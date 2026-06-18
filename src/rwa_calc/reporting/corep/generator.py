@@ -511,7 +511,7 @@ class COREPGenerator:
         - CRR Art. 147(2), Art. 148, Art. 150
         - PRA PS1/26 Art. 147B, Art. 150(1A)
         """
-        ead_col = _pick(cols, "ead_final", "final_ead", "ead")
+        ead_col = _pick(cols, "ead_final")
         approach_col = _pick(cols, "approach_applied", "approach")
         ec_col = _pick(cols, "exposure_class")
 
@@ -524,7 +524,7 @@ class COREPGenerator:
             errors.append(f"C 08.07: missing columns: {', '.join(missing)}")
             return None
 
-        rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa_post_factor", "rwa")
+        rwa_col = _pick(cols, "rwa_final", "rwa_post_factor", "rwa")
 
         lookups = _c08_07_group_by_class(results, ead_col, rwa_col, ec_col, approach_col)
         if lookups is None:
@@ -774,8 +774,8 @@ class COREPGenerator:
             CRR Art. 92 (own funds requirements)
             PRA PS1/26 Art. 92 para 2A/3A/5 (output floor)
         """
-        ead_col = _pick(cols, "ead_final", "final_ead", "ead")
-        rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa_post_factor", "rwa")
+        ead_col = _pick(cols, "ead_final")
+        rwa_col = _pick(cols, "rwa_final", "rwa_post_factor", "rwa")
 
         if ead_col is None or rwa_col is None:
             errors.append("C 02.00 skipped: missing EAD or RWA columns in results")
@@ -1007,7 +1007,7 @@ class COREPGenerator:
         has_subclass = "exposure_subclass" in cols
         has_sme = "is_sme" in cols
         has_fse = (
-            has_subclass or "apply_fi_scalar" in cols or "cp_is_financial_sector_entity" in cols
+            has_subclass or "cp_apply_fi_scalar" in cols or "cp_is_financial_sector_entity" in cols
         )
         has_pt = "property_type" in cols
         if has_sme or has_subclass:
@@ -1024,8 +1024,8 @@ class COREPGenerator:
                 fse_expr = pl.col("exposure_subclass") == "corporate_financial_large"
             else:
                 fse_col = (
-                    "apply_fi_scalar"
-                    if "apply_fi_scalar" in cols
+                    "cp_apply_fi_scalar"
+                    if "cp_apply_fi_scalar" in cols
                     else "cp_is_financial_sector_entity"
                 )
                 fse_expr = pl.col(fse_col).fill_null(False)
@@ -1276,8 +1276,8 @@ class COREPGenerator:
     ) -> dict[str, pl.DataFrame]:
         """Generate C 07.00 DataFrames for all SA exposure classes."""
         ec_col = _pick(cols, "exposure_class")
-        ead_col = _pick(cols, "ead_final", "final_ead", "ead")
-        rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa_post_factor", "rwa")
+        ead_col = _pick(cols, "ead_final")
+        rwa_col = _pick(cols, "rwa_final", "rwa_post_factor", "rwa")
 
         if ec_col is None or ead_col is None or rwa_col is None:
             if ead_col is None or rwa_col is None:
@@ -1371,7 +1371,7 @@ class COREPGenerator:
             _emit_subset_row(row_def, _c07_section2_subset(row_def.ref, class_data, cols))
 
         # Section 3: Breakdown by Risk Weights
-        rw_col = _pick(cols, "risk_weight", "sa_final_risk_weight")
+        rw_col = _pick(cols, "risk_weight")
         rw_row_data = _compute_rw_section_rows(
             class_data, cols, ead_col, rwa_col, column_refs, rw_bands, rw_col
         )
@@ -1411,8 +1411,8 @@ class COREPGenerator:
     ) -> dict[str, pl.DataFrame]:
         """Generate C 08.01 DataFrames for all IRB exposure classes."""
         ec_col = _pick(cols, "exposure_class")
-        ead_col = _pick(cols, "ead_final", "final_ead", "ead")
-        rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa_post_factor", "rwa")
+        ead_col = _pick(cols, "ead_final")
+        rwa_col = _pick(cols, "rwa_final", "rwa_post_factor", "rwa")
 
         if ec_col is None or ead_col is None or rwa_col is None:
             if ead_col is None or rwa_col is None:
@@ -1518,13 +1518,13 @@ class COREPGenerator:
     ) -> dict[str, pl.DataFrame]:
         """Generate C 08.02 DataFrames for all IRB exposure classes."""
         ec_col = _pick(cols, "exposure_class")
-        ead_col = _pick(cols, "ead_final", "final_ead", "ead")
-        rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa_post_factor", "rwa")
-        pd_col = _pick(cols, "irb_pd_floored", "irb_pd_original")
+        ead_col = _pick(cols, "ead_final")
+        rwa_col = _pick(cols, "rwa_final", "rwa_post_factor", "rwa")
+        pd_col = _pick(cols, "pd_floored", "pd")
         # Firm-supplied internal rating grade (COREP Annex II, C 08.02): when
         # present, rows are keyed by the firm's obligor grade scale rather than
         # the fixed PD bands.
-        grade_col = _pick(cols, "cp_internal_rating_grade", "internal_rating_grade")
+        grade_col = _pick(cols, "cp_internal_rating_grade")
 
         if ec_col is None or ead_col is None or rwa_col is None:
             errors.append("C08.02: Missing required columns")
@@ -1707,8 +1707,8 @@ class COREPGenerator:
         - PRA PS1/26 Annex I/II (OF 08.03)
         """
         ec_col = _pick(cols, "exposure_class")
-        ead_col = _pick(cols, "ead_final", "final_ead", "ead")
-        rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa_post_factor", "rwa")
+        ead_col = _pick(cols, "ead_final")
+        rwa_col = _pick(cols, "rwa_final", "rwa_post_factor", "rwa")
 
         if ec_col is None or ead_col is None or rwa_col is None:
             errors.append("C08.03: Missing required columns (exposure_class/ead/rwa)")
@@ -1716,11 +1716,11 @@ class COREPGenerator:
 
         # For row allocation: B31 uses pre-input-floor PD, CRR uses floored PD
         if framework == "BASEL_3_1":
-            alloc_pd_col = _pick(cols, "irb_pd_original", "irb_pd_floored")
+            alloc_pd_col = _pick(cols, "pd", "pd_floored")
         else:
-            alloc_pd_col = _pick(cols, "irb_pd_floored", "irb_pd_original")
+            alloc_pd_col = _pick(cols, "pd_floored", "pd")
         # For col 0050 (reported PD): always post-input-floor
-        report_pd_col = _pick(cols, "irb_pd_floored", "irb_pd_original")
+        report_pd_col = _pick(cols, "pd_floored", "pd")
 
         if alloc_pd_col is None:
             errors.append("C08.03: No PD column available — skipping PD range breakdown")
@@ -1907,7 +1907,7 @@ class COREPGenerator:
         column_defs = get_c08_04_columns(framework)
         column_refs = [c.ref for c in column_defs]
 
-        rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa")
+        rwa_col = _pick(cols, "rwa_final", "rwa")
         closing_rwea: float | None = None
         if rwa_col is not None and len(class_data) > 0:
             closing_rwea = float(class_data[rwa_col].fill_null(0.0).sum())
@@ -1965,11 +1965,11 @@ class COREPGenerator:
 
         # For row allocation: B31 uses pre-input-floor PD, CRR uses floored PD
         if framework == "BASEL_3_1":
-            alloc_pd_col = _pick(cols, "irb_pd_original", "irb_pd_floored")
+            alloc_pd_col = _pick(cols, "pd", "pd_floored")
         else:
-            alloc_pd_col = _pick(cols, "irb_pd_floored", "irb_pd_original")
+            alloc_pd_col = _pick(cols, "pd_floored", "pd")
         # For col 0010 (reported PD): always post-input-floor
-        report_pd_col = _pick(cols, "irb_pd_floored", "irb_pd_original")
+        report_pd_col = _pick(cols, "pd_floored", "pd")
 
         if alloc_pd_col is None:
             errors.append("C08.05: No PD column available — skipping PD backtesting")
@@ -2086,8 +2086,8 @@ class COREPGenerator:
         - CRR Art. 153(5), Regulation (EU) 2021/451 Annex I (C 08.06)
         - PRA PS1/26 Art. 153(5) Table A (OF 08.06)
         """
-        ead_col = _pick(cols, "ead_final", "final_ead", "ead")
-        rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa_post_factor", "rwa")
+        ead_col = _pick(cols, "ead_final")
+        rwa_col = _pick(cols, "rwa_final", "rwa_post_factor", "rwa")
         approach_col = _pick(cols, "approach_applied", "approach")
 
         if ead_col is None or rwa_col is None:
@@ -2410,8 +2410,8 @@ def _filter_defaulted(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
         return data.filter(pl.col("default_status") == True)  # noqa: E712
     if "exposure_class" in cols:
         return data.filter(pl.col("exposure_class") == "defaulted")
-    if "irb_pd_floored" in cols:
-        return data.filter(pl.col("irb_pd_floored") >= 1.0)
+    if "pd_floored" in cols:
+        return data.filter(pl.col("pd_floored") >= 1.0)
     return data.clear()
 
 
@@ -2427,10 +2427,10 @@ def _filter_sme(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
 def _filter_lfse(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame | None:
     """Filter to large financial sector entity exposures.
 
-    Returns None if apply_fi_scalar column is not available (cannot determine LFSE).
+    Returns None if cp_apply_fi_scalar column is not available (cannot determine LFSE).
     """
-    if "apply_fi_scalar" in cols:
-        return data.filter(pl.col("apply_fi_scalar") == True)  # noqa: E712
+    if "cp_apply_fi_scalar" in cols:
+        return data.filter(pl.col("cp_apply_fi_scalar") == True)  # noqa: E712
     return None
 
 
@@ -2593,7 +2593,7 @@ def _filter_defaulted_at_rw(data: pl.DataFrame, cols: set[str], target_rw: float
     defaulted = _filter_defaulted(data, cols)
     if len(defaulted) == 0:
         return defaulted
-    rw_col = _pick(set(defaulted.columns), "risk_weight", "sa_final_risk_weight")
+    rw_col = _pick(set(defaulted.columns), "risk_weight")
     if rw_col is None:
         return data.clear()
     return defaulted.filter(pl.col(rw_col).round(4) == round(target_rw, 4))
@@ -2713,8 +2713,8 @@ def _filter_section3_unrated_ig(
         return data.filter(
             ec_filter & unrated_filter & (pl.col("cp_is_investment_grade").fill_null(False) == True)  # noqa: E712
         )
-    if "irb_pd_floored" in cols:
-        return data.filter(ec_filter & unrated_filter & (pl.col("irb_pd_floored") <= 0.005))
+    if "pd_floored" in cols:
+        return data.filter(ec_filter & unrated_filter & (pl.col("pd_floored") <= 0.005))
     return None
 
 
@@ -2991,12 +2991,10 @@ def _c07_rwea_factor_cols(
     """Compute C 07.00 RWEA + supporting-factor + ECAI columns (0215-0240)."""
     values: dict[str, float | None] = {}
 
-    rwa_pre = _col_sum_eager(data, cols, "rwa_before_sme_factor")
-    if rwa_pre is None:
-        rwa_pre = _col_sum_eager(data, cols, "rwa_pre_factor")
+    rwa_pre = _col_sum_eager(data, cols, "rwa_pre_factor")
     values["0215"] = rwa_pre if rwa_pre is not None else _col_sum_eager(data, cols, rwa_col)
 
-    pre_factor_col = _pick(cols, "rwa_before_sme_factor", "rwa_pre_factor")
+    pre_factor_col = _pick(cols, "rwa_pre_factor")
     values["0216"] = _supporting_factor_adjustment(
         data, cols, "is_sme", "sme_supporting_factor_applied", pre_factor_col, rwa_col
     )
@@ -3137,10 +3135,8 @@ def _c08_exposure_cols(
 ) -> dict[str, float | None]:
     """Compute C 08.01/02 exposure columns (0010 PD, 0020 original, 0030 LFSE, 0035 netting)."""
     values: dict[str, float | None] = {}
-    if "irb_pd_floored" in cols and ead_sum > 0:
-        pd_x_ead = float(
-            (data["irb_pd_floored"].fill_null(0.0) * data[ead_col].fill_null(0.0)).sum()
-        )
+    if "pd_floored" in cols and ead_sum > 0:
+        pd_x_ead = float((data["pd_floored"].fill_null(0.0) * data[ead_col].fill_null(0.0)).sum())
         values["0010"] = pd_x_ead / ead_sum
     else:
         values["0010"] = None
@@ -3152,7 +3148,7 @@ def _c08_exposure_cols(
             lfse_data, set(lfse_data.columns), "drawn_amount", "undrawn_amount"
         )
     else:
-        values["0030"] = 0.0 if "apply_fi_scalar" in cols else None
+        values["0030"] = 0.0 if "cp_apply_fi_scalar" in cols else None
 
     values["0035"] = _col_sum_eager(data, cols, "on_bs_netting_amount")
     return values
@@ -3226,7 +3222,7 @@ def _c08_of_which_cols(
     if lfse_data is not None and len(lfse_data) > 0:
         values["0140"] = _col_sum_eager(lfse_data, set(lfse_data.columns), ead_col)
     else:
-        values["0140"] = 0.0 if "apply_fi_scalar" in cols else None
+        values["0140"] = 0.0 if "cp_apply_fi_scalar" in cols else None
     return values
 
 
@@ -3257,9 +3253,9 @@ def _c08_lfse_lgd_avg(
 ) -> float | None:
     """Compute the LFSE EAD-weighted-average LGD for C 08 col 0240."""
     if lfse_data is None or len(lfse_data) == 0:
-        return 0.0 if "apply_fi_scalar" in cols else None
+        return 0.0 if "cp_apply_fi_scalar" in cols else None
     lfse_cols = set(lfse_data.columns)
-    lfse_lgd_col = _pick(lfse_cols, "irb_lgd_floored", "irb_lgd_original")
+    lfse_lgd_col = _pick(lfse_cols, "lgd_floored", "lgd_input")
     lfse_ead_sum = float(lfse_data[ead_col].fill_null(0.0).sum()) if ead_col in lfse_cols else 0.0
     if lfse_lgd_col is None or lfse_ead_sum <= 0:
         return None
@@ -3279,7 +3275,7 @@ def _c08_lgd_maturity_cols(
     """Compute C 08.01/02 LGD/maturity weighted-average columns (0230-0250)."""
     values: dict[str, float | None] = {}
 
-    lgd_col = _pick(cols, "irb_lgd_floored", "irb_lgd_original")
+    lgd_col = _pick(cols, "lgd_floored", "lgd_input")
     if lgd_col is not None and ead_sum > 0:
         lgd_x_ead = float((data[lgd_col].fill_null(0.0) * data[ead_col].fill_null(0.0)).sum())
         values["0230"] = lgd_x_ead / ead_sum
@@ -3315,12 +3311,10 @@ def _c08_rwea_factor_cols(
     values["0253"] = _col_sum_eager(data, cols, "mortgage_rw_floor_adjustment")
     values["0254"] = _col_sum_eager(data, cols, "unrecognised_exposure_adjustment")
 
-    rwa_pre = _col_sum_eager(data, cols, "rwa_before_sme_factor")
-    if rwa_pre is None:
-        rwa_pre = _col_sum_eager(data, cols, "rwa_pre_factor")
+    rwa_pre = _col_sum_eager(data, cols, "rwa_pre_factor")
     values["0255"] = rwa_pre if rwa_pre is not None else _col_sum_eager(data, cols, rwa_col)
 
-    pre_factor_col = _pick(cols, "rwa_before_sme_factor", "rwa_pre_factor")
+    pre_factor_col = _pick(cols, "rwa_pre_factor")
     values["0256"] = _supporting_factor_adjustment(
         data, cols, "is_sme", "sme_supporting_factor_applied", pre_factor_col, rwa_col
     )
@@ -3343,10 +3337,10 @@ def _c08_rwea_factor_cols(
     if lfse_data is not None and len(lfse_data) > 0:
         values["0270"] = _col_sum_eager(lfse_data, set(lfse_data.columns), rwa_col)
     else:
-        values["0270"] = 0.0 if "apply_fi_scalar" in cols else None
+        values["0270"] = 0.0 if "cp_apply_fi_scalar" in cols else None
 
     values["0275"] = _col_sum_eager(data, cols, ead_col)
-    sa_rwa_col = _pick(cols, "sa_equivalent_rwa", "rwa_sa_equivalent", "sa_rwa")
+    sa_rwa_col = _pick(cols, "sa_rwa")
     values["0276"] = _col_sum_eager(data, cols, sa_rwa_col) if sa_rwa_col else None
     return values
 
@@ -3364,7 +3358,7 @@ def _c08_memorandum_cols(
     """
     values: dict[str, float | None] = {}
 
-    el_raw = _col_sum_eager(data, cols, "irb_expected_loss")
+    el_raw = _col_sum_eager(data, cols, "expected_loss")
     el_pre = _col_sum_eager(data, cols, "el_pre_adjustment")
     values["0280"] = el_pre if el_pre is not None else el_raw
 
@@ -3498,7 +3492,7 @@ def _c08_03_exposure_cols(
     else:
         values["0020"] = _col_sum_eager(data, cols, "nominal_amount")
 
-    ccf_col = _pick(cols, "ccf_applied", "ccf")
+    ccf_col = _pick(cols, "ccf")
     nominal_col = _pick(cols, "nominal_amount") if ccf_col is not None and ead_sum > 0 else None
     if ccf_col is not None and ead_sum > 0 and nominal_col is not None:
         nominal_sum = float(data[nominal_col].fill_null(0.0).sum())
@@ -3536,7 +3530,7 @@ def _c08_03_weighted_avg_cols(
     else:
         values["0060"] = float(len(data))
 
-    lgd_col = _pick(cols, "irb_lgd_floored", "irb_lgd_original")
+    lgd_col = _pick(cols, "lgd_floored", "lgd_input")
     if lgd_col is not None and ead_sum > 0:
         lgd_x_ead = float((data[lgd_col].fill_null(0.0) * data[ead_col].fill_null(0.0)).sum())
         values["0070"] = lgd_x_ead / ead_sum
@@ -3559,7 +3553,7 @@ def _c08_03_rwea_provisions(
     """Compute C 08.03 RWEA + EL + provisions columns (0090, 0100, 0110)."""
     values: dict[str, float | None] = {}
     values["0090"] = _col_sum_eager(data, cols, rwa_col)
-    el_col = _pick(cols, "irb_expected_loss", "expected_loss")
+    el_col = _pick(cols, "expected_loss")
     values["0100"] = _col_sum_eager(data, cols, el_col) if el_col else None
 
     prov = _safe_sum_eager(data, cols, "scra_provision_amount", "gcra_provision_amount")
@@ -3620,7 +3614,7 @@ def _c08_05_default_counts(
     """
     n_rows = len(data)
     n_obligors = float(data[cp_col].n_unique()) if cp_col is not None else float(n_rows)
-    default_col = _pick(cols, "is_defaulted", "default_status")
+    default_col = _pick(cols, "is_defaulted")
 
     if default_col is not None:
         defaulted = data.filter(pl.col(default_col) == True)  # noqa: E712
@@ -4014,7 +4008,7 @@ def _compute_c08_06_values(
     values["0080"] = _c08_06_rwea_value(data, cols, rwa_col, framework)
 
     # 0090: Expected loss amount
-    el_col = _pick(cols, "expected_loss", "irb_expected_loss")
+    el_col = _pick(cols, "expected_loss")
     values["0090"] = _col_sum_eager(data, cols, el_col) if el_col else None
 
     # 0100: (-) Value adjustments and provisions
@@ -4190,8 +4184,8 @@ def _compute_c09_01_values(
     - 0090: RWEA after supporting factors / Risk-weighted exposure amount
     """
     ead_gross_col = _pick(cols, "ead_gross", "nominal_amount", "drawn_amount")
-    ead_col = _pick(cols, "ead_final", "final_ead", "ead")
-    rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa")
+    ead_col = _pick(cols, "ead_final")
+    rwa_col = _pick(cols, "rwa_final", "rwa")
 
     values: dict[str, object] = {}
     values.update(_c09_01_exposure_provisions(data, cols, ead_gross_col, ead_col))
@@ -4278,8 +4272,8 @@ def _filter_c09_02_corporate_non_sme(
         )
     elif "exposure_class" in cols:
         non_sme = base.filter(~pl.col("exposure_class").str.contains("sme"))
-    if "apply_fi_scalar" in cols:
-        non_sme = non_sme.filter(pl.col("apply_fi_scalar") != True)  # noqa: E712
+    if "cp_apply_fi_scalar" in cols:
+        non_sme = non_sme.filter(pl.col("cp_apply_fi_scalar") != True)  # noqa: E712
     return non_sme
 
 
@@ -4304,8 +4298,8 @@ def _filter_c09_02_corporate(
         return _filter_sme(data.filter(pl.col(ec_col).is_in(["corporate", "corporate_sme"])), cols)
     if row_key == "corporate_fse_large":
         base = data.filter(pl.col(ec_col).is_in(["corporate", "corporate_sme"]))
-        if "apply_fi_scalar" in cols:
-            return base.filter(pl.col("apply_fi_scalar") == True)  # noqa: E712
+        if "cp_apply_fi_scalar" in cols:
+            return base.filter(pl.col("cp_apply_fi_scalar") == True)  # noqa: E712
         return data.clear()
     if row_key == "corporate_non_sme":
         return _filter_c09_02_corporate_non_sme(data, cols, ec_col)
@@ -4465,11 +4459,11 @@ def _compute_c09_02_values(
     - 0130: Expected loss amount
     """
     ead_gross_col = _pick(cols, "ead_gross", "nominal_amount", "drawn_amount")
-    ead_col = _pick(cols, "ead_final", "final_ead", "ead")
-    rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa")
-    pd_col = _pick(cols, "irb_pd_floored", "irb_pd_original")
-    lgd_col = _pick(cols, "lgd_post_crm", "irb_lgd_floored", "lgd_final")
-    el_col = _pick(cols, "expected_loss", "irb_expected_loss")
+    ead_col = _pick(cols, "ead_final")
+    rwa_col = _pick(cols, "rwa_final", "rwa")
+    pd_col = _pick(cols, "pd_floored", "pd")
+    lgd_col = _pick(cols, "lgd_post_crm")
+    el_col = _pick(cols, "expected_loss")
 
     defaulted = _filter_defaulted(data, cols)
 

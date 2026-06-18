@@ -77,8 +77,8 @@ Seed frame: one obligor per CR9 sub-class (15 rows total: 5 F-IRB + 10 A-IRB).
 Each row carries the columns consumed by _compute_cr9_values (cols c-h):
     counterparty_reference  — unique per row (unique-obligor counting)
     ead_final               — EAD weight for col f (_cr9_ewa_pd_pct)
-    irb_pd_floored          — reported PD (cols f / g)
-    irb_pd_original         — allocation PD (bucket selection for CR6 PD ranges)
+    pd_floored          — reported PD (cols f / g)
+    pd         — allocation PD (bucket selection for CR6 PD ranges)
     is_defaulted            — default-count discriminator for col d
     drawn_amount, nominal_amount, undrawn_amount — supporting columns
     exposure_type, ccf_applied                   — supporting columns
@@ -197,8 +197,8 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "property_type": None,
             "cp_is_financial_sector_entity": False,
             "ead_final": 1000.0,
-            "irb_pd_floored": 0.010,
-            "irb_pd_original": 0.010,
+            "pd_floored": 0.010,
+            "pd": 0.010,
             "is_defaulted": False,
             "drawn_amount": 900.0,
             "nominal_amount": 100.0,
@@ -207,9 +207,9 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "exposure_type": "loan",
             "ccf_applied": 1.0,
             "rwa_final": 500.0,
-            "irb_lgd_floored": 0.45,
+            "lgd_floored": 0.45,
             "irb_maturity_m": 2.5,
-            "irb_expected_loss": 4.5,
+            "expected_loss": 4.5,
         },
         # R02: specialised_lending → "foundation_irb - specialised_lending"
         {
@@ -220,8 +220,8 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "property_type": None,
             "cp_is_financial_sector_entity": False,
             "ead_final": 2000.0,
-            "irb_pd_floored": 0.012,
-            "irb_pd_original": 0.012,
+            "pd_floored": 0.012,
+            "pd": 0.012,
             "is_defaulted": False,
             "drawn_amount": 1800.0,
             "nominal_amount": 200.0,
@@ -230,9 +230,9 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "exposure_type": "loan",
             "ccf_applied": 1.0,
             "rwa_final": 1200.0,
-            "irb_lgd_floored": 0.45,
+            "lgd_floored": 0.45,
             "irb_maturity_m": 2.5,
-            "irb_expected_loss": 24.0,
+            "expected_loss": 24.0,
         },
         # R03: corporate + cp_is_financial_sector_entity=True
         #      → "foundation_irb - corporate_financial_large"
@@ -244,8 +244,8 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "property_type": None,
             "cp_is_financial_sector_entity": True,
             "ead_final": 3000.0,
-            "irb_pd_floored": 0.015,
-            "irb_pd_original": 0.015,
+            "pd_floored": 0.015,
+            "pd": 0.015,
             "is_defaulted": False,
             "drawn_amount": 2700.0,
             "nominal_amount": 300.0,
@@ -254,9 +254,9 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "exposure_type": "loan",
             "ccf_applied": 1.0,
             "rwa_final": 1800.0,
-            "irb_lgd_floored": 0.45,
+            "lgd_floored": 0.45,
             "irb_maturity_m": 2.5,
-            "irb_expected_loss": 45.0,
+            "expected_loss": 45.0,
         },
         # R04: corporate_sme → "foundation_irb - corporate_sme"
         {
@@ -267,8 +267,8 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "property_type": None,
             "cp_is_financial_sector_entity": False,
             "ead_final": 500.0,
-            "irb_pd_floored": 0.018,
-            "irb_pd_original": 0.018,
+            "pd_floored": 0.018,
+            "pd": 0.018,
             "is_defaulted": False,
             "drawn_amount": 450.0,
             "nominal_amount": 50.0,
@@ -277,9 +277,9 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "exposure_type": "loan",
             "ccf_applied": 1.0,
             "rwa_final": 300.0,
-            "irb_lgd_floored": 0.45,
+            "lgd_floored": 0.45,
             "irb_maturity_m": 2.5,
-            "irb_expected_loss": 9.0,
+            "expected_loss": 9.0,
         },
         # R05: corporate + cp_is_financial_sector_entity=False
         #      → "foundation_irb - corporate_other_non_sme"
@@ -291,8 +291,8 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "property_type": None,
             "cp_is_financial_sector_entity": False,
             "ead_final": 4000.0,
-            "irb_pd_floored": 0.020,
-            "irb_pd_original": 0.020,
+            "pd_floored": 0.020,
+            "pd": 0.020,
             "is_defaulted": False,
             "drawn_amount": 3600.0,
             "nominal_amount": 400.0,
@@ -301,9 +301,9 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "exposure_type": "loan",
             "ccf_applied": 1.0,
             "rwa_final": 2400.0,
-            "irb_lgd_floored": 0.45,
+            "lgd_floored": 0.45,
             "irb_maturity_m": 2.5,
-            "irb_expected_loss": 80.0,
+            "expected_loss": 80.0,
         },
         # ---- A-IRB leaves ----
         # R06: specialised_lending → "advanced_irb - specialised_lending"
@@ -315,8 +315,8 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "property_type": None,
             "cp_is_financial_sector_entity": False,
             "ead_final": 1500.0,
-            "irb_pd_floored": 0.010,
-            "irb_pd_original": 0.010,
+            "pd_floored": 0.010,
+            "pd": 0.010,
             "is_defaulted": False,
             "drawn_amount": 1350.0,
             "nominal_amount": 150.0,
@@ -325,9 +325,9 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "exposure_type": "loan",
             "ccf_applied": 1.0,
             "rwa_final": 900.0,
-            "irb_lgd_floored": 0.30,
+            "lgd_floored": 0.30,
             "irb_maturity_m": 2.5,
-            "irb_expected_loss": 15.0,
+            "expected_loss": 15.0,
         },
         # R07: corporate_sme → "advanced_irb - corporate_sme"
         {
@@ -338,8 +338,8 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "property_type": None,
             "cp_is_financial_sector_entity": False,
             "ead_final": 600.0,
-            "irb_pd_floored": 0.012,
-            "irb_pd_original": 0.012,
+            "pd_floored": 0.012,
+            "pd": 0.012,
             "is_defaulted": False,
             "drawn_amount": 540.0,
             "nominal_amount": 60.0,
@@ -348,9 +348,9 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "exposure_type": "loan",
             "ccf_applied": 1.0,
             "rwa_final": 360.0,
-            "irb_lgd_floored": 0.30,
+            "lgd_floored": 0.30,
             "irb_maturity_m": 2.5,
-            "irb_expected_loss": 7.2,
+            "expected_loss": 7.2,
         },
         # R08: corporate (not sme) → "advanced_irb - corporate_other_non_sme"
         {
@@ -361,8 +361,8 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "property_type": None,
             "cp_is_financial_sector_entity": False,
             "ead_final": 2500.0,
-            "irb_pd_floored": 0.015,
-            "irb_pd_original": 0.015,
+            "pd_floored": 0.015,
+            "pd": 0.015,
             "is_defaulted": False,
             "drawn_amount": 2250.0,
             "nominal_amount": 250.0,
@@ -371,9 +371,9 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "exposure_type": "loan",
             "ccf_applied": 1.0,
             "rwa_final": 1500.0,
-            "irb_lgd_floored": 0.30,
+            "lgd_floored": 0.30,
             "irb_maturity_m": 2.5,
-            "irb_expected_loss": 37.5,
+            "expected_loss": 37.5,
         },
         # R09: retail_mortgage + residential + is_sme
         #      → "advanced_irb - retail_rre_sme"
@@ -385,8 +385,8 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "property_type": "residential",
             "cp_is_financial_sector_entity": False,
             "ead_final": 800.0,
-            "irb_pd_floored": 0.010,
-            "irb_pd_original": 0.010,
+            "pd_floored": 0.010,
+            "pd": 0.010,
             "is_defaulted": False,
             "drawn_amount": 720.0,
             "nominal_amount": 80.0,
@@ -395,9 +395,9 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "exposure_type": "loan",
             "ccf_applied": 1.0,
             "rwa_final": 240.0,
-            "irb_lgd_floored": 0.10,
+            "lgd_floored": 0.10,
             "irb_maturity_m": 1.0,
-            "irb_expected_loss": 0.8,
+            "expected_loss": 0.8,
         },
         # R10: retail_mortgage + residential + NOT is_sme
         #      → "advanced_irb - retail_rre_non_sme"
@@ -409,8 +409,8 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "property_type": "residential",
             "cp_is_financial_sector_entity": False,
             "ead_final": 1200.0,
-            "irb_pd_floored": 0.008,
-            "irb_pd_original": 0.008,
+            "pd_floored": 0.008,
+            "pd": 0.008,
             "is_defaulted": False,
             "drawn_amount": 1080.0,
             "nominal_amount": 120.0,
@@ -419,9 +419,9 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "exposure_type": "loan",
             "ccf_applied": 1.0,
             "rwa_final": 360.0,
-            "irb_lgd_floored": 0.10,
+            "lgd_floored": 0.10,
             "irb_maturity_m": 1.0,
-            "irb_expected_loss": 0.96,
+            "expected_loss": 0.96,
         },
         # R11: retail_mortgage + commercial + is_sme
         #      → "advanced_irb - retail_cre_sme"
@@ -433,8 +433,8 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "property_type": "commercial",
             "cp_is_financial_sector_entity": False,
             "ead_final": 700.0,
-            "irb_pd_floored": 0.012,
-            "irb_pd_original": 0.012,
+            "pd_floored": 0.012,
+            "pd": 0.012,
             "is_defaulted": False,
             "drawn_amount": 630.0,
             "nominal_amount": 70.0,
@@ -443,9 +443,9 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "exposure_type": "loan",
             "ccf_applied": 1.0,
             "rwa_final": 280.0,
-            "irb_lgd_floored": 0.10,
+            "lgd_floored": 0.10,
             "irb_maturity_m": 1.0,
-            "irb_expected_loss": 0.84,
+            "expected_loss": 0.84,
         },
         # R12: retail_mortgage + commercial + NOT is_sme
         #      → "advanced_irb - retail_cre_non_sme"
@@ -457,8 +457,8 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "property_type": "commercial",
             "cp_is_financial_sector_entity": False,
             "ead_final": 900.0,
-            "irb_pd_floored": 0.014,
-            "irb_pd_original": 0.014,
+            "pd_floored": 0.014,
+            "pd": 0.014,
             "is_defaulted": False,
             "drawn_amount": 810.0,
             "nominal_amount": 90.0,
@@ -467,9 +467,9 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "exposure_type": "loan",
             "ccf_applied": 1.0,
             "rwa_final": 360.0,
-            "irb_lgd_floored": 0.10,
+            "lgd_floored": 0.10,
             "irb_maturity_m": 1.0,
-            "irb_expected_loss": 1.26,
+            "expected_loss": 1.26,
         },
         # R13: retail_qrre → "advanced_irb - retail_qrre"
         {
@@ -480,8 +480,8 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "property_type": None,
             "cp_is_financial_sector_entity": False,
             "ead_final": 400.0,
-            "irb_pd_floored": 0.020,
-            "irb_pd_original": 0.020,
+            "pd_floored": 0.020,
+            "pd": 0.020,
             "is_defaulted": False,
             "drawn_amount": 360.0,
             "nominal_amount": 40.0,
@@ -490,9 +490,9 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "exposure_type": "loan",
             "ccf_applied": 1.0,
             "rwa_final": 120.0,
-            "irb_lgd_floored": 0.50,
+            "lgd_floored": 0.50,
             "irb_maturity_m": 1.0,
-            "irb_expected_loss": 4.0,
+            "expected_loss": 4.0,
         },
         # R14: retail_other + is_sme → "advanced_irb - retail_other_sme"
         {
@@ -503,8 +503,8 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "property_type": None,
             "cp_is_financial_sector_entity": False,
             "ead_final": 300.0,
-            "irb_pd_floored": 0.015,
-            "irb_pd_original": 0.015,
+            "pd_floored": 0.015,
+            "pd": 0.015,
             "is_defaulted": False,
             "drawn_amount": 270.0,
             "nominal_amount": 30.0,
@@ -513,9 +513,9 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "exposure_type": "loan",
             "ccf_applied": 1.0,
             "rwa_final": 90.0,
-            "irb_lgd_floored": 0.30,
+            "lgd_floored": 0.30,
             "irb_maturity_m": 1.0,
-            "irb_expected_loss": 1.35,
+            "expected_loss": 1.35,
         },
         # R15: retail_other + NOT is_sme → "advanced_irb - retail_other_non_sme"
         {
@@ -526,8 +526,8 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "property_type": None,
             "cp_is_financial_sector_entity": False,
             "ead_final": 500.0,
-            "irb_pd_floored": 0.018,
-            "irb_pd_original": 0.018,
+            "pd_floored": 0.018,
+            "pd": 0.018,
             "is_defaulted": False,
             "drawn_amount": 450.0,
             "nominal_amount": 50.0,
@@ -536,9 +536,9 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
             "exposure_type": "loan",
             "ccf_applied": 1.0,
             "rwa_final": 150.0,
-            "irb_lgd_floored": 0.30,
+            "lgd_floored": 0.30,
             "irb_maturity_m": 1.0,
-            "irb_expected_loss": 2.7,
+            "expected_loss": 2.7,
         },
     ]
 
@@ -550,8 +550,8 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
         "property_type": pl.Utf8,
         "cp_is_financial_sector_entity": pl.Boolean,
         "ead_final": pl.Float64,
-        "irb_pd_floored": pl.Float64,
-        "irb_pd_original": pl.Float64,
+        "pd_floored": pl.Float64,
+        "pd": pl.Float64,
         "is_defaulted": pl.Boolean,
         "drawn_amount": pl.Float64,
         "nominal_amount": pl.Float64,
@@ -560,9 +560,9 @@ def build_cr9_irb_results_lf() -> pl.LazyFrame:
         "exposure_type": pl.Utf8,
         "ccf_applied": pl.Float64,
         "rwa_final": pl.Float64,
-        "irb_lgd_floored": pl.Float64,
+        "lgd_floored": pl.Float64,
         "irb_maturity_m": pl.Float64,
-        "irb_expected_loss": pl.Float64,
+        "expected_loss": pl.Float64,
     }
 
     return pl.DataFrame(rows, schema=schema).lazy()
@@ -587,8 +587,8 @@ def _verify_lf() -> None:
         "property_type",
         "cp_is_financial_sector_entity",
         "ead_final",
-        "irb_pd_floored",
-        "irb_pd_original",
+        "pd_floored",
+        "pd",
         "is_defaulted",
     }
     assert expected_cols.issubset(set(df.columns)), (

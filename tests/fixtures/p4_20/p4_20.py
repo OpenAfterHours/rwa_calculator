@@ -33,10 +33,10 @@ Column set mirrors the existing _irb_results() helper in test_corep.py
     undrawn_amount       pl.Float64  (= 0.0)
     ead_final            pl.Float64
     rwa_final            pl.Float64
-    irb_pd_floored       pl.Float64
-    irb_lgd_floored      pl.Float64
+    pd_floored       pl.Float64
+    lgd_floored      pl.Float64
     irb_maturity_m       pl.Float64
-    irb_expected_loss    pl.Float64
+    expected_loss    pl.Float64
     counterparty_reference  pl.String
     cp_internal_rating_grade  pl.String  <- NEW grade column
 
@@ -176,10 +176,10 @@ def build_grade_path_irb_results_lf() -> pl.LazyFrame:
         "undrawn_amount": pl.Float64,
         "ead_final": pl.Float64,
         "rwa_final": pl.Float64,
-        "irb_pd_floored": pl.Float64,
-        "irb_lgd_floored": pl.Float64,
+        "pd_floored": pl.Float64,
+        "lgd_floored": pl.Float64,
         "irb_maturity_m": pl.Float64,
-        "irb_expected_loss": pl.Float64,
+        "expected_loss": pl.Float64,
         "cp_internal_rating_grade": pl.String,
     }
 
@@ -194,10 +194,10 @@ def build_grade_path_irb_results_lf() -> pl.LazyFrame:
             "undrawn_amount": 0.0,
             "ead_final": 1000.0,
             "rwa_final": 700.0,
-            "irb_pd_floored": E1_PD,
-            "irb_lgd_floored": 0.45,
+            "pd_floored": E1_PD,
+            "lgd_floored": 0.45,
             "irb_maturity_m": 2.0,
-            "irb_expected_loss": 2.25,
+            "expected_loss": 2.25,
             "cp_internal_rating_grade": GRADE_AAA,
         },
         # E2 — grade BB, PD 0.02 (same bucket "0.75% - 2.50%" as E1)
@@ -210,10 +210,10 @@ def build_grade_path_irb_results_lf() -> pl.LazyFrame:
             "undrawn_amount": 0.0,
             "ead_final": 2000.0,
             "rwa_final": 1400.0,
-            "irb_pd_floored": E2_PD,
-            "irb_lgd_floored": 0.45,
+            "pd_floored": E2_PD,
+            "lgd_floored": 0.45,
             "irb_maturity_m": 2.0,
-            "irb_expected_loss": 18.0,
+            "expected_loss": 18.0,
             "cp_internal_rating_grade": GRADE_BB,
         },
         # E3 — grade D, PD 1.0 ("Default (100%)" bucket — control row)
@@ -226,10 +226,10 @@ def build_grade_path_irb_results_lf() -> pl.LazyFrame:
             "undrawn_amount": 0.0,
             "ead_final": 500.0,
             "rwa_final": 750.0,
-            "irb_pd_floored": E3_PD,
-            "irb_lgd_floored": 0.45,
+            "pd_floored": E3_PD,
+            "lgd_floored": 0.45,
             "irb_maturity_m": 1.0,
-            "irb_expected_loss": 225.0,
+            "expected_loss": 225.0,
             "cp_internal_rating_grade": GRADE_D,
         },
     ]
@@ -257,10 +257,10 @@ def _verify_lf() -> None:
         "undrawn_amount",
         "ead_final",
         "rwa_final",
-        "irb_pd_floored",
-        "irb_lgd_floored",
+        "pd_floored",
+        "lgd_floored",
         "irb_maturity_m",
-        "irb_expected_loss",
+        "expected_loss",
         "cp_internal_rating_grade",
     }
     missing = required_cols - set(df.columns)
@@ -295,9 +295,9 @@ def _verify_lf() -> None:
     bb_row = df.filter(df["cp_internal_rating_grade"] == GRADE_BB)
     d_row = df.filter(df["cp_internal_rating_grade"] == GRADE_D)
 
-    band_aaa = _find_band(aaa_row["irb_pd_floored"][0])
-    band_bb = _find_band(bb_row["irb_pd_floored"][0])
-    band_d = _find_band(d_row["irb_pd_floored"][0])
+    band_aaa = _find_band(aaa_row["pd_floored"][0])
+    band_bb = _find_band(bb_row["pd_floored"][0])
+    band_d = _find_band(d_row["pd_floored"][0])
 
     assert band_aaa == SAME_BUCKET_LABEL, (
         f"AAA PD bucket expected {SAME_BUCKET_LABEL!r}, got {band_aaa!r}"

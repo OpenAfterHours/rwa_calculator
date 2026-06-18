@@ -1,7 +1,7 @@
 {"row_ref":"0010","row_name":"Sovereign","a":null,"b":null,"c":0.0,"d":0.0}
 {"row_ref":"0011","row_name":"  Of which: categorised as MDB/PSE in SA","a":null,"b":null,"c":0.0,"d":null}
 {"row_ref":"0020","row_name":"Institutions","a":null,"b":null,"c":600000.0,"d":600000.0}
-{"row_ref":"0030","row_name":"Subordinated debt, equity and other own funds","a":null,"b":null,"c":0.0,"d":null}
+{"row_ref":"0030","row_name":"Subordinated debt, equity and other own funds","a":null,"b":null,"c":0.0,"d":0.0}
 {"row_ref":"0040","row_name":"Corporates","a":115347556.45478722,"b":142000000.0,"c":134022556.45478722,"d":160675000.0}
 {"row_ref":"0041","row_name":"  Of which are FIRB","a":48244060.92282306,"b":50000000.0,"c":66919060.92282306,"d":160675000.0}
 {"row_ref":"0042","row_name":"  Of which are AIRB","a":14603495.53196416,"b":17000000.0,"c":14603495.53196416,"d":null}

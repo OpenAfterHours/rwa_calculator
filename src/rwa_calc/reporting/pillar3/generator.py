@@ -293,7 +293,7 @@ class Pillar3Generator:
         capital_ratios: Pillar3CapitalRatioOverrides | None = None,
         output_floor_summary: OutputFloorSummary | None = None,
     ) -> pl.DataFrame | None:
-        rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa")
+        rwa_col = _pick(cols, "rwa_final", "rwa")
         if not rwa_col:
             errors.append("OV1: missing RWA column")
             return None
@@ -332,8 +332,8 @@ class Pillar3Generator:
         framework: str,
         errors: list[str],
     ) -> pl.DataFrame | None:
-        ead_col = _pick(cols, "ead_final", "final_ead", "ead")
-        rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa")
+        ead_col = _pick(cols, "ead_final")
+        rwa_col = _pick(cols, "rwa_final", "rwa")
         ec_col = _pick(cols, "exposure_class")
         if not ead_col or not rwa_col:
             errors.append("CR4: missing EAD or RWA column")
@@ -367,8 +367,8 @@ class Pillar3Generator:
         framework: str,
         errors: list[str],
     ) -> pl.DataFrame | None:
-        ead_col = _pick(cols, "ead_final", "final_ead", "ead")
-        rw_col = _pick(cols, "risk_weight", "sa_final_risk_weight")
+        ead_col = _pick(cols, "ead_final")
+        rw_col = _pick(cols, "risk_weight")
         ec_col = _pick(cols, "exposure_class")
         if not ead_col or not rw_col:
             errors.append("CR5: missing EAD or risk_weight column")
@@ -407,8 +407,8 @@ class Pillar3Generator:
         framework: str,
         errors: list[str],
     ) -> dict[str, pl.DataFrame]:
-        ead_col = _pick(cols, "ead_final", "final_ead", "ead")
-        rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa")
+        ead_col = _pick(cols, "ead_final")
+        rwa_col = _pick(cols, "rwa_final", "rwa")
         ec_col = _pick(cols, "exposure_class")
         if not ead_col or not rwa_col or not ec_col:
             errors.append("CR6: missing required columns")
@@ -419,9 +419,9 @@ class Pillar3Generator:
             return {}
 
         is_b31 = framework == "BASEL_3_1"
-        alloc_pd_col = _pick(cols, "irb_pd_original") if is_b31 else None
-        report_pd_col = _pick(cols, "irb_pd_floored")
-        pd_col = alloc_pd_col or report_pd_col or _pick(cols, "irb_pd_floored")
+        alloc_pd_col = _pick(cols, "pd") if is_b31 else None
+        report_pd_col = _pick(cols, "pd_floored")
+        pd_col = alloc_pd_col or report_pd_col or _pick(cols, "pd_floored")
 
         if not pd_col:
             errors.append("CR6: missing PD column")
@@ -491,7 +491,7 @@ class Pillar3Generator:
         framework: str,
         errors: list[str],
     ) -> pl.DataFrame | None:
-        ead_col = _pick(cols, "ead_final", "final_ead", "ead")
+        ead_col = _pick(cols, "ead_final")
         ec_col = _pick(cols, "exposure_class")
         approach_col = _pick(cols, "approach_applied", "approach")
         if not ead_col or not ec_col or not approach_col:
@@ -539,7 +539,7 @@ class Pillar3Generator:
         framework: str,
         errors: list[str],
     ) -> pl.DataFrame | None:
-        rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa")
+        rwa_col = _pick(cols, "rwa_final", "rwa")
         approach_col = _pick(cols, "approach_applied", "approach")
         ec_col = _pick(cols, "exposure_class")
         if not rwa_col or not approach_col:
@@ -581,8 +581,8 @@ class Pillar3Generator:
         framework: str,
         errors: list[str],
     ) -> dict[str, pl.DataFrame]:
-        ead_col = _pick(cols, "ead_final", "final_ead", "ead")
-        rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa")
+        ead_col = _pick(cols, "ead_final")
+        rwa_col = _pick(cols, "rwa_final", "rwa")
         approach_col = _pick(cols, "approach_applied", "approach")
         ec_col = _pick(cols, "exposure_class")
         if not ead_col or not rwa_col or not approach_col:
@@ -647,7 +647,7 @@ class Pillar3Generator:
         References:
             CRR Part 8 Art. 438(h); PRA PS1/26 Annex XXII §11.
         """
-        rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa")
+        rwa_col = _pick(cols, "rwa_final", "rwa")
         if not rwa_col:
             errors.append("CR8: missing RWA column")
             return None
@@ -709,10 +709,10 @@ class Pillar3Generator:
 
         # PD column selection — CR9 should use PD at beginning of disclosure
         # period. Since the pipeline does not provide this temporal variant,
-        # we use irb_pd_original (pre-input-floor model PD) as closest proxy
+        # we use pd (pre-input-floor model PD) as closest proxy
         # for bucket allocation. The reported PD (cols f, g) uses post-floor PD.
-        alloc_pd_col = _pick(cols, "irb_pd_original", "irb_pd_floored")
-        report_pd_col = _pick(cols, "irb_pd_floored", "irb_pd_original")
+        alloc_pd_col = _pick(cols, "pd", "pd_floored")
+        report_pd_col = _pick(cols, "pd_floored", "pd")
         if not alloc_pd_col:
             errors.append("CR9: no PD column available — skipping PD backtesting")
             return {}
@@ -817,7 +817,7 @@ class Pillar3Generator:
         if not ec_col or not approach_col or not mapping_col or not grade_col:
             return {}
 
-        report_pd_col = _pick(cols, "irb_pd_floored", "irb_pd_original")
+        report_pd_col = _pick(cols, "pd_floored", "pd")
         if not report_pd_col:
             errors.append("CR9.1: no PD column available — skipping ECAI backtesting")
             return {}
@@ -903,8 +903,8 @@ class Pillar3Generator:
         framework: str,
         errors: list[str],
     ) -> dict[str, pl.DataFrame]:
-        ead_col = _pick(cols, "ead_final", "final_ead", "ead")
-        rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa")
+        ead_col = _pick(cols, "ead_final")
+        rwa_col = _pick(cols, "rwa_final", "rwa")
         if not ead_col or not rwa_col:
             errors.append("CR10: missing required columns")
             return {}
@@ -918,7 +918,7 @@ class Pillar3Generator:
         column_refs = [c.ref for c in cr10_cols]
         sl_type_col = _pick(cols, "sl_type")
         cat_col = _pick(cols, "slotting_category")
-        el_col = _pick(cols, "irb_expected_loss", "expected_loss")
+        el_col = _pick(cols, "expected_loss")
         result: dict[str, pl.DataFrame] = {}
 
         for sl_key in subtemplates:
@@ -964,7 +964,7 @@ class Pillar3Generator:
         if framework != "BASEL_3_1":
             return None
 
-        rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa")
+        rwa_col = _pick(cols, "rwa_final", "rwa")
         approach_col = _pick(cols, "approach_applied", "approach")
         sa_rwa_col = _pick(cols, "sa_rwa")
 
@@ -1032,7 +1032,7 @@ class Pillar3Generator:
         if framework != "BASEL_3_1":
             return None
 
-        rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa")
+        rwa_col = _pick(cols, "rwa_final", "rwa")
         ec_col = _pick(cols, "exposure_class")
         approach_col = _pick(cols, "approach_applied", "approach")
         sa_rwa_col = _pick(cols, "sa_rwa")
@@ -1318,7 +1318,7 @@ def _ov1_memo_250_row(
     rwa_col: str,
 ) -> float | None:
     """Memo row 24: RWA of exposures with a 250% risk weight."""
-    rw_col = _pick(cols, "risk_weight", "sa_final_risk_weight")
+    rw_col = _pick(cols, "risk_weight")
     if not rw_col:
         return None
     memo = data.filter((pl.col(rw_col) >= 2.495) & (pl.col(rw_col) <= 2.505))
@@ -1625,7 +1625,7 @@ def _compute_cr5_values(
         off_bs = _filter_off_bs(data, cols)
         on_bs_ead = _safe_sum(on_bs, "drawn_amount", "interest")
         off_bs_ead = _safe_sum(off_bs, "nominal_amount", "undrawn_amount")
-        ccf_col = _pick(cols, "ccf_applied", "ccf")
+        ccf_col = _pick(cols, "ccf")
         avg_ccf = _ead_weighted_avg(off_bs, ead_col, ccf_col) if ccf_col else None
         values["ba"] = on_bs_ead
         values["bb"] = off_bs_ead
@@ -1648,10 +1648,10 @@ def _compute_cr6_values(
 
     on_bs = _filter_on_bs(data, cols)
     off_bs = _filter_off_bs(data, cols)
-    lgd_col = _pick(cols, "irb_lgd_floored", "irb_lgd_original")
+    lgd_col = _pick(cols, "lgd_floored", "lgd_input")
     maturity_col = _pick(cols, "irb_maturity_m")
-    el_col = _pick(cols, "irb_expected_loss", "expected_loss")
-    ccf_col = _pick(cols, "ccf_applied", "ccf")
+    el_col = _pick(cols, "expected_loss")
+    ccf_col = _pick(cols, "ccf")
     prov_col = _pick(cols, "scra_provision_amount", "provision_held")
 
     ead_sum = _col_sum(data, ead_col) or 0.0
@@ -1707,7 +1707,7 @@ def _cr9_class_predicate(spec: CR9ClassSpec, ec_col: str, cols: set[str]) -> pl.
             predicate = predicate & (pl.col(prop_col) == spec.property_type)
 
     if spec.financial_large is not None:
-        fin_col = _pick(cols, "cp_is_financial_sector_entity", "apply_fi_scalar")
+        fin_col = _pick(cols, "cp_is_financial_sector_entity")
         if fin_col:
             flag = pl.col(fin_col).fill_null(False)
             predicate = predicate & (flag == spec.financial_large)
@@ -1832,7 +1832,7 @@ def _cr9_default_count(
     cp_col: str | None,
 ) -> float:
     """Count of defaulted obligors. Prefers ``is_defaulted``; falls back to PD>=1.0."""
-    default_col = _pick(cols, "is_defaulted", "default_status")
+    default_col = _pick(cols, "is_defaulted")
     if default_col and default_col in data.columns:
         defaulted = data.filter(pl.col(default_col) == True)  # noqa: E712
     elif pd_col in data.columns:
@@ -1862,7 +1862,7 @@ def _cr9_ewa_pd_pct(
     pd_col: str,
 ) -> float | None:
     """Col f: exposure-weighted average PD (%), with arithmetic-mean fallback."""
-    ead_col = _pick(cols, "ead_final", "final_ead", "ead")
+    ead_col = _pick(cols, "ead_final")
     if ead_col and ead_col in data.columns and pd_col in data.columns:
         ewa_pd = _ead_weighted_avg(data, ead_col, pd_col)
         return float(ewa_pd) * 100.0 if ewa_pd is not None else None
@@ -1918,8 +1918,8 @@ def _compute_cr7a_values(
         "i": None,  # Life insurance — not separately tracked
         "j": None,  # Instruments held by third party — not separately tracked
         "k": _pct(_pick(cols, "guaranteed_portion")),
-        "m": _col_sum(data, _pick(cols, "rwa_final", "final_rwa", "rwa")),
-        "n": _col_sum(data, _pick(cols, "rwa_final", "final_rwa", "rwa")),
+        "m": _col_sum(data, _pick(cols, "rwa_final", "rwa")),
+        "n": _col_sum(data, _pick(cols, "rwa_final", "rwa")),
     }
 
     # c = sum of d + e + f

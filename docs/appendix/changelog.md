@@ -7,11 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- (Next release changes will go here)
+### Fixed (migration Phase 7 S1 — reporting sealed-input reconciliation)
+- **COREP C 08.02 / C 08.03 / C 08.05 and Pillar 3 CR6 / CR9 no longer emit empty from real sealed pipeline output.** The generators probed fictional `irb_pd_floored` / `irb_pd_original` (and `irb_lgd_floored` / `irb_lgd_original`) PD/LGD columns that the engine never produces — the sealed `AGGREGATOR_EXIT` carries `pd_floored` / `pd` / `lgd_floored` / `lgd_input`. The probes missed, so these IRB PD/LGD-keyed templates silently produced nothing in production (the synthetic unit fixtures masked this by pinning the fictional columns). The generators now read the sealed canonical names directly (operator-chosen Option B — reporting reads the sealed exit, no new contract aliases). Also fixed the same class of miss in the C 08.01 col 0010 EAD-weighted PD, C 09.02 col 0080 EWA PD, and the LFSE memo cells (`apply_fi_scalar` → the sealed `cp_apply_fi_scalar`). CR9.1 remains intentionally empty (gated on an ECAI PD-mapping disclosure the engine does not produce — recorded accept-empty).
+- **Equity now surfaces in reporting.** The reporting oracle portfolio gained one listed equity holding; the aggregator already concatenates the equity frame into `result.results` before the seal, so an `approach_applied='equity'` row reaches the COREP/Pillar 3 generators and contributes to C 02.00 / OV1 / output-floor totals. (The prior "equity does not reach results" note was stale — corrected.)
 
 ### Changed
-- (Next release changes will go here)
+- **Reporting generators: dead alias `_pick` rungs removed.** Consumer-side alias ladders for columns the sealed contract never carries (`final_ead`, `final_rwa`, `sa_final_risk_weight`, `sa_equivalent_rwa`, `ccf_applied`, `lgd_final`, bare `internal_rating_grade`, the `default_status` rung off the `is_defaulted` ladder, the redundant `irb_expected_loss` first rung) are deleted; `rwa_before_sme_factor` retargets to the sealed `rwa_pre_factor`. Sealed fallbacks (`rwa_post_factor` / `rwa`) are retained. Reporting goldens (`tests/expected_outputs/reporting/`) re-captured for both regimes with each diff verified as a legitimate fix. A new regression suite (`tests/acceptance/reporting/test_reporting_s1_reconciliation.py`) locks the non-empty templates + equity surfacing.
 
 ---
 

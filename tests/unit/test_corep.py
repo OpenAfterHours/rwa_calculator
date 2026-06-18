@@ -156,10 +156,10 @@ def _irb_results() -> pl.LazyFrame:
             "ead_final": [5500.0, 3000.0, 1200.0, 2000.0, 4000.0],
             "rwa_final": [3850.0, 1800.0, 780.0, 600.0, 1200.0],
             "risk_weight": [0.70, 0.60, 0.65, 0.30, 0.30],
-            "irb_pd_floored": [0.005, 0.01, 0.02, 0.002, 0.003],
-            "irb_lgd_floored": [0.45, 0.45, 0.45, 0.45, 0.15],
+            "pd_floored": [0.005, 0.01, 0.02, 0.002, 0.003],
+            "lgd_floored": [0.45, 0.45, 0.45, 0.45, 0.15],
             "irb_maturity_m": [2.5, 3.0, 2.5, 1.5, 20.0],
-            "irb_expected_loss": [12.375, 13.5, 10.8, 1.8, 1.8],
+            "expected_loss": [12.375, 13.5, 10.8, 1.8, 1.8],
             "irb_capital_k": [0.056, 0.048, 0.052, 0.024, 0.024],
             "provision_held": [15.0, 10.0, 8.0, 3.0, 2.5],
             "el_shortfall": [0.0, 3.5, 2.8, 0.0, 0.0],
@@ -249,7 +249,7 @@ def _sa_results_with_phase2_cols() -> pl.LazyFrame:
                 False,
                 False,
             ],
-            "rwa_before_sme_factor": [
+            "rwa_pre_factor": [
                 1200.0,
                 2000.0,
                 550.0,
@@ -317,10 +317,10 @@ def _irb_results_with_phase2_cols() -> pl.LazyFrame:
             "ead_final": [5500.0, 3000.0, 1200.0, 2000.0, 4000.0, 600.0],
             "rwa_final": [3850.0, 1800.0, 780.0, 600.0, 1200.0, 900.0],
             "risk_weight": [0.70, 0.60, 0.65, 0.30, 0.30, 1.50],
-            "irb_pd_floored": [0.005, 0.01, 0.02, 0.002, 0.003, 1.0],
-            "irb_lgd_floored": [0.45, 0.45, 0.45, 0.45, 0.15, 0.45],
+            "pd_floored": [0.005, 0.01, 0.02, 0.002, 0.003, 1.0],
+            "lgd_floored": [0.45, 0.45, 0.45, 0.45, 0.15, 0.45],
             "irb_maturity_m": [2.5, 3.0, 2.5, 1.5, 20.0, 2.5],
-            "irb_expected_loss": [12.375, 13.5, 10.8, 1.8, 1.8, 270.0],
+            "expected_loss": [12.375, 13.5, 10.8, 1.8, 1.8, 270.0],
             "irb_capital_k": [0.056, 0.048, 0.052, 0.024, 0.024, 0.12],
             "provision_held": [15.0, 10.0, 8.0, 3.0, 2.5, 50.0],
             "el_shortfall": [0.0, 3.5, 2.8, 0.0, 0.0, 0.0],
@@ -330,7 +330,7 @@ def _irb_results_with_phase2_cols() -> pl.LazyFrame:
             "counterparty_reference": ["CP_X", "CP_Y", "CP_Z", "CP_W", "CP_V", "CP_DEF"],
             "default_status": [False, False, False, False, False, True],
             "bs_type": ["ONB", "ONB", "ONB", "ONB", "ONB", "ONB"],
-            "apply_fi_scalar": [False, False, False, True, False, False],
+            "cp_apply_fi_scalar": [False, False, False, True, False, False],
         }
     )
 
@@ -379,16 +379,16 @@ def _irb_results_with_output_floor() -> pl.LazyFrame:
             "ead_final": [5500.0, 3000.0, 2000.0],
             "rwa_final": [3850.0, 1800.0, 600.0],
             "risk_weight": [0.70, 0.60, 0.30],
-            "irb_pd_floored": [0.005, 0.01, 0.002],
-            "irb_lgd_floored": [0.45, 0.45, 0.45],
+            "pd_floored": [0.005, 0.01, 0.002],
+            "lgd_floored": [0.45, 0.45, 0.45],
             "irb_maturity_m": [2.5, 3.0, 1.5],
-            "irb_expected_loss": [12.375, 13.5, 1.8],
+            "expected_loss": [12.375, 13.5, 1.8],
             "irb_capital_k": [0.056, 0.048, 0.024],
             "provision_held": [15.0, 10.0, 3.0],
             "scra_provision_amount": [10.0, 5.0, 2.0],
             "gcra_provision_amount": [5.0, 5.0, 1.0],
             "counterparty_reference": ["CP_X", "CP_Y", "CP_W"],
-            "sa_equivalent_rwa": [5500.0, 3000.0, 400.0],
+            "sa_rwa": [5500.0, 3000.0, 400.0],
         }
     )
 
@@ -1861,21 +1861,21 @@ class TestLFSESubColumns:
     """Tests for C 08.01 large financial sector entity sub-columns."""
 
     def test_c0801_lfse_original_exposure(self) -> None:
-        """Col 0030 (LFSE original exposure) populated from apply_fi_scalar."""
+        """Col 0030 (LFSE original exposure) populated from cp_apply_fi_scalar."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_phase2_cols())
 
-        # Institution has apply_fi_scalar=True: drawn=2000, undrawn=0
+        # Institution has cp_apply_fi_scalar=True: drawn=2000, undrawn=0
         inst = _get_total_row(bundle.c08_01["institution"])
         assert inst["0030"][0] == pytest.approx(2000.0)
 
     def test_c0801_lfse_ead(self) -> None:
-        """Col 0140 (LFSE EAD) populated from apply_fi_scalar."""
+        """Col 0140 (LFSE EAD) populated from cp_apply_fi_scalar."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_phase2_cols())
 
         inst = _get_total_row(bundle.c08_01["institution"])
-        # Institution: ead_final=2000, apply_fi_scalar=True
+        # Institution: ead_final=2000, cp_apply_fi_scalar=True
         assert inst["0140"][0] == pytest.approx(2000.0)
 
     def test_c0801_lfse_lgd(self) -> None:
@@ -1888,29 +1888,29 @@ class TestLFSESubColumns:
         assert inst["0240"][0] == pytest.approx(0.45)
 
     def test_c0801_lfse_rwea(self) -> None:
-        """Col 0270 (LFSE RWEA) populated from apply_fi_scalar."""
+        """Col 0270 (LFSE RWEA) populated from cp_apply_fi_scalar."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_phase2_cols())
 
         inst = _get_total_row(bundle.c08_01["institution"])
-        # Institution: rwa_final=600, apply_fi_scalar=True
+        # Institution: rwa_final=600, cp_apply_fi_scalar=True
         assert inst["0270"][0] == pytest.approx(600.0)
 
     def test_c0801_lfse_zero_when_no_lfse_in_class(self) -> None:
-        """LFSE cols are 0.0 when no exposures have apply_fi_scalar=True."""
+        """LFSE cols are 0.0 when no exposures have cp_apply_fi_scalar=True."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_phase2_cols())
 
-        # Corporate has no LFSE exposures (all apply_fi_scalar=False)
+        # Corporate has no LFSE exposures (all cp_apply_fi_scalar=False)
         corp = _get_total_row(bundle.c08_01["corporate"])
         assert corp["0030"][0] == pytest.approx(0.0)
         assert corp["0140"][0] == pytest.approx(0.0)
         assert corp["0270"][0] == pytest.approx(0.0)
 
     def test_c0801_lfse_null_without_column(self) -> None:
-        """LFSE cols are null when apply_fi_scalar not in data."""
+        """LFSE cols are null when cp_apply_fi_scalar not in data."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(_irb_results())  # no apply_fi_scalar
+        bundle = gen.generate_from_lazyframe(_irb_results())  # no cp_apply_fi_scalar
 
         corp = _get_total_row(bundle.c08_01["corporate"])
         assert corp["0030"][0] is None
@@ -1943,19 +1943,24 @@ class TestEdgeCases:
         assert len(bundle.c07_00) == 2
         assert "corporate" in bundle.c07_00
 
-    def test_alternative_column_names(self) -> None:
-        """Generator works with 'ead' instead of 'ead_final'."""
-        alt_names = pl.LazyFrame(
+    def test_canonical_column_names(self) -> None:
+        """Generator works with the sealed canonical names (ead_final / rwa_final).
+
+        P7-S1 (Option B): reporting reads only the sealed ``AGGREGATOR_EXIT``
+        column names; the prior consumer-side alias tolerance (``ead`` / ``rwa``)
+        was intentionally removed, so the fixture feeds the canonical names.
+        """
+        canonical = pl.LazyFrame(
             {
                 "approach_applied": ["standardised"],
                 "exposure_class": ["corporate"],
-                "ead": [1000.0],
-                "rwa": [1000.0],
+                "ead_final": [1000.0],
+                "rwa_final": [1000.0],
                 "risk_weight": [1.0],
             }
         )
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(alt_names)
+        bundle = gen.generate_from_lazyframe(canonical)
         assert len(bundle.c07_00) == 1
 
     def test_sa_only_data(self) -> None:
@@ -2087,10 +2092,10 @@ def _irb_results_with_substitution() -> pl.LazyFrame:
             "ead_final": [5500.0, 3000.0, 2000.0],
             "rwa_final": [3850.0, 1800.0, 600.0],
             "risk_weight": [0.70, 0.60, 0.30],
-            "irb_pd_floored": [0.005, 0.01, 0.002],
-            "irb_lgd_floored": [0.45, 0.45, 0.45],
+            "pd_floored": [0.005, 0.01, 0.002],
+            "lgd_floored": [0.45, 0.45, 0.45],
             "irb_maturity_m": [2.5, 3.0, 1.5],
-            "irb_expected_loss": [12.375, 13.5, 1.8],
+            "expected_loss": [12.375, 13.5, 1.8],
             "irb_capital_k": [0.056, 0.048, 0.024],
             "provision_held": [15.0, 10.0, 3.0],
             "scra_provision_amount": [10.0, 5.0, 2.0],
@@ -2251,10 +2256,10 @@ def _irb_results_with_netting() -> pl.LazyFrame:
             "ead_final": [5500.0, 3000.0, 2000.0],
             "rwa_final": [3850.0, 1800.0, 600.0],
             "risk_weight": [0.70, 0.60, 0.30],
-            "irb_pd_floored": [0.005, 0.01, 0.002],
-            "irb_lgd_floored": [0.45, 0.45, 0.45],
+            "pd_floored": [0.005, 0.01, 0.002],
+            "lgd_floored": [0.45, 0.45, 0.45],
             "irb_maturity_m": [2.5, 3.0, 1.5],
-            "irb_expected_loss": [12.375, 13.5, 1.8],
+            "expected_loss": [12.375, 13.5, 1.8],
             "irb_capital_k": [0.056, 0.048, 0.024],
             "provision_held": [15.0, 10.0, 3.0],
             "el_shortfall": [0.0, 3.5, 0.0],
@@ -2967,10 +2972,10 @@ def _irb_results_with_collateral_split() -> pl.LazyFrame:
             "ead_final": [5500.0, 3000.0],
             "rwa_final": [3850.0, 1800.0],
             "risk_weight": [0.70, 0.60],
-            "irb_pd_floored": [0.005, 0.01],
-            "irb_lgd_floored": [0.45, 0.45],
+            "pd_floored": [0.005, 0.01],
+            "lgd_floored": [0.45, 0.45],
             "irb_maturity_m": [2.5, 3.0],
-            "irb_expected_loss": [12.375, 13.5],
+            "expected_loss": [12.375, 13.5],
             "irb_capital_k": [0.056, 0.048],
             "provision_held": [15.0, 10.0],
             "el_shortfall": [0.0, 3.5],
@@ -3151,10 +3156,10 @@ def _irb_results_with_credit_derivatives() -> pl.LazyFrame:
             "ead_final": [5500.0, 3000.0],
             "rwa_final": [3850.0, 1800.0],
             "risk_weight": [0.70, 0.60],
-            "irb_pd_floored": [0.005, 0.01],
-            "irb_lgd_floored": [0.45, 0.45],
+            "pd_floored": [0.005, 0.01],
+            "lgd_floored": [0.45, 0.45],
             "irb_maturity_m": [2.5, 3.0],
-            "irb_expected_loss": [12.375, 13.5],
+            "expected_loss": [12.375, 13.5],
             "irb_capital_k": [0.056, 0.048],
             "provision_held": [15.0, 10.0],
             "el_shortfall": [0.0, 3.5],
@@ -3569,10 +3574,10 @@ def _irb_results_with_pma() -> pl.LazyFrame:
             "ead_final": [5500.0, 3000.0, 4000.0],
             "rwa_final": [4050.0, 1920.0, 1400.0],
             "risk_weight": [0.70, 0.60, 0.30],
-            "irb_pd_floored": [0.005, 0.01, 0.003],
-            "irb_lgd_floored": [0.45, 0.45, 0.15],
+            "pd_floored": [0.005, 0.01, 0.003],
+            "lgd_floored": [0.45, 0.45, 0.15],
             "irb_maturity_m": [2.5, 3.0, 20.0],
-            "irb_expected_loss": [12.375, 13.5, 1.8],
+            "expected_loss": [12.375, 13.5, 1.8],
             "irb_capital_k": [0.056, 0.048, 0.024],
             "scra_provision_amount": [10.0, 5.0, 1.0],
             "gcra_provision_amount": [5.0, 5.0, 1.5],
@@ -3712,10 +3717,10 @@ def _irb_results_with_double_default() -> pl.LazyFrame:
             "ead_final": [5500.0, 3000.0],
             "rwa_final": [2750.0, 1800.0],
             "risk_weight": [0.50, 0.60],
-            "irb_pd_floored": [0.02, 0.01],
-            "irb_lgd_floored": [0.45, 0.45],
+            "pd_floored": [0.02, 0.01],
+            "lgd_floored": [0.45, 0.45],
             "irb_maturity_m": [2.5, 3.0],
-            "irb_expected_loss": [49.5, 13.5],
+            "expected_loss": [49.5, 13.5],
             "irb_capital_k": [0.04, 0.048],
             "provision_held": [50.0, 10.0],
             "el_shortfall": [0.0, 3.5],
@@ -3843,10 +3848,10 @@ def _irb_results_with_slotting() -> pl.LazyFrame:
             "ead_final": [5500.0, 3000.0, 2000.0, 2000.0, 4000.0],
             "rwa_final": [3850.0, 1800.0, 1600.0, 600.0, 2800.0],
             "risk_weight": [0.70, 0.60, 0.80, 0.30, 0.70],
-            "irb_pd_floored": [0.005, 0.01, None, 0.002, None],
-            "irb_lgd_floored": [0.45, 0.45, None, 0.45, None],
+            "pd_floored": [0.005, 0.01, None, 0.002, None],
+            "lgd_floored": [0.45, 0.45, None, 0.45, None],
             "irb_maturity_m": [2.5, 3.0, None, 1.5, None],
-            "irb_expected_loss": [12.375, 13.5, 0.0, 1.8, 0.0],
+            "expected_loss": [12.375, 13.5, 0.0, 1.8, 0.0],
             "irb_capital_k": [0.056, 0.048, None, 0.024, None],
             "provision_held": [15.0, 10.0, 5.0, 3.0, 8.0],
             "el_shortfall": [0.0, 3.5, 0.0, 0.0, 0.0],
@@ -3889,10 +3894,10 @@ def _irb_results_b31_unrated_corporates() -> pl.LazyFrame:
             "ead_final": [5000.0, 3000.0, 2000.0, 1000.0],
             "rwa_final": [3500.0, 2100.0, 1000.0, 800.0],
             "risk_weight": [0.70, 0.70, 0.50, 0.80],
-            "irb_pd_floored": [0.005, 0.01, 0.003, 0.02],
-            "irb_lgd_floored": [0.45, 0.45, 0.45, 0.45],
+            "pd_floored": [0.005, 0.01, 0.003, 0.02],
+            "lgd_floored": [0.45, 0.45, 0.45, 0.45],
             "irb_maturity_m": [2.5, 2.5, 2.5, 2.5],
-            "irb_expected_loss": [11.25, 13.5, 2.7, 9.0],
+            "expected_loss": [11.25, 13.5, 2.7, 9.0],
             "irb_capital_k": [0.056, 0.056, 0.04, 0.064],
             "provision_held": [15.0, 10.0, 5.0, 8.0],
             "el_shortfall": [0.0, 0.0, 0.0, 0.0],
@@ -4660,16 +4665,16 @@ def _irb_pd_range_results() -> pl.LazyFrame:
             "ead_final": [5500.0, 3000.0, 2200.0, 1000.0, 500.0],
             "rwa_final": [2750.0, 1800.0, 1540.0, 750.0, 0.0],
             "risk_weight": [0.50, 0.60, 0.70, 0.75, 0.0],
-            "irb_pd_floored": [0.002, 0.005, 0.01, 0.03, 1.0],
-            "irb_pd_original": [0.001, 0.004, 0.01, 0.03, 1.0],
-            "irb_lgd_floored": [0.45, 0.45, 0.35, 0.40, 0.45],
+            "pd_floored": [0.002, 0.005, 0.01, 0.03, 1.0],
+            "pd": [0.001, 0.004, 0.01, 0.03, 1.0],
+            "lgd_floored": [0.45, 0.45, 0.35, 0.40, 0.45],
             "irb_maturity_m": [2.5, 3.0, 2.0, 4.0, 1.0],
-            "irb_expected_loss": [4.95, 6.75, 7.7, 12.0, 225.0],
+            "expected_loss": [4.95, 6.75, 7.7, 12.0, 225.0],
             "provision_held": [5.0, 8.0, 6.0, 15.0, 200.0],
             "scra_provision_amount": [3.0, 4.0, 3.0, 8.0, 100.0],
             "gcra_provision_amount": [2.0, 4.0, 3.0, 7.0, 100.0],
             "counterparty_reference": ["CP_A", "CP_B", "CP_C", "CP_D", "CP_E"],
-            "ccf_applied": [0.5, 0.0, 0.4, 0.0, 0.0],
+            "ccf": [0.5, 0.0, 0.4, 0.0, 0.0],
         }
     )
 
@@ -4695,10 +4700,10 @@ def _irb_multi_class_pd_range() -> pl.LazyFrame:
             "nominal_amount": [1000.0, 0.0, 0.0, 0.0],
             "ead_final": [5500.0, 3000.0, 2000.0, 4000.0],
             "rwa_final": [2750.0, 1800.0, 600.0, 1200.0],
-            "irb_pd_floored": [0.005, 0.01, 0.002, 0.003],
-            "irb_lgd_floored": [0.45, 0.45, 0.45, 0.15],
+            "pd_floored": [0.005, 0.01, 0.002, 0.003],
+            "lgd_floored": [0.45, 0.45, 0.45, 0.15],
             "irb_maturity_m": [2.5, 3.0, 1.5, 20.0],
-            "irb_expected_loss": [12.375, 13.5, 1.8, 1.8],
+            "expected_loss": [12.375, 13.5, 1.8, 1.8],
             "provision_held": [15.0, 10.0, 3.0, 2.5],
             "counterparty_reference": ["CP_A", "CP_B", "CP_C", "CP_D"],
         }
@@ -4823,8 +4828,8 @@ class TestC0803Generation:
                 "exposure_class": ["corporate", "specialised_lending"],
                 "ead_final": [5000.0, 3000.0],
                 "rwa_final": [2500.0, 2100.0],
-                "irb_pd_floored": [0.005, 0.0],
-                "irb_lgd_floored": [0.45, 0.0],
+                "pd_floored": [0.005, 0.0],
+                "lgd_floored": [0.45, 0.0],
                 "counterparty_reference": ["CP_A", "CP_B"],
             }
         )
@@ -4997,8 +5002,8 @@ class TestC0803B31Features:
     def test_b31_row_allocation_uses_pre_floor_pd(self) -> None:
         """Basel 3.1 OF 08.03 allocates rows using pre-input-floor PD.
 
-        E1 has irb_pd_original=0.001 (0.10%) which falls in '0.10 to < 0.15%'
-        bucket (row 0040), even though irb_pd_floored=0.002 (0.20%) would
+        E1 has pd=0.001 (0.10%) which falls in '0.10 to < 0.15%'
+        bucket (row 0040), even though pd_floored=0.002 (0.20%) would
         fall in '0.20 to < 0.25%' (row 0060).
         """
         gen = COREPGenerator()
@@ -5024,7 +5029,7 @@ class TestC0803B31Features:
     def test_crr_uses_floored_pd_for_allocation(self) -> None:
         """CRR C 08.03 uses floored PD for both allocation and reporting.
 
-        E1 has irb_pd_floored=0.002 (0.20%) → '0.20 to < 0.25%' bucket (row 0060).
+        E1 has pd_floored=0.002 (0.20%) → '0.20 to < 0.25%' bucket (row 0060).
         """
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_range_results(), framework="CRR")
@@ -5069,7 +5074,7 @@ class TestC0803EdgeCases:
                 "exposure_class": ["corporate"],
                 "ead_final": [1000.0],
                 "rwa_final": [500.0],
-                "irb_pd_floored": [0.01],
+                "pd_floored": [0.01],
             }
         )
         bundle = gen.generate_from_lazyframe(results)
@@ -5090,7 +5095,7 @@ class TestC0803EdgeCases:
                 "exposure_class": ["corporate", "corporate"],
                 "ead_final": [1000.0, 2000.0],
                 "rwa_final": [500.0, 1000.0],
-                "irb_pd_floored": [0.005, None],
+                "pd_floored": [0.005, None],
                 "counterparty_reference": ["CP_A", "CP_B"],
             }
         )
@@ -5559,8 +5564,8 @@ def _irb_pd_backtest_results() -> pl.LazyFrame:
             "exposure_class": ["corporate", "corporate", "corporate", "corporate", "corporate"],
             "ead_final": [5500.0, 3000.0, 2200.0, 1000.0, 500.0],
             "rwa_final": [2750.0, 1800.0, 1540.0, 750.0, 0.0],
-            "irb_pd_floored": [0.002, 0.005, 0.01, 0.03, 1.0],
-            "irb_pd_original": [0.001, 0.004, 0.01, 0.03, 1.0],
+            "pd_floored": [0.002, 0.005, 0.01, 0.03, 1.0],
+            "pd": [0.001, 0.004, 0.01, 0.03, 1.0],
             "is_defaulted": [False, False, False, False, True],
             "counterparty_reference": ["CP_A", "CP_B", "CP_C", "CP_D", "CP_E"],
         }
@@ -5584,7 +5589,7 @@ def _irb_backtest_multi_class() -> pl.LazyFrame:
             "exposure_class": ["corporate", "corporate", "corporate", "institution"],
             "ead_final": [1000.0, 2000.0, 500.0, 3000.0],
             "rwa_final": [500.0, 1200.0, 0.0, 900.0],
-            "irb_pd_floored": [0.005, 0.01, 1.0, 0.002],
+            "pd_floored": [0.005, 0.01, 1.0, 0.002],
             "is_defaulted": [False, False, True, False],
             "counterparty_reference": ["CP_A", "CP_B", "CP_C", "CP_D"],
         }
@@ -5673,7 +5678,7 @@ class TestC0805Generation:
                 "exposure_class": ["corporate"],
                 "ead_final": [1000.0],
                 "rwa_final": [500.0],
-                "irb_pd_floored": [0.005],
+                "pd_floored": [0.005],
             }
         )
         gen = COREPGenerator()
@@ -5688,7 +5693,7 @@ class TestC0805Generation:
                 "exposure_class": ["specialised_lending", "corporate"],
                 "ead_final": [1000.0, 2000.0],
                 "rwa_final": [700.0, 1000.0],
-                "irb_pd_floored": [0.005, 0.01],
+                "pd_floored": [0.005, 0.01],
                 "counterparty_reference": ["CP_A", "CP_B"],
             }
         )
@@ -5734,20 +5739,20 @@ class TestC0805PDRangeAssignment:
         assert len(corp) == 5
 
     def test_b31_allocation_uses_original_pd(self) -> None:
-        """Basel 3.1 allocates rows by irb_pd_original (pre-floor)."""
+        """Basel 3.1 allocates rows by pd (pre-floor)."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_backtest_results(), framework="BASEL_3_1")
         corp = bundle.c08_05["corporate"]
-        # E1: irb_pd_original=0.001, should go to row 0040 (0.10 to < 0.15%)
+        # E1: pd=0.001, should go to row 0040 (0.10 to < 0.15%)
         row = corp.filter(pl.col("row_ref") == "0040")
         assert len(row) == 1
 
     def test_crr_allocation_uses_floored_pd(self) -> None:
-        """CRR allocates rows by irb_pd_floored."""
+        """CRR allocates rows by pd_floored."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_backtest_results(), framework="CRR")
         corp = bundle.c08_05["corporate"]
-        # E1: irb_pd_floored=0.002, should go to row 0060 (0.20 to < 0.25%)
+        # E1: pd_floored=0.002, should go to row 0060 (0.20 to < 0.25%)
         row = corp.filter(pl.col("row_ref") == "0060")
         assert len(row) == 1
 
@@ -5852,7 +5857,7 @@ class TestC0805ColumnValues:
                 "exposure_class": ["corporate", "corporate", "corporate"],
                 "ead_final": [1000.0, 2000.0, 1500.0],
                 "rwa_final": [500.0, 1000.0, 750.0],
-                "irb_pd_floored": [0.005, 0.006, 0.007],
+                "pd_floored": [0.005, 0.006, 0.007],
                 "is_defaulted": [False, False, False],
                 # E1 and E3 share a counterparty
                 "counterparty_reference": ["CP_A", "CP_B", "CP_A"],
@@ -5939,7 +5944,7 @@ class TestC0805EdgeCases:
                 "exposure_class": ["corporate", "corporate"],
                 "ead_final": [1000.0, 2000.0],
                 "rwa_final": [500.0, 1000.0],
-                "irb_pd_floored": [None, 0.005],
+                "pd_floored": [None, 0.005],
                 "is_defaulted": [False, False],
                 "counterparty_reference": ["CP_A", "CP_B"],
             }
@@ -5965,7 +5970,7 @@ class TestC0805EdgeCases:
                 "exposure_class": ["corporate", "corporate"],
                 "ead_final": [1000.0, 500.0],
                 "rwa_final": [500.0, 0.0],
-                "irb_pd_floored": [0.005, 1.0],
+                "pd_floored": [0.005, 1.0],
                 "counterparty_reference": ["CP_A", "CP_B"],
             }
         )
@@ -5986,7 +5991,7 @@ class TestC0805EdgeCases:
                 "exposure_class": ["corporate", "corporate", "corporate"],
                 "ead_final": [1000.0, 2000.0, 3000.0],
                 "rwa_final": [500.0, 1000.0, 1500.0],
-                "irb_pd_floored": [0.005, 0.006, 0.007],
+                "pd_floored": [0.005, 0.006, 0.007],
                 "is_defaulted": [False, False, False],
             }
         )
@@ -7658,7 +7663,7 @@ def _irb_geo_results() -> pl.LazyFrame:
             "rwa_final": [700.0, 350.0, 600.0, 200.0, 300.0],
             "cp_country_code": ["GB", "US", "GB", "GB", "US"],
             "default_status": [False, False, False, False, False],
-            "irb_pd_floored": [0.01, 0.02, 0.005, 0.03, 0.008],
+            "pd_floored": [0.01, 0.02, 0.005, 0.03, 0.008],
             "lgd_post_crm": [0.45, 0.45, 0.20, 0.75, 0.45],
             "expected_loss": [4.5, 4.5, 2.0, 18.0, 5.4],
         }
@@ -7848,7 +7853,7 @@ class TestC0902Generation:
                 "exposure_class": ["corporate"],
                 "ead_final": [1000.0],
                 "rwa_final": [500.0],
-                "irb_pd_floored": [0.01],
+                "pd_floored": [0.01],
             }
         )
         gen = COREPGenerator()
@@ -7972,7 +7977,7 @@ class TestC0902EdgeCases:
                 "ead_gross": [1200.0],
                 "rwa_final": [500.0],
                 "cp_country_code": ["GB"],
-                "irb_pd_floored": [0.01],
+                "pd_floored": [0.01],
                 "lgd_post_crm": [0.45],
             }
         )
@@ -7991,7 +7996,7 @@ class TestC0902EdgeCases:
                 "ead_final": [1000.0, 500.0],
                 "rwa_final": [500.0, 250.0],
                 "cp_country_code": ["GB", None],
-                "irb_pd_floored": [0.01, 0.02],
+                "pd_floored": [0.01, 0.02],
             }
         )
         gen = COREPGenerator()
@@ -8012,7 +8017,7 @@ class TestC0902EdgeCases:
                 "ead_final": [1000.0, 500.0],
                 "rwa_final": [700.0, 250.0],
                 "cp_country_code": ["GB", "GB"],
-                "irb_pd_floored": [0.005, 0.01],
+                "pd_floored": [0.005, 0.01],
             }
         )
         gen = COREPGenerator()
@@ -8032,7 +8037,7 @@ class TestC0902EdgeCases:
                 "ead_gross": [0.0],
                 "rwa_final": [0.0],
                 "cp_country_code": ["GB"],
-                "irb_pd_floored": [0.01],
+                "pd_floored": [0.01],
             }
         )
         gen = COREPGenerator()
@@ -8538,7 +8543,7 @@ class TestC0700SupportingFactorRWEA:
 
 
 def _irb_results_with_sme_fse() -> pl.LazyFrame:
-    """IRB results with is_sme and apply_fi_scalar for OF 02.00 sub-row tests.
+    """IRB results with is_sme and cp_apply_fi_scalar for OF 02.00 sub-row tests.
 
     Contains F-IRB and A-IRB exposures with SME and FSE flags to test
     the per-sub-class breakdown (rows 0295-0297, 0355-0356, 0382-0385,
@@ -8630,7 +8635,7 @@ def _irb_results_with_sme_fse() -> pl.LazyFrame:
                 True,
                 False,
             ],
-            "apply_fi_scalar": [
+            "cp_apply_fi_scalar": [
                 True,
                 False,
                 False,
@@ -8705,7 +8710,7 @@ def _irb_results_with_sme_fse() -> pl.LazyFrame:
 
 
 class TestOF0200IRBSubRowSplits:
-    """Tests for OF 02.00 IRB sub-row population using is_sme and apply_fi_scalar.
+    """Tests for OF 02.00 IRB sub-row population using is_sme and cp_apply_fi_scalar.
 
     Why: The master capital template (OF 02.00) must report F-IRB and A-IRB
     RWEA with proper sub-class breakdown: financial/large corporates vs SME vs
@@ -9198,10 +9203,10 @@ def _irb_results_with_sign_convention_cols() -> pl.LazyFrame:
             "ead_final": [1000.0],
             "rwa_final": [700.0],
             "risk_weight": [0.70],
-            "irb_pd_floored": [0.005],
-            "irb_lgd_floored": [0.45],
+            "pd_floored": [0.005],
+            "lgd_floored": [0.45],
             "irb_maturity_m": [2.5],
-            "irb_expected_loss": [2.25],
+            "expected_loss": [2.25],
             "irb_capital_k": [0.056],
             "provision_held": [45.0],
             "el_shortfall": [0.0],

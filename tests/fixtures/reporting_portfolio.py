@@ -21,24 +21,26 @@ Coverage (one exposure each unless noted):
                 defaulted, other items
     IRB         F-IRB corporate, A-IRB corporate, A-IRB retail
     Slotting    specialised lending (project finance, strong)
+    Equity      one listed equity holding (Art. 133 SA / Art. 155 IRB simple)
 
-Equity is deliberately OUT OF SCOPE for S0: equity flows through a separate
-calculator path (``get_equity_result_bundle``) and does not reach the unified
-``result.results`` LazyFrame the generators read, so an equity row would not
-populate any reporting cell here. Equity reporting goldens are a recorded
-follow-up once the equity->results wiring is confirmed.
+Equity (added Phase 7 S1): equity flows through the separate
+``get_equity_result_bundle`` path, but the aggregator already concatenates the
+prepared equity frame into ``combined_unmultiplied`` BEFORE the
+``AGGREGATOR_EXIT`` seal (``aggregator.py``), so an equity row DOES reach
+``result.results`` with ``approach_applied='equity'`` / ``exposure_class='equity'``.
+The earlier "equity does not reach results" belief was stale — verified against
+the wiring this slice. The equity exposure here surfaces equity in the reporting
+templates that filter on the equity class/approach.
 
-Known-empty templates (a LATENT REPORTING GAP this oracle faithfully freezes, to
-be reconciled in Phase 7 S1 — NOT a fixture deficiency): C 08.02 / C 08.03 /
-C 08.05 and Pillar 3 CR6 / CR9 / CR9.1 generate EMPTY from real sealed output.
-Their generators probe ``irb_pd_floored`` / ``irb_pd_original`` (and obligor
-``internal_rating_grade``), but the sealed ``aggregator_exit`` provides
-``pd_floored`` (no ``irb_`` prefix) and does not seal the grade — so the probes
-miss and the templates emit nothing. The synthetic ``test_corep`` unit fixtures
-only populate these by pinning the (unsealed, fictional) ``irb_pd_floored``
-column. S1 reconciles each probe against the sealed schema (alias ``pd_floored``
-or add the column to the contract) and re-captures these goldens with a recorded
-decision.
+Templates reconciled in Phase 7 S1 (Option B — reporting reads the sealed
+canonical names): C 08.02 / C 08.03 / C 08.05 and Pillar 3 CR6 / CR9 now POPULATE
+from real sealed output. The generators previously probed the fictional
+``irb_pd_floored`` / ``irb_pd_original`` (and LGD equivalents); the sealed
+``aggregator_exit`` provides ``pd_floored`` / ``pd`` / ``lgd_floored`` /
+``lgd_input``, which the generators now read directly. CR9.1 remains EMPTY — it
+is gated on ``ecai_pd_mapping`` / ``external_rating_equivalent`` (an ECAI PD-
+mapping disclosure the engine does not produce), an accept-empty decision out of
+S1 scope.
 
 Routing is driven entirely by input columns (no config branching):
 - SA vs IRB:  an exposure routes IRB only when its inherited rating carries an
@@ -94,6 +96,10 @@ CP_FIRB = "RP-CP-FIRB"
 CP_AIRB = "RP-CP-AIRB"
 CP_AIRB_RET = "RP-CP-AIRB-RET"
 CP_SL = "RP-CP-SL"
+CP_EQUITY = "RP-CP-EQUITY"
+
+# Equity exposure reference (separate equity input table, not a loan)
+EQ_LISTED = "RP-EQ-LISTED"
 
 # Loan references
 LN_SOV = "RP-LN-SOV"
@@ -149,6 +155,7 @@ def build_reporting_bundle() -> RawDataBundle:
         model_permissions=create_full_irb_model_permissions(),
         specialised_lending=_specialised_lending(),
         collateral=_collateral(),
+        equity_exposures=_equity_exposures(),
     )
 
 
@@ -237,8 +244,36 @@ def _counterparties() -> pl.DataFrame:
             "country_code": "GB",
             "annual_revenue": 200_000_000.0,
         },
+        {
+            "counterparty_reference": CP_EQUITY,
+            "entity_type": "corporate",
+            "country_code": "GB",
+            "annual_revenue": 200_000_000.0,
+        },
     ]
     return pl.DataFrame(rows)
+
+
+def _equity_exposures() -> pl.DataFrame:
+    """One listed equity holding — exercises the separate equity calculator path.
+
+    Equity routes via the ``equity_exposures`` input table (not loans). The
+    aggregator concatenates the prepared equity frame into ``result.results``
+    before the seal, so this row appears with ``approach_applied='equity'`` /
+    ``exposure_class='equity'`` and surfaces equity in the reporting templates.
+    """
+    return pl.DataFrame(
+        [
+            {
+                "exposure_reference": EQ_LISTED,
+                "counterparty_reference": CP_EQUITY,
+                "equity_type": "listed",
+                "currency": "GBP",
+                "carrying_value": 1_000_000.0,
+                "fair_value": 1_000_000.0,
+            }
+        ]
+    )
 
 
 def _loans() -> pl.DataFrame:

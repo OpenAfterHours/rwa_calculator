@@ -1,0 +1,18 @@
+{"row_ref":"1","row_name":"0.00 to < 0.03%","a":"0.00 to < 0.03%","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
+{"row_ref":"2","row_name":"0.03 to < 0.05%","a":"0.03 to < 0.05%","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
+{"row_ref":"3","row_name":"0.05 to < 0.10%","a":"0.05 to < 0.10%","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
+{"row_ref":"4","row_name":"0.10 to < 0.15%","a":"0.10 to < 0.15%","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
+{"row_ref":"5","row_name":"0.15 to < 0.20%","a":"0.15 to < 0.20%","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
+{"row_ref":"6","row_name":"0.20 to < 0.25%","a":"0.20 to < 0.25%","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
+{"row_ref":"7","row_name":"0.25 to < 0.50%","a":"0.25 to < 0.50%","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
+{"row_ref":"8","row_name":"0.50 to < 0.75%","a":"0.50 to < 0.75%","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
+{"row_ref":"9","row_name":"0.75 to < 1.00%","a":"0.75 to < 1.00%","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
+{"row_ref":"10","row_name":"1.00 to < 2.50%","a":"1.00 to < 2.50%","b":20000000.0,"c":0.0,"d":null,"e":20000000.0,"f":1.0,"g":1.0,"h":30.0,"i":4.583561643835616,"j":14603495.53196416,"k":0.7301747765982081,"l":60000.0,"m":null}
+{"row_ref":"11","row_name":"2.50 to < 5.00%","a":"2.50 to < 5.00%","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
+{"row_ref":"12","row_name":"5.00 to < 10.00%","a":"5.00 to < 10.00%","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
+{"row_ref":"13","row_name":"10.00 to < 20.00%","a":"10.00 to < 20.00%","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
+{"row_ref":"14","row_name":"20.00 to < 30.00%","a":"20.00 to < 30.00%","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
+{"row_ref":"15","row_name":"30.00 to < 50.00%","a":"30.00 to < 50.00%","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
+{"row_ref":"16","row_name":"50.00 to < 100%","a":"50.00 to < 100%","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
+{"row_ref":"17","row_name":"100% (Default)","a":"100% (Default)","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
+{"row_ref":"18","row_name":"Total","a":"Total","b":20000000.0,"c":0.0,"d":null,"e":20000000.0,"f":1.0,"g":1.0,"h":30.0,"i":4.583561643835616,"j":14603495.53196416,"k":0.7301747765982081,"l":60000.0,"m":null}

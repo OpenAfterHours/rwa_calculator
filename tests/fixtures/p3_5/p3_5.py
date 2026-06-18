@@ -31,7 +31,7 @@ Scenario design (P3.5 — PRA PS1/26 UKB CR9.1 template, Art. 180(1)(f)):
 
     Obligor-level seed data:
 
-        counterparty_reference | approach  | exposure_class | irb_pd_original | irb_pd_floored | ead_final | is_defaulted | external_rating_equivalent
+        counterparty_reference | approach  | exposure_class | pd | pd_floored | ead_final | is_defaulted | external_rating_equivalent
         -----------------------+-----------+----------------+-----------------+----------------+-----------+--------------+---------------------------
         OBL-1                  | advanced_irb | corporate   | 0.0040          | 0.0040         | 100       | False        | A
         OBL-2                  | advanced_irb | corporate   | 0.0040          | 0.0040         | 100       | True         | A
@@ -201,8 +201,8 @@ def build_cr9_1_results_lf() -> pl.LazyFrame:
     Columns consumed by ``_compute_cr9_values`` (via ``_generate_all_cr9_1``):
         counterparty_reference  — for unique-obligor counting (_cr9_obligor_count)
         is_defaulted            — for default counting (_cr9_default_count)
-        irb_pd_floored          — reported PD (col f / g)
-        irb_pd_original         — allocation PD (bucket selection)
+        pd_floored          — reported PD (col f / g)
+        pd         — allocation PD (bucket selection)
         ead_final               — EAD weight for col f (_cr9_ewa_pd_pct)
         approach_applied        — approach filter
         exposure_class          — class filter
@@ -214,8 +214,8 @@ def build_cr9_1_results_lf() -> pl.LazyFrame:
             "counterparty_reference": "OBL-1",
             "approach_applied": "advanced_irb",
             "exposure_class": "corporate",
-            "irb_pd_original": 0.0040,
-            "irb_pd_floored": 0.0040,
+            "pd": 0.0040,
+            "pd_floored": 0.0040,
             "ead_final": 100.0,
             "is_defaulted": False,
             "ecai_pd_mapping": True,
@@ -225,8 +225,8 @@ def build_cr9_1_results_lf() -> pl.LazyFrame:
             "counterparty_reference": "OBL-2",
             "approach_applied": "advanced_irb",
             "exposure_class": "corporate",
-            "irb_pd_original": 0.0040,
-            "irb_pd_floored": 0.0040,
+            "pd": 0.0040,
+            "pd_floored": 0.0040,
             "ead_final": 100.0,
             "is_defaulted": True,
             "ecai_pd_mapping": True,
@@ -236,8 +236,8 @@ def build_cr9_1_results_lf() -> pl.LazyFrame:
             "counterparty_reference": "OBL-3",
             "approach_applied": "advanced_irb",
             "exposure_class": "corporate",
-            "irb_pd_original": 0.0050,
-            "irb_pd_floored": 0.0050,
+            "pd": 0.0050,
+            "pd_floored": 0.0050,
             "ead_final": 200.0,
             "is_defaulted": False,
             "ecai_pd_mapping": True,
@@ -247,8 +247,8 @@ def build_cr9_1_results_lf() -> pl.LazyFrame:
             "counterparty_reference": "OBL-4",
             "approach_applied": "advanced_irb",
             "exposure_class": "corporate",
-            "irb_pd_original": 0.0200,
-            "irb_pd_floored": 0.0200,
+            "pd": 0.0200,
+            "pd_floored": 0.0200,
             "ead_final": 50.0,
             "is_defaulted": False,
             "ecai_pd_mapping": True,
@@ -258,8 +258,8 @@ def build_cr9_1_results_lf() -> pl.LazyFrame:
             "counterparty_reference": "OBL-5",
             "approach_applied": "advanced_irb",
             "exposure_class": "corporate",
-            "irb_pd_original": 0.0200,
-            "irb_pd_floored": 0.0200,
+            "pd": 0.0200,
+            "pd_floored": 0.0200,
             "ead_final": 150.0,
             "is_defaulted": False,
             "ecai_pd_mapping": True,
@@ -270,8 +270,8 @@ def build_cr9_1_results_lf() -> pl.LazyFrame:
         "counterparty_reference": pl.Utf8,
         "approach_applied": pl.Utf8,
         "exposure_class": pl.Utf8,
-        "irb_pd_original": pl.Float64,
-        "irb_pd_floored": pl.Float64,
+        "pd": pl.Float64,
+        "pd_floored": pl.Float64,
         "ead_final": pl.Float64,
         "is_defaulted": pl.Boolean,
         "ecai_pd_mapping": pl.Boolean,
@@ -295,8 +295,8 @@ def _verify_lf() -> None:
         "counterparty_reference",
         "approach_applied",
         "exposure_class",
-        "irb_pd_original",
-        "irb_pd_floored",
+        "pd",
+        "pd_floored",
         "ead_final",
         "is_defaulted",
         "ecai_pd_mapping",

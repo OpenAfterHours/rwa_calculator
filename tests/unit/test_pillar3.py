@@ -118,11 +118,11 @@ def _make_irb_data(**overrides: object) -> pl.LazyFrame:
         "exposure_class": ["corporate", "retail_mortgage", "retail_other"],
         "ead_final": [5000.0, 3000.0, 2000.0],
         "rwa_final": [4000.0, 1500.0, 1200.0],
-        "irb_pd_floored": [0.02, 0.005, 0.01],
-        "irb_pd_original": [0.018, 0.004, 0.009],
-        "irb_lgd_floored": [0.45, 0.10, 0.30],
+        "pd_floored": [0.02, 0.005, 0.01],
+        "pd": [0.018, 0.004, 0.009],
+        "lgd_floored": [0.45, 0.10, 0.30],
         "irb_maturity_m": [2.5, 1.0, 1.0],
-        "irb_expected_loss": [45.0, 15.0, 6.0],
+        "expected_loss": [45.0, 15.0, 6.0],
         "counterparty_reference": ["CP1", "CP2", "CP3"],
         "drawn_amount": [4500.0, 2700.0, 1800.0],
         "nominal_amount": [600.0, 400.0, 300.0],
@@ -145,7 +145,7 @@ def _make_slotting_data(**overrides: object) -> pl.LazyFrame:
         "slotting_category": ["strong", "good", "satisfactory"],
         "ead_final": [1000.0, 800.0, 600.0],
         "rwa_final": [700.0, 720.0, 690.0],
-        "irb_expected_loss": [5.0, 8.0, 12.0],
+        "expected_loss": [5.0, 8.0, 12.0],
         "drawn_amount": [900.0, 700.0, 500.0],
         "nominal_amount": [150.0, 120.0, 120.0],
         "undrawn_amount": [100.0, 100.0, 100.0],
@@ -570,7 +570,7 @@ class TestCR6Generation:
         assert total["g"][0] == pytest.approx(1.0)
 
     def test_cr6_b31_uses_original_pd_for_allocation(self, generator: Pillar3Generator):
-        """B31: PD range allocation should use pre-floor PD (irb_pd_original)."""
+        """B31: PD range allocation should use pre-floor PD (pd)."""
         data = _make_irb_data()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
         assert len(bundle.cr6) > 0
@@ -1231,11 +1231,11 @@ def _make_cr9_irb_data(**overrides: object) -> pl.LazyFrame:
         "cp_is_financial_sector_entity": [False, False, False, False, False, False],
         "ead_final": [5000.0, 3000.0, 2000.0, 1500.0, 1000.0, 800.0],
         "rwa_final": [4000.0, 1800.0, 1200.0, 900.0, 600.0, 480.0],
-        "irb_pd_floored": [0.02, 0.005, 0.01, 0.008, 0.03, 1.0],
-        "irb_pd_original": [0.018, 0.004, 0.009, 0.007, 0.025, 1.0],
-        "irb_lgd_floored": [0.45, 0.45, 0.10, 0.10, 0.30, 0.45],
+        "pd_floored": [0.02, 0.005, 0.01, 0.008, 0.03, 1.0],
+        "pd": [0.018, 0.004, 0.009, 0.007, 0.025, 1.0],
+        "lgd_floored": [0.45, 0.45, 0.10, 0.10, 0.30, 0.45],
         "irb_maturity_m": [2.5, 2.5, 1.0, 1.0, 1.0, 1.0],
-        "irb_expected_loss": [45.0, 6.75, 2.0, 1.2, 9.0, 360.0],
+        "expected_loss": [45.0, 6.75, 2.0, 1.2, 9.0, 360.0],
         "counterparty_reference": ["CP1", "CP2", "CP3", "CP4", "CP5", "CP6"],
         "is_defaulted": [False, False, False, False, False, True],
         "drawn_amount": [4500.0, 2700.0, 1800.0, 1350.0, 900.0, 720.0],
@@ -1491,13 +1491,13 @@ class TestCR9PDAllocation:
     """Tests for PD range bucket assignment in CR9."""
 
     def test_pd_allocation_uses_original_pd(self, generator: Pillar3Generator):
-        """B31 allocates by irb_pd_original (pre-input-floor), not irb_pd_floored."""
+        """B31 allocates by pd (pre-input-floor), not pd_floored."""
         data = _make_cr9_irb_data()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
         # P2.49: CP1 (F-IRB corporate, cp_is_financial_sector_entity=False) →
         # foundation_irb - corporate_other_non_sme
         corp = bundle.cr9["foundation_irb - corporate_other_non_sme"]
-        # Corporate: irb_pd_original=0.018 → bucket "10" (1.00-2.50%)
+        # Corporate: pd=0.018 → bucket "10" (1.00-2.50%)
         non_total = corp.filter(pl.col("row_ref") != "18")
         refs = non_total["row_ref"].to_list()
         assert "10" in refs  # 1.00 to < 2.50%
@@ -1535,7 +1535,7 @@ class TestCR9EdgeCases:
                 "exposure_class": ["corporate"],
                 "ead_final": [1000.0],
                 "rwa_final": [800.0],
-                "irb_pd_floored": [0.01],
+                "pd_floored": [0.01],
             }
         )
         bundle = generator.generate_from_lazyframe(sa_only, framework="BASEL_3_1")
@@ -1568,8 +1568,8 @@ class TestCR9EdgeCases:
                 "exposure_class": ["specialised_lending"],
                 "ead_final": [1000.0],
                 "rwa_final": [700.0],
-                "irb_pd_floored": [0.02],
-                "irb_pd_original": [0.018],
+                "pd_floored": [0.02],
+                "pd": [0.018],
             }
         )
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
@@ -1598,8 +1598,8 @@ class TestCR9EdgeCases:
                 "exposure_class": ["corporate", "corporate"],
                 "ead_final": [1000.0, 2000.0],
                 "rwa_final": [800.0, 1600.0],
-                "irb_pd_floored": [0.01, 0.02],
-                "irb_pd_original": [0.009, 0.018],
+                "pd_floored": [0.01, 0.02],
+                "pd": [0.009, 0.018],
                 "counterparty_reference": ["A", "B"],
             }
         )
@@ -1630,8 +1630,8 @@ class TestCR9EdgeCases:
                 "exposure_class": ["corporate", "corporate", "corporate"],
                 "ead_final": [1000.0, 2000.0, 3000.0],
                 "rwa_final": [800.0, 1600.0, 2400.0],
-                "irb_pd_floored": [0.01, 0.01, 0.02],
-                "irb_pd_original": [0.009, 0.009, 0.018],
+                "pd_floored": [0.01, 0.01, 0.02],
+                "pd": [0.009, 0.009, 0.018],
                 "counterparty_reference": ["A", "A", "B"],  # 2 unique CPs
                 "is_defaulted": [False, False, False],
             }

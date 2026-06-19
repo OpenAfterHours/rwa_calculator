@@ -865,6 +865,103 @@ CMS2_SA_CLASS_MAP: dict[str, tuple[str, ...]] = {
 
 
 # ---------------------------------------------------------------------------
+# CCR1 — Analysis of CCR exposure by approach (Art. 439(f))
+# ---------------------------------------------------------------------------
+#
+# One row per CCR calculation approach. The pipeline calculates SA-CCR EAD on
+# the synthetic ``ccr__`` netting-set rows (CRR Art. 274(2)); the other rows
+# (IMM, original exposure, etc.) are structural placeholders left null. Column
+# ``a`` carries the EAD post-CRM, column ``f`` the resulting RWEA — the two
+# value columns the disclosure consumer reconciles against the OV1 CCR line.
+
+CCR1_COLUMNS: list[P3Column] = [
+    P3Column("a", "Exposure value post-CRM (EAD)", _GRP_EXPOSURE_BREAKDOWN),
+    P3Column("b", "RWEAs"),
+]
+
+CCR1_ROWS: list[P3Row] = [
+    P3Row("1", "SA-CCR (for derivatives)"),
+    P3Row("2", "Internal Model Method (IMM)"),
+    P3Row("6", "Original exposure method"),
+    P3Row("11", "Total", is_total=True),
+]
+
+
+# ---------------------------------------------------------------------------
+# CCR2 — Credit valuation adjustment (CVA) capital charge (Art. 439(h))
+# ---------------------------------------------------------------------------
+#
+# Under Basel 3.1 the firm uses the Basic Approach to CVA (BA-CVA). The single
+# populated row carries the portfolio RWEA_CVA (column ``b``) computed by the
+# CVA stage. Column ``a`` (exposure value) is left null — the BA-CVA charge is a
+# standalone RWEA scalar, not an EAD-derived figure.
+
+CCR2_COLUMNS: list[P3Column] = [
+    P3Column("a", "RWEAs"),
+]
+
+CCR2_ROWS: list[P3Row] = [
+    P3Row("4", "BA-CVA (Basic Approach)"),
+    P3Row("5", "SA-CVA (Standardised Approach)"),
+    P3Row("6", "Total", is_total=True),
+]
+
+
+# ---------------------------------------------------------------------------
+# CCR3 — SA-CCR EAD by risk weight (Art. 444(e))
+# ---------------------------------------------------------------------------
+#
+# Allocates the SA-CCR EAD across the SA risk-weight bands: one ROW per band
+# (mirroring CR5's band rates), plus an "Other" catch-all and a Total row. CCR3
+# reuses the CR5 risk-weight band lists so the band boundaries stay
+# framework-consistent. The single EAD column carries each band's CCR EAD.
+
+CCR3_COLUMNS: list[P3Column] = [
+    P3Column("a", "Exposure value post-CRM (EAD)"),
+]
+
+CCR3_RISK_WEIGHTS: dict[str, list[tuple[float, str]]] = {
+    "CRR": CRR_CR5_RISK_WEIGHTS,
+    "BASEL_3_1": B31_CR5_RISK_WEIGHTS,
+}
+
+
+def _build_ccr3_rows(rw_list: list[tuple[float, str]]) -> list[P3Row]:
+    """Build CCR3 rows: one per risk-weight band, an Other row, then Total."""
+    rows: list[P3Row] = [
+        P3Row(str(i + 1), f"Risk weight {label}") for i, (_, label) in enumerate(rw_list)
+    ]
+    rows.append(P3Row(str(len(rw_list) + 1), "Risk weight Other"))
+    rows.append(P3Row(str(len(rw_list) + 2), "Total", is_total=True))
+    return rows
+
+
+CRR_CCR3_ROWS: list[P3Row] = _build_ccr3_rows(CRR_CR5_RISK_WEIGHTS)
+B31_CCR3_ROWS: list[P3Row] = _build_ccr3_rows(B31_CR5_RISK_WEIGHTS)
+
+
+# ---------------------------------------------------------------------------
+# CCR8 — Exposures to central counterparties (Art. 439(i))
+# ---------------------------------------------------------------------------
+#
+# Splits CCP trade-leg exposures by QCCP vs non-QCCP. The QCCP/non-QCCP
+# discriminator mirrors the aggregator partition exactly
+# (``cp_entity_type == "ccp"`` AND ``cp_is_qccp.fill_null(True)``). Column ``a``
+# carries the EAD post-CRM, column ``b`` the resulting RWEA.
+
+CCR8_COLUMNS: list[P3Column] = [
+    P3Column("a", "RWEAs"),
+    P3Column("b", "Exposure value post-CRM (EAD)", _GRP_EXPOSURE_BREAKDOWN),
+]
+
+CCR8_ROWS: list[P3Row] = [
+    P3Row("1", "Exposures to QCCPs (total)"),
+    P3Row("2", "Exposures to non-QCCPs (total)"),
+    P3Row("21", "Total", is_total=True),
+]
+
+
+# ---------------------------------------------------------------------------
 # Selector functions (framework switching)
 # ---------------------------------------------------------------------------
 
@@ -927,3 +1024,13 @@ def get_cr10_columns(framework: str) -> list[P3Column]:
 def get_cr10_subtemplates(framework: str) -> dict[str, str]:
     """Return CR10 sub-template definitions for the given framework."""
     return B31_CR10_SUBTEMPLATES if framework == "BASEL_3_1" else CRR_CR10_SUBTEMPLATES
+
+
+def get_ccr3_rows(framework: str) -> list[P3Row]:
+    """Return CCR3 rows (one per risk-weight band, then Total) for the framework."""
+    return B31_CCR3_ROWS if framework == "BASEL_3_1" else CRR_CCR3_ROWS
+
+
+def get_ccr3_risk_weights(framework: str) -> list[tuple[float, str]]:
+    """Return the CCR3 risk-weight band definitions for the given framework."""
+    return CCR3_RISK_WEIGHTS["BASEL_3_1"] if framework == "BASEL_3_1" else CCR3_RISK_WEIGHTS["CRR"]

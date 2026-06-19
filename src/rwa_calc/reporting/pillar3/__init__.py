@@ -1,6 +1,9 @@
 """Pillar III credit risk disclosure templates.
 
-Public disclosures under CRR Part 8 / Disclosure (CRR) Part.
+Public disclosures under CRR Part 8 / Disclosure (CRR) Part, including the
+counterparty-credit-risk tables CCR1 (analysis by approach), CCR2 (BA-CVA
+capital charge), CCR3 (SA-CCR EAD by risk-weight band) and CCR8 (CCP
+exposures, QCCP vs non-QCCP).
 CRR templates use UK prefix; Basel 3.1 templates use UKB prefix.
 """
 

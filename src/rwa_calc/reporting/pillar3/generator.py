@@ -21,9 +21,13 @@ Key responsibilities:
     - CR10: Slotting approach exposures
     - CMS1: Output floor comparison by risk type (Basel 3.1 only)
     - CMS2: Output floor comparison by asset class (Basel 3.1 only)
+    - CCR1: Analysis of CCR exposure by approach (SA-CCR EAD / RWEA)
+    - CCR2: CVA capital charge (BA-CVA RWEA, Basel 3.1)
+    - CCR3: SA-CCR EAD allocation by risk-weight band
+    - CCR8: Exposures to central counterparties (QCCP vs non-QCCP RWEA)
 
 References:
-    CRR Part 8 (Art. 438, 444, 452, 453)
+    CRR Part 8 (Art. 438, 439, 444, 452, 453)
     PRA PS1/26 Disclosure (CRR) Part, Art. 456, Art. 2a
     PRA PS1/26 Annex XXII (CR9/CR9.1 back-testing instructions)
 """
@@ -60,6 +64,13 @@ from rwa_calc.reporting.kernel import (
     pick as _pick,
 )
 from rwa_calc.reporting.pillar3.templates import (
+    CCR1_COLUMNS,
+    CCR1_ROWS,
+    CCR2_COLUMNS,
+    CCR2_ROWS,
+    CCR3_COLUMNS,
+    CCR8_COLUMNS,
+    CCR8_ROWS,
     CMS1_COLUMNS,
     CMS1_ROWS,
     CMS2_COLUMNS,
@@ -93,6 +104,8 @@ from rwa_calc.reporting.pillar3.templates import (
     get_cr6a_rows,
     get_cr7_rows,
     get_cr7a_columns,
+    get_ccr3_risk_weights,
+    get_ccr3_rows,
     get_cr10_columns,
     get_cr10_subtemplates,
     get_ov1_rows,
@@ -140,6 +153,10 @@ class Pillar3TemplateBundle:
     cr10: dict[str, pl.DataFrame] = field(default_factory=dict)
     cms1: pl.DataFrame | None = None
     cms2: pl.DataFrame | None = None
+    ccr1: pl.DataFrame | None = None
+    ccr2: pl.DataFrame | None = None
+    ccr3: pl.DataFrame | None = None
+    ccr8: pl.DataFrame | None = None
     framework: str = "CRR"
     errors: list[str] = field(default_factory=list)
 
@@ -223,6 +240,10 @@ class Pillar3Generator:
             cms2=self._generate_cms2(
                 results, sa_data, irb_data, slotting_data, cols, framework, errors
             ),
+            ccr1=self._generate_ccr1(results, cols, errors),
+            ccr2=self._generate_ccr2(results, cols, framework, errors),
+            ccr3=self._generate_ccr3(results, cols, framework, errors),
+            ccr8=self._generate_ccr8(results, cols, errors),
             framework=framework,
             errors=errors,
         )
@@ -277,6 +298,14 @@ class Pillar3Generator:
                 total_rows += _write_single_sheet(workbook, bundle.cms1, f"{prefix} CMS1")
             if bundle.cms2 is not None:
                 total_rows += _write_single_sheet(workbook, bundle.cms2, f"{prefix} CMS2")
+            if bundle.ccr1 is not None:
+                total_rows += _write_single_sheet(workbook, bundle.ccr1, f"{prefix} CCR1")
+            if bundle.ccr2 is not None:
+                total_rows += _write_single_sheet(workbook, bundle.ccr2, f"{prefix} CCR2")
+            if bundle.ccr3 is not None:
+                total_rows += _write_single_sheet(workbook, bundle.ccr3, f"{prefix} CCR3")
+            if bundle.ccr8 is not None:
+                total_rows += _write_single_sheet(workbook, bundle.ccr8, f"{prefix} CCR8")
         finally:
             workbook.close()
 
@@ -1068,10 +1097,262 @@ class Pillar3Generator:
 
         return _build_df(rows_out, column_refs)
 
+    # ---- CCR1 — Analysis of CCR exposure by approach (Art. 439(f)) ----
+
+    def _generate_ccr1(
+        self,
+        results: pl.LazyFrame,
+        cols: set[str],
+        errors: list[str],
+    ) -> pl.DataFrame | None:
+        """Generate the CCR1 SA-CCR analysis-by-approach table.
+
+        The SA-CCR row (and the Total row) carry the portfolio CCR EAD
+        (Σ ``ead_final`` over the synthetic ``ccr__`` netting-set rows;
+        CRR Art. 274(2)) in column ``a`` and the non-QCCP default-risk RWEA
+        (Σ ``rwa_final`` over the ``ccr__`` rows that are NOT QCCP trade legs;
+        CRR Art. 107(2)(a)) in column ``f``. Both re-derive exactly the
+        AggregatedResultBundle ``ead_ccr_total`` / ``rwa_ccr_default`` roll-ups.
+        Returns ``None`` when the portfolio carries no CCR rows.
+
+        References:
+            CRR Art. 439(f); Art. 274(2); Art. 107(2)(a).
+        """
+        ccr_rows = _ccr_rows(results, cols)
+        if ccr_rows is None or ccr_rows.height == 0:
+            return None
+
+        column_refs = [c.ref for c in CCR1_COLUMNS]
+        ead_total = _col_sum(ccr_rows, "ead_final")
+        rwea_default = _ccr_rwa(ccr_rows, qccp_trade=False)
+
+        rows_out: list[dict[str, object]] = []
+        for row_def in CCR1_ROWS:
+            if row_def.ref in ("1", "11"):
+                # SA-CCR approach row and Total — both the single SA-CCR phase.
+                # Col a = EAD post-CRM, col b = non-QCCP default-risk RWEA.
+                values: dict[str, object] = {"a": ead_total, "b": rwea_default}
+            else:
+                values = {"a": None, "b": None}
+            rows_out.append(_make_row(row_def, values, column_refs))
+
+        return _build_df(rows_out, column_refs)
+
+    # ---- CCR2 — CVA capital charge (Art. 439(h)) ----
+
+    def _generate_ccr2(
+        self,
+        results: pl.LazyFrame,
+        cols: set[str],
+        framework: str,
+        errors: list[str],
+    ) -> pl.DataFrame | None:
+        """Generate the CCR2 BA-CVA capital-charge table.
+
+        Reads the portfolio RWEA_CVA from the ``cva_rwa`` broadcast
+        column the aggregation stage stamps on the results frame (the BA-CVA
+        charge is a standalone scalar, not an EAD-derived per-row figure). The
+        BA-CVA row and the Total row carry that RWEA in column ``b``. Returns
+        ``None`` when no CVA charge is present (CRR, or a portfolio with no
+        in-scope CVA counterparties).
+
+        References:
+            CRR Art. 439(h); PS1/26 CVA Part 4.2-4.4 (BA-CVA reduced/full);
+            Own Funds Part 4(b) (x12.5 RWEA multiplier).
+        """
+        cva_col = _pick(cols, "cva_rwa")
+        if not cva_col:
+            return None
+        cva_rwea = _first_non_null(results, cva_col)
+        if cva_rwea is None:
+            return None
+
+        column_refs = [c.ref for c in CCR2_COLUMNS]
+        rows_out: list[dict[str, object]] = []
+        for row_def in CCR2_ROWS:
+            if row_def.ref in ("4", "6"):
+                # BA-CVA row and Total — the single BA-CVA charge (col a = RWEA).
+                values: dict[str, object] = {"a": cva_rwea}
+            else:
+                values = {"a": None}
+            rows_out.append(_make_row(row_def, values, column_refs))
+
+        return _build_df(rows_out, column_refs)
+
+    # ---- CCR3 — SA-CCR EAD by risk-weight band (Art. 444(e)) ----
+
+    def _generate_ccr3(
+        self,
+        results: pl.LazyFrame,
+        cols: set[str],
+        framework: str,
+        errors: list[str],
+    ) -> pl.DataFrame | None:
+        """Generate the CCR3 SA-CCR-EAD-by-risk-weight-band table.
+
+        One row per SA risk-weight band: each band row's EAD cell (col ``a``)
+        sums ``ead_final`` over the ``ccr__`` rows whose ``risk_weight`` matches
+        the band rate; unmatched rows fall to the "Other" row; the Total row
+        re-derives ``ead_ccr_total``. Returns ``None`` when no CCR rows exist.
+
+        References:
+            CRR Art. 444(e); Art. 120(1) Table 3 (institution CQS bands).
+        """
+        ccr_rows = _ccr_rows(results, cols)
+        if ccr_rows is None or ccr_rows.height == 0:
+            return None
+        if "risk_weight" not in ccr_rows.columns:
+            errors.append("CCR3: missing risk_weight column")
+            return None
+
+        rw_bands = get_ccr3_risk_weights(framework)
+        column_refs = [c.ref for c in CCR3_COLUMNS]
+        band_eads = _ccr3_band_eads(ccr_rows, rw_bands)
+
+        rows_out: list[dict[str, object]] = []
+        for i, row_def in enumerate(get_ccr3_rows(framework)):
+            if row_def.is_total:
+                ead = _col_sum(ccr_rows, "ead_final")
+            else:
+                ead = band_eads[i] or None
+            rows_out.append(_make_row(row_def, {"a": ead}, column_refs))
+
+        return _build_df(rows_out, column_refs)
+
+    # ---- CCR8 — Exposures to central counterparties (Art. 439(i)) ----
+
+    def _generate_ccr8(
+        self,
+        results: pl.LazyFrame,
+        cols: set[str],
+        errors: list[str],
+    ) -> pl.DataFrame | None:
+        """Generate the CCR8 QCCP-vs-non-QCCP CCP-exposures table.
+
+        Partitions the ``ccr__`` rows by the QCCP trade-leg discriminator
+        (``cp_entity_type == "ccp"`` AND ``cp_is_qccp.fill_null(True)``, mirror
+        of the aggregator). The QCCP row carries the QCCP trade-leg RWEA
+        (``rwa_ccr_qccp_trade``; CRR Art. 306(1)/(4)); the non-QCCP row carries
+        the default-risk RWEA (``rwa_ccr_default``) — null when all rows are
+        QCCP. Returns ``None`` when no CCR rows exist.
+
+        References:
+            CRR Art. 439(i); Art. 306(1)(a) (2% QCCP proprietary trade RW).
+        """
+        ccr_rows = _ccr_rows(results, cols)
+        if ccr_rows is None or ccr_rows.height == 0:
+            return None
+
+        column_refs = [c.ref for c in CCR8_COLUMNS]
+        has_disc = {"cp_entity_type", "cp_is_qccp"} <= set(ccr_rows.columns)
+
+        qccp_ead = _ccr_ead(ccr_rows, qccp_trade=True) if has_disc else None
+        qccp_rwea = _ccr_rwa(ccr_rows, qccp_trade=True) if has_disc else None
+        non_qccp_ead = _ccr_ead(ccr_rows, qccp_trade=False) if has_disc else None
+        non_qccp_rwea = _ccr_rwa(ccr_rows, qccp_trade=False) if has_disc else None
+        total_ead = _col_sum(ccr_rows, "ead_final")
+        total_rwea = _col_sum(ccr_rows, "rwa_final")
+
+        # Col a = RWEA (the disclosure's primary CCP figure), col b = EAD.
+        per_ref: dict[str, dict[str, object]] = {
+            "1": {"a": qccp_rwea, "b": qccp_ead},
+            "2": {"a": non_qccp_rwea, "b": non_qccp_ead},
+            "21": {"a": total_rwea, "b": total_ead},
+        }
+        rows_out = [
+            _make_row(row_def, per_ref.get(row_def.ref, {}), column_refs) for row_def in CCR8_ROWS
+        ]
+        return _build_df(rows_out, column_refs)
+
 
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
+
+def _ccr_rows(results: pl.LazyFrame, cols: set[str]) -> pl.DataFrame | None:
+    """Collect the synthetic ``ccr__``-prefixed CCR rows, or None if absent.
+
+    The CCR disclosure tables read the same synthetic netting-set rows the
+    aggregator rolls up (CRR Art. 274(2)). Returns ``None`` when the results
+    frame carries no ``exposure_reference`` column.
+    """
+    ref_col = _pick(cols, "exposure_reference")
+    if not ref_col:
+        return None
+    # An empty / all-null results frame can carry exposure_reference as a Null
+    # dtype; ``.str.starts_with`` only operates on String. Cast defensively so
+    # the CCR filter degenerates to an empty selection rather than raising.
+    return (
+        results.filter(pl.col(ref_col).cast(pl.String).str.starts_with("ccr__")).collect()
+    )
+
+
+def _ccr_qccp_trade_predicate() -> pl.Expr:
+    """QCCP trade-leg discriminator — mirrors the aggregator partition exactly.
+
+    ``(cp_entity_type == "ccp") & cp_is_qccp.fill_null(True)`` (CRR Art. 306).
+    """
+    return (pl.col("cp_entity_type") == "ccp") & pl.col("cp_is_qccp").fill_null(True)
+
+
+def _ccr_rwa(ccr_rows: pl.DataFrame, *, qccp_trade: bool) -> float | None:
+    """Sum ``rwa_final`` over the QCCP (or non-QCCP) ``ccr__`` partition.
+
+    Mirrors the aggregator roll-ups: a zero partition total maps to ``None``
+    (``rwa_ccr_default`` / ``rwa_ccr_qccp_trade`` are None when the partition
+    is empty).
+    """
+    if not {"cp_entity_type", "cp_is_qccp", "rwa_final"} <= set(ccr_rows.columns):
+        return None
+    predicate = _ccr_qccp_trade_predicate()
+    partition = ccr_rows.filter(predicate if qccp_trade else ~predicate)
+    total = _col_sum(partition, "rwa_final")
+    return total if total else None
+
+
+def _ccr_ead(ccr_rows: pl.DataFrame, *, qccp_trade: bool) -> float | None:
+    """Sum ``ead_final`` over the QCCP (or non-QCCP) ``ccr__`` partition."""
+    if not {"cp_entity_type", "cp_is_qccp", "ead_final"} <= set(ccr_rows.columns):
+        return None
+    predicate = _ccr_qccp_trade_predicate()
+    partition = ccr_rows.filter(predicate if qccp_trade else ~predicate)
+    total = _col_sum(partition, "ead_final")
+    return total if total else None
+
+
+def _ccr3_band_eads(
+    ccr_rows: pl.DataFrame,
+    rw_bands: list[tuple[float, str]],
+) -> list[float]:
+    """Per-band CCR EAD totals plus a trailing "Other" total.
+
+    Returns a list aligned with the CCR3 band rows: one entry per risk-weight
+    band (``ead_final`` summed over ``ccr__`` rows whose ``risk_weight`` matches
+    the band rate within a small tolerance) followed by the "Other" catch-all
+    (rows whose risk_weight matched no band). The Total row is computed by the
+    caller from the un-partitioned frame.
+    """
+    band_eads: list[float] = []
+    matched_mask = pl.lit(False)
+    for rate, _label in rw_bands:
+        in_band = (pl.col("risk_weight") >= rate - 0.005) & (pl.col("risk_weight") <= rate + 0.005)
+        matched_mask = matched_mask | in_band
+        band = ccr_rows.filter(in_band)
+        band_eads.append(_col_sum(band, "ead_final") or 0.0)
+
+    unmatched = ccr_rows.filter(~matched_mask)
+    band_eads.append(_col_sum(unmatched, "ead_final") or 0.0)
+    return band_eads
+
+
+def _first_non_null(results: pl.LazyFrame, col_name: str) -> float | None:
+    """First non-null value of a broadcast scalar column, as a float."""
+    data = results.select(pl.col(col_name).drop_nulls().first()).collect()
+    if data.height == 0:
+        return None
+    value = data.item()
+    return float(value) if value is not None else None
 
 
 def _col_sum(data: pl.DataFrame, col_name: str | None) -> float | None:

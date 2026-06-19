@@ -95,11 +95,12 @@ def run(
         # ``cva_rwa`` is additive to the default-risk total (Σ rwa_final); it is
         # not folded into ``rwa_final`` (PS1/26 Own Funds 4(b)). It is also
         # broadcast as a constant ``cva_rwa`` column on the (re-sealed) results
-        # frame so the downstream COREP C 34.04 grid can read the portfolio CVA
-        # RWEA from the LazyFrame alone — the scalar is otherwise bundle-only.
-        # ``cva_rwa`` is a declared optional column on ``AGGREGATOR_EXIT_EDGE``,
-        # so the re-seal conforms and re-brands the frame without violating the
-        # producer-seal contract.
+        # frame so the downstream COREP C 34.04 grid (P8.50) and the Pillar III
+        # CCR2 disclosure (P8.51) can read the portfolio CVA RWEA from the
+        # LazyFrame alone — the scalar is otherwise bundle-only. ``cva_rwa`` is a
+        # declared optional column on ``AGGREGATOR_EXIT_EDGE``, so the re-seal
+        # conforms and re-brands the frame without violating the producer-seal
+        # contract.
         cva_results = seal(
             result.results.with_columns(
                 pl.lit(cva.rwea, dtype=pl.Float64).alias("cva_rwa")

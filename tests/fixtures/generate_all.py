@@ -596,6 +596,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "p8_62",
             _generate_p862_cva_hedge_a1,
         ),
+        (
+            "P8.46 (CVA-A2 BA-CVA reduced-K two-counterparty diversification — ρ=0.5 cross-term)",
+            "p8_46",
+            _generate_p846_cva_a2,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -3738,6 +3743,40 @@ def _generate_p862_cva_hedge_a1(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         for mod in list(sys.modules.keys()):
             if "p8_62" in mod or "cva_hedge_a1_builder" in mod:
+                sys.modules.pop(mod, None)
+
+
+def _generate_p846_cva_a2(output_dir: Path) -> list[tuple[str, int]]:
+    """
+    Generate P8.46 / CVA-A2 fixtures — BA-CVA reduced-K two-counterparty diversification.
+
+    CVA-A2 tests the BA-CVA reduced-K formula with two counterparties so that the
+    ρ=0.5 cross-term genuinely differs from the single-counterparty identity.  Both
+    counterparties are GB institutions (CQS 2, Financials IG), unmargined, one 3-year
+    and one 5-year GBP vanilla IR swap.
+
+    Parquet files produced (5 files):
+        cva_a2_trades.parquet              2 rows  (T_CVA_A2_1 3y, T_CVA_A2_2 5y)
+        cva_a2_netting_sets.parquet        2 rows  (NS_CVA_A2_1 → CP1, NS_CVA_A2_2 → CP2)
+        cva_a2_margin_agreements.parquet   0 rows  (no CSA)
+        cva_a2_ccr_collateral.parquet      0 rows  (no CCR collateral)
+        cva_a2_cva_counterparties.parquet  2 rows  (CP1 M=3.0, CP2 M=5.0, FINANCIAL/IG)
+
+    Diversification invariant (strictly holds for positive EADs):
+        sqrt(SCVA_1^2 + SCVA_2^2) < K_reduced < SCVA_1 + SCVA_2
+
+    Regulatory basis: PS1/26 App.1 CVA Part 4.2-4.4; CRR Art. 274(2).
+    """
+    _REPO_ROOT_STR = str(_REPO_ROOT)
+    if _REPO_ROOT_STR not in sys.path:
+        sys.path.insert(0, _REPO_ROOT_STR)
+    try:
+        from tests.fixtures.p8_46.cva_a2_builder import save_p846_fixtures
+
+        return save_p846_fixtures(output_dir)
+    finally:
+        for mod in list(sys.modules.keys()):
+            if "p8_46" in mod or "cva_a2_builder" in mod:
                 sys.modules.pop(mod, None)
 
 

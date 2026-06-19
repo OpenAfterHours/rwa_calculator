@@ -30,6 +30,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Make the sibling helper importable when this script is invoked directly.
+sys.path.insert(0, str(Path(__file__).parent))
+
+from _validate import validate_git_ref  # noqa: E402
+
 PROJECT_ROOT = Path(__file__).parent.parent
 BRANCH_PREFIX = "wt/"
 WORKTREE_PATH_PREFIX = "rwa_calculator-"
@@ -88,6 +93,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def cmd_create(name: str, base_ref: str, force: bool) -> int:
     _validate_name(name)
+    base_ref = validate_git_ref(base_ref)
     branch = _branch_for(name)
     worktree_path = _worktree_path_for(name)
 

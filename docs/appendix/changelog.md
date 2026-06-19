@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - (Next release changes will go here)
 
+### Security
+- **Developer scripts validate operator CLI input before it reaches `subprocess` argv (SonarQube subprocess hardening).** A new `scripts/_validate.py` provides fail-fast validators — `validate_semver` (strict `N.N.N`), `validate_git_ref` (safe-commitish allowlist that rejects leading `-`, `..`, `@{`, trailing `.lock`/`/`, and whitespace), and `validate_iso_date` — wired in at the argparse boundary of `deploy.py` (the `version` positional), `worktree.py` (the `--from` base ref; the worktree `name` was already validated), and `profile_memory.py` (the `--date` flag, validated in the parent before the worker `Popen`). All call sites already used the argv-list form (never `shell=True`), so this is defence-in-depth: a malformed or hostile argument is now rejected with a clear error before any command is built. Covered by `tests/unit/test_validate.py`.
+
 ---
 
 ## [0.3.1] - 2026-06-18

@@ -33,6 +33,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from _deploy_changelog import promote_unreleased, update_version_table  # noqa: E402
+from _validate import validate_semver  # noqa: E402
 
 # Project root (parent of scripts directory)
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -245,7 +246,7 @@ def resolve_new_version(args: argparse.Namespace, current_version: str) -> str |
     if args.bump:
         return bump_version(current_version, args.bump)
     if args.version:
-        return args.version
+        return validate_semver(args.version)
     # Default to patch bump
     return bump_version(current_version, "patch")
 

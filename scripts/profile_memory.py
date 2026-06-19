@@ -41,6 +41,11 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+# Make the sibling helper importable when this script is invoked directly.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from _validate import validate_iso_date  # noqa: E402
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 DEFAULT_ROWS = 100_000
@@ -336,7 +341,11 @@ def _parse_args() -> argparse.Namespace:
     # Internal flags used for the per-mode worker subprocess.
     parser.add_argument("--worker-mode", choices=list(MODES), default=None, help=argparse.SUPPRESS)
     parser.add_argument("--result-json", type=str, default=None, help=argparse.SUPPRESS)
-    return parser.parse_args()
+    args = parser.parse_args()
+    # Validate the free-form reporting date in the PARENT, before it is placed on
+    # the worker's argv (the worker's own date.fromisoformat runs after the spawn).
+    args.date = validate_iso_date(args.date)
+    return args
 
 
 if __name__ == "__main__":

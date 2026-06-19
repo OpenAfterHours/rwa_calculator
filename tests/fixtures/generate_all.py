@@ -591,6 +591,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "p8_60",
             _generate_p860_cva_a1,
         ),
+        (
+            "P8.62 (CVA-HEDGE-A1 full BA-CVA — perfect single-name CDS hedge, beta=0.25 ratio pin)",
+            "p8_62",
+            _generate_p862_cva_hedge_a1,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -3688,6 +3693,51 @@ def _generate_p860_cva_a1(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         for mod in list(sys.modules.keys()):
             if "p8_60" in mod or "cva_a1_builder" in mod:
+                sys.modules.pop(mod, None)
+
+
+def _generate_p862_cva_hedge_a1(output_dir: Path) -> list[tuple[str, int]]:
+    """
+    Generate P8.62 / CVA-HEDGE-A1 fixtures — full BA-CVA with perfect single-name CDS hedge.
+
+    CVA-HEDGE-A1 extends the P8.60 reduced-version baseline by adding one eligible
+    single-name CDS hedge (H_SN_CVA_001) that perfectly offsets the SCVA of
+    CP_CVA_001. The perfect-hedge condition is B_h = EAD_NS / alpha (NOT EAD_NS).
+
+    Key formula correction vs scenario-architect proposal:
+        The SNH_c formula (ps126app1.pdf 4.7, page 402) carries NO (1/alpha).
+        SCVA_c (4.3, page 400) does carry (1/alpha). For SNH_c == SCVA_c with
+        r_hc=1.0 and matching RW/M/DF, the hedge notional must satisfy:
+            B_h = EAD_NS / alpha  (i.e. EAD_NS / 1.4)
+
+    Parquet files produced (1 file):
+        cva_hedge_a1_single_name.parquet  1 row  (H_SN_CVA_001, IDENTICAL,
+                                                  FINANCIAL/IG, M=3.0,
+                                                  placeholder notional = EAD_ref/1.4)
+
+    NOTE: The parquet uses a placeholder notional (reference EAD / alpha). The
+    acceptance test rebuilds this row from the live pipeline EAD.
+
+    Confirmed regulatory scalars (ps126app1.pdf):
+        beta = 0.25                      (page 401, section 4.5)
+        r_hc IDENTICAL = 1.00            (page 403, section 4.10)
+        r_hc LEGALLY_RELATED = 0.80      (page 403, section 4.10)
+        r_hc SAME_SECTOR_REGION = 0.50   (page 403, section 4.10)
+        SNH_c formula (no 1/alpha)       (page 402, section 4.7)
+        index diversification = 0.70     (page 403, section 4.8)
+
+    Regulatory basis: PS1/26 App.1 CVA Part 4.5-4.10; CRR Art. 274(2).
+    """
+    _REPO_ROOT_STR = str(_REPO_ROOT)
+    if _REPO_ROOT_STR not in sys.path:
+        sys.path.insert(0, _REPO_ROOT_STR)
+    try:
+        from tests.fixtures.p8_62.cva_hedge_a1_builder import save_p862_fixtures
+
+        return save_p862_fixtures(output_dir)
+    finally:
+        for mod in list(sys.modules.keys()):
+            if "p8_62" in mod or "cva_hedge_a1_builder" in mod:
                 sys.modules.pop(mod, None)
 
 

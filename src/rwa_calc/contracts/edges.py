@@ -392,6 +392,10 @@ def _raw_table_edges() -> dict[str, EdgeContract]:
         # The field is intentionally NOT in SEALED_FRAME_FIELDS — callers that
         # supply the CVA book directly attach an unbranded frame.
         "cva_counterparties": schemas.CVA_COUNTERPARTY_SCHEMA,
+        # P8.62 — full BA-CVA hedge inputs. Same per-table coverage contract as
+        # cva_counterparties; not in SEALED_FRAME_FIELDS (callers attach an
+        # unbranded frame alongside the CVA book).
+        "cva_hedges": schemas.CVA_HEDGE_SCHEMA,
     }
     return {
         field_name: EdgeContract(name=f"raw_{field_name}", columns=edge_columns_from_specs(schema))

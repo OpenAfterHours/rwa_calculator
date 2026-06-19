@@ -162,6 +162,17 @@ class RawDataBundle:
             scope; the CVA stage then no-ops and ``cva_rwa`` stays None.
             Basel-3.1-only (gated on the ``cva_ba_cva`` pack Feature).
             See PRA PS1/26 CVA Part Chapter 4.
+        cva_hedges: Optional full BA-CVA hedge inputs
+            (``CVA_HEDGE_SCHEMA``). One row per eligible single-name /
+            index CDS hedge, carrying the correlation band (r_hc), the
+            sector / credit-quality RW keys, the residual maturity
+            (M_h), the notional (B_h) and the eligibility flag. None or
+            empty when the firm uses no eligible CVA hedges; the CVA
+            stage then computes the reduced BA-CVA charge. When eligible
+            hedges are present the full BA-CVA path runs (K_full =
+            beta.K_reduced + (1-beta).K_hedged). Basel-3.1-only (gated on
+            the ``cva_ba_cva`` pack Feature). See PRA PS1/26 CVA Part
+            4.5-4.10.
         errors: Validation errors found during loading
     """
 
@@ -190,6 +201,11 @@ class RawDataBundle:
     # firm supplies it alongside the CCR book; the CVA stage reads it after
     # aggregation. None when the firm has no CVA scope.
     cva_counterparties: pl.LazyFrame | None = None
+    # Full BA-CVA hedge inputs (P8.62). Like ``cva_counterparties`` it is not a
+    # loader-sealed frame — the firm supplies it alongside the CCR/CVA book; the
+    # CVA stage reads it after aggregation. None when the firm uses no eligible
+    # CVA hedges (the reduced BA-CVA charge then applies). Basel-3.1-only.
+    cva_hedges: pl.LazyFrame | None = None
     errors: list[CalculationError] = field(default_factory=list)
 
     def __post_init__(self) -> None:

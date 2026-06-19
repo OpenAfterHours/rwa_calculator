@@ -115,7 +115,9 @@ def _ba_cva_roll_up(
     ccr_rows = results.filter(
         pl.col("exposure_reference").str.starts_with(_CCR_EXPOSURE_PREFIX)
     )
-    cva_rwa = compute_ba_cva_rwa(data.cva_counterparties, ccr_rows, rulepack.pack)
+    cva_rwa = compute_ba_cva_rwa(
+        data.cva_counterparties, ccr_rows, rulepack.pack, data.cva_hedges
+    )
     if cva_rwa is not None:
         logger.info("BA-CVA RWEA computed: %.2f", cva_rwa)
     return cva_rwa

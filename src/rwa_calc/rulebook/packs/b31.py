@@ -1240,4 +1240,42 @@ ENTRIES: dict[str, RuleEntry] = {
         # Conservative catch-all = Other sector HY/NR (12.0%) for unmapped keys.
         default=Decimal("0.120"),
     ),
+    # ---------------------------------------------------------------------
+    # Full BA-CVA (eligible CVA hedges) — PRA PS1/26 CVA Part 4.5-4.10.
+    # Engaged only when the firm supplies eligible CVA hedges; otherwise the
+    # reduced charge above applies. Consumed by engine/cva/ba_cva.py.
+    # ---------------------------------------------------------------------
+    # beta: hedging-disallowance weight in the K_full blend
+    # K_full = beta x K_reduced + (1 - beta) x K_hedged (PS1/26 CVA Part 4.5,
+    # page 401).
+    "cva_ba_beta": ScalarParam(
+        name="cva_ba_beta",
+        value=Decimal("0.25"),
+        citation=Citation("PS1/26", "4.5", "hedging-disallowance weight beta in K_full blend"),
+    ),
+    # r_hc supervisory correlation between the credit spread of counterparty c
+    # and a single-name hedge h, keyed on the hedge's correlation band
+    # (PS1/26 CVA Part 4.10, page 403): references directly = 100%, legally
+    # related = 80%, shares sector and region = 50%.
+    "cva_ba_single_name_hedge_correlation": DecisionTable(
+        name="cva_ba_single_name_hedge_correlation",
+        key_names=("cva_hedge_correlation_band",),
+        rows=(
+            (("IDENTICAL",), Decimal("1.00")),
+            (("LEGALLY_RELATED",), Decimal("0.80")),
+            (("SAME_SECTOR_REGION",), Decimal("0.50")),
+        ),
+        citation=Citation("PS1/26", "4.10", "r_hc single-name hedge supervisory correlation"),
+        # Most conservative single-name correlation (lowest hedge offset) for
+        # unmapped bands.
+        default=Decimal("0.50"),
+    ),
+    # Index-hedge supervisory diversification multiplier applied to RW_i for
+    # index eligible BA-CVA hedges (PS1/26 CVA Part 4.8(1)/(2), page 403):
+    # RW_i_ind = (table RW) x 0.70.
+    "cva_ba_index_diversification_factor": ScalarParam(
+        name="cva_ba_index_diversification_factor",
+        value=Decimal("0.70"),
+        citation=Citation("PS1/26", "4.8", "index-hedge supervisory diversification multiplier"),
+    ),
 }

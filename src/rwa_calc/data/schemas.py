@@ -1200,6 +1200,33 @@ CVA_COUNTERPARTY_SCHEMA: dict[str, ColumnSpec] = {
     "cva_in_scope": ColumnSpec(pl.Boolean, default=True, required=False),
 }
 
+#: Eligible ``cva_hedge_type`` keys — single-name vs index CDS hedges
+#: (PS1/26 CVA Part 4.7 single-name / 4.8 index).
+VALID_CVA_HEDGE_TYPES = {"SINGLE_NAME", "INDEX"}
+
+#: Eligible ``cva_hedge_correlation_band`` keys — must match the key of the
+#: ``cva_ba_single_name_hedge_correlation`` DecisionTable in packs/b31.py
+#: (PS1/26 CVA Part 4.10 r_hc supervisory correlation table).
+VALID_CVA_HEDGE_CORRELATION_BANDS = {"IDENTICAL", "LEGALLY_RELATED", "SAME_SECTOR_REGION"}
+
+#: Full BA-CVA hedge input schema (P8.62). ``counterparty_reference`` is the FK
+#: to the hedged counterparty (null for INDEX hedges); ``cva_hedge_correlation_band``
+#: selects r_hc from the Part 4.10 table; ``cva_hedge_rw_sector`` /
+#: ``cva_hedge_rw_rating_band`` select RW_h from the Part 4.4 table;
+#: ``cva_hedge_residual_maturity_years`` is M_h; ``cva_hedge_notional`` is B_h;
+#: ``cva_hedge_eligible`` gates inclusion in K_hedged (ineligible rows are dropped).
+CVA_HEDGE_SCHEMA: dict[str, ColumnSpec] = {
+    "cva_hedge_reference": ColumnSpec(pl.String),
+    "cva_hedge_type": ColumnSpec(pl.String),
+    "counterparty_reference": ColumnSpec(pl.String, required=False),
+    "cva_hedge_correlation_band": ColumnSpec(pl.String, required=False),
+    "cva_hedge_rw_sector": ColumnSpec(pl.String),
+    "cva_hedge_rw_rating_band": ColumnSpec(pl.String),
+    "cva_hedge_residual_maturity_years": ColumnSpec(pl.Float64),
+    "cva_hedge_notional": ColumnSpec(pl.Float64),
+    "cva_hedge_eligible": ColumnSpec(pl.Boolean, default=True, required=False),
+}
+
 
 # Short-code mapping for the five SA-CCR asset classes used to compose the
 # stable ``hedging_set_id`` per CRR Art. 277(1) (e.g. "IR-NS-IR-01-GBP-GT_5Y").
@@ -1684,6 +1711,15 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     "cva_counterparties": {
         "cva_rw_sector": VALID_CVA_RW_SECTORS,
         "cva_rw_rating_band": VALID_CVA_RW_RATING_BANDS,
+    },
+    # P8.62 — full BA-CVA hedge sector / credit-quality / correlation-band / type
+    # discriminators (PS1/26 CVA Part 4.4 RW table, 4.7/4.8 hedge types, 4.10
+    # r_hc correlation table).
+    "cva_hedges": {
+        "cva_hedge_type": VALID_CVA_HEDGE_TYPES,
+        "cva_hedge_correlation_band": VALID_CVA_HEDGE_CORRELATION_BANDS,
+        "cva_hedge_rw_sector": VALID_CVA_RW_SECTORS,
+        "cva_hedge_rw_rating_band": VALID_CVA_RW_RATING_BANDS,
     },
     # P8.33 — CRR Art. 277(3)(b) / CRE52.67 commodity hedging-set partition.
     # UPPER-CASE bucket keys to match ``SA_CCR_SUPERVISORY_FACTORS_COMMODITY``

@@ -386,6 +386,12 @@ def _raw_table_edges() -> dict[str, EdgeContract]:
         "fx_rates": schemas.FX_RATES_SCHEMA,
         "model_permissions": schemas.MODEL_PERMISSIONS_SCHEMA,
         "securitisation_allocations": schemas.SECURITISATION_ALLOCATION_SCHEMA,
+        # P8.60 — BA-CVA counterparty inputs. A loader edge so the per-table
+        # coverage contract (one edge per RawDataBundle frame field) holds and
+        # the contract-derived test builders default it to None when absent.
+        # The field is intentionally NOT in SEALED_FRAME_FIELDS — callers that
+        # supply the CVA book directly attach an unbranded frame.
+        "cva_counterparties": schemas.CVA_COUNTERPARTY_SCHEMA,
     }
     return {
         field_name: EdgeContract(name=f"raw_{field_name}", columns=edge_columns_from_specs(schema))

@@ -1158,6 +1158,49 @@ DF_CONTRIBUTION_SCHEMA: dict[str, ColumnSpec] = {
 }
 
 
+# =============================================================================
+# BA-CVA COUNTERPARTY INPUT SCHEMA — P8.60
+# =============================================================================
+# One row per counterparty in scope of the Basic Approach to CVA risk
+# (PRA PS1/26 Credit Valuation Adjustment Risk Part, Chapter 4). Held under an
+# optional frame on ``RawDataBundle.cva_counterparties``; absent when the firm
+# has no CVA scope (the CVA stage then no-ops, leaving ``cva_rwa = None``).
+#
+# References:
+# - PS1/26 CVA Part 4.3: SCVA_c inputs (M_NS, EAD_NS, DF_NS, RW_c).
+# - PS1/26 CVA Part 4.4: sector x credit-quality supervisory RW table.
+
+#: Eligible ``cva_rw_sector`` keys — must match the first key of the
+#: ``cva_ba_supervisory_risk_weights`` DecisionTable in packs/b31.py.
+VALID_CVA_RW_SECTORS = {
+    "SOVEREIGN",
+    "LOCAL_GOVERNMENT",
+    "FINANCIAL",
+    "PENSION_FUND",
+    "BASIC_MATERIALS",
+    "CONSUMER",
+    "TECHNOLOGY",
+    "HEALTHCARE",
+    "OTHER",
+}
+
+#: Eligible ``cva_rw_rating_band`` keys — investment grade vs high-yield/non-rated
+#: (PS1/26 CVA Part 4.4 table columns).
+VALID_CVA_RW_RATING_BANDS = {"IG", "HY_NR"}
+
+#: BA-CVA counterparty input schema. ``counterparty_reference`` is the FK to the
+#: netting set's counterparty; ``cva_rw_sector`` / ``cva_rw_rating_band`` select
+#: RW_c from the Art. 4.4 table; ``cva_effective_maturity_years`` is M_NS;
+#: ``cva_in_scope`` gates BA-CVA inclusion (out-of-scope rows are dropped).
+CVA_COUNTERPARTY_SCHEMA: dict[str, ColumnSpec] = {
+    "counterparty_reference": ColumnSpec(pl.String),
+    "cva_rw_sector": ColumnSpec(pl.String),
+    "cva_rw_rating_band": ColumnSpec(pl.String),
+    "cva_effective_maturity_years": ColumnSpec(pl.Float64),
+    "cva_in_scope": ColumnSpec(pl.Boolean, default=True, required=False),
+}
+
+
 # Short-code mapping for the five SA-CCR asset classes used to compose the
 # stable ``hedging_set_id`` per CRR Art. 277(1) (e.g. "IR-NS-IR-01-GBP-GT_5Y").
 # Keys mirror the canonical ``TRADE_SCHEMA.asset_class`` input strings
@@ -1635,6 +1678,12 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     "securitisation_allocations": {
         "exposure_type": VALID_SECURITISATION_EXPOSURE_TYPES,
         "transfer_type": VALID_TRANSFER_TYPES,
+    },
+    # P8.60 — BA-CVA counterparty sector / credit-quality discriminators
+    # (PS1/26 CVA Part 4.4 supervisory RW table).
+    "cva_counterparties": {
+        "cva_rw_sector": VALID_CVA_RW_SECTORS,
+        "cva_rw_rating_band": VALID_CVA_RW_RATING_BANDS,
     },
     # P8.33 — CRR Art. 277(3)(b) / CRE52.67 commodity hedging-set partition.
     # UPPER-CASE bucket keys to match ``SA_CCR_SUPERVISORY_FACTORS_COMMODITY``

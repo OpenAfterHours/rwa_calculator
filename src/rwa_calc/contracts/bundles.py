@@ -154,6 +154,14 @@ class RawDataBundle:
             netting set / margin agreement / CCR collateral). None
             when the firm has no CCR scope; the CCR stage no-ops in
             that case. See CRR Art. 271-272.
+        cva_counterparties: Optional BA-CVA counterparty inputs
+            (``CVA_COUNTERPARTY_SCHEMA``). One row per counterparty in
+            scope of the Basic Approach to CVA risk, carrying the
+            sector / credit-quality RW keys, the effective maturity
+            (M_NS) and the in-scope flag. None when the firm has no CVA
+            scope; the CVA stage then no-ops and ``cva_rwa`` stays None.
+            Basel-3.1-only (gated on the ``cva_ba_cva`` pack Feature).
+            See PRA PS1/26 CVA Part Chapter 4.
         errors: Validation errors found during loading
     """
 
@@ -178,6 +186,10 @@ class RawDataBundle:
     model_permissions: pl.LazyFrame | None = None
     securitisation_allocations: pl.LazyFrame | None = None
     ccr: RawCCRBundle | None = None
+    # BA-CVA counterparty inputs (P8.60). Not a loader-sealed frame — the
+    # firm supplies it alongside the CCR book; the CVA stage reads it after
+    # aggregation. None when the firm has no CVA scope.
+    cva_counterparties: pl.LazyFrame | None = None
     errors: list[CalculationError] = field(default_factory=list)
 
     def __post_init__(self) -> None:
@@ -735,6 +747,10 @@ class AggregatedResultBundle:
             contribution RWEA (sum of ``rwa_final`` over the synthetic
             ``risk_type == "CCR_DEFAULT_FUND"`` rows; CRR Art. 308/309).
             ``None`` when the portfolio carries no default-fund contributions.
+        cva_rwa: Portfolio-level BA-CVA risk-weighted exposure amount
+            (RWEA_CVA = DS_BA-CVA x K_reduced x 12.5; PS1/26 CVA Part 4.2-4.4).
+            ``None`` when no CVA counterparties were supplied or the regime is
+            CRR (the CVA stage is a Basel-3.1-only no-op otherwise).
         errors: All errors accumulated throughout pipeline
     """
 
@@ -755,6 +771,7 @@ class AggregatedResultBundle:
     securitisation_summary: pl.LazyFrame | None = None
     securitisation_audit: pl.LazyFrame | None = None
     rwa_ccr_default_fund: float | Decimal | None = None
+    cva_rwa: float | None = None
     errors: list[CalculationError] = field(default_factory=list)
 
     def __post_init__(self) -> None:

@@ -586,6 +586,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "ccr",
             _generate_p845_e1_e5,
         ),
+        (
+            "P8.60 (CVA-A1 BA-CVA reduced-K vertical slice — single Financials IG counterparty)",
+            "p8_60",
+            _generate_p860_cva_a1,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -3643,6 +3648,47 @@ def _generate_p845_e1_e5(output_dir: Path) -> list[tuple[str, int]]:
             CCR_MARGIN_BUILDER_MODULE,
         ):
             sys.modules.pop(mod, None)
+
+
+def _generate_p860_cva_a1(output_dir: Path) -> list[tuple[str, int]]:
+    """
+    Generate P8.60 / CVA-A1 fixtures — BA-CVA reduced-K vertical slice.
+
+    CVA-A1 tests the reduced version of BA-CVA (PS1/26 CVA Part 4.2-4.4) with a
+    single counterparty (CP_CVA_001, Financials IG, M=3.0 years) and a single
+    netting set (NS_CVA_001, 3-year GBP IR swap, GBP 100m notional).
+
+    Parquet files produced (5 files):
+        cva_a1_trades.parquet              1 row  (T_CVA_001, 3y GBP IR swap)
+        cva_a1_netting_sets.parquet        1 row  (NS_CVA_001, CP_CVA_001)
+        cva_a1_margin_agreements.parquet   0 rows (no CSA)
+        cva_a1_ccr_collateral.parquet      0 rows (no CCR collateral)
+        cva_a1_cva_counterparties.parquet  1 row  (FINANCIAL, IG, M=3.0, in_scope=True)
+
+    Confirmed regulatory scalars (ps126app1.pdf):
+        DSBA-CVA = 0.65       (page 399, section 4.2)
+        rho = 50%             (page 399, section 4.2)
+        DF = (1-e^-0.05M)/(0.05M)  (page 400, section 4.3)
+        RW_Financials_IG = 5.0%    (page 401, section 4.4 table)
+        x12.5 multiplier      (page 15, Own Funds Part 4(b))
+
+    CORRECTION vs scenario-architect proposal: the proposal omitted the
+    DSBA-CVA = 0.65 scalar. The correct RWEA formula is:
+        RWEA_CVA = 0.65 * K_reduced * 12.5
+
+    Regulatory basis: PS1/26 App.1 CVA Part 4.2-4.4; CRR Art. 274(2).
+    """
+    _REPO_ROOT_STR = str(_REPO_ROOT)
+    if _REPO_ROOT_STR not in sys.path:
+        sys.path.insert(0, _REPO_ROOT_STR)
+    try:
+        from tests.fixtures.p8_60.cva_a1_builder import save_p860_fixtures
+
+        return save_p860_fixtures(output_dir)
+    finally:
+        for mod in list(sys.modules.keys()):
+            if "p8_60" in mod or "cva_a1_builder" in mod:
+                sys.modules.pop(mod, None)
 
 
 if __name__ == "__main__":

@@ -1176,4 +1176,68 @@ ENTRIES: dict[str, RuleEntry] = {
         key="sl_type",
         citation=Citation("PS1/26", "122A", "SA specialised-lending risk weights"),
     ),
+    # ---------------------------------------------------------------------
+    # BA-CVA (Basel-3.1-only) — PRA PS1/26 Credit Valuation Adjustment Risk
+    # Part, Chapter 4. The CVA risk capital charge has no CRR equivalent
+    # (CRR Art. 382 advanced/standardised CVA is replaced wholesale), so the
+    # feature is present/True ONLY in this pack — absent from common/crr, so
+    # ``pack.feature("cva_ba_cva")`` is False under CRR and the CVA stage is a
+    # clean no-op. Consumed by engine/cva/ba_cva.py + engine/stages/cva.py.
+    # ---------------------------------------------------------------------
+    "cva_ba_cva": Feature(
+        name="cva_ba_cva",
+        enabled=True,
+        citation=Citation("PS1/26", "4.1", "BA-CVA in scope (Credit Valuation Adjustment Risk Part)"),
+    ),
+    # DS_BA-CVA discount scalar applied to K_reduced (PS1/26 CVA Part 4.2,
+    # page 399): OFR_CVA = DS_BA-CVA x K_reduced.
+    "ds_ba_cva": ScalarParam(
+        name="ds_ba_cva",
+        value=Decimal("0.65"),
+        citation=Citation("PS1/26", "4.2", "DS_BA-CVA = 0.65 (reduced BA-CVA own-funds scalar)"),
+    ),
+    # Supervisory correlation rho (PS1/26 CVA Part 4.2, page 399): used inside
+    # K_reduced = sqrt[(rho.SUM SCVA_c)^2 + (1-rho^2).SUM SCVA_c^2].
+    "cva_ba_supervisory_correlation": ScalarParam(
+        name="cva_ba_supervisory_correlation",
+        value=Decimal("0.50"),
+        citation=Citation("PS1/26", "4.2", "rho = 50% supervisory correlation parameter"),
+    ),
+    # Supervisory discount rate (PS1/26 CVA Part 4.3, page 400): the 0.05 rate
+    # inside DF_NS = (1 - e^(-0.05.M_NS)) / (0.05.M_NS).
+    "cva_ba_supervisory_discount_rate": ScalarParam(
+        name="cva_ba_supervisory_discount_rate",
+        value=Decimal("0.05"),
+        citation=Citation("PS1/26", "4.3", "supervisory discount rate 0.05 in DF_NS"),
+    ),
+    # Supervisory CVA risk weights RW_c by (sector x credit quality) per the
+    # PS1/26 CVA Part 4.4 table (page 401). Investment grade ("IG") vs high
+    # yield / non-rated ("HY_NR"). Consumed by engine/cva/ba_cva.py.
+    "cva_ba_supervisory_risk_weights": DecisionTable(
+        name="cva_ba_supervisory_risk_weights",
+        key_names=("cva_rw_sector", "cva_rw_rating_band"),
+        rows=(
+            (("SOVEREIGN", "IG"), Decimal("0.005")),
+            (("SOVEREIGN", "HY_NR"), Decimal("0.020")),
+            (("LOCAL_GOVERNMENT", "IG"), Decimal("0.010")),
+            (("LOCAL_GOVERNMENT", "HY_NR"), Decimal("0.040")),
+            (("FINANCIAL", "IG"), Decimal("0.050")),
+            (("FINANCIAL", "HY_NR"), Decimal("0.120")),
+            (("PENSION_FUND", "IG"), Decimal("0.035")),
+            (("PENSION_FUND", "HY_NR"), Decimal("0.085")),
+            (("BASIC_MATERIALS", "IG"), Decimal("0.030")),
+            (("BASIC_MATERIALS", "HY_NR"), Decimal("0.070")),
+            (("CONSUMER", "IG"), Decimal("0.030")),
+            (("CONSUMER", "HY_NR"), Decimal("0.085")),
+            (("TECHNOLOGY", "IG"), Decimal("0.020")),
+            (("TECHNOLOGY", "HY_NR"), Decimal("0.055")),
+            (("HEALTHCARE", "IG"), Decimal("0.015")),
+            (("HEALTHCARE", "HY_NR"), Decimal("0.050")),
+            (("OTHER", "IG"), Decimal("0.050")),
+            (("OTHER", "HY_NR"), Decimal("0.120")),
+        ),
+        citation=Citation("PS1/26", "4.4", "supervisory CVA risk weight table (sector x IG/HY-NR)"),
+        # Conservative catch-all = Other sector HY/NR (12.0%) for unmapped keys.
+        default=Decimal("0.120"),
+    ),
 }

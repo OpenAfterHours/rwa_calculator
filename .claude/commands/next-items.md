@@ -1,6 +1,6 @@
 ---
-description: Pick top N non-conflicting items from IMPLEMENTATION_PLAN.md and drive them through the four-wave pipeline (scenario-architect → fixture-builder → test-writer → engine-implementer) per item, with a reviewer gate between every wave and one revision retry per wave per item. Agents run in the background so the operator can chat with the orchestrator mid-batch. Default N=3, capped at 5. Hard-excludes items that touch shared engine files.
-argument-hint: [N]
+description: Pick top N non-conflicting items from IMPLEMENTATION_PLAN.md and drive them through the four-wave pipeline (scenario-architect → fixture-builder → test-writer → engine-implementer) per item, with a reviewer gate between every wave and one revision retry per wave per item. Agents run in the background so the operator can chat with the orchestrator mid-batch. Default N=3, capped at 5. Hard-excludes items that touch shared engine files. An optional scope arg (e.g. `ccr` / `tier8`) restricts selection to a single tier.
+argument-hint: [N] [scope]
 ---
 
 You are draining `IMPLEMENTATION_PLAN.md` in batches. Each item runs
@@ -17,8 +17,18 @@ you squash-merge each surviving worktree branch back into the
 invoking this command), run the global validation gate **once** on
 the merged tree, then tick the plan and clean up the worktrees.
 
-Parse `$ARGUMENTS` as integer **N** (default 3, cap 5). If
-`$ARGUMENTS` is empty or not an integer, use 3.
+Parse `$ARGUMENTS` as an integer **N** (default 3, cap 5) optionally
+followed by a **scope** token. The integer is N (if absent or not an
+integer, use 3). Any non-integer token is the scope:
+
+- `ccr`, `tier8`, or `P8` → **CCR scope**: select only Tier 8
+  (Counterparty Credit Risk, `P8.*`) items. See Step 1.
+- absent or anything else → **default scope**: the normal tier walk
+  in Step 1.
+
+Examples: `/next-items` → N=3 default scope; `/next-items 2` → N=2
+default scope; `/next-items 3 ccr` → N=3 CCR scope; `/next-items ccr`
+→ N=3 CCR scope.
 
 ## Core architecture
 
@@ -36,7 +46,21 @@ is supplementary.
 
 ## Step 1 — pick a batch
 
-Read `IMPLEMENTATION_PLAN.md`. Walk tiers in order:
+Read `IMPLEMENTATION_PLAN.md`.
+
+**If the scope is `ccr`** (from `$ARGUMENTS`, see above): consider
+**only Tier 8 — Counterparty Credit Risk (CCR) Integration**. Pick
+the highest-priority unchecked (`[ ]`) `P8.*` items in plan order,
+skipping anything explicitly marked `DEFERRED v2.0` / Phase 10. Do
+**not** fall through to any other tier — if Tier 8 has no eligible
+unchecked items left, report "no CCR work to do" and stop. Everything
+else in this command (worktrees, four-wave pipeline, reviewer loop,
+hard exclusions, merge, gate, tick) is unchanged. Note that many CCR
+items touch shared files (`engine/pipeline.py`, `contracts/bundles.py`,
+`contracts/protocols.py`, `engine/registry.py`) and so will be forced
+single-stream by the hard-exclusion rule below — that is expected.
+
+**Otherwise (default scope)**, walk tiers in order:
 
 1. Tier 1: Calculation Correctness
 2. Tier 2: Test Coverage Gaps
@@ -45,6 +69,8 @@ Read `IMPLEMENTATION_PLAN.md`. Walk tiers in order:
 5. (skip Tier 5: Documentation — that's `/next-docs` territory)
 6. Tier 6: Code Quality
 7. (skip Tier 7: Future / v2.0)
+8. (skip Tier 8: CCR — only reached via the `ccr` scope above)
+9. (skip Tier 9 and beyond unless promoted into Tiers 1–6)
 
 For each candidate item, infer its expected change footprint by
 reading the bullet's `Ref:` field, the cited file paths, and the

@@ -186,6 +186,7 @@ Orchestration lives in slash commands, not in agents. Each `loop.sh` mode maps t
 | `loop.sh` mode | Prompt file | Default command | Strict-serial alternative |
 |---|---|---|---|
 | `loop.sh` (build) | `PROMPT_build.md` | `/next-items 3` | `/next-scenario` |
+| `loop.sh ccr` | `PROMPT_ccr.md` | `/next-items 3 ccr` | `/implement-scenario <P8.x>` |
 | `loop.sh plan` | `PROMPT_plan.md` | `/refresh-plan` | — |
 | `loop.sh docs_build` | `PROMPT_docs_build.md` | `/next-docs 3` | `/next-doc` |
 | `loop.sh docs_plan` | `PROMPT_docs_plan.md` | `/refresh-docs-plan` | — |

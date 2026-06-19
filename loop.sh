@@ -5,6 +5,8 @@
 #   ./loop.sh 20           # Build mode, max 20 iterations
 #   ./loop.sh plan         # Plan mode, 2 iterations (default)
 #   ./loop.sh plan 5       # Plan mode, max 5 iterations
+#   ./loop.sh ccr          # CCR-only build (Tier 8), 2 iterations (default)
+#   ./loop.sh ccr 10       # CCR-only build, max 10 iterations
 
 # Parse arguments
 if [[ "$1" = "plan" ]]; then
@@ -21,6 +23,11 @@ elif [[ "$1" = "docs_build" ]]; then
     # Doc build mode
     MODE="build"
     PROMPT_FILE="PROMPT_docs_build.md"
+    MAX_ITERATIONS=${2:-2}
+elif [[ "$1" = "ccr" ]]; then
+    # CCR build mode — drains Tier 8 (Counterparty Credit Risk) only
+    MODE="build"
+    PROMPT_FILE="PROMPT_ccr.md"
     MAX_ITERATIONS=${2:-2}
 elif [[ "$1" = "build_next" ]]; then
     # build mode

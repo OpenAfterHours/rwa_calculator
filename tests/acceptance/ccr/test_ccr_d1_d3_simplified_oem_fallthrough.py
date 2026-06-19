@@ -12,9 +12,9 @@ Key responsibilities:
 - Pin that unmargined at-par swaps yield pfe_multiplier == 1.0 (cap binds)
   and rc_unmargined == 0.0, exactly as full SA-CCR requires.
 - Pin the LOAD-BEARING CCR-D3 discriminator: an OTM margined swap whose
-  pfe_multiplier drops to 0.6048083569079303.  Simplified SA-CCR (Art. 281)
-  forces the multiplier to 1.0, which would produce ead_final = 8,629,617.519
-  instead of 6,464,360.391383706 — the wrong value is asserted NOT to match.
+  pfe_multiplier drops to 0.20816907251400474.  Simplified SA-CCR (Art. 281)
+  forces the multiplier to 1.0, which would produce ead_final = 4,794,005.256
+  instead of 3,492,231.049275926 — the wrong value is asserted NOT to match.
 
 Scenarios:
     CCR-D1: unmargined 10-year GBP IR swap, MtM=0  (mirrors CCR-A1 economics)
@@ -492,20 +492,22 @@ class TestCCRD3MarginedOTMIR:
     """
     CCR-D3 regression pins — LOAD-BEARING: margined OTM 10y GBP IR swap.
 
-    The primary discriminator is pfe_multiplier = 0.6048083569079303 (sub-unity).
-    Simplified SA-CCR (Art. 281) would force this to 1.0, yielding:
-        wrong_ead = 1.4 * (2_250_000 + 3_914_298.228) = 8_629_617.519
+    The primary discriminator is pfe_multiplier = 0.20816907251400474 (sub-unity).
+    CCR-D3 is margined daily-remargin, so the margined MF=0.30 (Art. 279c(2)/285)
+    scales the add-on to 1,174,289.468 (P8.54). Simplified SA-CCR (Art. 281) would
+    force the multiplier to 1.0, yielding:
+        wrong_ead = 1.4 * (2_250_000 + 1_174_289.468) = 4_794_005.256
 
     The full SA-CCR formula yields:
-        correct_ead = 1.4 * (2_250_000 + 2_367_400.280) = 6_464_360.391383706
+        correct_ead = 1.4 * (2_250_000 + 244_450.749) = 3_492_231.049275926
 
     Six assertions:
       1. ccr_method == "sa_ccr"
-      2. pfe_multiplier approx 0.6048083569079303    <- PRIMARY PIN (rel=1e-9)
+      2. pfe_multiplier approx 0.20816907251400474   <- PRIMARY PIN (rel=1e-9)
       3. rc_margined approx 2,250,000.0               (TH+MTA-NICA floor arm)
-      4. pfe_addon approx 2,367,400.27955979
-      5. ead_final approx 6,464,360.391383706 AND ead_final != 8,629,617.519
-      6. rwa_final approx 3,232,180.195691853
+      4. pfe_addon approx 244,450.7494828046
+      5. ead_final approx 3,492,231.049275926 AND ead_final != 4,794,005.256
+      6. rwa_final approx 1,746,115.524637963
 
     Go-RED trigger: any Art.281 branch that sets pfe_multiplier=1.0 for margined
     OTM netting sets, causing ead_final to match CCR_D3_WRONG_SIMPLIFIED_EAD.
@@ -535,19 +537,21 @@ class TestCCRD3MarginedOTMIR:
 
     def test_ccr_d3_pfe_multiplier_sub_unity(self, ccr_d3_result: dict) -> None:
         """
-        PRIMARY PIN: pfe_multiplier == 0.6048083569079303 (sub-unity, not 1.0).
+        PRIMARY PIN: pfe_multiplier == 0.20816907251400474 (sub-unity, not 1.0).
 
         This is the critical discriminator between full SA-CCR and Simplified Art. 281.
         Simplified SA-CCR forces pfe_multiplier = 1.0 for all margined netting sets.
         Full SA-CCR Art. 278(3) computes:
             multiplier = min(1, 0.05 + 0.95 * exp((V-C) / (2 * 0.95 * AddOn_agg)))
-        With V-C = -4,000,000 and AddOn_agg = 3,914,298.228:
-            multiplier = min(1, 0.05 + 0.95 * exp(-4m / (2 * 0.95 * 3_914_298.228)))
-                       = 0.6048083569079303
+        CCR-D3 is margined daily-remargin, so the margined MF=0.30 (Art. 279c(2)/285)
+        scales the add-on: AddOn_agg = 3_914_298.228 * 0.30 = 1,174,289.468 (P8.54).
+        With V-C = -4,000,000 and AddOn_agg = 1,174,289.468:
+            multiplier = min(1, 0.05 + 0.95 * exp(-4m / (2 * 0.95 * 1_174_289.468)))
+                       = 0.20816907251400474
 
-        Arrange: MtM=-4m (OTM, V-C=-4m), C=0, AddOn_agg approx 3,914,298.228.
+        Arrange: MtM=-4m (OTM, V-C=-4m), C=0, AddOn_agg approx 1,174,289.468.
         Act:     full CRR SA+CCR pipeline.
-        Assert:  pfe_multiplier approx 0.6048083569079303 (rel=1e-9).
+        Assert:  pfe_multiplier approx 0.20816907251400474 (rel=1e-9).
 
         References: CRR Art. 278(3) — PFE multiplier formula (sub-unity for OTM).
                     CRR Art. 281   — Simplified SA-CCR would force multiplier = 1.0.
@@ -591,13 +595,13 @@ class TestCCRD3MarginedOTMIR:
 
     def test_ccr_d3_pfe_addon(self, ccr_d3_result: dict) -> None:
         """
-        pfe_addon approx 2,367,400.27955979: multiplier * AddOn_aggregate.
+        pfe_addon approx 244,450.7494828046: multiplier * AddOn_aggregate.
 
-        PFE = pfe_multiplier * AddOn_agg = 0.6048... * 3,914,298.228 = 2,367,400.280.
+        PFE = pfe_multiplier * AddOn_agg = 0.2082... * 1,174,289.468 = 244,450.749.
 
-        Arrange: pfe_multiplier=0.6048083569079303, AddOn_agg approx 3,914,298.228.
+        Arrange: pfe_multiplier=0.20816907251400474, AddOn_agg approx 1,174,289.468.
         Act:     full CRR SA+CCR pipeline.
-        Assert:  pfe_addon approx 2,367,400.27955979 (rel=1e-6).
+        Assert:  pfe_addon approx 244,450.7494828046 (rel=1e-6).
 
         References: CRR Art. 278 — PFE = multiplier * AddOn_aggregate.
         """
@@ -608,26 +612,26 @@ class TestCCRD3MarginedOTMIR:
         assert row["pfe_addon"] == pytest.approx(CCR_D3_EXPECTED_PFE_ADDON, rel=1e-6), (
             f"CCR-D3: expected pfe_addon approx {CCR_D3_EXPECTED_PFE_ADDON:,.8f}, "
             f"got {row['pfe_addon']!r}. "
-            "CRR Art. 278: PFE = multiplier * AddOn_agg = 0.6048... * 3_914_298.228."
+            "CRR Art. 278: PFE = multiplier * AddOn_agg = 0.2082... * 1_174_289.468."
         )
 
     def test_ccr_d3_ead_correct_not_simplified(self, ccr_d3_result: dict) -> None:
         """
-        ead_final approx 6,464,360.391383706 AND ead_final != 8,629,617.519.
+        ead_final approx 3,492,231.049275926 AND ead_final != 4,794,005.256.
 
         The correct (full SA-CCR) EAD:
             EAD = 1.4 * (rc_margined + pfe_addon)
-                = 1.4 * (2_250_000 + 2_367_400.27955979)
-                = 6_464_360.391383706
+                = 1.4 * (2_250_000 + 244_450.7494828046)
+                = 3_492_231.049275926
 
         The wrong (Simplified Art.281) EAD would be:
-            simplified_ead = 1.4 * (2_250_000 + 3_914_298.228) = 8_629_617.519
+            simplified_ead = 1.4 * (2_250_000 + 1_174_289.468) = 4_794_005.256
             (because Art.281 forces multiplier=1.0, so pfe_addon = 1.0 * AddOn_agg)
 
-        Arrange: rc_margined=2_250_000, pfe_addon=2_367_400.280.
+        Arrange: rc_margined=2_250_000, pfe_addon=244_450.749.
         Act:     full CRR SA+CCR pipeline.
-        Assert:  ead_final approx 6,464,360.391383706 (rel=1e-9).
-        Assert:  ead_final != CCR_D3_WRONG_SIMPLIFIED_EAD (8,629,617.519).
+        Assert:  ead_final approx 3,492,231.049275926 (rel=1e-9).
+        Assert:  ead_final != CCR_D3_WRONG_SIMPLIFIED_EAD (4,794,005.256).
 
         References: CRR Art. 274(2) — EAD = alpha * (RC + PFE);
                     CRR Art. 281   — Simplified SA-CCR (NOT applied here).
@@ -638,7 +642,7 @@ class TestCCRD3MarginedOTMIR:
         # Assert — correct full SA-CCR EAD (PRIMARY load-bearing value)
         assert row["ead_final"] == pytest.approx(CCR_D3_EXPECTED_EAD, rel=1e-9), (
             f"CCR-D3: expected ead_final approx {CCR_D3_EXPECTED_EAD:,.9f} "
-            f"(full SA-CCR: 1.4 * (2_250_000 + 2_367_400.280)), "
+            f"(full SA-CCR: 1.4 * (2_250_000 + 244_450.749)), "
             f"got {row['ead_final']!r}. "
             f"Simplified Art.281 would produce ead_final={CCR_D3_WRONG_SIMPLIFIED_EAD:,.3f}."
         )
@@ -652,11 +656,11 @@ class TestCCRD3MarginedOTMIR:
 
     def test_ccr_d3_rwa(self, ccr_d3_result: dict) -> None:
         """
-        rwa_final approx 3,232,180.195691853: RWA = EAD * RW = 6,464,360.391 * 0.50.
+        rwa_final approx 1,746,115.524637963: RWA = EAD * RW = 3,492,231.049 * 0.50.
 
-        Arrange: EAD=6,464,360.391383706, RW=0.50 (institution CQS 2).
+        Arrange: EAD=3,492,231.049275926, RW=0.50 (institution CQS 2).
         Act:     full CRR SA+CCR pipeline.
-        Assert:  rwa_final approx 3,232,180.195691853 (rel=1e-9).
+        Assert:  rwa_final approx 1,746,115.524637963 (rel=1e-9).
 
         References: CRR Art. 120(1) Table 3 — institution CQS 2 → 50% risk weight.
         """
@@ -667,6 +671,6 @@ class TestCCRD3MarginedOTMIR:
         assert row["rwa_final"] == pytest.approx(CCR_D3_EXPECTED_RWA, rel=1e-9), (
             f"CCR-D3: expected rwa_final approx {CCR_D3_EXPECTED_RWA:,.9f}, "
             f"got {row['rwa_final']!r}. "
-            "RWA = EAD * RW = 6_464_360.391383706 * 0.50 "
+            "RWA = EAD * RW = 3_492_231.049275926 * 0.50 "
             "(CRR Art. 120(1) Table 3, institution CQS 2)."
         )

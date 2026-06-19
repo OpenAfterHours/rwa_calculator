@@ -1,0 +1,21 @@
+{
+  "scenario_id": "CCR-A14",
+  "framework": "crr",
+  "reporting_date": "2026-01-15",
+  "exposure_reference": "ccr__NS_MGN_002",
+  "source_netting_set_id": "NS_MGN_002",
+  "ccr_method": "sa_ccr",
+  "risk_type": "CCR_DERIVATIVE",
+  "_note_p854": "P8.54 new scenario: remargining_frequency_days=126 → MPOR_eff=max(10+126-1,10)=135 → MF_margined=1.5*sqrt(135/250)=1.102270384252. addon_aggregate=3914298.2277279915*1.102270384252=4314615.011554657 (exactly linear). Load-bearing inequality: ead_final>6464360.391383706 (unmargined MF=1.0 baseline). pfe_multiplier/pfe_addon/ead/rwa involve exp() so final bytes confirmed by engine-implementer during validation gate. rc_margined=2250000.0 exactly (MF-independent).",
+  "rc_margined": 2250000.0,
+  "rc_unmargined": 0.0,
+  "addon_aggregate": 4314615.011554657,
+  "pfe_multiplier": 0.633196584008729,
+  "pfe_addon": 2731999.486630257,
+  "ead_ccr": 6974799.28128236,
+  "ead_final": 6974799.28128236,
+  "exposure_class": "institution",
+  "approach_applied": "standardised",
+  "risk_weight": 0.50,
+  "rwa_final": 3487399.64064118
+}

@@ -9,7 +9,7 @@ Scenario design (P8.44 / CCR-D1, D2, D3):
     Three orchestrator-ready RawDataBundles asserting the engine always applies
     the full SA-CCR formula (Art. 274/275/278/279c) and never a Simplified Art.281
     or Original Exposure Method branch.  The critical distinguishing pin is CCR-D3:
-    a margined OTM position whose PFE multiplier drops below 1.0 (0.6048...).
+    a margined OTM position whose PFE multiplier drops below 1.0 (0.2082...).
     Simplified Art.281 would force the multiplier to 1.0, giving a wrong EAD.
 
     | Scenario | Trade         | NS          | Type  | MtM          | Margined |
@@ -32,12 +32,13 @@ CCR-D2 economics (mirrors CCR-A2):
     EAD=4,478,466.541; RW=0.50; RWA=2,239,233.271.
 
 CCR-D3 economics (mirrors CCR-A13 — LOAD-BEARING):
-    10-year GBP vanilla IR swap, notional 100m, MtM -4,000,000 (OTM), margined.
+    10-year GBP vanilla IR swap, notional 100m, MtM -4,000,000 (OTM), margined daily.
     NS: TH=2,000,000, MTA=500,000, NICA=250,000, MPOR=10d; margin_agreement_id MA-D3-001.
-    AddOn=3,914,298.2277279915; V=-4,000,000; C=0; V-C=-4,000,000;
-    pfe_multiplier=0.6048083569079303 (SUB-1; Art.281 would force 1.0 — fails test);
-    pfe_addon=2,367,400.27955979; rc_margined=2,250,000.0 (TH+MTA-NICA floor);
-    EAD=1.4*(2,250,000+2,367,400.27955979)=6,464,360.391383706; RWA=3,232,180.195691853.
+    Margined MF=0.30 (freq=1d -> MPOR_eff=10; Art. 279c(2)/285, P8.54), so
+    AddOn=3,914,298.2277279915*0.30=1,174,289.4683183974; V=-4,000,000; C=0; V-C=-4,000,000;
+    pfe_multiplier=0.20816907251400474 (SUB-1; Art.281 would force 1.0 — fails test);
+    pfe_addon=244,450.7494828046; rc_margined=2,250,000.0 (TH+MTA-NICA floor);
+    EAD=1.4*(2,250,000+244,450.7494828046)=3,492,231.049275926; RWA=1,746,115.524637963.
 
 All scenarios: CRR regime, reporting_date 2026-01-15, STANDARDISED.
 
@@ -250,18 +251,22 @@ CCR_D3_NUMBER_OF_TRADES: int = 1
 CCR_D3_HAS_ILLIQUID_COLLATERAL: bool = False
 
 # Golden expected values (from CCR-A13.json, full SA-CCR).
-# PRIMARY PIN: pfe_multiplier 0.6048083569079303 != 1.0 proves NOT Simplified.
+# CCR-D3 is a margined, daily-remargin NS (freq=1d -> MPOR_eff=10 -> margined
+# MF=0.30 per CRR Art. 279c(2)/285), so the add-on scales by 0.30 (P8.54):
+# AddOn_agg = 3_914_298.2277279915 * 0.30 = 1_174_289.4683183974.
+# PRIMARY PIN: pfe_multiplier 0.20816907251400474 != 1.0 proves NOT Simplified.
 CCR_D3_EXPECTED_CCR_METHOD: str = "sa_ccr"
-CCR_D3_EXPECTED_PFE_MULTIPLIER: float = 0.6048083569079303  # sub-unity; Art.281 forces 1.0
-CCR_D3_EXPECTED_RC_MARGINED: float = 2_250_000.0  # TH+MTA-NICA floor arm
-CCR_D3_EXPECTED_PFE_ADDON: float = 2_367_400.27955979
-CCR_D3_EXPECTED_EAD: float = 6_464_360.391383706
+CCR_D3_EXPECTED_PFE_MULTIPLIER: float = 0.20816907251400474  # sub-unity; Art.281 forces 1.0
+CCR_D3_EXPECTED_RC_MARGINED: float = 2_250_000.0  # TH+MTA-NICA floor arm (MF-independent)
+CCR_D3_EXPECTED_PFE_ADDON: float = 244_450.7494828046
+CCR_D3_EXPECTED_EAD: float = 3_492_231.049275926
 CCR_D3_EXPECTED_RISK_WEIGHT: float = 0.50
-CCR_D3_EXPECTED_RWA: float = 3_232_180.195691853
+CCR_D3_EXPECTED_RWA: float = 1_746_115.524637963
 
-# Contrast (would-go-RED if Simplified fired):
-#   simplified_ead = 1.4 * (2_250_000 + 3_914_298.228) = 8_629_617.519
-CCR_D3_WRONG_SIMPLIFIED_EAD: float = 8_629_617.519  # documented for test commentary
+# Contrast (would-go-RED if Simplified fired): forcing the PFE multiplier to 1.0
+# over the same margined add-on gives
+#   simplified_ead = 1.4 * (2_250_000 + 1_174_289.468) = 4_794_005.256
+CCR_D3_WRONG_SIMPLIFIED_EAD: float = 4_794_005.255645756  # documented for test commentary
 
 CCR_D3_EXPOSURE_REFERENCE: str = f"ccr__{CCR_D3_NETTING_SET_ID}"
 
@@ -640,10 +645,10 @@ def build_raw_data_bundle_ccr_d3() -> RawDataBundle:
     This is the load-bearing scenario.  The OTM position (MtM = -4m) causes
     the PFE multiplier (Art. 278(3)) to drop below 1.0:
 
-        pfe_multiplier = 0.6048083569079303
+        pfe_multiplier = 0.20816907251400474
 
     Simplified SA-CCR (Art. 281) would force this to 1.0, producing an EAD of
-    8,629,617.519 instead of 6,464,360.391383706.  If the engine erroneously
+    4,794,005.256 instead of 3,492,231.049275926.  If the engine erroneously
     routes through the Simplified branch, the test fails on the multiplier pin.
 
     Key responsibilities:
@@ -660,15 +665,15 @@ def build_raw_data_bundle_ccr_d3() -> RawDataBundle:
 
     Fall-through guard assertion (CCR-D3 / CCR-A13 anchors):
         ccr_method      == "sa_ccr"
-        pfe_multiplier  == approx(0.6048083569079303, rel=1e-9)  <- PRIMARY PIN
+        pfe_multiplier  == approx(0.20816907251400474, rel=1e-9)  <- PRIMARY PIN
         rc_margined     == 2_250_000.0
-        pfe_addon       == approx(2_367_400.27955979, rel=1e-9)
-        ead_final       == approx(6_464_360.391383706, rel=1e-9)
+        pfe_addon       == approx(244_450.7494828046, rel=1e-9)
+        ead_final       == approx(3_492_231.049275926, rel=1e-9)
         risk_weight     == 0.50
-        rwa_final       == approx(3_232_180.195691853, rel=1e-9)
+        rwa_final       == approx(1_746_115.524637963, rel=1e-9)
 
     Contrast (must NOT match; indicates Simplified branch fired):
-        simplified_ead  = 8_629_617.519  (Art.281 forced multiplier=1.0)
+        simplified_ead  = 4_794_005.256  (Art.281 forced multiplier=1.0)
 
     Integration test usage:
         from tests.fixtures.ccr.golden_ccr_d1_d3 import build_raw_data_bundle_ccr_d3

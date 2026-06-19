@@ -94,7 +94,12 @@ def compute_maturity_factor_margined(trades: pl.LazyFrame) -> pl.LazyFrame:
 
     1. Base MPOR (Art. 285(2)):
         - 5 BD when ALL trades in the netting set are SFT/repo/margin-lending
-          (Art. 285(2)(a))
+          (Art. 285(2)(a)) — DOCUMENTED-BUT-INERT in production: the pipeline
+          adapter splits SFTs out to the FCCM branch
+          (``pipeline_adapter._split_ccr_bundle_by_transaction_type``) before
+          this function ever sees them, so the derivative-only sub-bundle makes
+          ``all_sft_in_ns`` always False. The branch is retained for the unit
+          tests (which feed SFT rows directly) and for spec completeness.
         - 10 BD otherwise (OTC derivative netting set, Art. 285(2)(b))
     2. Upgrade to 20 BD (Art. 285(3)) when either:
         - ``number_of_trades > 5000`` (Art. 285(3)(a)), or
@@ -121,14 +126,24 @@ def compute_maturity_factor_margined(trades: pl.LazyFrame) -> pl.LazyFrame:
             - ``mpor_days_input``               — firm-supplied MPOR floor (BD)
 
     Returns:
-        The input LazyFrame with a new ``maturity_factor: Float64`` column.
+        The input LazyFrame with two new Float64 columns:
+
+        - ``maturity_factor_margined`` — the gated margined MF (null on
+          unmargined rows so the pipeline-adapter coalesce can fall back to
+          the unmargined MF without clobbering it).
+        - ``maturity_factor`` — an alias of ``maturity_factor_margined``
+          retained for the P8.14 unit tests, which feed an all-margined
+          denormalised frame and read the bare column.
 
     References:
         CRR Art. 279c(2); CRR Art. 285(2)-(5); BCBS CRE52.51-52.
     """
     # Step 1 — base MPOR per Art. 285(2): 5 BD if all trades in the netting
     # set are SFT, otherwise 10 BD. We broadcast the group-level decision
-    # back to each row via ``.over("netting_set_id")``.
+    # back to each row via ``.over("netting_set_id")``. NOTE: in production the
+    # all-SFT branch is inert — SFTs are routed to FCCM upstream so the
+    # derivative-only sub-bundle never satisfies ``all_sft_in_ns`` (see the
+    # docstring Step 1 note).
     all_sft_in_ns = pl.col("transaction_type").eq("sft").min().over("netting_set_id")
 
     base_post_step1 = (
@@ -163,7 +178,12 @@ def compute_maturity_factor_margined(trades: pl.LazyFrame) -> pl.LazyFrame:
     mpor_eff_pre_floor = base_post_step3 + pl.col("remargining_frequency_days") - pl.lit(1)
 
     # Step 5 — input-MPOR floor: MPOR_eff = max(MPOR_eff, mpor_days_input).
-    mpor_eff = pl.max_horizontal(mpor_eff_pre_floor, pl.col("mpor_days_input"))
+    # Null-safety: a null ``mpor_days_input`` would null the whole MF through
+    # ``max_horizontal``; fall back to the Art. 285(2)(b) 10-BD OTC floor so a
+    # missing firm-supplied MPOR never silently drops the margined MF to null.
+    mpor_eff = pl.max_horizontal(
+        mpor_eff_pre_floor, pl.col("mpor_days_input").fill_null(_MF_FLOOR_DAYS_OTC)
+    )
 
     # MF = 1.5 * sqrt(MPOR_eff / 250) per Art. 279c(2).
     maturity_factor = (
@@ -171,4 +191,21 @@ def compute_maturity_factor_margined(trades: pl.LazyFrame) -> pl.LazyFrame:
         * (mpor_eff.cast(pl.Float64) / pl.lit(float(_SA_CCR_BUSINESS_DAYS_PER_YEAR))).sqrt()
     ).cast(pl.Float64)
 
-    return trades.with_columns(maturity_factor.alias("maturity_factor"))
+    # Gate on ``is_margined`` (mirrors ``compute_rc_margined``): emit the MF only
+    # for margined rows; unmargined rows get null so the pipeline-adapter
+    # coalesce falls back to ``maturity_factor_unmargined``. A null/absent
+    # ``is_margined`` flows to the ``.otherwise`` (null) branch exactly like an
+    # explicit False — the conservative NETTING_SET_SCHEMA default — so no
+    # ``fill_null`` is needed on the gate. ``maturity_factor`` is written as an
+    # alias of the gated margined column for the P8.14 unit tests (all-margined
+    # frame).
+    maturity_factor_margined = (
+        pl.when(pl.col("is_margined"))
+        .then(maturity_factor)
+        .otherwise(pl.lit(None, dtype=pl.Float64))
+    )
+
+    return trades.with_columns(
+        maturity_factor_margined.alias("maturity_factor_margined"),
+        maturity_factor_margined.alias("maturity_factor"),
+    )

@@ -22,27 +22,37 @@ Regulatory hand-calc (margined RC formula, CRR Art. 275(2)):
                 = max(-4_000_000,  2_250_000,  0) = 2_250_000  [floor arm binds]
     rc_unmargined (buggy pre-fix) = max(V - C, 0) = max(-4_000_000, 0) = 0
 
-PFE add-on: same IR-swap inputs as CCR-A1 (identical trade parameters),
-so addon_aggregate, pfe_multiplier, pfe_addon are identical to CCR-A1.
-The margined maturity factor (P8.14 scope) is NOT yet wired; PFE still
-uses the unmargined MF path.  Engine-precise values extracted from the
-current (unfixed) engine:
-    addon_aggregate = 3_914_298.2277279915
-    pfe_multiplier  = 0.6048083569079303   (V < 0 so cap does not bind)
-    pfe_addon       = 2_367_400.27955979
+MPOR cascade (CRR Art. 285 — P8.54 re-pin to margined MF):
+    remargining_frequency_days = 1 (daily remargin CSA).
+    base MPOR = 10 BD (Art. 285(2)(b) OTC floor).
+    MPOR_eff_pre_floor = 10 + 1 - 1 = 10.
+    MPOR_eff = max(10, 10) = 10.
+    MF_margined = 1.5 × sqrt(10/250) = 1.5 × 0.2 = 0.30  (exact).
 
-Post-fix golden targets (P8.19 engine fix restores rc_margined):
+PFE add-on (P8.54 re-pin — MF_margined = 0.30 replaces unmargined MF = 1.0):
+    addon_aggregate (MF=1.0 baseline) = 3_914_298.2277279915.
+    addon_aggregate (MF=0.30) = 3_914_298.2277279915 × 0.30 = 1_174_289.46831839.
+    V = -4_000_000.
+    denom = 2 × 0.95 × 1_174_289.468 = 2_231_149.99.
+    exponent = -4_000_000 / 2_231_149.99 = -1.792790.
+    uncapped = 0.05 + 0.95 × exp(-1.792790) = 0.05 + 0.95 × 0.166471 = 0.208148.
+    pfe_multiplier = min(1.0, 0.208148) = 0.208148.
+    pfe_addon = 0.208148 × 1_174_289.468 ≈ 244_426.
+
+Post-fix golden targets (P8.19 rc_margined + P8.54 MF_margined = 0.30):
     EAD = alpha * (rc_margined + pfe_addon)
-        = 1.4 * (2_250_000.0 + 2_367_400.27955979)
-        = 1.4 * 4_617_400.27955979
-        = 6_464_360.391383706
-    RWA = EAD * risk_weight = 6_464_360.391383706 * 0.50 = 3_232_180.195691853
+        ≈ 1.4 * (2_250_000.0 + 244_426)
+        ≈ 3_492_196
+    RWA = EAD * risk_weight ≈ 3_492_196 * 0.50 ≈ 1_746_098
 
-Pre-fix degenerate (rc = 0 bug):
-    buggy_EAD = 1.4 * (0.0 + pfe_addon) = 3_314_360.391383706
+NOTE: pfe_multiplier, pfe_addon, EAD, and RWA involve exp() so the final
+bytes are Polars-float-determined.  The Python constants below use the
+hand-calc approximations from the P8.54 proposal; engine-precise values
+are stored in tests/expected_outputs/ccr/CCR-A13.json (owned by test-writer).
+
+Pre-fix degenerate (rc = 0 bug, unmargined MF = 1.0):
+    buggy_EAD = 1.4 * (0.0 + 2_367_400.27955979) = 3_314_360.391383706
     buggy_RWA = 1_657_180.195691853
-    These are the values the CURRENT engine produces — the acceptance test
-    will be RED until P8.19 fix is applied.
 
 Counterparty / rating: reuse CCR-A1 CP_001 stubs verbatim.
     CP_001: institution, CQS 2, GB.
@@ -147,42 +157,47 @@ CCR_A13_RATING_CQS: int = 2
 CCR_A13_RATING_DATE: _date = _date(2026, 1, 15)
 
 # ---------------------------------------------------------------------------
-# Golden expected values — engine-precise, post P8.19 fix.
+# Golden expected values — hand-calc, post P8.19 + P8.54 fix (MF_margined=0.30).
 # ---------------------------------------------------------------------------
 
-# PFE inputs: identical to CCR-A1 (same trade parameters, unmargined MF path).
-# Extracted from the current engine prior to P8.19 fix:
-CCR_A13_ADDON_AGGREGATE: float = 3_914_298.2277279915
-CCR_A13_PFE_MULTIPLIER: float = 0.6048083569079303  # V < 0 → cap does not bind
-CCR_A13_PFE_ADDON: float = 2_367_400.27955979
+# P8.54 re-pin: addon_aggregate now uses MF_margined=0.30 (daily remargin, MPOR_eff=10).
+# addon_aggregate (MF=1.0 baseline) = 3_914_298.2277279915 (unmargined baseline).
+# addon_aggregate (MF=0.30) = 3_914_298.2277279915 × 0.30 = 1_174_289.46831839 (exact, linear).
+CCR_A13_ADDON_AGGREGATE: float = 3_914_298.2277279915 * 0.30
+# = 1_174_289.46831839...
 
-# Margined RC — post-fix golden (P8.19 restores this computation).
+# PFE multiplier (hand-calc; exp() in Polars determines final bytes).
+# V = -4_000_000; denom = 2×0.95×1_174_289.468 ≈ 2_231_149.99;
+# exponent ≈ -1.792790; uncapped ≈ 0.208148; pfe_multiplier = min(1.0, 0.208148).
+CCR_A13_PFE_MULTIPLIER: float = 0.208148  # hand-calc; engine bytes in CCR-A13.json
+
+# PFE add-on = pfe_multiplier × addon_aggregate (hand-calc approximation).
+# ≈ 0.208148 × 1_174_289.468 ≈ 244_426
+CCR_A13_PFE_ADDON: float = 244_426.0  # hand-calc approximation; engine bytes in CCR-A13.json
+
+# Margined RC — post P8.19 fix (restores Art. 275(2) formula; MF-independent).
 # CRR Art. 275(2): RC = max(V-C, TH+MTA-NICA, 0).
 # max(-4_000_000, 2_250_000, 0) = 2_250_000  [TH+MTA-NICA floor arm binds]
 CCR_A13_RC_MARGINED: float = 2_250_000.0
 
-# Unmargined RC: pre-fix buggy value is 0 (max(-4_000_000, 0) = 0).
-# The engine currently places this in rc_unmargined. Post-fix, rc_unmargined
-# remains 0 since NS_MGN_001 is margined (the unmargined path is skipped).
+# Unmargined RC: NS_MGN_001 is margined, so unmargined path is skipped (= 0).
 CCR_A13_RC_UNMARGINED: float = 0.0
 
 # alpha = 1.4 (CRR Art. 274(2)).
-# EAD = alpha * (rc_margined + pfe_addon)
+# EAD ≈ alpha × (rc_margined + pfe_addon) ≈ 1.4 × (2_250_000 + 244_426) ≈ 3_492_196
 CCR_A13_ALPHA: float = 1.4
-CCR_A13_EAD: float = CCR_A13_ALPHA * (CCR_A13_RC_MARGINED + CCR_A13_PFE_ADDON)
-# = 1.4 * (2_250_000.0 + 2_367_400.27955979)
-# = 1.4 * 4_617_400.27955979
-# = 6_464_360.391383706
+CCR_A13_EAD: float = 3_492_196.0  # hand-calc approximation; engine bytes in CCR-A13.json
 
 # Risk weight: institution CQS 2, CRR Art. 120(1) Table 3.
 CCR_A13_RISK_WEIGHT: float = 0.50
-CCR_A13_RWA: float = CCR_A13_EAD * CCR_A13_RISK_WEIGHT
-# = 3_232_180.195691853
+CCR_A13_RWA: float = 1_746_098.0  # hand-calc approximation; engine bytes in CCR-A13.json
 
-# Pre-fix degenerate values (current engine output — test will be RED until fix):
-#   buggy_rc = 0.0  (max(-4_000_000, 0) used instead of margined formula)
-#   buggy_ead = 1.4 * (0.0 + 2_367_400.27955979) = 3_314_360.391383706
-#   buggy_rwa = 1_657_180.195691853
+# Unmargined MF=1.0 baseline values (pre-P8.54, for cross-check only):
+#   addon_aggregate_mf1 = 3_914_298.2277279915
+#   pfe_multiplier_mf1  = 0.6048083569079303
+#   pfe_addon_mf1       = 2_367_400.27955979
+#   ead_mf1             = 6_464_360.391383706
+#   rwa_mf1             = 3_232_180.195691853
 
 # Exposure reference identifier for the CCR pipeline adapter.
 CCR_A13_EXPOSURE_REFERENCE: str = "ccr__NS_MGN_001"
@@ -483,15 +498,19 @@ def main() -> None:
     )
     print("  CCR collateral: 0 rows (c_net=0)")
     print()
-    print("Post-fix golden (CRR Art. 275(2)):")
+    print("Post-fix golden (CRR Art. 275(2) + P8.54 MF_margined=0.30):")
     print(
-        f"  rc_margined = max(-4m, TH+MTA-NICA={CCR_A13_MARGIN_THRESHOLD + CCR_A13_MINIMUM_TRANSFER_AMOUNT - CCR_A13_NICA:,.0f}, 0) = {CCR_A13_RC_MARGINED:,.1f}"
+        f"  rc_margined     = max(-4m, TH+MTA-NICA={CCR_A13_MARGIN_THRESHOLD + CCR_A13_MINIMUM_TRANSFER_AMOUNT - CCR_A13_NICA:,.0f}, 0)"
+        f" = {CCR_A13_RC_MARGINED:,.1f}"
     )
-    print(f"  pfe_addon   = {CCR_A13_PFE_ADDON:.8f}")
+    print("  MF_margined     = 1.5 × sqrt(10/250) = 0.30  (daily remargin, MPOR_eff=10)")
+    print(f"  addon_aggregate ≈ 3_914_298.228 × 0.30 = {CCR_A13_ADDON_AGGREGATE:,.5f}")
+    print(f"  pfe_addon       ≈ {CCR_A13_PFE_ADDON:,.0f} (hand-calc; engine bytes in CCR-A13.json)")
     print(
-        f"  EAD         = 1.4 * ({CCR_A13_RC_MARGINED:,.1f} + {CCR_A13_PFE_ADDON:.3f}) = {CCR_A13_EAD:.6f}"
+        f"  EAD             ≈ 1.4 × ({CCR_A13_RC_MARGINED:,.1f} + {CCR_A13_PFE_ADDON:,.0f})"
+        f" ≈ {CCR_A13_EAD:,.0f}"
     )
-    print(f"  RWA         = {CCR_A13_EAD:.6f} * {CCR_A13_RISK_WEIGHT} = {CCR_A13_RWA:.6f}")
+    print(f"  RWA             ≈ {CCR_A13_EAD:,.0f} × {CCR_A13_RISK_WEIGHT} ≈ {CCR_A13_RWA:,.0f}")
     print()
     bundle = build_raw_data_bundle_with_ccr_a13()
     print(

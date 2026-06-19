@@ -6,16 +6,16 @@
   "source_netting_set_id": "NS_MGN_001",
   "ccr_method": "sa_ccr",
   "risk_type": "CCR_DERIVATIVE",
-  "_note_pre_fix": "Under the UNFIXED engine rc_unmargined=0 (max(-4m,0)=0) so ead_ccr=3314360.39 and rwa_final=1657180.20. These are the buggy values. The test is RED until P8.19 fix applies compute_rc_margined.",
+  "_note_p854": "P8.54 re-pin: daily remargin (freq=1) → MPOR_eff=10 → MF_margined=1.5*sqrt(10/250)=0.30 (exact). addon_aggregate=3914298.2277279915*0.30=1174289.468318397. pfe_multiplier/pfe_addon/ead/rwa involve exp() so final bytes confirmed by engine-implementer during validation gate. Pre-fix MF=1.0 values: addon_aggregate=3914298.228, pfe_multiplier=0.6048083569079303, pfe_addon=2367400.280, ead_final=6464360.391383706, rwa_final=3232180.196.",
   "rc_margined": 2250000.0,
   "rc_unmargined": 0.0,
-  "addon_aggregate": 3914298.2277279915,
-  "pfe_multiplier": 0.6048083569079303,
-  "pfe_addon": 2367400.27955979,
-  "ead_ccr": 6464360.391383706,
-  "ead_final": 6464360.391383706,
+  "addon_aggregate": 1174289.4683183974,
+  "pfe_multiplier": 0.20816907251400474,
+  "pfe_addon": 244450.7494828046,
+  "ead_ccr": 3492231.049275926,
+  "ead_final": 3492231.049275926,
   "exposure_class": "institution",
   "approach_applied": "standardised",
   "risk_weight": 0.50,
-  "rwa_final": 3232180.195691853
+  "rwa_final": 1746115.524637963
 }

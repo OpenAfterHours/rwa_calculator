@@ -81,6 +81,12 @@ def _build_denormalised_lf() -> pl.LazyFrame:
                 "number_of_trades",
                 pl.col("has_illiquid_collateral_or_hard_to_replace_otc").alias("has_illiquid"),
                 "margin_agreement_id",
+                # is_margined=True for all P8.14 rows (all netting sets are margined).
+                # P8.54 adds an internal is_margined gate to compute_maturity_factor_margined
+                # so the column must be present in the denormalised frame. Adding it now is
+                # harmless on the current engine (extra column ignored) and is the only safe
+                # ordering — the gate lands before the existing P8.14 unit tests run.
+                "is_margined",
             ]
         ),
         on="netting_set_id",

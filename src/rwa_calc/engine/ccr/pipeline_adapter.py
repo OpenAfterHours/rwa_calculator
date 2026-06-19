@@ -53,7 +53,10 @@ from rwa_calc.engine.ccr.adjusted_notional import (
     compute_adjusted_notional_ir,
 )
 from rwa_calc.engine.ccr.hedging_sets import assign_hedging_set
-from rwa_calc.engine.ccr.maturity_factor import compute_maturity_factor_unmargined
+from rwa_calc.engine.ccr.maturity_factor import (
+    compute_maturity_factor_margined,
+    compute_maturity_factor_unmargined,
+)
 from rwa_calc.engine.ccr.pfe import compute_addon_per_asset_class, compute_pfe
 from rwa_calc.engine.ccr.rc import compute_rc_margined, compute_rc_unmargined
 from rwa_calc.engine.ccr.sft_fccm import SFT_TRANSACTION_TYPE, sft_rows_to_exposures
@@ -314,8 +317,36 @@ def _derivative_rows_to_exposures(
     # linear +/- 1 delta (Art. 279a(1)) for non-option rows. This single call
     # therefore covers both directional and option trades in the book.
     trades_enriched = compute_supervisory_delta_option(trades_enriched)
-    trades_enriched = compute_maturity_factor_unmargined(trades_enriched)
+
+    # Denormalise the Art. 285 MPOR-cascade inputs onto each trade so the
+    # margined maturity factor (Art. 279c(2)) can be computed at trade grain.
+    # ``is_margined``, ``number_of_trades``, ``has_illiquid`` and
+    # ``mpor_days_input`` ride on the netting set (NETTING_SET_SCHEMA); the
+    # ``remargining_frequency_days`` / ``dispute_count_qtr`` CSA terms ride on
+    # the margin agreement (MARGIN_AGREEMENT_SCHEMA) and are joined via the
+    # netting set's ``margin_agreement_id``. ``remargining_frequency_days`` is a
+    # business-day count (Art. 285(5)) — deliberately NOT conflated with the
+    # calendar-day ``years_to_maturity`` derived above.
+    trades_enriched = _attach_mpor_cascade_inputs(
+        trades_enriched, netting_sets_lf, raw_ccr.margin_agreements.margin_agreements
+    )
+
+    # Maturity factor (Art. 279c). The unmargined fn writes the bare
+    # ``maturity_factor``; rename it to ``maturity_factor_unmargined`` so the
+    # margined fn (which writes ``maturity_factor_margined``, gated null on
+    # unmargined rows) does not clobber it. Coalesce both into the unified
+    # ``maturity_factor`` BEFORE the add-on consumes it (mirrors the
+    # rc_margined / rc_unmargined coalesce below).
+    trades_enriched = compute_maturity_factor_unmargined(trades_enriched).rename(
+        {"maturity_factor": "maturity_factor_unmargined"}
+    )
+    trades_enriched = compute_maturity_factor_margined(trades_enriched)
     trades_enriched = assign_hedging_set(trades_enriched)
+    trades_enriched = trades_enriched.with_columns(
+        pl.coalesce(pl.col("maturity_factor_margined"), pl.col("maturity_factor_unmargined")).alias(
+            "maturity_factor"
+        )
+    )
 
     # 2) Per-(NS, asset_class) add-on, then aggregate to per-NS sum.
     addon_per_class = compute_addon_per_asset_class(trades_enriched)
@@ -511,6 +542,60 @@ def _derivative_rows_to_exposures(
             pl.col("transitional_add_on"),
             pl.col("ead_ccr"),
         ]
+    )
+
+
+def _attach_mpor_cascade_inputs(
+    trades_enriched: pl.LazyFrame,
+    netting_sets_lf: pl.LazyFrame,
+    margin_agreements_lf: pl.LazyFrame,
+) -> pl.LazyFrame:
+    """Denormalise the Art. 285 MPOR-cascade inputs onto each trade row.
+
+    The margined maturity factor (CRR Art. 279c(2)) consumes a denormalised
+    trade frame carrying the Art. 285 cascade drivers. Two left joins (each
+    deduplicated to one row per key so they cannot fan out the trade frame)
+    bring those drivers onto ``trades_enriched``:
+
+    - keyed on ``netting_set_id`` (NETTING_SET_SCHEMA):
+      ``is_margined``, ``number_of_trades``, ``mpor_days`` (→ ``mpor_days_input``),
+      ``has_illiquid_collateral_or_hard_to_replace_otc`` (→ ``has_illiquid``)
+      and ``margin_agreement_id`` (the join key for the next hop).
+    - keyed on ``margin_agreement_id`` (MARGIN_AGREEMENT_SCHEMA):
+      ``remargining_frequency_days`` and ``dispute_count_qtr``.
+
+    ``remargining_frequency_days`` is a business-day count (Art. 285(5));
+    it is deliberately kept distinct from the calendar-day ``years_to_maturity``
+    already on the trade frame.
+
+    Args:
+        trades_enriched: Per-trade LazyFrame carrying ``netting_set_id``.
+        netting_sets_lf: Netting-set LazyFrame (NETTING_SET_SCHEMA).
+        margin_agreements_lf: Margin-agreement LazyFrame (MARGIN_AGREEMENT_SCHEMA).
+
+    Returns:
+        ``trades_enriched`` with the Art. 285 cascade columns attached.
+
+    References:
+        CRR Art. 285(2)-(5); CRR Art. 279c(2).
+    """
+    ns_cascade = netting_sets_lf.select(
+        pl.col("netting_set_id"),
+        pl.col("is_margined"),
+        pl.col("number_of_trades"),
+        pl.col("mpor_days").alias("mpor_days_input"),
+        pl.col("has_illiquid_collateral_or_hard_to_replace_otc").alias("has_illiquid"),
+        pl.col("margin_agreement_id"),
+    ).unique(subset=["netting_set_id"])
+
+    ma_terms = margin_agreements_lf.select(
+        pl.col("margin_agreement_id"),
+        pl.col("remargining_frequency_days"),
+        pl.col("dispute_count_qtr"),
+    ).unique(subset=["margin_agreement_id"])
+
+    return trades_enriched.join(ns_cascade, on="netting_set_id", how="left").join(
+        ma_terms, on="margin_agreement_id", how="left"
     )
 
 

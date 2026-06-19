@@ -20,7 +20,7 @@ delta=1), one netting set NS_MGN_001 (CP_001, legally enforceable, margined,
 TH=2m, MTA=0.5m, NICA=0.25m, MPOR=10d), margin agreement MA_MGN_001, no
 CCR collateral.
 
-Hand-calculation reference (CCR-A13 golden values from CCR-A13.json):
+Hand-calculation reference (CCR-A13 golden values from CCR-A13.json, P8.54 re-pin):
     V  = -4_000_000  (trade MtM)
     C  = 0           (no CCR collateral)
     TH + MTA - NICA = 2_000_000 + 500_000 - 250_000 = 2_250_000
@@ -29,17 +29,35 @@ Hand-calculation reference (CCR-A13 golden values from CCR-A13.json):
                                 = max(-4m, 2.25m, 0) = 2_250_000
     RC (pre-fix bug, Art. 275(1)) = max(V-C, 0) = max(-4m, 0) = 0
 
-    PFE  = 2_367_400.27955979
-    EAD  = 1.4 * (2_250_000 + 2_367_400.280) = 6_464_360.391
+    MPOR cascade (P8.54 re-pin — daily remargin → MF_margined=0.30):
+        remargining_frequency_days = 1 (daily remargin CSA)
+        base MPOR = 10 BD (Art. 285(2)(b) OTC floor)
+        MPOR_eff = max(10 + 1 - 1, 10) = 10
+        MF_margined = 1.5 × sqrt(10/250) = 0.30 (exact)
+
+    PFE add-on (MF=0.30, P8.54 re-pin):
+        addon_aggregate (MF=0.30) = 3_914_298.228 × 0.30 = 1_174_289.468
+        exponent = -4_000_000 / (2 * 0.95 * 1_174_289.468) ≈ -1.79279
+        pfe_multiplier ≈ 0.208148
+        pfe_addon ≈ 244_426
+
+    EAD  = 1.4 * (2_250_000 + 244_426) ≈ 3_492_196
     RW   = 0.50  (institution, CQS 2, CRR Art. 120(1) Table 3)
-    RWA  = 6_464_360.391 * 0.50 = 3_232_180.196
+    RWA  ≈ 3_492_196 * 0.50 ≈ 1_746_098
 
-    Pre-fix buggy values (current engine):
-        rc = 0  -> EAD = 3_314_360.391  -> RWA = 1_657_180.196
+    Pre-fix MF=1.0 baseline (unmargined path, current engine):
+        addon_aggregate = 3_914_298.228 -> pfe_addon = 2_367_400.280
+        EAD = 6_464_360.391383706  -> RWA = 3_232_180.196
 
-This test is expected to FAIL (RED) on the current unfixed engine because
-`compute_rc_margined` is not yet wired through the SA-CCR orchestrator.
-It becomes GREEN when P8.19 is applied.
+    NOTE: pfe_multiplier, pfe_addon, ead_final, rwa_final involve exp() so the
+    final bytes in CCR-A13.json are hand-calc approximations; the engine-implementer
+    must confirm/re-pin these to engine-precise values during the P8.54 validation gate.
+    addon_aggregate is exactly linear in MF and asserted with rel=1e-9.
+
+This test is expected to FAIL (RED) on the current engine because MF_margined
+is not yet wired — the engine applies unmargined MF=1.0, producing
+addon_aggregate≈3_914_298.228 (vs golden 1_174_289.468).
+It becomes GREEN when P8.54 wires compute_maturity_factor_margined.
 
 References:
     - CRR Art. 272(7): margin agreement / CSA definition
@@ -129,20 +147,24 @@ def ccr_a13_result() -> dict:
 
 class TestCCRA13MarginedRC:
     """
-    CCR-A13: 10y GBP IR swap, margined netting set — five acceptance assertions.
+    CCR-A13: 10y GBP IR swap, margined netting set — six acceptance assertions.
 
-    Five tests verify:
-      - rc (the unified replacement cost feeding EAD) approx 2_250_000.0
-        (post-fix: max(V-C, TH+MTA-NICA, 0) = max(-4m, 2.25m, 0) = 2_250_000)
-      - pfe_addon approx 2_367_400.280
-      - ead_final approx 6_464_360.391
+    Six tests verify (P8.54 re-pin — MF_margined=0.30, daily remargin):
+      - rc_margined == 2_250_000.0 (MF-independent; Art. 275(2) floor arm)
+      - rc_unmargined == 0.0 (margined netting set → unmargined path skipped)
+      - addon_aggregate ≈ 1_174_289.468 (= 3_914_298.228 × 0.30; exactly linear in MF)
+      - pfe_addon ≈ 244_426 (multiplier × addon_aggregate; exp()-dependent)
+      - ead_final ≈ 3_492_196 (= 1.4 × (2_250_000 + 244_426); exp()-dependent)
       - exposure_class == 'institution'
-      - rwa_final approx 3_232_180.196
+      - rwa_final ≈ 1_746_098 (= EAD × 0.50; exp()-dependent)
 
-    The rc/rwa_final tests are the load-bearing assertions that will be RED
-    until P8.19 wires compute_rc_margined through the SA-CCR orchestrator.
+    The addon_aggregate test is the load-bearing P8.54 precision assertion:
+      - Current engine (MF=1.0 unwired): addon_aggregate ≈ 3_914_298.228 — RED
+      - Post-fix (MF=0.30 wired): addon_aggregate ≈ 1_174_289.468 — GREEN
 
     All expected values are sourced from tests/expected_outputs/ccr/CCR-A13.json.
+    Engine-implementer must confirm/re-pin exp()-dependent bytes (pfe_addon/ead/rwa)
+    to Polars-precise values during the P8.54 validation gate.
     """
 
     def test_ccr_a13_rc_margined(self, ccr_a13_result: dict) -> None:
@@ -202,14 +224,51 @@ class TestCCRA13MarginedRC:
             "CRR Art. 275(1): unmargined RC = max(V - C, 0)."
         )
 
+    def test_ccr_a13_addon_aggregate(self, ccr_a13_result: dict) -> None:
+        """
+        addon_aggregate = 3_914_298.2277279915 × MF_margined(0.30) = 1_174_289.468.
+
+        This is the P8.54 load-bearing precision assertion: addon_aggregate is exactly
+        linear in MF (single trade, single bucket), so this test catches whether the
+        engine wires MF_margined=0.30 vs the unwired MF=1.0 baseline.
+
+        Arrange: daily remargin (freq=1) → MPOR_eff=10 → MF=1.5×sqrt(10/250)=0.30.
+                 Baseline addon_aggregate (MF=1.0) = 3_914_298.2277279915.
+                 addon_aggregate (MF=0.30) = 3_914_298.2277279915 × 0.30 = 1_174_289.468.
+        Act:     full CRR SA+CCR pipeline.
+        Assert:  addon_aggregate ≈ 1_174_289.468 (rel tol 1e-9 — exactly linear in MF).
+
+        Current engine (unwired MF=1.0): addon_aggregate ≈ 3_914_298.228 — this assertion
+        will FAIL RED until P8.54 wires compute_maturity_factor_margined.
+
+        References: CRR Art. 279c(2) MF=1.5×sqrt(MPOR_eff/250); Art. 280a SF_IR=0.5%.
+        """
+        # Arrange
+        row = ccr_a13_result
+        expected = _EXPECTED["addon_aggregate"]
+
+        # Assert
+        assert row["addon_aggregate"] == pytest.approx(expected, rel=1e-9), (
+            f"CCR-A13: expected addon_aggregate={expected:,.9f} "
+            f"(=3_914_298.228 × MF_margined(0.30)), "
+            f"got {row['addon_aggregate']:,.9f}. "
+            "P8.54: current engine applies unmargined MF=1.0 (≈3_914_298.228 — wrong). "
+            "CRR Art. 279c(2): MF_margined = 1.5 × sqrt(10/250) = 0.30."
+        )
+
     def test_ccr_a13_pfe(self, ccr_a13_result: dict) -> None:
         """
-        PFE add-on = multiplier * AddOn_aggregate approx 2_367_400.280.
+        PFE add-on = multiplier * AddOn_aggregate ≈ 244_426 (MF=0.30, P8.54 re-pin).
 
-        Arrange: 10y GBP IR swap, notional GBP 100m, same trade inputs as CCR-A1.
-                 MtM=-4m (V<0) so pfe_multiplier < 1.0 (cap does not bind at floor).
+        Arrange: 10y GBP IR swap, notional GBP 100m. MtM=-4m (V<0).
+                 addon_aggregate(MF=0.30) ≈ 1_174_289.468.
+                 exponent = -4_000_000 / (2 × 0.95 × 1_174_289.468) ≈ -1.79279.
+                 pfe_multiplier ≈ 0.208148; pfe_addon ≈ 244_426.
         Act:     full CRR SA+CCR pipeline.
-        Assert:  pfe_addon approx 2_367_400.27955979 (rel tol 1e-6).
+        Assert:  pfe_addon approx 244_426 (rel tol 1e-6; exp()-dependent).
+
+        NOTE: The exact bytes depend on Polars exp() — the engine-implementer must
+        confirm/re-pin the CCR-A13.json value during the P8.54 validation gate.
 
         References:
             CRR Art. 278: PFE = multiplier * AddOn_aggregate.
@@ -221,20 +280,21 @@ class TestCCRA13MarginedRC:
 
         # Assert
         assert row["pfe_addon"] == pytest.approx(expected, rel=1e-6), (
-            f"CCR-A13: expected pfe_addon approx {expected:,.6f}, "
+            f"CCR-A13: expected pfe_addon approx {expected:,.6f} (P8.54 MF=0.30 re-pin), "
             f"got {row['pfe_addon']:,.6f}. "
             "CRR Art. 278: PFE = multiplier * AddOn_aggregate; Art. 280a: SF_IR=0.005."
         )
 
     def test_ccr_a13_ead(self, ccr_a13_result: dict) -> None:
         """
-        EAD = alpha * (RC + PFE) = 1.4 * (2_250_000 + 2_367_400.280) = 6_464_360.391.
+        EAD = alpha * (RC + PFE) ≈ 1.4 * (2_250_000 + 244_426) ≈ 3_492_196 (MF=0.30 re-pin).
 
-        Arrange: alpha=1.4 (CRR Art. 274(2)), rc_margined=2_250_000, PFE=2_367_400.280.
+        Arrange: alpha=1.4 (CRR Art. 274(2)), rc_margined=2_250_000, pfe_addon≈244_426 (MF=0.30).
         Act:     full CRR SA+CCR pipeline.
-        Assert:  ead_final approx 6_464_360.391383706 (rel tol 1e-6).
+        Assert:  ead_final approx 3_492_196 (rel tol 1e-6; exp()-dependent).
 
-        This assertion is RED on the pre-fix engine where EAD = 1.4*(0+PFE) = 3_314_360.391.
+        NOTE: The exact bytes depend on Polars exp() — engine-implementer must confirm/re-pin
+        the CCR-A13.json ead_final value during the P8.54 validation gate.
 
         References: CRR Art. 274(2) — EAD = alpha * (RC + PFE).
         """
@@ -244,10 +304,10 @@ class TestCCRA13MarginedRC:
 
         # Assert
         assert row["ead_final"] == pytest.approx(expected, rel=1e-6), (
-            f"CCR-A13: expected ead_final approx {expected:,.6f}, "
+            f"CCR-A13: expected ead_final approx {expected:,.6f} (P8.54 MF=0.30 re-pin), "
             f"got {row['ead_final']:,.6f}. "
-            "CRR Art. 274(2): EAD = 1.4 * (rc_margined + PFE) = 1.4 * (2_250_000 + 2_367_400.280). "
-            "Pre-fix engine produces ead_final=3_314_360.391 (rc=0 bug)."
+            "CRR Art. 274(2): EAD = 1.4 * (rc_margined + PFE(MF=0.30)) ≈ 3_492_196. "
+            "Pre-fix engine (MF=1.0): ead_final≈6_464_360."
         )
 
     def test_ccr_a13_exposure_class(self, ccr_a13_result: dict) -> None:
@@ -273,14 +333,14 @@ class TestCCRA13MarginedRC:
 
     def test_ccr_a13_rwa(self, ccr_a13_result: dict) -> None:
         """
-        RWA = EAD * RW = 6_464_360.391 * 0.50 = 3_232_180.196.
+        RWA = EAD * RW ≈ 3_492_196 * 0.50 ≈ 1_746_098 (MF=0.30 re-pin).
 
-        Arrange: EAD=6_464_360.391, institution CQS 2 -> RW=50% (CRR Art. 120(1) Table 3).
+        Arrange: EAD≈3_492_196 (P8.54 MF=0.30), institution CQS 2 -> RW=50% (CRR Art. 120(1)).
         Act:     full CRR SA+CCR pipeline.
-        Assert:  rwa_final approx 3_232_180.195691853 (rel tol 1e-6).
+        Assert:  rwa_final approx 1_746_098 (rel tol 1e-6; exp()-dependent).
 
-        This assertion is RED on the pre-fix engine where rwa_final=1_657_180.196
-        (because rc=0 understates EAD).
+        NOTE: The exact bytes depend on Polars exp() — engine-implementer must confirm/re-pin
+        the CCR-A13.json rwa_final value during the P8.54 validation gate.
 
         References:
             CRR Art. 120(1) Table 3: institution CQS 2 -> 50% risk weight.
@@ -291,8 +351,8 @@ class TestCCRA13MarginedRC:
 
         # Assert
         assert row["rwa_final"] == pytest.approx(expected, rel=1e-6), (
-            f"CCR-A13: expected rwa_final approx {expected:,.6f}, "
+            f"CCR-A13: expected rwa_final approx {expected:,.6f} (P8.54 MF=0.30 re-pin), "
             f"got {row['rwa_final']:,.6f}. "
-            "RWA = EAD * RW = 6_464_360.391 * 0.50 (CRR Art. 120(1) Table 3, CQS 2). "
-            "Pre-fix engine produces rwa_final=1_657_180.196 (rc=0 bug)."
+            "RWA = EAD * RW ≈ 3_492_196 * 0.50 ≈ 1_746_098 (CRR Art. 120(1) Table 3, CQS 2). "
+            "Pre-fix engine (MF=1.0): rwa_final≈3_232_180."
         )

@@ -557,6 +557,16 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_ccr_irb1,
         ),
         (
+            "CCR-A13 golden (single 10y GBP IR swap, margined NS, daily remargin, MF=0.30)",
+            "ccr",
+            _generate_ccr_a13,
+        ),
+        (
+            "P8.54 / CCR-A14 (margined NS, 126d remargin, MF=1.10227 — EAD rises branch)",
+            "ccr",
+            _generate_ccr_a14,
+        ),
+        (
             "P8.43 (CCR-C1/C2/C3 DvP failed-trade Art. 378 band ladder — 3 distinct CPs)",
             "ccr",
             _generate_p843,
@@ -3030,6 +3040,65 @@ def _generate_ccr_irb1(output_dir: Path) -> list[tuple[str, int]]:
         sys.path.remove(fixtures_root)
         for mod in (
             "ccr.golden_ccr_irb1",
+            CCR_TRADE_BUILDER_MODULE,
+            CCR_NETTING_SET_BUILDER_MODULE,
+            CCR_MARGIN_BUILDER_MODULE,
+        ):
+            sys.modules.pop(mod, None)
+
+
+def _generate_ccr_a13(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate CCR-A13 golden fixtures (margined IR swap, daily remargin, MF=0.30).
+
+    Writes four parquet files to the ``ccr/`` output directory:
+        ccr_a13_trades.parquet              — 1 row (T_MGN_001, 10y GBP IR swap, MtM=-4m)
+        ccr_a13_netting_sets.parquet        — 1 row (NS_MGN_001, CP_001, margined)
+        ccr_a13_margin_agreements.parquet   — 1 row (MA_MGN_001, freq=1d)
+        ccr_a13_collateral.parquet          — 0 rows
+
+    P8.19 (rc_margined fix) + P8.54 (MF_margined=0.30 re-pin, daily remargin).
+    """
+    fixtures_root = str(output_dir.parent)
+    sys.path.insert(0, fixtures_root)
+    try:
+        from ccr.golden_ccr_a13 import save_golden_fixtures
+
+        saved = save_golden_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(fixtures_root)
+        for mod in (
+            "ccr.golden_ccr_a13",
+            CCR_TRADE_BUILDER_MODULE,
+            CCR_NETTING_SET_BUILDER_MODULE,
+            CCR_MARGIN_BUILDER_MODULE,
+        ):
+            sys.modules.pop(mod, None)
+
+
+def _generate_ccr_a14(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P8.54 / CCR-A14 golden fixtures (margined IR swap, 126d remargin, MF=1.10227).
+
+    Writes four parquet files to the ``ccr/`` output directory:
+        ccr_a14_trades.parquet              — 1 row (T_MGN_002, 10y GBP IR swap, MtM=-4m)
+        ccr_a14_netting_sets.parquet        — 1 row (NS_MGN_002, CP_001, margined)
+        ccr_a14_margin_agreements.parquet   — 1 row (MA_MGN_002, freq=126d)
+        ccr_a14_collateral.parquet          — 0 rows
+
+    The 126-day remargin frequency produces MPOR_eff=135 → MF_margined=1.10227 > 1.0,
+    demonstrating the "EAD rises" branch of the margined maturity-factor wiring (P8.54).
+    """
+    fixtures_root = str(output_dir.parent)
+    sys.path.insert(0, fixtures_root)
+    try:
+        from ccr.golden_ccr_a14 import save_golden_fixtures as save_ccr_a14_fixtures
+
+        saved = save_ccr_a14_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(fixtures_root)
+        for mod in (
+            "ccr.golden_ccr_a14",
             CCR_TRADE_BUILDER_MODULE,
             CCR_NETTING_SET_BUILDER_MODULE,
             CCR_MARGIN_BUILDER_MODULE,

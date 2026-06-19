@@ -41,7 +41,7 @@ from tests.fixtures.ccr.margined_mf_builder import (
 try:
     from rwa_calc.engine.ccr.maturity_factor import compute_maturity_factor_margined
 except (ImportError, ModuleNotFoundError):
-    compute_maturity_factor_margined = None  # type: ignore[assignment]
+    compute_maturity_factor_margined = None  # ty: ignore[invalid-assignment]
 
 
 # ---------------------------------------------------------------------------

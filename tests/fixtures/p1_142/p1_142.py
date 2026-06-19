@@ -99,8 +99,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import polars as pl
+
+if TYPE_CHECKING:
+    from polars._typing import PolarsDataType
 
 from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import (
@@ -173,7 +177,7 @@ EXPECTED_RWA_CTRL: float = EAD_AMOUNT * EXPECTED_RW_CTRL  # 69,333.33
 
 # Build the counterparty dtype dict from the canonical schema then extend it
 # with the new field.  This mirrors the p1_140 pattern for is_under_construction.
-_COUNTERPARTY_FIXTURE_SCHEMA: dict[str, pl.DataType] = {
+_COUNTERPARTY_FIXTURE_SCHEMA: dict[str, PolarsDataType] = {
     **dtypes_of(COUNTERPARTY_SCHEMA),
     # NEW field for P1.142 — not yet in COUNTERPARTY_SCHEMA canonical schema.
     # Engine-implementer must add:

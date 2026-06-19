@@ -4,6 +4,10 @@ Tests the validation utilities for checking LazyFrame schemas
 against expected definitions.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import polars as pl
 from tests.fixtures.raw_bundle import make_raw_bundle
 
@@ -21,6 +25,9 @@ from rwa_calc.contracts.validation import (
 )
 from rwa_calc.domain.enums import ErrorCategory
 
+if TYPE_CHECKING:
+    from polars._typing import PolarsDataType
+
 
 class TestValidateSchema:
     """Tests for validate_schema function."""
@@ -33,7 +40,7 @@ class TestValidateSchema:
                 "col2": ["a", "b", "c"],
             }
         )
-        expected = {
+        expected: dict[str, PolarsDataType] = {
             "col1": pl.Int64,
             "col2": pl.String,
         }
@@ -45,7 +52,7 @@ class TestValidateSchema:
     def test_missing_column_detected(self):
         """Missing column should be reported."""
         lf = pl.LazyFrame({"col1": [1, 2, 3]})
-        expected = {
+        expected: dict[str, PolarsDataType] = {
             "col1": pl.Int64,
             "col2": pl.String,  # Missing
         }
@@ -60,7 +67,7 @@ class TestValidateSchema:
     def test_type_mismatch_detected(self):
         """Type mismatch should be reported."""
         lf = pl.LazyFrame({"col1": ["a", "b", "c"]})  # String, not Int64
-        expected = {"col1": pl.Int64}
+        expected: dict[str, PolarsDataType] = {"col1": pl.Int64}
 
         errors = validate_schema(lf, expected)
 
@@ -71,7 +78,7 @@ class TestValidateSchema:
     def test_compatible_int_types_allowed(self):
         """Compatible integer types should not cause errors."""
         lf = pl.LazyFrame({"col1": pl.Series([1, 2, 3], dtype=pl.Int32)})
-        expected = {"col1": pl.Int64}
+        expected: dict[str, PolarsDataType] = {"col1": pl.Int64}
 
         errors = validate_schema(lf, expected)
 
@@ -80,7 +87,7 @@ class TestValidateSchema:
     def test_compatible_float_types_allowed(self):
         """Compatible float types should not cause errors."""
         lf = pl.LazyFrame({"col1": pl.Series([1.0, 2.0], dtype=pl.Float32)})
-        expected = {"col1": pl.Float64}
+        expected: dict[str, PolarsDataType] = {"col1": pl.Float64}
 
         errors = validate_schema(lf, expected)
 
@@ -95,7 +102,7 @@ class TestValidateSchema:
                 "extra": [True, False, True],
             }
         )
-        expected = {
+        expected: dict[str, PolarsDataType] = {
             "col1": pl.Int64,
             "col2": pl.String,
         }
@@ -109,7 +116,7 @@ class TestValidateSchema:
     def test_multiple_errors_reported(self):
         """Multiple issues should all be reported."""
         lf = pl.LazyFrame({"col1": ["a", "b"]})  # Wrong type
-        expected = {
+        expected: dict[str, PolarsDataType] = {
             "col1": pl.Int64,  # Type mismatch
             "col2": pl.String,  # Missing
             "col3": pl.Float64,  # Missing
@@ -150,7 +157,7 @@ class TestValidateSchemaToErrors:
     def test_returns_calculation_errors(self):
         """Should return CalculationError objects."""
         lf = pl.LazyFrame({"col1": [1]})
-        expected = {
+        expected: dict[str, PolarsDataType] = {
             "col1": pl.Int64,
             "col2": pl.String,  # Missing
         }
@@ -164,7 +171,7 @@ class TestValidateSchemaToErrors:
     def test_type_mismatch_error(self):
         """Type mismatch should create CalculationError."""
         lf = pl.LazyFrame({"col1": ["string"]})
-        expected = {"col1": pl.Int64}
+        expected: dict[str, PolarsDataType] = {"col1": pl.Int64}
 
         errors = validate_schema_to_errors(lf, expected)
 
@@ -175,7 +182,7 @@ class TestValidateSchemaToErrors:
     def test_optional_columns_not_reported_as_missing(self):
         """Optional columns absent from data should not produce errors."""
         lf = pl.LazyFrame({"model_id": ["M1"], "exposure_class": ["corporate"]})
-        expected = {
+        expected: dict[str, PolarsDataType] = {
             "model_id": pl.String,
             "exposure_class": pl.String,
             "country_codes": pl.String,
@@ -193,7 +200,7 @@ class TestValidateSchemaToErrors:
     def test_required_columns_still_reported_with_optional_set(self):
         """Missing required columns should still produce errors even when optional set is given."""
         lf = pl.LazyFrame({"model_id": ["M1"]})
-        expected = {
+        expected: dict[str, PolarsDataType] = {
             "model_id": pl.String,
             "exposure_class": pl.String,
             "country_codes": pl.String,

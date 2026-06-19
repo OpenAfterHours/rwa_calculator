@@ -646,7 +646,7 @@ def _print_stats_section(name: str, info: object) -> None:
     """Dispatch one dataset-stats section to its printer based on its name/shape."""
     if isinstance(info, dict) and "count" in info:
         print(f"\n{name}:")
-        print(f"  Count: {info['count']:,}")
+        print(f"  Count: {info['count']:,}")  # ty: ignore[invalid-argument-type]
     elif name == "entity_distribution" and isinstance(info, dict):
         _print_entity_distribution(name, info)
     elif name == "org_hierarchy" and isinstance(info, dict):

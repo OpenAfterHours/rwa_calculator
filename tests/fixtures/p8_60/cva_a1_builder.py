@@ -107,11 +107,10 @@ from rwa_calc.data.schemas import (
     LOAN_SCHEMA,
     RATINGS_SCHEMA,
 )
-from tests.fixtures.raw_bundle import make_raw_bundle
-
 from tests.fixtures.ccr.margin_builder import create_margin_agreements
 from tests.fixtures.ccr.netting_set_builder import NettingSet, create_netting_sets
 from tests.fixtures.ccr.trade_builder import Trade, create_trades, make_trade
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
 # Scenario constants — single source of truth for test-writer assertions.
@@ -123,18 +122,18 @@ CVA_A1_TRADE_ID: str = "T_CVA_001"
 
 # Trade economics: 3-year GBP vanilla IR swap.
 # Effective maturity = 3.0 years drives DF_NS != 1.0 and exercises the DF formula.
-CVA_A1_NOTIONAL: float = 100_000_000.0   # GBP 100m
+CVA_A1_NOTIONAL: float = 100_000_000.0  # GBP 100m
 CVA_A1_CURRENCY: str = "GBP"
 CVA_A1_ASSET_CLASS: str = "interest_rate"
 CVA_A1_TRANSACTION_TYPE: str = "derivative"
-CVA_A1_MTM: float = 0.0                  # at-par
-CVA_A1_DELTA: float = 1.0               # non-option directional long
+CVA_A1_MTM: float = 0.0  # at-par
+CVA_A1_DELTA: float = 1.0  # non-option directional long
 CVA_A1_IS_LONG: bool = True
-CVA_A1_START_DATE: _date = _date(2027, 1, 15)   # Basel 3.1 effective date
+CVA_A1_START_DATE: _date = _date(2027, 1, 15)  # Basel 3.1 effective date
 CVA_A1_MATURITY_DATE: _date = _date(2030, 1, 15)  # 3 years -> M_NS = 3.0
 
-CVA_A1_IS_LEGALLY_ENFORCEABLE: bool = True   # Art. 295 condition met
-CVA_A1_IS_MARGINED: bool = False             # unmargined
+CVA_A1_IS_LEGALLY_ENFORCEABLE: bool = True  # Art. 295 condition met
+CVA_A1_IS_MARGINED: bool = False  # unmargined
 
 # Counterparty: institution (financial), CQS 2, GB.
 # entity_type="institution" routes CCR exposure through SA-Institution RW lookup.
@@ -143,7 +142,7 @@ CVA_A1_CP_COUNTRY_CODE: str = "GB"
 CVA_A1_RATING_REF: str = "RTG_CVA_A1_CP"
 CVA_A1_RATING_TYPE: str = "external"
 CVA_A1_RATING_AGENCY: str = "S&P"
-CVA_A1_RATING_VALUE: str = "A"              # S&P "A" = CQS 2
+CVA_A1_RATING_VALUE: str = "A"  # S&P "A" = CQS 2
 CVA_A1_RATING_CQS: int = 2
 CVA_A1_RATING_DATE: _date = _date(2027, 1, 15)
 
@@ -174,10 +173,10 @@ CVA_SUPERVISORY_CORRELATION_RHO: float = 0.50
 
 # PS1/26 App.1 CVA Part 4.3, page 400.
 CVA_SUPERVISORY_DISCOUNT_RATE: float = 0.05
-CVA_ALPHA: float = 1.4   # from CCR Part Art. 274(2)
+CVA_ALPHA: float = 1.4  # from CCR Part Art. 274(2)
 
 # PS1/26 App.1 CVA Part 4.4, page 401 — Financials IG.
-CVA_RW_FINANCIALS_IG: float = 0.05   # 5.0%
+CVA_RW_FINANCIALS_IG: float = 0.05  # 5.0%
 
 # RWEA multiplier: PS1/26 App.1 Own Funds Part 4(b), page 15.
 CVA_RWEA_MULTIPLIER: float = 12.5
@@ -637,9 +636,7 @@ def save_p860_fixtures(output_dir: Path | None = None) -> list[tuple[str, int]]:
     if len(rating_df) != 1:
         raise AssertionError(f"CVA-A1: expected 1 rating row, got {len(rating_df)}")
     if rating_df["cqs"][0] != CVA_A1_RATING_CQS:
-        raise AssertionError(
-            f"CVA-A1: rating cqs {rating_df['cqs'][0]} != {CVA_A1_RATING_CQS}"
-        )
+        raise AssertionError(f"CVA-A1: rating cqs {rating_df['cqs'][0]} != {CVA_A1_RATING_CQS}")
 
     # Invariant 9: golden computation self-consistent.
     test_ead = 5_480_017.519  # CCR-A1 10y EAD (smoke-check only)
@@ -677,10 +674,8 @@ def main() -> None:
     assert ccr is not None, "RawCCRBundle must be present"
     trades = ccr.trades.trades.collect()
     ns = ccr.netting_sets.netting_sets.collect()
-    print(f"  Trade:        {trades['trade_id'][0]}  "
-          f"maturity={trades['maturity_date'][0]}")
-    print(f"  Netting set:  {ns['netting_set_id'][0]} -> "
-          f"{ns['counterparty_reference'][0]}")
+    print(f"  Trade:        {trades['trade_id'][0]}  maturity={trades['maturity_date'][0]}")
+    print(f"  Netting set:  {ns['netting_set_id'][0]} -> {ns['counterparty_reference'][0]}")
     print(f"  CVA CP frame: {len(inputs.cva_counterparty_frame)} row(s)")
 
     # Demonstrate the golden computation with the CCR-A1 10y EAD as a reference.

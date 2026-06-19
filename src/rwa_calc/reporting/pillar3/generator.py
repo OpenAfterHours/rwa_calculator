@@ -95,6 +95,8 @@ from rwa_calc.reporting.pillar3.templates import (
     CR9ClassSpec,
     P3Row,
     _letter_ref,
+    get_ccr3_risk_weights,
+    get_ccr3_rows,
     get_cr4_columns,
     get_cr4_rows,
     get_cr5_columns,
@@ -104,8 +106,6 @@ from rwa_calc.reporting.pillar3.templates import (
     get_cr6a_rows,
     get_cr7_rows,
     get_cr7a_columns,
-    get_ccr3_risk_weights,
-    get_ccr3_rows,
     get_cr10_columns,
     get_cr10_subtemplates,
     get_ov1_rows,
@@ -1211,10 +1211,7 @@ class Pillar3Generator:
 
         rows_out: list[dict[str, object]] = []
         for i, row_def in enumerate(get_ccr3_rows(framework)):
-            if row_def.is_total:
-                ead = _col_sum(ccr_rows, "ead_final")
-            else:
-                ead = band_eads[i] or None
+            ead = _col_sum(ccr_rows, "ead_final") if row_def.is_total else band_eads[i] or None
             rows_out.append(_make_row(row_def, {"a": ead}, column_refs))
 
         return _build_df(rows_out, column_refs)
@@ -1283,9 +1280,7 @@ def _ccr_rows(results: pl.LazyFrame, cols: set[str]) -> pl.DataFrame | None:
     # An empty / all-null results frame can carry exposure_reference as a Null
     # dtype; ``.str.starts_with`` only operates on String. Cast defensively so
     # the CCR filter degenerates to an empty selection rather than raising.
-    return (
-        results.filter(pl.col(ref_col).cast(pl.String).str.starts_with("ccr__")).collect()
-    )
+    return results.filter(pl.col(ref_col).cast(pl.String).str.starts_with("ccr__")).collect()
 
 
 def _ccr_qccp_trade_predicate() -> pl.Expr:

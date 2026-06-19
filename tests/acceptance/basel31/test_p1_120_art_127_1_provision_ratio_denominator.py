@@ -52,6 +52,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
+from rwa_calc.contracts.bundles import AggregatedResultBundle
 from rwa_calc.contracts.config import CalculationConfig, PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.p1_120.p1_120 import (
@@ -86,7 +87,7 @@ _ABS_TOL_RW = 1e-6  # exact risk-weight comparison
 # ---------------------------------------------------------------------------
 
 
-def _run_pipeline_p1120() -> object:
+def _run_pipeline_p1120() -> AggregatedResultBundle:
     """Run the Basel 3.1 SA pipeline with P1.120 scenario inputs.
 
     Loads counterparty, loan, provision, and collateral from the p1_120 parquet
@@ -136,7 +137,7 @@ def _run_pipeline_p1120() -> object:
     return PipelineOrchestrator().run_with_data(bundle, config)
 
 
-def _find_row(results: object, loan_ref: str) -> dict:
+def _find_row(results: AggregatedResultBundle, loan_ref: str) -> dict:
     """Return the single result row for *loan_ref* from SA results.
 
     Asserts that exactly one row matches — test-fails with a descriptive

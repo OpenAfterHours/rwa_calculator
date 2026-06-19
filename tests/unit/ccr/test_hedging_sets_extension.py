@@ -46,7 +46,7 @@ import pytest
 try:
     from rwa_calc.engine.ccr.hedging_sets import assign_hedging_set
 except (ImportError, ModuleNotFoundError):
-    assign_hedging_set = None  # type: ignore[assignment]
+    assign_hedging_set = None  # ty: ignore[invalid-assignment]
 
 # ---------------------------------------------------------------------------
 # Shared scenario constants

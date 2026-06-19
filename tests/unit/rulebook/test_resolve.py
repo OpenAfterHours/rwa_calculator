@@ -5,6 +5,7 @@ from __future__ import annotations
 import dataclasses
 from datetime import date
 from decimal import Decimal
+from typing import cast
 
 import polars as pl
 import pytest
@@ -254,7 +255,7 @@ def test_manifest_entries_sorted_with_citations() -> None:
     manifest = resolve("crr", date(2026, 1, 1)).as_manifest()
 
     # Act
-    entries = manifest["entries"]
+    entries = cast("list[dict[str, object]]", manifest["entries"])
     assert isinstance(entries, list)
     names = [entry["name"] for entry in entries]
 

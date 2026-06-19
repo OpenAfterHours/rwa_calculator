@@ -159,7 +159,7 @@ CCR_D1_IS_MARGINED: bool = False
 # Golden expected values (from CCR-A1.json, CRR Art. 274-278-279b-279c).
 CCR_D1_EXPECTED_CCR_METHOD: str = "sa_ccr"
 CCR_D1_EXPECTED_PFE_MULTIPLIER: float = 1.0  # cap binds (MtM=0, at-par)
-CCR_D1_EXPECTED_RC_UNMARGINED: float = 0.0   # max(0-0,0) = 0
+CCR_D1_EXPECTED_RC_UNMARGINED: float = 0.0  # max(0-0,0) = 0
 CCR_D1_EXPECTED_PFE_ADDON: float = 3_914_298.228
 CCR_D1_EXPECTED_EAD: float = 5_480_017.519
 CCR_D1_EXPECTED_RISK_WEIGHT: float = 0.50
@@ -253,7 +253,7 @@ CCR_D3_HAS_ILLIQUID_COLLATERAL: bool = False
 # PRIMARY PIN: pfe_multiplier 0.6048083569079303 != 1.0 proves NOT Simplified.
 CCR_D3_EXPECTED_CCR_METHOD: str = "sa_ccr"
 CCR_D3_EXPECTED_PFE_MULTIPLIER: float = 0.6048083569079303  # sub-unity; Art.281 forces 1.0
-CCR_D3_EXPECTED_RC_MARGINED: float = 2_250_000.0           # TH+MTA-NICA floor arm
+CCR_D3_EXPECTED_RC_MARGINED: float = 2_250_000.0  # TH+MTA-NICA floor arm
 CCR_D3_EXPECTED_PFE_ADDON: float = 2_367_400.27955979
 CCR_D3_EXPECTED_EAD: float = 6_464_360.391383706
 CCR_D3_EXPECTED_RISK_WEIGHT: float = 0.50
@@ -386,7 +386,9 @@ def _build_ccr_d1_raw_ccr_bundle() -> RawCCRBundle:
     """
     return RawCCRBundle(
         trades=TradeBundle(trades=create_trades([_ccr_d1_trade()]).lazy()),
-        netting_sets=NettingSetBundle(netting_sets=create_netting_sets([_ccr_d1_netting_set()]).lazy()),
+        netting_sets=NettingSetBundle(
+            netting_sets=create_netting_sets([_ccr_d1_netting_set()]).lazy()
+        ),
         margin_agreements=MarginAgreementBundle(
             margin_agreements=create_margin_agreements([]).lazy()
         ),
@@ -452,7 +454,9 @@ def _build_ccr_d2_raw_ccr_bundle() -> RawCCRBundle:
     """
     return RawCCRBundle(
         trades=TradeBundle(trades=create_trades([_ccr_d2_trade()]).lazy()),
-        netting_sets=NettingSetBundle(netting_sets=create_netting_sets([_ccr_d2_netting_set()]).lazy()),
+        netting_sets=NettingSetBundle(
+            netting_sets=create_netting_sets([_ccr_d2_netting_set()]).lazy()
+        ),
         margin_agreements=MarginAgreementBundle(
             margin_agreements=create_margin_agreements([]).lazy()
         ),
@@ -526,7 +530,9 @@ def _build_ccr_d3_raw_ccr_bundle() -> RawCCRBundle:
     """
     return RawCCRBundle(
         trades=TradeBundle(trades=create_trades([_ccr_d3_trade()]).lazy()),
-        netting_sets=NettingSetBundle(netting_sets=create_netting_sets([_ccr_d3_netting_set()]).lazy()),
+        netting_sets=NettingSetBundle(
+            netting_sets=create_netting_sets([_ccr_d3_netting_set()]).lazy()
+        ),
         margin_agreements=MarginAgreementBundle(
             margin_agreements=create_margin_agreements([_ccr_d3_margin()]).lazy()
         ),
@@ -745,7 +751,7 @@ def save_ccr_d1_d3_fixtures() -> list[tuple[str, int]]:
     )
 
     # CCR-D2 specific: trade must have notional_leg2 populated.
-    d2_trades = bundle_d2.ccr.trades.trades.collect()  # type: ignore[union-attr]
+    d2_trades = bundle_d2.ccr.trades.trades.collect()  # ty: ignore[unresolved-attribute]
     if d2_trades["notional_leg2"][0] is None:
         raise AssertionError("CCR-D2: notional_leg2 must be non-null (FX two-leg trade)")
     if d2_trades["notional_leg2"][0] != CCR_D2_NOTIONAL_LEG2:
@@ -755,7 +761,7 @@ def save_ccr_d1_d3_fixtures() -> list[tuple[str, int]]:
         )
 
     # CCR-D3 specific: margin row must have correct agreement ID and MPOR.
-    d3_margin = bundle_d3.ccr.margin_agreements.margin_agreements.collect()  # type: ignore[union-attr]
+    d3_margin = bundle_d3.ccr.margin_agreements.margin_agreements.collect()  # ty: ignore[unresolved-attribute]
     if d3_margin["margin_agreement_id"][0] != CCR_D3_MARGIN_AGREEMENT_ID:
         raise AssertionError(
             f"CCR-D3: margin_agreement_id must be {CCR_D3_MARGIN_AGREEMENT_ID!r} "
@@ -763,8 +769,7 @@ def save_ccr_d1_d3_fixtures() -> list[tuple[str, int]]:
         )
     if d3_margin["mpor_days"][0] != CCR_D3_MPOR_DAYS:
         raise AssertionError(
-            f"CCR-D3: margin mpor_days must be {CCR_D3_MPOR_DAYS} "
-            f"(got {d3_margin['mpor_days'][0]})"
+            f"CCR-D3: margin mpor_days must be {CCR_D3_MPOR_DAYS} (got {d3_margin['mpor_days'][0]})"
         )
 
     # Documented would-go-RED contrast: simplified EAD constant must differ from full EAD.
@@ -801,13 +806,11 @@ def _check_ccr_d_bundle(
         raise AssertionError(f"{scenario}: expected 1 trade row, got {trades_df.height}")
     if trades_df["trade_id"][0] != expected_trade_id:
         raise AssertionError(
-            f"{scenario}: trade_id must be {expected_trade_id!r} "
-            f"(got {trades_df['trade_id'][0]!r})"
+            f"{scenario}: trade_id must be {expected_trade_id!r} (got {trades_df['trade_id'][0]!r})"
         )
     if trades_df["mtm_value"][0] != expected_mtm:
         raise AssertionError(
-            f"{scenario}: mtm_value must be {expected_mtm} "
-            f"(got {trades_df['mtm_value'][0]})"
+            f"{scenario}: mtm_value must be {expected_mtm} (got {trades_df['mtm_value'][0]})"
         )
 
     # Netting-set row count, identity, and margining status.
@@ -838,9 +841,7 @@ def _check_ccr_d_bundle(
 
     # CCR collateral — always zero.
     if coll_df.height != 0:
-        raise AssertionError(
-            f"{scenario}: ccr_collateral must be empty (got {coll_df.height})"
-        )
+        raise AssertionError(f"{scenario}: ccr_collateral must be empty (got {coll_df.height})")
 
     # Counterparty: institution CQS 2.
     if cp_df.height != 1:

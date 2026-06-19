@@ -94,7 +94,9 @@ class TestGenerateSecuritisationSummary:
                 )
             ]
         )
-        summary = generate_securitisation_summary(df).collect()
+        summary_lf = generate_securitisation_summary(df)
+        assert summary_lf is not None
+        summary = summary_lf.collect()
         assert summary.height == 2
         rows = {r["pool_reference"]: r for r in summary.iter_rows(named=True)}
         # 1m EAD x 30% = 300k for each pool
@@ -119,7 +121,9 @@ class TestGenerateSecuritisationSummary:
                 },
             ]
         )
-        summary = generate_securitisation_summary(df).collect()
+        summary_lf = generate_securitisation_summary(df)
+        assert summary_lf is not None
+        summary = summary_lf.collect()
         row = summary.row(0, named=True)
         # L001 contributes 500k, L002 contributes 200k -> total 700k
         assert row["total_ead"] == pytest.approx(700_000.0)
@@ -159,7 +163,9 @@ class TestGenerateSecuritisationAudit:
                 "audit_status": ["ok"],
             }
         )
-        audit = generate_securitisation_audit(df, resolved).collect()
+        audit_lf = generate_securitisation_audit(df, resolved)
+        assert audit_lf is not None
+        audit = audit_lf.collect()
         row = audit.row(0, named=True)
         assert row["parent_ead"] == pytest.approx(1_000_000.0)
         assert row["residual_ead"] == pytest.approx(300_000.0)
@@ -181,5 +187,7 @@ class TestGenerateSecuritisationAudit:
                 "audit_status": ["over_allocated"],
             }
         )
-        audit = generate_securitisation_audit(df, resolved).collect()
+        audit_lf = generate_securitisation_audit(df, resolved)
+        assert audit_lf is not None
+        audit = audit_lf.collect()
         assert audit.row(0, named=True)["audit_status"] == "over_allocated"

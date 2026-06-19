@@ -37,7 +37,6 @@ Regulatory references:
 from __future__ import annotations
 
 from datetime import date
-from typing import cast
 
 import polars as pl
 import pytest
@@ -213,7 +212,7 @@ def p1117_hvcre_slotting_results_df() -> pl.DataFrame:
 
     if results.slotting_results is None:
         return pl.DataFrame()
-    return cast(pl.DataFrame, results.slotting_results.collect())
+    return results.slotting_results.collect()
 
 
 # ---------------------------------------------------------------------------

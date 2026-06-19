@@ -266,6 +266,7 @@ class TestCollateralAllocationPopulated:
 
         bundle = processor.get_crm_unified_bundle(_make_bundle(exposures, collateral), crr_config)
 
+        assert bundle.collateral_allocation is not None
         alloc = bundle.collateral_allocation.collect()
         assert alloc.shape[0] == 2
 
@@ -287,6 +288,7 @@ class TestCollateralAllocationColumns:
 
         bundle = processor.get_crm_unified_bundle(_make_bundle(exposures, collateral), crr_config)
 
+        assert bundle.collateral_allocation is not None
         cols = bundle.collateral_allocation.collect_schema().names()
         assert "exposure_reference" in cols
         assert "counterparty_reference" in cols
@@ -302,6 +304,7 @@ class TestCollateralAllocationColumns:
 
         bundle = processor.get_crm_unified_bundle(_make_bundle(exposures, collateral), crr_config)
 
+        assert bundle.collateral_allocation is not None
         cols = bundle.collateral_allocation.collect_schema().names()
         for alloc_col in CRM_ALLOC_COLUMNS.values():
             assert alloc_col in cols, f"Missing allocation column: {alloc_col}"
@@ -315,6 +318,7 @@ class TestCollateralAllocationColumns:
 
         bundle = processor.get_crm_unified_bundle(_make_bundle(exposures, collateral), crr_config)
 
+        assert bundle.collateral_allocation is not None
         cols = bundle.collateral_allocation.collect_schema().names()
         assert "total_collateral_for_lgd" in cols
         assert "collateral_coverage_pct" in cols
@@ -328,6 +332,7 @@ class TestCollateralAllocationColumns:
 
         bundle = processor.get_crm_unified_bundle(_make_bundle(exposures, collateral), crr_config)
 
+        assert bundle.collateral_allocation is not None
         cols = bundle.collateral_allocation.collect_schema().names()
         for col_name in [
             "collateral_adjusted_value",
@@ -349,6 +354,7 @@ class TestCollateralAllocationColumns:
 
         bundle = processor.get_crm_unified_bundle(_make_bundle(exposures, collateral), crr_config)
 
+        assert bundle.collateral_allocation is not None
         cols = bundle.collateral_allocation.collect_schema().names()
         assert "lgd_secured" in cols
         assert "lgd_unsecured" in cols
@@ -362,6 +368,7 @@ class TestCollateralAllocationColumns:
 
         bundle = processor.get_crm_unified_bundle(_make_bundle(exposures, collateral), crr_config)
 
+        assert bundle.collateral_allocation is not None
         alloc = bundle.collateral_allocation.collect()
         # 4 identifiers + 6 waterfall + 2 totals + 5 values + 2 financial + 4 LGD = 23
         assert alloc.shape[1] == 23
@@ -384,6 +391,7 @@ class TestCollateralAllocationValues:
 
         bundle = processor.get_crm_unified_bundle(_make_bundle(exposures, collateral), crr_config)
 
+        assert bundle.collateral_allocation is not None
         alloc = bundle.collateral_allocation.collect()
         row = alloc.filter(pl.col("exposure_reference") == "E1")
         assert row["crm_alloc_financial"][0] == pytest.approx(400_000)
@@ -398,6 +406,7 @@ class TestCollateralAllocationValues:
 
         bundle = processor.get_crm_unified_bundle(_make_bundle(exposures, collateral), crr_config)
 
+        assert bundle.collateral_allocation is not None
         alloc = bundle.collateral_allocation.collect()
         row = alloc.filter(pl.col("exposure_reference") == "E1")
         # 500k / 1M * 100 = 50%
@@ -412,6 +421,7 @@ class TestCollateralAllocationValues:
 
         bundle = processor.get_crm_unified_bundle(_make_bundle(exposures, collateral), crr_config)
 
+        assert bundle.collateral_allocation is not None
         alloc = bundle.collateral_allocation.collect()
         row = alloc.filter(pl.col("exposure_reference") == "E1")
         assert row["ead_after_collateral"][0] == pytest.approx(700_000)
@@ -425,6 +435,7 @@ class TestCollateralAllocationValues:
 
         bundle = processor.get_crm_unified_bundle(_make_bundle(exposures, collateral), firb_config)
 
+        assert bundle.collateral_allocation is not None
         alloc = bundle.collateral_allocation.collect()
         row = alloc.filter(pl.col("exposure_reference") == "E1")
         # Fully collateralised with cash → lgd_secured ≈ 0 (LGDS_financial = 0%)
@@ -443,6 +454,7 @@ class TestCollateralAllocationValues:
 
         bundle = processor.get_crm_unified_bundle(_make_bundle(exposures, collateral), crr_config)
 
+        assert bundle.collateral_allocation is not None
         alloc = bundle.collateral_allocation.collect()
         e2_row = alloc.filter(pl.col("exposure_reference") == "E2")
         assert e2_row["crm_alloc_financial"][0] == pytest.approx(0.0)
@@ -457,6 +469,7 @@ class TestCollateralAllocationValues:
 
         bundle = processor.get_crm_unified_bundle(_make_bundle(exposures, collateral), crr_config)
 
+        assert bundle.collateral_allocation is not None
         alloc = bundle.collateral_allocation.collect()
         main = bundle.exposures.collect().filter(pl.col("exposure_reference") == "E1")
 
@@ -515,6 +528,7 @@ class TestCollateralAllocationUnifiedBundle:
 
         bundle = processor.get_crm_unified_bundle(_make_bundle(exposures, collateral), crr_config)
 
+        assert bundle.collateral_allocation is not None
         alloc = bundle.collateral_allocation.collect()
         main = bundle.exposures.collect().filter(pl.col("exposure_reference") == "E1")
         assert alloc["crm_alloc_financial"][0] == pytest.approx(main["crm_alloc_financial"][0])
@@ -537,6 +551,7 @@ class TestCollateralAllocationEdgeCases:
 
         bundle = processor.get_crm_unified_bundle(_make_bundle(exposures, collateral), crr_config)
 
+        assert bundle.collateral_allocation is not None
         alloc = bundle.collateral_allocation.collect()
         row = alloc.filter(pl.col("exposure_reference") == "E1")
         # Waterfall caps at EAD
@@ -557,6 +572,7 @@ class TestCollateralAllocationEdgeCases:
 
         bundle = processor.get_crm_unified_bundle(_make_bundle(exposures, collateral), firb_config)
 
+        assert bundle.collateral_allocation is not None
         alloc = bundle.collateral_allocation.collect()
         row = alloc.filter(pl.col("exposure_reference") == "E1")
         # Cash absorbs first (LGDS=0%), then RE (subject to 30% threshold)
@@ -607,6 +623,7 @@ class TestCollateralAllocationEdgeCases:
 
         bundle = processor.get_crm_unified_bundle(_make_bundle(exposures, collateral), crr_config)
 
+        assert bundle.collateral_allocation is not None
         alloc = bundle.collateral_allocation.collect()
         refs = set(alloc["exposure_reference"].to_list())
         assert refs == {"E1", "E2", "E3"}

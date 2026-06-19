@@ -72,7 +72,12 @@ References:
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import polars as pl
+
+if TYPE_CHECKING:
+    from polars._typing import PolarsDataType
 
 # ---------------------------------------------------------------------------
 # Scenario constants
@@ -99,7 +104,7 @@ E3_BUCKET_LABEL: str = "Default (100%)"
 
 # Expected aggregated C 08.02 values per grade row (CRR, no partial data)
 # Keys are C 08.02 column references.
-EXPECTED_AAA: dict[str, object] = {
+EXPECTED_AAA: dict[str, str | float] = {
     "0005": GRADE_AAA,
     "0010": 0.01,
     "0020": 1000.0,
@@ -111,7 +116,7 @@ EXPECTED_AAA: dict[str, object] = {
     "0300": 1.0,
 }
 
-EXPECTED_BB: dict[str, object] = {
+EXPECTED_BB: dict[str, str | float] = {
     "0005": GRADE_BB,
     "0010": 0.02,
     "0020": 2000.0,
@@ -123,7 +128,7 @@ EXPECTED_BB: dict[str, object] = {
     "0300": 1.0,
 }
 
-EXPECTED_D: dict[str, object] = {
+EXPECTED_D: dict[str, str | float] = {
     "0005": GRADE_D,
     "0010": 1.0,
     "0020": 500.0,
@@ -167,7 +172,7 @@ def build_grade_path_irb_results_lf() -> pl.LazyFrame:
     Returns:
         A LazyFrame with 3 rows covering the AAA / BB / D grade labels.
     """
-    schema: dict[str, pl.DataType] = {
+    schema: dict[str, PolarsDataType] = {
         "exposure_reference": pl.String,
         "approach_applied": pl.String,
         "exposure_class": pl.String,

@@ -83,8 +83,12 @@ import sys
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import polars as pl
+
+if TYPE_CHECKING:
+    from polars._typing import PolarsDataType
 
 from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import (
@@ -148,7 +152,7 @@ ADC_RISK_WEIGHT: float = 1.50  # 150%
 # Fixture dtype schemas (inline — is_under_construction not yet in canonical schema)
 # ---------------------------------------------------------------------------
 
-_FACILITY_FIXTURE_SCHEMA: dict[str, pl.DataType] = {
+_FACILITY_FIXTURE_SCHEMA: dict[str, PolarsDataType] = {
     "facility_reference": pl.String,
     "product_type": pl.String,
     "counterparty_reference": pl.String,
@@ -165,7 +169,7 @@ _FACILITY_FIXTURE_SCHEMA: dict[str, pl.DataType] = {
     "is_under_construction": pl.Boolean,
 }
 
-_LOAN_FIXTURE_SCHEMA: dict[str, pl.DataType] = {
+_LOAN_FIXTURE_SCHEMA: dict[str, PolarsDataType] = {
     "loan_reference": pl.String,
     "product_type": pl.String,
     "counterparty_reference": pl.String,

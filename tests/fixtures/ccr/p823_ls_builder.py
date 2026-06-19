@@ -462,8 +462,8 @@ def _check_p823_parity(bundle_ls: RawDataBundle, bundle_ctrl: RawDataBundle) -> 
     bundles being economically equivalent so that EAD equality is guaranteed by
     construction, not coincidence.
     """
-    trades_ls = bundle_ls.ccr.trades.trades.collect()  # type: ignore[union-attr]
-    trades_ctrl = bundle_ctrl.ccr.trades.trades.collect()  # type: ignore[union-attr]
+    trades_ls = bundle_ls.ccr.trades.trades.collect()  # ty: ignore[unresolved-attribute]
+    trades_ctrl = bundle_ctrl.ccr.trades.trades.collect()  # ty: ignore[unresolved-attribute]
 
     # Fields that are allowed to differ between the two variants.
     excluded_cols = frozenset({"trade_id", "netting_set_id", "is_long_settlement"})
@@ -480,8 +480,8 @@ def _check_p823_parity(bundle_ls: RawDataBundle, bundle_ctrl: RawDataBundle) -> 
                 f"(ls={val_ls!r}, ctrl={val_ctrl!r}); this would break the EAD invariant"
             )
 
-    ns_ls = bundle_ls.ccr.netting_sets.netting_sets.collect()  # type: ignore[union-attr]
-    ns_ctrl = bundle_ctrl.ccr.netting_sets.netting_sets.collect()  # type: ignore[union-attr]
+    ns_ls = bundle_ls.ccr.netting_sets.netting_sets.collect()  # ty: ignore[unresolved-attribute]
+    ns_ctrl = bundle_ctrl.ccr.netting_sets.netting_sets.collect()  # ty: ignore[unresolved-attribute]
 
     ns_excluded = frozenset({"netting_set_id"})
     for col in ns_ls.columns:

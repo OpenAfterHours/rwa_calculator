@@ -123,9 +123,9 @@ def run(
             run_config,
             compute_failed_trade_rwa,
         )
-        concat_frames.append(_enrich_ccr_rows_with_ratings(
-            failed_trade_rows, resolved.counterparty_lookup
-        ))
+        concat_frames.append(
+            _enrich_ccr_rows_with_ratings(failed_trade_rows, resolved.counterparty_lookup)
+        )
 
     # CCR Art. 308/309 CCP default-fund contributions: when the firm reports
     # clearing-member default-fund contributions, compute their K_CM / RWEA
@@ -140,9 +140,7 @@ def run(
             run_config,
             compute_dfc_capital,
         )
-        concat_frames.append(_enrich_ccr_rows_with_ratings(
-            dfc_rows, resolved.counterparty_lookup
-        ))
+        concat_frames.append(_enrich_ccr_rows_with_ratings(dfc_rows, resolved.counterparty_lookup))
 
     new_exposures = pl.concat(
         concat_frames,

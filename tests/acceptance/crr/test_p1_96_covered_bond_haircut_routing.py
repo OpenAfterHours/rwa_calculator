@@ -51,11 +51,16 @@ References:
 from __future__ import annotations
 
 from datetime import date
+from typing import TYPE_CHECKING
 
 import polars as pl
 import pytest
 from tests.fixtures.raw_bundle import make_raw_bundle
 
+if TYPE_CHECKING:
+    from polars._typing import PolarsDataType
+
+from rwa_calc.contracts.bundles import AggregatedResultBundle
 from rwa_calc.contracts.config import CalculationConfig, PermissionMode
 from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import (
@@ -94,10 +99,10 @@ _ABS_TOL = 0.50
 # through the corp-bond haircut band, not "other_physical".)
 # ---------------------------------------------------------------------------
 
-_COUNTERPARTY_SCHEMA: dict[str, pl.DataType] = dtypes_of(COUNTERPARTY_SCHEMA)
-_FACILITY_SCHEMA: dict[str, pl.DataType] = dtypes_of(FACILITY_SCHEMA)
-_LOAN_SCHEMA: dict[str, pl.DataType] = dtypes_of(LOAN_SCHEMA)
-_COLLATERAL_SCHEMA: dict[str, pl.DataType] = dtypes_of(COLLATERAL_SCHEMA)
+_COUNTERPARTY_SCHEMA: dict[str, PolarsDataType] = dtypes_of(COUNTERPARTY_SCHEMA)
+_FACILITY_SCHEMA: dict[str, PolarsDataType] = dtypes_of(FACILITY_SCHEMA)
+_LOAN_SCHEMA: dict[str, PolarsDataType] = dtypes_of(LOAN_SCHEMA)
+_COLLATERAL_SCHEMA: dict[str, PolarsDataType] = dtypes_of(COLLATERAL_SCHEMA)
 
 
 # ---------------------------------------------------------------------------
@@ -288,7 +293,7 @@ def _run_pipeline_d15() -> object:
     return PipelineOrchestrator().run_with_data(bundle, config)
 
 
-def _find_rows(results: object, loan_ref: str) -> list[dict]:
+def _find_rows(results: AggregatedResultBundle, loan_ref: str) -> list[dict]:
     """Return all result rows whose exposure_reference contains *loan_ref*."""
     rows: list[dict] = []
     for lf in [results.sa_results, results.irb_results, results.slotting_results]:

@@ -61,6 +61,7 @@ from tests.fixtures.p1_118.p1_118 import (
 )
 from tests.fixtures.raw_bundle import make_raw_bundle
 
+from rwa_calc.contracts.bundles import AggregatedResultBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import LOAN_SCHEMA
@@ -89,7 +90,7 @@ _M_TOL = 0.002  # ±0.002y (≈ 0.73 days)
 # ---------------------------------------------------------------------------
 
 
-def _run_pipeline_p1118() -> object:
+def _run_pipeline_p1118() -> AggregatedResultBundle:
     """Run the CRR F-IRB pipeline with P1.118 scenario inputs.
 
     Loads counterparty, rating, model_permission, and contingent fixtures.
@@ -127,7 +128,7 @@ def _run_pipeline_p1118() -> object:
     return PipelineOrchestrator().run_with_data(bundle, config)
 
 
-def _get_irb_row(result: object, contingent_ref: str) -> dict:
+def _get_irb_row(result: AggregatedResultBundle, contingent_ref: str) -> dict:
     """Return the IRB result dict for a given contingent_reference.
 
     Raises AssertionError if not found or not unique.
@@ -171,17 +172,17 @@ class TestP1118Art1624ShortTermTradeFinanceMDerivation:
     """
 
     @pytest.fixture(scope="class")
-    def result(self) -> object:
+    def result(self) -> AggregatedResultBundle:
         """Run the pipeline once; reuse across all tests in this class."""
         return _run_pipeline_p1118()
 
     @pytest.fixture(scope="class")
-    def row_a(self, result: object) -> dict:
+    def row_a(self, result: AggregatedResultBundle) -> dict:
         """IRB result row for TF_LC_001 (is_short_term_trade_lc=True)."""
         return _get_irb_row(result, CONTINGENT_REF_A)
 
     @pytest.fixture(scope="class")
-    def row_b(self, result: object) -> dict:
+    def row_b(self, result: AggregatedResultBundle) -> dict:
         """IRB result row for TF_LC_002 (is_short_term_trade_lc=False)."""
         return _get_irb_row(result, CONTINGENT_REF_B)
 

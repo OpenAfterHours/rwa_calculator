@@ -68,7 +68,7 @@ class TestCalculationError:
         )
 
         with pytest.raises(AttributeError):
-            error.message = "Changed"
+            error.message = "Changed"  # ty: ignore[invalid-assignment]
 
     def test_error_str_representation(self):
         """__str__ should provide human-readable representation."""

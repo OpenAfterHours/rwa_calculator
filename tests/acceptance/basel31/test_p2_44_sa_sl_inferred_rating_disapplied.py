@@ -60,7 +60,6 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
-from typing import cast
 
 import polars as pl
 import pytest
@@ -171,7 +170,7 @@ def p2_44_sa_results() -> pl.DataFrame:
         "SA results should not be None — check PermissionMode.STANDARDISED config "
         "and that the SL specialised-lending counterparty routes to SA."
     )
-    return cast(pl.DataFrame, results.sa_results.collect())
+    return results.sa_results.collect()
 
 
 def _get_exposure_row(df: pl.DataFrame) -> dict:

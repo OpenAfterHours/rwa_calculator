@@ -67,6 +67,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
+from rwa_calc.contracts.bundles import AggregatedResultBundle
 from rwa_calc.contracts.config import CalculationConfig, PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.p1_151.p1_151 import (
@@ -187,13 +188,14 @@ def _run_pipeline_p1151() -> object:
     return PipelineOrchestrator().run_with_data(bundle, config)
 
 
-def _find_irb_row(results: object, loan_ref: str) -> dict:
+def _find_irb_row(results: AggregatedResultBundle, loan_ref: str) -> dict:
     """
     Return the single IRB result row for *loan_ref*.
 
     Asserts exactly one row matches — test-fails with a descriptive message if
     the exposure is missing (fixture or pipeline loading issue).
     """
+    assert results.irb_results is not None, "irb_results must not be None for F-IRB scenario"
     df = results.irb_results.collect()
     rows = df.filter(pl.col("exposure_reference") == loan_ref).to_dicts()
     assert len(rows) == 1, (
@@ -235,17 +237,17 @@ class TestP1151Art161PurchasedReceivablesLGD:
         return _run_pipeline_p1151()
 
     @pytest.fixture(scope="class")
-    def senior_row(self, pipeline_results: object) -> dict:
+    def senior_row(self, pipeline_results: AggregatedResultBundle) -> dict:
         """Result dict for LOAN_PR_SENIOR_001 (Art. 161(1)(e), EAD=1,000,000)."""
         return _find_irb_row(pipeline_results, LOAN_REF_SENIOR)
 
     @pytest.fixture(scope="class")
-    def sub_row(self, pipeline_results: object) -> dict:
+    def sub_row(self, pipeline_results: AggregatedResultBundle) -> dict:
         """Result dict for LOAN_PR_SUB_001 (Art. 161(1)(f), EAD=500,000)."""
         return _find_irb_row(pipeline_results, LOAN_REF_SUB)
 
     @pytest.fixture(scope="class")
-    def dilution_row(self, pipeline_results: object) -> dict:
+    def dilution_row(self, pipeline_results: AggregatedResultBundle) -> dict:
         """Result dict for LOAN_PR_DILUTION_001 (Art. 161(1)(g), EAD=200,000)."""
         return _find_irb_row(pipeline_results, LOAN_REF_DILUTION)
 
@@ -441,7 +443,7 @@ class TestP1151Art161PurchasedReceivablesLGD:
 
     def test_b31_purchased_receivables_all_route_to_firb(
         self,
-        pipeline_results: object,
+        pipeline_results: AggregatedResultBundle,
     ) -> None:
         """
         All three P1.151 loans route to F-IRB (foundation_irb), not SA.
@@ -454,6 +456,7 @@ class TestP1151Art161PurchasedReceivablesLGD:
         Assert:  approach_applied == 'foundation_irb' for all three loans.
         """
         # Arrange
+        assert pipeline_results.irb_results is not None, "irb_results must not be None for F-IRB"
         df = pipeline_results.irb_results.collect()
         refs = [LOAN_REF_SENIOR, LOAN_REF_SUB, LOAN_REF_DILUTION]
 

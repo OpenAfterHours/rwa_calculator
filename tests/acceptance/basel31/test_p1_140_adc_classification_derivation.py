@@ -43,7 +43,6 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
-from typing import cast
 
 import polars as pl
 import pytest
@@ -140,7 +139,7 @@ def p1_140_sa_results() -> pl.DataFrame:
     assert results.sa_results is not None, (
         "SA results should not be None — check PermissionMode.STANDARDISED config"
     )
-    return cast(pl.DataFrame, results.sa_results.collect())
+    return results.sa_results.collect()
 
 
 def _get_spv_rows(df: pl.DataFrame) -> pl.DataFrame:

@@ -102,7 +102,7 @@ def _make_minimal_bundle(**overrides) -> RawDataBundle:
     # Run loader-level validation to match real loader behaviour
     errors = _run_bundle_validation(bundle)
     if errors:
-        return make_raw_bundle(**{**defaults, "errors": errors})
+        return make_raw_bundle(**defaults, errors=errors)
     return bundle
 
 

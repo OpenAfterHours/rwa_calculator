@@ -63,7 +63,6 @@ References:
 from __future__ import annotations
 
 from datetime import date
-from typing import cast
 
 import polars as pl
 import pytest
@@ -134,7 +133,7 @@ def p2_31_crr_ccf_results() -> pl.DataFrame:
     # Act — apply CCF stage directly (no full pipeline needed)
     result_lf = calculator.apply_ccf(contingents_lf, config)
 
-    return cast(pl.DataFrame, result_lf.collect())
+    return result_lf.collect()
 
 
 # ---------------------------------------------------------------------------

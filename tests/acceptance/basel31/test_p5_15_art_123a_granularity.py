@@ -56,7 +56,6 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
-from typing import cast
 
 import polars as pl
 import pytest
@@ -129,7 +128,7 @@ def _run_b31_pipeline() -> pl.DataFrame:
         "P5.15: SA results should not be None under PermissionMode.STANDARDISED. "
         "Check CalculationConfig.basel_3_1() factory."
     )
-    return cast(pl.DataFrame, results.sa_results.collect())
+    return results.sa_results.collect()
 
 
 def _get_row(df: pl.DataFrame, loan_ref: str) -> dict:

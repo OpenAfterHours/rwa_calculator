@@ -47,7 +47,7 @@ from rwa_calc.domain.enums import ErrorSeverity
 try:
     from rwa_calc.engine.ccr.sa_ccr import apply_legal_enforceability_gate
 except ImportError:
-    apply_legal_enforceability_gate = None  # type: ignore[assignment]
+    apply_legal_enforceability_gate = None  # ty: ignore[invalid-assignment]
 
 # ---------------------------------------------------------------------------
 # Fixture constants (single source of truth from fixture module)

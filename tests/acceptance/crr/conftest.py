@@ -9,7 +9,7 @@ import sys
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import polars as pl
 import pytest
@@ -539,7 +539,7 @@ def run_single_guarantee_sa_pipeline(
     )
     results = PipelineOrchestrator().run_with_data(bundle, config)
     assert results.sa_results is not None, "SA results must not be None for SA-only config"
-    return cast(pl.DataFrame, results.sa_results.collect())
+    return results.sa_results.collect()
 
 
 def aggregate_sa_rows_by_parent(df: pl.DataFrame, parent_ref: str) -> dict:

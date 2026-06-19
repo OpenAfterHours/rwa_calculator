@@ -1253,7 +1253,7 @@ def check_no_empty_frame_sentinels(path: Path) -> list[str]:
             continue
         code_lines = _code_line_numbers(text)
         for i, line in enumerate(text.split("\n"), 1):
-            if i not in code_lines:
+            if code_lines is not None and i not in code_lines:
                 continue
             if pattern.search(line):
                 violations.append(
@@ -1640,7 +1640,7 @@ def main() -> int:
         for k, v in metrics.items():
             print(f"  {k}: {v}")
 
-    checks = [
+    checks: list[tuple[str, Callable[[Path], list[str]]]] = [
         ("from __future__ import annotations", check_future_annotations),
         ("No ABC imports (use Protocol)", check_no_abc),
         ("No .collect().lazy() (use materialise_edge)", check_no_collect_lazy),

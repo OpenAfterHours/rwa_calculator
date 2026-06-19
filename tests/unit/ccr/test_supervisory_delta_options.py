@@ -57,12 +57,12 @@ from tests.fixtures.ccr.option_delta_builder import (
 try:
     from rwa_calc.engine.ccr.supervisory_delta import compute_supervisory_delta_option
 except (ImportError, ModuleNotFoundError):
-    compute_supervisory_delta_option = None  # type: ignore[assignment]
+    compute_supervisory_delta_option = None  # ty: ignore[invalid-assignment]
 
 try:
     from rwa_calc.engine.ccr.supervisory_delta import compute_supervisory_delta_cdo_tranche
 except (ImportError, ModuleNotFoundError):
-    compute_supervisory_delta_cdo_tranche = None  # type: ignore[assignment]
+    compute_supervisory_delta_cdo_tranche = None  # ty: ignore[invalid-assignment]
 
 
 # ===========================================================================

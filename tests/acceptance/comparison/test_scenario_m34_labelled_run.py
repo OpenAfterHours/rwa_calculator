@@ -52,7 +52,8 @@ class TestLabelledTwoRun:
         assert "rwa_final_base" in deltas.columns
         assert "rwa_final_variant" in deltas.columns
         # Identical config on both sides -> every per-exposure delta is zero.
-        assert deltas["delta_rwa"].abs().max() < 1e-9
+        # (.max() returns a polars scalar union, hence the suppression below.)
+        assert deltas["delta_rwa"].abs().max() < 1e-9  # ty: ignore[unsupported-operator]
 
     def test_same_label_rejected(self, raw_data_bundle, b31_sa_config):
         """Two runs that resolve to the same label are rejected (distinct labels required)."""

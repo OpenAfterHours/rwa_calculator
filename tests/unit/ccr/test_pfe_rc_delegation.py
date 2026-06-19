@@ -56,17 +56,17 @@ from tests.fixtures.ccr.pfe_multiplier_builder import (
 try:
     from rwa_calc.engine.ccr.pfe import compute_pfe
 except (ImportError, ModuleNotFoundError, AttributeError):
-    compute_pfe = None  # type: ignore[assignment]
+    compute_pfe = None  # ty: ignore[invalid-assignment]
 
 try:
     from rwa_calc.engine.ccr.rc import compute_rc_unmargined
 except (ImportError, ModuleNotFoundError, AttributeError):
-    compute_rc_unmargined = None  # type: ignore[assignment]
+    compute_rc_unmargined = None  # ty: ignore[invalid-assignment]
 
 try:
     import rwa_calc.engine.ccr.pfe as pfe_mod
 except (ImportError, ModuleNotFoundError):
-    pfe_mod = None  # type: ignore[assignment]
+    pfe_mod = None  # ty: ignore[invalid-assignment]
 
 
 # ===========================================================================

@@ -8,7 +8,7 @@ and runs the full pipeline for correctness validation.
 from __future__ import annotations
 
 from datetime import date, timedelta
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import numpy as np
 import polars as pl
@@ -139,7 +139,7 @@ def generate_stress_counterparties(n: int, seed: int = 42) -> pl.LazyFrame:
         )
         .lazy()
         .pipe(ensure_columns, COUNTERPARTY_SCHEMA)
-        .cast(dtypes_of(COUNTERPARTY_SCHEMA))
+        .cast(dtypes_of(COUNTERPARTY_SCHEMA))  # ty: ignore[invalid-argument-type]
     )
 
 
@@ -237,7 +237,7 @@ def generate_stress_loans(
         )
         .lazy()
         .pipe(ensure_columns, LOAN_SCHEMA)
-        .cast(dtypes_of(LOAN_SCHEMA))
+        .cast(dtypes_of(LOAN_SCHEMA))  # ty: ignore[invalid-argument-type]
     )
 
 
@@ -296,7 +296,7 @@ def generate_stress_facilities(
         )
         .lazy()
         .pipe(ensure_columns, FACILITY_SCHEMA)
-        .cast(dtypes_of(FACILITY_SCHEMA))
+        .cast(dtypes_of(FACILITY_SCHEMA))  # ty: ignore[invalid-argument-type]
     )
 
 
@@ -344,7 +344,7 @@ def generate_stress_ratings(
         )
         .lazy()
         .pipe(ensure_columns, RATINGS_SCHEMA)
-        .cast(dtypes_of(RATINGS_SCHEMA))
+        .cast(dtypes_of(RATINGS_SCHEMA))  # ty: ignore[invalid-argument-type]
     )
 
 
@@ -382,7 +382,7 @@ def generate_stress_org_mappings(
         )
         .lazy()
         .pipe(ensure_columns, ORG_MAPPING_SCHEMA)
-        .cast(dtypes_of(ORG_MAPPING_SCHEMA))
+        .cast(dtypes_of(ORG_MAPPING_SCHEMA))  # ty: ignore[invalid-argument-type]
     )
 
 
@@ -415,7 +415,7 @@ def generate_stress_facility_mappings(
         )
         .lazy()
         .pipe(ensure_columns, FACILITY_MAPPING_SCHEMA)
-        .cast(dtypes_of(FACILITY_MAPPING_SCHEMA))
+        .cast(dtypes_of(FACILITY_MAPPING_SCHEMA))  # ty: ignore[invalid-argument-type]
     )
 
 
@@ -483,7 +483,7 @@ def generate_stress_contingents(
         )
         .lazy()
         .pipe(ensure_columns, CONTINGENTS_SCHEMA)
-        .cast(dtypes_of(CONTINGENTS_SCHEMA))
+        .cast(dtypes_of(CONTINGENTS_SCHEMA))  # ty: ignore[invalid-argument-type]
     )
 
 
@@ -660,22 +660,22 @@ def b31_irb_result_10k(
 @pytest.fixture(scope="session")
 def crr_sa_result_10k_df(crr_sa_result_10k: AggregatedResultBundle) -> pl.DataFrame:
     """CRR SA pipeline result at 10K scale, collected once."""
-    return cast(pl.DataFrame, crr_sa_result_10k.results.collect())
+    return crr_sa_result_10k.results.collect()
 
 
 @pytest.fixture(scope="session")
 def crr_irb_result_10k_df(crr_irb_result_10k: AggregatedResultBundle) -> pl.DataFrame:
     """CRR IRB pipeline result at 10K scale, collected once."""
-    return cast(pl.DataFrame, crr_irb_result_10k.results.collect())
+    return crr_irb_result_10k.results.collect()
 
 
 @pytest.fixture(scope="session")
 def b31_sa_result_10k_df(b31_sa_result_10k: AggregatedResultBundle) -> pl.DataFrame:
     """Basel 3.1 SA pipeline result at 10K scale, collected once."""
-    return cast(pl.DataFrame, b31_sa_result_10k.results.collect())
+    return b31_sa_result_10k.results.collect()
 
 
 @pytest.fixture(scope="session")
 def b31_irb_result_10k_df(b31_irb_result_10k: AggregatedResultBundle) -> pl.DataFrame:
     """Basel 3.1 IRB pipeline result at 10K scale, collected once."""
-    return cast(pl.DataFrame, b31_irb_result_10k.results.collect())
+    return b31_irb_result_10k.results.collect()

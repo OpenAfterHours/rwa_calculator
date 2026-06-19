@@ -65,7 +65,7 @@ References:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
@@ -82,6 +82,9 @@ from rwa_calc.data.schemas import (
     COUNTERPARTY_SCHEMA,
 )
 
+if TYPE_CHECKING:
+    from polars._typing import PolarsDataType
+
 # ---------------------------------------------------------------------------
 # DF_CONTRIBUTION_SCHEMA column dtype dict.
 # Defined here (not imported from rwa_calc.data.schemas) because the engine-
@@ -91,7 +94,7 @@ from rwa_calc.data.schemas import (
 #: Column dtype mapping for ``default_fund_contributions`` LazyFrames.
 #: Once ``DF_CONTRIBUTION_SCHEMA`` lands in ``data/schemas.py`` this can be
 #: replaced with ``dtypes_of(DF_CONTRIBUTION_SCHEMA)`` and the dict removed.
-DF_CONTRIBUTION_DTYPES: dict[str, pl.PolarsDataType] = {
+DF_CONTRIBUTION_DTYPES: dict[str, PolarsDataType] = {
     "contribution_id": pl.String,
     "ccp_reference": pl.String,
     "is_qccp_ccp": pl.Boolean,
@@ -350,9 +353,9 @@ def make_combined_b2_b3_b4_frame() -> pl.LazyFrame:
 #: Explicit EAD value for synthetic SA row exposed via drawn_amount.
 #: Engine sets drawn_amount = k_cm on the synthetic exposure; these pin the
 #: per-scenario EAD the test-writer should assert against.
-DFC_B2_EAD: float = DFC_B2_K_CM   # 1,000,000
-DFC_B3_EAD: float = DFC_B3_K_CM   # 750,000
-DFC_B4_EAD: float = DFC_B4_K_CM   # 400,000
+DFC_B2_EAD: float = DFC_B2_K_CM  # 1,000,000
+DFC_B3_EAD: float = DFC_B3_K_CM  # 750,000
+DFC_B4_EAD: float = DFC_B4_K_CM  # 400,000
 
 
 def make_minimal_counterparties_frame(scenario: str = "all") -> pl.LazyFrame:
@@ -420,9 +423,7 @@ def make_minimal_counterparties_frame(scenario: str = "all") -> pl.LazyFrame:
         DFC_B3_IS_QCCP,
         DFC_B4_IS_QCCP,
     ]
-    qccp_flag_for_selected = [
-        is_qccp_values[all_rows.index(row)] for row in selected
-    ]
+    qccp_flag_for_selected = [is_qccp_values[all_rows.index(row)] for row in selected]
 
     base = pl.DataFrame(selected, schema=dtypes_of(COUNTERPARTY_SCHEMA))
     return base.with_columns(pl.Series("is_qccp", qccp_flag_for_selected)).lazy()
@@ -502,8 +503,7 @@ def save_p849_fixtures() -> list[tuple[str, int]]:
         raise AssertionError(f"P8.49 B2: expected 1 row, got {b2_df.height}")
     if b2_df["contribution_id"][0] != DFC_B2_ID:
         raise AssertionError(
-            f"P8.49 B2: contribution_id must be {DFC_B2_ID!r} "
-            f"(got {b2_df['contribution_id'][0]!r})"
+            f"P8.49 B2: contribution_id must be {DFC_B2_ID!r} (got {b2_df['contribution_id'][0]!r})"
         )
     if b2_df["is_qccp_ccp"][0] is not True:
         raise AssertionError("P8.49 B2: is_qccp_ccp must be True")
@@ -562,16 +562,13 @@ def save_p849_fixtures() -> list[tuple[str, int]]:
     row_sum = DFC_B2_RWEA + DFC_B3_RWEA + DFC_B4_RWEA
     if abs(row_sum - PORTFOLIO_TOTAL_RWEA) > _tolerance:
         raise AssertionError(
-            f"P8.49: PORTFOLIO_TOTAL_RWEA {PORTFOLIO_TOTAL_RWEA} != "
-            f"sum of per-row RWEAs {row_sum}"
+            f"P8.49: PORTFOLIO_TOTAL_RWEA {PORTFOLIO_TOTAL_RWEA} != sum of per-row RWEAs {row_sum}"
         )
 
     # --- Invariant 8: counterparties frame ---
     cp_all = make_minimal_counterparties_frame(scenario="all").collect()
     if cp_all.height != 3:
-        raise AssertionError(
-            f"P8.49 counterparties (all): expected 3 rows, got {cp_all.height}"
-        )
+        raise AssertionError(f"P8.49 counterparties (all): expected 3 rows, got {cp_all.height}")
     if "is_qccp" not in cp_all.columns:
         raise AssertionError("P8.49 counterparties: is_qccp column must be present")
     cp_b2 = cp_all.filter(pl.col("counterparty_reference") == DFC_B2_CCP_REF)
@@ -595,8 +592,6 @@ def save_p849_fixtures() -> list[tuple[str, int]]:
     required_cols = set(DF_CONTRIBUTION_DTYPES.keys())
     missing = required_cols - set(combined_df.columns)
     if missing:
-        raise AssertionError(
-            f"P8.49 combined frame: missing required columns {missing}"
-        )
+        raise AssertionError(f"P8.49 combined frame: missing required columns {missing}")
 
     return [("(python-only builder — no parquet)", 0)]

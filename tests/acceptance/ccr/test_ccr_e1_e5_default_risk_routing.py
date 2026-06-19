@@ -761,9 +761,7 @@ class TestCCRE1E5EADInvarianceAndFrameworkDelta:
             "CRR Art. 274(2): EAD = alpha * (RC + PFE)."
         )
 
-    def test_ead_invariance_within_b31(
-        self, ccr_e4_row: dict, ccr_e5_row: dict
-    ) -> None:
+    def test_ead_invariance_within_b31(self, ccr_e4_row: dict, ccr_e5_row: dict) -> None:
         """
         EAD invariance within B3.1: ead_final(E4) == ead_final(E5).
 
@@ -819,9 +817,7 @@ class TestCCRE1E5EADInvarianceAndFrameworkDelta:
             "CRR Art. 274(2) / PS1/26 Art. 274(2): EAD formula is unchanged across frameworks."
         )
 
-    def test_crr_vs_b31_institution_rw_delta(
-        self, ccr_e1_row: dict, ccr_e4_row: dict
-    ) -> None:
+    def test_crr_vs_b31_institution_rw_delta(self, ccr_e1_row: dict, ccr_e4_row: dict) -> None:
         """
         CRR vs B3.1 institution RW delta: 0.50 (E1) != 0.30 (E4).
 
@@ -859,9 +855,7 @@ class TestCCRE1E5EADInvarianceAndFrameworkDelta:
             "vs Basel 3.1 (2027-01-15) reporting dates."
         )
 
-    def test_crr_vs_b31_corporate_rw_delta(
-        self, ccr_e2_row: dict, ccr_e5_row: dict
-    ) -> None:
+    def test_crr_vs_b31_corporate_rw_delta(self, ccr_e2_row: dict, ccr_e5_row: dict) -> None:
         """
         CRR vs B3.1 corporate RW delta: 1.00 (E2) != 0.75 (E5).
 

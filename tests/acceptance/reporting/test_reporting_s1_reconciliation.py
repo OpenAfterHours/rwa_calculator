@@ -28,16 +28,18 @@ References:
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date
 
+import polars as pl
 import pytest
 from tests.fixtures.reporting_portfolio import build_reporting_bundle
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
-from rwa_calc.reporting.corep.generator import COREPGenerator
-from rwa_calc.reporting.pillar3.generator import Pillar3Generator
+from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBundle
+from rwa_calc.reporting.pillar3.generator import Pillar3Generator, Pillar3TemplateBundle
 
 
 def _crr_config() -> CalculationConfig:
@@ -55,16 +57,18 @@ def _b31_config() -> CalculationConfig:
 
 
 # regime key -> (framework string, config factory)
-_REGIMES: dict[str, tuple[str, object]] = {
+_REGIMES: dict[str, tuple[str, Callable[[], CalculationConfig]]] = {
     "crr": ("CRR", _crr_config),
     "b31": ("BASEL_3_1", _b31_config),
 }
 
 
-def _run(regime_key: str) -> tuple[object, object, object]:
+def _run(
+    regime_key: str,
+) -> tuple[pl.DataFrame, COREPTemplateBundle, Pillar3TemplateBundle]:
     """Run the oracle portfolio through one regime; return (results_df, corep, pillar3)."""
     framework, config_factory = _REGIMES[regime_key]
-    config = config_factory()  # type: ignore[operator]
+    config = config_factory()
     result = PipelineOrchestrator().run_with_data(build_reporting_bundle(), config)
     results_df = result.results.collect()
     corep = COREPGenerator().generate_from_lazyframe(result.results, framework=framework)

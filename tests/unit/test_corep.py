@@ -4359,12 +4359,14 @@ class TestOF0201Generation:
         """OF 02.01 has 8 rows (one per risk type)."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
+        assert bundle.of_02_01 is not None
         assert len(bundle.of_02_01) == 8
 
     def test_column_structure(self) -> None:
         """DataFrame has row_ref, row_name, and 4 data columns."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
+        assert bundle.of_02_01 is not None
         cols = set(bundle.of_02_01.columns)
         assert "row_ref" in cols
         assert "row_name" in cols
@@ -4381,6 +4383,7 @@ class TestOF0201CreditRiskRow:
         """Col 0010 = sum of rwa_pre_floor for all exposures."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
+        assert bundle.of_02_01 is not None
         cr_row = bundle.of_02_01.filter(pl.col("row_ref") == "0010")
         # E1=500, E2=1500, E3=100, E4=900 → 3000
         assert cr_row["0010"][0] == pytest.approx(3000.0)
@@ -4389,6 +4392,7 @@ class TestOF0201CreditRiskRow:
         """Col 0020 = sum of sa_rwa for all exposures."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
+        assert bundle.of_02_01 is not None
         cr_row = bundle.of_02_01.filter(pl.col("row_ref") == "0010")
         # E1=700, E2=1400, E3=100, E4=1050 → 3250
         assert cr_row["0020"][0] == pytest.approx(3250.0)
@@ -4403,6 +4407,7 @@ class TestOF0201CreditRiskRow:
         # Arrange
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
+        assert bundle.of_02_01 is not None
         cr_row = bundle.of_02_01.filter(pl.col("row_ref") == "0010")
 
         # Act / Assert
@@ -4419,6 +4424,7 @@ class TestOF0201CreditRiskRow:
         """Col 0040 (S-TREA) equals col 0020 for credit-risk-only calculator."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
+        assert bundle.of_02_01 is not None
         cr_row = bundle.of_02_01.filter(pl.col("row_ref") == "0010")
         assert cr_row["0040"][0] == cr_row["0020"][0]
 
@@ -4426,6 +4432,7 @@ class TestOF0201CreditRiskRow:
         """Floor binding: modelled < SA (modelled=1100 < SA=2200)."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_b31_results_floor_binding(), framework="BASEL_3_1")
+        assert bundle.of_02_01 is not None
         cr_row = bundle.of_02_01.filter(pl.col("row_ref") == "0010")
         assert cr_row["0010"][0] == pytest.approx(1100.0)  # 300+800
         assert cr_row["0020"][0] == pytest.approx(2200.0)  # 600+1600
@@ -4436,6 +4443,7 @@ class TestOF0201CreditRiskRow:
         bundle = gen.generate_from_lazyframe(
             _sa_only_results_with_floor_cols(), framework="BASEL_3_1"
         )
+        assert bundle.of_02_01 is not None
         cr_row = bundle.of_02_01.filter(pl.col("row_ref") == "0010")
         assert cr_row["0010"][0] == pytest.approx(1100.0)  # 1000+100
         assert cr_row["0020"][0] == pytest.approx(1100.0)  # same
@@ -4448,6 +4456,7 @@ class TestOF0201TotalRow:
         """Total row equals credit risk row (credit-risk-only calculator)."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
+        assert bundle.of_02_01 is not None
         cr_row = bundle.of_02_01.filter(pl.col("row_ref") == "0010")
         total_row = bundle.of_02_01.filter(pl.col("row_ref") == "0080")
         for col_ref in ["0010", "0020", "0030", "0040"]:
@@ -4457,6 +4466,7 @@ class TestOF0201TotalRow:
         """Total row col 0010 matches credit risk sum."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
+        assert bundle.of_02_01 is not None
         total_row = bundle.of_02_01.filter(pl.col("row_ref") == "0080")
         assert total_row["0010"][0] == pytest.approx(3000.0)
 
@@ -4464,6 +4474,7 @@ class TestOF0201TotalRow:
         """Total row is named 'Total'."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
+        assert bundle.of_02_01 is not None
         total_row = bundle.of_02_01.filter(pl.col("row_ref") == "0080")
         assert total_row["row_name"][0] == "Total"
 
@@ -4486,6 +4497,7 @@ class TestOF0201NullRows:
         """Out-of-scope risk types have null values in all data columns."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
+        assert bundle.of_02_01 is not None
         row = bundle.of_02_01.filter(pl.col("row_ref") == row_ref)
         assert len(row) == 1
         assert row["row_name"][0] == row_name
@@ -4497,6 +4509,7 @@ class TestOF0201NullRows:
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
         null_refs = {"0020", "0030", "0040", "0050", "0060", "0070"}
+        assert bundle.of_02_01 is not None
         actual_refs = set(bundle.of_02_01["row_ref"].to_list())
         assert null_refs.issubset(actual_refs)
 
@@ -4539,6 +4552,7 @@ class TestOF0201EdgeCases:
             }
         )
         bundle = gen.generate_from_lazyframe(results, framework="BASEL_3_1")
+        assert bundle.of_02_01 is not None
         cr_row = bundle.of_02_01.filter(pl.col("row_ref") == "0010")
         assert cr_row["0010"][0] == pytest.approx(500.0)
         assert cr_row["0020"][0] == pytest.approx(1400.0)
@@ -4548,12 +4562,14 @@ class TestOF0201EdgeCases:
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
         for col_ref in ["0010", "0020", "0030", "0040"]:
+            assert bundle.of_02_01 is not None
             assert bundle.of_02_01[col_ref].dtype == pl.Float64
 
     def test_row_ref_and_name_are_string(self) -> None:
         """row_ref and row_name columns are String type."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
+        assert bundle.of_02_01 is not None
         assert bundle.of_02_01["row_ref"].dtype == pl.String
         assert bundle.of_02_01["row_name"].dtype == pl.String
 
@@ -4583,6 +4599,7 @@ class TestOF0201EdgeCases:
             }
         )
         bundle = gen.generate_from_lazyframe(results, framework="BASEL_3_1")
+        assert bundle.of_02_01 is not None
         cr_row = bundle.of_02_01.filter(pl.col("row_ref") == "0010")
         assert cr_row["0010"][0] == pytest.approx(5e11)
         assert cr_row["0020"][0] == pytest.approx(7e11)
@@ -4591,6 +4608,7 @@ class TestOF0201EdgeCases:
         """Rows are in the correct order: 0010, 0020, ..., 0080."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
+        assert bundle.of_02_01 is not None
         refs = bundle.of_02_01["row_ref"].to_list()
         assert refs == ["0010", "0020", "0030", "0040", "0050", "0060", "0070", "0080"]
 
@@ -8733,6 +8751,7 @@ class TestOF0200IRBSubRowSplits:
         """Row 0296: F-IRB other general corporates SME."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
+        assert bundle.c_02_00 is not None
         row = bundle.c_02_00.filter(pl.col("row_ref") == "0296")
         assert len(row) == 1
         # FIRB_CORP_SME_1: rwa = 300
@@ -8742,6 +8761,7 @@ class TestOF0200IRBSubRowSplits:
         """Row 0297: F-IRB other general corporates non-SME."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
+        assert bundle.c_02_00 is not None
         row = bundle.c_02_00.filter(pl.col("row_ref") == "0297")
         assert len(row) == 1
         # FIRB_CORP_OTHER_1: rwa = 1600
@@ -8751,6 +8771,7 @@ class TestOF0200IRBSubRowSplits:
         """Rows 0295+0296+0297 should sum to total F-IRB corporates (row 0260)."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
+        assert bundle.c_02_00 is not None
         df = bundle.c_02_00
         r0260 = float(df.filter(pl.col("row_ref") == "0260")["0010"][0])
         r0290 = float(df.filter(pl.col("row_ref") == "0290")["0010"][0])
@@ -8764,6 +8785,7 @@ class TestOF0200IRBSubRowSplits:
         """Row 0355: A-IRB other general corporates SME."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
+        assert bundle.c_02_00 is not None
         row = bundle.c_02_00.filter(pl.col("row_ref") == "0355")
         assert len(row) == 1
         # AIRB_CORP_SME_1: rwa = 640
@@ -8773,6 +8795,7 @@ class TestOF0200IRBSubRowSplits:
         """Row 0356: A-IRB other general corporates non-SME (incl. FSE)."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
+        assert bundle.c_02_00 is not None
         row = bundle.c_02_00.filter(pl.col("row_ref") == "0356")
         assert len(row) == 1
         # AIRB_CORP_OTHER_1: rwa = 960
@@ -8782,6 +8805,7 @@ class TestOF0200IRBSubRowSplits:
         """Row 0382: A-IRB retail residential RE SME."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
+        assert bundle.c_02_00 is not None
         row = bundle.c_02_00.filter(pl.col("row_ref") == "0382")
         assert len(row) == 1
         # AIRB_MORT_RES_SME_1: rwa = 120
@@ -8791,6 +8815,7 @@ class TestOF0200IRBSubRowSplits:
         """Row 0383: A-IRB retail residential RE non-SME."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
+        assert bundle.c_02_00 is not None
         row = bundle.c_02_00.filter(pl.col("row_ref") == "0383")
         assert len(row) == 1
         # AIRB_MORT_RES_1: rwa = 180
@@ -8800,6 +8825,7 @@ class TestOF0200IRBSubRowSplits:
         """Row 0384: A-IRB retail commercial RE SME."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
+        assert bundle.c_02_00 is not None
         row = bundle.c_02_00.filter(pl.col("row_ref") == "0384")
         assert len(row) == 1
         # AIRB_MORT_COM_SME_1: rwa = 150
@@ -8809,6 +8835,7 @@ class TestOF0200IRBSubRowSplits:
         """Row 0385: A-IRB retail commercial RE non-SME."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
+        assert bundle.c_02_00 is not None
         row = bundle.c_02_00.filter(pl.col("row_ref") == "0385")
         assert len(row) == 1
         # AIRB_MORT_COM_1: rwa = 350
@@ -8818,6 +8845,7 @@ class TestOF0200IRBSubRowSplits:
         """Rows 0382+0383+0384+0385 sum to total A-IRB retail RE (row 0380)."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
+        assert bundle.c_02_00 is not None
         df = bundle.c_02_00
         r0380 = float(df.filter(pl.col("row_ref") == "0380")["0010"][0])
         r0382 = float(df.filter(pl.col("row_ref") == "0382")["0010"][0])
@@ -8830,6 +8858,7 @@ class TestOF0200IRBSubRowSplits:
         """Row 0400: A-IRB retail other SME."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
+        assert bundle.c_02_00 is not None
         row = bundle.c_02_00.filter(pl.col("row_ref") == "0400")
         assert len(row) == 1
         # AIRB_OTHER_SME_1: rwa = 280
@@ -8839,6 +8868,7 @@ class TestOF0200IRBSubRowSplits:
         """Row 0410: A-IRB retail other non-SME."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
+        assert bundle.c_02_00 is not None
         row = bundle.c_02_00.filter(pl.col("row_ref") == "0410")
         assert len(row) == 1
         # AIRB_OTHER_1: rwa = 360
@@ -8859,6 +8889,7 @@ class TestOF0200IRBSubRowSplits:
         data = _irb_results_with_sme_fse().drop("is_sme")
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.c_02_00 is not None
         df = bundle.c_02_00
         # FSE exposure (800) still goes to 0295; rest (300+1600=1900) to 0297
         r0295 = float(df.filter(pl.col("row_ref") == "0295")["0010"][0])
@@ -8896,6 +8927,7 @@ class TestOF0200FloorIndicatorRows:
             framework="BASEL_3_1",
             output_floor_summary=summary,
         )
+        assert bundle.c_02_00 is not None
         row = bundle.c_02_00.filter(pl.col("row_ref") == "0035")
         assert len(row) == 1
         # 72.5% → 72.5
@@ -8920,6 +8952,7 @@ class TestOF0200FloorIndicatorRows:
             framework="BASEL_3_1",
             output_floor_summary=summary,
         )
+        assert bundle.c_02_00 is not None
         row = bundle.c_02_00.filter(pl.col("row_ref") == "0036")
         assert len(row) == 1
         assert row["0010"][0] == pytest.approx(123.45)
@@ -8928,6 +8961,7 @@ class TestOF0200FloorIndicatorRows:
         """Rows 0035/0036 are zero when no OutputFloorSummary is provided."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
+        assert bundle.c_02_00 is not None
         r0035 = bundle.c_02_00.filter(pl.col("row_ref") == "0035")
         r0036 = bundle.c_02_00.filter(pl.col("row_ref") == "0036")
         assert r0035["0010"][0] == pytest.approx(0.0)
@@ -8937,6 +8971,7 @@ class TestOF0200FloorIndicatorRows:
         """CRR does not have floor indicator rows 0034-0036."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="CRR")
+        assert bundle.c_02_00 is not None
         df = bundle.c_02_00
         for ref in ("0034", "0035", "0036"):
             assert len(df.filter(pl.col("row_ref") == ref)) == 0

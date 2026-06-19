@@ -47,7 +47,7 @@ from tests.fixtures.p2_36.p2_36 import (
 )
 from tests.fixtures.raw_bundle import make_raw_bundle
 
-from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.contracts.bundles import AggregatedResultBundle, RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
@@ -107,7 +107,7 @@ def _build_p236_bundle() -> RawDataBundle:
     )
 
 
-def _run_pipeline(bundle: RawDataBundle, config: CalculationConfig) -> object:
+def _run_pipeline(bundle: RawDataBundle, config: CalculationConfig) -> AggregatedResultBundle:
     """Run the pipeline and return the AggregatedResultBundle."""
     return PipelineOrchestrator().run_with_data(bundle, config)
 
@@ -129,7 +129,7 @@ def _pd_floor_override_rulepack(
     return RulepackV0.from_resolved(config, overridden)
 
 
-def _get_irb_row(results: object, loan_ref: str) -> dict | None:
+def _get_irb_row(results: AggregatedResultBundle, loan_ref: str) -> dict | None:
     """
     Return the IRB result row for *loan_ref*, or None if not on IRB branch.
 

@@ -866,7 +866,7 @@ class TestCapitalImpactAnalyzer:
         result = CapitalImpactAnalyzer().analyze(comparison)
 
         with pytest.raises(AttributeError):
-            result.exposure_attribution = pl.LazyFrame()  # type: ignore[misc]
+            result.exposure_attribution = pl.LazyFrame()  # ty: ignore[invalid-assignment]
 
     def test_errors_propagated_from_comparison(self) -> None:
         """Errors from the comparison bundle should propagate."""
@@ -885,7 +885,7 @@ class TestCapitalImpactAnalyzer:
             exposure_deltas=pl.LazyFrame(),
             summary_by_class=pl.LazyFrame(),
             summary_by_approach=pl.LazyFrame(),
-            errors=["error1", "error2"],
+            errors=["error1", "error2"],  # ty: ignore[invalid-argument-type]
         )
 
         result = CapitalImpactAnalyzer().analyze(comparison)

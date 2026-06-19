@@ -109,17 +109,17 @@ E_B31_MATURITY_DATE: _date = _date(2037, 1, 15)
 E_B31_REPORTING_DATE: _date = _date(2027, 1, 15)
 
 # Trade economic parameters (shared).
-E_NOTIONAL: float = 100_000_000.0          # GBP 100m
+E_NOTIONAL: float = 100_000_000.0  # GBP 100m
 E_CURRENCY: str = "GBP"
 E_ASSET_CLASS: str = "interest_rate"
 E_TRANSACTION_TYPE: str = "derivative"
-E_MTM: float = 0.0                         # at-par
-E_DELTA: float = 1.0                       # non-option directional long
+E_MTM: float = 0.0  # at-par
+E_DELTA: float = 1.0  # non-option directional long
 E_IS_LONG: bool = True
 
 # Netting-set flags (shared).
-E_IS_LEGALLY_ENFORCEABLE: bool = True      # Art. 295 condition met
-E_IS_MARGINED: bool = False                # unmargined
+E_IS_LEGALLY_ENFORCEABLE: bool = True  # Art. 295 condition met
+E_IS_MARGINED: bool = False  # unmargined
 
 # EAD anchor (from CCR-A1 golden JSON — live formula value).
 # RC = max(V - C, 0) = max(0 - 0, 0) = 0.0
@@ -143,12 +143,12 @@ CCR_E1_INSTITUTION_CQS: int = 2
 CCR_E1_RATING_REF: str = "RTG_E1"
 CCR_E1_RATING_TYPE: str = "external"
 CCR_E1_RATING_AGENCY: str = "S&P"
-CCR_E1_RATING_VALUE: str = "A"           # S&P "A" = CQS 2
+CCR_E1_RATING_VALUE: str = "A"  # S&P "A" = CQS 2
 CCR_E1_RATING_CQS: int = 2
 
 # CRR Art. 120(1) Table 3: institution CQS 2 -> 50%.
 CCR_E1_EXPECTED_RW: float = 0.50
-CCR_E1_EXPECTED_RWA: float = E_EAD_ANCHOR * CCR_E1_EXPECTED_RW   # 2,740,008.760
+CCR_E1_EXPECTED_RWA: float = E_EAD_ANCHOR * CCR_E1_EXPECTED_RW  # 2,740,008.760
 
 # ---------------------------------------------------------------------------
 # CCR-E2 constants — CRR corporate, CQS 3, GB.
@@ -163,12 +163,12 @@ CCR_E2_COUNTRY_CODE: str = "GB"
 CCR_E2_RATING_REF: str = "RTG_E2"
 CCR_E2_RATING_TYPE: str = "external"
 CCR_E2_RATING_AGENCY: str = "S&P"
-CCR_E2_RATING_VALUE: str = "BBB"         # S&P "BBB" = CQS 3
+CCR_E2_RATING_VALUE: str = "BBB"  # S&P "BBB" = CQS 3
 CCR_E2_RATING_CQS: int = 3
 
 # CRR Art. 122(1): corporate CQS 3 -> 100%.
 CCR_E2_EXPECTED_RW: float = 1.00
-CCR_E2_EXPECTED_RWA: float = E_EAD_ANCHOR * CCR_E2_EXPECTED_RW   # 5,480,017.519
+CCR_E2_EXPECTED_RWA: float = E_EAD_ANCHOR * CCR_E2_EXPECTED_RW  # 5,480,017.519
 
 # ---------------------------------------------------------------------------
 # CCR-E3 constants — CRR sovereign (BR, foreign/non-domestic), CQS 3.
@@ -184,12 +184,12 @@ CCR_E3_COUNTRY_CODE: str = "BR"
 CCR_E3_RATING_REF: str = "RTG_E3"
 CCR_E3_RATING_TYPE: str = "external"
 CCR_E3_RATING_AGENCY: str = "S&P"
-CCR_E3_RATING_VALUE: str = "BBB"         # S&P "BBB" = CQS 3 (sovereign table)
+CCR_E3_RATING_VALUE: str = "BBB"  # S&P "BBB" = CQS 3 (sovereign table)
 CCR_E3_RATING_CQS: int = 3
 
 # CRR Art. 114(1): sovereign CQS 3 -> 50% (non-domestic, Art. 114(4) does not apply).
 CCR_E3_EXPECTED_RW: float = 0.50
-CCR_E3_EXPECTED_RWA: float = E_EAD_ANCHOR * CCR_E3_EXPECTED_RW   # 2,740,008.760
+CCR_E3_EXPECTED_RWA: float = E_EAD_ANCHOR * CCR_E3_EXPECTED_RW  # 2,740,008.760
 
 # ---------------------------------------------------------------------------
 # CCR-E4 constants — B3.1 institution, CQS 2, GB (ECRA).
@@ -205,12 +205,12 @@ CCR_E4_INSTITUTION_CQS: int = 2
 CCR_E4_RATING_REF: str = "RTG_E4"
 CCR_E4_RATING_TYPE: str = "external"
 CCR_E4_RATING_AGENCY: str = "S&P"
-CCR_E4_RATING_VALUE: str = "A"           # S&P "A" = CQS 2
+CCR_E4_RATING_VALUE: str = "A"  # S&P "A" = CQS 2
 CCR_E4_RATING_CQS: int = 2
 
 # PS1/26 Art. 120(2) Table 3: institution CQS 2, tenor > 3m -> 30% (ECRA).
 CCR_E4_EXPECTED_RW: float = 0.30
-CCR_E4_EXPECTED_RWA: float = E_EAD_ANCHOR * CCR_E4_EXPECTED_RW   # 1,644,005.256
+CCR_E4_EXPECTED_RWA: float = E_EAD_ANCHOR * CCR_E4_EXPECTED_RW  # 1,644,005.256
 
 # ---------------------------------------------------------------------------
 # CCR-E5 constants — B3.1 corporate, CQS 3, GB.
@@ -225,12 +225,12 @@ CCR_E5_COUNTRY_CODE: str = "GB"
 CCR_E5_RATING_REF: str = "RTG_E5"
 CCR_E5_RATING_TYPE: str = "external"
 CCR_E5_RATING_AGENCY: str = "S&P"
-CCR_E5_RATING_VALUE: str = "BBB"         # S&P "BBB" = CQS 3
+CCR_E5_RATING_VALUE: str = "BBB"  # S&P "BBB" = CQS 3
 CCR_E5_RATING_CQS: int = 3
 
 # PS1/26 Art. 122(2) Table 6: corporate CQS 3 -> 75%.
 CCR_E5_EXPECTED_RW: float = 0.75
-CCR_E5_EXPECTED_RWA: float = E_EAD_ANCHOR * CCR_E5_EXPECTED_RW   # 4,110,013.139
+CCR_E5_EXPECTED_RWA: float = E_EAD_ANCHOR * CCR_E5_EXPECTED_RW  # 4,110,013.139
 
 
 # ---------------------------------------------------------------------------
@@ -695,16 +695,56 @@ def save_p845_fixtures() -> list[tuple[str, int]]:
         10. Expected RWA constants are consistent with EAD_anchor x RW.
     """
     scenarios = [
-        ("CCR-E1", build_raw_data_bundle_ccr_e1, CCR_E1_TRADE_ID, CCR_E1_NETTING_SET_ID,
-         CCR_E1_COUNTERPARTY_REF, CCR_E1_ENTITY_TYPE, CCR_E1_COUNTRY_CODE, CCR_E1_RATING_CQS),
-        ("CCR-E2", build_raw_data_bundle_ccr_e2, CCR_E2_TRADE_ID, CCR_E2_NETTING_SET_ID,
-         CCR_E2_COUNTERPARTY_REF, CCR_E2_ENTITY_TYPE, CCR_E2_COUNTRY_CODE, CCR_E2_RATING_CQS),
-        ("CCR-E3", build_raw_data_bundle_ccr_e3, CCR_E3_TRADE_ID, CCR_E3_NETTING_SET_ID,
-         CCR_E3_COUNTERPARTY_REF, CCR_E3_ENTITY_TYPE, CCR_E3_COUNTRY_CODE, CCR_E3_RATING_CQS),
-        ("CCR-E4", build_raw_data_bundle_ccr_e4, CCR_E4_TRADE_ID, CCR_E4_NETTING_SET_ID,
-         CCR_E4_COUNTERPARTY_REF, CCR_E4_ENTITY_TYPE, CCR_E4_COUNTRY_CODE, CCR_E4_RATING_CQS),
-        ("CCR-E5", build_raw_data_bundle_ccr_e5, CCR_E5_TRADE_ID, CCR_E5_NETTING_SET_ID,
-         CCR_E5_COUNTERPARTY_REF, CCR_E5_ENTITY_TYPE, CCR_E5_COUNTRY_CODE, CCR_E5_RATING_CQS),
+        (
+            "CCR-E1",
+            build_raw_data_bundle_ccr_e1,
+            CCR_E1_TRADE_ID,
+            CCR_E1_NETTING_SET_ID,
+            CCR_E1_COUNTERPARTY_REF,
+            CCR_E1_ENTITY_TYPE,
+            CCR_E1_COUNTRY_CODE,
+            CCR_E1_RATING_CQS,
+        ),
+        (
+            "CCR-E2",
+            build_raw_data_bundle_ccr_e2,
+            CCR_E2_TRADE_ID,
+            CCR_E2_NETTING_SET_ID,
+            CCR_E2_COUNTERPARTY_REF,
+            CCR_E2_ENTITY_TYPE,
+            CCR_E2_COUNTRY_CODE,
+            CCR_E2_RATING_CQS,
+        ),
+        (
+            "CCR-E3",
+            build_raw_data_bundle_ccr_e3,
+            CCR_E3_TRADE_ID,
+            CCR_E3_NETTING_SET_ID,
+            CCR_E3_COUNTERPARTY_REF,
+            CCR_E3_ENTITY_TYPE,
+            CCR_E3_COUNTRY_CODE,
+            CCR_E3_RATING_CQS,
+        ),
+        (
+            "CCR-E4",
+            build_raw_data_bundle_ccr_e4,
+            CCR_E4_TRADE_ID,
+            CCR_E4_NETTING_SET_ID,
+            CCR_E4_COUNTERPARTY_REF,
+            CCR_E4_ENTITY_TYPE,
+            CCR_E4_COUNTRY_CODE,
+            CCR_E4_RATING_CQS,
+        ),
+        (
+            "CCR-E5",
+            build_raw_data_bundle_ccr_e5,
+            CCR_E5_TRADE_ID,
+            CCR_E5_NETTING_SET_ID,
+            CCR_E5_COUNTERPARTY_REF,
+            CCR_E5_ENTITY_TYPE,
+            CCR_E5_COUNTRY_CODE,
+            CCR_E5_RATING_CQS,
+        ),
     ]
 
     for label, builder, trade_id, ns_id, cp_ref, entity_type, country_code, rating_cqs in scenarios:
@@ -719,9 +759,7 @@ def save_p845_fixtures() -> list[tuple[str, int]]:
         margin_df = bundle.ccr.margin_agreements.margin_agreements.collect()
         collateral_df = bundle.ccr.ccr_collateral.ccr_collateral.collect()
         cp_df = bundle.counterparties.collect()
-        rating_df = (
-            bundle.ratings.collect() if bundle.ratings is not None else pl.DataFrame()
-        )
+        rating_df = bundle.ratings.collect() if bundle.ratings is not None else pl.DataFrame()
 
         # Invariant 2: exactly 1 trade row.
         if trades_df.height != 1:
@@ -741,9 +779,7 @@ def save_p845_fixtures() -> list[tuple[str, int]]:
                 f"{label}: currency must be {E_CURRENCY!r} (got {trades_df['currency'][0]!r})"
             )
         if trades_df["delta"][0] != E_DELTA:
-            raise AssertionError(
-                f"{label}: delta must be {E_DELTA} (got {trades_df['delta'][0]})"
-            )
+            raise AssertionError(f"{label}: delta must be {E_DELTA} (got {trades_df['delta'][0]})")
         if trades_df["mtm_value"][0] != E_MTM:
             raise AssertionError(
                 f"{label}: mtm_value must be {E_MTM} (got {trades_df['mtm_value'][0]})"
@@ -777,9 +813,7 @@ def save_p845_fixtures() -> list[tuple[str, int]]:
         if cp_df.height != 1:
             raise AssertionError(f"{label}: expected 1 counterparty row, got {cp_df.height}")
         if cp_df["counterparty_reference"][0] != cp_ref:
-            raise AssertionError(
-                f"{label}: counterparty_reference must be {cp_ref!r}"
-            )
+            raise AssertionError(f"{label}: counterparty_reference must be {cp_ref!r}")
         if cp_df["entity_type"][0] != entity_type:
             raise AssertionError(
                 f"{label}: entity_type must be {entity_type!r} (got {cp_df['entity_type'][0]!r})"
@@ -846,13 +880,19 @@ def main() -> None:
     ]:
         print(f"  {label:<40}  RW={rw:.2f}  RWA={rwa:>14,.3f}")
     print()
-    print(f"  Shared EAD anchor: {E_EAD_ANCHOR:,.3f}  (RC={E_RC_ANCHOR}, PFE={E_PFE_ADDON_ANCHOR:,.3f})")
+    print(
+        f"  Shared EAD anchor: {E_EAD_ANCHOR:,.3f}  (RC={E_RC_ANCHOR}, PFE={E_PFE_ADDON_ANCHOR:,.3f})"
+    )
     print()
     print("Config factories:")
     crr_cfg = make_crr_config()
     b31_cfg = make_b31_config()
-    print(f"  make_crr_config():  regime_id={crr_cfg.regime_id!r}, reporting_date={crr_cfg.reporting_date}")
-    print(f"  make_b31_config():  regime_id={b31_cfg.regime_id!r}, reporting_date={b31_cfg.reporting_date}")
+    print(
+        f"  make_crr_config():  regime_id={crr_cfg.regime_id!r}, reporting_date={crr_cfg.reporting_date}"
+    )
+    print(
+        f"  make_b31_config():  regime_id={b31_cfg.regime_id!r}, reporting_date={b31_cfg.reporting_date}"
+    )
 
 
 if __name__ == "__main__":

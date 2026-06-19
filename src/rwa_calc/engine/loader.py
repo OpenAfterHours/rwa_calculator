@@ -98,7 +98,7 @@ type ScanFn = Callable[[Path], pl.LazyFrame]
 
 def enforce_schema(
     lf: pl.LazyFrame,
-    schema: dict[str, pl.DataType] | dict[str, ColumnSpec],
+    schema: dict[str, PolarsDataType] | dict[str, ColumnSpec],
     strict: bool = False,
 ) -> pl.LazyFrame:
     """
@@ -339,7 +339,7 @@ def _load_table_standalone(
     scan_fn: ScanFn,
     enforce_schemas: bool,
     relative_path: str | Path,
-    schema: dict[str, pl.DataType] | None = None,
+    schema: dict[str, PolarsDataType] | dict[str, ColumnSpec] | None = None,
 ) -> pl.LazyFrame:
     """Standalone single-file load (no bundle field): normalize + enforce.
 
@@ -413,7 +413,7 @@ def _load_table_standalone_optional(
     scan_fn: ScanFn,
     enforce_schemas: bool,
     relative_path: str | Path | None,
-    schema: dict[str, pl.DataType] | None = None,
+    schema: dict[str, PolarsDataType] | dict[str, ColumnSpec] | None = None,
 ) -> pl.LazyFrame | None:
     """Standalone optional load (no bundle field): None if missing/empty.
 
@@ -687,7 +687,7 @@ class ParquetLoader(LoaderProtocol):
     def _load_parquet(
         self,
         relative_path: str | Path,
-        schema: dict[str, pl.DataType] | None = None,
+        schema: dict[str, PolarsDataType] | dict[str, ColumnSpec] | None = None,
     ) -> pl.LazyFrame:
         return _load_table_standalone(
             self.base_path, pl.scan_parquet, self.enforce_schemas, relative_path, schema
@@ -696,7 +696,7 @@ class ParquetLoader(LoaderProtocol):
     def _load_parquet_optional(
         self,
         relative_path: str | Path | None,
-        schema: dict[str, pl.DataType] | None = None,
+        schema: dict[str, PolarsDataType] | dict[str, ColumnSpec] | None = None,
     ) -> pl.LazyFrame | None:
         # Standalone convenience entry point — no bundle field, no edge seal.
         return _load_table_standalone_optional(
@@ -754,7 +754,7 @@ class CSVLoader(LoaderProtocol):
     def _load_csv(
         self,
         relative_path: str | Path,
-        schema: dict[str, pl.DataType] | None = None,
+        schema: dict[str, PolarsDataType] | dict[str, ColumnSpec] | None = None,
     ) -> pl.LazyFrame:
         return _load_table_standalone(
             self.base_path, self._scan_csv, self.enforce_schemas, relative_path, schema
@@ -763,7 +763,7 @@ class CSVLoader(LoaderProtocol):
     def _load_csv_optional(
         self,
         relative_path: str | Path | None,
-        schema: dict[str, pl.DataType] | None = None,
+        schema: dict[str, PolarsDataType] | dict[str, ColumnSpec] | None = None,
     ) -> pl.LazyFrame | None:
         # Standalone convenience entry point — no bundle field, no edge seal.
         return _load_table_standalone_optional(

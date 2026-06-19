@@ -88,6 +88,7 @@ class TestPostCRMDetailedView:
         single_guaranteed_crm_result: AggregatedResultBundle,
     ) -> None:
         """Guaranteed exposure should generate two reporting rows."""
+        assert single_guaranteed_crm_result.post_crm_detailed is not None
         detailed_df = single_guaranteed_crm_result.post_crm_detailed.collect()
 
         # Should have 2 rows for the guaranteed exposure
@@ -140,6 +141,7 @@ class TestPostCRMDetailedView:
             config=crr_config,
         )
 
+        assert result.post_crm_detailed is not None
         detailed_df = result.post_crm_detailed.collect()
         assert len(detailed_df) == 1
         assert detailed_df["crm_portion_type"][0] == "original"
@@ -185,6 +187,7 @@ class TestPreCRMSummary:
             config=crr_config,
         )
 
+        assert result.pre_crm_summary is not None
         summary_df = result.pre_crm_summary.collect()
         corp_row = summary_df.filter(pl.col("pre_crm_exposure_class") == "CORPORATE")
         assert len(corp_row) == 1
@@ -201,6 +204,7 @@ class TestPostCRMSummary:
         single_guaranteed_crm_result: AggregatedResultBundle,
     ) -> None:
         """Guaranteed portion should aggregate under guarantor's exposure class."""
+        assert single_guaranteed_crm_result.post_crm_summary is not None
         summary_df = single_guaranteed_crm_result.post_crm_summary.collect()
         assert len(summary_df) == 2
 
@@ -275,11 +279,13 @@ class TestMixedSAIRBPortfolio:
         )
 
         # Pre-CRM summary should show all under CORPORATE
+        assert result.pre_crm_summary is not None
         pre_crm_df = result.pre_crm_summary.collect()
         corp_row = pre_crm_df.filter(pl.col("pre_crm_exposure_class") == "CORPORATE")
         assert corp_row["total_ead"][0] == pytest.approx(1_500_000.0)
         assert corp_row["exposure_count"][0] == 2
 
         # Post-CRM summary should show split across classes
+        assert result.post_crm_summary is not None
         post_crm_df = result.post_crm_summary.collect()
         assert len(post_crm_df) >= 2

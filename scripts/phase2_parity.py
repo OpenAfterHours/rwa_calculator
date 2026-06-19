@@ -183,8 +183,8 @@ def compare(baseline_dir: Path) -> int:
                         frames[field_name],
                         expected,
                         check_exact=False,
-                        rtol=1e-9,
-                        atol=1e-6,
+                        rtol=1e-9,  # ty: ignore[unknown-argument]
+                        atol=1e-6,  # ty: ignore[unknown-argument]
                     )
                 else:
                     assert_frame_equal(frames[field_name], expected, check_exact=True)

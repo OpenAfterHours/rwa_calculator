@@ -743,8 +743,8 @@ class TestStageErrorChannel:
         )
 
         class SentinelClassifier:
-            def classify(self, resolved, config, *, pack=None):
-                result = ExposureClassifier().classify(resolved, config, pack=pack)
+            def classify(self, data, config, *, pack=None):
+                result = ExposureClassifier().classify(data, config, pack=pack)
                 return replace(
                     result,
                     classification_errors=[*result.classification_errors, sentinel],
@@ -771,9 +771,9 @@ class TestStageErrorChannel:
         )
 
         class SentinelCRMProcessor:
-            def get_crm_unified_bundle(self, classified, config, *, pack=None):
+            def get_crm_unified_bundle(self, data, config, *, pack=None):
                 processor = CRMProcessor()
-                result = processor.get_crm_unified_bundle(classified, config, pack=pack)
+                result = processor.get_crm_unified_bundle(data, config, pack=pack)
                 return replace(result, crm_errors=[*result.crm_errors, sentinel])
 
         pipeline = PipelineOrchestrator(crm_processor=SentinelCRMProcessor())

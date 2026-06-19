@@ -74,8 +74,8 @@ _REPORTING_DATE = date(2027, 1, 15)
 
 # Synthetic exposure references for NS_CVA_A2_1 / NS_CVA_A2_2 produced by the
 # CCR adapter (format: "ccr__<netting_set_id>").
-_CCR_EXPOSURE_REF_1 = f"ccr__{CVA_A2_NS1_ID}"   # "ccr__NS_CVA_A2_1"
-_CCR_EXPOSURE_REF_2 = f"ccr__{CVA_A2_NS2_ID}"   # "ccr__NS_CVA_A2_2"
+_CCR_EXPOSURE_REF_1 = f"ccr__{CVA_A2_NS1_ID}"  # "ccr__NS_CVA_A2_1"
+_CCR_EXPOSURE_REF_2 = f"ccr__{CVA_A2_NS2_ID}"  # "ccr__NS_CVA_A2_2"
 
 
 # ---------------------------------------------------------------------------
@@ -365,8 +365,8 @@ class TestCVAA2BACVATwoCounterpartyDiversification:
         scva_2 = golden["scva_2"]
         k_reduced = golden["k_reduced"]
 
-        low = math.sqrt(scva_1**2 + scva_2**2)   # full independence bound
-        high = scva_1 + scva_2                     # perfect correlation bound
+        low = math.sqrt(scva_1**2 + scva_2**2)  # full independence bound
+        high = scva_1 + scva_2  # perfect correlation bound
 
         # Assert — both inequalities must be strict
         assert low < k_reduced, (

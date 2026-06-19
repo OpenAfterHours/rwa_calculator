@@ -783,6 +783,7 @@ class TestEquityAuditTrail:
             ]
         )
         result_bundle = equity_calculator.get_equity_result_bundle(bundle, sa_config)
+        assert result_bundle.calculation_audit is not None
         audit_df = result_bundle.calculation_audit.collect()
 
         assert "equity_calculation" in audit_df.columns
@@ -807,6 +808,7 @@ class TestEquityAuditTrail:
             ]
         )
         result_bundle = equity_calculator.get_equity_result_bundle(bundle, irb_config)
+        assert result_bundle.calculation_audit is not None
         audit_df = result_bundle.calculation_audit.collect()
 
         calc_str = audit_df["equity_calculation"][0]

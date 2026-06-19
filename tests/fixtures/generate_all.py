@@ -3119,8 +3119,7 @@ def _generate_p843(output_dir: Path) -> list[tuple[str, int]]:
         ft_c1 = df.filter(pl.col("failed_trade_id") == FT_C1_ID)
         if ft_c1["working_days_past_due"][0] != FT_C1_DAYS:
             raise AssertionError(
-                f"P8.43: FT_C1 days must be {FT_C1_DAYS} "
-                f"(got {ft_c1['working_days_past_due'][0]})"
+                f"P8.43: FT_C1 days must be {FT_C1_DAYS} (got {ft_c1['working_days_past_due'][0]})"
             )
 
         # Invariant 7: all optional boolean flags default False.
@@ -3185,9 +3184,7 @@ def _generate_p843(output_dir: Path) -> list[tuple[str, int]]:
         cp_set = set(cp_df["counterparty_reference"].to_list())
         expected_cps = {"CP_FT_C1", "CP_FT_C2", "CP_FT_C3"}
         if cp_set != expected_cps:
-            raise AssertionError(
-                f"P8.43: counterparties must be {expected_cps}, got {cp_set}"
-            )
+            raise AssertionError(f"P8.43: counterparties must be {expected_cps}, got {cp_set}")
 
         # No parquet files written — report zero files, zero records.
         return [(PYTHON_ONLY_NO_PARQUET, 0)]
@@ -3233,9 +3230,7 @@ def _generate_ccr_floor1(output_dir: Path) -> list[tuple[str, int]]:
         # Validate trades frame.
         trades_df = bundle.ccr.trades.trades.collect()
         if trades_df.height != 1:
-            raise AssertionError(
-                f"B31-CCR-FLOOR-1: expected 1 trade row, got {trades_df.height}"
-            )
+            raise AssertionError(f"B31-CCR-FLOOR-1: expected 1 trade row, got {trades_df.height}")
         if trades_df["trade_id"][0] != CCR_FLOOR1_TRADE_ID:
             raise AssertionError(
                 f"B31-CCR-FLOOR-1: trade_id must be {CCR_FLOOR1_TRADE_ID!r}, "
@@ -3250,9 +3245,7 @@ def _generate_ccr_floor1(output_dir: Path) -> list[tuple[str, int]]:
         # Validate netting sets frame.
         ns_df = bundle.ccr.netting_sets.netting_sets.collect()
         if ns_df.height != 1:
-            raise AssertionError(
-                f"B31-CCR-FLOOR-1: expected 1 netting set row, got {ns_df.height}"
-            )
+            raise AssertionError(f"B31-CCR-FLOOR-1: expected 1 netting set row, got {ns_df.height}")
         if ns_df["netting_set_id"][0] != CCR_FLOOR1_NETTING_SET_ID:
             raise AssertionError(
                 f"B31-CCR-FLOOR-1: netting_set_id must be {CCR_FLOOR1_NETTING_SET_ID!r}"
@@ -3260,9 +3253,7 @@ def _generate_ccr_floor1(output_dir: Path) -> list[tuple[str, int]]:
         if ns_df["is_margined"][0] is not False:
             raise AssertionError("B31-CCR-FLOOR-1: netting set must be unmargined")
 
-        return [
-            (f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()
-        ]
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
     finally:
         sys.path.remove(fixtures_root)
         for mod in (

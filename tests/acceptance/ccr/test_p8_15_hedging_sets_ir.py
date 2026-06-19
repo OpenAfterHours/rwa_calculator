@@ -61,12 +61,12 @@ from tests.fixtures.ccr.hedging_sets_ir_builder import (
 try:
     from rwa_calc.engine.ccr.hedging_sets import assign_hedging_set
 except (ImportError, ModuleNotFoundError):
-    assign_hedging_set = None  # type: ignore[assignment]
+    assign_hedging_set = None  # ty: ignore[invalid-assignment]
 
 try:
     from rwa_calc.engine.ccr.pfe import compute_addon_per_asset_class
 except (ImportError, ModuleNotFoundError, AttributeError):
-    compute_addon_per_asset_class = None  # type: ignore[assignment]
+    compute_addon_per_asset_class = None  # ty: ignore[invalid-assignment]
 
 # These are already shipped (P8.12 / P8.13 / P8.14) — import must succeed.
 from rwa_calc.engine.ccr.adjusted_notional import compute_adjusted_notional_ir

@@ -26,7 +26,7 @@ from typing import Any
 
 import polars as pl
 
-from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.contracts.bundles import AggregatedResultBundle, RawDataBundle
 from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
@@ -41,7 +41,7 @@ _FIXTURES_DIR = Path(__file__).parent.parent / "fixtures" / "p1_190"
 # ---------------------------------------------------------------------------
 
 
-def find_loan_rows(results: object, loan_ref: str) -> list[dict]:
+def find_loan_rows(results: AggregatedResultBundle, loan_ref: str) -> list[dict]:
     """Return all result rows containing loan_ref in exposure_reference."""
     rows: list[dict] = []
     for lf in [results.sa_results, results.irb_results, results.slotting_results]:

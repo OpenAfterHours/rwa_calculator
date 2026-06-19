@@ -172,7 +172,7 @@ class TestRunIdFilter:
 
         filt.filter(record)
 
-        assert record.run_id == "-"
+        assert record.run_id == "-"  # ty: ignore[unresolved-attribute]
 
     def test_injects_current_run_id(self) -> None:
         filt = RunIdFilter()
@@ -181,7 +181,7 @@ class TestRunIdFilter:
 
         try:
             filt.filter(record)
-            assert record.run_id == current_run_id()
+            assert record.run_id == current_run_id()  # ty: ignore[unresolved-attribute]
         finally:
             clear_run_id(token)
 

@@ -33,8 +33,8 @@ from rwa_calc.contracts.errors import (
 class TestConfigValidation:
     def test_valid_mapping_coerces_keys_to_tuples(self) -> None:
         mapping = LegacyColumnMapping(
-            legacy_keys=["a"],
-            our_keys=["exposure_reference"],
+            legacy_keys=["a"],  # ty: ignore[invalid-argument-type]
+            our_keys=["exposure_reference"],  # ty: ignore[invalid-argument-type]
             components={"rwa": ComponentMapping("R")},
         )
         assert isinstance(mapping.legacy_keys, tuple)
@@ -60,7 +60,7 @@ class TestConfigValidation:
 
     def test_bad_unit_raises(self) -> None:
         with pytest.raises(ValueError, match="unit must be one of"):
-            ComponentMapping("R", unit="furlongs")  # type: ignore[arg-type]
+            ComponentMapping("R", unit="furlongs")  # ty: ignore[invalid-argument-type]
 
     def test_negative_tolerance_raises(self) -> None:
         with pytest.raises(ValueError, match="tol must be non-negative"):
@@ -71,7 +71,7 @@ class TestBundle:
     def test_bundle_is_frozen(self) -> None:
         bundle = create_empty_reconciliation_bundle()
         with pytest.raises(dataclasses.FrozenInstanceError):
-            bundle.errors = []  # type: ignore[misc]
+            bundle.errors = []  # ty: ignore[invalid-assignment]
 
     def test_errors_defaults_to_empty_list(self) -> None:
         assert create_empty_reconciliation_bundle().errors == []

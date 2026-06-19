@@ -207,6 +207,7 @@ class TestNettingCollateralGeneration:
             }
         )
         result = processor._generate_netting_collateral(exposures)
+        assert result is not None
         df = result.collect()
 
         assert len(df) == 1
@@ -234,6 +235,7 @@ class TestNettingCollateralGeneration:
             }
         )
         result = processor._generate_netting_collateral(exposures)
+        assert result is not None
         df = result.collect().sort("beneficiary_reference")
 
         assert len(df) == 2
@@ -258,6 +260,7 @@ class TestNettingCollateralGeneration:
             }
         )
         result = processor._generate_netting_collateral(exposures)
+        assert result is not None
         df = result.collect()
 
         assert len(df) == 1
@@ -278,6 +281,7 @@ class TestNettingCollateralGeneration:
             }
         )
         result = processor._generate_netting_collateral(exposures)
+        assert result is not None
         df = result.collect().sort("beneficiary_reference")
 
         assert len(df) == 2
@@ -301,6 +305,7 @@ class TestNettingCollateralGeneration:
             }
         )
         result = processor._generate_netting_collateral(exposures)
+        assert result is not None
         df = result.collect()
 
         # Only POS01 shares AGR01 with the deposit; full pool of 200 to POS01.
@@ -607,6 +612,7 @@ class TestNettingDrawnOnlyScope:
             }
         )
         result = processor._generate_netting_collateral(exposures)
+        assert result is not None
         df = result.collect()
         # Pool = 300; only LOAN01 is an eligible beneficiary.
         assert len(df) == 1
@@ -632,6 +638,7 @@ class TestNettingDrawnOnlyScope:
             }
         )
         result = processor._generate_netting_collateral(exposures)
+        assert result is not None
         df = result.collect()
         # Pool = 200; full benefit to LOAN01, facility_undrawn excluded.
         assert len(df) == 1
@@ -660,6 +667,7 @@ class TestNettingDrawnOnlyScope:
             }
         )
         result = processor._generate_netting_collateral(exposures)
+        assert result is not None
         df = result.collect().sort("beneficiary_reference")
         loan_a = df.filter(pl.col("beneficiary_reference") == "LOAN_A")["market_value"][0]
         loan_b = df.filter(pl.col("beneficiary_reference") == "LOAN_B")["market_value"][0]
@@ -684,6 +692,7 @@ class TestNettingDrawnOnlyScope:
             }
         )
         result = processor._generate_netting_collateral(exposures)
+        assert result is not None
         df = result.collect()
         # Pool = 300; only LOAN01 eligible. Contingent + facility_undrawn excluded.
         assert len(df) == 1

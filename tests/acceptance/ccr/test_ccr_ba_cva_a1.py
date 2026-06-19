@@ -74,11 +74,9 @@ from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.p8_60.cva_a1_builder import (
     CVA_A1_NETTING_SET_ID,
     build_raw_data_bundle_cva_a1,
-    build_cva_a1_inputs,
     compute_cva_a1_golden,
     create_cva_a1_counterparty_frame,
 )
-from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
 # Constants

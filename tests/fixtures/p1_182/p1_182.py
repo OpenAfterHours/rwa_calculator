@@ -91,11 +91,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import polars as pl
 
 from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import COUNTERPARTY_SCHEMA
+
+if TYPE_CHECKING:
+    from polars._typing import PolarsDataType
 
 # ---------------------------------------------------------------------------
 # Scenario constants
@@ -217,7 +221,7 @@ class _EquityExposure:
 #  wave adds this column to the canonical schema in data/schemas.py)
 # ---------------------------------------------------------------------------
 
-_EQUITY_FIXTURE_SCHEMA: dict[str, pl.DataType] = {
+_EQUITY_FIXTURE_SCHEMA: dict[str, PolarsDataType] = {
     "exposure_reference": pl.String,
     "counterparty_reference": pl.String,
     "equity_type": pl.String,

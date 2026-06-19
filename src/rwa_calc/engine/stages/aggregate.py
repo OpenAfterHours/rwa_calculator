@@ -102,9 +102,7 @@ def run(
         # conforms and re-brands the frame without violating the producer-seal
         # contract.
         cva_results = seal(
-            result.results.with_columns(
-                pl.lit(cva.rwea, dtype=pl.Float64).alias("cva_rwa")
-            ),
+            result.results.with_columns(pl.lit(cva.rwea, dtype=pl.Float64).alias("cva_rwa")),
             AGGREGATOR_EXIT_EDGE,
         )
         result = replace(
@@ -146,12 +144,8 @@ def _ba_cva_roll_up(
 
     from rwa_calc.engine.cva import compute_ba_cva_rwa
 
-    ccr_rows = results.filter(
-        pl.col("exposure_reference").str.starts_with(_CCR_EXPOSURE_PREFIX)
-    )
-    cva = compute_ba_cva_rwa(
-        data.cva_counterparties, ccr_rows, rulepack.pack, data.cva_hedges
-    )
+    ccr_rows = results.filter(pl.col("exposure_reference").str.starts_with(_CCR_EXPOSURE_PREFIX))
+    cva = compute_ba_cva_rwa(data.cva_counterparties, ccr_rows, rulepack.pack, data.cva_hedges)
     if cva.rwea is not None:
         logger.info(
             "BA-CVA RWEA computed: %.2f (hedges_recognised=%s)",

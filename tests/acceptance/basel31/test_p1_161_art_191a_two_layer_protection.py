@@ -40,7 +40,6 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
-from typing import cast
 
 import polars as pl
 import pytest
@@ -146,7 +145,7 @@ def _run_pipeline(bundle: RawDataBundle, config: CalculationConfig) -> pl.DataFr
         "SA results should not be None — check CalculationConfig.basel_3_1() produces "
         "SA routing for a corporate unrated SA exposure."
     )
-    return cast(pl.DataFrame, results.sa_results.collect())
+    return results.sa_results.collect()
 
 
 def _get_total_rwa(df: pl.DataFrame) -> float:

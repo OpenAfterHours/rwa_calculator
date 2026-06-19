@@ -15,6 +15,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
+from typing import Literal
 
 import polars as pl
 import pytest
@@ -162,7 +163,12 @@ class TestAPIError:
 
     def test_severity_levels(self) -> None:
         """Should accept all severity levels."""
-        for severity in ["warning", "error", "critical"]:
+        severities: list[Literal["warning", "error", "critical"]] = [
+            "warning",
+            "error",
+            "critical",
+        ]
+        for severity in severities:
             error = APIError(
                 code="TEST",
                 message="Test",
@@ -358,7 +364,7 @@ class TestValidationResponse:
         response = ValidationResponse(
             valid=True,
             data_path="/path/to/data",
-            files_found=["file1.parquet", "file2.parquet"],
+            files_found=[Path("file1.parquet"), Path("file2.parquet")],
         )
         assert response.valid is True
         assert response.found_count == 2
@@ -369,8 +375,8 @@ class TestValidationResponse:
         response = ValidationResponse(
             valid=False,
             data_path="/path/to/data",
-            files_found=["file1.parquet"],
-            files_missing=["file2.parquet", "file3.parquet"],
+            files_found=[Path("file1.parquet")],
+            files_missing=[Path("file2.parquet"), Path("file3.parquet")],
             errors=[
                 APIError(
                     code="VAL002", message="Missing file", severity="error", category="Validation"

@@ -67,7 +67,6 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
-from typing import cast
 
 import polars as pl
 import pytest
@@ -142,7 +141,7 @@ def p2_32_b31_ccf_results() -> pl.DataFrame:
     # Act — apply CCF stage directly (no full pipeline needed for this CCF-only test)
     result_lf = calculator.apply_ccf(facilities_lf, config)
 
-    return cast(pl.DataFrame, result_lf.collect())
+    return result_lf.collect()
 
 
 @pytest.fixture(scope="module")
@@ -174,7 +173,7 @@ def p2_32_crr_ccf_results() -> pl.DataFrame:
     # Act
     result_lf = calculator.apply_ccf(facilities_lf, config)
 
-    return cast(pl.DataFrame, result_lf.collect())
+    return result_lf.collect()
 
 
 # ---------------------------------------------------------------------------

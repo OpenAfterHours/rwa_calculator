@@ -49,6 +49,7 @@ class TestCalculationConfigPermissionMode:
             reporting_date=date(2024, 12, 31),
             permission_mode=PermissionMode.STANDARDISED,
         )
+        assert config.irb_permissions is not None
         assert not config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.FIRB)
         assert not config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.AIRB)
 
@@ -58,6 +59,7 @@ class TestCalculationConfigPermissionMode:
             reporting_date=date(2024, 12, 31),
             permission_mode=PermissionMode.IRB,
         )
+        assert config.irb_permissions is not None
         assert config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.FIRB)
         assert config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.AIRB)
 
@@ -82,6 +84,7 @@ class TestCalculationConfigPermissionMode:
             permission_mode=PermissionMode.IRB,
         )
         assert config.permission_mode == PermissionMode.IRB
+        assert config.irb_permissions is not None
         assert config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.FIRB)
         assert config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.AIRB)
 
@@ -104,6 +107,7 @@ class TestServiceCreateConfig:
         )
         config = calc._create_config()
         assert config.permission_mode == PermissionMode.STANDARDISED
+        assert config.irb_permissions is not None
         assert not config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.FIRB)
 
     def test_create_config_irb(self) -> None:
@@ -116,6 +120,7 @@ class TestServiceCreateConfig:
         )
         config = calc._create_config()
         assert config.permission_mode == PermissionMode.IRB
+        assert config.irb_permissions is not None
         assert config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.FIRB)
         assert config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.AIRB)
 

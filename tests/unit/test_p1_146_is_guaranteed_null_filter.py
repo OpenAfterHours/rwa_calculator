@@ -87,6 +87,7 @@ class TestP1146IsGuaranteedNullFilter:
         )
 
         # Assert
+        assert result.post_crm_detailed is not None
         detailed_df = result.post_crm_detailed.collect()
         assert detailed_df.height == POST_CRM_DETAIL_EXPECTED_ROWS, (
             f"Expected {POST_CRM_DETAIL_EXPECTED_ROWS} rows in post_crm_detailed "
@@ -119,6 +120,7 @@ class TestP1146IsGuaranteedNullFilter:
         )
 
         # Assert
+        assert result.post_crm_detailed is not None
         detailed_df = result.post_crm_detailed.collect()
         null_rows = detailed_df.filter(pl.col("reporting_exposure_class") == "CORPORATE").filter(
             pl.col("crm_portion_type") == "original"
@@ -162,6 +164,7 @@ class TestP1146IsGuaranteedNullFilter:
         )
 
         # Assert
+        assert result.post_crm_summary is not None
         summary_df = result.post_crm_summary.collect()
         corp_rows = summary_df.filter(pl.col("reporting_exposure_class") == "CORPORATE")
         assert len(corp_rows) == 1, (
@@ -204,6 +207,7 @@ class TestP1146IsGuaranteedNullFilter:
         )
 
         # Assert
+        assert result.pre_crm_summary is not None
         pre_crm_df = result.pre_crm_summary.collect()
         corp_rows = pre_crm_df.filter(pl.col("pre_crm_exposure_class") == "CORPORATE")
         assert len(corp_rows) == 1, (

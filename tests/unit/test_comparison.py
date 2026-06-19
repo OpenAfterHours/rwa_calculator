@@ -332,7 +332,7 @@ class TestComparisonBundle:
             errors=[],
         )
         with pytest.raises(AttributeError):
-            bundle.errors = ["new error"]  # type: ignore[misc]
+            bundle.errors = ["new error"]  # type: ignore[misc]  # ty: ignore[invalid-assignment]
 
     def test_bundle_error_accumulation(self):
         """Bundle should accumulate errors from both pipelines."""

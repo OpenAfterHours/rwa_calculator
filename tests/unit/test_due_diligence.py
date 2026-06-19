@@ -21,6 +21,7 @@ References:
 from __future__ import annotations
 
 from datetime import date
+from typing import Any
 
 import polars as pl
 import pytest
@@ -62,7 +63,7 @@ def _exposures_with_dd(
 ) -> pl.LazyFrame:
     """Create minimal SA exposures with due diligence columns."""
     n = len(risk_weights)
-    data: dict[str, list[object]] = {
+    data: dict[str, list[Any]] = {
         "exposure_reference": [f"EXP_{i:03d}" for i in range(n)],
         "risk_weight": risk_weights,
     }

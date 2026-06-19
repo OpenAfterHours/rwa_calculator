@@ -41,7 +41,7 @@ from tests.fixtures.ccr.qccp_builder import (
 try:
     from rwa_calc.engine.ccr.ccp import apply_ccp_risk_weight
 except (ImportError, ModuleNotFoundError):
-    apply_ccp_risk_weight = None  # type: ignore[assignment]
+    apply_ccp_risk_weight = None  # ty: ignore[invalid-assignment]
 
 
 # ---------------------------------------------------------------------------

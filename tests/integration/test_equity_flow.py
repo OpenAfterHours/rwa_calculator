@@ -363,6 +363,7 @@ class TestEquityAggregation:
             config=crr_config,
         )
 
+        assert result.summary_by_approach is not None
         summary_df = result.summary_by_approach.collect()
         approaches_in_summary = summary_df["approach_applied"].to_list()
         assert "equity" in approaches_in_summary

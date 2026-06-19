@@ -93,7 +93,7 @@ from rwa_calc.reporting.pillar3.templates import (
 
 def _make_sa_data(**overrides: object) -> pl.LazyFrame:
     """Create minimal SA pipeline data for testing."""
-    defaults = {
+    defaults: dict[str, object] = {
         "exposure_reference": ["SA1", "SA2", "SA3"],
         "approach_applied": ["standardised", "standardised", "standardised"],
         "exposure_class": ["corporate", "retail_mortgage", "defaulted"],
@@ -112,7 +112,7 @@ def _make_sa_data(**overrides: object) -> pl.LazyFrame:
 
 def _make_irb_data(**overrides: object) -> pl.LazyFrame:
     """Create minimal IRB pipeline data for testing."""
-    defaults = {
+    defaults: dict[str, object] = {
         "exposure_reference": ["IRB1", "IRB2", "IRB3"],
         "approach_applied": ["foundation_irb", "advanced_irb", "advanced_irb"],
         "exposure_class": ["corporate", "retail_mortgage", "retail_other"],
@@ -137,7 +137,7 @@ def _make_irb_data(**overrides: object) -> pl.LazyFrame:
 
 def _make_slotting_data(**overrides: object) -> pl.LazyFrame:
     """Create minimal slotting pipeline data for testing."""
-    defaults = {
+    defaults: dict[str, object] = {
         "exposure_reference": ["SL1", "SL2", "SL3"],
         "approach_applied": ["slotting", "slotting", "slotting"],
         "exposure_class": ["specialised_lending", "specialised_lending", "specialised_lending"],
@@ -373,7 +373,7 @@ class TestPillar3Bundle:
     def test_bundle_is_frozen(self):
         bundle = Pillar3TemplateBundle()
         with pytest.raises(AttributeError):
-            bundle.framework = "CRR"  # type: ignore[misc]
+            bundle.framework = "CRR"  # ty: ignore[invalid-assignment]
 
     def test_bundle_defaults(self):
         bundle = Pillar3TemplateBundle()
@@ -408,12 +408,14 @@ class TestOV1Generation:
     def test_ov1_total_rwa_positive(self, generator: Pillar3Generator):
         data = _make_mixed_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
+        assert bundle.ov1 is not None
         total_row = bundle.ov1.filter(pl.col("row_ref") == "29")
         assert total_row["a"][0] > 0
 
     def test_ov1_own_funds_8_percent(self, generator: Pillar3Generator):
         data = _make_mixed_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
+        assert bundle.ov1 is not None
         total_row = bundle.ov1.filter(pl.col("row_ref") == "29")
         rwa = total_row["a"][0]
         own_funds = total_row["c"][0]
@@ -422,12 +424,14 @@ class TestOV1Generation:
     def test_ov1_sa_rwa_positive(self, generator: Pillar3Generator):
         data = _make_mixed_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
+        assert bundle.ov1 is not None
         sa_row = bundle.ov1.filter(pl.col("row_ref") == "2")
         assert sa_row["a"][0] > 0
 
     def test_ov1_has_row_ref_and_row_name(self, generator: Pillar3Generator):
         data = _make_mixed_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
+        assert bundle.ov1 is not None
         assert "row_ref" in bundle.ov1.columns
         assert "row_name" in bundle.ov1.columns
 
@@ -435,6 +439,7 @@ class TestOV1Generation:
         """Column b (T-1) requires prior period data — should be null."""
         data = _make_mixed_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
+        assert bundle.ov1 is not None
         assert bundle.ov1["b"].null_count() == bundle.ov1.height
 
 
@@ -456,18 +461,21 @@ class TestCR4Generation:
     def test_cr4_total_row_rwea(self, generator: Pillar3Generator):
         data = _make_sa_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
+        assert bundle.cr4 is not None
         total = bundle.cr4.filter(pl.col("row_ref") == "17")
         assert total["e"][0] == pytest.approx(2450.0)  # 1000 + 700 + 750
 
     def test_cr4_corporate_row_populated(self, generator: Pillar3Generator):
         data = _make_sa_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
+        assert bundle.cr4 is not None
         corp = bundle.cr4.filter(pl.col("row_ref") == "7")
         assert corp["e"][0] == pytest.approx(1000.0)
 
     def test_cr4_rwea_density_calculated(self, generator: Pillar3Generator):
         data = _make_sa_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
+        assert bundle.cr4 is not None
         total = bundle.cr4.filter(pl.col("row_ref") == "17")
         f_val = total["f"][0]
         assert f_val is not None
@@ -477,6 +485,7 @@ class TestCR4Generation:
         """Rows for classes not in pipeline should be null."""
         data = _make_sa_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
+        assert bundle.cr4 is not None
         # Row 11 (high risk) has no pipeline data
         hr = bundle.cr4.filter(pl.col("row_ref") == "11")
         assert hr["e"][0] is None
@@ -484,6 +493,7 @@ class TestCR4Generation:
     def test_cr4_columns_match_template(self, generator: Pillar3Generator):
         data = _make_sa_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
+        assert bundle.cr4 is not None
         expected_cols = {"row_ref", "row_name"} | {c.ref for c in CRR_CR4_COLUMNS}
         assert set(bundle.cr4.columns) == expected_cols
 
@@ -499,6 +509,7 @@ class TestCR5Generation:
     def test_cr5_total_matches_ead(self, generator: Pillar3Generator):
         data = _make_sa_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
+        assert bundle.cr5 is not None
         total = bundle.cr5.filter(pl.col("row_ref") == "17")
         # Total column (p for CRR) should equal total EAD
         assert total["p"][0] == pytest.approx(3500.0)  # 1000 + 2000 + 500
@@ -506,6 +517,7 @@ class TestCR5Generation:
     def test_cr5_100pct_bucket_has_corporate(self, generator: Pillar3Generator):
         data = _make_sa_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
+        assert bundle.cr5 is not None
         corp = bundle.cr5.filter(pl.col("row_ref") == "7")
         # Corporate has RW 1.0 (100%), column j
         assert corp["j"][0] == pytest.approx(1000.0)
@@ -513,6 +525,7 @@ class TestCR5Generation:
     def test_cr5_35pct_bucket_has_mortgage(self, generator: Pillar3Generator):
         data = _make_sa_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
+        assert bundle.cr5 is not None
         mortgage = bundle.cr5.filter(pl.col("row_ref") == "9")
         # Mortgage RW 0.35 (35%), column f
         assert mortgage["f"][0] == pytest.approx(2000.0)
@@ -528,6 +541,7 @@ class TestCR5Generation:
         """Without sa_cqs column, all exposures should be 'unrated'."""
         data = _make_sa_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
+        assert bundle.cr5 is not None
         total = bundle.cr5.filter(pl.col("row_ref") == "17")
         # Column q (unrated) — no CQS column so all treated as unrated
         assert total["q"][0] == pytest.approx(3500.0)
@@ -604,12 +618,14 @@ class TestCR6AGeneration:
     def test_cr6a_total_row_has_all_ead(self, generator: Pillar3Generator):
         data = _make_mixed_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
+        assert bundle.cr6a is not None
         total = bundle.cr6a.filter(pl.col("row_name").str.contains("Total"))
         assert total["b"][0] > 0
 
     def test_cr6a_irb_percentage(self, generator: Pillar3Generator):
         data = _make_mixed_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
+        assert bundle.cr6a is not None
         total = bundle.cr6a.filter(pl.col("row_name").str.contains("Total"))
         irb_pct = total["d"][0]
         sa_pct = total["c"][0]
@@ -619,6 +635,7 @@ class TestCR6AGeneration:
     def test_cr6a_columns_match(self, generator: Pillar3Generator):
         data = _make_mixed_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
+        assert bundle.cr6a is not None
         expected = {"row_ref", "row_name"} | {c.ref for c in CR6A_COLUMNS}
         assert set(bundle.cr6a.columns) == expected
 
@@ -642,6 +659,7 @@ class TestCR7Generation:
         """Pre-CD RWEA ≈ post-CD RWEA (approximation: no CD tracking)."""
         data = _make_mixed_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
+        assert bundle.cr7 is not None
         for i in range(bundle.cr7.height):
             a = bundle.cr7["a"][i]
             b = bundle.cr7["b"][i]
@@ -651,6 +669,7 @@ class TestCR7Generation:
     def test_cr7_total_positive(self, generator: Pillar3Generator):
         data = _make_mixed_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
+        assert bundle.cr7 is not None
         total = bundle.cr7.filter(pl.col("row_ref") == "10")
         assert total["b"][0] > 0
 
@@ -696,6 +715,7 @@ class TestCR8Generation:
     def test_cr8_closing_rwa_populated(self, generator: Pillar3Generator):
         data = _make_irb_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
+        assert bundle.cr8 is not None
         closing = bundle.cr8.filter(pl.col("row_ref") == "9")
         assert closing["a"][0] > 0
 
@@ -703,6 +723,7 @@ class TestCR8Generation:
         """Opening balance requires prior period — should be null."""
         data = _make_irb_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
+        assert bundle.cr8 is not None
         opening = bundle.cr8.filter(pl.col("row_ref") == "1")
         assert opening["a"][0] is None
 
@@ -710,6 +731,7 @@ class TestCR8Generation:
         """Flow drivers require multi-period comparison — should be null."""
         data = _make_irb_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
+        assert bundle.cr8 is not None
         drivers = bundle.cr8.filter(pl.col("row_ref").is_in(["2", "3", "4", "5", "6", "7", "8"]))
         assert drivers["a"].null_count() == 7
 
@@ -829,11 +851,13 @@ class TestCMS1Generation:
     def test_cms1_row_count(self, generator: Pillar3Generator):
         data = _make_mixed_data_with_sa_rwa()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms1 is not None
         assert bundle.cms1.height == 8
 
     def test_cms1_columns_match(self, generator: Pillar3Generator):
         data = _make_mixed_data_with_sa_rwa()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms1 is not None
         expected = {"row_ref", "row_name"} | {c.ref for c in CMS1_COLUMNS}
         assert set(bundle.cms1.columns) == expected
 
@@ -841,6 +865,7 @@ class TestCMS1Generation:
         """Row 0010 (credit risk) should have non-null values."""
         data = _make_mixed_data_with_sa_rwa()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms1 is not None
         cr_row = bundle.cms1.filter(pl.col("row_ref") == "0010")
         assert cr_row["a"][0] is not None  # Modelled RWA
         assert cr_row["b"][0] is not None  # SA portfolio RWA
@@ -851,6 +876,7 @@ class TestCMS1Generation:
         """Total row should match credit risk row (only risk type in scope)."""
         data = _make_mixed_data_with_sa_rwa()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms1 is not None
         cr_row = bundle.cms1.filter(pl.col("row_ref") == "0010")
         total_row = bundle.cms1.filter(pl.col("row_ref") == "0080")
         for col in ["a", "b", "c", "d"]:
@@ -860,6 +886,7 @@ class TestCMS1Generation:
         """Rows 0020-0070 (CCR, CVA, etc.) should be all null."""
         data = _make_mixed_data_with_sa_rwa()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms1 is not None
         non_credit_refs = ["0020", "0030", "0040", "0050", "0060", "0070"]
         for ref in non_credit_refs:
             row = bundle.cms1.filter(pl.col("row_ref") == ref)
@@ -870,6 +897,7 @@ class TestCMS1Generation:
         """Col a: modelled RWA = F-IRB + A-IRB + slotting RWA."""
         data = _make_mixed_data_with_sa_rwa()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms1 is not None
         cr_row = bundle.cms1.filter(pl.col("row_ref") == "0010")
         modelled_rwa = cr_row["a"][0]
         # IRB RWA: 4000 + 1500 + 1200 = 6700, Slotting RWA: 700 + 720 + 690 = 2110
@@ -879,6 +907,7 @@ class TestCMS1Generation:
         """Col b: SA portfolio RWA (exposures actually using SA)."""
         data = _make_mixed_data_with_sa_rwa()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms1 is not None
         cr_row = bundle.cms1.filter(pl.col("row_ref") == "0010")
         sa_portfolio_rwa = cr_row["b"][0]
         # SA RWA: 1000 + 700 + 750 = 2450
@@ -888,6 +917,7 @@ class TestCMS1Generation:
         """Col c: total actual RWA = modelled + SA portfolio."""
         data = _make_mixed_data_with_sa_rwa()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms1 is not None
         cr_row = bundle.cms1.filter(pl.col("row_ref") == "0010")
         total_rwa = cr_row["c"][0]
         # 6700 + 2110 + 2450 = 11260
@@ -897,6 +927,7 @@ class TestCMS1Generation:
         """Col d: full SA RWA for all exposures."""
         data = _make_mixed_data_with_sa_rwa()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms1 is not None
         cr_row = bundle.cms1.filter(pl.col("row_ref") == "0010")
         full_sa_rwa = cr_row["d"][0]
         # Total sa_rwa: 1000+700+750 + 3500+2100+1400 + 800+650+500 = 11400
@@ -998,11 +1029,13 @@ class TestCMS2Generation:
     def test_cms2_row_count(self, generator: Pillar3Generator):
         data = _make_mixed_data_with_sa_rwa()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms2 is not None
         assert bundle.cms2.height == 17
 
     def test_cms2_columns_match(self, generator: Pillar3Generator):
         data = _make_mixed_data_with_sa_rwa()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms2 is not None
         expected = {"row_ref", "row_name"} | {c.ref for c in CMS2_COLUMNS}
         assert set(bundle.cms2.columns) == expected
 
@@ -1010,6 +1043,7 @@ class TestCMS2Generation:
         """Corporate row (0040) should be populated from IRB data."""
         data = _make_mixed_data_with_sa_rwa()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms2 is not None
         corp_row = bundle.cms2.filter(pl.col("row_ref") == "0040")
         # IRB corporate RWA = 4000 (foundation_irb, corporate)
         assert corp_row["a"][0] is not None
@@ -1019,6 +1053,7 @@ class TestCMS2Generation:
         """Retail row (0050) should have modelled RWA from A-IRB retail."""
         data = _make_mixed_data_with_sa_rwa()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms2 is not None
         retail_row = bundle.cms2.filter(pl.col("row_ref") == "0050")
         # IRB retail: retail_mortgage 1500 + retail_other 1200 = 2700
         assert retail_row["a"][0] == pytest.approx(2700.0)
@@ -1027,6 +1062,7 @@ class TestCMS2Generation:
         """Retail sub-rows should break down the total."""
         data = _make_mixed_data_with_sa_rwa()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms2 is not None
         _qrre = bundle.cms2.filter(pl.col("row_ref") == "0051")
         other = bundle.cms2.filter(pl.col("row_ref") == "0052")
         mortgage = bundle.cms2.filter(pl.col("row_ref") == "0053")
@@ -1040,6 +1076,7 @@ class TestCMS2Generation:
         """Total row (0070) should aggregate all modelled exposures."""
         data = _make_mixed_data_with_sa_rwa()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms2 is not None
         total_row = bundle.cms2.filter(pl.col("row_ref") == "0070")
         # Total modelled RWA = IRB (6700) + slotting (2110)
         assert total_row["a"][0] == pytest.approx(8810.0)
@@ -1048,6 +1085,7 @@ class TestCMS2Generation:
         """Col b should show SA-equivalent RWA for modelled exposures."""
         data = _make_mixed_data_with_sa_rwa()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms2 is not None
         total_row = bundle.cms2.filter(pl.col("row_ref") == "0070")
         # Total sa_rwa for modelled: 3500+2100+1400 + 800+650+500 = 8950
         assert total_row["b"][0] == pytest.approx(8950.0)
@@ -1056,6 +1094,7 @@ class TestCMS2Generation:
         """Col c should be modelled + SA portfolio for total row."""
         data = _make_mixed_data_with_sa_rwa()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms2 is not None
         total_row = bundle.cms2.filter(pl.col("row_ref") == "0070")
         # Total actual = modelled (8810) + SA portfolio (2450) = 11260
         assert total_row["c"][0] == pytest.approx(11260.0)
@@ -1064,6 +1103,7 @@ class TestCMS2Generation:
         """Col d should show full SA RWA."""
         data = _make_mixed_data_with_sa_rwa()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms2 is not None
         total_row = bundle.cms2.filter(pl.col("row_ref") == "0070")
         # Total sa_rwa for all: 11400
         assert total_row["d"][0] == pytest.approx(11400.0)
@@ -1072,6 +1112,7 @@ class TestCMS2Generation:
         """Row 0041 (FIRB) should show corporate F-IRB RWA."""
         data = _make_mixed_data_with_sa_rwa()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms2 is not None
         firb_row = bundle.cms2.filter(pl.col("row_ref") == "0041")
         # Corporate F-IRB: 4000
         assert firb_row["a"][0] == pytest.approx(4000.0)
@@ -1080,6 +1121,7 @@ class TestCMS2Generation:
         """Row 0042 (AIRB) should show corporate A-IRB RWA (zero in test data)."""
         data = _make_mixed_data_with_sa_rwa()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms2 is not None
         airb_row = bundle.cms2.filter(pl.col("row_ref") == "0042")
         # No corporate A-IRB in test data (A-IRB is retail)
         assert airb_row["a"][0] is None or airb_row["a"][0] == pytest.approx(0.0)
@@ -1088,6 +1130,7 @@ class TestCMS2Generation:
         """Purchased receivable rows (0045, 0054) should be null."""
         data = _make_mixed_data_with_sa_rwa()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms2 is not None
         for ref in ["0045", "0054"]:
             row = bundle.cms2.filter(pl.col("row_ref") == ref)
             assert row["a"][0] is None
@@ -1111,6 +1154,7 @@ class TestCMS2Generation:
         """Row 0043 (specialised lending) should show slotting RWA."""
         data = _make_mixed_data_with_sa_rwa()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms2 is not None
         sl_row = bundle.cms2.filter(pl.col("row_ref") == "0043")
         # Slotting RWA: 700 + 720 + 690 = 2110
         assert sl_row["a"][0] == pytest.approx(2110.0)
@@ -1176,6 +1220,7 @@ class TestGeneratorEndToEnd:
     def test_no_duplicate_row_refs_in_cr4(self, generator: Pillar3Generator):
         data = _make_sa_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
+        assert bundle.cr4 is not None
         refs = bundle.cr4["row_ref"].to_list()
         assert len(refs) == len(set(refs))
 
@@ -1207,7 +1252,7 @@ def _make_cr9_irb_data(**overrides: object) -> pl.LazyFrame:
     - CP5/CP6 (A-IRB retail_other, is_sme=False) →
       ``advanced_irb - retail_other_non_sme``
     """
-    defaults = {
+    defaults: dict[str, object] = {
         "exposure_reference": ["CR9_1", "CR9_2", "CR9_3", "CR9_4", "CR9_5", "CR9_6"],
         "approach_applied": [
             "foundation_irb",

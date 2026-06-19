@@ -556,9 +556,7 @@ class TestCCRD3MarginedOTMIR:
         row = ccr_d3_result
 
         # Assert (PRIMARY PIN — rel=1e-9 for full precision)
-        assert row["pfe_multiplier"] == pytest.approx(
-            CCR_D3_EXPECTED_PFE_MULTIPLIER, rel=1e-9
-        ), (
+        assert row["pfe_multiplier"] == pytest.approx(CCR_D3_EXPECTED_PFE_MULTIPLIER, rel=1e-9), (
             f"CCR-D3 PRIMARY PIN: expected pfe_multiplier={CCR_D3_EXPECTED_PFE_MULTIPLIER!r} "
             f"(sub-unity: full SA-CCR Art. 278(3)), "
             f"got {row['pfe_multiplier']!r}. "

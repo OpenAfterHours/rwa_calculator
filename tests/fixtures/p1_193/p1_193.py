@@ -318,6 +318,10 @@ def create_p1193_ratings() -> pl.DataFrame:
         if rating_ref is None:
             # Unrated exposure — no rating row
             continue
+        # A rated scenario row always carries a CQS and rating value (the only
+        # null-CQS row is the unrated one, skipped above).
+        assert cqs is not None
+        assert rating_value is not None
         rows.append(
             _Rating(
                 rating_reference=rating_ref,

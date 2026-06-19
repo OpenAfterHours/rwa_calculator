@@ -95,6 +95,7 @@ class TestHappyPath:
             }
         )
         _, lookup, errors = allocator.allocate(_bundle(allocs), _CONFIG)
+        assert lookup is not None
         df = lookup.collect()
         assert df.height == 1
         row = df.row(0, named=True)
@@ -115,6 +116,7 @@ class TestHappyPath:
             }
         )
         _, lookup, errors = allocator.allocate(_bundle(allocs), _CONFIG)
+        assert lookup is not None
         df = lookup.collect()
         row = df.row(0, named=True)
         assert row["securitisation_residual_pct"] == pytest.approx(0.3)
@@ -137,6 +139,7 @@ class TestValidationSEC002InvalidPct:
             }
         )
         _, lookup, errors = allocator.allocate(_bundle(allocs), _CONFIG)
+        assert lookup is not None
         df = lookup.collect()
         assert df.height == 1
         assert df.row(0, named=True)["exposure_reference"] == "L001"
@@ -153,6 +156,7 @@ class TestValidationSEC002InvalidPct:
             }
         )
         _, lookup, errors = allocator.allocate(_bundle(allocs), _CONFIG)
+        assert lookup is not None
         assert lookup.collect().height == 0
         assert any(e.code == ERROR_SEC_INVALID_PCT for e in errors)
 
@@ -170,6 +174,7 @@ class TestValidationSEC003UnknownReference:
             }
         )
         _, lookup, errors = allocator.allocate(_bundle(allocs), _CONFIG)
+        assert lookup is not None
         df = lookup.collect()
         assert df.height == 1
         assert df.row(0, named=True)["exposure_reference"] == "L001"
@@ -188,6 +193,7 @@ class TestValidationSEC004Duplicate:
             }
         )
         _, lookup, errors = allocator.allocate(_bundle(allocs), _CONFIG)
+        assert lookup is not None
         row = lookup.collect().row(0, named=True)
         # First row kept: residual = 1 - 0.5 = 0.5
         assert row["securitisation_residual_pct"] == pytest.approx(0.5)
@@ -207,6 +213,7 @@ class TestValidationSEC001OverAllocated:
             }
         )
         _, lookup, errors = allocator.allocate(_bundle(allocs), _CONFIG)
+        assert lookup is not None
         row = lookup.collect().row(0, named=True)
         assert row["securitisation_residual_pct"] == pytest.approx(1.0)
         assert row["securitisation_pool_allocations"] == []
@@ -227,6 +234,7 @@ class TestValidationSEC005FullySecuritised:
             }
         )
         _, lookup, errors = allocator.allocate(_bundle(allocs), _CONFIG)
+        assert lookup is not None
         row = lookup.collect().row(0, named=True)
         assert row["securitisation_residual_pct"] == pytest.approx(0.0)
         assert row["audit_status"] == "fully_securitised"
@@ -249,6 +257,7 @@ class TestResolvedSchema:
             }
         )
         _, lookup, _ = allocator.allocate(_bundle(allocs), _CONFIG)
+        assert lookup is not None
         assert set(lookup.collect_schema().names()) == set(RESOLVED_SECURITISATION_SCHEMA.keys())
 
 

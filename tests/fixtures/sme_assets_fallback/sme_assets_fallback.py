@@ -32,11 +32,15 @@ References:
 from __future__ import annotations
 
 from datetime import date
+from typing import TYPE_CHECKING
 
 import polars as pl
 
 from rwa_calc.contracts.bundles import ResolvedHierarchyBundle
 from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolved_bundle
+
+if TYPE_CHECKING:
+    from polars._typing import PolarsDataType
 
 # ---------------------------------------------------------------------------
 # Scenario constants
@@ -67,7 +71,7 @@ TURNOVER_ASSETS_NON_SME: float = 25_000_000.0  # immaterial when turnover is pre
 # Counterparty builders
 # ---------------------------------------------------------------------------
 
-_CP_SCHEMA: dict[str, pl.PolarsDataType] = {
+_CP_SCHEMA: dict[str, PolarsDataType] = {
     "counterparty_reference": pl.String,
     "entity_type": pl.String,
     "country_code": pl.String,
@@ -235,7 +239,7 @@ def _enrich_counterparty(counterparties: pl.LazyFrame) -> pl.LazyFrame:
     return counterparties.with_columns(cols) if cols else counterparties
 
 
-def _empty_schema_lf(schema: dict[str, pl.PolarsDataType]) -> pl.LazyFrame:
+def _empty_schema_lf(schema: dict[str, PolarsDataType]) -> pl.LazyFrame:
     return pl.LazyFrame(schema=schema)
 
 

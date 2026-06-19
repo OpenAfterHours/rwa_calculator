@@ -130,9 +130,7 @@ def _build_ccr_bundle_with_failed_trades() -> RawCCRBundle:
     return RawCCRBundle(
         trades=TradeBundle(trades=_build_empty_trades()),
         netting_sets=NettingSetBundle(netting_sets=_build_empty_netting_sets()),
-        margin_agreements=MarginAgreementBundle(
-            margin_agreements=_build_empty_margin_agreements()
-        ),
+        margin_agreements=MarginAgreementBundle(margin_agreements=_build_empty_margin_agreements()),
         ccr_collateral=CCRCollateralBundle(ccr_collateral=_build_empty_ccr_collateral()),
         failed_trades=FailedTradesBundle(failed_trades=make_c_failed_trades_frame()),
     )
@@ -148,9 +146,7 @@ def _build_ccr_bundle_no_failed_trades() -> RawCCRBundle:
     return RawCCRBundle(
         trades=TradeBundle(trades=_build_empty_trades()),
         netting_sets=NettingSetBundle(netting_sets=_build_empty_netting_sets()),
-        margin_agreements=MarginAgreementBundle(
-            margin_agreements=_build_empty_margin_agreements()
-        ),
+        margin_agreements=MarginAgreementBundle(margin_agreements=_build_empty_margin_agreements()),
         ccr_collateral=CCRCollateralBundle(ccr_collateral=_build_empty_ccr_collateral()),
         failed_trades=None,
     )

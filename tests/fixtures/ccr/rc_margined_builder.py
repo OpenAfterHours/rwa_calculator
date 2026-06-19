@@ -33,12 +33,15 @@ References:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
 from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import NETTING_SET_SCHEMA
+
+if TYPE_CHECKING:
+    from polars._typing import PolarsDataType
 
 # ---------------------------------------------------------------------------
 # Scenario constants
@@ -181,10 +184,10 @@ _ALL_ROWS: list[RcMarginedRow] = [_ROW_NS_A, _ROW_NS_B, _ROW_NS_C, _ROW_NS_D]
 # ---------------------------------------------------------------------------
 
 #: Full dtype map from NETTING_SET_SCHEMA — used to cast schema columns.
-_NETTING_SET_DTYPES: dict[str, pl.DataType] = dtypes_of(NETTING_SET_SCHEMA)
+_NETTING_SET_DTYPES: dict[str, PolarsDataType] = dtypes_of(NETTING_SET_SCHEMA)
 
 #: Dtype map for the two upstream-derived columns (Float64 by convention).
-_DERIVED_DTYPES: dict[str, pl.DataType] = {
+_DERIVED_DTYPES: dict[str, PolarsDataType] = {
     "v_net": pl.Float64,
     "c_net": pl.Float64,
 }

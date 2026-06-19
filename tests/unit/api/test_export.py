@@ -161,7 +161,7 @@ class TestExportResult:
         """ExportResult should be immutable."""
         result = ExportResult(format="parquet", files=[], row_count=0)
         with pytest.raises(AttributeError):
-            result.format = "csv"  # type: ignore[misc]
+            result.format = "csv"  # type: ignore[misc]  # ty: ignore[invalid-assignment]
 
     def test_default_values(self) -> None:
         """Should have sensible defaults."""

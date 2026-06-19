@@ -21,10 +21,15 @@ from __future__ import annotations
 import dataclasses
 from datetime import date
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 import polars as pl
 import pytest
 from tests.fixtures.raw_bundle import make_raw_bundle
+
+if TYPE_CHECKING:
+    from rwa_calc.contracts.bundles import RawCCRBundle as RawCCRBundleType
+    from rwa_calc.contracts.config import CalculationConfig
 
 # ---------------------------------------------------------------------------
 # Import the modules under test at module scope — these always succeed
@@ -394,7 +399,7 @@ def test_raw_ccr_bundle_errors_default_factory_produces_distinct_lists() -> None
     assert MarginAgreementBundle is not None, "P8.1 leaf bundle 'MarginAgreementBundle' not found"
     assert CCRCollateralBundle is not None, "P8.1 leaf bundle 'CCRCollateralBundle' not found"
 
-    def _make_instance() -> object:
+    def _make_instance() -> RawCCRBundleType:
         return RawCCRBundle(
             trades=TradeBundle(trades=pl.LazyFrame()),
             netting_sets=NettingSetBundle(netting_sets=pl.LazyFrame()),
@@ -543,7 +548,7 @@ def _get_ccr_config_cls() -> type:
     return cls
 
 
-def _get_calculation_config_cls() -> type:
+def _get_calculation_config_cls() -> type[CalculationConfig]:
     """Return CalculationConfig class from config_module."""
     cls = getattr(config_module, "CalculationConfig", None)
     assert cls is not None, "CalculationConfig not found in rwa_calc.contracts.config"

@@ -126,8 +126,8 @@ CCR_FLOOR1_IS_LONG: bool = True
 CCR_FLOOR1_START_DATE: _date = _date(2026, 1, 15)
 CCR_FLOOR1_MATURITY_DATE: _date = _date(2031, 1, 15)
 
-CCR_FLOOR1_IS_LEGALLY_ENFORCEABLE: bool = True   # Art. 295 met
-CCR_FLOOR1_IS_MARGINED: bool = False              # unmargined
+CCR_FLOOR1_IS_LEGALLY_ENFORCEABLE: bool = True  # Art. 295 met
+CCR_FLOOR1_IS_MARGINED: bool = False  # unmargined
 
 # Counterparty: GB institution, CQS 2, no IRB model permission.
 # entity_type="institution" → Classifier routes CCR synthetic row through
@@ -174,8 +174,8 @@ CCR_FLOOR1_GOLDEN_RWA_FINAL: float = 4_220_395.772481701
 # OutputFloorSummary — TODAY (the bug being pinned by P8.55 test):
 # CCR-derived SA exposures are excluded from S-TREA / U-TREA computation.
 # Post-fix target: s_trea == u_trea == CCR_FLOOR1_GOLDEN_SA_RWA.
-CCR_FLOOR1_GOLDEN_S_TREA_CURRENT: float = 0.0   # BUG: should be 4,220,395.77 post-fix
-CCR_FLOOR1_GOLDEN_U_TREA_CURRENT: float = 0.0   # BUG: mirrors s_trea for pure-SA CCR
+CCR_FLOOR1_GOLDEN_S_TREA_CURRENT: float = 0.0  # BUG: should be 4,220,395.77 post-fix
+CCR_FLOOR1_GOLDEN_U_TREA_CURRENT: float = 0.0  # BUG: mirrors s_trea for pure-SA CCR
 CCR_FLOOR1_GOLDEN_TOTAL_RWA_POST_FLOOR: float = 4_220_395.772481701  # correct via sa_rwa_total
 
 # ---------------------------------------------------------------------------

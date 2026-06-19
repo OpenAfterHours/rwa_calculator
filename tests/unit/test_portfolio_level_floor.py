@@ -247,6 +247,7 @@ class TestProRataDistribution:
         result = aggregator.aggregate(
             EMPTY_SA, pad_irb_branch(irb), EMPTY_SLOTTING, None, b31_config
         )
+        assert result.floor_impact is not None
         impact = result.floor_impact.collect()
 
         # Shortfall = 72.5k - 50k = 22.5k, 100% to this exposure
@@ -272,6 +273,7 @@ class TestProRataDistribution:
         result = aggregator.aggregate(
             EMPTY_SA, pad_irb_branch(irb), EMPTY_SLOTTING, None, b31_config
         )
+        assert result.floor_impact is not None
         impact = result.floor_impact.collect()
 
         assert impact["floor_impact_rwa"][0] == pytest.approx(0.0, abs=0.01)
@@ -372,6 +374,7 @@ class TestSlottingInFloorScope:
         result = aggregator.aggregate(
             EMPTY_SA, EMPTY_IRB, pad_slotting_branch(slotting), None, b31_config
         )
+        assert result.floor_impact is not None
         impact = result.floor_impact.collect()
 
         assert len(impact) == 1
@@ -444,6 +447,7 @@ class TestSAExcludedFromFloor:
         result = aggregator.aggregate(
             pad_sa_branch(sa), EMPTY_IRB, EMPTY_SLOTTING, None, b31_config
         )
+        assert result.floor_impact is not None
         impact = result.floor_impact.collect()
         assert len(impact) == 0
 
@@ -475,6 +479,7 @@ class TestOutputFloorSummary:
             EMPTY_SA, pad_irb_branch(irb), EMPTY_SLOTTING, None, b31_config
         )
         summary = result.output_floor_summary
+        assert summary is not None
 
         assert summary is not None
         assert isinstance(summary, OutputFloorSummary)
@@ -508,6 +513,7 @@ class TestOutputFloorSummary:
             EMPTY_SA, pad_irb_branch(irb), EMPTY_SLOTTING, None, b31_config
         )
         summary = result.output_floor_summary
+        assert summary is not None
 
         assert summary is not None
         assert summary.u_trea == pytest.approx(80_000.0, rel=0.001)
@@ -547,6 +553,7 @@ class TestOutputFloorSummary:
             pad_sa_branch(sa), pad_irb_branch(irb), EMPTY_SLOTTING, None, b31_config
         )
         summary = result.output_floor_summary
+        assert summary is not None
 
         # U-TREA and S-TREA should only reflect the IRB exposure
         assert summary.u_trea == pytest.approx(50_000.0, rel=0.001)
@@ -582,6 +589,7 @@ class TestOutputFloorSummary:
             EMPTY_SA, pad_irb_branch(irb), pad_slotting_branch(slotting), None, b31_config
         )
         summary = result.output_floor_summary
+        assert summary is not None
 
         assert summary.u_trea == pytest.approx(120_000.0, rel=0.001)  # 50k + 70k
         assert summary.s_trea == pytest.approx(200_000.0, rel=0.001)  # 100k + 100k
@@ -607,6 +615,7 @@ class TestPortfolioFloorEdgeCases:
         """Empty portfolio (no exposures) should produce default summary."""
         result = aggregator.aggregate(EMPTY_SA, EMPTY_IRB, EMPTY_SLOTTING, None, b31_config)
         summary = result.output_floor_summary
+        assert summary is not None
 
         assert summary is not None
         assert summary.u_trea == pytest.approx(0.0, abs=0.01)
@@ -637,6 +646,7 @@ class TestPortfolioFloorEdgeCases:
         # Floor: 72.5% * 0 = 0 < IRB 50k → doesn't bind
         assert df["rwa_final"][0] == pytest.approx(50_000.0, rel=0.001)
         summary = result.output_floor_summary
+        assert summary is not None
         assert summary.portfolio_floor_binding is False
 
     def test_null_sa_rwa_treated_as_zero(
@@ -719,6 +729,7 @@ class TestPortfolioFloorEdgeCases:
             pad_sa_branch(sa), EMPTY_IRB, EMPTY_SLOTTING, None, b31_config
         )
         summary = result.output_floor_summary
+        assert summary is not None
 
         assert summary.u_trea == pytest.approx(0.0, abs=0.01)
         assert summary.s_trea == pytest.approx(0.0, abs=0.01)
@@ -765,6 +776,7 @@ class TestPortfolioFloorEdgeCases:
         result = aggregator.aggregate(
             EMPTY_SA, pad_irb_branch(irb), EMPTY_SLOTTING, None, b31_config
         )
+        assert result.floor_impact is not None
         impact = result.floor_impact.collect()
 
         # Both should be True (portfolio floor binds)

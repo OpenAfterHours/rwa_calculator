@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 import polars as pl
 import pytest
@@ -32,6 +33,9 @@ from rwa_calc.engine.crm.haircut_tables import (
 )
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
 from rwa_calc.engine.pipeline import PipelineOrchestrator
+
+if TYPE_CHECKING:
+    from polars._typing import PolarsDataType
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -48,7 +52,7 @@ def _build_equity_collateral(
 
     Includes exposure_currency (required by apply_haircuts FX mismatch step).
     """
-    schema: dict[str, pl.DataType] = {
+    schema: dict[str, PolarsDataType] = {
         "collateral_reference": pl.String,
         "collateral_type": pl.String,
         "currency": pl.String,
@@ -314,7 +318,7 @@ class TestMultipleEquityCollateral:
 
     @staticmethod
     def _build_mixed_frame() -> pl.LazyFrame:
-        _MULTI_SCHEMA: dict[str, pl.DataType] = {
+        _MULTI_SCHEMA: dict[str, PolarsDataType] = {
             "collateral_reference": pl.String,
             "collateral_type": pl.String,
             "currency": pl.String,
@@ -411,7 +415,7 @@ class TestMultipleEquityCollateral:
 
 _REPORTING_DATE = date(2025, 12, 31)
 
-_PIPELINE_COLLATERAL_SCHEMA: dict[str, pl.DataType] = {
+_PIPELINE_COLLATERAL_SCHEMA: dict[str, PolarsDataType] = {
     "collateral_reference": pl.String,
     "collateral_type": pl.String,
     "currency": pl.String,

@@ -54,7 +54,6 @@ References:
 from __future__ import annotations
 
 from datetime import date
-from typing import cast
 
 import polars as pl
 import pytest
@@ -142,7 +141,7 @@ def _run_pipeline(config: CalculationConfig) -> pl.DataFrame:
         "IRB results should not be None — check PermissionMode.IRB config and "
         "that model_permissions.parquet contains MODEL_BORROWER_FIRB."
     )
-    return cast(pl.DataFrame, results.irb_results.collect())
+    return results.irb_results.collect()
 
 
 # ---------------------------------------------------------------------------

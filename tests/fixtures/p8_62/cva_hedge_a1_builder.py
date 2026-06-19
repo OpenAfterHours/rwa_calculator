@@ -93,7 +93,6 @@ import polars as pl
 # Re-export everything from P8.60 — the CCR book and CVA counterparty frame
 # are byte-identical to P8.60.
 # ---------------------------------------------------------------------------
-
 from tests.fixtures.p8_60.cva_a1_builder import (
     CVA_A1_COUNTERPARTY_REF,
     CVA_A1_CVA_EFFECTIVE_MATURITY_YEARS,
@@ -225,9 +224,9 @@ def create_perfect_single_name_hedge_frame(hedge_notional: float) -> pl.DataFram
     row: dict[str, object] = {
         "cva_hedge_reference": CVA_HEDGE_A1_REF,
         "cva_hedge_type": "SINGLE_NAME",
-        "counterparty_reference": CVA_A1_COUNTERPARTY_REF,   # "CP_CVA_001"
+        "counterparty_reference": CVA_A1_COUNTERPARTY_REF,  # "CP_CVA_001"
         "cva_hedge_correlation_band": "IDENTICAL",
-        "cva_hedge_rw_sector": CVA_A1_CVA_RW_SECTOR,         # "FINANCIAL"
+        "cva_hedge_rw_sector": CVA_A1_CVA_RW_SECTOR,  # "FINANCIAL"
         "cva_hedge_rw_rating_band": CVA_A1_CVA_RW_RATING_BAND,  # "IG"
         "cva_hedge_residual_maturity_years": CVA_A1_CVA_EFFECTIVE_MATURITY_YEARS,  # 3.0
         "cva_hedge_notional": hedge_notional,
@@ -327,10 +326,10 @@ def compute_cva_full_golden(ead_ccr: float) -> dict[str, float]:
     # Step 2: hedge inputs for perfect single-name CDS.
     # B_h = EAD_NS / alpha  (NOT EAD_NS — see module docstring for derivation).
     alpha = CVA_ALPHA
-    rw_h = CVA_RW_FINANCIALS_IG          # 0.05, matches counterparty
+    rw_h = CVA_RW_FINANCIALS_IG  # 0.05, matches counterparty
     m_h = CVA_A1_CVA_EFFECTIVE_MATURITY_YEARS  # 3.0, matches netting set
     rate = CVA_SUPERVISORY_DISCOUNT_RATE
-    r_hc = CVA_BA_RHC_IDENTICAL          # 1.00, IDENTICAL band
+    r_hc = CVA_BA_RHC_IDENTICAL  # 1.00, IDENTICAL band
 
     # DF_h uses same formula as DF_NS (4.7): (1 - e^(-rate*M_h)) / (rate*M_h)
     df_h = (1.0 - math.exp(-rate * m_h)) / (rate * m_h)  # == df_ns since m_h == m_ns
@@ -348,7 +347,7 @@ def compute_cva_full_golden(ead_ccr: float) -> dict[str, float]:
         raise AssertionError(
             f"P8.62 perfect-hedge identity violated: SNH_c={snh_c:.6f} != "
             f"SCVA_c={scva_c:.6f} (diff={_diff:.2e}, tol={_tol:.2e}). "
-            f"Check hedge_notional={hedge_notional:.4f} vs EAD/alpha={ead_ccr/alpha:.4f}."
+            f"Check hedge_notional={hedge_notional:.4f} vs EAD/alpha={ead_ccr / alpha:.4f}."
         )
 
     # Step 4: HMA_c (section 4.9) — (1 - r_hc^2) * (RW_h * M_h * B_h * DF_h)^2.
@@ -360,7 +359,7 @@ def compute_cva_full_golden(ead_ccr: float) -> dict[str, float]:
 
     # Step 6: K_hedged (section 4.6).
     rho = CVA_SUPERVISORY_CORRELATION_RHO
-    net_c = scva_c - snh_c   # == 0.0 for perfect hedge
+    net_c = scva_c - snh_c  # == 0.0 for perfect hedge
     systematic_term = (rho * net_c - ih) ** 2
     idiosyncratic_term = (1.0 - rho**2) * net_c**2
     k_hedged = math.sqrt(systematic_term + idiosyncratic_term + hma_c)
@@ -472,9 +471,7 @@ def save_p862_fixtures(output_dir: Path | None = None) -> list[tuple[str, int]]:
     if _actual_cols != _expected_cols:
         missing = _expected_cols - _actual_cols
         extra = _actual_cols - _expected_cols
-        raise AssertionError(
-            f"P8.62: hedge schema mismatch. Missing: {missing}, Extra: {extra}"
-        )
+        raise AssertionError(f"P8.62: hedge schema mismatch. Missing: {missing}, Extra: {extra}")
     if len(hedge_df) != 1:
         raise AssertionError(f"P8.62: expected 1 hedge row, got {len(hedge_df)}")
 
@@ -496,7 +493,10 @@ def save_p862_fixtures(output_dir: Path | None = None) -> list[tuple[str, int]]:
         raise AssertionError("P8.62: cva_hedge_rw_sector mismatch")
     if hedge_df["cva_hedge_rw_rating_band"][0] != CVA_A1_CVA_RW_RATING_BAND:
         raise AssertionError("P8.62: cva_hedge_rw_rating_band mismatch")
-    if abs(hedge_df["cva_hedge_residual_maturity_years"][0] - CVA_A1_CVA_EFFECTIVE_MATURITY_YEARS) > 1e-9:
+    if (
+        abs(hedge_df["cva_hedge_residual_maturity_years"][0] - CVA_A1_CVA_EFFECTIVE_MATURITY_YEARS)
+        > 1e-9
+    ):
         raise AssertionError("P8.62: cva_hedge_residual_maturity_years mismatch")
     if not hedge_df["cva_hedge_eligible"][0]:
         raise AssertionError("P8.62: cva_hedge_eligible must be True")

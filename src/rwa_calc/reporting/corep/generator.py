@@ -64,10 +64,6 @@ from rwa_calc.reporting.corep.templates import (
     COREPRow,
     get_c02_00_row_sections,
     get_c07_columns,
-    get_c34_01_columns,
-    get_c34_02_columns,
-    get_c34_04_columns,
-    get_c34_08_columns,
     get_c08_02_columns,
     get_c08_03_columns,
     get_c08_04_columns,
@@ -82,6 +78,10 @@ from rwa_calc.reporting.corep.templates import (
     get_c09_01_rows,
     get_c09_02_columns,
     get_c09_02_rows,
+    get_c34_01_columns,
+    get_c34_02_columns,
+    get_c34_04_columns,
+    get_c34_08_columns,
     get_irb_row_sections,
     get_sa_risk_weight_bands,
     get_sa_row_sections,
@@ -872,9 +872,7 @@ class COREPGenerator:
         if cva_col is None:
             return None
 
-        cva_value = (
-            results.select(pl.col(cva_col).max().alias("_cva")).collect()["_cva"][0]
-        )
+        cva_value = results.select(pl.col(cva_col).max().alias("_cva")).collect()["_cva"][0]
         if cva_value is None or float(cva_value) <= 0.0:
             return None
 
@@ -910,9 +908,9 @@ class COREPGenerator:
 
         qccp_ead = qccp_rwea = non_qccp_ead = non_qccp_rwea = 0.0
         if ccr is not None and len(ccr) > 0:
-            is_qccp_trade = (pl.col("cp_entity_type") == "ccp") & pl.col(
-                "cp_is_qccp"
-            ).fill_null(True)
+            is_qccp_trade = (pl.col("cp_entity_type") == "ccp") & pl.col("cp_is_qccp").fill_null(
+                True
+            )
             qccp = ccr.filter(is_qccp_trade)
             non_qccp = ccr.filter(~is_qccp_trade)
             qccp_ead = float(qccp["ead_final"].fill_null(0.0).sum())
@@ -929,9 +927,7 @@ class COREPGenerator:
         rows: list[dict[str, object]] = []
         for row in C34_08_ROWS:
             ead, rwea = row_values.get(row.ref, (0.0, 0.0))
-            rows.append(
-                {"row_ref": row.ref, "row_name": row.name, "0010": ead, "0020": rwea}
-            )
+            rows.append({"row_ref": row.ref, "row_name": row.name, "0010": ead, "0020": rwea})
         return _c34_frame(rows, column_refs)
 
     # =========================================================================

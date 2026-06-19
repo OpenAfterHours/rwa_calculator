@@ -473,6 +473,7 @@ class TestSummaryGeneration:
             config=crr_config,
         )
 
+        assert result.summary_by_class is not None
         summary = result.summary_by_class.collect()
         classes = summary["exposure_class"].to_list()
         assert "CORPORATE" in classes
@@ -509,6 +510,7 @@ class TestSummaryGeneration:
             config=crr_config,
         )
 
+        assert result.summary_by_approach is not None
         summary = result.summary_by_approach.collect()
         approaches = summary["approach_applied"].to_list()
         assert "SA" in approaches
@@ -530,6 +532,7 @@ class TestSummaryGeneration:
             config=crr_config,
         )
 
+        assert result.summary_by_approach is not None
         summary = result.summary_by_approach.collect()
         sa_row = summary.filter(pl.col("approach_applied") == "SA")
 
@@ -562,6 +565,7 @@ class TestSummaryPostCRMBasis:
             config=crr_config,
         )
 
+        assert result.summary_by_class is not None
         summary = result.summary_by_class.collect()
         classes = summary["exposure_class"].to_list()
 
@@ -592,6 +596,7 @@ class TestSummaryPostCRMBasis:
             config=crr_config,
         )
 
+        assert result.summary_by_approach is not None
         summary = result.summary_by_approach.collect()
         approaches = summary["approach_applied"].to_list()
 
@@ -619,6 +624,7 @@ class TestSummaryPostCRMBasis:
             config=crr_config,
         )
 
+        assert result.summary_by_approach is not None
         summary = result.summary_by_approach.collect()
         sa_row = summary.filter(pl.col("approach_applied") == "SA")
 
@@ -649,6 +655,7 @@ class TestPostCRMDetailedReportingApproach:
             config=crr_config,
         )
 
+        assert result.post_crm_detailed is not None
         df = result.post_crm_detailed.collect()
         assert "reporting_approach" in df.columns
 

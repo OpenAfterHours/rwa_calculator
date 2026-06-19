@@ -72,7 +72,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.contracts.bundles import AggregatedResultBundle, RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
@@ -163,7 +163,7 @@ def _build_p2_43_bundle() -> RawDataBundle:
     )
 
 
-def _find_irb_row(results: object, loan_ref: str) -> dict:
+def _find_irb_row(results: AggregatedResultBundle, loan_ref: str) -> dict:
     """
     Return the guaranteed portion IRB result row for *loan_ref*.
 
@@ -176,6 +176,7 @@ def _find_irb_row(results: object, loan_ref: str) -> dict:
     and which has a non-zero EAD (the guaranteed portion), and asserts exactly one
     such row exists.
     """
+    assert results.irb_results is not None, "irb_results must not be None for IRB scenario"
     irb_df = results.irb_results.collect()
     # First try: direct match on exposure_reference (no guarantee split)
     direct_rows = irb_df.filter(pl.col("exposure_reference") == loan_ref).to_dicts()
@@ -300,16 +301,16 @@ class TestP243PSMLGDSourceSwitch:
         # to IRBPermissions. The TypeError is the intended pre-fix failure mode.
         # After fix: IRBPermissions(psm_lgd_source="option_i") accepted, engine routes
         # to borrower's subordinated LGD=0.75 in _apply_parameter_substitution.
+        from dataclasses import replace as dc_replace
+
         base_perms = IRBPermissions.full_irb_b31()
-        irb_perms_option_i = IRBPermissions(**{**vars(base_perms), "psm_lgd_source": "option_i"})
+        irb_perms_option_i = dc_replace(base_perms, psm_lgd_source="option_i")
 
         config = CalculationConfig.basel_3_1(
             reporting_date=date(2027, 6, 30),
             permission_mode=PermissionMode.IRB,
         )
         # Override irb_permissions with option_i variant
-        from dataclasses import replace as dc_replace
-
         config = dc_replace(config, irb_permissions=irb_perms_option_i)
 
         # Act
@@ -372,9 +373,10 @@ class TestP243PSMLGDSourceSwitch:
         # Arrange — option_i: psm_lgd_source="option_i" on IRBPermissions
         # This will FAIL (TypeError) until engine-implementer adds psm_lgd_source field.
         bundle_i = _build_p2_43_bundle()
-        base_perms = IRBPermissions.full_irb_b31()
-        irb_perms_option_i = IRBPermissions(**{**vars(base_perms), "psm_lgd_source": "option_i"})
         from dataclasses import replace as dc_replace
+
+        base_perms = IRBPermissions.full_irb_b31()
+        irb_perms_option_i = dc_replace(base_perms, psm_lgd_source="option_i")
 
         config_i = CalculationConfig.basel_3_1(
             reporting_date=date(2027, 6, 30),

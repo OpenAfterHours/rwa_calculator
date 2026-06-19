@@ -501,7 +501,7 @@ def save_p829_fixtures() -> list[tuple[str, int]]:
     Returns:
         ``[("(python-only builder — no parquet)", 0)]``
     """
-    scenarios: list[tuple[str, bool, str, str, str, str, int | None]] = [
+    scenarios: list[tuple[str, bool, str, str, str, str, str, int | None]] = [
         # (cp_type, legacy, scenario_label, cp_ref, ns_id, trade_id, entity_type, institution_cqs)
         (
             "non_financial",

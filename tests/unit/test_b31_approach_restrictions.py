@@ -345,6 +345,7 @@ class TestB31ConfigUsesB31Permissions:
             permission_mode=PermissionMode.IRB,
         )
         # Institution should be FIRB only (B31), not AIRB+FIRB (CRR)
+        assert config.irb_permissions is not None
         assert not config.irb_permissions.is_permitted(ExposureClass.INSTITUTION, ApproachType.AIRB)
         assert config.irb_permissions.is_permitted(ExposureClass.INSTITUTION, ApproachType.FIRB)
 
@@ -355,6 +356,7 @@ class TestB31ConfigUsesB31Permissions:
             permission_mode=PermissionMode.IRB,
         )
         # Institution should have AIRB under CRR
+        assert config.irb_permissions is not None
         assert config.irb_permissions.is_permitted(ExposureClass.INSTITUTION, ApproachType.AIRB)
 
     def test_b31_sa_config_uses_sa_only(self) -> None:
@@ -364,6 +366,7 @@ class TestB31ConfigUsesB31Permissions:
             permission_mode=PermissionMode.STANDARDISED,
         )
         # No IRB for any class
+        assert config.irb_permissions is not None
         assert not config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.FIRB)
 
     def test_b31_sovereign_forced_sa(self) -> None:
@@ -372,6 +375,7 @@ class TestB31ConfigUsesB31Permissions:
             reporting_date=date(2027, 6, 30),
             permission_mode=PermissionMode.IRB,
         )
+        assert config.irb_permissions is not None
         assert not config.irb_permissions.is_permitted(
             ExposureClass.CENTRAL_GOVT_CENTRAL_BANK, ApproachType.FIRB
         )

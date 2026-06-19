@@ -33,10 +33,15 @@ References:
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import polars as pl
 
 import rwa_calc.data.schemas as schemas
 from rwa_calc.data.column_spec import ColumnSpec
+
+if TYPE_CHECKING:
+    from polars._typing import PolarsDataType
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -53,7 +58,7 @@ def _get_schema(name: str) -> dict[str, ColumnSpec]:
     return obj  # type: ignore[return-value]
 
 
-def _dtype_of(schema: dict[str, ColumnSpec], col: str) -> pl.DataType:
+def _dtype_of(schema: dict[str, ColumnSpec], col: str) -> PolarsDataType:
     """Return the Polars dtype for *col* from a ColumnSpec schema."""
     spec = schema.get(col)
     assert spec is not None, f"Column '{col}' not found in schema"

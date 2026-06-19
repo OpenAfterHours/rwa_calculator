@@ -50,6 +50,7 @@ class TestRawDataBundle:
 
         assert bundle.facilities.collect().shape[0] == 2
         assert bundle.loans.collect().shape[0] == 2
+        assert bundle.contingents is not None
         assert bundle.contingents.collect().shape[0] == 1
 
     def test_optional_specialised_lending(self):
@@ -69,7 +70,7 @@ class TestRawDataBundle:
         bundle = create_empty_raw_data_bundle()
 
         with pytest.raises(AttributeError):
-            bundle.facilities = pl.LazyFrame()
+            bundle.facilities = pl.LazyFrame()  # ty: ignore[invalid-assignment]
 
 
 class TestCounterpartyLookup:

@@ -31,7 +31,7 @@ from rwa_calc.engine.loader import (
 from tests.fixtures.raw_bundle import make_raw_bundle
 
 if TYPE_CHECKING:
-    pass
+    from polars._typing import PolarsDataType
 
 
 # =============================================================================
@@ -517,6 +517,7 @@ class TestHeaderNormalization:
                 counterparties_file=Path("counterparty/counterparties.parquet")
             ),
         )
+        assert loader.config.counterparties_file is not None
         result = loader._load_parquet(loader.config.counterparties_file).collect()
 
         assert "counterparty_id" in result.columns
@@ -568,6 +569,7 @@ class TestHeaderNormalization:
             tmp_path,
             config=DataSourceConfig(counterparties_file=Path("counterparty/counterparties.csv")),
         )
+        assert loader.config.counterparties_file is not None
         result = loader._load_csv(loader.config.counterparties_file).collect()
 
         assert "counterparty_id" in result.columns
@@ -628,7 +630,7 @@ class TestEnforceSchema:
                 "name": ["a", "b", "c"],
             }
         )
-        schema = {"amount": pl.Float64}
+        schema: dict[str, PolarsDataType] = {"amount": pl.Float64}
 
         result = enforce_schema(lf, schema).collect()
 
@@ -645,7 +647,7 @@ class TestEnforceSchema:
                 "amount": [100.0, 200.0, 300.0],
             }
         )
-        schema = {"book_code": pl.String}
+        schema: dict[str, PolarsDataType] = {"book_code": pl.String}
 
         result = enforce_schema(lf, schema).collect()
 
@@ -660,7 +662,7 @@ class TestEnforceSchema:
                 "count": [10, 20, 30],
             }
         )
-        schema = {"is_active": pl.Boolean}
+        schema: dict[str, PolarsDataType] = {"is_active": pl.Boolean}
 
         result = enforce_schema(lf, schema).collect()
 
@@ -674,7 +676,7 @@ class TestEnforceSchema:
                 "limit": [1000, 2000, 3000],  # Int64
             }
         )
-        schema = {"limit": pl.Float64}
+        schema: dict[str, PolarsDataType] = {"limit": pl.Float64}
 
         result = enforce_schema(lf, schema).collect()
 
@@ -688,7 +690,7 @@ class TestEnforceSchema:
                 "amount": [100.0],
             }
         )
-        schema = {
+        schema: dict[str, PolarsDataType] = {
             "amount": pl.Float64,
             "missing_column": pl.String,  # Not in data
         }
@@ -706,7 +708,7 @@ class TestEnforceSchema:
                 "amount": [100.0, 200.0],  # Already Float64
             }
         )
-        schema = {"amount": pl.Float64}
+        schema: dict[str, PolarsDataType] = {"amount": pl.Float64}
 
         result = enforce_schema(lf, schema).collect()
 
@@ -720,7 +722,7 @@ class TestEnforceSchema:
                 "amount": ["100.0", "not_a_number", "300.0"],
             }
         )
-        schema = {"amount": pl.Float64}
+        schema: dict[str, PolarsDataType] = {"amount": pl.Float64}
 
         result = enforce_schema(lf, schema, strict=False).collect()
 
@@ -803,7 +805,9 @@ class TestSchemaEnforcementInLoaders:
         csv_content = "loan_reference,book_code,interest\nL001,123,50.5\n"
         (tmp_path / "exposures" / "loans.csv").write_text(csv_content)
 
-        loader = CSVLoader(tmp_path, config=DataSourceConfig(loans_file="exposures/loans.csv"))
+        loader = CSVLoader(
+            tmp_path, config=DataSourceConfig(loans_file=Path("exposures/loans.csv"))
+        )
         from rwa_calc.data.schemas import LOAN_SCHEMA
 
         result = loader._load_csv("exposures/loans.csv", LOAN_SCHEMA).collect()
@@ -874,6 +878,7 @@ class TestEdgeCases:
         (tmp_path / "exposures").mkdir()
 
         loader = ParquetLoader(tmp_path)
+        assert loader.config.counterparties_file is not None
         with pytest.raises(DataLoadError, match="File not found"):
             loader._load_parquet(loader.config.counterparties_file, COUNTERPARTY_SCHEMA)
 
@@ -892,6 +897,7 @@ class TestEdgeCases:
         loader = ParquetLoader(tmp_path)
 
         # Error occurs during loading due to schema enforcement
+        assert loader.config.counterparties_file is not None
         with pytest.raises(DataLoadError):
             loader._load_parquet(loader.config.counterparties_file, COUNTERPARTY_SCHEMA)
 

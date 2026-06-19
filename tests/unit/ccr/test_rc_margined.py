@@ -44,7 +44,7 @@ from tests.fixtures.ccr.rc_margined_builder import (
 try:
     from rwa_calc.engine.ccr.rc import compute_rc_margined
 except (ImportError, AttributeError):
-    compute_rc_margined = None  # type: ignore[assignment]
+    compute_rc_margined = None  # ty: ignore[invalid-assignment]
 
 
 # ===========================================================================

@@ -12,7 +12,8 @@ class TestAttributorRegistry:
 
     def test_crr_b31_pairing_registered(self):
         """The ('crr', 'b31') pairing resolves to the 4-driver waterfall attributor."""
-        assert get_attributor("crr", "b31").__name__ == "_crr_to_b31_attribution"
+        attributor = get_attributor("crr", "b31")
+        assert attributor.__name__ == "_crr_to_b31_attribution"  # ty: ignore[unresolved-attribute]
 
     def test_unregistered_pairing_falls_back_to_neutral(self):
         """Any unregistered pairing resolves to the neutral delta-only attributor."""

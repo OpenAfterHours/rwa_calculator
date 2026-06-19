@@ -25,7 +25,6 @@ References:
 from __future__ import annotations
 
 import dataclasses
-from typing import cast
 
 import polars as pl
 import pytest
@@ -109,7 +108,7 @@ def netting_result(
     """
     exposures_lf = create_p238_equity_exposures().lazy()
     result = equity_calculator.calculate_branch(exposures_lf, crr_irb_config).collect()
-    return cast(pl.DataFrame, result)
+    return result
 
 
 @pytest.fixture(scope="module")

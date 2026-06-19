@@ -213,23 +213,17 @@ class OutputAggregator:
             "cp_entity_type",
             "cp_is_qccp",
         } <= set(combined_df.columns):
-            ccr_rows = combined_df.filter(
-                pl.col("exposure_reference").str.starts_with("ccr__")
+            ccr_rows = combined_df.filter(pl.col("exposure_reference").str.starts_with("ccr__"))
+            is_qccp_trade = (pl.col("cp_entity_type") == "ccp") & pl.col("cp_is_qccp").fill_null(
+                True
             )
-            is_qccp_trade = (pl.col("cp_entity_type") == "ccp") & pl.col(
-                "cp_is_qccp"
-            ).fill_null(True)
             default_total = float(
-                ccr_rows.filter(~is_qccp_trade)
-                .select(pl.col("rwa_final").sum())
-                .item()
+                ccr_rows.filter(~is_qccp_trade).select(pl.col("rwa_final").sum()).item()
             )
             if default_total > 0.0:
                 rwa_ccr_default = default_total
             qccp_total = float(
-                ccr_rows.filter(is_qccp_trade)
-                .select(pl.col("rwa_final").sum())
-                .item()
+                ccr_rows.filter(is_qccp_trade).select(pl.col("rwa_final").sum()).item()
             )
             if qccp_total > 0.0:
                 rwa_ccr_qccp_trade = qccp_total

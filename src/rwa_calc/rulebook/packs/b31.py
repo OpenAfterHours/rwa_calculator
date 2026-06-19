@@ -1187,7 +1187,9 @@ ENTRIES: dict[str, RuleEntry] = {
     "cva_ba_cva": Feature(
         name="cva_ba_cva",
         enabled=True,
-        citation=Citation("PS1/26", "4.1", "BA-CVA in scope (Credit Valuation Adjustment Risk Part)"),
+        citation=Citation(
+            "PS1/26", "4.1", "BA-CVA in scope (Credit Valuation Adjustment Risk Part)"
+        ),
     ),
     # DS_BA-CVA discount scalar applied to K_reduced (PS1/26 CVA Part 4.2,
     # page 399): OFR_CVA = DS_BA-CVA x K_reduced.

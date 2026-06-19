@@ -28,7 +28,7 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from rwa_calc.reporting.corep.generator import COREPGenerator
+from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBundle
 
 # Grade-path fixture builder and constants
 from tests.fixtures.p4_20.p4_20 import (
@@ -85,16 +85,16 @@ class TestP420GradePath:
     """GROUP 1 — grade-keyed C 08.02 rows (fails until engine supports grades)."""
 
     @pytest.fixture()
-    def bundle(self) -> object:
+    def bundle(self) -> COREPTemplateBundle:
         """Generate C 08.02 bundle from the grade-path fixture (CRR framework)."""
         gen = COREPGenerator()
         lf = build_grade_path_irb_results_lf()
         return gen.generate_from_lazyframe(lf, framework=FRAMEWORK)
 
     @pytest.fixture()
-    def corp(self, bundle: object) -> pl.DataFrame:
+    def corp(self, bundle: COREPTemplateBundle) -> pl.DataFrame:
         """Extract the corporate C 08.02 DataFrame from the bundle."""
-        return bundle.c08_02["corporate"]  # type: ignore[attr-defined]
+        return bundle.c08_02["corporate"]
 
     # ------------------------------------------------------------------
     # Row count and row-name set
@@ -350,15 +350,15 @@ class TestP420FallbackPath:
     """GROUP 2 — fixed-PD-bucket fallback (passes before and after engine change)."""
 
     @pytest.fixture()
-    def bundle(self) -> object:
+    def bundle(self) -> COREPTemplateBundle:
         """Generate C 08.02 bundle from the existing _irb_results() fixture (CRR)."""
         gen = COREPGenerator()
         return gen.generate_from_lazyframe(_irb_results(), framework="CRR")
 
     @pytest.fixture()
-    def corp(self, bundle: object) -> pl.DataFrame:
+    def corp(self, bundle: COREPTemplateBundle) -> pl.DataFrame:
         """Extract the corporate C 08.02 DataFrame from the bundle."""
-        return bundle.c08_02["corporate"]  # type: ignore[attr-defined]
+        return bundle.c08_02["corporate"]
 
     def test_p420_fallback_corporate_band_050_ead(self, corp: pl.DataFrame) -> None:
         """Fallback: corporate '0.50% - 0.75%' band EAD == 5500.0 (col 0110).

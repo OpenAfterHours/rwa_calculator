@@ -77,6 +77,7 @@ import math
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import polars as pl
 
@@ -87,6 +88,9 @@ from rwa_calc.data.schemas import (
     FACILITY_SCHEMA,
     LOAN_SCHEMA,
 )
+
+if TYPE_CHECKING:
+    from polars._typing import PolarsDataType
 
 # ---------------------------------------------------------------------------
 # Scenario constants
@@ -471,7 +475,7 @@ def create_p1123_loans() -> pl.DataFrame:
             exposure_collateral_type=None,
             exposure_security_cqs=None,
             exposure_security_residual_maturity_years=None,
-            **common,
+            **common,  # ty: ignore[invalid-argument-type]
         ),
         _Loan(
             loan_reference=LOAN_REF_BIND,
@@ -480,7 +484,7 @@ def create_p1123_loans() -> pl.DataFrame:
             exposure_collateral_type="corp_bond",
             exposure_security_cqs=2,
             exposure_security_residual_maturity_years=4.0,
-            **common,
+            **common,  # ty: ignore[invalid-argument-type]
         ),
         _Loan(
             loan_reference=LOAN_REF_RUNB,
@@ -489,13 +493,13 @@ def create_p1123_loans() -> pl.DataFrame:
             exposure_collateral_type="cash",
             exposure_security_cqs=None,
             exposure_security_residual_maturity_years=None,
-            **common,
+            **common,  # ty: ignore[invalid-argument-type]
         ),
     ]
 
     # Build the base schema from LOAN_SCHEMA, then add new columns
     base_schema = dtypes_of(LOAN_SCHEMA)
-    extended_schema: dict[str, pl.DataType] = {
+    extended_schema: dict[str, PolarsDataType] = {
         **base_schema,
         "exposure_collateral_type": pl.String,
         "exposure_security_cqs": pl.Int8,

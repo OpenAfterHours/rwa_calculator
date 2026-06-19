@@ -48,6 +48,7 @@ from __future__ import annotations
 
 import dataclasses
 from datetime import date
+from typing import TYPE_CHECKING, cast
 
 import polars as pl
 import pytest
@@ -55,14 +56,16 @@ import pytest
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
-from rwa_calc.reporting.pillar3.generator import Pillar3Generator
+from rwa_calc.reporting.pillar3.generator import Pillar3Generator, Pillar3TemplateBundle
+
+if TYPE_CHECKING:
+    from rwa_calc.contracts.bundles import AggregatedResultBundle
 from tests.fixtures.ccr.golden_ccr_a1 import build_raw_data_bundle_with_ccr_a1
 from tests.fixtures.ccr.p839_ccp_builder import build_p839_bundle
 from tests.fixtures.p8_60.cva_a1_builder import (
-    build_raw_data_bundle_cva_a1,
-    compute_cva_a1_golden,
-    create_cva_a1_counterparty_frame,
     CVA_A1_NETTING_SET_ID,
+    build_raw_data_bundle_cva_a1,
+    create_cva_a1_counterparty_frame,
 )
 
 # ---------------------------------------------------------------------------
@@ -185,7 +188,7 @@ def cva_a1_result_and_ead():
 # ---------------------------------------------------------------------------
 
 
-def _generate_bundle(result, *, framework: str):
+def _generate_bundle(result: AggregatedResultBundle, *, framework: str) -> Pillar3TemplateBundle:
     """Generate a Pillar3TemplateBundle from a pipeline result."""
     return Pillar3Generator().generate_from_lazyframe(
         result.results,
@@ -309,14 +312,10 @@ class TestCCR1SAEquivalentEAD:
         assert ccr1 is not _MISSING, (
             "Pillar3TemplateBundle.ccr1 does not exist (P8.51 not yet implemented)."
         )
-        assert ccr1 is not None, (
-            "P8.51 CCR1: ccr1 must be generated for a CCR run."
-        )
+        assert ccr1 is not None, "P8.51 CCR1: ccr1 must be generated for a CCR run."
+        ccr1 = cast("pl.DataFrame", ccr1)
 
         # Find SA-CCR row — approach column must contain a row labelled "SA-CCR".
-        approach_col = next(
-            (c for c in ccr1.columns if c not in ("row_ref", "row_name")), None
-        )
         sa_ccr_rows = ccr1.filter(pl.col("row_name").str.contains("SA-CCR"))
 
         assert sa_ccr_rows.height > 0, (
@@ -327,9 +326,7 @@ class TestCCR1SAEquivalentEAD:
         )
 
         # EAD column — must be the first data column (column "a" by convention)
-        ead_col = next(
-            (c for c in ccr1.columns if c not in ("row_ref", "row_name")), None
-        )
+        ead_col = next((c for c in ccr1.columns if c not in ("row_ref", "row_name")), None)
         assert ead_col is not None, (
             "P8.51 CCR1: no data column found in ccr1. "
             "Expected at least one non-metadata column (e.g., 'a' for EAD)."
@@ -381,20 +378,16 @@ class TestCCR1SAEquivalentEAD:
         assert ccr1 is not _MISSING, (
             "Pillar3TemplateBundle.ccr1 does not exist (P8.51 not yet implemented)."
         )
-        assert ccr1 is not None, (
-            "P8.51 CCR1: ccr1 must be generated for a CCR run."
-        )
+        assert ccr1 is not None, "P8.51 CCR1: ccr1 must be generated for a CCR run."
+        ccr1 = cast("pl.DataFrame", ccr1)
 
         sa_ccr_rows = ccr1.filter(pl.col("row_name").str.contains("SA-CCR"))
-        assert sa_ccr_rows.height > 0, (
-            "P8.51 CCR1: no SA-CCR approach row found in ccr1."
-        )
+        assert sa_ccr_rows.height > 0, "P8.51 CCR1: no SA-CCR approach row found in ccr1."
 
         # RWEA column: typically the second data column (column "b").
         data_cols = [c for c in ccr1.columns if c not in ("row_ref", "row_name")]
         assert len(data_cols) >= 2, (
-            f"P8.51 CCR1: expected at least 2 data columns (EAD, RWEA), "
-            f"got {data_cols!r}."
+            f"P8.51 CCR1: expected at least 2 data columns (EAD, RWEA), got {data_cols!r}."
         )
         rwea_col = data_cols[1]
         actual_rwea = sa_ccr_rows[rwea_col][0]
@@ -433,14 +426,11 @@ class TestCCR1SAEquivalentEAD:
         assert ccr1 is not _MISSING, (
             "Pillar3TemplateBundle.ccr1 does not exist (P8.51 not yet implemented)."
         )
-        assert ccr1 is not None, (
-            "P8.51 CCR1: ccr1 must not be None for a CCR run."
-        )
+        assert ccr1 is not None, "P8.51 CCR1: ccr1 must not be None for a CCR run."
+        ccr1 = cast("pl.DataFrame", ccr1)
 
         # Assert
-        total_rows = ccr1.filter(
-            pl.col("row_name").str.to_lowercase().str.contains("total")
-        )
+        total_rows = ccr1.filter(pl.col("row_name").str.to_lowercase().str.contains("total"))
         assert total_rows.height > 0, (
             f"P8.51 CCR1: no Total row found. "
             f"Available row_names: {ccr1['row_name'].to_list()!r}. "
@@ -482,9 +472,7 @@ class TestCCR1SAEquivalentEAD:
         )
         # Derive prefix as the generator would.
         prefix = "UKB" if bundle.framework == "BASEL_3_1" else "UK"
-        assert prefix == "UK", (
-            f"P8.51: CRR run must use UK prefix, got {prefix!r}."
-        )
+        assert prefix == "UK", f"P8.51: CRR run must use UK prefix, got {prefix!r}."
 
 
 # ---------------------------------------------------------------------------
@@ -583,9 +571,8 @@ class TestCCR3EADByRiskWeightBand:
         assert ccr3 is not _MISSING, (
             "Pillar3TemplateBundle.ccr3 does not exist (P8.51 not yet implemented)."
         )
-        assert ccr3 is not None, (
-            "P8.51 CCR3: ccr3 must not be None for a CCR run with CCR rows."
-        )
+        assert ccr3 is not None, "P8.51 CCR3: ccr3 must not be None for a CCR run with CCR rows."
+        ccr3 = cast("pl.DataFrame", ccr3)
 
         # Find the 50%-band row: row_name should contain "50" or row_ref matches.
         band_rows = ccr3.filter(
@@ -637,9 +624,7 @@ class TestCCR3EADByRiskWeightBand:
         assert expected_total_ead is not _MISSING, (
             "AggregatedResultBundle.ead_ccr_total does not exist — P8.52 prerequisite."
         )
-        assert expected_total_ead is not None, (
-            "ead_ccr_total is None — P8.52 must populate it."
-        )
+        assert expected_total_ead is not None, "ead_ccr_total is None — P8.52 must populate it."
 
         # Act
         bundle = _generate_bundle(ccr_a1_result, framework="CRR")
@@ -648,16 +633,12 @@ class TestCCR3EADByRiskWeightBand:
         assert ccr3 is not _MISSING, (
             "Pillar3TemplateBundle.ccr3 does not exist (P8.51 not yet implemented)."
         )
-        assert ccr3 is not None, (
-            "P8.51 CCR3: ccr3 must not be None."
-        )
+        assert ccr3 is not None, "P8.51 CCR3: ccr3 must not be None."
+        ccr3 = cast("pl.DataFrame", ccr3)
 
-        total_rows = ccr3.filter(
-            pl.col("row_name").str.to_lowercase().str.contains("total")
-        )
+        total_rows = ccr3.filter(pl.col("row_name").str.to_lowercase().str.contains("total"))
         assert total_rows.height > 0, (
-            f"P8.51 CCR3: no Total row found. "
-            f"row_names: {ccr3['row_name'].to_list()!r}."
+            f"P8.51 CCR3: no Total row found. row_names: {ccr3['row_name'].to_list()!r}."
         )
 
         data_cols = [c for c in ccr3.columns if c not in ("row_ref", "row_name")]
@@ -766,9 +747,8 @@ class TestCCR8QCCPNonQCCPSplit:
         assert ccr8 is not _MISSING, (
             "Pillar3TemplateBundle.ccr8 does not exist (P8.51 not yet implemented)."
         )
-        assert ccr8 is not None, (
-            "P8.51 CCR8: ccr8 must not be None."
-        )
+        assert ccr8 is not None, "P8.51 CCR8: ccr8 must not be None."
+        ccr8 = cast("pl.DataFrame", ccr8)
 
         # Find QCCP row
         qccp_rows = ccr8.filter(
@@ -828,14 +808,11 @@ class TestCCR8QCCPNonQCCPSplit:
         assert ccr8 is not _MISSING, (
             "Pillar3TemplateBundle.ccr8 does not exist (P8.51 not yet implemented)."
         )
-        assert ccr8 is not None, (
-            "P8.51 CCR8: ccr8 must not be None."
-        )
+        assert ccr8 is not None, "P8.51 CCR8: ccr8 must not be None."
+        ccr8 = cast("pl.DataFrame", ccr8)
 
         # Find non-QCCP row
-        non_qccp_rows = ccr8.filter(
-            pl.col("row_name").str.to_lowercase().str.contains("non")
-        )
+        non_qccp_rows = ccr8.filter(pl.col("row_name").str.to_lowercase().str.contains("non"))
         assert non_qccp_rows.height > 0, (
             f"P8.51 CCR8: no non-QCCP row found. "
             f"Available row_names: {ccr8['row_name'].to_list()!r}. "
@@ -878,14 +855,11 @@ class TestCCR8QCCPNonQCCPSplit:
         assert ccr8 is not _MISSING, (
             "Pillar3TemplateBundle.ccr8 does not exist (P8.51 not yet implemented)."
         )
-        assert ccr8 is not None, (
-            "P8.51 CCR8: ccr8 must not be None."
-        )
+        assert ccr8 is not None, "P8.51 CCR8: ccr8 must not be None."
+        ccr8 = cast("pl.DataFrame", ccr8)
 
         # Assert
-        total_rows = ccr8.filter(
-            pl.col("row_name").str.to_lowercase().str.contains("total")
-        )
+        total_rows = ccr8.filter(pl.col("row_name").str.to_lowercase().str.contains("total"))
         assert total_rows.height > 0, (
             f"P8.51 CCR8: no Total row. row_names: {ccr8['row_name'].to_list()!r}."
         )
@@ -990,9 +964,8 @@ class TestCCR2BACVACapital:
         assert ccr2 is not _MISSING, (
             "Pillar3TemplateBundle.ccr2 does not exist (P8.51 not yet implemented)."
         )
-        assert ccr2 is not None, (
-            "P8.51 CCR2: ccr2 must not be None."
-        )
+        assert ccr2 is not None, "P8.51 CCR2: ccr2 must not be None."
+        ccr2 = cast("pl.DataFrame", ccr2)
 
         # Find BA-CVA row
         ba_cva_rows = ccr2.filter(
@@ -1086,6 +1059,4 @@ class TestCCR2BACVACapital:
             f"P8.51 CCR2 framework check: expected 'BASEL_3_1', got {bundle.framework!r}."
         )
         prefix = "UKB" if bundle.framework == "BASEL_3_1" else "UK"
-        assert prefix == "UKB", (
-            f"P8.51: Basel 3.1 run must use UKB prefix, got {prefix!r}."
-        )
+        assert prefix == "UKB", f"P8.51: Basel 3.1 run must use UKB prefix, got {prefix!r}."

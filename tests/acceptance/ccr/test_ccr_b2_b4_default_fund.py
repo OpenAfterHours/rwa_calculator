@@ -87,17 +87,14 @@ from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.ccr.p849_default_fund_builder import (
     DFC_B2_EAD,
     DFC_B2_ID,
-    DFC_B2_K_CM,
     DFC_B2_REGULATORY_BAND,
     DFC_B2_RWEA,
     DFC_B3_EAD,
     DFC_B3_ID,
-    DFC_B3_K_CM,
     DFC_B3_REGULATORY_BAND,
     DFC_B3_RWEA,
     DFC_B4_EAD,
     DFC_B4_ID,
-    DFC_B4_K_CM,
     DFC_B4_REGULATORY_BAND,
     DFC_B4_RWEA,
     OWN_FUNDS_TO_RWA_FACTOR,
@@ -523,8 +520,7 @@ class TestCCRB2B4DefaultFund:
 
         # Assert — provenance contract columns
         assert row["risk_type"] == _SYNTHETIC_RISK_TYPE, (
-            f"CCR-B2: expected risk_type=={_SYNTHETIC_RISK_TYPE!r}, "
-            f"got {row.get('risk_type')!r}."
+            f"CCR-B2: expected risk_type=={_SYNTHETIC_RISK_TYPE!r}, got {row.get('risk_type')!r}."
         )
         assert row["ccr_method"] == _SYNTHETIC_CCR_METHOD, (
             f"CCR-B2: expected ccr_method=={_SYNTHETIC_CCR_METHOD!r}, "
@@ -572,16 +568,14 @@ class TestCCRB2B4DefaultFund:
 
         # Assert
         assert row["risk_type"] == _SYNTHETIC_RISK_TYPE, (
-            f"CCR-B3: expected risk_type=={_SYNTHETIC_RISK_TYPE!r}, "
-            f"got {row.get('risk_type')!r}."
+            f"CCR-B3: expected risk_type=={_SYNTHETIC_RISK_TYPE!r}, got {row.get('risk_type')!r}."
         )
         assert row["ccr_method"] == _SYNTHETIC_CCR_METHOD, (
             f"CCR-B3: expected ccr_method=={_SYNTHETIC_CCR_METHOD!r}, "
             f"got {row.get('ccr_method')!r}."
         )
         assert row["risk_weight"] == pytest.approx(_SYNTHETIC_RW, abs=1e-6), (
-            f"CCR-B3: expected risk_weight=={_SYNTHETIC_RW}, "
-            f"got {row.get('risk_weight')}."
+            f"CCR-B3: expected risk_weight=={_SYNTHETIC_RW}, got {row.get('risk_weight')}."
         )
         assert row["drawn_amount"] == pytest.approx(DFC_B3_EAD, abs=1.0), (
             f"CCR-B3: expected drawn_amount=={DFC_B3_EAD:,.0f} (= K_CM), "
@@ -620,16 +614,14 @@ class TestCCRB2B4DefaultFund:
 
         # Assert
         assert row["risk_type"] == _SYNTHETIC_RISK_TYPE, (
-            f"CCR-B4: expected risk_type=={_SYNTHETIC_RISK_TYPE!r}, "
-            f"got {row.get('risk_type')!r}."
+            f"CCR-B4: expected risk_type=={_SYNTHETIC_RISK_TYPE!r}, got {row.get('risk_type')!r}."
         )
         assert row["ccr_method"] == _SYNTHETIC_CCR_METHOD, (
             f"CCR-B4: expected ccr_method=={_SYNTHETIC_CCR_METHOD!r}, "
             f"got {row.get('ccr_method')!r}."
         )
         assert row["risk_weight"] == pytest.approx(_SYNTHETIC_RW, abs=1e-6), (
-            f"CCR-B4: expected risk_weight=={_SYNTHETIC_RW}, "
-            f"got {row.get('risk_weight')}."
+            f"CCR-B4: expected risk_weight=={_SYNTHETIC_RW}, got {row.get('risk_weight')}."
         )
         assert row["drawn_amount"] == pytest.approx(DFC_B4_EAD, abs=1.0), (
             f"CCR-B4: expected drawn_amount=={DFC_B4_EAD:,.0f} (= K_CM), "

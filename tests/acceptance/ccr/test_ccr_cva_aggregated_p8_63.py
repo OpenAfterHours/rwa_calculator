@@ -52,10 +52,12 @@ from __future__ import annotations
 
 import dataclasses
 from datetime import date
+from typing import cast
 
 import polars as pl
 import pytest
 
+from rwa_calc.contracts.bundles import AggregatedResultBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
@@ -88,7 +90,7 @@ _CCR_EXPOSURE_REF = f"ccr__{CVA_A1_NETTING_SET_ID}"  # "ccr__NS_CVA_001"
 # ---------------------------------------------------------------------------
 
 
-def _materialise_ead_ccr(result: object) -> float:
+def _materialise_ead_ccr(result: AggregatedResultBundle) -> float:
     """
     Extract the materialised EAD for NS_CVA_001 from the pipeline result.
 
@@ -101,7 +103,7 @@ def _materialise_ead_ccr(result: object) -> float:
     Returns:
         EAD as a float (must be > 0 for any live 3-year IR swap).
     """
-    df = result.results.collect()  # type: ignore[union-attr]
+    df = result.results.collect()
     ccr_rows = df.filter(pl.col("exposure_reference") == _CCR_EXPOSURE_REF).to_dicts()
     assert len(ccr_rows) == 1, (
         f"CVA-AGG-A1: expected exactly 1 CCR synthetic row for "
@@ -117,7 +119,7 @@ def _materialise_ead_ccr(result: object) -> float:
 
 
 @pytest.fixture(scope="module")
-def cva_agg_reduced_result() -> tuple[object, float]:
+def cva_agg_reduced_result() -> tuple[AggregatedResultBundle, float]:
     """
     Sub-case A (reduced): run the CVA-A1 bundle with counterparties, no hedges.
 
@@ -153,7 +155,9 @@ def cva_agg_reduced_result() -> tuple[object, float]:
 
 
 @pytest.fixture(scope="module")
-def cva_agg_full_result(cva_agg_reduced_result: tuple[object, float]) -> tuple[object, float]:
+def cva_agg_full_result(
+    cva_agg_reduced_result: tuple[AggregatedResultBundle, float],
+) -> tuple[AggregatedResultBundle, float]:
     """
     Sub-case B (full): run the CVA-A1 bundle with counterparties AND a perfect hedge.
 
@@ -228,7 +232,7 @@ class TestCVAAggA1BundleFields:
 
     def test_cva_agg_a1_reduced_cva_method(
         self,
-        cva_agg_reduced_result: tuple[object, float],
+        cva_agg_reduced_result: tuple[AggregatedResultBundle, float],
     ) -> None:
         """
         result.cva_method == "BA-CVA" when CVA counterparties are attached.
@@ -257,7 +261,7 @@ class TestCVAAggA1BundleFields:
         assert hasattr(result, "cva_method"), (
             "AggregatedResultBundle must have field 'cva_method: str | None'. "
             "Engine-implementer: add 'cva_method: str | None = None' to the dataclass "
-            "and set it to \"BA-CVA\" in _ba_cva_roll_up when cva_rwa is not None."
+            'and set it to "BA-CVA" in _ba_cva_roll_up when cva_rwa is not None.'
         )
 
         # Act — read the field (guard passed)
@@ -272,7 +276,7 @@ class TestCVAAggA1BundleFields:
 
     def test_cva_agg_a1_reduced_cva_hedges_recognised(
         self,
-        cva_agg_reduced_result: tuple[object, float],
+        cva_agg_reduced_result: tuple[AggregatedResultBundle, float],
     ) -> None:
         """
         result.cva_hedges_recognised is False when no eligible hedges are attached.
@@ -314,7 +318,7 @@ class TestCVAAggA1BundleFields:
 
     def test_cva_agg_a1_reduced_cva_rwa_and_composition(
         self,
-        cva_agg_reduced_result: tuple[object, float],
+        cva_agg_reduced_result: tuple[AggregatedResultBundle, float],
     ) -> None:
         """
         Sub-case A: cva_rwa matches golden and composition identity holds.
@@ -362,9 +366,11 @@ class TestCVAAggA1BundleFields:
 
         # Assert (b) — composition identity: R + cva_rwa is the composed total.
         # SummaryStatistics.total_rwa today sums only rwa_final (CVA excluded).
-        default_risk_rwa = result.results.collect()["rwa_final"].sum()  # type: ignore[union-attr]
-        composed_total = default_risk_rwa + cva_rwa
-        assert composed_total == pytest.approx(default_risk_rwa + cva_rwa, rel=1e-9), (
+        default_risk_rwa = result.results.collect()["rwa_final"].sum()
+        composed_total = default_risk_rwa + cast("float", cva_rwa)
+        assert composed_total == pytest.approx(
+            default_risk_rwa + cast("float", cva_rwa), rel=1e-9
+        ), (
             "CVA-AGG-A1 (reduced): composition identity R + cva_rwa must be additive. "
             f"default_risk_rwa={default_risk_rwa:,.4f}, cva_rwa={cva_rwa:,.4f}, "
             f"composed_total={composed_total:,.4f}. "
@@ -394,7 +400,7 @@ class TestCVAAggA1FullBundleFields:
 
     def test_cva_agg_a1_full_cva_method(
         self,
-        cva_agg_full_result: tuple[object, float],
+        cva_agg_full_result: tuple[AggregatedResultBundle, float],
     ) -> None:
         """
         result.cva_method == "BA-CVA" when CVA counterparties AND hedges are attached.
@@ -417,7 +423,7 @@ class TestCVAAggA1FullBundleFields:
         assert hasattr(result, "cva_method"), (
             "AggregatedResultBundle must have field 'cva_method: str | None'. "
             "Engine-implementer: add 'cva_method: str | None = None' and set it "
-            "to \"BA-CVA\" in _ba_cva_roll_up for BOTH reduced and full paths."
+            'to "BA-CVA" in _ba_cva_roll_up for BOTH reduced and full paths.'
         )
 
         # Act
@@ -432,7 +438,7 @@ class TestCVAAggA1FullBundleFields:
 
     def test_cva_agg_a1_full_cva_hedges_recognised(
         self,
-        cva_agg_full_result: tuple[object, float],
+        cva_agg_full_result: tuple[AggregatedResultBundle, float],
     ) -> None:
         """
         result.cva_hedges_recognised is True when eligible hedge is attached.
@@ -476,7 +482,7 @@ class TestCVAAggA1FullBundleFields:
 
     def test_cva_agg_a1_full_cva_rwa_matches_golden(
         self,
-        cva_agg_full_result: tuple[object, float],
+        cva_agg_full_result: tuple[AggregatedResultBundle, float],
     ) -> None:
         """
         cva_rwa == approx(compute_cva_full_golden(ead_ccr)["rwea_cva_full"], rel=1e-6).
@@ -525,8 +531,8 @@ class TestCVAAggA1FullBundleFields:
 
     def test_cva_agg_a1_full_ratio_equals_beta(
         self,
-        cva_agg_full_result: tuple[object, float],
-        cva_agg_reduced_result: tuple[object, float],
+        cva_agg_full_result: tuple[AggregatedResultBundle, float],
+        cva_agg_reduced_result: tuple[AggregatedResultBundle, float],
     ) -> None:
         """
         Ratio invariant: cva_rwa_full / cva_rwa_reduced == approx(0.25=beta, rel=1e-9).
@@ -579,7 +585,7 @@ class TestCVAAggA1FullBundleFields:
 
     def test_cva_agg_a1_full_composition_identity(
         self,
-        cva_agg_full_result: tuple[object, float],
+        cva_agg_full_result: tuple[AggregatedResultBundle, float],
     ) -> None:
         """
         Composition identity: sum(rwa_final) + cva_rwa is the correct composed total.
@@ -611,7 +617,7 @@ class TestCVAAggA1FullBundleFields:
             # cva_rwa absent — let the primary value assertion catch it; skip here.
             pytest.skip("cva_rwa is None — primary value assertion covers this failure")
 
-        default_risk_rwa = result.results.collect()["rwa_final"].sum()  # type: ignore[union-attr]
+        default_risk_rwa = result.results.collect()["rwa_final"].sum()
         composed_total = default_risk_rwa + cva_rwa
 
         # Assert

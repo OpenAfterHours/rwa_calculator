@@ -48,7 +48,6 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
-from typing import cast
 
 import polars as pl
 import pytest
@@ -170,7 +169,7 @@ def _run_pipeline() -> pl.DataFrame:
     )
     results = PipelineOrchestrator().run_with_data(bundle, config)
     assert results.sa_results is not None, "SA results must not be None for SA-only config"
-    return cast(pl.DataFrame, results.sa_results.collect())
+    return results.sa_results.collect()
 
 
 # ---------------------------------------------------------------------------

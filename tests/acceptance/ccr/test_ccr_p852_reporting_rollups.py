@@ -50,6 +50,7 @@ References:
 from __future__ import annotations
 
 from datetime import date
+from typing import cast
 
 import polars as pl
 import pytest
@@ -62,22 +63,7 @@ from rwa_calc.contracts.bundles import (
     RawCCRBundle,
     TradeBundle,
 )
-from rwa_calc.engine.pipeline import PipelineOrchestrator
-from tests.fixtures.ccr.p843_failed_trade_builder import (
-    PORTFOLIO_TOTAL_RWA as FT_PORTFOLIO_TOTAL_RWA,
-    make_c_failed_trades_frame,
-    make_minimal_counterparties_frame as make_ft_counterparties_frame,
-)
-from tests.fixtures.ccr.p845_e1_e5_builder import (
-    build_raw_data_bundle_ccr_e1,
-    make_crr_config,
-)
-from tests.fixtures.ccr.p839_ccp_builder import (
-    P839_RW_CLIENT_CLEARED,
-    P839_RW_PROPRIETARY,
-    build_p839_bundle,
-)
-from tests.fixtures.raw_bundle import make_raw_bundle
+from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import (
     CCR_COLLATERAL_SCHEMA,
@@ -85,8 +71,27 @@ from rwa_calc.data.schemas import (
     NETTING_SET_SCHEMA,
     TRADE_SCHEMA,
 )
-from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import PermissionMode
+from rwa_calc.engine.pipeline import PipelineOrchestrator
+from tests.fixtures.ccr.p839_ccp_builder import (
+    P839_RW_CLIENT_CLEARED,
+    P839_RW_PROPRIETARY,
+    build_p839_bundle,
+)
+from tests.fixtures.ccr.p843_failed_trade_builder import (
+    PORTFOLIO_TOTAL_RWA as FT_PORTFOLIO_TOTAL_RWA,
+)
+from tests.fixtures.ccr.p843_failed_trade_builder import (
+    make_c_failed_trades_frame,
+)
+from tests.fixtures.ccr.p843_failed_trade_builder import (
+    make_minimal_counterparties_frame as make_ft_counterparties_frame,
+)
+from tests.fixtures.ccr.p845_e1_e5_builder import (
+    build_raw_data_bundle_ccr_e1,
+    make_crr_config,
+)
+from tests.fixtures.raw_bundle import make_raw_bundle
 from tests.fixtures.reporting_portfolio import build_reporting_bundle
 
 # ---------------------------------------------------------------------------
@@ -651,7 +656,7 @@ class TestP852CCRCcp1QccpProprietaryRollUp:
         if ead_total is None or rwa_qccp is None:
             pytest.skip("ead_ccr_total or rwa_ccr_qccp_trade is None — covered by other tests")
 
-        expected = ead_total * P839_RW_PROPRIETARY  # EAD * 0.02
+        expected = cast("float", ead_total) * P839_RW_PROPRIETARY  # EAD * 0.02
 
         # Assert
         assert rwa_qccp == pytest.approx(expected, rel=1e-9), (
@@ -749,7 +754,7 @@ class TestP852CCRCcp2QccpClientClearedRollUp:
         if ead_total is None or rwa_qccp is None:
             pytest.skip("ead_ccr_total or rwa_ccr_qccp_trade is None — covered by other tests")
 
-        expected = ead_total * P839_RW_CLIENT_CLEARED  # EAD * 0.04
+        expected = cast("float", ead_total) * P839_RW_CLIENT_CLEARED  # EAD * 0.04
 
         # Assert
         assert rwa_qccp == pytest.approx(expected, rel=1e-9), (
@@ -952,7 +957,9 @@ class TestP852ReconciliationInvariant:
             "AggregatedResultBundle.rwa_ccr_qccp_trade does not exist (P8.52 not yet implemented)."
         )
 
-        composed = (rwa_ccr_default or 0.0) + (rwa_ccr_qccp or 0.0)
+        composed = (cast("float | None", rwa_ccr_default) or 0.0) + (
+            cast("float | None", rwa_ccr_qccp) or 0.0
+        )
 
         # Assert
         assert composed == pytest.approx(ccr_total, rel=1e-9), (
@@ -998,7 +1005,9 @@ class TestP852ReconciliationInvariant:
             "AggregatedResultBundle.rwa_ccr_qccp_trade does not exist (P8.52 not yet implemented)."
         )
 
-        composed = (rwa_ccr_default or 0.0) + (rwa_ccr_qccp or 0.0)
+        composed = (cast("float | None", rwa_ccr_default) or 0.0) + (
+            cast("float | None", rwa_ccr_qccp) or 0.0
+        )
 
         # Assert
         assert composed == pytest.approx(ccr_total, rel=1e-9), (

@@ -57,10 +57,12 @@ from __future__ import annotations
 
 import dataclasses
 from datetime import date
+from typing import cast
 
 import polars as pl
 import pytest
 
+from rwa_calc.contracts.bundles import AggregatedResultBundle, RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
@@ -121,21 +123,21 @@ def _cell(df: pl.DataFrame, row_ref: str, col_ref: str) -> float | None:
     return rows[col_ref][0]
 
 
-def _run_pipeline(bundle: object, config: CalculationConfig) -> object:
+def _run_pipeline(bundle: RawDataBundle, config: CalculationConfig) -> AggregatedResultBundle:
     """Run the pipeline and return AggregatedResultBundle."""
-    return PipelineOrchestrator().run_with_data(bundle, config)  # type: ignore[arg-type]
+    return PipelineOrchestrator().run_with_data(bundle, config)
 
 
-def _generate_bundle(result: object, framework: str) -> COREPTemplateBundle:
+def _generate_bundle(result: AggregatedResultBundle, framework: str) -> COREPTemplateBundle:
     """Generate COREP templates from a pipeline result's results LazyFrame."""
-    results_lf = result.results  # type: ignore[union-attr]
+    results_lf = result.results
     return COREPGenerator().generate_from_lazyframe(results_lf, framework=framework)
 
 
-def _materialise_ead_ccr(result: object, ns_id: str) -> float:
+def _materialise_ead_ccr(result: AggregatedResultBundle, ns_id: str) -> float:
     """Extract ead_final for a CCR synthetic row with exposure_reference == ccr__{ns_id}."""
     ref = f"{_CCR_PREFIX}{ns_id}"
-    df = result.results.collect()  # type: ignore[union-attr]
+    df = result.results.collect()
     rows = df.filter(pl.col("exposure_reference") == ref).to_dicts()
     assert len(rows) == 1, (
         f"Expected 1 CCR row for {ref!r}, got {len(rows)}. "
@@ -150,7 +152,7 @@ def _materialise_ead_ccr(result: object, ns_id: str) -> float:
 
 
 @pytest.fixture(scope="module")
-def ccp1_result() -> object:
+def ccp1_result() -> AggregatedResultBundle:
     """
     Run QCCP-proprietary bundle (CCP-1, is_client_cleared=False) through CRR pipeline.
 
@@ -169,13 +171,13 @@ def ccp1_result() -> object:
 
 
 @pytest.fixture(scope="module")
-def ccp1_corep(ccp1_result: object) -> COREPTemplateBundle:
+def ccp1_corep(ccp1_result: AggregatedResultBundle) -> COREPTemplateBundle:
     """COREPTemplateBundle generated from the CCP-1 pipeline result (CRR)."""
     return _generate_bundle(ccp1_result, framework="CRR")
 
 
 @pytest.fixture(scope="module")
-def ccp2_result() -> object:
+def ccp2_result() -> AggregatedResultBundle:
     """
     Run QCCP-client-cleared bundle (CCP-2, is_client_cleared=True) through CRR pipeline.
 
@@ -194,13 +196,13 @@ def ccp2_result() -> object:
 
 
 @pytest.fixture(scope="module")
-def ccp2_corep(ccp2_result: object) -> COREPTemplateBundle:
+def ccp2_corep(ccp2_result: AggregatedResultBundle) -> COREPTemplateBundle:
     """COREPTemplateBundle generated from the CCP-2 pipeline result (CRR)."""
     return _generate_bundle(ccp2_result, framework="CRR")
 
 
 @pytest.fixture(scope="module")
-def ccr_a1_result() -> object:
+def ccr_a1_result() -> AggregatedResultBundle:
     """
     Run CCR-A1 (institution CQS2) through CRR pipeline.
 
@@ -219,13 +221,13 @@ def ccr_a1_result() -> object:
 
 
 @pytest.fixture(scope="module")
-def ccr_a1_corep(ccr_a1_result: object) -> COREPTemplateBundle:
+def ccr_a1_corep(ccr_a1_result: AggregatedResultBundle) -> COREPTemplateBundle:
     """COREPTemplateBundle generated from the CCR-A1 pipeline result (CRR)."""
     return _generate_bundle(ccr_a1_result, framework="CRR")
 
 
 @pytest.fixture(scope="module")
-def cva_a1_result() -> object:
+def cva_a1_result() -> AggregatedResultBundle:
     """
     Run CVA-A1 (3y IR swap, institution CQS2) through Basel 3.1 pipeline.
 
@@ -255,7 +257,7 @@ def cva_a1_result() -> object:
 
 
 @pytest.fixture(scope="module")
-def cva_a1_corep(cva_a1_result: object) -> COREPTemplateBundle:
+def cva_a1_corep(cva_a1_result: AggregatedResultBundle) -> COREPTemplateBundle:
     """COREPTemplateBundle generated from the CVA-A1 pipeline result (Basel 3.1)."""
     return _generate_bundle(cva_a1_result, framework="BASEL_3_1")
 
@@ -313,7 +315,7 @@ class TestP850C3408QccpProprietary:
 
     def test_p850_ccp1_c3408_qccp_trade_rwea_equals_bundle_rollup(
         self,
-        ccp1_result: object,
+        ccp1_result: AggregatedResultBundle,
         ccp1_corep: COREPTemplateBundle,
     ) -> None:
         """
@@ -369,7 +371,7 @@ class TestP850C3408QccpProprietary:
 
         # Assert — total QCCP RWEA in C 34.08 equals the bundle roll-up
         if rwa_qccp is not None and total_rwea > 0:
-            assert total_rwea == pytest.approx(float(rwa_qccp), rel=1e-6), (
+            assert total_rwea == pytest.approx(float(cast("float", rwa_qccp)), rel=1e-6), (
                 f"C 34.08 QCCP trade RWEA sum ({total_rwea:,.6f}) must equal "
                 f"result.rwa_ccr_qccp_trade ({rwa_qccp:,.6f}). "
                 "CRR Art. 306(1)(a): QCCP proprietary 2% trade-leg RWEA."
@@ -377,7 +379,7 @@ class TestP850C3408QccpProprietary:
 
     def test_p850_ccp1_c3408_qccp_rwea_equals_ead_times_002(
         self,
-        ccp1_result: object,
+        ccp1_result: AggregatedResultBundle,
         ccp1_corep: COREPTemplateBundle,
     ) -> None:
         """
@@ -401,14 +403,12 @@ class TestP850C3408QccpProprietary:
         # Arrange
         ead_total = getattr(ccp1_result, "ead_ccr_total", _MISSING)
         if ead_total is _MISSING or ead_total is None:
-            pytest.skip(
-                "ead_ccr_total not yet on AggregatedResultBundle (P8.52 prerequisite)."
-            )
+            pytest.skip("ead_ccr_total not yet on AggregatedResultBundle (P8.52 prerequisite).")
 
         c34_08 = _get_c34_field(ccp1_corep, "c34_08")
         assert c34_08 is not None, "C 34.08 not generated yet (P8.50 not implemented)."
 
-        expected = float(ead_total) * P839_RW_PROPRIETARY  # EAD * 0.02
+        expected = float(cast("float", ead_total)) * P839_RW_PROPRIETARY  # EAD * 0.02
 
         # Assert — QCCP trade RWEA in C 34.08 == EAD * 0.02
         assert isinstance(c34_08, pl.DataFrame)
@@ -512,7 +512,7 @@ class TestP850C3408QccpClientCleared:
 
     def test_p850_ccp2_c3408_rwea_equals_ead_times_004(
         self,
-        ccp2_result: object,
+        ccp2_result: AggregatedResultBundle,
         ccp2_corep: COREPTemplateBundle,
     ) -> None:
         """
@@ -541,7 +541,7 @@ class TestP850C3408QccpClientCleared:
         c34_08 = _get_c34_field(ccp2_corep, "c34_08")
         assert c34_08 is not None, "C 34.08 not generated yet (P8.50 not implemented)."
 
-        expected = float(ead_total) * P839_RW_CLIENT_CLEARED  # EAD * 0.04
+        expected = float(cast("float", ead_total)) * P839_RW_CLIENT_CLEARED  # EAD * 0.04
 
         assert isinstance(c34_08, pl.DataFrame)
         numeric_cols = [c for c in c34_08.columns if c not in ("row_ref", "row_name")]
@@ -561,7 +561,7 @@ class TestP850C3408QccpClientCleared:
 
     def test_p850_ccp2_c3408_rwea_equals_bundle_rollup(
         self,
-        ccp2_result: object,
+        ccp2_result: AggregatedResultBundle,
         ccp2_corep: COREPTemplateBundle,
     ) -> None:
         """
@@ -597,7 +597,7 @@ class TestP850C3408QccpClientCleared:
         )
 
         if total_rwea > 0:
-            assert total_rwea == pytest.approx(float(rwa_qccp), rel=1e-6), (
+            assert total_rwea == pytest.approx(float(cast("float", rwa_qccp)), rel=1e-6), (
                 f"C 34.08 client-cleared QCCP RWEA ({total_rwea:,.6f}) must equal "
                 f"result.rwa_ccr_qccp_trade ({rwa_qccp:,.6f}). "
                 "CRR Art. 306(1)(c): 4% RW for client-cleared QCCP trade leg."
@@ -659,7 +659,7 @@ class TestP850C3401SaCcrRollUp:
 
     def test_p850_ccr_a1_c3401_ead_equals_bundle_rollup(
         self,
-        ccr_a1_result: object,
+        ccr_a1_result: AggregatedResultBundle,
         ccr_a1_corep: COREPTemplateBundle,
     ) -> None:
         """
@@ -695,7 +695,7 @@ class TestP850C3401SaCcrRollUp:
         ead_col_name = ead_cols[0]  # first data column = EAD (per C 34.01 layout)
         c34_01_ead = float(c34_01[ead_col_name].fill_null(0.0).sum())
 
-        assert c34_01_ead == pytest.approx(float(ead_total), rel=1e-9), (
+        assert c34_01_ead == pytest.approx(float(cast("float", ead_total)), rel=1e-9), (
             f"C 34.01 SA-CCR EAD ({c34_01_ead:,.6f}) must equal "
             f"result.ead_ccr_total ({ead_total:,.6f}). "
             "CRR Art. 274(2): SA-CCR EAD = alpha * (RC + PFE)."
@@ -703,7 +703,7 @@ class TestP850C3401SaCcrRollUp:
 
     def test_p850_ccr_a1_c3401_rwea_equals_bundle_rollup(
         self,
-        ccr_a1_result: object,
+        ccr_a1_result: AggregatedResultBundle,
         ccr_a1_corep: COREPTemplateBundle,
     ) -> None:
         """
@@ -731,7 +731,9 @@ class TestP850C3401SaCcrRollUp:
         if rwa_default is _MISSING or rwa_qccp is _MISSING:
             pytest.skip("rwa_ccr_default/qccp_trade not yet on AggregatedResultBundle (P8.52).")
 
-        expected_rwea = (rwa_default or 0.0) + (rwa_qccp or 0.0)
+        expected_rwea = (cast("float | None", rwa_default) or 0.0) + (
+            cast("float | None", rwa_qccp) or 0.0
+        )
 
         c34_01 = _get_c34_field(ccr_a1_corep, "c34_01")
         assert c34_01 is not None, "C 34.01 not generated yet (P8.50 not implemented)."
@@ -790,7 +792,7 @@ class TestP850C3401SaCcrRollUp:
 
     def test_p850_ccr_a1_c3402_netting_set_ead_present(
         self,
-        ccr_a1_result: object,
+        ccr_a1_result: AggregatedResultBundle,
         ccr_a1_corep: COREPTemplateBundle,
     ) -> None:
         """
@@ -836,16 +838,14 @@ class TestP850C3401SaCcrRollUp:
             "C 34.02 is keyed by netting_set_id."
         )
 
-        ns_df = c34_02[ns_key]
-        assert isinstance(ns_df, pl.DataFrame), (
-            f"c34_02[{ns_key!r}] must be a pl.DataFrame."
-        )
+        ns_df = cast("dict[str, pl.DataFrame]", c34_02)[ns_key]
+        assert isinstance(ns_df, pl.DataFrame), f"c34_02[{ns_key!r}] must be a pl.DataFrame."
 
         ead_cols = [c for c in ns_df.columns if c not in ("row_ref", "row_name")]
         assert len(ead_cols) >= 1, f"c34_02[{ns_key!r}] has no data columns."
 
         ns_ead = float(ns_df[ead_cols[0]].fill_null(0.0).sum())
-        assert ns_ead == pytest.approx(float(ead_total), rel=1e-9), (
+        assert ns_ead == pytest.approx(float(cast("float", ead_total)), rel=1e-9), (
             f"c34_02[{ns_key!r}] EAD ({ns_ead:,.6f}) must equal "
             f"result.ead_ccr_total ({ead_total:,.6f}). "
             "For CCR-A1 (single NS) the only netting set contributes the full EAD. "
@@ -921,7 +921,7 @@ class TestP850C3404CvaRwea:
 
     def test_p850_cva_a1_c3404_not_none_when_cva_rwa_present(
         self,
-        cva_a1_result: object,
+        cva_a1_result: AggregatedResultBundle,
         cva_a1_corep: COREPTemplateBundle,
     ) -> None:
         """
@@ -964,7 +964,7 @@ class TestP850C3404CvaRwea:
 
     def test_p850_cva_a1_c3404_rwea_equals_cva_rwa(
         self,
-        cva_a1_result: object,
+        cva_a1_result: AggregatedResultBundle,
         cva_a1_corep: COREPTemplateBundle,
     ) -> None:
         """
@@ -1006,7 +1006,7 @@ class TestP850C3404CvaRwea:
         rwea_col = rwea_col_candidates[0]
         c34_04_rwea = float(c34_04[rwea_col].fill_null(0.0).sum())
 
-        assert c34_04_rwea == pytest.approx(float(cva_rwa), rel=1e-9), (
+        assert c34_04_rwea == pytest.approx(float(cast("float", cva_rwa)), rel=1e-9), (
             f"C 34.04 RWEA_CVA ({c34_04_rwea:,.6f}) must equal "
             f"result.cva_rwa ({cva_rwa:,.6f}). "
             "PS1/26 App.1 Own Funds Part 4(b): RWEA_CVA = OFR_CVA * 12.5."
@@ -1014,7 +1014,7 @@ class TestP850C3404CvaRwea:
 
     def test_p850_cva_a1_c3404_rwea_equals_golden_computation(
         self,
-        cva_a1_result: object,
+        cva_a1_result: AggregatedResultBundle,
         cva_a1_corep: COREPTemplateBundle,
     ) -> None:
         """
@@ -1055,7 +1055,9 @@ class TestP850C3404CvaRwea:
         rwea_col_candidates = [c for c in numeric_cols if "rwea" in c.lower() or c == "0010"]
         if not rwea_col_candidates:
             rwea_col_candidates = [numeric_cols[0]] if numeric_cols else []
-        assert len(rwea_col_candidates) >= 1, f"c34_04 has no RWEA column. Columns: {c34_04.columns}"
+        assert len(rwea_col_candidates) >= 1, (
+            f"c34_04 has no RWEA column. Columns: {c34_04.columns}"
+        )
 
         c34_04_rwea = float(c34_04[rwea_col_candidates[0]].fill_null(0.0).sum())
 
@@ -1069,7 +1071,7 @@ class TestP850C3404CvaRwea:
 
     def test_p850_cva_a1_c3404_grid_shape(
         self,
-        cva_a1_result: object,
+        cva_a1_result: AggregatedResultBundle,
         cva_a1_corep: COREPTemplateBundle,
     ) -> None:
         """

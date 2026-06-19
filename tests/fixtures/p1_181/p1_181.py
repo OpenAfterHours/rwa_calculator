@@ -74,11 +74,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import polars as pl
 
 from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import COUNTERPARTY_SCHEMA, LOAN_SCHEMA, RATINGS_SCHEMA
+
+if TYPE_CHECKING:
+    from polars._typing import PolarsDataType
 
 # ---------------------------------------------------------------------------
 # Scenario constants
@@ -284,7 +288,7 @@ class _Rating:
 # (extends LOAN_SCHEMA with CRE pass-through columns)
 # ---------------------------------------------------------------------------
 
-_LOAN_FIXTURE_SCHEMA: dict[str, pl.DataType] = {
+_LOAN_FIXTURE_SCHEMA: dict[str, PolarsDataType] = {
     **dtypes_of(LOAN_SCHEMA),
     # CLASSIFIER_OUTPUT_SCHEMA pass-through columns — present on input loan rows
     # so the SA namespace can access them without a separate collateral join.

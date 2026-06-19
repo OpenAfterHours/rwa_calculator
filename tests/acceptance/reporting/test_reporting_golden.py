@@ -48,12 +48,17 @@ from __future__ import annotations
 import dataclasses
 import json
 import os
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 import pytest
 from tests.fixtures.reporting_portfolio import build_reporting_bundle
+
+if TYPE_CHECKING:
+    from polars._typing import PolarsDataType
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import PermissionMode
@@ -74,7 +79,7 @@ _ATOL = 1e-6
 
 # Golden frames are Float64 / String only; the wider map future-proofs the
 # schema-aware reload if a template later emits integer / boolean / date cells.
-_DTYPE_BY_NAME: dict[str, pl.DataType] = {
+_DTYPE_BY_NAME: dict[str, PolarsDataType] = {
     str(dt): dt
     for dt in (
         pl.Float64,
@@ -114,7 +119,7 @@ def _b31_config() -> CalculationConfig:
 
 
 # regime key -> (golden subdir, framework string, config factory)
-_REGIMES: dict[str, tuple[str, str, object]] = {
+_REGIMES: dict[str, tuple[str, str, Callable[[], CalculationConfig]]] = {
     "crr": ("crr", "CRR", _crr_config),
     "b31": ("b31", "BASEL_3_1", _b31_config),
 }
@@ -125,7 +130,7 @@ _REGIMES: dict[str, tuple[str, str, object]] = {
 # ---------------------------------------------------------------------------
 
 
-def _flatten_bundle(prefix: str, bundle: object) -> tuple[dict[str, pl.DataFrame], dict]:
+def _flatten_bundle(prefix: str, bundle: Any) -> tuple[dict[str, pl.DataFrame], dict]:
     """Split a template bundle into a flat ``key -> DataFrame`` map + a metadata dict.
 
     - ``pl.DataFrame`` field        -> one frame ``f"{prefix}__{field}"``
@@ -136,7 +141,7 @@ def _flatten_bundle(prefix: str, bundle: object) -> tuple[dict[str, pl.DataFrame
     """
     frames: dict[str, pl.DataFrame] = {}
     meta: dict = {}
-    for f in dataclasses.fields(bundle):  # type: ignore[arg-type]
+    for f in dataclasses.fields(bundle):
         value = getattr(bundle, f.name)
         key_base = f"{prefix}__{f.name}"
         if isinstance(value, pl.DataFrame):
@@ -155,7 +160,7 @@ def _flatten_bundle(prefix: str, bundle: object) -> tuple[dict[str, pl.DataFrame
 def _generate_frames(regime_key: str) -> tuple[dict[str, pl.DataFrame], dict]:
     """Run the portfolio through one regime and flatten both generator bundles."""
     _subdir, framework, config_factory = _REGIMES[regime_key]
-    config = config_factory()  # type: ignore[operator]
+    config = config_factory()
     result = PipelineOrchestrator().run_with_data(build_reporting_bundle(), config)
 
     corep = COREPGenerator().generate_from_lazyframe(result.results, framework=framework)
@@ -193,7 +198,7 @@ def _read_golden(path: Path, schema: dict[str, str]) -> pl.DataFrame:
     missing = [pl.lit(None).alias(c) for c in schema if c not in df.columns]
     if missing:
         df = df.with_columns(missing)
-    return df.select(list(schema)).cast(typed)  # type: ignore[arg-type]
+    return df.select(list(schema)).cast(typed)  # ty: ignore[invalid-argument-type]
 
 
 # ---------------------------------------------------------------------------
@@ -248,6 +253,7 @@ def _frame_diffs(expected: pl.DataFrame, actual: pl.DataFrame, label: str) -> li
             n_over = int(over.sum())
             if n_over:
                 idx = over.arg_max()
+                assert idx is not None  # n_over > 0 guarantees a max position
                 diffs.append(
                     f"{label}.{col}: {n_over} float cell(s) exceed rtol={_RTOL}/atol={_ATOL}; "
                     f"worst expected={e[idx]!r} actual={a[idx]!r} (|err|={abs_err[idx]!r})"

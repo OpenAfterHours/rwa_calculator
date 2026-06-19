@@ -200,7 +200,7 @@ def dump_full_plan(dataset: dict[str, pl.LazyFrame]) -> None:
     has_provisions = has_required_columns(data.provisions, crm.PROVISION_REQUIRED_COLUMNS)
     has_collateral = has_required_columns(
         data.collateral,
-        crm.COLLATERAL_REQUIRED_REQUIRED_COLUMNS
+        crm.COLLATERAL_REQUIRED_REQUIRED_COLUMNS  # ty: ignore[invalid-argument-type]
         if hasattr(crm, "COLLATERAL_REQUIRED_REQUIRED_COLUMNS")
         else crm.COLLATERAL_REQUIRED_COLUMNS,
     )
@@ -215,6 +215,7 @@ def dump_full_plan(dataset: dict[str, pl.LazyFrame]) -> None:
     exposures = crm._apply_ccf(exposures, config)
     exposures = crm._initialize_ead(exposures)
     if has_collateral:
+        assert data.collateral is not None
         exposures = crm.apply_collateral(exposures, data.collateral, config)
     if has_guarantees:
         exposures = crm.apply_guarantees(

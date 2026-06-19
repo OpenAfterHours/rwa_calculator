@@ -25,7 +25,6 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
-from typing import cast
 
 import polars as pl
 import pytest
@@ -106,10 +105,7 @@ def _classify(config: CalculationConfig) -> pl.DataFrame:
     raw = _build_raw_bundle()
     resolved = HierarchyResolver().resolve(raw, config)
     result = ExposureClassifier().classify(resolved, config)
-    return cast(
-        pl.DataFrame,
-        result.all_exposures.select("exposure_reference", "exposure_class").collect(),
-    )
+    return result.all_exposures.select("exposure_reference", "exposure_class").collect()
 
 
 def _lookup(df: pl.DataFrame, ref: str) -> str:

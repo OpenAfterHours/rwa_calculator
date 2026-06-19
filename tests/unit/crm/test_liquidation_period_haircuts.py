@@ -18,6 +18,7 @@ from __future__ import annotations
 import math
 from datetime import date
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 import polars as pl
 import pytest
@@ -32,6 +33,9 @@ from rwa_calc.engine.crm.haircut_tables import (
 )
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
 from rwa_calc.rulebook.resolve import resolve
+
+if TYPE_CHECKING:
+    from rwa_calc.contracts.config import CalculationConfig
 
 # Liquidation periods relocated to the common pack (S13-h); read here for the
 # documentation-as-test value assertions below.
@@ -342,7 +346,7 @@ class TestCalculatorSingleItemLiquidationPeriod:
 class TestCalculatorPipelineLiquidationPeriod:
     """Test HaircutCalculator.apply_haircuts with liquidation_period_days column."""
 
-    def _make_config(self, is_b31: bool = True) -> object:
+    def _make_config(self, is_b31: bool = True) -> CalculationConfig:
         """Create a minimal config."""
         import datetime
 

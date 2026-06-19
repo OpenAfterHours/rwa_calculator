@@ -26,10 +26,15 @@ semantics — so they are lifted here, the nearest common parent of the
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import polars as pl
 
+if TYPE_CHECKING:
+    from rwa_calc.contracts.bundles import AggregatedResultBundle
 
-def find_exposure_rows(results: object, loan_ref: str) -> list[dict]:
+
+def find_exposure_rows(results: AggregatedResultBundle, loan_ref: str) -> list[dict]:
     """Return all result rows whose exposure_reference contains *loan_ref*."""
     rows: list[dict] = []
     for lf in [results.sa_results, results.irb_results, results.slotting_results]:

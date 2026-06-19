@@ -77,8 +77,6 @@ from rwa_calc.data.schemas import (
     LOAN_SCHEMA,
     RATINGS_SCHEMA,
 )
-from tests.fixtures.raw_bundle import make_raw_bundle
-
 from tests.fixtures.ccr.margin_builder import create_margin_agreements
 from tests.fixtures.ccr.netting_set_builder import NettingSet, create_netting_sets
 from tests.fixtures.ccr.trade_builder import Trade, create_trades, make_trade
@@ -94,12 +92,13 @@ from tests.fixtures.p8_60.cva_a1_builder import (
     CVA_RWEA_MULTIPLIER,
     CVA_SUPERVISORY_DISCOUNT_RATE,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
 # Scenario constants — single source of truth for test-writer assertions.
 # ---------------------------------------------------------------------------
 
-CVA_A3_CP_REF: str = "CP_CVA_A3"   # ONE counterparty for both netting sets
+CVA_A3_CP_REF: str = "CP_CVA_A3"  # ONE counterparty for both netting sets
 
 CVA_A3_NS1_ID: str = "NS_CVA_A3_1"
 CVA_A3_NS2_ID: str = "NS_CVA_A3_2"
@@ -108,7 +107,7 @@ CVA_A3_TRADE1_ID: str = "T_CVA_A3_1"
 CVA_A3_TRADE2_ID: str = "T_CVA_A3_2"
 
 # Trade economics: GBP vanilla IR swaps, both at-par, delta=1.0.
-CVA_A3_NOTIONAL: float = 100_000_000.0   # GBP 100m (same for both trades)
+CVA_A3_NOTIONAL: float = 100_000_000.0  # GBP 100m (same for both trades)
 CVA_A3_CURRENCY: str = "GBP"
 CVA_A3_ASSET_CLASS: str = "interest_rate"
 CVA_A3_TRANSACTION_TYPE: str = "derivative"
@@ -131,14 +130,14 @@ CVA_A3_CP_ENTITY_TYPE: str = "institution"
 CVA_A3_CP_COUNTRY_CODE: str = "GB"
 CVA_A3_RATING_TYPE: str = "external"
 CVA_A3_RATING_AGENCY: str = "S&P"
-CVA_A3_RATING_VALUE: str = "A"     # S&P "A" = CQS 2
+CVA_A3_RATING_VALUE: str = "A"  # S&P "A" = CQS 2
 CVA_A3_RATING_CQS: int = 2
 CVA_A3_RATING_DATE: _date = _date(2027, 1, 15)
 
 # CVA counterparty attributes — ONE row, shared M=4.0 applied to BOTH NS.
-CVA_A3_CVA_RW_SECTOR: str = "FINANCIAL"   # Financials IG row in 4.4 table
+CVA_A3_CVA_RW_SECTOR: str = "FINANCIAL"  # Financials IG row in 4.4 table
 CVA_A3_CVA_RW_RATING_BAND: str = "IG"
-CVA_A3_CVA_EFFECTIVE_MATURITY: float = 4.0   # shared M; both NS inherit this
+CVA_A3_CVA_EFFECTIVE_MATURITY: float = 4.0  # shared M; both NS inherit this
 CVA_A3_CVA_IN_SCOPE: bool = True
 
 # ---------------------------------------------------------------------------
@@ -185,10 +184,10 @@ def compute_cva_a3_golden(ead_ns1: float, ead_ns2: float) -> dict[str, float]:
         - PS1/26 App.1 CVA Part 4.4 (RW_c Financials IG = 5%)
         - PS1/26 App.1 Own Funds Part 4(b) (x12.5 multiplier)
     """
-    rate = CVA_SUPERVISORY_DISCOUNT_RATE   # 0.05
-    rw_c = CVA_RW_FINANCIALS_IG            # 0.05
-    alpha = CVA_ALPHA                      # 1.4
-    m = CVA_A3_CVA_EFFECTIVE_MATURITY     # 4.0 — shared by both NS
+    rate = CVA_SUPERVISORY_DISCOUNT_RATE  # 0.05
+    rw_c = CVA_RW_FINANCIALS_IG  # 0.05
+    alpha = CVA_ALPHA  # 1.4
+    m = CVA_A3_CVA_EFFECTIVE_MATURITY  # 4.0 — shared by both NS
 
     # DF_NS = (1 - e^(-rate * M)) / (rate * M)
     df_ns = (1.0 - math.exp(-rate * m)) / (rate * m)
@@ -685,13 +684,11 @@ def save_p846_cva_a3_fixtures(output_dir: Path | None = None) -> list[tuple[str,
     if len(rating_df) != 1:
         raise AssertionError(f"CVA-A3: expected 1 rating row, got {len(rating_df)}")
     if rating_df["cqs"][0] != CVA_A3_RATING_CQS:
-        raise AssertionError(
-            f"CVA-A3: CQS must be {CVA_A3_RATING_CQS}, got {rating_df['cqs'][0]}"
-        )
+        raise AssertionError(f"CVA-A3: CQS must be {CVA_A3_RATING_CQS}, got {rating_df['cqs'][0]}")
 
     # Invariant 9 + 10 + 11 + 12: golden computation self-consistent.
-    test_ead_ns1 = 5_200_000.0   # illustrative 3y EAD
-    test_ead_ns2 = 7_800_000.0   # illustrative 5y EAD
+    test_ead_ns1 = 5_200_000.0  # illustrative 3y EAD
+    test_ead_ns2 = 7_800_000.0  # illustrative 5y EAD
     golden = compute_cva_a3_golden(test_ead_ns1, test_ead_ns2)
 
     df_val = golden["df_ns"]
@@ -747,7 +744,7 @@ def main() -> None:
     print(f"  Maturities:   {trades['maturity_date'].to_list()}")
     print(
         f"  NS -> CP:     "
-        f"{list(zip(ns['netting_set_id'].to_list(), ns['counterparty_reference'].to_list()))}"
+        f"{list(zip(ns['netting_set_id'].to_list(), ns['counterparty_reference'].to_list(), strict=True))}"
     )
     print(f"  CVA CP frame: {len(inputs.cva_counterparty_frame)} row(s)  (MUST be 1)")
 

@@ -23,10 +23,14 @@ References:
 from __future__ import annotations
 
 from datetime import date
+from typing import TYPE_CHECKING
 
 import polars as pl
 import pytest
 from tests.fixtures.raw_bundle import make_raw_bundle
+
+if TYPE_CHECKING:
+    from polars._typing import PolarsDataType
 
 from rwa_calc.contracts.config import CalculationConfig, PermissionMode
 from rwa_calc.data.column_spec import dtypes_of
@@ -44,11 +48,11 @@ from rwa_calc.engine.pipeline import PipelineOrchestrator
 
 _REPORTING_DATE = date(2025, 12, 31)
 
-_COUNTERPARTY_SCHEMA: dict[str, pl.DataType] = dtypes_of(COUNTERPARTY_SCHEMA)
-_FACILITY_SCHEMA: dict[str, pl.DataType] = dtypes_of(FACILITY_SCHEMA)
-_LOAN_SCHEMA: dict[str, pl.DataType] = dtypes_of(LOAN_SCHEMA)
+_COUNTERPARTY_SCHEMA: dict[str, PolarsDataType] = dtypes_of(COUNTERPARTY_SCHEMA)
+_FACILITY_SCHEMA: dict[str, PolarsDataType] = dtypes_of(FACILITY_SCHEMA)
+_LOAN_SCHEMA: dict[str, PolarsDataType] = dtypes_of(LOAN_SCHEMA)
 
-_RATING_SCHEMA: dict[str, pl.DataType] = {
+_RATING_SCHEMA: dict[str, PolarsDataType] = {
     "rating_reference": pl.String,
     "counterparty_reference": pl.String,
     "rating_type": pl.String,
@@ -61,7 +65,7 @@ _RATING_SCHEMA: dict[str, pl.DataType] = {
     "model_id": pl.String,
 }
 
-_GUARANTEE_SCHEMA: dict[str, pl.DataType] = {
+_GUARANTEE_SCHEMA: dict[str, PolarsDataType] = {
     "guarantee_reference": pl.String,
     "guarantee_type": pl.String,
     "guarantor": pl.String,
@@ -75,9 +79,9 @@ _GUARANTEE_SCHEMA: dict[str, pl.DataType] = {
     "includes_restructuring": pl.Boolean,
 }
 
-_COLLATERAL_SCHEMA: dict[str, pl.DataType] = dtypes_of(COLLATERAL_SCHEMA)
+_COLLATERAL_SCHEMA: dict[str, PolarsDataType] = dtypes_of(COLLATERAL_SCHEMA)
 
-_PROVISION_SCHEMA: dict[str, pl.DataType] = {
+_PROVISION_SCHEMA: dict[str, PolarsDataType] = {
     "provision_reference": pl.String,
     "provision_type": pl.String,
     "ifrs9_stage": pl.Int8,

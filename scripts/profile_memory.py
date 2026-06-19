@@ -71,7 +71,7 @@ def main() -> int:
     try:
         import psutil  # noqa: F401 — availability probe only
     except ImportError:
-        psutil = None  # type: ignore[assignment]
+        psutil = None  # ty: ignore[invalid-assignment]
         print(PSUTIL_MISSING_MSG)
 
     print(
@@ -272,10 +272,12 @@ def _print_comparison(results: list[ModeResult]) -> None:
         print(f"{res.mode:<12} {rss:>16} {res.wall_s:>19.2f}")
 
     if all(r.peak_rss_bytes is not None for r in results) and len(results) == 2:
-        delta = results[0].peak_rss_bytes - results[1].peak_rss_bytes  # type: ignore[operator]
+        assert results[0].peak_rss_bytes is not None
+        assert results[1].peak_rss_bytes is not None
+        delta = results[0].peak_rss_bytes - results[1].peak_rss_bytes
         print(
             f"\nSpill mode peak RSS delta vs in-memory: {-delta / _MIB:+.1f} MiB "
-            f"({-delta / results[0].peak_rss_bytes * 100:+.1f}%)"  # type: ignore[operator]
+            f"({-delta / results[0].peak_rss_bytes * 100:+.1f}%)"
         )
 
     for res in results:

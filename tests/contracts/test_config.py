@@ -117,7 +117,7 @@ class TestCalculationConfig:
         config = CalculationConfig.crr(reporting_date=date(2025, 1, 1))
 
         with pytest.raises(AttributeError):
-            config.reporting_date = date(2026, 1, 1)
+            config.reporting_date = date(2026, 1, 1)  # ty: ignore[invalid-assignment]
 
     def test_config_with_irb_permission_mode(self):
         """Configuration should accept IRB permission mode."""

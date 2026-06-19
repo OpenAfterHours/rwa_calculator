@@ -42,11 +42,15 @@ References:
 from __future__ import annotations
 
 from datetime import date
+from typing import TYPE_CHECKING
 
 import polars as pl
 
 from rwa_calc.contracts.bundles import ResolvedHierarchyBundle
 from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolved_bundle
+
+if TYPE_CHECKING:
+    from polars._typing import PolarsDataType
 
 # ---------------------------------------------------------------------------
 # Scenario constants
@@ -303,7 +307,7 @@ def _enrich_counterparty(counterparties: pl.LazyFrame) -> pl.LazyFrame:
     return counterparties
 
 
-def _empty_schema_lf(schema: dict[str, pl.PolarsDataType]) -> pl.LazyFrame:
+def _empty_schema_lf(schema: dict[str, PolarsDataType]) -> pl.LazyFrame:
     """Return an empty LazyFrame with the given schema."""
     return pl.LazyFrame(schema=schema)
 

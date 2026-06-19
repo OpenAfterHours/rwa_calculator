@@ -36,8 +36,6 @@ References:
 
 from __future__ import annotations
 
-from datetime import date
-
 import pytest
 
 from rwa_calc.contracts.bundles import AggregatedResultBundle, OutputFloorSummary
@@ -56,7 +54,7 @@ from tests.fixtures.ccr.golden_ccr_floor1 import (
 # ---------------------------------------------------------------------------
 
 _REL_TOL = 1e-6  # tight relative tolerance for non-round floats
-_ABS_TOL = 1.0   # ±£1 absolute tolerance for portfolio-level floor values
+_ABS_TOL = 1.0  # ±£1 absolute tolerance for portfolio-level floor values
 
 # ---------------------------------------------------------------------------
 # Module-scoped pipeline fixture
@@ -228,9 +226,7 @@ class TestCCRFloor1OutputFloor:
         assert summary is not None, "Prerequisite: output_floor_summary must exist"
 
         # Assert
-        assert summary.floor_threshold == pytest.approx(
-            expected_floor_threshold, abs=_ABS_TOL
-        ), (
+        assert summary.floor_threshold == pytest.approx(expected_floor_threshold, abs=_ABS_TOL), (
             f"B31-CCR-FLOOR-1: floor_threshold must equal 0.725 * s_trea "
             f"(expected ≈{expected_floor_threshold:,.2f}, "
             f"got {summary.floor_threshold:,.2f}). "

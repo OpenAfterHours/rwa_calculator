@@ -18,7 +18,7 @@ class TestColumnSpecFrozen:
     def test_column_spec_is_frozen(self) -> None:
         spec = ColumnSpec(pl.String)
         with pytest.raises(FrozenInstanceError):
-            spec.dtype = pl.Int64  # type: ignore[misc]
+            spec.dtype = pl.Int64  # type: ignore[misc]  # ty: ignore[invalid-assignment]
 
     def test_defaults_to_required_true_and_none_default(self) -> None:
         spec = ColumnSpec(pl.String)

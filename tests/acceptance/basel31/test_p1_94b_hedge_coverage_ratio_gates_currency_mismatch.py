@@ -53,7 +53,6 @@ References:
 from __future__ import annotations
 
 from datetime import date
-from typing import cast
 
 import polars as pl
 import pytest
@@ -131,7 +130,7 @@ def p1_94b_sa_results(b31_config: CalculationConfig) -> pl.DataFrame:
         "SA results should not be None — check PermissionMode.STANDARDISED config "
         "and that the bundle contains a valid loan row."
     )
-    return cast(pl.DataFrame, results.sa_results.collect())
+    return results.sa_results.collect()
 
 
 @pytest.fixture(scope="module")

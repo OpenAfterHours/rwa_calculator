@@ -79,8 +79,6 @@ from rwa_calc.data.schemas import (
     LOAN_SCHEMA,
     RATINGS_SCHEMA,
 )
-from tests.fixtures.raw_bundle import make_raw_bundle
-
 from tests.fixtures.ccr.margin_builder import create_margin_agreements
 from tests.fixtures.ccr.netting_set_builder import NettingSet, create_netting_sets
 from tests.fixtures.ccr.trade_builder import Trade, create_trades, make_trade
@@ -97,6 +95,7 @@ from tests.fixtures.p8_60.cva_a1_builder import (
     CVA_SUPERVISORY_CORRELATION_RHO,
     CVA_SUPERVISORY_DISCOUNT_RATE,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
 # Scenario constants — single source of truth for test-writer assertions.
@@ -112,7 +111,7 @@ CVA_A2_TRADE1_ID: str = "T_CVA_A2_1"
 CVA_A2_TRADE2_ID: str = "T_CVA_A2_2"
 
 # Trade economics: GBP vanilla IR swaps, both at-par, delta=1.0.
-CVA_A2_NOTIONAL: float = 100_000_000.0   # GBP 100m (same for both trades)
+CVA_A2_NOTIONAL: float = 100_000_000.0  # GBP 100m (same for both trades)
 CVA_A2_CURRENCY: str = "GBP"
 CVA_A2_ASSET_CLASS: str = "interest_rate"
 CVA_A2_TRANSACTION_TYPE: str = "derivative"
@@ -135,12 +134,12 @@ CVA_A2_CP_ENTITY_TYPE: str = "institution"
 CVA_A2_CP_COUNTRY_CODE: str = "GB"
 CVA_A2_RATING_TYPE: str = "external"
 CVA_A2_RATING_AGENCY: str = "S&P"
-CVA_A2_RATING_VALUE: str = "A"     # S&P "A" = CQS 2
+CVA_A2_RATING_VALUE: str = "A"  # S&P "A" = CQS 2
 CVA_A2_RATING_CQS: int = 2
 CVA_A2_RATING_DATE: _date = _date(2027, 1, 15)
 
 # CVA counterparty attributes.
-CVA_A2_CVA_RW_SECTOR: str = "FINANCIAL"   # Financials IG row in 4.4 table
+CVA_A2_CVA_RW_SECTOR: str = "FINANCIAL"  # Financials IG row in 4.4 table
 CVA_A2_CVA_RW_RATING_BAND: str = "IG"
 CVA_A2_CVA_EFFECTIVE_MATURITY_1: float = 3.0
 CVA_A2_CVA_EFFECTIVE_MATURITY_2: float = 5.0
@@ -186,10 +185,10 @@ def compute_cva_a2_golden(ead1: float, ead2: float) -> dict[str, float]:
         - PS1/26 App.1 CVA Part 4.4 (RW_c Financials IG = 5%)
         - PS1/26 App.1 Own Funds Part 4(b) (x12.5 multiplier)
     """
-    rate = CVA_SUPERVISORY_DISCOUNT_RATE   # 0.05
+    rate = CVA_SUPERVISORY_DISCOUNT_RATE  # 0.05
     rho = CVA_SUPERVISORY_CORRELATION_RHO  # 0.50
-    rw_c = CVA_RW_FINANCIALS_IG            # 0.05
-    alpha = CVA_ALPHA                      # 1.4
+    rw_c = CVA_RW_FINANCIALS_IG  # 0.05
+    alpha = CVA_ALPHA  # 1.4
 
     m1 = CVA_A2_CVA_EFFECTIVE_MATURITY_1  # 3.0
     m2 = CVA_A2_CVA_EFFECTIVE_MATURITY_2  # 5.0
@@ -740,7 +739,9 @@ def main() -> None:
     ns = ccr.netting_sets.netting_sets.collect()
     print(f"  Trades:       {trades['trade_id'].to_list()}")
     print(f"  Maturities:   {trades['maturity_date'].to_list()}")
-    print(f"  NS -> CP:     {list(zip(ns['netting_set_id'].to_list(), ns['counterparty_reference'].to_list()))}")
+    print(
+        f"  NS -> CP:     {list(zip(ns['netting_set_id'].to_list(), ns['counterparty_reference'].to_list(), strict=True))}"
+    )
     print(f"  CVA CP frame: {len(inputs.cva_counterparty_frame)} row(s)")
 
     # Demonstrate the golden computation with illustrative EADs.

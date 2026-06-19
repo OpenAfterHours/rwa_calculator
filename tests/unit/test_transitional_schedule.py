@@ -385,7 +385,7 @@ class TestTransitionalScheduleBundle:
             errors=[],
         )
         with pytest.raises(AttributeError):
-            bundle.errors = ["new error"]  # type: ignore[misc]
+            bundle.errors = ["new error"]  # type: ignore[misc]  # ty: ignore[invalid-assignment]
 
     def test_bundle_default_fields(self):
         """Bundle should have sensible defaults."""

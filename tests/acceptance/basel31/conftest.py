@@ -12,14 +12,19 @@ Why these tests matter:
     and the output floor.
 """
 
+from __future__ import annotations
+
 import json
 import sys
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 import pytest
+
+if TYPE_CHECKING:
+    from polars._typing import PolarsDataType
 
 # Add project root to path for imports
 project_root = Path(__file__).parent.parent.parent.parent
@@ -62,7 +67,7 @@ __all__ = [
 # (_build_p1157_lf / _build_p1159_lf). The data payloads differ per scenario
 # (exposure_class, requires_fi_scalar, PD/LGD/guarantor values) and stay inline
 # in each test module; only this byte-identical column->dtype contract is shared.
-PSM_GUARANTEE_INPUT_SCHEMA: dict[str, pl.DataType] = {
+PSM_GUARANTEE_INPUT_SCHEMA: dict[str, PolarsDataType] = {
     "exposure_reference": pl.String,
     "exposure_class": pl.String,
     "pd": pl.Float64,

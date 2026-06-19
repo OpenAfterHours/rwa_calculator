@@ -283,8 +283,14 @@ def make_mixed_corp_gov_rows(
     ``_make_internal_rating`` so model_id semantics stay identical to the inline
     blocks this builder replaces.
     """
-    loan_corp = {"loan_reference": "LN_CORP", "counterparty_reference": "CP_CORP"}
-    loan_gov = {"loan_reference": "LN_GOV", "counterparty_reference": "CP_GOV"}
+    loan_corp: dict[str, str | float] = {
+        "loan_reference": "LN_CORP",
+        "counterparty_reference": "CP_CORP",
+    }
+    loan_gov: dict[str, str | float] = {
+        "loan_reference": "LN_GOV",
+        "counterparty_reference": "CP_GOV",
+    }
     if drawn:
         loan_corp["drawn_amount"] = 1_000_000.0
         loan_gov["drawn_amount"] = 500_000.0

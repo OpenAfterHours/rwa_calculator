@@ -87,8 +87,8 @@ _REPORTING_DATE = date(2027, 1, 15)
 
 # Synthetic exposure references for NS_CVA_A3_1 / NS_CVA_A3_2 produced by the
 # CCR adapter (format: "ccr__<netting_set_id>").
-_CCR_EXPOSURE_REF_1 = f"ccr__{CVA_A3_NS1_ID}"   # "ccr__NS_CVA_A3_1"
-_CCR_EXPOSURE_REF_2 = f"ccr__{CVA_A3_NS2_ID}"   # "ccr__NS_CVA_A3_2"
+_CCR_EXPOSURE_REF_1 = f"ccr__{CVA_A3_NS1_ID}"  # "ccr__NS_CVA_A3_1"
+_CCR_EXPOSURE_REF_2 = f"ccr__{CVA_A3_NS2_ID}"  # "ccr__NS_CVA_A3_2"
 
 
 # ---------------------------------------------------------------------------

@@ -30,6 +30,7 @@ Coverage:
 from __future__ import annotations
 
 from datetime import date
+from typing import TYPE_CHECKING
 
 import polars as pl
 import pytest
@@ -42,6 +43,9 @@ from rwa_calc.contracts.errors import ERROR_AIRB_MODEL_COLLATERAL_MISDIRECTED
 from rwa_calc.data.schemas import COLLATERAL_SCHEMA
 from rwa_calc.domain.enums import ApproachType, PermissionMode
 from rwa_calc.engine.crm.processor import CRMProcessor
+
+if TYPE_CHECKING:
+    from polars._typing import PolarsDataType
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -117,7 +121,7 @@ def _collateral(
     }
 
 
-_COLL_SCHEMA: dict[str, pl.DataType] = {
+_COLL_SCHEMA: dict[str, PolarsDataType] = {
     "collateral_reference": pl.String,
     "beneficiary_reference": pl.String,
     "beneficiary_type": pl.String,

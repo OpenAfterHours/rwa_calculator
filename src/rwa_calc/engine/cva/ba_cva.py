@@ -57,7 +57,7 @@ References:
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, NamedTuple, cast
+from typing import TYPE_CHECKING, NamedTuple
 
 import polars as pl
 
@@ -163,7 +163,7 @@ def compute_ba_cva_rwa(
     # Full version (PS1/26 4.5-4.10).
     rwea = _full_rwea(
         scva,
-        cast("pl.LazyFrame", cva_hedges),
+        cva_hedges,
         pack,
         rw_rows,
         rw_default,
@@ -187,9 +187,7 @@ def _supervisory_rw_rows(pack: ResolvedRulepack) -> tuple[dict[tuple[str, str], 
     """
     rw_table = pack.decision("cva_ba_supervisory_risk_weights")
     rw_default = float(rw_table.default) if rw_table.default is not None else 0.0
-    rw_rows = {
-        (str(sector), str(band)): float(value) for (sector, band), value in rw_table.rows
-    }
+    rw_rows = {(str(sector), str(band)): float(value) for (sector, band), value in rw_table.rows}
     return rw_rows, rw_default
 
 
@@ -212,9 +210,9 @@ def _scva_per_counterparty(
 
     m_ns = pl.col("cva_effective_maturity_years")
     df_ns = (1.0 - (-discount_rate * m_ns).exp()) / (discount_rate * m_ns)
-    per_ns_term = (
-        m_ns * pl.coalesce(pl.col("ead_final"), pl.lit(0.0)) * df_ns
-    ).alias("_cva_ns_term")
+    per_ns_term = (m_ns * pl.coalesce(pl.col("ead_final"), pl.lit(0.0)) * df_ns).alias(
+        "_cva_ns_term"
+    )
 
     in_scope = cva_counterparties.filter(pl.col("cva_in_scope")).select(
         "counterparty_reference",
@@ -231,9 +229,7 @@ def _scva_per_counterparty(
         .with_columns(per_ns_term)
         .group_by("counterparty_reference")
         .agg(
-            ((1.0 / alpha) * pl.first("_cva_rw_c") * pl.col("_cva_ns_term").sum()).alias(
-                "_scva_c"
-            )
+            ((1.0 / alpha) * pl.first("_cva_rw_c") * pl.col("_cva_ns_term").sum()).alias("_scva_c")
         )
     )
 
@@ -315,9 +311,7 @@ def _full_rwea(
     ih = float(aggregate.item(0, "ih") or 0.0)
 
     # K_hedged (PS1/26 4.6) and K_reduced (PS1/26 4.2).
-    k_hedged = math.sqrt(
-        (rho * sum_net - ih) ** 2 + (1.0 - rho**2) * sum_net_sq + sum_hma
-    )
+    k_hedged = math.sqrt((rho * sum_net - ih) ** 2 + (1.0 - rho**2) * sum_net_sq + sum_hma)
     k_reduced = math.sqrt((rho * sum_scva) ** 2 + (1.0 - rho**2) * sum_scva_sq)
 
     # K_full and RWEA_CVA (PS1/26 4.5; Own Funds 4(b)).
@@ -360,7 +354,7 @@ def _collect_sums(plan: pl.LazyFrame) -> pl.DataFrame | None:
     surface flat. Returns ``None`` when the plan yields no rows (no in-scope
     counterparty with matching EAD).
     """
-    out = cast(pl.DataFrame, plan.collect())
+    out = plan.collect()
     return out if out.height else None
 
 
@@ -379,9 +373,7 @@ def _has_eligible_hedge(cva_hedges: pl.LazyFrame) -> bool:
     collapses to the reduced path.
     """
     eligible = _collect_sums(
-        cva_hedges.filter(pl.col("cva_hedge_eligible")).select(
-            n=pl.len().cast(pl.Int64)
-        )
+        cva_hedges.filter(pl.col("cva_hedge_eligible")).select(n=pl.len().cast(pl.Int64))
     )
     if eligible is None:
         return False

@@ -202,7 +202,7 @@ def generate_counterparties(config: BenchmarkDataConfig) -> pl.LazyFrame:
                 "is_core_market_participant": pl.Series(np.zeros(n, dtype=bool)),
             }
         )
-        .pipe(ensure_columns, COUNTERPARTY_SCHEMA)
+        .pipe(ensure_columns, COUNTERPARTY_SCHEMA)  # ty: ignore[invalid-argument-type]
         .cast(dtypes_of(COUNTERPARTY_SCHEMA))
         .lazy()
     )
@@ -291,7 +291,7 @@ def generate_org_mappings(
                 "child_counterparty_reference": child_refs,
             }
         )
-        .pipe(ensure_columns, ORG_MAPPING_SCHEMA)
+        .pipe(ensure_columns, ORG_MAPPING_SCHEMA)  # ty: ignore[invalid-argument-type]
         .cast(dtypes_of(ORG_MAPPING_SCHEMA))
         .lazy()
     )
@@ -436,7 +436,7 @@ def generate_facilities(
                 "purchased_receivables_subtype": pl.Series([None] * n_facilities, dtype=pl.String),
             }
         )
-        .pipe(ensure_columns, FACILITY_SCHEMA)
+        .pipe(ensure_columns, FACILITY_SCHEMA)  # ty: ignore[invalid-argument-type]
         .cast(dtypes_of(FACILITY_SCHEMA))
         .lazy()
     )
@@ -646,7 +646,7 @@ def generate_loans(
                 ),
             }
         )
-        .pipe(ensure_columns, LOAN_SCHEMA)
+        .pipe(ensure_columns, LOAN_SCHEMA)  # ty: ignore[invalid-argument-type]
         .cast(dtypes_of(LOAN_SCHEMA))
     )
 
@@ -745,7 +745,7 @@ def generate_facility_mappings(
                 "child_type": all_types,
             }
         )
-        .pipe(ensure_columns, FACILITY_MAPPING_SCHEMA)
+        .pipe(ensure_columns, FACILITY_MAPPING_SCHEMA)  # ty: ignore[invalid-argument-type]
         .cast(dtypes_of(FACILITY_MAPPING_SCHEMA))
         .lazy()
     )
@@ -904,7 +904,7 @@ def generate_ratings(
                 ),
             }
         )
-        .pipe(ensure_columns, RATINGS_SCHEMA)
+        .pipe(ensure_columns, RATINGS_SCHEMA)  # ty: ignore[invalid-argument-type]
         .cast(dtypes_of(RATINGS_SCHEMA))
         .lazy()
     )
@@ -1038,7 +1038,7 @@ def generate_contingents(
                 ),
             }
         )
-        .pipe(ensure_columns, CONTINGENTS_SCHEMA)
+        .pipe(ensure_columns, CONTINGENTS_SCHEMA)  # ty: ignore[invalid-argument-type]
         .cast(dtypes_of(CONTINGENTS_SCHEMA))
         .lazy()
     )
@@ -1234,7 +1234,7 @@ def generate_collateral(
                 .alias("property_ltv"),
             ]
         )
-        .pipe(ensure_columns, COLLATERAL_SCHEMA)
+        .pipe(ensure_columns, COLLATERAL_SCHEMA)  # ty: ignore[invalid-argument-type]
         .cast(dtypes_of(COLLATERAL_SCHEMA))
         .lazy()
     )

@@ -28,6 +28,7 @@ STARTER = (
 
 def test_starter_template_has_no_parse_violations() -> None:
     nb = parse_notebook(STARTER.read_text(), filepath=str(STARTER))
+    assert nb is not None
     bad = [
         v
         for v in nb.violations

@@ -131,6 +131,7 @@ class TestFiniteValueSplit:
 
         # Act
         result = CollateralLinkAllocator().allocate_links(exposures, collateral, links, config)
+        assert result.collateral is not None
         alloc = _allocated(result.collateral)
 
         # Assert — finite value 500 split 400 + 100, never exceeding the value.
@@ -191,6 +192,7 @@ class TestFiniteValueSplit:
 
         # Act
         result = CollateralLinkAllocator().allocate_links(exposures, collateral, links, config)
+        assert result.collateral is not None
         alloc = _allocated(result.collateral)
 
         # Assert — all collateral lands on the higher-RWA-density loan A.
@@ -250,6 +252,7 @@ class TestFiniteValueSplit:
 
         # Act
         result = CollateralLinkAllocator().allocate_links(exposures, collateral, links, config)
+        assert result.collateral is not None
         alloc = _allocated(result.collateral)
 
         # Assert
@@ -308,6 +311,7 @@ class TestFiniteValueSplit:
 
         # Act
         result = CollateralLinkAllocator().allocate_links(exposures, collateral, links, config)
+        assert result.collateral is not None
         alloc = _allocated(result.collateral)
 
         # Assert — L1 capped at its 100 sub-limit, L2 takes the remaining 400.
@@ -367,6 +371,7 @@ class TestFiniteValueSplit:
 
         # Act
         result = CollateralLinkAllocator().allocate_links(exposures, collateral, links, config)
+        assert result.collateral is not None
         alloc = _allocated(result.collateral)
 
         # Assert — priority wins: L1 filled first despite lower density.
@@ -427,6 +432,7 @@ class TestFiniteValueSplit:
 
         # Act
         result = CollateralLinkAllocator().allocate_links(exposures, collateral, links, config)
+        assert result.collateral is not None
         df = result.collateral.collect()
 
         # Assert — C2 survives untouched with its original beneficiary and value.
@@ -502,6 +508,7 @@ class TestFiniteValueSplit:
 
         # Act
         result = CollateralLinkAllocator().allocate_links(exposures, collateral, links, config)
+        assert result.collateral is not None
         alloc = _allocated(result.collateral)
 
         # Assert — all three beneficiary types resolve and receive a slice.
@@ -583,6 +590,7 @@ class TestJointResidualAllocation:
 
         # Act
         result = CollateralLinkAllocator().allocate_links(exposures, collateral, links, config)
+        assert result.collateral is not None
         alloc = _allocated(result.collateral)
 
         # Assert — both facilities fully covered, nothing wasted.
@@ -663,6 +671,7 @@ class TestJointResidualAllocation:
 
         # Act
         result = CollateralLinkAllocator().allocate_links(exposures, collateral, links, config)
+        assert result.collateral is not None
         alloc = _allocated(result.collateral)
 
         # Assert — both filled; the constrained item is not wasted.
@@ -717,6 +726,7 @@ class TestJointResidualAllocation:
 
         # Act
         result = CollateralLinkAllocator().allocate_links(exposures, collateral, links, config)
+        assert result.collateral is not None
         alloc = _allocated(result.collateral)
 
         # Assert — L1 capped at its 100 demand, not 200.

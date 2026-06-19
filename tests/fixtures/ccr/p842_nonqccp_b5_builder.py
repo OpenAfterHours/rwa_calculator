@@ -399,8 +399,7 @@ def save_p842_fixtures() -> list[tuple[str, int]]:
         )
     if trades_df["notional"][0] != CCR_A1_NOTIONAL:
         raise AssertionError(
-            f"P8.42 CCR-B5: notional must be {CCR_A1_NOTIONAL} "
-            f"(got {trades_df['notional'][0]})"
+            f"P8.42 CCR-B5: notional must be {CCR_A1_NOTIONAL} (got {trades_df['notional'][0]})"
         )
     if trades_df["start_date"][0] != CCR_A1_START_DATE:
         raise AssertionError(
@@ -462,8 +461,6 @@ def save_p842_fixtures() -> list[tuple[str, int]]:
             f"P8.42 CCR-B5: margin_agreements must be empty (got {margin_df.height})"
         )
     if coll_df.height != 0:
-        raise AssertionError(
-            f"P8.42 CCR-B5: ccr_collateral must be empty (got {coll_df.height})"
-        )
+        raise AssertionError(f"P8.42 CCR-B5: ccr_collateral must be empty (got {coll_df.height})")
 
     return [("(python-only builder — no parquet)", 0)]

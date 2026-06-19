@@ -2027,6 +2027,7 @@ class TestClassificationAudit:
         bundle = create_resolved_bundle(simple_exposures, corporate_counterparties)
         result = classifier.classify(bundle, crr_config)
 
+        assert result.classification_audit is not None
         audit_df = result.classification_audit.collect()
 
         # Audit should have same number of rows as exposures
@@ -2100,7 +2101,7 @@ def _full_model_permissions(model_id: str = _TEST_MODEL_ID) -> pl.LazyFrame:
 
 def _make_model_permissions_df(**overrides: object) -> pl.LazyFrame:
     """Helper to create a model_permissions LazyFrame."""
-    data = {
+    data: dict[str, object] = {
         "model_id": ["CORP_PD_01"],
         "exposure_class": [ExposureClass.CORPORATE.value],
         "approach": [ApproachType.AIRB.value],

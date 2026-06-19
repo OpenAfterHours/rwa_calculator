@@ -21,7 +21,7 @@ from typing import Any
 # Reconfigure stdout to UTF-8 so bullet/arrow glyphs render on Windows consoles
 # (default cp1252 can't encode ●, ↳, etc.). Fall back silently on older Python.
 with contextlib.suppress(AttributeError, OSError):
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # ty: ignore[unresolved-attribute]
 
 # Glyphs — fall back to ASCII if the stream cannot encode the preferred ones.
 _enc = (getattr(sys.stdout, "encoding", "") or "").lower()

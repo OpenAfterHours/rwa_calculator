@@ -134,7 +134,7 @@ def profile_pipeline_stages(
     has_provisions = has_required_columns(data.provisions, crm.PROVISION_REQUIRED_COLUMNS)
     if has_provisions:
         exposures = _time(
-            lambda: crm.resolve_provisions(exposures, data.provisions, config),
+            lambda: crm.resolve_provisions(exposures, data.provisions, config),  # ty: ignore[invalid-argument-type]
             "CRM: provisions",
             results,
         )
@@ -263,6 +263,8 @@ def profile_pipeline_stages(
     if has_guarantees:
 
         def _collect_guarantee_inputs():
+            assert data.guarantees is not None
+            assert data.counterparty_lookup is not None
             e, g, cp, ri = pl.collect_all(
                 [
                     exposures,

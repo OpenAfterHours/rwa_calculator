@@ -32,7 +32,9 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from rwa_calc.contracts.edges import CALC_BRANCH_EDGES
-from rwa_calc.domain.enums import ApproachType
+from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
+from rwa_calc.domain.enums import ApproachType, RiskType
+from rwa_calc.engine.aggregator._schemas import SA_CCR_APPROACH
 from rwa_calc.engine.materialise import materialise_sealed_branches
 from rwa_calc.engine.orchestrator import (
     BRANCH_ERRORS,
@@ -51,6 +53,14 @@ if TYPE_CHECKING:
     from rwa_calc.rulebook import RulepackV0
 
 logger = logging.getLogger(__name__)
+
+# SA-CCR floor-tagging needs ``risk_type`` to be present on the SA branch even
+# for portfolios with no derivatives book. Declared optional (default null) so
+# ``ensure_columns`` injects it as a no-op when absent — the SA-CCR ``when``
+# predicate then evaluates to False for ordinary SA rows.
+_SA_CCR_TAG_SCHEMA: dict[str, ColumnSpec] = {
+    "risk_type": ColumnSpec(dtype=pl.String, default=None, required=False),
+}
 
 
 def run(
@@ -100,9 +110,23 @@ def run(
     # Process each branch (all still lazy)
     if rulepack.pack.feature("output_floor"):
         # SA already calculated by calculate_unified above — add
-        # aggregator columns that calculate_branch normally provides
-        sa_result = sa_branch.with_columns(
-            pl.col("approach").alias("approach_applied"),
+        # aggregator columns that calculate_branch normally provides.
+        #
+        # SA-CCR rows (synthetic netting-set rows, risk_type == "CCR_DERIVATIVE")
+        # are risk-weighted via the SA but, unlike ordinary SA exposures, must
+        # enter the output-floor S-TREA / U-TREA numerators (PS1/26 Art. 92(3A):
+        # SA-CCR is NOT on the S-TREA exclusion list). They carry the distinct
+        # ``SA_CCR_APPROACH`` label so the aggregator's single ``approach_applied``
+        # discriminator routes them into FLOOR_ELIGIBLE_APPROACHES (floor numerator)
+        # and out of SA_APPROACHES (plain-SA total) — moving the RWA into the floor
+        # buckets without double-counting. The underlying ``approach`` column is
+        # left untouched, so SA risk-weight routing and COREP reporting are
+        # unaffected. Only applies under the output-floor (Basel 3.1) path.
+        sa_result = ensure_columns(sa_branch, _SA_CCR_TAG_SCHEMA).with_columns(
+            pl.when(pl.col("risk_type") == RiskType.CCR_DERIVATIVE.value)
+            .then(pl.lit(SA_CCR_APPROACH))
+            .otherwise(pl.col("approach"))
+            .alias("approach_applied"),
             pl.col("rwa_post_factor").alias("rwa_final"),
         )
     else:

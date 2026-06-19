@@ -561,6 +561,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "ccr",
             _generate_p843,
         ),
+        (
+            "P8.55 / B31-CCR-FLOOR-1 (CCR-only SA portfolio — output floor S-TREA/U-TREA inclusion pin)",
+            "ccr",
+            _generate_ccr_floor1,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -3149,6 +3154,83 @@ def _generate_p843(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(fixtures_root)
         for mod in ("ccr.p843_failed_trade_builder",):
+            sys.modules.pop(mod, None)
+
+
+def _generate_ccr_floor1(output_dir: Path) -> list[tuple[str, int]]:
+    """
+    Generate P8.55 / B31-CCR-FLOOR-1 parquet files and smoke-check the bundle.
+
+    Writes four parquet files to the ``ccr/`` output directory:
+        ccr_floor1_trades.parquet             — 1 row (T_CCR_1, 5y GBP IR derivative)
+        ccr_floor1_netting_sets.parquet       — 1 row (NS_CCR_1, CP_CCR_1)
+        ccr_floor1_margin_agreements.parquet  — 0 rows (unmargined)
+        ccr_floor1_ccr_collateral.parquet     — 0 rows (no collateral)
+
+    Smoke-checks structural invariants on the bundle:
+    - trades: 1 row, T_CCR_1, interest_rate, mtm_value=10,000,000
+    - netting_sets: 1 row, NS_CCR_1, is_margined=False
+    - RawDataBundle constructs without error (no raise on build)
+    """
+    fixtures_root = str(output_dir.parent)
+    sys.path.insert(0, fixtures_root)
+    try:
+        from ccr.golden_ccr_floor1 import (
+            CCR_FLOOR1_MTM,
+            CCR_FLOOR1_NETTING_SET_ID,
+            CCR_FLOOR1_TRADE_ID,
+            build_raw_data_bundle_ccr_floor1,
+            save_ccr_floor1_fixtures,
+        )
+
+        # Write parquet artefacts.
+        saved = save_ccr_floor1_fixtures(output_dir)
+
+        # Smoke-check: bundle must construct without raising.
+        bundle = build_raw_data_bundle_ccr_floor1()
+        assert bundle.ccr is not None, "B31-CCR-FLOOR-1: ccr must not be None"
+
+        # Validate trades frame.
+        trades_df = bundle.ccr.trades.trades.collect()
+        if trades_df.height != 1:
+            raise AssertionError(
+                f"B31-CCR-FLOOR-1: expected 1 trade row, got {trades_df.height}"
+            )
+        if trades_df["trade_id"][0] != CCR_FLOOR1_TRADE_ID:
+            raise AssertionError(
+                f"B31-CCR-FLOOR-1: trade_id must be {CCR_FLOOR1_TRADE_ID!r}, "
+                f"got {trades_df['trade_id'][0]!r}"
+            )
+        if trades_df["mtm_value"][0] != CCR_FLOOR1_MTM:
+            raise AssertionError(
+                f"B31-CCR-FLOOR-1: mtm_value must be {CCR_FLOOR1_MTM}, "
+                f"got {trades_df['mtm_value'][0]}"
+            )
+
+        # Validate netting sets frame.
+        ns_df = bundle.ccr.netting_sets.netting_sets.collect()
+        if ns_df.height != 1:
+            raise AssertionError(
+                f"B31-CCR-FLOOR-1: expected 1 netting set row, got {ns_df.height}"
+            )
+        if ns_df["netting_set_id"][0] != CCR_FLOOR1_NETTING_SET_ID:
+            raise AssertionError(
+                f"B31-CCR-FLOOR-1: netting_set_id must be {CCR_FLOOR1_NETTING_SET_ID!r}"
+            )
+        if ns_df["is_margined"][0] is not False:
+            raise AssertionError("B31-CCR-FLOOR-1: netting set must be unmargined")
+
+        return [
+            (f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()
+        ]
+    finally:
+        sys.path.remove(fixtures_root)
+        for mod in (
+            "ccr.golden_ccr_floor1",
+            CCR_TRADE_BUILDER_MODULE,
+            CCR_NETTING_SET_BUILDER_MODULE,
+            CCR_MARGIN_BUILDER_MODULE,
+        ):
             sys.modules.pop(mod, None)
 
 

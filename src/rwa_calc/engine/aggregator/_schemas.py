@@ -28,14 +28,27 @@ IRB_APPROACHES: frozenset[str] = frozenset(
     }
 )
 
-# Floor-eligible approaches — IRB + slotting. The output floor compares
+# CCR-routed SA approach tag. SA-CCR exposures (synthetic netting-set rows,
+# risk_type == "CCR_DERIVATIVE") are risk-weighted via the Standardised
+# Approach but, unlike ordinary SA exposures, MUST enter the output-floor
+# S-TREA / U-TREA numerators (PRA PS1/26 Art. 92(3A): SA-CCR is NOT on the
+# S-TREA exclusion list). They carry this distinct ``approach_applied`` label
+# (set by the calculator stage) so the single ``approach_applied`` discriminator
+# routes them into FLOOR_ELIGIBLE_APPROACHES while keeping them out of
+# SA_APPROACHES — the RWA moves into the floor buckets rather than being
+# double-counted in the plain-SA total.
+SA_CCR_APPROACH: str = "standardised_ccr"
+
+# Floor-eligible approaches — IRB + slotting + SA-CCR. The output floor compares
 # "modelled" RWA (U-TREA) against SA-equivalent (S-TREA) at portfolio level.
 # Slotting (Art. 153(5)) is an IRB-chapter sub-approach and is included per
 # PRA PS1/26 Art. 92 para 2A which references all of Part Three, Title II.
+# SA-CCR is included per PS1/26 Art. 92(3A) (not on the S-TREA exclusion list).
 FLOOR_ELIGIBLE_APPROACHES: frozenset[str] = IRB_APPROACHES | frozenset(
     {
         "slotting",  # ApproachType.SLOTTING.value
         "SLOTTING",  # Defensive: test fixtures may use uppercase
+        SA_CCR_APPROACH,  # SA-CCR rows — PS1/26 Art. 92(3A)
     }
 )
 

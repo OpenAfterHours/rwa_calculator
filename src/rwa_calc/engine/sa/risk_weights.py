@@ -127,6 +127,7 @@ logger = logging.getLogger(__name__)
 
 # In-progress when/then chain accepted/extended by the branch appenders.
 type _RWChain = Then | ChainedThen
+_SETTLEMENT_FAILED_TRADE_RISK_TYPE: str = "SETTLEMENT_FAILED_TRADE"  # CCR routing tag
 
 
 # =============================================================================
@@ -164,6 +165,7 @@ SA_INPUT_CONTRACT: dict[str, ColumnSpec] = {
     # production; B31 defaulted-RW tests that exercise the provision
     # threshold must supply it explicitly.
     "ead_gross": ColumnSpec(pl.Float64, required=False),
+    "risk_type": ColumnSpec(pl.String, required=False),  # CCR failed-trade tag (P8.43)
 }
 
 
@@ -207,6 +209,8 @@ _SA_SHARED_RW: dict[str, float] = {
     "retail": scalar_value(_CRR_PACK.scalar_param("retail_risk_weight")),
 }
 
+# CCR Art. 92(3)(ca) own-funds -> RWA factor (12.5), pins failed-trade RW (P8.43).
+_OWN_FUNDS_TO_RWA_FACTOR: float = scalar_value(_CRR_PACK.scalar_param("own_funds_to_rwa_factor"))
 # Representative equity SA RW (LISTED) from the rulepack for the SA-equivalent maps.
 _CRR_EQ_RW = lookup_float_map(_CRR_PACK.lookup("equity_sa_risk_weights"))
 _B31_EQ_RW = lookup_float_map(_B31_PACK.lookup("equity_sa_risk_weights"))
@@ -1006,7 +1010,9 @@ def _apply_b31_risk_weight_overrides(
     #   corporate / retail / misc          (IG, SME, SL, QRRE, payroll, retail, ...)
     #   covered bond / high risk / other items / equity
     chain = (
-        pl.when(uc.str.contains("CENTRAL_GOVT", literal=True) & is_domestic_currency)
+        pl.when(pl.col("risk_type") == _SETTLEMENT_FAILED_TRADE_RISK_TYPE)  # P8.43 failed trade
+        .then(pl.lit(_OWN_FUNDS_TO_RWA_FACTOR))
+        .when(uc.str.contains("CENTRAL_GOVT", literal=True) & is_domestic_currency)
         .then(pl.lit(0.0))
         # Art. 137(1)-(2) Table 9: nominated ECA / MEIP score → direct sovereign
         # RW when no ECAI rating is present. Takes precedence over the Art. 114
@@ -1195,8 +1201,10 @@ def _apply_crr_risk_weight_overrides(
 ) -> pl.LazyFrame:
     """Apply CRR class-specific risk-weight overrides (Art. 112-134)."""
     chain = (
+        pl.when(pl.col("risk_type") == _SETTLEMENT_FAILED_TRADE_RISK_TYPE)  # P8.43 failed trade
+        .then(pl.lit(_OWN_FUNDS_TO_RWA_FACTOR))
         # Art. 114(4)/(7): Domestic CGCB -> 0% RW (overrides all CQS).
-        pl.when(uc.str.contains("CENTRAL_GOVT", literal=True) & is_domestic_currency)
+        .when(uc.str.contains("CENTRAL_GOVT", literal=True) & is_domestic_currency)
         .then(pl.lit(0.0))
         # Art. 137(1)-(2) Table 9: nominated ECA / MEIP score → direct sovereign
         # RW when no ECAI rating is present. Takes precedence over the Art. 114

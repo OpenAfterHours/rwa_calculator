@@ -556,6 +556,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "ccr",
             _generate_ccr_irb1,
         ),
+        (
+            "P8.43 (CCR-C1/C2/C3 DvP failed-trade Art. 378 band ladder — 3 distinct CPs)",
+            "ccr",
+            _generate_p843,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -2984,6 +2989,166 @@ def _generate_ccr_irb1(output_dir: Path) -> list[tuple[str, int]]:
             CCR_NETTING_SET_BUILDER_MODULE,
             CCR_MARGIN_BUILDER_MODULE,
         ):
+            sys.modules.pop(mod, None)
+
+
+def _generate_p843(output_dir: Path) -> list[tuple[str, int]]:
+    """
+    Validate P8.43 builder imports (Python-only builder — no persistent parquet output).
+
+    P8.43 tests three independent DvP failed-trade scenarios (CCR-C1 / C2 / C3),
+    each placed in a distinct Art. 378 Table 1 multiplier band:
+
+        CCR-C1: FT_C1, t+6,  dvp_5_15    (8%),  own_funds=8,000,    RWA=100,000
+        CCR-C2: FT_C2, t+35, dvp_31_45   (75%), own_funds=600,000,  RWA=7,500,000
+        CCR-C3: FT_C3, t+46, dvp_46_plus (100%), own_funds=500,000,  RWA=6,250,000
+
+    Portfolio total RWA = 13,850,000.
+
+    Each row carries a distinct counterparty reference (CP_FT_C1 / C2 / C3).
+    The fixture is a Python-only builder; test-writer imports constants and
+    ``make_c_failed_trades_frame()`` / ``make_minimal_counterparties_frame()`` directly.
+
+    Regulatory basis: CRR Art. 378 + Table 1 (DvP multiplier ladder).
+    """
+    fixtures_root = str(output_dir.parent)
+    sys.path.insert(0, fixtures_root)
+    try:
+        from ccr.p843_failed_trade_builder import (  # noqa: PLC0415
+            FT_C1_BAND,
+            FT_C1_DAYS,
+            FT_C1_ID,
+            FT_C1_MULTIPLIER,
+            FT_C1_OWN_FUNDS,
+            FT_C1_PRICE_DIFF,
+            FT_C1_RWA,
+            FT_C2_BAND,
+            FT_C2_ID,
+            FT_C2_OWN_FUNDS,
+            FT_C2_RWA,
+            FT_C3_BAND,
+            FT_C3_ID,
+            FT_C3_OWN_FUNDS,
+            FT_C3_RWA,
+            PORTFOLIO_TOTAL_RWA,
+            make_c_failed_trades_frame,
+            make_minimal_counterparties_frame,
+        )
+
+        # Smoke-check: frame must construct without raising.
+        lf = make_c_failed_trades_frame()
+        df = lf.collect()
+
+        # Invariant 1: exactly 3 rows.
+        if df.height != 3:
+            raise AssertionError(f"P8.43: frame must have 3 rows (got {df.height})")
+
+        # Invariant 2: all three trade IDs present.
+        ids = set(df["failed_trade_id"].to_list())
+        expected_ids = {FT_C1_ID, FT_C2_ID, FT_C3_ID}
+        if ids != expected_ids:
+            raise AssertionError(f"P8.43: expected trade IDs {expected_ids}, got {ids}")
+
+        # Invariant 3: all rows are dvp settlement type.
+        if df["settlement_type"].n_unique() != 1 or df["settlement_type"][0] != "dvp":
+            raise AssertionError("P8.43: all rows must have settlement_type='dvp'")
+
+        # Invariant 4: each row has a distinct counterparty reference.
+        cp_refs = set(df["counterparty_reference"].to_list())
+        if len(cp_refs) != 3:
+            raise AssertionError(
+                f"P8.43: expected 3 distinct counterparty references, got {cp_refs}"
+            )
+
+        # Invariant 5: DvP rows have null value_transferred and current_positive_exposure.
+        if df["value_transferred"].null_count() != 3:
+            raise AssertionError("P8.43: DvP rows must have null value_transferred")
+        if df["current_positive_exposure"].null_count() != 3:
+            raise AssertionError("P8.43: DvP rows must have null current_positive_exposure")
+        if df["agreed_settlement_price"].null_count() != 0:
+            raise AssertionError("P8.43: DvP rows must have non-null agreed_settlement_price")
+        if df["current_market_value"].null_count() != 0:
+            raise AssertionError("P8.43: DvP rows must have non-null current_market_value")
+
+        # Invariant 6: FT_C1 day count and band constant.
+        ft_c1 = df.filter(pl.col("failed_trade_id") == FT_C1_ID)
+        if ft_c1["working_days_past_due"][0] != FT_C1_DAYS:
+            raise AssertionError(
+                f"P8.43: FT_C1 days must be {FT_C1_DAYS} "
+                f"(got {ft_c1['working_days_past_due'][0]})"
+            )
+
+        # Invariant 7: all optional boolean flags default False.
+        for col in (
+            "is_repo_or_sec_lending",
+            "is_immaterial",
+            "elect_cet1_deduction",
+            "system_wide_failure_waiver",
+        ):
+            if col not in df.columns:
+                raise AssertionError(f"P8.43: column {col!r} must be present")
+            if df[col].sum() != 0:
+                raise AssertionError(f"P8.43: all rows must have {col}=False")
+
+        # Invariant 8: hand-calc spot-check — FT_C1 own-funds and RWA constants.
+        if abs(FT_C1_PRICE_DIFF * FT_C1_MULTIPLIER - FT_C1_OWN_FUNDS) > 0.01:
+            raise AssertionError(
+                f"P8.43: FT_C1 own_funds hand-calc mismatch: "
+                f"{FT_C1_PRICE_DIFF} × {FT_C1_MULTIPLIER} != {FT_C1_OWN_FUNDS}"
+            )
+        if abs(FT_C1_OWN_FUNDS * 12.5 - FT_C1_RWA) > 0.01:
+            raise AssertionError(
+                f"P8.43: FT_C1 RWA hand-calc mismatch: {FT_C1_OWN_FUNDS} × 12.5 != {FT_C1_RWA}"
+            )
+
+        # Invariant 9: own-funds and RWA constants for remaining rows.
+        for trade_id, of, rwa in [
+            (FT_C2_ID, FT_C2_OWN_FUNDS, FT_C2_RWA),
+            (FT_C3_ID, FT_C3_OWN_FUNDS, FT_C3_RWA),
+        ]:
+            if abs(of * 12.5 - rwa) > 0.01:
+                raise AssertionError(
+                    f"P8.43: {trade_id} RWA hand-calc mismatch: {of} × 12.5 != {rwa}"
+                )
+
+        # Invariant 10: portfolio total RWA constant matches sum of per-row RWAs.
+        row_rwa_sum = FT_C1_RWA + FT_C2_RWA + FT_C3_RWA
+        if abs(row_rwa_sum - PORTFOLIO_TOTAL_RWA) > 0.01:
+            raise AssertionError(
+                f"P8.43: PORTFOLIO_TOTAL_RWA {PORTFOLIO_TOTAL_RWA} != "
+                f"sum of per-row RWAs {row_rwa_sum}"
+            )
+
+        # Invariant 11: band string constants are correct non-empty strings.
+        for trade_id, band in [
+            (FT_C1_ID, FT_C1_BAND),
+            (FT_C2_ID, FT_C2_BAND),
+            (FT_C3_ID, FT_C3_BAND),
+        ]:
+            if not isinstance(band, str) or not band:
+                raise AssertionError(
+                    f"P8.43: band constant for {trade_id!r} must be a non-empty string"
+                )
+
+        # Invariant 12: minimal counterparties frame has 3 rows with correct references.
+        cp_lf = make_minimal_counterparties_frame()
+        cp_df = cp_lf.collect()
+        if cp_df.height != 3:
+            raise AssertionError(
+                f"P8.43: counterparties frame must have 3 rows (got {cp_df.height})"
+            )
+        cp_set = set(cp_df["counterparty_reference"].to_list())
+        expected_cps = {"CP_FT_C1", "CP_FT_C2", "CP_FT_C3"}
+        if cp_set != expected_cps:
+            raise AssertionError(
+                f"P8.43: counterparties must be {expected_cps}, got {cp_set}"
+            )
+
+        # No parquet files written — report zero files, zero records.
+        return [(PYTHON_ONLY_NO_PARQUET, 0)]
+    finally:
+        sys.path.remove(fixtures_root)
+        for mod in ("ccr.p843_failed_trade_builder",):
             sys.modules.pop(mod, None)
 
 

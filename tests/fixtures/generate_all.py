@@ -601,6 +601,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "p8_46",
             _generate_p846_cva_a2,
         ),
+        (
+            "P8.46 (CVA-A3 BA-CVA reduced-K one-counterparty two-netting-set SCVA aggregation)",
+            "p8_46",
+            _generate_p846_cva_a3,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -3777,6 +3782,44 @@ def _generate_p846_cva_a2(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         for mod in list(sys.modules.keys()):
             if "p8_46" in mod or "cva_a2_builder" in mod:
+                sys.modules.pop(mod, None)
+
+
+def _generate_p846_cva_a3(output_dir: Path) -> list[tuple[str, int]]:
+    """
+    Generate P8.46 / CVA-A3 fixtures — BA-CVA one-counterparty two-netting-set aggregation.
+
+    CVA-A3 isolates the inner SUM_NS within a single counterparty's SCVA_c: one
+    counterparty CP_CVA_A3 with two netting sets (NS_CVA_A3_1 3-year, NS_CVA_A3_2
+    5-year), both carrying the same counterparty_reference.  The engine join keyed
+    by counterparty_reference propagates M=4.0 to both NS rows and sums the per-NS
+    SCVA contributions.  The single-CP K collapse (n=1) produces K_reduced = SCVA_c.
+
+    Parquet files produced (5 files):
+        cva_a3_trades.parquet              2 rows  (T_CVA_A3_1 3y, T_CVA_A3_2 5y)
+        cva_a3_netting_sets.parquet        2 rows  (NS_CVA_A3_1 → CP_CVA_A3,
+                                                     NS_CVA_A3_2 → CP_CVA_A3)
+        cva_a3_margin_agreements.parquet   0 rows  (no CSA)
+        cva_a3_ccr_collateral.parquet      0 rows  (no CCR collateral)
+        cva_a3_cva_counterparties.parquet  1 row   (CP_CVA_A3, M=4.0, FINANCIAL/IG)
+
+    Structural invariants:
+        scva_c == scva_ns1 + scva_ns2   (cross-NS additivity)
+        k_reduced == scva_c             (single-CP K collapse)
+        scva_ns1 / scva_ns2 == ead_ns1 / ead_ns2  (shared M*DF ratio preservation)
+
+    Regulatory basis: PS1/26 App.1 CVA Part 4.2-4.4; CRR Art. 274(2).
+    """
+    _REPO_ROOT_STR = str(_REPO_ROOT)
+    if _REPO_ROOT_STR not in sys.path:
+        sys.path.insert(0, _REPO_ROOT_STR)
+    try:
+        from tests.fixtures.p8_46.cva_a3_builder import save_p846_cva_a3_fixtures
+
+        return save_p846_cva_a3_fixtures(output_dir)
+    finally:
+        for mod in list(sys.modules.keys()):
+            if "p8_46" in mod or "cva_a3_builder" in mod:
                 sys.modules.pop(mod, None)
 
 

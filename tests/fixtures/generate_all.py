@@ -581,6 +581,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "ccr",
             _generate_ccr_d1_d3,
         ),
+        (
+            "P8.45 (CCR-E1..E5 default-risk RWA routing — institution/corporate/sovereign x CRR/B3.1)",
+            "ccr",
+            _generate_p845_e1_e5,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -3599,6 +3604,45 @@ def _generate_p849_dfc(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(fixtures_root)
         sys.modules.pop("ccr.p849_default_fund_builder", None)
+
+
+def _generate_p845_e1_e5(output_dir: Path) -> list[tuple[str, int]]:
+    """
+    Validate P8.45 / CCR-E1..E5 bundles (Python-only builder — no persistent parquet output).
+
+    P8.45 tests five independent default-risk RWA routing scenarios that share
+    identical trade economics (10y GBP IR swap, notional GBP 100m, EAD ~ 5,480,018)
+    but differ in counterparty class (institution / corporate / sovereign) and
+    regulatory framework (CRR / Basel 3.1):
+
+        CCR-E1 (CRR):  institution, CQS 2  -> RW 0.50  (CRR Art. 120(1) Table 3)
+        CCR-E2 (CRR):  corporate,   CQS 3  -> RW 1.00  (CRR Art. 122(1))
+        CCR-E3 (CRR):  sovereign BR, CQS 3 -> RW 0.50  (CRR Art. 114(1) Table 1, non-domestic)
+        CCR-E4 (B3.1): institution, CQS 2  -> RW 0.30  (PS1/26 Art. 120(2) T3 ECRA)
+        CCR-E5 (B3.1): corporate,   CQS 3  -> RW 0.75  (PS1/26 Art. 122(2) Table 6)
+
+    The fixture is a Python-only builder; test-writer imports the five
+    ``build_raw_data_bundle_ccr_eN()`` functions and the two config factories
+    ``make_crr_config()`` / ``make_b31_config()`` directly.
+
+    Regulatory basis: CRR Art. 114, 120, 122, 274(2); PS1/26 Art. 120, 122, 274(2).
+    """
+    fixtures_root = str(output_dir.parent)
+    sys.path.insert(0, fixtures_root)
+    try:
+        from ccr.p845_e1_e5_builder import save_p845_fixtures
+
+        return save_p845_fixtures()
+    finally:
+        sys.path.remove(fixtures_root)
+        for mod in (
+            "ccr.p845_e1_e5_builder",
+            CCR_GOLDEN_A1_MODULE,
+            CCR_TRADE_BUILDER_MODULE,
+            CCR_NETTING_SET_BUILDER_MODULE,
+            CCR_MARGIN_BUILDER_MODULE,
+        ):
+            sys.modules.pop(mod, None)
 
 
 if __name__ == "__main__":

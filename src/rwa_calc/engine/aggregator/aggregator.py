@@ -170,6 +170,20 @@ class OutputAggregator:
 
         combined_df = pre_floor_dfs["combined"]
         combined = combined_df.lazy()
+
+        # CCR Art. 308/309 default-fund-contribution roll-up: sum rwa_final over
+        # the synthetic ``CCR_DEFAULT_FUND`` rows. Guarded for the column's
+        # absence on CCR-free portfolios (risk_type is null/absent there).
+        rwa_ccr_default_fund: float | None = None
+        if {"risk_type", "rwa_final"} <= set(combined_df.columns):
+            dfc_total = float(
+                combined_df.filter(pl.col("risk_type") == "CCR_DEFAULT_FUND")
+                .select(pl.col("rwa_final").fill_null(0.0).sum())
+                .item()
+            )
+            if dfc_total > 0.0:
+                rwa_ccr_default_fund = dfc_total
+
         pre_crm_summary = pre_floor_dfs["pre_crm_summary"].lazy()
         if securitisation_summary is not None:
             securitisation_summary = pre_floor_dfs["securitisation_summary"].lazy()
@@ -314,6 +328,7 @@ class OutputAggregator:
             el_summary=el_summary,
             securitisation_summary=securitisation_summary,
             securitisation_audit=sec_audit_view,
+            rwa_ccr_default_fund=rwa_ccr_default_fund,
             errors=[],
         )
 

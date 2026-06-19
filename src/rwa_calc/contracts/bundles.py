@@ -504,6 +504,8 @@ class RawCCRBundle:
     - ``margin_agreements``: per-CSA rows (CRR Art. 272(7))
     - ``ccr_collateral``: netting-set-keyed collateral (CRR Art. 275(1))
     - ``failed_trades``: optional failed-settlement rows (Art. 378-380)
+    - ``default_fund_contributions``: optional CCP default-fund
+      contribution rows (Art. 308-309)
 
     Each leaf bundle's LazyFrame may be empty (zero rows, schema
     present) when the firm has no instances of that domain — e.g.
@@ -522,6 +524,10 @@ class RawCCRBundle:
         margin_agreements: Margin-agreement (CSA) inputs for SA-CCR
         ccr_collateral: Netting-set-keyed collateral inputs
         failed_trades: Optional failed-settlement inputs (Art. 378-380)
+        default_fund_contributions: Optional CCP default-fund contribution
+            inputs (Art. 308-309). One row per clearing-member contribution
+            (``DF_CONTRIBUTION_SCHEMA``); ``None`` when the firm has no
+            default-fund contributions and the DFC sub-stage is skipped.
         errors: Bundle-level wiring errors (e.g. missing leaf file,
             cross-leaf consistency failures). Row-level data-quality
             errors live on the individual leaf bundles.
@@ -532,6 +538,7 @@ class RawCCRBundle:
     - CRR Art. 272(4) (netting set), 272(7) (margin agreement),
       272(9) (margin period of risk)
     - CRR Art. 378-380 (settlement risk — failed trades)
+    - CRR Art. 308-309 (CCP default-fund contributions)
     """
 
     trades: TradeBundle
@@ -539,6 +546,7 @@ class RawCCRBundle:
     margin_agreements: MarginAgreementBundle
     ccr_collateral: CCRCollateralBundle
     failed_trades: FailedTradesBundle | None = None
+    default_fund_contributions: pl.LazyFrame | None = None
     errors: list[CalculationError] = field(default_factory=list)
 
 
@@ -723,6 +731,10 @@ class AggregatedResultBundle:
         securitisation_audit: Per-exposure reconciliation showing the parent
             EAD, residual portion, sum of pool slices, and any validation
             status flags from the allocator stage (CRR Art. 244-246).
+        rwa_ccr_default_fund: Bundle-level roll-up of CCP default-fund
+            contribution RWEA (sum of ``rwa_final`` over the synthetic
+            ``risk_type == "CCR_DEFAULT_FUND"`` rows; CRR Art. 308/309).
+            ``None`` when the portfolio carries no default-fund contributions.
         errors: All errors accumulated throughout pipeline
     """
 
@@ -742,6 +754,7 @@ class AggregatedResultBundle:
     el_summary: ELPortfolioSummary | None = None
     securitisation_summary: pl.LazyFrame | None = None
     securitisation_audit: pl.LazyFrame | None = None
+    rwa_ccr_default_fund: float | Decimal | None = None
     errors: list[CalculationError] = field(default_factory=list)
 
     def __post_init__(self) -> None:

@@ -254,9 +254,10 @@ def test_raw_ccr_bundle_is_frozen_dataclass() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_raw_ccr_bundle_has_exactly_six_fields_in_order() -> None:
-    """RawCCRBundle must have exactly six fields: trades, netting_sets, margin_agreements,
-    ccr_collateral, failed_trades, errors — in that order. (failed_trades added by P8.24.)"""
+def test_raw_ccr_bundle_has_exactly_seven_fields_in_order() -> None:
+    """RawCCRBundle must have exactly seven fields: trades, netting_sets, margin_agreements,
+    ccr_collateral, failed_trades, default_fund_contributions, errors — in that order.
+    (failed_trades added by P8.24; default_fund_contributions added by P8.49.)"""
     # Arrange
     cls = getattr(bundles, "RawCCRBundle", None)
     assert cls is not None, "'RawCCRBundle' not found — see test_raw_ccr_bundle_exists"
@@ -265,8 +266,8 @@ def test_raw_ccr_bundle_has_exactly_six_fields_in_order() -> None:
     fields = dataclasses.fields(cls)
     field_names = [f.name for f in fields]
 
-    # Assert — exactly six fields
-    assert len(fields) == 6, f"'RawCCRBundle' must have exactly 6 fields, got {field_names}"
+    # Assert — exactly seven fields
+    assert len(fields) == 7, f"'RawCCRBundle' must have exactly 7 fields, got {field_names}"
 
     # Assert — names and order
     expected = [
@@ -275,6 +276,7 @@ def test_raw_ccr_bundle_has_exactly_six_fields_in_order() -> None:
         "margin_agreements",
         "ccr_collateral",
         "failed_trades",
+        "default_fund_contributions",
         "errors",
     ]
     assert field_names == expected, (

@@ -127,6 +127,23 @@ def run(
             failed_trade_rows, resolved.counterparty_lookup
         ))
 
+    # CCR Art. 308/309 CCP default-fund contributions: when the firm reports
+    # clearing-member default-fund contributions, compute their K_CM / RWEA
+    # via ``compute_dfc_capital`` and shape each row into a synthetic SA
+    # exposure (drawn_amount = K_CM, RW pinned to 12.5 in the SA override
+    # chain) so the default-fund RWEA reaches the aggregated totals.
+    if data.ccr.default_fund_contributions is not None:
+        from rwa_calc.engine.ccr.default_fund import compute_dfc_capital
+
+        dfc_rows = _dfc_rows_to_exposures(
+            data.ccr.default_fund_contributions,
+            run_config,
+            compute_dfc_capital,
+        )
+        concat_frames.append(_enrich_ccr_rows_with_ratings(
+            dfc_rows, resolved.counterparty_lookup
+        ))
+
     new_exposures = pl.concat(
         concat_frames,
         how="diagonal_relaxed",
@@ -179,6 +196,48 @@ def _failed_trade_rows_to_exposures(
         pl.col("failed_trade_rwa"),
         pl.col("price_difference"),
         pl.col("exposure_amount"),
+    )
+
+
+def _dfc_rows_to_exposures(
+    default_fund_contributions: pl.LazyFrame,
+    run_config: CalculationConfig,
+    compute_dfc_capital: Callable[[pl.LazyFrame, CalculationConfig], pl.LazyFrame],
+) -> pl.LazyFrame:
+    """Shape default-fund-contribution K_CM into synthetic SA exposure rows.
+
+    CCR Art. 308/309 CCP default-fund contributions: each contribution
+    carries a clearing-member capital requirement (K_CM = K_CCP x DF_i /
+    DF_CM, Art. 308(2)). The synthetic row sets ``drawn_amount = k_cm`` and
+    tags itself with ``risk_type = "CCR_DEFAULT_FUND"`` so the SA override
+    chain pins its risk weight to the own-funds->RWA factor (12.5, Art.
+    92(3)(ca)); the downstream EAD x RW then reproduces the upstream
+    ``dfc_rwea`` (K_CM x 12.5, Art. 308(3) / 309(2)). The ``ccp_reference``
+    becomes the synthetic row's ``counterparty_reference`` so the rating
+    enrichment join lines up.
+
+    References:
+        CRR Art. 308(2)/(3); CRR Art. 309(1)/(2); CRR Art. 92(3)(ca).
+    """
+    computed = compute_dfc_capital(default_fund_contributions, run_config)
+    return computed.select(
+        pl.concat_str([pl.lit("dfc__"), pl.col("contribution_id")]).alias("exposure_reference"),
+        pl.lit("ccr_default_fund").alias("exposure_type"),
+        pl.col("ccp_reference").alias("counterparty_reference"),
+        pl.lit(run_config.reporting_date).alias("value_date"),
+        pl.lit(run_config.reporting_date).alias("maturity_date"),
+        pl.col("k_cm").alias("drawn_amount"),
+        pl.lit(0.0).alias("interest"),
+        pl.lit(0.0).alias("undrawn_amount"),
+        pl.lit(0.0).alias("nominal_amount"),
+        pl.lit("senior").alias("seniority"),
+        pl.lit("CCR_DEFAULT_FUND").alias("risk_type"),
+        pl.lit("default_fund").alias("ccr_method"),
+        # Audit columns reconciling the synthetic row back to Art. 308/309.
+        pl.col("regulatory_band"),
+        pl.col("k_ccp_published"),
+        pl.col("k_cm"),
+        pl.col("dfc_rwea"),
     )
 
 

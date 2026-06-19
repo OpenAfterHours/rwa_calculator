@@ -128,6 +128,7 @@ logger = logging.getLogger(__name__)
 # In-progress when/then chain accepted/extended by the branch appenders.
 type _RWChain = Then | ChainedThen
 _SETTLEMENT_FAILED_TRADE_RISK_TYPE: str = "SETTLEMENT_FAILED_TRADE"  # CCR routing tag
+_CCR_DEFAULT_FUND_RISK_TYPE: str = "CCR_DEFAULT_FUND"  # CCP default-fund routing tag (P8.49)
 
 
 # =============================================================================
@@ -1012,6 +1013,8 @@ def _apply_b31_risk_weight_overrides(
     chain = (
         pl.when(pl.col("risk_type") == _SETTLEMENT_FAILED_TRADE_RISK_TYPE)  # P8.43 failed trade
         .then(pl.lit(_OWN_FUNDS_TO_RWA_FACTOR))
+        .when(pl.col("risk_type") == _CCR_DEFAULT_FUND_RISK_TYPE)  # P8.49 default fund (Art. 308/309)
+        .then(pl.lit(_OWN_FUNDS_TO_RWA_FACTOR))
         .when(uc.str.contains("CENTRAL_GOVT", literal=True) & is_domestic_currency)
         .then(pl.lit(0.0))
         # Art. 137(1)-(2) Table 9: nominated ECA / MEIP score → direct sovereign
@@ -1202,6 +1205,8 @@ def _apply_crr_risk_weight_overrides(
     """Apply CRR class-specific risk-weight overrides (Art. 112-134)."""
     chain = (
         pl.when(pl.col("risk_type") == _SETTLEMENT_FAILED_TRADE_RISK_TYPE)  # P8.43 failed trade
+        .then(pl.lit(_OWN_FUNDS_TO_RWA_FACTOR))
+        .when(pl.col("risk_type") == _CCR_DEFAULT_FUND_RISK_TYPE)  # P8.49 default fund (Art. 308/309)
         .then(pl.lit(_OWN_FUNDS_TO_RWA_FACTOR))
         # Art. 114(4)/(7): Domestic CGCB -> 0% RW (overrides all CQS).
         .when(uc.str.contains("CENTRAL_GOVT", literal=True) & is_domestic_currency)

@@ -575,6 +575,12 @@ CCR_EXIT_EDGE: EdgeContract = EdgeContract(
         "alpha_applied": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 274(2)"),
         "transitional_add_on": EdgeColumn(dtype=pl.Float64, citation="PS1/26 Art. 274(2A)"),
         "ead_ccr": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 274(3)"),
+        # Settlement-risk / default-fund audit band — present only when the
+        # firm reports failed trades (Art. 378/379) or CCP default-fund
+        # contributions (Art. 308/309); absent on SA-CCR-only runs.
+        "regulatory_band": EdgeColumn(
+            dtype=pl.String, required=False, inject=False, citation="CRR Art. 308/309/378/379"
+        ),
     },
 )
 """The CCR stage exit: the hierarchy_exit shape plus the SA-CCR synthetic-row
@@ -1235,6 +1241,9 @@ def _calc_output_common_columns() -> dict[str, EdgeColumn]:
         "provision_on_nominal": EdgeColumn(dtype=pl.Float64, required=False),
         "source_netting_set_id": EdgeColumn(dtype=pl.String, required=False, inject=False),
         "ccr_method": EdgeColumn(dtype=pl.String, required=False, inject=False),
+        # Settlement-risk / default-fund audit band (Art. 308/309/378/379) —
+        # conditional pass-through on the synthetic CCR rows.
+        "regulatory_band": EdgeColumn(dtype=pl.String, required=False, inject=False),
         "wwr_lgd_override": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         "addon_aggregate": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         "addon_by_asset_class": EdgeColumn(

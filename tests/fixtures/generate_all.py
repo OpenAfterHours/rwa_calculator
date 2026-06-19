@@ -566,6 +566,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "ccr",
             _generate_ccr_floor1,
         ),
+        (
+            "P8.49 (CCR-B2/B3/B4 default-fund-contribution capital stack — Art. 308/309)",
+            "ccr",
+            _generate_p849_dfc,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -3487,6 +3492,36 @@ def print_data_integrity_check(fixtures_dir: Path) -> None:
     if not errors and not warnings:
         print("All integrity checks passed!")
     print("=" * 80)
+
+
+def _generate_p849_dfc(output_dir: Path) -> list[tuple[str, int]]:
+    """
+    Validate P8.49 builder imports (Python-only builder — no persistent parquet output).
+
+    P8.49 tests three independent DF-contribution scenarios (CCR-B2 / B3 / B4),
+    each exercising a distinct CRR Art. 308/309 regulatory branch:
+
+        CCR-B2: DFC_B2, QCCP pre-funded   (Art. 308), K_CM=1,000,000   RWEA=12,500,000
+        CCR-B3: DFC_B3, non-QCCP pre-funded(Art. 309), K_CM=750,000    RWEA=9,375,000
+        CCR-B4: DFC_B4, non-QCCP unfunded  (Art. 309), K_CM=400,000    RWEA=5,000,000
+
+    Portfolio total RWEA (B2+B3+B4) = 26,875,000.
+
+    Each row carries a distinct CCP counterparty reference.
+    The fixture is a Python-only builder; test-writer imports constants and
+    ``make_b2_frame()`` / ``make_combined_b2_b3_b4_frame()`` directly.
+
+    Regulatory basis: CRR Art. 308(2)/(3) + Art. 309(1)/(2).
+    """
+    fixtures_root = str(output_dir.parent)
+    sys.path.insert(0, fixtures_root)
+    try:
+        from ccr.p849_default_fund_builder import save_p849_fixtures  # noqa: PLC0415
+
+        return save_p849_fixtures()
+    finally:
+        sys.path.remove(fixtures_root)
+        sys.modules.pop("ccr.p849_default_fund_builder", None)
 
 
 if __name__ == "__main__":

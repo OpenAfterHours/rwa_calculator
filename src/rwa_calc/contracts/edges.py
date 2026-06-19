@@ -1430,6 +1430,10 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
         "risk_weight_irb_original": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         "rw_direct": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         "rwa_irb_original": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
+        # Portfolio BA-CVA RWEA, broadcast as a constant column by the
+        # aggregation stage's CVA roll-up so the COREP C 34.04 consumer can read
+        # the scalar from the results LazyFrame (PRA PS1/26 Own Funds Part 4(b)).
+        "cva_rwa": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
     },
 )
 

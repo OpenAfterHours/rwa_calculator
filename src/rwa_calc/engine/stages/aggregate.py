@@ -40,6 +40,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from rwa_calc.contracts.edges import AGGREGATOR_EXIT_EDGE, seal
 from rwa_calc.engine.orchestrator import (
     BRANCH_ERRORS,
     COMPONENTS,
@@ -92,9 +93,22 @@ def run(
     cva = _ba_cva_roll_up(ctx, rulepack, result.results)
     if cva is not None and cva.rwea is not None:
         # ``cva_rwa`` is additive to the default-risk total (Σ rwa_final); it is
-        # not folded into ``rwa_final`` (PS1/26 Own Funds 4(b)).
+        # not folded into ``rwa_final`` (PS1/26 Own Funds 4(b)). It is also
+        # broadcast as a constant ``cva_rwa`` column on the (re-sealed) results
+        # frame so the downstream COREP C 34.04 grid can read the portfolio CVA
+        # RWEA from the LazyFrame alone — the scalar is otherwise bundle-only.
+        # ``cva_rwa`` is a declared optional column on ``AGGREGATOR_EXIT_EDGE``,
+        # so the re-seal conforms and re-brands the frame without violating the
+        # producer-seal contract.
+        cva_results = seal(
+            result.results.with_columns(
+                pl.lit(cva.rwea, dtype=pl.Float64).alias("cva_rwa")
+            ),
+            AGGREGATOR_EXIT_EDGE,
+        )
         result = replace(
             result,
+            results=cva_results,
             cva_rwa=cva.rwea,
             cva_method="BA-CVA",
             cva_hedges_recognised=cva.hedges_recognised,

@@ -14,6 +14,10 @@ Generates EBA/PRA COREP templates from RWA calculation results:
 - C 02.00 / OF 02.00: Own Funds Requirements — master capital template (CA2)
 - C 09.01 / OF 09.01: CR GB 1 — Geographical breakdown SA (per country)
 - C 09.02 / OF 09.02: CR GB 2 — Geographical breakdown IRB (per country)
+- C 34.01: CCR — analysis by approach (SA-CCR total EAD + RWEA)
+- C 34.02: CCR — SA-CCR EAD per netting set (one grid per netting_set_id)
+- C 34.04: CCR — CVA capital (BA-CVA RWEA; Basel 3.1 only)
+- C 34.08: CCR — CCP exposures (QCCP trade 2%/4%, non-QCCP, default fund)
 
 Supports both CRR (current) and Basel 3.1 (PRA PS1/26) frameworks.
 
@@ -88,6 +92,18 @@ from rwa_calc.reporting.corep.templates import (
     CRR_IRB_ROW_SECTIONS,
     CRR_SA_ROW_SECTIONS,
     CRR_SL_TYPES,
+    C34_01_COLUMN_REFS,
+    C34_01_COLUMNS,
+    C34_01_ROWS,
+    C34_02_COLUMN_REFS,
+    C34_02_COLUMNS,
+    C34_02_ROWS,
+    C34_04_COLUMN_REFS,
+    C34_04_COLUMNS,
+    C34_04_ROWS,
+    C34_08_COLUMN_REFS,
+    C34_08_COLUMNS,
+    C34_08_ROWS,
     IRB_EXPOSURE_CLASS_ROWS,
     OF_02_01_COLUMN_REFS,
     OF_02_01_COLUMNS,
@@ -98,6 +114,10 @@ from rwa_calc.reporting.corep.templates import (
     get_c02_00_columns,
     get_c02_00_row_sections,
     get_c07_columns,
+    get_c34_01_columns,
+    get_c34_02_columns,
+    get_c34_04_columns,
+    get_c34_08_columns,
     get_c08_03_columns,
     get_c08_04_columns,
     get_c08_05_columns,
@@ -179,6 +199,18 @@ __all__ = [
     "CRR_IRB_ROW_SECTIONS",
     "CRR_SA_ROW_SECTIONS",
     "CRR_SL_TYPES",
+    "C34_01_COLUMNS",
+    "C34_01_COLUMN_REFS",
+    "C34_01_ROWS",
+    "C34_02_COLUMNS",
+    "C34_02_COLUMN_REFS",
+    "C34_02_ROWS",
+    "C34_04_COLUMNS",
+    "C34_04_COLUMN_REFS",
+    "C34_04_ROWS",
+    "C34_08_COLUMNS",
+    "C34_08_COLUMN_REFS",
+    "C34_08_ROWS",
     "IRB_EXPOSURE_CLASS_ROWS",
     "OF_02_01_COLUMN_REFS",
     "OF_02_01_COLUMNS",
@@ -189,6 +221,10 @@ __all__ = [
     "get_c02_00_columns",
     "get_c02_00_row_sections",
     "get_c07_columns",
+    "get_c34_01_columns",
+    "get_c34_02_columns",
+    "get_c34_04_columns",
+    "get_c34_08_columns",
     "get_c08_03_columns",
     "get_c08_04_columns",
     "get_c08_05_columns",

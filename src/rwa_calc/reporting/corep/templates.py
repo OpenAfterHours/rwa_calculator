@@ -1922,3 +1922,88 @@ def get_c09_02_rows(framework: str = "CRR") -> list[COREPRow]:
     retail RE rows, removes equity).
     """
     return B31_C09_02_ROWS if framework == "BASEL_3_1" else CRR_C09_02_ROWS
+
+
+# =============================================================================
+# C 34.01 / C 34.02 / C 34.04 / C 34.08 — COUNTERPARTY CREDIT RISK (CCR)
+# =============================================================================
+
+# The C 34 family reports counterparty credit risk (CCR) under the SA-CCR
+# exposure measure, per-netting-set EAD, CVA capital, and CCP exposures.
+# Both CRR and Basel 3.1 share the same column/row skeleton here — the only
+# framework-conditional grid is C 34.04 (CVA), which the generator suppresses
+# under CRR because cva_rwa is a Basel-3.1-only output.
+#
+# Only the four sub-templates in P8.50 scope are defined (01/02/04/08); the
+# remaining C 34 grids (03/05/06/07/09/10/11) are out of scope.
+#
+# References:
+# - Regulation (EU) 2021/451, Annex I/II (C 34 CCR template family)
+# - CRR Art. 274(2): SA-CCR EAD = alpha * (RC + PFE)
+# - CRR Art. 306(1)(a)/(c): 2% / 4% QCCP trade-leg risk weight
+# - CRR Art. 308/309: default fund contribution exposures
+# - PRA PS1/26 App.1 CVA Part Ch.4.2-4.4 (BA-CVA reduced — C 34.04)
+
+# --- C 34.01: CCR analysis by approach (EAD + RWEA, SA-CCR total) ---
+C34_01_COLUMNS: list[COREPColumn] = [
+    COREPColumn("0010", _LBL_COL_EXPOSURE_VALUE_LC, "CCR"),
+    COREPColumn("0020", _LBL_COL_RWEA_HYPHEN, "RWEA"),
+]
+C34_01_COLUMN_REFS: list[str] = [c.ref for c in C34_01_COLUMNS]
+
+C34_01_ROWS: list[COREPRow] = [
+    COREPRow("0010", "SA-CCR (Standardised Approach for Counterparty Credit Risk)"),
+]
+
+# --- C 34.02: SA-CCR EAD per netting set (one grid per netting_set_id) ---
+C34_02_COLUMNS: list[COREPColumn] = [
+    COREPColumn("0010", _LBL_COL_EXPOSURE_VALUE_LC, "CCR"),
+]
+C34_02_COLUMN_REFS: list[str] = [c.ref for c in C34_02_COLUMNS]
+
+C34_02_ROWS: list[COREPRow] = [
+    COREPRow("0010", "Netting set exposure value (SA-CCR)"),
+]
+
+# --- C 34.04: CVA capital (RWEA_CVA — Basel 3.1 only) ---
+C34_04_COLUMNS: list[COREPColumn] = [
+    COREPColumn("0010", _LBL_COL_RWEA_HYPHEN, "RWEA"),
+]
+C34_04_COLUMN_REFS: list[str] = [c.ref for c in C34_04_COLUMNS]
+
+C34_04_ROWS: list[COREPRow] = [
+    COREPRow("0010", "Total CVA capital charge (BA-CVA)"),
+]
+
+# --- C 34.08: CCP exposures (QCCP trade 2%/4%, non-QCCP, default fund) ---
+C34_08_COLUMNS: list[COREPColumn] = [
+    COREPColumn("0010", _LBL_COL_EXPOSURE_VALUE_LC, "CCR"),
+    COREPColumn("0020", _LBL_COL_RWEA_HYPHEN, "RWEA"),
+]
+C34_08_COLUMN_REFS: list[str] = [c.ref for c in C34_08_COLUMNS]
+
+C34_08_ROWS: list[COREPRow] = [
+    COREPRow("0010", "QCCP trade exposures"),
+    COREPRow("0020", "Non-QCCP trade exposures"),
+    COREPRow("0030", "Default fund contributions"),
+]
+
+
+def get_c34_01_columns() -> list[COREPColumn]:
+    """Return the C 34.01 (CCR analysis by approach) column definitions."""
+    return C34_01_COLUMNS
+
+
+def get_c34_02_columns() -> list[COREPColumn]:
+    """Return the C 34.02 (SA-CCR EAD per netting set) column definitions."""
+    return C34_02_COLUMNS
+
+
+def get_c34_04_columns() -> list[COREPColumn]:
+    """Return the C 34.04 (CVA capital, Basel 3.1) column definitions."""
+    return C34_04_COLUMNS
+
+
+def get_c34_08_columns() -> list[COREPColumn]:
+    """Return the C 34.08 (CCP exposures) column definitions."""
+    return C34_08_COLUMNS

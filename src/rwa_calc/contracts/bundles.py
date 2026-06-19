@@ -763,6 +763,24 @@ class AggregatedResultBundle:
             contribution RWEA (sum of ``rwa_final`` over the synthetic
             ``risk_type == "CCR_DEFAULT_FUND"`` rows; CRR Art. 308/309).
             ``None`` when the portfolio carries no default-fund contributions.
+        ead_ccr_total: Portfolio-level roll-up of counterparty-credit-risk
+            exposure value (sum of ``ead_final`` over the synthetic
+            ``ccr__``-prefixed rows; CRR Art. 274(2) SA-CCR EAD =
+            alpha x (RC + PFE)). ``None`` when the portfolio carries no CCR
+            derivative / SFT exposures.
+        rwa_ccr_default: Portfolio-level roll-up of non-QCCP CCR default-risk
+            RWA (sum of ``rwa_final`` over ``ccr__`` rows that are NOT QCCP
+            trade-leg rows; CRR Art. 107(2)(a) SA RW on the SA-CCR EAD).
+            ``None`` when no non-QCCP CCR exposures are present.
+        rwa_ccr_qccp_trade: Portfolio-level roll-up of QCCP trade-leg RWA (sum
+            of ``rwa_final`` over ``ccr__`` rows weighted at the 2% / 4% QCCP
+            risk weight; CRR Art. 306(1)/(4)). ``None`` when no QCCP trade-leg
+            exposures are present.
+        failed_trades_rwa: Portfolio-level roll-up of settlement / failed-trade
+            RWA (sum of ``rwa_final`` over the synthetic
+            ``risk_type == "SETTLEMENT_FAILED_TRADE"`` rows; CRR Art. 378-380,
+            Art. 92(3)(ca) own-funds x 12.5). ``None`` when no failed trades
+            are present.
         cva_rwa: Portfolio-level BA-CVA risk-weighted exposure amount
             (RWEA_CVA = DS_BA-CVA x K_reduced x 12.5; PS1/26 CVA Part 4.2-4.4).
             ``None`` when no CVA counterparties were supplied or the regime is
@@ -795,6 +813,10 @@ class AggregatedResultBundle:
     securitisation_summary: pl.LazyFrame | None = None
     securitisation_audit: pl.LazyFrame | None = None
     rwa_ccr_default_fund: float | Decimal | None = None
+    ead_ccr_total: float | None = None
+    rwa_ccr_default: float | None = None
+    rwa_ccr_qccp_trade: float | None = None
+    failed_trades_rwa: float | None = None
     cva_rwa: float | None = None
     cva_method: str | None = None
     cva_hedges_recognised: bool | None = None

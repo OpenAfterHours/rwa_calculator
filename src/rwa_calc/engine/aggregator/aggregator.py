@@ -184,6 +184,68 @@ class OutputAggregator:
             if dfc_total > 0.0:
                 rwa_ccr_default_fund = dfc_total
 
+        # P8.52 CCR reporting roll-ups (COREP / Pillar-III scalars). Each is a
+        # filtered sum over the already-materialised ``combined_df``; column-
+        # presence-guarded so a CCR-free portfolio yields ``None`` not a raise.
+        #
+        # ead_ccr_total — CRR Art. 274(2): sum of ead_final over the synthetic
+        # ``ccr__``-prefixed CCR derivative / SFT rows.
+        ead_ccr_total: float | None = None
+        if {"exposure_reference", "ead_final"} <= set(combined_df.columns):
+            ead_total = float(
+                combined_df.filter(pl.col("exposure_reference").str.starts_with("ccr__"))
+                .select(pl.col("ead_final").sum())
+                .item()
+            )
+            if ead_total > 0.0:
+                ead_ccr_total = ead_total
+
+        # rwa_ccr_default / rwa_ccr_qccp_trade — partition of the ``ccr__`` row
+        # set by the QCCP trade-leg discriminator (cp_entity_type == "ccp" AND
+        # cp_is_qccp.fill_null(True), mirroring the SA QCCP override). Default
+        # is the non-QCCP complement (CRR Art. 107(2)(a)); qccp_trade is the
+        # QCCP partition (CRR Art. 306(1)/(4)).
+        rwa_ccr_default: float | None = None
+        rwa_ccr_qccp_trade: float | None = None
+        if {
+            "exposure_reference",
+            "rwa_final",
+            "cp_entity_type",
+            "cp_is_qccp",
+        } <= set(combined_df.columns):
+            ccr_rows = combined_df.filter(
+                pl.col("exposure_reference").str.starts_with("ccr__")
+            )
+            is_qccp_trade = (pl.col("cp_entity_type") == "ccp") & pl.col(
+                "cp_is_qccp"
+            ).fill_null(True)
+            default_total = float(
+                ccr_rows.filter(~is_qccp_trade)
+                .select(pl.col("rwa_final").sum())
+                .item()
+            )
+            if default_total > 0.0:
+                rwa_ccr_default = default_total
+            qccp_total = float(
+                ccr_rows.filter(is_qccp_trade)
+                .select(pl.col("rwa_final").sum())
+                .item()
+            )
+            if qccp_total > 0.0:
+                rwa_ccr_qccp_trade = qccp_total
+
+        # failed_trades_rwa — CRR Art. 378-380 / Art. 92(3)(ca): sum of
+        # rwa_final over the synthetic ``SETTLEMENT_FAILED_TRADE`` rows.
+        failed_trades_rwa: float | None = None
+        if {"risk_type", "rwa_final"} <= set(combined_df.columns):
+            ft_total = float(
+                combined_df.filter(pl.col("risk_type") == "SETTLEMENT_FAILED_TRADE")
+                .select(pl.col("rwa_final").sum())
+                .item()
+            )
+            if ft_total > 0.0:
+                failed_trades_rwa = ft_total
+
         pre_crm_summary = pre_floor_dfs["pre_crm_summary"].lazy()
         if securitisation_summary is not None:
             securitisation_summary = pre_floor_dfs["securitisation_summary"].lazy()
@@ -329,6 +391,10 @@ class OutputAggregator:
             securitisation_summary=securitisation_summary,
             securitisation_audit=sec_audit_view,
             rwa_ccr_default_fund=rwa_ccr_default_fund,
+            ead_ccr_total=ead_ccr_total,
+            rwa_ccr_default=rwa_ccr_default,
+            rwa_ccr_qccp_trade=rwa_ccr_qccp_trade,
+            failed_trades_rwa=failed_trades_rwa,
             errors=[],
         )
 

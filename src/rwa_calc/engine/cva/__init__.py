@@ -29,8 +29,8 @@ from __future__ import annotations
 
 import logging
 
-from rwa_calc.engine.cva.ba_cva import compute_ba_cva_rwa
+from rwa_calc.engine.cva.ba_cva import BaCvaResult, compute_ba_cva_rwa
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["compute_ba_cva_rwa"]
+__all__ = ["BaCvaResult", "compute_ba_cva_rwa"]

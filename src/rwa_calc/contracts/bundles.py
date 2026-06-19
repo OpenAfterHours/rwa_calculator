@@ -767,6 +767,14 @@ class AggregatedResultBundle:
             (RWEA_CVA = DS_BA-CVA x K_reduced x 12.5; PS1/26 CVA Part 4.2-4.4).
             ``None`` when no CVA counterparties were supplied or the regime is
             CRR (the CVA stage is a Basel-3.1-only no-op otherwise).
+        cva_method: BA-CVA variant label — ``"BA-CVA"`` whenever a non-None
+            ``cva_rwa`` is produced (both the reduced and full sub-cases carry
+            the same label; the reduced-vs-full distinction lives on
+            ``cva_hedges_recognised``). ``None`` when CVA is out of scope
+            (PS1/26 CVA Part Ch.4).
+        cva_hedges_recognised: ``True`` when at least one eligible CVA hedge fed
+            the full-K path (PS1/26 CVA Part 4.5), ``False`` for the reduced
+            path. ``None`` when CVA is out of scope.
         errors: All errors accumulated throughout pipeline
     """
 
@@ -788,6 +796,8 @@ class AggregatedResultBundle:
     securitisation_audit: pl.LazyFrame | None = None
     rwa_ccr_default_fund: float | Decimal | None = None
     cva_rwa: float | None = None
+    cva_method: str | None = None
+    cva_hedges_recognised: bool | None = None
     errors: list[CalculationError] = field(default_factory=list)
 
     def __post_init__(self) -> None:

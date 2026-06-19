@@ -57,7 +57,7 @@ References:
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, NamedTuple, cast
 
 import polars as pl
 
@@ -71,12 +71,27 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+class BaCvaResult(NamedTuple):
+    """Outcome of a BA-CVA portfolio computation.
+
+    Attributes:
+        rwea: Portfolio RWEA_CVA, or ``None`` when there is nothing to charge.
+        hedges_recognised: ``True`` when at least one eligible CVA hedge fed the
+            full-K path (PS1/26 4.5), ``False`` for the reduced path. Carries the
+            single discriminator used by the aggregation roll-up so the
+            reduced-vs-full distinction is not re-derived in two places.
+    """
+
+    rwea: float | None
+    hedges_recognised: bool
+
+
 def compute_ba_cva_rwa(
     cva_counterparties: pl.LazyFrame,
     ccr_exposures: pl.LazyFrame,
     pack: ResolvedRulepack,
     cva_hedges: pl.LazyFrame | None = None,
-) -> float | None:
+) -> BaCvaResult:
     """Compute the BA-CVA portfolio RWEA_CVA (reduced or full version).
 
     Args:
@@ -100,8 +115,10 @@ def compute_ba_cva_rwa(
             result (K_hedged contributions are all zero).
 
     Returns:
-        The portfolio RWEA_CVA as a ``float``, or ``None`` when no in-scope
-        counterparty has any matching netting-set EAD (nothing to charge).
+        A :class:`BaCvaResult` carrying the portfolio RWEA_CVA (``None`` when no
+        in-scope counterparty has any matching netting-set EAD) and the
+        ``hedges_recognised`` flag (``True`` when at least one eligible hedge fed
+        the full-K path, ``False`` for the reduced path).
 
     References:
         PRA PS1/26 CVA Part 4.2-4.10; Own Funds Part 4(b); CRR Art. 274(2).
@@ -119,7 +136,13 @@ def compute_ba_cva_rwa(
         cva_counterparties, ccr_exposures, rw_rows, rw_default, alpha, discount_rate
     )
 
-    if cva_hedges is None:
+    # Reduced path when no hedge frame is supplied OR every supplied hedge is
+    # ineligible (an all-ineligible frame collapses to reduced math, PS1/26 4.5
+    # "eligible BA-CVA hedges"). ``hedges_recognised`` carries this single
+    # discriminator so the aggregation roll-up never re-derives it.
+    hedges_recognised = cva_hedges is not None and _has_eligible_hedge(cva_hedges)
+
+    if not hedges_recognised:
         # Reduced version — SUM SCVA_c terms only (PS1/26 4.2).
         aggregate = _collect_sums(
             scva.select(
@@ -128,16 +151,19 @@ def compute_ba_cva_rwa(
             )
         )
         if aggregate is None:
-            return None
+            return BaCvaResult(rwea=None, hedges_recognised=False)
         sum_scva = float(aggregate.item(0, "sum_scva") or 0.0)
         sum_scva_sq = float(aggregate.item(0, "sum_scva_sq") or 0.0)
         k_reduced = math.sqrt((rho * sum_scva) ** 2 + (1.0 - rho**2) * sum_scva_sq)
-        return _rwea_or_none(ds_ba_cva * k_reduced * own_funds_to_rwa)
+        return BaCvaResult(
+            rwea=_rwea_or_none(ds_ba_cva * k_reduced * own_funds_to_rwa),
+            hedges_recognised=False,
+        )
 
     # Full version (PS1/26 4.5-4.10).
-    return _full_rwea(
+    rwea = _full_rwea(
         scva,
-        cva_hedges,
+        cast("pl.LazyFrame", cva_hedges),
         pack,
         rw_rows,
         rw_default,
@@ -146,6 +172,7 @@ def compute_ba_cva_rwa(
         own_funds_to_rwa,
         discount_rate,
     )
+    return BaCvaResult(rwea=rwea, hedges_recognised=rwea is not None)
 
 
 # ---------------------------------------------------------------------------
@@ -344,4 +371,21 @@ def _rwea_or_none(value: float) -> float | None:
     return float(value)
 
 
-__all__ = ["compute_ba_cva_rwa"]
+def _has_eligible_hedge(cva_hedges: pl.LazyFrame) -> bool:
+    """Whether at least one hedge row passes the eligibility filter (PS1/26 4.5).
+
+    Mirrors the exact ``cva_hedge_eligible`` filter applied in ``_full_rwea`` so
+    the full-vs-reduced discriminator is defined once. An all-ineligible frame
+    collapses to the reduced path.
+    """
+    eligible = _collect_sums(
+        cva_hedges.filter(pl.col("cva_hedge_eligible")).select(
+            n=pl.len().cast(pl.Int64)
+        )
+    )
+    if eligible is None:
+        return False
+    return int(eligible.item(0, "n") or 0) > 0
+
+
+__all__ = ["BaCvaResult", "compute_ba_cva_rwa"]

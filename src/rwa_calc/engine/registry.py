@@ -34,6 +34,7 @@ from rwa_calc.engine.stages import (
     equity,
     re_split,
     securitisation,
+    sft,
 )
 from rwa_calc.engine.stages import (
     hierarchy as hierarchy_stage,
@@ -45,6 +46,7 @@ PIPELINE_STAGES: tuple[StageSpec, ...] = (
     StageSpec("securitisation_allocator", securitisation.run, error_type="allocation_error"),
     StageSpec("hierarchy_resolver", hierarchy_stage.run, error_type="resolution_error"),
     StageSpec("ccr_sa_ccr", ccr.run, error_type="ccr_error"),
+    StageSpec("sft_fccm", sft.run, error_type="sft_error"),
     StageSpec("classifier", classify.run, error_type="classification_error"),
     StageSpec("crm_processor", crm.run, error_type="crm_error"),
     StageSpec("re_splitter", re_split.run, error_type="re_split_error"),

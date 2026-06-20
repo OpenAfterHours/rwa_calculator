@@ -43,9 +43,9 @@ from rwa_calc.engine.orchestrator import (
     RESOLVED_HIERARCHY,
     append_stage_errors,
 )
+from rwa_calc.engine.stages._ccr_shared import enrich_ccr_rows_with_ratings
 
 if TYPE_CHECKING:
-    from rwa_calc.contracts.bundles import CounterpartyLookup
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.contracts.context import PipelineContext
     from rwa_calc.rulebook import RulepackV0
@@ -109,7 +109,7 @@ def run(
     # lending rows. Without this enrichment, CCR rows arrive at the SA
     # calculator with ``cqs=None`` and fall through to the 100%
     # unrated-institution fallback.
-    ccr_exposure_rows = _enrich_ccr_rows_with_ratings(
+    ccr_exposure_rows = enrich_ccr_rows_with_ratings(
         ccr_exposure_rows, resolved.counterparty_lookup
     )
     concat_frames = [resolved.exposures, ccr_exposure_rows]
@@ -128,7 +128,7 @@ def run(
             compute_failed_trade_rwa,
         )
         concat_frames.append(
-            _enrich_ccr_rows_with_ratings(failed_trade_rows, resolved.counterparty_lookup)
+            enrich_ccr_rows_with_ratings(failed_trade_rows, resolved.counterparty_lookup)
         )
 
     # CCR Art. 308/309 CCP default-fund contributions: when the firm reports
@@ -144,7 +144,7 @@ def run(
             run_config,
             compute_dfc_capital,
         )
-        concat_frames.append(_enrich_ccr_rows_with_ratings(dfc_rows, resolved.counterparty_lookup))
+        concat_frames.append(enrich_ccr_rows_with_ratings(dfc_rows, resolved.counterparty_lookup))
 
     new_exposures = pl.concat(
         concat_frames,
@@ -240,32 +240,4 @@ def _dfc_rows_to_exposures(
         pl.col("k_ccp_published"),
         pl.col("k_cm"),
         pl.col("dfc_rwea"),
-    )
-
-
-def _enrich_ccr_rows_with_ratings(
-    ccr_exposure_rows: pl.LazyFrame,
-    counterparty_lookup: CounterpartyLookup,
-) -> pl.LazyFrame:
-    """Join the resolved counterparty rating columns onto CCR rows.
-
-    Mirrors the per-exposure rating attach performed by
-    ``hierarchy._attach_counterparty_rating`` for traditional lending
-    rows. The CCR pipeline adapter runs AFTER hierarchy resolution and
-    appends synthetic rows via ``diagonal_relaxed`` concat, so without
-    this enrichment those rows reach the SA calculator with ``cqs=None``
-    / ``external_cqs=None`` / ``internal_pd=None`` and the institution
-    risk-weight lookup falls through to its unrated 100% fallback
-    (CRR Art. 121(1)) instead of the rated CQS table
-    (CRR Art. 120(1) Table 3).
-    """
-    cp_schema = set(counterparty_lookup.counterparties.collect_schema().names())
-    rating_cols = [c for c in ("cqs", "pd", "internal_pd", "external_cqs") if c in cp_schema]
-    if not rating_cols:
-        return ccr_exposure_rows
-    cp_select = [pl.col("counterparty_reference"), *(pl.col(c) for c in rating_cols)]
-    return ccr_exposure_rows.join(
-        counterparty_lookup.counterparties.select(cp_select),
-        on="counterparty_reference",
-        how="left",
     )

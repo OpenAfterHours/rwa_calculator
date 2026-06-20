@@ -28,7 +28,7 @@ Scope decisions (kept narrow on purpose; revisit when new SFT scenarios land):
 - Unmargined SFTs only (Art. 224(2)(c) 5-BD liquidation period default;
   the margined FCCM extension lives in Art. 285 and is not modelled).
 - VaR (Art. 221) and IMM (Art. 283) SFT EAD methods are reserved on
-  ``CCRConfig.sft_method`` but not implemented.
+  ``SFTConfig.method`` but not implemented.
 
 References:
 - CRR Art. 220(1)(a) — single-CP SFT / master-netting-set scope.
@@ -44,17 +44,20 @@ from __future__ import annotations
 
 import logging
 from datetime import date
+from typing import TYPE_CHECKING
 
 import polars as pl
 from watchfire import cites
 
-from rwa_calc.contracts.bundles import RawCCRBundle
 from rwa_calc.engine.crm.haircut_tables import (
     FX_HAIRCUT,
     lookup_collateral_haircut,
     scale_haircut_for_liquidation_period,
 )
 from rwa_calc.rulebook.resolve import resolve
+
+if TYPE_CHECKING:
+    from rwa_calc.contracts.bundles import RawCCRBundle, RawSFTBundle
 
 logger = logging.getLogger(__name__)
 
@@ -133,8 +136,132 @@ def sft_rows_to_exposures(
     netting_sets_lf = raw_ccr.netting_sets.netting_sets
     ccr_collateral_lf = raw_ccr.ccr_collateral.ccr_collateral
 
-    trade_schema = trades_lf.collect_schema().names()
-    coll_schema = ccr_collateral_lf.collect_schema().names()
+    # The in-CCR path discriminates SFT rows by ``transaction_type``; the
+    # netting-set ``counterparty_reference`` lives on the separate netting-set
+    # table. Pre-filter to SFT trades and supply the NS-grain counterparty
+    # frame to the shared E* core (Art. 223(5)). The core does the single
+    # trade collect the eager HE loop needs.
+    sft_trades_lf = trades_lf.filter(pl.col("transaction_type") == SFT_TRANSACTION_TYPE)
+    ns_counterparty_lf = netting_sets_lf.select(
+        pl.col("netting_set_id"), pl.col("counterparty_reference")
+    )
+    return _build_sft_exposure_rows(
+        sft_trades_lf=sft_trades_lf,
+        ns_counterparty_lf=ns_counterparty_lf,
+        ccr_collateral_lf=ccr_collateral_lf,
+        reporting_date=reporting_date,
+    )
+
+
+@cites("CRR Art. 220")
+@cites("CRR Art. 223")
+@cites("CRR Art. 224")
+@cites("CRR Art. 226")
+@cites("CRR Art. 271")
+def sft_bundle_to_exposures(
+    raw_sft: RawSFTBundle,
+    reporting_date: date,
+) -> pl.LazyFrame:
+    """Shape FCCM SFT EADs into synthetic exposure rows from the lean SFT bundle.
+
+    The peer-subsystem entry point (SFT/FCCM separation Phase 5): consumes the
+    dedicated :class:`RawSFTBundle` rather than the co-mingled
+    :class:`RawCCRBundle`. The E* math is identical to
+    :func:`sft_rows_to_exposures` — only the input plumbing differs:
+
+    - Every trade row is an SFT (no ``transaction_type`` filter): the SFT/
+      derivative discrimination has moved out of the engine and into the input
+      bundle, so the whole ``raw_sft.trades`` frame is in scope.
+    - The netting-set ``counterparty_reference`` is denormalised onto the trade
+      row (FCCM scope is single-trade single-counterparty netting sets,
+      Art. 220(1)(a)), so the NS-grain counterparty frame is derived from the
+      trades themselves rather than a separate netting-set table.
+    - Collateral is OPTIONAL (``raw_sft.collateral is None`` for an
+      uncollateralised SFT, the common case): a missing collateral leaf yields a
+      zero collateral term (CVA·(1−HC−HFX) = 0), exactly as an empty
+      ``ccr_collateral`` frame does on the in-CCR path.
+
+    Each emitted synthetic exposure row carries the same provenance as
+    :func:`sft_rows_to_exposures` (``exposure_reference = "ccr__<netting_set_id>"``,
+    ``risk_type = "CCR_SFT"``, ``ccr_method = "fccm_sft"``, ``drawn_amount = E*``,
+    ``ead_ccr = E*``).
+
+    Args:
+        raw_sft: The SFT (FCCM) input bundle — every trade row is an SFT with the
+            denormalised netting-set counterparty; collateral optional.
+        reporting_date: As-of date; written to ``value_date``.
+
+    Returns:
+        LazyFrame at netting-set grain. Empty (zero-row) frame when the trades
+        bundle is empty.
+
+    References:
+        CRR Art. 271(2); Art. 220(1)(a); Art. 223(5); Art. 224 Table 1;
+        Art. 224(2)(c); Art. 226(2).
+    """
+    sft_trades_lf = raw_sft.trades.sft_trades
+    # Counterparty is denormalised onto the trade — collapse to NS grain. The
+    # ``first()`` aggregation is exact under the single-CP-per-NS scope
+    # (Art. 220(1)(a)); should a future netting set span counterparties the
+    # FCCM scope itself would need revisiting.
+    ns_counterparty_lf = sft_trades_lf.group_by("netting_set_id").agg(
+        pl.col("counterparty_reference").first()
+    )
+    ccr_collateral_lf = (
+        raw_sft.collateral.sft_collateral if raw_sft.collateral is not None else None
+    )
+    return _build_sft_exposure_rows(
+        sft_trades_lf=sft_trades_lf,
+        ns_counterparty_lf=ns_counterparty_lf,
+        ccr_collateral_lf=ccr_collateral_lf,
+        reporting_date=reporting_date,
+    )
+
+
+# =============================================================================
+# Private helpers
+# =============================================================================
+
+
+def _build_sft_exposure_rows(
+    sft_trades_lf: pl.LazyFrame,
+    ns_counterparty_lf: pl.LazyFrame,
+    ccr_collateral_lf: pl.LazyFrame | None,
+    reporting_date: date,
+) -> pl.LazyFrame:
+    """Compute the FCCM E* per netting set and shape the synthetic rows.
+
+    The single home of the Art. 223(5) E* arithmetic, shared by both the
+    in-CCR (:func:`sft_rows_to_exposures`) and peer-subsystem
+    (:func:`sft_bundle_to_exposures`) entry points so the regulatory core is
+    declared once — including the single trade ``collect()`` the eager HE loop
+    requires. The two callers differ only in how they shape the three inputs.
+
+    Args:
+        sft_trades_lf: SFT trade rows (already filtered to SFTs), carrying
+            ``netting_set_id``, ``notional``, ``currency``, ``maturity_date``
+            and the three Art. 223(5) HE columns. Materialised once here for
+            the per-row HE lookup (SFT books are firm-scale, tens to hundreds
+            of rows).
+        ns_counterparty_lf: Netting-set-grain frame mapping ``netting_set_id``
+            to ``counterparty_reference`` (the synthetic row's counterparty).
+        ccr_collateral_lf: Netting-set-keyed collateral feeding the
+            ``CVA·(1−HC−HFX)`` term, or ``None`` for an uncollateralised book.
+        reporting_date: As-of date; written to ``value_date``.
+
+    Returns:
+        LazyFrame at netting-set grain with the FCCM provenance columns.
+
+    References:
+        CRR Art. 223(5); Art. 224 Table 1; Art. 224(2)(c); Art. 226(2).
+    """
+    # Materialise the SFT trade frame once for the per-row HE lookup (the eager
+    # divergence both entry points share — kept in one place).
+    sft_trades_df = sft_trades_lf.collect()
+    trade_schema = sft_trades_df.columns
+    coll_schema = (
+        ccr_collateral_lf.collect_schema().names() if ccr_collateral_lf is not None else []
+    )
 
     # ---- 1) Per-trade E·(1+HE) -------------------------------------------------
     # HE is per-row (depends on the security being lent / sold), so we
@@ -142,10 +269,6 @@ def sft_rows_to_exposures(
     # supervisory haircut lookup. SFT books are small (firm-scale; tens to
     # hundreds of rows per netting set) so collecting here is cheap relative
     # to building a 5-band x CQS x type expression chain in Polars.
-    sft_trades_df = trades_lf.filter(pl.col("transaction_type") == SFT_TRANSACTION_TYPE).collect()
-
-    # Build per-trade enriched columns: E_times_one_plus_he, _trade_max_maturity,
-    # _trade_currency.
     he_values: list[float] = []
     for row in sft_trades_df.iter_rows(named=True):
         he_values.append(
@@ -181,7 +304,11 @@ def sft_rows_to_exposures(
     )
 
     # ---- 3) Per-NS collateral CVA·(1−HC−HFX) ---------------------------------
-    has_collateral_rows = "netting_set_id" in coll_schema and "market_value" in coll_schema
+    has_collateral_rows = (
+        ccr_collateral_lf is not None
+        and "netting_set_id" in coll_schema
+        and "market_value" in coll_schema
+    )
     if has_collateral_rows:
         # Materialise to apply per-row supervisory haircut lookups against the
         # Art. 224 table. Same scale rationale as the trade frame above.
@@ -223,8 +350,9 @@ def sft_rows_to_exposures(
         )
 
     # ---- 4) Compose NS-grain frame and compute E* ----------------------------
+    sft_ns_ids = sft_trades_df["netting_set_id"].unique().to_list()
     ns_with_ead = (
-        netting_sets_lf.filter(pl.col("netting_set_id").is_in(sft_trades_df["netting_set_id"]))
+        ns_counterparty_lf.filter(pl.col("netting_set_id").is_in(sft_ns_ids))
         .join(ns_e_grossed, on="netting_set_id", how="left")
         .join(cva_per_ns, on="netting_set_id", how="left")
         .with_columns(
@@ -261,11 +389,6 @@ def sft_rows_to_exposures(
     ]
     # Drop helper "_*" columns from the public projection.
     return ns_with_ead.select(select_exprs)
-
-
-# =============================================================================
-# Private helpers
-# =============================================================================
 
 
 def _lookup_haircut_unscaled(

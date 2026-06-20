@@ -352,6 +352,13 @@
     "CRR Art. 244",
     "PS1/26, paragraph 147A"
   ],
+  "rwa_calc.engine.sft.fccm::sft_bundle_to_exposures": [
+    "CRR Art. 220",
+    "CRR Art. 223",
+    "CRR Art. 224",
+    "CRR Art. 226",
+    "CRR Art. 271"
+  ],
   "rwa_calc.engine.sft.fccm::sft_rows_to_exposures": [
     "CRR Art. 220",
     "CRR Art. 223",

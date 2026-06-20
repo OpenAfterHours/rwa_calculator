@@ -63,6 +63,13 @@ _SFT_TRADE_COLUMNS = {
     "exposure_collateral_type",
     "exposure_security_cqs",
     "exposure_security_residual_maturity_years",
+    # Phase 0b — margined-SFT (Art. 285) MPOR input columns. Additive,
+    # all required=False so existing (unmargined) SFT rows default in.
+    "is_margined",
+    "remargining_frequency_days",
+    "mpor_floor_category",
+    "has_margin_dispute_doubling",
+    "mpor_days_override",
 }
 
 
@@ -136,6 +143,99 @@ def test_sft_trade_schema_he_inputs_are_first_class_nullable() -> None:
         assert spec.dtype == dtype, f"SFT_TRADE_SCHEMA.{col} must be {dtype}, got {spec.dtype}"
         assert spec.required is False, f"SFT_TRADE_SCHEMA.{col} must be required=False (nullable)"
         assert spec.default is None, f"SFT_TRADE_SCHEMA.{col} must default to None"
+
+
+# ---------------------------------------------------------------------------
+# Phase 0b — margined-SFT (Art. 285 MPOR) input columns.
+#
+# Five additive, required=False columns make a margined SFT REPRESENTABLE.
+# No engine math reads them yet (Phase 0b is carry-only): an SFT row without
+# them defaults to the unmargined branch, so output is unchanged.
+#
+# References:
+#   - CRR Art. 285(2)-(5) — margin period of risk (MPOR) floors / derivation
+#   - CRR Art. 224(2) final sub-para — margined holding period brought in line
+#   - CRR Art. 226 — non-daily revaluation term (unmargined branch)
+# ---------------------------------------------------------------------------
+
+#: Designed (dtype, default, required) for each new margining column.
+_SFT_MARGINING_SPECS: dict[str, tuple[object, object, bool]] = {
+    "is_margined": (pl.Boolean, False, False),
+    "remargining_frequency_days": (pl.Int16, 1, False),
+    "mpor_floor_category": (pl.String, "repo_only", False),
+    "has_margin_dispute_doubling": (pl.Boolean, False, False),
+    "mpor_days_override": (pl.Int16, None, False),
+}
+
+
+def test_sft_trade_schema_has_all_margining_columns() -> None:
+    """All five Art. 285 margining columns must be present on SFT_TRADE_SCHEMA."""
+    schema = _get_schema("SFT_TRADE_SCHEMA")
+    missing = set(_SFT_MARGINING_SPECS) - set(schema.keys())
+    assert not missing, f"SFT_TRADE_SCHEMA is missing margining columns: {sorted(missing)}"
+
+
+def test_sft_trade_margining_columns_are_additive_optional() -> None:
+    """Every margining column must be required=False (existing rows default in)."""
+    schema = _get_schema("SFT_TRADE_SCHEMA")
+    for col in _SFT_MARGINING_SPECS:
+        assert _spec(schema, col).required is False, (
+            f"SFT_TRADE_SCHEMA.{col} must be required=False so unmargined SFTs back-compat"
+        )
+
+
+def test_sft_trade_margining_columns_have_designed_dtypes_and_defaults() -> None:
+    """Each margining column carries the regulatory design's dtype + default."""
+    schema = _get_schema("SFT_TRADE_SCHEMA")
+    for col, (dtype, default, _required) in _SFT_MARGINING_SPECS.items():
+        spec = _spec(schema, col)
+        assert spec.dtype == dtype, f"SFT_TRADE_SCHEMA.{col} must be {dtype}, got {spec.dtype}"
+        assert spec.default == default, (
+            f"SFT_TRADE_SCHEMA.{col} must default to {default!r}, got {spec.default!r}"
+        )
+
+
+def test_is_margined_defaults_false_for_back_compat() -> None:
+    """is_margined defaults False — absent value == today's unmargined path."""
+    spec = _spec(_get_schema("SFT_TRADE_SCHEMA"), "is_margined")
+    assert spec.dtype == pl.Boolean
+    assert spec.default is False
+
+
+def test_remargining_frequency_days_defaults_one_daily() -> None:
+    """remargining_frequency_days defaults 1 (daily revaluation, Art. 226 term=1.0)."""
+    spec = _spec(_get_schema("SFT_TRADE_SCHEMA"), "remargining_frequency_days")
+    assert spec.dtype == pl.Int16
+    assert spec.default == 1
+
+
+def test_mpor_days_override_is_nullable_no_default() -> None:
+    """mpor_days_override is the 'derive me' signal — nullable, no default fill."""
+    spec = _spec(_get_schema("SFT_TRADE_SCHEMA"), "mpor_days_override")
+    assert spec.dtype == pl.Int16
+    assert spec.default is None
+
+
+def test_mpor_floor_category_is_value_constrained() -> None:
+    """mpor_floor_category must be value-constrained to the three Art. 285 floors."""
+    constraints = getattr(schemas, "COLUMN_VALUE_CONSTRAINTS", None)
+    assert constraints is not None
+    sft_trades = constraints.get("sft_trades")
+    assert sft_trades is not None, (
+        "COLUMN_VALUE_CONSTRAINTS must have an 'sft_trades' entry constraining "
+        "mpor_floor_category (Phase 0b)."
+    )
+    assert sft_trades.get("mpor_floor_category") == {"repo_only", "other", "illiquid_or_large"}, (
+        "mpor_floor_category must be constrained to {repo_only, other, illiquid_or_large}"
+    )
+
+
+def test_valid_mpor_floor_categories_is_exposed() -> None:
+    """The constraint set is exposed as a named VALID_* collection."""
+    valid = getattr(schemas, "VALID_MPOR_FLOOR_CATEGORIES", None)
+    assert valid == {"repo_only", "other", "illiquid_or_large"}, (
+        f"VALID_MPOR_FLOOR_CATEGORIES drift: {valid}"
+    )
 
 
 # ===========================================================================

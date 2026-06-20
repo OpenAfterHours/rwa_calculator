@@ -1134,6 +1134,38 @@ SFT_TRADE_SCHEMA: dict[str, ColumnSpec] = {
     "exposure_collateral_type": ColumnSpec(pl.String, required=False),
     "exposure_security_cqs": ColumnSpec(pl.Int8, required=False),
     "exposure_security_residual_maturity_years": ColumnSpec(pl.Float64, required=False),
+    # Optional margining inputs (5) — SFT/FCCM separation Phase 0b. These make a
+    # margined SFT under a qualifying Art. 285(2)-(4) margin agreement
+    # REPRESENTABLE. NO engine math reads them yet (carry-only this phase): an
+    # SFT row that omits them seals to the unmargined defaults below, so the
+    # FCCM E* is bit-identical to today's path. All denormalised onto the trade
+    # row (single-CP single-trade NS scope, Art. 220(1)(a)).
+    #
+    # is_margined: True => this SFT is under a qualifying Art. 285(2)-(4) margin
+    # agreement (margined branch (b): T_M = MPOR, Art. 226 non-daily term
+    # suppressed). False/absent => unmargined branch (a) = today's behaviour.
+    "is_margined": ColumnSpec(pl.Boolean, default=False, required=False),
+    # remargining_frequency_days: dual-purpose revaluation/remargin period in
+    # business days. Branch (a): N_R feeding the Art. 226 √((N_R+T_M−1)/T_M)
+    # term (1 => daily => term 1.0). Branch (b): N feeding Art. 285(5)
+    # MPOR = F + N − 1. Default 1 keeps both branches at the daily minimum.
+    "remargining_frequency_days": ColumnSpec(pl.Int16, default=1, required=False),
+    # mpor_floor_category: selects the Art. 285(2)-(3) floor F (branch (b) only):
+    # 'repo_only' => F=5 (Art. 285(2)(a)); 'other' => F=10 (Art. 285(2)(b));
+    # 'illiquid_or_large' => F=20 (Art. 285(3)). The actual F is read from cited
+    # pack scalars — never hardcoded in engine. Value-constrained via
+    # VALID_MPOR_FLOOR_CATEGORIES in COLUMN_VALUE_CONSTRAINTS['sft_trades'].
+    "mpor_floor_category": ColumnSpec(pl.String, default="repo_only", required=False),
+    # has_margin_dispute_doubling: True => apply the Art. 285(4) doubling of F
+    # (> 2 margin-call disputes over the preceding two quarters, each exceeding
+    # the applicable MPOR). Pre-computed upstream; the engine does not track
+    # quarters. When True: F → 2·F before MPOR = 2F + N − 1.
+    "has_margin_dispute_doubling": ColumnSpec(pl.Boolean, default=False, required=False),
+    # mpor_days_override: optional explicit MPOR (business days) that SUPERSEDES
+    # the F + N − 1 derivation (branch (b) only). Null (the common case) => the
+    # engine derives MPOR from the fields above; non-null => used directly as
+    # T_M. No default-fill — null is the 'derive me' signal.
+    "mpor_days_override": ColumnSpec(pl.Int16, default=None, required=False),
 }
 
 #: Netting-set-keyed collateral received against an SFT, feeding the
@@ -1163,6 +1195,15 @@ SFT_COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
 #: constrained via ``COLUMN_VALUE_CONSTRAINTS`` below. Enforced once the CCR/SFT
 #: trade frame is wired into ``validate_bundle_values`` (later separation phase).
 VALID_TRANSACTION_TYPES: set[str] = {"derivative", "sft"}
+
+#: Valid values for the margined-SFT MPOR floor selector ``mpor_floor_category``
+#: (SFT_TRADE_SCHEMA, SFT/FCCM separation Phase 0b). Selects the Art. 285(2)-(3)
+#: floor F (branch (b) only): ``repo_only`` => F=5 (Art. 285(2)(a)); ``other`` =>
+#: F=10 (Art. 285(2)(b)); ``illiquid_or_large`` => F=20 (Art. 285(3)). A bad value
+#: would silently mis-floor the MPOR, so it is value-constrained via
+#: ``COLUMN_VALUE_CONSTRAINTS['sft_trades']`` below. The actual F value is read
+#: from cited pack scalars in the engine — this set only constrains the input.
+VALID_MPOR_FLOOR_CATEGORIES: set[str] = {"repo_only", "other", "illiquid_or_large"}
 
 
 # =============================================================================
@@ -1824,6 +1865,14 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
         # ``SA_CCR_SUPERVISORY_FACTORS_CREDIT_SN`` / ``..._CREDIT_IDX`` in
         # ``data/tables/sa_ccr_factors.py``.
         "credit_quality": {"IG", "HY", "NON_RATED"},
+    },
+    # SFT/FCCM separation Phase 0b — the margined-SFT MPOR floor selector. A bad
+    # value would silently mis-floor the Art. 285 margin period of risk. Dormant
+    # until the SFT trade frame is added to validate_bundle_values' frame_mapping
+    # (mirrors the 'trades' entry above), but declared here as the single source
+    # of truth for the input domain.
+    "sft_trades": {
+        "mpor_floor_category": VALID_MPOR_FLOOR_CATEGORIES,
     },
 }
 

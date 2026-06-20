@@ -432,6 +432,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_ccr_a11_a12,
         ),
         (
+            "CCR-A15..A18 (margined / non-daily / FX SFT FCCM EAD — Art. 224(2)/226/285)",
+            "ccr",
+            _generate_ccr_a15_a18,
+        ),
+        (
             "P1.30(e) (CRR Art. 234 mezzanine partial-protection tranching attachment/detachment)",
             "p1_30e",
             _generate_p130e,
@@ -2588,6 +2593,37 @@ def _generate_ccr_a11_a12(output_dir: Path) -> list[tuple[str, int]]:
             CCR_TRADE_BUILDER_MODULE,
             CCR_NETTING_SET_BUILDER_MODULE,
             CCR_MARGIN_BUILDER_MODULE,
+        ):
+            sys.modules.pop(mod, None)
+
+
+def _generate_ccr_a15_a18(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate CCR-A15..A18 margined / non-daily SFT FCCM golden fixtures.
+
+    SFT/FCCM margined extension: cash exposure side (HE=0, E=10m) against a
+    govt_bond CQS 1 0.5y collateral (H_10=0.005), priced by the peer sft_fccm
+    stage via the FCCM margined / non-daily revaluation branch.
+
+    CCR-A15D: unmargined daily repo (anchor)         — E* = 35,355.34.
+    CCR-A15:  unmargined 3-day remargin (Art. 226)   — E* = 41,833.00.
+    CCR-A16:  margined repo-only N=2 ⇒ MPOR=6        — E* = 38,729.83.
+    CCR-A17:  unmargined daily + FX mismatch (USD)   — E* = 601,040.76.
+    CCR-A18:  margined repo-only N=2 + dispute ⇒ 11  — E* = 52,440.44.
+    All: counterparty CP_INST_SFT_M01 (institution, CQS 2, GB) → 50% SA RW.
+    """
+    fixtures_root = str(output_dir.parent)
+    sys.path.insert(0, fixtures_root)
+    try:
+        from ccr.golden_ccr_a15_a18_margined_sft import save_ccr_a15_a18_fixtures
+
+        saved = save_ccr_a15_a18_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(fixtures_root)
+        for mod in (
+            "ccr.golden_ccr_a15_a18_margined_sft",
+            "ccr.golden_ccr_a11_a12",
+            "ccr.sft_bundle_builder",
         ):
             sys.modules.pop(mod, None)
 

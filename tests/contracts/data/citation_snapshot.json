@@ -106,6 +106,9 @@
   "rwa_calc.engine.crm.haircut_tables::get_maturity_band": [
     "CRR Art. 224"
   ],
+  "rwa_calc.engine.crm.haircut_tables::scale_haircut_for_non_daily_revaluation": [
+    "CRR Art. 226"
+  ],
   "rwa_calc.engine.crm.haircuts::HaircutCalculator.apply_haircuts": [
     "CRR Art. 224"
   ],
@@ -352,12 +355,16 @@
     "CRR Art. 244",
     "PS1/26, paragraph 147A"
   ],
+  "rwa_calc.engine.sft.fccm::_derive_margining_terms": [
+    "CRR Art. 285"
+  ],
   "rwa_calc.engine.sft.fccm::sft_bundle_to_exposures": [
     "CRR Art. 220",
     "CRR Art. 223",
     "CRR Art. 224",
     "CRR Art. 226",
-    "CRR Art. 271"
+    "CRR Art. 271",
+    "CRR Art. 285"
   ],
   "rwa_calc.engine.slotting.calculator::SlottingCalculator.calculate_branch": [
     "CRR Art. 153(5)"

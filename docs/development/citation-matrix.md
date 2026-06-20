@@ -720,9 +720,9 @@ Last generated: 2026-06-20.
 
 ### CRR Art. 220 — Using the Supervisory Volatility Adjustments Approach or the Own Estimates Volatility Adjustments Approach for master netting agreements
 
-??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:75"
+??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:108"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:75:135"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:108:169"
     ```
 
 
@@ -751,22 +751,22 @@ Last generated: 2026-06-20.
     --8<-- "src/rwa_calc/engine/crm/collateral.py:300:426"
     ```
 
-??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:76"
+??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:109"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:75:135"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:108:169"
     ```
 
 
 ### CRR Art. 224 — Supervisory volatility adjustment under the Financial Collateral Comprehensive Method
 
-??? quote "`get_haircut_table` — src/rwa_calc/engine/crm/haircut_tables.py:274"
+??? quote "`get_haircut_table` — src/rwa_calc/engine/crm/haircut_tables.py:312"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/haircut_tables.py:274:285"
+    --8<-- "src/rwa_calc/engine/crm/haircut_tables.py:312:323"
     ```
 
-??? quote "`get_maturity_band` — src/rwa_calc/engine/crm/haircut_tables.py:288"
+??? quote "`get_maturity_band` — src/rwa_calc/engine/crm/haircut_tables.py:326"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/haircut_tables.py:288:320"
+    --8<-- "src/rwa_calc/engine/crm/haircut_tables.py:326:358"
     ```
 
 ??? quote "`apply_haircuts` — src/rwa_calc/engine/crm/haircuts.py:121"
@@ -774,17 +774,22 @@ Last generated: 2026-06-20.
     --8<-- "src/rwa_calc/engine/crm/haircuts.py:121:308"
     ```
 
-??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:77"
+??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:110"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:75:135"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:108:169"
     ```
 
 
 ### CRR Art. 226 — Scaling up of volatility adjustment under the Financial Collateral Comprehensive Method
 
-??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:78"
+??? quote "`scale_haircut_for_non_daily_revaluation` — src/rwa_calc/engine/crm/haircut_tables.py:122"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:75:135"
+    --8<-- "src/rwa_calc/engine/crm/haircut_tables.py:122:157"
+    ```
+
+??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:111"
+    ```python
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:108:169"
     ```
 
 
@@ -861,9 +866,9 @@ Last generated: 2026-06-20.
 
 ### CRR Art. 271 — Determination of the exposure value
 
-??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:79"
+??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:112"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:75:135"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:108:169"
     ```
 
 
@@ -946,6 +951,19 @@ Last generated: 2026-06-20.
 ??? quote "`compute_supervisory_delta_cdo_tranche` — src/rwa_calc/engine/ccr/supervisory_delta.py:188"
     ```python
     --8<-- "src/rwa_calc/engine/ccr/supervisory_delta.py:188:231"
+    ```
+
+
+### CRR Art. 285 — Exposure value for netting sets subject to a margin agreement
+
+??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:113"
+    ```python
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:108:169"
+    ```
+
+??? quote "`_derive_margining_terms` — src/rwa_calc/engine/sft/fccm.py:177"
+    ```python
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:177:220"
     ```
 
 

@@ -100,7 +100,8 @@ def scale_haircut_for_liquidation_period(
     """
     Scale a 10-day base supervisory haircut for a different liquidation period.
 
-    Art. 226(2): H_m = H_10 × sqrt(T_m / 10)
+    Art. 224(2): H_m = H_10 × sqrt(T_m / 10)
+    (the period rescale is Art. 224(2); Art. 226 has no numbered paragraphs.)
 
     Standard periods per Art. 224(2):
     - 5 days: repo-style transactions → haircut × sqrt(0.5) ≈ ×0.7071
@@ -117,6 +118,44 @@ def scale_haircut_for_liquidation_period(
     if liquidation_period_days == 10 or math.isclose(base_haircut_10day, 0.0, abs_tol=1e-10):
         return base_haircut_10day
     return base_haircut_10day * math.sqrt(liquidation_period_days / 10.0)
+
+
+@cites("CRR Art. 226")
+def scale_haircut_for_non_daily_revaluation(
+    daily_haircut: float,
+    revaluation_freq_days: int,
+    holding_period_days: int,
+) -> float:
+    """Scale a daily-revaluation haircut for non-daily revaluation (Art. 226).
+
+    H = H_daily × sqrt((N_R + T_M − 1) / T_M)
+
+    where N_R = ``revaluation_freq_days`` (actual business days between
+    revaluations) and T_M = ``holding_period_days`` (the holding / liquidation
+    period in business days). Collapses to the identity when N_R = 1 (daily) —
+    the regression anchor for the unmargined-daily SFT path. Art. 226 has no
+    numbered paragraphs (do not write "226(2)").
+
+    Args:
+        daily_haircut: Haircut already scaled to the holding period at daily
+            revaluation (i.e. ``H_10 × sqrt(T_M / 10)``).
+        revaluation_freq_days: Actual business days between revaluations (N_R).
+        holding_period_days: Holding / liquidation period in business days (T_M).
+
+    Returns:
+        The non-daily-scaled haircut; ``daily_haircut`` unchanged when daily,
+        when the haircut is zero (cash / ineligible), or for a non-positive
+        holding period (defensive div-guard).
+    """
+    if (
+        revaluation_freq_days == 1
+        or holding_period_days <= 0
+        or math.isclose(daily_haircut, 0.0, abs_tol=1e-10)
+    ):
+        return daily_haircut
+    return daily_haircut * math.sqrt(
+        (revaluation_freq_days + holding_period_days - 1) / holding_period_days
+    )
 
 
 # =============================================================================
@@ -467,7 +506,7 @@ def lookup_fx_haircut(
     Get FX mismatch haircut, scaled for liquidation period.
 
     Art. 224 Table 4 base (10-day): 8%
-    Scaled by Art. 226(2): H_m = 8% × sqrt(T_m / 10)
+    Scaled by Art. 224(2): H_m = 8% × sqrt(T_m / 10)
 
     Args:
         exposure_currency: Currency of exposure

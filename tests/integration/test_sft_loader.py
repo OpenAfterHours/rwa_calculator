@@ -59,6 +59,34 @@ def _write_sft_trades(directory: Path) -> Path:
     return path
 
 
+def _write_sft_trades_margined(directory: Path) -> Path:
+    """Write a one-row MARGINED SFT trade parquet carrying the Art. 285 fields."""
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / "sft_trades.parquet"
+    pl.DataFrame(
+        {
+            "trade_id": ["T_SFT_MARG"],
+            "netting_set_id": ["NS_SFT_MARG"],
+            "counterparty_reference": ["CP_SFT_1"],
+            "notional": [1_000_000.0],
+            "currency": ["GBP"],
+            "maturity_date": [date(2027, 1, 1)],
+            "start_date": [date(2026, 1, 1)],
+            # Margining inputs (Phase 0b) — carried, unused this phase.
+            "is_margined": [True],
+            "remargining_frequency_days": [pl.Series([3], dtype=pl.Int16)[0]],
+            "mpor_floor_category": ["illiquid_or_large"],
+            "has_margin_dispute_doubling": [True],
+            "mpor_days_override": [pl.Series([15], dtype=pl.Int16)[0]],
+        },
+        schema_overrides={
+            "remargining_frequency_days": pl.Int16,
+            "mpor_days_override": pl.Int16,
+        },
+    ).write_parquet(path)
+    return path
+
+
 def _write_sft_collateral(directory: Path) -> Path:
     """Write a one-row SFT collateral parquet."""
     directory.mkdir(parents=True, exist_ok=True)
@@ -176,6 +204,71 @@ def test_loader_seals_sft_collateral_via_standard_path(
 
     assert bundle.sft is not None and bundle.sft.collateral is not None
     assert sealed_edge_of(bundle.sft.collateral.sft_collateral) == "raw_sft_collateral"
+
+
+# ===========================================================================
+# 2b. Margined SFT (Phase 0b) — Art. 285 fields round-trip through the seal
+# ===========================================================================
+
+
+def test_loader_preserves_margined_sft_fields(
+    tmp_path: Path,
+    write_minimal_crr_dataset: Callable[[Path], DataSourceConfig],
+) -> None:
+    """A margined SFT round-trips through the loader with all Art. 285 fields intact."""
+    config = write_minimal_crr_dataset(tmp_path)
+    config = _config_with_sft(config, trades_file=_write_sft_trades_margined(tmp_path / "ccr"))
+    bundle = ParquetLoader(tmp_path, config=config).load()
+
+    assert bundle.sft is not None
+    row = bundle.sft.trades.sft_trades.collect().row(0, named=True)
+    assert row["is_margined"] is True
+    assert row["remargining_frequency_days"] == 3
+    assert row["mpor_floor_category"] == "illiquid_or_large"
+    assert row["has_margin_dispute_doubling"] is True
+    assert row["mpor_days_override"] == 15
+
+
+def test_loader_margining_columns_carry_designed_dtypes(
+    tmp_path: Path,
+    write_minimal_crr_dataset: Callable[[Path], DataSourceConfig],
+) -> None:
+    """The sealed margining columns carry the designed Int16 / Boolean / String dtypes."""
+    config = write_minimal_crr_dataset(tmp_path)
+    config = _config_with_sft(config, trades_file=_write_sft_trades_margined(tmp_path / "ccr"))
+    bundle = ParquetLoader(tmp_path, config=config).load()
+
+    assert bundle.sft is not None
+    schema = bundle.sft.trades.sft_trades.collect_schema()
+    assert schema["is_margined"] == pl.Boolean
+    assert schema["remargining_frequency_days"] == pl.Int16
+    assert schema["mpor_floor_category"] == pl.String
+    assert schema["has_margin_dispute_doubling"] == pl.Boolean
+    assert schema["mpor_days_override"] == pl.Int16
+
+
+def test_loader_applies_unmargined_defaults_to_legacy_sft_row(
+    tmp_path: Path,
+    write_minimal_crr_dataset: Callable[[Path], DataSourceConfig],
+) -> None:
+    """An SFT row WITHOUT the margining columns gets the unmargined defaults.
+
+    This is the Phase 0b back-compat guarantee: a legacy (pre-margining) SFT
+    parquet seals to is_margined=False / remargining=1 / floor='repo_only' /
+    no doubling / null override — bit-identical to today's unmargined path.
+    """
+    config = write_minimal_crr_dataset(tmp_path)
+    # _write_sft_trades writes the ORIGINAL (no-margining) schema.
+    config = _config_with_sft(config, trades_file=_write_sft_trades(tmp_path / "ccr"))
+    bundle = ParquetLoader(tmp_path, config=config).load()
+
+    assert bundle.sft is not None
+    row = bundle.sft.trades.sft_trades.collect().row(0, named=True)
+    assert row["is_margined"] is False, "absent is_margined must default to the unmargined branch"
+    assert row["remargining_frequency_days"] == 1, "absent remargin freq defaults to daily (1)"
+    assert row["mpor_floor_category"] == "repo_only", "absent floor category defaults to repo_only"
+    assert row["has_margin_dispute_doubling"] is False
+    assert row["mpor_days_override"] is None, "absent override must stay null ('derive me')"
 
 
 # ===========================================================================

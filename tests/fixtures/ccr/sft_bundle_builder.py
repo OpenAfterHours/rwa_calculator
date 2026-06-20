@@ -64,6 +64,35 @@ from .golden_ccr_a11_a12 import (
     CCR_A12_NETTING_SET_ID,
     CCR_A12_TRADE_ID,
 )
+from .golden_ccr_a15_a18_margined_sft import (
+    CCR_A15_A18_COLLATERAL_CURRENCY_GBP,
+    CCR_A15_A18_COLLATERAL_CURRENCY_USD,
+    CCR_A15_A18_COLLATERAL_ISSUER_CQS,
+    CCR_A15_A18_COLLATERAL_MARKET_VALUE,
+    CCR_A15_A18_COLLATERAL_RESIDUAL_MATURITY_YEARS,
+    CCR_A15_A18_COLLATERAL_TYPE,
+    CCR_A15_A18_COUNTERPARTY_REF,
+    CCR_A15_A18_CURRENCY,
+    CCR_A15_A18_EXPOSURE_COLLATERAL_TYPE,
+    CCR_A15_A18_MATURITY_DATE,
+    CCR_A15_A18_NOTIONAL,
+    CCR_A15_A18_START_DATE,
+    CCR_A15_COLLATERAL_REF,
+    CCR_A15_NETTING_SET_ID,
+    CCR_A15_TRADE_ID,
+    CCR_A15D_COLLATERAL_REF,
+    CCR_A15D_NETTING_SET_ID,
+    CCR_A15D_TRADE_ID,
+    CCR_A16_COLLATERAL_REF,
+    CCR_A16_NETTING_SET_ID,
+    CCR_A16_TRADE_ID,
+    CCR_A17_COLLATERAL_REF,
+    CCR_A17_NETTING_SET_ID,
+    CCR_A17_TRADE_ID,
+    CCR_A18_COLLATERAL_REF,
+    CCR_A18_NETTING_SET_ID,
+    CCR_A18_TRADE_ID,
+)
 
 # SFT trade / netting-set identifiers for the dark-launch scenarios. Distinct
 # from the CCR-A11/A12 ids so a future co-existence test can populate both
@@ -89,8 +118,23 @@ def _seal_sft_collateral(df: pl.DataFrame) -> pl.LazyFrame:
     return sealed
 
 
-def _sft_trade_df(trade_id: str, netting_set_id: str) -> pl.DataFrame:
-    """One-row SFT trade frame mirroring the CCR-A11/A12 corp-bond exposure."""
+def _sft_trade_df(
+    trade_id: str,
+    netting_set_id: str,
+    *,
+    is_margined: bool = False,
+    remargining_frequency_days: int = 1,
+    mpor_floor_category: str = "repo_only",
+    has_margin_dispute_doubling: bool = False,
+    mpor_days_override: int | None = None,
+) -> pl.DataFrame:
+    """One-row SFT trade frame mirroring the CCR-A11/A12 corp-bond exposure.
+
+    The Art. 285 margining columns (SFT/FCCM separation Phase 0b) default to the
+    UNMARGINED branch, so the existing A11/A12 builders are unaffected. Pass the
+    margining keywords to make a margined SFT representable (carry-only — the
+    engine does not read these fields yet).
+    """
     row = {
         "trade_id": trade_id,
         "netting_set_id": netting_set_id,
@@ -104,6 +148,11 @@ def _sft_trade_df(trade_id: str, netting_set_id: str) -> pl.DataFrame:
         "exposure_security_residual_maturity_years": (
             CCR_A11_A12_EXPOSURE_SECURITY_RESIDUAL_MATURITY_YEARS
         ),
+        "is_margined": is_margined,
+        "remargining_frequency_days": remargining_frequency_days,
+        "mpor_floor_category": mpor_floor_category,
+        "has_margin_dispute_doubling": has_margin_dispute_doubling,
+        "mpor_days_override": mpor_days_override,
     }
     return pl.DataFrame([row], schema=dtypes_of(SFT_TRADE_SCHEMA))
 
@@ -145,6 +194,45 @@ def build_sft_bundle_a12() -> RawSFTBundle:
         collateral=SftCollateralBundle(
             sft_collateral=_seal_sft_collateral(_sft_collateral_df(SFT_DL_A12_NETTING_SET_ID))
         ),
+    )
+
+
+def build_margined_sft_bundle(
+    *,
+    trade_id: str = "SFT_T_MARGINED",
+    netting_set_id: str = "NS_SFT_MARGINED",
+    remargining_frequency_days: int = 1,
+    mpor_floor_category: str = "repo_only",
+    has_margin_dispute_doubling: bool = False,
+    mpor_days_override: int | None = None,
+) -> RawSFTBundle:
+    """A MARGINED SFT bundle carrying the Art. 285 MPOR inputs (Phase 0b).
+
+    Mirrors the A11 corp-bond exposure but with ``is_margined=True`` and the
+    supplied margin-period inputs denormalised onto the trade row. Carry-only:
+    no engine math reads these fields yet, so this bundle's E* is identical to
+    the unmargined A11 result — the fields exist to make a margined SFT
+    representable for the math phases that follow.
+
+    References:
+        - CRR Art. 285(2)-(5) — MPOR floors / derivation
+        - CRR Art. 224(2) final sub-para — margined holding period
+    """
+    return RawSFTBundle(
+        trades=SftTradeBundle(
+            sft_trades=_seal_sft_trades(
+                _sft_trade_df(
+                    trade_id,
+                    netting_set_id,
+                    is_margined=True,
+                    remargining_frequency_days=remargining_frequency_days,
+                    mpor_floor_category=mpor_floor_category,
+                    has_margin_dispute_doubling=has_margin_dispute_doubling,
+                    mpor_days_override=mpor_days_override,
+                )
+            )
+        ),
+        collateral=None,
     )
 
 
@@ -193,4 +281,174 @@ def build_sft_bundle_ccr_a12() -> RawSFTBundle:
         collateral=SftCollateralBundle(
             sft_collateral=_seal_sft_collateral(_sft_collateral_df(CCR_A12_NETTING_SET_ID))
         ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# CCR-A15..A18 margined / non-daily SFT bundles (margined-branch acceptance).
+#
+# These exercise the FCCM margined / non-daily revaluation branch end-to-end
+# (CRR Art. 224(2) + Art. 226 + Art. 285(2)-(5)). They DIFFER from the A11/A12
+# builders above in two ways the FCCM math keys on:
+#   * the exposure side is CASH (exposure_collateral_type=None ⇒ HE=0), with the
+#     whole haircut carried by the collateral leg, and E = C = 10,000,000;
+#   * the collateral is a govt_bond CQS 1 0.5y security (H_10=0.005), GBP for
+#     A15D/A15/A16/A18 and USD for A17 (the FX-mismatch scenario).
+# Scenario constants (ids, notional, collateral params) come from the golden
+# module; the margining inputs (is_margined / remargining_frequency_days /
+# mpor_floor_category / has_margin_dispute_doubling) select the branch + T_M.
+# ---------------------------------------------------------------------------
+
+
+def _sft_margined_trade_df(
+    trade_id: str,
+    netting_set_id: str,
+    *,
+    is_margined: bool,
+    remargining_frequency_days: int,
+    has_margin_dispute_doubling: bool = False,
+) -> pl.DataFrame:
+    """One-row CASH-exposure SFT trade frame for the CCR-A15..A18 scenarios.
+
+    Cash exposure side ⇒ the three Art. 223(5) HE columns are null (HE=0); the
+    notional / currency / counterparty come from the golden A15..A18 constants.
+    ``mpor_floor_category`` is fixed to ``"repo_only"`` (F=5) for every margined
+    scenario in this family; ``mpor_days_override`` is left null (derive MPOR).
+    """
+    row = {
+        "trade_id": trade_id,
+        "netting_set_id": netting_set_id,
+        "counterparty_reference": CCR_A15_A18_COUNTERPARTY_REF,
+        "notional": CCR_A15_A18_NOTIONAL,
+        "currency": CCR_A15_A18_CURRENCY,
+        "maturity_date": CCR_A15_A18_MATURITY_DATE,
+        "start_date": CCR_A15_A18_START_DATE,
+        # Cash exposure side ⇒ HE = 0 (engine treats null collateral type as
+        # cash-equivalent / no haircut).
+        "exposure_collateral_type": CCR_A15_A18_EXPOSURE_COLLATERAL_TYPE,
+        "exposure_security_cqs": None,
+        "exposure_security_residual_maturity_years": None,
+        "is_margined": is_margined,
+        "remargining_frequency_days": remargining_frequency_days,
+        "mpor_floor_category": "repo_only",
+        "has_margin_dispute_doubling": has_margin_dispute_doubling,
+        "mpor_days_override": None,
+    }
+    return pl.DataFrame([row], schema=dtypes_of(SFT_TRADE_SCHEMA))
+
+
+def _sft_govt_bond_collateral_df(
+    netting_set_id: str,
+    collateral_reference: str,
+    *,
+    currency: str,
+) -> pl.DataFrame:
+    """One-row govt_bond CQS 1 0.5y collateral frame (H_10=0.005), C=10,000,000.
+
+    ``currency`` is GBP for the same-currency scenarios (HFX=0) and USD for the
+    A17 FX-mismatch scenario (HFX = 0.08·√(T_M/10) against the GBP exposure).
+    """
+    row = {
+        "sft_collateral_reference": collateral_reference,
+        "netting_set_id": netting_set_id,
+        "collateral_type": CCR_A15_A18_COLLATERAL_TYPE,
+        "market_value": CCR_A15_A18_COLLATERAL_MARKET_VALUE,
+        "currency": currency,
+        "issuer_cqs": CCR_A15_A18_COLLATERAL_ISSUER_CQS,
+        "residual_maturity_years": CCR_A15_A18_COLLATERAL_RESIDUAL_MATURITY_YEARS,
+    }
+    return pl.DataFrame([row], schema=dtypes_of(SFT_COLLATERAL_SCHEMA))
+
+
+def _build_margined_scenario_bundle(
+    trade_id: str,
+    netting_set_id: str,
+    collateral_reference: str,
+    *,
+    is_margined: bool,
+    remargining_frequency_days: int,
+    has_margin_dispute_doubling: bool = False,
+    collateral_currency: str,
+) -> RawSFTBundle:
+    """Assemble a CCR-A15..A18 RawSFTBundle (cash exposure + govt_bond collateral)."""
+    return RawSFTBundle(
+        trades=SftTradeBundle(
+            sft_trades=_seal_sft_trades(
+                _sft_margined_trade_df(
+                    trade_id,
+                    netting_set_id,
+                    is_margined=is_margined,
+                    remargining_frequency_days=remargining_frequency_days,
+                    has_margin_dispute_doubling=has_margin_dispute_doubling,
+                )
+            )
+        ),
+        collateral=SftCollateralBundle(
+            sft_collateral=_seal_sft_collateral(
+                _sft_govt_bond_collateral_df(
+                    netting_set_id, collateral_reference, currency=collateral_currency
+                )
+            )
+        ),
+    )
+
+
+def build_sft_bundle_ccr_a15d() -> RawSFTBundle:
+    """CCR-A15D: unmargined daily repo SFT (T_M=5, N_R=1) — regression anchor."""
+    return _build_margined_scenario_bundle(
+        CCR_A15D_TRADE_ID,
+        CCR_A15D_NETTING_SET_ID,
+        CCR_A15D_COLLATERAL_REF,
+        is_margined=False,
+        remargining_frequency_days=1,
+        collateral_currency=CCR_A15_A18_COLLATERAL_CURRENCY_GBP,
+    )
+
+
+def build_sft_bundle_ccr_a15() -> RawSFTBundle:
+    """CCR-A15: unmargined 3-day remargin SFT (T_M=5, N_R=3)."""
+    return _build_margined_scenario_bundle(
+        CCR_A15_TRADE_ID,
+        CCR_A15_NETTING_SET_ID,
+        CCR_A15_COLLATERAL_REF,
+        is_margined=False,
+        remargining_frequency_days=3,
+        collateral_currency=CCR_A15_A18_COLLATERAL_CURRENCY_GBP,
+    )
+
+
+def build_sft_bundle_ccr_a16() -> RawSFTBundle:
+    """CCR-A16: margined repo-only N=2 ⇒ MPOR=6 SFT (T_M=6, N_R suppressed)."""
+    return _build_margined_scenario_bundle(
+        CCR_A16_TRADE_ID,
+        CCR_A16_NETTING_SET_ID,
+        CCR_A16_COLLATERAL_REF,
+        is_margined=True,
+        remargining_frequency_days=2,
+        collateral_currency=CCR_A15_A18_COLLATERAL_CURRENCY_GBP,
+    )
+
+
+def build_sft_bundle_ccr_a17() -> RawSFTBundle:
+    """CCR-A17: unmargined daily + FX mismatch SFT (T_M=5, N_R=1, USD collateral)."""
+    return _build_margined_scenario_bundle(
+        CCR_A17_TRADE_ID,
+        CCR_A17_NETTING_SET_ID,
+        CCR_A17_COLLATERAL_REF,
+        is_margined=False,
+        remargining_frequency_days=1,
+        collateral_currency=CCR_A15_A18_COLLATERAL_CURRENCY_USD,
+    )
+
+
+def build_sft_bundle_ccr_a18() -> RawSFTBundle:
+    """CCR-A18: margined repo-only N=2 + dispute-doubling ⇒ MPOR=11 SFT."""
+    return _build_margined_scenario_bundle(
+        CCR_A18_TRADE_ID,
+        CCR_A18_NETTING_SET_ID,
+        CCR_A18_COLLATERAL_REF,
+        is_margined=True,
+        remargining_frequency_days=2,
+        has_margin_dispute_doubling=True,
+        collateral_currency=CCR_A15_A18_COLLATERAL_CURRENCY_GBP,
     )

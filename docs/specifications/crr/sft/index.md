@@ -79,18 +79,65 @@ where:
 | `HC` | Volatility haircut appropriate to the **collateral** | Art. 224 Table 1 |
 | `HFX` | Haircut for any **currency mismatch** between collateral and exposure | Art. 224 Table 4 (8%; 0 when currencies match) |
 
-The supervisory haircuts `H_10` (10-business-day holding period) come from
-the CRR Art. 224 Table 1 lookup by collateral type / issuer CQS / residual
-maturity, then are scaled to the **SFT 5-business-day liquidation period**
-(Art. 224(2)(c)) via the Art. 226(2) square-root-of-time rule:
+The supervisory haircuts `H_10` (10-business-day daily-revaluation holding
+period) come from the CRR Art. 224 Table 1 lookup by collateral type / issuer
+CQS / residual maturity. The **applied** haircut is the full three-factor
+expression:
 
 ```
-H_m = H_10 · sqrt( T_m / 10 )
+H = H_10 · sqrt( T_M / 10 ) · sqrt( (N_R + T_M − 1) / T_M )
 ```
 
-with `T_m = 5` for SFTs. Both the haircut table and the 5-BD liquidation
-period resolve from the rulepack — the FCCM engine declares no regulatory
-scalars of its own (project data/engine separation rule).
+with:
+
+- `sqrt( T_M / 10 )` — the **Art. 224(2)** liquidation-period rescale (the
+  published 5/10/20-day columns are `H_10 · sqrt(T_M/10)`). `T_M` is the
+  holding/liquidation period in business days appropriate to the branch
+  (5 for unmargined repo/SFT, Art. 224(2)(b); the MPOR for margined sets).
+- `sqrt( (N_R + T_M − 1) / T_M )` — the **Art. 226** non-daily revaluation
+  scale-up, driven by `N_R = remargining_frequency_days`. It **collapses to
+  1.0 at daily revaluation** (`N_R = 1`), so a daily-revalued unmargined SFT
+  sees only the period rescale (the regression anchor). Art. 226 has **no
+  numbered paragraphs** — do not write "Art. 226(2)".
+
+The same three-factor form applies independently to `HE` (exposure
+security), `HC` (collateral security) and `HFX` (the 8% currency-mismatch
+base, Art. 224 Table 4 / Art. 233(4)). Both the haircut table and the
+business-day periods resolve from the rulepack — the FCCM engine declares no
+regulatory scalars of its own (project data/engine separation rule).
+
+### Two mutually-exclusive branches (margined vs unmargined)
+
+The holding period `T_M` and whether the Art. 226 non-daily factor applies
+are selected per netting set on the `is_margined` flag. The two branches are
+**never combined** ([`engine/sft/fccm.py::_derive_margining_terms`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/sft/fccm.py)):
+
+- **Branch (a) — unmargined / simply-collateralised** (`is_margined` False or
+  absent; today's behaviour). `T_M` is the transaction-type liquidation
+  period — **5 business days** for the FCCM repo/SFT path (Art. 224(2)(b)).
+  The Art. 226 non-daily term **is applied**, with `N_R =
+  remargining_frequency_days`. At daily revaluation (`N_R = 1`) the term is
+  exactly 1.0, so the unmargined-daily path is **bit-identical** to the prior
+  behaviour (verified by IEEE-754 hex probe and the unchanged CCR-A11/A12
+  goldens).
+- **Branch (b) — margined** (qualifying Art. 285(2)–(4) collateral agreement;
+  legal hook = the final subparagraph of Art. 224(2)). `T_M` is the
+  **margin period of risk** `MPOR = F + N − 1` (Art. 285(5)), and the Art. 226
+  non-daily term is **suppressed** (`N_R = 1`) because the MPOR already encodes
+  the remargin period `N`. The floor `F` is `5` for repo / securities- or
+  margin-lending-only sets (Art. 285(2)(a)), `10` for other sets
+  (Art. 285(2)(b)) and `20` for sets with > 5000 trades **or** illiquid /
+  hard-to-replace collateral (Art. 285(3) — two independent triggers). `F` is
+  **doubled** for the two quarters following more than two margin disputes
+  (Art. 285(4)). An explicit `mpor_days_override` supersedes the `F + N − 1`
+  derivation. All `F` values and the dispute multiplier resolve from cited
+  rulepack scalars — no regulatory numerics are hardcoded in the engine.
+
+The five input columns that drive this selection (`is_margined`,
+`remargining_frequency_days`, `mpor_floor_category`,
+`has_margin_dispute_doubling`, `mpor_days_override`) are documented on the
+[SFT input schema page](../../../data-model/input-schemas.md#sft-input-schemas-fccm);
+all default so that the unmargined-daily path reproduces today's `E*` exactly.
 
 Engine entry point:
 
@@ -203,8 +250,9 @@ scenarios land):
 |---|---|
 | FCCM (Art. 220–223), the only implemented method | VaR method (Art. 221) — `SFTConfig.method = "var"`, fails loud |
 | Single-trade, single-counterparty netting sets (Art. 220(1)(a)) | IMM method (Art. 283) — `SFTConfig.method = "imm"`, fails loud |
-| Unmargined SFTs (Art. 224(2)(c) 5-BD liquidation period) | Margined FCCM (Art. 285 MPOR extension) |
-| Standardised supervisory haircuts (Art. 220(3)(a)(i)) | Own-estimate / VaR haircuts |
+| Unmargined SFTs (Art. 224(2)(b) 5-BD liquidation period) | Own-estimate / VaR haircuts |
+| Margined FCCM (Art. 285 MPOR; `F + N − 1`, dispute doubling) | Art. 227(2)(a)–(h) 0% core-market-participant carve-out |
+| Standardised supervisory haircuts (Art. 220(3)(a)(i)) | |
 
 ---
 
@@ -214,10 +262,12 @@ scenarios land):
 - **CRR Art. 220(3)(a)(i)** — standardised supervisory haircuts.
 - **CRR Art. 223(5)** — `E* = max(0, E·(1+HE) − CVA·(1−HC−HFX))`.
 - **CRR Art. 224 Table 1** — `H_10` supervisory haircuts by collateral type / CQS / residual maturity.
-- **CRR Art. 224(2)(c)** — 5-business-day liquidation period for SFTs.
+- **CRR Art. 224(2)(b)** — 5-business-day liquidation period for repo/SFT.
+- **CRR Art. 224(2) final subparagraph** — legal hook for the margined branch.
 - **CRR Art. 224 Table 4** — 8% currency-mismatch haircut (`HFX`).
-- **CRR Art. 226(2)** — `H_m = H_10 · sqrt(T_m / 10)` liquidation-period scaling.
+- **CRR Art. 226** — the applied haircut `H = H_10 · sqrt(T_M/10) · sqrt((N_R+T_M−1)/T_M)` (Art. 224(2) period rescale + Art. 226 non-daily revaluation scale-up). Art. 226 has no numbered paragraphs.
 - **CRR Art. 271(2)** — SFT EAD via FCCM, not SA-CCR Art. 274.
+- **CRR Art. 285(2)–(5)** — margined MPOR floors (`F` = 5/10/20), the `F + N − 1` margin period of risk and the Art. 285(4) dispute-doubling multiplier.
 - **PRA PS1/26 Art. 92(3A)** — output-floor inclusion of SA-CCR / FCCM EAD.
 - **PRA PS1/26 Appendix 17** — COREP / OF 07.00 row 0090 ("SFT netting sets") template guidance.
 - **`src/rwa_calc/engine/sft/fccm.py`** — FCCM engine implementation.

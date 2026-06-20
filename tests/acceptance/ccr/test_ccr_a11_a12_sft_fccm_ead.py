@@ -19,7 +19,7 @@ Key responsibilities:
   (Art. 271(2)) rather than the SA-CCR derivative chain (Art. 274).
 - Validate the FCCM haircut mechanics:
     H_10 = 0.08 (corp bond CQS 1, residual > 5y, Art. 224 Table 1)
-    HE   = H_10 × √(5/10) = 0.05656854249492381 (Art. 224(2)(c) + Art. 226(2))
+    HE   = H_10 × √(5/10) = 0.05656854249492381 (Art. 224(2)(b) + Art. 226)
     E*   = max(0, E·(1+HE) − CVA·(1−HC−HFX))    (Art. 223(5))
 - Validate that the synthetic CCR row carries ccr_method="fccm_sft" and
   risk_type="CCR_SFT" (not "sa_ccr" / "CCR_DERIVATIVE").
@@ -49,9 +49,9 @@ References:
     - CRR Art. 220(1)(a) — single-CP SFT / master-netting-set scope.
     - CRR Art. 220(3)(a)(i) — standardised supervisory haircuts.
     - CRR Art. 223(5) — E* = max(0, E·(1+HE) − CVA·(1−HC−HFX)).
-    - CRR Art. 224(2)(c) — 5-BD liquidation period floor for SFTs.
+    - CRR Art. 224(2)(b) — 5-BD liquidation period for repo/SFT.
     - CRR Art. 224 Table 1 — H_10 = 0.08 (corp bond CQS 1, residual > 5y).
-    - CRR Art. 226(2) — H_m = H_10 × √(T_m / 10) haircut scaling.
+    - CRR Art. 224(2) — H_m = H_10 × √(T_m / 10) period rescale; Art. 226 non-daily revaluation.
     - CRR Art. 120 Table 3 — institution CQS 2 → 50% SA risk weight.
     - tests/fixtures/ccr/golden_ccr_a11_a12.py: fixture builder and constants.
 """
@@ -117,7 +117,7 @@ def ccr_a11_result() -> dict:
         - CalculationConfig.crr(), permission_mode=STANDARDISED.
 
     References:
-        CRR Art. 271(2), 223(5), 224 Table 1, 226(2), 120 Table 3.
+        CRR Art. 271(2), 223(5), 224 Table 1, 224(2)(b), 226, 120 Table 3.
     """
     # Arrange
     bundle = build_raw_data_bundle_ccr_a11()
@@ -155,7 +155,7 @@ def ccr_a12_result() -> dict:
         - CalculationConfig.crr(), permission_mode=STANDARDISED.
 
     References:
-        CRR Art. 271(2), 223(5), 224 Table 1, 226(2), 120 Table 3.
+        CRR Art. 271(2), 223(5), 224 Table 1, 224(2)(b), 226, 120 Table 3.
     """
     # Arrange
     bundle = build_raw_data_bundle_ccr_a12()
@@ -259,9 +259,9 @@ class TestCCRA11UncollateralisedSFT:
 
         References:
             CRR Art. 223(5): E* = max(0, E·(1+HE) − 0) = E·(1+HE).
-            CRR Art. 224(2)(c): 5-BD liquidation period.
+            CRR Art. 224(2)(b): 5-BD liquidation period (repo/SFT).
             CRR Art. 224 Table 1: H_10=0.08 for corp bond CQS 1, residual > 5y.
-            CRR Art. 226(2): H_m = H_10 × √(T_m / 10).
+            CRR Art. 224(2): H_m = H_10 × √(T_m / 10) (period rescale); Art. 226 non-daily revaluation.
         """
         # Arrange
         expected = CCR_A11_EAD  # 64_133_710.52944188

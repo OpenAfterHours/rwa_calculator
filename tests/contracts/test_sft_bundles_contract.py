@@ -232,3 +232,42 @@ def test_raw_data_bundle_accepts_sft_keyword() -> None:
     )
 
     assert instance.sft is rsft
+
+
+# ===========================================================================
+# 5. Phase 0b — fixture builder optionally populates the margining fields
+# ===========================================================================
+
+
+def test_builder_defaults_to_unmargined_sft() -> None:
+    """The default A11 builder emits an UNMARGINED SFT (is_margined defaults False).
+
+    Existing fixtures call build_sft_bundle_a11/a12 unchanged — they must stay
+    unmargined so the Phase 0b carry-only change cannot move any output.
+    """
+    from tests.fixtures.ccr.sft_bundle_builder import build_sft_bundle_a11
+
+    bundle = build_sft_bundle_a11()
+    row = bundle.trades.sft_trades.collect().row(0, named=True)
+    assert row["is_margined"] is False
+    assert row["remargining_frequency_days"] == 1
+    assert row["mpor_floor_category"] == "repo_only"
+    assert row["mpor_days_override"] is None
+
+
+def test_builder_can_emit_margined_sft() -> None:
+    """The builder OPTIONALLY populates the Art. 285 margining fields when asked."""
+    from tests.fixtures.ccr.sft_bundle_builder import build_margined_sft_bundle
+
+    bundle = build_margined_sft_bundle(
+        remargining_frequency_days=2,
+        mpor_floor_category="other",
+        has_margin_dispute_doubling=True,
+        mpor_days_override=12,
+    )
+    row = bundle.trades.sft_trades.collect().row(0, named=True)
+    assert row["is_margined"] is True
+    assert row["remargining_frequency_days"] == 2
+    assert row["mpor_floor_category"] == "other"
+    assert row["has_margin_dispute_doubling"] is True
+    assert row["mpor_days_override"] == 12

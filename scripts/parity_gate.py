@@ -1,19 +1,27 @@
 """
-Phase 2 parity gate: byte-identical RWA on the 10k stress set.
+RWA parity gate: byte-identical output on the 10k stress set.
 
-Migration Phase 2 (docs/plans/target-architecture-migration.md) deletes dead
-code paths and must not move a single output number. This harness captures a
-full snapshot of the pipeline output on the deterministic 10k stress dataset
-(all four framework/permission configs) before the deletions, then re-runs and
-compares after: every output frame exactly equal, error lists allowed to GROW
-only (restored branch-path accumulation), never shrink or mutate.
+Any refactor that is meant to move code without moving numbers (the
+target-architecture migration phases — dead-path deletion, the uniform stage
+model, the rulebook pack split, and the analysis/reporting layers still to
+come) must prove it. This harness captures a full snapshot of the pipeline
+output on the deterministic 10k stress dataset (all four framework/permission
+configs) before the change, then re-runs and compares after: every per-row
+output frame exactly equal, group-by sum aggregates equal to
+float-reassociation tolerance (Polars' multi-threaded Float64 summation is not
+deterministic across processes), and error lists allowed to GROW only (restored
+branch-path accumulation), never shrink or mutate.
 
 Usage:
-    uv run python scripts/phase2_parity.py capture --out <dir>
-    uv run python scripts/phase2_parity.py compare --baseline <dir>
+    uv run python scripts/parity_gate.py capture --out <dir>
+    uv run python scripts/parity_gate.py compare --baseline <dir>
+
+CLI-supplied paths are confined to the repository's parent directory so the
+snapshot lives inside the repo or in a sibling baseline dir (e.g.
+../rwa_phase5_parity/before) and a faulty argument cannot escape the filesystem.
 
 References:
-- docs/plans/target-architecture-migration.md (Phase 2 validation)
+- docs/plans/target-architecture-migration.md (per-phase parity validation)
 - tests/acceptance/stress/conftest.py (deterministic dataset builders)
 """
 
@@ -30,6 +38,11 @@ from polars.testing import assert_frame_equal
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
+
+# Parity snapshots live inside the repo or in a sibling baseline directory
+# (e.g. ../rwa_phase5_parity/before); confine every CLI-supplied path to the
+# repo's parent so a faulty argument cannot read or write elsewhere.
+_ALLOWED_ROOT = REPO_ROOT.parent
 
 from tests.acceptance.stress.conftest import (  # noqa: E402
     STRESS_REPORTING_DATE,
@@ -215,6 +228,20 @@ def compare(baseline_dir: Path) -> int:
     return 0
 
 
+def _confine_path(raw: Path) -> Path:
+    """Resolve a CLI-supplied path and reject anything outside ``_ALLOWED_ROOT``.
+
+    The capture/compare directories are operator-supplied; without this guard a
+    faulty argument (or an automated caller) could direct reads/writes to an
+    arbitrary filesystem location. Resolving first collapses any ``..`` segments
+    so the containment check cannot be bypassed.
+    """
+    resolved = raw.expanduser().resolve()
+    if not resolved.is_relative_to(_ALLOWED_ROOT):
+        raise SystemExit(f"path escapes {_ALLOWED_ROOT}: {raw}")
+    return resolved
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="mode", required=True)
@@ -225,9 +252,9 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.mode == "capture":
-        capture(args.out)
+        capture(_confine_path(args.out))
         return 0
-    return compare(args.baseline)
+    return compare(_confine_path(args.baseline))
 
 
 if __name__ == "__main__":

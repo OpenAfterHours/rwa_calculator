@@ -12,7 +12,7 @@ Regenerate after annotation changes:
 uv run python scripts/generate_citation_matrix.py
 ```
 
-Last generated: 2026-06-20.
+Last generated: 2026-06-21.
 
 ## CRR (Capital Requirements Regulation)
 
@@ -510,14 +510,14 @@ Last generated: 2026-06-20.
     --8<-- "src/rwa_calc/engine/irb/formulas.py:1072:1100"
     ```
 
-??? quote "`calculate_correlation` — src/rwa_calc/engine/irb/transforms.py:358"
+??? quote "`calculate_correlation` — src/rwa_calc/engine/irb/transforms.py:370"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/transforms.py:358:396"
+    --8<-- "src/rwa_calc/engine/irb/transforms.py:370:408"
     ```
 
-??? quote "`calculate_k` — src/rwa_calc/engine/irb/transforms.py:399"
+??? quote "`calculate_k` — src/rwa_calc/engine/irb/transforms.py:411"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/transforms.py:399:413"
+    --8<-- "src/rwa_calc/engine/irb/transforms.py:411:425"
     ```
 
 ??? quote "`calculate_branch` — src/rwa_calc/engine/slotting/calculator.py:90"
@@ -607,9 +607,14 @@ Last generated: 2026-06-20.
     --8<-- "src/rwa_calc/engine/irb/formulas.py:1103:1137"
     ```
 
-??? quote "`calculate_maturity_adjustment` — src/rwa_calc/engine/irb/transforms.py:416"
+??? quote "`calculate_maturity_adjustment` — src/rwa_calc/engine/irb/transforms.py:428"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/transforms.py:416:449"
+    --8<-- "src/rwa_calc/engine/irb/transforms.py:428:461"
+    ```
+
+??? quote "`_derive_ccr_sft_maturity_years` — src/rwa_calc/engine/sft/fccm.py:232"
+    ```python
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:232:288"
     ```
 
 
@@ -620,9 +625,9 @@ Last generated: 2026-06-20.
     --8<-- "src/rwa_calc/engine/irb/formulas.py:109:188"
     ```
 
-??? quote "`apply_pd_floor` — src/rwa_calc/engine/irb/transforms.py:264"
+??? quote "`apply_pd_floor` — src/rwa_calc/engine/irb/transforms.py:276"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/transforms.py:264:288"
+    --8<-- "src/rwa_calc/engine/irb/transforms.py:276:300"
     ```
 
 
@@ -633,9 +638,9 @@ Last generated: 2026-06-20.
     --8<-- "src/rwa_calc/engine/irb/formulas.py:191:243"
     ```
 
-??? quote "`apply_lgd_floor` — src/rwa_calc/engine/irb/transforms.py:291"
+??? quote "`apply_lgd_floor` — src/rwa_calc/engine/irb/transforms.py:303"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/transforms.py:291:355"
+    --8<-- "src/rwa_calc/engine/irb/transforms.py:303:367"
     ```
 
 
@@ -720,9 +725,9 @@ Last generated: 2026-06-20.
 
 ### CRR Art. 220 — Using the Supervisory Volatility Adjustments Approach or the Own Estimates Volatility Adjustments Approach for master netting agreements
 
-??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:108"
+??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:109"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:108:169"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:109:178"
     ```
 
 
@@ -751,9 +756,9 @@ Last generated: 2026-06-20.
     --8<-- "src/rwa_calc/engine/crm/collateral.py:300:426"
     ```
 
-??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:109"
+??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:110"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:108:169"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:109:178"
     ```
 
 
@@ -774,9 +779,9 @@ Last generated: 2026-06-20.
     --8<-- "src/rwa_calc/engine/crm/haircuts.py:121:308"
     ```
 
-??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:110"
+??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:111"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:108:169"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:109:178"
     ```
 
 
@@ -787,9 +792,9 @@ Last generated: 2026-06-20.
     --8<-- "src/rwa_calc/engine/crm/haircut_tables.py:123:158"
     ```
 
-??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:111"
+??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:112"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:108:169"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:109:178"
     ```
 
 
@@ -866,9 +871,9 @@ Last generated: 2026-06-20.
 
 ### CRR Art. 271 — Determination of the exposure value
 
-??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:112"
+??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:113"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:108:169"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:109:178"
     ```
 
 
@@ -956,14 +961,14 @@ Last generated: 2026-06-20.
 
 ### CRR Art. 285 — Exposure value for netting sets subject to a margin agreement
 
-??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:113"
+??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:114"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:108:169"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:109:178"
     ```
 
-??? quote "`_derive_margining_terms` — src/rwa_calc/engine/sft/fccm.py:177"
+??? quote "`_derive_margining_terms` — src/rwa_calc/engine/sft/fccm.py:186"
     ```python
-    --8<-- "src/rwa_calc/engine/sft/fccm.py:177:220"
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:186:229"
     ```
 
 
@@ -1207,6 +1212,14 @@ Last generated: 2026-06-20.
     ```
 
 
+### PS1/26, paragraph 162 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
+
+??? quote "`_derive_ccr_sft_maturity_years` — src/rwa_calc/engine/sft/fccm.py:233"
+    ```python
+    --8<-- "src/rwa_calc/engine/sft/fccm.py:232:288"
+    ```
+
+
 ### PS1/26, paragraph 163 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
 ??? quote "`_pd_floor_expression` — src/rwa_calc/engine/irb/formulas.py:110"
@@ -1214,9 +1227,9 @@ Last generated: 2026-06-20.
     --8<-- "src/rwa_calc/engine/irb/formulas.py:109:188"
     ```
 
-??? quote "`apply_pd_floor` — src/rwa_calc/engine/irb/transforms.py:265"
+??? quote "`apply_pd_floor` — src/rwa_calc/engine/irb/transforms.py:277"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/transforms.py:264:288"
+    --8<-- "src/rwa_calc/engine/irb/transforms.py:276:300"
     ```
 
 
@@ -1237,9 +1250,9 @@ Last generated: 2026-06-20.
     --8<-- "src/rwa_calc/engine/irb/formulas.py:318:405"
     ```
 
-??? quote "`apply_lgd_floor` — src/rwa_calc/engine/irb/transforms.py:292"
+??? quote "`apply_lgd_floor` — src/rwa_calc/engine/irb/transforms.py:304"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/transforms.py:291:355"
+    --8<-- "src/rwa_calc/engine/irb/transforms.py:303:367"
     ```
 
 

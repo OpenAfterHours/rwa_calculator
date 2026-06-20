@@ -355,6 +355,10 @@
     "CRR Art. 244",
     "PS1/26, paragraph 147A"
   ],
+  "rwa_calc.engine.sft.fccm::_derive_ccr_sft_maturity_years": [
+    "CRR Art. 162",
+    "PS1/26, paragraph 162"
+  ],
   "rwa_calc.engine.sft.fccm::_derive_margining_terms": [
     "CRR Art. 285"
   ],

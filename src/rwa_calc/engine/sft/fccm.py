@@ -487,9 +487,13 @@ def _build_sft_exposure_rows(
     # ``fill_null`` ratchet pattern), joined onto the NS frame so a None carrier
     # surfaces as a typed null on the synthetic row (date-derived 1y catch-all
     # downstream).
+    # Force the join-key dtype to String: an empty SFT book (zero trades) yields
+    # an empty ``sft_ns_ids`` list, from which Polars would infer a Null-typed
+    # ``netting_set_id`` column and fail the str-key join (the empty-book
+    # pipeline-abort regression).
     ns_maturity_lf = pl.DataFrame(
         {
-            "netting_set_id": sft_ns_ids,
+            "netting_set_id": pl.Series("netting_set_id", sft_ns_ids, dtype=pl.String),
             "ccr_effective_maturity": pl.Series(
                 "ccr_effective_maturity",
                 [ns_maturity.get(ns_id) for ns_id in sft_ns_ids],

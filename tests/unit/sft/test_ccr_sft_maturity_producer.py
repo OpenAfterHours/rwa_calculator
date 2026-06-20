@@ -108,3 +108,22 @@ def test_carrier_one_day_for_qualifying_overnight_repo() -> None:
         qualifies_one_day_maturity_floor=True,
     )
     assert _carrier(bundle) == pytest.approx(_ONE_DAY, rel=_REL_TOL)
+
+
+def test_empty_sft_book_does_not_raise() -> None:
+    """An empty SFT book (zero trades) must not abort the producer.
+
+    Regression: with an empty ``sft_ns_ids`` the NS-grain carrier frame would
+    infer a Null-typed ``netting_set_id`` and fail the str-key join, aborting
+    the whole pipeline (the audit-cache empty-book regression). The carrier
+    join key is forced to String, so the empty book yields a clean zero-row
+    frame that still carries the carrier column.
+    """
+    empty_trades = pl.DataFrame([], schema=dtypes_of(SFT_TRADE_SCHEMA))
+    sealed, _ = seal_lenient(empty_trades.lazy(), SFT_TABLE_EDGES["sft_trades"])
+    bundle = RawSFTBundle(trades=SftTradeBundle(sft_trades=sealed))
+
+    rows = sft_bundle_to_exposures(bundle, _REPORTING_DATE, rulepack=_CRR_PACK).collect()
+
+    assert rows.height == 0
+    assert "ccr_effective_maturity" in rows.columns

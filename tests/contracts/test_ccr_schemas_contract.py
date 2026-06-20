@@ -399,7 +399,10 @@ def test_valid_risk_types_input_length_is_nine() -> None:
 # ===========================================================================
 
 _P8_35_EXPECTED_COLUMN_COUNT = (
-    30  # 23 pre-P8.33 + 5 (P8.33) + 1 (P8.35: credit_quality) + 1 (P8.29: is_legacy_cva_exempt)
+    # 23 pre-P8.33 + 5 (P8.33) + 1 (P8.35: credit_quality) + 1 (P8.29: is_legacy_cva_exempt)
+    # + 3 (CCR/SFT IRB effective-maturity fix Phase 2: under_master_netting_agreement,
+    #   qualifies_one_day_maturity_floor, qualifies_mna_intermediate_floor — Art. 162)
+    33
 )
 _P8_33_COMMODITY_BUCKETS = {"ELECTRICITY", "OIL_GAS", "METALS", "AGRICULTURAL", "OTHER"}
 
@@ -588,13 +591,15 @@ def test_trade_schema_commodity_type_value_constraint_has_five_buckets() -> None
 
 
 def test_trade_schema_column_count_includes_credit_quality() -> None:
-    """TRADE_SCHEMA must have exactly 30 columns (P8.35 credit_quality + P8.29 is_legacy_cva_exempt).
+    """TRADE_SCHEMA must have exactly 33 columns (P8.35 credit_quality + P8.29 is_legacy_cva_exempt).
 
     Baseline (pre-P8.33): 23 columns.
     P8.33 adds: market_price, number_of_units, reference_entity, commodity_type, is_index.
     P8.35 adds: credit_quality.
     P8.29 adds: is_legacy_cva_exempt (PRA PS1/26 Art. 274(2A) transitional alpha add-on).
-    Expected total: 30.
+    CCR/SFT IRB effective-maturity fix (Phase 2) adds: under_master_netting_agreement,
+        qualifies_one_day_maturity_floor, qualifies_mna_intermediate_floor (Art. 162).
+    Expected total: 33.
     """
     # Arrange
     schema = _get_schema("TRADE_SCHEMA")
@@ -611,8 +616,10 @@ def test_trade_schema_column_count_includes_credit_quality() -> None:
 
     # Assert — total column count.
     assert col_count == _P8_35_EXPECTED_COLUMN_COUNT, (
-        f"TRADE_SCHEMA must have exactly {_P8_35_EXPECTED_COLUMN_COUNT} columns after P8.35 "
+        f"TRADE_SCHEMA must have exactly {_P8_35_EXPECTED_COLUMN_COUNT} columns "
         f"(23 pre-P8.33 + 5 P8.33: market_price, number_of_units, reference_entity, "
-        f"commodity_type, is_index + 1 P8.35: credit_quality), "
+        f"commodity_type, is_index + 1 P8.35: credit_quality + 1 P8.29: is_legacy_cva_exempt "
+        f"+ 3 Art. 162 IRB-maturity flags: under_master_netting_agreement, "
+        f"qualifies_one_day_maturity_floor, qualifies_mna_intermediate_floor), "
         f"got {col_count}: {list(schema.keys())}"
     )

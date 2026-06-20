@@ -59,8 +59,8 @@ from rwa_calc.engine.ccr.maturity_factor import (
 )
 from rwa_calc.engine.ccr.pfe import compute_addon_per_asset_class, compute_pfe
 from rwa_calc.engine.ccr.rc import compute_rc_margined, compute_rc_unmargined
-from rwa_calc.engine.ccr.sft_fccm import SFT_TRANSACTION_TYPE, sft_rows_to_exposures
 from rwa_calc.engine.ccr.supervisory_delta import compute_supervisory_delta_option
+from rwa_calc.engine.sft.fccm import SFT_TRANSACTION_TYPE, sft_rows_to_exposures
 from rwa_calc.rulebook.compile import lookup_float_map, scalar_value
 from rwa_calc.rulebook.resolve import resolve
 

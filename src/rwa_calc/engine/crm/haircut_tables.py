@@ -100,7 +100,8 @@ def scale_haircut_for_liquidation_period(
     """
     Scale a 10-day base supervisory haircut for a different liquidation period.
 
-    Art. 226(2): H_m = H_10 × sqrt(T_m / 10)
+    Art. 224(2): H_m = H_10 × sqrt(T_m / 10)
+    (the period rescale is Art. 224(2); Art. 226 has no numbered paragraphs.)
 
     Standard periods per Art. 224(2):
     - 5 days: repo-style transactions → haircut × sqrt(0.5) ≈ ×0.7071
@@ -505,7 +506,7 @@ def lookup_fx_haircut(
     Get FX mismatch haircut, scaled for liquidation period.
 
     Art. 224 Table 4 base (10-day): 8%
-    Scaled by Art. 226(2): H_m = 8% × sqrt(T_m / 10)
+    Scaled by Art. 224(2): H_m = 8% × sqrt(T_m / 10)
 
     Args:
         exposure_currency: Currency of exposure

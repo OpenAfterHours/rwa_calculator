@@ -839,6 +839,19 @@ volatility-haircut (`HE`) inputs.
 | `exposure_collateral_type` | `String` | No | `HE` input — exposure-side security type for the Art. 224 Table 1 haircut lookup. Null when the exposure side is cash / a standard loan (`HE = 0`) |
 | `exposure_security_cqs` | `Int8` | No | `HE` input — exposure-side issuer CQS |
 | `exposure_security_residual_maturity_years` | `Float64` | No | `HE` input — exposure-side residual maturity (years) |
+| `is_margined` | `Boolean` | No (default `False`) | Branch selector (Art. 224(2) final subparagraph). `False` → unmargined branch (today's behaviour); `True` → the margined Art. 285 MPOR branch |
+| `remargining_frequency_days` | `Int16` | No (default `1`) | Dual role: `N_R` for the Art. 226 non-daily revaluation factor on the **unmargined** branch (1 = daily revaluation, factor = 1.0) / `N` in `MPOR = F + N − 1` on the **margined** branch |
+| `mpor_floor_category` | `String` | No (default `repo_only`) | MPOR floor `F` selector (margined branch only): `repo_only` → 5 (Art. 285(2)(a)) / `other` → 10 (Art. 285(2)(b)) / `illiquid_or_large` → 20 (Art. 285(3)). Constrained to `VALID_MPOR_FLOOR_CATEGORIES` |
+| `has_margin_dispute_doubling` | `Boolean` | No (default `False`) | `True` doubles `F` for the two quarters following more than two margin disputes (Art. 285(4)) |
+| `mpor_days_override` | `Int16` | No (default `null`) | Explicit MPOR in business days; supersedes the `F + N − 1` derivation when set |
+
+!!! note "The five margining columns are inert on the unmargined-daily path"
+    All five margining columns default so that `is_margined = False` with
+    `remargining_frequency_days = 1` reproduces today's `E*` **exactly** (the
+    Art. 226 non-daily factor collapses to 1.0 at daily revaluation). They take
+    effect only when `is_margined = True` (the Art. 285 MPOR branch) or
+    `remargining_frequency_days > 1` (non-daily revaluation). See the
+    [SFT specification — two mutually-exclusive branches](../specifications/crr/sft/index.md#two-mutually-exclusive-branches-margined-vs-unmargined).
 
 !!! note "These three columns were previously schema-orphaned"
     `exposure_collateral_type`, `exposure_security_cqs` and

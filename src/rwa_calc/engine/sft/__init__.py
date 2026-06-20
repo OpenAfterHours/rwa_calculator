@@ -23,7 +23,8 @@ References:
 - CRR Art. 220(1)(a): single-counterparty SFT / master-netting-set scope
 - CRR Art. 223(5): E* = max(0, E·(1+HE) − CVA·(1−HC−HFX))
 - CRR Art. 224 Table 1: supervisory haircuts (H_10) by type / CQS / maturity
-- CRR Art. 226(2): H_m = H_10 × √(T_m / 10) liquidation-period scaling
+- CRR Art. 224(2): H_m = H_10 × √(T_m / 10) liquidation-period rescale
+  (Art. 226: non-daily revaluation scale-up — Art. 226 has no numbered paragraphs)
 - CRR Art. 271(2): SFT EAD via FCCM, not SA-CCR Art. 274
 """
 

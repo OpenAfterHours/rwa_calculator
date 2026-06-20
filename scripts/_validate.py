@@ -19,11 +19,8 @@ through the sanitizer.
 
 from __future__ import annotations
 
-import os
 import re
-import tempfile
 from datetime import date
-from pathlib import Path
 
 # Strict release semver (N.N.N). Pre-release / build suffixes are intentionally
 # rejected: deploy.bump_version only ever emits N.N.N and every VERSION_FILES
@@ -95,27 +92,3 @@ def validate_framework(value: str) -> str:
     raise SystemExit(
         f"error: invalid framework {value!r}. Expected one of: {', '.join(FRAMEWORKS)}."
     )
-
-
-def validate_temp_output_path(value: str) -> Path:
-    """Resolve a worker output-file path and confine it to the system temp tree.
-
-    Worker subprocesses receive their result-file path on argv (an internal,
-    suppressed flag the parent always points at a file inside a
-    ``tempfile.TemporaryDirectory``). ``os.path.realpath`` canonicalises the
-    candidate (resolving symlinks / junctions and normalising any ``..``);
-    requiring the result to sit under the realpath'd system temp root rejects
-    path traversal before the worker writes to the file. Both sides are
-    canonicalised the same way, so symlink / case differences stay consistent
-    across the parent and worker processes. Confinement is to the temp ROOT (not
-    the parent's per-run subdirectory) because the parent always supplies an
-    internally generated path; the guard's only job is to reject traversal
-    outside the temp tree.
-    """
-    temp_root = os.path.realpath(tempfile.gettempdir())
-    resolved = os.path.realpath(value)
-    if resolved != temp_root and not resolved.startswith(temp_root + os.sep):
-        raise SystemExit(
-            f"error: refusing result path {value!r}: outside the temp directory {temp_root}."
-        )
-    return Path(resolved)

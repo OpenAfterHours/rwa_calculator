@@ -1,17 +1,15 @@
 """Unit tests for the CLI-input validators shared by the developer scripts.
 
-These guard the ``subprocess`` argv interpolation and filesystem-path
-interpolation points in deploy.py, worktree.py, and profile_memory.py: a valid
-value is returned in sanitised form (unchanged for the semver/git-ref/framework
-allowlists, canonicalised for the ISO date and temp path), an invalid one fails
-fast via ``SystemExit`` before any command is built or file is written.
+These guard the ``subprocess`` argv interpolation points in deploy.py,
+worktree.py, and profile_memory.py: a valid value is returned in sanitised form
+(unchanged for the semver/git-ref/framework allowlists, canonicalised for the
+ISO date), an invalid one fails fast via ``SystemExit`` before any command is
+built.
 """
 
 from __future__ import annotations
 
-import os
 import sys
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -25,7 +23,6 @@ from _validate import (  # noqa: E402  # ty: ignore[unresolved-import]
     validate_git_ref,
     validate_iso_date,
     validate_semver,
-    validate_temp_output_path,
 )
 
 
@@ -101,22 +98,3 @@ class TestValidateFramework:
     def test_rejects_unknown_framework(self, value: str) -> None:
         with pytest.raises(SystemExit):
             validate_framework(value)
-
-
-class TestValidateTempOutputPath:
-    def test_accepts_path_under_temp_root(self) -> None:
-        candidate = os.path.join(tempfile.gettempdir(), "rwa_probe_test", "result.json")
-        resolved = validate_temp_output_path(candidate)
-        assert isinstance(resolved, Path)
-        assert str(resolved) == os.path.realpath(candidate)
-
-    def test_rejects_path_outside_temp_root(self) -> None:
-        # The test file itself lives in the repo tree, never under system temp.
-        with pytest.raises(SystemExit):
-            validate_temp_output_path(str(Path(__file__).resolve()))
-
-    def test_rejects_traversal_out_of_temp_root(self) -> None:
-        # realpath normalises the `..`, then containment rejects the escape.
-        escape = os.path.join(tempfile.gettempdir(), "..", "rwa_escape.json")
-        with pytest.raises(SystemExit):
-            validate_temp_output_path(escape)

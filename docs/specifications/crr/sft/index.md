@@ -23,10 +23,14 @@ exposure ladder.
 
 !!! warning "Two unrelated meanings of \"SFT\" — do not conflate"
     The FCCM SFT path described on this page (`transaction_type == "sft"`,
-    CCR EAD under CRR Art. 220–223) is a **completely different concept**
-    from the `is_sft` Boolean carried on the loan / contingent / facility
-    schemas (which drives the F-IRB 0.4-year maturity floor under CRR
-    Art. 162). Same acronym, same `schemas.py`, **zero interaction**.
+    CCR EAD under CRR Art. 220–223) is a **different concept** from the
+    `is_sft` Boolean carried on the loan / contingent / facility schemas
+    (which selects the F-IRB **0.5-year** repo-style supervisory maturity
+    under CRR **Art. 162(1)** — a fixed value, not a floor; deleted under
+    Basel 3.1). Same acronym, same `schemas.py`. They no longer have *zero*
+    interaction, however: an FCCM SFT row that routes to IRB now carries a
+    dedicated `ccr_effective_maturity` carrier into the IRB maturity chain
+    (it is **never** delivered via `is_sft`, which stays a CRM-only input).
     See [The two meanings of "SFT"](#the-two-meanings-of-sft) below.
 
 ---
@@ -227,9 +231,34 @@ never interact, despite sharing the name and the `schemas.py` module.
 |---|---|---|
 | Carrier | `transaction_type == "sft"` on `SFT_TRADE_SCHEMA` | `is_sft` Boolean on `LOAN` / `CONTINGENT` / `FACILITY` schemas |
 | Concept | Securities financing transaction routed to **FCCM CCR EAD** | A lending exposure that **is** a securities financing transaction for the F-IRB maturity carve-out |
-| What it drives | The `sft_fccm` stage: `E* = max(0, E·(1+HE) − CVA·(1−HC−HFX))` | The F-IRB **0.4-year maturity (`M`) floor** in lieu of the 1-year floor |
-| Regulatory basis | CRR Art. 220–223, Art. 271(2) | CRR Art. 162(3) |
+| What it drives | The `sft_fccm` stage: `E* = max(0, E·(1+HE) − CVA·(1−HC−HFX))` | The F-IRB **0.5-year fixed supervisory maturity (`M`)** for repo-style transactions, in place of the 2.5-year default |
+| Regulatory basis | CRR Art. 220–223, Art. 271(2) | CRR Art. 162(1) (fixed `M = 0.5y`; **deleted** under Basel 3.1) |
 | Engine site | `engine/sft/fccm.py` | `engine/irb/transforms.py` |
+
+!!! note "FCCM SFT rows now carry their own maturity into the IRB chain — via a carrier, never `is_sft`"
+    When an FCCM SFT row (`risk_type == "CCR_SFT"`) routes to IRB (its
+    counterparty has an internal PD and the firm holds IRB permission for
+    the class), the FCCM producer computes the Art. 162 effective maturity
+    at netting-set grain and surfaces it on a dedicated
+    `ccr_effective_maturity` `Float64` carrier on `CCR_EXIT_EDGE`. The IRB
+    maturity chain (`engine/irb/transforms.py::_build_maturity_exprs`) reads
+    that carrier into the `M` column and, for an F-IRB `CCR_SFT` row,
+    applies the fixed **0.5-year** repo-style `M` (Art. 162(1)) via a
+    **widened gate** — `(is_sft OR risk_type == CCR_SFT)`. Crucially the
+    synthetic row's `is_sft` Boolean **stays null/False**: re-arming
+    `is_sft` would mis-fire its CRM consumers (Art. 226(2) liquidation-period
+    scaling, Art. 207(2) covered-bond eligibility, the FCSM Art. 222(4)
+    carve-out, multi-level beneficiary resolution) on a `drawn_amount` that
+    is **already** the post-haircut `E*`, risking a double haircut. So the
+    FCCM SFT `M` reaches IRB through the carrier and the gate — never through
+    `is_sft`.
+
+    **AIRB-routing limitation (follow-up).** A `CCR_SFT` row reaches **F-IRB**
+    end-to-end with the correct Art. 162 `M`. Reaching **A-IRB** additionally
+    requires an own-modelled LGD on the synthetic row, which the FCCM
+    producer does not yet emit; AIRB routing for CCR rows is tracked as a
+    separate follow-up. The `ccr_effective_maturity` carrier and the new IRB
+    rung are AIRB-ready, so closing that gap is purely additive.
 
 Promoting FCCM to `engine/sft/` already reduces the day-to-day grep
 ambiguity: CCR-SFT hits land in `engine/sft/`; lending-SFT hits land in

@@ -298,9 +298,28 @@ to calculate effective maturity — the CRR F-IRB fixed-maturity option is delet
 
 #### Art. 162(3) — One-Day Maturity Floor
 
-Retained from CRR with a wider trigger condition (re-margining **or** revaluation, vs CRR's
-**and**). Applies to daily-margined repos/derivatives/margin lending and qualifying short-term
-exposures (FX settlement, trade finance ≤ 1yr, securities settlement, electronic payments).
+Retained from CRR **unchanged**: the one-day floor still requires the *conjunctive* trigger
+**daily re-margining AND daily revaluation** (plus documentation for prompt liquidation /
+set-off). It is **not** correct that Art. 162(3) widened to "or" under Basel 3.1 — only the
+**5-day / 10-day** intermediate floors in Art. 162(2A)(c)/(d) switched CRR's "and" to Basel 3.1's
+**"or"** (daily re-margining **or** revaluation + prompt liquidation). Art. 162(3) applies to
+daily-margined repos / derivatives / margin lending under a master netting agreement and to
+qualifying short-term exposures (FX settlement, self-liquidating trade finance ≤ 1yr, securities
+settlement, electronic payments).
+
+!!! warning "Do not propagate the stale 'Art. 162(3) widened to or' claim"
+    An earlier draft of this page stated Art. 162(3) adopted the wider "re-margining **or**
+    revaluation" trigger under Basel 3.1. Source-verified against `docs/assets/crr.pdf`
+    (pp. 157–159) and `docs/assets/ps126app1.pdf` (pp. 111–113): Art. 162(3) keeps the **AND**
+    in both regimes. The **OR** is exclusive to the new Art. 162(2A)(c) (10-day collateralised
+    derivative / margin lending) and Art. 162(2A)(d) (5-day repo / securities lending) floors.
+
+!!! note "Art. 162(2A)(da) — mixed-MNA 10-day floor (new, no CRR equivalent)"
+    Basel 3.1 adds Art. 162(2A)(da): where a single master netting agreement covers **both**
+    (c)-type (collateralised derivatives / margin lending) **and** (d)-type (repos / securities
+    lending) transactions, the whole netting set takes the higher **10-day** floor (not the 5-day
+    repo floor). This is the (da) row in the Art. 162(2A) table above and has no CRR
+    counterpart.
 
 See [CRR F-IRB specification](../crr/firb-calculation.md#art-1623--one-day-maturity-floor-exceptions)
 for the full qualifying short-term exposure list.

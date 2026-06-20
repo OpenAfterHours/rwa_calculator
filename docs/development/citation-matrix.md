@@ -759,14 +759,14 @@ Last generated: 2026-06-20.
 
 ### CRR Art. 224 — Supervisory volatility adjustment under the Financial Collateral Comprehensive Method
 
-??? quote "`get_haircut_table` — src/rwa_calc/engine/crm/haircut_tables.py:312"
+??? quote "`get_haircut_table` — src/rwa_calc/engine/crm/haircut_tables.py:313"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/haircut_tables.py:312:323"
+    --8<-- "src/rwa_calc/engine/crm/haircut_tables.py:313:324"
     ```
 
-??? quote "`get_maturity_band` — src/rwa_calc/engine/crm/haircut_tables.py:326"
+??? quote "`get_maturity_band` — src/rwa_calc/engine/crm/haircut_tables.py:327"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/haircut_tables.py:326:358"
+    --8<-- "src/rwa_calc/engine/crm/haircut_tables.py:327:359"
     ```
 
 ??? quote "`apply_haircuts` — src/rwa_calc/engine/crm/haircuts.py:121"
@@ -782,9 +782,9 @@ Last generated: 2026-06-20.
 
 ### CRR Art. 226 — Scaling up of volatility adjustment under the Financial Collateral Comprehensive Method
 
-??? quote "`scale_haircut_for_non_daily_revaluation` — src/rwa_calc/engine/crm/haircut_tables.py:122"
+??? quote "`scale_haircut_for_non_daily_revaluation` — src/rwa_calc/engine/crm/haircut_tables.py:123"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/haircut_tables.py:122:157"
+    --8<-- "src/rwa_calc/engine/crm/haircut_tables.py:123:158"
     ```
 
 ??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:111"

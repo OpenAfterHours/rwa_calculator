@@ -560,18 +560,49 @@ class CCRConfig:
     - CRR Art. 285(1)(b)(ii) — initial margin recognition
     - CRR Art. 273a — small/non-complex derivatives portfolio carve-out
 
-    ``sft_method`` selects the EAD method for SFT trades per CRR Art. 271(2).
-    Only the Financial Collateral Comprehensive Method ("fccm", Art. 220-223)
-    is implemented today; the ``"var"`` (Art. 221) and ``"imm"`` (Art. 283)
-    method literals are reserved for future expansion.
+    ``sft_method`` is **deprecated** (SFT/FCCM separation, Phase 3): the SFT EAD
+    method now lives on the peer :class:`SFTConfig` (``CalculationConfig.sft``).
+    The engine reads ``SFTConfig.method``; this field is retained for one release
+    so existing ``CCRConfig(sft_method=...)`` construction sites keep working, but
+    it is no longer consulted by the pipeline. ``CCRConfig`` is frozen and holds
+    no reference to ``SFTConfig``, so this cannot be a read-through property —
+    migrate callers to ``CalculationConfig.sft`` / ``SFTConfig.method``.
     """
 
     method: Literal["sa_ccr"] = "sa_ccr"
-    sft_method: Literal["fccm", "var", "imm"] = "fccm"
+    sft_method: Literal["fccm", "var", "imm"] = "fccm"  # deprecated — see SFTConfig
     alpha: Decimal = Decimal("1.4")
     enable_ccp_exposures: bool = True
     mpor_floor_days: int = 10
     recognise_im: bool = True
+
+
+@cites("CRR Art. 220")
+@cites("CRR Art. 221")
+@cites("CRR Art. 222")
+@cites("CRR Art. 223")
+@cites("CRR Art. 271(2)")
+@dataclass(frozen=True)
+class SFTConfig:
+    """
+    Securities Financing Transaction (SFT) configuration.
+
+    Peer to :class:`CCRConfig` (SFT/FCCM separation — promotes the FCCM SFT EAD
+    treatment to its own subsystem). ``method`` selects the SFT EAD method per
+    CRR Art. 271(2):
+
+    - ``"fccm"`` (default) — Financial Collateral Comprehensive Method
+      (Art. 220-223). The only method implemented today.
+    - ``"var"`` (Art. 221) and ``"imm"`` (Art. 283) — reserved literals,
+      unimplemented. The engine fails loud (``NotImplementedError``) rather than
+      silently dropping SFT rows when either is selected.
+
+    References:
+    - CRR Art. 220-223 — Financial Collateral Comprehensive Method.
+    - CRR Art. 271(2) — SFT EAD routing (FCCM, not SA-CCR Art. 274).
+    """
+
+    method: Literal["fccm", "var", "imm"] = "fccm"
 
 
 @dataclass(frozen=True)
@@ -607,6 +638,7 @@ class CalculationConfig:
         default_factory=PostModelAdjustmentConfig.crr
     )
     ccr: CCRConfig = field(default_factory=CCRConfig)
+    sft: SFTConfig = field(default_factory=SFTConfig)
     permission_mode: PermissionMode = PermissionMode.STANDARDISED
     # Optional explicit IRBPermissions override. When None (default) the value
     # is derived in __post_init__ from permission_mode and regime_id. Passing a
@@ -756,6 +788,7 @@ class CalculationConfig:
         enable_ccp_exposures: bool = True,
         mpor_floor_days: int = 10,
         recognise_im: bool = True,
+        sft_method: Literal["fccm", "var", "imm"] = "fccm",
     ) -> CalculationConfig:
         """
         Create CRR (Basel 3.0) configuration.
@@ -777,6 +810,9 @@ class CalculationConfig:
             enable_double_default: Enable double default treatment for eligible guarantees
             collect_engine: Polars engine for .collect() - 'cpu' (default) for
                 in-memory processing, 'streaming' for batched lower-memory execution.
+            sft_method: SFT EAD method (CRR Art. 271(2)). "fccm" (default,
+                Art. 220-223) is implemented; "var"/"imm" are reserved and fail
+                loud in the engine. Sets ``SFTConfig.method`` on the returned config.
 
         Returns:
             Configured CalculationConfig for CRR
@@ -794,6 +830,7 @@ class CalculationConfig:
                 mpor_floor_days=mpor_floor_days,
                 recognise_im=recognise_im,
             ),
+            sft=SFTConfig(method=sft_method),
             permission_mode=permission_mode,
             eur_gbp_rate=eur_gbp_rate,
             enable_double_default=enable_double_default,
@@ -836,6 +873,7 @@ class CalculationConfig:
         enable_ccp_exposures: bool = True,
         mpor_floor_days: int = 10,
         recognise_im: bool = True,
+        sft_method: Literal["fccm", "var", "imm"] = "fccm",
     ) -> CalculationConfig:
         """
         Create Basel 3.1 (PRA PS1/26) configuration.
@@ -877,6 +915,9 @@ class CalculationConfig:
                 isolate the other Art. 123A limbs in tests).
             collect_engine: Polars engine for .collect() - 'cpu' (default) for
                 in-memory processing, 'streaming' for batched lower-memory execution.
+            sft_method: SFT EAD method (CRR Art. 271(2)). "fccm" (default,
+                Art. 220-223) is implemented; "var"/"imm" are reserved and fail
+                loud in the engine. Sets ``SFTConfig.method`` on the returned config.
 
         Returns:
             Configured CalculationConfig for Basel 3.1
@@ -903,6 +944,7 @@ class CalculationConfig:
                 mpor_floor_days=mpor_floor_days,
                 recognise_im=recognise_im,
             ),
+            sft=SFTConfig(method=sft_method),
             permission_mode=permission_mode,
             equity_transitional=EquityTransitionalConfig.basel_3_1(),
             eur_gbp_rate=Decimal("0.8732"),  # Used only to derive sme_balance_sheet_threshold

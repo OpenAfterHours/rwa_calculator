@@ -93,6 +93,7 @@ def ccr_rows_to_exposures(
     fx_rates: pl.LazyFrame | None = None,
     counterparties: pl.LazyFrame | None = None,
     is_basel_3_1: bool = False,
+    sft_method: str = "fccm",
 ) -> pl.LazyFrame:
     """Shape SA-CCR netting-set EADs into synthetic exposure rows.
 
@@ -158,6 +159,16 @@ def ccr_rows_to_exposures(
             transitional alpha add-on. The add-on is Basel 3.1 only — under CRR
             (the default ``False``) it never fires regardless of the reporting
             date or the ``is_legacy_cva_exempt`` trade flag.
+        sft_method: SFT EAD method (CRR Art. 271(2)), sourced from
+            ``SFTConfig.method`` (SFT/FCCM separation, Phase 3). ``"fccm"``
+            (default, Art. 220-223) routes SFT trades through the FCCM branch;
+            the reserved ``"var"`` (Art. 221) and ``"imm"`` (Art. 283) methods
+            are unimplemented and raise ``NotImplementedError`` rather than
+            silently dropping SFT rows.
+
+    Raises:
+        NotImplementedError: when ``sft_method`` is a reserved-but-unimplemented
+            method (``"var"`` / ``"imm"``) and the bundle carries SFT trades.
 
     Returns:
         LazyFrame at netting-set grain with one synthetic exposure row per
@@ -174,7 +185,7 @@ def ccr_rows_to_exposures(
     # and their synthetic exposure rows are stitched back together via a
     # ``diagonal_relaxed`` concat so the SA-CCR component columns
     # (rc_unmargined, pfe_addon, ...) are filled with nulls on SFT rows.
-    derivative_bundle, sft_bundle = _split_ccr_bundle_by_transaction_type(raw_ccr)
+    derivative_bundle, sft_bundle, has_sft_rows = _split_ccr_bundle_by_transaction_type(raw_ccr)
     derivative_rows = _derivative_rows_to_exposures(
         derivative_bundle,
         config_ccr,
@@ -184,15 +195,28 @@ def ccr_rows_to_exposures(
         counterparties=counterparties,
         is_basel_3_1=is_basel_3_1,
     )
-    if config_ccr.sft_method == "fccm":
+    if sft_method == "fccm":
         sft_rows = sft_rows_to_exposures(sft_bundle, reporting_date)
         return pl.concat([derivative_rows, sft_rows], how="diagonal_relaxed")
+    # Reserved-but-unimplemented SFT methods (Art. 221 "var" / Art. 283 "imm").
+    # Fail loud rather than silently returning derivative-only rows (which would
+    # drop every SFT exposure and under-report EAD). Only raise when the bundle
+    # actually carries SFT trades — a pure derivative book is method-agnostic.
+    # ``has_sft_rows`` is derived from the split's existing collect (no new
+    # eager materialisation).
+    if has_sft_rows:
+        msg = (
+            f"SFT EAD method {sft_method!r} is reserved but not implemented "
+            "(CRR Art. 221 'var' / Art. 283 'imm'). Only 'fccm' (Art. 220-223) "
+            "is supported. Set SFTConfig.method='fccm' or remove SFT trades."
+        )
+        raise NotImplementedError(msg)
     return derivative_rows
 
 
 def _split_ccr_bundle_by_transaction_type(
     raw_ccr: RawCCRBundle,
-) -> tuple[RawCCRBundle, RawCCRBundle]:
+) -> tuple[RawCCRBundle, RawCCRBundle, bool]:
     """Partition a CCR bundle into derivative-only and SFT-only sub-bundles.
 
     The split is keyed on ``trades.transaction_type``. Each side carries the
@@ -203,6 +227,12 @@ def _split_ccr_bundle_by_transaction_type(
     Margin agreements ride along on both sides — they are CSA-level (Art.
     272(7)) and may cover trades on either side; downstream consumers join
     on ``margin_agreement_id`` so the duplication is harmless.
+
+    Returns:
+        ``(derivative_bundle, sft_bundle, has_sft_rows)`` where ``has_sft_rows``
+        is derived from the already-materialised SFT netting-set-id list (no new
+        eager collect) and lets the caller fail loud on reserved SFT methods only
+        when the book actually carries SFT trades.
 
     References:
         CRR Art. 271(2) — SFT EAD via FCCM, not SA-CCR Art. 274.
@@ -251,7 +281,10 @@ def _split_ccr_bundle_by_transaction_type(
         failed_trades=raw_ccr.failed_trades,
         errors=list(raw_ccr.errors),
     )
-    return derivative_bundle, sft_bundle
+    # ``bool(sft_ns_ids)`` reuses the SFT-side collect above: a non-empty list
+    # means at least one ``transaction_type == "sft"`` trade is present (the
+    # unique() of an SFT trade's netting_set_id is non-empty even if null).
+    return derivative_bundle, sft_bundle, bool(sft_ns_ids)
 
 
 def _derivative_rows_to_exposures(

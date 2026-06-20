@@ -96,6 +96,10 @@ def run(
         # fires under CRR. The add-on branch keeps its ``is_basel_3_1`` bool
         # plumbing param; only this regime read moves to the pack (S9a).
         is_basel_3_1=rulepack.pack.feature("ccr_transitional_alpha_addon_applicable"),
+        # CRR Art. 271(2): SFT EAD method now lives on the peer SFTConfig
+        # (SFT/FCCM separation, Phase 3). "fccm" routes SFT trades through
+        # FCCM (Art. 220-223); reserved "var"/"imm" fail loud in the adapter.
+        sft_method=run_config.sft.method,
     )
     # Inherit the resolved counterparty rating columns onto each CCR
     # synthetic row so the downstream SA Institution lookup (CRR

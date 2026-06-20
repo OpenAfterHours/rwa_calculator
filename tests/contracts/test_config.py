@@ -4,6 +4,7 @@ Tests the CalculationConfig and related configuration classes,
 including factory methods for CRR and Basel 3.1 frameworks.
 """
 
+import dataclasses
 from datetime import date
 from decimal import Decimal
 
@@ -13,6 +14,7 @@ from rwa_calc.contracts.config import (
     CalculationConfig,
     IRBPermissions,
     OutputFloorConfig,
+    SFTConfig,
 )
 from rwa_calc.domain.enums import (
     ApproachType,
@@ -196,3 +198,74 @@ class TestCalculationConfig:
 
         assert new_config.permission_mode == PermissionMode.IRB
         assert new_config.irb_permissions == config.irb_permissions
+
+
+class TestSFTConfig:
+    """SFTConfig peer dataclass (Phase 3 of the SFT/FCCM separation).
+
+    SFTConfig.method selects the SFT EAD method per CRR Art. 220-223 / 271(2).
+    Only "fccm" is implemented; "var" (Art. 221) and "imm" (Art. 283) are
+    reserved literals that must fail loud in the engine.
+    """
+
+    def test_sftconfig_default_method_is_fccm(self):
+        """SFTConfig().method defaults to 'fccm' (the only implemented method)."""
+        config = SFTConfig()
+
+        assert config.method == "fccm"
+
+    def test_sftconfig_is_frozen(self):
+        """SFTConfig is an immutable frozen dataclass."""
+        config = SFTConfig()
+
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            config.method = "var"  # type: ignore[misc]
+
+    def test_sftconfig_accepts_reserved_var_method(self):
+        """SFTConfig(method='var') constructs (reserved, unimplemented literal)."""
+        config = SFTConfig(method="var")
+
+        assert config.method == "var"
+
+    def test_sftconfig_accepts_reserved_imm_method(self):
+        """SFTConfig(method='imm') constructs (reserved, unimplemented literal)."""
+        config = SFTConfig(method="imm")
+
+        assert config.method == "imm"
+
+    def test_calculationconfig_has_sft_peer(self):
+        """CalculationConfig carries an sft: SFTConfig field peer to ccr."""
+        config = CalculationConfig.crr(reporting_date=date(2025, 12, 31))
+
+        assert isinstance(config.sft, SFTConfig)
+        assert config.sft.method == "fccm"
+
+    def test_crr_factory_exposes_sft_method(self):
+        """CalculationConfig.crr(sft_method=...) reaches SFTConfig.method."""
+        config = CalculationConfig.crr(
+            reporting_date=date(2025, 12, 31),
+            sft_method="var",
+        )
+
+        assert config.sft.method == "var"
+
+    def test_basel_3_1_factory_exposes_sft_method(self):
+        """CalculationConfig.basel_3_1(sft_method=...) reaches SFTConfig.method."""
+        config = CalculationConfig.basel_3_1(
+            reporting_date=date(2027, 1, 1),
+            sft_method="imm",
+        )
+
+        assert config.sft.method == "imm"
+
+    def test_crr_factory_default_sft_method_is_fccm(self):
+        """CalculationConfig.crr() defaults sft.method to 'fccm'."""
+        config = CalculationConfig.crr(reporting_date=date(2025, 12, 31))
+
+        assert config.sft.method == "fccm"
+
+    def test_basel_3_1_factory_default_sft_method_is_fccm(self):
+        """CalculationConfig.basel_3_1() defaults sft.method to 'fccm'."""
+        config = CalculationConfig.basel_3_1(reporting_date=date(2027, 1, 1))
+
+        assert config.sft.method == "fccm"

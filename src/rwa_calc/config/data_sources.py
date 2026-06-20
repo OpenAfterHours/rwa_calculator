@@ -193,6 +193,28 @@ DATA_SOURCES = [
         requirement=RequirementLevel.OPTIONAL,
         description="Netting-set-keyed collateral inputs for SA-CCR (CRR Art. 275(1)).",
     ),
+    # Securities Financing Transactions (SFT / FCCM) — SFT/FCCM separation
+    # Phase 4. The FCCM EAD method (CRR Art. 220-223, 271(2)) for repos /
+    # securities lending, peer to the SA-CCR derivative book. Composed into
+    # ``RawSFTBundle`` and attached to ``RawDataBundle.sft``. The trade file
+    # is the single primary dataload; collateral is a separate OPTIONAL file
+    # appearing only when securities are posted (an uncollateralised SFT is
+    # literally one file). Both live under the existing ``ccr/`` directory.
+    DataSourceFile(
+        id="sft_trades",
+        relative_path=Path("ccr/sft_trades"),
+        requirement=RequirementLevel.OPTIONAL,
+        description="Trade-level SFT inputs for the FCCM EAD method (CRR Art. 220-223, 271(2)).",
+    ),
+    DataSourceFile(
+        id="sft_collateral",
+        relative_path=Path("ccr/sft_collateral"),
+        requirement=RequirementLevel.OPTIONAL,
+        description=(
+            "Optional netting-set-keyed collateral received against an SFT, "
+            "feeding the FCCM E* collateral term (CRR Art. 223(5))."
+        ),
+    ),
 ]
 
 

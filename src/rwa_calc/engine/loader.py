@@ -38,9 +38,18 @@ from rwa_calc.contracts.bundles import (
     NettingSetBundle,
     RawCCRBundle,
     RawDataBundle,
+    RawSFTBundle,
+    SftCollateralBundle,
+    SftTradeBundle,
     TradeBundle,
 )
-from rwa_calc.contracts.edges import RAW_TABLE_EDGES, brand, seal_lenient
+from rwa_calc.contracts.edges import (
+    RAW_TABLE_EDGES,
+    SFT_TABLE_EDGES,
+    EdgeContract,
+    brand,
+    seal_lenient,
+)
 from rwa_calc.contracts.errors import (
     CalculationError,
     missing_required_column_error,
@@ -248,6 +257,13 @@ class DataSourceConfig:
     ccr_netting_sets_file: Path | None = None
     ccr_margin_agreements_file: Path | None = None
     ccr_collateral_file: Path | None = None
+    # SFT (FCCM) inputs (SFT/FCCM separation Phase 4) — composed into
+    # ``RawSFTBundle`` and attached to ``RawDataBundle.sft``. ``sft_trades``
+    # is the single primary dataload; ``sft_collateral`` is optional and
+    # appears only when securities are posted. Firms without an SFT book
+    # leave ``sft_trades_file`` at None and the SFT bundle stays None.
+    sft_trades_file: Path | None = None
+    sft_collateral_file: Path | None = None
 
     @classmethod
     def from_registry(
@@ -292,6 +308,8 @@ class DataSourceConfig:
             ccr_netting_sets_file=get_p("ccr_netting_sets"),
             ccr_margin_agreements_file=get_p("ccr_margin_agreements"),
             ccr_collateral_file=get_p("ccr_collateral"),
+            sft_trades_file=get_p("sft_trades"),
+            sft_collateral_file=get_p("sft_collateral"),
         )
 
 
@@ -575,6 +593,124 @@ def _build_raw_ccr_bundle(
     )
 
 
+def _seal_sft_table(
+    lf: pl.LazyFrame,
+    edge: EdgeContract,
+    field_name: str,
+    enforce_schemas: bool,
+    errors: list[CalculationError],
+) -> pl.LazyFrame:
+    """Seal one SFT input table against its dedicated edge contract.
+
+    Mirrors ``_seal_table`` but resolves the edge from ``SFT_TABLE_EDGES``
+    (passed explicitly) rather than ``RAW_TABLE_EDGES``. The structural
+    fix at the heart of the SFT/FCCM separation: SFT inputs get the same
+    brand + undeclared-column-strip + lenient missing-column accounting as
+    the 18 traditional tables — NOT the ``enforce_schema`` bypass the CCR
+    leaf frames use.
+    """
+    if not enforce_schemas:
+        return brand(lf, edge.name)
+    sealed, missing = seal_lenient(lf, edge)
+    errors.extend(
+        missing_required_column_error(table=field_name, column=column) for column in missing
+    )
+    return sealed
+
+
+def _load_sft_file_optional(
+    base_path: Path,
+    scan_fn: ScanFn,
+    enforce_schemas: bool,
+    errors: list[CalculationError],
+    field_name: str,
+    relative_path: str | Path | None,
+) -> pl.LazyFrame | None:
+    """Load an optional SFT file via the standard seal path — None if absent.
+
+    Same None-on-missing/empty semantics as the generic
+    ``_load_file_optional`` (a missing FILE is the legitimate "optional not
+    configured" case logged at DEBUG; any other failure appends one DQ007
+    and is treated as absent), but seals against ``SFT_TABLE_EDGES`` instead
+    of ``RAW_TABLE_EDGES``. Used for both SFT leaf frames; the caller maps a
+    None ``sft_collateral`` to ``RawSFTBundle.collateral = None``.
+    """
+    if relative_path is None:
+        return None
+    try:
+        lf = normalize_columns(scan_fn(base_path / relative_path))
+        # Force schema resolution so corrupt parquet / scan failures surface
+        # here rather than being swallowed by ``has_rows``' broad except.
+        lf.collect_schema()
+        if not has_rows(lf):
+            return None
+        return _seal_sft_table(lf, SFT_TABLE_EDGES[field_name], field_name, enforce_schemas, errors)
+    except FileNotFoundError:
+        logger.debug("optional SFT input %s not present; treating as absent", relative_path)
+        return None
+    except Exception as exc:
+        logger.warning(
+            "optional SFT input %s could not be loaded (%s: %s); treating as absent",
+            relative_path,
+            type(exc).__name__,
+            exc,
+        )
+        errors.append(
+            optional_file_load_error(relative_path=relative_path, field_name=field_name, exc=exc)
+        )
+        return None
+
+
+def _build_raw_sft_bundle(
+    base_path: Path,
+    scan_fn: ScanFn,
+    enforce_schemas: bool,
+    config: DataSourceConfig,
+    load_errors: list[CalculationError],
+) -> RawSFTBundle | None:
+    """Compose ``RawSFTBundle`` from the SFT file paths on *config*.
+
+    Returns ``None`` when no SFT trade file is configured — the legitimate
+    "no SFT scope" case (mirrors ``_build_raw_ccr_bundle`` returning None
+    for "no CCR scope"). Otherwise:
+
+    - ``trades``: sealed via the STANDARD seal path
+      (``SFT_TABLE_EDGES`` / ``seal_lenient``), NOT ``enforce_schema``. A
+      configured-but-zero-row / absent trade file yields an empty sealed
+      frame so the mandatory ``trades`` leaf is always constructable.
+    - ``collateral``: OPTIONAL. ``None`` when the collateral file is absent,
+      empty, or unconfigured — the common uncollateralised SFT (CCR-A11).
+      A populated collateral file yields a ``SftCollateralBundle`` (CCR-A12).
+    """
+    if config.sft_trades_file is None:
+        return None
+
+    trades_lf = _load_sft_file_optional(
+        base_path, scan_fn, enforce_schemas, load_errors, "sft_trades", config.sft_trades_file
+    )
+    if trades_lf is None:
+        # Configured but absent / zero-row: keep the mandatory trades leaf
+        # constructable with an empty sealed frame (CCR-style tolerance).
+        trades_lf = SFT_TABLE_EDGES["sft_trades"].empty_frame()
+
+    collateral_lf = _load_sft_file_optional(
+        base_path,
+        scan_fn,
+        enforce_schemas,
+        load_errors,
+        "sft_collateral",
+        config.sft_collateral_file,
+    )
+    collateral_bundle = (
+        SftCollateralBundle(sft_collateral=collateral_lf) if collateral_lf is not None else None
+    )
+
+    return RawSFTBundle(
+        trades=SftTradeBundle(sft_trades=trades_lf),
+        collateral=collateral_bundle,
+    )
+
+
 def _run_bundle_validation(bundle: RawDataBundle) -> list[CalculationError]:
     """Validate categorical column values in a loaded bundle.
 
@@ -625,6 +761,7 @@ def _build_bundle(
         return load_optional(load_errors, field_name, relative_path)
 
     ccr_bundle = _build_raw_ccr_bundle(base_path, scan_fn, enforce_schemas, config, load_errors)
+    sft_bundle = _build_raw_sft_bundle(base_path, scan_fn, enforce_schemas, config, load_errors)
 
     bundle = RawDataBundle(
         facilities=_req("facilities", config.facilities_file),
@@ -648,6 +785,7 @@ def _build_bundle(
             "securitisation_allocations", config.securitisation_allocations_file
         ),
         ccr=ccr_bundle,
+        sft=sft_bundle,
     )
     validation_errors = _run_bundle_validation(bundle)
     combined = load_errors + validation_errors

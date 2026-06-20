@@ -53,6 +53,12 @@ SEALED_FRAME_FIELDS: Mapping[str, str | tuple[str, ...]] = {
     "CounterpartyLookup.parent_mappings": "cp_lookup_parents",
     "CounterpartyLookup.ultimate_parent_mappings": "cp_lookup_ultimate_parents",
     "CounterpartyLookup.rating_inheritance": "cp_lookup_rating_inheritance",
+    # SFT (FCCM) raw leaf frames — sealed via the standard seal path
+    # (SFT_TABLE_EDGES / seal_lenient) exactly like the 18 traditional
+    # tables, NOT enforce_schema. The brands match the raw_<field> edge
+    # names; the leaf bundles validate them in __post_init__.
+    "SftTradeBundle.sft_trades": "raw_sft_trades",
+    "SftCollateralBundle.sft_collateral": "raw_sft_collateral",
     # Untransformed pass-throughs: the resolver forwards the loader-sealed
     # objects unchanged, so the raw_* brands are still attached. (The
     # FX-converted side frames — collateral/guarantees/provisions/
@@ -154,6 +160,11 @@ class RawDataBundle:
             netting set / margin agreement / CCR collateral). None
             when the firm has no CCR scope; the CCR stage no-ops in
             that case. See CRR Art. 271-272.
+        sft: Optional Securities Financing Transaction inputs (FCCM
+            trade frame + optional netting-set-keyed collateral). None
+            when the firm has no SFT scope; the SFT stage no-ops in
+            that case (SFT/FCCM separation Phase 4 — additive, nothing
+            consumes it until Phase 5). See CRR Art. 220-223, 271(2).
         cva_counterparties: Optional BA-CVA counterparty inputs
             (``CVA_COUNTERPARTY_SCHEMA``). One row per counterparty in
             scope of the Basic Approach to CVA risk, carrying the
@@ -197,6 +208,10 @@ class RawDataBundle:
     model_permissions: pl.LazyFrame | None = None
     securitisation_allocations: pl.LazyFrame | None = None
     ccr: RawCCRBundle | None = None
+    # SFT (FCCM) inputs (SFT/FCCM separation Phase 4). Composite optional
+    # field like ``ccr`` — None when the firm has no SFT scope. Additive
+    # and backward-compatible: every existing construction is unaffected.
+    sft: RawSFTBundle | None = None
     # BA-CVA counterparty inputs (P8.60). Not a loader-sealed frame — the
     # firm supplies it alongside the CCR book; the CVA stage reads it after
     # aggregation. None when the firm has no CVA scope.
@@ -575,6 +590,109 @@ class RawCCRBundle:
     ccr_collateral: CCRCollateralBundle
     failed_trades: FailedTradesBundle | None = None
     default_fund_contributions: pl.LazyFrame | None = None
+    errors: list[CalculationError] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class SftTradeBundle:
+    """
+    Trade-level input for the SFT FCCM EAD method.
+
+    Holds the per-SFT-trade LazyFrame consumed by the SFT stage
+    (SFT/FCCM separation Phase 5). One row per securities financing
+    transaction (repo / reverse repo / securities lending). The
+    netting-set counterparty is denormalised onto the trade row —
+    FCCM's current scope is single-trade, single-counterparty netting
+    sets (CRR Art. 220(1)(a)), so no separate SFT netting-set table is
+    needed.
+
+    Row schema enforced by ``SFT_TRADE_SCHEMA`` in
+    ``rwa_calc.data.schemas`` (added in SFT/FCCM separation Phase 2).
+    The frame is sealed via the standard loader seal path
+    (``SFT_TABLE_EDGES`` / ``seal_lenient``) and branded
+    ``raw_sft_trades``, validated by ``__post_init__``.
+
+    References:
+    - CRR Art. 220(1)(a) (single-counterparty SFT scope)
+    - CRR Art. 223(5) (E* = max(0, E·(1+HE) − CVA·(1−HC−HFX)))
+    - CRR Art. 271(2) (SFT EAD via FCCM, not SA-CCR Art. 274)
+    """
+
+    sft_trades: pl.LazyFrame
+    errors: list[CalculationError] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        _validate_sealed_frames(self)
+
+
+@dataclass(frozen=True)
+class SftCollateralBundle:
+    """
+    Netting-set-keyed collateral input for the SFT FCCM EAD method.
+
+    Holds collateral received against an SFT, keyed by
+    ``netting_set_id`` — a genuinely different grain (0..n securities
+    per netting set) from the trade frame, so it stays a separate leaf
+    bundle. Feeds the ``CVA·(1−HC−HFX)`` collateral term of the FCCM
+    E* formula (CRR Art. 223(5)).
+
+    Row schema enforced by ``SFT_COLLATERAL_SCHEMA`` in
+    ``rwa_calc.data.schemas`` (a lean subset of ``CCR_COLLATERAL_SCHEMA``).
+    The frame is sealed via the standard loader seal path
+    (``SFT_TABLE_EDGES`` / ``seal_lenient``) and branded
+    ``raw_sft_collateral``, validated by ``__post_init__``.
+
+    References:
+    - CRR Art. 223(5) (collateral CVA term in E*)
+    - CRR Art. 224 (supervisory haircuts HC / HFX)
+    """
+
+    sft_collateral: pl.LazyFrame
+    errors: list[CalculationError] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        _validate_sealed_frames(self)
+
+
+@dataclass(frozen=True)
+class RawSFTBundle:
+    """
+    Aggregate SFT (FCCM) input bundle — composes the SFT leaf bundles.
+
+    Structurally analogous to ``RawCCRBundle``: a frozen composite of the
+    per-domain SFT input frames plus a bundle-level ``errors`` list. Held
+    as an optional field on ``RawDataBundle.sft`` so firms without an SFT
+    book continue to construct valid pipelines — the SFT stage no-ops when
+    ``raw.sft is None`` (SFT/FCCM separation Phase 5).
+
+    Composition mirrors the FCCM input model (CRR Art. 220-223):
+    - ``trades``: per-SFT-trade rows with the denormalised netting-set
+      counterparty (CRR Art. 220(1)(a), 223(5))
+    - ``collateral``: OPTIONAL netting-set-keyed collateral. An
+      uncollateralised SFT (the common case, e.g. CCR-A11) carries no
+      collateral, so this is ``None`` — unlike ``RawCCRBundle`` whose four
+      leaf bundles are all mandatory frames. Collateral appears only when
+      securities are posted (CCR-A12).
+
+    Optionality lives one level up at ``RawDataBundle.sft`` (the whole SFT
+    book is absent) AND on ``collateral`` here (the book exists but is
+    uncollateralised).
+
+    Attributes:
+        trades: Trade-level FCCM inputs (mandatory once an SFT book exists)
+        collateral: Optional netting-set-keyed collateral inputs; ``None``
+            for an uncollateralised SFT
+        errors: Bundle-level wiring errors (e.g. missing leaf file).
+            Row-level data-quality errors live on the leaf bundles.
+
+    References:
+    - CRR Art. 220(1)(a) (single-counterparty SFT / master-netting-set scope)
+    - CRR Art. 223(5) (FCCM E* formula)
+    - CRR Art. 271(2) (SFT EAD via FCCM)
+    """
+
+    trades: SftTradeBundle
+    collateral: SftCollateralBundle | None = None
     errors: list[CalculationError] = field(default_factory=list)
 
 

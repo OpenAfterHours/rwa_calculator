@@ -406,6 +406,36 @@ def _raw_table_edges() -> dict[str, EdgeContract]:
 RAW_TABLE_EDGES: dict[str, EdgeContract] = _raw_table_edges()
 
 
+def _sft_table_edges() -> dict[str, EdgeContract]:
+    """Per-table loader edge contracts for the SFT (FCCM) raw input frames.
+
+    SFT/FCCM separation Phase 4: the SFT trade / collateral frames load
+    through the SAME standard seal path (``seal_lenient`` + edge contract)
+    as the 18 traditional tables — ending CCR's status as the lone
+    seal-bypassing input family. They live in a dedicated registry rather
+    than ``RAW_TABLE_EDGES`` because the latter is contract-pinned to the
+    ``RawDataBundle`` LazyFrame fields (``test_edge_contracts.py::
+    test_covers_every_raw_data_bundle_frame_field``); the SFT frames hang
+    off the composite ``RawSFTBundle`` leaf bundles, not off
+    ``RawDataBundle`` directly. Keys are the leaf-bundle frame field names;
+    edge names carry the ``raw_`` prefix to match the brands registered in
+    ``contracts.bundles.SEALED_FRAME_FIELDS``.
+    """
+    from rwa_calc.data import schemas
+
+    table_schemas = {
+        "sft_trades": schemas.SFT_TRADE_SCHEMA,
+        "sft_collateral": schemas.SFT_COLLATERAL_SCHEMA,
+    }
+    return {
+        field_name: EdgeContract(name=f"raw_{field_name}", columns=edge_columns_from_specs(schema))
+        for field_name, schema in table_schemas.items()
+    }
+
+
+SFT_TABLE_EDGES: dict[str, EdgeContract] = _sft_table_edges()
+
+
 # ---------------------------------------------------------------------------
 # Edge definitions — hierarchy exit
 # ---------------------------------------------------------------------------

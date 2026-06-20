@@ -12,9 +12,10 @@ Key responsibilities:
 - Compute the FCCM E* formula at netting-set grain:
       E* = max(0, E·(1+HE) − CVA·(1−HC−HFX))    (Art. 223(5))
   using the standardised supervisory haircuts in
-  ``rwa_calc.engine.crm.haircut_tables`` (pack-bound). Haircut scalars and the
-  5-business-day liquidation period for SFTs (Art. 224(2)(c)) are sourced from
-  the rulepack via that module — no regulatory scalars are declared here per the
+  ``rwa_calc.engine.crm.haircut_tables`` (pack-bound). Haircut scalars, the
+  5-business-day repo liquidation period (Art. 224(2)(b)) and the Art. 285 MPOR
+  floors / dispute multiplier are sourced from the rulepack via that module and
+  the pack reads below — no regulatory scalars are declared here per the
   engine/data separation rule.
 - Emit one synthetic exposure row per SFT netting set with
   ``ccr_method == "fccm_sft"`` and ``risk_type == "CCR_SFT"`` so downstream
@@ -24,8 +25,16 @@ Key responsibilities:
 
 Scope decisions (kept narrow on purpose; revisit when new SFT scenarios land):
 - Single-trade, single-counterparty netting sets only (Art. 220(1)(a)).
-- Unmargined SFTs only (Art. 224(2)(c) 5-BD liquidation period default;
-  the margined FCCM extension lives in Art. 285 and is not modelled).
+- BOTH branches modelled (margined/unmargined select on ``is_margined``):
+  - (a) Unmargined / simply-collateralised: T_M = 5-BD repo liquidation period
+    (Art. 224(2)(b)), with the Art. 226 non-daily revaluation scale-up
+    √((N_R+T_M−1)/T_M) driven by ``remargining_frequency_days`` (collapses to
+    1.0 at daily revaluation — the regression anchor).
+  - (b) Margined (qualifying Art. 285(2)-(4) agreement): T_M = MPOR
+    (= F + N − 1, Art. 285(5)), with the Art. 226 non-daily term suppressed
+    (the MPOR already encodes the remargin period N).
+- Art. 227(2)(a)-(h) 0% core-market-participant carve-out is NOT modelled
+  (deferred — needs the full eight-condition gate).
 - VaR (Art. 221) and IMM (Art. 283) SFT EAD methods are reserved on
   ``SFTConfig.method`` but not implemented.
 
@@ -33,10 +42,11 @@ References:
 - CRR Art. 220(1)(a) — single-CP SFT / master-netting-set scope.
 - CRR Art. 220(3)(a)(i) — standardised supervisory haircuts.
 - CRR Art. 223(5) — E* = max(0, E·(1+HE) − CVA·(1−HC−HFX)).
-- CRR Art. 224(2)(c) — 5-BD liquidation period for SFTs.
+- CRR Art. 224(2) — liquidation-period rescale; Art. 224(2)(b) 5-BD repo.
 - CRR Art. 224 Table 1 — H_10 by collateral type / CQS / residual maturity.
-- CRR Art. 226(2) — H_m = H_10 × √(T_m / 10) liquidation-period scaling.
+- CRR Art. 226 — H = H_10 × √(T_M/10) × √((N_R+T_M−1)/T_M) non-daily scale-up.
 - CRR Art. 271(2) — SFT EAD via FCCM, not SA-CCR Art. 274.
+- CRR Art. 285(2)-(5) — margined MPOR floors / dispute doubling / F + N − 1.
 """
 
 from __future__ import annotations
@@ -52,6 +62,7 @@ from rwa_calc.engine.crm.haircut_tables import (
     FX_HAIRCUT,
     lookup_collateral_haircut,
     scale_haircut_for_liquidation_period,
+    scale_haircut_for_non_daily_revaluation,
 )
 from rwa_calc.rulebook.resolve import resolve
 
@@ -60,11 +71,33 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# CRR Art. 224(2) repo/SFT liquidation period (5 BD), resolved from the common
-# pack at module load — feeds the Art. 226(2) sqrt(T_m/10) haircut scaling below.
-# Kept int (passed to scale_haircut_for_liquidation_period). (S13-h)
+# CRR Art. 224(2)(b) repo/SFT liquidation period (5 BD), resolved from the common
+# pack at module load — feeds the Art. 226 sqrt(T_m/10) haircut scaling below.
+# The Art. 285 MPOR floors (F = 5/10/20 BD by transaction-type category) and the
+# Art. 285(4) dispute-doubling multiplier (2) are read here too, for the margined
+# branch's MPOR = F·mult + N − 1 derivation. ALL kept int (fed to the period /
+# MPOR scalers). No regulatory numerics are hardcoded in this engine module.
+# (S13-h; SFT/FCCM margined extension.)
 _PACK = resolve("crr", date(2026, 1, 1))
 _LIQUIDATION_PERIOD_REPO = _PACK.int_param("liquidation_period_repo").value
+_MPOR_FLOOR_REPO_ONLY = _PACK.int_param(
+    "mf_margined_floor_days_repo_sft"
+).value  # 5, Art. 285(2)(a)
+_MPOR_FLOOR_OTHER = _PACK.int_param("mf_margined_floor_days_otc").value  # 10, Art. 285(2)(b)
+_MPOR_FLOOR_LARGE_ILLIQ = _PACK.int_param(
+    "mf_margined_floor_days_large_or_illiquid"
+).value  # 20, Art. 285(3)
+_MPOR_DISPUTE_MULT = _PACK.int_param("mf_margined_dispute_multiplier").value  # 2, Art. 285(4)
+
+# MPOR floor F by ``mpor_floor_category`` (keys mirror VALID_MPOR_FLOOR_CATEGORIES
+# in data/schemas.py). Values are pack-bound ints (not str literals), so this dict
+# is not a regulatory-string collection (arch_check check 6) and its values are
+# resolved pack names (arch_check check 5).
+_MPOR_FLOOR_BY_CATEGORY: dict[str, int] = {
+    "repo_only": _MPOR_FLOOR_REPO_ONLY,
+    "other": _MPOR_FLOOR_OTHER,
+    "illiquid_or_large": _MPOR_FLOOR_LARGE_ILLIQ,
+}
 
 
 # =============================================================================
@@ -77,6 +110,7 @@ _LIQUIDATION_PERIOD_REPO = _PACK.int_param("liquidation_period_repo").value
 @cites("CRR Art. 224")
 @cites("CRR Art. 226")
 @cites("CRR Art. 271")
+@cites("CRR Art. 285")
 def sft_bundle_to_exposures(
     raw_sft: RawSFTBundle,
     reporting_date: date,
@@ -114,7 +148,7 @@ def sft_bundle_to_exposures(
 
     References:
         CRR Art. 271(2); Art. 220(1)(a); Art. 223(5); Art. 224 Table 1;
-        Art. 224(2)(c); Art. 226(2).
+        Art. 224(2)(b); Art. 226; Art. 285(2)-(5).
     """
     sft_trades_lf = raw_sft.trades.sft_trades
     # Counterparty is denormalised onto the trade — collapse to NS grain. The
@@ -138,6 +172,52 @@ def sft_bundle_to_exposures(
 # =============================================================================
 # Private helpers
 # =============================================================================
+
+
+@cites("CRR Art. 285")
+def _derive_margining_terms(
+    is_margined: bool | None,
+    remargining_frequency_days: int | None,
+    mpor_floor_category: str | None,
+    has_margin_dispute_doubling: bool | None,
+    mpor_days_override: int | None,
+) -> tuple[int, int]:
+    """Return ``(T_M, non_daily_N_R)`` for one SFT netting set.
+
+    Selects the applied-haircut holding period T_M and whether the Art. 226
+    non-daily revaluation factor √((N_R+T_M−1)/T_M) applies:
+
+    - Branch (a) unmargined: ``(5-BD repo period, real N_R)`` → the Art. 226
+      factor applies (driven by ``remargining_frequency_days``; collapses to
+      1.0 at daily revaluation). T_M per Art. 224(2)(b).
+    - Branch (b) margined: ``(MPOR, 1)`` → the Art. 226 factor is suppressed
+      (N_R=1), because the MPOR already encodes the remargin period N.
+      MPOR = ``mpor_days_override`` when supplied, else F·mult + N − 1 where F is
+      the Art. 285(2)-(3) floor by category and mult = the Art. 285(4) doubling
+      multiplier (2) when a margin dispute applies.
+
+    All F values and the dispute multiplier are read from cited pack scalars at
+    module load — no regulatory numerics here. Single-trade-per-NS scope is
+    assumed (Art. 220(1)(a)); the caller derives terms per trade.
+
+    Args:
+        is_margined: True selects the margined branch (b); False/None → (a).
+        remargining_frequency_days: N (branch a: N_R; branch b: N). Default 1.
+        mpor_floor_category: F selector ('repo_only'/'other'/'illiquid_or_large').
+        has_margin_dispute_doubling: True doubles F (Art. 285(4)).
+        mpor_days_override: Explicit MPOR (business days); supersedes derivation.
+
+    Returns:
+        ``(T_M, non_daily_N_R)`` — both ints in business days / count.
+    """
+    n = int(remargining_frequency_days) if remargining_frequency_days is not None else 1
+    if not is_margined:
+        return (_LIQUIDATION_PERIOD_REPO, n)
+    if mpor_days_override is not None:
+        return (int(mpor_days_override), 1)
+    floor = _MPOR_FLOOR_BY_CATEGORY[mpor_floor_category or "repo_only"]
+    mult = _MPOR_DISPUTE_MULT if has_margin_dispute_doubling else 1
+    return (floor * mult + n - 1, 1)
 
 
 def _build_sft_exposure_rows(
@@ -170,7 +250,8 @@ def _build_sft_exposure_rows(
         LazyFrame at netting-set grain with the FCCM provenance columns.
 
     References:
-        CRR Art. 223(5); Art. 224 Table 1; Art. 224(2)(c); Art. 226(2).
+        CRR Art. 223(5); Art. 224 Table 1; Art. 224(2)(b); Art. 226;
+        Art. 285(2)-(5).
     """
     # Materialise the SFT trade frame once for the per-row HE lookup (the eager
     # HE divergence, kept in one place).
@@ -180,6 +261,28 @@ def _build_sft_exposure_rows(
         ccr_collateral_lf.collect_schema().names() if ccr_collateral_lf is not None else []
     )
 
+    # ---- 0) Per-NS (T_M, N_R) margining terms --------------------------------
+    # The Art. 285 margining inputs are denormalised onto the TRADE row (single-CP
+    # single-trade NS scope, Art. 220(1)(a)). Derive the applied holding period
+    # T_M and the Art. 226 non-daily revaluation count N_R per netting set; the
+    # first occurrence per ``netting_set_id`` wins (consistent with the .first()/
+    # .max() NS aggregations below) under the single-trade-per-NS assumption. The
+    # five margining columns are backfilled to their schema defaults by the
+    # standard loader seal (``seal_lenient``), so ``row.get(col, default)`` reads
+    # the value when present and the conservative default otherwise.
+    ns_terms: dict[str, tuple[int, int]] = {}
+    for row in sft_trades_df.iter_rows(named=True):
+        ns_id = row["netting_set_id"]
+        if ns_id in ns_terms:
+            continue
+        ns_terms[ns_id] = _derive_margining_terms(
+            is_margined=row.get("is_margined", False),
+            remargining_frequency_days=row.get("remargining_frequency_days", 1),
+            mpor_floor_category=row.get("mpor_floor_category", "repo_only"),
+            has_margin_dispute_doubling=row.get("has_margin_dispute_doubling", False),
+            mpor_days_override=row.get("mpor_days_override", None),
+        )
+
     # ---- 1) Per-trade E·(1+HE) -------------------------------------------------
     # HE is per-row (depends on the security being lent / sold), so we
     # materialise the SFT trade frame once to compute HE row-by-row via the
@@ -188,6 +291,7 @@ def _build_sft_exposure_rows(
     # to building a 5-band x CQS x type expression chain in Polars.
     he_values: list[float] = []
     for row in sft_trades_df.iter_rows(named=True):
+        t_m, n_r = ns_terms[row["netting_set_id"]]
         he_values.append(
             _compute_exposure_haircut(
                 collateral_type=row.get("exposure_collateral_type")
@@ -199,6 +303,8 @@ def _build_sft_exposure_rows(
                 residual_maturity_years=row.get("exposure_security_residual_maturity_years")
                 if "exposure_security_residual_maturity_years" in trade_schema
                 else None,
+                holding_period_days=t_m,
+                revaluation_freq_days=n_r,
             )
         )
     sft_trades_with_he = sft_trades_df.with_columns(
@@ -244,6 +350,7 @@ def _build_sft_exposure_rows(
             coll_with_ccy = coll_df.join(ns_currency_df, on="netting_set_id", how="left")
             cva_values: list[float] = []
             for row in coll_with_ccy.iter_rows(named=True):
+                t_m, n_r = ns_terms[row["netting_set_id"]]
                 cva_values.append(
                     _compute_collateral_cva_contribution(
                         collateral_type=row.get("collateral_type"),
@@ -252,6 +359,8 @@ def _build_sft_exposure_rows(
                         residual_maturity_years=row.get("residual_maturity_years"),
                         collateral_currency=row.get("currency"),
                         exposure_currency=row.get("_trade_currency"),
+                        holding_period_days=t_m,
+                        revaluation_freq_days=n_r,
                     )
                 )
             cva_per_ns = (
@@ -319,11 +428,11 @@ def _lookup_haircut_unscaled(
 
     Returns ``None`` when the security is ineligible under Art. 197 (e.g.
     unrated corporate bonds), distinguishing that from a legitimately-zero
-    haircut (cash). The 5-BD SFT scaling is applied by the caller via
-    :func:`scale_haircut_for_liquidation_period` so that the SFT EAD formula
-    sees the un-rounded ``H_10 × √(5/10)`` value (the table-level lookup
-    helper rounds to 6 decimals at the scaled step, which would exceed the
-    1 ppm tolerance pinned by the CCR-A12 golden after net of collateral).
+    haircut (cash). The holding-period scaling is applied by the caller via
+    :func:`scale_haircut_for_liquidation_period` (Art. 224(2)) so that the SFT
+    EAD formula sees the un-rounded ``H_10 × √(T_M/10)`` value (the table-level
+    lookup helper rounds to 6 decimals at the scaled step, which would exceed
+    the 1 ppm tolerance pinned by the CCR-A12 golden after net of collateral).
     """
     if collateral_type is None:
         return 0.0
@@ -343,9 +452,16 @@ def _compute_exposure_haircut(
     collateral_type: str | None,
     cqs: int | None,
     residual_maturity_years: float | None,
+    holding_period_days: int,
+    revaluation_freq_days: int,
 ) -> float:
-    """Compute HE for the exposure-side security per Art. 224 Table 1, scaled
-    to the 5-BD SFT liquidation period (Art. 224(2)(c) + Art. 226(2)).
+    """Compute HE for the exposure-side security per Art. 224 Table 1, scaled to
+    the holding period ``T_M`` (Art. 224(2)) and the Art. 226 non-daily factor.
+
+    H_E = H_10 × √(T_M/10) × √((N_R+T_M−1)/T_M). The first two factors are
+    :func:`scale_haircut_for_liquidation_period`; the third is
+    :func:`scale_haircut_for_non_daily_revaluation` (identity when N_R=1, e.g.
+    the margined branch which sets N_R=1, or daily unmargined revaluation).
 
     Returns 0.0 when ``collateral_type`` is None (no security info → treat
     as cash-equivalent / no haircut); the upstream test fixture pins this
@@ -354,7 +470,10 @@ def _compute_exposure_haircut(
     base = _lookup_haircut_unscaled(collateral_type, cqs, residual_maturity_years)
     if base is None or base == 0.0:
         return 0.0
-    return scale_haircut_for_liquidation_period(base, _LIQUIDATION_PERIOD_REPO)
+    scaled = scale_haircut_for_liquidation_period(base, holding_period_days)
+    return scale_haircut_for_non_daily_revaluation(
+        scaled, revaluation_freq_days, holding_period_days
+    )
 
 
 def _compute_collateral_cva_contribution(
@@ -364,13 +483,16 @@ def _compute_collateral_cva_contribution(
     residual_maturity_years: float | None,
     collateral_currency: str | None,
     exposure_currency: str | None,
+    holding_period_days: int,
+    revaluation_freq_days: int,
 ) -> float:
     """Compute one collateral row's contribution to ``CVA·(1−HC−HFX)``.
 
-    HC sourced from Art. 224 Table 1 (unscaled lookup) and scaled to the 5-BD
-    SFT liquidation period (Art. 224(2)(c), Art. 226(2)). HFX is 0% when the
-    collateral and exposure currencies match (Art. 224 Table 4), else the
-    8% base FX haircut scaled to 5 BD.
+    HC and HFX are sourced from Art. 224 Tables 1/4 (unscaled lookup), scaled to
+    the holding period ``T_M`` (Art. 224(2)) and then by the Art. 226 non-daily
+    revaluation factor √((N_R+T_M−1)/T_M) — applied independently to HC and HFX
+    (identity when N_R=1, e.g. the margined branch or daily revaluation). HFX is
+    0% when the collateral and exposure currencies match (Art. 224 Table 4).
     """
     if collateral_type is None:
         # No collateral type → cannot value the collateral conservatively;
@@ -380,7 +502,11 @@ def _compute_collateral_cva_contribution(
     if base is None:
         # Ineligible collateral per Art. 197 — zero recognition.
         return 0.0
-    hc = scale_haircut_for_liquidation_period(base, _LIQUIDATION_PERIOD_REPO)
+    hc = scale_haircut_for_non_daily_revaluation(
+        scale_haircut_for_liquidation_period(base, holding_period_days),
+        revaluation_freq_days,
+        holding_period_days,
+    )
     same_currency = (
         collateral_currency is not None
         and exposure_currency is not None
@@ -389,5 +515,9 @@ def _compute_collateral_cva_contribution(
     if same_currency:
         hfx = 0.0
     else:
-        hfx = scale_haircut_for_liquidation_period(float(FX_HAIRCUT), _LIQUIDATION_PERIOD_REPO)
+        hfx = scale_haircut_for_non_daily_revaluation(
+            scale_haircut_for_liquidation_period(float(FX_HAIRCUT), holding_period_days),
+            revaluation_freq_days,
+            holding_period_days,
+        )
     return float(market_value) * (1.0 - hc - hfx)

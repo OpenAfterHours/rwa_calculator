@@ -30,6 +30,7 @@ from rwa_calc.engine.crm.haircut_tables import (
     lookup_collateral_haircut,
     lookup_fx_haircut,
     scale_haircut_for_liquidation_period,
+    scale_haircut_for_non_daily_revaluation,
 )
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
 from rwa_calc.rulebook.resolve import resolve
@@ -155,6 +156,36 @@ class TestScalingFormula:
         assert LIQUIDATION_PERIOD_REPO == 5
         assert LIQUIDATION_PERIOD_CAPITAL_MARKET == 10
         assert LIQUIDATION_PERIOD_SECURED_LENDING == 20
+
+
+# =============================================================================
+# Non-daily revaluation scale-up (Art. 226): H = H_daily × sqrt((N_R+T_M−1)/T_M)
+# =============================================================================
+
+
+class TestNonDailyRevaluationFactor:
+    """Test Art. 226 non-daily revaluation: H = H_daily × sqrt((N_R+T_M−1)/T_M)."""
+
+    def test_non_daily_factor_identity_at_daily_revaluation(self) -> None:
+        """N_R=1 (daily) collapses the Art. 226 factor to the identity, unchanged."""
+        # Same value returned (no float op) — Art. 226 term is exactly 1.0 at N_R=1.
+        result = scale_haircut_for_non_daily_revaluation(
+            0.005, revaluation_freq_days=1, holding_period_days=5
+        )
+        assert result == 0.005
+
+    def test_non_daily_factor_known_value_nr3_tm5(self) -> None:
+        """N_R=3, T_M=5: H_daily × sqrt((3+5−1)/5) = H_daily × sqrt(7/5)."""
+        # 0.0035355339059327378 = 0.005 × sqrt(5/10) is the daily H_C for govt CQS1 0.5y.
+        result = scale_haircut_for_non_daily_revaluation(0.0035355339059327378, 3, 5)
+        expected = 0.0035355339059327378 * math.sqrt((3 + 5 - 1) / 5)
+        assert result == pytest.approx(expected, rel=1e-12)
+        # Equivalently the full H_C chain 0.005 × sqrt(5/10) × sqrt(7/5).
+        assert result == pytest.approx(0.005 * math.sqrt(0.5) * math.sqrt(7 / 5), rel=1e-12)
+
+    def test_non_daily_factor_zero_haircut_guard(self) -> None:
+        """Zero haircut (cash / ineligible) stays zero regardless of revaluation freq."""
+        assert scale_haircut_for_non_daily_revaluation(0.0, 5, 5) == 0.0
 
 
 # =============================================================================

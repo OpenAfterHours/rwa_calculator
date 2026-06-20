@@ -4073,7 +4073,7 @@ def _c07_sa_data(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:
     )
 
 
-@cites("PS1/26, paragraph 1.3")
+@cites("PS1/26")
 def _filter_sft(class_data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
     """Filter to the FCCM SFT synthetic rows (C 07.00 row 0090 — SFT netting sets).
 

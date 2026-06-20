@@ -1,10 +1,17 @@
 # SA-CCR — Counterparty Credit Risk
 
 Specifications for the Standardised Approach for Counterparty Credit Risk
-(SA-CCR), the regulatory method for translating derivatives, long-settlement
-transactions and securities financing transactions (SFTs) into a single
-exposure-at-default (EAD) figure that then feeds the SA / IRB credit-risk
-exposure ladder.
+(SA-CCR), the regulatory method for translating **OTC derivatives** and
+long-settlement transactions into a single exposure-at-default (EAD) figure
+that then feeds the SA / IRB credit-risk exposure ladder.
+
+!!! info "SFTs use FCCM, not SA-CCR"
+    **Securities financing transactions (SFTs)** — repos, securities lending,
+    margin lending — are **not** priced by SA-CCR. CRR Art. 271(2) routes SFT
+    EAD through the **Financial Collateral Comprehensive Method (FCCM)**
+    (Art. 220–223), a peer subsystem implemented in `engine/sft/` and the
+    `sft_fccm` pipeline stage. See the
+    [SFT (FCCM EAD) specification](../sft/index.md).
 
 **Primary regulatory source:** PRA PS1/26 Part Three Title II Chapter 6
 (Art. 271–311) — the UK SA-CCR regime is largely a verbatim re-export of the

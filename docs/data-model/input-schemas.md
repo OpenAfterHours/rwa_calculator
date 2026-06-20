@@ -16,6 +16,8 @@ This page documents the authoritative schemas for all input data files required 
 | [Rating](#rating-schema) | `ratings/ratings.parquet` | No | Credit ratings |
 | [FX Rates](#fx-rates-schema) | `fx_rates/fx_rates.parquet` | No | Currency conversion rates |
 | [Specialised Lending](#specialised-lending-schema) | `ratings/specialised_lending.parquet` | No | Slotting approach data |
+| [SFT Trade](#sft-input-schemas-fccm) | `ccr/sft_trades.parquet` | No | FCCM SFT EAD (CCR — Art. 220–223) |
+| [SFT Collateral](#sft-input-schemas-fccm) | `ccr/sft_collateral.parquet` | No | Optional collateral for FCCM SFTs |
 | [Equity Exposure](#equity-exposure-schema) | N/A | No | Equity holdings |
 | [CIU Holdings](#ciu-holdings-schema) | N/A | No | Per-fund holdings for CIU look-through (Art. 132) |
 | [Model Permissions](#model-permissions-schema) | `config/model_permissions.parquet` | No | Per-model IRB approach permissions |
@@ -762,6 +764,151 @@ fx_rates = pl.DataFrame({
 | `satisfactory` | 115% | Acceptable risk profile |
 | `weak` | 250% | Higher risk profile |
 | `default` | 0% | In default (provisions apply) |
+
+---
+
+## SFT Input Schemas (FCCM)
+
+**Purpose:** Dedicated input contract for **securities financing transactions
+(SFTs)** — repos, reverse repos, securities-borrowing/lending and
+margin-lending — whose exposure-at-default is computed by the **Financial
+Collateral Comprehensive Method (FCCM)** under CRR Art. 220–223. SFTs are a
+**peer** of the SA-CCR derivative book, not a sub-mode of it: they have their
+own input bundle, their own dataloads and their own pipeline stage.
+
+!!! warning "Two unrelated meanings of \"SFT\""
+    The `transaction_type == "sft"` / FCCM path documented here (CCR EAD,
+    CRR Art. 220–223) is a **completely different concept** from the
+    [`is_sft` Boolean](#facility-schema) carried on the loan / contingent /
+    facility schemas (which drives the F-IRB 0.4-year maturity floor under
+    CRR Art. 162(3)). **Same acronym, different concept, zero interaction.**
+    See [The two meanings of "SFT"](#the-two-meanings-of-sft) below.
+
+### How SFTs flow through the pipeline
+
+SFT inputs are loaded into a dedicated bundle and processed by a dedicated
+stage that runs as a **peer** of the SA-CCR derivative stage:
+
+```
+sft_trades.parquet (+ optional sft_collateral.parquet)
+   → RawSFTBundle  (RawDataBundle.sft)
+   → sft_fccm stage  (engine/stages/sft.py)
+   → E* = max(0, E·(1+HE) − CVA·(1−HC−HFX))   (CRR Art. 223(5))
+   → one synthetic exposure row per netting set
+        (risk_type = "CCR_SFT", ccr_method = "fccm_sft", drawn_amount = E*)
+   → Classifier → CRM → SA / IRB exposure ladder
+```
+
+The `sft_fccm` stage sits immediately after `ccr_sa_ccr` in the literal
+pipeline registry, so the two regulatory EAD methods are **adjacent and
+visible**:
+
+| Stage | Input bundle | Regulatory EAD basis | Output `risk_type` |
+|-------|--------------|----------------------|--------------------|
+| `ccr_sa_ccr` | `RawDataBundle.ccr` | SA-CCR `EAD = α·(RC + PFE)` (CRR Art. 274) | `CCR_DERIVATIVE` |
+| `sft_fccm` | `RawDataBundle.sft` | FCCM `E*` (CRR Art. 220–223 via Art. 271(2)) | `CCR_SFT` |
+
+The stage **no-ops** when `RawDataBundle.sft is None` (a firm with no SFT
+book is unaffected), and it re-seals its output to the existing `ccr_exit`
+edge brand so SFT and derivative rows share the same downstream contract.
+
+> **Details:** see the
+> [SFT (FCCM EAD) specification](../specifications/crr/sft/index.md) for the
+> E\* formula, haircut treatment, and the architectural separation from
+> SA-CCR.
+
+### SFT Trade Schema
+
+**File:** `ccr/sft_trades.parquet` (the single primary SFT dataload; optional)
+
+One row per SFT. The netting-set counterparty is **denormalised onto the
+trade row** — FCCM's current scope is single-trade, single-counterparty
+netting sets (Art. 220(1)(a)), so no separate SFT netting-set table is
+needed. The three `exposure_*` columns carry the Art. 223(5) exposure-side
+volatility-haircut (`HE`) inputs.
+
+| Column | Type | Required | Description |
+|--------|------|----------|-------------|
+| `trade_id` | `String` | Yes | Unique identifier for the SFT |
+| `netting_set_id` | `String` | Yes | Netting-set reference — used for the `ccr__<netting_set_id>` output reference and the collateral join |
+| `counterparty_reference` | `String` | Yes | Counterparty (denormalised from the netting set) — drives the SA institution risk-weight lookup (CRR Art. 120(1) Table 3) |
+| `notional` | `Float64` | Yes | `E` — the exposure amount lent / sold under the SFT (Art. 223(5)) |
+| `currency` | `String` | Yes | ISO 4217 currency code of the exposure |
+| `maturity_date` | `Date` | Yes | SFT maturity date |
+| `start_date` | `Date` | Yes | SFT start date |
+| `exposure_collateral_type` | `String` | No | `HE` input — exposure-side security type for the Art. 224 Table 1 haircut lookup. Null when the exposure side is cash / a standard loan (`HE = 0`) |
+| `exposure_security_cqs` | `Int8` | No | `HE` input — exposure-side issuer CQS |
+| `exposure_security_residual_maturity_years` | `Float64` | No | `HE` input — exposure-side residual maturity (years) |
+
+!!! note "These three columns were previously schema-orphaned"
+    `exposure_collateral_type`, `exposure_security_cqs` and
+    `exposure_security_residual_maturity_years` are **first-class** on
+    `SFT_TRADE_SCHEMA`. They are *not* the identically-named columns on
+    `LOAN_SCHEMA` / `CONTINGENTS_SCHEMA` (which serve an unrelated lending
+    purpose) — grepping the name across schemas can mislead.
+
+### SFT Collateral Schema
+
+**File:** `ccr/sft_collateral.parquet` (optional — appears only when securities
+are posted)
+
+Collateral received against an SFT, keyed by `netting_set_id` (a genuinely
+different grain — 0..n securities per netting set — so it stays a separate
+optional file). Feeds the `CVA·(1 − HC − HFX)` collateral term of the FCCM
+`E*` formula. An **uncollateralised** SFT carries no collateral row, so for
+the common case this is literally one file.
+
+| Column | Type | Required | Description |
+|--------|------|----------|-------------|
+| `sft_collateral_reference` | `String` | Yes | Unique identifier for the collateral row |
+| `netting_set_id` | `String` | Yes | Join key back to the SFT trade's `netting_set_id` |
+| `collateral_type` | `String` | Yes | Collateral security type — `HC` input for the Art. 224 Table 1 lookup |
+| `market_value` | `Float64` | No (default `0.0`) | `CVA` — collateral market value in the `E*` formula; `0.0` when unknown (no collateral credit) |
+| `currency` | `String` | No | Collateral currency. Drives the `HFX` same-currency shortcut (Art. 224 Table 4: `HFX = 0` when collateral and exposure currencies match) |
+| `issuer_cqs` | `Int8` | No | `HC` input — collateral issuer CQS |
+| `residual_maturity_years` | `Float64` | No | `HC` input — collateral residual maturity (years) |
+
+### `transaction_type` discriminator
+
+The CCR/SFT split key is `transaction_type` on the SA-CCR `TRADE_SCHEMA`,
+constrained to `VALID_TRANSACTION_TYPES = {"derivative", "sft"}` via
+`COLUMN_VALUE_CONSTRAINTS`. A bad value (e.g. `"SFT"`, `"repo"`) would
+otherwise silently mis-route an SFT into the SA-CCR Art. 274 chain (≈£0 EAD);
+the value constraint surfaces it as a `DQ006` data-quality error instead. SFT
+rows belong in `SFT_TRADE_SCHEMA` / `RawDataBundle.sft`, not on the SA-CCR
+trade frame.
+
+### Configuration
+
+`SFTConfig.method` (on `CalculationConfig.sft`) selects the SFT EAD method per
+CRR Art. 271(2):
+
+| `method` | Meaning | Status |
+|----------|---------|--------|
+| `"fccm"` (default) | Financial Collateral Comprehensive Method (Art. 220–223) | Implemented |
+| `"var"` | VaR method (Art. 221) | Reserved — engine fails loud (`NotImplementedError`) |
+| `"imm"` | Internal Model Method (Art. 283) | Reserved — engine fails loud |
+
+The method is exposed as the `sft_method` factory argument on
+`CalculationConfig.crr()` / `.basel_3_1()`.
+
+### The two meanings of "SFT"
+
+The acronym "SFT" denotes **two unrelated concepts** that never interact:
+
+| | FCCM SFT (this section) | Lending `is_sft` |
+|---|---|---|
+| Carrier | `transaction_type == "sft"` on `SFT_TRADE_SCHEMA` | `is_sft` Boolean on `LOAN` / `CONTINGENT` / `FACILITY` schemas |
+| Concept | Securities financing transaction routed to **FCCM CCR EAD** | A lending exposure flagged as an SFT for the F-IRB maturity carve-out |
+| Drives | The `sft_fccm` stage: `E* = max(0, E·(1+HE) − CVA·(1−HC−HFX))` | The F-IRB **0.4-year maturity (`M`) floor** in lieu of the 1-year floor |
+| Regulatory basis | CRR Art. 220–223, Art. 271(2) | CRR Art. 162(3) |
+| Engine site | `engine/sft/fccm.py` | `engine/irb/transforms.py` |
+
+The lending `is_sft` Boolean is deliberately **not renamed** as part of the
+SFT/FCCM separation — that would touch the sealed `hierarchy_resolved` edge,
+the IRB transforms and every fixture that sets `is_sft` — so it is reserved
+for a standalone future codemod. See the
+[SFT (FCCM EAD) specification](../specifications/crr/sft/index.md#the-two-meanings-of-sft).
 
 ---
 

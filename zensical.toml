@@ -98,6 +98,8 @@ nav = [
       { "Slotting Approach" = "specifications/crr/slotting-approach.md" },
       { "Provisions" = "specifications/crr/provisions.md" },
       { "Equity Approach" = "specifications/crr/equity-approach.md" },
+      { "SA-CCR (Counterparty Credit Risk)" = "specifications/crr/ccr/index.md" },
+      { "SFT (FCCM EAD)" = "specifications/crr/sft/index.md" },
     ]},
     { "Basel 3.1 Framework" = [
       "specifications/basel31/index.md",

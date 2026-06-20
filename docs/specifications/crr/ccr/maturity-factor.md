@@ -67,10 +67,9 @@ where:
 - The `250` divisor expresses `MPOR_eff` as a fraction of the
   business-day year.
 
-When `MPOR_eff = 10` (the standard OTC base), `MF_margined =
-1.5 × sqrt(10/250) ≈ 0.30`. When `MPOR_eff = 5` (the SFT/repo base),
-`MF_margined ≈ 0.21`. When `MPOR_eff = 20` (large or illiquid netting
-sets), `MF_margined ≈ 0.42`.
+When `MPOR_eff = 10` (the OTC base — the only base this derivatives-only
+engine uses), `MF_margined = 1.5 × sqrt(10/250) ≈ 0.30`. When `MPOR_eff = 20`
+(large or illiquid netting sets), `MF_margined ≈ 0.42`.
 
 Engine entry point:
 
@@ -93,14 +92,21 @@ the trades in a netting set via `.over("netting_set_id")`.
 
 | Netting-set composition                              | Base MPOR        | Constant                              |
 | ---------------------------------------------------- | ---------------- | ------------------------------------- |
-| All trades are SFT / repo / margin-lending           | **5 BD**         | `MF_MARGINED_FLOOR_DAYS_REPO_SFT`     |
-| Otherwise (any OTC derivative present)               | **10 BD**        | `MF_MARGINED_FLOOR_DAYS_OTC`          |
+| OTC derivative netting set (Art. 285(2)(b))          | **10 BD**        | `MF_MARGINED_FLOOR_DAYS_OTC`          |
 
-The "all-SFT" test is evaluated per netting set: every trade must satisfy
-`transaction_type == "sft"`. A single OTC derivative in the netting set
-pulls the whole set to the 10 BD base. The CRR Art. 285(2)(a) "5 BD" SFT
-floor matches the post-Basel-III revision of the original 10 BD SFT
-treatment.
+The base is a **constant 10 BD**: this engine's SA-CCR maturity factor is
+**derivatives-only**, so every netting set reaching
+`compute_maturity_factor_margined` is an OTC derivative netting set and the
+Art. 285(2)(b) 10 BD floor always applies.
+
+!!! note "The Art. 285(2)(a) 5-BD SFT/repo base is not modelled here"
+    Securities financing transactions (SFTs) are priced by the **FCCM**
+    `sft_fccm` stage from `RawDataBundle.sft` and **never enter the SA-CCR
+    chain** (SFT/FCCM separation). They therefore never reach this maturity
+    factor, so the Art. 285(2)(a) 5-BD SFT/repo/margin-lending base — and the
+    per-netting-set "all trades are SFT" (`transaction_type == "sft"`) test
+    that selected it — has been removed from the engine. See the
+    [SFT (FCCM EAD) specification](../sft/index.md).
 
 ### Step 2 — Large or illiquid upgrade (Art. 285(3))
 
@@ -170,43 +176,51 @@ writes a `maturity_factor: Float64` column:
 
 ```python
 # src/rwa_calc/engine/ccr/maturity_factor.py
-all_sft_in_ns = pl.col("transaction_type").eq("sft").min().over("netting_set_id")
-
-base_post_step1 = (
-    pl.when(all_sft_in_ns)
-    .then(pl.lit(MF_MARGINED_FLOOR_DAYS_REPO_SFT))    # 5 BD
-    .otherwise(pl.lit(MF_MARGINED_FLOOR_DAYS_OTC))    # 10 BD
-)
+# Step 1 — constant Art. 285(2)(b) 10-BD OTC base. Derivatives-only engine:
+# there is no all-SFT (5-BD) branch — SFTs are priced by the sft_fccm stage.
+base_post_step1 = pl.lit(_MF_FLOOR_DAYS_OTC)             # 10 BD
 
 is_large_or_illiquid = (
-    pl.col("number_of_trades") > pl.lit(MF_MARGINED_LARGE_NETTING_SET_TRADE_COUNT)
+    pl.col("number_of_trades") > pl.lit(_MF_LARGE_NETTING_SET_TRADE_COUNT)
 ) | pl.col("has_illiquid")
 
 base_post_step2 = (
     pl.when(is_large_or_illiquid)
-    .then(pl.lit(MF_MARGINED_FLOOR_DAYS_LARGE_OR_ILLIQUID))   # 20 BD
+    .then(pl.lit(_MF_FLOOR_DAYS_LARGE_OR_ILLIQUID))      # 20 BD
     .otherwise(base_post_step1)
 )
 
 base_post_step3 = (
-    pl.when(pl.col("dispute_count_qtr") > pl.lit(MF_MARGINED_DISPUTE_THRESHOLD))
-    .then(base_post_step2 * pl.lit(MF_MARGINED_DISPUTE_MULTIPLIER))
+    pl.when(pl.col("dispute_count_qtr") > pl.lit(_MF_DISPUTE_THRESHOLD))
+    .then(base_post_step2 * pl.lit(_MF_DISPUTE_MULTIPLIER))
     .otherwise(base_post_step2)
 )
 
 mpor_eff_pre_floor = base_post_step3 + pl.col("remargining_frequency_days") - pl.lit(1)
-mpor_eff = pl.max_horizontal(mpor_eff_pre_floor, pl.col("mpor_days_input"))
+# Null-safe floor: a null mpor_days_input falls back to the 10-BD OTC base
+# so a missing firm-supplied MPOR never silently nulls the margined MF.
+mpor_eff = pl.max_horizontal(
+    mpor_eff_pre_floor, pl.col("mpor_days_input").fill_null(_MF_FLOOR_DAYS_OTC)
+)
 
 maturity_factor = (
-    pl.lit(float(MF_MARGINED_SCALAR))                 # 1.5
-    * (mpor_eff.cast(pl.Float64) / pl.lit(float(SA_CCR_BUSINESS_DAYS_PER_YEAR))).sqrt()
+    pl.lit(_MF_MARGINED_SCALAR)                          # 1.5
+    * (mpor_eff.cast(pl.Float64) / pl.lit(float(_SA_CCR_BUSINESS_DAYS_PER_YEAR))).sqrt()
 ).cast(pl.Float64)
+
+# Gated on is_margined: unmargined rows get null so the pipeline-adapter
+# coalesce falls back to the unmargined MF (CRR Art. 279c(1)).
+maturity_factor_margined = (
+    pl.when(pl.col("is_margined")).then(maturity_factor).otherwise(None)
+)
 ```
 
 Constants resolve from the rulebook pack
 (`src/rwa_calc/rulebook/packs/common.py`) once at module load — `engine/`
 modules read the resolved pack and never inline these regulatory scalars
 (project architectural rule, enforced by `scripts/arch_check.py` check 5).
+The Art. 285(2)(a) 5-BD SFT/repo base param (`mf_margined_floor_days_repo_sft`)
+is no longer read here — this function is derivatives-only.
 
 ## Pipeline ordering
 
@@ -224,35 +238,37 @@ trades → years_to_maturity
        → compute_pfe
 ```
 
-The current `engine/ccr/pipeline_adapter.py` orchestrator wires only the
-**unmargined** path — every netting set is treated as unmargined for the
-CCR-A1 .. CCR-A10 acceptance scenarios. The margined function is
-implemented end-to-end (the Step 1–5 cascade above) but not yet routed
-through the orchestrator pending the margined-netting-set acceptance
-batch.
+The `engine/ccr/pipeline_adapter.py` orchestrator wires **both** paths
+(P8.54): it denormalises the Art. 285 cascade inputs onto each trade,
+computes the margined MF, and coalesces the `is_margined`-gated
+`maturity_factor_margined` over the unmargined `maturity_factor` before the
+PFE add-on. Unmargined netting sets (e.g. CCR-A1 .. CCR-A10) fall through to
+`compute_maturity_factor_unmargined`; margined sets (CCR-A13 daily-remargin,
+CCR-A14 long-remargin) take the Step 1–5 cascade above.
 
 ## Worked numeric examples
 
-All four examples use the formula
+All three examples use the formula
 
 ```
 MF_margined = 1.5 × sqrt(MPOR_eff / 250)
 ```
 
 with the cascade producing `MPOR_eff`. Inputs are stripped to the
-columns that drive each branch.
+columns that drive each branch. Every netting set is an OTC derivative
+netting set (SFTs never reach this function), so Step 1 is always the
+Art. 285(2)(b) 10-BD base.
 
 ### Example 1 — OTC base (10 BD), daily remargining
 
 ```
-transaction_type            = "derivative"
 number_of_trades            = 100
 has_illiquid                = False
 dispute_count_qtr           = 0
 remargining_frequency_days  = 1
 mpor_days_input             = 0
 
-Step 1: base                = 10 BD     (not all-SFT)
+Step 1: base                = 10 BD     (Art. 285(2)(b) OTC base)
 Step 2: base                = 10 BD     (not large, not illiquid)
 Step 3: base                = 10 BD     (no dispute)
 Step 4: pre-floor           = 10 + 1 − 1 = 10 BD
@@ -264,32 +280,9 @@ MF_margined = 1.5 × sqrt(10 / 250)
             = 0.30
 ```
 
-### Example 2 — SFT base (5 BD), daily remargining
+### Example 2 — Large netting set (20 BD upgrade), daily remargining
 
 ```
-transaction_type            = "sft"      (all trades in NS)
-number_of_trades            = 50
-has_illiquid                = False
-dispute_count_qtr           = 0
-remargining_frequency_days  = 1
-mpor_days_input             = 0
-
-Step 1: base                = 5 BD      (all-SFT triggers Art. 285(2)(a))
-Step 2: base                = 5 BD
-Step 3: base                = 5 BD
-Step 4: pre-floor           = 5 + 1 − 1 = 5 BD
-Step 5: MPOR_eff            = 5 BD
-
-MF_margined = 1.5 × sqrt(5 / 250)
-            = 1.5 × sqrt(0.02)
-            = 1.5 × 0.14142
-            ≈ 0.21213
-```
-
-### Example 3 — Large netting set (20 BD upgrade), daily remargining
-
-```
-transaction_type            = "derivative"
 number_of_trades            = 7,500     (> 5,000 threshold)
 has_illiquid                = False
 dispute_count_qtr           = 0
@@ -312,10 +305,9 @@ The same `MPOR_eff = 20 BD` is reached via the Art. 285(3)(b) illiquid /
 hard-to-replace-OTC flag — the engine treats the two triggers as a
 logical OR.
 
-### Example 4 — Dispute doubling + weekly remargining
+### Example 3 — Dispute doubling + weekly remargining
 
 ```
-transaction_type            = "derivative"
 number_of_trades            = 100
 has_illiquid                = False
 dispute_count_qtr           = 3         (> 2 threshold)
@@ -336,8 +328,8 @@ MF_margined = 1.5 × sqrt(24 / 250)
 
 ### Unmargined sanity check — Art. 279c(1)
 
-Used by every CCR-A acceptance scenario currently routed through the
-orchestrator (`years_to_maturity` is the residual maturity in years):
+Used by every **unmargined** CCR-A acceptance scenario (`years_to_maturity`
+is the residual maturity in years):
 
 ```
 M = 0.99931554 years      (1-year forward, reporting_date = 2026-01-15)
@@ -363,7 +355,9 @@ MF_unmargined = sqrt( min(10, 1.0) / 1.0 ) = sqrt(1.0) = 1.0
 
 - CRR Art. 279c(1) — unmargined maturity factor `sqrt(min(M, 1y)/1y)`.
 - CRR Art. 279c(2) — margined maturity factor `1.5 × sqrt(MPOR_eff/250)`.
-- CRR Art. 285(2) — base MPOR floors (5 BD SFT / 10 BD OTC).
+- CRR Art. 285(2) — base MPOR floors. This derivatives-only engine uses the
+  Art. 285(2)(b) 10-BD OTC base; the Art. 285(2)(a) 5-BD SFT/repo base does
+  not apply (SFTs are priced by the FCCM `sft_fccm` stage, not SA-CCR).
 - CRR Art. 285(3) — 20 BD upgrade for >5,000-trade netting sets and
   illiquid / hard-to-replace OTC.
 - CRR Art. 285(4) — dispute doubling when prior-quarter disputes

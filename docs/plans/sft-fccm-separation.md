@@ -1,6 +1,6 @@
 # SFT / FCCM Separation of Concerns
 
-**Status:** Proposed (not started)
+**Status:** ✅ DONE — all phases 1–8 complete (2026-06-20). FCCM SFTs are now a peer subsystem (`engine/sft/`, `sft_fccm` stage, `RawDataBundle.sft`); `engine/ccr/` is SA-CCR-derivatives-only. See the per-phase checkmarks in §5 below.
 **Author:** Investigation 2026-06-19
 **Scope:** Separate Securities Financing Transaction (SFT) FCCM EAD from OTC-derivative SA-CCR EAD across the CCR input + engine surface.
 **Related:** [target-architecture-migration.md](target-architecture-migration.md) (Phase 4 fold / literal registry / edge contracts).
@@ -109,35 +109,35 @@ Each phase is independently committable and leaves the suite green. Gate after e
 uv run python scripts/arch_check.py && uv run ruff check && uv run ruff format --check && uv run ty check && uv run pytest tests/
 ```
 
-### Phase 1 — Pure extraction (no behaviour change)
+### Phase 1 — Pure extraction (no behaviour change) ✅ DONE
 Create `src/rwa_calc/engine/sft/`. Move `engine/ccr/sft_fccm.py` → `engine/sft/fccm.py` **verbatim** (it already imports only `engine/crm/haircut_tables`, the rulepack, and `contracts/bundles`). Re-point the import at `pipeline_adapter.py:62` and update test/fixture import paths.
 - **Files:** `engine/sft/__init__.py` (new), `engine/sft/fccm.py` (moved), `engine/ccr/pipeline_adapter.py`, `engine/ccr/__init__.py`, test imports.
 - **Note:** `engine/sft/` is a plain engine domain package (transforms), **not** a stage package — it must not be added to any `STAGE_PACKAGES_WITHOUT_RUN` list in `arch_check.py`.
 - **arch_check:** unchanged — `liquidation_period_repo` stays pack-resolved; `SFT_TRANSACTION_TYPE = "sft"` is a literal token (allowed).
 
-### Phase 2 — Declare the SFT input contract (kills the tunnelling)
+### Phase 2 — Declare the SFT input contract (kills the tunnelling) ✅ DONE
 Add `SFT_TRADE_SCHEMA` + `SFT_COLLATERAL_SCHEMA` (Section 4) to `data/schemas.py`, the three HE columns cited `@cites("CRR Art. 223")`. Add `VALID_TRANSACTION_TYPES = {"derivative", "sft"}` and a `COLUMN_VALUE_CONSTRAINTS` entry for the SFT trade frame's `transaction_type`. Schemas land but nothing wires them yet.
 - **Files:** `data/schemas.py`, `tests/contracts/test_sft_schemas_contract.py` (new — pin the columns).
 - **Untouched here:** the existing `TRADE_SCHEMA` 30-column pin and `RawCCRBundle` 7-field pin (`tests/contracts/test_ccr_schemas_contract.py`, `test_ccr_bundles_contract.py`).
 
-### Phase 3 — Config peer
+### Phase 3 — Config peer ✅ DONE
 Add frozen `SFTConfig(method: Literal["fccm","var","imm"] = "fccm")` to `contracts/config.py`, cited Art. 220–223; add `sft: SFTConfig` to `CalculationConfig`; expose `sft_method` as a factory arg on `.crr()` / `.basel_3_1()` (currently unreachable). Add the fail-loud guard for `var`/`imm`. Keep `CCRConfig.sft_method` as a **computed read-through property** (the dataclass is frozen — it cannot be a field default that shadows `SFTConfig.method`) for one release; rewire the read site at `pipeline_adapter.py:187` to `SFTConfig.method` in the same commit.
 - **Files:** `contracts/config.py`, factory-method tests.
 
-### Phase 4 — Peer bundle + loader dataload (additive, backward-compatible)
+### Phase 4 — Peer bundle + loader dataload (additive, backward-compatible) ✅ DONE
 Add `SftTradeBundle` + optional `SftCollateralBundle` and `RawSFTBundle(trades, collateral, errors)` to `contracts/bundles.py`, plus `sft: RawSFTBundle | None = None` on `RawDataBundle`. Add `raw_sft_trades` / `raw_sft_collateral` edges to `contracts/edges.py` and register the leaf frames in `SEALED_FRAME_FIELDS`. Add `sft_trades` (+ optional `sft_collateral`) `DataSourceFile` entries to `config/data_sources.py`, `DataSourceConfig.sft_*_file` fields + `from_registry` wiring, and `_build_raw_sft_bundle` in `loader.py` **loading via `seal_lenient` + `RAW_TABLE_EDGES`** (not `enforce_schema`).
 - **Backward-compat:** `RawDataBundle.sft` defaults `None`; every existing construction is unaffected; no existing fixture populates it yet.
 - **Files:** `contracts/bundles.py`, `contracts/edges.py`, `config/data_sources.py`, `engine/loader.py`, `tests/contracts/test_sft_bundles_contract.py` (new), a loader test (extend `tests/integration/test_ccr_loader.py` or add `test_sft_loader.py`).
 - **Verify:** `tests/fixtures/raw_bundle.py::make_raw_bundle` and `tests/contracts/test_edge_contracts.py` iterate `dataclasses.fields(RawDataBundle)` — confirm neither asserts that *every* frame field is a bare loader-sealed frame (`RawSFTBundle` is a composite, like `ccr`, so it should be exempt exactly as `ccr` is).
 
-### Phase 5 — Peer stage (sealing to the `ccr_exit` brand)
+### Phase 5 — Peer stage (sealing to the `ccr_exit` brand) ✅ DONE
 Create `engine/stages/sft.py::run(ctx, rulepack, run_config)` that no-ops on `raw.sft is None`, calls `sft_rows_to_exposures`, enriches ratings (lift `_enrich_ccr_rows_with_ratings` out of `engine/stages/ccr.py` into a shared `engine/stages/_ccr_shared.py` consumed by both), appends via `diagonal_relaxed`, and **re-seals `resolved.exposures` against `CCR_EXIT_EDGE` / `ccr_exit`** (Section 3 — *not* a new edge). Insert `StageSpec("sft_fccm", sft.run, error_type="sft_error")` into `PIPELINE_STAGES` **immediately after `ccr_sa_ccr`** (`registry.py:47`).
 - **Verify:** `engine/pipeline.py` error-merge accepts a new `error_type` token (`"sft_error"`); pin the new `sft_fccm` `stage_timer` label in the observability contract test (`tests/contracts/test_logging_contract.py` / integration).
 - **Sequential re-seal:** `ccr_sa_ccr` then `sft_fccm` both `replace(resolved, exposures=materialise_sealed_edge(...))` on the same field — both seal to `ccr_exit`, so the last-writer brand is what the classifier expects.
 - **Files:** `engine/stages/sft.py` (new), `engine/stages/_ccr_shared.py` (new), `engine/stages/ccr.py`, `engine/registry.py`, `engine/stages/__init__.py`, observability test.
 - **Backward-compat:** existing single-file fixtures still flow SFT rows through `raw.ccr` and the legacy in-CCR SFT branch; the new stage only fires when `raw.sft` is populated.
 
-### Phase 6 — Flip the source, delete the old path
+### Phase 6 — Flip the source, delete the old path ✅ DONE
 Re-point the SFT golden (`tests/fixtures/ccr/golden_ccr_a11_a12.py`) and any firm wiring at `raw.sft` via a dedicated SFT trade/collateral builder mirroring `SFT_TRADE_SCHEMA`. Add **guards**:
 - error if any `transaction_type == "sft"` row survives in `raw.ccr` (the derivative chain would otherwise mis-price it via SA-CCR once the SFT branch is gone),
 - error if both `raw.ccr` (with SFT rows) and `raw.sft` are populated (double-count).
@@ -148,24 +148,24 @@ Then delete: the `config_ccr.sft_method` gate + SFT `diagonal_relaxed` concat in
 - **Hard-pinned contract tests (one deliberate commit):** revise `tests/contracts/test_ccr_schemas_contract.py` (`_P8_35_EXPECTED_COLUMN_COUNT` and the `VALID_RISK_TYPES_INPUT` pins as needed) and confirm `tests/contracts/test_ccr_bundles_contract.py`'s 7-field `RawCCRBundle` pin still holds (C does not change `RawCCRBundle`). Re-express the `test_ccr_a11_sa_ccr_columns_null` assertion (`tests/acceptance/ccr/test_ccr_a11_a12_sft_fccm_ead.py:270-287`): SFT rows now arrive via the typed `sft` stage; SA-CCR provenance is null because the FCCM path never projects it, not because of a shared intra-adapter concat.
 - **Files:** `engine/ccr/pipeline_adapter.py`, `engine/ccr/maturity_factor.py`, `data/schemas.py`, `tests/fixtures/ccr/` (new SFT builder), `tests/fixtures/generate_all.py`, the two contract tests, the A11/A12 acceptance test, `tests/contracts/test_ccr_fixture_builders.py` (loader round-trip shape assertions).
 
-### Phase 7 — Downstream behaviour (operator decisions Q1 + Q2)
+### Phase 7 — Downstream behaviour (operator decisions Q1 + Q2) ✅ DONE (7a + 7b; 7c deferred)
 These are deliberate regulatory changes (not behaviour-preserving), each independently reviewable, each needing golden-output updates.
 
-**Phase 7a — Output floor: include FCCM SFTs (Q1).**
+**Phase 7a — Output floor: include FCCM SFTs (Q1). ✅ DONE**
 Today FCCM SFTs are excluded from the Basel 3.1 floor numerator because the floor tag keys on `risk_type == CCR_DERIVATIVE` only (`engine/stages/calc.py:126`). Extend the predicate to include `CCR_SFT` so SFT rows receive the floor-eligible tag (`SA_CCR_APPROACH` routes rows into `FLOOR_ELIGIBLE_APPROACHES` and out of `SA_APPROACHES` — `engine/aggregator/_schemas.py`). The tag's name becomes a slight misnomer for SFTs; consider renaming the constant to a method-neutral "CCR-via-SA, floored" label, or leave it and document. Regulatory basis: PS1/26 Art. 92(3A) does not place SFTs on the S-TREA exclusion list.
 - **Files:** `engine/stages/calc.py`, possibly `engine/aggregator/_schemas.py`; acceptance test asserting SFT RWA enters the floor numerator; update CCR-A11/A12 (and any floor-scenario) expected outputs.
 
-**Phase 7b — COREP / Pillar 3: report SFTs under C07 row 0090, not the SA-CCR templates (Q2).**
+**Phase 7b — COREP / Pillar 3: report SFTs under C07 row 0090, not the SA-CCR templates (Q2). ✅ DONE**
 Today both `_collect_ccr_rows` (`reporting/corep/generator.py:2986-3008`) and `_ccr_rows` (`reporting/pillar3/generator.py:1270-1283`) sum **all** `ccr__`-prefixed rows with no `risk_type` filter, so FCCM SFT EAD is reported inside the SA-CCR templates (COREP C34, Pillar 3 CCR1). Two changes:
 1. Add a `risk_type != "CCR_SFT"` (equivalently `ccr_method != "fccm_sft"`) exclusion to both collectors so FCCM SFT EAD leaves the SA-CCR templates.
 2. Implement **C07 (SA) row 0090 — SFT-netting** to receive the FCCM SFT EAD; it is currently unimplemented (`reporting/corep/generator.py:4043` — `# CCR rows (0090-0130) not implemented`). Template guidance: PS1/26 App. 17 (`docs/assets/ps126app17`).
 - **Files:** `reporting/corep/generator.py`, `reporting/pillar3/generator.py`; update `tests/expected_outputs/reporting/{crr,b31}/` goldens and the reporting reconciliation/golden tests.
 
-**Phase 7c — Aggregator roll-up split (optional).**
+**Phase 7c — Aggregator roll-up split (optional). ⏸ DEFERRED** (larger blast radius — sealed aggregator-exit contract; defer unless reconciliation needs it).
 If the operator wants SFT vs derivative CCR EAD/RWA reconcilable at portfolio level, add `ead_ccr_sft` / `ead_ccr_derivative` fields to `AggregatedResultBundle`. This touches the **sealed aggregator-exit contract** and the aggregator goldens — larger blast radius; defer unless reconciliation needs it.
 
-### Phase 8 — Docs + changelog
-Add a CCR-vs-SFT input-separation section to `docs/data-model/input-schemas.md` and `docs/specifications/crr/ccr/`, with an explicit callout disambiguating the two meanings of "SFT" (Section 6). Update `docs/appendix/changelog.md`. Run `uv run zensical build`.
+### Phase 8 — Docs + changelog ✅ DONE
+Added a CCR-vs-SFT input-separation section to [`docs/data-model/input-schemas.md`](../data-model/input-schemas.md#sft-input-schemas-fccm) and a dedicated FCCM SFT spec page at [`docs/specifications/crr/sft/index.md`](../specifications/crr/sft/index.md) (peer to the SA-CCR [`crr/ccr/`](../specifications/crr/ccr/index.md) directory), both carrying the explicit callout disambiguating the two meanings of "SFT" (Section 6). Consolidated the phases 1–7 narrative in `docs/appendix/changelog.md`. Corrected the `_filter_sft` `@cites` in `reporting/corep/generator.py` (was `PS1/26, paragraph 1.3` — the COREP Annex II negation convention — now `PS1/26`, matching the C 07.00 row 0090 / App. 17 guidance the function implements) and regenerated the citation snapshot. `uv run zensical build` passes.
 
 ---
 

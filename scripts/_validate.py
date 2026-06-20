@@ -34,6 +34,10 @@ SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
 # Accepts HEAD, master, origin/main, v0.3.1, and full/short SHAs.
 GIT_REF_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
 
+# Regulatory frameworks profile_memory.py can target. Mirrored as the argparse
+# ``choices`` so the CLI help and the taint sanitizer share one source of truth.
+FRAMEWORKS = ("crr", "basel31")
+
 
 def validate_semver(value: str) -> str:
     """Return ``value`` if it is a strict N.N.N version, else exit with an error."""
@@ -58,11 +62,33 @@ def validate_git_ref(value: str) -> str:
 
 
 def validate_iso_date(value: str) -> str:
-    """Return ``value`` if it is an ISO-8601 date (YYYY-MM-DD), else exit with an error."""
+    """Return an ISO-8601 date (YYYY-MM-DD) in canonical form, else exit with an error.
+
+    Parses with ``date.fromisoformat`` and returns the date reformatted via
+    ``date.isoformat()`` — a value derived from the parsed date, not the raw
+    operator string flowing through unchanged — so a caller can hand the result
+    to a subprocess argv as a sanitised value. Canonical inputs round-trip
+    identically (``2026-01-01`` -> ``2026-01-01``).
+    """
     try:
-        date.fromisoformat(value)
+        parsed = date.fromisoformat(value)
     except ValueError as exc:
         raise SystemExit(
             f"error: invalid reporting date {value!r}. Expected ISO YYYY-MM-DD (e.g. 2026-01-01)."
         ) from exc
-    return value
+    return parsed.isoformat()
+
+
+def validate_framework(value: str) -> str:
+    """Return the matching framework from ``FRAMEWORKS`` (a constant), else exit.
+
+    Returns the canonical constant element rather than the caller's argument, so
+    the value handed to a subprocess argv is a program-owned literal — not an
+    operator-supplied string a taint analyser must trust.
+    """
+    for framework in FRAMEWORKS:
+        if value == framework:
+            return framework
+    raise SystemExit(
+        f"error: invalid framework {value!r}. Expected one of: {', '.join(FRAMEWORKS)}."
+    )

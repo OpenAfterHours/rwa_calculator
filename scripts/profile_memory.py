@@ -44,7 +44,11 @@ from typing import Any
 # Make the sibling helper importable when this script is invoked directly.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _validate import validate_iso_date  # noqa: E402
+from _validate import (  # noqa: E402
+    FRAMEWORKS,
+    validate_framework,
+    validate_iso_date,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -54,6 +58,11 @@ LOANS_PER_COUNTERPARTY = 3
 RSS_SAMPLE_INTERVAL_S = 0.05
 MODES = ("in-memory", "spill")
 _MIB = 1024 * 1024
+
+# Worker -> parent result handoff. The worker prints exactly one JSON line on
+# stdout tagged with this sentinel (rather than writing to an operator-supplied
+# file path), keeping the result channel away from any filesystem-write sink.
+RESULT_SENTINEL = "__RWA_PROFILE_RESULT__"
 
 PSUTIL_MISSING_MSG = (
     "psutil is not installed - peak RSS will be reported as 'n/a'. "
@@ -70,7 +79,7 @@ def main() -> int:
     """Run both modes in subprocesses, sample RSS, print the comparison."""
     args = _parse_args()
 
-    if args.worker_mode:
+    if args.worker_mode is not None:
         return _run_worker(args)
 
     try:
@@ -111,34 +120,44 @@ class ModeResult:
 
 def _profile_mode(mode: str, args: argparse.Namespace, *, rss_available: bool) -> ModeResult:
     """Spawn a worker for one mode, sample its RSS until exit, read its result."""
-    with tempfile.TemporaryDirectory(prefix="rwa_profile_") as tmp:
-        result_json = Path(tmp) / "result.json"
-        cmd = [
-            sys.executable,
-            str(Path(__file__).resolve()),
-            "--worker-mode",
-            mode,
-            "--rows",
-            str(args.rows),
-            "--seed",
-            str(args.seed),
-            "--framework",
-            args.framework,
-            "--date",
-            args.date,
-            "--result-json",
-            str(result_json),
-        ]
-        # PYTHONHASHSEED pinned so set/dict iteration order in the dataset
-        # generator cannot differ between the two worker processes.
-        env = {**os.environ, "PYTHONHASHSEED": "0"}
-        proc = subprocess.Popen(cmd, cwd=REPO_ROOT, env=env)
-        peak_rss = _sample_peak_rss(proc) if rss_available else _wait_only(proc)
-        if proc.returncode != 0:
-            raise RuntimeError(f"worker for mode '{mode}' exited with {proc.returncode}")
+    # Sanitise each operator-supplied value into a LOCAL here, at the subprocess
+    # sink, so the argparse-source -> sanitizer -> argv dataflow is a single
+    # straight line inside one function. (SonarCloud's Python taint engine is not
+    # documented to be field-sensitive across functions, so validating args.* in
+    # _parse_args is not relied on to clear this sink.) `mode` is program-owned.
+    framework = validate_framework(args.framework)  # allowlist -> constant literal
+    date_arg = validate_iso_date(args.date)  # parsed + reformatted to canonical ISO
+    rows = str(int(args.rows))  # int() is a recognised numeric coercion/sanitizer
+    seed = str(int(args.seed))
+    cmd = [
+        sys.executable,
+        str(Path(__file__).resolve()),
+        "--worker-mode",
+        mode,
+        "--rows",
+        rows,
+        "--seed",
+        seed,
+        "--framework",
+        framework,
+        "--date",
+        date_arg,
+    ]
+    # PYTHONHASHSEED pinned so set/dict iteration order in the dataset generator
+    # cannot differ between the two worker processes.
+    env = {**os.environ, "PYTHONHASHSEED": "0"}
+    # The worker returns its result as a sentinel-tagged JSON line on stdout
+    # rather than via an operator-supplied file path, so no argv-derived path
+    # reaches a filesystem-write sink. The payload is small and emitted only at
+    # worker exit, so the unread stdout pipe cannot deadlock RSS sampling; stderr
+    # stays inherited so worker warnings remain visible.
+    proc = subprocess.Popen(cmd, cwd=REPO_ROOT, env=env, stdout=subprocess.PIPE, text=True)
+    peak_rss = _sample_peak_rss(proc) if rss_available else _wait_only(proc)
+    stdout = proc.stdout.read() if proc.stdout is not None else ""
+    if proc.returncode != 0:
+        raise RuntimeError(f"worker for mode '{mode}' exited with {proc.returncode}")
 
-        payload = json.loads(result_json.read_text(encoding="utf-8"))
-
+    payload = _extract_worker_result(stdout, mode)
     return ModeResult(
         mode=mode,
         peak_rss_bytes=peak_rss,
@@ -148,7 +167,15 @@ def _profile_mode(mode: str, args: argparse.Namespace, *, rss_available: bool) -
     )
 
 
-def _sample_peak_rss(proc: subprocess.Popen[bytes]) -> int:
+def _extract_worker_result(stdout: str, mode: str) -> dict[str, Any]:
+    """Pull the worker's sentinel-tagged JSON result line out of its stdout."""
+    for line in stdout.splitlines():
+        if line.startswith(RESULT_SENTINEL):
+            return json.loads(line.removeprefix(RESULT_SENTINEL))
+    raise RuntimeError(f"worker for mode '{mode}' produced no result line on stdout")
+
+
+def _sample_peak_rss(proc: subprocess.Popen[str]) -> int:
     """Poll the worker's RSS every ~50 ms until it exits; return the max seen.
 
     Sums RSS over the spawned process AND its descendants: on Windows a uv
@@ -186,7 +213,7 @@ def _children_of(ps_proc: Any) -> list[Any]:
         return []
 
 
-def _wait_only(proc: subprocess.Popen[bytes]) -> None:
+def _wait_only(proc: subprocess.Popen[str]) -> None:
     """Fallback when psutil is unavailable: just wait for the worker."""
     proc.wait()
     return None
@@ -198,7 +225,7 @@ def _wait_only(proc: subprocess.Popen[bytes]) -> None:
 
 
 def _run_worker(args: argparse.Namespace) -> int:
-    """Generate the dataset, run the pipeline once, write the result JSON."""
+    """Generate the dataset, run the pipeline once, emit the result JSON on stdout."""
     from dataclasses import replace
 
     from rwa_calc.contracts.config import CalculationConfig
@@ -255,7 +282,10 @@ def _run_worker(args: argparse.Namespace) -> int:
         "table_rows": table_rows,
         "edge_map": manifest["materialisation_map"],
     }
-    Path(args.result_json).write_text(json.dumps(payload), encoding="utf-8")
+    # Hand the result back to the parent on stdout (sentinel-tagged so the parent
+    # can pick it out of any incidental output) instead of writing to an
+    # operator-supplied path — this keeps the handoff off any filesystem sink.
+    print(f"{RESULT_SENTINEL}{json.dumps(payload)}", flush=True)
     return 0
 
 
@@ -330,7 +360,7 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--framework",
-        choices=["crr", "basel31"],
+        choices=list(FRAMEWORKS),
         default="crr",
         help="Regulatory framework (default: crr)",
     )
@@ -340,14 +370,12 @@ def _parse_args() -> argparse.Namespace:
         default="2026-01-01",
         help="Reporting date YYYY-MM-DD (default: 2026-01-01)",
     )
-    # Internal flags used for the per-mode worker subprocess.
+    # Internal flag used to drive a per-mode worker subprocess.
     parser.add_argument("--worker-mode", choices=list(MODES), default=None, help=argparse.SUPPRESS)
-    parser.add_argument("--result-json", type=str, default=None, help=argparse.SUPPRESS)
-    args = parser.parse_args()
-    # Validate the free-form reporting date in the PARENT, before it is placed on
-    # the worker's argv (the worker's own date.fromisoformat runs after the spawn).
-    args.date = validate_iso_date(args.date)
-    return args
+    # Operator-supplied values are sanitised at their sink sites: the worker argv
+    # in _profile_mode, and the worker hands its result back over stdout (never
+    # via an operator-supplied output path), so nothing needs validating here.
+    return parser.parse_args()
 
 
 if __name__ == "__main__":

@@ -257,5 +257,17 @@ not the conversation, is the source of truth.
 - **Stale engine citations to fix in Phase 2/4:** `engine/sft/fccm.py` still cites `Art. 224(2)(c)` for
   the 5-BD repo period (correct = `Art. 224(2)(b)`) and `Art. 226(2)` for the period rescale (Art. 226
   has no numbered paragraphs; the rescale is Art. 224(2)). Left untouched in Phase 0 (carry-only); fix
-  when Phase 2 edits the file and refresh the module docstring in Phase 4.
+  when Phase 2 edits the file and refresh the module docstring in Phase 4. **DONE** (Phases 2 + 4) for
+  the SFT/FCCM subsystem (`fccm.py`, `sft/__init__.py`, the two touched `haircut_tables.py` docstrings,
+  CCR-A11/A12 docstrings, SFT spec doc).
+
+### Follow-up (out of this scope — separate item)
+
+- **Codebase-wide `Art. 226(2)` mis-citation.** The same `Art. 226(2)` convention is used pervasively in
+  the broader CRM haircut path (`engine/crm/haircuts.py` ×7, `packs/common.py`, several basel31 tests,
+  and a test literally named `test_p2_18_art_226_1_...`). Phase 0's CRR-PDF reading (twice-verified) says
+  Art. 226 has no numbered paragraphs and the `√(T_M/10)` rescale is Art. 224(2). Before any mass change,
+  open a **focused investigation** to confirm this against the authoritative UK CRR text (the `art_226_1`
+  test name suggests a prior contrary belief) — then de-stale repo-wide in one dedicated pass. NOT folded
+  into the margined-SFT work to avoid touching unrelated subsystems.
 ```

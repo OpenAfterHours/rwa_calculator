@@ -20,35 +20,34 @@ Regulatory hand-calc (CRR Art. 279b(1)(b)(i) + Art. 277a(2) + Art. 278 + 274):
     adjusted_notional = |notional_leg1| * rate_USD_to_GBP
                       = 100m * 0.80 = 80m GBP                  (Art. 279b(1)(b)(i))
 
-    years_to_maturity = (2027-01-15 - 2026-01-15) / 365.25
-                      = 365 / 365.25
-                      = 0.99931553723477...                    (engine convention)
+    business_days_to_maturity (2026-01-15 -> 2027-01-15)
+                      ≈ 261 business days (Mon-Fri)            (engine convention)
 
-    MF                = sqrt(min(years_to_maturity, 1.0) / 1.0)
-                      = sqrt(0.99931553723477) ≈ 0.99965770... (Art. 279c(1))
+    MF                = sqrt(min(BD, 250) / 250)
+                      = sqrt(min(261, 250) / 250) = 1.0        (Art. 279c(1); >= 250 BD)
 
     effective_notional = delta * adjusted_notional * MF
-                       = 1.0 * 80m * 0.99965770...
-                       ≈ 79_972_616.13 GBP
+                       = 1.0 * 80m * 1.0
+                       = 80_000_000.0 GBP
 
     AddOn_HS_FX       = SF_FX * |D_HS|
-                      = 0.04 * 79_972_616.13
-                      ≈ 3_198_904.65 GBP                       (Art. 277a(2), CRE52.55)
+                      = 0.04 * 80_000_000.0
+                      = 3_200_000.0 GBP                        (Art. 277a(2), CRE52.55)
 
-    AddOn_FX (one HS) ≈ 3_198_904.65 GBP
+    AddOn_FX (one HS) = 3_200_000.0 GBP
 
     RC                = max(V - C, 0) = max(0 - 0, 0) = 0      (Art. 275(1))
 
     PFE multiplier    = min(1, 0.05 + 0.95 * exp(0 / (2*0.95*AddOn_aggregate)))
                       = min(1, 0.05 + 0.95 * 1.0) = 1.0         (Art. 278(3))
 
-    PFE_addon         = 1.0 * 3_198_904.65 ≈ 3_198_904.65 GBP   (Art. 278(1))
+    PFE_addon         = 1.0 * 3_200_000.0 = 3_200_000.0 GBP     (Art. 278(1))
 
-    EAD               = alpha * (RC + PFE) = 1.4 * 3_198_904.65
-                      ≈ 4_478_466.51 GBP                       (Art. 274(2))
+    EAD               = alpha * (RC + PFE) = 1.4 * 3_200_000.0
+                      = 4_480_000.0 GBP                        (Art. 274(2))
 
-    RWA               = EAD * RW = 4_478_466.51 * 0.50
-                      ≈ 2_239_233.26 GBP                       (Art. 120(1) Table 3)
+    RWA               = EAD * RW = 4_480_000.0 * 0.50
+                      = 2_240_000.0 GBP                        (Art. 120(1) Table 3)
 
 Counterparty reuse:
     CCR-A2 reuses the CCR-A1 institution counterparty (CP_001, GB, CQS 2) and

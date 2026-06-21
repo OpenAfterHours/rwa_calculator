@@ -7,20 +7,20 @@
   "ccr_method": "sa_ccr",
   "risk_type": "CCR_DERIVATIVE",
   "rc_unmargined": 0.0,
-  "addon_aggregate": 25304132.167317,
+  "addon_aggregate": 25310704.199375845,
   "addon_breakdown": {
     "interest_rate": 3914298.228,
-    "fx": 3198904.672,
+    "fx": 3200000.0,
     "credit": 2016405.972,
-    "equity": 15994523.295317,
+    "equity": 16000000.0,
     "commodity": 180000.0
   },
   "pfe_multiplier": 1.0,
-  "pfe_addon": 25304132.167317,
-  "ead_ccr": 35425785.034244,
-  "ead_final": 35425785.034244,
+  "pfe_addon": 25310704.199375845,
+  "ead_ccr": 35434985.87912618,
+  "ead_final": 35434985.87912618,
   "exposure_class": "institution",
   "approach_applied": "standardised",
   "risk_weight": 0.50,
-  "rwa_final": 17712892.517122
+  "rwa_final": 17717492.93956309
 }

@@ -216,13 +216,19 @@ correlation.
 
 ### Commodity within-bucket form (Art. 280c, CRE52.68–69)
 
-For each commodity bucket `b`:
+For each commodity bucket `b`, trades referencing the **same individual
+commodity** `k` (`commodity_reference`) are first netted into one effective
+notional `D_k` (full same-commodity offset) BEFORE the `ρ_CM = 0.40`
+within-bucket step — mirroring how the credit / equity add-ons net by
+`reference_entity`. A null `commodity_reference` falls back to `trade_id`, so
+each trade is its own reference and the per-trade behaviour is preserved:
 
 ```
 e_i      = δ_i × d_i × MF_i                  (per trade)
-D_b      = Σ_i in bucket b e_i                (signed)
-sum_e²_b = Σ_i in bucket b e_i²
-AddOn_b  = SF_CM[b] × sqrt( ρ_CM² × D_b² + (1 − ρ_CM²) × sum_e²_b )
+D_k      = Σ_i in commodity k  e_i            (signed; full same-commodity netting)
+D_b      = Σ_k in bucket b  D_k               (signed)
+sum_Dk²  = Σ_k in bucket b  D_k²
+AddOn_b  = SF_CM[b] × sqrt( ρ_CM² × D_b² + (1 − ρ_CM²) × sum_Dk² )
 ```
 
 The five bucket-level add-ons compose **without cross-bucket correlation**
@@ -328,10 +334,10 @@ single-trade netting set). The FX worked example flows through:
 
 ```
 adjusted_notional  = |100m USD| × 0.80 = 80,000,000 GBP    (Art. 279b(1)(b)(i))
-MF                 ≈ 0.99965770                             (Art. 279c(1))
-effective_notional ≈ 79,972,616.13
-AddOn_HS           = 0.04 × 79,972,616.13 ≈ 3,198,904.67    (Art. 277a(2))
-AddOn_FX           = 3,198,904.67                           (single HS; no cross-pair ρ)
+MF                 = 1.0                                    (Art. 279c(1); ≥ 250 BD)
+effective_notional = 80,000,000
+AddOn_HS           = 0.04 × 80,000,000 = 3,200,000         (Art. 277a(2))
+AddOn_FX           = 3,200,000                              (single HS; no cross-pair ρ)
 ```
 
 A second non-overlapping pair (e.g. EUR/JPY) in the same netting set would
@@ -400,17 +406,19 @@ Sketch (one netting set, one trade per bucket):
 SF_CM           = {ELECTRICITY: 0.40, OIL_GAS / METALS / AGRICULTURAL / OTHER: 0.18}
 ρ_CM            = 0.40            (Art. 280c — within-bucket only)
 
-# Per bucket b:
-D_b             = Σ_i in b ( δ_i × d_i × MF_i )            (signed)
-sum_e²_b        = Σ_i in b ( δ_i × d_i × MF_i )²
-AddOn_b         = SF_CM[b] × sqrt( ρ_CM² × D_b² + (1 − ρ_CM²) × sum_e²_b )
+# Per bucket b (same-commodity legs netted into D_k first):
+D_k             = Σ_i in commodity k ( δ_i × d_i × MF_i )  (signed)
+D_b             = Σ_k in b  D_k                            (signed)
+sum_Dk²         = Σ_k in b  D_k²
+AddOn_b         = SF_CM[b] × sqrt( ρ_CM² × D_b² + (1 − ρ_CM²) × sum_Dk² )
 
 AddOn_CM        = sqrt( Σ_b AddOn_b² )    (no cross-bucket ρ)
 ```
 
-A single-trade bucket collapses cleanly: `D_b = e_1`, `sum_e²_b = e_1²`,
-and `sqrt(ρ² × e_1² + (1 − ρ²) × e_1²) = |e_1|`, so
-`AddOn_b = SF_CM[b] × |e_1|`.
+A single-commodity bucket collapses cleanly: `D_b = D_k`, `sum_Dk² = D_k²`,
+and `sqrt(ρ² × D_k² + (1 − ρ²) × D_k²) = |D_k|`, so
+`AddOn_b = SF_CM[b] × |D_k|` (e.g. several legs on one electricity product
+fully net before the supervisory factor applies).
 
 ---
 

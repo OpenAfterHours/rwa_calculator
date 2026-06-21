@@ -98,17 +98,17 @@ Hand-calc:
 
 ```
 adjusted_notional  = |100m USD| × 0.80                         = 80,000,000 GBP   (Art. 279b(1)(b)(i))
-years_to_maturity  = (2027-01-15 − 2026-01-15) / 365.25        ≈ 0.99931554
-MF                 = sqrt(min(0.99931554, 1.0) / 1.0)          ≈ 0.99965770       (Art. 279c(1))
-effective_notional = 1.0 × 80,000,000 × 0.99965770             ≈ 79,972,616.13
-AddOn_HS           = 0.04 × 79,972,616.13                      ≈ 3,198,904.67     (Art. 277a(2))
-AddOn_FX           = 3,198,904.67                                                 (single HS)
+business_days_to_maturity (2026-01-15 → 2027-01-15)            ≈ 261 BD           (Mon-Fri)
+MF                 = sqrt(min(261, 250) / 250)                  = 1.0             (Art. 279c(1), ≥ 250 BD)
+effective_notional = 1.0 × 80,000,000 × 1.0                    = 80,000,000
+AddOn_HS           = 0.04 × 80,000,000                         = 3,200,000       (Art. 277a(2))
+AddOn_FX           = 3,200,000                                                    (single HS)
 RC                 = max(0 − 0, 0)                              = 0               (Art. 275(1))
 PFE_multiplier     = min(1, 0.05 + 0.95 × exp(0))               = 1.0             (Art. 278(3))
-PFE_addon          = 1.0 × 3,198,904.67                        ≈ 3,198,904.67    (Art. 278(1))
-EAD                = 1.4 × (0 + 3,198,904.67)                  ≈ 4,478,466.54    (Art. 274(2))
+PFE_addon          = 1.0 × 3,200,000                          = 3,200,000       (Art. 278(1))
+EAD                = 1.4 × (0 + 3,200,000)                     = 4,480,000       (Art. 274(2))
 RW                 = 0.50                                                         (Art. 120(1) Table 3, CQS 2)
-RWA                = 4,478,466.54 × 0.50                       ≈ 2,239,233.27 GBP
+RWA                = 4,480,000 × 0.50                          = 2,240,000 GBP
 ```
 
 Pinned by `tests/expected_outputs/ccr/CCR-A2.json` and the six assertions in

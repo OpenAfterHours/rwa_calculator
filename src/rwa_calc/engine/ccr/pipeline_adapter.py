@@ -213,12 +213,20 @@ def ccr_rows_to_exposures(
     trades_lf = raw_ccr.trades.trades
     netting_sets_lf = raw_ccr.netting_sets.netting_sets
 
-    # 1) Enrich trade-level frame with years_to_maturity, then chain the
-    #    per-trade SA-CCR components in regulatory order.
+    # 1) Enrich trade-level frame with residual-maturity measures, then chain the
+    #    per-trade SA-CCR components in regulatory order. Two distinct measures:
+    #    - ``years_to_maturity`` (calendar days / 365.25): feeds the Art. 277(2)
+    #      IR maturity buckets (1y / 5y thresholds), a calendar-based partition.
+    #    - ``business_days_to_maturity`` (Mon-Fri business-day count): feeds the
+    #      Art. 279c(1) unmargined maturity factor MF = sqrt(min(BD, 250) / 250),
+    #      on the same 250-business-day-year basis as the margined MF (Art. 279c(2)).
     trades_enriched = trades_lf.with_columns(
         ((pl.col("maturity_date") - pl.lit(reporting_date)).dt.total_days() / 365.25).alias(
             "years_to_maturity"
-        )
+        ),
+        pl.business_day_count(pl.lit(reporting_date), pl.col("maturity_date")).alias(
+            "business_days_to_maturity"
+        ),
     )
     trades_enriched = compute_adjusted_notional_ir(trades_enriched, reporting_date)
     # FX adjusted notional per Art. 279b(1)(b) — overlays the FX branch on top

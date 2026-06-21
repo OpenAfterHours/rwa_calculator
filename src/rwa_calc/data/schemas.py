@@ -1004,6 +1004,15 @@ TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # OTHER. UPPER-CASE to match ``SA_CCR_SUPERVISORY_FACTORS_COMMODITY``
     # keys in ``data/tables/sa_ccr_factors.py``. See COLUMN_VALUE_CONSTRAINTS.
     "commodity_type": ColumnSpec(pl.String, required=False),
+    # CRR Art. 280c / CRE52.68: the individual commodity reference within a
+    # bucket (e.g. a specific power product or delivery hub). Trades that share
+    # a ``commodity_reference`` are fully netted into one effective notional
+    # ``D_k`` BEFORE the within-bucket ρ=0.40 aggregation — mirroring how
+    # ``reference_entity`` partitions the credit / equity add-ons. Free-text
+    # (no COLUMN_VALUE_CONSTRAINTS entry). Nullable: when null the commodity
+    # add-on falls back to per-trade (``trade_id``) granularity, preserving the
+    # pre-existing behaviour for inputs that do not populate the column.
+    "commodity_reference": ColumnSpec(pl.String, required=False),
     # CRR Art. 280a / 280b / CRE52.61: discriminator for single-name vs index
     # in credit / equity asset classes. Default None (not False) — null means
     # "not applicable" (IR / FX / commodity rows); False would be a load-bearing

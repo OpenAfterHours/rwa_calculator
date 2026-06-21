@@ -266,14 +266,14 @@ rc_unmargined   = max(V − C, 0) = max(0 − 0, 0) = 0.0                  (Art.
 pfe_addon       = multiplier × AddOn_aggregate
                 = 1.0 × (SF_IR × |D_HS|)
                 = 1.0 × (0.005 × 1.0 × 100m × 1.0 × MF_unmargined)
-                ≈ 1.0 × (0.005 × 100,000,000 × 0.99965770)
-                ≈ 499,828.85                                            (Art. 278)
+                = 1.0 × (0.005 × 100,000,000 × 1.0)                     (≥ 250 BD → MF = 1.0)
+                = 500,000.00                                            (Art. 278)
 
 Apply Art. 274(2) with default α = 1.4:
 
 ead_ccr         = α × (rc_unmargined + pfe_addon)
-                = 1.4 × (0.0 + 499,828.85)
-                ≈ 699,760.39                                            (Art. 274(2))
+                = 1.4 × (0.0 + 500,000.00)
+                = 700,000.00                                            (Art. 274(2))
 ```
 
 The synthetic exposure row emitted by `ccr_rows_to_exposures` for

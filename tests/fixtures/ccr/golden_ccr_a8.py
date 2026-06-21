@@ -19,37 +19,35 @@ Regulatory hand-calc (CRR Art. 279b(1)(c) + Art. 277(3)(b) + Art. 278 + 274):
     adjusted_notional = market_price × number_of_units
                       = 25.0 × 40_000.0 = 1_000_000.0 GBP      (Art. 279b(1)(c))
 
-    years_to_maturity = (2027-01-15 - 2026-01-15) / 365.25
-                      = 365 / 365.25
-                      = 0.999315537...                          (engine convention)
+    business_days_to_maturity (2026-01-15 -> 2027-01-15)
+                      ≈ 261 business days (Mon-Fri)             (engine convention)
 
-    MF                = sqrt(min(0.999315537, 1.0) / 1.0)
-                      = sqrt(0.999315537)
-                      ≈ 0.999657706...                          (Art. 279c(1))
+    MF                = sqrt(min(BD, 250) / 250)
+                      = sqrt(min(261, 250) / 250) = 1.0         (Art. 279c(1); >= 250 BD)
 
     effective_notional = delta × d × MF
-                       = 1.0 × 1_000_000.0 × 0.999657706
-                       ≈ 999_657.706 GBP
+                       = 1.0 × 1_000_000.0 × 1.0
+                       = 1_000_000.0 GBP
 
-    D_ELECTRICITY     = 999_657.706                             (single-trade, one bucket)
+    D_ELECTRICITY     = 1_000_000.0                             (single-trade, one bucket)
 
     AddOn_ELECTRICITY = SF_CM[ELECTRICITY] × |D_ELECTRICITY|
-                      = 0.40 × 999_657.706                     (Art. 280 Table 2)
-                      ≈ 399_863.080 GBP
+                      = 0.40 × 1_000_000.0                     (Art. 280 Table 2)
+                      = 400_000.0 GBP
 
-    AddOn_commodity   ≈ 399_863.080 GBP                        (Art. 280c: single bucket)
+    AddOn_commodity   = 400_000.0 GBP                          (Art. 280c: single bucket)
 
     RC                = max(V - C, 0) = max(0 - 0, 0) = 0      (Art. 275(1))
 
     PFE multiplier    = min(1, 0.05 + 0.95 × exp(0/(2×0.95×AddOn))) = 1.0  (Art. 278(3))
 
-    PFE_addon         ≈ 399_863.080 GBP                        (Art. 278(1))
+    PFE_addon         = 400_000.0 GBP                          (Art. 278(1))
 
-    EAD               = alpha × (RC + PFE) = 1.4 × 399_863.080
-                      ≈ 559_808.312 GBP                        (Art. 274(2))
+    EAD               = alpha × (RC + PFE) = 1.4 × 400_000.0
+                      = 560_000.0 GBP                          (Art. 274(2))
 
-    RWA               = EAD × RW = 559_808.312 × 0.50
-                      ≈ 279_904.156 GBP                        (Art. 120(1) Table 3)
+    RWA               = EAD × RW = 560_000.0 × 0.50
+                      = 280_000.0 GBP                          (Art. 120(1) Table 3)
 
 Load-bearing assertion:
     ELECTRICITY uses SF_CM = 0.40 (not the 0.18 catch-all for OIL_GAS/METALS/etc.).
@@ -144,12 +142,12 @@ CCR_A8_IS_MARGINED: bool = False
 # d = 25.0 × 40_000.0 = 1_000_000.0                    [Art. 279b(1)(c)]
 CCR_A8_ADJUSTED_NOTIONAL: float = 1_000_000.0
 
-# years_to_maturity = 365 / 365.25 = 0.999315537...
-# MF = sqrt(0.999315537) = 0.999657706...               [Art. 279c(1)]
-# e_i = 1.0 × 1_000_000.0 × 0.999657706 = 999_657.706...
-# D_ELECTRICITY = 999_657.706...
-# AddOn = 0.40 × 999_657.706 = 399_863.080...           [SF_CM ELECTRICITY = 0.40]
-CCR_A8_ADDON_AGGREGATE: float = 399_863.080  # rounded to 3 dp for test tolerance
+# business_days_to_maturity (2026-01-15 -> 2027-01-15) ≈ 261 BD (>= 250)
+# MF = sqrt(min(261, 250) / 250) = 1.0                  [Art. 279c(1), business-day basis]
+# e_i = 1.0 × 1_000_000.0 × 1.0 = 1_000_000.0
+# D_ELECTRICITY = 1_000_000.0
+# AddOn = 0.40 × 1_000_000.0 = 400_000.0                [SF_CM ELECTRICITY = 0.40]
+CCR_A8_ADDON_AGGREGATE: float = 400_000.0
 
 # RC = max(0 - 0, 0) = 0                                [Art. 275(1)]
 CCR_A8_RC: float = 0.0
@@ -157,17 +155,17 @@ CCR_A8_RC: float = 0.0
 # PFE multiplier = 1.0 (V = C = 0)                     [Art. 278(3)]
 CCR_A8_PFE_MULTIPLIER: float = 1.0
 
-# PFE_addon = 1.0 × 399_863.080 = 399_863.080          [Art. 278(1)]
-CCR_A8_PFE_ADDON: float = 399_863.080
+# PFE_addon = 1.0 × 400_000.0 = 400_000.0              [Art. 278(1)]
+CCR_A8_PFE_ADDON: float = 400_000.0
 
-# EAD = 1.4 × 399_863.080 = 559_808.312                [Art. 274(2)]
-CCR_A8_EAD: float = 559_808.312
+# EAD = 1.4 × 400_000.0 = 560_000.0                    [Art. 274(2)]
+CCR_A8_EAD: float = 560_000.0
 
 # SA risk weight: institution CQS 2 → 50%               [Art. 120(1) Table 3]
 CCR_A8_RISK_WEIGHT: float = 0.50
 
-# RWA = 559_808.312 × 0.50 = 279_904.156
-CCR_A8_RWA: float = 279_904.156
+# RWA = 560_000.0 × 0.50 = 280_000.0
+CCR_A8_RWA: float = 280_000.0
 
 CCR_A8_EXPOSURE_CLASS: str = "institution"
 

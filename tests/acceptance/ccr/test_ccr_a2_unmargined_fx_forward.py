@@ -23,15 +23,15 @@ Scenario:
 
 Hand-calculation reference (see golden_ccr_a2.py docstring for full derivation):
     adjusted_notional = 80m GBP   (Art. 279b(1)(b)(i): take USD leg converted)
-    MF                = sqrt(365 / 365.25) ≈ 0.99965770
-    effective_notional ≈ 79,972,616.13 GBP
-    AddOn_FX          = 0.04 * 79_972_616.13 ≈ 3,198,904.67 GBP
+    MF                = sqrt(min(261 BD, 250) / 250) = 1.0  (Art. 279c(1); >= 250 BD)
+    effective_notional = 80,000,000 GBP
+    AddOn_FX          = 0.04 * 80_000_000 = 3,200,000 GBP
     RC                = 0
     PFE_multiplier    = 1.0 (V-C = 0 → exp(0) = 1 → 0.05 + 0.95 = 1.0)
-    PFE_addon         ≈ 3,198,904.67 GBP
-    EAD               ≈ 4,478,466.54 GBP
+    PFE_addon         = 3,200,000 GBP
+    EAD               = 4,480,000 GBP
     RW                = 0.50 (institution, CQS 2, CRR Art. 120(1) Table 3)
-    RWA               ≈ 2,239,233.27 GBP
+    RWA               = 2,240,000 GBP
 
 References:
     - CRR Art. 274(2): EAD = alpha * (RC + PFE), alpha = 1.4

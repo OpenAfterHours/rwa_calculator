@@ -7,13 +7,13 @@
   "ccr_method": "sa_ccr",
   "risk_type": "CCR_DERIVATIVE",
   "rc_unmargined": 0.0,
-  "addon_aggregate": 5976656.65,
+  "addon_aggregate": 5979017.546862791,
   "pfe_multiplier": 1.0,
-  "pfe_addon": 5976656.65,
-  "ead_ccr": 8367319.31,
-  "ead_final": 8367319.31,
+  "pfe_addon": 5979017.546862791,
+  "ead_ccr": 8370624.565607907,
+  "ead_final": 8370624.565607907,
   "exposure_class": "institution",
   "approach_applied": "standardised",
   "risk_weight": 0.50,
-  "rwa_final": 4183659.66
+  "rwa_final": 4185312.2828039536
 }

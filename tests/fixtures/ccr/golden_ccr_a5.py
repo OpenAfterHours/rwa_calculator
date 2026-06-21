@@ -143,26 +143,28 @@ CCR_A5_ADJUSTED_NOTIONAL: float = 50_000_000.0
 # Art. 275(1): RC = max(V - C, 0) = max(0 - 0, 0).
 CCR_A5_RC_UNMARGINED: float = 0.0
 
-# Art. 277a + 280b (single-name collapse, one trade):
-# AddOn_HS = 0.32 × 49_982_885.297867 = 15_994_523.295317
-CCR_A5_ADDON_AGGREGATE: float = 15_994_523.295317
+# Art. 277a + 280b (single-name collapse, one trade). MF on the 250-business-day
+# basis (Art. 279c(1)): the 1y TRS has ≥ 250 BD to maturity, so MF = 1.0 and the
+# effective notional equals the full adjusted notional:
+# AddOn_HS = 0.32 × 50_000_000 = 16_000_000.0
+CCR_A5_ADDON_AGGREGATE: float = 16_000_000.0
 
 # Art. 278(3): PFE multiplier = 1.0 (at-par, unmargined).
 CCR_A5_PFE_MULTIPLIER: float = 1.0
 
 # Art. 278(1): PFE_addon = multiplier × AddOn_aggregate.
-CCR_A5_PFE_ADDON: float = 15_994_523.295317
+CCR_A5_PFE_ADDON: float = 16_000_000.0
 
-# Art. 274(2): EAD = 1.4 × (RC + PFE).
-CCR_A5_EAD_CCR: float = 22_392_332.613444
-CCR_A5_EAD_FINAL: float = 22_392_332.613444
+# Art. 274(2): EAD = 1.4 × (RC + PFE) = 1.4 × 16_000_000.
+CCR_A5_EAD_CCR: float = 22_400_000.0
+CCR_A5_EAD_FINAL: float = 22_400_000.0
 
 # Art. 120(1) Table 3: institution CQS 2 → 50% SA risk weight.
 CCR_A5_EXPOSURE_CLASS: str = "institution"
 CCR_A5_RISK_WEIGHT: float = 0.50
 
-# RWA = EAD × RW.
-CCR_A5_RWA_FINAL: float = 11_196_166.306722
+# RWA = EAD × RW = 22_400_000 × 0.50.
+CCR_A5_RWA_FINAL: float = 11_200_000.0
 
 # Tolerance bounds for acceptance assertions.
 CCR_A5_MONETARY_REL_TOLERANCE: float = 1e-6

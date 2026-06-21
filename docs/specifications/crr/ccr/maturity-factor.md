@@ -17,25 +17,40 @@ add-on aggregation in
 
 ## Unmargined formula — Art. 279c(1)
 
-For trades in an **unmargined** netting set:
+For trades in an **unmargined** netting set, the maturity factor is measured on
+the **250-business-day-year basis** — the same "1 year" the margined branch
+divides MPOR by. CRR Art. 279c writes both branches against a single "1 year"
+denominator (`min(M, 1y)/1y` and `(3/2)·sqrt(MPOR/1y)`); since the margined MPOR
+is a business-day count, "1 year" = 250 business days throughout, so the
+unmargined residual maturity is measured in business days too:
 
 ```
-MF_unmargined = sqrt( min(M, 1y) / 1y )
+MF_unmargined = sqrt( min(max(BD, 10), 250) / 250 )
 ```
 
-where `M` is the residual maturity in years from the reporting date to
-the trade's maturity date, with the regulatory floor
+where `BD` is the residual maturity in **business days** (Mon-Fri, no holiday
+calendar) from the reporting date to the trade's maturity date, supplied by the
+SA-CCR adapter as `business_days_to_maturity` via `pl.business_day_count`.
 
-```
-M >= 10 business days = 10 / 250 = 0.04 years
-```
+The `250 BD` cap means any trade with `BD >= 250` (≈ one calendar year) collapses
+to `MF = 1.0`. For example, a trade exactly 200 business days from maturity has
+`MF = sqrt(200/250) = 0.8944`.
 
-applied upstream when populating `years_to_maturity` (250 business-day
-year convention per BCBS CRE52.40 footnote).
+The **10-BD floor** on the residual maturity `M` (BCBS CRE52.47-52.48,
+footnote 13) means a trade with fewer than 10 business days to maturity never
+drops below `MF = sqrt(10/250) = 0.20`. For example, a 5-business-day trade
+clamps to `MF = 0.20` (not `sqrt(5/250) = 0.1414`, which would be
+anti-conservative). This 10-BD floor is on the residual maturity `M` and is
+**distinct** from (a) the Art. 279b 10-BD floor on the *start date* `S` in the
+supervisory duration (`adjusted-notional.md`) and (b) the Art. 285 margined MPOR
+floors — same numeric value, different provisions on different quantities.
 
-The `1y` cap means any trade with `M >= 1y` collapses to `MF = 1.0`. The
-`10 BD` floor means very short-dated trades never collapse below
-`sqrt(0.04) ≈ 0.20`.
+> **Calendar vs business days.** The unmargined MF deliberately uses the
+> business-day measure, NOT the calendar-day / 365.25 measure. The two differ for
+> sub-1-year trades (e.g. 200 business days = 280 calendar days → `sqrt(200/250) =
+> 0.8944` vs `sqrt(280/365.25) = 0.8756`). The separate **Art. 277(2) IR maturity
+> buckets** (1y / 5y thresholds) remain a calendar-based partition and are
+> unaffected — they read `years_to_maturity`, not `business_days_to_maturity`.
 
 Engine entry point:
 
@@ -43,7 +58,7 @@ Engine entry point:
 from rwa_calc.engine.ccr.maturity_factor import compute_maturity_factor_unmargined
 
 def compute_maturity_factor_unmargined(trades: pl.LazyFrame) -> pl.LazyFrame:
-    """MF = sqrt(min(M, 1y) / 1y). Reads `years_to_maturity`,
+    """MF = sqrt(min(max(BD, 10), 250) / 250). Reads `business_days_to_maturity`,
     writes `maturity_factor`. See `src/rwa_calc/engine/ccr/maturity_factor.py`."""
 ```
 
@@ -328,32 +343,42 @@ MF_margined = 1.5 × sqrt(24 / 250)
 
 ### Unmargined sanity check — Art. 279c(1)
 
-Used by every **unmargined** CCR-A acceptance scenario (`years_to_maturity`
-is the residual maturity in years):
+Used by every **unmargined** CCR-A acceptance scenario (`business_days_to_maturity`
+is the residual maturity in business days):
 
 ```
-M = 0.99931554 years      (1-year forward, reporting_date = 2026-01-15)
-MF_unmargined = sqrt( min(0.99931554, 1.0) / 1.0 )
-              = sqrt(0.99931554)
-              ≈ 0.99965770
+BD = 200 business days     (sub-year forward, reporting_date = 2026-01-15)
+MF_unmargined = sqrt( min(max(200, 10), 250) / 250 )
+              = sqrt(0.80)
+              ≈ 0.89443
 ```
 
-A 10-business-day forward sits at the floor:
+A sub-10-business-day trade sits at the 10-BD floor (CRE52.47-52.48 fn.13):
 
 ```
-M_floor = 10 / 250 = 0.04
-MF_unmargined = sqrt(0.04) = 0.20
+BD = 5 business days
+MF_unmargined = sqrt( min(max(5, 10), 250) / 250 )
+              = sqrt(10 / 250) = sqrt(0.04) = 0.20
 ```
 
-A 10-year swap collapses to the cap:
+A 1-year forward (≈ 261 business days) sits at the cap:
 
 ```
-MF_unmargined = sqrt( min(10, 1.0) / 1.0 ) = sqrt(1.0) = 1.0
+MF_unmargined = sqrt( min(max(261, 10), 250) / 250 ) = sqrt(1.0) = 1.0
+```
+
+A 10-year swap (≈ 2500 business days) collapses to the cap:
+
+```
+MF_unmargined = sqrt( min(max(2500, 10), 250) / 250 ) = sqrt(1.0) = 1.0
 ```
 
 ## References
 
 - CRR Art. 279c(1) — unmargined maturity factor `sqrt(min(M, 1y)/1y)`.
+- BCBS CRE52.47-52.48 (+ footnote 13) — residual maturity `M` floored at
+  10 business days for the unmargined maturity factor (so `MF >= sqrt(10/250) =
+  0.20`); distinct from the Art. 279b start-date floor on `S`.
 - CRR Art. 279c(2) — margined maturity factor `1.5 × sqrt(MPOR_eff/250)`.
 - CRR Art. 285(2) — base MPOR floors. This derivatives-only engine uses the
   Art. 285(2)(b) 10-BD OTC base; the Art. 285(2)(a) 5-BD SFT/repo base does

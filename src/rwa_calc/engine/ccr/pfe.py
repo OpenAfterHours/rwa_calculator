@@ -447,17 +447,29 @@ def _compute_addon_commodity(trades: pl.LazyFrame) -> pl.LazyFrame:
     """Commodity asset-class add-on per CRR Art. 277(3)(b) + Art. 277a + Art. 280c.
 
     Per-bucket aggregation across the five commodity buckets
-    (ELECTRICITY / OIL_GAS / METALS / AGRICULTURAL / OTHER):
+    (ELECTRICITY / OIL_GAS / METALS / AGRICULTURAL / OTHER). Within a bucket the
+    individual-commodity reference ``k`` (``commodity_reference``) is the unit of
+    the correlation formula: trades that reference the **same** commodity are
+    fully netted into one effective notional ``D_k`` BEFORE the ρ=0.40 step
+    (Art. 280c / CRE52.68), exactly as the credit / equity add-ons net by
+    ``reference_entity``.
 
         e_i           = δ_i × d_i × MF_i                          (per trade)
-        D_b           = sum_i e_i within bucket b                 (signed sum)
-        sum_e2_b      = sum_i e_i²
-        AddOn_b       = SF_CM[b] × sqrt(ρ² × D_b² + (1−ρ²) × sum_e2_b)
+        D_k           = sum_i e_i within commodity reference k     (full netting)
+        D_b           = sum_k D_k within bucket b                  (signed sum)
+        sum_Dk2_b     = sum_k D_k²
+        AddOn_b       = SF_CM[b] × sqrt(ρ² × D_b² + (1−ρ²) × sum_Dk2_b)
         AddOn_commod  = sqrt(sum_b AddOn_b²)                      (CRE52.69)
 
     where ρ = 0.40 within-bucket (Art. 280c / CRE52.68) and SF_CM[b] is the
     bucket-specific supervisory factor from Art. 280 Table 2
     (ELECTRICITY=0.40, OIL_GAS/METALS/AGRICULTURAL/OTHER=0.18).
+
+    Reference fallback: when ``commodity_reference`` is null the per-commodity
+    key falls back to ``trade_id``, so each trade becomes its own reference and
+    ``D_k == e_i`` — making ``sum_Dk2_b == sum_i e_i²`` and reproducing the
+    pre-Art.-280c-netting behaviour exactly. Trades opt into same-commodity
+    netting by sharing a non-null ``commodity_reference``.
 
     Critical: ``commodity_type`` values are UPPER-CASE per the schema enum at
     ``schemas.py`` COLUMN_VALUE_CONSTRAINTS. Rows with null commodity_type are
@@ -471,8 +483,8 @@ def _compute_addon_commodity(trades: pl.LazyFrame) -> pl.LazyFrame:
 
     References:
         CRR Art. 277(3)(b) (5 buckets); CRR Art. 277a(1) (intra-class agg);
-        CRR Art. 280c (within-bucket ρ=0.40, no cross-bucket); CRR Art. 280
-        Table 2 (SF_CM per bucket); BCBS CRE52.67-69.
+        CRR Art. 280c (within-bucket ρ=0.40, no cross-bucket; per-commodity
+        netting); CRR Art. 280 Table 2 (SF_CM per bucket); BCBS CRE52.67-69.
     """
     rho = _RHO_COMMODITY
     rho2 = rho * rho
@@ -489,13 +501,22 @@ def _compute_addon_commodity(trades: pl.LazyFrame) -> pl.LazyFrame:
     )
 
     # Defensive: upstream IR / FX / equity callers may pass frames without a
-    # commodity_type column or with the column inferred as null dtype (when
-    # the only rows are non-commodity with None). Coerce to Utf8 so the
-    # downstream join against sf_cm_lookup's String key resolves cleanly.
-    trades = ensure_columns(trades, {"commodity_type": TRADE_SCHEMA["commodity_type"]})
+    # commodity_type / commodity_reference column or with the column inferred as
+    # null dtype (when the only rows are non-commodity with None). Coerce to Utf8
+    # so the downstream join against sf_cm_lookup's String key resolves cleanly
+    # and the per-commodity group key is well-typed.
+    trades = ensure_columns(
+        trades,
+        {
+            "commodity_type": TRADE_SCHEMA["commodity_type"],
+            "commodity_reference": TRADE_SCHEMA["commodity_reference"],
+        },
+    )
     schema = trades.collect_schema()
     if schema["commodity_type"] != pl.Utf8:
         trades = trades.with_columns(pl.col("commodity_type").cast(pl.Utf8))
+    if schema["commodity_reference"] != pl.Utf8:
+        trades = trades.with_columns(pl.col("commodity_reference").cast(pl.Utf8))
 
     # Commodity rows with a populated commodity_type only — null commodity_type
     # does not fall back to OTHER per the regulatory contract.
@@ -503,26 +524,37 @@ def _compute_addon_commodity(trades: pl.LazyFrame) -> pl.LazyFrame:
         (pl.col("asset_class") == "commodity") & pl.col("commodity_type").is_not_null()
     )
 
-    # Per-trade effective notional e_i = δ × d × MF (Art. 277a(1)).
+    # Per-trade effective notional e_i = δ × d × MF (Art. 277a(1)). The
+    # individual-commodity key ``_commodity_ref`` falls back to ``trade_id`` when
+    # ``commodity_reference`` is null, so unkeyed trades stay at per-trade grain.
     trade_terms = co_trades.with_columns(
         (
             pl.col("supervisory_delta") * pl.col("adjusted_notional") * pl.col("maturity_factor")
-        ).alias("effective_notional_trade")
+        ).alias("effective_notional_trade"),
+        pl.coalesce(pl.col("commodity_reference"), pl.col("trade_id")).alias("_commodity_ref"),
     )
 
-    # Bucket-level aggregates D_b (signed sum) and sum_e2_b (sum of squares).
-    d_b = trade_terms.group_by(["netting_set_id", "asset_class", "commodity_type"]).agg(
+    # Per-commodity netting (Art. 280c / CRE52.68): sum effective notionals over
+    # trades that reference the SAME individual commodity into D_k BEFORE the
+    # within-bucket ρ aggregation.
+    per_commodity = trade_terms.group_by(
+        ["netting_set_id", "asset_class", "commodity_type", "_commodity_ref"]
+    ).agg(pl.col("effective_notional_trade").sum().alias("d_k"))
+
+    # Bucket-level aggregates over the per-commodity D_k: D_b (signed sum) and
+    # sum_Dk2_b (sum of squared per-commodity effective notionals).
+    d_b = per_commodity.group_by(["netting_set_id", "asset_class", "commodity_type"]).agg(
         [
-            pl.col("effective_notional_trade").sum().alias("d_bucket"),
-            (pl.col("effective_notional_trade") ** 2).sum().alias("sum_e2_bucket"),
+            pl.col("d_k").sum().alias("d_bucket"),
+            (pl.col("d_k") ** 2).sum().alias("sum_dk2_bucket"),
         ]
     )
 
-    # AddOn_b = SF_CM[b] × sqrt(ρ² × D_b² + (1−ρ²) × sum_e2_b).
+    # AddOn_b = SF_CM[b] × sqrt(ρ² × D_b² + (1−ρ²) × sum_Dk2_b).
     with_sf = d_b.join(sf_cm_lookup, on="commodity_type", how="left").with_columns(
         (
             pl.col("_sf_cm")
-            * (rho2 * pl.col("d_bucket") ** 2 + one_minus_rho2 * pl.col("sum_e2_bucket")).sqrt()
+            * (rho2 * pl.col("d_bucket") ** 2 + one_minus_rho2 * pl.col("sum_dk2_bucket")).sqrt()
         ).alias("addon_bucket")
     )
 

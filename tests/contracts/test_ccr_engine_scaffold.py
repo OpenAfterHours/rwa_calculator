@@ -287,21 +287,23 @@ def test_compute_rc_unmargined_clamps_at_zero() -> None:
 
 
 def test_compute_maturity_factor_unmargined_three_rows() -> None:
-    """MF_i = sqrt(min(M_i, 1y) / 1y) — three regimes (above-cap, sub-year, exact-quarter).
+    """MF_i = sqrt(min(BD_i, 250) / 250) — three regimes on the 250-BD-year basis.
 
-    CRR Art. 279c(1): MF_i = sqrt(min(M_i, 1y) / 1y) for unmargined trades.
-    Row 0 (T-10Y): min(10.0, 1.0) / 1.0 = 1.0  -> sqrt(1.0)  = 1.0
-    Row 1 (T-6M):  min(0.5,  1.0) / 1.0 = 0.5  -> sqrt(0.5)  ≈ 0.7071...
-    Row 2 (T-3M):  min(0.25, 1.0) / 1.0 = 0.25 -> sqrt(0.25) = 0.5
+    CRR Art. 279c(1) on the business-day basis: MF_i = sqrt(min(BD_i, 250) / 250)
+    where BD_i is the residual maturity in business days. The "1 year" cap is the
+    250-business-day year shared with the margined branch.
+    Row 0 (above-cap, 2500 BD): min(2500, 250) / 250 = 1.0  -> sqrt(1.0)  = 1.0
+    Row 1 (125 BD ≈ ½y):        min(125,  250) / 250 = 0.5  -> sqrt(0.5)  ≈ 0.7071...
+    Row 2 (90 BD):              min(90,   250) / 250 = 0.36 -> sqrt(0.36) = 0.6
     """
     from rwa_calc.engine.ccr.maturity_factor import compute_maturity_factor_unmargined
 
-    # Arrange
+    # Arrange — residual maturity supplied in BUSINESS DAYS (the new MF basis).
     lf = pl.LazyFrame(
         {
-            "trade_id": ["T-10Y", "T-6M", "T-3M"],
+            "trade_id": ["T-ABOVE-CAP", "T-125BD", "T-90BD"],
             "netting_set_id": ["NS-001", "NS-001", "NS-002"],
-            "years_to_maturity": [10.0, 0.5, 0.25],
+            "business_days_to_maturity": [2500, 125, 90],
         }
     )
 
@@ -316,7 +318,7 @@ def test_compute_maturity_factor_unmargined_three_rows() -> None:
     actual = result["maturity_factor"].to_list()
     assert actual[0] == pytest.approx(1.0, rel=1e-12)
     assert actual[1] == pytest.approx(0.7071067811865476, rel=1e-12)
-    assert actual[2] == pytest.approx(0.5, rel=1e-12)
+    assert actual[2] == pytest.approx(0.6, rel=1e-12)
 
 
 # ===========================================================================

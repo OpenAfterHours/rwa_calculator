@@ -557,6 +557,19 @@ ENTRIES: dict[str, RuleEntry] = {
         value=250,
         citation=Citation("CRR", "279c", "(2) business days per year in the MF sqrt divisor"),
     ),
+    # Unmargined maturity-factor remaining-maturity floor: M floored at 10 BD, so
+    # MF never drops below sqrt(10/250) = 0.20. Distinct from the Art. 279b start-
+    # date floor (on S) and the Art. 285 margined MPOR floors — same 10-BD value,
+    # different provision applied to the residual maturity M. Regime-invariant.
+    "mf_unmargined_floor_days": IntParam(
+        name="mf_unmargined_floor_days",
+        value=10,
+        citation=Citation(
+            "CRR",
+            "279c",
+            "(1) unmargined remaining-maturity M floored at 10 BD (BCBS CRE52.47-52.48 fn.13)",
+        ),
+    ),
     # Failed-trade settlement-risk band lower bounds in working days past due
     # (CRR Art. 378 DvP Table 1 / Art. 379 non-DvP Column 4). Integer day counts.
     "failed_trade_dvp_band_5_15_lower_days": IntParam(

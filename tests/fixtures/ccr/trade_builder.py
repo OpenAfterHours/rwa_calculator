@@ -102,6 +102,10 @@ class Trade:
     reference_entity: str | None = None
     # CRR Art. 277(3)(b): commodity bucket — ELECTRICITY / OIL_GAS / METALS / AGRICULTURAL / OTHER.
     commodity_type: str | None = None
+    # CRR Art. 280c: individual commodity reference within a bucket. Trades that
+    # share it net fully into one effective notional before the ρ=0.40 step;
+    # null falls back to ``trade_id`` (per-trade granularity).
+    commodity_reference: str | None = None
     # CRR Art. 280a / 280b: single-name vs index discriminator for credit / equity.
     is_index: bool | None = None
 
@@ -137,6 +141,7 @@ class Trade:
             "number_of_units": self.number_of_units,
             "reference_entity": self.reference_entity,
             "commodity_type": self.commodity_type,
+            "commodity_reference": self.commodity_reference,
             "is_index": self.is_index,
             "credit_quality": self.credit_quality,
         }

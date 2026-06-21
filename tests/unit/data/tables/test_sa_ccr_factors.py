@@ -331,6 +331,17 @@ class TestMaturityFactorConstants:
             f"MF_UNMARGINED_DENOM_YEARS must be Decimal('1.0') per Art. 279c, got {val!r}"
         )
 
+    def test_mf_unmargined_floor_days_is_10(self) -> None:
+        """Art. 279c(1) / BCBS CRE52.47-52.48 fn.13: unmargined M floored at 10 BD."""
+        # Arrange
+        val = _PACK.int_param("mf_unmargined_floor_days").value
+
+        # Assert
+        assert val == 10, (
+            f"mf_unmargined_floor_days must be 10 per Art. 279c(1) / CRE52.47-52.48 fn.13, "
+            f"got {val!r}"
+        )
+
     def test_mf_margined_scalar_is_1_5(self) -> None:
         """Art. 279c(1)(b): margined MF scalar = 1.5 (the 3/2 factor)."""
         # Arrange

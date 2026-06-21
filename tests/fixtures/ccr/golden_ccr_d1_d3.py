@@ -201,13 +201,15 @@ CCR_D2_IS_LEGALLY_ENFORCEABLE: bool = True
 CCR_D2_IS_MARGINED: bool = False
 
 # Golden expected values (from CCR-A2.json, CRR Art. 274-278-279b(1)(b)(i)-279c).
+# Unmargined MF on the 250-business-day basis (Art. 279c(1)): the 1y FX forward
+# has ≥ 250 BD to maturity, so MF = 1.0 and AddOn = SF_FX × |D_HS| = 0.04 × 80m.
 CCR_D2_EXPECTED_CCR_METHOD: str = "sa_ccr"
 CCR_D2_EXPECTED_PFE_MULTIPLIER: float = 1.0
 CCR_D2_EXPECTED_RC_UNMARGINED: float = 0.0
-CCR_D2_EXPECTED_PFE_ADDON: float = 3_198_904.672
-CCR_D2_EXPECTED_EAD: float = 4_478_466.541
+CCR_D2_EXPECTED_PFE_ADDON: float = 3_200_000.0
+CCR_D2_EXPECTED_EAD: float = 4_480_000.0
 CCR_D2_EXPECTED_RISK_WEIGHT: float = 0.50
-CCR_D2_EXPECTED_RWA: float = 2_239_233.271
+CCR_D2_EXPECTED_RWA: float = 2_240_000.0
 
 CCR_D2_EXPOSURE_REFERENCE: str = f"ccr__{CCR_D2_NETTING_SET_ID}"
 

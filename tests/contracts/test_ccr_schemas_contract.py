@@ -402,7 +402,8 @@ _P8_35_EXPECTED_COLUMN_COUNT = (
     # 23 pre-P8.33 + 5 (P8.33) + 1 (P8.35: credit_quality) + 1 (P8.29: is_legacy_cva_exempt)
     # + 3 (CCR/SFT IRB effective-maturity fix Phase 2: under_master_netting_agreement,
     #   qualifies_one_day_maturity_floor, qualifies_mna_intermediate_floor — Art. 162)
-    33
+    # + 1 (commodity same-reference netting: commodity_reference — Art. 280c)
+    34
 )
 _P8_33_COMMODITY_BUCKETS = {"ELECTRICITY", "OIL_GAS", "METALS", "AGRICULTURAL", "OTHER"}
 
@@ -620,6 +621,7 @@ def test_trade_schema_column_count_includes_credit_quality() -> None:
         f"(23 pre-P8.33 + 5 P8.33: market_price, number_of_units, reference_entity, "
         f"commodity_type, is_index + 1 P8.35: credit_quality + 1 P8.29: is_legacy_cva_exempt "
         f"+ 3 Art. 162 IRB-maturity flags: under_master_netting_agreement, "
-        f"qualifies_one_day_maturity_floor, qualifies_mna_intermediate_floor), "
+        f"qualifies_one_day_maturity_floor, qualifies_mna_intermediate_floor "
+        f"+ 1 Art. 280c commodity_reference), "
         f"got {col_count}: {list(schema.keys())}"
     )

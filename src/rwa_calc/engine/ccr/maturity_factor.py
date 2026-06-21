@@ -31,16 +31,21 @@ from rwa_calc.rulebook.resolve import resolve
 logger = logging.getLogger(__name__)
 
 # SA-CCR maturity-factor parameters resolved from the rulepack once at module
-# load: the margined-MF float scalars (CRR Art. 279c) plus the integer MPOR
+# load: the margined-MF float scalar (CRR Art. 279c) plus the integer MPOR
 # cascade counts (Art. 285 floor business-days, large-netting-set trade count,
 # dispute threshold/multiplier) and the 250-business-day-year divisor basis.
+# Both branches express the supervisory horizon ("1 year") on the SAME
+# 250-business-day-year basis: the margined MF divides MPOR by 250, and the
+# unmargined MF (CRR Art. 279c(1)) measures residual maturity in business days
+# capped at ``_SA_CCR_BUSINESS_DAYS_PER_YEAR`` (so a ≥1y trade collapses to
+# MF=1.0). The pack's year-denominated ``mf_unmargined_cap_years`` /
+# ``mf_unmargined_denom_years`` (= 1.0 year) are therefore not read here — the
+# 250-BD basis is the single shared "1 year" the CRR formula refers to.
 # The Art. 285(2)(a) 5-BD SFT/repo base (``mf_margined_floor_days_repo_sft``) is
 # NOT read here: this function is derivatives-only since the SFT/FCCM separation,
 # so the only base used is the Art. 285(2)(b) 10-BD OTC floor.
 _PACK = resolve("crr", date(2026, 1, 1))
 _MF_MARGINED_SCALAR = scalar_value(_PACK.scalar_param("mf_margined_scalar"))
-_MF_UNMARGINED_CAP_YEARS = scalar_value(_PACK.scalar_param("mf_unmargined_cap_years"))
-_MF_UNMARGINED_DENOM_YEARS = scalar_value(_PACK.scalar_param("mf_unmargined_denom_years"))
 _MF_FLOOR_DAYS_OTC = _PACK.int_param("mf_margined_floor_days_otc").value
 _MF_FLOOR_DAYS_LARGE_OR_ILLIQUID = _PACK.int_param("mf_margined_floor_days_large_or_illiquid").value
 _MF_LARGE_NETTING_SET_TRADE_COUNT = _PACK.int_param(
@@ -49,6 +54,9 @@ _MF_LARGE_NETTING_SET_TRADE_COUNT = _PACK.int_param(
 _MF_DISPUTE_THRESHOLD = _PACK.int_param("mf_margined_dispute_threshold").value
 _MF_DISPUTE_MULTIPLIER = _PACK.int_param("mf_margined_dispute_multiplier").value
 _SA_CCR_BUSINESS_DAYS_PER_YEAR = _PACK.int_param("sa_ccr_business_days_per_year").value
+# Art. 279c(1) / BCBS CRE52.47-52.48 fn.13: unmargined residual maturity M floored
+# at 10 BD (distinct from the Art. 279b start-date floor and the Art. 285 MPOR floors).
+_MF_UNMARGINED_FLOOR_DAYS = _PACK.int_param("mf_unmargined_floor_days").value
 
 
 # Watchfire's bundled CRR index does not yet contain Art. 279c; collapse the
@@ -58,25 +66,54 @@ _SA_CCR_BUSINESS_DAYS_PER_YEAR = _PACK.int_param("sa_ccr_business_days_per_year"
 def compute_maturity_factor_unmargined(trades: pl.LazyFrame) -> pl.LazyFrame:
     """Maturity factor for unmargined transactions per CRR Art. 279c(1).
 
-    MF = sqrt(min(M, 1y) / 1y)
+    ``MF = sqrt(min(M, 1y) / 1y)`` measured on the 250-business-day-year basis,
+    with the residual maturity floored at 10 business days:
+
+        MF = sqrt(min(max(BD, 10), 250) / 250)
+
+    where ``BD`` is the residual maturity in *business days* from the reporting
+    date to the trade's maturity date (``business_days_to_maturity``, built by
+    the SA-CCR adapter via ``pl.business_day_count``). CRR Art. 279c expresses
+    both the unmargined and margined maturity factors against the same "1 year"
+    denominator; because the margined branch's MPOR is a business-day count
+    divided by 250, "1 year" = 250 business days throughout — so the unmargined
+    residual maturity is measured in business days too. A trade with ≥ 250 BD
+    (≈ 1 calendar year) to maturity collapses to MF = 1.0; the 10-BD floor
+    (BCBS CRE52.47-52.48 fn.13) means a trade with < 10 BD to maturity never
+    drops below ``sqrt(10/250) = 0.20``.
+
+    The 10-BD floor here is on the residual maturity ``M`` and is distinct from
+    (a) the Art. 279b 10-BD floor on the *start date* ``S`` in the supervisory
+    duration (``engine/ccr/adjusted_notional.py``) and (b) the Art. 285 margined
+    MPOR floors — same numeric value, different provisions on different quantities.
+
+    Note: the IR maturity-bucket thresholds (Art. 277(2): 1y / 5y) are a
+    separate, calendar-based partition handled by ``assign_ir_maturity_bucket``
+    and are NOT affected by this business-day measure.
 
     Args:
-        trades: LazyFrame containing a ``years_to_maturity`` column (Float64) —
-            residual maturity in years from reporting date to trade maturity.
+        trades: LazyFrame containing a ``business_days_to_maturity`` column
+            (integer) — residual maturity in business days from the reporting
+            date to the trade's maturity date.
 
     Returns:
         The input LazyFrame with a new ``maturity_factor: Float64`` column.
 
     References:
-        CRR Art. 279c(1); BCBS CRE52.50-52.
+        CRR Art. 279c(1); BCBS CRE52.47-52.48 (+ fn.13 10-BD M floor), 52.50-52.
     """
+    bd_per_year = _SA_CCR_BUSINESS_DAYS_PER_YEAR
+    floor_days = _MF_UNMARGINED_FLOOR_DAYS
     return trades.with_columns(
         (
             pl.min_horizontal(
-                pl.col("years_to_maturity"),
-                pl.lit(_MF_UNMARGINED_CAP_YEARS),
-            )
-            / _MF_UNMARGINED_DENOM_YEARS
+                pl.max_horizontal(
+                    pl.col("business_days_to_maturity"),
+                    pl.lit(floor_days),
+                ),
+                pl.lit(bd_per_year),
+            ).cast(pl.Float64)
+            / float(bd_per_year)
         )
         .sqrt()
         .alias("maturity_factor")

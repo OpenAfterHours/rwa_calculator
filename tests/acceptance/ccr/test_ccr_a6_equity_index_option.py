@@ -113,9 +113,15 @@ _PHI_D1: float = float(
     pl.DataFrame({"d1": [_D1]}).with_columns(normal_cdf(pl.col("d1")).alias("phi"))["phi"][0]
 )
 
-# Maturity factor: MF = sqrt(min(T_mf, 1.0)) where T_mf = days/365.25 (pipeline convention)
-_T_MF: float = (CCR_A6_MATURITY_DATE - date(2026, 1, 15)).days / 365.25
-_MF: float = math.sqrt(min(_T_MF, 1.0))
+# Maturity factor on the 250-business-day basis (Art. 279c(1)):
+# MF = sqrt(min(BD, 250) / 250), BD = business_day_count(reporting_date, maturity).
+# The 1y option spans ≈ 261 business days (≥ 250), so MF = 1.0.
+_BD_MF: int = int(
+    pl.DataFrame({"m": [CCR_A6_MATURITY_DATE]}).with_columns(
+        pl.business_day_count(pl.lit(date(2026, 1, 15)), pl.col("m")).alias("bd")
+    )["bd"][0]
+)
+_MF: float = math.sqrt(min(_BD_MF, 250) / 250)
 
 # Effective notional = Phi(d1) × adj_notional × MF  (Art. 279a(2) + 279b(1)(c))
 _EN: float = _PHI_D1 * CCR_A6_ADJUSTED_NOTIONAL * _MF

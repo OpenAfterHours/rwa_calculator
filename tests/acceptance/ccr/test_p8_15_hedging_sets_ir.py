@@ -113,14 +113,20 @@ def _make_enriched_trades() -> pl.LazyFrame:
     # Step 2 — supervisory delta (+/-1) per Art. 279a(1).
     trades = compute_supervisory_delta_linear(trades)
 
-    # Step 3 — years_to_maturity column required by compute_maturity_factor_unmargined.
+    # Step 3 — residual-maturity measures: years_to_maturity (calendar, for the
+    # Art. 277 IR maturity buckets) and business_days_to_maturity (for the
+    # Art. 279c(1) unmargined maturity factor). Both T1 (10y) and T2 (3y) are
+    # well above the 1-year cap, so MF = 1.0 on either basis.
     trades = trades.with_columns(
         ((pl.col("maturity_date") - pl.lit(P815_START_DATE)).dt.total_days() / 365.25).alias(
             "years_to_maturity"
-        )
+        ),
+        pl.business_day_count(pl.lit(P815_START_DATE), pl.col("maturity_date")).alias(
+            "business_days_to_maturity"
+        ),
     )
 
-    # Step 4 — maturity factor MF per Art. 279c(1): sqrt(min(M, 1y)/1y).
+    # Step 4 — maturity factor MF per Art. 279c(1): sqrt(min(BD, 250)/250).
     trades = compute_maturity_factor_unmargined(trades)
 
     return trades

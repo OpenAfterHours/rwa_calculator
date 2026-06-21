@@ -43,6 +43,8 @@ def _firb_frame(
     *,
     is_sft: bool | None,
     maturity_date: date | None = None,
+    risk_type: str | None = None,
+    approach: str = "foundation_irb",
 ) -> pl.LazyFrame:
     """Minimal F-IRB exposure frame for maturity-only assertions."""
     data: dict[str, object] = {
@@ -51,13 +53,15 @@ def _firb_frame(
         "lgd": [0.45],
         "ead_final": [1_000_000.0],
         "exposure_class": ["CORPORATE"],
-        "approach": ["foundation_irb"],
+        "approach": [approach],
     }
     lf = pl.LazyFrame(data)
     maturity_col = pl.Series("maturity_date", [maturity_date], dtype=pl.Date)
     lf = lf.with_columns(maturity_col)
     if is_sft is not None:
         lf = lf.with_columns(pl.lit(is_sft).alias("is_sft"))
+    if risk_type is not None:
+        lf = lf.with_columns(pl.lit(risk_type).alias("risk_type"))
     # Pad the remaining crm_exit contract columns (is_sft=None falls back to
     # the padded False default — column absence is no longer possible at the
     # sealed branch input).
@@ -130,6 +134,61 @@ class TestFIRBRepoSFTMaturity:
         """Per Art. 162(1), the F-IRB supervisory M is a fixed regulatory value —
         an explicit maturity_date must not raise M above 0.5y for repo-style SFTs."""
         lf = _firb_frame(is_sft=True, maturity_date=date(2029, 12, 31))
+
+        result = lf.pipe(classify_approach, crr_config).pipe(prepare_columns, crr_config).collect()
+
+        assert result["maturity"][0] == pytest.approx(0.5)
+
+
+class TestFIRBCCRSFTMaturity:
+    """CRR Art. 162(1) extends to synthetic FCCM SFT rows (risk_type=CCR_SFT).
+
+    Synthetic CCR/SFT rows never carry ``is_sft`` (it stays a CRM-only input),
+    so the FIRB 0.5y gate must also fire on ``risk_type == "CCR_SFT"``. Under
+    B31 the 162(1) provision is deleted, so the 0.5y must NOT apply.
+    """
+
+    def test_ccr_sft_firb_resolves_half_year_under_crr(self, crr_config: CalculationConfig) -> None:
+        """A CCR_SFT row routed to FIRB under CRR gets the 0.5y supervisory M."""
+        lf = _firb_frame(is_sft=False, maturity_date=date(2034, 12, 31), risk_type="CCR_SFT")
+
+        result = lf.pipe(classify_approach, crr_config).pipe(prepare_columns, crr_config).collect()
+
+        assert result["maturity"][0] == pytest.approx(0.5)
+
+    def test_ccr_sft_firb_sets_one_day_floor_flag(self, crr_config: CalculationConfig) -> None:
+        """The MA 1y-floor suppressor must be True so the 0.5y bites in the MA
+        (else it is silently re-floored to 1.0y inside the maturity adjustment)."""
+        lf = _firb_frame(is_sft=False, maturity_date=date(2034, 12, 31), risk_type="CCR_SFT")
+
+        result = lf.pipe(classify_approach, crr_config).pipe(prepare_columns, crr_config).collect()
+
+        assert result["has_one_day_maturity_floor"][0] is True
+
+    def test_ccr_sft_firb_not_half_year_under_b31(self, b31_config: CalculationConfig) -> None:
+        """B31 deleted Art. 162(1); CCR_SFT FIRB falls to date-derived M (>= 1y)."""
+        lf = _firb_frame(is_sft=False, maturity_date=date(2037, 6, 30), risk_type="CCR_SFT")
+
+        result = lf.pipe(classify_approach, b31_config).pipe(prepare_columns, b31_config).collect()
+
+        assert result["maturity"][0] != pytest.approx(0.5)
+        assert result["maturity"][0] >= 1.0
+
+    def test_ccr_derivative_firb_never_half_year(self, crr_config: CalculationConfig) -> None:
+        """Derivatives (CCR_DERIVATIVE) are excluded from the 162(1) 0.5y gate."""
+        lf = _firb_frame(is_sft=False, maturity_date=date(2034, 12, 31), risk_type="CCR_DERIVATIVE")
+
+        result = lf.pipe(classify_approach, crr_config).pipe(prepare_columns, crr_config).collect()
+
+        assert result["maturity"][0] != pytest.approx(0.5)
+        assert result["maturity"][0] >= 1.0
+
+    def test_lending_is_sft_half_year_unchanged_alongside_risk_type(
+        self, crr_config: CalculationConfig
+    ) -> None:
+        """A lending is_sft row (no CCR risk_type) still resolves 0.5y — the
+        widened gate is purely additive."""
+        lf = _firb_frame(is_sft=True, maturity_date=date(2034, 12, 31), risk_type="LENDING")
 
         result = lf.pipe(classify_approach, crr_config).pipe(prepare_columns, crr_config).collect()
 

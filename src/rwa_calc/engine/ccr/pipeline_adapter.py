@@ -429,6 +429,9 @@ def ccr_rows_to_exposures(
             pl.lit(0.0).alias("nominal_amount"),
             pl.lit("senior").alias("seniority"),
             pl.lit("CCR_DERIVATIVE").alias("risk_type"),
+            # TODO(CCR-deriv-maturity): emit ccr_effective_maturity for
+            # CCR_DERIVATIVE rows (NS-grain .all() daily aggregation over the
+            # trade-grain margining inputs) — see Phase 3b.
             pl.col("netting_set_id").alias("source_netting_set_id"),
             pl.lit("sa_ccr").alias("ccr_method"),
             # CRR Art. 306(1)(c): client-clearing flag for the QCCP 4% trade

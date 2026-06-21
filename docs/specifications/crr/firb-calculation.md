@@ -304,12 +304,32 @@ financing, including:
 - (c) Securities settlement within usual delivery period or 2 business days
 - (d) Cash settlement/electronic payment exposures, including failed-transaction overdrafts
 
-!!! info "Implementation Note — `has_one_day_maturity_floor` Flag"
-    The code implements Art. 162(3) via a boolean flag `has_one_day_maturity_floor` on the
-    input schema (`schemas.py:82,103,132`). However, this flag is currently used **only** for
-    CRM maturity mismatch ineligibility (Art. 237(2) — any mismatch zeroes protection value
-    for one-day-floor exposures). It does **not** currently override the IRB maturity column
-    to 1/365. See `haircuts.py:482-485`.
+!!! info "Implementation Note — `has_one_day_maturity_floor` Flag + the `ccr_effective_maturity` carrier"
+    The code implements Art. 162(3) via a boolean flag `has_one_day_maturity_floor`. When the
+    flag is set, the IRB maturity chain (`engine/irb/transforms.py::_build_maturity_exprs`)
+    **does** drive the effective-maturity column down to one day (`1/365 ≈ 0.00274` years), and
+    the maturity adjustment then suppresses its own 1-year floor so the sub-1-year `M` survives
+    into `MA`. The flag has a *second*, independent consumer — CRM maturity-mismatch
+    ineligibility (Art. 237(2): any mismatch zeroes protection value for one-day-floor
+    exposures) — but it is **not** only a CRM-side flag.
+
+    For synthetic CCR / SFT rows the one-day signal is **not** a firm input. The
+    [FCCM SFT producer](sft/index.md) and the SA-CCR derivative producer compute the Art. 162
+    effective maturity at netting-set grain and surface it on a dedicated
+    `ccr_effective_maturity` `Float64` carrier (declared on `CCR_EXIT_EDGE`, propagated through
+    the classifier / CRM / RE-split CCR edges). A new rung in `_build_maturity_exprs`
+    coalesces that carrier into the IRB `M` column (AIRB-gated, so it never displaces the F-IRB
+    fixed `M`), and **sets `has_one_day_maturity_floor` from the winning rung** — so when the
+    carrier resolves to the Art. 162(3) one-day value, the maturity adjustment uses the actual
+    sub-1-year `M` rather than re-flooring to 1 year. Because the flag is derived *inside* the
+    IRB chain (downstream of CRM), CRM never sees a CCR one-day signal and no collateral is
+    silently zeroed by Art. 237(2).
+
+    The F-IRB 0.5-year repo carve-out (Art. 162(1)) reaches CCR / SFT rows via a widened gate:
+    `_apply_firb_sft_supervisory_maturity` now fires on `(is_sft OR risk_type == CCR_SFT)` —
+    so a `CCR_SFT` row routed to F-IRB receives `M = 0.5` years without ever setting the
+    lending-side `is_sft` flag (which stays a CRM-only input). `CCR_DERIVATIVE` rows are
+    deliberately excluded from this gate.
 
 ### Art. 162(4) — SME Maturity Simplification
 

@@ -94,7 +94,14 @@ def run(
 
     resolved = ctx.get(RESOLVED_HIERARCHY)
 
-    sft_exposure_rows = sft_bundle_to_exposures(data.sft, run_config.reporting_date)
+    # Thread the RUN resolved pack (regime-correct Art. 162 maturity floors /
+    # feature) into the producer so the ``ccr_effective_maturity`` carrier reads
+    # the run regime, not the producer's module-level CRR ``_PACK``. ``rulepack``
+    # is the RulepackV0 facade; ``.pack`` is its content-hashed ResolvedRulepack
+    # exposing ``.scalar_param`` / ``.feature`` (the helper's API).
+    sft_exposure_rows = sft_bundle_to_exposures(
+        data.sft, run_config.reporting_date, rulepack=rulepack.pack
+    )
     # Inherit the resolved counterparty rating columns onto each SFT synthetic
     # row so the SA institution lookup (CRR Art. 120(1) Table 3, keyed off
     # ``cqs``) and any IRB routing (keyed off ``internal_pd``) see the same

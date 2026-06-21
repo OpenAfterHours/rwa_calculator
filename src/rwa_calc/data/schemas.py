@@ -987,6 +987,31 @@ TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # see no transitional add-on. See SA_CCR_TRANSITIONAL_ADDON_PHASE in
     # data/tables/sa_ccr_factors.py.
     "is_legacy_cva_exempt": ColumnSpec(pl.Boolean, default=False, required=False),
+    # IRB effective-maturity (Art. 162) input flags (3) — CCR/SFT IRB
+    # effective-maturity fix Phase 2. SA-CCR derivatives are IN SCOPE for the
+    # carrier (an internally-rated CP routes the synthetic CCR_DERIVATIVE row to
+    # FIRB/AIRB and hits the Art. 162 chain). Mirror of the SFT_TRADE_SCHEMA
+    # flags — CARRY-ONLY this phase; the producer (engine/ccr/pipeline_adapter.py)
+    # reads them in Phase 3 alongside the NS-grain margining cascade
+    # (_attach_mpor_cascade_inputs, which sources is_margined /
+    # remargining_frequency_days from NETTING_SET_SCHEMA / MARGIN_AGREEMENT_SCHEMA,
+    # not from this trade schema). All three are Boolean (no
+    # COLUMN_VALUE_CONSTRAINTS entry needed) and default conservatively to False:
+    # an absent flag NEVER unlocks a sub-1y floor, so a derivative omitting them
+    # falls to the Art. 162(2)(f) / 162(2A)(f) 1-year catch-all.
+    #
+    # under_master_netting_agreement: Art. 162(2) MNA precondition for any sub-1y
+    # floor. (CRR Art. 162(2); PS1/26 Art. 162(2A).)
+    "under_master_netting_agreement": ColumnSpec(pl.Boolean, default=False, required=False),
+    # qualifies_one_day_maturity_floor: all three Art. 162(3) conditions
+    # conjunctively (daily re-margin AND revaluation AND prompt-liquidation docs).
+    # (CRR Art. 162(3); PS1/26 Art. 162(3).)
+    "qualifies_one_day_maturity_floor": ColumnSpec(pl.Boolean, default=False, required=False),
+    # qualifies_mna_intermediate_floor: B31 Art. 162(2A)(c)/(d) "daily re-margin
+    # OR revaluation AND prompt-liquidation" documentation condition gating the
+    # 5BD/10BD intermediate floors UNDER B31 ONLY (unused under CRR, where the
+    # 5BD/10BD apply on MNA alone). (PS1/26 Art. 162(2A)(c)/(d).)
+    "qualifies_mna_intermediate_floor": ColumnSpec(pl.Boolean, default=False, required=False),
 }
 
 #: Netting-set-level input for SA-CCR. One row per netting set keyed by
@@ -1166,6 +1191,36 @@ SFT_TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # engine derives MPOR from the fields above; non-null => used directly as
     # T_M. No default-fill — null is the 'derive me' signal.
     "mpor_days_override": ColumnSpec(pl.Int16, default=None, required=False),
+    # IRB effective-maturity (Art. 162) input flags (3) — CCR/SFT IRB
+    # effective-maturity fix Phase 2. CARRY-ONLY this phase: declared so a
+    # margined / netted SFT routing to FIRB/AIRB is REPRESENTABLE; the producer
+    # (engine/sft/fccm.py) and the IRB maturity chain that read them land in
+    # Phases 3-4. All three are Boolean — no COLUMN_VALUE_CONSTRAINTS entry is
+    # needed (the dtype is the constraint). All default conservatively to False:
+    # an absent flag NEVER unlocks a sub-1y maturity floor (anti-conservative
+    # trap), so an SFT omitting them falls to the Art. 162(2)(f) / 162(2A)(f)
+    # 1-year catch-all — bit-identical to today's behaviour.
+    #
+    # under_master_netting_agreement: Art. 162(2) MNA precondition. ANY sub-1y
+    # maturity floor (one-day, 5BD, 10BD) requires this True; without it the row
+    # falls to the 1-year catch-all. (CRR Art. 162(2); PS1/26 Art. 162(2A).)
+    "under_master_netting_agreement": ColumnSpec(pl.Boolean, default=False, required=False),
+    # qualifies_one_day_maturity_floor: carries ALL THREE Art. 162(3) conditions
+    # conjunctively — (i) daily re-margining AND (ii) daily revaluation AND
+    # (iii) documentation provisions for prompt liquidation / set-off. True =>
+    # the ~1-day (1/365 y) floor is available. Default False: NEVER inferred
+    # from remargining_frequency_days (absent ≠ qualifying). (CRR Art. 162(3);
+    # PS1/26 Art. 162(3) — the AND condition is unchanged under B31.)
+    "qualifies_one_day_maturity_floor": ColumnSpec(pl.Boolean, default=False, required=False),
+    # qualifies_mna_intermediate_floor: the B31 Art. 162(2A)(c)/(d) documentation
+    # condition — "daily re-margining OR revaluation AND prompt-liquidation /
+    # set-off" (note the OR, distinct from 162(3)'s AND) — that gates the
+    # 5BD / 10BD intermediate MNA floors UNDER B31 ONLY. Under CRR the 5BD/10BD
+    # floors apply on MNA alone (Art. 162(2)(c)/(d): "subject to an MNA" is the
+    # only condition), so this flag is unused under CRR; under B31 a repo/deriv
+    # under an MNA but lacking it falls to the 162(2A)(f) 1-year catch-all.
+    # Default False (conservative). (PS1/26 Art. 162(2A)(c)/(d).)
+    "qualifies_mna_intermediate_floor": ColumnSpec(pl.Boolean, default=False, required=False),
 }
 
 #: Netting-set-keyed collateral received against an SFT, feeding the

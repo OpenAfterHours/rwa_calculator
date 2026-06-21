@@ -213,7 +213,7 @@ See [Classification](../features/classification.md) for the complete classificat
 | `is_payroll_loan` | `Boolean` | No | Payroll-deduction / pension lending — qualifies for the Basel 3.1 35% retail RW (PS1/26 Art. 123(2)) |
 | `is_buy_to_let` | `Boolean` | No | Buy-to-let property lending — excluded from SME supporting factor (CRR Art. 501) |
 | `has_one_day_maturity_floor` | `Boolean` | No | Set True for short-term self-liquidating trade exposures and certain capital-markets-driven exposures eligible for the 1-day `M` floor under CRR Art. 162(3) (otherwise the standard 1-year floor applies) |
-| `is_sft` | `Boolean` | No | Securities Financing Transaction — drives the 0.4-year `M` floor (Art. 162(3)) and SFT-specific CCR treatment |
+| `is_sft` | `Boolean` | No | Securities Financing Transaction — selects the F-IRB **0.5-year** repo-style supervisory maturity (`M`) under CRR **Art. 162(1)** (a fixed value, not a floor; deleted under Basel 3.1) |
 | `effective_maturity` | `Float64` | No | Explicit numeric `M` override (years) per CRR Art. 162(3) / PS1/26. When populated it supersedes the `maturity_date`-derived `M` and bypasses the 1-year floor — firm-owned judgement for short-term carve-outs |
 
 **Valid `product_type` values:**
@@ -780,8 +780,10 @@ own input bundle, their own dataloads and their own pipeline stage.
     The `transaction_type == "sft"` / FCCM path documented here (CCR EAD,
     CRR Art. 220–223) is a **completely different concept** from the
     [`is_sft` Boolean](#facility-schema) carried on the loan / contingent /
-    facility schemas (which drives the F-IRB 0.4-year maturity floor under
-    CRR Art. 162(3)). **Same acronym, different concept, zero interaction.**
+    facility schemas (which selects the F-IRB **0.5-year** repo-style
+    supervisory maturity under CRR **Art. 162(1)**). **Same acronym, different
+    concept.** (FCCM SFT rows that route to IRB carry their Art. 162 maturity
+    via a dedicated `ccr_effective_maturity` carrier — never `is_sft`.)
     See [The two meanings of "SFT"](#the-two-meanings-of-sft) below.
 
 ### How SFTs flow through the pipeline
@@ -913,8 +915,8 @@ The acronym "SFT" denotes **two unrelated concepts** that never interact:
 |---|---|---|
 | Carrier | `transaction_type == "sft"` on `SFT_TRADE_SCHEMA` | `is_sft` Boolean on `LOAN` / `CONTINGENT` / `FACILITY` schemas |
 | Concept | Securities financing transaction routed to **FCCM CCR EAD** | A lending exposure flagged as an SFT for the F-IRB maturity carve-out |
-| Drives | The `sft_fccm` stage: `E* = max(0, E·(1+HE) − CVA·(1−HC−HFX))` | The F-IRB **0.4-year maturity (`M`) floor** in lieu of the 1-year floor |
-| Regulatory basis | CRR Art. 220–223, Art. 271(2) | CRR Art. 162(3) |
+| Drives | The `sft_fccm` stage: `E* = max(0, E·(1+HE) − CVA·(1−HC−HFX))` | The F-IRB **0.5-year fixed supervisory maturity (`M`)** for repo-style transactions, in place of the 2.5-year default |
+| Regulatory basis | CRR Art. 220–223, Art. 271(2) | CRR Art. 162(1) (fixed `M = 0.5y`; deleted under Basel 3.1) |
 | Engine site | `engine/sft/fccm.py` | `engine/irb/transforms.py` |
 
 The lending `is_sft` Boolean is deliberately **not renamed** as part of the

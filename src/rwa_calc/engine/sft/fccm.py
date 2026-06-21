@@ -68,6 +68,7 @@ from rwa_calc.rulebook.resolve import resolve
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import RawSFTBundle
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +115,7 @@ _MPOR_FLOOR_BY_CATEGORY: dict[str, int] = {
 def sft_bundle_to_exposures(
     raw_sft: RawSFTBundle,
     reporting_date: date,
+    rulepack: ResolvedRulepack | None = None,
 ) -> pl.LazyFrame:
     """Shape FCCM SFT EADs into synthetic exposure rows from the lean SFT bundle.
 
@@ -141,6 +143,12 @@ def sft_bundle_to_exposures(
         raw_sft: The SFT (FCCM) input bundle — every trade row is an SFT with the
             denormalised netting-set counterparty; collateral optional.
         reporting_date: As-of date; written to ``value_date``.
+        rulepack: The resolved RUN rulepack supplying the Art. 162 effective-
+            maturity floors / regime gate for the ``ccr_effective_maturity``
+            carrier. ``None`` (the back-compat default used by direct unit /
+            acceptance calls) falls back to the module-level CRR ``_PACK``; the
+            stage adapter threads the run pack so production runs are regime-
+            correct.
 
     Returns:
         LazyFrame at netting-set grain. Empty (zero-row) frame when the trades
@@ -166,6 +174,7 @@ def sft_bundle_to_exposures(
         ns_counterparty_lf=ns_counterparty_lf,
         ccr_collateral_lf=ccr_collateral_lf,
         reporting_date=reporting_date,
+        pack=rulepack if rulepack is not None else _PACK,
     )
 
 
@@ -220,11 +229,88 @@ def _derive_margining_terms(
     return (floor * mult + n - 1, 1)
 
 
+@cites("CRR Art. 162")
+@cites("PS1/26, paragraph 162")
+def _derive_ccr_sft_maturity_years(
+    *,
+    remaining_years: float | None,
+    under_mna: bool,
+    qualifies_one_day_floor: bool,
+    qualifies_mna_intermediate_floor: bool,
+    pack: ResolvedRulepack,
+) -> float | None:
+    """Return the Art. 162 effective maturity M for one SFT netting set, or None.
+
+    The carrier is the FULL M = ``clip(remaining_years, floor, 5.0)`` — the floor
+    is a MINIMUM on the remaining maturity (Art. 162(2)(d)/(3)), never a fixed
+    replacement value. For a long-dated MNA exposure the floor does not bite and
+    M = ``remaining_years``. Returns ``None`` (the date-derived 1-year catch-all,
+    Art. 162(2)(f) / PS1/26 162(2A)(f)) when the row is not under a master netting
+    agreement or carries no maturity.
+
+    Floor precedence (all sub-1y floors require the MNA precondition):
+
+    - not under an MNA, or ``remaining_years is None`` -> ``None`` (1y catch-all).
+    - ``qualifies_one_day_floor`` (the three conjunctive Art. 162(3) conditions —
+      daily re-margin AND revaluation AND prompt-liquidation docs) -> the one-day
+      (~1/365 y) floor.
+    - else the 5BD repo/SFT floor (Art. 162(2)(d) / PS1/26 162(2A)(d)). Under B31
+      the intermediate floor additionally requires the 162(2A)(c)/(d) daily
+      documentation condition (gated by the
+      ``mna_intermediate_floor_requires_daily_condition`` feature); without it the
+      row falls to the 1-year catch-all (``None``). Under CRR the floor applies on
+      MNA alone (the feature is off).
+
+    Floors / feature are read from the RUN ``pack`` (not the module ``_PACK``) so
+    the derivation is regime-correct.
+
+    Args:
+        remaining_years: Exact /365 fractional years to maturity, or None.
+        under_mna: Art. 162(2) master-netting-agreement precondition.
+        qualifies_one_day_floor: All three Art. 162(3) conditions hold.
+        qualifies_mna_intermediate_floor: The B31 162(2A)(c)/(d) daily condition.
+        pack: The resolved run rulepack supplying the cited maturity floors / gate.
+
+    Returns:
+        M as a float, or ``None`` for the date-derived 1-year catch-all.
+    """
+    if not under_mna or remaining_years is None:
+        return None
+    cap = 5.0
+    if qualifies_one_day_floor:
+        floor = float(pack.scalar_param("one_day_maturity_floor_years").value)
+    else:
+        requires_daily = pack.feature("mna_intermediate_floor_requires_daily_condition")
+        intermediate_available = (not requires_daily) or qualifies_mna_intermediate_floor
+        if not intermediate_available:
+            return None
+        floor = float(pack.scalar_param("irb_maturity_floor_repo_sft_years").value)
+    return min(max(remaining_years, floor), cap)
+
+
+def _remaining_years(reporting_date: date, maturity_date: date | None) -> float | None:
+    """Exact fractional years from ``reporting_date`` to ``maturity_date``, or None.
+
+    Uses the engine's /365 ordinal day-count (the eager-loop equivalent of
+    :func:`rwa_calc.engine.utils.exact_fractional_years_expr`):
+
+        (mat.year − rep.year) + (mat_ordinal − rep_ordinal) / 365
+
+    Returns ``None`` when ``maturity_date`` is null (carrier -> None downstream).
+    """
+    if maturity_date is None:
+        return None
+    return (maturity_date.year - reporting_date.year) + (
+        maturity_date.timetuple().tm_yday - reporting_date.timetuple().tm_yday
+    ) / 365.0
+
+
 def _build_sft_exposure_rows(
     sft_trades_lf: pl.LazyFrame,
     ns_counterparty_lf: pl.LazyFrame,
     ccr_collateral_lf: pl.LazyFrame | None,
     reporting_date: date,
+    pack: ResolvedRulepack,
 ) -> pl.LazyFrame:
     """Compute the FCCM E* per netting set and shape the synthetic rows.
 
@@ -245,6 +331,8 @@ def _build_sft_exposure_rows(
         ccr_collateral_lf: Netting-set-keyed collateral feeding the
             ``CVA·(1−HC−HFX)`` term, or ``None`` for an uncollateralised book.
         reporting_date: As-of date; written to ``value_date``.
+        pack: The resolved run rulepack supplying the Art. 162 effective-maturity
+            floors / regime gate for the per-NS ``ccr_effective_maturity`` carrier.
 
     Returns:
         LazyFrame at netting-set grain with the FCCM provenance columns.
@@ -270,7 +358,15 @@ def _build_sft_exposure_rows(
     # five margining columns are backfilled to their schema defaults by the
     # standard loader seal (``seal_lenient``), so ``row.get(col, default)`` reads
     # the value when present and the conservative default otherwise.
+    # The per-NS Art. 162 effective-maturity carrier (``ccr_effective_maturity``)
+    # is derived alongside the margining terms — both off the same first-trade row
+    # per NS. The three Art. 162 input flags (``under_master_netting_agreement`` /
+    # ``qualifies_one_day_maturity_floor`` / ``qualifies_mna_intermediate_floor``)
+    # default conservatively to False (absent flag never unlocks a sub-1y floor),
+    # and a null ``maturity_date`` yields a None carrier (date-derived 1y catch-all
+    # downstream).
     ns_terms: dict[str, tuple[int, int]] = {}
+    ns_maturity: dict[str, float | None] = {}
     for row in sft_trades_df.iter_rows(named=True):
         ns_id = row["netting_set_id"]
         if ns_id in ns_terms:
@@ -281,6 +377,15 @@ def _build_sft_exposure_rows(
             mpor_floor_category=row.get("mpor_floor_category", "repo_only"),
             has_margin_dispute_doubling=row.get("has_margin_dispute_doubling", False),
             mpor_days_override=row.get("mpor_days_override", None),
+        )
+        ns_maturity[ns_id] = _derive_ccr_sft_maturity_years(
+            remaining_years=_remaining_years(reporting_date, row.get("maturity_date")),
+            under_mna=bool(row.get("under_master_netting_agreement", False)),
+            qualifies_one_day_floor=bool(row.get("qualifies_one_day_maturity_floor", False)),
+            qualifies_mna_intermediate_floor=bool(
+                row.get("qualifies_mna_intermediate_floor", False)
+            ),
+            pack=pack,
         )
 
     # ---- 1) Per-trade E·(1+HE) -------------------------------------------------
@@ -377,10 +482,30 @@ def _build_sft_exposure_rows(
 
     # ---- 4) Compose NS-grain frame and compute E* ----------------------------
     sft_ns_ids = sft_trades_df["netting_set_id"].unique().to_list()
+    # NS-grain Art. 162 effective-maturity carrier. Built from the per-NS
+    # ``ns_maturity`` map as a Series with explicit None -> null (the check-11
+    # ``fill_null`` ratchet pattern), joined onto the NS frame so a None carrier
+    # surfaces as a typed null on the synthetic row (date-derived 1y catch-all
+    # downstream).
+    # Force the join-key dtype to String: an empty SFT book (zero trades) yields
+    # an empty ``sft_ns_ids`` list, from which Polars would infer a Null-typed
+    # ``netting_set_id`` column and fail the str-key join (the empty-book
+    # pipeline-abort regression).
+    ns_maturity_lf = pl.DataFrame(
+        {
+            "netting_set_id": pl.Series("netting_set_id", sft_ns_ids, dtype=pl.String),
+            "ccr_effective_maturity": pl.Series(
+                "ccr_effective_maturity",
+                [ns_maturity.get(ns_id) for ns_id in sft_ns_ids],
+                dtype=pl.Float64,
+            ),
+        }
+    ).lazy()
     ns_with_ead = (
         ns_counterparty_lf.filter(pl.col("netting_set_id").is_in(sft_ns_ids))
         .join(ns_e_grossed, on="netting_set_id", how="left")
         .join(cva_per_ns, on="netting_set_id", how="left")
+        .join(ns_maturity_lf, on="netting_set_id", how="left")
         .with_columns(
             [
                 pl.col("_e_grossed").fill_null(0.0),
@@ -412,6 +537,9 @@ def _build_sft_exposure_rows(
         pl.col("netting_set_id").alias("source_netting_set_id"),
         pl.lit("fccm_sft").alias("ccr_method"),
         pl.col("ead_ccr"),
+        # Art. 162 effective-maturity carrier for IRB routing (null off the MNA
+        # carve-out — date-derived 1y catch-all applies downstream).
+        pl.col("ccr_effective_maturity"),
     ]
     # Drop helper "_*" columns from the public projection.
     return ns_with_ead.select(select_exprs)

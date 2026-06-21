@@ -47,7 +47,7 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
-from rwa_calc.domain.enums import ApproachType
+from rwa_calc.domain.enums import ApproachType, RiskType
 from rwa_calc.engine.irb.adjustments import (
     apply_defaulted_treatment as _apply_defaulted_treatment,
 )
@@ -91,9 +91,6 @@ logger = logging.getLogger(__name__)
 
 # Repeated audit-string fragment (S1192).
 _AUDIT_LGD_LABEL = "%, LGD="
-
-# Art. 162(3) carve-out: one-day maturity floor expressed in years.
-_ONE_DAY_YEARS = 1.0 / 365.0
 
 
 # =============================================================================
@@ -249,6 +246,21 @@ def prepare_columns(
     # CRR F-IRB SFT supervisory M = 0.5y (Art. 162(1)) is applied to the base
     # chain (4/3) but is superseded by the two explicit overrides above.
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    # Guarantee the CCR maturity-chain inputs exist as typed nulls so the
+    # carrier rung / FIRB-CCR_SFT gate never error on lending-only or
+    # direct-call frames (both absent from pad_crm_exit_defaults; the carrier
+    # is a CCR_EXIT_EDGE-only column). ensure_columns uses pl.lit().cast() —
+    # no fill_null — so the check-11 baseline is untouched. A typed null leaves
+    # the carrier rung inert (is_not_null() False) and lending rows untouched
+    # (risk_type null → eq_missing("CCR_SFT") False).
+    lf = ensure_columns(
+        lf,
+        {
+            "approach": ColumnSpec(pl.String, default=ApproachType.FIRB.value, required=False),
+            "risk_type": ColumnSpec(pl.String, default=None, required=False),
+            "ccr_effective_maturity": ColumnSpec(pl.Float64, default=None, required=False),
+        },
+    )
     names = set(lf.collect_schema().names())
     exprs = _prepare_columns_exprs(config, names, pack=resolved_pack)
     if exprs:
@@ -897,13 +909,22 @@ def _apply_firb_sft_supervisory_maturity(
 ) -> pl.Expr:
     """CRR Art. 162(1): F-IRB fixed supervisory maturity for repo-style SFTs (0.5y).
 
-    B31 deleted Art. 162(1); under B31 all IRB firms calculate M per Art. 162(2A).
+    Fires for lending repo-style SFTs (``is_sft=True``) AND synthetic FCCM SFT
+    rows (``risk_type == "CCR_SFT"``), which never carry ``is_sft`` (it stays a
+    CRM-only input). Derivatives (``CCR_DERIVATIVE``) are excluded — Art. 162(1)
+    covers repos / securities-or-commodities lending only. B31 deleted
+    Art. 162(1); under B31 all IRB firms calculate M per Art. 162(2A) and this
+    feature is off.
     """
     if not pack.feature("firb_sft_supervisory_maturity"):
         return maturity_expr
+    firb_sft_m = float(pack.scalar_param("firb_sft_supervisory_maturity_years").value)
+    is_firb_repo_style = pl.col("is_sft").fill_null(False) | pl.col("risk_type").eq_missing(
+        RiskType.CCR_SFT.value
+    )
     return (
-        pl.when((pl.col("approach") == ApproachType.FIRB.value) & pl.col("is_sft").fill_null(False))
-        .then(pl.lit(0.5))
+        pl.when((pl.col("approach") == ApproachType.FIRB.value) & is_firb_repo_style)
+        .then(pl.lit(firb_sft_m))
         .otherwise(maturity_expr)
     )
 
@@ -939,20 +960,51 @@ def _build_maturity_exprs(config: CalculationConfig, *, pack: ResolvedRulepack) 
 
     Returns two expressions: ``maturity`` and ``has_one_day_maturity_floor``.
     See ``prepare_columns`` for the priority chain documentation.
+
+    NOTE: this is the production maturity chain (``prepare_columns`` →
+    ``apply_all_formulas`` in ``IRBCalculator.calculate_branch``). The
+    ``ccr_effective_maturity`` carrier rung lives ONLY here — the alternate
+    ``formulas.apply_irb_formulas`` (which defaults maturity to 2.5) is not the
+    production path; a future re-route through it would bypass the carrier.
     """
+    one_day = float(pack.scalar_param("one_day_maturity_floor_years").value)
+
     maturity_expr = _maturity_base_expr(config, pack=pack)
     maturity_expr = _apply_firb_sft_supervisory_maturity(maturity_expr, pack=pack)
 
     effective_floor_flag = _effective_one_day_floor_flag(config, pack=pack)
-    maturity_expr = (
-        pl.when(effective_floor_flag).then(pl.lit(_ONE_DAY_YEARS)).otherwise(maturity_expr)
+    maturity_expr = pl.when(effective_floor_flag).then(pl.lit(one_day)).otherwise(maturity_expr)
+
+    # CCR/SFT synthetic carrier (CRR Art. 162(2)/(3); PS1/26 162(2A)/(3)):
+    # ``ccr_effective_maturity`` already holds the FULL Art. 162 M (the MNA /
+    # one-day floor is a MINIMUM applied at the producer) — do NOT re-clip it.
+    # Gated to AIRB (``approach != FIRB``) so it never displaces the CRR FIRB
+    # 0.5y from _apply_firb_sft_supervisory_maturity; inserted below the
+    # firm-supplied override so a firm-asserted M still wins.
+    if pack.feature("ccr_synthetic_maturity"):
+        maturity_expr = (
+            pl.when(
+                (pl.col("approach") != ApproachType.FIRB.value)
+                & pl.col("ccr_effective_maturity").is_not_null()
+            )
+            .then(pl.col("ccr_effective_maturity"))
+            .otherwise(maturity_expr)
+        )
+
+    # Suppress the maturity-adjustment 1y floor for every sub-1y CCR_SFT M
+    # (the FIRB 0.5y AND the AIRB carrier). Computed from the RESOLVED maturity
+    # so the persisted flag matches the winning sub-1y rung. eq_missing keeps
+    # lending rows (a lending risk_type, never "CCR_SFT") untouched (False),
+    # with no new ``fill_null`` site (check-11 ratchet).
+    effective_floor_flag = effective_floor_flag | (
+        pl.col("risk_type").eq_missing(RiskType.CCR_SFT.value) & (maturity_expr < pl.lit(1.0))
     )
 
     # Explicit firm-supplied effective_maturity — highest priority.
     # Clipped to [1 day, 5 years]; nulls fall through to the chain above.
     maturity_expr = (
         pl.when(pl.col("effective_maturity").is_not_null())
-        .then(pl.col("effective_maturity").clip(_ONE_DAY_YEARS, 5.0))
+        .then(pl.col("effective_maturity").clip(one_day, 5.0))
         .otherwise(maturity_expr)
     )
 

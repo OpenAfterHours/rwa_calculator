@@ -89,6 +89,29 @@ ENTRIES: dict[str, RuleEntry] = {
             "CRR", "162", "revolving facilities use the standard M derivation under CRR"
         ),
     ),
+    # CCR/SFT synthetic-row effective-maturity rung (Art. 162). Gates the new
+    # ccr_effective_maturity carrier rung in engine/irb/transforms.py (the MNA &
+    # one-day maturity floors for FCCM-SFT / SA-CCR synthetic IRB rows). Enabled
+    # under BOTH regimes — only the CRR Art. 162(1) fixed 0.5y is regime-specific
+    # (gated by firb_sft_supervisory_maturity); the sub-1y MNA floors and the
+    # one-day override survive under Basel 3.1 (only Art. 162(1)/162(4) were deleted).
+    # Declared in both packs (crr.py + b31.py) so pack.feature() never KeyErrors.
+    "ccr_synthetic_maturity": Feature(
+        name="ccr_synthetic_maturity",
+        enabled=True,
+        citation=Citation("CRR", "162", "CCR/SFT synthetic-row MNA & one-day maturity floors"),
+    ),
+    # CRR Art. 162(2)(c)/(d): the 10BD/5BD intermediate maturity floors apply to
+    # collateralised derivs / repos merely "subject to a master netting agreement"
+    # — NO daily-re-margining condition under CRR. So the daily condition is NOT
+    # required here (enabled=False). Basel 3.1 162(2A)(c)/(d) ADDED a "daily
+    # re-margin OR revaluation + prompt-liquidation" condition (b31.py = True).
+    # Declared in both packs (KeyError-safety).
+    "mna_intermediate_floor_requires_daily_condition": Feature(
+        name="mna_intermediate_floor_requires_daily_condition",
+        enabled=False,
+        citation=Citation("CRR", "162(2)", "5BD/10BD MNA floors need no daily-re-margin condition"),
+    ),
     # CRR Art. 153(3)/202-203 double-default treatment for guaranteed exposures —
     # removed under Basel 3.1. The election (config.enable_double_default) and the
     # 0.15+160xPD multiplier constant stay engine-side; only the regime gate moves.

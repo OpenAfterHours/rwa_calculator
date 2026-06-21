@@ -70,6 +70,11 @@ _SFT_TRADE_COLUMNS = {
     "mpor_floor_category",
     "has_margin_dispute_doubling",
     "mpor_days_override",
+    # CCR/SFT IRB effective-maturity fix Phase 2 — Art. 162 IRB-maturity input
+    # flags. Additive, all required=False with conservative default False.
+    "under_master_netting_agreement",
+    "qualifies_one_day_maturity_floor",
+    "qualifies_mna_intermediate_floor",
 }
 
 

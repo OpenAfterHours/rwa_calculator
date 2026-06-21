@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from rwa_calc.rulebook.resolve import resolve
@@ -176,12 +177,41 @@ def _load_manifest(path: str) -> dict[str, object]:
     Accepts either a bare pack manifest (:func:`serialize_pack` output, with an
     ``entries`` key) or a full pipeline ``manifest.json`` (with the pack under
     its ``rulepack`` key) so the CLI diffs persisted run manifests directly.
+
+    The operator-supplied ``path`` is validated by :func:`_safe_manifest_path`
+    before any filesystem access; the canonicalised :class:`~pathlib.Path` it
+    returns — never the raw argument — is what reaches the ``open`` sink.
     """
-    with open(path, encoding="utf-8") as handle:
+    safe_path = _safe_manifest_path(path)
+    with open(safe_path, encoding="utf-8") as handle:
         data = json.load(handle)
     if "entries" not in data and isinstance(data.get("rulepack"), dict):
         return data["rulepack"]
     return data
+
+
+def _safe_manifest_path(path: str) -> Path:
+    """Canonicalise and validate an operator-supplied manifest path before I/O.
+
+    Resolves ``path`` to an absolute, canonical form (collapsing ``..`` and
+    symlinks) and requires it to name an existing regular ``.json`` file, so a
+    malformed or hostile CLI argument is rejected with a clear ``error: ...``
+    message *before* :func:`_load_manifest` opens it. The validated value flows
+    to the filesystem sink in place of the raw argument — the path-injection
+    analogue of the ``error: ...`` fast-fail sanitiser convention used at the
+    project's other CLI boundaries (e.g. ``scripts/_validate.py``).
+
+    Containment to a fixed base directory is intentionally *not* enforced:
+    ``rulepack-diff`` legitimately diffs manifests written to operator-chosen
+    run-output / CI-artifact directories (the per-run ``manifest.json`` under
+    ``config.audit_cache_dir``), which may sit anywhere on disk.
+    """
+    resolved = Path(path).resolve()
+    if resolved.suffix.lower() != ".json":
+        raise SystemExit(f"error: manifest path must be a .json file: {path!r}")
+    if not resolved.is_file():
+        raise SystemExit(f"error: manifest file not found: {path!r}")
+    return resolved
 
 
 if __name__ == "__main__":

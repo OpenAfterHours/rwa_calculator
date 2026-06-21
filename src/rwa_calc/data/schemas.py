@@ -8,10 +8,13 @@ Pipeline position:
 
 Key responsibilities:
 - Declare frozen ColumnSpec schemas for every input bundle (Loan, Facility, ...)
-- Declare COLUMN_VALUE_CONSTRAINTS — single source of truth for input-domain
-  string enums (per arch_check check 6); used by validate_bundle_values to
-  catch invalid input values early
-- Publish reference-data tables (risk weights, CCFs, haircuts, LGD/PD floors)
+- Declare the VALID_* enum sets and COLUMN_VALUE_CONSTRAINTS (the input-validation
+  map built from them) consumed by validate_bundle_values to catch invalid input
+  values early; engine/** may not redeclare these string collections (arch_check check 6)
+- Declare the column-shape of the reference / lookup tables (risk weights, CCFs,
+  haircuts, LGD/PD floors). NOTE: shape declarations only — the regulatory VALUES
+  now live in the rulepack packs (rwa_calc/rulebook/packs/{common,crr,b31}.py) and
+  are read through the resolved pack, not from these dicts
 - Declare the Calculation_output schema (full RWA audit trail)
 
 Key Data Inputs:
@@ -19,19 +22,25 @@ Key Data Inputs:
 - Facility                  # Committed credit limits (parent nodes) with seniority, risk_type
 - Contingents               # Off-balance sheet commitments with CCF category
 - Counterparty              # Borrower/obligor with entity flags (PSE, MDB, institution, etc.)
-- Collateral                # Security items with RE-specific fields (LTV, property type, ADC)
-- Guarantee                 # Guarantees and credit protection
-- Provision                 # IFRS 9 provisions/impairments (SCRA, GCRA)
-- Ratings                   # Internal and external credit ratings
+- Collateral                # Security items with RE-specific fields (LTV, property type, ADC);
+                            # linked to its beneficiary via beneficiary_type/beneficiary_reference
+- Collateral_links          # Optional M:N side table splitting one collateral item across many
+                            # beneficiaries (sub-limit + priority); FK to Collateral. Logical key
+                            # (collateral_reference, beneficiary_type, beneficiary_reference) (Art. 230-231)
+- Guarantee                 # Guarantees and credit protection; linked via beneficiary_type/beneficiary_reference
+- Provision                 # IFRS 9 provisions/impairments (SCRA, GCRA); linked via beneficiary_type/beneficiary_reference
+- Ratings                   # Internal and external credit ratings; linked to counterparty via counterparty_reference
 - Specialised_lending       # Slotting approach for PF, OF, CF, IPRE (CRE33)
 - Equity_exposure           # Equity holdings - SA only under Basel 3.1 (CRE20.58-62)
 - CIU_holdings              # Fund look-through holdings for the CIU look-through approach (Art. 132)
 - FX_rates                  # Currency conversion table (currency_from, currency_to, rate)
 
 Counterparty Credit Risk (CCR) Inputs:
-- Trade                     # OTC derivative / long-settlement / SFT row for SA-CCR (Art. 271-279a)
+- Trade                     # OTC derivative / long-settlement row for SA-CCR (Art. 271-279a).
                             # Carries asset_class, notional, MtM, supervisory delta, option / CDO
-                            # inputs, QCCP client-clearing flag, and specific-WWR flag
+                            # inputs, the client-cleared-to-QCCP flag (is_client_cleared, Art. 307),
+                            # and the specific-WWR flag. SFTs are NOT carried here since the
+                            # SFT/FCCM split — see SFT_trade below
 - Netting_set               # Per-netting-set row with legal-enforceability flag (Art. 295),
                             # margined / unmargined toggle, large-NS / illiquid-collateral MPOR
                             # cascade inputs (Art. 285), and general-WWR flag
@@ -39,6 +48,24 @@ Counterparty Credit Risk (CCR) Inputs:
                             # separable from netting set so one CSA can cover multiple sets
 - CCR_collateral            # CCR-specific collateral keyed by netting_set_id (vs the
                             # exposure-keyed Collateral schema); haircut lookup via Art. 224
+- DF_contribution           # Optional clearing-member default-fund contribution to a (Q)CCP;
+                            # is_qccp_ccp discriminates the Art. 308 (QCCP) vs Art. 309
+                            # (non-QCCP) capital branch
+
+Securities Financing Transaction (SFT) Inputs:
+- SFT_trade                 # Lean SFT row (RawDataBundle.sft) priced via the Financial
+                            # Collateral Comprehensive Method (Art. 271(2), 220-223). Carries the
+                            # Art. 223(5) exposure-side volatility-haircut (HE) inputs first-class
+                            # and the netting-set counterparty denormalised onto the trade
+                            # (single-trade-NS scope, Art. 220(1)(a)); optional margined / MPOR flags
+- SFT_collateral            # Optional SFT collateral keyed by netting_set_id; market_value +
+                            # Art. 224 haircut (HC/HFX) inputs feeding the FCCM E* formula
+
+CVA Risk Inputs (Basel 3.1 / PS1/26 only — BA-CVA):
+- CVA_counterparty          # Optional BA-CVA counterparty row (sector x credit-quality RW_c,
+                            # M_NS); gates BA-CVA inclusion via cva_in_scope (PS1/26 CVA Part Ch.4)
+- CVA_hedge                 # Optional BA-CVA single-name / index CDS hedge feeding K_hedged
+                            # (correlation band, RW_h, M_h, notional B_h); PS1/26 CVA Part Ch.4
 
 Settlement Risk Inputs:
 - Failed_trade              # One row per failed DvP or non-DvP free-delivery settlement
@@ -56,13 +83,17 @@ Mappings:
 - Facility_mappings         # Mappings between Facilities, Loans and Contingents
 - Org_mapping               # Mapping between counterparties (parents to children) for rating/turnover inheritance
 - Lending_mapping           # Mapping between connected counterparties for Retail threshold aggregation
-- Ratings_mapping           # Mapping between Internal and External Ratings to Counterparties
-- Collateral_mapping        # Mapping between Collateral and Exposures/Counterparties
-- Provision_mapping         # Mapping between Provision and Exposures/Counterparties
-- Guarantee_mapping         # Mapping between Guarantee and Exposures/Counterparties
 - Exposure_class_mapping    # Mapping of counterparty/exposure attributes to SA/IRB exposure classes
 
-Reference/Lookup Data:
+  Note: ratings, collateral, provisions and guarantees do NOT use standalone
+  *_mapping tables. Ratings link to their counterparty via a counterparty_reference
+  column on the Ratings schema; collateral / provision / guarantee each link to
+  their beneficiary via embedded beneficiary_type + beneficiary_reference columns
+  (constrained by VALID_BENEFICIARY_TYPES). The only standalone collateral side
+  table is the optional M:N Collateral_links frame above.
+
+Reference/Lookup Data (column-shape declarations only — VALUES live in the rulepack
+packs, read via the resolved pack; not consumed from these dicts):
 - Central_govt_central_bank_risk_weights  # CQS to risk weight mapping for central govts/central banks (0%-150%)
 - Institution_risk_weights  # CQS to risk weight mapping (ECRA) with UK CQS2=30% deviation
 - Corporate_risk_weights    # CQS to risk weight mapping for corporates
@@ -74,7 +105,7 @@ Reference/Lookup Data:
 - PD_floors                 # PD floors by exposure class (Corporate 0.03%, Retail 0.05%, QRRE 0.10%)
 - Correlation_parameters    # Asset correlation formulas/values by exposure class
 
-Configuration:
+Configuration (column-shape declarations; runtime config is the CalculationConfig dataclass):
 - IRB_permissions           # Which exposure classes can use IRB (SA/FIRB/AIRB)
 - Model_permissions         # Per-model approach + geography / book-code scoping
                             # (model_id, exposure_class, approach, country_codes,
@@ -102,16 +133,22 @@ References:
 - CRR Art. 153(5): Specialised-lending slotting categories (PF, OF, CF, IPRE)
 - CRR Art. 197-200: Eligible collateral types (basis for collateral_type enum)
 - CRR Art. 213-217: Eligible guarantor types (basis for guarantor_type enum)
+- CRR Art. 220-223: Financial Collateral Comprehensive Method (basis for SFT_trade / SFT_collateral)
 - CRR Art. 223-230: Collateral valuation / supervisory haircut categories
+- CRR Art. 230-231: Collateral substitution / sequential allocation (basis for Collateral_links)
 - CRR Art. 244-246: Securitisation significant risk transfer (basis for Securitisation_allocation)
+- CRR Art. 271(2): SFT exposure value via FCCM under the CCR framework (basis for SFT_trade)
 - CRR Art. 271-279a: SA-CCR scope and exposure-value methodology (basis for Trade schema)
+- CRR Art. 272(7), 285(5): Margin agreement (CSA) parameters (basis for Margin_agreement schema)
 - CRR Art. 285, 295: MPOR cascade and netting-set legal enforceability (basis for Netting_set schema)
 - CRR Art. 291: Wrong-way risk flags (general + specific) on Trade / Netting_set
 - CRR Art. 306-307: QCCP proprietary vs client-cleared routing (``is_client_cleared``)
+- CRR Art. 308-309: CCP default-fund contribution capital (basis for DF_contribution)
 - CRR Art. 378-380: Settlement risk treatment (basis for Failed_trade schema)
 - CRR Art. 501 / 501a: SME and infrastructure supporting-factor eligibility fields
 - PRA PS1/26 (Basel 3.1): LTV bands, ADC flag, IPRE flags, equity SA-only treatment
   (CRE20.58-62), and revised SA input fields effective 1 Jan 2027
+- PRA PS1/26 CVA Part Ch.4: Basic Approach for CVA (BA-CVA) — basis for CVA_counterparty / CVA_hedge
 """
 
 from __future__ import annotations
@@ -1415,11 +1452,13 @@ CVA_HEDGE_SCHEMA: dict[str, ColumnSpec] = {
 
 # Short-code mapping for the five SA-CCR asset classes used to compose the
 # stable ``hedging_set_id`` per CRR Art. 277(1) (e.g. "IR-NS-IR-01-GBP-GT_5Y").
-# Keys mirror the canonical ``TRADE_SCHEMA.asset_class`` input strings
-# (see line 659 above). Values are the BCBS / CRR conventional short codes.
+# Keys are the canonical ``TRADE_SCHEMA.asset_class`` input strings; values are the
+# BCBS / CRR conventional short codes. NOTE: only the ``interest_rate`` entry is
+# currently consumed (engine/ccr/hedging_sets.py looks up ``asset_short`` for the IR
+# hedging-set id); the FX / credit / equity / commodity ids use hardcoded literals.
 ASSET_CLASS_SHORT_CODE: dict[str, str] = {
     "interest_rate": "IR",
-    "foreign_exchange": "FX",
+    "fx": "FX",
     "credit": "CR",
     "equity": "EQ",
     "commodity": "CO",

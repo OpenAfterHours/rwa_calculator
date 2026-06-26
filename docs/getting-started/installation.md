@@ -31,7 +31,7 @@ The calculator provides several optional dependency groups:
 === "uv"
 
     ```bash
-    # UI and Marimo workbook support
+    # UI support (Marimo web interface)
     uv add rwa-calc[ui]
 
     # Everything (ui and dev dependencies)
@@ -41,7 +41,7 @@ The calculator provides several optional dependency groups:
 === "pip"
 
     ```bash
-    # UI and Marimo workbook support
+    # UI support (Marimo web interface)
     pip install rwa-calc[ui]
 
     # Everything (ui and dev dependencies)
@@ -50,7 +50,7 @@ The calculator provides several optional dependency groups:
 
 | Extra | Description |
 |-------|-------------|
-| `ui` | Marimo (for the expected-output workbooks); the server-rendered web UI also ships in the base package |
+| `ui` | Interactive web UI via Marimo for exploration and testing |
 | `dev` | Development tools (pytest, ty, zensical, etc.) |
 | `all` | All optional dependencies combined |
 

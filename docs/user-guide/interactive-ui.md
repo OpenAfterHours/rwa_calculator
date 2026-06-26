@@ -12,8 +12,8 @@ step is required and it bundles cleanly for local distribution.
 uv add rwa-calc      # or: pip install rwa-calc
 ```
 
-The UI dependencies (FastAPI, Uvicorn, Jinja) ship with the base package — no
-extra is required.
+The UI dependencies (FastAPI, Uvicorn, Jinja, Marimo) ship with the base
+package — no extra is required.
 
 ---
 
@@ -46,6 +46,7 @@ your browser at the landing page.
 | **Results** | `/results/{run_id}` | Headline metrics, charts and an exposure sample for a run |
 | **Comparison** | `/comparison` | CRR vs Basel 3.1 with the capital-impact waterfall |
 | **Reconciliation** | `/reconciliation` | Reconcile against a legacy calculator, component by component |
+| **Workbench** | `/workbench` | Launch the editable Marimo notebook editor (port 8002) |
 
 Charts on the results, comparison and reconciliation pages are rendered as inline
 SVG themed with the documentation palette.
@@ -93,6 +94,16 @@ by-approach segmentation, the break worklist ranked by materiality, and a per-ke
 forensic table with a bucket filter — plus CSV / Excel downloads of the full
 per-key detail. See the [Reconciliation guide](../reconciliation/index.md) for the
 mapping grammar and the output reference.
+
+---
+
+## Workbench
+
+The polished pages above are read-only. For ad-hoc analysis, the Workbench page
+launches the **Marimo editor** (a separate edit server on port 8002) pointed at
+`workspaces/`. Marimo notebooks are reactive, reproducible, and git-friendly
+plain-Python files; new notebooks start from `workspaces/templates/starter.py`,
+which wires in the engine API and the shared sidebar.
 
 ---
 

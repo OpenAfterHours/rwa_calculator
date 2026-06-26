@@ -105,6 +105,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["T20", "G"]                  # test debugging prints / f-string logs are OK
+"src/rwa_calc/ui/marimo/apps/**" = ["T20"] # marimo workbooks use print for cell output
 "scripts/**" = ["T20", "G"]                # CLI scripts print user-facing output
 "scratch_barrier/**" = ["T20"]             # scratch diagnostic scripts print tab-separated traces
 
@@ -141,9 +142,9 @@ exclude_lines = [
 python-version = "3.13"
 
 [tool.ty.src]
-# Marimo workbooks and generated fixtures excluded from type checking
-# (equivalent to mypy ignore_errors)
+# Marimo UI module excluded from type checking (equivalent to mypy ignore_errors)
 exclude = [
+    "src/rwa_calc/ui/marimo/",
     "workbooks",
     "tests/fixtures/generate_all.py",
     "tests/fixtures/*/generate_all.py",

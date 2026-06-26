@@ -1,27 +1,38 @@
 # Workbooks & Interactive UI
 
-This guide covers the Marimo workbooks used for expected-output generation and
-the server-rendered interactive UI.
+This guide covers the Marimo workbooks used for expected output generation and the interactive UI applications.
 
 ## Overview
 
-The project includes two web/notebook components:
+The project includes two types of Marimo-based components:
 
-1. **Expected Output Workbooks** — Marimo reference implementations for generating
-   test expected outputs
-2. **Interactive UI** — a server-rendered FastAPI + Jinja web app for running
-   calculations and exploring results
+1. **Expected Output Workbooks** - Reference implementations for generating test expected outputs
+2. **Interactive UI Applications** - Web-based tools for running calculations and exploring results
 
 ## Interactive UI
 
-The polished read-only interface (landing, calculator, results, comparison,
-reconciliation) is a server-rendered FastAPI + Jinja app at `rwa_calc.ui.app` (the
-`rwa-ui` console script), backed by a REST API in the same process. See the
-[Interactive UI Guide](../user-guide/interactive-ui.md) for full coverage.
+The polished read-only interface (landing, calculator, results, comparison) is a
+server-rendered FastAPI + Jinja app at `rwa_calc.ui.app` (the `rwa-ui` console
+script), backed by a REST API in the same process. See the
+[Interactive UI Guide](../user-guide/interactive-ui.md) for full coverage. Marimo
+is retained only for the **editable workbench** described below.
 
 ```bash
 rwa-ui            # installed from PyPI
 uv run rwa-ui     # from source
+```
+
+### Workbench (Marimo)
+
+The Workbench page launches the Marimo edit server (port 8002) pointed at
+`src/rwa_calc/ui/marimo/workspaces/` (`local/` and `team/`). New notebooks start
+from `workspaces/templates/starter.py`; `shared/sidebar.py` provides the
+navigation back to the read-only app and `shared/theme.css` maps Marimo's
+variables onto the shared `--oah-*` brand tokens (vendored from
+`ui/app/static/tokens.css`, the single source of truth). Edit directly with:
+
+```bash
+uv run marimo edit src/rwa_calc/ui/marimo/workspaces
 ```
 
 ---

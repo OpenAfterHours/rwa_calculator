@@ -55,7 +55,8 @@ without a matching model permission fall back to SA. See the
 for the model permissions schema.
 
 **Interactive UI** — server-rendered web interface (calculator, results, CRR vs
-Basel 3.1 comparison, and legacy-engine reconciliation) plus a REST API:
+Basel 3.1 comparison, and legacy-engine reconciliation) plus a REST API and an
+editable Marimo workbench:
 
 ```bash
 uv add rwa-calc

@@ -17,7 +17,7 @@ Inspect a single module's dependencies and dependents directly:
 uv run curfew report rwa_calc.engine.classifier
 ```
 
-Last generated: 2026-06-21.
+Last generated: 2026-06-26.
 
 
 ## Package overview
@@ -26,63 +26,61 @@ Each node is a top-level subpackage of `rwa_calc`; an arrow `A --> B` means some
 
 ```mermaid
 flowchart LR
-    p0["rwa_calc"]
-    p1["rwa_calc.analysis"]
-    p2["rwa_calc.api"]
-    p3["rwa_calc.config"]
-    p4["rwa_calc.contracts"]
-    p5["rwa_calc.data"]
-    p6["rwa_calc.domain"]
-    p7["rwa_calc.engine"]
-    p8["rwa_calc.observability"]
-    p9["rwa_calc.reporting"]
-    p10["rwa_calc.rulebook"]
-    p11["rwa_calc.ui"]
-    p1 --> p4
+    p0["rwa_calc.analysis"]
+    p1["rwa_calc.api"]
+    p2["rwa_calc.config"]
+    p3["rwa_calc.contracts"]
+    p4["rwa_calc.data"]
+    p5["rwa_calc.domain"]
+    p6["rwa_calc.engine"]
+    p7["rwa_calc.observability"]
+    p8["rwa_calc.reporting"]
+    p9["rwa_calc.rulebook"]
+    p10["rwa_calc.ui"]
+    p0 --> p3
+    p0 --> p5
+    p0 --> p6
+    p0 --> p9
+    p1 --> p0
+    p1 --> p2
+    p1 --> p3
+    p1 --> p5
     p1 --> p6
     p1 --> p7
-    p1 --> p10
-    p2 --> p1
-    p2 --> p3
-    p2 --> p4
-    p2 --> p6
-    p2 --> p7
-    p2 --> p8
-    p2 --> p9
-    p2 --> p10
-    p4 --> p2
-    p4 --> p5
-    p4 --> p6
-    p4 --> p7
-    p4 --> p10
+    p1 --> p8
+    p1 --> p9
+    p3 --> p1
+    p3 --> p4
+    p3 --> p5
+    p3 --> p6
+    p3 --> p9
+    p6 --> p2
+    p6 --> p3
+    p6 --> p4
+    p6 --> p5
+    p6 --> p7
+    p6 --> p9
     p7 --> p3
-    p7 --> p4
-    p7 --> p5
-    p7 --> p6
-    p7 --> p8
-    p7 --> p10
-    p8 --> p4
-    p9 --> p2
-    p9 --> p4
-    p9 --> p6
-    p10 --> p4
+    p8 --> p1
+    p8 --> p3
+    p8 --> p5
+    p9 --> p3
+    p9 --> p5
+    p10 --> p0
+    p10 --> p1
+    p10 --> p3
+    p10 --> p5
     p10 --> p6
-    p11 --> p0
-    p11 --> p1
-    p11 --> p2
-    p11 --> p4
-    p11 --> p6
-    p11 --> p7
-    p11 --> p8
+    p10 --> p7
     classDef first_party fill:#e8f0fe,stroke:#1a73e8,color:#202124
-    class p0,p1,p2,p3,p4,p5,p6,p7,p8,p9,p10,p11 first_party
+    class p0,p1,p2,p3,p4,p5,p6,p7,p8,p9,p10 first_party
 ```
 
 ## Full module graph
 
 The complete graph, one node per module, exactly as `curfew show --mermaid` emits it.
 
-??? note "Full module-level graph (200 modules)"
+??? note "Full module-level graph (197 modules)"
 
     ```mermaid
     flowchart LR
@@ -265,9 +263,9 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n176["rwa_calc.ui"]
         n177["rwa_calc.ui.app"]
         n178["rwa_calc.ui.app.main"]
-        n179["rwa_calc.ui.app.recon_state"]
-        n180["rwa_calc.ui.marimo"]
-        n181["rwa_calc.ui.marimo.shared"]
+        n179["rwa_calc.ui.app.progress"]
+        n180["rwa_calc.ui.app.recon_state"]
+        n181["rwa_calc.ui.marimo"]
         n182["rwa_calc.ui.marimo.shared.sidebar"]
         n183["rwa_calc.ui.marimo.workspaces"]
         n184["rwa_calc.ui.marimo.workspaces.local"]
@@ -280,12 +278,10 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n191["rwa_calc.ui.marimo.workspaces.local.new_folder.my_workbook"]
         n192["rwa_calc.ui.marimo.workspaces.local.test_book"]
         n193["rwa_calc.ui.marimo.workspaces.local.tests"]
-        n194["rwa_calc.ui.marimo.workspaces.templates"]
-        n195["rwa_calc.ui.marimo.workspaces.templates.starter"]
-        n196["rwa_calc.ui.views"]
-        n197["rwa_calc.ui.views.charts"]
-        n198["rwa_calc.ui.views.comparison"]
-        n199["rwa_calc.ui.views.reconciliation"]
+        n194["rwa_calc.ui.views"]
+        n195["rwa_calc.ui.views.charts"]
+        n196["rwa_calc.ui.views.comparison"]
+        n197["rwa_calc.ui.views.reconciliation"]
         n2 --> n20
         n3 --> n2
         n3 --> n20
@@ -335,6 +331,7 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n15 --> n12
         n15 --> n14
         n15 --> n16
+        n15 --> n20
         n15 --> n21
         n15 --> n25
         n15 --> n32
@@ -968,20 +965,20 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n178 --> n91
         n178 --> n148
         n178 --> n179
+        n178 --> n180
+        n178 --> n195
+        n178 --> n196
         n178 --> n197
-        n178 --> n198
-        n178 --> n199
-        n182 --> n0
+        n179 --> n96
         n186 --> n182
         n187 --> n182
         n188 --> n182
         n189 --> n182
         n193 --> n182
-        n195 --> n182
-        n198 --> n20
-        n199 --> n5
-        n199 --> n11
+        n196 --> n20
+        n197 --> n5
+        n197 --> n11
         classDef first_party fill:#e8f0fe,stroke:#1a73e8,color:#202124
-        class n0,n1,n2,n3,n4,n5,n6,n7,n8,n9,n10,n11,n12,n13,n14,n15,n16,n17,n18,n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,n30,n31,n32,n33,n34,n35,n36,n37,n38,n39,n40,n41,n42,n43,n44,n45,n46,n47,n48,n49,n50,n51,n52,n53,n54,n55,n56,n57,n58,n59,n60,n61,n62,n63,n64,n65,n66,n67,n68,n69,n70,n71,n72,n73,n74,n75,n76,n77,n78,n79,n80,n81,n82,n83,n84,n85,n86,n87,n88,n89,n90,n91,n92,n93,n94,n95,n96,n97,n98,n99,n100,n101,n102,n103,n104,n105,n106,n107,n108,n109,n110,n111,n112,n113,n114,n115,n116,n117,n118,n119,n120,n121,n122,n123,n124,n125,n126,n127,n128,n129,n130,n131,n132,n133,n134,n135,n136,n137,n138,n139,n140,n141,n142,n143,n144,n145,n146,n147,n148,n149,n150,n151,n152,n153,n154,n155,n156,n157,n158,n159,n160,n161,n162,n163,n164,n165,n166,n167,n168,n169,n170,n171,n172,n173,n174,n175,n176,n177,n178,n179,n180,n181,n182,n183,n184,n185,n186,n187,n188,n189,n190,n191,n192,n193,n194,n195,n196,n197,n198,n199 first_party
+        class n0,n1,n2,n3,n4,n5,n6,n7,n8,n9,n10,n11,n12,n13,n14,n15,n16,n17,n18,n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,n30,n31,n32,n33,n34,n35,n36,n37,n38,n39,n40,n41,n42,n43,n44,n45,n46,n47,n48,n49,n50,n51,n52,n53,n54,n55,n56,n57,n58,n59,n60,n61,n62,n63,n64,n65,n66,n67,n68,n69,n70,n71,n72,n73,n74,n75,n76,n77,n78,n79,n80,n81,n82,n83,n84,n85,n86,n87,n88,n89,n90,n91,n92,n93,n94,n95,n96,n97,n98,n99,n100,n101,n102,n103,n104,n105,n106,n107,n108,n109,n110,n111,n112,n113,n114,n115,n116,n117,n118,n119,n120,n121,n122,n123,n124,n125,n126,n127,n128,n129,n130,n131,n132,n133,n134,n135,n136,n137,n138,n139,n140,n141,n142,n143,n144,n145,n146,n147,n148,n149,n150,n151,n152,n153,n154,n155,n156,n157,n158,n159,n160,n161,n162,n163,n164,n165,n166,n167,n168,n169,n170,n171,n172,n173,n174,n175,n176,n177,n178,n179,n180,n181,n182,n183,n184,n185,n186,n187,n188,n189,n190,n191,n192,n193,n194,n195,n196,n197 first_party
     ```
 

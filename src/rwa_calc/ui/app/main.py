@@ -10,7 +10,6 @@ Key responsibilities:
   matches the Zensical docs site.
 - Mount the REST API (``rwa_calc.api.rest``) in the same process — the
   library-first contract the UI itself consumes.
-- Launch the Marimo edit server on demand for the editable workbench.
 
 Runs locally; packaged via moonlit (entry point ``rwa_calc.ui.app.main:main``).
 """
@@ -18,8 +17,6 @@ Runs locally; packaged via moonlit (entry point ``rwa_calc.ui.app.main:main``).
 from __future__ import annotations
 
 import logging
-import subprocess
-import sys
 import webbrowser
 from datetime import date
 from pathlib import Path
@@ -58,11 +55,9 @@ logger = logging.getLogger(__name__)
 _APP_DIR = Path(__file__).parent
 _STATIC_DIR = _APP_DIR / "static"
 _TEMPLATES_DIR = _APP_DIR / "templates"
-_WORKSPACES_DIR = _APP_DIR.parent / "marimo" / "workspaces"
 
 _DEFAULT_HOST = "127.0.0.1"
 _DEFAULT_PORT = 8000
-_EDIT_PORT = 8002
 
 # User-facing loopback URL. The literal "localhost" host keeps this a recognised
 # loopback address (no TLS applies to a local dev server); binding still uses the
@@ -87,9 +82,6 @@ _RESULT_TABLE_COLS = [
 ]
 
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
-
-# Lazily-launched Marimo edit server (the workbench).
-_edit_process: subprocess.Popen[bytes] | None = None
 
 
 # =============================================================================
@@ -117,10 +109,7 @@ def main() -> None:
         webbrowser.open(_LOCAL_URL)
     except Exception:  # pragma: no cover - browser launch is best-effort
         logger.debug("could not open browser automatically", exc_info=True)
-    try:
-        uvicorn.run(app, host=_DEFAULT_HOST, port=_DEFAULT_PORT)
-    finally:
-        _stop_workbench()
+    uvicorn.run(app, host=_DEFAULT_HOST, port=_DEFAULT_PORT)
 
 
 # =============================================================================
@@ -311,21 +300,6 @@ def _register_pages(app: FastAPI) -> None:
         context["result"] = _reconciliation_result(recon_id, response, bucket)
         return templates.TemplateResponse(
             request=request, name="reconciliation.html", context=_nav(context)
-        )
-
-    @app.get("/workbench", response_class=HTMLResponse)
-    def workbench(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(
-            request=request, name="workbench.html", context=_nav({"edit_port": _EDIT_PORT})
-        )
-
-    @app.post("/workbench/launch", response_class=HTMLResponse)
-    def workbench_launch(request: Request) -> HTMLResponse:
-        _launch_workbench()
-        return templates.TemplateResponse(
-            request=request,
-            name="workbench_launching.html",
-            context=_nav({"edit_port": _EDIT_PORT}),
         )
 
 
@@ -557,37 +531,6 @@ def _not_found(request: Request, message: str) -> HTMLResponse:
         context=_nav({"message": message}),
         status_code=404,
     )
-
-
-def _launch_workbench() -> None:
-    """Start the Marimo edit server (idempotent) for the editable workbench."""
-    global _edit_process  # noqa: PLW0603
-    if _edit_process is not None and _edit_process.poll() is None:
-        return
-    _WORKSPACES_DIR.mkdir(parents=True, exist_ok=True)
-    logger.info("launching workbench (marimo edit) on port %d", _EDIT_PORT)
-    _edit_process = subprocess.Popen(
-        [
-            sys.executable,
-            "-m",
-            "marimo",
-            "edit",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            str(_EDIT_PORT),
-            "--no-token",
-            "--headless",
-            str(_WORKSPACES_DIR),
-        ],
-        cwd=str(_WORKSPACES_DIR),
-    )
-
-
-def _stop_workbench() -> None:
-    """Terminate the workbench edit server if it was started."""
-    if _edit_process is not None:
-        _edit_process.terminate()
 
 
 if __name__ == "__main__":

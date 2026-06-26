@@ -5,7 +5,7 @@ Pipeline position:
     TestClient -> FastAPI page routes -> CreditRiskCalc / ui.views -> Jinja + SVG
 
 Key responsibilities tested:
-- The landing / calculator / comparison / workbench pages render.
+- The landing / calculator / comparison pages render.
 - POST /calculate runs a real SA calculation and the results page shows the
   headline cards, an inline SVG chart, and the exposure table.
 - POST /comparison runs both frameworks and renders the executive summary.
@@ -36,7 +36,7 @@ def data_dir(tmp_path: Path) -> str:
 
 
 def test_static_pages_render(client: TestClient) -> None:
-    for path in ("/", "/calculator", "/comparison", "/workbench"):
+    for path in ("/", "/calculator", "/comparison"):
         assert client.get(path).status_code == 200, path
 
 

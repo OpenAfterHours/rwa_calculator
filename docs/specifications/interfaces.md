@@ -9,7 +9,6 @@
 | FR-6.3 | CLI entry point (`rwa-ui`) for launching the web interface | P2 | Done |
 | FR-6.4 | API input validation with clear error messages | P1 | Done |
 | FR-6.5 | REST API over `CreditRiskCalc` (calculate / validate / results / comparison / export) | P1 | Done |
-| FR-6.6 | Editable Marimo workbench for ad-hoc notebook analysis | P2 | Done |
 
 ## Python API
 
@@ -30,11 +29,6 @@ serves the read-only surface and mounts the REST API in the same process
   `DualFrameworkRunner` + `CapitalImpactAnalyzer`, transformed by
   `ui/views/comparison.py`)
 - `GET /api/export/{parquet|csv|excel|corep}` — download an export
-
-## Marimo workbench
-
-Retained for editable, reproducible notebooks against the engine; launched on
-demand by the app (port 8002) from `ui/marimo/workspaces/`.
 
 ## CLI
 

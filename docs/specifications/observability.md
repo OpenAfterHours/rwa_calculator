@@ -181,7 +181,7 @@ The contract is enforced by four mutually-reinforcing mechanisms:
 1. **ruff rules** (`pyproject.toml` `[tool.ruff.lint]`): `G`
    (flake8-logging-format — no f-strings in log calls), `LOG`
    (flake8-logging — no deprecated APIs), `T20` (flake8-print — no
-   `print()` outside `tests/` and marimo workbooks).
+   `print()` outside `tests/` and `scripts/`).
 2. **Architecture check** (`scripts/arch_check.py` check 8): every non-exempt
    engine module declares a module logger; `print(` and `logging.basicConfig(`
    are forbidden in `engine/**`. Helper modules are listed in

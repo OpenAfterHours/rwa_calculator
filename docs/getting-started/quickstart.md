@@ -43,7 +43,6 @@ Navigate to [http://localhost:8000](http://localhost:8000) to access:
 
 - **Calculator** (`/calculator`) - Run calculations on your data
 - **Comparison** (`/comparison`) - CRR vs Basel 3.1 impact analysis
-- **Workbench** (`/workbench`) - Editable Marimo notebooks against the engine
 
 A JSON REST API is served from the same process (see `/docs`).
 

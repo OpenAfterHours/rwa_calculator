@@ -349,6 +349,16 @@ def register_run(response: CalculationResponse) -> str:
     return run_id
 
 
+def register_run_with_id(run_id: str, response: CalculationResponse) -> None:
+    """Register a completed run under a caller-supplied id.
+
+    Used by the UI's background-job flow so the job_id minted at dispatch (and
+    shown in the ``/calculating/{id}`` progress URL) is the same id the results
+    page is served under — one identifier from submit to results.
+    """
+    _RUNS[run_id] = response
+
+
 def get_run(run_id: str) -> CalculationResponse | None:
     """Look up a registered run, or None if it is unknown/expired."""
     return _RUNS.get(run_id)

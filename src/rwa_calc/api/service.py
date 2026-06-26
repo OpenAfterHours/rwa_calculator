@@ -202,11 +202,28 @@ class CreditRiskCalc:
         from rwa_calc.api.reconciliation import (
             ReconciliationSettings as _Settings,
         )
+        from rwa_calc.contracts.bundles import create_empty_reconciliation_bundle
 
         if not isinstance(settings, _Settings):
             settings = load_reconciliation_config(settings)
 
         calc_response = self.calculate()
+        if not calc_response.success:
+            # Our-side calculation failed (bad data path, missing model
+            # permissions, a pipeline exception, ...). The error path writes a
+            # 0-row results parquet that still carries the reconciliation schema,
+            # so reconciling it would silently mark every legacy row missing_left
+            # with our_* blank and report success — hiding the real failure.
+            # Surface the calculation's own errors instead.
+            return ReconciliationResponse(
+                success=False,
+                bundle=create_empty_reconciliation_bundle(),
+                legacy_file=settings.legacy_file,
+                framework=self.framework,
+                reporting_date=self.reporting_date,
+                errors=list(calc_response.errors),
+            )
+
         our_results = calc_response.scan_results()
         legacy_results = LegacyOutputLoader(settings).load()
 

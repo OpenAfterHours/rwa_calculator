@@ -45,6 +45,8 @@ from rwa_calc.contracts.errors import (
     ERROR_RECON_GRAIN_HETEROGENEOUS,
     ERROR_RECON_KEY_COLUMN_MISSING,
     ERROR_RECON_LEGACY_COLUMN_MISSING,
+    ERROR_RECON_NO_KEY_OVERLAP,
+    ERROR_RECON_NON_FINITE_VALUE,
     reconciliation_warning,
 )
 from rwa_calc.engine.aggregator._collapse import HETEROGENEITY_FLAG, aggregate_to_key_grain
@@ -161,6 +163,7 @@ class ReconciliationRunner:
         )
 
         recon = self._apply_buckets(joined, mapping, active)
+        self._emit_join_diagnostics(recon, active, errors)
 
         return ReconciliationBundle(
             component_reconciliation=recon,
@@ -449,6 +452,82 @@ class ReconciliationRunner:
             .alias("worst_component")
         )
         return joined.with_columns(worst_component)
+
+    # -- post-join diagnostics ----------------------------------------------
+
+    def _emit_join_diagnostics(
+        self,
+        recon: pl.LazyFrame,
+        active: list[_ActiveComponent],
+        errors: list[CalculationError],
+    ) -> None:
+        """Warn on the two silent failure modes that blank the "ours" side.
+
+        Both surface conditions that otherwise produce a normal-looking,
+        legacy-only report with an empty errors list:
+
+        - REC005: zero key overlap — every row is one-sided (our rows
+          missing_right, legacy rows missing_left). Almost always a key-mapping
+          mistake (legacy_keys/our_keys naming different identifiers, or values
+          that differ by case / zero-padding / whitespace / numeric formatting),
+          not a real break.
+        - REC006: non-finite our values — a NaN/inf in any numeric component
+          poisons that component's portfolio total and tie-out, so "ours" shows
+          as NaN/blank even though most rows reconcile. Points the analyst at the
+          upstream calculation for the affected exposures rather than the mapping.
+
+        One small diagnostic collect (offline analysis tool, not the hot
+        pipeline), symmetric with the existing heterogeneity / duplicate-key
+        checks.
+        """
+        numeric = [a for a in active if a.spec.kind == "numeric"]
+        aggs: list[pl.Expr] = [
+            pl.col("_our_present").sum().alias("_our_rows"),
+            pl.col("_legacy_present").sum().alias("_legacy_rows"),
+            (pl.col("_our_present") & pl.col("_legacy_present")).sum().alias("_matched"),
+        ]
+        for a in numeric:
+            col = pl.col(f"our_{a.spec.name}").cast(pl.Float64, strict=False)
+            aggs.append(
+                (col.is_nan() | col.is_infinite())
+                .fill_null(False)  # noqa: FBT003
+                .sum()
+                .alias(f"_nf_{a.spec.name}")
+            )
+        row = recon.select(aggs).collect().row(0, named=True)
+
+        our_rows = row["_our_rows"] or 0
+        legacy_rows = row["_legacy_rows"] or 0
+        matched = row["_matched"] or 0
+        if our_rows and legacy_rows and not matched:
+            errors.append(
+                reconciliation_warning(
+                    ERROR_RECON_NO_KEY_OVERLAP,
+                    f"0 of {legacy_rows} legacy key(s) matched any of {our_rows} our "
+                    "key(s) — every row is one-sided. Check that legacy_keys/our_keys "
+                    "name the same identifier and that their values align (case, "
+                    "zero-padding, trailing whitespace, '123' vs '123.0').",
+                    actual_value="0",
+                )
+            )
+
+        affected = {
+            a.spec.name: row[f"_nf_{a.spec.name}"] for a in numeric if row[f"_nf_{a.spec.name}"]
+        }
+        if affected:
+            detail = ", ".join(f"{name}={count}" for name, count in affected.items())
+            errors.append(
+                reconciliation_warning(
+                    ERROR_RECON_NON_FINITE_VALUE,
+                    f"our side carries non-finite (NaN/inf) values [{detail}]; a single "
+                    "NaN/inf makes that component's portfolio total and tie-out NaN, so "
+                    "'ours' reads as blank/zero even though most rows reconcile. "
+                    "Investigate the upstream calculation for the affected exposures "
+                    "(e.g. IRB maturity-adjustment blow-up at very low PD, or NaN inputs).",
+                    field_name="our_values",
+                    actual_value=detail,
+                )
+            )
 
     # -- helpers ------------------------------------------------------------
 

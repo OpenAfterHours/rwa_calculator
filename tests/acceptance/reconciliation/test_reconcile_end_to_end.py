@@ -195,3 +195,27 @@ class TestReconcileEndToEnd:
         names = {p.name for p in export.files}
         assert "reconciliation_summary_by_component.csv" in names
         assert "reconciliation_totals_tie_out.csv" in names
+
+    def test_reconcile_surfaces_failed_calculation(self, tmp_path: Path) -> None:
+        # Arrange: a data path with no input files -> calculate() fails, and its
+        # error path writes a 0-row results parquet. Reconciling that empty frame
+        # would silently mark every legacy row missing_left with our_* blank and
+        # report success; reconcile() must surface the failure instead.
+        empty_dir = tmp_path / "empty_data"
+        empty_dir.mkdir()
+        legacy = _write_legacy(tmp_path, "LN-X", 1_000_000.0)
+        calc = CreditRiskCalc(
+            data_path=empty_dir,
+            framework="CRR",
+            reporting_date=date(2025, 1, 1),
+            permission_mode="standardised",
+        )
+        assert not calc.calculate().success  # precondition: the calc really fails
+
+        # Act
+        response = calc.reconcile(_settings(legacy))
+
+        # Assert: the failed calculation is surfaced, not hidden behind a
+        # legacy-only "success" with our_* blank.
+        assert not response.success
+        assert response.errors

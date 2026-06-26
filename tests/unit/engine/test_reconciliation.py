@@ -26,6 +26,8 @@ from rwa_calc.contracts.errors import (
     ERROR_RECON_GRAIN_HETEROGENEOUS,
     ERROR_RECON_KEY_COLUMN_MISSING,
     ERROR_RECON_LEGACY_COLUMN_MISSING,
+    ERROR_RECON_NO_KEY_OVERLAP,
+    ERROR_RECON_NON_FINITE_VALUE,
 )
 
 
@@ -483,3 +485,52 @@ class TestDataQualityWarnings:
         # Assert: REC003 + empty reconciliation.
         assert any(e.code == ERROR_RECON_KEY_COLUMN_MISSING for e in bundle.errors)
         assert bundle.component_reconciliation.collect().height == 0
+
+    def test_zero_key_overlap_warns_rec005(self) -> None:
+        # Arrange: legacy ids share NO values with our exposure_reference (the
+        # classic "legacy feeds through, ours blank" key-mapping mistake).
+        legacy = pl.LazyFrame({"loan_id": ["X1", "X2", "X3"], "legacy_rwa": [50.0, 150.0, 250.0]})
+
+        # Act
+        bundle = _recon(_ours(), legacy, _mapping())
+
+        # Assert: REC005 surfaces that nothing joined, instead of a silent
+        # all-one-sided report with an empty errors list.
+        assert any(e.code == ERROR_RECON_NO_KEY_OVERLAP for e in bundle.errors)
+
+    def test_matching_keys_do_not_warn_rec005(self) -> None:
+        # Arrange / Act: keys align (L1..L3 on both sides).
+        bundle = _recon(_ours(), _legacy(), _mapping())
+
+        # Assert: no spurious zero-overlap warning on the happy path.
+        assert not any(e.code == ERROR_RECON_NO_KEY_OVERLAP for e in bundle.errors)
+
+    def test_non_finite_our_value_warns_rec006(self) -> None:
+        # Arrange: one matched exposure carries a NaN rwa_final (e.g. an IRB
+        # maturity-adjustment blow-up upstream). A single NaN poisons the total.
+        ours = pl.LazyFrame(
+            {
+                "exposure_reference": ["L1", "L2", "L3"],
+                "exposure_class": ["corporate", "retail", "corporate"],
+                "approach_applied": ["AIRB", "AIRB", "AIRB"],
+                "ead_final": [100.0, 200.0, 500.0],
+                "rwa_final": [50.0, float("nan"), 250.0],
+                "risk_weight": [0.50, 0.75, 0.50],
+            }
+        )
+
+        # Act
+        bundle = _recon(ours, _legacy(), _mapping())
+
+        # Assert: REC006 names the affected component so the analyst looks
+        # upstream rather than at the mapping.
+        nf = [e for e in bundle.errors if e.code == ERROR_RECON_NON_FINITE_VALUE]
+        assert nf
+        assert "rwa" in (nf[0].actual_value or "")
+
+    def test_finite_our_values_do_not_warn_rec006(self) -> None:
+        # Arrange / Act: all our values finite.
+        bundle = _recon(_ours(), _legacy(), _mapping())
+
+        # Assert: no spurious non-finite warning.
+        assert not any(e.code == ERROR_RECON_NON_FINITE_VALUE for e in bundle.errors)

@@ -174,6 +174,12 @@ ERROR_RECON_LEGACY_COLUMN_MISSING = "REC001"
 ERROR_RECON_DUPLICATE_LEGACY_KEY = "REC002"
 ERROR_RECON_KEY_COLUMN_MISSING = "REC003"
 ERROR_RECON_GRAIN_HETEROGENEOUS = "REC004"
+# Every key is one-sided: the legacy and our key columns share no values, so the
+# join matched nothing (almost always a key-mapping mistake, not a real break).
+ERROR_RECON_NO_KEY_OVERLAP = "REC005"
+# Our side carries non-finite (NaN / inf) values: a single one poisons the
+# portfolio total and the tie-out, blanking "ours" even though most rows are fine.
+ERROR_RECON_NON_FINITE_VALUE = "REC006"
 
 
 # =============================================================================

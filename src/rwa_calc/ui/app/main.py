@@ -17,6 +17,8 @@ Runs locally; packaged via moonlit (entry point ``rwa_calc.ui.app.main:main``).
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 import subprocess
 import sys
@@ -28,15 +30,29 @@ from typing import TYPE_CHECKING, Annotated, Literal
 import polars as pl
 import uvicorn
 from fastapi import FastAPI, Form, Request, Response
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from rwa_calc.api.reconciliation import loads_reconciliation_config
-from rwa_calc.api.rest import get_reconciliation, get_run, register_reconciliation, register_run
+from rwa_calc.api.rest import (
+    get_reconciliation,
+    get_run,
+    register_reconciliation,
+    register_run_with_id,
+)
 from rwa_calc.api.rest import router as api_router
 from rwa_calc.api.service import CreditRiskCalc, get_supported_frameworks
 from rwa_calc.api.validation import validate_data_path
+from rwa_calc.ui.app.progress import (
+    STAGE_INDEX,
+    STAGE_SEQUENCE,
+    Job,
+    attach_progress_handler,
+    create_job,
+    get_job,
+    submit_job,
+)
 from rwa_calc.ui.app.recon_state import (
     ReconciliationFormState,
     clear_last_run,
@@ -48,6 +64,8 @@ from rwa_calc.ui.views import comparison as comparison_view
 from rwa_calc.ui.views import reconciliation as reconciliation_view
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator, Callable
+
     from rwa_calc.api.models import CalculationResponse, ReconciliationResponse
 
 logger = logging.getLogger(__name__)
@@ -63,6 +81,30 @@ _WORKSPACES_DIR = _APP_DIR.parent / "marimo" / "workspaces"
 _DEFAULT_HOST = "127.0.0.1"
 _DEFAULT_PORT = 8000
 _EDIT_PORT = 8002
+
+# Cadence at which the SSE stream re-reads job state (in-memory; cheap).
+_SSE_POLL_SECONDS = 0.15
+
+# Tombstone for a stale Marimo service worker. The previous Marimo-based UI ran
+# on this same port and registered a worker at ``./public-files-sw.js`` relative
+# to whichever page was open; those registrations outlive the app, so the
+# browser re-fetches the script on every in-scope navigation (404 noise) and
+# keeps the dead worker installed. Serving this self-unregistering worker lets
+# the browser's update check replace it with one that simply unregisters itself.
+# We deliberately do NOT reload any tab: forcing a reload would also reload
+# unrelated in-scope tabs (e.g. an old ``/results/<id>`` page from a previous
+# server run, whose in-memory result is gone) and they would then 404. The
+# registration finishes uninstalling when its controlled pages next navigate or
+# close; until then this worker has no fetch handler, so it intercepts nothing.
+# A no-op for browsers that never had the old worker.
+_TOMBSTONE_SERVICE_WORKER = """\
+self.addEventListener('install', function () {
+  self.skipWaiting();
+});
+self.addEventListener('activate', function (event) {
+  event.waitUntil(self.registration.unregister().catch(function () {}));
+});
+"""
 
 # User-facing loopback URL. The literal "localhost" host keeps this a recognised
 # loopback address (no TLS applies to a local dev server); binding still uses the
@@ -100,6 +142,7 @@ _edit_process: subprocess.Popen[bytes] | None = None
 def create_app() -> FastAPI:
     """Build the read-only UI app with the REST API mounted alongside."""
     app = FastAPI(title="RWA Calculator")
+    attach_progress_handler()
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
     app.include_router(api_router)
     _register_pages(app)
@@ -130,6 +173,22 @@ def main() -> None:
 
 def _register_pages(app: FastAPI) -> None:
     """Attach the HTML page routes to *app*."""
+
+    # Service-worker tombstones are registered FIRST so they win over the
+    # "/results/{run_id}", "/calculating/{job_id}", … parameter routes. The old
+    # Marimo UI registered "./public-files-sw.js" *relative to whichever page
+    # was open*, so stale registrations can sit at the root scope AND under
+    # nested scopes (/results/, /calculator/, …). Serving the self-unregistering
+    # worker (see _TOMBSTONE_SERVICE_WORKER) at every such path lets each scope's
+    # update check clean itself up instead of 404ing forever.
+    @app.get("/public-files-sw.js", include_in_schema=False)
+    def public_files_service_worker() -> Response:
+        return _sw_tombstone_response()
+
+    @app.get("/{sw_scope:path}/public-files-sw.js", include_in_schema=False)
+    def scoped_public_files_service_worker(sw_scope: str) -> Response:
+        del sw_scope  # the path only distinguishes the dead worker's scope
+        return _sw_tombstone_response()
 
     @app.get("/", response_class=HTMLResponse)
     def landing(request: Request) -> HTMLResponse:
@@ -175,15 +234,59 @@ def _register_pages(app: FastAPI) -> None:
                 ),
                 status_code=400,
             )
-        response = CreditRiskCalc(
-            data_path=data_path,
-            framework=framework,
-            reporting_date=date.fromisoformat(reporting_date),
-            permission_mode=permission_mode,
-            data_format=data_format,
-        ).calculate()
-        run_id = register_run(response)
-        return RedirectResponse(url=f"/results/{run_id}", status_code=303)
+        # Run off the request thread so the browser gets a live, stage-by-stage
+        # stepper instead of a frozen tab. The job_id doubles as the eventual
+        # results id (see _calculation_worker -> register_run_with_id).
+        job = create_job()
+        submit_job(
+            job,
+            _calculation_worker(
+                data_path=data_path,
+                framework=framework,
+                reporting_date=date.fromisoformat(reporting_date),
+                permission_mode=permission_mode,
+                data_format=data_format,
+            ),
+        )
+        return RedirectResponse(url=f"/calculating/{job.job_id}", status_code=303)
+
+    @app.get("/calculating/{job_id}", response_class=HTMLResponse)
+    def calculating(request: Request, job_id: str) -> HTMLResponse:
+        if get_job(job_id) is None:
+            return _not_found(request, "That calculation has expired or does not exist.")
+        return templates.TemplateResponse(
+            request=request,
+            name="calculating.html",
+            context=_nav({"job_id": job_id, "stages": STAGE_SEQUENCE}),
+        )
+
+    @app.get("/jobs/{job_id}")
+    def job_status(job_id: str) -> JSONResponse:
+        job = get_job(job_id)
+        if job is None:
+            return JSONResponse({"detail": f"unknown job_id: {job_id}"}, status_code=404)
+        snap = job.snapshot()
+        return JSONResponse(
+            {
+                "job_id": job_id,
+                "status": snap.status,
+                "success": snap.success,
+                "error": snap.error,
+                "completed": list(snap.completed),
+                "total_stages": len(STAGE_SEQUENCE),
+            }
+        )
+
+    @app.get("/jobs/{job_id}/events")
+    async def job_events(request: Request, job_id: str) -> Response:
+        job = get_job(job_id)
+        if job is None:
+            return Response(status_code=404)
+        return StreamingResponse(
+            _stage_event_stream(request, job),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     @app.get("/results/{run_id}", response_class=HTMLResponse)
     def results(request: Request, run_id: str) -> HTMLResponse:
@@ -327,6 +430,75 @@ def _register_pages(app: FastAPI) -> None:
             name="workbench_launching.html",
             context=_nav({"edit_port": _EDIT_PORT}),
         )
+
+
+# =============================================================================
+# Background calculation jobs (the live-progress stepper backend)
+# =============================================================================
+
+
+def _calculation_worker(
+    *,
+    data_path: str,
+    framework: FrameworkArg,
+    reporting_date: date,
+    permission_mode: PermissionArg,
+    data_format: FormatArg,
+) -> Callable[[Job], None]:
+    """Build the background worker that runs one calculation for a job.
+
+    Runs on the progress executor, off the request thread. The job_id is reused
+    as the results id, so the ``/calculating/{id}`` progress URL and the
+    ``/results/{id}`` page share one identifier. ``CreditRiskCalc.calculate``
+    captures its own failures as ``success=False``, so an error result is still
+    registered and rendered; ``submit_job`` only catches a truly unexpected
+    crash (-> ``job.fail``).
+    """
+
+    def _work(job: Job) -> None:
+        response = CreditRiskCalc(
+            data_path=data_path,
+            framework=framework,
+            reporting_date=reporting_date,
+            permission_mode=permission_mode,
+            data_format=data_format,
+        ).calculate()
+        register_run_with_id(job.job_id, response)
+        job.finish(success=response.success)
+
+    return _work
+
+
+async def _stage_event_stream(request: Request, job: Job) -> AsyncIterator[str]:
+    """Stream Server-Sent Events as pipeline stages complete, then a terminal.
+
+    Driven off completed-stage *order* (never a synthesised percentage): the
+    client ticks each stage off a fixed checklist and the spinner honestly
+    parks on the heavy ``calculators`` collect. Replays every stage completed so
+    far on each (re)connection, so EventSource auto-reconnect stays idempotent.
+    """
+    sent = 0
+    yield ": connected\n\n"
+    while True:
+        if await request.is_disconnected():
+            return
+        snap = job.snapshot()
+        while sent < len(snap.completed):
+            name = snap.completed[sent]
+            yield _sse("stage", {"name": name, "index": STAGE_INDEX.get(name, -1)})
+            sent += 1
+        if snap.status == "done":
+            yield _sse("done", {"run_id": job.job_id, "success": snap.success})
+            return
+        if snap.status == "error":
+            yield _sse("failed", {"error": snap.error or "Calculation failed."})
+            return
+        await asyncio.sleep(_SSE_POLL_SECONDS)
+
+
+def _sse(event: str, data: dict) -> str:
+    """Format one Server-Sent Event frame (``event:`` name + JSON ``data:``)."""
+    return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
 
 # =============================================================================
@@ -548,6 +720,15 @@ def _nav(extra: dict | None = None) -> dict:
     if extra:
         context.update(extra)
     return context
+
+
+def _sw_tombstone_response() -> Response:
+    """Serve the self-unregistering service-worker tombstone (see the constant)."""
+    return Response(
+        content=_TOMBSTONE_SERVICE_WORKER,
+        media_type="text/javascript",
+        headers={"Cache-Control": "no-cache"},
+    )
 
 
 def _not_found(request: Request, message: str) -> HTMLResponse:

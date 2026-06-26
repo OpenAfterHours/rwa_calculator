@@ -130,3 +130,72 @@ table.data tbody tr:hover { background: rgba(255, 145, 0, 0.06); }
 
 .muted { color: var(--oah-slate-400); font-size: 13px; }
 .mono { font-family: var(--font-mono); }
+
+/* ---------- Progress: spinner, busy overlay, stage stepper -- */
+@keyframes oah-spin { to { transform: rotate(360deg); } }
+
+.spinner {
+  width: 22px; height: 22px; flex: none;
+  border: 2.5px solid rgba(255, 145, 0, 0.25);
+  border-top-color: var(--oah-orange);
+  border-radius: 999px;
+  animation: oah-spin 0.8s linear infinite;
+}
+
+/* Phase A — full-screen busy overlay for the blocking form posts
+   (comparison, reconciliation). Persists until the response replaces the
+   page. Indeterminate by design: an honest "working" spinner + live elapsed
+   timer, never a fake percentage. */
+.calc-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(13, 14, 17, 0.72); backdrop-filter: blur(4px);
+}
+.calc-overlay__card {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: 28px 40px; border-radius: 14px; text-align: center;
+  background: var(--oah-slate-800); border: 1px solid rgba(216, 222, 233, 0.12);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+}
+.calc-overlay__msg { font-family: var(--font-display); font-size: 17px; color: #fff; }
+.calc-overlay__elapsed { font-size: 13px; color: var(--oah-slate-300); }
+.calc-overlay__hint { font-size: 12px; max-width: 280px; }
+
+/* Phase B — stage stepper on the /calculating page. */
+.calc-progress { max-width: 720px; }
+.calc-progress__head { display: flex; align-items: center; gap: 12px; margin: 8px 0 18px; }
+.calc-progress__elapsed { font-size: 14px; color: var(--oah-slate-300); }
+.calc-progress.is-error .spinner { animation: none; border-top-color: var(--oah-owl-body); }
+
+.steps { list-style: none; margin: 0; padding: 0; }
+.step {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; border-radius: 10px;
+  border: 1px solid transparent; color: var(--oah-slate-400);
+  transition: color 160ms var(--ease-std), background 160ms var(--ease-std);
+}
+.step__marker {
+  width: 18px; height: 18px; flex: none; border-radius: 999px; position: relative;
+  border: 2px solid var(--oah-slate-600);
+}
+.step--active {
+  color: var(--oah-slate-100);
+  background: rgba(255, 145, 0, 0.07);
+  border-color: rgba(255, 145, 0, 0.22);
+}
+.step--active .step__marker {
+  border-color: var(--oah-orange);
+  border-top-color: transparent;
+  animation: oah-spin 0.8s linear infinite;
+}
+.step--done { color: var(--oah-slate-200); }
+.step--done .step__marker {
+  border-color: var(--oah-terminal-green);
+  background: var(--oah-terminal-green);
+  animation: none;
+}
+.step--done .step__marker::after {
+  content: ""; position: absolute; left: 5px; top: 1.5px;
+  width: 4px; height: 9px; border: solid var(--oah-slate-900);
+  border-width: 0 2px 2px 0; transform: rotate(45deg);
+}

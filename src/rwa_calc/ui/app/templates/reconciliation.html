@@ -29,7 +29,7 @@ engine fix.</p>
 
 {% if error %}<div class="callout error">Reconciliation failed: {{ error }}</div>{% endif %}
 
-<form class="form" method="post" action="/reconciliation">
+<form class="form" method="post" action="/reconciliation" data-busy-overlay="Reconciling against legacy…">
   <div class="field">
     <label for="data_path">Our data path</label>
     <input id="data_path" name="data_path" value="{{ default_path }}" placeholder="/path/to/data" required>

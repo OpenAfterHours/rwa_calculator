@@ -8,7 +8,7 @@ regulatory drivers. Takes roughly twice a single run.</p>
 
 {% if error %}<div class="callout error">Comparison failed: {{ error }}</div>{% endif %}
 
-<form class="form" method="post" action="/comparison">
+<form class="form" method="post" action="/comparison" data-busy-overlay="Running both frameworks…">
   <div class="field">
     <label for="data_path">Data path</label>
     <input id="data_path" name="data_path" value="{{ default_path }}" placeholder="/path/to/data" required>

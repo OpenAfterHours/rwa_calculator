@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Calculating — RWA Calculator{% endblock %}
+
+{% block content %}
+<h1>Calculating…</h1>
+<p class="muted">Running the RWA pipeline. Keep this tab open — the results page opens
+automatically when the run finishes.</p>
+
+<div id="calc-progress" class="calc-progress" data-job-id="{{ job_id }}">
+  <div class="calc-progress__head">
+    <div class="spinner" role="status" aria-label="Calculating"></div>
+    <div id="calc-elapsed" class="calc-progress__elapsed mono">0:00 elapsed</div>
+  </div>
+
+  <ol class="steps">
+    {% for s in stages %}
+    <li class="step{% if loop.first %} step--active{% endif %}{% if s.heavy %} step--heavy{% endif %}"
+        data-stage="{{ s.name }}">
+      <span class="step__marker" aria-hidden="true"></span>
+      <span class="step__label">{{ s.label }}{% if s.heavy %}
+        <span class="muted">· the heavy step</span>{% endif %}</span>
+    </li>
+    {% endfor %}
+  </ol>
+
+  <div id="calc-error" class="callout error" role="alert" style="display:none"></div>
+
+  <noscript>
+    <p class="muted">Live progress needs JavaScript. The calculation is still running —
+      reopen this page or check back shortly.</p>
+  </noscript>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script defer src="/static/calculating.js"></script>
+{% endblock %}

@@ -142,7 +142,8 @@ src/rwa_calc/
 ├── domain/                 # Core domain
 │   └── enums.py           # Enumerations
 ├── ui/                     # User interface
-│   └── marimo/            # Marimo web applications
+│   ├── app/               # Server-rendered FastAPI + Jinja read-only UI (rwa-ui)
+│   └── views/             # Framework-agnostic chart / table view helpers
 └── engine/                 # Calculation engine
     ├── pipeline.py        # Run-lifecycle facade (run_id, edge capture, audit)
     ├── registry.py        # Literal ordered StageSpec list

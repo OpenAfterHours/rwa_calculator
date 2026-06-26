@@ -127,6 +127,10 @@ _RESULT_TABLE_COLS = [
     "rwa_final",
 ]
 
+# Shown when a reconciliation id is unknown (expired from the in-memory registry
+# or never existed) — reused by the report, explorer and single-loan routes.
+_RECON_NOT_FOUND_MESSAGE = "That reconciliation has expired or does not exist."
+
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
 
@@ -402,7 +406,7 @@ def _register_pages(app: FastAPI) -> None:
     @app.get("/reconciling/{job_id}", response_class=HTMLResponse)
     def reconciling(request: Request, job_id: str) -> HTMLResponse:
         if get_job(job_id) is None:
-            return _not_found(request, "That reconciliation has expired or does not exist.")
+            return _not_found(request, _RECON_NOT_FOUND_MESSAGE)
         return templates.TemplateResponse(
             request=request,
             name="reconciling.html",
@@ -419,7 +423,7 @@ def _register_pages(app: FastAPI) -> None:
     def reconciliation_result(request: Request, recon_id: str) -> HTMLResponse:
         response = get_reconciliation(recon_id)
         if response is None:
-            return _not_found(request, "That reconciliation has expired or does not exist.")
+            return _not_found(request, _RECON_NOT_FOUND_MESSAGE)
         context = _reconciliation_form_context()
         context["result"] = _reconciliation_result(recon_id, response)
         return templates.TemplateResponse(
@@ -442,7 +446,7 @@ def _register_pages(app: FastAPI) -> None:
     ) -> HTMLResponse:
         response = get_reconciliation(recon_id)
         if response is None or not response.success:
-            return _not_found(request, "That reconciliation has expired or does not exist.")
+            return _not_found(request, _RECON_NOT_FOUND_MESSAGE)
         filters = reconciliation_view.ForensicFilters(
             bucket=bucket or None,
             exposure_class=exposure_class or None,
@@ -468,7 +472,7 @@ def _register_pages(app: FastAPI) -> None:
     def reconciliation_loan(request: Request, recon_id: str, key: str = "") -> HTMLResponse:
         response = get_reconciliation(recon_id)
         if response is None or not response.success:
-            return _not_found(request, "That reconciliation has expired or does not exist.")
+            return _not_found(request, _RECON_NOT_FOUND_MESSAGE)
         # ``key`` defaults to "" so an omitted ?key= reaches the handler and gets
         # the styled 404 below (loan_detail returns None for an empty/unknown key)
         # rather than FastAPI's raw 422 for a missing required query param.

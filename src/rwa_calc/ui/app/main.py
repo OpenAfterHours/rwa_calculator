@@ -23,6 +23,7 @@ import webbrowser
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal
+from urllib.parse import urlencode
 
 import polars as pl
 import uvicorn
@@ -35,13 +36,15 @@ from rwa_calc.api.reconciliation import loads_reconciliation_config
 from rwa_calc.api.rest import (
     get_reconciliation,
     get_run,
-    register_reconciliation,
+    register_reconciliation_with_id,
     register_run_with_id,
 )
 from rwa_calc.api.rest import router as api_router
 from rwa_calc.api.service import CreditRiskCalc, get_supported_frameworks
 from rwa_calc.api.validation import validate_data_path
 from rwa_calc.ui.app.progress import (
+    RECON_STAGE_NAME,
+    RECON_STAGE_SEQUENCE,
     STAGE_INDEX,
     STAGE_SEQUENCE,
     Job,
@@ -64,6 +67,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable
 
     from rwa_calc.api.models import CalculationResponse, ReconciliationResponse
+    from rwa_calc.api.reconciliation import ReconciliationSettings
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +126,10 @@ _RESULT_TABLE_COLS = [
     "risk_weight",
     "rwa_final",
 ]
+
+# Shown when a reconciliation id is unknown (expired from the in-memory registry
+# or never existed) — reused by the report, explorer and single-loan routes.
+_RECON_NOT_FOUND_MESSAGE = "That reconciliation has expired or does not exist."
 
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
@@ -350,17 +358,13 @@ def _register_pages(app: FastAPI) -> None:
         permission_mode: Annotated[PermissionArg, Form()] = "standardised",
         data_format: Annotated[FormatArg, Form()] = "parquet",
     ) -> Response:
+        # Parse the mapping (and date) synchronously so a bad config re-renders
+        # the form with an error before any work is dispatched.
         try:
             settings = loads_reconciliation_config(mapping_toml, base_dir=data_path or ".")
-            response = CreditRiskCalc(
-                data_path=data_path,
-                framework=framework,
-                reporting_date=date.fromisoformat(reporting_date),
-                permission_mode=permission_mode,
-                data_format=data_format,
-            ).reconcile(settings)
-        except Exception as exc:  # noqa: BLE001 - surface any parse/run failure to the page
-            logger.warning("reconciliation failed: %s", exc)
+            parsed_date = date.fromisoformat(reporting_date)
+        except Exception as exc:  # noqa: BLE001 - surface any parse failure to the page
+            logger.warning("reconciliation config invalid: %s", exc)
             context = _reconciliation_form_context(
                 default_path=data_path,
                 default_date=reporting_date,
@@ -373,18 +377,41 @@ def _register_pages(app: FastAPI) -> None:
             return templates.TemplateResponse(
                 request=request, name="reconciliation.html", context=_nav(context), status_code=400
             )
-        recon_id = register_reconciliation(response)
-        save_last_run(
-            ReconciliationFormState(
+        # Run the reconciliation (a full pipeline run + the legacy join) off the
+        # request thread so the browser gets the live stage stepper instead of a
+        # frozen tab. The job_id doubles as the recon result id (see
+        # _reconciliation_worker -> register_reconciliation_with_id).
+        job = create_job()
+        submit_job(
+            job,
+            _reconciliation_worker(
+                settings=settings,
                 data_path=data_path,
-                reporting_date=reporting_date,
                 framework=framework,
+                reporting_date=parsed_date,
                 permission_mode=permission_mode,
                 data_format=data_format,
-                mapping_toml=mapping_toml,
-            )
+                form_state=ReconciliationFormState(
+                    data_path=data_path,
+                    reporting_date=reporting_date,
+                    framework=framework,
+                    permission_mode=permission_mode,
+                    data_format=data_format,
+                    mapping_toml=mapping_toml,
+                ),
+            ),
         )
-        return RedirectResponse(url=f"/reconciliation/{recon_id}", status_code=303)
+        return RedirectResponse(url=f"/reconciling/{job.job_id}", status_code=303)
+
+    @app.get("/reconciling/{job_id}", response_class=HTMLResponse)
+    def reconciling(request: Request, job_id: str) -> HTMLResponse:
+        if get_job(job_id) is None:
+            return _not_found(request, _RECON_NOT_FOUND_MESSAGE)
+        return templates.TemplateResponse(
+            request=request,
+            name="reconciling.html",
+            context=_nav({"job_id": job_id, "stages": RECON_STAGE_SEQUENCE}),
+        )
 
     @app.get("/reconciliation/reset")
     def reconciliation_reset() -> Response:
@@ -393,16 +420,69 @@ def _register_pages(app: FastAPI) -> None:
         return RedirectResponse(url="/reconciliation", status_code=303)
 
     @app.get("/reconciliation/{recon_id}", response_class=HTMLResponse)
-    def reconciliation_result(
-        request: Request, recon_id: str, bucket: str = "break"
-    ) -> HTMLResponse:
+    def reconciliation_result(request: Request, recon_id: str) -> HTMLResponse:
         response = get_reconciliation(recon_id)
         if response is None:
-            return _not_found(request, "That reconciliation has expired or does not exist.")
+            return _not_found(request, _RECON_NOT_FOUND_MESSAGE)
         context = _reconciliation_form_context()
-        context["result"] = _reconciliation_result(recon_id, response, bucket)
+        context["result"] = _reconciliation_result(recon_id, response)
         return templates.TemplateResponse(
             request=request, name="reconciliation.html", context=_nav(context)
+        )
+
+    @app.get("/reconciliation/{recon_id}/rows", response_class=HTMLResponse)
+    def reconciliation_rows(
+        request: Request,
+        recon_id: str,
+        bucket: str = "",
+        exposure_class: str = "",
+        approach: str = "",
+        worst_component: str = "",
+        q: str = "",
+        sort: str = "",
+        sort_dir: str = "desc",
+        page: int = 1,
+        page_size: int = reconciliation_view.DEFAULT_PAGE_SIZE,
+    ) -> HTMLResponse:
+        response = get_reconciliation(recon_id)
+        if response is None or not response.success:
+            return _not_found(request, _RECON_NOT_FOUND_MESSAGE)
+        filters = reconciliation_view.ForensicFilters(
+            bucket=bucket or None,
+            exposure_class=exposure_class or None,
+            approach=approach or None,
+            worst_component=worst_component or None,
+            query=q or None,
+            sort=sort or None,
+            descending=(sort_dir != "asc"),
+            page=page,
+            page_size=page_size,
+        )
+        try:
+            result_page = reconciliation_view.forensic_page(response, filters)
+        except ValueError as exc:
+            return _bad_request(request, str(exc))
+        return templates.TemplateResponse(
+            request=request,
+            name="recon_explorer.html",
+            context=_nav(_reconciliation_explorer(recon_id, response, filters, result_page)),
+        )
+
+    @app.get("/reconciliation/{recon_id}/loan", response_class=HTMLResponse)
+    def reconciliation_loan(request: Request, recon_id: str, key: str = "") -> HTMLResponse:
+        response = get_reconciliation(recon_id)
+        if response is None or not response.success:
+            return _not_found(request, _RECON_NOT_FOUND_MESSAGE)
+        # ``key`` defaults to "" so an omitted ?key= reaches the handler and gets
+        # the styled 404 below (loan_detail returns None for an empty/unknown key)
+        # rather than FastAPI's raw 422 for a missing required query param.
+        detail = reconciliation_view.loan_detail(response, key) if key else None
+        if detail is None:
+            return _not_found(request, "No reconciliation row matches that key.")
+        return templates.TemplateResponse(
+            request=request,
+            name="recon_loan.html",
+            context=_nav(_reconciliation_loan(recon_id, response, detail)),
         )
 
 
@@ -441,6 +521,67 @@ def _calculation_worker(
         job.finish(success=response.success)
 
     return _work
+
+
+def _reconciliation_worker(
+    *,
+    settings: ReconciliationSettings,
+    data_path: str,
+    framework: FrameworkArg,
+    reporting_date: date,
+    permission_mode: PermissionArg,
+    data_format: FormatArg,
+    form_state: ReconciliationFormState,
+) -> Callable[[Job], None]:
+    """Build the background worker that runs one reconciliation for a job.
+
+    Mirrors ``_calculation_worker``: runs on the progress executor, off the
+    request thread, and the job_id is reused as the recon result id (so
+    ``/reconciling/{id}`` and ``/reconciliation/{id}`` share one identifier). The
+    embedded ``calculate()`` streams every engine stage to the progress tap for
+    free; the worker then *warms* the lazy bundle frames so the heavy full-outer
+    join runs here — under the stepper — instead of freezing the result page on
+    its first collect, and marks the ``recon_reconcile`` tail step done.
+    """
+
+    def _work(job: Job) -> None:
+        response = CreditRiskCalc(
+            data_path=data_path,
+            framework=framework,
+            reporting_date=reporting_date,
+            permission_mode=permission_mode,
+            data_format=data_format,
+        ).reconcile(settings)
+        _warm_reconciliation_frames(response)
+        job.mark_stage(RECON_STAGE_NAME)
+        register_reconciliation_with_id(job.job_id, response)
+        save_last_run(form_state)
+        job.finish(success=response.success)
+
+    return _work
+
+
+def _warm_reconciliation_frames(response: ReconciliationResponse) -> None:
+    """Force the lazy reconcile join to execute, caching every result frame.
+
+    The ``ReconciliationBundle`` is lazy; its full-outer join + bucketing fires on
+    the first ``collect_*`` call (``api/models.py``). Warming the cache on the
+    worker thread keeps that heavy compute under the progress stepper and makes
+    the subsequent overview render hit the cache instead of freezing.
+
+    The small summary frames and the ranked break worklist are warmed (they back
+    the aggregates-first overview); the wide ``component_reconciliation`` frame is
+    deliberately left lazy — the overview never touches it, and it is collected
+    on the first explorer/loan drill so a large portfolio is never materialised
+    just to show the summary page.
+    """
+    response.collect_totals_tie_out()
+    response.collect_summary_by_component()
+    response.collect_summary_by_bucket()
+    response.collect_summary_by_exposure_class()
+    response.collect_summary_by_approach()
+    response.collect_class_allocation()
+    response.collect_breaks_detail()
 
 
 async def _stage_event_stream(request: Request, job: Job) -> AsyncIterator[str]:
@@ -580,17 +721,25 @@ def _reconciliation_form_context(
     }
 
 
-def _reconciliation_result(recon_id: str, response: ReconciliationResponse, bucket: str) -> dict:
-    """Build the four-tier result context for a registered reconciliation."""
+def _reconciliation_result(recon_id: str, response: ReconciliationResponse) -> dict:
+    """Build the aggregates-first overview context for a registered reconciliation.
+
+    The overview renders only the small pre-aggregated frames (headline tie-out,
+    per-component summary, the segment tables) plus a ranked "biggest breaks"
+    top-N — it never collects the wide per-key frame, so it renders in constant
+    time and constant DOM for any portfolio size. The full row-level diff is
+    reached by drilling into the explorer (``/rows``) and a single loan
+    (``/loan``); the segment rows carry the filter that pre-narrows the explorer.
+    """
     warnings = [f"[{e.code}] {e.message}" for e in response.errors]
     if not response.success:
         return {"recon_id": recon_id, "success": False, "warnings": warnings}
 
-    if bucket not in reconciliation_view.BUCKET_CHOICES:
-        bucket = "break"
     segments = reconciliation_view.segment_tables(response)
-    breaks = reconciliation_view.breaks_table(response)
-    f_cols, f_rows, f_total = reconciliation_view.forensic_table(response, bucket)
+    by_bucket = segments["by_bucket"]
+    total_rows = (
+        int(by_bucket.get_column("count").sum() or 0) if "count" in by_bucket.columns else 0
+    )
     return {
         "recon_id": recon_id,
         "success": True,
@@ -605,28 +754,93 @@ def _reconciliation_result(recon_id: str, response: ReconciliationResponse, buck
             reconciliation_view.tie_out_chart_items(response), series=("Legacy", "Ours")
         ),
         "component_table": _table(reconciliation_view.summary_by_component_table(response)),
-        # Tier 2 — segment
-        "bucket_table": _table(segments["by_bucket"]),
+        # Tier 2 — segment (each row drills into the explorer, pre-filtered)
+        "bucket_table": _table(by_bucket),
         "allocation_table": _table(reconciliation_view.class_allocation_table(response)),
         "chart_allocation": charts.grouped_bar_svg(
             reconciliation_view.class_allocation_chart_items(response), series=("Legacy", "Ours")
         ),
         "class_table": _table(segments["by_class"]),
         "approach_table": _table(segments["by_approach"]),
-        # Tier 3 — worklist
-        "break_count": breaks.height,
-        "breaks_table": _table(breaks),
-        # Tier 4 — forensic
-        "bucket_choices": reconciliation_view.BUCKET_CHOICES,
-        "active_bucket": bucket,
-        "forensic": {
-            "columns": f_cols,
-            "rows": f_rows,
-            "total": f_total,
-            "shown": len(f_rows),
-        },
+        # Tier 3 — ranked worklist (top-N; the full diff lives in the explorer)
+        "biggest_breaks": _table(reconciliation_view.biggest_breaks(response)),
+        "biggest_n": reconciliation_view.BIGGEST_BREAKS_LIMIT,
+        "break_count": response.collect_breaks_detail().height,
+        "total_rows": total_rows,
+        # Navigation
+        "explorer_url": f"/reconciliation/{recon_id}/rows",
+        "loan_url_base": f"/reconciliation/{recon_id}/loan",
         "export_csv_url": f"/api/reconcile/export/csv?recon_id={recon_id}",
         "export_excel_url": f"/api/reconcile/export/excel?recon_id={recon_id}",
+    }
+
+
+def _reconciliation_explorer(
+    recon_id: str,
+    response: ReconciliationResponse,
+    filters: reconciliation_view.ForensicFilters,
+    page: reconciliation_view.ForensicPage,
+) -> dict:
+    """Build the per-key explorer context (one filtered/sorted/paged window).
+
+    ``query_base`` is the active filter set (sans sort/page) pre-encoded, so the
+    template's sortable-header and prev/next links preserve the filters without
+    re-assembling the query string by hand.
+    """
+    by_bucket = response.collect_summary_by_bucket()
+    grand_total = (
+        int(by_bucket.get_column("count").sum() or 0) if "count" in by_bucket.columns else 0
+    )
+    base_params = {
+        "bucket": filters.bucket,
+        "exposure_class": filters.exposure_class,
+        "approach": filters.approach,
+        "worst_component": filters.worst_component,
+        "q": filters.query,
+        "page_size": page.page_size,
+    }
+    query_base = urlencode({k: v for k, v in base_params.items() if v})
+    return {
+        "recon_id": recon_id,
+        "framework": response.framework,
+        "columns": page.columns,
+        "rows": page.rows,
+        "total": page.total,
+        "grand_total": grand_total,
+        "page": page.page,
+        "pages": page.pages,
+        "page_size": page.page_size,
+        "max_page_size": reconciliation_view.MAX_PAGE_SIZE,
+        "first_row": page.offset + 1 if page.rows else 0,
+        "last_row": page.offset + len(page.rows),
+        "sort": page.sort,
+        "sort_dir": "desc" if page.descending else "asc",
+        "filters": {
+            "bucket": filters.bucket or "",
+            "exposure_class": filters.exposure_class or "",
+            "approach": filters.approach or "",
+            "worst_component": filters.worst_component or "",
+            "q": filters.query or "",
+        },
+        "options": reconciliation_view.forensic_filter_options(response),
+        "key_column": "_recon_key",
+        "explorer_path": f"/reconciliation/{recon_id}/rows",
+        "query_base": query_base,
+        "loan_url_base": f"/reconciliation/{recon_id}/loan",
+        "report_url": f"/reconciliation/{recon_id}",
+        "export_csv_url": f"/api/reconcile/export/csv?recon_id={recon_id}",
+        "export_excel_url": f"/api/reconcile/export/excel?recon_id={recon_id}",
+    }
+
+
+def _reconciliation_loan(recon_id: str, response: ReconciliationResponse, detail: dict) -> dict:
+    """Build the single-loan forensic context."""
+    return {
+        "recon_id": recon_id,
+        "framework": response.framework,
+        "detail": detail,
+        "report_url": f"/reconciliation/{recon_id}",
+        "explorer_url": f"/reconciliation/{recon_id}/rows",
     }
 
 
@@ -711,6 +925,16 @@ def _not_found(request: Request, message: str) -> HTMLResponse:
         name="not_found.html",
         context=_nav({"message": message}),
         status_code=404,
+    )
+
+
+def _bad_request(request: Request, message: str) -> HTMLResponse:
+    """Render the lightweight error page with a 400 (e.g. an invalid sort column)."""
+    return templates.TemplateResponse(
+        request=request,
+        name="not_found.html",
+        context=_nav({"message": message}),
+        status_code=400,
     )
 
 

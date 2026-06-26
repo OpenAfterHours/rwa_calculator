@@ -228,9 +228,16 @@ response.to_csv(Path("reconciliation_out/"))
 
 The **Reconciliation** page in the app (served at **`/reconciliation`**) gives you the same
 result without writing Python: enter your data path, edit the TOML mapping in the form, and
-run. It renders the four drill-down tiers (headline tie-out, per-component summary, the break
-worklist, and the per-key forensic table with a bucket filter) and offers CSV / Excel
-downloads of the full per-key detail.
+run. The run executes on a background worker and shows a **live, stage-by-stage progress
+stepper** (the same one the calculator page uses) so a large parallel run no longer looks
+like a frozen tab; when it finishes the page opens the report automatically. The report is an
+**aggregates-first overview** — headline tie-out, per-component summary, the segment tables
+and a ranked "biggest breaks" top-N — that never materialises the full diff, so it stays fast
+for portfolios of any size. From there you drill down: each segment row opens the **per-key
+explorer** (filter by bucket / class / approach / worst-component / key, sort any column, and
+page through the full row-level diff), and each key opens its **single-loan forensic** (every
+component's legacy-vs-ours plus the explain / input drivers). CSV / Excel downloads of the
+full per-key detail remain available.
 
 ```bash
 uv add rwa-calc

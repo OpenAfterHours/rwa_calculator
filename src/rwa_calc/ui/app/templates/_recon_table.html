@@ -1,0 +1,40 @@
+{# Shared reconciliation table helpers.
+
+   fmt(v)            — format one cell: integers with thousands separators, other
+                       numbers to 2dp, everything else verbatim (blank for null).
+   render_table(t)   — a plain {columns, rows} table rendered with fmt().
+   drill_table(...)  — like render_table, but the cell in `key_col` becomes a link
+                       to `link_base?param=<value>` (segment → explorer drill-down,
+                       or a key → single-loan link). #}
+
+{% macro fmt(v) -%}
+{%- if v is integer -%}{{ "{:,}".format(v) }}{%- elif v is number -%}{{ "{:,.2f}".format(v) }}{%- else -%}{{ v if v is not none else "" }}{%- endif -%}
+{%- endmacro %}
+
+{% macro render_table(table) %}
+<div class="table-wrap">
+  <table class="data">
+    <thead><tr>{% for c in table.columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+    <tbody>
+      {% for row in table.rows %}
+      <tr>{% for c in table.columns %}<td>{{ fmt(row[c]) }}</td>{% endfor %}</tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endmacro %}
+
+{% macro drill_table(table, key_col, link_base, param) %}
+<div class="table-wrap">
+  <table class="data">
+    <thead><tr>{% for c in table.columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+    <tbody>
+      {% for row in table.rows %}
+      <tr>{% for c in table.columns %}
+        <td>{% if c == key_col and row[c] is not none %}<a href="{{ link_base }}?{{ param }}={{ row[c]|string|urlencode }}">{{ fmt(row[c]) }}</a>{% else %}{{ fmt(row[c]) }}{% endif %}</td>
+      {% endfor %}</tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endmacro %}

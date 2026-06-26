@@ -2,14 +2,19 @@
 Integration test: the server-rendered reconciliation page.
 
 Pipeline position:
-    TestClient -> FastAPI /reconciliation routes -> CreditRiskCalc.reconcile()
-        -> ui.views.reconciliation -> Jinja + SVG
+    TestClient -> FastAPI /reconciliation routes -> background job
+        -> CreditRiskCalc.reconcile() -> ui.views.reconciliation -> Jinja + SVG
 
 Key responsibilities tested:
 - GET /reconciliation renders the form pre-filled with the default TOML mapping.
-- POST /reconciliation runs a real reconciliation against a generated legacy file
-  and (after the 303) renders the four tiers with an inline SVG chart.
-- A bad mapping re-renders the form with an error and a 400.
+- POST /reconciliation dispatches a background job and redirects to the live
+  stage stepper (/reconciling/{job_id}); once the job finishes, the report is
+  served under the job_id (/reconciliation/{job_id}) with the four tiers + an
+  inline SVG chart.
+- The progress stream (SSE) replays stage events, including the reconcile tail,
+  and reports completion.
+- A bad mapping re-renders the form with an error and a 400 (parsed synchronously
+  before any work is dispatched).
 - GET /reconciliation/{id}?bucket=… reads the cached result; unknown ids 404.
 
 The legacy output is generated from our own SA results (renamed + one RWA nudged
@@ -18,6 +23,9 @@ to force a break) so the reconciliation has comparable components and a worklist
 
 from __future__ import annotations
 
+import re
+import time
+import urllib.parse
 from datetime import date
 from pathlib import Path
 
@@ -90,6 +98,39 @@ def _form_data(data_path: str, mapping_toml: str = DEFAULT_MAPPING_TOML) -> dict
     }
 
 
+def _non_default_form(data_path: str) -> dict:
+    return {
+        "data_path": data_path,
+        "reporting_date": "2026-06-30",
+        "framework": "BASEL_3_1",
+        "permission_mode": "irb",
+        "data_format": "parquet",
+        "mapping_toml": DEFAULT_MAPPING_TOML + "\n# MY-CUSTOM-MARKER\n",
+    }
+
+
+def _wait_for_job(client: TestClient, job_id: str, timeout: float = 60.0) -> dict:
+    """Poll the job-status endpoint until the run leaves the 'running' state."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        status = client.get(f"/jobs/{job_id}").json()
+        if status["status"] != "running":
+            return status
+        time.sleep(0.05)
+    raise AssertionError(f"reconciliation job {job_id} did not finish within {timeout}s")
+
+
+def _dispatch_and_wait(client: TestClient, data: dict) -> str:
+    """POST the form, assert the 303 to the stepper, and wait for the job to finish."""
+    posted = client.post("/reconciliation", data=data, follow_redirects=False)
+    assert posted.status_code == 303
+    location = posted.headers["location"]
+    assert location.startswith("/reconciling/")
+    job_id = location.rsplit("/", 1)[1]
+    _wait_for_job(client, job_id)
+    return job_id
+
+
 def test_reconciliation_form_renders_with_default_mapping(client: TestClient) -> None:
     resp = client.get("/reconciliation")
     assert resp.status_code == 200
@@ -97,14 +138,50 @@ def test_reconciliation_form_renders_with_default_mapping(client: TestClient) ->
     assert "legacy_file" in resp.text  # the default TOML is pre-filled
 
 
-def test_reconciliation_post_renders_four_tiers(client: TestClient, recon_dir: str) -> None:
-    # TestClient follows the 303 to /reconciliation/{id}
-    resp = client.post("/reconciliation", data=_form_data(recon_dir))
-    assert resp.status_code == 200
-    assert "Headline" in resp.text
-    assert "Worklist" in resp.text
-    assert "Forensic" in resp.text
-    assert '<svg class="chart"' in resp.text
+def test_reconciliation_dispatches_job_then_report(client: TestClient, recon_dir: str) -> None:
+    # Act — POST dispatches a background job and redirects to the stepper page
+    posted = client.post("/reconciliation", data=_form_data(recon_dir), follow_redirects=False)
+
+    # Assert — 303 to /reconciling/{job_id}, and the stepper page renders
+    assert posted.status_code == 303
+    location = posted.headers["location"]
+    assert location.startswith("/reconciling/")
+    job_id = location.rsplit("/", 1)[1]
+
+    pending = client.get(location)
+    assert pending.status_code == 200
+    assert "Reconciling" in pending.text
+    assert 'data-stage="recon_reconcile"' in pending.text
+    assert 'data-result-base="/reconciliation/"' in pending.text
+    assert "/static/calculating.js" in pending.text
+
+    # The job finishes in the background; the report is served under the job_id
+    status = _wait_for_job(client, job_id)
+    assert status["status"] == "done"
+
+    report = client.get(f"/reconciliation/{job_id}")
+    assert report.status_code == 200
+    assert "Headline" in report.text
+    assert "Worklist" in report.text
+    assert f"/reconciliation/{job_id}/rows" in report.text  # drills into the explorer
+    assert '<svg class="chart"' in report.text
+
+
+def test_reconciliation_progress_stream_replays_recon_tail(
+    client: TestClient, recon_dir: str
+) -> None:
+    # Arrange — dispatch and let the job finish
+    job_id = _dispatch_and_wait(client, _form_data(recon_dir))
+
+    # Act — a fresh stream replays every completed stage, then the terminal
+    stream = client.get(f"/jobs/{job_id}/events")
+
+    # Assert — the engine stages and the reconcile tail are reported, then done
+    assert stream.status_code == 200
+    assert "text/event-stream" in stream.headers["content-type"]
+    assert "event: stage" in stream.text
+    assert "event: done" in stream.text
+    assert "recon_reconcile" in stream.text
 
 
 def test_reconciliation_renders_asset_class_allocation(client: TestClient, tmp_path: Path) -> None:
@@ -130,29 +207,78 @@ def test_reconciliation_renders_asset_class_allocation(client: TestClient, tmp_p
     ).write_csv(tmp_path / "legacy_output.csv")
 
     # Act
-    resp = client.post("/reconciliation", data=_form_data(str(tmp_path)))
+    job_id = _dispatch_and_wait(client, _form_data(str(tmp_path)))
+    report = client.get(f"/reconciliation/{job_id}")
 
     # Assert: the asset-class allocation view is present.
-    assert resp.status_code == 200
-    assert "Asset-class allocation" in resp.text
+    assert report.status_code == 200
+    assert "Asset-class allocation" in report.text
 
 
-def test_reconciliation_bucket_filter_reads_cached_result(
+def test_reconciliation_overview_offers_explorer_and_worklist(
     client: TestClient, recon_dir: str
 ) -> None:
-    posted = client.post("/reconciliation", data=_form_data(recon_dir), follow_redirects=False)
-    assert posted.status_code == 303
-    location = posted.headers["location"]
-    assert location.startswith("/reconciliation/")
+    job_id = _dispatch_and_wait(client, _form_data(recon_dir))
+    report = client.get(f"/reconciliation/{job_id}")
+    assert report.status_code == 200
+    assert "Worklist" in report.text
+    assert "Explore all" in report.text
+    assert f"/reconciliation/{job_id}/rows" in report.text
 
-    got = client.get(location, params={"bucket": "break"})
-    assert got.status_code == 200
-    assert "Forensic" in got.text
+
+def test_reconciliation_explorer_filters_paginates_and_links_loans(
+    client: TestClient, recon_dir: str
+) -> None:
+    job_id = _dispatch_and_wait(client, _form_data(recon_dir))
+
+    # One row per page -> the pager appears.
+    paged = client.get(f"/reconciliation/{job_id}/rows", params={"page_size": 1})
+    assert paged.status_code == 200
+    assert "Per-key explorer" in paged.text
+    assert "Page 1 of" in paged.text
+
+    # The bucket filter is served by the explorer (reads the cached frame).
+    broken = client.get(f"/reconciliation/{job_id}/rows", params={"bucket": "break"})
+    assert broken.status_code == 200
+    assert f"/reconciliation/{job_id}/loan?key=" in broken.text
+
+
+def test_reconciliation_explorer_unknown_sort_is_400(client: TestClient, recon_dir: str) -> None:
+    job_id = _dispatch_and_wait(client, _form_data(recon_dir))
+    resp = client.get(f"/reconciliation/{job_id}/rows", params={"sort": "definitely_not_a_column"})
+    assert resp.status_code == 400
+
+
+def test_reconciliation_loan_detail_renders_for_a_key(client: TestClient, recon_dir: str) -> None:
+    job_id = _dispatch_and_wait(client, _form_data(recon_dir))
+    explorer = client.get(f"/reconciliation/{job_id}/rows")
+    match = re.search(r"/reconciliation/[^/]+/loan\?key=([^\"&]+)", explorer.text)
+    assert match, "expected at least one per-loan link in the explorer"
+
+    key = urllib.parse.unquote(match.group(1))
+    loan = client.get(f"/reconciliation/{job_id}/loan", params={"key": key})
+    assert loan.status_code == 200
+    assert "Loan forensic" in loan.text
+    assert "By component" in loan.text
+
+
+def test_reconciliation_loan_unknown_key_is_404(client: TestClient, recon_dir: str) -> None:
+    job_id = _dispatch_and_wait(client, _form_data(recon_dir))
+    resp = client.get(f"/reconciliation/{job_id}/loan", params={"key": "NOT-A-REAL-KEY"})
+    assert resp.status_code == 404
+
+
+def test_reconciliation_loan_missing_key_is_styled_404(client: TestClient, recon_dir: str) -> None:
+    # Omitting ?key= must reach the styled 404, not FastAPI's raw 422.
+    job_id = _dispatch_and_wait(client, _form_data(recon_dir))
+    resp = client.get(f"/reconciliation/{job_id}/loan")
+    assert resp.status_code == 404
 
 
 def test_reconciliation_bad_mapping_rerenders_with_error(
     client: TestClient, recon_dir: str
 ) -> None:
+    # The mapping is parsed synchronously, before any job is dispatched.
     resp = client.post("/reconciliation", data=_form_data(recon_dir, mapping_toml="not valid ["))
     assert resp.status_code == 400
     assert "Reconciliation failed" in resp.text
@@ -160,6 +286,10 @@ def test_reconciliation_bad_mapping_rerenders_with_error(
 
 def test_reconciliation_unknown_id_is_404(client: TestClient) -> None:
     assert client.get("/reconciliation/does-not-exist").status_code == 404
+
+
+def test_unknown_reconciling_page_is_404(client: TestClient) -> None:
+    assert client.get("/reconciling/does-not-exist").status_code == 404
 
 
 def test_reconciliation_prefills_from_last_run(client: TestClient, recon_dir: str) -> None:
@@ -174,9 +304,8 @@ def test_reconciliation_prefills_from_last_run(client: TestClient, recon_dir: st
         "mapping_toml": marked_toml,
     }
 
-    # Act — run it (saves on success), then re-open the blank form.
-    posted = client.post("/reconciliation", data=submitted)
-    assert posted.status_code == 200
+    # Act — run it (the worker saves on success), then re-open the blank form.
+    _dispatch_and_wait(client, submitted)
     form = client.get("/reconciliation")
 
     # Assert — every field comes back from the saved run.
@@ -188,24 +317,13 @@ def test_reconciliation_prefills_from_last_run(client: TestClient, recon_dir: st
     assert 'value="irb" selected' in form.text
 
 
-def _non_default_form(data_path: str) -> dict:
-    return {
-        "data_path": data_path,
-        "reporting_date": "2026-06-30",
-        "framework": "BASEL_3_1",
-        "permission_mode": "irb",
-        "data_format": "parquet",
-        "mapping_toml": DEFAULT_MAPPING_TOML + "\n# MY-CUSTOM-MARKER\n",
-    }
-
-
 def test_reset_button_hidden_until_a_run_is_saved(client: TestClient, recon_dir: str) -> None:
     # Arrange — a fresh form has nothing to reset.
     fresh = client.get("/reconciliation")
     assert "/reconciliation/reset" not in fresh.text
 
     # Act — a completed run saves state.
-    client.post("/reconciliation", data=_non_default_form(recon_dir))
+    _dispatch_and_wait(client, _non_default_form(recon_dir))
 
     # Assert — the reset control now appears.
     assert "/reconciliation/reset" in client.get("/reconciliation").text
@@ -213,7 +331,7 @@ def test_reset_button_hidden_until_a_run_is_saved(client: TestClient, recon_dir:
 
 def test_reset_restores_defaults_and_clears_saved_run(client: TestClient, recon_dir: str) -> None:
     # Arrange — save a non-default run, confirm it is pre-filled.
-    client.post("/reconciliation", data=_non_default_form(recon_dir))
+    _dispatch_and_wait(client, _non_default_form(recon_dir))
     assert "# MY-CUSTOM-MARKER" in client.get("/reconciliation").text
 
     # Act — reset (303 -> /reconciliation).

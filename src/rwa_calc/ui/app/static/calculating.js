@@ -14,6 +14,10 @@
   if (!root) return;
 
   var jobId = root.getAttribute("data-job-id");
+  // Where to navigate on success. The calculator stepper points at /results/,
+  // the reconciliation stepper at /reconciliation/ — both serve their result
+  // under the job id. Defaults to /results/ for backwards safety.
+  var resultBase = root.getAttribute("data-result-base") || "/results/";
   var steps = Array.prototype.slice.call(root.querySelectorAll(".step"));
   var byName = {};
   steps.forEach(function (step) {
@@ -59,7 +63,7 @@
       s.classList.remove("step--active");
       s.classList.add("step--done");
     });
-    window.location.href = "/results/" + jobId;
+    window.location.href = resultBase + jobId;
   }
 
   function finishError(message) {

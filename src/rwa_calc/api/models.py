@@ -443,6 +443,14 @@ class ReconciliationResponse:
         """Collect the break summary grouped by our approach."""
         return self._collect_cached("summary_by_approach")
 
+    def scan_breaks_detail(self) -> pl.LazyFrame:
+        """Lazy long-format break worklist (ranked by materiality).
+
+        Lets a caller take a top-N slice (the overview's "biggest breaks") without
+        forcing the full worklist into the eager cache.
+        """
+        return self.bundle.breaks_detail
+
     def collect_breaks_detail(self) -> pl.DataFrame:
         """Collect the long-format break worklist (ranked by materiality)."""
         return self._collect_cached("breaks_detail")

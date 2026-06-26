@@ -1,14 +1,15 @@
 {% extends "base.html" %}
-{% block title %}Calculating — RWA Calculator{% endblock %}
+{% block title %}Reconciling — RWA Calculator{% endblock %}
 
 {% block content %}
-<h1>Calculating…</h1>
-<p class="muted">Running the RWA pipeline. Keep this tab open — the results page opens
-automatically when the run finishes.</p>
+<h1>Reconciling…</h1>
+<p class="muted">Running the RWA pipeline and reconciling it against your legacy
+output. Keep this tab open — the reconciliation report opens automatically when the
+run finishes.</p>
 
-<div id="calc-progress" class="calc-progress" data-job-id="{{ job_id }}" data-result-base="/results/">
+<div id="calc-progress" class="calc-progress" data-job-id="{{ job_id }}" data-result-base="/reconciliation/">
   <div class="calc-progress__head">
-    <output class="spinner" aria-label="Calculating"></output>
+    <output class="spinner" aria-label="Reconciling"></output>
     <div id="calc-elapsed" class="calc-progress__elapsed mono">0:00 elapsed</div>
   </div>
 
@@ -26,8 +27,8 @@ automatically when the run finishes.</p>
   <div id="calc-error" class="callout error" role="alert" style="display:none"></div>
 
   <noscript>
-    <p class="muted">Live progress needs JavaScript. The calculation is still running —
-      reopen this page or check back shortly.</p>
+    <p class="muted">Live progress needs JavaScript. The reconciliation is still
+      running — reopen this page or check back shortly.</p>
   </noscript>
 </div>
 {% endblock %}

@@ -25,6 +25,8 @@ References:
 
 from __future__ import annotations
 
+import math
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, SupportsFloat, cast
 
 import polars as pl
@@ -93,6 +95,66 @@ BUCKET_CHOICES: tuple[str, ...] = (
 # On-screen forensic row cap; the full frame is available via the CSV export.
 _FORENSIC_LIMIT = 200
 
+# Overview "biggest breaks" worklist size — the ranked top-N shown on the report
+# landing page (the engine already sorts breaks_detail by |Δ| desc) so the
+# overview never materialises the full diff.
+BIGGEST_BREAKS_LIMIT = 50
+
+# Explorer pagination defaults. The page size is clamped to MAX_PAGE_SIZE so a
+# hand-crafted URL cannot ask the server to render an unbounded window.
+DEFAULT_PAGE_SIZE = 100
+MAX_PAGE_SIZE = 500
+
+# The wide per-key frame's filterable dimensions and their query-param names.
+# Each maps a UI filter to the column it constrains in component_reconciliation.
+_FILTER_COLUMNS: dict[str, str] = {
+    "bucket": "row_bucket",
+    "exposure_class": "our_exposure_class",
+    "approach": "our_approach",
+    "worst_component": "worst_component",
+}
+
+
+@dataclass(frozen=True, slots=True)
+class ForensicFilters:
+    """A server-side filter/sort/page request over the wide per-key frame.
+
+    Every field is optional; an absent filter does not constrain that dimension.
+    ``query`` is a literal substring match on ``_recon_key`` (no regex). ``sort``
+    is validated against the projected display columns by ``forensic_page`` — an
+    unknown column raises ``ValueError`` so the route can answer 400.
+    """
+
+    bucket: str | None = None
+    exposure_class: str | None = None
+    approach: str | None = None
+    worst_component: str | None = None
+    query: str | None = None
+    sort: str | None = None
+    descending: bool = True
+    page: int = 1
+    page_size: int = DEFAULT_PAGE_SIZE
+
+
+@dataclass(frozen=True, slots=True)
+class ForensicPage:
+    """One rendered page of the per-key explorer.
+
+    ``total`` is the filtered row count *before* the page slice, so the template
+    can show "rows X–Y of Z" and drive the pager. ``offset`` is the 0-based index
+    of the first shown row.
+    """
+
+    columns: list[str]
+    rows: list[dict]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+    offset: int
+    sort: str | None
+    descending: bool
+
 
 def headline_stats(response: ReconciliationResponse) -> list[dict]:
     """Tier 1 — one tie-out stat per additive component (our vs legacy total)."""
@@ -117,13 +179,16 @@ def summary_by_component_table(response: ReconciliationResponse) -> pl.DataFrame
 
 
 def segment_tables(response: ReconciliationResponse) -> dict[str, pl.DataFrame]:
-    """Tier 2 — where breaks concentrate: by bucket, exposure class and approach."""
-    by_class: pl.DataFrame = response.bundle.summary_by_exposure_class.collect()
-    by_approach: pl.DataFrame = response.bundle.summary_by_approach.collect()
+    """Tier 2 — where breaks concentrate: by bucket, exposure class and approach.
+
+    Reads through the cached ``collect_*`` accessors (not the raw lazy bundle
+    frames) so the overview render reuses the worker-warmed cache instead of
+    re-executing the heavy reconcile join once per segment table.
+    """
     return {
         "by_bucket": response.collect_summary_by_bucket(),
-        "by_class": by_class,
-        "by_approach": by_approach,
+        "by_class": response.collect_summary_by_exposure_class(),
+        "by_approach": response.collect_summary_by_approach(),
     }
 
 
@@ -167,6 +232,147 @@ def forensic_table(
     columns = _readable_recon_columns(df)
     rows = df.select(columns).head(limit).fill_nan(None).to_dicts()
     return columns, rows, total
+
+
+def biggest_breaks(
+    response: ReconciliationResponse, *, limit: int = BIGGEST_BREAKS_LIMIT
+) -> pl.DataFrame:
+    """Overview worklist — the ``limit`` most material breaks, ranked.
+
+    ``breaks_detail`` is already sorted by ``|abs_delta|`` descending in the
+    engine, so a ``head`` is the top-N. Reads the worker-warmed ``breaks_detail``
+    cache (not the wide per-key frame), so the overview never materialises the
+    full diff for a large portfolio.
+    """
+    return response.collect_breaks_detail().head(limit).fill_nan(None)
+
+
+def forensic_filter_options(response: ReconciliationResponse) -> dict[str, list[str]]:
+    """The distinct filter values offered by the explorer's drop-downs.
+
+    Buckets come from the fixed engine vocabulary; classes / approaches /
+    worst-components are read from the small pre-aggregated summaries (cheap), so
+    this never touches the wide per-key frame.
+    """
+    return {
+        "bucket": [b for b in BUCKET_CHOICES if b != ALL_BUCKETS],
+        "exposure_class": _summary_values(response.collect_summary_by_exposure_class()),
+        "approach": _summary_values(response.collect_summary_by_approach()),
+        "worst_component": _summary_values(
+            response.collect_summary_by_component(), col="component"
+        ),
+    }
+
+
+def forensic_page(response: ReconciliationResponse, filters: ForensicFilters) -> ForensicPage:
+    """Tier B explorer — one filtered, sorted, paged window of the per-key frame.
+
+    Collects the wide ``component_reconciliation`` frame once (cached on the
+    response), applies the filters, validates ``filters.sort`` against the
+    projected display columns (unknown -> ``ValueError``), then sorts and slices
+    a single page — so the browser only ever receives ``page_size`` rows.
+    """
+    df = response.collect_component_reconciliation()
+    df = _apply_forensic_filters(df, filters)
+    total = df.height
+    columns = _readable_recon_columns(df)
+
+    sort_col = filters.sort or None
+    if sort_col is not None and sort_col not in columns:
+        raise ValueError(f"unknown sort column: {sort_col!r}")
+    if sort_col is not None:
+        df = df.sort(sort_col, descending=filters.descending, nulls_last=True)
+
+    page_size = max(1, min(filters.page_size, MAX_PAGE_SIZE))
+    pages = max(1, math.ceil(total / page_size)) if total else 1
+    page = min(max(1, filters.page), pages)
+    offset = (page - 1) * page_size
+    rows = df.select(columns).slice(offset, page_size).fill_nan(None).to_dicts()
+    return ForensicPage(
+        columns=columns,
+        rows=rows,
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=pages,
+        offset=offset,
+        sort=sort_col,
+        descending=filters.descending,
+    )
+
+
+def loan_detail(response: ReconciliationResponse, recon_key: str) -> dict | None:
+    """Tier C — the full per-component forensic for a single loan (join key).
+
+    Filters the lazy per-key frame to one key (filter pushdown keeps it cheap even
+    when the eager cache is cold), then surfaces: a per-component panel
+    (legacy / ours / Δ / bucket for every active component, matches included), that
+    key's break rows, and the *driver* columns (explain / input) dropped from
+    every on-screen table today and previously only reachable via the CSV export.
+    Returns ``None`` when no row matches the key.
+    """
+    df = (
+        response.scan_component_reconciliation()
+        .filter(pl.col("_recon_key") == recon_key)
+        .collect()
+        .fill_nan(None)
+    )
+    if df.height == 0:
+        return None
+
+    row = df.row(0, named=True)
+    components = _component_names(df.columns)
+    panels = [
+        {
+            "component": name,
+            "legacy": row.get(f"legacy_{name}"),
+            "ours": row.get(f"our_{name}"),
+            "abs_delta": row.get(f"abs_delta_{name}"),
+            "rel_delta": row.get(f"rel_delta_{name}"),
+            "bucket": row.get(f"{name}_bucket"),
+        }
+        for name in components
+    ]
+
+    # Everything not already shown in a panel or the header (and not an internal
+    # marker) is a driver column — the explain / input detail this view surfaces.
+    shown = {
+        "_recon_key",
+        "row_bucket",
+        "worst_component",
+        "our_exposure_class",
+        "our_approach",
+        "_our_present",
+        "_legacy_present",
+    }
+    for name in components:
+        shown.update(
+            {
+                f"legacy_{name}",
+                f"our_{name}",
+                f"abs_delta_{name}",
+                f"rel_delta_{name}",
+                f"{name}_bucket",
+            }
+        )
+    drivers = {c: row.get(c) for c in df.columns if c not in shown}
+
+    breaks = (
+        response.scan_breaks_detail()
+        .filter(pl.col("_recon_key") == recon_key)
+        .collect()
+        .fill_nan(None)
+    )
+    return {
+        "recon_key": recon_key,
+        "row_bucket": row.get("row_bucket"),
+        "worst_component": row.get("worst_component"),
+        "exposure_class": row.get("our_exposure_class"),
+        "approach": row.get("our_approach"),
+        "panels": panels,
+        "drivers": drivers,
+        "breaks": {"columns": breaks.columns, "rows": breaks.to_dicts()},
+    }
 
 
 def tie_out_chart_items(response: ReconciliationResponse) -> list[tuple[str, float, float]]:
@@ -221,6 +427,37 @@ def _component_names(columns: list[str]) -> list[str]:
     """Active component names, in column order, inferred from ``<name>_bucket``."""
     suffix = "_bucket"
     return [c[: -len(suffix)] for c in columns if c.endswith(suffix) and c != "row_bucket"]
+
+
+def _apply_forensic_filters(df: pl.DataFrame, filters: ForensicFilters) -> pl.DataFrame:
+    """Constrain the wide per-key frame by each set explorer filter.
+
+    Categorical filters are exact-match on their backing column; ``query`` is a
+    *literal* substring match on ``_recon_key`` (``literal=True`` so a key with
+    regex metacharacters cannot break the match). Each filter is skipped when its
+    value is unset or its column is absent from the frame.
+    """
+    for field_name, column in _FILTER_COLUMNS.items():
+        value = getattr(filters, field_name)
+        if value and column in df.columns:
+            df = df.filter(pl.col(column) == value)
+    if filters.query and "_recon_key" in df.columns:
+        df = df.filter(
+            pl.col("_recon_key").cast(pl.String).str.contains(filters.query, literal=True)
+        )
+    return df
+
+
+def _summary_values(df: pl.DataFrame, *, col: str | None = None) -> list[str]:
+    """Sorted distinct string values of a summary frame's first (or named) column.
+
+    Used to populate the explorer's filter drop-downs from the small
+    pre-aggregated summaries. Returns ``[]`` when the column is absent.
+    """
+    column = col or (df.columns[0] if df.columns else None)
+    if column is None or column not in df.columns:
+        return []
+    return [str(v) for v in df.get_column(column).unique().sort().to_list() if v is not None]
 
 
 def _f(value: object) -> float:

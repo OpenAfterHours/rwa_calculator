@@ -1,23 +1,6 @@
 {% extends "base.html" %}
+{% from "_recon_table.html" import render_table, drill_table %}
 {% block title %}Reconciliation — RWA Calculator{% endblock %}
-
-{# One table renderer reused by every tier. Integers print without decimals,
-   other numbers to 2dp, everything else verbatim (blank for nulls). #}
-{% macro render_table(table) %}
-<div class="table-wrap">
-  <table class="data">
-    <thead><tr>{% for c in table.columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>
-    <tbody>
-      {% for row in table.rows %}
-      <tr>{% for c in table.columns %}
-        {% set v = row[c] %}
-        <td>{% if v is integer %}{{ "{:,}".format(v) }}{% elif v is number %}{{ "{:,.2f}".format(v) }}{% else %}{{ v if v is not none else "" }}{% endif %}</td>
-      {% endfor %}</tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% endmacro %}
 
 {% block content %}
 <h1>Parallel-run reconciliation</h1>
@@ -29,7 +12,7 @@ engine fix.</p>
 
 {% if error %}<div class="callout error">Reconciliation failed: {{ error }}</div>{% endif %}
 
-<form class="form" method="post" action="/reconciliation" data-busy-overlay="Reconciling against legacy…">
+<form class="form" method="post" action="/reconciliation">
   <div class="field">
     <label for="data_path">Our data path</label>
     <input id="data_path" name="data_path" value="{{ default_path }}" placeholder="/path/to/data" required>
@@ -106,6 +89,7 @@ join keys and column names).</div>
 {{ render_table(result.component_table) }}
 
 <h2>2 · Segment — where do breaks concentrate?</h2>
+<p class="muted">Each row links into the per-key explorer, pre-filtered to that segment.</p>
 {% if result.allocation_table.rows %}
 <div class="panel">
   <h3>Asset-class allocation — legacy vs ours (RWA)</h3>
@@ -118,26 +102,21 @@ allocate an exposure to different classes.</p>
 {{ render_table(result.allocation_table) }}
 {% endif %}
 <h3>By bucket</h3>
-{{ render_table(result.bucket_table) }}
+{{ drill_table(result.bucket_table, "row_bucket", result.explorer_url, "bucket") }}
 <h3>By exposure class</h3>
-{{ render_table(result.class_table) }}
+{{ drill_table(result.class_table, "our_exposure_class", result.explorer_url, "exposure_class") }}
 <h3>By approach</h3>
-{{ render_table(result.approach_table) }}
+{{ drill_table(result.approach_table, "our_approach", result.explorer_url, "approach") }}
 
-<h2>3 · Worklist — {{ result.break_count }} break(s), largest first</h2>
-{{ render_table(result.breaks_table) }}
-
-<h2>4 · Forensic — per-key detail</h2>
-<div class="bucket-filter">
-  {% for b in result.bucket_choices %}
-  <a class="btn btn-ghost{% if b == result.active_bucket %} is-active{% endif %}"
-     href="/reconciliation/{{ result.recon_id }}?bucket={{ b }}">{{ b }}</a>
-  {% endfor %}
-</div>
-<p class="muted">Showing {{ result.forensic.shown }} of {{ result.forensic.total }} row(s).
-Download the full per-key detail (with explain &amp; input columns):
+<h2>3 · Worklist — top {{ result.biggest_n }} of {{ "{:,}".format(result.break_count) }} break(s), largest first</h2>
+<p class="muted">Click a key to open its single-loan forensic, or
+<a href="{{ result.explorer_url }}">open the full per-key explorer</a>
+({{ "{:,}".format(result.total_rows) }} row(s)). Download the full per-key detail:
 <a href="{{ result.export_csv_url }}">CSV</a> · <a href="{{ result.export_excel_url }}">Excel</a>.</p>
-{{ render_table(result.forensic) }}
+{{ drill_table(result.biggest_breaks, "_recon_key", result.loan_url_base, "key") }}
+<p>
+  <a class="btn btn-primary" href="{{ result.explorer_url }}">Explore all {{ "{:,}".format(result.total_rows) }} rows →</a>
+</p>
 
 {% endif %}
 {% endif %}

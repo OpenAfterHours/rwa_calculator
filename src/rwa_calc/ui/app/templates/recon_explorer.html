@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% from "_recon_table.html" import fmt %}
+{% block title %}Reconciliation explorer — RWA Calculator{% endblock %}
+
+{% block content %}
+<p class="muted"><a href="{{ report_url }}">← Back to the reconciliation report</a></p>
+<h1>Per-key explorer</h1>
+<p class="muted">Filter, sort and page the full per-key reconciliation. Click a key to open
+its single-loan forensic. Download the full per-key detail:
+<a href="{{ export_csv_url }}">CSV</a> · <a href="{{ export_excel_url }}">Excel</a>.</p>
+
+<form class="form" method="get" action="{{ explorer_path }}">
+  <div class="field-row">
+    <div class="field">
+      <label for="bucket">Row bucket</label>
+      <select id="bucket" name="bucket">
+        <option value="">(any)</option>
+        {% for b in options.bucket %}<option value="{{ b }}"{% if b == filters.bucket %} selected{% endif %}>{{ b }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="exposure_class">Exposure class</label>
+      <select id="exposure_class" name="exposure_class">
+        <option value="">(any)</option>
+        {% for c in options.exposure_class %}<option value="{{ c }}"{% if c == filters.exposure_class %} selected{% endif %}>{{ c }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="approach">Approach</label>
+      <select id="approach" name="approach">
+        <option value="">(any)</option>
+        {% for a in options.approach %}<option value="{{ a }}"{% if a == filters.approach %} selected{% endif %}>{{ a }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="worst_component">Worst component</label>
+      <select id="worst_component" name="worst_component">
+        <option value="">(any)</option>
+        {% for w in options.worst_component %}<option value="{{ w }}"{% if w == filters.worst_component %} selected{% endif %}>{{ w }}</option>{% endfor %}
+      </select>
+    </div>
+  </div>
+  <div class="field-row">
+    <div class="field">
+      <label for="q">Key contains</label>
+      <input id="q" name="q" value="{{ filters.q }}" placeholder="exposure reference…">
+    </div>
+    <div class="field">
+      <label for="page_size">Rows per page</label>
+      <input id="page_size" name="page_size" type="number" min="1" max="{{ max_page_size }}" value="{{ page_size }}">
+    </div>
+  </div>
+  {# Preserve the active sort when the filters change. #}
+  {% if sort %}<input type="hidden" name="sort" value="{{ sort }}">
+  <input type="hidden" name="sort_dir" value="{{ sort_dir }}">{% endif %}
+  <div class="form-actions">
+    <button class="btn btn-primary" type="submit">Apply</button>
+    <a class="btn btn-ghost" href="{{ explorer_path }}">Clear</a>
+  </div>
+</form>
+
+{% if rows %}
+<p class="muted">Rows {{ "{:,}".format(first_row) }}–{{ "{:,}".format(last_row) }} of
+{{ "{:,}".format(total) }}{% if total != grand_total %} (filtered from {{ "{:,}".format(grand_total) }}){% endif %}.</p>
+<div class="table-wrap">
+  <table class="data">
+    <thead><tr>
+      {% for c in columns %}
+      <th><a href="{{ explorer_path }}?{{ query_base }}&sort={{ c|urlencode }}&sort_dir={% if sort == c and sort_dir == 'desc' %}asc{% else %}desc{% endif %}">{{ c }}{% if sort == c %} {{ '▼' if sort_dir == 'desc' else '▲' }}{% endif %}</a></th>
+      {% endfor %}
+    </tr></thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>{% for c in columns %}
+        <td>{% if c == key_column %}<a href="{{ loan_url_base }}?key={{ row[c]|string|urlencode }}">{{ row[c] }}</a>{% else %}{{ fmt(row[c]) }}{% endif %}</td>
+      {% endfor %}</tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="form-actions">
+  {% if page > 1 %}<a class="btn btn-ghost" href="{{ explorer_path }}?{{ query_base }}{% if sort %}&sort={{ sort|urlencode }}&sort_dir={{ sort_dir }}{% endif %}&page={{ page - 1 }}">← Prev</a>{% endif %}
+  <span class="muted">Page {{ "{:,}".format(page) }} of {{ "{:,}".format(pages) }}</span>
+  {% if page < pages %}<a class="btn btn-ghost" href="{{ explorer_path }}?{{ query_base }}{% if sort %}&sort={{ sort|urlencode }}&sort_dir={{ sort_dir }}{% endif %}&page={{ page + 1 }}">Next →</a>{% endif %}
+</div>
+{% else %}
+<div class="callout info">No rows match the current filter.</div>
+{% endif %}
+{% endblock %}

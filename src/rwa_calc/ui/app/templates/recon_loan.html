@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% from "_recon_table.html" import fmt, render_table %}
+{% block title %}Loan forensic — RWA Calculator{% endblock %}
+
+{% block content %}
+<p class="muted"><a href="{{ report_url }}">← Back to the report</a> ·
+<a href="{{ explorer_url }}">per-key explorer</a></p>
+<h1>Loan forensic</h1>
+<p class="mono">{{ detail.recon_key }}</p>
+
+<div class="stat-row">
+  <div class="stat"><div class="stat-num">{{ detail.row_bucket or "—" }}</div><div class="stat-lbl">row bucket</div></div>
+  <div class="stat"><div class="stat-num">{{ detail.worst_component or "—" }}</div><div class="stat-lbl">worst component</div></div>
+  <div class="stat"><div class="stat-num">{{ detail.exposure_class or "—" }}</div><div class="stat-lbl">exposure class</div></div>
+  <div class="stat"><div class="stat-num">{{ detail.approach or "—" }}</div><div class="stat-lbl">approach</div></div>
+</div>
+
+<h2>By component — legacy vs ours</h2>
+<div class="table-wrap">
+  <table class="data">
+    <thead><tr><th>component</th><th>legacy</th><th>ours</th><th>abs Δ</th><th>rel Δ</th><th>bucket</th></tr></thead>
+    <tbody>
+      {% for p in detail.panels %}
+      <tr>
+        <td>{{ p.component }}</td>
+        <td>{{ fmt(p.legacy) }}</td>
+        <td>{{ fmt(p.ours) }}</td>
+        <td>{{ fmt(p.abs_delta) }}</td>
+        <td>{{ fmt(p.rel_delta) }}</td>
+        <td>{{ p.bucket if p.bucket is not none else "" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if detail.breaks.rows %}
+<h2>Breaks for this key</h2>
+{{ render_table(detail.breaks) }}
+{% endif %}
+
+{% if detail.drivers %}
+<h2>Input &amp; explain drivers</h2>
+<p class="muted">The wide explain / input columns behind this row — dropped from the
+on-screen summary tables and previously reachable only via the CSV export.</p>
+<div class="table-wrap">
+  <table class="data">
+    <tbody>
+      {% for k, v in detail.drivers.items() %}
+      <tr><th>{{ k }}</th><td>{{ fmt(v) }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

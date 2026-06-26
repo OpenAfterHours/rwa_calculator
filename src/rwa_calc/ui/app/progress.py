@@ -94,6 +94,19 @@ STAGE_SEQUENCE: tuple[StageInfo, ...] = tuple(
 STAGE_INDEX: dict[str, int] = {info.name: i for i, info in enumerate(STAGE_SEQUENCE)}
 KNOWN_STAGE_NAMES: frozenset[str] = frozenset(STAGE_INDEX)
 
+# Reconciliation runs the SAME engine pipeline (so every engine stage above
+# streams for free via the logging tap) and then a reconcile tail: load the
+# legacy file, join it to our side and bucket every component. That tail is a
+# plain function, not a registry stage, so the background worker marks it
+# DIRECTLY (``job.mark_stage("recon_reconcile")``) after it has warmed the
+# result frames — which is also where the heavy lazy join actually executes. The
+# stepper therefore parks honestly on this final step while the join runs.
+RECON_STAGE_NAME = "recon_reconcile"
+RECON_STAGE_SEQUENCE: tuple[StageInfo, ...] = (
+    *STAGE_SEQUENCE,
+    StageInfo(name=RECON_STAGE_NAME, label="Reconcile & summarise", heavy=False),
+)
+
 
 # =============================================================================
 # Job state

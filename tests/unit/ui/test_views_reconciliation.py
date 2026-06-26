@@ -222,3 +222,121 @@ def test_default_mapping_toml_parses() -> None:
 def test_bucket_choices_lead_with_all_then_break() -> None:
     assert rv.BUCKET_CHOICES[0] == rv.ALL_BUCKETS
     assert rv.BUCKET_CHOICES[1] == rv.BUCKET_BREAK
+
+
+# =============================================================================
+# Phase 2 — progressive-disclosure explorer / loan helpers
+# =============================================================================
+
+
+def test_biggest_breaks_ranked_and_capped(response: ReconciliationResponse) -> None:
+    df = rv.biggest_breaks(response, limit=10)
+    # Only L3's RWA breaks in the base fixture.
+    assert df.height == 1
+    row = df.row(0, named=True)
+    assert row["_recon_key"] == "L3"
+    assert row["component"] == "rwa"
+
+
+def test_biggest_breaks_limit_caps_rows() -> None:
+    # A fixture with two breaks, then ask for only the largest one.
+    ours = pl.LazyFrame(
+        {
+            "exposure_reference": ["A", "B"],
+            "exposure_class": ["corporate", "retail"],
+            "approach_applied": ["SA", "SA"],
+            "ead_final": [100.0, 100.0],
+            "rwa_final": [10.0, 10.0],
+        }
+    )
+    legacy = pl.LazyFrame(
+        {"exposure_reference": ["A", "B"], "legacy_ead": [100.0, 100.0], "legacy_rwa": [40.0, 20.0]}
+    )
+    mapping = LegacyColumnMapping(
+        legacy_keys=("exposure_reference",),
+        our_keys=("exposure_reference",),
+        components={"ead": ComponentMapping("EAD"), "rwa": ComponentMapping("RWA")},
+    )
+    bundle = ReconciliationRunner().reconcile(ours, legacy, mapping)
+    resp = ReconciliationResponse.from_bundle(bundle, legacy_file=Path("legacy.csv"))
+
+    top = rv.biggest_breaks(resp, limit=1)
+    assert top.height == 1
+    assert top.row(0, named=True)["_recon_key"] == "A"  # |Δ|=30 ranks above B's 10
+
+
+def test_forensic_page_returns_all_keys_unfiltered(response: ReconciliationResponse) -> None:
+    page = rv.forensic_page(response, rv.ForensicFilters())
+    assert page.total == 3
+    assert len(page.rows) == 3
+    assert page.page == 1
+    assert page.pages == 1
+    assert "_recon_key" in page.columns
+
+
+def test_forensic_page_bucket_filter(response: ReconciliationResponse) -> None:
+    page = rv.forensic_page(response, rv.ForensicFilters(bucket=rv.BUCKET_BREAK))
+    assert page.total == 1
+    assert all(row["row_bucket"] == rv.BUCKET_BREAK for row in page.rows)
+
+
+def test_forensic_page_key_query_is_literal(response: ReconciliationResponse) -> None:
+    page = rv.forensic_page(response, rv.ForensicFilters(query="L3"))
+    assert page.total == 1
+    assert page.rows[0]["_recon_key"] == "L3"
+
+
+def test_forensic_page_paginates(response: ReconciliationResponse) -> None:
+    first = rv.forensic_page(response, rv.ForensicFilters(page=1, page_size=2))
+    assert len(first.rows) == 2
+    assert first.total == 3
+    assert first.pages == 2
+    second = rv.forensic_page(response, rv.ForensicFilters(page=2, page_size=2))
+    assert len(second.rows) == 1
+    assert second.offset == 2
+
+
+def test_forensic_page_page_clamped_to_last(response: ReconciliationResponse) -> None:
+    # Asking past the end returns the last page, not an empty slice.
+    page = rv.forensic_page(response, rv.ForensicFilters(page=99, page_size=2))
+    assert page.page == 2
+    assert page.rows
+
+
+def test_forensic_page_sort_by_known_column(response: ReconciliationResponse) -> None:
+    page = rv.forensic_page(response, rv.ForensicFilters(sort="abs_delta_rwa", descending=True))
+    deltas = [row["abs_delta_rwa"] for row in page.rows if row["abs_delta_rwa"] is not None]
+    assert deltas == sorted(deltas, reverse=True)
+
+
+def test_forensic_page_unknown_sort_column_raises(response: ReconciliationResponse) -> None:
+    with pytest.raises(ValueError, match="unknown sort column"):
+        rv.forensic_page(response, rv.ForensicFilters(sort="not_a_column"))
+
+
+def test_forensic_page_size_clamped_to_max(response: ReconciliationResponse) -> None:
+    page = rv.forensic_page(response, rv.ForensicFilters(page_size=10_000_000))
+    assert page.page_size == rv.MAX_PAGE_SIZE
+
+
+def test_forensic_filter_options_from_summaries(response: ReconciliationResponse) -> None:
+    options = rv.forensic_filter_options(response)
+    assert rv.BUCKET_BREAK in options["bucket"]
+    assert "corporate" in options["exposure_class"]
+    assert options["approach"]  # at least the SA approach is present
+
+
+def test_loan_detail_surfaces_components_and_breaks(response: ReconciliationResponse) -> None:
+    detail = rv.loan_detail(response, "L3")
+    assert detail is not None
+    assert detail["recon_key"] == "L3"
+    assert detail["row_bucket"] == rv.BUCKET_BREAK
+    rwa_panel = next(p for p in detail["panels"] if p["component"] == "rwa")
+    assert rwa_panel["legacy"] == pytest.approx(300.0)
+    assert rwa_panel["ours"] == pytest.approx(250.0)
+    assert rwa_panel["bucket"] == rv.BUCKET_BREAK
+    assert detail["breaks"]["rows"]  # the L3 rwa break row
+
+
+def test_loan_detail_unknown_key_returns_none(response: ReconciliationResponse) -> None:
+    assert rv.loan_detail(response, "NOPE") is None

@@ -371,6 +371,17 @@ def register_reconciliation(response: ReconciliationResponse) -> str:
     return recon_id
 
 
+def register_reconciliation_with_id(recon_id: str, response: ReconciliationResponse) -> None:
+    """Register a reconciliation result under a caller-supplied id.
+
+    Mirrors ``register_run_with_id``: the UI's background-job flow reuses the
+    job_id minted at dispatch (shown in ``/reconciling/{id}``) as the result id,
+    so the ``done`` event navigates to ``/reconciliation/{id}`` — one identifier
+    from submit to results.
+    """
+    _RECON_RUNS[recon_id] = response
+
+
 def get_reconciliation(recon_id: str) -> ReconciliationResponse | None:
     """Look up a registered reconciliation, or None if it is unknown/expired."""
     return _RECON_RUNS.get(recon_id)

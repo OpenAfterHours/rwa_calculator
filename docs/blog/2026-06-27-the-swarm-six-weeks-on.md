@@ -1,14 +1,14 @@
-# The Swarm, Two Months On: Reviewer-Gated Worktree Batches
+# The Swarm, Six Weeks On: Reviewer-Gated Worktree Batches
 
-*Post 4 said, in plain text, that "the orchestrator commands don't review the agents' work." Two and a bit months later that sentence is wrong, and the way it became wrong is the most interesting thing that has happened to this build pipeline since I wrote about it. A fifth agent now refuses bad work between every wave; each item builds in its own git worktree; and the orchestrator stopped being a script that runs once and became a supervisor that survives across turns.*
+*Post 4 said, in plain text, that "the orchestrator commands don't review the agents' work." Six weeks later that sentence is wrong, and the way it became wrong is the most interesting thing that has happened to this build pipeline since I wrote about it. A fifth agent now refuses bad work between every wave; each item builds in its own git worktree; and the orchestrator stopped being a script that runs once and became a supervisor that survives across turns.*
 
-Published 2026-09-29. Code references are pinned to commit [`7e7ed7ec`](https://github.com/OpenAfterHours/rwa_calculator/tree/7e7ed7ec).
+Published 2026-06-27. Code references are pinned to commit [`7e7ed7ec`](https://github.com/OpenAfterHours/rwa_calculator/tree/7e7ed7ec).
 
 ---
 
-This post picks the series back up after the season-one finale ([*What I Got Wrong, What's Next*](2026-08-04-what-i-got-wrong-whats-next.md), 2026-08-04). That post closed a planned arc of eight; this one opens a second pass over the same ground, because the ground moved. The calculator is still a UK Basel 3.1 / PRA PS1/26 credit-risk RWA engine, still Polars, still one person directing a swarm of Claude Code agents. What changed is the swarm.
+This post picks the series back up after the season-one finale ([*What I Got Wrong, What's Next*](2026-06-16-what-i-got-wrong-whats-next.md), 2026-06-16). That post closed a planned arc of eight; this one opens a second pass over the same ground, because the ground moved. The calculator is still a UK Basel 3.1 / PRA PS1/26 credit-risk RWA engine, still Polars, still one person directing a swarm of Claude Code agents. What changed is the swarm.
 
-[Post 4 — *Building With an Agent Swarm*](2026-06-09-building-with-an-agent-swarm.md) — described four role-bounded agents dispatched as parallel waves behind one global validation gate, and it made a deliberate, load-bearing claim about how quality was enforced:
+[Post 4 — *Building With an Agent Swarm*](2026-05-19-building-with-an-agent-swarm.md) — described four role-bounded agents dispatched as parallel waves behind one global validation gate, and it made a deliberate, load-bearing claim about how quality was enforced:
 
 > The non-obvious property: the orchestrator commands don't "review" the agents' work. They route inputs and outputs through the validation gate. Agents make architectural mistakes constantly; the gate is what catches them.
 
@@ -136,5 +136,5 @@ If you want the live figures rather than a snapshot, the repository now ships [`
 - [`/next-items` command](https://github.com/OpenAfterHours/rwa_calculator/blob/7e7ed7ec/.claude/commands/next-items.md) — the multi-turn supervisor runbook in full, including the per-wave reviewer checklists.
 - [`reviewer` agent](https://github.com/OpenAfterHours/rwa_calculator/blob/7e7ed7ec/.claude/agents/reviewer.md) — the read-only quality gate and its `pass | revise | drop` contract.
 - [Architecture: Pipeline](../architecture/pipeline.md) and the [target-architecture migration plan](../plans/target-architecture-migration.md) — the Phase-4 fold whose shared files (`registry.py`, `orchestrator.py`) are now forced single-stream.
-- [Post 4 — *Building With an Agent Swarm*](2026-06-09-building-with-an-agent-swarm.md) — the snapshot this post updates, kept as-is on purpose.
+- [Post 4 — *Building With an Agent Swarm*](2026-05-19-building-with-an-agent-swarm.md) — the snapshot this post updates, kept as-is on purpose.
 - [Citation tracking](../development/citation-tracking.md) and the [testing strategy](../development/testing.md) — the deterministic half of the enforcement the reviewer sits in front of.

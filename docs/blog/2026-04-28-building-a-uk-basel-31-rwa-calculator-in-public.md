@@ -70,7 +70,7 @@ Second, **I want to be honest about what AI-assisted engineering looks like at t
 | 7 | Testing a Regulatory Engine | 5,300 tests, hand-derived golden files, hash-locked oracles, and the contracts that keep the layers separated. |
 | 8 | What I Got Wrong, What's Next | Honest retrospective and the open roadmap. |
 
-Posts will land roughly every two to three weeks.
+Posts will land roughly weekly.
 
 ## Who this is for
 
@@ -86,7 +86,7 @@ This is a reference implementation — useful for understanding how the rules be
 
 ---
 
-**Read next:** *[The Pipeline: Why Regulation Forced an Immutable Design](2026-05-12-the-pipeline.md)*.
+**Read next:** *[The Pipeline: Why Regulation Forced an Immutable Design](2026-05-05-the-pipeline.md)*.
 
 **Further reading:**
 

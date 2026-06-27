@@ -2,7 +2,7 @@
 
 *Most regulatory bugs do not look like bugs. They look like reasonable code computing the right number on the wrong unit. Four war stories from the changelog.*
 
-Published 2026-07-07. Code references are pinned to commit [`cceaee4`](https://github.com/OpenAfterHours/rwa_calculator/tree/cceaee4).
+Published 2026-06-02. Code references are pinned to commit [`cceaee4`](https://github.com/OpenAfterHours/rwa_calculator/tree/cceaee4).
 
 ---
 
@@ -10,7 +10,7 @@ This is post 6 in the series on building this UK Basel 3.1 RWA calculator. Posts
 
 The changelog has on the order of sixty closed items at the time of writing. Most are one or two lines: a missing field, a wrong constant, a misclassified entity type. A smaller set — maybe a dozen — took weeks of work each, with cross-cutting changes spanning the hierarchy resolver, classifier, CRM processor, and calculators. The pattern across them is consistent: someone reads the regulatory text, notices that the implementation is operating on the *wrong unit* (per-counterparty when the rule says group-of-connected-clients, per-row when the rule says pool-aware, on the guarantor's approach when the rule says the protection slice's approach), and then has to push a structural change through every stage that touched the misread quantity. Each of the four stories below is one of those.
 
-This is the post that makes the regulatory case for the architectural choices in [post 2](2026-05-12-the-pipeline.md). Frozen bundles, error accumulation, and the data/engine split do not exist because they look pretty. They exist because the wrong-unit bugs that follow only become visible — and only become *fixable* — when the data flow between stages is explicit and traceable.
+This is the post that makes the regulatory case for the architectural choices in [post 2](2026-05-05-the-pipeline.md). Frozen bundles, error accumulation, and the data/engine split do not exist because they look pretty. They exist because the wrong-unit bugs that follow only become visible — and only become *fixable* — when the data flow between stages is explicit and traceable.
 
 ## War story 1: Multiple Option Facilities and Facility Shares
 
@@ -48,7 +48,7 @@ The SME supporting factor under CRR Art. 501 reduces the RWA of qualifying SME e
 
 The catch is the definition of "obligor". Art. 4(1)(39) of CRR (and PS1/26's equivalent) defines a "group of connected clients" as the unit on which credit risk concentration is measured, and Art. 501 reads `E*` against this unit, not against the individual loan. A counterparty that belongs to a corporate group with five other connected obligors must aggregate its exposures with the group before the `E*` threshold is applied.
 
-Until [version 0.2.0](../appendix/changelog.md), the calculator was evaluating `E*` per-counterparty, ignoring connected-client aggregation. A counterparty with three GBP 600,000 loans and a parent group whose total connected-client exposure was GBP 8m would still receive the deeper SME discount on each individual loan, because the per-row check passed (each row's exposure was below GBP 1.5m). The fix replaced the per-row test with an aggregation across the full connected-client group before threshold evaluation — which the hierarchy resolver was already producing as `lending_group_totals` for the retail Art. 123(c) granularity check covered in [post 3](2026-05-26-risk-weights-are-not-a-lookup-table.md).
+Until [version 0.2.0](../appendix/changelog.md), the calculator was evaluating `E*` per-counterparty, ignoring connected-client aggregation. A counterparty with three GBP 600,000 loans and a parent group whose total connected-client exposure was GBP 8m would still receive the deeper SME discount on each individual loan, because the per-row check passed (each row's exposure was below GBP 1.5m). The fix replaced the per-row test with an aggregation across the full connected-client group before threshold evaluation — which the hierarchy resolver was already producing as `lending_group_totals` for the retail Art. 123(c) granularity check covered in [post 3](2026-05-12-risk-weights-are-not-a-lookup-table.md).
 
 The architectural point is the small one: two different regulatory rules — the SME supporting factor under Art. 501, and the retail granularity threshold under Art. 123(c) / Art. 123A — both depend on the *same* primitive (group-of-connected-clients aggregate exposure). Once the hierarchy resolver was producing that primitive correctly for retail, applying it to SME was a single expression change. Before the hierarchy resolver was producing it correctly, both rules were broken in subtly different ways.
 
@@ -66,7 +66,7 @@ Determining the guarantor's approach is the part that turned out to need careful
 
 The earlier version of this code routed all guarantor substitution through one path keyed only on the guarantor's properties: if the guarantor had an internal PD it went IRB, if it had only a CQS it went SA. The fix made the routing *beneficiary-aware*: an SA exposure beneficiary always uses the guarantor's external CQS (because the SA exposure is in CQS-space anyway); an IRB exposure beneficiary uses the guarantor's internal PD when one exists, falling back to CQS otherwise. The F-IRB supervisory LGD used in PD substitution and EL blending now tracks the active framework as well — 0.45 under CRR, 0.40 under Basel 3.1 for senior unsecured corporate — instead of being hard-coded.
 
-What this story demonstrates: cross-approach interactions are where most regulatory implementations have undocumented bugs. The substitution rule is the kind of thing that gets a one-line treatment in a Basel summary deck ("guarantees substitute the guarantor's risk weight") and a six-month implementation path when you actually try to honour it for a portfolio that mixes IRB exposures with SA-rated guarantors. The architecture from [post 2](2026-05-12-the-pipeline.md) — frozen bundles, an explicit `CounterpartyLookup` for guarantor lookups, the `crm_audit` LazyFrame surfacing every substitution decision — is what made this finable as a bug rather than a vague suspicion that the numbers looked off.
+What this story demonstrates: cross-approach interactions are where most regulatory implementations have undocumented bugs. The substitution rule is the kind of thing that gets a one-line treatment in a Basel summary deck ("guarantees substitute the guarantor's risk weight") and a six-month implementation path when you actually try to honour it for a portfolio that mixes IRB exposures with SA-rated guarantors. The architecture from [post 2](2026-05-05-the-pipeline.md) — frozen bundles, an explicit `CounterpartyLookup` for guarantor lookups, the `crm_audit` LazyFrame surfacing every substitution decision — is what made this finable as a bug rather than a vague suspicion that the numbers looked off.
 
 ## What the four stories have in common
 
@@ -74,7 +74,7 @@ Each of these started with someone reading regulatory text carefully and noticin
 
 In all four cases, the data the regulation cared about was already present in the bundles. The hierarchy resolver was already producing parent-child facility relationships, lending-group totals, and the counterparty lookup that exposed the guarantor's `internal_pd`. The classifier was already partitioning exposures by approach. The CRM processor was already computing per-exposure CRM allocations. What was missing was the *connection* between those data elements and the regulatory rule that demanded the connection be honoured. Each fix is, fundamentally, the addition of one more correctly-typed dependency between two stages that were already producing the right primitives.
 
-The architecture from post 2 makes those dependencies *findable*. Frozen bundles let you trace exactly which stage produced each column the rule depends on. The data/engine split forces every regulatory scalar (the SME factor, the AIRB pool gate, the framework-specific SA CCF) into cited rulepack packs that an auditor can read in one place. Error accumulation surfaces violations as data-quality warnings rather than swallowing them in exceptions. The agent workflow from [post 4](2026-06-09-building-with-an-agent-swarm.md) makes the fixes *implementable* in days rather than weeks, because the four-stage pipeline forces a regulatory citation and a hand-derived expected output before any engine code is touched.
+The architecture from post 2 makes those dependencies *findable*. Frozen bundles let you trace exactly which stage produced each column the rule depends on. The data/engine split forces every regulatory scalar (the SME factor, the AIRB pool gate, the framework-specific SA CCF) into cited rulepack packs that an auditor can read in one place. Error accumulation surfaces violations as data-quality warnings rather than swallowing them in exceptions. The agent workflow from [post 4](2026-05-19-building-with-an-agent-swarm.md) makes the fixes *implementable* in days rather than weeks, because the four-stage pipeline forces a regulatory citation and a hand-derived expected output before any engine code is touched.
 
 What stays human, as before, is the part that still doesn't automate: reading the regulation carefully enough to notice the wrong unit in the first place. The fixes above were not generated by an agent that had a sudden insight about Art. 4(1)(39) connected-client aggregation. They were generated by an agent that had been told, by me, that the SME supporting factor was producing the wrong numbers on a particular acceptance fixture, and that the regulatory text said something specific about groups of connected clients, and could it please come up with a hand-derived expected output and a failing test. The agent then did a creditable job. The notice-the-bug step is the bottleneck.
 
@@ -82,7 +82,7 @@ Post 7 turns from regulatory archaeology to testing strategy: ~7,450 tests, hand
 
 ---
 
-**Read next:** *Testing a Regulatory Engine: ~7,450 Tests, Hand-Derived Goldens* (in progress).
+**Read next:** [*Testing a Regulatory Engine: ~7,450 Tests, Hand-Derived Goldens*](2026-06-09-testing-a-regulatory-engine.md).
 
 **Further reading:**
 

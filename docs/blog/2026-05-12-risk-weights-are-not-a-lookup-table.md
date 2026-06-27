@@ -2,11 +2,11 @@
 
 *The Standardised Approach is supposed to be the simple framework. It is — once classification has done the regulatory work that IRB hides inside its models.*
 
-Published 2026-05-26. Code references are pinned to commit [`cceaee4`](https://github.com/OpenAfterHours/rwa_calculator/tree/cceaee4).
+Published 2026-05-12. Code references are pinned to commit [`cceaee4`](https://github.com/OpenAfterHours/rwa_calculator/tree/cceaee4).
 
 ---
 
-This is post 3 in the series on building this UK Basel 3.1 RWA calculator. Post 2 ([The Pipeline: Why Regulation Forced an Immutable Design](2026-05-12-the-pipeline.md)) was about how the architecture is shaped by audit demands. This post is about the regulation: specifically, why the Standardised Approach to credit risk — the framework for institutions that do not run internal models — looks like a set of lookup tables and is not, in fact, a set of lookup tables.
+This is post 3 in the series on building this UK Basel 3.1 RWA calculator. Post 2 ([The Pipeline: Why Regulation Forced an Immutable Design](2026-05-05-the-pipeline.md)) was about how the architecture is shaped by audit demands. This post is about the regulation: specifically, why the Standardised Approach to credit risk — the framework for institutions that do not run internal models — looks like a set of lookup tables and is not, in fact, a set of lookup tables.
 
 *Update (June 2026): the regulation in this post is unchanged, but a few code locations below were overtaken by the 2026-06 architecture migration. `engine/classifier.py` is now a thin back-compat shim — the classifier implementation (and `ENTITY_TYPE_TO_SA_CLASS`) was split into the `engine/stages/classify/` package. Polars namespaces were retired (banned by `arch_check`), so `engine/sa/namespace.py` no longer exists; the ECRA/SCRA expression chains now live in plain `lf.pipe(...)`-composed functions under `engine/sa/`. And `data/tables/` was removed: the `SplitParameters` records moved to `engine/stages/re_split/params.py` and now read their secured-LTV caps from the rulebook packs (`re_split_{rre,cre}_secured_ltv_cap` in `packs/{crr,b31}.py`, resolved via `rwa_calc.rulebook.resolve`); the record shape itself also changed — `secured_rw` and `target_class` were dropped, leaving the secured-LTV cap as the only regime value it carries. The `engine/re_splitter.py` link below still resolves as a back-compat shim. (The body's "1,566-line classifier" and "seventeen exposure classes" are 2026-05 snapshots too: the classifier is now the multi-module `engine/stages/classify/` package noted above, and `domain/enums.py` defines nineteen exposure classes.)*
 
@@ -107,7 +107,7 @@ The second-cleanest example. Under CRR Art. 123 and PS1/26 Art. 123A, a loan onl
 
 That threshold is on the *group of connected clients*, not on the single loan. A counterparty with three GBP 400,000 loans and no formal lending-group reference looks below the threshold on each row but is over £1.2m in aggregate — which exceeds the regulatory ceiling. We had a [version 0.1.65](../appendix/changelog.md) fix where the hierarchy resolver was setting the lending-group total to zero when no explicit group was defined; the classifier then compared the per-row exposure against the threshold and admitted a non-retail counterparty. The fix was to default the lending-group total to a `sum().over("counterparty_reference")` aggregate — a counterparty with no group is a group of one, and the connected-client aggregation has to happen anyway. Without that aggregation, the classifier's "retail or corporate" decision was structurally unreliable.
 
-What this means in practice: the retail / corporate split is a property of the *portfolio*, not of the loan. You cannot determine the right exposure class by looking at any one row in isolation. The classifier needs the upstream `lending_group_totals` from the hierarchy resolver before it can decide; the hierarchy resolver needs the connected-client mappings; the mappings need to be reasonably complete for the classification to be reliable. The architecture from [post 2](2026-05-12-the-pipeline.md) is what makes that data flow visible — every stage's input is an explicit bundle, and the classifier's reliance on the lending-group totals is a single, traceable dependency rather than an implicit shared global.
+What this means in practice: the retail / corporate split is a property of the *portfolio*, not of the loan. You cannot determine the right exposure class by looking at any one row in isolation. The classifier needs the upstream `lending_group_totals` from the hierarchy resolver before it can decide; the hierarchy resolver needs the connected-client mappings; the mappings need to be reasonably complete for the classification to be reliable. The architecture from [post 2](2026-05-05-the-pipeline.md) is what makes that data flow visible — every stage's input is an explicit bundle, and the classifier's reliance on the lending-group totals is a single, traceable dependency rather than an implicit shared global.
 
 ## Defaulted exposures are their own grid
 
@@ -157,7 +157,7 @@ Post 4 in the series turns from regulation back to engineering: how `loop.sh` an
 
 ---
 
-**Read next:** [*Building With an Agent Swarm: How `loop.sh` Writes This Codebase*](2026-06-09-building-with-an-agent-swarm.md).
+**Read next:** [*Building With an Agent Swarm: How `loop.sh` Writes This Codebase*](2026-05-19-building-with-an-agent-swarm.md).
 
 **Further reading:**
 

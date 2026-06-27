@@ -2,11 +2,11 @@
 
 *Every risk weight, LGD floor, scaling factor, and supporting-factor switch in this calculator used to live in Python. Now they live in a cited, content-hashed rulebook of data that a regulator can read, diff, and replay — and the engine is no longer allowed to know which regime it is computing.*
 
-Published 2026-09-01. Code references are pinned to commit [`7e7ed7ec`](https://github.com/OpenAfterHours/rwa_calculator/tree/7e7ed7ec).
+Published 2026-06-23. Code references are pinned to commit [`7e7ed7ec`](https://github.com/OpenAfterHours/rwa_calculator/tree/7e7ed7ec).
 
 ---
 
-This post picks the series back up after the season-one finale ([What I Got Wrong, What's Next](2026-08-04-what-i-got-wrong-whats-next.md), the eighth post). That post closed a chapter; it did not close the project. The agent loop kept running through August, and the largest single piece of work it produced is the one I want to write up here, because it is the deepest architecture change since [the pipeline post](2026-05-12-the-pipeline.md) — the second post in the series and, until now, the one that explained the most about how this thing is shaped.
+This post picks the series back up after the season-one finale ([What I Got Wrong, What's Next](2026-06-16-what-i-got-wrong-whats-next.md), the eighth post). That post closed a chapter; it did not close the project. The agent loop kept running through June, and the largest single piece of work it produced is the one I want to write up here, because it is the deepest architecture change since [the pipeline post](2026-05-05-the-pipeline.md) — the second post in the series and, until now, the one that explained the most about how this thing is shaped.
 
 The change has a boring name and an unboring consequence. It is the *rulebook migration*: the work that took every regulatory value out of code and turned it into data. Not data in the loose sense of "a config file someone can edit" — data in the regulated sense: each value carries a citation to the article it comes from, the whole set is hashed so a run can prove which numbers produced it, and the engine that consumes those numbers is no longer permitted to branch on whether it is computing under the old regime or the new one. That last property is the one I care about most, and it is the one a script now enforces on every commit.
 
@@ -22,7 +22,7 @@ It was not enough for two reasons. The first is that `data/tables/` was still Py
 scaling_factor = 1.06 if config.is_crr else 1.0
 ```
 
-That single line appeared, in spirit, in four separate engine sites. The IRB scaling factor (CRR Art. 153(1): the 1.06 multiplier on internal-ratings RWA, which PRA PS1/26 removes) was reconstructed independently each time someone needed it. So were the supporting factors, the LGD floors, the maturity treatments — each a small `if config.is_crr` somewhere in a transform. Every one of those is a place where the CRR path and the Basel 3.1 path could silently drift apart, which is exactly the failure mode [the pipeline post opened with](2026-05-12-the-pipeline.md): a value used in two regulatory contexts that is allowed to disagree between them. I had fixed *one* instance of that (the FX rate) with a factory method. The regime booleans were the same disease, untreated, scattered across the engine.
+That single line appeared, in spirit, in four separate engine sites. The IRB scaling factor (CRR Art. 153(1): the 1.06 multiplier on internal-ratings RWA, which PRA PS1/26 removes) was reconstructed independently each time someone needed it. So were the supporting factors, the LGD floors, the maturity treatments — each a small `if config.is_crr` somewhere in a transform. Every one of those is a place where the CRR path and the Basel 3.1 path could silently drift apart, which is exactly the failure mode [the pipeline post opened with](2026-05-05-the-pipeline.md): a value used in two regulatory contexts that is allowed to disagree between them. I had fixed *one* instance of that (the FX rate) with a factory method. The regime booleans were the same disease, untreated, scattered across the engine.
 
 The migration — internally "Phase 5", and the slice that finished it was tagged "S13" — did three things at once. It deleted the `data/tables/` package outright. It rehomed every value as a *cited entry* in a small set of rulebook *packs*. And it made the engine forget the regime, replacing `if config.is_crr` with a read of a cited on/off flag whose name describes the rule, not the regime. The current source tree no longer contains a `rwa_calc.data.tables` module with any regulatory content in it; the package is gone, and an architecture check refuses to let it come back.
 
@@ -152,7 +152,7 @@ This is enforced, not merely encouraged. `arch_check.py` is the project's commit
 - **Check 15** requires the stage registry to be a literal list.
 - **Check 17** is the one that closes the loop: `engine/**` may not branch on `config.is_crr` or `config.is_basel_3_1`. Regime-specific behaviour must read a cited pack `Feature`. The check catches both the attribute read and the `getattr` form.
 
-Worth a worked number, because the supporting-factor switch and the scaling factor are not abstractions — they move capital. Take one £10m senior corporate exposure on the foundation IRB approach whose *unscaled* risk-weighted assets, after the full Basel correlation-and-maturity machinery, come to £8.00m. Under CRR the engine multiplies by `irb_scaling_factor = 1.06` and reports **£8.48m**. Under Basel 3.1 it multiplies by `1.0` and reports **£8.00m** — a 5.66% reduction on that exposure from a single cited scalar flipping from `1.06` to `1.0`. Before the migration, that 1.06 was reconstructed as `1.06 if config.is_crr else 1.0` in four engine sites, any one of which could have been missed in a refactor. After it, the value is read in one way from one cited entry, and the only thing that decides 1.06 versus 1.0 is which pack layer won during `resolve`. The IRB output floor — [the subject of post 5](2026-06-23-the-output-floor-and-why-basel-31-bites.md) — then bites on the *floored* number, which is why getting the unfloored regime parameters into a single auditable home mattered before the floor work could be trusted.
+Worth a worked number, because the supporting-factor switch and the scaling factor are not abstractions — they move capital. Take one £10m senior corporate exposure on the foundation IRB approach whose *unscaled* risk-weighted assets, after the full Basel correlation-and-maturity machinery, come to £8.00m. Under CRR the engine multiplies by `irb_scaling_factor = 1.06` and reports **£8.48m**. Under Basel 3.1 it multiplies by `1.0` and reports **£8.00m** — a 5.66% reduction on that exposure from a single cited scalar flipping from `1.06` to `1.0`. Before the migration, that 1.06 was reconstructed as `1.06 if config.is_crr else 1.0` in four engine sites, any one of which could have been missed in a refactor. After it, the value is read in one way from one cited entry, and the only thing that decides 1.06 versus 1.0 is which pack layer won during `resolve`. The IRB output floor — [the subject of post 5](2026-05-26-the-output-floor-and-why-basel-31-bites.md) — then bites on the *floored* number, which is why getting the unfloored regime parameters into a single auditable home mattered before the floor work could be trusted.
 
 ## The honest remainder
 
@@ -174,13 +174,13 @@ The next post leaves the engine room for the first time in a while: it is about 
 
 ---
 
-**Read next:** [*From Workbench to Web App*](2026-09-15-from-workbench-to-web-app.md) — taking the calculator from an interactive notebook to a deployable app without loosening any of the audit guarantees this post is about.
+**Read next:** [*From Workbench to Web App*](2026-06-25-from-workbench-to-web-app.md) — taking the calculator from an interactive notebook to a deployable app without loosening any of the audit guarantees this post is about.
 
 **Further reading:**
 
 - [Architecture: Pipeline](../architecture/pipeline.md) — the stage-by-stage reference; the rulepack is threaded through every stage here.
 - [Development: Citation Tracking](../development/citation-tracking.md) — the watchfire grammar that `Citation.__str__` matches, and the article→function index.
 - [Specifications: Audit Cache](../specifications/audit-cache.md) — the per-run `manifest.json` that now embeds the resolved rulepack snapshot.
-- [The Pipeline: Why Regulation Forced an Immutable Design](2026-05-12-the-pipeline.md) — the predecessor architecture post; the data/engine split this migration completes.
-- [The Output Floor and Why Basel 3.1 Bites](2026-06-23-the-output-floor-and-why-basel-31-bites.md) — what the regime parameters feed into.
+- [The Pipeline: Why Regulation Forced an Immutable Design](2026-05-05-the-pipeline.md) — the predecessor architecture post; the data/engine split this migration completes.
+- [The Output Floor and Why Basel 3.1 Bites](2026-05-26-the-output-floor-and-why-basel-31-bites.md) — what the regime parameters feed into.
 - [`scripts/blog_counts.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/7e7ed7ec/scripts/blog_counts.py) — the canonical-counts script behind every figure in this post.

@@ -2,7 +2,7 @@
 
 *The 72.5% output floor is the headline change in Basel 3.1 for IRB banks. It is also one of four drivers, and the relationship between them is more interesting than any single number.*
 
-Published 2026-06-23. Code references are pinned to commit [`cceaee4`](https://github.com/OpenAfterHours/rwa_calculator/tree/cceaee4).
+Published 2026-05-26. Code references are pinned to commit [`cceaee4`](https://github.com/OpenAfterHours/rwa_calculator/tree/cceaee4).
 
 ---
 
@@ -43,7 +43,7 @@ Where:
 
 Three things are non-obvious about this.
 
-**First, S-TREA is not the SA RWA of the SA portfolio.** It is an SA-equivalent RWA computed across the *entire IRB portfolio*, in addition to whatever SA exposures the firm holds. Every IRB exposure has to be dragged back through the SA classifier with the same EAD, the same counterparty, the same collateral, but treated *as if IRB had never been permitted*. The calculator's split-once-and-materialise architecture from [post 2](2026-05-12-the-pipeline.md) is what makes this cheap: the upstream stages (loader, hierarchy, classifier, CRM) run once and produce a frame that the SA calculator and the IRB calculator both consume. The cost of computing S-TREA is roughly the cost of one extra calculator pass over the IRB rows, not a second full pipeline.
+**First, S-TREA is not the SA RWA of the SA portfolio.** It is an SA-equivalent RWA computed across the *entire IRB portfolio*, in addition to whatever SA exposures the firm holds. Every IRB exposure has to be dragged back through the SA classifier with the same EAD, the same counterparty, the same collateral, but treated *as if IRB had never been permitted*. The calculator's split-once-and-materialise architecture from [post 2](2026-05-05-the-pipeline.md) is what makes this cheap: the upstream stages (loader, hierarchy, classifier, CRM) run once and produce a frame that the SA calculator and the IRB calculator both consume. The cost of computing S-TREA is roughly the cost of one extra calculator pass over the IRB rows, not a second full pipeline.
 
 **Second, the floor applies portfolio-wide, not per-exposure.** The aggregator emits a per-exposure `floor_rwa` column allocated pro-rata to IRB exposures by their share of S-TREA, but that column is a reporting convenience — the regulatory floor is `max(U-TREA, x × S-TREA + OF-ADJ)` at the portfolio level. The shortfall, when it exists, is the amount that the floored TREA exceeds the un-floored TREA. The calculator surfaces both the per-exposure allocation and the portfolio-level summary; consumers that need to feed COREP C 02.00 must read the portfolio-level fields, because OF-ADJ is an own-funds reconciliation defined at the entity level and has no meaningful per-exposure decomposition.
 
@@ -110,7 +110,7 @@ The calculator's `CapitalImpactAnalyzer` decomposes the CRR-to-Basel-3.1 RWA del
 
 1. **Scaling factor removal** (negative, IRB only). CRR multiplies IRB capital by 1.06 under Art. 92(2)(b); Basel 3.1 removes this. For a £25m IRB book, this is a -£1.4m effect — pure relief.
 2. **Supporting factor removal** (positive, SA and IRB). CRR applies the SME supporting factor (0.7619 below the threshold, 0.85 above) and the infrastructure supporting factor (0.75) as RWA discounts under Art. 501. Basel 3.1 removes them. The effect is positive — removing the discount increases RWA — and the magnitude depends entirely on how SME-heavy the book is.
-3. **Methodology and parameter changes** (varies, all). The residual after the other three drivers — PD/LGD floor changes, SA risk-weight table revisions, F-IRB supervisory LGD changes (0.45 CRR → 0.40 Basel 3.1 for senior non-financial corporate; financial-sector entities retain 45%), correlation formula updates, the Art. 124F/H real-estate splitter from [post 3](2026-05-26-risk-weights-are-not-a-lookup-table.md), every other rule difference. Can be sizeable in either direction.
+3. **Methodology and parameter changes** (varies, all). The residual after the other three drivers — PD/LGD floor changes, SA risk-weight table revisions, F-IRB supervisory LGD changes (0.45 CRR → 0.40 Basel 3.1 for senior non-financial corporate; financial-sector entities retain 45%), correlation formula updates, the Art. 124F/H real-estate splitter from [post 3](2026-05-12-risk-weights-are-not-a-lookup-table.md), every other rule difference. Can be sizeable in either direction.
 4. **Output floor impact** (positive, IRB only). The amount the floor adds when it binds. Zero when it doesn't.
 
 The four drivers are additive and they sum exactly to the per-exposure delta; the methodology driver is computed as the residual to enforce this. The point of the decomposition is that "IRB capital went up under Basel 3.1" is not a single phenomenon. For the £100m IG corporate book in the lead — assuming no SME supporting factor applied under CRR and no methodology change of note — the breakdown is roughly: -£1.4m scaling factor, +£0m supporting factor, +£0m methodology, +£23.5m output floor. The floor is essentially the entire story.
@@ -121,7 +121,7 @@ This matters for capital planning. A firm reading "Basel 3.1 capital impact" as 
 
 ## The shape of the bite
 
-The mental model "Basel 3.1 makes IRB worse and SA the same" is wrong in both directions. SA changed materially under Basel 3.1 — the real-estate splitter, the ECRA/SCRA distinction, the corporate sub-categories, the currency-mismatch multiplier, the due-diligence obligation. The floor matters for IRB firms because the IRB framework that Basel 3.1 is comparing them against — `x × S-TREA + OF-ADJ` — is computed under the *new* SA, not the old one. A firm that wants to anticipate the floor's bite has to anticipate two changes simultaneously: what its IRB book looks like under tightened parameter floors, and what the same exposures look like under PS1/26 SA. The dual-framework runner from [post 2](2026-05-12-the-pipeline.md) is what makes that comparison tractable in code; the regulatory thinking is what makes it meaningful.
+The mental model "Basel 3.1 makes IRB worse and SA the same" is wrong in both directions. SA changed materially under Basel 3.1 — the real-estate splitter, the ECRA/SCRA distinction, the corporate sub-categories, the currency-mismatch multiplier, the due-diligence obligation. The floor matters for IRB firms because the IRB framework that Basel 3.1 is comparing them against — `x × S-TREA + OF-ADJ` — is computed under the *new* SA, not the old one. A firm that wants to anticipate the floor's bite has to anticipate two changes simultaneously: what its IRB book looks like under tightened parameter floors, and what the same exposures look like under PS1/26 SA. The dual-framework runner from [post 2](2026-05-05-the-pipeline.md) is what makes that comparison tractable in code; the regulatory thinking is what makes it meaningful.
 
 There is also a structural point about who the floor was designed for. Most well-run UK IRB books, on most portfolios, will not be floor-binding even in steady state. The floor is calibrated to bite on low-default, high-quality exposures where IRB models can produce risk weights that are statistically defensible but, in the BCBS's judgement, too dispersed across the population of internal models to be relied upon. IG corporate lending, prime mortgages, and senior bank exposures are where the floor shows up. Sub-investment-grade corporate, retail SME, defaulted exposures — the IRB number tends to be higher than 72.5% of S-TREA on these, and the floor is irrelevant.
 
@@ -131,7 +131,7 @@ Post 6 in the series goes back to engineering: a tour of the regulatory edge cas
 
 ---
 
-**Read next:** *CRM, MOFs, and Other Edge-Case Archaeology* (in progress).
+**Read next:** [*CRM, MOFs, and Other Edge-Case Archaeology*](2026-06-02-crm-mofs-and-other-edge-case-archaeology.md).
 
 **Further reading:**
 

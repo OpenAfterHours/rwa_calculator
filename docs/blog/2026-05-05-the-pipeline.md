@@ -2,7 +2,7 @@
 
 *Frozen bundles, structural protocols, lazy graphs, and accumulated errors are not Clean Architecture cosplay. They are the negative space that audit demands leave behind.*
 
-Published 2026-05-12. Code references are pinned to commit [`7657a56`](https://github.com/OpenAfterHours/rwa_calculator/tree/7657a56).
+Published 2026-05-05. Code references are pinned to commit [`7657a56`](https://github.com/OpenAfterHours/rwa_calculator/tree/7657a56).
 
 ---
 
@@ -166,7 +166,7 @@ Post 3 in the series digs into the standardised approach itself: the RE splitter
 
 ---
 
-**Read next:** [*Risk Weights Are Not a Lookup Table: SA & Exposure Classification*](2026-05-26-risk-weights-are-not-a-lookup-table.md).
+**Read next:** [*Risk Weights Are Not a Lookup Table: SA & Exposure Classification*](2026-05-12-risk-weights-are-not-a-lookup-table.md).
 
 **Further reading:**
 

@@ -2,11 +2,11 @@
 
 *7,450 tests is not the point. Five layers each catching a different failure mode, and a hash-locked oracle suite that prevents the goldens from becoming a mirror of the engine — that is the point.*
 
-Published 2026-07-21. Code references are pinned to commit [`cceaee4`](https://github.com/OpenAfterHours/rwa_calculator/tree/cceaee4).
+Published 2026-06-09. Code references are pinned to commit [`cceaee4`](https://github.com/OpenAfterHours/rwa_calculator/tree/cceaee4).
 
 ---
 
-This is post 7 in the series on building this UK Basel 3.1 RWA calculator. Posts 1–6 covered why the calculator exists, how its pipeline is shaped, what the regulation actually does, how the codebase gets written, what the output floor does, and why the wrong-unit bugs from [post 6](2026-07-07-crm-mofs-and-other-edge-case-archaeology.md) are the recurring shape of regulatory implementation defects. This post is about the testing strategy that makes any of that defensible.
+This is post 7 in the series on building this UK Basel 3.1 RWA calculator. Posts 1–6 covered why the calculator exists, how its pipeline is shaped, what the regulation actually does, how the codebase gets written, what the output floor does, and why the wrong-unit bugs from [post 6](2026-06-02-crm-mofs-and-other-edge-case-archaeology.md) are the recurring shape of regulatory implementation defects. This post is about the testing strategy that makes any of that defensible.
 
 The thing I want to convince you of: the headline test count is irrelevant. What matters is that there are five layers in the test pyramid, each one designed to catch a class of failure that the others cannot. Removing any layer leaves a category of bugs invisible. The interesting layer is not the one with the most tests; it is the one with the fewest, and the one that took the most care to design.
 
@@ -20,7 +20,7 @@ Golden-file testing has a structural weakness most engineering teams accept as a
 
 For most software, this trade-off is fine. Behavioural specifications are loose, "correctness" is what the team agrees it is, and once a feature ships any further drift is — by definition — the new specification. For a regulatory calculator, accepting the trade-off means accepting that you cannot tell whether your numbers match the regulation. You can only tell whether they match an earlier version of yourself. This is a bad position to defend in front of an audit team.
 
-The acceptance suite of ~500 scenarios is real, useful, and central to the calculator's daily operation. It catches per-rule regressions, it pins the framework-comparison numbers, and it is what the agent pipeline from [post 4](2026-06-09-building-with-an-agent-swarm.md) writes into when implementing a new rule. But it is not the layer that defends against the golden-file problem. That defence is a separate, smaller suite.
+The acceptance suite of ~500 scenarios is real, useful, and central to the calculator's daily operation. It catches per-rule regressions, it pins the framework-comparison numbers, and it is what the agent pipeline from [post 4](2026-05-19-building-with-an-agent-swarm.md) writes into when implementing a new rule. But it is not the layer that defends against the golden-file problem. That defence is a separate, smaller suite.
 
 ## The pyramid
 
@@ -78,7 +78,7 @@ Six of the contract modules worth calling out (there are around thirty-four file
 - `test_logging_contract.py` — every stage module under `engine/` declares `logger = logging.getLogger(__name__)`. A module that omits this fails.
 - `test_data_layer_boundary.py` — the architectural enforcer this post is most pleased about.
 
-The data-layer-boundary test reuses the check functions from `scripts/arch_check.py` (the same script that runs as a Claude Code pre-commit hook from [post 4](2026-06-09-building-with-an-agent-swarm.md)) and runs them as pytest assertions:
+The data-layer-boundary test reuses the check functions from `scripts/arch_check.py` (the same script that runs as a Claude Code pre-commit hook from [post 4](2026-05-19-building-with-an-agent-swarm.md)) and runs them as pytest assertions:
 
 ```python
 def test_no_regulatory_scalars_in_engine() -> None:
@@ -127,7 +127,7 @@ The point is not the count. The point is that each layer is designed against a d
 
 Removing any layer leaves a class of bugs invisible. Doubling the unit-test count would change almost nothing about the calculator's regulatory correctness. Doubling the oracle suite, on the other hand, would close the largest remaining structural gap.
 
-The architecture from [post 2](2026-05-12-the-pipeline.md) made the test pyramid possible: frozen bundles let unit tests assert against well-typed inputs and outputs, the data/engine split made the contract enforcers writable, error accumulation produced the data-quality channel the integration tests assert against. The agent workflow from [post 4](2026-06-09-building-with-an-agent-swarm.md) made the pyramid sustainable: every new rule produces a hand-derived expected output, a fixture, a failing test, and a minimum-diff implementation, in that order, because the role boundaries make any other order harder than the right one.
+The architecture from [post 2](2026-05-05-the-pipeline.md) made the test pyramid possible: frozen bundles let unit tests assert against well-typed inputs and outputs, the data/engine split made the contract enforcers writable, error accumulation produced the data-quality channel the integration tests assert against. The agent workflow from [post 4](2026-05-19-building-with-an-agent-swarm.md) made the pyramid sustainable: every new rule produces a hand-derived expected output, a fixture, a failing test, and a minimum-diff implementation, in that order, because the role boundaries make any other order harder than the right one.
 
 The regulation from posts 3, 5, and 6 is what all of it is testing against. The tests are the link between the rule book and the code. They are the documentation an audit team can actually read.
 
@@ -135,7 +135,7 @@ Post 8 closes the series with the honest retrospective: what I got wrong, what t
 
 ---
 
-**Read next:** *What I Got Wrong, What's Next* (in progress).
+**Read next:** [*What I Got Wrong, What's Next*](2026-06-16-what-i-got-wrong-whats-next.md).
 
 **Further reading:**
 

@@ -59,7 +59,13 @@ our-side drivers explaining how we reached the value above; a driver tagged
 <h2>Sign-off</h2>
 <p class="muted">Record whether this exposure's difference is acceptable. Accepting or
 rejecting takes it off the Open worklist; reopen it to put it back.</p>
-{% if decision %}
+{% if decision and signoff_stale %}
+<div class="callout warn">
+  ⚠ This exposure was <span class="badge badge-{{ decision.status }}">{{ decision.status }}</span>
+  on {{ decision.decided_at }}{% if decision.reason %} (“{{ decision.reason }}”){% endif %}, but the
+  difference has <strong>changed since</strong> — please re-review before signing off again.
+</div>
+{% elif decision %}
 <div class="callout info">
   This exposure is <span class="badge badge-{{ decision.status }}">{{ decision.status }}</span>{% if decision.decided_at %}
   <span class="muted">· decided {{ decision.decided_at }}</span>{% endif %}.

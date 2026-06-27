@@ -72,8 +72,10 @@ def _key_for(response: ReconciliationResponse, suffix: str) -> str:
     return next(k for k in keys if str(k).upper().endswith(suffix))
 
 
-def _decision(status: str, reason: str = "") -> Decision:
-    return Decision(status=status, reason=reason, decided_at="2026-06-27T10:00:00")
+def _decision(status: str, reason: str = "", fingerprint: str = "") -> Decision:
+    return Decision(
+        status=status, reason=reason, decided_at="2026-06-27T10:00:00", fingerprint=fingerprint
+    )
 
 
 # =============================================================================
@@ -158,9 +160,203 @@ def test_biggest_breaks_drops_reviewed_keys(response: ReconciliationResponse) ->
 
 def test_breaks_signoff_progress_counts_reviewed(response: ReconciliationResponse) -> None:
     l3 = _key_for(response, "L3")
-    progress = rv.breaks_signoff_progress(response, {l3: _decision("accepted", "ok")})
+    current = rv.recon_fingerprint(response, l3)
+    progress = rv.breaks_signoff_progress(
+        response, {l3: _decision("accepted", "ok", current)}, {l3: current}
+    )
     assert progress["total"] == 1
     assert progress["reviewed"] == 1
     assert progress["open"] == 0
     assert progress["accepted"] == 1
     assert progress["rejected"] == 0
+    assert progress["changed"] == 0
+
+
+# =============================================================================
+# Staleness — a moved difference re-flags an old decision
+# =============================================================================
+
+
+def test_delta_band_absorbs_float_noise_but_catches_real_change() -> None:
+    base = rv._delta_band(1234.0)
+    assert rv._delta_band(1234.0 + 1e-6) == base  # sub-band noise -> unchanged
+    assert rv._delta_band(1234.0 * 1.5) != base  # a real 50% move -> changed
+
+
+def test_recon_fingerprint_is_deterministic(response: ReconciliationResponse) -> None:
+    l3 = _key_for(response, "L3")
+    fp = rv.recon_fingerprint(response, l3)
+    assert fp != ""
+    assert fp == rv.recon_fingerprint(response, l3)
+
+
+def test_is_signoff_stale_rules() -> None:
+    no_fp = Decision(status="accepted", reason="x", decided_at="t")  # fingerprint=""
+    assert rv.is_signoff_stale(no_fp, "anything") is False  # can't judge -> not stale
+    fp = Decision(status="accepted", reason="x", decided_at="t", fingerprint="FP1")
+    assert rv.is_signoff_stale(fp, "FP1") is False
+    assert rv.is_signoff_stale(fp, "FP2") is True
+    assert rv.is_signoff_stale(fp, None) is False  # row gone -> not stale
+
+
+def test_annotate_flags_stale_decision_back_to_open(response: ReconciliationResponse) -> None:
+    l3 = _key_for(response, "L3")
+    current = rv.recon_fingerprint(response, l3)
+    moved = Decision(status="accepted", reason="old", decided_at="t", fingerprint=current + "X")
+    df = rv.annotate_signoff(
+        response.collect_component_reconciliation(), {l3: moved}, {l3: current}
+    )
+    row = next(r for r in df.iter_rows(named=True) if r["_recon_key"] == l3)
+    assert row["signoff_status"] == rv.SIGNOFF_OPEN
+    assert row["signoff_stale"] is True
+
+
+def test_annotate_keeps_unchanged_decision(response: ReconciliationResponse) -> None:
+    l3 = _key_for(response, "L3")
+    current = rv.recon_fingerprint(response, l3)
+    fresh = Decision(status="accepted", reason="ok", decided_at="t", fingerprint=current)
+    df = rv.annotate_signoff(
+        response.collect_component_reconciliation(), {l3: fresh}, {l3: current}
+    )
+    row = next(r for r in df.iter_rows(named=True) if r["_recon_key"] == l3)
+    assert row["signoff_status"] == rv.SIGNOFF_ACCEPTED
+    assert row["signoff_stale"] is False
+
+
+def test_biggest_breaks_keeps_stale_drops_unchanged(response: ReconciliationResponse) -> None:
+    l3 = _key_for(response, "L3")
+    current = rv.recon_fingerprint(response, l3)
+    fresh = Decision(status="accepted", reason="ok", decided_at="t", fingerprint=current)
+    moved = Decision(status="accepted", reason="old", decided_at="t", fingerprint=current + "X")
+    assert rv.biggest_breaks(response, {l3: fresh}, {l3: current}).height == 0
+    assert rv.biggest_breaks(response, {l3: moved}, {l3: current}).height >= 1
+
+
+def test_progress_counts_stale_as_open_and_changed(response: ReconciliationResponse) -> None:
+    l3 = _key_for(response, "L3")
+    current = rv.recon_fingerprint(response, l3)
+    moved = Decision(status="accepted", reason="old", decided_at="t", fingerprint=current + "X")
+    progress = rv.breaks_signoff_progress(response, {l3: moved}, {l3: current})
+    assert progress["reviewed"] == 0
+    assert progress["open"] == 1
+    assert progress["changed"] == 1
+
+
+# =============================================================================
+# Staleness — the difference MOVING (not just growing), and resolution
+# =============================================================================
+
+
+def _build(
+    *,
+    our_rwa: float = 50.0,
+    legacy_rwa: float = 50.0,
+    our_ead: float = 100.0,
+    legacy_ead: float = 100.0,
+    our_class: str = "corporate",
+    legacy_class: str | None = None,
+) -> ReconciliationResponse:
+    """A one-row reconciliation (key L1) with controllable per-component breaks."""
+    ours = pl.LazyFrame(
+        {
+            "exposure_reference": ["L1"],
+            "exposure_class": [our_class],
+            "approach_applied": ["SA"],
+            "ead_final": [our_ead],
+            "rwa_final": [our_rwa],
+        }
+    )
+    legacy_data: dict = {
+        "exposure_reference": ["L1"],
+        "legacy_ead": [legacy_ead],
+        "legacy_rwa": [legacy_rwa],
+    }
+    components = {"ead": ComponentMapping("EAD"), "rwa": ComponentMapping("RWA")}
+    if legacy_class is not None:
+        legacy_data["legacy_exposure_class"] = [legacy_class]
+        components["exposure_class"] = ComponentMapping("Asset_Class")
+    mapping = LegacyColumnMapping(
+        legacy_keys=("exposure_reference",),
+        our_keys=("exposure_reference",),
+        components=components,
+    )
+    bundle = ReconciliationRunner().reconcile(ours, pl.LazyFrame(legacy_data), mapping)
+    return ReconciliationResponse.from_bundle(bundle, legacy_file=Path("l.csv"), framework="CRR")
+
+
+def _signoff_status(resp: ReconciliationResponse, key: str, decision: Decision) -> tuple:
+    current = rv.recon_fingerprint(resp, key)
+    df = rv.annotate_signoff(
+        resp.collect_component_reconciliation(), {key: decision}, {key: current}
+    )
+    row = next(r for r in df.iter_rows(named=True) if r["_recon_key"] == key)
+    return row["signoff_status"], row["signoff_stale"]
+
+
+def test_moved_categorical_break_is_flagged_stale() -> None:
+    # The worst-case the feature exists to prevent: a class reclassification on an
+    # already-accepted categorical break (abs_delta is null for categoricals).
+    a = _build(legacy_class="retail")  # our corporate vs legacy retail -> break
+    key = _key_for(a, "L1")
+    fp_a = rv.recon_fingerprint(a, key)
+    b = _build(legacy_class="sovereign")  # our corporate vs legacy sovereign -> moved
+    fp_b = rv.recon_fingerprint(b, key)
+    assert fp_a != fp_b  # the categorical value moved -> fingerprint changes
+    accepted = Decision(status="accepted", reason="ok", decided_at="t", fingerprint=fp_a)
+    assert rv.is_signoff_stale(accepted, fp_b) is True
+    # It is NOT waved through: the moved break stays on the worklist.
+    assert rv.biggest_breaks(b, {key: accepted}, {key: fp_b}).height >= 1
+
+
+def test_break_moving_to_a_different_component_is_flagged_stale() -> None:
+    a = _build(our_rwa=50.0, legacy_rwa=60.0)  # RWA breaks, EAD ties
+    key = _key_for(a, "L1")
+    fp_a = rv.recon_fingerprint(a, key)
+    b = _build(our_ead=100.0, legacy_ead=130.0)  # now EAD breaks, RWA ties
+    fp_b = rv.recon_fingerprint(b, key)
+    assert fp_a != fp_b
+    accepted = Decision(status="accepted", reason="ok", decided_at="t", fingerprint=fp_a)
+    status, stale = _signoff_status(b, key, accepted)
+    assert status == rv.SIGNOFF_OPEN
+    assert stale is True
+
+
+def test_fixed_row_with_lingering_decision_shows_matched_not_stale() -> None:
+    resp = _build(our_rwa=50.0, legacy_rwa=50.0)  # everything ties out now
+    key = _key_for(resp, "L1")
+    old_break = Decision(
+        status="accepted", reason="old", decided_at="t", fingerprint="break|rwa:break:5e1~6e1"
+    )
+    status, stale = _signoff_status(resp, key, old_break)
+    assert status == rv.SIGNOFF_MATCHED
+    assert stale is False
+
+
+def test_within_tolerance_improvement_with_decision_is_not_stale() -> None:
+    resp = _build(our_rwa=50.0, legacy_rwa=50.3)  # 0.6% < 1% rwa tol -> within_tolerance
+    key = _key_for(resp, "L1")
+    old_break = Decision(
+        status="accepted", reason="old", decided_at="t", fingerprint="break|rwa:break:5e1~6e1"
+    )
+    status, stale = _signoff_status(resp, key, old_break)
+    assert stale is False  # resolved into tolerance — not re-flagged
+    assert status == rv.SIGNOFF_ACCEPTED
+
+
+def test_delta_band_is_canonical_at_a_decade_boundary() -> None:
+    # A value a hair below a power of ten must band identically to the power of ten,
+    # so float-sum noise across the boundary cannot false-flag stale.
+    assert rv._delta_band(1000.0) == rv._delta_band(999.999999999)
+    assert rv._delta_band(1000.0) == "1.000e+03"
+
+
+def test_fingerprints_are_safe_on_a_failed_empty_response() -> None:
+    # A failed re-run with prior decisions must not raise (column-less wide frame).
+    from rwa_calc.contracts.bundles import create_empty_reconciliation_bundle
+
+    empty = ReconciliationResponse.from_bundle(
+        create_empty_reconciliation_bundle(), legacy_file=Path("l.csv"), framework="CRR"
+    )
+    decisions = {"L1": Decision(status="accepted", reason="x", decided_at="t", fingerprint="fp")}
+    assert rv.current_fingerprints(empty, decisions) == {}
+    assert rv.recon_fingerprint(empty, "L1") == ""

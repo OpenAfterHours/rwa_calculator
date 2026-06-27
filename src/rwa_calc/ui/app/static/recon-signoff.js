@@ -20,7 +20,7 @@
 
   function updateProgress(progress) {
     if (!progress) return;
-    ["reviewed", "open", "accepted", "rejected", "total"].forEach(function (key) {
+    ["reviewed", "open", "accepted", "rejected", "changed", "total"].forEach(function (key) {
       var span = document.querySelector('[data-signoff="' + key + '"]');
       if (span && typeof progress[key] === "number") {
         span.textContent = progress[key].toLocaleString();
@@ -31,6 +31,13 @@
   document.addEventListener("submit", function (event) {
     var form = event.target;
     if (!(form instanceof HTMLFormElement)) return;
+    // Destructive "clear all sign-offs" — confirm before letting it through.
+    if (form.classList.contains("clear-all-signoff")) {
+      if (!window.confirm(form.getAttribute("data-confirm") || "Clear all sign-offs?")) {
+        event.preventDefault();
+      }
+      return;
+    }
     if (!form.classList.contains("inline-signoff")) return;
     // Only enhance the Open worklist; other views must stay correct, so let the
     // normal submit (full reload) re-render them.

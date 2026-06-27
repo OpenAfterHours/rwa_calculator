@@ -161,6 +161,7 @@ table.data tbody tr.chain-driver .driver-name { padding-left: 24px; font-family:
 .badge-accepted { background: rgba(61, 214, 140, 0.10); border-color: var(--oah-terminal-green); color: #b9f0d3; }
 .badge-rejected { background: rgba(201, 68, 42, 0.12); border-color: var(--oah-owl-body); color: #ffd2c7; }
 .badge-matched { background: rgba(216, 222, 233, 0.06); border-color: rgba(216, 222, 233, 0.30); color: var(--oah-slate-300); }
+.badge-stale { background: rgba(255, 145, 0, 0.16); border-color: var(--oah-orange-bright); color: var(--oah-orange-bright); }
 
 .btn-sm { padding: 4px 10px; font-size: 12px; }
 .inline-signoff { display: inline; margin: 0; }

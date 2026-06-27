@@ -119,13 +119,22 @@ Download the full per-key detail:
 {{ "{:,}".format(result.signoff_progress.total) }} break(s) reviewed —
 {{ "{:,}".format(result.signoff_progress.open) }} still open
 ({{ "{:,}".format(result.signoff_progress.accepted) }} accepted,
-{{ "{:,}".format(result.signoff_progress.rejected) }} rejected).</p>
+{{ "{:,}".format(result.signoff_progress.rejected) }} rejected{% if result.signoff_progress.changed %},
+{{ "{:,}".format(result.signoff_progress.changed) }} changed since sign-off &amp; back on the worklist{% endif %}).</p>
+{% endif %}
+{% if result.signoff_decision_count %}
+<form class="clear-all-signoff" method="post" action="{{ result.clear_all_url }}"
+      data-confirm="Clear all {{ result.signoff_decision_count }} sign-off decision(s) for this dataset? This cannot be undone.">
+  <input type="hidden" name="return_to" value="{{ result.explorer_url }}">
+  <button class="btn btn-ghost btn-sm" type="submit">Clear all {{ "{:,}".format(result.signoff_decision_count) }} sign-off(s)</button>
+</form>
 {% endif %}
 {% if result.biggest_breaks.rows %}
 {{ drill_table(result.biggest_breaks, "_recon_key", result.loan_url_base, "key") }}
 {% elif result.break_count %}
-<div class="callout info">Every break has been signed off. Switch the explorer's status
-filter to <em>accepted</em> / <em>rejected</em> to review your decisions.</div>
+<div class="callout info">Every break has been reviewed (or its difference is unchanged).
+Switch the explorer's status filter to <em>accepted</em> / <em>rejected</em> to review your
+decisions.</div>
 {% endif %}
 <p>
   <a class="btn btn-primary" href="{{ result.explorer_url }}">Explore open differences →</a>
@@ -133,4 +142,8 @@ filter to <em>accepted</em> / <em>rejected</em> to review your decisions.</div>
 
 {% endif %}
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script defer src="/static/recon-signoff.js"></script>
 {% endblock %}

@@ -53,12 +53,18 @@ class Decision:
 
     ``status`` is the terminal disposition (accepted / rejected); ``reason`` is the
     analyst's free-text justification (may be empty for a quick *accept*);
-    ``decided_at`` is an ISO-8601 local timestamp, second precision.
+    ``decided_at`` is an ISO-8601 local timestamp, second precision; ``fingerprint``
+    captures *what the difference looked like* when it was signed off, so a later
+    re-run can detect that the difference has **moved** (and re-flag the decision as
+    stale) rather than waving a changed difference through under an old approval. An
+    empty fingerprint (a pre-fingerprint decision) is treated as "cannot tell" — it
+    never goes stale.
     """
 
     status: Status
     reason: str
     decided_at: str
+    fingerprint: str = ""
 
 
 def workspace_id(
@@ -108,13 +114,20 @@ def load_decisions(workspace: str) -> dict[str, Decision]:
 
 
 def upsert_decision(
-    workspace: str, data_path: str, recon_key: str, status: str, reason: str
+    workspace: str,
+    data_path: str,
+    recon_key: str,
+    status: str,
+    reason: str,
+    fingerprint: str = "",
 ) -> None:
     """Record (or overwrite) the decision for one ``_recon_key`` in *workspace*.
 
     ``status`` must be ``"accepted"`` or ``"rejected"`` (a programming error
-    otherwise — the route validates first). The IO is best-effort: a write failure
-    is logged and swallowed so a sign-off click can never surface a 500.
+    otherwise — the route validates first). ``fingerprint`` snapshots the current
+    shape of the difference so a later re-run can tell whether it has moved. The IO
+    is best-effort: a write failure is logged and swallowed so a sign-off click can
+    never surface a 500.
     """
     if status not in _VALID_STATUSES:
         raise ValueError(f"status must be one of {sorted(_VALID_STATUSES)}, got {status!r}")
@@ -129,6 +142,7 @@ def upsert_decision(
         decisions[recon_key] = {
             "status": status,
             "reason": reason,
+            "fingerprint": fingerprint,
             "decided_at": datetime.now().isoformat(timespec="seconds"),  # noqa: DTZ005 - local wall-clock is intended for an analyst-facing stamp
         }
         entry["data_path"] = data_path
@@ -155,6 +169,21 @@ def clear_decision(workspace: str, recon_key: str) -> None:
         logger.warning("could not clear reconciliation sign-off", exc_info=True)
 
 
+def clear_all_decisions(workspace: str) -> None:
+    """Forget *every* decision for a workspace (the "clear all approvals" action).
+
+    Drops the whole workspace entry; a missing workspace is a no-op and any IO error
+    is logged and swallowed so the action can never surface an error to the page.
+    """
+    try:
+        store = _load_store()
+        if workspace in store:
+            store.pop(workspace, None)
+            _save_store(store)
+    except (OSError, TypeError):
+        logger.warning("could not clear all reconciliation sign-offs", exc_info=True)
+
+
 # =============================================================================
 # Private helpers
 # =============================================================================
@@ -167,13 +196,20 @@ def _decision_from_raw(rec: object) -> Decision | None:
     status = rec.get("status")
     reason = rec.get("reason", "")
     decided_at = rec.get("decided_at", "")
+    fingerprint = rec.get("fingerprint", "")
     if (
         status not in _VALID_STATUSES
         or not isinstance(reason, str)
         or not isinstance(decided_at, str)
+        or not isinstance(fingerprint, str)
     ):
         return None
-    return Decision(status=cast("Status", status), reason=reason, decided_at=decided_at)
+    return Decision(
+        status=cast("Status", status),
+        reason=reason,
+        decided_at=decided_at,
+        fingerprint=fingerprint,
+    )
 
 
 def _load_store() -> dict:

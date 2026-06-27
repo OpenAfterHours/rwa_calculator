@@ -15,7 +15,15 @@ full per-key detail: <a href="{{ export_csv_url }}">CSV</a> · <a href="{{ expor
 <span data-signoff="total">{{ "{:,}".format(signoff_progress.total) }}</span> break(s) reviewed
 (<span data-signoff="accepted">{{ "{:,}".format(signoff_progress.accepted) }}</span> accepted,
 <span data-signoff="rejected">{{ "{:,}".format(signoff_progress.rejected) }}</span> rejected) —
-<span data-signoff="open">{{ "{:,}".format(signoff_progress.open) }}</span> open.</p>
+<span data-signoff="open">{{ "{:,}".format(signoff_progress.open) }}</span> open{% if signoff_progress.changed %},
+incl. <span data-signoff="changed">{{ "{:,}".format(signoff_progress.changed) }}</span> changed since sign-off{% endif %}.</p>
+{% endif %}
+{% if signoff_decision_count %}
+<form class="clear-all-signoff" method="post" action="{{ clear_all_url }}"
+      data-confirm="Clear all {{ signoff_decision_count }} sign-off decision(s) for this dataset? This cannot be undone.">
+  <input type="hidden" name="return_to" value="{{ explorer_path }}">
+  <button class="btn btn-ghost btn-sm" type="submit">Clear all {{ "{:,}".format(signoff_decision_count) }} sign-off(s)</button>
+</form>
 {% endif %}
 
 <form class="form" method="get" action="{{ explorer_path }}">
@@ -90,7 +98,7 @@ full per-key detail: <a href="{{ export_csv_url }}">CSV</a> · <a href="{{ expor
       <tr>{% for c in columns %}
         <td>
         {%- if c == key_column -%}<a href="{{ loan_url_base }}?key={{ row[c]|string|urlencode }}">{{ row[c] }}</a>
-        {%- elif c == status_column -%}<span class="badge badge-{{ row[c] }}">{{ row[c] }}</span>
+        {%- elif c == status_column -%}{% if row.get('signoff_stale') %}<span class="badge badge-stale" title="Signed off, but the difference has changed since — re-review">changed</span>{% else %}<span class="badge badge-{{ row[c] }}">{{ row[c] }}</span>{% endif %}
         {%- elif c == 'signoff_reason' -%}{{ row[c]|string|truncate(60) if row[c] else "" }}
         {%- else -%}{{ fmt(row[c]) }}{%- endif -%}
         </td>

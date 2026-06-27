@@ -15,6 +15,7 @@ Key responsibilities tested:
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -23,6 +24,7 @@ from rwa_calc.ui.app.recon_signoff import (
     STATE_DIR_ENV_VAR,
     Decision,
     _state_file,
+    clear_all_decisions,
     clear_decision,
     load_decisions,
     upsert_decision,
@@ -172,8 +174,6 @@ def test_partial_decision_record_is_skipped_not_fatal() -> None:
     # Arrange — one valid decision, then hand-corrupt a second record
     upsert_decision(_WS, "/data/q1", "GOOD", "accepted", "fine")
     path = _state_file()
-    import json
-
     store = json.loads(path.read_text(encoding="utf-8"))
     store[_WS]["decisions"]["BAD"] = {"reason": "missing status"}
     path.write_text(json.dumps(store), encoding="utf-8")
@@ -213,3 +213,46 @@ def test_no_temp_file_left_after_save(tmp_path: Path) -> None:
 
 def test_env_override_points_store_under_tmp(tmp_path: Path) -> None:
     assert _state_file() == tmp_path / "state" / "reconciliation_signoff.json"
+
+
+# =============================================================================
+# Fingerprint + clear-all
+# =============================================================================
+
+
+def test_upsert_stores_and_loads_the_fingerprint() -> None:
+    upsert_decision(_WS, "/data/q1", "L1", "accepted", "ok", "FP-123")
+    assert load_decisions(_WS)["L1"].fingerprint == "FP-123"
+
+
+def test_decision_without_fingerprint_loads_with_empty_string() -> None:
+    # A pre-fingerprint record (no "fingerprint" key) must still load.
+    path = _state_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    record = {"status": "accepted", "reason": "r", "decided_at": "t"}
+    path.write_text(json.dumps({_WS: {"decisions": {"L1": record}}}), encoding="utf-8")
+    assert load_decisions(_WS)["L1"].fingerprint == ""
+
+
+def test_clear_all_removes_every_decision_in_the_workspace() -> None:
+    upsert_decision(_WS, "/data/q1", "L1", "accepted", "a")
+    upsert_decision(_WS, "/data/q1", "L2", "rejected", "b")
+
+    clear_all_decisions(_WS)
+
+    assert load_decisions(_WS) == {}
+
+
+def test_clear_all_is_isolated_to_one_workspace() -> None:
+    upsert_decision(_WS, "/data/q1", "L1", "accepted", "a")
+    upsert_decision(_OTHER_WS, "/data/q2", "L1", "accepted", "b")
+
+    clear_all_decisions(_WS)
+
+    assert load_decisions(_WS) == {}
+    assert "L1" in load_decisions(_OTHER_WS)
+
+
+def test_clear_all_is_safe_for_unknown_workspace() -> None:
+    clear_all_decisions("never-seen")  # must not raise
+    assert load_decisions(_WS) == {}

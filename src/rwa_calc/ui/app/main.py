@@ -65,6 +65,7 @@ from rwa_calc.ui.app.progress import (
     submit_job,
 )
 from rwa_calc.ui.app.recon_signoff import (
+    clear_all_decisions,
     clear_decision,
     load_decisions,
     upsert_decision,
@@ -550,9 +551,11 @@ def _register_pages(app: FastAPI) -> None:
             context=_nav({"job_id": job_id, "stages": RECON_STAGE_SEQUENCE}),
         )
 
-    @app.get("/reconciliation/reset")
+    @app.get("/reconciliation/reset", dependencies=[Depends(require_same_origin)])
     def reconciliation_reset() -> Response:
         # Registered before "/reconciliation/{recon_id}" so the literal path wins.
+        # Same-origin guarded: this GET has a side effect (clears the saved form
+        # prefill), so a cross-site <img src=…/reset> must not be able to trigger it.
         clear_last_run()
         return RedirectResponse(url="/reconciliation", status_code=303)
 
@@ -562,7 +565,9 @@ def _register_pages(app: FastAPI) -> None:
         if response is None:
             return _not_found(request, _RECON_NOT_FOUND_MESSAGE)
         context = _reconciliation_form_context()
-        context["result"] = _reconciliation_result(recon_id, response, _recon_decisions(recon_id))
+        decisions = _recon_decisions(recon_id)
+        fps = reconciliation_view.current_fingerprints(response, decisions)
+        context["result"] = _reconciliation_result(recon_id, response, decisions, fps)
         return templates.TemplateResponse(
             request=request, name="reconciliation.html", context=_nav(context)
         )
@@ -602,15 +607,16 @@ def _register_pages(app: FastAPI) -> None:
             page_size=page_size,
         )
         decisions = _recon_decisions(recon_id)
+        fps = reconciliation_view.current_fingerprints(response, decisions)
         try:
-            result_page = reconciliation_view.forensic_page(response, filters, decisions)
+            result_page = reconciliation_view.forensic_page(response, filters, decisions, fps)
         except ValueError as exc:
             return _bad_request(request, str(exc))
         return templates.TemplateResponse(
             request=request,
             name="recon_explorer.html",
             context=_nav(
-                _reconciliation_explorer(recon_id, response, filters, result_page, decisions)
+                _reconciliation_explorer(recon_id, response, filters, result_page, decisions, fps)
             ),
         )
 
@@ -626,10 +632,23 @@ def _register_pages(app: FastAPI) -> None:
         if detail is None:
             return _not_found(request, "No reconciliation row matches that key.")
         decision = _recon_decisions(recon_id).get(key)
+        # Only a row that is STILL a material difference (not exact / within-tolerance)
+        # can be stale — a break fixed at source is resolved, not "changed, re-review".
+        still_a_difference = detail.get("row_bucket") not in (
+            reconciliation_view.BUCKET_EXACT,
+            reconciliation_view.BUCKET_WITHIN,
+        )
+        stale = (
+            decision is not None
+            and still_a_difference
+            and reconciliation_view.is_signoff_stale(
+                decision, reconciliation_view.recon_fingerprint(response, key)
+            )
+        )
         return templates.TemplateResponse(
             request=request,
             name="recon_loan.html",
-            context=_nav(_reconciliation_loan(recon_id, response, detail, decision)),
+            context=_nav(_reconciliation_loan(recon_id, response, detail, decision, stale=stale)),
         )
 
     @app.post(
@@ -655,7 +674,7 @@ def _register_pages(app: FastAPI) -> None:
         is_ajax = request.headers.get("x-requested-with") == "fetch"
         response = get_reconciliation(recon_id)
         workspace = get_recon_workspace(recon_id)
-        if response is None or workspace is None:
+        if response is None or not response.success or workspace is None:
             return _not_found(request, _RECON_NOT_FOUND_MESSAGE)
         destination = _safe_return_to(return_to, f"/reconciliation/{recon_id}/rows")
         valid = {
@@ -681,8 +700,33 @@ def _register_pages(app: FastAPI) -> None:
             return _signoff_loan_error(
                 request, recon_id, response, workspace.workspace_id, key, message
             )
-        upsert_decision(workspace.workspace_id, workspace.data_path, key, status, reason)
+        # Snapshot the current shape of the difference so a later re-run can tell
+        # whether it has moved (and re-flag this decision) rather than wave a changed
+        # difference through under an old approval.
+        fingerprint = reconciliation_view.recon_fingerprint(response, key)
+        upsert_decision(
+            workspace.workspace_id, workspace.data_path, key, status, reason, fingerprint
+        )
         return _signoff_done(is_ajax, response, workspace.workspace_id, status, key, destination)
+
+    @app.post(
+        "/reconciliation/{recon_id}/signoff/clear-all",
+        response_class=HTMLResponse,
+        dependencies=[Depends(require_same_origin)],
+    )
+    def reconciliation_signoff_clear_all(
+        request: Request,
+        recon_id: str,
+        return_to: Annotated[str, Form()] = "",
+    ) -> Response:
+        # Forget every sign-off decision for this run's dataset, then 303 back. A
+        # destructive reset, guarded client-side by a confirm() (recon-signoff.js).
+        workspace = get_recon_workspace(recon_id)
+        if workspace is None:
+            return _not_found(request, _RECON_NOT_FOUND_MESSAGE)
+        clear_all_decisions(workspace.workspace_id)
+        destination = _safe_return_to(return_to, f"/reconciliation/{recon_id}/rows")
+        return RedirectResponse(url=destination, status_code=303)
 
 
 # =============================================================================
@@ -1039,7 +1083,10 @@ def _reconciliation_form_context(
 
 
 def _reconciliation_result(
-    recon_id: str, response: ReconciliationResponse, decisions: Mapping[str, Decision]
+    recon_id: str,
+    response: ReconciliationResponse,
+    decisions: Mapping[str, Decision],
+    current_fps: Mapping[str, str],
 ) -> dict:
     """Build the aggregates-first overview context for a registered reconciliation.
 
@@ -1082,15 +1129,22 @@ def _reconciliation_result(
         "class_table": _table(segments["by_class"]),
         "approach_table": _table(segments["by_approach"]),
         # Tier 3 — ranked worklist (top-N open breaks; the full diff lives in the
-        # explorer). Reviewed breaks drop off, so the worklist burns down.
-        "biggest_breaks": _table(reconciliation_view.biggest_breaks(response, decisions)),
+        # explorer). Reviewed breaks drop off, so the worklist burns down; a break
+        # whose difference moved since sign-off stays (stale) for re-review.
+        "biggest_breaks": _table(
+            reconciliation_view.biggest_breaks(response, decisions, current_fps)
+        ),
         "biggest_n": reconciliation_view.BIGGEST_BREAKS_LIMIT,
         "break_count": response.collect_breaks_detail().height,
-        "signoff_progress": reconciliation_view.breaks_signoff_progress(response, decisions),
+        "signoff_progress": reconciliation_view.breaks_signoff_progress(
+            response, decisions, current_fps
+        ),
+        "signoff_decision_count": len(decisions),
         "total_rows": total_rows,
         # Navigation
         "explorer_url": f"/reconciliation/{recon_id}/rows",
         "loan_url_base": f"/reconciliation/{recon_id}/loan",
+        "clear_all_url": f"/reconciliation/{recon_id}/signoff/clear-all",
         "export_csv_url": f"/api/reconcile/export/csv?recon_id={recon_id}",
         "export_excel_url": f"/api/reconcile/export/excel?recon_id={recon_id}",
     }
@@ -1102,6 +1156,7 @@ def _reconciliation_explorer(
     filters: reconciliation_view.ForensicFilters,
     page: reconciliation_view.ForensicPage,
     decisions: Mapping[str, Decision],
+    current_fps: Mapping[str, str],
 ) -> dict:
     """Build the per-key explorer context (one filtered/sorted/paged window).
 
@@ -1150,10 +1205,14 @@ def _reconciliation_explorer(
             "q": filters.query or "",
         },
         "options": reconciliation_view.forensic_filter_options(response),
-        "signoff_progress": reconciliation_view.breaks_signoff_progress(response, decisions),
+        "signoff_progress": reconciliation_view.breaks_signoff_progress(
+            response, decisions, current_fps
+        ),
+        "signoff_decision_count": len(decisions),
         "key_column": "_recon_key",
         "status_column": "signoff_status",
         "signoff_post_url": f"/reconciliation/{recon_id}/signoff",
+        "clear_all_url": f"/reconciliation/{recon_id}/signoff/clear-all",
         "explorer_path": f"/reconciliation/{recon_id}/rows",
         "query_base": query_base,
         "loan_url_base": f"/reconciliation/{recon_id}/loan",
@@ -1168,13 +1227,20 @@ def _reconciliation_loan(
     response: ReconciliationResponse,
     detail: dict,
     decision: Decision | None = None,
+    *,
+    stale: bool = False,
 ) -> dict:
-    """Build the single-loan forensic context (incl. any existing sign-off)."""
+    """Build the single-loan forensic context (incl. any existing sign-off).
+
+    ``stale`` is True when an existing decision no longer matches the row's current
+    difference (it moved since sign-off) — the template warns and asks for re-review.
+    """
     return {
         "recon_id": recon_id,
         "framework": response.framework,
         "detail": detail,
         "decision": decision,
+        "signoff_stale": stale,
         "signoff_post_url": f"/reconciliation/{recon_id}/signoff",
         "signoff_return_to": f"/reconciliation/{recon_id}/rows",
         "signoff_error": None,
@@ -1220,9 +1286,9 @@ def _signoff_done(
     """
     if not is_ajax:
         return RedirectResponse(url=destination, status_code=303)
-    progress = reconciliation_view.breaks_signoff_progress(
-        response, load_decisions(workspace_id_value)
-    )
+    decisions = load_decisions(workspace_id_value)
+    fps = reconciliation_view.current_fingerprints(response, decisions)
+    progress = reconciliation_view.breaks_signoff_progress(response, decisions, fps)
     return JSONResponse({"status": status, "key": key, "progress": progress})
 
 

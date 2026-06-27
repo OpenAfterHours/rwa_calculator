@@ -9,6 +9,7 @@
 | FR-6.3 | CLI entry point (`rwa-ui`) for launching the web interface | P2 | Done |
 | FR-6.4 | API input validation with clear error messages | P1 | Done |
 | FR-6.5 | REST API over `CreditRiskCalc` (calculate / validate / results / comparison / export) | P1 | Done |
+| FR-6.6 | UI can write results to a user-chosen local output folder (calc-time + on-demand save), loopback-guarded | P1 | Done |
 
 ## Python API
 
@@ -29,6 +30,26 @@ serves the read-only surface and mounts the REST API in the same process
   `DualFrameworkRunner` + `CapitalImpactAnalyzer`, transformed by
   `ui/views/comparison.py`)
 - `GET /api/export/{parquet|csv|excel|corep}` — download an export
+
+### UI page routes that write to disk (FR-6.6)
+
+The UI can write a run's results to a folder on the local machine (the server is
+the user's own process, so a server-side write is a write to the user's disk):
+
+- `POST /calculate` — accepts an optional `output_folder` + `output_formats`; when
+  set, the background worker writes the selected formats *after* the run, into a
+  run-stamped `rwa_export_<run_id>` subfolder of the chosen folder.
+- `POST /results/{run_id}/save` — re-exports an already-computed run (looked up by
+  `run_id`) to a chosen folder without recomputing.
+
+**Security posture (deliberate reversal).** The REST export endpoints keep user
+input out of the filesystem path (temp dir + literal filenames). FR-6.6 instead
+lets a user-supplied `output_folder` become a real write target — acceptable only
+because the app is loopback single-user. It is guarded by
+`TrustedHostMiddleware(["localhost", "127.0.0.1"])` (DNS-rebinding) and a
+same-origin check (`require_same_origin`) on the write routes; `output_folder` is
+validated by `validate_output_path` (absolute, parent exists, no reserved names),
+and `run_id` never becomes a path component.
 
 ## CLI
 

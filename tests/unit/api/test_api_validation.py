@@ -9,6 +9,7 @@ Tests cover:
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import polars as pl
@@ -19,6 +20,7 @@ from rwa_calc.api.validation import (
     DataPathValidator,
     get_required_files,
     validate_data_path,
+    validate_output_path,
 )
 from rwa_calc.config.data_sources import DataSourceRegistry
 
@@ -251,3 +253,54 @@ class TestGetRequiredFiles:
         files = get_required_files("csv")
         assert len(files) > 0
         assert all(".csv" in str(f) for f in files)
+
+
+class TestValidateOutputPath:
+    """Tests for the validate_output_path convenience function."""
+
+    def test_existing_writable_dir_is_valid(self, tmp_path: Path) -> None:
+        # Arrange / Act
+        response = validate_output_path(str(tmp_path))
+
+        # Assert
+        assert response.valid is True
+        assert not response.errors
+
+    def test_absent_folder_under_existing_parent_is_valid(self, tmp_path: Path) -> None:
+        # The folder may be created; only one new level under an existing parent.
+        response = validate_output_path(str(tmp_path / "rwa_output"))
+
+        assert response.valid is True
+
+    def test_relative_path_is_rejected(self) -> None:
+        # cwd is unreliable when launched as a packaged zipapp, so relative is out.
+        response = validate_output_path("relative/output")
+
+        assert response.valid is False
+        assert "absolute" in response.errors[0].message.lower()
+
+    def test_empty_path_is_rejected(self) -> None:
+        response = validate_output_path("   ")
+
+        assert response.valid is False
+
+    def test_file_path_is_rejected(self, tmp_path: Path) -> None:
+        target = tmp_path / "a_file.txt"
+        target.write_text("not a directory")
+
+        response = validate_output_path(str(target))
+
+        assert response.valid is False
+        assert "directory" in response.errors[0].message.lower()
+
+    def test_deep_missing_tree_is_rejected(self, tmp_path: Path) -> None:
+        # The immediate parent must already exist (typo guard) — no deep mkdir.
+        response = validate_output_path(str(tmp_path / "a" / "b" / "c"))
+
+        assert response.valid is False
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows reserved names")
+    def test_reserved_device_name_is_rejected(self, tmp_path: Path) -> None:
+        response = validate_output_path(str(tmp_path / "NUL"))
+
+        assert response.valid is False

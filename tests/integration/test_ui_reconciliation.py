@@ -52,7 +52,8 @@ def _isolated_state_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
 
 @pytest.fixture
 def client() -> TestClient:
-    return TestClient(create_app())
+    # Loopback base_url so the app's TrustedHostMiddleware accepts test requests.
+    return TestClient(create_app(), base_url="http://localhost")
 
 
 @pytest.fixture

@@ -67,6 +67,10 @@ h3 { font-size: 16px; margin: 0 0 8px; }
 .btn-primary:hover { background: var(--oah-orange-bright); transform: translateY(-1px); color: #fff; }
 .btn-ghost { background: transparent; color: var(--oah-slate-100); border: 1.5px solid rgba(216, 222, 233, 0.30); }
 .btn-ghost:hover { border-color: var(--oah-orange); color: var(--oah-orange); }
+.btn.is-disabled { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
+
+/* A horizontal cluster of buttons (e.g. the results-page download formats). */
+.btn-row { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0; }
 
 /* ---------- Forms ------------------------------------------ */
 .form { background: var(--oah-slate-800); border: 1px solid rgba(216,222,233,0.10); border-radius: 12px; padding: 24px; max-width: 720px; }
@@ -86,6 +90,17 @@ h3 { font-size: 16px; margin: 0 0 8px; }
 .field textarea:focus { outline: none; border-color: var(--oah-orange); }
 .field-row { display: flex; gap: 16px; flex-wrap: wrap; }
 .field-row .field { flex: 1; min-width: 180px; }
+
+/* A <fieldset class="field"> groups related controls (e.g. a checkbox group)
+   for accessibility; reset the native chrome and style its legend like a label. */
+fieldset.field { border: 0; padding: 0; min-width: 0; }
+.field legend { display: block; font-size: 13px; color: var(--oah-slate-300); margin-bottom: 6px; padding: 0; }
+
+/* Inline checkbox group (e.g. the results-page "Save to folder" formats). */
+.checkbox-row { display: flex; flex-wrap: wrap; gap: 14px; }
+.checkbox { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--oah-slate-100); cursor: pointer; }
+.checkbox input { width: auto; }
+.checkbox.is-disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* Primary action + optional "reset to defaults" link, side by side. */
 .form-actions { display: flex; align-items: center; gap: 12px; }

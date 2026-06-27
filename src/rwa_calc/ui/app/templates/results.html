@@ -37,9 +37,60 @@
   {{ chart_approach | safe }}
 </div>
 
+<h2>Download results</h2>
+<p class="muted">Save the full result set to a file. Parquet and CSV download as a zip of one file per
+dataset; Excel and COREP download as a single workbook.</p>
+<div class="btn-row">
+  <a class="btn btn-ghost" href="{{ export_parquet_url }}">Parquet</a>
+  <a class="btn btn-ghost" href="{{ export_csv_url }}">CSV</a>
+  {% if xlsx_available %}
+  <a class="btn btn-ghost" href="{{ export_excel_url }}">Excel</a>
+  <a class="btn btn-ghost" href="{{ export_corep_url }}">COREP</a>
+  {% else %}
+  <span class="btn btn-ghost is-disabled" title="Install xlsxwriter to enable Excel/COREP export">Excel</span>
+  <span class="btn btn-ghost is-disabled" title="Install xlsxwriter to enable Excel/COREP export">COREP</span>
+  {% endif %}
+</div>
+
+<h2>Save to a folder</h2>
+<p class="muted">Write the selected formats straight to a folder on this machine. Each save lands in
+its own <span class="mono">rwa_export_&lt;id&gt;</span> subfolder so it never overwrites earlier results.</p>
+{% if save_outcome and save_outcome.files %}
+<div class="callout info">Wrote {{ save_outcome.files | length }} file(s) to
+<span class="mono">{{ save_outcome.folder }}</span>.</div>
+{% endif %}
+{% if save_outcome and save_outcome.errors %}
+<div class="callout warn">{% for e in save_outcome.errors %}{{ e }}<br>{% endfor %}</div>
+{% endif %}
+{% if save_error %}
+<div class="callout error">{{ save_error }}</div>
+{% endif %}
+<form class="form" method="post" action="/results/{{ run_id }}/save">
+  <div class="field">
+    <label for="output_folder">Output folder</label>
+    <input id="output_folder" name="output_folder" value="{{ default_output_folder }}"
+      placeholder="/path/to/output" required>
+  </div>
+  <fieldset class="field">
+    <legend>Formats</legend>
+    <div class="checkbox-row">
+      {% for fmt in export_formats %}
+      {% set is_workbook = fmt in ("excel", "corep") %}
+      <label class="checkbox{% if is_workbook and not xlsx_available %} is-disabled{% endif %}">
+        <input type="checkbox" name="output_formats" value="{{ fmt }}"
+          {% if fmt in selected_output_formats %}checked{% endif %}
+          {% if is_workbook and not xlsx_available %}disabled{% endif %}>
+        {{ fmt }}
+      </label>
+      {% endfor %}
+    </div>
+    {% if not xlsx_available %}<p class="muted">Install xlsxwriter to enable Excel and COREP.</p>{% endif %}
+  </fieldset>
+  <button class="btn btn-primary" type="submit">Save to folder</button>
+</form>
+
 <h2>Exposure sample</h2>
-<p class="muted">First {{ table_rows | length }} exposures. Export the full result set via the REST API
-(<span class="mono">/api/export/&lt;fmt&gt;?run_id={{ run_id }}</span>).</p>
+<p class="muted">First {{ table_rows | length }} exposures.</p>
 <div class="table-wrap">
   <table class="data">
     <thead><tr>{% for c in table_columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>

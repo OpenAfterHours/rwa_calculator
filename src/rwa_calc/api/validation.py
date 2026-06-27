@@ -9,6 +9,8 @@ Checks that required files exist and reports missing files clearly.
 
 from __future__ import annotations
 
+import os
+import sys
 from pathlib import Path
 from typing import Literal
 
@@ -184,3 +186,69 @@ def get_required_files(
     """
     registry = DataSourceRegistry()
     return sorted(registry.get_all_paths(data_format))
+
+
+# Windows device names that are invalid as a path component — rejected up front
+# so an output write can never be silently redirected to a device.
+_WIN_RESERVED = frozenset(
+    {"CON", "PRN", "AUX", "NUL"}
+    | {f"COM{i}" for i in range(1, 10)}
+    | {f"LPT{i}" for i in range(1, 10)}
+)
+
+
+def validate_output_path(output_path: str | Path) -> ValidationResponse:
+    """
+    Validate a directory the user has chosen to write calculation outputs into.
+
+    Output semantics (distinct from ``validate_data_path``, which checks input-file
+    presence): the path must be absolute and resolvable; if it already exists it
+    must be a writable directory; if it does not, its immediate parent must exist
+    and be writable, so a typo cannot create a deep tree in a surprising place.
+    Errors are accumulated into the ``ValidationResponse`` — never raised.
+
+    ``os.access(W_OK)`` is advisory only (it ignores Windows ACLs), so the
+    authoritative writability check remains the wrapped write itself.
+
+    Args:
+        output_path: The chosen output folder.
+
+    Returns:
+        ValidationResponse with ``valid`` set and any VAL001 errors.
+    """
+    raw = str(output_path).strip()
+    if not raw:
+        return _output_fail(raw, "Output folder is empty.")
+
+    path = Path(raw).expanduser()
+    if not path.is_absolute():
+        return _output_fail(path, f"Output folder must be an absolute path: {raw}")
+
+    if sys.platform == "win32" and any(
+        part.split(".")[0].upper() in _WIN_RESERVED for part in path.parts
+    ):
+        return _output_fail(path, f"Output folder uses a reserved device name: {raw}")
+
+    resolved = path.resolve()
+    if resolved.exists():
+        if not resolved.is_dir():
+            return _output_fail(resolved, f"Output path is not a directory: {resolved}")
+        if not os.access(resolved, os.W_OK):
+            return _output_fail(resolved, f"Output folder is not writable: {resolved}")
+        return ValidationResponse(valid=True, data_path=resolved)
+
+    parent = resolved.parent
+    if not parent.exists() or not parent.is_dir():
+        return _output_fail(resolved, f"Output folder's parent does not exist: {parent}")
+    if not os.access(parent, os.W_OK):
+        return _output_fail(resolved, f"Cannot create the output folder under: {parent}")
+    return ValidationResponse(valid=True, data_path=resolved)
+
+
+def _output_fail(path: Path | str, message: str) -> ValidationResponse:
+    """Build a non-valid output-path ValidationResponse carrying a VAL001 error."""
+    return ValidationResponse(
+        valid=False,
+        data_path=path,
+        errors=[create_validation_error(message, path=path)],
+    )

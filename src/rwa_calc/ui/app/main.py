@@ -17,20 +17,22 @@ Runs locally; packaged via moonlit (entry point ``rwa_calc.ui.app.main:main``).
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import json
 import logging
 import webbrowser
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 import polars as pl
 import uvicorn
-from fastapi import FastAPI, Form, Request, Response
+from fastapi import Depends, FastAPI, Form, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from rwa_calc.api.reconciliation import loads_reconciliation_config
 from rwa_calc.api.rest import (
@@ -41,7 +43,13 @@ from rwa_calc.api.rest import (
 )
 from rwa_calc.api.rest import router as api_router
 from rwa_calc.api.service import CreditRiskCalc, get_supported_frameworks
-from rwa_calc.api.validation import validate_data_path
+from rwa_calc.api.validation import validate_data_path, validate_output_path
+from rwa_calc.ui.app.calculator_state import (
+    CalculatorFormState,
+    load_calculator_state,
+    save_calculator_state,
+)
+from rwa_calc.ui.app.output_writer import write_selected_formats
 from rwa_calc.ui.app.progress import (
     RECON_STAGE_NAME,
     RECON_STAGE_SEQUENCE,
@@ -64,10 +72,11 @@ from rwa_calc.ui.views import comparison as comparison_view
 from rwa_calc.ui.views import reconciliation as reconciliation_view
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable
+    from collections.abc import AsyncIterator, Callable, Sequence
 
     from rwa_calc.api.models import CalculationResponse, ReconciliationResponse
     from rwa_calc.api.reconciliation import ReconciliationSettings
+    from rwa_calc.ui.app.output_writer import OutputWriteResult
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +89,13 @@ _TEMPLATES_DIR = _APP_DIR / "templates"
 
 _DEFAULT_HOST = "127.0.0.1"
 _DEFAULT_PORT = 8000
+
+# Hosts the loopback server answers to — the TrustedHost allowlist and the
+# same-origin allowlist for state-changing routes. The server is loopback-only
+# and single-user, so a user-supplied output folder becoming a real filesystem
+# write target is acceptable; these two guards stop a rebound DNS name or a
+# cross-origin page from driving that write without the user's knowledge.
+_ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
 
 # Cadence at which the SSE stream re-reads job state (in-memory; cheap).
 _SSE_POLL_SECONDS = 0.15
@@ -127,11 +143,23 @@ _RESULT_TABLE_COLS = [
     "rwa_final",
 ]
 
+# Output formats the UI can write/download, in canonical order. parquet/csv are
+# dependency-free; excel/corep need xlsxwriter (see _xlsxwriter_available).
+EXPORT_FORMATS = ("parquet", "csv", "excel", "corep")
+_DEFAULT_OUTPUT_FORMATS = ("parquet", "csv")
+
+# Rendered by the GET results page and both branches of the save route.
+_RESULTS_TEMPLATE = "results.html"
+
 # Shown when a reconciliation id is unknown (expired from the in-memory registry
 # or never existed) — reused by the report, explorer and single-loan routes.
 _RECON_NOT_FOUND_MESSAGE = "That reconciliation has expired or does not exist."
 
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
+
+# Calc-time write outcomes keyed by run_id (== job_id), surfaced on the results
+# page. Mirrors the in-memory _RUNS registry: process-local, cleared on restart.
+_EXPORT_OUTCOMES: dict[str, OutputWriteResult] = {}
 
 
 # =============================================================================
@@ -142,6 +170,10 @@ templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 def create_app() -> FastAPI:
     """Build the read-only UI app with the REST API mounted alongside."""
     app = FastAPI(title="RWA Calculator")
+    # DNS-rebinding defence: only answer to the loopback host names. The bind
+    # stays on 127.0.0.1 (see main); the middleware strips the port before
+    # matching, so "localhost:8000" / "127.0.0.1:8000" both pass.
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=_ALLOWED_HOSTS)
     attach_progress_handler()
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
     app.include_router(api_router)
@@ -161,6 +193,24 @@ def main() -> None:
     except Exception:  # pragma: no cover - browser launch is best-effort
         logger.debug("could not open browser automatically", exc_info=True)
     uvicorn.run(app, host=_DEFAULT_HOST, port=_DEFAULT_PORT)
+
+
+def require_same_origin(request: Request) -> None:
+    """Reject cross-site state-changing requests (CSRF / DNS-rebinding belt).
+
+    A browser always attaches ``Sec-Fetch-Site`` (and ``Origin``) to a
+    cross-origin form POST, so a page on another origin cannot silently drive a
+    disk-writing route here. Local non-browser clients send neither header and
+    are allowed — they already run as the user. Pairs with the
+    ``TrustedHostMiddleware`` on ``create_app`` (which blocks DNS-rebinding for
+    every route); this dependency guards the routes that write to disk.
+    """
+    site = request.headers.get("sec-fetch-site")
+    if site is not None and site not in ("same-origin", "none"):
+        raise HTTPException(status_code=400, detail="cross-site request rejected")
+    origin = request.headers.get("origin")
+    if origin and urlsplit(origin).hostname not in _ALLOWED_HOSTS:
+        raise HTTPException(status_code=400, detail="cross-origin request rejected")
 
 
 # =============================================================================
@@ -196,17 +246,14 @@ def _register_pages(app: FastAPI) -> None:
         return templates.TemplateResponse(
             request=request,
             name="calculator.html",
-            context=_nav(
-                {
-                    "frameworks": get_supported_frameworks(),
-                    "default_path": _default_data_path(),
-                    "default_date": "2025-01-01",
-                    "error": None,
-                }
-            ),
+            context=_nav(_calculator_context()),
         )
 
-    @app.post("/calculate", response_class=HTMLResponse)
+    @app.post(
+        "/calculate",
+        response_class=HTMLResponse,
+        dependencies=[Depends(require_same_origin)],
+    )
     def run_calculation(
         request: Request,
         data_path: Annotated[str, Form()],
@@ -214,23 +261,42 @@ def _register_pages(app: FastAPI) -> None:
         framework: Annotated[FrameworkArg, Form()] = "CRR",
         permission_mode: Annotated[PermissionArg, Form()] = "standardised",
         data_format: Annotated[FormatArg, Form()] = "parquet",
+        output_folder: Annotated[str, Form()] = "",
+        output_formats: Annotated[list[str] | None, Form()] = None,
     ) -> Response:
-        validation = validate_data_path(data_path=data_path, data_format=data_format)
-        if not validation.valid:
-            missing = ", ".join(str(f) for f in validation.files_missing[:5])
+        formats = _clean_formats(output_formats)
+
+        def _form_error(message: str) -> Response:
+            # Re-render the form non-destructively: every field (incl. selects and
+            # the typed output folder/formats) is echoed back with the message.
             return templates.TemplateResponse(
                 request=request,
                 name="calculator.html",
                 context=_nav(
-                    {
-                        "frameworks": get_supported_frameworks(),
-                        "default_path": data_path,
-                        "default_date": reporting_date,
-                        "error": f"Data path invalid. Missing: {missing or 'see logs'}",
-                    }
+                    _calculator_context(
+                        default_path=data_path,
+                        default_date=reporting_date,
+                        selected_framework=framework,
+                        selected_permission=permission_mode,
+                        selected_format=data_format,
+                        default_output_folder=output_folder,
+                        selected_output_formats=formats,
+                        error=message,
+                    )
                 ),
                 status_code=400,
             )
+
+        validation = validate_data_path(data_path=data_path, data_format=data_format)
+        if not validation.valid:
+            missing = ", ".join(str(f) for f in validation.files_missing[:5])
+            return _form_error(f"Data path invalid. Missing: {missing or 'see logs'}")
+
+        if output_folder.strip():
+            out_validation = validate_output_path(output_folder)
+            if not out_validation.valid:
+                return _form_error(out_validation.errors[0].message)
+
         # Run off the request thread so the browser gets a live, stage-by-stage
         # stepper instead of a frozen tab. The job_id doubles as the eventual
         # results id (see _calculation_worker -> register_run_with_id).
@@ -243,6 +309,8 @@ def _register_pages(app: FastAPI) -> None:
                 reporting_date=date.fromisoformat(reporting_date),
                 permission_mode=permission_mode,
                 data_format=data_format,
+                output_folder=output_folder,
+                output_formats=formats,
             ),
         )
         return RedirectResponse(url=f"/calculating/{job.job_id}", status_code=303)
@@ -292,8 +360,67 @@ def _register_pages(app: FastAPI) -> None:
             return _not_found(request, "That result has expired or does not exist.")
         return templates.TemplateResponse(
             request=request,
-            name="results.html",
-            context=_nav(_results_context(run_id, response)),
+            name=_RESULTS_TEMPLATE,
+            context=_nav(
+                _results_context(run_id, response, save_outcome=_EXPORT_OUTCOMES.get(run_id))
+            ),
+        )
+
+    @app.post(
+        "/results/{run_id}/save",
+        response_class=HTMLResponse,
+        dependencies=[Depends(require_same_origin)],
+    )
+    def save_results(
+        request: Request,
+        run_id: str,
+        output_folder: Annotated[str, Form()],
+        output_formats: Annotated[list[str] | None, Form()] = None,
+    ) -> Response:
+        # Re-export an already-computed run to a chosen folder without recomputing.
+        response = get_run(run_id)
+        if response is None:
+            return _not_found(
+                request,
+                "That result has expired or does not exist — re-run the calculation.",
+            )
+        formats = _clean_formats(output_formats)
+        validation = validate_output_path(output_folder)
+        if not validation.valid or not formats:
+            message = (
+                validation.errors[0].message
+                if not validation.valid
+                else "Choose at least one output format."
+            )
+            return templates.TemplateResponse(
+                request=request,
+                name=_RESULTS_TEMPLATE,
+                context=_nav(
+                    _results_context(
+                        run_id,
+                        response,
+                        save_error=message,
+                        default_output_folder=output_folder,
+                        selected_output_formats=formats,
+                    )
+                ),
+                status_code=400,
+            )
+        outcome = write_selected_formats(
+            response, Path(validation.data_path), formats, run_id=run_id
+        )
+        return templates.TemplateResponse(
+            request=request,
+            name=_RESULTS_TEMPLATE,
+            context=_nav(
+                _results_context(
+                    run_id,
+                    response,
+                    save_outcome=outcome,
+                    default_output_folder=str(validation.data_path),
+                    selected_output_formats=formats,
+                )
+            ),
         )
 
     @app.get("/comparison", response_class=HTMLResponse)
@@ -498,6 +625,8 @@ def _calculation_worker(
     reporting_date: date,
     permission_mode: PermissionArg,
     data_format: FormatArg,
+    output_folder: str = "",
+    output_formats: Sequence[str] | None = None,
 ) -> Callable[[Job], None]:
     """Build the background worker that runs one calculation for a job.
 
@@ -507,7 +636,13 @@ def _calculation_worker(
     captures its own failures as ``success=False``, so an error result is still
     registered and rendered; ``submit_job`` only catches a truly unexpected
     crash (-> ``job.fail``).
+
+    When an ``output_folder`` was given, the selected formats are written to disk
+    *after* ``calculate()`` returns — outside ``STAGE_SEQUENCE``, so the live
+    stepper stays responsive and the stage count is unchanged. The form inputs
+    are remembered (best-effort) so the next calculator render is pre-filled.
     """
+    formats = list(output_formats or [])
 
     def _work(job: Job) -> None:
         response = CreditRiskCalc(
@@ -518,6 +653,21 @@ def _calculation_worker(
             data_format=data_format,
         ).calculate()
         register_run_with_id(job.job_id, response)
+        if output_folder.strip() and formats:
+            _EXPORT_OUTCOMES[job.job_id] = write_selected_formats(
+                response, Path(output_folder).expanduser(), formats, run_id=job.job_id
+            )
+        save_calculator_state(
+            CalculatorFormState(
+                data_path=data_path,
+                reporting_date=reporting_date.isoformat(),
+                framework=framework,
+                permission_mode=permission_mode,
+                data_format=data_format,
+                output_folder=output_folder,
+                output_formats=",".join(formats),
+            )
+        )
         job.finish(success=response.success)
 
     return _work
@@ -621,10 +771,26 @@ def _sse(event: str, data: dict) -> str:
 # =============================================================================
 
 
-def _results_context(run_id: str, response: CalculationResponse) -> dict:
-    """Build the template context for the results page."""
+def _results_context(
+    run_id: str,
+    response: CalculationResponse,
+    *,
+    save_outcome: OutputWriteResult | None = None,
+    save_error: str | None = None,
+    default_output_folder: str = "",
+    selected_output_formats: Sequence[str] | None = None,
+) -> dict:
+    """Build the template context for the results page.
+
+    The optional ``save_*`` arguments carry the outcome of a "Save to folder"
+    action (or a calc-time write) back to the page; they default to the page's
+    first render where no save has happened yet.
+    """
     rwa_by_class, ead_by_class = _class_chart_items(response)
     approach_split = _approach_chart_items(response)
+    selected = list(
+        selected_output_formats if selected_output_formats is not None else _DEFAULT_OUTPUT_FORMATS
+    )
     return {
         "run_id": run_id,
         "success": response.success,
@@ -636,6 +802,19 @@ def _results_context(run_id: str, response: CalculationResponse) -> dict:
         "chart_approach": charts.horizontal_bar_svg(approach_split),
         "table_columns": _RESULT_TABLE_COLS,
         "table_rows": _result_rows(response),
+        # Download buttons stream from the existing GET /api/export/{fmt} endpoint.
+        "export_parquet_url": f"/api/export/parquet?run_id={run_id}",
+        "export_csv_url": f"/api/export/csv?run_id={run_id}",
+        "export_excel_url": f"/api/export/excel?run_id={run_id}",
+        "export_corep_url": f"/api/export/corep?run_id={run_id}",
+        # Excel/COREP need xlsxwriter; grey them out when it is not installed.
+        "xlsx_available": _xlsxwriter_available(),
+        # "Save to folder" form scaffolding + the last save outcome (if any).
+        "export_formats": EXPORT_FORMATS,
+        "selected_output_formats": selected,
+        "default_output_folder": default_output_folder,
+        "save_outcome": save_outcome,
+        "save_error": save_error,
     }
 
 
@@ -672,6 +851,60 @@ def _compute_comparison(
         "chart_by_class": charts.grouped_bar_svg(grouped),
         "class_columns": by_class.columns,
         "class_rows": by_class.to_dicts(),
+    }
+
+
+def _calculator_context(
+    *,
+    default_path: str | None = None,
+    default_date: str | None = None,
+    error: str | None = None,
+    selected_framework: str | None = None,
+    selected_permission: str | None = None,
+    selected_format: str | None = None,
+    default_output_folder: str | None = None,
+    selected_output_formats: Sequence[str] | None = None,
+) -> dict:
+    """Build the calculator form context (precedence: override > last run > default).
+
+    The last completed run is remembered via ``calculator_state`` so the form
+    opens pre-filled; an explicit override (a validation re-render) wins, so a
+    bounce echoes the user's just-typed values back and never resets the selects.
+    """
+    saved = load_calculator_state()
+
+    def _pick(override: str | None, saved_value: str | None, fallback: str) -> str:
+        if override is not None:
+            return override
+        if saved_value is not None:
+            return saved_value
+        return fallback
+
+    if selected_output_formats is not None:
+        selected_formats = list(selected_output_formats)
+    elif saved is not None:
+        selected_formats = saved.formats
+    else:
+        selected_formats = list(_DEFAULT_OUTPUT_FORMATS)
+
+    return {
+        "frameworks": get_supported_frameworks(),
+        "default_path": _pick(
+            default_path, saved.data_path if saved else None, _default_data_path()
+        ),
+        "default_date": _pick(default_date, saved.reporting_date if saved else None, "2025-01-01"),
+        "selected_framework": _pick(selected_framework, saved.framework if saved else None, "CRR"),
+        "selected_permission": _pick(
+            selected_permission, saved.permission_mode if saved else None, "standardised"
+        ),
+        "selected_format": _pick(selected_format, saved.data_format if saved else None, "parquet"),
+        "default_output_folder": _pick(
+            default_output_folder, saved.output_folder if saved else None, ""
+        ),
+        "selected_output_formats": selected_formats,
+        "export_formats": EXPORT_FORMATS,
+        "xlsx_available": _xlsxwriter_available(),
+        "error": error,
     }
 
 
@@ -900,6 +1133,17 @@ def _default_data_path() -> str:
     """Repo fixtures path when present (dev), else empty (installed)."""
     candidate = _APP_DIR.parents[3] / "tests" / "fixtures"
     return str(candidate) if candidate.exists() else ""
+
+
+def _xlsxwriter_available() -> bool:
+    """Whether xlsxwriter is importable (gates the Excel/COREP export options)."""
+    return importlib.util.find_spec("xlsxwriter") is not None
+
+
+def _clean_formats(raw: list[str] | None) -> list[str]:
+    """Keep only known export formats, de-duplicated, in canonical order."""
+    requested = set(raw or [])
+    return [fmt for fmt in EXPORT_FORMATS if fmt in requested]
 
 
 def _nav(extra: dict | None = None) -> dict:

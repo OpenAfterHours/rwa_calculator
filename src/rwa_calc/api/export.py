@@ -17,7 +17,9 @@ lazy scan accessors, so no redundant in-memory materialisation occurs.
 
 from __future__ import annotations
 
+import json
 import logging
+import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -130,10 +132,10 @@ class ResultExporter:
         files: list[Path] = []
         total_rows = 0
 
-        # Main results
+        # Main results (nested columns JSON-encoded so CSV can hold them).
         results_df = response.scan_results().collect()
         results_path = output_dir / "results.csv"
-        results_df.write_csv(results_path)
+        _csv_safe(results_df).write_csv(results_path)
         files.append(results_path)
         total_rows += len(results_df)
 
@@ -142,7 +144,7 @@ class ResultExporter:
         if class_lf is not None:
             class_df = class_lf.collect()
             class_path = output_dir / "summary_by_class.csv"
-            class_df.write_csv(class_path)
+            _csv_safe(class_df).write_csv(class_path)
             files.append(class_path)
 
         # Summary by approach
@@ -150,7 +152,7 @@ class ResultExporter:
         if approach_lf is not None:
             approach_df = approach_lf.collect()
             approach_path = output_dir / "summary_by_approach.csv"
-            approach_df.write_csv(approach_path)
+            _csv_safe(approach_df).write_csv(approach_path)
             files.append(approach_path)
 
         return ExportResult(format="csv", files=files, row_count=total_rows)
@@ -300,7 +302,7 @@ class ResultExporter:
         total_rows = 0
         for name, df in _reconciliation_frames(response):
             path = output_dir / f"reconciliation_{name}.csv"
-            df.write_csv(path)
+            _csv_safe(df).write_csv(path)
             files.append(path)
             total_rows += len(df)
         return ExportResult(format="csv", files=files, row_count=total_rows)
@@ -356,6 +358,43 @@ class ResultExporter:
         finally:
             workbook.close()
         return ExportResult(format="excel", files=[output_path], row_count=total_rows)
+
+
+# =============================================================================
+# CSV helpers
+# =============================================================================
+
+
+def _csv_safe(df: pl.DataFrame) -> pl.DataFrame:
+    """Return *df* with any nested columns JSON-encoded so CSV can represent them.
+
+    CSV has no nested types, so a List/Array/Struct column makes ``write_csv``
+    raise ``ComputeError`` and leave a blank file. The results frame carries a few
+    such columns (e.g. ``ancestor_facilities``, ``securitisation_pool_allocations``,
+    ``addon_by_asset_class``); each is replaced by its JSON string so the data is
+    preserved for downstream tools. Flat frames are returned unchanged.
+
+    The per-row encode only touches the handful of nested columns; ``map_elements``
+    is the one encoder uniform across List/Array/Struct in this Polars version.
+    """
+    nested = [n for n, t in df.schema.items() if t.base_type() in (pl.List, pl.Array, pl.Struct)]
+    if not nested:
+        return df
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", pl.exceptions.PolarsInefficientMapWarning)
+        return df.with_columns(
+            pl.col(c).map_elements(_json_encode_value, return_dtype=pl.String).alias(c)
+            for c in nested
+        )
+
+
+def _json_encode_value(value: object) -> str | None:
+    """JSON-encode one nested cell: ``None`` stays null; a Series becomes a list first."""
+    if value is None:
+        return None
+    if isinstance(value, pl.Series):
+        value = value.to_list()
+    return json.dumps(value, default=str)
 
 
 # =============================================================================

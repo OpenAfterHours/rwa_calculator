@@ -11,6 +11,7 @@
 | FR-4.5 | Exposure-level detail output with all intermediate calculations | P1 | Done |
 | FR-4.6 | COREP template generation (CRR reporting) | P3 | Done |
 | FR-4.7 | Excel / Parquet export of results | P2 | Done |
+| FR-4.8 | UI writes the export formats to a user-chosen local folder (run-stamped subfolder; see [interfaces FR-6.6](interfaces.md)) | P2 | Done |
 
 ## Output Floor (Basel 3.1)
 

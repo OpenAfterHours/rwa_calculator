@@ -527,6 +527,47 @@ class TestCalculationResponseExportMethods:
         assert output_path.exists()
 
 
+class TestCsvNestedColumns:
+    """CSV export must represent nested columns (CSV has no nested types)."""
+
+    def test_export_to_csv_stringifies_nested_columns(self, tmp_path: Path) -> None:
+        # Arrange — a results frame with a nested List column CSV cannot hold.
+        cache = ResultsCache(tmp_path / "cache")
+        cached = cache.sink_results(
+            results=pl.LazyFrame(
+                {
+                    "exposure_reference": ["E1", "E2"],
+                    "rwa_final": [100.0, 200.0],
+                    "ancestor_facilities": [["F1", "F2"], None],
+                }
+            ),
+        )
+        response = CalculationResponse(
+            success=True,
+            framework="CRR",
+            reporting_date=date(2024, 12, 31),
+            summary=SummaryStatistics(
+                total_ead=Decimal("0"),
+                total_rwa=Decimal("300"),
+                exposure_count=2,
+                average_risk_weight=Decimal("0"),
+            ),
+            results_path=cached.results_path,
+        )
+
+        # Act
+        ResultExporter().export_to_csv(response, tmp_path / "out")
+
+        # Assert — the file has data and the nested column round-trips as JSON
+        # (CSV-escaped on disk), not a blank file.
+        csv_path = tmp_path / "out" / "results.csv"
+        assert csv_path.stat().st_size > 0
+        back = pl.read_csv(csv_path)
+        assert back["exposure_reference"].to_list() == ["E1", "E2"]
+        assert back["ancestor_facilities"][0] == '["F1", "F2"]'
+        assert back["ancestor_facilities"][1] is None
+
+
 # =============================================================================
 # Protocol conformance tests
 # =============================================================================

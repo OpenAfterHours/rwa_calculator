@@ -59,16 +59,48 @@ The calculator (`/calculator`) runs the full pipeline through a form.
 | Field | Description |
 |-------|-------------|
 | **Data path** | Directory of Parquet/CSV inputs (see [Input Schemas](../data-model/input-schemas.md)) |
+| **Output folder** | *Optional.* An absolute folder to write the results into when the run finishes. Leave blank to skip writing to disk (you can still download or save afterwards). |
+| **Output format(s)** | Which formats to write: Parquet, CSV, Excel, COREP. Excel and COREP require `xlsxwriter` (greyed out otherwise). |
 | **Framework** | CRR (Basel 3.0) or Basel 3.1 |
 | **Permission mode** | Standardised (all SA) or IRB (driven by `model_permissions`) |
 | **Data format** | Parquet (recommended) or CSV |
 | **Reporting date** | Calculation reference date |
 
-Submitting validates the data path, runs the calculation, and redirects to the
-results page for that run. Results show total RWA/EAD, exposure count and average
-risk weight; the RWA/IRB/SA/Slotting split and output-floor impact; charts of RWA
-and EAD by exposure class and RWA by approach; and a sample of the exposure-level
-output. Any data-quality issues are listed beneath the results.
+Submitting validates the data path (and the output folder, if set), runs the
+calculation, and redirects to the results page for that run. Results show total
+RWA/EAD, exposure count and average risk weight; the RWA/IRB/SA/Slotting split and
+output-floor impact; charts of RWA and EAD by exposure class and RWA by approach;
+and a sample of the exposure-level output. Any data-quality issues are listed
+beneath the results.
+
+### Writing results to a folder
+
+Because the app runs locally, it can write outputs straight to a folder on your
+machine. There are three ways:
+
+- **At run time** — fill in **Output folder** and tick one or more **Output
+  format(s)** on the calculator. When the run finishes, the files are written and
+  the results page confirms exactly what was written and where. The folder and
+  formats are remembered for next time.
+- **From the results page** — the **Save to folder** form re-exports an
+  already-computed run to any folder without recomputing it.
+- **Download** — the **Download results** buttons stream each format to your
+  browser's Downloads folder.
+
+Each save lands in its own `rwa_export_<run_id>` subfolder of the folder you
+choose, so a new run never overwrites an earlier one. The output folder must be an
+absolute path whose parent already exists. Parquet preserves every column
+natively; CSV has no nested types, so the handful of nested columns (e.g.
+securitisation pool allocations) are JSON-encoded in the CSV rather than left
+blank. If a format genuinely cannot be written — for example Excel or COREP
+without `xlsxwriter` — that format alone is reported, and the others still write.
+
+!!! note "Local-only by design"
+    The server binds to `127.0.0.1` and only answers to the `localhost` /
+    `127.0.0.1` host names, and the write routes reject cross-origin requests — so
+    a folder you name is written by your own process on your own machine, and a
+    web page on another site cannot drive a write. Do not expose the app off
+    loopback.
 
 ---
 

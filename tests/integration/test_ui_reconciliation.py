@@ -29,6 +29,7 @@ import urllib.parse
 from datetime import date
 from pathlib import Path
 
+import httpx
 import polars as pl
 import pytest
 from fastapi.testclient import TestClient
@@ -360,7 +361,9 @@ def _open_break_key(client: TestClient, job_id: str) -> str:
     return urllib.parse.unquote(match.group(1))
 
 
-def _signoff(client: TestClient, job_id: str, key: str, status: str, reason: str = "") -> object:
+def _signoff(
+    client: TestClient, job_id: str, key: str, status: str, reason: str = ""
+) -> httpx.Response:
     return client.post(
         f"/reconciliation/{job_id}/signoff",
         data={

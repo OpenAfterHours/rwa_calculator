@@ -27,7 +27,7 @@ import pytest
 from rwa_calc.analysis.recon_registry import ComponentMapping, LegacyColumnMapping
 from rwa_calc.analysis.reconciliation import ReconciliationRunner
 from rwa_calc.api.models import ReconciliationResponse
-from rwa_calc.ui.app.recon_signoff import Decision
+from rwa_calc.ui.app.recon_signoff import Decision, Status
 from rwa_calc.ui.views import reconciliation as rv
 
 
@@ -72,7 +72,7 @@ def _key_for(response: ReconciliationResponse, suffix: str) -> str:
     return next(k for k in keys if str(k).upper().endswith(suffix))
 
 
-def _decision(status: str, reason: str = "", fingerprint: str = "") -> Decision:
+def _decision(status: Status, reason: str = "", fingerprint: str = "") -> Decision:
     return Decision(
         status=status, reason=reason, decided_at="2026-06-27T10:00:00", fingerprint=fingerprint
     )

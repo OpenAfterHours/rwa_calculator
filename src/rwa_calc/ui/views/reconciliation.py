@@ -773,12 +773,9 @@ def _delta_band(value: object, *, sig_figs: int = 4) -> str:
     ten itself (``1000.0``) both render ``1.000e+03`` — no false break at a decade
     boundary.
     """
-    if value is None:
+    if not isinstance(value, (int, float)):
         return ""
-    try:
-        x = float(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return ""
+    x = float(value)
     if not math.isfinite(x):
         return "inf"
     # No float-equality check for zero: format() bands any finite value, and adding

@@ -8,6 +8,8 @@
 <h1>Loan forensic</h1>
 <p class="mono">{{ detail.recon_key }}</p>
 
+{% if signoff_error %}<div class="callout error">{{ signoff_error }}</div>{% endif %}
+
 <div class="stat-row">
   <div class="stat"><div class="stat-num">{{ detail.row_bucket or "—" }}</div><div class="stat-lbl">row bucket</div></div>
   <div class="stat"><div class="stat-num">{{ detail.worst_component or "—" }}</div><div class="stat-lbl">worst component</div></div>
@@ -53,4 +55,29 @@ our-side drivers explaining how we reached the value above; a driver tagged
 <h2>Breaks for this key</h2>
 {{ render_table(detail.breaks) }}
 {% endif %}
+
+<h2>Sign-off</h2>
+<p class="muted">Record whether this exposure's difference is acceptable. Accepting or
+rejecting takes it off the Open worklist; reopen it to put it back.</p>
+{% if decision %}
+<div class="callout info">
+  This exposure is <span class="badge badge-{{ decision.status }}">{{ decision.status }}</span>{% if decision.decided_at %}
+  <span class="muted">· decided {{ decision.decided_at }}</span>{% endif %}.
+  {% if decision.reason %}<div class="muted">Reason: {{ decision.reason }}</div>{% endif %}
+</div>
+{% endif %}
+<form class="form" method="post" action="{{ signoff_post_url }}">
+  <input type="hidden" name="key" value="{{ detail.recon_key }}">
+  <input type="hidden" name="return_to" value="{{ signoff_return_to }}">
+  <div class="field">
+    <label for="reason">Reason / what caused the difference</label>
+    <textarea id="reason" name="reason" rows="3" placeholder="e.g. FX timing difference, immaterial — or: legacy applied the wrong LGD floor">{{ decision.reason if decision else "" }}</textarea>
+    <p class="muted">A reason is required to <em>reject</em>; optional to accept.</p>
+  </div>
+  <div class="form-actions">
+    <button class="btn btn-primary" type="submit" name="status" value="accepted">{% if decision %}Update — accept{% else %}Accept (acceptable){% endif %}</button>
+    <button class="btn btn-ghost" type="submit" name="status" value="rejected">Reject (genuine error)</button>
+    {% if decision %}<button class="btn btn-ghost" type="submit" name="status" value="open">Reopen</button>{% endif %}
+  </div>
+</form>
 {% endblock %}

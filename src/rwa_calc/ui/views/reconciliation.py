@@ -41,7 +41,10 @@ from rwa_calc.analysis.reconciliation import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from rwa_calc.api.models import ReconciliationResponse
+    from rwa_calc.ui.app.recon_signoff import Decision
 
 # The default mapping shown in the page's TOML editor. Kept as the single source
 # the page route, the REST default and the tests all reference. ``legacy_file``
@@ -109,6 +112,23 @@ BUCKET_CHOICES: tuple[str, ...] = (
     BUCKET_MISSING_RIGHT,
 )
 
+# Sign-off status vocabulary. ``open`` is an un-actioned difference; ``accepted`` /
+# ``rejected`` are the analyst's two terminal dispositions (both clear the row from
+# the default Open worklist); ``matched`` is the implicit status of an exact-match
+# row (never a difference, never sign-off-able). ``all`` is the pseudo-filter that
+# imposes no status constraint. The on-screen explorer filter offers Open first.
+SIGNOFF_OPEN = "open"
+SIGNOFF_ACCEPTED = "accepted"
+SIGNOFF_REJECTED = "rejected"
+SIGNOFF_MATCHED = "matched"
+SIGNOFF_ALL = "all"
+SIGNOFF_STATUS_CHOICES: tuple[str, ...] = (
+    SIGNOFF_OPEN,
+    SIGNOFF_ACCEPTED,
+    SIGNOFF_REJECTED,
+    SIGNOFF_ALL,
+)
+
 # On-screen forensic row cap; the full frame is available via the CSV export.
 _FORENSIC_LIMIT = 200
 
@@ -129,6 +149,7 @@ _FILTER_COLUMNS: dict[str, str] = {
     "exposure_class": "our_exposure_class",
     "approach": "our_approach",
     "worst_component": "worst_component",
+    "status": "signoff_status",
 }
 
 # The order an analyst reads a single loan's RWA build. ``loan_detail`` orders the
@@ -185,6 +206,7 @@ class ForensicFilters:
     exposure_class: str | None = None
     approach: str | None = None
     worst_component: str | None = None
+    status: str | None = None
     query: str | None = None
     sort: str | None = None
     descending: bool = True
@@ -291,16 +313,52 @@ def forensic_table(
 
 
 def biggest_breaks(
-    response: ReconciliationResponse, *, limit: int = BIGGEST_BREAKS_LIMIT
+    response: ReconciliationResponse,
+    decisions: Mapping[str, Decision] | None = None,
+    *,
+    limit: int = BIGGEST_BREAKS_LIMIT,
 ) -> pl.DataFrame:
-    """Overview worklist — the ``limit`` most material breaks, ranked.
+    """Overview worklist — the ``limit`` most material *open* breaks, ranked.
 
     ``breaks_detail`` is already sorted by ``|abs_delta|`` descending in the
     engine, so a ``head`` is the top-N. Reads the worker-warmed ``breaks_detail``
     cache (not the wide per-key frame), so the overview never materialises the
-    full diff for a large portfolio.
+    full diff for a large portfolio. Any break whose key already carries a sign-off
+    decision (accepted or rejected) is dropped, so the worklist burns down as the
+    analyst dispositions each one.
     """
-    return response.collect_breaks_detail().head(limit).fill_nan(None)
+    df = response.collect_breaks_detail()
+    if decisions and "_recon_key" in df.columns:
+        df = df.filter(~pl.col("_recon_key").is_in(list(decisions.keys())))
+    return df.head(limit).fill_nan(None)
+
+
+def breaks_signoff_progress(
+    response: ReconciliationResponse, decisions: Mapping[str, Decision] | None = None
+) -> dict[str, int]:
+    """Burndown of the break worklist: how many distinct breaking keys are reviewed.
+
+    Counts distinct ``_recon_key`` in the warmed ``breaks_detail`` (the primary
+    worklist) and how many already carry a decision, so the overview / explorer can
+    show "X of Y reviewed — Z open" without touching the wide per-key frame.
+    """
+    decisions = decisions or {}
+    df = response.collect_breaks_detail()
+    if "_recon_key" not in df.columns:
+        return {"total": 0, "reviewed": 0, "open": 0, "accepted": 0, "rejected": 0}
+    break_keys = set(df.get_column("_recon_key").unique().to_list())
+    reviewed_keys = [k for k in break_keys if k in decisions]
+    accepted = sum(1 for k in reviewed_keys if decisions[k].status == SIGNOFF_ACCEPTED)
+    rejected = sum(1 for k in reviewed_keys if decisions[k].status == SIGNOFF_REJECTED)
+    total = len(break_keys)
+    reviewed = len(reviewed_keys)
+    return {
+        "total": total,
+        "reviewed": reviewed,
+        "open": total - reviewed,
+        "accepted": accepted,
+        "rejected": rejected,
+    }
 
 
 def forensic_filter_options(response: ReconciliationResponse) -> dict[str, list[str]]:
@@ -317,18 +375,26 @@ def forensic_filter_options(response: ReconciliationResponse) -> dict[str, list[
         "worst_component": _summary_values(
             response.collect_summary_by_component(), col="component"
         ),
+        "status": list(SIGNOFF_STATUS_CHOICES),
     }
 
 
-def forensic_page(response: ReconciliationResponse, filters: ForensicFilters) -> ForensicPage:
+def forensic_page(
+    response: ReconciliationResponse,
+    filters: ForensicFilters,
+    decisions: Mapping[str, Decision] | None = None,
+) -> ForensicPage:
     """Tier B explorer — one filtered, sorted, paged window of the per-key frame.
 
     Collects the wide ``component_reconciliation`` frame once (cached on the
-    response), applies the filters, validates ``filters.sort`` against the
-    projected display columns (unknown -> ``ValueError``), then sorts and slices
-    a single page — so the browser only ever receives ``page_size`` rows.
+    response), annotates each row with its sign-off ``signoff_status`` /
+    ``signoff_reason`` from *decisions*, applies the filters (including the
+    ``status`` dimension), validates ``filters.sort`` against the projected display
+    columns (unknown -> ``ValueError``), then sorts and slices a single page — so
+    the browser only ever receives ``page_size`` rows.
     """
     df = response.collect_component_reconciliation()
+    df = annotate_signoff(df, decisions or {})
     df = _apply_forensic_filters(df, filters)
     total = df.height
     columns = _readable_recon_columns(df)
@@ -432,6 +498,41 @@ def loan_detail(response: ReconciliationResponse, recon_key: str) -> dict | None
     }
 
 
+def annotate_signoff(df: pl.DataFrame, decisions: Mapping[str, Decision]) -> pl.DataFrame:
+    """Attach ``signoff_status`` / ``signoff_reason`` to a per-key recon frame.
+
+    Left-joins the analyst's stored decisions onto ``component_reconciliation`` by
+    ``_recon_key`` and derives ``signoff_status`` per row:
+
+    - the decision's status (``accepted`` / ``rejected``) when one exists,
+    - ``matched`` for an exact-match row (never a difference — keeps matches out of
+      the Open worklist),
+    - ``open`` otherwise (an un-actioned difference).
+
+    ``signoff_reason`` carries the decision's reason (empty string when none). The
+    frame is returned unchanged when it has no ``_recon_key`` column.
+    """
+    if "_recon_key" not in df.columns:
+        return df
+    dec_df = _decisions_frame(decisions)
+    is_exact = (
+        (pl.col("row_bucket") == BUCKET_EXACT)
+        if "row_bucket" in df.columns
+        else pl.lit(value=False)
+    )
+    return (
+        df.join(dec_df, on="_recon_key", how="left", maintain_order="left")
+        .with_columns(
+            pl.coalesce(
+                pl.col("_decision_status"),
+                pl.when(is_exact).then(pl.lit(SIGNOFF_MATCHED)).otherwise(pl.lit(SIGNOFF_OPEN)),
+            ).alias("signoff_status"),
+            pl.col("_decision_reason").fill_null("").alias("signoff_reason"),
+        )
+        .drop("_decision_status", "_decision_reason")
+    )
+
+
 def tie_out_chart_items(response: ReconciliationResponse) -> list[tuple[str, float, float]]:
     """Grouped-bar items (component, legacy_total, our_total) for the tie-out chart."""
     tie = response.collect_totals_tie_out()
@@ -477,7 +578,31 @@ def _readable_recon_columns(df: pl.DataFrame) -> list[str]:
     for rollup in ("worst_component", "row_bucket"):
         if rollup in present and rollup not in cols:
             cols.append(rollup)
+    for extra in ("signoff_status", "signoff_reason"):
+        if extra in present and extra not in cols:
+            cols.append(extra)
     return cols or present
+
+
+def _decisions_frame(decisions: Mapping[str, Decision]) -> pl.DataFrame:
+    """A 3-column frame ``{_recon_key, _decision_status, _decision_reason}``.
+
+    Built from the stored decisions for a left-join onto the per-key frame; an
+    empty mapping yields an empty (correctly-typed) frame so the join is a no-op.
+    """
+    keys = list(decisions.keys())
+    return pl.DataFrame(
+        {
+            "_recon_key": keys,
+            "_decision_status": [decisions[k].status for k in keys],
+            "_decision_reason": [decisions[k].reason for k in keys],
+        },
+        schema={
+            "_recon_key": pl.String,
+            "_decision_status": pl.String,
+            "_decision_reason": pl.String,
+        },
+    )
 
 
 def _component_names(columns: list[str]) -> list[str]:

@@ -6,8 +6,17 @@
 <p class="muted"><a href="{{ report_url }}">← Back to the reconciliation report</a></p>
 <h1>Per-key explorer</h1>
 <p class="muted">Filter, sort and page the full per-key reconciliation. Click a key to open
-its single-loan forensic. Download the full per-key detail:
-<a href="{{ export_csv_url }}">CSV</a> · <a href="{{ export_excel_url }}">Excel</a>.</p>
+its single-loan forensic, or <strong>Accept</strong> a row inline. The list defaults to
+<em>Open</em> — un-actioned differences — so it shrinks as you sign items off. Download the
+full per-key detail: <a href="{{ export_csv_url }}">CSV</a> · <a href="{{ export_excel_url }}">Excel</a>.</p>
+{% if signoff_progress and signoff_progress.total %}
+<p class="muted" data-signoff-progress>Sign-off:
+<span data-signoff="reviewed">{{ "{:,}".format(signoff_progress.reviewed) }}</span> of
+<span data-signoff="total">{{ "{:,}".format(signoff_progress.total) }}</span> break(s) reviewed
+(<span data-signoff="accepted">{{ "{:,}".format(signoff_progress.accepted) }}</span> accepted,
+<span data-signoff="rejected">{{ "{:,}".format(signoff_progress.rejected) }}</span> rejected) —
+<span data-signoff="open">{{ "{:,}".format(signoff_progress.open) }}</span> open.</p>
+{% endif %}
 
 <form class="form" method="get" action="{{ explorer_path }}">
   <div class="field-row">
@@ -42,6 +51,12 @@ its single-loan forensic. Download the full per-key detail:
   </div>
   <div class="field-row">
     <div class="field">
+      <label for="status">Sign-off status</label>
+      <select id="status" name="status">
+        {% for s in options.status %}<option value="{{ s }}"{% if s == filters.status %} selected{% endif %}>{{ s }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="field">
       <label for="q">Key contains</label>
       <input id="q" name="q" value="{{ filters.q }}" placeholder="exposure reference…">
     </div>
@@ -62,18 +77,37 @@ its single-loan forensic. Download the full per-key detail:
 {% if rows %}
 <p class="muted">Rows {{ "{:,}".format(first_row) }}–{{ "{:,}".format(last_row) }} of
 {{ "{:,}".format(total) }}{% if total != grand_total %} (filtered from {{ "{:,}".format(grand_total) }}){% endif %}.</p>
-<div class="table-wrap">
+<div class="table-wrap" data-signoff-status="{{ filters.status }}">
   <table class="data">
     <thead><tr>
       {% for c in columns %}
       <th><a href="{{ explorer_path }}?{{ query_base }}&sort={{ c|urlencode }}&sort_dir={% if sort == c and sort_dir == 'desc' %}asc{% else %}desc{% endif %}">{{ c }}{% if sort == c %} {{ '▼' if sort_dir == 'desc' else '▲' }}{% endif %}</a></th>
       {% endfor %}
+      <th>sign-off</th>
     </tr></thead>
     <tbody>
       {% for row in rows %}
       <tr>{% for c in columns %}
-        <td>{% if c == key_column %}<a href="{{ loan_url_base }}?key={{ row[c]|string|urlencode }}">{{ row[c] }}</a>{% else %}{{ fmt(row[c]) }}{% endif %}</td>
-      {% endfor %}</tr>
+        <td>
+        {%- if c == key_column -%}<a href="{{ loan_url_base }}?key={{ row[c]|string|urlencode }}">{{ row[c] }}</a>
+        {%- elif c == status_column -%}<span class="badge badge-{{ row[c] }}">{{ row[c] }}</span>
+        {%- elif c == 'signoff_reason' -%}{{ row[c]|string|truncate(60) if row[c] else "" }}
+        {%- else -%}{{ fmt(row[c]) }}{%- endif -%}
+        </td>
+      {% endfor %}
+        <td>
+        {%- if row[status_column] == 'open' -%}
+          <form class="inline-signoff" method="post" action="{{ signoff_post_url }}">
+            <input type="hidden" name="key" value="{{ row[key_column]|string }}">
+            <input type="hidden" name="status" value="accepted">
+            <input type="hidden" name="return_to" value="{{ explorer_path }}?{{ query_base }}{% if sort %}&sort={{ sort|urlencode }}&sort_dir={{ sort_dir }}{% endif %}&page={{ page }}">
+            <button class="btn btn-ghost btn-sm" type="submit">Accept</button>
+          </form>
+        {%- elif row[status_column] in ('accepted', 'rejected') -%}
+          <a class="btn btn-ghost btn-sm" href="{{ loan_url_base }}?key={{ row[key_column]|string|urlencode }}">edit</a>
+        {%- endif -%}
+        </td>
+      </tr>
       {% endfor %}
     </tbody>
   </table>
@@ -87,4 +121,8 @@ its single-loan forensic. Download the full per-key detail:
 {% else %}
 <div class="callout info">No rows match the current filter.</div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script defer src="/static/recon-signoff.js"></script>
 {% endblock %}

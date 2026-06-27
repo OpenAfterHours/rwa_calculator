@@ -109,13 +109,26 @@ allocate an exposure to different classes.</p>
 {{ drill_table(result.approach_table, "our_approach", result.explorer_url, "approach") }}
 
 <h2>3 · Worklist — top {{ result.biggest_n }} of {{ "{:,}".format(result.break_count) }} break(s), largest first</h2>
-<p class="muted">Click a key to open its single-loan forensic, or
-<a href="{{ result.explorer_url }}">open the full per-key explorer</a>
-({{ "{:,}".format(result.total_rows) }} row(s)). Download the full per-key detail:
+<p class="muted">Click a key to open its single-loan forensic and sign it off (accept / reject
+with a reason), or <a href="{{ result.explorer_url }}">open the full per-key explorer</a>
+({{ "{:,}".format(result.total_rows) }} row(s)). Reviewed breaks drop off this worklist.
+Download the full per-key detail:
 <a href="{{ result.export_csv_url }}">CSV</a> · <a href="{{ result.export_excel_url }}">Excel</a>.</p>
+{% if result.signoff_progress and result.signoff_progress.total %}
+<p class="muted">Sign-off progress: {{ "{:,}".format(result.signoff_progress.reviewed) }} of
+{{ "{:,}".format(result.signoff_progress.total) }} break(s) reviewed —
+{{ "{:,}".format(result.signoff_progress.open) }} still open
+({{ "{:,}".format(result.signoff_progress.accepted) }} accepted,
+{{ "{:,}".format(result.signoff_progress.rejected) }} rejected).</p>
+{% endif %}
+{% if result.biggest_breaks.rows %}
 {{ drill_table(result.biggest_breaks, "_recon_key", result.loan_url_base, "key") }}
+{% elif result.break_count %}
+<div class="callout info">Every break has been signed off. Switch the explorer's status
+filter to <em>accepted</em> / <em>rejected</em> to review your decisions.</div>
+{% endif %}
 <p>
-  <a class="btn btn-primary" href="{{ result.explorer_url }}">Explore all {{ "{:,}".format(result.total_rows) }} rows →</a>
+  <a class="btn btn-primary" href="{{ result.explorer_url }}">Explore open differences →</a>
 </p>
 
 {% endif %}

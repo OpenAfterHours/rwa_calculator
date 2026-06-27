@@ -151,6 +151,20 @@ table.data tbody tr.chain-driver .driver-name { padding-left: 24px; font-family:
 .muted { color: var(--oah-slate-400); font-size: 13px; }
 .mono { font-family: var(--font-mono); }
 
+/* ---------- Sign-off: status badges + inline action --------- */
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 999px;
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em;
+  border: 1px solid; text-transform: uppercase;
+}
+.badge-open { background: rgba(255, 145, 0, 0.10); border-color: var(--oah-orange); color: var(--oah-orange-soft); }
+.badge-accepted { background: rgba(61, 214, 140, 0.10); border-color: var(--oah-terminal-green); color: #b9f0d3; }
+.badge-rejected { background: rgba(201, 68, 42, 0.12); border-color: var(--oah-owl-body); color: #ffd2c7; }
+.badge-matched { background: rgba(216, 222, 233, 0.06); border-color: rgba(216, 222, 233, 0.30); color: var(--oah-slate-300); }
+
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+.inline-signoff { display: inline; margin: 0; }
+
 /* ---------- Progress: spinner, busy overlay, stage stepper -- */
 @keyframes oah-spin { to { transform: rotate(360deg); } }
 

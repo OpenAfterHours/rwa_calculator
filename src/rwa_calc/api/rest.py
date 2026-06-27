@@ -65,6 +65,26 @@ _RUNS: dict[str, CalculationResponse] = {}
 # recomputing. Same in-process / non-persistent trade-off as ``_RUNS``.
 _RECON_RUNS: dict[str, ReconciliationResponse] = {}
 
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class ReconWorkspace:
+    """The stable sign-off scope bound to one reconciliation run.
+
+    ``workspace_id`` is the per-dataset hash (data path + mapping keys) under which
+    ``ui.app.recon_signoff`` persists this run's accept/reject decisions;
+    ``data_path`` is carried so an upsert can record it for the operator's reference.
+    """
+
+    workspace_id: str
+    data_path: str
+
+
+# Binds an (ephemeral) recon_id to its (persistent) sign-off workspace, so the
+# sign-off routes can locate this run's stored decisions. The decisions live on
+# disk (see ui.app.recon_signoff); this map is the in-process recon_id -> workspace
+# lookup, cleared on restart like ``_RECON_RUNS``.
+_RECON_WORKSPACE: dict[str, ReconWorkspace] = {}
+
 _MAX_PAGE = 10_000
 
 # Documents the 404 raised when a run_id (or its summary) is unknown, so it
@@ -385,6 +405,16 @@ def register_reconciliation_with_id(recon_id: str, response: ReconciliationRespo
 def get_reconciliation(recon_id: str) -> ReconciliationResponse | None:
     """Look up a registered reconciliation, or None if it is unknown/expired."""
     return _RECON_RUNS.get(recon_id)
+
+
+def register_recon_workspace(recon_id: str, workspace: ReconWorkspace) -> None:
+    """Bind a recon_id to its sign-off workspace (called by the UI recon worker)."""
+    _RECON_WORKSPACE[recon_id] = workspace
+
+
+def get_recon_workspace(recon_id: str) -> ReconWorkspace | None:
+    """Look up the sign-off workspace bound to a recon_id, or None if unknown."""
+    return _RECON_WORKSPACE.get(recon_id)
 
 
 # =============================================================================

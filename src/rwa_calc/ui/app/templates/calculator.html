@@ -16,8 +16,8 @@
     <label for="output_folder">Output folder <span class="muted">— optional; leave blank to skip writing to disk</span></label>
     <input id="output_folder" name="output_folder" value="{{ default_output_folder }}" placeholder="/path/to/output">
   </div>
-  <div class="field">
-    <label>Output format(s) <span class="muted">— written to the output folder when one is set</span></label>
+  <fieldset class="field">
+    <legend>Output format(s) <span class="muted">— written to the output folder when one is set</span></legend>
     <div class="checkbox-row">
       {% for fmt in export_formats %}
       {% set is_workbook = fmt in ("excel", "corep") %}
@@ -30,7 +30,7 @@
       {% endfor %}
     </div>
     {% if not xlsx_available %}<p class="muted">Install xlsxwriter to enable Excel and COREP.</p>{% endif %}
-  </div>
+  </fieldset>
   <div class="field-row">
     <div class="field">
       <label for="framework">Framework</label>

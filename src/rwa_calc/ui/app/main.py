@@ -148,6 +148,9 @@ _RESULT_TABLE_COLS = [
 EXPORT_FORMATS = ("parquet", "csv", "excel", "corep")
 _DEFAULT_OUTPUT_FORMATS = ("parquet", "csv")
 
+# Rendered by the GET results page and both branches of the save route.
+_RESULTS_TEMPLATE = "results.html"
+
 # Shown when a reconciliation id is unknown (expired from the in-memory registry
 # or never existed) — reused by the report, explorer and single-loan routes.
 _RECON_NOT_FOUND_MESSAGE = "That reconciliation has expired or does not exist."
@@ -357,7 +360,7 @@ def _register_pages(app: FastAPI) -> None:
             return _not_found(request, "That result has expired or does not exist.")
         return templates.TemplateResponse(
             request=request,
-            name="results.html",
+            name=_RESULTS_TEMPLATE,
             context=_nav(
                 _results_context(run_id, response, save_outcome=_EXPORT_OUTCOMES.get(run_id))
             ),
@@ -391,7 +394,7 @@ def _register_pages(app: FastAPI) -> None:
             )
             return templates.TemplateResponse(
                 request=request,
-                name="results.html",
+                name=_RESULTS_TEMPLATE,
                 context=_nav(
                     _results_context(
                         run_id,
@@ -408,7 +411,7 @@ def _register_pages(app: FastAPI) -> None:
         )
         return templates.TemplateResponse(
             request=request,
-            name="results.html",
+            name=_RESULTS_TEMPLATE,
             context=_nav(
                 _results_context(
                     run_id,

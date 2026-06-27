@@ -2,17 +2,35 @@
 
 Notes on the experience of building this UK Credit Risk RWA Calculator — the regulation, the engineering, and what it has been like driving the work largely through a swarm of Claude Code agents.
 
-The blog is a planned series of eight posts. Each post stands alone, but the arc as a whole alternates between regulatory depth (CRR vs Basel 3.1, the output floor, CRM edge cases) and engineering depth (the immutable pipeline, the agent workflow, the test strategy).
+The blog began as a planned series of eight posts. Each post stands alone, but the arc alternates between regulatory depth (CRR vs Basel 3.1, the output floor, CRM edge cases) and engineering depth (the immutable pipeline, the agent workflow, the test strategy). The first eight posts — "season one" — ran from April to August 2026 and closed with a retrospective. The project kept growing, so the series did too: a second run picks up the subsystems that did not exist when season one was written — counterparty credit risk, the rulebook-as-data migration, and the web application.
 
 Posts land roughly every two to three weeks.
 
-## Posts
+## Season two
+
+The project outgrew its original eight-post plan. These posts carry the story forward to the parts of the calculator built after season one.
+
+- **2026-09-29 — [The Swarm, Two Months On: Reviewer-Gated Worktree Batches](2026-09-29-the-swarm-two-months-on.md)**
+  A dated follow-up to *Building With an Agent Swarm*. How `/next-items` grew from four parallel waves and one gate into an event-driven supervisor: a reviewer agent gating every wave, one git worktree per item, background dispatch, on-disk batch state that survives compactions, and squash-merge-before-gate.
+
+- **2026-09-15 — [From Workbench to Web App: Reconciliation and the RWA Driver Chain](2026-09-15-from-workbench-to-web-app.md)**
+  The web application the first eight posts never mentioned. Retiring the Marimo workbench for a server-rendered FastAPI app, live stage-by-stage progress tapped from existing telemetry with no engine change, a reconciliation explorer that scales to millions of keys, and the single-loan forensic driver chain that makes a discrepancy explainable step by step.
+
+- **2026-09-01 — [Making Regulation Data, Not Code: The Rulebook Migration](2026-09-01-making-regulation-data-not-code.md)**
+  The deepest architecture change since the pipeline post. Moving every regulatory value out of code into cited, content-hashed rulebook packs resolved per `(regime, date)`, and replacing `is_crr` branches with cited feature flags — so every number an auditor cares about carries a citation and a hash.
+
+- **2026-08-18 — [Counterparty Credit Risk: Teaching the Engine SA-CCR](2026-08-18-counterparty-credit-risk-sa-ccr.md)**
+  The single biggest subsystem added after season one. A regulatory and engineering deep-dive on SA-CCR — `EAD = α·(RC + PFE)`, the five hedging-set asset classes, the maturity-factor and MPOR cascade, wrong-way risk and default-fund contributions, and why counterparty rows have to route into both the SA and the IRB engines.
+
+## Season one
+
+The original eight-post arc: why the calculator exists, how it is shaped, how the regulation actually behaves, and how it gets built.
 
 - **2026-08-04 — [What I Got Wrong, What's Next](2026-08-04-what-i-got-wrong-whats-next.md)**
-  Closing post. The honest ledger: things that took longer than I planned, things the agent swarm got wrong, ~35 open Tier 1 items, and the gap between a reference implementation and a regulated production system.
+  Season-one finale. The honest ledger: things that took longer than I planned, things the agent swarm got wrong, what is still open, and the gap between a reference implementation and a regulated production system.
 
 - **2026-07-21 — [Testing a Regulatory Engine](2026-07-21-testing-a-regulatory-engine.md)**
-  Five layers in the test pyramid, each catching a different failure mode. The headline is not the 5,300-test count — it is the small hash-locked oracle suite that prevents the goldens from becoming a mirror of the engine.
+  Five layers in the test pyramid, each catching a different failure mode. The headline is not the test count — it is the small hash-locked oracle suite that prevents the goldens from becoming a mirror of the engine.
 
 - **2026-07-07 — [CRM, MOFs, and Other Edge-Case Archaeology](2026-07-07-crm-mofs-and-other-edge-case-archaeology.md)**
   Four war stories from the changelog — Multiple Option Facilities, AIRB own-LGD anti-double-counting, the SME supporting factor's connected-client aggregation, and cross-approach CCF substitution. Each one a regulatory rule applied to the wrong unit until a careful reading caught it.
@@ -21,7 +39,7 @@ Posts land roughly every two to three weeks.
   Regulatory deep-dive on the 72.5% output floor. Why it exists, how the `TREA = max{U-TREA; x × S-TREA + OF-ADJ}` formula works, what the Art. 122(8) election does, and why "the floor binds" is the start of the analysis rather than the end.
 
 - **2026-06-09 — [Building With an Agent Swarm](2026-06-09-building-with-an-agent-swarm.md)**
-  How a 90-line bash loop, four role-bounded Claude Code agents, and a pre-commit hook produce regulatory-grade code. Walks one closed plan item end-to-end and is honest about the failure modes.
+  How a bash loop, role-bounded Claude Code agents, and a pre-commit hook produce regulatory-grade code. Walks one closed plan item end-to-end and is honest about the failure modes. (See the season-two follow-up for how the orchestration matured.)
 
 - **2026-05-26 — [Risk Weights Are Not a Lookup Table](2026-05-26-risk-weights-are-not-a-lookup-table.md)**
   Standardised Approach deep-dive. Why the £1m loan secured by a residential property has at least six right answers, and why "look up the country, get the risk weight" misreads what SA actually does.
@@ -34,7 +52,9 @@ Posts land roughly every two to three weeks.
 
 ## The series
 
-The series ran for eight posts, alternating between regulatory substance (CRR vs Basel 3.1, the output floor, CRM edge cases) and engineering substance (architecture, the agent workflow, testing strategy). The first post sets the scene; the closing post is the honest retrospective. The repository is at [github.com/OpenAfterHours/rwa_calculator](https://github.com/OpenAfterHours/rwa_calculator).
+Season one ran for eight posts, alternating between regulatory substance (CRR vs Basel 3.1, the output floor, CRM edge cases) and engineering substance (architecture, the agent workflow, testing strategy). The first post set the scene; the eighth was the honest retrospective. Season two continues the same alternation on the subsystems built since — counterparty credit risk, the regulatory-data migration, and the web application. The repository is at [github.com/OpenAfterHours/rwa_calculator](https://github.com/OpenAfterHours/rwa_calculator).
+
+A note on dates and accuracy: published posts are dated snapshots. Code references in each post are pinned to the commit it was written against, and where a later change has overtaken a published post, a dated *Update* note records what moved rather than rewriting the original. The live project counts a post cites (tests, files, stages) can be regenerated at any time with `uv run python scripts/blog_counts.py`.
 
 ## Who it is for
 

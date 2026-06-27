@@ -10,7 +10,7 @@ This is post 4 in the series on building this UK Basel 3.1 RWA calculator. Posts
 
 If you have read enough breathless takes on AI coding to last a lifetime, this is not that. The honest version of "agents wrote the calculator" is closer to "I designed a pipeline of agents with strict role boundaries, wrote the prompts that constrain each one, designed the validation gates that refuse work that violates the architecture, and reviewed every diff." The agents do the typing. The interesting question is what scaffolding has to be in place before that division of labour produces regulatory-grade code, and what failure modes you have to defend against.
 
-*Update (June 2026): the agent workflow described here is accurate for the period, but the `data/tables/` value home it references (both the "prefer adding a row to an existing data table" implementer guidance and the collision rule keyed on "a different `data/tables/` file") was later replaced by the rulebook packs. A new regulatory value now goes into `src/rwa_calc/rulebook/packs/{common,crr,b31}.py` as a cited entry — see the "pack-as-value-home" guidance in `CLAUDE.md` — and the collision rules key on the relevant engine sub-package / pack instead.*
+*Update (June 2026): the agent workflow described here is accurate for the period, but the `data/tables/` value home it references (both the "prefer adding a row to an existing data table" implementer guidance and the collision rule keyed on "a different `data/tables/` file") was later replaced by the rulebook packs. A new regulatory value now goes into `src/rwa_calc/rulebook/packs/{common,crr,b31}.py` as a cited entry — see the "pack-as-value-home" guidance in `CLAUDE.md` — and the collision rules key on the relevant engine sub-package / pack instead. The build loop has also evolved beyond the four-agent, no-review picture above. A fifth role agent, `reviewer`, now gates every wave with a `VERDICT: pass | revise | drop` (one revision retry allowed) — superseding the claim below that the orchestrator commands "don't review" the agents' work — so the role-agent roster is now seven: `scenario-architect`, `fixture-builder`, `test-writer`, `engine-implementer`, `reviewer`, `plan-curator`, `doc-writer`. `/next-items` now runs each item in its own git worktree (branch `batch/<batch-id>/<P-code>`), dispatches the agents in the background so the operator can chat with the orchestrator mid-batch, persists batch state under `.claude/state/`, and squash-merges the surviving branches into the feature branch before the single end-of-batch gate; the forced-single-stream shared-file list now also includes `engine/registry.py` and `engine/orchestrator.py`. `arch_check.py` is up to 17 checks (the "eight" under Further reading was the `cceaee4`-era count), and `loop.sh` is now a ~100-line mode-selector shim, with the real orchestration in the slash commands. For the full current account, see the two-months-on retrospective ([`2026-09-29-the-swarm-two-months-on.md`](2026-09-29-the-swarm-two-months-on.md), forthcoming).*
 
 ## What is actually running
 
@@ -147,7 +147,7 @@ Post 5 in the series goes back to regulation: the 72.5% output floor under Basel
 
 ---
 
-**Read next:** *The Output Floor and Why Basel 3.1 Bites* (in progress).
+**Read next:** [*The Output Floor and Why Basel 3.1 Bites*](2026-06-23-the-output-floor-and-why-basel-31-bites.md).
 
 **Further reading:**
 

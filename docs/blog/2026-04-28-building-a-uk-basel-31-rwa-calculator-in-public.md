@@ -10,6 +10,8 @@ On 1 January 2027, the UK's implementation of Basel 3.1 — the PRA's [Policy St
 
 I have been building an open-source reference implementation of credit-risk RWA under both the current rules ([CRR](https://www.legislation.gov.uk/eur/2013/575/contents), as onshored) and PS1/26. It runs roughly 5,300 tests, including around 500 acceptance scenarios where the expected outputs are hand-derived from the regulatory text. It supports Standardised, Foundation IRB, Advanced IRB, slotting, equity, the output floor, and the parts of CRM that turn out to matter most. As of this week it passes 100% of the CRR acceptance suite and 100% of the Basel 3.1 acceptance suite.
 
+*Update (June 2026): the counts in this paragraph are an April snapshot. The suite has since grown to roughly 7,450 tests (~8,100 collected once parametrised), of which the acceptance layer alone is now ~1,449 hand-derived scenarios; the codebase has grown to ~186 source files and ~450 test files. Run `scripts/blog_counts.py` for the live figures. The engine has also gained SA-CCR counterparty credit risk, SFT/FCCM, BA-CVA, securitisation allocation, and a server-rendered web UI — each of which gets its own season-two post.*
+
 I built it largely by directing a swarm of [Claude Code](https://www.anthropic.com/claude-code) agents.
 
 This is the first post in a series about that experience. The series alternates between two things I think are worth writing about:
@@ -45,7 +47,7 @@ That sounds tidy. It is not, in fact, tidy. By the time you have:
 - routed cross-approach guarantees so an IRB exposure guaranteed by a sovereign-rated counterparty picks up SA CCFs on the guaranteed slice,
 - and prevented AIRB-modelled collateral from being double-counted against the same exposure,
 
-…the "simple pipeline" has accumulated about 600 audit items between the implementation plan and the docs plan. The fact that the audit is exhaustive is the point. A regulatory engine you cannot trace is a regulatory engine you cannot certify.
+…the "simple pipeline" has accumulated about 600 audit items (a writing-time cumulative tally, not a live count) between the implementation plan and the docs plan. The fact that the audit is exhaustive is the point. A regulatory engine you cannot trace is a regulatory engine you cannot certify.
 
 ## Why I am writing about this
 
@@ -84,7 +86,7 @@ This is a reference implementation — useful for understanding how the rules be
 
 ---
 
-**Read next:** *The Pipeline: Why Regulation Forced an Immutable Design* (in progress).
+**Read next:** *[The Pipeline: Why Regulation Forced an Immutable Design](2026-05-12-the-pipeline.md)*.
 
 **Further reading:**
 

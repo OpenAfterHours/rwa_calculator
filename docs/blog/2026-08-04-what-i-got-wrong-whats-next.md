@@ -1,20 +1,22 @@
 # What I Got Wrong, What's Next
 
-*Closing post in the series. The honest ledger: things that took longer than planned, things the agent swarm got wrong, what is still open, and the gap between a reference implementation and a regulated production system.*
+*The season-one finale. The honest ledger: things that took longer than planned, things the agent swarm got wrong, what is still open, and the gap between a reference implementation and a regulated production system. Season two follows — on CCR, the rulebook-as-data migration, the web app, and how the swarm matured.*
 
-Published 2026-08-04. Code references are pinned to commit [`cceaee4`](https://github.com/OpenAfterHours/rwa_calculator/tree/cceaee4).
+Published 2026-08-04. Code references are pinned to commit [`7e7ed7ec`](https://github.com/OpenAfterHours/rwa_calculator/tree/7e7ed7ec). The counts in this post were taken with [`scripts/blog_counts.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/7e7ed7ec/scripts/blog_counts.py) at that commit; run it for live figures.
 
 ---
 
-This is the eighth and final post in the series on building this UK Basel 3.1 RWA calculator. Posts 1–7 made the case for what the calculator does and how it works. This post is the ledger: what got built, what didn't, what nearly didn't, and what to expect of a reference implementation versus a regulated production system.
+This is the eighth post — the season-one finale — in the series on building this UK Basel 3.1 RWA calculator. Posts 1–7 made the case for what the calculator does and how it works. This post is the ledger: what got built, what didn't, what nearly didn't, and what to expect of a reference implementation versus a regulated production system. It closes the first arc, not the project; season two picks up the threads this post has to leave hanging.
 
 The series began with this claim: *"This is a reference implementation — useful for understanding how the rules behave, not a regulated production system. The gap between the two matters; I'll come back to it in post 8."* This is post 8. The gap is the substance of half this post.
+
+A note before the ledger: a lot has shipped since the first seven posts were drafted that those posts treat as future work or out of scope. The SA-CCR counterparty-credit-risk epic, SFT/FCCM collateral, BA-CVA, securitisation allocation, the rulebook-as-data migration (regulatory values moved out of the engine into cited `rulebook/packs/` entries), and the web UI with its reconciliation view all landed across the 0.2.x–0.3.x line. Each earns its own season-two post; the ledger below is the state of the *first* arc at the season-one boundary.
 
 ## Things that took longer than I planned
 
 Four areas where the published changelog under-counts the effort that landed.
 
-**The CRM allocator.** The credit risk mitigation processor went through three rewrites. The first version was a single-allocation pass: each piece of collateral is assigned to one exposure, full stop. That ignored counterparty-level pools (a parent guarantee covering many drawdowns) and facility-level pledges (a master collateral basket). The second version was multi-level: direct → facility-level pro-rata → counterparty-level pro-rata, with overcollateralisation thresholds (1.4x for non-financial RE/other, 1.25x for receivables, 1.0x for financial). The third version, [shipped in 0.2.0](../appendix/changelog.md), added pool-awareness for AIRB own-LGD anti-double-counting — the war story from [post 6](2026-07-07-crm-mofs-and-other-edge-case-archaeology.md). Each rewrite was three to four weeks of work and produced numbers that looked correct under the previous test set. Each successive set of acceptance scenarios revealed why the previous version was structurally insufficient.
+**The CRM allocator.** The credit risk mitigation processor went through three rewrites. The first version was a single-allocation pass: each piece of collateral is assigned to one exposure, full stop. That ignored counterparty-level pools (a parent guarantee covering many drawdowns) and facility-level pledges (a master collateral basket). The second version was multi-level: direct → facility-level pro-rata → counterparty-level pro-rata, with overcollateralisation thresholds (1.4x for non-financial RE/other, 1.25x for receivables, 1.0x for financial). The third version, [shipped in 0.2.1](../appendix/changelog.md), added pool-awareness for AIRB own-LGD anti-double-counting — the war story from [post 6](2026-07-07-crm-mofs-and-other-edge-case-archaeology.md). Each rewrite was three to four weeks of work and produced numbers that looked correct under the previous test set. Each successive set of acceptance scenarios revealed why the previous version was structurally insufficient.
 
 **Rating inheritance.** Resolving "the counterparty's effective rating" turned out to be two parallel resolutions, not one. Internal ratings (which carry a PD) and external ratings (which carry a CQS) inherit from different parent chains under different rules, with [Art. 138 multi-rating selection](../appendix/changelog.md) layered on top of the external chain. The classifier gates IRB on `internal_pd is not null`, not on rating presence. Sovereigns with external CQS but no internal PD always land on SA even when F-IRB is permitted. The whole story took six weeks across `engine/hierarchy.py`, the classifier, and the cross-approach guarantor routing — most of which I underestimated as "should be a couple of joins."
 
@@ -36,21 +38,19 @@ The pattern across all three: agents are good at applying regulatory text once t
 
 ## What is still open
 
-`IMPLEMENTATION_PLAN.md` lists roughly 35 open items in Tier 1 (calculation correctness) at the time of writing. A representative sample, by P-code:
+`IMPLEMENTATION_PLAN.md` lists roughly 21 open P1 items (calculation correctness) at the time of writing — the bulk of them in a Tier 9 conformance-audit batch (P1.198–P1.213) awaiting promotion into Tier 1. A representative sample of the open ones, by P-code:
 
-- **P1.93** — FCSM Art. 222(4) SFT zero-haircut and Art. 222(6) same-currency cash / 0%-RW sovereign exception. Effort: M.
-- **P1.95** — B31 SCRA grades for unrated institution guarantors (currently a flat 40% under B31; should be SCRA grades A→40%, B→75%, C→150%). Effort: M.
-- **P1.97 / P1.117** — B31 slotting non-HVCRE and HVCRE short-maturity subgrade differentiation (Art. 153(5)(d)). The current code ignores `is_short` for B31 slotting entirely. Effort: S each.
-- **P1.109 / P1.124** — Art. 237–238 maturity mismatch and ineligibility for unfunded credit protection (guarantees, CDS). Currently no maturity adjustment is applied. Effort: M.
-- **P1.151** — Purchased receivables / dilution-risk LGD (Art. 161(1)(e)–(g)) — the F-IRB LGD lookup has no entries for `purchased_receivables_senior`, `_subordinated`, or `dilution_risk`; everything defaults to senior 45%. Effort: M.
-- **P1.153** — Art. 155(3) PD/LGD equity approach. CRR-only — removed under Basel 3.1 — but firms reporting under CRR through 2026-12-31 still need it. No `EquityApproach.PD_LGD` enum, no Art. 165 floor table (0.09% / 0.40% / 1.25%), no equity M=5y handling. Effort: L.
+- **P1.199** — CIU / fund-unit collateral mis-buckets to `other_physical` (a flat 40% haircut) instead of the Art. 224(5) look-through volatility adjustment; eligible fund units never reach a financial-collateral treatment. Effort: L.
+- **P1.205 / P1.206 / P1.207** — the equity PD/LGD floors and the speculative flag. P1.205: the CRR Art. 165(1) 0.09% equity PD floors are defined but unreachable — no input column selects the long-term-relationship / regular-cashflow sub-types, so they floor at 0.40% / 1.25% instead. P1.206: the Art. 165(2) 65% diversified-PE LGD keys on the type-string only, ignoring the `is_diversified_portfolio` flag the IRB-Simple branch honours. P1.207: the B31 `is_speculative` flag short-circuits to 400%, bypassing the unlisted-AND-business-under-5-years higher-risk test (Art. 133(4)). Effort: S–M.
+- **P1.208 / P1.210 / P1.212** — the SA provision GCRA-versus-SCRA boundary again, the same distinction that bit the output floor (above) showing up in three more places. P1.208: the SA exposure-value deduction sums *all* provision rows, so general CRA wrongly reduce SA exposure value (Art. 111(1) is SCRA-only). P1.210: the Art. 159(3) defaulted IRB pool wrongly includes GCRA because `provision_type` is never split upstream. P1.212: the GCRA cap base uses floor-eligible S-TREA instead of the full standardised TREA (Art. 92(3A)). Effort: S–M.
+- **P1.213** — the SA-CCR option supervisory delta uses the original tenor for the Black-Scholes `T` instead of remaining time-to-expiry from `reporting_date`, overstating delta, the PFE add-on, and EAD on any seasoned option. Effort: S.
 
 Add to that the structural items I am most aware of:
 
 - **The oracle suite has 3 of an audit-recommended ~50 exposures** — the load-bearing claim of [post 7](2026-07-21-testing-a-regulatory-engine.md). Closing the gap is a several-week roadmap item, not a quick patch.
 - **Stress testing** has scenario coverage but the surrounding workbook integration is partial.
-- **COREP and Pillar 3 templates** have unimplemented rows acknowledged as out-of-scope (the only remaining `not implemented` markers in the codebase are CCR rows in the COREP generator).
-- **Performance** has been benchmarked against ~10M-exposure portfolios but not optimised end-to-end.
+- **COREP and Pillar 3 templates** are now broad — the CCR templates (C 34.xx) and the Pillar III CCR1–CCR8 tables shipped across the 0.3.x line, so CCR is no longer out of scope. The remaining placeholders are narrow: the C 08.01 row 0160 "alternative treatment for real estate" returns null pending an RE alt-treatment pipeline flag, and the SFT EAD path implements only FCCM (Art. 220–223) — the reserved `"var"` (Art. 221) and `"imm"` (Art. 283) methods fail loud rather than guess.
+- **Performance** has been benchmarked up to ~1M counterparties (the opt-in `scale_1m` suite; the older 10M-row benchmarks were removed as un-runnable on commodity CI) but not optimised end-to-end.
 - **`DOCS_IMPLEMENTATION_PLAN.md`** still has open items, mostly small documentation gaps the doc agent has not gotten to yet.
 
 This is not a small backlog. It is also not a hopeless one. The agent workflow throughput on `/next-items 3` runs is roughly three closed Tier 1 items per build iteration when items are non-conflicting, which means the open backlog is closeable in a few months of consistent effort. Whether it gets closed before PS1/26 goes live on 1 January 2027 is a question of priority, not feasibility.
@@ -63,17 +63,17 @@ The calculator is not validated against the PRA's [SS1/23 Model Risk Management 
 
 The calculator is not under firm change control. Every commit lands when it lands; there is no sign-off path, no model committee, no segregation of duties between the developer and the reviewer (because there is one of me). Under SS1/23 expectations, model changes are tracked, justified, validated, and approved by named individuals with documented authority. None of that infrastructure exists here.
 
-The calculator is not running on production data with full data-quality assurance. The acceptance suite covers ~500 scenarios with hand-derived inputs; real bank portfolios contain millions of exposures with combinations of attributes I have not enumerated. The test discipline gives statistical confidence about correctness on the scenarios tested, not absolute confidence on portfolios I have not seen. Real production deployment requires a parallel-run discipline against an existing system, signed-off reconciliation thresholds, and a rollback plan I have not built.
+The calculator is not running on production data with full data-quality assurance. The acceptance suite covers roughly 1,449 hand-derived test functions across ~182 named scenarios; real bank portfolios contain millions of exposures with combinations of attributes I have not enumerated. The test discipline gives statistical confidence about correctness on the scenarios tested, not absolute confidence on portfolios I have not seen. Real production deployment requires a parallel-run discipline against an existing system, signed-off reconciliation thresholds, and a rollback plan I have not built.
 
 The calculator is not signed off by an external auditor. It has not been through a model validation engagement, an internal-audit review, or an independent quantitative testing effort. The hash-locked oracle suite from [post 7](2026-07-21-testing-a-regulatory-engine.md) is the closest thing it has to independent validation; it is a useful start and it is not a substitute.
 
-What it *is* useful for: a public reference for understanding how the rules behave; a comparator engine that a firm's in-house team can run alongside their own to triangulate disagreements; an educational artefact for engineers learning the regulation; and a demonstration that PS1/26 is implementable to roughly 5,300 tests of discipline by one person directing an agent pipeline. None of that is small. It is also not the same thing as a regulated production system. A firm that adopts this in earnest owes itself everything in the four paragraphs above.
+What it *is* useful for: a public reference for understanding how the rules behave; a comparator engine that a firm's in-house team can run alongside their own to triangulate disagreements; an educational artefact for engineers learning the regulation; and a demonstration that PS1/26 is implementable to roughly 7,450 tests of discipline by one person directing an agent pipeline. None of that is small. It is also not the same thing as a regulated production system. A firm that adopts this in earnest owes itself everything in the four paragraphs above.
 
 ## What's next
 
 Three things on the roadmap, before PS1/26 lands on 1 January 2027.
 
-**Closing the Tier 1 backlog.** Roughly 35 items, the bulk of which are S-effort and addressable by the agent pipeline at current throughput. The blockers are not technical; they are the regulatory-judgement calls that gate each item — the decision of which interpretation to implement when the rule book is genuinely ambiguous. Those decisions cannot be delegated to the agents.
+**Closing the Tier 1 backlog.** Roughly 21 open P1 items, the bulk of which are S-effort and addressable by the agent pipeline at current throughput. The blockers are not technical; they are the regulatory-judgement calls that gate each item — the decision of which interpretation to implement when the rule book is genuinely ambiguous. Those decisions cannot be delegated to the agents.
 
 **Expanding the oracle suite.** Three exposures today, ten on the prioritised roadmap, ~50 on the audit's recommendation. Each addition is a four-file lockstep commit (markdown, derive script, JSON, test) and takes a measured day to a measured week depending on the calculation pathway. This is not work the agents can usefully accelerate — the derivations have to be auditable by a regulatory reader, which means a human writes them.
 
@@ -81,7 +81,7 @@ Three things on the roadmap, before PS1/26 lands on 1 January 2027.
 
 The framing question is not "can the calculator be made fully correct before PS1/26" — it can, with a few months of consistent effort. The framing question is *whether the right ambition for an open-source reference implementation is full compliance or transparent partial compliance with a clear backlog and a credible path*. I am increasingly convinced the second is more useful than the first. A reference implementation that closes its backlog in public, with each closed item carrying a regulatory citation and a hand-derived test, is more credible than a closed-source production system that says "trust us." The series has been an attempt to make that argument by demonstrating it.
 
-## Closing the series
+## Closing season one
 
 Eight posts. About 22,000 words. One repository, one calculator, one solo developer with a Claude Code agent pipeline. The argument across the posts has been a single one in three parts:
 
@@ -91,7 +91,7 @@ Eight posts. About 22,000 words. One repository, one calculator, one solo develo
 
 The calculator continues. The agent loop will run again tomorrow. The PS1/26 effective date is sixteen months away. The backlog gets shorter, then it doesn't, then it does. If you are reading this from a UK firm preparing for the same deadline, I hope some of what is here is useful. If you are reading it from somewhere else entirely, I hope at least one of the eight posts taught you something about regulation, software architecture, or how AI-assisted engineering looks when the rule book is unforgiving.
 
-The repository is at [github.com/OpenAfterHours/rwa_calculator](https://github.com/OpenAfterHours/rwa_calculator). The series ends here.
+The repository is at [github.com/OpenAfterHours/rwa_calculator](https://github.com/OpenAfterHours/rwa_calculator). Season one ends here; season two begins with the CCR epic.
 
 ---
 
@@ -104,4 +104,6 @@ The repository is at [github.com/OpenAfterHours/rwa_calculator](https://github.c
 5. [The Output Floor and Why Basel 3.1 Bites](2026-06-23-the-output-floor-and-why-basel-31-bites.md)
 6. [CRM, MOFs, and Other Edge-Case Archaeology](2026-07-07-crm-mofs-and-other-edge-case-archaeology.md)
 7. [Testing a Regulatory Engine](2026-07-21-testing-a-regulatory-engine.md)
-8. *What I Got Wrong, What's Next* (this post)
+8. *What I Got Wrong, What's Next* — the season-one finale (this post)
+
+*Season two continues the story — posts on the SA-CCR/CCR epic, the rulebook-as-data migration, the web app, and how the agent swarm matured are in the pipeline.*

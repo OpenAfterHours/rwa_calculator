@@ -153,6 +153,10 @@ nav = [
   ]},
   { "Blog" = [
     "blog/index.md",
+    { "The Swarm, Two Months On: Reviewer-Gated Worktree Batches" = "blog/2026-09-29-the-swarm-two-months-on.md" },
+    { "From Workbench to Web App: Reconciliation and the RWA Driver Chain" = "blog/2026-09-15-from-workbench-to-web-app.md" },
+    { "Making Regulation Data, Not Code: The Rulebook Migration" = "blog/2026-09-01-making-regulation-data-not-code.md" },
+    { "Counterparty Credit Risk: Teaching the Engine SA-CCR" = "blog/2026-08-18-counterparty-credit-risk-sa-ccr.md" },
     { "What I Got Wrong, What's Next" = "blog/2026-08-04-what-i-got-wrong-whats-next.md" },
     { "Testing a Regulatory Engine" = "blog/2026-07-21-testing-a-regulatory-engine.md" },
     { "CRM, MOFs, and Other Edge-Case Archaeology" = "blog/2026-07-07-crm-mofs-and-other-edge-case-archaeology.md" },

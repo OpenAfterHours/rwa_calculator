@@ -1,6 +1,6 @@
 # Testing a Regulatory Engine
 
-*5,300 tests is not the point. Five layers each catching a different failure mode, and a hash-locked oracle suite that prevents the goldens from becoming a mirror of the engine — that is the point.*
+*7,450 tests is not the point. Five layers each catching a different failure mode, and a hash-locked oracle suite that prevents the goldens from becoming a mirror of the engine — that is the point.*
 
 Published 2026-07-21. Code references are pinned to commit [`cceaee4`](https://github.com/OpenAfterHours/rwa_calculator/tree/cceaee4).
 
@@ -10,7 +10,7 @@ This is post 7 in the series on building this UK Basel 3.1 RWA calculator. Posts
 
 The thing I want to convince you of: the headline test count is irrelevant. What matters is that there are five layers in the test pyramid, each one designed to catch a class of failure that the others cannot. Removing any layer leaves a category of bugs invisible. The interesting layer is not the one with the most tests; it is the one with the fewest, and the one that took the most care to design.
 
-*Update (June 2026): two references below were overtaken by the 2026-06 architecture migration. `CalculationConfig` no longer carries regulatory scalars (scaling factor, PD/LGD floors, thresholds) — those were removed and now resolve from the rulebook packs keyed on `regime_id` + reporting date — so the `test_config.py` invariant now lives in the rulepack/regime-resolution layer rather than in the config object. And `data/tables/` was removed: the data-layer-boundary contract now directs regulatory values to the rulebook packs (`src/rwa_calc/rulebook/packs/*.py`, resolved via `rwa_calc.rulebook.resolve`) rather than to `data/tables/`. The remediation string in the quoted code block is reproduced verbatim from the contract test, whose message text still said `data/tables/` at the time and is itself pending an update.*
+*Update (June 2026): the 2026-06 architecture migration removed `data/tables/` — the data-layer-boundary contract now directs regulatory values to the rulebook packs (`src/rwa_calc/rulebook/packs/*.py`, resolved via `rwa_calc.rulebook.resolve`) rather than to `data/tables/`. The remediation string in the quoted code block below is reproduced verbatim from the contract test, whose message text still says `data/tables/` and is itself pending an update.*
 
 ## The structural problem with golden-file testing
 
@@ -28,15 +28,15 @@ Five test layers, in order of breadth:
 
 | Layer | Approximate count | Purpose |
 |---|---|---|
-| Unit | ~4,500 | Per-function assertions, fast. The bulk of the suite. |
-| Acceptance | ~500 | Scenario-based regression goldens, organised by framework (CRR / Basel 3.1) and topic (SA, IRB, Slotting, CRM, Output Floor). |
-| Contracts | ~150 | Protocol compliance, architectural invariants, observability rules. The "the design is still the design" layer. |
-| Integration | ~130 | Cross-component flow tests. The "the pipeline still composes" layer. |
+| Unit | ~5,300 | Per-function assertions, fast. The bulk of the suite. |
+| Acceptance | ~1,449 | Scenario-based regression goldens, organised by framework (CRR / Basel 3.1) and topic (SA, IRB, Slotting, CRM, Output Floor). |
+| Contracts | ~375 | Protocol compliance, architectural invariants, observability rules. The "the design is still the design" layer. |
+| Integration | ~289 | Cross-component flow tests. The "the pipeline still composes" layer. |
 | Oracle | ~3 (scaffolded; ~50 planned) | Hand-derivations from the regulation, locked to the engine by a SHA-256 hash. The "the math is still right" layer. |
 
-Plus benchmarks under `tests/benchmarks/` (opt-in via `--benchmark-skip` defaults), and a small BDD suite under `tests/bdd/` for behaviour-driven scenarios with step definitions.
+Plus benchmarks under `tests/benchmarks/` (held out of the default loop by the `--benchmark-disable` addopt; run them explicitly with `-m benchmark`), and an opt-in stress suite under `tests/acceptance/stress/` — file-level `@pytest.mark.stress`, ~60 correctness-at-scale tests excluded from the default run.
 
-The total is roughly 5,300 tests. The unit count is the one most likely to make people whistle. It is also the least interesting number on the page. Unit tests catch broken expressions, broken constants, and broken control flow — necessary, but mechanical. They are produced cheaply by the agent pipeline, they run in seconds, and a calculator with 4,500 of them passing has demonstrated almost nothing about its regulatory correctness. The interesting layers are everywhere else.
+The total is roughly 7,450 test functions — about 8,100 cases once parametrised variants are collected. The unit count is the one most likely to make people whistle. It is also the least interesting number on the page. Unit tests catch broken expressions, broken constants, and broken control flow — necessary, but mechanical. They are produced cheaply by the agent pipeline, they run in seconds, and a calculator with 5,300 of them passing has demonstrated almost nothing about its regulatory correctness. The interesting layers are everywhere else.
 
 ## The acceptance suite is the broadest, not the truest
 
@@ -69,11 +69,11 @@ The oracle suite is small because writing it is expensive. ORC-001 is a one-para
 
 The contract suite under `tests/contracts/` is the architectural fail-safe. Every test in it asserts a *property* of the codebase rather than a *value* it produces.
 
-Six contract test modules:
+Six of the contract modules worth calling out (there are around thirty-four files, ~375 functions, in total):
 
 - `test_protocols.py` — every stage implementation in `engine/` satisfies its corresponding `Protocol` in `contracts/protocols.py`. A new `LoaderProtocol` implementation that fails to declare `def load(self) -> RawDataBundle` fails this test.
 - `test_bundles.py` — every bundle in `contracts/bundles.py` is `@dataclass(frozen=True)`. A bundle that becomes mutable fails this test.
-- `test_config.py` — `CalculationConfig` factories produce internally-consistent configurations. A factory that ships with a CRR scaling factor and a Basel 3.1 PD floor fails.
+- `test_config.py` — `CalculationConfig` factories produce internally-consistent configurations. Regulatory scalars no longer live on the config: the IRB scaling factor resolves from the rulepack scalar `irb_scaling_factor`, keyed on regime and reporting date, so the invariant a factory must satisfy is that it pins the right `regime_id` — not that it carries the right scaling factor.
 - `test_errors.py` — `CalculationError` codes are unique, framework-tagged, and properly enumerated.
 - `test_logging_contract.py` — every stage module under `engine/` declares `logger = logging.getLogger(__name__)`. A module that omits this fails.
 - `test_data_layer_boundary.py` — the architectural enforcer this post is most pleased about.
@@ -115,7 +115,7 @@ Three things the suite does not catch and never will.
 
 The five layers cover what they cover. Acceptance of that limit is a precondition for shipping a regulatory engine responsibly.
 
-## What 5,300 tests are doing
+## What 7,450 tests are doing
 
 The point is not the count. The point is that each layer is designed against a different failure mode:
 

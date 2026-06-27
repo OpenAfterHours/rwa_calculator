@@ -781,9 +781,9 @@ def _delta_band(value: object, *, sig_figs: int = 4) -> str:
         return ""
     if not math.isfinite(x):
         return "inf"
-    if x == 0.0:
-        return "0"
-    return format(x, f".{sig_figs - 1}e")
+    # No float-equality check for zero: format() bands any finite value, and adding
+    # 0.0 collapses -0.0 to +0.0 so both render the same canonical "0.000e+00".
+    return format(x + 0.0, f".{sig_figs - 1}e")
 
 
 def _component_names(columns: list[str]) -> list[str]:

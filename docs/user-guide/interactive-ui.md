@@ -121,10 +121,15 @@ confidence. Enter your data path, edit the TOML mapping (which names the legacy
 file, the join keys and how each legacy column maps to a canonical component)
 directly in the form, and run. The result is shown across four drill-down tiers —
 the headline tie-out and per-component summary, the by-bucket / by-class /
-by-approach segmentation, the break worklist ranked by materiality, and a per-key
-forensic table with a bucket filter — plus CSV / Excel downloads of the full
-per-key detail. See the [Reconciliation guide](../reconciliation/index.md) for the
-mapping grammar and the output reference.
+by-approach segmentation, the break worklist ranked by materiality, and a
+single-loan forensic that lays out the **RWA-driver chain** (exposure class →
+approach → CQS → PD → LGD → maturity → CCF → collateral → guarantee → EAD → risk
+weight → RWA) with legacy beside ours at each step and our drivers nested beneath
+— plus CSV / Excel downloads of the full per-key detail. Map a legacy column for
+`pd`, `lgd`, `cqs`, `collateral` or `guarantee` (commented examples ship in the
+default mapping) to compare those drivers side-by-side. See the
+[Reconciliation guide](../reconciliation/index.md) for the mapping grammar and the
+output reference.
 
 ---
 

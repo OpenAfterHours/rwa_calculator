@@ -340,3 +340,189 @@ def test_loan_detail_surfaces_components_and_breaks(response: ReconciliationResp
 
 def test_loan_detail_unknown_key_returns_none(response: ReconciliationResponse) -> None:
     assert rv.loan_detail(response, "NOPE") is None
+
+
+# =============================================================================
+# Phase 5A — RWA-driver chain (ordered steps + grouped drivers)
+# =============================================================================
+
+
+def _response_with_drivers() -> ReconciliationResponse:
+    """One loan with risk_weight mapped and our-side RW drivers populated."""
+    ours = pl.LazyFrame(
+        {
+            "exposure_reference": ["L1"],
+            "exposure_class": ["corporate"],
+            "approach_applied": ["SA"],
+            "ead_final": [100.0],
+            "rwa_final": [75.0],
+            "risk_weight": [0.75],
+            "external_cqs": [3],
+            "property_ltv": [0.8],
+            "ltv_band": ["60-80%"],
+        }
+    )
+    legacy = pl.LazyFrame(
+        {
+            "exposure_reference": ["L1"],
+            "legacy_ead": [100.0],
+            "legacy_rwa": [75.0],
+            "legacy_risk_weight": [0.75],
+        }
+    )
+    mapping = LegacyColumnMapping(
+        legacy_keys=("exposure_reference",),
+        our_keys=("exposure_reference",),
+        components={
+            "ead": ComponentMapping("EAD"),
+            "rwa": ComponentMapping("RWA"),
+            "risk_weight": ComponentMapping("RW"),
+        },
+    )
+    bundle = ReconciliationRunner().reconcile(ours, legacy, mapping)
+    return ReconciliationResponse.from_bundle(bundle, legacy_file=Path("legacy.csv"))
+
+
+def test_loan_detail_steps_follow_rwa_chain_order(response: ReconciliationResponse) -> None:
+    detail = rv.loan_detail(response, "L3")
+    assert detail is not None
+    # Only ead + rwa are mapped in the base fixture; the chain order puts ead first.
+    assert [s["step"] for s in detail["steps"]] == ["ead", "rwa"]
+
+
+def test_loan_detail_step_carries_legacy_ours_and_bucket(response: ReconciliationResponse) -> None:
+    detail = rv.loan_detail(response, "L3")
+    assert detail is not None
+    rwa_step = next(s for s in detail["steps"] if s["step"] == "rwa")
+    assert rwa_step["legacy"] == pytest.approx(300.0)
+    assert rwa_step["ours"] == pytest.approx(250.0)
+    assert rwa_step["bucket"] == rv.BUCKET_BREAK
+
+
+def test_loan_detail_groups_drivers_under_owning_component() -> None:
+    detail = rv.loan_detail(_response_with_drivers(), "L1")
+    assert detail is not None
+    rw_step = next(s for s in detail["steps"] if s["step"] == "risk_weight")
+    driver_names = {d["name"] for d in rw_step["drivers"]}
+    assert {"external_cqs", "property_ltv", "ltv_band"} <= driver_names
+
+
+def test_loan_detail_drivers_are_our_side_only() -> None:
+    detail = rv.loan_detail(_response_with_drivers(), "L1")
+    assert detail is not None
+    rw_step = next(s for s in detail["steps"] if s["step"] == "risk_weight")
+    cqs = next(d for d in rw_step["drivers"] if d["name"] == "external_cqs")
+    assert cqs["ours"] == 3
+    assert cqs["legacy_available"] is False
+    assert cqs["legacy"] is None
+
+
+# =============================================================================
+# Phase 5B — collateral / guarantee / cqs promoted to reconcilable components
+# =============================================================================
+
+
+def _response_with_crm_components() -> ReconciliationResponse:
+    """A loan whose collateral, guarantee and CQS are mapped legacy-vs-ours."""
+    ours = pl.LazyFrame(
+        {
+            "exposure_reference": ["L1"],
+            "exposure_class": ["corporate"],
+            "approach_applied": ["SA"],
+            "ead_final": [100.0],
+            "rwa_final": [75.0],
+            "collateral_adjusted_value": [40.0],
+            "guarantee_benefit": [10.0],
+            "sa_cqs": [3],
+        }
+    )
+    legacy = pl.LazyFrame(
+        {
+            "exposure_reference": ["L1"],
+            "legacy_ead": [100.0],
+            "legacy_rwa": [75.0],
+            "legacy_collateral": [35.0],
+            "legacy_guarantee": [10.0],
+            "legacy_cqs": [3],
+        }
+    )
+    mapping = LegacyColumnMapping(
+        legacy_keys=("exposure_reference",),
+        our_keys=("exposure_reference",),
+        components={
+            "ead": ComponentMapping("EAD"),
+            "rwa": ComponentMapping("RWA"),
+            "collateral": ComponentMapping("Collateral_Value"),
+            "guarantee": ComponentMapping("Guarantee_Benefit"),
+            "cqs": ComponentMapping("CQS"),
+        },
+    )
+    bundle = ReconciliationRunner().reconcile(ours, legacy, mapping)
+    return ReconciliationResponse.from_bundle(bundle, legacy_file=Path("legacy.csv"))
+
+
+def test_new_components_are_registered() -> None:
+    from rwa_calc.analysis.recon_registry import RECONCILABLE_COMPONENTS_BY_NAME
+
+    assert {"collateral", "guarantee", "cqs"} <= set(RECONCILABLE_COMPONENTS_BY_NAME)
+
+
+def test_collateral_break_is_bucketed_legacy_vs_ours() -> None:
+    detail = rv.loan_detail(_response_with_crm_components(), "L1")
+    assert detail is not None
+    coll = next(s for s in detail["steps"] if s["step"] == "collateral")
+    assert coll["ours"] == pytest.approx(40.0)
+    assert coll["legacy"] == pytest.approx(35.0)
+    assert coll["bucket"] == rv.BUCKET_BREAK
+
+
+def test_collateral_step_precedes_ead_in_chain() -> None:
+    detail = rv.loan_detail(_response_with_crm_components(), "L1")
+    assert detail is not None
+    names = [s["step"] for s in detail["steps"]]
+    assert names.index("collateral") < names.index("ead")
+    assert names.index("guarantee") < names.index("ead")
+    assert names.index("cqs") < names.index("ead")
+
+
+def test_mapped_crm_driver_not_duplicated_under_ead() -> None:
+    # When collateral/guarantee are mapped as their own steps they must NOT also
+    # appear as EAD driver rows (the chain de-dup owns them at their own step).
+    detail = rv.loan_detail(_response_with_crm_components(), "L1")
+    assert detail is not None
+    ead = next(s for s in detail["steps"] if s["step"] == "ead")
+    ead_drivers = {d["name"] for d in ead["drivers"]}
+    assert "collateral_adjusted_value" not in ead_drivers
+    assert "guarantee_benefit" not in ead_drivers
+
+
+def test_unmapped_crm_shows_as_ead_driver() -> None:
+    # With collateral/guarantee NOT mapped, our-side values stay visible under EAD.
+    ours = pl.LazyFrame(
+        {
+            "exposure_reference": ["L1"],
+            "exposure_class": ["corporate"],
+            "approach_applied": ["SA"],
+            "ead_final": [100.0],
+            "rwa_final": [75.0],
+            "collateral_adjusted_value": [40.0],
+            "guarantee_benefit": [10.0],
+        }
+    )
+    legacy = pl.LazyFrame(
+        {"exposure_reference": ["L1"], "legacy_ead": [100.0], "legacy_rwa": [75.0]}
+    )
+    mapping = LegacyColumnMapping(
+        legacy_keys=("exposure_reference",),
+        our_keys=("exposure_reference",),
+        components={"ead": ComponentMapping("EAD"), "rwa": ComponentMapping("RWA")},
+    )
+    bundle = ReconciliationRunner().reconcile(ours, legacy, mapping)
+    resp = ReconciliationResponse.from_bundle(bundle, legacy_file=Path("legacy.csv"))
+
+    detail = rv.loan_detail(resp, "L1")
+    assert detail is not None
+    ead = next(s for s in detail["steps"] if s["step"] == "ead")
+    coll = next(d for d in ead["drivers"] if d["name"] == "collateral_adjusted_value")
+    assert coll["ours"] == pytest.approx(40.0)
+    assert coll["legacy_available"] is False

@@ -67,15 +67,22 @@ You map only the components you have. Each one is compared with a sensible defau
 |-----------|------|-------------|----------------------|
 | `exposure_class` | categorical | exact label (after synonyms) | classification reason, pre-CRM class |
 | `approach` | categorical | exact label | approach-selection reason, permission |
+| `cqs` | numeric | exact (integer step) | rating source |
 | `pd` | numeric | absolute tolerance | original PD, PD floor applied |
 | `lgd` | numeric | absolute tolerance | original LGD, LGD floor, LGD type |
 | `maturity` | numeric | absolute tolerance | residual maturity, maturity date |
 | `ccf` | numeric | absolute tolerance | CCF regulatory source |
-| `ead` | numeric | relative tolerance | gross EAD, converted undrawn, CRM benefit |
+| `collateral` | numeric | relative tolerance | gross value, haircut, per-type split |
+| `guarantee` | numeric | relative tolerance | method/status, guaranteed split |
+| `ead` | numeric | relative tolerance | gross EAD, converted undrawn |
 | `risk_weight` | numeric | absolute tolerance | RW regulatory reference / adjustment reason |
 | `supporting_factor` | numeric | absolute tolerance | infra factor, SF benefit |
 | `expected_loss` | numeric | relative tolerance | — |
 | `rwa` | numeric | relative tolerance | — |
+
+`collateral`, `guarantee` and `cqs` are additive/exact CRM drivers — map a legacy column for
+each to compare collateral allocation, guarantee benefit and credit-quality step side-by-side.
+A component you do **not** map simply shows our side only in the single-loan forensic.
 
 ### Buckets
 
@@ -126,9 +133,14 @@ The result is layered from a one-number verdict down to a single exposure's driv
 
 === "4 · Forensic"
 
-    **One exposure, end to end.** `component_reconciliation` is the per-key row carrying
-    legacy-vs-ours for every component, the bucket, and our explain + input columns — the
-    view you use to decide *data fix vs engine fix*.
+    **One exposure, end to end.** The single-loan view reads as an ordered **RWA-driver
+    chain** — `exposure class → approach → CQS → PD → LGD → maturity → CCF → collateral →
+    guarantee → EAD → risk weight → RWA` — showing legacy vs ours (and Δ / status) at each
+    mapped step, with that step's explain/input columns nested beneath it as our-side drivers.
+    A driver with no legacy column in the mapping is marked **"legacy not provided"** so a
+    one-sided field is never read as agreement. This is the view you use to decide *data fix
+    vs engine fix*. (The underlying `component_reconciliation` frame — every column, all keys —
+    remains the CSV/Excel export's escape hatch.)
 
 ## How to run it
 

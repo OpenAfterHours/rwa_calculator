@@ -15,20 +15,35 @@
   <div class="stat"><div class="stat-num">{{ detail.approach or "—" }}</div><div class="stat-lbl">approach</div></div>
 </div>
 
-<h2>By component — legacy vs ours</h2>
+<h2>By component — RWA driver chain</h2>
+<p class="muted">The loan's RWA build, legacy vs ours at each step. Indented rows are
+our-side drivers explaining how we reached the value above; a driver tagged
+<em>legacy not provided</em> has no legacy counterpart in the mapping.</p>
 <div class="table-wrap">
   <table class="data">
-    <thead><tr><th>component</th><th>legacy</th><th>ours</th><th>abs Δ</th><th>rel Δ</th><th>bucket</th></tr></thead>
+    <thead><tr><th>step</th><th>legacy</th><th>ours</th><th>abs Δ</th><th>rel Δ</th><th>status</th></tr></thead>
     <tbody>
-      {% for p in detail.panels %}
-      <tr>
-        <td>{{ p.component }}</td>
-        <td>{{ fmt(p.legacy) }}</td>
-        <td>{{ fmt(p.ours) }}</td>
-        <td>{{ fmt(p.abs_delta) }}</td>
-        <td>{{ fmt(p.rel_delta) }}</td>
-        <td>{{ p.bucket if p.bucket is not none else "" }}</td>
+      {% for step in detail.steps %}
+      <tr class="chain-step">
+        <td><strong>{{ step.label }}</strong></td>
+        <td>{{ fmt(step.legacy) }}</td>
+        <td>{{ fmt(step.ours) }}</td>
+        <td>{{ fmt(step.abs_delta) }}</td>
+        <td>{{ fmt(step.rel_delta) }}</td>
+        <td>{{ step.bucket if step.bucket is not none else "" }}</td>
       </tr>
+      {% for d in step.drivers %}
+      <tr class="chain-driver">
+        <td class="driver-name">↳ {{ d.name }}</td>
+        {% if d.legacy_available %}
+        <td>{{ fmt(d.legacy) }}</td>
+        {% else %}
+        <td class="muted">legacy not provided</td>
+        {% endif %}
+        <td>{{ fmt(d.ours) }}</td>
+        <td></td><td></td><td></td>
+      </tr>
+      {% endfor %}
       {% endfor %}
     </tbody>
   </table>
@@ -37,20 +52,5 @@
 {% if detail.breaks.rows %}
 <h2>Breaks for this key</h2>
 {{ render_table(detail.breaks) }}
-{% endif %}
-
-{% if detail.drivers %}
-<h2>Input &amp; explain drivers</h2>
-<p class="muted">The wide explain / input columns behind this row — dropped from the
-on-screen summary tables and previously reachable only via the CSV export.</p>
-<div class="table-wrap">
-  <table class="data">
-    <tbody>
-      {% for k, v in detail.drivers.items() %}
-      <tr><th>{{ k }}</th><td>{{ fmt(v) }}</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
 {% endif %}
 {% endblock %}

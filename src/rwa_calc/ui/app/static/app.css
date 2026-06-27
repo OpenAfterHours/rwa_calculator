@@ -137,6 +137,11 @@ table.data thead th { background: var(--oah-slate-800); color: var(--oah-slate-2
 table.data tbody tr { border-top: 1px solid rgba(216,222,233,0.07); }
 table.data tbody tr:hover { background: rgba(255, 145, 0, 0.06); }
 
+/* Forensic RWA-driver chain: component step rows vs nested our-side drivers. */
+table.data tbody tr.chain-step { border-top: 1px solid rgba(216,222,233,0.16); }
+table.data tbody tr.chain-driver td { color: var(--oah-slate-400); font-size: 12px; }
+table.data tbody tr.chain-driver .driver-name { padding-left: 24px; font-family: var(--font-mono); }
+
 /* ---------- Callouts --------------------------------------- */
 .callout { padding: 14px 16px; border-radius: 10px; margin: 16px 0; font-size: 14px; border: 1px solid; }
 .callout.error { background: rgba(201, 68, 42, 0.12); border-color: var(--oah-owl-body); color: #ffd2c7; }

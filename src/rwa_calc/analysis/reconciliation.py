@@ -570,6 +570,11 @@ def _component_columns(a: _ActiveComponent, mapping: LegacyColumnMapping) -> lis
     lv = pl.col(a.legacy_col)
 
     if a.spec.kind == "numeric":
+        # Cast to Float64 so an integer-valued component (e.g. CQS) yields a
+        # Float64 delta — otherwise its summary row's ``sum_abs_delta`` is Int64
+        # and the per-component concat (mixed Int/Float) fails.
+        ov = ov.cast(pl.Float64)
+        lv = lv.cast(pl.Float64)
         abs_delta = (ov - lv).alias(f"abs_delta_{name}")
         rel_delta = (
             pl.when(lv.abs() > _ZERO_GUARD)

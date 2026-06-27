@@ -1,6 +1,7 @@
 # Reconciliation page UX redesign — live progress + large-data navigation
 
 **Status:** Phase 1 ✅ done · Phase 2 ✅ done · Phases 3–4 optional/deferred ·
+Phase 5 (RWA-driver chain comparison) planned 2026-06-27 ·
 **Owner:** UI surface (`src/rwa_calc/ui/`) · **Created:** 2026-06-26
 
 ## Why
@@ -172,6 +173,109 @@ A single vanilla virtual-scroll grid scoped to the **explorer tier in
 server-windowed mode only**. Highest effort/risk and the largest client surface;
 defer until there is evidence analysts need to fluidly scroll a multi-million-row
 explorer rather than triage ranked breaks.
+
+## Phase 5 — RWA-driver chain comparison (forensic loan view)
+
+**Status:** planned · **Scope decided 2026-06-27** (rating *grades* out — PD+CQS
+suffice; collateral/guarantee promoted to full legacy-vs-ours; new drivers surface
+everywhere — tie-out, explorer, export).
+
+### Why
+
+The single-loan forensic (Tier C, `loan_detail()` → `recon_loan.html`) answers
+*"which components break"* but not *"why this loan's RWA differs"*. It renders two
+flat tables: a `By component` panel grid and an **our-side-only** `Input & explain
+drivers` key=value dump (`reconciliation.py:338-358`, `recon_loan.html:42-55`).
+An analyst triaging a break must read the RWA calculation as an **ordered chain**
+— class → approach → rating/CQS → PD → LGD → maturity → CCF → collateral →
+guarantee → EAD → risk weight → RWA — with legacy beside ours at each step.
+
+**Load-bearing finding:** the view *already* shows legacy-vs-ours for the 11
+registry components (`pd, lgd, maturity, ccf, risk_weight, exposure_class,
+approach, supporting_factor, ead, expected_loss, rwa`). They are dormant only
+because `DEFAULT_MAPPING_TOML` ships mapping just `ead, rwa, exposure_class`. So
+PD/LGD/CCF/maturity/RW/class comparison is *free* the moment a legacy column is
+mapped. What is genuinely missing: **ratings/CQS, collateral allocation, guarantee
+benefit** are our-side `input_columns` on `ead`/`risk_weight` with no legacy
+counterpart, and `CALCULATION_OUTPUT_SCHEMA` (`schemas.py:2389-2640`) carries
+`internal_pd`, `external_cqs`, `sa_cqs`, `collateral_adjusted_value`,
+`guarantee_benefit` but **no rating-grade column** (`rating_value` is upstream in
+`CLASSIFIED_EXPOSURE_SCHEMA`, never reaches `scan_results()`).
+
+### Phase 5A — Ordered RWA-driver chain (UI-only, ship first)
+
+Lowest risk, highest single UX win; touches **none** of the single-stream shared
+engine files.
+
+- **`ui/views/reconciliation.py::loan_detail`** — keep every pinned key
+  (`recon_key`, `row_bucket`, `panels`, `breaks`) **additively** and add a new
+  `steps` list: one entry per *active* component, ordered by a module-level
+  `_CHAIN_ORDER`, each `{step, label, legacy, ours, abs_delta, rel_delta, bucket,
+  drivers}`. `drivers` are that component's `explain_columns` + `input_columns`
+  (from the registry, present-on-row), each `{name, ours, legacy, legacy_available}`
+  with `legacy_available=False` (our-side-only) and a "legacy not provided" marker.
+  A driver that is itself another component's `our_column` is de-duplicated (it
+  owns its own step). New private helper `_driver_chain(row, components)`.
+- **`recon_loan.html`** — replace the two flat tables with a `{% for step in
+  detail.steps %}` block: component row (legacy|ours|Δ|status via the existing
+  `fmt()`) then nested driver rows. **Keep** the H1 `Loan forensic` and an H2
+  containing `By component` (pinned substrings in
+  `tests/integration/test_ui_reconciliation.py:253-276`).
+- Route + context builder unchanged (additive return; `main.py:598-613,1069-1077`).
+- **TDD entry:** `tests/unit/ui/test_views_reconciliation.py` (extend the Phase-2
+  loan block ~`:329`) — assert `steps` ordering, driver grouping, `legacy_available`.
+
+### Phase 5B — Promote `collateral`, `guarantee`, `cqs` to components
+
+Makes the three missing drivers genuinely comparable, and (per the "everywhere"
+decision) surfaces them in the tie-out, class allocation, explorer grid, and
+export — all for free, because the loader maps any *registered* component by name
+(`api/reconciliation.py:162-167`) and the export dumps the whole frame.
+
+- **`analysis/recon_registry.py`** — three new `RECONCILABLE_COMPONENTS`:
+  - `collateral` — numeric, `our_columns=("collateral_adjusted_value",)`,
+    **additive=True**, rel tol 0.01, explain `collateral_gross_value`,
+    `collateral_haircut_applied`, `collateral_allocation_method`; input the
+    per-type split (`collateral_financial_value`/`collateral_re_value`/
+    `collateral_receivables_value`/`collateral_other_physical_value`).
+  - `guarantee` — numeric, `our_columns=("guarantee_benefit",)`, **additive=True**,
+    rel tol 0.01, explain `guarantee_method_used`, `guarantee_status`,
+    `guarantor_risk_weight`; input `guaranteed_amount`, `guarantee_coverage_pct`,
+    `unguaranteed_portion`, `pre_crm_risk_weight`, `guarantee_benefit_rw`.
+  - `cqs` — numeric, `our_columns=("sa_cqs","external_cqs")`, additive=False
+    (take-first), abs tol 0 (exact int); explain `sa_rating_source`.
+  - **Collapse treatment:** collateral/guarantee `additive=True` so guaranteed/RE
+    split sub-rows *sum* to the key grain (matches `ead`/`rwa`); cqs take-first
+    (a within-key disagreement is already surfaced as REC004).
+  - Keep `collateral_adjusted_value`/`guarantee_benefit` as `ead` `input_columns`
+    so our side is visible even when unmapped; when the `collateral`/`guarantee`
+    components are mapped they graduate to their own step and the view's de-dup
+    (`_driver_chain`) drops the EAD driver row to avoid repetition.
+- **`DEFAULT_MAPPING_TOML`** — add commented `[components.lgd|pd|collateral|guarantee|cqs]`
+  examples (kept commented so `test_default_mapping_toml_parses`'s expected active
+  set `{ead, rwa, exposure_class}` stays green).
+- **No loader/export/REST code change.** New `legacy_/our_/<bucket>/abs_delta_`
+  columns flow into `_readable_recon_columns` (explorer grid) and the CSV/Excel
+  export automatically. `forensic_filter_options` gains new `worst_component`
+  values — widen that test's expected set.
+- **Changelog note:** once mapped, collateral/guarantee appear in Tier-1
+  `totals_tie_out` — a visible (intended) behaviour change.
+- **TDD entry:** `tests/unit/engine/test_reconciliation.py` (bucketing for the new
+  components) + `tests/contracts/test_reconciliation_contract.py` (TOML round-trip,
+  7-frame bundle unchanged) + the view/route tests above.
+
+### Deferred (not in this scope)
+
+- **Rating *grades*** (internal/external grade strings) need a new
+  `CALCULATION_OUTPUT_SCHEMA` column + aggregator projection (single-stream shared
+  file) — out per the 2026-06-27 decision; revisit if analysts need grades beyond
+  PD+CQS.
+- **REST loan endpoint** (`GET /api/reconcile/{id}/loan?key=`) returning the
+  `loan_detail` dict — UI-only today; add only if API parity is requested.
+- **Always-show-our-side for unmapped components** — `_prepare_our_side` carries
+  driver columns only for *active* (mapped) components, so an unmapped LGD shows no
+  our-side LGD either. Carrying all registry our-columns unconditionally is a
+  larger follow-up.
 
 ## Honest limits / follow-ups (out of scope here, track separately)
 

@@ -73,6 +73,17 @@ RECONCILABLE_COMPONENTS: tuple[ReconcilableComponent, ...] = (
         input_columns=("model_id",),
     ),
     ReconcilableComponent(
+        # Credit-quality step. SA uses sa_cqs; external_cqs is the rating-agency
+        # CQS behind it (take-first by presence). Exact-int match: tol 0 means any
+        # CQS difference is a break (the exact-epsilon branch passes equal values).
+        "cqs",
+        "numeric",
+        our_columns=("sa_cqs", "external_cqs"),
+        explain_columns=("sa_rating_source",),
+        default_tol_kind="abs",
+        default_tol=0.0,
+    ),
+    ReconcilableComponent(
         "pd",
         "numeric",
         our_columns=("irb_pd_floored", "irb_pd"),
@@ -107,10 +118,59 @@ RECONCILABLE_COMPONENTS: tuple[ReconcilableComponent, ...] = (
         default_tol=1e-4,
     ),
     ReconcilableComponent(
+        # CRM — eligible collateral after haircuts. Additive: a split exposure's
+        # collateralised sub-rows sum to the key grain. The per-type split and the
+        # gross/haircut explain how we reached the net value.
+        "collateral",
+        "numeric",
+        our_columns=("collateral_adjusted_value",),
+        explain_columns=(
+            "collateral_gross_value",
+            "collateral_haircut_applied",
+            "collateral_allocation_method",
+        ),
+        input_columns=(
+            "collateral_financial_value",
+            "collateral_re_value",
+            "collateral_receivables_value",
+            "collateral_other_physical_value",
+        ),
+        additive=True,
+        default_tol_kind="rel",
+        default_tol=0.01,
+    ),
+    ReconcilableComponent(
+        # CRM — RWA reduction from unfunded protection (substitution). Additive:
+        # guaranteed sub-rows sum to the key grain. The method/status and the
+        # guaranteed/unguaranteed split explain the benefit.
+        "guarantee",
+        "numeric",
+        our_columns=("guarantee_benefit",),
+        explain_columns=(
+            "guarantee_method_used",
+            "guarantee_status",
+            "guarantor_risk_weight",
+        ),
+        input_columns=(
+            "guaranteed_amount",
+            "guarantee_coverage_pct",
+            "unguaranteed_portion",
+            "pre_crm_risk_weight",
+            "guarantee_benefit_rw",
+        ),
+        additive=True,
+        default_tol_kind="rel",
+        default_tol=0.01,
+    ),
+    ReconcilableComponent(
         "ead",
         "numeric",
         our_columns=("ead_final", "final_ead", "ead"),
         explain_columns=("gross_ead", "converted_undrawn"),
+        # collateral_adjusted_value / guarantee_benefit stay as EAD drivers so our
+        # side is always visible; when the `collateral` / `guarantee` components are
+        # mapped they graduate to their own chain step and the forensic view's
+        # de-dup (``_driver_chain``) drops the EAD driver row to avoid repetition.
         input_columns=(
             "drawn_amount",
             "undrawn_amount",

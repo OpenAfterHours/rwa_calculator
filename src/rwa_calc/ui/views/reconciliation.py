@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING, SupportsFloat, cast
 
 import polars as pl
 
+from rwa_calc.analysis.recon_registry import RECONCILABLE_COMPONENTS_BY_NAME
 from rwa_calc.analysis.reconciliation import (
     BUCKET_BREAK,
     BUCKET_EXACT,
@@ -74,6 +75,22 @@ value_map = { CORP = "corporate", RETAIL = "retail", RRE = "residential_mortgage
 # legacy_column = "RW_pct"
 # unit = "percent"
 
+# Map any of these to compare the RWA drivers side-by-side in the single-loan
+# forensic view (and the tie-out / explorer / export). Each is optional — an
+# unmapped driver simply shows our side only ("legacy not provided").
+# [components.pd]
+# legacy_column = "PD"
+# unit = "decimal"            # 0.012, not 1.2
+# [components.lgd]
+# legacy_column = "LGD"
+# unit = "decimal"
+# [components.cqs]
+# legacy_column = "CQS"       # credit-quality step / external rating bucket
+# [components.collateral]
+# legacy_column = "Collateral_Value"     # net eligible collateral after haircuts
+# [components.guarantee]
+# legacy_column = "Guarantee_RWA_Benefit"
+
 # To reconcile each class portion line-by-line (not just per exposure), add the
 # class to BOTH keys — a portion in a class on only one side then shows as missing:
 # legacy_keys = ["exposure_reference", "Asset_Class"]
@@ -112,6 +129,45 @@ _FILTER_COLUMNS: dict[str, str] = {
     "exposure_class": "our_exposure_class",
     "approach": "our_approach",
     "worst_component": "worst_component",
+}
+
+# The order an analyst reads a single loan's RWA build. ``loan_detail`` orders the
+# active components into this chain for the forensic view; active components not
+# listed here are appended (registry order) after the known steps.
+_CHAIN_ORDER: tuple[str, ...] = (
+    "exposure_class",
+    "approach",
+    "cqs",
+    "pd",
+    "lgd",
+    "maturity",
+    "ccf",
+    "collateral",
+    "guarantee",
+    "ead",
+    "risk_weight",
+    "supporting_factor",
+    "expected_loss",
+    "rwa",
+)
+
+# Human labels for the chain steps; anything unmapped falls back to the component
+# name with underscores spaced.
+_STEP_LABELS: dict[str, str] = {
+    "exposure_class": "exposure class",
+    "approach": "approach",
+    "cqs": "CQS / rating",
+    "pd": "PD",
+    "lgd": "LGD",
+    "maturity": "maturity (M)",
+    "ccf": "CCF",
+    "collateral": "collateral",
+    "guarantee": "guarantee",
+    "ead": "EAD",
+    "risk_weight": "risk weight",
+    "supporting_factor": "supporting factor",
+    "expected_loss": "expected loss",
+    "rwa": "RWA",
 }
 
 
@@ -369,6 +425,7 @@ def loan_detail(response: ReconciliationResponse, recon_key: str) -> dict | None
         "worst_component": row.get("worst_component"),
         "exposure_class": row.get("our_exposure_class"),
         "approach": row.get("our_approach"),
+        "steps": _driver_chain(row, components),
         "panels": panels,
         "drivers": drivers,
         "breaks": {"columns": breaks.columns, "rows": breaks.to_dicts()},
@@ -427,6 +484,57 @@ def _component_names(columns: list[str]) -> list[str]:
     """Active component names, in column order, inferred from ``<name>_bucket``."""
     suffix = "_bucket"
     return [c[: -len(suffix)] for c in columns if c.endswith(suffix) and c != "row_bucket"]
+
+
+def _driver_chain(row: dict, components: list[str]) -> list[dict]:
+    """Order the active components into the RWA-driver chain, nesting drivers.
+
+    Each step is ``{step, label, legacy, ours, abs_delta, rel_delta, bucket,
+    drivers}``; the component value reads its panel columns (``legacy_/our_/
+    abs_delta_/rel_delta_/<name>_bucket``). ``drivers`` are that component's
+    registry ``explain_columns`` + ``input_columns`` present on the row, each
+    ``{name, ours, legacy, legacy_available}``. Drivers are our-side-only
+    (``legacy_available=False``) — a column with a real legacy counterpart is a
+    promoted component and gets its own step, so it is excluded from any driver
+    list (and each driver is shown once, under its earliest chain-order step).
+    """
+    active = set(components)
+    # Columns that ARE a component value (their own step) must never re-appear as
+    # a driver row; seed ``seen`` with them so the dedup below skips them.
+    seen: set[str] = set()
+    for name in active:
+        spec = RECONCILABLE_COMPONENTS_BY_NAME.get(name)
+        if spec is not None:
+            seen.update(spec.our_columns)
+
+    ordered = [c for c in _CHAIN_ORDER if c in active]
+    ordered += [c for c in components if c not in _CHAIN_ORDER]
+
+    steps: list[dict] = []
+    for name in ordered:
+        spec = RECONCILABLE_COMPONENTS_BY_NAME.get(name)
+        drivers: list[dict] = []
+        if spec is not None:
+            for col in (*spec.explain_columns, *spec.input_columns):
+                if col in seen or col not in row:
+                    continue
+                seen.add(col)
+                drivers.append(
+                    {"name": col, "ours": row.get(col), "legacy": None, "legacy_available": False}
+                )
+        steps.append(
+            {
+                "step": name,
+                "label": _STEP_LABELS.get(name, name.replace("_", " ")),
+                "legacy": row.get(f"legacy_{name}"),
+                "ours": row.get(f"our_{name}"),
+                "abs_delta": row.get(f"abs_delta_{name}"),
+                "rel_delta": row.get(f"rel_delta_{name}"),
+                "bucket": row.get(f"{name}_bucket"),
+                "drivers": drivers,
+            }
+        )
+    return steps
 
 
 def _apply_forensic_filters(df: pl.DataFrame, filters: ForensicFilters) -> pl.DataFrame:

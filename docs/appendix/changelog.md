@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - (Next release changes will go here)
 
 ### Changed
-- (Next release changes will go here)
+- **The calculator progress stepper now shows a "Create exports" step when a run writes export files, so the end-of-run wait is labelled instead of looking like a hang.** When an output folder + formats are chosen, the calculator writes the selected exports (Parquet/CSV/Excel/COREP/Pillar III) *after* the pipeline finishes — a step that has no registry stage, so the stepper's spinner previously parked on the last pipeline stage (or appeared to "circle" with everything ticked) while the workbook(s) wrote, with no indication of what was happening. The stepper now appends a synthetic **Create exports** step (mirroring the reconciliation stepper's "Reconcile & summarise" tail): the spinner parks on it honestly while the files write, and it ticks off when they are done. The step is shown only when the run actually writes exports (`Job.writes_exports`); a plain run with no output folder ends at the aggregator as before. The reported `total_stages` (the registry pipeline count) is unchanged — the export step is a UI-only tail. Covered by extended `tests/integration/test_ui_app.py` assertions (the step renders and ticks for an export-writing run, and is absent otherwise).
 
 ---
 

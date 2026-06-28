@@ -107,6 +107,20 @@ RECON_STAGE_SEQUENCE: tuple[StageInfo, ...] = (
     StageInfo(name=RECON_STAGE_NAME, label="Reconcile & summarise", heavy=False),
 )
 
+# A calculation can optionally write the selected export formats to a folder
+# AFTER calculate() returns (see ui.app.main._calculation_worker). That write is
+# a plain function, not a registry stage, so when a run has exports configured the
+# worker marks this synthetic tail step DIRECTLY once the files are written — so
+# the stepper parks honestly on "Create exports" instead of appearing to hang on
+# the last pipeline stage while the workbook(s)/files write. Shown only when the
+# run actually writes exports (Job.writes_exports); a plain run ends at the
+# aggregator with no trailing step.
+EXPORT_STAGE_NAME = "write_exports"
+EXPORT_STAGE_SEQUENCE: tuple[StageInfo, ...] = (
+    *STAGE_SEQUENCE,
+    StageInfo(name=EXPORT_STAGE_NAME, label="Create exports", heavy=False),
+)
+
 
 # =============================================================================
 # Job state
@@ -132,6 +146,10 @@ class Job:
     """
 
     job_id: str
+    # Whether this run writes export files after calculate() returns. Drives the
+    # trailing "Create exports" step on the stepper; set once at creation, read by
+    # the /calculating page render. Plain immutable flag, no lock needed.
+    writes_exports: bool = False
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     _completed: list[str] = field(default_factory=list, repr=False)
     _status: str = "running"
@@ -176,9 +194,13 @@ _JOBS: dict[str, Job] = {}
 _JOBS_LOCK = threading.Lock()
 
 
-def create_job() -> Job:
-    """Create and register a fresh running job; return it."""
-    job = Job(job_id=uuid.uuid4().hex)
+def create_job(*, writes_exports: bool = False) -> Job:
+    """Create and register a fresh running job; return it.
+
+    ``writes_exports`` marks a run that will write export files after the
+    pipeline finishes, so the stepper shows the trailing "Create exports" step.
+    """
+    job = Job(job_id=uuid.uuid4().hex, writes_exports=writes_exports)
     with _JOBS_LOCK:
         _JOBS[job.job_id] = job
     return job

@@ -54,6 +54,8 @@ from rwa_calc.ui.app.calculator_state import (
 )
 from rwa_calc.ui.app.output_writer import write_selected_formats
 from rwa_calc.ui.app.progress import (
+    EXPORT_STAGE_NAME,
+    EXPORT_STAGE_SEQUENCE,
     RECON_STAGE_NAME,
     RECON_STAGE_SEQUENCE,
     STAGE_INDEX,
@@ -310,8 +312,10 @@ def _register_pages(app: FastAPI) -> None:
 
         # Run off the request thread so the browser gets a live, stage-by-stage
         # stepper instead of a frozen tab. The job_id doubles as the eventual
-        # results id (see _calculation_worker -> register_run_with_id).
-        job = create_job()
+        # results id (see _calculation_worker -> register_run_with_id). A run with
+        # an output folder + formats writes exports after calculate(), so the
+        # stepper shows the trailing "Create exports" step.
+        job = create_job(writes_exports=bool(output_folder.strip() and formats))
         submit_job(
             job,
             _calculation_worker(
@@ -328,12 +332,16 @@ def _register_pages(app: FastAPI) -> None:
 
     @app.get("/calculating/{job_id}", response_class=HTMLResponse)
     def calculating(request: Request, job_id: str) -> HTMLResponse:
-        if get_job(job_id) is None:
+        job = get_job(job_id)
+        if job is None:
             return _not_found(request, "That calculation has expired or does not exist.")
+        # Show the trailing "Create exports" step only when this run writes exports,
+        # so the spinner has a labelled step to park on while the files write.
+        stages = EXPORT_STAGE_SEQUENCE if job.writes_exports else STAGE_SEQUENCE
         return templates.TemplateResponse(
             request=request,
             name="calculating.html",
-            context=_nav({"job_id": job_id, "stages": STAGE_SEQUENCE}),
+            context=_nav({"job_id": job_id, "stages": stages}),
         )
 
     @app.get("/jobs/{job_id}")
@@ -773,6 +781,10 @@ def _calculation_worker(
             _EXPORT_OUTCOMES[job.job_id] = write_selected_formats(
                 response, Path(output_folder).expanduser(), formats, run_id=job.job_id
             )
+            # Tick the trailing "Create exports" step (the stepper parked on it
+            # while the files wrote). Marked only when exports actually ran, to
+            # match the conditional step shown by the /calculating page.
+            job.mark_stage(EXPORT_STAGE_NAME)
         save_calculator_state(
             CalculatorFormState(
                 data_path=data_path,

@@ -486,7 +486,7 @@ class COREPGenerator:
                 display = class_names.get(ec, (None, ec))[1]
                 raw_sheet = f"{prefix} - {display}"
                 sheet = _EXCEL_SHEET_INVALID_RE.sub("", raw_sheet)[:31]
-                df.write_excel(workbook=workbook, worksheet=sheet, autofit=True)
+                _finite_only(df).write_excel(workbook=workbook, worksheet=sheet, autofit=True)
                 total += len(df)
         return total
 
@@ -500,7 +500,7 @@ class COREPGenerator:
         if len(df) == 0:
             return 0
         sheet = _EXCEL_SHEET_INVALID_RE.sub("", sheet_name)[:31]
-        df.write_excel(workbook=workbook, worksheet=sheet, autofit=True)
+        _finite_only(df).write_excel(workbook=workbook, worksheet=sheet, autofit=True)
         return len(df)
 
     @staticmethod
@@ -519,7 +519,7 @@ class COREPGenerator:
         for country, df in sorted(templates.items()):
             if len(df) > 0:
                 sheet = _EXCEL_SHEET_INVALID_RE.sub("", f"{prefix} - {country}")[:31]
-                df.write_excel(workbook=workbook, worksheet=sheet, autofit=True)
+                _finite_only(df).write_excel(workbook=workbook, worksheet=sheet, autofit=True)
                 total += len(df)
         return total
 
@@ -2488,6 +2488,24 @@ _EQUITY_TRANSITIONAL_FILTERS: dict[str, dict[str, Any]] = {
 # =============================================================================
 # PRIVATE HELPERS
 # =============================================================================
+
+
+def _finite_only(df: pl.DataFrame) -> pl.DataFrame:
+    """Replace non-finite floats (NaN, +/-Inf) with null so the cell can be written.
+
+    xlsxwriter's ``write_number`` rejects NaN/Inf unless the workbook is opened
+    with ``nan_inf_to_errors`` (which would emit Excel error cells). A COREP value
+    that is mathematically undefined — e.g. a ratio over a zero denominator in an
+    empty class/geography segment — is better shown blank than as ``#NUM!``, so
+    non-finite floats become null here. Existing nulls and non-float columns are
+    untouched (only float columns can carry NaN/Inf).
+    """
+    float_cols = [name for name, dtype in df.schema.items() if dtype in (pl.Float32, pl.Float64)]
+    if not float_cols:
+        return df
+    return df.with_columns(
+        pl.when(pl.col(c).is_finite()).then(pl.col(c)).otherwise(None).alias(c) for c in float_cols
+    )
 
 
 def _irb_sub_split(

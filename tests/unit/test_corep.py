@@ -1469,6 +1469,31 @@ class TestExcelExport:
             first_sheet = next(iter(sheets.values()))
             assert len(first_sheet) > 0
 
+    def test_export_writes_non_finite_cells_as_blank(self, tmp_path: Path) -> None:
+        """A non-finite COREP cell is written blank, not crashing the workbook.
+
+        On real data a COREP template ratio can be NaN or +/-Inf (e.g. over a zero
+        denominator in an empty class segment); xlsxwriter rejects NaN/Inf in
+        write_number(), so they must become blank rather than abort the export.
+        """
+        gen = COREPGenerator()
+        bundle = COREPTemplateBundle(
+            c07_00={"corporate": pl.DataFrame({"row": ["Avg RW"], "value": [float("inf")]})},
+            c08_01={},
+            c08_02={},
+        )
+        output = tmp_path / "corep_nonfinite.xlsx"
+
+        # Act — must not raise "NAN/INF not supported in write_number()".
+        result = gen.export_to_excel(bundle, output)
+
+        # Assert — workbook written; the non-finite cell reads back blank (null).
+        assert output.exists()
+        assert result.format == "corep_excel"
+        sheets = pl.read_excel(output, sheet_id=0)
+        df = next(iter(sheets.values())) if isinstance(sheets, dict) else sheets
+        assert all(v is None for v in df["value"].to_list())
+
 
 # =============================================================================
 # PHASE 2A — SUPPORTING FACTOR COLUMNS (CRR ONLY)

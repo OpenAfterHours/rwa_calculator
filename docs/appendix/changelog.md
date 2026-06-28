@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - (Next release changes will go here)
 
+### Fixed
+- **The COREP export no longer crashes when a template cell computes a non-finite value.** Like the Pillar III export, a COREP template ratio can be `NaN` or `±Inf` on real data — e.g. a ratio over a zero denominator in an empty exposure-class or geography segment — and `xlsxwriter` rejects those in `write_number()` (`NAN/INF not supported … without 'nan_inf_to_errors'`), aborting the whole workbook. The three COREP workbook writers (`reporting/corep/generator.py`) now replace non-finite floats with null at the write boundary, so an undefined cell is shown **blank** rather than `#NUM!` or a crash; existing nulls and non-float columns are untouched. Covered by a new `TestExcelExport` regression test.
+
 ---
 
 ## [0.3.6] - 2026-06-27

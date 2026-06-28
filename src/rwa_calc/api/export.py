@@ -2,13 +2,14 @@
 Result export utilities for RWA Calculator.
 
 Pipeline position:
-    CalculationResponse -> ResultExporter -> Parquet / CSV / Excel / COREP files
+    CalculationResponse -> ResultExporter -> Parquet / CSV / Excel / COREP / Pillar III
 
 Key responsibilities:
 - Export calculation results to Parquet files (one per dataset)
 - Export calculation results to CSV files (one per dataset)
 - Export calculation results to multi-sheet Excel workbooks
 - Generate COREP regulatory reporting templates (C 07.00, C 08.01, C 08.02)
+- Generate Pillar III quantitative disclosure templates (OV1, CR4-CR10, CMS1/2, CCR1-8)
 - Provide a unified export interface regardless of output format
 
 The exporter reads from cached parquet files via CalculationResponse's

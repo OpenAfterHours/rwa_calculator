@@ -311,7 +311,9 @@ def reconcile_export(fmt: Literal["csv", "excel"], recon_id: str) -> FileRespons
 
 
 @router.get("/export/{fmt}", responses=_RESP_404)
-def export(fmt: Literal["parquet", "csv", "excel", "corep"], run_id: str) -> FileResponse:
+def export(
+    fmt: Literal["parquet", "csv", "excel", "corep", "pillar3"], run_id: str
+) -> FileResponse:
     """Export a completed run and stream it back for download.
 
     All on-disk paths are built from a fresh temp dir plus fixed, literal
@@ -327,6 +329,10 @@ def export(fmt: Literal["parquet", "csv", "excel", "corep"], run_id: str) -> Fil
     if fmt == "corep":
         out = tmp / "rwa_corep.xlsx"
         response.to_corep(out)
+        return _file(out)
+    if fmt == "pillar3":
+        out = tmp / "rwa_pillar3.xlsx"
+        response.to_pillar3(out)
         return _file(out)
 
     # parquet / csv export to a directory, then zip for a single download.

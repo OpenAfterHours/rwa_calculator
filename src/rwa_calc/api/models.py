@@ -293,6 +293,30 @@ class CalculationResponse:
 
         return ResultExporter().export_to_corep(self, output_path)
 
+    def to_pillar3(self, output_path: Path) -> ExportResult:
+        """
+        Export results as Pillar III quantitative disclosure templates.
+
+        Generates the credit-risk disclosure suite (OV1; SA CR4/CR5; IRB
+        CR6/CR6-A/CR7/CR7-A/CR8/CR9/CR9.1; slotting CR10; output-floor CMS1/CMS2;
+        counterparty CCR1/CCR2/CCR3/CCR8) in a multi-sheet Excel workbook, with
+        UK-prefixed sheet names under CRR and UKB-prefixed under Basel 3.1.
+
+        Requires xlsxwriter to be installed.
+
+        Args:
+            output_path: Path for the Pillar III .xlsx output file
+
+        Returns:
+            ExportResult with the written file path and row count
+
+        Raises:
+            ModuleNotFoundError: If xlsxwriter is not installed
+        """
+        from rwa_calc.api.export import ResultExporter
+
+        return ResultExporter().export_to_pillar3(self, output_path)
+
     @property
     def has_warnings(self) -> bool:
         """Check if there are any warnings."""

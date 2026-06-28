@@ -155,8 +155,8 @@ _RESULT_TABLE_COLS = [
 ]
 
 # Output formats the UI can write/download, in canonical order. parquet/csv are
-# dependency-free; excel/corep need xlsxwriter (see _xlsxwriter_available).
-EXPORT_FORMATS = ("parquet", "csv", "excel", "corep")
+# dependency-free; excel/corep/pillar3 need xlsxwriter (see _xlsxwriter_available).
+EXPORT_FORMATS = ("parquet", "csv", "excel", "corep", "pillar3")
 _DEFAULT_OUTPUT_FORMATS = ("parquet", "csv")
 
 # Rendered by the GET results page and both branches of the save route.
@@ -935,7 +935,8 @@ def _results_context(
         "export_csv_url": f"/api/export/csv?run_id={run_id}",
         "export_excel_url": f"/api/export/excel?run_id={run_id}",
         "export_corep_url": f"/api/export/corep?run_id={run_id}",
-        # Excel/COREP need xlsxwriter; grey them out when it is not installed.
+        "export_pillar3_url": f"/api/export/pillar3?run_id={run_id}",
+        # Excel/COREP/Pillar III need xlsxwriter; grey them out when it is not installed.
         "xlsx_available": _xlsxwriter_available(),
         # "Save to folder" form scaffolding + the last save outcome (if any).
         "export_formats": EXPORT_FORMATS,

@@ -184,7 +184,10 @@ def test_openapi_documents_results_404(client: TestClient) -> None:
     assert "404" in schema["paths"]["/api/results"]["get"]["responses"]
 
 
-@pytest.mark.parametrize(("fmt", "media"), [("parquet", "zip"), ("csv", "zip"), ("excel", "xlsx")])
+@pytest.mark.parametrize(
+    ("fmt", "media"),
+    [("parquet", "zip"), ("csv", "zip"), ("excel", "xlsx"), ("pillar3", "xlsx")],
+)
 def test_export_downloads_with_fixed_filename(
     client: TestClient, data_dir: str, fmt: str, media: str
 ) -> None:

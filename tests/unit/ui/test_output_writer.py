@@ -9,6 +9,7 @@ Tests cover:
 
 from __future__ import annotations
 
+import importlib.util
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -20,6 +21,8 @@ import pytest
 from rwa_calc.api.models import CalculationResponse, SummaryStatistics
 from rwa_calc.api.results_cache import ResultsCache
 from rwa_calc.ui.app.output_writer import OutputWriteResult, write_selected_formats
+
+XLSXWRITER_AVAILABLE = importlib.util.find_spec("xlsxwriter") is not None
 
 
 @pytest.fixture
@@ -106,3 +109,15 @@ def test_polars_export_error_is_captured(
     assert result.files == ()
     assert len(result.errors) == 1
     assert "csv" in result.errors[0]
+
+
+@pytest.mark.skipif(not XLSXWRITER_AVAILABLE, reason="xlsxwriter not installed")
+def test_writes_pillar3_workbook(sample_response: CalculationResponse, tmp_path: Path) -> None:
+    # Act — the Pillar III disclosure workbook is a single-file (workbook) export.
+    result = write_selected_formats(sample_response, tmp_path, ["pillar3"], run_id="r4")
+
+    # Assert — a single rwa_pillar3.xlsx lands in the run-stamped subfolder.
+    subdir = tmp_path / "rwa_export_r4"
+    assert (subdir / "rwa_pillar3.xlsx").exists()
+    assert result.errors == ()
+    assert any(f.name == "rwa_pillar3.xlsx" for f in result.files)

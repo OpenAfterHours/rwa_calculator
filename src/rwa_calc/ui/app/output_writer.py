@@ -39,9 +39,10 @@ logger = logging.getLogger(__name__)
 # Workbook filenames for the single-file (file-form) exporters.
 _EXCEL_NAME = "rwa_results.xlsx"
 _COREP_NAME = "rwa_corep.xlsx"
+_PILLAR3_NAME = "rwa_pillar3.xlsx"
 
-# Message shown when excel/corep is requested but xlsxwriter is not installed.
-_XLSX_HINT = "Excel/COREP export needs xlsxwriter — install it with 'uv add xlsxwriter'."
+# Message shown when a workbook format is requested but xlsxwriter is not installed.
+_XLSX_HINT = "Excel/COREP/Pillar III export needs xlsxwriter — install it with 'uv add xlsxwriter'."
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,7 +83,8 @@ def write_selected_formats(
     Args:
         response: The completed run to export.
         folder: The user-chosen output folder (a run-stamped subfolder is made).
-        formats: Any of ``parquet``, ``csv``, ``excel``, ``corep`` (order kept).
+        formats: Any of ``parquet``, ``csv``, ``excel``, ``corep``, ``pillar3``
+            (order kept).
         run_id: The run identifier, used to stamp the isolating subfolder.
 
     Returns:
@@ -111,9 +113,9 @@ def _write_one(response: CalculationResponse, fmt: str, subdir: Path) -> list[Pa
     """
     Write a single format into *subdir* and return the files written.
 
-    parquet/csv write their dataset files straight into the directory; excel and
-    corep are single workbooks written to a temp name then atomically renamed, so
-    a re-save can never shadow a good workbook with a half-written one.
+    parquet/csv write their dataset files straight into the directory; excel,
+    corep and pillar3 are single workbooks written to a temp name then atomically
+    renamed, so a re-save can never shadow a good workbook with a half-written one.
     """
     if fmt == "parquet":
         return list(response.to_parquet(subdir).files)
@@ -123,6 +125,8 @@ def _write_one(response: CalculationResponse, fmt: str, subdir: Path) -> list[Pa
         return [_write_workbook(response.to_excel, subdir / _EXCEL_NAME)]
     if fmt == "corep":
         return [_write_workbook(response.to_corep, subdir / _COREP_NAME)]
+    if fmt == "pillar3":
+        return [_write_workbook(response.to_pillar3, subdir / _PILLAR3_NAME)]
     raise ValueError(f"unknown export format: {fmt}")
 
 

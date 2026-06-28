@@ -60,7 +60,7 @@ The calculator (`/calculator`) runs the full pipeline through a form.
 |-------|-------------|
 | **Data path** | Directory of Parquet/CSV inputs (see [Input Schemas](../data-model/input-schemas.md)) |
 | **Output folder** | *Optional.* An absolute folder to write the results into when the run finishes. Leave blank to skip writing to disk (you can still download or save afterwards). |
-| **Output format(s)** | Which formats to write: Parquet, CSV, Excel, COREP. Excel and COREP require `xlsxwriter` (greyed out otherwise). |
+| **Output format(s)** | Which formats to write: Parquet, CSV, Excel, COREP, Pillar III. Excel, COREP and Pillar III require `xlsxwriter` (greyed out otherwise). |
 | **Framework** | CRR (Basel 3.0) or Basel 3.1 |
 | **Permission mode** | Standardised (all SA) or IRB (driven by `model_permissions`) |
 | **Data format** | Parquet (recommended) or CSV |
@@ -92,8 +92,9 @@ choose, so a new run never overwrites an earlier one. The output folder must be 
 absolute path whose parent already exists. Parquet preserves every column
 natively; CSV has no nested types, so the handful of nested columns (e.g.
 securitisation pool allocations) are JSON-encoded in the CSV rather than left
-blank. If a format genuinely cannot be written — for example Excel or COREP
-without `xlsxwriter` — that format alone is reported, and the others still write.
+blank. If a format genuinely cannot be written — for example Excel, COREP or
+Pillar III without `xlsxwriter` — that format alone is reported, and the others
+still write.
 
 !!! note "Local-only by design"
     The server binds to `127.0.0.1` and only answers to the `localhost` /
@@ -148,7 +149,7 @@ other tools). Interactive docs are at `/docs` (OpenAPI).
 | `POST` | `/api/comparison` | Run CRR and Basel 3.1 with deltas |
 | `POST` | `/api/reconcile` | Reconcile against a legacy output; returns a `recon_id` + tiers |
 | `GET`  | `/api/reconcile/export/{csv\|excel}?recon_id=…` | Download the reconciliation |
-| `GET`  | `/api/export/{parquet\|csv\|excel\|corep}?run_id=…` | Download an export |
+| `GET`  | `/api/export/{parquet\|csv\|excel\|corep\|pillar3}?run_id=…` | Download an export |
 
 ```bash
 curl -X POST http://localhost:8000/api/calculate \

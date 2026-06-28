@@ -582,3 +582,63 @@ class TestResultExporterProtocol:
 
         exporter = ResultExporter()
         assert isinstance(exporter, ResultExporterProtocol)
+
+
+# =============================================================================
+# Pillar III export
+# =============================================================================
+
+
+class TestExportToPillar3:
+    """Tests for the Pillar III disclosure export (workbook + convenience method)."""
+
+    @pytest.mark.skipif(not XLSXWRITER_AVAILABLE, reason="xlsxwriter not installed")
+    def test_creates_pillar3_workbook(
+        self, sample_response: CalculationResponse, tmp_path: Path
+    ) -> None:
+        # Arrange
+        output_path = tmp_path / "pillar3.xlsx"
+
+        # Act
+        result = ResultExporter().export_to_pillar3(sample_response, output_path)
+
+        # Assert
+        assert result.format == "pillar3_excel"
+        assert output_path.exists()
+        assert result.row_count > 0
+
+    @pytest.mark.skipif(not XLSXWRITER_AVAILABLE, reason="xlsxwriter not installed")
+    def test_pillar3_workbook_has_uk_prefixed_sheets(
+        self, sample_response: CalculationResponse, tmp_path: Path
+    ) -> None:
+        # Arrange / Act — the sample response is CRR, so sheets carry the UK prefix.
+        output_path = tmp_path / "pillar3.xlsx"
+        ResultExporter().export_to_pillar3(sample_response, output_path)
+
+        # Assert
+        import fastexcel
+
+        sheets = fastexcel.read_excel(str(output_path)).sheet_names
+        assert "UK OV1" in sheets
+        assert "UK CR5" in sheets
+
+    @pytest.mark.skipif(not XLSXWRITER_AVAILABLE, reason="xlsxwriter not installed")
+    def test_to_pillar3_convenience_delegates(
+        self, sample_response: CalculationResponse, tmp_path: Path
+    ) -> None:
+        # Arrange / Act
+        result = sample_response.to_pillar3(tmp_path / "pillar3.xlsx")
+
+        # Assert
+        assert result.format == "pillar3_excel"
+        assert (tmp_path / "pillar3.xlsx").exists()
+
+    def test_pillar3_raises_without_xlsxwriter(
+        self, sample_response: CalculationResponse, tmp_path: Path
+    ) -> None:
+        # Arrange / Act / Assert
+        with (
+            patch.dict("sys.modules", {"xlsxwriter": None}),
+            pytest.raises(ModuleNotFoundError, match="xlsxwriter"),
+        ):
+            sample_response.to_pillar3(tmp_path / "pillar3.xlsx")

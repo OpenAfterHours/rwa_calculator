@@ -20,7 +20,7 @@
     <legend>Output format(s) <span class="muted">— written to the output folder when one is set</span></legend>
     <div class="checkbox-row">
       {% for fmt in export_formats %}
-      {% set is_workbook = fmt in ("excel", "corep") %}
+      {% set is_workbook = fmt in ("excel", "corep", "pillar3") %}
       <label class="checkbox{% if is_workbook and not xlsx_available %} is-disabled{% endif %}">
         <input type="checkbox" name="output_formats" value="{{ fmt }}"
           {% if fmt in selected_output_formats %}checked{% endif %}
@@ -29,7 +29,7 @@
       </label>
       {% endfor %}
     </div>
-    {% if not xlsx_available %}<p class="muted">Install xlsxwriter to enable Excel and COREP.</p>{% endif %}
+    {% if not xlsx_available %}<p class="muted">Install xlsxwriter to enable Excel, COREP and Pillar III.</p>{% endif %}
   </fieldset>
   <div class="field-row">
     <div class="field">

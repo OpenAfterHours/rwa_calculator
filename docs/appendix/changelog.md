@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- (Next release changes will go here)
+- **Pillar III disclosure templates can now be exported from the UI and REST API, alongside COREP.** The engine already produced the full Pillar III quantitative credit-risk disclosure suite — OV1; SA CR4/CR5; IRB CR6/CR6-A/CR7/CR7-A/CR8/CR9/CR9.1; slotting CR10; output-floor CMS1/CMS2; counterparty CCR1/CCR2/CCR3/CCR8 (UK-prefixed sheets under CRR, UKB-prefixed under Basel 3.1) — but it was reachable **only** from Python via `ResultExporter().export_to_pillar3(...)`: there was no `CalculationResponse.to_pillar3()`, no REST endpoint, and no UI button, so a user could download COREP but not Pillar III. Pillar III is now wired through every export surface that COREP already had: a `CalculationResponse.to_pillar3(path)` convenience method (`api/models.py`); the REST `GET /api/export/{fmt}?run_id=…` endpoint accepts `pillar3` and streams the workbook (`api/rest.py`); the results page shows a **Pillar III** download button next to COREP, and `pillar3` is an option in the calculator's at-run-time and the results page's **Save to folder** format pickers (it writes `rwa_pillar3.xlsx` into the run-stamped subfolder via `output_writer`). Like Excel/COREP it needs `xlsxwriter` and is greyed out / reported per-format when that is missing, and the user-supplied `run_id` never reaches a filesystem path (fresh temp dir + fixed literal filename). Covered by `TestExportToPillar3` (`tests/unit/api/test_export.py`), the REST export parametrisation, `tests/unit/ui/test_output_writer.py`, and an extended results-page render assertion in `tests/integration/test_ui_app.py`.
 
 ### Changed
 - (Next release changes will go here)

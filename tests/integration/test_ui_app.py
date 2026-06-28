@@ -120,6 +120,9 @@ def test_results_page_offers_download_buttons(client: TestClient, data_dir: str)
     # the existing export endpoint (not just inert REST-API text).
     assert f"/api/export/parquet?run_id={job_id}" in page
     assert f"/api/export/csv?run_id={job_id}" in page
+    # The Pillar III disclosure export is offered alongside COREP (label always
+    # present; the link itself is gated on xlsxwriter being installed).
+    assert "Pillar III" in page
 
 
 def _run_to_completion(client: TestClient, data_dir: str) -> str:

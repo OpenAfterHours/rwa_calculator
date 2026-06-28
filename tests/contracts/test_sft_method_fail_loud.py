@@ -51,7 +51,7 @@ def _config(sft_method: str) -> CalculationConfig:
     return CalculationConfig.crr(
         reporting_date=_REPORTING_DATE,
         permission_mode=PermissionMode.STANDARDISED,
-        sft_method=sft_method,  # type: ignore[arg-type]
+        sft_method=sft_method,  # ty: ignore[invalid-argument-type]
     )
 
 

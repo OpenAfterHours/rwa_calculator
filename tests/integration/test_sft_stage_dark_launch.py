@@ -37,6 +37,7 @@ from datetime import date
 import polars as pl
 import pytest
 
+from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.contracts.edges import sealed_edge_of
 from rwa_calc.domain.enums import PermissionMode
@@ -67,7 +68,7 @@ _EXPECTED_RISK_WEIGHT: float = 0.50
 _A11_EAD_LOWER_BOUND: float = 60_000_000.0
 
 
-def _make_sft_data_bundle(sft_bundle) -> object:
+def _make_sft_data_bundle(sft_bundle) -> RawDataBundle:
     """Assemble a RawDataBundle with a populated ``raw.sft`` (no ``raw.ccr``)."""
     return make_raw_bundle(
         counterparties=_build_cp_inst_001_counterparty(),

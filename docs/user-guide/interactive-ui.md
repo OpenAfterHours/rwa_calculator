@@ -109,7 +109,11 @@ without `xlsxwriter` — that format alone is reported, and the others still wri
 The comparison page (`/comparison`) runs the portfolio through **both**
 frameworks and shows an executive summary, the additive capital-impact waterfall
 (scaling factor, supporting factor, methodology, output floor), and a per-class
-breakdown. It takes roughly twice a single-framework run.
+breakdown. It takes roughly twice a single-framework run. **Download** buttons
+export the comparison — the executive summary, the by-class and by-approach
+**delta** summaries, the capital-impact waterfall, and the per-exposure deltas —
+as CSV, Parquet (both a zip of one file per dataset) or a single multi-sheet Excel
+workbook.
 
 ---
 
@@ -146,6 +150,7 @@ other tools). Interactive docs are at `/docs` (OpenAPI).
 | `GET`  | `/api/results?run_id=…` | Page exposure-level results |
 | `GET`  | `/api/results/summary/{class\|approach}?run_id=…` | Portfolio summary |
 | `POST` | `/api/comparison` | Run CRR and Basel 3.1 with deltas |
+| `GET`  | `/api/comparison/export/{csv\|parquet\|excel}?comparison_id=…` | Download a comparison |
 | `POST` | `/api/reconcile` | Reconcile against a legacy output; returns a `recon_id` + tiers |
 | `GET`  | `/api/reconcile/export/{csv\|excel}?recon_id=…` | Download the reconciliation |
 | `GET`  | `/api/export/{parquet\|csv\|excel\|corep}?run_id=…` | Download an export |

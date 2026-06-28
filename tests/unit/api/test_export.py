@@ -28,6 +28,7 @@ import pytest
 from rwa_calc.api.export import ExportResult, ResultExporter
 from rwa_calc.api.models import (
     CalculationResponse,
+    ComparisonExportResponse,
     SummaryStatistics,
 )
 from rwa_calc.api.results_cache import ResultsCache
@@ -582,3 +583,125 @@ class TestResultExporterProtocol:
 
         exporter = ResultExporter()
         assert isinstance(exporter, ResultExporterProtocol)
+
+
+# =============================================================================
+# Comparison export
+# =============================================================================
+
+
+# Frame names the comparison exporter writes one file / sheet per (report order).
+_COMPARISON_FRAME_NAMES = (
+    "executive_summary",
+    "summary_by_class",
+    "summary_by_approach",
+    "waterfall",
+    "exposure_deltas",
+    "exposure_attribution",
+)
+
+
+def _comparison_export_response() -> ComparisonExportResponse:
+    """A small CRR vs Basel 3.1 comparison-export response for the exporter tests.
+
+    ``from_bundles`` only reads the summary / delta / waterfall / attribution
+    frames (not the nested AggregatedResultBundles), so a stub bundle suffices.
+    """
+    from tests.fixtures.resolved_bundle import make_aggregated_bundle
+
+    from rwa_calc.contracts.bundles import CapitalImpactBundle, ComparisonBundle
+
+    agg = make_aggregated_bundle(results=pl.LazyFrame())
+    comparison = ComparisonBundle(
+        baseline_results=agg,
+        variant_results=agg,
+        exposure_deltas=pl.LazyFrame(
+            {"exposure_reference": ["E1", "E2"], "delta_rwa": [100.0, -50.0]}
+        ),
+        summary_by_class=pl.LazyFrame(
+            {"exposure_class": ["corporate", "retail"], "total_delta_rwa": [100.0, -50.0]}
+        ),
+        summary_by_approach=pl.LazyFrame(
+            {"approach_applied": ["standardised"], "total_delta_rwa": [50.0]}
+        ),
+        baseline_label="crr",
+        variant_label="b31",
+    )
+    impact = CapitalImpactBundle(
+        exposure_attribution=pl.LazyFrame(
+            {"exposure_reference": ["E1", "E2"], "methodology_impact": [100.0, -50.0]}
+        ),
+        portfolio_waterfall=pl.LazyFrame(
+            {
+                "step": [1, 2],
+                "driver": ["Scaling factor removal", "Methodology & parameter changes"],
+                "impact_rwa": [-100.0, 50.0],
+                "cumulative_rwa": [-100.0, -50.0],
+            }
+        ),
+        summary_by_class=pl.LazyFrame({"exposure_class": ["corporate"]}),
+        summary_by_approach=pl.LazyFrame({"approach_applied": ["standardised"]}),
+    )
+    return ComparisonExportResponse.from_bundles(
+        comparison,
+        impact,
+        summary={"crr_rwa": 1000.0, "b31_rwa": 1050.0, "delta_rwa": 50.0},
+    )
+
+
+class TestComparisonExport:
+    """Tests for the comparison-page CSV / Parquet / Excel export."""
+
+    def test_csv_writes_one_file_per_frame(self, tmp_path: Path) -> None:
+        # Arrange
+        response = _comparison_export_response()
+
+        # Act
+        result = response.to_csv(tmp_path / "out")
+
+        # Assert: one CSV per export frame, each non-empty.
+        assert result.format == "csv"
+        assert {p.name for p in result.files} == {
+            f"comparison_{n}.csv" for n in _COMPARISON_FRAME_NAMES
+        }
+        assert all(p.stat().st_size > 0 for p in result.files)
+
+    def test_parquet_roundtrips_per_exposure_deltas(self, tmp_path: Path) -> None:
+        # Arrange
+        response = _comparison_export_response()
+
+        # Act
+        response.to_parquet(tmp_path / "out")
+
+        # Assert: the per-exposure delta frame survives the round-trip.
+        deltas = pl.read_parquet(tmp_path / "out" / "comparison_exposure_deltas.parquet")
+        assert deltas.height == 2
+        assert "delta_rwa" in deltas.columns
+
+    @pytest.mark.skipif(not XLSXWRITER_AVAILABLE, reason="xlsxwriter not installed")
+    def test_excel_has_a_sheet_per_frame(self, tmp_path: Path) -> None:
+        # Arrange
+        response = _comparison_export_response()
+        output_path = tmp_path / "comparison.xlsx"
+
+        # Act
+        response.to_excel(output_path)
+
+        # Assert: the friendly, comparison-specific sheet titles are present.
+        import fastexcel
+
+        sheets = fastexcel.read_excel(str(output_path)).sheet_names
+        assert "Executive Summary" in sheets
+        assert "Capital Impact Waterfall" in sheets
+        assert "Driver Attribution" in sheets
+
+    def test_excel_raises_without_xlsxwriter(self, tmp_path: Path) -> None:
+        # Arrange
+        response = _comparison_export_response()
+
+        # Act / Assert
+        with (
+            patch.dict("sys.modules", {"xlsxwriter": None}),
+            pytest.raises(ModuleNotFoundError, match="xlsxwriter"),
+        ):
+            response.to_excel(tmp_path / "comparison.xlsx")

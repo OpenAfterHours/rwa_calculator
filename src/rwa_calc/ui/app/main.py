@@ -973,12 +973,26 @@ def _compute_comparison(
         for row in by_class.to_dicts()
         if "exposure_class" in row
     ]
+
+    # Cache the comparison under a fresh id so the download buttons can stream it
+    # without re-running both frameworks. The comparison page renders inline (no
+    # background job), so the id + export URLs ride along in this same response.
+    from rwa_calc.api.models import ComparisonExportResponse
+    from rwa_calc.api.rest import register_comparison
+
+    comparison_id = register_comparison(
+        ComparisonExportResponse.from_bundles(bundle, impact, summary=summary)
+    )
     return {
         "summary": summary,
         "chart_waterfall": charts.waterfall_svg(steps),
         "chart_by_class": charts.grouped_bar_svg(grouped),
         "class_columns": by_class.columns,
         "class_rows": by_class.to_dicts(),
+        "export_csv_url": f"/api/comparison/export/csv?comparison_id={comparison_id}",
+        "export_parquet_url": f"/api/comparison/export/parquet?comparison_id={comparison_id}",
+        "export_excel_url": f"/api/comparison/export/excel?comparison_id={comparison_id}",
+        "xlsx_available": _xlsxwriter_available(),
     }
 
 

@@ -333,6 +333,10 @@ def test_comparison_renders_executive_summary(client: TestClient, data_dir: str)
     assert resp.status_code == 200
     assert "Executive summary" in resp.text
     assert "Comparison failed" not in resp.text
+    # The comparison is cached and its download buttons are wired to the export API.
+    assert "Download comparison" in resp.text
+    assert "/api/comparison/export/csv?comparison_id=" in resp.text
+    assert "/api/comparison/export/parquet?comparison_id=" in resp.text
 
 
 def test_invalid_path_rerenders_form_with_error(client: TestClient) -> None:

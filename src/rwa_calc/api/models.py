@@ -21,7 +21,11 @@ import polars as pl
 
 if TYPE_CHECKING:
     from rwa_calc.api.export import ExportResult
-    from rwa_calc.contracts.bundles import ReconciliationBundle
+    from rwa_calc.contracts.bundles import (
+        CapitalImpactBundle,
+        ComparisonBundle,
+        ReconciliationBundle,
+    )
 
 
 # =============================================================================
@@ -496,3 +500,92 @@ class ReconciliationResponse:
             df: pl.DataFrame = getattr(self.bundle, name).collect()
             self._collect_cache[name] = df
         return self._collect_cache[name]
+
+
+# =============================================================================
+# Response Models - Comparison export
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class ComparisonExportResponse:
+    """
+    Export wrapper for a CRR vs Basel 3.1 comparison (the comparison page download).
+
+    Holds the comparison's presentation frames already collected into eager
+    DataFrames — the executive-summary headline, the by-class / by-approach delta
+    summaries, the capital-impact waterfall, and the per-exposure delta /
+    driver-attribution frames. Storing collected frames (not the lazy
+    ``ComparisonBundle`` + ``CapitalImpactBundle``) keeps the in-process export
+    registry light: an entry is just these frames, not two full pipeline plan
+    graphs held alive until the process restarts.
+
+    The summaries and waterfall are tiny (one row per class / approach / driver);
+    only the per-exposure frames scale with the portfolio — and those are exactly
+    the data a download exists to provide.
+
+    Attributes:
+        baseline_label: Label for the baseline run (e.g. "crr").
+        variant_label: Label for the variant run (e.g. "b31").
+        frames: Ordered name -> DataFrame map, in report order, that the exporter
+            writes one file / sheet per entry from.
+        errors: Combined, API-friendly warnings from both runs and the analysis.
+    """
+
+    baseline_label: str
+    variant_label: str
+    frames: dict[str, pl.DataFrame]
+    errors: list[APIError] = field(default_factory=list)
+
+    @classmethod
+    def from_bundles(
+        cls,
+        comparison: ComparisonBundle,
+        impact: CapitalImpactBundle,
+        *,
+        summary: dict[str, float] | None = None,
+        baseline_label: str | None = None,
+        variant_label: str | None = None,
+    ) -> ComparisonExportResponse:
+        """Collect the export frames once from the comparison + impact bundles.
+
+        ``summary`` is the executive-summary headline already computed by the UI
+        layer (so this api-layer model never imports ``ui.views``); it becomes a
+        one-row ``executive_summary`` frame. Each lazy bundle frame is collected
+        exactly once here — the response then holds only eager DataFrames.
+        """
+        from rwa_calc.api.errors import convert_errors
+
+        exec_frame = pl.DataFrame([summary]) if summary else pl.DataFrame()
+        frames: dict[str, pl.DataFrame] = {
+            "executive_summary": exec_frame,
+            "summary_by_class": comparison.summary_by_class.collect(),
+            "summary_by_approach": comparison.summary_by_approach.collect(),
+            "waterfall": impact.portfolio_waterfall.collect(),
+            "exposure_deltas": comparison.exposure_deltas.collect(),
+            "exposure_attribution": impact.exposure_attribution.collect(),
+        }
+        return cls(
+            baseline_label=baseline_label or comparison.baseline_label,
+            variant_label=variant_label or comparison.variant_label,
+            frames=frames,
+            errors=convert_errors([*comparison.errors, *impact.errors]),
+        )
+
+    def to_csv(self, output_dir: Path) -> ExportResult:
+        """Export the comparison frames to CSV files (one per frame)."""
+        from rwa_calc.api.export import ResultExporter
+
+        return ResultExporter().export_comparison_to_csv(self, output_dir)
+
+    def to_parquet(self, output_dir: Path) -> ExportResult:
+        """Export the comparison frames to Parquet files (one per frame)."""
+        from rwa_calc.api.export import ResultExporter
+
+        return ResultExporter().export_comparison_to_parquet(self, output_dir)
+
+    def to_excel(self, output_path: Path) -> ExportResult:
+        """Export the comparison to a multi-sheet Excel workbook."""
+        from rwa_calc.api.export import ResultExporter
+
+        return ResultExporter().export_comparison_to_excel(self, output_path)

@@ -1791,6 +1791,15 @@ print(result.row_count)   # Total rows across all sheets
 !!! note "Excel dependency"
     Excel export requires `xlsxwriter`. Install via `uv add xlsxwriter`.
 
+!!! tip "Readable column-name header band"
+    Each sheet carries a **two-row header band**: the top row is a readable
+    column-name banner ("Row code" / "Row name", then each column's name —
+    e.g. *Original exposure pre conversion factors* over `0010`), and the row
+    beneath it is the regulatory 4-digit COREP ref codes that the cells are
+    keyed by. The top two rows are frozen so both stay visible while scrolling.
+    The banner is a presentation layer only — the underlying template data is
+    still keyed by ref, so machine-readable consumers are unaffected.
+
 ## Regulatory References
 
 | Reference | Topic |

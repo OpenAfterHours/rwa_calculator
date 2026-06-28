@@ -1921,7 +1921,37 @@ class TestExcelExport:
         result = generator.export_to_excel(bundle, output)
 
         # Assert — workbook written; the non-finite cells read back blank (null).
+        # The data header sits on row 1 (row 0 is the readable-name banner band).
         assert output.exists()
         assert result.format == "pillar3_excel"
-        readback = pl.read_excel(output, sheet_name="UK OV1")
+        readback = pl.read_excel(output, sheet_name="UK OV1", read_options={"header_row": 1})
         assert all(v is None for v in readback["value"].to_list())
+
+    def test_export_writes_readable_name_banner_above_refs(
+        self, generator: Pillar3Generator, tmp_path: Path
+    ):
+        # Arrange — a real-schema OV1 frame (row_ref/row_name + ref-coded columns).
+        bundle = Pillar3TemplateBundle(
+            ov1=pl.DataFrame(
+                {
+                    "row_ref": ["1"],
+                    "row_name": ["Credit risk (excluding CCR)"],
+                    "a": [100.0],
+                    "b": [90.0],
+                    "c": [8.0],
+                }
+            ),
+            framework="CRR",
+        )
+        output = tmp_path / "pillar3_banner.xlsx"
+
+        # Act
+        generator.export_to_excel(bundle, output)
+
+        # Assert — row 0 carries the readable column names, row 1 the ref codes.
+        raw = pl.read_excel(output, sheet_name="UK OV1", read_options={"header_row": None})
+        banner = raw.row(0)
+        refs = raw.row(1)
+        assert "RWEAs (T)" in banner  # readable name of column "a" (OV1_COLUMNS)
+        assert "Row code" in banner and "Row name" in banner
+        assert "a" in refs and "row_ref" in refs

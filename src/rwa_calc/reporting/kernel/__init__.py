@@ -10,6 +10,7 @@ Key responsibilities:
 - Approach and balance-sheet-side row filters (``filters``)
 - Null-safe column summation primitives (``sums``)
 - Template row-dict construction (``rows``)
+- Excel sheet writing with a readable-name header band (``excel``)
 
 Why: the COREP and Pillar 3 generators originally each carried a private
 copy of these helpers. The copies drifted (see ``filters.filter_on_bs`` for
@@ -25,6 +26,11 @@ References:
 from __future__ import annotations
 
 from rwa_calc.reporting.kernel.columns import available_columns, pick
+from rwa_calc.reporting.kernel.excel import (
+    column_name_map,
+    sanitise_sheet_name,
+    write_template_sheet,
+)
 from rwa_calc.reporting.kernel.filters import (
     filter_by_approach,
     filter_off_bs,
@@ -36,6 +42,7 @@ from rwa_calc.reporting.kernel.sums import col_sum, safe_sum, safe_sum_or_none
 __all__ = [
     "available_columns",
     "col_sum",
+    "column_name_map",
     "filter_by_approach",
     "filter_off_bs",
     "filter_on_bs",
@@ -43,4 +50,6 @@ __all__ = [
     "pick",
     "safe_sum",
     "safe_sum_or_none",
+    "sanitise_sheet_name",
+    "write_template_sheet",
 ]

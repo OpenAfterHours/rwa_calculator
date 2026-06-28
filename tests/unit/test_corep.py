@@ -1488,11 +1488,43 @@ class TestExcelExport:
         result = gen.export_to_excel(bundle, output)
 
         # Assert — workbook written; the non-finite cell reads back blank (null).
+        # The data header sits on row 1 (row 0 is the readable-name banner band).
         assert output.exists()
         assert result.format == "corep_excel"
-        sheets = pl.read_excel(output, sheet_id=0)
+        sheets = pl.read_excel(output, sheet_id=0, read_options={"header_row": 1})
         df = next(iter(sheets.values())) if isinstance(sheets, dict) else sheets
         assert all(v is None for v in df["value"].to_list())
+
+    def test_export_writes_readable_name_banner_above_refs(self, tmp_path: Path) -> None:
+        """The COREP Excel export bands readable column names above the ref codes."""
+        gen = COREPGenerator()
+        bundle = COREPTemplateBundle(
+            c07_00={
+                "corporate": pl.DataFrame(
+                    {
+                        "row_ref": ["0010"],
+                        "row_name": ["TOTAL EXPOSURES"],
+                        "0010": [100.0],
+                        "0220": [50.0],
+                    }
+                )
+            },
+            c08_01={},
+            c08_02={},
+        )
+        output = tmp_path / "corep_banner.xlsx"
+
+        # Act
+        gen.export_to_excel(bundle, output)
+
+        # Assert — row 0 carries the readable column names, row 1 the ref codes.
+        sheets = pl.read_excel(output, sheet_id=0, read_options={"header_row": None})
+        df = next(iter(sheets.values())) if isinstance(sheets, dict) else sheets
+        banner = df.row(0)
+        refs = df.row(1)
+        assert "Original exposure pre conversion factors" in banner  # name of col 0010
+        assert "Row code" in banner and "Row name" in banner
+        assert "0010" in refs and "row_ref" in refs
 
 
 # =============================================================================

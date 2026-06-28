@@ -36,7 +36,6 @@ from __future__ import annotations
 
 import logging
 import math
-import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -50,9 +49,11 @@ from rwa_calc.reporting.kernel import (
 )
 from rwa_calc.reporting.kernel import (
     col_sum,
+    column_name_map,
     filter_by_approach,
     null_row,
     safe_sum_or_none,
+    write_template_sheet,
 )
 from rwa_calc.reporting.kernel import (
     filter_off_bs as _filter_off_bs,
@@ -85,6 +86,7 @@ from rwa_calc.reporting.pillar3.templates import (
     CR9_AIRB_CLASSES,
     CR9_APPROACH_DISPLAY,
     CR9_COLUMN_REFS,
+    CR9_COLUMNS,
     CR9_FIRB_CLASSES,
     CR10_CATEGORY_MAP,
     CR10_SLOTTING_ROWS,
@@ -265,47 +267,91 @@ class Pillar3Generator:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         workbook = xw.Workbook(str(output_path))
         total_rows = 0
-        prefix = "UKB" if bundle.framework == "BASEL_3_1" else "UK"
+        framework = bundle.framework
+        prefix = "UKB" if framework == "BASEL_3_1" else "UK"
 
         try:
             if bundle.ov1 is not None:
-                total_rows += _write_single_sheet(workbook, bundle.ov1, f"{prefix} OV1")
+                total_rows += _write_single_sheet(
+                    workbook, bundle.ov1, f"{prefix} OV1", column_name_map(OV1_COLUMNS)
+                )
             if bundle.cr4 is not None:
-                total_rows += _write_single_sheet(workbook, bundle.cr4, f"{prefix} CR4")
+                total_rows += _write_single_sheet(
+                    workbook,
+                    bundle.cr4,
+                    f"{prefix} CR4",
+                    column_name_map(get_cr4_columns(framework)),
+                )
             if bundle.cr5 is not None:
-                total_rows += _write_single_sheet(workbook, bundle.cr5, f"{prefix} CR5")
+                total_rows += _write_single_sheet(
+                    workbook,
+                    bundle.cr5,
+                    f"{prefix} CR5",
+                    column_name_map(get_cr5_columns(framework)),
+                )
             total_rows += _write_dict_sheets(
-                workbook, bundle.cr6, f"{prefix} CR6", IRB_EXPOSURE_CLASSES
+                workbook,
+                bundle.cr6,
+                f"{prefix} CR6",
+                IRB_EXPOSURE_CLASSES,
+                column_name_map(get_cr6_columns(framework)),
             )
             if bundle.cr6a is not None:
-                total_rows += _write_single_sheet(workbook, bundle.cr6a, f"{prefix} CR6-A")
+                total_rows += _write_single_sheet(
+                    workbook, bundle.cr6a, f"{prefix} CR6-A", column_name_map(CR6A_COLUMNS)
+                )
             if bundle.cr7 is not None:
-                total_rows += _write_single_sheet(workbook, bundle.cr7, f"{prefix} CR7")
+                total_rows += _write_single_sheet(
+                    workbook, bundle.cr7, f"{prefix} CR7", column_name_map(CR7_COLUMNS)
+                )
             total_rows += _write_dict_sheets(
                 workbook,
                 bundle.cr7a,
                 f"{prefix} CR7-A",
                 {"foundation_irb": "F-IRB", "advanced_irb": "A-IRB"},
+                column_name_map(get_cr7a_columns(framework)),
             )
             if bundle.cr8 is not None:
-                total_rows += _write_single_sheet(workbook, bundle.cr8, f"{prefix} CR8")
+                total_rows += _write_single_sheet(
+                    workbook, bundle.cr8, f"{prefix} CR8", column_name_map(CR8_COLUMNS)
+                )
             if bundle.cr9:
                 cr9_display = _cr9_display_names(bundle.cr9)
-                total_rows += _write_dict_sheets(workbook, bundle.cr9, f"{prefix} CR9", cr9_display)
-            subtemplates = get_cr10_subtemplates(bundle.framework)
-            total_rows += _write_dict_sheets(workbook, bundle.cr10, f"{prefix} CR10", subtemplates)
+                total_rows += _write_dict_sheets(
+                    workbook, bundle.cr9, f"{prefix} CR9", cr9_display, column_name_map(CR9_COLUMNS)
+                )
+            subtemplates = get_cr10_subtemplates(framework)
+            total_rows += _write_dict_sheets(
+                workbook,
+                bundle.cr10,
+                f"{prefix} CR10",
+                subtemplates,
+                column_name_map(get_cr10_columns(framework)),
+            )
             if bundle.cms1 is not None:
-                total_rows += _write_single_sheet(workbook, bundle.cms1, f"{prefix} CMS1")
+                total_rows += _write_single_sheet(
+                    workbook, bundle.cms1, f"{prefix} CMS1", column_name_map(CMS1_COLUMNS)
+                )
             if bundle.cms2 is not None:
-                total_rows += _write_single_sheet(workbook, bundle.cms2, f"{prefix} CMS2")
+                total_rows += _write_single_sheet(
+                    workbook, bundle.cms2, f"{prefix} CMS2", column_name_map(CMS2_COLUMNS)
+                )
             if bundle.ccr1 is not None:
-                total_rows += _write_single_sheet(workbook, bundle.ccr1, f"{prefix} CCR1")
+                total_rows += _write_single_sheet(
+                    workbook, bundle.ccr1, f"{prefix} CCR1", column_name_map(CCR1_COLUMNS)
+                )
             if bundle.ccr2 is not None:
-                total_rows += _write_single_sheet(workbook, bundle.ccr2, f"{prefix} CCR2")
+                total_rows += _write_single_sheet(
+                    workbook, bundle.ccr2, f"{prefix} CCR2", column_name_map(CCR2_COLUMNS)
+                )
             if bundle.ccr3 is not None:
-                total_rows += _write_single_sheet(workbook, bundle.ccr3, f"{prefix} CCR3")
+                total_rows += _write_single_sheet(
+                    workbook, bundle.ccr3, f"{prefix} CCR3", column_name_map(CCR3_COLUMNS)
+                )
             if bundle.ccr8 is not None:
-                total_rows += _write_single_sheet(workbook, bundle.ccr8, f"{prefix} CCR8")
+                total_rows += _write_single_sheet(
+                    workbook, bundle.ccr8, f"{prefix} CCR8", column_name_map(CCR8_COLUMNS)
+                )
         finally:
             workbook.close()
 
@@ -2474,16 +2520,18 @@ def _obligor_count(data: pl.DataFrame, cols: set[str]) -> float | None:
 # ---------------------------------------------------------------------------
 
 
-def _sanitise_sheet_name(name: str) -> str:
-    """Sanitise a string for use as an Excel sheet name."""
-    return re.sub(r"[\[\]:*?/\\]", "", name)[:31]
+def _write_single_sheet(
+    workbook: Workbook,
+    df: pl.DataFrame,
+    name: str,
+    name_by_ref: Mapping[str, str],
+) -> int:
+    """Write a single DataFrame to a workbook sheet. Returns row count.
 
-
-def _write_single_sheet(workbook: Workbook, df: pl.DataFrame, name: str) -> int:
-    """Write a single DataFrame to a workbook sheet. Returns row count."""
-    sheet = _sanitise_sheet_name(name)
-    _finite_only(df).write_excel(workbook=workbook, worksheet=sheet, autofit=True)
-    return df.height
+    The sheet carries a readable column-name banner above the disclosure ref
+    codes (see ``kernel.write_template_sheet``).
+    """
+    return write_template_sheet(workbook, df, name, name_by_ref)
 
 
 def _write_dict_sheets(
@@ -2491,6 +2539,7 @@ def _write_dict_sheets(
     templates: dict[str, pl.DataFrame],
     prefix: str,
     display_names: dict[str, str],
+    name_by_ref: Mapping[str, str],
 ) -> int:
     """Write per-class/type templates to workbook sheets. Returns total rows."""
     total = 0
@@ -2499,25 +2548,5 @@ def _write_dict_sheets(
         if df.height == 0:
             continue
         display = display_names.get(key, key)
-        sheet = _sanitise_sheet_name(f"{prefix} - {display}")
-        _finite_only(df).write_excel(workbook=workbook, worksheet=sheet, autofit=True)
-        total += df.height
+        total += write_template_sheet(workbook, df, f"{prefix} - {display}", name_by_ref)
     return total
-
-
-def _finite_only(df: pl.DataFrame) -> pl.DataFrame:
-    """Replace non-finite floats (NaN, +/-Inf) with null so the cell can be written.
-
-    xlsxwriter's ``write_number`` rejects NaN/Inf unless the workbook is opened
-    with ``nan_inf_to_errors`` (which would emit Excel error cells). A disclosure
-    value that is mathematically undefined — e.g. an average PD or a ratio over a
-    zero denominator in an empty segment — is better shown blank than as ``#NUM!``,
-    so non-finite floats become null here. Existing nulls and non-float columns are
-    untouched (only float columns can carry NaN/Inf).
-    """
-    float_cols = [name for name, dtype in df.schema.items() if dtype in (pl.Float32, pl.Float64)]
-    if not float_cols:
-        return df
-    return df.with_columns(
-        pl.when(pl.col(c).is_finite()).then(pl.col(c)).otherwise(None).alias(c) for c in float_cols
-    )

@@ -964,6 +964,30 @@ above for the full reconciliation and links to the OF-ADJ formula and GCRA cap.
 
 ---
 
+## Excel Export
+
+```python
+from pathlib import Path
+from rwa_calc.reporting.pillar3.generator import Pillar3Generator
+
+generator = Pillar3Generator()
+bundle = generator.generate(response)
+result = generator.export_to_excel(bundle, Path("pillar3_disclosures.xlsx"))
+# UK-prefixed sheets under CRR (e.g. "UK OV1"), UKB-prefixed under Basel 3.1
+```
+
+!!! tip "Readable column-name header band"
+    Each sheet carries a **two-row header band**: the top row is a readable
+    column-name banner ("Row code" / "Row name", then each column's name —
+    e.g. *RWEAs (T)* over `a`), and the row beneath it is the regulatory
+    disclosure ref codes (`a`, `b`, `c`, … or `0010`, …) that the cells are
+    keyed by. The top two rows are frozen so both stay visible while scrolling.
+    The banner is a presentation layer only — the underlying template data is
+    still keyed by ref, so machine-readable consumers are unaffected. Excel
+    export requires `xlsxwriter` (`uv add xlsxwriter`).
+
+---
+
 ## See Also
 
 - [COREP Reporting](corep-reporting.md) — supervisory return templates (C 07.00, C 08.01, C 08.02)

@@ -32,7 +32,6 @@ References:
 from __future__ import annotations
 
 import logging
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -58,10 +57,12 @@ from rwa_calc.reporting.corep.templates import (
     CRR_C02_00_COLUMN_REFS,
     IRB_EXPOSURE_CLASS_ROWS,
     OF_02_01_COLUMN_REFS,
+    OF_02_01_COLUMNS,
     OF_02_01_ROW_SECTIONS,
     PD_BANDS,
     SA_EXPOSURE_CLASS_ROWS,
     COREPRow,
+    get_c02_00_columns,
     get_c02_00_row_sections,
     get_c07_columns,
     get_c08_02_columns,
@@ -93,6 +94,10 @@ from rwa_calc.reporting.kernel import (
     col_sum as _col_sum_eager,
 )
 from rwa_calc.reporting.kernel import (
+    column_name_map,
+    write_template_sheet,
+)
+from rwa_calc.reporting.kernel import (
     filter_by_approach as _filter_by_approach,
 )
 from rwa_calc.reporting.kernel import (
@@ -112,6 +117,8 @@ from rwa_calc.reporting.kernel import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from polars._typing import PolarsDataType
     from xlsxwriter import Workbook
 
@@ -121,11 +128,6 @@ if TYPE_CHECKING:
     from rwa_calc.contracts.results import ExportResult
 
 logger = logging.getLogger(__name__)
-
-# Regex matching characters Excel forbids in worksheet names. Hoisted to a
-# module-level compiled pattern so the regex literal isn't duplicated across
-# the four sheet-naming use-sites in ``export_to_excel``.
-_EXCEL_SHEET_INVALID_RE = re.compile(r"[\[\]:*?/\\]")
 
 
 # =============================================================================
@@ -422,53 +424,92 @@ class COREPGenerator:
         templates + 4 single-sheet templates + 2 geographical templates so
         the public ``export_to_excel`` stays focused on workbook lifecycle.
         """
-        is_b31 = bundle.framework == "BASEL_3_1"
+        framework = bundle.framework
+        is_b31 = framework == "BASEL_3_1"
         total = 0
         total += self._write_template_sheets(
-            workbook, bundle.c07_00, "C 07.00", SA_EXPOSURE_CLASS_ROWS
+            workbook,
+            bundle.c07_00,
+            "C 07.00",
+            SA_EXPOSURE_CLASS_ROWS,
+            column_name_map(get_c07_columns(framework)),
         )
         total += self._write_template_sheets(
-            workbook, bundle.c08_01, "C 08.01", IRB_EXPOSURE_CLASS_ROWS
+            workbook,
+            bundle.c08_01,
+            "C 08.01",
+            IRB_EXPOSURE_CLASS_ROWS,
+            column_name_map(get_c08_columns(framework)),
         )
         total += self._write_template_sheets(
-            workbook, bundle.c08_02, "C 08.02", IRB_EXPOSURE_CLASS_ROWS
+            workbook,
+            bundle.c08_02,
+            "C 08.02",
+            IRB_EXPOSURE_CLASS_ROWS,
+            column_name_map(get_c08_02_columns(framework)),
         )
         total += self._write_template_sheets(
-            workbook, bundle.c08_03, "C 08.03", IRB_EXPOSURE_CLASS_ROWS
+            workbook,
+            bundle.c08_03,
+            "C 08.03",
+            IRB_EXPOSURE_CLASS_ROWS,
+            column_name_map(get_c08_03_columns(framework)),
         )
         total += self._write_template_sheets(
             workbook,
             bundle.c08_04,
             "OF 08.04" if is_b31 else "C 08.04",
             IRB_EXPOSURE_CLASS_ROWS,
+            column_name_map(get_c08_04_columns(framework)),
         )
         total += self._write_template_sheets(
             workbook,
             bundle.c08_05,
             "OF 08.05" if is_b31 else "C 08.05",
             IRB_EXPOSURE_CLASS_ROWS,
+            column_name_map(get_c08_05_columns(framework)),
         )
-        sl_type_names = get_c08_06_sl_types(bundle.framework)
+        sl_type_names = get_c08_06_sl_types(framework)
         sl_class_map = {k: (k, v) for k, v in sl_type_names.items()}
-        total += self._write_template_sheets(workbook, bundle.c08_06, "C 08.06", sl_class_map)
+        total += self._write_template_sheets(
+            workbook,
+            bundle.c08_06,
+            "C 08.06",
+            sl_class_map,
+            column_name_map(get_c08_06_columns(framework)),
+        )
 
         if bundle.c08_07 is not None:
             total += self._write_single_template_sheet(
-                workbook, bundle.c08_07, "OF 08.07" if is_b31 else "C 08.07"
+                workbook,
+                bundle.c08_07,
+                "OF 08.07" if is_b31 else "C 08.07",
+                column_name_map(get_c08_07_columns(framework)),
             )
         if bundle.of_02_01 is not None:
-            total += self._write_single_template_sheet(workbook, bundle.of_02_01, "OF 02.01")
+            total += self._write_single_template_sheet(
+                workbook, bundle.of_02_01, "OF 02.01", column_name_map(OF_02_01_COLUMNS)
+            )
         if bundle.c_02_00 is not None:
             total += self._write_single_template_sheet(
-                workbook, bundle.c_02_00, "OF 02.00" if is_b31 else "C 02.00"
+                workbook,
+                bundle.c_02_00,
+                "OF 02.00" if is_b31 else "C 02.00",
+                column_name_map(get_c02_00_columns(framework)),
             )
         if bundle.c09_01:
             total += self._write_geo_template_sheets(
-                workbook, bundle.c09_01, "OF 09.01" if is_b31 else "C 09.01"
+                workbook,
+                bundle.c09_01,
+                "OF 09.01" if is_b31 else "C 09.01",
+                column_name_map(get_c09_01_columns(framework)),
             )
         if bundle.c09_02:
             total += self._write_geo_template_sheets(
-                workbook, bundle.c09_02, "OF 09.02" if is_b31 else "C 09.02"
+                workbook,
+                bundle.c09_02,
+                "OF 09.02" if is_b31 else "C 09.02",
+                column_name_map(get_c09_02_columns(framework)),
             )
         return total
 
@@ -478,16 +519,18 @@ class COREPGenerator:
         templates: dict[str, pl.DataFrame],
         prefix: str,
         class_names: dict[str, tuple[str, str]],
+        name_by_ref: Mapping[str, str],
     ) -> int:
-        """Write per-class DataFrames as Excel sheets. Returns total rows written."""
+        """Write per-class DataFrames as Excel sheets. Returns total rows written.
+
+        Each sheet carries a readable column-name banner above the COREP ref
+        codes (see ``kernel.write_template_sheet``).
+        """
         total = 0
         for ec, df in sorted(templates.items()):
             if len(df) > 0:
                 display = class_names.get(ec, (None, ec))[1]
-                raw_sheet = f"{prefix} - {display}"
-                sheet = _EXCEL_SHEET_INVALID_RE.sub("", raw_sheet)[:31]
-                _finite_only(df).write_excel(workbook=workbook, worksheet=sheet, autofit=True)
-                total += len(df)
+                total += write_template_sheet(workbook, df, f"{prefix} - {display}", name_by_ref)
         return total
 
     @staticmethod
@@ -495,19 +538,19 @@ class COREPGenerator:
         workbook: Workbook,
         df: pl.DataFrame,
         sheet_name: str,
+        name_by_ref: Mapping[str, str],
     ) -> int:
         """Write a single DataFrame as an Excel sheet. Returns rows written."""
         if len(df) == 0:
             return 0
-        sheet = _EXCEL_SHEET_INVALID_RE.sub("", sheet_name)[:31]
-        _finite_only(df).write_excel(workbook=workbook, worksheet=sheet, autofit=True)
-        return len(df)
+        return write_template_sheet(workbook, df, sheet_name, name_by_ref)
 
     @staticmethod
     def _write_geo_template_sheets(
         workbook: Workbook,
         templates: dict[str, pl.DataFrame],
         prefix: str,
+        name_by_ref: Mapping[str, str],
     ) -> int:
         """Write per-country geographical templates as Excel sheets.
 
@@ -518,9 +561,7 @@ class COREPGenerator:
         total = 0
         for country, df in sorted(templates.items()):
             if len(df) > 0:
-                sheet = _EXCEL_SHEET_INVALID_RE.sub("", f"{prefix} - {country}")[:31]
-                _finite_only(df).write_excel(workbook=workbook, worksheet=sheet, autofit=True)
-                total += len(df)
+                total += write_template_sheet(workbook, df, f"{prefix} - {country}", name_by_ref)
         return total
 
     # =========================================================================
@@ -2488,24 +2529,6 @@ _EQUITY_TRANSITIONAL_FILTERS: dict[str, dict[str, Any]] = {
 # =============================================================================
 # PRIVATE HELPERS
 # =============================================================================
-
-
-def _finite_only(df: pl.DataFrame) -> pl.DataFrame:
-    """Replace non-finite floats (NaN, +/-Inf) with null so the cell can be written.
-
-    xlsxwriter's ``write_number`` rejects NaN/Inf unless the workbook is opened
-    with ``nan_inf_to_errors`` (which would emit Excel error cells). A COREP value
-    that is mathematically undefined — e.g. a ratio over a zero denominator in an
-    empty class/geography segment — is better shown blank than as ``#NUM!``, so
-    non-finite floats become null here. Existing nulls and non-float columns are
-    untouched (only float columns can carry NaN/Inf).
-    """
-    float_cols = [name for name, dtype in df.schema.items() if dtype in (pl.Float32, pl.Float64)]
-    if not float_cols:
-        return df
-    return df.with_columns(
-        pl.when(pl.col(c).is_finite()).then(pl.col(c)).otherwise(None).alias(c) for c in float_cols
-    )
 
 
 def _irb_sub_split(

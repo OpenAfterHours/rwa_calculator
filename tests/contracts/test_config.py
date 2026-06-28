@@ -219,7 +219,7 @@ class TestSFTConfig:
         config = SFTConfig()
 
         with pytest.raises(dataclasses.FrozenInstanceError):
-            config.method = "var"  # type: ignore[misc]
+            config.method = "var"  # ty: ignore[invalid-assignment]
 
     def test_sftconfig_accepts_reserved_var_method(self):
         """SFTConfig(method='var') constructs (reserved, unimplemented literal)."""

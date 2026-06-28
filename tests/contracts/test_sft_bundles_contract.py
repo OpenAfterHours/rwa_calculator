@@ -72,7 +72,8 @@ def test_leaf_bundle_is_frozen_dataclass(class_name: str) -> None:
     """Each SFT leaf bundle must be a frozen dataclass."""
     cls = _get(class_name)
     assert dataclasses.is_dataclass(cls), f"'{class_name}' must be a @dataclass"
-    assert cls.__dataclass_params__.frozen is True, f"'{class_name}' must be frozen"
+    params = cls.__dataclass_params__  # ty: ignore[unresolved-attribute]
+    assert params.frozen is True, f"'{class_name}' must be frozen"
 
 
 @pytest.mark.parametrize("class_name, lf_field, _brand", _LEAF_SPECS)
@@ -145,7 +146,8 @@ def test_raw_sft_bundle_is_frozen_dataclass() -> None:
     """RawSFTBundle must be a frozen dataclass."""
     cls = _get("RawSFTBundle")
     assert dataclasses.is_dataclass(cls)
-    assert cls.__dataclass_params__.frozen is True
+    params = cls.__dataclass_params__  # ty: ignore[unresolved-attribute]
+    assert params.frozen is True
 
 
 def test_raw_sft_bundle_field_set_and_order() -> None:

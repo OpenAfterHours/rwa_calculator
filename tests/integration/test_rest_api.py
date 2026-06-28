@@ -266,6 +266,77 @@ def test_reconcile_export_unknown_id_is_404(client: TestClient) -> None:
     assert client.get("/api/reconcile/export/csv", params={"recon_id": "nope"}).status_code == 404
 
 
+# =============================================================================
+# Comparison export
+# =============================================================================
+
+
+def _register_small_comparison(comparison_id: str = "test-comparison-id") -> str:
+    """Register a small comparison-export result in the shared registry; return its id."""
+    from rwa_calc.api.models import ComparisonExportResponse
+    from rwa_calc.api.rest import register_comparison_with_id
+    from rwa_calc.contracts.bundles import CapitalImpactBundle, ComparisonBundle
+    from tests.fixtures.resolved_bundle import make_aggregated_bundle
+
+    agg = make_aggregated_bundle(results=pl.LazyFrame())
+    comparison = ComparisonBundle(
+        baseline_results=agg,
+        variant_results=agg,
+        exposure_deltas=pl.LazyFrame({"exposure_reference": ["E1"], "delta_rwa": [100.0]}),
+        summary_by_class=pl.LazyFrame(
+            {"exposure_class": ["corporate"], "total_delta_rwa": [100.0]}
+        ),
+        summary_by_approach=pl.LazyFrame(
+            {"approach_applied": ["standardised"], "total_delta_rwa": [100.0]}
+        ),
+        baseline_label="crr",
+        variant_label="b31",
+    )
+    impact = CapitalImpactBundle(
+        exposure_attribution=pl.LazyFrame(
+            {"exposure_reference": ["E1"], "methodology_impact": [100.0]}
+        ),
+        portfolio_waterfall=pl.LazyFrame(
+            {
+                "step": [1],
+                "driver": ["Methodology & parameter changes"],
+                "impact_rwa": [100.0],
+                "cumulative_rwa": [100.0],
+            }
+        ),
+        summary_by_class=pl.LazyFrame({"exposure_class": ["corporate"]}),
+        summary_by_approach=pl.LazyFrame({"approach_applied": ["standardised"]}),
+    )
+    register_comparison_with_id(
+        comparison_id,
+        ComparisonExportResponse.from_bundles(
+            comparison, impact, summary={"crr_rwa": 1.0, "b31_rwa": 2.0}
+        ),
+    )
+    return comparison_id
+
+
+@pytest.mark.parametrize(("fmt", "media"), [("csv", "zip"), ("parquet", "zip"), ("excel", "xlsx")])
+def test_comparison_export_downloads(client: TestClient, fmt: str, media: str) -> None:
+    # Arrange
+    comparison_id = _register_small_comparison()
+
+    # Act
+    resp = client.get(f"/api/comparison/export/{fmt}", params={"comparison_id": comparison_id})
+
+    # Assert — download succeeds; the served filename is a fixed literal (no id)
+    assert resp.status_code == 200
+    assert resp.content
+    disposition = resp.headers.get("content-disposition", "")
+    assert comparison_id not in disposition
+    assert media in disposition
+
+
+def test_comparison_export_unknown_id_is_404(client: TestClient) -> None:
+    resp = client.get("/api/comparison/export/csv", params={"comparison_id": "nope"})
+    assert resp.status_code == 404
+
+
 def test_openapi_documents_reconcile(client: TestClient) -> None:
     schema = client.get("/openapi.json").json()
     assert "/api/reconcile" in schema["paths"]

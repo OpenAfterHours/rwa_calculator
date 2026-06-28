@@ -48,6 +48,7 @@ from rwa_calc.api.validation import DataPathValidator
 if TYPE_CHECKING:
     from rwa_calc.api.models import (
         CalculationResponse,
+        ComparisonExportResponse,
         PerformanceMetrics,
         ReconciliationResponse,
         SummaryStatistics,
@@ -64,6 +65,13 @@ _RUNS: dict[str, CalculationResponse] = {}
 # forensic-tier filter and export endpoints can re-read a cached result without
 # recomputing. Same in-process / non-persistent trade-off as ``_RUNS``.
 _RECON_RUNS: dict[str, ReconciliationResponse] = {}
+
+# Parallel registry for comparison-export results (CRR vs Basel 3.1), keyed by a
+# generated comparison_id so the comparison page's download buttons can stream a
+# cached result without re-running both frameworks. Each entry holds only the
+# collected export frames (not the lazy bundles), so it stays light; same
+# in-process / non-persistent trade-off as ``_RUNS``.
+_COMPARISONS: dict[str, ComparisonExportResponse] = {}
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -345,6 +353,38 @@ def export(fmt: Literal["parquet", "csv", "excel", "corep"], run_id: str) -> Fil
     return _file(zip_path)
 
 
+@router.get("/comparison/export/{fmt}", responses=_RESP_404)
+def comparison_export(fmt: Literal["csv", "excel", "parquet"], comparison_id: str) -> FileResponse:
+    """Export a registered CRR vs Basel 3.1 comparison and stream it for download.
+
+    Carries the executive-summary headline, the by-class / by-approach delta
+    summaries, the capital-impact waterfall and the per-exposure deltas. As with
+    ``/export``, on-disk paths use a fresh temp dir plus fixed literal filenames —
+    the user-supplied comparison_id never reaches the filesystem path.
+    """
+    response = _require_comparison(comparison_id)
+    tmp = Path(tempfile.mkdtemp(prefix="rwa_comparison_export_"))
+
+    if fmt == "excel":
+        out = tmp / "comparison.xlsx"
+        response.to_excel(out)
+        return _file(out)
+
+    out_dir = tmp / fmt
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if fmt == "csv":
+        response.to_csv(out_dir)
+        zip_path = tmp / "comparison_csv.zip"
+    else:
+        response.to_parquet(out_dir)
+        zip_path = tmp / "comparison_parquet.zip"
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for f in sorted(out_dir.rglob("*")):
+            if f.is_file():
+                zf.write(f, f.relative_to(out_dir))
+    return _file(zip_path)
+
+
 # =============================================================================
 # App factory
 # =============================================================================
@@ -407,6 +447,23 @@ def get_reconciliation(recon_id: str) -> ReconciliationResponse | None:
     return _RECON_RUNS.get(recon_id)
 
 
+def register_comparison(response: ComparisonExportResponse) -> str:
+    """Register a comparison-export result in the in-process registry; return its id."""
+    comparison_id = uuid.uuid4().hex
+    _COMPARISONS[comparison_id] = response
+    return comparison_id
+
+
+def register_comparison_with_id(comparison_id: str, response: ComparisonExportResponse) -> None:
+    """Register a comparison-export result under a caller-supplied id."""
+    _COMPARISONS[comparison_id] = response
+
+
+def get_comparison(comparison_id: str) -> ComparisonExportResponse | None:
+    """Look up a registered comparison-export result, or None if unknown/expired."""
+    return _COMPARISONS.get(comparison_id)
+
+
 def register_recon_workspace(recon_id: str, workspace: ReconWorkspace) -> None:
     """Bind a recon_id to its sign-off workspace (called by the UI recon worker)."""
     _RECON_WORKSPACE[recon_id] = workspace
@@ -457,6 +514,14 @@ def _require_reconciliation(recon_id: str) -> ReconciliationResponse:
     response = _RECON_RUNS.get(recon_id)
     if response is None:
         raise HTTPException(status_code=404, detail=f"unknown recon_id: {recon_id}")
+    return response
+
+
+def _require_comparison(comparison_id: str) -> ComparisonExportResponse:
+    """Look up a registered comparison-export result or raise 404."""
+    response = _COMPARISONS.get(comparison_id)
+    if response is None:
+        raise HTTPException(status_code=404, detail=f"unknown comparison_id: {comparison_id}")
     return response
 
 

@@ -28,7 +28,11 @@ import polars as pl
 from rwa_calc.contracts.results import ExportResult
 
 if TYPE_CHECKING:
-    from rwa_calc.api.models import CalculationResponse, ReconciliationResponse
+    from rwa_calc.api.models import (
+        CalculationResponse,
+        ComparisonExportResponse,
+        ReconciliationResponse,
+    )
     from rwa_calc.contracts.config import OutputFloorConfig
 
 logger = logging.getLogger(__name__)
@@ -359,6 +363,90 @@ class ResultExporter:
             workbook.close()
         return ExportResult(format="excel", files=[output_path], row_count=total_rows)
 
+    # -- comparison ---------------------------------------------------------
+
+    def export_comparison_to_csv(
+        self,
+        response: ComparisonExportResponse,
+        output_dir: Path,
+    ) -> ExportResult:
+        """Export each comparison frame to its own CSV file."""
+        output_dir.mkdir(parents=True, exist_ok=True)
+        files: list[Path] = []
+        total_rows = 0
+        for name, df in _comparison_frames(response):
+            path = output_dir / f"comparison_{name}.csv"
+            _csv_safe(df).write_csv(path)
+            files.append(path)
+            total_rows += len(df)
+        return ExportResult(format="csv", files=files, row_count=total_rows)
+
+    def export_comparison_to_parquet(
+        self,
+        response: ComparisonExportResponse,
+        output_dir: Path,
+    ) -> ExportResult:
+        """Export each comparison frame to its own Parquet file."""
+        output_dir.mkdir(parents=True, exist_ok=True)
+        files: list[Path] = []
+        total_rows = 0
+        for name, df in _comparison_frames(response):
+            path = output_dir / f"comparison_{name}.parquet"
+            df.write_parquet(path)
+            files.append(path)
+            total_rows += len(df)
+        return ExportResult(format="parquet", files=files, row_count=total_rows)
+
+    def export_comparison_to_excel(
+        self,
+        response: ComparisonExportResponse,
+        output_path: Path,
+    ) -> ExportResult:
+        """Export the comparison to a multi-sheet Excel workbook.
+
+        Sheets: Executive Summary, By Class, By Approach, Capital Impact Waterfall,
+        Exposure Deltas, Driver Attribution, Errors. Requires xlsxwriter.
+
+        Raises:
+            ModuleNotFoundError: If xlsxwriter is not installed.
+        """
+        try:
+            import xlsxwriter  # noqa: F401
+        except ModuleNotFoundError:
+            msg = "Excel export requires 'xlsxwriter'. Install it with: uv add xlsxwriter"
+            raise ModuleNotFoundError(msg) from None
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        import xlsxwriter as xw
+
+        # Friendly sheet titles in report order (headline -> per-exposure detail).
+        sheet_titles = {
+            "executive_summary": "Executive Summary",
+            "summary_by_class": "By Class",
+            "summary_by_approach": "By Approach",
+            "waterfall": "Capital Impact Waterfall",
+            "exposure_deltas": "Exposure Deltas",
+            "exposure_attribution": "Driver Attribution",
+        }
+        total_rows = 0
+        workbook = xw.Workbook(str(output_path))
+        try:
+            for name, df in _comparison_frames(response):
+                if len(df) == 0:
+                    continue
+                df.write_excel(
+                    workbook=workbook,
+                    worksheet=sheet_titles.get(name, name)[:31],
+                    autofit=True,
+                )
+                total_rows += len(df)
+            errors_df = _comparison_errors_frame(response)
+            if len(errors_df) > 0:
+                errors_df.write_excel(workbook=workbook, worksheet="Errors", autofit=True)
+        finally:
+            workbook.close()
+        return ExportResult(format="excel", files=[output_path], row_count=total_rows)
+
 
 # =============================================================================
 # CSV helpers
@@ -426,6 +514,29 @@ def _reconciliation_frames(
 
 def _reconciliation_errors_frame(response: ReconciliationResponse) -> pl.DataFrame:
     """Build a small DataFrame of the reconciliation warnings for the report."""
+    return pl.DataFrame(
+        {
+            "code": [e.code for e in response.errors],
+            "severity": [e.severity for e in response.errors],
+            "message": [e.message for e in response.errors],
+        }
+    )
+
+
+# =============================================================================
+# Comparison export helpers
+# =============================================================================
+
+
+def _comparison_frames(
+    response: ComparisonExportResponse,
+) -> list[tuple[str, pl.DataFrame]]:
+    """The comparison export frames in report order (headline first)."""
+    return list(response.frames.items())
+
+
+def _comparison_errors_frame(response: ComparisonExportResponse) -> pl.DataFrame:
+    """Build a small DataFrame of the comparison warnings for the report."""
     return pl.DataFrame(
         {
             "code": [e.code for e in response.errors],

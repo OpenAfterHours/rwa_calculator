@@ -56,6 +56,20 @@ regulatory drivers. Takes roughly twice a single run.</p>
   {{ result.chart_by_class | safe }}
 </div>
 
+<h2>Download comparison</h2>
+<p class="muted">Save the comparison — executive summary, by-class and by-approach deltas, the
+capital-impact waterfall, and per-exposure deltas. CSV and Parquet download as a zip of one file
+per dataset; Excel downloads as a single multi-sheet workbook.</p>
+<div class="btn-row">
+  <a class="btn btn-ghost" href="{{ result.export_csv_url }}">CSV</a>
+  <a class="btn btn-ghost" href="{{ result.export_parquet_url }}">Parquet</a>
+  {% if result.xlsx_available %}
+  <a class="btn btn-ghost" href="{{ result.export_excel_url }}">Excel</a>
+  {% else %}
+  <span class="btn btn-ghost is-disabled" title="Install xlsxwriter to enable Excel export">Excel</span>
+  {% endif %}
+</div>
+
 <h2>By exposure class</h2>
 <div class="table-wrap">
   <table class="data">

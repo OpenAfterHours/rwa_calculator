@@ -32,8 +32,12 @@ if TYPE_CHECKING:
 # Constants
 # =============================================================================
 
-_SA_APPROACHES = ["SA", "standardised"]
-_IRB_APPROACHES = ["foundation_irb", "advanced_irb", "FIRB"]
+# Approach-string buckets for the SA / IRB / Slotting card totals. Production
+# emits the long ``ApproachType`` values ("standardised", "foundation_irb",
+# "advanced_irb", "slotting"); the short aliases (SA/FIRB/AIRB/SLOTTING) appear on
+# branch frames and test fixtures, so both forms are listed to avoid undercounting.
+_SA_APPROACHES = ["SA", "standardised", "sa", "STD"]
+_IRB_APPROACHES = ["foundation_irb", "advanced_irb", "FIRB", "AIRB", "firb", "airb"]
 _SLOTTING_APPROACHES = ["SLOTTING", "slotting"]
 
 _EMPTY_SUMMARY = SummaryStatistics(
@@ -103,6 +107,8 @@ class ResultFormatter:
             frames_to_collect.append(bundle.summary_by_class)
         if bundle.summary_by_approach is not None:
             frames_to_collect.append(bundle.summary_by_approach)
+        if bundle.summary_by_class_method is not None:
+            frames_to_collect.append(bundle.summary_by_class_method)
 
         collected = pl.collect_all(frames_to_collect)
         results_df = collected[0]
@@ -116,6 +122,10 @@ class ResultFormatter:
         summary_by_approach_df = None
         if bundle.summary_by_approach is not None:
             summary_by_approach_df = collected[idx]
+            idx += 1
+        summary_by_class_method_df = None
+        if bundle.summary_by_class_method is not None:
+            summary_by_class_method_df = collected[idx]
 
         # Compute summary from already-collected DataFrame (zero cost)
         summary, exposure_count = self._compute_summary_from_df(
@@ -141,6 +151,7 @@ class ResultFormatter:
             results=results_df,
             summary_by_class=summary_by_class_df,
             summary_by_approach=summary_by_approach_df,
+            summary_by_class_method=summary_by_class_method_df,
             metadata=metadata,
         )
 
@@ -159,6 +170,7 @@ class ResultFormatter:
             results_path=cached.results_path,
             summary_by_class_path=cached.summary_by_class_path,
             summary_by_approach_path=cached.summary_by_approach_path,
+            summary_by_class_method_path=cached.summary_by_class_method_path,
             errors=errors,
             performance=performance,
         )
@@ -310,11 +322,31 @@ class ResultFormatter:
 # =============================================================================
 
 
+def _finite_sum(series: pl.Series) -> float | int | None:
+    """Sum a series, excluding non-finite (NaN / inf) values.
+
+    Polars float ``.sum()`` propagates ``NaN`` (and ``inf``) — a single
+    non-finite row would otherwise turn the whole portfolio total into
+    ``NaN``/``inf`` and blank the stat cards. ``null`` rows are already skipped
+    by ``.sum()``; here we additionally drop NaN/inf so the card shows the real
+    total for the unaffected rows. The offending rows are surfaced separately as
+    an aggregator ``CalculationError`` (AGG001), so this is a display safety net,
+    not a silent correction.
+    """
+    if series.dtype in (pl.Float32, pl.Float64):
+        series = series.filter(series.is_finite())
+    return series.sum()
+
+
 def _column_sum_decimal(df: pl.DataFrame, col: str | None) -> Decimal:
-    """Sum a column as Decimal, returning 0 when the column is missing."""
+    """Sum a column as Decimal, returning 0 when the column is missing.
+
+    Non-finite (NaN / inf) rows are excluded so one poisoned IRB row cannot
+    blank the total (see ``_finite_sum``).
+    """
     if not col:
         return Decimal("0")
-    return Decimal(str(df[col].sum() or 0))
+    return Decimal(str(_finite_sum(df[col]) or 0))
 
 
 def _approach_sum(
@@ -323,11 +355,14 @@ def _approach_sum(
     approaches: list[str],
     has_approach: bool,
 ) -> Decimal:
-    """Sum a column over rows whose `approach_applied` is in `approaches`."""
+    """Sum a column over rows whose `approach_applied` is in `approaches`.
+
+    Non-finite (NaN / inf) rows are excluded (see ``_finite_sum``).
+    """
     if not col or not has_approach:
         return Decimal("0")
     mask = df["approach_applied"].is_in(approaches)
-    return Decimal(str(df.filter(mask)[col].sum() or 0))
+    return Decimal(str(_finite_sum(df.filter(mask)[col]) or 0))
 
 
 def _extract_floor_impact(floor_impact: pl.LazyFrame | None) -> tuple[bool, Decimal]:
@@ -342,7 +377,7 @@ def _extract_floor_impact(floor_impact: pl.LazyFrame | None) -> tuple[bool, Deci
         bool(floor_df["floor_binding"].any()) if "floor_binding" in floor_df.columns else False
     )
     add_on = (
-        Decimal(str(floor_df["floor_add_on"].sum() or 0))
+        Decimal(str(_finite_sum(floor_df["floor_add_on"]) or 0))
         if "floor_add_on" in floor_df.columns
         else Decimal("0")
     )

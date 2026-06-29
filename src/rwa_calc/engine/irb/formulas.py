@@ -451,10 +451,12 @@ def apply_irb_formulas(
     if "turnover_m" not in schema_names:
         exposures = exposures.with_columns(pl.lit(None).cast(pl.Float64).alias("turnover_m"))
 
-    # Step 1: Apply per-exposure-class PD floor (CRR: uniform, Basel 3.1: differentiated)
+    # Step 1: Apply per-exposure-class PD floor (CRR: uniform, Basel 3.1: differentiated).
+    # fill_nan(None) first: a NaN PD passes straight through max_horizontal/clip and
+    # would poison K -> rwa; treating it as null routes it to the regulatory floor.
     pd_floor_expr = _pd_floor_expression(config, pack=resolved_pack)
     exposures = exposures.with_columns(
-        pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored")
+        pl.max_horizontal(pl.col("pd").fill_nan(None), pd_floor_expr).alias("pd_floored")
     )
 
     # Step 2: Apply LGD floor (Basel 3.1 A-IRB only, CRR has no LGD floors)
@@ -481,7 +483,9 @@ def apply_irb_formulas(
             pl.when(blended_expr.is_not_null()).then(blended_expr).otherwise(lgd_floor_expr)
         )
         is_airb = pl.col("is_airb").fill_null(False) if "is_airb" in schema_names else pl.lit(False)
-        floored_lgd = pl.max_horizontal(pl.col("lgd"), lgd_floor_expr)
+        # fill_nan(None): treat a NaN own-estimate LGD as null so the A-IRB
+        # regulatory floor governs (max_horizontal does not scrub NaN).
+        floored_lgd = pl.max_horizontal(pl.col("lgd").fill_nan(None), lgd_floor_expr)
         exposures = exposures.with_columns(
             pl.when(is_airb).then(floored_lgd).otherwise(pl.col("lgd")).alias("lgd_floored")
         )

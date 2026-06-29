@@ -233,6 +233,45 @@ class TestResultFormatterFormatResponse:
         assert class_lf is not None
         assert isinstance(class_lf, pl.LazyFrame)
 
+    def test_populates_summary_by_class_method_path(
+        self,
+        cache: ResultsCache,
+    ) -> None:
+        """A bundle carrying the class-by-method summary surfaces a scan path."""
+        bundle = make_aggregated_bundle(
+            results=pl.LazyFrame(
+                {
+                    "exposure_reference": ["E1"],
+                    "approach_applied": ["advanced_irb"],
+                    "exposure_class": ["corporate"],
+                    "ead_final": [1_000_000.0],
+                    "risk_weight": [0.5],
+                    "rwa_final": [500_000.0],
+                }
+            ),
+            summary_by_class_method=pl.LazyFrame(
+                {
+                    "exposure_class": ["corporate"],
+                    "method": ["AIRB"],
+                    "total_ead": [1_000_000.0],
+                    "total_rwa": [500_000.0],
+                }
+            ),
+            errors=[],
+        )
+        response = ResultFormatter().format_response(
+            bundle=bundle,
+            cache=cache,
+            framework="CRR",
+            reporting_date=date(2024, 12, 31),
+            started_at=datetime.now(),
+        )
+
+        assert response.summary_by_class_method_path is not None
+        scanned = response.scan_summary_by_class_method()
+        assert scanned is not None
+        assert scanned.collect().get_column("method").to_list() == ["AIRB"]
+
     def test_converts_errors(
         self,
         error_result_bundle: AggregatedResultBundle,
@@ -251,6 +290,68 @@ class TestResultFormatterFormatResponse:
         assert len(response.errors) == 2
         assert response.errors[0].code == "TEST001"
         assert response.errors[1].code == "TEST002"
+
+
+class TestNonFiniteSanitisation:
+    """A NaN/inf in a result column must not blank the portfolio totals.
+
+    Polars float ``.sum()`` propagates NaN (it is not skipped like null), so one
+    poisoned IRB row would otherwise turn every card into ``Decimal('NaN')`` —
+    and ``Decimal('NaN') > 0`` raises ``InvalidOperation``, masquerading as a
+    whole-page failure. The formatter excludes non-finite rows from the sums.
+    """
+
+    def test_nan_rwa_excluded_from_totals(self, cache: ResultsCache) -> None:
+        """A NaN rwa_final is dropped from the sums; the clean row still totals."""
+        bundle = make_aggregated_bundle(
+            results=pl.LazyFrame(
+                {
+                    "exposure_reference": ["GOOD", "BAD"],
+                    "approach_applied": ["advanced_irb", "advanced_irb"],
+                    "ead_final": [1_000_000.0, 2_000_000.0],
+                    "risk_weight": [1.0, 1.0],
+                    "rwa_final": [1_000_000.0, float("nan")],
+                }
+            ),
+            errors=[],
+        )
+        response = ResultFormatter().format_response(
+            bundle=bundle,
+            cache=cache,
+            framework="CRR",
+            reporting_date=date(2024, 12, 31),
+            started_at=datetime.now(),
+        )
+
+        assert response.summary.total_rwa == Decimal("1000000")
+        assert response.summary.total_rwa.is_finite()
+        assert response.summary.total_rwa_irb == Decimal("1000000")
+        assert response.summary.average_risk_weight.is_finite()
+
+    def test_nan_ead_does_not_raise_invalid_operation(self, cache: ResultsCache) -> None:
+        """A NaN ead_final must not raise on the ``total_ead > 0`` guard."""
+        bundle = make_aggregated_bundle(
+            results=pl.LazyFrame(
+                {
+                    "exposure_reference": ["GOOD", "BAD"],
+                    "approach_applied": ["SA", "SA"],
+                    "ead_final": [1_000_000.0, float("nan")],
+                    "risk_weight": [1.0, 1.0],
+                    "rwa_final": [1_000_000.0, 500_000.0],
+                }
+            ),
+            errors=[],
+        )
+        response = ResultFormatter().format_response(
+            bundle=bundle,
+            cache=cache,
+            framework="CRR",
+            reporting_date=date(2024, 12, 31),
+            started_at=datetime.now(),
+        )
+
+        assert response.summary.total_ead == Decimal("1000000")
+        assert response.summary.average_risk_weight.is_finite()
 
 
 class TestResultFormatterFormatErrorResponse:

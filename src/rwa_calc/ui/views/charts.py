@@ -26,6 +26,7 @@ directly in a template (mark it safe — the text inputs are escaped here).
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from html import escape
 from typing import TYPE_CHECKING
@@ -68,6 +69,10 @@ def horizontal_bar_svg(
     Bars are scaled to the largest absolute value. Used for RWA/EAD by exposure
     class and the approach split.
     """
+    # Drop non-finite (NaN / inf) values up front: a single NaN would otherwise
+    # poison ``max_value`` (NaN sorts as the max), collapsing every other bar to a
+    # 1px sliver and rendering literal "nan" labels.
+    items = [(label, value) for label, value in items if math.isfinite(value)]
     if not items:
         return _empty("No data")
 
@@ -103,6 +108,12 @@ def grouped_bar_svg(
     if not items:
         return _empty("No data")
 
+    # Coerce non-finite (NaN / inf) series values to 0 so a single bad cell cannot
+    # poison the shared ``max_value`` scale or render a literal "nan" bar/label.
+    items = [
+        (label, a if math.isfinite(a) else 0.0, b if math.isfinite(b) else 0.0)
+        for label, a, b in items
+    ]
     max_value = max((max(abs(a), abs(b)) for _, a, b in items), default=0.0) or 1.0
     stacked = _stack_labels(label for label, _, _ in items)
     sub_h = (_BAR_H - 4) / 2

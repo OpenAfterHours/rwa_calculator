@@ -19,6 +19,7 @@ import pytest
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.aggregator import OutputAggregator
 from rwa_calc.engine.aggregator._el_summary import compute_el_portfolio_summary
+from rwa_calc.engine.aggregator.aggregator import _detect_non_finite_errors
 from tests.fixtures.contract_columns import (
     pad_irb_branch,
     pad_sa_branch,
@@ -630,6 +631,227 @@ class TestSummaryPostCRMBasis:
 
         assert sa_row["total_ead"][0] == pytest.approx(3500000.0, rel=0.01)
         assert sa_row["exposure_count"][0] == 3
+
+
+class TestNonFiniteOutputDetection:
+    """A NaN/inf in a final output column is surfaced as an AGG001 error.
+
+    Polars float ``.sum()`` propagates NaN (not skipped like null), so one
+    poisoned row blanks the portfolio totals and charts. The aggregator records
+    a non-critical AGG001 error so the gap is visible rather than silent, while
+    the run stays successful and the clean rows still report.
+    """
+
+    def test_nan_rwa_final_surfaced_as_agg001(
+        self,
+        aggregator: OutputAggregator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """A NaN rwa_final row produces an AGG001 error naming the exposure."""
+        irb_results = pad_irb_branch(
+            pl.LazyFrame(
+                {
+                    "exposure_reference": ["GOOD01", "NAN01"],
+                    "exposure_class": ["CORPORATE", "CORPORATE"],
+                    "approach_applied": ["advanced_irb", "advanced_irb"],
+                    "ead_final": [1_000_000.0, 2_000_000.0],
+                    "risk_weight": [1.0, 1.0],
+                    "rwa_final": [1_000_000.0, float("nan")],
+                }
+            )
+        )
+
+        result = aggregator.aggregate(
+            sa_results=EMPTY_SA,
+            irb_results=irb_results,
+            slotting_results=EMPTY_SLOTTING,
+            equity_bundle=None,
+            config=crr_config,
+        )
+
+        agg001 = [e for e in result.errors if e.code == "AGG001"]
+        assert agg001, "expected an AGG001 error for the NaN rwa_final row"
+        assert any(e.field_name == "rwa_final" for e in agg001)
+        assert any("NAN01" in (e.message or "") for e in agg001)
+
+    def test_clean_results_emit_no_agg001(
+        self,
+        aggregator: OutputAggregator,
+        sa_results: pl.LazyFrame,
+        irb_results: pl.LazyFrame,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """A clean portfolio produces no AGG001 error."""
+        result = aggregator.aggregate(
+            sa_results=sa_results,
+            irb_results=irb_results,
+            slotting_results=EMPTY_SLOTTING,
+            equity_bundle=None,
+            config=crr_config,
+        )
+
+        assert not [e for e in result.errors if e.code == "AGG001"]
+        assert not [e for e in result.errors if e.code == "AGG002"]
+
+    def test_nan_pd_input_emits_agg002_warning(
+        self,
+        aggregator: OutputAggregator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """A non-finite raw PD/LGD input is surfaced as a non-blocking AGG002 warning."""
+        irb_results = pad_irb_branch(
+            pl.LazyFrame(
+                {
+                    "exposure_reference": ["BADPD"],
+                    "exposure_class": ["CORPORATE"],
+                    "approach_applied": ["advanced_irb"],
+                    "pd": [float("nan")],
+                    "lgd": [0.45],
+                    "ead_final": [1_000_000.0],
+                    "risk_weight": [0.8],
+                    "rwa_final": [800_000.0],
+                }
+            )
+        )
+
+        result = aggregator.aggregate(
+            sa_results=EMPTY_SA,
+            irb_results=irb_results,
+            slotting_results=EMPTY_SLOTTING,
+            equity_bundle=None,
+            config=crr_config,
+        )
+
+        agg002 = [e for e in result.errors if e.code == "AGG002"]
+        assert agg002, "expected an AGG002 warning for the NaN pd input"
+        assert all(e.severity.value == "warning" for e in agg002)
+        assert any(e.field_name == "pd" and "BADPD" in (e.message or "") for e in agg002)
+
+    def test_reporting_column_nan_deduped_against_output_scan(self) -> None:
+        """A reporting-column scan reports only exposures the output scan missed.
+
+        A NaN ``risk_weight`` row also makes its ``reporting_rw`` NaN — that must be
+        reported once (under the output column), while a reporting-only NaN (an
+        exposure finite in the output frame) is uniquely caught.
+        """
+        results = pl.DataFrame(
+            {
+                "exposure_reference": ["A", "B"],
+                "rwa_final": [1.0, 2.0],
+                "ead_final": [10.0, 20.0],
+                "risk_weight": [float("nan"), 0.5],  # A: NaN output
+            }
+        )
+        reporting = pl.DataFrame(
+            {
+                "exposure_reference": ["A", "A", "C"],  # A split; C reporting-only NaN
+                "reporting_rw": [float("nan"), 0.3, float("nan")],
+                "reporting_ead": [5.0, 5.0, 7.0],
+            }
+        )
+
+        errors = _detect_non_finite_errors(results, reporting)
+
+        rw_out = [e for e in errors if e.field_name == "risk_weight"]
+        rw_rep = [e for e in errors if e.field_name == "reporting_rw"]
+        assert len(rw_out) == 1 and "A" in (rw_out[0].message or "")
+        # reporting_rw error names only C (A already flagged by the output scan).
+        assert len(rw_rep) == 1
+        assert rw_rep[0].actual_value == "1"
+        assert "C" in (rw_rep[0].message or "")
+
+
+class TestSummaryByClassMethod:
+    """The (exposure_class, method) summary splits RWA by methodology family.
+
+    Methodology = STD (standardised) / FIRB / AIRB (advanced IRB, retail folded
+    in) / SLOTTING / EQUITY. Summing total_rwa over methods within a class must
+    reconcile exactly with the by-class summary.
+    """
+
+    def test_shape_and_method_labels(
+        self,
+        aggregator: OutputAggregator,
+        sa_results: pl.LazyFrame,
+        irb_results: pl.LazyFrame,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """The frame carries class x method rows with the expected labels."""
+        result = aggregator.aggregate(
+            sa_results=sa_results,
+            irb_results=irb_results,
+            slotting_results=EMPTY_SLOTTING,
+            equity_bundle=None,
+            config=crr_config,
+        )
+
+        assert result.summary_by_class_method is not None
+        cm = result.summary_by_class_method.collect()
+        assert {"exposure_class", "method", "total_ead", "total_rwa", "exposure_count"} <= set(
+            cm.columns
+        )
+        methods = set(cm.get_column("method").to_list())
+        assert "STD" in methods  # SA rows
+        assert "FIRB" in methods  # foundation_irb / FIRB rows
+        assert "AIRB" in methods  # advanced_irb / AIRB rows
+        assert "RIRB" not in methods  # retail A-IRB folds into AIRB
+
+    def test_reconciles_with_summary_by_class(
+        self,
+        aggregator: OutputAggregator,
+        sa_results: pl.LazyFrame,
+        irb_results: pl.LazyFrame,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Per-class total_rwa summed over methods equals the by-class total."""
+        result = aggregator.aggregate(
+            sa_results=sa_results,
+            irb_results=irb_results,
+            slotting_results=EMPTY_SLOTTING,
+            equity_bundle=None,
+            config=crr_config,
+        )
+
+        by_class = result.summary_by_class.collect().select(["exposure_class", "total_rwa"])
+        rolled = (
+            result.summary_by_class_method.collect()
+            .group_by("exposure_class")
+            .agg(pl.col("total_rwa").sum().alias("rwa_cm"))
+        )
+        joined = by_class.join(rolled, on="exposure_class")
+        max_diff = joined.select((pl.col("total_rwa") - pl.col("rwa_cm")).abs().max()).item()
+        assert max_diff == pytest.approx(0.0, abs=1e-6)
+
+    def test_retail_advanced_irb_labelled_airb(
+        self,
+        aggregator: OutputAggregator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """A retail advanced-IRB exposure is labelled AIRB (RIRB folded in)."""
+        irb_results = pad_irb_branch(
+            pl.LazyFrame(
+                {
+                    "exposure_reference": ["R1"],
+                    "exposure_class": ["RETAIL_MORTGAGE"],
+                    "approach_applied": ["advanced_irb"],
+                    "ead_final": [800_000.0],
+                    "risk_weight": [0.2],
+                    "rwa_final": [160_000.0],
+                }
+            )
+        )
+
+        result = aggregator.aggregate(
+            sa_results=EMPTY_SA,
+            irb_results=irb_results,
+            slotting_results=EMPTY_SLOTTING,
+            equity_bundle=None,
+            config=crr_config,
+        )
+
+        cm = result.summary_by_class_method.collect()
+        row = cm.filter(pl.col("exposure_class") == "RETAIL_MORTGAGE")
+        assert row["method"].to_list() == ["AIRB"]
 
 
 # =============================================================================

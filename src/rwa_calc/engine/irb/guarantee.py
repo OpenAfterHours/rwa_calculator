@@ -162,7 +162,10 @@ def apply_guarantee_substitution(
             )
             .then(
                 pl.col("rwa_irb_original")
-                * (pl.col("unguaranteed_portion") / pl.col(ead_col)).fill_null(1.0)
+                * pl.when(pl.col(ead_col) > 0)
+                .then(pl.col("unguaranteed_portion") / pl.col(ead_col))
+                .otherwise(pl.lit(1.0))
+                .fill_null(1.0)
                 + pl.col("guaranteed_portion") * pl.col("guarantor_rw")
             )
             .otherwise(pl.col("rwa_irb_original"))
@@ -170,10 +173,16 @@ def apply_guarantee_substitution(
         ]
     )
 
-    # Calculate blended risk weight for reporting
+    # Calculate blended risk weight for reporting. Guard the divisor so a
+    # zero-EAD guaranteed row yields a finite 0.0 rather than 0/0 -> NaN (or
+    # x/0 -> inf); .fill_null does not catch a non-finite quotient.
     lf = lf.with_columns(
         [
-            (pl.col("rwa") / pl.col(ead_col)).fill_null(0.0).alias("risk_weight"),
+            pl.when(pl.col(ead_col) > 0)
+            .then(pl.col("rwa") / pl.col(ead_col))
+            .otherwise(pl.lit(0.0))
+            .fill_null(0.0)
+            .alias("risk_weight"),
         ]
     )
 

@@ -49,6 +49,7 @@ from rwa_calc.engine.irb.formulas import (
 from rwa_calc.engine.irb.formulas import apply_irb_formulas as _apply_irb_formulas_raw
 from rwa_calc.engine.irb.stats_backend import normal_cdf, normal_ppf
 from rwa_calc.engine.irb.transforms import (
+    apply_all_formulas,
     apply_firb_lgd,
 )
 from rwa_calc.rulebook.resolve import resolve
@@ -58,6 +59,86 @@ def apply_irb_formulas(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFr
     """Test shim: pad hand frames with the crm_exit contract columns the
     sealed branch input guarantees, then invoke the real function."""
     return _apply_irb_formulas_raw(_pad(lf), config)
+
+
+class TestNonFinitePdLgdScrub:
+    """A NaN PD/LGD is treated as null and raised to the regulatory floor.
+
+    Polars ``max_horizontal`` / ``clip`` do NOT scrub a NaN — only ``fill_nan``
+    does — so an upstream NaN PD/LGD would otherwise flow straight through to a
+    NaN ``rwa``/``risk_weight`` and poison the portfolio total. The floor sites
+    ``fill_nan(None)`` first, so a NaN routes to the regulatory floor exactly
+    like a null (conservative).
+    """
+
+    def test_nan_pd_routes_to_floor_and_stays_finite(self) -> None:
+        """A NaN PD is floored (0.03% CRR) and produces a finite RWA."""
+        crr_config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1"],
+                "pd": [float("nan")],
+                "lgd": [0.45],
+                "ead_final": [1_000_000.0],
+                "exposure_class": ["CORPORATE"],
+            }
+        )
+
+        result = apply_irb_formulas(lf, crr_config).collect()
+
+        assert result["pd_floored"][0] == pytest.approx(0.0003, abs=1e-8)
+        assert math.isfinite(result["k"][0])
+        assert math.isfinite(result["rwa"][0])
+        assert math.isfinite(result["risk_weight"][0])
+
+    def test_nan_lgd_routes_to_airb_floor_b31(self) -> None:
+        """A NaN own-estimate LGD is floored to the A-IRB unsecured floor (25%)."""
+        b31_config = CalculationConfig.basel_3_1(reporting_date=date(2032, 1, 1))
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1"],
+                "pd": [0.01],
+                "lgd": [float("nan")],
+                "ead_final": [1_000_000.0],
+                "exposure_class": ["CORPORATE"],
+                "is_airb": [True],
+            }
+        )
+
+        result = apply_irb_formulas(lf, b31_config).collect()
+
+        assert result["lgd_floored"][0] == pytest.approx(0.25, abs=1e-8)
+        assert math.isfinite(result["rwa"][0])
+        assert math.isfinite(result["risk_weight"][0])
+
+    def test_nan_lgd_routes_to_airb_floor_production_path(self) -> None:
+        """The production path (apply_all_formulas -> _lgd_floored_expr) scrubs a NaN LGD.
+
+        apply_all_formulas reads ``lgd_input`` (a crm_exit column), not ``lgd``, so the
+        scrub must be on that path — the ``apply_irb_formulas`` twin above only covers
+        the ``lgd`` column and would not catch a regression in ``_lgd_floored_expr``.
+        """
+        b31_config = CalculationConfig.basel_3_1(reporting_date=date(2032, 1, 1))
+        lf = _pad(
+            pl.LazyFrame(
+                {
+                    "exposure_reference": ["E1"],
+                    "pd": [0.01],
+                    "lgd": [float("nan")],
+                    "lgd_input": [float("nan")],
+                    "ead_final": [1_000_000.0],
+                    "exposure_class": ["CORPORATE"],
+                    "is_airb": [True],
+                    "maturity": [2.5],
+                }
+            )
+        )
+
+        result = lf.pipe(apply_all_formulas, b31_config).collect()
+
+        assert result["lgd_floored"][0] == pytest.approx(0.25, abs=1e-8)
+        assert math.isfinite(result["rwa"][0])
+        assert math.isfinite(result["risk_weight"][0])
 
 
 # =============================================================================

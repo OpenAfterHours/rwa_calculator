@@ -42,6 +42,7 @@ class CachedResults:
     results_path: Path
     summary_by_class_path: Path | None = None
     summary_by_approach_path: Path | None = None
+    summary_by_class_method_path: Path | None = None
     metadata_path: Path | None = None
 
     def scan_results(self) -> pl.LazyFrame:
@@ -58,6 +59,12 @@ class CachedResults:
         """Lazy-scan the approach summary parquet, or None if not available."""
         if self.summary_by_approach_path and self.summary_by_approach_path.exists():
             return pl.scan_parquet(self.summary_by_approach_path)
+        return None
+
+    def scan_summary_by_class_method(self) -> pl.LazyFrame | None:
+        """Lazy-scan the class-by-method summary parquet, or None if not available."""
+        if self.summary_by_class_method_path and self.summary_by_class_method_path.exists():
+            return pl.scan_parquet(self.summary_by_class_method_path)
         return None
 
 
@@ -100,6 +107,7 @@ class ResultsCache:
         results: pl.LazyFrame | pl.DataFrame,
         summary_by_class: pl.LazyFrame | pl.DataFrame | None = None,
         summary_by_approach: pl.LazyFrame | pl.DataFrame | None = None,
+        summary_by_class_method: pl.LazyFrame | pl.DataFrame | None = None,
         metadata: dict | None = None,
     ) -> CachedResults:
         """
@@ -113,6 +121,7 @@ class ResultsCache:
             results: Main results (LazyFrame streamed, or DataFrame written directly)
             summary_by_class: Optional class summary
             summary_by_approach: Optional approach summary
+            summary_by_class_method: Optional class-by-method summary
             metadata: Optional metadata dict written as JSON
 
         Returns:
@@ -122,6 +131,7 @@ class ResultsCache:
         metadata_path = self._cache_dir / "last_results_meta.json"
         class_path = self._cache_dir / "last_summary_by_class.parquet"
         approach_path = self._cache_dir / "last_summary_by_approach.parquet"
+        class_method_path = self._cache_dir / "last_summary_by_class_method.parquet"
 
         # Write main results to parquet
         if isinstance(results, pl.DataFrame):
@@ -130,31 +140,13 @@ class ResultsCache:
             self._sink_or_collect(results, results_path)
 
         # Write small summary frames
-        class_out = None
-        if summary_by_class is not None:
-            try:
-                df = (
-                    summary_by_class
-                    if isinstance(summary_by_class, pl.DataFrame)
-                    else summary_by_class.collect()
-                )
-                df.write_parquet(class_path)
-                class_out = class_path
-            except Exception:
-                logger.warning("Failed to write summary_by_class parquet")
-
-        approach_out = None
-        if summary_by_approach is not None:
-            try:
-                df = (
-                    summary_by_approach
-                    if isinstance(summary_by_approach, pl.DataFrame)
-                    else summary_by_approach.collect()
-                )
-                df.write_parquet(approach_path)
-                approach_out = approach_path
-            except Exception:
-                logger.warning("Failed to write summary_by_approach parquet")
+        class_out = self._write_summary(summary_by_class, class_path, "summary_by_class")
+        approach_out = self._write_summary(
+            summary_by_approach, approach_path, "summary_by_approach"
+        )
+        class_method_out = self._write_summary(
+            summary_by_class_method, class_method_path, "summary_by_class_method"
+        )
 
         # Write metadata JSON
         if metadata is not None:
@@ -164,6 +156,7 @@ class ResultsCache:
             results_path=results_path,
             summary_by_class_path=class_out,
             summary_by_approach_path=approach_out,
+            summary_by_class_method_path=class_method_out,
             metadata_path=metadata_path if metadata is not None else None,
         )
 
@@ -181,11 +174,15 @@ class ResultsCache:
         metadata_path = self._cache_dir / "last_results_meta.json"
         class_path = self._cache_dir / "last_summary_by_class.parquet"
         approach_path = self._cache_dir / "last_summary_by_approach.parquet"
+        class_method_path = self._cache_dir / "last_summary_by_class_method.parquet"
 
         return CachedResults(
             results_path=results_path,
             summary_by_class_path=class_path if class_path.exists() else None,
             summary_by_approach_path=approach_path if approach_path.exists() else None,
+            summary_by_class_method_path=(
+                class_method_path if class_method_path.exists() else None
+            ),
             metadata_path=metadata_path if metadata_path.exists() else None,
         )
 
@@ -208,6 +205,31 @@ class ResultsCache:
         """
         result: pl.DataFrame = lazy.slice(offset, page_size).collect()
         return result
+
+    def _write_summary(
+        self,
+        summary: pl.LazyFrame | pl.DataFrame | None,
+        path: Path,
+        label: str,
+    ) -> Path | None:
+        """Write one optional summary frame to parquet, or None on absence/failure.
+
+        Clears any stale parquet at ``path`` when there is nothing (or a failure)
+        to write, so a later run that produces no summary — e.g. an error run via
+        ``format_error_response`` — cannot leave a previous run's summary on disk
+        for ``load_cached`` to resurrect.
+        """
+        if summary is None:
+            path.unlink(missing_ok=True)
+            return None
+        try:
+            df = summary if isinstance(summary, pl.DataFrame) else summary.collect()
+            df.write_parquet(path)
+        except Exception:
+            logger.warning("Failed to write %s parquet", label)
+            path.unlink(missing_ok=True)
+            return None
+        return path
 
     def _sink_or_collect(self, lf: pl.LazyFrame, path: Path) -> None:
         """

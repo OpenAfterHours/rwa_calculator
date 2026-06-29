@@ -118,6 +118,8 @@ fieldset.field { border: 0; padding: 0; min-width: 0; }
 
 /* ---------- Panels & charts -------------------------------- */
 .panel { background: var(--oah-slate-850); border: 1px solid rgba(216,222,233,0.10); border-radius: 12px; padding: 20px; margin: 16px 0; }
+.method-subtitle { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--oah-orange); margin: 16px 0 4px; }
+.method-subtitle:first-of-type { margin-top: 8px; }
 .chart { display: block; margin-top: 8px; }
 .chart-label { fill: var(--oah-slate-300); font-family: var(--font-mono); font-size: 11px; }
 .chart-value { fill: var(--oah-slate-100); font-family: var(--font-mono); font-size: 11px; }

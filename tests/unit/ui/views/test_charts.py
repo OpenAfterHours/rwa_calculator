@@ -12,6 +12,7 @@ regress them:
 
 from __future__ import annotations
 
+import math
 from html import escape
 
 from rwa_calc.ui.views import charts
@@ -71,6 +72,27 @@ def test_value_text_emitted_in_both_layouts() -> None:
 def test_empty_items_render_placeholder() -> None:
     # Arrange / Act / Assert
     assert 'class="chart-empty"' in charts.horizontal_bar_svg([])
+
+
+def test_horizontal_bar_drops_non_finite_values() -> None:
+    # Arrange: the same two finite bars, with NaN/inf rows appended.
+    clean = charts.horizontal_bar_svg(_SHORT_ITEMS)
+    with_bad = charts.horizontal_bar_svg([*_SHORT_ITEMS, ("BAD", math.nan), ("WORSE", math.inf)])
+
+    # Assert: the bad rows are dropped, so no "nan"/"inf" leaks and the finite
+    # bars keep their exact scale (a NaN must not collapse max_value).
+    assert "nan" not in with_bad.lower()
+    assert "inf" not in with_bad.lower()
+    assert with_bad == clean
+
+
+def test_grouped_bar_coerces_non_finite_to_zero() -> None:
+    # Arrange / Act: one series cell is NaN.
+    svg = charts.grouped_bar_svg([("CORPORATE", 100.0, math.nan), ("RETAIL", 60.0, 50.0)])
+
+    # Assert: the category still renders, with no "nan" leaking into the markup.
+    assert "nan" not in svg.lower()
+    assert "CORPORATE" in svg
 
 
 # =============================================================================

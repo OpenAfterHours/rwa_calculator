@@ -20,6 +20,7 @@ import asyncio
 import importlib.util
 import json
 import logging
+import math
 import webbrowser
 from datetime import date
 from pathlib import Path
@@ -928,6 +929,7 @@ def _results_context(
     """
     rwa_by_class, ead_by_class = _class_chart_items(response)
     approach_split = _approach_chart_items(response)
+    class_method_sections = _class_method_sections(response)
     selected = list(
         selected_output_formats if selected_output_formats is not None else _DEFAULT_OUTPUT_FORMATS
     )
@@ -940,6 +942,7 @@ def _results_context(
         "chart_rwa_by_class": charts.horizontal_bar_svg(rwa_by_class),
         "chart_ead_by_class": charts.horizontal_bar_svg(ead_by_class),
         "chart_approach": charts.horizontal_bar_svg(approach_split),
+        "class_method_sections": class_method_sections,
         "table_columns": _RESULT_TABLE_COLS,
         "table_rows": _result_rows(response),
         # Download buttons stream from the existing GET /api/export/{fmt} endpoint.
@@ -1352,7 +1355,7 @@ def _class_chart_items(
     lf = response.scan_summary_by_class()
     if lf is None:
         return [], []
-    df = lf.collect()
+    df = lf.collect().fill_nan(None)
     rwa = _items(df, "exposure_class", "total_rwa")
     ead = _items(df, "exposure_class", "total_ead")
     return rwa, ead
@@ -1363,17 +1366,62 @@ def _approach_chart_items(response: CalculationResponse) -> list[tuple[str, floa
     lf = response.scan_summary_by_approach()
     if lf is None:
         return []
-    return _items(lf.collect(), "approach_applied", "total_rwa")
+    return _items(lf.collect().fill_nan(None), "approach_applied", "total_rwa")
+
+
+# Methodology subsection order on the results page. Methods present but not listed
+# (an unexpected approach label) are appended alphabetically so nothing is dropped.
+_METHOD_ORDER = ("STD", "FIRB", "AIRB", "SLOTTING", "EQUITY")
+
+
+def _class_method_sections(response: CalculationResponse) -> list[dict]:
+    """Per-methodology "RWA by exposure class" charts (STD / FIRB / AIRB / …).
+
+    Splits the class-by-method summary into one section per methodology present,
+    each rendering the same horizontal-bar chart filtered to that method, so the
+    viewer sees how much RWA each methodology contributes within each exposure
+    class. Returns ``[]`` when the summary is unavailable (older cache), so the
+    template falls back to the single combined chart.
+    """
+    lf = response.scan_summary_by_class_method()
+    if lf is None:
+        return []
+    df = lf.collect().fill_nan(None)
+    if not {"method", "exposure_class", "total_rwa"} <= set(df.columns):
+        return []
+    # ``method`` is never null in practice (_method_expr coalesces to "OTHER"), but
+    # filter None defensively so the sort below cannot TypeError on a stray null.
+    present = [m for m in df.get_column("method").unique().to_list() if m is not None]
+    ordered = [m for m in _METHOD_ORDER if m in present]
+    ordered += sorted(m for m in present if m not in _METHOD_ORDER)
+    sections: list[dict] = []
+    for method in ordered:
+        items = _items(df.filter(pl.col("method") == method), "exposure_class", "total_rwa")
+        if items:
+            sections.append({"method": method, "chart": charts.horizontal_bar_svg(items)})
+    return sections
 
 
 def _items(df: pl.DataFrame, label_col: str, value_col: str) -> list[tuple[str, float]]:
-    """Build (label, value) tuples from two columns, tolerating absence."""
+    """Build (label, value) tuples from two columns, tolerating absence.
+
+    Non-finite (NaN / inf) values are dropped so a single poisoned IRB row
+    cannot collapse the chart's bar scale (the bars are sized relative to the
+    largest value). The underlying issue is surfaced as an aggregator error.
+    """
     if label_col not in df.columns or value_col not in df.columns:
         return []
-    return [
-        (str(row[label_col]), float(row[value_col] or 0.0))
-        for row in df.sort(value_col, descending=True).to_dicts()
-    ]
+    items: list[tuple[str, float]] = []
+    for row in df.sort(value_col, descending=True).to_dicts():
+        raw = row[value_col]
+        if raw is None:
+            items.append((str(row[label_col]), 0.0))
+            continue
+        value = float(raw)
+        if not math.isfinite(value):
+            continue
+        items.append((str(row[label_col]), value))
+    return items
 
 
 def _result_rows(response: CalculationResponse) -> list[dict]:

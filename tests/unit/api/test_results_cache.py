@@ -115,6 +115,58 @@ class TestResultsCache:
         assert cached.summary_by_approach_path is not None
         assert cached.summary_by_approach_path.exists()
 
+    def test_sink_and_scan_summary_by_class_method(self, tmp_path: Path) -> None:
+        """sink_results round-trips the class-by-method summary parquet."""
+        cache = ResultsCache(tmp_path / "cache")
+        results_lf = pl.LazyFrame({"a": [1]})
+        class_method_lf = pl.LazyFrame(
+            {"exposure_class": ["corp"], "method": ["AIRB"], "total_rwa": [100.0]}
+        )
+
+        cached = cache.sink_results(results=results_lf, summary_by_class_method=class_method_lf)
+
+        assert cached.summary_by_class_method_path is not None
+        assert cached.summary_by_class_method_path.exists()
+        scanned = cached.scan_summary_by_class_method()
+        assert scanned is not None
+        assert scanned.collect().get_column("method").to_list() == ["AIRB"]
+
+    def test_load_cached_picks_up_class_method(self, tmp_path: Path) -> None:
+        """load_cached re-discovers the class-by-method summary on disk."""
+        cache = ResultsCache(tmp_path / "cache")
+        cache.sink_results(
+            results=pl.LazyFrame({"a": [1]}),
+            summary_by_class_method=pl.LazyFrame(
+                {"exposure_class": ["corp"], "method": ["STD"], "total_rwa": [50.0]}
+            ),
+        )
+
+        loaded = cache.load_cached()
+
+        assert loaded is not None
+        assert loaded.summary_by_class_method_path is not None
+        assert loaded.scan_summary_by_class_method().collect().height == 1
+
+    def test_sink_with_none_summary_clears_stale_parquet(self, tmp_path: Path) -> None:
+        """A later run that writes no summary clears a prior run's stale parquet.
+
+        Guards against ``format_error_response`` (which sinks no summaries) leaving
+        a previous successful run's summary on disk for ``load_cached`` to resurrect.
+        """
+        cache = ResultsCache(tmp_path / "cache")
+        cache.sink_results(
+            results=pl.LazyFrame({"a": [1]}),
+            summary_by_class_method=pl.LazyFrame(
+                {"exposure_class": ["corp"], "method": ["STD"], "total_rwa": [1.0]}
+            ),
+        )
+        assert cache.load_cached().summary_by_class_method_path is not None
+
+        # Second run produces no summary (e.g. an error run) -> stale file removed.
+        cache.sink_results(results=pl.LazyFrame({"a": [2]}))
+
+        assert cache.load_cached().summary_by_class_method_path is None
+
     def test_sink_results_writes_metadata(self, tmp_path: Path) -> None:
         """sink_results should write metadata JSON."""
         cache = ResultsCache(tmp_path / "cache")

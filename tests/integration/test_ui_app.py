@@ -105,6 +105,26 @@ def test_calculate_dispatches_job_then_results_become_available(
     assert "exposure_reference" in results.text
 
 
+def test_results_page_splits_rwa_by_class_by_method(client: TestClient, data_dir: str) -> None:
+    # Arrange — run a standardised calculation to completion
+    resp = client.post(
+        "/calculate",
+        data={"data_path": data_dir, "reporting_date": "2025-01-01"},
+        follow_redirects=False,
+    )
+    job_id = resp.headers["location"].rsplit("/", 1)[1]
+    _wait_for_job(client, job_id)
+
+    # Act
+    page = client.get(f"/results/{job_id}").text
+
+    # Assert — the RWA-by-class panel is split into methodology subsections; the
+    # mandatory-minimum dataset is standardised, so the STD subsection renders.
+    assert "RWA by exposure class" in page
+    assert 'class="method-subtitle"' in page
+    assert ">STD<" in page
+
+
 def test_results_page_offers_download_buttons(client: TestClient, data_dir: str) -> None:
     # Arrange — run a calculation to completion
     resp = client.post(

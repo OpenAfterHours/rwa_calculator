@@ -297,7 +297,11 @@ def apply_pd_floor(
         LazyFrame with pd_floored column
     """
     pd_floor_expr = _pd_floor_expression(config, pack=pack)
-    return lf.with_columns(pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored"))
+    # fill_nan(None) so a NaN PD is treated as null and raised to the floor
+    # (max_horizontal/clip do not scrub NaN); see apply_all_formulas.
+    return lf.with_columns(
+        pl.max_horizontal(pl.col("pd").fill_nan(None), pd_floor_expr).alias("pd_floored")
+    )
 
 
 @cites("CRR Art. 164")
@@ -360,7 +364,9 @@ def apply_lgd_floor(
 
         # LGD floors only apply to A-IRB (CRE30.41); F-IRB uses supervisory LGD
         is_airb = pl.col("is_airb").fill_null(False) if "is_airb" in schema_names else pl.lit(False)
-        floored_lgd = pl.max_horizontal(pl.col(lgd_col), lgd_floor_expr)
+        # fill_nan(None): a NaN own-estimate LGD passes through max_horizontal;
+        # treat it as null so the A-IRB regulatory LGD floor governs (conservative).
+        floored_lgd = pl.max_horizontal(pl.col(lgd_col).fill_nan(None), lgd_floor_expr)
         return lf.with_columns(
             pl.when(is_airb).then(floored_lgd).otherwise(pl.col(lgd_col)).alias("lgd_floored")
         )
@@ -619,9 +625,13 @@ def apply_all_formulas(
     # --- Batch 1: PD floor + LGD floor ---
     batch1: list[pl.Expr] = []
 
-    # Per-exposure-class PD floor (CRR: uniform, Basel 3.1: differentiated)
+    # Per-exposure-class PD floor (CRR: uniform, Basel 3.1: differentiated).
+    # fill_nan(None) first: a NaN PD passes straight through max_horizontal/clip
+    # (only fill_nan catches it) and would poison K -> rwa -> the portfolio total.
+    # Treating NaN as null routes it to the regulatory PD floor — conservative and
+    # identical to the existing null-PD handling.
     pd_floor_expr = _pd_floor_expression(config, pack=resolved_pack)
-    batch1.append(pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored"))
+    batch1.append(pl.max_horizontal(pl.col("pd").fill_nan(None), pd_floor_expr).alias("pd_floored"))
 
     # LGD floor (CRR: none, Basel 3.1: per-collateral-type for A-IRB only)
     # F-IRB supervisory LGDs are regulatory values — don't floor them (CRE30.41)
@@ -1095,5 +1105,8 @@ def _lgd_floored_expr(
         pl.when(blended_expr.is_not_null()).then(blended_expr).otherwise(lgd_floor_expr)
     )
     is_airb = pl.col("is_airb").fill_null(False) if "is_airb" in schema_names else pl.lit(False)
-    floored_lgd = pl.max_horizontal(pl.col(lgd_col), lgd_floor_expr)
+    # fill_nan(None): a NaN own-estimate LGD passes through max_horizontal; treat it
+    # as null so the A-IRB regulatory LGD floor governs (conservative). This is the
+    # production path (apply_all_formulas -> _lgd_floored_expr).
+    floored_lgd = pl.max_horizontal(pl.col(lgd_col).fill_nan(None), lgd_floor_expr)
     return pl.when(is_airb).then(floored_lgd).otherwise(pl.col(lgd_col)).alias("lgd_floored")

@@ -32,6 +32,7 @@ from watchfire import cites
 
 from rwa_calc.contracts.bundles import AggregatedResultBundle
 from rwa_calc.contracts.edges import AGGREGATOR_EXIT_EDGE, seal
+from rwa_calc.contracts.errors import non_finite_input_warning, non_finite_output_error
 from rwa_calc.engine.aggregator._crm_reporting import (
     generate_post_crm_detailed,
     generate_post_crm_summary,
@@ -48,6 +49,7 @@ from rwa_calc.engine.aggregator._securitisation import (
 from rwa_calc.engine.aggregator._summaries import (
     generate_summary_by_approach,
     generate_summary_by_class,
+    generate_summary_by_class_method,
 )
 from rwa_calc.engine.aggregator._supporting_factors import generate_supporting_factor_impact
 from rwa_calc.rulebook import RulepackV0
@@ -58,6 +60,7 @@ if TYPE_CHECKING:
 
     from rwa_calc.contracts.bundles import EquityResultBundle
     from rwa_calc.contracts.config import CalculationConfig, OutputFloorConfig
+    from rwa_calc.contracts.errors import CalculationError
     from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
@@ -334,6 +337,7 @@ class OutputAggregator:
         post_crm_summary = generate_post_crm_summary(post_crm_detailed)
         summary_by_class = generate_summary_by_class(post_crm_detailed)
         summary_by_approach = generate_summary_by_approach(post_crm_detailed)
+        summary_by_class_method = generate_summary_by_class_method(post_crm_detailed)
 
         # Supporting factor impact. The regime gate is pack Feature-sourced; the
         # pack is threaded into aggregate() (S11d), so this reads the run's
@@ -351,6 +355,7 @@ class OutputAggregator:
             "post_crm_summary": post_crm_summary,
             "summary_by_class": summary_by_class,
             "summary_by_approach": summary_by_approach,
+            "summary_by_class_method": summary_by_class_method,
         }
         if floor_impact is not None:
             post_floor_views["floor_impact"] = floor_impact
@@ -378,6 +383,7 @@ class OutputAggregator:
             ),
             summary_by_class=post_floor_dfs["summary_by_class"].lazy(),
             summary_by_approach=post_floor_dfs["summary_by_approach"].lazy(),
+            summary_by_class_method=post_floor_dfs["summary_by_class_method"].lazy(),
             pre_crm_summary=pre_crm_summary,
             post_crm_detailed=post_floor_dfs["post_crm_detailed"].lazy(),
             post_crm_summary=post_floor_dfs["post_crm_summary"].lazy(),
@@ -389,7 +395,9 @@ class OutputAggregator:
             rwa_ccr_default=rwa_ccr_default,
             rwa_ccr_qccp_trade=rwa_ccr_qccp_trade,
             failed_trades_rwa=failed_trades_rwa,
-            errors=[],
+            errors=_detect_non_finite_errors(
+                post_floor_dfs["results"], post_floor_dfs.get("post_crm_detailed")
+            ),
         )
 
 
@@ -418,6 +426,72 @@ def _collect_views(views: dict[str, pl.LazyFrame]) -> dict[str, pl.DataFrame]:
     """
     collected = pl.collect_all(list(views.values()))
     return dict(zip(views, collected, strict=True))
+
+
+def _non_finite_refs(df: pl.DataFrame, col: str) -> list[str]:
+    """Distinct ``exposure_reference`` values with a non-finite (NaN/inf) ``col``.
+
+    Returns ``[]`` when the column is absent, non-float, or fully finite. A null
+    is NOT non-finite (``is_finite()`` is null on a null, filled to False here), so
+    only genuine NaN/inf rows are flagged. References are de-duplicated because the
+    post-CRM reporting frame splits one exposure across several rows.
+    """
+    cols = set(df.columns)
+    if col not in cols or df.schema[col] not in (pl.Float32, pl.Float64):
+        return []
+    mask = (~df.get_column(col).is_finite()).fill_null(value=False)  # noqa: FBT003
+    if not bool(mask.any()):
+        return []
+    if "exposure_reference" not in cols:
+        return ["<unknown>"] * int(mask.sum())
+    refs = df.filter(mask).get_column("exposure_reference").cast(pl.String).to_list()
+    return list(dict.fromkeys(refs))
+
+
+def _detect_non_finite_errors(
+    results_df: pl.DataFrame, reporting_df: pl.DataFrame | None
+) -> list[CalculationError]:
+    """Surface NaN/inf in the per-row outputs (AGG001) and IRB inputs (AGG002).
+
+    Polars float ``.sum()`` propagates a NaN (it is not skipped like a null), so a
+    single non-finite value would blank the portfolio totals and the summary
+    charts. Rather than silently degrade, the aggregator records:
+
+    - **AGG001 (error)** for the final output columns the cards/charts consume —
+      ``rwa_final`` / ``ead_final`` / ``risk_weight`` (the totals/cards) plus the
+      post-CRM ``reporting_rw`` / ``reporting_ead`` the by-class/by-approach charts
+      aggregate. Reporting-column offenders already named by the output scan are
+      not re-reported. ``ErrorSeverity.ERROR`` (not critical) keeps the run
+      successful so the unaffected rows still report.
+    - **AGG002 (warning)** for a non-finite raw IRB input (``pd`` / ``lgd``) that
+      the floors raised to the regulatory minimum — a finite result that never
+      trips AGG001, so without this it would be absorbed silently.
+    """
+    errors: list[CalculationError] = []
+
+    flagged: set[str] = set()
+    for col in ("rwa_final", "ead_final", "risk_weight"):
+        refs = [r for r in _non_finite_refs(results_df, col) if r not in flagged]
+        if refs:
+            errors.append(non_finite_output_error(column=col, count=len(refs), references=refs[:5]))
+            flagged.update(refs)
+    if reporting_df is not None:
+        for col in ("reporting_rw", "reporting_ead"):
+            refs = [r for r in _non_finite_refs(reporting_df, col) if r not in flagged]
+            if refs:
+                errors.append(
+                    non_finite_output_error(column=col, count=len(refs), references=refs[:5])
+                )
+                flagged.update(refs)
+
+    for col in ("pd", "lgd"):
+        refs = _non_finite_refs(results_df, col)
+        if refs:
+            errors.append(
+                non_finite_input_warning(column=col, count=len(refs), references=refs[:5])
+            )
+
+    return errors
 
 
 def _output_floor_pct(pack: ResolvedRulepack, output_floor: OutputFloorConfig, on: date) -> Decimal:

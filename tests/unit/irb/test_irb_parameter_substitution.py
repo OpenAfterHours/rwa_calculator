@@ -19,6 +19,7 @@ References:
 
 from __future__ import annotations
 
+import math
 from datetime import date
 
 import polars as pl
@@ -41,6 +42,46 @@ def crr_config() -> CalculationConfig:
 def b31_config() -> CalculationConfig:
     """Basel 3.1 configuration (enables parameter substitution)."""
     return CalculationConfig.basel_3_1(reporting_date=date(2027, 6, 30))
+
+
+class TestZeroEadGuaranteeStaysFinite:
+    """A guaranteed IRB row with zero EAD must not divide by zero into NaN/inf.
+
+    The blended-RWA and blended-risk-weight expressions divide by ``ead_final``;
+    a zero-EAD guaranteed row would otherwise yield ``0/0 -> NaN`` (or
+    ``x/0 -> inf``), which ``.fill_null`` does not catch — poisoning the
+    portfolio total. The divisor is guarded so the row degrades to a finite 0.
+    """
+
+    def test_zero_ead_guaranteed_row_finite_risk_weight(
+        self, b31_config: CalculationConfig
+    ) -> None:
+        """Zero-EAD guaranteed row produces finite rwa and risk_weight."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "pd": [0.05],
+                "lgd": [0.45],
+                "ead_final": [0.0],
+                "maturity": [2.5],
+                "exposure_class": ["CORPORATE"],
+                "turnover_m": [None],
+                "requires_fi_scalar": [False],
+                "rwa": [0.0],
+                "risk_weight": [0.80],
+                "guaranteed_portion": [0.0],
+                "unguaranteed_portion": [0.0],
+                "guarantor_entity_type": ["corporate"],
+                "guarantor_cqs": [2],
+                "guarantor_approach": ["irb"],
+                "guarantor_pd": [0.005],
+            }
+        )
+
+        result = lf.pipe(apply_guarantee_substitution, b31_config).collect()
+
+        assert math.isfinite(result["risk_weight"][0])
+        assert math.isfinite(result["rwa"][0])
 
 
 def _compute_expected_irb_rw(

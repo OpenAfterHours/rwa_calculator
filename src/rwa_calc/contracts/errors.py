@@ -167,6 +167,19 @@ ERROR_RW_NEGATIVE = "OUT002"
 ERROR_RWA_NEGATIVE = "OUT003"
 ERROR_EAD_NULL = "OUT004"
 
+# Aggregator non-finite output code. A single NaN/inf in a per-row RWA/EAD/RW
+# column propagates through Polars ``.sum()`` (NaN is not skipped like null) and
+# blanks the portfolio totals and the by-class/by-approach charts. The aggregator
+# detects this and surfaces it here so the gap is a visible coded issue rather
+# than a silently blank result page.
+ERROR_NON_FINITE_OUTPUT = "AGG001"
+
+# Aggregator non-finite IRB input code. A NaN PD/LGD reaching the IRB floors is
+# treated as null and raised to the regulatory floor (conservative) — a finite
+# result, so it does NOT trip AGG001. This warning surfaces that the input data
+# carried a non-finite value rather than letting it be absorbed silently.
+ERROR_NON_FINITE_INPUT = "AGG002"
+
 # Parallel-run reconciliation error codes (legacy-vs-ours comparison).
 # Non-fatal: reconciliation degrades gracefully (skips the affected
 # component/column) and records the issue rather than aborting.
@@ -419,6 +432,70 @@ def missing_required_column_error(*, table: str, column: str) -> CalculationErro
         ),
         field_name=column,
         actual_value=table,
+    )
+
+
+def non_finite_output_error(
+    *, column: str, count: int, references: list[str] | None = None
+) -> CalculationError:
+    """Create an AGG001 error for a non-finite (NaN / inf) per-row output value.
+
+    Raised by the output aggregator when a final RWA / EAD / risk-weight column
+    carries a NaN or inf on one or more rows. Polars ``.sum()`` propagates a NaN
+    (it is not skipped like a null), so a single poisoned row would otherwise
+    blank the portfolio totals and the by-class / by-approach charts. Surfacing
+    it as a coded ``error`` (not ``critical``) keeps the run "successful" — the
+    unaffected rows still report correctly and are shown — while making the
+    excluded rows explicit in the audit trail. ``references`` carries up to a
+    handful of the offending ``exposure_reference`` values for triage.
+    """
+    sample = ""
+    if references:
+        shown = ", ".join(references)
+        sample = f" (e.g. {shown})"
+    return CalculationError(
+        code=ERROR_NON_FINITE_OUTPUT,
+        message=(
+            f"{count} exposure(s) produced a non-finite (NaN/inf) value in "
+            f"'{column}'{sample}; these rows are excluded from portfolio totals "
+            "and the summary charts. Check the IRB inputs (PD/LGD/EAD/maturity) "
+            "or guarantee allocation for these exposures."
+        ),
+        severity=ErrorSeverity.ERROR,
+        category=ErrorCategory.CALCULATION,
+        field_name=column,
+        actual_value=str(count),
+    )
+
+
+def non_finite_input_warning(
+    *, column: str, count: int, references: list[str] | None = None
+) -> CalculationError:
+    """Create an AGG002 warning for a non-finite (NaN/inf) IRB input value.
+
+    Raised by the output aggregator when a raw IRB input column (``pd`` / ``lgd``)
+    carries a NaN/inf on one or more rows. The IRB floors treat a NaN as null and
+    raise it to the regulatory floor (conservative and finite — so it never trips
+    the AGG001 *output* error), which would otherwise absorb the bad input
+    silently. This ``warning`` makes the source-data problem visible without
+    failing the run. ``references`` carries up to a handful of the affected
+    ``exposure_reference`` values.
+    """
+    sample = ""
+    if references:
+        shown = ", ".join(references)
+        sample = f" (e.g. {shown})"
+    return CalculationError(
+        code=ERROR_NON_FINITE_INPUT,
+        message=(
+            f"{count} exposure(s) carried a non-finite (NaN/inf) value in the IRB "
+            f"input '{column}'{sample}; it was treated as null and raised to the "
+            "regulatory floor where one applies. Check the source PD/LGD data."
+        ),
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.DATA_QUALITY,
+        field_name=column,
+        actual_value=str(count),
     )
 
 

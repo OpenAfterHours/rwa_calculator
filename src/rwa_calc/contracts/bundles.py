@@ -866,6 +866,10 @@ class AggregatedResultBundle:
         supporting_factor_impact: Supporting factor impact (CRR only)
         summary_by_class: RWA summarised by exposure class
         summary_by_approach: RWA summarised by approach
+        summary_by_class_method: RWA summarised by (exposure class, methodology),
+            where methodology is STD / FIRB / AIRB (retail A-IRB folded in) /
+            SLOTTING / EQUITY. Reconciles cell-for-cell with summary_by_class when
+            summed over methods within a class.
         pre_crm_summary: Pre-CRM summary (gross view by original class)
         post_crm_detailed: Post-CRM detailed view (split rows for guarantees)
         post_crm_summary: Post-CRM summary (net view by effective class)
@@ -924,6 +928,7 @@ class AggregatedResultBundle:
     supporting_factor_impact: pl.LazyFrame | None = None
     summary_by_class: pl.LazyFrame | None = None
     summary_by_approach: pl.LazyFrame | None = None
+    summary_by_class_method: pl.LazyFrame | None = None
     pre_crm_summary: pl.LazyFrame | None = None
     post_crm_detailed: pl.LazyFrame | None = None
     post_crm_summary: pl.LazyFrame | None = None

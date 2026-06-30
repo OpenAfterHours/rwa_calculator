@@ -432,7 +432,7 @@ def _response_with_crm_components() -> ReconciliationResponse:
             "ead_final": [100.0],
             "rwa_final": [75.0],
             "collateral_adjusted_value": [40.0],
-            "guarantee_benefit": [10.0],
+            "guaranteed_portion": [10.0],
             "sa_cqs": [3],
         }
     )
@@ -493,7 +493,7 @@ def test_mapped_crm_driver_not_duplicated_under_ead() -> None:
     ead = next(s for s in detail["steps"] if s["step"] == "ead")
     ead_drivers = {d["name"] for d in ead["drivers"]}
     assert "collateral_adjusted_value" not in ead_drivers
-    assert "guarantee_benefit" not in ead_drivers
+    assert "guaranteed_portion" not in ead_drivers
 
 
 def test_unmapped_crm_shows_as_ead_driver() -> None:
@@ -506,7 +506,7 @@ def test_unmapped_crm_shows_as_ead_driver() -> None:
             "ead_final": [100.0],
             "rwa_final": [75.0],
             "collateral_adjusted_value": [40.0],
-            "guarantee_benefit": [10.0],
+            "guaranteed_portion": [10.0],
         }
     )
     legacy = pl.LazyFrame(

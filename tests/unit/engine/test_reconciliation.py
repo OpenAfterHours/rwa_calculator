@@ -44,6 +44,25 @@ def _ours() -> pl.LazyFrame:
     )
 
 
+def _ours_irb() -> pl.LazyFrame:
+    """IRB-shaped results carrying the engine's REAL per-exposure output column
+    names (pd_floored / lgd_floored / guaranteed_portion), as written to the
+    parquet that ``scan_results()`` scans — not the fictional irb_-prefixed
+    CALCULATION_OUTPUT_SCHEMA names."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["L1", "L2"],
+            "exposure_class": ["corporate", "corporate"],
+            "approach_applied": ["AIRB", "AIRB"],
+            "ead_final": [100.0, 200.0],
+            "rwa_final": [80.0, 160.0],
+            "pd_floored": [0.012, 0.030],
+            "lgd_floored": [0.45, 0.45],
+            "guaranteed_portion": [25.0, 0.0],
+        }
+    )
+
+
 def _legacy() -> pl.LazyFrame:
     return pl.LazyFrame(
         {
@@ -454,7 +473,8 @@ class TestDataQualityWarnings:
         assert "rwa" in components
 
     def test_missing_our_column_skips_component(self) -> None:
-        # Arrange: map pd, but our frame has no irb_pd_floored/irb_pd column.
+        # Arrange: map pd, but the SA-shaped _ours() frame carries no pd column
+        # under any name (neither the floored pd_floored nor the raw pd).
         legacy = pl.LazyFrame(
             {
                 "loan_id": ["L1", "L2", "L3"],
@@ -470,6 +490,43 @@ class TestDataQualityWarnings:
         # Assert
         assert any(e.code == ERROR_RECON_LEGACY_COLUMN_MISSING for e in bundle.errors)
         assert "pd" not in set(bundle.summary_by_component.collect()["component"])
+
+    def test_irb_pd_lgd_guarantee_resolve_against_real_output_names(self) -> None:
+        # Regression guard for the REC001 "no column for component 'lgd'" bug: the
+        # registry must resolve pd/lgd/guarantee against the engine's REAL output
+        # names (pd_floored / lgd_floored / guaranteed_portion), NOT the fictional
+        # irb_-prefixed CALCULATION_OUTPUT_SCHEMA names the engine never emits.
+        legacy = pl.LazyFrame(
+            {
+                "loan_id": ["L1", "L2"],
+                "legacy_rwa": [80.0, 160.0],
+                "legacy_pd": [0.012, 0.030],
+                "legacy_lgd": [0.45, 0.45],
+                "legacy_guarantee": [25.0, 0.0],
+            }
+        )
+        mapping = LegacyColumnMapping(
+            legacy_keys=("loan_id",),
+            our_keys=("exposure_reference",),
+            components={
+                "rwa": ComponentMapping("legacy_rwa"),
+                "pd": ComponentMapping("legacy_pd"),
+                "lgd": ComponentMapping("legacy_lgd"),
+                "guarantee": ComponentMapping("legacy_guarantee"),
+            },
+        )
+
+        # Act
+        bundle = _recon(_ours_irb(), legacy, mapping)
+
+        # Assert: none are skipped (no REC001) and each reconciles exactly.
+        assert not any(e.code == ERROR_RECON_LEGACY_COLUMN_MISSING for e in bundle.errors)
+        components = set(bundle.summary_by_component.collect()["component"])
+        assert {"pd", "lgd", "guarantee"} <= components
+        df = bundle.component_reconciliation.collect()
+        assert _bucket_for(df, "L1", "pd_bucket") == BUCKET_EXACT
+        assert _bucket_for(df, "L1", "lgd_bucket") == BUCKET_EXACT
+        assert _bucket_for(df, "L1", "guarantee_bucket") == BUCKET_EXACT
 
     def test_missing_composite_key_returns_empty_bundle(self) -> None:
         # Arrange: our_keys references a column not on our frame.

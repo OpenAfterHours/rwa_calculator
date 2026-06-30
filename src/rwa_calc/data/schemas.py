@@ -2321,7 +2321,10 @@ SA_RESULT_SCHEMA = {
     "sa_rwa": pl.Float64,  # final_ead × risk_weight
 }
 
-# Schema for IRB calculation results
+# Schema for IRB calculation results.
+# NOTE (documentary only — NOT enforced): the live IRB output uses un-prefixed
+# names (``pd_floored``/``pd``, ``lgd_floored``/``lgd_input``/``lgd``), not the
+# ``irb_``-prefixed names below. See CALCULATION_OUTPUT_SCHEMA's note.
 IRB_RESULT_SCHEMA = {
     "exposure_reference": pl.String,
     "exposure_class": pl.String,
@@ -2386,6 +2389,17 @@ CALCULATION_CONFIG_SCHEMA = {
 # Main RWA calculation output schema
 # Designed to enable full auditability: users can investigate why results occurred
 # and replicate the calculation from the output data alone.
+#
+# NOTE (documentary only — NOT enforced): this dict is never applied to the output
+# frame via select/rename/cast. The real per-exposure output (what scan_results()
+# scans) is the raw aggregator ``results`` frame sealed by
+# ``contracts/edges.AGGREGATOR_EXIT_EDGE``. Several IRB columns below use aspirational
+# ``irb_``-prefixed names the engine never emits — the real output names are
+# un-prefixed: ``pd_floored``/``pd``, ``lgd_floored``/``lgd_input``/``lgd``,
+# ``ead_final``, ``rwa_final``, ``risk_weight``. Consumers that must match the live
+# output (the reconciliation registry in analysis/recon_registry.py and the
+# COREP/Pillar-III generators) key on those real names, never on this schema.
+# Guarded by tests/integration/test_reconciliation_output_contract.py.
 CALCULATION_OUTPUT_SCHEMA = {
     # -------------------------------------------------------------------------
     # IDENTIFICATION & LINEAGE

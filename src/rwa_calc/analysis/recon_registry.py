@@ -84,19 +84,26 @@ RECONCILABLE_COMPONENTS: tuple[ReconcilableComponent, ...] = (
         default_tol=0.0,
     ),
     ReconcilableComponent(
+        # The IRB engine emits the floored PD as ``pd_floored`` and the pre-floor
+        # working PD as ``pd`` — there is no ``irb_``-prefixed output column
+        # (``CALCULATION_OUTPUT_SCHEMA`` declares ``irb_pd_floored`` but nothing
+        # produces it). No separate original/floor column is persisted on output.
         "pd",
         "numeric",
-        our_columns=("irb_pd_floored", "irb_pd"),
-        explain_columns=("irb_pd_original", "irb_pd_floor"),
+        our_columns=("pd_floored", "pd"),
         input_columns=("internal_pd",),
         default_tol_kind="abs",
         default_tol=5e-5,
     ),
     ReconcilableComponent(
+        # Floored regulatory LGD (drives K / EL) is ``lgd_floored``; ``lgd_input``
+        # is the CRM-adjusted input and ``lgd`` the raw value — mirrors the
+        # reporting layer's ``_pick(cols, "lgd_floored", "lgd_input")``. No
+        # ``irb_``-prefixed output exists; ``lgd_pre_crm`` is the pre-CRM rationale.
         "lgd",
         "numeric",
-        our_columns=("irb_lgd_floored", "irb_lgd"),
-        explain_columns=("irb_lgd_original", "irb_lgd_floor", "irb_lgd_type"),
+        our_columns=("lgd_floored", "lgd_input", "lgd"),
+        explain_columns=("lgd_pre_crm",),
         default_tol_kind="abs",
         default_tol=1e-3,
     ),
@@ -140,23 +147,23 @@ RECONCILABLE_COMPONENTS: tuple[ReconcilableComponent, ...] = (
         default_tol=0.01,
     ),
     ReconcilableComponent(
-        # CRM — RWA reduction from unfunded protection (substitution). Additive:
-        # guaranteed sub-rows sum to the key grain. The method/status and the
-        # guaranteed/unguaranteed split explain the benefit.
+        # CRM — unfunded protection (substitution). The engine persists no single
+        # "RWA benefit" figure (``guarantee_benefit`` / ``guarantee_benefit_rw`` do
+        # not survive to the per-exposure output), so we reconcile the additive
+        # guaranteed EAD portion (``guaranteed_portion``): the amount our engine
+        # treated as covered by the guarantee, which sums across split sub-rows to
+        # the key grain. The guarantor approach / class and coverage ratio explain it.
         "guarantee",
         "numeric",
-        our_columns=("guarantee_benefit",),
+        our_columns=("guaranteed_portion",),
         explain_columns=(
-            "guarantee_method_used",
-            "guarantee_status",
-            "guarantor_risk_weight",
+            "guarantor_approach",
+            "guarantor_exposure_class",
+            "guarantee_ratio",
         ),
         input_columns=(
-            "guaranteed_amount",
-            "guarantee_coverage_pct",
+            "guarantee_amount",
             "unguaranteed_portion",
-            "pre_crm_risk_weight",
-            "guarantee_benefit_rw",
         ),
         additive=True,
         default_tol_kind="rel",
@@ -167,7 +174,7 @@ RECONCILABLE_COMPONENTS: tuple[ReconcilableComponent, ...] = (
         "numeric",
         our_columns=("ead_final", "final_ead", "ead"),
         explain_columns=("gross_ead", "converted_undrawn"),
-        # collateral_adjusted_value / guarantee_benefit stay as EAD drivers so our
+        # collateral_adjusted_value / guaranteed_portion stay as EAD drivers so our
         # side is always visible; when the `collateral` / `guarantee` components are
         # mapped they graduate to their own chain step and the forensic view's
         # de-dup (``_driver_chain``) drops the EAD driver row to avoid repetition.
@@ -176,7 +183,7 @@ RECONCILABLE_COMPONENTS: tuple[ReconcilableComponent, ...] = (
             "undrawn_amount",
             "ccf_applied",
             "collateral_adjusted_value",
-            "guarantee_benefit",
+            "guaranteed_portion",
         ),
         additive=True,
         default_tol_kind="rel",

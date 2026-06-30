@@ -92,7 +92,7 @@ value_map = { CORP = "corporate", RETAIL = "retail", RRE = "residential_mortgage
 # [components.collateral]
 # legacy_column = "Collateral_Value"     # net eligible collateral after haircuts
 # [components.guarantee]
-# legacy_column = "Guarantee_RWA_Benefit"
+# legacy_column = "Guaranteed_Amount"    # EAD portion covered by the guarantee
 
 # To reconcile each class portion line-by-line (not just per exposure), add the
 # class to BOTH keys — a portion in a class on only one side then shows as missing:

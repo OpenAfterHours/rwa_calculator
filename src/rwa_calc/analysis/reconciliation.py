@@ -24,8 +24,10 @@ file mapped onto our canonical components.
 References:
 - CLAUDE.md — data/engine separation; reconciliation is not a regulatory
   calculation, so this module carries no @cites decorators. Canonical component
-  definitions live in data/schemas.RECONCILABLE_COMPONENTS; the documented output
-  contract is data/schemas.CALCULATION_OUTPUT_SCHEMA.
+  definitions live in analysis.recon_registry.RECONCILABLE_COMPONENTS; the live
+  per-exposure output contract (the real column names a component resolves
+  against) is the aggregator frame sealed by contracts.edges.AGGREGATOR_EXIT_EDGE
+  — NOT the documentary, non-enforced data/schemas.CALCULATION_OUTPUT_SCHEMA.
 """
 
 from __future__ import annotations

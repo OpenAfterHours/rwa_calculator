@@ -6,6 +6,16 @@ calculator and the final aggregated output.
 > **Source of truth**: All schemas are defined in `src/rwa_calc/data/schemas.py`.
 > Result bundles are defined in `src/rwa_calc/contracts/bundles.py`.
 
+> **Heads-up — these schemas are illustrative, not the literal output contract.**
+> They are not enforced (nothing projects the output frame onto them), and some
+> IRB columns below use aspirational `irb_`-prefixed names the engine does **not**
+> emit. The live per-exposure output (what `scan_results()` scans) is the raw
+> aggregator frame sealed by `contracts/edges.AGGREGATOR_EXIT_EDGE`; its real
+> floored-parameter columns are **un-prefixed** — `pd_floored`/`pd`,
+> `lgd_floored`/`lgd_input`/`lgd`, `ead_final`, `rwa_final`, `risk_weight`. Tools
+> that must match the live output (the reconciliation registry, COREP / Pillar III
+> generators) key on those real names.
+
 ## SA Result Schema
 
 Results from Standardised Approach calculation. Each exposure gets a risk weight looked up

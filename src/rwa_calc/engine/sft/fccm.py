@@ -523,6 +523,12 @@ def _build_sft_exposure_rows(
     # ---- 5) Shape into synthetic exposure rows -------------------------------
     select_exprs = [
         pl.concat_str([pl.lit("ccr__"), pl.col("netting_set_id")]).alias("exposure_reference"),
+        # Reconciliation base: keep the ``ccr__`` namespace (an SFT netting set
+        # has no legacy per-exposure equivalent; a bare id could collide with a
+        # loan reference on a base-grain reconciliation key).
+        pl.concat_str([pl.lit("ccr__"), pl.col("netting_set_id")]).alias(
+            "source_exposure_reference"
+        ),
         pl.lit("ccr_netting_set").alias("exposure_type"),
         pl.col("counterparty_reference"),
         pl.lit(reporting_date).alias("value_date"),

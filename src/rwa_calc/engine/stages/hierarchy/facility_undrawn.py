@@ -230,6 +230,7 @@ def _empty_facility_undrawn_frame() -> pl.LazyFrame:
             "is_qrre_transactor": pl.Boolean,
             "facility_limit": pl.Float64,
             "source_facility_reference": pl.String,
+            "source_exposure_reference": pl.String,
             "facility_termination_date": pl.Date,
             "effective_maturity": pl.Float64,
         }
@@ -465,6 +466,12 @@ def _undrawn_select_expressions() -> list[pl.Expr]:
         (pl.col("facility_reference") + pl.lit("_UNDRAWN") + pl.col("_exposure_suffix")).alias(
             "exposure_reference"
         ),
+        # Pre-concatenation base reference for reconciliation linking: the
+        # facility the undrawn headroom belongs to (strips the
+        # _UNDRAWN[_<sub>|_RESIDUAL] suffix). Legacy parallel-run extracts key
+        # undrawn commitments on the facility reference, so every MOF waterfall
+        # and residual sub-row collapses to a single facility base line.
+        pl.col("facility_reference").alias("source_exposure_reference"),
         pl.lit("facility_undrawn").alias("exposure_type"),
         pl.col("product_type"),
         pl.col("book_code").cast(pl.String, strict=False),

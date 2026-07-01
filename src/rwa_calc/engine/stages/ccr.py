@@ -189,6 +189,11 @@ def _failed_trade_rows_to_exposures(
     computed = compute_failed_trade_rwa(failed_trades, run_config)
     return computed.select(
         pl.concat_str([pl.lit("ft__"), pl.col("failed_trade_id")]).alias("exposure_reference"),
+        # Reconciliation base: keep the ``ft__`` namespace (no legacy
+        # per-exposure equivalent; avoids collision with a loan reference).
+        pl.concat_str([pl.lit("ft__"), pl.col("failed_trade_id")]).alias(
+            "source_exposure_reference"
+        ),
         pl.lit("ccr_failed_trade").alias("exposure_type"),
         pl.col("counterparty_reference"),
         pl.lit(run_config.reporting_date).alias("value_date"),
@@ -233,6 +238,11 @@ def _dfc_rows_to_exposures(
     computed = compute_dfc_capital(default_fund_contributions, run_config)
     return computed.select(
         pl.concat_str([pl.lit("dfc__"), pl.col("contribution_id")]).alias("exposure_reference"),
+        # Reconciliation base: keep the ``dfc__`` namespace (no legacy
+        # per-exposure equivalent; avoids collision with a loan reference).
+        pl.concat_str([pl.lit("dfc__"), pl.col("contribution_id")]).alias(
+            "source_exposure_reference"
+        ),
         pl.lit("ccr_default_fund").alias("exposure_type"),
         pl.col("ccp_reference").alias("counterparty_reference"),
         pl.lit(run_config.reporting_date).alias("value_date"),

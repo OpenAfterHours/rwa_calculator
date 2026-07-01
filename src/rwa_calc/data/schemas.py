@@ -2407,6 +2407,7 @@ CALCULATION_OUTPUT_SCHEMA = {
     "calculation_run_id": pl.String,  # Unique run identifier for audit trail
     "calculation_timestamp": pl.Datetime,  # When calculation was performed
     "exposure_reference": pl.String,  # Links to source loan/facility/contingent
+    "source_exposure_reference": pl.String,  # Pre-concatenation base ref for reconciliation (strips guarantee/undrawn/RE suffixes)
     "parent_exposure_reference": pl.String,  # Original exposure before multi-guarantor split
     "exposure_type": pl.String,  # "loan", "facility", "contingent"
     "counterparty_reference": pl.String,  # Links to counterparty
@@ -2765,11 +2766,21 @@ ADDITIVE_OUTPUT_FIELDS: frozenset[str] = frozenset(
     }
 )
 
-# Columns that carry a sub-row's link to its parent exposure. The collapse helper
-# coalesces whichever are present (then falls back to exposure_reference) to derive
-# the parent grain. guarantees.py sets ``parent_exposure_reference``; re_splitter.py
-# sets ``split_parent_id`` (may be dropped from the final frame — hence "if present").
+# Columns that carry a row's link to its pre-concatenation base exposure. The
+# collapse helper coalesces whichever are present, in order (then falls back to
+# exposure_reference), to derive the parent/base grain.
+# ``source_exposure_reference`` is the primary, always-present base: unify.py sets
+# it on loans/contingents, facility_undrawn.py sets it to the facility reference
+# (recovering undrawn / MOF rows the parent-link columns cannot), the equity path
+# and synthetic CCR/SFT builders set it too. It is listed first so it wins the
+# coalesce; guarantee (``parent_exposure_reference``) and RE-split
+# (``split_parent_id``) recovery is unchanged because on those sub-rows the base
+# equals the parent link. The latter two are retained as defensive fallbacks for
+# result parquets written before ``source_exposure_reference`` existed (typed null
+# there -> fall through). All three are declared required on the sealed
+# aggregator-exit edge, so they are always present on a live results frame.
 RECON_PARENT_KEY_COLUMNS: tuple[str, ...] = (
+    "source_exposure_reference",
     "parent_exposure_reference",
     "split_parent_id",
 )

@@ -57,6 +57,19 @@ legacy_keys   = ["exposure_reference"]
 our_keys      = ["exposure_reference"]
 top_n         = 50
 
+# On the default "exposure_reference" key, our sub-rows are automatically
+# collapsed back to their pre-concatenation BASE reference before the join:
+#   guarantee splits   L1__G_<guarantor> / L1__REM      -> L1
+#   real-estate splits M1_rre / M1_cre / M1_res         -> M1
+#   facility undrawn   FAC1_UNDRAWN[_<sub>|_RESIDUAL]    -> FAC1  (the facility ref)
+# so a legacy file keyed on the ORIGINAL loan / facility reference links straight
+# through — you do NOT need to strip our engine's suffixes on the legacy side.
+# To key on the base explicitly (e.g. as part of a composite key), use the
+# always-present "source_exposure_reference" column:
+#   our_keys = ["source_exposure_reference"]
+# Synthetic derivative/SFT rows (ccr__/ft__/dfc__) keep their namespace and stay
+# as our-only lines unless your legacy file reports those aggregates too.
+
 # A legacy file may split one exposure across several lines (a collateralised
 # portion in one risk class, the residual in another). Those lines are SUMMED to
 # the key grain, never dropped, so the totals tie out.

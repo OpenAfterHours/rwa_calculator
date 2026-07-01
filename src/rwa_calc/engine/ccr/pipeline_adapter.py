@@ -426,6 +426,13 @@ def ccr_rows_to_exposures(
     return ns_with_ead.select(
         [
             pl.concat_str([pl.lit("ccr__"), pl.col("netting_set_id")]).alias("exposure_reference"),
+            # Reconciliation base: a netting set has no legacy per-exposure
+            # equivalent, so keep the ``ccr__`` namespace (the base equals the
+            # exposure_reference) — a bare netting_set_id could collide with an
+            # unrelated loan reference and silently sum EAD on a base-grain key.
+            pl.concat_str([pl.lit("ccr__"), pl.col("netting_set_id")]).alias(
+                "source_exposure_reference"
+            ),
             pl.lit("ccr_netting_set").alias("exposure_type"),
             pl.col("counterparty_reference"),
             pl.lit(reporting_date).alias("value_date"),

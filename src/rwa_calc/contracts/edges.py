@@ -514,6 +514,13 @@ def _hierarchy_resolved_columns() -> dict[str, EdgeColumn]:
         "is_qrre_transactor": EdgeColumn(dtype=pl.Boolean),
         "facility_limit": EdgeColumn(dtype=pl.Float64),
         "source_facility_reference": EdgeColumn(dtype=pl.String),
+        "source_exposure_reference": EdgeColumn(
+            dtype=pl.String,
+            null_meaning="pre-concatenation base reference (loan / contingent / facility "
+            "ref) for reconciliation linking; strips guarantee (__G_/__REM), RE-split and "
+            "facility-undrawn (_UNDRAWN) suffixes; namespaced synthetic CCR/SFT rows keep "
+            "their prefix; never fabricated",
+        ),
         "mapped_parent_facility": EdgeColumn(dtype=pl.String),
         "parent_facility_reference": EdgeColumn(dtype=pl.String),
         "exposure_has_parent": EdgeColumn(dtype=pl.Boolean),
@@ -1255,6 +1262,13 @@ def _calc_output_common_columns() -> dict[str, EdgeColumn]:
         "sme_size_metric_gbp": EdgeColumn(dtype=pl.Float64),
         "sme_size_source": EdgeColumn(dtype=pl.String),
         "source_facility_reference": EdgeColumn(dtype=pl.String),
+        "source_exposure_reference": EdgeColumn(
+            dtype=pl.String,
+            null_meaning="pre-concatenation base reference (loan / contingent / facility "
+            "ref) for reconciliation linking; strips guarantee (__G_/__REM), RE-split and "
+            "facility-undrawn (_UNDRAWN) suffixes; namespaced synthetic CCR/SFT rows keep "
+            "their prefix; never fabricated",
+        ),
         "split_parent_id": EdgeColumn(dtype=pl.String),
         "substitute_rw": EdgeColumn(dtype=pl.Float64),
         "supporting_factor": EdgeColumn(dtype=pl.Float64),

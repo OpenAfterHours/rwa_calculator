@@ -117,6 +117,120 @@ class TestDefaultExposureGrain:
         assert out["risk_weight"][0] == pytest.approx(0.0)
 
 
+class TestSourceExposureReferenceGrain:
+    """``source_exposure_reference`` is the always-present base that lets the
+    default-key collapse recover synthetic rows (facility_undrawn, MOF) that
+    carry no ``parent_exposure_reference``/``split_parent_id`` link, while
+    leaving guarantee/RE recovery byte-for-byte unchanged.
+    """
+
+    def test_undrawn_collapses_to_facility_base(self) -> None:
+        # Arrange: a facility_undrawn row carries source_exposure_reference =
+        # the base facility ref; its parent_exposure_reference is self (the
+        # guarantee stage copies exposure_reference onto every row).
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["F1_UNDRAWN", "L1"],
+                "source_exposure_reference": ["F1", "L1"],
+                "parent_exposure_reference": ["F1_UNDRAWN", "L1"],
+                "exposure_type": ["facility_undrawn", "loan"],
+                "ead_final": [30.0, 100.0],
+                "rwa_final": [15.0, 50.0],
+                "risk_weight": [0.50, 0.50],
+            }
+        )
+
+        # Act
+        out = aggregate_to_key_grain(lf).collect()
+
+        # Assert: the undrawn row is rewritten to its facility base, not left
+        # as the suffixed synthetic reference.
+        assert set(out["exposure_reference"]) == {"F1", "L1"}
+
+    def test_mof_sub_rows_collapse_to_one_facility_line(self) -> None:
+        # Arrange: MOF waterfall + residual sub-rows all share the facility base.
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["F1_UNDRAWN_S1", "F1_UNDRAWN_S2", "F1_UNDRAWN_RESIDUAL"],
+                "source_exposure_reference": ["F1", "F1", "F1"],
+                "parent_exposure_reference": [
+                    "F1_UNDRAWN_S1",
+                    "F1_UNDRAWN_S2",
+                    "F1_UNDRAWN_RESIDUAL",
+                ],
+                "exposure_type": ["facility_undrawn"] * 3,
+                "ead_final": [40.0, 30.0, 30.0],
+                "rwa_final": [20.0, 15.0, 30.0],
+                "risk_weight": [0.50, 0.50, 1.00],
+            }
+        )
+
+        out = aggregate_to_key_grain(lf).collect()
+
+        assert out.height == 1
+        f1 = out.row(0, named=True)
+        assert f1["exposure_reference"] == "F1"
+        assert f1["ead_final"] == pytest.approx(100.0)
+        assert f1["rwa_final"] == pytest.approx(65.0)
+        assert f1["risk_weight"] == pytest.approx(0.65)
+
+    def test_guarantee_recovery_unchanged_when_source_equals_parent(self) -> None:
+        # source_exposure_reference on guarantee sub-rows equals the original
+        # loan ref (inherited from unify), i.e. the same base parent_exposure_
+        # reference already provided — so recovery is identical to today.
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["L1__G_GTR", "L1__REM"],
+                "source_exposure_reference": ["L1", "L1"],
+                "parent_exposure_reference": ["L1", "L1"],
+                "exposure_type": ["loan", "loan"],
+                "ead_final": [60.0, 40.0],
+                "rwa_final": [12.0, 40.0],
+                "risk_weight": [0.20, 1.00],
+            }
+        )
+
+        out = aggregate_to_key_grain(lf).collect()
+
+        assert set(out["exposure_reference"]) == {"L1"}
+        assert _row(out, "L1")["ead_final"] == pytest.approx(100.0)
+
+    def test_null_source_falls_through_to_parent(self) -> None:
+        # Back-compat: an old result parquet lacking a value (typed null) must
+        # fall through to parent_exposure_reference, reproducing prior behaviour.
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["L1__G_GTR", "L1__REM"],
+                "source_exposure_reference": pl.Series([None, None], dtype=pl.String),
+                "parent_exposure_reference": ["L1", "L1"],
+                "ead_final": [60.0, 40.0],
+                "rwa_final": [12.0, 40.0],
+            }
+        )
+
+        out = aggregate_to_key_grain(lf).collect()
+
+        assert set(out["exposure_reference"]) == {"L1"}
+
+    def test_namespaced_ccr_source_does_not_merge_with_loan(self) -> None:
+        # CCR synthetic rows keep the ``ccr__`` namespace in their base, so a
+        # netting_set_id that collides with a loan reference must NOT sum.
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["NS1", "ccr__NS1"],
+                "source_exposure_reference": ["NS1", "ccr__NS1"],
+                "exposure_type": ["loan", "ccr_netting_set"],
+                "ead_final": [100.0, 40.0],
+                "rwa_final": [50.0, 20.0],
+            }
+        )
+
+        out = aggregate_to_key_grain(lf).collect()
+
+        assert out.height == 2
+        assert set(out["exposure_reference"]) == {"NS1", "ccr__NS1"}
+
+
 class TestCompositeKeyGrain:
     def test_aggregates_multiple_loans_to_key(self) -> None:
         # Arrange: two loans under one counterparty.

@@ -121,6 +121,11 @@ def _coerce_loans_to_unified(loans: pl.LazyFrame) -> pl.LazyFrame:
     """
     loan_select_exprs = [
         pl.col("loan_reference").alias("exposure_reference"),
+        # Pre-concatenation base reference for reconciliation linking. A loan is
+        # base-grain, so it equals exposure_reference here; guarantee / RE-split
+        # sub-rows inherit this value unchanged (they only mutate
+        # exposure_reference), recovering the original loan reference on collapse.
+        pl.col("loan_reference").alias("source_exposure_reference"),
         pl.lit("loan").alias("exposure_type"),
         pl.col("product_type"),
         pl.col("book_code").cast(pl.String, strict=False),  # Ensure consistent type
@@ -217,6 +222,9 @@ def _coerce_contingents_to_unified(
     return contingents.select(
         [
             pl.col("contingent_reference").alias("exposure_reference"),
+            # Pre-concatenation base reference for reconciliation linking
+            # (base-grain; guarantee / RE-split sub-rows inherit it unchanged).
+            pl.col("contingent_reference").alias("source_exposure_reference"),
             pl.lit("contingent").alias("exposure_type"),
             pl.col("product_type"),
             pl.col("book_code").cast(pl.String, strict=False),

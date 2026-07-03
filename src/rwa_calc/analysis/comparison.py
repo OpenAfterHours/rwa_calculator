@@ -50,6 +50,7 @@ from rwa_calc.contracts.bundles import (
     CapitalImpactBundle,
     ComparisonBundle,
 )
+from rwa_calc.engine.aggregator._summaries import method_label_expr
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from rwa_calc.rulebook.resolve import resolve
 
@@ -338,6 +339,11 @@ def _compute_exposure_deltas(
             ),
         ]
     )
+
+    # Tag each exposure with its methodology label (STD/FIRB/AIRB/SLOTTING/EQUITY)
+    # from the single shared mapping, so a class×method split of these deltas
+    # reconciles cell-for-cell with the by-class summary (same source grain).
+    joined = joined.with_columns(method_label_expr("approach_applied").alias("method"))
 
     # Compute deltas: variant - baseline (positive = increased capital requirement)
     joined = joined.with_columns(

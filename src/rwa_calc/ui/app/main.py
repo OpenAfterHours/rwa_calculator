@@ -80,7 +80,7 @@ from rwa_calc.ui.app.recon_state import (
     load_last_run,
     save_last_run,
 )
-from rwa_calc.ui.views import charts
+from rwa_calc.ui.views import charts, method_split
 from rwa_calc.ui.views import comparison as comparison_view
 from rwa_calc.ui.views import reconciliation as reconciliation_view
 
@@ -588,6 +588,7 @@ def _register_pages(app: FastAPI) -> None:
         bucket: str = "",
         exposure_class: str = "",
         approach: str = "",
+        method: str = "",
         worst_component: str = "",
         status: str = reconciliation_view.SIGNOFF_OPEN,
         q: str = "",
@@ -607,6 +608,7 @@ def _register_pages(app: FastAPI) -> None:
             bucket=bucket or None,
             exposure_class=exposure_class or None,
             approach=approach or None,
+            method=method or None,
             worst_component=worst_component or None,
             status=status_filter,
             query=q or None,
@@ -929,7 +931,9 @@ def _results_context(
     """
     rwa_by_class, ead_by_class = _class_chart_items(response)
     approach_split = _approach_chart_items(response)
-    class_method_sections = _class_method_sections(response)
+    class_method_df = _class_method_df(response)
+    class_method_sections = method_split.single_series_sections(class_method_df, "total_rwa")
+    class_method_ead_sections = method_split.single_series_sections(class_method_df, "total_ead")
     selected = list(
         selected_output_formats if selected_output_formats is not None else _DEFAULT_OUTPUT_FORMATS
     )
@@ -943,6 +947,7 @@ def _results_context(
         "chart_ead_by_class": charts.horizontal_bar_svg(ead_by_class),
         "chart_approach": charts.horizontal_bar_svg(approach_split),
         "class_method_sections": class_method_sections,
+        "class_method_ead_sections": class_method_ead_sections,
         "table_columns": _RESULT_TABLE_COLS,
         "table_rows": _result_rows(response),
         # Download buttons stream from the existing GET /api/export/{fmt} endpoint.
@@ -989,6 +994,14 @@ def _compute_comparison(
         for row in by_class.to_dicts()
         if "exposure_class" in row
     ]
+    # The by-class delta split by methodology (STD/FIRB/AIRB/…): one grouped bar
+    # (CRR vs B31) per method, sharing one scale so methods stay comparable.
+    class_method = comparison_view.summary_by_class_method(bundle)
+    class_method_sections = method_split.grouped_series_sections(
+        class_method,
+        left_col=f"total_rwa_{bundle.baseline_label}",
+        right_col=f"total_rwa_{bundle.variant_label}",
+    )
 
     # Cache the comparison under a fresh id so the download buttons can stream it
     # without re-running both frameworks. The comparison page renders inline (no
@@ -1003,6 +1016,7 @@ def _compute_comparison(
         "summary": summary,
         "chart_waterfall": charts.waterfall_svg(steps),
         "chart_by_class": charts.grouped_bar_svg(grouped),
+        "class_method_sections": class_method_sections,
         "class_columns": by_class.columns,
         "class_rows": by_class.to_dicts(),
         "export_csv_url": f"/api/comparison/export/csv?comparison_id={comparison_id}",
@@ -1158,6 +1172,7 @@ def _reconciliation_result(
         ),
         "class_table": _table(segments["by_class"]),
         "approach_table": _table(segments["by_approach"]),
+        "class_method_table": _table(segments["by_class_method"]),
         # Tier 3 — ranked worklist (top-N open breaks; the full diff lives in the
         # explorer). Reviewed breaks drop off, so the worklist burns down; a break
         # whose difference moved since sign-off stays (stale) for re-review.
@@ -1205,6 +1220,7 @@ def _reconciliation_explorer(
         "bucket": filters.bucket,
         "exposure_class": filters.exposure_class,
         "approach": filters.approach,
+        "method": filters.method,
         "worst_component": filters.worst_component,
         "status": status_param,
         "q": filters.query,
@@ -1230,6 +1246,7 @@ def _reconciliation_explorer(
             "bucket": filters.bucket or "",
             "exposure_class": filters.exposure_class or "",
             "approach": filters.approach or "",
+            "method": filters.method or "",
             "worst_component": filters.worst_component or "",
             "status": status_param,
             "q": filters.query or "",
@@ -1369,37 +1386,21 @@ def _approach_chart_items(response: CalculationResponse) -> list[tuple[str, floa
     return _items(lf.collect().fill_nan(None), "approach_applied", "total_rwa")
 
 
-# Methodology subsection order on the results page. Methods present but not listed
-# (an unexpected approach label) are appended alphabetically so nothing is dropped.
-_METHOD_ORDER = ("STD", "FIRB", "AIRB", "SLOTTING", "EQUITY")
+def _class_method_df(response: CalculationResponse) -> pl.DataFrame | None:
+    """The class x method summary as a display-ready DataFrame (or ``None``).
 
-
-def _class_method_sections(response: CalculationResponse) -> list[dict]:
-    """Per-methodology "RWA by exposure class" charts (STD / FIRB / AIRB / …).
-
-    Splits the class-by-method summary into one section per methodology present,
-    each rendering the same horizontal-bar chart filtered to that method, so the
-    viewer sees how much RWA each methodology contributes within each exposure
-    class. Returns ``[]`` when the summary is unavailable (older cache), so the
+    Feeds the results page's per-methodology "RWA by exposure class" and "EAD by
+    exposure class" sections (built by ``method_split``). Returns ``None`` when
+    the summary is unavailable (an older cache predating the frame) so the
     template falls back to the single combined chart.
     """
     lf = response.scan_summary_by_class_method()
     if lf is None:
-        return []
+        return None
     df = lf.collect().fill_nan(None)
-    if not {"method", "exposure_class", "total_rwa"} <= set(df.columns):
-        return []
-    # ``method`` is never null in practice (_method_expr coalesces to "OTHER"), but
-    # filter None defensively so the sort below cannot TypeError on a stray null.
-    present = [m for m in df.get_column("method").unique().to_list() if m is not None]
-    ordered = [m for m in _METHOD_ORDER if m in present]
-    ordered += sorted(m for m in present if m not in _METHOD_ORDER)
-    sections: list[dict] = []
-    for method in ordered:
-        items = _items(df.filter(pl.col("method") == method), "exposure_class", "total_rwa")
-        if items:
-            sections.append({"method": method, "chart": charts.horizontal_bar_svg(items)})
-    return sections
+    if not {"method", "exposure_class"} <= set(df.columns):
+        return None
+    return df
 
 
 def _items(df: pl.DataFrame, label_col: str, value_col: str) -> list[tuple[str, float]]:

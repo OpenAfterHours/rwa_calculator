@@ -39,7 +39,16 @@
 </div>
 <div class="panel">
   <h3>EAD by exposure class</h3>
+  {% if class_method_ead_sections %}
+  <p class="muted">Split by method — STD (standardised), FIRB, AIRB (advanced IRB, retail included),
+  and slotting / equity where present.</p>
+  {% for section in class_method_ead_sections %}
+  <h4 class="method-subtitle">{{ section.method }}</h4>
+  {{ section.chart | safe }}
+  {% endfor %}
+  {% else %}
   {{ chart_ead_by_class | safe }}
+  {% endif %}
 </div>
 <div class="panel">
   <h3>RWA by approach</h3>

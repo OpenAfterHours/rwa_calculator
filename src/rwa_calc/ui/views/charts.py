@@ -62,27 +62,33 @@ def horizontal_bar_svg(
     width: int = 560,
     bar_class: str = "chart-bar",
     value_format: str = "{:,.0f}",
+    max_value: float | None = None,
 ) -> str:
     """
     A horizontal bar chart: one labelled bar per (label, value) pair.
 
     Bars are scaled to the largest absolute value. Used for RWA/EAD by exposure
     class and the approach split.
+
+    Pass ``max_value`` to fix the bar scale to an external maximum instead of the
+    chart's own largest value — the per-methodology sections share one scale this
+    way, so a small method's bars read as genuinely small next to a large one
+    (a NaN / inf / non-positive override is ignored and the internal max is used).
     """
     # Drop non-finite (NaN / inf) values up front: a single NaN would otherwise
-    # poison ``max_value`` (NaN sorts as the max), collapsing every other bar to a
+    # poison the scale (NaN sorts as the max), collapsing every other bar to a
     # 1px sliver and rendering literal "nan" labels.
     items = [(label, value) for label, value in items if math.isfinite(value)]
     if not items:
         return _empty("No data")
 
-    max_value = max((abs(v) for _, v in items), default=0.0) or 1.0
+    scale = _scale(max_value, (abs(v) for _, v in items))
     stacked = _stack_labels(label for label, _ in items)
     height = _chart_height(len(items), stacked=stacked)
     rows: list[str] = []
     for i, (label, value) in enumerate(items):
         row = _row(i, width, stacked=stacked)
-        bar_w = max(1.0, abs(value) / max_value * row.bar_area)
+        bar_w = max(1.0, abs(value) / scale * row.bar_area)
         rows.append(
             _label(label, row)
             + f'<rect class="{escape(bar_class)}" x="{row.bar_x}" y="{row.bar_y:.1f}" '
@@ -99,22 +105,25 @@ def grouped_bar_svg(
     series: tuple[str, str] = ("CRR", "Basel 3.1"),
     width: int = 560,
     value_format: str = "{:,.0f}",
+    max_value: float | None = None,
 ) -> str:
     """
     Two bars per category — used for CRR vs Basel 3.1 RWA by exposure class.
 
-    Each tuple is (label, crr_value, b31_value).
+    Each tuple is (label, crr_value, b31_value). Pass ``max_value`` to fix the bar
+    scale to an external maximum (so per-methodology sections share one scale); a
+    non-finite / non-positive override is ignored and the internal max is used.
     """
     if not items:
         return _empty("No data")
 
     # Coerce non-finite (NaN / inf) series values to 0 so a single bad cell cannot
-    # poison the shared ``max_value`` scale or render a literal "nan" bar/label.
+    # poison the scale or render a literal "nan" bar/label.
     items = [
         (label, a if math.isfinite(a) else 0.0, b if math.isfinite(b) else 0.0)
         for label, a, b in items
     ]
-    max_value = max((max(abs(a), abs(b)) for _, a, b in items), default=0.0) or 1.0
+    scale = _scale(max_value, (max(abs(a), abs(b)) for _, a, b in items))
     stacked = _stack_labels(label for label, _, _ in items)
     sub_h = (_BAR_H - 4) / 2
     height = _chart_height(len(items), stacked=stacked)
@@ -124,7 +133,7 @@ def grouped_bar_svg(
         rows.append(_label(label, row))
         for j, (name, value) in enumerate(((series[0], crr), (series[1], b31))):
             by = row.bar_y + j * (sub_h + 4)
-            bw = max(1.0, abs(value) / max_value * row.bar_area)
+            bw = max(1.0, abs(value) / scale * row.bar_area)
             cls = "chart-bar-crr" if j == 0 else "chart-bar-b31"
             rows.append(
                 f'<rect class="{cls}" x="{row.bar_x}" y="{by:.1f}" '
@@ -239,6 +248,18 @@ def _chart_height(n: int, *, stacked: bool) -> int:
 # =============================================================================
 # Private helpers
 # =============================================================================
+
+
+def _scale(max_value: float | None, values: Iterable[float]) -> float:
+    """Resolve the bar-scale denominator: a valid external override, else the max.
+
+    A caller-supplied ``max_value`` fixes the scale (so sibling charts share it);
+    a ``None`` / non-finite / non-positive override falls back to the largest
+    absolute value in ``values``. Never returns 0 (a 0 scale would divide by zero).
+    """
+    if max_value is not None and math.isfinite(max_value) and max_value > 0:
+        return max_value
+    return max((abs(v) for v in values), default=0.0) or 1.0
 
 
 def _svg(width: int, height: int, body: str) -> str:

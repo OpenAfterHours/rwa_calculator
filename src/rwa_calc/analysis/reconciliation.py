@@ -52,6 +52,7 @@ from rwa_calc.contracts.errors import (
     reconciliation_warning,
 )
 from rwa_calc.engine.aggregator._collapse import HETEROGENEITY_FLAG, aggregate_to_key_grain
+from rwa_calc.engine.aggregator._summaries import method_label_expr
 
 if TYPE_CHECKING:
     from rwa_calc.analysis.recon_registry import LegacyColumnMapping, ReconcilableComponent
@@ -165,6 +166,11 @@ class ReconciliationRunner:
         )
 
         recon = self._apply_buckets(joined, mapping, active)
+        # Tag every key with its methodology label (STD/FIRB/AIRB/SLOTTING/EQUITY)
+        # from the shared mapping, so the class×method segment carries the same
+        # vocabulary as the results/comparison tabs and the explorer can filter on
+        # it. This is our-side only — the legacy file has no approach to split on.
+        recon = recon.with_columns(method_label_expr("our_approach").alias("method"))
         self._emit_join_diagnostics(recon, active, errors)
 
         return ReconciliationBundle(
@@ -174,6 +180,9 @@ class ReconciliationRunner:
             summary_by_bucket=_summary_by_bucket(recon),
             summary_by_exposure_class=_summary_by_group(recon, "our_exposure_class", active),
             summary_by_approach=_summary_by_group(recon, "our_approach", active),
+            summary_by_class_method=_summary_by_group(
+                recon, ["our_exposure_class", "method"], active
+            ),
             breaks_detail=_breaks_detail(recon, mapping, active),
             totals_tie_out=_totals_tie_out(recon, active),
             errors=errors,
@@ -543,6 +552,7 @@ class ReconciliationRunner:
             summary_by_bucket=bundle.summary_by_bucket,
             summary_by_exposure_class=bundle.summary_by_exposure_class,
             summary_by_approach=bundle.summary_by_approach,
+            summary_by_class_method=bundle.summary_by_class_method,
             breaks_detail=bundle.breaks_detail,
             totals_tie_out=bundle.totals_tie_out,
             errors=errors,
@@ -791,13 +801,19 @@ def _summary_by_bucket(recon: pl.LazyFrame) -> pl.LazyFrame:
 
 
 def _summary_by_group(
-    recon: pl.LazyFrame, group_col: str, active: list[_ActiveComponent]
+    recon: pl.LazyFrame, group_col: str | list[str], active: list[_ActiveComponent]
 ) -> pl.LazyFrame:
-    """Break counts/sums grouped by our exposure class or approach."""
+    """Break counts/sums grouped by our exposure class, approach, or their cross.
+
+    ``group_col`` is one column name or a list of them (e.g. ``["our_exposure_class",
+    "method"]`` for the class×method segmentation); the aggregations are identical
+    either way, so summing over the finer grain reconciles with the coarser one.
+    """
+    group_cols = [group_col] if isinstance(group_col, str) else list(group_col)
     has_rwa = any(a.spec.name == "rwa" for a in active)
     sum_abs_rwa = pl.col("abs_delta_rwa").abs().sum() if has_rwa else pl.lit(None, dtype=pl.Float64)
     return (
-        recon.group_by(group_col)
+        recon.group_by(group_cols)
         .agg(
             pl.len().alias("n_total"),
             (pl.col("row_bucket") == BUCKET_EXACT).sum().alias("n_exact_match"),
@@ -807,7 +823,7 @@ def _summary_by_group(
             (pl.col("row_bucket") == BUCKET_MISSING_RIGHT).sum().alias("n_missing_right"),
             sum_abs_rwa.alias("sum_abs_delta_rwa"),
         )
-        .sort(group_col, nulls_last=True)
+        .sort(group_cols, nulls_last=True)
     )
 
 

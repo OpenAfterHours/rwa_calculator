@@ -1099,6 +1099,11 @@ class ReconciliationBundle:
         summary_by_bucket: Row-level bucket counts.
         summary_by_exposure_class: Break counts/sums grouped by our exposure class.
         summary_by_approach: Break counts/sums grouped by our approach.
+        summary_by_class_method: Break counts/sums grouped by (our exposure class,
+            methodology STD/FIRB/AIRB/SLOTTING/EQUITY) — the our-side class×method
+            segmentation. Summing ``n_total`` over methods within a class ties to
+            ``summary_by_exposure_class`` (method is a pure partition). Our-side
+            only: the legacy side carries no approach to split on.
         breaks_detail: Long-format worklist (one row per key×component break),
             sorted by materiality.
         totals_tie_out: Per additive component — sum(legacy) vs sum(ours), delta, pct.
@@ -1111,6 +1116,7 @@ class ReconciliationBundle:
     summary_by_bucket: pl.LazyFrame
     summary_by_exposure_class: pl.LazyFrame
     summary_by_approach: pl.LazyFrame
+    summary_by_class_method: pl.LazyFrame
     breaks_detail: pl.LazyFrame
     totals_tie_out: pl.LazyFrame
     errors: list[CalculationError] = field(default_factory=list)
@@ -1217,6 +1223,7 @@ def create_empty_reconciliation_bundle() -> ReconciliationBundle:
         summary_by_bucket=pl.LazyFrame(),
         summary_by_exposure_class=pl.LazyFrame(),
         summary_by_approach=pl.LazyFrame(),
+        summary_by_class_method=pl.LazyFrame(),
         breaks_detail=pl.LazyFrame(),
         totals_tie_out=pl.LazyFrame(),
     )

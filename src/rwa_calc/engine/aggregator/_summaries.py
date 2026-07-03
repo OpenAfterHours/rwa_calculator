@@ -166,6 +166,17 @@ def generate_summary_by_class_method(results: pl.LazyFrame) -> pl.LazyFrame:
     return _with_avg_risk_weight(summary, ead_col, rw_col)
 
 
+def method_label_expr(approach_col: str) -> pl.Expr:
+    """Map an approach column to the UI methodology label (STD/FIRB/AIRB/…).
+
+    The single, public source of the approach->methodology mapping. Reused by the
+    dual-run comparison (``analysis/comparison.py``) so its class×method split
+    carries the *same* labels as the single-run ``summary_by_class_method``,
+    rather than re-deriving the vocabulary. See ``_method_expr`` for the rules.
+    """
+    return _method_expr(approach_col)
+
+
 # =============================================================================
 # Private helpers
 # =============================================================================

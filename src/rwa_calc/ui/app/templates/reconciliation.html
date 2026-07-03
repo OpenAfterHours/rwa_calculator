@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_recon_table.html" import render_table, drill_table %}
+{% from "_recon_table.html" import render_table, drill_table, drill_table2 %}
 {% block title %}Reconciliation — RWA Calculator{% endblock %}
 
 {% block content %}
@@ -107,6 +107,12 @@ allocate an exposure to different classes.</p>
 {{ drill_table(result.class_table, "our_exposure_class", result.explorer_url, "exposure_class") }}
 <h3>By approach</h3>
 {{ drill_table(result.approach_table, "our_approach", result.explorer_url, "approach") }}
+<h3>By exposure class &amp; method</h3>
+<p class="muted">Our-side view — how our breaks distribute across methodology (STD / FIRB / AIRB /
+slotting / equity) within each exposure class. Click a method to drill the explorer to that
+class × method. (The legacy side carries no approach, so the asset-class allocation above stays
+un-split.)</p>
+{{ drill_table2(result.class_method_table, "method", result.explorer_url, "exposure_class", "our_exposure_class", "method", "method") }}
 
 <h2>3 · Worklist — top {{ result.biggest_n }} of {{ "{:,}".format(result.break_count) }} break(s), largest first</h2>
 <p class="muted">Click a key to open its single-loan forensic and sign it off (accept / reject

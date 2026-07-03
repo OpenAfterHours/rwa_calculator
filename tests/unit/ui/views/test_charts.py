@@ -119,6 +119,39 @@ def test_grouped_bar_long_label_stacks() -> None:
 
 
 # =============================================================================
+# max_value — the shared bar scale for per-methodology sections
+# =============================================================================
+
+
+def test_horizontal_bar_external_max_value_shrinks_bar() -> None:
+    # Arrange / Act: the same bar drawn against its own max vs a larger shared max.
+    own = charts.horizontal_bar_svg([("CORPORATE", 100.0)])
+    shared = charts.horizontal_bar_svg([("CORPORATE", 100.0)], max_value=200.0)
+
+    # Assert: the shared (larger) scale draws the bar at half width — so a small
+    # method reads as genuinely small next to a large one.
+    assert _first_bar_width(shared) < _first_bar_width(own)
+
+
+def test_horizontal_bar_ignores_non_positive_or_non_finite_max_value() -> None:
+    # Arrange / Act: a 0 / NaN override must fall back to the internal max.
+    own = charts.horizontal_bar_svg([("CORPORATE", 100.0)])
+
+    # Assert: identical markup — the bad override is ignored, not divided by.
+    assert charts.horizontal_bar_svg([("CORPORATE", 100.0)], max_value=0.0) == own
+    assert charts.horizontal_bar_svg([("CORPORATE", 100.0)], max_value=math.nan) == own
+
+
+def test_grouped_bar_external_max_value_shrinks_bars() -> None:
+    # Arrange / Act
+    own = charts.grouped_bar_svg([("CORPORATE", 100.0, 100.0)])
+    shared = charts.grouped_bar_svg([("CORPORATE", 100.0, 100.0)], max_value=400.0)
+
+    # Assert
+    assert _first_bar_width(shared) < _first_bar_width(own)
+
+
+# =============================================================================
 # waterfall_svg — the reported regression
 # =============================================================================
 
@@ -161,3 +194,12 @@ def _viewbox_height(svg: str) -> int:
     start = svg.index(marker) + len(marker)
     end = svg.index('"', start)
     return int(svg[start:end].split()[1])
+
+
+def _first_bar_width(svg: str) -> float:
+    """Parse the ``width`` of the first data-bar ``<rect>`` in the chart."""
+    bar = svg.index("<rect")
+    marker = 'width="'
+    start = svg.index(marker, bar) + len(marker)
+    end = svg.index('"', start)
+    return float(svg[start:end])

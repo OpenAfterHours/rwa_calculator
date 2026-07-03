@@ -479,6 +479,10 @@ class ReconciliationResponse:
         """Collect the break summary grouped by our approach."""
         return self._collect_cached("summary_by_approach")
 
+    def collect_summary_by_class_method(self) -> pl.DataFrame:
+        """Collect the break summary grouped by (our exposure class, methodology)."""
+        return self._collect_cached("summary_by_class_method")
+
     def scan_breaks_detail(self) -> pl.LazyFrame:
         """Lazy long-format break worklist (ranked by materiality).
 

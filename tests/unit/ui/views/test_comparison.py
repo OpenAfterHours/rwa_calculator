@@ -26,6 +26,9 @@ def _comparison_bundle(
     *,
     summary_by_approach: pl.LazyFrame | None = None,
     summary_by_class: pl.LazyFrame | None = None,
+    exposure_deltas: pl.LazyFrame | None = None,
+    baseline_label: str = "crr",
+    variant_label: str = "b31",
 ) -> ComparisonBundle:
     """Build a ComparisonBundle whose only meaningful fields are the summaries."""
     empty = pl.LazyFrame()
@@ -33,9 +36,11 @@ def _comparison_bundle(
     return ComparisonBundle(
         baseline_results=agg,
         variant_results=agg,
-        exposure_deltas=empty,
+        exposure_deltas=exposure_deltas if exposure_deltas is not None else empty,
         summary_by_class=summary_by_class if summary_by_class is not None else empty,
         summary_by_approach=summary_by_approach if summary_by_approach is not None else empty,
+        baseline_label=baseline_label,
+        variant_label=variant_label,
     )
 
 
@@ -155,3 +160,82 @@ def test_summary_by_class_selects_and_sorts_by_delta_desc() -> None:
     assert df["exposure_class"].to_list() == ["corporate", "retail"]
     assert "internal_only_column" not in df.columns
     assert df.columns[0] == "exposure_class"
+
+
+# =============================================================================
+# summary_by_class_method
+# =============================================================================
+
+
+def _deltas_frame() -> pl.LazyFrame:
+    """Per-exposure deltas: corporate spans STD+AIRB, retail is STD only."""
+    return pl.LazyFrame(
+        {
+            "exposure_class": ["corporate", "corporate", "retail"],
+            "method": ["STD", "AIRB", "STD"],
+            "rwa_final_crr": [100.0, 300.0, 50.0],
+            "rwa_final_b31": [120.0, 250.0, 60.0],
+            "ead_final_crr": [1000.0, 2000.0, 500.0],
+            "ead_final_b31": [1000.0, 2000.0, 500.0],
+            "delta_rwa": [20.0, -50.0, 10.0],
+        }
+    )
+
+
+def test_summary_by_class_method_partitions_class_by_method() -> None:
+    # Arrange
+    bundle = _comparison_bundle(exposure_deltas=_deltas_frame())
+
+    # Act
+    df = cmp.summary_by_class_method(bundle)
+
+    # Assert — one row per (class, method), CRR/B31 suffixed, sorted by delta desc.
+    assert set(zip(df["exposure_class"], df["method"], strict=True)) == {
+        ("corporate", "STD"),
+        ("corporate", "AIRB"),
+        ("retail", "STD"),
+    }
+    assert {"total_rwa_crr", "total_rwa_b31", "total_delta_rwa", "delta_rwa_pct"} <= set(df.columns)
+    assert df["total_delta_rwa"].to_list() == [20.0, 10.0, -50.0]  # desc
+
+
+def test_summary_by_class_method_reconciles_with_summary_by_class() -> None:
+    # Arrange: build both views from the SAME deltas frame.
+    deltas = _deltas_frame()
+    bundle = _comparison_bundle(
+        exposure_deltas=deltas,
+        summary_by_class=_class_totals(deltas),
+    )
+
+    # Act
+    by_class = cmp.summary_by_class(bundle)
+    by_method = cmp.summary_by_class_method(bundle)
+
+    # Assert — summing the method rows within each class ties, cell-for-cell, to the
+    # by-class totals shown alongside them (the core no-drift invariant).
+    rolled = by_method.group_by("exposure_class").agg(
+        pl.col("total_rwa_crr").sum(),
+        pl.col("total_rwa_b31").sum(),
+    )
+    check = by_class.join(rolled, on="exposure_class", how="full", coalesce=True)
+    assert (check["total_rwa_crr"] - check["total_rwa_crr_right"]).abs().max() == 0.0
+    assert (check["total_rwa_b31"] - check["total_rwa_b31_right"]).abs().max() == 0.0
+
+
+def test_summary_by_class_method_missing_columns_returns_empty() -> None:
+    # Arrange: an empty (column-less) delta frame — e.g. a failed run.
+    bundle = _comparison_bundle(exposure_deltas=pl.LazyFrame())
+
+    # Act / Assert: degrades gracefully so the page still renders.
+    assert cmp.summary_by_class_method(bundle).is_empty()
+
+
+def _class_totals(deltas: pl.LazyFrame) -> pl.LazyFrame:
+    """The by-class summary from the same deltas (mirrors analysis._compute_summary)."""
+    return deltas.group_by("exposure_class").agg(
+        pl.col("rwa_final_crr").sum().alias("total_rwa_crr"),
+        pl.col("rwa_final_b31").sum().alias("total_rwa_b31"),
+        pl.col("delta_rwa").sum().alias("total_delta_rwa"),
+        pl.col("ead_final_crr").sum().alias("total_ead_crr"),
+        pl.col("ead_final_b31").sum().alias("total_ead_b31"),
+    )

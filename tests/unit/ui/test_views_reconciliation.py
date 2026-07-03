@@ -343,6 +343,84 @@ def test_loan_detail_unknown_key_returns_none(response: ReconciliationResponse) 
 
 
 # =============================================================================
+# Class × method segment (our-side methodology split)
+# =============================================================================
+
+
+def _response_mixed_method() -> ReconciliationResponse:
+    """corporate spans SA + advanced_irb; retail SA. L4 (corporate IRB) RWA breaks."""
+    ours = pl.LazyFrame(
+        {
+            "exposure_reference": ["L1", "L2", "L3", "L4"],
+            "exposure_class": ["corporate", "retail", "corporate", "corporate"],
+            "approach_applied": ["SA", "SA", "advanced_irb", "advanced_irb"],
+            "ead_final": [100.0, 200.0, 500.0, 300.0],
+            "rwa_final": [50.0, 150.0, 250.0, 180.0],
+        }
+    )
+    legacy = pl.LazyFrame(
+        {
+            "exposure_reference": ["L1", "L2", "L3", "L4"],
+            "legacy_ead": [100.0, 200.0, 500.0, 300.0],
+            "legacy_rwa": [50.0, 150.0, 250.0, 240.0],  # L4 breaks
+        }
+    )
+    mapping = LegacyColumnMapping(
+        legacy_keys=("exposure_reference",),
+        our_keys=("exposure_reference",),
+        components={"ead": ComponentMapping("EAD"), "rwa": ComponentMapping("RWA")},
+    )
+    bundle = ReconciliationRunner().reconcile(ours, legacy, mapping)
+    return ReconciliationResponse.from_bundle(
+        bundle, legacy_file=Path("legacy.csv"), framework="CRR"
+    )
+
+
+def test_segment_tables_include_class_method() -> None:
+    segments = rv.segment_tables(_response_mixed_method())
+    cm = segments["by_class_method"]
+    # Grouped by (our exposure class, methodology); raw approach mapped to the
+    # STD/AIRB vocabulary shared with the results/comparison tabs.
+    assert {"our_exposure_class", "method", "n_total"} <= set(cm.columns)
+    assert set(cm.get_column("method").to_list()) == {"STD", "AIRB"}
+
+
+def test_class_method_reconciles_with_by_exposure_class() -> None:
+    # Summing n_total over methods within a class ties to summary_by_exposure_class
+    # (method is a pure partition — the core no-drift invariant).
+    response = _response_mixed_method()
+    by_class = response.collect_summary_by_exposure_class()
+    rolled = (
+        response.collect_summary_by_class_method()
+        .group_by("our_exposure_class")
+        .agg(pl.col("n_total").sum().alias("rolled_total"))
+    )
+    check = by_class.join(rolled, on="our_exposure_class", how="full", coalesce=True)
+    assert (check["n_total"] - check["rolled_total"]).abs().max() == 0
+
+
+def test_forensic_filter_options_include_method() -> None:
+    options = rv.forensic_filter_options(_response_mixed_method())
+    assert set(options["method"]) == {"STD", "AIRB"}
+
+
+def test_forensic_page_filters_by_method() -> None:
+    response = _response_mixed_method()
+    page = rv.forensic_page(response, rv.ForensicFilters(method="AIRB", status=None))
+    assert {r["_recon_key"] for r in page.rows} == {"L3", "L4"}
+
+
+def test_forensic_page_filters_by_class_and_method() -> None:
+    # The two-dimensional class×method drill narrows on both dimensions at once.
+    response = _response_mixed_method()
+    page = rv.forensic_page(
+        response,
+        rv.ForensicFilters(exposure_class="corporate", method="AIRB", status=None),
+    )
+    assert {r["_recon_key"] for r in page.rows} == {"L3", "L4"}
+
+
+# =============================================================================
 # Phase 5A — RWA-driver chain (ordered steps + grouped drivers)
 # =============================================================================
 

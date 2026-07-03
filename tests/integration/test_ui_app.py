@@ -118,10 +118,12 @@ def test_results_page_splits_rwa_by_class_by_method(client: TestClient, data_dir
     # Act
     page = client.get(f"/results/{job_id}").text
 
-    # Assert — the RWA-by-class panel is split into methodology subsections; the
-    # mandatory-minimum dataset is standardised, so the STD subsection renders.
+    # Assert — BOTH the RWA-by-class and EAD-by-class panels are split into
+    # methodology subsections; the mandatory-minimum dataset is standardised, so
+    # each renders a STD subsection (>=2 method-subtitles: one per panel).
     assert "RWA by exposure class" in page
-    assert 'class="method-subtitle"' in page
+    assert "EAD by exposure class" in page
+    assert page.count('class="method-subtitle"') >= 2
     assert ">STD<" in page
 
 
@@ -365,6 +367,10 @@ def test_comparison_renders_executive_summary(client: TestClient, data_dir: str)
     assert resp.status_code == 200
     assert "Executive summary" in resp.text
     assert "Comparison failed" not in resp.text
+    # The by-class delta is also split by methodology (CRR vs B31); the all-SA
+    # dataset renders the STD subsection under the class×method panel.
+    assert "RWA by exposure class &amp; methodology" in resp.text
+    assert 'class="method-subtitle"' in resp.text
     # The comparison is cached and its download buttons are wired to the export API.
     assert "Download comparison" in resp.text
     assert "/api/comparison/export/csv?comparison_id=" in resp.text

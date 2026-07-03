@@ -217,6 +217,20 @@ def test_reconciliation_renders_asset_class_allocation(client: TestClient, tmp_p
     assert "Asset-class allocation" in report.text
 
 
+def test_reconciliation_renders_class_method_segment(client: TestClient, recon_dir: str) -> None:
+    # Arrange / Act
+    job_id = _dispatch_and_wait(client, _form_data(recon_dir))
+    report = client.get(f"/reconciliation/{job_id}")
+
+    # Assert: the Tier-2 class×method segment renders, and the explorer it drills
+    # into offers a Method filter (so a class×method cell can pre-narrow on both).
+    assert report.status_code == 200
+    assert "By exposure class &amp; method" in report.text
+    explorer = client.get(f"/reconciliation/{job_id}/rows")
+    assert explorer.status_code == 200
+    assert 'name="method"' in explorer.text
+
+
 def test_reconciliation_overview_offers_explorer_and_worklist(
     client: TestClient, recon_dir: str
 ) -> None:

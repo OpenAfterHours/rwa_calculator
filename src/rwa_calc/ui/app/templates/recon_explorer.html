@@ -50,6 +50,13 @@ incl. <span data-signoff="changed">{{ "{:,}".format(signoff_progress.changed) }}
       </select>
     </div>
     <div class="field">
+      <label for="method">Method</label>
+      <select id="method" name="method">
+        <option value="">(any)</option>
+        {% for m in options.method %}<option value="{{ m }}"{% if m == filters.method %} selected{% endif %}>{{ m }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="field">
       <label for="worst_component">Worst component</label>
       <select id="worst_component" name="worst_component">
         <option value="">(any)</option>

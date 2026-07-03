@@ -406,6 +406,9 @@ def _reconciliation_response() -> ReconciliationResponse:
             {"exposure_class": ["corporate"], "break_count": [1]}
         ),
         summary_by_approach=pl.LazyFrame({"approach_applied": ["SA"], "break_count": [1]}),
+        summary_by_class_method=pl.LazyFrame(
+            {"our_exposure_class": ["corporate"], "method": ["STD"], "n_total": [2]}
+        ),
         breaks_detail=pl.LazyFrame({"exposure_reference": ["L2"], "component": ["rwa"]}),
         totals_tie_out=pl.LazyFrame({"component": ["ead"], "delta": [0.0]}),
     )
@@ -435,6 +438,7 @@ class TestReconciliationResponseCollectCache:
             response.collect_summary_by_bucket,
             response.collect_summary_by_exposure_class,
             response.collect_summary_by_approach,
+            response.collect_summary_by_class_method,
             response.collect_breaks_detail,
             response.collect_totals_tie_out,
         ]

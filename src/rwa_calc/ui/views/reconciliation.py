@@ -161,6 +161,7 @@ _FILTER_COLUMNS: dict[str, str] = {
     "bucket": "row_bucket",
     "exposure_class": "our_exposure_class",
     "approach": "our_approach",
+    "method": "method",
     "worst_component": "worst_component",
     "status": "signoff_status",
 }
@@ -218,6 +219,7 @@ class ForensicFilters:
     bucket: str | None = None
     exposure_class: str | None = None
     approach: str | None = None
+    method: str | None = None
     worst_component: str | None = None
     status: str | None = None
     query: str | None = None
@@ -280,6 +282,7 @@ def segment_tables(response: ReconciliationResponse) -> dict[str, pl.DataFrame]:
         "by_bucket": response.collect_summary_by_bucket(),
         "by_class": response.collect_summary_by_exposure_class(),
         "by_approach": response.collect_summary_by_approach(),
+        "by_class_method": response.collect_summary_by_class_method(),
     }
 
 
@@ -399,6 +402,7 @@ def forensic_filter_options(response: ReconciliationResponse) -> dict[str, list[
         "bucket": [b for b in BUCKET_CHOICES if b != ALL_BUCKETS],
         "exposure_class": _summary_values(response.collect_summary_by_exposure_class()),
         "approach": _summary_values(response.collect_summary_by_approach()),
+        "method": _summary_values(response.collect_summary_by_class_method(), col="method"),
         "worst_component": _summary_values(
             response.collect_summary_by_component(), col="component"
         ),

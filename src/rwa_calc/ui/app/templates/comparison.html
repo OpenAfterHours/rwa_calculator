@@ -56,6 +56,18 @@ regulatory drivers. Takes roughly twice a single run.</p>
   {{ result.chart_by_class | safe }}
 </div>
 
+{% if result.class_method_sections %}
+<div class="panel">
+  <h3>RWA by exposure class &amp; methodology — CRR vs Basel 3.1</h3>
+  <p class="muted">The by-class delta split by method — STD (standardised), FIRB, AIRB (advanced IRB,
+  retail included), and slotting / equity where present.</p>
+  {% for section in result.class_method_sections %}
+  <h4 class="method-subtitle">{{ section.method }}</h4>
+  {{ section.chart | safe }}
+  {% endfor %}
+</div>
+{% endif %}
+
 <h2>Download comparison</h2>
 <p class="muted">Save the comparison — executive summary, by-class and by-approach deltas, the
 capital-impact waterfall, and per-exposure deltas. CSV and Parquet download as a zip of one file

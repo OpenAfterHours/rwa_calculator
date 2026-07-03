@@ -113,6 +113,46 @@ def summary_by_approach(bundle: ComparisonBundle) -> pl.DataFrame:
     return _ordered_summary(bundle.summary_by_approach, _APPROACH_DISPLAY_COLS)
 
 
+def summary_by_class_method(bundle: ComparisonBundle) -> pl.DataFrame:
+    """Comparison summary by (exposure class, methodology), CRR vs Basel 3.1.
+
+    Aggregates the *same* ``exposure_deltas`` frame that backs
+    ``summary_by_class`` — grouped by ``(exposure_class, method)`` instead of
+    exposure class alone — so summing over the methods within a class reconciles
+    cell-for-cell with the by-class summary shown alongside it (the ``method``
+    label is a pure partition of each class). ``exposure_deltas`` already carries
+    the shared methodology label (``analysis/comparison.py``). Ordered by RWA
+    delta (desc); returns an empty frame when the delta frame lacks the columns.
+    """
+    deltas = bundle.exposure_deltas
+    bl, vl = bundle.baseline_label, bundle.variant_label
+    have = set(deltas.collect_schema().names())
+    required = {"exposure_class", "method", f"rwa_final_{bl}", f"rwa_final_{vl}"}
+    if not required <= have:
+        return pl.DataFrame()
+
+    df = (
+        deltas.group_by(["exposure_class", "method"])
+        .agg(
+            pl.col(f"rwa_final_{bl}").sum().alias(f"total_rwa_{bl}"),
+            pl.col(f"rwa_final_{vl}").sum().alias(f"total_rwa_{vl}"),
+            pl.col("delta_rwa").sum().alias("total_delta_rwa"),
+            pl.col(f"ead_final_{bl}").sum().alias(f"total_ead_{bl}"),
+            pl.col(f"ead_final_{vl}").sum().alias(f"total_ead_{vl}"),
+            pl.len().alias("exposure_count"),
+        )
+        .with_columns(
+            pl.when(pl.col(f"total_rwa_{bl}").abs() > 1e-10)
+            .then(pl.col("total_delta_rwa") / pl.col(f"total_rwa_{bl}") * 100.0)
+            .otherwise(pl.lit(0.0))
+            .alias("delta_rwa_pct")
+        )
+        .collect()
+    )
+    cols = [c for c in _class_method_display_cols(bl, vl) if c in df.columns]
+    return df.select(cols).sort("total_delta_rwa", descending=True)
+
+
 # =============================================================================
 # Private helpers
 # =============================================================================
@@ -127,6 +167,20 @@ def _ordered_summary(lf: pl.LazyFrame, preferred: list[str]) -> pl.DataFrame:
     if "total_delta_rwa" in df.columns:
         df = df.sort("total_delta_rwa", descending=True)
     return df
+
+
+def _class_method_display_cols(baseline_label: str, variant_label: str) -> list[str]:
+    """Preferred column order for the class-method comparison summary."""
+    return [
+        "exposure_class",
+        "method",
+        f"total_ead_{baseline_label}",
+        f"total_ead_{variant_label}",
+        f"total_rwa_{baseline_label}",
+        f"total_rwa_{variant_label}",
+        "total_delta_rwa",
+        "delta_rwa_pct",
+    ]
 
 
 def _sum(df: pl.DataFrame, col: str) -> float:

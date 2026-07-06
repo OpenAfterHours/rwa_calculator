@@ -26,7 +26,6 @@ The web UI and REST API ship with the base package — no extra required.
 
 | Extra | Description |
 |-------|-------------|
-| `ui` | Legacy alias — UI deps are now included in the base install |
 | `dev` | Development tools (pytest, ruff, ty, zensical) |
 | `all` | All optional dependencies |
 

@@ -310,6 +310,7 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n10 --> n11
         n10 --> n14
         n10 --> n20
+        n11 --> n5
         n11 --> n8
         n11 --> n9
         n11 --> n20

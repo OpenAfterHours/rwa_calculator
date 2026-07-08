@@ -437,6 +437,18 @@ def _add_exposure_class_applied(lf: pl.LazyFrame) -> pl.LazyFrame:
     already reclassifies corporate→retail on ``exposure_class`` and reports
     default via a PD override (not a class), slotting keeps SPECIALISED_LENDING,
     and equity keeps EQUITY — so every non-SA approach keeps ``exposure_class``.
+
+    This is a PRE-substitution (obligor-side) class and is applied to guaranteed
+    exposures too. A guaranteed exposure is physically split into ``__G_`` /
+    ``__REM`` legs (``engine/crm/guarantees.py``) that BOTH carry the obligor's
+    origination ``exposure_class`` — the guarantor's class lives only in
+    ``post_crm_exposure_class_guaranteed``, which drives the COREP C 07.00
+    substitution inflow/outflow. So the guaranteed leg of a defaulted (or
+    SME-managed-as-retail) obligor correctly takes the same applied class as its
+    remainder: in C 07.00 the whole exposure originates in the obligor's sheet
+    ("Exposures in default" / Retail) and the guaranteed portion leaves as an
+    outflow. Gating the overlay on ``~is_guaranteed`` would wrongly drop the
+    guaranteed portion out of that class and understate it.
     """
     is_sa = pl.col("approach_applied") == ApproachType.SA.value
     is_high_risk = pl.col("exposure_class") == ExposureClass.HIGH_RISK.value

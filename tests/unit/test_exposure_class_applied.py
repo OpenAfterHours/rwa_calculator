@@ -138,6 +138,61 @@ class TestAddExposureClassApplied:
 
 
 # =============================================================================
+# Guaranteed legs (pre-substitution semantics)
+# =============================================================================
+
+
+def _applied_with_guarantee(rows: list[dict[str, object]]) -> list[str | None]:
+    """Run the helper over rows that carry an ``is_guaranteed`` flag."""
+    lf = pl.LazyFrame(
+        rows,
+        schema={
+            "approach_applied": pl.String,
+            "exposure_class": pl.String,
+            "is_defaulted": pl.Boolean,
+            "cp_is_managed_as_retail": pl.Boolean,
+            "qualifies_as_retail": pl.Boolean,
+            "is_guaranteed": pl.Boolean,
+        },
+    )
+    return _add_exposure_class_applied(lf).collect()["exposure_class_applied"].to_list()
+
+
+class TestGuaranteedLegAppliedClass:
+    """A guaranteed exposure's ``__G_`` / ``__REM`` legs both keep the obligor's
+    pre-substitution applied class — the overlay is NOT gated on ``is_guaranteed``.
+
+    Both legs carry the obligor's origination ``exposure_class`` (the guarantor's
+    class lives in ``post_crm_exposure_class_guaranteed``), so in COREP C 07.00 the
+    whole exposure originates in the obligor's sheet and the guaranteed portion
+    leaves via a substitution outflow. Gating on ``~is_guaranteed`` would drop the
+    guaranteed portion out of the defaulted / retail class and understate it.
+    """
+
+    def test_defaulted_guaranteed_leg_stays_defaulted(self) -> None:
+        """The guaranteed leg (is_guaranteed=True) of a defaulted obligor is defaulted."""
+        result = _applied_with_guarantee(
+            [
+                {**_row(ec="corporate_sme", defaulted=True), "is_guaranteed": True},  # __G_ leg
+                {**_row(ec="corporate_sme", defaulted=True), "is_guaranteed": False},  # __REM leg
+            ]
+        )
+        assert result == [ExposureClass.DEFAULTED.value, ExposureClass.DEFAULTED.value]
+
+    def test_sme_retail_guaranteed_leg_stays_retail(self) -> None:
+        """The guaranteed leg of an SME-managed-as-retail obligor stays retail_other."""
+        result = _applied_with_guarantee(
+            [
+                {
+                    **_row(ec="corporate_sme", managed_as_retail=True, qualifies=True),
+                    "is_guaranteed": True,
+                },
+            ]
+        )
+        assert result[0] == ExposureClass.RETAIL_OTHER.value
+
+
+# =============================================================================
 # Reconciliation registry wiring
 # =============================================================================
 

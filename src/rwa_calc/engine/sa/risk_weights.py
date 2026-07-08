@@ -94,6 +94,7 @@ from rwa_calc.engine.sa.crr_risk_weight_tables import (
     CRR_DEFAULTED_RW_HIGH_PROVISION,
     CRR_DEFAULTED_RW_LOW_PROVISION,
     CRR_NON_REGULATORY_RETAIL_RW,
+    CRR_SHORT_TERM_ECAI_RISK_WEIGHTS,
     INSTITUTION_RISK_WEIGHTS_B31_ECRA,
     INSTITUTION_RISK_WEIGHTS_CRR,
     INSTITUTION_RISK_WEIGHTS_SOVEREIGN_DERIVED,
@@ -235,6 +236,12 @@ _SA_CRR_RW: dict[str, float] = {
     "inst_st_mid": float(INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR[CQS.CQS4]),
     "inst_st_high": float(INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR[CQS.CQS6]),
     "inst_unrated_st": float(INSTITUTION_SHORT_TERM_UNRATED_RW_CRR),
+    # Art. 131 Table 7 — dedicated short-term ECAI assessment (institutions and
+    # corporates). CQS 1=20%, CQS 2=50%, CQS 3=100%, CQS 4-6/Others=150%.
+    "st_ecai_cqs1": float(CRR_SHORT_TERM_ECAI_RISK_WEIGHTS[CQS.CQS1]),
+    "st_ecai_cqs2": float(CRR_SHORT_TERM_ECAI_RISK_WEIGHTS[CQS.CQS2]),
+    "st_ecai_cqs3": float(CRR_SHORT_TERM_ECAI_RISK_WEIGHTS[CQS.CQS3]),
+    "st_ecai_high": float(CRR_SHORT_TERM_ECAI_RISK_WEIGHTS[CQS.CQS4]),
     # Defaulted exposure treatment (Art. 127)
     "defaulted_threshold": float(CRR_DEFAULTED_PROVISION_THRESHOLD),
     "defaulted_high": float(CRR_DEFAULTED_RW_HIGH_PROVISION),
@@ -803,20 +810,42 @@ def _crr_append_real_estate_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThe
 
 
 def _crr_append_institution_maturity_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
-    """Append CRR Art. 120/121 short-term institution branches."""
+    """Append CRR Art. 120/121/131 short-term institution branches.
+
+    The Art. 131 Table 7 dedicated short-term ECAI branch is prepended ahead of
+    the Art. 120(2) Table 4 general short-term branch: when the exposure carries
+    an issue-specific short-term credit assessment (``has_short_term_ecai=True``)
+    Table 7 applies regardless of the residual-maturity gate that drives the
+    Table 4 path. Mirrors the Basel 3.1 Table 4A pattern.
+    """
     is_institution = uc.str.contains("INSTITUTION", literal=True)
     is_rated = pl.col("cqs").is_not_null() & (pl.col("cqs") > 0)
     is_unrated = pl.col("cqs").is_null() | (pl.col("cqs") <= 0)
     residual_mty = pl.col("residual_maturity_years").fill_null(1.0)
     original_mty = pl.col("original_maturity_years").fill_null(1.0)
+    # Producer-guaranteed non-null (hierarchy is_not_null()/lit(False); contract False).
+    has_st_ecai = pl.col("has_short_term_ecai")
     return (
+        # Art. 131 Table 7: rated institution with a dedicated short-term ECAI
+        # assessment. CQS 1=20%, CQS 2=50%, CQS 3=100%, CQS 4-6=150%. The
+        # producer only flags maturity-qualifying rows, so no re-check here.
+        chain.when(is_institution & is_rated & has_st_ecai)
+        .then(
+            pl.when(pl.col("cqs") == 1)
+            .then(pl.lit(_SA_CRR_RW["st_ecai_cqs1"]))
+            .when(pl.col("cqs") == 2)
+            .then(pl.lit(_SA_CRR_RW["st_ecai_cqs2"]))
+            .when(pl.col("cqs") == 3)
+            .then(pl.lit(_SA_CRR_RW["st_ecai_cqs3"]))
+            .otherwise(pl.lit(_SA_CRR_RW["st_ecai_high"]))
+        )
         # Art. 120(2) Table 4: rated institution short-term (residual maturity
         # <= 3m). Also fires on derived ORIGINAL maturity when
         # residual_maturity_years is not populated upstream — original is
         # derived from (maturity_date - value_date) earlier in the SA pipeline,
         # mirroring the B31 ECRA short-term gate so date-only fixtures still
         # qualify for Table 4 preferential weights.
-        chain.when(is_institution & is_rated & ((residual_mty <= 0.25) | (original_mty <= 0.25)))
+        .when(is_institution & is_rated & ((residual_mty <= 0.25) | (original_mty <= 0.25)))
         .then(
             pl.when(pl.col("cqs") <= 3)
             .then(pl.lit(_SA_CRR_RW["inst_st_low"]))
@@ -829,6 +858,34 @@ def _crr_append_institution_maturity_branches(chain: _RWChain, uc: pl.Expr) -> C
         # floor (applied later) still raises this in FX.
         .when(is_institution & is_unrated & (original_mty <= 0.25))
         .then(pl.lit(_SA_CRR_RW["inst_unrated_st"]))
+    )
+
+
+def _crr_append_corporate_maturity_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
+    """Append the CRR Art. 131 Table 7 short-term corporate ECAI branch.
+
+    Fires for rated CORPORATE exposures carrying a dedicated short-term ECAI
+    assessment (``has_short_term_ecai=True``): CQS 1 = 20%, CQS 2 = 50%,
+    CQS 3 = 100%, CQS 4-6/Others = 150%. Without this branch a rated corporate
+    falls through to the Art. 122 base-join risk weight (CQS 4 = 100%).
+
+    Excludes SME corporates (which use the dedicated SME RW path), mirroring the
+    Basel 3.1 Table 6A gate.
+    """
+    is_corporate = uc.str.contains("CORPORATE", literal=True) & ~uc.str.contains(
+        "SME", literal=True
+    )
+    is_rated = pl.col("cqs").is_not_null() & (pl.col("cqs") > 0)
+    # Producer-guaranteed non-null (see _crr_append_institution_maturity_branches).
+    has_st_ecai = pl.col("has_short_term_ecai")
+    return chain.when(is_corporate & is_rated & has_st_ecai).then(
+        pl.when(pl.col("cqs") == 1)
+        .then(pl.lit(_SA_CRR_RW["st_ecai_cqs1"]))
+        .when(pl.col("cqs") == 2)
+        .then(pl.lit(_SA_CRR_RW["st_ecai_cqs2"]))
+        .when(pl.col("cqs") == 3)
+        .then(pl.lit(_SA_CRR_RW["st_ecai_cqs3"]))
+        .otherwise(pl.lit(_SA_CRR_RW["st_ecai_high"]))
     )
 
 
@@ -1328,6 +1385,7 @@ def _apply_crr_risk_weight_overrides(
     )
 
     chain = _crr_append_institution_maturity_branches(chain, uc)
+    chain = _crr_append_corporate_maturity_branches(chain, uc)
 
     # Covered bond / high risk / other items / equity tail.
     exposures = exposures.with_columns(

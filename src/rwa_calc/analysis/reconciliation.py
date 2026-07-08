@@ -740,9 +740,12 @@ def _class_allocation(
     own exposure class (normalised both sides, value-mapped on the legacy side) and
     the additive money fields summed, then full-joined on the canonical class. A
     class our engine allocates differently to the legacy one shows as offsetting
-    deltas. Uses the raw (un-collapsed) ``our_results`` so a split exposure's
-    portions each land in their own class. Returns an empty frame (stable schema)
-    when exposure class or both money components are unmapped.
+    deltas. Uses the raw (un-collapsed) ``our_results`` and the post-guarantee class
+    (``exposure_class_post_crm``, the ``exposure_class`` component's preferred
+    column), so a guaranteed exposure's guaranteed slice lands under the guarantor's
+    class and its retained slice under the obligor's — mirroring a post-substitution
+    legacy extract. Returns an empty frame (stable schema) when exposure class or
+    both money components are unmapped.
     """
     by_name = {a.spec.name: a for a in active}
     cls = by_name.get("exposure_class")
@@ -752,8 +755,16 @@ def _class_allocation(
         return _empty_class_allocation()
 
     value_map = mapping.components["exposure_class"].value_map
+    # Allocation is post-guarantee: prefer ``exposure_class_post_crm`` (guaranteed
+    # slice under the guarantor's class, retained slice under the obligor's) over the
+    # per-key component column (the obligor home class used for break attribution),
+    # so our by-class money totals mirror a post-substitution legacy extract.
+    our_present = set(our_results.collect_schema().names())
+    our_class_col = (
+        "exposure_class_post_crm" if "exposure_class_post_crm" in our_present else cls.our_col
+    )
     our_side = (
-        our_results.with_columns(_normalise(pl.col(cls.our_col)).alias("exposure_class"))
+        our_results.with_columns(_normalise(pl.col(our_class_col)).alias("exposure_class"))
         .group_by("exposure_class")
         .agg(
             _sum_or_null(ead.our_col if ead else None).alias("our_ead"),

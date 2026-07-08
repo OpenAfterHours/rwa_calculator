@@ -261,6 +261,50 @@ class TestClassAllocation:
         assert corp["delta_ead"] == pytest.approx(20.0)
         assert corp["delta_rwa"] == pytest.approx(10.0)
 
+    def test_class_allocation_uses_post_guarantee_class(self) -> None:
+        # A defaulted loan split into a guaranteed leg (guarantor = institution) and a
+        # retained leg (obligor = defaulted). exposure_class_applied is the obligor
+        # class on BOTH legs; exposure_class_post_crm moves the guaranteed slice to the
+        # guarantor, so the allocation ties out against a post-guarantee legacy extract.
+        ours = pl.LazyFrame(
+            {
+                "exposure_reference": ["DEF__G_INST", "DEF__REM"],
+                "exposure_class": ["corporate_sme", "corporate_sme"],
+                "exposure_class_applied": ["defaulted", "defaulted"],
+                "exposure_class_post_crm": ["institution", "defaulted"],
+                "approach_applied": ["standardised", "standardised"],
+                "ead_final": [250.0, 750.0],
+                "rwa_final": [125.0, 750.0],
+                "risk_weight": [0.50, 1.00],
+            }
+        )
+        legacy = pl.LazyFrame(
+            {
+                "loan_id": ["A", "B"],
+                "legacy_ead": [250.0, 750.0],
+                "legacy_rwa": [125.0, 750.0],
+                "legacy_exposure_class": ["institution", "defaulted"],
+            }
+        )
+        mapping = LegacyColumnMapping(
+            legacy_keys=("loan_id",),
+            our_keys=("exposure_reference",),
+            components={
+                "ead": ComponentMapping("legacy_ead"),
+                "rwa": ComponentMapping("legacy_rwa"),
+                "exposure_class": ComponentMapping("legacy_exposure_class"),
+            },
+        )
+
+        df = _recon(ours, legacy, mapping).class_allocation.collect()
+        by_class = {r["exposure_class"]: r for r in df.to_dicts()}
+
+        # Guaranteed slice under the guarantor's class (post-guarantee), not the obligor's.
+        assert by_class["institution"]["our_ead"] == pytest.approx(250.0)
+        assert by_class["defaulted"]["our_ead"] == pytest.approx(750.0)
+        assert by_class["institution"]["delta_ead"] == pytest.approx(0.0)
+        assert by_class["defaulted"]["delta_ead"] == pytest.approx(0.0)
+
     def test_class_allocation_flags_class_present_one_side_only(self) -> None:
         # Arrange: ours classifies L3 as residential_mortgage; legacy still corporate.
         ours = pl.LazyFrame(

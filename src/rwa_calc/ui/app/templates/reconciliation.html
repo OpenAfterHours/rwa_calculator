@@ -107,14 +107,18 @@ join keys and column names).</div>
   {{ result.chart_allocation | safe }}
 </div>
 <h3>Asset-class allocation — EAD &amp; RWA by risk class</h3>
-<p class="muted">Each side's exposures are totalled by risk class (a split exposure's
-portions each counted in their own class). Offsetting deltas show where the two engines
-allocate an exposure to different classes.</p>
+<p class="muted">Money totalled by risk class, <strong>post-guarantee</strong>: a guaranteed
+exposure's guaranteed slice is counted under the guarantor's class and its retained slice
+under the borrower's, matching a post-substitution legacy extract. Offsetting deltas show
+where the two engines allocate an exposure to different classes.</p>
 {{ render_table(result.allocation_table) }}
 {% endif %}
 <h3>By bucket</h3>
 {{ drill_table(result.bucket_table, "row_bucket", result.explorer_url, "bucket", result.hide_qs) }}
-<h3>By exposure class</h3>
+<h3>Breaks by exposure class <span class="muted">(borrower class)</span></h3>
+<p class="muted">Where breaks concentrate. Each exposure is a single key, so its break is
+attributed to its <strong>borrower</strong> (origination) class — a guaranteed exposure is not
+split here (that post-guarantee split is in the allocation above).</p>
 {{ drill_table(result.class_table, "our_exposure_class", result.explorer_url, "exposure_class", result.hide_qs) }}
 <h3>By approach</h3>
 {{ drill_table(result.approach_table, "our_approach", result.explorer_url, "approach", result.hide_qs) }}

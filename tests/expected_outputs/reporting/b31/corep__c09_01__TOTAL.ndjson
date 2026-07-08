@@ -4,7 +4,7 @@
 {"row_ref":"0040","row_name":"Multilateral development banks","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
 {"row_ref":"0050","row_name":"International organisations","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
 {"row_ref":"0060","row_name":"Institutions","0010":2000000.0,"0020":0.0,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":2000000.0,"0090":600000.0}
-{"row_ref":"0070","row_name":"Corporates","0010":19500000.0,"0020":0.0,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":19500000.0,"0090":18675000.0}
+{"row_ref":"0070","row_name":"Corporates","0010":19500000.0,"0020":1000000.0,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":19500000.0,"0090":18675000.0}
 {"row_ref":"0075","row_name":"  of which: SME","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
 {"row_ref":"0071","row_name":"  of which: specialised lending - object finance","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
 {"row_ref":"0072","row_name":"  of which: specialised lending - commodities finance","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
@@ -26,4 +26,4 @@
 {"row_ref":"0143","row_name":"  Fall-back approach","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
 {"row_ref":"0150","row_name":"Subordinated debt, equity and other own funds instruments","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
 {"row_ref":"0160","row_name":"Other items","0010":100000.0,"0020":0.0,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":100000.0,"0090":20000.0}
-{"row_ref":"0170","row_name":"Total exposures","0010":23250000.0,"0020":0.0,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":23250000.0,"0090":19580833.333333332}
+{"row_ref":"0170","row_name":"Total exposures","0010":23250000.0,"0020":1000000.0,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":23250000.0,"0090":19580833.333333336}

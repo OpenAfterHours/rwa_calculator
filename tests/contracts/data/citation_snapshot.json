@@ -5,6 +5,13 @@
   "rwa_calc.engine.aggregator.aggregator::OutputAggregator.aggregate": [
     "PS1/26, paragraph 92"
   ],
+  "rwa_calc.engine.aggregator.aggregator::_add_exposure_class_applied": [
+    "CRR Art. 112",
+    "CRR Art. 123"
+  ],
+  "rwa_calc.engine.aggregator.aggregator::_add_post_crm_reporting_class": [
+    "CRR Art. 235"
+  ],
   "rwa_calc.engine.ccf::CCFCalculator._apply_purchased_receivable_ccf": [
     "PS1/26, paragraph 166.5"
   ],

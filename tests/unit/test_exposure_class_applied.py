@@ -25,7 +25,10 @@ import pytest
 
 from rwa_calc.analysis.recon_registry import RECONCILABLE_COMPONENTS_BY_NAME
 from rwa_calc.domain.enums import ExposureClass
-from rwa_calc.engine.aggregator.aggregator import _add_exposure_class_applied
+from rwa_calc.engine.aggregator.aggregator import (
+    _add_exposure_class_applied,
+    _add_post_crm_reporting_class,
+)
 from rwa_calc.reporting.corep.generator import COREPGenerator
 
 # =============================================================================
@@ -198,15 +201,95 @@ class TestGuaranteedLegAppliedClass:
 
 
 class TestReconClassComponent:
-    """The exposure_class recon component prefers the applied class."""
+    """The exposure_class recon component prefers the post-guarantee class."""
 
-    def test_prefers_applied_then_origination(self) -> None:
+    def test_prefers_post_crm_then_applied_then_origination(self) -> None:
         component = RECONCILABLE_COMPONENTS_BY_NAME["exposure_class"]
-        assert component.our_columns == ("exposure_class_applied", "exposure_class")
+        assert component.our_columns == (
+            "exposure_class_post_crm",
+            "exposure_class_applied",
+            "exposure_class",
+        )
 
     def test_origination_class_surfaced_as_rationale(self) -> None:
         component = RECONCILABLE_COMPONENTS_BY_NAME["exposure_class"]
         assert "exposure_class" in component.explain_columns
+
+
+# =============================================================================
+# Post-guarantee reporting class (exposure_class_post_crm)
+# =============================================================================
+
+
+def _post_crm(rows: list[dict[str, object]]) -> list[str | None]:
+    """Run both aggregator helpers and return the post-guarantee class column."""
+    lf = pl.LazyFrame(
+        rows,
+        schema={
+            "approach_applied": pl.String,
+            "exposure_class": pl.String,
+            "is_defaulted": pl.Boolean,
+            "cp_is_managed_as_retail": pl.Boolean,
+            "qualifies_as_retail": pl.Boolean,
+            "is_guaranteed": pl.Boolean,
+            "post_crm_exposure_class_guaranteed": pl.String,
+        },
+    )
+    out = _add_post_crm_reporting_class(_add_exposure_class_applied(lf))
+    return out.collect()["exposure_class_post_crm"].to_list()
+
+
+def _guar_row(
+    ec: str = "corporate",
+    *,
+    defaulted: bool = False,
+    guaranteed: bool = False,
+    guarantor_class: str | None = None,
+) -> dict[str, object]:
+    return {
+        "approach_applied": "standardised",
+        "exposure_class": ec,
+        "is_defaulted": defaulted,
+        "cp_is_managed_as_retail": False,
+        "qualifies_as_retail": False,
+        "is_guaranteed": guaranteed,
+        "post_crm_exposure_class_guaranteed": guarantor_class,
+    }
+
+
+class TestPostCrmReportingClass:
+    """The post-guarantee class puts the guaranteed slice under the guarantor."""
+
+    def test_guaranteed_leg_takes_guarantor_class(self) -> None:
+        """The __G_ leg of a defaulted obligor reports under the guarantor's class."""
+        result = _post_crm(
+            [
+                _guar_row(
+                    ec="corporate_sme",
+                    defaulted=True,
+                    guaranteed=True,
+                    guarantor_class="institution",
+                )
+            ]
+        )
+        assert result[0] == "institution"
+
+    def test_retained_leg_keeps_obligor_applied_class(self) -> None:
+        """The __REM leg of a defaulted obligor stays defaulted (obligor applied)."""
+        result = _post_crm([_guar_row(ec="corporate_sme", defaulted=True, guaranteed=False)])
+        assert result[0] == ExposureClass.DEFAULTED.value
+
+    def test_unguaranteed_exposure_uses_applied_class(self) -> None:
+        """A plain unguaranteed exposure keeps its applied class."""
+        result = _post_crm([_guar_row(ec="corporate", guaranteed=False)])
+        assert result[0] == ExposureClass.CORPORATE.value
+
+    def test_guaranteed_leg_missing_guarantor_class_falls_back(self) -> None:
+        """A guaranteed leg with no resolved guarantor class falls back to applied."""
+        result = _post_crm(
+            [_guar_row(ec="corporate_sme", defaulted=True, guaranteed=True, guarantor_class="")]
+        )
+        assert result[0] == ExposureClass.DEFAULTED.value
 
 
 # =============================================================================

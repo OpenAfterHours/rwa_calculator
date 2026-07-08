@@ -139,8 +139,11 @@ class OutputAggregator:
         # Applied reporting class (recon + COREP class dimension). Pure function
         # of columns already present on every branch exit, so it is added once
         # here and flows through the residual multiplier, output floor, post-CRM
-        # views and the sealed results frame.
+        # views and the sealed results frame. ``exposure_class_post_crm`` is its
+        # post-guarantee twin (guaranteed slice under the guarantor's class) that
+        # the reconciliation ties out on.
         combined_unmultiplied = _add_exposure_class_applied(combined_unmultiplied)
+        combined_unmultiplied = _add_post_crm_reporting_class(combined_unmultiplied)
 
         # Build the per-pool summary and the per-exposure reconciliation
         # BEFORE applying the residual multiplier -- the pool slice needs
@@ -468,6 +471,40 @@ def _add_exposure_class_applied(lf: pl.LazyFrame) -> pl.LazyFrame:
         .then(pl.lit(ExposureClass.RETAIL_OTHER.value))
         .otherwise(pl.col("exposure_class"))
         .alias("exposure_class_applied")
+    )
+
+
+@cites("CRR Art. 235")
+def _add_post_crm_reporting_class(lf: pl.LazyFrame) -> pl.LazyFrame:
+    """Add ``exposure_class_post_crm`` — the post-guarantee (post-substitution) class.
+
+    The reconciliation ties out on a post-guarantee basis, so the guaranteed slice
+    must be reported under the GUARANTOR's class (CRR Art. 235 substitution) while
+    everything else keeps its obligor applied class. A guaranteed exposure is
+    physically split into a ``__G_`` guaranteed leg and a ``__REM`` retained leg
+    (``engine/crm/guarantees.py``); only the guaranteed leg carries
+    ``is_guaranteed=True`` and the guarantor's class in
+    ``post_crm_exposure_class_guaranteed``, so:
+
+    - guaranteed leg -> ``post_crm_exposure_class_guaranteed`` (guarantor class)
+    - retained leg / unguaranteed exposure -> ``exposure_class_applied``
+
+    ``exposure_class_applied`` stays the PRE-substitution class that COREP C 07.00
+    keys its sheet + substitution flows on; this is its post-substitution twin,
+    consumed by the reconciliation's by-class allocation so our totals per class
+    tie to a post-guarantee legacy extract. A guaranteed leg whose guarantor class
+    is unresolved (null / empty) falls back to the applied class.
+    """
+    guarantor_class = pl.col("post_crm_exposure_class_guaranteed")
+    return lf.with_columns(
+        pl.when(
+            (pl.col("is_guaranteed") == True)  # noqa: E712
+            & guarantor_class.is_not_null()
+            & (guarantor_class != "")
+        )
+        .then(guarantor_class)
+        .otherwise(pl.col("exposure_class_applied"))
+        .alias("exposure_class_post_crm")
     )
 
 

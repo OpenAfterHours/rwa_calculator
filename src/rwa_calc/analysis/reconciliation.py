@@ -740,9 +740,12 @@ def _class_allocation(
     own exposure class (normalised both sides, value-mapped on the legacy side) and
     the additive money fields summed, then full-joined on the canonical class. A
     class our engine allocates differently to the legacy one shows as offsetting
-    deltas. Uses the raw (un-collapsed) ``our_results`` so a split exposure's
-    portions each land in their own class. Returns an empty frame (stable schema)
-    when exposure class or both money components are unmapped.
+    deltas. Uses the raw (un-collapsed) ``our_results`` and the post-guarantee class
+    (``exposure_class_post_crm``, the ``exposure_class`` component's preferred
+    column), so a guaranteed exposure's guaranteed slice lands under the guarantor's
+    class and its retained slice under the obligor's — mirroring a post-substitution
+    legacy extract. Returns an empty frame (stable schema) when exposure class or
+    both money components are unmapped.
     """
     by_name = {a.spec.name: a for a in active}
     cls = by_name.get("exposure_class")

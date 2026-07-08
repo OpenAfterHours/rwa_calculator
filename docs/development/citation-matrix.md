@@ -46,9 +46,9 @@ Last generated: 2026-07-08.
 
 ### CRR Art. 112 — Exposure classes
 
-??? quote "`_add_exposure_class_applied` — src/rwa_calc/engine/aggregator/aggregator.py:416"
+??? quote "`_add_exposure_class_applied` — src/rwa_calc/engine/aggregator/aggregator.py:419"
     ```python
-    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:416:459"
+    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:419:474"
     ```
 
 ??? quote "`apply_risk_weights` — src/rwa_calc/engine/sa/risk_weights.py:307"
@@ -209,9 +209,9 @@ Last generated: 2026-07-08.
 
 ### CRR Art. 123 — Retail exposures
 
-??? quote "`_add_exposure_class_applied` — src/rwa_calc/engine/aggregator/aggregator.py:417"
+??? quote "`_add_exposure_class_applied` — src/rwa_calc/engine/aggregator/aggregator.py:420"
     ```python
-    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:416:459"
+    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:419:474"
     ```
 
 ??? quote "`build_entity_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:302"
@@ -852,6 +852,11 @@ Last generated: 2026-07-08.
 
 ### CRR Art. 235 — Calculating risk-weighted exposure amounts under the Standardised Approach
 
+??? quote "`_add_post_crm_reporting_class` — src/rwa_calc/engine/aggregator/aggregator.py:477"
+    ```python
+    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:477:508"
+    ```
+
 ??? quote "`_compute_guarantor_rw_sa` — src/rwa_calc/engine/irb/guarantee.py:210"
     ```python
     --8<-- "src/rwa_calc/engine/irb/guarantee.py:209:310"
@@ -1056,7 +1061,7 @@ Last generated: 2026-07-08.
 
 ??? quote "`aggregate` — src/rwa_calc/engine/aggregator/aggregator.py:79"
     ```python
-    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:79:408"
+    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:79:411"
     ```
 
 

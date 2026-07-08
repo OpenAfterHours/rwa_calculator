@@ -60,15 +60,22 @@ class ReconcilableComponent:
 
 RECONCILABLE_COMPONENTS: tuple[ReconcilableComponent, ...] = (
     ReconcilableComponent(
-        # Applied reporting class. ``exposure_class_applied`` (aggregator-derived)
-        # folds the SA-only SME-managed-as-retail and defaulted movements onto the
-        # origination ``exposure_class`` so the class dimension matches the applied
-        # risk weight; ``exposure_class`` remains the take-first fallback (and the
-        # origination rationale) for frames produced before the column existed.
+        # Post-guarantee reporting class — the reconciliation ties out on a
+        # post-substitution basis. ``exposure_class_post_crm`` reports a guaranteed
+        # exposure's guaranteed slice under the guarantor's class (Art. 235) and the
+        # retained slice under the obligor's applied class; ``exposure_class_applied``
+        # (pre-substitution, folds SME-managed-as-retail + defaulted) is the fallback
+        # and the pre-CRM rationale, and origination ``exposure_class`` the final
+        # fallback for frames produced before these columns existed.
         "exposure_class",
         "categorical",
-        our_columns=("exposure_class_applied", "exposure_class"),
-        explain_columns=("exposure_class_reason", "exposure_class", "pre_crm_exposure_class"),
+        our_columns=("exposure_class_post_crm", "exposure_class_applied", "exposure_class"),
+        explain_columns=(
+            "exposure_class_reason",
+            "exposure_class_applied",
+            "exposure_class",
+            "pre_crm_exposure_class",
+        ),
     ),
     ReconcilableComponent(
         "approach",

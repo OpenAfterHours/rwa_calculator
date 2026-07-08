@@ -1449,6 +1449,10 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
         # defaulted applied-treatment class; every other approach keeps
         # exposure_class. Computed by the aggregator (_add_exposure_class_applied).
         "exposure_class_applied": EdgeColumn(dtype=pl.String, citation="CRR Art. 112"),
+        # Post-guarantee twin of exposure_class_applied: the guaranteed slice is
+        # reported under the guarantor's class (Art. 235 substitution). Consumed by
+        # the reconciliation's post-guarantee by-class allocation.
+        "exposure_class_post_crm": EdgeColumn(dtype=pl.String, citation="CRR Art. 235"),
         "irb_maturity_m": EdgeColumn(dtype=pl.Float64),
         "is_airb": EdgeColumn(dtype=pl.Boolean),
         "is_pre_operational": EdgeColumn(dtype=pl.Boolean),

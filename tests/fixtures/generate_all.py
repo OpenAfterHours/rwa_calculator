@@ -537,6 +537,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p1200,
         ),
         (
+            "P1.216 (CRR Art. 131 Table 7 short-term ECAI risk weights — institution + corporate)",
+            "p1_216",
+            _generate_p1216,
+        ),
+        (
             "P8.39 (CCR-CCP-1/CCP-2 orchestrator QCCP wiring — 2%/4% vs 50% anti-degenerate baseline)",
             "ccr",
             _generate_p839_ccp,
@@ -2963,6 +2968,19 @@ def _generate_p1200(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_200", None)
+
+
+def _generate_p1216(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.216 fixtures (CRR Art. 131 Table 7 short-term ECAI risk weights)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_216 import save_p1216_fixtures
+
+        saved = save_p1216_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_216", None)
 
 
 def _generate_p828_alpha(output_dir: Path) -> list[tuple[str, int]]:

@@ -912,6 +912,24 @@ ENTRIES: dict[str, RuleEntry] = {
         citation=Citation("CRR", "120", "(2) Table 4 short-term institution RW (<=3m)"),
         default=Decimal("0.20"),
     ),
+    # CRR Art. 131 Table 7: dedicated short-term ECAI assessment risk weights,
+    # shared by rated institutions and corporates. CQS 1 = 20%, CQS 2 = 50%,
+    # CQS 3 = 100%, CQS 4-6/Others = 150%. Numerically identical to PRA PS1/26
+    # Table 4A / Table 6A (packs/b31.py).
+    "crr_short_term_ecai_risk_weights": LookupTable(
+        name="crr_short_term_ecai_risk_weights",
+        entries={
+            CQS.CQS1: Decimal("0.20"),
+            CQS.CQS2: Decimal("0.50"),
+            CQS.CQS3: Decimal("1.00"),
+            CQS.CQS4: Decimal("1.50"),
+            CQS.CQS5: Decimal("1.50"),
+            CQS.CQS6: Decimal("1.50"),
+        },
+        key="cqs",
+        citation=Citation("CRR", "131", "Table 7 short-term ECAI RW"),
+        default=Decimal("1.50"),
+    ),
     "institution_rw_sovereign_derived": LookupTable(
         name="institution_rw_sovereign_derived",
         entries={

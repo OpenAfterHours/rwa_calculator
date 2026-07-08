@@ -176,6 +176,14 @@ INSTITUTION_SHORT_TERM_RISK_WEIGHTS_B31_ECRA: dict[CQS, Decimal] = _cqs_rw_from_
     "institution_short_term_rw_b31_ecra", _SA_RW_PACK_B31
 )
 
+# CRR Art. 131 Table 7: dedicated short-term ECAI assessment risk weights,
+# shared by rated institutions and corporates carrying an issue-specific
+# short-term credit assessment (``has_short_term_ecai=True``). CQS 1 = 20%,
+# CQS 2 = 50%, CQS 3 = 100%, CQS 4-6/Others = 150%.
+CRR_SHORT_TERM_ECAI_RISK_WEIGHTS: dict[CQS, Decimal] = _cqs_rw_from_pack(
+    "crr_short_term_ecai_risk_weights"
+)
+
 # CRR Art. 121(3): unrated institution, original effective maturity <= 3 months.
 # Overrides the Table 5 sovereign-derived fallback.
 INSTITUTION_SHORT_TERM_UNRATED_RW_CRR = _scalar_dec("institution_short_term_unrated_rw_crr")

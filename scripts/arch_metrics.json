@@ -4,6 +4,6 @@
   "engine_presence_guard_sites": 362,
   "engine_collect_schema_sites": 156,
   "engine_eager_collect_sites": 33,
-  "max_engine_module_loc": 1535,
+  "max_engine_module_loc": 1593,
   "cites_decorators": 196
 }

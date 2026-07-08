@@ -60,10 +60,15 @@ class ReconcilableComponent:
 
 RECONCILABLE_COMPONENTS: tuple[ReconcilableComponent, ...] = (
     ReconcilableComponent(
+        # Applied reporting class. ``exposure_class_applied`` (aggregator-derived)
+        # folds the SA-only SME-managed-as-retail and defaulted movements onto the
+        # origination ``exposure_class`` so the class dimension matches the applied
+        # risk weight; ``exposure_class`` remains the take-first fallback (and the
+        # origination rationale) for frames produced before the column existed.
         "exposure_class",
         "categorical",
-        our_columns=("exposure_class",),
-        explain_columns=("exposure_class_reason", "pre_crm_exposure_class"),
+        our_columns=("exposure_class_applied", "exposure_class"),
+        explain_columns=("exposure_class_reason", "exposure_class", "pre_crm_exposure_class"),
     ),
     ReconcilableComponent(
         "approach",

@@ -33,6 +33,7 @@ from watchfire import cites
 from rwa_calc.contracts.bundles import AggregatedResultBundle
 from rwa_calc.contracts.edges import AGGREGATOR_EXIT_EDGE, seal
 from rwa_calc.contracts.errors import non_finite_input_warning, non_finite_output_error
+from rwa_calc.domain.enums import ApproachType, ExposureClass
 from rwa_calc.engine.aggregator._crm_reporting import (
     generate_post_crm_detailed,
     generate_post_crm_summary,
@@ -134,6 +135,12 @@ class OutputAggregator:
                 [combined_unmultiplied, equity_prepared], how="diagonal_relaxed"
             )
             equity_results = equity_bundle.results
+
+        # Applied reporting class (recon + COREP class dimension). Pure function
+        # of columns already present on every branch exit, so it is added once
+        # here and flows through the residual multiplier, output floor, post-CRM
+        # views and the sealed results frame.
+        combined_unmultiplied = _add_exposure_class_applied(combined_unmultiplied)
 
         # Build the per-pool summary and the per-exposure reconciliation
         # BEFORE applying the residual multiplier -- the pool slice needs
@@ -404,6 +411,52 @@ class OutputAggregator:
 # =============================================================================
 # Private helpers
 # =============================================================================
+
+
+@cites("CRR Art. 112")
+@cites("CRR Art. 123")
+def _add_exposure_class_applied(lf: pl.LazyFrame) -> pl.LazyFrame:
+    """Add ``exposure_class_applied`` — the approach-agnostic applied class.
+
+    The routing ``exposure_class`` records origination + guarantee substitution
+    but omits two SA-only applied-treatment movements, so the reconciliation and
+    COREP class dimensions previously mis-bucketed those rows (the RWA is correct
+    in both cases — only the class label was wrong):
+
+    - **SME managed as retail** (CRR Art. 123 / PS1/26 Art. 123A) — a
+      corporate-SME row that took the 75% retail risk weight logically belongs
+      to the retail class: Art. 122 corporate has no 75% band, so a 75%-weighted
+      SME entails retail. The predicate mirrors the SA risk-weight branch exactly
+      (``engine/sa/risk_weights.py``) so the reported class tracks the applied RW.
+    - **Defaulted** (CRR Art. 112(1)(j) / Art. 127) — a defaulted SA exposure
+      belongs to the "Exposures in default" class, which wins over origination
+      (PS1/26 Table A2 priority 5). High-risk (Art. 128, Basel 3.1) still outranks
+      default (priority 4), so a defaulted high-risk row keeps its class.
+
+    Only SA rows (``approach_applied == "standardised"``) are re-mapped: IRB
+    already reclassifies corporate→retail on ``exposure_class`` and reports
+    default via a PD override (not a class), slotting keeps SPECIALISED_LENDING,
+    and equity keeps EQUITY — so every non-SA approach keeps ``exposure_class``.
+    """
+    is_sa = pl.col("approach_applied") == ApproachType.SA.value
+    is_high_risk = pl.col("exposure_class") == ExposureClass.HIGH_RISK.value
+    sme_managed_as_retail = (
+        pl.col("exposure_class").str.to_uppercase().str.contains("SME", literal=True)
+        & (pl.col("cp_is_managed_as_retail") == True)  # noqa: E712
+        & (pl.col("qualifies_as_retail") == True)  # noqa: E712
+    )
+    return lf.with_columns(
+        pl.when(~is_sa)
+        .then(pl.col("exposure_class"))
+        # A null is_defaulted falls through the when() (treated as not defaulted),
+        # so no fill_null is needed — keep the applied class off origination.
+        .when((pl.col("is_defaulted") == True) & ~is_high_risk)  # noqa: E712
+        .then(pl.lit(ExposureClass.DEFAULTED.value))
+        .when(sme_managed_as_retail)
+        .then(pl.lit(ExposureClass.RETAIL_OTHER.value))
+        .otherwise(pl.col("exposure_class"))
+        .alias("exposure_class_applied")
+    )
 
 
 def _collect_views(views: dict[str, pl.LazyFrame]) -> dict[str, pl.DataFrame]:

@@ -1512,8 +1512,14 @@ class COREPGenerator:
         framework: str,
         errors: list[str],
     ) -> dict[str, pl.DataFrame]:
-        """Generate C 07.00 DataFrames for all SA exposure classes."""
-        ec_col = _pick(cols, "exposure_class")
+        """Generate C 07.00 DataFrames for all SA exposure classes.
+
+        Buckets on ``exposure_class_applied`` when present (the aggregator's
+        applied-treatment class) so SME-managed-as-retail rows land in the Retail
+        sheet and defaulted SA rows in "Exposures in default" (row 0100), falling
+        back to the origination ``exposure_class`` for pre-existing frames.
+        """
+        ec_col = _pick(cols, "exposure_class_applied", "exposure_class")
         ead_col = _pick(cols, "ead_final")
         rwa_col = _pick(cols, "rwa_final", "rwa_post_factor", "rwa")
 
@@ -2643,11 +2649,19 @@ def _filter_by_irb_approach(
 
 
 def _filter_defaulted(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
-    """Filter to defaulted exposures using available columns."""
+    """Filter to defaulted exposures using available columns.
+
+    Prefers the per-row ``is_defaulted`` flag the pipeline actually sets (it
+    also carries row-level defaults, not just counterparty ``default_status``),
+    falling back to legacy identification columns for hand-rolled frames.
+    """
+    if "is_defaulted" in cols:
+        return data.filter(pl.col("is_defaulted").fill_null(False))  # noqa: FBT003
     if "default_status" in cols:
         return data.filter(pl.col("default_status") == True)  # noqa: E712
-    if "exposure_class" in cols:
-        return data.filter(pl.col("exposure_class") == "defaulted")
+    class_col = "exposure_class_applied" if "exposure_class_applied" in cols else "exposure_class"
+    if class_col in cols:
+        return data.filter(pl.col(class_col) == "defaulted")
     if "pd_floored" in cols:
         return data.filter(pl.col("pd_floored") >= 1.0)
     return data.clear()

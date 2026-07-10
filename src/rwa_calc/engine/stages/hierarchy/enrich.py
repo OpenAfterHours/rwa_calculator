@@ -230,14 +230,24 @@ def apply_short_term_rating_override(
     # and set has_short_term_ecai=True. SA Tables 4A / 6A are keyed off cqs
     # only — rating_agency / rating_value are audit columns added later by
     # the classifier and intentionally not overridden here.
+    #
+    # Two scratch columns are carried into the obligor-level Art. 120(3)(c)
+    # spillover step below: ``_st_assessment_cqs`` (the matched short-term ECAI
+    # cqs, non-null only on the directly-rated exposure) and ``_general_cqs``
+    # (the obligor's pre-override counterparty cqs).
     has_st = st_cqs_expr.is_not_null()
     exposures = exposures.with_columns(
         [
             has_st.alias("has_short_term_ecai"),
+            st_cqs_expr.cast(pl.Int8).alias("_st_assessment_cqs"),
+            pl.col("cqs").cast(pl.Int8).alias("_general_cqs"),
             pl.when(has_st).then(st_cqs_expr).otherwise(pl.col("cqs")).cast(pl.Int8).alias("cqs"),
         ]
     )
-    return exposures.drop([f"_st_{s}_cqs" for s in joined_scopes])
+    exposures = _apply_obligor_short_term_spillover(exposures)
+    return exposures.drop(
+        [f"_st_{s}_cqs" for s in joined_scopes] + ["_st_assessment_cqs", "_general_cqs"]
+    )
 
 
 def enrich_with_property_coverage(
@@ -768,6 +778,101 @@ def _build_short_term_match_branches(exp_schema: set[str]) -> list[tuple[str, pl
             )
         )
     return match_branches
+
+
+@cites("CRR Art. 131")
+def _apply_obligor_short_term_spillover(exposures: pl.LazyFrame) -> pl.LazyFrame:
+    """Spill a less-favourable short-term ECAI assessment across the obligor.
+
+    CRR Art. 131(2) / PRA PS1/26 Art. 120(3)(c): when an obligor carries a
+    short-term issue-specific ECAI assessment (Table 4A / Table 7) that maps to
+    a LESS favourable (higher) risk weight than that obligor's general
+    preferential short-term treatment (Table 4), the general preferential
+    treatment is disapplied and ALL of that obligor's unrated SHORT-TERM claims
+    take the short-term assessment's cqs — not just the directly-rated
+    exposure. The spillover is bounded to the short-term maturity window;
+    long-term claims on the same obligor are unaffected.
+
+    Reads two scratch columns produced by ``apply_short_term_rating_override``:
+    ``_st_assessment_cqs`` (the matched short-term cqs, non-null only on the
+    directly-rated exposure) and ``_general_cqs`` (the obligor's pre-override
+    counterparty cqs).
+
+    The "less favourable" test is a CQS-band comparison mirroring the Table 4
+    vs Table 4A / Table 7 structure, so no risk-weight scalars are duplicated in
+    the hierarchy stage. Table 4 (general preferential) assigns 20% to CQS 1-3,
+    50% to CQS 4-5 and 150% to CQS 6; Table 4A / Table 7 (short-term assessment)
+    assign 20%/50%/100%/150% to CQS 1/2/3/4+. Hence the assessment is worse iff:
+
+    - general cqs 1-3 (Table 4 20%):  assessment cqs >= 2
+    - general cqs 4-5 (Table 4 50%):  assessment cqs >= 3
+    - general cqs 6   (Table 4 150%): never
+
+    Both short-term tables are identical across CRR and Basel 3.1 over this cqs
+    range, so the gate is regime-independent.
+    """
+    schema = set(exposures.collect_schema().names())
+    required = {
+        "counterparty_reference",
+        "has_short_term_ecai",
+        "_st_assessment_cqs",
+        "_general_cqs",
+        "value_date",
+        "maturity_date",
+        "cqs",
+    }
+    if not required <= schema:
+        return exposures
+
+    # Short-term maturity window: original maturity <= 3m (<= 6m for self-
+    # liquidating trade-finance LCs). Derived from (maturity - value) dates,
+    # mirroring the SA-stage derivation of ``original_maturity_years``. Missing
+    # dates fall back to "not short-term" (conservative — no contamination of
+    # long-term or unknown-maturity claims).
+    original_mty = (
+        pl.col("maturity_date").cast(pl.Int32) - pl.col("value_date").cast(pl.Int32)
+    ).cast(pl.Float64) / 365.0
+    is_trade_lc = (
+        pl.col("is_short_term_trade_lc").fill_null(False)
+        if "is_short_term_trade_lc" in schema
+        else pl.lit(False)  # noqa: FBT003
+    )
+    in_st_window = ((original_mty <= 0.25) | (is_trade_lc & (original_mty <= 0.5))).fill_null(False)
+
+    # Obligor-level aggregates (guarded against null-key partition collapse).
+    # ``obligor_st_cqs``: worst (highest) short-term-assessment cqs among the
+    # obligor's short-term-window exposures. ``obligor_general_cqs``: the
+    # obligor's general preferential cqs.
+    st_assessment_cqs = pl.when(pl.col("has_short_term_ecai") & in_st_window).then(
+        pl.col("_st_assessment_cqs")
+    )
+    obligor_st_cqs = partition_by_nullable(
+        st_assessment_cqs.max().over("counterparty_reference"),
+        "counterparty_reference",
+        pl.lit(None, dtype=pl.Int8),
+    )
+    obligor_general_cqs = partition_by_nullable(
+        pl.col("_general_cqs").min().over("counterparty_reference"),
+        "counterparty_reference",
+        pl.col("_general_cqs"),
+    )
+
+    # Art. 120(3)(c) "less favourable" test — see docstring for the band map.
+    less_favourable = ((obligor_general_cqs <= 3) & (obligor_st_cqs >= 2)) | (
+        (obligor_general_cqs >= 4) & (obligor_general_cqs <= 5) & (obligor_st_cqs >= 3)
+    )
+    fires = obligor_st_cqs.is_not_null() & less_favourable.fill_null(False)
+
+    # Spill onto the obligor's unrated short-term claims only. Directly-rated
+    # exposures already carry has_short_term_ecai=True and their own cqs, so are
+    # excluded via ``~has_short_term_ecai``.
+    spill = fires & in_st_window & ~pl.col("has_short_term_ecai")
+    return exposures.with_columns(
+        [
+            (pl.col("has_short_term_ecai") | spill).alias("has_short_term_ecai"),
+            pl.when(spill).then(obligor_st_cqs).otherwise(pl.col("cqs")).cast(pl.Int8).alias("cqs"),
+        ]
+    )
 
 
 def _build_qrre_coalesce_expr(

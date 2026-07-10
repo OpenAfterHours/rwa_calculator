@@ -563,6 +563,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p1222,
         ),
         (
+            "P1.223 (Art. 120(3)(c) obligor-level short-term ECAI spillover — institution)",
+            "p1_223",
+            _generate_p1223,
+        ),
+        (
             "P8.39 (CCR-CCP-1/CCP-2 orchestrator QCCP wiring — 2%/4% vs 50% anti-degenerate baseline)",
             "ccr",
             _generate_p839_ccp,
@@ -3056,6 +3061,19 @@ def _generate_p1222(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_222", None)
+
+
+def _generate_p1223(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.223 fixtures (Art. 120(3)(c) obligor-level short-term ECAI spillover)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_223 import save_p1223_fixtures
+
+        saved = save_p1223_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_223", None)
 
 
 def _generate_p828_alpha(output_dir: Path) -> list[tuple[str, int]]:

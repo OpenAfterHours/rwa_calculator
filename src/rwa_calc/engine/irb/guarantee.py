@@ -678,18 +678,18 @@ def _apply_double_default(
     # Double default multiplier: (0.15 + 160 x PD_g)
     dd_multiplier = _double_default_multiplier_expr(guarantor_pd_floored_dd)
 
-    # RW_dd = RW_obligor x multiplier (risk_weight_irb_original already = K x 12.5 x s x MA)
+    # RW_dd = RW_obligor x multiplier (risk_weight_irb_original already = K x 12.5 x s x MA).
+    # CRR Art. 153(3) carries NO "not lower than a direct exposure to the protection
+    # provider" floor (that was Basel II para 286, not onshored), so rw_dd is compared
+    # unfloored against the substitution RW in the beneficial gate below.
     rw_dd = pl.col("risk_weight_irb_original") * dd_multiplier
-
-    # Floor: RW_dd cannot be lower than direct exposure to guarantor (Basel II para 286)
-    rw_dd_floored = pl.max_horizontal(rw_dd, pl.col("guarantor_rw"))
 
     return lf.with_columns(
         [
             _is_dd_eligible.alias("is_double_default_eligible"),
-            # Override guarantor_rw with DD RW when eligible and better than substitution
-            pl.when(_is_dd_eligible & (rw_dd_floored < pl.col("guarantor_rw")))
-            .then(rw_dd_floored)
+            # Override guarantor_rw with DD RW when eligible and beneficial vs. substitution
+            pl.when(_is_dd_eligible & (rw_dd < pl.col("guarantor_rw")))
+            .then(rw_dd)
             .otherwise(pl.col("guarantor_rw"))
             .alias("guarantor_rw"),
             # Track DD-specific columns
@@ -704,7 +704,7 @@ def _apply_double_default(
             # Track DD method — True only when actual double-default treatment is
             # applied (eligible AND beneficial vs. plain substitution). PD substitution
             # is tracked independently via _is_pd_substitution.
-            pl.when(_is_dd_eligible & (rw_dd_floored < pl.col("guarantor_rw")))
+            pl.when(_is_dd_eligible & (rw_dd < pl.col("guarantor_rw")))
             .then(pl.lit(True))
             .otherwise(pl.lit(False))
             .alias("_is_dd_applied"),

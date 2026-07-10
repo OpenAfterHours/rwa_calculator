@@ -333,3 +333,45 @@ class TestDoubleDefaultStatusTracking:
         result = lf.pipe(apply_guarantee_substitution, _crr_no_dd_config()).collect()
         if result["is_guarantee_beneficial"][0]:
             assert result["guarantee_method_used"][0] == "SA_RW_SUBSTITUTION"
+
+
+class TestDoubleDefaultReachable:
+    """P1.228 — CRR Art. 153(3) DD RW must be reachable (no direct-to-guarantor floor).
+
+    Art. 153(3) defines rw_dd = RW_0 x (0.15 + 160 x PD_guarantor) with NO floor
+    at the substitution (direct-exposure-to-guarantor) risk weight — that floor was
+    Basel II para 286, not onshored into CRR. The engine's beneficial gate must
+    compare the UNFLOORED rw_dd against the substitution RW; flooring rw_dd at
+    guarantor_rw before the gate makes the strict "<" comparison always False,
+    so DOUBLE_DEFAULT is never reachable.
+    """
+
+    def test_crr_a7_dd_reachable_full_guarantee_institution_sa(self):
+        """Full-cover corporate exposure, institution CQS2 guarantor (SA path).
+
+        Hand calc (see P1_228-scenario.md):
+        - Substitution RW (Art. 120 Table 3, institution CQS2): 0.50
+        - DD multiplier (Art. 153(3)): 0.15 + 160 x 0.0005 = 0.23
+        - Unfloored DD RW: RW_0 (borrower IRB RW = 1.00) x 0.23 = 0.23
+        - Beneficial gate: 0.23 < 0.50 (substitution RW) -> DD applies
+        - rwa = 1,000,000 x 0.23 = 230,000; risk_weight = 0.23
+        """
+        # Arrange
+        lf = _make_guaranteed_frame(
+            rwa=1_000_000.0,
+            risk_weight=1.00,
+            guaranteed_portion=1_000_000.0,
+            unguaranteed_portion=0.0,
+            guarantor_pd=0.0005,
+            guarantor_approach="sa",
+        )
+
+        # Act
+        result = lf.pipe(apply_guarantee_substitution, _crr_dd_config()).collect()
+
+        # Assert
+        assert result["is_double_default_eligible"][0] is True
+        assert result["guarantee_status"][0] == "DOUBLE_DEFAULT"
+        assert result["guarantor_rw"][0] == pytest.approx(0.23)
+        assert result["risk_weight"][0] == pytest.approx(0.23)
+        assert result["rwa"][0] == pytest.approx(230_000.0)

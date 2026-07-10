@@ -201,16 +201,23 @@ def _apply_b31_approach_restrictions(
         .then(pl.col("cp_total_assets") >= balance_sheet_threshold)
         .otherwise(pl.lit(True))
     )
-    # Art. 147A(1)(b): Institution (including RGLAs/PSEs treated as
-    # institutions per Art. 147(4)(b)) → F-IRB only. Key on
-    # exposure_class_irb so rgla_institution / pse_institution inherit
-    # the restriction.
+    # Art. 147A(1)(b): genuine institution exposures → F-IRB only (no
+    # A-IRB). Keys on exposure_class_irb. NOTE: institution-typed RGLAs /
+    # PSEs (rgla_institution / pse_institution) share exposure_class_irb ==
+    # INSTITUTION, but are additionally caught by ``b31_sa_only`` below and
+    # forced to SA per Art. 147(3)(c)-(e); this branch only governs their
+    # A-IRB block, which the SA-only restriction then subsumes.
     b31_institution_no_airb = pl.col("exposure_class_irb") == ExposureClass.INSTITUTION.value
     b31_airb_blocked = is_fse | is_large_corp | b31_institution_no_airb
 
-    # Art. 147A(1)(a) read with Art. 147(3): sovereigns and
-    # quasi-sovereigns with 0% SA RW → SA only. See
-    # ``B31_SOVEREIGN_LIKE_ENTITY_TYPES`` for the full list.
+    # Art. 147A(1)(a) read with Art. 147(3)(c)-(e): central governments,
+    # central banks and the quasi-sovereign entity types (regional govts,
+    # local authorities, PSEs) → SA only. Points (c)-(e) are assigned to
+    # the quasi-sovereign class UNCONDITIONALLY — the "0% SA RW" qualifier
+    # binds only the Art. 147(3)(g) international-organisations limb — so
+    # the institution-typed rgla_institution / pse_institution are in scope
+    # (this supersedes the CRR-era Art. 147(4)(b) "treated as institutions"
+    # routing). See ``B31_SOVEREIGN_LIKE_ENTITY_TYPES`` for the full list.
     b31_sa_only = pl.col("cp_entity_type").is_in(list(B31_SOVEREIGN_LIKE_ENTITY_TYPES))
 
     # Art. 155 / CRE60 / PRA PS1/26: equity exposures are SA-only under

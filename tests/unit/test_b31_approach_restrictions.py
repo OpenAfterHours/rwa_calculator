@@ -404,12 +404,16 @@ class TestB31SovereignSAOnly:
 
 
 class TestB31QuasiSovereignSAOnly:
-    """Art. 147A(1)(a)/Art. 147(3): Sovereign-treated RGLAs/PSEs/MDBs forced to SA.
+    """Art. 147A(1)(a)/Art. 147(3): RGLAs/PSEs/MDBs forced to SA under B31.
 
-    The quasi-sovereign SA-only restriction tracks the 0% SA RW qualifier
-    in Art. 147(3), so it only captures entities whose counterparty type is
-    sovereign-derived. RGLAs/PSEs treated as institutions (Art. 147(4)(b))
-    are covered by TestB31InstitutionFIRBOnly below.
+    Art. 147(3)(a)-(f) assign central governments, central banks, regional
+    governments, local authorities, public sector entities and MDBs to the
+    quasi-sovereign exposure class (Art. 147(2)(a)) UNCONDITIONALLY; the 0%
+    SA RW qualifier in Art. 147(3)(g) binds only the international-
+    organisations limb. Art. 147A(1)(a) then makes the whole class SA-only.
+    This drops the CRR-era "treated as institution" carve-out (Art.
+    147(4)(b)), so the institution-typed variants rgla_institution /
+    pse_institution are in scope here too, not routed to F-IRB.
     """
 
     def test_pse_sovereign_gets_sa_under_b31(self) -> None:
@@ -432,35 +436,36 @@ class TestB31QuasiSovereignSAOnly:
         df = _classify(entity_type="rgla_sovereign")
         assert df["approach"][0] == ApproachType.SA.value
 
-    def test_rgla_institution_gets_firb_under_b31(self) -> None:
-        """Art. 147A(1)(b): rgla_institution with internal PD lands on FIRB under B31.
+    def test_rgla_institution_forced_to_sa_under_b31(self) -> None:
+        """Art. 147A(1)(a)/147(3)(d): rgla_institution with internal PD forced to SA.
 
-        RGLA treated as institution is NOT quasi-sovereign (no 0% SA RW
-        qualifier per Art. 147(3)); it follows the INSTITUTION IRB class
-        per Art. 147(4)(b) with the Art. 147A(1)(b) F-IRB-only restriction.
+        Regional govts/local authorities treated as institutions are still
+        assigned to the quasi-sovereign class unconditionally under Art.
+        147(3)(d); the F-IRB-only Art. 147A(1)(b) institution carve-out does
+        NOT apply here — this class is SA-only per Art. 147A(1)(a).
         """
         df = _classify(entity_type="rgla_institution")
-        assert df["approach"][0] == ApproachType.FIRB.value
+        assert df["approach"][0] == ApproachType.SA.value
 
     def test_rgla_institution_airb_blocked_under_b31(self) -> None:
-        """Art. 147A(1)(b): rgla_institution with PD + LGD still FIRB (no A-IRB)."""
+        """Art. 147A(1)(a): rgla_institution with PD + LGD still forced to SA."""
         df = _classify(entity_type="rgla_institution", lgd=0.35, internal_pd=0.01)
-        assert df["approach"][0] == ApproachType.FIRB.value
+        assert df["approach"][0] == ApproachType.SA.value
 
     def test_rgla_institution_lgd_cleared_under_b31(self) -> None:
-        """FIRB rgla_institution has LGD cleared (uses supervisory LGD)."""
+        """SA-routed rgla_institution has LGD cleared (not used under SA)."""
         df = _classify(entity_type="rgla_institution")
         assert df["lgd"][0] is None
 
-    def test_pse_institution_gets_firb_under_b31(self) -> None:
-        """Art. 147A(1)(b): pse_institution with internal PD lands on FIRB under B31."""
+    def test_pse_institution_forced_to_sa_under_b31(self) -> None:
+        """Art. 147A(1)(a)/147(3)(e): pse_institution with internal PD forced to SA."""
         df = _classify(entity_type="pse_institution")
-        assert df["approach"][0] == ApproachType.FIRB.value
+        assert df["approach"][0] == ApproachType.SA.value
 
     def test_pse_institution_airb_blocked_under_b31(self) -> None:
-        """Art. 147A(1)(b): pse_institution with PD + LGD still FIRB (no A-IRB)."""
+        """Art. 147A(1)(a): pse_institution with PD + LGD still forced to SA."""
         df = _classify(entity_type="pse_institution", lgd=0.35, internal_pd=0.01)
-        assert df["approach"][0] == ApproachType.FIRB.value
+        assert df["approach"][0] == ApproachType.SA.value
 
 
 class TestB31InstitutionFIRBOnly:

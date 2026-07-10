@@ -1540,18 +1540,27 @@ RGLA_PSE_ENTITY_TYPES: tuple[str, ...] = (
     "pse_institution",
 )
 
-# Entity types treated as sovereign-like under Basel 3.1 Art. 147A(1)(a)
-# read with Art. 147(3): when the counterparty qualifies for 0% SA RW it
-# is restricted to SA only (no IRB). Identified by entity type because
-# the 0%-RW qualifier is a property of how the counterparty is treated
-# (sovereign-derived), not of the SA exposure class label.
-# rgla_institution / pse_institution are NOT in scope — they route to
-# institution IRB per Art. 147A(1)(b).
+# Entity types the Basel 3.1 approach-restriction step forces to the
+# Standardised Approach only (no IRB), under PS1/26 Art. 147A(1)(a) read
+# with Art. 147(3). Art. 147(3)(a)-(f) assign central governments, central
+# banks, regional governments, local authorities, public sector entities
+# and MDBs to the central-government / quasi-sovereign exposure class
+# (Art. 147(2)(a)); Art. 147(3)(g) adds international organisations that
+# carry a 0% SA risk weight. The "0% SA RW" qualifier binds ONLY the
+# (g) international-organisations limb — regional governments (c), local
+# authorities (d) and public sector entities (e) are assigned to that
+# class UNCONDITIONALLY, dropping the CRR-era "treated as institutions"
+# carve-out. Art. 147A(1)(a) then makes the whole class SA-only, so the
+# institution-typed variants rgla_institution / pse_institution are IN
+# scope here (superseding the earlier Art. 147A(1)(b)/147(4)(b) reading
+# that routed them to institution F-IRB).
 B31_SOVEREIGN_LIKE_ENTITY_TYPES: tuple[str, ...] = (
     "sovereign",
     "central_bank",
     "rgla_sovereign",
+    "rgla_institution",
     "pse_sovereign",
+    "pse_institution",
     "mdb",
     "mdb_named",
     "international_org",

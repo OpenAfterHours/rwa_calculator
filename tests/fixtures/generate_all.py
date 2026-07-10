@@ -547,6 +547,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p1218,
         ),
         (
+            "P1.220 (B31 Art. 147(3)(c)-(e)/147A(1)(a) institution-typed PSE stays SA-only)",
+            "p1_220",
+            _generate_p1220,
+        ),
+        (
             "P8.39 (CCR-CCP-1/CCP-2 orchestrator QCCP wiring — 2%/4% vs 50% anti-degenerate baseline)",
             "ccr",
             _generate_p839_ccp,
@@ -2999,6 +3004,19 @@ def _generate_p1218(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_218", None)
+
+
+def _generate_p1220(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.220 fixtures (B31 institution-typed PSE stays SA-only, Art. 147(3)/147A(1)(a))."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_220 import save_p1220_fixtures
+
+        saved = save_p1220_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_220", None)
 
 
 def _generate_p828_alpha(output_dir: Path) -> list[tuple[str, int]]:

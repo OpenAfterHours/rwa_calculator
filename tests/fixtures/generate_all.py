@@ -537,6 +537,12 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p1200,
         ),
         (
+            "P1.219 (guarantee maturity-mismatch t must use residual protection maturity, "
+            "not original term — CRR/PS1/26 Art. 239(3)/238(1))",
+            "p1_219",
+            _generate_p1219,
+        ),
+        (
             "P1.216 (CRR Art. 131 Table 7 short-term ECAI risk weights — institution + corporate)",
             "p1_216",
             _generate_p1216,
@@ -2978,6 +2984,21 @@ def _generate_p1200(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_200", None)
+
+
+def _generate_p1219(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.219 fixtures (guarantee maturity-mismatch t = residual, not original term)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_219 import save_p1219_fixtures
+
+        saved = save_p1219_fixtures(output_dir / "data")
+        return [
+            (f"data/{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()
+        ]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_219", None)
 
 
 def _generate_p1216(output_dir: Path) -> list[tuple[str, int]]:

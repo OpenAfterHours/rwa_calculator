@@ -1335,7 +1335,10 @@ def _apply_maturity_mismatch_to_guarantees(
 
     References:
         CRR Art. 237(2): minimum maturity / mismatch eligibility
-        CRR Art. 238(1): maturity of credit protection
+        CRR Art. 238(1): maturity of credit protection — ``t`` is the RESIDUAL
+            maturity (time remaining to protection maturity), not the original
+            contract term; the residual from ``maturity_date`` therefore wins
+            and ``original_maturity_years`` is only a fallback.
         CRR Art. 239(3): maturity mismatch adjustment formula
     """
     guar_schema = guarantees.collect_schema()
@@ -1366,22 +1369,26 @@ def _apply_maturity_mismatch_to_guarantees(
         how="left",
     )
 
-    # Compute t (Art. 238(1)). Prefer the explicit regulatory input
-    # ``original_maturity_years`` when present (it is the authoritative
-    # contract term written by upstream loaders); fall back to
-    # ``maturity_date`` minus reporting date when missing. Null t means
-    # "no info" and yields no scaling.
-    if has_guar_original_maturity and has_guar_maturity_date:
+    # Compute t = RESIDUAL maturity (Art. 238(1)): the time REMAINING to
+    # protection maturity, derived from the guarantee ``maturity_date`` minus
+    # the reporting date. ``original_maturity_years`` is the ORIGINAL contract
+    # term and must NOT override the residual — otherwise a seasoned guarantee
+    # (long original term, short residual) is over-recognised. It is used for
+    # ``t`` only as a fallback when ``maturity_date`` is null. The separate
+    # Art. 237(2)(a) >=1y eligibility gate upstream still reads
+    # ``original_maturity_years`` (the original term). Null t means "no info"
+    # and yields no scaling.
+    if has_guar_maturity_date and has_guar_original_maturity:
         t_from_date = exact_fractional_years_expr(config.reporting_date, "maturity_date")
         t_raw = (
-            pl.when(pl.col("original_maturity_years").is_not_null())
-            .then(pl.col("original_maturity_years"))
-            .otherwise(t_from_date)
+            pl.when(pl.col("maturity_date").is_not_null())
+            .then(t_from_date)
+            .otherwise(pl.col("original_maturity_years"))
         )
-    elif has_guar_original_maturity:
-        t_raw = pl.col("original_maturity_years")
-    else:
+    elif has_guar_maturity_date:
         t_raw = exact_fractional_years_expr(config.reporting_date, "maturity_date")
+    else:
+        t_raw = pl.col("original_maturity_years")
 
     # Apply Art. 239(3) floors / caps:
     #   t floored at 0.25, T capped at 5.0 and floored at 0.25.

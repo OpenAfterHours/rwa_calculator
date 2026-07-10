@@ -1,58 +1,77 @@
 """
-Generate P1.200 fixtures: B31 guarantee/CDS maturity-mismatch (t−0.25)/(T−0.25) scaling.
+Generate P1.219 fixtures: guarantee maturity-mismatch `t` must use residual protection
+maturity (from `maturity_date`), not the seasoned `original_maturity_years` term.
 
 Pipeline position:
     fixture-builder output -> test-writer -> engine-implementer (crm/guarantees.py)
 
 Key responsibilities:
 - Produce two counterparty rows:
-    CP-OBLIGOR-200:   corporate, GB, cqs=null (unrated → 100% SA RW Art. 122)
-    CP-GUARANTOR-200: institution, GB, cqs=1 (external rating → 20% SA RW)
+    CP-OBLIGOR-219:   corporate, GB, cqs=null (unrated -> 100% SA RW Art. 122)
+    CP-GUARANTOR-219: institution, GB, cqs=1 (external rating -> 20% SA RW)
 - Produce one loan row:
-    EXP-200: GBP 1,000,000, value_date=2026-06-01, maturity_date=2030-06-01 (T=4.0y)
+    EXP-219: GBP 1,000,000, value_date=2026-06-01, maturity_date=2030-06-01 (T=4.0y)
 - Produce one guarantee row:
-    G-200: original_maturity_years=2.0 (t=2.0y < T=4.0y → mismatch)
-           protection_type=credit_derivative, includes_restructuring=True
-           Art. 239(3): GA = 1,000,000 × (2.0−0.25)/(4.0−0.25) = 466,666.6666666667
+    G-219: maturity_date=2027-06-01 (residual t=1.0y -- authoritative post-fix)
+           original_maturity_years=5.0 (seasoned; passes Art. 237(2)(a) >=1y gate;
+           this is the WRONG t the pre-fix bug prefers over the residual)
+           protection_type=guarantee (not credit_derivative -> H_restructuring=0)
 - Produce one external rating row (guarantor CQS 1 only; obligor is unrated/null CQS).
 
 Defect under test (pre-fix):
-    crm/guarantees.py guards the only call to _apply_maturity_mismatch_to_guarantees()
-    with ``if config.is_crr``.  Under basel_3_1(), the guard prevents the scaling
-    entirely, so GA = 1,000,000 (full face), yielding RWA = 200,000 (20% × 1m).
-    The correct B31 RWA is 626,666.67 — an understatement of 426,667 (~68%).
+    crm/guarantees.py._apply_maturity_mismatch_to_guarantees() prefers
+    ``original_maturity_years`` over the residual derived from ``maturity_date``
+    when both are present:
 
-Post-fix assertion (primary):
-    EXP-200 + G-200, config=basel_3_1() → Art. 239(3) applies → RWA = 626,666.6666666666
-    EXP-200 + G-200, config=crr()       → same scaling (CRR already correct) → same RWA
+        t_raw = when(original_maturity_years.is_not_null())
+                .then(original_maturity_years)
+                .otherwise(t_from_date)
 
-Hand-calculations (Art. 239(3), CalculationConfig.basel_3_1()):
+    Art. 238(1) defines t as the years *remaining* to protection maturity — the
+    residual, not the original seasoned term. With a seasoned 5-year guarantee
+    whose *residual* maturity has run down to 1.0y, the bug uses t=5.0 (>= T=4.0y,
+    "no mismatch") instead of the correct t=1.0 (< T=4.0y, mismatch scaling
+    applies), understating RWA by ~76%.
+
+Post-fix assertion (primary; identical CRR & B31 -- Art. 239(3) is
+framework-invariant, mismatch guard already removed by P1.200):
+    EXP-219 + G-219 -> residual t=1.0y wins -> Art. 239(3) scaling applies
+    -> RWA = 840,000.0 (post-fix, correct)
+    Pre-fix (bug, original wins): t=5.0 -> no mismatch -> RWA = 200,000.0 (understated)
+
+Hand-calculations (Art. 239(3), day-count Actual/365, no leap adjustment):
     Loan EAD = drawn_amount + interest = 1,000,000 + 0 = 1,000,000 GBP
-    T_raw = (2030-06-01 − 2026-06-01) = 4.0y; T_eff = max(min(4.0,5.0),0.25) = 4.0
-    t_raw = original_maturity_years = 2.0y; filter 2.0 >= 1.0 → ELIGIBLE (Art.237(2)(a))
-    t_eff = max(2.0, 0.25) = 2.0
-    mismatch: t_eff 2.0 < T_eff 4.0 → scaling applies
-    H_fx = 0 (GBP = GBP); H_r = 0 (includes_restructuring = True, CDS)
-    G* = 1,000,000 × 1 × 1 = 1,000,000
-    m = (t_eff − 0.25) / (T_eff − 0.25) = 1.75 / 3.75 = 0.4666666666666667
-    GA = G* × m = 466,666.6666666667
-    uncovered = 1,000,000 − 466,666.6666666667 = 533,333.3333333333
-    RW_borrower = 1.00 (unrated corp, Art. 122); RW_guarantor = 0.20 (institution CQS 1)
-    CORRECT B31 RWA = 466,666.67 × 0.20 + 533,333.33 × 1.00
-                    = 93,333.33 + 533,333.33
-                    = 626,666.6666666666
+    T_raw = (2030-06-01 - 2026-06-01) = 4.0y; T_eff = max(min(4.0,5.0),0.25) = 4.0
+    Guarantee residual (maturity_date 2027-06-01 - reporting 2026-06-01) = 1.0y
+    original_maturity_years = 5.0y; filter 5.0 >= 1.0 -> ELIGIBLE (Art. 237(2)(a))
+
+    POST-FIX (residual wins): t_eff = max(1.0, 0.25) = 1.0
+        mismatch: t_eff 1.0 < T_eff 4.0 -> scaling applies
+        H_fx = 0 (GBP = GBP); H_r = 0 (protection_type=guarantee, not credit_derivative)
+        G* = 1,000,000
+        m = (t_eff - 0.25) / (T_eff - 0.25) = 0.75 / 3.75 = 0.2
+        GA = 1,000,000 x 0.2 = 200,000.0
+        guaranteed = min(GA, EAD) = 200,000.0; unguaranteed = 1,000,000 - 200,000 = 800,000.0
+        RW_borrower = 1.00 (unrated corp, Art. 122); RW_guarantor = 0.20 (institution CQS 1)
+        CORRECT RWA = 200,000.0 x 0.20 + 800,000.0 x 1.00 = 40,000.0 + 800,000.0 = 840,000.0
+
+    PRE-FIX (bug, original wins): t_eff = 5.0
+        mismatch: t_eff 5.0 < T_eff 4.0 -> False -> NO scaling -> GA = 1,000,000.0 (full face)
+        BUGGED RWA = 1,000,000.0 x 0.20 = 200,000.0 (understated by 640,000, ~76%)
 
 References:
-    - PS1/26 Art. 235(1): RWSM substitution approach
-    - PS1/26 Art. 237(2)(a): minimum original maturity >= 1y eligibility filter
-    - PS1/26 Art. 238(1): definition of protection maturity t
-    - PS1/26 Art. 239(3): GA = G* × (t−0.25)/(T−0.25) maturity mismatch adjustment
-    - CRR Art. 239(3): identical formula (both frameworks)
-    - src/rwa_calc/data/schemas.py: GUARANTEE_SCHEMA (original_maturity_years field)
+    - CRR Art. 239(3): GA = G* x (t-0.25)/(T-0.25) maturity mismatch adjustment
+    - CRR Art. 238(1): definition of protection maturity t (years remaining)
+    - CRR Art. 237(2)(a): minimum original maturity >= 1y eligibility filter
+    - CRR Art. 233/233(2): FX / restructuring haircuts (both zero in this scenario)
+    - CRR Art. 122: unrated corporate 100% SA risk weight
+    - CRR Art. 120 Table 3: institution CQS 1 -> 20% SA risk weight
+    - PS1/26 mirrors of the above (mismatch scaling is framework-invariant post P1.200)
+    - src/rwa_calc/data/schemas.py: GUARANTEE_SCHEMA (maturity_date, original_maturity_years)
     - src/rwa_calc/engine/crm/guarantees.py: _apply_maturity_mismatch_to_guarantees
 
 Usage:
-    python tests/fixtures/p1_200/p1_200.py
+    python tests/fixtures/p1_219/p1_219.py
 """
 
 from __future__ import annotations
@@ -67,20 +86,20 @@ from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import COUNTERPARTY_SCHEMA, LOAN_SCHEMA, RATINGS_SCHEMA
 
 # ---------------------------------------------------------------------------
-# Scenario constants — exported for test assertions
+# Scenario constants -- exported for test assertions
 # ---------------------------------------------------------------------------
 
 REPORTING_DATE = date(2026, 6, 1)
 
 # Counterparty references
-OBLIGOR_REF = "CP-OBLIGOR-200"
-GUARANTOR_REF = "CP-GUARANTOR-200"
+OBLIGOR_REF = "CP-OBLIGOR-219"
+GUARANTOR_REF = "CP-GUARANTOR-219"
 
 # Exposure reference
-LOAN_REF = "EXP-200"
+LOAN_REF = "EXP-219"
 
 # Guarantee reference
-GUARANTEE_REF = "G-200"
+GUARANTEE_REF = "G-219"
 
 # Loan economics
 LOAN_DRAWN_AMOUNT = 1_000_000.0
@@ -90,43 +109,45 @@ LOAN_EAD = LOAN_DRAWN_AMOUNT  # interest = 0
 LOAN_VALUE_DATE = date(2026, 6, 1)
 LOAN_MATURITY_DATE = date(2030, 6, 1)
 
-# Guarantee maturity parameters
-GUARANTEE_ORIGINAL_MATURITY_YEARS: float = 2.0  # t = 2.0y  (>= 1.0 → eligible)
-# 2028-05-31 (not 2028-06-01): 2028 is a leap year, so 2028-06-01 is ordinal 153
-# from reporting date 2026-06-01 (ordinal 152), giving residual=2.00273973 not
-# an exact 2.0y. 2028-05-31 is ordinal 152 -> residual exactly 2.0y, matching
-# original_maturity_years and keeping EXPECTED_TOTAL_RWA_B31 unchanged once the
-# engine fix (P1.219: residual from maturity_date wins over original_maturity_years)
-# lands. See docs: P1.219 companion re-pin (§5 of the P1.219 scenario proposal).
-GUARANTEE_MATURITY_DATE = date(2028, 5, 31)  # residual t = 2.0y exactly (leap-year safe)
+# Guarantee maturity parameters -- the discriminating pair:
+#   original_maturity_years is seasoned (5.0y, >= 1.0y -> eligible) -- the WRONG
+#   t the pre-fix bug prefers.
+#   maturity_date gives a residual of exactly 1.0y from the reporting date --
+#   the CORRECT t per Art. 238(1) once the engine fix (residual wins) lands.
+GUARANTEE_ORIGINAL_MATURITY_YEARS: float = 5.0  # seasoned term (bug's t pre-fix)
+GUARANTEE_MATURITY_DATE = date(2027, 6, 1)  # residual t = 1.0y (correct t post-fix)
 
 # Art. 239(3) scalars
 _T_EFF: float = 4.0  # max(min(4.0, 5.0), 0.25)
 _T_EFF_FLOOR: float = 0.25
-_t_EFF: float = 2.0  # max(2.0, 0.25)
+_t_EFF_POST_FIX: float = 1.0  # max(1.0, 0.25) -- residual wins
+_t_EFF_PRE_FIX: float = 5.0  # max(5.0, 0.25) -- original wins (bug)
 
-# Derived: maturity multiplier m = (t−0.25)/(T−0.25) = 1.75/3.75
-EXPECTED_MATURITY_MULTIPLIER: float = (_t_EFF - _T_EFF_FLOOR) / (_T_EFF - _T_EFF_FLOOR)
+# Derived: maturity multiplier m = (t-0.25)/(T-0.25) = 0.75/3.75 (post-fix only;
+# pre-fix t=5.0 >= T=4.0 -> no mismatch -> m=1.0)
+EXPECTED_MATURITY_MULTIPLIER: float = (_t_EFF_POST_FIX - _T_EFF_FLOOR) / (_T_EFF - _T_EFF_FLOOR)
 
-# Guaranteed (GA) and unguaranteed portions
+# Guaranteed (GA) and unguaranteed portions (post-fix, correct)
 EXPECTED_GUARANTEED_PORTION: float = LOAN_EAD * EXPECTED_MATURITY_MULTIPLIER
+EXPECTED_UNGUARANTEED_PORTION: float = LOAN_EAD - EXPECTED_GUARANTEED_PORTION
 
 # Risk weights
 EXPECTED_GUARANTOR_RW: float = 0.20  # institution CQS 1, Art. 120 Table 3
 _BORROWER_RW: float = 1.00  # unrated corporate, Art. 122
 
-# Correct B31 total RWA (post-fix)
-EXPECTED_TOTAL_RWA_B31: float = (
+# Correct total RWA (post-fix, residual t wins -- identical CRR & B31)
+EXPECTED_TOTAL_RWA: float = (
     EXPECTED_GUARANTEED_PORTION * EXPECTED_GUARANTOR_RW
-    + (LOAN_EAD - EXPECTED_GUARANTEED_PORTION) * _BORROWER_RW
+    + EXPECTED_UNGUARANTEED_PORTION * _BORROWER_RW
 )
 
-# Bugged B31 total RWA (pre-fix: mismatch scaling skipped → GA = full 1m)
+# Bugged total RWA (pre-fix: original_maturity_years=5.0 >= T=4.0 -> no mismatch
+# -> GA = full 1m)
 BUGGED_TOTAL_RWA: float = LOAN_EAD * EXPECTED_GUARANTOR_RW  # = 200,000.0
 
 # Guarantor rating
 GUARANTOR_CQS = 1
-_GUARANTOR_RATING_VALUE = "AA"  # CQS 1: AAA–AA-
+_GUARANTOR_RATING_VALUE = "AA"  # CQS 1: AAA-AA-
 RATING_AGENCY = "S&P"
 RATING_DATE = date(2026, 6, 1)
 
@@ -138,7 +159,7 @@ RATING_DATE = date(2026, 6, 1)
 
 @dataclass(frozen=True)
 class _Counterparty:
-    """P1.200 counterparty row."""
+    """P1.219 counterparty row."""
 
     counterparty_reference: str
     counterparty_name: str
@@ -160,7 +181,7 @@ class _Counterparty:
 
 @dataclass(frozen=True)
 class _Loan:
-    """P1.200 loan: GBP 1,000,000 drawn, 4-year maturity."""
+    """P1.219 loan: GBP 1,000,000 drawn, 4-year maturity."""
 
     loan_reference: str
     counterparty_reference: str
@@ -186,7 +207,7 @@ class _Loan:
 
 @dataclass(frozen=True)
 class _Rating:
-    """P1.200 external ECAI rating."""
+    """P1.219 external ECAI rating."""
 
     rating_reference: str
     counterparty_reference: str
@@ -217,10 +238,13 @@ class _Rating:
 @dataclass(frozen=True)
 class _Guarantee:
     """
-    P1.200 guarantee row: CDS (credit_derivative) with maturity mismatch.
+    P1.219 guarantee row: seasoned guarantee (long original, short residual).
 
-    Uses original_maturity_years (GUARANTEE_SCHEMA field, Art. 237/239(3)) and
-    includes_restructuring=True to suppress the 40% H_r haircut (Art.233(2)).
+    Carries BOTH ``maturity_date`` (residual t=1.0y -- correct post-fix) and
+    ``original_maturity_years`` (5.0y seasoned term -- the WRONG t the pre-fix
+    bug prefers). ``protection_type="guarantee"`` (not credit_derivative) so
+    the restructuring haircut (Art. 233(2)) never applies regardless of
+    ``includes_restructuring``.
     """
 
     guarantee_reference: str
@@ -258,17 +282,17 @@ class _Guarantee:
 # ---------------------------------------------------------------------------
 
 
-def create_p1200_counterparties() -> pl.DataFrame:
+def create_p1219_counterparties() -> pl.DataFrame:
     """
-    Return two P1.200 counterparties (obligor + guarantor) as a DataFrame.
+    Return two P1.219 counterparties (obligor + guarantor) as a DataFrame.
 
-    CP-OBLIGOR-200:   corporate, GB, unrated (null CQS) — 100% SA risk weight.
-    CP-GUARANTOR-200: institution, GB, CQS 1 — 20% SA risk weight.
+    CP-OBLIGOR-219:   corporate, GB, unrated (null CQS) -- 100% SA risk weight.
+    CP-GUARANTOR-219: institution, GB, CQS 1 -- 20% SA risk weight.
     """
     rows = [
         _Counterparty(
             counterparty_reference=OBLIGOR_REF,
-            counterparty_name="P1.200 Obligor Corporate GB Unrated",
+            counterparty_name="P1.219 Obligor Corporate GB Unrated",
             entity_type="corporate",
             country_code="GB",
             default_status=False,
@@ -276,7 +300,7 @@ def create_p1200_counterparties() -> pl.DataFrame:
         ),
         _Counterparty(
             counterparty_reference=GUARANTOR_REF,
-            counterparty_name="P1.200 Guarantor Institution GB CQS1",
+            counterparty_name="P1.219 Guarantor Institution GB CQS1",
             entity_type="institution",
             country_code="GB",
             default_status=False,
@@ -286,11 +310,11 @@ def create_p1200_counterparties() -> pl.DataFrame:
     return pl.DataFrame([r.to_dict() for r in rows], schema=dtypes_of(COUNTERPARTY_SCHEMA))
 
 
-def create_p1200_loan() -> pl.DataFrame:
+def create_p1219_loan() -> pl.DataFrame:
     """
-    Return one P1.200 loan as a DataFrame.
+    Return one P1.219 loan as a DataFrame.
 
-    EXP-200: GBP 1,000,000, value_date=2026-06-01, maturity_date=2030-06-01 (T=4.0y).
+    EXP-219: GBP 1,000,000, value_date=2026-06-01, maturity_date=2030-06-01 (T=4.0y).
     EAD = drawn_amount (interest=0) = 1,000,000.
     """
     rows = [
@@ -308,16 +332,16 @@ def create_p1200_loan() -> pl.DataFrame:
     return pl.DataFrame([r.to_dict() for r in rows], schema=dtypes_of(LOAN_SCHEMA))
 
 
-def create_p1200_ratings() -> pl.DataFrame:
+def create_p1219_ratings() -> pl.DataFrame:
     """
-    Return one P1.200 external rating (guarantor only) as a DataFrame.
+    Return one P1.219 external rating (guarantor only) as a DataFrame.
 
-    CP-GUARANTOR-200: CQS 1 / S&P AA → 20% SA institution RW.
-    CP-OBLIGOR-200 is unrated — no rating row (null CQS → 100% unrated corporate RW).
+    CP-GUARANTOR-219: CQS 1 / S&P AA -> 20% SA institution RW.
+    CP-OBLIGOR-219 is unrated -- no rating row (null CQS -> 100% unrated corporate RW).
     """
     rows = [
         _Rating(
-            rating_reference="RTG-P1200-GUARANTOR",
+            rating_reference="RTG-P1219-GUARANTOR",
             counterparty_reference=GUARANTOR_REF,
             rating_type="external",
             rating_agency=RATING_AGENCY,
@@ -332,15 +356,17 @@ def create_p1200_ratings() -> pl.DataFrame:
     return pl.DataFrame([r.to_dict() for r in rows], schema=dtypes_of(RATINGS_SCHEMA))
 
 
-def create_p1200_guarantees() -> pl.DataFrame:
+def create_p1219_guarantees() -> pl.DataFrame:
     """
-    Return one P1.200 guarantee row as a DataFrame.
+    Return one P1.219 guarantee row as a DataFrame.
 
-    G-200: CDS (credit_derivative) from CP-GUARANTOR-200 on EXP-200.
-        original_maturity_years = 2.0y (t < T=4.0y → mismatch, passes >=1y filter)
-        includes_restructuring = True (suppresses 40% H_r Art.233(2) haircut)
+    G-219: guarantee from CP-GUARANTOR-219 on EXP-219.
+        maturity_date = 2027-06-01 -> residual t = 1.0y (correct t post-fix)
+        original_maturity_years = 5.0y (seasoned; >= 1.0y -> eligible; the WRONG
+            t the pre-fix bug prefers over the residual)
+        protection_type = "guarantee" (not credit_derivative -> H_r = 0)
         currency = GBP (no FX haircut vs GBP exposure)
-        Art. 239(3): GA = 1,000,000 × (2.0−0.25)/(4.0−0.25) = 466,666.6666666667
+        Post-fix Art. 239(3): GA = 1,000,000 x (1.0-0.25)/(4.0-0.25) = 200,000.0
     """
     # Use explicit schema dict to ensure optional GUARANTEE_SCHEMA fields are typed correctly
     guarantee_schema_plus = {
@@ -361,7 +387,7 @@ def create_p1200_guarantees() -> pl.DataFrame:
     rows = [
         _Guarantee(
             guarantee_reference=GUARANTEE_REF,
-            guarantee_type="credit_derivative",
+            guarantee_type="guarantee",
             guarantor=GUARANTOR_REF,
             currency="GBP",
             maturity_date=GUARANTEE_MATURITY_DATE,
@@ -369,8 +395,8 @@ def create_p1200_guarantees() -> pl.DataFrame:
             percentage_covered=1.0,
             beneficiary_type="loan",
             beneficiary_reference=LOAN_REF,
-            protection_type="credit_derivative",
-            includes_restructuring=True,
+            protection_type="guarantee",
+            includes_restructuring=False,
             original_maturity_years=GUARANTEE_ORIGINAL_MATURITY_YEARS,
         ),
     ]
@@ -382,13 +408,13 @@ def create_p1200_guarantees() -> pl.DataFrame:
 # ---------------------------------------------------------------------------
 
 
-def save_p1200_fixtures(output_dir: Path | None = None) -> dict[str, Path]:
+def save_p1219_fixtures(output_dir: Path | None = None) -> dict[str, Path]:
     """
-    Write all P1.200 parquet files and return a mapping of name to path.
+    Write all P1.219 parquet files and return a mapping of name to path.
 
     Args:
         output_dir: Target directory. Defaults to the data/ subdirectory
-                    within the p1_200 fixture package.
+                    within the p1_219 fixture package.
 
     Returns:
         dict mapping artefact name to saved Path.
@@ -401,10 +427,10 @@ def save_p1200_fixtures(output_dir: Path | None = None) -> dict[str, Path]:
     saved: dict[str, Path] = {}
 
     artefacts = [
-        ("counterparty", create_p1200_counterparties()),
-        ("loan", create_p1200_loan()),
-        ("rating", create_p1200_ratings()),
-        ("guarantee", create_p1200_guarantees()),
+        ("counterparty", create_p1219_counterparties()),
+        ("loan", create_p1219_loan()),
+        ("rating", create_p1219_ratings()),
+        ("guarantee", create_p1219_guarantees()),
     ]
 
     for name, df in artefacts:
@@ -417,28 +443,33 @@ def save_p1200_fixtures(output_dir: Path | None = None) -> dict[str, Path]:
 
 def print_summary(saved: dict[str, Path]) -> None:
     """Print a human-readable generation summary."""
-    print("P1.200 fixture generation complete")
+    print("P1.219 fixture generation complete")
     print("-" * 70)
     for name, path in saved.items():
         df = pl.read_parquet(path)
         print(f"  {name:<20} {len(df):>3} row(s)  ->  {path}")
     print("-" * 70)
-    print("Scenario: B31 Art. 239(3) maturity mismatch on unfunded protection (CDS)")
+    print("Scenario: guarantee maturity-mismatch t must use residual, not original term")
     print(f"  Obligor:   {OBLIGOR_REF} (corporate, unrated, 100% RW)")
     print(f"  Guarantor: {GUARANTOR_REF} (institution, CQS {GUARANTOR_CQS}, 20% RW)")
     print(f"  Loan:      {LOAN_REF}  GBP {LOAN_DRAWN_AMOUNT:,.0f}  maturity {LOAN_MATURITY_DATE}")
     print()
-    print(f"  {GUARANTEE_REF}: original_maturity_years={GUARANTEE_ORIGINAL_MATURITY_YEARS}")
-    print(f"    T_eff={_T_EFF:.2f}y, t_eff={_t_EFF:.2f}y → mismatch → Art.239(3) applies")
-    print(f"    m = ({_t_EFF}−0.25)/({_T_EFF}−0.25) = {EXPECTED_MATURITY_MULTIPLIER:.16f}")
-    print(f"    GA = 1,000,000 × m = {EXPECTED_GUARANTEED_PORTION:.10f}")
-    print(f"    CORRECT B31 RWA = {EXPECTED_TOTAL_RWA_B31:.10f}")
-    print(f"    BUGGED B31 RWA (guard blocks scaling) = {BUGGED_TOTAL_RWA:.1f}")
+    print(
+        f"  {GUARANTEE_REF}: maturity_date={GUARANTEE_MATURITY_DATE} (residual t=1.0y), "
+        f"original_maturity_years={GUARANTEE_ORIGINAL_MATURITY_YEARS} (seasoned)"
+    )
+    print(f"    T_eff={_T_EFF:.2f}y")
+    print(f"    POST-FIX t_eff={_t_EFF_POST_FIX:.2f}y (residual wins) -> mismatch -> Art.239(3)")
+    print(f"    m = ({_t_EFF_POST_FIX}-0.25)/({_T_EFF}-0.25) = {EXPECTED_MATURITY_MULTIPLIER:.16f}")
+    print(f"    GA = 1,000,000 x m = {EXPECTED_GUARANTEED_PORTION:.10f}")
+    print(f"    CORRECT RWA = {EXPECTED_TOTAL_RWA:.10f}")
+    print(f"    PRE-FIX t_eff={_t_EFF_PRE_FIX:.2f}y (original wins, bug) -> no mismatch")
+    print(f"    BUGGED RWA = {BUGGED_TOTAL_RWA:.1f}")
 
 
 def main() -> None:
     """Entry point for standalone generation."""
-    saved = save_p1200_fixtures()
+    saved = save_p1219_fixtures()
     print_summary(saved)
 
 

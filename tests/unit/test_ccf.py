@@ -460,6 +460,117 @@ class TestFIRBArt16610Fallback:
 
 
 # =============================================================================
+# CRR A-IRB Art. 166(8)/(9)/(10) CCF Fallback Scope Tests (P1.250)
+# =============================================================================
+
+
+class TestArt16689CCFFallbackScope:
+    """Tests for the CRR A-IRB CCF fallback branch in ``_compute_ccf`` (P1.250).
+
+    Two coupled defects in the pre-fix ``else:`` branch of the A-IRB CCF
+    selection (``airb_ccf = ccf_modelled_expr.fill_null(pl.col("_sa_ccf_from_risk_type"))``):
+
+    1. A null ``ccf_modelled`` incorrectly falls back to the SA Art. 111 CCF
+       (``_sa_ccf_from_risk_type``) instead of the F-IRB Art. 166(8)/(10) CCF
+       (``_firb_ccf_from_risk_type``).
+    2. A non-null ``ccf_modelled`` is honoured unconditionally, even for
+       exposures out of the Art. 166(9) own-estimate scope (issued OBS items
+       and FR/FRC full-risk substitutes), which must take the supervisory
+       Art. 166(8)/(10) CCF regardless of any modelled value.
+
+    Fix predicate: ``in_166_8_scope = (is_obs_commitment OR is_short_term_trade_lc)
+    AND risk_type not in {FR, FRC}``; only in-scope rows honour
+    ``ccf_modelled.fill_null(_firb_ccf_from_risk_type)`` — everything else takes
+    ``_firb_ccf_from_risk_type`` unconditionally.
+    """
+
+    def test_null_modelled_mr_commitment_falls_back_to_firb_75_not_sa_50(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Row A: null ccf_modelled on an MR commitment must fall back to the
+        F-IRB Art. 166(8)(d) 75% CCF, not the SA Art. 111 50% CCF.
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_ROW_A"],
+                "approach": ["advanced_irb"],
+                "risk_type": ["MR"],
+                "nominal_amount": [1_000_000.0],
+                "drawn_amount": [0.0],
+                "interest": [0.0],
+                "ccf_modelled": [None],
+                "is_obs_commitment": [True],
+                "is_short_term_trade_lc": [False],
+            },
+            schema_overrides={"ccf_modelled": pl.Float64},
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        assert result["ccf"][0] == pytest.approx(0.75)
+        assert result["ead_from_ccf"][0] == pytest.approx(750_000.0)
+
+    def test_issued_fr_item_suppresses_modelled_ccf_out_of_scope(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Row B: an issued FR item (``is_obs_commitment=False``) is out of
+        Art. 166(9) own-estimate scope, so a modelled 0.40 CCF must be
+        suppressed in favour of the Art. 166(10) supervisory 100% CCF.
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_ROW_B"],
+                "approach": ["advanced_irb"],
+                "risk_type": ["FR"],
+                "nominal_amount": [1_000_000.0],
+                "drawn_amount": [0.0],
+                "interest": [0.0],
+                "ccf_modelled": [0.40],
+                "is_obs_commitment": [False],
+                "is_short_term_trade_lc": [False],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        assert result["ccf"][0] == pytest.approx(1.00)
+        assert result["ead_from_ccf"][0] == pytest.approx(1_000_000.0)
+
+    def test_revolving_mr_commitment_permitted_own_estimate_honoured_regression(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Row C (regression guard): a revolving MR commitment is within
+        Art. 166(8)(d)/166(9) scope, so its permitted own-estimate CCF (0.60)
+        must still be honoured, unchanged by the fix.
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["AIRB_ROW_C"],
+                "approach": ["advanced_irb"],
+                "risk_type": ["MR"],
+                "nominal_amount": [1_000_000.0],
+                "drawn_amount": [0.0],
+                "interest": [0.0],
+                "ccf_modelled": [0.60],
+                "is_obs_commitment": [True],
+                "is_short_term_trade_lc": [False],
+                "is_revolving": [True],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        assert result["ccf"][0] == pytest.approx(0.60)
+        assert result["ead_from_ccf"][0] == pytest.approx(600_000.0)
+
+
+# =============================================================================
 # Basel 3.1 F-IRB CCF Tests (PRA PS1/26 Art. 166C)
 # =============================================================================
 
@@ -808,7 +919,13 @@ class TestCCFFromRiskType:
         ccf_calculator: CCFCalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """A-IRB should fall back to SA CCF when ccf_modelled is null."""
+        """A-IRB should fall back to the F-IRB supervisory CCF when ccf_modelled is null.
+
+        ``is_obs_commitment`` is absent here and defaults to True (a credit
+        line/commitment), so this MR row is in Art. 166(8)(d)/166(9) scope. A
+        null ``ccf_modelled`` therefore falls back to the F-IRB supervisory
+        Art. 166(8)(d) 75% CCF, not the SA Art. 111 CCF.
+        """
         exposures = pl.DataFrame(
             {
                 "exposure_reference": ["AIRB_NULL"],
@@ -822,9 +939,10 @@ class TestCCFFromRiskType:
 
         result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
 
-        # A-IRB without ccf_modelled should fall back to SA (MR = 50%)
-        assert result["ccf"][0] == pytest.approx(0.50)
-        assert result["ead_from_ccf"][0] == pytest.approx(50000.0)
+        # A-IRB without ccf_modelled falls back to the F-IRB supervisory CCF
+        # (Art. 166(8)(d)): MR = 75%.
+        assert result["ccf"][0] == pytest.approx(0.75)
+        assert result["ead_from_ccf"][0] == pytest.approx(75000.0)
 
     def test_risk_type_case_insensitive(
         self,
@@ -1979,12 +2097,15 @@ class TestFullRiskCommitmentCCF:
 
         assert result["ccf"][0] == pytest.approx(1.0)
 
-    def test_airb_frc_crr_uses_modelled(
+    def test_airb_frc_crr_ignores_modelled_out_of_scope(
         self,
         ccf_calculator: CCFCalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """CRR A-IRB FRC: can use own-estimate CCF (no Art. 166D restriction)."""
+        """CRR A-IRB FRC: full-risk substitutes are out of Art. 166(9) own-estimate
+        scope, so a modelled CCF is suppressed and the Art. 166(10)(a) supervisory
+        100% CCF applies regardless of the modelled value.
+        """
         exposures = pl.DataFrame(
             {
                 "exposure_reference": ["AIRB_FRC_CRR"],
@@ -1998,7 +2119,7 @@ class TestFullRiskCommitmentCCF:
 
         result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
 
-        assert result["ccf"][0] == pytest.approx(0.80)
+        assert result["ccf"][0] == pytest.approx(1.00)
 
     # --- RWA impact test ---
 

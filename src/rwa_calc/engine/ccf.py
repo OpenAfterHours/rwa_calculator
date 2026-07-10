@@ -440,6 +440,14 @@ class CCFCalculator:
         residential-property commitment (``is_uk_residential_mortgage_commitment``)
         gets a 50% SA CCF under Basel 3.1, except where the otherwise-resolved
         CCF is 10% (Row 6 UCC) or 100% (Row 2) — the Row 4(b) carve-out.
+
+        References:
+        - CRR Art. 111(1) / Annex I: SA CCF buckets.
+        - CRR Art. 166(8)(a)-(d): F-IRB bespoke supervisory CCFs.
+        - CRR Art. 166(9): own-estimate (modelled) A-IRB CCFs are admissible
+          only within the Art. 166(8) product scope.
+        - CRR Art. 166(10): residual supervisory fallback for issued OBS items
+          outside the Art. 166(8) scope.
         """
         # CRR Annex I / Art. 111(1): resolve risk_type from the concrete OBS
         # product when (and only when) no explicit risk_type was supplied. Explicit
@@ -556,7 +564,25 @@ class CCFCalculator:
                 .otherwise(pl.col("_sa_ccf_from_risk_type"))
             )
         else:
-            airb_ccf = ccf_modelled_expr.fill_null(pl.col("_sa_ccf_from_risk_type"))
+            # CRR Art. 166(9): own-estimate (modelled) A-IRB CCFs are admissible
+            # only within the Art. 166(8) product scope — undrawn commitments
+            # (``is_obs_commitment``) and short-term trade LCs
+            # (``is_short_term_trade_lc``) — and never for FR/FRC full-risk
+            # substitutes. Out-of-scope rows (issued OBS items governed by
+            # Art. 166(10), full-risk items) take the supervisory F-IRB CCF
+            # unconditionally, so a spuriously low modelled value is ignored.
+            # In scope, a null modelled CCF falls back to the Art. 166(8)/(10)
+            # supervisory value (``_firb_ccf_from_risk_type``), NOT the SA
+            # Art. 111 CCF.
+            in_166_8_scope = (
+                pl.col("is_obs_commitment").fill_null(True)
+                | pl.col("is_short_term_trade_lc").fill_null(False)
+            ) & ~_normalize_risk_type("risk_type").is_in(["FR", "FRC"])
+            airb_ccf = (
+                pl.when(in_166_8_scope)
+                .then(ccf_modelled_expr.fill_null(pl.col("_firb_ccf_from_risk_type")))
+                .otherwise(pl.col("_firb_ccf_from_risk_type"))
+            )
 
         # Select final CCF based on approach
         return exposures.with_columns(

@@ -245,6 +245,7 @@ def apply_short_term_rating_override(
         ]
     )
     exposures = _apply_obligor_short_term_spillover(exposures)
+    exposures = _apply_obligor_st_140_2_flags(exposures)
     return exposures.drop(
         [f"_st_{s}_cqs" for s in joined_scopes] + ["_st_assessment_cqs", "_general_cqs"]
     )
@@ -871,6 +872,69 @@ def _apply_obligor_short_term_spillover(exposures: pl.LazyFrame) -> pl.LazyFrame
         [
             (pl.col("has_short_term_ecai") | spill).alias("has_short_term_ecai"),
             pl.when(spill).then(obligor_st_cqs).otherwise(pl.col("cqs")).cast(pl.Int8).alias("cqs"),
+        ]
+    )
+
+
+def _apply_obligor_st_140_2_flags(exposures: pl.LazyFrame) -> pl.LazyFrame:
+    """Derive the obligor-level CRR Art. 140(2)(a)/(b) spillover flags.
+
+    CRR Art. 140(2): a short-term credit assessment applies only to the item
+    it refers to, EXCEPT that its risk weight spills across the obligor —
+
+    - (a) if a short-term rated facility is assigned a 150% risk weight
+      (Art. 131 Table 7, short-term-assessment CQS 4/5/6) then ALL unrated
+      unsecured exposures on that obligor, whether short- or long-term, are
+      also assigned 150%;
+    - (b) if a short-term rated facility is assigned a 50% risk weight
+      (Table 7 CQS 2) then no unrated short-term exposure on that obligor may
+      be assigned a risk weight lower than 100%.
+
+    This helper derives the two obligor-level booleans; the SA stage
+    (engine/sa/risk_weights.py) applies the force / floor after the base
+    risk-weight lookup. It mirrors ``_apply_obligor_short_term_spillover`` —
+    keying on the short-term-assessment CQS band (Table 7 maps CQS 2 -> 50%
+    and CQS 4/5/6 -> 150%), NOT a risk-weight scalar duplicated in the
+    hierarchy stage — and guards the window aggregate against null-key
+    partition collapse with ``partition_by_nullable``.
+
+    Reads ``_st_assessment_cqs`` (the matched short-term cqs, non-null only on
+    the directly-rated exposure) and ``has_short_term_ecai``, both produced by
+    ``apply_short_term_rating_override``. When those scratch columns are
+    absent (ratings-frame-absent early return) the flags are omitted here and
+    injected False by the hierarchy edge — i.e. no spillover.
+
+    Both short-term tables are identical across CRR and Basel 3.1 over this
+    cqs range, so the derivation is regime-independent.
+
+    References:
+        CRR Art. 140(2)(a)/(b); Art. 131 Table 7. PRA PS1/26 Art. 140(2)
+        (identical substance). BCBS CRE21.17-21.18.
+    """
+    schema = set(exposures.collect_schema().names())
+    required = {"counterparty_reference", "has_short_term_ecai", "_st_assessment_cqs"}
+    if not required <= schema:
+        return exposures
+
+    st_cqs = pl.col("_st_assessment_cqs")
+    has_st = pl.col("has_short_term_ecai")
+    # Directly-rated short-term facilities whose Table 7 weight is 150%
+    # (CQS 4/5/6) or 50% (CQS 2). ``_st_assessment_cqs`` is non-null only on
+    # the directly-rated exposure, so spilled P1.223 rows never contribute.
+    force_trigger = (has_st & (st_cqs >= 4)).fill_null(False)
+    floor_trigger = (has_st & (st_cqs == 2)).fill_null(False)
+    return exposures.with_columns(
+        [
+            partition_by_nullable(
+                force_trigger.any().over("counterparty_reference"),
+                "counterparty_reference",
+                pl.lit(False),  # noqa: FBT003
+            ).alias("obligor_st_force_150"),
+            partition_by_nullable(
+                floor_trigger.any().over("counterparty_reference"),
+                "counterparty_reference",
+                pl.lit(False),  # noqa: FBT003
+            ).alias("obligor_st_floor_100"),
         ]
     )
 

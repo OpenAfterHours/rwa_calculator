@@ -573,6 +573,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p1233,
         ),
         (
+            "P1.225 (Art. 140(2) obligor-level short-term ECAI contamination — 150%/100%)",
+            "p1_225",
+            _generate_p1225,
+        ),
+        (
             "P8.39 (CCR-CCP-1/CCP-2 orchestrator QCCP wiring — 2%/4% vs 50% anti-degenerate baseline)",
             "ccr",
             _generate_p839_ccp,
@@ -3092,6 +3097,19 @@ def _generate_p1233(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_233", None)
+
+
+def _generate_p1225(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.225 fixtures (Art. 140(2) obligor-level short-term ECAI contamination)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_225 import save_p1225_fixtures
+
+        saved = save_p1225_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_225", None)
 
 
 def _generate_p828_alpha(output_dir: Path) -> list[tuple[str, int]]:

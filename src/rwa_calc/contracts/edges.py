@@ -542,6 +542,25 @@ def _hierarchy_resolved_columns() -> dict[str, EdgeColumn]:
         ),
         "model_id": EdgeColumn(dtype=pl.String),
         "has_short_term_ecai": EdgeColumn(dtype=pl.Boolean),
+        # CRR Art. 140(2)(a)/(b): obligor-level short-term-ECAI spillover flags,
+        # derived by enrich.apply_short_term_rating_override (window-aggregated
+        # over counterparty_reference) and consumed by the SA stage
+        # (engine/sa/risk_weights.py). Optional/default-False so the ratings-
+        # absent early-return path conforms cleanly to "no spillover".
+        "obligor_st_force_150": EdgeColumn(
+            dtype=pl.Boolean,
+            required=False,
+            default=False,
+            fill_null_default=True,
+            citation="CRR Art. 140(2)(a)",
+        ),
+        "obligor_st_floor_100": EdgeColumn(
+            dtype=pl.Boolean,
+            required=False,
+            default=False,
+            fill_null_default=True,
+            citation="CRR Art. 140(2)(b)",
+        ),
         "original_currency": EdgeColumn(dtype=pl.String),
         "original_amount": EdgeColumn(dtype=pl.Float64),
         "fx_rate_applied": EdgeColumn(dtype=pl.Float64),

@@ -158,6 +158,16 @@ SA_INPUT_CONTRACT: dict[str, ColumnSpec] = {
     "prior_charge_ltv": ColumnSpec(pl.Float64, default=0.0, required=False),
     "is_short_term_trade_lc": ColumnSpec(pl.Boolean, default=False, required=False),
     "has_short_term_ecai": ColumnSpec(pl.Boolean, default=False, required=False),
+    # CRR Art. 140(2)(a)/(b) obligor-level short-term-ECAI spillover flags
+    # (derived in the hierarchy stage). Default False when the SA calculator is
+    # invoked without the obligor-flag producer (e.g. the CRM link-ranking
+    # preview, which runs before the flags/CRM columns are attached).
+    "obligor_st_force_150": ColumnSpec(pl.Boolean, default=False, required=False),
+    "obligor_st_floor_100": ColumnSpec(pl.Boolean, default=False, required=False),
+    # CRM outputs read by the Art. 140(2)(a) "unsecured" gate; absent on the
+    # pre-CRM link-ranking preview frame, so defaulted to "unsecured".
+    "is_guaranteed": ColumnSpec(pl.Boolean, default=False, required=False),
+    "collateral_coverage_pct": ColumnSpec(pl.Float64, default=0.0, required=False),
     "is_payroll_loan": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_qrre_transactor": ColumnSpec(pl.Boolean, default=False, required=False),
     "sl_type": ColumnSpec(pl.String, required=False),
@@ -342,6 +352,12 @@ def apply_risk_weights(
         exposures = _apply_crr_risk_weight_overrides(
             exposures, uc, is_domestic_currency, is_uk_domestic
         )
+
+    # CRR Art. 140(2)(a)/(b): obligor-level short-term-ECAI spillover. Applied
+    # after the base RW lookup (as a max) so an obligor's 150%/50% short-term
+    # rated facility contaminates its unrated exposures. Regime-uniform — the
+    # Art. 131 Table 7 values are identical to PRA PS1/26 Table 4A / Table 6A.
+    exposures = _apply_obligor_st_contamination(exposures)
 
     # Art. 121(6) (CRR) / CRE20.22 (Basel 3.1): Sovereign RW floor for
     # FX-denominated unrated institution exposures. Exception:
@@ -1456,6 +1472,60 @@ def _apply_crr_risk_weight_overrides(
         .alias("risk_weight")
     )
     return exposures
+
+
+def _apply_obligor_st_contamination(exposures: pl.LazyFrame) -> pl.LazyFrame:
+    """Apply the CRR Art. 140(2)(a)/(b) obligor-level short-term-ECAI spillover.
+
+    Consumes the two obligor-level flags derived in the hierarchy stage
+    (``obligor_st_force_150`` / ``obligor_st_floor_100``,
+    engine/stages/hierarchy/enrich.py) and adjusts the base risk weight for
+    the obligor's unrated claims:
+
+    - (a) ``obligor_st_force_150`` -> every UNRATED, UNSECURED exposure on the
+      obligor (short- OR long-term) is forced to 150% (Art. 131 Table 7
+      CQS 4-6), applied as ``max`` so an already-higher weight is never
+      lowered;
+    - (b) ``obligor_st_floor_100`` -> every UNRATED SHORT-TERM exposure on the
+      obligor is floored at 100% (``max(risk_weight, 100%)``).
+
+    The directly short-term-rated trigger facilities are excluded — they carry
+    their own cqs / ``has_short_term_ecai`` and keep their Table 7 weight. The
+    Table 7 scalars are read from the pack-bound ``_SA_CRR_RW`` overlay (values
+    identical to PRA PS1/26 Table 4A / Table 6A over this cqs range), so no
+    risk-weight scalar is inlined.
+
+    References:
+        CRR Art. 140(2)(a)/(b); Art. 131 Table 7. PRA PS1/26 Art. 140(2)
+        (identical substance). BCBS CRE21.17-21.18.
+    """
+    force = pl.col("obligor_st_force_150").fill_null(False)
+    floor = pl.col("obligor_st_floor_100").fill_null(False)
+    # "Unrated" = no own external cqs AND not itself short-term-ECAI-rated
+    # (the trigger facilities keep their Table 7 weight).
+    own_unrated = pl.col("cqs").is_null() | (pl.col("cqs") <= 0)
+    not_st_rated = ~pl.col("has_short_term_ecai").fill_null(False)
+    is_unrated = own_unrated & not_st_rated
+    # Art. 140(2)(a) "unsecured" = no guarantee and no collateral coverage.
+    is_unsecured = ~pl.col("is_guaranteed").fill_null(False) & (
+        pl.col("collateral_coverage_pct").fill_null(0.0) <= 0.0
+    )
+    # Art. 140(2)(b) short-term window reuses the Art. 121/131 <=3m
+    # original-maturity gate that drives the base short-term branches.
+    is_short_term = pl.col("original_maturity_years").fill_null(1.0) <= 0.25
+
+    rw = pl.col("risk_weight")
+    force_rw = pl.lit(_SA_CRR_RW["st_ecai_high"])  # Table 7 CQS 4-6 = 150%
+    floor_rw = pl.lit(_SA_CRR_RW["st_ecai_cqs3"])  # Art. 140(2)(b) floor = 100% (Table 7 CQS 3)
+
+    return exposures.with_columns(
+        pl.when(force & is_unrated & is_unsecured)
+        .then(pl.max_horizontal(rw, force_rw))
+        .when(floor & is_unrated & is_short_term)
+        .then(pl.max_horizontal(rw, floor_rw))
+        .otherwise(rw)
+        .alias("risk_weight")
+    )
 
 
 def _apply_sovereign_floor_for_institutions(

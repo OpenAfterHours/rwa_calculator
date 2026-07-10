@@ -64,6 +64,21 @@ def _ours_irb() -> pl.LazyFrame:
     )
 
 
+def _ours_nan_rwa() -> pl.LazyFrame:
+    """Our results with one non-finite ``rwa_final`` (L2), e.g. an IRB
+    maturity-adjustment blow-up upstream — the case that used to blank the total."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["L1", "L2", "L3"],
+            "exposure_class": ["corporate", "retail", "corporate"],
+            "approach_applied": ["AIRB", "AIRB", "AIRB"],
+            "ead_final": [100.0, 200.0, 500.0],
+            "rwa_final": [50.0, float("nan"), 250.0],
+            "risk_weight": [0.50, 0.75, 0.50],
+        }
+    )
+
+
 def _legacy() -> pl.LazyFrame:
     return pl.LazyFrame(
         {
@@ -636,6 +651,73 @@ class TestDataQualityWarnings:
 
         # Assert: no spurious non-finite warning.
         assert not any(e.code == ERROR_RECON_NON_FINITE_VALUE for e in bundle.errors)
+
+    def test_non_finite_our_value_still_yields_finite_tie_out(self) -> None:
+        # Arrange / Act: L2 rwa is NaN; the tie-out must report the finite rows
+        # (NaN treated as 0) instead of a blank NaN total, while REC006 still fires.
+        bundle = _recon(_ours_nan_rwa(), _legacy(), _mapping())
+        rwa = (
+            bundle.totals_tie_out.collect().filter(pl.col("component") == "rwa").row(0, named=True)
+        )
+
+        # Assert: 50 + (NaN->0) + 250 = 300; delta + pct are finite, not blank.
+        assert rwa["our_total"] == pytest.approx(300.0)  # would be NaN before the fix
+        assert rwa["delta"] == pytest.approx(300.0 - 500.3)
+        assert rwa["delta_pct"] is not None
+        assert any(e.code == ERROR_RECON_NON_FINITE_VALUE for e in bundle.errors)
+
+    def test_non_finite_our_value_still_yields_finite_summary(self) -> None:
+        # Arrange / Act: the per-component summed |delta| skips the NaN row.
+        df = _recon(_ours_nan_rwa(), _legacy(), _mapping()).summary_by_component.collect()
+        rwa = df.filter(pl.col("component") == "rwa").row(0, named=True)
+
+        # Assert: |L1 0| + |L2 NaN->0| + |L3 -50| = 50, not NaN.
+        assert rwa["sum_abs_delta"] == pytest.approx(50.0)
+
+    def test_non_finite_our_value_still_yields_finite_class_allocation(self) -> None:
+        # Arrange: corporate = L1 (50) + L3 (NaN); one bad row must not blank the class.
+        ours = pl.LazyFrame(
+            {
+                "exposure_reference": ["L1", "L2", "L3"],
+                "exposure_class": ["corporate", "retail", "corporate"],
+                "approach_applied": ["SA", "SA", "SA"],
+                "ead_final": [100.0, 200.0, 500.0],
+                "rwa_final": [50.0, 150.0, float("nan")],
+                "risk_weight": [0.50, 0.75, 0.50],
+            }
+        )
+        legacy = pl.LazyFrame(
+            {
+                "loan_id": ["L1", "L2", "L3"],
+                "legacy_ead": [100.0, 200.0, 480.0],
+                "legacy_rwa": [50.0, 150.0, 240.0],
+                "legacy_exposure_class": ["CORP", "RETAIL", "CORP"],
+            }
+        )
+        mapping = LegacyColumnMapping(
+            legacy_keys=("loan_id",),
+            our_keys=("exposure_reference",),
+            components={
+                "ead": ComponentMapping("legacy_ead"),
+                "rwa": ComponentMapping("legacy_rwa"),
+                "exposure_class": ComponentMapping(
+                    "legacy_exposure_class", value_map={"CORP": "corporate", "RETAIL": "retail"}
+                ),
+            },
+        )
+
+        # Act
+        corp = (
+            _recon(ours, legacy, mapping)
+            .class_allocation.collect()
+            .filter(pl.col("exposure_class") == "corporate")
+            .row(0, named=True)
+        )
+
+        # Assert: rwa = 50 + (NaN->0) = 50 (finite); EAD unaffected; deltas finite.
+        assert corp["our_rwa"] == pytest.approx(50.0)  # would be NaN before the fix
+        assert corp["our_ead"] == pytest.approx(600.0)
+        assert corp["delta_rwa"] == pytest.approx(50.0 - 290.0)
 
 
 class TestMateriality:

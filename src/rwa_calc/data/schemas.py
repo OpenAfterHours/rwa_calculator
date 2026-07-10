@@ -164,6 +164,13 @@ FACILITY_SCHEMA: dict[str, ColumnSpec] = {
     "counterparty_reference": ColumnSpec(pl.String),
     "value_date": ColumnSpec(pl.Date, required=False),
     "maturity_date": ColumnSpec(pl.Date, required=False),
+    # CRR Art. 111(1) / Annex I items 2(b),3(b): original maturity (years) of an
+    # "other commitment" (OC). The SA CCF engine keys the 50% (MR, original > 1yr)
+    # / 20% (MLR, original <= 1yr) split on ORIGINAL — not residual — maturity.
+    # Nullable; when absent the engine falls back to (maturity_date - value_date),
+    # else the conservative 50% MR default. Mirrors the nullable
+    # original_maturity_years on GUARANTEE_SCHEMA / COLLATERAL_SCHEMA.
+    "original_maturity_years": ColumnSpec(pl.Float64, required=False),
     "currency": ColumnSpec(pl.String, required=False),
     "limit": ColumnSpec(pl.Float64, required=False),
     "committed": ColumnSpec(pl.Boolean, default=True, required=False),
@@ -330,6 +337,9 @@ CONTINGENTS_SCHEMA: dict[str, ColumnSpec] = {
     "counterparty_reference": ColumnSpec(pl.String),
     "value_date": ColumnSpec(pl.Date, required=False),
     "maturity_date": ColumnSpec(pl.Date, required=False),
+    # CRR Art. 111(1) / Annex I items 2(b),3(b): OC original maturity (years).
+    # Mirrored from FACILITY_SCHEMA; see the FACILITY_SCHEMA notes for full detail.
+    "original_maturity_years": ColumnSpec(pl.Float64, required=False),
     "currency": ColumnSpec(pl.String, required=False),
     "nominal_amount": ColumnSpec(pl.Float64, default=0.0, required=False),
     "lgd": ColumnSpec(pl.Float64, required=False),
@@ -2113,6 +2123,8 @@ RAW_EXPOSURE_SCHEMA = {
     "counterparty_reference": pl.String,
     "value_date": pl.Date,
     "maturity_date": pl.Date,
+    # CRR Art. 111(1)/Annex I 2(b),3(b): OC original maturity (years) for the SA CCF MR/MLR split
+    "original_maturity_years": pl.Float64,
     "currency": pl.String,
     "drawn_amount": pl.Float64,  # Drawn balance (0 for facilities without loans)
     "interest": pl.Float64,  # Accrued interest (adds to on-balance-sheet EAD, not undrawn)
@@ -2155,6 +2167,8 @@ RESOLVED_HIERARCHY_SCHEMA = {
     "counterparty_reference": pl.String,
     "value_date": pl.Date,
     "maturity_date": pl.Date,
+    # CRR Art. 111(1)/Annex I 2(b),3(b): OC original maturity (years) for the SA CCF MR/MLR split
+    "original_maturity_years": pl.Float64,
     "currency": pl.String,
     "drawn_amount": pl.Float64,
     "interest": pl.Float64,  # Accrued interest (adds to on-balance-sheet EAD, not undrawn)

@@ -89,9 +89,10 @@ _SA_CCF_DEFAULT = scalar_value(_CRR_PACK.scalar_param("sa_ccf_default"))
 _FIRB_TRADE_LC_CCF = scalar_value(_CRR_PACK.scalar_param("firb_trade_lc_ccf"))
 _FIRB_CREDIT_LINE_CCF = scalar_value(_CRR_PACK.scalar_param("firb_credit_line_ccf"))
 _OC_SHORT_MATURITY_CCF = scalar_value(_CRR_PACK.scalar_param("oc_short_maturity_ccf"))
-# CRR Art. 111(1): "other commitments" remap to the 20% MLR CCF at/below this
-# remaining-maturity day boundary. Integer day count compared int-to-int against
-# ``.dt.total_days()`` (no float coercion) — sourced via IntParam (S13-c).
+# CRR Art. 111(1) / Annex I items 2(b),3(b): "other commitments" remap to the 20%
+# MLR CCF at/below this ORIGINAL-maturity day boundary (365 days = 1yr); above it
+# the 50% MR CCF applies. The split keys on ORIGINAL, not residual, maturity —
+# sourced via IntParam (S13-c).
 _OC_SHORT_MATURITY_THRESHOLD_DAYS = _CRR_PACK.int_param("oc_short_maturity_threshold_days").value
 # CRR Annex I / Art. 111(1) concrete OBS product -> abstract risk_type bucket,
 # rebound from the common pack at module load (framework-invariant — CRR Annex I
@@ -479,26 +480,15 @@ class CCFCalculator:
             ),
         )
 
-        # CRR maturity-dependent OC override: under CRR, "other commitments" mapped
-        # to MR (50%, >1yr) or MLR (20%, <=1yr). The sa_ccf_expression gives OC 50%
-        # as the conservative default; override to 20% when remaining maturity <= 1yr.
+        # CRR maturity-dependent OC override (Art. 111(1) / Annex I items 2(b),
+        # 3(b)): "other commitments" attract the MR 50% CCF when their ORIGINAL
+        # maturity is > 1yr (item 2(b)) and the MLR 20% CCF when it is <= 1yr
+        # (item 3(b)). The split keys on ORIGINAL maturity, not residual: the
+        # explicit ``original_maturity_years`` when present, else the
+        # (maturity_date - value_date) start-date fallback. With no origination
+        # source the conservative MR 50% default (from sa_ccf_expression) stands.
         if not is_b31:
-            normalized_rt = pl.col("risk_type").fill_null("").str.to_lowercase()
-            is_oc = normalized_rt.is_in(["oc", "other_commit"])
-            schema_names = exposures.collect_schema().names()
-            if "maturity_date" in schema_names:
-                is_short_maturity = pl.col("maturity_date").is_not_null() & (
-                    (
-                        pl.col("maturity_date").cast(pl.Date) - pl.lit(config.reporting_date)
-                    ).dt.total_days()
-                    <= _OC_SHORT_MATURITY_THRESHOLD_DAYS
-                )
-                exposures = exposures.with_columns(
-                    pl.when(is_oc & is_short_maturity)
-                    .then(pl.lit(_OC_SHORT_MATURITY_CCF))
-                    .otherwise(pl.col("_sa_ccf_from_risk_type"))
-                    .alias("_sa_ccf_from_risk_type"),
-                )
+            exposures = self._apply_oc_original_maturity_ccf(exposures)
 
         # PRA PS1/26 Art. 111(1) Table A1 Row 4(b): commitments to extend credit
         # secured by residential property attract a 50% CCF — "to the extent
@@ -584,6 +574,70 @@ class CCFCalculator:
             .then(pl.col("_firb_ccf_from_risk_type"))
             .otherwise(pl.col("_sa_ccf_from_risk_type"))
             .alias("ccf"),
+        )
+
+    # CRR Art. 111(1) / Annex I items 2(b) (MR 50%, original maturity > 1yr) and
+    # 3(b) (MLR 20%, original maturity <= 1yr). The MR/MLR split keys on ORIGINAL,
+    # not residual, maturity — see the oc_short_maturity_threshold_days scalar.
+    @cites("CRR Art. 111(1)")
+    def _apply_oc_original_maturity_ccf(
+        self,
+        exposures: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        """Remap the OC ("other commitments") SA CCF on ORIGINAL maturity (CRR).
+
+        CRR Annex I items 2(b)/3(b) split "other commitments" on their ORIGINAL
+        maturity: 50% (MR) when > 1yr, 20% (MLR) when <= 1yr. ``sa_ccf_expression``
+        supplies the conservative 50% MR default; this override drops the CCF to
+        the 20% MLR rate only where an original-maturity source exists and is at
+        or below the ``oc_short_maturity_threshold_days`` (365-day) boundary.
+
+        Original maturity is taken from ``original_maturity_years`` when present,
+        else the ``(maturity_date - value_date)`` start-date fallback. With neither
+        source the row keeps the conservative 50% MR default.
+        """
+        normalized_rt = pl.col("risk_type").fill_null("").str.to_lowercase()
+        is_oc = normalized_rt.is_in(["oc", "other_commit"])
+        schema_names = exposures.collect_schema().names()
+
+        # Preferred explicit source: original_maturity_years (years -> days on a
+        # 365-day year, matching the oc_short_maturity_threshold_days scalar).
+        if "original_maturity_years" in schema_names:
+            original_years_available = pl.col("original_maturity_years").is_not_null()
+            original_years_days = (
+                pl.col("original_maturity_years").cast(pl.Float64, strict=False) * 365.0
+            )
+        else:
+            original_years_available = pl.lit(False)
+            original_years_days = pl.lit(None, dtype=pl.Float64)
+
+        # Fallback source: (maturity_date - value_date) in days.
+        if "maturity_date" in schema_names and "value_date" in schema_names:
+            start_available = (
+                pl.col("maturity_date").is_not_null() & pl.col("value_date").is_not_null()
+            )
+            start_days = (
+                (pl.col("maturity_date").cast(pl.Date) - pl.col("value_date").cast(pl.Date))
+                .dt.total_days()
+                .cast(pl.Float64)
+            )
+        else:
+            start_available = pl.lit(False)
+            start_days = pl.lit(None, dtype=pl.Float64)
+
+        original_maturity_days = (
+            pl.when(original_years_available).then(original_years_days).otherwise(start_days)
+        )
+        has_original_source = original_years_available | start_available
+        is_short_original = has_original_source & (
+            original_maturity_days <= _OC_SHORT_MATURITY_THRESHOLD_DAYS
+        )
+
+        return exposures.with_columns(
+            pl.when(is_oc & is_short_original)
+            .then(pl.lit(_OC_SHORT_MATURITY_CCF))
+            .otherwise(pl.col("_sa_ccf_from_risk_type"))
+            .alias("_sa_ccf_from_risk_type"),
         )
 
     # PRA PS1/26 Art. 166E(5) — no CRR equivalent; the watchfire PS-instrument

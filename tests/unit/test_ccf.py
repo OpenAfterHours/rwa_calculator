@@ -1502,7 +1502,12 @@ class TestOtherCommitCCF:
         ccf_calculator: CCFCalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """CRR SA: OC with maturity <=1yr from reporting_date -> 20% CCF."""
+        """CRR SA: OC with ORIGINAL maturity <=1yr -> 20% CCF (Annex I item 3(b)).
+
+        Residual maturity is also <=1yr here, but ``original_maturity_years`` is
+        the field that governs the MR/MLR split (CRR Annex I 2(b)/3(b)) — this
+        is a genuine short-original-maturity case, not merely a short-residual one.
+        """
         exposures = pl.DataFrame(
             {
                 "exposure_reference": ["OC_SHORT"],
@@ -1511,6 +1516,7 @@ class TestOtherCommitCCF:
                 "risk_type": ["OC"],
                 "approach": ["standardised"],
                 "maturity_date": [date(2025, 6, 30)],  # ~6 months from 2024-12-31
+                "original_maturity_years": [0.75],  # original maturity <=1yr -> MLR 20%
             }
         ).lazy()
 
@@ -1524,7 +1530,12 @@ class TestOtherCommitCCF:
         ccf_calculator: CCFCalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """CRR SA: OC with maturity >1yr from reporting_date -> 50% CCF."""
+        """CRR SA: OC with ORIGINAL maturity >1yr -> 50% CCF (Annex I item 2(b)).
+
+        Residual maturity is also >1yr here, but the assertion is pinned to the
+        explicit origination path (``value_date`` / ``original_maturity_years``)
+        that governs the MR/MLR split, not the residual maturity_date.
+        """
         exposures = pl.DataFrame(
             {
                 "exposure_reference": ["OC_LONG"],
@@ -1533,6 +1544,8 @@ class TestOtherCommitCCF:
                 "risk_type": ["OC"],
                 "approach": ["standardised"],
                 "maturity_date": [date(2026, 6, 30)],  # ~18 months from 2024-12-31
+                "value_date": [date(2024, 6, 30)],  # cross-check: 2yr to maturity_date
+                "original_maturity_years": [2.0],  # original maturity >1yr -> MR 50%
             }
         ).lazy()
 
@@ -1546,7 +1559,13 @@ class TestOtherCommitCCF:
         ccf_calculator: CCFCalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """CRR SA: OC with maturity exactly 365 days from reporting_date -> 20% (<=1yr)."""
+        """CRR SA: OC with ORIGINAL maturity exactly 1yr (365 days) -> 20% (<=1yr).
+
+        CRR Annex I item 3(b): "up to and including one year" is an ORIGINAL-maturity
+        test, not a residual one. Residual maturity here is ~2yr (>365 days) — the
+        buggy residual-keyed implementation would return 50% for this row; only the
+        original-maturity path (``original_maturity_years == 1.0``) yields 20%.
+        """
         exposures = pl.DataFrame(
             {
                 "exposure_reference": ["OC_BOUNDARY"],
@@ -1554,13 +1573,55 @@ class TestOtherCommitCCF:
                 "nominal_amount": [100000.0],
                 "risk_type": ["OC"],
                 "approach": ["standardised"],
-                "maturity_date": [date(2025, 12, 31)],  # exactly 365 days from 2024-12-31
+                "maturity_date": [date(2026, 12, 31)],  # residual ~731 days, >365
+                "original_maturity_years": [1.0],  # original maturity exactly 1yr -> MLR 20%
             }
         ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
 
         assert result["ccf"][0] == pytest.approx(0.2)
+
+    def test_sa_pipeline_oc_50_percent_crr_seasoned_original_maturity(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CRR SA: OC MR/MLR split (Annex I 2(b)/3(b)) keys on ORIGINAL maturity.
+
+        P1.217 regression guard. All three rows share the same residual maturity
+        (~181 days, < 1yr from reporting_date 2024-12-31) so a residual-keyed
+        implementation would return 20% for every row. The CRR split is on
+        ORIGINAL maturity:
+
+        - Row A (OC_SEASONED): seasoned revolver, original maturity 3yr (>1yr)
+          -> MR 50%. This is the bug case — a residual-keyed engine wrongly
+          drops a seasoned >1yr facility to 20% CCF in its final year.
+        - Row B (OC_SHORT_ORIG): genuinely short original maturity, 0.75yr (<=1yr)
+          -> MLR 20%.
+        - Row C (OC_NO_ORIGINATION): residual <1yr but no origination data
+          (``value_date`` and ``original_maturity_years`` both null) -> no
+          original-maturity source, conservative default MR 50%.
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["OC_SEASONED", "OC_SHORT_ORIG", "OC_NO_ORIGINATION"],
+                "drawn_amount": [0.0, 0.0, 0.0],
+                "nominal_amount": [100000.0, 100000.0, 100000.0],
+                "risk_type": ["OC", "OC", "OC"],
+                "approach": ["standardised", "standardised", "standardised"],
+                # All three residuals are ~181 days (< 1yr) from reporting_date.
+                "maturity_date": [date(2025, 6, 30), date(2025, 6, 30), date(2025, 6, 30)],
+                "value_date": [date(2022, 6, 30), date(2024, 9, 30), None],
+                "original_maturity_years": [3.0, 0.75, None],
+            },
+            schema_overrides={"value_date": pl.Date, "original_maturity_years": pl.Float64},
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        assert result["ccf"].to_list() == pytest.approx([0.50, 0.20, 0.50])
+        assert result["ead_from_ccf"].to_list() == pytest.approx([50000.0, 20000.0, 50000.0])
 
     def test_sa_pipeline_oc_null_maturity_conservative_50(
         self,

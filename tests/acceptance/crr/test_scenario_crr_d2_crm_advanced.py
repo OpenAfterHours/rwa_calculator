@@ -246,11 +246,16 @@ def _collateral(
     residual_maturity_years: float | None = None,
     is_eligible_financial: bool = True,
     liquidation_period_days: int | None = 10,
+    is_main_index: bool | None = None,
 ) -> dict:
     # P1.186: default 10-day liquidation period for capital-markets collateral
     # (gold, equity, bonds) consistent with CRR Art. 224 Table 4 haircut lookup tests.
     # Non-SFT secured lending uses 20-day per Art. 224(2)(a); D-group scenarios here
     # test the haircut lookup itself, not the period-scaling behaviour.
+    # is_main_index: equity-only field (CRR Art. 224 Table 4). Left as None (null) by
+    # default, which P1.237 resolves to the CONSERVATIVE other-listed haircut (25%
+    # CRR / 30% B31) rather than the old anti-conservative main-index default —
+    # callers testing genuine main-index equity must pass is_main_index=True explicitly.
     return {
         "collateral_reference": ref,
         "collateral_type": collateral_type,
@@ -267,6 +272,7 @@ def _collateral(
         "original_maturity_years": None,
         "is_eligible_financial_collateral": is_eligible_financial,
         "is_eligible_irb_collateral": is_eligible_financial,
+        "is_main_index": is_main_index,
         "valuation_date": date(2025, 12, 31),
         "valuation_type": "market",
         "property_type": None,
@@ -662,15 +668,19 @@ class TestCRRD11_EquityCollateral:
     """Equity collateral at CRR 15% main-index supervisory haircut.
 
     Borrower: unrated corporate (100% RW), GBP 1M drawn
-    Collateral: equity, market value GBP 500k
+    Collateral: equity, market value GBP 500k, ``is_main_index=True``
     After 15% haircut: recognised value = 500k × (1 - 0.15) = 425k
     EAD = max(0, 1M - 425k) = 575k
 
     Expected: EAD ≈ 575k, RWA ≈ 575k.
 
-    Note: The ``is_main_index`` field on COLLATERAL_SCHEMA now drives the
-    haircut lookup (P6.21). When absent, falls back to
-    ``is_eligible_financial_collateral`` for backward compatibility.
+    Note: The ``is_main_index`` field on COLLATERAL_SCHEMA drives the equity
+    haircut lookup (P6.21). Since P1.237, a null/unreported ``is_main_index``
+    resolves to the CONSERVATIVE other-listed haircut (CRR 25%), not the
+    main-index one — an unreported index membership is no longer treated as
+    evidence of main-index status (CRR Art. 224). This class asserts genuine
+    main-index behaviour, so the fixture sets ``is_main_index=True``
+    explicitly rather than relying on the (now conservative) null default.
 
     Reference: CRR Art. 224 Table 4 — main-index equity haircut 15%.
     """
@@ -687,6 +697,7 @@ class TestCRRD11_EquityCollateral:
                     "LOAN_D11",
                     "equity",
                     500_000.0,
+                    is_main_index=True,
                 ),
             ],
         )

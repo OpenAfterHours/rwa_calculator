@@ -1,10 +1,11 @@
 {
   "_comment": "Architecture-debt ratchet baseline (arch_check check 11). Counts may not increase (cites_decorators may not decrease). Regenerate after an improvement with: python scripts/arch_check.py --update-baseline",
   "_note_20260710_2012": "P1.223 obligor short-term ECAI spillover (enrich.py::_apply_obligor_short_term_spillover) adds 3 null-safe fill_null gates, 1 required<=schema presence guard, and 1 collect_schema().names() — all defensive and required so the function no-ops when scratch/date columns are absent and null dates fall back conservatively to not-short-term. Bumped fill_null 448->451, presence_guard 363->364, collect_schema 156->157.",
-  "engine_fill_null_sites": 451,
+  "_note_20260710_2145": "P1.225 CRR Art. 140(2) obligor-level short-term-ECAI contamination adds the two obligor Boolean flags (obligor_st_force_150/obligor_st_floor_100) threaded through contracts/edges.py + SA_INPUT_CONTRACT and the force/floor helper _apply_obligor_st_contamination in sa/risk_weights.py — all null-safe fill_null defaults for the new optional columns + one collect_schema presence guard so the preview path can't crash; the helper grows risk_weights.py to the new max module LOC. Bumped fill_null 451->459, collect_schema 157->158, max_engine_module_loc 1625->1695 (risk_weights.py). P1.248 (formulas.py blend gate) added no defensive surface.",
+  "engine_fill_null_sites": 459,
   "engine_presence_guard_sites": 364,
-  "engine_collect_schema_sites": 157,
+  "engine_collect_schema_sites": 158,
   "engine_eager_collect_sites": 33,
-  "max_engine_module_loc": 1625,
+  "max_engine_module_loc": 1695,
   "cites_decorators": 196
 }

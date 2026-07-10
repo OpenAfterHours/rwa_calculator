@@ -100,14 +100,32 @@ class TestCRRGroupD_CreditRiskMitigation:
         expected_outputs_dict: dict[str, dict[str, Any]],
     ) -> None:
         """
-        CRR-D3: Equity collateral (main index) has 15% haircut.
+        CRR-D3: Equity collateral with unreported index membership — 25% haircut.
 
-        Input: Exposure, FTSE 100 equity collateral
-        Expected: 15% haircut (vs 25% for non-main index)
+        Input: £1M exposure, £400k equity collateral (fixture COLL_CRM_D3 does
+        not set ``is_main_index`` — it is null), 20-day secured-lending
+        liquidation period.
 
-        CRR Art. 224: Main index equity = 15% haircut
+        Since P1.237, a null ``is_main_index`` is no longer treated as evidence
+        of main-index membership and resolves to the CONSERVATIVE other-listed
+        haircut (was the anti-conservative main-index 15% default pre-P1.237).
+        Base other-listed haircut 25% scaled to 20-day: 25% x sqrt(2) = 35.355%.
+        Adjusted collateral = £400k x (1 - 0.35355) = £258,578.64.
+        EAD = RWA = £1,000,000 - £258,578.64 = £741,421.36.
+
+        Note: the shared fixture (``tests/fixtures/collateral/collateral.py``,
+        ``COLL_CRM_D3``) is out of scope for this test-file-only gate repair, so
+        this test asserts the recomputed literal directly rather than via the
+        (now stale) ``tests/expected_outputs/crr/expected_rwa_crr.csv`` golden
+        row, which still encodes the pre-P1.237 main-index 15% figure
+        (684,852.81). Genuine main-index equity coverage lives in
+        ``TestCRRD11_EquityCollateral`` (test_scenario_crr_d2_crm_advanced.py),
+        which explicitly sets ``is_main_index=True``.
+
+        CRR Art. 224 Table 4, Art. 224(2)(a), Art. 226(2).
         """
-        expected = expected_outputs_dict["CRR-D3"]
+        # expected_outputs_dict / golden CSV is stale post-P1.237 (see docstring);
+        # this test asserts the recomputed literal below instead.
         exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-D3"]
 
         result = get_result_for_exposure(pipeline_results_df, exposure_ref)
@@ -117,7 +135,7 @@ class TestCRRGroupD_CreditRiskMitigation:
 
         assert_rwa_within_tolerance(
             result["rwa_final"],
-            expected["rwa_after_sf"],
+            741_421.36,
             scenario_id="CRR-D3",
         )
 

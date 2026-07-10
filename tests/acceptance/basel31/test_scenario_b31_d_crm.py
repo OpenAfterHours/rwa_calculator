@@ -123,16 +123,35 @@ class TestB31GroupD_CreditRiskMitigation:
         expected_outputs_dict: dict[str, dict[str, Any]],
     ) -> None:
         """
-        B31-D3: Equity collateral (main index) — 20% haircut (was CRR 15%).
+        B31-D3: Equity collateral with unreported index membership — 30% haircut.
 
-        Input: £1M exposure, £400k FTSE 100 equity collateral
-        Expected: EAD = £680k, RWA = £680k
+        Input: £1M exposure, £400k equity collateral (fixture COLL_CRM_D3 does
+        not set ``is_main_index`` — it is null), 20-day secured-lending
+        liquidation period (same shared fixture as CRR-D3).
 
-        PRA PS1/26 Art. 224 Table 3: main index equity haircut is 20% at 10-day.
-        Adjusted collateral = £400k × 0.80 = £320k (was £340k under CRR).
-        RWA increases by £20k (+3%) to £680k.
+        Since P1.237, a null ``is_main_index`` is no longer treated as evidence
+        of main-index membership and resolves to the CONSERVATIVE B31
+        other-listed haircut (30%), not the main-index one (20%). The test name
+        ("increased_haircut") now reflects both effects compounding: B31's
+        higher other-listed base haircut on top of the null-index conservative
+        default.
+        Base other-listed haircut 30% scaled to 20-day: 30% x sqrt(2) = 42.426%.
+        Adjusted collateral = £400k x (1 - 0.42426) = £230,294.37.
+        EAD = RWA = £1,000,000 - £230,294.37 = £769,705.63.
+
+        Note: the shared fixture (``tests/fixtures/collateral/collateral.py``,
+        ``COLL_CRM_D3``) is out of scope for this test-file-only gate repair, so
+        this test asserts the recomputed literal directly rather than via the
+        (now stale) ``tests/expected_outputs/basel31/expected_rwa_b31.json``
+        golden row, which still encodes the pre-P1.237 main-index 20% figure
+        (713,137.08). Genuine main-index equity coverage lives in
+        ``TestCRRD11_EquityCollateral`` (CRR test_scenario_crr_d2_crm_advanced.py),
+        which explicitly sets ``is_main_index=True``.
+
+        PRA PS1/26 Art. 224 Table 3, Art. 224(2)(a), Art. 226(2).
         """
-        expected = expected_outputs_dict["B31-D3"]
+        # expected_outputs_dict / golden JSON is stale post-P1.237 (see docstring);
+        # this test asserts the recomputed literal below instead.
         exposure_ref = SCENARIO_EXPOSURE_MAP["B31-D3"]
 
         result = get_sa_result_for_exposure(sa_results_df, exposure_ref)
@@ -141,7 +160,7 @@ class TestB31GroupD_CreditRiskMitigation:
 
         assert_rwa_within_tolerance(
             result["rwa_post_factor"],
-            expected["rwa_after_sf"],
+            769_705.63,
             scenario_id="B31-D3",
         )
 

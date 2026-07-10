@@ -14,7 +14,9 @@ RGLA treatment (Art. 115) is identical under CRR and PRA PS1/26 Basel 3.1:
     - Unrated RGLAs: Sovereign-derived Table 1A (Art. 115(1)(a))
     - UK devolved administrations: 0% (PRA designation)
     - UK local authorities: 20% (PRA designation)
-    - Domestic-currency RGLA: 20% regardless of CQS (Art. 115(5))
+    - Domestic-currency RGLA: 20% regardless of CQS, but scoped to UK RGLAs
+      denominated and funded in sterling only (Art. 115(5)) -- non-UK
+      domestic-currency RGLAs (e.g. EU) fall through to Table 1A/1B instead
 
 References:
     - CRR Art. 115 / PRA PS1/26 Art. 115: RGLA risk weights
@@ -245,7 +247,13 @@ class TestCRRRGLARiskWeights:
         assert result["rwa"] == pytest.approx(5_000_000 * 0.20)
 
     def test_eu_domestic_currency_rgla(self, sa_calculator, crr_config):
-        """CRR EU RGLA in domestic currency (DE+EUR) → 20% (Art. 115(5))."""
+        """
+        CRR EU RGLA in domestic currency (DE+EUR), rated CQS 4 → 100%
+        (P1.222: Art. 115(5) is scoped to UK RGLAs denominated AND funded
+        in sterling only -- non-UK domestic-currency RGLAs are NOT exempt
+        from the flat 20% override and instead fall to Table 1B own-rating,
+        CQS 4 = 100%).
+        """
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("5000000"),
@@ -255,8 +263,9 @@ class TestCRRRGLARiskWeights:
             country_code="DE",
             currency="EUR",
         )
-        # Art. 115(5) domestic currency overrides CQS 4 (would be 100% from Table 1B)
-        assert result["risk_weight"] == pytest.approx(0.20)
+        # Art. 115(5) domestic-currency 20% is UK/GBP-scoped and does NOT apply
+        # here; falls through to Table 1B own-rating CQS 4 = 100%.
+        assert result["risk_weight"] == pytest.approx(1.00)
 
     def test_non_uk_devolved_not_zero(self, sa_calculator, crr_config):
         """Non-UK rgla_sovereign does NOT get 0% — only UK devolved govts do."""

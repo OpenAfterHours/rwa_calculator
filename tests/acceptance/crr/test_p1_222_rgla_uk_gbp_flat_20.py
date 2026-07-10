@@ -55,11 +55,6 @@ from pathlib import Path
 
 import polars as pl
 import pytest
-
-from rwa_calc.contracts.bundles import RawDataBundle
-from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.domain.enums import ExposureClass
-from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.p1_222.p1_222 import (
     EAD,
     EXPECTED_EXPOSURE_CLASS,
@@ -68,6 +63,11 @@ from tests.fixtures.p1_222.p1_222 import (
     LOAN_REF,
 )
 from tests.fixtures.raw_bundle import make_raw_bundle
+
+from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import ExposureClass
+from rwa_calc.engine.pipeline import PipelineOrchestrator
 
 # ---------------------------------------------------------------------------
 # Fixture path

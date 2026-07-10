@@ -136,6 +136,26 @@ default mapping) to compare those drivers side-by-side. See the
 [Reconciliation guide](../reconciliation/index.md) for the mapping grammar and the
 output reference.
 
+**Reusing a calculation you already ran.** A reconciliation normally embeds a full
+engine run for our side. When the *identical* calculation has already run (same data
+path, framework, reporting date, permission mode and data format — and no input file
+has changed since), the form offers a pre-ticked
+**"Use results from the calculation completed at …"** checkbox: the engine run is
+skipped and the reconciliation starts straight from that run's cached results, so
+the stepper ticks every engine stage instantly and parks on the reconcile step.
+Untick it to force a recompute. Freshness is verified again at submit time against
+the input files' size/mtime signature — if anything changed in between, the run
+silently falls back to a full recompute (never a stale reuse). If a matching run
+exists but the data has changed, the form says so instead of offering the reuse.
+
+Every run seeds the reuse pool: calculator runs, both halves of a comparison run,
+and a full reconciliation's own embedded run — so any calc → compare → reconcile
+order pays for each framework's pipeline once. The pool **survives an app
+restart**: run caches and the reuse index persist under `~/.rwa_calc/` (or
+`$RWA_STATE_DIR`), capped at the ten most recent runs. The calculator page joins
+in too — when its pre-filled form matches a fresh run it shows a non-blocking
+"already ran — view its results" banner linking straight to the existing results.
+
 ---
 
 ## REST API
@@ -152,7 +172,7 @@ other tools). Interactive docs are at `/docs` (OpenAPI).
 | `GET`  | `/api/results/summary/{class\|approach}?run_id=…` | Portfolio summary |
 | `POST` | `/api/comparison` | Run CRR and Basel 3.1 with deltas |
 | `GET`  | `/api/comparison/export/{csv\|parquet\|excel}?comparison_id=…` | Download a comparison |
-| `POST` | `/api/reconcile` | Reconcile against a legacy output; returns a `recon_id` + tiers |
+| `POST` | `/api/reconcile` | Reconcile against a legacy output; returns a `recon_id` + tiers. Optional `run_id` reuses a registered calculation instead of re-running the pipeline (404 unknown, 422 mismatch) |
 | `GET`  | `/api/reconcile/export/{csv\|excel}?recon_id=…` | Download the reconciliation |
 | `GET`  | `/api/export/{parquet\|csv\|excel\|corep\|pillar3}?run_id=…` | Download an export |
 

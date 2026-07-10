@@ -25,7 +25,7 @@ import polars as pl
 import pytest
 from fastapi.testclient import TestClient
 
-from rwa_calc.api import create_api_app
+from rwa_calc.api import create_api_app, run_index
 from rwa_calc.api.service import CreditRiskCalc
 from rwa_calc.ui.views.reconciliation import DEFAULT_MAPPING_TOML
 from tests.fixtures.api_validation.build_mandatory_only import write_mandatory_minimum
@@ -33,6 +33,12 @@ from tests.fixtures.api_validation.build_mandatory_only import write_mandatory_m
 # =============================================================================
 # Fixtures
 # =============================================================================
+
+
+@pytest.fixture(autouse=True)
+def _clean_run_index() -> None:
+    """Each test starts with an empty calculation run index (module-level state)."""
+    run_index.clear()
 
 
 @pytest.fixture
@@ -344,3 +350,132 @@ def test_openapi_documents_reconcile(client: TestClient) -> None:
     schema = client.get("/openapi.json").json()
     assert "/api/reconcile" in schema["paths"]
     assert "post" in schema["paths"]["/api/reconcile"]
+
+
+# =============================================================================
+# Reconcile — explicit run_id reuse
+# =============================================================================
+
+
+def _calculate_run_id(client: TestClient, data_dir: str, framework: str = "CRR") -> str:
+    """Run /api/calculate and return the registered run_id."""
+    resp = client.post(
+        "/api/calculate",
+        json={
+            "data_path": data_dir,
+            "framework": framework,
+            "reporting_date": "2025-01-01",
+            "permission_mode": "standardised",
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    return body["run_id"]
+
+
+def test_reconcile_with_run_id_reuses_registered_run(
+    client: TestClient, recon_data_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange — a registered run; any pipeline re-run would raise.
+    run_id = _calculate_run_id(client, recon_data_dir)
+    monkeypatch.setattr(
+        CreditRiskCalc,
+        "calculate",
+        lambda self: (_ for _ in ()).throw(AssertionError("pipeline re-run")),
+    )
+    body = _reconcile_body(recon_data_dir)
+    body["run_id"] = run_id
+
+    # Act
+    resp = client.post("/api/reconcile", json=body)
+
+    # Assert — reconciled off the cached run (the nudged RWA still breaks).
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["success"] is True
+    assert payload["has_breaks"] is True
+
+
+def test_reconcile_with_unknown_run_id_is_404(client: TestClient, recon_data_dir: str) -> None:
+    body = _reconcile_body(recon_data_dir)
+    body["run_id"] = "not-a-run"
+
+    resp = client.post("/api/reconcile", json=body)
+
+    assert resp.status_code == 404
+
+
+def test_reconcile_with_mismatched_run_is_422(client: TestClient, recon_data_dir: str) -> None:
+    # An explicit run_id whose framework does not match the request must not be
+    # silently recomputed — the caller asked for THAT run.
+    run_id = _calculate_run_id(client, recon_data_dir, framework="CRR")
+    body = _reconcile_body(recon_data_dir)
+    body["framework"] = "BASEL_3_1"
+    body["run_id"] = run_id
+
+    resp = client.post("/api/reconcile", json=body)
+
+    assert resp.status_code == 422
+    assert "framework" in resp.json()["detail"]
+
+
+def test_reconcile_with_failed_run_id_is_422(client: TestClient, tmp_path: Path) -> None:
+    # A failed calculation is registered too; explicitly reusing it is an error.
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    resp = client.post(
+        "/api/calculate",
+        json={
+            "data_path": str(empty),
+            "framework": "CRR",
+            "reporting_date": "2025-01-01",
+            "permission_mode": "standardised",
+        },
+    )
+    run_id = resp.json()["run_id"]
+    assert resp.json()["success"] is False
+
+    body = _reconcile_body(str(empty))
+    body["run_id"] = run_id
+
+    assert client.post("/api/reconcile", json=body).status_code == 422
+
+
+def test_api_calculate_seeds_run_index(client: TestClient, data_dir: str) -> None:
+    run_id = _calculate_run_id(client, data_dir)
+
+    fingerprint = run_index.compute_fingerprint(
+        data_path=data_dir,
+        framework="CRR",
+        reporting_date=date(2025, 1, 1),
+        permission_mode="standardised",
+        data_format="parquet",
+    )
+    hit = run_index.find_reusable(fingerprint)
+
+    assert hit is not None
+    assert hit.run_id == run_id
+
+
+def test_api_comparison_seeds_run_index_for_both_frameworks(
+    client: TestClient, data_dir: str
+) -> None:
+    resp = client.post(
+        "/api/comparison",
+        json={
+            "data_path": data_dir,
+            "reporting_date": "2025-01-01",
+            "permission_mode": "standardised",
+        },
+    )
+    assert resp.status_code == 200
+
+    for framework in ("CRR", "BASEL_3_1"):
+        fingerprint = run_index.compute_fingerprint(
+            data_path=data_dir,
+            framework=framework,
+            reporting_date=date(2025, 1, 1),
+            permission_mode="standardised",
+            data_format="parquet",
+        )
+        assert run_index.find_reusable(fingerprint) is not None, framework

@@ -36,12 +36,6 @@ from pathlib import Path
 
 import polars as pl
 import pytest
-
-from rwa_calc.contracts.bundles import RawDataBundle
-from rwa_calc.contracts.config import CalculationConfig, PermissionMode
-from rwa_calc.data.column_spec import dtypes_of
-from rwa_calc.data.schemas import FACILITY_MAPPING_SCHEMA, LENDING_MAPPING_SCHEMA, LOAN_SCHEMA
-from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.p1_218.p1_218 import (
     BORROWER_REF,
     EXPECTED_BLENDED_RW,
@@ -58,6 +52,12 @@ from tests.fixtures.p1_218.p1_218 import (
     REPORTING_DATE,
 )
 from tests.fixtures.raw_bundle import make_raw_bundle
+
+from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.contracts.config import CalculationConfig, PermissionMode
+from rwa_calc.data.column_spec import dtypes_of
+from rwa_calc.data.schemas import FACILITY_MAPPING_SCHEMA, LENDING_MAPPING_SCHEMA, LOAN_SCHEMA
+from rwa_calc.engine.pipeline import PipelineOrchestrator
 
 # ---------------------------------------------------------------------------
 # Fixture paths

@@ -27,6 +27,7 @@ import re
 import time
 import urllib.parse
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 import httpx
@@ -36,11 +37,20 @@ from fastapi.testclient import TestClient
 
 from rwa_calc.analysis.recon_registry import ComponentMapping, LegacyColumnMapping
 from rwa_calc.analysis.reconciliation import ReconciliationRunner
-from rwa_calc.api.models import ReconciliationResponse
-from rwa_calc.api.rest import register_reconciliation_with_id
+from rwa_calc.api import run_index
+from rwa_calc.api.models import (
+    CalculationResponse,
+    ReconciliationResponse,
+    SummaryStatistics,
+)
+from rwa_calc.api.rest import register_reconciliation_with_id, register_run_with_id
 from rwa_calc.api.service import CreditRiskCalc
 from rwa_calc.ui.app.main import create_app
-from rwa_calc.ui.app.recon_state import STATE_DIR_ENV_VAR
+from rwa_calc.ui.app.recon_state import (
+    STATE_DIR_ENV_VAR,
+    ReconciliationFormState,
+    save_last_run,
+)
 from rwa_calc.ui.views.reconciliation import DEFAULT_MAPPING_TOML
 from tests.fixtures.api_validation.build_mandatory_only import write_mandatory_minimum
 
@@ -55,6 +65,12 @@ def _isolated_state_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setenv(STATE_DIR_ENV_VAR, str(tmp_path / "state"))
 
 
+@pytest.fixture(autouse=True)
+def _clean_run_index() -> None:
+    """Each test starts with an empty calculation run index (module-level state)."""
+    run_index.clear()
+
+
 @pytest.fixture
 def client() -> TestClient:
     # Loopback base_url so the app's TrustedHostMiddleware accepts test requests.
@@ -63,11 +79,17 @@ def client() -> TestClient:
 
 @pytest.fixture
 def recon_dir(tmp_path: Path) -> str:
-    """Mandatory-minimum dataset plus a legacy_output.csv derived from our results."""
-    write_mandatory_minimum(tmp_path)
+    """Mandatory-minimum dataset plus a legacy_output.csv derived from our results.
+
+    Lives in a subdir so the state home (tmp_path/"state", which holds the
+    persistent run caches) never sits inside the data path signature.
+    """
+    root = tmp_path / "data"
+    root.mkdir()
+    write_mandatory_minimum(root)
     ours = (
         CreditRiskCalc(
-            data_path=str(tmp_path),
+            data_path=str(root),
             framework="CRR",
             reporting_date=date(2025, 1, 1),
             permission_mode="standardised",
@@ -89,8 +111,8 @@ def recon_dir(tmp_path: Path) -> str:
         )
         .drop("_i")
     )
-    legacy.write_csv(tmp_path / "legacy_output.csv")
-    return str(tmp_path)
+    legacy.write_csv(root / "legacy_output.csv")
+    return str(root)
 
 
 def _form_data(data_path: str, mapping_toml: str = DEFAULT_MAPPING_TOML) -> dict:
@@ -771,3 +793,278 @@ def test_clear_all_from_the_overview(client: TestClient, recon_dir: str) -> None
     )
     assert cleared.status_code == 303
     assert "clear-all-signoff" not in client.get(f"/reconciliation/{job_id}").text
+
+
+# =============================================================================
+# Calculation reuse — skip the pipeline when a matching run already exists
+# =============================================================================
+
+
+def _seed_reusable_calculation(
+    data_dir: Path, results_dir: Path, run_id: str = "reuse-run"
+) -> CalculationResponse:
+    """Index a manufactured successful run for *data_dir*'s current state.
+
+    The results parquet lives OUTSIDE the data dir (a results file must never be
+    part of the input-data signature). Registered both in the run registry and
+    the run index, as the calculation worker does.
+    """
+    results_dir.mkdir(parents=True, exist_ok=True)
+    results_path = results_dir / "last_results.parquet"
+    pl.DataFrame(
+        {
+            "exposure_reference": ["L1"],
+            "exposure_class": ["corporate"],
+            "approach_applied": ["SA"],
+            "ead_final": [100.0],
+            "rwa_final": [50.0],
+        }
+    ).write_parquet(results_path)
+    response = CalculationResponse(
+        success=True,
+        framework="CRR",
+        reporting_date=date(2025, 1, 1),
+        summary=SummaryStatistics(
+            total_ead=Decimal("100"),
+            total_rwa=Decimal("50"),
+            exposure_count=1,
+            average_risk_weight=Decimal("0.5"),
+        ),
+        results_path=results_path,
+    )
+    fingerprint = run_index.compute_fingerprint(
+        data_path=data_dir,
+        framework="CRR",
+        reporting_date=date(2025, 1, 1),
+        permission_mode="standardised",
+        data_format="parquet",
+    )
+    run_index.register_calculation(fingerprint, run_id, response)
+    register_run_with_id(run_id, response)
+    return response
+
+
+def _seed_recon_form_state(data_dir: Path) -> None:
+    """Persist a last-run form state so GET /reconciliation pre-fills *data_dir*."""
+    save_last_run(
+        ReconciliationFormState(
+            data_path=str(data_dir),
+            reporting_date="2025-01-01",
+            framework="CRR",
+            permission_mode="standardised",
+            data_format="parquet",
+            mapping_toml=DEFAULT_MAPPING_TOML,
+        )
+    )
+
+
+@pytest.fixture
+def reuse_dir(tmp_path: Path) -> Path:
+    """A minimal data dir (one parquet input) plus a matching legacy_output.csv."""
+    data_dir = tmp_path / "reuse_data"
+    data_dir.mkdir()
+    pl.DataFrame({"id": ["1"]}).write_parquet(data_dir / "exposures.parquet")
+    pl.DataFrame(
+        {"exposure_reference": ["L1"], "EAD": [100.0], "RWA": [75.0]}  # RWA break
+    ).write_csv(data_dir / "legacy_output.csv")
+    return data_dir
+
+
+def test_form_offers_reuse_when_matching_run_exists(
+    client: TestClient, reuse_dir: Path, tmp_path: Path
+) -> None:
+    # Arrange — an indexed run matching the form's pre-filled values.
+    _seed_reusable_calculation(reuse_dir, tmp_path / "results")
+    _seed_recon_form_state(reuse_dir)
+
+    # Act
+    form = client.get("/reconciliation")
+
+    # Assert — the reuse option renders, pre-ticked.
+    assert form.status_code == 200
+    assert 'name="reuse_calculation"' in form.text
+    assert "Use results from the calculation completed at" in form.text
+    assert "checked" in form.text
+
+
+def test_form_without_matching_run_has_no_reuse_option(client: TestClient) -> None:
+    form = client.get("/reconciliation")
+    assert form.status_code == 200
+    assert 'name="reuse_calculation"' not in form.text
+
+
+def test_form_notes_data_changed_when_inputs_modified(
+    client: TestClient, reuse_dir: Path, tmp_path: Path
+) -> None:
+    # Arrange — index a run, then change an input file so the signature misses.
+    _seed_reusable_calculation(reuse_dir, tmp_path / "results")
+    _seed_recon_form_state(reuse_dir)
+    pl.DataFrame({"id": ["1", "2"]}).write_parquet(reuse_dir / "exposures.parquet")
+
+    # Act
+    form = client.get("/reconciliation")
+
+    # Assert — a passive will-recompute note, no reuse checkbox.
+    assert form.status_code == 200
+    assert 'name="reuse_calculation"' not in form.text
+    assert "Input data has changed" in form.text
+
+
+def test_reuse_submit_skips_pipeline_and_renders_report(
+    client: TestClient, reuse_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange — a reusable run; any pipeline re-run would blow up the job.
+    _seed_reusable_calculation(reuse_dir, tmp_path / "results")
+    monkeypatch.setattr(
+        CreditRiskCalc,
+        "calculate",
+        lambda self: (_ for _ in ()).throw(AssertionError("pipeline re-run")),
+    )
+    data = _form_data(str(reuse_dir))
+    data["reuse_calculation"] = "1"
+
+    # Act
+    job_id = _dispatch_and_wait(client, data)
+
+    # Assert — the job completed off the cached run and the report renders,
+    # with every engine stage ticked instantly for the stepper replay.
+    status = client.get(f"/jobs/{job_id}").json()
+    assert status["status"] == "done"
+    assert status["success"] is True
+    assert len(status["completed"]) == status["total_stages"] + 1  # + recon tail
+    report = client.get(f"/reconciliation/{job_id}")
+    assert report.status_code == 200
+    assert "Headline" in report.text
+
+
+def test_reuse_submit_falls_back_to_full_run_when_stale(
+    client: TestClient, recon_dir: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange — index a run for the real dataset, then change an input file.
+    _seed_reusable_calculation(Path(recon_dir), tmp_path / "results")
+    pl.DataFrame({"extra": ["x"]}).write_parquet(Path(recon_dir) / "extra_input.parquet")
+    calls: list[int] = []
+    original = CreditRiskCalc.calculate
+
+    def _spy(self: CreditRiskCalc) -> CalculationResponse:
+        calls.append(1)
+        return original(self)
+
+    monkeypatch.setattr(CreditRiskCalc, "calculate", _spy)
+    data = _form_data(recon_dir)
+    data["reuse_calculation"] = "1"
+
+    # Act — the reuse request silently degrades to a full run.
+    job_id = _dispatch_and_wait(client, data)
+
+    # Assert — the pipeline really ran once and the report still renders.
+    assert calls == [1]
+    assert client.get(f"/jobs/{job_id}").json()["status"] == "done"
+    assert client.get(f"/reconciliation/{job_id}").status_code == 200
+
+
+def test_calculate_then_reconcile_reuses_end_to_end(
+    client: TestClient, recon_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange — a real calculation via the calculator form seeds the index.
+    calc_form = {
+        "data_path": recon_dir,
+        "reporting_date": "2025-01-01",
+        "framework": "CRR",
+        "permission_mode": "standardised",
+        "data_format": "parquet",
+        "output_folder": "",
+    }
+    posted = client.post("/calculate", data=calc_form, follow_redirects=False)
+    assert posted.status_code == 303
+    calc_job = posted.headers["location"].rsplit("/", 1)[1]
+    assert _wait_for_job(client, calc_job)["status"] == "done"
+
+    # The reconciliation form (pre-filled to the same values) offers the reuse.
+    _seed_recon_form_state(Path(recon_dir))
+    form = client.get("/reconciliation")
+    assert 'name="reuse_calculation"' in form.text
+
+    # Act — reconcile with reuse; any pipeline re-run would blow up the job.
+    monkeypatch.setattr(
+        CreditRiskCalc,
+        "calculate",
+        lambda self: (_ for _ in ()).throw(AssertionError("pipeline re-run")),
+    )
+    data = _form_data(recon_dir)
+    data["reuse_calculation"] = "1"
+    job_id = _dispatch_and_wait(client, data)
+
+    # Assert — reconciliation completed off the cached run.
+    status = client.get(f"/jobs/{job_id}").json()
+    assert status["status"] == "done"
+    assert status["success"] is True
+    assert "Headline" in client.get(f"/reconciliation/{job_id}").text
+
+
+def test_full_reconciliation_seeds_reuse_for_next_run(
+    client: TestClient, recon_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange — a recon-first session: the FULL run's embedded calculation must
+    # seed the index (and the run registry), so the next reconciliation is free.
+    _dispatch_and_wait(client, _form_data(recon_dir))
+
+    # The form (pre-filled from the saved run) now offers the reuse.
+    form = client.get("/reconciliation")
+    assert 'name="reuse_calculation"' in form.text
+
+    # Act — the second reconciliation reuses; a pipeline re-run would blow up.
+    monkeypatch.setattr(
+        CreditRiskCalc,
+        "calculate",
+        lambda self: (_ for _ in ()).throw(AssertionError("pipeline re-run")),
+    )
+    data = _form_data(recon_dir)
+    data["reuse_calculation"] = "1"
+    job_id = _dispatch_and_wait(client, data)
+
+    # Assert
+    status = client.get(f"/jobs/{job_id}").json()
+    assert status["status"] == "done"
+    assert status["success"] is True
+
+
+def test_reuse_survives_restart(
+    client: TestClient, recon_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange — a calculation through the calculator route persists its cache
+    # and index entry under the state dir.
+    posted = client.post(
+        "/calculate",
+        data={
+            "data_path": recon_dir,
+            "reporting_date": "2025-01-01",
+            "framework": "CRR",
+            "permission_mode": "standardised",
+            "data_format": "parquet",
+            "output_folder": "",
+        },
+        follow_redirects=False,
+    )
+    assert posted.status_code == 303
+    assert _wait_for_job(client, posted.headers["location"].rsplit("/", 1)[1])["status"] == "done"
+    _seed_recon_form_state(Path(recon_dir))
+
+    # Act — simulate a restart: in-memory index gone, a fresh app boots and
+    # reloads the persisted index from the state dir.
+    run_index.clear()
+    client2 = TestClient(create_app(), base_url="http://localhost")
+    form = client2.get("/reconciliation")
+
+    # Assert — the reuse offer survived the restart, and reconciling off it
+    # completes without a pipeline re-run.
+    assert 'name="reuse_calculation"' in form.text
+    monkeypatch.setattr(
+        CreditRiskCalc,
+        "calculate",
+        lambda self: (_ for _ in ()).throw(AssertionError("pipeline re-run")),
+    )
+    data = _form_data(recon_dir)
+    data["reuse_calculation"] = "1"
+    job_id = _dispatch_and_wait(client2, data)
+    assert client2.get(f"/jobs/{job_id}").json()["success"] is True

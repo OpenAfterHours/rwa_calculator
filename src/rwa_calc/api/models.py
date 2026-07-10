@@ -364,7 +364,6 @@ class ValidationResponse:
         files_found: List of required files that were found
         files_missing: List of required files that are missing
         errors: List of validation errors
-        cached_path: Path to cached/processed Parquet files (if any)
     """
 
     valid: bool
@@ -372,7 +371,6 @@ class ValidationResponse:
     files_found: list[Path] = field(default_factory=list)
     files_missing: list[Path] = field(default_factory=list)
     errors: list[APIError] = field(default_factory=list)
-    cached_path: Path | str | None = None
 
     @property
     def missing_count(self) -> int:
@@ -407,6 +405,9 @@ class ReconciliationResponse:
         framework: Framework our side was run under (for the report header).
         reporting_date: As-of date of our run.
         errors: Non-fatal reconciliation warnings (REC001-REC004), API-friendly.
+        calculation: The our-side CalculationResponse this reconciliation was
+            built from (embedded run or caller-supplied reuse), so a caller can
+            index/register it for later reuse. None on the failure path.
     """
 
     success: bool
@@ -415,6 +416,7 @@ class ReconciliationResponse:
     framework: str | None = None
     reporting_date: date | None = None
     errors: list[APIError] = field(default_factory=list)
+    calculation: CalculationResponse | None = None
     # Per-frame collect cache: the bundle frames are lazy views over one
     # shared reconciliation plan, so a raw ``.collect()`` per accessor call
     # re-executes that plan every time. Accessors collect once via
@@ -438,6 +440,7 @@ class ReconciliationResponse:
         legacy_file: Path,
         framework: str | None = None,
         reporting_date: date | None = None,
+        calculation: CalculationResponse | None = None,
     ) -> ReconciliationResponse:
         """Build a response from an engine bundle, converting errors to APIError."""
         from rwa_calc.api.errors import convert_errors
@@ -452,6 +455,7 @@ class ReconciliationResponse:
             framework=framework,
             reporting_date=reporting_date,
             errors=convert_errors(bundle.errors),
+            calculation=calculation,
         )
 
     def scan_component_reconciliation(self) -> pl.LazyFrame:

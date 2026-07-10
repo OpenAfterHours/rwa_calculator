@@ -273,6 +273,20 @@ response.to_csv(Path("reconciliation_out/"))
 `reconcile()` accepts either a path to a `.toml` file (shown above) or a
 `ReconciliationSettings` object built in code via `api.load_reconciliation_config`.
 
+`reconcile()` embeds a full `calculate()` for our side. If you already hold a
+completed run for the same parameters and data, pass it as `calculation=` and the
+pipeline is not re-run — the reconciliation starts from that run's cached results:
+
+```python
+prior = calc.calculate()
+# ... later, same data on disk ...
+response = calc.reconcile("reconciliation.toml", calculation=prior)
+```
+
+The seam trusts what it is given — verify freshness yourself, or go through
+`rwa_calc.api.run_index` (which fingerprints parameters plus the input files'
+size/mtime signature) the way the UI does.
+
 ### 3. Or use the interactive UI
 
 The **Reconciliation** page in the app (served at **`/reconciliation`**) gives you the same
@@ -290,13 +304,25 @@ rows"** toggle on the overview and the explorer drops immaterial our-only / lega
 from the breakdown counts (see [Focusing on material differences](#focusing-on-material-differences)).
 CSV / Excel downloads of the full per-key detail remain available.
 
+If the identical calculation already ran — from the calculator page, either half of
+a comparison run, or a previous reconciliation's own embedded run (same data path,
+framework, reporting date, permission mode, data format — and no input file changed
+since) — the form offers a pre-ticked **reuse checkbox** so the engine run is
+skipped and the reconciliation starts from that run's cached results. Freshness is
+re-verified at submit time against the input files' size/mtime signature; any change
+falls back silently to a full recompute. The reuse pool persists under
+`~/.rwa_calc/` (or `$RWA_STATE_DIR`), so it survives an app restart.
+
 ```bash
 uv add rwa-calc
 rwa-ui                 # then open http://localhost:8000/reconciliation
 ```
 
 The same flow is available over HTTP for programmatic callers via `POST /api/reconcile`
-(with `GET /api/reconcile/export/{csv|excel}` for the downloads).
+(with `GET /api/reconcile/export/{csv|excel}` for the downloads). Pass the `run_id`
+returned by `POST /api/calculate` to reconcile that registered run without re-running
+the pipeline — an explicit `run_id` is strict: unknown ids 404 and a mismatched
+framework/date, failed run or expired results 422 rather than silently recomputing.
 
 > **Details:** See [Interactive UI](../user-guide/interactive-ui.md) for the full list of
 > pages and how to start the server.

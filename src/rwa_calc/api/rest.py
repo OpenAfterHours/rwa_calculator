@@ -40,6 +40,7 @@ from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from rwa_calc.api import run_index
 from rwa_calc.api.models import ValidationRequest
 from rwa_calc.api.reconciliation import loads_reconciliation_config
 from rwa_calc.api.service import CreditRiskCalc, get_supported_frameworks
@@ -142,6 +143,12 @@ class ReconcileRequest(BaseModel):
     ``mapping_toml`` is the reconciliation config (legacy file path, join keys,
     per-component column mapping) as TOML text; relative ``legacy_file`` paths in
     it resolve against ``data_path``.
+
+    ``run_id`` optionally references an already-registered calculation (from
+    ``POST /api/calculate``) to reconcile instead of re-running the pipeline.
+    An explicit run_id is an instruction, not a preference: an unknown id is a
+    404 and a run that cannot serve this request (framework/date mismatch,
+    failed run, vanished results) is a 422 — never a silent recompute.
     """
 
     data_path: str
@@ -150,6 +157,7 @@ class ReconcileRequest(BaseModel):
     permission_mode: Literal["standardised", "irb"] = "standardised"
     data_format: Literal["parquet", "csv"] = "parquet"
     mapping_toml: str
+    run_id: str | None = None
 
 
 # =============================================================================
@@ -178,8 +186,24 @@ def validate(req: ValidateRequest) -> dict:
 
 @router.post("/calculate")
 def calculate(req: CalculateRequest) -> dict:
-    """Run an RWA calculation and register the result under a fresh run_id."""
+    """Run an RWA calculation and register the result under a fresh run_id.
+
+    The run is also indexed for reuse (``rwa_calc.api.run_index``) so a later
+    ``POST /api/reconcile`` — or the UI's reconciliation form in the same
+    process — can start from it instead of re-running the pipeline.
+    """
     logger.info("api calculate framework=%s mode=%s", req.framework, req.permission_mode)
+    # Fingerprinted BEFORE the run so a mid-run input change can never be
+    # reused against data the run did not read.
+    fingerprint = run_index.compute_fingerprint(
+        data_path=req.data_path,
+        framework=req.framework,
+        reporting_date=req.reporting_date,
+        permission_mode=req.permission_mode,
+        data_format=req.data_format,
+        base_currency=req.base_currency,
+        eur_gbp_rate=req.eur_gbp_rate,
+    )
     response = _run_calc(
         data_path=req.data_path,
         framework=req.framework,
@@ -190,6 +214,7 @@ def calculate(req: CalculateRequest) -> dict:
         eur_gbp_rate=req.eur_gbp_rate,
     )
     run_id = register_run(response)
+    run_index.register_calculation(fingerprint, run_id, response)
     return {"run_id": run_id, **_serialize_response(response)}
 
 
@@ -229,8 +254,22 @@ def results_summary(dimension: Literal["class", "approach"], run_id: str) -> dic
 
 @router.post("/comparison")
 def comparison(req: ComparisonRequest) -> dict:
-    """Run CRR and Basel 3.1 over one dataset and return both with deltas."""
+    """Run CRR and Basel 3.1 over one dataset and return both with deltas.
+
+    Both runs are indexed for reuse (as ``POST /api/calculate`` does), so a
+    later reconciliation over the same data can start from either.
+    """
     logger.info("api comparison mode=%s", req.permission_mode)
+    fingerprints = {
+        fw: run_index.compute_fingerprint(
+            data_path=req.data_path,
+            framework=fw,
+            reporting_date=req.reporting_date,
+            permission_mode=req.permission_mode,
+            data_format=req.data_format,
+        )
+        for fw in ("CRR", "BASEL_3_1")
+    }
     crr = _run_calc(
         data_path=req.data_path,
         framework="CRR",
@@ -247,6 +286,8 @@ def comparison(req: ComparisonRequest) -> dict:
     )
     crr_id = register_run(crr)
     b31_id = register_run(b31)
+    run_index.register_calculation(fingerprints["CRR"], crr_id, crr)
+    run_index.register_calculation(fingerprints["BASEL_3_1"], b31_id, b31)
     return {
         "crr": {"run_id": crr_id, **_serialize_response(crr)},
         "basel_3_1": {"run_id": b31_id, **_serialize_response(b31)},
@@ -254,15 +295,22 @@ def comparison(req: ComparisonRequest) -> dict:
     }
 
 
-@router.post("/reconcile")
+@router.post("/reconcile", responses=_RESP_404)
 def reconcile(req: ReconcileRequest) -> dict:
     """Reconcile our results against a mapped legacy output; register the result.
 
     Returns the recon_id plus each headline / segment / worklist tier as a
     ``{columns, rows}`` table. The wide per-key forensic frame is not inlined —
     download it via ``GET /api/reconcile/export/{fmt}``.
+
+    With ``run_id`` set, the referenced calculation's cached results are
+    reconciled and the pipeline is not re-run (see ``ReconcileRequest``).
     """
     logger.info("api reconcile framework=%s mode=%s", req.framework, req.permission_mode)
+    calculation: CalculationResponse | None = None
+    if req.run_id is not None:
+        calculation = _require_run(req.run_id)
+        _require_run_serves_reconcile(calculation, req)
     try:
         settings = loads_reconciliation_config(req.mapping_toml, base_dir=req.data_path or ".")
         response = CreditRiskCalc(
@@ -271,7 +319,7 @@ def reconcile(req: ReconcileRequest) -> dict:
             reporting_date=req.reporting_date,
             permission_mode=req.permission_mode,
             data_format=req.data_format,
-        ).reconcile(settings)
+        ).reconcile(settings, calculation=calculation)
     except (ValueError, FileNotFoundError) as exc:
         raise HTTPException(
             status_code=422, detail=f"invalid reconciliation config: {exc}"
@@ -515,6 +563,32 @@ def _require_run(run_id: str) -> CalculationResponse:
     return response
 
 
+def _require_run_serves_reconcile(calculation: CalculationResponse, req: ReconcileRequest) -> None:
+    """Verify an explicitly referenced run can serve this reconciliation, else 422.
+
+    The caller asked for THAT run — a run that cannot serve the request must be
+    an error, never a silent recompute (contrast the UI's reuse checkbox, which
+    is a preference and degrades silently via ``rwa_calc.api.run_index``).
+    """
+
+    def _reject(reason: str) -> HTTPException:
+        return HTTPException(status_code=422, detail=f"run {req.run_id} not reusable: {reason}")
+
+    if not calculation.success:
+        raise _reject("the referenced calculation failed")
+    if calculation.framework != req.framework:
+        raise _reject(
+            f"framework {calculation.framework!r} does not match request {req.framework!r}"
+        )
+    if calculation.reporting_date != req.reporting_date:
+        raise _reject(
+            f"reporting_date {calculation.reporting_date.isoformat()} does not match "
+            f"request {req.reporting_date.isoformat()}"
+        )
+    if not Path(calculation.results_path).exists():
+        raise _reject("its cached results are no longer available")
+
+
 def _require_reconciliation(recon_id: str) -> ReconciliationResponse:
     """Look up a registered reconciliation or raise 404."""
     response = _RECON_RUNS.get(recon_id)
@@ -587,7 +661,6 @@ def _serialize_validation(v: ValidationResponse) -> dict:
         "files_found": [str(p) for p in v.files_found],
         "files_missing": [str(p) for p in v.files_missing],
         "errors": [dataclasses.asdict(e) for e in v.errors],
-        "cached_path": str(v.cached_path) if v.cached_path is not None else None,
     }
 
 

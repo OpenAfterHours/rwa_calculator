@@ -68,12 +68,6 @@ from pathlib import Path
 
 import polars as pl
 import pytest
-
-from rwa_calc.contracts.bundles import RawDataBundle
-from rwa_calc.contracts.config import CalculationConfig, PermissionMode
-from rwa_calc.data.column_spec import dtypes_of
-from rwa_calc.data.schemas import FACILITY_MAPPING_SCHEMA, FACILITY_SCHEMA, LENDING_MAPPING_SCHEMA
-from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.acceptance.conftest import get_guaranteed_row, get_total_rwa
 from tests.fixtures.p1_219.p1_219 import (
     BUGGED_TOTAL_RWA,
@@ -85,6 +79,12 @@ from tests.fixtures.p1_219.p1_219 import (
     REPORTING_DATE,
 )
 from tests.fixtures.raw_bundle import make_raw_bundle
+
+from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.contracts.config import CalculationConfig, PermissionMode
+from rwa_calc.data.column_spec import dtypes_of
+from rwa_calc.data.schemas import FACILITY_MAPPING_SCHEMA, FACILITY_SCHEMA, LENDING_MAPPING_SCHEMA
+from rwa_calc.engine.pipeline import PipelineOrchestrator
 
 # ---------------------------------------------------------------------------
 # Fixture paths

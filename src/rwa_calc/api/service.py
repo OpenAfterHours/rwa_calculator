@@ -178,16 +178,23 @@ class CreditRiskCalc:
     def reconcile(
         self,
         settings: ReconciliationSettings | str | Path,
+        calculation: CalculationResponse | None = None,
     ) -> ReconciliationResponse:
         """
         Reconcile this calculator's results against a legacy calculator's output.
 
-        Runs ``self.calculate()`` for our side, loads and maps the legacy output
-        per ``settings``, and reconciles them component by component.
+        Runs ``self.calculate()`` for our side (or reuses a supplied, already
+        completed run), loads and maps the legacy output per ``settings``, and
+        reconciles them component by component.
 
         Args:
             settings: A ``ReconciliationSettings`` object, or a path to a TOML
                 reconciliation config file.
+            calculation: An already-completed ``CalculationResponse`` for this
+                calculator's parameters. When provided, the embedded pipeline
+                run is skipped and this response's cached results are
+                reconciled instead. The caller owns freshness verification
+                (see ``rwa_calc.api.run_index``).
 
         Returns:
             ReconciliationResponse with per-component buckets, summaries, a break
@@ -207,7 +214,7 @@ class CreditRiskCalc:
         if not isinstance(settings, _Settings):
             settings = load_reconciliation_config(settings)
 
-        calc_response = self.calculate()
+        calc_response = calculation if calculation is not None else self.calculate()
         if not calc_response.success:
             # Our-side calculation failed (bad data path, missing model
             # permissions, a pipeline exception, ...). The error path writes a
@@ -233,6 +240,7 @@ class CreditRiskCalc:
             legacy_file=settings.legacy_file,
             framework=self.framework,
             reporting_date=self.reporting_date,
+            calculation=calc_response,
         )
 
     def _create_config(self) -> CalculationConfig:

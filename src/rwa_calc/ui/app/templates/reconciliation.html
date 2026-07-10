@@ -43,6 +43,19 @@ engine fix.</p>
       <input id="reporting_date" name="reporting_date" type="date" value="{{ default_date }}" required>
     </div>
   </div>
+  {% if reusable_run %}
+  <div class="callout info">
+    <label for="reuse_calculation">
+      <input id="reuse_calculation" type="checkbox" name="reuse_calculation" value="1" checked>
+      Use results from the calculation completed at {{ reusable_run.completed_at }} —
+      the engine run is skipped and the reconciliation starts from its cached results.
+      Untick to recompute from the source data.
+    </label>
+  </div>
+  {% elif data_changed %}
+  <div class="callout info">Input data has changed since the last matching calculation —
+  it will be recomputed.</div>
+  {% endif %}
   <div class="field">
     <label for="mapping_toml">Legacy mapping (TOML)</label>
     <textarea id="mapping_toml" name="mapping_toml" class="mono" rows="16" spellcheck="false">{{ mapping_toml }}</textarea>

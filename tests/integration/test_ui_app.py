@@ -18,11 +18,14 @@ Key responsibilities tested:
 from __future__ import annotations
 
 import time
+from datetime import date
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
+from rwa_calc.api import run_index
+from rwa_calc.api.rest import get_run
 from rwa_calc.ui.app.calculator_state import STATE_DIR_ENV_VAR
 from rwa_calc.ui.app.main import create_app
 from tests.fixtures.api_validation.build_mandatory_only import write_mandatory_minimum
@@ -34,6 +37,12 @@ def _isolated_state_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setenv(STATE_DIR_ENV_VAR, str(tmp_path / "state"))
 
 
+@pytest.fixture(autouse=True)
+def _clean_run_index() -> None:
+    """Each test starts with an empty calculation run index (module-level state)."""
+    run_index.clear()
+
+
 @pytest.fixture
 def client() -> TestClient:
     # base_url uses a loopback host so the app's TrustedHostMiddleware (which
@@ -43,8 +52,12 @@ def client() -> TestClient:
 
 @pytest.fixture
 def data_dir(tmp_path: Path) -> str:
-    write_mandatory_minimum(tmp_path)
-    return str(tmp_path)
+    # A sibling of the state home (tmp_path/"state"): the persistent run caches
+    # must never land inside the data path, or they would change its signature.
+    root = tmp_path / "data"
+    root.mkdir()
+    write_mandatory_minimum(root)
+    return str(root)
 
 
 def test_static_pages_render(client: TestClient) -> None:
@@ -429,3 +442,69 @@ def test_landing_hosts_bear_constellation(client: TestClient) -> None:
     assert "/static/bear-constellation.js" in page
     assert js.status_code == 200
     assert "URSA POLARIS" in js.text
+
+
+# =============================================================================
+# Calculation reuse — calculator banner + comparison seeding
+# =============================================================================
+
+
+def test_calculator_offers_results_link_when_identical_run_exists(
+    client: TestClient, data_dir: str
+) -> None:
+    # A fresh form offers nothing.
+    assert "already ran at" not in client.get("/calculator").text
+
+    # Arrange — run a calculation via the form (the worker saves the form state
+    # and seeds the run index).
+    posted = client.post(
+        "/calculate",
+        data={
+            "data_path": data_dir,
+            "framework": "CRR",
+            "reporting_date": "2025-01-01",
+            "permission_mode": "standardised",
+            "data_format": "parquet",
+        },
+        follow_redirects=False,
+    )
+    assert posted.status_code == 303
+    job_id = posted.headers["location"].rsplit("/", 1)[1]
+    assert _wait_for_job(client, job_id)["status"] == "done"
+
+    # Act — reopen the calculator (pre-filled with the same values).
+    form = client.get("/calculator")
+
+    # Assert — a non-blocking banner links straight to the existing results.
+    assert "already ran at" in form.text
+    assert f"/results/{job_id}" in form.text
+
+
+def test_comparison_seeds_run_index_for_both_frameworks(
+    client: TestClient, data_dir: str
+) -> None:
+    # Act — a comparison runs both frameworks over one dataset.
+    resp = client.post(
+        "/comparison",
+        data={
+            "data_path": data_dir,
+            "reporting_date": "2025-01-01",
+            "permission_mode": "standardised",
+            "data_format": "parquet",
+        },
+    )
+    assert resp.status_code == 200
+
+    # Assert — both embedded runs are reusable (e.g. by a reconciliation) and
+    # registered for the results endpoints.
+    for framework in ("CRR", "BASEL_3_1"):
+        fingerprint = run_index.compute_fingerprint(
+            data_path=data_dir,
+            framework=framework,
+            reporting_date=date(2025, 1, 1),
+            permission_mode="standardised",
+            data_format="parquet",
+        )
+        hit = run_index.find_reusable(fingerprint)
+        assert hit is not None, framework
+        assert get_run(hit.run_id) is not None, framework

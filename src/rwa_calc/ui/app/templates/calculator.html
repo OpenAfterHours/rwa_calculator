@@ -6,6 +6,11 @@
 <p class="muted">Point at a local data directory of parquet/CSV inputs and run the RWA pipeline.</p>
 
 {% if error %}<div class="callout error">{{ error }}</div>{% endif %}
+{% if reusable_run %}
+<div class="callout info">This exact calculation (same inputs, unchanged data) already ran at
+{{ reusable_run.completed_at }} — <a href="/results/{{ reusable_run.run_id }}">view its results</a>,
+or run it again below.</div>
+{% endif %}
 
 <form class="form" method="post" action="/calculate">
   <div class="field">

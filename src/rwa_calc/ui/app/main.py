@@ -21,8 +21,10 @@ import importlib.util
 import json
 import logging
 import math
+import os
+import uuid
 import webbrowser
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal
 from urllib.parse import urlencode, urlsplit
@@ -35,6 +37,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from rwa_calc.api import run_index
 from rwa_calc.api.reconciliation import loads_reconciliation_config
 from rwa_calc.api.rest import (
     ReconWorkspace,
@@ -75,6 +78,7 @@ from rwa_calc.ui.app.recon_signoff import (
     workspace_id,
 )
 from rwa_calc.ui.app.recon_state import (
+    STATE_DIR_ENV_VAR,
     ReconciliationFormState,
     clear_last_run,
     load_last_run,
@@ -89,6 +93,7 @@ if TYPE_CHECKING:
 
     from rwa_calc.api.models import CalculationResponse, ReconciliationResponse
     from rwa_calc.api.reconciliation import ReconciliationSettings
+    from rwa_calc.contracts.bundles import ComparisonBundle
     from rwa_calc.ui.app.output_writer import OutputWriteResult
     from rwa_calc.ui.app.recon_signoff import Decision
 
@@ -189,6 +194,12 @@ def create_app() -> FastAPI:
     # matching, so "localhost:8000" / "127.0.0.1:8000" both pass.
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=_ALLOWED_HOSTS)
     attach_progress_handler()
+    # Reload the persisted calculation run index (reuse offers survive a
+    # restart) and re-register the reloaded runs so their /results/{run_id}
+    # pages resolve again too.
+    run_index.configure_persistence(_state_home())
+    for entry in run_index.entries():
+        register_run_with_id(entry.run_id, entry.response)
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
     app.include_router(api_router)
     _register_pages(app)
@@ -504,6 +515,7 @@ def _register_pages(app: FastAPI) -> None:
         framework: Annotated[FrameworkArg, Form()] = "CRR",
         permission_mode: Annotated[PermissionArg, Form()] = "standardised",
         data_format: Annotated[FormatArg, Form()] = "parquet",
+        reuse_calculation: Annotated[str | None, Form()] = None,
     ) -> Response:
         # Parse the mapping (and date) synchronously so a bad config re-renders
         # the form with an error before any work is dispatched.
@@ -524,10 +536,31 @@ def _register_pages(app: FastAPI) -> None:
             return templates.TemplateResponse(
                 request=request, name="reconciliation.html", context=_nav(context), status_code=400
             )
-        # Run the reconciliation (a full pipeline run + the legacy join) off the
-        # request thread so the browser gets the live stage stepper instead of a
-        # frozen tab. The job_id doubles as the recon result id (see
-        # _reconciliation_worker -> register_reconciliation_with_id).
+        # A ticked reuse checkbox is re-verified NOW against the posted values and
+        # the current on-disk data (the rendered form may be stale). A miss is a
+        # silent fall-through to the full run — the checkbox is a preference,
+        # never a promise the data kept.
+        calculation: CalculationResponse | None = None
+        if reuse_calculation:
+            reuse = run_index.find_reusable(
+                run_index.compute_fingerprint(
+                    data_path=data_path,
+                    framework=framework,
+                    reporting_date=parsed_date,
+                    permission_mode=permission_mode,
+                    data_format=data_format,
+                )
+            )
+            if reuse is not None:
+                calculation = reuse.response
+                logger.info("reconciliation reusing calculation run %s", reuse.run_id)
+            else:
+                logger.info("requested calculation reuse unavailable; running the pipeline")
+        # Run the reconciliation (a full pipeline run + the legacy join, or just
+        # the legacy join when reusing a cached run) off the request thread so the
+        # browser gets the live stage stepper instead of a frozen tab. The job_id
+        # doubles as the recon result id (see _reconciliation_worker ->
+        # register_reconciliation_with_id).
         job = create_job()
         submit_job(
             job,
@@ -546,6 +579,7 @@ def _register_pages(app: FastAPI) -> None:
                     data_format=data_format,
                     mapping_toml=mapping_toml,
                 ),
+                calculation=calculation,
             ),
         )
         return RedirectResponse(url=f"/reconciling/{job.job_id}", status_code=303)
@@ -778,14 +812,28 @@ def _calculation_worker(
     formats = list(output_formats or [])
 
     def _work(job: Job) -> None:
+        # Fingerprint BEFORE the run: if an input file changes mid-run, the stored
+        # (pre-run) signature no longer matches the on-disk state at lookup time,
+        # so the run can never be reused against data it did not read.
+        fingerprint = run_index.compute_fingerprint(
+            data_path=data_path,
+            framework=framework,
+            reporting_date=reporting_date,
+            permission_mode=permission_mode,
+            data_format=data_format,
+        )
         response = CreditRiskCalc(
             data_path=data_path,
             framework=framework,
             reporting_date=reporting_date,
             permission_mode=permission_mode,
             data_format=data_format,
+            # Under the state home (when persistence is on) so the cached
+            # results — and with them the reuse offer — survive a restart.
+            cache_dir=run_index.run_cache_dir(job.job_id),
         ).calculate()
         register_run_with_id(job.job_id, response)
+        run_index.register_calculation(fingerprint, job.job_id, response)
         if output_folder.strip() and formats:
             _EXPORT_OUTCOMES[job.job_id] = write_selected_formats(
                 response, Path(output_folder).expanduser(), formats, run_id=job.job_id
@@ -819,6 +867,7 @@ def _reconciliation_worker(
     permission_mode: PermissionArg,
     data_format: FormatArg,
     form_state: ReconciliationFormState,
+    calculation: CalculationResponse | None = None,
 ) -> Callable[[Job], None]:
     """Build the background worker that runs one reconciliation for a job.
 
@@ -829,16 +878,41 @@ def _reconciliation_worker(
     free; the worker then *warms* the lazy bundle frames so the heavy full-outer
     join runs here — under the stepper — instead of freezing the result page on
     its first collect, and marks the ``recon_reconcile`` tail step done.
+
+    When ``calculation`` carries a verified reusable run (see
+    ``rwa_calc.api.run_index``), the embedded pipeline run is skipped: no engine
+    stage events will fire, so every engine stage is ticked up front and the
+    stepper goes straight to the reconcile tail. A FULL run seeds the run index
+    with its embedded calculation instead, so a recon-first session gets the
+    reuse offer on its next reconciliation.
     """
 
     def _work(job: Job) -> None:
+        if calculation is not None:
+            for info in STAGE_SEQUENCE:
+                job.mark_stage(info.name)
+        # Pre-run fingerprint + a persistent cache home for the embedded run,
+        # mirroring _calculation_worker (both are no-ops on the reuse path).
+        fingerprint = run_index.compute_fingerprint(
+            data_path=data_path,
+            framework=framework,
+            reporting_date=reporting_date,
+            permission_mode=permission_mode,
+            data_format=data_format,
+        )
+        calc_run_id = uuid.uuid4().hex
         response = CreditRiskCalc(
             data_path=data_path,
             framework=framework,
             reporting_date=reporting_date,
             permission_mode=permission_mode,
             data_format=data_format,
-        ).reconcile(settings)
+            cache_dir=None if calculation is not None else run_index.run_cache_dir(calc_run_id),
+        ).reconcile(settings, calculation=calculation)
+        embedded = response.calculation
+        if calculation is None and embedded is not None and embedded.success:
+            register_run_with_id(calc_run_id, embedded)
+            run_index.register_calculation(fingerprint, calc_run_id, embedded)
         _warm_reconciliation_frames(response)
         job.mark_stage(RECON_STAGE_NAME)
         register_reconciliation_with_id(job.job_id, response)
@@ -982,6 +1056,20 @@ def _compute_comparison(
     from rwa_calc.domain.enums import PermissionMode
     from rwa_calc.engine.loader import CSVLoader, ParquetLoader
 
+    # Pre-run fingerprints for both embedded runs (see _calculation_worker for
+    # why they are captured before any input file is read).
+    started_at = datetime.now()
+    fingerprints = {
+        fw: run_index.compute_fingerprint(
+            data_path=data_path,
+            framework=fw,
+            reporting_date=reporting_date,
+            permission_mode=permission_mode,
+            data_format=data_format,
+        )
+        for fw in ("CRR", "BASEL_3_1")
+    }
+
     base = Path(data_path)
     loader = CSVLoader(base_path=base) if data_format == "csv" else ParquetLoader(base_path=base)
     raw = loader.load()
@@ -991,6 +1079,10 @@ def _compute_comparison(
 
     bundle = DualFrameworkRunner().compare(raw, crr_cfg, b31_cfg)
     impact = CapitalImpactAnalyzer().analyze(bundle)
+
+    # Seed the run index with both embedded runs so a follow-up reconciliation
+    # (or the calculator page) can reuse them without another pipeline run.
+    _seed_comparison_runs(bundle, fingerprints, reporting_date, started_at)
 
     summary = comparison_view.executive_summary(bundle)
     steps = comparison_view.waterfall_steps(impact)
@@ -1032,6 +1124,46 @@ def _compute_comparison(
     }
 
 
+def _seed_comparison_runs(
+    bundle: ComparisonBundle,
+    fingerprints: Mapping[str, run_index.CalculationFingerprint],
+    reporting_date: date,
+    started_at: datetime,
+) -> None:
+    """Format and index a comparison's two embedded runs for later reuse.
+
+    The comparison itself keeps computing from the rich ``ComparisonBundle``
+    (its capital-impact attribution needs the floor-impact and pre-factor
+    frames a cached ``CalculationResponse`` does not persist — see the plan's
+    follow-on notes); this only *seeds* the index so a follow-up reconciliation
+    reuses either run. Best-effort by design: seeding is an optimisation, so a
+    failure is logged and must never break the comparison page.
+    """
+    from rwa_calc.api.formatters import ResultFormatter
+    from rwa_calc.api.results_cache import ResultsCache
+
+    sides = {"CRR": bundle.baseline_results, "BASEL_3_1": bundle.variant_results}
+    for framework, results_bundle in sides.items():
+        try:
+            run_id = uuid.uuid4().hex
+            cache_dir = run_index.run_cache_dir(run_id)
+            if cache_dir is None:
+                import tempfile
+
+                cache_dir = Path(tempfile.mkdtemp(prefix="rwa_cache_"))
+            response = ResultFormatter().format_response(
+                bundle=results_bundle,
+                cache=ResultsCache(cache_dir),
+                framework=framework,
+                reporting_date=reporting_date,
+                started_at=started_at,
+            )
+            register_run_with_id(run_id, response)
+            run_index.register_calculation(fingerprints[framework], run_id, response)
+        except Exception:  # noqa: BLE001 - seeding must never break the page
+            logger.warning("could not seed the %s comparison run for reuse", framework)
+
+
 def _calculator_context(
     *,
     default_path: str | None = None,
@@ -1065,7 +1197,7 @@ def _calculator_context(
     else:
         selected_formats = list(_DEFAULT_OUTPUT_FORMATS)
 
-    return {
+    context = {
         "frameworks": get_supported_frameworks(),
         "default_path": _pick(
             default_path, saved.data_path if saved else None, _default_data_path()
@@ -1084,6 +1216,19 @@ def _calculator_context(
         "xlsx_available": _xlsxwriter_available(),
         "error": error,
     }
+    # A fresh matching run gets a non-blocking "view its results" banner (the
+    # template ignores the data_changed key — a will-recompute note would be
+    # noise on a page whose whole purpose is to run the calculation).
+    context.update(
+        _calculation_reuse_context(
+            data_path=context["default_path"],
+            reporting_date=context["default_date"],
+            framework=context["selected_framework"],
+            permission_mode=context["selected_permission"],
+            data_format=context["selected_format"],
+        )
+    )
+    return context
 
 
 def _reconciliation_form_context(
@@ -1110,7 +1255,7 @@ def _reconciliation_form_context(
             return saved_value
         return fallback
 
-    return {
+    context = {
         "frameworks": get_supported_frameworks(),
         "default_path": _pick(
             default_path, saved.data_path if saved else None, _default_data_path()
@@ -1130,6 +1275,57 @@ def _reconciliation_form_context(
         "error": None,
         "result": None,
     }
+    context.update(
+        _calculation_reuse_context(
+            data_path=context["default_path"],
+            reporting_date=context["default_date"],
+            framework=context["selected_framework"],
+            permission_mode=context["selected_permission"],
+            data_format=context["selected_format"],
+        )
+    )
+    return context
+
+
+def _calculation_reuse_context(
+    *,
+    data_path: str,
+    reporting_date: str,
+    framework: str,
+    permission_mode: str,
+    data_format: str,
+) -> dict:
+    """The reuse block for the reconciliation form, from the form's effective values.
+
+    ``reusable_run`` (a fresh, still-valid matching run -> the reuse checkbox) and
+    ``data_changed`` (the same calculation ran before but an input file changed ->
+    a passive will-recompute note) are mutually exclusive; both falsy means no
+    matching run is known at all. An unparseable date just means no reuse offer.
+    """
+    no_reuse = {"reusable_run": None, "data_changed": False}
+    try:
+        parsed_date = date.fromisoformat(reporting_date)
+    except ValueError:
+        return no_reuse
+    fingerprint = run_index.compute_fingerprint(
+        data_path=data_path,
+        framework=framework,
+        reporting_date=parsed_date,
+        permission_mode=permission_mode,
+        data_format=data_format,
+    )
+    fresh = run_index.find_reusable(fingerprint)
+    if fresh is not None:
+        return {
+            "reusable_run": {
+                "run_id": fresh.run_id,
+                "completed_at": fresh.completed_at.strftime("%Y-%m-%d %H:%M"),
+            },
+            "data_changed": False,
+        }
+    if run_index.find_latest_for_params(fingerprint) is not None:
+        return {"reusable_run": None, "data_changed": True}
+    return no_reuse
 
 
 def _reconciliation_result(
@@ -1492,6 +1688,17 @@ def _result_rows(response: CalculationResponse) -> list[dict]:
         return []
     df: pl.DataFrame = lf.select(available).head(100).collect().fill_nan(None)
     return df.to_dicts()
+
+
+def _state_home() -> Path:
+    """The per-user state home (env override, else ``~/.rwa_calc``).
+
+    The same resolution the last-run form-state files use (``recon_state`` /
+    ``calculator_state``), so the persisted run index and the run caches live
+    beside them.
+    """
+    override = os.environ.get(STATE_DIR_ENV_VAR)
+    return Path(override) if override else Path.home() / ".rwa_calc"
 
 
 def _default_data_path() -> str:

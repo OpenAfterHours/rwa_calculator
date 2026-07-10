@@ -335,8 +335,10 @@ def _lgd_floor_blended_expression(
     and E_unsecured = EAD - total_collateral_for_lgd.
 
     Applies to:
-        - retail_other (LGDU = 30%)
-        - retail_qrre (LGDU = 50%)
+        - retail_other (LGDU = 30%, Art. 164(4)(c))
+        - retail_qrre (LGDU = 50%, Art. 164(4)(b)(i))
+        - corporate / corporate_sme / institution (LGDU = 25%, Art. 161(5) /
+          BCBS CRE32.17 partially-secured exposure-weighted-average floor)
     Does NOT apply to:
         - retail_mortgage (flat 5% floor per Art. 164(4)(a))
         - CRR (no LGD floors)
@@ -383,23 +385,30 @@ def _lgd_floor_blended_expression(
     )
 
     # LGDU depends on exposure class:
-    # - retail_other: 30% (Art. 164(4)(c))
     # - retail_qrre: 50% (Art. 164(4)(b)(i))
+    # - retail_other: 30% (Art. 164(4)(c))
+    # - corporate / corporate_sme / institution: 25% (Art. 161(5))
     exp_class = pl.col("exposure_class").cast(pl.String).str.to_lowercase()
     lgdu_expr = (
         pl.when(exp_class.is_in(["retail_qrre"]))
         .then(pl.lit(floors["retail_qrre_unsecured"]))  # 50%
-        .otherwise(pl.lit(floors["retail_lgdu"]))  # 30%
+        .when(exp_class.is_in(["retail_other"]))
+        .then(pl.lit(floors["retail_lgdu"]))  # 30%
+        .otherwise(pl.lit(floors["unsecured"]))  # 25% corporate/institution Art. 161(5)
     )
 
     numerator_with_unsecured = numerator + unsecured_portion * lgdu_expr
 
     blended = pl.when(ead > 0).then(numerator_with_unsecured / ead).otherwise(pl.lit(0.0))
 
-    # Apply blended floor only to retail_other and retail_qrre with collateral.
-    # retail_mortgage uses flat 5% (Art. 164(4)(a)).
-    # Corporate uses single-type floor from _lgd_floor_expression_with_collateral().
-    is_blended_eligible = exp_class.is_in(["retail_other", "retail_qrre"])
+    # Apply the EAD-weighted blended floor to any partially-secured A-IRB class
+    # with collateral: retail_other / retail_qrre (Art. 164(4)(c)) and corporate /
+    # corporate_sme / institution (Art. 161(5) / BCBS CRE32.17). institution is
+    # vacuous under B31 (F-IRB only) but included for completeness.
+    # retail_mortgage uses flat 5% (Art. 164(4)(a)) and is excluded.
+    is_blended_eligible = exp_class.is_in(
+        ["retail_other", "retail_qrre", "corporate", "corporate_sme", "institution"]
+    )
     has_collateral = total_coll > 0
 
     return pl.when(is_blended_eligible & has_collateral).then(blended).otherwise(pl.lit(None))

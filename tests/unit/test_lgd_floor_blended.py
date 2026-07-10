@@ -174,14 +174,18 @@ class TestBlendedExpressionDirect:
         result = lf.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
         assert result["floor"][0] is None
 
-    def test_corporate_returns_null(self):
-        """Corporate exposure is not eligible for blended — returns null."""
+    def test_corporate_now_blends(self):
+        """Corporate is now eligible for the blended floor (P1.248, Art. 161(5)).
+
+        80% financial collateral (0% LGDS) + 20% unsecured (25% LGDU) over
+        100,000 EAD: (0 * 80,000 + 0.25 * 20,000) / 100,000 = 5%.
+        """
         lf = _make_df(
             exposure_class="CORPORATE",
             crm_alloc_financial=80_000.0,
         )
         result = lf.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
-        assert result["floor"][0] is None
+        assert result["floor"][0] == pytest.approx(0.05)
 
     def test_zero_ead_returns_null(self):
         """Zero EAD: no exposure, so blended not applicable → null."""
@@ -312,16 +316,19 @@ class TestBlendedFloorIntegration:
         result = lf.pipe(apply_lgd_floor, CRR).collect()
         assert result["lgd_floored"][0] == pytest.approx(0.10)
 
-    def test_corporate_uses_single_type_floor(self):
-        """Corporate falls through to single-type floor (not blended)."""
+    def test_corporate_uses_blended_floor(self):
+        """Corporate now gets the EAD-weighted blended floor (P1.248, Art. 161(5)).
+
+        60% other_physical collateral (15% LGDS) + 40% unsecured (25% LGDU)
+        over 100,000 EAD: (0.15 * 60,000 + 0.25 * 40,000) / 100,000 = 19%.
+        """
         lf = self._make_irb_df(
             lgd=0.10,
             exposure_class="CORPORATE",
             crm_alloc_other_physical=60_000.0,
         )
         result = lf.pipe(apply_lgd_floor, B31).collect()
-        # Corporate single-type floor for other_physical = 15%
-        assert result["lgd_floored"][0] == pytest.approx(0.15)
+        assert result["lgd_floored"][0] == pytest.approx(0.19)
 
     def test_retail_mortgage_uses_flat_floor(self):
         """retail_mortgage uses flat 5% floor (Art. 164(4)(a)), not blended."""

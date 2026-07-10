@@ -47,14 +47,17 @@ from rwa_calc.contracts.errors import (
     ERROR_RECON_GRAIN_HETEROGENEOUS,
     ERROR_RECON_KEY_COLUMN_MISSING,
     ERROR_RECON_LEGACY_COLUMN_MISSING,
+    ERROR_RECON_METHOD_UNRESOLVED,
     ERROR_RECON_NO_KEY_OVERLAP,
     ERROR_RECON_NON_FINITE_VALUE,
     reconciliation_warning,
 )
 from rwa_calc.engine.aggregator._collapse import HETEROGENEITY_FLAG, aggregate_to_key_grain
-from rwa_calc.engine.aggregator._summaries import method_label_expr
+from rwa_calc.engine.aggregator._summaries import METHOD_LABELS, method_label_expr
 
 if TYPE_CHECKING:
+    from polars._typing import PolarsDataType
+
     from rwa_calc.analysis.recon_registry import LegacyColumnMapping, ReconcilableComponent
     from rwa_calc.contracts.errors import CalculationError
 
@@ -75,6 +78,25 @@ _ZERO_GUARD = 1e-10
 # Internal join key built by concatenating the mapped key columns.
 _RECON_KEY = "_recon_key"
 _KEY_SEP = "||"
+# Transient column holding an allocation side's method SOURCE (a raw / value-mapped
+# approach) before ``method_label_expr`` — which takes a column name — labels it.
+_METHOD_SRC = "_method_src"
+
+# The two grains the asset-class allocation is built at. The method dimension is a
+# pure partition of the class one: summing a class's methods reproduces its class row.
+_GROUP_CLASS: tuple[str, ...] = ("exposure_class",)
+_GROUP_CLASS_METHOD: tuple[str, ...] = ("method", "exposure_class")
+# Money columns of both allocation frames, in display order. Shared by the populated
+# ``.select()`` and the stable-empty schema so the two can never disagree.
+_ALLOCATION_MONEY_COLUMNS: tuple[str, ...] = (
+    "our_ead",
+    "legacy_ead",
+    "delta_ead",
+    "our_rwa",
+    "legacy_rwa",
+    "delta_rwa",
+    "delta_rwa_pct",
+)
 
 
 @runtime_checkable
@@ -184,6 +206,9 @@ class ReconciliationRunner:
             component_reconciliation=recon,
             summary_by_component=_summary_by_component(recon, active),
             class_allocation=_class_allocation(our_results, legacy_results, mapping, active),
+            class_allocation_by_method=_class_allocation_by_method(
+                our_results, legacy_results, mapping, active, errors
+            ),
             summary_by_bucket=_summary_by_bucket(recon),
             summary_by_exposure_class=_summary_by_group(recon, "our_exposure_class", active),
             summary_by_approach=_summary_by_group(recon, "our_approach", active),
@@ -556,6 +581,7 @@ class ReconciliationRunner:
             component_reconciliation=bundle.component_reconciliation,
             summary_by_component=bundle.summary_by_component,
             class_allocation=bundle.class_allocation,
+            class_allocation_by_method=bundle.class_allocation_by_method,
             summary_by_bucket=bundle.summary_by_bucket,
             summary_by_exposure_class=bundle.summary_by_exposure_class,
             summary_by_approach=bundle.summary_by_approach,
@@ -747,43 +773,109 @@ def _class_allocation(
     legacy extract. Returns an empty frame (stable schema) when exposure class or
     both money components are unmapped.
     """
+    return _build_class_allocation(our_results, legacy_results, mapping, active, group=_GROUP_CLASS)
+
+
+def _class_allocation_by_method(
+    our_results: pl.LazyFrame,
+    legacy_results: pl.LazyFrame,
+    mapping: LegacyColumnMapping,
+    active: list[_ActiveComponent],
+    errors: list[CalculationError],
+) -> pl.LazyFrame:
+    """The by-class allocation split by methodology — ours vs legacy, on both sides.
+
+    COREP reports each asset class *per method* (SA on C 07.00, IRB on C 08.0x), so a
+    class-only allocation can hide a real difference: a class the two engines allocate
+    to different approaches nets to zero at class level. This frame adds the method
+    dimension (STD / FIRB / AIRB / SLOTTING / EQUITY) to BOTH sides, so summing a
+    class's methods reproduces its :func:`_class_allocation` row exactly, while the
+    per-method rows show where the two engines disagree on treatment.
+
+    Unlike ``summary_by_class_method`` (our-side only, obligor grain), this frame is
+    genuinely two-sided — which is why it is produced ONLY when the ``approach``
+    component is mapped: that mapping is what gives the legacy side a method to split
+    on. Otherwise it returns an empty stable-schema frame and the UI falls back to the
+    combined allocation.
+
+    Both dimensions are post-guarantee: our class comes from ``exposure_class_post_crm``
+    and our method from ``approach_post_crm``, so an SA-guaranteed exposure's guaranteed
+    slice reports under the guarantor's class AND its standardised approach, and the two
+    dimensions partition the same money the same way. Deriving the method from the raw
+    ``approach_applied`` instead would file that slice under (guarantor class, obligor's
+    IRB method) — a phantom break in exactly the substitution case this view exists to
+    reconcile.
+    """
+    return _build_class_allocation(
+        our_results, legacy_results, mapping, active, group=_GROUP_CLASS_METHOD, errors=errors
+    )
+
+
+def _build_class_allocation(
+    our_results: pl.LazyFrame,
+    legacy_results: pl.LazyFrame,
+    mapping: LegacyColumnMapping,
+    active: list[_ActiveComponent],
+    *,
+    group: tuple[str, ...],
+    errors: list[CalculationError] | None = None,
+) -> pl.LazyFrame:
+    """Group both sides to ``group``, full-join them, and difference the money columns.
+
+    Shared body of the class-only and class x method allocations, so the two can never
+    drift on normalisation, one-sided fills, column order or the non-finite guard.
+    ``group`` is ``_GROUP_CLASS`` or ``_GROUP_CLASS_METHOD``; the method dimension
+    additionally requires the ``approach`` component to be mapped (without it the legacy
+    side has no approach to split on).
+    """
     by_name = {a.spec.name: a for a in active}
     cls = by_name.get("exposure_class")
     ead = by_name.get("ead")
     rwa = by_name.get("rwa")
+    approach = by_name.get("approach")
+    by_method = group == _GROUP_CLASS_METHOD
     if cls is None or (ead is None and rwa is None):
-        return _empty_class_allocation()
+        return _empty_class_allocation(group)
 
-    value_map = mapping.components["exposure_class"].value_map
-    # Allocation is post-guarantee: prefer ``exposure_class_post_crm`` (guaranteed
-    # slice under the guarantor's class, retained slice under the obligor's) over the
-    # per-key component column (the obligor home class used for break attribution),
-    # so our by-class money totals mirror a post-substitution legacy extract.
-    our_present = set(our_results.collect_schema().names())
-    our_class_col = (
-        "exposure_class_post_crm" if "exposure_class_post_crm" in our_present else cls.our_col
-    )
-    our_side = (
-        our_results.with_columns(_normalise(pl.col(our_class_col)).alias("exposure_class"))
-        .group_by("exposure_class")
-        .agg(
+    # Resolve both method sources up front: the by-method grain is only reachable when
+    # the approach component is mapped, so this is also where that gate is enforced.
+    our_method_src: pl.Expr | None = None
+    legacy_method_src: pl.Expr | None = None
+    if by_method:
+        if approach is None:
+            return _empty_class_allocation(group)
+        our_method_src = pl.col(_our_method_col(our_results, approach))
+        legacy_method_src = _legacy_method_src(approach, mapping)
+
+    our_side = _allocation_side(
+        our_results,
+        class_expr=_normalise(pl.col(_our_class_col(our_results, cls))),
+        method_src=our_method_src,
+        group=group,
+        aggs=(
             _sum_or_null(ead.our_col if ead else None).alias("our_ead"),
             _sum_or_null(rwa.our_col if rwa else None).alias("our_rwa"),
-        )
+        ),
     )
-    legacy_side = (
-        legacy_results.with_columns(
-            _apply_value_map(_normalise(pl.col(cls.legacy_col)), value_map).alias("exposure_class")
-        )
-        .group_by("exposure_class")
-        .agg(
+    legacy_side = _allocation_side(
+        legacy_results,
+        class_expr=_apply_value_map(
+            _normalise(pl.col(cls.legacy_col)), mapping.components["exposure_class"].value_map
+        ),
+        method_src=legacy_method_src,
+        group=group,
+        aggs=(
             _sum_or_null(ead.legacy_col if ead else None).alias("legacy_ead"),
             _sum_or_null(rwa.legacy_col if rwa else None).alias("legacy_rwa"),
-        )
+        ),
     )
+    if by_method and errors is not None and approach is not None and legacy_method_src is not None:
+        _emit_method_vocabulary_diagnostic(
+            legacy_results, approach.legacy_col, legacy_method_src, errors
+        )
 
-    joined = our_side.join(legacy_side, on="exposure_class", how="full", coalesce=True)
-    # A class absent from one side means 0 allocated there (mapped components only),
+    joined = our_side.join(legacy_side, on=list(group), how="full", coalesce=True)
+    # A group absent from one side means 0 allocated there (mapped components only),
     # so the delta reflects the full one-sided allocation rather than a null.
     fills: list[pl.Expr] = []
     if ead is not None:
@@ -802,17 +894,128 @@ def _class_allocation(
             .otherwise(pl.lit(None, dtype=pl.Float64))
             .alias("delta_rwa_pct"),
         )
-        .select(
-            "exposure_class",
-            "our_ead",
-            "legacy_ead",
-            "delta_ead",
-            "our_rwa",
-            "legacy_rwa",
-            "delta_rwa",
-            "delta_rwa_pct",
+        .select(*group, *_ALLOCATION_MONEY_COLUMNS)
+        .sort(list(group), nulls_last=True)
+    )
+
+
+def _allocation_side(
+    lf: pl.LazyFrame,
+    *,
+    class_expr: pl.Expr,
+    method_src: pl.Expr | None,
+    group: tuple[str, ...],
+    aggs: tuple[pl.Expr, ...],
+) -> pl.LazyFrame:
+    """Attach the canonical group column(s) to one side, then sum its money fields.
+
+    ``method_label_expr`` takes a COLUMN NAME (it reads ``pl.col(name)`` itself), so a
+    method source that first needs normalising / value-mapping is materialised into a
+    transient column in its own ``with_columns`` before the label expression reads it.
+    """
+    prepared = lf.with_columns(class_expr.alias("exposure_class"))
+    if method_src is not None:
+        prepared = prepared.with_columns(method_src.alias(_METHOD_SRC)).with_columns(
+            method_label_expr(_METHOD_SRC).alias("method")
         )
-        .sort("exposure_class", nulls_last=True)
+    return prepared.group_by(list(group)).agg(*aggs)
+
+
+def _our_class_col(our_results: pl.LazyFrame, cls: _ActiveComponent) -> str:
+    """Our post-guarantee class column, falling back to the per-key component column.
+
+    Allocation is post-guarantee: prefer ``exposure_class_post_crm`` (guaranteed slice
+    under the guarantor's class, retained slice under the obligor's) over the per-key
+    component column (the obligor home class used for break attribution), so our
+    by-class money totals mirror a post-substitution legacy extract.
+    """
+    present = set(our_results.collect_schema().names())
+    return "exposure_class_post_crm" if "exposure_class_post_crm" in present else cls.our_col
+
+
+def _our_method_col(our_results: pl.LazyFrame, approach: _ActiveComponent) -> str:
+    """Our post-guarantee approach column — the method twin of :func:`_our_class_col`.
+
+    ``approach_post_crm`` is the aggregator's post-substitution approach (CRR Art. 235 /
+    Art. 161), so it pairs with ``exposure_class_post_crm``. Frames that predate the
+    column (minimal fixtures) fall back to the approach component's own column.
+    """
+    present = set(our_results.collect_schema().names())
+    if "approach_post_crm" in present:
+        return "approach_post_crm"
+    return approach.our_col
+
+
+def _legacy_method_src(approach: _ActiveComponent, mapping: LegacyColumnMapping) -> pl.Expr:
+    """The legacy approach, normalised and value-mapped, ready for ``method_label_expr``.
+
+    The value_map is applied first so a legacy label (``"IRB-F"``) reaches the label
+    expression as one of our approach values (``"foundation_irb"`` -> ``FIRB``).
+    """
+    value_map = mapping.components["approach"].value_map
+    return _apply_value_map(_normalise(pl.col(approach.legacy_col)), value_map)
+
+
+def _emit_method_vocabulary_diagnostic(
+    legacy_results: pl.LazyFrame,
+    raw_col: str,
+    method_src: pl.Expr,
+    errors: list[CalculationError],
+) -> None:
+    """Warn (REC007) when legacy approach values fall outside our methodology vocabulary.
+
+    The gate for the by-method allocation is that the ``approach`` component is *mapped*
+    — not that its VALUES resolve. A legacy approach coded ``"STA"`` / ``"1"`` /
+    ``"Internal"`` passes ``method_label_expr`` straight through to its own upper-cased
+    label, which can never share a ``(class, method)`` key with our STD / FIRB / AIRB
+    rows: the split renders, but every row is one-sided and the deltas are meaningless.
+    This turns that silent trap into an actionable "fix your value_map" warning.
+
+    Reported values are the RAW legacy cells, not the labels they mapped to, so the
+    message names what is actually in the analyst's file. A NULL approach is called out
+    separately: ``method_label_expr`` folds it to the synthetic label ``OTHER``, and
+    telling someone to value-map ``OTHER`` (a value they never supplied) would be
+    useless — the fix there is to populate the column, not to map it.
+
+    Runs over ``legacy_results`` (one projected column, deduplicated) rather than the
+    grouped ``legacy_side``, so this diagnostic collect never re-executes the allocation
+    aggregation that the returned lazy frame will run at the output boundary. Symmetric
+    with the existing duplicate-key / heterogeneity / REC005 / REC006 diagnostics: this
+    is an offline analysis tool, not the hot pipeline.
+    """
+    pairs = (
+        legacy_results.select(
+            pl.col(raw_col).cast(pl.String).alias("_raw"), method_src.alias(_METHOD_SRC)
+        )
+        .with_columns(method_label_expr(_METHOD_SRC).alias("method"))
+        .unique()
+        .collect()
+    )
+    rows = list(pairs.iter_rows(named=True))
+    unresolved = sorted(
+        {r["_raw"] for r in rows if r["_raw"] is not None and r["method"] not in METHOD_LABELS}
+    )
+    has_null = any(r["_raw"] is None for r in rows)
+    if not unresolved and not has_null:
+        return
+
+    parts: list[str] = []
+    if unresolved:
+        parts.append(
+            f"legacy approach value(s) {unresolved} do not resolve to a methodology "
+            f"{list(METHOD_LABELS)} — add a [components.approach] value_map translating "
+            "them to our approach labels (e.g. standardised / foundation_irb / advanced_irb)"
+        )
+    if has_null:
+        parts.append("some legacy rows carry no approach at all (populate the column)")
+    errors.append(
+        reconciliation_warning(
+            ERROR_RECON_METHOD_UNRESOLVED,
+            f"{'; '.join(parts)}. Those rows appear as legacy-only lines in the by-method "
+            "asset-class allocation, so its deltas overstate the difference.",
+            field_name=raw_col,
+            actual_value=", ".join(unresolved) if unresolved else "null",
+        )
     )
 
 
@@ -837,20 +1040,16 @@ def _drop_nonfinite(expr: pl.Expr) -> pl.Expr:
     return pl.when(f.is_finite() | f.is_null()).then(f).otherwise(0.0)
 
 
-def _empty_class_allocation() -> pl.LazyFrame:
-    """Stable empty schema for the class-allocation view (class/money unmapped)."""
-    return pl.LazyFrame(
-        schema={
-            "exposure_class": pl.String,
-            "our_ead": pl.Float64,
-            "legacy_ead": pl.Float64,
-            "delta_ead": pl.Float64,
-            "our_rwa": pl.Float64,
-            "legacy_rwa": pl.Float64,
-            "delta_rwa": pl.Float64,
-            "delta_rwa_pct": pl.Float64,
-        }
-    )
+def _empty_class_allocation(group: tuple[str, ...]) -> pl.LazyFrame:
+    """Stable empty schema for an allocation view (class / approach / money unmapped).
+
+    Shares ``_ALLOCATION_MONEY_COLUMNS`` with the populated ``.select()`` so the empty
+    and non-empty frames agree on column names, dtypes AND order — the export sheet and
+    the UI table read the same shape either way.
+    """
+    schema: dict[str, PolarsDataType] = dict.fromkeys(group, pl.String)
+    schema.update(dict.fromkeys(_ALLOCATION_MONEY_COLUMNS, pl.Float64))
+    return pl.LazyFrame(schema=schema)
 
 
 def _summary_by_bucket(recon: pl.LazyFrame) -> pl.LazyFrame:
@@ -983,10 +1182,12 @@ def material_summaries(recon: pl.DataFrame) -> dict[str, pl.DataFrame]:
     wide per-key frame filtered to ``~is_immaterial`` — so the UI's "hide
     zero-gross-exposure rows" view can never drift from the all-rows summaries.
     Returns a dict keyed by the corresponding ``ReconciliationBundle`` frame names;
-    ``class_allocation`` is intentionally omitted (it is built from the raw results
-    and a zero-gross row contributes nothing to it). Returns an empty dict when the
-    frame carries no active components, so callers fall back to the all-rows
-    accessors rather than crash on an empty reconciliation.
+    ``class_allocation`` and ``class_allocation_by_method`` are intentionally omitted —
+    both are built from the raw results rather than the per-key frame (so they carry no
+    ``is_immaterial`` flag to filter on), and a zero-gross row contributes nothing to
+    either. Do NOT add a per-key re-derivation for them. Returns an empty dict when the
+    frame carries no active components, so callers fall back to the all-rows accessors
+    rather than crash on an empty reconciliation.
     """
     active = _active_components_from_frame(recon)
     if not active:

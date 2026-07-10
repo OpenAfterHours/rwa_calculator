@@ -105,6 +105,17 @@ join keys and column names).</div>
 <div class="panel">
   <h3>Asset-class allocation — legacy vs ours (RWA)</h3>
   {{ result.chart_allocation | safe }}
+  {% if result.allocation_method_sections %}
+  <h4>Split by method</h4>
+  <p class="muted">The same money again, one section per methodology — STD (standardised),
+  FIRB, AIRB (advanced IRB, retail included), and slotting / equity where present — because
+  each asset class is reported per method (SA on COREP C 07.00, IRB on C 08.0x). All sections
+  share one bar scale, so a small method reads as genuinely small.</p>
+  {% for section in result.allocation_method_sections %}
+  <h4 class="method-subtitle">{{ section.method }}</h4>
+  {{ section.chart | safe }}
+  {% endfor %}
+  {% endif %}
 </div>
 <h3>Asset-class allocation — EAD &amp; RWA by risk class</h3>
 <p class="muted">Money totalled by risk class, <strong>post-guarantee</strong>: a guaranteed
@@ -112,6 +123,15 @@ exposure's guaranteed slice is counted under the guarantor's class and its retai
 under the borrower's, matching a post-substitution legacy extract. Offsetting deltas show
 where the two engines allocate an exposure to different classes.</p>
 {{ render_table(result.allocation_table) }}
+{% if result.allocation_method_table.rows %}
+<h3>Asset-class allocation — EAD &amp; RWA by risk class &amp; method</h3>
+<p class="muted">The same post-guarantee money, split by the methodology each side applied.
+Summing a class's methods reproduces its combined row above, so a class that ties out in
+total but is allocated to <em>different approaches</em> by the two engines shows here as
+offsetting deltas instead of a clean match. The guaranteed slice of an SA-guaranteed
+exposure is counted under the guarantor's class <em>and</em> its standardised method.</p>
+{{ render_table(result.allocation_method_table) }}
+{% endif %}
 {% endif %}
 <h3>By bucket</h3>
 {{ drill_table(result.bucket_table, "row_bucket", result.explorer_url, "bucket", result.hide_qs) }}
@@ -125,8 +145,11 @@ split here (that post-guarantee split is in the allocation above).</p>
 <h3>By exposure class &amp; method</h3>
 <p class="muted">Our-side view — how our breaks distribute across methodology (STD / FIRB / AIRB /
 slotting / equity) within each exposure class. Click a method to drill the explorer to that
-class × method. (The legacy side carries no approach, so the asset-class allocation above stays
-un-split.)</p>
+class × method.
+{% if result.allocation_method_sections %}(Break attribution is at the borrower grain, so this
+stays our-side only — the two-sided, post-guarantee money split is the by-method allocation
+above.){% else %}(Map <code>[components.approach]</code> to give the legacy side a method too and
+split the asset-class allocation above by methodology.){% endif %}</p>
 {{ drill_table2(result.class_method_table, "method", result.explorer_url, "exposure_class", "our_exposure_class", "method", "method", result.hide_qs) }}
 
 <h2>3 · Worklist — top {{ result.biggest_n }} of {{ "{:,}".format(result.break_count) }} break(s), largest first</h2>

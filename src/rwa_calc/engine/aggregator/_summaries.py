@@ -21,6 +21,18 @@ _METHOD_AIRB = "AIRB"
 _METHOD_SLOTTING = "SLOTTING"
 _METHOD_EQUITY = "EQUITY"
 
+# The complete methodology vocabulary ``method_label_expr`` can resolve an approach
+# to. Anything else falls through to its own upper-cased label, so a consumer that
+# maps an EXTERNAL approach column (the reconciliation's legacy side) can test
+# membership here to detect labels that will never meet ours on a join.
+METHOD_LABELS: tuple[str, ...] = (
+    _METHOD_STD,
+    _METHOD_FIRB,
+    _METHOD_AIRB,
+    _METHOD_SLOTTING,
+    _METHOD_EQUITY,
+)
+
 
 def generate_summary_by_class(results: pl.LazyFrame) -> pl.LazyFrame:
     """

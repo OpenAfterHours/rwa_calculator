@@ -27,6 +27,7 @@ from rwa_calc.contracts.errors import (
     ERROR_RECON_GRAIN_HETEROGENEOUS,
     ERROR_RECON_KEY_COLUMN_MISSING,
     ERROR_RECON_LEGACY_COLUMN_MISSING,
+    ERROR_RECON_METHOD_UNRESOLVED,
     ERROR_RECON_NO_KEY_OVERLAP,
     ERROR_RECON_NON_FINITE_VALUE,
 )
@@ -350,6 +351,207 @@ class TestClassAllocation:
         assert df.height == 0
         assert "exposure_class" in df.columns
         assert "delta_rwa" in df.columns
+
+
+class TestClassAllocationByMethod:
+    """The asset-class allocation split by methodology — two-sided, post-guarantee.
+
+    COREP reports each asset class per method, so the allocation gains a method
+    dimension whenever the ``approach`` component is mapped (which is what gives the
+    legacy side a method to split on).
+    """
+
+    def _ours(self) -> pl.LazyFrame:
+        return pl.LazyFrame(
+            {
+                "exposure_reference": ["C1", "C2", "R1"],
+                "exposure_class": ["corporate", "corporate", "retail"],
+                "approach_applied": ["standardised", "advanced_irb", "standardised"],
+                "ead_final": [100.0, 400.0, 200.0],
+                "rwa_final": [50.0, 320.0, 150.0],
+            }
+        )
+
+    def _legacy(self, approaches: list[str | None]) -> pl.LazyFrame:
+        return pl.LazyFrame(
+            {
+                "loan_id": ["C1", "C2", "R1"],
+                "legacy_ead": [100.0, 400.0, 200.0],
+                "legacy_rwa": [50.0, 320.0, 150.0],
+                "legacy_exposure_class": ["CORP", "CORP", "RETAIL"],
+                "legacy_approach": approaches,
+            },
+            schema_overrides={"legacy_approach": pl.String},
+        )
+
+    def _mapping(self, approach: ComponentMapping | None = None) -> LegacyColumnMapping:
+        components: dict[str, ComponentMapping] = {
+            "ead": ComponentMapping("legacy_ead"),
+            "rwa": ComponentMapping("legacy_rwa"),
+            "exposure_class": ComponentMapping(
+                "legacy_exposure_class", value_map={"CORP": "corporate", "RETAIL": "retail"}
+            ),
+        }
+        if approach is not None:
+            components["approach"] = approach
+        return LegacyColumnMapping(
+            legacy_keys=("loan_id",), our_keys=("exposure_reference",), components=components
+        )
+
+    def test_splits_each_class_by_method_on_both_sides(self) -> None:
+        # Arrange: corporate is half STD, half AIRB on both sides.
+        mapping = self._mapping(
+            ComponentMapping("legacy_approach", value_map={"STD": "standardised"})
+        )
+
+        # Act
+        df = _recon(
+            self._ours(), self._legacy(["STD", "advanced_irb", "STD"]), mapping
+        ).class_allocation_by_method.collect()
+
+        # Assert: corporate is two rows (one per method), each tying out.
+        rows = {(r["method"], r["exposure_class"]): r for r in df.to_dicts()}
+        assert rows[("STD", "corporate")]["our_rwa"] == pytest.approx(50.0)
+        assert rows[("AIRB", "corporate")]["our_rwa"] == pytest.approx(320.0)
+        assert rows[("STD", "retail")]["our_rwa"] == pytest.approx(150.0)
+        assert all(r["delta_rwa"] == pytest.approx(0.0) for r in rows.values())
+
+    def test_method_rows_sum_to_the_class_allocation_row(self) -> None:
+        # The method dimension is a pure partition of the class one.
+        mapping = self._mapping(
+            ComponentMapping("legacy_approach", value_map={"STD": "standardised"})
+        )
+        bundle = _recon(self._ours(), self._legacy(["STD", "advanced_irb", "STD"]), mapping)
+
+        by_method = bundle.class_allocation_by_method.collect()
+        by_class = bundle.class_allocation.collect()
+
+        corp_methods = by_method.filter(pl.col("exposure_class") == "corporate")
+        corp_class = by_class.filter(pl.col("exposure_class") == "corporate").row(0, named=True)
+        assert corp_methods.get_column("our_rwa").sum() == pytest.approx(corp_class["our_rwa"])
+        assert corp_methods.get_column("our_ead").sum() == pytest.approx(corp_class["our_ead"])
+
+    def test_guaranteed_slice_reports_under_the_guarantors_method(self) -> None:
+        # An AIRB corporate guaranteed by an SA sovereign: Art. 235 substitution treats
+        # the guaranteed slice as a direct SA exposure to the guarantor, so it must land
+        # under (STD, central_government) -- matching a post-substitution legacy extract
+        # -- not under the obligor's AIRB method.
+        ours = pl.LazyFrame(
+            {
+                "exposure_reference": ["C1__G_SOV", "C1__REM"],
+                "exposure_class": ["corporate", "corporate"],
+                "exposure_class_applied": ["corporate", "corporate"],
+                "exposure_class_post_crm": ["central_government", "corporate"],
+                "approach_applied": ["advanced_irb", "advanced_irb"],
+                "approach_post_crm": ["standardised", "advanced_irb"],
+                "ead_final": [400.0, 600.0],
+                "rwa_final": [0.0, 480.0],
+            }
+        )
+        legacy = pl.LazyFrame(
+            {
+                "loan_id": ["C1G", "C1R"],
+                "legacy_ead": [400.0, 600.0],
+                "legacy_rwa": [0.0, 480.0],
+                "legacy_exposure_class": ["central_government", "corporate"],
+                "legacy_approach": ["standardised", "advanced_irb"],
+            }
+        )
+        mapping = self._mapping(ComponentMapping("legacy_approach"))
+
+        df = _recon(ours, legacy, mapping).class_allocation_by_method.collect()
+
+        rows = {(r["method"], r["exposure_class"]): r for r in df.to_dicts()}
+        assert ("STD", "central_government") in rows
+        assert ("AIRB", "central_government") not in rows
+        assert rows[("STD", "central_government")]["our_ead"] == pytest.approx(400.0)
+        assert rows[("STD", "central_government")]["delta_ead"] == pytest.approx(0.0)
+        assert rows[("AIRB", "corporate")]["delta_rwa"] == pytest.approx(0.0)
+
+    def test_offsetting_deltas_when_engines_disagree_on_method(self) -> None:
+        # Legacy books the AIRB corporate under STD: the class total still ties, but the
+        # by-method split exposes it as two offsetting one-sided rows.
+        mapping = self._mapping(
+            ComponentMapping("legacy_approach", value_map={"STD": "standardised"})
+        )
+        bundle = _recon(self._ours(), self._legacy(["STD", "STD", "STD"]), mapping)
+
+        by_class = bundle.class_allocation.collect()
+        corp_class = by_class.filter(pl.col("exposure_class") == "corporate").row(0, named=True)
+        assert corp_class["delta_rwa"] == pytest.approx(0.0)  # hidden at class level
+
+        rows = {
+            (r["method"], r["exposure_class"]): r
+            for r in bundle.class_allocation_by_method.collect().to_dicts()
+        }
+        assert rows[("AIRB", "corporate")]["legacy_rwa"] == pytest.approx(0.0)
+        assert rows[("AIRB", "corporate")]["delta_rwa"] == pytest.approx(320.0)
+        assert rows[("STD", "corporate")]["delta_rwa"] == pytest.approx(-320.0)
+
+    def test_empty_when_approach_unmapped(self) -> None:
+        # The gate: without a mapped approach the legacy side has no method to split on.
+        df = _recon(
+            self._ours(), self._legacy(["STD", "STD", "STD"]), self._mapping()
+        ).class_allocation_by_method.collect()
+
+        assert df.height == 0
+        assert df.columns[:2] == ["method", "exposure_class"]
+        assert "delta_rwa_pct" in df.columns
+
+    def test_warns_when_legacy_approach_values_do_not_resolve(self) -> None:
+        # REC007: the gate checks the approach is MAPPED, not that its values resolve.
+        bundle = _recon(
+            self._ours(),
+            self._legacy(["STA", "IRBA", "STA"]),
+            self._mapping(ComponentMapping("legacy_approach")),
+        )
+
+        codes = [e.code for e in bundle.errors]
+        assert ERROR_RECON_METHOD_UNRESOLVED in codes
+        message = next(e.message for e in bundle.errors if e.code == ERROR_RECON_METHOD_UNRESOLVED)
+        assert "IRBA" in message
+        assert "STA" in message
+
+    def test_no_warning_when_value_map_resolves_legacy_approaches(self) -> None:
+        bundle = _recon(
+            self._ours(),
+            self._legacy(["STA", "IRBA", "STA"]),
+            self._mapping(
+                ComponentMapping(
+                    "legacy_approach",
+                    value_map={"STA": "standardised", "IRBA": "advanced_irb"},
+                )
+            ),
+        )
+
+        assert ERROR_RECON_METHOD_UNRESOLVED not in [e.code for e in bundle.errors]
+
+    def test_warning_names_the_raw_legacy_value_not_its_label(self) -> None:
+        # The message must quote what is in the analyst's file, not the synthetic
+        # upper-cased label method_label_expr folded it to.
+        bundle = _recon(
+            self._ours(),
+            self._legacy(["Internal", "standardised", "standardised"]),
+            self._mapping(ComponentMapping("legacy_approach")),
+        )
+
+        message = next(e.message for e in bundle.errors if e.code == ERROR_RECON_METHOD_UNRESOLVED)
+        assert "Internal" in message
+        assert "INTERNAL" not in message
+
+    def test_null_legacy_approach_is_reported_as_missing_not_as_an_unmappable_value(self) -> None:
+        # method_label_expr folds a null approach to the synthetic label "OTHER". Telling
+        # the analyst to value_map "OTHER" -- a value they never supplied -- is useless;
+        # the warning must say the column is unpopulated instead.
+        bundle = _recon(
+            self._ours(),
+            self._legacy([None, "standardised", "standardised"]),
+            self._mapping(ComponentMapping("legacy_approach")),
+        )
+
+        message = next(e.message for e in bundle.errors if e.code == ERROR_RECON_METHOD_UNRESOLVED)
+        assert "no approach at all" in message
+        assert "OTHER" not in message
 
 
 class TestCompositeKey:

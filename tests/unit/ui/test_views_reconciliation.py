@@ -154,6 +154,84 @@ def test_class_allocation_empty_when_unmapped(response: ReconciliationResponse) 
     assert rv.class_allocation_chart_items(response) == []
 
 
+def _response_with_class_and_method() -> ReconciliationResponse:
+    """Class AND approach mapped, so the by-method allocation is populated.
+
+    Corporate spans two methods (L1 standardised, L3 advanced IRB); retail is STD only.
+    """
+    ours = pl.LazyFrame(
+        {
+            "exposure_reference": ["L1", "L2", "L3"],
+            "exposure_class": ["corporate", "retail", "corporate"],
+            "approach_applied": ["standardised", "standardised", "advanced_irb"],
+            "ead_final": [100.0, 200.0, 500.0],
+            "rwa_final": [50.0, 150.0, 250.0],
+        }
+    )
+    legacy = pl.LazyFrame(
+        {
+            "exposure_reference": ["L1", "L2", "L3"],
+            "legacy_ead": [100.0, 200.0, 500.0],
+            "legacy_rwa": [50.0, 150.0, 300.0],
+            "legacy_exposure_class": ["corporate", "retail", "corporate"],
+            "legacy_approach": ["standardised", "standardised", "advanced_irb"],
+        }
+    )
+    mapping = LegacyColumnMapping(
+        legacy_keys=("exposure_reference",),
+        our_keys=("exposure_reference",),
+        components={
+            "ead": ComponentMapping("EAD"),
+            "rwa": ComponentMapping("RWA"),
+            "exposure_class": ComponentMapping("legacy_exposure_class"),
+            "approach": ComponentMapping("legacy_approach"),
+        },
+    )
+    bundle = ReconciliationRunner().reconcile(ours, legacy, mapping)
+    return ReconciliationResponse.from_bundle(
+        bundle, legacy_file=Path("legacy.csv"), framework="CRR"
+    )
+
+
+def test_class_allocation_by_method_table_splits_each_class() -> None:
+    df = rv.class_allocation_by_method_table(_response_with_class_and_method())
+    rows = {(r["method"], r["exposure_class"]): r for r in df.to_dicts()}
+    assert rows[("STD", "corporate")]["our_rwa"] == pytest.approx(50.0)
+    assert rows[("AIRB", "corporate")]["our_rwa"] == pytest.approx(250.0)
+    assert rows[("STD", "retail")]["our_rwa"] == pytest.approx(150.0)
+
+
+def test_class_allocation_by_method_table_orders_methods_for_presentation() -> None:
+    # STD before AIRB (METHOD_ORDER), not alphabetical -- matches the chart sections.
+    df = rv.class_allocation_by_method_table(_response_with_class_and_method())
+    assert df.columns[0] == "method"
+    assert df.get_column("method").to_list() == ["STD", "STD", "AIRB"]
+
+
+def test_class_allocation_method_sections_one_per_method() -> None:
+    sections = rv.class_allocation_method_sections(_response_with_class_and_method())
+    assert [s["method"] for s in sections] == ["STD", "AIRB"]
+    assert all(s["chart"].startswith("<svg") for s in sections)
+
+
+def test_class_allocation_by_method_empty_when_approach_unmapped() -> None:
+    # Class mapped but approach not -> no split; the page falls back to the combined view.
+    resp = _response_with_class()
+    assert rv.class_allocation_by_method_table(resp).height == 0
+    assert rv.class_allocation_method_sections(resp) == []
+
+
+def test_class_allocation_by_method_tolerates_bare_empty_bundle() -> None:
+    # create_empty_reconciliation_bundle() yields a 0-COLUMN frame, not the stable schema.
+    from rwa_calc.contracts.bundles import create_empty_reconciliation_bundle
+
+    resp = ReconciliationResponse.from_bundle(
+        create_empty_reconciliation_bundle(), legacy_file=Path("legacy.csv"), framework="CRR"
+    )
+    assert rv.class_allocation_by_method_table(resp).height == 0
+    assert rv.class_allocation_method_sections(resp) == []
+
+
 # =============================================================================
 # Tier 4 — forensic table projection + filter
 # =============================================================================

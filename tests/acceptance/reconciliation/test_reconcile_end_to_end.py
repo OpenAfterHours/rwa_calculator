@@ -231,6 +231,10 @@ class TestReconcileEndToEnd:
         names = {p.name for p in export.files}
         assert "reconciliation_summary_by_component.csv" in names
         assert "reconciliation_totals_tie_out.csv" in names
+        # Both allocation grains ship, even when the by-method one is header-only
+        # (the approach component is unmapped in this settings fixture).
+        assert "reconciliation_class_allocation.csv" in names
+        assert "reconciliation_class_allocation_by_method.csv" in names
 
     def test_reconcile_surfaces_failed_calculation(self, tmp_path: Path) -> None:
         # Arrange: a data path with no input files -> calculate() fails, and its

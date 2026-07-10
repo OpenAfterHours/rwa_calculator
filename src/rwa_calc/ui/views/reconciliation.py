@@ -39,6 +39,8 @@ from rwa_calc.analysis.reconciliation import (
     BUCKET_MISSING_RIGHT,
     BUCKET_WITHIN,
 )
+from rwa_calc.ui.views import method_split
+from rwa_calc.ui.views.method_split import METHOD_ORDER  # presentation order of the sections
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -86,6 +88,15 @@ legacy_column = "EAD"
 [components.exposure_class]
 legacy_column = "Asset_Class"
 value_map = { CORP = "corporate", RETAIL = "retail", RRE = "residential_mortgage" }
+
+# Map your approach/method column to SPLIT the asset-class allocation by methodology
+# (STD / FIRB / AIRB / SLOTTING / EQUITY), the way COREP reports each class per method
+# (SA on C 07.00, IRB on C 08.0x). Without it the allocation stays combined — the legacy
+# side has no method to split on. value_map must land on OUR approach labels or the two
+# sides cannot join; a REC007 warning names any value that did not resolve.
+# [components.approach]
+# legacy_column = "Method"
+# value_map = { STD = "standardised", "IRB-F" = "foundation_irb", "IRB-A" = "advanced_irb" }
 
 # [components.risk_weight]
 # legacy_column = "RW_pct"
@@ -331,6 +342,47 @@ def class_allocation_chart_items(
         (str(row["exposure_class"]).upper(), _f(row.get("legacy_rwa")), _f(row.get("our_rwa")))
         for row in alloc.iter_rows(named=True)
     ]
+
+
+def class_allocation_by_method_table(response: ReconciliationResponse) -> pl.DataFrame:
+    """Tier 2 — the asset-class allocation split by methodology within each class.
+
+    Re-sorted into the presentation ``METHOD_ORDER`` (STD, FIRB, AIRB, SLOTTING, EQUITY,
+    then anything unrecognised alphabetically) and then by class, so the table reads in
+    the same order as the per-method chart sections beside it. Returns the frame
+    untouched when it is empty or carries no ``method`` column — the reconciliation
+    produced no by-method split (the ``approach`` component was unmapped), or the bundle
+    is the bare empty one, and the page falls back to the combined allocation.
+    """
+    alloc = response.collect_class_allocation_by_method()
+    if alloc.is_empty() or "method" not in alloc.columns:
+        return alloc
+    rank = pl.col("method").replace_strict(
+        {m: i for i, m in enumerate(METHOD_ORDER)},
+        default=len(METHOD_ORDER),
+        return_dtype=pl.Int32,
+    )
+    return (
+        alloc.with_columns(rank.alias("_method_rank"))
+        .sort("_method_rank", "method", "exposure_class", nulls_last=True)
+        .drop("_method_rank")
+    )
+
+
+def class_allocation_method_sections(response: ReconciliationResponse) -> list[dict]:
+    """Per-methodology grouped-bar sections (Legacy vs Ours RWA by class).
+
+    Mirrors the results / comparison tabs: one chart per method in ``METHOD_ORDER``,
+    sharing one bar scale so a small method reads as genuinely small. Returns ``[]``
+    when there is no by-method split, so the template falls back to the single combined
+    allocation chart.
+    """
+    return method_split.grouped_series_sections(
+        response.collect_class_allocation_by_method(),
+        left_col="legacy_rwa",
+        right_col="our_rwa",
+        series=("Legacy", "Ours"),
+    )
 
 
 def breaks_table(response: ReconciliationResponse) -> pl.DataFrame:

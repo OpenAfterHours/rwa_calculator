@@ -219,6 +219,58 @@ def test_reconciliation_renders_asset_class_allocation(client: TestClient, tmp_p
     # Assert: the asset-class allocation view is present.
     assert report.status_code == 200
     assert "Asset-class allocation" in report.text
+    # Approach unmapped by default -> the allocation stays combined, and the page
+    # tells the analyst how to split it.
+    assert "by risk class &amp; method" not in report.text
+    assert "[components.approach]" in report.text
+
+
+def test_reconciliation_splits_asset_class_allocation_by_method(
+    client: TestClient, tmp_path: Path
+) -> None:
+    # Arrange: a legacy extract that reports each asset class PER METHOD (as COREP
+    # does), so mapping [components.approach] gives the legacy side a method to split
+    # on and the allocation renders one chart section + a table row set per method.
+    write_mandatory_minimum(tmp_path)
+    ours = (
+        CreditRiskCalc(
+            data_path=str(tmp_path),
+            framework="CRR",
+            reporting_date=date(2025, 1, 1),
+            permission_mode="standardised",
+            data_format="parquet",
+        )
+        .calculate()
+        .scan_results()
+        .select(
+            "exposure_reference", "ead_final", "rwa_final", "exposure_class", "approach_applied"
+        )
+        .collect()
+    )
+    ours.rename(
+        {
+            "ead_final": "EAD",
+            "rwa_final": "RWA",
+            "exposure_class": "Asset_Class",
+            "approach_applied": "Method",
+        }
+    ).write_csv(tmp_path / "legacy_output.csv")
+
+    mapping_toml = DEFAULT_MAPPING_TOML + '\n[components.approach]\nlegacy_column = "Method"\n'
+
+    # Act
+    job_id = _dispatch_and_wait(client, _form_data(str(tmp_path), mapping_toml))
+    report = client.get(f"/reconciliation/{job_id}")
+
+    # Assert: the per-method split renders (chart sections + the class x method table),
+    # and no REC007 "unresolved method" warning fires -- our own labels round-trip.
+    assert report.status_code == 200
+    assert "by risk class &amp; method" in report.text
+    assert 'class="method-subtitle"' in report.text
+    assert "STD" in report.text
+    # No REC007: our own approach labels round-trip through method_label_expr. (Match on
+    # the message, not the code -- the code is named in the mapping TOML textarea.)
+    assert "do not resolve to a methodology" not in report.text
 
 
 def test_reconciliation_renders_class_method_segment(client: TestClient, recon_dir: str) -> None:

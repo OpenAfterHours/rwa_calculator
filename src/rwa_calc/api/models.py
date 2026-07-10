@@ -474,6 +474,18 @@ class ReconciliationResponse:
         """Collect the by-risk-class allocation tie-out (ours vs legacy EAD/RWA)."""
         return self._collect_cached("class_allocation")
 
+    def scan_class_allocation_by_method(self) -> pl.LazyFrame:
+        """Lazy by-(method, risk-class) allocation tie-out (ours vs legacy EAD/RWA)."""
+        return self.bundle.class_allocation_by_method
+
+    def collect_class_allocation_by_method(self) -> pl.DataFrame:
+        """Collect the allocation tie-out split by methodology within each risk class.
+
+        Empty unless the ``approach`` component is mapped (the legacy side then has a
+        method to split on) — callers fall back to ``collect_class_allocation()``.
+        """
+        return self._collect_cached("class_allocation_by_method")
+
     def collect_summary_by_bucket(self) -> pl.DataFrame:
         """Collect the row-level bucket counts."""
         return self._collect_cached("summary_by_bucket")

@@ -79,17 +79,13 @@ class TestBundle:
     def test_empty_factory_has_all_frames(self) -> None:
         bundle = create_empty_reconciliation_bundle()
         assert isinstance(bundle, ReconciliationBundle)
-        # All seven frames present (collect_schema works on each).
-        for frame in (
-            bundle.component_reconciliation,
-            bundle.summary_by_component,
-            bundle.summary_by_bucket,
-            bundle.summary_by_exposure_class,
-            bundle.summary_by_approach,
-            bundle.breaks_detail,
-            bundle.totals_tie_out,
-        ):
-            assert frame.collect().height == 0
+        # Every LazyFrame field is present and empty. Derived from the dataclass
+        # fields rather than a hand-listed tuple, so a frame added to the bundle
+        # cannot silently escape this contract.
+        frames = [f.name for f in dataclasses.fields(ReconciliationBundle) if f.name != "errors"]
+        assert "class_allocation_by_method" in frames
+        for name in frames:
+            assert getattr(bundle, name).collect().height == 0, name
 
 
 class TestErrorCodes:

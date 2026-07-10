@@ -319,8 +319,10 @@ class ResultExporter:
     ) -> ExportResult:
         """Export the reconciliation to a multi-sheet Excel workbook.
 
-        Sheets: By Component, Totals Tie-Out, Class Allocation, Reconciliation,
-        Breaks, By Class, By Approach, Errors. Requires xlsxwriter.
+        Sheets: By Component, Totals Tie-Out, Class Allocation, Class Alloc by Method,
+        Reconciliation, Breaks, By Class, By Approach, Errors. Requires xlsxwriter.
+        Empty frames are skipped, so the by-method sheet is absent when the ``approach``
+        component is unmapped.
 
         Raises:
             ModuleNotFoundError: If xlsxwriter is not installed.
@@ -339,6 +341,7 @@ class ResultExporter:
             "summary_by_component": "By Component",
             "totals_tie_out": "Totals Tie-Out",
             "class_allocation": "Class Allocation",
+            "class_allocation_by_method": "Class Alloc by Method",
             "summary_by_bucket": "By Bucket",
             "summary_by_exposure_class": "By Class",
             "summary_by_approach": "By Approach",
@@ -508,6 +511,7 @@ def _reconciliation_frames(
         ("summary_by_component", response.collect_summary_by_component()),
         ("totals_tie_out", response.collect_totals_tie_out()),
         ("class_allocation", response.collect_class_allocation()),
+        ("class_allocation_by_method", response.collect_class_allocation_by_method()),
         ("summary_by_bucket", response.collect_summary_by_bucket()),
         ("summary_by_exposure_class", response.collect_summary_by_exposure_class()),
         ("summary_by_approach", response.collect_summary_by_approach()),

@@ -401,6 +401,9 @@ def _reconciliation_response() -> ReconciliationResponse:
         ),
         summary_by_component=pl.LazyFrame({"component": ["ead"], "break_count": [1]}),
         class_allocation=pl.LazyFrame({"exposure_class": ["corporate"]}),
+        class_allocation_by_method=pl.LazyFrame(
+            {"method": ["STD"], "exposure_class": ["corporate"]}
+        ),
         summary_by_bucket=pl.LazyFrame({"row_bucket": ["break", "match"], "count": [1, 1]}),
         summary_by_exposure_class=pl.LazyFrame(
             {"exposure_class": ["corporate"], "break_count": [1]}
@@ -435,6 +438,7 @@ class TestReconciliationResponseCollectCache:
             response.collect_component_reconciliation,
             response.collect_summary_by_component,
             response.collect_class_allocation,
+            response.collect_class_allocation_by_method,
             response.collect_summary_by_bucket,
             response.collect_summary_by_exposure_class,
             response.collect_summary_by_approach,

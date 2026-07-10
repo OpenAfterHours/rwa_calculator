@@ -84,6 +84,26 @@ You map only the components you have. Each one is compared with a sensible defau
 each to compare collateral allocation, guarantee benefit and credit-quality step side-by-side.
 A component you do **not** map simply shows our side only in the single-loan forensic.
 
+!!! tip "Map `approach` to split the asset-class allocation by method"
+    COREP reports each asset class **per method** (SA on C 07.00, IRB on C 08.0x). Mapping
+    `[components.approach]` gives the legacy side a method to split on, and the asset-class
+    allocation gains a per-methodology breakdown (STD / FIRB / AIRB / slotting / equity) —
+    one chart section and one table row-set per method. Without it the allocation stays
+    combined. Your `value_map` must land on **our** approach labels (`standardised`,
+    `foundation_irb`, `advanced_irb`, …), or the two sides split on keys that can never meet;
+    a `REC007` warning names any value that failed to resolve.
+
+    ```toml
+    [components.approach]
+    legacy_column = "Method"
+    value_map = { STD = "standardised", "IRB-F" = "foundation_irb", "IRB-A" = "advanced_irb" }
+    ```
+
+    Both dimensions are **post-guarantee**: the guaranteed slice of an SA-guaranteed exposure
+    is counted under the guarantor's class *and* its standardised method, so a class that ties
+    out in total but is booked under a different approach on each side surfaces as offsetting
+    deltas instead of a clean match.
+
 ### Buckets
 
 Every component on every row lands in one bucket, and the row takes its worst:
@@ -135,9 +155,12 @@ The result is layered from a one-number verdict down to a single exposure's driv
     **Where do breaks concentrate, and is the allocation right?** `class_allocation` totals
     EAD/RWA **by risk class** on each side (a split exposure's portions each counted in their
     own class) and shows the delta — so a class our engine allocates differently to the legacy
-    one stands out as offsetting deltas. `summary_by_bucket`, `summary_by_exposure_class`, and
-    `summary_by_approach` show whether breaks cluster in a particular bucket, class, or
-    approach.
+    one stands out as offsetting deltas. Map `[components.approach]` and
+    `class_allocation_by_method` splits that same money **by methodology within each class**
+    (STD / FIRB / AIRB / slotting / equity), the way COREP reports each class per method — so a
+    class that ties out in total but is booked under a *different approach* on each side stops
+    hiding. `summary_by_bucket`, `summary_by_exposure_class`, and `summary_by_approach` show
+    whether breaks cluster in a particular bucket, class, or approach.
 
 === "3 · Worklist"
 
@@ -289,6 +312,7 @@ The same flow is available over HTTP for programmatic callers via `POST /api/rec
 | `collect_totals_tie_out()` | `pl.DataFrame` | Per additive component: `legacy_total`, `our_total`, `delta`, `delta_pct`. |
 | `collect_summary_by_component()` | `pl.DataFrame` | Per component: bucket counts, `sum_abs_delta`, `break_rate`. |
 | `collect_class_allocation()` | `pl.DataFrame` | Per risk class: `our_ead`/`legacy_ead`/`delta_ead`, `our_rwa`/`legacy_rwa`/`delta_rwa`/`delta_rwa_pct`. |
+| `collect_class_allocation_by_method()` | `pl.DataFrame` | The same, split by `method` within each class. Empty unless `[components.approach]` is mapped. |
 | `collect_summary_by_bucket()` | `pl.DataFrame` | Row-level `row_bucket` counts. |
 | `collect_material_summaries()` | `dict[str, pl.DataFrame]` | The count / tie-out summaries re-derived with zero-gross-exposure rows removed (keyed by bundle-frame name); empty when no components reconciled. |
 | `collect_breaks_detail()` | `pl.DataFrame` | Long-format break worklist, ranked by `abs_delta`. |
@@ -306,6 +330,7 @@ The underlying engine bundle (available as `response.bundle`). All frames are
 | `component_reconciliation` | Per-key: `legacy_<c>` / `our_<c>` / `<c>_bucket` per component, explain + input columns, `row_bucket`, `worst_component`, `gross_exposure`, `is_immaterial`. |
 | `summary_by_component` | Headline per-component bucket counts and break rate. |
 | `class_allocation` | Per risk class: sum(ours) vs sum(legacy) EAD/RWA and deltas — the asset-class allocation tie-out. Empty when class/EAD/RWA are unmapped. |
+| `class_allocation_by_method` | The same allocation split by `method` (STD/FIRB/AIRB/SLOTTING/EQUITY) within each class — two-sided, post-guarantee. Summing a class's methods reproduces its `class_allocation` row. Empty unless `[components.approach]` is mapped. |
 | `summary_by_bucket` | Row-level bucket counts. |
 | `summary_by_exposure_class` | Break counts / sums by our exposure class. |
 | `summary_by_approach` | Break counts / sums by our approach. |
@@ -329,6 +354,9 @@ Reconciliation never aborts on a data problem — issues are recorded as non-fat
 | `REC002` | Legacy key(s) had multiple rows; the lines are **aggregated** to the key grain (additive components summed, ratios recomputed) — symmetric with our side, never dropped. |
 | `REC003` | A declared join key column was not found; reconciliation cannot proceed. |
 | `REC004` | A key aggregated rows of differing class/approach — on **our** side (a coarse key) or the **legacy** side (an exposure split across classes). The categorical shown is the first in the group; reconcile at the `(exposure × class)` grain to separate them. |
+| `REC005` | Zero key overlap: every row is one-sided, so the join matched nothing. Almost always a key-mapping mistake (case, zero-padding, `'123'` vs `'123.0'`), not a real break. |
+| `REC006` | Our side carries non-finite (NaN/inf) values. They are treated as `0` in the totals so one bad row cannot blank a column, and the affected components are named here. |
+| `REC007` | The mapped legacy **approach** values do not resolve to a methodology (`STD`/`FIRB`/`AIRB`/`SLOTTING`/`EQUITY`) — or some rows have none at all — so the by-method allocation shows them as legacy-only lines and its deltas overstate the difference. The warning names the raw values from your file: add a `[components.approach]` `value_map` translating them to our approach labels (or populate the column). |
 
 ## Related
 

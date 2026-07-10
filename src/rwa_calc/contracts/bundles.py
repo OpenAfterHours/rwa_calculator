@@ -1080,8 +1080,9 @@ class ReconciliationBundle:
 
     The frames are layered high-level → forensic:
     - ``totals_tie_out`` / ``summary_by_component``: headline agreement.
-    - ``class_allocation``: portfolio EAD/RWA by risk class, ours vs legacy — the
-      asset-class allocation comfort view (independent of the per-key join).
+    - ``class_allocation`` / ``class_allocation_by_method``: portfolio EAD/RWA by risk
+      class (and, when the approach is mapped, by methodology within it), ours vs legacy
+      — the asset-class allocation comfort view (independent of the per-key join).
     - ``summary_by_bucket`` / ``summary_by_exposure_class`` / ``summary_by_approach``:
       where breaks concentrate.
     - ``breaks_detail``: long-format worklist of every break, ranked by materiality.
@@ -1096,6 +1097,14 @@ class ReconciliationBundle:
         class_allocation: Per risk class — sum(ours) vs sum(legacy) EAD/RWA and
             deltas, so a class our engine allocates differently to the legacy one
             shows as offsetting deltas. Empty when class/EAD/RWA are unmapped.
+        class_allocation_by_method: The same allocation split by methodology
+            (STD/FIRB/AIRB/SLOTTING/EQUITY) within each class — COREP reports each
+            asset class per method, and a class the two engines allocate to different
+            approaches nets to zero at class level. Two-sided (unlike
+            ``summary_by_class_method``): both dimensions are post-guarantee, and
+            summing a class's methods reproduces its ``class_allocation`` row. Empty
+            unless the ``approach`` component is mapped — that mapping is what gives
+            the legacy side a method to split on.
         summary_by_bucket: Row-level bucket counts.
         summary_by_exposure_class: Break counts/sums grouped by our exposure class.
         summary_by_approach: Break counts/sums grouped by our approach.
@@ -1113,6 +1122,7 @@ class ReconciliationBundle:
     component_reconciliation: pl.LazyFrame
     summary_by_component: pl.LazyFrame
     class_allocation: pl.LazyFrame
+    class_allocation_by_method: pl.LazyFrame
     summary_by_bucket: pl.LazyFrame
     summary_by_exposure_class: pl.LazyFrame
     summary_by_approach: pl.LazyFrame
@@ -1220,6 +1230,7 @@ def create_empty_reconciliation_bundle() -> ReconciliationBundle:
         component_reconciliation=pl.LazyFrame(),
         summary_by_component=pl.LazyFrame(),
         class_allocation=pl.LazyFrame(),
+        class_allocation_by_method=pl.LazyFrame(),
         summary_by_bucket=pl.LazyFrame(),
         summary_by_exposure_class=pl.LazyFrame(),
         summary_by_approach=pl.LazyFrame(),

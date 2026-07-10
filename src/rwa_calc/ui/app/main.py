@@ -1214,6 +1214,15 @@ def _reconciliation_result(
         "chart_allocation": charts.grouped_bar_svg(
             reconciliation_view.class_allocation_chart_items(response), series=("Legacy", "Ours")
         ),
+        # The allocation split by methodology — populated only when the `approach`
+        # component is mapped. Both are empty otherwise and the template falls back
+        # to the combined chart + table above.
+        "allocation_method_sections": reconciliation_view.class_allocation_method_sections(
+            response
+        ),
+        "allocation_method_table": _table(
+            reconciliation_view.class_allocation_by_method_table(response)
+        ),
         "class_table": _table(segments["by_class"]),
         "approach_table": _table(segments["by_approach"]),
         "class_method_table": _table(segments["by_class_method"]),

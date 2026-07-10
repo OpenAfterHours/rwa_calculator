@@ -193,6 +193,10 @@ ERROR_RECON_NO_KEY_OVERLAP = "REC005"
 # Our side carries non-finite (NaN / inf) values: a single one poisons the
 # portfolio total and the tie-out, blanking "ours" even though most rows are fine.
 ERROR_RECON_NON_FINITE_VALUE = "REC006"
+# The mapped legacy approach column carries labels that do not resolve to our
+# methodology vocabulary (STD / FIRB / AIRB / SLOTTING / EQUITY), so the by-method
+# allocation would split the two sides on keys that can never meet.
+ERROR_RECON_METHOD_UNRESOLVED = "REC007"
 
 
 # =============================================================================

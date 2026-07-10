@@ -705,7 +705,7 @@ def _summary_by_component(recon: pl.LazyFrame, active: list[_ActiveComponent]) -
         n_mr = (bucket == BUCKET_MISSING_RIGHT).sum()
         comparable = n_break + n_within + n_exact
         sum_abs = (
-            pl.col(f"abs_delta_{a.spec.name}").abs().sum()
+            _drop_nonfinite(pl.col(f"abs_delta_{a.spec.name}")).abs().sum()
             if a.spec.kind == "numeric"
             else pl.lit(None, dtype=pl.Float64)
         )
@@ -817,8 +817,24 @@ def _class_allocation(
 
 
 def _sum_or_null(col: str | None) -> pl.Expr:
-    """Sum a column, or a null Float64 literal when the component is unmapped."""
-    return pl.col(col).sum() if col is not None else pl.lit(None, dtype=pl.Float64)
+    """Sum a column (non-finite treated as 0), or a null Float64 when unmapped."""
+    return _drop_nonfinite(pl.col(col)).sum() if col is not None else pl.lit(None, dtype=pl.Float64)
+
+
+def _drop_nonfinite(expr: pl.Expr) -> pl.Expr:
+    """Map NaN/inf summands to 0 (nulls preserved) so one bad row can't blank a total.
+
+    Every reconciliation total is a float ``sum()``; Polars sums a NaN/inf summand to
+    NaN/inf, which the UI then renders as a blank (or literal ``nan``) cell — hiding
+    every finite exposure in that class/component and its dependent delta. The non-finite
+    our-side values are still surfaced to the analyst as the REC006 warning banner (that
+    detector runs on the raw per-key frame, before any summary builder), so treating them
+    as 0 here only stops them from poisoning the readable totals; it never hides the
+    condition. Nulls (a genuinely absent / one-sided value) are left untouched so ``sum``
+    keeps skipping them.
+    """
+    f = expr.cast(pl.Float64, strict=False)
+    return pl.when(f.is_finite() | f.is_null()).then(f).otherwise(0.0)
 
 
 def _empty_class_allocation() -> pl.LazyFrame:
@@ -853,7 +869,11 @@ def _summary_by_group(
     """
     group_cols = [group_col] if isinstance(group_col, str) else list(group_col)
     has_rwa = any(a.spec.name == "rwa" for a in active)
-    sum_abs_rwa = pl.col("abs_delta_rwa").abs().sum() if has_rwa else pl.lit(None, dtype=pl.Float64)
+    sum_abs_rwa = (
+        _drop_nonfinite(pl.col("abs_delta_rwa")).abs().sum()
+        if has_rwa
+        else pl.lit(None, dtype=pl.Float64)
+    )
     return (
         recon.group_by(group_cols)
         .agg(
@@ -925,8 +945,8 @@ def _totals_tie_out(recon: pl.LazyFrame, active: list[_ActiveComponent]) -> pl.L
     for a in active:
         if not (a.spec.kind == "numeric" and a.spec.additive):
             continue
-        legacy_total = pl.col(a.legacy_col).sum()
-        our_total = pl.col(f"our_{a.spec.name}").sum()
+        legacy_total = _drop_nonfinite(pl.col(a.legacy_col)).sum()
+        our_total = _drop_nonfinite(pl.col(f"our_{a.spec.name}")).sum()
         rows.append(
             recon.select(
                 pl.lit(a.spec.name).alias("component"),

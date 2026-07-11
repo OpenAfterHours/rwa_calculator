@@ -1110,3 +1110,219 @@ class TestELPortfolioSummary:
         assert el is not None
         assert float(el.total_irb_rwa) == pytest.approx(2000000.0)
         assert float(el.t2_credit_cap) == pytest.approx(12000.0)
+
+
+# =============================================================================
+# Reporting Projection Tests (Phase 7 S2 — the canonical per-leg ledger)
+# =============================================================================
+
+
+class TestReportingProjection:
+    """Phase 7 S2: the canonical reporting projection sealed on aggregator_exit.
+
+    The results frame IS the per-leg substitution ledger (physical ``__G_`` /
+    ``__REM`` legs); these columns name it once so no consumer re-derives
+    class/approach/method or sniffs reference suffixes.
+    """
+
+    REPORTING_COLUMNS: tuple[str, ...] = (
+        "reporting_class",
+        "reporting_class_origin",
+        "reporting_approach",
+        "reporting_approach_origin",
+        "reporting_method",
+        "reporting_leg_role",
+        "reporting_on_balance_sheet",
+        "reporting_subclass",
+        "reporting_ead",
+        "reporting_rw",
+    )
+
+    @pytest.fixture
+    def guarantee_leg_results(self) -> pl.LazyFrame:
+        """Physical guarantee legs as the CRM stage emits them.
+
+        One FIRB corporate exposure 60% guaranteed by an SA retail guarantor,
+        already split into its ``__G_`` guaranteed leg (is_guaranteed=True,
+        guaranteed_portion=EAD) and ``__REM`` retained leg, plus an Art. 234
+        tranched pair (``__REM_FL`` / ``__REM_SEN``) from a second exposure and
+        one plain unguaranteed exposure.
+        """
+        return pad_irb_branch(
+            pl.LazyFrame(
+                {
+                    "exposure_reference": [
+                        "EXPG__G_GUAR01",
+                        "EXPG__REM",
+                        "EXPT__REM_FL",
+                        "EXPT__REM_SEN",
+                        "EXP_PLAIN",
+                    ],
+                    "counterparty_reference": ["B01", "B01", "B02", "B02", "B03"],
+                    "exposure_class": ["CORPORATE"] * 5,
+                    "approach": ["FIRB"] * 5,
+                    "approach_applied": ["FIRB"] * 5,
+                    "ead_final": [600000.0, 400000.0, 100000.0, 900000.0, 250000.0],
+                    "risk_weight": [0.75, 0.5, 0.5, 0.5, 0.5],
+                    "rwa_final": [450000.0, 200000.0, 50000.0, 450000.0, 125000.0],
+                    "is_guaranteed": [True, False, False, False, False],
+                    "guaranteed_portion": [600000.0, 0.0, 0.0, 0.0, 0.0],
+                    "unguaranteed_portion": [0.0, 400000.0, 100000.0, 900000.0, 0.0],
+                    "guarantor_approach": ["sa", None, None, None, None],
+                    "guarantor_reference": ["GUAR01", None, None, None, None],
+                    "pre_crm_exposure_class": ["CORPORATE"] * 5,
+                    "post_crm_exposure_class_guaranteed": ["RETAIL", None, None, None, None],
+                }
+            )
+        )
+
+    def _aggregate_irb(
+        self,
+        aggregator: OutputAggregator,
+        frame: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.DataFrame:
+        result = aggregator.aggregate(
+            sa_results=EMPTY_SA,
+            irb_results=frame,
+            slotting_results=EMPTY_SLOTTING,
+            equity_bundle=None,
+            config=config,
+        )
+        return result.results.collect()
+
+    def _aggregate_sa(
+        self,
+        aggregator: OutputAggregator,
+        frame: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.DataFrame:
+        result = aggregator.aggregate(
+            sa_results=frame,
+            irb_results=EMPTY_IRB,
+            slotting_results=EMPTY_SLOTTING,
+            equity_bundle=None,
+            config=config,
+        )
+        return result.results.collect()
+
+    def test_projection_columns_sealed_on_results(
+        self,
+        aggregator: OutputAggregator,
+        sa_results: pl.LazyFrame,
+        irb_results: pl.LazyFrame,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Every projection column is present on the sealed results frame."""
+        result = aggregator.aggregate(
+            sa_results=sa_results,
+            irb_results=irb_results,
+            slotting_results=EMPTY_SLOTTING,
+            equity_bundle=None,
+            config=crr_config,
+        )
+        schema = result.results.collect_schema()
+        missing = [c for c in self.REPORTING_COLUMNS if c not in schema.names()]
+        assert not missing, f"projection columns missing from aggregator_exit: {missing}"
+        assert schema["reporting_on_balance_sheet"] == pl.Boolean
+        assert schema["reporting_ead"] == pl.Float64
+        assert schema["reporting_rw"] == pl.Float64
+
+    def test_projection_columns_declared_on_edge(self) -> None:
+        """The edge contract declares the projection with its citations."""
+        from rwa_calc.contracts.edges import AGGREGATOR_EXIT_EDGE
+
+        for name in self.REPORTING_COLUMNS:
+            assert name in AGGREGATOR_EXIT_EDGE.columns, name
+        assert AGGREGATOR_EXIT_EDGE.columns["reporting_class"].citation == "CRR Art. 235"
+        assert AGGREGATOR_EXIT_EDGE.columns["reporting_class_origin"].citation == "CRR Art. 112"
+        assert AGGREGATOR_EXIT_EDGE.columns["reporting_leg_role"].citation == "CRR Art. 235"
+
+    def test_aliases_mirror_sealed_sources(
+        self,
+        aggregator: OutputAggregator,
+        guarantee_leg_results: pl.LazyFrame,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """The alias columns equal their sealed sources row-for-row."""
+        df = self._aggregate_irb(aggregator, guarantee_leg_results, crr_config)
+        for alias, source in (
+            ("reporting_class", "exposure_class_post_crm"),
+            ("reporting_class_origin", "exposure_class_applied"),
+            ("reporting_approach", "approach_post_crm"),
+            ("reporting_approach_origin", "approach_applied"),
+            ("reporting_subclass", "exposure_subclass"),
+            ("reporting_ead", "ead_final"),
+            ("reporting_rw", "risk_weight"),
+        ):
+            assert df[alias].to_list() == df[source].to_list(), (alias, source)
+
+    def test_leg_roles_name_the_physical_guarantee_split(
+        self,
+        aggregator: OutputAggregator,
+        guarantee_leg_results: pl.LazyFrame,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """guaranteed = the __G_ leg; retained = __REM/__REM_FL/__REM_SEN; else whole."""
+        df = self._aggregate_irb(aggregator, guarantee_leg_results, crr_config)
+        roles = dict(zip(df["exposure_reference"], df["reporting_leg_role"], strict=True))
+        assert roles == {
+            "EXPG__G_GUAR01": "guaranteed",
+            "EXPG__REM": "retained",
+            "EXPT__REM_FL": "retained",
+            "EXPT__REM_SEN": "retained",
+            "EXP_PLAIN": "whole",
+        }
+
+    def test_substitution_flows_reconstruct_by_grouping(
+        self,
+        aggregator: OutputAggregator,
+        guarantee_leg_results: pl.LazyFrame,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Outflow/inflow (COREP C 07.00) = two Sum bindings over the ledger."""
+        df = self._aggregate_irb(aggregator, guarantee_leg_results, crr_config)
+        guaranteed = df.filter(pl.col("reporting_leg_role") == "guaranteed")
+        outflow = guaranteed.group_by("reporting_class_origin").agg(pl.col("reporting_ead").sum())
+        inflow = guaranteed.group_by("reporting_class").agg(pl.col("reporting_ead").sum())
+        assert outflow.to_dicts() == [
+            {"reporting_class_origin": "CORPORATE", "reporting_ead": 600000.0}
+        ]
+        assert inflow.to_dicts() == [{"reporting_class": "RETAIL", "reporting_ead": 600000.0}]
+
+    def test_reporting_method_is_post_substitution(
+        self,
+        aggregator: OutputAggregator,
+        guarantee_leg_results: pl.LazyFrame,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Method labels the post-substitution approach: SA-guaranteed leg -> STD."""
+        df = self._aggregate_irb(aggregator, guarantee_leg_results, crr_config)
+        methods = dict(zip(df["exposure_reference"], df["reporting_method"], strict=True))
+        assert methods["EXPG__G_GUAR01"] == "STD"
+        assert methods["EXPG__REM"] == "FIRB"
+        assert methods["EXP_PLAIN"] == "FIRB"
+
+    def test_on_balance_sheet_derived_from_exposure_type(
+        self,
+        aggregator: OutputAggregator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """loan -> True; facility/contingent -> False; anything else -> null."""
+        frame = pad_sa_branch(
+            pl.LazyFrame(
+                {
+                    "exposure_reference": ["E1", "E2", "E3", "E4", "E5"],
+                    "counterparty_reference": ["C1", "C2", "C3", "C4", "C5"],
+                    "exposure_class": ["CORPORATE"] * 5,
+                    "approach_applied": ["SA"] * 5,
+                    "exposure_type": ["loan", "facility", "contingent", "derivative", None],
+                    "ead_final": [1.0, 1.0, 1.0, 1.0, 1.0],
+                    "risk_weight": [1.0, 1.0, 1.0, 1.0, 1.0],
+                    "rwa_final": [1.0, 1.0, 1.0, 1.0, 1.0],
+                }
+            )
+        )
+        df = self._aggregate_sa(aggregator, frame, crr_config)
+        on_bs = dict(zip(df["exposure_reference"], df["reporting_on_balance_sheet"], strict=True))
+        assert on_bs == {"E1": True, "E2": False, "E3": False, "E4": None, "E5": None}

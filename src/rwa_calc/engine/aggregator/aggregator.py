@@ -52,6 +52,7 @@ from rwa_calc.engine.aggregator._summaries import (
     generate_summary_by_approach,
     generate_summary_by_class,
     generate_summary_by_class_method,
+    method_label_expr,
 )
 from rwa_calc.engine.aggregator._supporting_factors import generate_supporting_factor_impact
 from rwa_calc.rulebook import RulepackV0
@@ -339,6 +340,14 @@ class OutputAggregator:
                 sa_t2_credit=sa_t2,
             )
 
+        # Canonical reporting projection (Phase 7 S2): name the per-leg
+        # substitution ledger on the frame that gets sealed. Applied AFTER the
+        # residual multiplier and the output floor so the ``reporting_ead`` /
+        # ``reporting_rw`` aliases mirror the sealed final values. No consumer
+        # reads these columns yet (S4+ retarget the summaries/recon/reporting),
+        # so this is provably cell-neutral.
+        combined = _add_reporting_projection(combined)
+
         # Generate post-CRM reporting views from the (possibly floored)
         # ``combined`` frame.  When the floor binds, ``combined`` now carries
         # the per-row ``floor_impact_rwa`` add-on, which the by-class /
@@ -537,6 +546,74 @@ def _add_post_crm_reporting_approach(lf: pl.LazyFrame) -> pl.LazyFrame:
         CRR Art. 161 / CRE22.70-85: IRB parameter substitution.
     """
     return lf.with_columns(post_crm_approach_expr().alias("approach_post_crm"))
+
+
+@cites("CRR Art. 235")
+@cites("CRR Art. 112")
+def _add_reporting_projection(lf: pl.LazyFrame) -> pl.LazyFrame:
+    """Add the canonical per-leg reporting projection (Phase 7 S2).
+
+    The results frame IS the two-leg substitution ledger — CRM physically splits
+    each guaranteed exposure into ``__G_<guarantor>`` guaranteed legs and
+    ``__REM`` / ``__REM_FL`` / ``__REM_SEN`` retained legs
+    (``engine/crm/guarantees.py``). This projection names that ledger once, on
+    the sealed exit, so no downstream consumer re-derives class/approach/method
+    or sniffs reference suffixes (COREP, Pillar 3, reconciliation, and the UI
+    all read these columns instead of re-picking among the raw twins):
+
+    - ``reporting_class`` — post-substitution class the RWA is bucketed under
+      (Art. 235: guarantor class on guaranteed legs) = ``exposure_class_post_crm``.
+    - ``reporting_class_origin`` — obligor applied class, uniform across a
+      guaranteed exposure's legs (Art. 112/123) = ``exposure_class_applied``.
+    - ``reporting_approach`` / ``reporting_approach_origin`` — the post- and
+      pre-substitution approach twins (``approach_post_crm`` / ``approach_applied``).
+    - ``reporting_method`` — the STD/FIRB/AIRB/SLOTTING/EQUITY methodology label
+      of the post-substitution approach (``method_label_expr`` materialised).
+    - ``reporting_leg_role`` — ``guaranteed`` (the ``__G_`` leg,
+      ``is_guaranteed=True``), ``retained`` (the ``__REM*`` remainder /
+      Art. 234 tranche legs), or ``whole``. COREP C 07.00 substitution
+      outflow/inflow reconstruct as two sums over the ``guaranteed`` legs
+      grouped by origin vs post-substitution class.
+    - ``reporting_on_balance_sheet`` — declared at source from
+      ``exposure_type`` (loan -> on; facility/contingent -> off; anything else
+      null = excluded from both on- and off-BS template cells). Mirrors the
+      production rule in ``reporting/kernel/filters.py`` (``bs_type`` never
+      reaches the aggregator, so the exposure-type rule IS today's behaviour).
+    - ``reporting_subclass`` / ``reporting_ead`` / ``reporting_rw`` — aliases of
+      ``exposure_subclass`` / ``ead_final`` / ``risk_weight``.
+
+    Called after the residual multiplier and the output floor so the aliases
+    mirror the sealed final values. Per-row post-floor RWA is deliberately NOT
+    projected here — the floor is a portfolio-level max and its per-row
+    allocation is a recorded-decision slice of its own (Phase 7 plan S5).
+    """
+    is_retained_leg = pl.col("exposure_reference").str.contains(r"__REM(?:_FL|_SEN)?$")
+    leg_role = (
+        pl.when(pl.col("is_guaranteed") == True)  # noqa: E712
+        .then(pl.lit("guaranteed"))
+        .when(is_retained_leg)
+        .then(pl.lit("retained"))
+        .otherwise(pl.lit("whole"))
+    )
+    on_balance_sheet = (
+        pl.when(pl.col("exposure_type") == "loan")
+        .then(pl.lit(True))
+        .when(pl.col("exposure_type").is_in(["facility", "contingent"]))
+        .then(pl.lit(False))
+        .otherwise(pl.lit(None, dtype=pl.Boolean))
+    )
+    return lf.with_columns(
+        pl.col("exposure_class_post_crm").alias("reporting_class"),
+        pl.col("exposure_class_applied").alias("reporting_class_origin"),
+        pl.col("approach_post_crm").alias("reporting_approach"),
+        pl.col("approach_applied").alias("reporting_approach_origin"),
+        method_label_expr("approach_post_crm").alias("reporting_method"),
+        leg_role.alias("reporting_leg_role"),
+        on_balance_sheet.alias("reporting_on_balance_sheet"),
+        pl.col("exposure_subclass").alias("reporting_subclass"),
+        pl.col("ead_final").alias("reporting_ead"),
+        pl.col("risk_weight").alias("reporting_rw"),
+    )
 
 
 def _collect_views(views: dict[str, pl.LazyFrame]) -> dict[str, pl.DataFrame]:

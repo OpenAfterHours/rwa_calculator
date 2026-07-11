@@ -362,7 +362,20 @@ double-count hazard.
 *(S0 golden gate `c97c5e9c` and S1 sealed-name retarget `b41aba70` are merged; numbering
 continues.)*
 
-### S2 — Seal the canonical projection on the edge (NUMBER-NEUTRAL, single-stream)
+### S2 — Seal the canonical projection on the edge (NUMBER-NEUTRAL, single-stream) — **DONE 2026-07-11**
+
+*As delivered:* `_add_reporting_projection` (`engine/aggregator/aggregator.py`), applied to
+`combined` after the residual multiplier and output floor; 10 columns declared on
+`AGGREGATOR_EXIT_EDGE` with citations + null-semantics. One recorded deviation:
+`reporting_on_balance_sheet` derives from `exposure_type` (loan → on;
+facility/contingent → off; else null), NOT from `bs_type` — `bs_type` is stripped upstream of
+the branch seals and never reaches the aggregator, and the `exposure_type` rule is what the
+reporting kernel actually applies in production today, so the exposure-type derivation is the
+behaviour-preserving one. Art. 234 tranche legs (`__REM_FL`/`__REM_SEN`) map to `retained`
+(tranche identity stays on the reference columns; no `leg_detail` column warranted yet). Gate:
+7 new pins in `tests/unit/test_aggregator.py::TestReportingProjection`; 95 goldens
+structure-identical; full suite 8,343 passed; arch_check + ruff green; citation snapshot
+regenerated (137 fns).
 - **Scope:** add the §3.1 projection columns *except* `reporting_rwa` — the four aliases plus
   `reporting_method`, `reporting_leg_role`, `reporting_on_balance_sheet`, `reporting_subclass`,
   `reporting_ead`, `reporting_rw`. Computed once at the aggregator (extending the existing

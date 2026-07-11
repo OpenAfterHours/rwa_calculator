@@ -15,6 +15,10 @@
   "rwa_calc.engine.aggregator.aggregator::_add_post_crm_reporting_class": [
     "CRR Art. 235"
   ],
+  "rwa_calc.engine.aggregator.aggregator::_add_reporting_projection": [
+    "CRR Art. 235",
+    "CRR Art. 112"
+  ],
   "rwa_calc.engine.ccf::CCFCalculator._apply_oc_original_maturity_ccf": [
     "CRR Art. 111(1)"
   ],

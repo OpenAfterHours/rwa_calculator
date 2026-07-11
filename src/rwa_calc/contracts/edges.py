@@ -1444,6 +1444,34 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
         # same post-guarantee money. Computed by the aggregator
         # (_add_post_crm_reporting_approach).
         "approach_post_crm": EdgeColumn(dtype=pl.String, citation="CRR Art. 235"),
+        # --- Canonical reporting projection (Phase 7 S2) ------------------
+        # The per-leg substitution ledger, named once at the producer
+        # (_add_reporting_projection). reporting_class/_origin and the
+        # approach twins are aliases of the sealed columns above;
+        # reporting_leg_role names the physical __G_/__REM guarantee split
+        # (Art. 234 tranche legs __REM_FL/__REM_SEN are `retained`);
+        # reporting_method materialises the STD/FIRB/AIRB/SLOTTING/EQUITY
+        # label of the post-substitution approach; reporting_ead/_rw alias
+        # ead_final/risk_weight AFTER the residual multiplier and floor.
+        "reporting_approach": EdgeColumn(dtype=pl.String, citation="CRR Art. 235"),
+        "reporting_approach_origin": EdgeColumn(dtype=pl.String),
+        "reporting_class": EdgeColumn(dtype=pl.String, citation="CRR Art. 235"),
+        "reporting_class_origin": EdgeColumn(dtype=pl.String, citation="CRR Art. 112"),
+        "reporting_ead": EdgeColumn(dtype=pl.Float64),
+        "reporting_leg_role": EdgeColumn(dtype=pl.String, citation="CRR Art. 235"),
+        "reporting_method": EdgeColumn(dtype=pl.String),
+        "reporting_on_balance_sheet": EdgeColumn(
+            dtype=pl.Boolean,
+            null_meaning=(
+                "exposure_type outside the loan/facility/contingent vocabulary — "
+                "the row belongs to neither the on- nor the off-balance-sheet "
+                "template cells (matches the reporting kernel's exposure_type "
+                "rule; must NOT be filled to a side)"
+            ),
+        ),
+        "reporting_rw": EdgeColumn(dtype=pl.Float64),
+        "reporting_subclass": EdgeColumn(dtype=pl.String),
+        # ------------------------------------------------------------------
         "correlation": EdgeColumn(dtype=pl.Float64),
         "cp_internal_rating_grade": EdgeColumn(dtype=pl.String),
         "cp_is_core_market_participant": EdgeColumn(dtype=pl.Boolean),

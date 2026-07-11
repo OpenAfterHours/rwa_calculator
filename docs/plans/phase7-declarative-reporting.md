@@ -659,7 +659,34 @@ ECAI grade column) are module post-steps; CR9.1's grade-row axis is a generate-t
 classes split out to `tests/unit/reporting/pillar3/test_cr9_cr10.py` (+ new obligor-basis
 substitution and defaulted-band pins). Gate: goldens untouched; full suite green.
 
-Order: **Pillar 3** OV1 → ~~CR4/CR5~~ → ~~CR6/CR6a/CR7/CR7a~~ → ~~CR9/CR9.1/CR10~~ → CMS1/2 → CCR1/2/3/8
+**S8-CMS1/CMS2 DONE 2026-07-11 — the Pillar 3 credit estate is fully declarative.**
+`reporting/pillar3/{cms1,cms2}.py`; the imperative bodies + the five `_cms2_*` helpers +
+`_CMS2_SUBROW_NULL_REFS` deleted; the router's `sa_data`/`slotting_data` pre-filter plumbing
+retired (spec predicates replaced them; `irb_data` survives for CR8). Both specs are static
+single-layout (Basel 3.1 only — the Art. 92(3A) internal-model gate; verified NO CRR heritage
+exists, unlike CR9).
+**Recorded fix (reg-mandated, 2 golden cells):** the standardised side of the modelled-vs-SA
+split is now the EXPLICIT origin-approach complement `("standardised", "equity")` — the
+instructions state "exposures calculated according to the SA for credit risk include equity
+exposures subject to the IRB Equity Transitional" (the OV1 row-2 precedent). CMS1 already used
+the complement (unchanged); CMS2's per-class "SA portfolio add" used `standardised` only, so
+its equity row 0030 reported 0.0 against a 2.5M equity book and its Total disagreed with CMS1
+by exactly that amount. CMS2 column c is now the row's total actual RWA across ALL approaches
+(golden: 0030 c 0.0→2,500,000; 0070 c → equals CMS1). Unit-pinned incl. the CMS1==CMS2 total
+reconciliation.
+**Recorded keying:** CMS2 rows carry the ORIGINATION class (tolerant limbs over the sealed raw
+`exposure_class` — the CR6-A pattern): the row axis is Art. 147-shaped, and column b is
+defined as the SA recomputation "of exposures reported in column (a)" — the same population,
+never re-bucketed, so substitution moves no row (unit-pinned with a two-leg fixture).
+**Recorded basis:** columns b/d read the pre-supporting-factor `sa_rwa` (the engine's
+S-TREA/floor convention); the floor's multi-pass fallback path resolves a POST-factor SA RWA —
+recorded §7 divergence follow-up. Sub-rows preserved: 0041 (column c adds the class's
+standardised-side RWA; column d compares at parent-corporate level), 0042 (c mirrors a, d
+recorded-null), 0044/0045/0054 (no IPRE/HVCRE/purchased-receivables discriminators — F6).
+CMS unit classes moved to `tests/unit/reporting/pillar3/test_cms.py`. Gate: goldens regen'd
+with the recorded 2-cell diff; full suite green.
+
+Order: **Pillar 3** OV1 → ~~CR4/CR5~~ → ~~CR6/CR6a/CR7/CR7a~~ → ~~CR9/CR9.1/CR10~~ → ~~CMS1/2~~ → CCR1/2/3/8
 (post S8-pre); then **COREP** C07 + skeleton-sharing C08.01/02/03/05 → C08.04/06/07 → C09.01/02 →
 OF02.01 → OF07/OF08/C34.x (post S8-pre) → **C02.00 LAST** (portfolio pre-pass via
 `ReportingContext`).
@@ -772,6 +799,12 @@ Consumer-facing surface = `reporting_class`, `reporting_class_origin`, `reportin
   fixed PD range; the estate emits only populated bands (+Total) while CR6 renders all 17.
   Preserved as the recorded convention; aligning CR9 to the fixed 17-band shape is a golden-
   structure change needing its own decision.
+- **`sa_rwa` pre- vs post-supporting-factor divergence (found during S8-CMS; behaviour
+  predates the slice):** the inline S-TREA carrier `sa_rwa` (engine/sa/calculator.py) is
+  captured BEFORE `apply_supporting_factors`, while the floor's multi-pass fallback join
+  resolves the POST-factor SA `rwa_final`. CMS cols b/d and the floor's single-pass path read
+  the pre-factor figure (recorded). Decide the S-TREA convention once (Art. 92(3A): does the
+  full-SA basis include Art. 501/501a relief?) and align both paths.
 - **CR10 column c short-maturity variant + display-constant pack-homing:** the fixed
   Art. 153(5) reference weights hard-code the >= 2.5y column-c values
   (`SLOTTING_RISK_WEIGHTS`/`HVCRE_RISK_WEIGHTS` in templates.py) while the pack carries the

@@ -56,6 +56,8 @@ from rwa_calc.reporting.kernel import (
 from rwa_calc.reporting.kernel import (
     pick as _pick,
 )
+from rwa_calc.reporting.pillar3.cms1 import generate_cms1
+from rwa_calc.reporting.pillar3.cms2 import generate_cms2
 from rwa_calc.reporting.pillar3.cr4 import generate_cr4
 from rwa_calc.reporting.pillar3.cr5 import generate_cr5
 from rwa_calc.reporting.pillar3.cr6 import generate_cr6
@@ -75,10 +77,7 @@ from rwa_calc.reporting.pillar3.templates import (
     CCR8_COLUMNS,
     CCR8_ROWS,
     CMS1_COLUMNS,
-    CMS1_ROWS,
     CMS2_COLUMNS,
-    CMS2_ROWS,
-    CMS2_SA_CLASS_MAP,
     CR6A_COLUMNS,
     CR7_COLUMNS,
     CR8_COLUMNS,
@@ -198,9 +197,7 @@ class Pillar3Generator:
         cols = _available_columns(results)
         errors: list[str] = []
 
-        sa_data = _filter_by_approach(results, "standardised", cols)
         irb_data = _filter_irb_non_slotting(results, cols)
-        slotting_data = _filter_by_approach(results, "slotting", cols)
 
         prior_irb_data: pl.LazyFrame | None = None
         if previous_period_results is not None:
@@ -222,9 +219,7 @@ class Pillar3Generator:
             cr9_1=self._generate_cr9_1(results, cols, framework, errors),
             cr10=self._generate_all_cr10(results, cols, framework, errors),
             cms1=self._generate_cms1(results, cols, framework, errors),
-            cms2=self._generate_cms2(
-                results, sa_data, irb_data, slotting_data, cols, framework, errors
-            ),
+            cms2=self._generate_cms2(results, cols, framework, errors),
             ccr1=self._generate_ccr1(results, cols, errors),
             ccr2=self._generate_ccr2(results, cols, framework, errors),
             ccr3=self._generate_ccr3(results, cols, framework, errors),
@@ -582,124 +577,39 @@ class Pillar3Generator:
         framework: str,
         errors: list[str],
     ) -> pl.DataFrame | None:
-        """Generate UKB CMS1: SA vs modelled RWA comparison by risk type.
+        """Generate the CMS1 by-risk-type output-floor comparison (Basel 3.1).
 
-        Basel 3.1 only — returns None under CRR. Only the credit risk row
-        (0010) and total row (0080) are populated from the pipeline; other
-        risk types (CCR, CVA, securitisation, market, op risk, residual)
-        require data beyond credit risk scope and are left null.
+        Dispatch-router entry (Phase 7 S8): CMS1 is declarative — the cell
+        semantics live in ``pillar3/cms1.py::build_cms1_spec`` (modelled vs
+        the explicit standardised-side complement incl. equity) and run
+        through the one ``cellspec.execute`` executor.
 
         References:
-            PRA PS1/26 Art. 456(1)(a), Art. 2a(1)
+            PRA PS1/26 Art. 456(1)(a), Art. 2a(1).
         """
-        if framework != "BASEL_3_1":
-            return None
+        return generate_cms1(results, cols, framework, errors)
 
-        rwa_col = _pick(cols, "rwa_final", "rwa")
-        approach_col = _pick(cols, "approach_applied", "approach")
-        sa_rwa_col = _pick(cols, "sa_rwa")
-
-        if not rwa_col:
-            errors.append("CMS1: missing RWA column")
-            return None
-
-        data = results.collect()
-        column_refs = [c.ref for c in CMS1_COLUMNS]
-        rows_out: list[dict[str, object]] = []
-
-        # Compute portfolio-level aggregates
-        # Col a: RWA for modelled approaches (IRB + slotting)
-        modelled_rwa = 0.0
-        # Col b: RWA for SA-only portfolios
-        sa_portfolio_rwa = 0.0
-        if approach_col:
-            modelled_approaches = ["foundation_irb", "advanced_irb", "slotting"]
-            modelled = data.filter(pl.col(approach_col).is_in(modelled_approaches))
-            sa_only = data.filter(~pl.col(approach_col).is_in(modelled_approaches))
-            modelled_rwa = _col_sum(modelled, rwa_col) or 0.0
-            sa_portfolio_rwa = _col_sum(sa_only, rwa_col) or 0.0
-
-        # Col c: Total actual RWA = modelled + SA portfolio
-        total_actual_rwa = modelled_rwa + sa_portfolio_rwa
-
-        # Col d: Full SA RWA (all exposures under SA)
-        full_sa_rwa = _col_sum(data, sa_rwa_col) if sa_rwa_col else None
-
-        for row_def in CMS1_ROWS:
-            values: dict[str, object] = {"a": None, "b": None, "c": None, "d": None}
-
-            if row_def.ref in ("0010", "0080"):
-                # Credit risk row and total row — populated from pipeline
-                values["a"] = modelled_rwa
-                values["b"] = sa_portfolio_rwa
-                values["c"] = total_actual_rwa
-                values["d"] = full_sa_rwa
-
-            rows_out.append(_make_row(row_def, values, column_refs))
-
-        return _build_df(rows_out, column_refs)
-
-    # ---- CMS2 — Output floor comparison by asset class (Art. 456(1)(b)) ----
+    # ---- CMS2 ----
 
     def _generate_cms2(
         self,
         results: pl.LazyFrame,
-        sa_data: pl.LazyFrame,
-        irb_data: pl.LazyFrame,
-        slotting_data: pl.LazyFrame,
         cols: set[str],
         framework: str,
         errors: list[str],
     ) -> pl.DataFrame | None:
-        """Generate UKB CMS2: SA vs modelled RWA comparison by asset class.
+        """Generate the CMS2 by-asset-class output-floor comparison (Basel 3.1).
 
-        Basel 3.1 only — returns None under CRR. Breaks down credit risk
-        exposures by asset class with modelled vs SA comparison. Excludes
-        CCR, CVA, and securitisation.
+        Dispatch-router entry (Phase 7 S8): CMS2 is declarative — the cell
+        semantics live in ``pillar3/cms2.py::build_cms2_spec`` (origination-
+        class rows; column c = the class's total actual RWA across ALL
+        approaches, the recorded equity fix) and run through the one
+        ``cellspec.execute`` executor.
 
         References:
-            PRA PS1/26 Art. 456(1)(b), Art. 2a(2)
+            PRA PS1/26 Art. 456(1)(b), Art. 2a(2).
         """
-        if framework != "BASEL_3_1":
-            return None
-
-        rwa_col = _pick(cols, "rwa_final", "rwa")
-        ec_col = _pick(cols, "exposure_class")
-        approach_col = _pick(cols, "approach_applied", "approach")
-        sa_rwa_col = _pick(cols, "sa_rwa")
-
-        if not rwa_col:
-            errors.append("CMS2: missing RWA column")
-            return None
-
-        # Collect all sub-frames
-        all_data = results.collect()
-        sa_collected = sa_data.collect()
-        irb_collected = irb_data.collect()
-        slotting_collected = slotting_data.collect()
-
-        # Merge IRB + slotting into "modelled" data
-        modelled_data = pl.concat([irb_collected, slotting_collected], how="diagonal_relaxed")
-
-        column_refs = [c.ref for c in CMS2_COLUMNS]
-        rows_out: list[dict[str, object]] = []
-
-        for row_def in CMS2_ROWS:
-            values = _cms2_row_values(
-                row_def,
-                modelled_data=modelled_data,
-                sa_collected=sa_collected,
-                all_data=all_data,
-                ec_col=ec_col,
-                approach_col=approach_col,
-                rwa_col=rwa_col,
-                sa_rwa_col=sa_rwa_col,
-            )
-            rows_out.append(_make_row(row_def, values, column_refs))
-
-        return _build_df(rows_out, column_refs)
-
-    # ---- CCR1 — Analysis of CCR exposure by approach (Art. 439(f)) ----
+        return generate_cms2(results, cols, framework, errors)
 
     def _generate_ccr1(
         self,
@@ -1050,139 +960,6 @@ def _filter_irb_non_slotting(
 # CR7 row helpers
 # ---------------------------------------------------------------------------
 # CMS2 row helpers
-# ---------------------------------------------------------------------------
-
-
-_CMS2_SUBROW_NULL_REFS: frozenset[str] = frozenset({"0044", "0045", "0054"})
-
-
-def _cms2_row_values(
-    row_def: P3Row,
-    *,
-    modelled_data: pl.DataFrame,
-    sa_collected: pl.DataFrame,
-    all_data: pl.DataFrame,
-    ec_col: str | None,
-    approach_col: str | None,
-    rwa_col: str,
-    sa_rwa_col: str | None,
-) -> dict[str, object]:
-    """Compute CMS2 column values for a single row, dispatching by ref."""
-    if row_def.is_total:
-        return _cms2_total_row(modelled_data, sa_collected, all_data, rwa_col, sa_rwa_col)
-    if row_def.ref == "0041" and ec_col and approach_col:
-        return _cms2_firb_row(
-            modelled_data, sa_collected, all_data, ec_col, approach_col, rwa_col, sa_rwa_col
-        )
-    if row_def.ref == "0042" and ec_col and approach_col:
-        return _cms2_airb_row(modelled_data, ec_col, approach_col, rwa_col, sa_rwa_col)
-    if row_def.ref in _CMS2_SUBROW_NULL_REFS:
-        # 0044 IPRE/HVCRE, 0045 purchased receivables (corp),
-        # 0054 purchased receivables (retail) — pipeline data not available.
-        return {"a": None, "b": None, "c": None, "d": None}
-    if row_def.exposure_classes and ec_col:
-        return _cms2_class_row(
-            row_def, modelled_data, sa_collected, all_data, ec_col, rwa_col, sa_rwa_col
-        )
-    return {"a": None, "b": None, "c": None, "d": None}
-
-
-def _cms2_total_row(
-    modelled_data: pl.DataFrame,
-    sa_collected: pl.DataFrame,
-    all_data: pl.DataFrame,
-    rwa_col: str,
-    sa_rwa_col: str | None,
-) -> dict[str, object]:
-    """CMS2 total row: sum across all credit risk exposures."""
-    modelled_rwa = _col_sum(modelled_data, rwa_col)
-    sa_port_rwa = _col_sum(sa_collected, rwa_col) or 0.0
-    return {
-        "a": modelled_rwa,
-        "b": _col_sum(modelled_data, sa_rwa_col) if sa_rwa_col else None,
-        "c": (modelled_rwa or 0.0) + sa_port_rwa,
-        "d": _col_sum(all_data, sa_rwa_col) if sa_rwa_col else None,
-    }
-
-
-def _cms2_firb_row(
-    modelled_data: pl.DataFrame,
-    sa_collected: pl.DataFrame,
-    all_data: pl.DataFrame,
-    ec_col: str,
-    approach_col: str,
-    rwa_col: str,
-    sa_rwa_col: str | None,
-) -> dict[str, object]:
-    """Row 0041: 'Of which are FIRB' — corporate exposures under F-IRB."""
-    corp_classes = list(CMS2_SA_CLASS_MAP.get("0040", ()))
-    firb_corp = modelled_data.filter(
-        pl.col(ec_col).is_in(corp_classes) & (pl.col(approach_col) == "foundation_irb")
-    )
-    a_val = _col_sum(firb_corp, rwa_col)
-    sa_firb = sa_collected.filter(pl.col(ec_col).is_in(corp_classes))
-    return {
-        "a": a_val,
-        "b": _col_sum(firb_corp, sa_rwa_col) if sa_rwa_col else None,
-        "c": (a_val or 0.0) + (_col_sum(sa_firb, rwa_col) or 0.0),
-        "d": (
-            _col_sum(all_data.filter(pl.col(ec_col).is_in(corp_classes)), sa_rwa_col)
-            if sa_rwa_col
-            else None
-        ),
-    }
-
-
-def _cms2_airb_row(
-    modelled_data: pl.DataFrame,
-    ec_col: str,
-    approach_col: str,
-    rwa_col: str,
-    sa_rwa_col: str | None,
-) -> dict[str, object]:
-    """Row 0042: 'Of which are AIRB' — corporate exposures under A-IRB."""
-    corp_classes = list(CMS2_SA_CLASS_MAP.get("0040", ()))
-    airb_corp = modelled_data.filter(
-        pl.col(ec_col).is_in(corp_classes) & (pl.col(approach_col) == "advanced_irb")
-    )
-    a_val = _col_sum(airb_corp, rwa_col)
-    # Sub-row pattern: c mirrors a (no SA portfolio add); d compared at parent level.
-    return {
-        "a": a_val,
-        "b": _col_sum(airb_corp, sa_rwa_col) if sa_rwa_col else None,
-        "c": a_val,
-        "d": None,
-    }
-
-
-def _cms2_class_row(
-    row_def: P3Row,
-    modelled_data: pl.DataFrame,
-    sa_collected: pl.DataFrame,
-    all_data: pl.DataFrame,
-    ec_col: str,
-    rwa_col: str,
-    sa_rwa_col: str | None,
-) -> dict[str, object]:
-    """Standard CMS2 asset-class row driven by ``row_def.exposure_classes``."""
-    ec_list = list(row_def.exposure_classes or ())
-    class_modelled = modelled_data.filter(pl.col(ec_col).is_in(ec_list))
-    a_val = _col_sum(class_modelled, rwa_col)
-
-    class_sa = sa_collected.filter(pl.col(ec_col).is_in(ec_list))
-    sa_port_rwa = _col_sum(class_sa, rwa_col) or 0.0
-
-    sa_classes = CMS2_SA_CLASS_MAP.get(row_def.ref, ec_list)
-    class_all = all_data.filter(pl.col(ec_col).is_in(list(sa_classes)))
-
-    return {
-        "a": a_val,
-        "b": _col_sum(class_modelled, sa_rwa_col) if sa_rwa_col else None,
-        "c": (a_val or 0.0) + sa_port_rwa,
-        "d": _col_sum(class_all, sa_rwa_col) if sa_rwa_col else None,
-    }
-
-
 def _cr9_display_names(cr9_dict: dict[str, pl.DataFrame]) -> dict[str, str]:
     """Build display names for CR9 Excel sheets from composite keys.
 

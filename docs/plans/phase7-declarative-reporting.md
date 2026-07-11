@@ -453,7 +453,17 @@ portfolio showed exactly these and nothing else):
 - **Gate:** recon acceptance tie-outs + goldens + full suite; every golden move a recorded
   decision with oracle sign-off.
 
-### S5 — Per-row post-floor `reporting_rwa` (NUMBER-CHANGING, ring-fenced)
+### S5 — Per-row post-floor `reporting_rwa` (NUMBER-CHANGING, ring-fenced) — **RESOLVED AS MOOT 2026-07-11 (recorded)**
+
+*S4 established that the premise was wrong:* the authoritative per-row post-floor RWA
+**already exists** — `apply_floor_with_impact` rewrites `rwa_final` in place to the post-floor
+value (`_floor.py:256`; the pre-floor snapshot moves to `rwa_pre_floor`, the add-on to
+`floor_impact_rwa`). No new sealed column, no allocation-convention decision, and no F2 are
+needed: the summaries read the sealed `rwa_final` since S4, and the two remaining
+`floor_impact_rwa` read sites are legitimate **attribution** uses of the add-on, not re-folds —
+`analysis/transition.py:176-177` reports per-year `total_floor_impact` and
+`analysis/comparison.py:499-530` joins the B31 add-on for the waterfall's floor driver. Both
+stay. F2 is closed with this recording; execution continues at S6.
 - **Scope:** one authoritative per-row post-floor RWA on the edge. Retarget the **three**
   `floor_impact_rwa` re-fold sites — `_summaries.py:242-314`, `transition.py:176-177`,
   `analysis/comparison.py:499-573` — each as its own gated diff. **Explicitly NOT in scope

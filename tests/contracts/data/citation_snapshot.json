@@ -452,14 +452,14 @@
   "rwa_calc.engine.supporting_factors::compute_e_star_group_drawn": [
     "CRR Art. 501"
   ],
+  "rwa_calc.reporting.corep.c07::c07_population": [
+    "PS1/26"
+  ],
+  "rwa_calc.reporting.corep.c07::generate_c07": [
+    "PS1/26, paragraph 1.3"
+  ],
   "rwa_calc.reporting.corep.generator::_c08_memorandum_cols": [
     "PS1/26, paragraph 1.3"
-  ],
-  "rwa_calc.reporting.corep.generator::_compute_c07_values": [
-    "PS1/26, paragraph 1.3"
-  ],
-  "rwa_calc.reporting.corep.generator::_filter_sft": [
-    "PS1/26"
   ],
   "rwa_calc.reporting.pillar3.cms1::build_cms1_spec": [
     "PS1/26, paragraph 456"

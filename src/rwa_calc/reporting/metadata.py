@@ -58,6 +58,11 @@ class ReportingContext:
             from the run config; ``None`` when not elected.
         institution_type: Institution-type election from the run config;
             ``None`` when not elected.
+        substitution_inflow: The CRM substitution inflow into the sheet's
+            exposure class (COREP C 07.00 col 0100 — a cross-sheet number:
+            guaranteed portions migrating INTO this class from other
+            obligor classes, precomputed over the whole population and
+            threaded per sheet execution). ``None`` when not applicable.
     """
 
     template_set: ReportingTemplateSet | None = None
@@ -66,6 +71,7 @@ class ReportingContext:
     capital_ratio_overrides: Pillar3CapitalRatioOverrides | None = None
     reporting_basis: str | None = None
     institution_type: str | None = None
+    substitution_inflow: float | None = None
 
     def side_value(self, key: str) -> float | None:
         """Resolve a named out-of-frame scalar for a ``SideContext`` binding.
@@ -78,6 +84,8 @@ class ReportingContext:
         """
         if key == "of_adj":
             return float(self.output_floor_summary.of_adj) if self.output_floor_summary else None
+        if key == "substitution_inflow":
+            return self.substitution_inflow
         ratio_fields = {
             "cet1_ratio_pre_floor",
             "cet1_ratio_pre_floor_transitional",

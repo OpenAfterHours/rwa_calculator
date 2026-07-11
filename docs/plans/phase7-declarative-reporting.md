@@ -686,7 +686,41 @@ recorded-null), 0044/0045/0054 (no IPRE/HVCRE/purchased-receivables discriminato
 CMS unit classes moved to `tests/unit/reporting/pillar3/test_cms.py`. Gate: goldens regen'd
 with the recorded 2-cell diff; full suite green.
 
-Order: **Pillar 3** OV1 → ~~CR4/CR5~~ → ~~CR6/CR6a/CR7/CR7a~~ → ~~CR9/CR9.1/CR10~~ → ~~CMS1/2~~ → CCR1/2/3/8
+**S8-C07.00 DONE 2026-07-11 — the F4 keystone; the first declarative COREP template.**
+`reporting/corep/c07.py`; the imperative estate deleted (`_compute_c07_values`, the CRM/CCF/
+RWEA column helpers, `_compute_rw_section_rows`, the four section-subset builders + their
+C07-only `_filter_*` family and map constants, `_c07_sa_data`); the router delegates and
+`c07_population` (SA book ∪ FCCM-SFT rows) is exported for the still-imperative C09.01.
+**F4 recorded decision executed as PRESERVE-verbatim:** sheets key the obligor applied-class
+ladder (`exposure_class_applied` → `exposure_class` — ≡ `reporting_class_origin` on sealed
+frames, kept raw so the shimless COREP unit estate needs no churn); SL merges into corporate
+before keying; substitution outflow (0090) keeps the raw-twin semantics (Σ `guaranteed_portion`
+where the pre-CRM class differs from the guarantor class — a derived `c07_substituted` flag)
+and the cross-sheet inflow (0100) is precomputed per destination class and threaded to the
+total row via the new `ReportingContext.substitution_inflow` side input (the out-of-frame
+escape — the 0110 waterfall Formula consumes it in-pass). The two-leg-ledger equivalence
+stays pinned at the aggregator (`test_substitution_flows_reconstruct_by_grouping`);
+**COREP ledger-field convergence + a `LedgerShimCorepGenerator` = recorded Sn/follow-up.**
+Mechanics: ~24 columns × ~37/72 rows per sheet through the one executor (COREP zero policy);
+waterfalls 0040/0110/0150 as Formulas over positive magnitudes with the Annex II §1.3 "(-)"
+negation as a frame post-step; module-derived discriminators (defaulted/SME/materially-
+dependent/qualifying-RE ladders, RW band label, CCF bucket, substitution flag, on/off-BS) feed
+tolerant-equals row terms — `RowPredicate.equals` widened to accept Boolean values; empty/
+inert row subsets render ALL-NULL via a predicate-reapplying post-step (the `_null_row`
+contract; COREP zero applies only to populated rows' unbound cells); structural-null cells
+(0210/0211/0240, CCF buckets and ECAI splits sans carriers, SF adjustments sans
+`rwa_pre_factor`) are constant-None Formulas. Traps hit: the asymmetric dedicated SF flag
+names (`sme_supporting_factor_applied` vs `infrastructure_factor_applied`); eager derived-
+column rounds need `cast(Float64, strict=False)` guards (Null-typed synthetic columns).
+Gate: goldens byte-identical WITHOUT regen (both regimes, all 16 sheets — F4 number-
+neutrality confirmed); all 713 test_corep tests + the C07 acceptance pins green unchanged;
+full suite green. **Scope deferrals recorded (operator): S8-pre golden authoring and the
+Pillar 3 CCR1/2/3/8 family stay on the legacy imperative path for now.** C08 family = the
+next slice (order C08.04 → C08.03 → C08.05 → C08.01; C08.02's data-driven String-keyed rows
++ String data column 0005 defeat the Float64 executor — expect a recorded scope-out or an
+executor extension decision).
+
+Order: **Pillar 3** OV1 → ~~CR4/CR5~~ → ~~CR6/CR6a/CR7/CR7a~~ → ~~CR9/CR9.1/CR10~~ → ~~CMS1/2~~ → CCR1/2/3/8 (DEFERRED with S8-pre)
 (post S8-pre); then **COREP** C07 + skeleton-sharing C08.01/02/03/05 → C08.04/06/07 → C09.01/02 →
 OF02.01 → OF07/OF08/C34.x (post S8-pre) → **C02.00 LAST** (portfolio pre-pass via
 `ReportingContext`).

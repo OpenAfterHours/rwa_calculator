@@ -201,10 +201,12 @@ class RowPredicate:
     subclass: str | None = None
     # Presence-TOLERANT column == value conditions for the audited F6 columns
     # (e.g. the OV1 equity sub-approach discriminators ciu_approach /
-    # equity_transitional_approach, which the seal strips today): an absent
+    # equity_transitional_approach, which the seal strips today) and for
+    # template-owned derived discriminator columns (Boolean values compare
+    # against derived flags like C07's substitution/band columns): an absent
     # column yields an EMPTY subset — the recorded permanently-null-cell
     # behaviour — never a raise. Sealed-ledger fields above stay strict.
-    equals: tuple[tuple[str, str], ...] = ()
+    equals: tuple[tuple[str, str | bool], ...] = ()
     # Inclusive band over the per-leg reporting_rw (the OV1 250%-RW memo row).
     rw_between: tuple[float, float] | None = None
     # Presence-TOLERANT half-open bands ``low <= col < high`` over a named

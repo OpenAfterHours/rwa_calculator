@@ -34,12 +34,12 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 
 import polars as pl
 from watchfire import cites
 
-from rwa_calc.domain.enums import ExposureClass
+from rwa_calc.reporting.corep.c07 import c07_population, generate_c07
 from rwa_calc.reporting.corep.templates import (
     B31_C02_00_COLUMN_REFS,
     C02_00_CREDIT_RISK_ROWS,
@@ -84,8 +84,6 @@ from rwa_calc.reporting.corep.templates import (
     get_c34_04_columns,
     get_c34_08_columns,
     get_irb_row_sections,
-    get_sa_risk_weight_bands,
-    get_sa_row_sections,
 )
 from rwa_calc.reporting.kernel import (
     available_columns as _available_columns,
@@ -96,9 +94,6 @@ from rwa_calc.reporting.kernel import (
 from rwa_calc.reporting.kernel import (
     column_name_map,
     write_template_sheet,
-)
-from rwa_calc.reporting.kernel import (
-    filter_by_approach as _filter_by_approach,
 )
 from rwa_calc.reporting.kernel import (
     filter_off_bs as _filter_off_bs,
@@ -288,8 +283,7 @@ class COREPGenerator:
         # "CCR_SFT"`` so the SFT EAD lands in C 07.00 (total row 0010 + the
         # SFT-netting breakdown row 0090, PS1/26 App. 17). SA-CCR derivatives are
         # NOT admitted here — they report under C 34 (CRR Art. 274).
-        sa_data = _c07_sa_data(results, cols)
-        c07_00 = self._generate_all_c07(sa_data, cols, framework, errors)
+        c07_00 = self._generate_all_c07(results, cols, framework, errors)
 
         # IRB templates (C 08.01, C 08.02, C 08.03, C 08.06)
         irb_data = _filter_by_irb_approach(results, cols)
@@ -329,7 +323,7 @@ class COREPGenerator:
         )
 
         # C 09.01 / OF 09.01 — Geographical Breakdown SA
-        c09_01 = self._generate_all_c09_01(sa_data, cols, framework, errors)
+        c09_01 = self._generate_all_c09_01(c07_population(results, cols), cols, framework, errors)
 
         # C 09.02 / OF 09.02 — Geographical Breakdown IRB
         c09_02 = self._generate_all_c09_02(irb_data, cols, framework, errors)
@@ -1507,144 +1501,22 @@ class COREPGenerator:
 
     def _generate_all_c07(
         self,
-        sa_data: pl.LazyFrame,
+        results: pl.LazyFrame,
         cols: set[str],
         framework: str,
         errors: list[str],
     ) -> dict[str, pl.DataFrame]:
-        """Generate C 07.00 DataFrames for all SA exposure classes.
+        """Generate the per-class C 07.00 SA templates.
 
-        Buckets on ``exposure_class_applied`` when present (the aggregator's
-        applied-treatment class) so SME-managed-as-retail rows land in the Retail
-        sheet and defaulted SA rows in "Exposures in default" (row 0100), falling
-        back to the origination ``exposure_class`` for pre-existing frames.
+        Dispatch-router entry (Phase 7 S8): C 07.00 is declarative — the
+        cell semantics live in ``corep/c07.py::generate_c07`` (obligor-class
+        sheets, substitution outflow/inflow, Annex II sign convention) and
+        run through the one ``cellspec.execute`` executor.
+
+        References:
+            CRR Art. 111-113; COREP Annex II C 07.00; PRA PS1/26 App. 17.
         """
-        ec_col = _pick(cols, "exposure_class_applied", "exposure_class")
-        ead_col = _pick(cols, "ead_final")
-        rwa_col = _pick(cols, "rwa_final", "rwa_post_factor", "rwa")
-
-        if ec_col is None or ead_col is None or rwa_col is None:
-            if ead_col is None or rwa_col is None:
-                errors.append("C07: Missing EAD or RWA columns in results")
-            if ec_col is None:
-                errors.append("C07: Missing exposure_class column")
-            return {}
-
-        sa_df: pl.DataFrame = sa_data.collect()
-        if len(sa_df) == 0:
-            return {}
-
-        # Art. 112 Table A2: Under SA, specialised lending is a corporate
-        # sub-type (Art. 112(1)(g)), not a separate exposure class.  Merge SL
-        # into corporate so C 07.00 reports SL under the corporate sheet; the
-        # SL "of which" sub-rows (0021-0026) still populate via sl_type.
-        sa_df = sa_df.with_columns(
-            pl.when(pl.col(ec_col) == ExposureClass.SPECIALISED_LENDING.value)
-            .then(pl.lit(ExposureClass.CORPORATE.value))
-            .otherwise(pl.col(ec_col))
-            .alias(ec_col)
-        )
-
-        data_cols = set(sa_df.columns)
-        classes = sa_df[ec_col].unique().sort().to_list()
-
-        # Pre-compute CRM substitution flows (inflows require full dataset)
-        sub_flows = _compute_substitution_flows(sa_df, data_cols)
-
-        result: dict[str, pl.DataFrame] = {}
-        for ec in classes:
-            class_df = sa_df.filter(pl.col(ec_col) == ec)
-            inflow = sub_flows.get(ec, {}).get("inflow", 0.0)
-            template_df = self._generate_c07_for_class(
-                class_df, data_cols, ead_col, rwa_col, framework, inflow
-            )
-            result[ec] = template_df
-
-        return result
-
-    def _generate_c07_for_class(
-        self,
-        class_data: pl.DataFrame,
-        cols: set[str],
-        ead_col: str,
-        rwa_col: str,
-        framework: str,
-        substitution_inflow: float = 0.0,
-    ) -> pl.DataFrame:
-        """Generate a C 07.00 DataFrame for a single SA exposure class.
-
-        Builds all 5 row sections:
-        1. Total Exposures (row 0010 + "of which" detail rows)
-        2. Breakdown by Exposure Types (on-BS, off-BS, CCR)
-        3. Breakdown by Risk Weights (one row per RW band)
-        4. Breakdown by CIU Approach
-        5. Memorandum Items
-        """
-        column_defs = get_c07_columns(framework)
-        column_refs = [c.ref for c in column_defs]
-        row_sections = get_sa_row_sections(framework)
-        rw_bands = get_sa_risk_weight_bands(framework)
-
-        rows: list[dict[str, object]] = []
-
-        def _emit_subset_row(row_def, subset: pl.DataFrame | None) -> None:
-            """Append either populated values (subset non-empty) or a null row."""
-            if subset is not None and len(subset) > 0:
-                values = _compute_c07_values(subset, cols, ead_col, rwa_col, column_refs)
-                rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
-            else:
-                rows.append(_null_row(row_def.ref, row_def.name, column_refs))
-
-        # Section 1: Total Exposures
-        for row_def in row_sections[0].rows:
-            if row_def.ref == "0010":
-                values = _compute_c07_values(
-                    class_data,
-                    cols,
-                    ead_col,
-                    rwa_col,
-                    column_refs,
-                    substitution_inflow=substitution_inflow,
-                )
-                rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
-            else:
-                _emit_subset_row(row_def, _c07_section1_subset(row_def.ref, class_data, cols))
-
-        # Section 2: Breakdown by Exposure Types
-        for row_def in row_sections[1].rows:
-            _emit_subset_row(row_def, _c07_section2_subset(row_def.ref, class_data, cols))
-
-        # Section 3: Breakdown by Risk Weights
-        rw_col = _pick(cols, "risk_weight")
-        rw_row_data = _compute_rw_section_rows(
-            class_data, cols, ead_col, rwa_col, column_refs, rw_bands, rw_col
-        )
-        for row_def in row_sections[2].rows:
-            if row_def.name in rw_row_data:
-                values = rw_row_data[row_def.name]
-                rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
-            else:
-                rows.append(_null_row(row_def.ref, row_def.name, column_refs))
-
-        # Section 4: Breakdown by CIU Approach (Art. 132-132C)
-        ciu_col = _pick(cols, "ciu_approach")
-        for row_def in row_sections[3].rows:
-            _emit_subset_row(row_def, _c07_section4_subset(row_def.ref, class_data, ciu_col))
-
-        # Section 5: Memorandum Items
-        for row_def in row_sections[4].rows:
-            _emit_subset_row(row_def, _c07_section5_subset(row_def.ref, class_data, cols))
-
-        schema: dict[str, PolarsDataType] = {
-            "row_ref": pl.String,
-            "row_name": pl.String,
-        }
-        schema.update(dict.fromkeys(column_refs, pl.Float64))
-        return pl.DataFrame(rows, schema=schema)
-
-    # =========================================================================
-    # C 08.01 — IRB Totals (per exposure class)
-    # =========================================================================
+        return generate_c07(results, cols, framework, errors)
 
     def _generate_all_c08_01(
         self,
@@ -2466,71 +2338,16 @@ class COREPGenerator:
 # C 07.00 SECTION-LEVEL FILTER CONFIGURATION
 # =============================================================================
 
-# Section 1 "of which" sub-rows that map to a single specialised-lending type.
-_C07_SL_TYPE_MAP: dict[str, str] = {
-    "0021": "object_finance",
-    "0022": "commodities_finance",
-    "0023": "project_finance",
-}
-
-# Section 1 "of which" sub-rows for project-finance phase splits.
-_C07_PF_PHASE_MAP: dict[str, str] = {
-    "0024": "pre_operational",
-    "0025": "operational",
-    "0026": "high_quality_operational",
-}
-
-# Section 4: Maps CIU sub-approach row refs to the ciu_approach pipeline value.
-_C07_CIU_ROW_APPROACH: dict[str, str] = {
-    "0281": "look_through",
-    "0282": "mandate_based",
-    "0283": "fallback",
-}
-
-# Section 5 Memorandum: defaulted-exposure rows with a specific target RW.
-_C07_MEMO_DEFAULTED_RW: dict[str, float] = {"0300": 1.0, "0320": 1.5}
-
-# Section 5 Memorandum: rows for exposures secured by mortgage on a property type.
-_C07_MEMO_RE_SECURED: dict[str, str] = {"0290": "commercial", "0310": "residential"}
-
 
 # =============================================================================
 # RE ROW FILTER CONFIGURATION (Basel 3.1 OF 07.00 rows 0330-0360)
 # =============================================================================
 
-# Maps row refs to _filter_re() kwargs. Each entry defines the filter criteria
-# for a real estate "of which" row in B3.1 Section 1.
-_RE_ROW_FILTERS: dict[str, dict[str, Any]] = {
-    # Regulatory residential RE (CRE20.71-82)
-    "0330": {"property_type": "residential"},
-    "0331": {"property_type": "residential", "materially_dependent": False},
-    "0332": {"property_type": "residential", "materially_dependent": True},
-    # Regulatory commercial RE (CRE20.83-87)
-    "0340": {"property_type": "commercial"},
-    "0341": {"property_type": "commercial", "materially_dependent": False, "is_sme": False},
-    "0342": {"property_type": "commercial", "materially_dependent": True},
-    "0343": {"property_type": "commercial", "materially_dependent": False, "is_sme": True},
-    "0344": {"property_type": "commercial", "materially_dependent": True, "is_sme": True},
-    # Other real estate (Art. 124J) — non-qualifying RE
-    "0350": {"is_qualifying": False},
-    "0351": {"is_qualifying": False, "property_type": "residential", "materially_dependent": False},
-    "0352": {"is_qualifying": False, "property_type": "residential", "materially_dependent": True},
-    "0353": {"is_qualifying": False, "property_type": "commercial", "materially_dependent": False},
-    "0354": {"is_qualifying": False, "property_type": "commercial", "materially_dependent": True},
-    # Land ADC (CRE20.88)
-    "0360": {"is_adc": True},
-}
 
 # =============================================================================
 # EQUITY TRANSITIONAL ROW CONFIGURATION (Basel 3.1 OF 07.00 rows 0371-0374)
 # =============================================================================
 
-_EQUITY_TRANSITIONAL_FILTERS: dict[str, dict[str, Any]] = {
-    "0371": {"approach": "sa_transitional", "higher_risk": True},
-    "0372": {"approach": "sa_transitional", "higher_risk": False},
-    "0373": {"approach": "irb_transitional", "higher_risk": True},
-    "0374": {"approach": "irb_transitional", "higher_risk": False},
-}
 
 # =============================================================================
 # PRIVATE HELPERS
@@ -2684,258 +2501,6 @@ def _filter_lfse(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame | None:
     if "cp_apply_fi_scalar" in cols:
         return data.filter(pl.col("cp_apply_fi_scalar") == True)  # noqa: E712
     return None
-
-
-def _filter_equity_transitional(
-    data: pl.DataFrame,
-    cols: set[str],
-    *,
-    approach: str,
-    higher_risk: bool,
-) -> pl.DataFrame:
-    """Filter to equity exposures under a transitional approach.
-
-    Args:
-        approach: "sa_transitional" or "irb_transitional"
-        higher_risk: True for 400%+ RW (speculative/venture capital)
-    """
-    if "equity_transitional_approach" not in cols:
-        return data.clear()
-
-    result = data.filter(pl.col("equity_transitional_approach") == approach)
-
-    if "equity_higher_risk" in cols:
-        result = result.filter(pl.col("equity_higher_risk") == higher_risk)
-    elif higher_risk:
-        return data.clear()
-
-    return result
-
-
-def _filter_sl_type(data: pl.DataFrame, cols: set[str], sl_type: str) -> pl.DataFrame:
-    """Filter to exposures with a given specialised lending type."""
-    if "sl_type" not in cols:
-        return data.clear()
-    return data.filter(pl.col("sl_type") == sl_type)
-
-
-def _filter_project_phase(data: pl.DataFrame, cols: set[str], phase: str) -> pl.DataFrame:
-    """Filter to project finance exposures in a given phase."""
-    if "sl_type" not in cols or "sl_project_phase" not in cols:
-        return data.clear()
-    return data.filter(
-        (pl.col("sl_type") == "project_finance") & (pl.col("sl_project_phase") == phase)
-    )
-
-
-def _filter_re_materially_dependent(
-    result: pl.DataFrame,
-    cols: set[str],
-    materially_dependent: bool,
-) -> pl.DataFrame | None:
-    """Apply materially-dependent filter using whichever column is available.
-
-    Tries ``materially_dependent_on_property`` first (exact regulatory field —
-    null is excluded from the split), then falls back to ``has_income_cover``
-    or ``is_income_producing`` (null defaults to False).
-
-    Returns ``None`` when no candidate column exists (caller treats as
-    ``data.clear()``).
-    """
-    md_col: str | None = None
-    for candidate in (
-        "materially_dependent_on_property",
-        "has_income_cover",
-        "is_income_producing",
-    ):
-        if candidate in cols:
-            md_col = candidate
-            break
-    if md_col is None:
-        return None
-    if md_col == "materially_dependent_on_property":
-        # Exact field: null means unclassified — exclude from split
-        return result.filter(pl.col(md_col) == materially_dependent)
-    # Fallback proxy: null defaults to False (not dependent)
-    return result.filter(pl.col(md_col).fill_null(False) == materially_dependent)
-
-
-def _filter_re_sme_split(result: pl.DataFrame, is_sme: bool) -> pl.DataFrame:
-    """Split ``result`` into the SME or non-SME subset."""
-    sme_subset = _filter_sme(result, set(result.columns))
-    if is_sme:
-        return sme_subset
-    sme_refs = set(sme_subset["exposure_reference"].to_list()) if len(sme_subset) > 0 else set()
-    if sme_refs:
-        return result.filter(~pl.col("exposure_reference").is_in(sme_refs))
-    return result
-
-
-def _filter_re(
-    data: pl.DataFrame,
-    cols: set[str],
-    *,
-    property_type: str | None = None,
-    materially_dependent: bool | None = None,
-    is_sme: bool | None = None,
-    is_adc: bool | None = None,
-    is_qualifying: bool | None = None,
-) -> pl.DataFrame:
-    """Filter to real estate exposures with optional sub-criteria.
-
-    Args:
-        property_type: "residential" or "commercial" (None = any RE)
-        materially_dependent: True/False filter on materially_dependent_on_property
-        is_sme: True/False filter for SME sub-split (uses _filter_sme logic)
-        is_adc: True/False filter on is_adc column
-        is_qualifying: True/False filter on is_qualifying_re (Art. 124A)
-    """
-    if "property_type" not in cols:
-        return data.clear()
-
-    result = data.filter(pl.col("property_type").is_not_null())
-
-    if is_qualifying is not None and "is_qualifying_re" in cols:
-        result = result.filter(pl.col("is_qualifying_re").fill_null(True) == is_qualifying)
-    elif is_qualifying is False:
-        # No is_qualifying_re column — no non-qualifying RE to report
-        return data.clear()
-
-    if property_type is not None:
-        result = result.filter(pl.col("property_type") == property_type)
-
-    if materially_dependent is not None:
-        filtered = _filter_re_materially_dependent(result, cols, materially_dependent)
-        if filtered is None:
-            return data.clear()
-        result = filtered
-
-    if is_sme is not None:
-        result = _filter_re_sme_split(result, is_sme)
-
-    if is_adc is not None and "is_adc" in cols:
-        result = result.filter(pl.col("is_adc") == is_adc)
-    elif is_adc is True:
-        return data.clear()
-
-    return result
-
-
-def _filter_currency_mismatch(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
-    """Filter to exposures where the currency mismatch multiplier was applied.
-
-    Used for Basel 3.1 OF 07.00 memorandum row 0380.
-    """
-    if "currency_mismatch_multiplier_applied" not in cols:
-        return data.clear()
-    return data.filter(pl.col("currency_mismatch_multiplier_applied") == True)  # noqa: E712
-
-
-def _filter_defaulted_at_rw(data: pl.DataFrame, cols: set[str], target_rw: float) -> pl.DataFrame:
-    """Filter to defaulted exposures with a specific risk weight.
-
-    Used for C 07.00 / OF 07.00 memorandum items:
-    - Row 0300: Exposures in default subject to RW of 100% (target_rw=1.0)
-    - Row 0320: Exposures in default subject to RW of 150% (target_rw=1.5)
-
-    References:
-        CRR Art. 127: Defaulted exposure risk weights
-        PRA PS1/26 Art. 127: Defaulted exposure risk weights
-    """
-    defaulted = _filter_defaulted(data, cols)
-    if len(defaulted) == 0:
-        return defaulted
-    rw_col = _pick(set(defaulted.columns), "risk_weight")
-    if rw_col is None:
-        return data.clear()
-    return defaulted.filter(pl.col(rw_col).round(4) == round(target_rw, 4))
-
-
-def _filter_re_secured(data: pl.DataFrame, cols: set[str], property_type: str) -> pl.DataFrame:
-    """Filter to exposures secured by mortgages on immovable property.
-
-    Used for CRR C 07.00 memorandum items:
-    - Row 0290: Exposures secured by mortgages on commercial immovable property
-    - Row 0310: Exposures secured by mortgages on residential immovable property
-
-    References:
-        CRR Art. 124-126: Exposures secured by immovable property
-    """
-    if "property_type" not in cols:
-        return data.clear()
-    return data.filter(pl.col("property_type") == property_type)
-
-
-def _filter_supporting_factor(data: pl.DataFrame, cols: set[str], factor_type: str) -> pl.DataFrame:
-    """Filter to exposures where a specific supporting factor was applied.
-
-    Args:
-        factor_type: "sme" or "infrastructure"
-
-    Used for CRR C 07.00 Section 1 "of which" rows:
-    - Row 0030: Exposures subject to SME-supporting factor
-    - Row 0035: Exposures subject to infrastructure supporting factor
-
-    References:
-        CRR Art. 501: SME supporting factor
-        CRR Art. 501a: Infrastructure supporting factor
-    """
-    flag_col = "is_sme" if factor_type == "sme" else "is_infrastructure"
-    if flag_col not in cols:
-        return data.clear()
-
-    # Check for specific factor_applied columns first, then generic
-    sf_applied = _pick(
-        cols,
-        f"{factor_type}_supporting_factor_applied",
-        "supporting_factor_applied",
-    )
-    if sf_applied is None:
-        # No supporting factor tracking — filter by flag only
-        return data.filter(pl.col(flag_col) == True)  # noqa: E712
-
-    return data.filter(
-        (pl.col(flag_col) == True)  # noqa: E712
-        & (pl.col(sf_applied) == True)  # noqa: E712
-    )
-
-
-def _filter_ppu_of_sa(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
-    """Filter to SA exposures held under permanent partial use (PPU).
-
-    C 07.00 / OF 07.00 Section 1 row 0050 ("of which: Exposures under permanent
-    partial use of SA"). An exposure qualifies when its classifier-stage
-    ``ppu_reason`` is one of the CRR Art. 150(1)(a)-(j) conditions
-    (``art_150_1_*``).
-
-    Graceful fallback: when ``ppu_reason`` is absent (CRR/pre-classifier frames
-    and any caller that does not supply model-permission provenance), returns an
-    empty subset so the caller emits a null row — preserving prior behaviour.
-
-    References:
-        CRR Art. 150(1)(a)-(j): permanent partial use conditions.
-    """
-    if "ppu_reason" not in cols:
-        return data.clear()
-    return data.filter(pl.col("ppu_reason").str.starts_with("art_150_1_"))
-
-
-def _filter_sequential_rollout(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
-    """Filter to SA exposures held under sequential IRB roll-out.
-
-    C 07.00 / OF 07.00 Section 1 row 0060 ("of which: Exposures under sequential
-    IRB implementation"). An exposure qualifies when its classifier-stage
-    ``ppu_reason`` equals ``art_148_rollout``.
-
-    Graceful fallback: when ``ppu_reason`` is absent, returns an empty subset so
-    the caller emits a null row — preserving prior behaviour.
-
-    References:
-        CRR Art. 148: sequential IRB roll-out.
-    """
-    if "ppu_reason" not in cols:
-        return data.clear()
-    return data.filter(pl.col("ppu_reason") == "art_148_rollout")
 
 
 _SECTION3_NULL_REFS: frozenset[str] = frozenset({"0160", "0170", "0175", "0180"})
@@ -3198,14 +2763,6 @@ def _compute_substitution_outflow(data: pl.DataFrame, cols: set[str]) -> float:
     return float(migrated[gp_col].fill_null(0.0).sum())
 
 
-# COREP Annex II §1.3: columns whose header is prefixed "(-)" carry a
-# deduction and must be reported as NEGATIVE so the DPM net-exposure
-# arithmetic reconciles when summed. The cross-column formulas (0040, 0110,
-# 0150, IRB 0090) consume the POSITIVE magnitudes; negation is applied once
-# at the emit boundary, after that arithmetic has run.
-_C07_NEGATIVE_COLS: frozenset[str] = frozenset(
-    {"0030", "0035", "0050", "0060", "0070", "0080", "0090", "0130", "0140"}
-)
 _C08_NEGATIVE_COLS: frozenset[str] = frozenset({"0290"})
 
 
@@ -3223,227 +2780,6 @@ def _negate_deduction_cols(values: dict[str, float | None], negative_cols: froze
             continue
         negated = -magnitude
         values[ref] = 0.0 if negated == 0.0 else negated
-
-
-@cites("PS1/26, paragraph 1.3")
-def _compute_c07_values(
-    data: pl.DataFrame,
-    cols: set[str],
-    ead_col: str,
-    rwa_col: str,
-    column_refs: list[str],
-    *,
-    substitution_inflow: float = 0.0,
-) -> dict[str, float | None]:
-    """Compute C 07.00 column values from a data subset.
-
-    Maps pipeline columns to 4-digit COREP column refs. Columns without
-    a pipeline source are set to None (to be populated in Phase 2/3).
-
-    "(-)"-labelled deduction columns (``_C07_NEGATIVE_COLS``) are emitted
-    as NEGATIVE figures per COREP Annex II §1.3, applied at the boundary
-    after the reconciliation formulas (0040, 0110, 0150) consume positive
-    magnitudes.
-
-    Args:
-        substitution_inflow: Pre-computed inflow of guaranteed_portion from
-            other exposure classes into this class. Only meaningful for the
-            total row (0010); sub-rows pass 0.
-    """
-    if len(data) == 0:
-        return dict.fromkeys(column_refs)
-
-    ref_set = set(column_refs)
-    values: dict[str, float | None] = {}
-
-    # --- Exposure ---
-    # 0010: Original exposure pre conversion factors
-    values["0010"] = _safe_sum_eager(data, cols, "drawn_amount", "undrawn_amount")
-
-    # 0020: Exposures deducted from own funds (CRR Art. 111(1)(b))
-    # None when own_funds_deduction_amount is not provided in the input data.
-    values["0020"] = _col_sum_eager(data, cols, "own_funds_deduction_amount")
-
-    # 0030: (-) Value adjustments and provisions
-    values["0030"] = _safe_sum_eager(data, cols, "scra_provision_amount", "gcra_provision_amount")
-
-    # 0035: (-) On-balance sheet netting (B3.1 col 0035, CRR Art. 195)
-    values["0035"] = _col_sum_eager(data, cols, "on_bs_netting_amount")
-
-    # 0040: Exposure net of value adjustments (and netting for B3.1)
-    v_0010 = values["0010"] or 0.0
-    v_0030 = values["0030"] or 0.0
-    v_0035 = values.get("0035") or 0.0
-    values["0040"] = v_0010 - v_0030 - v_0035
-
-    # --- CRM substitution + comprehensive financial-collateral block ---
-    values.update(
-        _c07_crm_and_collateral_cols(data, cols, substitution_inflow, values.get("0040") or 0.0)
-    )
-
-    # --- CCF Breakdown --- Phase 2C
-    values.update(_c07_ccf_cols(data, cols, ead_col, ref_set))
-
-    # --- Final ---
-    # 0200: Exposure value (EAD)
-    values["0200"] = _col_sum_eager(data, cols, ead_col)
-
-    # 0210: Of which: arising from CCR — Phase 3K
-    values["0210"] = None
-
-    # 0211: Of which: CCR excl CCP — Phase 3K
-    values["0211"] = None
-
-    # --- RWEA + supporting factors + ECAI ---
-    values.update(_c07_rwea_factor_cols(data, cols, rwa_col))
-
-    # COREP Annex II §1.3: emit "(-)"-labelled deduction cols as negative,
-    # after all cross-column arithmetic has consumed the positive magnitudes.
-    _negate_deduction_cols(values, _C07_NEGATIVE_COLS)
-
-    # Filter to only refs present in this framework's column set
-    return {ref: values.get(ref) for ref in column_refs if ref in values}
-
-
-def _c07_rwea_factor_cols(
-    data: pl.DataFrame, cols: set[str], rwa_col: str
-) -> dict[str, float | None]:
-    """Compute C 07.00 RWEA + supporting-factor + ECAI columns (0215-0240)."""
-    values: dict[str, float | None] = {}
-
-    rwa_pre = _col_sum_eager(data, cols, "rwa_pre_factor")
-    values["0215"] = rwa_pre if rwa_pre is not None else _col_sum_eager(data, cols, rwa_col)
-
-    pre_factor_col = _pick(cols, "rwa_pre_factor")
-    values["0216"] = _supporting_factor_adjustment(
-        data, cols, "is_sme", "sme_supporting_factor_applied", pre_factor_col, rwa_col
-    )
-    values["0217"] = _supporting_factor_adjustment(
-        data,
-        cols,
-        "is_infrastructure",
-        "infrastructure_factor_applied",
-        pre_factor_col,
-        rwa_col,
-    )
-
-    values["0220"] = _col_sum_eager(data, cols, rwa_col)
-
-    if "sa_cqs" in cols and rwa_col in cols:
-        ecai_data = data.filter(pl.col("sa_cqs").is_not_null())
-        values["0230"] = float(ecai_data[rwa_col].fill_null(0.0).sum())
-        no_ecai = data.filter(pl.col("sa_cqs").is_null())
-        values["0235"] = float(no_ecai[rwa_col].fill_null(0.0).sum())
-    else:
-        values["0230"] = None
-        values["0235"] = None
-
-    values["0240"] = None  # ECAI derived from central govt (CRR only)
-    return values
-
-
-def _c07_crm_and_collateral_cols(
-    data: pl.DataFrame, cols: set[str], substitution_inflow: float, v_0040: float
-) -> dict[str, float | None]:
-    """Compute C 07.00 CRM substitution + comprehensive-collateral cols (0050-0150).
-
-    Encapsulates the CRR Art. 195/222/223 CRM-method-comprehensive flows:
-    - 0050/0060: unfunded protection (guarantees vs credit derivatives)
-    - 0070/0080: funded protection (simple-method fin collateral vs other)
-    - 0090/0100: substitution flows out/in
-    - 0110: net exposure after CRM (E')
-    - 0120/0130/0140/0150: comprehensive-method adjustments and E*
-    """
-    values: dict[str, float | None] = {}
-
-    # 0050: (-) Guarantees (excluding credit derivatives)
-    guar_only = _sum_by_protection_type(data, cols, "guarantee")
-    values["0050"] = (
-        guar_only if guar_only is not None else _col_sum_eager(data, cols, "guaranteed_portion")
-    )
-
-    # 0060: (-) Credit derivatives
-    cd_val = _sum_by_protection_type(data, cols, "credit_derivative")
-    values["0060"] = cd_val if cd_val is not None else 0.0
-
-    # 0070: (-) Financial collateral: Simple method (Art. 222)
-    if "fcsm_collateral_value" in data.columns:
-        values["0070"] = data["fcsm_collateral_value"].sum()
-    else:
-        values["0070"] = 0.0
-
-    # 0080: (-) Other funded credit protection (non-financial collateral)
-    values["0080"] = _safe_sum_eager(
-        data,
-        cols,
-        "collateral_re_value",
-        "collateral_receivables_value",
-        "collateral_other_physical_value",
-    )
-
-    # 0090: (-) Substitution outflows
-    values["0090"] = _compute_substitution_outflow(data, cols)
-    # 0100: Substitution inflows
-    values["0100"] = substitution_inflow if substitution_inflow else 0.0
-
-    # 0110: Net exposure after CRM substitution pre CCFs
-    values["0110"] = (
-        v_0040
-        - (values["0050"] or 0.0)
-        - (values["0060"] or 0.0)
-        - (values["0070"] or 0.0)
-        - (values["0080"] or 0.0)
-        - (values["0090"] or 0.0)
-        + (values["0100"] or 0.0)
-    )
-
-    # 0120: Volatility adjustment to exposure (He = 0 for loan exposures)
-    values["0120"] = 0.0
-    # 0130: Financial collateral adjusted value (Cvam)
-    values["0130"] = _col_sum_eager(data, cols, "collateral_adjusted_value")
-    # 0140: Of which: volatility and maturity adjustments
-    v_mv = _col_sum_eager(data, cols, "collateral_market_value")
-    v_cv = values["0130"] or 0.0
-    values["0140"] = (v_mv - v_cv) if v_mv is not None else None
-    # 0150: Fully adjusted exposure value (E*)
-    values["0150"] = max(0.0, (values["0110"] or 0.0) - (values["0130"] or 0.0))
-    return values
-
-
-_C07_CCF_REFS = ("0160", "0170", "0171", "0180", "0190")
-_C07_CCF_MAP_CRR: dict[float, str] = {0.0: "0160", 0.2: "0170", 0.5: "0180", 1.0: "0190"}
-_C07_CCF_MAP_B31: dict[float, str] = {
-    0.1: "0160",
-    0.2: "0170",
-    0.4: "0171",
-    0.5: "0180",
-    1.0: "0190",
-}
-
-
-def _c07_ccf_cols(
-    data: pl.DataFrame, cols: set[str], ead_col: str, ref_set: set[str]
-) -> dict[str, float | None]:
-    """Compute C 07.00 CCF breakdown columns (0160-0190).
-
-    Routes off-BS exposures into COREP CCF buckets based on ``ccf_applied``.
-    Bucket layout differs between CRR (0/20/50/100 %) and B3.1 (10/20/40/50/100 %).
-    Returns None for all refs when ``ccf_applied`` is absent.
-    """
-    if "ccf_applied" not in cols:
-        return dict.fromkeys(_C07_CCF_REFS, None)
-
-    off_bs = _filter_off_bs(data, cols) if "bs_type" in cols else data
-    is_b31 = "0171" in ref_set
-    ccf_map = _C07_CCF_MAP_B31 if is_b31 else _C07_CCF_MAP_CRR
-
-    values: dict[str, float | None] = dict.fromkeys(_C07_CCF_REFS, 0.0)
-    if len(off_bs) > 0 and ead_col in cols:
-        for ccf_val, col_ref in ccf_map.items():
-            bucket = off_bs.filter(pl.col("ccf_applied").round(4) == round(ccf_val, 4))
-            if len(bucket) > 0:
-                values[col_ref] = float(bucket[ead_col].fill_null(0.0).sum())
-    return values
 
 
 def _c08_exposure_cols(
@@ -3757,43 +3093,6 @@ def _compute_c08_values(
     return {ref: values.get(ref) for ref in column_refs if ref in values}
 
 
-def _compute_rw_section_rows(
-    class_data: pl.DataFrame,
-    cols: set[str],
-    ead_col: str,
-    rwa_col: str,
-    column_refs: list[str],
-    rw_bands: list[tuple[float, str]],
-    rw_col: str | None,
-) -> dict[str, dict[str, float | None]]:
-    """Compute C 07.00 column values for each risk weight band.
-
-    Returns a dict mapping band label (e.g., "100%") to column values.
-    Exposures not matching any standard band go to "Other risk weights".
-    """
-    if rw_col is None or rw_col not in cols or len(class_data) == 0:
-        return {}
-
-    # Assign risk weight bands
-    band_expr = pl.lit("Other risk weights")
-    for rw_value, label in reversed(rw_bands):
-        band_expr = (
-            pl.when(pl.col(rw_col).round(4) == round(rw_value, 4))
-            .then(pl.lit(label))
-            .otherwise(band_expr)
-        )
-
-    banded = class_data.with_columns(band_expr.alias("_rw_band"))
-
-    result: dict[str, dict[str, float | None]] = {}
-    for label in banded["_rw_band"].unique().to_list():
-        band_data = banded.filter(pl.col("_rw_band") == label).drop("_rw_band")
-        if len(band_data) > 0:
-            result[label] = _compute_c07_values(band_data, cols, ead_col, rwa_col, column_refs)
-
-    return result
-
-
 def _c08_03_exposure_cols(
     data: pl.DataFrame, cols: set[str], ead_sum: float
 ) -> dict[str, float | None]:
@@ -4074,123 +3373,6 @@ def _c08_01_section2_subset(
         return _filter_on_bs(class_data, cols)
     if row_ref == "0030":
         return _filter_off_bs(class_data, cols)
-    return None
-
-
-def _c07_section1_subset(
-    row_ref: str, class_data: pl.DataFrame, cols: set[str]
-) -> pl.DataFrame | None:
-    """Resolve a C 07.00 Section 1 "of which" row to its filtered subset.
-
-    Caller handles ``row_ref == "0010"`` (the total). Returns ``None`` for
-    rows that map to no available pipeline data (caller emits null).
-    """
-    if row_ref == "0015":
-        return _filter_defaulted(class_data, cols)
-    if row_ref == "0020":
-        return _filter_sme(class_data, cols)
-    if row_ref in _C07_SL_TYPE_MAP:
-        return _filter_sl_type(class_data, cols, _C07_SL_TYPE_MAP[row_ref])
-    if row_ref in _C07_PF_PHASE_MAP:
-        return _filter_project_phase(class_data, cols, _C07_PF_PHASE_MAP[row_ref])
-    if row_ref in _RE_ROW_FILTERS:
-        return _filter_re(class_data, cols, **_RE_ROW_FILTERS[row_ref])
-    if row_ref == "0030":
-        return _filter_supporting_factor(class_data, cols, "sme")
-    if row_ref == "0035":
-        return _filter_supporting_factor(class_data, cols, "infrastructure")
-    if row_ref == "0050":
-        return _filter_ppu_of_sa(class_data, cols)
-    if row_ref == "0060":
-        return _filter_sequential_rollout(class_data, cols)
-    return None
-
-
-def _c07_sa_data(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:
-    """Select the rows that populate C 07.00 (SA credit risk).
-
-    Plain SA exposures (``approach_applied == "standardised"``) plus FCCM SFT
-    synthetic rows (``risk_type == "CCR_SFT"``). The latter are SA-risk-weighted
-    but tagged ``standardised_ccr`` under the Basel 3.1 output floor, so they
-    would otherwise be dropped by the bare approach filter. SA-CCR derivatives
-    are deliberately excluded — they report under C 34 (CRR Art. 274), not C 07.
-
-    References:
-        PS1/26 App. 17: FCCM SFTs report under C 07.00 row 0090.
-    """
-    sa = _filter_by_approach(results, "standardised", cols)
-    if "risk_type" not in cols:
-        return sa
-    sft = results.filter(pl.col("risk_type") == "CCR_SFT")
-    return pl.concat([sa, sft], how="diagonal_relaxed").unique(
-        subset=["exposure_reference"] if "exposure_reference" in cols else None,
-        keep="first",
-    )
-
-
-@cites("PS1/26")
-def _filter_sft(class_data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
-    """Filter to the FCCM SFT synthetic rows (C 07.00 row 0090 — SFT netting sets).
-
-    SFTs carry ``risk_type == "CCR_SFT"`` (set by the ``sft_fccm`` stage). Their
-    exposure value (col 0200) and RWEA (col 0215/0220) populate the SFT-netting
-    breakdown row under the row's exposure-class sheet. Returns an empty frame
-    when the discriminator is absent (no SFT book).
-
-    References:
-        PS1/26 App. 17: C 07.00 row 0090 — SFT netting sets.
-    """
-    if "risk_type" not in cols:
-        return class_data.clear()
-    return class_data.filter(pl.col("risk_type") == "CCR_SFT")
-
-
-def _c07_section2_subset(
-    row_ref: str, class_data: pl.DataFrame, cols: set[str]
-) -> pl.DataFrame | None:
-    """Resolve a C 07.00 Section 2 (Breakdown by Exposure Types) row."""
-    if row_ref == "0070":
-        return _filter_on_bs(class_data, cols)
-    if row_ref == "0080":
-        return _filter_off_bs(class_data, cols)
-    if row_ref == "0090":
-        # SFT netting sets (FCCM SFT EAD; PS1/26 App. 17). The "of which: QCCP"
-        # sub-row 0100 and the derivative / CCP netting-set rows 0110-0130 stay
-        # unimplemented (those exposures report under C 34).
-        return _filter_sft(class_data, cols)
-    # Derivative / CCP netting-set rows (0100-0130) report under C 34.
-    return None
-
-
-def _c07_section4_subset(
-    row_ref: str, class_data: pl.DataFrame, ciu_col: str | None
-) -> pl.DataFrame | None:
-    """Resolve a C 07.00 Section 4 (CIU Approach) row."""
-    if row_ref in _C07_CIU_ROW_APPROACH and ciu_col:
-        return class_data.filter(pl.col(ciu_col) == _C07_CIU_ROW_APPROACH[row_ref])
-    return None
-
-
-def _c07_section5_subset(
-    row_ref: str, class_data: pl.DataFrame, cols: set[str]
-) -> pl.DataFrame | None:
-    """Resolve a C 07.00 Section 5 (Memorandum) row to its filtered subset.
-
-    Returns ``None`` for rows that have no pipeline source — caller emits a
-    null row in that case. The four mutually exclusive families handled:
-    equity transitional, currency mismatch, defaulted at specific RW, and
-    RE-secured by property type.
-    """
-    if row_ref in _EQUITY_TRANSITIONAL_FILTERS:
-        eq_filter = _EQUITY_TRANSITIONAL_FILTERS[row_ref]
-        return _filter_equity_transitional(class_data, cols, **eq_filter)
-    if row_ref == "0380":
-        # Currency mismatch multiplier (B3.1 Art. 123B / CRE20.93)
-        return _filter_currency_mismatch(class_data, cols)
-    if row_ref in _C07_MEMO_DEFAULTED_RW:
-        return _filter_defaulted_at_rw(class_data, cols, _C07_MEMO_DEFAULTED_RW[row_ref])
-    if row_ref in _C07_MEMO_RE_SECURED:
-        return _filter_re_secured(class_data, cols, _C07_MEMO_RE_SECURED[row_ref])
     return None
 
 

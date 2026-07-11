@@ -628,7 +628,38 @@ classes split out to `tests/unit/reporting/pillar3/test_cr6_cr7.py` (+ new oblig
 substitution, defaulted-band, CR7-row-8 and CR6-A-keying pins). Gate: goldens regen'd with
 the recorded row-8 diff only; full suite green.
 
-Order: **Pillar 3** OV1 → ~~CR4/CR5~~ → ~~CR6/CR6a/CR7/CR7a~~ → CR9/CR9.1/CR10 → CMS1/2 → CCR1/2/3/8
+**S8-CR9/CR9.1/CR10 DONE 2026-07-11 — closes F3 (CR9 was the last open tranche).**
+`reporting/pillar3/{cr9,cr10}.py` (CR9.1 shares cr9.py's value vocabulary — same c-h verbs,
+grade-row axis); the imperative bodies (per-class CR9 loop + six value helpers + schemas +
+`_cr9_class_predicate`, `_generate_cr9_1_for_class`, the four CR10 helpers) deleted; router
+methods delegate (the `@cites("PS1/26, paragraph 147.2")` strings moved with them).
+**F3 close-out, oracle-adjudicated:** CR9 sheets key the OBLIGOR basis —
+`reporting_class_origin` × `reporting_approach_origin` refined by the Annex XXII leaf taxonomy
+(the `CR9ClassSpec` discriminators stay a module-owned typed expression `_leaf_expr`, ported
+verbatim incl. the absent-column degradation rules) — "for each obligor assigned to this
+exposure class (without considering any substitution effects due to CRM)". CR10 has NO class
+axis (supervisory categories × `sl_type`; population = origin slotting book) — nothing to
+retarget; recorded. Number-neutral: the golden gate passed WITHOUT regeneration.
+**Recorded fix (zero golden diff, unit-pinned):** CR9's PD-band allocation now forces
+defaulted obligors to the 100% band via the derived `cr9_alloc_pd` (the CR6 fix pattern —
+the retired code bucketed defaulted rows at model PD; the fixture's defaulted row happened
+to carry pd=1.0). **Preserved verbatim (recorded):** the sparse-row emission (only populated
+PD bands + Total — CR6 by contrast renders all 17 bands; a fixed-shape alignment is a
+recorded open question, not a silent change); the c/d/e/h single-run point-in-time proxies
+incl. the live carrier ladders (`prior_year_obligor_count` summed when supplied, else current
+distinct obligors; `historical_annual_default_rate` meaned ×100 when supplied, else h copies
+e) — the instructions define c/e/h over prior-period/five-year series the engine does not
+carry (§7 follow-up); CR9.1's silent-empty gate on the never-produced `ecai_pd_mapping` /
+`external_rating_equivalent` (the recorded S1 accept-empty decision); CR10's a/b-zero vs
+d-f-null empty-category asymmetry, the CRR IPRE+HVCRE merge, the CRR equity force-emit, and
+the fixed Art. 153(5) column c (a module post-step — populated even on empty categories).
+Vocabulary addition: `Mean.scale` (CR9 col g ×100). String cells (CR9 a/b, CR9.1's dynamic
+ECAI grade column) are module post-steps; CR9.1's grade-row axis is a generate-time spec
+(rows discovered from the frame — the one data-driven row axis in the estate). CR9/CR10 unit
+classes split out to `tests/unit/reporting/pillar3/test_cr9_cr10.py` (+ new obligor-basis
+substitution and defaulted-band pins). Gate: goldens untouched; full suite green.
+
+Order: **Pillar 3** OV1 → ~~CR4/CR5~~ → ~~CR6/CR6a/CR7/CR7a~~ → ~~CR9/CR9.1/CR10~~ → CMS1/2 → CCR1/2/3/8
 (post S8-pre); then **COREP** C07 + skeleton-sharing C08.01/02/03/05 → C08.04/06/07 → C09.01/02 →
 OF02.01 → OF07/OF08/C34.x (post S8-pre) → **C02.00 LAST** (portfolio pre-pass via
 `ReportingContext`).
@@ -659,7 +690,7 @@ OF02.01 → OF07/OF08/C34.x (post S8-pre) → **C02.00 LAST** (portfolio pre-pas
 |---|---|---|---|
 | **F1** | S4 | `summary_by_class` basis shift for unguaranteed defaulted / SME-managed-as-retail rows (raw → applied class) | **FIX** — align summaries to the applied/post-CRM semantic; oracle sign-off per diff |
 | **F2** | S5 | Per-row post-floor `reporting_rwa` allocation of the portfolio floor add-on | **PRESERVE** portfolio totals exactly; **FIX** the per-row convention, ring-fenced, oracle-signed |
-| **F3** | S8.. | Pillar 3 CR4/CR5/CR6/CR9 retarget raw `exposure_class` → `reporting_class` (SME/defaulted rows change sheet) | **FIX** — per-template oracle sign-off; the basis is PER-TEMPLATE, not uniform. **CR4/CR5 DONE 2026-07-11** (split basis: a/b origin, c-f + CR5 post). **CR6/CR6a/CR7/CR7a DONE 2026-07-11** (obligor basis: CR6/CR7/CR7a → `reporting_class_origin` — the instructions bar substitution effects; CR6-A → origination class, recorded). CR9 pending |
+| **F3** | S8.. | Pillar 3 CR4/CR5/CR6/CR9 retarget raw `exposure_class` → `reporting_class` (SME/defaulted rows change sheet) | **FIX — CLOSED 2026-07-11**; the basis is PER-TEMPLATE, not uniform. **CR4/CR5** split basis (a/b origin, c-f + CR5 post-substitution). **CR6/CR7/CR7a + CR9** obligor basis (`reporting_class_origin` — the instructions bar substitution effects; CR9 refined by the Annex XXII leaf taxonomy). **CR6-A** origination class (Art. 147-shaped axis, no defaulted sink). **CR10** has no class axis (recorded no-op) |
 | **F4** | S8.. | COREP C07 origin vs post-CRM column consistency (already on `exposure_class_applied` since `5ee669f8`) | **PRESERVE** C07.00 origination keying + outflow/inflow; confirm the split reproduces existing cells |
 | **F5** | S8../Sn | UI by-class chart retarget raw `exposure_class` → `reporting_class` | **FIX** — UI matches COREP/Pillar 3 exactly; closes the operator-flagged UI/recon gap |
 | **F6** | follow-ups | The S1-DEFERRED stripped/never-produced reads (`ccf_applied`, `sa_cqs`, `scra/gcra_provision_amount`, `ead_pre_ccf`, `exposure_post_crm`, …) — permanently-null cells today | **Per-column add-to-contract-vs-accept-empty decision**, never a blanket seal |
@@ -724,6 +755,30 @@ Consumer-facing surface = `reporting_class`, `reporting_class_origin`, `reportin
   scale; if benchmarks flag the reporting stage on 10M-row frames, add a grouped-aggregation
   kernel behind `execute()` (one group-by per (predicate-family, verb) instead of per-cell
   filters) — an executor-internal change, specs untouched.
+- **CR9 back-testing series carriers (F6, found during S8-CR9; behaviour predates the
+  slice):** columns c/e/h are defined over prior-period and five-year default-rate series
+  (obligors at previous year-end; one-year observed default rates; five-year average) that a
+  single reporting-date run cannot produce — the preserved point-in-time proxies (c = current
+  obligor count, e = snapshot default rate, h = e) are materially different quantities.
+  Decision path: add `prior_year_obligor_count` / `historical_annual_default_rate` input
+  carriers (the ladders already consume them when supplied) or null the cells as
+  un-computable; the e/h proxies are the strongest null-with-carrier-opt-in candidates.
+- **UK CR9/CR9.1 under CRR — recorded scope-out:** the code gates both templates
+  Basel-3.1-only, but the CRR heritage annex carries UK CR9 (Art. 452(h)) and UK CR9.1
+  (Art. 180(1)(f)) with a COARSER taxonomy (no residential/commercial retail split, no
+  financial/large corporate split) and no input-floor language on f/g. Implementing the CRR
+  variants is an own slice (new class specs + goldens), not a gate flip.
+- **CR9 sparse vs fixed-shape rows:** the instructions call CR9 a "fixed template" with a
+  fixed PD range; the estate emits only populated bands (+Total) while CR6 renders all 17.
+  Preserved as the recorded convention; aligning CR9 to the fixed 17-band shape is a golden-
+  structure change needing its own decision.
+- **CR10 column c short-maturity variant + display-constant pack-homing:** the fixed
+  Art. 153(5) reference weights hard-code the >= 2.5y column-c values
+  (`SLOTTING_RISK_WEIGHTS`/`HVCRE_RISK_WEIGHTS` in templates.py) while the pack carries the
+  <2.5y preferential tables the CALCULATION uses; a short-maturity slotting book shows the
+  standard RW in column c against a preferential RWEA in column e. Defensible ("fixed
+  column"), but reading column c from the pack (and retiring the templates.py copies) is the
+  tidy-up path.
 - **Tie-out cross-check:** headline totals (per-key frame) vs class allocation (raw frame) have
   no cross-check; add one assertion frame once both read the ledger.
 - **`exposure_class_for_sa` / `substitute_rw` deletions** (S3) — record the 0-reader /

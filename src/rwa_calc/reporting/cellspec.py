@@ -58,9 +58,11 @@ class Sum:
 @dataclass(frozen=True)
 class Mean:
     """Kind 3: unweighted mean of ``col`` (e.g. C08.05 avg-PD — deliberately
-    NOT EAD-weighted)."""
+    NOT EAD-weighted). ``scale`` multiplies a non-None result (the CR9
+    average-PD column reports the arithmetic mean x100)."""
 
     col: str
+    scale: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -467,7 +469,7 @@ def _evaluate(
         mean = data[binding.col].mean()
         if mean is None:
             return None if empty_as_none else 0.0
-        return float(cast("float", mean))
+        return float(cast("float", mean)) * binding.scale
     if isinstance(binding, WeightedAvg):
         if binding.col not in cols or binding.weight not in cols or data.height == 0:
             return None if empty_as_none else 0.0

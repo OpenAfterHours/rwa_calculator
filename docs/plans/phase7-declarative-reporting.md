@@ -747,6 +747,39 @@ Substitution inflow reuses the C 07 `ReportingContext.substitution_inflow` side 
 regimes); all 732 COREP unit tests (incl. P4.20 grade rows) green unchanged; full suite
 green. Remaining imperative COREP: C 08.06/07, C 09.01/02, OF 02.01, C 02.00, C 34.x.
 
+**S8-C08.06/07 DONE 2026-07-11 — the C 08 family is FULLY declarative.** Both generators live
+in `reporting/corep/c08.py`; 13 imperative functions deleted from generator.py (the two
+generator bodies + eleven helpers, including the already-orphaned
+`_negate_deduction_cols`/`_C08_NEGATIVE_COLS` residue). **C 08.06** (per-SL-type sheets,
+slotting only): the per-ROW two-branch policy is a module post-pass over the executed spec —
+empty non-Total rows zero-fill every cell with 0070 = the row definition's fixed display risk
+weight ("50%" -> 0.5), while live rows AND both maturity-split Total rows compute on data
+(0050/0060/0070/0031 per-cell null). Preserved verbatim: the HVCRE routing (CRR's IPRE sheet
+absorbs HVCRE only when `is_hvcre` exists; B31 splits HVCRE out, admitting `is_hvcre` flags);
+the asymmetric maturity fallback (no `is_short_maturity` column -> short band empty, long
+band absorbs the whole category — generate-time predicate variants, NOT a tolerant term that
+would empty both); the permanently-empty "substantially stronger" sub-rows (a derived
+always-False carrier); CRR 0080 preferring `rwa_post_factor`; 0020 falling back to 0010 when
+no post-CRM carrier exists; 0030's whole-subset nominal fallback when the row has no
+off-balance slice; the 0040 `>0` clamp; 0070's first-non-null risk weight on zero-total-EAD
+subsets; the SCRA/GCRA -> `provision_held` ladder (shared `_provisions_postfix`); empty SL
+types emit NO sheet; the `approach_applied`-only population gate (an `approach`-only frame
+silently yields nothing). **C 08.07** (single frame): population = the FULL results frame —
+SA enters every denominator, null approach falls to SA, slotting counts as IRB
+(`C08_07_IRB_APPROACHES`); rows key RAW `exposure_class`; coverage percentages are intra-row
+Formulas guarding zero denominators to 0.0; the structural-null rows are a FIXED set (CRR
+0060/0100/0130, B31 0210/0280) — the OPPOSITE of C 07.00's empty-subset rule (empty
+real-class rows stay 0.0); B31 0140 = 0060 - 0150 so the additive identity
+0060 = Σ(0070..0140) + 0150 holds by construction; 0070-0130 stay 0.0 (no `sa_use_reason`
+carrier). **Recorded: the retired `output_floor_config` materiality gate was DEAD code** (the
+flag was threaded but never read; 0160-0180 unconditionally null, pinned by
+TestC0807MaterialityColumns on all three bases) — the declarative signature drops the
+parameter. The retired error-string mismatch is preserved ("C08.06" no space vs "C 08.07"
+with space — both pinned). Gate: goldens byte-identical WITHOUT regen (23 reporting
+acceptance); 65 C 08.06 + 51 C 08.07 + 4 materiality unit tests green unchanged;
+ty/ruff/arch_check green; citation snapshot 154 fns; full suite green. Remaining imperative
+COREP: C 09.01/02, OF 02.01, C 02.00, C 34.x.
+
 Order: **Pillar 3** OV1 → ~~CR4/CR5~~ → ~~CR6/CR6a/CR7/CR7a~~ → ~~CR9/CR9.1/CR10~~ → ~~CMS1/2~~ → CCR1/2/3/8 (DEFERRED with S8-pre)
 (post S8-pre); then **COREP** C07 + skeleton-sharing C08.01/02/03/05 → C08.04/06/07 → C09.01/02 →
 OF02.01 → OF07/OF08/C34.x (post S8-pre) → **C02.00 LAST** (portfolio pre-pass via

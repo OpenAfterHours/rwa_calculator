@@ -1,11 +1,13 @@
 """
-COREP C 08.01/02/03/04/05 — IRB credit risk, declarative.
+COREP C 08.01/02/03/04/05/06/07 — IRB credit risk, declarative.
 
 Pipeline position:
     sealed aggregator-exit ledger -> _prepare() -> per-template TemplateSpecs
     (C 08.01 static rows; C 08.02 data-driven grade/PD-band rows; C 08.03/05
-    sparse PD-range rows; C 08.04 fixed flow rows) -> cellspec.execute()
-    -> dict[class, DataFrame] each
+    sparse PD-range rows; C 08.04 fixed flow rows; C 08.06 per-SL-type
+    category x maturity rows; C 08.07 scope-of-use class rows over the FULL
+    population) -> cellspec.execute() -> dict[class, DataFrame] each
+    (C 08.07: one DataFrame | None)
 
 Cell semantics (recorded decisions, this slice):
 
@@ -47,6 +49,23 @@ Cell semantics (recorded decisions, this slice):
 - C 08.04 is the CR8-clone flow: only the closing-RWEA cell (row 0090) is
   populated — note its DELIBERATELY two-wide RWA ladder (``rwa_final``,
   ``rwa`` — no ``rwa_post_factor``).
+- C 08.06 keys per-SL-type sheets (CRR's IPRE absorbs HVCRE when
+  ``is_hvcre`` exists; B31 splits HVCRE out; empty SL types emit NO sheet)
+  over the slotting-only book, with a per-ROW two-branch policy: empty
+  non-Total rows zero-fill (0070 = the fixed display risk weight from the
+  row definition), live rows and both maturity-split Total rows compute on
+  data (0050/0060/0070/0031 null where the retired code reported None).
+  CRR's 0080 prefers ``rwa_post_factor``; the maturity fallback is
+  asymmetric (no ``is_short_maturity`` column -> short band empty, long
+  band absorbs the category); the "substantially stronger" sub-rows are
+  unconditionally empty.
+- C 08.07 reads the FULL population (SA enters every denominator; null
+  approach falls to SA; slotting counts as IRB) keyed on RAW
+  ``exposure_class``; percentages are intra-row formulas guarding zero
+  denominators to 0.0; the structural-null rows are a FIXED set (empty
+  real-class rows stay 0.0 — the opposite of C 07.00's empty-subset rule);
+  B31 materiality columns 0160-0180 are always null (the retired
+  ``output_floor_config`` gate was dead code, recorded).
 
 References:
 - CRR Art. 142-191 (IRB); Art. 153 (risk weights), Art. 180 (PD
@@ -77,15 +96,23 @@ from rwa_calc.reporting.cellspec import (
 from rwa_calc.reporting.corep.templates import (
     C08_03_PD_RANGES,
     C08_04_ROWS,
+    C08_06_CATEGORY_MAP,
+    C08_07_CRR_RETAIL_CLASSES,
+    C08_07_IRB_APPROACHES,
     PD_BANDS,
     get_c08_02_columns,
     get_c08_03_columns,
     get_c08_04_columns,
     get_c08_05_columns,
+    get_c08_06_columns,
+    get_c08_06_rows,
+    get_c08_06_sl_types,
+    get_c08_07_columns,
+    get_c08_07_rows,
     get_c08_columns,
     get_irb_row_sections,
 )
-from rwa_calc.reporting.kernel import pick
+from rwa_calc.reporting.kernel import col_sum, pick
 from rwa_calc.reporting.metadata import ReportingContext
 
 if TYPE_CHECKING:
@@ -972,6 +999,387 @@ def generate_c08_04(
 
 
 # =============================================================================
+# C 08.06 / OF 08.06 — specialised lending slotting (per SL-type sheets)
+# =============================================================================
+
+
+@cites("PS1/26, paragraph 1.3")
+def generate_c08_06(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, pl.DataFrame]:
+    """Execute C 08.06 / OF 08.06 per SL-type sheet (slotting only).
+
+    Rows = slotting category x maturity band (plus the two maturity-split
+    Total rows); the retired two-branch row policy is preserved: an EMPTY
+    non-Total row zero-fills every cell and reports the row definition's
+    fixed display risk weight in 0070, while live rows (and both Total
+    rows, even when empty) compute on data with per-cell null policy.
+    """
+    ead_col = pick(cols, "ead_final")
+    rwa_col = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
+    if ead_col is None or rwa_col is None:
+        errors.append("C08.06: Missing required columns (ead/rwa)")
+        return {}
+    if pick(cols, "approach_applied", "approach") is None:
+        errors.append("C08.06: No approach column — cannot identify slotting exposures")
+        return {}
+    # The retired dispatch pre-filtered the IRB book on ``approach_applied``
+    # only — an ``approach``-only frame silently yields nothing.
+    if "approach_applied" not in cols:
+        return {}
+    slotting_df = results.filter(pl.col("approach_applied") == "slotting").collect()
+    if slotting_df.height == 0:
+        return {}
+    if "slotting_category" not in cols:
+        errors.append("C08.06: Missing slotting_category column — cannot generate template")
+        return {}
+    data = _c08_06_prepare(slotting_df, cols)
+    spec, row_defs, row_preds = _c08_06_spec(cols, ead_col, rwa_col, framework)
+    result: dict[str, pl.DataFrame] = {}
+    if "sl_type" in cols:
+        for sl_key in get_c08_06_sl_types(framework):
+            type_df = _c08_06_sl_type_sheet(data, sl_key, cols, framework)
+            if type_df.height == 0:
+                continue
+            result[sl_key] = _c08_06_sheet(spec, type_df, row_defs, row_preds, cols, ead_col)
+    else:
+        result["specialised_lending"] = _c08_06_sheet(
+            spec, data, row_defs, row_preds, cols, ead_col
+        )
+    return result
+
+
+def _c08_06_prepare(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
+    """Derive the off-balance discriminator (the kernel filter_off_bs rule:
+    ``bs_type == "OFB"`` else ``exposure_type in {facility, contingent}``
+    else nothing) and the always-False carrier behind the permanently-empty
+    "substantially stronger" sub-rows."""
+    if "bs_type" in cols:
+        off_bs = pl.col("bs_type") == "OFB"
+    elif "exposure_type" in cols:
+        off_bs = pl.col("exposure_type").is_in(["facility", "contingent"])
+    else:
+        off_bs = pl.lit(value=False)
+    return data.with_columns(
+        off_bs.alias("c0806_off_bs"),
+        pl.lit(value=False).alias("c0806_never"),
+    )
+
+
+def _c08_06_sl_type_sheet(
+    data: pl.DataFrame, sl_key: str, cols: set[str], framework: str
+) -> pl.DataFrame:
+    """The retired HVCRE routing: CRR's IPRE sheet absorbs HVCRE (only when
+    ``is_hvcre`` exists); B31's HVCRE sheet admits ``is_hvcre`` flags too."""
+    has_hvcre = "is_hvcre" in cols
+    if sl_key == "ipre" and framework != "BASEL_3_1" and has_hvcre:
+        return data.filter(pl.col("sl_type").is_in(["ipre", "hvcre"]))
+    if sl_key == "hvcre" and framework == "BASEL_3_1" and has_hvcre:
+        return data.filter((pl.col("sl_type") == "hvcre") | pl.col("is_hvcre"))
+    return data.filter(pl.col("sl_type") == sl_key)
+
+
+def _c08_06_row_pred(label: str, is_short: bool | None, *, has_maturity: bool) -> RowPredicate:
+    """One category x maturity row subset. The retired asymmetric fallback
+    is preserved: with no maturity column the SHORT band is empty while the
+    LONG band absorbs the whole category."""
+    never = RowPredicate(equals=(("c0806_never", True),))
+    if "substantially stronger" in label:
+        return never
+    terms: list[tuple[str, str | bool]] = []
+    if label != "Total":
+        terms.append(("slotting_category", C08_06_CATEGORY_MAP[label]))
+    if is_short is not None:
+        if has_maturity:
+            terms.append(("is_short_maturity", is_short))
+        elif is_short:
+            return never
+    return RowPredicate(equals=tuple(terms))
+
+
+def _c08_06_spec(
+    cols: set[str], ead_col: str, rwa_col: str, framework: str
+) -> tuple[
+    TemplateSpec,
+    list[tuple[str, str, bool | None, str]],
+    dict[str, RowPredicate],
+]:
+    """The C 08.06 spec (framework-shaped, sheet-independent)."""
+    column_refs = tuple(col.ref for col in get_c08_06_columns(framework))
+    row_defs = [
+        row_def
+        for row_def in get_c08_06_rows(framework)
+        if row_def[1] == "Total" or row_def[1] in C08_06_CATEGORY_MAP
+    ]
+    has_maturity = "is_short_maturity" in cols
+    rows = tuple(_Row(row_def[0], row_def[1]) for row_def in row_defs)
+    row_preds = {
+        row_def[0]: _c08_06_row_pred(row_def[1], row_def[2], has_maturity=has_maturity)
+        for row_def in row_defs
+    }
+    crm_col = pick(cols, "ead_pre_ccf", "exposure_post_crm")
+    if framework != "BASEL_3_1" and "rwa_post_factor" in cols:
+        rwea_col = "rwa_post_factor"  # CRR prefers the post-supporting-factor RWEA
+    else:
+        rwea_col = rwa_col
+    cells: dict[tuple[str, str], CellSpec] = {}
+    for row_def in row_defs:
+        ref = row_def[0]
+        pred = row_preds[ref]
+        off_pred = RowPredicate(equals=(*pred.equals, ("c0806_off_bs", True)))
+        cells[(ref, "0010")] = CellSpec(
+            SafeSum(("drawn_amount", "interest", "nominal_amount", "undrawn_amount")),
+            predicate=pred,
+        )
+        cells[(ref, "0020")] = (
+            CellSpec(Sum(crm_col), predicate=pred)
+            if crm_col is not None
+            else CellSpec(Formula(refs=("0010",), fn=_copy_of_0010))
+        )
+        cells[(ref, "0030")] = CellSpec(
+            SafeSum(("nominal_amount", "undrawn_amount")), predicate=off_pred
+        )
+        if "0031" in column_refs:
+            cells[(ref, "0031")] = CellSpec(Formula(refs=(), fn=_const(None)))
+        cells[(ref, "0040")] = CellSpec(Sum(ead_col), predicate=pred)
+        cells[(ref, "0050")] = CellSpec(Sum(ead_col), predicate=off_pred, empty_cell="null")
+        cells[(ref, "0060")] = CellSpec(Formula(refs=(), fn=_const(None)))
+        cells[(ref, "0070")] = CellSpec(
+            WeightedAvg("risk_weight", weight=ead_col), predicate=pred, empty_cell="null"
+        )
+        cells[(ref, "0080")] = CellSpec(Sum(rwea_col), predicate=pred)
+        cells[(ref, "0090")] = (
+            CellSpec(Sum("expected_loss"), predicate=pred)
+            if "expected_loss" in cols
+            else CellSpec(Formula(refs=(), fn=_const(None)))
+        )
+        cells[(ref, "0100")] = CellSpec(
+            SafeSum(("scra_provision_amount", "gcra_provision_amount")), predicate=pred
+        )
+    spec = TemplateSpec(
+        name="c08_06", rows=rows, column_refs=column_refs, cells=cells, empty_cell="zero"
+    )
+    return spec, row_defs, row_preds
+
+
+def _c08_06_sheet(
+    spec: TemplateSpec,
+    type_df: pl.DataFrame,
+    row_defs: list[tuple[str, str, bool | None, str]],
+    row_preds: dict[str, RowPredicate],
+    cols: set[str],
+    ead_col: str,
+) -> pl.DataFrame:
+    """Execute one SL-type sheet and apply the retired value-dependent
+    branches: the zero-fill policy for empty non-Total rows (fixed display
+    RW in 0070), the whole-subset nominal fallback for 0030 when the row
+    has no off-balance slice, the >0 clamp on 0040, the first-non-null
+    risk weight when the subset carries zero total EAD, and the SCRA/GCRA
+    -> provision_held provisions ladder."""
+    frame = execute(spec, type_df)
+    overrides: dict[str, dict[str, float | None]] = {}
+    for row_ref, label, _is_short, rw_display in row_defs:
+        subset = row_preds[row_ref].apply(type_df)
+        if subset.height == 0 and label != "Total":
+            overrides[row_ref] = _c08_06_zero_row(spec.column_refs, rw_display)
+            continue
+        fixes: dict[str, float | None] = {}
+        if subset.filter(pl.col("c0806_off_bs")).height == 0:
+            fixes["0030"] = col_sum(subset, cols, "nominal_amount")
+        ead_sum = float(subset[ead_col].fill_null(0.0).sum())
+        if ead_sum <= 0.0:
+            fixes["0040"] = 0.0
+        if subset.height > 0 and ead_sum <= 0.0 and "risk_weight" in cols:
+            rw_vals = subset["risk_weight"].drop_nulls()
+            fixes["0070"] = float(rw_vals[0]) if len(rw_vals) > 0 else None
+        if fixes:
+            overrides[row_ref] = fixes
+    frame = _c08_06_apply_overrides(frame, overrides)
+    return _provisions_postfix(frame, type_df, row_preds, cols, ref="0100")
+
+
+def _c08_06_zero_row(column_refs: tuple[str, ...], rw_display: str) -> dict[str, float | None]:
+    """The retired zero-fill for an empty non-Total row: every cell 0.0
+    except 0070 = the row definition's display risk weight ("50%" -> 0.5;
+    unparseable/blank -> None)."""
+    values: dict[str, float | None] = dict.fromkeys(column_refs, 0.0)
+    if rw_display:
+        try:
+            values["0070"] = float(rw_display.replace("%", "").strip()) / 100.0
+        except ValueError:
+            values["0070"] = None
+    else:
+        values["0070"] = None
+    return values
+
+
+def _c08_06_apply_overrides(
+    frame: pl.DataFrame, overrides: dict[str, dict[str, float | None]]
+) -> pl.DataFrame:
+    if not overrides:
+        return frame
+    exprs: list[pl.Expr] = []
+    value_cols = [col for col in frame.columns if col not in ("row_ref", "row_name")]
+    for col in value_cols:
+        expr = pl.col(col)
+        touched = False
+        for row_ref, values in overrides.items():
+            if col in values:
+                expr = (
+                    pl.when(pl.col("row_ref") == row_ref)
+                    .then(pl.lit(values[col], dtype=pl.Float64))
+                    .otherwise(expr)
+                )
+                touched = True
+        if touched:
+            exprs.append(expr.alias(col))
+    return frame.with_columns(exprs) if exprs else frame
+
+
+def _copy_of_0010(cells: Mapping[str, float | None], _prior: bool) -> float | None:
+    """C 08.06 col 0020 falls back to col 0010 when no post-CRM carrier
+    (``ead_pre_ccf`` / ``exposure_post_crm``) exists."""
+    return cells["0010"]
+
+
+# =============================================================================
+# C 08.07 / OF 08.07 — IRB scope of use (single frame, full population)
+# =============================================================================
+
+
+@cites("PS1/26, paragraph 1.3")
+def generate_c08_07(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> pl.DataFrame | None:
+    """Execute C 08.07 / OF 08.07 over the FULL results population.
+
+    SA and IRB both enter (the IRB side is ``approach_applied`` membership
+    in the pinned ``C08_07_IRB_APPROACHES`` — slotting counts as IRB; a
+    null approach falls to SA); coverage percentages are intra-row
+    formulas guarding a zero denominator to 0.0. Rows with no exposure
+    class binding (and no aggregate rule) render ALL-NULL; empty real-class
+    rows stay 0.0 — the opposite split from C 07.00. The B31 materiality
+    columns 0160-0180 are structurally null regardless of reporting basis
+    (the retired ``output_floor_config`` gate was dead code).
+    """
+    ead_col = pick(cols, "ead_final")
+    approach_col = pick(cols, "approach_applied", "approach")
+    ec_col = pick(cols, "exposure_class")
+    if ead_col is None or approach_col is None or ec_col is None:
+        missing = [
+            name
+            for name, value in (("ead", ead_col), ("approach", approach_col), ("class", ec_col))
+            if value is None
+        ]
+        errors.append(f"C 08.07: missing columns: {', '.join(missing)}")
+        return None
+    data = results.collect()
+    if data.height == 0:
+        return None
+    data = data.with_columns(
+        pl.col(approach_col).is_in(sorted(C08_07_IRB_APPROACHES)).alias("c0807_irb")
+    )
+    rwa_col = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
+    row_defs = get_c08_07_rows(framework)
+    spec, null_rows = _c08_07_spec(row_defs, ec_col, ead_col, rwa_col, framework)
+    frame = execute(spec, data)
+    return _null_fixed_rows(frame, null_rows)
+
+
+def _c08_07_spec(
+    row_defs: list[tuple[str, str, str | None]],
+    ec_col: str,
+    ead_col: str,
+    rwa_col: str | None,
+    framework: str,
+) -> tuple[TemplateSpec, list[str]]:
+    """The C 08.07 spec + the fixed structural-null row set (CRR 0060/0100/
+    0130; B31 0210/0280 — rows with neither a class binding nor an
+    aggregate rule)."""
+    is_b31 = framework == "BASEL_3_1"
+    column_refs = tuple(col.ref for col in get_c08_07_columns(framework))
+    rows = tuple(_Row(row_def[0], row_def[1]) for row_def in row_defs)
+    cells: dict[tuple[str, str], CellSpec] = {}
+    null_rows: list[str] = []
+    for row_ref, row_name, ec_value in row_defs:
+        union: tuple[RowPredicate, ...] = ()
+        if row_name == "Total":
+            class_terms: _Terms = ()
+        elif ec_value is not None:
+            class_terms = ((ec_col, ec_value),)
+        elif row_ref == "0090":
+            # The CRR "Retail" display aggregate — three retail classes.
+            class_terms = ()
+            union = tuple(
+                RowPredicate(equals=((ec_col, ec),)) for ec in sorted(C08_07_CRR_RETAIL_CLASSES)
+            )
+        else:
+            null_rows.append(row_ref)
+            continue
+        total_pred = RowPredicate(equals=class_terms, any_of=union)
+        irb_pred = RowPredicate(equals=(*class_terms, ("c0807_irb", True)), any_of=union)
+        cells[(row_ref, "0010")] = CellSpec(Sum(ead_col), predicate=irb_pred)
+        cells[(row_ref, "0020")] = CellSpec(Sum(ead_col), predicate=total_pred)
+        cells[(row_ref, "0030")] = CellSpec(Formula(refs=("0010", "0020"), fn=_pct_sa))
+        cells[(row_ref, "0050")] = CellSpec(Formula(refs=("0010", "0020"), fn=_pct_irb))
+        if is_b31:
+            if rwa_col is not None:
+                cells[(row_ref, "0060")] = CellSpec(Sum(rwa_col), predicate=total_pred)
+                cells[(row_ref, "0150")] = CellSpec(Sum(rwa_col), predicate=irb_pred)
+                cells[(row_ref, "0140")] = CellSpec(Formula(refs=("0060", "0150"), fn=_sa_rwea))
+            for ref in ("0160", "0170", "0180"):
+                cells[(row_ref, ref)] = CellSpec(Formula(refs=(), fn=_const(None)))
+    spec = TemplateSpec(
+        name="c08_07", rows=rows, column_refs=column_refs, cells=cells, empty_cell="zero"
+    )
+    return spec, null_rows
+
+
+def _pct_sa(cells: Mapping[str, float | None], _prior: bool) -> float | None:
+    """0030 = SA share of the row's EAD, % (0.0 on a zero denominator)."""
+    total = cells["0020"] or 0.0
+    if total <= 0:
+        return 0.0
+    return (total - (cells["0010"] or 0.0)) / total * 100.0
+
+
+def _pct_irb(cells: Mapping[str, float | None], _prior: bool) -> float | None:
+    """0050 = IRB share of the row's EAD, % (0.0 on a zero denominator)."""
+    total = cells["0020"] or 0.0
+    if total <= 0:
+        return 0.0
+    return (cells["0010"] or 0.0) / total * 100.0
+
+
+def _sa_rwea(cells: Mapping[str, float | None], _prior: bool) -> float | None:
+    """B31 0140 = SA RWEA lumped as "other" (total 0060 minus IRB 0150 —
+    no ``sa_use_reason`` carrier exists, so 0070-0130 stay 0.0 and the
+    additive identity 0060 = Σ(0070..0140) + 0150 holds by construction)."""
+    return (cells["0060"] or 0.0) - (cells["0150"] or 0.0)
+
+
+def _null_fixed_rows(frame: pl.DataFrame, row_refs: list[str]) -> pl.DataFrame:
+    """Render a FIXED row set all-null (the C 08.07 structural rows — NOT
+    empty-subset detection: empty real-class rows must stay 0.0)."""
+    if not row_refs:
+        return frame
+    value_cols = [col for col in frame.columns if col not in ("row_ref", "row_name")]
+    return frame.with_columns(
+        pl.when(pl.col("row_ref").is_in(row_refs))
+        .then(pl.lit(None, dtype=pl.Float64))
+        .otherwise(pl.col(col))
+        .alias(col)
+        for col in value_cols
+    )
+
+
+# =============================================================================
 # Shared post-steps + small helpers
 # =============================================================================
 
@@ -1008,7 +1416,7 @@ def _null_empty_rows(
 def _provisions_postfix(
     frame: pl.DataFrame,
     class_df: pl.DataFrame,
-    row_preds: dict[str, RowPredicate | None],
+    row_preds: Mapping[str, RowPredicate | None],
     cols: set[str],
     *,
     ref: str,

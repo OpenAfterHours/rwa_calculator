@@ -806,6 +806,22 @@ no provision_held ladder on either template. Gate: goldens passed WITHOUT regen 
 frames, both regimes); all 80 C 09 unit tests green unchanged; ty/ruff/arch_check green;
 citation snapshot 156 fns. Remaining imperative COREP: OF 02.01, C 02.00, C 34.x.
 
+**S8-OF02.01 DONE 2026-07-12 — the output-floor comparison template
+(`reporting/corep/of02.py`).** The imperative method + `_of_02_01_row` deleted. Preserved
+verbatim: the B31-only gate (CRR -> None field, no frame); the entity gate reading ONLY
+`OutputFloorConfig.is_floor_applicable()` (nothing off OutputFloorSummary — that threading
+belongs to C 02.00), kept OUTSIDE the executor with the retired error string; rows 0010 and
+0080 carrying IDENTICAL full-portfolio values (the recorded "S1871 collapse" — 0080 is NOT a
+sum of rows); the FIXED all-null rows 0020-0070 (post-pass); column 0010 = Sum(rwa_pre_floor)
+— the PRE-floor modelled carrier, the mirror image of the "rwa_final is already post-floor"
+trap; 0030 = 0010 + 0020 as an intra-row Formula (Annex II §1.3.2); NO empty-frame early
+return (an empty portfolio still yields the 8-row frame with 0.0 on populated rows). The
+delegate keeps the extra `output_floor_config` kwarg (a recorded signature divergence from
+the 4-arg c07/c08/c09 delegates; ReportingContext carries no floor-config field — a
+convergence candidate for Sn). Gate: goldens WITHOUT regen; 42 OF0201 + 38 reporting-basis
+unit tests unchanged; full suite green; citation snapshot 157 fns. Remaining imperative
+COREP: C 02.00, C 34.x.
+
 Order: **Pillar 3** OV1 → ~~CR4/CR5~~ → ~~CR6/CR6a/CR7/CR7a~~ → ~~CR9/CR9.1/CR10~~ → ~~CMS1/2~~ → CCR1/2/3/8 (DEFERRED with S8-pre)
 (post S8-pre); then **COREP** C07 + skeleton-sharing C08.01/02/03/05 → C08.04/06/07 → C09.01/02 →
 OF02.01 → OF07/OF08/C34.x (post S8-pre) → **C02.00 LAST** (portfolio pre-pass via

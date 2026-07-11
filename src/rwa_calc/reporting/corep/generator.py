@@ -49,6 +49,7 @@ from rwa_calc.reporting.corep.c08 import (
     generate_c08_07,
 )
 from rwa_calc.reporting.corep.c09 import generate_c09_01, generate_c09_02
+from rwa_calc.reporting.corep.of02 import generate_of_02_01
 from rwa_calc.reporting.corep.templates import (
     B31_C02_00_COLUMN_REFS,
     C02_00_CREDIT_RISK_ROWS,
@@ -59,9 +60,7 @@ from rwa_calc.reporting.corep.templates import (
     C34_08_ROWS,
     CRR_C02_00_COLUMN_REFS,
     IRB_EXPOSURE_CLASS_ROWS,
-    OF_02_01_COLUMN_REFS,
     OF_02_01_COLUMNS,
-    OF_02_01_ROW_SECTIONS,
     SA_EXPOSURE_CLASS_ROWS,
     get_c02_00_columns,
     get_c02_00_row_sections,
@@ -281,7 +280,7 @@ class COREPGenerator:
         c08_07 = generate_c08_07(results, cols, framework, errors)
 
         # OF 02.01 — Output floor comparison (Basel 3.1 only)
-        of_02_01 = self._generate_of_02_01(
+        of_02_01 = generate_of_02_01(
             results,
             cols,
             framework,
@@ -537,85 +536,6 @@ class COREPGenerator:
 
     # =========================================================================
     # C 08.07 / OF 08.07 — IRB Scope of Use
-    # =========================================================================
-
-    def _generate_of_02_01(
-        self,
-        results: pl.LazyFrame,
-        cols: set[str],
-        framework: str,
-        errors: list[str],
-        *,
-        output_floor_config: OutputFloorConfig | None = None,
-    ) -> pl.DataFrame | None:
-        """Generate OF 02.01 output floor comparison template.
-
-        Basel 3.1 only (no CRR equivalent). Compares modelled (U-TREA) vs
-        standardised (S-TREA) total risk exposure amounts by risk type.
-
-        Requires ``rwa_pre_floor`` and ``sa_rwa`` columns in the results
-        LazyFrame (added by the output floor calculation in the aggregator).
-        Returns None under CRR, when floor columns are absent, or when the
-        entity is exempt from the output floor per Art. 92 para 2A.
-
-        References:
-            PRA PS1/26 Art. 92 para 2A/3A
-        """
-        if framework != "BASEL_3_1":
-            return None
-
-        # Exempt entities do not report the output floor comparison.
-        # Art. 92 para 2A restricts the floor to 3 entity-type/basis combos.
-        if output_floor_config is not None and not output_floor_config.is_floor_applicable():
-            return None
-
-        if "rwa_pre_floor" not in cols or "sa_rwa" not in cols:
-            errors.append(
-                "OF 02.01 skipped: rwa_pre_floor and/or sa_rwa columns not found "
-                "(output floor not applied)"
-            )
-            return None
-
-        # Compute credit risk totals from the full results LazyFrame.
-        # rwa_pre_floor = actual modelled RWA (before floor add-on).
-        # sa_rwa = SA-equivalent RWA for each exposure.
-        credit_risk_stats = results.select(
-            pl.col("rwa_pre_floor").fill_null(0.0).sum().alias("modelled_rwa"),
-            pl.col("sa_rwa").fill_null(0.0).sum().alias("sa_rwa_total"),
-        ).collect()
-
-        modelled_rwa = float(credit_risk_stats["modelled_rwa"][0])
-        sa_rwa_total = float(credit_risk_stats["sa_rwa_total"][0])
-
-        column_refs = OF_02_01_COLUMN_REFS
-        rows: list[dict[str, object]] = []
-
-        for section in OF_02_01_ROW_SECTIONS:
-            for row_def in section.rows:
-                if row_def.ref in ("0010", "0080"):
-                    # 0010 = credit risk (excl. CCR); 0080 = total — same value
-                    # for a credit-risk-only calculator (S1871 collapse).
-                    rows.append(
-                        _of_02_01_row(
-                            row_def.ref,
-                            row_def.name,
-                            column_refs,
-                            modelled_rwa=modelled_rwa,
-                            sa_rwa=sa_rwa_total,
-                        )
-                    )
-                else:
-                    # CCR, CVA, securitisation, market, op risk, other — out of scope
-                    rows.append(_null_row(row_def.ref, row_def.name, column_refs))
-
-        schema: dict[str, PolarsDataType] = {"row_ref": pl.String, "row_name": pl.String}
-        for ref in column_refs:
-            schema[ref] = pl.Float64
-
-        return pl.DataFrame(rows, schema=schema)
-
-    # =========================================================================
-    # C 34.01 / 02 / 04 / 08 — Counterparty Credit Risk (CCR)
     # =========================================================================
 
     def _generate_c34_01(
@@ -1304,31 +1224,6 @@ def _irb_other_sme_split(
 
 
 _SECTION3_NULL_REFS: frozenset[str] = frozenset({"0160", "0170", "0175", "0180"})
-
-
-def _of_02_01_row(
-    row_ref: str,
-    row_name: str,
-    column_refs: list[str],
-    *,
-    modelled_rwa: float,
-    sa_rwa: float,
-) -> dict[str, object]:
-    """Build an OF 02.01 row with modelled/SA RWA and U-TREA/S-TREA values.
-
-    U-TREA (col 0030) = modelled RWA + SA RWA per Annex II §1.3.2;
-    S-TREA (col 0040) = SA-equivalent RWA across the entire portfolio.
-    """
-    row: dict[str, object] = {"row_ref": row_ref, "row_name": row_name}
-    values = {
-        "0010": modelled_rwa,
-        "0020": sa_rwa,
-        "0030": modelled_rwa + sa_rwa,
-        "0040": sa_rwa,
-    }
-    for ref in column_refs:
-        row[ref] = values.get(ref)
-    return row
 
 
 def _collect_ccr_rows(results: pl.LazyFrame, cols: set[str]) -> pl.DataFrame | None:

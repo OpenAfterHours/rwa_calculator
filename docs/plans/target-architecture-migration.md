@@ -1,7 +1,9 @@
 # Target Architecture & Migration Plan
 
-**Status:** Active — Phases 0–5 complete (2026-06-16); Phase 6 (`analysis/` layer) next
-**Date:** 2026-06-11 (last updated 2026-06-16)
+**Status:** Active — Phases 0–6 complete (Phase 6 merged 2026-06-17, PR #394); Phase 7 in
+progress (S0 golden gate + S1 sealed-name retarget merged, PR #395) — execution plan at
+[phase7-declarative-reporting.md](phase7-declarative-reporting.md)
+**Date:** 2026-06-11 (last updated 2026-07-11)
 **Provenance:** Multi-agent architecture review (10 subsystem mappers, 6 adversarial
 pain-point lenses → 49 evidenced findings, 3 independent greenfield designs scored by a
 3-judge panel, 1 migration planner). Judge tally: Design B "regime as data / rulepack"
@@ -453,7 +455,8 @@ The slice-group narrative and every recorded preserve-or-fix decision are in the
 log (S1–S13). Deliberately deferred (recorded, **not** residue): the `ccr/sft_fccm.py`
 regime-insensitive SFT haircut (number-changing — needs a B31 SFT fixture + PS1/26
 determination + oracle) and the regime-invariant formula-embedded constants kept inline per
-the S5d precedent. Next = Phase 6 (`analysis/` layer).
+the S5d precedent. Next = Phase 6 (`analysis/` layer) — *since delivered; see the Phase 6
+status block below.*
 
 - Land `model.py` (7 shapes) + `compile.py` + `registry.py`; pack-owned expression
   builders as the sanctioned under-fit escape hatch.
@@ -569,6 +572,21 @@ institution-guarantor pin (S3), `firb_lgd`↔`crm_supervisory` dual-shape collap
 
 ### Phase 6 — `analysis/` layer
 
+**Status: DONE (2026-06-17, branch `feat/phase6`, PR #394).** All four goals delivered as
+slices S1–S5b: comparison + reconciliation relocated `engine/` → `analysis/` (S1 `7e707d6d`);
+recon registry + config + protocol out of `data/schemas.py`/`contracts/` (S2 `e8afbbf1`,
+severing the contracts→registry knot); comparison generalised to a labelled two-run
+(`RunSpec(config, label, rulepack)`, S3 `13031cdd`); the CRR→B31 waterfall as one registered
+delta-attributor pairing (`analysis/attribution.py`, S4 `a9f59aa3`); transition at successive
+dates (S5a `ca128a77`). The **floor-tail partial re-run was recorded INFEASIBLE** (S5b
+`022dd30d`): pre-floor IRB RWA is not date-invariant (Art. 162 effective maturity shortens per
+reporting date), so only the SA floor benchmark is date-stable — a capability boundary, not
+incomplete work (see decision log). Residue audit 2026-07-10: stale
+`rwa_calc.engine.comparison` import examples in `docs/api/engine.md` +
+`docs/framework-comparison/impact-analysis.md`; `analysis` lacks an upward
+import-direction rule (closed by the Phase 7 plan §9); analysis DTOs remain in
+`contracts/bundles.py` pending the `contracts/results.py` split.
+
 - Move comparison + reconciliation out of `engine/` (and the reconciliation registry
   out of `data/schemas.py`); comparison generalises to labelled two-run over
   rulepack-identified runs (unlocks B31-vs-B31-amended, election-vs-election); the
@@ -576,6 +594,18 @@ institution-guarantor pin (S3), `firb_lgd`↔`crm_supervisory` dual-shape collap
   pack resolved at successive dates + floor-tail partial re-run.
 
 ### Phase 7 — Declarative reporting
+
+**Status: IN PROGRESS.** S0 (per-template golden gate + rich reporting-portfolio oracle,
+`c97c5e9c`) and S1 (generators retargeted to sealed column names, un-emptying
+C08.02/03/05 + CR6/CR9, `b41aba70`) merged via PR #395. The full execution plan —
+grounded in a 2026-07-10 multi-agent recon + 3-design judge panel — is
+**[phase7-declarative-reporting.md](phase7-declarative-reporting.md)**: one canonical
+per-leg output ledger (`reporting_class`/`reporting_class_origin`/`reporting_leg_role`
+sealed on the aggregator exit, naming the physical `__G_`/`__REM` substitution split)
+consumed uniformly by COREP, Pillar 3, the UI, and reconciliation; then CellSpec + one
+executor stranglered per template family. "Byte-identical golden gates" is realised as
+the S0 structure-exact + Float64 rtol=1e-9 gate (Polars group-by float sums are not
+process-deterministic — Phase 2 finding).
 
 - `reporting/cellspec.py` + one executor; strangler by template family with
   byte-identical golden gates; reporting input = the sealed aggregator exit (deletes
@@ -702,5 +732,9 @@ institution-guarantor pin (S3), `firb_lgd`↔`crm_supervisory` dual-shape collap
 
 | 2026-06-15 | Phase 5 S12: the bulk `data/tables/` → `packs/{common,crr,b31}` table-move (the deferred written-S10 capstone) + the audit/manifest/arch_check capstone; **S12 COMPLETE** | Two strands landed together. **(1) The table-move** that the S4–S9 Feature-gate pattern had deliberately left in `data/tables/`: the regulatory VALUES (SA-RW CQS tables, institution SCRA/ECRA, corporate/covered-bond, sovereign/PSE/RGLA/MDB, RE LTV bands + secured/junior scalars, specialised-lending slotting RWs, equity PD/LGD + SA/IRB-simple RW tables, SA/F-IRB CCF schedules, RE-split secured-LTV caps, failed-trade settlement multipliers, the whole SA-CCR factor/correlation/option-vol/CDO-delta/duration/maturity surface incl. the transitional add-on, the A-IRB floor + GCRA cap, the WWR LGD override) moved into the packs as cited entries, each a byte-identical sub-commit round-tripping through the `compile` Decimal→float boundary with frame-equal pins. The redundant F-IRB/CRM supervisory-LGD + overcollateralisation subsystem was retired (`6ebb9a5d`), the production-dead guarantee FX/restructuring haircut pair deleted (`a397e6cf`), the FCSM-scalar twin `crr_simple_method.py` deleted (`ef2645f6`), and the `crr↔b31` import cycle broken by relocating the guarantor SA-RW builders to `engine/` (`3a95d9e1`). The remaining `engine → data.tables` import surface was put under a shrink-only ratchet (`fe3041ca`). **(2) The audit capstone:** `rulebook/audit.py` — the pack manifest (id + content hash + full resolved-params-with-citations serializer) recorded into the run manifest + the `rulepack diff` CLI (`6ac17974`); PS1/26 pack citations cite at instrument level with sub-article in a note (`a267b4c4`); the watchfire pack-citation bridge — pack-data citations join the `@cites` index and `arch_check` gates them (`d5dfe168`); the **regime-containment** arch_check (**check 17**) banning `config.is_crr`/`config.is_basel_3_1` in `engine/` (`926df998`); and the pack-as-value-home register propagated across `CLAUDE.md` + the agent/command charters in the same change (`f768bf12`, per the do-not-do register requirement). **Scope note:** the written-S10 line's "shim getters / symbol-set parity" mechanic was not used — values moved into packs directly (no `data/tables/` shim layer survived), so the move's cleanup tail (emptying `data/tables/` to zero + the hard import ban) became S13 rather than part of S12. Byte-identical on all 4 configs every sub-slice. |
 | 2026-06-16 | Phase 5 S13: finish the migration tail — empty `data/tables/` to zero, flip the import ratchet to a hard ban, delete the package; **S13 + Phase 5 COMPLETE** | The values S12 left in `data/tables/` were the table BUILDERS and a handful of int/date/string primitives. **Three new raw-value pack primitives** were designed (each: model shape + resolve accessor + manifest/content-hash handling + unit test): `IntParam` (S13-a, int-typed regulatory counts — no Decimal→float boundary, engine reads `.value`), `DateParam` (S13-g, e.g. `b31_effective_date`), `CategoryMap` (S13-d, cited str→str maps consumed Python-side via `replace_strict`). Using them, the int counts (SA-CCR MPOR, failed-trade band bounds, CRM liquidation periods Art. 224(2), OC/zero-haircut/3-property singletons), the entity-type→class and EU-domestic-currency and Annex-I OBS-product maps, and the `B31_EFFECTIVE_DATE`/retail-granularity singletons all moved to the packs (S13-a..h), with their builders relocated into `engine/` (`engine/ccf.py`, `engine/eu_sovereign.py`, `engine/entity_class_maps.py`). The three remaining table modules — the CRR and B31 SA risk-weight tables and the collateral-haircut module — were `git mv`'d into `engine/` as thin **pack-binding shims** that read their values back from the pack (`engine/sa/crr_risk_weight_tables.py`, `engine/sa/b31_risk_weight_tables.py`, `engine/crm/haircut_tables.py`; S13-i/j/k), the haircut move also resolving a pack↔`data/tables` value DUPLICATION (the `COLLATERAL_HAIRCUTS`/`FX_HAIRCUT` literals were independent duplicates of the pack `collateral_haircuts` DecisionTable / `fx_haircut` scalar — now derived from the pack). That drove the `engine_data_tables_import_edges` ratchet 104 → 0 across the workstream (104→97→92→89→83→73→72→70→67→35→7→0), at which point **check 12 flipped from a shrink-only ratchet to a zero-tolerance hard ban** (`check_no_engine_data_tables_imports`, no allowlist) and the now-empty `data/tables/` package was **deleted entirely** (S13-l) — `data/` now holds only `column_spec.py` + `schemas.py`. The dead/test-only `firb_lgd.py` was removed (its CRR_PD_FLOOR/K_SCALING values are cited pack literals; MATURITY_FLOOR/CAP are engine inline defaults). **Inline-literal residue (S13-m):** the one genuine drift hazard — the life-insurance Art. 232 RW map, a `{float:float}` dict that checks 5/6 miss and that had silently duplicated a hardcoded production when/then chain — was pack-homed as a common-pack `BandedTable` and the expression now builds its chain from the pack (m1); a forward-guard `check_no_numeric_tables_in_engine` was added to catch module-level float-rate tables re-entering the engine (m2). **Deliberately left in engine (recorded, per the S5d precedent):** the regime-invariant formula-embedded constants (Art. 162 1y/5y maturity bounds, Art. 238/239 0.25/5y mismatch params, the Art. 153 `CORRELATION_PARAMS`) — pack-homing them would be inconsistent with S5d's "constants stay engine literals (0.5y SFT M, 1÷365, 0.15+160×PD)" and a blanket inline-`pl.lit(<float>)` ban is not mechanically feasible. Byte-identical on all 4 configs every sub-slice; suite 7506 passed / 2 skipped. **Migration tail complete: `data/tables/` is gone; the engine reads every regulatory value from the rulepack via `resolve`.** |
+
+| 2026-06-17 | Phase 6 S3: the comparison regime gate (`is_crr`/`is_basel_3_1` `_validate_configs`) replaced by labelled `RunSpec(config, label, rulepack=None)` pairs — reversed-regime, same-regime election-vs-election, and regime-vs-amended comparisons now pass; labels default to `regime_id` | Comparison is a generic labelled two-run over rulepack-identified runs (target §3.1 principle 6); the CRR→B31 waterfall survives as the one registered delta-attributor pairing (`register_attributor("crr","b31",…)`), with `neutral_attribution` (single "Total delta" driver) for every unregistered pairing |
+| 2026-06-17 | Phase 6 S5b: the floor-tail partial re-run is **INFEASIBLE** — transition runs the full pipeline per reporting date | Pre-floor IRB RWA is not date-invariant: CRR Art. 162 effective maturity shortens as the reporting date advances, so a floor-tail-only re-run over cached pre-floor RWA produces wrong per-year numbers; only the SA-equivalent floor benchmark is date-stable. Recorded in `analysis/transition.py:58-69`; the M33 acceptance test pins the resulting non-monotonicity. Analogous to the single-lazy-plan dead-end: a verified capability boundary, not deferred work |
+| 2026-07-11 | Phase 7 execution plan adopted: one canonical per-leg output ledger sealed on the aggregator exit, then CellSpec/executor stranglered per template — see [phase7-declarative-reporting.md](phase7-declarative-reporting.md) | 2026-07-10 multi-agent recon + 3-design judge panel (contract-first won 2/3). Keystone: the canonical `reporting_*` projection already exists but on the API-dropped `post_crm_detailed` frame, so every consumer re-derives class/approach from raw columns and disagrees (defaulted-SA rows bucket differently in COREP vs Pillar 3 vs recon vs UI). Central recorded decision G1: substitution representation = the declared two-leg ledger (name the physical `__G_`/`__REM` split), NOT a single applied-class collapse — COREP C07.00 mandates both endpoints + outflow/inflow. "Byte-identical golden gates" re-read as the S0 structure-exact + Float64 rtol gate |
 
 *(Append further preserve-or-fix decisions here as phases land.)*

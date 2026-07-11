@@ -780,6 +780,32 @@ acceptance); 65 C 08.06 + 51 C 08.07 + 4 materiality unit tests green unchanged;
 ty/ruff/arch_check green; citation snapshot 154 fns; full suite green. Remaining imperative
 COREP: C 09.01/02, OF 02.01, C 02.00, C 34.x.
 
+**S8-C09.01/02 DONE 2026-07-11 — both geographical-breakdown templates in one slice
+(`reporting/corep/c09.py`); 29 imperative functions + 7 constant maps deleted, including the
+five already-orphaned c07/c08-era helpers (`_filter_lfse`, `_sum_by_protection_type`,
+`_compute_substitution_flows/_outflow`, `_supporting_factor_adjustment`) and the now-dead
+`_filter_by_irb_approach`/`irb_data` dispatch plumbing.** Both templates key rows on the RAW
+`exposure_class` — NOT C 07.00's applied ladder (load-bearing: the defaulted SA exposure
+stays in its raw corporate row lighting the "of which defaulted" column while the "Exposures
+in default" row is null; under B31 the RE-split mortgage surfaces ONLY in the Total row —
+golden-verified, never "fixed"). Populations: C 09.01 = `c07_population` (SA book + FCCM SFT
+synthetic rows); C 09.02 = the IRB book INCLUDING slotting (the retired inline comment
+claiming exclusion was misleading — recorded). Preserved verbatim: the reverse-map row keying
+whose non-map-value rows are permanently null (C 09.01's SME/short-term/CIU/RE sub-rows —
+recorded dead code); empty class rows ALL-NULL vs the whole-frame Total rows (0170/0150,
+never nulled, aggregating exposures no class row displays); the narrow retired column ladders
+(gross = single pick(ead_gross, nominal_amount, drawn_amount); RWEA = pick(rwa_final, rwa) —
+NO rwa_post_factor; CRR pre-SF == post-SF RWEA with structurally-null SF adjustment columns);
+C 09.02's PD/LGD as RAW ratios weighted by `ead_final` (NOT reporting_ead, NOT x100) reading
+`lgd_post_crm` only, with the retired UNWEIGHTED-mean fallback on zero-EAD subsets as a
+module post-step (the WeightedAvg verb has no such fallback); the per-cell defaulted
+asymmetry (0100 null on an empty defaulted subset while 0030/0107/0120 are 0.0); the
+`!= True` null-dropping corporate non-SME filters vs the null-keeping non-SME anti-join
+(distinct derived flags); the B31 purchased-receivables rows as permanent nulls; no negation,
+no provision_held ladder on either template. Gate: goldens passed WITHOUT regen (8 c09
+frames, both regimes); all 80 C 09 unit tests green unchanged; ty/ruff/arch_check green;
+citation snapshot 156 fns. Remaining imperative COREP: OF 02.01, C 02.00, C 34.x.
+
 Order: **Pillar 3** OV1 → ~~CR4/CR5~~ → ~~CR6/CR6a/CR7/CR7a~~ → ~~CR9/CR9.1/CR10~~ → ~~CMS1/2~~ → CCR1/2/3/8 (DEFERRED with S8-pre)
 (post S8-pre); then **COREP** C07 + skeleton-sharing C08.01/02/03/05 → C08.04/06/07 → C09.01/02 →
 OF02.01 → OF07/OF08/C34.x (post S8-pre) → **C02.00 LAST** (portfolio pre-pass via

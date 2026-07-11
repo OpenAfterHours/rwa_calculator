@@ -479,6 +479,12 @@
   "rwa_calc.reporting.corep.c08::generate_c08_07": [
     "PS1/26, paragraph 1.3"
   ],
+  "rwa_calc.reporting.corep.c09::generate_c09_01": [
+    "PS1/26, paragraph 1.3"
+  ],
+  "rwa_calc.reporting.corep.c09::generate_c09_02": [
+    "PS1/26, paragraph 1.3"
+  ],
   "rwa_calc.reporting.pillar3.cms1::build_cms1_spec": [
     "PS1/26, paragraph 456"
   ],

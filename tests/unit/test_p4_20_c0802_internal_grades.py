@@ -47,7 +47,7 @@ from tests.fixtures.p4_20.p4_20 import (
 )
 
 # Fallback fixture reused from existing test module (do NOT modify)
-from tests.unit.test_corep import _irb_results
+from tests.unit.reporting.corep._builders import _irb_results
 
 # =============================================================================
 # Helpers

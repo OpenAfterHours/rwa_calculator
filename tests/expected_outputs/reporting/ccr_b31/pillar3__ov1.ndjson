@@ -1,0 +1,20 @@
+{"row_ref":"1","row_name":"Credit risk (excluding CCR)","a":4060296.719974031,"b":null,"c":324823.7375979225}
+{"row_ref":"2","row_name":"Of which: standardised approach","a":2500000.0,"b":null,"c":200000.0}
+{"row_ref":"3","row_name":"Of which: foundation IRB approach","a":0.0,"b":null,"c":0.0}
+{"row_ref":"4","row_name":"Of which: slotting approach","a":0.0,"b":null,"c":0.0}
+{"row_ref":"4a","row_name":"Total RWEAs (pre-floor)","a":4060296.719974031,"b":null,"c":324823.7375979225}
+{"row_ref":"5","row_name":"Of which: advanced IRB approach","a":0.0,"b":null,"c":0.0}
+{"row_ref":"5a","row_name":"CET1 ratio (pre-floor)","a":null,"b":null,"c":null}
+{"row_ref":"5b","row_name":"CET1 ratio (pre-floor, transitional)","a":null,"b":null,"c":null}
+{"row_ref":"6a","row_name":"Tier 1 ratio (pre-floor)","a":null,"b":null,"c":null}
+{"row_ref":"6b","row_name":"Tier 1 ratio (pre-floor, transitional)","a":null,"b":null,"c":null}
+{"row_ref":"7a","row_name":"Total capital ratio (pre-floor)","a":null,"b":null,"c":null}
+{"row_ref":"7b","row_name":"Total capital ratio (pre-floor, transitional)","a":null,"b":null,"c":null}
+{"row_ref":"11","row_name":"Equity positions under IRB Transitional Approach","a":null,"b":null,"c":null}
+{"row_ref":"12","row_name":"Equity investments in funds — look-through approach","a":null,"b":null,"c":null}
+{"row_ref":"13","row_name":"Equity investments in funds — mandate-based approach","a":null,"b":null,"c":null}
+{"row_ref":"14","row_name":"Equity investments in funds — fall-back approach","a":null,"b":null,"c":null}
+{"row_ref":"24","row_name":"Amounts below deduction thresholds (250% RW)","a":null,"b":null,"c":null}
+{"row_ref":"26","row_name":"Output floor multiplier","a":0.6,"b":null,"c":null}
+{"row_ref":"27","row_name":"Output floor adjustment","a":null,"b":null,"c":null}
+{"row_ref":"29","row_name":"Total","a":4060296.719974031,"b":null,"c":324823.7375979225}

@@ -258,7 +258,9 @@ class COREPGenerator:
         # them under Basel 3.1. Admit them explicitly via ``risk_type ==
         # "CCR_SFT"`` so the SFT EAD lands in C 07.00 (total row 0010 + the
         # SFT-netting breakdown row 0090, PS1/26 App. 17). SA-CCR derivatives are
-        # NOT admitted here — they report under C 34 (CRR Art. 274).
+        # admitted only incidentally, and only under CRR — a known defect, since
+        # Annex II puts CCR exposures in C 07.00 rows 0090-0130 (row 0110 =
+        # derivatives). See the c07 module docstring / docs/plans/c07-ccr-derivatives.md.
         c07_00 = self._generate_all_c07(results, cols, framework, errors)
 
         # IRB templates (C 08.01, C 08.02, C 08.03, C 08.06)

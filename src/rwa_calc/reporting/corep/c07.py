@@ -17,8 +17,29 @@ docs/plans/phase7-declarative-reporting.md §6):
   sub-type under SA; the SL "of which" rows split it back via sl_type).
 - The population is the standardised book plus the FCCM SFT synthetic rows
   (``risk_type == "CCR_SFT"`` — SA-risk-weighted but tagged
-  ``standardised_ccr`` under the output floor); SA-CCR derivatives are
-  excluded (they report under C 34).
+  ``standardised_ccr`` under the output floor).
+
+  **KNOWN DEFECT — SA-CCR derivatives (tracked; do not "tidy" this note away).**
+  Annex II is explicit that C 07.00 covers CCR exposures: rows 0070/0080 say
+  "Exposures that are subject to counterparty credit risk shall be reported in
+  rows 0090 - 0130, and therefore shall not be reported in this row", row 0110
+  is "Derivatives and Long Settlement Transactions netting sets", and the
+  column instructions take the CCR exposure value from C 34.02 col 0160.
+  C 07.00 and C 34 are NOT alternatives — C 34 analyses CCR by approach,
+  C 07.00 risk-weights those same exposures under SA. What this module does
+  today, measured:
+    - CRR: derivative rows carry ``approach_applied == "standardised"``, so
+      they ARE admitted — landing in total row 0010 and their risk-weight band
+      row, but in NO exposure-type row (0110 is inert), so section 2 does not
+      foot to the total.
+    - Basel 3.1: the output-floor relabel (``standardised_ccr``,
+      ``engine/stages/calc.py``) moves them off the ``"standardised"`` value and
+      they are dropped from C 07.00 ENTIRELY — the SA EAD/RWEA is understated.
+  The asymmetry is an artefact of that floor relabel, never a scope decision.
+  The fix admits them by ``risk_type`` (the precedent SFTs already set) and
+  populates rows 0100/0110/0120 — it must NOT relabel the approach, which is
+  load-bearing for the output floor. See
+  ``docs/plans/c07-ccr-derivatives.md``.
 - Substitution outflow (col 0090) sums the guaranteed portions migrating
   OUT of each row subset (``guaranteed_portion > 0`` and the pre-CRM class
   differs from the guarantor class — the raw-twin semantics preserved
@@ -268,8 +289,13 @@ def generate_c07(
 
 @cites("PS1/26")
 def c07_population(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:
-    """The C 07.00 population: standardised book plus FCCM SFT synthetic rows
-    (SA-CCR derivatives excluded — they report under C 34)."""
+    """The C 07.00 population: the standardised book plus the FCCM SFT rows.
+
+    SA-CCR derivative rows are admitted only incidentally, and only under CRR
+    (where they carry ``approach_applied == "standardised"``); under Basel 3.1
+    the output-floor relabel drops them. That asymmetry is a known defect, not a
+    scope rule — see the module docstring.
+    """
     sa = filter_by_approach(
         results, "standardised", cols, candidates=("reporting_approach_origin",)
     )

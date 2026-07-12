@@ -1,0 +1,8 @@
+{"row_ref":"0010","row_name":"Credit risk (excluding CCR)","0010":4060296.719974031,"0020":4060296.719974031,"0030":8120593.439948062,"0040":4060296.719974031}
+{"row_ref":"0020","row_name":"Counterparty credit risk","0010":null,"0020":null,"0030":null,"0040":null}
+{"row_ref":"0030","row_name":"Credit valuation adjustment risk","0010":null,"0020":null,"0030":null,"0040":null}
+{"row_ref":"0040","row_name":"Securitisation positions in the non-trading book","0010":null,"0020":null,"0030":null,"0040":null}
+{"row_ref":"0050","row_name":"Market risk","0010":null,"0020":null,"0030":null,"0040":null}
+{"row_ref":"0060","row_name":"Operational risk","0010":null,"0020":null,"0030":null,"0040":null}
+{"row_ref":"0070","row_name":"Other","0010":null,"0020":null,"0030":null,"0040":null}
+{"row_ref":"0080","row_name":"Total","0010":4060296.719974031,"0020":4060296.719974031,"0030":8120593.439948062,"0040":4060296.719974031}

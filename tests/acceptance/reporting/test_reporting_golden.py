@@ -272,17 +272,18 @@ def _frame_diffs(expected: pl.DataFrame, actual: pl.DataFrame, label: str) -> li
 # ---------------------------------------------------------------------------
 
 
-def _capture(regime_key: str) -> None:
-    """Write goldens + manifest for one regime."""
-    subdir = _REGIMES[regime_key][0]
-    out = _GOLDEN_ROOT / subdir
+def _capture_frames(out: Path, frames: dict[str, pl.DataFrame], meta: dict) -> None:
+    """Write goldens + manifest for one already-generated frame map.
+
+    Shared with the CCR golden gate (``test_reporting_ccr_golden.py``), which
+    runs a different portfolio through the same comparison machinery.
+    """
     out.mkdir(parents=True, exist_ok=True)
 
     # Clear stale frames so a removed template does not linger as a golden.
     for stale in out.glob("*.ndjson"):
         stale.unlink()
 
-    frames, meta = _generate_frames(regime_key)
     schemas: dict[str, dict[str, str]] = {}
     for key, df in sorted(frames.items()):
         df.write_ndjson(out / f"{key}.ndjson")
@@ -292,6 +293,12 @@ def _capture(regime_key: str) -> None:
     # reload restores via .select(list(schema)); sorting it would scramble it.
     manifest = {"frames": schemas, "meta": meta}
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2))
+
+
+def _capture(regime_key: str) -> None:
+    """Write goldens + manifest for one regime of the rich portfolio."""
+    frames, meta = _generate_frames(regime_key)
+    _capture_frames(_GOLDEN_ROOT / _REGIMES[regime_key][0], frames, meta)
 
 
 # ---------------------------------------------------------------------------

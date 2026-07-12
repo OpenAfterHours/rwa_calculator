@@ -408,10 +408,6 @@ IMPORT_DIRECTION_ALLOWLIST: dict[str, set[str]] = {
         "rwa_calc.engine.crm.link_allocation",
         "rwa_calc.rulebook.resolve",
     },
-    # TYPE_CHECKING-only CalculationResponse on the generator entry points.
-    # Retired by Phase 7 (reporting consumes the sealed aggregator exit).
-    "reporting/corep/generator.py": {"rwa_calc.api.models"},
-    "reporting/pillar3/generator.py": {"rwa_calc.api.service"},
 }
 
 

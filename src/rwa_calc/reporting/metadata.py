@@ -28,7 +28,7 @@ References:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
     import polars as pl
@@ -36,6 +36,20 @@ if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import OutputFloorSummary
     from rwa_calc.contracts.config import Pillar3CapitalRatioOverrides
     from rwa_calc.rulebook.model import ReportingTemplateSet
+
+
+class ResultsSource(Protocol):
+    """What the template generators need from a calculation response.
+
+    Structural stand-in for ``api.models.CalculationResponse`` so the
+    reporting layer never imports upward (Phase 7 Sn — retires the two
+    "Retired by Phase 7" import-direction inversions).
+    """
+
+    @property
+    def framework(self) -> str: ...
+
+    def scan_results(self) -> pl.LazyFrame: ...
 
 
 @dataclass(frozen=True)

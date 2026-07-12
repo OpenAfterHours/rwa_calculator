@@ -50,7 +50,6 @@ from rwa_calc.contracts.bundles import (
     CapitalImpactBundle,
     ComparisonBundle,
 )
-from rwa_calc.engine.aggregator._summaries import method_label_expr
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from rwa_calc.rulebook.resolve import resolve
 
@@ -185,9 +184,10 @@ class DualFrameworkRunner:
 # Capital Impact Analysis (M3.2)
 # =============================================================================
 
-# IRB approach values used by the aggregator — "foundation_irb" and "advanced_irb"
-# from ApproachType enum, plus "FIRB" from aggregator fallback
-_IRB_APPROACHES = ["foundation_irb", "advanced_irb", "FIRB"]
+# IRB approach values on the sealed ``reporting_approach`` (the
+# POST-substitution approach — the one the engine scaled; Phase 7 Sn).
+# The retired "FIRB" aggregator-fallback rung is gone with the raw read.
+_IRB_APPROACHES = ["foundation_irb", "advanced_irb"]
 
 # CRR scaling factor for IRB RWA (CRR Art. 153(1)). The Decimal value is the
 # canonical regulatory constant in the rulepack; comparison math runs in float
@@ -291,10 +291,18 @@ def _select_result_columns(results: AggregatedResultBundle, suffix: str) -> pl.L
     # Always select exposure_reference as the join key (no suffix)
     select_exprs: list[pl.Expr] = [pl.col("exposure_reference")]
 
-    # exposure_class and approach_applied are shared context (no suffix)
-    for col_name in ("exposure_class", "approach_applied"):
-        if col_name in schema.names():
-            select_exprs.append(pl.col(col_name).alias(f"{col_name}_{suffix}"))
+    # Shared context from the sealed reporting projection (Phase 7 Sn /
+    # decision F5): class and approach are POST-substitution, and the method
+    # label is read from the ledger instead of re-derived from a raw column.
+    # Output names keep the retired raw spellings so every consumer
+    # (summaries, UI views, attribution) is name-stable.
+    for out_name, src_name in (
+        ("exposure_class", "reporting_class"),
+        ("approach_applied", "reporting_approach"),
+        ("method", "reporting_method"),
+    ):
+        if src_name in schema.names():
+            select_exprs.append(pl.col(src_name).alias(f"{out_name}_{suffix}"))
 
     # Core numeric columns get framework suffix
     for col_name in ("ead_final", "risk_weight", "rwa_final"):
@@ -328,7 +336,9 @@ def _compute_exposure_deltas(
 
     joined = base_lf.join(var_lf, on="exposure_reference", how="full", coalesce=True)
 
-    # Use the baseline exposure class/approach as the primary context; fall back to variant
+    # Use the baseline exposure class/approach/method as the primary context;
+    # fall back to variant. The method label comes from the sealed
+    # reporting_method (same source grain as the by-class summary).
     joined = joined.with_columns(
         [
             pl.coalesce(pl.col(f"exposure_class_{b}"), pl.col(f"exposure_class_{v}")).alias(
@@ -337,13 +347,9 @@ def _compute_exposure_deltas(
             pl.coalesce(pl.col(f"approach_applied_{b}"), pl.col(f"approach_applied_{v}")).alias(
                 "approach_applied"
             ),
+            pl.coalesce(pl.col(f"method_{b}"), pl.col(f"method_{v}")).alias("method"),
         ]
     )
-
-    # Tag each exposure with its methodology label (STD/FIRB/AIRB/SLOTTING/EQUITY)
-    # from the single shared mapping, so a class×method split of these deltas
-    # reconciles cell-for-cell with the by-class summary (same source grain).
-    joined = joined.with_columns(method_label_expr("approach_applied").alias("method"))
 
     # Compute deltas: variant - baseline (positive = increased capital requirement)
     joined = joined.with_columns(
@@ -472,11 +478,12 @@ def _compute_exposure_attribution(comparison: ComparisonBundle) -> pl.LazyFrame:
 
     crr_cols = [
         pl.col("exposure_reference"),
-        pl.col("exposure_class")
-        if "exposure_class" in crr_schema.names()
+        # Sealed post-substitution context (Phase 7 Sn) under name-stable aliases.
+        pl.col("reporting_class").alias("exposure_class")
+        if "reporting_class" in crr_schema.names()
         else pl.lit(None).cast(pl.String).alias("exposure_class"),
-        pl.col("approach_applied")
-        if "approach_applied" in crr_schema.names()
+        pl.col("reporting_approach").alias("approach_applied")
+        if "reporting_approach" in crr_schema.names()
         else pl.lit(None).cast(pl.String).alias("approach_applied"),
         _safe_col(crr_schema, "rwa_final").alias("rwa_crr"),
         rwa_pre_factor_expr.alias("rwa_pre_factor_crr"),

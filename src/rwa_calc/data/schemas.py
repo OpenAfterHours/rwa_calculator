@@ -2808,13 +2808,6 @@ RECON_PARENT_KEY_COLUMNS: tuple[str, ...] = (
     "split_parent_id",
 )
 
-# Candidate columns (preference order) for the RWA numerator and EAD denominator
-# used to recompute ratio columns after a sub-row collapse. The runtime results
-# frame uses ead_final / rwa_final; the documented schema uses final_ead /
-# final_rwa — accept both.
-RECON_RWA_CANDIDATES: tuple[str, ...] = ("rwa_final", "final_rwa", "rwa")
-RECON_EAD_CANDIDATES: tuple[str, ...] = ("ead_final", "final_ead", "ead")
-
 # Ratio columns that are meaningless when summed/first-ed across sub-rows and must
 # be recomputed as sum(rwa) / sum(ead) after the collapse group-by.
 RECON_RATIO_COLUMNS: tuple[str, ...] = ("risk_weight", "risk_weight_effective")

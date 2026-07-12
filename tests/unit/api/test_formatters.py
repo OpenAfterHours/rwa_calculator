@@ -41,6 +41,7 @@ def sample_result_bundle() -> AggregatedResultBundle:
         {
             "exposure_reference": ["EXP001", "EXP002", "EXP003"],
             "approach_applied": ["SA", "SA", "foundation_irb"],
+            "reporting_method": ["STD", "STD", "FIRB"],
             "exposure_class": ["corporate", "retail", "corporate"],
             "ead_final": [1000000.0, 500000.0, 750000.0],
             "risk_weight": [1.0, 0.75, 0.5],
@@ -308,6 +309,7 @@ class TestNonFiniteSanitisation:
                 {
                     "exposure_reference": ["GOOD", "BAD"],
                     "approach_applied": ["advanced_irb", "advanced_irb"],
+                    "reporting_method": ["AIRB", "AIRB"],
                     "ead_final": [1_000_000.0, 2_000_000.0],
                     "risk_weight": [1.0, 1.0],
                     "rwa_final": [1_000_000.0, float("nan")],
@@ -335,6 +337,7 @@ class TestNonFiniteSanitisation:
                 {
                     "exposure_reference": ["GOOD", "BAD"],
                     "approach_applied": ["SA", "SA"],
+                    "reporting_method": ["STD", "STD"],
                     "ead_final": [1_000_000.0, float("nan")],
                     "risk_weight": [1.0, 1.0],
                     "rwa_final": [1_000_000.0, 500_000.0],
@@ -452,14 +455,14 @@ class TestComputeSummaryLazyApproachStats:
     """Tests for approach stats computed via lazy aggregation."""
 
     def _make_bundle(
-        self, approach_applied: list[str], ead: list[float], rwa: list[float]
+        self, methods: list[str], ead: list[float], rwa: list[float]
     ) -> AggregatedResultBundle:
-        """Helper to create a bundle with given approach data."""
+        """Helper to create a bundle with given ``reporting_method`` labels."""
         return make_aggregated_bundle(
             results=pl.LazyFrame(
                 {
-                    "exposure_reference": [f"EXP{i}" for i in range(len(approach_applied))],
-                    "approach_applied": approach_applied,
+                    "exposure_reference": [f"EXP{i}" for i in range(len(methods))],
+                    "reporting_method": methods,
                     "ead_final": ead,
                     "rwa_final": rwa,
                 }
@@ -468,8 +471,8 @@ class TestComputeSummaryLazyApproachStats:
         )
 
     def test_foundation_irb_counted_in_irb(self, cache: ResultsCache) -> None:
-        """foundation_irb should be counted in ead_irb/rwa_irb."""
-        bundle = self._make_bundle(["foundation_irb"], [1_000_000.0], [500_000.0])
+        """FIRB method rows should be counted in ead_irb/rwa_irb."""
+        bundle = self._make_bundle(["FIRB"], [1_000_000.0], [500_000.0])
         formatter = ResultFormatter()
         response = formatter.format_response(
             bundle=bundle,
@@ -484,8 +487,8 @@ class TestComputeSummaryLazyApproachStats:
         assert response.summary.total_ead_sa == Decimal("0")
 
     def test_advanced_irb_counted_in_irb(self, cache: ResultsCache) -> None:
-        """advanced_irb should be counted in ead_irb/rwa_irb."""
-        bundle = self._make_bundle(["advanced_irb"], [2_000_000.0], [800_000.0])
+        """AIRB method rows should be counted in ead_irb/rwa_irb."""
+        bundle = self._make_bundle(["AIRB"], [2_000_000.0], [800_000.0])
         formatter = ResultFormatter()
         response = formatter.format_response(
             bundle=bundle,
@@ -499,8 +502,8 @@ class TestComputeSummaryLazyApproachStats:
         assert response.summary.total_rwa_irb == Decimal("800000")
 
     def test_sa_counted_in_sa(self, cache: ResultsCache) -> None:
-        """SA literal should be counted in ead_sa/rwa_sa."""
-        bundle = self._make_bundle(["SA"], [500_000.0], [250_000.0])
+        """STD method rows should be counted in ead_sa/rwa_sa."""
+        bundle = self._make_bundle(["STD"], [500_000.0], [250_000.0])
         formatter = ResultFormatter()
         response = formatter.format_response(
             bundle=bundle,
@@ -515,9 +518,9 @@ class TestComputeSummaryLazyApproachStats:
         assert response.summary.total_ead_irb == Decimal("0")
 
     def test_slotting_counted_in_slotting(self, cache: ResultsCache) -> None:
-        """Both SLOTTING literal and slotting enum value should be counted."""
+        """SLOTTING method rows should be counted in the slotting card."""
         bundle = self._make_bundle(
-            ["SLOTTING", "slotting"],
+            ["SLOTTING", "SLOTTING"],
             [300_000.0, 200_000.0],
             [150_000.0, 100_000.0],
         )
@@ -536,7 +539,7 @@ class TestComputeSummaryLazyApproachStats:
     def test_mixed_approaches(self, cache: ResultsCache) -> None:
         """Mixed approach results should produce correct per-approach breakdown."""
         bundle = self._make_bundle(
-            ["SA", "SA", "foundation_irb", "advanced_irb", "SLOTTING"],
+            ["STD", "STD", "FIRB", "AIRB", "SLOTTING"],
             [1_000_000.0, 500_000.0, 750_000.0, 250_000.0, 300_000.0],
             [1_000_000.0, 375_000.0, 375_000.0, 100_000.0, 240_000.0],
         )
@@ -556,8 +559,8 @@ class TestComputeSummaryLazyApproachStats:
         assert response.summary.total_ead_slotting == Decimal("300000")
         assert response.summary.total_rwa_slotting == Decimal("240000")
 
-    def test_firb_fallback_counted_in_irb(self, cache: ResultsCache) -> None:
-        """FIRB fallback should also be counted in IRB."""
+    def test_firb_label_counted_in_irb(self, cache: ResultsCache) -> None:
+        """The FIRB method label is counted in IRB."""
         bundle = self._make_bundle(["FIRB"], [400_000.0], [200_000.0])
         formatter = ResultFormatter()
         response = formatter.format_response(
@@ -571,12 +574,12 @@ class TestComputeSummaryLazyApproachStats:
         assert response.summary.total_ead_irb == Decimal("400000")
         assert response.summary.total_rwa_irb == Decimal("200000")
 
-    def test_no_approach_column(self, cache: ResultsCache) -> None:
-        """Should return zeros when approach_applied carries no values.
+    def test_no_method_values(self, cache: ResultsCache) -> None:
+        """Should return zeros when reporting_method carries no values.
 
-        Phase 3: sealed results always carry the column, so the absent-column
-        ramp becomes a typed-null column after the seal — per-approach totals
-        must still be zero.
+        Sealed results always carry the column, so an absent mock column
+        becomes typed-null after the seal — per-method totals must still be
+        zero (Phase 7 Sn: the cards read the sealed ``reporting_method``).
         """
         bundle = make_aggregated_bundle(
             results=pl.LazyFrame(

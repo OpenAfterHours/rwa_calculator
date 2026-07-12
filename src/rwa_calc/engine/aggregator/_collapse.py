@@ -26,11 +26,9 @@ import polars as pl
 
 from rwa_calc.data.schemas import (
     ADDITIVE_OUTPUT_FIELDS,
-    RECON_EAD_CANDIDATES,
     RECON_HETEROGENEITY_COLUMNS,
     RECON_PARENT_KEY_COLUMNS,
     RECON_RATIO_COLUMNS,
-    RECON_RWA_CANDIDATES,
 )
 
 # Default reconciliation grain: one row per (collapsed) exposure.
@@ -81,10 +79,11 @@ def aggregate_to_key_grain(
             raise ValueError(f"key columns not present on results frame: {missing}")
         group_cols = list(key_columns)
 
-    rwa_col = _first_present(RECON_RWA_CANDIDATES, present)
-    ead_col = _first_present(RECON_EAD_CANDIDATES, present)
+    # The aggregator seals rwa_final / ead_final — single canonical names
+    # (Phase 7 Sn; the final_rwa/rwa alternates were dead for sealed frames).
+    has_ratio_inputs = {"rwa_final", "ead_final"} <= present
     recomputable_ratios = (
-        [c for c in RECON_RATIO_COLUMNS if c in present] if (rwa_col and ead_col) else []
+        [c for c in RECON_RATIO_COLUMNS if c in present] if has_ratio_inputs else []
     )
 
     agg_exprs = _build_agg_exprs(schema_names, group_cols, recomputable_ratios)
@@ -92,7 +91,7 @@ def aggregate_to_key_grain(
 
     collapsed = results.group_by(group_cols, maintain_order=True).agg(agg_exprs)
     collapsed = _finalise_heterogeneity(collapsed, present, group_cols)
-    collapsed = _recompute_ratios(collapsed, recomputable_ratios, rwa_col, ead_col)
+    collapsed = _recompute_ratios(collapsed, recomputable_ratios)
     return collapsed
 
 
@@ -147,15 +146,13 @@ def _finalise_heterogeneity(
 def _recompute_ratios(
     collapsed: pl.LazyFrame,
     recomputable_ratios: Sequence[str],
-    rwa_col: str | None,
-    ead_col: str | None,
 ) -> pl.LazyFrame:
-    """Recompute ratio columns as sum(rwa) / sum(ead), zero-guarded."""
-    if not recomputable_ratios or rwa_col is None or ead_col is None:
+    """Recompute ratio columns as sum(rwa_final) / sum(ead_final), zero-guarded."""
+    if not recomputable_ratios:
         return collapsed
     ratio_expr = (
-        pl.when(pl.col(ead_col).abs() > _EAD_ZERO_GUARD)
-        .then(pl.col(rwa_col) / pl.col(ead_col))
+        pl.when(pl.col("ead_final").abs() > _EAD_ZERO_GUARD)
+        .then(pl.col("rwa_final") / pl.col("ead_final"))
         .otherwise(0.0)
     )
     return collapsed.with_columns([ratio_expr.alias(c) for c in recomputable_ratios])

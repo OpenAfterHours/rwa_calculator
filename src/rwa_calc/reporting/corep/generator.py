@@ -2,7 +2,7 @@
 COREP template generator for credit risk reporting.
 
 Pipeline position:
-    CalculationResponse -> COREPGenerator -> COREPTemplateBundle -> Excel
+    calculation results (ResultsSource) -> COREPGenerator -> COREPTemplateBundle -> Excel
 
 Key responsibilities:
 - Generate per-exposure-class COREP template DataFrames with row sections
@@ -86,6 +86,7 @@ from rwa_calc.reporting.kernel import (
 from rwa_calc.reporting.kernel import (
     pick as _pick,
 )
+from rwa_calc.reporting.metadata import ResultsSource
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -93,7 +94,6 @@ if TYPE_CHECKING:
     from polars._typing import PolarsDataType
     from xlsxwriter import Workbook
 
-    from rwa_calc.api.models import CalculationResponse
     from rwa_calc.contracts.bundles import OutputFloorSummary
     from rwa_calc.contracts.config import OutputFloorConfig
     from rwa_calc.contracts.results import ExportResult
@@ -210,12 +210,12 @@ class COREPGenerator:
 
     def generate(
         self,
-        response: CalculationResponse,
+        response: ResultsSource,
         *,
         output_floor_summary: OutputFloorSummary | None = None,
         output_floor_config: OutputFloorConfig | None = None,
     ) -> COREPTemplateBundle:
-        """Generate all COREP templates from a CalculationResponse."""
+        """Generate all COREP templates from a calculation results source."""
         results_lf = response.scan_results()
         return self.generate_from_lazyframe(
             results_lf,

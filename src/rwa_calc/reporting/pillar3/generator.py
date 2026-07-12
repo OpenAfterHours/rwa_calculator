@@ -56,6 +56,7 @@ from rwa_calc.reporting.kernel import (
 from rwa_calc.reporting.kernel import (
     pick as _pick,
 )
+from rwa_calc.reporting.metadata import ResultsSource
 from rwa_calc.reporting.pillar3.cms1 import generate_cms1
 from rwa_calc.reporting.pillar3.cms2 import generate_cms2
 from rwa_calc.reporting.pillar3.cr4 import generate_cr4
@@ -102,7 +103,6 @@ if TYPE_CHECKING:
     from polars._typing import PolarsDataType
     from xlsxwriter import Workbook
 
-    from rwa_calc.api.service import CalculationResponse
     from rwa_calc.contracts.bundles import OutputFloorSummary
     from rwa_calc.contracts.config import Pillar3CapitalRatioOverrides
     from rwa_calc.contracts.results import ExportResult
@@ -160,11 +160,11 @@ class Pillar3Generator:
 
     def generate(
         self,
-        response: CalculationResponse,
+        response: ResultsSource,
         *,
         previous_period_results: pl.LazyFrame | None = None,
     ) -> Pillar3TemplateBundle:
-        """Generate all Pillar III templates from a ``CalculationResponse``.
+        """Generate all Pillar III templates from a results source (``ResultsSource``).
 
         When ``previous_period_results`` (a prior-run results LazyFrame of the
         same shape as the current results) is supplied, the CR8 RWEA flow

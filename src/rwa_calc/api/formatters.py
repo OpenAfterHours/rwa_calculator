@@ -32,13 +32,14 @@ if TYPE_CHECKING:
 # Constants
 # =============================================================================
 
-# Approach-string buckets for the SA / IRB / Slotting card totals. Production
-# emits the long ``ApproachType`` values ("standardised", "foundation_irb",
-# "advanced_irb", "slotting"); the short aliases (SA/FIRB/AIRB/SLOTTING) appear on
-# branch frames and test fixtures, so both forms are listed to avoid undercounting.
-_SA_APPROACHES = ["SA", "standardised", "sa", "STD"]
-_IRB_APPROACHES = ["foundation_irb", "advanced_irb", "FIRB", "AIRB", "firb", "airb"]
-_SLOTTING_APPROACHES = ["SLOTTING", "slotting"]
+# Method-label buckets for the SA / IRB / Slotting card totals, read from the
+# sealed ``reporting_method`` (STD/FIRB/AIRB/SLOTTING/EQUITY — the label of the
+# POST-substitution approach, Phase 7 Sn recorded decision): a cross-approach
+# guaranteed leg reports on its guarantor's card, matching COREP/Pillar 3.
+# The retired raw-``approach_applied`` alias unions are gone with the ladder.
+_SA_METHODS = ["STD"]
+_IRB_METHODS = ["FIRB", "AIRB"]
+_SLOTTING_METHODS = ["SLOTTING"]
 
 _EMPTY_SUMMARY = SummaryStatistics(
     total_ead=Decimal("0"),
@@ -260,9 +261,12 @@ class ResultFormatter:
             return _EMPTY_SUMMARY, 0
 
         schema = results_df.schema
-        ead_col = self._find_column_in_schema(schema, ["ead_final", "ead", "exposure_at_default"])
-        rwa_col = self._find_column_in_schema(schema, ["rwa_final", "rwa", "risk_weighted_assets"])
-        has_approach = "approach_applied" in schema.names()
+        # Single sealed names — the aggregator contract guarantees them
+        # (Phase 7 Sn; the ead/exposure_at_default alternates were dead).
+        names = schema.names()
+        ead_col = "ead_final" if "ead_final" in names else None
+        rwa_col = "rwa_final" if "rwa_final" in names else None
+        has_method = "reporting_method" in names
 
         total_ead = _column_sum_decimal(results_df, ead_col)
         total_rwa = _column_sum_decimal(results_df, rwa_col)
@@ -276,16 +280,12 @@ class ResultFormatter:
             total_rwa=total_rwa,
             exposure_count=exposure_count,
             average_risk_weight=avg_rw,
-            total_ead_sa=_approach_sum(results_df, ead_col, _SA_APPROACHES, has_approach),
-            total_ead_irb=_approach_sum(results_df, ead_col, _IRB_APPROACHES, has_approach),
-            total_ead_slotting=_approach_sum(
-                results_df, ead_col, _SLOTTING_APPROACHES, has_approach
-            ),
-            total_rwa_sa=_approach_sum(results_df, rwa_col, _SA_APPROACHES, has_approach),
-            total_rwa_irb=_approach_sum(results_df, rwa_col, _IRB_APPROACHES, has_approach),
-            total_rwa_slotting=_approach_sum(
-                results_df, rwa_col, _SLOTTING_APPROACHES, has_approach
-            ),
+            total_ead_sa=_method_sum(results_df, ead_col, _SA_METHODS, has_method),
+            total_ead_irb=_method_sum(results_df, ead_col, _IRB_METHODS, has_method),
+            total_ead_slotting=_method_sum(results_df, ead_col, _SLOTTING_METHODS, has_method),
+            total_rwa_sa=_method_sum(results_df, rwa_col, _SA_METHODS, has_method),
+            total_rwa_irb=_method_sum(results_df, rwa_col, _IRB_METHODS, has_method),
+            total_rwa_slotting=_method_sum(results_df, rwa_col, _SLOTTING_METHODS, has_method),
             floor_applied=floor_applied,
             floor_impact=floor_impact_value,
             total_el_shortfall=el_shortfall,
@@ -294,28 +294,6 @@ class ResultFormatter:
         )
 
         return summary, exposure_count
-
-    def _find_column_in_schema(
-        self,
-        schema: pl.Schema,
-        candidates: list[str],
-    ) -> str | None:
-        """
-        Find first matching column name from candidates in a schema.
-
-        Args:
-            schema: Polars schema to search
-            candidates: List of possible column names
-
-        Returns:
-            First matching column name or None
-        """
-        names = schema.names()
-        for col in candidates:
-            if col in names:
-                return col
-        return None
-
 
 # =============================================================================
 # Private summary helpers
@@ -349,19 +327,19 @@ def _column_sum_decimal(df: pl.DataFrame, col: str | None) -> Decimal:
     return Decimal(str(_finite_sum(df[col]) or 0))
 
 
-def _approach_sum(
+def _method_sum(
     df: pl.DataFrame,
     col: str | None,
-    approaches: list[str],
-    has_approach: bool,
+    methods: list[str],
+    has_method: bool,  # noqa: FBT001 - retired positional signature preserved
 ) -> Decimal:
-    """Sum a column over rows whose `approach_applied` is in `approaches`.
+    """Sum a column over rows whose ``reporting_method`` is in ``methods``.
 
     Non-finite (NaN / inf) rows are excluded (see ``_finite_sum``).
     """
-    if not col or not has_approach:
+    if not col or not has_method:
         return Decimal("0")
-    mask = df["approach_applied"].is_in(approaches)
+    mask = df["reporting_method"].is_in(methods)
     return Decimal(str(_finite_sum(df.filter(mask)[col]) or 0))
 
 

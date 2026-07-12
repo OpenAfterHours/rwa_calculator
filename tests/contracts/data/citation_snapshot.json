@@ -462,6 +462,9 @@
   "rwa_calc.reporting.corep.c02::generate_c02_00": [
     "PS1/26, paragraph 1.3"
   ],
+  "rwa_calc.reporting.corep.c07::c07_plans": [
+    "PS1/26, paragraph 1.3"
+  ],
   "rwa_calc.reporting.corep.c07::c07_population": [
     "PS1/26"
   ],

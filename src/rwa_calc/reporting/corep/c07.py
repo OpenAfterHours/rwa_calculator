@@ -55,6 +55,7 @@ References:
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
@@ -168,19 +169,43 @@ def _fully_adjusted(cells: Mapping[str, float | None], _prior: bool) -> float | 
     return max(0.0, (cells["0110"] or 0.0) - (cells["0130"] or 0.0))
 
 
+@dataclass(frozen=True)
+class SheetPlan:
+    """Everything one C 07.00 sheet is executed from.
+
+    The spec + the prepared, partitioned frame + the side context ARE the
+    definition of every cell on that sheet: ``execute(spec, frame, ctx)``
+    produces it. Exposing the plan (rather than only the rendered frame) lets a
+    consumer that must explain a cell — the lineage drill-down — read the very
+    same ``CellSpec`` and run the very same ``RowPredicate`` over the very same
+    rows the generator used, instead of re-deriving the population, the Art.
+    112(1)(g) merge, the derived discriminators and the sheet partition (a copy
+    that could silently drift from the reported figure).
+
+    ``row_terms`` and ``negative_cols`` carry the two post-``execute`` passes
+    (all-null inert rows; the Annex II §1.3 "(-)" negation), so a consumer knows
+    a rendered cell's sign and emptiness policy without re-deciding either.
+    """
+
+    spec: TemplateSpec
+    frame: pl.DataFrame
+    ctx: ReportingContext
+    row_terms: dict[str, _Terms | None]
+    negative_cols: frozenset[str] = _NEGATIVE_COLS
+
+
 @cites("PS1/26, paragraph 1.3")
-def generate_c07(
+def c07_plans(
     results: pl.LazyFrame,
     cols: set[str],
     framework: str,
     errors: list[str],
-) -> dict[str, pl.DataFrame]:
-    """Execute C 07.00 per obligor-class sheet over the sealed ledger.
+) -> dict[str, SheetPlan]:
+    """Build the per-obligor-class execution plans for C 07.00.
 
-    Preserves the imperative generator's contracts: missing EAD/RWA columns
-    record "C07: Missing EAD or RWA columns in results"; a missing class
-    column records "C07: Missing exposure_class column"; an empty SA
-    population yields ``{}``.
+    Preserves the generator's contracts: missing EAD/RWA columns record
+    "C07: Missing EAD or RWA columns in results"; a missing class column records
+    "C07: Missing exposure_class column"; an empty SA population yields ``{}``.
     """
     # Phase 7 convergence: the sealed obligor applied class, single name
     # (== the retired exposure_class_applied/exposure_class ladder).
@@ -212,14 +237,31 @@ def generate_c07(
     row_terms = _row_terms(framework, data_cols)
     spec = _build_spec(framework, data_cols, ead_col, rwa_col, row_terms)
 
-    result: dict[str, pl.DataFrame] = {}
+    plans: dict[str, SheetPlan] = {}
     # Sealed-ledger rule: the class column always exists; a null key
     # (no source on a synthetic frame) partitions into NO sheet.
     for ec in sa_df[ec_col].drop_nulls().unique().sort().to_list():
-        class_df = sa_df.filter(pl.col(ec_col) == ec)
-        ctx = ReportingContext(substitution_inflow=inflow_map.get(ec, 0.0))
-        frame = execute(spec, class_df, ctx)
-        frame = _null_empty_rows(frame, class_df, row_terms)
+        plans[ec] = SheetPlan(
+            spec=spec,
+            frame=sa_df.filter(pl.col(ec_col) == ec),
+            ctx=ReportingContext(substitution_inflow=inflow_map.get(ec, 0.0)),
+            row_terms=row_terms,
+        )
+    return plans
+
+
+@cites("PS1/26, paragraph 1.3")
+def generate_c07(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, pl.DataFrame]:
+    """Execute C 07.00 per obligor-class sheet over the sealed ledger."""
+    result: dict[str, pl.DataFrame] = {}
+    for ec, plan in c07_plans(results, cols, framework, errors).items():
+        frame = execute(plan.spec, plan.frame, plan.ctx)
+        frame = _null_empty_rows(frame, plan.frame, plan.row_terms)
         result[ec] = _negate_deduction_cols(frame)
     return result
 

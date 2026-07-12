@@ -45,7 +45,7 @@ from rwa_calc.api.models import ValidationRequest
 from rwa_calc.api.reconciliation import loads_reconciliation_config
 from rwa_calc.api.service import CreditRiskCalc, get_supported_frameworks
 from rwa_calc.api.validation import DataPathValidator
-from rwa_calc.reporting import catalog
+from rwa_calc.reporting import catalog, lineage
 
 if TYPE_CHECKING:
     from rwa_calc.api.models import (
@@ -312,6 +312,75 @@ def template(template_id: str, run_id: str, sheet: str | None = None) -> dict:
         "sheet": view.sheet,
         "columns": [dataclasses.asdict(col) for col in view.columns],
         "rows": frame.to_dicts(),
+    }
+
+
+@router.get("/lineage", responses=_RESP_404)
+def cell_lineage(  # noqa: PLR0913 - the cell key plus paging
+    run_id: str,
+    template: str,
+    row: str,
+    col: str,
+    sheet: str | None = None,
+    offset: int = 0,
+    limit: int = 50,
+) -> dict:
+    """Explain one reported template cell: what it means, and which legs produced it.
+
+    The cell is addressed by the key the viewer stamps on it
+    (``template``/``sheet``/``row``/``col``). The response echoes the cell's
+    metric, its filter criteria and the scope of its population, so it is
+    self-describing — and returns ``cell_value`` AS REPORTED (read from the
+    generated template, never recomputed) alongside the contributing ledger legs.
+
+    A template with no lineage (still imperative — C 34.x, CCR1-8) or a cell that
+    is not on the template is a clean 404, never a re-derived guess.
+    """
+    response = _require_run(run_id)
+    result = lineage.drilldown(
+        response,
+        template,
+        row,
+        col,
+        run_id=run_id,
+        sheet=sheet,
+        offset=max(0, offset),
+        limit=max(1, min(limit, _MAX_PAGE)),
+    )
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"no lineage available for cell {template}/{sheet or '-'}/{row}/{col}",
+        )
+
+    query = result.query
+    rows = result.rows.fill_nan(None)
+    return {
+        "run_id": run_id,
+        "cell": {
+            "template": query.template_id,
+            "sheet": query.sheet,
+            "row_ref": query.row_ref,
+            "col_ref": query.col_ref,
+            "row_name": query.row_name,
+        },
+        "kind": query.kind,
+        "metric": query.metric,
+        "metric_columns": query.metric_columns,
+        "missing_columns": query.missing_columns,
+        "is_source_backed": query.is_source_backed,
+        "filter_terms": [dataclasses.asdict(term) for term in query.filter_terms],
+        "scope": query.scope,
+        "refs": query.refs,
+        "basis": query.basis,
+        "sign": query.sign,
+        "cell_value": result.cell_value,
+        "contribution_total": result.contribution_total,
+        "total_rows": result.total_rows,
+        "offset": max(0, offset),
+        "limit": max(1, min(limit, _MAX_PAGE)),
+        "columns": rows.columns,
+        "rows": rows.to_dicts(),
     }
 
 

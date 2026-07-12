@@ -243,6 +243,91 @@ def test_template_sheet_defaults_to_the_first_sheet(client: TestClient, data_dir
     assert resp.json()["sheet"] == "corporate"
 
 
+def test_lineage_explains_a_reported_cell_and_lists_its_contributors(
+    client: TestClient, data_dir: str
+) -> None:
+    # Arrange
+    run_id = _run(client, data_dir)
+
+    # Act — C 07.00 / corporate / row 0010 (total) / col 0220 (RWEA)
+    resp = client.get(
+        "/api/lineage",
+        params={
+            "run_id": run_id,
+            "template": "c07_00",
+            "sheet": "corporate",
+            "row": "0010",
+            "col": "0220",
+        },
+    )
+
+    # Assert — the cell is self-describing (metric + scope + basis), its value is
+    # the REPORTED figure, and the legs shown sum back to it.
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["cell"]["row_ref"] == "0010"
+    assert body["kind"] == "rows"
+    assert body["metric"] == "sum"
+    assert body["metric_columns"] == ["rwa_final"]
+    assert body["basis"] == "aggregator_exit"
+    assert body["sign"] == "positive"
+    assert body["scope"]
+    assert body["cell_value"] > 0
+    assert body["contribution_total"] == pytest.approx(body["cell_value"])
+    assert body["total_rows"] >= 1
+    assert "exposure_reference" in body["columns"]
+    assert "reporting_leg_role" in body["columns"]  # a contributor is a LEG
+    assert len(body["rows"]) >= 1
+
+
+def test_lineage_reports_a_cell_whose_sources_are_never_produced(
+    client: TestClient, data_dir: str
+) -> None:
+    # Arrange
+    run_id = _run(client, data_dir)
+
+    # Act — col 0030 sums provision amounts the engine does not put on the ledger
+    resp = client.get(
+        "/api/lineage",
+        params={
+            "run_id": run_id,
+            "template": "c07_00",
+            "sheet": "corporate",
+            "row": "0010",
+            "col": "0030",
+        },
+    )
+
+    # Assert — the reported 0.0 is flagged as NOT source-backed, so a reviewer can
+    # tell "we computed zero" from "we cannot compute this".
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["is_source_backed"] is False
+    assert body["missing_columns"] == body["metric_columns"]
+    assert body["sign"] == "negated"
+    assert body["contribution_total"] is None
+
+
+def test_lineage_unknown_run_template_and_cell_are_404(client: TestClient, data_dir: str) -> None:
+    # Arrange
+    run_id = _run(client, data_dir)
+    cell = {"template": "c07_00", "sheet": "corporate", "row": "0010", "col": "0220"}
+
+    # Act / Assert — an uninstrumented template (C 34.01 is still imperative) and
+    # an unknown cell are clean 404s, never a re-derived guess.
+    assert client.get("/api/lineage", params={**cell, "run_id": "nope"}).status_code == 404
+    assert (
+        client.get(
+            "/api/lineage", params={**cell, "run_id": run_id, "template": "c34_01"}
+        ).status_code
+        == 404
+    )
+    assert (
+        client.get("/api/lineage", params={**cell, "run_id": run_id, "row": "9999"}).status_code
+        == 404
+    )
+
+
 def test_templates_unknown_run_and_unknown_template_are_404(
     client: TestClient, data_dir: str
 ) -> None:

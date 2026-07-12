@@ -822,6 +822,32 @@ convergence candidate for Sn). Gate: goldens WITHOUT regen; 42 OF0201 + 38 repor
 unit tests unchanged; full suite green; citation snapshot 157 fns. Remaining imperative
 COREP: C 02.00, C 34.x.
 
+**S8-C02.00 DONE 2026-07-12 — the master own-funds roll-up, ported as the recorded Kind-9
+HYBRID (`reporting/corep/c02.py`): typed pre-pass aggregation kernels + a thin row-assembly
+shell, deliberately NOT through the cellspec executor (plan §8.2 mandate).** 17 imperative
+functions relocated from generator.py; the three instance-state dicts
+(`self._irb_class_rwa` / `_slotting_type_rwa` / `_irb_sub_rwa`, set-read-reset across
+methods) become pure-function RETURNS of `_aggregate_by_approach` — the only structural
+change; everything else verbatim. Preserved (recorded): col 0030 = the post-floor total
+(`rwa_final` is ALREADY post-floor; `rwa_pre_floor` feeds only the 0034 activation boolean
+with its 0.01 epsilon); equity RWA in THREE rows by design (0210/0060/0420) while the flat
+total counts it once; SA rows key RAW `exposure_class` through the many-to-one ACCUMULATING
+`C02_00_SA_CLASS_MAP`; the `_irb_*_split` fallbacks that dump the whole total into one
+bucket on no sub-data (corporate → non-SME 0297/0356; RE → residential-non-SME 0383;
+retail-other → SME 0400 CRR-heritage); `exposure_subclass` as the canonical corporate split
+with the is_sme/FSE-flag heuristic fallback; the F-IRB-vs-A-IRB FSE asymmetry (0295 separate
+vs folded into 0356); the B31 column policy (only the three approach parents zero 0020/0030;
+sub-rows mirror 0010; totals take portfolio SA-equiv/floor; 0040 x0.08); the 0500
+currency-mismatch memo populated AFTER the column pass (0020/0030 null, excluded from TREA);
+zero-fill for valueless credit-risk rows vs null-fill for the six other-risk-type rows; the
+floor indicator gating (None config => applicable; absent summary => 0.0 not null). The
+delegate keeps both `output_floor_summary`/`output_floor_config` kwargs (recorded — with
+OF 02.01's, the ReportingContext convergence is an Sn follow-up). Gate: goldens WITHOUT
+regen (both regimes); 64 C02 + 38 reporting-basis unit tests + 7 P2.41 subclass acceptance
+pins unchanged; full suite green; citation snapshot 158 fns. **The COREP credit-risk estate
+is now FULLY declarative/delegated — only C 34.x (CCR) remains imperative, deferred with
+S8-pre (operator).**
+
 Order: **Pillar 3** OV1 → ~~CR4/CR5~~ → ~~CR6/CR6a/CR7/CR7a~~ → ~~CR9/CR9.1/CR10~~ → ~~CMS1/2~~ → CCR1/2/3/8 (DEFERRED with S8-pre)
 (post S8-pre); then **COREP** C07 + skeleton-sharing C08.01/02/03/05 → C08.04/06/07 → C09.01/02 →
 OF02.01 → OF07/OF08/C34.x (post S8-pre) → **C02.00 LAST** (portfolio pre-pass via

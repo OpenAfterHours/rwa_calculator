@@ -1,316 +1,343 @@
 # Report Cell Lineage / Drill-Down — v1 Vertical Slice
 
-**Status:** PROPOSED — premise reviewed 2026-07-11 against the Phase 7 declarative-reporting plan.
-**Parent:** `docs/plans/phase7-declarative-reporting.md` (this feature is a Phase-7-adjacent consumer
-slice; it builds on the S2 sealed reporting projection and pre-pins the S8 C07 predicate).
+**Status:** PROPOSED (rev 2) — **re-reviewed 2026-07-12 against the completed Phase 7 estate.**
+Rev 1 (2026-07-11) was written when CellSpec did not exist; its central sequencing decision is
+now obsolete and is superseded below. The design is materially simpler and materially more
+general as a result.
+**Parent:** `docs/plans/phase7-declarative-reporting.md` (COMPLETE) — this is a consumer slice
+built on the sealed ledger + the one executor.
 **Requested scope:** generic lineage data model (run, template, cell, metric, filter criteria,
-source records, stage) + one end-to-end example (COREP C 07.00 corporates RWA) + drill-down
-endpoint/page + tests + short doc page. Constraints: no breaking API changes, extensible,
+source records, stage) + one example end-to-end (COREP C 07.00 corporates RWA) + drill-down
+endpoint/page + tests + a short doc page. Constraints: no breaking API changes, extensible,
 minimally invasive.
 
 ---
 
-## 1. Premise review — what changes vs the request
+## 1. What changed since rev 1 — and why the plan gets smaller
 
-The user journey is right and the timing is good: Phase 7 S2 (merged 2026-07-11) sealed the
-reporting projection (`reporting_class`, `reporting_class_origin`, `reporting_leg_role`,
-`reporting_ead`, `reporting_rw`, …) on `AGGREGATOR_EXIT_EDGE`, so every column a drill-down needs
-is already on the one canonical ledger that `CalculationResponse.scan_results()` reads. No engine,
-aggregator, or edge change is needed — the whole slice is additive consumer code.
+Rev 1 reasoned: *"CellSpec/TemplateSpec don't exist yet (Phase 7 S7); don't wait, and don't invent
+a rival vocabulary — hand-author one registry entry using the Phase-7 predicate vocabulary, and
+record that S7/S8 supersede it."*
 
-Two elements of the proposed data model are corrected:
+**S7 and S8 have since landed. That supersession is now due, before the feature is built.** The
+predicate vocabulary is real code, and every credit-risk COREP + Pillar 3 template is executed
+through it:
 
-### 1.1 Lineage is a stored QUERY, not stored source-record IDs
+- `reporting/cellspec.py` (608 LOC) — `RowPredicate`, the binding verbs (`Sum`, `SafeSum`, `Mean`,
+  `WeightedAvg`, `Ratio`, `Count`, `FirstNonNull`, `SideContext`, `PriorPeriod`, `Formula`),
+  `CellSpec`, `TemplateSpec`, and the one `execute()`.
+- Per-template modules: `corep/{c02,c07,c08,c09,of02}.py`, `pillar3/{cr4..cr10,ov1,cms1,cms2}.py`.
+- `corep/generator.py` fell from **5,179 → 899 LOC**.
 
-The proposed model persists "source record IDs" per cell. That is an inverted index of the cell's
-filter, and it is the wrong shape for this codebase:
+The requested cell is now *literally a declarative object in the codebase*. C 07.00, row 0010
+(Total exposures), column 0220 (RWEA) is:
 
-- **It duplicates massively.** Every ledger leg contributes to many cells (class-sheet total, RW-band
-  row, on/off-BS row, CCF row, ECAI split…). Materialising memberships multiplies the ledger by the
-  cell count per template.
-- **It can silently disagree with the reported number.** A stored membership table is a second
-  representation of the cell computation; any drift between it and the generator is invisible.
-  Deriving rows from the same predicate that defines the cell makes agreement structural.
-- **Phase 7 already decided this.** The measured cell taxonomy (§3.2 of the Phase 7 plan) shows the
-  dominant cell kind is pure filter+aggregate over the sealed ledger; CellSpec = `RowPredicate` +
-  `ValueBinding`. A cell's lineage **is** its predicate. And §8.6 bans introducing a new normalised
-  frame beside the ledger.
-
-Verified concretely for the example cell — C 07.00 corporates, row 0010, col 0220 (RWEA post
-supporting factor) is exactly:
-
-```
-sum(rwa_final) over rows where
-    (approach_applied == "standardised" OR risk_type == "CCR_SFT")
-    AND exposure_class_applied ∈ {corporate, specialised_lending}   # SL merged per Art. 112(1)(g)
+```python
+# reporting/corep/c07.py:609
+"0220": CellSpec(Sum(rwa_col), predicate=member)      # member = RowPredicate(equals=terms)
 ```
 
-(`reporting/corep/generator.py::_c07_sa_data:4109`, `_generate_all_c07:1522-1556`,
-`_c07_rwea_factor_cols:3330`.)
+with `terms == ()` for row 0010, executed over the sheet frame produced by `generate_c07`
+(`c07.py:197-224`): population filter → SL-into-corporate merge → derived discriminator columns →
+partition by `reporting_class_origin`.
 
-**Decision: the lineage record stores the query (predicate + metric + basis), never row IDs.
-Contributing rows are derived on demand by applying the predicate to the run's sealed results
-frame.** `run_id` is a runtime parameter of the drill-down, not a field of the spec — the spec is
-run-independent, which is what makes it cacheable, testable, and eventually generatable from S7
-`TemplateSpec`s.
+**Therefore: v1 must not declare lineage. It must READ the specs that already exist.**
 
-### 1.2 "Calculation stage" is a different axis — trimmed to a `basis` label in v1
+Rev 1's hand-authored registry entry would today be a *second, drifting copy* of `c07.py` — the
+exact failure rev 1 argued against when it rejected materialised row-ID tables. Same argument, one
+level up.
 
-Cell → contributing-rows lineage (horizontal) and row → rule/stage provenance (vertical) are
-different features. The vertical axis already has partial machinery: the sealed row carries its own
-explanation (`reporting_leg_role`, `reporting_class_origin` vs `reporting_class`, `risk_weight`,
-`sa_cqs`, approach columns), and the bundle carries per-row attribution frames (`floor_impact`,
-`supporting_factor_impact`) plus the opt-in `audit_cache`. A full cross-stage provenance graph is a
-large feature in its own right and is **out of scope for v1**.
+### 1.1 What survives from rev 1 (re-confirmed, now structurally guaranteed)
 
-v1 keeps a `basis` field on the lineage record (the sealed edge the query runs on —
-`"aggregator_exit"`) and answers "which rules contributed" by returning the row's already-sealed
-explanatory columns. Deeper per-row provenance is a recorded follow-up (§7).
+**Lineage is a QUERY, not stored source-record IDs.** Rev 1 argued this on duplication and
+drift-risk grounds. It is now stronger than an argument — it is the shape of the code: a cell's
+lineage *is* `spec.predicate ∧ spec.cells[(row, col)].predicate`, and the executor already exposes
+the machinery to evaluate it (`RowPredicate.apply`, and the public `subset_rows` / `matched_counts`
+kernels at `cellspec.py:434,464`, which read as if they were built for this question).
 
-### 1.3 Grain warning: contributing rows are LEGS, not exposures
+Persisting cell→row memberships would multiply the ledger by the cell count per template and could
+silently disagree with the reported number. **Decision unchanged: derive contributing rows on
+demand from the same spec object the generator ran.** `run_id` stays a runtime parameter.
 
-The ledger is per-leg for guaranteed exposures (`__G_<guarantor>` / `__REM` / `__REM_FL` /
-`__REM_SEN`). A corporate cell can contain an inflow leg whose *origin* class is something else
-(guaranteed leg reporting under the guarantor's class). If the drill-down presents bare rows, users
-will report "unknown exposures" as bugs. The response must therefore always include
-`reporting_leg_role`, `reporting_class`, `reporting_class_origin`, and the base reference
-(`source_exposure_reference` where sealed; otherwise derived), and the doc page must explain the
-two-leg ledger in one paragraph.
+### 1.2 What this buys: coverage becomes generic, not one-cell
 
-*(Note: C07 sheets bucket on `exposure_class_applied` — the origin/applied class, uniform across
-legs — so for THIS cell no cross-class inflow leg appears; the columns are still returned so the
-model generalises to post-substitution-keyed cells without change.)*
-
-### 1.4 Scope note: there is no rendered report to click yet
-
-The UI does not render COREP templates on screen (COREP exists only as an export format), so
-"click a cell in the report" cannot literally ship in v1. v1 ships the lineage API plus a
-standalone drill-down page linked from the run's results page. Clickable rendered templates are a
-natural later slice (after S8 stranglers migrate templates through the executor, rendering them
-server-side becomes cheap).
-
-### 1.5 Sequencing vs Phase 7 — build it CellSpec-shaped, don't wait for S7
-
-CellSpec/`TemplateSpec` don't exist yet (S7). Waiting blocks the feature on S4–S6; building an
-unrelated predicate language creates a rival vocabulary. The middle path: give the v1 lineage model
-**exactly the Phase-7 §3.2 predicate vocabulary** (a subset of `RowPredicate` fields + a `Sum`
-binding), hand-author the single registry entry for the example cell, and record that S7/S8
-supersede the hand-authored entry by generating lineage records from `TemplateSpec`s. The v1
-tie-out test then doubles as an early pin of the C07 predicate — de-risking the S8 C07 strangler
-(F4).
+Rev 1's model covered exactly one hand-authored cell. Reading the real specs means the *mechanism*
+covers **every cell of every declarative template** — roughly 20 templates across COREP and
+Pillar 3 — with per-template wiring that is a few lines each (§2.2). v1 still ships **C 07.00 only**
+as the wired, tested, documented example (the requested thin slice); the rest are a clean 404 and a
+short registration.
 
 ---
 
 ## 2. Target design
 
-### 2.1 Data model — `src/rwa_calc/reporting/lineage.py` (new module)
+### 2.1 The one structural obstacle, and the fix
 
-All frozen dataclasses; no Polars namespace registration; module logger; full type hints.
+`execute(spec, frame, ctx)` does **not** see the sealed ledger. It sees a frame the template module
+prepared. For C 07.00 (`c07.py:197-224`) that is four steps:
+
+1. `c07_population(results, cols)` — SA book (`reporting_approach_origin == "standardised"`) plus
+   FCCM SFT synthetics (`risk_type == "CCR_SFT"`); SA-CCR derivatives excluded (they report C 34).
+2. Art. 112(1)(g) merge — `specialised_lending` rows relabelled `corporate` before keying.
+3. `_prepare(...)` — the module-derived discriminator columns (`c07_defaulted`, `c07_rw_band`,
+   `c07_ccf_bucket`, `c07_bs`, `c07_substituted`, …) that the row predicates key on.
+4. Partition by `reporting_class_origin` → one sheet per obligor class.
+
+A lineage module that re-implemented those four steps would be exactly the drifting copy §1 rejects.
+
+**Fix — extract, don't duplicate.** Refactor `generate_c07` to build its execution plan through a
+new module-public function, and have both the generator and lineage consume it:
+
+```python
+# reporting/corep/c07.py  (number-neutral extraction of the existing body)
+@dataclass(frozen=True)
+class SheetPlan:
+    spec: TemplateSpec
+    frame: pl.DataFrame            # the prepared, partitioned sheet frame
+    ctx: ReportingContext
+    row_terms: dict[str, _Terms | None]
+    negative_cols: frozenset[str]  # the Annex II §1.3 "(-)" post-pass set
+
+def c07_plans(results, cols, framework, errors) -> dict[str, SheetPlan]: ...
+
+def generate_c07(results, cols, framework, errors) -> dict[str, pl.DataFrame]:
+    return {
+        sheet: _negate_deduction_cols(_null_empty_rows(execute(p.spec, p.frame, p.ctx), ...))
+        for sheet, p in c07_plans(results, cols, framework, errors).items()
+    }
+```
+
+This is a mechanical extraction of code that already exists, gated by the 95 goldens (the C 07.00
+goldens are structure-exact + rtol 1e-9). It is the only change to an existing production module in
+the whole feature.
+
+### 2.2 The generic lineage model — `src/rwa_calc/reporting/lineage.py` (new)
+
+Frozen dataclasses, `from __future__ import annotations`, no upward imports (arch check 12:
+`reporting` may not import `rwa_calc.api` / `rwa_calc.ui`, even under `TYPE_CHECKING` — so the entry
+point takes the **`ResultsSource`** protocol at `reporting/metadata.py:41`, exactly as the
+generators do).
 
 ```python
 @dataclass(frozen=True)
-class LineagePredicate:
-    """Row-selection criteria, compiled to a single pl.Expr against sealed column names.
-
-    Field vocabulary deliberately mirrors the Phase 7 §3.2 RowPredicate so S7 can absorb it.
-    Only sealed AGGREGATOR_EXIT_EDGE names — no candidate ladders (Phase 7 invariant 5).
-    """
-    approaches: tuple[str, ...] = ()          # approach_applied ∈ …
-    include_risk_types: tuple[str, ...] = ()  # OR-branch: risk_type ∈ … (e.g. CCR_SFT)
-    classes: tuple[str, ...] = ()             # exposure_class_applied ∈ …
-    leg_role: str | None = None               # reporting_leg_role
-    on_balance_sheet: bool | None = None      # reporting_on_balance_sheet
+class FilterTerm:
+    """One human-readable criterion: column, op, value, and whether it is a
+    SEALED ledger column or a module-derived discriminator."""
+    column: str
+    op: Literal["eq", "in", "between", "any_of"]
+    value: object
+    source: Literal["ledger", "derived"]
 
 @dataclass(frozen=True)
-class LineageMetric:
-    kind: Literal["sum"]                      # v1: Sum only (kind 1, the dominant taxonomy kind)
-    column: str                               # e.g. "rwa_final"
+class CellQuery:
+    """The run-INDEPENDENT lineage record, read off the TemplateSpec."""
+    template_id: str                     # "c07_00" — the ReportingTemplateSet id space
+    sheet: str | None                    # "corporate" (None for single-frame templates)
+    row_ref: str                         # "0010"
+    col_ref: str                         # "0220"
+    row_name: str
+    kind: Literal["rows", "formula", "side_context", "prior_period",
+                  "constant", "unbound"]
+    metric: str | None                   # "sum" | "safe_sum" | "weighted_avg" | ...
+    metric_columns: tuple[str, ...]      # ("rwa_final",)
+    filter_terms: tuple[FilterTerm, ...] # template predicate ∧ cell predicate, flattened
+    scope: tuple[str, ...]               # the module scope steps (§2.1) in words
+    refs: tuple[str, ...]                # Formula: the cells it derives from
+    basis: str = "aggregator_exit"       # the sealed edge the query runs on
+    sign: Literal["positive", "negated"] = "positive"   # Annex II §1.3 post-pass
 
 @dataclass(frozen=True)
 class CellLineage:
-    template_id: str                          # "C_07.00"
-    sheet: str | None                         # exposure-class sheet key, e.g. "corporate"
-    row_ref: str                              # "0010"
-    col_ref: str                              # "0220"
-    label: str                                # human-readable cell name
-    metric: LineageMetric
-    predicate: LineagePredicate
-    basis: str = "aggregator_exit"            # sealed edge the query runs on
-    citation: str | None = None               # e.g. "Reg 2021/451 Annex I, C 07.00"
+    """The answer for ONE run."""
+    query: CellQuery
+    run_id: str
+    cell_value: float | None        # AS REPORTED — read from the generated template
+    contribution_total: float | None  # recomputed from the contributing rows
+    total_rows: int
+    rows: pl.DataFrame              # paginated projection
 ```
 
-Registry + resolution + execution (module-level, plain typed functions):
+**The six `kind`s are the honest answer to "which rules contributed", and they fall straight out of
+the binding vocabulary** — this is what makes the model generic rather than C07-shaped:
+
+| kind | when | what the drill-down shows |
+|---|---|---|
+| `rows` | `Sum`/`SafeSum`/`Mean`/`WeightedAvg`/`Ratio`/`Count`/`FirstNonNull` | the contributing ledger legs (the main journey) |
+| `formula` | `Formula` (C07 0040/0110/0150 waterfalls) | the referenced cells — "derived from 0010 − 0030", not rows |
+| `side_context` | `SideContext` (C07 0100 substitution inflow) | the out-of-frame value + its `ReportingContext` key |
+| `prior_period` | `PriorPeriod` (CR8, C 08.04 opening RWEA) | the prior run's rows |
+| `constant` | the structural-null Formulas (0210/0211/0240; 0230/0235 when `sa_cqs` is unsealed) | "not produced — permanently null (Phase 7 F6)" |
+| `unbound` | no CellSpec | "template empty-cell policy: 0.0 (COREP) / null (Pillar 3)" |
+
+That last pair matters: the drill-down tells the truth about cells that are structurally empty
+rather than inventing a filter for them. Today a user cannot tell an empty cell from a
+never-produced one.
+
+Resolution + execution:
 
 ```python
-LINEAGE_REGISTRY: dict[tuple[str, str | None, str, str], CellLineage]  # ONE entry in v1
+type PlanFn = Callable[..., dict[str | None, SheetPlan]]
+LINEAGE_PLANS: dict[str, PlanFn] = {"c07_00": c07_plans}   # v1: one entry
 
-def resolve_cell(template_id, sheet, row_ref, col_ref) -> CellLineage | None
-def compile_predicate(p: LineagePredicate) -> pl.Expr
-def drilldown(results: pl.LazyFrame, cell: CellLineage, *, offset, limit) -> LineageDrilldown
+def describe_cell(plan, sheet, row_ref, col_ref) -> CellQuery         # spec -> record
+def drilldown(source: ResultsSource, template_id, sheet, row_ref, col_ref,
+              *, offset, limit) -> CellLineage | None                  # None = not instrumented
 ```
 
-`LineageDrilldown` (frozen) carries: `cell_value: float | None`, `total_rows: int`,
-`rows: pl.DataFrame` (paginated projection), `columns: tuple[str, ...]`. The row projection is a
-fixed explanatory set: `exposure_reference`, `source_exposure_reference` (if sealed; else derived
-by suffix-strip), `reporting_leg_role`, `reporting_class`, `reporting_class_origin`,
-`reporting_method`, `ead_final`, `risk_weight`, `rwa_final`, `sa_cqs`. Sorted `rwa_final`
-descending so the biggest contributors surface first.
+Extending to any other declarative template = extract its `*_plans` the same way and add one
+`LINEAGE_PLANS` entry. **C 34.01/02/04/08 and CCR1/2/3/8 remain imperative** (never strangled —
+the Phase 7 S8-pre deferral) and therefore have **no** lineage; they 404 with that reason. This is
+stated in the doc page rather than hidden.
 
-The v1 registry entry:
+### 2.3 Two honesty requirements (new in rev 2 — post-passes did not exist in rev 1's model)
 
-```python
-CellLineage(
-    template_id="C_07.00", sheet="corporate", row_ref="0010", col_ref="0220",
-    label="Corporates — risk weighted exposure amount post supporting factors",
-    metric=LineageMetric("sum", "rwa_final"),
-    predicate=LineagePredicate(
-        approaches=("standardised",),
-        include_risk_types=("CCR_SFT",),
-        classes=("corporate", "specialised_lending"),   # Art. 112(1)(g) SL merge
-    ),
-    citation="Reg 2021/451 Annex I, C 07.00 col 0220; CRR Art. 112(1)(g)",
-)
+The rendered template cell is **not** the raw executor output. Two module post-passes run after
+`execute()`:
+
+- `_null_empty_rows` — a row whose subset is empty renders **all-null**, not zeros.
+- `_negate_deduction_cols` — Annex II §1.3 "(-)"-labelled columns (`0030 0035 0050 0060 0070 0080
+  0090 0130 0140`) are **negated** after the waterfalls consumed positive magnitudes.
+
+So a drill-down that recomputes a cell from rows can legitimately disagree in *sign* with what the
+user clicked. v1 handles this explicitly rather than accidentally:
+
+1. **`cell_value` is read from the generated template frame** — the number the user actually saw is
+   ground truth, never recomputed.
+2. **`contribution_total` is the sum over the returned rows**, and `CellQuery.sign` records whether
+   the column is in the negation set. A test asserts `cell_value == ±contribution_total` per the
+   recorded sign policy. (The example cell, 0220, is `positive` — but the model is correct for the
+   deduction columns from day one.)
+
+### 2.4 Grain warning (carried from rev 1 — still load-bearing)
+
+Contributing rows are **legs**, not exposures: guaranteed exposures are physically split into
+`__G_<guarantor>` / `__REM` / `__REM_FL` / `__REM_SEN`. The row projection therefore always carries
+`exposure_reference`, `source_exposure_reference`, `reporting_leg_role`, `reporting_class`,
+`reporting_class_origin`, `reporting_method`, `reporting_ead`, `risk_weight`, `rwa_final`, and
+`guarantee_rwa_benefit` (sealed at Phase 7 F8) — sorted by the metric column descending, so the
+biggest contributors surface first. The doc page explains the two-leg ledger in one paragraph.
+
+*(C 07.00 keys the obligor-origin class, so its sheets do not mix in guarantor-class inflow legs —
+the columns are returned anyway so the model generalises unchanged to post-substitution-keyed
+templates such as Pillar 3 CR5.)*
+
+### 2.5 API — one additive endpoint
+
+```
+GET /api/lineage?run_id=&template=c07_00&sheet=corporate&row=0010&col=0220&offset=0&limit=50
 ```
 
-Notes:
-- The predicate reads **exact sealed names** (`approach_applied`, `exposure_class_applied`,
-  `risk_type`, `rwa_final`) — no `_pick` ladders (Phase 7 invariant 5 / §9 ban). The legacy
-  generator's ladders exist for pre-existing frames; lineage only ever runs on sealed output.
-- The generator's `unique(subset=exposure_reference)` dedup after the SFT concat is defensive
-  (`standardised` and `CCR_SFT` are disjoint populations); a single OR filter is equivalent and
-  the tie-out test (§4, L4) proves it.
-- Framework-agnostic in v1: col 0220 exists in both CRR C 07.00 and B31 OF 07.00 with the same
-  filter semantics (B31 has no supporting factors, so post-SF ≡ RWEA). No regime branch anywhere
-  (check 17 stays trivially satisfied).
+Mirrors `GET /api/results` (`rest.py:221-237`) exactly: `_require_run(run_id)` → 404 on unknown run
+(reuse `_RESP_404`), `limit` clamped to `_MAX_PAGE`, `.fill_nan(None)` before `to_dicts()`, and the
+same envelope `{run_id, total, offset, limit, columns, rows}` — extended with `cell` (identity +
+`row_name` + citation), `kind`, `metric`, `filter_terms`, `scope`, `basis`, `sign`, `cell_value`,
+`contribution_total`. Echoing the predicate back makes the endpoint self-describing: that *is* the
+"filter criteria" field the request asked for.
 
-### 2.2 API — one additive endpoint in `api/rest.py`
+An uninstrumented template/cell → **404** with the reason (`"template c34_01 is not declarative —
+no lineage"` / `"unknown cell"`). No existing endpoint, model, or response shape changes.
 
-```
-GET /api/lineage?run_id=&template=C_07.00&sheet=corporate&row=0010&col=0220&offset=0&limit=50
-```
+### 2.6 UI — one page, recon-explorer pattern
 
-- Mirrors `GET /api/results` conventions exactly: `_require_run(run_id)` (404 unknown run),
-  `response.scan_results()`, `_df`-style `{columns, rows}` payload.
-- Unregistered cell → **404** with detail `"lineage not yet available for this cell"` — the
-  extensibility contract: adding coverage = adding registry entries, never an API change.
-- Response body: `{run_id, cell: {template, sheet, row, col, label, citation}, metric,
-  predicate: {…as declared…}, basis, cell_value, total_rows, offset, limit, columns, rows}`.
-  Returning the predicate verbatim makes the endpoint self-describing (the "filter criteria"
-  field of the requested model).
-- No existing endpoint changes. No new persistence: run retrieval reuses `_RUNS` + the calc-reuse
-  `run_index` exactly as `/api/results` does.
+`ui/views/lineage.py` (pure, no FastAPI/Jinja) → route `GET /results/{run_id}/lineage` in
+`ui/app/main.py::_register_pages` → `cell_lineage.html` (extends `base.html`): cell identity +
+citation, the reported value, the predicate rendered in plain English ("Standardised-approach legs,
+plus FCCM SFT rows, whose obligor class is corporate (specialised lending merged in per Art.
+112(1)(g))"), the scope steps, then the paginated contributors table. One link added from
+`results.html`.
 
-### 2.3 UI — one page following the recon-explorer pattern
+**Scope note (unchanged from rev 1):** the UI does not render COREP templates on screen — COREP is
+an export format today — so "click a cell in the report" cannot literally ship. v1 is the API plus a
+standalone drill-down page. Rendering clickable templates is now cheap to add later precisely
+because the templates are declarative.
 
-- `ui/views/lineage.py` — pure view function `cell_lineage_page(response, cell, offset, limit)`
-  (no FastAPI/Jinja imports), wrapping `reporting.lineage.drilldown` and formatting for display —
-  mirrors `ui/views/reconciliation.py::forensic_page`.
-- Route `GET /results/{run_id}/lineage` in `main.py::_register_pages` (query params for cell key +
-  paging, defaulting to the one registered cell) → `cell_lineage.html` extends `base.html`:
-  cell identity + citation, headline cell value, the predicate rendered as plain English
-  ("Standardised approach rows (plus FCCM SFT synthetics) in classes corporate,
-  specialised-lending"), paginated contributors table with leg-role/class-origin columns.
-- One link from `results.html` ("Report cell lineage") — the only touch to an existing template.
+### 2.7 What this deliberately does not touch
 
-### 2.4 What this deliberately does NOT touch
-
-- **No single-stream files**: `contracts/edges.py`, `engine/aggregator/*`, `contracts/bundles.py`,
-  `engine/pipeline.py` are untouched — S2 already sealed every needed column.
-- **No generator changes**: COREP output is byte-identical; the 95 goldens are untouched by
-  construction.
-- **No lineage persistence**: nothing new written to `$RWA_STATE_DIR`.
+No engine, aggregator, contracts, or edge change (Phase 7 sealed every column needed). No generator
+behaviour change — the only production edit to existing code is the number-neutral `c07_plans`
+extraction inside `c07.py`. No new persistence. No changes to the 95 goldens.
 
 ---
 
-## 3. Mapping to the requested model (for the record)
+## 3. Mapping to the requested data model
 
 | Requested field | Where it landed |
 |---|---|
-| run ID | runtime parameter of the drill-down (spec is run-independent) |
-| template ID / cell ID | `CellLineage.template_id/sheet/row_ref/col_ref` registry key |
-| metric | `LineageMetric` (v1: `Sum`) |
-| filter criteria | `LineagePredicate` (typed fields → one `pl.Expr`) |
+| run ID | runtime parameter (`CellLineage.run_id`); the query itself is run-independent |
+| template ID | `CellQuery.template_id` — the existing `ReportingTemplateSet` id space (`c07_00`, `cr5`, …) |
+| cell ID | `(sheet, row_ref, col_ref)` |
+| metric | `CellQuery.kind` + `metric` + `metric_columns`, read off the `ValueBinding` |
+| filter criteria | `CellQuery.filter_terms` + `scope`, read off `RowPredicate` + the module plan |
 | source record IDs | **derived on demand, never stored** (§1.1) |
-| calculation stage | `basis` label (`aggregator_exit`) + per-row explanatory columns; cross-stage provenance deferred (§1.2, §7) |
+| calculation stage | `basis` (`aggregator_exit`) + `scope` (population → merge → derive → partition) + the per-row explanatory columns. Cross-stage per-row provenance stays out of scope (§6). |
 
 ---
 
-## 4. Execution slices (each independently green; total ≈ 4 PR-sized steps or 1 feature PR)
+## 4. Execution slices
 
-### L1 — Lineage core (`reporting/lineage.py`) + unit tests
-- Model, registry (one entry), `compile_predicate`, `drilldown`.
-- `tests/unit/reporting/test_lineage.py`: predicate compilation (each field, combinations,
-  empty predicate rejected), sum over a hand-built frame, pagination/sort, unknown-cell resolution,
-  empty-results run → `cell_value = 0.0` per COREP zero policy, and a **sealed-names guard**: every
-  column referenced by every registry entry (predicate + metric + row projection) is asserted to be
-  declared on `AGGREGATOR_EXIT_EDGE` — mechanically enforcing Phase 7 invariant 5 for this module.
-- Gate: arch_check, ruff, ty, unit tests.
+### L1 — `c07_plans` extraction (NUMBER-NEUTRAL)
+Extract the plan-building body of `generate_c07` into `c07_plans(...) -> dict[str, SheetPlan]`;
+`generate_c07` becomes its consumer. **Gate:** C 07.00 goldens structure-identical (rtol 1e-9);
+`tests/unit/reporting/corep/test_c07.py` green; full unit suite green.
 
-### L2 — Fidelity tie-out (the load-bearing test)
-- `tests/acceptance/reporting/test_lineage_tieout.py`: run the rich
-  `tests/fixtures/reporting_portfolio.py` through the **real pipeline** (reuse the golden-gate
-  session fixture), generate C 07.00 via `COREPGenerator`, read corporates sheet / row 0010 /
-  col 0220, and assert `drilldown(...).cell_value` matches **rtol 1e-9 / atol 1e-6** (the recorded
-  golden tolerance — never byte-exact). Membership sanity: every returned row satisfies the
-  declared predicate; row count > 0.
-- This test is the feature's correctness anchor AND an early pin of the C07 predicate for the S8
-  strangler (F4 support).
-- Gate: acceptance test green in the default dev-loop profile.
+### L2 — `reporting/lineage.py` + unit tests
+The model, `LINEAGE_PLANS` (one entry), `describe_cell`, `drilldown`.
+`tests/unit/reporting/test_lineage.py`: a `CellQuery` for each of the six `kind`s off the real C07
+spec (rows / formula 0040 / side_context 0100 / constant 0210 / unbound / prior_period via a CR8
+spec once instrumented); predicate flattening incl. `any_of` and `between`; ledger-vs-derived term
+classification; pagination + sort; unknown cell → None.
+**Arch constraints:** no `rwa_calc.api` / `rwa_calc.ui` import (check 12); **no multi-candidate
+`pick(cols, a, b)`** — the `reporting_multi_candidate_picks` ratchet is at 30 and may not increase;
+module ≤ 2,010 LOC and the new test file ≤ 1,581 LOC (existing MAX ratchets — ample headroom).
 
-### L3 — REST endpoint + integration tests
-- `GET /api/lineage` per §2.2; tests alongside the existing `/api/results` TestClient tests:
-  200 happy path (value + rows + predicate echo), 404 unknown run, 404 unregistered cell,
-  paging params, additive-API guard (existing endpoint tests untouched).
+### L3 — Fidelity tie-out (the correctness anchor)
+`tests/acceptance/reporting/test_lineage_tieout.py`: run `tests/fixtures/reporting_portfolio.py`
+through the real pipeline (reuse the golden-gate fixture), generate the COREP bundle, and for
+C 07.00 / corporate assert:
+(a) `drilldown(...).cell_value` equals the bundle's cell (rtol 1e-9);
+(b) `contribution_total == ±cell_value` per the recorded `sign` policy;
+(c) every returned row satisfies the declared predicate; `total_rows > 0`;
+(d) **sweep**: for *every* row×column of the corporates sheet, the lineage `kind` is consistent with
+the rendered cell (a `rows` cell with an empty subset renders null; a `constant` cell renders null).
+That sweep is what makes the model trustworthy beyond the one showcased cell.
 
-### L4 — UI page
-- `ui/views/lineage.py` + route + `cell_lineage.html` + one link from `results.html`.
-- View unit tests mirroring the existing `ui/views` test style (pure-function tests, no server).
+### L4 — `GET /api/lineage` + integration tests
+Happy path (value, rows, predicate echo), 404 unknown run, 404 uninstrumented template, 404 unknown
+cell, paging clamps. Existing `/api/results` tests untouched (additive-API guard).
 
-### L5 — Docs + changelog
-- One docs page (e.g. `docs/reporting/cell-lineage.md`, added to zensical nav): the journey, the
-  query-not-materialised design decision, the two-leg ledger caveat (§1.3), API shape, extension
-  path (§6), current coverage (one cell) and how to add a cell.
-- `docs/appendix/changelog.md` entry under Unreleased.
-- `uv run zensical build` green.
+### L5 — UI page + view unit tests (§2.6).
 
-**Suggested delivery:** single feature branch, L1→L5 as separate commits, one PR. Nothing here
-forces single-stream handling; it can run as a normal `/next-items`-style worktree item if batched.
+### L6 — Docs + changelog
+`docs/reporting/cell-lineage.md` (nav-registered): the journey, the query-not-materialised decision,
+the two-leg ledger caveat, the six cell kinds, the sign/null post-pass caveat, current coverage
+(C 07.00; C 34/CCR excluded and why), and the ~10-line recipe to instrument the next template.
+`docs/appendix/changelog.md` under Unreleased. `uv run zensical build` green.
 
----
-
-## 5. Invariants (inherited + local)
-
-1. Additive only: no existing endpoint, template, bundle, or edge changes; goldens untouched.
-2. Lineage reads only sealed `AGGREGATOR_EXIT_EDGE` names + `CalculationResponse` paths — no
-   candidate ladders, no unsealed frames (Phase 7 invariants 4 & 5).
-3. The tie-out test compares against the real generator output at rtol 1e-9 — if the generator and
-   the predicate ever drift, the suite fails; the registry entry is corrected (or the drift is a
-   found generator bug — escalate, don't paper over).
-4. No regime string-branching in lineage code (check 17 discipline; v1 entry is regime-agnostic).
-5. Unknown cells are a clean 404, not a fallback computation.
+**Delivery:** one feature branch, L1–L6 as separate commits, one PR. Nothing here touches the
+forced-single-stream file list, so it can also run as a normal `/next-items` worktree item.
 
 ---
 
-## 6. Extension path (recorded, not built)
+## 5. Invariants
 
-- **S7/S8 supersession:** when `TemplateSpec`/CellSpec land, lineage records are *generated* from
-  the specs (predicate and binding are the same objects), the hand-authored registry entry is
-  deleted, and drill-down coverage becomes automatic for every migrated template. The v1 module is
-  designed so this is a source swap, not a redesign.
-- **More metrics:** `WeightedAvg`/`Ratio`/`Count` arrive with the S7 kernel primitives — lineage
-  reuses them rather than growing its own.
-- **Per-row "why" enrichment:** join `floor_impact` / `supporting_factor_impact` (and F8's
-  `rwa_benefit` once decided) into the drill-down row projection.
-- **Vertical provenance:** row → stage/rule trail via the opt-in `audit_cache` (per-run parquets)
-  — a separate plan when demanded.
-- **Rendered templates with clickable cells:** after S8 migrates templates through the executor.
+1. **Additive only** — no existing endpoint/bundle/edge/template output changes; goldens untouched.
+2. **One source of truth** — lineage reads the same `TemplateSpec` object the generator executes.
+   A lineage module that re-implements a template's row selection is the failure mode; if a
+   template's plan cannot be extracted, it is not instrumented (404), never re-derived.
+3. **Reported value wins** — `cell_value` comes from the generated template, never recomputed.
+4. **Reads only the sealed ledger + `ReportingContext`** (Phase 7 invariant 4). Note: the sealed-
+   column read-allowlist ratchet was *deferred* at Phase 7 Sn (it would fail on the F6 columns), so
+   this is a review criterion here, not a machine check.
+5. **Uninstrumented = clean 404**, never a fallback computation.
 
 ---
 
-## 7. Out of scope for v1 (explicit)
+## 6. Out of scope for v1 (explicit)
 
-1. Materialised lineage tables/parquets (banned by design, §1.1).
-2. Cross-stage provenance graphs (§1.2).
-3. Coverage beyond the one registered cell (the model covers it; the registry doesn't yet).
-4. Formula cells (C07 0040/0110/0150) — need `Formula` bindings; deferred to S7 vocabulary.
-5. Any COREP/Pillar 3 generator refactor — that is Phase 7 S8's job.
+1. Materialised lineage tables (banned by design, §1.1).
+2. Cross-stage per-row provenance (row → which rule/stage set this RW). The vertical axis has
+   partial machinery already (`floor_impact`, `supporting_factor_impact`, `guarantee_rwa_benefit`,
+   the opt-in `audit_cache`, `classify/audit.py`); a provenance graph is its own plan.
+3. Templates beyond C 07.00 (mechanism is generic; wiring is per-template and cheap).
+4. C 34.x / CCR1/2/3/8 — still imperative; no spec to read (Phase 7 S8-pre deferral).
+5. Rendered, clickable COREP/Pillar 3 templates in the UI.

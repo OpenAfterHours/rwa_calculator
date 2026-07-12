@@ -44,6 +44,7 @@ from rwa_calc.api.rest import (
     get_recon_workspace,
     get_reconciliation,
     get_run,
+    get_template_bundles,
     register_recon_workspace,
     register_reconciliation_with_id,
     register_run_with_id,
@@ -87,6 +88,7 @@ from rwa_calc.ui.app.recon_state import (
 from rwa_calc.ui.views import charts, method_split
 from rwa_calc.ui.views import comparison as comparison_view
 from rwa_calc.ui.views import reconciliation as reconciliation_view
+from rwa_calc.ui.views import report_templates as report_templates_view
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable, Mapping, Sequence
@@ -395,6 +397,36 @@ def _register_pages(app: FastAPI) -> None:
             context=_nav(
                 _results_context(run_id, response, save_outcome=_EXPORT_OUTCOMES.get(run_id))
             ),
+        )
+
+    @app.get("/results/{run_id}/templates", response_class=HTMLResponse)
+    def report_templates(
+        request: Request,
+        run_id: str,
+        template: str | None = None,
+        sheet: str | None = None,
+    ) -> HTMLResponse:
+        """Render one COREP / Pillar III template sheet for a completed run.
+
+        The bundles are generated once per run and cached (``get_template_bundles``),
+        so switching template or sheet is a re-render, not a re-generation.
+        """
+        response = get_run(run_id)
+        bundles = get_template_bundles(run_id)
+        if response is None or bundles is None:
+            return _not_found(request, "That result has expired or does not exist.")
+        page = report_templates_view.template_page(
+            bundles.corep,
+            bundles.pillar3,
+            run_id=run_id,
+            framework=response.framework,
+            template_id=template or None,
+            sheet=sheet or None,
+        )
+        return templates.TemplateResponse(
+            request=request,
+            name="report_templates.html",
+            context=_nav({"page": page}),
         )
 
     @app.post(

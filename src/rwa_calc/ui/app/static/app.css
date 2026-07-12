@@ -244,3 +244,12 @@ table.data tbody tr.chain-driver .driver-name { padding-left: 24px; font-family:
   width: 4px; height: 9px; border: solid var(--oah-slate-900);
   border-width: 0 2px 2px 0; transform: rotate(45deg);
 }
+
+/* --- Report-template grid ------------------------------------------------
+   Regulatory cells are numeric and read column-wise, so they are right-aligned
+   and monospaced. A null cell (an empty/inert row, or a source the engine never
+   produces) must read differently from a reported 0.0 — conflating the two
+   would misstate the return, so nulls are dimmed rather than blank-and-equal. */
+table.data td.num { text-align: right; font-family: var(--font-mono); }
+table.data td.num.is-null { color: var(--oah-slate-400); opacity: 0.5; }
+table.data thead th[colspan] { text-align: center; border-left: 1px solid rgba(216,222,233,0.10); }

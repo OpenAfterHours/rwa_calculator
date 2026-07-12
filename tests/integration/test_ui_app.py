@@ -17,6 +17,7 @@ Key responsibilities tested:
 
 from __future__ import annotations
 
+import re
 import time
 from datetime import date
 from pathlib import Path
@@ -138,6 +139,89 @@ def test_results_page_splits_rwa_by_class_by_method(client: TestClient, data_dir
     assert "EAD by exposure class" in page
     assert page.count('class="method-subtitle"') >= 2
     assert ">STD<" in page
+
+
+def test_results_page_links_the_template_viewer(client: TestClient, data_dir: str) -> None:
+    # Arrange — run a calculation to completion
+    resp = client.post(
+        "/calculate",
+        data={"data_path": data_dir, "reporting_date": "2025-01-01"},
+        follow_redirects=False,
+    )
+    job_id = resp.headers["location"].rsplit("/", 1)[1]
+    _wait_for_job(client, job_id)
+
+    # Act
+    page = client.get(f"/results/{job_id}").text
+
+    # Assert — the viewer is reachable from the run, not just by URL surgery.
+    assert f"/results/{job_id}/templates" in page
+
+
+def test_template_viewer_renders_cells_keyed_for_drilldown(
+    client: TestClient, data_dir: str
+) -> None:
+    # Arrange — run a calculation to completion
+    resp = client.post(
+        "/calculate",
+        data={"data_path": data_dir, "reporting_date": "2025-01-01"},
+        follow_redirects=False,
+    )
+    job_id = resp.headers["location"].rsplit("/", 1)[1]
+    _wait_for_job(client, job_id)
+
+    # Act — C 07.00, corporate sheet (the SA corporate loan's sheet)
+    page = client.get(
+        f"/results/{job_id}/templates",
+        params={"template": "c07_00", "sheet": "corporate"},
+    )
+
+    # Assert — every value cell carries its full cell key (template, sheet, row,
+    # col). This is the address the lineage drill-down attaches to; it must not
+    # regress into an anonymous grid.
+    assert page.status_code == 200
+    html = page.text
+    assert "C 07.00" in html
+    cell = re.search(
+        r'data-template="c07_00"\s+data-sheet="corporate"\s+'
+        r'data-row="0010"\s+data-col="0220">([^<]+)<',
+        html,
+    )
+    assert cell is not None, "C 07.00 row 0010 / col 0220 is not addressable by its cell key"
+    assert cell.group(1).strip(), "the keyed RWEA cell rendered empty"
+
+
+def test_template_viewer_distinguishes_null_from_reported_zero(
+    client: TestClient, data_dir: str
+) -> None:
+    # Arrange — run a calculation to completion
+    resp = client.post(
+        "/calculate",
+        data={"data_path": data_dir, "reporting_date": "2025-01-01"},
+        follow_redirects=False,
+    )
+    job_id = resp.headers["location"].rsplit("/", 1)[1]
+    _wait_for_job(client, job_id)
+
+    # Act
+    html = client.get(
+        f"/results/{job_id}/templates",
+        params={"template": "c07_00", "sheet": "corporate"},
+    ).text
+
+    # Assert — an empty/not-reported cell is marked null and rendered with the
+    # null glyph; a reported 0.0 is not. Conflating the two misstates the return.
+    assert "is-null" in html
+    assert "—" in html
+    assert ">0<" in html
+
+
+def test_template_viewer_unknown_run_is_not_found(client: TestClient) -> None:
+    # Act
+    resp = client.get("/results/does-not-exist/templates")
+
+    # Assert
+    assert resp.status_code == 404
 
 
 def test_results_page_offers_download_buttons(client: TestClient, data_dir: str) -> None:

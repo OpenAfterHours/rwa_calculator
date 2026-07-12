@@ -67,6 +67,7 @@ nav = [
     { "Classification" = "features/classification.md" },
     { "COREP Reporting" = "features/corep-reporting.md" },
     { "Pillar III Disclosures" = "features/pillar3-disclosures.md" },
+    { "Report Template Viewer" = "features/report-template-viewer.md" },
   ]},
   { "Data Model" = [
     "data-model/index.md",

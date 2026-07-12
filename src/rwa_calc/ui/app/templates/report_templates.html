@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Report templates — RWA Calculator{% endblock %}
+
+{% block content %}
+<p class="muted"><a href="/results/{{ page.run_id }}">← Back to results</a></p>
+<h1>Report templates <span class="muted mono">· {{ page.framework }}</span></h1>
+
+{% if not page.templates %}
+<div class="callout info">This run produced no report templates.</div>
+{% else %}
+<p class="muted">The COREP and Pillar III templates generated from this run, exactly as they export.
+Cells are shown as the generator produced them — a blank cell (<span class="mono">—</span>) is an
+empty or not-reported cell, which is <em>not</em> the same as a reported <span class="mono">0</span>.</p>
+
+<form class="form" method="get" action="/results/{{ page.run_id }}/templates">
+  <div class="field-row">
+    <div class="field">
+      <label for="template">Template</label>
+      <select id="template" name="template" onchange="this.form.sheet.value=''; this.form.submit()">
+        {% for family, label in [("corep", "COREP"), ("pillar3", "Pillar III")] %}
+        <optgroup label="{{ label }}">
+          {% for info in page.templates if info.family == family %}
+          <option value="{{ info.id }}"{% if page.selected and info.id == page.selected.id %} selected{% endif %}>{{ info.title }}</option>
+          {% endfor %}
+        </optgroup>
+        {% endfor %}
+      </select>
+    </div>
+    {% if page.selected and page.selected.sheets %}
+    <div class="field">
+      <label for="sheet">{{ page.selected.sheet_label or "Sheet" }}</label>
+      <select id="sheet" name="sheet" onchange="this.form.submit()">
+        {% for key in page.selected.sheets %}
+        <option value="{{ key }}"{% if key == page.sheet %} selected{% endif %}>{{ key }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% else %}
+    <input type="hidden" name="sheet" value="">
+    {% endif %}
+    <div class="field">
+      <button class="btn btn-ghost" type="submit">Show</button>
+    </div>
+  </div>
+</form>
+
+{% if page.selected %}
+<div class="panel">
+  <h3>{{ page.selected.title }}{% if page.sheet %} <span class="muted mono">· {{ page.sheet }}</span>{% endif %}</h3>
+  <div class="table-wrap">
+    <table class="data" data-template="{{ page.selected.id }}" data-sheet="{{ page.sheet or '' }}">
+      <thead>
+        {% if page.groups %}
+        <tr>
+          <th colspan="2"></th>
+          {% for group in page.groups %}<th colspan="{{ group.span }}">{{ group.name }}</th>{% endfor %}
+        </tr>
+        {% endif %}
+        <tr>
+          <th>Row</th>
+          <th>Name</th>
+          {% for col in page.columns %}<th title="{{ col.name }}">{{ col.ref }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in page.rows %}
+        <tr>
+          <td class="mono">{{ row.row_ref }}</td>
+          <td>{{ row.row_name }}</td>
+          {% for cell in row.cells %}
+          <td class="num{% if cell.is_null %} is-null{% endif %}"
+              data-template="{{ page.selected.id }}"
+              data-sheet="{{ page.sheet or '' }}"
+              data-row="{{ row.row_ref }}"
+              data-col="{{ cell.ref }}">{{ cell.display }}</td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="callout info">That template is not available for this run.</div>
+{% endif %}
+{% endif %}
+{% endblock %}

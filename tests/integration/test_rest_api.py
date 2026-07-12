@@ -175,6 +175,91 @@ def test_results_unknown_run_id_is_404(client: TestClient) -> None:
     assert resp.status_code == 404
 
 
+# =============================================================================
+# Report templates (GET /api/templates, GET /api/templates/{template_id})
+# =============================================================================
+
+
+def _run(client: TestClient, data_dir: str) -> str:
+    """Run a CRR calculation and return its run_id."""
+    run_id: str = client.post(
+        "/api/calculate",
+        json={
+            "data_path": data_dir,
+            "framework": "CRR",
+            "reporting_date": date(2025, 1, 1).isoformat(),
+            "permission_mode": "standardised",
+        },
+    ).json()["run_id"]
+    return run_id
+
+
+def test_templates_index_lists_the_generated_templates(client: TestClient, data_dir: str) -> None:
+    # Arrange
+    run_id = _run(client, data_dir)
+
+    # Act
+    resp = client.get("/api/templates", params={"run_id": run_id})
+
+    # Assert — the SA corporate loan produces C 07.00, keyed by exposure class.
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["framework"] == "CRR"
+    c07 = next(t for t in body["templates"] if t["id"] == "c07_00")
+    assert c07["title"].startswith("C 07.00")
+    assert c07["family"] == "corep"
+    assert c07["sheets"] == ["corporate"]
+
+
+def test_template_sheet_returns_headers_and_the_generated_cells(
+    client: TestClient, data_dir: str
+) -> None:
+    # Arrange
+    run_id = _run(client, data_dir)
+
+    # Act
+    resp = client.get("/api/templates/c07_00", params={"run_id": run_id, "sheet": "corporate"})
+
+    # Assert — col 0220 (RWEA) on row 0010 (total) carries the run's RWA.
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["sheet"] == "corporate"
+    headers = {col["ref"]: col for col in body["columns"]}
+    assert headers["0220"]["group"] == "RWEA"
+    assert headers["0220"]["name"] != "0220"  # a readable name, not the bare ref
+    total = next(row for row in body["rows"] if row["row_ref"] == "0010")
+    assert total["0220"] > 0
+
+
+def test_template_sheet_defaults_to_the_first_sheet(client: TestClient, data_dir: str) -> None:
+    # Arrange
+    run_id = _run(client, data_dir)
+
+    # Act — no sheet named
+    resp = client.get("/api/templates/c07_00", params={"run_id": run_id})
+
+    # Assert
+    assert resp.status_code == 200
+    assert resp.json()["sheet"] == "corporate"
+
+
+def test_templates_unknown_run_and_unknown_template_are_404(
+    client: TestClient, data_dir: str
+) -> None:
+    # Arrange
+    run_id = _run(client, data_dir)
+
+    # Act / Assert — an uninstrumented cell address is a clean 404, never a guess.
+    assert client.get("/api/templates", params={"run_id": "nope"}).status_code == 404
+    assert client.get("/api/templates/not_a_template", params={"run_id": run_id}).status_code == 404
+    assert (
+        client.get(
+            "/api/templates/c07_00", params={"run_id": run_id, "sheet": "retail"}
+        ).status_code
+        == 404
+    )
+
+
 def test_openapi_documents_calculate(client: TestClient) -> None:
     # Act
     schema = client.get("/openapi.json").json()

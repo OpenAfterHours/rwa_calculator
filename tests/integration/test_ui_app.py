@@ -193,6 +193,33 @@ def test_template_viewer_renders_cells_keyed_for_drilldown(
     assert re.sub(r"<[^>]+>", "", cell.group(1)).strip(), "the keyed RWEA cell rendered empty"
 
 
+def test_template_viewer_uses_the_full_width_with_frozen_row_labels(
+    client: TestClient, data_dir: str
+) -> None:
+    # Arrange — run a calculation to completion
+    resp = client.post(
+        "/calculate",
+        data={"data_path": data_dir, "reporting_date": "2025-01-01"},
+        follow_redirects=False,
+    )
+    job_id = resp.headers["location"].rsplit("/", 1)[1]
+    _wait_for_job(client, job_id)
+
+    # Act
+    html = client.get(
+        f"/results/{job_id}/templates",
+        params={"template": "c07_00", "sheet": "corporate"},
+    ).text
+
+    # Assert — a 28-column return is unreadable in a 1100px reading measure, and
+    # unusable if scrolling right loses the row labels. Both must hold together.
+    assert 'class="container container--wide"' in html
+    assert 'class="grid-wrap"' in html
+    assert html.count("rowhead-ref") > 30  # every row's label cell is frozen
+    assert html.count("rowhead-name") > 30
+    assert "28 columns" in html  # the width is stated, so it is not a surprise
+
+
 def test_template_viewer_distinguishes_null_from_reported_zero(
     client: TestClient, data_dir: str
 ) -> None:

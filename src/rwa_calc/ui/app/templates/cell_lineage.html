@@ -1,12 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Cell lineage — RWA Calculator{% endblock %}
+{% block container_mod %}container--wide{% endblock %}
 
 {% block content %}
-<p class="muted"><a href="{{ panel.back_url }}">← Back to {{ panel.template_title }}</a></p>
+<div class="page-intro">
+  <p class="muted"><a href="{{ panel.back_url }}">← Back to {{ panel.template_title }}</a></p>
 
-<h1>Cell lineage</h1>
-<p class="muted mono">{{ panel.template_title }}{% if panel.sheet %} · {{ panel.sheet }}{% endif %}
- · row {{ panel.row_ref }} · column {{ panel.col_ref }}</p>
+  <h1>Cell lineage</h1>
+  <p class="muted mono">{{ panel.template_title }}{% if panel.sheet %} · {{ panel.sheet }}{% endif %}
+   · row {{ panel.row_ref }} · column {{ panel.col_ref }}</p>
+</div>
 
 <div class="stat-row">
   <div class="stat">

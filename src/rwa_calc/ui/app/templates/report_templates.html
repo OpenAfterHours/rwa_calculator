@@ -11,6 +11,9 @@
 <p class="muted">The COREP and Pillar III templates generated from this run, exactly as they export.
 Cells are shown as the generator produced them — a blank cell (<span class="mono">—</span>) is an
 empty or not-reported cell, which is <em>not</em> the same as a reported <span class="mono">0</span>.</p>
+{% if page.selected and page.has_lineage %}
+<p class="muted">Click any cell to see which exposures and rules produced it.</p>
+{% endif %}
 
 <form class="form" method="get" action="/results/{{ page.run_id }}/templates">
   <div class="field-row">
@@ -72,7 +75,9 @@ empty or not-reported cell, which is <em>not</em> the same as a reported <span c
               data-template="{{ page.selected.id }}"
               data-sheet="{{ page.sheet or '' }}"
               data-row="{{ row.row_ref }}"
-              data-col="{{ cell.ref }}">{{ cell.display }}</td>
+              data-col="{{ cell.ref }}">{% if page.has_lineage %}<a class="cell-link"
+              href="/results/{{ page.run_id }}/lineage?template={{ page.selected.id }}&amp;sheet={{ page.sheet or '' }}&amp;row={{ row.row_ref }}&amp;col={{ cell.ref }}"
+              title="Explain this cell">{{ cell.display }}</a>{% else %}{{ cell.display }}{% endif %}</td>
           {% endfor %}
         </tr>
         {% endfor %}

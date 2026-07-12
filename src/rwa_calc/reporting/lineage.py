@@ -178,6 +178,16 @@ LINEAGE_PLANS: dict[str, _Provider] = {
 }
 
 
+def is_instrumented(template_id: str) -> bool:
+    """Whether this template's cells can be explained.
+
+    A template is instrumented when it exposes its execution plans, so lineage
+    can read the very spec the generator executes. Consumers use this to offer a
+    drill-down only where there is a truthful answer to give.
+    """
+    return template_id in LINEAGE_PLANS
+
+
 @dataclass(frozen=True)
 class SheetLineage:
     """A lineage resolver bound to one run and one template sheet.

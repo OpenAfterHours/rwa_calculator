@@ -5,6 +5,19 @@ Ask a reported figure where it came from: **which exposures and which rules prod
 Given a cell address — template, sheet, row ref, column ref — lineage answers what the cell *means*
 (its metric, its filter criteria, the scope of its population) and lists the ledger legs that fed it.
 
+## Using it
+
+Open the [report template viewer](report-template-viewer.md) for a run and **click any cell**. The
+drill-down page shows:
+
+- the **reported value**, the **sum of contributions**, and whether the two reconcile (allowing for the
+  deduction-column sign convention — a mismatch is flagged as a defect, not hidden);
+- what the cell measures, and the criteria a leg must satisfy to be counted;
+- the population the criteria were applied to;
+- the contributing exposure legs, largest first.
+
+Cells are only offered as links on templates that have lineage — a link never leads to a shrug.
+
 ## The key idea: lineage is a query, not an index
 
 A cell's lineage **is its specification**. Every declarative template is a `TemplateSpec` whose cells

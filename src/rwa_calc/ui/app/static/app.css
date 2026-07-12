@@ -253,3 +253,8 @@ table.data tbody tr.chain-driver .driver-name { padding-left: 24px; font-family:
 table.data td.num { text-align: right; font-family: var(--font-mono); }
 table.data td.num.is-null { color: var(--oah-slate-400); opacity: 0.5; }
 table.data thead th[colspan] { text-align: center; border-left: 1px solid rgba(216,222,233,0.10); }
+
+/* A clickable report cell: the figure stays the figure — the affordance is the
+   hover, not a coloured link, so the grid still reads like a regulatory return. */
+table.data td.num a.cell-link { color: inherit; text-decoration: none; display: block; }
+table.data td.num a.cell-link:hover { color: var(--oah-orange-bright); text-decoration: underline; }

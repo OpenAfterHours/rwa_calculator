@@ -79,8 +79,9 @@ viewer stamps that key on every rendered cell.
   CMS1/2, CCR1–8).
 - Read-only. The workbook exports (COREP / Pillar III) remain the submission artefacts; the viewer is
   for inspection.
-- Drill-down from a cell to its contributing exposures is **not yet implemented** — see
-  `docs/plans/report-cell-lineage.md`.
+- **Click a cell to see which exposures and rules produced it** — see
+  [Report Cell Lineage](report-cell-lineage.md). Cells are only clickable on templates that have
+  lineage (C 07.00 today).
 
 ## References
 

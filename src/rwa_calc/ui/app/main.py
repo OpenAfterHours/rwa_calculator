@@ -52,6 +52,8 @@ from rwa_calc.api.rest import (
 from rwa_calc.api.rest import router as api_router
 from rwa_calc.api.service import CreditRiskCalc, get_supported_frameworks
 from rwa_calc.api.validation import validate_data_path, validate_output_path
+from rwa_calc.reporting import catalog
+from rwa_calc.reporting import lineage as reporting_lineage
 from rwa_calc.ui.app.calculator_state import (
     CalculatorFormState,
     load_calculator_state,
@@ -87,6 +89,7 @@ from rwa_calc.ui.app.recon_state import (
 )
 from rwa_calc.ui.views import charts, method_split
 from rwa_calc.ui.views import comparison as comparison_view
+from rwa_calc.ui.views import lineage as lineage_view
 from rwa_calc.ui.views import reconciliation as reconciliation_view
 from rwa_calc.ui.views import report_templates as report_templates_view
 
@@ -427,6 +430,43 @@ def _register_pages(app: FastAPI) -> None:
             request=request,
             name="report_templates.html",
             context=_nav({"page": page}),
+        )
+
+    @app.get("/results/{run_id}/lineage", response_class=HTMLResponse)
+    def cell_lineage(  # noqa: PLR0913 - the cell key addresses one reported figure
+        request: Request,
+        run_id: str,
+        template: str,
+        row: str,
+        col: str,
+        sheet: str | None = None,
+    ) -> HTMLResponse:
+        """Explain one clicked template cell: its meaning, and the legs behind it."""
+        response = get_run(run_id)
+        bundles = get_template_bundles(run_id)
+        if response is None or bundles is None:
+            return _not_found(request, "That result has expired or does not exist.")
+
+        result = reporting_lineage.drilldown(
+            response, template, row, col, run_id=run_id, sheet=sheet or None, limit=200
+        )
+        view = catalog.template_sheet(bundles.corep, bundles.pillar3, template, sheet or None)
+        if result is None or view is None:
+            return _not_found(request, "That cell has no lineage.")
+
+        col_name = next((c.name for c in view.columns if c.ref == col), col)
+        back = f"/results/{run_id}/templates?template={template}&sheet={sheet or ''}"
+        panel = lineage_view.lineage_panel(
+            result,
+            run_id=run_id,
+            template_title=view.info.title,
+            col_name=col_name,
+            back_url=back,
+        )
+        return templates.TemplateResponse(
+            request=request,
+            name="cell_lineage.html",
+            context=_nav({"panel": panel}),
         )
 
     @app.post(

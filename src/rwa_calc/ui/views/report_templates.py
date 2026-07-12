@@ -31,7 +31,7 @@ import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from rwa_calc.reporting import catalog
+from rwa_calc.reporting import catalog, lineage
 
 if TYPE_CHECKING:
     from rwa_calc.reporting.corep.generator import COREPTemplateBundle
@@ -75,7 +75,12 @@ class ColumnGroup:
 
 @dataclass(frozen=True)
 class TemplatePage:
-    """Everything the viewer page renders for one run + one selected sheet."""
+    """Everything the viewer page renders for one run + one selected sheet.
+
+    ``has_lineage`` says whether this template's cells can be explained (see
+    ``reporting.lineage``). Cells are only offered as drill-down links where
+    there is a truthful answer to give — never a link that leads to a shrug.
+    """
 
     run_id: str
     framework: str
@@ -85,6 +90,7 @@ class TemplatePage:
     groups: tuple[ColumnGroup, ...]
     columns: tuple[catalog.ColumnHeader, ...]
     rows: tuple[TemplateRow, ...]
+    has_lineage: bool = False
 
 
 def template_page(
@@ -141,6 +147,7 @@ def template_page(
         groups=column_groups(view.columns),
         columns=view.columns,
         rows=_rows(view),
+        has_lineage=lineage.is_instrumented(view.info.id),
     )
 
 

@@ -594,9 +594,10 @@ def _add_reporting_projection(lf: pl.LazyFrame) -> pl.LazyFrame:
       folds the double-default override (Art. 153(3)) and the Art. 160(4)
       no-better-than-direct floor, so the benefit ties exactly to the relief
       the engine granted. 0.0 on retained/whole/non-beneficial legs; NULL
-      where the substitution machinery never ran (slotting legs — the
-      recorded zero-relief gap, deliberately NOT papered over as 0.0 — and
-      unguaranteed runs, where the branch columns are absent).
+      where the substitution machinery never ran (unguaranteed runs, where
+      the branch delta column is absent). Slotting legs substitute via
+      RWSM (Art. 235(1), fixed 2026-07-12) and carry real benefits on the
+      slotting borrower basis.
 
     Called after the residual multiplier and the output floor so the aliases
     mirror the sealed final values. Per-row post-floor RWA is deliberately NOT
@@ -619,8 +620,8 @@ def _add_reporting_projection(lf: pl.LazyFrame) -> pl.LazyFrame:
         .otherwise(pl.lit(None, dtype=pl.Boolean))
     )
     if "guarantee_benefit_rw" in lf.collect_schema().names():
-        # Null delta (slotting legs on guaranteed runs) stays null; the
-        # branch clamps non-beneficial legs to a 0.0 delta.
+        # Every branch (SA/IRB/slotting) produces the delta on guaranteed
+        # runs; non-beneficial legs are clamped to 0.0 at the branch.
         rwa_benefit = pl.col("ead_final") * pl.col("guarantee_benefit_rw")
     else:
         rwa_benefit = pl.lit(None, dtype=pl.Float64)

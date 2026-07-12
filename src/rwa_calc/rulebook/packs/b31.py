@@ -316,6 +316,18 @@ ENTRIES: dict[str, RuleEntry] = {
     # HVCRE risk-weight + EL splits and the PF pre-operational distinction.
     # Overrides the CRR Feature; selects the B31 table family in
     # engine/slotting/transforms.py.
+    "slotting_guarantee_substitution": Feature(
+        name="slotting_guarantee_substitution",
+        enabled=True,
+        citation=Citation(
+            "PS1/26",
+            "235",
+            "Part 3 CRM decision tree mandates the Risk-Weight Substitution "
+            "Method for slotting-approach exposures: Art. 235(1) blend "
+            "(guarantor SA RW on the covered part); Art. 235(1A) zeroes the "
+            "covered part's EL",
+        ),
+    ),
     "slotting_revised_tables": Feature(
         name="slotting_revised_tables",
         enabled=True,

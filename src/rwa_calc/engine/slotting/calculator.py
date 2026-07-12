@@ -46,10 +46,12 @@ from watchfire import cites
 from rwa_calc.contracts.errors import CalculationError
 from rwa_calc.engine.slotting.transforms import (
     apply_el_rates,
+    apply_guarantee_substitution,
     apply_slotting_weights,
     calculate_rwa,
     compute_el_shortfall_excess,
     prepare_columns,
+    zero_covered_expected_loss,
 )
 from rwa_calc.engine.supporting_factors import SupportingFactorCalculator
 from rwa_calc.rulebook import RulepackV0
@@ -114,14 +116,23 @@ class SlottingCalculator:
         exposures = (
             exposures.pipe(prepare_columns, config)
             .pipe(apply_slotting_weights, config, pack=pack)
+            # RWSM (Art. 235(1)): the covered __G_ leg takes the guarantor's
+            # SA RW when beneficial — BEFORE calculate_rwa (so rwa reflects
+            # the substituted RW) and BEFORE supporting factors / the floor
+            # (the F8 guarantee_benefit_rw snapshot basis).
+            .pipe(apply_guarantee_substitution, config, pack=pack)
             .pipe(calculate_rwa)
         )
 
         # Apply supporting factors (CRR Art. 501/501a) — same pattern as IRB
         exposures = self._apply_supporting_factors(exposures, config, errors=errors, pack=pack)
 
-        exposures = exposures.pipe(apply_el_rates, config, pack=pack).pipe(
-            compute_el_shortfall_excess, errors=errors
+        exposures = (
+            exposures.pipe(apply_el_rates, config, pack=pack)
+            # Art. 235(1A): the substituted covered part carries no slotting
+            # EL — zero it before the Art. 159 shortfall pool sees it.
+            .pipe(zero_covered_expected_loss, config, pack=pack)
+            .pipe(compute_el_shortfall_excess, errors=errors)
         )
 
         # Standardize output for aggregator

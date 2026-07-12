@@ -530,6 +530,20 @@ Setting `is_airb_model_collateral = True` is the firm's assertion that the colla
 
 ## Guarantee Substitution (CRR Art. 213-217)
 
+!!! note "Slotting-approach beneficiaries (RWSM — fixed 2026-07-12)"
+    Guaranteed **slotting** exposures substitute via the Risk-Weight
+    Substitution Method exactly like SA beneficiaries: the covered
+    ``__G_`` leg takes the guarantor's SA risk weight when beneficial, and
+    the covered part's Art. 158(6) slotting EL is zeroed (PS1/26
+    Art. 235(1)/(1A); the covered part is an exposure to a guarantor
+    treated under SA, which carries no slotting EL). Gated by the cited
+    pack Feature ``slotting_guarantee_substitution`` — enabled under BOTH
+    regimes by recorded operator decision (2026-07-12): PS1/26 Part 3
+    mandates RWSM; the CRR black-letter basis is recorded as unsettled
+    (COREP Annex II para 43 + the Art. 235 analogy) and reverts with a
+    one-line pack flag flip. Non-beneficial guarantees are never applied
+    (the guarantee cannot increase RWA or erase EL).
+
 ### Approach
 
 The guarantor's risk weight replaces the borrower's risk weight for the guaranteed portion of the exposure, but only when this is beneficial.

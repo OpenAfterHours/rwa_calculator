@@ -189,7 +189,8 @@ RECONCILABLE_COMPONENTS: tuple[ReconcilableComponent, ...] = (
         # RW)``, PRE-supporting-factor / PRE-floor, sealed by the aggregator.
         # Sums across split sub-rows to the key grain, so a guarantee-relief
         # mismatch gets its own component row instead of diffusing into the
-        # risk_weight/rwa deltas. Null = relief not modelled (slotting legs).
+        # risk_weight/rwa deltas. Null = relief not modelled (runs with
+        # no CRM guarantee sub-step).
         "guarantee_rwa_benefit",
         "numeric",
         our_columns=("guarantee_rwa_benefit",),

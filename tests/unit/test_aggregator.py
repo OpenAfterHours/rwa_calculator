@@ -1310,7 +1310,7 @@ class TestReportingProjection:
         assert AGGREGATOR_EXIT_EDGE.columns["reporting_leg_role"].citation == "CRR Art. 235"
         benefit = AGGREGATOR_EXIT_EDGE.columns["guarantee_rwa_benefit"]
         assert benefit.citation == "CRR Art. 235"
-        assert benefit.null_meaning is not None  # slotting gap must stay visible
+        assert benefit.null_meaning is not None  # null-not-zero contract stays documented
 
     def test_aliases_mirror_sealed_sources(
         self,

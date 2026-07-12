@@ -390,8 +390,15 @@
   "rwa_calc.engine.slotting.calculator::SlottingCalculator.calculate_branch": [
     "CRR Art. 153(5)"
   ],
+  "rwa_calc.engine.slotting.transforms::apply_guarantee_substitution": [
+    "CRR Art. 235",
+    "PS1/26, paragraph 235"
+  ],
   "rwa_calc.engine.slotting.transforms::apply_slotting_weights": [
     "CRR Art. 153(5)"
+  ],
+  "rwa_calc.engine.slotting.transforms::zero_covered_expected_loss": [
+    "PS1/26, paragraph 235"
   ],
   "rwa_calc.engine.stages.classify.approach::_align_irb_exposure_class": [
     "CRR Art. 147"

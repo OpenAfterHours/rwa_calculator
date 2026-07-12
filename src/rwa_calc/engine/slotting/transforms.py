@@ -56,6 +56,9 @@ from rwa_calc.contracts.errors import (
     ErrorCategory,
     ErrorSeverity,
 )
+from rwa_calc.engine.sa.rw_adjustments import (
+    apply_guarantee_substitution as sa_apply_guarantee_substitution,
+)
 from rwa_calc.engine.utils import exact_fractional_years_expr
 from rwa_calc.rulebook import RulepackV0
 from rwa_calc.rulebook.compile import lookup_float_map, scalar_value
@@ -187,6 +190,74 @@ def calculate_rwa(lf: pl.LazyFrame) -> pl.LazyFrame:
     """Calculate RWA = EAD x Risk Weight (pre-supporting-factor)."""
     rwa = col("ead_final") * col("risk_weight")
     return lf.with_columns(rwa=rwa)
+
+
+@cites("CRR Art. 235")
+@cites("PS1/26, paragraph 235")
+def apply_guarantee_substitution(
+    lf: pl.LazyFrame,
+    config: CalculationConfig,
+    *,
+    pack: ResolvedRulepack | None = None,
+) -> pl.LazyFrame:
+    """Risk-Weight Substitution Method on slotting legs (Art. 235(1)).
+
+    The CRM stage already splits guaranteed slotting exposures into
+    physical ``__G_``/``__REM`` legs and assigns ``guarantor_approach="sa"``
+    (slotting has no PD, so parameter substitution never applies); this
+    step is the previously-MISSING consumer: the covered leg takes the
+    guarantor's SA risk weight when beneficial, via the SAME shared
+    substitution step the SA branch runs (identical beneficial gate,
+    multi-guarantor redistribution and audit columns — the F8
+    ``guarantee_benefit_rw`` snapshot lands here, on the SLOTTING borrower
+    basis, before supporting factors and the portfolio floor).
+
+    Gated by the cited pack Feature ``slotting_guarantee_substitution``
+    (recorded decision 2026-07-12: enabled under BOTH regimes — PS1/26
+    mandates RWSM; the CRR-side basis is recorded as unsettled on the
+    Feature's citation). Runs only when the CRM guarantee sub-step ran
+    (the SA step's ``guarantor_entity_type`` sentinel gate).
+    """
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    if not resolved_pack.feature("slotting_guarantee_substitution"):
+        return lf
+    return sa_apply_guarantee_substitution(lf, config, pack=resolved_pack)
+
+
+@cites("PS1/26, paragraph 235")
+def zero_covered_expected_loss(
+    lf: pl.LazyFrame,
+    config: CalculationConfig,
+    *,
+    pack: ResolvedRulepack | None = None,
+) -> pl.LazyFrame:
+    """Zero the covered leg's slotting EL (Art. 235(1A)).
+
+    The substituted covered part is an exposure to a guarantor treated
+    under SA, which carries no slotting EL — leaving the borrower's
+    Art. 158(6) EL on the ``__G_`` leg would double-count it into the
+    Art. 159 shortfall pool (mirrors the IRB SA-guarantor precedent,
+    ``engine/irb/guarantee.py::_adjust_expected_loss``). Applies ONLY to
+    beneficially-substituted legs; non-beneficial and retained legs keep
+    the borrower slotting EL.
+    """
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    if not resolved_pack.feature("slotting_guarantee_substitution"):
+        return lf
+    cols = lf.collect_schema().names()
+    if "is_guarantee_beneficial" not in cols or "guaranteed_portion" not in cols:
+        return lf
+    covered = pl.col("is_guarantee_beneficial") & (pl.col("guaranteed_portion") > 0)
+    return lf.with_columns(
+        pl.when(covered)
+        .then(pl.lit(0.0))
+        .otherwise(pl.col("slotting_el_rate"))
+        .alias("slotting_el_rate"),
+        pl.when(covered)
+        .then(pl.lit(0.0))
+        .otherwise(pl.col("expected_loss"))
+        .alias("expected_loss"),
+    )
 
 
 def apply_el_rates(

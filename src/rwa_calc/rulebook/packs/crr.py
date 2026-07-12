@@ -333,6 +333,21 @@ ENTRIES: dict[str, RuleEntry] = {
     # and PF pre-operational splits — see packs/b31.py. The Feature selects the
     # CRR vs B31 table family in engine/slotting/transforms.py (apply_slotting_
     # weights / apply_el_rates); the VALUES stay in data/tables/{crr,b31}_slotting.
+    "slotting_guarantee_substitution": Feature(
+        name="slotting_guarantee_substitution",
+        enabled=True,
+        citation=Citation(
+            "CRR",
+            "235",
+            "RW substitution applied to slotting by analogy (operator "
+            "decision 2026-07-12): the CRR black-letter scoping is UNSETTLED "
+            "(Art. 235 textually SA-scoped; Art. 236 needs a guarantor PD; "
+            "Art. 161(3) A-IRB-only) but COREP Annex II para 43 expects "
+            "substitution flows on slotting rows and zero relief mis-states "
+            "the risk; covered-part EL zeroing mirrors the IRB SA-guarantor "
+            "precedent. Flip enabled=False to restore zero relief",
+        ),
+    ),
     "slotting_revised_tables": Feature(
         name="slotting_revised_tables",
         enabled=False,

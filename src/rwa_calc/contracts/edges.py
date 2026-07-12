@@ -1476,10 +1476,11 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
             dtype=pl.Float64,
             citation="CRR Art. 235",
             null_meaning=(
-                "the substitution machinery never ran for this leg — slotting "
-                "legs (the recorded zero-relief gap: no guarantee substitution "
-                "stage exists for slotting) and runs with no CRM guarantee "
-                "sub-step. NOT zero relief; must not be filled to 0.0"
+                "the substitution machinery never ran for this run (no CRM "
+                "guarantee sub-step, so the branch delta column is absent). "
+                "NOT zero relief; must not be filled to 0.0. Slotting legs "
+                "substitute via RWSM (Art. 235(1), the 2026-07-12 fix) and "
+                "carry real benefits like SA/IRB legs"
             ),
         ),
         # ------------------------------------------------------------------

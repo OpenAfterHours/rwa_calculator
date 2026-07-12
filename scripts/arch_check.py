@@ -318,6 +318,15 @@ RATCHET_MAX_METRICS = (
     "engine_collect_schema_sites",
     "engine_eager_collect_sites",
     "max_engine_module_loc",
+    # Phase 7 Sn (§9): the reporting estate is ratcheted the same way —
+    # module-size ceiling (one-module-per-template stays enforced by shrink),
+    # the multi-candidate pick() ladder census (>2 args; the surviving
+    # ladders encode RECORDED regime-divergent sources and may not grow),
+    # and the per-template test-file ceiling (the test_corep.py straggler
+    # may not re-accrete).
+    "max_reporting_module_loc",
+    "reporting_multi_candidate_picks",
+    "max_reporting_test_file_loc",
 )
 
 # Metrics where the measured value may not DECREASE below the baseline.
@@ -336,6 +345,8 @@ IMPORT_DIRECTION_RULES: dict[str, tuple[str, ...]] = {
         "rwa_calc.rulebook",
     ),
     "engine": ("rwa_calc.api", "rwa_calc.ui", "rwa_calc.reporting", "rwa_calc.analysis"),
+    # Phase 6 residue R3, closed at Phase 7 Sn (§9): analysis sits below api/ui.
+    "analysis": ("rwa_calc.api", "rwa_calc.ui"),
     # The regime seam (migration Phase 4 v0 / Phase 5): sits between
     # contracts and engine — wraps config + data tables, never engine code.
     "rulebook": (
@@ -1071,6 +1082,32 @@ def _measure_ratchet_metrics(path: Path) -> dict[str, int]:
             continue
         cites += _count_pattern_lines(text, _CITES_PATTERN)
 
+    max_reporting_loc = 0
+    multi_picks = 0
+    reporting_dir = path / "reporting"
+    if reporting_dir.is_dir():
+        for py_file in sorted(reporting_dir.rglob("*.py")):
+            if py_file.name == "__init__.py":
+                continue
+            try:
+                text = py_file.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            max_reporting_loc = max(max_reporting_loc, text.count("\n") + 1)
+            multi_picks += _count_multi_candidate_picks(text)
+
+    # Phase 7 Sn (§9): the per-template test files may not re-accrete into a
+    # single-file xdist straggler. Walked from the repo root next to src/.
+    max_reporting_test_loc = 0
+    tests_dir = path.parent.parent / "tests" / "unit" / "reporting"
+    if tests_dir.is_dir():
+        for py_file in sorted(tests_dir.rglob("*.py")):
+            try:
+                text = py_file.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            max_reporting_test_loc = max(max_reporting_test_loc, text.count("\n") + 1)
+
     return {
         "engine_fill_null_sites": fill_null,
         "engine_presence_guard_sites": presence,
@@ -1078,7 +1115,33 @@ def _measure_ratchet_metrics(path: Path) -> dict[str, int]:
         "engine_eager_collect_sites": eager_collects,
         "max_engine_module_loc": max_loc,
         "cites_decorators": cites,
+        "max_reporting_module_loc": max_reporting_loc,
+        "reporting_multi_candidate_picks": multi_picks,
+        "max_reporting_test_file_loc": max_reporting_test_loc,
     }
+
+
+def _count_multi_candidate_picks(text: str) -> int:
+    """Count ``pick(cols, a, b, ...)`` calls carrying MORE than one candidate.
+
+    The surviving multi-candidate ladders in reporting/ encode RECORDED
+    regime-divergent sources (e.g. ``lgd_floored``/``lgd_input``) and
+    test-boundary tolerance — they may not grow (Phase 7 Sn §9 scope-down:
+    ratcheted shrink-only, not banned outright).
+    """
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return 0
+    count = 0
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", "")
+        if name in ("pick", "_pick") and len(node.args) > 2:  # noqa: PLR2004
+            count += 1
+    return count
 
 
 def write_ratchet_baseline(path: Path) -> dict[str, int]:

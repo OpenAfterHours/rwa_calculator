@@ -23,6 +23,11 @@ This file lists **outstanding** items only — completed items have been removed
 
 ## Priority 2: Basel 3.1 Specification Parity (B31 specs matching CRR depth)
 
+### Phase 7 Sn follow-on (2026-07-12) — declarative-reporting doc drift
+
+- [ ] **D2.81** — **`docs/api/reporting.md` + `docs/features/corep-reporting.md` describe the retired imperative reporting architecture.** `api/reporting.md` (hand-written, NOT mkdocstrings) still documents the killed `_pick` column-resilience ladder verbatim ("resilient to column naming variations (e.g., `ead_final` or `final_ead` or `ead`)", L31-32), raw `approach_applied` template filtering (L36-37), a 3-field `COREPTemplateBundle` (L77-82), and an obsolete "being reworked" status note (L84-93). `features/corep-reporting.md` names deleted imperative methods (`_generate_c_02_00()` L168/201, `_generate_of_02_01()` L252, `_compute_c08_05_values()` L1235). Reality since Phase 7 S8/Sn: per-template declarative modules `reporting/corep/{c02,c07,c08,c09,of02}.py` + `reporting/pillar3/*.py` through `reporting/cellspec.py`; the sealed `reporting_*` ledger is the keying surface; `generator.py` survives only as the C 34.x host + dispatch/Excel shim; consumers (formatters cards, comparison, recon collapse) read the sealed names. Also sweep `docs/features/pillar3-disclosures.md:996` + `docs/framework-comparison/reporting-differences.md:482` cross-references. **Effort: M** | Ref: docs/plans/phase7-declarative-reporting.md §Sn DONE block
+
+
 ### Phase 8 — CRR Art. 120(2) short-term institution gap
 
 - [ ] **D2.57** — **CRR Art. 120(2) Table 4 short-term institution preferential treatment absent from CRR calculator branch.** `sa/calculator.py` CRR branch (lines 914–1094) has no check for rated institution exposures with residual maturity ≤3 months. Per CRR Art. 120(2) Table 4: CQS 1–3 = 20%, CQS 4–5 = 50%, CQS 6 = 150%. Without this, CQS 4–5 short-term institutions receive 100% (double the required 50%). B31 branch correctly implements ECRA short-term at lines 726–748. CRR branch has an analogous PSE short-term check (line 996–1002) but no institution equivalent. Spec `crr/sa-risk-weights.md` (lines 219–228) documents Table 4 correctly — the gap is code-only. **Effort: S** | Ref: CRR Art. 120(2), IMPLEMENTATION_PLAN cross-ref needed

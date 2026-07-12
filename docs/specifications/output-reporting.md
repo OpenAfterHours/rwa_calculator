@@ -317,8 +317,8 @@ Source: PS1/26 Annex II §3.4.1 (OF 09.01 row instructions, pp. 139-141 of `docs
 - `docs/assets/ps1-26-annex-ii-reporting-instructions.pdf` — Basel 3.1 reporting instructions
 
 ### Status
-- Generator: Complete — all 10 COREP template families implemented: C/OF 02.00, 07.00, 08.01, 08.02, 08.03, 08.04, 08.05, 08.06, 08.07, 09.01, 09.02, and OF 02.01.
-- OF 02.01: Complete — `COREPGenerator._generate_of_02_01()` populates credit risk row (0010) and Total row (0080); other rows null (CCR/market/op risk out of scope).
+- Generator: Complete — all COREP credit-risk template families are declarative per-template modules (`reporting/corep/{c02,c07,c08,c09,of02}.py`) through the one executor (`reporting/cellspec.py`), C 02.00 as the recorded pre-pass-kernel hybrid: C/OF 02.00, 07.00, 08.01–08.07, 09.01, 09.02, and OF 02.01. Only the C 34.x CCR family remains on the legacy `generator.py` path (deferred with the S8-pre goldens).
+- OF 02.01: Complete — `reporting/corep/of02.py::generate_of_02_01` populates credit risk row (0010) and Total row (0080) identically; other rows null (CCR/market/op risk out of scope).
 - Template definitions: Complete — all templates use correct 4-digit COREP column references and multi-section row structures matching EBA/PRA layouts.
 - Excel export: Complete — produces per-exposure-class sheets for all templates.
 - Integration: Done (`ResultExporter.export_to_corep()`, `CalculationResponse.to_corep()`)
@@ -373,7 +373,7 @@ COREP supervisory returns with publicly available credit risk data.
 
 ### Status
 - Documentation: Done — see [Pillar III Disclosures](../features/pillar3-disclosures.md)
-- Code implementation: Done — 13 templates (OV1, CR4-CR10, CR9/CR9.1, CMS1/CMS2) in `reporting/pillar3/`
+- Code implementation: Done — 13 declarative templates (OV1, CR4-CR10, CR9/CR9.1, CMS1/CMS2), one module each under `reporting/pillar3/`, through the one executor (`reporting/cellspec.py`)
 
 ## Export
 

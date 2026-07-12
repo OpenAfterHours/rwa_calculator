@@ -97,7 +97,12 @@ a known-bad merge before you start.
 - `src/rwa_calc/engine/orchestrator.py`
 - `src/rwa_calc/contracts/protocols.py`
 - `src/rwa_calc/contracts/bundles.py`
-- `src/rwa_calc/engine/aggregator/aggregator.py`
+- `src/rwa_calc/contracts/edges.py`
+- `src/rwa_calc/engine/aggregator/` (any module — the reporting projection
+  spans `aggregator.py` + `_summaries.py` + `_collapse.py`)
+- `src/rwa_calc/analysis/reconciliation.py`
+- `src/rwa_calc/reporting/cellspec.py`
+- `src/rwa_calc/reporting/metadata.py`
 
 is forced single-stream. Pick it alone, even if N>1 was requested,
 report the downgrade ("Picked P-code only; touches pipeline.py —
@@ -381,11 +386,28 @@ C4.3 — None of `src/rwa_calc/engine/pipeline.py`,
        `src/rwa_calc/engine/registry.py`,
        `src/rwa_calc/engine/orchestrator.py`,
        `src/rwa_calc/contracts/protocols.py`,
-       `src/rwa_calc/contracts/bundles.py`, or
-       `src/rwa_calc/engine/aggregator/aggregator.py` are modified
+       `src/rwa_calc/contracts/bundles.py`,
+       `src/rwa_calc/contracts/edges.py`,
+       `src/rwa_calc/engine/aggregator/` (any module),
+       `src/rwa_calc/analysis/reconciliation.py`,
+       `src/rwa_calc/reporting/cellspec.py`, or
+       `src/rwa_calc/reporting/metadata.py` are modified
        UNLESS the item explicitly required it (in which case the
        item should have been hard-excluded at Step 1; flag this as a
        structural drop).
+C4.6 — Reporting-slice criteria (any item touching `src/rwa_calc/reporting/`
+       or `tests/expected_outputs/reporting/`):
+       (a) NO bulk-regen-to-green — the report must not show
+           `REGEN_REPORTING_GOLDENS=1` without a recorded per-cell
+           preserve-or-fix decision; the golden gate
+           (`tests/acceptance/reporting/test_reporting_golden.py`)
+           passed structure-exact + rtol without blanket regeneration.
+       (b) Number-changing slices carry a recorded decision — every
+           golden cell that moved cites its §6 (F1–F8) / recorded
+           preserve-or-fix sign-off (the `crr`/`basel31` skills +
+           `tests/oracle/` are the referee).
+       (c) The slice names its D1–D10 duplication kill (plan §2.5
+           matrix) and proves the deleted site dead.
 C4.4 — Targeted pytest path matches what the test-writer reported
        in Wave 3.
 C4.5 — The targeted pytest result is PASS. The report quotes the

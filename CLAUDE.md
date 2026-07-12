@@ -126,12 +126,12 @@ References:
 ### Organisation
 ```
 tests/
-├── unit/          # Fast, isolated tests (~4,500 tests)
-├── acceptance/    # Scenario-based regulatory tests (~500 tests)
-├── contracts/     # Protocol/interface compliance tests (~150 tests)
-├── integration/   # Cross-component integration tests (~130 tests)
+├── unit/          # Fast, isolated tests (~5,900 tests; reporting/ splits per template)
+├── acceptance/    # Scenario-based regulatory tests (~1,500 tests)
+├── contracts/     # Protocol/interface compliance tests (~650 tests)
+├── integration/   # Cross-component integration tests (~300 tests)
 ├── benchmarks/    # Performance tests (marked @pytest.mark.benchmark)
-├── bdd/           # BDD-style tests (step definitions)
+├── oracle/        # Human-reviewed regulatory oracle cases (golden referee)
 ├── fixtures/      # Shared test data builders
 └── expected_outputs/  # Golden files for acceptance tests
 ```
@@ -191,7 +191,7 @@ Orchestration lives in slash commands, not in agents. Each `loop.sh` mode maps t
 | `loop.sh docs_build` | `PROMPT_docs_build.md` | `/next-docs 3` | `/next-doc` |
 | `loop.sh docs_plan` | `PROMPT_docs_plan.md` | `/refresh-docs-plan` | — |
 
-The batch commands pick N non-conflicting items and run the validation gate (or `uv run zensical build`) **once at the end** — not per agent. `/next-items` provisions one git worktree per item on `batch/<batch-id>/<P-code>` and drives the four-wave pipeline as an event-driven supervisor: agents are dispatched in the background (`run_in_background: true`), a `reviewer` agent gates every wave (`pass | revise | drop`), one revision retry per wave per item is allowed, and the orchestrator persists batch state to `.claude/state/next-items-<batch-id>.json` so it can survive context compactions and operator interjections across multiple turns. The operator can chat with the orchestrator mid-batch — ask for status, drop an item, inspect outputs — without interrupting in-flight agents. After all items reach `merge_ready` or `dropped`, the orchestrator squash-merges the surviving worktree branches into the current feature branch before the gate runs. `/next-docs` keeps the flat parallel `doc-writer` dispatch (no worktree, no reviewer — docs writes don't collide). Items that touch shared engine files (`engine/pipeline.py`, `engine/registry.py`, `engine/orchestrator.py`, `contracts/protocols.py`, `contracts/bundles.py`, `engine/aggregator/aggregator.py`) are forced single-stream by `/next-items` even when N>1 was requested, and run in the main tree without worktree machinery (the reviewer loop and background dispatch still apply).
+The batch commands pick N non-conflicting items and run the validation gate (or `uv run zensical build`) **once at the end** — not per agent. `/next-items` provisions one git worktree per item on `batch/<batch-id>/<P-code>` and drives the four-wave pipeline as an event-driven supervisor: agents are dispatched in the background (`run_in_background: true`), a `reviewer` agent gates every wave (`pass | revise | drop`), one revision retry per wave per item is allowed, and the orchestrator persists batch state to `.claude/state/next-items-<batch-id>.json` so it can survive context compactions and operator interjections across multiple turns. The operator can chat with the orchestrator mid-batch — ask for status, drop an item, inspect outputs — without interrupting in-flight agents. After all items reach `merge_ready` or `dropped`, the orchestrator squash-merges the surviving worktree branches into the current feature branch before the gate runs. `/next-docs` keeps the flat parallel `doc-writer` dispatch (no worktree, no reviewer — docs writes don't collide). Items that touch shared engine/reporting-projection files (`engine/pipeline.py`, `engine/registry.py`, `engine/orchestrator.py`, `contracts/protocols.py`, `contracts/bundles.py`, `contracts/edges.py`, any module under `engine/aggregator/`, `analysis/reconciliation.py`, `reporting/cellspec.py`, `reporting/metadata.py`) are forced single-stream by `/next-items` even when N>1 was requested, and run in the main tree without worktree machinery (the reviewer loop and background dispatch still apply).
 
 Plus `/implement-scenario <ID>` for ad-hoc one-off work on a specific P-code or scenario ID.
 

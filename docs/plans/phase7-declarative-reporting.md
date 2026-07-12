@@ -860,6 +860,53 @@ OF02.01 → OF07/OF08/C34.x (post S8-pre) → **C02.00 LAST** (portfolio pre-pas
   its own recorded decision + oracle sign-off.
 - **Gate per slice:** that template's golden structure-identical + full suite.
 
+**Sn DONE 2026-07-12 (three commits: 78f06ba2 test split / 276f9250 consumer convergence + F5 /
+the ratchets+docs commit).**
+- **Test split:** `test_corep.py` (9,525 LOC, 91 classes, 713 tests, THE loadfile straggler) →
+  `tests/unit/reporting/corep/` — 13 per-template files + `test_cross.py` (the 12 cross-template
+  classes keep their C07+C08 cross-checks together) + `_builders.py` (7 cross-family shared
+  builders; `test_p4_20`'s external `_irb_results` import re-pointed). Pure cut-paste (ast
+  segment extraction, ruff-trimmed imports), collection parity exact; unit chunk ~315s → ~197s.
+- **Consumer convergence (recorded decision — invariant 8's precondition satisfied since S4):**
+  formatters cards + REST deltas read `reporting_method` (D1 + the `_find_column_in_schema` D2
+  family deleted; NaN/inf net preserved); comparison.py selects
+  `reporting_class`/`reporting_approach`/`reporting_method` under name-stable aliases and the
+  attribution is_irb gate keys the post-substitution approach (D1 + D4/D5; the "FIRB" fallback
+  rung retired) — **this IS F5** (the comparison page was the one remaining raw-class UI
+  surface); `_collapse` ladders → sealed names, `RECON_RWA/EAD_CANDIDATES` deleted (one D2
+  family; number-neutral — alternates dead for sealed frames). `RECON_HETEROGENEITY_COLUMNS`
+  deliberately untouched (G2 REC004 refinement, behaviour-changing, stays recorded). The
+  comparison floor driver is NOT a D7 kill — it is the recorded-legitimate attribution use
+  (S5-moot record). Both generator entry points re-typed onto a structural
+  `reporting/metadata.py::ResultsSource` protocol; the api TYPE_CHECKING imports deleted; the
+  two "Retired by Phase 7" inversions retired for real.
+- **§9 dispositions:** ADDED — `max_reporting_module_loc` (banked 2010, templates.py),
+  `reporting_multi_candidate_picks` (banked 31 — **recorded scope-down: shrink-only ratchet,
+  NOT ratcheted to 0**; the survivors encode recorded regime-divergent sources like
+  `lgd_floored`/`lgd_input` and test-boundary tolerance), `max_reporting_test_file_loc`
+  (banked 1581), the `analysis` upward import rule (0 violations). RETIRED — the two
+  inversions. **RECORDED SCOPE-DOWNS / DEFERRALS:** (c) the raw `exposure_class`/
+  `approach_applied` read-ban contradicts the recorded F3/F4 bases (all COREP keys raw class BY
+  DESIGN — corep/ has 2 `reporting_*` reads total); any future enforcement must be a
+  per-module basis allowlist keyed to the §6 F3 table, not a blanket ban. (d) extending
+  check-17 to reporting's 98 `framework ==`/`is_b31` sites needs a NEW detector (the AST
+  predicate catches zero of them) plus a slice-sized refactor moving shape-selection into the
+  pack-resolved `ReportingTemplateSet` — deferred, recorded. (e) the sealed-column
+  read-allowlist is sequenced behind the F6 per-column decisions (it would fail on
+  `ead_pre_ccf`/`exposure_post_crm` day one). (watchfire) widening `source_paths` to
+  reporting/ risks fatal `unknown_article` on the CRR Part-8 disclosure articles and the COREP
+  ITS "Reg 2021/451" is not an allowed instrument — deferred pending an instrument-allowlist
+  decision; the projection columns already carry Art. 235/112 as EdgeColumn citation data
+  (un-validated, recorded).
+- **Docs/orchestration:** specs de-staled (`output-reporting.md` status block,
+  `default-definition.md` consumer paths + the CR1 phantom removed); `/next-items` Step-4d
+  gains C4.6 (no bulk-regen-to-green / §6 decisions / D1–D10 kill) and the forced-single-stream
+  list adds `contracts/edges.py`, `engine/aggregator/*` (widened), `analysis/reconciliation.py`,
+  `reporting/cellspec.py`, `reporting/metadata.py` in ALL THREE synced homes (CLAUDE.md +
+  Step-1 + C4.3); CLAUDE.md tests tree fixed (bdd/ never existed; oracle/ added). The
+  worst-stale `docs/api/reporting.md` + `docs/features/corep-reporting.md` are OUTSIDE the Sn
+  specs mandate — queued as a DOCS_IMPLEMENTATION_PLAN item.
+
 ### Sn — Capstone: test split + consumer convergence + arch (NUMBER-NEUTRAL except F5 if pending)
 - **Scope:** confirm `test_corep.py` fully split (~16 per-template files; kills the xdist
   straggler). Converge the remaining consumers on the ledger + summaries:
@@ -881,7 +928,7 @@ OF02.01 → OF07/OF08/C34.x (post S8-pre) → **C02.00 LAST** (portfolio pre-pas
 | **F2** | S5 | Per-row post-floor `reporting_rwa` allocation of the portfolio floor add-on | **PRESERVE** portfolio totals exactly; **FIX** the per-row convention, ring-fenced, oracle-signed |
 | **F3** | S8.. | Pillar 3 CR4/CR5/CR6/CR9 retarget raw `exposure_class` → `reporting_class` (SME/defaulted rows change sheet) | **FIX — CLOSED 2026-07-11**; the basis is PER-TEMPLATE, not uniform. **CR4/CR5** split basis (a/b origin, c-f + CR5 post-substitution). **CR6/CR7/CR7a + CR9** obligor basis (`reporting_class_origin` — the instructions bar substitution effects; CR9 refined by the Annex XXII leaf taxonomy). **CR6-A** origination class (Art. 147-shaped axis, no defaulted sink). **CR10** has no class axis (recorded no-op) |
 | **F4** | S8.. | COREP C07 origin vs post-CRM column consistency (already on `exposure_class_applied` since `5ee669f8`) | **PRESERVE** C07.00 origination keying + outflow/inflow; confirm the split reproduces existing cells |
-| **F5** | S8../Sn | UI by-class chart retarget raw `exposure_class` → `reporting_class` | **FIX** — UI matches COREP/Pillar 3 exactly; closes the operator-flagged UI/recon gap |
+| **F5** | S8../Sn | UI by-class chart retarget raw `exposure_class` → `reporting_class` | **FIX — EXECUTED at Sn (276f9250)**: the results page had already moved at S4; the residual surface was the comparison page (fed by `analysis/comparison.py`), retargeted with the formatter cards under invariant 8's now-satisfied precondition |
 | **F6** | follow-ups | The S1-DEFERRED stripped/never-produced reads (`ccf_applied`, `sa_cqs`, `scra/gcra_provision_amount`, `ead_pre_ccf`, `exposure_post_crm`, …) — permanently-null cells today | **Per-column add-to-contract-vs-accept-empty decision**, never a blanket seal |
 | **F7** | own slices | P2.27 (OF08.01 col 0275 SA-equivalent EAD), P3.3/P3.6 (pre-multiplier RW, equity transitional end-state RW, AIRB RE 4-way split) — need new engine columns | Own recorded-decision slices, not silent generator one-liners |
 | **F8** | candidate | **Persisted guarantee RWA benefit** (`rwa_benefit` per guaranteed leg = leg RWA at borrower RW − at guarantor RW) — recon today reconciles guarantee EAD only; relief mismatches diffuse into `risk_weight` deltas, unattributable | Additive column, but new semantics — needs an Art. 235 definition decision + oracle scenario before sealing; schedule after S4 once the ledger is consumed |

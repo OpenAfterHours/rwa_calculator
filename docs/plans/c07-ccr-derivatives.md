@@ -82,11 +82,82 @@ C 07.00 and C 34 together. Changing the C 07.00 population moves nothing in the 
       not-modelled.
 - [ ] **4 — Basel 3.1: admit `CCR_DERIVATIVE` into `c07_population`** by `risk_type`.
       **NUMBER-CHANGING** — recorded decision + oracle sign-off.
-- [ ] **5 — C 02.00 row 0060 (and OV1 row 2)** to include `standardised_ccr` RWEA so the breakdown
-      foots to the total. **NUMBER-CHANGING.**
-- [ ] **6 — Tie-out tests** that would have caught this: C 07.00 total RWEA == C 02.00 SA row; and a
-      derivative EAD/RWEA conservation check across C 34 ↔ C 07.00 (the mirror of the SFT test at
-      `tests/acceptance/reporting/test_reporting_sft_c07_0090.py`, which exists for SFTs only).
+- [ ] **5 — C 02.00 only.** Row 0060 ("Of which: SA") and the SA class rows must include
+      `standardised_ccr` RWEA so the template foots. **NUMBER-CHANGING.**
+      **Basis (read from the Annex II PDF):** C 02.00's parent credit row is "RISK WEIGHTED EXPOSURE
+      AMOUNTS FOR CREDIT, **COUNTERPARTY CREDIT** AND DILUTION RISKS AND FREE DELIVERIES"; its
+      "Standardised Approach (SA)" child is defined as *"CR SA and SEC SA templates at the level of
+      total exposures"* — the SA row **is** the C 07.00 total, which now includes CCR.
+      **~~and OV1 row 2~~ — REMOVED FROM STEP 5. That instruction was WRONG (see §4).**
+- [ ] **6 — Tie-out tests** that would have caught this: C 07.00 total RWEA == C 02.00 SA row; a
+      derivative RWEA conservation check across C 34 ↔ C 07.00 (the mirror of the SFT test at
+      `tests/acceptance/reporting/test_reporting_sft_c07_0090.py`); and C 07.00's own section-2
+      footing (0070+0080+0090+0110+0130 == row 0010).
+
+---
+
+## 4. Defects found while doing steps 3-5 — each its own slice, NOT half-fixed here
+
+Surfaced by the step-5 investigation (a scenario-architect + an adversarial reviewer), then verified
+by the orchestrator against the instruction PDFs and the committed goldens. **None is caused by the
+C 07.00 fix**; all are pre-existing, and the C 07.00 fix merely made two of them visible.
+
+### D1 — Pillar 3 OV1 has no CCR row block, and row 1 lies (BOTH regimes)
+
+The plan's original step 5 said "OV1 row 2 carries the same asymmetry". **That was wrong, and wrong
+in the opposite direction.** Verbatim, from the OV1 instructions:
+
+> **Row 1 — Credit risk (excluding CCR):** "RWEAs and own funds requirements calculated in accordance
+> with Chapters 1 to 4 of Title II of Part Three CRR … **RWEAs for securitisation exposures in the
+> non-trading book and for CCR are excluded and disclosed in rows 6 and 16 of this template.**"
+> **Row 6 — Counterparty credit risk – CCR:** "…calculated in accordance with Chapter 6…"
+> **Row 7 — CCR – Of which the standardised approach:** "…in accordance with **Section 3** of
+> Chapter 6…" (SA-CCR)
+> **Row UK 8a — CCR – Of which exposures to a CCP:** "…in accordance with **Section 9** of Chapter 6…"
+
+So: **adding CCR to OV1 row 2 would be a misstatement.** CCR must be *removed* from rows 1 and 2 and
+disclosed in its own block. The of-whichs partition by *RWEA computation basis*, so a QCCP trade's
+RWEA (Art. 306, Section 9) belongs in **UK 8a**, not row 7.
+
+Measured today (`ccr_b31`/`ccr_crr` goldens): OV1 row 1, labelled *"Credit risk (excluding CCR)"*,
+**includes** the CCR RWEA in both regimes; under CRR row 2 (the SA of-which) does too, because CRR
+CCR legs carry `approach_origin == "standardised"`. Our OV1 row list has **no rows 6/7/8/UK 8a at
+all** — so this is a template-structure change (new `P3Row`s), not a predicate tweak.
+
+### D2 — Pillar 3 CMS1: the CCR row is null and the Total is not a total (Basel 3.1)
+
+`cms1.py` gives row 0010 ("Credit risk excluding CCR") and row 0080 ("Total") *identical* cell specs,
+and row 0020 ("Counterparty credit risk") is never bound. Internal oracle, no PDF needed: **CMS1
+Total col c = 2,500,000 while CMS2 Total col c = 4,060,296.72** — the same book, disagreeing by
+exactly the derivative RWEA. CMS2 is the correct one (it already books the derivative under
+Institutions). CCR-via-SA is floor-eligible (`FLOOR_ELIGIBLE_APPROACHES`), so it must appear in the
+floor comparison.
+
+### D3 — OF 02.01: U-TREA is DOUBLE-COUNTED (pre-existing, regime-independent)
+
+`of02.py` sets col 0010 = `Sum(rwa_pre_floor)` over the **whole** portfolio and col 0020 =
+`Sum(sa_rwa)` over the **whole** portfolio, then col 0030 (U-TREA) = 0010 + 0020. But
+`rwa_pre_floor` summed over the whole ledger **already is** U-TREA (own-approach RWA), and `sa_rwa`
+summed over the whole ledger is S-TREA. Adding them is meaningless.
+
+Verified on the **rich** portfolio at commit `c1a120ba` — i.e. before any CCR work touched anything:
+modelled 137,449,963.91 + SA 161,655,833.33 → **U-TREA 299,105,797.25, 2.18× the modelled RWA.**
+This is the most serious of the four: the output floor compares U-TREA against S-TREA.
+
+### D4 — CRR CR4/CR5 leak CCR into SA disclosures (the mirror of the C 07.00 defect)
+
+`cr4.py`/`cr5.py` filter `approaches_origin=("standardised",)`, which under **CRR** admits the CCR
+legs (they carry `"standardised"` there; under Basel 3.1 the relabel excludes them, correctly — the
+Basel SA disclosure templates scope CCR out, it has CCR1–CCR8). Measured in `ccr_crr`: CR4 row 6
+(Institutions) reports RWEA 2,858,279.37 against **zero** exposure in cols a–d, giving a published
+RWEA-to-exposure density of **1.07** — prima facie nonsense. CR5 row 6 carries the derivative EADs in
+the 2% and 50% bands.
+
+**Live trap for whoever fixes D1/D2:** do NOT implement by widening a *shared* SA-approach constant
+to include `standardised_ccr` — that would silently pull the derivative into Basel 3.1 CR4/CR5 and
+break the B3.1 disclosure too. Exclude/include CCR by **`risk_type`**, never by the approach label
+(under CRR the label is `"standardised"`, so an approach-based rule no-ops exactly where the CRR
+defect lives).
 
 ### Open question for step 3/4 — RESOLVED 2026-07-12 (read from the Annex II PDF)
 

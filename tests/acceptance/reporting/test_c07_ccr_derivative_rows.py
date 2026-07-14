@@ -49,6 +49,11 @@ _REL = 1e-9
 
 _INSTITUTION_SHEET = "corep__c07_00__institution"
 _CORPORATE_SHEET = "corep__c07_00__corporate"
+_C02_FRAME = "corep__c_02_00"
+
+# Section 2 partitions the sheet by exposure type. Rows 0100 / 0120 are "of which"
+# sub-rows (of 0090 and 0110) and are deliberately NOT addends.
+_C07_SECTION_2_ADDENDS: tuple[str, ...] = ("0070", "0080", "0090", "0110", "0130")
 
 # The CCF columns (Art. 111(2): no conversion factor applies to a CCR exposure).
 # Structural null in THIS portfolio — ``ccf_applied`` is not sealed on the
@@ -466,8 +471,130 @@ def test_c34_01_is_untouched_by_the_c07_fix(
 
 
 # =============================================================================
+# Tie-outs — the cross-template arithmetic that would have caught all of this
+#
+# The C 07.00 defect survived because nothing tied the templates to each other:
+# C 07.00 could drop a whole netting set and no other test noticed. These three
+# are the lasting guard (docs/plans/c07-ccr-derivatives.md step 6).
+# =============================================================================
+
+
+@pytest.mark.parametrize("regime_key", list(_REGIMES))
+def test_tieout_c07_total_equals_c02_standardised_row(
+    regime_key: str, ccr_frames: dict[str, dict[str, pl.DataFrame]]
+) -> None:
+    """TIE-OUT: sum(C 07.00 row 0010 col 0220) == C 02.00 row 0060.
+
+    Annex II defines C 02.00's "Of which: Standardised Approach (SA)" row as the
+    "CR SA and SEC SA templates at the level of total exposures" — so the SA row
+    IS the C 07.00 total, summed over every exposure-class sheet. This portfolio
+    has no securitisations and no equity, so C 07.00 alone must account for it.
+
+    This is the tie-out whose absence let the defect live: under Basel 3.1 the
+    derivatives are on C 07.00 (steps 3-4) but not in C 02.00's SA row, and no
+    test compared the two.
+
+    Arrange: the CCR portfolio (SA-only — no SEC, no equity, no IRB).
+    Act:     run the pipeline -> COREP C 07.00 (all sheets) + C 02.00.
+    Assert:  the C 07.00 RWEA total across sheets == C 02.00 row 0060.
+    """
+    # Arrange + Act
+    frames = ccr_frames[regime_key]
+    c07_rwea = sum(float(_row(sheet, "0010")["0220"] or 0.0) for sheet in _c07_sheets(frames))
+    c02_sa_rwea = float(_row(frames[_C02_FRAME], "0060")["0010"] or 0.0)
+
+    # Assert
+    assert c07_rwea == pytest.approx(c02_sa_rwea, rel=_REL), (
+        f"[{regime_key}] TIE-OUT BROKEN: C 07.00 reports {c07_rwea:,.6f} of SA RWEA "
+        f"across its sheets, but C 02.00 row 0060 ('Of which: SA') reports "
+        f"{c02_sa_rwea:,.6f}. Annex II defines that row as the CR SA template at the "
+        "level of total exposures — they must be the same number."
+    )
+
+
+@pytest.mark.parametrize("regime_key", list(_REGIMES))
+def test_tieout_c34_derivative_rwea_is_conserved_in_c07_row_0110(
+    regime_key: str, ccr_frames: dict[str, dict[str, pl.DataFrame]]
+) -> None:
+    """TIE-OUT: C 34.01 RWEA (col 0020) == sum(C 07.00 row 0110 col 0220).
+
+    A CONSERVATION check, not an exclusivity one: a derivative belongs in BOTH
+    templates. C 34 analyses CCR by approach; C 07.00 risk-weights those same
+    exposures under SA. Every pound of SA-CCR RWEA reported in C 34.01 must
+    therefore also appear in C 07.00's derivative row — no loss, no invention.
+
+    (The mirror of tests/acceptance/reporting/test_reporting_sft_c07_0090.py,
+    which makes the same check for FCCM SFTs — those are EXCLUSIVE to C 07.00
+    row 0090, which is why that test asserts C 34 is empty and this one does not.)
+
+    Arrange: the CCR portfolio (two SA-CCR derivative netting sets).
+    Act:     run the pipeline -> COREP C 34.01 + C 07.00.
+    Assert:  the two templates report the same derivative RWEA.
+    """
+    # Arrange + Act
+    frames = ccr_frames[regime_key]
+    c34_rwea = float(frames["corep__c34_01"]["0020"].fill_null(0.0).sum())
+    c07_0110_rwea = sum(float(_row(sheet, "0110")["0220"] or 0.0) for sheet in _c07_sheets(frames))
+
+    # Assert
+    assert c34_rwea > 0.0, "Precondition: C 34.01 must report the SA-CCR derivatives."
+    assert c07_0110_rwea == pytest.approx(c34_rwea, rel=_REL), (
+        f"[{regime_key}] CONSERVATION BROKEN: C 34.01 reports {c34_rwea:,.6f} of "
+        f"SA-CCR derivative RWEA, but C 07.00 row 0110 reports {c07_0110_rwea:,.6f} "
+        "across its sheets. A derivative belongs in both templates — C 07.00 and "
+        "C 34 are not alternatives."
+    )
+
+
+@pytest.mark.parametrize("regime_key", list(_REGIMES))
+def test_tieout_c07_section_2_foots_to_the_total_row(
+    regime_key: str, ccr_frames: dict[str, dict[str, pl.DataFrame]]
+) -> None:
+    """TIE-OUT: on every sheet, rows 0070+0080+0090+0110+0130 == row 0010.
+
+    Section 2 is the exposure-type breakdown of the total: on-balance-sheet,
+    off-balance-sheet, SFT netting sets, derivative netting sets, and contractual
+    cross-product netting sets. They partition the sheet, so they must foot to it.
+    (0100 and 0120 are "of which" sub-rows of 0090 and 0110 — they are NOT
+    addends, and including them would double-count.)
+
+    This is the check that was silently false before steps 3-4: row 0110 was inert,
+    so a sheet of pure derivatives footed to zero against a non-zero total.
+
+    Arrange: the CCR portfolio.
+    Act:     run the pipeline -> COREP C 07.00 (every sheet).
+    Assert:  the section-2 addends sum to row 0010, for exposure value (col 0200)
+             and RWEA (col 0220).
+    """
+    # Arrange + Act
+    sheets = {
+        key: sheet
+        for key, sheet in ccr_frames[regime_key].items()
+        if key.startswith("corep__c07_00__")
+    }
+    assert sheets, f"[{regime_key}] no C 07.00 sheet was produced at all."
+
+    # Assert
+    for key, sheet in sorted(sheets.items()):
+        total = _row(sheet, "0010")
+        for col, what in (("0200", "exposure value"), ("0220", "RWEA")):
+            addends = {ref: _row(sheet, ref)[col] or 0.0 for ref in _C07_SECTION_2_ADDENDS}
+            breakdown = sum(float(value) for value in addends.values())
+            assert breakdown == pytest.approx(float(total[col] or 0.0), rel=_REL), (
+                f"[{regime_key}] {key} does not foot: the section-2 breakdown of "
+                f"{what} (col {col}) sums to {breakdown:,.6f} but the total row 0010 "
+                f"reports {total[col]}. Addends: {addends}."
+            )
+
+
+# =============================================================================
 # Helpers
 # =============================================================================
+
+
+def _c07_sheets(frames: dict[str, pl.DataFrame]) -> list[pl.DataFrame]:
+    """Every C 07.00 exposure-class sheet (the SA template, in full)."""
+    return [sheet for key, sheet in sorted(frames.items()) if key.startswith("corep__c07_00__")]
 
 
 def _institution_sheet(frames: dict[str, pl.DataFrame], regime_key: str) -> pl.DataFrame:

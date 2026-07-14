@@ -170,6 +170,30 @@ OV1_COLUMNS: list[P3Column] = [
     P3Column("c", "Total own funds requirements"),
 ]
 
+# The CCR block (rows 6 / 7 / 8 / UK 8a / 9), carried by BOTH regimes — the UKB
+# OV1 has the identical block. Row 1 is "Credit risk (EXCLUDING CCR)" and its
+# instructions are explicit: "RWEAs ... for CCR are excluded and disclosed in rows
+# 6 and 16 of this template", so the block is where the CCR charge lands. Rows
+# 7 / 8 / UK 8a / 9 are the "of which" rows of row 6 and PARTITION it — row 9 is
+# defined as the explicit residual ("CCR RWEAs ... that are not disclosed under
+# rows 7, 8 and UK 8a"). ``UK8a`` takes the row list's own existing convention for
+# a UK-specific insert (``UK4a``): a bare token, no space.
+#
+# Placed immediately after row 5 (the last "of which" of row 1) — the block's
+# regulatory position. The Basel 3.1 pre-floor/ratio rows (4a, 5a-7b) are our own
+# supplementary grafts and do not dictate where the fixed-format block sits.
+#
+# Row 10 (CVA) is deliberately NOT added: the engine's BA-CVA charge is not a
+# per-leg ``rwa_final``, so there is nothing to bind (recorded gap,
+# docs/plans/c07-ccr-derivatives.md §4 D1).
+_OV1_CCR_ROWS: list[P3Row] = [
+    P3Row("6", "Counterparty credit risk - CCR"),
+    P3Row("7", "CCR - Of which the standardised approach"),
+    P3Row("8", "CCR - Of which internal model method (IMM)"),
+    P3Row("UK8a", "CCR - Of which exposures to a central counterparty (CCP)"),
+    P3Row("9", "CCR - Of which other CCR"),
+]
+
 CRR_OV1_ROWS: list[P3Row] = [
     P3Row("1", _LBL_CREDIT_RISK_EX_CCR),
     P3Row("2", "Of which: standardised approach"),
@@ -177,6 +201,7 @@ CRR_OV1_ROWS: list[P3Row] = [
     P3Row("4", "Of which: slotting approach"),
     P3Row("UK4a", "Of which: equities under simple risk-weighted approach"),
     P3Row("5", "Of which: advanced IRB approach"),
+    *_OV1_CCR_ROWS,
     P3Row("24", "Amounts below deduction thresholds (250% RW)"),
     P3Row("29", "Total", is_total=True),
 ]
@@ -188,6 +213,7 @@ B31_OV1_ROWS: list[P3Row] = [
     P3Row("4", "Of which: slotting approach"),
     P3Row("4a", "Total RWEAs (pre-floor)"),
     P3Row("5", "Of which: advanced IRB approach"),
+    *_OV1_CCR_ROWS,
     P3Row("5a", "CET1 ratio (pre-floor)"),
     P3Row("5b", "CET1 ratio (pre-floor, transitional)"),
     P3Row("6a", "Tier 1 ratio (pre-floor)"),

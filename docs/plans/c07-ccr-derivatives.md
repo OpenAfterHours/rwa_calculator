@@ -131,7 +131,7 @@ all** — so this is a template-structure change (new `P3Row`s), not a predicate
 | 7 | "Of which the standardised approach … **Section 3**" (SA-CCR) | the bilateral derivative |
 | 8 | "Of which internal model method (IMM) … Section 6" | **null** — IMM not implemented (CCR1 row 2 sets the precedent) |
 | UK 8a | "Of which exposures to a central counterparty (CCP) … **Section 9**" | the QCCP-cleared derivative (Art. 306) |
-| 9 | "Of which **other CCR** — CCR RWEAs … **that are not disclosed under rows 7, 8 and UK 8a**" | the residual: FCCM SFTs, default-fund contributions |
+| 9 | "Of which **other CCR** — CCR RWEAs … **that are not disclosed under rows 7, 8 and UK 8a**" | the residual: CCR legs faced to a **non-CCP** counterparty (today: FCCM SFTs vs an institution) |
 | 10 | "Credit valuation adjustment (CVA)" | not modelled here — see the CVA gap below |
 
 Row 9's text **settles the partition**: rows 7/8/UK 8a/9 partition row 6, with 9 as the explicit
@@ -143,9 +143,21 @@ corroborate it**: CCR1 row 1 (SA-CCR) carries the bilateral RWEA only; CCR8 carr
 Booking the QCCP into row 7 would make OV1 contradict CCR1/CCR8 on the same book.
 
 **The CCR set is THREE risk types**, not two: `CCR_DERIVATIVE`, `CCR_SFT`, **and `CCR_DEFAULT_FUND`**
-(Art. 307-309, Chapter 6, carries `rwa_final`). No fixture has one, so nothing moves today — but
-`c07.py::_CCR_RISK_TYPES` and `of02.py::_CCR_RISK_TYPES` both omit it, which would silently
-under-report for a book with default-fund contributions. Latent, unfixtured; recorded.
+(Art. 307-309, Chapter 6, carries `rwa_final`). Aligned across `c07`/`of02`/`cms1`/`ov1` in 92f53e63;
+no fixture has one, so nothing moved.
+
+**Where default-fund contributions belong (corrected 2026-07-14 by adversarial review):** Art. 307-309
+sits **inside Section 9** (Art. 300-311), so a CCP default-fund contribution is an *"exposure to a
+CCP"* and reports in **UK 8a**, NOT the row-9 residual. An earlier draft of this table said the
+opposite. The code was already right (a default-fund row carries `cp_entity_type == "ccp"`, so it
+routes to UK 8a) — only the recorded basis was wrong, which is precisely how a defect survives. Now
+pinned by a test. Likewise a **CCP-faced SFT** routes to UK 8a (Art. 301(1)(b)); row 9 holds only CCR
+legs faced to a non-CCP counterparty.
+
+**Latent divergence recorded:** on a **non-qualifying CCP** book, OV1 row 7 excludes the leg (it keys
+`cp_entity_type != "ccp"`) while CCR1 row 1 col b admits it (it keys `~(ccp & cp_is_qccp)`, conflating
+"bilateral" with "non-QCCP"). OV1's reading is the correct one; the defect is CCR1's. No fixture has a
+non-qualifying CCP.
 
 **Two further gaps found in passing (not this slice):** OV1 has no CVA row, and the engine's BA-CVA
 charge is not a per-row `rwa_final`, so a book with a CVA charge publishes an OV1 Total that omits it.

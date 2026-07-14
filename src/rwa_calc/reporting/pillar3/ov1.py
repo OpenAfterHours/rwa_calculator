@@ -5,17 +5,51 @@ Pipeline position:
     sealed aggregator-exit ledger + ReportingContext
         -> build_ov1_spec(framework) -> cellspec.execute() -> OV1 DataFrame
 
-Cell semantics (unchanged from the imperative generator, golden-gated):
+Cell semantics (golden-gated):
 
-- Rows 1 / 29 (totals): Sum of ``rwa_final``; column c takes the generic
-  8% own-funds shim.
+- Row 29 (Total): Sum of ``rwa_final`` over the WHOLE ledger — an
+  all-risk-type total; column c takes the generic 8% own-funds shim.
+- Row 1 ("Credit risk (EXCLUDING CCR)"): Sum of ``rwa_final`` over the
+  NON-CCR legs. The instructions are explicit — "RWEAs ... for CCR are
+  excluded and disclosed in rows 6 and 16 of this template" — so rows 1-5
+  are cut by ``risk_type``, NEVER by the approach label: under CRR the CCR
+  legs carry ``reporting_approach_origin == "standardised"``, so an
+  approach-keyed exclusion no-ops exactly where the defect lives (recorded
+  fix 2026-07-14, docs/plans/c07-ccr-derivatives.md §4 D1/D4; before it,
+  row 1 was the whole ledger and equalled row 29 on a book with CCR).
 - Row 2 (SA incl. equity) and the per-approach rows (3 F-IRB, 4 slotting,
   UK4a equity, 5 A-IRB): Sum of ``rwa_final`` over the ORIGIN approach
   (``reporting_approach_origin`` — the recorded pre-substitution basis;
-  the post-substitution retarget is the plan's F-decision family). These
-  cells report 0.0 for an absent approach (per-cell zero override on the
-  Pillar 3 null template).
-- Row 4a: pre-floor total (Sum of the conditional ``rwa_pre_floor``).
+  the post-substitution retarget is the plan's F-decision family),
+  conjoined with the same non-CCR cut — they are "of which" rows of row 1
+  and inherit its exclusion. These cells report 0.0 for an absent approach
+  (per-cell zero override on the Pillar 3 null template).
+- The CCR block (6 / 7 / 8 / UK8a / 9), keyed on the module-owned derived
+  Booleans below:
+    * 6 (Chapter 6) is a POPULATION — ``risk_type`` in the CCR set — and
+      NOT ``Formula(7 + 8 + UK8a + 9)``. That choice does NOT turn the
+      "children partition the parent" tie-out into a real assertion: row 9
+      is DEFINED as the residual (``is_ccr & ~is_sa_ccr & ~is_ccp``), so
+      ``6 == 7 + UK8a + 9`` holds algebraically whichever way row 6 is
+      bound. What it does buy is smaller and worth stating honestly — the
+      tie-out exercises the executor's population plumbing end to end, and
+      it catches a MIS-KEYED row-6 population (a CCR risk type missing from
+      ``_CCR_RISK_TYPES``, say) that a Formula parent would silently absorb.
+    * 7 (Section 3, SA-CCR) is a CCR derivative NOT faced to a CCP; UK8a
+      (Section 9) is the CCP-faced leg, whatever its risk type; 9 is the
+      explicit residual ("CCR RWEAs ... that are not disclosed under rows 7,
+      8 and UK 8a") — the CCR legs that are neither SA-CCR-against-a-non-CCP
+      (row 7), nor IMM (row 8), nor faced to a CCP (row UK8a). Today that is
+      exactly the SFTs faced to a NON-CCP counterparty: an SFT faced to a CCP
+      is inside Section 9's scope (Art. 301(1)(b)) and routes to UK8a, and so
+      does a default-fund contribution (Art. 307-309, also inside Section 9).
+    * 8 (Section 6, IMM) is bound to NOTHING and stays null: IMM is not
+      implemented, and null is not the same claim as 0.0 (CCR1 row 2 is
+      the precedent).
+  Rows 6/7/UK8a/9 zero-fill — "this book has no CCR" is a claim the
+  calculator can make.
+- Row 4a: pre-floor total (Sum of the conditional ``rwa_pre_floor``) — an
+  all-risk-type total, like row 29, and so NOT cut by the CCR exclusion.
 - Rows 5a-7b: pre-floor capital ratios x100 from the ReportingContext
   overrides (SideContext).
 - Row 24: 250%-RW memo (Sum of ``rwa_final`` where ``reporting_rw`` is in
@@ -32,13 +66,19 @@ Cell semantics (unchanged from the imperative generator, golden-gated):
 References:
 - CRR Part 8 Art. 438; PRA PS1/26 Annex XX (UKB OV1, incl. rows 11-14
   Art. 132-132C CIU sub-approaches and the floor rows 26/27)
+- CRR Art. 274-280f (SA-CCR, Chapter 6 Section 3); Art. 283 (IMM,
+  Section 6); Art. 300-311 (exposures to CCPs, Section 9 — including
+  Art. 301(1)(b), which puts SFTs faced to a CCP in Section 9's scope, and
+  Art. 307-309, the default-fund-contribution charge)
 - docs/plans/phase7-declarative-reporting.md §3.2 (S8 — Pillar 3 first)
+- docs/plans/c07-ccr-derivatives.md §4 D1 (the CCR block this adds)
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import polars as pl
 from watchfire import cites
 
 from rwa_calc.reporting.cellspec import (
@@ -56,8 +96,6 @@ from rwa_calc.reporting.pillar3.templates import OV1_COLUMNS, get_ov1_rows
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-
-    import polars as pl
 
     from rwa_calc.contracts.bundles import OutputFloorSummary
     from rwa_calc.contracts.config import Pillar3CapitalRatioOverrides
@@ -93,6 +131,48 @@ _EQUITY_SUBAPPROACH_REFS: dict[str, tuple[str, str]] = {
 # Floor rows whose column ``a`` is a multiplier (26) or RWA adjustment (27).
 _FLOOR_NO_SHIM_REFS: frozenset[str] = frozenset({"26", "27"})
 
+# The CCR population (Chapter 6). Keyed by ``risk_type``, NEVER by the approach
+# label: under CRR the CCR legs carry ``standardised`` and under Basel 3.1
+# ``standardised_ccr`` (the output-floor relabel), so an approach-based rule
+# no-ops exactly where the CRR defect lives (§4 D4). THREE risk types, not two:
+# CCP default-fund contributions (Art. 307-309) are a Chapter 6 charge carrying
+# ``rwa_final``, so they belong in row 6 — and in row UK8a, NOT in the row-9
+# residual: Art. 307-309 sits INSIDE Section 9 (Art. 300-311), so a default-fund
+# contribution IS an "exposure to a CCP" in the disclosure taxonomy (the CCR8
+# template carries explicit pre-funded / unfunded default-fund rows under both
+# its QCCP and non-QCCP blocks). That is already what the code does, with no
+# special-casing: the CCR stage gives the synthetic default-fund row the CCP as
+# its counterparty (``counterparty_reference = ccp_reference``), enrichment
+# stamps ``cp_entity_type == "ccp"``, and ``_IS_CCP`` fires. No fixture carries
+# one today — latent, not a reason to drop it.
+#
+# Deliberately LOCAL to OV1 (the of02.py / cms1.py precedent): each template owns
+# its own tuple, so one template's recorded basis cannot leak into another's
+# (docs/plans/c07-ccr-derivatives.md §4 D4).
+_CCR_RISK_TYPES: tuple[str, ...] = ("CCR_DERIVATIVE", "CCR_SFT", "CCR_DEFAULT_FUND")
+
+# Module-owned derived discriminator columns (the cms1.py / of02.py pattern):
+# RowPredicate carries no negation and no risk-type field, so the CCR cut and its
+# three-way partition are derived in ``_prepare`` as Boolean flags and matched
+# with tolerant ``equals``.
+_IS_CCR: str = "ov1_is_ccr"
+_IS_SA_CCR: str = "ov1_is_sa_ccr"
+_IS_CCP: str = "ov1_is_ccp"
+_IS_OTHER_CCR: str = "ov1_is_other_ccr"
+
+# The CCR block's populated rows -> the derived flag each one selects. Row 8
+# (IMM, Section 6) is absent on purpose: it binds NO CellSpec and stays null.
+_CCR_ROW_FLAGS: dict[str, str] = {
+    "6": _IS_CCR,
+    "7": _IS_SA_CCR,
+    "UK8a": _IS_CCP,
+    "9": _IS_OTHER_CCR,
+}
+
+# Rows 1-5 are "Credit risk (excluding CCR)" and its "of which" rows: the CCR
+# legs are excluded here and disclosed in the block above.
+_NON_CCR: RowPredicate = RowPredicate(equals=((_IS_CCR, False),))
+
 
 def _own_funds_shim(cells: Mapping[str, float | None], _prior: bool) -> float | None:
     """Column c = a x 0.08 (own-funds requirement) when a is populated."""
@@ -102,12 +182,20 @@ def _own_funds_shim(cells: Mapping[str, float | None], _prior: bool) -> float | 
 
 def _row_a_cell(ref: str) -> CellSpec | None:
     """The column-``a`` binding for one OV1 row ref (None = stays null)."""
-    if ref in ("1", "29"):
+    if ref == "29":
         return CellSpec(Sum("rwa_final"))
+    if ref == "1":
+        return CellSpec(Sum("rwa_final"), predicate=_NON_CCR)
     if ref == "4a":
         return CellSpec(Sum("rwa_pre_floor"))
     if ref in _RATIO_REFS:
         return CellSpec(SideContext(_RATIO_REFS[ref], scale=100.0))
+    if ref in _CCR_ROW_FLAGS:
+        return CellSpec(
+            Sum("rwa_final"),
+            predicate=RowPredicate(equals=((_CCR_ROW_FLAGS[ref], True),)),
+            empty_cell="zero",
+        )
     if ref == "24":
         return CellSpec(Sum("rwa_final"), predicate=RowPredicate(rw_between=(2.495, 2.505)))
     if ref in _EQUITY_SUBAPPROACH_REFS:
@@ -122,9 +210,10 @@ def _row_a_cell(ref: str) -> CellSpec | None:
     if ref == "27":
         return CellSpec(SideContext("of_adj"))
     if ref in _APPROACH_REFS:
+        # An "of which" of row 1 inherits row 1's CCR exclusion.
         return CellSpec(
             Sum("rwa_final"),
-            predicate=RowPredicate(approaches_origin=_APPROACH_REFS[ref]),
+            predicate=RowPredicate(approaches_origin=_APPROACH_REFS[ref], equals=_NON_CCR.equals),
             empty_cell="zero",
         )
     return None
@@ -182,4 +271,54 @@ def generate_ov1(
         output_floor_summary=output_floor_summary,
         capital_ratio_overrides=capital_ratios,
     )
-    return execute(spec, results, ctx)
+    return execute(spec, _prepare(results, cols), ctx)
+
+
+def _prepare(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:
+    """Derive the four CCR discriminator columns the cell predicates key off.
+
+    All four are ALWAYS derived — a missing source column yields a literal
+    False, never an absent column. That matters: an absent column makes a
+    tolerant ``equals`` term match NOTHING, which would drop the whole book out
+    of row 1 rather than route it to the non-CCR side.
+
+    Rows 7 / UK8a / 9 PARTITION row 6, so they are cut mutually exclusively:
+
+    - 7 (Section 3, SA-CCR): a CCR derivative NOT faced to a CCP.
+    - UK8a (Section 9): the CCP-faced legs. Section 9 (Art. 300-311) scopes
+      "exposures to a CCP" — ALL CCPs, qualifying and non-qualifying — so this
+      is the literal reading (``cp_entity_type == "ccp"``), NOT a QCCP-only cut.
+      Our fixture carries only a QCCP, so the two readings are numerically
+      identical today; the literal one is chosen and recorded here. (Contrast
+      c07.py's ``c07_qccp``, whose rows are explicitly "of which: cleared
+      through a QCCP" and so DO consult ``cp_is_qccp``.)
+    - 9: the explicit residual — is-CCR and neither of the above. Today that is
+      exactly the FCCM SFTs faced to a NON-CCP counterparty. It is NOT "the SFTs
+      and the default-fund contributions": an SFT faced to a CCP is in Section
+      9's scope (Art. 301(1)(b)) and so lands in UK8a, as does a default-fund
+      contribution (Art. 307-309, also inside Section 9) — both by the plain
+      ``cp_entity_type == "ccp"`` cut above, with no special-casing.
+    """
+    is_ccr = (
+        pl.col("risk_type").is_in(_CCR_RISK_TYPES).fill_null(value=False)
+        if "risk_type" in cols
+        else pl.lit(value=False)
+    )
+    is_derivative = (
+        (pl.col("risk_type").fill_null("") == "CCR_DERIVATIVE")
+        if "risk_type" in cols
+        else pl.lit(value=False)
+    )
+    faces_ccp = (
+        (pl.col("cp_entity_type").fill_null("") == "ccp")
+        if "cp_entity_type" in cols
+        else pl.lit(value=False)
+    )
+    is_sa_ccr = is_derivative & ~faces_ccp
+    is_ccp = is_ccr & faces_ccp
+    return results.with_columns(
+        is_ccr.alias(_IS_CCR),
+        is_sa_ccr.alias(_IS_SA_CCR),
+        is_ccp.alias(_IS_CCP),
+        (is_ccr & ~is_sa_ccr & ~is_ccp).alias(_IS_OTHER_CCR),
+    )

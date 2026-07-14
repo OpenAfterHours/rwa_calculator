@@ -252,15 +252,16 @@ class COREPGenerator:
         cols = _available_columns(results)
 
         # SA templates (C 07.00)
-        # FCCM SFTs are SA-risk-weighted but carry the CCR-via-SA
-        # ``approach_applied`` tag (``standardised_ccr``) under the output floor,
-        # so a plain ``approach_applied == "standardised"`` filter would drop
-        # them under Basel 3.1. Admit them explicitly via ``risk_type ==
-        # "CCR_SFT"`` so the SFT EAD lands in C 07.00 (total row 0010 + the
-        # SFT-netting breakdown row 0090, PS1/26 App. 17). SA-CCR derivatives are
-        # admitted only incidentally, and only under CRR — a known defect, since
-        # Annex II puts CCR exposures in C 07.00 rows 0090-0130 (row 0110 =
-        # derivatives). See the c07 module docstring / docs/plans/c07-ccr-derivatives.md.
+        # Both CCR populations — FCCM SFTs and SA-CCR derivative netting sets —
+        # are SA-risk-weighted but carry the CCR-via-SA ``approach_applied`` tag
+        # (``standardised_ccr``) under the output floor, so a plain
+        # ``approach_applied == "standardised"`` filter would drop them under
+        # Basel 3.1. They are admitted explicitly by ``risk_type`` so their EAD
+        # lands in C 07.00 — the total row 0010 plus the Annex II exposure-type
+        # breakdown (row 0090 SFT netting sets, row 0110 derivative + long
+        # settlement netting sets, and their QCCP "of which" rows 0100/0120;
+        # PS1/26 App. 17). See the c07 module docstring /
+        # docs/plans/c07-ccr-derivatives.md.
         c07_00 = self._generate_all_c07(results, cols, framework, errors)
 
         # IRB templates (C 08.01, C 08.02, C 08.03, C 08.06)

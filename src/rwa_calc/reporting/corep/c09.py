@@ -21,8 +21,13 @@ Cell semantics (recorded decisions, this slice):
   Under B31 the RE-split mortgage classes match no class row and
   surface ONLY in the Total row.
 - C 09.01 shares C 07.00's population (``c07_population`` — the SA book
-  plus FCCM SFT synthetic rows); C 09.02 is the IRB book INCLUDING
-  slotting (the retired inline comment claiming exclusion was misleading).
+  plus BOTH counterparty-credit-risk populations: FCCM SFT synthetic rows
+  and SA-CCR derivative netting sets, admitted by ``risk_type``). That
+  shared population is why the Basel 3.1 institution row is now populated:
+  the derivative netting sets used to be dropped by the
+  ``standardised_ccr`` output-floor relabel and never reached either
+  template. C 09.02 is the IRB book INCLUDING slotting (the retired inline
+  comment claiming exclusion was misleading).
 - The retired reverse-map row keying is preserved: a row whose key is not
   a ``C09_01_SA_CLASS_MAP`` value renders ALL-NULL (the SME / short-term /
   CIU / real-estate sub-rows are permanently null — recorded dead code,

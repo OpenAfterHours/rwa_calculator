@@ -10,19 +10,19 @@ CCR template surface (C 34.x) and the C 07.00 counterparty-credit-risk rows had
 no oracle at all — the recorded Phase 7 "S8-pre" gap. Without a golden, any fix
 to C 07.00's derivative handling would be unprovable.
 
-**These goldens capture CURRENT behaviour, which is DEFECTIVE.** Measured, and
-asserted explicitly below so nobody mistakes the snapshot for a blessing:
-- C 07.00 row 0110 ("Derivatives and Long Settlement Transactions netting sets")
-  is EMPTY in both regimes, so the exposure-type breakdown does not foot to the
-  total;
-- under Basel 3.1 the derivatives are dropped from C 07.00 ENTIRELY (the
-  output-floor ``standardised_ccr`` relabel moves them off the ``"standardised"``
-  filter), so the SA EAD/RWEA is understated.
+The goldens were captured BEFORE the C 07.00 fix, against behaviour that was
+measurably defective: row 0110 ("Derivatives and Long Settlement Transactions
+netting sets") was empty in both regimes, and under Basel 3.1 the derivatives
+were dropped from C 07.00 entirely (the output-floor ``standardised_ccr`` relabel
+moved them off the ``"standardised"`` population filter). The snapshot was never
+a blessing — the fix's diff against it IS the proof.
 
-Annex II requires CCR exposures in C 07.00 rows 0090-0130. The fix
-(docs/plans/c07-ccr-derivatives.md steps 3-6) will move these goldens; that diff
-IS the proof. Regenerate with REGEN_REPORTING_GOLDENS=1 only alongside a recorded
-decision — never to make a red suite green.
+The two assertions at the foot of this file state the behaviour Annex II
+requires (CCR exposures in rows 0090-0130) rather than the behaviour that was
+captured, so they hold the fix in place; the full expected-value oracle lives in
+``tests/acceptance/reporting/test_c07_ccr_derivative_rows.py``. Regenerate the
+goldens with REGEN_REPORTING_GOLDENS=1 only alongside a recorded decision —
+never to make a red suite green.
 
 References:
 - COREP Annex II, C 07.00 rows 0090-0130; CRR Art. 274(2), Art. 306 (QCCP 2%)
@@ -129,7 +129,7 @@ def test_ccr_reporting_templates_match_golden(regime_key: str) -> None:
 
 
 # =============================================================================
-# The defect, pinned explicitly (so the snapshot is not mistaken for correct)
+# The fix, pinned explicitly (so the snapshot is not mistaken for correct)
 # =============================================================================
 
 
@@ -148,38 +148,66 @@ def test_derivatives_reach_the_engine_in_both_regimes() -> None:
         assert float(rows["rwa_final"].sum()) > 0.0, regime_key
 
 
-def test_c07_derivative_row_0110_is_empty_today() -> None:
-    """KNOWN DEFECT: C 07.00 row 0110 is null though derivatives are present.
+def test_c07_derivative_row_0110_reports_the_derivative_netting_sets() -> None:
+    """C 07.00 row 0110 carries the derivative netting sets (was null — the defect).
 
     Annex II: row 0110 = "Netting sets containing only derivatives listed in
-    Annex II CRR and long settlement transactions". Step 3 of
-    docs/plans/c07-ccr-derivatives.md populates it — this assertion then flips,
-    deliberately.
+    Annex II CRR and long settlement transactions", and it is the additive parent
+    of the QCCP "of which" row 0120. An empty 0110 means the exposure-type
+    breakdown does not foot to the total.
+
+    Arrange: the CCR portfolio under CRR (two derivative netting sets).
+    Act:     run the pipeline -> COREP C 07.00 institution sheet.
+    Assert:  row 0110 reports a positive exposure value and RWEA, and contains
+             row 0120.
+
+    Exact figures: tests/acceptance/reporting/test_c07_ccr_derivative_rows.py.
     """
+    # Arrange + Act
     frames, _meta = _generate_frames("crr")
     sheet = frames["corep__c07_00__institution"]
     row_0110 = sheet.filter(pl.col("row_ref") == "0110")
+    row_0120 = sheet.filter(pl.col("row_ref") == "0120")
 
+    # Assert
     assert row_0110.height == 1
-    assert row_0110["0200"][0] is None, "row 0110 populated — has step 3 landed? update this test"
-    assert row_0110["0220"][0] is None
-
-
-def test_basel31_drops_derivatives_from_c07_entirely_today() -> None:
-    """KNOWN DEFECT: under Basel 3.1 the derivatives never reach C 07.00.
-
-    The ``standardised_ccr`` output-floor relabel moves them off the
-    ``"standardised"`` population filter, so C 07.00 understates the SA EAD and
-    RWEA. C 34.01 still reports them, so the RWEA is not lost from the ledger —
-    only from this template. Step 4 fixes the population; this assertion flips.
-    """
-    frames, _meta = _generate_frames("b31")
-
-    c07_sheets = [key for key in frames if key.startswith("corep__c07_00__")]
-    assert c07_sheets == ["corep__c07_00__corporate"], (
-        "an institution sheet appeared — has step 4 landed? update this test"
+    assert row_0110["0200"][0] is not None, (
+        "C 07.00 row 0110 must report the derivative netting sets (Annex II) — "
+        "it is null, so section 2 does not foot to the total."
+    )
+    assert float(row_0110["0220"][0]) > 0.0
+    assert float(row_0110["0200"][0]) >= float(row_0120["0200"][0]), (
+        "row 0120 is an 'of which' subset of row 0110, not a sibling."
     )
 
-    # The RWEA is still on the ledger: C 34.01 reports it.
+
+def test_basel31_reports_derivatives_in_c07() -> None:
+    """Basel 3.1: the derivatives reach C 07.00 (they were dropped — the defect).
+
+    The ``standardised_ccr`` output-floor relabel moved them off the
+    ``"standardised"`` population filter, so C 07.00 understated the SA EAD and
+    RWEA. They are readmitted by ``risk_type`` — the label must stay
+    ``standardised_ccr`` (it is load-bearing for the output floor). C 34.01 keeps
+    reporting them too: C 07.00 and C 34 are not alternatives.
+
+    Arrange: the CCR portfolio under Basel 3.1.
+    Act:     run the pipeline -> COREP.
+    Assert:  the institution C 07.00 sheet exists and carries RWEA; C 34.01 still
+             reports the same book.
+    """
+    # Arrange + Act
+    frames, _meta = _generate_frames("b31")
+
+    # Assert
+    c07_sheets = sorted(key for key in frames if key.startswith("corep__c07_00__"))
+    assert c07_sheets == ["corep__c07_00__corporate", "corep__c07_00__institution"], (
+        "the SA-CCR derivative netting sets must reach C 07.00 under Basel 3.1 "
+        f"(sheets produced: {c07_sheets})"
+    )
+    institution = frames["corep__c07_00__institution"]
+    total = institution.filter(pl.col("row_ref") == "0010")
+    assert float(total["0220"][0]) > 0.0
+
+    # The RWEA is on the ledger twice by design: C 34.01 reports it as well.
     c34_01 = frames["corep__c34_01"]
     assert float(c34_01["0020"][0]) > 0.0

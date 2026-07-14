@@ -1448,8 +1448,6 @@ class TestC0700SupportingFactorRWEA:
         assert "0215" not in corp.columns
         assert "0216" not in corp.columns
         assert "0217" not in corp.columns
-
-
 class TestOF0700RESubRowFallback:
     """Tests for OF 07.00 RE sub-row filtering with has_income_cover fallback.
 

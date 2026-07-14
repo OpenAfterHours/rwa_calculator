@@ -168,10 +168,10 @@ LINEAGE_PLANS: dict[str, _Provider] = {
         plans=c07_plans,
         generate=generate_c07,
         scope=(
-            "Standardised-approach legs, plus FCCM SFT rows. KNOWN DEFECT: SA-CCR "
-            "derivatives are included under CRR (in the total and their risk-weight "
-            "band, but in no exposure-type row — 0110 is empty) and dropped entirely "
-            "under Basel 3.1. Annex II requires them here (rows 0090-0130)",
+            "Standardised-approach legs, plus BOTH counterparty-credit-risk "
+            "populations — FCCM SFT rows and SA-CCR derivative netting sets. The CCR "
+            "rows are admitted by risk type (not by the approach label, which the "
+            "output floor relabels), and Annex II breaks them out in rows 0090-0130",
             "Specialised lending is merged into corporate (Art. 112(1)(g): under the "
             "standardised approach SL is a corporate sub-type)",
         ),

@@ -88,10 +88,29 @@ C 07.00 and C 34 together. Changing the C 07.00 population moves nothing in the 
       derivative EAD/RWEA conservation check across C 34 ↔ C 07.00 (the mirror of the SFT test at
       `tests/acceptance/reporting/test_reporting_sft_c07_0090.py`, which exists for SFTs only).
 
-### Open question for step 3/4
+### Open question for step 3/4 — RESOLVED 2026-07-12 (read from the Annex II PDF)
 
-C 07.00 col 0010 ("Original exposure pre conversion factors") is `SafeSum(drawn_amount,
-undrawn_amount)`. The CCR adapter sets `drawn_amount = ead_ccr`
-(`engine/ccr/pipeline_adapter.py`), so the column does populate for derivative rows — but whether
-the *exposure value* is the right thing to report in col 0010 for a CCR row (vs the C 34.02 col 0160
-cross-reference) must be checked against the column instructions before step 4 lands.
+**Col 0010 is correct as it stands; no CellSpec change needed.** Annex II, col 0010 "ORIGINAL
+EXPOSURE PRE-CONVERSION FACTORS": *"…with the following qualifications stemming from Article 111(2)
+CRR: 1. For Derivative instruments … subject to counterparty credit risk … **the original exposure
+shall correspond to the Exposure Value for Counterparty Credit Risk** (see instructions to column
+0210)."* The CCR adapter sets `drawn_amount = ead_ccr`, so `SafeSum(drawn_amount, undrawn_amount)`
+already yields the SA-CCR EAD. (The C 34.02 col-0160 cross-reference belongs to **col 0210**, not
+col 0010 — it governs allocating an obligor's exposure across netting-set rows.)
+
+**Cols 0210/0211 are REQUIRED, not optional — folded into step 3.** Col 0200: *"Exposure values for
+CCR business shall be the same as reported in column 0210."* Col 0210 = *"Of which: Arising from
+Counterparty Credit Risk"* — the CCR exposure value. Col 0211 = *"Exposures reported in column 0210
+excluding those arising from contracts and transactions listed in Article 301(1) CRR"* (i.e.
+excluding CCP-cleared). Both are hard-coded null today; the same inert-CCR-cell defect.
+
+### Row membership (settled)
+
+0110 is the **additive parent** = every derivative netting set, *including* the QCCP-cleared ones;
+0120 is the **"of which"** QCCP subset of 0110; 0100 is the QCCP subset of **0090** (SFTs), not of
+the CCR block. **Trap:** writing 0110 as "derivative AND NOT qccp" makes 0120 a sibling rather than
+an of-which, and the breakdown stops footing.
+
+Row 0130 (contractual cross-product netting, Art. 295(c)) stays null — **not modelled**: there is no
+input carrier for a cross-product netting agreement. Recorded as a scope limitation, not as
+"we checked and there are none".

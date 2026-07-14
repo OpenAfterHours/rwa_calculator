@@ -15,31 +15,23 @@ docs/plans/phase7-declarative-reporting.md §6):
   the synthetic COREP unit estate needs no shim). Specialised lending is
   merged into corporate before keying (Art. 112(1)(g): SL is a corporate
   sub-type under SA; the SL "of which" rows split it back via sl_type).
-- The population is the standardised book plus the FCCM SFT synthetic rows
-  (``risk_type == "CCR_SFT"`` — SA-risk-weighted but tagged
-  ``standardised_ccr`` under the output floor).
-
-  **KNOWN DEFECT — SA-CCR derivatives (tracked; do not "tidy" this note away).**
-  Annex II is explicit that C 07.00 covers CCR exposures: rows 0070/0080 say
-  "Exposures that are subject to counterparty credit risk shall be reported in
-  rows 0090 - 0130, and therefore shall not be reported in this row", row 0110
-  is "Derivatives and Long Settlement Transactions netting sets", and the
-  column instructions take the CCR exposure value from C 34.02 col 0160.
-  C 07.00 and C 34 are NOT alternatives — C 34 analyses CCR by approach,
-  C 07.00 risk-weights those same exposures under SA. What this module does
-  today, measured:
-    - CRR: derivative rows carry ``approach_applied == "standardised"``, so
-      they ARE admitted — landing in total row 0010 and their risk-weight band
-      row, but in NO exposure-type row (0110 is inert), so section 2 does not
-      foot to the total.
-    - Basel 3.1: the output-floor relabel (``standardised_ccr``,
-      ``engine/stages/calc.py``) moves them off the ``"standardised"`` value and
-      they are dropped from C 07.00 ENTIRELY — the SA EAD/RWEA is understated.
-  The asymmetry is an artefact of that floor relabel, never a scope decision.
-  The fix admits them by ``risk_type`` (the precedent SFTs already set) and
-  populates rows 0100/0110/0120 — it must NOT relabel the approach, which is
-  load-bearing for the output floor. See
-  ``docs/plans/c07-ccr-derivatives.md``.
+- The population is the standardised book plus BOTH counterparty-credit-risk
+  populations (``risk_type in {"CCR_SFT", "CCR_DERIVATIVE"}`` — SA-risk-weighted
+  but tagged ``standardised_ccr`` under the output floor, so they are admitted by
+  ``risk_type``, never by the approach label; relabelling the approach back would
+  break the output floor, which routes on it).
+  Annex II is explicit that C 07.00 covers CCR: rows 0070/0080 say "Exposures
+  that are subject to counterparty credit risk shall be reported in rows
+  0090 - 0130, and therefore shall not be reported in this row", row 0110 is
+  "Derivatives and Long Settlement Transactions netting sets" (the ADDITIVE
+  PARENT of the QCCP "of which" row 0120; 0100 is the same "of which" for the
+  SFT row 0090), and cols 0210/0211 carry the CCR exposure value and its
+  Art. 301(1) CCP-cleared exclusion. C 07.00 and C 34 are NOT alternatives —
+  C 34 analyses CCR by approach, C 07.00 risk-weights those same exposures
+  under SA; a derivative belongs in both, and no roll-up sums the two.
+  Row 0130 (contractual cross-product netting sets, Art. 295(c)) is inert
+  because it is NOT MODELLED — no input carrier exists for a cross-product
+  netting agreement. See ``docs/plans/c07-ccr-derivatives.md``.
 - Substitution outflow (col 0090) sums the guaranteed portions migrating
   OUT of each row subset (``guaranteed_portion > 0`` and the pre-CRM class
   differs from the guarantor class — the raw-twin semantics preserved
@@ -63,9 +55,10 @@ docs/plans/phase7-declarative-reporting.md §6):
   ALL-NULL — the retired ``_null_row`` contract — via a module post-step
   that re-applies each row's predicate.
 - Cells whose sources are never produced render None via constant
-  Formulas (0210/0211/0240; the CCF buckets and supporting-factor
-  adjustments when their carriers are absent), preserving the recorded
-  structural-null cells.
+  Formulas (0240; 0210/0211 when no ``risk_type`` / ``cp_entity_type``
+  carrier is sealed; the CCF buckets and supporting-factor adjustments
+  when their carriers are absent), preserving the recorded structural-null
+  cells.
 
 References:
 - CRR Art. 111-113 (SA exposure values / RWEA); Art. 501/501a
@@ -114,6 +107,12 @@ _NEGATIVE_COLS: frozenset[str] = frozenset(
 _CCF_MAP_CRR: dict[float, str] = {0.0: "0160", 0.2: "0170", 0.5: "0180", 1.0: "0190"}
 _CCF_MAP_B31: dict[float, str] = {0.1: "0160", 0.2: "0170", 0.4: "0171", 0.5: "0180", 1.0: "0190"}
 _CCF_REFS: tuple[str, ...] = ("0160", "0170", "0171", "0180", "0190")
+
+# The two counterparty-credit-risk row populations (Annex II rows 0090-0130):
+# FCCM SFT synthetic rows and SA-CCR derivative netting sets. Both are
+# SA-risk-weighted but carry ``standardised_ccr`` under the output floor, so
+# they are admitted to C 07.00 by risk_type, never by the approach label.
+_CCR_RISK_TYPES: tuple[str, ...] = ("CCR_SFT", "CCR_DERIVATIVE")
 
 # Section 1 "of which" maps (retired _C07_* constants, preserved verbatim).
 _SL_TYPE_MAP: dict[str, str] = {
@@ -289,20 +288,33 @@ def generate_c07(
 
 @cites("PS1/26")
 def c07_population(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:
-    """The C 07.00 population: the standardised book plus the FCCM SFT rows.
+    """The C 07.00 population: the standardised book plus the CCR rows.
 
-    SA-CCR derivative rows are admitted only incidentally, and only under CRR
-    (where they carry ``approach_applied == "standardised"``); under Basel 3.1
-    the output-floor relabel drops them. That asymmetry is a known defect, not a
-    scope rule — see the module docstring.
+    The CCR limb admits BOTH counterparty-credit-risk risk types (FCCM SFT
+    synthetic rows and SA-CCR derivative netting sets) by ``risk_type`` —
+    Annex II puts them in rows 0090-0130, and C 07.00 risk-weights under SA the
+    very exposures C 34 analyses by approach. Admission cannot key the approach
+    label: under the output floor ``engine/stages/calc.py`` relabels CCR rows to
+    ``standardised_ccr`` so they route into the floor-eligible approaches, which
+    is load-bearing and must NOT be undone here.
+
+    Under CRR the derivative rows already arrive on the ``"standardised"`` limb;
+    the ``unique`` dedupe means admitting them again costs nothing (the CRR
+    totals do not move). Under Basel 3.1 this limb is the only one that admits
+    them at all.
     """
     sa = filter_by_approach(
         results, "standardised", cols, candidates=("reporting_approach_origin",)
     )
     if "risk_type" not in cols:
         return sa
-    sft = results.filter(pl.col("risk_type") == "CCR_SFT")
-    return pl.concat([sa, sft], how="diagonal_relaxed").unique(
+    ccr = results.filter(pl.col("risk_type").is_in(_CCR_RISK_TYPES))
+    # The dedupe keys the exposure reference, which the sealed ledger always
+    # carries. The `subset=None` fallback (synthetic unit frames only, where no
+    # reference column exists) dedupes on ALL columns — two genuinely distinct
+    # exposures identical in every column would collapse into one. Harmless
+    # where it can fire; do not promote this fallback to the ledger path.
+    return pl.concat([sa, ccr], how="diagonal_relaxed").unique(
         subset=["exposure_reference"] if "exposure_reference" in cols else None,
         keep="first",
     )
@@ -424,6 +436,37 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
     if "sa_cqs" in cols:
         exprs.append(pl.col("sa_cqs").is_not_null().alias("c07_rated"))
 
+    # CCR discriminators (cols 0210/0211). 0210 = "of which: arising from
+    # counterparty credit risk"; 0211 = the same, excluding the Art. 301(1)
+    # CCP-cleared transactions. RowPredicate carries no negation, so the
+    # "excluding CCP" side is derived here as its own flag.
+    if "risk_type" in cols:
+        is_ccr = pl.col("risk_type").is_in(_CCR_RISK_TYPES).fill_null(value=False)
+        exprs.append(is_ccr.alias("c07_ccr"))
+        if "cp_entity_type" in cols:
+            exprs.append(
+                (is_ccr & (pl.col("cp_entity_type").fill_null("") != "ccp")).alias(
+                    "c07_ccr_non_ccp"
+                )
+            )
+
+    # QCCP discriminator (the "of which: cleared through a QCCP" rows 0100/0120).
+    # The project-wide canonical form, mirrored verbatim: a ``ccp`` entity_type
+    # whose flag is not an EXPLICIT False (CRR Art. 272 Def (88) / Art. 306 — an
+    # absent flag is treated as qualifying; only an explicit False demotes a
+    # ``ccp`` to the Art. 107(2)(a) institution ladder). Identical to
+    # engine/sa/risk_weights.py's 2%/4% override, the aggregator's
+    # ``rwa_ccr_qccp_trade`` partition and Pillar 3 CCR8. It MUST be derived
+    # rather than expressed as a RowPredicate term: a bare ("cp_is_qccp", True)
+    # compiles to ``== True``, so a NULL flag would drop a netting set that the
+    # very same sheet already reports in the 2% risk-weight band.
+    if {"cp_entity_type", "cp_is_qccp"} <= cols:
+        exprs.append(
+            ((pl.col("cp_entity_type") == "ccp") & pl.col("cp_is_qccp").fill_null(value=True))
+            .fill_null(value=False)
+            .alias("c07_qccp")
+        )
+
     # Collateral volatility/maturity adjustment (col 0140 = market - Cvam).
     if "collateral_market_value" in cols:
         adjusted = (
@@ -511,6 +554,18 @@ def _terms_for_row(  # noqa: PLR0911, PLR0912, C901 - a direct table of the reti
             return (("c07_bs", "off"),)
         if ref == "0090":
             return (("risk_type", "CCR_SFT"),)
+        if ref == "0100":  # of which: SFT netting sets cleared through a QCCP
+            return (("risk_type", "CCR_SFT"), ("c07_qccp", True))
+        if ref == "0110":  # derivative + long-settlement netting sets — the
+            # ADDITIVE PARENT of 0120: every netting set, INCLUDING the
+            # QCCP-cleared ones. Writing it as "derivative AND NOT qccp" would
+            # make 0120 a sibling and the breakdown would stop footing.
+            return (("risk_type", "CCR_DERIVATIVE"),)
+        if ref == "0120":  # of which: derivative netting sets cleared via a QCCP
+            return (("risk_type", "CCR_DERIVATIVE"), ("c07_qccp", True))
+        # 0130 (contractual cross-product netting sets, Art. 295(c)) is NOT
+        # MODELLED: no input carrier exists for a cross-product netting
+        # agreement. Inert, not "checked and found empty".
         return None
     if section_index == 2:  # noqa: PLR2004 - RW band section
         return (("c07_rw_band", name),)
@@ -672,8 +727,20 @@ def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row
         ),
         "0150": CellSpec(Formula(refs=("0110", "0130"), fn=_fully_adjusted)),
         "0200": CellSpec(Sum(ead_col), predicate=member),
-        "0210": CellSpec(Formula(refs=(), fn=_const(None))),
-        "0211": CellSpec(Formula(refs=(), fn=_const(None))),
+        # Annex II col 0200: "Exposure values for CCR business shall be the same
+        # as reported in column 0210" — so 0210 is the row's exposure value
+        # narrowed to its CCR rows, and 0211 narrows further by excluding the
+        # Art. 301(1) CCP-cleared transactions.
+        "0210": (
+            CellSpec(Sum(ead_col), predicate=narrowed(("c07_ccr", True)))
+            if "risk_type" in cols
+            else CellSpec(Formula(refs=(), fn=_const(None)))
+        ),
+        "0211": (
+            CellSpec(Sum(ead_col), predicate=narrowed(("c07_ccr_non_ccp", True)))
+            if {"risk_type", "cp_entity_type"} <= cols
+            else CellSpec(Formula(refs=(), fn=_const(None)))
+        ),
         "0220": CellSpec(Sum(rwa_col), predicate=member),
         "0240": CellSpec(Formula(refs=(), fn=_const(None))),
     }

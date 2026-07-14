@@ -838,20 +838,47 @@ comparison between full standardised RWA and modelled RWA by risk type.
 
 ### Implementation Notes
 
-- Only row 0010 (credit risk) and 0080 (total) are populated from the pipeline
-- Rows 0020–0070 (CCR, CVA, securitisation, market risk, op risk, residual) are null — require
-  data beyond credit risk scope
-- Col a: RWA from IRB + slotting exposures (modelled approaches)
-- Col b: RWA from SA-only portfolios
-- Col c: Sum of cols a and b
-- Col d: sa_rwa for all exposures (full SA recalculation)
+- **The columns partition each row.** Annex II defines cell 0010/a as the exposures "where the
+  RWA is **not** computed based on the standardised approach (ie subject to the credit risk IRB
+  approaches (F-IRB, A-IRB and supervisory slotting))", cell 0010/b as the RWA "which result from
+  applying the … standardised approach", and cell 0010/c as "the sum of cells 0010/a and 0010/b".
+  That sum is only the row's whole RWA because a and b partition it.
+- **Col a — modelled**: `rwa_final` over {F-IRB, A-IRB, supervisory slotting}. Slotting is
+  Art. 153(5) — an IRB-chapter approach.
+- **Col b — the complement of col a**, never an allow-list of approach labels. It therefore
+  includes **SA-CCR** legs and equity ("exposures calculated according to the SA for credit risk
+  include equity exposures subject to the IRB Equity Transitional"). An approach label the
+  template does not recognise falls into b rather than into neither column.
+- **Col c** = a + b (the Annex II intra-row sum).
+- **Col d — the SA-equivalent of *that row's* population**, not of the whole book: "RWA as would
+  result from applying the … standardised approach to **all exposures giving rise to the RWA
+  reported in cell 0010/c**". It spans both the modelled and standardised sides of the row.
+- **Rows 0010 and 0020 partition the credit-risk book by risk type.** Row 0010 ("Credit risk")
+  "excludes … capital requirements relating to a counterparty credit risk charge, which are
+  reported in row 0020"; row 0020 (CCR) carries the SA-CCR derivative netting sets, FCCM SFT legs
+  and CCP default-fund contributions. Row 0020 is **bound**, so it reports `0.0` on a book with no
+  CCR rather than a misleading null. Row 0080 (Total) is the whole book, and hence their sum.
+- Rows 0030–0070 (CVA, securitisation, market risk, op risk, residual) are **null** — genuinely
+  outside a credit-risk calculator's scope, and null is not the same claim as 0.0.
+- CCR membership is keyed by `risk_type`, never by the approach label: under CRR the CCR legs
+  carry `standardised` and under Basel 3.1 `standardised_ccr` (the output-floor relabel), so an
+  approach-based rule would no-op exactly where it matters.
+
+!!! warning "Col b used to be an allow-list — and it silently dropped the CCR charge"
+    Until the 2026-07 fix, col b was an explicit list of standardised approach labels that omitted
+    `standardised_ccr`. Every SA-CCR leg therefore matched **neither** col a nor col b, and col c
+    (= a + b) dropped it: CMS1's Total reported 2,500,000 while CMS2 reported 4,060,296.72 for the
+    same book — a difference of exactly the derivative RWEA. CCR-via-SA is floor-eligible, so it
+    must appear in the floor comparison. Making col b the *complement* of the modelled set is what
+    makes an omission of this kind impossible to repeat.
 
 ### Col d — pre-OF-ADJ S-TREA input (reconciles to OF 02.01 col 0040)
 
 Column d is the **S-TREA input to the output floor formula before the floor multiplier
-`x` is applied and before OF-ADJ is added** — not the post-floor RWA. It matches the
-S-TREA value reported in supervisory return **OF 02.01 col 0040** ("Standardised total
-RWA — multiplier not applied"). The full TREA formula is:
+`x` is applied and before OF-ADJ is added** — not the post-floor RWA. Row for row, it matches
+the S-TREA reported in supervisory return **OF 02.01 col 0040** ("Standardised total
+RWA — multiplier not applied"), which shares CMS1's risk-type row axis (0010 credit risk
+excluding CCR, 0020 CCR, 0080 total). The full TREA formula is:
 
 ```
 TREA = max{U-TREA; x · S-TREA + OF-ADJ}
@@ -874,8 +901,12 @@ Source: PRA PS1/26 Art. 92(2A), `docs/assets/ps126app1.pdf` page 13.
     GCRA cap specifically references S-TREA, so CMS1 col d **directly determines**
     the maximum GCRA amount that can flow into OF-ADJ:
 
-    `max GCRA in OF-ADJ = 1.25% × (CMS1 col d for credit risk row 0010, plus the
-    S-TREA contribution from non-credit risk types)`
+    `max GCRA in OF-ADJ = 1.25% × (CMS1 col d for the credit-risk rows 0010 + 0020,
+    plus the S-TREA contribution from non-credit risk types)`
+
+    Rows 0010 and 0020 partition the credit-risk book (credit risk excluding CCR, and
+    CCR), so both belong in the credit-risk S-TREA — reading row 0010 alone would
+    understate the base, and a smaller S-TREA is a lower floor.
 
     For an IRB firm whose credit-risk S-TREA is the dominant component (as is
     typical), increasing CMS1 col d row 0010 raises the GCRA T2 capacity in
@@ -937,13 +968,17 @@ Basel 3.1 only — no CRR equivalent. Breaks down the credit risk comparison at 
 
 ### Implementation Notes
 
-- Col a: IRB + slotting RWA per exposure class
-- Col b: sa_rwa for modelled exposures (SA-equivalent recalculation)
-- Col c: Modelled RWA + SA portfolio RWA per class
+- Col a: IRB + slotting RWA per exposure class (the modelled approaches)
+- Col b: sa_rwa for modelled exposures (SA-equivalent recalculation of col a's population)
+- Col c: the class's whole actual RWA — no approach filter, so modelled and standardised alike
 - Col d: sa_rwa for all exposures in each class
 - Sub-rows 0041/0042 filter by approach (F-IRB/A-IRB within corporates)
 - Sub-rows 0044, 0045, 0054 are null (require pipeline data not yet available)
-- Excludes CCR, CVA, and securitisation exposures
+- CVA and securitisation are out of scope. **Counterparty credit risk is not excluded**: CMS2's row
+  axis is the Art. 147 asset class, so an SA-CCR leg reports in its counterparty's class row (a bank
+  counterparty under row 0020, Institutions) and in the col c total. CMS2 is the template that
+  caught CMS1 dropping the CCR charge — the two disagreed by exactly the derivative RWEA on the
+  same book (2,500,000 vs 4,060,296.72), and CMS2 was the one telling the truth.
 
 ### Col d — pre-OF-ADJ S-TREA at asset-class granularity
 

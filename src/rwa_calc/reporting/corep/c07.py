@@ -108,11 +108,27 @@ _CCF_MAP_CRR: dict[float, str] = {0.0: "0160", 0.2: "0170", 0.5: "0180", 1.0: "0
 _CCF_MAP_B31: dict[float, str] = {0.1: "0160", 0.2: "0170", 0.4: "0171", 0.5: "0180", 1.0: "0190"}
 _CCF_REFS: tuple[str, ...] = ("0160", "0170", "0171", "0180", "0190")
 
-# The two counterparty-credit-risk row populations (Annex II rows 0090-0130):
-# FCCM SFT synthetic rows and SA-CCR derivative netting sets. Both are
-# SA-risk-weighted but carry ``standardised_ccr`` under the output floor, so
-# they are admitted to C 07.00 by risk_type, never by the approach label.
-_CCR_RISK_TYPES: tuple[str, ...] = ("CCR_SFT", "CCR_DERIVATIVE")
+# What counts as counterparty credit risk in C 07.00: the population limb
+# (``c07_population``) and the "of which: arising from CCR" discriminator (cols
+# 0210/0211) read the SAME set. All three members are SA-risk-weighted but carry
+# ``standardised_ccr`` under the output floor, so they are admitted by risk_type,
+# never by the approach label.
+#
+# The CCR set is THREE risk types, not two: FCCM SFT synthetic rows, SA-CCR
+# derivative netting sets, and ``CCR_DEFAULT_FUND`` — CCP default-fund
+# contributions (Art. 307-309), which are Chapter 6 counterparty credit risk just
+# as much as the other two. Do not trim it back to two: without it the population
+# would silently depend on the approach LABEL (default-fund rows carry
+# ``approach_applied == "standardised"``, so they reach C 07.00 anyway today — the
+# limb makes the intent explicit), and the 0210/0211 "of which CCR" columns would
+# under-report a book that holds default-fund contributions. It also keeps this
+# template's definition of CCR identical to OF 02.01's and CMS1's, so one
+# submission cannot carry two contradictory definitions.
+#
+# Deliberately LOCAL to C 07.00 (docs/plans/c07-ccr-derivatives.md §4 D4): each
+# template owns its own tuple — a shared risk-type constant is how one template's
+# basis leaks into CR4/CR5/OV1, which key their own recorded bases.
+_CCR_RISK_TYPES: tuple[str, ...] = ("CCR_SFT", "CCR_DERIVATIVE", "CCR_DEFAULT_FUND")
 
 # Section 1 "of which" maps (retired _C07_* constants, preserved verbatim).
 _SL_TYPE_MAP: dict[str, str] = {

@@ -104,7 +104,21 @@ _MODELLED_APPROACHES: tuple[str, ...] = ("foundation_irb", "advanced_irb", "slot
 # by the approach label: under CRR the CCR legs carry ``standardised`` and under
 # Basel 3.1 ``standardised_ccr`` (the output-floor relabel), so an approach-based
 # rule would no-op exactly where it matters.
-_CCR_RISK_TYPES: tuple[str, ...] = ("CCR_DERIVATIVE", "CCR_SFT")
+#
+# The CCR set is THREE risk types, not two. ``CCR_DEFAULT_FUND`` (CCP
+# default-fund contributions, Art. 307-309) is a Chapter 6 counterparty-credit-risk
+# charge — same chapter as the SA-CCR derivative and FCCM SFT legs — so it belongs
+# on row 0020, not on row 0010 ("Credit risk excluding CCR"). Do not trim it back
+# to two: dropping it would book a default-fund contribution as NON-CCR here while
+# CMS1 (whose set is the same three) books it as CCR, so one submission would carry
+# two contradictory definitions of CCR. No fixture carries such a row today, so the
+# third member is latent — that is not a reason to remove it.
+#
+# Deliberately LOCAL, like ``_MODELLED_APPROACHES`` above: each template owns its
+# own tuple (recorded anti-pattern, docs/plans/c07-ccr-derivatives.md §4 D4 — a
+# shared risk-type/approach constant is how one template's basis leaks into
+# CR4/CR5/OV1, which key their own recorded bases).
+_CCR_RISK_TYPES: tuple[str, ...] = ("CCR_DERIVATIVE", "CCR_SFT", "CCR_DEFAULT_FUND")
 
 # The module-derived discriminator columns (the established pattern — c07_qccp,
 # cr5_rw_bucket): RowPredicate carries no negation and no approach/risk-type

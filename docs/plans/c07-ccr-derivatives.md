@@ -116,13 +116,42 @@ in the opposite direction.** Verbatim, from the OV1 instructions:
 > **Row UK 8a — CCR – Of which exposures to a CCP:** "…in accordance with **Section 9** of Chapter 6…"
 
 So: **adding CCR to OV1 row 2 would be a misstatement.** CCR must be *removed* from rows 1 and 2 and
-disclosed in its own block. The of-whichs partition by *RWEA computation basis*, so a QCCP trade's
-RWEA (Art. 306, Section 9) belongs in **UK 8a**, not row 7.
+disclosed in its own block.
 
 Measured today (`ccr_b31`/`ccr_crr` goldens): OV1 row 1, labelled *"Credit risk (excluding CCR)"*,
 **includes** the CCR RWEA in both regimes; under CRR row 2 (the SA of-which) does too, because CRR
-CCR legs carry `approach_origin == "standardised"`. Our OV1 row list has **no rows 6/7/8/UK 8a at
+CCR legs carry `approach_origin == "standardised"`. Our OV1 row list has **no rows 6/7/8/UK 8a/9/10 at
 all** — so this is a template-structure change (new `P3Row`s), not a predicate tweak.
+
+**The CCR block, resolved (both regimes — UKB OV1 carries the identical block):**
+
+| Row | Instruction (verbatim) | Our population |
+|---|---|---|
+| 6 | "Counterparty credit risk – CCR … in accordance with Chapter 6 / the CCR Part" | `risk_type ∈ CCR set` (the additive parent) |
+| 7 | "Of which the standardised approach … **Section 3**" (SA-CCR) | the bilateral derivative |
+| 8 | "Of which internal model method (IMM) … Section 6" | **null** — IMM not implemented (CCR1 row 2 sets the precedent) |
+| UK 8a | "Of which exposures to a central counterparty (CCP) … **Section 9**" | the QCCP-cleared derivative (Art. 306) |
+| 9 | "Of which **other CCR** — CCR RWEAs … **that are not disclosed under rows 7, 8 and UK 8a**" | the residual: FCCM SFTs, default-fund contributions |
+| 10 | "Credit valuation adjustment (CVA)" | not modelled here — see the CVA gap below |
+
+Row 9's text **settles the partition**: rows 7/8/UK 8a/9 partition row 6, with 9 as the explicit
+residual. So a QCCP trade's RWEA (computed under Section 9) belongs in **UK 8a**, not row 7 — and
+SFTs, which are neither Section 3 nor Section 9, have a home in row 9 rather than breaking the
+footing. Our engine already splits exactly this way, with citations
+(`aggregator.py` — `rwa_ccr_default` vs `rwa_ccr_qccp_trade`), and **our own CCR1/CCR8 goldens
+corroborate it**: CCR1 row 1 (SA-CCR) carries the bilateral RWEA only; CCR8 carries the QCCP RWEA.
+Booking the QCCP into row 7 would make OV1 contradict CCR1/CCR8 on the same book.
+
+**The CCR set is THREE risk types**, not two: `CCR_DERIVATIVE`, `CCR_SFT`, **and `CCR_DEFAULT_FUND`**
+(Art. 307-309, Chapter 6, carries `rwa_final`). No fixture has one, so nothing moves today — but
+`c07.py::_CCR_RISK_TYPES` and `of02.py::_CCR_RISK_TYPES` both omit it, which would silently
+under-report for a book with default-fund contributions. Latent, unfixtured; recorded.
+
+**Two further gaps found in passing (not this slice):** OV1 has no CVA row, and the engine's BA-CVA
+charge is not a per-row `rwa_final`, so a book with a CVA charge publishes an OV1 Total that omits it.
+And our B31 OV1 refs `4a/5a/5b/6a/6b/7a/7b` (pre-floor totals and capital ratios) look like BCBS
+**KM1** row numbers grafted into OV1 with no citation — they do not collide with the CCR block as
+strings, but one of the two numbering systems is likely wrong.
 
 ### D2 — Pillar 3 CMS1: the CCR row is null and the Total is not a total (Basel 3.1)
 
@@ -170,6 +199,19 @@ U-TREA = 137,449,963.91). **OF 02.01 must keep reading nothing off `OutputFloorS
 col 0030 to `summary.u_trea` would look reasonable and be wrong.
 
 **This needs a binding-floor fixture to prove, which no golden currently has.**
+
+### D7 — An IRB-treated CCR leg would be reported in BOTH C 07.00 and C 08.01 (NEW, latent)
+
+`c07_population` admits any row whose `risk_type` is in the CCR set **regardless of approach**. But an
+IRB-permissioned counterparty's derivative routes through IRB (`approach_applied == "foundation_irb"`),
+so such a leg would land in C 07.00 (the **SA** template, via the `risk_type` limb) *and* in C 08.01
+(via the IRB population) — double-reported across templates, and breaking the new C 07.00 ↔ C 02.00
+tie-out (C 02.00 would book it in the IRB rows).
+
+Pre-existing in shape (the SFT limb had the same unconditional admission), but widening the limb to
+derivatives makes it likelier to bite. **No fixture exercises it** — the CCR portfolio is SA-only. The
+fix is presumably to conjoin the CCR limb with "not IRB-treated", but that needs a decision about
+where an IRB-treated derivative *should* report. Flagged by two independent reviewers.
 
 ### D4 — CRR CR4/CR5 leak CCR into SA disclosures (the mirror of the C 07.00 defect)
 

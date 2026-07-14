@@ -100,6 +100,21 @@ See `output-floor.md` for the floor mechanics in detail.
 (output floor); Regulation (EU) 2021/451 Annex I (CRR layout); PRA PS1/26 Annex I
 (OF 02.00 layout).
 
+!!! warning "Row 0050 **includes** counterparty credit risk — and the SA row foots"
+    Annex II names row 0050 **"RISK WEIGHTED EXPOSURE AMOUNTS FOR CREDIT, COUNTERPARTY CREDIT
+    AND DILUTION RISKS AND FREE DELIVERIES"** (Art. 92(3)(a),(f)). CCR is *inside* that row —
+    C 02.00 has no sibling "Counterparty credit risk" row to hold it, unlike
+    [OF 02.01](#of-0201-output-floor-comparison-basel-31-only) and Pillar 3 OV1, whose row
+    labels legitimately read "Credit risk (excluding CCR)".
+
+    Row 0050 was mislabelled "Credit risk (excluding CCR)" until the 2026-07 fix — a row that
+    carried CCR while claiming to exclude it. Its **"Of which: Standardised Approach"** child
+    (row 0060) and the Art. 112 class rows (0070–0211) now cover SA **and** SA-CCR, because
+    Annex II defines the SA child as the "CR SA and SEC SA templates at the level of total
+    exposures" — the SA row **is** the C 07.00 total, and C 07.00 reports CCR business. Before
+    the fix, the Basel 3.1 template did not foot: the SA row reported 2,500,000 against a
+    4,060,296.72 credit-risk total, the gap being exactly the SA-CCR derivative RWEA.
+
 ### Column Structure
 
 === "CRR (C 02.00)"
@@ -222,36 +237,59 @@ consumed by [C 02.00 / OF 02.00](#c-0200-of-0200-own-funds-requirements) to appl
 
 | Column | Label | Description |
 |--------|-------|-------------|
-| **0010** | Modelled RWA | RWEA using internal models (IRB, IMM, IMA, SEC-IRBA, etc.) |
-| **0020** | SA RWA | RWEA calculated under the Standardised Approach equivalent portfolio |
-| **0030** | U-TREA | Un-floored Total Risk Exposure Amount (Art. 92 para 3) |
-| **0040** | S-TREA | Standardised Total Risk Exposure Amount (Art. 92 para 3A) — calculated without IRB, SFT VaR, SEC-IRBA, IAA, IMM, or IMA |
+| **0010** | Modelled RWA | RWEA of the portfolios calculated under **modelled** approaches only — F-IRB, A-IRB and supervisory slotting (Art. 153(5) is an IRB-chapter approach) |
+| **0020** | Standardised RWA | RWEA of the portfolios calculated under **standardised** approaches only — the **complement** of col 0010, so SA, SA-CCR and equity all land here |
+| **0030** | U-TREA | Un-floored Total Risk Exposure Amount (Art. 92 para 3) = **col 0010 + col 0020** |
+| **0040** | S-TREA | Standardised Total Risk Exposure Amount (Art. 92 para 3A) — the SA re-computation of the row's **whole** population (modelled and standardised alike), calculated without IRB, SFT VaR, SEC-IRBA, IAA, IMM, or IMA |
+
+!!! warning "Cols 0010 and 0020 **partition** the book — they do not overlap"
+    Annex II defines col 0030 as "a sum of 0010 and 0020, i.e. the complete current
+    portfolio". That identity only holds because the two columns partition the portfolio:
+    each exposure is counted in exactly one of them. Col 0020 is therefore the
+    **complement** of the modelled set — not an allow-list of approach labels — so an
+    approach the template does not recognise falls into the standardised side rather than
+    into neither column.
+
+    Both columns sum the **pre-floor own-approach RWA** (`rwa_pre_floor`). Only col 0040
+    sums the SA-equivalent (`sa_rwa`), and it does so over the row's whole population —
+    that is what S-TREA *is*.
+
+    Until the 2026-07 fix, cols 0010 and 0020 were each summed over the **whole**
+    portfolio, so col 0030 reported U-TREA + S-TREA rather than U-TREA. See the
+    [changelog](../appendix/changelog.md) for the measured impact.
 
 ### Row Structure
 
 | Row | Risk Type | Current Scope |
 |-----|-----------|---------------|
-| **0010** | Credit risk | Populated — SA and IRB credit RWA from pipeline output |
-| **0020** | Counterparty credit risk (CCR) | Null — CCR out of scope |
+| **0010** | Credit risk (excluding CCR) | Populated — the SA and IRB credit book, CCR excluded |
+| **0020** | Counterparty credit risk (CCR) | Populated — SA-CCR derivative netting sets, FCCM SFT legs, CCP default-fund contributions |
 | **0030** | CVA | Null — CVA out of scope |
 | **0040** | Securitisation | Null — securitisation out of scope |
 | **0050** | Market risk | Null — market risk out of scope |
 | **0060** | Operational risk | Null — operational risk out of scope |
 | **0070** | Other risk | Null — no other risk types in scope |
-| **0080** | Total | Populated — sum of all in-scope risk types (currently credit risk only) |
+| **0080** | Total | Populated — the whole book, and therefore the sum of rows 0010 and 0020 |
 
 !!! note "Scope"
-    Only the credit risk row (0010) and Total row (0080) are populated. All other rows
-    (CCR, CVA, securitisation, market risk, operational risk, other) are null because those
-    risk types are outside the current scope of the calculator.
+    Rows 0010 (credit risk excl. CCR), 0020 (CCR) and 0080 (Total) are populated. Rows 0010
+    and 0020 **partition** the credit-risk book by `risk_type`, so row 0080 is their sum.
+    Row 0020 is bound, not hard-coded — on a book with no derivatives, SFTs or default-fund
+    contributions it reports `0.0`, which is a claim this calculator can actually make.
+
+    The remaining rows (CVA, securitisation, market risk, operational risk, other) are
+    **null**, not zero: those risk types are genuinely outside a credit-risk calculator's
+    scope, and null is not the same claim as 0.0.
 
 ### Implementation
 
 | Item | Detail |
 |------|--------|
-| Generator method | `COREPGenerator._generate_of_02_01()` |
+| Generator | `reporting/corep/of02.py::generate_of_02_01` (declarative — one `TemplateSpec` through `reporting/cellspec.py`) |
 | Bundle field | `COREPTemplateBundle.of_02_01` |
 | Framework | Basel 3.1 only — not generated for CRR frameworks |
+| CCR membership | Keyed by `risk_type` (`CCR_DERIVATIVE`, `CCR_SFT`, `CCR_DEFAULT_FUND`), never by the approach label — under CRR the CCR legs carry `standardised` and under Basel 3.1 `standardised_ccr` (the output-floor relabel), so an approach-based rule would no-op exactly where it matters |
+| Output floor summary | Deliberately **not** read: `OutputFloorSummary.u_trea` / `.s_trea` are modelled-subset quantities, not the Art. 92 aggregates |
 | Status | **Complete** |
 
 ---
@@ -312,10 +350,17 @@ flowchart LR
     | 0210 | Of which: arising from CCR | Final |
     | 0211 | Of which: CCR excl. CCP | Final |
 
-    !!! warning "Null Columns — CCR Out of Scope"
-        Columns **0210** and **0211** are always null. Counterparty credit risk (SFT, derivatives,
-        cross-product netting) is outside the current scope of the calculator. CCR exposures would
-        be separately reported in OF 34.07 (see [Missing Templates](../specifications/output-reporting.md#status)).
+    !!! info "Columns 0210 / 0211 — the CCR exposure value (populated)"
+        Column **0210** ("Of which: Arising from Counterparty Credit Risk") is the row's exposure
+        value narrowed to its CCR legs — SA-CCR derivative netting sets, FCCM SFT legs and CCP
+        default-fund contributions. Column **0211** narrows it further by excluding the contracts
+        and transactions listed in **Art. 301(1)** (i.e. the CCP-cleared ones). Column 0200 is
+        anchored to them: *"Exposure values for CCR business shall be the same as reported in
+        column 0210."*
+
+        Both columns were hard-coded null until the 2026-07 fix. They are populated by
+        `risk_type` — never by the approach label, which the output floor relabels to
+        `standardised_ccr` under Basel 3.1.
 
     | 0215 | RWEA pre supporting factors | RWEA |
     | 0216 | (-) SME supporting factor adjustment | RWEA |
@@ -352,8 +397,11 @@ flowchart LR
     | 0210 | Of which: arising from CCR | Final | |
     | 0211 | Of which: CCR excl. CCP | Final | |
 
-    !!! warning "Null Columns — CCR Out of Scope"
-        Columns **0210** and **0211** are always null (same as CRR). See CRR tab for details.
+    !!! info "Columns 0210 / 0211 — the CCR exposure value (populated)"
+        Same as CRR — see the CRR tab. Under Basel 3.1 the CCR legs carry the
+        `standardised_ccr` approach label (the output-floor relabel), which is precisely why
+        the population is keyed by `risk_type`: before the 2026-07 fix that relabel dropped
+        SA-CCR derivatives out of OF 07.00 **entirely**, understating SA exposure value and RWEA.
 
     | ~~0215~~ | ~~RWEA pre supporting factors~~ | | **Removed** |
     | ~~0216~~ | ~~(-) SME supporting factor adjustment~~ | | **Removed** |
@@ -420,11 +468,30 @@ flowchart TD
     | 0120 | &emsp;of which: centrally cleared through a QCCP |
     | 0130 | From Contractual Cross Product netting sets |
 
-    !!! warning "Null Rows — CCR Out of Scope"
-        Rows **0090–0130** (SFT netting sets, derivatives and long settlement transactions,
-        cross-product netting, and their QCCP sub-rows) are always null. Counterparty credit risk
-        exposure data (netting sets, QCCP clearing flags) is not produced by the current pipeline.
-        Only rows 0070 (on-BS) and 0080 (off-BS) are populated.
+    !!! info "Rows 0090–0130 — counterparty credit risk (C 07.00 **does** cover CCR)"
+        Annex II is explicit that CCR belongs here. Rows 0070 / 0080 carry the instruction:
+        *"Exposures that are subject to counterparty credit risk shall be reported in
+        **rows 0090 – 0130**, and therefore shall not be reported in this row."*
+
+        | Row | Population |
+        |-----|------------|
+        | 0090 | SFT netting sets — the FCCM SFT legs |
+        | 0100 | &emsp;of which: cleared through a QCCP — the "of which" **subset of row 0090** |
+        | 0110 | Derivatives & long settlement transaction netting sets — the **additive parent**: every derivative netting set, **including** the QCCP-cleared ones |
+        | 0120 | &emsp;of which: cleared through a QCCP — the "of which" subset of row 0110 |
+        | 0130 | Contractual cross-product netting sets (Art. 295(c)) — **null: not modelled**. There is no input carrier for a cross-product netting agreement. This is a scope limitation, not "we checked and found none" |
+
+        Rows 0110 / 0120 were inert until the 2026-07 fix, and under Basel 3.1 derivatives were
+        dropped from C 07.00 altogether. Row 0110 is deliberately **not** written as "derivative
+        AND NOT QCCP": that would make 0120 a sibling rather than an "of which", and the
+        breakdown would stop footing to row 0010.
+
+    !!! note "C 07.00 and C 34 are not alternatives"
+        C 34 analyses counterparty credit risk **by CCR approach** (SA-CCR / IMM); C 07.00
+        risk-weights those same exposures **under the SA**. A derivative belongs in **both**, and
+        no roll-up sums the two — C 02.00, OF 02.01 and Pillar 3 OV1 each read the calculation
+        ledger directly. The earlier claim that "SA-CCR derivatives report under C 34, not
+        C 07.00" was not a scope decision; it rationalised a defect.
 
     **Section 3 — Breakdown by Risk Weights**
 
@@ -499,7 +566,18 @@ flowchart TD
 
     **Section 2 — Breakdown by Exposure Types**
 
-    Identical to CRR (rows 0070-0130). Rows 0090–0130 are null (CCR out of scope — see CRR tab).
+    Identical to CRR (rows 0070-0130), and populated identically — rows 0090/0100 (SFT netting
+    sets and their QCCP subset) and 0110/0120 (derivative netting sets and their QCCP subset)
+    carry the CCR book; row 0130 (cross-product netting) is null because it is not modelled.
+    See the CRR tab.
+
+    !!! warning "Basel 3.1 was the material case"
+        Under Basel 3.1 the CCR legs are relabelled `standardised_ccr` so the output floor can
+        route them, and OF 07.00 used to filter on the `standardised` label — so derivatives
+        fell out of the template **entirely**, understating SA exposure value and RWEA. They are
+        now admitted by `risk_type`, which is regime-independent. Under CRR the legs already
+        carried `standardised` and reached the total row incidentally; what was missing there
+        was only the 0110 / 0120 exposure-type breakdown.
 
     **Section 3 — Breakdown by Risk Weights**
 
@@ -618,10 +696,15 @@ value, LGD, maturity, RWEA, and memorandum items (expected loss, provisions, obl
     | 0140 | &emsp;Of which: large financial sector entities | Exposure Value |
 
     !!! warning "Null Columns — CCR and Off-BS Breakdown"
-        Column **0130** ("Of which: arising from CCR") is always null — counterparty credit risk
-        is outside the calculator's scope. Column **0120** ("Of which: off balance sheet" under
-        Exposure Value) is also null (implementation Phase 2B). Column **0030** ("Of which: large
-        financial sector entities") is null (Phase 2F).
+        Column **0130** ("Of which: arising from CCR") is always null. **Not because CCR is out
+        of scope** — the engine computes counterparty credit risk and reports it in
+        [C 07.00 rows 0090–0130](#c-0700-of-0700-cr-sa) — but because the engine risk-weights CCR
+        under **SA**-CCR, so no CCR exposure value reaches an IRB template. The column carries no
+        binding: an IRB-routed CCR exposure (an IRB-permissioned counterparty, whose derivative
+        takes the SA-CCR EAD into the IRB risk-weight function) would not be broken out here.
+        Column **0120** ("Of which: off balance sheet" under Exposure Value) is also null
+        (implementation Phase 2B). Column **0030** ("Of which: large financial sector entities")
+        is null (Phase 2F).
 
     | 0150 | Guarantees (own LGD estimates) | CRM in LGD: Unfunded |
     | 0160 | Credit derivatives (own LGD estimates) | CRM in LGD: Unfunded |
@@ -674,8 +757,10 @@ value, LGD, maturity, RWEA, and memorandum items (expected loss, provisions, obl
 
     !!! warning "Null Columns — CCR and Off-BS Breakdown"
         Columns **0120** (off-BS EAD), **0130** (CCR EAD), and **0030** (LFSE) are always null —
-        same as CRR. See CRR tab for details. Additionally, B31-only columns **0101–0104**
-        (slotting FCCM) and **0275–0276** (output floor SA-equivalent) are null (Phase 3A/2D).
+        same as CRR, and for the same reason: the CCR book is SA-risk-weighted and reports in
+        OF 07.00, not in an IRB template. See CRR tab. Additionally, B31-only columns
+        **0101–0104** (slotting FCCM) and **0275–0276** (output floor SA-equivalent) are null
+        (Phase 3A/2D).
 
     | 0150 | Guarantees | CRM in LGD: Unfunded | |
     | 0160 | Credit derivatives | CRM in LGD: Unfunded | |
@@ -740,11 +825,14 @@ value, LGD, maturity, RWEA, and memorandum items (expected loss, provisions, obl
     | 0050 | Derivatives & Long Settlement Transactions netting sets |
     | 0060 | From Contractual Cross Product netting sets |
 
-    !!! warning "Null Rows — CCR Out of Scope"
+    !!! warning "Null Rows — CCR reports under C 07.00, not here"
         Rows **0040–0060** (SFT netting sets, derivatives and long settlement transactions,
-        cross-product netting) are always null. Counterparty credit risk exposure data is not
-        produced by the current pipeline. Only rows 0020 (on-BS) and 0030 (off-BS) are populated.
-        CCR-arising IRB exposures would be separately reported in OF 34.07.
+        cross-product netting) are always null. The pipeline **does** produce counterparty credit
+        risk exposure data — it risk-weights it under **SA**-CCR, so it lands in
+        [C 07.00 rows 0090–0130](#c-0700-of-0700-cr-sa), the SA template. Only rows 0020 (on-BS)
+        and 0030 (off-BS) are populated here. These three rows carry no binding, so an IRB-routed
+        CCR exposure would not be broken out; IRB CCR would also be reported in OF 34.07, which
+        is not yet implemented.
 
     | | **CALCULATION APPROACHES** |
     | 0070 | Exposures assigned to obligor grades or pools: Total |
@@ -768,9 +856,10 @@ value, LGD, maturity, RWEA, and memorandum items (expected loss, provisions, obl
     | 0060 | From Contractual Cross Product netting sets | |
 
     !!! warning "Null Rows — CCR and CCF Buckets"
-        Rows **0040–0060** are null (CCR out of scope — see CRR tab). Additionally, rows
-        **0031–0035** (off-BS breakdown by CCF buckets) are null — CCF bucket data exists in the
-        pipeline but is not yet disaggregated for C 08.01 (available in C 07.00 only).
+        Rows **0040–0060** are null — the CCR book is SA-risk-weighted and reports in OF 07.00
+        rows 0090–0130 (see CRR tab). Additionally, rows **0031–0035** (off-BS breakdown by CCF
+        buckets) are null — CCF bucket data exists in the pipeline but is not yet disaggregated
+        for C 08.01 (available in C 07.00 only).
 
     | | **CALCULATION APPROACHES** | |
     | 0070 | Exposures assigned to obligor grades or pools: Total | |
@@ -1473,6 +1562,15 @@ defined in Art 5(5) of the Reporting (CRR) Part).
 Original exposure pre-conversion factors is reported by country of the **immediate** obligor.
 Exposure value and RWEA are reported by country of the **ultimate** obligor (after CRM
 substitution effects).
+
+!!! info "C 09.01 shares C 07.00's population — CCR included"
+    The geographical breakdown of the SA book is taken over the *same* population as
+    [C 07.00](#c-0700-of-0700-cr-sa): the standardised book **plus** both counterparty-credit-risk
+    populations, admitted by `risk_type`. So an SA-CCR derivative appears in its counterparty's
+    country sheet, under the counterparty's Art. 112 class row (a bank counterparty under row 0060,
+    Institutions). That shared population is why the Basel 3.1 institution row now populates: the
+    derivative netting sets used to be dropped by the `standardised_ccr` output-floor relabel and
+    reached neither template.
 
 ### Column Structure
 

@@ -81,7 +81,7 @@ GET /api/lineage?run_id=…&template=c07_00&sheet=corporate&row=0010&col=0220
   "is_source_backed": true,
   "filter_terms": [],
   "scope": [
-    "Standardised-approach legs, plus FCCM SFT rows (SA-CCR derivatives are excluded — they report under C 34)",
+    "Standardised-approach legs, plus BOTH counterparty-credit-risk populations — FCCM SFT rows and SA-CCR derivative netting sets. The CCR rows are admitted by risk type (not by the approach label, which the output floor relabels), and Annex II breaks them out in rows 0090-0130",
     "Specialised lending is merged into corporate (Art. 112(1)(g): under the standardised approach SL is a corporate sub-type)",
     "Sheet: obligor class = corporate"
   ],
@@ -101,6 +101,17 @@ risk-weight band). `scope` names the population steps that ran before the predic
 the full, reviewable answer to "which rules contributed".
 
 Everything runs on `basis: aggregator_exit` — the sealed per-leg ledger.
+
+!!! success "What it found first: a scope note that was not true"
+    The `scope` line above used to read *"Standardised-approach legs, plus FCCM SFT rows (SA-CCR
+    derivatives are excluded — they report under C 34)"*. An operator read it in the drill-down and
+    asked why. The answer: C 07.00 and C 34 are **not alternatives** — Annex II puts CCR exposures in
+    C 07.00 rows 0090–0130, and a derivative belongs in both templates. Under Basel 3.1 the
+    derivatives were being dropped from C 07.00 entirely, understating SA exposure value and RWEA.
+
+    That sentence was never a scope decision; it rationalised a defect. Making a hidden scope
+    decision *visible* is how it got caught — see the
+    [changelog](../appendix/changelog.md) for the four templates the resulting fix moved.
 
 ## Coverage
 

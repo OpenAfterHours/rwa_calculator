@@ -1,8 +1,8 @@
-{"row_ref":"0010","row_name":"Credit risk (excluding CCR)","a":0.0,"b":2500000.0,"c":2500000.0,"d":4060296.719974031}
-{"row_ref":"0020","row_name":"Counterparty credit risk","a":null,"b":null,"c":null,"d":null}
+{"row_ref":"0010","row_name":"Credit risk (excluding CCR)","a":0.0,"b":2500000.0,"c":2500000.0,"d":2500000.0}
+{"row_ref":"0020","row_name":"Counterparty credit risk","a":0.0,"b":1560296.719974031,"c":1560296.719974031,"d":1560296.719974031}
 {"row_ref":"0030","row_name":"Credit valuation adjustment","a":null,"b":null,"c":null,"d":null}
 {"row_ref":"0040","row_name":"Securitisation exposures in the banking book","a":null,"b":null,"c":null,"d":null}
 {"row_ref":"0050","row_name":"Market risk","a":null,"b":null,"c":null,"d":null}
 {"row_ref":"0060","row_name":"Operational risk","a":null,"b":null,"c":null,"d":null}
 {"row_ref":"0070","row_name":"Residual RWA","a":null,"b":null,"c":null,"d":null}
-{"row_ref":"0080","row_name":"Total","a":0.0,"b":2500000.0,"c":2500000.0,"d":4060296.719974031}
+{"row_ref":"0080","row_name":"Total","a":0.0,"b":4060296.719974031,"c":4060296.719974031,"d":4060296.719974031}

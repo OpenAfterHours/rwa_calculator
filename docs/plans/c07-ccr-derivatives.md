@@ -144,6 +144,33 @@ Verified on the **rich** portfolio at commit `c1a120ba` — i.e. before any CCR 
 modelled 137,449,963.91 + SA 161,655,833.33 → **U-TREA 299,105,797.25, 2.18× the modelled RWA.**
 This is the most serious of the four: the output floor compares U-TREA against S-TREA.
 
+### D5 — Equity is missing from S-TREA (anti-conservative; NEW)
+
+`sa_rwa` is **null on equity rows** — equity bypasses the SA calculator (it arrives via
+`equity_exposures` and is concatenated at the aggregator), so the `sa_rwa` snapshot never runs on it.
+Evidence: `b31/pillar3__cms2.ndjson` row 0030 (equity) — own RWEA 2,500,000, SA-equivalent **0.0**.
+
+Under Basel 3.1 equity is Art. 133 **SA**, so its RWA *is* its SA RWA and belongs in S-TREA. Today
+OF 02.01 col 0040, C 02.00 col 0020 and CMS2 col d all **understate S-TREA** by the equity RWA. A
+smaller S-TREA is a **lower floor** — this is anti-conservative. Engine-carrier fix (`sa_rwa` on the
+equity path); moves C 02.00 and CMS2 goldens. Its own slice.
+
+### D6 — The engine's output floor omits the SA book's headroom (HIGHEST SEVERITY; NEW)
+
+`engine/aggregator/_floor.py` computes U-TREA and S-TREA over `FLOOR_ELIGIBLE_APPROACHES` **only**,
+justified by a comment saying *"SA exposures cancel out … so we only need the modelled subset."*
+**They cancel under a subtraction, not under a `max()`.** With `A` = the SA book, the correct TREA is
+`A + max(U_m, x·S_m + adj − (1−x)·A)`; the engine returns `A + max(U_m, x·S_m + adj)`. So the engine
+**overstates TREA by up to (1−x)·A whenever the floor binds** — conservative, but a misstatement, and
+invisible in both goldens precisely because the floor binds in neither.
+
+Consequence for OF 02.01: `OutputFloorSummary.u_trea`/`.s_trea` are **modelled-subset** quantities,
+NOT the Art. 92 U-TREA/S-TREA (rich book: `summary.u_trea` = 115,369,130.58 while the template's
+U-TREA = 137,449,963.91). **OF 02.01 must keep reading nothing off `OutputFloorSummary`** — wiring
+col 0030 to `summary.u_trea` would look reasonable and be wrong.
+
+**This needs a binding-floor fixture to prove, which no golden currently has.**
+
 ### D4 — CRR CR4/CR5 leak CCR into SA disclosures (the mirror of the C 07.00 defect)
 
 `cr4.py`/`cr5.py` filter `approaches_origin=("standardised",)`, which under **CRR** admits the CCR

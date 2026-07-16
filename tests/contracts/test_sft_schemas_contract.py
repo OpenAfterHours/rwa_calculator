@@ -75,6 +75,10 @@ _SFT_TRADE_COLUMNS = {
     "under_master_netting_agreement",
     "qualifies_one_day_maturity_floor",
     "qualifies_mna_intermediate_floor",
+    # P1.215 — A-IRB routing carrier for synthetic CCR rows (own-estimate
+    # LGD). Additive, required=False, no default value (null = no modelled
+    # LGD; feeds the classifier's has_modelled_lgd AIRB gate).
+    "ccr_modelled_lgd",
 }
 
 

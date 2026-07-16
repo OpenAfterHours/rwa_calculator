@@ -1079,6 +1079,12 @@ TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # 5BD/10BD intermediate floors UNDER B31 ONLY (unused under CRR, where the
     # 5BD/10BD apply on MNA alone). (PS1/26 Art. 162(2A)(c)/(d).)
     "qualifies_mna_intermediate_floor": ColumnSpec(pl.Boolean, default=False, required=False),
+    # Own-estimate LGD carrier for A-IRB routing of the synthetic SA-CCR
+    # derivative row (P1.215, mirrors ``ccr_effective_maturity`` / the SFT
+    # sibling on SFT_TRADE_SCHEMA). Null (the common case) => no modelled LGD =>
+    # the row routes to SA / FIRB, bit-identical to today.
+    # (CRR Art. 143 / Art. 169-171: own-estimate LGD under A-IRB.)
+    "ccr_modelled_lgd": ColumnSpec(pl.Float64, required=False),
 }
 
 #: Netting-set-level input for SA-CCR. One row per netting set keyed by
@@ -1288,6 +1294,15 @@ SFT_TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # under an MNA but lacking it falls to the 162(2A)(f) 1-year catch-all.
     # Default False (conservative). (PS1/26 Art. 162(2A)(c)/(d).)
     "qualifies_mna_intermediate_floor": ColumnSpec(pl.Boolean, default=False, required=False),
+    # Own-estimate LGD carrier for A-IRB routing of the synthetic CCR/SFT row
+    # (P1.215, mirrors ``ccr_effective_maturity``). A netting-set/trade that
+    # routes to A-IRB carries the firm's modelled LGD here — the synthetic
+    # ``ccr__<NS>`` row has no lending ``lgd`` of its own, so this dedicated
+    # carrier feeds the classifier's ``has_modelled_lgd`` AIRB gate and the IRB
+    # LGD selection (engine/irb/transforms.py). Null (the common case) => no
+    # modelled LGD => the row falls to SA / FIRB, bit-identical to today.
+    # (CRR Art. 143 / Art. 169-171: own-estimate LGD under A-IRB.)
+    "ccr_modelled_lgd": ColumnSpec(pl.Float64, required=False),
 }
 
 #: Netting-set-keyed collateral received against an SFT, feeding the

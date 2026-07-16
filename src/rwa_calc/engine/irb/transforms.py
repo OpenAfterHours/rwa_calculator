@@ -195,11 +195,27 @@ def apply_firb_lgd(
         .otherwise(seniority_based_lgd_expr)
     )
 
+    # Guarantee the P1.215 A-IRB own-estimate LGD carrier exists as a typed null
+    # so the coalesce below never errors on lending-only / direct-call frames
+    # (it is a CCR_EXIT_EDGE-only column). ensure_columns uses pl.lit().cast() —
+    # no fill_null — so the check-11 baseline is untouched.
+    lf = ensure_columns(
+        lf, {"ccr_modelled_lgd": ColumnSpec(pl.Float64, default=None, required=False)}
+    )
+
     lf = lf.with_columns(
         [
+            # FIRB rows with a cleared LGD take the supervisory value (the FIRB
+            # branch is checked first, so ``firb_clear_expr`` wins and the
+            # coalesce never applies to them). A-IRB rows keep their own LGD;
+            # a synthetic CCR/SFT A-IRB row carries it on ``ccr_modelled_lgd``
+            # (P1.215) rather than the lending ``lgd``, so coalesce those before
+            # the supervisory default-fill (CRR Art. 143 own-estimate LGD).
             pl.when((pl.col("approach") == ApproachType.FIRB.value) & pl.col("lgd").is_null())
             .then(firb_lgd_expr)
-            .otherwise(pl.col("lgd").fill_null(default_lgd))
+            .otherwise(
+                pl.coalesce([pl.col("lgd"), pl.col("ccr_modelled_lgd")]).fill_null(default_lgd)
+            )
             .alias("lgd"),
         ]
     )

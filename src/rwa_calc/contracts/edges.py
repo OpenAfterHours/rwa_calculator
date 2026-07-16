@@ -619,6 +619,23 @@ CCR_EXIT_EDGE: EdgeContract = EdgeContract(
             citation="CRR Art. 162",
             null_meaning="null = lending row / off-carve-out CCR row — date-derived M applies",
         ),
+        # Own-estimate LGD carrier for A-IRB routing of the synthetic CCR/SFT row
+        # (P1.215). Producer-emitted modelled LGD for the FCCM-SFT / SA-CCR rows
+        # that route to A-IRB; null on lending rows and off-carve-out CCR rows
+        # (conform injects a typed null). Feeds the classifier ``has_modelled_lgd``
+        # AIRB gate and the IRB LGD selection (engine/irb/transforms.py) — never
+        # overloads the lending ``lgd`` column. required=False with NO default
+        # (a default on an optional Float carrier is anti-conservative). Declared
+        # HERE on CCR_EXIT_EDGE ONLY (NOT HIERARCHY_EXIT_EDGE) so it survives the
+        # CCR-only spread into CLASSIFIER_EXIT_CCR / CRM_EXIT_CCR / RE_SPLIT_EXIT_CCR
+        # rather than being filtered by the ``c not in HIERARCHY_EXIT_EDGE.columns``
+        # guard.
+        "ccr_modelled_lgd": EdgeColumn(
+            dtype=pl.Float64,
+            required=False,
+            citation="CRR Art. 143",
+            null_meaning="null = lending row / off-carve-out CCR row — no modelled LGD",
+        ),
         "addon_aggregate": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 278"),
         "addon_by_asset_class": EdgeColumn(
             dtype=pl.Struct(

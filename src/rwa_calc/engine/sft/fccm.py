@@ -367,6 +367,13 @@ def _build_sft_exposure_rows(
     # downstream).
     ns_terms: dict[str, tuple[int, int]] = {}
     ns_maturity: dict[str, float | None] = {}
+    # Per-NS own-estimate LGD carrier for A-IRB routing (P1.215), taken off the
+    # first trade row per netting set — the same first-trade-per-NS grain as the
+    # margining terms / effective maturity above. A multi-trade NS with
+    # heterogeneous modelled LGDs is a data-quality question (not silently
+    # averaged); under the single-trade-per-NS scope (Art. 220(1)(a)) it does
+    # not arise. Null carrier => the synthetic row falls to SA / FIRB downstream.
+    ns_modelled_lgd: dict[str, float | None] = {}
     for row in sft_trades_df.iter_rows(named=True):
         ns_id = row["netting_set_id"]
         if ns_id in ns_terms:
@@ -378,6 +385,7 @@ def _build_sft_exposure_rows(
             has_margin_dispute_doubling=row.get("has_margin_dispute_doubling", False),
             mpor_days_override=row.get("mpor_days_override", None),
         )
+        ns_modelled_lgd[ns_id] = row.get("ccr_modelled_lgd")
         ns_maturity[ns_id] = _derive_ccr_sft_maturity_years(
             remaining_years=_remaining_years(reporting_date, row.get("maturity_date")),
             under_mna=bool(row.get("under_master_netting_agreement", False)),
@@ -499,6 +507,13 @@ def _build_sft_exposure_rows(
                 [ns_maturity.get(ns_id) for ns_id in sft_ns_ids],
                 dtype=pl.Float64,
             ),
+            # Per-NS A-IRB own-estimate LGD carrier (P1.215), joined onto the
+            # synthetic row alongside the effective-maturity carrier.
+            "ccr_modelled_lgd": pl.Series(
+                "ccr_modelled_lgd",
+                [ns_modelled_lgd.get(ns_id) for ns_id in sft_ns_ids],
+                dtype=pl.Float64,
+            ),
         }
     ).lazy()
     ns_with_ead = (
@@ -546,6 +561,9 @@ def _build_sft_exposure_rows(
         # Art. 162 effective-maturity carrier for IRB routing (null off the MNA
         # carve-out — date-derived 1y catch-all applies downstream).
         pl.col("ccr_effective_maturity"),
+        # Art. 143 own-estimate LGD carrier for A-IRB routing (P1.215; null =>
+        # SA / FIRB downstream).
+        pl.col("ccr_modelled_lgd"),
     ]
     # Drop helper "_*" columns from the public projection.
     return ns_with_ead.select(select_exprs)

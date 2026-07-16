@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 from watchfire import cites
 
+from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.schemas import (
     B31_SOVEREIGN_LIKE_ENTITY_TYPES,
     RGLA_PSE_ENTITY_TYPES,
@@ -92,10 +93,24 @@ def assign_approach(
     """
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
 
+    # Guarantee the P1.215 A-IRB routing carrier exists as a typed null so the
+    # ``has_modelled_lgd`` gate never errors on lending-only frames (the carrier
+    # is a CCR_EXIT_EDGE-only column, absent on the hierarchy base). ensure_columns
+    # uses pl.lit().cast() — no fill_null — so the check-11 baseline is untouched;
+    # a typed null leaves the OR-arm inert on lending rows. Mirrors the
+    # ccr_effective_maturity handling in engine/irb/transforms.py::prepare_columns.
+    exposures = ensure_columns(
+        exposures,
+        {"ccr_modelled_lgd": ColumnSpec(pl.Float64, default=None, required=False)},
+    )
+
     # IRB requires an internal rating (PD from the firm's IRB model).
     # Counterparties with only external ratings fall through to SA.
     has_internal_rating = pl.col("internal_pd").is_not_null()
-    has_modelled_lgd = pl.col("lgd").is_not_null()
+    # A synthetic CCR/SFT row carries its A-IRB own-estimate LGD on the dedicated
+    # ``ccr_modelled_lgd`` carrier (P1.215), not the lending ``lgd`` column, so the
+    # AIRB gate accepts EITHER source.
+    has_modelled_lgd = pl.col("lgd").is_not_null() | pl.col("ccr_modelled_lgd").is_not_null()
 
     # Step 1: permission expressions
     airb_expr, firb_expr, firb_clear_expr, sl_airb, sl_slotting = build_permission_exprs(

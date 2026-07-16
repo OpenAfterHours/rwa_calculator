@@ -326,6 +326,10 @@
     "CRR Art. 127",
     "PS1/26, paragraph 127"
   ],
+  "rwa_calc.engine.sa.risk_weights::_apply_obligor_st_contamination_override": [
+    "CRR Art. 140",
+    "PS1/26, paragraph 140"
+  ],
   "rwa_calc.engine.sa.risk_weights::_b31_append_high_risk_branch": [
     "PS1/26, paragraph 128"
   ],
@@ -435,6 +439,10 @@
   ],
   "rwa_calc.engine.stages.hierarchy.enrich::_apply_obligor_short_term_spillover": [
     "CRR Art. 131"
+  ],
+  "rwa_calc.engine.stages.hierarchy.enrich::_apply_obligor_st_contamination_flags": [
+    "CRR Art. 140",
+    "PS1/26, paragraph 140"
   ],
   "rwa_calc.engine.stages.hierarchy.enrich::apply_short_term_rating_override": [
     "CRR Art. 131",

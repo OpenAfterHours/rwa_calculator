@@ -542,6 +542,17 @@ def _hierarchy_resolved_columns() -> dict[str, EdgeColumn]:
         ),
         "model_id": EdgeColumn(dtype=pl.String),
         "has_short_term_ecai": EdgeColumn(dtype=pl.Boolean),
+        # Art. 140(2) obligor-level short-term contamination flags (P1.225):
+        # broadcast per-counterparty by the hierarchy stage, read by the SA
+        # risk-weight override. required=False — a frame that skips the ST-rating
+        # path (direct-call / no ratings) carries a typed null, which the SA
+        # override reads as "no contamination".
+        "obligor_st_150_contamination": EdgeColumn(
+            dtype=pl.Boolean, required=False, citation="CRR Art. 140"
+        ),
+        "obligor_st_50_floor": EdgeColumn(
+            dtype=pl.Boolean, required=False, citation="CRR Art. 140"
+        ),
         "original_currency": EdgeColumn(dtype=pl.String),
         "original_amount": EdgeColumn(dtype=pl.Float64),
         "fx_rate_applied": EdgeColumn(dtype=pl.Float64),

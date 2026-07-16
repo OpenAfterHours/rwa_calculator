@@ -158,6 +158,13 @@ SA_INPUT_CONTRACT: dict[str, ColumnSpec] = {
     "prior_charge_ltv": ColumnSpec(pl.Float64, default=0.0, required=False),
     "is_short_term_trade_lc": ColumnSpec(pl.Boolean, default=False, required=False),
     "has_short_term_ecai": ColumnSpec(pl.Boolean, default=False, required=False),
+    # Art. 140(2) obligor-level short-term contamination flags (P1.225),
+    # broadcast per-counterparty by the hierarchy stage. ``is_guaranteed`` is
+    # ensured here too (default False = unsecured) so the contamination override
+    # can read the unsecured predicate without a presence guard.
+    "obligor_st_150_contamination": ColumnSpec(pl.Boolean, default=False, required=False),
+    "obligor_st_50_floor": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_guaranteed": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_payroll_loan": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_qrre_transactor": ColumnSpec(pl.Boolean, default=False, required=False),
     "sl_type": ColumnSpec(pl.String, required=False),
@@ -343,6 +350,16 @@ def apply_risk_weights(
             exposures, uc, is_domestic_currency, is_uk_domestic
         )
 
+    # Art. 140(2) obligor-level short-term contamination — a shared post-branch
+    # override applied AFTER both regime ladders assign the base RW (regime-
+    # invariant; Table 7 is identical across CRR and Basel 3.1).
+    # ORDER CONSTRAINT: must run BEFORE _apply_defaulted_risk_weight — the
+    # Art. 127 defaulted handler overwrites risk_weight unconditionally, which
+    # is what lets its provision-based RW (lex specialis) survive contamination
+    # on defaulted rows. Reordering would silently flip well-provisioned
+    # defaulted rows 100% -> 150%.
+    exposures = _apply_obligor_st_contamination_override(exposures)
+
     # Art. 121(6) (CRR) / CRE20.22 (Basel 3.1): Sovereign RW floor for
     # FX-denominated unrated institution exposures. Exception:
     # self-liquidating trade items with original maturity <= 1yr.
@@ -364,6 +381,44 @@ def apply_risk_weights(
         "risk_weight_rw",
     ]
     return exposures.drop([c for c in temp_cols if c in schema_names])
+
+
+@cites("CRR Art. 140")
+@cites("PS1/26, paragraph 140")
+def _apply_obligor_st_contamination_override(exposures: pl.LazyFrame) -> pl.LazyFrame:
+    """Apply the Art. 140(2) obligor-level short-term contamination RW override.
+
+    CRR Art. 140(2) / PRA PS1/26 Art. 140(2) (CRE21.17-18), reading the two
+    per-obligor flags from ``_apply_obligor_st_contamination_flags``:
+    (a) 150% broadcast (Table 7 CQS 4+) onto ALL the obligor's unrated unsecured
+    claims (short- OR long-term); (b) 100% floor (max(RW, 100%)) on its unrated
+    unsecured SHORT-TERM claims when a 50%-attracting (Table 7 CQS 2) assessment
+    exists. The 150% hard override dominates the floor (checked first).
+
+    Only UNRATED (no own ``cqs``, no own short-term ECAI) UNSECURED
+    (``~is_guaranteed``) legs are touched — a guarantor-substituted leg keeps its
+    guarantor RW; SA collateral acts on EAD not RW so it does not exempt a row.
+    All inputs are ensured by ``SA_INPUT_CONTRACT`` / ``_prepare_risk_weight_lookup``,
+    so no presence guard or ``fill_null`` is needed (a null reads as "no
+    contamination").
+    """
+    is_unrated = pl.col("cqs").is_null() & pl.col("has_short_term_ecai").not_()
+    is_unsecured = pl.col("is_guaranteed").not_()
+    # Reuse the SA short-term window (original maturity <= 3m, <= 6m for
+    # self-liquidating trade LCs) used by the institution ST branches. No
+    # fill_null: a null maturity yields a null gate the when-chain treats as
+    # "not short-term".
+    original_mty = pl.col("original_maturity_years")
+    is_st = (original_mty <= 0.25) | (pl.col("is_short_term_trade_lc") & (original_mty <= 0.5))
+
+    return exposures.with_columns(
+        pl.when(pl.col("obligor_st_150_contamination") & is_unrated & is_unsecured)
+        .then(pl.lit(1.50))
+        .when(pl.col("obligor_st_50_floor") & is_unrated & is_unsecured & is_st)
+        .then(pl.max_horizontal(pl.col("risk_weight"), pl.lit(1.00)))
+        .otherwise(pl.col("risk_weight"))
+        .alias("risk_weight")
+    )
 
 
 # ---------------------------------------------------------------------------

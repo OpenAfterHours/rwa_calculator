@@ -578,6 +578,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p1223,
         ),
         (
+            "P1.225 (Art. 140(2) obligor-level 150%/100%-floor ST contamination)",
+            "p1_225",
+            _generate_p1225,
+        ),
+        (
             "P1.233 (CRR Art. 197(1)(c)/(d) corp/PSE 'bond' collateral routes to corp_bond)",
             "p1_233",
             _generate_p1233,
@@ -3115,6 +3120,19 @@ def _generate_p1223(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_223", None)
+
+
+def _generate_p1225(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.225 fixtures (Art. 140(2) obligor-level 150%/100%-floor ST contamination)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_225 import save_p225_fixtures
+
+        saved = save_p225_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_225", None)
 
 
 def _generate_p1233(output_dir: Path) -> list[tuple[str, int]]:

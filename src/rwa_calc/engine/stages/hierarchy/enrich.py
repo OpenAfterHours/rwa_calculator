@@ -245,6 +245,10 @@ def apply_short_term_rating_override(
         ]
     )
     exposures = _apply_obligor_short_term_spillover(exposures)
+    # Art. 140(2) obligor-level contamination flags — reads the pristine
+    # ``_st_assessment_cqs`` scratch here, BEFORE the drop below. The two flag
+    # columns it emits are not ``_st_*`` scratch, so they survive the drop.
+    exposures = _apply_obligor_st_contamination_flags(exposures)
     return exposures.drop(
         [f"_st_{s}_cqs" for s in joined_scopes] + ["_st_assessment_cqs", "_general_cqs"]
     )
@@ -871,6 +875,53 @@ def _apply_obligor_short_term_spillover(exposures: pl.LazyFrame) -> pl.LazyFrame
         [
             (pl.col("has_short_term_ecai") | spill).alias("has_short_term_ecai"),
             pl.when(spill).then(obligor_st_cqs).otherwise(pl.col("cqs")).cast(pl.Int8).alias("cqs"),
+        ]
+    )
+
+
+@cites("CRR Art. 140")
+@cites("PS1/26, paragraph 140")
+def _apply_obligor_st_contamination_flags(exposures: pl.LazyFrame) -> pl.LazyFrame:
+    """Flag obligor-level short-term rating contamination (Art. 140(2)).
+
+    CRR Art. 140(2) / PRA PS1/26 Art. 140(2) (CRE21.17-18): a short-term ECAI
+    assessment on ANY of an obligor's facilities contaminates that obligor's
+    unrated UNSECURED exposures:
+
+    - (a) an assessment attracting 150% (Table 7 CQS 4+) broadcasts 150% to ALL
+      the obligor's unrated unsecured claims — short- OR long-term;
+    - (b) an assessment attracting 50% (Table 7 CQS 2) floors the obligor's
+      unrated SHORT-TERM unsecured claims at 100%.
+
+    Emits two obligor-broadcast Boolean flags read by the SA risk-weight
+    override (engine/sa/risk_weights.py). Reads the pristine ``_st_assessment_cqs``
+    scratch (non-null only on the directly-rated exposure) BEFORE it is dropped —
+    a spilled row carries a null assessment cqs and so never contributes. This is
+    a DISTINCT mechanism from the Art. 120(3)(c) short-term spillover above, which
+    modifies ``has_short_term_ecai`` / ``cqs``; this helper touches neither.
+    Regime-independent (Table 7 is identical across CRR and Basel 3.1), mirroring
+    ``_apply_obligor_short_term_spillover``. Called immediately after that
+    spillover in ``apply_short_term_rating_override``, where the three inputs
+    (``counterparty_reference`` / ``has_short_term_ecai`` / ``_st_assessment_cqs``)
+    are already materialised, so no presence guard is needed.
+    """
+    # The directly-rated ST facility's assessment cqs drives the obligor flags;
+    # ``_st_assessment_cqs`` is non-null only there (a spilled row's is null and
+    # drops out of the ``.max()``). Table 7: CQS 4+ -> 150%, CQS 2 -> 50%.
+    st_150 = pl.col("has_short_term_ecai") & (pl.col("_st_assessment_cqs") >= 4)
+    st_50 = pl.col("has_short_term_ecai") & (pl.col("_st_assessment_cqs") == 2)
+    return exposures.with_columns(
+        [
+            partition_by_nullable(
+                st_150.max().over("counterparty_reference"),
+                "counterparty_reference",
+                pl.lit(False),  # noqa: FBT003
+            ).alias("obligor_st_150_contamination"),
+            partition_by_nullable(
+                st_50.max().over("counterparty_reference"),
+                "counterparty_reference",
+                pl.lit(False),  # noqa: FBT003
+            ).alias("obligor_st_50_floor"),
         ]
     )
 

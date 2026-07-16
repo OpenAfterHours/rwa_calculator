@@ -34,6 +34,8 @@ from typing import TYPE_CHECKING
 import polars as pl
 from watchfire import cites
 
+from rwa_calc.contracts.errors import misscoped_short_term_rating_warning
+from rwa_calc.engine.entity_class_maps import ENTITY_TYPES_BY_SA_CLASS
 from rwa_calc.engine.kernels.allocation import (
     NO_DEFAULT,
     LevelSpec,
@@ -46,6 +48,7 @@ from rwa_calc.engine.utils import has_required_columns, partition_by_nullable
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import CounterpartyLookup
+    from rwa_calc.contracts.errors import CalculationError
 
 logger = logging.getLogger(__name__)
 
@@ -160,6 +163,8 @@ def attach_counterparty_rating(
 def apply_short_term_rating_override(
     exposures: pl.LazyFrame,
     ratings: pl.LazyFrame | None,
+    counterparty_lookup: CounterpartyLookup | None = None,
+    errors: list[CalculationError] | None = None,
 ) -> pl.LazyFrame:
     """Apply per-exposure short-term rating override.
 
@@ -226,20 +231,63 @@ def apply_short_term_rating_override(
     ordered = [s for s in priority if s in joined_scopes]
     st_cqs_expr = pl.coalesce([pl.col(f"_st_{s}_cqs") for s in ordered])
 
-    # Override: when the short-term cqs is non-null, replace the cqs column
-    # and set has_short_term_ecai=True. SA Tables 4A / 6A are keyed off cqs
-    # only — rating_agency / rating_value are audit columns added later by
-    # the classifier and intentionally not overridden here.
+    # Art. 140(1) / CRE21.16 obligor-class gate: short-term ECAI assessments may
+    # be used ONLY for institution / corporate obligors. Join the raw entity_type
+    # (from the counterparty lookup — no class column exists on the frame yet;
+    # the classifier derives it later) and disqualify a match on any other class.
+    # A mis-scoped match is ignored: has_short_term_ecai stays False, cqs keeps
+    # its counterparty-level value and _st_assessment_cqs stays null, so the row
+    # AND the Art. 120(3)(c) spillover / Art. 140(2) contamination helpers that
+    # run AFTER the gate all inherit the rejection for free.
+    #   Ordering: (1) scope-match [above] -> (2) THIS GATE -> (3) spillover ->
+    #   (4) contamination flags.
+    has_gate = counterparty_lookup is not None
+    if has_gate:
+        eligible = list(ENTITY_TYPES_BY_SA_CLASS["institution"]) + list(
+            ENTITY_TYPES_BY_SA_CLASS["corporate"]
+        )
+        gate_lookup = counterparty_lookup.counterparties.select(
+            pl.col("counterparty_reference"),
+            pl.col("entity_type").str.to_lowercase().alias("_st_gate_entity_type"),
+        )
+        exposures = exposures.join(gate_lookup, on="counterparty_reference", how="left")
+        # fill_null("") before is_in: Polars propagates null through is_in, so a
+        # null/unknown entity_type (or a join-miss) would otherwise yield a NULL
+        # eligibility -> a null has_short_term_ecai flag AND a null-dropped DQ009
+        # filter (warning silently lost). "" resolves to ineligible -> clean
+        # rejection + DQ009 emitted. Mirrors the entity_type null-guard idiom in
+        # engine/sa/risk_weights.py.
+        st_class_eligible = pl.col("_st_gate_entity_type").fill_null("").is_in(eligible)
+    else:
+        st_class_eligible = pl.lit(True)  # noqa: FBT003
+
+    # Override: when a short-term cqs matched AND the obligor class is eligible,
+    # replace the cqs column and set has_short_term_ecai=True. SA Tables 4A / 6A
+    # are keyed off cqs only — rating_agency / rating_value are audit columns
+    # added later by the classifier and intentionally not overridden here.
     #
     # Two scratch columns are carried into the obligor-level Art. 120(3)(c)
     # spillover step below: ``_st_assessment_cqs`` (the matched short-term ECAI
-    # cqs, non-null only on the directly-rated exposure) and ``_general_cqs``
-    # (the obligor's pre-override counterparty cqs).
-    has_st = st_cqs_expr.is_not_null()
+    # cqs, non-null only on the directly-rated ELIGIBLE exposure) and
+    # ``_general_cqs`` (the obligor's pre-override counterparty cqs).
+    has_st = st_cqs_expr.is_not_null() & st_class_eligible
+
+    # Art. 140(1) DQ warning: a match rejected purely by the class gate (matched
+    # but ineligible) is a mis-scoped rating — record one DQ009 per such
+    # exposure before the scratch entity_type is dropped.
+    if errors is not None and has_gate:
+        _record_misscoped_st_ratings(
+            exposures, st_cqs_expr.is_not_null() & st_class_eligible.not_(), errors
+        )
+
     exposures = exposures.with_columns(
         [
             has_st.alias("has_short_term_ecai"),
-            st_cqs_expr.cast(pl.Int8).alias("_st_assessment_cqs"),
+            pl.when(has_st)
+            .then(st_cqs_expr)
+            .otherwise(pl.lit(None, dtype=pl.Int8))
+            .cast(pl.Int8)
+            .alias("_st_assessment_cqs"),
             pl.col("cqs").cast(pl.Int8).alias("_general_cqs"),
             pl.when(has_st).then(st_cqs_expr).otherwise(pl.col("cqs")).cast(pl.Int8).alias("cqs"),
         ]
@@ -249,9 +297,34 @@ def apply_short_term_rating_override(
     # ``_st_assessment_cqs`` scratch here, BEFORE the drop below. The two flag
     # columns it emits are not ``_st_*`` scratch, so they survive the drop.
     exposures = _apply_obligor_st_contamination_flags(exposures)
-    return exposures.drop(
-        [f"_st_{s}_cqs" for s in joined_scopes] + ["_st_assessment_cqs", "_general_cqs"]
+    scratch = [f"_st_{s}_cqs" for s in joined_scopes] + ["_st_assessment_cqs", "_general_cqs"]
+    if has_gate:
+        scratch.append("_st_gate_entity_type")
+    return exposures.drop(scratch)
+
+
+def _record_misscoped_st_ratings(
+    exposures: pl.LazyFrame,
+    mis_scoped: pl.Expr,
+    errors: list[CalculationError],
+) -> None:
+    """Append one DQ009 warning per Art. 140(1)-mis-scoped short-term rating.
+
+    Targeted mid-pipeline collect of the mis-scoped rows' ``exposure_reference``
+    and scratch ``_st_gate_entity_type`` only — the ratings/mis-scope set is a
+    small dimension (empty on a well-scoped portfolio), so materialising just
+    those two columns to build the per-exposure DQ messages is cheap.
+    """
+    dropped = (
+        exposures.filter(mis_scoped).select("exposure_reference", "_st_gate_entity_type").collect()
     )
+    for row in dropped.iter_rows(named=True):
+        errors.append(
+            misscoped_short_term_rating_warning(
+                exposure_reference=row["exposure_reference"],
+                obligor_entity_type=row["_st_gate_entity_type"],
+            )
+        )
 
 
 def enrich_with_property_coverage(

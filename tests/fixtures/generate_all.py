@@ -583,6 +583,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p1225,
         ),
         (
+            "P1.264 (Art. 140(1) short-term-override obligor-class gate)",
+            "p1_264",
+            _generate_p1264,
+        ),
+        (
             "P1.233 (CRR Art. 197(1)(c)/(d) corp/PSE 'bond' collateral routes to corp_bond)",
             "p1_233",
             _generate_p1233,
@@ -3133,6 +3138,19 @@ def _generate_p1225(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_225", None)
+
+
+def _generate_p1264(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.264 fixtures (Art. 140(1) short-term-override obligor-class gate)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_264 import save_p264_fixtures
+
+        saved = save_p264_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_264", None)
 
 
 def _generate_p1233(output_dir: Path) -> list[tuple[str, int]]:

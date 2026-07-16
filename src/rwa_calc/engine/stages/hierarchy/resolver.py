@@ -118,7 +118,9 @@ class HierarchyResolver:
         # specific, attached to a particular exposure rather than the
         # counterparty as a whole; when present, they override the counterparty-
         # level long-term rating for SA risk-weight routing.
-        exposures = self._apply_short_term_rating_override(exposures, data.ratings)
+        exposures = self._apply_short_term_rating_override(
+            exposures, data.ratings, counterparty_lookup, errors
+        )
 
         # Apply FX conversion so threshold calculations use consistent currency.
         # The converter methods also preserve ``original_currency`` when conversion
@@ -276,9 +278,15 @@ class HierarchyResolver:
         self,
         exposures: pl.LazyFrame,
         ratings: pl.LazyFrame | None,
+        counterparty_lookup: CounterpartyLookup,
+        errors: list[CalculationError],
     ) -> pl.LazyFrame:
-        """Delegate to :func:`enrich.apply_short_term_rating_override`."""
-        return apply_short_term_rating_override(exposures, ratings)
+        """Delegate to :func:`enrich.apply_short_term_rating_override`.
+
+        Threads the counterparty lookup (for the Art. 140(1) obligor-class gate)
+        and the run's error accumulator (for DQ009 mis-scope warnings).
+        """
+        return apply_short_term_rating_override(exposures, ratings, counterparty_lookup, errors)
 
     def _enrich_with_property_coverage(
         self,

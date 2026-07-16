@@ -2,6 +2,9 @@
   "rwa_calc.engine.aggregator._floor::apply_floor_with_impact": [
     "PS1/26, paragraph 92"
   ],
+  "rwa_calc.engine.aggregator._lgd_floor_check::check_retail_re_portfolio_lgd_floors": [
+    "CRR Art. 164"
+  ],
   "rwa_calc.engine.aggregator.aggregator::OutputAggregator.aggregate": [
     "PS1/26, paragraph 92"
   ],

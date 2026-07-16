@@ -68,6 +68,30 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=False,
         citation=Citation("CRR", "164", "no A-IRB own-estimate LGD floor under CRR"),
     ),
+    # CRR Art. 164(4)/(5): portfolio-level minimum EAD-weighted-average LGD for
+    # A-IRB retail exposures secured by real estate (residential 10% / commercial
+    # 15%), excluding central-government-guaranteed exposures (164(4)). CRR has no
+    # per-exposure A-IRB LGD floor (airb_lgd_floor off above), so this
+    # portfolio-level backstop is the live CRR check; the aggregator emits a
+    # monitoring WARNING on breach (never an RWA/LGD mutation). Basel 3.1's own
+    # per-exposure airb_lgd_floor supersedes it, so b31.py disables this Feature.
+    "crr_retail_re_portfolio_lgd_floor": Feature(
+        name="crr_retail_re_portfolio_lgd_floor",
+        enabled=True,
+        citation=Citation(
+            "CRR", "164", "(4)/(5) portfolio-level EW-avg LGD floor for A-IRB retail RE"
+        ),
+    ),
+    "retail_residential_re_portfolio_lgd_floor": ScalarParam(
+        name="retail_residential_re_portfolio_lgd_floor",
+        value=Decimal("0.10"),
+        citation=Citation("CRR", "164", "(4) residential-RE portfolio EW-avg LGD floor 10%"),
+    ),
+    "retail_commercial_re_portfolio_lgd_floor": ScalarParam(
+        name="retail_commercial_re_portfolio_lgd_floor",
+        value=Decimal("0.15"),
+        citation=Citation("CRR", "164", "(4) commercial-RE portfolio EW-avg LGD floor 15%"),
+    ),
     # IRB maturity (M) regime treatments — Features gate only the on/off regime
     # branch; the numeric constants they gate (0.5y SFT supervisory M, the 1/365
     # one-day floor) stay engine literals. Consumed in engine/irb/transforms.py.

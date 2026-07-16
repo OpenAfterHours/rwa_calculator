@@ -70,6 +70,20 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=True,
         citation=Citation("PS1/26", "161", "(5)"),
     ),
+    # CRR Art. 164(4)/(5) portfolio-level A-IRB retail-RE LGD floor — see
+    # packs/crr.py. Disabled under Basel 3.1: the per-exposure airb_lgd_floor
+    # (Art. 164(4)(a), enabled above) clips every retail-RE A-IRB LGD to the 5%
+    # floor before it reaches the aggregator, so the portfolio-level backstop is
+    # redundant here. Declared in both packs so pack.feature() never KeyErrors.
+    "crr_retail_re_portfolio_lgd_floor": Feature(
+        name="crr_retail_re_portfolio_lgd_floor",
+        enabled=False,
+        citation=Citation(
+            "PS1/26",
+            "164",
+            "portfolio-level RE LGD floor superseded by per-exposure Art. 164(4)(a)",
+        ),
+    ),
     # IRB maturity (M) regime treatments — see packs/crr.py. Basel 3.1 deleted the
     # CRR SFT supervisory M and the short-term-trade one-day-floor derivation, and
     # added the revolving→termination-date rule (Art. 162(2A)(k)).

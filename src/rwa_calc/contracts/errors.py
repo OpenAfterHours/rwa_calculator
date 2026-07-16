@@ -135,6 +135,11 @@ ERROR_MATURITY_INVALID = "IRB003"
 ERROR_MISSING_PD = "IRB004"
 ERROR_MISSING_LGD = "IRB005"
 ERROR_MISSING_EXPECTED_LOSS = "IRB006"
+# Portfolio-level A-IRB retail-RE LGD-floor backstop (CRR Art. 164(4)): the
+# EAD-weighted-average own-estimate LGD of an A-IRB retail real-estate book fell
+# below the residential 10% / commercial 15% floor. Monitoring WARNING only —
+# never an RWA/LGD adjustment.
+ERROR_RETAIL_RE_PORTFOLIO_LGD_FLOOR = "IRB007"
 
 # SA error codes
 ERROR_INVALID_CQS = "SA001"

@@ -101,6 +101,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p110,
         ),
         (
+            "P1.183 (CRR Art. 164(4)/(5) portfolio-level A-IRB retail-RE LGD floor)",
+            "p1_183",
+            _generate_p183,
+        ),
+        (
             "P1.126 (classifier null-revenue conservative-large default CLS008)",
             "p1_126",
             _generate_p1126,
@@ -885,6 +890,19 @@ def _generate_p198(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_98", None)
+
+
+def _generate_p183(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.183 fixtures (CRR Art. 164(4)/(5) portfolio-level A-IRB retail-RE LGD floor)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_183 import save_p183_fixtures
+
+        saved = save_p183_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_183", None)
 
 
 def _generate_p199(output_dir: Path) -> list[tuple[str, int]]:

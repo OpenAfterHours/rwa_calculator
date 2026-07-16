@@ -96,6 +96,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
         ),
         ("P1.124 (CRR Art. 237(2)(a) guarantee maturity ineligibility)", "p1_124", _generate_p1124),
         (
+            "P1.10 (CRR/PS1-26 Art. 213(1)(c)(i) UCP unilateral-cancellation/-change gate)",
+            "p1_10",
+            _generate_p110,
+        ),
+        (
             "P1.126 (classifier null-revenue conservative-large default CLS008)",
             "p1_126",
             _generate_p1126,
@@ -1062,6 +1067,19 @@ def _generate_p1124(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_124", None)
+
+
+def _generate_p110(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.10 fixtures (CRR/PS1-26 Art. 213(1)(c)(i) UCP unilateral-cancellation/-change gate)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_10 import save_p110_fixtures
+
+        saved = save_p110_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_10", None)
 
 
 def _generate_p1156(output_dir: Path) -> list[tuple[str, int]]:

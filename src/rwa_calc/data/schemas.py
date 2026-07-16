@@ -600,6 +600,17 @@ GUARANTEE_SCHEMA: dict[str, ColumnSpec] = {
     # treated permissively (defaulted to >= 1y) — mirrors the collateral
     # original_maturity_years fallback in engine/crm/haircuts.py.
     "original_maturity_years": ColumnSpec(pl.Float64, required=False),
+    # CRR / PS1-26 Art. 213(1)(c)(i): unfunded credit protection eligibility.
+    # A guarantee the protection provider can unilaterally CANCEL is ineligible
+    # under both regimes; one whose terms the provider can unilaterally CHANGE
+    # (increasing the effective cost of protection) is additionally ineligible
+    # under Basel 3.1 only (the "or change" words are new in PS1/26, gated by
+    # the ucp_unilateral_change_ineligible pack Feature). Both flags are
+    # null-PERMISSIVE — a null means "no known defect => eligible", mirroring
+    # the Art. 237(2)(a) original_maturity_years fallback above: no default is
+    # declared, so apply_boolean_column_defaults leaves nulls untouched.
+    "is_unilaterally_cancellable": ColumnSpec(pl.Boolean, required=False),
+    "is_unilaterally_changeable": ColumnSpec(pl.Boolean, required=False),
     # Seniority of the guarantor's claim drives F-IRB supervisory LGD selection
     # in PSM (parameter substitution) — Art. 161(1)(a)/(aa)/(b). Allowed
     # values: "senior", "subordinated". Engine treats missing as "senior".

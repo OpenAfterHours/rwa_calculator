@@ -911,6 +911,7 @@ class CRMProcessor:
                 config,
                 ri_df.lazy(),
                 pack=pack,
+                errors=errors,
             )
         self._collect_guarantee_skip_errors(guarantees_lf, data, errors)
         return exposures
@@ -1004,6 +1005,7 @@ class CRMProcessor:
         rating_inheritance: pl.LazyFrame | None = None,
         *,
         pack: ResolvedRulepack | None = None,
+        errors: list[CalculationError] | None = None,
     ) -> pl.LazyFrame:
         """Apply guarantee substitution."""
         return guarantees_mod.apply_guarantees(
@@ -1013,6 +1015,7 @@ class CRMProcessor:
             config,
             rating_inheritance,
             pack=pack,
+            errors=errors,
         )
 
     # --- Internal methods ---

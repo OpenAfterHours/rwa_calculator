@@ -124,6 +124,22 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=False,
         citation=Citation("PS1/26", "153", "Basel 3.1 removed CRR double-default treatment"),
     ),
+    # Art. 213(1)(c)(i) unfunded-credit-protection eligibility: PS1/26 adds an
+    # "or change" limb to the CRR unilateral-cancellation test — a guarantee the
+    # provider can unilaterally change to increase the effective cost of
+    # protection is ineligible under Basel 3.1. Enabled here; the CRR pack sets
+    # it False (cancel arm only). Gates the change branch in
+    # engine/crm/guarantees.py::_gate_unilateral_protection.
+    "ucp_unilateral_change_ineligible": Feature(
+        name="ucp_unilateral_change_ineligible",
+        enabled=True,
+        citation=Citation(
+            "PS1/26",
+            "213",
+            "(1)(c)(i) UCP ineligible if the provider can unilaterally cancel OR "
+            "change (increase the effective cost of) the protection",
+        ),
+    ),
     # Basel 3.1 splits F-IRB senior unsecured supervisory LGD into FSE 45%
     # (Art. 161(1)(a)) vs non-FSE 40% (Art. 161(1)(aa)); CRR has no such split.
     # Gates the per-row FSE selection in engine/irb/formulas.py::apply_firb_lgd.
@@ -1326,14 +1342,41 @@ ENTRIES: dict[str, RuleEntry] = {
     "reporting_template_set": ReportingTemplateSet(
         name="reporting_template_set",
         corep=(
-            "c_02_00", "c07_00", "c08_01", "c08_02", "c08_03", "c08_04", "c08_05", "c08_06",
-            "c08_07", "c09_01", "c09_02", "c34_01", "c34_02", "c34_04", "c34_08",
+            "c_02_00",
+            "c07_00",
+            "c08_01",
+            "c08_02",
+            "c08_03",
+            "c08_04",
+            "c08_05",
+            "c08_06",
+            "c08_07",
+            "c09_01",
+            "c09_02",
+            "c34_01",
+            "c34_02",
+            "c34_04",
+            "c34_08",
             "of_02_01",
         ),
         pillar3=(
-            "ov1", "cr4", "cr5", "cr6", "cr6a", "cr7", "cr7a", "cr8", "cr9", "cr9_1", "cr10",
-            "ccr1", "ccr2", "ccr3", "ccr8",
-            "cms1", "cms2",
+            "ov1",
+            "cr4",
+            "cr5",
+            "cr6",
+            "cr6a",
+            "cr7",
+            "cr7a",
+            "cr8",
+            "cr9",
+            "cr9_1",
+            "cr10",
+            "ccr1",
+            "ccr2",
+            "ccr3",
+            "ccr8",
+            "cms1",
+            "cms2",
         ),
         variant="b31",
         citation=Citation(

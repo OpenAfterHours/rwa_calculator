@@ -121,6 +121,18 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=True,
         citation=Citation("CRR", "153(3)", "double-default treatment (Art. 153(3), 202-203)"),
     ),
+    # Art. 213(1)(c)(i) unfunded-credit-protection eligibility: CRR gates only the
+    # unilateral-CANCELLATION arm (a guarantee the provider can unilaterally
+    # cancel is ineligible). The "or change" limb is a PS1/26 addition, so this
+    # Feature is disabled under CRR; Basel 3.1 (packs/b31.py) overrides it True.
+    # Gates the change branch in engine/crm/guarantees.py::_gate_unilateral_protection.
+    "ucp_unilateral_change_ineligible": Feature(
+        name="ucp_unilateral_change_ineligible",
+        enabled=False,
+        citation=Citation(
+            "CRR", "213", "(1)(c)(i) UCP ineligible if the provider can unilaterally cancel"
+        ),
+    ),
     # F-IRB senior unsecured supervisory LGD: CRR applies a flat 45% (Art. 161(1)(a))
     # with no financial-sector-entity split, so this is disabled. Basel 3.1 splits
     # senior unsecured into FSE 45% (Art. 161(1)(a)) vs non-FSE 40% (Art. 161(1)(aa)).
@@ -1063,12 +1075,38 @@ ENTRIES: dict[str, RuleEntry] = {
     "reporting_template_set": ReportingTemplateSet(
         name="reporting_template_set",
         corep=(
-            "c_02_00", "c07_00", "c08_01", "c08_02", "c08_03", "c08_04", "c08_05", "c08_06",
-            "c08_07", "c09_01", "c09_02", "c34_01", "c34_02", "c34_04", "c34_08",
+            "c_02_00",
+            "c07_00",
+            "c08_01",
+            "c08_02",
+            "c08_03",
+            "c08_04",
+            "c08_05",
+            "c08_06",
+            "c08_07",
+            "c09_01",
+            "c09_02",
+            "c34_01",
+            "c34_02",
+            "c34_04",
+            "c34_08",
         ),
         pillar3=(
-            "ov1", "cr4", "cr5", "cr6", "cr6a", "cr7", "cr7a", "cr8", "cr9", "cr9_1", "cr10",
-            "ccr1", "ccr2", "ccr3", "ccr8",
+            "ov1",
+            "cr4",
+            "cr5",
+            "cr6",
+            "cr6a",
+            "cr7",
+            "cr7a",
+            "cr8",
+            "cr9",
+            "cr9_1",
+            "cr10",
+            "ccr1",
+            "ccr2",
+            "ccr3",
+            "ccr8",
         ),
         variant="crr",
         citation=Citation(

@@ -12,7 +12,7 @@ Regenerate after annotation changes:
 uv run python scripts/generate_citation_matrix.py
 ```
 
-Last generated: 2026-07-12.
+Last generated: 2026-07-16.
 
 ## CRR (Capital Requirements Regulation)
 
@@ -716,9 +716,14 @@ Last generated: 2026-07-12.
 
 ### CRR Art. 213 — Requirements common to guarantees and credit derivatives
 
-??? quote "`apply_guarantees` — src/rwa_calc/engine/crm/guarantees.py:90"
+??? quote "`apply_guarantees` — src/rwa_calc/engine/crm/guarantees.py:92"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:90:166"
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:92:171"
+    ```
+
+??? quote "`_gate_unilateral_protection` — src/rwa_calc/engine/crm/guarantees.py:235"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:235:275"
     ```
 
 ??? quote "`apply_guarantee_substitution` — src/rwa_calc/engine/sa/rw_adjustments.py:153"
@@ -729,14 +734,14 @@ Last generated: 2026-07-12.
 
 ### CRR Art. 217 — Requirements to qualify for the treatment set out in Article 153(3)
 
-??? quote "`apply_guarantees` — src/rwa_calc/engine/crm/guarantees.py:91"
+??? quote "`apply_guarantees` — src/rwa_calc/engine/crm/guarantees.py:93"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:90:166"
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:92:171"
     ```
 
-??? quote "`_apply_maturity_mismatch_to_guarantees` — src/rwa_calc/engine/crm/guarantees.py:1311"
+??? quote "`_apply_maturity_mismatch_to_guarantees` — src/rwa_calc/engine/crm/guarantees.py:1400"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:1311:1422"
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:1400:1511"
     ```
 
 
@@ -859,9 +864,9 @@ Last generated: 2026-07-12.
 
 ### CRR Art. 234 — Calculating risk-weighted exposure amounts and expected loss amounts in the event of partial protection and tranching
 
-??? quote "`_build_remainder_sub_rows` — src/rwa_calc/engine/crm/guarantees.py:731"
+??? quote "`_build_remainder_sub_rows` — src/rwa_calc/engine/crm/guarantees.py:820"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:731:792"
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:820:881"
     ```
 
 
@@ -1306,6 +1311,14 @@ Last generated: 2026-07-12.
 ??? quote "`_apply_purchased_receivable_ccf` — src/rwa_calc/engine/ccf.py:672"
     ```python
     --8<-- "src/rwa_calc/engine/ccf.py:672:712"
+    ```
+
+
+### PS1/26, paragraph 213 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
+
+??? quote "`_gate_unilateral_protection` — src/rwa_calc/engine/crm/guarantees.py:236"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:235:275"
     ```
 
 

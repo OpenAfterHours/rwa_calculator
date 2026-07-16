@@ -123,6 +123,10 @@ ERROR_LOOK_THROUGH_NOT_IMPLEMENTED = "CRM008"
 ERROR_COLLATERAL_LINK_UNKNOWN_COLLATERAL = "CRM009"
 ERROR_COLLATERAL_LINK_UNKNOWN_BENEFICIARY = "CRM010"
 ERROR_COLLATERAL_LINK_DUPLICATE = "CRM011"
+# Ineligible unfunded credit protection (CRR/PS1-26 Art. 213(1)(c)(i)): a
+# guarantee the provider can unilaterally cancel (both regimes) or unilaterally
+# change (Basel 3.1 only) is dropped and the exposure flows unguaranteed.
+ERROR_INELIGIBLE_UNFUNDED_PROTECTION = "CRM012"
 
 # IRB error codes
 ERROR_PD_OUT_OF_RANGE = "IRB001"

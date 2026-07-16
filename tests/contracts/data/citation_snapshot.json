@@ -113,6 +113,10 @@
   "rwa_calc.engine.crm.guarantees::_build_remainder_sub_rows": [
     "CRR Art. 234"
   ],
+  "rwa_calc.engine.crm.guarantees::_gate_unilateral_protection": [
+    "CRR Art. 213",
+    "PS1/26, paragraph 213"
+  ],
   "rwa_calc.engine.crm.guarantees::apply_guarantees": [
     "CRR Art. 213",
     "CRR Art. 217"

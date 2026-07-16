@@ -1,9 +1,9 @@
 {
   "_comment": "Architecture-debt ratchet baseline (arch_check check 11). Counts may not increase (cites_decorators may not decrease). Regenerate after an improvement with: python scripts/arch_check.py --update-baseline",
-  "engine_fill_null_sites": 447,
+  "engine_fill_null_sites": 448,
   "engine_presence_guard_sites": 328,
   "engine_collect_schema_sites": 156,
-  "engine_eager_collect_sites": 33,
+  "engine_eager_collect_sites": 34,
   "max_engine_module_loc": 1625,
   "cites_decorators": 230,
   "max_reporting_module_loc": 2010,

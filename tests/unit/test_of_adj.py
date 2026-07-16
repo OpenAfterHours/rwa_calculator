@@ -70,7 +70,16 @@ def _irb_frame(
     excess: float = 0.0,
     shortfall: float = 0.0,
 ) -> pl.LazyFrame:
-    """IRB frame with EL columns for OF-ADJ testing."""
+    """IRB frame with EL columns for OF-ADJ testing.
+
+    ``expected_loss``/``provision_allocated`` are built from ``shortfall``/
+    ``excess`` (rather than a fixed base with only one side adjusted) so the
+    single-row pool aggregate (P1.221: Art. 159(3) nets at the pool level,
+    not per-row-then-sum) reproduces the intended shortfall/excess exactly:
+    A-B = (100_000+shortfall)-(100_000+excess) = shortfall-excess, which
+    floors to ``shortfall`` when excess=0 and to ``excess`` (via B-A) when
+    shortfall=0 — the only two cases any caller here uses.
+    """
     return pad_irb_branch(
         pl.LazyFrame(
             {
@@ -82,7 +91,7 @@ def _irb_frame(
                 "rwa_post_factor": [rwa],
                 "rwa_final": [rwa],
                 "sa_rwa": [sa_rwa],
-                "expected_loss": [100_000.0],
+                "expected_loss": [100_000.0 + shortfall],
                 "provision_allocated": [100_000.0 + excess],
                 "el_shortfall": [shortfall],
                 "el_excess": [excess],

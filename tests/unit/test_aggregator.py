@@ -1054,7 +1054,16 @@ class TestELPortfolioSummary:
         aggregator: OutputAggregator,
         crr_config: CalculationConfig,
     ) -> None:
-        """Should handle portfolio with both shortfall and excess exposures."""
+        """Should handle portfolio with both shortfall and excess exposures.
+
+        Pool-aggregate netting (P1.221): all three exposures are non-defaulted
+        (no is_defaulted column), so they form a single pool. A = sum(EL) =
+        50k+10k+20k = 80,000; B = sum(pool_b) = 30k+40k+50k = 120,000 ->
+        pool shortfall = max(0, 80k-120k) = 0; pool excess = max(0, 120k-80k)
+        = 40,000. The buggy per-row-then-sum path instead reports
+        shortfall=20,000 (EXP001 alone) and excess=60,000 (EXP002+EXP003),
+        never netting EXP001's shortfall against its siblings' excess.
+        """
         irb = pl.LazyFrame(
             {
                 "exposure_reference": ["EXP001", "EXP002", "EXP003"],
@@ -1079,12 +1088,12 @@ class TestELPortfolioSummary:
         assert el is not None
         assert float(el.total_expected_loss) == pytest.approx(80000.0)
         assert float(el.total_provisions_allocated) == pytest.approx(120000.0)
-        assert float(el.total_el_shortfall) == pytest.approx(20000.0)
-        assert float(el.total_el_excess) == pytest.approx(60000.0)
+        assert float(el.total_el_shortfall) == pytest.approx(0.0)
+        assert float(el.total_el_excess) == pytest.approx(40000.0)
         assert float(el.total_irb_rwa) == pytest.approx(10000000.0)
         assert float(el.t2_credit_cap) == pytest.approx(60000.0)
-        assert float(el.t2_credit) == pytest.approx(60000.0)
-        assert float(el.cet1_deduction) == pytest.approx(20000.0)
+        assert float(el.t2_credit) == pytest.approx(40000.0)
+        assert float(el.cet1_deduction) == pytest.approx(0.0)
         assert float(el.t2_deduction) == pytest.approx(0.0)
 
     def test_uses_rwa_final_fallback(self) -> None:

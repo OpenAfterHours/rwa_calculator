@@ -350,14 +350,9 @@ def apply_risk_weights(
             exposures, uc, is_domestic_currency, is_uk_domestic
         )
 
-    # Art. 140(2) obligor-level short-term contamination — a shared post-branch
-    # override applied AFTER both regime ladders assign the base RW (regime-
-    # invariant; Table 7 is identical across CRR and Basel 3.1).
-    # ORDER CONSTRAINT: must run BEFORE _apply_defaulted_risk_weight — the
-    # Art. 127 defaulted handler overwrites risk_weight unconditionally, which
-    # is what lets its provision-based RW (lex specialis) survive contamination
-    # on defaulted rows. Reordering would silently flip well-provisioned
-    # defaulted rows 100% -> 150%.
+    # Art. 140(2) obligor ST contamination (regime-invariant, post-ladder).
+    # ORDER: must precede _apply_defaulted_risk_weight — its unconditional Art. 127
+    # overwrite keeps provision-based defaulted RWs; reordering flips them to 150%.
     exposures = _apply_obligor_st_contamination_override(exposures)
 
     # Art. 121(6) (CRR) / CRE20.22 (Basel 3.1): Sovereign RW floor for

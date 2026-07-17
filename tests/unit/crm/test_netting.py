@@ -78,7 +78,7 @@ def _netting_exposure(
     ref: str,
     drawn: float,
     facility_ref: str = "FAC_01",
-    cp_ref: str = "CP001",
+    cp_ref: str | None = "CP001",
     currency: str = "GBP",
     agreement_ref: str | None = "AGR01",
     approach: str = ApproachType.SA.value,

@@ -1,11 +1,22 @@
 """
 Integration tests: EU/UK domestic sovereign guarantor 0% RW end-to-end.
 
-Verifies that under the substitution approach (CRR Art. 215-217), the
-domestic-currency test in CRR Art. 114(4) / Art. 114(7) is evaluated against
-the **guarantee** currency, not the underlying exposure currency. The cross-
-currency mismatch between guarantee and underlying exposure is addressed by
-the Art. 233(3) 8% FX haircut separately.
+Verifies the two-limb Art. 114(4)/(7) + Art. 235(3) condition under the
+substitution approach (CRR Art. 215-217): the 0% domestic-CGCB extension applies
+only when the substituted exposure is BOTH
+
+  (a) denominated in the guarantor's domestic currency — evaluated against the
+      **guarantee** currency, with the Art. 233(3) 8% FX haircut separately
+      absorbing any guarantee-vs-underlying mismatch; AND
+  (b) *funded* in that same currency — the Art. 235(3) funding limb, which reads
+      the loan's funding currency (its ``funding_currency``, falling back to the
+      denomination). See P1.229.
+
+A loan funded in a non-domestic currency therefore does NOT receive the 0%
+extension even when the guarantee is denominated in the domestic currency; it
+follows normal guarantor routing instead (here: IRB parameter substitution,
+because the sovereign guarantors carry an internal PD and the beneficiaries are
+IRB). Only the same-currency case keeps the 0% short-circuit.
 
 Pipeline wired: HierarchyResolver -> ExposureClassifier -> CRMProcessor
     -> SACalculator / IRBCalculator. No mocking.
@@ -240,12 +251,17 @@ class TestDomesticSovereignGuarantorEndToEnd:
     def test_gbp_loan_eur_guarantee_de_sovereign_facility_level(
         self, hierarchy_resolver, classifier, crm_processor, irb_calculator, crr_firb_config
     ):
-        """Reported bug: GBP loan + EUR guarantee from DE sovereign at facility level.
+        """GBP-funded loan + EUR guarantee from DE sovereign at facility level.
 
-        Expected under Art. 114(7) + Art. 215-217: guarantee currency (EUR) matches
-        DE's domestic currency, so the substituted exposure is in the sovereign's
-        domestic currency and gets 0% RW. The Art. 233(3) 8% FX haircut absorbs
-        the GBP/EUR mismatch.
+        The guarantee currency (EUR) matches DE's domestic currency so the
+        DENOMINATION limb of Art. 114(4)/(7) passes — but the loan is FUNDED in
+        GBP, so the Art. 235(3) FUNDING limb fails and the 0% extension is denied
+        (P1.229). Normal routing applies: the DE sovereign carries an internal PD
+        and the beneficiary is IRB, so the guarantor routes to IRB parameter
+        substitution with a positive risk weight — NOT the 0% short-circuit.
+
+        (Pre-P1.229 this case wrongly returned guarantor_approach="sa" / 0% RW —
+        the engine tested only the guarantee currency, ignoring the funding limb.)
         """
         bundle = _build_bundle(
             loan_currency="GBP",
@@ -265,11 +281,14 @@ class TestDomesticSovereignGuarantorEndToEnd:
         df = irb_lf.collect()
 
         row = _guarantor_row(df)
-        assert row["guarantor_approach"] == "sa", (
-            f"Expected sa (Art. 114(7) via EUR guarantee matches DE domestic), "
-            f"got {row['guarantor_approach']!r}"
+        assert row["guarantor_approach"] == "irb", (
+            f"Expected irb (GBP-funded loan fails the Art. 235(3) funding limb "
+            f"despite the EUR guarantee matching DE domestic), got "
+            f"{row['guarantor_approach']!r}"
         )
-        assert row["guarantor_rw"] == pytest.approx(0.0, abs=1e-9)
+        # 0% short-circuit must NOT fire — the sovereign's IRB parameter
+        # substitution yields a positive risk weight.
+        assert row["guarantor_rw"] > 0.0
 
     def test_gbp_loan_gbp_guarantee_uk_sovereign_counterparty_level(
         self, hierarchy_resolver, classifier, crm_processor, irb_calculator, crr_firb_config
@@ -299,11 +318,15 @@ class TestDomesticSovereignGuarantorEndToEnd:
     def test_eur_loan_gbp_guarantee_uk_sovereign(
         self, hierarchy_resolver, classifier, crm_processor, irb_calculator, crr_firb_config
     ):
-        """Mirror case: EUR loan + GBP guarantee from UK sovereign.
+        """Mirror case: EUR-funded loan + GBP guarantee from UK sovereign.
 
-        Guarantee currency (GBP) matches UK's domestic, so 0% RW applies even
-        though the underlying loan is in EUR (Art. 233(3) FX haircut handles
-        the mismatch).
+        The guarantee currency (GBP) matches the UK's domestic currency so the
+        denomination limb passes — but the loan is FUNDED in EUR, so the
+        Art. 235(3) funding limb fails and the 0% extension is denied (P1.229).
+        The guarantor (internal PD, IRB beneficiary) routes to IRB parameter
+        substitution with a positive risk weight.
+
+        (Pre-P1.229 this case wrongly returned guarantor_approach="sa" / 0% RW.)
         """
         bundle = _build_bundle(
             loan_currency="EUR",
@@ -323,8 +346,8 @@ class TestDomesticSovereignGuarantorEndToEnd:
         df = irb_lf.collect()
 
         row = _guarantor_row(df)
-        assert row["guarantor_approach"] == "sa"
-        assert row["guarantor_rw"] == pytest.approx(0.0, abs=1e-9)
+        assert row["guarantor_approach"] == "irb"
+        assert row["guarantor_rw"] > 0.0
 
     def test_gbp_loan_usd_guarantee_de_sovereign_stays_irb(
         self, hierarchy_resolver, classifier, crm_processor, irb_calculator, crr_firb_config

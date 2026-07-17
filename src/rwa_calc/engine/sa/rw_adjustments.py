@@ -44,6 +44,7 @@ from rwa_calc.domain.enums import CRMCollateralMethod
 from rwa_calc.engine.eu_sovereign import (
     build_domestic_cgcb_guarantor_expr,
     denomination_currency_expr,
+    funding_currency_expr,
 )
 from rwa_calc.engine.sa.guarantor_rw import build_guarantor_rw_expr
 from rwa_calc.engine.sa.risk_weights import _SA_B31_RW
@@ -530,13 +531,20 @@ def _ensure_guarantee_substitution_columns(exposures: pl.LazyFrame) -> pl.LazyFr
 
 
 def _build_domestic_guarantor_expr(schema_names: list[str]) -> pl.Expr:
-    """Build the Art. 114(4)/(7) domestic CGCB-guarantor currency check.
+    """Build the Art. 114(4)/(7) + Art. 235(3) domestic CGCB-guarantor check.
 
-    Evaluates the domestic-currency test against the guarantee currency (the
-    currency of the substituted exposure to the sovereign); the Art. 233(3)
-    8% FX haircut separately handles any mismatch between the guarantee and
-    the underlying exposure. Falls back to the exposure's pre-FX denomination
-    when ``guarantee_currency`` is missing (legacy / no-guarantee rows).
+    Evaluates the domestic-currency (denomination) test against the guarantee
+    currency (the currency of the substituted exposure to the sovereign); the
+    Art. 233(3) 8% FX haircut separately handles any mismatch between the
+    guarantee and the underlying exposure. Falls back to the exposure's pre-FX
+    denomination when ``guarantee_currency`` is missing (legacy / no-guarantee
+    rows).
+
+    Art. 235(3): the 0% extension also requires the exposure to be *funded* in
+    the domestic currency, so the funding limb (``funding_currency``, null-
+    PERMISSIVE fallback to the denomination — see :func:`funding_currency_expr`)
+    is ANDed in; a USD-funded, EUR-guaranteed loan therefore falls to the
+    guarantor's own CQS risk weight rather than 0%.
     """
     has_country = "guarantor_country_code" in schema_names
     has_exposure_ccy = "currency" in schema_names or "original_currency" in schema_names
@@ -553,7 +561,9 @@ def _build_domestic_guarantor_expr(schema_names: list[str]) -> pl.Expr:
 
     if not has_country or ccy_expr is None:
         return pl.lit(False)
-    return build_domestic_cgcb_guarantor_expr("guarantor_country_code", ccy_expr)
+    return build_domestic_cgcb_guarantor_expr(
+        "guarantor_country_code", ccy_expr, funding_currency_expr(schema_names)
+    )
 
 
 def _build_guarantor_rw_expr(

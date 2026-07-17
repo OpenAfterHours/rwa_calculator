@@ -189,11 +189,17 @@
     "PS1/26, paragraph 132"
   ],
   "rwa_calc.engine.eu_sovereign::build_domestic_cgcb_guarantor_expr": [
-    "CRR Art. 114"
+    "CRR Art. 114",
+    "CRR Art. 235",
+    "PS1/26, paragraph 235"
   ],
   "rwa_calc.engine.eu_sovereign::build_eu_domestic_currency_expr": [
     "CRR Art. 114",
     "CRR Art. 141"
+  ],
+  "rwa_calc.engine.eu_sovereign::funding_currency_expr": [
+    "CRR Art. 114",
+    "CRR Art. 235"
   ],
   "rwa_calc.engine.irb.formulas::_capital_k_expr_from_params": [
     "CRR Art. 153(1)"

@@ -80,9 +80,12 @@ def build_eu_domestic_currency_expr(
 
 
 @cites("CRR Art. 114")
+@cites("CRR Art. 235")
+@cites("PS1/26, paragraph 235")
 def build_domestic_cgcb_guarantor_expr(
     country_col: str,
     currency_col: str | pl.Expr,
+    funding_currency_col: str | pl.Expr | None = None,
 ) -> pl.Expr:
     """
     Build a Polars expression that identifies a domestic-currency CGCB guarantor
@@ -96,19 +99,44 @@ def build_domestic_cgcb_guarantor_expr(
     should be the **guarantee** currency — the Art. 233(3) 8% FX haircut handles
     any mismatch between the guarantee and the underlying exposure separately.
 
+    Art. 235(3) funding limb: the Art. 114(4)/(7) 0% extension to a centrally-
+    guaranteed exposure requires the exposure to be BOTH denominated in the
+    guarantor's domestic currency (the ``currency_col`` limb) AND *funded* in
+    that same currency. When ``funding_currency_col`` is supplied, the limb
+    ``funding == currency`` is ANDed in — because ``currency`` has already passed
+    the domestic-currency test, equality with it is equivalent to "funded in the
+    domestic currency", and holds uniformly across the UK/GBP and EU branches.
+    When it is None (the frame carries no funding source) the funding limb is
+    omitted, preserving the pure-denomination behaviour. Callers should pass a
+    null-PERMISSIVE funding expression (see :func:`funding_currency_expr`) so an
+    unreported funding currency reuses the denomination and keeps the exposure's
+    existing 0% treatment.
+
     Args:
         country_col: Column name containing the guarantor's ISO country code.
         currency_col: Column name (str) or Polars expression for the currency
             to test against the guarantor's domestic currency.
+        funding_currency_col: Column name (str) or Polars expression for the
+            exposure's funding currency. When None, the Art. 235(3) funding limb
+            is not applied.
 
     Returns:
         Boolean Polars expression: True when the guarantor is UK CGCB in GBP or
-        an EU-member CGCB in that member state's domestic currency.
+        an EU-member CGCB in that member state's domestic currency, and — when a
+        funding currency is supplied — the exposure is funded in that currency.
     """
     currency_expr = pl.col(currency_col) if isinstance(currency_col, str) else currency_col
     is_uk_domestic = (pl.col(country_col).fill_null("") == "GB") & (currency_expr == "GBP")
     is_eu_domestic = build_eu_domestic_currency_expr(country_col, currency_expr)
-    return is_uk_domestic | is_eu_domestic
+    denominated_domestic = is_uk_domestic | is_eu_domestic
+    if funding_currency_col is None:
+        return denominated_domestic
+    funding_expr = (
+        pl.col(funding_currency_col)
+        if isinstance(funding_currency_col, str)
+        else funding_currency_col
+    )
+    return denominated_domestic & funding_expr.eq(currency_expr)
 
 
 def denomination_currency_expr(schema_names: list[str] | set[str]) -> pl.Expr:
@@ -136,3 +164,41 @@ def denomination_currency_expr(schema_names: list[str] | set[str]) -> pl.Expr:
     if "original_currency" in names:
         return pl.col("original_currency")
     return pl.col("currency")
+
+
+@cites("CRR Art. 114")
+@cites("CRR Art. 235")
+def funding_currency_expr(schema_names: list[str] | set[str]) -> pl.Expr | None:
+    """
+    Return the exposure's funding-currency expression for the Art. 235(3) limb.
+
+    The Art. 114(4)/(7) 0% risk weight — and its Art. 235(3) extension to
+    centrally-guaranteed exposures — requires the exposure to be BOTH
+    denominated AND *funded* in the relevant domestic currency. This helper
+    yields the "funded in" currency: an explicit ``funding_currency`` column when
+    present, otherwise the exposure's denomination currency as the proxy the
+    audit endorses.
+
+    Null-PERMISSIVE: a null ``funding_currency`` falls back to the denomination
+    (``denomination_currency_expr``), so a dataset that does not report a
+    separate funding currency keeps the treatment it had before this limb existed
+    (mirrors the Art. 237(2)(a) original-maturity null fallback). Returns None
+    when the frame carries no currency column at all, signalling the caller to
+    omit the funding limb entirely.
+
+    Args:
+        schema_names: Column names from ``lf.collect_schema().names()``.
+
+    Returns:
+        Polars expression yielding the funding currency per row, or None when no
+        currency source is available on the frame.
+    """
+    names = set(schema_names)
+    has_denomination = "original_currency" in names or "currency" in names
+    if "funding_currency" in names:
+        if has_denomination:
+            return pl.col("funding_currency").fill_null(denomination_currency_expr(names))
+        return pl.col("funding_currency")
+    if has_denomination:
+        return denomination_currency_expr(names)
+    return None

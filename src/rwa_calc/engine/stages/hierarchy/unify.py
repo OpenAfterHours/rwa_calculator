@@ -133,6 +133,12 @@ def _coerce_loans_to_unified(loans: pl.LazyFrame) -> pl.LazyFrame:
         pl.col("value_date"),
         pl.col("maturity_date"),
         pl.col("currency"),
+        # CRR Art. 114(4)/(7) via Art. 235(3): funding currency for the domestic-
+        # CGCB 0%-extension funding limb. Declared on LOAN_SCHEMA (nullable), so
+        # the sealed loans frame always carries it; without this pass-through the
+        # unified ``select`` would drop it and the funding limb would silently
+        # fall back to the denomination currency for every exposure.
+        pl.col("funding_currency"),
         pl.col("drawn_amount"),
         pl.col("interest").fill_null(0.0),
         pl.lit(0.0).alias("undrawn_amount"),
@@ -232,6 +238,9 @@ def _coerce_contingents_to_unified(
             pl.col("value_date"),
             pl.col("maturity_date"),
             pl.col("currency"),
+            # CRR Art. 114(4)/(7) via Art. 235(3): funding-currency pass-through
+            # (see _coerce_loans_to_unified). Declared on CONTINGENTS_SCHEMA.
+            pl.col("funding_currency"),
             pl.when(is_drawn)
             .then(pl.col("nominal_amount"))
             .otherwise(pl.lit(0.0))

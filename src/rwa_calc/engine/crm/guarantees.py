@@ -40,6 +40,7 @@ from rwa_calc.engine.entity_class_maps import ENTITY_TYPE_TO_SA_CLASS
 from rwa_calc.engine.eu_sovereign import (
     build_domestic_cgcb_guarantor_expr,
     denomination_currency_expr,
+    funding_currency_expr,
 )
 from rwa_calc.engine.kernels.allocation import (
     expand_items_pro_rata,
@@ -538,10 +539,17 @@ def _build_domestic_cgcb_flag(schema_names: list[str]) -> pl.Expr:
     Art. 114(4)/(7): a domestic-currency CGCB guarantor must receive 0% RW
     via the SA short-circuit, even if the guarantor has an internal PD that
     would otherwise route to IRB parameter substitution. The domestic-currency
-    test is evaluated against the guarantee currency (the currency of the
-    substituted exposure to the sovereign), not the underlying loan's
-    currency — Art. 233(3) FX haircut handles any mismatch between guarantee
-    and underlying.
+    (denomination) test is evaluated against the guarantee currency (the
+    currency of the substituted exposure to the sovereign), not the underlying
+    loan's currency — Art. 233(3) FX haircut handles any mismatch between
+    guarantee and underlying.
+
+    Art. 235(3): the 0% extension additionally requires the exposure to be
+    *funded* in the same domestic currency. The funding limb (``funding_currency``,
+    null-PERMISSIVE fallback to the exposure denomination — see
+    :func:`funding_currency_expr`) is ANDed in, so a loan funded in a
+    non-domestic currency (e.g. USD-funded, EUR-guaranteed) no longer receives
+    the 0% short-circuit.
     """
     has_exposure_ccy = "original_currency" in schema_names or "currency" in schema_names
     has_guarantee_ccy = "guarantee_currency" in schema_names
@@ -558,7 +566,7 @@ def _build_domestic_cgcb_flag(schema_names: list[str]) -> pl.Expr:
 
     cgcb = ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value
     return (pl.col("guarantor_exposure_class") == cgcb) & build_domestic_cgcb_guarantor_expr(
-        "guarantor_country_code", ccy_expr
+        "guarantor_country_code", ccy_expr, funding_currency_expr(schema_names)
     )
 
 

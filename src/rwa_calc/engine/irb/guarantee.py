@@ -32,6 +32,7 @@ from watchfire import cites
 from rwa_calc.engine.eu_sovereign import (
     build_domestic_cgcb_guarantor_expr,
     denomination_currency_expr,
+    funding_currency_expr,
 )
 from rwa_calc.engine.irb.formulas import (
     _double_default_multiplier_expr,
@@ -254,11 +255,14 @@ def _compute_guarantor_rw_sa(
     _gec = pl.col("guarantor_exposure_class").fill_null("")
 
     # Art. 114(4)/(7): Domestic CGCB guarantors -> 0% RW regardless of CQS.
-    # Evaluate the domestic-currency test against the guarantee currency (the
-    # currency of the substituted exposure to the sovereign); the Art. 233(3) 8%
-    # FX haircut separately handles any mismatch between the guarantee and the
-    # underlying exposure. Fall back to the exposure's pre-FX denomination when
-    # `guarantee_currency` is missing (legacy / no-guarantee rows).
+    # Evaluate the domestic-currency (denomination) test against the guarantee
+    # currency (the currency of the substituted exposure to the sovereign); the
+    # Art. 233(3) 8% FX haircut separately handles any mismatch between the
+    # guarantee and the underlying exposure. Fall back to the exposure's pre-FX
+    # denomination when `guarantee_currency` is missing (legacy / no-guarantee
+    # rows). Art. 235(3): the 0% extension additionally requires the exposure to
+    # be *funded* in the domestic currency, so the funding limb (null-PERMISSIVE
+    # fallback to the denomination — see `funding_currency_expr`) is ANDed in.
     _irb_schema_names = lf.collect_schema().names()
     _has_country = "guarantor_country_code" in _irb_schema_names
     _has_exposure_ccy_irb = (
@@ -277,7 +281,9 @@ def _compute_guarantor_rw_sa(
         _ccy_expr_irb = None
 
     _is_domestic_guarantor = (
-        build_domestic_cgcb_guarantor_expr("guarantor_country_code", _ccy_expr_irb)
+        build_domestic_cgcb_guarantor_expr(
+            "guarantor_country_code", _ccy_expr_irb, funding_currency_expr(_irb_schema_names)
+        )
         if _has_country and _ccy_expr_irb is not None
         else pl.lit(False)
     )

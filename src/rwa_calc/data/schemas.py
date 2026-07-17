@@ -172,6 +172,10 @@ FACILITY_SCHEMA: dict[str, ColumnSpec] = {
     # original_maturity_years on GUARANTEE_SCHEMA / COLLATERAL_SCHEMA.
     "original_maturity_years": ColumnSpec(pl.Float64, required=False),
     "currency": ColumnSpec(pl.String, required=False),
+    # CRR Art. 114(4)/(7) via Art. 235(3): funding currency of any undrawn
+    # exposure this facility generates. See LOAN_SCHEMA.funding_currency for the
+    # full null-PERMISSIVE semantics (falls back to the denomination currency).
+    "funding_currency": ColumnSpec(pl.String, required=False),
     "limit": ColumnSpec(pl.Float64, required=False),
     "committed": ColumnSpec(pl.Boolean, default=True, required=False),
     "lgd": ColumnSpec(pl.Float64, required=False),
@@ -252,6 +256,16 @@ LOAN_SCHEMA: dict[str, ColumnSpec] = {
     "value_date": ColumnSpec(pl.Date, required=False),
     "maturity_date": ColumnSpec(pl.Date, required=False),
     "currency": ColumnSpec(pl.String, required=False),
+    # CRR Art. 114(4)/(7) via Art. 235(3): the currency in which the exposure is
+    # FUNDED. The 0% domestic-CGCB extension to a centrally-guaranteed exposure
+    # requires the exposure to be BOTH denominated AND funded in the guarantor's
+    # domestic currency. Distinct from ``currency`` (the denomination): a loan can
+    # be denominated in one currency yet funded in another. Null-PERMISSIVE — when
+    # absent the funding-currency limb falls back to the exposure's denomination
+    # currency (engine/eu_sovereign.funding_currency_expr), preserving datasets
+    # that do not report a separate funding currency (mirrors the Art. 237(2)(a)
+    # original-maturity null fallback).
+    "funding_currency": ColumnSpec(pl.String, required=False),
     "drawn_amount": ColumnSpec(pl.Float64, default=0.0, required=False),
     "interest": ColumnSpec(pl.Float64, default=0.0, required=False),
     "lgd": ColumnSpec(pl.Float64, required=False),
@@ -341,6 +355,10 @@ CONTINGENTS_SCHEMA: dict[str, ColumnSpec] = {
     # Mirrored from FACILITY_SCHEMA; see the FACILITY_SCHEMA notes for full detail.
     "original_maturity_years": ColumnSpec(pl.Float64, required=False),
     "currency": ColumnSpec(pl.String, required=False),
+    # CRR Art. 114(4)/(7) via Art. 235(3): funding currency of this contingent
+    # exposure. See LOAN_SCHEMA.funding_currency for the full null-PERMISSIVE
+    # semantics (falls back to the denomination currency).
+    "funding_currency": ColumnSpec(pl.String, required=False),
     "nominal_amount": ColumnSpec(pl.Float64, default=0.0, required=False),
     "lgd": ColumnSpec(pl.Float64, required=False),
     "lgd_unsecured": ColumnSpec(pl.Float64, required=False),

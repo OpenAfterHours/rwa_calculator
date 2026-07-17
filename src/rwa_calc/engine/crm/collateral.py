@@ -1186,20 +1186,27 @@ def _apply_collateral_unified(
     # LGD* formula (Art. 230/231) applies to FIRB and qualifying AIRB exposures.
     # Non-qualifying AIRB and SA keep lgd_pre_crm.
     #
-    # CRR Art. 223(4) / PS1/26 Art. 223(4): the exposure value E used in
-    #   LGD* = (LGDS · min(C, E) + LGDU · max(0, E - C)) / E
-    # is the CCF=100% basis (ead_for_crm) for off-balance-sheet items, NOT
-    # the post-CCF EAD.  For pure on-BS rows ead_for_crm == ead_gross.
+    # CRR Art. 223(4) / PS1/26 Art. 223(4): the exposure value E used in the
+    # LGD* formula is the CCF=100% basis (ead_for_crm) for off-balance-sheet
+    # items, NOT the post-CCF EAD.  For pure on-BS rows ead_for_crm == ead_gross.
+    #
+    # PS1/26 Art. 230(1) / CRR Art. 228(2) (P1.272): the exposure basis is
+    # grossed up by its own volatility haircut HE — E' = E(1 + HE) — so
+    #   LGD* = (LGDS · min(C, E') + LGDU · max(0, E' - C)) / E'.
+    # HE (exposure_volatility_haircut, Art. 223(5)) is non-zero only for SFT rows
+    # lending out a debt security, so he_factor == 1 for every other row and
+    # E' == E; the SFT-FCCM path is unaffected (it emits E* directly).
+    e_for_lgd_star = pl.col("ead_for_crm") * he_factor
     lgd_star_expr = (
         (
             pl.col("lgd_secured")
-            * pl.col("total_collateral_for_lgd").clip(upper_bound=pl.col("ead_for_crm"))
+            * pl.col("total_collateral_for_lgd").clip(upper_bound=e_for_lgd_star)
         )
         + (
             pl.col("lgd_unsecured")
-            * (pl.col("ead_for_crm") - pl.col("total_collateral_for_lgd")).clip(lower_bound=0)
+            * (e_for_lgd_star - pl.col("total_collateral_for_lgd")).clip(lower_bound=0)
         )
-    ) / pl.col("ead_for_crm")
+    ) / e_for_lgd_star
 
     exposures = exposures.with_columns(
         [

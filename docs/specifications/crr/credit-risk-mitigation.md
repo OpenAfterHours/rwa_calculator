@@ -1075,6 +1075,37 @@ Under IRB parameter substitution for guaranteed exposures:
 
 The choice of LGD for the covered portion depends on the approach used for the guarantor's exposure class, not the obligor's approach.
 
+## Unfunded Credit Protection Eligibility (Art. 213(1)(c)(i))
+
+Art. 213(1)(c)(i) makes credit protection ineligible where the protection provider can
+unilaterally **cancel** it — and, under Basel 3.1's new wording, unilaterally **change**
+its terms so as to increase the effective cost of protection. The calculator enforces this
+base limb for guarantees and credit derivatives.
+
+The gate runs in [`engine/crm/guarantees.py::_gate_unilateral_protection`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/crm/guarantees.py#L241-L282) inside `_prepare_guarantees`, on the raw per-protection rows **before** multi-level expansion (so exactly one warning is raised per ineligible protection):
+
+- Two nullable Boolean inputs drive it: `is_unilaterally_cancellable` and `is_unilaterally_changeable`.
+- A protection row flagged `is_unilaterally_cancellable` is dropped under **both** regimes.
+- A protection row flagged `is_unilaterally_changeable` is additionally dropped **under Basel 3.1 only** — the "or change" arm is new in PS1/26 and is gated by the cited pack Feature `ucp_unilateral_change_ineligible` (`enabled=True` in `rulebook/packs/b31.py`, `enabled=False` in `rulebook/packs/crr.py`). No engine code branches on the regime; the Feature carries the difference.
+- A dropped protection leaves the exposure **un-guaranteed** — the covered leg reverts to the borrower's own risk-weight basis — and each drop appends one `CRM012` warning to the error channel.
+
+!!! note "Null flags are permissive by design"
+    A null `is_unilaterally_cancellable` / `is_unilaterally_changeable` is read as
+    "no known defect ⇒ eligible", so a portfolio that never populates these flags stays
+    number-neutral. This mirrors the Art. 237(2)(a) original-maturity fallback in the same
+    module (`_prepare_guarantees`). Only an explicit `True` drops the protection.
+
+!!! warning "Partially Implemented"
+    Two adjacent Art. 213 elements are **not** yet enforced:
+
+    - **Art. 213(1)(c)(ii) cost-increase limb** — a clause that increases the effective
+      cost of protection as the protected exposure's credit quality deteriorates is not
+      detected (a recorded deferral from the base gate).
+    - **Rule 4.11 date-gated transitional** — described in the section below.
+
+    Tracked as IMPLEMENTATION_PLAN.md item P1.143 (transitional; the cost-increase limb is
+    a recorded deferral folded into that item).
+
 ## Unfunded Credit Protection Transitional (Rule 4.11)
 
 Rule 4.11 provides a **narrow contractual carve-out** for pre-existing unfunded credit protection during 1 January 2027 to 30 June 2028:
@@ -1086,16 +1117,16 @@ Rule 4.11 provides a **narrow contractual carve-out** for pre-existing unfunded 
 Rule 4.11 applies to **unfunded credit protection only** (guarantees and credit derivatives). Funded credit protection (collateral) transitions immediately to Basel 3.1 rules on 1 January 2027. The transitional is exposure-specific — each protection arrangement is assessed individually.
 
 !!! warning "Not Yet Implemented"
-    Rule 4.11 transitional logic is not implemented. The calculator does not perform
-    Art. 213 eligibility validation, so the "or change" criterion is not enforced under
-    either framework. Implementing this requires:
+    The Rule 4.11 date-gated transitional is not implemented. The base Art. 213(1)(c)(i)
+    gate (above) applies the "or change" limb to **all** Basel 3.1 contracts, with no
+    grandfathering of pre-2027 inceptions. Honouring Rule 4.11 requires:
 
     - A `protection_inception_date` field on guarantee/credit derivative inputs
-    - Art. 213(1)(c)(i) eligibility validation in the CRM processor
-    - Date-gated logic to disapply the "or change" words for pre-2027 contracts
-      during 1 Jan 2027 – 30 Jun 2028
+    - Date-gated logic that disapplies **only** the `is_unilaterally_changeable` limb for
+      contracts entered into before 1 Jan 2027, during 1 Jan 2027 – 30 Jun 2028 (the
+      unilaterally-cancellable limb stays live throughout)
 
-    See IMPLEMENTATION_PLAN.md item P1.10.
+    See IMPLEMENTATION_PLAN.md item P1.143.
 
 ## Key Scenarios
 

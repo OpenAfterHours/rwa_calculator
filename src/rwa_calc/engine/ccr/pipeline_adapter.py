@@ -44,7 +44,7 @@ from rwa_calc.contracts.bundles import (
 )
 from rwa_calc.contracts.config import CCRConfig
 from rwa_calc.contracts.errors import CalculationError
-from rwa_calc.data.column_spec import ensure_columns
+from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.schemas import CCR_ALPHA_CARVE_OUT_COUNTERPARTY_TYPES, NETTING_SET_SCHEMA
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
 from rwa_calc.engine.ccr.adjusted_notional import (
@@ -338,6 +338,17 @@ def ccr_rows_to_exposures(
         if "is_legacy_cva_exempt" in trade_cols
         else pl.lit(False).alias("_ns_is_legacy_cva_exempt")
     )
+    # Own-estimate LGD carrier for A-IRB routing (P1.215), collapsed to NS grain
+    # via ``.max()`` — deterministic AND conservative. A group_by has no stable
+    # row order, so ``.first()`` would pick an order-nondeterministic value across
+    # a multi-trade netting set with heterogeneous modelled LGDs; ``.max()`` is
+    # order-independent and selects the highest LGD — the most conservative
+    # capital input (a higher LGD drives a larger K / RWA). Ensure the carrier as
+    # a typed null first (older fixtures / Python bundle path may omit it) — the
+    # ensure_columns pattern avoids a presence-guard ratchet site.
+    trades_lf = ensure_columns(
+        trades_lf, {"ccr_modelled_lgd": ColumnSpec(pl.Float64, default=None, required=False)}
+    )
     ns_trade_aggregates = trades_lf.group_by("netting_set_id").agg(
         [
             pl.col("mtm_value").fill_null(0.0).sum().alias("v_net"),
@@ -345,6 +356,7 @@ def ccr_rows_to_exposures(
             pl.col("maturity_date").max().alias("_trade_max_maturity"),
             client_cleared_agg,
             legacy_cva_exempt_agg,
+            pl.col("ccr_modelled_lgd").max().alias("ccr_modelled_lgd"),
         ]
     )
 
@@ -447,6 +459,10 @@ def ccr_rows_to_exposures(
             # TODO(CCR-deriv-maturity): emit ccr_effective_maturity for
             # CCR_DERIVATIVE rows (NS-grain .all() daily aggregation over the
             # trade-grain margining inputs) — see Phase 3b.
+            # Art. 143 own-estimate LGD carrier for A-IRB routing (P1.215; null =>
+            # SA / FIRB downstream), max-per-NS (deterministic + conservative)
+            # from the trade aggregation above.
+            pl.col("ccr_modelled_lgd"),
             pl.col("netting_set_id").alias("source_netting_set_id"),
             pl.lit("sa_ccr").alias("ccr_method"),
             # CRR Art. 306(1)(c): client-clearing flag for the QCCP 4% trade

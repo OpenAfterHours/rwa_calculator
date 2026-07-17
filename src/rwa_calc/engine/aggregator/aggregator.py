@@ -37,6 +37,7 @@ from rwa_calc.domain.enums import ApproachType, ExposureClass
 from rwa_calc.engine.aggregator._el_summary import compute_el_portfolio_summary
 from rwa_calc.engine.aggregator._equity_prep import prepare_equity_results
 from rwa_calc.engine.aggregator._floor import apply_floor_with_impact, compute_of_adj
+from rwa_calc.engine.aggregator._lgd_floor_check import check_retail_re_portfolio_lgd_floors
 from rwa_calc.engine.aggregator._securitisation import (
     apply_residual_multiplier,
     generate_securitisation_audit,
@@ -272,6 +273,16 @@ class OutputAggregator:
             apply_residual_multiplier(slotting_results),
         )
 
+        # CRR Art. 164(4)/(5) portfolio-level A-IRB retail-RE LGD-floor backstop.
+        # CRR-only monitoring WARNING (never an RWA/LGD adjustment); Basel 3.1
+        # disables the Feature — its per-exposure airb_lgd_floor supersedes it.
+        # Reads the already-materialised ``combined_df`` (no extra collect).
+        retail_re_lgd_floor_warnings: list[CalculationError] = []
+        if resolved_pack.feature("crr_retail_re_portfolio_lgd_floor"):
+            retail_re_lgd_floor_warnings = check_retail_re_portfolio_lgd_floors(
+                combined_df, resolved_pack
+            )
+
         # Apply portfolio-level output floor if applicable (Art. 92 para 2A)
         # Floor only applies to specific (institution_type, reporting_basis)
         # combinations — exempt entities use U-TREA with no floor add-on.
@@ -396,7 +407,9 @@ class OutputAggregator:
             rwa_ccr_default=rwa_ccr_default,
             rwa_ccr_qccp_trade=rwa_ccr_qccp_trade,
             failed_trades_rwa=failed_trades_rwa,
-            errors=_detect_non_finite_errors(post_floor_dfs["results"]),
+            errors=(
+                _detect_non_finite_errors(post_floor_dfs["results"]) + retail_re_lgd_floor_warnings
+            ),
         )
 
 

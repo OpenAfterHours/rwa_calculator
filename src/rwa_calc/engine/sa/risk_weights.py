@@ -158,6 +158,17 @@ SA_INPUT_CONTRACT: dict[str, ColumnSpec] = {
     "prior_charge_ltv": ColumnSpec(pl.Float64, default=0.0, required=False),
     "is_short_term_trade_lc": ColumnSpec(pl.Boolean, default=False, required=False),
     "has_short_term_ecai": ColumnSpec(pl.Boolean, default=False, required=False),
+    # Art. 140(2) obligor-level short-term contamination flags (P1.225),
+    # broadcast per-counterparty by the hierarchy stage. ``is_guaranteed`` is
+    # ensured here too (default False = unsecured) so the contamination override
+    # can read the unsecured predicate without a presence guard.
+    "obligor_st_150_contamination": ColumnSpec(pl.Boolean, default=False, required=False),
+    "obligor_st_50_floor": ColumnSpec(pl.Boolean, default=False, required=False),
+    # Per-exposure: True only on a leg with its OWN issue-specific short-term
+    # ECAI assessment; the Art. 140(2) override reads it to reach spilled legs
+    # (P1.225 co-fire) without touching the directly-rated source.
+    "has_own_short_term_ecai": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_guaranteed": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_payroll_loan": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_qrre_transactor": ColumnSpec(pl.Boolean, default=False, required=False),
     "sl_type": ColumnSpec(pl.String, required=False),
@@ -343,6 +354,11 @@ def apply_risk_weights(
             exposures, uc, is_domestic_currency, is_uk_domestic
         )
 
+    # Art. 140(2) obligor ST contamination (regime-invariant, post-ladder).
+    # ORDER: must precede _apply_defaulted_risk_weight — its unconditional Art. 127
+    # overwrite keeps provision-based defaulted RWs; reordering flips them to 150%.
+    exposures = _apply_obligor_st_contamination_override(exposures)
+
     # Art. 121(6) (CRR) / CRE20.22 (Basel 3.1): Sovereign RW floor for
     # FX-denominated unrated institution exposures. Exception:
     # self-liquidating trade items with original maturity <= 1yr.
@@ -364,6 +380,49 @@ def apply_risk_weights(
         "risk_weight_rw",
     ]
     return exposures.drop([c for c in temp_cols if c in schema_names])
+
+
+@cites("CRR Art. 140")
+@cites("PS1/26, paragraph 140")
+def _apply_obligor_st_contamination_override(exposures: pl.LazyFrame) -> pl.LazyFrame:
+    """Apply the Art. 140(2) obligor-level short-term contamination RW override.
+
+    CRR Art. 140(2) / PRA PS1/26 Art. 140(2) (CRE21.17-18), reading the two
+    per-obligor flags from ``_apply_obligor_st_contamination_flags``:
+    (a) 150% broadcast (Table 7 CQS 4+) onto ALL the obligor's unrated unsecured
+    claims (short- OR long-term); (b) 100% floor (max(RW, 100%)) on its unrated
+    unsecured SHORT-TERM claims when a 50%-attracting (Table 7 CQS 2) assessment
+    exists. The 150% hard override dominates the floor (checked first).
+
+    A target is UNSECURED (``~is_guaranteed`` — a guaranteed leg keeps its
+    guarantor RW), lacks its OWN short-term assessment (``~has_own_short_term_ecai``
+    — the directly-rated leg is the SOURCE, never a target), and is either
+    genuinely unrated (``cqs`` null) OR was handed a short-term cqs by the
+    Art. 120(3)(c) spillover (``has_short_term_ecai``). Including the spilled arm
+    is the P1.225 co-fire fix: the spillover overwrites ``cqs`` /
+    ``has_short_term_ecai``, so the pre-fix ``cqs.is_null() & ~has_short_term_ecai``
+    predicate dropped spilled legs and Art. 140(2) never bound when both fired.
+    A leg with only an inherited long-term cqs stays excluded as before.
+    """
+    is_target = pl.col("has_own_short_term_ecai").not_() & (
+        pl.col("cqs").is_null() | pl.col("has_short_term_ecai")
+    )
+    is_unsecured = pl.col("is_guaranteed").not_()
+    # Reuse the SA short-term window (original maturity <= 3m, <= 6m for
+    # self-liquidating trade LCs) used by the institution ST branches. No
+    # fill_null: a null maturity yields a null gate the when-chain treats as
+    # "not short-term".
+    original_mty = pl.col("original_maturity_years")
+    is_st = (original_mty <= 0.25) | (pl.col("is_short_term_trade_lc") & (original_mty <= 0.5))
+
+    return exposures.with_columns(
+        pl.when(pl.col("obligor_st_150_contamination") & is_target & is_unsecured)
+        .then(pl.lit(1.50))
+        .when(pl.col("obligor_st_50_floor") & is_target & is_unsecured & is_st)
+        .then(pl.max_horizontal(pl.col("risk_weight"), pl.lit(1.00)))
+        .otherwise(pl.col("risk_weight"))
+        .alias("risk_weight")
+    )
 
 
 # ---------------------------------------------------------------------------

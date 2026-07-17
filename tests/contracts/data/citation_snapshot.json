@@ -2,6 +2,9 @@
   "rwa_calc.engine.aggregator._floor::apply_floor_with_impact": [
     "PS1/26, paragraph 92"
   ],
+  "rwa_calc.engine.aggregator._lgd_floor_check::check_retail_re_portfolio_lgd_floors": [
+    "CRR Art. 164"
+  ],
   "rwa_calc.engine.aggregator.aggregator::OutputAggregator.aggregate": [
     "PS1/26, paragraph 92"
   ],
@@ -110,8 +113,16 @@
   "rwa_calc.engine.crm.guarantees::_apply_maturity_mismatch_to_guarantees": [
     "CRR Art. 217"
   ],
+  "rwa_calc.engine.crm.guarantees::_assign_guarantor_approach": [
+    "CRR Art. 201",
+    "PS1/26, paragraph 201"
+  ],
   "rwa_calc.engine.crm.guarantees::_build_remainder_sub_rows": [
     "CRR Art. 234"
+  ],
+  "rwa_calc.engine.crm.guarantees::_gate_unilateral_protection": [
+    "CRR Art. 213",
+    "PS1/26, paragraph 213"
   ],
   "rwa_calc.engine.crm.guarantees::apply_guarantees": [
     "CRR Art. 213",
@@ -319,6 +330,10 @@
     "CRR Art. 127",
     "PS1/26, paragraph 127"
   ],
+  "rwa_calc.engine.sa.risk_weights::_apply_obligor_st_contamination_override": [
+    "CRR Art. 140",
+    "PS1/26, paragraph 140"
+  ],
   "rwa_calc.engine.sa.risk_weights::_b31_append_high_risk_branch": [
     "PS1/26, paragraph 128"
   ],
@@ -428,6 +443,10 @@
   ],
   "rwa_calc.engine.stages.hierarchy.enrich::_apply_obligor_short_term_spillover": [
     "CRR Art. 131"
+  ],
+  "rwa_calc.engine.stages.hierarchy.enrich::_apply_obligor_st_contamination_flags": [
+    "CRR Art. 140",
+    "PS1/26, paragraph 140"
   ],
   "rwa_calc.engine.stages.hierarchy.enrich::apply_short_term_rating_override": [
     "CRR Art. 131",

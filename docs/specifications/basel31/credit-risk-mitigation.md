@@ -1364,6 +1364,23 @@ The multiplier-affected exposures appear in:
 
 ---
 
+## Unfunded Credit Protection Eligibility (Art. 213(1)(c)(i))
+
+Basel 3.1 tightens Art. 213(1)(c)(i): credit protection is ineligible not only where the
+provider can unilaterally **cancel** it (as under CRR) but also where the provider can
+unilaterally **change** its terms to increase the effective cost of protection. The
+calculator enforces this base limb.
+
+The gate is regime-invariant engine code driven by the cited pack Feature
+`ucp_unilateral_change_ineligible` — `enabled=True` under Basel 3.1 (`rulebook/packs/b31.py`),
+`enabled=False` under CRR (`rulebook/packs/crr.py`). Under Basel 3.1 a guarantee or credit
+derivative flagged `is_unilaterally_cancellable` **or** `is_unilaterally_changeable` is
+dropped before multi-level expansion; the covered leg reverts to the borrower's own basis
+and a `CRM012` warning is raised per dropped protection. Both flags are null-permissive
+(a null means "no known defect ⇒ eligible").
+
+> **Details:** See [CRR CRM spec — Unfunded Credit Protection Eligibility](../crr/credit-risk-mitigation.md#unfunded-credit-protection-eligibility-art-2131ci) for the full mechanism, the source link, and the null-permissive rationale.
+
 ## Unfunded Credit Protection Transitional (Rule 4.11)
 
 Pre-1 January 2027 unfunded credit protection contracts may continue to use CRR eligibility
@@ -1371,12 +1388,14 @@ criteria until **30 June 2028**, even if they do not meet the stricter Basel 3.1
 (e.g., the new "or changeable" criterion in Art. 213).
 
 !!! warning "Not Yet Implemented"
-    Rule 4.11 transitional logic is not implemented. The calculator does not perform
-    Art. 213 eligibility validation, so the "or change" criterion is not enforced under
-    either framework. Implementing this requires a `protection_inception_date` input field
-    and date-gated eligibility logic in the CRM processor.
+    The Rule 4.11 date-gated transitional is not implemented. The base Art. 213(1)(c)(i)
+    gate (above) applies the "or change" limb to **all** Basel 3.1 contracts with no
+    grandfathering of pre-2027 inceptions, and the Art. 213(1)(c)(ii) cost-increase limb is
+    likewise not yet detected. Honouring Rule 4.11 requires a `protection_inception_date`
+    input field and date-gated logic that disapplies **only** the `is_unilaterally_changeable`
+    limb for pre-2027 contracts during 1 Jan 2027 – 30 Jun 2028.
     See [CRR CRM spec](../crr/credit-risk-mitigation.md#unfunded-credit-protection-transitional-rule-411)
-    for the full regulatory description and IMPLEMENTATION_PLAN.md item P1.10.
+    for the full regulatory description and IMPLEMENTATION_PLAN.md item P1.143.
 
 ---
 

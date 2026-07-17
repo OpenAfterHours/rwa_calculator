@@ -542,6 +542,32 @@ def _hierarchy_resolved_columns() -> dict[str, EdgeColumn]:
         ),
         "model_id": EdgeColumn(dtype=pl.String),
         "has_short_term_ecai": EdgeColumn(dtype=pl.Boolean),
+        # Art. 140(2) obligor-level short-term contamination flags (P1.225):
+        # broadcast per-counterparty by the hierarchy stage, read by the SA
+        # risk-weight override. required=False — a frame that skips the ST-rating
+        # path (direct-call / no ratings) carries a typed null, which the SA
+        # override reads as "no contamination".
+        "obligor_st_150_contamination": EdgeColumn(
+            dtype=pl.Boolean, required=False, citation="CRR Art. 140"
+        ),
+        "obligor_st_50_floor": EdgeColumn(
+            dtype=pl.Boolean, required=False, citation="CRR Art. 140"
+        ),
+        # Per-exposure (NOT broadcast): True only on the leg carrying its OWN
+        # issue-specific short-term ECAI assessment (Art. 120(2B) / 122(3)). Lets
+        # the SA Art. 140(2) override tell a directly-rated contamination SOURCE
+        # from a leg handed a short-term cqs by the Art. 120(3)(c) obligor
+        # spillover — the spillover overwrites has_short_term_ecai / cqs, so
+        # without this flag a spilled leg would evade the 140(2)(b) floor
+        # (P1.225 co-fire defect). default False + fill_null_default: a frame
+        # skipping the ST-rating path has no directly-rated leg.
+        "has_own_short_term_ecai": EdgeColumn(
+            dtype=pl.Boolean,
+            required=False,
+            default=False,
+            fill_null_default=True,
+            citation="CRR Art. 140",
+        ),
         "original_currency": EdgeColumn(dtype=pl.String),
         "original_amount": EdgeColumn(dtype=pl.Float64),
         "fx_rate_applied": EdgeColumn(dtype=pl.Float64),
@@ -618,6 +644,23 @@ CCR_EXIT_EDGE: EdgeContract = EdgeContract(
             required=False,
             citation="CRR Art. 162",
             null_meaning="null = lending row / off-carve-out CCR row — date-derived M applies",
+        ),
+        # Own-estimate LGD carrier for A-IRB routing of the synthetic CCR/SFT row
+        # (P1.215). Producer-emitted modelled LGD for the FCCM-SFT / SA-CCR rows
+        # that route to A-IRB; null on lending rows and off-carve-out CCR rows
+        # (conform injects a typed null). Feeds the classifier ``has_modelled_lgd``
+        # AIRB gate and the IRB LGD selection (engine/irb/transforms.py) — never
+        # overloads the lending ``lgd`` column. required=False with NO default
+        # (a default on an optional Float carrier is anti-conservative). Declared
+        # HERE on CCR_EXIT_EDGE ONLY (NOT HIERARCHY_EXIT_EDGE) so it survives the
+        # CCR-only spread into CLASSIFIER_EXIT_CCR / CRM_EXIT_CCR / RE_SPLIT_EXIT_CCR
+        # rather than being filtered by the ``c not in HIERARCHY_EXIT_EDGE.columns``
+        # guard.
+        "ccr_modelled_lgd": EdgeColumn(
+            dtype=pl.Float64,
+            required=False,
+            citation="CRR Art. 143",
+            null_meaning="null = lending row / off-carve-out CCR row — no modelled LGD",
         ),
         "addon_aggregate": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 278"),
         "addon_by_asset_class": EdgeColumn(

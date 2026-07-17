@@ -236,6 +236,14 @@ class TestSlottingRwsmFullCoverCRR:
         assert retained["risk_weight"] == pytest.approx(0.70)
         assert retained["ead_final"] == pytest.approx(0.0)
 
+    def test_covered_leg_pre_crm_risk_weight_is_slotting_base(self, results: pl.DataFrame) -> None:
+        """The substitution snapshot (``pre_crm_risk_weight``) is taken from
+        the strong-category slotting base (0.70) BEFORE the guarantor's RW
+        overwrites ``risk_weight`` — the same 0.70 used transitively by
+        ``guarantee_rwa_benefit`` above, asserted here directly."""
+        guaranteed = _leg(results, "guaranteed")
+        assert guaranteed["pre_crm_risk_weight"] == pytest.approx(0.70)
+
 
 class TestSlottingRwsmPartialCoverCRR:
     """CRR, 60% cover: total RWA 7.0M -> 2.8M; EL 40k -> 16k."""
@@ -305,3 +313,51 @@ class TestSlottingRwsmFullCoverB31:
     def test_covered_leg_el_zeroed(self, results: pl.DataFrame) -> None:
         guaranteed = _leg(results, "guaranteed")
         assert guaranteed["expected_loss"] == pytest.approx(0.0)
+
+
+class TestSlottingRwsmPartialCoverB31:
+    """B31, 60% cover: total RWA 7.0M -> 2.8M; EL 40k -> 16k (same table
+    values as CRR — strong base 0.70, sovereign CQS1 0.00)."""
+
+    @pytest.fixture(scope="class")
+    def results(self) -> pl.DataFrame:
+        return _run(_b31_config(), percentage_covered=0.6)
+
+    def test_leg_split(self, results: pl.DataFrame) -> None:
+        guaranteed = _leg(results, "guaranteed")
+        retained = _leg(results, "retained")
+        assert guaranteed["ead_final"] == pytest.approx(6_000_000.0)
+        assert guaranteed["risk_weight"] == pytest.approx(0.0)
+        assert retained["ead_final"] == pytest.approx(4_000_000.0)
+        assert retained["risk_weight"] == pytest.approx(0.70)
+
+    def test_total_rwa(self, results: pl.DataFrame) -> None:
+        assert float(results["rwa_final"].sum()) == pytest.approx(2_800_000.0)
+
+    def test_retained_el_only(self, results: pl.DataFrame) -> None:
+        guaranteed = _leg(results, "guaranteed")
+        retained = _leg(results, "retained")
+        assert guaranteed["expected_loss"] == pytest.approx(0.0)
+        assert retained["expected_loss"] == pytest.approx(16_000.0)
+
+
+class TestSlottingRwsmNonBeneficialB31:
+    """B31, unrated corporate guarantor (SA RW 1.00 > slotting 0.70):
+    no substitution — the guarantee must never increase RWA."""
+
+    @pytest.fixture(scope="class")
+    def results(self) -> pl.DataFrame:
+        return _run(_b31_config(), guarantor=_CORP_GUARANTOR)
+
+    def test_no_substitution(self, results: pl.DataFrame) -> None:
+        guaranteed = _leg(results, "guaranteed")
+        assert guaranteed["risk_weight"] == pytest.approx(0.70)
+        assert guaranteed["guarantee_rwa_benefit"] == pytest.approx(0.0)
+
+    def test_total_rwa_unchanged(self, results: pl.DataFrame) -> None:
+        assert float(results["rwa_final"].sum()) == pytest.approx(7_000_000.0)
+
+    def test_el_not_zeroed(self, results: pl.DataFrame) -> None:
+        """Non-beneficial: the covered part is NOT substituted, so its
+        slotting EL stands (0.4% x 10M)."""
+        assert float(results["expected_loss"].sum()) == pytest.approx(40_000.0)

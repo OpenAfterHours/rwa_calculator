@@ -600,6 +600,17 @@ GUARANTEE_SCHEMA: dict[str, ColumnSpec] = {
     # treated permissively (defaulted to >= 1y) — mirrors the collateral
     # original_maturity_years fallback in engine/crm/haircuts.py.
     "original_maturity_years": ColumnSpec(pl.Float64, required=False),
+    # CRR / PS1-26 Art. 213(1)(c)(i): unfunded credit protection eligibility.
+    # A guarantee the protection provider can unilaterally CANCEL is ineligible
+    # under both regimes; one whose terms the provider can unilaterally CHANGE
+    # (increasing the effective cost of protection) is additionally ineligible
+    # under Basel 3.1 only (the "or change" words are new in PS1/26, gated by
+    # the ucp_unilateral_change_ineligible pack Feature). Both flags are
+    # null-PERMISSIVE — a null means "no known defect => eligible", mirroring
+    # the Art. 237(2)(a) original_maturity_years fallback above: no default is
+    # declared, so apply_boolean_column_defaults leaves nulls untouched.
+    "is_unilaterally_cancellable": ColumnSpec(pl.Boolean, required=False),
+    "is_unilaterally_changeable": ColumnSpec(pl.Boolean, required=False),
     # Seniority of the guarantor's claim drives F-IRB supervisory LGD selection
     # in PSM (parameter substitution) — Art. 161(1)(a)/(aa)/(b). Allowed
     # values: "senior", "subordinated". Engine treats missing as "senior".
@@ -1068,6 +1079,12 @@ TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # 5BD/10BD intermediate floors UNDER B31 ONLY (unused under CRR, where the
     # 5BD/10BD apply on MNA alone). (PS1/26 Art. 162(2A)(c)/(d).)
     "qualifies_mna_intermediate_floor": ColumnSpec(pl.Boolean, default=False, required=False),
+    # Own-estimate LGD carrier for A-IRB routing of the synthetic SA-CCR
+    # derivative row (P1.215, mirrors ``ccr_effective_maturity`` / the SFT
+    # sibling on SFT_TRADE_SCHEMA). Null (the common case) => no modelled LGD =>
+    # the row routes to SA / FIRB, bit-identical to today.
+    # (CRR Art. 143 / Art. 169-171: own-estimate LGD under A-IRB.)
+    "ccr_modelled_lgd": ColumnSpec(pl.Float64, required=False),
 }
 
 #: Netting-set-level input for SA-CCR. One row per netting set keyed by
@@ -1277,6 +1294,15 @@ SFT_TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # under an MNA but lacking it falls to the 162(2A)(f) 1-year catch-all.
     # Default False (conservative). (PS1/26 Art. 162(2A)(c)/(d).)
     "qualifies_mna_intermediate_floor": ColumnSpec(pl.Boolean, default=False, required=False),
+    # Own-estimate LGD carrier for A-IRB routing of the synthetic CCR/SFT row
+    # (P1.215, mirrors ``ccr_effective_maturity``). A netting-set/trade that
+    # routes to A-IRB carries the firm's modelled LGD here — the synthetic
+    # ``ccr__<NS>`` row has no lending ``lgd`` of its own, so this dedicated
+    # carrier feeds the classifier's ``has_modelled_lgd`` AIRB gate and the IRB
+    # LGD selection (engine/irb/transforms.py). Null (the common case) => no
+    # modelled LGD => the row falls to SA / FIRB, bit-identical to today.
+    # (CRR Art. 143 / Art. 169-171: own-estimate LGD under A-IRB.)
+    "ccr_modelled_lgd": ColumnSpec(pl.Float64, required=False),
 }
 
 #: Netting-set-keyed collateral received against an SFT, feeding the

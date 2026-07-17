@@ -22,6 +22,11 @@ from typing import TYPE_CHECKING
 import polars as pl
 from watchfire import cites
 
+from rwa_calc.contracts.errors import (
+    ERROR_INELIGIBLE_GUARANTOR,
+    ERROR_INELIGIBLE_UNFUNDED_PROTECTION,
+    crm_warning,
+)
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.schemas import DIRECT_BENEFICIARY_TYPES
 from rwa_calc.domain.enums import ApproachType, ExposureClass
@@ -48,6 +53,7 @@ if TYPE_CHECKING:
     from polars._typing import PolarsDataType
 
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.contracts.errors import CalculationError
     from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 
@@ -97,6 +103,7 @@ def apply_guarantees(
     rating_inheritance: pl.LazyFrame | None = None,
     *,
     pack: ResolvedRulepack | None = None,
+    errors: list[CalculationError] | None = None,
 ) -> pl.LazyFrame:
     """
     Apply guarantee substitution.
@@ -109,11 +116,13 @@ def apply_guarantees(
         counterparty_lookup: For guarantor risk weights
         config: Calculation configuration
         rating_inheritance: For guarantor CQS lookup
+        errors: Optional CRM error channel. When provided, guarantees dropped by
+            the Art. 213(1)(c)(i) eligibility gate append a CRM012 warning each.
 
     Returns:
         Exposures with guarantee effects applied
     """
-    guarantees = _prepare_guarantees(guarantees, exposures, config, pack=pack)
+    guarantees = _prepare_guarantees(guarantees, exposures, config, pack=pack, errors=errors)
 
     exposures = exposures.with_columns(
         pl.col("exposure_reference").alias("parent_exposure_reference"),
@@ -136,7 +145,7 @@ def apply_guarantees(
         .alias("guarantor_exposure_class"),
     )
 
-    exposures = _assign_guarantor_approach(exposures, config)
+    exposures = _assign_guarantor_approach(exposures, config, errors=errors)
 
     # Cross-approach CCF substitution (CRR Art. 111 / COREP C07)
     # When IRB exposure guaranteed by SA counterparty, use SA CCFs for guaranteed portion
@@ -172,6 +181,7 @@ def _prepare_guarantees(
     config: CalculationConfig,
     *,
     pack: ResolvedRulepack | None = None,
+    errors: list[CalculationError] | None = None,
 ) -> pl.LazyFrame:
     """Normalise, filter, expand, and haircut guarantees before the split."""
     # Art. 233 H_fx and Art. 233(2) restructuring-exclusion haircuts are
@@ -199,6 +209,12 @@ def _prepare_guarantees(
     )
     guarantees = guarantees.filter(pl.col("original_maturity_years").fill_null(10.0) >= 1.0)
 
+    # CRR / PS1-26 Art. 213(1)(c)(i): drop guarantees the provider can
+    # unilaterally cancel (both regimes) or unilaterally change (Basel 3.1
+    # only). Runs on the raw per-guarantee rows — before multi-level expansion
+    # — so exactly one CRM012 warning is raised per ineligible guarantee.
+    guarantees = _gate_unilateral_protection(guarantees, resolved_pack, errors)
+
     guarantees = _resolve_guarantees_multi_level(guarantees, exposures)
 
     # Apply haircuts to guarantee amounts BEFORE splitting (Art. 233).
@@ -218,6 +234,85 @@ def _prepare_guarantees(
     # unconditionally — mirroring the collateral sibling in collateral.py.
     guarantees = _apply_maturity_mismatch_to_guarantees(guarantees, exposures, config)
     return guarantees
+
+
+@cites("CRR Art. 213")
+@cites("PS1/26, paragraph 213")
+def _gate_unilateral_protection(
+    guarantees: pl.LazyFrame,
+    pack: ResolvedRulepack,
+    errors: list[CalculationError] | None,
+) -> pl.LazyFrame:
+    """
+    Drop guarantees ineligible under Art. 213(1)(c)(i) (unilateral cancel / change).
+
+    A guarantee the protection provider can unilaterally CANCEL is ineligible
+    under both regimes; one whose terms the provider can unilaterally CHANGE
+    (increasing the effective cost of protection) is additionally ineligible
+    under Basel 3.1 — the "or change" limb is new in PS1/26, gated by the
+    ``ucp_unilateral_change_ineligible`` pack Feature. Dropped rows leave the
+    exposure un-guaranteed and each raises one CRM012 warning.
+
+    Both flags are null-permissive: a null means "no known defect => eligible",
+    mirroring the Art. 237(2)(a) original-maturity fallback in the caller.
+
+    References:
+        CRR Art. 213(1)(c)(i): unfunded credit protection eligibility.
+        PS1/26 Art. 213(1)(c)(i): adds the unilateral-change arm.
+    """
+    guarantees = ensure_columns(
+        guarantees,
+        {
+            "is_unilaterally_cancellable": ColumnSpec(pl.Boolean, required=False),
+            "is_unilaterally_changeable": ColumnSpec(pl.Boolean, required=False),
+        },
+    )
+
+    change_gated = pack.feature("ucp_unilateral_change_ineligible")
+    ineligible = pl.col("is_unilaterally_cancellable")
+    if change_gated:
+        ineligible = ineligible | pl.col("is_unilaterally_changeable")
+    # Null is permissive (no known defect => eligible): coalesce the Kleene-OR
+    # result to False so a null flag never drops the guarantee.
+    ineligible = ineligible.fill_null(False)
+
+    if errors is not None:
+        _record_ucp_ineligibility(guarantees, ineligible, change_gated, errors)
+
+    return guarantees.filter(~ineligible)
+
+
+def _record_ucp_ineligibility(
+    guarantees: pl.LazyFrame,
+    ineligible: pl.Expr,
+    change_gated: bool,
+    errors: list[CalculationError],
+) -> None:
+    """Append one CRM012 warning per guarantee dropped by the Art. 213 gate.
+
+    The guarantee table is a small dimension frame (already materialised
+    upstream by the CRM stage's ``collect_all``), so a targeted collect of the
+    dropped rows to build the per-guarantee messages is cheap — the only
+    mid-pipeline collect on this path.
+    """
+    # The PS1/26 "or change" wording only applies when the change arm is gated
+    # (Basel 3.1); under CRR only the cancellation arm can drop a guarantee.
+    reg_ref = "PS1/26 Art. 213(1)(c)(i)" if change_gated else "CRR Art. 213(1)(c)(i)"
+    arm = "cancel or change" if change_gated else "cancel"
+    dropped = guarantees.filter(ineligible).collect()
+    for row in dropped.iter_rows(named=True):
+        guar_ref = row.get("guarantee_reference")
+        beneficiary_ref = row.get("beneficiary_reference")
+        errors.append(
+            crm_warning(
+                ERROR_INELIGIBLE_UNFUNDED_PROTECTION,
+                f"Guarantee '{guar_ref}' is ineligible unfunded credit protection "
+                f"under Art. 213(1)(c)(i) (the protection provider can unilaterally "
+                f"{arm} it); dropped — the exposure flows unguaranteed.",
+                exposure_reference=beneficiary_ref,
+                regulatory_reference=reg_ref,
+            )
+        )
 
 
 def _join_guarantor_counterparty(
@@ -302,7 +397,14 @@ def _join_guarantor_ratings(
     return exposures
 
 
-def _assign_guarantor_approach(exposures: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+@cites("CRR Art. 201")
+@cites("PS1/26, paragraph 201")
+def _assign_guarantor_approach(
+    exposures: pl.LazyFrame,
+    config: CalculationConfig,
+    *,
+    errors: list[CalculationError] | None = None,
+) -> pl.LazyFrame:
     """
     Determine guarantor approach (IRB / SA) and rating provenance.
 
@@ -310,11 +412,23 @@ def _assign_guarantor_approach(exposures: pl.LazyFrame, config: CalculationConfi
     1. The beneficiary exposure is itself on FIRB/AIRB (CRR Art. 161 /
        Basel 3.1 CRE22.70-85: parameter substitution applies only to IRB
        beneficiaries; SA beneficiaries always substitute via guarantor's
-       SA risk weight regardless of the guarantor's internal rating), AND
+       SA risk weight regardless of the guarantor's internal rating —
+       SLOTTING beneficiaries are deliberately excluded, so the Art. 201(2)
+       internal-rating eligibility limb does not reach them either), AND
     2. The firm has IRB permission for the guarantor's exposure class, AND
     3. The guarantor has an internal rating (PD) — indicating the firm
        actively rates this counterparty under its IRB model.
     Counterparties with only external ratings (CQS) are treated under SA.
+
+    CRR/PS1-26 Art. 201(1)(g)/(2) eligibility gate: a CORPORATE guarantor is an
+    eligible protection provider only if it has an ECAI credit assessment
+    (``guarantor_cqs``) or — Art. 201(2), IRB-beneficiary-only — an internal
+    rating (``guarantor_internal_pd``) when the beneficiary is itself IRB. An
+    ineligible corporate guarantor is rejected: its ``guarantor_exposure_class``
+    is cleared so the SA guarantor-RW lookup returns null (non-beneficial), the
+    covered leg reverts to the borrower's own basis, and a CRM013 warning is
+    raised. Non-corporate classes are governed by other Art. 201 limbs and are
+    not gated here.
     """
     # irb_permissions is derived non-None in CalculationConfig.__post_init__.
     irb_exposure_class_values = {
@@ -333,6 +447,21 @@ def _assign_guarantor_approach(exposures: pl.LazyFrame, config: CalculationConfi
 
     is_domestic_cgcb_guarantor = _build_domestic_cgcb_flag(schema_names)
 
+    # Art. 201(1)(g)/(2) gate. All inputs are non-null booleans (is_not_null /
+    # == on the default-"" class), so no Kleene-null leaks into the gate. The
+    # class column can only ever say "corporate" (never "corporate_sme" — the
+    # entity->SA-class map has no such entity_type; SME-ness is derived later).
+    is_corporate_guarantor = pl.col("guarantor_exposure_class") == "corporate"
+    corporate_eligible = pl.col("guarantor_cqs").is_not_null() | (
+        beneficiary_is_irb & pl.col("guarantor_internal_pd").is_not_null()
+    )
+    guarantor_ineligible = (
+        is_corporate_guarantor & corporate_eligible.not_() & (pl.col("guaranteed_portion") > 0)
+    )
+
+    if errors is not None:
+        _record_ineligible_guarantors(exposures, guarantor_ineligible, errors)
+
     return exposures.with_columns(
         pl.when(is_domestic_cgcb_guarantor)
         .then(pl.lit("sa"))
@@ -343,7 +472,9 @@ def _assign_guarantor_approach(exposures: pl.LazyFrame, config: CalculationConfi
             & pl.col("guarantor_internal_pd").is_not_null()
         )
         .then(pl.lit("irb"))
-        .when(pl.col("guarantor_exposure_class") != "")
+        # SA fallback — gated: an ineligible corporate guarantor takes "" (the
+        # existing no-substitution value) rather than "sa".
+        .when((pl.col("guarantor_exposure_class") != "") & guarantor_ineligible.not_())
         .then(pl.lit("sa"))
         .otherwise(pl.lit(""))
         .alias("guarantor_approach"),
@@ -355,7 +486,49 @@ def _assign_guarantor_approach(exposures: pl.LazyFrame, config: CalculationConfi
         .then(pl.lit("external"))
         .otherwise(pl.lit(None).cast(pl.String))
         .alias("guarantor_rating_type"),
+        # Explicit revert (Art. 201): clear the guarantor class for an ineligible
+        # corporate so ``build_guarantor_rw_expr`` returns null -> non-beneficial
+        # -> the covered leg reverts to the borrower's own basis. Mirrors the
+        # existing unmapped-guarantor (class "") no-substitution path.
+        pl.when(guarantor_ineligible)
+        .then(pl.lit(""))
+        .otherwise(pl.col("guarantor_exposure_class"))
+        .alias("guarantor_exposure_class"),
     )
+
+
+def _record_ineligible_guarantors(
+    exposures: pl.LazyFrame,
+    ineligible: pl.Expr,
+    errors: list[CalculationError],
+) -> None:
+    """Append one CRM013 warning per Art. 201-ineligible corporate guarantor leg.
+
+    Targeted mid-pipeline collect of the ineligible guarantor sub-rows' parent
+    loan + guarantor references only — the guarantee book is a small dimension
+    (empty when every guarantor is eligible), so materialising just those two
+    columns to build the per-leg CRM013 messages is cheap.
+    """
+    dropped = (
+        exposures.filter(ineligible)
+        .select("parent_exposure_reference", "guarantor_reference")
+        .collect()
+    )
+    for row in dropped.iter_rows(named=True):
+        loan_ref = row.get("parent_exposure_reference")
+        guar_ref = row.get("guarantor_reference")
+        errors.append(
+            crm_warning(
+                ERROR_INELIGIBLE_GUARANTOR,
+                f"Guarantor '{guar_ref}' is an ineligible protection provider for "
+                f"exposure '{loan_ref}': a corporate guarantor without an ECAI credit "
+                "assessment (or, for an IRB-approach beneficiary, an internal rating) "
+                "is not eligible under Art. 201(1)(g)/(2); the guarantee is not "
+                "recognised and the exposure reverts to the borrower's own basis.",
+                exposure_reference=loan_ref,
+                regulatory_reference="CRR Art. 201(1)(g)",
+            )
+        )
 
 
 def _build_domestic_cgcb_flag(schema_names: list[str]) -> pl.Expr:

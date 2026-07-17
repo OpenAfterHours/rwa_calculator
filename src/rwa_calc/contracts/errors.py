@@ -94,6 +94,10 @@ ERROR_ORPHAN_REFERENCE = "DQ005"
 ERROR_INVALID_COLUMN_VALUE = "DQ006"
 ERROR_OPTIONAL_FILE_UNREADABLE = "DQ007"
 ERROR_BEEL_ON_NON_DEFAULTED_EXPOSURE = "DQ008"
+# Short-term ECAI rating scoped onto an ineligible obligor class
+# (CRR/PS1-26 Art. 140(1) / CRE21.16 — short-term assessments are confined to
+# institution / corporate obligors). The mis-scoped override is ignored for RW.
+ERROR_MISSCOPED_SHORT_TERM_RATING = "DQ009"
 
 # Hierarchy error codes
 ERROR_CIRCULAR_HIERARCHY = "HIE001"
@@ -123,6 +127,15 @@ ERROR_LOOK_THROUGH_NOT_IMPLEMENTED = "CRM008"
 ERROR_COLLATERAL_LINK_UNKNOWN_COLLATERAL = "CRM009"
 ERROR_COLLATERAL_LINK_UNKNOWN_BENEFICIARY = "CRM010"
 ERROR_COLLATERAL_LINK_DUPLICATE = "CRM011"
+# Ineligible unfunded credit protection (CRR/PS1-26 Art. 213(1)(c)(i)): a
+# guarantee the provider can unilaterally cancel (both regimes) or unilaterally
+# change (Basel 3.1 only) is dropped and the exposure flows unguaranteed.
+ERROR_INELIGIBLE_UNFUNDED_PROTECTION = "CRM012"
+# Ineligible guarantor (CRR/PS1-26 Art. 201(1)(g)/(2)): a corporate guarantor
+# without an ECAI credit assessment (or, for an IRB-approach beneficiary, an
+# internal rating) is not an eligible protection provider — the covered exposure
+# reverts to the borrower's own basis.
+ERROR_INELIGIBLE_GUARANTOR = "CRM013"
 
 # IRB error codes
 ERROR_PD_OUT_OF_RANGE = "IRB001"
@@ -131,6 +144,11 @@ ERROR_MATURITY_INVALID = "IRB003"
 ERROR_MISSING_PD = "IRB004"
 ERROR_MISSING_LGD = "IRB005"
 ERROR_MISSING_EXPECTED_LOSS = "IRB006"
+# Portfolio-level A-IRB retail-RE LGD-floor backstop (CRR Art. 164(4)): the
+# EAD-weighted-average own-estimate LGD of an A-IRB retail real-estate book fell
+# below the residential 10% / commercial 15% floor. Monitoring WARNING only —
+# never an RWA/LGD adjustment.
+ERROR_RETAIL_RE_PORTFOLIO_LGD_FLOOR = "IRB007"
 
 # SA error codes
 ERROR_INVALID_CQS = "SA001"
@@ -386,6 +404,35 @@ def beel_on_non_defaulted_exposure_warning(*, n: int) -> CalculationError:
         ),
         regulatory_reference="PS1/26 Art. 181(1)(h)(ii); CRR Art. 158(5)",
         field_name="beel",
+    )
+
+
+def misscoped_short_term_rating_warning(
+    *, exposure_reference: str | None, obligor_entity_type: str | None
+) -> CalculationError:
+    """Create a DQ009 warning for a short-term ECAI rating on an ineligible class.
+
+    CRR Art. 140(1) / PS1/26 Art. 140(1) (CRE21.16): short-term credit
+    assessments may be used only for institution and corporate obligors. A
+    short-term rating attached to any other class (e.g. a sovereign) is ignored
+    for risk-weight purposes — the exposure reverts to its counterparty-level
+    long-term rating — and this warning records the rejected mis-scope. One is
+    emitted per mis-scoped exposure (the fixture estate is loan-scoped, so this
+    equals one per mis-scoped rating).
+    """
+    return CalculationError(
+        code=ERROR_MISSCOPED_SHORT_TERM_RATING,
+        message=(
+            f"Short-term ECAI rating on exposure '{exposure_reference}' is scoped "
+            f"onto an ineligible obligor class (entity_type '{obligor_entity_type}'); "
+            "Art. 140(1) confines short-term assessments to institution / corporate "
+            "obligors, so the override is ignored and the exposure reverts to its "
+            "counterparty-level rating."
+        ),
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.DATA_QUALITY,
+        exposure_reference=exposure_reference,
+        regulatory_reference="CRR Art. 140(1)",
     )
 
 

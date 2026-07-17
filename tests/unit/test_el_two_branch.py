@@ -265,7 +265,17 @@ class TestArt1593BackwardCompatibility:
         assert float(result.defaulted_el_excess) == pytest.approx(0.0)
 
     def test_mixed_shortfall_excess_without_is_defaulted(self) -> None:
-        """Mixed portfolio without is_defaulted — standard combined approach."""
+        """Mixed portfolio without is_defaulted — pool-aggregate netting (P1.221).
+
+        Single (non-defaulted) pool: A = sum(EL) = 50k+10k+20k = 80,000;
+        B = sum(pool_b) = 30k+40k+50k = 120,000. Art. 159(3) compares the
+        POOL AGGREGATE, not the per-row-then-summed el_shortfall/el_excess
+        columns: nd_shortfall = max(0, 80k-120k) = 0; nd_excess =
+        max(0, 120k-80k) = 40,000. The buggy per-row-then-sum path instead
+        reports shortfall=20,000 (from EXP001 alone) and excess=60,000 (from
+        EXP002+EXP003), which never nets EXP001's shortfall against its
+        siblings' excess within the same pool.
+        """
         irb = pl.LazyFrame(
             {
                 "exposure_reference": ["EXP001", "EXP002", "EXP003"],
@@ -282,14 +292,21 @@ class TestArt1593BackwardCompatibility:
         assert result is not None
         assert result.art_159_3_applies is False
         # All treated as non-defaulted
-        assert float(result.non_defaulted_el_shortfall) == pytest.approx(20_000.0)
-        assert float(result.non_defaulted_el_excess) == pytest.approx(60_000.0)
-        # Standard combined approach: shortfall=20k, excess=60k
-        assert float(result.total_el_shortfall) == pytest.approx(20_000.0)
-        assert float(result.total_el_excess) == pytest.approx(60_000.0)
+        assert float(result.non_defaulted_el_shortfall) == pytest.approx(0.0)
+        assert float(result.non_defaulted_el_excess) == pytest.approx(40_000.0)
+        # Pool-aggregate netting: shortfall=0, excess=40k (A=80k vs B=120k)
+        assert float(result.total_el_shortfall) == pytest.approx(0.0)
+        assert float(result.total_el_excess) == pytest.approx(40_000.0)
 
     def test_null_is_defaulted_defaults_to_non_defaulted(self) -> None:
-        """Null is_defaulted values should be treated as non-defaulted (conservative)."""
+        """Null is_defaulted values should be treated as non-defaulted (conservative).
+
+        Pool-aggregate netting (P1.221): A = 50k+10k = 60,000; B = 30k+40k =
+        70,000 -> nd_shortfall = max(0, 60k-70k) = 0; nd_excess =
+        max(0, 70k-60k) = 10,000. The buggy per-row-then-sum path instead
+        reports shortfall=20,000/excess=30,000 (EXP001's shortfall never nets
+        against EXP002's excess within the same non-defaulted pool).
+        """
         irb = pl.LazyFrame(
             {
                 "exposure_reference": ["EXP001", "EXP002"],
@@ -306,8 +323,8 @@ class TestArt1593BackwardCompatibility:
         result = compute_el_portfolio_summary(irb)
         assert result is not None
         assert result.art_159_3_applies is False
-        assert float(result.non_defaulted_el_shortfall) == pytest.approx(20_000.0)
-        assert float(result.non_defaulted_el_excess) == pytest.approx(30_000.0)
+        assert float(result.non_defaulted_el_shortfall) == pytest.approx(0.0)
+        assert float(result.non_defaulted_el_excess) == pytest.approx(10_000.0)
         assert float(result.defaulted_el_shortfall) == pytest.approx(0.0)
         assert float(result.defaulted_el_excess) == pytest.approx(0.0)
 
@@ -316,7 +333,16 @@ class TestArt1593PoolBreakdown:
     """Tests for the pool-level breakdown fields on ELPortfolioSummary."""
 
     def test_pool_breakdown_fields_populated(self) -> None:
-        """All four pool breakdown fields should be populated correctly."""
+        """All four pool breakdown fields should be populated correctly.
+
+        Pool-aggregate netting (P1.221) on the defaulted pool: C = 8k+12k =
+        20,000; D = 20k+5k = 25,000 -> d_shortfall = max(0, 20k-25k) = 0;
+        d_excess = max(0, 25k-20k) = 5,000. The buggy per-row-then-sum path
+        instead reports shortfall=7,000/excess=12,000 (DEF_001's excess
+        never nets against DEF_002's shortfall within the same defaulted
+        pool). Non-defaulted pool is single-sign (both rows shortfall) so
+        pool-aggregate == per-row-sum there and stays 20,000/0.
+        """
         irb = pl.LazyFrame(
             {
                 "exposure_reference": ["ND_001", "ND_002", "DEF_001", "DEF_002"],
@@ -334,8 +360,8 @@ class TestArt1593PoolBreakdown:
         assert result is not None
         assert float(result.non_defaulted_el_shortfall) == pytest.approx(20_000.0)
         assert float(result.non_defaulted_el_excess) == pytest.approx(0.0)
-        assert float(result.defaulted_el_shortfall) == pytest.approx(7_000.0)
-        assert float(result.defaulted_el_excess) == pytest.approx(12_000.0)
+        assert float(result.defaulted_el_shortfall) == pytest.approx(0.0)
+        assert float(result.defaulted_el_excess) == pytest.approx(5_000.0)
 
     def test_pool_rwa_totals_correct(self) -> None:
         """Total IRB RWA should be sum of both pools."""
@@ -491,3 +517,108 @@ class TestArt1593CapitalImpact:
         assert float(result.total_el_shortfall) == pytest.approx(40_000.0)
         assert float(result.cet1_deduction) == pytest.approx(40_000.0)
         assert float(result.t2_deduction) == pytest.approx(0.0)
+
+
+class TestP1221PoolAggregateNetting:
+    """P1.221: Art. 159(3) EL-vs-provision netting compares POOL AGGREGATES.
+
+    Bug: ``adjustments.py`` floors shortfall/excess per row (max(0, EL_i -
+    pool_b_i)) before ``_el_summary.py`` sums those already-floored values
+    per default-status pool, so one row's excess never offsets a sibling
+    row's shortfall inside the same pool. Art. 159(3) requires the
+    comparison on aggregate pool totals: nd_shortfall = max(0, sum(EL) -
+    sum(pool_b)), not sum(max(0, EL_i - pool_b_i)).
+
+    References:
+    - CRR Art. 159(3): pool-level netting, not per-row-then-sum
+    - CRR Art. 36(1)(d): CET1 deduction of shortfall (100%)
+    - CRR Art. 62(d): T2 credit for excess (capped at 0.6% of IRB RWA)
+    """
+
+    def test_p1221_a_single_pool_mixed_sign_nets_at_pool_level(self) -> None:
+        """P1.221-A: 3 non-defaulted exposures, mixed sign — must net at pool level.
+
+        E1: EL=60,000, prov=20,000 -> per-row shortfall=40,000
+        E2: EL=10,000, prov=50,000 -> per-row excess=40,000
+        E3: EL=20,000, prov=25,000 -> per-row excess=5,000
+
+        Pool aggregate: A=90,000, B=95,000 -> nd_shortfall=max(0,90k-95k)=0;
+        nd_excess=max(0,95k-90k)=5,000. The buggy per-row-then-sum path
+        instead reports shortfall=40,000 and excess=45,000 — this test pins
+        the correct pool-aggregate answer, which the bug cannot produce.
+        """
+        irb = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1", "E2", "E3"],
+                "approach_applied": ["AIRB", "AIRB", "AIRB"],
+                "rwa_post_factor": [20_000_000.0, 20_000_000.0, 20_000_000.0],
+                "expected_loss": [60_000.0, 10_000.0, 20_000.0],
+                "provision_allocated": [20_000.0, 50_000.0, 25_000.0],
+                "el_shortfall": [40_000.0, 0.0, 0.0],
+                "el_excess": [0.0, 40_000.0, 5_000.0],
+                "is_defaulted": [False, False, False],
+            }
+        )
+
+        result = compute_el_portfolio_summary(irb)
+
+        assert result is not None
+        assert float(result.total_expected_loss) == pytest.approx(90_000.0)
+        assert float(result.total_provisions_allocated) == pytest.approx(95_000.0)
+        assert float(result.total_pool_b) == pytest.approx(95_000.0)
+        assert float(result.non_defaulted_el_shortfall) == pytest.approx(0.0)
+        assert float(result.non_defaulted_el_excess) == pytest.approx(5_000.0)
+        assert float(result.defaulted_el_shortfall) == pytest.approx(0.0)
+        assert float(result.defaulted_el_excess) == pytest.approx(0.0)
+        assert result.art_159_3_applies is False
+        assert float(result.total_el_shortfall) == pytest.approx(0.0)
+        assert float(result.total_el_excess) == pytest.approx(5_000.0)
+        assert float(result.cet1_deduction) == pytest.approx(0.0)
+        assert float(result.t2_credit) == pytest.approx(5_000.0)
+        assert float(result.t2_deduction) == pytest.approx(0.0)
+
+    def test_p1221_b_two_branch_selector_uses_pool_aggregate_inputs(self) -> None:
+        """P1.221-B: the two-branch selector (Art. 159(3)) must trigger off
+        pool aggregates, not the per-row-then-sum values it reads today.
+
+        Non-defaulted: N1 EL=50k/prov=20k, N2 EL=30k/prov=40k
+            -> A=80k, B=60k -> nd_shortfall=20,000, nd_excess=0
+        Defaulted: D1 EL=8k/prov=25k, D2 EL=12k/prov=5k
+            -> C=20k, D=30k -> d_shortfall=0, d_excess=10,000
+
+        art_159_3_applies = (nd_shortfall>0) and (d_excess>0) = True -> split
+        branch: effective_shortfall = nd_shortfall = 20,000; effective_excess
+        = d_excess = 10,000. total_irb_rwa = 10,000,000 -> cap = 60,000 ->
+        t2_credit = min(10k, 60k) = 10,000.
+
+        The buggy per-row-then-sum path instead reports
+        non_defaulted_el_shortfall=30,000 / non_defaulted_el_excess=10,000
+        and defaulted_el_shortfall=7,000 / defaulted_el_excess=17,000,
+        over-stating both the CET1 deduction and the T2 credit.
+        """
+        irb = pl.LazyFrame(
+            {
+                "exposure_reference": ["N1", "N2", "D1", "D2"],
+                "approach_applied": ["AIRB", "AIRB", "AIRB", "AIRB"],
+                "rwa_post_factor": [4_000_000.0, 3_000_000.0, 2_000_000.0, 1_000_000.0],
+                "expected_loss": [50_000.0, 30_000.0, 8_000.0, 12_000.0],
+                "provision_allocated": [20_000.0, 40_000.0, 25_000.0, 5_000.0],
+                "el_shortfall": [30_000.0, 0.0, 0.0, 7_000.0],
+                "el_excess": [0.0, 10_000.0, 17_000.0, 0.0],
+                "is_defaulted": [False, False, True, True],
+            }
+        )
+
+        result = compute_el_portfolio_summary(irb)
+
+        assert result is not None
+        assert float(result.non_defaulted_el_shortfall) == pytest.approx(20_000.0)
+        assert float(result.non_defaulted_el_excess) == pytest.approx(0.0)
+        assert float(result.defaulted_el_shortfall) == pytest.approx(0.0)
+        assert float(result.defaulted_el_excess) == pytest.approx(10_000.0)
+        assert result.art_159_3_applies is True
+        assert float(result.total_el_shortfall) == pytest.approx(20_000.0)
+        assert float(result.total_el_excess) == pytest.approx(10_000.0)
+        assert float(result.t2_credit_cap) == pytest.approx(60_000.0)
+        assert float(result.t2_credit) == pytest.approx(10_000.0)
+        assert float(result.cet1_deduction) == pytest.approx(20_000.0)

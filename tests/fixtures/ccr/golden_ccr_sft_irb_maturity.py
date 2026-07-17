@@ -124,6 +124,13 @@ CCR_SFT_IRB_APPROACH_AIRB: str = "advanced_irb"
 CCR_SFT_IRB_NOTIONAL: float = 100_000_000.0
 CCR_SFT_IRB_CURRENCY: str = "GBP"
 
+# Illustrative own-estimate LGD (P1.215) for the A-IRB anchors (A0-1, A0-4,
+# A0-5, A0-5b, A0-6). The SAME trade row also feeds the FIRB anchors
+# (A0-2, A0-3), but FIRB permissions clear modelled LGD downstream (FIRB uses
+# the supervisory 45% senior-unsecured LGD, Art. 161(1)(a)), so one value on
+# the shared row is correct for every anchor — see ``_sft_irb_trade_df``.
+CCR_SFT_IRB_MODELLED_LGD: float = 0.45
+
 # ---------------------------------------------------------------------------
 # Per-anchor identifiers + dates + flags. Each anchor -> one netting set ->
 # one emitted ``ccr__<NS>`` synthetic row.
@@ -206,6 +213,16 @@ def _sft_irb_trade_df(
     margining columns default to the non-daily / unmargined branch (the carrier
     never infers the one-day floor from remargin frequency — only the explicit
     ``qualifies_one_day_maturity_floor`` flag unlocks it).
+
+    ``ccr_modelled_lgd`` (P1.215) is NOT yet declared on ``SFT_TRADE_SCHEMA`` /
+    ``SFT_TABLE_EDGES["sft_trades"]`` — the engine-implementer adds it later.
+    Today it is carried on the row's OWN construction schema
+    (``sft_trade_schema_plus`` below, mirroring the P1.10 / P1.124
+    extra-column-beyond-schema pattern) so it survives into the DataFrame and
+    is then dropped at the loader-boundary seal (``_seal_sft_trades`` ->
+    ``seal_lenient`` against the current, narrower ``SFT_TABLE_EDGES``) rather
+    than vanishing one step earlier at construction time — this is the
+    behaviour the P1.215 sequencing check exercises.
     """
     row = {
         "trade_id": trade_id,
@@ -226,8 +243,12 @@ def _sft_irb_trade_df(
         "under_master_netting_agreement": under_master_netting_agreement,
         "qualifies_one_day_maturity_floor": qualifies_one_day_maturity_floor,
         "qualifies_mna_intermediate_floor": qualifies_mna_intermediate_floor,
+        # NEW field (P1.215) — not yet in SFT_TRADE_SCHEMA. Illustrative
+        # own-estimate LGD shared by every anchor (see CCR_SFT_IRB_MODELLED_LGD).
+        "ccr_modelled_lgd": CCR_SFT_IRB_MODELLED_LGD,
     }
-    return pl.DataFrame([row], schema=dtypes_of(SFT_TRADE_SCHEMA))
+    sft_trade_schema_plus = {**dtypes_of(SFT_TRADE_SCHEMA), "ccr_modelled_lgd": pl.Float64}
+    return pl.DataFrame([row], schema=sft_trade_schema_plus)
 
 
 def _single_sft_bundle(df: pl.DataFrame) -> RawSFTBundle:
@@ -313,6 +334,14 @@ def _build_cp_sft_irb_counterparty() -> pl.LazyFrame:
         "counterparty_name": "CCR-SFT-IRB Test Corporate",
         "entity_type": CCR_SFT_IRB_CP_ENTITY_TYPE,
         "country_code": CCR_SFT_IRB_CP_COUNTRY_CODE,
+        # MUST be present and below the GBP 440m large-corporate threshold
+        # (Art. 147A(1)(d)): engine/stages/classify/approach.py's is_large_corp
+        # treats a counterparty with BOTH annual_revenue and total_assets null
+        # as large (conservative ``.otherwise(pl.lit(True))`` default), and a
+        # B31 large corporate is A-IRB-blocked. That would silently route A0-5b
+        # (the only B31 AIRB anchor) to SA instead of exercising the
+        # ccr_modelled_lgd carrier. Do not strip this value.
+        "annual_revenue": 50_000_000.0,
         "default_status": False,
         "apply_fi_scalar": False,
         "is_managed_as_retail": False,

@@ -403,7 +403,8 @@ _P8_35_EXPECTED_COLUMN_COUNT = (
     # + 3 (CCR/SFT IRB effective-maturity fix Phase 2: under_master_netting_agreement,
     #   qualifies_one_day_maturity_floor, qualifies_mna_intermediate_floor — Art. 162)
     # + 1 (commodity same-reference netting: commodity_reference — Art. 280c)
-    34
+    # + 1 (P1.215: ccr_modelled_lgd — A-IRB routing carrier for synthetic CCR rows)
+    35
 )
 _P8_33_COMMODITY_BUCKETS = {"ELECTRICITY", "OIL_GAS", "METALS", "AGRICULTURAL", "OTHER"}
 
@@ -592,7 +593,7 @@ def test_trade_schema_commodity_type_value_constraint_has_five_buckets() -> None
 
 
 def test_trade_schema_column_count_includes_credit_quality() -> None:
-    """TRADE_SCHEMA must have exactly 33 columns (P8.35 credit_quality + P8.29 is_legacy_cva_exempt).
+    """TRADE_SCHEMA must have exactly 35 columns (P8.35 credit_quality + P8.29 is_legacy_cva_exempt).
 
     Baseline (pre-P8.33): 23 columns.
     P8.33 adds: market_price, number_of_units, reference_entity, commodity_type, is_index.
@@ -600,7 +601,9 @@ def test_trade_schema_column_count_includes_credit_quality() -> None:
     P8.29 adds: is_legacy_cva_exempt (PRA PS1/26 Art. 274(2A) transitional alpha add-on).
     CCR/SFT IRB effective-maturity fix (Phase 2) adds: under_master_netting_agreement,
         qualifies_one_day_maturity_floor, qualifies_mna_intermediate_floor (Art. 162).
-    Expected total: 33.
+    Commodity same-reference netting adds: commodity_reference (Art. 280c).
+    P1.215 adds: ccr_modelled_lgd (A-IRB routing carrier for synthetic CCR rows).
+    Expected total: 35.
     """
     # Arrange
     schema = _get_schema("TRADE_SCHEMA")
@@ -622,6 +625,6 @@ def test_trade_schema_column_count_includes_credit_quality() -> None:
         f"commodity_type, is_index + 1 P8.35: credit_quality + 1 P8.29: is_legacy_cva_exempt "
         f"+ 3 Art. 162 IRB-maturity flags: under_master_netting_agreement, "
         f"qualifies_one_day_maturity_floor, qualifies_mna_intermediate_floor "
-        f"+ 1 Art. 280c commodity_reference), "
+        f"+ 1 Art. 280c commodity_reference + 1 P1.215 ccr_modelled_lgd), "
         f"got {col_count}: {list(schema.keys())}"
     )

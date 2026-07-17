@@ -68,6 +68,30 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=False,
         citation=Citation("CRR", "164", "no A-IRB own-estimate LGD floor under CRR"),
     ),
+    # CRR Art. 164(4)/(5): portfolio-level minimum EAD-weighted-average LGD for
+    # A-IRB retail exposures secured by real estate (residential 10% / commercial
+    # 15%), excluding central-government-guaranteed exposures (164(4)). CRR has no
+    # per-exposure A-IRB LGD floor (airb_lgd_floor off above), so this
+    # portfolio-level backstop is the live CRR check; the aggregator emits a
+    # monitoring WARNING on breach (never an RWA/LGD mutation). Basel 3.1's own
+    # per-exposure airb_lgd_floor supersedes it, so b31.py disables this Feature.
+    "crr_retail_re_portfolio_lgd_floor": Feature(
+        name="crr_retail_re_portfolio_lgd_floor",
+        enabled=True,
+        citation=Citation(
+            "CRR", "164", "(4)/(5) portfolio-level EW-avg LGD floor for A-IRB retail RE"
+        ),
+    ),
+    "retail_residential_re_portfolio_lgd_floor": ScalarParam(
+        name="retail_residential_re_portfolio_lgd_floor",
+        value=Decimal("0.10"),
+        citation=Citation("CRR", "164", "(4) residential-RE portfolio EW-avg LGD floor 10%"),
+    ),
+    "retail_commercial_re_portfolio_lgd_floor": ScalarParam(
+        name="retail_commercial_re_portfolio_lgd_floor",
+        value=Decimal("0.15"),
+        citation=Citation("CRR", "164", "(4) commercial-RE portfolio EW-avg LGD floor 15%"),
+    ),
     # IRB maturity (M) regime treatments — Features gate only the on/off regime
     # branch; the numeric constants they gate (0.5y SFT supervisory M, the 1/365
     # one-day floor) stay engine literals. Consumed in engine/irb/transforms.py.
@@ -120,6 +144,18 @@ ENTRIES: dict[str, RuleEntry] = {
         name="double_default_treatment",
         enabled=True,
         citation=Citation("CRR", "153(3)", "double-default treatment (Art. 153(3), 202-203)"),
+    ),
+    # Art. 213(1)(c)(i) unfunded-credit-protection eligibility: CRR gates only the
+    # unilateral-CANCELLATION arm (a guarantee the provider can unilaterally
+    # cancel is ineligible). The "or change" limb is a PS1/26 addition, so this
+    # Feature is disabled under CRR; Basel 3.1 (packs/b31.py) overrides it True.
+    # Gates the change branch in engine/crm/guarantees.py::_gate_unilateral_protection.
+    "ucp_unilateral_change_ineligible": Feature(
+        name="ucp_unilateral_change_ineligible",
+        enabled=False,
+        citation=Citation(
+            "CRR", "213", "(1)(c)(i) UCP ineligible if the provider can unilaterally cancel"
+        ),
     ),
     # F-IRB senior unsecured supervisory LGD: CRR applies a flat 45% (Art. 161(1)(a))
     # with no financial-sector-entity split, so this is disabled. Basel 3.1 splits
@@ -1063,12 +1099,38 @@ ENTRIES: dict[str, RuleEntry] = {
     "reporting_template_set": ReportingTemplateSet(
         name="reporting_template_set",
         corep=(
-            "c_02_00", "c07_00", "c08_01", "c08_02", "c08_03", "c08_04", "c08_05", "c08_06",
-            "c08_07", "c09_01", "c09_02", "c34_01", "c34_02", "c34_04", "c34_08",
+            "c_02_00",
+            "c07_00",
+            "c08_01",
+            "c08_02",
+            "c08_03",
+            "c08_04",
+            "c08_05",
+            "c08_06",
+            "c08_07",
+            "c09_01",
+            "c09_02",
+            "c34_01",
+            "c34_02",
+            "c34_04",
+            "c34_08",
         ),
         pillar3=(
-            "ov1", "cr4", "cr5", "cr6", "cr6a", "cr7", "cr7a", "cr8", "cr9", "cr9_1", "cr10",
-            "ccr1", "ccr2", "ccr3", "ccr8",
+            "ov1",
+            "cr4",
+            "cr5",
+            "cr6",
+            "cr6a",
+            "cr7",
+            "cr7a",
+            "cr8",
+            "cr9",
+            "cr9_1",
+            "cr10",
+            "ccr1",
+            "ccr2",
+            "ccr3",
+            "ccr8",
         ),
         variant="crr",
         citation=Citation(

@@ -96,6 +96,16 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
         ),
         ("P1.124 (CRR Art. 237(2)(a) guarantee maturity ineligibility)", "p1_124", _generate_p1124),
         (
+            "P1.10 (CRR/PS1-26 Art. 213(1)(c)(i) UCP unilateral-cancellation/-change gate)",
+            "p1_10",
+            _generate_p110,
+        ),
+        (
+            "P1.183 (CRR Art. 164(4)/(5) portfolio-level A-IRB retail-RE LGD floor)",
+            "p1_183",
+            _generate_p183,
+        ),
+        (
             "P1.126 (classifier null-revenue conservative-large default CLS008)",
             "p1_126",
             _generate_p1126,
@@ -568,6 +578,21 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p1223,
         ),
         (
+            "P1.225 (Art. 140(2) obligor-level 150%/100%-floor ST contamination)",
+            "p1_225",
+            _generate_p1225,
+        ),
+        (
+            "P1.264 (Art. 140(1) short-term-override obligor-class gate)",
+            "p1_264",
+            _generate_p1264,
+        ),
+        (
+            "P1.227 (Art. 201 guarantor-eligibility gate)",
+            "p1_227",
+            _generate_p1227,
+        ),
+        (
             "P1.233 (CRR Art. 197(1)(c)/(d) corp/PSE 'bond' collateral routes to corp_bond)",
             "p1_233",
             _generate_p1233,
@@ -882,6 +907,19 @@ def _generate_p198(output_dir: Path) -> list[tuple[str, int]]:
         sys.modules.pop("p1_98", None)
 
 
+def _generate_p183(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.183 fixtures (CRR Art. 164(4)/(5) portfolio-level A-IRB retail-RE LGD floor)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_183 import save_p183_fixtures
+
+        saved = save_p183_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_183", None)
+
+
 def _generate_p199(output_dir: Path) -> list[tuple[str, int]]:
     """Generate P1.99 fixtures (CRR Art. 120(2) Table 4 short-term rated institution RW)."""
     sys.path.insert(0, str(output_dir))
@@ -1062,6 +1100,19 @@ def _generate_p1124(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_124", None)
+
+
+def _generate_p110(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.10 fixtures (CRR/PS1-26 Art. 213(1)(c)(i) UCP unilateral-cancellation/-change gate)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_10 import save_p110_fixtures
+
+        saved = save_p110_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_10", None)
 
 
 def _generate_p1156(output_dir: Path) -> list[tuple[str, int]]:
@@ -3079,6 +3130,45 @@ def _generate_p1223(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_223", None)
+
+
+def _generate_p1225(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.225 fixtures (Art. 140(2) obligor-level 150%/100%-floor ST contamination)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_225 import save_p225_fixtures
+
+        saved = save_p225_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_225", None)
+
+
+def _generate_p1264(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.264 fixtures (Art. 140(1) short-term-override obligor-class gate)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_264 import save_p264_fixtures
+
+        saved = save_p264_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_264", None)
+
+
+def _generate_p1227(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.227 fixtures (Art. 201 guarantor-eligibility gate)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_227 import save_p227_fixtures
+
+        saved = save_p227_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_227", None)
 
 
 def _generate_p1233(output_dir: Path) -> list[tuple[str, int]]:

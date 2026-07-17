@@ -80,8 +80,13 @@ def _aggregate_by_default_status(
     """Split EL aggregation into non-defaulted and defaulted pools.
 
     Returns two dicts (non_defaulted, defaulted) each with keys:
-    el_shortfall, el_excess, irb_rwa, expected_loss, provisions_allocated,
-    ava_amount, other_own_funds_reductions.
+    el_shortfall, el_excess, irb_rwa, expected_loss, expected_loss_count,
+    provisions_allocated, ava_amount, other_own_funds_reductions.
+
+    ``expected_loss_count`` is the number of non-null expected_loss values in
+    the pool; the caller uses the portfolio total to distinguish a frame with
+    real EL data (recompute the Art. 159(3) netting) from one that only carries
+    an injected-null expected_loss column (fall back to the per-row sums).
 
     When is_defaulted column is absent, all exposures are treated as
     non-defaulted (conservative: no defaulted excess to offset shortfall).
@@ -103,6 +108,9 @@ def _aggregate_by_default_status(
     ]
     if has_el:
         agg_exprs.append(pl.col("expected_loss").sum().alias("expected_loss"))
+        # count() ignores nulls — zero across all pools means the column was
+        # injected (padded) with no real EL data, so netting must not recompute.
+        agg_exprs.append(pl.col("expected_loss").count().alias("expected_loss_count"))
     if has_provisions:
         agg_exprs.append(pl.col("provision_allocated").sum().alias("provisions_allocated"))
     if has_ava:
@@ -128,6 +136,7 @@ def _aggregate_by_default_status(
                 "el_excess": 0.0,
                 "irb_rwa": 0.0,
                 "expected_loss": 0.0,
+                "expected_loss_count": 0.0,
                 "provisions_allocated": 0.0,
                 "ava_amount": 0.0,
                 "other_own_funds_reductions": 0.0,
@@ -138,6 +147,7 @@ def _aggregate_by_default_status(
             "el_excess": float(row.get("el_excess") or 0.0),
             "irb_rwa": float(row.get("irb_rwa") or 0.0),
             "expected_loss": float(row.get("expected_loss", 0.0) or 0.0),
+            "expected_loss_count": float(row.get("expected_loss_count", 0.0) or 0.0),
             "provisions_allocated": float(row.get("provisions_allocated", 0.0) or 0.0),
             "ava_amount": float(row.get("ava_amount", 0.0) or 0.0),
             "other_own_funds_reductions": float(row.get("other_own_funds_reductions", 0.0) or 0.0),
@@ -155,9 +165,11 @@ def compute_el_portfolio_summary(
     """
     Compute portfolio-level EL summary with T2 credit cap and Art. 159(3) rule.
 
-    Aggregates per-exposure EL shortfall/excess across all IRB and slotting
-    exposures, splits by default status, and applies the Art. 159(3) two-branch
-    no-cross-offset rule before computing the T2 credit cap per CRR Art. 62(d).
+    Splits all IRB and slotting exposures by default status and nets aggregate
+    expected loss against aggregate Pool B within each pool — CRR Art. 159(3)
+    compares the pool totals, not the per-row-then-summed shortfall/excess —
+    before applying the two-branch no-cross-offset rule and computing the T2
+    credit cap per CRR Art. 62(d).
 
     Art. 159(3) two-branch rule:
         When non-defaulted EL > non-defaulted provisions (A > B) AND
@@ -194,11 +206,35 @@ def compute_el_portfolio_summary(
         combined, rwa_col, has_el, has_provisions, has_ava, has_other_ofr
     )
 
-    # Pool-level shortfall/excess
-    nd_shortfall = non_def["el_shortfall"]
-    nd_excess = non_def["el_excess"]
-    d_shortfall = def_pool["el_shortfall"]
-    d_excess = def_pool["el_excess"]
+    # Pool-level shortfall/excess.
+    # Art. 159(3) nets expected loss against Pool B on the AGGREGATE pool
+    # totals: nd_shortfall = max(0, ΣEL - Σpool_b). Summing the per-row
+    # max(0, EL_i - pool_b_i) columns instead would never let one exposure's
+    # excess offset a sibling's shortfall inside the same default-status pool.
+    # Recompute only when the frame carries real EL data; when expected_loss is
+    # absent — or present only as an injected-null column with no values — fall
+    # back to the pre-computed per-row shortfall/excess sums (audit columns).
+    has_el_data = has_el and (non_def["expected_loss_count"] + def_pool["expected_loss_count"]) > 0
+    if has_el_data:
+        nd_pool_b = (
+            non_def["provisions_allocated"]
+            + non_def["ava_amount"]
+            + non_def["other_own_funds_reductions"]
+        )
+        d_pool_b = (
+            def_pool["provisions_allocated"]
+            + def_pool["ava_amount"]
+            + def_pool["other_own_funds_reductions"]
+        )
+        nd_shortfall = max(0.0, non_def["expected_loss"] - nd_pool_b)
+        nd_excess = max(0.0, nd_pool_b - non_def["expected_loss"])
+        d_shortfall = max(0.0, def_pool["expected_loss"] - d_pool_b)
+        d_excess = max(0.0, d_pool_b - def_pool["expected_loss"])
+    else:
+        nd_shortfall = non_def["el_shortfall"]
+        nd_excess = non_def["el_excess"]
+        d_shortfall = def_pool["el_shortfall"]
+        d_excess = def_pool["el_excess"]
 
     # Combined totals (always needed for reporting)
     raw_total_shortfall = nd_shortfall + d_shortfall

@@ -170,6 +170,7 @@ class TestP110Art213UCPEligibilityCRR:
     @pytest.fixture(scope="class")
     def sa_results(self, pipeline_results: AggregatedResultBundle) -> pl.DataFrame:
         """Collected SA results DataFrame (all sub-rows across BASE/A/B)."""
+        assert pipeline_results.sa_results is not None
         return pipeline_results.sa_results.collect()
 
     # -------------------------------------------------------------------------

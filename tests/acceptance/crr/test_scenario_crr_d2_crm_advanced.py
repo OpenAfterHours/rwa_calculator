@@ -245,6 +245,7 @@ def _collateral(
     issuer_type: str | None = None,
     residual_maturity_years: float | None = None,
     is_eligible_financial: bool = True,
+    is_main_index: bool | None = None,
     liquidation_period_days: int | None = 10,
 ) -> dict:
     # P1.186: default 10-day liquidation period for capital-markets collateral
@@ -267,6 +268,9 @@ def _collateral(
         "original_maturity_years": None,
         "is_eligible_financial_collateral": is_eligible_financial,
         "is_eligible_irb_collateral": is_eligible_financial,
+        # P1.237/P1.271 — Art. 197(1)(f)/198(1)(a): main-index attestation drives the
+        # equity haircut (15%/20% vs 25%/30%). Null now resolves to other-listed.
+        "is_main_index": is_main_index,
         "valuation_date": date(2025, 12, 31),
         "valuation_type": "market",
         "property_type": None,
@@ -687,6 +691,7 @@ class TestCRRD11_EquityCollateral:
                     "LOAN_D11",
                     "equity",
                     500_000.0,
+                    is_main_index=True,
                 ),
             ],
         )

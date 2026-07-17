@@ -553,10 +553,10 @@ COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     # CRR Art. 224 Table 4 / PRA PS1/26: distinguishes main-index equity (15%
     # haircut CRR / 20% Basel 3.1) from other listed equity (25% / 30%). No
     # Boolean default on purpose: null means "index membership unreported" and
-    # the haircut engine (engine/crm/haircuts.py) resolves null -> main-index
-    # for backward compatibility (pinned by tests/unit/crm/test_equity_main_index.py).
-    # A schema default of False would silently re-rate unreported equity to the
-    # higher other-listed haircut at the loader seal.
+    # the haircut engine (engine/crm/haircuts.py) resolves null -> other-listed
+    # equity (the higher, CONSERVATIVE haircut) per P1.237/P1.271 — CRR/PS1-26
+    # Art. 197(1)(f)/198(1)(a): only main-index equities earn the cheaper
+    # all-methods treatment, so unknown membership must not fabricate it.
     "is_main_index": ColumnSpec(pl.Boolean, required=False),
     "valuation_date": ColumnSpec(pl.Date, required=False),
     "valuation_type": ColumnSpec(pl.String, required=False),

@@ -180,10 +180,12 @@ class TestCRREquityHaircutsWithMainIndex:
         haircut = _get_haircut(_build_equity_collateral(is_main_index=False), is_basel_3_1=False)
         assert haircut == pytest.approx(0.25)
 
-    def test_main_index_null_defaults_to_main(self) -> None:
-        """Null is_main_index defaults to True (main-index) for backward compat."""
+    def test_main_index_null_defaults_to_other_listed(self) -> None:
+        """P1.237/P1.271 — Art. 197(1)(f)/198(1)(a): null is_main_index defaults to
+        other-listed (25% CRR), not main-index. Unknown index membership must not
+        earn the cheaper main-index haircut (anti-conservative)."""
         haircut = _get_haircut(_build_equity_collateral(is_main_index=None), is_basel_3_1=False)
-        assert haircut == pytest.approx(0.15)
+        assert haircut == pytest.approx(0.25)
 
     def test_other_listed_eligible_and_haircut(self) -> None:
         """Other-listed equity is eligible AND gets 25% haircut (decoupled)."""
@@ -220,10 +222,11 @@ class TestB31EquityHaircutsWithMainIndex:
         haircut = _get_haircut(_build_equity_collateral(is_main_index=False), is_basel_3_1=True)
         assert haircut == pytest.approx(0.30)
 
-    def test_main_index_null_defaults_to_main(self) -> None:
-        """Null is_main_index defaults to True (main-index) for backward compat."""
+    def test_main_index_null_defaults_to_other_listed(self) -> None:
+        """P1.237/P1.271 — PS1/26 Art. 197(1)(f)/198(1)(a): null is_main_index defaults
+        to other-listed (30% B31), not main-index (anti-conservative)."""
         haircut = _get_haircut(_build_equity_collateral(is_main_index=None), is_basel_3_1=True)
-        assert haircut == pytest.approx(0.20)
+        assert haircut == pytest.approx(0.30)
 
     def test_other_listed_eligible_and_haircut(self) -> None:
         """Other-listed equity is eligible AND gets 30% haircut (decoupled)."""

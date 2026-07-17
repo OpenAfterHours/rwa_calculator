@@ -524,8 +524,14 @@ class HaircutCalculator:
 
         # Equity main-index lookup: prefer is_main_index when available,
         # fall back to is_eligible_financial_collateral for backward compatibility.
+        # P1.237/P1.271 — CRR/PS1-26 Art. 197(1)(f)/198(1)(a): only main-index
+        # equities take the cheaper 15%/20% haircut and are eligible under all
+        # methods; other-listed equities take 25%/30% (and are repo-only). A null
+        # is_main_index is UNKNOWN index membership and must default to
+        # other-listed (False), never to the cheaper main-index treatment — the
+        # project's never-fill-anti-conservative rule.
         if has_main_index_col:
-            _equity_main_index_expr = pl.col("is_main_index").fill_null(True).cast(pl.Int8)
+            _equity_main_index_expr = pl.col("is_main_index").fill_null(False).cast(pl.Int8)
         else:
             _equity_main_index_expr = (
                 pl.col("is_eligible_financial_collateral").fill_null(False).cast(pl.Int8)

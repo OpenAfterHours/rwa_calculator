@@ -136,6 +136,13 @@ ERROR_INELIGIBLE_UNFUNDED_PROTECTION = "CRM012"
 # internal rating) is not an eligible protection provider — the covered exposure
 # reverts to the borrower's own basis.
 ERROR_INELIGIBLE_GUARANTOR = "CRM013"
+# Ineligible IRB/FCM non-financial collateral (CRR/PS1-26 Art. 199(2)/(5)/(6)):
+# real-estate / receivables / other-physical collateral is recognised on the
+# FIRB Foundation Collateral Method (LGD* substitution) path only when the
+# institution attests eligibility via is_eligible_irb_collateral. An unattested
+# row (flag False/unset), or a receivable whose ORIGINAL maturity is populated
+# > 1 year (Art. 199(5)), is zeroed and this warning is raised (one per row).
+ERROR_INELIGIBLE_IRB_COLLATERAL = "CRM014"
 
 # IRB error codes
 ERROR_PD_OUT_OF_RANGE = "IRB001"

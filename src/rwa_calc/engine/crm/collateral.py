@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 from watchfire import cites
 
+from rwa_calc.contracts.errors import ERROR_INELIGIBLE_IRB_COLLATERAL, crm_warning
 from rwa_calc.data.schemas import DIRECT_BENEFICIARY_TYPES, NON_ELIGIBLE_RE_TYPES
 from rwa_calc.domain.enums import AIRBCollateralMethod, ApproachType
 from rwa_calc.engine.crm.expressions import (
@@ -50,6 +51,7 @@ from rwa_calc.rulebook.resolve import resolve
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.contracts.errors import CalculationError
     from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 
@@ -311,6 +313,7 @@ def apply_collateral(
     resolve_pledge_from_joined_fn: Callable,
     *,
     pack: ResolvedRulepack | None = None,
+    errors: list[CalculationError] | None = None,
 ) -> pl.LazyFrame:
     """
     Apply collateral to reduce EAD (SA) or LGD (IRB).
@@ -423,6 +426,7 @@ def apply_collateral(
         config,
         cp_ead_totals,
         pack=resolved_pack,
+        errors=errors,
     )
 
 
@@ -579,6 +583,52 @@ def apply_firb_supervisory_lgd_no_collateral(
 # ---------------------------------------------------------------------------
 
 
+def _record_ineligible_irb_collateral(
+    annotated: pl.LazyFrame,
+    not_attested: pl.Expr,
+    receivables_too_long: pl.Expr,
+    errors: list[CalculationError],
+) -> None:
+    """Append one CRM014 warning per FIRB FCM non-financial collateral row zeroed
+    by the Art. 199(2)/(5)/(6) eligibility gate.
+
+    Targeted collect of the gated rows only — the accepted data-quality emission
+    idiom (P1.264); the collateral table is a small dimension frame, so
+    materialising just the gated rows' references is cheap.
+    """
+    names = annotated.collect_schema().names()
+    select_cols: list[pl.Expr] = [
+        not_attested.alias("_not_attested"),
+        receivables_too_long.alias("_recv_long"),
+    ]
+    select_cols.extend(
+        pl.col(c) for c in ("collateral_reference", "beneficiary_reference") if c in names
+    )
+    gated = annotated.filter(not_attested | receivables_too_long).select(select_cols).collect()
+    for row in gated.iter_rows(named=True):
+        coll_ref = row.get("collateral_reference")
+        ben_ref = row.get("beneficiary_reference")
+        reason = (
+            "its original maturity exceeds 1 year (Art. 199(5))"
+            if row.get("_recv_long")
+            else "it is not attested as eligible IRB collateral "
+            "(is_eligible_irb_collateral is False/unset; Art. 199(2)/(5)/(6))"
+        )
+        errors.append(
+            crm_warning(
+                ERROR_INELIGIBLE_IRB_COLLATERAL,
+                f"Non-financial collateral '{coll_ref}' securing exposure "
+                f"'{ben_ref}' is ineligible under the FIRB Foundation Collateral "
+                f"Method because {reason}; it is zeroed and the secured LGD reverts "
+                f"to the unsecured supervisory value.",
+                exposure_reference=ben_ref,
+                regulatory_reference="CRR Art. 199(2)/(5)/(6)",
+            )
+        )
+
+
+@cites("CRR Art. 199")
+@cites("PS1/26 Art. 199")
 def _apply_collateral_unified(
     exposures: pl.LazyFrame,
     adjusted_collateral: pl.LazyFrame,
@@ -586,6 +636,7 @@ def _apply_collateral_unified(
     cp_ead_totals: pl.LazyFrame,
     *,
     pack: ResolvedRulepack | None = None,
+    errors: list[CalculationError] | None = None,
 ) -> pl.LazyFrame:
     """
     Unified EAD + LGD collateral allocation in a single pass.
@@ -706,6 +757,46 @@ def _apply_collateral_unified(
         (pl.col("adjusted_value") / pl.col("overcollateralisation_ratio")).alias(
             "effectively_secured"
         ),
+    )
+
+    # CRR/PS1-26 Art. 199(2)/(5)/(6): FIRB Foundation Collateral Method non-
+    # financial collateral (real estate, receivables, other physical) is
+    # recognised on the LGD*-substitution path only where the institution ATTESTS
+    # eligibility via the pre-existing ``is_eligible_irb_collateral`` flag. Default
+    # False => ineligible — the flag IS the attestation, so the P1.10 new-field
+    # null-permissive precedent does NOT apply. Art. 199(5): a receivable whose
+    # ORIGINAL maturity is populated > 1 year is ineligible even if attested
+    # (explicit data contradicting the attestation wins conservatively); a NULL
+    # original maturity is PERMISSIVE (recorded deviation — the attestation covers
+    # the maturity condition, absence doesn't contradict it). Ineligible rows are
+    # zeroed on ``effectively_secured`` (the Art. 231 waterfall feed) with one
+    # CRM014 warning each. Scope: FIRB FCM non-financial only — financial
+    # collateral (Art. 197), SA EAD reduction, and exposure classification are
+    # untouched.
+    _non_financial = ~pl.col("is_financial_collateral_type")
+    _attested = (
+        pl.col("is_eligible_irb_collateral").fill_null(False)
+        if "is_eligible_irb_collateral" in collateral_schema.names()
+        else pl.lit(False)
+    )
+    _not_attested = _non_financial & ~_attested
+    if "original_maturity_years" in collateral_schema.names():
+        # NULL original maturity is PERMISSIVE (recorded deviation — the
+        # attestation covers the maturity condition, absence doesn't contradict
+        # it), so fill the *Boolean* > 1y test to False rather than the float
+        # column to 0.0 (the latter would be an anti-conservative float fill).
+        _receivables_too_long = (pl.col("_coll_category") == "receivables") & (
+            pl.col("original_maturity_years") > 1.0
+        ).fill_null(False)
+    else:
+        _receivables_too_long = pl.lit(False)
+    if errors is not None:
+        _record_ineligible_irb_collateral(annotated, _not_attested, _receivables_too_long, errors)
+    annotated = annotated.with_columns(
+        pl.when(_not_attested | _receivables_too_long)
+        .then(pl.lit(0.0))
+        .otherwise(pl.col("effectively_secured"))
+        .alias("effectively_secured")
     )
 
     # --- Single group_by: EAD + LGD aggregates in one pass, split by AIRB pool ---

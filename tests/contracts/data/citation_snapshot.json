@@ -93,6 +93,10 @@
   "rwa_calc.engine.ccr.wwr::apply_wwr_gate": [
     "CRR Art. 291"
   ],
+  "rwa_calc.engine.crm.collateral::_apply_collateral_unified": [
+    "CRR Art. 199",
+    "PS1/26 Art. 199"
+  ],
   "rwa_calc.engine.crm.collateral::apply_collateral": [
     "PS1/26 Art. 230(2)",
     "PS1/26 Art. 230(1)",

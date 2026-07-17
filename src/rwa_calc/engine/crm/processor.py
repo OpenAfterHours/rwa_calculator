@@ -789,7 +789,9 @@ class CRMProcessor:
             # Cheap no-op unless the collateral table actually carries the
             # is_airb_model_collateral flag (early-return inside the finder).
             self._record_misdirected_airb_errors(exposures, collateral, config, errors, pack=pack)
-            exposures = self.apply_collateral(exposures, collateral, config, pack=pack)
+            exposures = self.apply_collateral(
+                exposures, collateral, config, pack=pack, errors=errors
+            )
             return exposures, True
         # No (valid) collateral path
         self._record_missing_collateral_columns(collateral, errors)
@@ -983,8 +985,14 @@ class CRMProcessor:
         config: CalculationConfig,
         *,
         pack: ResolvedRulepack | None = None,
+        errors: list[CalculationError] | None = None,
     ) -> pl.LazyFrame:
-        """Apply collateral to reduce EAD (SA) or LGD (IRB)."""
+        """Apply collateral to reduce EAD (SA) or LGD (IRB).
+
+        ``errors`` receives Art. 199(2)/(5)/(6) CRM014 warnings when the FIRB
+        Foundation Collateral Method zeroes an unattested / >1y-receivable
+        non-financial collateral row.
+        """
         return collateral_mod.apply_collateral(
             exposures,
             collateral,
@@ -994,6 +1002,7 @@ class CRMProcessor:
             join_collateral_to_lookups_fn=_join_collateral_to_lookups,
             resolve_pledge_from_joined_fn=_resolve_pledge_from_joined,
             pack=pack,
+            errors=errors,
         )
 
     def apply_guarantees(

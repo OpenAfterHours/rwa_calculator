@@ -129,6 +129,7 @@ def _collateral_schema() -> dict[str, type[pl.DataType]]:
         "issuer_type": pl.String,
         "residual_maturity_years": pl.Float64,
         "is_eligible_financial_collateral": pl.Boolean,
+        "is_eligible_irb_collateral": pl.Boolean,
         "pledge_percentage": pl.Float64,
         "collateral_maturity_date": pl.Date,
     }
@@ -167,6 +168,10 @@ def _re_collateral(beneficiary_ref: str, market_value: float) -> dict:
         "issuer_type": None,
         "residual_maturity_years": None,
         "is_eligible_financial_collateral": False,
+        # P1.235 — Art. 199(2): attest the RE collateral as IRB-eligible so the
+        # FIRB FCM eligibility gate recognises it (this test is about waterfall
+        # allocation, not the eligibility gate).
+        "is_eligible_irb_collateral": True,
         "pledge_percentage": None,
         "collateral_maturity_date": None,
     }

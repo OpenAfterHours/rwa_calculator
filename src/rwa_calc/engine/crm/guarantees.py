@@ -1490,24 +1490,42 @@ def redistribute_non_beneficial(exposures: pl.LazyFrame) -> pl.LazyFrame:
 
 
 @cites("CRR Art. 217")
+@cites("CRR Art. 237")
+@cites("PS1/26, paragraph 237")
 def _apply_maturity_mismatch_to_guarantees(
     guarantees: pl.LazyFrame,
     exposures: pl.LazyFrame,
     config: CalculationConfig,
 ) -> pl.LazyFrame:
     """
-    Apply CRR Art. 239(3) maturity mismatch scaling to guarantee amounts.
+    Apply CRR Art. 237/239(3) maturity mismatch treatment to guarantee amounts.
 
     When the protection's residual maturity ``t`` is shorter than the
     exposure's effective maturity ``T``, the covered amount ``G`` is scaled:
 
         GA = G* × (t - 0.25) / (T - 0.25)
 
-    with ``T`` capped at 5.0 years and both ``t`` and ``T`` floored at 0.25
-    (so any t < 0.25 yields zero coverage; the >=1y original-maturity floor
-    in Art. 237(2)(a) is enforced separately upstream). Scaling is applied
-    to ``amount_covered`` and ``percentage_covered`` before the split, so
-    the reduced nominal protection value propagates through cap-at-EAD.
+    with ``T`` capped at 5.0 years and both ``t`` and ``T`` floored at 0.25.
+    Scaling is applied to ``amount_covered`` and ``percentage_covered`` before
+    the split, so the reduced nominal protection value propagates through
+    cap-at-EAD.
+
+    Two Art. 237 eligibility gates ZERO coverage (rather than merely scaling
+    it) before the 239(3) formula, mirroring the collateral sibling in
+    ``engine/crm/haircuts.py``:
+
+    - Art. 237(1): credit protection whose RAW residual maturity is < 3 months
+      AND shorter than the exposure is not recognised. The test runs on the
+      pre-floor residuals so a short exposure — whose ``T`` also floors to 0.25
+      and would mask the mismatch under the scaling formula — no longer retains
+      full coverage.
+    - Art. 162(3)/237(2)(b): where the exposure is subject to the one-day IRB
+      maturity floor (daily-margined repos/SFTs), ANY maturity mismatch makes
+      the protection ineligible. The ``has_one_day_maturity_floor`` flag is
+      joined from the exposure; null/absent is PERMISSIVE (treated as no floor).
+
+    The >=1y original-maturity floor (Art. 237(2)(a)) remains enforced by the
+    separate upstream pre-filter.
 
     The protection residual maturity ``t`` is derived from the guarantee
     row's ``maturity_date`` if present, otherwise from
@@ -1515,12 +1533,14 @@ def _apply_maturity_mismatch_to_guarantees(
     from the exposure's ``maturity_date``.
 
     References:
-        CRR Art. 237(2): minimum maturity / mismatch eligibility
+        CRR / PS1-26 Art. 237(1): <3-month-and-shorter protection ineligibility.
+        CRR / PS1-26 Art. 237(2)(b) with Art. 162(3): one-day-floor exposures
+            + any mismatch => ineligible.
         CRR Art. 238(1): maturity of credit protection — ``t`` is the RESIDUAL
             maturity (time remaining to protection maturity), not the original
             contract term; the residual from ``maturity_date`` therefore wins
             and ``original_maturity_years`` is only a fallback.
-        CRR Art. 239(3): maturity mismatch adjustment formula
+        CRR Art. 239(3): maturity mismatch adjustment formula.
     """
     guar_schema = guarantees.collect_schema()
     guar_cols = guar_schema.names()
@@ -1536,12 +1556,16 @@ def _apply_maturity_mismatch_to_guarantees(
     if not (has_guar_maturity_date or has_guar_original_maturity):
         return guarantees
 
-    # Bring exposure residual maturity (years) onto each guarantee row.
+    # Bring exposure residual maturity (years) and the Art. 162(3) one-day
+    # maturity-floor flag onto each guarantee row.
     exp_t_expr = exact_fractional_years_expr(config.reporting_date, "maturity_date").alias("_exp_T")
-    exp_lookup = exposures.select(
-        pl.col("exposure_reference"),
-        exp_t_expr,
-    )
+    exp_select = [pl.col("exposure_reference"), exp_t_expr]
+    has_1d_floor_col = "has_one_day_maturity_floor" in exp_cols
+    if has_1d_floor_col:
+        exp_select.append(
+            pl.col("has_one_day_maturity_floor").fill_null(False).alias("_has_1d_floor")
+        )
+    exp_lookup = exposures.select(exp_select)
 
     guarantees = guarantees.join(
         exp_lookup,
@@ -1549,6 +1573,13 @@ def _apply_maturity_mismatch_to_guarantees(
         right_on="exposure_reference",
         how="left",
     )
+    # Null-PERMISSIVE: an exposure with no flag, an absent column, or a
+    # join-miss beneficiary is treated as NOT subject to the one-day floor
+    # (mirrors the collateral sibling's default).
+    if has_1d_floor_col:
+        guarantees = guarantees.with_columns(pl.col("_has_1d_floor").fill_null(False))
+    else:
+        guarantees = guarantees.with_columns(pl.lit(False).alias("_has_1d_floor"))
 
     # Compute t = RESIDUAL maturity (Art. 238(1)): the time REMAINING to
     # protection maturity, derived from the guarantee ``maturity_date`` minus
@@ -1571,25 +1602,52 @@ def _apply_maturity_mismatch_to_guarantees(
     else:
         t_raw = pl.col("original_maturity_years")
 
-    # Apply Art. 239(3) floors / caps:
-    #   t floored at 0.25, T capped at 5.0 and floored at 0.25.
+    # Art. 239(3) floors / caps: t and T floored at 0.25, T capped at 5.0.
+    # A null / join-miss exposure maturity defaults to a 5y exposure (the most
+    # conservative recognised maturity), aligning with the collateral twin
+    # (haircuts.py) so a guarantee on a null-maturity exposure is still subject
+    # to the mismatch gates and the 239(3) scaling rather than silently keeping
+    # full coverage.
     floor = pl.lit(0.25)
     cap = pl.lit(5.0)
-    t_eff = pl.max_horizontal(t_raw, floor)
-    t_eff_safe = pl.when(t_raw.is_null()).then(pl.lit(None, dtype=pl.Float64)).otherwise(t_eff)
-    exp_t_eff = pl.max_horizontal(pl.min_horizontal(pl.col("_exp_T"), cap), floor)
-    exp_t_eff_safe = (
-        pl.when(pl.col("_exp_T").is_null())
+    exp_T = pl.col("_exp_T").fill_null(5.0)  # raw exposure residual; null -> 5y
+    t_eff_safe = (
+        pl.when(t_raw.is_null())
         .then(pl.lit(None, dtype=pl.Float64))
-        .otherwise(exp_t_eff)
+        .otherwise(pl.max_horizontal(t_raw, floor))
     )
+    # The 0.25 floor lives ONLY on the scaling denominator (its purpose); the
+    # eligibility gates below compare the RAW residuals.
+    exp_t_eff = pl.max_horizontal(pl.min_horizontal(exp_T, cap), floor)
 
-    # Mismatch only applies when t < T (else no scaling).
-    is_mismatch = (
-        t_eff_safe.is_not_null() & exp_t_eff_safe.is_not_null() & (t_eff_safe < exp_t_eff_safe)
+    # Mismatch (floored) drives the Art. 239(3) scaling.
+    is_mismatch = t_eff_safe.is_not_null() & (t_eff_safe < exp_t_eff)
+    scale = (t_eff_safe - floor) / (exp_t_eff - floor)
+
+    # Art. 237(1): a RAW protection residual < 3 months that is also shorter than
+    # the exposure is not recognised. Tested pre-floor (audit: "raw t < 0.25 AND
+    # t < raw T") so a short exposure — whose T also floors to 0.25 and would
+    # mask the mismatch under the scaling formula — no longer retains full
+    # coverage, while a protection that OUTLIVES a sub-3-month exposure (t >= T)
+    # stays recognised (Art. 238: no adjustment when protection >= exposure).
+    # (The collateral twin labels this sub-point 237(2)(a) and floors the
+    # exposure maturity at 0.25 for its mismatch test; per the audit we compare
+    # the raw T so the outlives case is not spuriously zeroed.)
+    raw_mismatch = t_raw.is_not_null() & (t_raw < exp_T)
+    short_protection = raw_mismatch & (t_raw < floor)
+    # Art. 162(3)/237(2)(b): a one-day-M-floor exposure (daily-margined repo/SFT)
+    # with ANY maturity mismatch makes the protection ineligible.
+    one_day_floor_gate = pl.col("_has_1d_floor") & raw_mismatch
+
+    # Zero-gates take priority over the scaling; otherwise scale on mismatch,
+    # else full coverage. Mirrors the collateral sibling (engine/crm/haircuts.py).
+    scale_safe = (
+        pl.when(short_protection | one_day_floor_gate)
+        .then(pl.lit(0.0))
+        .when(is_mismatch)
+        .then(scale)
+        .otherwise(pl.lit(1.0))
     )
-    scale = (t_eff_safe - floor) / (exp_t_eff_safe - floor)
-    scale_safe = pl.when(is_mismatch).then(scale).otherwise(pl.lit(1.0))
 
     scale_exprs: list[pl.Expr] = []
     if "amount_covered" in guar_cols:
@@ -1600,7 +1658,7 @@ def _apply_maturity_mismatch_to_guarantees(
     if scale_exprs:
         guarantees = guarantees.with_columns(scale_exprs)
 
-    return guarantees.drop("_exp_T")
+    return _drop_columns_if_present(guarantees, ["_exp_T", "_has_1d_floor"])
 
 
 def _drop_columns_if_present(lf: pl.LazyFrame, cols: list[str]) -> pl.LazyFrame:

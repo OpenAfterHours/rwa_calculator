@@ -769,7 +769,7 @@ Last generated: 2026-07-17.
 
 ??? quote "`_apply_maturity_mismatch_to_guarantees` — src/rwa_calc/engine/crm/guarantees.py:1492"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:1492:1603"
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:1492:1652"
     ```
 
 
@@ -942,6 +942,11 @@ Last generated: 2026-07-17.
 
 
 ### CRR Art. 237 — Maturity mismatch
+
+??? quote "`_apply_maturity_mismatch_to_guarantees` — src/rwa_calc/engine/crm/guarantees.py:1493"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:1492:1652"
+    ```
 
 ??? quote "`apply_maturity_mismatch` — src/rwa_calc/engine/crm/haircuts.py:668"
     ```python
@@ -1396,6 +1401,14 @@ Last generated: 2026-07-17.
 ??? quote "`zero_covered_expected_loss` — src/rwa_calc/engine/slotting/transforms.py:227"
     ```python
     --8<-- "src/rwa_calc/engine/slotting/transforms.py:227:260"
+    ```
+
+
+### PS1/26, paragraph 237 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
+
+??? quote "`_apply_maturity_mismatch_to_guarantees` — src/rwa_calc/engine/crm/guarantees.py:1494"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:1492:1652"
     ```
 
 

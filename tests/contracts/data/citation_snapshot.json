@@ -111,7 +111,9 @@
     "PS1/26 Art. 230(1)"
   ],
   "rwa_calc.engine.crm.guarantees::_apply_maturity_mismatch_to_guarantees": [
-    "CRR Art. 217"
+    "CRR Art. 217",
+    "CRR Art. 237",
+    "PS1/26, paragraph 237"
   ],
   "rwa_calc.engine.crm.guarantees::_assign_guarantor_approach": [
     "CRR Art. 201",

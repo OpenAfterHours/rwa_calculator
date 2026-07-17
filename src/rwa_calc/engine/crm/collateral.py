@@ -29,7 +29,11 @@ from typing import TYPE_CHECKING
 import polars as pl
 from watchfire import cites
 
-from rwa_calc.contracts.errors import ERROR_INELIGIBLE_IRB_COLLATERAL, crm_warning
+from rwa_calc.contracts.errors import (
+    ERROR_CROSS_COUNTERPARTY_NETTING,
+    ERROR_INELIGIBLE_IRB_COLLATERAL,
+    crm_warning,
+)
 from rwa_calc.data.schemas import DIRECT_BENEFICIARY_TYPES, NON_ELIGIBLE_RE_TYPES
 from rwa_calc.domain.enums import AIRBCollateralMethod, ApproachType
 from rwa_calc.engine.crm.expressions import (
@@ -156,6 +160,7 @@ def find_misdirected_airb_model_collateral(
 @cites("CRR Art. 223")
 def generate_netting_collateral(
     exposures: pl.LazyFrame,
+    errors: list[CalculationError] | None = None,
 ) -> pl.LazyFrame | None:
     """
     Generate synthetic cash collateral from negative-drawn netting-eligible loans.
@@ -163,26 +168,35 @@ def generate_netting_collateral(
     When a loan has a negative drawn amount (credit balance / deposit) and carries
     a ``netting_agreement_reference`` (CRR Art. 195/219), the absolute value of
     that negative balance can reduce other exposures covered by the SAME netting
-    agreement — treated as synthetic cash collateral.
+    agreement AND owed by the SAME counterparty — treated as synthetic cash
+    collateral.
 
-    Netting is driven SOLELY by ``netting_agreement_reference``: only exposures
-    sharing the same reference net together. This reflects the legal right of
-    set-off, which is defined by the netting agreement itself — not by facility
-    hierarchy or counterparty. A deposit from one counterparty may net a loan to a
-    different counterparty (and across different facilities) iff both carry the
-    same reference; conversely two exposures in the same facility do NOT net unless
-    they share the reference.
+    CRR/PS1-26 Art. 195 (P1.238): on-balance-sheet netting is limited to "mutual
+    claims" / "reciprocal cash balances between the institution and the
+    counterparty" — a single counterparty. So a deposit from counterparty A may
+    net only loans owed by counterparty A under the same agreement; it may NOT
+    offset a loan to a different counterparty B, even where a group-level
+    agreement reference is shared. Pools are therefore keyed by
+    (netting_agreement_reference, counterparty_reference) — the agreement is the
+    legal set-off boundary, the counterparty the Art. 195 eligibility boundary.
+    A netting_agreement_reference that spans more than one counterparty raises a
+    CRM016 data-quality warning (the disallowed cross-counterparty offset is
+    otherwise invisible). Two exposures still do NOT net unless they share the
+    reference, regardless of facility hierarchy.
 
     CRR Art. 219 limits on-balance-sheet netting to drawn loans and deposits
     (cash-on-cash). Synthetic cash collateral is allocated pro-rata by the drawn
     portion (`on_bs_for_ead`) to positive-drawn LOAN siblings carrying the same
     reference — contingents and synthetic facility_undrawn rows are
-    off-balance-sheet and excluded from the beneficiary set. Netting pools are
-    grouped by (netting_agreement_reference, currency) so the haircut pipeline can
-    apply FX haircuts when the pool currency differs from the sibling's currency.
+    off-balance-sheet and excluded from the beneficiary set. Netting pools also
+    keep currency (as (ref, currency, counterparty_reference)) so the haircut
+    pipeline can apply FX haircuts when the pool currency differs from the
+    sibling's currency.
 
     Args:
         exposures: Exposures with ead_for_crm, on_bs_for_ead, exposure_type set
+        errors: optional CRM error channel — receives Art. 195 CRM016 warnings
+            for netting agreements that span more than one counterparty.
 
     Returns:
         LazyFrame of synthetic collateral rows, or None if no netting applies
@@ -208,17 +222,31 @@ def generate_netting_collateral(
         )
     if "exposure_type" not in schema_names:
         exposures = exposures.with_columns(pl.lit("loan").alias("exposure_type"))
+    if "counterparty_reference" not in schema_names:
+        # Test-caller fallback only: production always supplies counterparty_reference
+        # (a core exposure column). Absent → treat every row as the same counterparty
+        # so the Art. 195 same-counterparty constraint is a no-op for legacy callers.
+        exposures = exposures.with_columns(pl.lit("_UNKNOWN_CP").alias("counterparty_reference"))
 
     # Negative-drawn loans carrying a netting agreement reference provide the pool
     negative_loans = exposures.filter(
         pl.col("netting_agreement_reference").is_not_null() & (pl.col("drawn_amount") < 0)
     )
 
-    # Sum abs(drawn_amount) per (netting_agreement_reference, currency) → netting pool.
-    # Currency is kept so the synthetic collateral carries the source currency,
-    # allowing the haircut pipeline to apply FX haircuts when currencies differ.
+    # Art. 195 (P1.238): emit a CRM016 warning for any agreement that spans more
+    # than one counterparty (a deposit and a positive loan under the same
+    # reference but for different counterparties would previously have netted).
+    if errors is not None:
+        _record_cross_counterparty_netting(exposures, errors)
+
+    # Sum abs(drawn_amount) per (netting_agreement_reference, currency,
+    # counterparty_reference) → netting pool. Currency is kept so the synthetic
+    # collateral carries the source currency (FX haircut when currencies differ);
+    # counterparty_reference enforces the Art. 195 same-counterparty limit.
     netting_pool = (
-        negative_loans.group_by(["netting_agreement_reference", "currency"])
+        negative_loans.group_by(
+            ["netting_agreement_reference", "currency", "counterparty_reference"]
+        )
         .agg(
             pl.col("drawn_amount").abs().sum().alias("netting_pool"),
         )
@@ -228,7 +256,8 @@ def generate_netting_collateral(
     # CRR Art. 219: drawn-on-drawn cash netting. Synthetic cash collateral may
     # only benefit the drawn portion of loan exposures — contingents and
     # facility_undrawn synthetic rows are off-balance-sheet and ineligible. A
-    # sibling matches a pool iff it carries the same netting_agreement_reference.
+    # sibling matches a pool iff it shares BOTH the netting_agreement_reference
+    # and the counterparty_reference (Art. 195 same-counterparty limit).
     positive_siblings = exposures.filter(
         (pl.col("exposure_type") == "loan")
         & (pl.col("on_bs_for_ead") > 0)
@@ -236,15 +265,16 @@ def generate_netting_collateral(
     ).select(
         "exposure_reference",
         "netting_agreement_reference",
+        "counterparty_reference",
         "currency",
         "on_bs_for_ead",
         "maturity_date",
     )
 
-    # Match siblings to pools by shared netting agreement reference.
+    # Match siblings to pools by shared agreement reference AND counterparty.
     matched = positive_siblings.join(
         netting_pool,
-        on="netting_agreement_reference",
+        on=["netting_agreement_reference", "counterparty_reference"],
         how="inner",
     )
 
@@ -253,14 +283,16 @@ def generate_netting_collateral(
     # NOT ead_for_crm (which includes the off-BS nominal at CCF=100% per
     # Art. 223(4) — that override is for collateral valuation, not for OBS
     # netting allocation basis).
-    facility_totals = matched.group_by("netting_agreement_reference", "_pool_currency").agg(
+    facility_totals = matched.group_by(
+        "netting_agreement_reference", "_pool_currency", "counterparty_reference"
+    ).agg(
         pl.col("on_bs_for_ead").sum().alias("_facility_total_drawn"),
     )
 
     # Join totals back for pro-rata
     allocated = matched.join(
         facility_totals,
-        on=["netting_agreement_reference", "_pool_currency"],
+        on=["netting_agreement_reference", "_pool_currency", "counterparty_reference"],
         how="left",
     ).filter(pl.col("_facility_total_drawn") > 0)
 
@@ -623,6 +655,56 @@ def _record_ineligible_irb_collateral(
                 f"to the unsecured supervisory value.",
                 exposure_reference=ben_ref,
                 regulatory_reference="CRR Art. 199(2)/(5)/(6)",
+            )
+        )
+
+
+def _record_cross_counterparty_netting(
+    exposures: pl.LazyFrame,
+    errors: list[CalculationError],
+) -> None:
+    """Emit one CRM016 warning per netting agreement that spans >1 counterparty.
+
+    CRR/PS1-26 Art. 195 limits on-B/S netting to a single counterparty. The
+    warning fires for an agreement (carrying both a deposit and a positive loan)
+    where reciprocity cannot be positively confirmed: either more than one
+    distinct counterparty, OR any null counterparty (netting benefit requires a
+    POSITIVE same-counterparty confirmation, so an unconfirmed counterparty is
+    conservatively excluded — Polars' default null-join semantics already prevent
+    a null-keyed deposit from matching any sibling). Targeted collect of the
+    offending agreements (the accepted DQ-emission idiom, P1.264).
+    """
+    is_deposit = pl.col("drawn_amount") < 0
+    is_positive_loan = (pl.col("exposure_type") == "loan") & (pl.col("on_bs_for_ead") > 0)
+    spanning = (
+        exposures.filter(
+            pl.col("netting_agreement_reference").is_not_null() & (is_deposit | is_positive_loan)
+        )
+        .group_by("netting_agreement_reference")
+        .agg(
+            pl.col("counterparty_reference").drop_nulls().n_unique().alias("_n_cp"),
+            pl.col("counterparty_reference").is_null().any().alias("_has_null_cp"),
+            is_deposit.sum().alias("_n_deposit"),
+            is_positive_loan.sum().alias("_n_positive"),
+        )
+        .filter(
+            ((pl.col("_n_cp") > 1) | pl.col("_has_null_cp"))
+            & (pl.col("_n_deposit") > 0)
+            & (pl.col("_n_positive") > 0)
+        )
+        .select("netting_agreement_reference")
+        .collect()
+    )
+    for row in spanning.iter_rows(named=True):
+        agr = row.get("netting_agreement_reference")
+        errors.append(
+            crm_warning(
+                ERROR_CROSS_COUNTERPARTY_NETTING,
+                f"Netting agreement '{agr}' could not be confined to a single confirmed "
+                f"counterparty (cross-counterparty or null-counterparty rows present); "
+                f"on-balance-sheet netting is limited to reciprocal balances with one "
+                f"counterparty (Art. 195), so those offsets are disallowed.",
+                regulatory_reference="CRR Art. 195",
             )
         )
 

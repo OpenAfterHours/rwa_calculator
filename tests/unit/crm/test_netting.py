@@ -6,16 +6,21 @@ When a loan has a negative drawn amount (credit balance / deposit) and carries a
 generates synthetic cash collateral that reduces other exposures carrying the
 SAME reference — pro-rata by drawn EAD.
 
-Netting is driven SOLELY by the netting agreement reference: only exposures
-sharing the same reference net together, regardless of facility hierarchy or
-counterparty. A deposit from one counterparty can net a loan to a different
-counterparty (or under a different facility) when both share the reference.
+Netting pools are keyed on (netting_agreement_reference, currency,
+counterparty_reference): the agreement is the set-off boundary, the
+counterparty is the Art. 195 eligibility boundary. A deposit nets only
+exposures to the SAME counterparty under the agreement — across facilities is
+fine (reciprocal balances with one counterparty), across counterparties is
+not (P1.238). A cross-counterparty agreement raises a CRM016 warning and the
+disallowed offset is not applied; a null counterparty_reference never matches
+a pool (conservatively excluded + warned).
 
 Covers:
 - No netting_agreement_reference column → no synthetic collateral generated
 - SA: single negative + single positive loan sharing a reference → EAD reduced
 - SA: single negative + two positive loans → pro-rata allocation
-- Cross-counterparty / cross-facility netting via a shared reference
+- Cross-counterparty netting disallowed (Art. 195) + CRM016; same-counterparty
+  cross-facility netting still applies; null-counterparty deposit excluded
 - Same facility but different/absent reference → no netting
 - FIRB: netting reduces LGD (cash collateral path), not direct EAD
 - Currency mismatch → FX haircut applied
@@ -34,6 +39,7 @@ from tests.unit.crm._crm_bundles import empty_counterparty_lookup
 
 from rwa_calc.contracts.bundles import ClassifiedExposuresBundle
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.contracts.errors import ERROR_CROSS_COUNTERPARTY_NETTING
 from rwa_calc.domain.enums import ApproachType, PermissionMode
 from rwa_calc.engine.crm.processor import CRMProcessor
 
@@ -475,15 +481,15 @@ class TestNettingSAEndToEnd:
 class TestNettingByAgreementReference:
     """Netting follows the agreement reference, not facility or counterparty."""
 
-    def test_cross_counterparty_cross_facility_netting(
+    def test_cross_counterparty_netting_disallowed(
         self, processor: CRMProcessor, sa_config: CalculationConfig
     ):
-        """A deposit nets a loan to a different counterparty AND facility.
+        """P1.238 — Art. 195: a deposit does NOT net a loan to a DIFFERENT counterparty.
 
-        This is the core behavioural change: the netting agreement reference is
-        the legal set-off boundary, so a credit balance for counterparty A under
-        facility FAC_A offsets a loan to counterparty B under facility FAC_B when
-        both are covered by the same agreement (AGR1).
+        On-balance-sheet netting is limited to mutual claims between the institution
+        and a single counterparty (CRR/PS1-26 Art. 195). A credit balance for
+        counterparty A under agreement AGR1 must not offset a loan to counterparty B
+        under the same agreement — even across facilities. POS01 keeps its full EAD.
         """
         rows = [
             _netting_exposure(
@@ -496,7 +502,71 @@ class TestNettingByAgreementReference:
         df = _run_crm(processor, sa_config, rows)
 
         pos = df.filter(pl.col("exposure_reference") == "POS01")
+        assert pos["ead_final"][0] == pytest.approx(1000.0, abs=1.0)
+
+    def test_same_counterparty_netting_still_applies(
+        self, processor: CRMProcessor, sa_config: CalculationConfig
+    ):
+        """Control: a deposit DOES net a loan to the SAME counterparty (Art. 195).
+
+        Both legs are counterparty CPA under agreement AGR1 (across facilities);
+        the £200 credit balance offsets the £1000 loan → EAD £800.
+        """
+        rows = [
+            _netting_exposure(
+                "NEG01", drawn=-200.0, cp_ref="CPA", facility_ref="FAC_A", agreement_ref="AGR1"
+            ),
+            _netting_exposure(
+                "POS01", drawn=1000.0, cp_ref="CPA", facility_ref="FAC_B", agreement_ref="AGR1"
+            ),
+        ]
+        df = _run_crm(processor, sa_config, rows)
+
+        pos = df.filter(pl.col("exposure_reference") == "POS01")
         assert pos["ead_final"][0] == pytest.approx(800.0, abs=1.0)
+
+    def test_cross_counterparty_netting_emits_crm016(
+        self, processor: CRMProcessor, sa_config: CalculationConfig
+    ):
+        """A netting agreement spanning >1 counterparty raises one CRM016 warning."""
+        rows = [
+            _netting_exposure(
+                "NEG01", drawn=-200.0, cp_ref="CPA", facility_ref="FAC_A", agreement_ref="AGR1"
+            ),
+            _netting_exposure(
+                "POS01", drawn=1000.0, cp_ref="CPB", facility_ref="FAC_B", agreement_ref="AGR1"
+            ),
+        ]
+        bundle = _make_bundle(pl.LazyFrame(rows))
+        result = processor.get_crm_unified_bundle(bundle, sa_config)
+
+        warnings = [e for e in result.crm_errors if e.code == ERROR_CROSS_COUNTERPARTY_NETTING]
+        assert len(warnings) == 1
+
+    def test_null_counterparty_deposit_excluded(
+        self, processor: CRMProcessor, sa_config: CalculationConfig
+    ):
+        """P1.238 — a deposit whose counterparty is NULL cannot confirm reciprocity.
+
+        Netting benefit requires POSITIVE confirmation of a same-counterparty
+        relationship (Art. 195), so a null-counterparty deposit is conservatively
+        excluded — the loan keeps its full EAD — and a CRM016 warning is raised.
+        """
+        rows = [
+            _netting_exposure("NEG01", drawn=-200.0, cp_ref=None, agreement_ref="AGR1"),
+            _netting_exposure("POS01", drawn=1000.0, cp_ref="CPA", agreement_ref="AGR1"),
+        ]
+        bundle = _make_bundle(
+            pl.LazyFrame(rows, schema_overrides={"counterparty_reference": pl.String})
+        )
+        result = processor.get_crm_unified_bundle(bundle, sa_config)
+
+        df = result.exposures.collect()
+        pos = df.filter(pl.col("exposure_reference") == "POS01")
+        warnings = [e for e in result.crm_errors if e.code == ERROR_CROSS_COUNTERPARTY_NETTING]
+
+        assert pos["ead_final"][0] == pytest.approx(1000.0, abs=1.0)
+        assert len(warnings) == 1
 
     def test_only_matching_reference_nets_in_same_facility(
         self, processor: CRMProcessor, sa_config: CalculationConfig

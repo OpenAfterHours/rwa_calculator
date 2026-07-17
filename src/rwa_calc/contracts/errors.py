@@ -151,6 +151,13 @@ ERROR_INELIGIBLE_IRB_COLLATERAL = "CRM014"
 # counterparty sharing the obligor's ultimate parent, the row is zeroed (no CRM
 # benefit) and this warning is raised (one per row). Null issuer is permissive.
 ERROR_OWN_ISSUE_COLLATERAL = "CRM015"
+# Cross-counterparty on-balance-sheet netting (CRR/PS1-26 Art. 195): on-B/S
+# netting is limited to mutual claims / reciprocal cash balances between the
+# institution and a SINGLE counterparty. A netting_agreement_reference that spans
+# more than one counterparty cannot net a deposit from counterparty A against a
+# loan to counterparty B; such cross-counterparty offsets are disallowed and this
+# warning names the agreement (one per multi-counterparty agreement).
+ERROR_CROSS_COUNTERPARTY_NETTING = "CRM016"
 
 # IRB error codes
 ERROR_PD_OUT_OF_RANGE = "IRB001"

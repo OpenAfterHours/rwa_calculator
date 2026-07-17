@@ -762,7 +762,7 @@ class CRMProcessor:
         that ``has_required_columns``' bare except misreported as "missing
         required columns" (silent-skip layer, migration Phase 3).
         """
-        netting_collateral = collateral_mod.generate_netting_collateral(exposures)
+        netting_collateral = collateral_mod.generate_netting_collateral(exposures, errors)
         collateral: pl.LazyFrame | None = collateral_lf
         if netting_collateral is None:
             exposures = exposures.with_columns(pl.lit(0.0).alias("on_bs_netting_amount"))

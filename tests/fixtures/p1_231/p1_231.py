@@ -74,6 +74,7 @@ LN_1DF_CONTROL = "LN_1DF_CONTROL"  # no floor + mismatch -> recognised (scaled)
 LN_237_1_MASKED = "LN_237_1_MASKED"  # t,T both <0.25, t<T -> zeroed (237(1))
 LN_237_1_OUTLIVES = "LN_237_1_OUTLIVES"  # t>=T -> recognised
 LN_237_1_T02_T5 = "LN_237_1_T02_T5"  # t~0.2, T=5y -> zeroed (sub-3m protection)
+LN_NULL_MATURITY = "LN_NULL_MATURITY"  # null exposure maturity + 1-day floor -> zeroed
 
 DRAWN = 1_000_000.0
 BORROWER_RW = 1.0  # unrated corporate, both regimes
@@ -83,13 +84,19 @@ GUARANTOR_CQS = 1  # corporate CQS 1 -> 20% RW, both regimes
 EXPECTED_RWA_BORROWER_BASIS = DRAWN * BORROWER_RW  # 1,000,000
 
 
-def _loan(loan_ref: str, reporting_date: date, exp_days: int, *, one_day_floor: bool) -> dict:
+def _loan(
+    loan_ref: str, reporting_date: date, exp_days: int | None, *, one_day_floor: bool
+) -> dict:
     return {
         "loan_reference": loan_ref,
         "counterparty_reference": CP_B_REF,
         "currency": "GBP",
         "value_date": reporting_date - timedelta(days=30),
-        "maturity_date": reporting_date + timedelta(days=exp_days),
+        # exp_days=None => null maturity_date (treated as a 5y exposure by the
+        # maturity-mismatch step's conservative null-T default).
+        "maturity_date": (
+            reporting_date + timedelta(days=exp_days) if exp_days is not None else None
+        ),
         "drawn_amount": DRAWN,
         "interest": 0.0,
         "seniority": "senior",
@@ -146,6 +153,7 @@ def build_p231_bundle(reporting_date: date) -> RawDataBundle:
         _loan(LN_237_1_MASKED, reporting_date, 80, one_day_floor=False),
         _loan(LN_237_1_OUTLIVES, reporting_date, 55, one_day_floor=False),
         _loan(LN_237_1_T02_T5, reporting_date, int(5 * 365.25), one_day_floor=False),
+        _loan(LN_NULL_MATURITY, reporting_date, None, one_day_floor=True),
     ]
     guarantees = [
         _guarantee("GUAR_1DF_MISMATCH", LN_1DF_MISMATCH, reporting_date, 365),
@@ -153,6 +161,7 @@ def build_p231_bundle(reporting_date: date) -> RawDataBundle:
         _guarantee("GUAR_237_1_MASKED", LN_237_1_MASKED, reporting_date, 40),
         _guarantee("GUAR_237_1_OUTLIVES", LN_237_1_OUTLIVES, reporting_date, 74),
         _guarantee("GUAR_237_1_T02_T5", LN_237_1_T02_T5, reporting_date, 74),
+        _guarantee("GUAR_NULL_MATURITY", LN_NULL_MATURITY, reporting_date, 365),
     ]
     ratings = [
         {

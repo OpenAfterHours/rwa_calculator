@@ -29,6 +29,7 @@ from tests.fixtures.p1_231.p1_231 import (
     LN_237_1_OUTLIVES,
     LN_237_1_T02_T5,
     LN_BASELINE,
+    LN_NULL_MATURITY,
     build_p231_bundle,
 )
 
@@ -71,6 +72,11 @@ class TestP1231Art237MaturityGatesB31:
         rwa = _loan_rwa(results, LN_1DF_CONTROL)
         assert rwa < EXPECTED_RWA_BORROWER_BASIS
         assert _loan_rwa(results, LN_1DF_MISMATCH) > rwa
+
+    def test_null_exposure_maturity_one_day_floor_zeroed(self, results: pl.DataFrame) -> None:
+        """DISCRIMINATING (null-T): one-day-floor loan with NULL maturity_date +
+        shorter guarantee => zeroed (null T defaults to 5y). RWA = 1,000,000."""
+        assert _loan_rwa(results, LN_NULL_MATURITY) == pytest.approx(EXPECTED_RWA_BORROWER_BASIS)
 
     def test_masked_short_protection_zeroed(self, results: pl.DataFrame) -> None:
         """DISCRIMINATING: guarantee 40d / exposure 80d (masked mismatch) => NO

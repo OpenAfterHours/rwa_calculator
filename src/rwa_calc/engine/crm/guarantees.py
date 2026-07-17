@@ -1588,8 +1588,12 @@ def _apply_maturity_mismatch_to_guarantees(
     # (long original term, short residual) is over-recognised. It is used for
     # ``t`` only as a fallback when ``maturity_date`` is null. The separate
     # Art. 237(2)(a) >=1y eligibility gate upstream still reads
-    # ``original_maturity_years`` (the original term). Null t means "no info"
-    # and yields no scaling.
+    # ``original_maturity_years`` (the original term). A null PROTECTION maturity
+    # t stays PERMISSIVE — no scaling, no gate, full coverage (t-side unknown =>
+    # no basis to reduce). This is asymmetric with the EXPOSURE maturity T, which
+    # a null defaults CONSERVATIVELY to 5y below (Art. 237 targets short
+    # protection on longer exposures, so an unknown exposure horizon must not
+    # defeat the gates).
     if has_guar_maturity_date and has_guar_original_maturity:
         t_from_date = exact_fractional_years_expr(config.reporting_date, "maturity_date")
         t_raw = (

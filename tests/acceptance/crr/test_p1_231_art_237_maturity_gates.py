@@ -35,6 +35,7 @@ from tests.fixtures.p1_231.p1_231 import (
     LN_237_1_OUTLIVES,
     LN_237_1_T02_T5,
     LN_BASELINE,
+    LN_NULL_MATURITY,
     build_p231_bundle,
 )
 
@@ -88,6 +89,16 @@ class TestP1231Art237MaturityGatesCRR:
         rwa = _loan_rwa(results, LN_1DF_CONTROL)
         assert rwa < EXPECTED_RWA_BORROWER_BASIS
         assert _loan_rwa(results, LN_1DF_MISMATCH) > rwa
+
+    def test_null_exposure_maturity_one_day_floor_zeroed(self, results: pl.DataFrame) -> None:
+        """DISCRIMINATING (null-T): a one-day-floor loan with NULL maturity_date +
+        a shorter guarantee gets NO benefit — the null exposure maturity defaults
+        to a 5y exposure, so the mismatch stands and Art. 237(2)(b) zeroes it.
+
+        PRE-FIX (null-T not defaulted): the gate never fires -> guarantee scaled
+        -> RWA < 1,000,000. POST-FIX: RWA = 1,000,000.
+        """
+        assert _loan_rwa(results, LN_NULL_MATURITY) == pytest.approx(EXPECTED_RWA_BORROWER_BASIS)
 
     # ---- Art. 237(1): <3-month-and-shorter protection ----------------------
 

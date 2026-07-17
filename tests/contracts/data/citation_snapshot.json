@@ -113,6 +113,10 @@
   "rwa_calc.engine.crm.guarantees::_apply_maturity_mismatch_to_guarantees": [
     "CRR Art. 217"
   ],
+  "rwa_calc.engine.crm.guarantees::_assign_guarantor_approach": [
+    "CRR Art. 201",
+    "PS1/26, paragraph 201"
+  ],
   "rwa_calc.engine.crm.guarantees::_build_remainder_sub_rows": [
     "CRR Art. 234"
   ],

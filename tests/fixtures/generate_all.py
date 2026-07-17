@@ -588,6 +588,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p1264,
         ),
         (
+            "P1.227 (Art. 201 guarantor-eligibility gate)",
+            "p1_227",
+            _generate_p1227,
+        ),
+        (
             "P1.233 (CRR Art. 197(1)(c)/(d) corp/PSE 'bond' collateral routes to corp_bond)",
             "p1_233",
             _generate_p1233,
@@ -3151,6 +3156,19 @@ def _generate_p1264(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_264", None)
+
+
+def _generate_p1227(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.227 fixtures (Art. 201 guarantor-eligibility gate)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_227 import save_p227_fixtures
+
+        saved = save_p227_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_227", None)
 
 
 def _generate_p1233(output_dir: Path) -> list[tuple[str, int]]:

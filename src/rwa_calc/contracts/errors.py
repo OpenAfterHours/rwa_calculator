@@ -131,6 +131,11 @@ ERROR_COLLATERAL_LINK_DUPLICATE = "CRM011"
 # guarantee the provider can unilaterally cancel (both regimes) or unilaterally
 # change (Basel 3.1 only) is dropped and the exposure flows unguaranteed.
 ERROR_INELIGIBLE_UNFUNDED_PROTECTION = "CRM012"
+# Ineligible guarantor (CRR/PS1-26 Art. 201(1)(g)/(2)): a corporate guarantor
+# without an ECAI credit assessment (or, for an IRB-approach beneficiary, an
+# internal rating) is not an eligible protection provider — the covered exposure
+# reverts to the borrower's own basis.
+ERROR_INELIGIBLE_GUARANTOR = "CRM013"
 
 # IRB error codes
 ERROR_PD_OUT_OF_RANGE = "IRB001"

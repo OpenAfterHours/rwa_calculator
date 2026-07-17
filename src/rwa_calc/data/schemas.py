@@ -544,6 +544,22 @@ COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     # honours an Art. 191A(2)(e)(i) "funded-only" election, the collateral is
     # re-anchored from the guarantee onto the original obligor exposure.
     "posted_by_counterparty_reference": ColumnSpec(pl.String, required=False),
+    # CRR/PS1-26 Art. 200(a)/232(2) with Art. 212(1) (P1.239/P1.240): cash on
+    # deposit with (or cash-assimilated instruments held by) a THIRD-PARTY
+    # institution, pledged to the lender, is "other funded credit protection" —
+    # treated as a GUARANTEE by the deposit-holding institution (its own SA risk
+    # weight substitutes on the covered part), NOT as own-bank cash at a 0%
+    # haircut. This optional reference identifies that holder institution; the
+    # deposit row's issuer_type/issuer_cqs describe the holder (a cash deposit is
+    # a claim on the institution holding it), so the holder's institution RW is
+    # derived from issuer_cqs. NULL is PERMISSIVE = own-bank deposit → the
+    # existing 0% cash treatment is preserved (the overwhelmingly common case, so
+    # existing datasets are unaffected). Populated => third-party: the row is
+    # excluded from every 0% cash-collateral value channel (SA E*, FIRB LGD*) and
+    # instead drives the SA risk-weight substitution. FIRB substitution is a
+    # deferred follow-up — under FIRB a third-party deposit currently gives NO
+    # benefit (conservative) and raises CRM017.
+    "held_by_counterparty_reference": ColumnSpec(pl.String, required=False),
     # CRR/PS1-26 Art. 194(4): funded protection is ineligible where its value is
     # materially positively correlated with the obligor's credit quality — the
     # canonical case (BCBS CRE22) being a security ISSUED by the obligor or a
@@ -1697,6 +1713,17 @@ OTHER_PHYSICAL_COLLATERAL_TYPES: list[str] = [
 COVERED_BOND_COLLATERAL_TYPES: list[str] = ["covered_bond", "covered_bonds"]
 
 LIFE_INSURANCE_COLLATERAL_TYPES: list[str] = ["life_insurance"]
+
+# CRR/PS1-26 Art. 200(a)/232(2): cash-on-deposit collateral types eligible for the
+# third-party-deposit (other-funded-protection) treatment when held at another
+# institution (P1.239/P1.240).
+THIRD_PARTY_DEPOSIT_COLLATERAL_TYPES: list[str] = ["cash", "deposit"]
+
+# CRR/PS1-26 Art. 232(2) applies only where the deposit holder is an INSTITUTION.
+# The deposit row's issuer_type describes the holder; only these values reach the
+# institution risk-weight substitution — any other populated holder is out of
+# scope (no benefit + CRM017).
+INSTITUTION_DEPOSIT_HOLDER_TYPES: list[str] = ["institution", "bank", "credit_institution"]
 
 CREDIT_LINKED_NOTE_COLLATERAL_TYPES: list[str] = ["credit_linked_note"]
 

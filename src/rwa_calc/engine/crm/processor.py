@@ -66,6 +66,10 @@ from rwa_calc.engine.crm.life_insurance import compute_life_insurance_columns
 from rwa_calc.engine.crm.link_allocation import RANK_METRIC_COLUMN, CollateralLinkAllocator
 from rwa_calc.engine.crm.look_through import apply_funded_only_look_through
 from rwa_calc.engine.crm.simple_method import compute_fcsm_columns, undo_sa_ead_reduction
+from rwa_calc.engine.crm.third_party_deposit import (
+    compute_third_party_deposit_columns,
+    split_third_party_deposits,
+)
 from rwa_calc.engine.kernels.allocation import (
     ancestor_membership_expr,
     direct_level_lookup,
@@ -76,6 +80,7 @@ from rwa_calc.engine.kernels.allocation import (
 from rwa_calc.engine.materialise import materialise_edge
 from rwa_calc.engine.utils import has_required_columns
 from rwa_calc.observability.audit_cache import sink_audit
+from rwa_calc.rulebook import RulepackV0
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import CounterpartyLookup
@@ -615,6 +620,13 @@ class CRMProcessor:
             collateral, exposures, data.counterparty_lookup, errors
         )
 
+        # Step 3.65: CRR/PS1-26 Art. 200(a)/232(2) — partition third-party deposits
+        # (cash held at another institution) out of the ordinary collateral frame
+        # so they feed NO cash-collateral value channel (SA E*, FIRB LGD*); they
+        # are re-introduced as an SA risk-weight substitution at the holder's
+        # institution RW (Step 4c). Own-bank deposits (null holder) are untouched.
+        collateral, third_party_deposits = split_third_party_deposits(collateral)
+
         # Step 3.7: Split each finite collateral value across its linked
         # beneficiaries (CRR Art. 230-231) when a collateral_links table is
         # supplied. No-op otherwise; the single-beneficiary path is unchanged.
@@ -648,6 +660,12 @@ class CRMProcessor:
 
         # Pre-compute life insurance method columns (Art. 232) for SA RW mapping
         exposures = self._apply_life_insurance_step(exposures, collateral, config)
+
+        # Step 4c: Art. 200(a)/232(2) third-party-deposit SA RW substitution columns
+        # (holder institution RW on the covered part) + F-IRB deferral warning.
+        exposures = self._apply_third_party_deposit_step(
+            exposures, third_party_deposits, config, errors, pack=pack
+        )
 
         # The second sanctioned INTRA-STAGE checkpoint (with crm_post_ead).
         # Empirically irreducible on Polars 1.37: the guarantee module's
@@ -1050,6 +1068,29 @@ class CRMProcessor:
         from rwa_calc.engine.crm.life_insurance import _add_default_life_ins_columns
 
         return _add_default_life_ins_columns(exposures)
+
+    def _apply_third_party_deposit_step(
+        self,
+        exposures: pl.LazyFrame,
+        third_party_deposits: pl.LazyFrame | None,
+        config: CalculationConfig,
+        errors: list[CalculationError],
+        *,
+        pack: ResolvedRulepack | None = None,
+    ) -> pl.LazyFrame:
+        """Pre-compute Art. 200(a)/232(2) third-party-deposit SA RW columns.
+
+        The holder institution's SA risk weight (derived from the deposit's
+        issuer_cqs via the Art. 120/120A institution tables) substitutes on the
+        covered part for SA exposures; F-IRB is a deferred follow-up (no benefit +
+        CRM017). The regime is read from the ``sa_revised_risk_weight_tables``
+        pack Feature — never ``config.is_basel_3_1`` (arch check 17).
+        """
+        resolved = pack if pack is not None else RulepackV0.from_config(config).pack
+        is_b31 = bool(resolved.feature("sa_revised_risk_weight_tables"))
+        return compute_third_party_deposit_columns(
+            exposures, third_party_deposits, is_basel_3_1=is_b31, errors=errors
+        )
 
     def _apply_guarantees_step(
         self,

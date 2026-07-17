@@ -169,6 +169,9 @@
   "rwa_calc.engine.crm.simple_method::compute_fcsm_columns": [
     "CRR Art. 222"
   ],
+  "rwa_calc.engine.crm.third_party_deposit::compute_third_party_deposit_columns": [
+    "CRR Art. 232"
+  ],
   "rwa_calc.engine.equity.calculator::EquityCalculator._apply_b31_equity_weights_sa": [
     "PS1/26, paragraph 133"
   ],
@@ -395,6 +398,9 @@
     "CRR Art. 213"
   ],
   "rwa_calc.engine.sa.rw_adjustments::apply_life_insurance_rw_mapping": [
+    "CRR Art. 232"
+  ],
+  "rwa_calc.engine.sa.rw_adjustments::apply_third_party_deposit_rw_mapping": [
     "CRR Art. 232"
   ],
   "rwa_calc.engine.securitisation.allocator::SecuritisationAllocator.allocate": [

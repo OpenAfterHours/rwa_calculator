@@ -49,6 +49,7 @@ from rwa_calc.engine.sa.rw_adjustments import (
     apply_fcsm_rw_substitution,
     apply_guarantee_substitution,
     apply_life_insurance_rw_mapping,
+    apply_third_party_deposit_rw_mapping,
 )
 from rwa_calc.rulebook import RulepackV0
 
@@ -113,6 +114,7 @@ class SACalculator:
             exposures.pipe(apply_risk_weights, config, pack=pack)
             .pipe(apply_fcsm_rw_substitution, config)
             .pipe(apply_life_insurance_rw_mapping)
+            .pipe(apply_third_party_deposit_rw_mapping)
             .pipe(apply_guarantee_substitution, config, pack=pack)
             .pipe(apply_currency_mismatch_multiplier, config, pack=pack)
             .pipe(apply_due_diligence_override, config, errors=errors, pack=pack)
@@ -178,6 +180,7 @@ class SACalculator:
             exposures.pipe(apply_risk_weights, config, pack=pack)
             .pipe(apply_fcsm_rw_substitution, config)
             .pipe(apply_life_insurance_rw_mapping)
+            .pipe(apply_third_party_deposit_rw_mapping)
             .pipe(apply_guarantee_substitution, config, pack=pack)
             .pipe(apply_currency_mismatch_multiplier, config, pack=pack)
             .pipe(apply_due_diligence_override, config, errors=errors, pack=pack)

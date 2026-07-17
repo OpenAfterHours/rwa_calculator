@@ -158,6 +158,14 @@ ERROR_OWN_ISSUE_COLLATERAL = "CRM015"
 # loan to counterparty B; such cross-counterparty offsets are disallowed and this
 # warning names the agreement (one per multi-counterparty agreement).
 ERROR_CROSS_COUNTERPARTY_NETTING = "CRM016"
+# Third-party deposit under FIRB (CRR/PS1-26 Art. 200(a)/232(2), P1.239/P1.240):
+# cash on deposit with a third-party institution is "other funded credit
+# protection" treated as a guarantee at the holder institution's risk weight.
+# The SA risk-weight substitution is implemented; the FIRB analogue is a deferred
+# follow-up, so under FIRB such a deposit is conservatively given NO CRM benefit
+# (it is excluded from the LGD* collateral input rather than valued at 0% cash)
+# and this warning records the pending substitution (one per gated row).
+ERROR_THIRD_PARTY_DEPOSIT_FIRB_DEFERRED = "CRM017"
 
 # IRB error codes
 ERROR_PD_OUT_OF_RANGE = "IRB001"

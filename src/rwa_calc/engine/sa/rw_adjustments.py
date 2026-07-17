@@ -151,6 +151,42 @@ def apply_life_insurance_rw_mapping(lf: pl.LazyFrame) -> pl.LazyFrame:
     )
 
 
+@cites("CRR Art. 232")
+def apply_third_party_deposit_rw_mapping(lf: pl.LazyFrame) -> pl.LazyFrame:
+    """Apply Art. 232(2) third-party-deposit risk-weight substitution for SA.
+
+    A cash deposit held at a third-party institution is other funded credit
+    protection treated as a guarantee by that holder institution: the covered
+    part of the exposure takes the holder's own SA risk weight (P1.239/P1.240).
+
+        blended = secured_pct x holder_rw + unsecured_pct x exposure_rw
+
+    Benefit-only cap (Art. 232 protection can never increase RWA): the blended
+    weight is applied only where it is at or below the exposure's own weight, so
+    a holder RW >= obligor RW leaves the exposure unchanged. No-op when no
+    third-party deposit is present (columns absent or value 0).
+    """
+    cols = lf.collect_schema().names()
+    if "third_party_deposit_value" not in cols or "third_party_deposit_secured_rw" not in cols:
+        return lf
+
+    ead = pl.col("ead_final").fill_null(0.0)
+    value = pl.col("third_party_deposit_value").fill_null(0.0)
+    holder_rw = pl.col("third_party_deposit_secured_rw").fill_null(0.0)
+
+    secured_pct = pl.when(ead > 0).then((value / ead).clip(0.0, 1.0)).otherwise(0.0)
+    unsecured_pct = pl.lit(1.0) - secured_pct
+    blended_rw = secured_pct * holder_rw + unsecured_pct * pl.col("risk_weight")
+
+    # Substitution only helps: cap at the exposure's own risk weight.
+    beneficial_rw = pl.min_horizontal(blended_rw, pl.col("risk_weight"))
+    has_tpd = value > 0
+
+    return lf.with_columns(
+        pl.when(has_tpd).then(beneficial_rw).otherwise(pl.col("risk_weight")).alias("risk_weight"),
+    )
+
+
 @cites("CRR Art. 213")
 def apply_guarantee_substitution(
     lf: pl.LazyFrame,

@@ -987,6 +987,8 @@ def _crm_added_columns() -> dict[str, EdgeColumn]:
         "lgd_secured": EdgeColumn(dtype=pl.Float64),
         "life_ins_collateral_value": EdgeColumn(dtype=pl.Float64),
         "life_ins_secured_rw": EdgeColumn(dtype=pl.Float64),
+        "third_party_deposit_value": EdgeColumn(dtype=pl.Float64),
+        "third_party_deposit_secured_rw": EdgeColumn(dtype=pl.Float64),
         "crm_calculation": EdgeColumn(dtype=pl.String),
         # Guarantees / substitution (CRR Art. 233-236)
         "is_guaranteed": EdgeColumn(dtype=pl.Boolean),
@@ -1244,6 +1246,8 @@ def _calc_output_common_columns() -> dict[str, EdgeColumn]:
         "lgd_unsecured": EdgeColumn(dtype=pl.Float64),
         "life_ins_collateral_value": EdgeColumn(dtype=pl.Float64),
         "life_ins_secured_rw": EdgeColumn(dtype=pl.Float64),
+        "third_party_deposit_value": EdgeColumn(dtype=pl.Float64),
+        "third_party_deposit_secured_rw": EdgeColumn(dtype=pl.Float64),
         "ltv": EdgeColumn(dtype=pl.Float64),
         "mapped_parent_facility": EdgeColumn(dtype=pl.String),
         "maturity_date": EdgeColumn(dtype=pl.Date),

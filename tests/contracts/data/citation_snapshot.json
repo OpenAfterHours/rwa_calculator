@@ -157,6 +157,9 @@
     "CRR Art. 230",
     "CRR Art. 231"
   ],
+  "rwa_calc.engine.crm.processor::CRMProcessor._apply_own_issue_collateral_gate": [
+    "CRR Art. 194"
+  ],
   "rwa_calc.engine.crm.processor::CRMProcessor.get_crm_unified_bundle": [
     "CRR Art. 194"
   ],

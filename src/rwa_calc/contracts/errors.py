@@ -143,6 +143,14 @@ ERROR_INELIGIBLE_GUARANTOR = "CRM013"
 # row (flag False/unset), or a receivable whose ORIGINAL maturity is populated
 # > 1 year (Art. 199(5)), is zeroed and this warning is raised (one per row).
 ERROR_INELIGIBLE_IRB_COLLATERAL = "CRM014"
+# Own-issue / connected-issuer collateral (CRR/PS1-26 Art. 194(4)): funded credit
+# protection is ineligible where its value is materially positively correlated
+# with the obligor's credit quality — the canonical case being a security ISSUED
+# by the obligor or a member of the obligor's group (BCBS CRE22). When a
+# collateral row's issuer_counterparty_reference resolves to the obligor, or to a
+# counterparty sharing the obligor's ultimate parent, the row is zeroed (no CRM
+# benefit) and this warning is raised (one per row). Null issuer is permissive.
+ERROR_OWN_ISSUE_COLLATERAL = "CRM015"
 
 # IRB error codes
 ERROR_PD_OUT_OF_RANGE = "IRB001"

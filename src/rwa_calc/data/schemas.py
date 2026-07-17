@@ -544,6 +544,16 @@ COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     # honours an Art. 191A(2)(e)(i) "funded-only" election, the collateral is
     # re-anchored from the guarantee onto the original obligor exposure.
     "posted_by_counterparty_reference": ColumnSpec(pl.String, required=False),
+    # CRR/PS1-26 Art. 194(4): funded protection is ineligible where its value is
+    # materially positively correlated with the obligor's credit quality — the
+    # canonical case (BCBS CRE22) being a security ISSUED by the obligor or a
+    # group member. This optional reference identifies the counterparty that
+    # ISSUED the collateral security (distinct from posted_by_counterparty_reference,
+    # which is who PROVIDED it). When it resolves to the obligor or a counterparty
+    # sharing the obligor's ultimate parent, the CRM engine zeroes the row and
+    # raises CRM015. Null is PERMISSIVE (issuer unknown / not an issued security,
+    # e.g. cash on deposit) — the gate never fires, so existing data is unaffected.
+    "issuer_counterparty_reference": ColumnSpec(pl.String, required=False),
     # CRR Art. 181 / CRE36 / Basel 3.1 Art. 169A: AIRB own LGD already reflects
     # the collateral effect, so collateral incorporated into the firm's internal
     # LGD model must not contribute CRM benefit to non-AIRB exposures of the

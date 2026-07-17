@@ -720,9 +720,14 @@ Last generated: 2026-07-17.
 
 ### CRR Art. 194 — Principles governing the eligibility of credit risk mitigation techniques
 
-??? quote "`get_crm_unified_bundle` — src/rwa_calc/engine/crm/processor.py:492"
+??? quote "`get_crm_unified_bundle` — src/rwa_calc/engine/crm/processor.py:559"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/processor.py:492:635"
+    --8<-- "src/rwa_calc/engine/crm/processor.py:559:711"
+    ```
+
+??? quote "`_apply_own_issue_collateral_gate` — src/rwa_calc/engine/crm/processor.py:802"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/processor.py:802:890"
     ```
 
 
@@ -956,17 +961,17 @@ Last generated: 2026-07-17.
     --8<-- "src/rwa_calc/engine/crm/guarantees.py:1494:1686"
     ```
 
-??? quote "`apply_maturity_mismatch` — src/rwa_calc/engine/crm/haircuts.py:702"
+??? quote "`apply_maturity_mismatch` — src/rwa_calc/engine/crm/haircuts.py:708"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/haircuts.py:702:807"
+    --8<-- "src/rwa_calc/engine/crm/haircuts.py:708:813"
     ```
 
 
 ### CRR Art. 238 — Maturity of credit protection
 
-??? quote "`apply_maturity_mismatch` — src/rwa_calc/engine/crm/haircuts.py:703"
+??? quote "`apply_maturity_mismatch` — src/rwa_calc/engine/crm/haircuts.py:709"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/haircuts.py:702:807"
+    --8<-- "src/rwa_calc/engine/crm/haircuts.py:708:813"
     ```
 
 

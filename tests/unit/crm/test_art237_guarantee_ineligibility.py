@@ -54,22 +54,34 @@ def b31_config() -> CalculationConfig:
     return CalculationConfig.basel_3_1(reporting_date=date(2027, 1, 1))
 
 
-def _guarantee(reporting_date: date, guar_maturity_days: int) -> pl.LazyFrame:
-    """One guarantee row covering _AMOUNT, maturing guar_maturity_days out."""
-    return pl.LazyFrame(
-        {
-            "guarantee_reference": ["G1"],
-            "beneficiary_reference": [_BENEFICIARY],
-            "amount_covered": [_AMOUNT],
-            "maturity_date": [reporting_date + timedelta(days=guar_maturity_days)],
-        },
-        schema={
-            "guarantee_reference": pl.String,
-            "beneficiary_reference": pl.String,
-            "amount_covered": pl.Float64,
-            "maturity_date": pl.Date,
-        },
-    )
+def _guarantee(
+    reporting_date: date,
+    guar_maturity_days: int,
+    *,
+    original_maturity_years: float | None = None,
+    include_original_column: bool = False,
+) -> pl.LazyFrame:
+    """One guarantee row covering _AMOUNT, maturing guar_maturity_days out.
+
+    ``include_original_column`` adds the ``original_maturity_years`` column (Art.
+    237(2)(a) original term); ``original_maturity_years`` sets its value (None =>
+    null, permissive)."""
+    data: dict = {
+        "guarantee_reference": ["G1"],
+        "beneficiary_reference": [_BENEFICIARY],
+        "amount_covered": [_AMOUNT],
+        "maturity_date": [reporting_date + timedelta(days=guar_maturity_days)],
+    }
+    schema: dict = {
+        "guarantee_reference": pl.String,
+        "beneficiary_reference": pl.String,
+        "amount_covered": pl.Float64,
+        "maturity_date": pl.Date,
+    }
+    if include_original_column or original_maturity_years is not None:
+        data["original_maturity_years"] = [original_maturity_years]
+        schema["original_maturity_years"] = pl.Float64
+    return pl.LazyFrame(data, schema=schema)
 
 
 def _exposure(
@@ -314,6 +326,76 @@ class TestGuaranteeNullExposureMaturity:
         covered = _covered(
             _guarantee(rd, 365),
             _exposure(rd, None, has_one_day_maturity_floor=True),
+            b31_config,
+        )
+        assert covered == pytest.approx(0.0, abs=1e-9)
+
+
+# ---------------------------------------------------------------------------
+# Art. 237(2)(a) — original maturity < 1y, ONLY where a mismatch exists (P1.232)
+# ---------------------------------------------------------------------------
+
+
+class TestGuaranteeShortOriginalMaturity:
+    """Art. 237(2)(a): a guarantee whose ORIGINAL maturity is < 1 year is
+    ineligible ONLY where a maturity mismatch exists (Art. 237(2) chapeau).
+    Matched / protection-outlives-exposure short-dated guarantees stay
+    recognised. Null original maturity is PERMISSIVE (P1.10)."""
+
+    def test_short_original_mismatch_zeroed(self, crr_config: CalculationConfig) -> None:
+        """DISCRIMINATING: 1y guarantee, original 0.75y, exposure 3y (mismatch) => 0.
+
+        Pre-fix the maturity-mismatch step only scales (~272); the relocated
+        Art. 237(2)(a) gate zeroes it because a mismatch exists and original < 1y.
+        """
+        rd = crr_config.reporting_date
+        covered = _covered(
+            _guarantee(rd, 365, original_maturity_years=0.75),
+            _exposure(rd, int(3 * 365.25)),
+            crr_config,
+        )
+        assert covered == pytest.approx(0.0, abs=1e-9)
+
+    def test_matched_short_original_recognised(self, crr_config: CalculationConfig) -> None:
+        """Control: 1y guarantee == 1y exposure (NO mismatch), original 0.75y =>
+        full coverage. The <1y-original test must NOT bind without a mismatch."""
+        rd = crr_config.reporting_date
+        covered = _covered(
+            _guarantee(rd, 365, original_maturity_years=0.75),
+            _exposure(rd, 365),
+            crr_config,
+        )
+        assert covered == pytest.approx(_AMOUNT)
+
+    def test_outlives_short_original_recognised(self, crr_config: CalculationConfig) -> None:
+        """Control: 9m guarantee (original 0.75y) OUTLIVES a 6m exposure (t>=T, no
+        mismatch) => full coverage, even though original maturity < 1y."""
+        rd = crr_config.reporting_date
+        covered = _covered(
+            _guarantee(rd, 274, original_maturity_years=0.75),
+            _exposure(rd, 183),
+            crr_config,
+        )
+        assert covered == pytest.approx(_AMOUNT)
+
+    def test_null_original_mismatch_permissive(self, crr_config: CalculationConfig) -> None:
+        """Control: mismatch present but original maturity NULL => permissive (the
+        2(a) gate does not fire); the guarantee is scaled by Art. 239(3), not
+        zeroed (1y guarantee, 3y exposure => ~0.27)."""
+        rd = crr_config.reporting_date
+        covered = _covered(
+            _guarantee(rd, 365, original_maturity_years=None, include_original_column=True),
+            _exposure(rd, int(3 * 365.25)),
+            crr_config,
+        )
+        assert 0.0 < covered < _AMOUNT
+
+    def test_b31_short_original_mismatch_zeroed(self, b31_config: CalculationConfig) -> None:
+        """Basel 3.1: the relocated Art. 237(2)(a) gate binds identically."""
+        rd = b31_config.reporting_date
+        covered = _covered(
+            _guarantee(rd, 365, original_maturity_years=0.75),
+            _exposure(rd, int(3 * 365.25)),
             b31_config,
         )
         assert covered == pytest.approx(0.0, abs=1e-9)

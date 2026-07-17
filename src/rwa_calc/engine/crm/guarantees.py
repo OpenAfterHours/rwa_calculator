@@ -199,16 +199,18 @@ def _prepare_guarantees(
         pl.col("protection_type").fill_null("guarantee").alias("protection_type"),
     )
 
-    # CRR Art. 237(2)(a): unfunded credit protection with original maturity
-    # < 1 year is ineligible. Drop ineligible guarantee rows here so the
-    # downstream pipeline treats the exposure as un-guaranteed. Null is
-    # treated permissively (>= 1y) — mirrors the collateral fallback in
-    # engine/crm/haircuts.py:478-484.
+    # CRR Art. 237(2)(a): the original-maturity >= 1yr eligibility test is NOT an
+    # unconditional pre-filter — Art. 237(2) applies "where there is a maturity
+    # mismatch". A matched (or protection-outlives-exposure) short-dated guarantee
+    # remains eligible. The test is therefore applied inside
+    # _apply_maturity_mismatch_to_guarantees (mismatch-conditioned, mirroring the
+    # collateral twin in haircuts.py) rather than dropping rows here (P1.232). The
+    # original_maturity_years column is ensured so the residual-fallback and the
+    # relocated gate can read it (null-PERMISSIVE, P1.10).
     guarantees = ensure_columns(
         guarantees,
         {"original_maturity_years": ColumnSpec(pl.Float64, required=False)},
     )
-    guarantees = guarantees.filter(pl.col("original_maturity_years").fill_null(10.0) >= 1.0)
 
     # CRR / PS1-26 Art. 213(1)(c)(i): drop guarantees the provider can
     # unilaterally cancel (both regimes) or unilaterally change (Basel 3.1
@@ -1510,9 +1512,11 @@ def _apply_maturity_mismatch_to_guarantees(
     the split, so the reduced nominal protection value propagates through
     cap-at-EAD.
 
-    Two Art. 237 eligibility gates ZERO coverage (rather than merely scaling
+    Three Art. 237 eligibility gates ZERO coverage (rather than merely scaling
     it) before the 239(3) formula, mirroring the collateral sibling in
-    ``engine/crm/haircuts.py``:
+    ``engine/crm/haircuts.py``. All three bind ONLY WHERE a maturity mismatch
+    exists (Art. 237(2) chapeau) — matched / protection-outlives-exposure
+    guarantees stay recognised:
 
     - Art. 237(1): credit protection whose RAW residual maturity is < 3 months
       AND shorter than the exposure is not recognised. The test runs on the
@@ -1523,9 +1527,11 @@ def _apply_maturity_mismatch_to_guarantees(
       maturity floor (daily-margined repos/SFTs), ANY maturity mismatch makes
       the protection ineligible. The ``has_one_day_maturity_floor`` flag is
       joined from the exposure; null/absent is PERMISSIVE (treated as no floor).
-
-    The >=1y original-maturity floor (Art. 237(2)(a)) remains enforced by the
-    separate upstream pre-filter.
+    - Art. 237(2)(a): protection whose ORIGINAL maturity is < 1 year is ineligible
+      where a mismatch exists. Relocated here from an unconditional pre-filter
+      (P1.232) so matched short-dated (e.g. trade-finance) guarantees are no
+      longer discarded. Reads ``original_maturity_years`` (the original term, NOT
+      the residual ``t``); null is PERMISSIVE (>= 1y).
 
     The protection residual maturity ``t`` is derived from the guarantee
     row's ``maturity_date`` if present, otherwise from
@@ -1534,6 +1540,7 @@ def _apply_maturity_mismatch_to_guarantees(
 
     References:
         CRR / PS1-26 Art. 237(1): <3-month-and-shorter protection ineligibility.
+        CRR / PS1-26 Art. 237(2)(a): <1y-original protection, mismatch-conditioned.
         CRR / PS1-26 Art. 237(2)(b) with Art. 162(3): one-day-floor exposures
             + any mismatch => ineligible.
         CRR Art. 238(1): maturity of credit protection — ``t`` is the RESIDUAL
@@ -1642,11 +1649,25 @@ def _apply_maturity_mismatch_to_guarantees(
     # Art. 162(3)/237(2)(b): a one-day-M-floor exposure (daily-margined repo/SFT)
     # with ANY maturity mismatch makes the protection ineligible.
     one_day_floor_gate = pl.col("_has_1d_floor") & raw_mismatch
+    # Art. 237(2)(a): unfunded protection whose ORIGINAL maturity is < 1 year is
+    # ineligible ONLY where a maturity mismatch exists (Art. 237(2) chapeau) — a
+    # matched or protection-outlives-exposure short-dated guarantee stays
+    # recognised. Relocated here (P1.232) from the former UNCONDITIONAL pre-filter
+    # in _prepare_guarantees, mirroring the collateral twin's conditioning
+    # (haircuts.py). Null original maturity is PERMISSIVE (treated as >= 1y => not
+    # ineligible), preserving the P1.10 policy. Reads the ORIGINAL term
+    # (original_maturity_years), NOT the residual t that feeds the scaling (P1.219).
+    orig_maturity = (
+        pl.col("original_maturity_years").fill_null(10.0)
+        if has_guar_original_maturity
+        else pl.lit(10.0)
+    )
+    short_original_gate = raw_mismatch & (orig_maturity < 1.0)
 
     # Zero-gates take priority over the scaling; otherwise scale on mismatch,
     # else full coverage. Mirrors the collateral sibling (engine/crm/haircuts.py).
     scale_safe = (
-        pl.when(short_protection | one_day_floor_gate)
+        pl.when(short_protection | one_day_floor_gate | short_original_gate)
         .then(pl.lit(0.0))
         .when(is_mismatch)
         .then(scale)

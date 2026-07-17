@@ -553,6 +553,21 @@ def _hierarchy_resolved_columns() -> dict[str, EdgeColumn]:
         "obligor_st_50_floor": EdgeColumn(
             dtype=pl.Boolean, required=False, citation="CRR Art. 140"
         ),
+        # Per-exposure (NOT broadcast): True only on the leg carrying its OWN
+        # issue-specific short-term ECAI assessment (Art. 120(2B) / 122(3)). Lets
+        # the SA Art. 140(2) override tell a directly-rated contamination SOURCE
+        # from a leg handed a short-term cqs by the Art. 120(3)(c) obligor
+        # spillover — the spillover overwrites has_short_term_ecai / cqs, so
+        # without this flag a spilled leg would evade the 140(2)(b) floor
+        # (P1.225 co-fire defect). default False + fill_null_default: a frame
+        # skipping the ST-rating path has no directly-rated leg.
+        "has_own_short_term_ecai": EdgeColumn(
+            dtype=pl.Boolean,
+            required=False,
+            default=False,
+            fill_null_default=True,
+            citation="CRR Art. 140",
+        ),
         "original_currency": EdgeColumn(dtype=pl.String),
         "original_amount": EdgeColumn(dtype=pl.Float64),
         "fx_rate_applied": EdgeColumn(dtype=pl.Float64),

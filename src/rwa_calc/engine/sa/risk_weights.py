@@ -164,6 +164,10 @@ SA_INPUT_CONTRACT: dict[str, ColumnSpec] = {
     # can read the unsecured predicate without a presence guard.
     "obligor_st_150_contamination": ColumnSpec(pl.Boolean, default=False, required=False),
     "obligor_st_50_floor": ColumnSpec(pl.Boolean, default=False, required=False),
+    # Per-exposure: True only on a leg with its OWN issue-specific short-term
+    # ECAI assessment; the Art. 140(2) override reads it to reach spilled legs
+    # (P1.225 co-fire) without touching the directly-rated source.
+    "has_own_short_term_ecai": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_guaranteed": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_payroll_loan": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_qrre_transactor": ColumnSpec(pl.Boolean, default=False, required=False),
@@ -390,14 +394,19 @@ def _apply_obligor_st_contamination_override(exposures: pl.LazyFrame) -> pl.Lazy
     unsecured SHORT-TERM claims when a 50%-attracting (Table 7 CQS 2) assessment
     exists. The 150% hard override dominates the floor (checked first).
 
-    Only UNRATED (no own ``cqs``, no own short-term ECAI) UNSECURED
-    (``~is_guaranteed``) legs are touched — a guarantor-substituted leg keeps its
-    guarantor RW; SA collateral acts on EAD not RW so it does not exempt a row.
-    All inputs are ensured by ``SA_INPUT_CONTRACT`` / ``_prepare_risk_weight_lookup``,
-    so no presence guard or ``fill_null`` is needed (a null reads as "no
-    contamination").
+    A target is UNSECURED (``~is_guaranteed`` — a guaranteed leg keeps its
+    guarantor RW), lacks its OWN short-term assessment (``~has_own_short_term_ecai``
+    — the directly-rated leg is the SOURCE, never a target), and is either
+    genuinely unrated (``cqs`` null) OR was handed a short-term cqs by the
+    Art. 120(3)(c) spillover (``has_short_term_ecai``). Including the spilled arm
+    is the P1.225 co-fire fix: the spillover overwrites ``cqs`` /
+    ``has_short_term_ecai``, so the pre-fix ``cqs.is_null() & ~has_short_term_ecai``
+    predicate dropped spilled legs and Art. 140(2) never bound when both fired.
+    A leg with only an inherited long-term cqs stays excluded as before.
     """
-    is_unrated = pl.col("cqs").is_null() & pl.col("has_short_term_ecai").not_()
+    is_target = pl.col("has_own_short_term_ecai").not_() & (
+        pl.col("cqs").is_null() | pl.col("has_short_term_ecai")
+    )
     is_unsecured = pl.col("is_guaranteed").not_()
     # Reuse the SA short-term window (original maturity <= 3m, <= 6m for
     # self-liquidating trade LCs) used by the institution ST branches. No
@@ -407,9 +416,9 @@ def _apply_obligor_st_contamination_override(exposures: pl.LazyFrame) -> pl.Lazy
     is_st = (original_mty <= 0.25) | (pl.col("is_short_term_trade_lc") & (original_mty <= 0.5))
 
     return exposures.with_columns(
-        pl.when(pl.col("obligor_st_150_contamination") & is_unrated & is_unsecured)
+        pl.when(pl.col("obligor_st_150_contamination") & is_target & is_unsecured)
         .then(pl.lit(1.50))
-        .when(pl.col("obligor_st_50_floor") & is_unrated & is_unsecured & is_st)
+        .when(pl.col("obligor_st_50_floor") & is_target & is_unsecured & is_st)
         .then(pl.max_horizontal(pl.col("risk_weight"), pl.lit(1.00)))
         .otherwise(pl.col("risk_weight"))
         .alias("risk_weight")

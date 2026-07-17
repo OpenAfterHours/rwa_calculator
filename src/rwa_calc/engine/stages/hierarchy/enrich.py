@@ -966,17 +966,27 @@ def _apply_obligor_st_contamination_flags(exposures: pl.LazyFrame) -> pl.LazyFra
     - (b) an assessment attracting 50% (Table 7 CQS 2) floors the obligor's
       unrated SHORT-TERM unsecured claims at 100%.
 
-    Emits two obligor-broadcast Boolean flags read by the SA risk-weight
-    override (engine/sa/risk_weights.py). Reads the pristine ``_st_assessment_cqs``
-    scratch (non-null only on the directly-rated exposure) BEFORE it is dropped —
-    a spilled row carries a null assessment cqs and so never contributes. This is
-    a DISTINCT mechanism from the Art. 120(3)(c) short-term spillover above, which
-    modifies ``has_short_term_ecai`` / ``cqs``; this helper touches neither.
-    Regime-independent (Table 7 is identical across CRR and Basel 3.1), mirroring
+    Emits two obligor-broadcast Boolean flags plus one per-exposure flag, all
+    read by the SA risk-weight override (engine/sa/risk_weights.py). Reads the
+    pristine ``_st_assessment_cqs`` scratch (non-null only on the directly-rated
+    exposure) BEFORE it is dropped — a spilled row carries a null assessment cqs
+    and so never contributes. This is a DISTINCT mechanism from the
+    Art. 120(3)(c) short-term spillover above, which modifies
+    ``has_short_term_ecai`` / ``cqs``; this helper touches neither. Regime-
+    independent (Table 7 is identical across CRR and Basel 3.1), mirroring
     ``_apply_obligor_short_term_spillover``. Called immediately after that
     spillover in ``apply_short_term_rating_override``, where the three inputs
     (``counterparty_reference`` / ``has_short_term_ecai`` / ``_st_assessment_cqs``)
     are already materialised, so no presence guard is needed.
+
+    ``has_own_short_term_ecai`` (per-exposure, non-broadcast) records whether
+    THIS leg carries its OWN issue-specific short-term assessment. It is the
+    discriminator the SA Art. 140(2) override needs to tell a directly-rated
+    trigger (contamination SOURCE — keeps its own weight) from a leg that only
+    INHERITED a short-term cqs via the Art. 120(3)(c) spillover. The spillover
+    overwrites ``has_short_term_ecai`` / ``cqs`` on a spilled leg, so without
+    this pristine flag the floor / 150% broadcast would evade the spilled leg
+    (P1.225 co-fire defect).
     """
     # The directly-rated ST facility's assessment cqs drives the obligor flags;
     # ``_st_assessment_cqs`` is non-null only there (a spilled row's is null and
@@ -995,6 +1005,7 @@ def _apply_obligor_st_contamination_flags(exposures: pl.LazyFrame) -> pl.LazyFra
                 "counterparty_reference",
                 pl.lit(False),  # noqa: FBT003
             ).alias("obligor_st_50_floor"),
+            pl.col("_st_assessment_cqs").is_not_null().alias("has_own_short_term_ecai"),
         ]
     )
 

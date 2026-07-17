@@ -230,7 +230,7 @@ class TestCCRSFTIRBEffectiveMaturity:
             MA = (1 + (M-2.5)*b) / (1-1.5*b) = 0.853445
             N^-1(PD)     = -2.170090
             N^-1(0.999)  =  3.090232
-            inner = (N^-1(PD) + sqrt(R)*N^-1(0.999)) / sqrt(1-R) = -1.649653
+            inner = (N^-1(PD) + sqrt(R)*N^-1(0.999)) / sqrt(1-R) = -0.960083
             N(inner) = 0.168507
 
             IMPORTANT — the engine's ``k`` column is the BASE capital

@@ -389,6 +389,70 @@ class TestB31GroupG_PortfolioELSummary:
             "el_summary should be populated when IRB results have EL columns"
         )
 
+    def test_el_shortfall_pool_aggregate_nets_to_zero(self, firb_pipeline_results) -> None:
+        """B31-G portfolio EL shortfall nets to zero at pool-aggregate grain (P1.221).
+
+        The B31 F-IRB book is a mixed-sign non-defaulted pool: many rows are
+        over-provisioned (EL < provisions) while others are under-provisioned
+        (EL > provisions). CRR Art. 159(3) / PS1/26 Art. 159 (CRE35.4) net the
+        AGGREGATE pool EL against the AGGREGATE Pool B — not the per-row
+        max(0, EL_i - B_i) then summed — so the netted value is distinguishable
+        from the per-row path (this pool is emphatically mixed-sign).
+
+        Derivation (combined IRB + slotting EL sources — ``firb_pipeline_results``
+        ``irb_results`` and ``slotting_results`` — grouped by ``is_defaulted``;
+        AVA and other_own_funds_reductions are zero across the whole book):
+
+            Non-defaulted pool (57 F-IRB rows + 10 slotting rows = 67):
+                IRB      A_irb  = 382,478.3961824273   B_irb  = 1,668,571.4285714286
+                Slotting A_slot = 680,000.0            B_slot = 0.0
+                A = ΣEL     = 1,062,478.3961824272
+                B = Σpool_b = 1,668,571.4285714286
+                nd_shortfall = max(0, A - B) = 0.0
+                nd_excess    = max(0, B - A) = 606,093.0323890015
+            Defaulted pool: 0 rows -> C = D = 0 -> d_shortfall = d_excess = 0
+
+            art_159_3_applies = (nd_shortfall>0) and (d_excess>0)
+                              = (0>0) and (0>0) = False -> combined branch:
+            total_el_shortfall = nd_shortfall + d_shortfall = 0.0
+
+        The pre-fix per-row-then-sum path instead reports 982,235.00 (it floors
+        and sums each under-provisioned row's shortfall independently, never
+        letting the over-provisioned rows in the same pool absorb it).
+        """
+        el = firb_pipeline_results.el_summary
+        if el is None:
+            pytest.skip("el_summary not available")
+        assert float(el.total_el_shortfall) == pytest.approx(0.0, abs=1e-6), (
+            "Portfolio el_shortfall should net to 0.00 at pool-aggregate grain "
+            f"(non-defaulted pool is net over-provisioned), got {el.total_el_shortfall:,.2f}"
+        )
+
+    def test_el_excess_pool_aggregate_netted(self, firb_pipeline_results) -> None:
+        """B31-G portfolio EL excess equals the pool-aggregate netted value (P1.221).
+
+        Same aggregate ingredients as ``test_el_shortfall_pool_aggregate_nets_to_zero``:
+
+            Non-defaulted: nd_excess = max(0, B - A)
+                         = 1,668,571.4285714286 - 1,062,478.3961824272
+                         = 606,093.0323890015
+            Defaulted:     d_excess = 0
+
+            art_159_3_applies = False -> combined branch:
+            total_el_excess = nd_excess + d_excess = 606,093.0323890015
+
+        The pre-fix per-row-then-sum path instead reports 1,581,112.64 (each
+        over-provisioned row's excess is floored and summed independently, so
+        the under-provisioned rows' shortfalls never reduce the pool excess).
+        """
+        el = firb_pipeline_results.el_summary
+        if el is None:
+            pytest.skip("el_summary not available")
+        assert float(el.total_el_excess) == pytest.approx(606_093.0323890015, rel=1e-6), (
+            "Portfolio el_excess should be the pool-aggregate netted value "
+            f"606,093.03 (non-defaulted pool: B - A), got {el.total_el_excess:,.2f}"
+        )
+
     def test_t2_credit_cap_is_point_six_pct(self, firb_pipeline_results) -> None:
         """T2 credit cap should be 0.6% of total IRB RWA per CRR Art. 62(d)."""
         el = firb_pipeline_results.el_summary

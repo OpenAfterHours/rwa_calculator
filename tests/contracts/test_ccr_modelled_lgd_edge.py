@@ -29,9 +29,22 @@ References:
 
 from __future__ import annotations
 
+from datetime import date
+
 import polars as pl
 import pytest
+from tests.fixtures.ccr.margin_builder import create_margin_agreements
+from tests.fixtures.ccr.netting_set_builder import create_netting_sets, make_netting_set
+from tests.fixtures.ccr.trade_builder import create_trades, make_trade
 
+from rwa_calc.contracts.bundles import (
+    CCRCollateralBundle,
+    MarginAgreementBundle,
+    NettingSetBundle,
+    RawCCRBundle,
+    TradeBundle,
+)
+from rwa_calc.contracts.config import CCRConfig
 from rwa_calc.contracts.edges import (
     CCR_EXIT_EDGE,
     CLASSIFIER_EXIT_CCR_EDGE,
@@ -39,7 +52,9 @@ from rwa_calc.contracts.edges import (
     HIERARCHY_EXIT_EDGE,
     RE_SPLIT_EXIT_CCR_EDGE,
 )
-from rwa_calc.data.schemas import SFT_TRADE_SCHEMA, TRADE_SCHEMA
+from rwa_calc.data.column_spec import dtypes_of
+from rwa_calc.data.schemas import CCR_COLLATERAL_SCHEMA, SFT_TRADE_SCHEMA, TRADE_SCHEMA
+from rwa_calc.engine.ccr.pipeline_adapter import ccr_rows_to_exposures
 
 CARRIER = "ccr_modelled_lgd"
 
@@ -123,4 +138,73 @@ class TestCcrModelledLgdInputSchemas:
         assert CARRIER in TRADE_SCHEMA
         assert TRADE_SCHEMA[CARRIER].required is False, (
             f"TRADE_SCHEMA['{CARRIER}'] must be required=False"
+        )
+
+
+def _two_trade_ns_raw_ccr(lgd_a: float, lgd_b: float) -> RawCCRBundle:
+    """Return a RawCCRBundle: one netting set, two IR-swap trades, distinct LGDs.
+
+    Both trades sit in the same legally-enforceable, unmargined netting set
+    (NS_001 / CP_001) and carry the golden CCR-A1 10y GBP IR-swap economics —
+    only ``ccr_modelled_lgd`` differs (``lgd_a`` on the first trade, ``lgd_b``
+    on the second). Margin-agreement and collateral frames are empty-schema.
+    """
+    trades_df = create_trades(
+        [
+            make_trade(trade_id="T_LGD_A", netting_set_id="NS_001"),
+            make_trade(trade_id="T_LGD_B", netting_set_id="NS_001"),
+        ]
+    ).with_columns(pl.Series(CARRIER, [lgd_a, lgd_b], dtype=pl.Float64))
+
+    return RawCCRBundle(
+        trades=TradeBundle(trades=trades_df.lazy()),
+        netting_sets=NettingSetBundle(
+            netting_sets=create_netting_sets(
+                [make_netting_set(netting_set_id="NS_001", counterparty_reference="CP_001")]
+            ).lazy()
+        ),
+        margin_agreements=MarginAgreementBundle(
+            margin_agreements=create_margin_agreements([]).lazy()
+        ),
+        ccr_collateral=CCRCollateralBundle(
+            ccr_collateral=pl.DataFrame(schema=dtypes_of(CCR_COLLATERAL_SCHEMA)).lazy()
+        ),
+    )
+
+
+class TestCcrModelledLgdCollapse:
+    """The NS-grain collapse of ``ccr_modelled_lgd`` is deterministic + conservative.
+
+    A netting set has no stable trade order, so collapsing heterogeneous
+    modelled LGDs via ``.first()`` would pick an order-nondeterministic value.
+    ``ccr_rows_to_exposures`` collapses via ``.max()`` — order-independent and
+    conservative (the highest LGD is the largest capital input; a higher LGD
+    drives a larger K / RWA). This pins the max is selected for a two-trade NS.
+    """
+
+    @pytest.mark.parametrize(
+        ("lgd_a", "lgd_b", "expected_max"),
+        [
+            (0.30, 0.55, 0.55),  # max is the second trade
+            (0.55, 0.30, 0.55),  # max is the first trade — order-independent
+        ],
+    )
+    def test_multi_trade_ns_collapses_to_max_modelled_lgd(
+        self, lgd_a: float, lgd_b: float, expected_max: float
+    ) -> None:
+        # Arrange
+        raw_ccr = _two_trade_ns_raw_ccr(lgd_a, lgd_b)
+
+        # Act — one synthetic exposure row per netting set.
+        rows = ccr_rows_to_exposures(raw_ccr, CCRConfig(), date(2026, 6, 30)).collect()
+
+        # Assert — exactly one NS row, carrying the MAX modelled LGD.
+        ns_rows = rows.filter(pl.col("source_netting_set_id") == "NS_001")
+        assert ns_rows.height == 1, (
+            f"expected exactly 1 synthetic row for NS_001, got {ns_rows.height}"
+        )
+        actual = ns_rows.row(0, named=True)[CARRIER]
+        assert actual == pytest.approx(expected_max, abs=1e-9), (
+            f"multi-trade NS with modelled LGDs {{{lgd_a}, {lgd_b}}} must collapse to "
+            f"the max ({expected_max}) — deterministic + conservative, got {actual}"
         )

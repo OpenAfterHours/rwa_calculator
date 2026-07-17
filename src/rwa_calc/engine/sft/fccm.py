@@ -367,15 +367,24 @@ def _build_sft_exposure_rows(
     # downstream).
     ns_terms: dict[str, tuple[int, int]] = {}
     ns_maturity: dict[str, float | None] = {}
-    # Per-NS own-estimate LGD carrier for A-IRB routing (P1.215), taken off the
-    # first trade row per netting set — the same first-trade-per-NS grain as the
-    # margining terms / effective maturity above. A multi-trade NS with
-    # heterogeneous modelled LGDs is a data-quality question (not silently
-    # averaged); under the single-trade-per-NS scope (Art. 220(1)(a)) it does
-    # not arise. Null carrier => the synthetic row falls to SA / FIRB downstream.
+    # Per-NS own-estimate LGD carrier for A-IRB routing (P1.215), collapsed to NS
+    # grain via the MAX across every trade in the set — deterministic AND
+    # conservative (the highest modelled LGD drives the largest capital
+    # requirement), mirroring the ``.max()`` collapse in the SA-CCR pipeline
+    # adapter. This scan runs for every row (outside the first-trade guard that
+    # gates the margining terms / effective maturity below) so a multi-trade NS
+    # with heterogeneous modelled LGDs collapses order-independently; under the
+    # single-trade-per-NS scope (Art. 220(1)(a)) only one value exists. Null
+    # carrier => the synthetic row falls to SA / FIRB downstream.
     ns_modelled_lgd: dict[str, float | None] = {}
     for row in sft_trades_df.iter_rows(named=True):
         ns_id = row["netting_set_id"]
+        trade_lgd = row.get("ccr_modelled_lgd")
+        if trade_lgd is not None:
+            prior = ns_modelled_lgd.get(ns_id)
+            ns_modelled_lgd[ns_id] = trade_lgd if prior is None else max(prior, trade_lgd)
+        else:
+            ns_modelled_lgd.setdefault(ns_id, None)
         if ns_id in ns_terms:
             continue
         ns_terms[ns_id] = _derive_margining_terms(
@@ -385,7 +394,6 @@ def _build_sft_exposure_rows(
             has_margin_dispute_doubling=row.get("has_margin_dispute_doubling", False),
             mpor_days_override=row.get("mpor_days_override", None),
         )
-        ns_modelled_lgd[ns_id] = row.get("ccr_modelled_lgd")
         ns_maturity[ns_id] = _derive_ccr_sft_maturity_years(
             remaining_years=_remaining_years(reporting_date, row.get("maturity_date")),
             under_mna=bool(row.get("under_master_netting_agreement", False)),

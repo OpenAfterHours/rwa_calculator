@@ -522,6 +522,22 @@ COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     "original_maturity_years": ColumnSpec(pl.Float64, required=False),
     "is_eligible_financial_collateral": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_eligible_irb_collateral": ColumnSpec(pl.Boolean, default=False, required=False),
+    # CRR / PS1-26 Art. 197(1)(h): a securitisation position is eligible financial
+    # collateral only if it is NOT a resecuritisation AND its own risk weight is
+    # <= 100%. These two fields drive that gate for issuer_type/collateral_type
+    # "securitisation" (dedicated Art. 224 Table 1 supervisory-haircut column).
+    #   is_resecuritisation: True => hard-ineligible (Art. 197(1)(h)). The default
+    #     False means "NOT KNOWN to be a resecuritisation", not "confirmed plain
+    #     securitisation" — RESIDUAL RISK: a genuine resecuritisation posted
+    #     without this flag set is wrongly recognised. Unlike the RW/CQS gate
+    #     (conservative on null), resecuritisation cannot be inferred from other
+    #     fields, so the correct signal must be supplied by the data provider.
+    #   securitisation_position_risk_weight: the position's own RW as a fraction
+    #     (e.g. 0.20 = 20%). Null is CONSERVATIVE — the RW<=100% gate cannot be
+    #     confirmed, so the position is treated as ineligible (absence of data
+    #     must not fabricate eligibility). Only consulted for securitisation rows.
+    "is_resecuritisation": ColumnSpec(pl.Boolean, default=False, required=False),
+    "securitisation_position_risk_weight": ColumnSpec(pl.Float64, required=False),
     # PRA PS1/26 Art. 191A(2)(d)-(f): two-layer protection look-through.
     # Optional reference to the counterparty that posted the collateral (e.g.
     # the guarantor for guarantee-anchored collateral). When the engine

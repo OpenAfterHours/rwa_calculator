@@ -835,6 +835,27 @@ ENTRIES: dict[str, RuleEntry] = {
             (("corp_bond", 3, "3_5y", None), Decimal("0.06")),
             (("corp_bond", 3, "5_10y", None), Decimal("0.12")),
             (("corp_bond", 3, "10y_plus", None), Decimal("0.20")),
+            # PS1/26 Art. 224 Table 1, "Volatility adjustments for securitisation
+            # positions ... point (h) of paragraph 1 of Article 197", 10-day
+            # liquidation column (ps126app1.pdf p.203). NOT a clean 2x corporate:
+            # these are the PRINTED values. Eligible only for CQS 1-3 non-
+            # resecuritisation positions with RW <= 100% (Art. 197(1)(h), gated in
+            # haircuts.py).
+            (("securitisation", 1, "0_1y", None), Decimal("0.02")),
+            (("securitisation", 1, "1_3y", None), Decimal("0.08")),
+            (("securitisation", 1, "3_5y", None), Decimal("0.08")),
+            (("securitisation", 1, "5_10y", None), Decimal("0.16")),
+            (("securitisation", 1, "10y_plus", None), Decimal("0.16")),
+            (("securitisation", 2, "0_1y", None), Decimal("0.04")),
+            (("securitisation", 2, "1_3y", None), Decimal("0.12")),
+            (("securitisation", 2, "3_5y", None), Decimal("0.12")),
+            (("securitisation", 2, "5_10y", None), Decimal("0.24")),
+            (("securitisation", 2, "10y_plus", None), Decimal("0.24")),
+            (("securitisation", 3, "0_1y", None), Decimal("0.04")),
+            (("securitisation", 3, "1_3y", None), Decimal("0.12")),
+            (("securitisation", 3, "3_5y", None), Decimal("0.12")),
+            (("securitisation", 3, "5_10y", None), Decimal("0.24")),
+            (("securitisation", 3, "10y_plus", None), Decimal("0.24")),
             (("equity", None, None, True), Decimal("0.20")),
             (("equity", None, None, False), Decimal("0.30")),
             (("real_estate", None, None, None), Decimal("0.40")),

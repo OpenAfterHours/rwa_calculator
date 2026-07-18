@@ -333,8 +333,8 @@ class TestB31P1142ThreePropertyIncomeDependentRouting:
         """
         # Arrange
         ctrl_rows = _get_ctrl_rows(p1_142_sa_results)
-        total_rwa = ctrl_rows["rwa_final"].sum()
-        total_ead = ctrl_rows["ead_final"].sum()
+        total_rwa = float(ctrl_rows["rwa_final"].sum())
+        total_ead = float(ctrl_rows["ead_final"].sum())
 
         assert total_ead > 0, (
             f"P1.142: CTRL obligor has zero EAD — fixture may not be loaded correctly. "

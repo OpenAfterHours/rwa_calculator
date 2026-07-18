@@ -58,7 +58,7 @@ def _loan_rwa(df: pl.DataFrame, loan_ref: str) -> float:
     """Total rwa_final across all (split) rows of a loan."""
     rows = df.filter(pl.col("parent_exposure_reference") == loan_ref)
     assert rows.height > 0, f"no rows for {loan_ref}"
-    return rows["rwa_final"].sum()
+    return float(rows["rwa_final"].sum())
 
 
 class TestP1231Art237MaturityGatesCRR:

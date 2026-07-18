@@ -249,14 +249,14 @@ def _verify_irb_filter() -> None:
 
     prior_df = build_prior_period_lf().collect()
     prior_irb = prior_df.filter(pl.col("approach_applied").is_in(irb_approaches))
-    computed_opening = prior_irb["rwa_final"].sum()
+    computed_opening = float(prior_irb["rwa_final"].sum())
     assert abs(computed_opening - EXPECTED_OPENING) < 1e-6, (
         f"Opening mismatch: computed={computed_opening}, expected={EXPECTED_OPENING}"
     )
 
     current_df = build_current_period_lf().collect()
     current_irb = current_df.filter(pl.col("approach_applied").is_in(irb_approaches))
-    computed_closing = current_irb["rwa_final"].sum()
+    computed_closing = float(current_irb["rwa_final"].sum())
     assert abs(computed_closing - EXPECTED_CLOSING) < 1e-6, (
         f"Closing mismatch: computed={computed_closing}, expected={EXPECTED_CLOSING}"
     )

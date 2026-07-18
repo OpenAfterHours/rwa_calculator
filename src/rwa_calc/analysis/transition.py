@@ -178,7 +178,9 @@ def _extract_floor_metrics(
                 if "is_floor_binding" in floor_df.columns:
                     metrics["floor_binding_count"] = int(floor_df["is_floor_binding"].sum())
                 if "floor_rwa" in floor_df.columns:
-                    metrics["total_sa_rwa"] = floor_df["floor_rwa"].sum() / max(floor_pct, 1e-10)
+                    metrics["total_sa_rwa"] = float(floor_df["floor_rwa"].sum()) / max(
+                        floor_pct, 1e-10
+                    )
         except Exception:
             logger.warning("Failed to collect floor_impact for year %d", year)
 

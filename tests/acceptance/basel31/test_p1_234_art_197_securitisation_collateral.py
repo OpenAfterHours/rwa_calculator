@@ -52,7 +52,7 @@ def _loan_rwa(df: pl.DataFrame, loan_ref: str) -> float:
     if rows.height == 0:
         rows = df.filter(pl.col("parent_exposure_reference") == loan_ref)
     assert rows.height > 0, f"no rows for {loan_ref}"
-    return rows["rwa_final"].sum()
+    return float(rows["rwa_final"].sum())
 
 
 class TestP1234Art197SecuritisationCollateralB31:

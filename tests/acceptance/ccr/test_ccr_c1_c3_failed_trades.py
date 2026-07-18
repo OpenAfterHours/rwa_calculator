@@ -268,8 +268,8 @@ class TestCCRC1C3FailedTrades:
         df_with = ccr_c123_with_failed_trades_results
         df_without = ccr_c123_no_failed_trades_results
 
-        total_with = df_with["rwa_final"].sum() or 0.0
-        total_without = df_without["rwa_final"].sum() or 0.0
+        total_with = float(df_with["rwa_final"].sum() or 0.0)
+        total_without = float(df_without["rwa_final"].sum() or 0.0)
         delta = total_with - total_without
 
         # Assert

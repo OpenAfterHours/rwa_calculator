@@ -24,6 +24,7 @@ References:
 from __future__ import annotations
 
 import dataclasses
+from typing import Any
 
 import polars as pl
 import pytest
@@ -36,8 +37,13 @@ from rwa_calc.contracts.edges import SFT_TABLE_EDGES, sealed_edge_of
 # ---------------------------------------------------------------------------
 
 
-def _get(name: str) -> type:
-    """Fetch a bundle class by name, asserting it exists."""
+def _get(name: str) -> Any:
+    """Fetch a bundle class by name, asserting it exists.
+
+    Returns ``Any``: the class is resolved by runtime ``getattr`` and used both
+    as a dataclass (``dataclasses.fields``) and as a constructor, so no single
+    static type fits.
+    """
     cls = getattr(bundles, name, None)
     assert cls is not None, (
         f"rwa_calc.contracts.bundles does not expose '{name}'. "
@@ -72,7 +78,7 @@ def test_leaf_bundle_is_frozen_dataclass(class_name: str) -> None:
     """Each SFT leaf bundle must be a frozen dataclass."""
     cls = _get(class_name)
     assert dataclasses.is_dataclass(cls), f"'{class_name}' must be a @dataclass"
-    params = cls.__dataclass_params__  # ty: ignore[unresolved-attribute]
+    params = cls.__dataclass_params__
     assert params.frozen is True, f"'{class_name}' must be frozen"
 
 
@@ -146,7 +152,7 @@ def test_raw_sft_bundle_is_frozen_dataclass() -> None:
     """RawSFTBundle must be a frozen dataclass."""
     cls = _get("RawSFTBundle")
     assert dataclasses.is_dataclass(cls)
-    params = cls.__dataclass_params__  # ty: ignore[unresolved-attribute]
+    params = cls.__dataclass_params__
     assert params.frozen is True
 
 

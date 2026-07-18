@@ -364,8 +364,8 @@ class TestCCRB2B4DefaultFund:
         df_with = ccr_b234_combined_results
         df_without = ccr_b234_no_dfc_results
 
-        total_with = df_with["rwa_final"].sum() or 0.0
-        total_without = df_without["rwa_final"].sum() or 0.0
+        total_with = float(df_with["rwa_final"].sum() or 0.0)
+        total_without = float(df_without["rwa_final"].sum() or 0.0)
         delta = total_with - total_without
 
         # Assert

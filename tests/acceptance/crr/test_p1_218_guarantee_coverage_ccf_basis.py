@@ -260,8 +260,8 @@ class TestP1218GuaranteeCoverageCCFBasis:
         sub_rows = _sub_rows(sa_results)
 
         # Act
-        total_rwa = sub_rows["rwa_final"].sum()
-        total_ead = sub_rows["ead_final"].sum()
+        total_rwa = float(sub_rows["rwa_final"].sum())
+        total_ead = float(sub_rows["ead_final"].sum())
         blended_rw = total_rwa / total_ead
 
         # Assert

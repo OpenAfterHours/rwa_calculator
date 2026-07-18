@@ -275,7 +275,7 @@ def _verify_lf() -> None:
     assert residual["materially_dependent_on_property"][0] is False
 
     # EAD reconciliation
-    total_ead = df["ead_final"].sum()
+    total_ead = float(df["ead_final"].sum())
     assert abs(total_ead - PARENT_EAD) < 1e-9, (
         f"EAD reconciliation failed: {total_ead} != {PARENT_EAD}"
     )

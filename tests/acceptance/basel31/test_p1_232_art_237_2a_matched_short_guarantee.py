@@ -47,7 +47,7 @@ def _results() -> pl.DataFrame:
 def _loan_rwa(df: pl.DataFrame, loan_ref: str) -> float:
     rows = df.filter(pl.col("parent_exposure_reference") == loan_ref)
     assert rows.height > 0, f"no rows for {loan_ref}"
-    return rows["rwa_final"].sum()
+    return float(rows["rwa_final"].sum())
 
 
 class TestP1232Art2372aMatchedShortGuaranteeB31:

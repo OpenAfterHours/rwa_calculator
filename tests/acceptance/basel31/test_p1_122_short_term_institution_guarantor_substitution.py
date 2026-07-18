@@ -170,7 +170,7 @@ def _get_guaranteed_row(df: pl.DataFrame) -> dict:
 def _get_total_rwa(df: pl.DataFrame) -> float:
     """Return total rwa_final for LN-P1122 (sum across all split rows)."""
     sub_rows = df.filter(pl.col("parent_exposure_reference") == LOAN_REF)
-    return sub_rows["rwa_final"].sum()
+    return float(sub_rows["rwa_final"].sum())
 
 
 # ---------------------------------------------------------------------------

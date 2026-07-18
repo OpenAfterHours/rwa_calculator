@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import polars as pl
 
@@ -314,7 +314,10 @@ def _finite_sum(series: pl.Series) -> float | int | None:
     """
     if series.dtype in (pl.Float32, pl.Float64):
         series = series.filter(series.is_finite())
-    return series.sum()
+    # These columns are always Float64/Int; the Polars `int | float | Decimal`
+    # sum union never yields Decimal here. cast restates the declared contract
+    # (incl. the None possibility) without altering the runtime value.
+    return cast("float | int | None", series.sum())
 
 
 def _column_sum_decimal(df: pl.DataFrame, col: str | None) -> Decimal:

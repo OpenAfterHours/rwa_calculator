@@ -34,6 +34,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+from datetime import date
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -609,7 +610,9 @@ class CRMProcessor:
         exposures = self._run_ead_pipeline(data, config, pack=pack)
 
         # Generate synthetic collateral from netting (CRR Art. 195)
-        exposures, collateral = self._merge_netting_collateral(exposures, collateral_lf, errors)
+        exposures, collateral = self._merge_netting_collateral(
+            exposures, collateral_lf, errors, config.reporting_date
+        )
 
         # Step 3.6: CRR/PS1-26 Art. 194(4) own-issue / connected-issuer gate.
         # Zero collateral whose issuer_counterparty_reference resolves to the
@@ -766,6 +769,7 @@ class CRMProcessor:
         exposures: pl.LazyFrame,
         collateral_lf: pl.LazyFrame | None,
         errors: list[CalculationError],
+        reporting_date: date,
     ) -> tuple[pl.LazyFrame, pl.LazyFrame | None]:
         """Generate synthetic netting collateral and merge with input collateral.
 
@@ -780,7 +784,9 @@ class CRMProcessor:
         that ``has_required_columns``' bare except misreported as "missing
         required columns" (silent-skip layer, migration Phase 3).
         """
-        netting_collateral = collateral_mod.generate_netting_collateral(exposures, errors)
+        netting_collateral = collateral_mod.generate_netting_collateral(
+            exposures, errors, reporting_date=reporting_date
+        )
         collateral: pl.LazyFrame | None = collateral_lf
         if netting_collateral is None:
             exposures = exposures.with_columns(pl.lit(0.0).alias("on_bs_netting_amount"))

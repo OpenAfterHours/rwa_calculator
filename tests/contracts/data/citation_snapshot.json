@@ -109,7 +109,8 @@
   "rwa_calc.engine.crm.collateral::generate_netting_collateral": [
     "CRR Art. 195",
     "CRR Art. 219",
-    "CRR Art. 223"
+    "CRR Art. 223",
+    "CRR Art. 238"
   ],
   "rwa_calc.engine.crm.expressions::overcollateralisation_ratio_expr": [
     "PS1/26 Art. 230(1)"

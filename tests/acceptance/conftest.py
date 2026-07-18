@@ -85,4 +85,4 @@ def get_total_rwa(df: pl.DataFrame, loan_ref: str) -> float:
     rwa_final.
     """
     sub_rows = df.filter(pl.col("parent_exposure_reference") == loan_ref)
-    return sub_rows["rwa_final"].sum()
+    return float(sub_rows["rwa_final"].sum())

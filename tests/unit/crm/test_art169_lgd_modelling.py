@@ -105,6 +105,9 @@ def _make_collateral(
             "value_after_haircut": [market_value],
             "value_after_maturity_adj": [market_value],
             "is_eligible_financial_collateral": [True],
+            # P1.235 — Art. 199(2): attest non-financial collateral as IRB-eligible;
+            # these tests exercise the Art. 169A/230 LGD math, not the eligibility gate.
+            "is_eligible_irb_collateral": [True],
         }
     )
 
@@ -609,6 +612,8 @@ class TestMixedBatch:
                 "value_after_haircut": [700_000.0, 700_000.0, 700_000.0],
                 "value_after_maturity_adj": [700_000.0, 700_000.0, 700_000.0],
                 "is_eligible_financial_collateral": [True, True, True],
+                # P1.235 — Art. 199(2): attest RE collateral as IRB-eligible.
+                "is_eligible_irb_collateral": [True, True, True],
             }
         )
 

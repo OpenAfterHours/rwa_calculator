@@ -404,20 +404,48 @@ class TestIRBEUDomesticSovereignPostFX:
 
 
 class TestGuarantorSubstitutionReadsGuaranteeCurrency:
-    """Art. 114(4)/(7): the domestic-currency test reads the GUARANTEE currency.
+    """Art. 114(4)/(7) + Art. 235(3): the 0% extension needs BOTH currencies.
 
     Under the substitution approach (Art. 215-217) the guaranteed portion is
-    treated as an exposure to the sovereign. Whether it qualifies for 0% RW
-    under Art. 114(4)/(7) depends on whether the guarantee itself (the
-    substituted exposure) is denominated in the sovereign's domestic currency —
-    not whether the underlying loan is. The Art. 233(3) 8% FX haircut handles
-    any mismatch between guarantee and underlying separately.
+    treated as an exposure to the sovereign. It qualifies for the 0% RW only
+    when the substituted exposure is BOTH denominated in the sovereign's
+    domestic currency (evaluated against the GUARANTEE currency — the Art. 233(3)
+    8% FX haircut handles any guarantee-vs-underlying mismatch separately) AND
+    *funded* in that same currency (the Art. 235(3) funding limb, which reads the
+    exposure's funding currency, falling back to its denomination — P1.229). A
+    guarantee denominated in the domestic currency but on an exposure funded in a
+    different currency therefore does NOT get 0% — it takes the sovereign's own
+    CQS risk weight.
     """
 
-    def test_sa_gbp_exposure_eur_guarantee_de_sovereign_zero_rw(
+    def test_sa_gbp_exposure_gbp_guarantee_uk_sovereign_zero_rw(
         self, crr_config: CalculationConfig
     ) -> None:
-        """SA: GBP exposure + EUR guarantee + DE sovereign -> 0% RW."""
+        """SA: GBP-funded exposure + GBP guarantee + UK sovereign -> 0% RW.
+
+        Matched-currency control: BOTH denominated and funded in GBP (the UK's
+        domestic currency), so the Art. 114(4)/(7) 0% extension legitimately
+        applies. Guards that the P1.229 funding limb did not disable the 0% path.
+        """
+        result = _sa_guarantee_result(
+            "sovereign",
+            3,
+            crr_config,
+            guarantor_country_code="GB",
+            currency="GBP",
+            guarantee_currency="GBP",
+        )
+        assert result["guarantor_rw"][0] == pytest.approx(0.0)
+
+    def test_sa_gbp_funded_exposure_eur_guarantee_de_sovereign_non_zero_rw(
+        self, crr_config: CalculationConfig
+    ) -> None:
+        """SA: GBP-funded exposure + EUR guarantee + DE sovereign -> NOT 0% RW.
+
+        The guarantee (EUR) matches DE's domestic currency (denomination limb
+        passes), but the exposure is funded in GBP, so the Art. 235(3) funding
+        limb fails and the 0% extension is denied. CQS 3 CGCB = 50% (P1.229).
+        """
         result = _sa_guarantee_result(
             "sovereign",
             3,
@@ -426,12 +454,17 @@ class TestGuarantorSubstitutionReadsGuaranteeCurrency:
             currency="GBP",
             guarantee_currency="EUR",
         )
-        assert result["guarantor_rw"][0] == pytest.approx(0.0)
+        assert result["guarantor_rw"][0] == pytest.approx(0.50)
 
-    def test_sa_eur_exposure_gbp_guarantee_uk_sovereign_zero_rw(
+    def test_sa_eur_funded_exposure_gbp_guarantee_uk_sovereign_non_zero_rw(
         self, crr_config: CalculationConfig
     ) -> None:
-        """SA: EUR exposure + GBP guarantee + UK sovereign -> 0% RW (mirror case)."""
+        """SA: EUR-funded exposure + GBP guarantee + UK sovereign -> NOT 0% RW.
+
+        Mirror case: guarantee (GBP) matches the UK's domestic currency but the
+        exposure is funded in EUR, so the Art. 235(3) funding limb fails. CQS 3
+        CGCB = 50% (P1.229).
+        """
         result = _sa_guarantee_result(
             "sovereign",
             3,
@@ -440,7 +473,7 @@ class TestGuarantorSubstitutionReadsGuaranteeCurrency:
             currency="EUR",
             guarantee_currency="GBP",
         )
-        assert result["guarantor_rw"][0] == pytest.approx(0.0)
+        assert result["guarantor_rw"][0] == pytest.approx(0.50)
 
     def test_sa_eur_exposure_gbp_guarantee_de_sovereign_non_zero_rw(
         self, crr_config: CalculationConfig
@@ -462,10 +495,16 @@ class TestGuarantorSubstitutionReadsGuaranteeCurrency:
         # CQS 3 CGCB = 50% RW (standard, not the 0% short-circuit)
         assert result["guarantor_rw"][0] == pytest.approx(0.50)
 
-    def test_irb_gbp_exposure_eur_guarantee_de_sovereign_zero_rw(
+    def test_irb_gbp_funded_exposure_eur_guarantee_de_sovereign_non_zero_rw(
         self, crr_config: CalculationConfig
     ) -> None:
-        """IRB: GBP exposure + EUR guarantee + DE sovereign -> 0% guarantor_rw."""
+        """IRB: GBP-funded exposure + EUR guarantee + DE sovereign -> NOT 0%.
+
+        The guarantee (EUR) matches DE's domestic currency but the exposure is
+        funded in GBP, so the Art. 235(3) funding limb fails and the 0%
+        short-circuit does not fire — the guarantor takes its CQS 3 = 50% RW
+        (P1.229). Mirrors the passing EUR-funded case below.
+        """
         result = _irb_guarantee_result(
             "sovereign",
             3,
@@ -474,7 +513,7 @@ class TestGuarantorSubstitutionReadsGuaranteeCurrency:
             currency="GBP",
             guarantee_currency="EUR",
         )
-        assert result["guarantor_rw"][0] == pytest.approx(0.0)
+        assert result["guarantor_rw"][0] == pytest.approx(0.50)
 
     def test_irb_eur_exposure_gbp_guarantee_de_sovereign_non_zero(
         self, crr_config: CalculationConfig

@@ -113,6 +113,11 @@ def _create_bundle(
         "issuer_cqs": [1] * coll_n,
         "is_main_index": [False] * coll_n,
         "is_eligible_financial_collateral": [True] * coll_n,
+        # P1.235 — Art. 199(2)/(5)/(6): these waterfall tests assume the non-
+        # financial (RE/receivables/other-physical) collateral is IRB-eligible;
+        # make that attestation explicit so the new FIRB FCM eligibility gate
+        # recognises it (default False would zero it as unattested).
+        "is_eligible_irb_collateral": [True] * coll_n,
         "value_after_maturity_adj": [None] * coll_n,
         "residual_maturity_years": [10.0] * coll_n,
         # P1.186: 10-day liquidation period pinned here so sequential-fill tests

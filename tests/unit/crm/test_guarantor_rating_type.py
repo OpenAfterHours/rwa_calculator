@@ -497,13 +497,19 @@ def _sovereign_counterparty_lookup(country_code: str) -> pl.LazyFrame:
 
 
 class TestDomesticSovereignGuarantorForcedToSA:
-    """Art. 114(4)/(7): EU/UK domestic-currency CGCB guarantor must be routed through
-    SA so the 0% RW short-circuit applies — even when the guarantor has an internal
-    PD that would otherwise route it to IRB parameter substitution.
+    """Art. 114(4)/(7) + Art. 235(3): an EU/UK domestic-currency CGCB guarantor is
+    routed through SA so the 0% RW short-circuit applies — even when the guarantor
+    has an internal PD that would otherwise route it to IRB parameter substitution
+    — but ONLY when the exposure is BOTH denominated AND funded in the domestic
+    currency.
 
-    The domestic-currency test is evaluated against the **guarantee** currency (the
-    currency of the substituted exposure to the sovereign), not the underlying
-    exposure currency. Art. 233(3) FX haircut handles the mismatch separately.
+    The denomination limb is evaluated against the **guarantee** currency (the
+    currency of the substituted exposure to the sovereign; Art. 233(3) FX haircut
+    handles any guarantee-vs-underlying mismatch separately). The Art. 235(3)
+    funding limb additionally requires the exposure to be funded in that currency
+    (read from its funding currency, falling back to its denomination — P1.229): a
+    guarantee in the domestic currency on an exposure funded elsewhere does NOT get
+    the short-circuit and follows normal (IRB, here) routing.
     """
 
     def test_uk_sovereign_gbp_guarantee_with_internal_pd_forced_to_sa(
@@ -526,12 +532,17 @@ class TestDomesticSovereignGuarantorForcedToSA:
         # Rating type still reports the underlying rating source
         assert result["guarantor_rating_type"][0] == "internal"
 
-    def test_de_sovereign_eur_guarantee_with_internal_pd_forced_to_sa(
+    def test_de_sovereign_eur_funded_eur_guarantee_with_internal_pd_forced_to_sa(
         self, crr_irb_config: CalculationConfig
     ) -> None:
-        """DE sovereign + EUR guarantee + internal PD -> 'sa' via Art. 114(7)."""
+        """DE sovereign + EUR guarantee + EUR-funded exposure + internal PD -> 'sa'.
+
+        Denominated (guarantee EUR) AND funded (exposure EUR) in DE's domestic
+        currency, so the Art. 114(7) 0% short-circuit fires despite the internal
+        PD (P1.229 funding limb satisfied).
+        """
         result = apply_guarantees(
-            _sovereign_exposure(currency="GBP"),
+            _sovereign_exposure(currency="EUR"),
             _guarantee(currency="EUR"),
             _sovereign_counterparty_lookup("DE"),
             crr_irb_config,
@@ -540,12 +551,15 @@ class TestDomesticSovereignGuarantorForcedToSA:
 
         assert result["guarantor_approach"][0] == "sa"
 
-    def test_pl_sovereign_pln_guarantee_with_internal_pd_forced_to_sa(
+    def test_pl_sovereign_pln_funded_pln_guarantee_with_internal_pd_forced_to_sa(
         self, crr_irb_config: CalculationConfig
     ) -> None:
-        """PL sovereign + PLN guarantee + internal PD -> 'sa' (non-euro EU)."""
+        """PL sovereign + PLN guarantee + PLN-funded exposure + internal PD -> 'sa'.
+
+        Non-euro EU branch: denominated and funded in PL's domestic currency (PLN).
+        """
         result = apply_guarantees(
-            _sovereign_exposure(currency="GBP"),
+            _sovereign_exposure(currency="PLN"),
             _guarantee(currency="PLN"),
             _sovereign_counterparty_lookup("PL"),
             crr_irb_config,
@@ -554,14 +568,18 @@ class TestDomesticSovereignGuarantorForcedToSA:
 
         assert result["guarantor_approach"][0] == "sa"
 
-    def test_gbp_loan_eur_guarantee_de_sovereign_forced_to_sa(
+    def test_gbp_funded_eur_guarantee_de_sovereign_routes_to_irb(
         self, crr_irb_config: CalculationConfig
     ) -> None:
-        """Cross-currency: GBP loan + EUR guarantee + DE sovereign -> 'sa'.
+        """Cross-funding-currency: GBP-funded loan + EUR guarantee + DE sovereign -> 'irb'.
 
-        Regression test for the reported bug: guarantee currency (EUR) matches
-        DE's domestic currency so Art. 114(7) fires, even though the underlying
-        loan is in GBP. Art. 233(3) 8% FX haircut handles the mismatch.
+        P1.229 regression: the guarantee currency (EUR) matches DE's domestic
+        currency (denomination limb passes), but the loan is FUNDED in GBP, so the
+        Art. 235(3) funding limb fails and the 0% short-circuit does NOT fire. The
+        internal-PD guarantor then routes to IRB parameter substitution.
+
+        (Pre-P1.229 this wrongly returned 'sa' — the engine read only the guarantee
+        currency, ignoring the funding limb.)
         """
         result = apply_guarantees(
             _sovereign_exposure(currency="GBP", original_currency="GBP"),
@@ -571,7 +589,7 @@ class TestDomesticSovereignGuarantorForcedToSA:
             rating_inheritance=_rating_inheritance(cqs=2, internal_pd=0.001),
         ).collect()
 
-        assert result["guarantor_approach"][0] == "sa"
+        assert result["guarantor_approach"][0] == "irb"
 
     def test_de_sovereign_usd_guarantee_stays_irb(self, crr_irb_config: CalculationConfig) -> None:
         """DE sovereign + USD guarantee (non-domestic) + internal PD -> 'irb'.

@@ -366,7 +366,7 @@ class TestCVAAggA1BundleFields:
 
         # Assert (b) — composition identity: R + cva_rwa is the composed total.
         # SummaryStatistics.total_rwa today sums only rwa_final (CVA excluded).
-        default_risk_rwa = result.results.collect()["rwa_final"].sum()
+        default_risk_rwa = float(result.results.collect()["rwa_final"].sum())
         composed_total = default_risk_rwa + cast("float", cva_rwa)
         assert composed_total == pytest.approx(
             default_risk_rwa + cast("float", cva_rwa), rel=1e-9

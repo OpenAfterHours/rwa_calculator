@@ -499,10 +499,15 @@ class HaircutCalculator:
             collateral: Collateral data with normalised lookup keys
             haircut_table: Framework-specific haircut table (CRR or Basel 3.1)
         """
-        # Ensure issuer_type column exists for bond type normalization.
+        # Ensure issuer_type + Art. 197(1)(h) securitisation-eligibility columns
+        # exist for bond-type normalization / the securitisation gate below.
         collateral = ensure_columns(
             collateral,
-            {"issuer_type": ColumnSpec(pl.String, required=False)},
+            {
+                "issuer_type": ColumnSpec(pl.String, required=False),
+                "is_resecuritisation": ColumnSpec(pl.Boolean, default=False, required=False),
+                "securitisation_position_risk_weight": ColumnSpec(pl.Float64, required=False),
+            },
         )
         schema = collateral.collect_schema()
 
@@ -511,14 +516,22 @@ class HaircutCalculator:
         # Art. 224 Table 3/4: is_main_index distinguishes main-index vs other-listed equity
         has_main_index_col = "is_main_index" in schema.names()
 
-        # Normalize collateral type and build sentinel join keys
-        bond_types = pl.col("_lookup_type").is_in(["govt_bond", "corp_bond"])
+        # Normalize collateral type and build sentinel join keys. Securitisation
+        # positions look up by (cqs, maturity_band) exactly like bonds (Art. 224
+        # Table 1 securitisation column).
+        bond_types = pl.col("_lookup_type").is_in(["govt_bond", "corp_bond", "securitisation"])
         is_equity = pl.col("_lookup_type") == "equity"
 
         # Equity main-index lookup: prefer is_main_index when available,
         # fall back to is_eligible_financial_collateral for backward compatibility.
+        # P1.237/P1.271 — CRR/PS1-26 Art. 197(1)(f)/198(1)(a): only main-index
+        # equities take the cheaper 15%/20% haircut and are eligible under all
+        # methods; other-listed equities take 25%/30% (and are repo-only). A null
+        # is_main_index is UNKNOWN index membership and must default to
+        # other-listed (False), never to the cheaper main-index treatment — the
+        # project's never-fill-anti-conservative rule.
         if has_main_index_col:
-            _equity_main_index_expr = pl.col("is_main_index").fill_null(True).cast(pl.Int8)
+            _equity_main_index_expr = pl.col("is_main_index").fill_null(False).cast(pl.Int8)
         else:
             _equity_main_index_expr = (
                 pl.col("is_eligible_financial_collateral").fill_null(False).cast(pl.Int8)
@@ -591,6 +604,24 @@ class HaircutCalculator:
         _ineligible_covered_bond_non_sft = is_raw_covered_bond & ~sft_flag
         _ineligible_bond = _ineligible_bond | _ineligible_covered_bond_non_sft
 
+        # CRR / PS1-26 Art. 197(1)(h): a securitisation position is eligible
+        # financial collateral only if it is NOT a resecuritisation AND its own
+        # risk weight is <= 100%. A resecuritisation, a missing / >100% RW, or a
+        # CQS outside 1-3 (no Art. 224 Table 1 securitisation haircut exists) is
+        # ineligible — routed through the same _bond_ineligible machinery that
+        # zeros value_after_haircut and overrides is_eligible_financial_collateral.
+        # Null RW is CONSERVATIVE (cannot confirm <=100% => ineligible).
+        _is_securitisation = pl.col("_lookup_type") == "securitisation"
+        _sec_rw = pl.col("securitisation_position_risk_weight")
+        _ineligible_securitisation = _is_securitisation & (
+            pl.col("is_resecuritisation").fill_null(False)
+            | _sec_rw.is_null()
+            | (_sec_rw > 1.0)
+            | cqs_val.is_null()
+            | (cqs_val >= 4)
+        )
+        _ineligible_bond = _ineligible_bond | _ineligible_securitisation
+
         # Art. 227(2)(a): eligible for zero haircut if cash/deposit or CQS ≤ 1 sovereign bond
         _zero_type_eligible = pl.col("_lookup_type").is_in(["cash"]) | (
             (pl.col("_lookup_type") == "govt_bond")
@@ -647,6 +678,15 @@ class HaircutCalculator:
                 | ((ct == "bond") & (pl.col("issuer_type").str.to_lowercase() == "sovereign"))
             )
             .then(pl.lit("govt_bond"))
+            # CRR / PS1-26 Art. 197(1)(h): securitisation positions are a distinct
+            # eligible-collateral class with the Art. 224 Table 1 securitisation
+            # haircut (2x corporate). Keyed on collateral_type/issuer_type; the
+            # RW<=100% + non-resecuritisation eligibility gate is applied below.
+            .when(
+                (ct == "securitisation")
+                | ((ct == "bond") & (pl.col("issuer_type").str.to_lowercase() == "securitisation"))
+            )
+            .then(pl.lit("securitisation"))
             .when(ct.is_in(["corp_bond", "corporate_bond", "covered_bond"]))
             .then(pl.lit("corp_bond"))
             .when(

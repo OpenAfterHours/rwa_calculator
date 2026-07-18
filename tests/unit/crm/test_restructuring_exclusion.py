@@ -267,8 +267,8 @@ class TestCDSRestructuringExclusionHaircut:
         df = _run_crm(crm_processor, crr_config, exposures, guarantees)
 
         # Guaranteed: 600k at guarantor RW; Unguaranteed: 400k at borrower RW
-        guaranteed = df["guaranteed_portion"].sum()
-        unguaranteed = df["unguaranteed_portion"].sum()
+        guaranteed = float(df["guaranteed_portion"].sum())
+        unguaranteed = float(df["unguaranteed_portion"].sum())
         assert guaranteed + unguaranteed == pytest.approx(ead, rel=1e-6)
 
     def test_cds_without_restructuring_under_basel31(

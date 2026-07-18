@@ -174,6 +174,8 @@ SA_INPUT_CONTRACT: dict[str, ColumnSpec] = {
     "sl_type": ColumnSpec(pl.String, required=False),
     "life_ins_collateral_value": ColumnSpec(pl.Float64, required=False),
     "life_ins_secured_rw": ColumnSpec(pl.Float64, required=False),
+    "third_party_deposit_value": ColumnSpec(pl.Float64, required=False),
+    "third_party_deposit_secured_rw": ColumnSpec(pl.Float64, required=False),
     # Null default: the crm_exit edge always carries the real ead_gross in
     # production; B31 defaulted-RW tests that exercise the provision
     # threshold must supply it explicitly.

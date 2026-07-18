@@ -525,8 +525,8 @@ class TestP130eArt234PartialProtectionTranching:
         NOTE: this also PASSES today (regression pin).
         """
         # Arrange / Act
-        total_rwa = tranche_rows["rwa_final"].sum()
-        total_ead = tranche_rows["ead_final"].sum()
+        total_rwa = float(tranche_rows["rwa_final"].sum())
+        total_ead = float(tranche_rows["ead_final"].sum())
         blended_rw = total_rwa / total_ead
 
         # Assert

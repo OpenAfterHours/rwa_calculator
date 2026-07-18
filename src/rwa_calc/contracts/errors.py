@@ -136,6 +136,36 @@ ERROR_INELIGIBLE_UNFUNDED_PROTECTION = "CRM012"
 # internal rating) is not an eligible protection provider — the covered exposure
 # reverts to the borrower's own basis.
 ERROR_INELIGIBLE_GUARANTOR = "CRM013"
+# Ineligible IRB/FCM non-financial collateral (CRR/PS1-26 Art. 199(2)/(5)/(6)):
+# real-estate / receivables / other-physical collateral is recognised on the
+# FIRB Foundation Collateral Method (LGD* substitution) path only when the
+# institution attests eligibility via is_eligible_irb_collateral. An unattested
+# row (flag False/unset), or a receivable whose ORIGINAL maturity is populated
+# > 1 year (Art. 199(5)), is zeroed and this warning is raised (one per row).
+ERROR_INELIGIBLE_IRB_COLLATERAL = "CRM014"
+# Own-issue / connected-issuer collateral (CRR/PS1-26 Art. 194(4)): funded credit
+# protection is ineligible where its value is materially positively correlated
+# with the obligor's credit quality — the canonical case being a security ISSUED
+# by the obligor or a member of the obligor's group (BCBS CRE22). When a
+# collateral row's issuer_counterparty_reference resolves to the obligor, or to a
+# counterparty sharing the obligor's ultimate parent, the row is zeroed (no CRM
+# benefit) and this warning is raised (one per row). Null issuer is permissive.
+ERROR_OWN_ISSUE_COLLATERAL = "CRM015"
+# Cross-counterparty on-balance-sheet netting (CRR/PS1-26 Art. 195): on-B/S
+# netting is limited to mutual claims / reciprocal cash balances between the
+# institution and a SINGLE counterparty. A netting_agreement_reference that spans
+# more than one counterparty cannot net a deposit from counterparty A against a
+# loan to counterparty B; such cross-counterparty offsets are disallowed and this
+# warning names the agreement (one per multi-counterparty agreement).
+ERROR_CROSS_COUNTERPARTY_NETTING = "CRM016"
+# Third-party deposit under FIRB (CRR/PS1-26 Art. 200(a)/232(2), P1.239/P1.240):
+# cash on deposit with a third-party institution is "other funded credit
+# protection" treated as a guarantee at the holder institution's risk weight.
+# The SA risk-weight substitution is implemented; the FIRB analogue is a deferred
+# follow-up, so under FIRB such a deposit is conservatively given NO CRM benefit
+# (it is excluded from the LGD* collateral input rather than valued at 0% cash)
+# and this warning records the pending substitution (one per gated row).
+ERROR_THIRD_PARTY_DEPOSIT_FIRB_DEFERRED = "CRM017"
 
 # IRB error codes
 ERROR_PD_OUT_OF_RANGE = "IRB001"

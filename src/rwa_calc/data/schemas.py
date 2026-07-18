@@ -172,6 +172,10 @@ FACILITY_SCHEMA: dict[str, ColumnSpec] = {
     # original_maturity_years on GUARANTEE_SCHEMA / COLLATERAL_SCHEMA.
     "original_maturity_years": ColumnSpec(pl.Float64, required=False),
     "currency": ColumnSpec(pl.String, required=False),
+    # CRR Art. 114(4)/(7) via Art. 235(3): funding currency of any undrawn
+    # exposure this facility generates. See LOAN_SCHEMA.funding_currency for the
+    # full null-PERMISSIVE semantics (falls back to the denomination currency).
+    "funding_currency": ColumnSpec(pl.String, required=False),
     "limit": ColumnSpec(pl.Float64, required=False),
     "committed": ColumnSpec(pl.Boolean, default=True, required=False),
     "lgd": ColumnSpec(pl.Float64, required=False),
@@ -252,6 +256,16 @@ LOAN_SCHEMA: dict[str, ColumnSpec] = {
     "value_date": ColumnSpec(pl.Date, required=False),
     "maturity_date": ColumnSpec(pl.Date, required=False),
     "currency": ColumnSpec(pl.String, required=False),
+    # CRR Art. 114(4)/(7) via Art. 235(3): the currency in which the exposure is
+    # FUNDED. The 0% domestic-CGCB extension to a centrally-guaranteed exposure
+    # requires the exposure to be BOTH denominated AND funded in the guarantor's
+    # domestic currency. Distinct from ``currency`` (the denomination): a loan can
+    # be denominated in one currency yet funded in another. Null-PERMISSIVE — when
+    # absent the funding-currency limb falls back to the exposure's denomination
+    # currency (engine/eu_sovereign.funding_currency_expr), preserving datasets
+    # that do not report a separate funding currency (mirrors the Art. 237(2)(a)
+    # original-maturity null fallback).
+    "funding_currency": ColumnSpec(pl.String, required=False),
     "drawn_amount": ColumnSpec(pl.Float64, default=0.0, required=False),
     "interest": ColumnSpec(pl.Float64, default=0.0, required=False),
     "lgd": ColumnSpec(pl.Float64, required=False),
@@ -341,6 +355,10 @@ CONTINGENTS_SCHEMA: dict[str, ColumnSpec] = {
     # Mirrored from FACILITY_SCHEMA; see the FACILITY_SCHEMA notes for full detail.
     "original_maturity_years": ColumnSpec(pl.Float64, required=False),
     "currency": ColumnSpec(pl.String, required=False),
+    # CRR Art. 114(4)/(7) via Art. 235(3): funding currency of this contingent
+    # exposure. See LOAN_SCHEMA.funding_currency for the full null-PERMISSIVE
+    # semantics (falls back to the denomination currency).
+    "funding_currency": ColumnSpec(pl.String, required=False),
     "nominal_amount": ColumnSpec(pl.Float64, default=0.0, required=False),
     "lgd": ColumnSpec(pl.Float64, required=False),
     "lgd_unsecured": ColumnSpec(pl.Float64, required=False),
@@ -504,12 +522,54 @@ COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     "original_maturity_years": ColumnSpec(pl.Float64, required=False),
     "is_eligible_financial_collateral": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_eligible_irb_collateral": ColumnSpec(pl.Boolean, default=False, required=False),
+    # CRR / PS1-26 Art. 197(1)(h): a securitisation position is eligible financial
+    # collateral only if it is NOT a resecuritisation AND its own risk weight is
+    # <= 100%. These two fields drive that gate for issuer_type/collateral_type
+    # "securitisation" (dedicated Art. 224 Table 1 supervisory-haircut column).
+    #   is_resecuritisation: True => hard-ineligible (Art. 197(1)(h)). The default
+    #     False means "NOT KNOWN to be a resecuritisation", not "confirmed plain
+    #     securitisation" — RESIDUAL RISK: a genuine resecuritisation posted
+    #     without this flag set is wrongly recognised. Unlike the RW/CQS gate
+    #     (conservative on null), resecuritisation cannot be inferred from other
+    #     fields, so the correct signal must be supplied by the data provider.
+    #   securitisation_position_risk_weight: the position's own RW as a fraction
+    #     (e.g. 0.20 = 20%). Null is CONSERVATIVE — the RW<=100% gate cannot be
+    #     confirmed, so the position is treated as ineligible (absence of data
+    #     must not fabricate eligibility). Only consulted for securitisation rows.
+    "is_resecuritisation": ColumnSpec(pl.Boolean, default=False, required=False),
+    "securitisation_position_risk_weight": ColumnSpec(pl.Float64, required=False),
     # PRA PS1/26 Art. 191A(2)(d)-(f): two-layer protection look-through.
     # Optional reference to the counterparty that posted the collateral (e.g.
     # the guarantor for guarantee-anchored collateral). When the engine
     # honours an Art. 191A(2)(e)(i) "funded-only" election, the collateral is
     # re-anchored from the guarantee onto the original obligor exposure.
     "posted_by_counterparty_reference": ColumnSpec(pl.String, required=False),
+    # CRR/PS1-26 Art. 200(a)/232(2) with Art. 212(1) (P1.239/P1.240): cash on
+    # deposit with (or cash-assimilated instruments held by) a THIRD-PARTY
+    # institution, pledged to the lender, is "other funded credit protection" —
+    # treated as a GUARANTEE by the deposit-holding institution (its own SA risk
+    # weight substitutes on the covered part), NOT as own-bank cash at a 0%
+    # haircut. This optional reference identifies that holder institution; the
+    # deposit row's issuer_type/issuer_cqs describe the holder (a cash deposit is
+    # a claim on the institution holding it), so the holder's institution RW is
+    # derived from issuer_cqs. NULL is PERMISSIVE = own-bank deposit → the
+    # existing 0% cash treatment is preserved (the overwhelmingly common case, so
+    # existing datasets are unaffected). Populated => third-party: the row is
+    # excluded from every 0% cash-collateral value channel (SA E*, FIRB LGD*) and
+    # instead drives the SA risk-weight substitution. FIRB substitution is a
+    # deferred follow-up — under FIRB a third-party deposit currently gives NO
+    # benefit (conservative) and raises CRM017.
+    "held_by_counterparty_reference": ColumnSpec(pl.String, required=False),
+    # CRR/PS1-26 Art. 194(4): funded protection is ineligible where its value is
+    # materially positively correlated with the obligor's credit quality — the
+    # canonical case (BCBS CRE22) being a security ISSUED by the obligor or a
+    # group member. This optional reference identifies the counterparty that
+    # ISSUED the collateral security (distinct from posted_by_counterparty_reference,
+    # which is who PROVIDED it). When it resolves to the obligor or a counterparty
+    # sharing the obligor's ultimate parent, the CRM engine zeroes the row and
+    # raises CRM015. Null is PERMISSIVE (issuer unknown / not an issued security,
+    # e.g. cash on deposit) — the gate never fires, so existing data is unaffected.
+    "issuer_counterparty_reference": ColumnSpec(pl.String, required=False),
     # CRR Art. 181 / CRE36 / Basel 3.1 Art. 169A: AIRB own LGD already reflects
     # the collateral effect, so collateral incorporated into the firm's internal
     # LGD model must not contribute CRM benefit to non-AIRB exposures of the
@@ -519,10 +579,10 @@ COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     # CRR Art. 224 Table 4 / PRA PS1/26: distinguishes main-index equity (15%
     # haircut CRR / 20% Basel 3.1) from other listed equity (25% / 30%). No
     # Boolean default on purpose: null means "index membership unreported" and
-    # the haircut engine (engine/crm/haircuts.py) resolves null -> main-index
-    # for backward compatibility (pinned by tests/unit/crm/test_equity_main_index.py).
-    # A schema default of False would silently re-rate unreported equity to the
-    # higher other-listed haircut at the loader seal.
+    # the haircut engine (engine/crm/haircuts.py) resolves null -> other-listed
+    # equity (the higher, CONSERVATIVE haircut) per P1.237/P1.271 — CRR/PS1-26
+    # Art. 197(1)(f)/198(1)(a): only main-index equities earn the cheaper
+    # all-methods treatment, so unknown membership must not fabricate it.
     "is_main_index": ColumnSpec(pl.Boolean, required=False),
     "valuation_date": ColumnSpec(pl.Date, required=False),
     "valuation_type": ColumnSpec(pl.String, required=False),
@@ -1653,6 +1713,17 @@ OTHER_PHYSICAL_COLLATERAL_TYPES: list[str] = [
 COVERED_BOND_COLLATERAL_TYPES: list[str] = ["covered_bond", "covered_bonds"]
 
 LIFE_INSURANCE_COLLATERAL_TYPES: list[str] = ["life_insurance"]
+
+# CRR/PS1-26 Art. 200(a)/232(2): cash-on-deposit collateral types eligible for the
+# third-party-deposit (other-funded-protection) treatment when held at another
+# institution (P1.239/P1.240).
+THIRD_PARTY_DEPOSIT_COLLATERAL_TYPES: list[str] = ["cash", "deposit"]
+
+# CRR/PS1-26 Art. 232(2) applies only where the deposit holder is an INSTITUTION.
+# The deposit row's issuer_type describes the holder; only these values reach the
+# institution risk-weight substitution — any other populated holder is out of
+# scope (no benefit + CRM017).
+INSTITUTION_DEPOSIT_HOLDER_TYPES: list[str] = ["institution", "bank", "credit_institution"]
 
 CREDIT_LINKED_NOTE_COLLATERAL_TYPES: list[str] = ["credit_linked_note"]
 

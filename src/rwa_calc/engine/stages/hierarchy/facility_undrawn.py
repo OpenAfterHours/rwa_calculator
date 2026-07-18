@@ -204,6 +204,7 @@ def _empty_facility_undrawn_frame() -> pl.LazyFrame:
             "value_date": pl.Date,
             "maturity_date": pl.Date,
             "currency": pl.String,
+            "funding_currency": pl.String,
             "drawn_amount": pl.Float64,
             "interest": pl.Float64,
             "undrawn_amount": pl.Float64,
@@ -483,6 +484,9 @@ def _undrawn_select_expressions() -> list[pl.Expr]:
         pl.col("value_date"),
         pl.col("maturity_date"),
         pl.col("currency"),
+        # CRR Art. 114(4)/(7) via Art. 235(3): funding-currency pass-through for
+        # undrawn facility exposures (see unify._coerce_loans_to_unified).
+        pl.col("funding_currency"),
         pl.lit(0.0).alias("drawn_amount"),
         pl.lit(0.0).alias("interest"),
         pl.col("undrawn_amount"),

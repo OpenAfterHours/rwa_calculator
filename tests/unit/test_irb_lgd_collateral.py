@@ -101,6 +101,11 @@ def create_classified_bundle(
             "issuer_cqs": [1] * coll_n,  # Default CQS
             "is_main_index": [False] * coll_n,
             "is_eligible_financial_collateral": [True] * coll_n,  # Assume eligible by default
+            # P1.235 — Art. 199(2)/(5)/(6): these FIRB LGD tests exercise the Art. 230
+            # collateral LGD math, not the eligibility gate, so attest the non-financial
+            # (RE/receivables/other-physical) collateral as IRB-eligible; the default
+            # False would zero effectively_secured as unattested.
+            "is_eligible_irb_collateral": [True] * coll_n,
             "value_after_maturity_adj": [None] * coll_n,
             # P1.186: pin 10-day liquidation period so haircut lookup tests (which test
             # CRR Art. 224 ratios, not Art. 224(2)(a) period scaling) remain stable.

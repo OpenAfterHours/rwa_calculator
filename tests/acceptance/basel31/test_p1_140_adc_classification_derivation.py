@@ -159,7 +159,7 @@ def _get_spv_rows(df: pl.DataFrame) -> pl.DataFrame:
 
 def _get_spv_total_rwa(df: pl.DataFrame) -> float:
     """Return the summed rwa_final for all rows derived from LN_ADC_SPV_001."""
-    return _get_spv_rows(df)["rwa_final"].sum()
+    return float(_get_spv_rows(df)["rwa_final"].sum())
 
 
 def _get_np_row(df: pl.DataFrame) -> dict:

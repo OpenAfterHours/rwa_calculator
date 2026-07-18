@@ -34,7 +34,7 @@ _B31_DATE = date(2027, 6, 1)
 class TestReportingTemplateSetShape:
     def test_citation_is_required(self) -> None:
         with pytest.raises(TypeError):
-            ReportingTemplateSet(  # type: ignore[call-arg]
+            ReportingTemplateSet(  # type: ignore[call-arg]  # ty: ignore[missing-argument]
                 name="x", corep=("c07_00",), pillar3=("ov1",), variant="crr"
             )
 
@@ -165,4 +165,4 @@ class TestReportingContext:
 
         ctx = ReportingContext(template_set=resolve("crr", _DATE).reporting())
         with pytest.raises(AttributeError):
-            ctx.reporting_basis = "consolidated"  # type: ignore[misc]
+            ctx.reporting_basis = "consolidated"  # type: ignore[misc]  # ty: ignore[invalid-assignment]

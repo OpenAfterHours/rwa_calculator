@@ -44,6 +44,7 @@ from rwa_calc.domain.enums import CRMCollateralMethod
 from rwa_calc.engine.eu_sovereign import (
     build_domestic_cgcb_guarantor_expr,
     denomination_currency_expr,
+    funding_currency_expr,
 )
 from rwa_calc.engine.sa.guarantor_rw import build_guarantor_rw_expr
 from rwa_calc.engine.sa.risk_weights import _SA_B31_RW
@@ -147,6 +148,42 @@ def apply_life_insurance_rw_mapping(lf: pl.LazyFrame) -> pl.LazyFrame:
 
     return lf.with_columns(
         pl.when(has_li).then(blended_rw).otherwise(pl.col("risk_weight")).alias("risk_weight"),
+    )
+
+
+@cites("CRR Art. 232")
+def apply_third_party_deposit_rw_mapping(lf: pl.LazyFrame) -> pl.LazyFrame:
+    """Apply Art. 232(2) third-party-deposit risk-weight substitution for SA.
+
+    A cash deposit held at a third-party institution is other funded credit
+    protection treated as a guarantee by that holder institution: the covered
+    part of the exposure takes the holder's own SA risk weight (P1.239/P1.240).
+
+        blended = secured_pct x holder_rw + unsecured_pct x exposure_rw
+
+    Benefit-only cap (Art. 232 protection can never increase RWA): the blended
+    weight is applied only where it is at or below the exposure's own weight, so
+    a holder RW >= obligor RW leaves the exposure unchanged. No-op when no
+    third-party deposit is present (columns absent or value 0).
+    """
+    cols = lf.collect_schema().names()
+    if "third_party_deposit_value" not in cols or "third_party_deposit_secured_rw" not in cols:
+        return lf
+
+    ead = pl.col("ead_final").fill_null(0.0)
+    value = pl.col("third_party_deposit_value").fill_null(0.0)
+    holder_rw = pl.col("third_party_deposit_secured_rw").fill_null(0.0)
+
+    secured_pct = pl.when(ead > 0).then((value / ead).clip(0.0, 1.0)).otherwise(0.0)
+    unsecured_pct = pl.lit(1.0) - secured_pct
+    blended_rw = secured_pct * holder_rw + unsecured_pct * pl.col("risk_weight")
+
+    # Substitution only helps: cap at the exposure's own risk weight.
+    beneficial_rw = pl.min_horizontal(blended_rw, pl.col("risk_weight"))
+    has_tpd = value > 0
+
+    return lf.with_columns(
+        pl.when(has_tpd).then(beneficial_rw).otherwise(pl.col("risk_weight")).alias("risk_weight"),
     )
 
 
@@ -530,13 +567,20 @@ def _ensure_guarantee_substitution_columns(exposures: pl.LazyFrame) -> pl.LazyFr
 
 
 def _build_domestic_guarantor_expr(schema_names: list[str]) -> pl.Expr:
-    """Build the Art. 114(4)/(7) domestic CGCB-guarantor currency check.
+    """Build the Art. 114(4)/(7) + Art. 235(3) domestic CGCB-guarantor check.
 
-    Evaluates the domestic-currency test against the guarantee currency (the
-    currency of the substituted exposure to the sovereign); the Art. 233(3)
-    8% FX haircut separately handles any mismatch between the guarantee and
-    the underlying exposure. Falls back to the exposure's pre-FX denomination
-    when ``guarantee_currency`` is missing (legacy / no-guarantee rows).
+    Evaluates the domestic-currency (denomination) test against the guarantee
+    currency (the currency of the substituted exposure to the sovereign); the
+    Art. 233(3) 8% FX haircut separately handles any mismatch between the
+    guarantee and the underlying exposure. Falls back to the exposure's pre-FX
+    denomination when ``guarantee_currency`` is missing (legacy / no-guarantee
+    rows).
+
+    Art. 235(3): the 0% extension also requires the exposure to be *funded* in
+    the domestic currency, so the funding limb (``funding_currency``, null-
+    PERMISSIVE fallback to the denomination — see :func:`funding_currency_expr`)
+    is ANDed in; a USD-funded, EUR-guaranteed loan therefore falls to the
+    guarantor's own CQS risk weight rather than 0%.
     """
     has_country = "guarantor_country_code" in schema_names
     has_exposure_ccy = "currency" in schema_names or "original_currency" in schema_names
@@ -553,7 +597,9 @@ def _build_domestic_guarantor_expr(schema_names: list[str]) -> pl.Expr:
 
     if not has_country or ccy_expr is None:
         return pl.lit(False)
-    return build_domestic_cgcb_guarantor_expr("guarantor_country_code", ccy_expr)
+    return build_domestic_cgcb_guarantor_expr(
+        "guarantor_country_code", ccy_expr, funding_currency_expr(schema_names)
+    )
 
 
 def _build_guarantor_rw_expr(

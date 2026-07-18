@@ -442,7 +442,7 @@ SFT_TABLE_EDGES: dict[str, EdgeContract] = _sft_table_edges()
 
 
 def _hierarchy_resolved_columns() -> dict[str, EdgeColumn]:
-    """The 78 columns HierarchyResolver always emits on the unified frame.
+    """The columns HierarchyResolver always emits on the unified frame.
 
     Seeded from the observed schema (scripts/dump_hierarchy_exit_schema.py,
     2026-06-12): shape-stable across minimal/rich inputs and CRR/B31 after
@@ -459,6 +459,14 @@ def _hierarchy_resolved_columns() -> dict[str, EdgeColumn]:
         "value_date": EdgeColumn(dtype=pl.Date),
         "maturity_date": EdgeColumn(dtype=pl.Date),
         "currency": EdgeColumn(dtype=pl.String),
+        "funding_currency": EdgeColumn(
+            dtype=pl.String,
+            citation="CRR Art. 114(4)/(7) via Art. 235(3)",
+            null_meaning=(
+                "null = funding currency not separately reported; the Art. 235(3) "
+                "domestic-CGCB funding limb falls back to the denomination currency"
+            ),
+        ),
         "drawn_amount": EdgeColumn(dtype=pl.Float64),
         "interest": EdgeColumn(dtype=pl.Float64),
         "undrawn_amount": EdgeColumn(dtype=pl.Float64),
@@ -979,6 +987,8 @@ def _crm_added_columns() -> dict[str, EdgeColumn]:
         "lgd_secured": EdgeColumn(dtype=pl.Float64),
         "life_ins_collateral_value": EdgeColumn(dtype=pl.Float64),
         "life_ins_secured_rw": EdgeColumn(dtype=pl.Float64),
+        "third_party_deposit_value": EdgeColumn(dtype=pl.Float64),
+        "third_party_deposit_secured_rw": EdgeColumn(dtype=pl.Float64),
         "crm_calculation": EdgeColumn(dtype=pl.String),
         # Guarantees / substitution (CRR Art. 233-236)
         "is_guaranteed": EdgeColumn(dtype=pl.Boolean),
@@ -1236,6 +1246,8 @@ def _calc_output_common_columns() -> dict[str, EdgeColumn]:
         "lgd_unsecured": EdgeColumn(dtype=pl.Float64),
         "life_ins_collateral_value": EdgeColumn(dtype=pl.Float64),
         "life_ins_secured_rw": EdgeColumn(dtype=pl.Float64),
+        "third_party_deposit_value": EdgeColumn(dtype=pl.Float64),
+        "third_party_deposit_secured_rw": EdgeColumn(dtype=pl.Float64),
         "ltv": EdgeColumn(dtype=pl.Float64),
         "mapped_parent_facility": EdgeColumn(dtype=pl.String),
         "maturity_date": EdgeColumn(dtype=pl.Date),

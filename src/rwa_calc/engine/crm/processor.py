@@ -53,6 +53,7 @@ from rwa_calc.contracts.errors import (
     ERROR_AIRB_MODEL_COLLATERAL_MISDIRECTED,
     ERROR_INELIGIBLE_COLLATERAL,
     ERROR_INVALID_GUARANTEE,
+    ERROR_OWN_ISSUE_COLLATERAL,
     crm_warning,
 )
 from rwa_calc.domain.enums import CRMCollateralMethod
@@ -65,6 +66,10 @@ from rwa_calc.engine.crm.life_insurance import compute_life_insurance_columns
 from rwa_calc.engine.crm.link_allocation import RANK_METRIC_COLUMN, CollateralLinkAllocator
 from rwa_calc.engine.crm.look_through import apply_funded_only_look_through
 from rwa_calc.engine.crm.simple_method import compute_fcsm_columns, undo_sa_ead_reduction
+from rwa_calc.engine.crm.third_party_deposit import (
+    compute_third_party_deposit_columns,
+    split_third_party_deposits,
+)
 from rwa_calc.engine.kernels.allocation import (
     ancestor_membership_expr,
     direct_level_lookup,
@@ -75,8 +80,10 @@ from rwa_calc.engine.kernels.allocation import (
 from rwa_calc.engine.materialise import materialise_edge
 from rwa_calc.engine.utils import has_required_columns
 from rwa_calc.observability.audit_cache import sink_audit
+from rwa_calc.rulebook import RulepackV0
 
 if TYPE_CHECKING:
+    from rwa_calc.contracts.bundles import CounterpartyLookup
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.contracts.errors import CalculationError
     from rwa_calc.rulebook.resolve import ResolvedRulepack
@@ -456,6 +463,72 @@ def _join_netting_amounts(
     return exposures
 
 
+def _build_beneficiary_obligor_map(exposures: pl.LazyFrame, exp_names: list[str]) -> pl.LazyFrame:
+    """Map any collateral beneficiary reference to its obligor counterparty.
+
+    A collateral row's ``beneficiary_reference`` may name an exposure, a facility,
+    or a counterparty. This builds the union of all three key spaces so a single
+    left join resolves the obligor (``_obligor_cp``) regardless of pledge level.
+    """
+    parts: list[pl.LazyFrame] = [
+        exposures.select(
+            pl.col("counterparty_reference").alias("_ben_key"),
+            pl.col("counterparty_reference").alias("_obligor_cp"),
+        )
+    ]
+    if "exposure_reference" in exp_names:
+        parts.append(
+            exposures.select(
+                pl.col("exposure_reference").alias("_ben_key"),
+                pl.col("counterparty_reference").alias("_obligor_cp"),
+            )
+        )
+    if "parent_facility_reference" in exp_names:
+        parts.append(
+            exposures.filter(pl.col("parent_facility_reference").is_not_null()).select(
+                pl.col("parent_facility_reference").alias("_ben_key"),
+                pl.col("counterparty_reference").alias("_obligor_cp"),
+            )
+        )
+    return pl.concat(parts, how="vertical").unique(subset="_ben_key")
+
+
+def _record_own_issue_collateral(
+    collateral: pl.LazyFrame,
+    is_own_issue: pl.Expr,
+    names: list[str],
+    errors: list[CalculationError],
+) -> None:
+    """Append one CRM015 warning per Art. 194(4) own-issue collateral row dropped.
+
+    Targeted collect of the gated rows only (the accepted DQ-emission idiom,
+    P1.264) — the collateral table is a small dimension frame.
+    """
+    select_cols: list[pl.Expr] = [is_own_issue.alias("_own_issue")]
+    select_cols.extend(
+        pl.col(c)
+        for c in ("collateral_reference", "beneficiary_reference", "issuer_counterparty_reference")
+        if c in names
+    )
+    gated = collateral.filter(is_own_issue).select(select_cols).collect()
+    for row in gated.iter_rows(named=True):
+        coll_ref = row.get("collateral_reference")
+        ben_ref = row.get("beneficiary_reference")
+        issuer_ref = row.get("issuer_counterparty_reference")
+        errors.append(
+            crm_warning(
+                ERROR_OWN_ISSUE_COLLATERAL,
+                f"Collateral '{coll_ref}' securing exposure '{ben_ref}' is issued by "
+                f"'{issuer_ref}', which is the obligor or a member of the obligor's "
+                f"group; its value is materially correlated with the obligor's credit "
+                f"quality, so it is ineligible funded protection (Art. 194(4)) and is "
+                f"excluded from credit risk mitigation.",
+                exposure_reference=ben_ref,
+                regulatory_reference="CRR Art. 194(4)",
+            )
+        )
+
+
 class CRMProcessor:
     """
     Apply credit risk mitigation to exposures.
@@ -538,6 +611,22 @@ class CRMProcessor:
         # Generate synthetic collateral from netting (CRR Art. 195)
         exposures, collateral = self._merge_netting_collateral(exposures, collateral_lf, errors)
 
+        # Step 3.6: CRR/PS1-26 Art. 194(4) own-issue / connected-issuer gate.
+        # Zero collateral whose issuer_counterparty_reference resolves to the
+        # obligor or a member of the obligor's group (materially correlated with
+        # obligor credit quality -> ineligible funded protection). Runs before the
+        # links split / haircut chain so the zeroed value cascades everywhere.
+        collateral = self._apply_own_issue_collateral_gate(
+            collateral, exposures, data.counterparty_lookup, errors
+        )
+
+        # Step 3.65: CRR/PS1-26 Art. 200(a)/232(2) — partition third-party deposits
+        # (cash held at another institution) out of the ordinary collateral frame
+        # so they feed NO cash-collateral value channel (SA E*, FIRB LGD*); they
+        # are re-introduced as an SA risk-weight substitution at the holder's
+        # institution RW (Step 4c). Own-bank deposits (null holder) are untouched.
+        collateral, third_party_deposits = split_third_party_deposits(collateral)
+
         # Step 3.7: Split each finite collateral value across its linked
         # beneficiaries (CRR Art. 230-231) when a collateral_links table is
         # supplied. No-op otherwise; the single-beneficiary path is unchanged.
@@ -571,6 +660,12 @@ class CRMProcessor:
 
         # Pre-compute life insurance method columns (Art. 232) for SA RW mapping
         exposures = self._apply_life_insurance_step(exposures, collateral, config)
+
+        # Step 4c: Art. 200(a)/232(2) third-party-deposit SA RW substitution columns
+        # (holder institution RW on the covered part) + F-IRB deferral warning.
+        exposures = self._apply_third_party_deposit_step(
+            exposures, third_party_deposits, config, errors, pack=pack
+        )
 
         # The second sanctioned INTRA-STAGE checkpoint (with crm_post_ead).
         # Empirically irreducible on Polars 1.37: the guarantee module's
@@ -685,7 +780,7 @@ class CRMProcessor:
         that ``has_required_columns``' bare except misreported as "missing
         required columns" (silent-skip layer, migration Phase 3).
         """
-        netting_collateral = collateral_mod.generate_netting_collateral(exposures)
+        netting_collateral = collateral_mod.generate_netting_collateral(exposures, errors)
         collateral: pl.LazyFrame | None = collateral_lf
         if netting_collateral is None:
             exposures = exposures.with_columns(pl.lit(0.0).alias("on_bs_netting_amount"))
@@ -722,6 +817,98 @@ class CRMProcessor:
         else:
             collateral = netting_collateral
         return exposures, collateral
+
+    @cites("CRR Art. 194")
+    def _apply_own_issue_collateral_gate(
+        self,
+        collateral: pl.LazyFrame | None,
+        exposures: pl.LazyFrame,
+        counterparty_lookup: CounterpartyLookup | None,
+        errors: list[CalculationError],
+    ) -> pl.LazyFrame | None:
+        """CRR/PS1-26 Art. 194(4): drop collateral issued by the obligor or its group.
+
+        Funded protection is ineligible where its value is materially positively
+        correlated with the obligor's credit quality — the canonical case (BCBS
+        CRE22) being a security issued by the obligor or a group member. Each
+        collateral row's ``issuer_counterparty_reference`` is resolved against the
+        obligor (the counterparty of the exposure it secures) and, via
+        ``ultimate_parent_mappings``, the obligor's group. On a match the row is
+        removed before the haircut / allocation chain (so it yields no CRM benefit
+        by any path — filtering also side-steps the pledge-percentage re-resolution
+        that would revive a merely value-zeroed row) and one CRM015 warning raised.
+
+        Null ``issuer_counterparty_reference`` is PERMISSIVE — the gate never fires,
+        so existing data (which does not populate the field) is number-neutral.
+        """
+        if collateral is None:
+            return None
+        coll_names = collateral.collect_schema().names()
+        exp_names = exposures.collect_schema().names()
+        if "issuer_counterparty_reference" not in coll_names or "beneficiary_reference" not in (
+            coll_names
+        ):
+            return collateral
+        if "counterparty_reference" not in exp_names:
+            return collateral
+
+        # Resolve each collateral's obligor counterparty (any pledge level).
+        obligor_map = _build_beneficiary_obligor_map(exposures, exp_names)
+        collateral = collateral.join(
+            obligor_map, left_on="beneficiary_reference", right_on="_ben_key", how="left"
+        )
+
+        # Resolve obligor and issuer ultimate parents for the group limb.
+        if counterparty_lookup is not None:
+            up = counterparty_lookup.ultimate_parent_mappings.select(
+                pl.col("counterparty_reference"),
+                pl.col("ultimate_parent_reference"),
+            )
+            collateral = collateral.join(
+                up.rename(
+                    {
+                        "counterparty_reference": "_obligor_cp",
+                        "ultimate_parent_reference": "_obligor_ult",
+                    }
+                ),
+                on="_obligor_cp",
+                how="left",
+            ).join(
+                up.rename(
+                    {
+                        "counterparty_reference": "issuer_counterparty_reference",
+                        "ultimate_parent_reference": "_issuer_ult",
+                    }
+                ),
+                on="issuer_counterparty_reference",
+                how="left",
+            )
+        else:
+            collateral = collateral.with_columns(
+                pl.lit(None).cast(pl.String).alias("_obligor_ult"),
+                pl.lit(None).cast(pl.String).alias("_issuer_ult"),
+            )
+
+        issuer = pl.col("issuer_counterparty_reference")
+        obligor = pl.col("_obligor_cp")
+        obligor_ult = pl.col("_obligor_ult")
+        issuer_ult = pl.col("_issuer_ult")
+        # fill_null(False): an unresolved obligor (null) must NOT drop the row.
+        is_own_issue = (
+            issuer.is_not_null()
+            & (
+                (issuer == obligor)
+                | (issuer == obligor_ult)
+                | (obligor == issuer_ult)
+                | (issuer_ult.is_not_null() & (issuer_ult == obligor_ult))
+            )
+        ).fill_null(value=False)
+
+        _record_own_issue_collateral(collateral, is_own_issue, coll_names, errors)
+
+        return collateral.filter(~is_own_issue).drop(
+            "_obligor_cp", "_obligor_ult", "_issuer_ult", strict=False
+        )
 
     def _apply_collateral_links(
         self,
@@ -789,7 +976,9 @@ class CRMProcessor:
             # Cheap no-op unless the collateral table actually carries the
             # is_airb_model_collateral flag (early-return inside the finder).
             self._record_misdirected_airb_errors(exposures, collateral, config, errors, pack=pack)
-            exposures = self.apply_collateral(exposures, collateral, config, pack=pack)
+            exposures = self.apply_collateral(
+                exposures, collateral, config, pack=pack, errors=errors
+            )
             return exposures, True
         # No (valid) collateral path
         self._record_missing_collateral_columns(collateral, errors)
@@ -879,6 +1068,29 @@ class CRMProcessor:
         from rwa_calc.engine.crm.life_insurance import _add_default_life_ins_columns
 
         return _add_default_life_ins_columns(exposures)
+
+    def _apply_third_party_deposit_step(
+        self,
+        exposures: pl.LazyFrame,
+        third_party_deposits: pl.LazyFrame | None,
+        config: CalculationConfig,
+        errors: list[CalculationError],
+        *,
+        pack: ResolvedRulepack | None = None,
+    ) -> pl.LazyFrame:
+        """Pre-compute Art. 200(a)/232(2) third-party-deposit SA RW columns.
+
+        The holder institution's SA risk weight (derived from the deposit's
+        issuer_cqs via the Art. 120/120A institution tables) substitutes on the
+        covered part for SA exposures; F-IRB is a deferred follow-up (no benefit +
+        CRM017). The regime is read from the ``sa_revised_risk_weight_tables``
+        pack Feature — never ``config.is_basel_3_1`` (arch check 17).
+        """
+        resolved = pack if pack is not None else RulepackV0.from_config(config).pack
+        is_b31 = bool(resolved.feature("sa_revised_risk_weight_tables"))
+        return compute_third_party_deposit_columns(
+            exposures, third_party_deposits, is_basel_3_1=is_b31, errors=errors
+        )
 
     def _apply_guarantees_step(
         self,
@@ -983,8 +1195,14 @@ class CRMProcessor:
         config: CalculationConfig,
         *,
         pack: ResolvedRulepack | None = None,
+        errors: list[CalculationError] | None = None,
     ) -> pl.LazyFrame:
-        """Apply collateral to reduce EAD (SA) or LGD (IRB)."""
+        """Apply collateral to reduce EAD (SA) or LGD (IRB).
+
+        ``errors`` receives Art. 199(2)/(5)/(6) CRM014 warnings when the FIRB
+        Foundation Collateral Method zeroes an unattested / >1y-receivable
+        non-financial collateral row.
+        """
         return collateral_mod.apply_collateral(
             exposures,
             collateral,
@@ -994,6 +1212,7 @@ class CRMProcessor:
             join_collateral_to_lookups_fn=_join_collateral_to_lookups,
             resolve_pledge_from_joined_fn=_resolve_pledge_from_joined,
             pack=pack,
+            errors=errors,
         )
 
     def apply_guarantees(

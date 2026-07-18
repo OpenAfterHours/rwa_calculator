@@ -93,6 +93,10 @@
   "rwa_calc.engine.ccr.wwr::apply_wwr_gate": [
     "CRR Art. 291"
   ],
+  "rwa_calc.engine.crm.collateral::_apply_collateral_unified": [
+    "CRR Art. 199",
+    "PS1/26 Art. 199"
+  ],
   "rwa_calc.engine.crm.collateral::apply_collateral": [
     "PS1/26 Art. 230(2)",
     "PS1/26 Art. 230(1)",
@@ -111,7 +115,9 @@
     "PS1/26 Art. 230(1)"
   ],
   "rwa_calc.engine.crm.guarantees::_apply_maturity_mismatch_to_guarantees": [
-    "CRR Art. 217"
+    "CRR Art. 217",
+    "CRR Art. 237",
+    "PS1/26, paragraph 237"
   ],
   "rwa_calc.engine.crm.guarantees::_assign_guarantor_approach": [
     "CRR Art. 201",
@@ -151,6 +157,9 @@
     "CRR Art. 230",
     "CRR Art. 231"
   ],
+  "rwa_calc.engine.crm.processor::CRMProcessor._apply_own_issue_collateral_gate": [
+    "CRR Art. 194"
+  ],
   "rwa_calc.engine.crm.processor::CRMProcessor.get_crm_unified_bundle": [
     "CRR Art. 194"
   ],
@@ -159,6 +168,9 @@
   ],
   "rwa_calc.engine.crm.simple_method::compute_fcsm_columns": [
     "CRR Art. 222"
+  ],
+  "rwa_calc.engine.crm.third_party_deposit::compute_third_party_deposit_columns": [
+    "CRR Art. 232"
   ],
   "rwa_calc.engine.equity.calculator::EquityCalculator._apply_b31_equity_weights_sa": [
     "PS1/26, paragraph 133"
@@ -189,11 +201,17 @@
     "PS1/26, paragraph 132"
   ],
   "rwa_calc.engine.eu_sovereign::build_domestic_cgcb_guarantor_expr": [
-    "CRR Art. 114"
+    "CRR Art. 114",
+    "CRR Art. 235",
+    "PS1/26, paragraph 235"
   ],
   "rwa_calc.engine.eu_sovereign::build_eu_domestic_currency_expr": [
     "CRR Art. 114",
     "CRR Art. 141"
+  ],
+  "rwa_calc.engine.eu_sovereign::funding_currency_expr": [
+    "CRR Art. 114",
+    "CRR Art. 235"
   ],
   "rwa_calc.engine.irb.formulas::_capital_k_expr_from_params": [
     "CRR Art. 153(1)"
@@ -380,6 +398,9 @@
     "CRR Art. 213"
   ],
   "rwa_calc.engine.sa.rw_adjustments::apply_life_insurance_rw_mapping": [
+    "CRR Art. 232"
+  ],
+  "rwa_calc.engine.sa.rw_adjustments::apply_third_party_deposit_rw_mapping": [
     "CRR Art. 232"
   ],
   "rwa_calc.engine.securitisation.allocator::SecuritisationAllocator.allocate": [

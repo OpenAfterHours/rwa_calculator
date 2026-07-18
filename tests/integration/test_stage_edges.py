@@ -60,18 +60,27 @@ from .conftest import (
 # Measured 2026-06-11 on Polars 1.37 (RWA_PRINT_EDGE_NODES=1): hierarchy_exit
 # 1586, classifier_exit 88, crm_post_ead 22, crm_pre_guarantee_unified 1021,
 # crm_exit 1025 (1225 with guarantees), re_split_exit 100, branches 28-85.
-# Ceilings pinned at ~2-4x measured; SIGSEGV threshold ~25,000.
+# Re-measured 2026-07-18 on Polars 1.42.1 (max of plain/guaranteed runs):
+# hierarchy_exit 1731, classifier_exit 97, crm_post_ead 27,
+# crm_pre_guarantee_unified 1043, crm_exit 1047 (1259 with guarantees),
+# re_split_exit 131, sa_branch 76, irb_branch 90, slotting_branch 57. The
+# measured counts barely moved from 1.37 (no plan-node explosion), so the
+# ceilings below are re-pinned at ~2x the 1.42.1 measurement — ratcheting the
+# previously stale-loose entries (crm_post_ead was 2400 vs 27 measured). SIGSEGV
+# threshold ~25,000 (measured on 1.37; not re-characterised on 1.42.1). ccr_exit
+# is not exercised by the recalibration runs (no-CCR fixtures) — its 800 ceiling
+# is carried forward unchanged.
 _EDGE_NODE_CEILINGS: dict[str, int] = {
-    "hierarchy_exit": 3200,
+    "hierarchy_exit": 3500,
     "ccr_exit": 800,
-    "classifier_exit": 400,
-    "crm_post_ead": 2400,
-    "crm_pre_guarantee_unified": 4000,
-    "crm_exit": 4000,
-    "re_split_exit": 500,
-    "sa_branch": 500,
-    "irb_branch": 500,
-    "slotting_branch": 300,
+    "classifier_exit": 200,
+    "crm_post_ead": 100,
+    "crm_pre_guarantee_unified": 2100,
+    "crm_exit": 2600,
+    "re_split_exit": 300,
+    "sa_branch": 200,
+    "irb_branch": 200,
+    "slotting_branch": 150,
 }
 
 # The orchestrated edge sequence for a plain (no-CCR, no-guarantee) run.
@@ -250,8 +259,8 @@ def test_pipeline_polars_version_pin_reminder() -> None:
     When it fails after a Polars upgrade: re-run with RWA_PRINT_EDGE_NODES=1,
     re-pin _EDGE_NODE_CEILINGS, and update this version string.
     """
-    assert pl.__version__.startswith("1.37"), (
+    assert pl.__version__.startswith("1.42"), (
         f"Polars {pl.__version__}: plan-node ceilings in this module were "
-        "measured on 1.37 — recalibrate (see module docstring) before bumping "
+        "measured on 1.42.1 — recalibrate (see module docstring) before bumping "
         "this pin."
     )

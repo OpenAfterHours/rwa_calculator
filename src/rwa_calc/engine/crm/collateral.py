@@ -29,6 +29,11 @@ from typing import TYPE_CHECKING
 import polars as pl
 from watchfire import cites
 
+from rwa_calc.contracts.errors import (
+    ERROR_CROSS_COUNTERPARTY_NETTING,
+    ERROR_INELIGIBLE_IRB_COLLATERAL,
+    crm_warning,
+)
 from rwa_calc.data.schemas import DIRECT_BENEFICIARY_TYPES, NON_ELIGIBLE_RE_TYPES
 from rwa_calc.domain.enums import AIRBCollateralMethod, ApproachType
 from rwa_calc.engine.crm.expressions import (
@@ -50,6 +55,7 @@ from rwa_calc.rulebook.resolve import resolve
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.contracts.errors import CalculationError
     from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 
@@ -154,6 +160,7 @@ def find_misdirected_airb_model_collateral(
 @cites("CRR Art. 223")
 def generate_netting_collateral(
     exposures: pl.LazyFrame,
+    errors: list[CalculationError] | None = None,
 ) -> pl.LazyFrame | None:
     """
     Generate synthetic cash collateral from negative-drawn netting-eligible loans.
@@ -161,26 +168,35 @@ def generate_netting_collateral(
     When a loan has a negative drawn amount (credit balance / deposit) and carries
     a ``netting_agreement_reference`` (CRR Art. 195/219), the absolute value of
     that negative balance can reduce other exposures covered by the SAME netting
-    agreement — treated as synthetic cash collateral.
+    agreement AND owed by the SAME counterparty — treated as synthetic cash
+    collateral.
 
-    Netting is driven SOLELY by ``netting_agreement_reference``: only exposures
-    sharing the same reference net together. This reflects the legal right of
-    set-off, which is defined by the netting agreement itself — not by facility
-    hierarchy or counterparty. A deposit from one counterparty may net a loan to a
-    different counterparty (and across different facilities) iff both carry the
-    same reference; conversely two exposures in the same facility do NOT net unless
-    they share the reference.
+    CRR/PS1-26 Art. 195 (P1.238): on-balance-sheet netting is limited to "mutual
+    claims" / "reciprocal cash balances between the institution and the
+    counterparty" — a single counterparty. So a deposit from counterparty A may
+    net only loans owed by counterparty A under the same agreement; it may NOT
+    offset a loan to a different counterparty B, even where a group-level
+    agreement reference is shared. Pools are therefore keyed by
+    (netting_agreement_reference, counterparty_reference) — the agreement is the
+    legal set-off boundary, the counterparty the Art. 195 eligibility boundary.
+    A netting_agreement_reference that spans more than one counterparty raises a
+    CRM016 data-quality warning (the disallowed cross-counterparty offset is
+    otherwise invisible). Two exposures still do NOT net unless they share the
+    reference, regardless of facility hierarchy.
 
     CRR Art. 219 limits on-balance-sheet netting to drawn loans and deposits
     (cash-on-cash). Synthetic cash collateral is allocated pro-rata by the drawn
     portion (`on_bs_for_ead`) to positive-drawn LOAN siblings carrying the same
     reference — contingents and synthetic facility_undrawn rows are
-    off-balance-sheet and excluded from the beneficiary set. Netting pools are
-    grouped by (netting_agreement_reference, currency) so the haircut pipeline can
-    apply FX haircuts when the pool currency differs from the sibling's currency.
+    off-balance-sheet and excluded from the beneficiary set. Netting pools also
+    keep currency (as (ref, currency, counterparty_reference)) so the haircut
+    pipeline can apply FX haircuts when the pool currency differs from the
+    sibling's currency.
 
     Args:
         exposures: Exposures with ead_for_crm, on_bs_for_ead, exposure_type set
+        errors: optional CRM error channel — receives Art. 195 CRM016 warnings
+            for netting agreements that span more than one counterparty.
 
     Returns:
         LazyFrame of synthetic collateral rows, or None if no netting applies
@@ -206,17 +222,31 @@ def generate_netting_collateral(
         )
     if "exposure_type" not in schema_names:
         exposures = exposures.with_columns(pl.lit("loan").alias("exposure_type"))
+    if "counterparty_reference" not in schema_names:
+        # Test-caller fallback only: production always supplies counterparty_reference
+        # (a core exposure column). Absent → treat every row as the same counterparty
+        # so the Art. 195 same-counterparty constraint is a no-op for legacy callers.
+        exposures = exposures.with_columns(pl.lit("_UNKNOWN_CP").alias("counterparty_reference"))
 
     # Negative-drawn loans carrying a netting agreement reference provide the pool
     negative_loans = exposures.filter(
         pl.col("netting_agreement_reference").is_not_null() & (pl.col("drawn_amount") < 0)
     )
 
-    # Sum abs(drawn_amount) per (netting_agreement_reference, currency) → netting pool.
-    # Currency is kept so the synthetic collateral carries the source currency,
-    # allowing the haircut pipeline to apply FX haircuts when currencies differ.
+    # Art. 195 (P1.238): emit a CRM016 warning for any agreement that spans more
+    # than one counterparty (a deposit and a positive loan under the same
+    # reference but for different counterparties would previously have netted).
+    if errors is not None:
+        _record_cross_counterparty_netting(exposures, errors)
+
+    # Sum abs(drawn_amount) per (netting_agreement_reference, currency,
+    # counterparty_reference) → netting pool. Currency is kept so the synthetic
+    # collateral carries the source currency (FX haircut when currencies differ);
+    # counterparty_reference enforces the Art. 195 same-counterparty limit.
     netting_pool = (
-        negative_loans.group_by(["netting_agreement_reference", "currency"])
+        negative_loans.group_by(
+            ["netting_agreement_reference", "currency", "counterparty_reference"]
+        )
         .agg(
             pl.col("drawn_amount").abs().sum().alias("netting_pool"),
         )
@@ -226,7 +256,8 @@ def generate_netting_collateral(
     # CRR Art. 219: drawn-on-drawn cash netting. Synthetic cash collateral may
     # only benefit the drawn portion of loan exposures — contingents and
     # facility_undrawn synthetic rows are off-balance-sheet and ineligible. A
-    # sibling matches a pool iff it carries the same netting_agreement_reference.
+    # sibling matches a pool iff it shares BOTH the netting_agreement_reference
+    # and the counterparty_reference (Art. 195 same-counterparty limit).
     positive_siblings = exposures.filter(
         (pl.col("exposure_type") == "loan")
         & (pl.col("on_bs_for_ead") > 0)
@@ -234,15 +265,16 @@ def generate_netting_collateral(
     ).select(
         "exposure_reference",
         "netting_agreement_reference",
+        "counterparty_reference",
         "currency",
         "on_bs_for_ead",
         "maturity_date",
     )
 
-    # Match siblings to pools by shared netting agreement reference.
+    # Match siblings to pools by shared agreement reference AND counterparty.
     matched = positive_siblings.join(
         netting_pool,
-        on="netting_agreement_reference",
+        on=["netting_agreement_reference", "counterparty_reference"],
         how="inner",
     )
 
@@ -251,14 +283,16 @@ def generate_netting_collateral(
     # NOT ead_for_crm (which includes the off-BS nominal at CCF=100% per
     # Art. 223(4) — that override is for collateral valuation, not for OBS
     # netting allocation basis).
-    facility_totals = matched.group_by("netting_agreement_reference", "_pool_currency").agg(
+    facility_totals = matched.group_by(
+        "netting_agreement_reference", "_pool_currency", "counterparty_reference"
+    ).agg(
         pl.col("on_bs_for_ead").sum().alias("_facility_total_drawn"),
     )
 
     # Join totals back for pro-rata
     allocated = matched.join(
         facility_totals,
-        on=["netting_agreement_reference", "_pool_currency"],
+        on=["netting_agreement_reference", "_pool_currency", "counterparty_reference"],
         how="left",
     ).filter(pl.col("_facility_total_drawn") > 0)
 
@@ -311,6 +345,7 @@ def apply_collateral(
     resolve_pledge_from_joined_fn: Callable,
     *,
     pack: ResolvedRulepack | None = None,
+    errors: list[CalculationError] | None = None,
 ) -> pl.LazyFrame:
     """
     Apply collateral to reduce EAD (SA) or LGD (IRB).
@@ -423,6 +458,7 @@ def apply_collateral(
         config,
         cp_ead_totals,
         pack=resolved_pack,
+        errors=errors,
     )
 
 
@@ -579,6 +615,102 @@ def apply_firb_supervisory_lgd_no_collateral(
 # ---------------------------------------------------------------------------
 
 
+def _record_ineligible_irb_collateral(
+    annotated: pl.LazyFrame,
+    not_attested: pl.Expr,
+    receivables_too_long: pl.Expr,
+    errors: list[CalculationError],
+) -> None:
+    """Append one CRM014 warning per FIRB FCM non-financial collateral row zeroed
+    by the Art. 199(2)/(5)/(6) eligibility gate.
+
+    Targeted collect of the gated rows only — the accepted data-quality emission
+    idiom (P1.264); the collateral table is a small dimension frame, so
+    materialising just the gated rows' references is cheap.
+    """
+    names = annotated.collect_schema().names()
+    select_cols: list[pl.Expr] = [
+        not_attested.alias("_not_attested"),
+        receivables_too_long.alias("_recv_long"),
+    ]
+    select_cols.extend(
+        pl.col(c) for c in ("collateral_reference", "beneficiary_reference") if c in names
+    )
+    gated = annotated.filter(not_attested | receivables_too_long).select(select_cols).collect()
+    for row in gated.iter_rows(named=True):
+        coll_ref = row.get("collateral_reference")
+        ben_ref = row.get("beneficiary_reference")
+        reason = (
+            "its original maturity exceeds 1 year (Art. 199(5))"
+            if row.get("_recv_long")
+            else "it is not attested as eligible IRB collateral "
+            "(is_eligible_irb_collateral is False/unset; Art. 199(2)/(5)/(6))"
+        )
+        errors.append(
+            crm_warning(
+                ERROR_INELIGIBLE_IRB_COLLATERAL,
+                f"Non-financial collateral '{coll_ref}' securing exposure "
+                f"'{ben_ref}' is ineligible under the FIRB Foundation Collateral "
+                f"Method because {reason}; it is zeroed and the secured LGD reverts "
+                f"to the unsecured supervisory value.",
+                exposure_reference=ben_ref,
+                regulatory_reference="CRR Art. 199(2)/(5)/(6)",
+            )
+        )
+
+
+def _record_cross_counterparty_netting(
+    exposures: pl.LazyFrame,
+    errors: list[CalculationError],
+) -> None:
+    """Emit one CRM016 warning per netting agreement that spans >1 counterparty.
+
+    CRR/PS1-26 Art. 195 limits on-B/S netting to a single counterparty. The
+    warning fires for an agreement (carrying both a deposit and a positive loan)
+    where reciprocity cannot be positively confirmed: either more than one
+    distinct counterparty, OR any null counterparty (netting benefit requires a
+    POSITIVE same-counterparty confirmation, so an unconfirmed counterparty is
+    conservatively excluded — Polars' default null-join semantics already prevent
+    a null-keyed deposit from matching any sibling). Targeted collect of the
+    offending agreements (the accepted DQ-emission idiom, P1.264).
+    """
+    is_deposit = pl.col("drawn_amount") < 0
+    is_positive_loan = (pl.col("exposure_type") == "loan") & (pl.col("on_bs_for_ead") > 0)
+    spanning = (
+        exposures.filter(
+            pl.col("netting_agreement_reference").is_not_null() & (is_deposit | is_positive_loan)
+        )
+        .group_by("netting_agreement_reference")
+        .agg(
+            pl.col("counterparty_reference").drop_nulls().n_unique().alias("_n_cp"),
+            pl.col("counterparty_reference").is_null().any().alias("_has_null_cp"),
+            is_deposit.sum().alias("_n_deposit"),
+            is_positive_loan.sum().alias("_n_positive"),
+        )
+        .filter(
+            ((pl.col("_n_cp") > 1) | pl.col("_has_null_cp"))
+            & (pl.col("_n_deposit") > 0)
+            & (pl.col("_n_positive") > 0)
+        )
+        .select("netting_agreement_reference")
+        .collect()
+    )
+    for row in spanning.iter_rows(named=True):
+        agr = row.get("netting_agreement_reference")
+        errors.append(
+            crm_warning(
+                ERROR_CROSS_COUNTERPARTY_NETTING,
+                f"Netting agreement '{agr}' could not be confined to a single confirmed "
+                f"counterparty (cross-counterparty or null-counterparty rows present); "
+                f"on-balance-sheet netting is limited to reciprocal balances with one "
+                f"counterparty (Art. 195), so those offsets are disallowed.",
+                regulatory_reference="CRR Art. 195",
+            )
+        )
+
+
+@cites("CRR Art. 199")
+@cites("PS1/26 Art. 199")
 def _apply_collateral_unified(
     exposures: pl.LazyFrame,
     adjusted_collateral: pl.LazyFrame,
@@ -586,6 +718,7 @@ def _apply_collateral_unified(
     cp_ead_totals: pl.LazyFrame,
     *,
     pack: ResolvedRulepack | None = None,
+    errors: list[CalculationError] | None = None,
 ) -> pl.LazyFrame:
     """
     Unified EAD + LGD collateral allocation in a single pass.
@@ -706,6 +839,46 @@ def _apply_collateral_unified(
         (pl.col("adjusted_value") / pl.col("overcollateralisation_ratio")).alias(
             "effectively_secured"
         ),
+    )
+
+    # CRR/PS1-26 Art. 199(2)/(5)/(6): FIRB Foundation Collateral Method non-
+    # financial collateral (real estate, receivables, other physical) is
+    # recognised on the LGD*-substitution path only where the institution ATTESTS
+    # eligibility via the pre-existing ``is_eligible_irb_collateral`` flag. Default
+    # False => ineligible — the flag IS the attestation, so the P1.10 new-field
+    # null-permissive precedent does NOT apply. Art. 199(5): a receivable whose
+    # ORIGINAL maturity is populated > 1 year is ineligible even if attested
+    # (explicit data contradicting the attestation wins conservatively); a NULL
+    # original maturity is PERMISSIVE (recorded deviation — the attestation covers
+    # the maturity condition, absence doesn't contradict it). Ineligible rows are
+    # zeroed on ``effectively_secured`` (the Art. 231 waterfall feed) with one
+    # CRM014 warning each. Scope: FIRB FCM non-financial only — financial
+    # collateral (Art. 197), SA EAD reduction, and exposure classification are
+    # untouched.
+    _non_financial = ~pl.col("is_financial_collateral_type")
+    _attested = (
+        pl.col("is_eligible_irb_collateral").fill_null(False)
+        if "is_eligible_irb_collateral" in collateral_schema.names()
+        else pl.lit(False)
+    )
+    _not_attested = _non_financial & ~_attested
+    if "original_maturity_years" in collateral_schema.names():
+        # NULL original maturity is PERMISSIVE (recorded deviation — the
+        # attestation covers the maturity condition, absence doesn't contradict
+        # it), so fill the *Boolean* > 1y test to False rather than the float
+        # column to 0.0 (the latter would be an anti-conservative float fill).
+        _receivables_too_long = (pl.col("_coll_category") == "receivables") & (
+            pl.col("original_maturity_years") > 1.0
+        ).fill_null(False)
+    else:
+        _receivables_too_long = pl.lit(False)
+    if errors is not None:
+        _record_ineligible_irb_collateral(annotated, _not_attested, _receivables_too_long, errors)
+    annotated = annotated.with_columns(
+        pl.when(_not_attested | _receivables_too_long)
+        .then(pl.lit(0.0))
+        .otherwise(pl.col("effectively_secured"))
+        .alias("effectively_secured")
     )
 
     # --- Single group_by: EAD + LGD aggregates in one pass, split by AIRB pool ---
@@ -1095,20 +1268,27 @@ def _apply_collateral_unified(
     # LGD* formula (Art. 230/231) applies to FIRB and qualifying AIRB exposures.
     # Non-qualifying AIRB and SA keep lgd_pre_crm.
     #
-    # CRR Art. 223(4) / PS1/26 Art. 223(4): the exposure value E used in
-    #   LGD* = (LGDS · min(C, E) + LGDU · max(0, E - C)) / E
-    # is the CCF=100% basis (ead_for_crm) for off-balance-sheet items, NOT
-    # the post-CCF EAD.  For pure on-BS rows ead_for_crm == ead_gross.
+    # CRR Art. 223(4) / PS1/26 Art. 223(4): the exposure value E used in the
+    # LGD* formula is the CCF=100% basis (ead_for_crm) for off-balance-sheet
+    # items, NOT the post-CCF EAD.  For pure on-BS rows ead_for_crm == ead_gross.
+    #
+    # PS1/26 Art. 230(1) / CRR Art. 228(2) (P1.272): the exposure basis is
+    # grossed up by its own volatility haircut HE — E' = E(1 + HE) — so
+    #   LGD* = (LGDS · min(C, E') + LGDU · max(0, E' - C)) / E'.
+    # HE (exposure_volatility_haircut, Art. 223(5)) is non-zero only for SFT rows
+    # lending out a debt security, so he_factor == 1 for every other row and
+    # E' == E; the SFT-FCCM path is unaffected (it emits E* directly).
+    e_for_lgd_star = pl.col("ead_for_crm") * he_factor
     lgd_star_expr = (
         (
             pl.col("lgd_secured")
-            * pl.col("total_collateral_for_lgd").clip(upper_bound=pl.col("ead_for_crm"))
+            * pl.col("total_collateral_for_lgd").clip(upper_bound=e_for_lgd_star)
         )
         + (
             pl.col("lgd_unsecured")
-            * (pl.col("ead_for_crm") - pl.col("total_collateral_for_lgd")).clip(lower_bound=0)
+            * (e_for_lgd_star - pl.col("total_collateral_for_lgd")).clip(lower_bound=0)
         )
-    ) / pl.col("ead_for_crm")
+    ) / e_for_lgd_star
 
     exposures = exposures.with_columns(
         [

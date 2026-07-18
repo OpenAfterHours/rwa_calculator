@@ -68,6 +68,9 @@ class Collateral:
     liquidation_period_days: int | None = None
     original_maturity_years: float | None = None
     rental_to_interest_ratio: float | None = None
+    # P1.237/P1.271 — Art. 197(1)(f)/198(1)(a): main-index attestation drives the
+    # equity haircut (15%/20% vs 25%/30%). None -> other-listed (conservative).
+    is_main_index: bool | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -94,6 +97,7 @@ class Collateral:
             "is_presold": self.is_presold,
             "liquidation_period_days": self.liquidation_period_days,
             "rental_to_interest_ratio": self.rental_to_interest_ratio,
+            "is_main_index": self.is_main_index,
         }
 
 
@@ -265,12 +269,15 @@ def _government_bond_collateral() -> list[Collateral]:
 
 def _equity_collateral() -> list[Collateral]:
     """
-    Equity collateral - 25% haircut for main index equities.
+    Equity collateral - other-listed (non-main-index) equity at the 25% CRR /
+    30% Basel 3.1 supervisory haircut.
 
-    Scenario D3: Listed equity collateral.
+    These rows do NOT attest is_main_index, so per P1.237/P1.271 (Art. 197(1)(f)/
+    198(1)(a)) they take the higher other-listed haircut. Main-index equity (15%/
+    20%) is covered by the COLL_CRM_D3 row, which sets is_main_index=True.
     """
     return [
-        # Listed equity (FTSE 100) - 25% haircut (uses dedicated test loan)
+        # Other-listed equity, 25% CRR / 30% B31 haircut (uses dedicated test loan)
         Collateral(
             collateral_reference="COLL_EQ_001",
             collateral_type="equity",
@@ -864,6 +871,9 @@ def _crr_d_scenario_collateral() -> list[Collateral]:
             is_income_producing=None,
             is_adc=None,
             is_presold=None,
+            # P1.237/P1.271 — FTSE 100 main-index equity: attest so it earns the
+            # 15% (CRR) / 20% (B31) main-index haircut per Art. 224 Table 3/4.
+            is_main_index=True,
         ),
         # =============================================================================
         # D5: Maturity mismatch - 2yr collateral vs 5yr exposure

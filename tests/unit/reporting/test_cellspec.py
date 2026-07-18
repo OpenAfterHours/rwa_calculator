@@ -13,7 +13,9 @@ Pins the vocabulary semantics the strangler slices build on:
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Literal, cast
 
 import polars as pl
 import pytest
@@ -67,7 +69,7 @@ def _spec(cells: dict, *, empty_cell: str = "zero", predicate=None) -> TemplateS
         column_refs=("a", "b"),
         cells=cells,
         predicate=predicate,
-        empty_cell=empty_cell,  # type: ignore[arg-type]
+        empty_cell=cast(Literal["zero", "null"], empty_cell),
     )
 
 
@@ -131,12 +133,16 @@ class TestPredicates:
             on_balance_sheet=False,
             is_defaulted=False,
         )
-        assert _ledger().filter(pred.to_expr())["exposure_reference"].to_list() == ["B"]
+        expr = pred.to_expr()
+        assert expr is not None
+        assert _ledger().filter(expr)["exposure_reference"].to_list() == ["B"]
 
     def test_subclass_and_no_constraint(self) -> None:
         assert RowPredicate().to_expr() is None
         pred = RowPredicate(subclass="sme")
-        assert _ledger().filter(pred.to_expr())["exposure_reference"].to_list() == ["A"]
+        expr = pred.to_expr()
+        assert expr is not None
+        assert _ledger().filter(expr)["exposure_reference"].to_list() == ["A"]
 
     def test_between_half_open_band(self) -> None:
         """CR5 band shape: low <= col < high, so a boundary value falls in
@@ -230,7 +236,9 @@ class TestPriorPeriodAndFormula:
         """CR8 shape: row 2 col a = row-1 value minus a constant; the fn sees
         prior availability so flow residuals can null without a prior period."""
 
-        def residual(cells: dict, prior_available: bool) -> float | None:
+        def residual(
+            cells: Mapping[str, int | float | None], prior_available: bool
+        ) -> float | None:
             if not prior_available:
                 return None
             return (cells["1"] or 0.0) - 40.0

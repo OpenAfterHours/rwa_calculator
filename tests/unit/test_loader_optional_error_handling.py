@@ -197,17 +197,16 @@ class TestOptionalFileCorruptEmitsLazyFormattedWarningLog:
         loader = ParquetLoader(tmp_path, config=_config_with_collateral(tmp_path))
 
         # rwa_calc.observability.configure_logging() sets propagate=False on the
-        # `rwa_calc` namespace logger, which prevents caplog (attached to root)
-        # from seeing records from descendants like rwa_calc.engine.loader.
-        # Temporarily re-enable propagation so the test captures the warning.
-        namespace_logger = logging.getLogger("rwa_calc")
-        saved_propagate = namespace_logger.propagate
-        namespace_logger.propagate = True
-        try:
-            with caplog.at_level(logging.WARNING, logger="rwa_calc.engine.loader"):
-                loader.load()
-        finally:
-            namespace_logger.propagate = saved_propagate
+        # `rwa_calc` namespace logger. Do NOT force ``rwa_calc.propagate = True``
+        # here: pytest's caplog machinery attaches its capture handler to BOTH
+        # the root logger AND every *non-propagating* logger at call-phase
+        # start, so the record is captured either way — and flipping propagate
+        # back to True after a configure_logging() leak on the same xdist
+        # worker makes the ONE emit reach caplog twice (root + rwa_calc),
+        # breaking the exact ``== 1`` assertion below (same trap as
+        # test_stage_timer_emits_ccr_sa_ccr_record).
+        with caplog.at_level(logging.WARNING, logger="rwa_calc.engine.loader"):
+            loader.load()
 
         loader_warnings = [
             r

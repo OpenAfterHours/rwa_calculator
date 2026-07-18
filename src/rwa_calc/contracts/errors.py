@@ -184,6 +184,14 @@ ERROR_NON_MAIN_INDEX_EQUITY_INELIGIBLE = "CRM018"
 # is_eligible_financial_collateral is cleared, and this warning is raised (one per
 # gated row).
 ERROR_CREDIT_LINKED_NOTE_NOT_OWN_ISSUED = "CRM019"
+# Life-insurance policy currency unknown (CRR/PS1-26 Art. 232(3) with Art. 233(3),
+# P1.275): a pledged life-insurance policy's surrender value is reduced by the 8%
+# FX volatility haircut when the policy currency differs from the exposure
+# currency. A life-insurance collateral row that carries a currency column but
+# leaves it null cannot prove a currency match, so the 8% reduction is applied
+# conservatively (the anti-conservative full-benefit treatment is disallowed) and
+# this warning is raised (one per row with an unknown policy currency).
+ERROR_LIFE_INSURANCE_CURRENCY_UNKNOWN = "CRM020"
 
 # IRB error codes
 ERROR_PD_OUT_OF_RANGE = "IRB001"

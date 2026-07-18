@@ -662,7 +662,7 @@ class CRMProcessor:
             exposures = undo_sa_ead_reduction(exposures)
 
         # Pre-compute life insurance method columns (Art. 232) for SA RW mapping
-        exposures = self._apply_life_insurance_step(exposures, collateral, config)
+        exposures = self._apply_life_insurance_step(exposures, collateral, config, errors)
 
         # Step 4c: Art. 200(a)/232(2) third-party-deposit SA RW substitution columns
         # (holder institution RW on the covered part) + F-IRB deferral warning.
@@ -1060,17 +1060,20 @@ class CRMProcessor:
         exposures: pl.LazyFrame,
         collateral: pl.LazyFrame | None,
         config: CalculationConfig,
+        errors: list[CalculationError],
     ) -> pl.LazyFrame:
-        """Pre-compute life insurance method columns (Art. 232).
+        """Pre-compute life insurance method columns (Art. 232(3) with Art. 233(3)).
 
-        Life insurance uses mapped risk weight for SA (not EAD reduction).
-        IRB LGD handled via the waterfall (LGDS = 40%).  SA EAD is not reduced
-        because life_insurance has is_eligible_financial_collateral=False —
-        the Comprehensive Method's eligible-only filter already excludes it.
+        Life insurance uses mapped risk weight for SA (not EAD reduction), reduced
+        by the Art. 233(3) 8% FX volatility haircut on a currency mismatch (CRM020
+        surfaces an unknown policy currency). IRB LGD handled via the waterfall
+        (LGDS = 40%).  SA EAD is not reduced because life_insurance has
+        is_eligible_financial_collateral=False — the Comprehensive Method's
+        eligible-only filter already excludes it.
         """
         if has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
             assert collateral is not None
-            return compute_life_insurance_columns(exposures, collateral, config)
+            return compute_life_insurance_columns(exposures, collateral, config, errors=errors)
         from rwa_calc.engine.crm.life_insurance import _add_default_life_ins_columns
 
         return _add_default_life_ins_columns(exposures)

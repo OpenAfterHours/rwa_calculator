@@ -161,7 +161,8 @@
     "CRR Art. 198"
   ],
   "rwa_calc.engine.crm.life_insurance::compute_life_insurance_columns": [
-    "CRR Art. 232"
+    "CRR Art. 232(3)",
+    "CRR Art. 233(3)"
   ],
   "rwa_calc.engine.crm.link_allocation::CollateralLinkAllocator.allocate_links": [
     "CRR Art. 230",

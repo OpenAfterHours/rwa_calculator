@@ -614,9 +614,9 @@ Last generated: 2026-07-18.
 
 ### CRR Art. 161 — Loss Given Default (LGD)
 
-??? quote "`apply_firb_supervisory_lgd_no_collateral` — src/rwa_calc/engine/crm/collateral.py:586"
+??? quote "`apply_firb_supervisory_lgd_no_collateral` — src/rwa_calc/engine/crm/collateral.py:588"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:586:711"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:588:713"
     ```
 
 ??? quote "`_parametric_irb_risk_weight_expr` — src/rwa_calc/engine/irb/formulas.py:871"
@@ -733,9 +733,9 @@ Last generated: 2026-07-18.
 
 ### CRR Art. 195 — On-balance sheet netting
 
-??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/collateral.py:163"
+??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/collateral.py:165"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:163:422"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:165:424"
     ```
 
 
@@ -757,9 +757,9 @@ Last generated: 2026-07-18.
 
 ### CRR Art. 199 — Additional eligibility for collateral under the IRB Approach
 
-??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:891"
+??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:893"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:891:1516"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:893:1518"
     ```
 
 
@@ -773,9 +773,9 @@ Last generated: 2026-07-18.
 
 ### CRR Art. 211 — Requirements for treating lease exposures as collateralised
 
-??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:892"
+??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:894"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:891:1516"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:893:1518"
     ```
 
 
@@ -820,9 +820,9 @@ Last generated: 2026-07-18.
 
 ### CRR Art. 219 — On-balance sheet netting
 
-??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/collateral.py:164"
+??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/collateral.py:166"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:163:422"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:165:424"
     ```
 
 
@@ -849,14 +849,14 @@ Last generated: 2026-07-18.
 
 ### CRR Art. 223 — Financial Collateral Comprehensive Method
 
-??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/collateral.py:165"
+??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/collateral.py:167"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:163:422"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:165:424"
     ```
 
-??? quote "`apply_collateral` — src/rwa_calc/engine/crm/collateral.py:427"
+??? quote "`apply_collateral` — src/rwa_calc/engine/crm/collateral.py:429"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:425:563"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:427:565"
     ```
 
 ??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:110"
@@ -903,9 +903,9 @@ Last generated: 2026-07-18.
 
 ### CRR Art. 230 — Calculating risk-weighted exposure amounts and expected loss amounts for other eligible collateral under the IRB Approach
 
-??? quote "`apply_collateral` — src/rwa_calc/engine/crm/collateral.py:428"
+??? quote "`apply_collateral` — src/rwa_calc/engine/crm/collateral.py:430"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:425:563"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:427:565"
     ```
 
 ??? quote "`allocate_links` — src/rwa_calc/engine/crm/link_allocation.py:89"
@@ -924,9 +924,9 @@ Last generated: 2026-07-18.
 
 ### CRR Art. 232 — Other funded credit protection
 
-??? quote "`compute_life_insurance_columns` — src/rwa_calc/engine/crm/life_insurance.py:76"
+??? quote "`compute_life_insurance_columns` — src/rwa_calc/engine/crm/life_insurance.py:87"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/life_insurance.py:76:160"
+    --8<-- "src/rwa_calc/engine/crm/life_insurance.py:87:215"
     ```
 
 ??? quote "`compute_third_party_deposit_columns` — src/rwa_calc/engine/crm/third_party_deposit.py:82"
@@ -942,6 +942,14 @@ Last generated: 2026-07-18.
 ??? quote "`apply_third_party_deposit_rw_mapping` — src/rwa_calc/engine/sa/rw_adjustments.py:154"
     ```python
     --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:154:187"
+    ```
+
+
+### CRR Art. 233 — Valuation
+
+??? quote "`compute_life_insurance_columns` — src/rwa_calc/engine/crm/life_insurance.py:88"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/life_insurance.py:87:215"
     ```
 
 
@@ -1011,9 +1019,9 @@ Last generated: 2026-07-18.
 
 ### CRR Art. 238 — Maturity of credit protection
 
-??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/collateral.py:166"
+??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/collateral.py:168"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:163:422"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:165:424"
     ```
 
 ??? quote "`apply_maturity_mismatch` — src/rwa_calc/engine/crm/haircuts.py:815"
@@ -1474,30 +1482,30 @@ Last generated: 2026-07-18.
 
 ### PS1/26 Art. 199 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:893"
+??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:895"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:891:1516"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:893:1518"
     ```
 
 
 ### PS1/26 Art. 211 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:894"
+??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:896"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:891:1516"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:893:1518"
     ```
 
 
 ### PS1/26 Art. 230 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`apply_collateral` — src/rwa_calc/engine/crm/collateral.py:425"
+??? quote "`apply_collateral` — src/rwa_calc/engine/crm/collateral.py:427"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:425:563"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:427:565"
     ```
 
-??? quote "`apply_collateral` — src/rwa_calc/engine/crm/collateral.py:426"
+??? quote "`apply_collateral` — src/rwa_calc/engine/crm/collateral.py:428"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:425:563"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:427:565"
     ```
 
 ??? quote "`overcollateralisation_ratio_expr` — src/rwa_calc/engine/crm/expressions.py:131"

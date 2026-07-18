@@ -48,7 +48,7 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("0.40"),
         citation=Citation("CRR", "233(2)", "credit-derivative restructuring-exclusion 40% haircut"),
     ),
-    # Art. 232(1) life-insurance funded-protection RW map: insurer SA risk weight
+    # Art. 232(3) life-insurance funded-protection RW map: insurer SA risk weight
     # -> secured-portion risk weight (banded; a band applies when the insurer RW
     # is <= its upper bound). Regime-invariant (CRR Art. 232 retained unchanged
     # under PS1/26). Consumed by
@@ -62,7 +62,7 @@ ENTRIES: dict[str, RuleEntry] = {
             (None, Decimal("1.50")),
         ),
         input="insurer_risk_weight",
-        citation=Citation("CRR", "232", "(1) life-insurance secured-portion RW map"),
+        citation=Citation("CRR", "232", "(3) life-insurance secured-portion RW map"),
     ),
     "sa_ccr_alpha": ScalarParam(
         name="sa_ccr_alpha",

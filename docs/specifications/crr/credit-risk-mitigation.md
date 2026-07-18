@@ -1114,7 +1114,8 @@ Note: Art. 218 does not introduce a separate issuer risk weight check — the CL
 Life insurance policies assigned to the lending institution as collateral:
 
 - **Eligible**: Only life insurance policies with a current surrender value assigned/pledged to the institution (Art. 200(b) + Art. 212(2) operational requirements)
-- **Collateral value**: The current surrender value, reduced for currency mismatch per Art. 233(3)
+- **Collateral value**: The current surrender value, reduced by the **Art. 233(3) 8% FX volatility haircut** on a currency mismatch — the policy denomination (`original_currency` pre-FX-conversion, else `currency`) is compared with the exposure denomination. A policy row that carries a currency column but leaves it **null** cannot prove a match, so it takes the 8% reduction conservatively and raises a `CRM020` data-quality warning; a policy frame with no currency column at all leaves the FX dimension absent (no reduction). The mapped RW is unchanged — only the secured value shrinks.
+- **Pledge level**: A policy is recognised wherever its `beneficiary_reference` names an **exposure, a facility (`parent_facility_reference`) or a counterparty (`counterparty_reference`)**; a facility- or counterparty-level pledge is shared **pro-rata by EAD** across the covered exposures (Art. 230-231 pooling). Reference namespaces are disjoint, so a pledge resolves at exactly one level and a direct pledge benefits only its own exposure.
 - **SA risk weight** (Art. 232(3)): The secured portion uses a **mapped risk weight** (not direct substitution) keyed off the senior-unsecured RW assigned to the insurer under the SA:
 
 | Insurer Senior-Unsecured RW | Secured Portion RW |

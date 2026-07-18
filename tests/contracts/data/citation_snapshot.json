@@ -95,7 +95,9 @@
   ],
   "rwa_calc.engine.crm.collateral::_apply_collateral_unified": [
     "CRR Art. 199",
-    "PS1/26 Art. 199"
+    "CRR Art. 211",
+    "PS1/26 Art. 199",
+    "PS1/26 Art. 211"
   ],
   "rwa_calc.engine.crm.collateral::apply_collateral": [
     "PS1/26 Art. 230(2)",

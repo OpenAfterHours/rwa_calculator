@@ -522,6 +522,27 @@ COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     "original_maturity_years": ColumnSpec(pl.Float64, required=False),
     "is_eligible_financial_collateral": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_eligible_irb_collateral": ColumnSpec(pl.Boolean, default=False, required=False),
+    # CRR Art. 199(7) with Art. 211 / PRA PS1/26 Art. 199(7) with Art. 211 (P1.273):
+    # an exposure arising from a leasing transaction "may be treated in the same
+    # manner as loans collateralised by the type of property leased" when the Art.
+    # 211 conditions are met. The leased asset is supplied as an ordinary non-
+    # financial collateral row (collateral_type real_estate for property leases,
+    # other_physical for equipment/vehicle/plant leases) pledged to the lease
+    # exposure; this flag is the lessor's attestation that the lease-SPECIFIC Art.
+    # 211 conditions hold: (b) robust lessor risk management of the asset's use,
+    # location, age and planned duration; (c) the lessor's legal ownership and
+    # timely enforcement rights; (d) the unamortised-amount vs market-value gap does
+    # not overstate the CRM. Art. 211(a) — the Art. 208/210 eligibility of the
+    # property type — is subsumed: attesting Art. 211 attests a SUPERSET, so
+    # is_lease_collateral_attested=True is on its own a complete recognition route
+    # through the FIRB Foundation Collateral Method (engine/crm/collateral.py),
+    # independent of is_eligible_irb_collateral. No Boolean default on purpose: null
+    # means "not a lease-collateralised row / no lease attestation supplied" and the
+    # FCM gate resolves it to False (conservative — absence of the attestation must
+    # not fabricate a lease CRM benefit), so existing non-lease collateral is
+    # unaffected. Consulted only for non-financial collateral (leased assets are
+    # physical property); financial-collateral rows ignore it.
+    "is_lease_collateral_attested": ColumnSpec(pl.Boolean, required=False),
     # CRR / PS1-26 Art. 197(1)(h): a securitisation position is eligible financial
     # collateral only if it is NOT a resecuritisation AND its own risk weight is
     # <= 100%. These two fields drive that gate for issuer_type/collateral_type

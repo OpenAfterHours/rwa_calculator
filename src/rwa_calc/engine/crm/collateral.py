@@ -846,7 +846,9 @@ def _record_cross_counterparty_netting(
 
 
 @cites("CRR Art. 199")
+@cites("CRR Art. 211")
 @cites("PS1/26 Art. 199")
+@cites("PS1/26 Art. 211")
 def _apply_collateral_unified(
     exposures: pl.LazyFrame,
     adjusted_collateral: pl.LazyFrame,
@@ -990,13 +992,30 @@ def _apply_collateral_unified(
     # zeroed on ``effectively_secured`` (the Art. 231 waterfall feed) with one
     # CRM014 warning each. Scope: FIRB FCM non-financial only — financial
     # collateral (Art. 197), SA EAD reduction, and exposure classification are
-    # untouched.
+    # untouched. Art. 199(7)/211 (P1.273): a leased asset attested via
+    # ``is_lease_collateral_attested`` is an alternative attestation route (OR-ed
+    # below), so a lessor row is recognised without the general IRB flag.
     _non_financial = ~pl.col("is_financial_collateral_type")
     _attested = (
         pl.col("is_eligible_irb_collateral").fill_null(False)
         if "is_eligible_irb_collateral" in collateral_schema.names()
         else pl.lit(False)
     )
+    # CRR Art. 199(7) with Art. 211 / PS1/26 Art. 199(7) with Art. 211 (P1.273):
+    # a leased asset supplied as a non-financial collateral row is recognised when
+    # the lessor attests the lease-specific Art. 211 conditions (b)/(c)/(d). This
+    # is an INDEPENDENT eligibility route — Art. 211(a) subsumes the Art. 208/210
+    # property-eligibility that is_eligible_irb_collateral otherwise attests — so it
+    # is OR-ed into the attestation. Art. 211 concerns leased PROPERTY, so the route
+    # is scoped to the real_estate / other_physical categories (Art. 208 immovable
+    # property / Art. 210 other physical): a lease attestation on a receivables row
+    # confers NO eligibility — it must still carry its own is_eligible_irb_collateral.
+    # Null -> False (conservative), leaving all existing non-lease collateral untouched.
+    if "is_lease_collateral_attested" in collateral_schema.names():
+        _lease_attested = pl.col("is_lease_collateral_attested").fill_null(False) & pl.col(
+            "_coll_category"
+        ).is_in(["real_estate", "other_physical"])
+        _attested = _attested | _lease_attested
     _not_attested = _non_financial & ~_attested
     if "original_maturity_years" in collateral_schema.names():
         # NULL original maturity is PERMISSIVE (recorded deviation — the

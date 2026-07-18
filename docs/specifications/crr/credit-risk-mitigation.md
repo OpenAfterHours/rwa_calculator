@@ -338,6 +338,58 @@ institutions can assume that conditions (a) and (b) of paragraph 6 are met
     must self-certify Art. 199(6)(a)–(d) compliance for each collateral type
     before submission.
 
+### Lease Exposures Treated as Collateralised (CRR Art. 199(7) / Art. 211)
+
+CRR Art. 199(7) — *"where the requirements set out in Article 211 are met, exposures
+arising from transactions whereby an institution leases property to a third party
+may be treated in the same manner as loans collateralised by the type of property
+leased"* — lets a lessor's F-IRB exposure be secured by the **leased asset** rather
+than treated as unsecured. PRA PS1/26 Art. 199(7) retains this verbatim (both regimes).
+
+**Input convention.** The calculator has no dedicated lease exposure type; instead a
+lease is represented through the ordinary non-financial collateral machinery. Supply
+the leased asset as a `COLLATERAL_SCHEMA` row pledged to the lease exposure:
+
+| Field | Value |
+|-------|-------|
+| `collateral_type` | `real_estate` (property leases) or `other_physical` (equipment / plant / vehicle leases) |
+| `beneficiary_type` / `beneficiary_reference` | the lease exposure the leased asset secures |
+| `market_value` | the leased asset's market value |
+| `original_maturity_years` | the lease term (a finance lease intrinsically has one) |
+| `is_lease_collateral_attested` | `True` — the Art. 211 attestation (see below) |
+
+The row then flows through the Foundation Collateral Method exactly like any pledged
+non-financial collateral: the Art. 230(2) FCM haircut for the leased-asset type,
+the 1.4× overcollateralisation ratio, the 30% C\* minimum, and the LGD\* blend of the
+LGDS ([F-IRB LGDS Values](#f-irb-lgds-values-art-230--art-161)) over the secured
+portion with LGDU over the residual.
+
+**Art. 211 attestation.** The conditions Art. 211 requires:
+
+| Condition | How handled |
+|-----------|-------------|
+| (a) the Art. 208 (immovable property) / 210 (other physical) eligibility of the leased-asset type is met | **subsumed** — attesting Art. 211 attests a superset of the Art. 208/210 conditions that `is_eligible_irb_collateral` otherwise carries |
+| (b) robust lessor risk management (use, location, age, planned duration, value monitoring) | attested by `is_lease_collateral_attested` |
+| (c) the lessor's legal ownership and timely enforcement rights | attested by `is_lease_collateral_attested` |
+| (d) the unamortised-amount vs market-value gap does not overstate the CRM | attested by `is_lease_collateral_attested` |
+
+`is_lease_collateral_attested` is an **independent** eligibility route in the FCM gate
+(`engine/crm/collateral.py::_apply_collateral_unified`): a lease row is recognised on
+its own attestation, without also setting the general `is_eligible_irb_collateral`
+flag. The field has **no Boolean default** — null means "not a lease-collateralised
+row / no lease attestation supplied" and resolves to `False` (conservative), so
+existing non-lease collateral is unaffected. It is consulted only for non-financial
+collateral. Without any attestation the leased asset is not recognised: the FCM gate
+zeroes its `effectively_secured` amount, LGD reverts to the senior unsecured
+supervisory value (Art. 161(1)(a) 45% CRR / Art. 161(1)(aa) 40% B31 non-FSE), and one
+`CRM014` warning is raised.
+
+!!! note "Scope"
+    P1.273 covers the F-IRB Foundation Collateral Method secured-LGD path only. The
+    SA-side lease input convention (the drawn amount as the discounted minimum lease
+    payments) and residual-value treatment (Art. 134(7), the `other_residual_lease`
+    entity type → OTHER class 100% RW) are separate and unaffected.
+
 ### Overcollateralisation Ratios
 
 The code implements overcollateralisation ratios (1.25x receivables, 1.4x RE/physical) and 30% minimum thresholds for RE and other physical collateral. These ratios divide the haircut-adjusted collateral value before it enters the LGD* waterfall, effectively reducing the recognised secured portion.

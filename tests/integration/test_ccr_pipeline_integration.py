@@ -357,24 +357,25 @@ def test_stage_timer_emits_ccr_sa_ccr_record(
     config = _crr_config
     orchestrator = PipelineOrchestrator()
 
-    # Act — run with caplog capturing INFO on the pipeline logger.
-    # rwa_calc.observability.configure_logging() (called by any earlier
-    # CreditRiskCalc.calculate() test that shares the xdist worker) sets
-    # propagate=False on the rwa_calc namespace logger, which severs it
-    # from caplog's root-attached handler. Temporarily re-enable
-    # propagation so caplog captures the stage_timer record. Mirrors the
-    # pattern in tests/unit/test_loader_optional_error_handling.py and
-    # tests/unit/test_fx_rate_sync.py.
-    namespace_logger = logging.getLogger("rwa_calc")
-    saved_propagate = namespace_logger.propagate
-    namespace_logger.propagate = True
-    try:
-        caplog.set_level(logging.INFO, logger=_ORCHESTRATOR_LOGGER)
-        caplog.handler.addFilter(RunIdFilter())
-        with caplog.at_level(logging.INFO, logger=_ORCHESTRATOR_LOGGER):
-            orchestrator.run_with_data(data, config)
-    finally:
-        namespace_logger.propagate = saved_propagate
+    # Act — capture INFO on the fold logger via caplog.
+    #
+    # Do NOT force ``rwa_calc.propagate = True`` here. If an earlier
+    # CreditRiskCalc.calculate() on the same xdist worker called
+    # configure_logging() — which sets propagate=False on the rwa_calc
+    # namespace logger and does not reset it — pytest's caplog machinery
+    # (``_pytest.logging.catching_logs``) has already attached its capture
+    # handler to BOTH the root logger AND every *non-propagating* logger at
+    # call-phase start, so it sits on rwa_calc too. Flipping propagate back to
+    # True would then let the single stage_timer emit be captured twice — once
+    # at rwa_calc, once at root — producing two identical records (same run_id,
+    # same object) and breaking the exact-count assertion below. Leaving
+    # propagate untouched keeps exactly one caplog handler in the record's path
+    # in either worker state: propagate True -> captured once at root;
+    # propagate False -> captured once at the rwa_calc-attached handler.
+    caplog.set_level(logging.INFO, logger=_ORCHESTRATOR_LOGGER)
+    caplog.handler.addFilter(RunIdFilter())
+    with caplog.at_level(logging.INFO, logger=_ORCHESTRATOR_LOGGER):
+        orchestrator.run_with_data(data, config)
 
     # Find records with stage='ccr_sa_ccr' and 'completed' in message
     ccr_stage_records = [

@@ -4,6 +4,11 @@
 {"row_ref":"4","row_name":"Of which: slotting approach","a":52500000.0,"b":null,"c":4200000.0}
 {"row_ref":"4a","row_name":"Total RWEAs (pre-floor)","a":137449963.91362947,"b":null,"c":10995997.113090359}
 {"row_ref":"5","row_name":"Of which: advanced IRB approach","a":14625069.657473093,"b":null,"c":1170005.5725978476}
+{"row_ref":"6","row_name":"Counterparty credit risk - CCR","a":0.0,"b":null,"c":0.0}
+{"row_ref":"7","row_name":"CCR - Of which the standardised approach","a":0.0,"b":null,"c":0.0}
+{"row_ref":"8","row_name":"CCR - Of which internal model method (IMM)","a":null,"b":null,"c":null}
+{"row_ref":"UK8a","row_name":"CCR - Of which exposures to a central counterparty (CCP)","a":0.0,"b":null,"c":0.0}
+{"row_ref":"9","row_name":"CCR - Of which other CCR","a":0.0,"b":null,"c":0.0}
 {"row_ref":"5a","row_name":"CET1 ratio (pre-floor)","a":null,"b":null,"c":null}
 {"row_ref":"5b","row_name":"CET1 ratio (pre-floor, transitional)","a":null,"b":null,"c":null}
 {"row_ref":"6a","row_name":"Tier 1 ratio (pre-floor)","a":null,"b":null,"c":null}

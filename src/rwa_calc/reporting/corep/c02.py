@@ -21,6 +21,10 @@ Cell semantics (recorded decisions, this slice):
   (total > pre-floor + 0.01).
 - Equity RWA appears in THREE rows by design (0210 SA class, 0060 SA
   total, 0420 equity approach) while the flat total counts it once.
+- The SA row 0060 and the SA class rows cover ``_SA_APPROACHES`` — SA
+  *and* SA-CCR — so the template foots against rows 0010/0050, which
+  are flat ledger sums and always carried the CCR RWEA (recorded fix
+  2026-07-12; see the constant for why it is not shared).
 - Class rows key the APPLIED Art. 112 class (``reporting_class_origin``
   — recorded fix 2026-07-12, tying the SA breakdown to C 07.00: defaulted
   SA RWA reports under row 0160) through the many-to-one ACCUMULATING
@@ -78,6 +82,25 @@ if TYPE_CHECKING:
 # The finer-grained B31 sub-row aggregation key:
 # (approach, exposure_class, is_sme, is_fse, property_type).
 type _SubKey = tuple[str, str, bool | None, bool | None, str | None]
+
+# The approach labels that make up C 02.00's "Of which: Standardised Approach"
+# (row 0060) and its Art. 112 class rows (0070-0211).
+#
+# Annex II defines row 0050 as "RISK WEIGHTED EXPOSURE AMOUNTS FOR CREDIT,
+# COUNTERPARTY CREDIT AND DILUTION RISKS AND FREE DELIVERIES" (Art. 92(3)(a),(f))
+# and its SA child as the "CR SA and SEC SA templates at the level of total
+# exposures" — the SA row IS the C 07.00 total, and C 07.00 reports CCR business
+# (rows 0090-0130). Both CCR risk types (CCR_SFT and CCR_DERIVATIVE) are SA
+# risk-weighted but carry ``standardised_ccr`` under Basel 3.1 — the output-floor
+# relabel in ``engine/stages/calc.py``, which routes them into
+# ``FLOOR_ELIGIBLE_APPROACHES`` and is load-bearing. So they are admitted here by
+# label, and the template foots. Under CRR the relabel never fires (the legs
+# carry ``standardised``), so the second entry is inert and no CRR cell moves.
+#
+# Deliberately LOCAL to C 02.00 (docs/plans/c07-ccr-derivatives.md §4 D4): a
+# shared SA-approach constant would also widen the Pillar 3 CR4/CR5 disclosures,
+# which correctly scope CCR out under Basel 3.1 (it has CCR1-CCR8).
+_SA_APPROACHES: tuple[str, ...] = ("standardised", "standardised_ccr")
 
 
 @cites("PS1/26, paragraph 1.3")
@@ -151,7 +174,7 @@ def generate_c02_00(
         floor_rwa = total_rwa
         floor_activated = total_rwa > pre_floor_total + 0.01
 
-    sa_rwa_total = approach_rwa.get("standardised", 0.0)
+    sa_rwa_total = sum(approach_rwa.get(approach, 0.0) for approach in _SA_APPROACHES)
     equity_rwa = approach_rwa.get("equity", 0.0)
     firb_rwa = approach_rwa.get("foundation_irb", 0.0)
     airb_rwa = approach_rwa.get("advanced_irb", 0.0)
@@ -242,8 +265,11 @@ def _aggregate_by_approach(
     for row in by_approach.iter_rows(named=True):
         approach_rwa[row["_approach"]] = float(row["rwa"])
 
-    # SA class breakdown (equity folds into the SA class group-by)
-    sa_mask = collected["_approach"] == "standardised"
+    # SA class breakdown (equity folds into the SA class group-by). The SA-CCR
+    # legs join it via ``_SA_APPROACHES``, so a derivative reports under its
+    # counterparty's Art. 112 class (an institution -> row 0120) — and, being SA,
+    # they are no longer swept into the IRB residual below.
+    sa_mask = collected["_approach"].is_in(_SA_APPROACHES)
     equity_mask = collected["_approach"] == "equity"
     sa_rows = collected.filter(sa_mask | equity_mask)
     by_class = sa_rows.group_by("_ec").agg(pl.col("_rwa").sum().alias("rwa"))

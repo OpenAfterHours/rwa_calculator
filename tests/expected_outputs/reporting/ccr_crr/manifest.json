@@ -1,0 +1,299 @@
+{
+  "frames": {
+    "corep__c07_00__corporate": {
+      "row_ref": "String",
+      "row_name": "String",
+      "0010": "Float64",
+      "0020": "Float64",
+      "0030": "Float64",
+      "0040": "Float64",
+      "0050": "Float64",
+      "0060": "Float64",
+      "0070": "Float64",
+      "0080": "Float64",
+      "0090": "Float64",
+      "0100": "Float64",
+      "0110": "Float64",
+      "0120": "Float64",
+      "0130": "Float64",
+      "0140": "Float64",
+      "0150": "Float64",
+      "0160": "Float64",
+      "0170": "Float64",
+      "0180": "Float64",
+      "0190": "Float64",
+      "0200": "Float64",
+      "0210": "Float64",
+      "0211": "Float64",
+      "0215": "Float64",
+      "0216": "Float64",
+      "0217": "Float64",
+      "0220": "Float64",
+      "0230": "Float64",
+      "0240": "Float64"
+    },
+    "corep__c07_00__institution": {
+      "row_ref": "String",
+      "row_name": "String",
+      "0010": "Float64",
+      "0020": "Float64",
+      "0030": "Float64",
+      "0040": "Float64",
+      "0050": "Float64",
+      "0060": "Float64",
+      "0070": "Float64",
+      "0080": "Float64",
+      "0090": "Float64",
+      "0100": "Float64",
+      "0110": "Float64",
+      "0120": "Float64",
+      "0130": "Float64",
+      "0140": "Float64",
+      "0150": "Float64",
+      "0160": "Float64",
+      "0170": "Float64",
+      "0180": "Float64",
+      "0190": "Float64",
+      "0200": "Float64",
+      "0210": "Float64",
+      "0211": "Float64",
+      "0215": "Float64",
+      "0216": "Float64",
+      "0217": "Float64",
+      "0220": "Float64",
+      "0230": "Float64",
+      "0240": "Float64"
+    },
+    "corep__c08_07": {
+      "row_ref": "String",
+      "row_name": "String",
+      "0010": "Float64",
+      "0020": "Float64",
+      "0030": "Float64",
+      "0040": "Float64",
+      "0050": "Float64"
+    },
+    "corep__c09_01__GB": {
+      "row_ref": "String",
+      "row_name": "String",
+      "0010": "Float64",
+      "0020": "Float64",
+      "0040": "Float64",
+      "0050": "Float64",
+      "0055": "Float64",
+      "0060": "Float64",
+      "0061": "Float64",
+      "0070": "Float64",
+      "0075": "Float64",
+      "0080": "Float64",
+      "0081": "Float64",
+      "0082": "Float64",
+      "0090": "Float64"
+    },
+    "corep__c09_01__TOTAL": {
+      "row_ref": "String",
+      "row_name": "String",
+      "0010": "Float64",
+      "0020": "Float64",
+      "0040": "Float64",
+      "0050": "Float64",
+      "0055": "Float64",
+      "0060": "Float64",
+      "0061": "Float64",
+      "0070": "Float64",
+      "0075": "Float64",
+      "0080": "Float64",
+      "0081": "Float64",
+      "0082": "Float64",
+      "0090": "Float64"
+    },
+    "corep__c34_01": {
+      "row_ref": "String",
+      "row_name": "String",
+      "0010": "Float64",
+      "0020": "Float64"
+    },
+    "corep__c34_02__NS_CCR_BILAT": {
+      "row_ref": "String",
+      "row_name": "String",
+      "0010": "Float64"
+    },
+    "corep__c34_02__NS_CCR_QCCP": {
+      "row_ref": "String",
+      "row_name": "String",
+      "0010": "Float64"
+    },
+    "corep__c34_08": {
+      "row_ref": "String",
+      "row_name": "String",
+      "0010": "Float64",
+      "0020": "Float64"
+    },
+    "corep__c_02_00": {
+      "row_ref": "String",
+      "row_name": "String",
+      "0010": "Float64"
+    },
+    "pillar3__ccr1": {
+      "row_ref": "String",
+      "row_name": "String",
+      "a": "Float64",
+      "b": "Float64"
+    },
+    "pillar3__ccr3": {
+      "row_ref": "String",
+      "row_name": "String",
+      "a": "Float64"
+    },
+    "pillar3__ccr8": {
+      "row_ref": "String",
+      "row_name": "String",
+      "a": "Float64",
+      "b": "Float64"
+    },
+    "pillar3__cr4": {
+      "row_ref": "String",
+      "row_name": "String",
+      "a": "Float64",
+      "b": "Float64",
+      "c": "Float64",
+      "d": "Float64",
+      "e": "Float64",
+      "f": "Float64"
+    },
+    "pillar3__cr5": {
+      "row_ref": "String",
+      "row_name": "String",
+      "a": "Float64",
+      "b": "Float64",
+      "c": "Float64",
+      "d": "Float64",
+      "e": "Float64",
+      "f": "Float64",
+      "g": "Float64",
+      "h": "Float64",
+      "i": "Float64",
+      "j": "Float64",
+      "k": "Float64",
+      "l": "Float64",
+      "m": "Float64",
+      "n": "Float64",
+      "o": "Float64",
+      "p": "Float64",
+      "q": "Float64"
+    },
+    "pillar3__cr6a": {
+      "row_ref": "String",
+      "row_name": "String",
+      "a": "Float64",
+      "b": "Float64",
+      "c": "Float64",
+      "d": "Float64",
+      "e": "Float64"
+    },
+    "pillar3__cr7": {
+      "row_ref": "String",
+      "row_name": "String",
+      "a": "Float64",
+      "b": "Float64"
+    },
+    "pillar3__cr8": {
+      "row_ref": "String",
+      "row_name": "String",
+      "a": "Float64"
+    },
+    "pillar3__ov1": {
+      "row_ref": "String",
+      "row_name": "String",
+      "a": "Float64",
+      "b": "Float64",
+      "c": "Float64"
+    }
+  },
+  "meta": {
+    "corep": {
+      "c07_00": {
+        "kind": "dict",
+        "keys": [
+          "corporate",
+          "institution"
+        ]
+      },
+      "c08_01": {
+        "kind": "dict",
+        "keys": []
+      },
+      "c08_02": {
+        "kind": "dict",
+        "keys": []
+      },
+      "c08_03": {
+        "kind": "dict",
+        "keys": []
+      },
+      "c08_04": {
+        "kind": "dict",
+        "keys": []
+      },
+      "c08_05": {
+        "kind": "dict",
+        "keys": []
+      },
+      "c08_06": {
+        "kind": "dict",
+        "keys": []
+      },
+      "of_02_01": null,
+      "c09_01": {
+        "kind": "dict",
+        "keys": [
+          "GB",
+          "TOTAL"
+        ]
+      },
+      "c09_02": {
+        "kind": "dict",
+        "keys": []
+      },
+      "c34_02": {
+        "kind": "dict",
+        "keys": [
+          "NS_CCR_BILAT",
+          "NS_CCR_QCCP"
+        ]
+      },
+      "c34_04": null,
+      "framework": "CRR",
+      "reporting_basis": null,
+      "institution_type": null,
+      "errors": []
+    },
+    "pillar3": {
+      "cr6": {
+        "kind": "dict",
+        "keys": []
+      },
+      "cr7a": {
+        "kind": "dict",
+        "keys": []
+      },
+      "cr9": {
+        "kind": "dict",
+        "keys": []
+      },
+      "cr9_1": {
+        "kind": "dict",
+        "keys": []
+      },
+      "cr10": {
+        "kind": "dict",
+        "keys": []
+      },
+      "cms1": null,
+      "cms2": null,
+      "ccr2": null,
+      "framework": "CRR",
+      "errors": []
+    }
+  }
+}

@@ -51,7 +51,7 @@ from rwa_calc.reporting.cellspec import (
     TemplateSpec,
     execute,
 )
-from rwa_calc.reporting.pillar3.cms1 import MODELLED_APPROACHES, STANDARDISED_APPROACHES
+from rwa_calc.reporting.pillar3.cms1 import MODELLED_APPROACHES
 from rwa_calc.reporting.pillar3.templates import (
     CMS2_COLUMNS,
     CMS2_ROWS,
@@ -62,6 +62,17 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     import polars as pl
+
+# Row 0041's standardised-side add (its column c is the corporate class's F-IRB
+# RWA plus the class's standardised-side RWA). Deliberately LOCAL to CMS2 (the
+# of02.py / c02.py precedent): CMS1 retired its shared standardised allow-list
+# when column b became the modelled COMPLEMENT, and widening a SHARED approach
+# tuple with ``standardised_ccr`` is the recorded trap — it would pull the
+# SA-CCR legs into templates that correctly scope CCR out. CMS2's row axis is
+# Art. 147 asset classes; a CCR leg's own class row already carries it via
+# column c's unfiltered class total, and this sub-row add keeps its recorded
+# value.
+_STANDARDISED_APPROACHES: tuple[str, ...] = ("standardised", "equity")
 
 # Sub-rows with no engine discriminator — recorded permanently-null.
 _NULL_REFS: frozenset[str] = frozenset({"0044", "0045", "0054"})
@@ -133,7 +144,7 @@ def build_cms2_spec() -> TemplateSpec:
                 Sum("rwa_final"),
                 predicate=_class_member(
                     _CORPORATE_CLASSES,
-                    approaches_origin=("foundation_irb", *STANDARDISED_APPROACHES),
+                    approaches_origin=("foundation_irb", *_STANDARDISED_APPROACHES),
                 ),
                 empty_cell="zero",
             )

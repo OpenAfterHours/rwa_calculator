@@ -3,6 +3,10 @@
 Tests cover:
     - CMS1: output-floor comparison by risk type — the modelled vs
       standardised split, the full-SA column, framework gating
+    - CMS1's risk-type row axis (docs/plans/c07-ccr-derivatives.md §4 D2):
+      row 0020 carries the SA-CCR legs, row 0010 excludes them, row 0080 is
+      their sum; the standardised column is the COMPLEMENT of the modelled
+      set, so ``standardised_ccr`` cannot fall out of both columns
     - CMS2: comparison by asset class — class rows, F-IRB/A-IRB sub-rows,
       recorded-null purchased-receivables rows, the SA class map
     - The recorded equity fix: the standardised side is the explicit
@@ -226,23 +230,55 @@ class TestCMS1Generation:
         assert cr_row["c"][0] is not None  # Total actual RWA
         assert cr_row["d"][0] is not None  # Full SA RWA
 
-    def test_cms1_total_row_matches_credit_risk(self, generator: Pillar3Generator):
-        """Total row should match credit risk row (only risk type in scope)."""
+    def test_cms1_total_row_foots_to_the_risk_type_rows(self, generator: Pillar3Generator):
+        """Row 0080 (Total) == row 0010 (credit risk excl. CCR) + row 0020 (CCR).
+
+        Rewritten (docs/plans/c07-ccr-derivatives.md §4 D2): the retired test
+        asserted the Total was a COPY of row 0010 ("only risk type in scope"),
+        which is how row 0020's CCR charge came to be reported on no row at all.
+        On this CCR-free fixture the two shapes coincide numerically — the
+        footing form is the one that stays true when a derivative arrives.
+        """
         data = _make_mixed_data_with_sa_rwa()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
         assert bundle.cms1 is not None
         cr_row = bundle.cms1.filter(pl.col("row_ref") == "0010")
+        ccr_row = bundle.cms1.filter(pl.col("row_ref") == "0020")
         total_row = bundle.cms1.filter(pl.col("row_ref") == "0080")
         for col in ["a", "b", "c", "d"]:
-            assert total_row[col][0] == cr_row[col][0]
+            assert ccr_row[col][0] is not None, (
+                f"row 0020 col {col} is null — the CCR row must be bound to foot"
+            )
+            assert total_row[col][0] == pytest.approx(cr_row[col][0] + ccr_row[col][0])
 
-    def test_cms1_non_credit_rows_null(self, generator: Pillar3Generator):
-        """Rows 0020-0070 (CCR, CVA, etc.) should be all null."""
+    def test_cms1_ccr_row_is_populated_and_empty_on_a_book_with_no_ccr(
+        self, generator: Pillar3Generator
+    ):
+        """Row 0020 (CCR) is BOUND — it zero-fills when the book has no CCR.
+
+        Rewritten (docs/plans/c07-ccr-derivatives.md §4 D2): the retired test
+        asserted row 0020 was null alongside the genuinely out-of-scope rows.
+        "This book has no counterparty credit risk" is a claim a credit-risk
+        calculator can make; null says "not reported here", and that is what
+        let the SA-CCR legs disappear from the disclosure entirely.
+        """
         data = _make_mixed_data_with_sa_rwa()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
         assert bundle.cms1 is not None
-        non_credit_refs = ["0020", "0030", "0040", "0050", "0060", "0070"]
-        for ref in non_credit_refs:
+        row = bundle.cms1.filter(pl.col("row_ref") == "0020")
+        for col in ["a", "b", "c", "d"]:
+            assert row[col][0] == pytest.approx(0.0), f"Row 0020 col {col} should be 0.0"
+
+    def test_cms1_out_of_scope_rows_null(self, generator: Pillar3Generator):
+        """Rows 0030-0070 (CVA, securitisation, market, op, residual) stay null.
+
+        They are outside a credit-risk calculator's scope — null is not the
+        same claim as 0.0. Row 0020 (CCR) is NOT one of them.
+        """
+        data = _make_mixed_data_with_sa_rwa()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms1 is not None
+        for ref in ["0030", "0040", "0050", "0060", "0070"]:
             row = bundle.cms1.filter(pl.col("row_ref") == ref)
             for col in ["a", "b", "c", "d"]:
                 assert row[col][0] is None, f"Row {ref} col {col} should be None"
@@ -301,6 +337,94 @@ class TestCMS1Generation:
         assert bundle.cms1 is not None
         cr_row = bundle.cms1.filter(pl.col("row_ref") == "0010")
         assert cr_row["d"][0] is None
+
+
+class TestCMS1CCRPartition:
+    """The SA-CCR legs: row 0020, and the standardised COMPLEMENT.
+
+    docs/plans/c07-ccr-derivatives.md §4 D2. ``standardised_ccr`` is the Basel
+    3.1 output-floor relabel of an SA-CCR leg. It is not "modelled", so it
+    belongs in column b — and column b must therefore be the COMPLEMENT of the
+    modelled set, never an allow-list: an allow-list of ("standardised",
+    "equity") drops the leg out of column a AND column b, and column c ("the
+    sum of cells a and b") then under-reports the book by its whole CCR charge.
+    """
+
+    def _with_derivative(self) -> pl.LazyFrame:
+        """The mixed book plus one SA-CCR derivative netting-set leg (RWA 500)."""
+        frames = [
+            _make_sa_data(sa_rwa=[1000.0, 700.0, 750.0]).collect(),
+            _make_irb_data(sa_rwa=[3500.0, 2100.0, 1400.0]).collect(),
+            _make_slotting_data(sa_rwa=[800.0, 650.0, 500.0]).collect(),
+            pl.DataFrame(
+                {
+                    "exposure_reference": ["ccr__NS1"],
+                    "approach_applied": ["standardised_ccr"],
+                    "exposure_class": ["institution"],
+                    "risk_type": ["CCR_DERIVATIVE"],
+                    "ead_final": [2500.0],
+                    "rwa_final": [500.0],
+                    "sa_rwa": [500.0],
+                    "risk_weight": [0.2],
+                    "drawn_amount": [2500.0],
+                    "exposure_type": ["derivative"],
+                }
+            ),
+        ]
+        return _align_and_concat(frames)
+
+    def test_cms1_ccr_leg_lands_on_row_0020(self, generator: Pillar3Generator):
+        """Row 0020 carries the SA-CCR leg: b = c = d = 500, a = 0 (no model)."""
+        bundle = generator.generate_from_lazyframe(self._with_derivative(), framework="BASEL_3_1")
+        assert bundle.cms1 is not None
+        row = bundle.cms1.filter(pl.col("row_ref") == "0020")
+        assert row["a"][0] == pytest.approx(0.0)
+        assert row["b"][0] == pytest.approx(500.0)
+        assert row["c"][0] == pytest.approx(500.0)
+        assert row["d"][0] == pytest.approx(500.0)
+
+    def test_cms1_ccr_leg_is_excluded_from_row_0010(self, generator: Pillar3Generator):
+        """Row 0010 "excludes ... a counterparty credit risk charge" — cols c and d.
+
+        Column c stays at the non-CCR book's 11,260 (8,810 modelled + 2,450 SA)
+        and column d at its 11,400 of sa_rwa: the derivative is reported on row
+        0020 and NOT here — including in column d, which today has no predicate
+        at all and would pull the leg's SA-equivalent onto every row.
+        """
+        bundle = generator.generate_from_lazyframe(self._with_derivative(), framework="BASEL_3_1")
+        assert bundle.cms1 is not None
+        row = bundle.cms1.filter(pl.col("row_ref") == "0010")
+        assert row["b"][0] == pytest.approx(2450.0)
+        assert row["c"][0] == pytest.approx(11260.0)
+        assert row["d"][0] == pytest.approx(11400.0)
+
+    def test_cms1_total_carries_the_whole_book_including_ccr(self, generator: Pillar3Generator):
+        """Row 0080 = the whole book: the CCR leg is in column b, c AND d.
+
+        The defect in one assertion — today column c reports 11,260 against a
+        book of 11,760, short by exactly the SA-CCR leg's RWA.
+        """
+        bundle = generator.generate_from_lazyframe(self._with_derivative(), framework="BASEL_3_1")
+        assert bundle.cms1 is not None
+        row = bundle.cms1.filter(pl.col("row_ref") == "0080")
+        assert row["a"][0] == pytest.approx(8810.0)  # modelled: unchanged
+        assert row["b"][0] == pytest.approx(2950.0)  # 2450 SA + 500 SA-CCR
+        assert row["c"][0] == pytest.approx(11760.0)  # a + b == the whole book
+        assert row["d"][0] == pytest.approx(11900.0)  # 11400 + 500
+
+    def test_cms1_total_ties_to_cms2_total_with_a_ccr_leg(self, generator: Pillar3Generator):
+        """CMS1 0080/c == CMS2 0070/c — the internal oracle that exposed D2.
+
+        CMS2 totals ``rwa_final`` over the whole ledger with no approach filter,
+        so it books the SA-CCR leg; CMS1's approach allow-lists do not. On the
+        reference CCR portfolio the two disagree by exactly the derivative RWEA.
+        """
+        bundle = generator.generate_from_lazyframe(self._with_derivative(), framework="BASEL_3_1")
+        assert bundle.cms1 is not None
+        assert bundle.cms2 is not None
+        cms1_total = bundle.cms1.filter(pl.col("row_ref") == "0080")["c"][0]
+        cms2_total = bundle.cms2.filter(pl.col("row_ref") == "0070")["c"][0]
+        assert cms1_total == pytest.approx(cms2_total)
 
 
 # ---------------------------------------------------------------------------

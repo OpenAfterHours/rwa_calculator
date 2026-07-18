@@ -116,7 +116,13 @@ _LBL_ROW_SFT_NETTING = "SFT netting sets"
 _LBL_ROW_OF_WHICH_QCCP = "  of which: centrally cleared through a QCCP"
 _LBL_ROW_DERIV_LST_NETTING = "Derivatives & Long Settlement Transactions netting sets"
 _LBL_ROW_CCP_NETTING = "From Contractual Cross Product netting sets"
+# Correct ONLY where a sibling "Counterparty credit risk" row exists (OF 02.01, OV1).
 _LBL_ROW_CREDIT_RISK_EXCL_CCR = "Credit risk (excluding CCR)"
+# C 02.00 / OF 02.00 row 0050 has no such sibling — CCR is INSIDE it (Annex II wording).
+_LBL_ROW_CREDIT_CCR_DILUTION_FREE_DELIV = (
+    "RISK WEIGHTED EXPOSURE AMOUNTS FOR CREDIT, COUNTERPARTY CREDIT AND DILUTION RISKS "
+    "AND FREE DELIVERIES"
+)
 _LBL_ROW_OP_RISK = "Operational risk"
 _LBL_ROW_CIU = "Collective investment undertakings (CIU)"
 _LBL_ROW_OF_WHICH_SME_LC = "  of which: SME"
@@ -1297,9 +1303,9 @@ B31_C02_00_COLUMNS: list[COREPColumn] = [
 ]
 
 # --- CRR C 02.00 Row Sections ---
-# Rows cover the complete own funds requirements structure. Only the credit
-# risk section is populated by this calculator; CCR, market, op risk rows
-# are null (out of credit risk scope).
+# Rows cover the complete own funds requirements structure. Only the credit risk
+# section is populated by this calculator; market/op risk rows are null. CCR has no
+# row of its own: Annex II folds it into 0050 and its SA child 0060 (c02.py::_SA_APPROACHES).
 
 CRR_C02_00_ROW_SECTIONS: list[RowSection] = [
     RowSection(
@@ -1307,8 +1313,8 @@ CRR_C02_00_ROW_SECTIONS: list[RowSection] = [
         [
             COREPRow("0010", "TOTAL RISK EXPOSURE AMOUNT"),
             COREPRow("0040", "TOTAL OWN FUNDS REQUIREMENTS"),
-            # Credit risk
-            COREPRow("0050", _LBL_ROW_CREDIT_RISK_EXCL_CCR),
+            # Credit, counterparty credit and dilution risk
+            COREPRow("0050", _LBL_ROW_CREDIT_CCR_DILUTION_FREE_DELIV),
             COREPRow("0060", "Of which: Standardised Approach (SA)"),
             COREPRow("0070", _LBL_IRB_CENTRAL_GOVT),
             COREPRow("0080", "Regional governments and local authorities"),
@@ -1380,7 +1386,7 @@ B31_C02_00_ROW_SECTIONS: list[RowSection] = [
     RowSection(
         "Credit Risk — SA",
         [
-            COREPRow("0050", _LBL_ROW_CREDIT_RISK_EXCL_CCR),
+            COREPRow("0050", _LBL_ROW_CREDIT_CCR_DILUTION_FREE_DELIV),
             COREPRow("0060", "Of which: Standardised Approach (SA)"),
             COREPRow("0070", _LBL_IRB_CENTRAL_GOVT),
             COREPRow("0080", "Regional governments and local authorities"),

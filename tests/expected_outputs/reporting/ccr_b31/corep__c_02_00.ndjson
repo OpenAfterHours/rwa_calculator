@@ -1,0 +1,63 @@
+{"row_ref":"0010","row_name":"TOTAL RISK EXPOSURE AMOUNT","0010":4060296.719974031,"0020":4060296.719974031,"0030":4060296.719974031}
+{"row_ref":"0034","row_name":"Output floor activated","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0035","row_name":"Output floor multiplier","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0036","row_name":"Output floor adjustment (OF-ADJ)","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0040","row_name":"TOTAL OWN FUNDS REQUIREMENTS","0010":324823.7375979225,"0020":324823.7375979225,"0030":324823.7375979225}
+{"row_ref":"0050","row_name":"RISK WEIGHTED EXPOSURE AMOUNTS FOR CREDIT, COUNTERPARTY CREDIT AND DILUTION RISKS AND FREE DELIVERIES","0010":4060296.719974031,"0020":4060296.719974031,"0030":4060296.719974031}
+{"row_ref":"0060","row_name":"Of which: Standardised Approach (SA)","0010":4060296.7199740307,"0020":4060296.7199740307,"0030":4060296.7199740307}
+{"row_ref":"0070","row_name":"Central governments and central banks","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0080","row_name":"Regional governments and local authorities","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0090","row_name":"Public sector entities","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0100","row_name":"Multilateral development banks","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0110","row_name":"International organisations","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0120","row_name":"Institutions","0010":1560296.719974031,"0020":1560296.719974031,"0030":1560296.719974031}
+{"row_ref":"0130","row_name":"Corporates","0010":2500000.0,"0020":2500000.0,"0030":2500000.0}
+{"row_ref":"0131","row_name":"Of which: specialised lending","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0140","row_name":"Retail","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0150","row_name":"Secured by mortgages on immovable property","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0160","row_name":"Exposures in default","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0170","row_name":"Higher-risk items","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0180","row_name":"Covered bonds","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0190","row_name":"Short-term credit assessment","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0200","row_name":"Collective investment undertakings (CIU)","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0210","row_name":"Equity","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0211","row_name":"Other items","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0220","row_name":"Of which: IRB Approach","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0240","row_name":"Of which: Foundation IRB (F-IRB)","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0250","row_name":"F-IRB — Institutions","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0271","row_name":"F-IRB — Institutions (detail)","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0260","row_name":"F-IRB — Corporates","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0290","row_name":"F-IRB — SL excluding slotting","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0295","row_name":"F-IRB — Financial and large corporates","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0296","row_name":"F-IRB — Other general corporates SME","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0297","row_name":"F-IRB — Other general corporates non-SME","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0300","row_name":"Of which: Advanced IRB (A-IRB)","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0310","row_name":"A-IRB — Central governments and central banks","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0330","row_name":"A-IRB — Institutions","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0340","row_name":"A-IRB — Corporates","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0350","row_name":"A-IRB — SL excluding slotting","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0355","row_name":"A-IRB — Other general corporates SME","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0356","row_name":"A-IRB — Other general corporates non-SME","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0370","row_name":"A-IRB — Retail","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0380","row_name":"A-IRB — Retail, secured by immovable property","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0382","row_name":"A-IRB — Retail, residential immovable SME","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0383","row_name":"A-IRB — Retail, residential immovable non-SME","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0384","row_name":"A-IRB — Retail, commercial RE SME","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0385","row_name":"A-IRB — Retail, commercial RE non-SME","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0390","row_name":"A-IRB — Retail, qualifying revolving (QRRE)","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0400","row_name":"A-IRB — Retail, other SME","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0410","row_name":"A-IRB — Retail, other non-SME","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0411","row_name":"Supervisory slotting","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0412","row_name":"Slotting — Project finance","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0413","row_name":"Slotting — Object finance","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0414","row_name":"Slotting — Commodities finance","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0415","row_name":"Slotting — IPRE","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0416","row_name":"Slotting — HVCRE","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0420","row_name":"Equity IRB","0010":0.0,"0020":0.0,"0030":0.0}
+{"row_ref":"0430","row_name":"Settlement risk","0010":null,"0020":null,"0030":null}
+{"row_ref":"0440","row_name":"Securitisation positions in non-trading book","0010":null,"0020":null,"0030":null}
+{"row_ref":"0460","row_name":"Position, foreign exchange and commodities risk","0010":null,"0020":null,"0030":null}
+{"row_ref":"0590","row_name":"Credit valuation adjustment (CVA)","0010":null,"0020":null,"0030":null}
+{"row_ref":"0640","row_name":"Operational risk","0010":null,"0020":null,"0030":null}
+{"row_ref":"0680","row_name":"Additional risk exposure: fixed overheads","0010":null,"0020":null,"0030":null}
+{"row_ref":"0500","row_name":"Of which: retail/RE subject to currency mismatch multiplier (RWEA)","0010":0.0,"0020":null,"0030":null}

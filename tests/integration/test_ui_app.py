@@ -17,8 +17,10 @@ Key responsibilities tested:
 
 from __future__ import annotations
 
+import re
 import time
 from datetime import date
+from html import unescape
 from pathlib import Path
 
 import pytest
@@ -138,6 +140,174 @@ def test_results_page_splits_rwa_by_class_by_method(client: TestClient, data_dir
     assert "EAD by exposure class" in page
     assert page.count('class="method-subtitle"') >= 2
     assert ">STD<" in page
+
+
+def test_results_page_links_the_template_viewer(client: TestClient, data_dir: str) -> None:
+    # Arrange — run a calculation to completion
+    resp = client.post(
+        "/calculate",
+        data={"data_path": data_dir, "reporting_date": "2025-01-01"},
+        follow_redirects=False,
+    )
+    job_id = resp.headers["location"].rsplit("/", 1)[1]
+    _wait_for_job(client, job_id)
+
+    # Act
+    page = client.get(f"/results/{job_id}").text
+
+    # Assert — the viewer is reachable from the run, not just by URL surgery.
+    assert f"/results/{job_id}/templates" in page
+
+
+def test_template_viewer_renders_cells_keyed_for_drilldown(
+    client: TestClient, data_dir: str
+) -> None:
+    # Arrange — run a calculation to completion
+    resp = client.post(
+        "/calculate",
+        data={"data_path": data_dir, "reporting_date": "2025-01-01"},
+        follow_redirects=False,
+    )
+    job_id = resp.headers["location"].rsplit("/", 1)[1]
+    _wait_for_job(client, job_id)
+
+    # Act — C 07.00, corporate sheet (the SA corporate loan's sheet)
+    page = client.get(
+        f"/results/{job_id}/templates",
+        params={"template": "c07_00", "sheet": "corporate"},
+    )
+
+    # Assert — every value cell carries its full cell key (template, sheet, row,
+    # col). This is the address the lineage drill-down attaches to; it must not
+    # regress into an anonymous grid.
+    assert page.status_code == 200
+    html = page.text
+    assert "C 07.00" in html
+    cell = re.search(
+        r'data-template="c07_00"\s+data-sheet="corporate"\s+'
+        r'data-row="0010"\s+data-col="0220">(.*?)</td>',
+        html,
+        re.S,
+    )
+    assert cell is not None, "C 07.00 row 0010 / col 0220 is not addressable by its cell key"
+    assert re.sub(r"<[^>]+>", "", cell.group(1)).strip(), "the keyed RWEA cell rendered empty"
+
+
+def test_template_viewer_uses_the_full_width_with_frozen_row_labels(
+    client: TestClient, data_dir: str
+) -> None:
+    # Arrange — run a calculation to completion
+    resp = client.post(
+        "/calculate",
+        data={"data_path": data_dir, "reporting_date": "2025-01-01"},
+        follow_redirects=False,
+    )
+    job_id = resp.headers["location"].rsplit("/", 1)[1]
+    _wait_for_job(client, job_id)
+
+    # Act
+    html = client.get(
+        f"/results/{job_id}/templates",
+        params={"template": "c07_00", "sheet": "corporate"},
+    ).text
+
+    # Assert — a 28-column return is unreadable in a 1100px reading measure, and
+    # unusable if scrolling right loses the row labels. Both must hold together.
+    assert 'class="container container--wide"' in html
+    assert 'class="grid-wrap"' in html
+    assert html.count("rowhead-ref") > 30  # every row's label cell is frozen
+    assert html.count("rowhead-name") > 30
+    assert "28 columns" in html  # the width is stated, so it is not a surprise
+
+
+def test_template_viewer_distinguishes_null_from_reported_zero(
+    client: TestClient, data_dir: str
+) -> None:
+    # Arrange — run a calculation to completion
+    resp = client.post(
+        "/calculate",
+        data={"data_path": data_dir, "reporting_date": "2025-01-01"},
+        follow_redirects=False,
+    )
+    job_id = resp.headers["location"].rsplit("/", 1)[1]
+    _wait_for_job(client, job_id)
+
+    # Act
+    html = client.get(
+        f"/results/{job_id}/templates",
+        params={"template": "c07_00", "sheet": "corporate"},
+    ).text
+
+    # Assert — an empty/not-reported cell is marked null and rendered with the
+    # null glyph; a reported 0.0 is not. Conflating the two misstates the return.
+    assert "is-null" in html
+    assert "—" in html
+    assert ">0<" in html
+
+
+def test_clicking_a_template_cell_opens_its_lineage(client: TestClient, data_dir: str) -> None:
+    # Arrange — run a calculation to completion
+    resp = client.post(
+        "/calculate",
+        data={"data_path": data_dir, "reporting_date": "2025-01-01"},
+        follow_redirects=False,
+    )
+    job_id = resp.headers["location"].rsplit("/", 1)[1]
+    _wait_for_job(client, job_id)
+
+    # Act — follow the C 07.00 RWEA cell's own link, exactly as a user would
+    grid = client.get(
+        f"/results/{job_id}/templates",
+        params={"template": "c07_00", "sheet": "corporate"},
+    ).text
+    assert "Click any cell" in grid
+    match = re.search(r'data-row="0010"\s+data-col="0220">.*?href="([^"]+)"', grid, re.S)
+    assert match is not None, "the RWEA cell is not a drill-down link"
+    page = client.get(unescape(match.group(1)))
+
+    # Assert — the journey lands on the cell's lineage: what it means, and the
+    # exposure legs that produced it.
+    assert page.status_code == 200
+    html = page.text
+    assert "Cell lineage" in html
+    assert "Sum of rwa_final" in html  # the metric
+    assert "aggregator_exit" in html  # the basis
+    assert "Contributing exposure legs" in html
+    assert "reporting_leg_role" in html  # a contributor is a LEG
+    assert "reconcile" in html  # legs tie back to the reported figure
+
+
+def test_uninstrumented_templates_offer_no_dead_drilldown_links(
+    client: TestClient, data_dir: str
+) -> None:
+    # Arrange
+    resp = client.post(
+        "/calculate",
+        data={"data_path": data_dir, "reporting_date": "2025-01-01"},
+        follow_redirects=False,
+    )
+    job_id = resp.headers["location"].rsplit("/", 1)[1]
+    _wait_for_job(client, job_id)
+
+    # Act — C 02.00 has no lineage (its cells are not spec-backed)
+    grid = client.get(f"/results/{job_id}/templates", params={"template": "c_02_00"}).text
+    dead = client.get(
+        f"/results/{job_id}/lineage",
+        params={"template": "c34_01", "row": "0010", "col": "0010"},
+    )
+
+    # Assert — a cell is only offered as a link where there is a truthful answer;
+    # asking anyway is a clean 404, never a re-derived guess.
+    assert "cell-link" not in grid
+    assert dead.status_code == 404
+
+
+def test_template_viewer_unknown_run_is_not_found(client: TestClient) -> None:
+    # Act
+    resp = client.get("/results/does-not-exist/templates")
+
+    # Assert
+    assert resp.status_code == 404
 
 
 def test_results_page_offers_download_buttons(client: TestClient, data_dir: str) -> None:

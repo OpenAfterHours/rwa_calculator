@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Cell lineage — RWA Calculator{% endblock %}
+{% block container_mod %}container--wide{% endblock %}
+
+{% block content %}
+<div class="page-intro">
+  <p class="muted"><a href="{{ panel.back_url }}">← Back to {{ panel.template_title }}</a></p>
+
+  <h1>Cell lineage</h1>
+  <p class="muted mono">{{ panel.template_title }}{% if panel.sheet %} · {{ panel.sheet }}{% endif %}
+   · row {{ panel.row_ref }} · column {{ panel.col_ref }}</p>
+</div>
+
+<div class="stat-row">
+  <div class="stat">
+    <div class="stat-num">{{ panel.cell_display }}</div>
+    <div class="stat-lbl">Reported value</div>
+  </div>
+  {% if panel.contribution_display %}
+  <div class="stat">
+    <div class="stat-num">{{ panel.contribution_display }}</div>
+    <div class="stat-lbl">Sum of contributions</div>
+  </div>
+  {% endif %}
+  <div class="stat">
+    <div class="stat-num">{{ "{:,}".format(panel.total_rows) }}</div>
+    <div class="stat-lbl">Contributing legs</div>
+  </div>
+</div>
+
+{% if panel.warning %}
+<div class="callout warn">{{ panel.warning }}</div>
+{% endif %}
+{% if panel.reconciles is not none %}
+<div class="callout {{ 'info' if panel.reconciles else 'error' }}">
+  {% if panel.reconciles %}
+  The contributing legs reconcile to the reported figure{% if panel.sign == 'negated' %} (allowing for
+  the deduction-column sign convention){% endif %}.
+  {% else %}
+  The contributing legs do <strong>not</strong> reconcile to the reported figure — this is a defect,
+  please report it.
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="panel">
+  <h3>{{ panel.row_name or panel.row_ref }} <span class="muted">·</span> {{ panel.col_name }}</h3>
+  <p>{{ panel.summary }}</p>
+  {% if panel.metric %}
+  <p><strong>Measure:</strong> <span class="mono">{{ panel.metric }}</span></p>
+  {% endif %}
+  {% if panel.refs %}
+  <p><strong>Derived from cells:</strong>
+    {% for ref in panel.refs %}<span class="mono">{{ ref }}</span>{% if not loop.last %}, {% endif %}{% endfor %}
+    of this row.</p>
+  {% endif %}
+
+  {% if panel.kind == 'rows' %}
+  <p><strong>A leg is included when:</strong></p>
+  {% if panel.criteria %}
+  <ul>{% for c in panel.criteria %}<li class="mono">{{ c }}</li>{% endfor %}</ul>
+  {% else %}
+  <p class="muted">No further condition — this cell covers the whole sheet population.</p>
+  {% endif %}
+  {% endif %}
+
+  <p><strong>Population:</strong></p>
+  <ul>{% for step in panel.scope %}<li>{{ step }}</li>{% endfor %}</ul>
+  <p class="muted">Basis: <span class="mono">{{ panel.basis }}</span> — the sealed per-exposure ledger.</p>
+</div>
+
+{% if panel.total_rows %}
+<div class="panel">
+  <h3>Contributing exposure legs</h3>
+  <p class="muted">A guaranteed exposure is split into legs (guaranteed / retained), so a row here is a
+  <em>leg</em>, not necessarily a whole exposure — see <span class="mono">reporting_leg_role</span>.
+  Largest contributor first.</p>
+  <div class="table-wrap">
+    <table class="data">
+      <thead>
+        <tr>{% for col in panel.columns %}<th>{{ col }}</th>{% endfor %}</tr>
+      </thead>
+      <tbody>
+        {% for row in panel.rows %}
+        <tr>{% for cell in row %}<td class="mono">{{ cell }}</td>{% endfor %}</tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

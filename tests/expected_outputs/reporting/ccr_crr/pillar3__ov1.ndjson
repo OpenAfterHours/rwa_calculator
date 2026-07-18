@@ -1,0 +1,13 @@
+{"row_ref":"1","row_name":"Credit risk (excluding CCR)","a":2500000.0,"b":null,"c":200000.0}
+{"row_ref":"2","row_name":"Of which: standardised approach","a":2500000.0,"b":null,"c":200000.0}
+{"row_ref":"3","row_name":"Of which: foundation IRB approach","a":0.0,"b":null,"c":0.0}
+{"row_ref":"4","row_name":"Of which: slotting approach","a":0.0,"b":null,"c":0.0}
+{"row_ref":"UK4a","row_name":"Of which: equities under simple risk-weighted approach","a":0.0,"b":null,"c":0.0}
+{"row_ref":"5","row_name":"Of which: advanced IRB approach","a":0.0,"b":null,"c":0.0}
+{"row_ref":"6","row_name":"Counterparty credit risk - CCR","a":2858279.372710047,"b":null,"c":228662.34981680376}
+{"row_ref":"7","row_name":"CCR - Of which the standardised approach","a":2748345.5506827375,"b":null,"c":219867.644054619}
+{"row_ref":"8","row_name":"CCR - Of which internal model method (IMM)","a":null,"b":null,"c":null}
+{"row_ref":"UK8a","row_name":"CCR - Of which exposures to a central counterparty (CCP)","a":109933.8220273095,"b":null,"c":8794.705762184762}
+{"row_ref":"9","row_name":"CCR - Of which other CCR","a":0.0,"b":null,"c":0.0}
+{"row_ref":"24","row_name":"Amounts below deduction thresholds (250% RW)","a":null,"b":null,"c":null}
+{"row_ref":"29","row_name":"Total","a":5358279.372710047,"b":null,"c":428662.3498168038}

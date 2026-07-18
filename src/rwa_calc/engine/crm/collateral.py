@@ -30,6 +30,7 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.contracts.errors import (
+    ERROR_CREDIT_LINKED_NOTE_NOT_OWN_ISSUED,
     ERROR_CROSS_COUNTERPARTY_NETTING,
     ERROR_INELIGIBLE_IRB_COLLATERAL,
     ERROR_NON_MAIN_INDEX_EQUITY_INELIGIBLE,
@@ -51,6 +52,7 @@ from rwa_calc.engine.crm.expressions import (
 )
 from rwa_calc.engine.crm.haircuts import (
     HaircutCalculator,
+    credit_linked_note_ineligible_expr,
     non_main_index_equity_ineligible_expr,
 )
 from rwa_calc.observability.audit_cache import sink_audit
@@ -539,6 +541,10 @@ def apply_collateral(
     # eligibility flag; record one CRM018 warning per gated row.
     if errors is not None:
         _record_non_main_index_equity_ineligible(adjusted_collateral, errors)
+        # CRR/PS1-26 Art. 218 (P1.274): apply_haircuts has already zeroed a
+        # credit-linked note that is not attested own-issued; record one CRM019
+        # warning per gated row.
+        _record_credit_linked_note_not_own_issued(adjusted_collateral, errors)
 
     # Apply maturity mismatch using actual exposure maturity (Art. 238)
     adjusted_collateral = haircut_calculator.apply_maturity_mismatch(adjusted_collateral, config)
@@ -791,6 +797,45 @@ def _record_non_main_index_equity_ineligible(
                 f"risk mitigation.",
                 exposure_reference=ben_ref,
                 regulatory_reference="CRR/PS1-26 Art. 197(1)(f)/198(1)(a)",
+            )
+        )
+
+
+def _record_credit_linked_note_not_own_issued(
+    collateral: pl.LazyFrame,
+    errors: list[CalculationError],
+) -> None:
+    """Append one CRM019 warning per credit-linked note ruled ineligible by the
+    CRR/PS1-26 Art. 218 own-issuance gate.
+
+    The gate itself (value zeroing + is_eligible_financial_collateral clearing) is
+    applied in ``HaircutCalculator.apply_haircuts``; this re-derives the SAME
+    shared predicate on the post-haircut frame purely to emit the data-quality
+    warning. Targeted collect of the gated rows only — the accepted emission idiom
+    (P1.264); the collateral table is a small dimension frame. Reusing the one
+    predicate keeps the warning from drifting from the zeroed number.
+    """
+    names = collateral.collect_schema().names()
+    gate = credit_linked_note_ineligible_expr(names)
+    select_cols: list[pl.Expr] = [gate.alias("_gated")]
+    select_cols.extend(
+        pl.col(c) for c in ("collateral_reference", "beneficiary_reference") if c in names
+    )
+    gated = collateral.filter(gate).select(select_cols).collect()
+    for row in gated.iter_rows(named=True):
+        coll_ref = row.get("collateral_reference")
+        ben_ref = row.get("beneficiary_reference")
+        errors.append(
+            crm_warning(
+                ERROR_CREDIT_LINKED_NOTE_NOT_OWN_ISSUED,
+                f"Credit-linked note '{coll_ref}' securing exposure '{ben_ref}' is "
+                f"not attested issued by the lending institution (is_own_issued_cln "
+                f"is False/unset), so it does not qualify for Art. 218 cash-collateral "
+                f"treatment; a third-party CLN is materially correlated with its "
+                f"reference entity (Art. 194(4)). Its value is zeroed and it is "
+                f"excluded from credit risk mitigation.",
+                exposure_reference=ben_ref,
+                regulatory_reference="CRR/PS1-26 Art. 218",
             )
         )
 

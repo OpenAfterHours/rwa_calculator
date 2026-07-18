@@ -614,9 +614,9 @@ Last generated: 2026-07-18.
 
 ### CRR Art. 161 — Loss Given Default (LGD)
 
-??? quote "`apply_firb_supervisory_lgd_no_collateral` — src/rwa_calc/engine/crm/collateral.py:582"
+??? quote "`apply_firb_supervisory_lgd_no_collateral` — src/rwa_calc/engine/crm/collateral.py:586"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:582:707"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:586:711"
     ```
 
 ??? quote "`_parametric_irb_risk_weight_expr` — src/rwa_calc/engine/irb/formulas.py:871"
@@ -741,25 +741,25 @@ Last generated: 2026-07-18.
 
 ### CRR Art. 197 — Eligibility of collateral under all approaches and methods
 
-??? quote "`non_main_index_equity_ineligible_expr` — src/rwa_calc/engine/crm/haircuts.py:66"
+??? quote "`non_main_index_equity_ineligible_expr` — src/rwa_calc/engine/crm/haircuts.py:67"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/haircuts.py:66:98"
+    --8<-- "src/rwa_calc/engine/crm/haircuts.py:67:99"
     ```
 
 
 ### CRR Art. 198 — Additional eligibility of collateral under the Financial Collateral Comprehensive Method
 
-??? quote "`non_main_index_equity_ineligible_expr` — src/rwa_calc/engine/crm/haircuts.py:67"
+??? quote "`non_main_index_equity_ineligible_expr` — src/rwa_calc/engine/crm/haircuts.py:68"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/haircuts.py:66:98"
+    --8<-- "src/rwa_calc/engine/crm/haircuts.py:67:99"
     ```
 
 
 ### CRR Art. 199 — Additional eligibility for collateral under the IRB Approach
 
-??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:848"
+??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:891"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:848:1467"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:891:1516"
     ```
 
 
@@ -773,9 +773,9 @@ Last generated: 2026-07-18.
 
 ### CRR Art. 211 — Requirements for treating lease exposures as collateralised
 
-??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:849"
+??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:892"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:848:1467"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:891:1516"
     ```
 
 
@@ -807,6 +807,14 @@ Last generated: 2026-07-18.
 ??? quote "`_apply_maturity_mismatch_to_guarantees` — src/rwa_calc/engine/crm/guarantees.py:1494"
     ```python
     --8<-- "src/rwa_calc/engine/crm/guarantees.py:1494:1686"
+    ```
+
+
+### CRR Art. 218 — Credit linked notes
+
+??? quote "`credit_linked_note_ineligible_expr` — src/rwa_calc/engine/crm/haircuts.py:102"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/haircuts.py:102:130"
     ```
 
 
@@ -848,7 +856,7 @@ Last generated: 2026-07-18.
 
 ??? quote "`apply_collateral` — src/rwa_calc/engine/crm/collateral.py:427"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:425:559"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:425:563"
     ```
 
 ??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:110"
@@ -869,9 +877,9 @@ Last generated: 2026-07-18.
     --8<-- "src/rwa_calc/engine/crm/haircut_tables.py:353:385"
     ```
 
-??? quote "`apply_haircuts` — src/rwa_calc/engine/crm/haircuts.py:158"
+??? quote "`apply_haircuts` — src/rwa_calc/engine/crm/haircuts.py:190"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/haircuts.py:158:358"
+    --8<-- "src/rwa_calc/engine/crm/haircuts.py:190:395"
     ```
 
 ??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:111"
@@ -897,7 +905,7 @@ Last generated: 2026-07-18.
 
 ??? quote "`apply_collateral` — src/rwa_calc/engine/crm/collateral.py:428"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:425:559"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:425:563"
     ```
 
 ??? quote "`allocate_links` — src/rwa_calc/engine/crm/link_allocation.py:89"
@@ -995,9 +1003,9 @@ Last generated: 2026-07-18.
     --8<-- "src/rwa_calc/engine/crm/guarantees.py:1494:1686"
     ```
 
-??? quote "`apply_maturity_mismatch` — src/rwa_calc/engine/crm/haircuts.py:767"
+??? quote "`apply_maturity_mismatch` — src/rwa_calc/engine/crm/haircuts.py:814"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/haircuts.py:767:872"
+    --8<-- "src/rwa_calc/engine/crm/haircuts.py:814:919"
     ```
 
 
@@ -1008,9 +1016,9 @@ Last generated: 2026-07-18.
     --8<-- "src/rwa_calc/engine/crm/collateral.py:163:422"
     ```
 
-??? quote "`apply_maturity_mismatch` — src/rwa_calc/engine/crm/haircuts.py:768"
+??? quote "`apply_maturity_mismatch` — src/rwa_calc/engine/crm/haircuts.py:815"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/haircuts.py:767:872"
+    --8<-- "src/rwa_calc/engine/crm/haircuts.py:814:919"
     ```
 
 
@@ -1466,17 +1474,17 @@ Last generated: 2026-07-18.
 
 ### PS1/26 Art. 199 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:850"
+??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:893"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:848:1467"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:891:1516"
     ```
 
 
 ### PS1/26 Art. 211 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:851"
+??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:894"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:848:1467"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:891:1516"
     ```
 
 
@@ -1484,12 +1492,12 @@ Last generated: 2026-07-18.
 
 ??? quote "`apply_collateral` — src/rwa_calc/engine/crm/collateral.py:425"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:425:559"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:425:563"
     ```
 
 ??? quote "`apply_collateral` — src/rwa_calc/engine/crm/collateral.py:426"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:425:559"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:425:563"
     ```
 
 ??? quote "`overcollateralisation_ratio_expr` — src/rwa_calc/engine/crm/expressions.py:131"

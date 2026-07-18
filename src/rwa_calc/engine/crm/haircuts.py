@@ -33,6 +33,7 @@ from watchfire import cites
 
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.schemas import (
+    CREDIT_LINKED_NOTE_COLLATERAL_TYPES,
     EQUITY_COLLATERAL_TYPES,
     NON_FINANCIAL_COLLATERAL_TYPES,
     REAL_ESTATE_COLLATERAL_TYPES,
@@ -96,6 +97,37 @@ def non_main_index_equity_ineligible_expr(schema_names: Iterable[str]) -> pl.Exp
     )
     is_listed = pl.col("is_listed").fill_null(False) if "is_listed" in names else pl.lit(False)
     return is_equity & is_main_index.not_() & is_listed.not_()
+
+
+@cites("CRR Art. 218")
+def credit_linked_note_ineligible_expr(schema_names: Iterable[str]) -> pl.Expr:
+    """Art. 218: a credit-linked note is cash collateral only if own-issued.
+
+    A credit-linked note earns cash-collateral treatment (0% haircut, full
+    EAD/LGD* offset) under CRR/PS1-26 Art. 218 only when it is ISSUED BY THE
+    LENDING INSTITUTION itself — the note's cash proceeds fund the protection. A
+    CLN issued by a THIRD PARTY is not within Art. 218: its value is materially
+    correlated with the reference entity (typically the obligor — Art. 194(4)
+    wrong-way risk), so it is ineligible funded protection.
+
+    A ``credit_linked_note`` collateral row that is not attested own-issued
+    (``is_own_issued_cln`` False or null) is therefore ineligible. Null / absent
+    resolves conservatively to False (absence of attestation must not fabricate
+    cash treatment). When the ``is_own_issued_cln`` column is not present the
+    expression is a no-op (``False``): the legacy backward-compatibility path
+    where every CLN retained cash treatment — production always carries the
+    column via ``COLLATERAL_SCHEMA``.
+
+    Shared by the haircut-stage value gate (``HaircutCalculator.apply_haircuts``)
+    and the CRM019 warning emission (``engine/crm/collateral.py``) so the
+    predicate has a single definition. It reads the raw ``collateral_type``.
+    """
+    names = set(schema_names)
+    if "is_own_issued_cln" not in names:
+        return pl.lit(False)
+    is_cln = pl.col("collateral_type").str.to_lowercase().is_in(CREDIT_LINKED_NOTE_COLLATERAL_TYPES)
+    is_own_issued = pl.col("is_own_issued_cln").fill_null(False)
+    return is_cln & is_own_issued.not_()
 
 
 @dataclass
@@ -302,7 +334,7 @@ class HaircutCalculator:
             ]
         )
 
-        # Zero out value for ineligible collateral. Two independent gates share the
+        # Zero out value for ineligible collateral. Three independent gates share the
         # same value/eligibility treatment:
         #   _bond_ineligible          — Art. 197 CQS gate (govt CQS 5-6, corp CQS 4-6,
         #                               securitisation / non-SFT covered bonds); the
@@ -311,9 +343,14 @@ class HaircutCalculator:
         #                               non-listed equity (P1.271); the 25%/30%
         #                               supervisory haircut is deliberately left
         #                               intact (valuation ≠ eligibility).
+        #   _cln_ineligible           — Art. 218 credit-linked note not attested
+        #                               own-issued (P1.274); the 0% cash haircut is
+        #                               left intact (valuation ≠ eligibility).
         names = collateral.collect_schema().names()
         ineligible_flags = [
-            f for f in ("_bond_ineligible", "_equity_listing_ineligible") if f in names
+            f
+            for f in ("_bond_ineligible", "_equity_listing_ineligible", "_cln_ineligible")
+            if f in names
         ]
         if ineligible_flags:
             is_ineligible = pl.any_horizontal([pl.col(f) for f in ineligible_flags])
@@ -694,11 +731,21 @@ class HaircutCalculator:
         # gated row, but its collateral_haircut keeps the looked-up band value.
         _equity_listing_ineligible = non_main_index_equity_ineligible_expr(schema.names())
 
+        # P1.274 — CRR/PS1-26 Art. 218: a credit-linked note is cash collateral
+        # only when issued by the lending institution itself. A CLN not attested
+        # own-issued is ineligible funded protection (a third-party CLN carries
+        # Art. 194(4) wrong-way risk to its reference entity). Same ELIGIBILITY
+        # gate as equity: apply_haircuts zeros value_after_haircut and clears
+        # is_eligible_financial_collateral; the 0% cash collateral_haircut the row
+        # would otherwise take is irrelevant once the value is zeroed.
+        _cln_ineligible = credit_linked_note_ineligible_expr(schema.names())
+
         # Assign haircut: life insurance 0% → Art. 227 zero → ineligible bond 100% → lookup → 40%
         collateral = collateral.with_columns(
             [
                 _ineligible_bond.alias("_bond_ineligible"),
                 _equity_listing_ineligible.alias("_equity_listing_ineligible"),
+                _cln_ineligible.alias("_cln_ineligible"),
                 _is_art227.alias("_is_zero_haircut"),
                 pl.when(_is_life_insurance)
                 .then(pl.lit(0.0))

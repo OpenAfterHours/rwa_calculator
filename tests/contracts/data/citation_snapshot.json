@@ -153,6 +153,9 @@
     "CRR Art. 237",
     "CRR Art. 238"
   ],
+  "rwa_calc.engine.crm.haircuts::credit_linked_note_ineligible_expr": [
+    "CRR Art. 218"
+  ],
   "rwa_calc.engine.crm.haircuts::non_main_index_equity_ineligible_expr": [
     "CRR Art. 197",
     "CRR Art. 198"

@@ -616,6 +616,19 @@ COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     # conservative default; absence of data must not fabricate eligibility). Per
     # P1.271 — CRR/PS1-26 Art. 197(1)(f)/198(1)(a).
     "is_listed": ColumnSpec(pl.Boolean, required=False),
+    # CRR Art. 218 / PRA PS1/26 Art. 218 (retained): a credit-linked note is
+    # treated as cash collateral (0% haircut, full EAD/LGD* offset) only when it
+    # is ISSUED BY THE LENDING INSTITUTION itself — the note's cash proceeds fund
+    # the protection. A CLN issued by a THIRD PARTY is not within Art. 218: its
+    # value is materially correlated with the reference entity (typically the
+    # obligor — Art. 194(4) wrong-way risk), so it is not clean cash collateral.
+    # This attestation gates the CLN→cash treatment. No Boolean default on
+    # purpose: null means "own-issuance unattested" and the haircut engine
+    # (engine/crm/haircuts.py) resolves null -> NOT own-issued -> ineligible
+    # funded protection (value zeroed, is_eligible_financial_collateral cleared,
+    # CRM019 raised) — absence of attestation must not fabricate cash treatment.
+    # Only consulted for credit_linked_note collateral rows (P1.274).
+    "is_own_issued_cln": ColumnSpec(pl.Boolean, required=False),
     "valuation_date": ColumnSpec(pl.Date, required=False),
     "valuation_type": ColumnSpec(pl.String, required=False),
     "property_type": ColumnSpec(pl.String, required=False),

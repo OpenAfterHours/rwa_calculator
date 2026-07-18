@@ -175,6 +175,15 @@ ERROR_THIRD_PARTY_DEPOSIT_FIRB_DEFERRED = "CRM017"
 # False/unset) is ineligible: its value is zeroed, is_eligible_financial_collateral
 # is cleared, and this warning is raised (one per gated row).
 ERROR_NON_MAIN_INDEX_EQUITY_INELIGIBLE = "CRM018"
+# Credit-linked note own-issuance (CRR/PS1-26 Art. 218, P1.274): a credit-linked
+# note is treated as cash collateral only when it is ISSUED BY THE LENDING
+# institution itself (the note's cash proceeds fund the protection). A CLN that
+# is not attested own-issued (is_own_issued_cln False/unset) is not within Art.
+# 218 — its value is materially correlated with the reference entity (Art. 194(4)
+# wrong-way risk), so it is ineligible funded protection: its value is zeroed,
+# is_eligible_financial_collateral is cleared, and this warning is raised (one per
+# gated row).
+ERROR_CREDIT_LINKED_NOTE_NOT_OWN_ISSUED = "CRM019"
 
 # IRB error codes
 ERROR_PD_OUT_OF_RANGE = "IRB001"

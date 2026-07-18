@@ -133,6 +133,45 @@ Key B31 changes: the 5-band split **raises the longest-tenor haircuts** material
 | Main index | 15% | 20% |
 | Other listed | 25% | 30% |
 
+### Credit-Linked Notes (CRR/PS1-26 Art. 218)
+
+Art. 218 — *"investments in credit-linked notes issued by the lending institution
+may be treated as cash collateral … provided that the credit default swap embedded
+in the credit-linked note qualifies as eligible unfunded credit protection"* — grants
+a credit-linked note the cash treatment (0% haircut, full EAD/LGD\* offset) **only
+where the note is issued by the lending institution itself**. The note's cash proceeds
+fund the protection, so it behaves as own-bank cash. PRA PS1/26 retains this verbatim
+(both regimes — no regime split).
+
+A CLN issued by a **third party** is *not* within Art. 218: its value is materially
+correlated with the reference entity (typically the obligor — the Art. 194(4)
+wrong-way-risk case), so it is not clean cash collateral.
+
+**Input convention.** Supply the note as a `credit_linked_note` `COLLATERAL_SCHEMA`
+row and attest own-issuance with `is_own_issued_cln`:
+
+| `is_own_issued_cln` | Treatment |
+|--------------------|-----------|
+| `True` | Own-issued → **cash collateral** (0% haircut, full offset) |
+| `False` / null | Not attested own-issued → **ineligible funded protection** |
+
+`is_own_issued_cln` has **no Boolean default** — null means "own-issuance unattested"
+and resolves to `False` (conservative): absence of attestation must not fabricate cash
+treatment. The eligibility gate lives in `HaircutCalculator.apply_haircuts`
+(`engine/crm/haircuts.py::credit_linked_note_ineligible_expr`) and works exactly like
+the non-main-index-equity gate — it zeroes `value_after_haircut` and clears
+`is_eligible_financial_collateral` for a non-own-issued row (which removes the row from
+both the SA E\* reduction and the F-IRB LGD\* input, since `effectively_secured` derives
+from the zeroed value), and raises one `CRM019` warning per gated row. The 0% cash
+haircut the row would otherwise take is a valuation parameter, left intact.
+
+**Direction of error.** Own-issued CLN: **exact** (unchanged cash treatment). Third-
+party / unattested CLN: **conservative** (over-states RWA relative to the prior
+anti-conservative full-cash treatment — a third-party CLN is not recognised at all,
+rather than routed to a debt-security-of-its-issuer treatment, because a CLN carries no
+clean issuer-bond eligibility path and its reference-entity correlation would need an
+independent Art. 194(4) check).
+
 ### Non-Financial Collateral
 
 Non-financial collateral does not use the supervisory volatility haircut framework (Art. 224). Instead, it is recognised through the **Foundation Collateral Method** (Art. 230-231) using LGDS values within the LGD* formula. See [F-IRB LGDS Values](#f-irb-lgds-values-art-230--art-161) below for the per-framework values.

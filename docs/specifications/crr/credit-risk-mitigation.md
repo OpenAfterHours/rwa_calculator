@@ -733,6 +733,26 @@ Method:
 | (g) | Gold | N/A |
 | (h) | Non-resecuritisation securitisation positions | RW <= 100% |
 
+### Additional Comprehensive-Method Collateral (Art. 198)
+
+Art. 198(1) extends the eligible list **only where the institution uses the
+Financial Collateral Comprehensive Method** (the calculator's default):
+
+| Art. 198(1) Para | Collateral Type | Condition |
+|------------------|-----------------|-----------|
+| (a) | Non-main-index equities / convertible bonds | Listed on a recognised exchange |
+| (b) | Units/shares in CIUs | Daily quote; underlying limited to Art. 197/198 instruments |
+
+**Non-main-index equity eligibility (P1.271).** An equity that is neither included
+in a main index (Art. 197(1)(f), eligible under all methods) nor attested listed on
+a recognised exchange (Art. 198(1)(a)) is **ineligible** — the engine zeroes its
+value, clears `is_eligible_financial_collateral`, and raises a `CRM018` warning. The
+`is_listed` flag carries the recognised-exchange attestation; null resolves
+conservatively to *not listed*. The Art. 224 Table 3/4 other-listed haircut
+(25% CRR / 30% Basel 3.1) is a valuation parameter and is unaffected by the
+eligibility gate. The condition is comprehensive-method scope, **not** a repo/SFT
+restriction. PS1/26 carries Art. 197(1)(f)/198(1)(a) forward unchanged.
+
 ## Eligible Unfunded Protection Providers (Art. 201)
 
 | Provider Type | SA + F-IRB | A-IRB (additional) |

@@ -166,6 +166,15 @@ ERROR_CROSS_COUNTERPARTY_NETTING = "CRM016"
 # (it is excluded from the LGD* collateral input rather than valued at 0% cash)
 # and this warning records the pending substitution (one per gated row).
 ERROR_THIRD_PARTY_DEPOSIT_FIRB_DEFERRED = "CRM017"
+# Non-main-index equity collateral eligibility (CRR/PS1-26 Art. 197(1)(f)/198(1)(a),
+# P1.271): equities/convertible bonds are eligible financial collateral under all
+# methods only when included in a MAIN index (Art. 197(1)(f)); a non-main-index
+# equity is eligible only if LISTED on a recognised exchange (Art. 198(1)(a)) and
+# then only under the comprehensive method. A collateral row of equity type that is
+# neither attested main-index nor attested listed (is_main_index and is_listed both
+# False/unset) is ineligible: its value is zeroed, is_eligible_financial_collateral
+# is cleared, and this warning is raised (one per gated row).
+ERROR_NON_MAIN_INDEX_EQUITY_INELIGIBLE = "CRM018"
 
 # IRB error codes
 ERROR_PD_OUT_OF_RANGE = "IRB001"

@@ -584,6 +584,17 @@ COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     # Art. 197(1)(f)/198(1)(a): only main-index equities earn the cheaper
     # all-methods treatment, so unknown membership must not fabricate it.
     "is_main_index": ColumnSpec(pl.Boolean, required=False),
+    # CRR Art. 198(1)(a) / PRA PS1/26 Art. 198(1)(a): a non-main-index equity (or
+    # convertible bond) is eligible financial collateral only if it is traded on a
+    # recognised exchange, i.e. LISTED — and then only under the comprehensive
+    # method this calculator uses by default. Main-index equities are eligible
+    # under all methods regardless (Art. 197(1)(f)), so this flag is only consulted
+    # for equity that is NOT attested main-index. No Boolean default on purpose:
+    # null means "listing status unreported" and the haircut engine
+    # (engine/crm/haircuts.py) resolves null -> not listed -> INELIGIBLE (the
+    # conservative default; absence of data must not fabricate eligibility). Per
+    # P1.271 — CRR/PS1-26 Art. 197(1)(f)/198(1)(a).
+    "is_listed": ColumnSpec(pl.Boolean, required=False),
     "valuation_date": ColumnSpec(pl.Date, required=False),
     "valuation_type": ColumnSpec(pl.String, required=False),
     "property_type": ColumnSpec(pl.String, required=False),
@@ -1726,6 +1737,12 @@ THIRD_PARTY_DEPOSIT_COLLATERAL_TYPES: list[str] = ["cash", "deposit"]
 INSTITUTION_DEPOSIT_HOLDER_TYPES: list[str] = ["institution", "bank", "credit_institution"]
 
 CREDIT_LINKED_NOTE_COLLATERAL_TYPES: list[str] = ["credit_linked_note"]
+
+# CRR/PS1-26 Art. 197(1)(f)/198(1)(a): the collateral_type synonyms the CRM engine
+# treats as equity (main-index and non-main-index). Mirrors the equity branch of
+# engine/crm/haircuts.py::_normalize_collateral_type_expr; used by the Art. 198(1)(a)
+# non-main-index-equity listing-eligibility gate (P1.271).
+EQUITY_COLLATERAL_TYPES: list[str] = ["equity", "shares", "stock"]
 
 # Art. 227(2)(a): collateral types eligible for zero-haircut treatment in repos.
 # Both the exposure and collateral must be cash or 0%-RW sovereign debt securities.

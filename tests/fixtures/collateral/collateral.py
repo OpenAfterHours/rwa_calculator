@@ -71,6 +71,10 @@ class Collateral:
     # P1.237/P1.271 — Art. 197(1)(f)/198(1)(a): main-index attestation drives the
     # equity haircut (15%/20% vs 25%/30%). None -> other-listed (conservative).
     is_main_index: bool | None = None
+    # P1.271 — Art. 198(1)(a): a non-main-index equity is eligible collateral only
+    # if listed on a recognised exchange. None/False -> ineligible (conservative);
+    # only consulted for equity that is not attested main-index.
+    is_listed: bool | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -98,6 +102,7 @@ class Collateral:
             "liquidation_period_days": self.liquidation_period_days,
             "rental_to_interest_ratio": self.rental_to_interest_ratio,
             "is_main_index": self.is_main_index,
+            "is_listed": self.is_listed,
         }
 
 
@@ -273,8 +278,10 @@ def _equity_collateral() -> list[Collateral]:
     30% Basel 3.1 supervisory haircut.
 
     These rows do NOT attest is_main_index, so per P1.237/P1.271 (Art. 197(1)(f)/
-    198(1)(a)) they take the higher other-listed haircut. Main-index equity (15%/
-    20%) is covered by the COLL_CRM_D3 row, which sets is_main_index=True.
+    198(1)(a)) they take the higher other-listed haircut. They ARE attested listed
+    (is_listed=True) so the Art. 198(1)(a) eligibility gate recognises them as
+    other-listed equity collateral. Main-index equity (15%/20%) is covered by the
+    COLL_CRM_D3 row, which sets is_main_index=True.
     """
     return [
         # Other-listed equity, 25% CRR / 30% B31 haircut (uses dedicated test loan)
@@ -299,6 +306,8 @@ def _equity_collateral() -> list[Collateral]:
             is_income_producing=None,
             is_adc=None,
             is_presold=None,
+            # P1.271 — Art. 198(1)(a): listed on a recognised exchange (other-listed).
+            is_listed=True,
         ),
         # Listed equity for subordinated loan
         Collateral(
@@ -322,6 +331,8 @@ def _equity_collateral() -> list[Collateral]:
             is_income_producing=None,
             is_adc=None,
             is_presold=None,
+            # P1.271 — Art. 198(1)(a): listed on a recognised exchange (other-listed).
+            is_listed=True,
         ),
     ]
 
@@ -873,7 +884,10 @@ def _crr_d_scenario_collateral() -> list[Collateral]:
             is_presold=None,
             # P1.237/P1.271 — FTSE 100 main-index equity: attest so it earns the
             # 15% (CRR) / 20% (B31) main-index haircut per Art. 224 Table 3/4.
+            # Main-index equity is eligible under all methods (Art. 197(1)(f)), so
+            # the Art. 198(1)(a) listing gate does not apply; is_listed=True anyway.
             is_main_index=True,
+            is_listed=True,
         ),
         # =============================================================================
         # D5: Maturity mismatch - 2yr collateral vs 5yr exposure

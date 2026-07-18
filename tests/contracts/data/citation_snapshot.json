@@ -150,6 +150,10 @@
     "CRR Art. 237",
     "CRR Art. 238"
   ],
+  "rwa_calc.engine.crm.haircuts::non_main_index_equity_ineligible_expr": [
+    "CRR Art. 197",
+    "CRR Art. 198"
+  ],
   "rwa_calc.engine.crm.life_insurance::compute_life_insurance_columns": [
     "CRR Art. 232"
   ],

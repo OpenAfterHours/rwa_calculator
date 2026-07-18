@@ -32,6 +32,7 @@ from watchfire import cites
 from rwa_calc.contracts.errors import (
     ERROR_CROSS_COUNTERPARTY_NETTING,
     ERROR_INELIGIBLE_IRB_COLLATERAL,
+    ERROR_NON_MAIN_INDEX_EQUITY_INELIGIBLE,
     crm_warning,
 )
 from rwa_calc.data.schemas import DIRECT_BENEFICIARY_TYPES, NON_ELIGIBLE_RE_TYPES
@@ -47,7 +48,10 @@ from rwa_calc.engine.crm.expressions import (
     subordinated_unsecured_lgd,
     supervisory_lgd_values,
 )
-from rwa_calc.engine.crm.haircuts import HaircutCalculator
+from rwa_calc.engine.crm.haircuts import (
+    HaircutCalculator,
+    non_main_index_equity_ineligible_expr,
+)
 from rwa_calc.observability.audit_cache import sink_audit
 from rwa_calc.rulebook import RulepackV0
 from rwa_calc.rulebook.compile import lookup_float_map
@@ -443,6 +447,12 @@ def apply_collateral(
     # Apply haircuts to collateral (no longer needs exposures)
     adjusted_collateral = haircut_calculator.apply_haircuts(collateral, config, pack=pack)
 
+    # CRR/PS1-26 Art. 197(1)(f)/198(1)(a) (P1.271): apply_haircuts has already
+    # zeroed non-main-index / non-listed equity collateral and cleared its
+    # eligibility flag; record one CRM018 warning per gated row.
+    if errors is not None:
+        _record_non_main_index_equity_ineligible(adjusted_collateral, errors)
+
     # Apply maturity mismatch using actual exposure maturity (Art. 238)
     adjusted_collateral = haircut_calculator.apply_maturity_mismatch(adjusted_collateral, config)
 
@@ -655,6 +665,45 @@ def _record_ineligible_irb_collateral(
                 f"to the unsecured supervisory value.",
                 exposure_reference=ben_ref,
                 regulatory_reference="CRR Art. 199(2)/(5)/(6)",
+            )
+        )
+
+
+def _record_non_main_index_equity_ineligible(
+    collateral: pl.LazyFrame,
+    errors: list[CalculationError],
+) -> None:
+    """Append one CRM018 warning per non-main-index equity collateral row ruled
+    ineligible by the CRR/PS1-26 Art. 197(1)(f)/198(1)(a) listing gate.
+
+    The gate itself (value zeroing + is_eligible_financial_collateral clearing) is
+    applied in ``HaircutCalculator.apply_haircuts``; this re-derives the SAME
+    shared predicate on the post-haircut frame purely to emit the data-quality
+    warning. Targeted collect of the gated rows only — the accepted emission idiom
+    (P1.264); the collateral table is a small dimension frame. Reusing the one
+    predicate keeps the warning from drifting from the zeroed number.
+    """
+    names = collateral.collect_schema().names()
+    gate = non_main_index_equity_ineligible_expr(names)
+    select_cols: list[pl.Expr] = [gate.alias("_gated")]
+    select_cols.extend(
+        pl.col(c) for c in ("collateral_reference", "beneficiary_reference") if c in names
+    )
+    gated = collateral.filter(gate).select(select_cols).collect()
+    for row in gated.iter_rows(named=True):
+        coll_ref = row.get("collateral_reference")
+        ben_ref = row.get("beneficiary_reference")
+        errors.append(
+            crm_warning(
+                ERROR_NON_MAIN_INDEX_EQUITY_INELIGIBLE,
+                f"Equity collateral '{coll_ref}' securing exposure '{ben_ref}' is "
+                f"neither included in a main index (Art. 197(1)(f)) nor attested "
+                f"listed on a recognised exchange (Art. 198(1)(a); is_main_index and "
+                f"is_listed are both False/unset), so it is ineligible financial "
+                f"collateral; its value is zeroed and it is excluded from credit "
+                f"risk mitigation.",
+                exposure_reference=ben_ref,
+                regulatory_reference="CRR/PS1-26 Art. 197(1)(f)/198(1)(a)",
             )
         )
 

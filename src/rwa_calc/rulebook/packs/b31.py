@@ -559,7 +559,7 @@ ENTRIES: dict[str, RuleEntry] = {
             "large_corporate_revenue_threshold": Decimal("440000000"),  # GBP 440m (Art. 147A(1)(d))
             "retail_max_exposure": Decimal("880000"),  # GBP 880k (Art. 147(5A))
             "qrre_max_limit": Decimal("90000"),  # GBP 90k (Art. 147(5A)(c))
-            "lfse_total_assets_threshold": Decimal("0"),  # n/a under Basel 3.1
+            "lfse_total_assets_threshold": Decimal("79000000000"),  # GBP 79bn (IRB Part glossary)
         },
         citation=Citation("PS1/26", "147", "PRA-native GBP thresholds (sme_balance_sheet frozen)"),
     ),

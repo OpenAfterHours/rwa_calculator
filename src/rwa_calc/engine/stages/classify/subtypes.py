@@ -54,6 +54,9 @@ logger = logging.getLogger(__name__)
 # =========================================================================
 
 
+@cites("CRR Art. 153(2)")
+@cites("CRR Art. 142(1)(4)")
+@cites("PS1/26, paragraph 153")
 def classify_exposure_subtypes(
     exposures: pl.LazyFrame,
     config: CalculationConfig,
@@ -67,14 +70,38 @@ def classify_exposure_subtypes(
     SME only touches "corporate", retail only touches "retail_other",
     QRRE specialises qualifying revolving retail.
 
-    Also derives requires_fi_scalar directly from the user-supplied
-    apply_fi_scalar flag (no entity-type gate).
+    Also derives ``requires_fi_scalar`` — the gate for the 1.25x asset-value
+    correlation multiplier (CRR Art. 153(2) / PS1/26 Art. 153(2)). This is a
+    MANDATORY treatment for large financial sector entities, not a user
+    election, so it is DERIVED from the entity-type flag and total assets:
+
+        requires_fi_scalar = apply_fi_scalar
+                             OR (is_financial_sector_entity
+                                 AND total_assets >= threshold)
+
+    The threshold is the LFSE size test (CRR Art. 142(1)(4): EUR 70bn on an
+    individual/consolidated basis, converted GBP via the FX seam; PS1/26 IRB
+    Part glossary: GBP 79bn native, at the highest level of consolidation).
+    ``total_assets`` is a GBP figure, mirroring the SME balance-sheet gate.
+    The user-supplied ``apply_fi_scalar`` is retained as an authoritative
+    True-OVERRIDE (a firm may know an entity is a large or UNREGULATED FSE
+    even when size data says otherwise) — it can never SUPPRESS a derived
+    True. A null ``total_assets`` on a flagged FSE leaves largeness
+    undetermined: the scalar is NOT applied (the whole-FSE population mostly
+    sits below the threshold), and ``audit.collect_input_warnings`` emits
+    CLS009 so the data gap is never a silent under-statement. The unregulated
+    FSE limb (Art. 142(1)(5), size-independent) needs a regulated-status input
+    the schema does not carry and is deferred to a schema-enablement change;
+    ``apply_fi_scalar`` is the interim override for known unregulated FSEs.
 
     Sets: exposure_class (updated), is_sme, requires_fi_scalar, is_hvcre
     """
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     qrre_max_limit = float(
         regulatory_threshold(resolved_pack, "qrre_max_limit", config.eur_gbp_rate)
+    )
+    lfse_total_assets_threshold = float(
+        regulatory_threshold(resolved_pack, "lfse_total_assets_threshold", config.eur_gbp_rate)
     )
     is_sme_by_size = is_sme_by_size_expr(config, pack=resolved_pack)
 
@@ -137,6 +164,17 @@ def classify_exposure_subtypes(
     )
     is_qrre = is_qrre_candidate & (obligor_aggregate_limit <= qrre_max_limit)
 
+    # FI scalar (1.25x correlation) — mandatory for large FSEs (Art. 153(2)).
+    # An FSE is "large" when total assets meet the Art. 142(1)(4) / PS1/26
+    # glossary threshold. Null total_assets -> the >= test is null -> False:
+    # size undetermined, no scalar (CLS009 flags the gap in audit.py). The
+    # user flag is OR-ed in as an authoritative override that can never
+    # suppress a derived True.
+    is_large_fse = pl.col("cp_is_financial_sector_entity").fill_null(False) & (
+        pl.col("cp_total_assets") >= lfse_total_assets_threshold
+    ).fill_null(False)
+    requires_fi_scalar = pl.col("cp_apply_fi_scalar").fill_null(False) | is_large_fse
+
     return exposures.with_columns(
         [
             # --- exposure_class update (SME + retail + QRRE combined) ---
@@ -178,10 +216,8 @@ def classify_exposure_subtypes(
             # True for: corporate SME, retail reclassified to CORPORATE_SME,
             # or specialised lending with SME counterparty (keeps SPECIALISED_LENDING class).
             (is_corporate_sme | is_retail_sme | is_sl_sme).alias("is_sme"),
-            # --- FI scalar: user flag is authoritative (CRR Art. 153(2)) ---
-            (pl.col("cp_apply_fi_scalar") == True)  # noqa: E712
-            .fill_null(False)
-            .alias("requires_fi_scalar"),
+            # --- FI scalar: derived (large FSE) OR user override (Art. 153(2)) ---
+            requires_fi_scalar.alias("requires_fi_scalar"),
             # --- HVCRE flag (from specialised lending join, null → False) ---
             pl.col("is_hvcre").fill_null(False).alias("is_hvcre"),
         ]

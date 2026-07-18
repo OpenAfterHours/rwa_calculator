@@ -425,9 +425,12 @@ Last generated: 2026-07-18.
     ```
 
 
-### CRR Art. 142 — Definitions for the IRB approach
+### CRR Art. 142 — Definitions
 
-*Definitions only — no calculation path. The terms are realised in `src/rwa_calc/domain/enums.py` (e.g. `ExposureClass`, `ApproachType`) and `src/rwa_calc/data/schemas.py`.*
+??? quote "`classify_exposure_subtypes` — src/rwa_calc/engine/stages/classify/subtypes.py:58"
+    ```python
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:57:224"
+    ```
 
 
 ### CRR Art. 143 — Permission to use the IRB Approach
@@ -573,6 +576,11 @@ Last generated: 2026-07-18.
 ??? quote "`_build_is_defaulted_expr` — src/rwa_calc/engine/stages/classify/attributes.py:479"
     ```python
     --8<-- "src/rwa_calc/engine/stages/classify/attributes.py:478:506"
+    ```
+
+??? quote "`classify_exposure_subtypes` — src/rwa_calc/engine/stages/classify/subtypes.py:57"
+    ```python
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:57:224"
     ```
 
 
@@ -924,9 +932,9 @@ Last generated: 2026-07-18.
 
 ### CRR Art. 232 — Other funded credit protection
 
-??? quote "`compute_life_insurance_columns` — src/rwa_calc/engine/crm/life_insurance.py:87"
+??? quote "`compute_life_insurance_columns` — src/rwa_calc/engine/crm/life_insurance.py:92"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/life_insurance.py:87:215"
+    --8<-- "src/rwa_calc/engine/crm/life_insurance.py:92:234"
     ```
 
 ??? quote "`compute_third_party_deposit_columns` — src/rwa_calc/engine/crm/third_party_deposit.py:82"
@@ -947,9 +955,9 @@ Last generated: 2026-07-18.
 
 ### CRR Art. 233 — Valuation
 
-??? quote "`compute_life_insurance_columns` — src/rwa_calc/engine/crm/life_insurance.py:88"
+??? quote "`compute_life_insurance_columns` — src/rwa_calc/engine/crm/life_insurance.py:93"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/life_insurance.py:87:215"
+    --8<-- "src/rwa_calc/engine/crm/life_insurance.py:92:234"
     ```
 
 
@@ -1380,9 +1388,17 @@ Last generated: 2026-07-18.
 
 ### PS1/26, paragraph 147A.1 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`derive_exposure_subclass` — src/rwa_calc/engine/stages/classify/subtypes.py:279"
+??? quote "`derive_exposure_subclass` — src/rwa_calc/engine/stages/classify/subtypes.py:315"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:279:333"
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:315:369"
+    ```
+
+
+### PS1/26, paragraph 153 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
+
+??? quote "`classify_exposure_subtypes` — src/rwa_calc/engine/stages/classify/subtypes.py:59"
+    ```python
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:57:224"
     ```
 
 

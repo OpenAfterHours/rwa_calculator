@@ -232,6 +232,43 @@ A **1.25x** multiplier applied to the **asset correlation coefficient** (R) for 
     - **GBP 440m annual revenue** → F-IRB only approach restriction (Art. 147A(1)(e), Basel 3.1 only). Does not affect correlation.
     - The Art. 147A(1)(e) F-IRB restriction applies to **all** FSEs regardless of size — it is separate from the correlation uplift which only applies to *large* or *unregulated* FSEs.
 
+### Derivation (mandatory, not an election)
+
+The multiplier is a **mandatory** treatment ("shall multiply … by 1.25"), so
+`requires_fi_scalar` is **derived** in the classification stage
+(`engine/stages/classify/subtypes.py::classify_exposure_subtypes`), not driven
+solely by the user flag:
+
+```
+requires_fi_scalar = apply_fi_scalar
+                     OR (is_financial_sector_entity AND total_assets ≥ threshold)
+```
+
+- **Threshold** — read from the pack `lfse_total_assets_threshold` through the
+  FX seam (`engine/thresholds.py::regulatory_threshold`): CRR EUR 70bn ×
+  EUR/GBP rate → GBP; Basel 3.1 GBP 79bn native. `total_assets` is a GBP
+  figure, mirroring the SME balance-sheet gate.
+- **User override** — the explicit `apply_fi_scalar` election is an
+  *authoritative True-override* (a firm may know an entity is a large or
+  unregulated FSE even when the data says otherwise). It can never **suppress**
+  a derived True. It is also the interim recognition path for the unregulated
+  FSE limb (below).
+- **Null `total_assets` on a flagged FSE** — largeness is undetermined, so the
+  multiplier is **not** applied (the LFSE base rate among FSEs is low, so a
+  conservative-apply default would over-state most of the FSE population).
+  Because a genuinely-large FSE with missing data would then be under-stated,
+  the classifier emits **CLS009** (both regimes) to flag the gap — never a
+  silent pass-through. The warning is suppressed when an explicit
+  `apply_fi_scalar` election already resolves the treatment.
+
+!!! warning "Unregulated FSE limb — deferred"
+    CRR Art. 142(1)(5) / Art. 153(2) apply the 1.25× multiplier to
+    **unregulated** FSEs *regardless of size*. The schema carries no
+    regulated-status signal, so this size-independent limb is not yet derived;
+    `apply_fi_scalar=True` is the interim recognition path for a known
+    unregulated FSE. Enabling it fully is a schema-enablement change (a nullable
+    regulated-status input with a conservative default).
+
 ## Capital Requirement Formula
 
 ```

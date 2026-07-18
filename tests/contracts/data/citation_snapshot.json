@@ -470,6 +470,11 @@
     "CRR Art. 148",
     "CRR Art. 150"
   ],
+  "rwa_calc.engine.stages.classify.subtypes::classify_exposure_subtypes": [
+    "CRR Art. 153(2)",
+    "CRR Art. 142(1)(4)",
+    "PS1/26, paragraph 153"
+  ],
   "rwa_calc.engine.stages.classify.subtypes::derive_exposure_subclass": [
     "PS1/26, paragraph 147A.1"
   ],

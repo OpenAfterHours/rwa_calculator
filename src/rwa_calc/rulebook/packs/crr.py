@@ -670,7 +670,7 @@ ENTRIES: dict[str, RuleEntry] = {
             "large_corporate_revenue_threshold": Decimal("0"),  # n/a under CRR
             "retail_max_exposure": Decimal("1000000"),  # EUR 1m (Art. 123(c))
             "qrre_max_limit": Decimal("100000"),  # EUR 100k (Art. 123)
-            "lfse_total_assets_threshold": Decimal("70000000000"),  # EUR 70bn (Art. 4(1)(146))
+            "lfse_total_assets_threshold": Decimal("70000000000"),  # EUR 70bn (Art. 142(1)(4))
         },
         citation=Citation("CRR", "123", "EUR monetary thresholds (× EUR/GBP rate → GBP)"),
     ),

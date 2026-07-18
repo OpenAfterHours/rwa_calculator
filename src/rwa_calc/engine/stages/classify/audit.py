@@ -31,6 +31,7 @@ import polars as pl
 
 from rwa_calc.contracts.errors import (
     ERROR_LARGE_CORP_REVENUE_NULL,
+    ERROR_LFSE_ASSETS_NULL,
     CalculationError,
     ErrorCategory,
     ErrorSeverity,
@@ -60,12 +61,20 @@ def collect_input_warnings(
 ) -> list[CalculationError]:
     """Collect non-blocking warnings for null input data.
 
-    One warning fires here, surfaced as a ``CalculationError`` with
+    Two warnings fire here, each surfaced as a ``CalculationError`` with
     severity WARNING:
 
-    - **Large-corp F-IRB restriction conservatism** (Art. 147A(1)(d)):
-      when ``annual_revenue`` is null on any corporate counterparty,
-      the engine treats the row as large-corp by default (see
+    - **LFSE size undetermined** (Art. 153(2), BOTH regimes): when a
+      counterparty is flagged ``is_financial_sector_entity=True`` but
+      ``total_assets`` is null and no explicit ``apply_fi_scalar`` election
+      was made, the mandatory 1.25x correlation multiplier (CRR Art.
+      142(1)(4) / PS1/26 glossary) cannot be derived — the scalar is not
+      applied and CLS009 flags the gap so it is never a silent
+      under-statement.
+
+    - **Large-corp F-IRB restriction conservatism** (Art. 147A(1)(d),
+      Basel 3.1 only): when ``annual_revenue`` is null on any corporate
+      counterparty, the engine treats the row as large-corp by default (see
       ``_is_large_corp`` in ``_apply_b31_approach_restrictions``) and
       emits CLS008.
 
@@ -74,11 +83,46 @@ def collect_input_warnings(
     ``CP_LOOKUP_COUNTERPARTIES_EDGE`` and the exposures frame against
     ``hierarchy_exit``, so every declared column is guaranteed present
     and the absent-column states those warnings detected are
-    unrepresentable. The null-revenue check materialises a count and is
-    the only branch that triggers a ``.collect()``.
+    unrepresentable. Each null-count check materialises a count via a
+    ``.collect()`` on the (small) counterparty lookup.
     """
     errors: list[CalculationError] = []
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+
+    # Art. 153(2) (both regimes): a flagged FSE with null total_assets leaves
+    # the LFSE size test (Art. 142(1)(4) / PS1/26 glossary) undetermined, so
+    # ``classify_exposure_subtypes`` does not apply the 1.25x scalar. Emit
+    # CLS009 unless the firm supplied an explicit apply_fi_scalar election
+    # (which resolves the treatment either way).
+    lfse_undetermined_filter = (
+        pl.col("is_financial_sector_entity").fill_null(False)
+        & pl.col("total_assets").is_null()
+        & ~pl.col("apply_fi_scalar").fill_null(False)
+    )
+    lfse_undetermined_count = (
+        data.counterparty_lookup.counterparties.filter(lfse_undetermined_filter)
+        .select(pl.len())
+        .collect()
+        .item()
+    )
+    if lfse_undetermined_count > 0:
+        errors.append(
+            CalculationError(
+                code=ERROR_LFSE_ASSETS_NULL,
+                message=(
+                    f"Art. 153(2) large-FSE 1.25x correlation multiplier could not "
+                    f"be derived for {lfse_undetermined_count} financial-sector "
+                    f"counterparty row(s) with null total_assets and no apply_fi_scalar "
+                    f"election — the multiplier was NOT applied (supply total_assets "
+                    f"or set apply_fi_scalar to confirm the LFSE treatment)."
+                ),
+                severity=ErrorSeverity.WARNING,
+                category=ErrorCategory.CLASSIFICATION,
+                regulatory_reference="CRR Art. 142(1)(4) / Art. 153(2)",
+                field_name="total_assets",
+            )
+        )
+
     if not resolved_pack.feature("approach_restrictions_b31_applicable"):
         return errors
 

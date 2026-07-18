@@ -46,6 +46,7 @@ from rwa_calc.engine.eu_sovereign import (
     build_eu_domestic_currency_expr,
     denomination_currency_expr,
 )
+from rwa_calc.engine.stages.classify.attributes import natural_person_expr
 from rwa_calc.engine.stages.classify.permissions import build_permission_exprs
 from rwa_calc.engine.thresholds import regulatory_threshold
 from rwa_calc.rulebook import RulepackV0
@@ -344,17 +345,35 @@ def _build_approach_expr(
 
 
 @cites("CRR Art. 147")
+@cites("CRR Art. 147(5)")
+@cites("PS1/26, paragraph 147")
 def _align_irb_exposure_class(exposures: pl.LazyFrame) -> pl.LazyFrame:
-    """Align exposure_class with exposure_class_irb for rgla/pse rows.
+    """Align exposure_class with exposure_class_irb for IRB-routed rows.
 
-    For IRB-routed rgla_* / pse_* rows, the IRB calculator (which reads
-    exposure_class for correlation/LGD selection) needs CGCB / INSTITUTION
-    rather than the SA labels RGLA / PSE. Scoped to these entity types
-    because later phases (retail reclassification, SME/QRRE) mutate
-    exposure_class in place without updating exposure_class_irb — a
-    blanket rewrite would revert those legitimate adjustments.
+    The IRB calculator reads ``exposure_class`` (not ``exposure_class_irb``)
+    for correlation / LGD / floor selection, so any IRB-routed row whose IRB
+    class legitimately differs from its SA class must have ``exposure_class``
+    rewritten to the IRB value. Two entity populations diverge after
+    ``sync_irb_exposure_class`` and no other:
+
+    - rgla_* / pse_* rows, whose SA labels RGLA / PSE differ from the IRB
+      CGCB / INSTITUTION class (CRR Art. 147(3)/147(4)(b)).
+    - natural persons expelled from retail to CORPORATE by the SA
+      regulatory-retail monetary cap / granularity limb but kept in the IRB
+      retail class (CRR Art. 147(5)(a)(i) / PS1/26 Art. 147(5)(a)(i) — the cap
+      conditions the SME limb only). ``sync_irb_exposure_class`` restores
+      their ``exposure_class_irb`` to RETAIL_OTHER; this step propagates it to
+      ``exposure_class`` so the retail IRB formula applies.
+
+    Both are gated on the ``exposure_class_irb != exposure_class`` difference
+    (a no-op for every other IRB-routed row, where the two are already equal),
+    so QRRE / mortgage / SME subtyping is never reverted.
     """
-    needs_alignment = pl.col("cp_entity_type").is_in(list(RGLA_PSE_ENTITY_TYPES))
+    is_rgla_pse = pl.col("cp_entity_type").is_in(list(RGLA_PSE_ENTITY_TYPES))
+    natural_person_diverged = natural_person_expr() & (
+        pl.col("exposure_class_irb") != pl.col("exposure_class")
+    )
+    needs_alignment = is_rgla_pse | natural_person_diverged
     return exposures.with_columns(
         pl.when(
             pl.col("approach").is_in([ApproachType.FIRB.value, ApproachType.AIRB.value])

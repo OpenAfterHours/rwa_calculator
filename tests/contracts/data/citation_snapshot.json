@@ -448,7 +448,9 @@
     "PS1/26, paragraph 235"
   ],
   "rwa_calc.engine.stages.classify.approach::_align_irb_exposure_class": [
-    "CRR Art. 147"
+    "CRR Art. 147",
+    "CRR Art. 147(5)",
+    "PS1/26, paragraph 147"
   ],
   "rwa_calc.engine.stages.classify.attributes::_build_has_income_cover_expr": [
     "PS1/26, paragraph 124E"
@@ -460,6 +462,10 @@
   "rwa_calc.engine.stages.classify.attributes::_build_qualifies_as_retail_expr": [
     "CRR Art. 123",
     "PS1/26, paragraph 123A"
+  ],
+  "rwa_calc.engine.stages.classify.attributes::natural_person_expr": [
+    "CRR Art. 147(5)",
+    "PS1/26, paragraph 147"
   ],
   "rwa_calc.engine.stages.classify.classifier::ExposureClassifier.classify": [
     "CRR Art. 112",
@@ -477,6 +483,10 @@
   ],
   "rwa_calc.engine.stages.classify.subtypes::derive_exposure_subclass": [
     "PS1/26, paragraph 147A.1"
+  ],
+  "rwa_calc.engine.stages.classify.subtypes::sync_irb_exposure_class": [
+    "CRR Art. 147(5)",
+    "PS1/26, paragraph 147"
   ],
   "rwa_calc.engine.stages.hierarchy.enrich::_apply_obligor_short_term_spillover": [
     "CRR Art. 131"

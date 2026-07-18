@@ -46,6 +46,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 from watchfire import cites
 
+from rwa_calc.data.schemas import NATURAL_PERSON_ENTITY_TYPES
 from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.engine.entity_class_maps import (
     ENTITY_TYPE_TO_IRB_CLASS,
@@ -398,6 +399,25 @@ def is_sme_by_size_expr(
     turnover_branch = (source == "turnover") & (metric > 0) & (metric < turnover_threshold)
     assets_branch = (source == "assets") & (metric > 0) & (metric < balance_sheet_threshold)
     return turnover_branch | assets_branch
+
+
+@cites("CRR Art. 147(5)")
+@cites("PS1/26, paragraph 147")
+def natural_person_expr() -> pl.Expr:
+    """Return an expression flagging a counterparty as a natural person.
+
+    CRR Art. 147(5)(a)(i) / PS1/26 Art. 147(5)(a)(i): exposures to natural
+    persons enter the IRB retail exposure class with NO monetary cap, unlike
+    the SME limb (a)(ii). The signal is the explicit ``is_natural_person``
+    flag OR one of the documented natural-person ``entity_type`` aliases
+    (``individual`` / ``natural_person`` / ``retail`` — all mapping to
+    RETAIL_OTHER). A null flag AND a non-natural entity type resolve to
+    False, so an unknown obligor is treated as NOT a natural person and the
+    monetary cap keeps binding (conservative direction of error).
+    """
+    return pl.col("cp_is_natural_person").fill_null(False) | pl.col("cp_entity_type").is_in(
+        list(NATURAL_PERSON_ENTITY_TYPES)
+    )
 
 
 # =========================================================================

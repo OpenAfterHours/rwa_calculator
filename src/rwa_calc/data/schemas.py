@@ -1671,6 +1671,23 @@ RGLA_PSE_ENTITY_TYPES: tuple[str, ...] = (
     "pse_institution",
 )
 
+# Entity types that denote a natural person (as opposed to an SME / legal
+# person). CRR Art. 147(5)(a)(i) / PS1/26 Art. 147(5)(a)(i): exposures to
+# natural persons enter the IRB retail exposure class with NO monetary cap —
+# the EUR 1,000,000 (CRR) / GBP 880,000 (PS1/26) total-amount-owed cap in
+# Art. 147(5)(a)(ii) conditions the SME limb ONLY. These three strings all map
+# to RETAIL_OTHER under entity_type_to_{sa,irb}_class and are the documented
+# natural-person aliases (see rulebook/packs/common.py). Consumed by the
+# classifier's natural-person predicate alongside the explicit
+# ``is_natural_person`` flag. A row whose entity type is none of these and
+# whose ``is_natural_person`` flag is null/False is NOT treated as a natural
+# person (conservative: the monetary cap still binds).
+NATURAL_PERSON_ENTITY_TYPES: tuple[str, ...] = (
+    "individual",
+    "natural_person",
+    "retail",
+)
+
 # Entity types the Basel 3.1 approach-restriction step forces to the
 # Standardised Approach only (no IRB), under PS1/26 Art. 147A(1)(a) read
 # with Art. 147(3). Art. 147(3)(a)-(f) assign central governments, central

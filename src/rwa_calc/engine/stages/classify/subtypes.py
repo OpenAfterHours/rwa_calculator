@@ -37,7 +37,7 @@ from watchfire import cites
 
 from rwa_calc.data.schemas import RGLA_PSE_ENTITY_TYPES
 from rwa_calc.domain.enums import ExposureClass, ExposureSubclass
-from rwa_calc.engine.stages.classify.attributes import is_sme_by_size_expr
+from rwa_calc.engine.stages.classify.attributes import is_sme_by_size_expr, natural_person_expr
 from rwa_calc.engine.thresholds import regulatory_threshold
 from rwa_calc.engine.utils import partition_by_nullable
 from rwa_calc.rulebook import RulepackV0
@@ -290,6 +290,8 @@ def reclassify_corporate_to_retail(
     )
 
 
+@cites("CRR Art. 147(5)")
+@cites("PS1/26, paragraph 147")
 def sync_irb_exposure_class(exposures: pl.LazyFrame) -> pl.LazyFrame:
     """Sync exposure_class_irb with the (possibly mutated) exposure_class.
 
@@ -303,10 +305,36 @@ def sync_irb_exposure_class(exposures: pl.LazyFrame) -> pl.LazyFrame:
     classes are definitionally different (CRR Art. 147(3)/147(4)(b)) —
     ``exposure_class_irb`` already carries the correct CGCB / INSTITUTION
     value from ``ENTITY_TYPE_TO_IRB_CLASS`` and must not be overwritten.
+
+    Natural-person IRB retail restoration (CRR Art. 147(5)(a)(i) / PS1/26
+    Art. 147(5)(a)(i)): the SA regulatory-retail test (``qualifies_as_retail``,
+    Art. 123 / 123A) applies the EUR 1,000,000 / GBP 880,000 monetary cap AND
+    (under B31) the Art. 123A(1)(b)(ii) 0.2% granularity limb to natural
+    persons, expelling large or portfolio-dominant individuals to CORPORATE.
+    Neither condition exists in the IRB retail class: Art. 147(5)(a) caps the
+    SME limb (ii) only, and Art. 147(5) has no granularity limb. So a natural
+    person expelled to CORPORATE keeps the IRB retail class, provided the
+    Art. 147(5)(c) management-basis condition holds — i.e. the obligor is not
+    managed individually as a corporate (``is_managed_as_retail`` not
+    explicitly False; a null flag defaults to True, matching the
+    Art. 123A(1)(b)(iii) backward-compatible KEEP). This leaves the SA
+    ``exposure_class`` and ``qualifies_as_retail`` untouched — the SA/IRB
+    divergence lives only in ``exposure_class_irb``.
     """
+    # Art. 147(5)(c): a natural person managed individually as corporate
+    # (is_managed_as_retail explicitly False) is NOT IRB retail. Null → True
+    # (documented KEEP, mirrors _build_qualifies_as_retail_expr).
+    managed_as_retail = pl.col("cp_is_managed_as_retail").fill_null(True)
+    restore_retail_irb = (
+        natural_person_expr()
+        & (pl.col("exposure_class") == ExposureClass.CORPORATE.value)
+        & managed_as_retail
+    )
     return exposures.with_columns(
         pl.when(pl.col("cp_entity_type").is_in(list(RGLA_PSE_ENTITY_TYPES)))
         .then(pl.col("exposure_class_irb"))
+        .when(restore_retail_irb)
+        .then(pl.lit(ExposureClass.RETAIL_OTHER.value))
         .otherwise(pl.col("exposure_class"))
         .alias("exposure_class_irb")
     )

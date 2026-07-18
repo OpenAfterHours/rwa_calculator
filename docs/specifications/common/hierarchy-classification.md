@@ -246,7 +246,33 @@ Individual counterparties qualify for retail treatment when:
 - **Basel 3.1:** Aggregate exposure < GBP 880k
 - **QRRE limit (IRB Art. 147(5A)(c)):** Largest aggregate nominal exposure to any single individual in the QRRE sub-portfolio ≤ EUR 100k (CRR) / **GBP 90,000** (Basel 3.1). This is a **portfolio-level** constraint, not a per-facility check.
 
-If retail thresholds are breached, the exposure is reclassified as CORPORATE.
+If the **SA regulatory-retail** thresholds are breached, the exposure loses its SA
+regulatory-retail (75%) treatment and its SA `exposure_class` is reclassified to
+CORPORATE.
+
+!!! warning "SA regulatory retail (Art. 123/123A) vs IRB retail class (Art. 147(5)) — the monetary cap is SME-limb-only in IRB"
+    The aggregate-owed cap above (`qualifies_as_retail`) implements the **SA**
+    regulatory-retail test (CRR Art. 123 / PS1/26 Art. 123A), which caps natural
+    persons for the 75% treatment and — under Basel 3.1 — adds the Art. 123A(1)(b)(ii)
+    0.2% granularity limb. The **IRB** retail *exposure class* (CRR Art. 147(5)(a) /
+    PS1/26 Art. 147(5)(a)) is a **different** rule: it admits **(i)** exposures to
+    natural persons with **no monetary cap** and no granularity limb, or **(ii)**
+    exposures to an SME **provided** the total amount owed (excluding
+    residential-property-secured exposures) does not exceed **EUR 1,000,000 (CRR) /
+    GBP 880,000 (PS1/26)**. The cap and granularity limb condition the **SME limb
+    only**.
+
+    Consequently a natural person owing more than the cap is expelled from SA
+    regulatory retail (`exposure_class` → CORPORATE) but **stays in the IRB retail
+    class**: `sync_irb_exposure_class` restores such a row's `exposure_class_irb`
+    to RETAIL_OTHER (subject to the Art. 147(5)(c) management-basis condition —
+    `is_managed_as_retail` not explicitly False), and `_align_irb_exposure_class`
+    propagates it to `exposure_class` for the IRB-routed leg so the retail A-IRB
+    formula applies. The natural-person signal is the `is_natural_person` flag OR
+    an entity type in `NATURAL_PERSON_ENTITY_TYPES` (`individual` / `natural_person`
+    / `retail`); an unknown obligor is treated as NOT a natural person, so the cap
+    keeps binding (conservative). The SME limb is unchanged — an SME above the cap
+    stays corporate.
 
 ### Basel 3.1 Retail Qualifying Criteria (Art. 123A)
 

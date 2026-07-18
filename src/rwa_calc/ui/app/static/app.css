@@ -244,3 +244,78 @@ table.data tbody tr.chain-driver .driver-name { padding-left: 24px; font-family:
   width: 4px; height: 9px; border: solid var(--oah-slate-900);
   border-width: 0 2px 2px 0; transform: rotate(45deg);
 }
+
+/* --- Report-template grid ------------------------------------------------
+   Regulatory cells are numeric and read column-wise, so they are right-aligned
+   and monospaced. A null cell (an empty/inert row, or a source the engine never
+   produces) must read differently from a reported 0.0 — conflating the two
+   would misstate the return, so nulls are dimmed rather than blank-and-equal. */
+table.data td.num { text-align: right; font-family: var(--font-mono); }
+table.data td.num.is-null { color: var(--oah-slate-400); opacity: 0.5; }
+table.data thead th[colspan] { text-align: center; border-left: 1px solid rgba(216,222,233,0.10); }
+
+/* A clickable report cell: the figure stays the figure — the affordance is the
+   hover, not a coloured link, so the grid still reads like a regulatory return. */
+table.data td.num a.cell-link { color: inherit; text-decoration: none; display: block; }
+table.data td.num a.cell-link:hover { color: var(--oah-orange-bright); text-decoration: underline; }
+
+/* ---------- Report-template grid ----------------------------------------
+   Regulatory templates are wide — up to 49 value columns (C 08.02 under Basel
+   3.1) — and are read on desktop. Three things make that usable:
+
+   1. `container--wide` lets the report pages use the full viewport instead of
+      the 1100px reading measure (which is right for prose, wrong for a return).
+   2. `grid-wrap` is a bounded scroll pane, so `position: sticky` actually has a
+      scrollport to stick to: the header band and the row labels stay put while
+      the columns scroll under them (the freeze-pane a reader expects of a
+      return). Without the height cap the wrapper never scrolls internally and
+      the sticky header simply scrolls away with the page.
+   3. Compact density + tabular numerals fit ~30% more columns and keep digits
+      aligned column-wise.                                                    */
+
+.container--wide { max-width: none; }
+/* Prose keeps a readable measure even when the grid goes full-bleed. */
+.container--wide .page-intro { max-width: 900px; }
+
+.grid-wrap {
+  overflow: auto;
+  max-height: calc(100vh - 260px);
+  border: 1px solid rgba(216,222,233,0.10);
+  border-radius: 12px;
+}
+/* separate borders: `collapse` drops cell borders under position: sticky */
+table.data.grid { border-collapse: separate; border-spacing: 0; width: auto; min-width: 100%; font-size: 12px; }
+table.data.grid th, table.data.grid td {
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(216,222,233,0.07);
+}
+table.data.grid td.num { font-variant-numeric: tabular-nums; }
+
+/* Sticky header: the group band pins to the top, the ref row sits under it. */
+table.data.grid thead th { position: sticky; z-index: 2; background: var(--oah-slate-800); }
+table.data.grid thead tr.band th { top: 0; height: 26px; }
+table.data.grid thead tr.refs th { top: 26px; }
+table.data.grid thead tr.refs--only th { top: 0; }
+
+/* Frozen row labels: without these, scrolling right loses which row you are on
+   and the extra width is worthless. */
+table.data.grid .rowhead-ref,
+table.data.grid .rowhead-name { position: sticky; z-index: 1; background: var(--oah-slate-850); }
+table.data.grid .rowhead-ref { left: 0; width: 62px; min-width: 62px; }
+table.data.grid .rowhead-name {
+  left: 62px;
+  min-width: 220px;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-right: 1px solid rgba(216,222,233,0.14);
+}
+/* Corner cells are sticky on both axes, so they must outrank both. */
+table.data.grid thead .rowhead-ref,
+table.data.grid thead .rowhead-name { z-index: 3; background: var(--oah-slate-800); }
+/* The row-hover highlight has to reach the frozen cells too, or the row splits. */
+table.data.grid tbody tr:hover .rowhead-ref,
+table.data.grid tbody tr:hover .rowhead-name { background: #2c3140; }
+/* Prose inside a full-bleed panel keeps its measure; tables still go full width. */
+.container--wide .panel > p,
+.container--wide .panel > ul { max-width: 900px; }

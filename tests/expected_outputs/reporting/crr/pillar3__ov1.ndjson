@@ -4,5 +4,10 @@
 {"row_ref":"4","row_name":"Of which: slotting approach","a":52500000.0,"b":null,"c":4200000.0}
 {"row_ref":"UK4a","row_name":"Of which: equities under simple risk-weighted approach","a":2900000.0,"b":null,"c":232000.0}
 {"row_ref":"5","row_name":"Of which: advanced IRB approach","a":13622029.832174154,"b":null,"c":1089762.3865739324}
+{"row_ref":"6","row_name":"Counterparty credit risk - CCR","a":0.0,"b":null,"c":0.0}
+{"row_ref":"7","row_name":"CCR - Of which the standardised approach","a":0.0,"b":null,"c":0.0}
+{"row_ref":"8","row_name":"CCR - Of which internal model method (IMM)","a":null,"b":null,"c":null}
+{"row_ref":"UK8a","row_name":"CCR - Of which exposures to a central counterparty (CCP)","a":0.0,"b":null,"c":0.0}
+{"row_ref":"9","row_name":"CCR - Of which other CCR","a":0.0,"b":null,"c":0.0}
 {"row_ref":"24","row_name":"Amounts below deduction thresholds (250% RW)","a":null,"b":null,"c":null}
 {"row_ref":"29","row_name":"Total","a":145511467.28986624,"b":null,"c":11640917.3831893}

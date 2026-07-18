@@ -175,6 +175,176 @@ def test_results_unknown_run_id_is_404(client: TestClient) -> None:
     assert resp.status_code == 404
 
 
+# =============================================================================
+# Report templates (GET /api/templates, GET /api/templates/{template_id})
+# =============================================================================
+
+
+def _run(client: TestClient, data_dir: str) -> str:
+    """Run a CRR calculation and return its run_id."""
+    run_id: str = client.post(
+        "/api/calculate",
+        json={
+            "data_path": data_dir,
+            "framework": "CRR",
+            "reporting_date": date(2025, 1, 1).isoformat(),
+            "permission_mode": "standardised",
+        },
+    ).json()["run_id"]
+    return run_id
+
+
+def test_templates_index_lists_the_generated_templates(client: TestClient, data_dir: str) -> None:
+    # Arrange
+    run_id = _run(client, data_dir)
+
+    # Act
+    resp = client.get("/api/templates", params={"run_id": run_id})
+
+    # Assert — the SA corporate loan produces C 07.00, keyed by exposure class.
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["framework"] == "CRR"
+    c07 = next(t for t in body["templates"] if t["id"] == "c07_00")
+    assert c07["title"].startswith("C 07.00")
+    assert c07["family"] == "corep"
+    assert c07["sheets"] == ["corporate"]
+
+
+def test_template_sheet_returns_headers_and_the_generated_cells(
+    client: TestClient, data_dir: str
+) -> None:
+    # Arrange
+    run_id = _run(client, data_dir)
+
+    # Act
+    resp = client.get("/api/templates/c07_00", params={"run_id": run_id, "sheet": "corporate"})
+
+    # Assert — col 0220 (RWEA) on row 0010 (total) carries the run's RWA.
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["sheet"] == "corporate"
+    headers = {col["ref"]: col for col in body["columns"]}
+    assert headers["0220"]["group"] == "RWEA"
+    assert headers["0220"]["name"] != "0220"  # a readable name, not the bare ref
+    total = next(row for row in body["rows"] if row["row_ref"] == "0010")
+    assert total["0220"] > 0
+
+
+def test_template_sheet_defaults_to_the_first_sheet(client: TestClient, data_dir: str) -> None:
+    # Arrange
+    run_id = _run(client, data_dir)
+
+    # Act — no sheet named
+    resp = client.get("/api/templates/c07_00", params={"run_id": run_id})
+
+    # Assert
+    assert resp.status_code == 200
+    assert resp.json()["sheet"] == "corporate"
+
+
+def test_lineage_explains_a_reported_cell_and_lists_its_contributors(
+    client: TestClient, data_dir: str
+) -> None:
+    # Arrange
+    run_id = _run(client, data_dir)
+
+    # Act — C 07.00 / corporate / row 0010 (total) / col 0220 (RWEA)
+    resp = client.get(
+        "/api/lineage",
+        params={
+            "run_id": run_id,
+            "template": "c07_00",
+            "sheet": "corporate",
+            "row": "0010",
+            "col": "0220",
+        },
+    )
+
+    # Assert — the cell is self-describing (metric + scope + basis), its value is
+    # the REPORTED figure, and the legs shown sum back to it.
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["cell"]["row_ref"] == "0010"
+    assert body["kind"] == "rows"
+    assert body["metric"] == "sum"
+    assert body["metric_columns"] == ["rwa_final"]
+    assert body["basis"] == "aggregator_exit"
+    assert body["sign"] == "positive"
+    assert body["scope"]
+    assert body["cell_value"] > 0
+    assert body["contribution_total"] == pytest.approx(body["cell_value"])
+    assert body["total_rows"] >= 1
+    assert "exposure_reference" in body["columns"]
+    assert "reporting_leg_role" in body["columns"]  # a contributor is a LEG
+    assert len(body["rows"]) >= 1
+
+
+def test_lineage_reports_a_cell_whose_sources_are_never_produced(
+    client: TestClient, data_dir: str
+) -> None:
+    # Arrange
+    run_id = _run(client, data_dir)
+
+    # Act — col 0030 sums provision amounts the engine does not put on the ledger
+    resp = client.get(
+        "/api/lineage",
+        params={
+            "run_id": run_id,
+            "template": "c07_00",
+            "sheet": "corporate",
+            "row": "0010",
+            "col": "0030",
+        },
+    )
+
+    # Assert — the reported 0.0 is flagged as NOT source-backed, so a reviewer can
+    # tell "we computed zero" from "we cannot compute this".
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["is_source_backed"] is False
+    assert body["missing_columns"] == body["metric_columns"]
+    assert body["sign"] == "negated"
+    assert body["contribution_total"] is None
+
+
+def test_lineage_unknown_run_template_and_cell_are_404(client: TestClient, data_dir: str) -> None:
+    # Arrange
+    run_id = _run(client, data_dir)
+    cell = {"template": "c07_00", "sheet": "corporate", "row": "0010", "col": "0220"}
+
+    # Act / Assert — an uninstrumented template (C 34.01 is still imperative) and
+    # an unknown cell are clean 404s, never a re-derived guess.
+    assert client.get("/api/lineage", params={**cell, "run_id": "nope"}).status_code == 404
+    assert (
+        client.get(
+            "/api/lineage", params={**cell, "run_id": run_id, "template": "c34_01"}
+        ).status_code
+        == 404
+    )
+    assert (
+        client.get("/api/lineage", params={**cell, "run_id": run_id, "row": "9999"}).status_code
+        == 404
+    )
+
+
+def test_templates_unknown_run_and_unknown_template_are_404(
+    client: TestClient, data_dir: str
+) -> None:
+    # Arrange
+    run_id = _run(client, data_dir)
+
+    # Act / Assert — an uninstrumented cell address is a clean 404, never a guess.
+    assert client.get("/api/templates", params={"run_id": "nope"}).status_code == 404
+    assert client.get("/api/templates/not_a_template", params={"run_id": run_id}).status_code == 404
+    assert (
+        client.get(
+            "/api/templates/c07_00", params={"run_id": run_id, "sheet": "retail"}
+        ).status_code
+        == 404
+    )
+
+
 def test_openapi_documents_calculate(client: TestClient) -> None:
     # Act
     schema = client.get("/openapi.json").json()

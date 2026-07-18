@@ -45,6 +45,7 @@ from rwa_calc.api.models import ValidationRequest
 from rwa_calc.api.reconciliation import loads_reconciliation_config
 from rwa_calc.api.service import CreditRiskCalc, get_supported_frameworks
 from rwa_calc.api.validation import DataPathValidator
+from rwa_calc.reporting import catalog, lineage
 
 if TYPE_CHECKING:
     from rwa_calc.api.models import (
@@ -55,6 +56,8 @@ if TYPE_CHECKING:
         SummaryStatistics,
         ValidationResponse,
     )
+    from rwa_calc.reporting.corep.generator import COREPTemplateBundle
+    from rwa_calc.reporting.pillar3.generator import Pillar3TemplateBundle
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +96,21 @@ class ReconWorkspace:
 # disk (see ui.app.recon_signoff); this map is the in-process recon_id -> workspace
 # lookup, cleared on restart like ``_RECON_RUNS``.
 _RECON_WORKSPACE: dict[str, ReconWorkspace] = {}
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class TemplateBundles:
+    """The COREP and Pillar 3 template bundles generated for one run."""
+
+    corep: COREPTemplateBundle
+    pillar3: Pillar3TemplateBundle
+
+
+# Generated template bundles, keyed by run_id. Generating both bundles walks the
+# whole results frame, so the viewer caches per run rather than regenerating on
+# every page view / template switch. Same in-process, non-persistent trade-off as
+# ``_RUNS`` — an entry is only ever a pure function of that run's results.
+_TEMPLATE_BUNDLES: dict[str, TemplateBundles] = {}
 
 _MAX_PAGE = 10_000
 
@@ -250,6 +268,120 @@ def results_summary(dimension: Literal["class", "approach"], run_id: str) -> dic
         raise HTTPException(status_code=404, detail=f"no summary by {dimension} for this run")
     df = lf.collect().fill_nan(None)
     return {"run_id": run_id, "dimension": dimension, "columns": df.columns, "rows": df.to_dicts()}
+
+
+@router.get("/templates", responses=_RESP_404)
+def templates_index(run_id: str) -> dict:
+    """List the regulatory templates generated for a completed run.
+
+    Only templates with content are listed — a template that did not apply to
+    the portfolio or the regime is absent, not empty.
+    """
+    response = _require_run(run_id)
+    bundles = _require_template_bundles(run_id)
+    infos = catalog.template_index(bundles.corep, bundles.pillar3)
+    return {
+        "run_id": run_id,
+        "framework": response.framework,
+        "templates": [dataclasses.asdict(info) for info in infos],
+        "errors": [*bundles.corep.errors, *bundles.pillar3.errors],
+    }
+
+
+@router.get("/templates/{template_id}", responses=_RESP_404)
+def template(template_id: str, run_id: str, sheet: str | None = None) -> dict:
+    """Return one template sheet: its column headers and its rows, as generated.
+
+    ``sheet`` selects a per-sheet template's key (exposure class / country /
+    netting set); omitted, it takes the first sheet. Cells are returned exactly
+    as the generator produced them — including the Annex II §1.3 "(-)" sign
+    convention and the all-null inert rows. Nothing here recomputes a cell.
+    """
+    _require_run(run_id)
+    bundles = _require_template_bundles(run_id)
+    view = catalog.template_sheet(bundles.corep, bundles.pillar3, template_id, sheet)
+    if view is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"unknown template or sheet for this run: {template_id}",
+        )
+    frame = view.frame.fill_nan(None)
+    return {
+        "run_id": run_id,
+        "template": dataclasses.asdict(view.info),
+        "sheet": view.sheet,
+        "columns": [dataclasses.asdict(col) for col in view.columns],
+        "rows": frame.to_dicts(),
+    }
+
+
+@router.get("/lineage", responses=_RESP_404)
+def cell_lineage(  # noqa: PLR0913 - the cell key plus paging
+    run_id: str,
+    template: str,
+    row: str,
+    col: str,
+    sheet: str | None = None,
+    offset: int = 0,
+    limit: int = 50,
+) -> dict:
+    """Explain one reported template cell: what it means, and which legs produced it.
+
+    The cell is addressed by the key the viewer stamps on it
+    (``template``/``sheet``/``row``/``col``). The response echoes the cell's
+    metric, its filter criteria and the scope of its population, so it is
+    self-describing — and returns ``cell_value`` AS REPORTED (read from the
+    generated template, never recomputed) alongside the contributing ledger legs.
+
+    A template with no lineage (still imperative — C 34.x, CCR1-8) or a cell that
+    is not on the template is a clean 404, never a re-derived guess.
+    """
+    response = _require_run(run_id)
+    result = lineage.drilldown(
+        response,
+        template,
+        row,
+        col,
+        run_id=run_id,
+        sheet=sheet,
+        offset=max(0, offset),
+        limit=max(1, min(limit, _MAX_PAGE)),
+    )
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"no lineage available for cell {template}/{sheet or '-'}/{row}/{col}",
+        )
+
+    query = result.query
+    rows = result.rows.fill_nan(None)
+    return {
+        "run_id": run_id,
+        "cell": {
+            "template": query.template_id,
+            "sheet": query.sheet,
+            "row_ref": query.row_ref,
+            "col_ref": query.col_ref,
+            "row_name": query.row_name,
+        },
+        "kind": query.kind,
+        "metric": query.metric,
+        "metric_columns": query.metric_columns,
+        "missing_columns": query.missing_columns,
+        "is_source_backed": query.is_source_backed,
+        "filter_terms": [dataclasses.asdict(term) for term in query.filter_terms],
+        "scope": query.scope,
+        "refs": query.refs,
+        "basis": query.basis,
+        "sign": query.sign,
+        "cell_value": result.cell_value,
+        "contribution_total": result.contribution_total,
+        "total_rows": result.total_rows,
+        "offset": max(0, offset),
+        "limit": max(1, min(limit, _MAX_PAGE)),
+        "columns": rows.columns,
+        "rows": rows.to_dicts(),
+    }
 
 
 @router.post("/comparison")
@@ -478,6 +610,32 @@ def get_run(run_id: str) -> CalculationResponse | None:
     return _RUNS.get(run_id)
 
 
+def get_template_bundles(run_id: str) -> TemplateBundles | None:
+    """The run's COREP + Pillar 3 bundles, generating them once and caching.
+
+    Returns None when the run itself is unknown/expired. Shared by the REST
+    template endpoints and the UI's template viewer so a run's templates are
+    generated at most once per process.
+    """
+    response = _RUNS.get(run_id)
+    if response is None:
+        return None
+    cached = _TEMPLATE_BUNDLES.get(run_id)
+    if cached is not None:
+        return cached
+
+    from rwa_calc.reporting.corep.generator import COREPGenerator
+    from rwa_calc.reporting.pillar3.generator import Pillar3Generator
+
+    logger.info("generating report templates run_id=%s", run_id)
+    bundles = TemplateBundles(
+        corep=COREPGenerator().generate(response),
+        pillar3=Pillar3Generator().generate(response),
+    )
+    _TEMPLATE_BUNDLES[run_id] = bundles
+    return bundles
+
+
 def register_reconciliation(response: ReconciliationResponse) -> str:
     """Register a reconciliation result in the in-process registry; return its id."""
     recon_id = uuid.uuid4().hex
@@ -561,6 +719,14 @@ def _require_run(run_id: str) -> CalculationResponse:
     if response is None:
         raise HTTPException(status_code=404, detail=f"unknown run_id: {run_id}")
     return response
+
+
+def _require_template_bundles(run_id: str) -> TemplateBundles:
+    """The run's generated template bundles, or raise 404 for an unknown run."""
+    bundles = get_template_bundles(run_id)
+    if bundles is None:
+        raise HTTPException(status_code=404, detail=f"unknown run_id: {run_id}")
+    return bundles
 
 
 def _require_run_serves_reconcile(calculation: CalculationResponse, req: ReconcileRequest) -> None:

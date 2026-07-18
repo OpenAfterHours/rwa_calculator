@@ -126,8 +126,21 @@ def run(
         # FLOOR_ELIGIBLE_APPROACHES (floor numerator) and out of SA_APPROACHES
         # (plain-SA total) — moving the RWA into the floor buckets without
         # double-counting. The underlying ``approach`` column is left untouched,
-        # so SA risk-weight routing and COREP reporting are unaffected. Only
-        # applies under the output-floor (Basel 3.1) path.
+        # so SA risk-weight routing is unaffected. Only applies under the
+        # output-floor (Basel 3.1) path.
+        #
+        # This relabel IS load-bearing for reporting, and must not be reverted:
+        # ``approach_applied`` is the column the sealed reporting ledger projects
+        # (as ``reporting_approach_origin``), so under Basel 3.1 a CCR leg does
+        # NOT carry the plain ``standardised`` label downstream. Two consumers
+        # compensate, deliberately and locally:
+        #   - ``reporting/corep/c02.py::_SA_APPROACHES`` admits ``standardised_ccr``
+        #     into C 02.00's SA row 0060 and its Art. 112 class rows, so the
+        #     template foots (Annex II row 0050 covers counterparty credit risk).
+        #   - ``reporting/corep/c07.py::_CCR_RISK_TYPES`` admits the CCR rows by
+        #     ``risk_type``, never by the approach label — the label differs by
+        #     regime, ``risk_type`` does not.
+        # See docs/plans/c07-ccr-derivatives.md.
         sa_result = ensure_columns(sa_branch, _SA_CCR_TAG_SCHEMA).with_columns(
             pl.when(
                 pl.col("risk_type").is_in([RiskType.CCR_DERIVATIVE.value, RiskType.CCR_SFT.value])

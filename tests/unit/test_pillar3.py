@@ -189,10 +189,12 @@ class TestTemplateDefinitions:
         assert len(OV1_COLUMNS) == 3
 
     def test_ov1_crr_rows_count(self):
-        assert len(CRR_OV1_ROWS) == 8
+        # 8 original rows + the 5-row CCR block (6, 7, 8, UK8a, 9).
+        assert len(CRR_OV1_ROWS) == 13
 
     def test_ov1_b31_rows_count(self):
-        assert len(B31_OV1_ROWS) == 20
+        # 20 original rows + the 5-row CCR block (6, 7, 8, UK8a, 9).
+        assert len(B31_OV1_ROWS) == 25
 
     def test_ov1_b31_has_equity_rows(self):
         refs = {r.ref for r in B31_OV1_ROWS}
@@ -201,6 +203,17 @@ class TestTemplateDefinitions:
     def test_ov1_b31_has_output_floor_rows(self):
         refs = {r.ref for r in B31_OV1_ROWS}
         assert {"26", "27"} <= refs
+
+    @pytest.mark.parametrize("rows", [CRR_OV1_ROWS, B31_OV1_ROWS])
+    def test_ov1_has_the_ccr_block(self, rows):
+        """Row 1 is "Credit risk (excluding CCR)" — the excluded CCR must land somewhere.
+
+        Verbatim: "RWEAs ... for CCR are excluded and disclosed in rows 6 and 16 of
+        this template." The UKB OV1 carries the identical block, so BOTH regimes get
+        rows 6 / 7 / 8 / UK8a / 9. See docs/plans/c07-ccr-derivatives.md §4 D1.
+        """
+        refs = {r.ref for r in rows}
+        assert {"6", "7", "8", "UK8a", "9"} <= refs
 
     def test_cr4_crr_columns_count(self):
         assert len(CRR_CR4_COLUMNS) == 6

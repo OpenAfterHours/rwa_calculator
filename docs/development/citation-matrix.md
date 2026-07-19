@@ -66,9 +66,9 @@ Last generated: 2026-07-19.
     --8<-- "src/rwa_calc/engine/sa/risk_weights.py:327:384"
     ```
 
-??? quote "`classify` — src/rwa_calc/engine/stages/classify/classifier.py:104"
+??? quote "`classify` — src/rwa_calc/engine/stages/classify/classifier.py:105"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/classifier.py:104:188"
+    --8<-- "src/rwa_calc/engine/stages/classify/classifier.py:105:190"
     ```
 
 
@@ -312,9 +312,9 @@ Last generated: 2026-07-19.
     --8<-- "src/rwa_calc/engine/stages/hierarchy/enrich.py:161:303"
     ```
 
-??? quote "`_apply_obligor_short_term_spillover` — src/rwa_calc/engine/stages/hierarchy/enrich.py:860"
+??? quote "`_apply_obligor_short_term_spillover` — src/rwa_calc/engine/stages/hierarchy/enrich.py:863"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/hierarchy/enrich.py:860:952"
+    --8<-- "src/rwa_calc/engine/stages/hierarchy/enrich.py:863:955"
     ```
 
 
@@ -411,9 +411,9 @@ Last generated: 2026-07-19.
     --8<-- "src/rwa_calc/engine/stages/hierarchy/enrich.py:161:303"
     ```
 
-??? quote "`_apply_obligor_st_contamination_flags` — src/rwa_calc/engine/stages/hierarchy/enrich.py:955"
+??? quote "`_apply_obligor_st_contamination_flags` — src/rwa_calc/engine/stages/hierarchy/enrich.py:958"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/hierarchy/enrich.py:955:1010"
+    --8<-- "src/rwa_calc/engine/stages/hierarchy/enrich.py:958:1013"
     ```
 
 
@@ -427,9 +427,9 @@ Last generated: 2026-07-19.
 
 ### CRR Art. 142 — Definitions
 
-??? quote "`classify_exposure_subtypes` — src/rwa_calc/engine/stages/classify/subtypes.py:58"
+??? quote "`classify_exposure_subtypes` — src/rwa_calc/engine/stages/classify/subtypes.py:59"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:57:224"
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:58:250"
     ```
 
 
@@ -473,14 +473,14 @@ Last generated: 2026-07-19.
     --8<-- "src/rwa_calc/engine/stages/classify/attributes.py:404:420"
     ```
 
-??? quote "`classify` — src/rwa_calc/engine/stages/classify/classifier.py:105"
+??? quote "`classify` — src/rwa_calc/engine/stages/classify/classifier.py:106"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/classifier.py:104:188"
+    --8<-- "src/rwa_calc/engine/stages/classify/classifier.py:105:190"
     ```
 
-??? quote "`sync_irb_exposure_class` — src/rwa_calc/engine/stages/classify/subtypes.py:293"
+??? quote "`sync_irb_exposure_class` — src/rwa_calc/engine/stages/classify/subtypes.py:370"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:293:340"
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:370:417"
     ```
 
 
@@ -593,9 +593,9 @@ Last generated: 2026-07-19.
     --8<-- "src/rwa_calc/engine/stages/classify/attributes.py:498:526"
     ```
 
-??? quote "`classify_exposure_subtypes` — src/rwa_calc/engine/stages/classify/subtypes.py:57"
+??? quote "`classify_exposure_subtypes` — src/rwa_calc/engine/stages/classify/subtypes.py:58"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:57:224"
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:58:250"
     ```
 
 
@@ -604,6 +604,21 @@ Last generated: 2026-07-19.
 ??? quote "`apply_irb_formulas` — src/rwa_calc/engine/irb/formulas.py:415"
     ```python
     --8<-- "src/rwa_calc/engine/irb/formulas.py:413:555"
+    ```
+
+??? quote "`classify_exposure_subtypes` — src/rwa_calc/engine/stages/classify/subtypes.py:60"
+    ```python
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:58:250"
+    ```
+
+??? quote "`qrre_unsecured_expr` — src/rwa_calc/engine/stages/classify/subtypes.py:258"
+    ```python
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:258:273"
+    ```
+
+??? quote "`qrre_undrawn_cancellable_expr` — src/rwa_calc/engine/stages/classify/subtypes.py:276"
+    ```python
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:276:301"
     ```
 
 
@@ -1387,9 +1402,9 @@ Last generated: 2026-07-19.
     --8<-- "src/rwa_calc/engine/sa/risk_weights.py:387:427"
     ```
 
-??? quote "`_apply_obligor_st_contamination_flags` — src/rwa_calc/engine/stages/hierarchy/enrich.py:956"
+??? quote "`_apply_obligor_st_contamination_flags` — src/rwa_calc/engine/stages/hierarchy/enrich.py:959"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/hierarchy/enrich.py:955:1010"
+    --8<-- "src/rwa_calc/engine/stages/hierarchy/enrich.py:958:1013"
     ```
 
 
@@ -1405,9 +1420,24 @@ Last generated: 2026-07-19.
     --8<-- "src/rwa_calc/engine/stages/classify/attributes.py:404:420"
     ```
 
-??? quote "`sync_irb_exposure_class` — src/rwa_calc/engine/stages/classify/subtypes.py:294"
+??? quote "`classify_exposure_subtypes` — src/rwa_calc/engine/stages/classify/subtypes.py:62"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:293:340"
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:58:250"
+    ```
+
+??? quote "`qrre_unsecured_expr` — src/rwa_calc/engine/stages/classify/subtypes.py:259"
+    ```python
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:258:273"
+    ```
+
+??? quote "`qrre_undrawn_cancellable_expr` — src/rwa_calc/engine/stages/classify/subtypes.py:277"
+    ```python
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:276:301"
+    ```
+
+??? quote "`sync_irb_exposure_class` — src/rwa_calc/engine/stages/classify/subtypes.py:371"
+    ```python
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:370:417"
     ```
 
 
@@ -1421,17 +1451,17 @@ Last generated: 2026-07-19.
 
 ### PS1/26, paragraph 147A.1 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`derive_exposure_subclass` — src/rwa_calc/engine/stages/classify/subtypes.py:343"
+??? quote "`derive_exposure_subclass` — src/rwa_calc/engine/stages/classify/subtypes.py:420"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:343:397"
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:420:474"
     ```
 
 
 ### PS1/26, paragraph 153 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`classify_exposure_subtypes` — src/rwa_calc/engine/stages/classify/subtypes.py:59"
+??? quote "`classify_exposure_subtypes` — src/rwa_calc/engine/stages/classify/subtypes.py:61"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:57:224"
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:58:250"
     ```
 
 

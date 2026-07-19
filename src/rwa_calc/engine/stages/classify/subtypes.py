@@ -20,7 +20,8 @@ Key responsibilities:
 
 References:
 - CRR Art. 147(5) / Basel CRE30.16-17: corporate→retail reclassification
-- CRR Art. 154(4)(c) / PS1/26 Art. 147(5A)(c): QRRE aggregate limit
+- CRR Art. 154(4)(a)-(c) / PS1/26 Art. 147(5A)(a)-(c): QRRE assignment —
+  individuals, unsecured + unconditionally-cancellable-when-undrawn, aggregate limit
 - CRR Art. 4(1)(128D): SME size test (via ``attributes.is_sme_by_size_expr``)
 - CRR Art. 147(3)/147(4)(b): RGLA / PSE IRB class exclusion
 - PS1/26, paragraph 147A.1: corporate exposure_subclass three-way split
@@ -56,7 +57,9 @@ logger = logging.getLogger(__name__)
 
 @cites("CRR Art. 153(2)")
 @cites("CRR Art. 142(1)(4)")
+@cites("CRR Art. 154(4)")
 @cites("PS1/26, paragraph 153")
+@cites("PS1/26, paragraph 147")
 def classify_exposure_subtypes(
     exposures: pl.LazyFrame,
     config: CalculationConfig,
@@ -134,14 +137,34 @@ def classify_exposure_subtypes(
         pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value
     ) & is_sme_by_size
 
-    # QRRE qualification: revolving, retail, under QRRE limit (CRR Art. 147(5)).
+    # QRRE qualification (CRR Art. 154(4)(a)-(c) / PS1/26 Art. 147(5A)(a)-(c)):
+    #   (a) the exposures are to individuals (natural persons);
+    #   (b) they are revolving, UNSECURED, and — to the extent they are not
+    #       drawn — immediately and unconditionally cancellable; and
+    #   (c) the largest per-individual aggregate nominal exposure across the
+    #       sub-portfolio is <= the limit (EUR 100k CRR / GBP 90k B31).
+    # The same conditions apply under both regimes (only the (c) limit value
+    # differs, resolved from the pack), so the gates are NOT regime-Featured.
+    # Conditions (5A)(d) low loss-rate volatility and (5A)(e) consistency with
+    # the sub-portfolio's underlying risk characteristics are supervisory,
+    # portfolio-level attestations — not per-exposure inputs — and are out of
+    # scope for row-level classification.
+    #
+    # (a) individuals; (b) unsecured + unconditionally-cancellable-when-undrawn.
+    #     Each is a reusable module-level predicate (also read by the CLS010
+    #     demotion-warning collector in ``audit.py``) — see the helpers below.
+    is_qrre_individual = natural_person_expr()
+    is_qrre_unsecured = qrre_unsecured_expr()
+    is_qrre_cancellable = qrre_undrawn_cancellable_expr()
+
     # CRR Art. 154(4)(c) / PS1/26 Art. 147(5A)(c) cap the *aggregate* nominal
     # exposure to any single individual across the QRRE sub-portfolio at the
     # limit (EUR 100k / GBP 90k), not each facility individually. Aggregate
     # ``facility_limit`` (the committed/nominal basis) per
     # ``counterparty_reference`` before comparing. The driver columns
-    # (``is_revolving`` / ``facility_limit``) are hierarchy_exit contract
-    # columns — always present, null-gated by value below.
+    # (``is_revolving`` / ``facility_limit`` / ``is_secured`` / ``risk_type`` /
+    # ``undrawn_amount``) are hierarchy_exit contract columns — always present,
+    # null-gated by value.
     #
     # The QRRE sub-portfolio is the qualifying revolving retail population.
     # Only those rows contribute to the per-individual aggregate; non-QRRE
@@ -150,6 +173,9 @@ def classify_exposure_subtypes(
         (pl.col("exposure_class") == ExposureClass.RETAIL_OTHER.value)
         & (pl.col("qualifies_as_retail") == True)  # noqa: E712
         & (pl.col("is_revolving") == True)  # noqa: E712
+        & is_qrre_individual
+        & is_qrre_unsecured
+        & is_qrre_cancellable
     )
     facility_limit = pl.col("facility_limit").fill_null(float("inf"))
     candidate_limit = pl.when(is_qrre_candidate).then(facility_limit).otherwise(pl.lit(0.0))
@@ -222,6 +248,57 @@ def classify_exposure_subtypes(
             pl.col("is_hvcre").fill_null(False).alias("is_hvcre"),
         ]
     )
+
+
+# =========================================================================
+# QRRE (b)-gate predicates (shared with the CLS010 demotion-warning collector)
+# =========================================================================
+
+
+@cites("CRR Art. 154(4)")
+@cites("PS1/26, paragraph 147")
+def qrre_unsecured_expr() -> pl.Expr:
+    """Return the Art. 147(5A)(b) / Art. 154(4)(b) "unsecured" QRRE predicate.
+
+    A revolving retail facility flagged ``is_secured`` is NOT a QRRE. A null
+    attestation resolves to unsecured (``fill_null(False)``) — consistent with
+    how the pipeline treats absent collateral everywhere else, and with the
+    reality that revolving retail credit is unsecured by nature. The classifier
+    runs before CRMProcessor, so general (non-property) collateral is not yet
+    allocated; this is a firm attestation rather than a pledge-presence join
+    (which would replicate CRM's multi-level beneficiary cascade at classify
+    time). The Art. 147(5A) second-sub-paragraph wage-account derogation is
+    applied via input semantics — see ``FACILITY_SCHEMA.is_secured``.
+    """
+    return ~pl.col("is_secured").fill_null(False)
+
+
+@cites("CRR Art. 154(4)")
+@cites("PS1/26, paragraph 147")
+def qrre_undrawn_cancellable_expr() -> pl.Expr:
+    """Return the Art. 147(5A)(b) / Art. 154(4)(b) cancellability QRRE predicate.
+
+    QRRE must be, "to the extent they are not drawn, immediately and
+    unconditionally cancellable". A row carrying an undrawn commitment
+    (``undrawn_amount > 0``) must have the CCF unconditionally-cancellable
+    (LR / low-risk) ``risk_type``; a fully-drawn row has nothing undrawn to
+    cancel and satisfies the limb trivially. Reuses the CCF machinery's UC
+    signal (``risk_type`` == LR, engine/ccf.py) rather than minting a duplicate
+    flag. A null/non-LR ``risk_type`` on an undrawn row -> not cancellable ->
+    not QRRE, mirroring the CCF null convention (a null risk_type resolves to
+    the MR-equivalent CCF, never the LR benefit — no divergence). A null
+    ``undrawn_amount`` propagates (never QRRE), which is the conservative
+    direction — no ``fill_null(0.0)`` on the Float column.
+    """
+    has_undrawn_commitment = pl.col("undrawn_amount") > 0.0
+    is_uncond_cancellable = (
+        pl.col("risk_type")
+        .cast(pl.Utf8, strict=False)
+        .fill_null("")
+        .str.to_lowercase()
+        .is_in(["lr", "low_risk"])
+    )
+    return ~has_undrawn_commitment | is_uncond_cancellable
 
 
 # =========================================================================

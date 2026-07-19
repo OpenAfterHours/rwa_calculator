@@ -246,6 +246,31 @@ Individual counterparties qualify for retail treatment when:
 - **Basel 3.1:** Aggregate exposure < GBP 880k
 - **QRRE limit (IRB Art. 147(5A)(c)):** Largest aggregate nominal exposure to any single individual in the QRRE sub-portfolio ≤ EUR 100k (CRR) / **GBP 90,000** (Basel 3.1). This is a **portfolio-level** constraint, not a per-facility check.
 
+#### QRRE assignment gates (CRR Art. 154(4)(a)-(b) / PS1/26 Art. 147(5A)(a)-(b))
+
+A revolving regulatory-retail exposure is admitted to the **RETAIL_QRRE** sub-class
+(`classify_exposure_subtypes`) only when, in addition to the (c) aggregate-nominal
+limit above, it satisfies all of:
+
+| Gate | Condition | Engine signal | Null / direction of error |
+|---|---|---|---|
+| (a) individuals | exposure is to a natural person | `natural_person_expr()` — `is_natural_person` flag OR `individual` / `natural_person` / `retail` entity type | null/non-natural → **not** an individual → not QRRE (conservative) |
+| (b) unsecured | facility is not collateralised | `~is_secured` (`FACILITY_SCHEMA.is_secured`, facility-coupled to drawn + undrawn rows) | null → **unsecured** (backward-compatible; matches absent-collateral handling elsewhere) |
+| (b) cancellable | to the extent undrawn, unconditionally cancellable | `undrawn_amount == 0` OR `risk_type` ∈ {LR, low_risk} (the CCF unconditionally-cancellable bucket) | null/non-LR `risk_type` on an undrawn row → **not** cancellable → not QRRE (mirrors the CCF null convention, no divergence) |
+
+Both regimes apply the same conditions (CRR Art. 154(4) is identical; only the (c)
+limit *value* differs, from the pack), so the gates are **not** regime-Featured. A row
+that fails any gate is left in **RETAIL_OTHER** (never mortgage, never expelled from
+retail); this is the conservative direction because QRRE's fixed 0.04 correlation is
+below the retail-other correlation at the low PDs typical of performing revolving
+retail (the two cross at PD ≈ 7.3%), so QRRE would understate RWA. A gate-driven
+demotion raises a single **CLS010** classification warning per run. The Art. 147(5A)
+**wage-account derogation** (a wage-account-linked collateralised facility is treated as
+unsecured) is applied via input semantics — set `is_secured=False` for such a facility.
+Conditions (5A)(d) low loss-rate volatility and (5A)(e) consistency with the
+sub-portfolio's risk characteristics are supervisory, portfolio-level attestations, not
+per-exposure inputs, and are out of scope for row-level classification.
+
 If the **SA regulatory-retail** thresholds are breached, the exposure loses its SA
 regulatory-retail (75%) treatment and its SA `exposure_class` is reclassified to
 CORPORATE.

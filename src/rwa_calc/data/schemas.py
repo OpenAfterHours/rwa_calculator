@@ -184,6 +184,17 @@ FACILITY_SCHEMA: dict[str, ColumnSpec] = {
     "beel": ColumnSpec(pl.Float64, required=False),
     "is_revolving": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_qrre_transactor": ColumnSpec(pl.Boolean, default=False, required=False),
+    # PRA PS1/26 Art. 147(5A)(b) / CRR Art. 154(4)(b): a qualifying revolving
+    # retail exposure (QRRE) must be UNSECURED. This facility-level attestation
+    # flags a revolving retail facility as collateralised so the classifier's
+    # QRRE gate demotes it to RETAIL_OTHER (QRRE correlation is lower, so leaving
+    # a secured facility as QRRE would understate RWA). Defaults False (unsecured)
+    # — consistent with the pipeline's treatment of absent collateral everywhere
+    # else, and with the reality that revolving retail credit is unsecured by
+    # nature. By way of the Art. 147(5A) second-sub-paragraph derogation, a
+    # collateralised credit facility linked to a WAGE ACCOUNT is treated as
+    # unsecured for this test — set is_secured=False for such a facility.
+    "is_secured": ColumnSpec(pl.Boolean, default=False, required=False),
     "seniority": ColumnSpec(pl.String, default="senior", required=False),
     "risk_type": ColumnSpec(pl.String, required=False),
     "underlying_risk_type": ColumnSpec(pl.String, required=False),

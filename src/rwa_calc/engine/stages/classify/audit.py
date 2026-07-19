@@ -32,10 +32,18 @@ import polars as pl
 from rwa_calc.contracts.errors import (
     ERROR_LARGE_CORP_REVENUE_NULL,
     ERROR_LFSE_ASSETS_NULL,
+    ERROR_QRRE_GATE_DEMOTION,
     CalculationError,
     ErrorCategory,
     ErrorSeverity,
     beel_on_non_defaulted_exposure_warning,
+    classification_warning,
+)
+from rwa_calc.domain.enums import ExposureClass
+from rwa_calc.engine.stages.classify.attributes import natural_person_expr
+from rwa_calc.engine.stages.classify.subtypes import (
+    qrre_undrawn_cancellable_expr,
+    qrre_unsecured_expr,
 )
 from rwa_calc.engine.thresholds import regulatory_threshold
 from rwa_calc.rulebook import RulepackV0
@@ -202,6 +210,57 @@ def collect_beel_on_non_defaulted_warnings(
     if offender_count == 0:
         return []
     return [beel_on_non_defaulted_exposure_warning(n=offender_count)]
+
+
+def collect_qrre_gate_demotion_warnings(
+    classified: pl.LazyFrame,
+) -> list[CalculationError]:
+    """Emit a single aggregate CLS010 warning for revolving retail rows denied QRRE.
+
+    CRR Art. 154(4)(a)-(b) / PS1/26 Art. 147(5A)(a)-(b) restrict the qualifying
+    revolving retail exposures (QRRE) sub-class to exposures that are (a) to
+    individuals and (b) revolving, unsecured and — to the extent undrawn —
+    unconditionally cancellable. A row that is otherwise a QRRE candidate
+    (RETAIL_OTHER, regulatory-retail, revolving) but fails one of those gates is
+    correctly left in RETAIL_OTHER rather than admitted to QRRE (whose lower
+    correlation would understate RWA). This companion check surfaces those
+    gate-driven demotions as a single non-blocking warning so the reason a
+    revolving retail line missed QRRE is explicit in the audit trail.
+
+    Rows demoted purely by the (c) aggregate-nominal limit are NOT flagged —
+    they pass every (a)/(b) gate and their demotion is the long-standing
+    per-obligor cap behaviour, not a new gate. The driver columns
+    (``is_secured`` / ``risk_type`` / ``undrawn_amount`` / ``cp_entity_type`` /
+    ``cp_is_natural_person``) are present on the pre-seal classified frame.
+    """
+    # Fails an (a)/(b) gate: not an individual, secured, or (undrawn and) not
+    # unconditionally cancellable. Reuses the exact gate predicates the
+    # classifier applies (subtypes.py) so the warning cannot drift from the rule.
+    failed_gate = ~natural_person_expr() | ~qrre_unsecured_expr() | ~qrre_undrawn_cancellable_expr()
+    would_be_candidate = (
+        (pl.col("exposure_class") == ExposureClass.RETAIL_OTHER.value)
+        & pl.col("is_revolving")
+        & pl.col("qualifies_as_retail")
+    )
+    demoted_count = (
+        classified.filter(would_be_candidate & failed_gate).select(pl.len()).collect().item()
+    )
+    if demoted_count == 0:
+        return []
+    return [
+        classification_warning(
+            code=ERROR_QRRE_GATE_DEMOTION,
+            message=(
+                f"{demoted_count} revolving regulatory-retail exposure(s) were kept in "
+                "RETAIL_OTHER rather than admitted to QRRE: they fail an "
+                "Art. 147(5A)(a)-(b) / Art. 154(4)(a)-(b) gate (not to an individual, "
+                "secured, or — to the extent undrawn — not unconditionally cancellable). "
+                "QRRE's lower correlation would understate RWA, so the demotion is "
+                "conservative."
+            ),
+            regulatory_reference="CRR Art. 154(4)(a)-(b) / PS1/26 Art. 147(5A)(a)-(b)",
+        )
+    ]
 
 
 # =========================================================================

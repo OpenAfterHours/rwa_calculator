@@ -479,10 +479,20 @@
   "rwa_calc.engine.stages.classify.subtypes::classify_exposure_subtypes": [
     "CRR Art. 153(2)",
     "CRR Art. 142(1)(4)",
-    "PS1/26, paragraph 153"
+    "CRR Art. 154(4)",
+    "PS1/26, paragraph 153",
+    "PS1/26, paragraph 147"
   ],
   "rwa_calc.engine.stages.classify.subtypes::derive_exposure_subclass": [
     "PS1/26, paragraph 147A.1"
+  ],
+  "rwa_calc.engine.stages.classify.subtypes::qrre_undrawn_cancellable_expr": [
+    "CRR Art. 154(4)",
+    "PS1/26, paragraph 147"
+  ],
+  "rwa_calc.engine.stages.classify.subtypes::qrre_unsecured_expr": [
+    "CRR Art. 154(4)",
+    "PS1/26, paragraph 147"
   ],
   "rwa_calc.engine.stages.classify.subtypes::sync_irb_exposure_class": [
     "CRR Art. 147(5)",

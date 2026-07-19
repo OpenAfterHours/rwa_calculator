@@ -41,11 +41,13 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from rwa_calc.api import run_index
+from rwa_calc.api.export import ResultExporter
 from rwa_calc.api.models import ValidationRequest
 from rwa_calc.api.reconciliation import loads_reconciliation_config
 from rwa_calc.api.service import CreditRiskCalc, get_supported_frameworks
 from rwa_calc.api.validation import DataPathValidator
 from rwa_calc.reporting import catalog, lineage
+from rwa_calc.reporting.facts import FilingMetadata
 
 if TYPE_CHECKING:
     from rwa_calc.api.models import (
@@ -500,27 +502,66 @@ def reconcile_export(fmt: Literal["csv", "excel"], recon_id: str) -> FileRespons
 
 @router.get("/export/{fmt}", responses=_RESP_404)
 def export(
-    fmt: Literal["parquet", "csv", "excel", "corep", "pillar3"], run_id: str
+    fmt: Literal[
+        "parquet",
+        "csv",
+        "excel",
+        "corep",
+        "pillar3",
+        "corep_facts_parquet",
+        "corep_facts_ndjson",
+        "pillar3_facts_parquet",
+        "pillar3_facts_ndjson",
+    ],
+    run_id: str,
+    entity_identifier: str | None = None,
 ) -> FileResponse:
     """Export a completed run and stream it back for download.
 
-    All on-disk paths are built from a fresh temp dir plus fixed, literal
-    filenames — the user-supplied run_id never reaches the filesystem path.
+    All on-disk paths are built from a fresh temp dir plus a filename stamped
+    from server-validated run data (framework, reporting date) — the
+    user-supplied run_id itself never reaches the filesystem path. The
+    ``*_facts_*`` formats stream the flat, keyed cell-fact feed
+    (``reporting/facts.py``) instead of a merged-header workbook.
+    ``entity_identifier`` (e.g. an LEI) is optional, caller-supplied firm-config
+    metadata stamped onto the fact rows and the workbook metadata sheet — NOT
+    onto the filename (it is free-form user input; unlike framework/
+    reporting_date it is never sanitised for filesystem/path use).
     """
     response = _require_run(run_id)
     tmp = Path(tempfile.mkdtemp(prefix="rwa_export_"))
+    metadata = FilingMetadata(
+        reporting_date=response.reporting_date,
+        framework=response.framework,
+        run_id=run_id,
+        entity_identifier=entity_identifier,
+    )
+    exporter = ResultExporter()
+    # metadata.stamped_filename() intentionally uses only framework/
+    # reporting_date (server-validated, path-safe) — entity_identifier is
+    # unsanitised caller input and must never be folded into a filesystem path.
 
     if fmt == "excel":
-        out = tmp / "rwa_results.xlsx"
+        out = tmp / metadata.stamped_filename("rwa_results", "xlsx")
         response.to_excel(out)
         return _file(out)
     if fmt == "corep":
-        out = tmp / "rwa_corep.xlsx"
-        response.to_corep(out)
+        out = tmp / metadata.stamped_filename("rwa_corep", "xlsx")
+        exporter.export_to_corep(response, out, metadata=metadata)
         return _file(out)
     if fmt == "pillar3":
-        out = tmp / "rwa_pillar3.xlsx"
-        response.to_pillar3(out)
+        out = tmp / metadata.stamped_filename("rwa_pillar3", "xlsx")
+        exporter.export_to_pillar3(response, out, metadata=metadata)
+        return _file(out)
+    if fmt.endswith("_facts_parquet") or fmt.endswith("_facts_ndjson"):
+        facts_fmt: Literal["parquet", "ndjson"] = "ndjson" if fmt.endswith("ndjson") else "parquet"
+        is_corep = fmt.startswith("corep")
+        prefix = "rwa_corep_facts" if is_corep else "rwa_pillar3_facts"
+        out = tmp / metadata.stamped_filename(prefix, facts_fmt)
+        if is_corep:
+            exporter.export_corep_facts(response, out, fmt=facts_fmt, metadata=metadata)
+        else:
+            exporter.export_pillar3_facts(response, out, fmt=facts_fmt, metadata=metadata)
         return _file(out)
 
     # parquet / csv export to a directory, then zip for a single download.
@@ -528,10 +569,10 @@ def export(
     out_dir.mkdir(parents=True, exist_ok=True)
     if fmt == "csv":
         response.to_csv(out_dir)
-        zip_path = tmp / "rwa_csv.zip"
+        zip_path = tmp / metadata.stamped_filename("rwa_csv", "zip")
     else:
         response.to_parquet(out_dir)
-        zip_path = tmp / "rwa_parquet.zip"
+        zip_path = tmp / metadata.stamped_filename("rwa_parquet", "zip")
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for f in sorted(out_dir.rglob("*")):
             if f.is_file():

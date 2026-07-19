@@ -29,6 +29,7 @@ from rwa_calc.reporting.kernel.columns import available_columns, pick
 from rwa_calc.reporting.kernel.excel import (
     column_name_map,
     sanitise_sheet_name,
+    write_metadata_sheet,
     write_template_sheet,
 )
 from rwa_calc.reporting.kernel.filters import (
@@ -51,5 +52,6 @@ __all__ = [
     "safe_sum",
     "safe_sum_or_none",
     "sanitise_sheet_name",
+    "write_metadata_sheet",
     "write_template_sheet",
 ]

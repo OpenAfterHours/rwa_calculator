@@ -389,6 +389,75 @@ def test_export_downloads_with_fixed_filename(
     assert media in disposition
 
 
+@pytest.mark.parametrize(
+    ("fmt", "media"),
+    [
+        ("corep_facts_parquet", "parquet"),
+        ("corep_facts_ndjson", "ndjson"),
+        ("pillar3_facts_parquet", "parquet"),
+        ("pillar3_facts_ndjson", "ndjson"),
+    ],
+)
+def test_export_cell_facts_downloads(
+    client: TestClient, data_dir: str, fmt: str, media: str
+) -> None:
+    """The flat, keyed cell-fact feed (reporting/facts.py) downloads the same
+    way as the other export formats, with the same run_id-in-filename guard."""
+    # Arrange
+    run_id = _run(client, data_dir)
+
+    # Act
+    resp = client.get(f"/api/export/{fmt}", params={"run_id": run_id})
+
+    # Assert
+    assert resp.status_code == 200
+    assert resp.content
+    disposition = resp.headers.get("content-disposition", "")
+    assert run_id not in disposition
+    assert media in disposition
+
+
+def test_export_filenames_are_stamped_with_framework_and_reporting_date(
+    client: TestClient, data_dir: str
+) -> None:
+    """Filenames now carry server-validated run data (framework, reporting
+    date) instead of a bare fixed literal — still never the opaque run_id."""
+    # Arrange
+    run_id = _run(client, data_dir)
+
+    # Act
+    resp = client.get("/api/export/corep", params={"run_id": run_id})
+
+    # Assert
+    disposition = resp.headers.get("content-disposition", "")
+    assert "CRR" in disposition
+    assert "2025-01-01" in disposition
+    assert run_id not in disposition
+
+
+def test_export_entity_identifier_is_stamped_into_corep_facts(
+    client: TestClient, data_dir: str
+) -> None:
+    """The optional entity_identifier query param reaches every fact row."""
+    # Arrange
+    run_id = _run(client, data_dir)
+
+    # Act
+    resp = client.get(
+        "/api/export/corep_facts_ndjson",
+        params={"run_id": run_id, "entity_identifier": "LEI999"},
+    )
+
+    # Assert — every fact row carries the caller-supplied entity id and the run id.
+    import json
+
+    assert resp.status_code == 200
+    records = [json.loads(line) for line in resp.content.decode().splitlines() if line]
+    assert records
+    assert all(r["entity_identifier"] == "LEI999" for r in records)
+    assert all(r["run_id"] == run_id for r in records)
+
+
 # =============================================================================
 # Reconciliation
 # =============================================================================

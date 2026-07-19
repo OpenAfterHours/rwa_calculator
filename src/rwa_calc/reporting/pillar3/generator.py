@@ -51,6 +51,7 @@ from rwa_calc.reporting.kernel import (
     filter_by_approach,
     null_row,
     safe_sum_or_none,
+    write_metadata_sheet,
     write_template_sheet,
 )
 from rwa_calc.reporting.kernel import (
@@ -106,6 +107,7 @@ if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import OutputFloorSummary
     from rwa_calc.contracts.config import Pillar3CapitalRatioOverrides
     from rwa_calc.contracts.results import ExportResult
+    from rwa_calc.reporting.facts import FilingMetadata
 
 logger = logging.getLogger(__name__)
 
@@ -232,8 +234,16 @@ class Pillar3Generator:
         self,
         bundle: Pillar3TemplateBundle,
         output_path: Path,
+        *,
+        metadata: FilingMetadata | None = None,
     ) -> ExportResult:
-        """Write Pillar III templates to an Excel workbook."""
+        """Write Pillar III templates to an Excel workbook.
+
+        When *metadata* is supplied, an additional "metadata" sheet carries
+        the run's filing context (reporting date, framework, entity
+        identifier, run id, generator version) — see
+        ``reporting/facts.py::FilingMetadata``.
+        """
         from rwa_calc.contracts.results import ExportResult
 
         try:
@@ -330,6 +340,8 @@ class Pillar3Generator:
                 total_rows += _write_single_sheet(
                     workbook, bundle.ccr8, f"{prefix} CCR8", column_name_map(CCR8_COLUMNS)
                 )
+            if metadata is not None:
+                write_metadata_sheet(workbook, metadata.as_sheet_fields())
         finally:
             workbook.close()
 

@@ -22,7 +22,7 @@ import json
 import logging
 import warnings
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import polars as pl
 
@@ -35,6 +35,7 @@ if TYPE_CHECKING:
         ReconciliationResponse,
     )
     from rwa_calc.contracts.config import OutputFloorConfig
+    from rwa_calc.reporting.facts import FilingMetadata
 
 logger = logging.getLogger(__name__)
 
@@ -248,6 +249,7 @@ class ResultExporter:
         output_path: Path,
         *,
         output_floor_config: OutputFloorConfig | None = None,
+        metadata: FilingMetadata | None = None,
     ) -> ExportResult:
         """
         Export results as COREP regulatory reporting templates.
@@ -266,6 +268,8 @@ class ResultExporter:
             output_floor_config: Optional floor config for reporting
                 basis conditionality (Art. 92 para 2A). Gates floor
                 indicators and materiality columns on entity type.
+            metadata: Optional filing metadata — stamped as a "metadata"
+                sheet in the workbook (``reporting/facts.py::FilingMetadata``).
 
         Returns:
             ExportResult with the written file path and row count
@@ -280,19 +284,82 @@ class ResultExporter:
             response,
             output_floor_config=output_floor_config,
         )
-        return generator.export_to_excel(bundle, output_path)
+        return generator.export_to_excel(bundle, output_path, metadata=metadata)
 
     def export_to_pillar3(
         self,
         response: CalculationResponse,
         output_path: Path,
+        *,
+        metadata: FilingMetadata | None = None,
     ) -> ExportResult:
-        """Export results as Pillar III public disclosure templates."""
+        """Export results as Pillar III public disclosure templates.
+
+        ``metadata``, when supplied, is stamped as a "metadata" sheet in the
+        workbook (``reporting/facts.py::FilingMetadata``).
+        """
         from rwa_calc.reporting.pillar3.generator import Pillar3Generator
 
         generator = Pillar3Generator()
         bundle = generator.generate(response)
-        return generator.export_to_excel(bundle, output_path)
+        return generator.export_to_excel(bundle, output_path, metadata=metadata)
+
+    # -- cell facts -----------------------------------------------------------
+
+    def export_corep_facts(
+        self,
+        response: CalculationResponse,
+        output_path: Path,
+        *,
+        fmt: Literal["parquet", "ndjson"] = "parquet",
+        output_floor_config: OutputFloorConfig | None = None,
+        metadata: FilingMetadata | None = None,
+    ) -> ExportResult:
+        """Export COREP as a flat, keyed cell-fact feed (parquet or ndjson).
+
+        One row per populated ``(template_id, sheet, row_ref, col_ref)`` cell
+        — the shape a vendor filing tool maps against, rather than a
+        merged-header spreadsheet. See ``reporting/facts.py`` for the fact
+        schema and null/sign conventions.
+
+        Args:
+            response: CalculationResponse with cached results
+            output_path: Path for the output file
+            fmt: "parquet" (default) or "ndjson"
+            output_floor_config: Optional floor config, as ``export_to_corep``
+            metadata: Optional filing metadata, stamped as constant columns
+
+        Returns:
+            ExportResult with the written file path and fact-row count
+        """
+        from rwa_calc.reporting.corep.generator import COREPGenerator
+        from rwa_calc.reporting.facts import build_fact_frame
+
+        generator = COREPGenerator()
+        bundle = generator.generate(response, output_floor_config=output_floor_config)
+        frame = build_fact_frame(bundle, None, metadata=metadata)
+        return _write_fact_frame(frame, output_path, fmt, "corep_facts")
+
+    def export_pillar3_facts(
+        self,
+        response: CalculationResponse,
+        output_path: Path,
+        *,
+        fmt: Literal["parquet", "ndjson"] = "parquet",
+        metadata: FilingMetadata | None = None,
+    ) -> ExportResult:
+        """Export Pillar III as a flat, keyed cell-fact feed (parquet or ndjson).
+
+        See ``export_corep_facts`` for the fact shape; this is the same
+        traversal over the Pillar III bundle instead of COREP.
+        """
+        from rwa_calc.reporting.facts import build_fact_frame
+        from rwa_calc.reporting.pillar3.generator import Pillar3Generator
+
+        generator = Pillar3Generator()
+        bundle = generator.generate(response)
+        frame = build_fact_frame(None, bundle, metadata=metadata)
+        return _write_fact_frame(frame, output_path, fmt, "pillar3_facts")
 
     # -- reconciliation -----------------------------------------------------
 
@@ -450,6 +517,28 @@ class ResultExporter:
         finally:
             workbook.close()
         return ExportResult(format="excel", files=[output_path], row_count=total_rows)
+
+
+# =============================================================================
+# Cell-fact helpers
+# =============================================================================
+
+
+def _write_fact_frame(
+    frame: pl.DataFrame,
+    output_path: Path,
+    fmt: Literal["parquet", "ndjson"],
+    export_format_label: str,
+) -> ExportResult:
+    """Write a cell-fact frame (``reporting.facts.build_fact_frame``) to disk."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if fmt == "ndjson":
+        frame.write_ndjson(output_path)
+    else:
+        frame.write_parquet(output_path)
+    return ExportResult(
+        format=f"{export_format_label}_{fmt}", files=[output_path], row_count=frame.height
+    )
 
 
 # =============================================================================

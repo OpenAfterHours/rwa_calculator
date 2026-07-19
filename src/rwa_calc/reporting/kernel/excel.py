@@ -12,6 +12,9 @@ Key responsibilities:
   definitions (``COREPColumn`` / ``P3Column`` — both expose ``.ref`` and ``.name``).
 - Replace non-finite floats (NaN, +/-Inf) with null so xlsxwriter writes a blank
   cell instead of raising / emitting an Excel ``#NUM!`` error.
+- Write a simple two-column label/value sheet (``write_metadata_sheet``) — used
+  by the COREP / Pillar 3 generators for the filing-metadata sheet
+  (``reporting/facts.py::FilingMetadata``).
 
 Why: the template frames are keyed by regulatory column refs (e.g. ``"0010"``,
 ``"a"``) so downstream consumers and the ndjson goldens stay code-stable. This
@@ -123,6 +126,36 @@ def write_template_sheet(
     # (often wide) template. Applied after the table write so it is not reset.
     worksheet.freeze_panes(2, 0)
     return df.height
+
+
+def write_metadata_sheet(
+    workbook: Workbook,
+    fields: Mapping[str, str],
+    sheet_name: str = "metadata",
+) -> None:
+    """Write a two-column ``Field`` / ``Value`` sheet — e.g. filing metadata.
+
+    Deliberately generic (a plain ordered label/value mapping) rather than
+    typed on ``FilingMetadata`` directly, so this module does not have to
+    import ``reporting/facts.py`` — the caller (a generator's
+    ``export_to_excel``) builds the mapping via
+    ``FilingMetadata.as_sheet_fields()`` and passes it in.
+
+    Every cell is written with ``write_string`` — not the type-sniffing
+    ``write`` — because a value (``entity_identifier`` is caller-supplied REST
+    input, e.g. from ``/api/export/{fmt}?entity_identifier=...``) may start
+    with ``=``, ``+``, ``-`` or ``@``, which xlsxwriter's default ``write``
+    would otherwise emit as a live formula rather than a literal string. This
+    workbook is a regulatory artefact handed to a filing tool, so a value must
+    never turn into executable spreadsheet content.
+    """
+    worksheet = workbook.add_worksheet(sanitise_sheet_name(sheet_name))
+    bold = workbook.add_format({"bold": True})
+    worksheet.write_string(0, 0, "Field", bold)
+    worksheet.write_string(0, 1, "Value", bold)
+    for row_idx, (label, value) in enumerate(fields.items(), start=1):
+        worksheet.write_string(row_idx, 0, label)
+        worksheet.write_string(row_idx, 1, value)
 
 
 def _finite_only(df: pl.DataFrame) -> pl.DataFrame:

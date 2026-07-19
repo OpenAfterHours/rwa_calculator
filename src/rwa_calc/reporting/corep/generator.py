@@ -81,6 +81,7 @@ from rwa_calc.reporting.kernel import (
 )
 from rwa_calc.reporting.kernel import (
     column_name_map,
+    write_metadata_sheet,
     write_template_sheet,
 )
 from rwa_calc.reporting.kernel import (
@@ -97,6 +98,7 @@ if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import OutputFloorSummary
     from rwa_calc.contracts.config import OutputFloorConfig
     from rwa_calc.contracts.results import ExportResult
+    from rwa_calc.reporting.facts import FilingMetadata
 
 logger = logging.getLogger(__name__)
 
@@ -348,6 +350,8 @@ class COREPGenerator:
         self,
         bundle: COREPTemplateBundle,
         output_path: Path,
+        *,
+        metadata: FilingMetadata | None = None,
     ) -> ExportResult:
         """Write COREP templates to a multi-sheet Excel workbook.
 
@@ -355,6 +359,11 @@ class COREPGenerator:
         - "C 07.00 - Corporate", "C 07.00 - Institution", etc.
         - "C 08.01 - Corporate", etc.
         - "C 08.02 - Corporate", etc.
+
+        When *metadata* is supplied, an additional "metadata" sheet carries
+        the run's filing context (reporting date, framework, entity
+        identifier, run id, generator version) — see
+        ``reporting/facts.py::FilingMetadata``.
         """
         from rwa_calc.contracts.results import ExportResult
 
@@ -372,6 +381,8 @@ class COREPGenerator:
         workbook = xw.Workbook(str(output_path))
         try:
             total_rows += self._export_all_template_sheets(workbook, bundle)
+            if metadata is not None:
+                write_metadata_sheet(workbook, metadata.as_sheet_fields())
         finally:
             workbook.close()
 

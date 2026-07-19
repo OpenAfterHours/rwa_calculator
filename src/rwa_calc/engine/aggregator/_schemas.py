@@ -101,8 +101,17 @@ FLOOR_IMPACT_SCHEMA: dict[str, PolarsDataType] = {
     "output_floor_pct": pl.Float64,
 }
 
+# Mirrors SUPPORTING_FACTOR_IMPACT_EDGE (contracts/edges.py) column-for-column so
+# the empty-frame fallback conforms cleanly if it ever fires. The populated path
+# in _supporting_factors.py always emits all ten (col_or_default injects the four
+# optional-source columns), so this fallback is dead today — but keeping it
+# edge-shaped means a strict seal of the empty frame would not raise.
 SUPPORTING_FACTOR_SCHEMA: dict[str, PolarsDataType] = {
     "exposure_reference": pl.String,
+    "exposure_class": pl.String,
+    "is_sme": pl.Boolean,
+    "is_infrastructure": pl.Boolean,
+    "ead_final": pl.Float64,
     "supporting_factor": pl.Float64,
     "rwa_pre_factor": pl.Float64,
     "rwa_post_factor": pl.Float64,

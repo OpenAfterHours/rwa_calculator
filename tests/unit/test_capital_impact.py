@@ -89,7 +89,28 @@ def _make_b31_results(
 
     floor_impact = None
     if floor_impact_data is not None:
-        floor_impact = pl.LazyFrame(floor_impact_data)
+        # Complete the hand-rolled floor_impact to the full producer shape
+        # (floor_impact edge is all-required). Callers supply only the columns
+        # the capital-impact analysis reads (exposure_reference, floor_impact_rwa);
+        # the rest are placeholder-defaulted so the seal does not null-complete.
+        n = len(floor_impact_data["exposure_reference"])
+        floor_impact = pl.LazyFrame(
+            {
+                "exposure_reference": floor_impact_data["exposure_reference"],
+                "approach_applied": floor_impact_data.get(
+                    "approach_applied", ["foundation_irb"] * n
+                ),
+                "exposure_class": floor_impact_data.get("exposure_class", ["corporate"] * n),
+                "rwa_pre_floor": floor_impact_data.get("rwa_pre_floor", [0.0] * n),
+                "floor_rwa": floor_impact_data.get("floor_rwa", [0.0] * n),
+                "is_floor_binding": floor_impact_data.get(
+                    "is_floor_binding", [v > 0 for v in floor_impact_data["floor_impact_rwa"]]
+                ),
+                "floor_impact_rwa": floor_impact_data["floor_impact_rwa"],
+                "rwa_post_floor": floor_impact_data.get("rwa_post_floor", [0.0] * n),
+                "output_floor_pct": floor_impact_data.get("output_floor_pct", [0.725] * n),
+            }
+        )
 
     return make_aggregated_bundle(
         results=pl.LazyFrame(data),

@@ -40,7 +40,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from rwa_calc.contracts.edges import AGGREGATOR_EXIT_EDGE, seal
+from rwa_calc.contracts.edges import AGGREGATOR_EXIT_EDGE, reseal_with
 from rwa_calc.engine.orchestrator import (
     BRANCH_ERRORS,
     COMPONENTS,
@@ -100,9 +100,12 @@ def run(
         # LazyFrame alone — the scalar is otherwise bundle-only. ``cva_rwa`` is a
         # declared optional column on ``AGGREGATOR_EXIT_EDGE``, so the re-seal
         # conforms and re-brands the frame without violating the producer-seal
-        # contract.
-        cva_results = seal(
-            result.results.with_columns(pl.lit(cva.rwea, dtype=pl.Float64).alias("cva_rwa")),
+        # contract. ``reseal_with`` is the single sanctioned mutate-and-rebrand
+        # path — this is the second of the exit edge's two legitimate seal
+        # points (the aggregator being the first).
+        cva_results = reseal_with(
+            result.results,
+            {"cva_rwa": pl.lit(cva.rwea, dtype=pl.Float64)},
             AGGREGATOR_EXIT_EDGE,
         )
         result = replace(

@@ -31,7 +31,15 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.contracts.bundles import AggregatedResultBundle
-from rwa_calc.contracts.edges import AGGREGATOR_EXIT_EDGE, seal
+from rwa_calc.contracts.edges import (
+    AGGREGATOR_EXIT_EDGE,
+    FLOOR_IMPACT_EDGE,
+    SUMMARY_BY_APPROACH_EDGE,
+    SUMMARY_BY_CLASS_EDGE,
+    SUMMARY_BY_CLASS_METHOD_EDGE,
+    SUPPORTING_FACTOR_IMPACT_EDGE,
+    seal,
+)
 from rwa_calc.contracts.errors import non_finite_input_warning, non_finite_output_error
 from rwa_calc.domain.enums import ApproachType, ExposureClass
 from rwa_calc.engine.aggregator._el_summary import compute_el_portfolio_summary
@@ -387,18 +395,30 @@ class OutputAggregator:
             irb_results=irb_results,
             slotting_results=slotting_results,
             equity_results=equity_results,
+            # Producer seals for the consumer-read summary / floor / factor
+            # frames (SEALED_FRAME_FIELDS-registered), same eager-backed wrap as
+            # ``results``: the UI cards / results cache / analyses receive a
+            # brand-validated frame, never a reshaped or partially-built one.
             floor_impact=(
-                post_floor_dfs["floor_impact"].lazy() if floor_impact is not None else None
+                seal(post_floor_dfs["floor_impact"].lazy(), FLOOR_IMPACT_EDGE)
+                if floor_impact is not None
+                else None
             ),
             output_floor_summary=output_floor_summary,
             supporting_factor_impact=(
-                post_floor_dfs["supporting_factor_impact"].lazy()
+                seal(
+                    post_floor_dfs["supporting_factor_impact"].lazy(), SUPPORTING_FACTOR_IMPACT_EDGE
+                )
                 if supporting_factor_impact is not None
                 else None
             ),
-            summary_by_class=post_floor_dfs["summary_by_class"].lazy(),
-            summary_by_approach=post_floor_dfs["summary_by_approach"].lazy(),
-            summary_by_class_method=post_floor_dfs["summary_by_class_method"].lazy(),
+            summary_by_class=seal(post_floor_dfs["summary_by_class"].lazy(), SUMMARY_BY_CLASS_EDGE),
+            summary_by_approach=seal(
+                post_floor_dfs["summary_by_approach"].lazy(), SUMMARY_BY_APPROACH_EDGE
+            ),
+            summary_by_class_method=seal(
+                post_floor_dfs["summary_by_class_method"].lazy(), SUMMARY_BY_CLASS_METHOD_EDGE
+            ),
             el_summary=el_summary,
             securitisation_summary=securitisation_summary,
             securitisation_audit=sec_audit_view,

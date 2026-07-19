@@ -20,12 +20,21 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.bundles import CRMAdjustedBundle
+from rwa_calc.contracts.bundles import AggregatedResultBundle, CRMAdjustedBundle
 from rwa_calc.contracts.edges import (
+    AGGREGATOR_EXIT_EDGE,
+    AGGREGATOR_SUMMARY_EDGES,
+    FLOOR_IMPACT_EDGE,
     RAW_TABLE_EDGES,
+    REPORTING_SURFACE,
+    SUMMARY_BY_APPROACH_EDGE,
+    SUMMARY_BY_CLASS_EDGE,
+    SUMMARY_BY_CLASS_METHOD_EDGE,
+    SUPPORTING_FACTOR_IMPACT_EDGE,
     EdgeColumn,
     EdgeContract,
     EdgeContractViolation,
+    reseal_with,
     seal,
     seal_lenient,
     sealed_edge_of,
@@ -500,3 +509,158 @@ class TestConditionalColumns:
                 name="bad",
                 columns={"x": EdgeColumn(dtype=pl.Float64, inject=False)},
             )
+
+
+class TestResealWith:
+    """``reseal_with`` — the sanctioned mutate-and-rebrand of a sealed frame."""
+
+    @staticmethod
+    def _edge() -> EdgeContract:
+        return EdgeContract(
+            name="reseal_edge",
+            columns={
+                "exposure_reference": EdgeColumn(dtype=pl.String),
+                "scalar": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
+            },
+        )
+
+    def test_declared_column_added_and_frame_rebranded(self):
+        edge = self._edge()
+        sealed = seal(pl.LazyFrame({"exposure_reference": ["E1"]}), edge)
+
+        resealed = reseal_with(sealed, {"scalar": pl.lit(1.5, dtype=pl.Float64)}, edge)
+
+        out = resealed.collect()
+        assert sealed_edge_of(resealed) == "reseal_edge"
+        assert out["scalar"].to_list() == [1.5]
+
+    def test_undeclared_column_raises_before_conform_can_strip_it(self):
+        edge = self._edge()
+        sealed = seal(pl.LazyFrame({"exposure_reference": ["E1"]}), edge)
+
+        # An undeclared mutation would be silently stripped by conform, dropping
+        # the mutation without a trace — reseal_with rejects it up front instead.
+        with pytest.raises(EdgeContractViolation, match="not_declared"):
+            reseal_with(sealed, {"not_declared": pl.lit(9.9)}, edge)
+
+
+class TestReportingSurface:
+    """``REPORTING_SURFACE`` is a documented subset of the exit-edge columns."""
+
+    def test_every_surface_column_is_declared_on_aggregator_exit(self):
+        undeclared = REPORTING_SURFACE - set(AGGREGATOR_EXIT_EDGE.columns)
+
+        assert undeclared == set(), f"REPORTING_SURFACE names not on the edge: {undeclared}"
+
+    def test_surface_contains_the_reporting_ledger_and_headline_measures(self):
+        # Guards the annotation against silent drift: the 10 reporting_* columns,
+        # the substitution-relief column, and the three headline measures.
+        assert {"reporting_class", "reporting_approach", "reporting_method"} <= REPORTING_SURFACE
+        assert "guarantee_rwa_benefit" in REPORTING_SURFACE
+        assert {"rwa_final", "ead_final", "rwa_pre_floor"} <= REPORTING_SURFACE
+
+
+class TestAggregatorSummaryEdges:
+    """The five consumer-read aggregator frames seal against their own edges."""
+
+    def test_registry_maps_field_name_to_matching_edge_name(self):
+        for field_name, edge in AGGREGATOR_SUMMARY_EDGES.items():
+            assert edge.name == field_name
+
+    def test_summary_by_class_seals_producer_shape(self):
+        # Producer shape verified against generate_summary_by_class (no floor):
+        # exposure_class, total_ead, exposure_count, total_rwa, avg_risk_weight.
+        frame = pl.LazyFrame(
+            {
+                "exposure_class": ["corporate"],
+                "total_ead": [100.0],
+                "exposure_count": pl.Series([1], dtype=pl.UInt32),
+                "total_rwa": [50.0],
+                "avg_risk_weight": [0.5],
+            }
+        )
+
+        sealed = seal(frame, SUMMARY_BY_CLASS_EDGE)
+
+        assert sealed_edge_of(sealed) == "summary_by_class"
+        # floor_binding_count is conditional (inject=False) — absent when the
+        # floor did not run, never injected.
+        assert "floor_binding_count" not in sealed.collect().columns
+
+    def test_summary_by_class_keeps_conditional_floor_binding_count(self):
+        frame = pl.LazyFrame(
+            {
+                "exposure_class": ["corporate"],
+                "total_ead": [100.0],
+                "exposure_count": pl.Series([1], dtype=pl.UInt32),
+                "total_rwa": [50.0],
+                "floor_binding_count": pl.Series([1], dtype=pl.UInt32),
+                "avg_risk_weight": [0.5],
+            }
+        )
+
+        sealed = seal(frame, SUMMARY_BY_CLASS_EDGE).collect()
+
+        assert sealed["floor_binding_count"].to_list() == [1]
+
+    def test_supporting_factor_impact_seals_producer_shape(self):
+        frame = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1"],
+                "exposure_class": ["corporate"],
+                "is_sme": [True],
+                "is_infrastructure": [False],
+                "ead_final": [100.0],
+                "supporting_factor": [0.7619],
+                "rwa_pre_factor": [100.0],
+                "rwa_post_factor": [76.19],
+                "supporting_factor_impact": [23.81],
+                "supporting_factor_applied": [True],
+            }
+        )
+
+        sealed = seal(frame, SUPPORTING_FACTOR_IMPACT_EDGE)
+
+        assert sealed_edge_of(sealed) == "supporting_factor_impact"
+
+    def test_floor_impact_seals_producer_shape(self):
+        frame = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1"],
+                "approach_applied": ["foundation_irb"],
+                "exposure_class": ["corporate"],
+                "rwa_pre_floor": [100.0],
+                "floor_rwa": [72.5],
+                "is_floor_binding": [True],
+                "floor_impact_rwa": [10.0],
+                "rwa_post_floor": [110.0],
+                "output_floor_pct": [0.725],
+            }
+        )
+
+        sealed = seal(frame, FLOOR_IMPACT_EDGE)
+
+        assert sealed_edge_of(sealed) == "floor_impact"
+
+    def test_registered_field_rejects_unsealed_summary_frame(self):
+        # AggregatedResultBundle.summary_by_class is registered in
+        # SEALED_FRAME_FIELDS in production — an unbranded frame must raise.
+        results = AGGREGATOR_EXIT_EDGE.empty_frame()
+
+        with pytest.raises(EdgeContractViolation, match="summary_by_class"):
+            AggregatedResultBundle(results=results, summary_by_class=pl.LazyFrame({"x": [1]}))
+
+    def test_registered_field_accepts_sealed_summary_frame(self):
+        results = AGGREGATOR_EXIT_EDGE.empty_frame()
+        sealed_summary = SUMMARY_BY_CLASS_EDGE.empty_frame()
+        sealed_approach = SUMMARY_BY_APPROACH_EDGE.empty_frame()
+        sealed_method = SUMMARY_BY_CLASS_METHOD_EDGE.empty_frame()
+
+        bundle = AggregatedResultBundle(
+            results=results,
+            summary_by_class=sealed_summary,
+            summary_by_approach=sealed_approach,
+            summary_by_class_method=sealed_method,
+        )
+
+        assert bundle.summary_by_class is sealed_summary

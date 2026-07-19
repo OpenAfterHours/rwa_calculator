@@ -258,6 +258,55 @@ def seal(lf: pl.LazyFrame, edge: EdgeContract) -> pl.LazyFrame:
     return brand(edge.conform(lf), edge.name)
 
 
+def reseal_with(
+    frame: pl.LazyFrame,
+    columns: Mapping[str, pl.Expr],
+    edge: EdgeContract,
+) -> pl.LazyFrame:
+    """Add/overwrite ``columns`` on an already-sealed frame and re-seal it.
+
+    THE sanctioned way to mutate-and-rebrand a frame that has already passed a
+    producer seal. Sealing a frame twice is otherwise a smell — the brand is
+    meant to prove the frame is exactly what the producing stage emitted — so
+    this helper makes the ONE legitimate post-seal mutation explicit and
+    greppable, rather than letting bare ``seal(frame.with_columns(...))`` calls
+    proliferate and blur where re-branding happens.
+
+    Every added/overwritten column MUST already be declared on ``edge`` (as a
+    required or optional column). This is enforced up front: an undeclared
+    column raises ``EdgeContractViolation`` rather than being silently stripped
+    by ``conform`` (which would drop the mutation without a trace), so the
+    re-brand stays faithful to the producer-seal contract.
+
+    The single production caller today is the aggregation stage's post-run
+    BA-CVA roll-up, which broadcasts the portfolio ``cva_rwa`` scalar onto the
+    already-sealed results frame (``engine/stages/aggregate.py``). See
+    ``AGGREGATOR_EXIT_EDGE`` for the two-legitimate-seal-point invariant this
+    exists to preserve.
+
+    Args:
+        frame: An already-sealed frame. The incoming brand is not checked —
+            the caller owns provenance and ``conform`` re-validates the full
+            shape regardless.
+        columns: Column-name -> expression to add or overwrite before re-seal.
+        edge: The edge to conform-and-brand against — normally the SAME edge
+            the frame was originally sealed for.
+
+    Raises:
+        EdgeContractViolation: if any name in ``columns`` is not declared on
+            ``edge`` (the mutation would otherwise vanish at conform time).
+    """
+    undeclared = [name for name in columns if name not in edge.columns]
+    if undeclared:
+        raise EdgeContractViolation(
+            f"reseal_with: columns {sorted(undeclared)} are not declared on edge "
+            f"'{edge.name}' — conform would strip them, silently dropping the "
+            "mutation; declare them on the edge first"
+        )
+    mutated = frame.with_columns([expr.alias(name) for name, expr in columns.items()])
+    return seal(mutated, edge)
+
+
 def seal_lenient(lf: pl.LazyFrame, edge: EdgeContract) -> tuple[pl.LazyFrame, list[str]]:
     """Leniently conform ``lf`` to ``edge``, brand it, report missing columns.
 
@@ -1615,6 +1664,178 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
         "cva_rwa": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
     },
 )
+"""The reporting input contract — the aggregator's combined per-leg results frame.
+
+Two-seal-point invariant: this edge has exactly TWO legitimate seal sites, and
+no others may brand a frame ``aggregator_exit``:
+
+1. the aggregator itself (``engine/aggregator/aggregator.py``), which seals the
+   combined results frame at the end of ``OutputAggregator.aggregate``; and
+2. the post-aggregation BA-CVA roll-up in ``engine/stages/aggregate.py``, which
+   broadcasts the portfolio ``cva_rwa`` scalar onto the already-sealed frame via
+   ``reseal_with`` (the only sanctioned mutate-and-rebrand path). ``cva_rwa`` is
+   a declared optional column here precisely so that re-seal conforms.
+
+Of the ~300 declared columns, only a small ``REPORTING_SURFACE`` group is the
+actual reporting contract new template authors should read — see that frozenset.
+"""
+
+
+# The reporting surface: the columns a COREP / Pillar 3 template author actually
+# consumes off the aggregator exit. Everything else on AGGREGATOR_EXIT_EDGE is
+# calculation provenance / audit that rides along for reconciliation and debug.
+# New template modules read THESE names (never the raw exposure_class / approach
+# twins the per-leg reporting ledger already resolves). Annotation only — this
+# does NOT prune, reorder, or reclassify any edge column.
+REPORTING_SURFACE: frozenset[str] = frozenset(
+    {
+        # Canonical per-leg substitution ledger (Phase 7 S2): post-substitution
+        # class/approach/method + their origination twins, leg role, on/off-BS
+        # flag, and the EAD/RW/subclass aliases of the sealed final values.
+        "reporting_approach",
+        "reporting_approach_origin",
+        "reporting_class",
+        "reporting_class_origin",
+        "reporting_ead",
+        "reporting_leg_role",
+        "reporting_method",
+        "reporting_on_balance_sheet",
+        "reporting_rw",
+        "reporting_subclass",
+        # The additive per-leg Art. 235/236 substitution relief (Phase 7 F8).
+        "guarantee_rwa_benefit",
+        # Headline measures every template rolls up (post-floor final RWA, EAD,
+        # and the pre-floor RWA snapshot for the floor-impact view).
+        "rwa_final",
+        "ead_final",
+        "rwa_pre_floor",
+    }
+)
+"""The ~14-column reporting contract inside ``AGGREGATOR_EXIT_EDGE`` — what new
+COREP / Pillar 3 template authors read. Pinned as a subset of the edge columns by
+``tests/contracts/test_edge_contracts.py``."""
+
+
+# ---------------------------------------------------------------------------
+# Edge definitions — aggregator consumer-read summary / floor / factor frames
+# ---------------------------------------------------------------------------
+# Beyond ``results``, the aggregator emits five consumer-read frames — three
+# summaries, the per-exposure floor-impact view, and the supporting-factor
+# impact view — each a pure group-by / projection of the sealed per-leg
+# reporting ledger. They feed the UI cards, the API results cache (parquet
+# sink) and the transition / comparison analyses, so they get producer seals
+# and SEALED_FRAME_FIELDS registration exactly like ``results``. Each contract
+# declares precisely what the producer emits (verified against the aggregator
+# summary functions) — conditional columns (present only when the output floor
+# ran) are ``required=False, inject=False`` so a CRR / floor-exempt run's
+# narrower frame conforms without a shape change.
+
+
+SUMMARY_BY_CLASS_EDGE: EdgeContract = EdgeContract(
+    name="summary_by_class",
+    columns={
+        "exposure_class": EdgeColumn(dtype=pl.String, citation="CRR Art. 112"),
+        "total_ead": EdgeColumn(dtype=pl.Float64),
+        "exposure_count": EdgeColumn(dtype=pl.UInt32),
+        "total_rwa": EdgeColumn(dtype=pl.Float64),
+        # Emitted only when the output floor ran (is_floor_binding present on
+        # the ledger); absent on CRR / floor-exempt runs.
+        "floor_binding_count": EdgeColumn(
+            dtype=pl.UInt32, required=False, inject=False, citation="PS1/26 Art. 92"
+        ),
+        "avg_risk_weight": EdgeColumn(dtype=pl.Float64),
+    },
+)
+"""Per-exposure-class RWA summary — grouped on the sealed ``reporting_class``."""
+
+
+SUMMARY_BY_APPROACH_EDGE: EdgeContract = EdgeContract(
+    name="summary_by_approach",
+    columns={
+        "approach_applied": EdgeColumn(dtype=pl.String, citation="CRR Art. 143"),
+        "total_ead": EdgeColumn(dtype=pl.Float64),
+        "exposure_count": EdgeColumn(dtype=pl.UInt32),
+        "total_rwa": EdgeColumn(dtype=pl.Float64),
+        # Emitted only when the output floor ran (floor_impact_rwa present).
+        "total_floor_impact": EdgeColumn(
+            dtype=pl.Float64, required=False, inject=False, citation="PS1/26 Art. 92"
+        ),
+        "total_expected_loss": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 158"),
+        "total_el_shortfall": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 159"),
+        "total_el_excess": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 159"),
+    },
+)
+"""Per-approach RWA summary — grouped on the sealed ``reporting_approach``."""
+
+
+SUMMARY_BY_CLASS_METHOD_EDGE: EdgeContract = EdgeContract(
+    name="summary_by_class_method",
+    columns={
+        "exposure_class": EdgeColumn(dtype=pl.String, citation="CRR Art. 112"),
+        "method": EdgeColumn(dtype=pl.String),
+        "total_ead": EdgeColumn(dtype=pl.Float64),
+        "exposure_count": EdgeColumn(dtype=pl.UInt32),
+        "total_rwa": EdgeColumn(dtype=pl.Float64),
+        "floor_binding_count": EdgeColumn(
+            dtype=pl.UInt32, required=False, inject=False, citation="PS1/26 Art. 92"
+        ),
+        "avg_risk_weight": EdgeColumn(dtype=pl.Float64),
+    },
+)
+"""Per-(class, methodology) RWA summary — grouped on the sealed
+``reporting_class`` x ``reporting_method``; ties cell-for-cell to
+``summary_by_class`` when summed over methods within a class."""
+
+
+FLOOR_IMPACT_EDGE: EdgeContract = EdgeContract(
+    name="floor_impact",
+    columns={
+        "exposure_reference": EdgeColumn(dtype=pl.String),
+        "approach_applied": EdgeColumn(dtype=pl.String, citation="CRR Art. 143"),
+        "exposure_class": EdgeColumn(dtype=pl.String, citation="CRR Art. 112"),
+        "rwa_pre_floor": EdgeColumn(dtype=pl.Float64),
+        "floor_rwa": EdgeColumn(dtype=pl.Float64, citation="PS1/26 Art. 92"),
+        "is_floor_binding": EdgeColumn(dtype=pl.Boolean, citation="PS1/26 Art. 92"),
+        "floor_impact_rwa": EdgeColumn(dtype=pl.Float64, citation="PS1/26 Art. 92"),
+        "rwa_post_floor": EdgeColumn(dtype=pl.Float64),
+        "output_floor_pct": EdgeColumn(dtype=pl.Float64, citation="PS1/26 Art. 92"),
+    },
+)
+"""Per-exposure output-floor impact (floor-eligible rows). Built only when the
+output floor ran, so ``AggregatedResultBundle.floor_impact`` is None otherwise;
+mirrors ``engine/aggregator/_schemas.py::FLOOR_IMPACT_SCHEMA``."""
+
+
+SUPPORTING_FACTOR_IMPACT_EDGE: EdgeContract = EdgeContract(
+    name="supporting_factor_impact",
+    columns={
+        "exposure_reference": EdgeColumn(dtype=pl.String),
+        "exposure_class": EdgeColumn(dtype=pl.String, citation="CRR Art. 112"),
+        "is_sme": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 501"),
+        "is_infrastructure": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 501a"),
+        "ead_final": EdgeColumn(dtype=pl.Float64),
+        "supporting_factor": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 501"),
+        "rwa_pre_factor": EdgeColumn(dtype=pl.Float64),
+        "rwa_post_factor": EdgeColumn(dtype=pl.Float64),
+        "supporting_factor_impact": EdgeColumn(dtype=pl.Float64),
+        "supporting_factor_applied": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 501"),
+    },
+)
+"""Per-exposure SME / infrastructure supporting-factor relief (CRR only). Built
+only when the ``supporting_factors`` Feature is on, so
+``AggregatedResultBundle.supporting_factor_impact`` is None under Basel 3.1."""
+
+
+AGGREGATOR_SUMMARY_EDGES: dict[str, EdgeContract] = {
+    "summary_by_class": SUMMARY_BY_CLASS_EDGE,
+    "summary_by_approach": SUMMARY_BY_APPROACH_EDGE,
+    "summary_by_class_method": SUMMARY_BY_CLASS_METHOD_EDGE,
+    "floor_impact": FLOOR_IMPACT_EDGE,
+    "supporting_factor_impact": SUPPORTING_FACTOR_IMPACT_EDGE,
+}
+"""AggregatedResultBundle field name -> edge for the consumer-read summary /
+floor / supporting-factor frames (all registered in
+``contracts.bundles.SEALED_FRAME_FIELDS``)."""
 
 
 CALC_BRANCH_EDGES: dict[str, EdgeContract] = {

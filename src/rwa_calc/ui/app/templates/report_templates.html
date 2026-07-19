@@ -3,59 +3,56 @@
 {% block container_mod %}container--wide{% endblock %}
 
 {% block content %}
+{% macro template_picker() %}
+<form class="grid-toolbar" method="get" action="/results/{{ page.run_id }}/templates">
+  <div class="field">
+    <label for="template">Template</label>
+    <select id="template" name="template" onchange="this.form.sheet.value=''; this.form.submit()">
+      {% for family, label in [("corep", "COREP"), ("pillar3", "Pillar III")] %}
+      <optgroup label="{{ label }}">
+        {% for info in page.templates if info.family == family %}
+        <option value="{{ info.id }}"{% if page.selected and info.id == page.selected.id %} selected{% endif %}>{{ info.title }}</option>
+        {% endfor %}
+      </optgroup>
+      {% endfor %}
+    </select>
+  </div>
+  {% if page.selected and page.selected.sheets %}
+  <div class="field">
+    <label for="sheet">{{ page.selected.sheet_label or "Sheet" }}</label>
+    <select id="sheet" name="sheet" onchange="this.form.submit()">
+      {% for key in page.selected.sheets %}
+      <option value="{{ key }}"{% if key == page.sheet %} selected{% endif %}>{{ key }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  {% else %}
+  <input type="hidden" name="sheet" value="">
+  {% endif %}
+  <button class="btn btn-ghost" type="submit">Show</button>
+</form>
+{% endmacro %}
+
 <div class="page-intro">
   <p class="muted"><a href="/results/{{ page.run_id }}">← Back to results</a></p>
   <h1>Report templates <span class="muted mono">· {{ page.framework }}</span></h1>
+  {% if page.templates %}
+  <p class="muted">The COREP and Pillar III templates generated from this run, exactly as they export.
+  A blank cell (<span class="mono">—</span>) is an empty or not-reported cell, which is <em>not</em>
+  the same as a reported <span class="mono">0</span>.{% if page.selected and page.has_lineage %}
+  Click any cell to see which exposures and rules produced it.{% endif %}</p>
+  {% endif %}
 </div>
 
 {% if not page.templates %}
 <div class="callout info">This run produced no report templates.</div>
-{% else %}
-<div class="page-intro">
-  <p class="muted">The COREP and Pillar III templates generated from this run, exactly as they export.
-  Cells are shown as the generator produced them — a blank cell (<span class="mono">—</span>) is an
-  empty or not-reported cell, which is <em>not</em> the same as a reported <span class="mono">0</span>.</p>
-  {% if page.selected and page.has_lineage %}
-  <p class="muted">Click any cell to see which exposures and rules produced it.</p>
-  {% endif %}
-
-  <form class="form" method="get" action="/results/{{ page.run_id }}/templates">
-    <div class="field-row">
-      <div class="field">
-        <label for="template">Template</label>
-        <select id="template" name="template" onchange="this.form.sheet.value=''; this.form.submit()">
-          {% for family, label in [("corep", "COREP"), ("pillar3", "Pillar III")] %}
-          <optgroup label="{{ label }}">
-            {% for info in page.templates if info.family == family %}
-            <option value="{{ info.id }}"{% if page.selected and info.id == page.selected.id %} selected{% endif %}>{{ info.title }}</option>
-            {% endfor %}
-          </optgroup>
-          {% endfor %}
-        </select>
-      </div>
-      {% if page.selected and page.selected.sheets %}
-      <div class="field">
-        <label for="sheet">{{ page.selected.sheet_label or "Sheet" }}</label>
-        <select id="sheet" name="sheet" onchange="this.form.submit()">
-          {% for key in page.selected.sheets %}
-          <option value="{{ key }}"{% if key == page.sheet %} selected{% endif %}>{{ key }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      {% else %}
-      <input type="hidden" name="sheet" value="">
-      {% endif %}
-      <div class="field">
-        <button class="btn btn-ghost" type="submit">Show</button>
-      </div>
-    </div>
-  </form>
-</div>
-
-{% if page.selected %}
-<div class="panel">
-  <h3>{{ page.selected.title }}{% if page.sheet %} <span class="muted mono">· {{ page.sheet }}</span>{% endif %}
-    <span class="muted">· {{ page.columns | length }} columns</span></h3>
+{% elif page.selected %}
+<div class="panel panel--grid">
+  <div class="grid-head">
+    <h3>{{ page.selected.title }}{% if page.sheet %} <span class="muted mono">· {{ page.sheet }}</span>{% endif %}
+      <span class="muted">· {{ page.columns | length }} columns</span></h3>
+    {{ template_picker() }}
+  </div>
   <div class="grid-wrap">
     <table class="data grid" data-template="{{ page.selected.id }}" data-sheet="{{ page.sheet or '' }}">
       <thead>
@@ -93,7 +90,13 @@
   </div>
 </div>
 {% else %}
+<div class="panel">
+  {{ template_picker() }}
+</div>
 <div class="callout info">That template is not available for this run.</div>
 {% endif %}
-{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script defer src="/static/report-grid.js"></script>
 {% endblock %}

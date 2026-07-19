@@ -261,28 +261,59 @@ table.data td.num a.cell-link:hover { color: var(--oah-orange-bright); text-deco
 
 /* ---------- Report-template grid ----------------------------------------
    Regulatory templates are wide — up to 49 value columns (C 08.02 under Basel
-   3.1) — and are read on desktop. Three things make that usable:
+   3.1) — and are read on desktop. The format is a framed spreadsheet window:
 
    1. `container--wide` lets the report pages use the full viewport instead of
       the 1100px reading measure (which is right for prose, wrong for a return).
-   2. `grid-wrap` is a bounded scroll pane, so `position: sticky` actually has a
+   2. The grid card (`panel--grid`) IS the window: a header strip (title +
+      picker toolbar) over a scroll pane sitting flush inside the card frame.
+      Columns clip exactly at the card border — a freeze-pane edge — rather
+      than at an invisible inner border that reads as the table overflowing
+      the card.
+   3. `grid-wrap` is a bounded scroll pane, so `position: sticky` actually has a
       scrollport to stick to: the header band and the row labels stay put while
       the columns scroll under them (the freeze-pane a reader expects of a
-      return). Without the height cap the wrapper never scrolls internally and
-      the sticky header simply scrolls away with the page.
-   3. Compact density + tabular numerals fit ~30% more columns and keep digits
-      aligned column-wise.                                                    */
+      return). The height cap also keeps the pane's own horizontal scrollbar on
+      screen — report-grid.js trues it up to the actual viewport remainder;
+      without it the scrollbar lands below the fold and a wide return reads as
+      clipped with no way to reach the remaining columns.
+   4. Compact density + tabular numerals fit ~30% more columns and keep digits
+      aligned column-wise; thin styled scrollbars keep the scroll affordance
+      visible on the dark canvas.                                            */
 
-.container--wide { max-width: none; }
+/* Full width, and a slim bottom margin: the grid pane is fitted to the viewport
+   (report-grid.js), so the prose page's 64px tail would only re-introduce page
+   scroll and push the pane's horizontal scrollbar off screen. */
+.container--wide { max-width: none; padding-bottom: 24px; }
 /* Prose keeps a readable measure even when the grid goes full-bleed. */
 .container--wide .page-intro { max-width: 900px; }
 
 .grid-wrap {
   overflow: auto;
-  max-height: calc(100vh - 260px);
-  border: 1px solid rgba(216,222,233,0.10);
-  border-radius: 12px;
+  /* Fallback height; report-grid.js fits the pane to the real viewport remainder. */
+  max-height: calc(100vh - 300px);
+  max-height: calc(100dvh - 300px);
+  scrollbar-width: thin;
+  scrollbar-color: var(--oah-slate-600) var(--oah-slate-850);
 }
+
+/* The grid card: no inner padding — the pane fills the frame edge to edge. */
+.panel--grid { padding: 0; overflow: hidden; }
+.grid-head {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 12px 24px; flex-wrap: wrap;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(216,222,233,0.12);
+}
+.grid-head h3 { margin: 0; }
+
+/* The template picker as a slim toolbar (lives in the grid card's header
+   strip; also rendered standalone in a plain panel when nothing is selected). */
+.grid-toolbar { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.grid-toolbar .field { margin: 0; }
+.grid-toolbar .field label { margin-bottom: 4px; font-size: 12px; }
+.grid-toolbar .field select { width: auto; min-width: 160px; padding: 7px 10px; font-size: 13px; }
+.grid-toolbar .btn { padding: 8px 14px; font-size: 13px; }
 /* separate borders: `collapse` drops cell borders under position: sticky */
 table.data.grid { border-collapse: separate; border-spacing: 0; width: auto; min-width: 100%; font-size: 12px; }
 table.data.grid th, table.data.grid td {

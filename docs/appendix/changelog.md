@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - (Next release changes will go here)
 
 ### Changed
-- (Next release changes will go here)
+- **The report-template grid no longer looks like it overflows its card.** The previous format double-framed the grid — a scroll pane with a near-invisible border inside a padded panel — so on wide templates (C 07.00's 28 columns, C 08.02's 49) columns were chopped mid-digit at an edge that read as accidental clipping, and on tall templates the pane's horizontal scrollbar sat below the fold, leaving no visible way to reach the remaining columns. The grid card is now itself the window: a header strip (template title, sheet, column count, and the template/sheet picker folded in as a slim toolbar — reclaiming ~200px of page chrome) over a scroll pane sitting flush inside the card frame, so columns clip exactly at the card border like a freeze pane. The pane is fitted to the viewport remainder (`report-grid.js`, with a CSS fallback), keeping its horizontal scrollbar on screen at all times, and pane scrollbars are now thin and visible on the dark canvas. Frozen headers, row labels, cell keys, drill-down links and the null-vs-zero distinction are unchanged.
 
 ---
 

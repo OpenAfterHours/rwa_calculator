@@ -474,6 +474,7 @@ def _seed_irb_run(
     airb_rwa: float,
     results_dir: Path,
     framework: str = "CRR",
+    exposure_class: str | None = None,
 ) -> None:
     """Register a synthetic IRB-only run so CR8's opening/closing sum has data.
 
@@ -485,19 +486,23 @@ def _seed_irb_run(
     shape used by the generator's own unit tests); ``with_reporting_ledger``
     seals the frame to the shape the other Pillar 3 templates (OV1 etc.)
     require, matching the production aggregator-exit contract.
+
+    ``exposure_class``, when supplied, adds an ``exposure_class`` column (so
+    ``with_reporting_ledger`` derives a real ``reporting_class_origin`` value)
+    — COREP C 08.04 is a per-class sheet keyed on that column, unlike Pillar 3
+    CR8 which doesn't split by class and doesn't need it.
     """
     results_dir.mkdir(parents=True, exist_ok=True)
     results_path = results_dir / "results.parquet"
-    with_reporting_ledger(
-        pl.LazyFrame(
-            {
-                "exposure_reference": ["EXP-FIRB", "EXP-AIRB"],
-                "approach_applied": ["foundation_irb", "advanced_irb"],
-                "ead_final": [1_000_000.0, 1_000_000.0],
-                "rwa_final": [firb_rwa, airb_rwa],
-            }
-        )
-    ).collect().write_parquet(results_path)
+    columns: dict[str, list[object]] = {
+        "exposure_reference": ["EXP-FIRB", "EXP-AIRB"],
+        "approach_applied": ["foundation_irb", "advanced_irb"],
+        "ead_final": [1_000_000.0, 1_000_000.0],
+        "rwa_final": [firb_rwa, airb_rwa],
+    }
+    if exposure_class is not None:
+        columns["exposure_class"] = [exposure_class, exposure_class]
+    with_reporting_ledger(pl.LazyFrame(columns)).collect().write_parquet(results_path)
     response = CalculationResponse(
         success=True,
         framework=framework,
@@ -653,6 +658,78 @@ def test_export_pillar3_prior_run_id_not_earlier_is_422(client: TestClient, tmp_
     # Assert
     assert resp.status_code == 422
     assert "reporting_date" in resp.json()["detail"]
+
+
+# =============================================================================
+# COREP export — prior_run_id (C 08.04 comparative period)
+# =============================================================================
+
+
+def _c08_04_opening_value(records: list[dict]) -> object:
+    """The C 08.04 row-0010 / col-0010 cell value from a corep_facts_ndjson payload."""
+    opening = next(
+        r
+        for r in records
+        if r["template_id"] == "c08_04" and r["row_ref"] == "0010" and r["col_ref"] == "0010"
+    )
+    return opening["value"]
+
+
+def test_export_corep_with_prior_run_id_populates_c08_04_opening_row(
+    client: TestClient, tmp_path: Path
+) -> None:
+    # Arrange — prior period IRB RWA sums to 1,000,000; current to 1,150,000.
+    # C 08.04 is a per-class sheet (unlike CR8), so both runs need the same
+    # exposure_class so the current+prior populations key onto one sheet.
+    _seed_irb_run(
+        "prior-c0804",
+        date(2024, 12, 31),
+        firb_rwa=600_000.0,
+        airb_rwa=400_000.0,
+        results_dir=tmp_path / "prior",
+        exposure_class="corporate",
+    )
+    _seed_irb_run(
+        "current-c0804",
+        date(2025, 1, 1),
+        firb_rwa=720_000.0,
+        airb_rwa=430_000.0,
+        results_dir=tmp_path / "current",
+        exposure_class="corporate",
+    )
+
+    # Act
+    resp = client.get(
+        "/api/export/corep_facts_ndjson",
+        params={"run_id": "current-c0804", "prior_run_id": "prior-c0804"},
+    )
+
+    # Assert — C 08.04 row 0010 (opening) is the prior period's IRB rwa_final sum.
+    assert resp.status_code == 200
+    records = [json.loads(line) for line in resp.content.decode().splitlines() if line]
+    assert _c08_04_opening_value(records) == pytest.approx(1_000_000.0)
+
+
+def test_export_corep_without_prior_run_id_c08_04_opening_is_null(
+    client: TestClient, tmp_path: Path
+) -> None:
+    # Arrange
+    _seed_irb_run(
+        "current-c0804-solo",
+        date(2025, 1, 1),
+        firb_rwa=720_000.0,
+        airb_rwa=430_000.0,
+        results_dir=tmp_path / "solo",
+        exposure_class="corporate",
+    )
+
+    # Act — no prior_run_id at all
+    resp = client.get("/api/export/corep_facts_ndjson", params={"run_id": "current-c0804-solo"})
+
+    # Assert — unchanged behaviour: C 08.04's opening row stays null.
+    assert resp.status_code == 200
+    records = [json.loads(line) for line in resp.content.decode().splitlines() if line]
+    assert _c08_04_opening_value(records) is None
 
 
 # =============================================================================

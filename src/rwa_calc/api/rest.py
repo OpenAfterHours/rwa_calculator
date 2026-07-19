@@ -539,22 +539,24 @@ def export(  # noqa: PLR0913 - the pillar3 comparative-period + capital-ratio in
     onto the filename (it is free-form user input; unlike framework/
     reporting_date it is never sanitised for filesystem/path use).
 
-    The Pillar 3 formats (``pillar3``, ``pillar3_facts_parquet``,
-    ``pillar3_facts_ndjson``) additionally accept:
+    The Pillar 3 and COREP formats (``pillar3``, ``pillar3_facts_parquet``,
+    ``pillar3_facts_ndjson``, ``corep``, ``corep_facts_parquet``,
+    ``corep_facts_ndjson``) additionally accept:
 
     - ``prior_run_id``: an already-registered run to use as the comparative
-      prior period for CR8's RWEA flow rows. Selection is explicit only — an
-      unknown id is a 404, and a run that cannot serve as this run's prior
-      period (different framework, or a reporting_date not strictly earlier
-      than this run's) is a 422. Omitted, CR8's opening/flow rows stay null
-      (unchanged behaviour); there is no auto-selected fallback.
-    - The six ``*_ratio_pre_floor*`` query params: optional Pillar 3
-      capital-ratio overrides for the CMS1/OV1 pre-floor disclosure rows
-      (see ``Pillar3CapitalRatioOverrides``). Any field left unset leaves the
-      corresponding row null, as today.
+      prior period for Pillar 3 CR8 / COREP C 08.04's RWEA flow rows.
+      Selection is explicit only — an unknown id is a 404, and a run that
+      cannot serve as this run's prior period (different framework, or a
+      reporting_date not strictly earlier than this run's) is a 422.
+      Omitted, CR8 / C 08.04's opening/flow rows stay null (unchanged
+      behaviour); there is no auto-selected fallback.
+    - The six ``*_ratio_pre_floor*`` query params (Pillar 3 formats only):
+      optional capital-ratio overrides for the CMS1/OV1 pre-floor disclosure
+      rows (see ``Pillar3CapitalRatioOverrides``). Any field left unset
+      leaves the corresponding row null, as today.
 
-    This run's own output-floor summary is threaded through automatically —
-    it is the run's own data, not a caller input.
+    This run's own output-floor summary is threaded through automatically for
+    the Pillar 3 formats — it is the run's own data, not a caller input.
     """
     response = _require_run(run_id)
     tmp = Path(tempfile.mkdtemp(prefix="rwa_export_"))
@@ -570,11 +572,12 @@ def export(  # noqa: PLR0913 - the pillar3 comparative-period + capital-ratio in
     # unsanitised caller input and must never be folded into a filesystem path.
 
     is_pillar3 = fmt == "pillar3" or (fmt.startswith("pillar3") and "_facts_" in fmt)
+    is_corep = fmt == "corep" or (fmt.startswith("corep") and "_facts_" in fmt)
     previous_period_results = None
     capital_ratios = None
+    if (is_pillar3 or is_corep) and prior_run_id is not None:
+        previous_period_results = _require_prior_run(prior_run_id, response).scan_results()
     if is_pillar3:
-        if prior_run_id is not None:
-            previous_period_results = _require_prior_run(prior_run_id, response).scan_results()
         capital_ratios = _capital_ratio_overrides(
             cet1_ratio_pre_floor=cet1_ratio_pre_floor,
             cet1_ratio_pre_floor_transitional=cet1_ratio_pre_floor_transitional,
@@ -590,7 +593,12 @@ def export(  # noqa: PLR0913 - the pillar3 comparative-period + capital-ratio in
         return _file(out)
     if fmt == "corep":
         out = tmp / metadata.stamped_filename("rwa_corep", "xlsx")
-        exporter.export_to_corep(response, out, metadata=metadata)
+        exporter.export_to_corep(
+            response,
+            out,
+            metadata=metadata,
+            previous_period_results=previous_period_results,
+        )
         return _file(out)
     if fmt == "pillar3":
         out = tmp / metadata.stamped_filename("rwa_pillar3", "xlsx")
@@ -605,11 +613,16 @@ def export(  # noqa: PLR0913 - the pillar3 comparative-period + capital-ratio in
         return _file(out)
     if fmt.endswith("_facts_parquet") or fmt.endswith("_facts_ndjson"):
         facts_fmt: Literal["parquet", "ndjson"] = "ndjson" if fmt.endswith("ndjson") else "parquet"
-        is_corep = fmt.startswith("corep")
         prefix = "rwa_corep_facts" if is_corep else "rwa_pillar3_facts"
         out = tmp / metadata.stamped_filename(prefix, facts_fmt)
         if is_corep:
-            exporter.export_corep_facts(response, out, fmt=facts_fmt, metadata=metadata)
+            exporter.export_corep_facts(
+                response,
+                out,
+                fmt=facts_fmt,
+                metadata=metadata,
+                previous_period_results=previous_period_results,
+            )
         else:
             exporter.export_pillar3_facts(
                 response,
@@ -719,9 +732,9 @@ def get_template_bundles(run_id: str, *, prior_run_id: str | None = None) -> Tem
     ``prior_run_id``, when supplied, must reference an already-registered run
     usable as *run_id*'s comparative prior period — see ``_require_prior_run``
     for the exact 404/422 contract (never a silent guess). Its results
-    populate the Pillar 3 CR8 RWEA flow rows; the run's own
-    ``output_floor_summary`` is always threaded through (it is the run's own
-    data, not a caller input).
+    populate the Pillar 3 CR8 / COREP C 08.04 RWEA flow rows; the run's own
+    ``output_floor_summary`` is always threaded through to Pillar 3 (it is the
+    run's own data, not a caller input).
     """
     response = _RUNS.get(run_id)
     if response is None:
@@ -740,7 +753,7 @@ def get_template_bundles(run_id: str, *, prior_run_id: str | None = None) -> Tem
 
     logger.info("generating report templates run_id=%s prior_run_id=%s", run_id, prior_run_id)
     bundles = TemplateBundles(
-        corep=COREPGenerator().generate(response),
+        corep=COREPGenerator().generate(response, previous_period_results=previous_period_results),
         pillar3=Pillar3Generator().generate_from_lazyframe(
             response.scan_results(),
             framework=response.framework,

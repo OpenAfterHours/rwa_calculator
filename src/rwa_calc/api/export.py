@@ -251,6 +251,7 @@ class ResultExporter:
         *,
         output_floor_config: OutputFloorConfig | None = None,
         metadata: FilingMetadata | None = None,
+        previous_period_results: pl.LazyFrame | None = None,
     ) -> ExportResult:
         """
         Export results as COREP regulatory reporting templates.
@@ -271,6 +272,12 @@ class ResultExporter:
                 indicators and materiality columns on entity type.
             metadata: Optional filing metadata — stamped as a "metadata"
                 sheet in the workbook (``reporting/facts.py::FilingMetadata``).
+            previous_period_results: Optional prior-period results LazyFrame
+                (same sealed shape as the current results — a persisted
+                results parquet scan, never a hand-built frame), threaded
+                straight through to ``COREPGenerator.generate``. Populates
+                C 08.04's RWEA flow opening balance (row 0010) and signed
+                residual (row 0080); ``None`` (default) leaves those rows null.
 
         Returns:
             ExportResult with the written file path and row count
@@ -284,6 +291,7 @@ class ResultExporter:
         bundle = generator.generate(
             response,
             output_floor_config=output_floor_config,
+            previous_period_results=previous_period_results,
         )
         return generator.export_to_excel(bundle, output_path, metadata=metadata)
 
@@ -328,6 +336,7 @@ class ResultExporter:
         fmt: Literal["parquet", "ndjson"] = "parquet",
         output_floor_config: OutputFloorConfig | None = None,
         metadata: FilingMetadata | None = None,
+        previous_period_results: pl.LazyFrame | None = None,
     ) -> ExportResult:
         """Export COREP as a flat, keyed cell-fact feed (parquet or ndjson).
 
@@ -342,6 +351,9 @@ class ResultExporter:
             fmt: "parquet" (default) or "ndjson"
             output_floor_config: Optional floor config, as ``export_to_corep``
             metadata: Optional filing metadata, stamped as constant columns
+            previous_period_results: Optional prior-period results LazyFrame,
+                as ``export_to_corep`` — populates C 08.04's opening/residual
+                RWEA-flow rows.
 
         Returns:
             ExportResult with the written file path and fact-row count
@@ -350,7 +362,11 @@ class ResultExporter:
         from rwa_calc.reporting.facts import build_fact_frame
 
         generator = COREPGenerator()
-        bundle = generator.generate(response, output_floor_config=output_floor_config)
+        bundle = generator.generate(
+            response,
+            output_floor_config=output_floor_config,
+            previous_period_results=previous_period_results,
+        )
         frame = build_fact_frame(bundle, None, metadata=metadata)
         return _write_fact_frame(frame, output_path, fmt, "corep_facts")
 

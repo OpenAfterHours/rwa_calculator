@@ -537,11 +537,12 @@ class TestResealWith:
     def test_undeclared_column_raises_before_conform_can_strip_it(self):
         edge = self._edge()
         sealed = seal(pl.LazyFrame({"exposure_reference": ["E1"]}), edge)
+        undeclared_mutation = {"not_declared": pl.lit(9.9)}
 
         # An undeclared mutation would be silently stripped by conform, dropping
         # the mutation without a trace — reseal_with rejects it up front instead.
         with pytest.raises(EdgeContractViolation, match="not_declared"):
-            reseal_with(sealed, {"not_declared": pl.lit(9.9)}, edge)
+            reseal_with(sealed, undeclared_mutation, edge)
 
 
 class TestReportingSurface:
@@ -646,9 +647,10 @@ class TestAggregatorSummaryEdges:
         # AggregatedResultBundle.summary_by_class is registered in
         # SEALED_FRAME_FIELDS in production — an unbranded frame must raise.
         results = AGGREGATOR_EXIT_EDGE.empty_frame()
+        unsealed_summary = pl.LazyFrame({"x": [1]})
 
         with pytest.raises(EdgeContractViolation, match="summary_by_class"):
-            AggregatedResultBundle(results=results, summary_by_class=pl.LazyFrame({"x": [1]}))
+            AggregatedResultBundle(results=results, summary_by_class=unsealed_summary)
 
     def test_registered_field_accepts_sealed_summary_frame(self):
         results = AGGREGATOR_EXIT_EDGE.empty_frame()

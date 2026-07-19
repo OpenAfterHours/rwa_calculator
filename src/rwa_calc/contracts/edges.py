@@ -48,6 +48,14 @@ if TYPE_CHECKING:
 
 _BRAND_ATTR = "_rwa_sealed_edge"
 
+# Regulatory citation strings reused across several edge-column declarations.
+# Extracted to module constants so each provenance literal is written once; the
+# values stay byte-identical to the inline strings they replace.
+_CITE_CRR_143 = "CRR Art. 143"
+_CITE_CRR_159 = "CRR Art. 159"
+_CITE_CRR_501 = "CRR Art. 501"
+_CITE_PS126_92 = "PS1/26 Art. 92"
+
 
 class EdgeContractViolation(Exception):
     """A frame failed its edge contract, or a bundle field lacks its brand.
@@ -563,8 +571,8 @@ def _hierarchy_resolved_columns() -> dict[str, EdgeColumn]:
         "exposure_collateral_type": EdgeColumn(dtype=pl.String),
         "exposure_security_cqs": EdgeColumn(dtype=pl.Int8),
         "exposure_security_residual_maturity_years": EdgeColumn(dtype=pl.Float64),
-        "ava_amount": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 159"),
-        "other_own_funds_reductions": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 159"),
+        "ava_amount": EdgeColumn(dtype=pl.Float64, citation=_CITE_CRR_159),
+        "other_own_funds_reductions": EdgeColumn(dtype=pl.Float64, citation=_CITE_CRR_159),
         "original_counterparty_reference": EdgeColumn(dtype=pl.String),
         "mof_risk_type_source": EdgeColumn(dtype=pl.String),
         "is_revolving": EdgeColumn(dtype=pl.Boolean),
@@ -721,7 +729,7 @@ CCR_EXIT_EDGE: EdgeContract = EdgeContract(
         "ccr_modelled_lgd": EdgeColumn(
             dtype=pl.Float64,
             required=False,
-            citation="CRR Art. 143",
+            citation=_CITE_CRR_143,
             null_meaning="null = lending row / off-carve-out CCR row — no modelled LGD",
         ),
         "addon_aggregate": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 278"),
@@ -898,7 +906,7 @@ def _classifier_added_columns() -> dict[str, EdgeColumn]:
         # SME determination (CRR Art. 501 / PS1/26 Art. 153(4))
         "sme_size_metric_gbp": EdgeColumn(dtype=pl.Float64),
         "sme_size_source": EdgeColumn(dtype=pl.String),
-        "is_sme": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 501"),
+        "is_sme": EdgeColumn(dtype=pl.Boolean, citation=_CITE_CRR_501),
         # Specialised lending join (null when no SL table)
         "sl_type": EdgeColumn(dtype=pl.String),
         "slotting_category": EdgeColumn(dtype=pl.String, citation="CRR Art. 153(5)"),
@@ -930,7 +938,7 @@ def _classifier_added_columns() -> dict[str, EdgeColumn]:
         ),
         "re_split_force_other_re": EdgeColumn(dtype=pl.Boolean),
         # Approach routing
-        "approach": EdgeColumn(dtype=pl.String, citation="CRR Art. 143"),
+        "approach": EdgeColumn(dtype=pl.String, citation=_CITE_CRR_143),
         # Model-permission audit columns — present only when a
         # model_permissions table was supplied; injected as typed nulls
         # otherwise so the downstream shape is uniform.
@@ -1741,7 +1749,7 @@ SUMMARY_BY_CLASS_EDGE: EdgeContract = EdgeContract(
         # Emitted only when the output floor ran (is_floor_binding present on
         # the ledger); absent on CRR / floor-exempt runs.
         "floor_binding_count": EdgeColumn(
-            dtype=pl.UInt32, required=False, inject=False, citation="PS1/26 Art. 92"
+            dtype=pl.UInt32, required=False, inject=False, citation=_CITE_PS126_92
         ),
         "avg_risk_weight": EdgeColumn(dtype=pl.Float64),
     },
@@ -1752,17 +1760,17 @@ SUMMARY_BY_CLASS_EDGE: EdgeContract = EdgeContract(
 SUMMARY_BY_APPROACH_EDGE: EdgeContract = EdgeContract(
     name="summary_by_approach",
     columns={
-        "approach_applied": EdgeColumn(dtype=pl.String, citation="CRR Art. 143"),
+        "approach_applied": EdgeColumn(dtype=pl.String, citation=_CITE_CRR_143),
         "total_ead": EdgeColumn(dtype=pl.Float64),
         "exposure_count": EdgeColumn(dtype=pl.UInt32),
         "total_rwa": EdgeColumn(dtype=pl.Float64),
         # Emitted only when the output floor ran (floor_impact_rwa present).
         "total_floor_impact": EdgeColumn(
-            dtype=pl.Float64, required=False, inject=False, citation="PS1/26 Art. 92"
+            dtype=pl.Float64, required=False, inject=False, citation=_CITE_PS126_92
         ),
         "total_expected_loss": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 158"),
-        "total_el_shortfall": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 159"),
-        "total_el_excess": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 159"),
+        "total_el_shortfall": EdgeColumn(dtype=pl.Float64, citation=_CITE_CRR_159),
+        "total_el_excess": EdgeColumn(dtype=pl.Float64, citation=_CITE_CRR_159),
     },
 )
 """Per-approach RWA summary — grouped on the sealed ``reporting_approach``."""
@@ -1777,7 +1785,7 @@ SUMMARY_BY_CLASS_METHOD_EDGE: EdgeContract = EdgeContract(
         "exposure_count": EdgeColumn(dtype=pl.UInt32),
         "total_rwa": EdgeColumn(dtype=pl.Float64),
         "floor_binding_count": EdgeColumn(
-            dtype=pl.UInt32, required=False, inject=False, citation="PS1/26 Art. 92"
+            dtype=pl.UInt32, required=False, inject=False, citation=_CITE_PS126_92
         ),
         "avg_risk_weight": EdgeColumn(dtype=pl.Float64),
     },
@@ -1791,14 +1799,14 @@ FLOOR_IMPACT_EDGE: EdgeContract = EdgeContract(
     name="floor_impact",
     columns={
         "exposure_reference": EdgeColumn(dtype=pl.String),
-        "approach_applied": EdgeColumn(dtype=pl.String, citation="CRR Art. 143"),
+        "approach_applied": EdgeColumn(dtype=pl.String, citation=_CITE_CRR_143),
         "exposure_class": EdgeColumn(dtype=pl.String, citation="CRR Art. 112"),
         "rwa_pre_floor": EdgeColumn(dtype=pl.Float64),
-        "floor_rwa": EdgeColumn(dtype=pl.Float64, citation="PS1/26 Art. 92"),
-        "is_floor_binding": EdgeColumn(dtype=pl.Boolean, citation="PS1/26 Art. 92"),
-        "floor_impact_rwa": EdgeColumn(dtype=pl.Float64, citation="PS1/26 Art. 92"),
+        "floor_rwa": EdgeColumn(dtype=pl.Float64, citation=_CITE_PS126_92),
+        "is_floor_binding": EdgeColumn(dtype=pl.Boolean, citation=_CITE_PS126_92),
+        "floor_impact_rwa": EdgeColumn(dtype=pl.Float64, citation=_CITE_PS126_92),
         "rwa_post_floor": EdgeColumn(dtype=pl.Float64),
-        "output_floor_pct": EdgeColumn(dtype=pl.Float64, citation="PS1/26 Art. 92"),
+        "output_floor_pct": EdgeColumn(dtype=pl.Float64, citation=_CITE_PS126_92),
     },
 )
 """Per-exposure output-floor impact (floor-eligible rows). Built only when the
@@ -1811,14 +1819,14 @@ SUPPORTING_FACTOR_IMPACT_EDGE: EdgeContract = EdgeContract(
     columns={
         "exposure_reference": EdgeColumn(dtype=pl.String),
         "exposure_class": EdgeColumn(dtype=pl.String, citation="CRR Art. 112"),
-        "is_sme": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 501"),
+        "is_sme": EdgeColumn(dtype=pl.Boolean, citation=_CITE_CRR_501),
         "is_infrastructure": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 501a"),
         "ead_final": EdgeColumn(dtype=pl.Float64),
-        "supporting_factor": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 501"),
+        "supporting_factor": EdgeColumn(dtype=pl.Float64, citation=_CITE_CRR_501),
         "rwa_pre_factor": EdgeColumn(dtype=pl.Float64),
         "rwa_post_factor": EdgeColumn(dtype=pl.Float64),
         "supporting_factor_impact": EdgeColumn(dtype=pl.Float64),
-        "supporting_factor_applied": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 501"),
+        "supporting_factor_applied": EdgeColumn(dtype=pl.Boolean, citation=_CITE_CRR_501),
     },
 )
 """Per-exposure SME / infrastructure supporting-factor relief (CRR only). Built

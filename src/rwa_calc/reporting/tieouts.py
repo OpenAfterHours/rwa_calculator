@@ -81,6 +81,14 @@ DEFAULT_ATOL = 1e-6
 # The frameworks every curated tie applies to (both, for the current set).
 _ALL_FRAMEWORKS: tuple[str, ...] = ("CRR", "BASEL_3_1")
 
+# Template ids reused as standalone tie / non-comparable-pair members. Named so
+# the same id string is not a duplicated literal across the tuples; the prose
+# descriptions/reasons keep the id inline (a substring of a longer sentence, not
+# a standalone literal).
+_TEMPLATE_C02 = "C 02.00"
+_TEMPLATE_C07 = "C 07.00"
+_TEMPLATE_C08_01 = "C 08.01"
+
 # A tie extractor reads one scalar aggregate out of the two bundles, or returns
 # None to signal "this template / cell was not produced — skip the tie".
 type _Extractor = Callable[["COREPTemplateBundle", "Pillar3TemplateBundle"], float | None]
@@ -205,7 +213,7 @@ TIE_OUTS: list[TieOut] = [
             "CRR Art. 92(3); COREP Annex II C 02.00 row 0010; Pillar 3 OV1 "
             "row 29 (CRR Art. 438; PS1/26 Annex XX)"
         ),
-        templates=("C 02.00", "OV1"),
+        templates=(_TEMPLATE_C02, "OV1"),
         lhs_label="C 02.00 [0010][0010] total RWEA",
         rhs_label="OV1 [29][a] total RWEA",
         lhs=lambda c, _p: _cell(c.c_02_00, "0010", "0010"),
@@ -222,7 +230,7 @@ TIE_OUTS: list[TieOut] = [
             "CRR Art. 92(3)(a); COREP Annex II C 02.00 rows 0050/0060/0220 "
             "(PS1/26 Annex II OF 02.00)"
         ),
-        templates=("C 02.00",),
+        templates=(_TEMPLATE_C02,),
         lhs_label="C 02.00 [0050][0010] credit-risk RWEA",
         rhs_label="C 02.00 [0060]+[0220] (SA incl. equity + IRB)",
         lhs=lambda c, _p: _cell(c.c_02_00, "0050", "0010"),
@@ -239,7 +247,7 @@ TIE_OUTS: list[TieOut] = [
             "CRR Art. 92(3)(a); COREP Annex II C 07.00 col 0220 / C 02.00 rows "
             "0060/0420 (PS1/26 Annex II OF 07.00 / OF 02.00)"
         ),
-        templates=("C 07.00", "C 02.00"),
+        templates=(_TEMPLATE_C07, _TEMPLATE_C02),
         lhs_label="Σ C 07.00 [0010][0220] SA RWEA",
         rhs_label="C 02.00 [0060]-[0420] (SA of-which net of equity)",
         lhs=lambda c, _p: _sheet_total(c.c07_00, "0220"),
@@ -255,7 +263,7 @@ TIE_OUTS: list[TieOut] = [
             "CRR Art. 92(3)(a); COREP Annex II C 08.01 col 0260 / C 02.00 row "
             "0220 (PS1/26 Annex II OF 08.01 / OF 02.00)"
         ),
-        templates=("C 08.01", "C 02.00"),
+        templates=(_TEMPLATE_C08_01, _TEMPLATE_C02),
         lhs_label="Σ C 08.01 [0010][0260] IRB RWEA",
         rhs_label="C 02.00 [0220][0010] IRB of-which RWEA",
         lhs=lambda c, _p: _sheet_total(c.c08_01, "0260"),
@@ -272,7 +280,7 @@ TIE_OUTS: list[TieOut] = [
             "COREP Annex II C 08.01 col 0260; Pillar 3 OV1 rows 3/4/5 "
             "(CRR Art. 438; PS1/26 Annex XX)"
         ),
-        templates=("C 08.01", "OV1"),
+        templates=(_TEMPLATE_C08_01, "OV1"),
         lhs_label="Σ C 08.01 [0010][0260] IRB RWEA",
         rhs_label="OV1 [3]+[4]+[5] IRB RWEA",
         lhs=lambda c, _p: _sheet_total(c.c08_01, "0260"),
@@ -283,7 +291,7 @@ TIE_OUTS: list[TieOut] = [
 
 NON_COMPARABLE_PAIRS: list[NonComparablePair] = [
     NonComparablePair(
-        pair=("UK CR6", "C 08.01"),
+        pair=("UK CR6", _TEMPLATE_C08_01),
         reason=(
             "Both CR6 and C 08.01 key the OBLIGOR's exposure class "
             "(reporting_class_origin), so the row AXIS matches — the divergence "
@@ -298,7 +306,7 @@ NON_COMPARABLE_PAIRS: list[NonComparablePair] = [
         regulatory_reference="PS1/26 Art. 452(g), Annex XXII; CRR Art. 92(3)(a)",
     ),
     NonComparablePair(
-        pair=("UK CR7", "C 08.01"),
+        pair=("UK CR7", _TEMPLATE_C08_01),
         reason=(
             "CR7 (credit-derivatives effect on IRB RWEA) is likewise an "
             "obligor-basis disclosure (PS1/26 Annex XXII) and carries a recorded "
@@ -319,7 +327,7 @@ NON_COMPARABLE_PAIRS: list[NonComparablePair] = [
         regulatory_reference="PS1/26 Art. 452(h), Annex XXII paras 12-15",
     ),
     NonComparablePair(
-        pair=("C 08.07", "C 08.01"),
+        pair=("C 08.07", _TEMPLATE_C08_01),
         reason=(
             "C 08.07 (IRB scope of use) keeps the RAW Art. 147 origination class "
             "(number-changing vs the applied class) and reads the FULL population "
@@ -331,7 +339,7 @@ NON_COMPARABLE_PAIRS: list[NonComparablePair] = [
         regulatory_reference="CRR Art. 147(2); COREP Annex II C 08.07",
     ),
     NonComparablePair(
-        pair=("C 09.01", "C 07.00"),
+        pair=("C 09.01", _TEMPLATE_C07),
         reason=(
             "C 09.01 (geographical breakdown, SA) is a per-country, two-basis "
             "breakdown (F9): its class rows are keyed differently from the "
@@ -342,7 +350,7 @@ NON_COMPARABLE_PAIRS: list[NonComparablePair] = [
         regulatory_reference="COREP Annex II C 09.01; PS1/26 Annex II OF 09.01",
     ),
     NonComparablePair(
-        pair=("UK CR4", "C 07.00"),
+        pair=("UK CR4", _TEMPLATE_C07),
         reason=(
             "CR4 (SA exposure and CRM effects) mixes bases PER COLUMN BLOCK "
             "(F3): cols a/b are on the origin class, cols c-f on the "

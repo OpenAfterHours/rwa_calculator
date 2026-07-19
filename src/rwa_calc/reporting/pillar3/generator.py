@@ -340,8 +340,7 @@ class Pillar3Generator:
                 total_rows += _write_single_sheet(
                     workbook, bundle.ccr8, f"{prefix} CCR8", column_name_map(CCR8_COLUMNS)
                 )
-            if metadata is not None:
-                write_metadata_sheet(workbook, metadata.as_sheet_fields())
+            _write_optional_metadata_sheet(workbook, metadata)
         finally:
             workbook.close()
 
@@ -990,6 +989,17 @@ def _cr9_display_names(cr9_dict: dict[str, pl.DataFrame]) -> dict[str, str]:
 # ---------------------------------------------------------------------------
 # Excel sheet-writing helpers
 # ---------------------------------------------------------------------------
+
+
+def _write_optional_metadata_sheet(workbook: Workbook, metadata: FilingMetadata | None) -> None:
+    """Write the "metadata" sheet when *metadata* is supplied; a no-op otherwise.
+
+    Factored out of ``export_to_excel`` (SonarCloud cognitive-complexity gate,
+    PR #442) so the one extra branch the metadata feature added lives here
+    instead of lengthening that method's already-long flat if-chain.
+    """
+    if metadata is not None:
+        write_metadata_sheet(workbook, metadata.as_sheet_fields())
 
 
 def _write_single_sheet(

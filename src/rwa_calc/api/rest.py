@@ -571,84 +571,25 @@ def export(  # noqa: PLR0913 - the pillar3 comparative-period + capital-ratio in
     # reporting_date (server-validated, path-safe) — entity_identifier is
     # unsanitised caller input and must never be folded into a filesystem path.
 
-    is_pillar3 = fmt == "pillar3" or (fmt.startswith("pillar3") and "_facts_" in fmt)
-    is_corep = fmt == "corep" or (fmt.startswith("corep") and "_facts_" in fmt)
-    previous_period_results = None
-    capital_ratios = None
-    if (is_pillar3 or is_corep) and prior_run_id is not None:
-        previous_period_results = _require_prior_run(prior_run_id, response).scan_results()
-    if is_pillar3:
-        capital_ratios = _capital_ratio_overrides(
-            cet1_ratio_pre_floor=cet1_ratio_pre_floor,
-            cet1_ratio_pre_floor_transitional=cet1_ratio_pre_floor_transitional,
-            tier1_ratio_pre_floor=tier1_ratio_pre_floor,
-            tier1_ratio_pre_floor_transitional=tier1_ratio_pre_floor_transitional,
-            total_ratio_pre_floor=total_ratio_pre_floor,
-            total_ratio_pre_floor_transitional=total_ratio_pre_floor_transitional,
-        )
+    previous_period_results, capital_ratios = _resolve_export_inputs(
+        fmt,
+        response,
+        prior_run_id,
+        cet1_ratio_pre_floor=cet1_ratio_pre_floor,
+        cet1_ratio_pre_floor_transitional=cet1_ratio_pre_floor_transitional,
+        tier1_ratio_pre_floor=tier1_ratio_pre_floor,
+        tier1_ratio_pre_floor_transitional=tier1_ratio_pre_floor_transitional,
+        total_ratio_pre_floor=total_ratio_pre_floor,
+        total_ratio_pre_floor_transitional=total_ratio_pre_floor_transitional,
+    )
 
-    if fmt == "excel":
-        out = tmp / metadata.stamped_filename("rwa_results", "xlsx")
-        response.to_excel(out)
-        return _file(out)
-    if fmt == "corep":
-        out = tmp / metadata.stamped_filename("rwa_corep", "xlsx")
-        exporter.export_to_corep(
-            response,
-            out,
-            metadata=metadata,
-            previous_period_results=previous_period_results,
-        )
-        return _file(out)
-    if fmt == "pillar3":
-        out = tmp / metadata.stamped_filename("rwa_pillar3", "xlsx")
-        exporter.export_to_pillar3(
-            response,
-            out,
-            metadata=metadata,
-            previous_period_results=previous_period_results,
-            capital_ratios=capital_ratios,
-            output_floor_summary=response.output_floor_summary,
-        )
-        return _file(out)
-    if fmt.endswith("_facts_parquet") or fmt.endswith("_facts_ndjson"):
-        facts_fmt: Literal["parquet", "ndjson"] = "ndjson" if fmt.endswith("ndjson") else "parquet"
-        prefix = "rwa_corep_facts" if is_corep else "rwa_pillar3_facts"
-        out = tmp / metadata.stamped_filename(prefix, facts_fmt)
-        if is_corep:
-            exporter.export_corep_facts(
-                response,
-                out,
-                fmt=facts_fmt,
-                metadata=metadata,
-                previous_period_results=previous_period_results,
-            )
-        else:
-            exporter.export_pillar3_facts(
-                response,
-                out,
-                fmt=facts_fmt,
-                metadata=metadata,
-                previous_period_results=previous_period_results,
-                capital_ratios=capital_ratios,
-                output_floor_summary=response.output_floor_summary,
-            )
-        return _file(out)
-
-    # parquet / csv export to a directory, then zip for a single download.
-    out_dir = tmp / ("csv" if fmt == "csv" else "parquet")
-    out_dir.mkdir(parents=True, exist_ok=True)
-    if fmt == "csv":
-        response.to_csv(out_dir)
-        zip_path = tmp / metadata.stamped_filename("rwa_csv", "zip")
-    else:
-        response.to_parquet(out_dir)
-        zip_path = tmp / metadata.stamped_filename("rwa_parquet", "zip")
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for f in sorted(out_dir.rglob("*")):
-            if f.is_file():
-                zf.write(f, f.relative_to(out_dir))
-    return _file(zip_path)
+    if fmt in ("parquet", "csv", "excel"):
+        return _export_raw(fmt, response, tmp, metadata)
+    if fmt.startswith("corep"):
+        return _export_corep(fmt, response, tmp, metadata, exporter, previous_period_results)
+    return _export_pillar3(
+        fmt, response, tmp, metadata, exporter, previous_period_results, capital_ratios
+    )
 
 
 @router.get("/comparison/export/{fmt}", responses=_RESP_404)
@@ -751,7 +692,14 @@ def get_template_bundles(run_id: str, *, prior_run_id: str | None = None) -> Tem
     if prior_run_id is not None:
         previous_period_results = _require_prior_run(prior_run_id, response).scan_results()
 
-    logger.info("generating report templates run_id=%s prior_run_id=%s", run_id, prior_run_id)
+    # run_id is server-validated by this point (the _RUNS lookup above already
+    # succeeded); prior_run_id is caller-controlled free text and is never
+    # interpolated into a log line — only whether one was supplied.
+    logger.info(
+        "generating report templates run_id=%s has_prior_period=%s",
+        run_id,
+        prior_run_id is not None,
+    )
     bundles = TemplateBundles(
         corep=COREPGenerator().generate(response, previous_period_results=previous_period_results),
         pillar3=Pillar3Generator().generate_from_lazyframe(
@@ -878,7 +826,7 @@ def _require_prior_run(prior_run_id: str, current: CalculationResponse) -> Calcu
         raise _reject(
             f"framework {prior.framework!r} does not match the current run's {current.framework!r}"
         )
-    if not prior.reporting_date < current.reporting_date:
+    if prior.reporting_date >= current.reporting_date:
         raise _reject(
             f"reporting_date {prior.reporting_date.isoformat()} is not strictly earlier "
             f"than the current run's {current.reporting_date.isoformat()}"
@@ -914,6 +862,135 @@ def _capital_ratio_overrides(
     if all(value is None for value in fields.values()):
         return None
     return Pillar3CapitalRatioOverrides(**fields)
+
+
+def _resolve_export_inputs(  # noqa: PLR0913 - the six pass-through capital-ratio query params
+    fmt: str,
+    response: CalculationResponse,
+    prior_run_id: str | None,
+    *,
+    cet1_ratio_pre_floor: Decimal | None,
+    cet1_ratio_pre_floor_transitional: Decimal | None,
+    tier1_ratio_pre_floor: Decimal | None,
+    tier1_ratio_pre_floor_transitional: Decimal | None,
+    total_ratio_pre_floor: Decimal | None,
+    total_ratio_pre_floor_transitional: Decimal | None,
+) -> tuple[pl.LazyFrame | None, Pillar3CapitalRatioOverrides | None]:
+    """Resolve the comparative-period + capital-ratio inputs for one ``/export/{fmt}`` call.
+
+    Only the Pillar 3 / COREP format families consult ``prior_run_id`` (via
+    ``_require_prior_run`` — the same 404/422 contract either family gets);
+    only the Pillar 3 family consults the capital-ratio query params. Every
+    other format (parquet/csv/excel) resolves to ``(None, None)``.
+    """
+    is_pillar3 = fmt == "pillar3" or (fmt.startswith("pillar3") and "_facts_" in fmt)
+    is_corep = fmt == "corep" or (fmt.startswith("corep") and "_facts_" in fmt)
+    previous_period_results = None
+    if (is_pillar3 or is_corep) and prior_run_id is not None:
+        previous_period_results = _require_prior_run(prior_run_id, response).scan_results()
+    capital_ratios = None
+    if is_pillar3:
+        capital_ratios = _capital_ratio_overrides(
+            cet1_ratio_pre_floor=cet1_ratio_pre_floor,
+            cet1_ratio_pre_floor_transitional=cet1_ratio_pre_floor_transitional,
+            tier1_ratio_pre_floor=tier1_ratio_pre_floor,
+            tier1_ratio_pre_floor_transitional=tier1_ratio_pre_floor_transitional,
+            total_ratio_pre_floor=total_ratio_pre_floor,
+            total_ratio_pre_floor_transitional=total_ratio_pre_floor_transitional,
+        )
+    return previous_period_results, capital_ratios
+
+
+def _export_raw(
+    fmt: str, response: CalculationResponse, tmp: Path, metadata: FilingMetadata
+) -> FileResponse:
+    """The plain, non-regulatory-template export formats: excel / parquet / csv."""
+    if fmt == "excel":
+        out = tmp / metadata.stamped_filename("rwa_results", "xlsx")
+        response.to_excel(out)
+        return _file(out)
+
+    # parquet / csv export to a directory, then zip for a single download.
+    out_dir = tmp / ("csv" if fmt == "csv" else "parquet")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if fmt == "csv":
+        response.to_csv(out_dir)
+        zip_path = tmp / metadata.stamped_filename("rwa_csv", "zip")
+    else:
+        response.to_parquet(out_dir)
+        zip_path = tmp / metadata.stamped_filename("rwa_parquet", "zip")
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for f in sorted(out_dir.rglob("*")):
+            if f.is_file():
+                zf.write(f, f.relative_to(out_dir))
+    return _file(zip_path)
+
+
+def _export_corep(
+    fmt: str,
+    response: CalculationResponse,
+    tmp: Path,
+    metadata: FilingMetadata,
+    exporter: ResultExporter,
+    previous_period_results: pl.LazyFrame | None,
+) -> FileResponse:
+    """The COREP export formats: corep / corep_facts_parquet / corep_facts_ndjson."""
+    if fmt == "corep":
+        out = tmp / metadata.stamped_filename("rwa_corep", "xlsx")
+        exporter.export_to_corep(
+            response,
+            out,
+            metadata=metadata,
+            previous_period_results=previous_period_results,
+        )
+        return _file(out)
+
+    facts_fmt: Literal["parquet", "ndjson"] = "ndjson" if fmt.endswith("ndjson") else "parquet"
+    out = tmp / metadata.stamped_filename("rwa_corep_facts", facts_fmt)
+    exporter.export_corep_facts(
+        response,
+        out,
+        fmt=facts_fmt,
+        metadata=metadata,
+        previous_period_results=previous_period_results,
+    )
+    return _file(out)
+
+
+def _export_pillar3(
+    fmt: str,
+    response: CalculationResponse,
+    tmp: Path,
+    metadata: FilingMetadata,
+    exporter: ResultExporter,
+    previous_period_results: pl.LazyFrame | None,
+    capital_ratios: Pillar3CapitalRatioOverrides | None,
+) -> FileResponse:
+    """The Pillar 3 export formats: pillar3 / pillar3_facts_parquet / pillar3_facts_ndjson."""
+    if fmt == "pillar3":
+        out = tmp / metadata.stamped_filename("rwa_pillar3", "xlsx")
+        exporter.export_to_pillar3(
+            response,
+            out,
+            metadata=metadata,
+            previous_period_results=previous_period_results,
+            capital_ratios=capital_ratios,
+            output_floor_summary=response.output_floor_summary,
+        )
+        return _file(out)
+
+    facts_fmt: Literal["parquet", "ndjson"] = "ndjson" if fmt.endswith("ndjson") else "parquet"
+    out = tmp / metadata.stamped_filename("rwa_pillar3_facts", facts_fmt)
+    exporter.export_pillar3_facts(
+        response,
+        out,
+        fmt=facts_fmt,
+        metadata=metadata,
+        previous_period_results=previous_period_results,
+        capital_ratios=capital_ratios,
+        output_floor_summary=response.output_floor_summary,
+    )
+    return _file(out)
 
 
 def _require_template_bundles(run_id: str) -> TemplateBundles:

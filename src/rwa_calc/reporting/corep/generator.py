@@ -216,14 +216,23 @@ class COREPGenerator:
         *,
         output_floor_summary: OutputFloorSummary | None = None,
         output_floor_config: OutputFloorConfig | None = None,
+        previous_period_results: pl.LazyFrame | None = None,
     ) -> COREPTemplateBundle:
-        """Generate all COREP templates from a calculation results source."""
+        """Generate all COREP templates from a calculation results source.
+
+        When ``previous_period_results`` (a prior-run results LazyFrame of the
+        same sealed shape as the current results) is supplied, the C 08.04
+        RWEA flow statement gains an opening balance (row 0010) and a signed
+        residual (row 0080); otherwise C 08.04 rows 0010-0080 stay null
+        (unchanged behaviour).
+        """
         results_lf = response.scan_results()
         return self.generate_from_lazyframe(
             results_lf,
             framework=response.framework,
             output_floor_summary=output_floor_summary,
             output_floor_config=output_floor_config,
+            previous_period_results=previous_period_results,
         )
 
     def generate_from_lazyframe(
@@ -233,6 +242,7 @@ class COREPGenerator:
         framework: str = "CRR",
         output_floor_summary: OutputFloorSummary | None = None,
         output_floor_config: OutputFloorConfig | None = None,
+        previous_period_results: pl.LazyFrame | None = None,
     ) -> COREPTemplateBundle:
         """Generate all COREP templates from a results LazyFrame.
 
@@ -249,6 +259,10 @@ class COREPGenerator:
                 basis conditionality (Art. 92 para 2A). When provided,
                 gates floor indicator rows and materiality columns on
                 entity-type applicability and reporting basis.
+            previous_period_results: Optional prior-period results LazyFrame
+                (same sealed shape as ``results``) used to populate the
+                C 08.04 opening balance (row 0010) and signed residual
+                (row 0080). When ``None`` C 08.04 rows 0010-0080 stay null.
         """
         errors: list[str] = []
         cols = _available_columns(results)
@@ -270,7 +284,9 @@ class COREPGenerator:
         c08_01 = self._generate_all_c08_01(results, cols, framework, errors)
         c08_02 = self._generate_all_c08_02(results, cols, framework, errors)
         c08_03 = self._generate_all_c08_03(results, cols, framework, errors)
-        c08_04 = self._generate_all_c08_04(results, cols, framework, errors)
+        c08_04 = self._generate_all_c08_04(
+            results, cols, framework, errors, previous_period_results
+        )
         c08_05 = self._generate_all_c08_05(results, cols, framework, errors)
         c08_06 = generate_c08_06(results, cols, framework, errors)
 
@@ -772,13 +788,16 @@ class COREPGenerator:
         cols: set[str],
         framework: str,
         errors: list[str],
+        prior_results: pl.LazyFrame | None = None,
     ) -> dict[str, pl.DataFrame]:
         """Generate the per-class C 08.04 RWEA flow templates.
 
         Dispatch-router entry (Phase 7 S8): declarative in
-        ``corep/c08.py::generate_c08_04`` (only the closing row populates).
+        ``corep/c08.py::generate_c08_04``. The closing row (0090) always
+        populates; the opening (0010) and Other (0080) rows populate only
+        when ``prior_results`` (a prior-period frame) is supplied.
         """
-        return generate_c08_04(results, cols, framework, errors)
+        return generate_c08_04(results, cols, framework, errors, prior_results)
 
     def _generate_all_c08_05(
         self,

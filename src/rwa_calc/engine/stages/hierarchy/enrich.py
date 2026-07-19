@@ -649,6 +649,9 @@ def _join_facility_qrre_columns(
     fac_specs: tuple[tuple[str, str, str, bool], ...] = (
         ("is_revolving", "_fac_revolving", "is_revolving", True),
         ("is_qrre_transactor", "_fac_transactor", "is_qrre_transactor", True),
+        # PRA PS1/26 Art. 147(5A)(b): facility "secured" attestation, fill_null
+        # False (a facility with no attested collateral is unsecured).
+        ("is_secured", "_fac_secured", "is_secured", True),
         ("limit", "_fac_limit", "facility_limit", False),
         (
             "facility_termination_date",
@@ -1034,6 +1037,7 @@ def _apply_qrre_defaults(exposures: pl.LazyFrame, qrre_schema: set[str]) -> pl.L
     default_specs: tuple[tuple[str, pl.Expr], ...] = (
         ("is_revolving", pl.lit(False).alias("is_revolving")),
         ("is_qrre_transactor", pl.lit(False).alias("is_qrre_transactor")),
+        ("is_secured", pl.lit(False).alias("is_secured")),
         ("facility_limit", pl.lit(None).cast(pl.Float64).alias("facility_limit")),
     )
     default_cols = [expr for col, expr in default_specs if col not in qrre_schema]

@@ -246,7 +246,58 @@ Individual counterparties qualify for retail treatment when:
 - **Basel 3.1:** Aggregate exposure < GBP 880k
 - **QRRE limit (IRB Art. 147(5A)(c)):** Largest aggregate nominal exposure to any single individual in the QRRE sub-portfolio ≤ EUR 100k (CRR) / **GBP 90,000** (Basel 3.1). This is a **portfolio-level** constraint, not a per-facility check.
 
-If retail thresholds are breached, the exposure is reclassified as CORPORATE.
+#### QRRE assignment gates (CRR Art. 154(4)(a)-(b) / PS1/26 Art. 147(5A)(a)-(b))
+
+A revolving regulatory-retail exposure is admitted to the **RETAIL_QRRE** sub-class
+(`classify_exposure_subtypes`) only when, in addition to the (c) aggregate-nominal
+limit above, it satisfies all of:
+
+| Gate | Condition | Engine signal | Null / direction of error |
+|---|---|---|---|
+| (a) individuals | exposure is to a natural person | `natural_person_expr()` — `is_natural_person` flag OR `individual` / `natural_person` / `retail` entity type | null/non-natural → **not** an individual → not QRRE (conservative) |
+| (b) unsecured | facility is not collateralised | `~is_secured` (`FACILITY_SCHEMA.is_secured`, facility-coupled to drawn + undrawn rows) | null → **unsecured** (backward-compatible; matches absent-collateral handling elsewhere) |
+| (b) cancellable | to the extent undrawn, unconditionally cancellable | `undrawn_amount == 0` OR `risk_type` ∈ {LR, low_risk} (the CCF unconditionally-cancellable bucket) | null/non-LR `risk_type` on an undrawn row → **not** cancellable → not QRRE (mirrors the CCF null convention, no divergence) |
+
+Both regimes apply the same conditions (CRR Art. 154(4) is identical; only the (c)
+limit *value* differs, from the pack), so the gates are **not** regime-Featured. A row
+that fails any gate is left in **RETAIL_OTHER** (never mortgage, never expelled from
+retail); this is the conservative direction because QRRE's fixed 0.04 correlation is
+below the retail-other correlation at the low PDs typical of performing revolving
+retail (the two cross at PD ≈ 7.3%), so QRRE would understate RWA. A gate-driven
+demotion raises a single **CLS010** classification warning per run. The Art. 147(5A)
+**wage-account derogation** (a wage-account-linked collateralised facility is treated as
+unsecured) is applied via input semantics — set `is_secured=False` for such a facility.
+Conditions (5A)(d) low loss-rate volatility and (5A)(e) consistency with the
+sub-portfolio's risk characteristics are supervisory, portfolio-level attestations, not
+per-exposure inputs, and are out of scope for row-level classification.
+
+If the **SA regulatory-retail** thresholds are breached, the exposure loses its SA
+regulatory-retail (75%) treatment and its SA `exposure_class` is reclassified to
+CORPORATE.
+
+!!! warning "SA regulatory retail (Art. 123/123A) vs IRB retail class (Art. 147(5)) — the monetary cap is SME-limb-only in IRB"
+    The aggregate-owed cap above (`qualifies_as_retail`) implements the **SA**
+    regulatory-retail test (CRR Art. 123 / PS1/26 Art. 123A), which caps natural
+    persons for the 75% treatment and — under Basel 3.1 — adds the Art. 123A(1)(b)(ii)
+    0.2% granularity limb. The **IRB** retail *exposure class* (CRR Art. 147(5)(a) /
+    PS1/26 Art. 147(5)(a)) is a **different** rule: it admits **(i)** exposures to
+    natural persons with **no monetary cap** and no granularity limb, or **(ii)**
+    exposures to an SME **provided** the total amount owed (excluding
+    residential-property-secured exposures) does not exceed **EUR 1,000,000 (CRR) /
+    GBP 880,000 (PS1/26)**. The cap and granularity limb condition the **SME limb
+    only**.
+
+    Consequently a natural person owing more than the cap is expelled from SA
+    regulatory retail (`exposure_class` → CORPORATE) but **stays in the IRB retail
+    class**: `sync_irb_exposure_class` restores such a row's `exposure_class_irb`
+    to RETAIL_OTHER (subject to the Art. 147(5)(c) management-basis condition —
+    `is_managed_as_retail` not explicitly False), and `_align_irb_exposure_class`
+    propagates it to `exposure_class` for the IRB-routed leg so the retail A-IRB
+    formula applies. The natural-person signal is the `is_natural_person` flag OR
+    an entity type in `NATURAL_PERSON_ENTITY_TYPES` (`individual` / `natural_person`
+    / `retail`); an unknown obligor is treated as NOT a natural person, so the cap
+    keeps binding (conservative). The SME limb is unchanged — an SME above the cap
+    stays corporate.
 
 ### Basel 3.1 Retail Qualifying Criteria (Art. 123A)
 
@@ -270,7 +321,19 @@ Under Basel 3.1, Art. 123A has a two-path structure:
 
 ### Large Corporate Revenue Threshold (Basel 3.1)
 
-Under Basel 3.1, corporates with consolidated annual revenue exceeding **EUR 500 million (GBP 440 million)** are classified as **large corporates** and are restricted to **F-IRB only** (cannot use A-IRB). This threshold is distinct from the SME firm-size adjustment threshold (EUR 50m / GBP 44m).
+Under Basel 3.1, corporates with consolidated annual revenue exceeding **EUR 500 million (GBP 440 million)** are classified as **large corporates** and, together with financial corporates, form the Art. 147(2)(c)(ii) subclass restricted to **F-IRB only** (cannot use A-IRB, per Art. 147A(1)(e)). This threshold is distinct from the SME firm-size adjustment threshold (EUR 50m / GBP 44m).
+
+**Group-consolidation basis (Art. 147(4C)(b)(ii)).** The revenue is measured "at the highest level of consolidation which is performed and at which audited financial statements are available" — the *group's* revenue, not the individual counterparty's. The classifier therefore rolls each corporate's own `annual_revenue` up its resolved `ultimate_parent_reference` chain into `cp_group_annual_revenue` before the test (`attributes.with_group_annual_revenue`): the signal is the **maximum** of the counterparty's own turnover and its ultimate parent's own turnover. A parent's own `annual_revenue` is, by convention, its consolidated audited-accounts figure (which subsumes its subsidiaries), so the ultimate parent — the top of the group — carries the highest-consolidation figure. A small subsidiary of a > GBP 440m group is therefore correctly F-IRB-only even when its own turnover is below the threshold. The `max` (rather than a source-preference coalesce) is the conservative direction for a test that *forces* F-IRB: neither a small subsidiary figure nor a data-anomalous small parent figure can let a large obligor escape.
+
+This is deliberately distinct from the entity-level `cp_annual_revenue`, which continues to drive the Art. 4(1)(128D) SME size test and the Art. 501 SME supporting factor — those read the counterparty's *own* turnover, not the group's.
+
+**Null composition.** `max_horizontal` ignores nulls, so a null own turnover under a revenue-bearing parent yields the parent figure; a standalone corporate (null `ultimate_parent_reference`) yields its own; both-null yields null, at which point the existing conservative default applies (a corporate whose group revenue is null and whose `total_assets` does not confirm SME size is treated as large and **CLS008** is emitted). A subsidiary with null own revenue under a large parent is thus resolved by the roll-up and no longer trips CLS008.
+
+**Warning.** When the roll-up itself drives the restriction — the counterparty's own turnover is at/below GBP 440m but its group turnover exceeds it — a **CLS011** classification warning records that F-IRB was forced by the group rather than the entity, for audit transparency (mirroring the CLS010 pattern). CLS008 and CLS011 are mutually exclusive.
+
+**Deferral (3-year averaging).** Art. 147(4C)(b)(ii) prescribes "the average annual amount over the last three years". The counterparty schema carries a single point-in-time `annual_revenue`, so the most-recent-figure convention is used; multi-year revenue inputs are a documented future enhancement.
+
+**CRR.** CRR has no financial-/large-corporates subclass — the whole restriction (and the roll-up) is gated on the `approach_restrictions_b31_applicable` feature and is a no-op under CRR, where A-IRB remains available regardless of revenue.
 
 ### FSE Classification Requirements
 

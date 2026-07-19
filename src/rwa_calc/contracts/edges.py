@@ -520,6 +520,11 @@ def _hierarchy_resolved_columns() -> dict[str, EdgeColumn]:
         "mof_risk_type_source": EdgeColumn(dtype=pl.String),
         "is_revolving": EdgeColumn(dtype=pl.Boolean),
         "is_qrre_transactor": EdgeColumn(dtype=pl.Boolean),
+        "is_secured": EdgeColumn(
+            dtype=pl.Boolean,
+            citation="PS1/26 Art. 147(5A)(b) / CRR Art. 154(4)(b)",
+            null_meaning="null = collateral status not attested; treated as unsecured (QRRE-eligible)",
+        ),
         "facility_limit": EdgeColumn(dtype=pl.Float64),
         "source_facility_reference": EdgeColumn(dtype=pl.String),
         "source_exposure_reference": EdgeColumn(

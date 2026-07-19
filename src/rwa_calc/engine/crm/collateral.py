@@ -30,10 +30,13 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.contracts.errors import (
+    ERROR_CREDIT_LINKED_NOTE_NOT_OWN_ISSUED,
     ERROR_CROSS_COUNTERPARTY_NETTING,
     ERROR_INELIGIBLE_IRB_COLLATERAL,
+    ERROR_NON_MAIN_INDEX_EQUITY_INELIGIBLE,
     crm_warning,
 )
+from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.schemas import DIRECT_BENEFICIARY_TYPES, NON_ELIGIBLE_RE_TYPES
 from rwa_calc.domain.enums import AIRBCollateralMethod, ApproachType
 from rwa_calc.engine.crm.expressions import (
@@ -47,7 +50,11 @@ from rwa_calc.engine.crm.expressions import (
     subordinated_unsecured_lgd,
     supervisory_lgd_values,
 )
-from rwa_calc.engine.crm.haircuts import HaircutCalculator
+from rwa_calc.engine.crm.haircuts import (
+    HaircutCalculator,
+    credit_linked_note_ineligible_expr,
+    non_main_index_equity_ineligible_expr,
+)
 from rwa_calc.observability.audit_cache import sink_audit
 from rwa_calc.rulebook import RulepackV0
 from rwa_calc.rulebook.compile import lookup_float_map
@@ -158,9 +165,12 @@ def find_misdirected_airb_model_collateral(
 @cites("CRR Art. 195")
 @cites("CRR Art. 219")
 @cites("CRR Art. 223")
+@cites("CRR Art. 238")
 def generate_netting_collateral(
     exposures: pl.LazyFrame,
     errors: list[CalculationError] | None = None,
+    *,
+    reporting_date: date | None = None,
 ) -> pl.LazyFrame | None:
     """
     Generate synthetic cash collateral from negative-drawn netting-eligible loans.
@@ -193,10 +203,49 @@ def generate_netting_collateral(
     pipeline can apply FX haircuts when the pool currency differs from the
     sibling's currency.
 
+    Art. 219 treats the netted deposit as cash collateral, so the funded-
+    protection maturity-mismatch rules (Art. 237-239) apply exactly as for any
+    other funded protection (P1.241). The synthetic row therefore carries the
+    DEPOSIT's maturity — not the beneficiary loan's — as ``maturity_date``, the
+    deposit residual (t) as ``residual_maturity_years`` (when ``reporting_date``
+    is supplied), and the deposit ORIGINAL term as ``original_maturity_years``
+    (when ``value_date`` is available). The downstream ``apply_maturity_mismatch``
+    then, on a mismatch (t < T where T is the loan residual), zeroes the
+    protection when t < 0.25 (Art. 237(1)) OR the original term < 1y
+    (Art. 237(2)(a)), else applies (t-0.25)/(T-0.25) (Art. 238-239). Previously
+    the row carried the loan's maturity, a null residual (filled to 10y
+    downstream) and no original term, so no gate fired and a short deposit
+    netting a long loan was recognised in full.
+
+    The residual t uses the /365.25 day-count of the exposure-side T derivation in
+    ``apply_maturity_mismatch`` (so equal deposit/loan maturities net in full with
+    NO phantom mismatch); the original term uses the /365 convention of the
+    engine's other original-maturity derivations (risk_weights.py / enrich.py).
+
+    Pooling convention (conservative): when several deposits of differing
+    maturities pool into one (ref, currency, counterparty) row, the pool carries
+    the EARLIEST (minimum) deposit maturity AND the minimum deposit original term.
+    The earliest-maturing deposit is when the pool's protection first begins to
+    lapse; representing the whole pool at that maturity maximises the mismatch
+    haircut (shortest t → smallest (t-0.25)/(T-0.25)), and the minimum original
+    term is the one most likely to trip the Art. 237(2)(a) <1y gate — both the
+    prudent single-value summary. A null deposit maturity (or no
+    ``reporting_date``) leaves the residual null and is handled permissively
+    downstream — absent maturity data cannot establish a mismatch, the same
+    convention ordinary financial collateral without a supplied residual follows
+    (this is NOT an anti-conservative fill: the downstream 10y default is
+    unchanged, it is simply no longer fed a null when the data is present); a null
+    original term (no ``value_date``) likewise leaves the Art. 237(2)(a) gate
+    permissive.
+
     Args:
         exposures: Exposures with ead_for_crm, on_bs_for_ead, exposure_type set
         errors: optional CRM error channel — receives Art. 195 CRM016 warnings
             for netting agreements that span more than one counterparty.
+        reporting_date: run reporting date, used to derive the deposit residual
+            maturity (Art. 238) on the synthetic rows. When None (direct
+            unit-test callers), residual_maturity_years stays null and the
+            maturity mismatch is not applied — backward-compatible behaviour.
 
     Returns:
         LazyFrame of synthetic collateral rows, or None if no netting applies
@@ -205,6 +254,12 @@ def generate_netting_collateral(
     schema_names = set(schema.names())
     if "netting_agreement_reference" not in schema_names:
         return None
+
+    # value_date lets the pool derive each deposit's ORIGINAL maturity for the
+    # Art. 237(2)(a) gate. It is a core exposure column in production; injected as
+    # a typed null for direct unit-test callers that omit it (→ original maturity
+    # null → the gate stays permissive), via the schema-driven ensure_columns.
+    exposures = ensure_columns(exposures, {"value_date": ColumnSpec(pl.Date, required=False)})
 
     # Graceful fallback for direct unit-test callers (production always
     # supplies ead_for_crm via _initialize_ead, on_bs_for_ead via _compute_ead,
@@ -243,12 +298,24 @@ def generate_netting_collateral(
     # counterparty_reference) → netting pool. Currency is kept so the synthetic
     # collateral carries the source currency (FX haircut when currencies differ);
     # counterparty_reference enforces the Art. 195 same-counterparty limit.
+    # Art. 219/238 (P1.241): the earliest (min) deposit maturity per pool is the
+    # conservative single-maturity summary — it drives the maturity-mismatch t.
+    # The minimum deposit ORIGINAL maturity is carried alongside for the
+    # Art. 237(2)(a) >=1y eligibility gate (min → shortest term is most likely to
+    # trip the <1y gate; derived from maturity_date - value_date, the same
+    # convention as engine/sa/risk_weights.py / hierarchy/enrich.py, /365). A null
+    # value_date yields a null original maturity (permissive — gate does not fire).
+    deposit_original_years = (
+        pl.col("maturity_date").cast(pl.Int32) - pl.col("value_date").cast(pl.Int32)
+    ).cast(pl.Float64) / 365.0
     netting_pool = (
         negative_loans.group_by(
             ["netting_agreement_reference", "currency", "counterparty_reference"]
         )
         .agg(
             pl.col("drawn_amount").abs().sum().alias("netting_pool"),
+            pl.col("maturity_date").min().alias("_pool_deposit_maturity_date"),
+            deposit_original_years.min().alias("_pool_deposit_orig_maturity"),
         )
         .rename({"currency": "_pool_currency"})
     )
@@ -258,6 +325,9 @@ def generate_netting_collateral(
     # facility_undrawn synthetic rows are off-balance-sheet and ineligible. A
     # sibling matches a pool iff it shares BOTH the netting_agreement_reference
     # and the counterparty_reference (Art. 195 same-counterparty limit).
+    # The beneficiary loan's own maturity is NOT carried onto the synthetic row:
+    # it feeds the mismatch as the EXPOSURE side (T) via the exposure lookup join
+    # downstream, while the synthetic row carries the DEPOSIT maturity (t).
     positive_siblings = exposures.filter(
         (pl.col("exposure_type") == "loan")
         & (pl.col("on_bs_for_ead") > 0)
@@ -268,7 +338,6 @@ def generate_netting_collateral(
         "counterparty_reference",
         "currency",
         "on_bs_for_ead",
-        "maturity_date",
     )
 
     # Match siblings to pools by shared agreement reference AND counterparty.
@@ -303,12 +372,35 @@ def generate_netting_collateral(
         ),
     )
 
-    # Build synthetic collateral rows — currency from the pool (source of funds)
+    # Deposit residual maturity (Art. 238 t). Derived from the pool's earliest
+    # deposit maturity when a reporting_date is available; null (permissive)
+    # otherwise. The /365.25 basis MATCHES the exposure-side T derivation in
+    # HaircutCalculator.apply_maturity_mismatch, so a deposit and loan sharing a
+    # maturity date net in full (t == T, no phantom mismatch). A null pool
+    # maturity date yields a null residual either way.
+    residual_expr = (
+        (
+            (pl.col("_pool_deposit_maturity_date").cast(pl.Date) - pl.lit(reporting_date))
+            .dt.total_days()
+            .cast(pl.Float64)
+            / 365.25
+        )
+        if reporting_date is not None
+        else pl.lit(None, dtype=pl.Float64)
+    )
+    # Deposit original maturity (Art. 237(2)(a) t_orig): the pool's minimum
+    # deposit original term (null → permissive when value_date was absent). A
+    # deposit with original maturity < 1y and a mismatch is zeroed downstream.
+    original_expr = pl.col("_pool_deposit_orig_maturity")
+
+    # Build synthetic collateral rows — currency from the pool (source of funds).
+    # maturity_date / residual_maturity_years / original_maturity_years are the
+    # DEPOSIT's (Art. 219/237-238), not the beneficiary loan's.
     synthetic = allocated.select(
         (pl.lit("NETTING_") + pl.col("exposure_reference")).alias("collateral_reference"),
         pl.lit("cash").alias("collateral_type"),
         pl.col("_pool_currency").alias("currency"),
-        pl.col("maturity_date"),
+        pl.col("_pool_deposit_maturity_date").alias("maturity_date"),
         pl.col("market_value"),
         pl.lit(None).cast(pl.Float64).alias("nominal_value"),
         pl.lit(None).cast(pl.Float64).alias("pledge_percentage"),
@@ -316,7 +408,8 @@ def generate_netting_collateral(
         pl.col("exposure_reference").alias("beneficiary_reference"),
         pl.lit(None).cast(pl.Int8).alias("issuer_cqs"),
         pl.lit(None).cast(pl.String).alias("issuer_type"),
-        pl.lit(None).cast(pl.Float64).alias("residual_maturity_years"),
+        residual_expr.alias("residual_maturity_years"),
+        original_expr.alias("original_maturity_years"),
         pl.lit(True).alias("is_eligible_financial_collateral"),
         pl.lit(True).alias("is_eligible_irb_collateral"),
         pl.lit(None).cast(pl.Date).alias("valuation_date"),
@@ -442,6 +535,16 @@ def apply_collateral(
 
     # Apply haircuts to collateral (no longer needs exposures)
     adjusted_collateral = haircut_calculator.apply_haircuts(collateral, config, pack=pack)
+
+    # CRR/PS1-26 Art. 197(1)(f)/198(1)(a) (P1.271): apply_haircuts has already
+    # zeroed non-main-index / non-listed equity collateral and cleared its
+    # eligibility flag; record one CRM018 warning per gated row.
+    if errors is not None:
+        _record_non_main_index_equity_ineligible(adjusted_collateral, errors)
+        # CRR/PS1-26 Art. 218 (P1.274): apply_haircuts has already zeroed a
+        # credit-linked note that is not attested own-issued; record one CRM019
+        # warning per gated row.
+        _record_credit_linked_note_not_own_issued(adjusted_collateral, errors)
 
     # Apply maturity mismatch using actual exposure maturity (Art. 238)
     adjusted_collateral = haircut_calculator.apply_maturity_mismatch(adjusted_collateral, config)
@@ -659,6 +762,84 @@ def _record_ineligible_irb_collateral(
         )
 
 
+def _record_non_main_index_equity_ineligible(
+    collateral: pl.LazyFrame,
+    errors: list[CalculationError],
+) -> None:
+    """Append one CRM018 warning per non-main-index equity collateral row ruled
+    ineligible by the CRR/PS1-26 Art. 197(1)(f)/198(1)(a) listing gate.
+
+    The gate itself (value zeroing + is_eligible_financial_collateral clearing) is
+    applied in ``HaircutCalculator.apply_haircuts``; this re-derives the SAME
+    shared predicate on the post-haircut frame purely to emit the data-quality
+    warning. Targeted collect of the gated rows only — the accepted emission idiom
+    (P1.264); the collateral table is a small dimension frame. Reusing the one
+    predicate keeps the warning from drifting from the zeroed number.
+    """
+    names = collateral.collect_schema().names()
+    gate = non_main_index_equity_ineligible_expr(names)
+    select_cols: list[pl.Expr] = [gate.alias("_gated")]
+    select_cols.extend(
+        pl.col(c) for c in ("collateral_reference", "beneficiary_reference") if c in names
+    )
+    gated = collateral.filter(gate).select(select_cols).collect()
+    for row in gated.iter_rows(named=True):
+        coll_ref = row.get("collateral_reference")
+        ben_ref = row.get("beneficiary_reference")
+        errors.append(
+            crm_warning(
+                ERROR_NON_MAIN_INDEX_EQUITY_INELIGIBLE,
+                f"Equity collateral '{coll_ref}' securing exposure '{ben_ref}' is "
+                f"neither included in a main index (Art. 197(1)(f)) nor attested "
+                f"listed on a recognised exchange (Art. 198(1)(a); is_main_index and "
+                f"is_listed are both False/unset), so it is ineligible financial "
+                f"collateral; its value is zeroed and it is excluded from credit "
+                f"risk mitigation.",
+                exposure_reference=ben_ref,
+                regulatory_reference="CRR/PS1-26 Art. 197(1)(f)/198(1)(a)",
+            )
+        )
+
+
+def _record_credit_linked_note_not_own_issued(
+    collateral: pl.LazyFrame,
+    errors: list[CalculationError],
+) -> None:
+    """Append one CRM019 warning per credit-linked note ruled ineligible by the
+    CRR/PS1-26 Art. 218 own-issuance gate.
+
+    The gate itself (value zeroing + is_eligible_financial_collateral clearing) is
+    applied in ``HaircutCalculator.apply_haircuts``; this re-derives the SAME
+    shared predicate on the post-haircut frame purely to emit the data-quality
+    warning. Targeted collect of the gated rows only — the accepted emission idiom
+    (P1.264); the collateral table is a small dimension frame. Reusing the one
+    predicate keeps the warning from drifting from the zeroed number.
+    """
+    names = collateral.collect_schema().names()
+    gate = credit_linked_note_ineligible_expr(names)
+    select_cols: list[pl.Expr] = [gate.alias("_gated")]
+    select_cols.extend(
+        pl.col(c) for c in ("collateral_reference", "beneficiary_reference") if c in names
+    )
+    gated = collateral.filter(gate).select(select_cols).collect()
+    for row in gated.iter_rows(named=True):
+        coll_ref = row.get("collateral_reference")
+        ben_ref = row.get("beneficiary_reference")
+        errors.append(
+            crm_warning(
+                ERROR_CREDIT_LINKED_NOTE_NOT_OWN_ISSUED,
+                f"Credit-linked note '{coll_ref}' securing exposure '{ben_ref}' is "
+                f"not attested issued by the lending institution (is_own_issued_cln "
+                f"is False/unset), so it does not qualify for Art. 218 cash-collateral "
+                f"treatment; a third-party CLN is materially correlated with its "
+                f"reference entity (Art. 194(4)). Its value is zeroed and it is "
+                f"excluded from credit risk mitigation.",
+                exposure_reference=ben_ref,
+                regulatory_reference="CRR/PS1-26 Art. 218",
+            )
+        )
+
+
 def _record_cross_counterparty_netting(
     exposures: pl.LazyFrame,
     errors: list[CalculationError],
@@ -710,7 +891,9 @@ def _record_cross_counterparty_netting(
 
 
 @cites("CRR Art. 199")
+@cites("CRR Art. 211")
 @cites("PS1/26 Art. 199")
+@cites("PS1/26 Art. 211")
 def _apply_collateral_unified(
     exposures: pl.LazyFrame,
     adjusted_collateral: pl.LazyFrame,
@@ -854,13 +1037,30 @@ def _apply_collateral_unified(
     # zeroed on ``effectively_secured`` (the Art. 231 waterfall feed) with one
     # CRM014 warning each. Scope: FIRB FCM non-financial only — financial
     # collateral (Art. 197), SA EAD reduction, and exposure classification are
-    # untouched.
+    # untouched. Art. 199(7)/211 (P1.273): a leased asset attested via
+    # ``is_lease_collateral_attested`` is an alternative attestation route (OR-ed
+    # below), so a lessor row is recognised without the general IRB flag.
     _non_financial = ~pl.col("is_financial_collateral_type")
     _attested = (
         pl.col("is_eligible_irb_collateral").fill_null(False)
         if "is_eligible_irb_collateral" in collateral_schema.names()
         else pl.lit(False)
     )
+    # CRR Art. 199(7) with Art. 211 / PS1/26 Art. 199(7) with Art. 211 (P1.273):
+    # a leased asset supplied as a non-financial collateral row is recognised when
+    # the lessor attests the lease-specific Art. 211 conditions (b)/(c)/(d). This
+    # is an INDEPENDENT eligibility route — Art. 211(a) subsumes the Art. 208/210
+    # property-eligibility that is_eligible_irb_collateral otherwise attests — so it
+    # is OR-ed into the attestation. Art. 211 concerns leased PROPERTY, so the route
+    # is scoped to the real_estate / other_physical categories (Art. 208 immovable
+    # property / Art. 210 other physical): a lease attestation on a receivables row
+    # confers NO eligibility — it must still carry its own is_eligible_irb_collateral.
+    # Null -> False (conservative), leaving all existing non-lease collateral untouched.
+    if "is_lease_collateral_attested" in collateral_schema.names():
+        _lease_attested = pl.col("is_lease_collateral_attested").fill_null(False) & pl.col(
+            "_coll_category"
+        ).is_in(["real_estate", "other_physical"])
+        _attested = _attested | _lease_attested
     _not_attested = _non_financial & ~_attested
     if "original_maturity_years" in collateral_schema.names():
         # NULL original maturity is PERMISSIVE (recorded deviation — the

@@ -435,6 +435,7 @@ _PIPELINE_COLLATERAL_SCHEMA: dict[str, PolarsDataType] = {
     "is_eligible_financial_collateral": pl.Boolean,
     "is_eligible_irb_collateral": pl.Boolean,
     "is_main_index": pl.Boolean,
+    "is_listed": pl.Boolean,
     "valuation_date": pl.Date,
     "valuation_type": pl.String,
     "property_type": pl.String,
@@ -575,6 +576,9 @@ class TestOtherListedEquityPipeline:
                     "is_eligible_financial_collateral": [True],
                     "is_eligible_irb_collateral": [True],
                     "is_main_index": [is_main_index],
+                    # P1.271 — other-listed equity is listed on a recognised exchange,
+                    # so it is eligible under Art. 198(1)(a) at the 25%/30% haircut.
+                    "is_listed": [True],
                     "valuation_date": [date(2025, 12, 31)],
                     "valuation_type": ["market"],
                     "property_type": [None],

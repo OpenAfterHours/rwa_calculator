@@ -30,9 +30,19 @@ from tests.fixtures.raw_bundle import make_raw_bundle
 
 def test_facility_qrre_coupled_columns_constant_exists() -> None:
     """_FACILITY_QRRE_COUPLED_COLUMNS must exist as a module-level tuple with
-    exactly the four QRRE-relevant facility column names in canonical order."""
+    exactly the QRRE-relevant facility column names in canonical order.
+
+    ``is_secured`` (PS1/26 Art. 147(5A)(b) / CRR Art. 154(4)(b) unsecured gate)
+    joined the set in P1.244 so a secured revolving retail facility is demoted
+    from QRRE on both its drawn and undrawn exposure rows."""
     # Arrange
-    expected = ("is_revolving", "is_qrre_transactor", "facility_limit", "facility_termination_date")
+    expected = (
+        "is_revolving",
+        "is_qrre_transactor",
+        "is_secured",
+        "facility_limit",
+        "facility_termination_date",
+    )
 
     # Act / Assert — test fails here until the constant is added
     assert hasattr(hierarchy_module, "_FACILITY_QRRE_COUPLED_COLUMNS"), (

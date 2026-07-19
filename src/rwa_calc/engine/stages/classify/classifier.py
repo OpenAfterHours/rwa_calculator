@@ -58,6 +58,7 @@ from rwa_calc.engine.stages.classify.audit import (
     build_audit_trail,
     collect_beel_on_non_defaulted_warnings,
     collect_input_warnings,
+    collect_qrre_gate_demotion_warnings,
 )
 from rwa_calc.engine.stages.classify.permissions import (
     emit_model_permission_diagnostics,
@@ -170,6 +171,7 @@ class ExposureClassifier:
         classified = materialise_edge(classified, config, "classifier_exit")
 
         classification_errors.extend(collect_beel_on_non_defaulted_warnings(classified))
+        classification_errors.extend(collect_qrre_gate_demotion_warnings(classified))
         if has_model_permissions:
             classification_errors.extend(emit_model_permission_diagnostics(classified))
 

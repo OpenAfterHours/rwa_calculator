@@ -95,7 +95,9 @@
   ],
   "rwa_calc.engine.crm.collateral::_apply_collateral_unified": [
     "CRR Art. 199",
-    "PS1/26 Art. 199"
+    "CRR Art. 211",
+    "PS1/26 Art. 199",
+    "PS1/26 Art. 211"
   ],
   "rwa_calc.engine.crm.collateral::apply_collateral": [
     "PS1/26 Art. 230(2)",
@@ -109,7 +111,8 @@
   "rwa_calc.engine.crm.collateral::generate_netting_collateral": [
     "CRR Art. 195",
     "CRR Art. 219",
-    "CRR Art. 223"
+    "CRR Art. 223",
+    "CRR Art. 238"
   ],
   "rwa_calc.engine.crm.expressions::overcollateralisation_ratio_expr": [
     "PS1/26 Art. 230(1)"
@@ -150,8 +153,16 @@
     "CRR Art. 237",
     "CRR Art. 238"
   ],
+  "rwa_calc.engine.crm.haircuts::credit_linked_note_ineligible_expr": [
+    "CRR Art. 218"
+  ],
+  "rwa_calc.engine.crm.haircuts::non_main_index_equity_ineligible_expr": [
+    "CRR Art. 197",
+    "CRR Art. 198"
+  ],
   "rwa_calc.engine.crm.life_insurance::compute_life_insurance_columns": [
-    "CRR Art. 232"
+    "CRR Art. 232(3)",
+    "CRR Art. 233(3)"
   ],
   "rwa_calc.engine.crm.link_allocation::CollateralLinkAllocator.allocate_links": [
     "CRR Art. 230",
@@ -174,6 +185,9 @@
   ],
   "rwa_calc.engine.equity.calculator::EquityCalculator._apply_b31_equity_weights_sa": [
     "PS1/26, paragraph 133"
+  ],
+  "rwa_calc.engine.equity.calculator::EquityCalculator._apply_equity_weights_irb_simple": [
+    "CRR Art. 155(2)"
   ],
   "rwa_calc.engine.equity.calculator::EquityCalculator._apply_equity_weights_pd_lgd": [
     "CRR Art. 155(3)",
@@ -437,7 +451,9 @@
     "PS1/26, paragraph 235"
   ],
   "rwa_calc.engine.stages.classify.approach::_align_irb_exposure_class": [
-    "CRR Art. 147"
+    "CRR Art. 147",
+    "CRR Art. 147(5)",
+    "PS1/26, paragraph 147"
   ],
   "rwa_calc.engine.stages.classify.attributes::_build_has_income_cover_expr": [
     "PS1/26, paragraph 124E"
@@ -450,6 +466,13 @@
     "CRR Art. 123",
     "PS1/26, paragraph 123A"
   ],
+  "rwa_calc.engine.stages.classify.attributes::natural_person_expr": [
+    "CRR Art. 147(5)",
+    "PS1/26, paragraph 147"
+  ],
+  "rwa_calc.engine.stages.classify.attributes::with_group_annual_revenue": [
+    "PS1/26, paragraph 147"
+  ],
   "rwa_calc.engine.stages.classify.classifier::ExposureClassifier.classify": [
     "CRR Art. 112",
     "CRR Art. 147"
@@ -459,8 +482,27 @@
     "CRR Art. 148",
     "CRR Art. 150"
   ],
+  "rwa_calc.engine.stages.classify.subtypes::classify_exposure_subtypes": [
+    "CRR Art. 153(2)",
+    "CRR Art. 142(1)(4)",
+    "CRR Art. 154(4)",
+    "PS1/26, paragraph 153",
+    "PS1/26, paragraph 147"
+  ],
   "rwa_calc.engine.stages.classify.subtypes::derive_exposure_subclass": [
     "PS1/26, paragraph 147A.1"
+  ],
+  "rwa_calc.engine.stages.classify.subtypes::qrre_undrawn_cancellable_expr": [
+    "CRR Art. 154(4)",
+    "PS1/26, paragraph 147"
+  ],
+  "rwa_calc.engine.stages.classify.subtypes::qrre_unsecured_expr": [
+    "CRR Art. 154(4)",
+    "PS1/26, paragraph 147"
+  ],
+  "rwa_calc.engine.stages.classify.subtypes::sync_irb_exposure_class": [
+    "CRR Art. 147(5)",
+    "PS1/26, paragraph 147"
   ],
   "rwa_calc.engine.stages.hierarchy.enrich::_apply_obligor_short_term_spillover": [
     "CRR Art. 131"

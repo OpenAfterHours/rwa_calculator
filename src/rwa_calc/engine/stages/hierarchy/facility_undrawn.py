@@ -229,6 +229,7 @@ def _empty_facility_undrawn_frame() -> pl.LazyFrame:
             "netting_agreement_reference": pl.String,
             "is_revolving": pl.Boolean,
             "is_qrre_transactor": pl.Boolean,
+            "is_secured": pl.Boolean,
             "facility_limit": pl.Float64,
             "source_facility_reference": pl.String,
             "source_exposure_reference": pl.String,
@@ -534,6 +535,11 @@ def _undrawn_select_expressions() -> list[pl.Expr]:
         # can read them directly.
         pl.col("is_revolving"),
         pl.col("is_qrre_transactor"),
+        # PRA PS1/26 Art. 147(5A)(b): carry the facility "secured" attestation onto
+        # the undrawn commitment row so a secured revolving retail facility's
+        # undrawn portion is demoted from QRRE alongside its drawn exposures.
+        # Loader-defaulted (schema default False), so we can read it directly.
+        pl.col("is_secured"),
         pl.col("limit").alias("facility_limit"),
         # Art. 162(2A)(k): max contractual termination date for revolving M under B31
         pl.col("facility_termination_date"),

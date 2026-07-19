@@ -46,6 +46,7 @@ from rwa_calc.engine.eu_sovereign import (
     build_eu_domestic_currency_expr,
     denomination_currency_expr,
 )
+from rwa_calc.engine.stages.classify.attributes import natural_person_expr
 from rwa_calc.engine.stages.classify.permissions import build_permission_exprs
 from rwa_calc.engine.thresholds import regulatory_threshold
 from rwa_calc.rulebook import RulepackV0
@@ -186,13 +187,18 @@ def _apply_b31_approach_restrictions(
         (pl.col("cp_is_financial_sector_entity") == True)  # noqa: E712
         .fill_null(False)
     )
-    # Art. 147A(1)(d): the large-corporate F-IRB restriction applies ONLY
-    # to counterparties of entity_type == "corporate". Non-corporate
-    # entity types are governed by their own Art. 147A sub-clauses and
-    # must never trip this branch. Within the corporate slice:
-    #   - When annual_revenue is non-null, compare to the large-corp
+    # Art. 147(4C)(b)(ii) w/ Art. 147A(1)(e): the large-corporate F-IRB
+    # restriction applies ONLY to counterparties of entity_type ==
+    # "corporate". Non-corporate entity types are governed by their own
+    # Art. 147A sub-clauses and must never trip this branch. The revenue
+    # test reads ``cp_group_annual_revenue`` — the counterparty's own
+    # turnover rolled up its ultimate-parent chain (attributes.
+    # with_group_annual_revenue) — because Art. 147(4C)(b)(ii) prescribes
+    # revenue "taken at the highest level of consolidation", so a small
+    # subsidiary of a large group is F-IRB-only. Within the corporate slice:
+    #   - When the group revenue is non-null, compare to the large-corp
     #     threshold (GBP 440m).
-    #   - When annual_revenue is null but total_assets indicates the
+    #   - When group revenue is null but total_assets indicates the
     #     counterparty is SME-sized (assets < EUR 43m per Commission
     #     Rec 2003/361/EC Art. 2), it is definitively not large.
     #   - Otherwise (both fields null, or null revenue with assets that
@@ -203,9 +209,9 @@ def _apply_b31_approach_restrictions(
     )
     is_corporate_cp = pl.col("cp_entity_type").fill_null("") == "corporate"
     is_large_corp = is_corporate_cp & (
-        pl.when(pl.col("cp_annual_revenue").is_not_null())
+        pl.when(pl.col("cp_group_annual_revenue").is_not_null())
         .then(
-            pl.col("cp_annual_revenue")
+            pl.col("cp_group_annual_revenue")
             > float(
                 regulatory_threshold(
                     resolved_pack, "large_corporate_revenue_threshold", config.eur_gbp_rate
@@ -344,17 +350,35 @@ def _build_approach_expr(
 
 
 @cites("CRR Art. 147")
+@cites("CRR Art. 147(5)")
+@cites("PS1/26, paragraph 147")
 def _align_irb_exposure_class(exposures: pl.LazyFrame) -> pl.LazyFrame:
-    """Align exposure_class with exposure_class_irb for rgla/pse rows.
+    """Align exposure_class with exposure_class_irb for IRB-routed rows.
 
-    For IRB-routed rgla_* / pse_* rows, the IRB calculator (which reads
-    exposure_class for correlation/LGD selection) needs CGCB / INSTITUTION
-    rather than the SA labels RGLA / PSE. Scoped to these entity types
-    because later phases (retail reclassification, SME/QRRE) mutate
-    exposure_class in place without updating exposure_class_irb — a
-    blanket rewrite would revert those legitimate adjustments.
+    The IRB calculator reads ``exposure_class`` (not ``exposure_class_irb``)
+    for correlation / LGD / floor selection, so any IRB-routed row whose IRB
+    class legitimately differs from its SA class must have ``exposure_class``
+    rewritten to the IRB value. Two entity populations diverge after
+    ``sync_irb_exposure_class`` and no other:
+
+    - rgla_* / pse_* rows, whose SA labels RGLA / PSE differ from the IRB
+      CGCB / INSTITUTION class (CRR Art. 147(3)/147(4)(b)).
+    - natural persons expelled from retail to CORPORATE by the SA
+      regulatory-retail monetary cap / granularity limb but kept in the IRB
+      retail class (CRR Art. 147(5)(a)(i) / PS1/26 Art. 147(5)(a)(i) — the cap
+      conditions the SME limb only). ``sync_irb_exposure_class`` restores
+      their ``exposure_class_irb`` to RETAIL_OTHER; this step propagates it to
+      ``exposure_class`` so the retail IRB formula applies.
+
+    Both are gated on the ``exposure_class_irb != exposure_class`` difference
+    (a no-op for every other IRB-routed row, where the two are already equal),
+    so QRRE / mortgage / SME subtyping is never reverted.
     """
-    needs_alignment = pl.col("cp_entity_type").is_in(list(RGLA_PSE_ENTITY_TYPES))
+    is_rgla_pse = pl.col("cp_entity_type").is_in(list(RGLA_PSE_ENTITY_TYPES))
+    natural_person_diverged = natural_person_expr() & (
+        pl.col("exposure_class_irb") != pl.col("exposure_class")
+    )
+    needs_alignment = is_rgla_pse | natural_person_diverged
     return exposures.with_columns(
         pl.when(
             pl.col("approach").is_in([ApproachType.FIRB.value, ApproachType.AIRB.value])

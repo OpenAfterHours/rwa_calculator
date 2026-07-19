@@ -17,6 +17,11 @@ from decimal import Decimal
 import polars as pl
 import pytest
 
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.contracts.errors import (
+    ERROR_LIFE_INSURANCE_CURRENCY_UNKNOWN,
+    CalculationError,
+)
 from rwa_calc.engine.crm.expressions import (
     WATERFALL_ORDER,
     collateral_category_expr,
@@ -225,6 +230,346 @@ class TestComputeLifeInsuranceColumns:
         result = compute_life_insurance_columns(exposures, collateral, config).collect()
         e1 = result.filter(pl.col("exposure_reference") == "E1")
         assert e1["life_ins_secured_rw"][0] == pytest.approx(0.70)
+
+
+# --- Art. 233(3): Currency-mismatch 8% reduction ---
+
+
+class TestLifeInsuranceFXMismatch:
+    """Art. 233(3): the surrender value takes an 8% FX reduction on a currency mismatch."""
+
+    @pytest.fixture()
+    def exposures(self) -> pl.LazyFrame:
+        return pl.DataFrame(
+            {
+                "exposure_reference": ["E1"],
+                "ead_gross": [1000.0],
+                "currency": ["GBP"],
+            }
+        ).lazy()
+
+    @pytest.fixture()
+    def config(self) -> object:
+        class _Cfg:
+            is_basel_3_1 = False
+
+        return _Cfg()
+
+    def test_matched_currency_no_reduction(self, exposures, config) -> None:
+        collateral = pl.DataFrame(
+            {
+                "beneficiary_reference": ["E1"],
+                "collateral_type": ["life_insurance"],
+                "market_value": [400.0],
+                "insurer_risk_weight": [0.50],
+                "currency": ["GBP"],
+            }
+        ).lazy()
+        result = compute_life_insurance_columns(exposures, collateral, config).collect()
+        e1 = result.filter(pl.col("exposure_reference") == "E1")
+        assert e1["life_ins_collateral_value"][0] == pytest.approx(400.0)
+        assert e1["life_ins_secured_rw"][0] == pytest.approx(0.35)
+
+    def test_mismatched_currency_takes_8pct_cut(self, exposures, config) -> None:
+        collateral = pl.DataFrame(
+            {
+                "beneficiary_reference": ["E1"],
+                "collateral_type": ["life_insurance"],
+                "market_value": [400.0],
+                "insurer_risk_weight": [0.50],
+                "currency": ["USD"],
+            }
+        ).lazy()
+        result = compute_life_insurance_columns(exposures, collateral, config).collect()
+        e1 = result.filter(pl.col("exposure_reference") == "E1")
+        # 400 * (1 - 0.08) = 368 ; mapped RW unchanged at 0.35
+        assert e1["life_ins_collateral_value"][0] == pytest.approx(368.0)
+        assert e1["life_ins_secured_rw"][0] == pytest.approx(0.35)
+
+    def test_original_currency_wins_over_reporting_currency(self, exposures, config) -> None:
+        """Post-FX-conversion the value is in reporting currency; the mismatch must be
+        judged on the pre-conversion original_currency pair (P1.135)."""
+        # Exposure: reporting GBP, pre-conversion original_currency GBP.
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["E1"],
+                "ead_gross": [1000.0],
+                "currency": ["GBP"],
+                "original_currency": ["GBP"],
+            }
+        ).lazy()
+        # Collateral converted to GBP but original_currency preserves the USD denomination.
+        collateral = pl.DataFrame(
+            {
+                "beneficiary_reference": ["E1"],
+                "collateral_type": ["life_insurance"],
+                "market_value": [400.0],
+                "insurer_risk_weight": [0.20],
+                "currency": ["GBP"],
+                "original_currency": ["USD"],
+            }
+        ).lazy()
+        result = compute_life_insurance_columns(exposures, collateral, config).collect()
+        e1 = result.filter(pl.col("exposure_reference") == "E1")
+        assert e1["life_ins_collateral_value"][0] == pytest.approx(368.0)
+
+    def test_null_policy_currency_takes_conservative_cut(self, exposures, config) -> None:
+        """A present-but-null policy currency cannot prove a match -> conservative 8% cut."""
+        collateral = pl.DataFrame(
+            {
+                "beneficiary_reference": ["E1"],
+                "collateral_type": ["life_insurance"],
+                "market_value": [400.0],
+                "insurer_risk_weight": [0.50],
+                "currency": [None],
+            },
+            schema_overrides={"currency": pl.String},
+        ).lazy()
+        result = compute_life_insurance_columns(exposures, collateral, config).collect()
+        e1 = result.filter(pl.col("exposure_reference") == "E1")
+        assert e1["life_ins_collateral_value"][0] == pytest.approx(368.0)
+
+    def test_absent_currency_column_no_cut(self, exposures, config) -> None:
+        """No currency column on the collateral -> no FX dimension -> full value (number-neutral)."""
+        collateral = pl.DataFrame(
+            {
+                "beneficiary_reference": ["E1"],
+                "collateral_type": ["life_insurance"],
+                "market_value": [400.0],
+                "insurer_risk_weight": [0.50],
+            }
+        ).lazy()
+        result = compute_life_insurance_columns(exposures, collateral, config).collect()
+        e1 = result.filter(pl.col("exposure_reference") == "E1")
+        assert e1["life_ins_collateral_value"][0] == pytest.approx(400.0)
+
+    def test_regime_parity_fx_reduction_identical(self, exposures) -> None:
+        """Art. 232/233 are retained unchanged under PS1/26 -> identical FX reduction."""
+        crr_cfg = CalculationConfig.crr(reporting_date=date(2026, 6, 30))
+        b31_cfg = CalculationConfig.basel_3_1(reporting_date=date(2027, 6, 30))
+        collateral = pl.DataFrame(
+            {
+                "beneficiary_reference": ["E1"],
+                "collateral_type": ["life_insurance"],
+                "market_value": [400.0],
+                "insurer_risk_weight": [0.50],
+                "currency": ["USD"],
+            }
+        ).lazy()
+        crr = compute_life_insurance_columns(exposures, collateral, crr_cfg).collect()
+        b31 = compute_life_insurance_columns(exposures, collateral, b31_cfg).collect()
+        assert (
+            crr["life_ins_collateral_value"][0]
+            == pytest.approx(b31["life_ins_collateral_value"][0])
+            == pytest.approx(368.0)
+        )
+
+    def test_mixed_currency_pool_cuts_only_mismatched_portion(self, exposures, config) -> None:
+        """A pool of a GBP + a USD policy on one GBP exposure cuts ONLY the USD share
+        (cut-then-sum): 100 + 900×0.92 = 928, NOT the anti-conservative 1000 or 920."""
+        collateral = pl.DataFrame(
+            {
+                "beneficiary_reference": ["E1", "E1"],
+                "collateral_type": ["life_insurance", "life_insurance"],
+                "market_value": [100.0, 900.0],
+                "insurer_risk_weight": [0.20, 0.20],
+                "currency": ["GBP", "USD"],
+            }
+        ).lazy()
+        result = compute_life_insurance_columns(exposures, collateral, config).collect()
+        e1 = result.filter(pl.col("exposure_reference") == "E1")
+        assert e1["life_ins_collateral_value"][0] == pytest.approx(928.0)
+        assert e1["life_ins_secured_rw"][0] == pytest.approx(0.20)
+
+    def test_mixed_currency_pool_is_order_independent(self, exposures, config) -> None:
+        """The reversed row order yields the identical 928 — no `.first()` currency
+        nondeterminism (the pool is summed, not sampled)."""
+        collateral = pl.DataFrame(
+            {
+                "beneficiary_reference": ["E1", "E1"],
+                "collateral_type": ["life_insurance", "life_insurance"],
+                "market_value": [900.0, 100.0],
+                "insurer_risk_weight": [0.20, 0.20],
+                "currency": ["USD", "GBP"],
+            }
+        ).lazy()
+        result = compute_life_insurance_columns(exposures, collateral, config).collect()
+        e1 = result.filter(pl.col("exposure_reference") == "E1")
+        assert e1["life_ins_collateral_value"][0] == pytest.approx(928.0)
+
+
+# --- Art. 232(3): Multi-level (facility/counterparty) pledges ---
+
+
+class TestLifeInsuranceMultiLevelPledge:
+    """A policy pledged at facility or counterparty level flows pro-rata to the exposures."""
+
+    @pytest.fixture()
+    def exposures(self) -> pl.LazyFrame:
+        # Two exposures under facility F1 / counterparty C1, EAD 600 and 400.
+        return pl.DataFrame(
+            {
+                "exposure_reference": ["E1", "E2"],
+                "counterparty_reference": ["C1", "C1"],
+                "parent_facility_reference": ["F1", "F1"],
+                "ead_gross": [600.0, 400.0],
+                "currency": ["GBP", "GBP"],
+            }
+        ).lazy()
+
+    @pytest.fixture()
+    def config(self) -> object:
+        class _Cfg:
+            is_basel_3_1 = False
+
+        return _Cfg()
+
+    def test_facility_level_pledge_allocates_pro_rata(self, exposures, config) -> None:
+        collateral = pl.DataFrame(
+            {
+                "beneficiary_reference": ["F1"],
+                "collateral_type": ["life_insurance"],
+                "market_value": [1000.0],
+                "insurer_risk_weight": [0.20],
+                "currency": ["GBP"],
+            }
+        ).lazy()
+        result = compute_life_insurance_columns(exposures, collateral, config).collect()
+        e1 = result.filter(pl.col("exposure_reference") == "E1")
+        e2 = result.filter(pl.col("exposure_reference") == "E2")
+        # 1000 shared pro-rata by EAD: E1 600, E2 400 (each capped at its own EAD).
+        assert e1["life_ins_collateral_value"][0] == pytest.approx(600.0)
+        assert e2["life_ins_collateral_value"][0] == pytest.approx(400.0)
+        assert e1["life_ins_secured_rw"][0] == pytest.approx(0.20)
+        assert e2["life_ins_secured_rw"][0] == pytest.approx(0.20)
+
+    def test_counterparty_level_pledge_allocates_pro_rata(self, exposures, config) -> None:
+        collateral = pl.DataFrame(
+            {
+                "beneficiary_reference": ["C1"],
+                "collateral_type": ["life_insurance"],
+                "market_value": [1000.0],
+                "insurer_risk_weight": [0.20],
+                "currency": ["GBP"],
+            }
+        ).lazy()
+        result = compute_life_insurance_columns(exposures, collateral, config).collect()
+        e1 = result.filter(pl.col("exposure_reference") == "E1")
+        e2 = result.filter(pl.col("exposure_reference") == "E2")
+        assert e1["life_ins_collateral_value"][0] == pytest.approx(600.0)
+        assert e2["life_ins_collateral_value"][0] == pytest.approx(400.0)
+
+    def test_direct_pledge_takes_precedence_over_siblings(self, exposures, config) -> None:
+        """A policy pledged to a single exposure benefits only that exposure, not its siblings."""
+        collateral = pl.DataFrame(
+            {
+                "beneficiary_reference": ["E1"],
+                "collateral_type": ["life_insurance"],
+                "market_value": [500.0],
+                "insurer_risk_weight": [0.20],
+                "currency": ["GBP"],
+            }
+        ).lazy()
+        result = compute_life_insurance_columns(exposures, collateral, config).collect()
+        e1 = result.filter(pl.col("exposure_reference") == "E1")
+        e2 = result.filter(pl.col("exposure_reference") == "E2")
+        assert e1["life_ins_collateral_value"][0] == pytest.approx(500.0)
+        assert e2["life_ins_collateral_value"][0] == pytest.approx(0.0)
+
+    def test_facility_pledge_with_fx_mismatch_cuts_each_share(self, exposures, config) -> None:
+        collateral = pl.DataFrame(
+            {
+                "beneficiary_reference": ["F1"],
+                "collateral_type": ["life_insurance"],
+                "market_value": [1000.0],
+                "insurer_risk_weight": [0.20],
+                "currency": ["USD"],
+            }
+        ).lazy()
+        result = compute_life_insurance_columns(exposures, collateral, config).collect()
+        e1 = result.filter(pl.col("exposure_reference") == "E1")
+        e2 = result.filter(pl.col("exposure_reference") == "E2")
+        # Each pro-rata share takes the 8% cut: E1 600*0.92=552, E2 400*0.92=368.
+        assert e1["life_ins_collateral_value"][0] == pytest.approx(552.0)
+        assert e2["life_ins_collateral_value"][0] == pytest.approx(368.0)
+
+
+# --- Art. 233(3): CRM020 unknown-currency warning ---
+
+
+class TestLifeInsuranceCurrencyWarning:
+    """A null policy currency (column present) raises CRM020 alongside the conservative cut."""
+
+    @pytest.fixture()
+    def exposures(self) -> pl.LazyFrame:
+        return pl.DataFrame(
+            {
+                "exposure_reference": ["E1"],
+                "ead_gross": [1000.0],
+                "currency": ["GBP"],
+            }
+        ).lazy()
+
+    @pytest.fixture()
+    def config(self) -> object:
+        class _Cfg:
+            is_basel_3_1 = False
+
+        return _Cfg()
+
+    def test_null_currency_raises_crm020(self, exposures, config) -> None:
+        collateral = pl.DataFrame(
+            {
+                "collateral_reference": ["POL1"],
+                "beneficiary_reference": ["E1"],
+                "collateral_type": ["life_insurance"],
+                "market_value": [400.0],
+                "insurer_risk_weight": [0.50],
+                "currency": [None],
+            },
+            schema_overrides={"currency": pl.String},
+        ).lazy()
+        errors: list[CalculationError] = []
+        compute_life_insurance_columns(exposures, collateral, config, errors=errors).collect()
+        crm020 = [e for e in errors if e.code == ERROR_LIFE_INSURANCE_CURRENCY_UNKNOWN]
+        assert len(crm020) == 1
+
+    def test_matched_currency_raises_no_warning(self, exposures, config) -> None:
+        collateral = pl.DataFrame(
+            {
+                "collateral_reference": ["POL1"],
+                "beneficiary_reference": ["E1"],
+                "collateral_type": ["life_insurance"],
+                "market_value": [400.0],
+                "insurer_risk_weight": [0.50],
+                "currency": ["GBP"],
+            }
+        ).lazy()
+        errors: list[CalculationError] = []
+        compute_life_insurance_columns(exposures, collateral, config, errors=errors).collect()
+        assert not [e for e in errors if e.code == ERROR_LIFE_INSURANCE_CURRENCY_UNKNOWN]
+
+    def test_mixed_pool_null_policy_cut_per_policy_and_one_warning(self, exposures, config) -> None:
+        """In a GBP + null-currency pool, only the null policy is cut (100 + 900×0.92 =
+        928) and exactly one CRM020 is raised — cut and warning are coherent per policy."""
+        collateral = pl.DataFrame(
+            {
+                "collateral_reference": ["POL_GBP", "POL_NULL"],
+                "beneficiary_reference": ["E1", "E1"],
+                "collateral_type": ["life_insurance", "life_insurance"],
+                "market_value": [100.0, 900.0],
+                "insurer_risk_weight": [0.20, 0.20],
+                "currency": ["GBP", None],
+            },
+            schema_overrides={"currency": pl.String},
+        ).lazy()
+        errors: list[CalculationError] = []
+        result = compute_life_insurance_columns(
+            exposures, collateral, config, errors=errors
+        ).collect()
+        e1 = result.filter(pl.col("exposure_reference") == "E1")
+        assert e1["life_ins_collateral_value"][0] == pytest.approx(928.0)
+        assert len([e for e in errors if e.code == ERROR_LIFE_INSURANCE_CURRENCY_UNKNOWN]) == 1
 
 
 # --- Art. 232: Constants Integration ---

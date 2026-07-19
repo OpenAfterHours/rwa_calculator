@@ -185,6 +185,37 @@ Risk weights by equity type (listed, unlisted, strategic holdings).
 - Private equity (diversified): 190%
 - All other equity (unlisted, speculative, etc.): 370%
 
+The risk-weighted exposure amount is `RW × exposure value` (Art. 155(2)) — there
+is **no** expected-loss gross-up of the RWA.
+
+#### Expected loss — Art. 158(7)
+
+Alongside the RW, the simple path emits an expected-loss amount
+`EL = EL rate × exposure value`, paired bucket-for-bucket with the RW:
+
+| Equity bucket | Simple RW | EL rate (Art. 158(7)) |
+|---------------|-----------|-----------------------|
+| Private equity in sufficiently diversified portfolios | 190% | 0.8% |
+| Exchange-traded / listed | 290% | 0.8% |
+| All other equity | 370% | 2.4% |
+| Central bank | 0% | 0.0% |
+
+The rates live in the cited rulepack entry `equity_irb_simple_el`
+(`packs/crr.py`, `Citation("CRR", "158(7)")`) and are emitted by
+`engine/equity/calculator.py::_apply_equity_weights_irb_simple`.
+
+!!! warning "Equity EL is excluded from the Art. 159 comparison"
+    The Art. 158(7) equity EL is a **disclosure** quantity (COREP C08 / Pillar 3
+    IRB EL columns). It does **not** enter the Art. 159 EL-vs-provisions
+    shortfall/excess machinery: UK CRR Art. 159 subtracts only the
+    "Article 158(5), (6) and (10)" EL amounts from provisions, and Art. 36(1)(d)
+    (PRA Rulebook Own Funds Part) deducts only that Art. 159 negative amount.
+    Art. 158(7)/(8)/(9) equity EL is outside both. The aggregator therefore feeds
+    only the IRB and slotting frames to `compute_el_portfolio_summary` — equity
+    results are never pooled. (Art. 158 was omitted from onshored UK CRR by
+    SI 2021/1078; the live equity-EL text is in the PRA Rulebook (CRR Firms) IRB
+    Approach Part, mirroring EU CRR Art. 158(7).)
+
 ### Basel 3.1
 
 Removal of equity IRB — Art. 155 is entirely "[Provision left blank]" in PRA PS1/26. All

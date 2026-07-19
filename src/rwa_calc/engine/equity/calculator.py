@@ -71,6 +71,10 @@ _B31_SA_RW = lookup_float_map(resolve("b31", date(2027, 1, 1)).lookup("equity_sa
 _IRB_RW = lookup_float_map(
     resolve("crr", date(2026, 1, 1)).lookup("equity_irb_simple_risk_weights")
 )
+# Art. 158(7) IRB-simple equity EL rates (EquityType-keyed), paired with the
+# Art. 155(2) simple-RW bucket: 0.8% for diversified-PE/exchange-traded/listed,
+# 2.4% for all other equity, 0% for central-bank. CRR-only (B31 removes IRB equity).
+_IRB_SIMPLE_EL = lookup_float_map(resolve("crr", date(2026, 1, 1)).lookup("equity_irb_simple_el"))
 
 # Art. 132(2): CIU fallback risk weight — 1,250% under both CRR and B31.
 # Punitive weight incentivises firms to use look-through or mandate-based approaches.
@@ -689,48 +693,79 @@ class EquityCalculator:
             ]
         )
 
+    @cites("CRR Art. 155(2)")
     def _apply_equity_weights_irb_simple(
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,
     ) -> pl.LazyFrame:
         """
-        Apply Article 155 (IRB Simple) equity risk weights.
+        Apply Article 155 (IRB Simple) equity risk weights and Art. 158(7) EL.
 
-        Risk weights:
-        - Central bank: 0%
-        - Private equity (diversified portfolio): 190%
-        - Exchange-traded: 290%
-        - Other equity: 370%
+        Risk weights (Art. 155(2)) and paired expected-loss rates (Art. 158(7)):
+        - Central bank: 0% RW, 0.0% EL
+        - Private equity (diversified portfolio): 190% RW, 0.8% EL
+        - Exchange-traded / listed: 290% RW, 0.8% EL
+        - All other equity: 370% RW, 2.4% EL
+
+        The Art. 158(7) expected-loss amount is ``EL rate x ead_final`` and shares
+        the RW when-chain's bucket predicates so each EL rate pairs with its RW.
+        It is a disclosure quantity (COREP C08 / Pillar 3 IRB EL) — Art. 155(2)
+        does not gross the equity RWA up by EL, and Art. 159 subtracts only the
+        Art. 158(5),(6),(10) EL amounts from provisions, so equity simple EL does
+        not enter the EL-vs-provisions shortfall/excess machinery.
 
         Before assigning risk weights this nets non-trading-book short positions
         against long positions in the same individual stock per Art. 155(2)
         (see ``_net_short_positions``).
         """
         exposures = self._net_short_positions(exposures)
+
+        # Shared bucket predicates so the RW and EL when-chains stay in lockstep
+        # (each Art. 158(7) EL rate must pair with its Art. 155(2) RW bucket).
+        eq_type = pl.col("equity_type").str.to_lowercase()
+        is_central_bank = eq_type == "central_bank"
+        is_diversified_pe = (eq_type == "private_equity_diversified") | (
+            (eq_type == "private_equity") & (pl.col("is_diversified_portfolio") == True)  # noqa: E712
+        )
+        is_exchange_traded = pl.col("is_exchange_traded") == True  # noqa: E712
+        is_listed = eq_type == "listed"
+        is_exchange_traded_type = eq_type == "exchange_traded"
+
+        risk_weight = (
+            pl.when(is_central_bank)
+            .then(pl.lit(_IRB_RW[EquityType.CENTRAL_BANK]))
+            .when(is_diversified_pe)
+            .then(pl.lit(_IRB_RW[EquityType.PRIVATE_EQUITY_DIVERSIFIED]))
+            .when(is_exchange_traded)
+            .then(pl.lit(_IRB_RW[EquityType.EXCHANGE_TRADED]))
+            .when(is_listed)
+            .then(pl.lit(_IRB_RW[EquityType.LISTED]))
+            .when(is_exchange_traded_type)
+            .then(pl.lit(_IRB_RW[EquityType.EXCHANGE_TRADED]))
+            # CRR Art. 155(2)(c): "all other equity" 370% — including
+            # government_supported, which has no Art. 155 carve-out.
+            .otherwise(pl.lit(_IRB_RW[EquityType.OTHER]))
+        )
+
+        # Art. 158(7) EL rate, matched bucket-for-bucket to the RW chain above.
+        el_rate = (
+            pl.when(is_central_bank)
+            .then(pl.lit(_IRB_SIMPLE_EL[EquityType.CENTRAL_BANK]))
+            .when(is_diversified_pe)
+            .then(pl.lit(_IRB_SIMPLE_EL[EquityType.PRIVATE_EQUITY_DIVERSIFIED]))
+            .when(is_exchange_traded)
+            .then(pl.lit(_IRB_SIMPLE_EL[EquityType.EXCHANGE_TRADED]))
+            .when(is_listed)
+            .then(pl.lit(_IRB_SIMPLE_EL[EquityType.LISTED]))
+            .when(is_exchange_traded_type)
+            .then(pl.lit(_IRB_SIMPLE_EL[EquityType.EXCHANGE_TRADED]))
+            .otherwise(pl.lit(_IRB_SIMPLE_EL[EquityType.OTHER]))
+        )
+
         return exposures.with_columns(
-            [
-                pl.when(pl.col("equity_type").str.to_lowercase() == "central_bank")
-                .then(pl.lit(_IRB_RW[EquityType.CENTRAL_BANK]))
-                .when(
-                    (pl.col("equity_type").str.to_lowercase() == "private_equity_diversified")
-                    | (
-                        (pl.col("equity_type").str.to_lowercase() == "private_equity")
-                        & (pl.col("is_diversified_portfolio") == True)  # noqa: E712
-                    )
-                )
-                .then(pl.lit(_IRB_RW[EquityType.PRIVATE_EQUITY_DIVERSIFIED]))
-                .when(pl.col("is_exchange_traded") == True)  # noqa: E712
-                .then(pl.lit(_IRB_RW[EquityType.EXCHANGE_TRADED]))
-                .when(pl.col("equity_type").str.to_lowercase() == "listed")
-                .then(pl.lit(_IRB_RW[EquityType.LISTED]))
-                .when(pl.col("equity_type").str.to_lowercase() == "exchange_traded")
-                .then(pl.lit(_IRB_RW[EquityType.EXCHANGE_TRADED]))
-                # CRR Art. 155(2)(c): "all other equity" 370% — including
-                # government_supported, which has no Art. 155 carve-out.
-                .otherwise(pl.lit(_IRB_RW[EquityType.OTHER]))
-                .alias("risk_weight"),
-            ]
+            risk_weight.alias("risk_weight"),
+            (el_rate * pl.col("ead_final")).alias("expected_loss"),
         )
 
     @cites("CRR Art. 155(2)")

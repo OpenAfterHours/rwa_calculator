@@ -133,6 +133,45 @@ Key B31 changes: the 5-band split **raises the longest-tenor haircuts** material
 | Main index | 15% | 20% |
 | Other listed | 25% | 30% |
 
+### Credit-Linked Notes (CRR/PS1-26 Art. 218)
+
+Art. 218 — *"investments in credit-linked notes issued by the lending institution
+may be treated as cash collateral … provided that the credit default swap embedded
+in the credit-linked note qualifies as eligible unfunded credit protection"* — grants
+a credit-linked note the cash treatment (0% haircut, full EAD/LGD\* offset) **only
+where the note is issued by the lending institution itself**. The note's cash proceeds
+fund the protection, so it behaves as own-bank cash. PRA PS1/26 retains this verbatim
+(both regimes — no regime split).
+
+A CLN issued by a **third party** is *not* within Art. 218: its value is materially
+correlated with the reference entity (typically the obligor — the Art. 194(4)
+wrong-way-risk case), so it is not clean cash collateral.
+
+**Input convention.** Supply the note as a `credit_linked_note` `COLLATERAL_SCHEMA`
+row and attest own-issuance with `is_own_issued_cln`:
+
+| `is_own_issued_cln` | Treatment |
+|--------------------|-----------|
+| `True` | Own-issued → **cash collateral** (0% haircut, full offset) |
+| `False` / null | Not attested own-issued → **ineligible funded protection** |
+
+`is_own_issued_cln` has **no Boolean default** — null means "own-issuance unattested"
+and resolves to `False` (conservative): absence of attestation must not fabricate cash
+treatment. The eligibility gate lives in `HaircutCalculator.apply_haircuts`
+(`engine/crm/haircuts.py::credit_linked_note_ineligible_expr`) and works exactly like
+the non-main-index-equity gate — it zeroes `value_after_haircut` and clears
+`is_eligible_financial_collateral` for a non-own-issued row (which removes the row from
+both the SA E\* reduction and the F-IRB LGD\* input, since `effectively_secured` derives
+from the zeroed value), and raises one `CRM019` warning per gated row. The 0% cash
+haircut the row would otherwise take is a valuation parameter, left intact.
+
+**Direction of error.** Own-issued CLN: **exact** (unchanged cash treatment). Third-
+party / unattested CLN: **conservative** (over-states RWA relative to the prior
+anti-conservative full-cash treatment — a third-party CLN is not recognised at all,
+rather than routed to a debt-security-of-its-issuer treatment, because a CLN carries no
+clean issuer-bond eligibility path and its reference-entity correlation would need an
+independent Art. 194(4) check).
+
 ### Non-Financial Collateral
 
 Non-financial collateral does not use the supervisory volatility haircut framework (Art. 224). Instead, it is recognised through the **Foundation Collateral Method** (Art. 230-231) using LGDS values within the LGD* formula. See [F-IRB LGDS Values](#f-irb-lgds-values-art-230--art-161) below for the per-framework values.
@@ -337,6 +376,58 @@ institutions can assume that conditions (a) and (b) of paragraph 6 are met
     and 1.4× overcollateralisation ratio below. Firms relying on this code path
     must self-certify Art. 199(6)(a)–(d) compliance for each collateral type
     before submission.
+
+### Lease Exposures Treated as Collateralised (CRR Art. 199(7) / Art. 211)
+
+CRR Art. 199(7) — *"where the requirements set out in Article 211 are met, exposures
+arising from transactions whereby an institution leases property to a third party
+may be treated in the same manner as loans collateralised by the type of property
+leased"* — lets a lessor's F-IRB exposure be secured by the **leased asset** rather
+than treated as unsecured. PRA PS1/26 Art. 199(7) retains this verbatim (both regimes).
+
+**Input convention.** The calculator has no dedicated lease exposure type; instead a
+lease is represented through the ordinary non-financial collateral machinery. Supply
+the leased asset as a `COLLATERAL_SCHEMA` row pledged to the lease exposure:
+
+| Field | Value |
+|-------|-------|
+| `collateral_type` | `real_estate` (property leases) or `other_physical` (equipment / plant / vehicle leases) |
+| `beneficiary_type` / `beneficiary_reference` | the lease exposure the leased asset secures |
+| `market_value` | the leased asset's market value |
+| `original_maturity_years` | the lease term (a finance lease intrinsically has one) |
+| `is_lease_collateral_attested` | `True` — the Art. 211 attestation (see below) |
+
+The row then flows through the Foundation Collateral Method exactly like any pledged
+non-financial collateral: the Art. 230(2) FCM haircut for the leased-asset type,
+the 1.4× overcollateralisation ratio, the 30% C\* minimum, and the LGD\* blend of the
+LGDS ([F-IRB LGDS Values](#f-irb-lgds-values-art-230--art-161)) over the secured
+portion with LGDU over the residual.
+
+**Art. 211 attestation.** The conditions Art. 211 requires:
+
+| Condition | How handled |
+|-----------|-------------|
+| (a) the Art. 208 (immovable property) / 210 (other physical) eligibility of the leased-asset type is met | **subsumed** — attesting Art. 211 attests a superset of the Art. 208/210 conditions that `is_eligible_irb_collateral` otherwise carries |
+| (b) robust lessor risk management (use, location, age, planned duration, value monitoring) | attested by `is_lease_collateral_attested` |
+| (c) the lessor's legal ownership and timely enforcement rights | attested by `is_lease_collateral_attested` |
+| (d) the unamortised-amount vs market-value gap does not overstate the CRM | attested by `is_lease_collateral_attested` |
+
+`is_lease_collateral_attested` is an **independent** eligibility route in the FCM gate
+(`engine/crm/collateral.py::_apply_collateral_unified`): a lease row is recognised on
+its own attestation, without also setting the general `is_eligible_irb_collateral`
+flag. The field has **no Boolean default** — null means "not a lease-collateralised
+row / no lease attestation supplied" and resolves to `False` (conservative), so
+existing non-lease collateral is unaffected. It is consulted only for non-financial
+collateral. Without any attestation the leased asset is not recognised: the FCM gate
+zeroes its `effectively_secured` amount, LGD reverts to the senior unsecured
+supervisory value (Art. 161(1)(a) 45% CRR / Art. 161(1)(aa) 40% B31 non-FSE), and one
+`CRM014` warning is raised.
+
+!!! note "Scope"
+    P1.273 covers the F-IRB Foundation Collateral Method secured-LGD path only. The
+    SA-side lease input convention (the drawn amount as the discounted minimum lease
+    payments) and residual-value treatment (Art. 134(7), the `other_residual_lease`
+    entity type → OTHER class 100% RW) are separate and unaffected.
 
 ### Overcollateralisation Ratios
 
@@ -733,6 +824,26 @@ Method:
 | (g) | Gold | N/A |
 | (h) | Non-resecuritisation securitisation positions | RW <= 100% |
 
+### Additional Comprehensive-Method Collateral (Art. 198)
+
+Art. 198(1) extends the eligible list **only where the institution uses the
+Financial Collateral Comprehensive Method** (the calculator's default):
+
+| Art. 198(1) Para | Collateral Type | Condition |
+|------------------|-----------------|-----------|
+| (a) | Non-main-index equities / convertible bonds | Listed on a recognised exchange |
+| (b) | Units/shares in CIUs | Daily quote; underlying limited to Art. 197/198 instruments |
+
+**Non-main-index equity eligibility (P1.271).** An equity that is neither included
+in a main index (Art. 197(1)(f), eligible under all methods) nor attested listed on
+a recognised exchange (Art. 198(1)(a)) is **ineligible** — the engine zeroes its
+value, clears `is_eligible_financial_collateral`, and raises a `CRM018` warning. The
+`is_listed` flag carries the recognised-exchange attestation; null resolves
+conservatively to *not listed*. The Art. 224 Table 3/4 other-listed haircut
+(25% CRR / 30% Basel 3.1) is a valuation parameter and is unaffected by the
+eligibility gate. The condition is comprehensive-method scope, **not** a repo/SFT
+restriction. PS1/26 carries Art. 197(1)(f)/198(1)(a) forward unchanged.
+
 ## Eligible Unfunded Protection Providers (Art. 201)
 
 | Provider Type | SA + F-IRB | A-IRB (additional) |
@@ -1003,7 +1114,8 @@ Note: Art. 218 does not introduce a separate issuer risk weight check — the CL
 Life insurance policies assigned to the lending institution as collateral:
 
 - **Eligible**: Only life insurance policies with a current surrender value assigned/pledged to the institution (Art. 200(b) + Art. 212(2) operational requirements)
-- **Collateral value**: The current surrender value, reduced for currency mismatch per Art. 233(3)
+- **Collateral value**: The current surrender value, reduced by the **Art. 233(3) 8% FX volatility haircut** on a currency mismatch — the policy denomination (`original_currency` pre-FX-conversion, else `currency`) is compared with the exposure denomination. A policy row that carries a currency column but leaves it **null** cannot prove a match, so it takes the 8% reduction conservatively and raises a `CRM020` data-quality warning; a policy frame with no currency column at all leaves the FX dimension absent (no reduction). The mapped RW is unchanged — only the secured value shrinks.
+- **Pledge level**: A policy is recognised wherever its `beneficiary_reference` names an **exposure, a facility (`parent_facility_reference`) or a counterparty (`counterparty_reference`)**; a facility- or counterparty-level pledge is shared **pro-rata by EAD** across the covered exposures (Art. 230-231 pooling). Reference namespaces are disjoint, so a pledge resolves at exactly one level and a direct pledge benefits only its own exposure.
 - **SA risk weight** (Art. 232(3)): The secured portion uses a **mapped risk weight** (not direct substitution) keyed off the senior-unsecured RW assigned to the insurer under the SA:
 
 | Insurer Senior-Unsecured RW | Secured Portion RW |

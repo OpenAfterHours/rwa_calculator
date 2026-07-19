@@ -63,7 +63,7 @@ _B31_GBP = {
     "large_corporate_revenue_threshold": Decimal("440000000"),
     "retail_max_exposure": Decimal("880000"),
     "qrre_max_limit": Decimal("90000"),
-    "lfse_total_assets_threshold": Decimal("0"),
+    "lfse_total_assets_threshold": Decimal("79000000000"),  # GBP 79bn (IRB Part glossary)
 }
 
 

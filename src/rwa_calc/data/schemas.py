@@ -184,6 +184,17 @@ FACILITY_SCHEMA: dict[str, ColumnSpec] = {
     "beel": ColumnSpec(pl.Float64, required=False),
     "is_revolving": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_qrre_transactor": ColumnSpec(pl.Boolean, default=False, required=False),
+    # PRA PS1/26 Art. 147(5A)(b) / CRR Art. 154(4)(b): a qualifying revolving
+    # retail exposure (QRRE) must be UNSECURED. This facility-level attestation
+    # flags a revolving retail facility as collateralised so the classifier's
+    # QRRE gate demotes it to RETAIL_OTHER (QRRE correlation is lower, so leaving
+    # a secured facility as QRRE would understate RWA). Defaults False (unsecured)
+    # — consistent with the pipeline's treatment of absent collateral everywhere
+    # else, and with the reality that revolving retail credit is unsecured by
+    # nature. By way of the Art. 147(5A) second-sub-paragraph derogation, a
+    # collateralised credit facility linked to a WAGE ACCOUNT is treated as
+    # unsecured for this test — set is_secured=False for such a facility.
+    "is_secured": ColumnSpec(pl.Boolean, default=False, required=False),
     "seniority": ColumnSpec(pl.String, default="senior", required=False),
     "risk_type": ColumnSpec(pl.String, required=False),
     "underlying_risk_type": ColumnSpec(pl.String, required=False),
@@ -522,6 +533,27 @@ COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     "original_maturity_years": ColumnSpec(pl.Float64, required=False),
     "is_eligible_financial_collateral": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_eligible_irb_collateral": ColumnSpec(pl.Boolean, default=False, required=False),
+    # CRR Art. 199(7) with Art. 211 / PRA PS1/26 Art. 199(7) with Art. 211 (P1.273):
+    # an exposure arising from a leasing transaction "may be treated in the same
+    # manner as loans collateralised by the type of property leased" when the Art.
+    # 211 conditions are met. The leased asset is supplied as an ordinary non-
+    # financial collateral row (collateral_type real_estate for property leases,
+    # other_physical for equipment/vehicle/plant leases) pledged to the lease
+    # exposure; this flag is the lessor's attestation that the lease-SPECIFIC Art.
+    # 211 conditions hold: (b) robust lessor risk management of the asset's use,
+    # location, age and planned duration; (c) the lessor's legal ownership and
+    # timely enforcement rights; (d) the unamortised-amount vs market-value gap does
+    # not overstate the CRM. Art. 211(a) — the Art. 208/210 eligibility of the
+    # property type — is subsumed: attesting Art. 211 attests a SUPERSET, so
+    # is_lease_collateral_attested=True is on its own a complete recognition route
+    # through the FIRB Foundation Collateral Method (engine/crm/collateral.py),
+    # independent of is_eligible_irb_collateral. No Boolean default on purpose: null
+    # means "not a lease-collateralised row / no lease attestation supplied" and the
+    # FCM gate resolves it to False (conservative — absence of the attestation must
+    # not fabricate a lease CRM benefit), so existing non-lease collateral is
+    # unaffected. Consulted only for non-financial collateral (leased assets are
+    # physical property); financial-collateral rows ignore it.
+    "is_lease_collateral_attested": ColumnSpec(pl.Boolean, required=False),
     # CRR / PS1-26 Art. 197(1)(h): a securitisation position is eligible financial
     # collateral only if it is NOT a resecuritisation AND its own risk weight is
     # <= 100%. These two fields drive that gate for issuer_type/collateral_type
@@ -584,6 +616,30 @@ COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     # Art. 197(1)(f)/198(1)(a): only main-index equities earn the cheaper
     # all-methods treatment, so unknown membership must not fabricate it.
     "is_main_index": ColumnSpec(pl.Boolean, required=False),
+    # CRR Art. 198(1)(a) / PRA PS1/26 Art. 198(1)(a): a non-main-index equity (or
+    # convertible bond) is eligible financial collateral only if it is traded on a
+    # recognised exchange, i.e. LISTED — and then only under the comprehensive
+    # method this calculator uses by default. Main-index equities are eligible
+    # under all methods regardless (Art. 197(1)(f)), so this flag is only consulted
+    # for equity that is NOT attested main-index. No Boolean default on purpose:
+    # null means "listing status unreported" and the haircut engine
+    # (engine/crm/haircuts.py) resolves null -> not listed -> INELIGIBLE (the
+    # conservative default; absence of data must not fabricate eligibility). Per
+    # P1.271 — CRR/PS1-26 Art. 197(1)(f)/198(1)(a).
+    "is_listed": ColumnSpec(pl.Boolean, required=False),
+    # CRR Art. 218 / PRA PS1/26 Art. 218 (retained): a credit-linked note is
+    # treated as cash collateral (0% haircut, full EAD/LGD* offset) only when it
+    # is ISSUED BY THE LENDING INSTITUTION itself — the note's cash proceeds fund
+    # the protection. A CLN issued by a THIRD PARTY is not within Art. 218: its
+    # value is materially correlated with the reference entity (typically the
+    # obligor — Art. 194(4) wrong-way risk), so it is not clean cash collateral.
+    # This attestation gates the CLN→cash treatment. No Boolean default on
+    # purpose: null means "own-issuance unattested" and the haircut engine
+    # (engine/crm/haircuts.py) resolves null -> NOT own-issued -> ineligible
+    # funded protection (value zeroed, is_eligible_financial_collateral cleared,
+    # CRM019 raised) — absence of attestation must not fabricate cash treatment.
+    # Only consulted for credit_linked_note collateral rows (P1.274).
+    "is_own_issued_cln": ColumnSpec(pl.Boolean, required=False),
     "valuation_date": ColumnSpec(pl.Date, required=False),
     "valuation_type": ColumnSpec(pl.String, required=False),
     "property_type": ColumnSpec(pl.String, required=False),
@@ -1626,6 +1682,23 @@ RGLA_PSE_ENTITY_TYPES: tuple[str, ...] = (
     "pse_institution",
 )
 
+# Entity types that denote a natural person (as opposed to an SME / legal
+# person). CRR Art. 147(5)(a)(i) / PS1/26 Art. 147(5)(a)(i): exposures to
+# natural persons enter the IRB retail exposure class with NO monetary cap —
+# the EUR 1,000,000 (CRR) / GBP 880,000 (PS1/26) total-amount-owed cap in
+# Art. 147(5)(a)(ii) conditions the SME limb ONLY. These three strings all map
+# to RETAIL_OTHER under entity_type_to_{sa,irb}_class and are the documented
+# natural-person aliases (see rulebook/packs/common.py). Consumed by the
+# classifier's natural-person predicate alongside the explicit
+# ``is_natural_person`` flag. A row whose entity type is none of these and
+# whose ``is_natural_person`` flag is null/False is NOT treated as a natural
+# person (conservative: the monetary cap still binds).
+NATURAL_PERSON_ENTITY_TYPES: tuple[str, ...] = (
+    "individual",
+    "natural_person",
+    "retail",
+)
+
 # Entity types the Basel 3.1 approach-restriction step forces to the
 # Standardised Approach only (no IRB), under PS1/26 Art. 147A(1)(a) read
 # with Art. 147(3). Art. 147(3)(a)-(f) assign central governments, central
@@ -1726,6 +1799,12 @@ THIRD_PARTY_DEPOSIT_COLLATERAL_TYPES: list[str] = ["cash", "deposit"]
 INSTITUTION_DEPOSIT_HOLDER_TYPES: list[str] = ["institution", "bank", "credit_institution"]
 
 CREDIT_LINKED_NOTE_COLLATERAL_TYPES: list[str] = ["credit_linked_note"]
+
+# CRR/PS1-26 Art. 197(1)(f)/198(1)(a): the collateral_type synonyms the CRM engine
+# treats as equity (main-index and non-main-index). Mirrors the equity branch of
+# engine/crm/haircuts.py::_normalize_collateral_type_expr; used by the Art. 198(1)(a)
+# non-main-index-equity listing-eligibility gate (P1.271).
+EQUITY_COLLATERAL_TYPES: list[str] = ["equity", "shares", "stock"]
 
 # Art. 227(2)(a): collateral types eligible for zero-haircut treatment in repos.
 # Both the exposure and collateral must be cash or 0%-RW sovereign debt securities.

@@ -166,8 +166,10 @@ class _Facility:
     limit=FACILITY_LIMIT: facility_limit in the exposure bundle = limit; since no loans
     are mapped (drawn=0), nominal_amount = undrawn_amount = limit, so
     facility_limit == nominal_amount == FACILITY_LIMIT (50,000).
-    risk_type="MR": revolving credit facility (medium-risk CCF 75% under F-IRB, or SA
-    Table A1 Row 4 under B31); irrelevant to classification but required by FACILITY_SCHEMA.
+    risk_type="LR": unconditionally cancellable revolving credit line (Table A1 Row 7 /
+    low-risk). The whole facility is undrawn here, so the Art. 147(5A)(b) / Art. 154(4)(b)
+    "unconditionally cancellable to the extent undrawn" QRRE gate requires the LR risk_type
+    — an "MR" committed line would fail that gate and demote to RETAIL_OTHER.
     committed=True: committed facility so undrawn_amount is non-zero (creates exposure row).
     seniority="senior": standard retail claim.
     """
@@ -238,7 +240,7 @@ def _make_facility(ref: str, cp_ref: str) -> _Facility:
         is_revolving=True,
         is_qrre_transactor=False,
         seniority="senior",
-        risk_type="MR",
+        risk_type="LR",
         product_type="revolving_credit_facility",
         book_code="BANKING",
     )

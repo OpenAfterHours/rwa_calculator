@@ -20,7 +20,8 @@ Key responsibilities:
 
 References:
 - CRR Art. 147(5) / Basel CRE30.16-17: corporate→retail reclassification
-- CRR Art. 154(4)(c) / PS1/26 Art. 147(5A)(c): QRRE aggregate limit
+- CRR Art. 154(4)(a)-(c) / PS1/26 Art. 147(5A)(a)-(c): QRRE assignment —
+  individuals, unsecured + unconditionally-cancellable-when-undrawn, aggregate limit
 - CRR Art. 4(1)(128D): SME size test (via ``attributes.is_sme_by_size_expr``)
 - CRR Art. 147(3)/147(4)(b): RGLA / PSE IRB class exclusion
 - PS1/26, paragraph 147A.1: corporate exposure_subclass three-way split
@@ -37,7 +38,7 @@ from watchfire import cites
 
 from rwa_calc.data.schemas import RGLA_PSE_ENTITY_TYPES
 from rwa_calc.domain.enums import ExposureClass, ExposureSubclass
-from rwa_calc.engine.stages.classify.attributes import is_sme_by_size_expr
+from rwa_calc.engine.stages.classify.attributes import is_sme_by_size_expr, natural_person_expr
 from rwa_calc.engine.thresholds import regulatory_threshold
 from rwa_calc.engine.utils import partition_by_nullable
 from rwa_calc.rulebook import RulepackV0
@@ -54,6 +55,11 @@ logger = logging.getLogger(__name__)
 # =========================================================================
 
 
+@cites("CRR Art. 153(2)")
+@cites("CRR Art. 142(1)(4)")
+@cites("CRR Art. 154(4)")
+@cites("PS1/26, paragraph 153")
+@cites("PS1/26, paragraph 147")
 def classify_exposure_subtypes(
     exposures: pl.LazyFrame,
     config: CalculationConfig,
@@ -67,14 +73,38 @@ def classify_exposure_subtypes(
     SME only touches "corporate", retail only touches "retail_other",
     QRRE specialises qualifying revolving retail.
 
-    Also derives requires_fi_scalar directly from the user-supplied
-    apply_fi_scalar flag (no entity-type gate).
+    Also derives ``requires_fi_scalar`` — the gate for the 1.25x asset-value
+    correlation multiplier (CRR Art. 153(2) / PS1/26 Art. 153(2)). This is a
+    MANDATORY treatment for large financial sector entities, not a user
+    election, so it is DERIVED from the entity-type flag and total assets:
+
+        requires_fi_scalar = apply_fi_scalar
+                             OR (is_financial_sector_entity
+                                 AND total_assets >= threshold)
+
+    The threshold is the LFSE size test (CRR Art. 142(1)(4): EUR 70bn on an
+    individual/consolidated basis, converted GBP via the FX seam; PS1/26 IRB
+    Part glossary: GBP 79bn native, at the highest level of consolidation).
+    ``total_assets`` is a GBP figure, mirroring the SME balance-sheet gate.
+    The user-supplied ``apply_fi_scalar`` is retained as an authoritative
+    True-OVERRIDE (a firm may know an entity is a large or UNREGULATED FSE
+    even when size data says otherwise) — it can never SUPPRESS a derived
+    True. A null ``total_assets`` on a flagged FSE leaves largeness
+    undetermined: the scalar is NOT applied (the whole-FSE population mostly
+    sits below the threshold), and ``audit.collect_input_warnings`` emits
+    CLS009 so the data gap is never a silent under-statement. The unregulated
+    FSE limb (Art. 142(1)(5), size-independent) needs a regulated-status input
+    the schema does not carry and is deferred to a schema-enablement change;
+    ``apply_fi_scalar`` is the interim override for known unregulated FSEs.
 
     Sets: exposure_class (updated), is_sme, requires_fi_scalar, is_hvcre
     """
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     qrre_max_limit = float(
         regulatory_threshold(resolved_pack, "qrre_max_limit", config.eur_gbp_rate)
+    )
+    lfse_total_assets_threshold = float(
+        regulatory_threshold(resolved_pack, "lfse_total_assets_threshold", config.eur_gbp_rate)
     )
     is_sme_by_size = is_sme_by_size_expr(config, pack=resolved_pack)
 
@@ -107,14 +137,34 @@ def classify_exposure_subtypes(
         pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value
     ) & is_sme_by_size
 
-    # QRRE qualification: revolving, retail, under QRRE limit (CRR Art. 147(5)).
+    # QRRE qualification (CRR Art. 154(4)(a)-(c) / PS1/26 Art. 147(5A)(a)-(c)):
+    #   (a) the exposures are to individuals (natural persons);
+    #   (b) they are revolving, UNSECURED, and — to the extent they are not
+    #       drawn — immediately and unconditionally cancellable; and
+    #   (c) the largest per-individual aggregate nominal exposure across the
+    #       sub-portfolio is <= the limit (EUR 100k CRR / GBP 90k B31).
+    # The same conditions apply under both regimes (only the (c) limit value
+    # differs, resolved from the pack), so the gates are NOT regime-Featured.
+    # Conditions (5A)(d) low loss-rate volatility and (5A)(e) consistency with
+    # the sub-portfolio's underlying risk characteristics are supervisory,
+    # portfolio-level attestations — not per-exposure inputs — and are out of
+    # scope for row-level classification.
+    #
+    # (a) individuals; (b) unsecured + unconditionally-cancellable-when-undrawn.
+    #     Each is a reusable module-level predicate (also read by the CLS010
+    #     demotion-warning collector in ``audit.py``) — see the helpers below.
+    is_qrre_individual = natural_person_expr()
+    is_qrre_unsecured = qrre_unsecured_expr()
+    is_qrre_cancellable = qrre_undrawn_cancellable_expr()
+
     # CRR Art. 154(4)(c) / PS1/26 Art. 147(5A)(c) cap the *aggregate* nominal
     # exposure to any single individual across the QRRE sub-portfolio at the
     # limit (EUR 100k / GBP 90k), not each facility individually. Aggregate
     # ``facility_limit`` (the committed/nominal basis) per
     # ``counterparty_reference`` before comparing. The driver columns
-    # (``is_revolving`` / ``facility_limit``) are hierarchy_exit contract
-    # columns — always present, null-gated by value below.
+    # (``is_revolving`` / ``facility_limit`` / ``is_secured`` / ``risk_type`` /
+    # ``undrawn_amount``) are hierarchy_exit contract columns — always present,
+    # null-gated by value.
     #
     # The QRRE sub-portfolio is the qualifying revolving retail population.
     # Only those rows contribute to the per-individual aggregate; non-QRRE
@@ -123,6 +173,9 @@ def classify_exposure_subtypes(
         (pl.col("exposure_class") == ExposureClass.RETAIL_OTHER.value)
         & (pl.col("qualifies_as_retail") == True)  # noqa: E712
         & (pl.col("is_revolving") == True)  # noqa: E712
+        & is_qrre_individual
+        & is_qrre_unsecured
+        & is_qrre_cancellable
     )
     facility_limit = pl.col("facility_limit").fill_null(float("inf"))
     candidate_limit = pl.when(is_qrre_candidate).then(facility_limit).otherwise(pl.lit(0.0))
@@ -136,6 +189,17 @@ def classify_exposure_subtypes(
         candidate_limit,
     )
     is_qrre = is_qrre_candidate & (obligor_aggregate_limit <= qrre_max_limit)
+
+    # FI scalar (1.25x correlation) — mandatory for large FSEs (Art. 153(2)).
+    # An FSE is "large" when total assets meet the Art. 142(1)(4) / PS1/26
+    # glossary threshold. Null total_assets -> the >= test is null -> False:
+    # size undetermined, no scalar (CLS009 flags the gap in audit.py). The
+    # user flag is OR-ed in as an authoritative override that can never
+    # suppress a derived True.
+    is_large_fse = pl.col("cp_is_financial_sector_entity").fill_null(False) & (
+        pl.col("cp_total_assets") >= lfse_total_assets_threshold
+    ).fill_null(False)
+    requires_fi_scalar = pl.col("cp_apply_fi_scalar").fill_null(False) | is_large_fse
 
     return exposures.with_columns(
         [
@@ -178,14 +242,63 @@ def classify_exposure_subtypes(
             # True for: corporate SME, retail reclassified to CORPORATE_SME,
             # or specialised lending with SME counterparty (keeps SPECIALISED_LENDING class).
             (is_corporate_sme | is_retail_sme | is_sl_sme).alias("is_sme"),
-            # --- FI scalar: user flag is authoritative (CRR Art. 153(2)) ---
-            (pl.col("cp_apply_fi_scalar") == True)  # noqa: E712
-            .fill_null(False)
-            .alias("requires_fi_scalar"),
+            # --- FI scalar: derived (large FSE) OR user override (Art. 153(2)) ---
+            requires_fi_scalar.alias("requires_fi_scalar"),
             # --- HVCRE flag (from specialised lending join, null → False) ---
             pl.col("is_hvcre").fill_null(False).alias("is_hvcre"),
         ]
     )
+
+
+# =========================================================================
+# QRRE (b)-gate predicates (shared with the CLS010 demotion-warning collector)
+# =========================================================================
+
+
+@cites("CRR Art. 154(4)")
+@cites("PS1/26, paragraph 147")
+def qrre_unsecured_expr() -> pl.Expr:
+    """Return the Art. 147(5A)(b) / Art. 154(4)(b) "unsecured" QRRE predicate.
+
+    A revolving retail facility flagged ``is_secured`` is NOT a QRRE. A null
+    attestation resolves to unsecured (``fill_null(False)``) — consistent with
+    how the pipeline treats absent collateral everywhere else, and with the
+    reality that revolving retail credit is unsecured by nature. The classifier
+    runs before CRMProcessor, so general (non-property) collateral is not yet
+    allocated; this is a firm attestation rather than a pledge-presence join
+    (which would replicate CRM's multi-level beneficiary cascade at classify
+    time). The Art. 147(5A) second-sub-paragraph wage-account derogation is
+    applied via input semantics — see ``FACILITY_SCHEMA.is_secured``.
+    """
+    return ~pl.col("is_secured").fill_null(False)
+
+
+@cites("CRR Art. 154(4)")
+@cites("PS1/26, paragraph 147")
+def qrre_undrawn_cancellable_expr() -> pl.Expr:
+    """Return the Art. 147(5A)(b) / Art. 154(4)(b) cancellability QRRE predicate.
+
+    QRRE must be, "to the extent they are not drawn, immediately and
+    unconditionally cancellable". A row carrying an undrawn commitment
+    (``undrawn_amount > 0``) must have the CCF unconditionally-cancellable
+    (LR / low-risk) ``risk_type``; a fully-drawn row has nothing undrawn to
+    cancel and satisfies the limb trivially. Reuses the CCF machinery's UC
+    signal (``risk_type`` == LR, engine/ccf.py) rather than minting a duplicate
+    flag. A null/non-LR ``risk_type`` on an undrawn row -> not cancellable ->
+    not QRRE, mirroring the CCF null convention (a null risk_type resolves to
+    the MR-equivalent CCF, never the LR benefit — no divergence). A null
+    ``undrawn_amount`` propagates (never QRRE), which is the conservative
+    direction — no ``fill_null(0.0)`` on the Float column.
+    """
+    has_undrawn_commitment = pl.col("undrawn_amount") > 0.0
+    is_uncond_cancellable = (
+        pl.col("risk_type")
+        .cast(pl.Utf8, strict=False)
+        .fill_null("")
+        .str.to_lowercase()
+        .is_in(["lr", "low_risk"])
+    )
+    return ~has_undrawn_commitment | is_uncond_cancellable
 
 
 # =========================================================================
@@ -254,6 +367,8 @@ def reclassify_corporate_to_retail(
     )
 
 
+@cites("CRR Art. 147(5)")
+@cites("PS1/26, paragraph 147")
 def sync_irb_exposure_class(exposures: pl.LazyFrame) -> pl.LazyFrame:
     """Sync exposure_class_irb with the (possibly mutated) exposure_class.
 
@@ -267,10 +382,36 @@ def sync_irb_exposure_class(exposures: pl.LazyFrame) -> pl.LazyFrame:
     classes are definitionally different (CRR Art. 147(3)/147(4)(b)) —
     ``exposure_class_irb`` already carries the correct CGCB / INSTITUTION
     value from ``ENTITY_TYPE_TO_IRB_CLASS`` and must not be overwritten.
+
+    Natural-person IRB retail restoration (CRR Art. 147(5)(a)(i) / PS1/26
+    Art. 147(5)(a)(i)): the SA regulatory-retail test (``qualifies_as_retail``,
+    Art. 123 / 123A) applies the EUR 1,000,000 / GBP 880,000 monetary cap AND
+    (under B31) the Art. 123A(1)(b)(ii) 0.2% granularity limb to natural
+    persons, expelling large or portfolio-dominant individuals to CORPORATE.
+    Neither condition exists in the IRB retail class: Art. 147(5)(a) caps the
+    SME limb (ii) only, and Art. 147(5) has no granularity limb. So a natural
+    person expelled to CORPORATE keeps the IRB retail class, provided the
+    Art. 147(5)(c) management-basis condition holds — i.e. the obligor is not
+    managed individually as a corporate (``is_managed_as_retail`` not
+    explicitly False; a null flag defaults to True, matching the
+    Art. 123A(1)(b)(iii) backward-compatible KEEP). This leaves the SA
+    ``exposure_class`` and ``qualifies_as_retail`` untouched — the SA/IRB
+    divergence lives only in ``exposure_class_irb``.
     """
+    # Art. 147(5)(c): a natural person managed individually as corporate
+    # (is_managed_as_retail explicitly False) is NOT IRB retail. Null → True
+    # (documented KEEP, mirrors _build_qualifies_as_retail_expr).
+    managed_as_retail = pl.col("cp_is_managed_as_retail").fill_null(True)
+    restore_retail_irb = (
+        natural_person_expr()
+        & (pl.col("exposure_class") == ExposureClass.CORPORATE.value)
+        & managed_as_retail
+    )
     return exposures.with_columns(
         pl.when(pl.col("cp_entity_type").is_in(list(RGLA_PSE_ENTITY_TYPES)))
         .then(pl.col("exposure_class_irb"))
+        .when(restore_retail_irb)
+        .then(pl.lit(ExposureClass.RETAIL_OTHER.value))
         .otherwise(pl.col("exposure_class"))
         .alias("exposure_class_irb")
     )

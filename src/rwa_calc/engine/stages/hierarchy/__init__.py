@@ -41,6 +41,12 @@ from rwa_calc.engine.stages.hierarchy.stage import run as run
 _FACILITY_QRRE_COUPLED_COLUMNS: tuple[str, ...] = (
     "is_revolving",
     "is_qrre_transactor",
+    # PRA PS1/26 Art. 147(5A)(b) / CRR Art. 154(4)(b): facility-level "secured"
+    # attestation. Coupled like the other QRRE drivers so BOTH the drawn loan
+    # exposures under the facility (Site B) and the synthesised facility_undrawn
+    # rows (Site A) inherit it, letting the classifier's unsecured gate demote a
+    # secured revolving retail facility in full.
+    "is_secured",
     "facility_limit",
     "facility_termination_date",
 )

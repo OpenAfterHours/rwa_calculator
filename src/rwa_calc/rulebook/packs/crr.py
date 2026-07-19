@@ -585,6 +585,36 @@ ENTRIES: dict[str, RuleEntry] = {
         citation=Citation("CRR", "155", "(2) IRB simple PE-div 190%/exch 290%/other 370%"),
         default=Decimal("3.70"),
     ),
+    # IRB Simple equity expected-loss rates (Art. 158(7)): the EL amount is
+    # EL rate x exposure value, paired with the Art. 155(2) simple RW bucket —
+    # 0.8% for diversified PE (190%) and exchange-traded/listed (290%), 2.4% for
+    # all other equity (370%). Central-bank equity (0% RW) carries no EL. Art. 158
+    # was omitted from onshored UK CRR by SI 2021/1078 (soft-allowlisted in
+    # arch_check); the live text is PRA Rulebook (CRR Firms) IRB Approach Part,
+    # mirroring EU CRR Art. 158(7) / Annex VII Part I point 32. These EL amounts
+    # are a disclosure quantity (COREP C08 / Pillar 3 IRB EL) and do NOT feed the
+    # Art. 159 EL-vs-provisions comparison, which is limited to Art. 158(5),(6),(10).
+    # CRR-only (Basel 3.1 removes IRB equity). Enum (EquityType)-keyed; consumed
+    # by engine/equity/calculator.py via compile.lookup_float_map.
+    "equity_irb_simple_el": LookupTable(
+        name="equity_irb_simple_el",
+        entries={
+            EquityType.CENTRAL_BANK: Decimal("0.0"),
+            EquityType.SUBORDINATED_DEBT: Decimal("0.024"),
+            EquityType.PRIVATE_EQUITY_DIVERSIFIED: Decimal("0.008"),
+            EquityType.PRIVATE_EQUITY: Decimal("0.024"),
+            EquityType.EXCHANGE_TRADED: Decimal("0.008"),
+            EquityType.LISTED: Decimal("0.008"),
+            EquityType.GOVERNMENT_SUPPORTED: Decimal("0.024"),
+            EquityType.UNLISTED: Decimal("0.024"),
+            EquityType.SPECULATIVE: Decimal("0.024"),
+            EquityType.CIU: Decimal("0.024"),
+            EquityType.OTHER: Decimal("0.024"),
+        },
+        key="equity_type",
+        citation=Citation("CRR", "158(7)", "IRB simple equity EL 0.8% div-PE/exch, 2.4% other"),
+        default=Decimal("0.024"),
+    ),
     # CRR Art. 155(2): non-trading-book short positions may net long positions in
     # the same stock only if the explicit hedge covers >= 1 year. Documentary
     # value-home (the netting logic lives in engine/equity/calculator.py).
@@ -670,7 +700,7 @@ ENTRIES: dict[str, RuleEntry] = {
             "large_corporate_revenue_threshold": Decimal("0"),  # n/a under CRR
             "retail_max_exposure": Decimal("1000000"),  # EUR 1m (Art. 123(c))
             "qrre_max_limit": Decimal("100000"),  # EUR 100k (Art. 123)
-            "lfse_total_assets_threshold": Decimal("70000000000"),  # EUR 70bn (Art. 4(1)(146))
+            "lfse_total_assets_threshold": Decimal("70000000000"),  # EUR 70bn (Art. 142(1)(4))
         },
         citation=Citation("CRR", "123", "EUR monetary thresholds (× EUR/GBP rate → GBP)"),
     ),

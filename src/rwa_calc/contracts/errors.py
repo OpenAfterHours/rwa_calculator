@@ -113,6 +113,9 @@ ERROR_RETAIL_POOL_MGMT_MISSING = "CLS005"
 ERROR_MODEL_PERMISSION_UNMATCHED = "CLS006"
 ERROR_FSE_COLUMN_MISSING = "CLS007"
 ERROR_LARGE_CORP_REVENUE_NULL = "CLS008"
+ERROR_LFSE_ASSETS_NULL = "CLS009"
+ERROR_QRRE_GATE_DEMOTION = "CLS010"
+ERROR_LARGE_CORP_GROUP_ROLLUP = "CLS011"
 
 # CRM error codes
 ERROR_INELIGIBLE_COLLATERAL = "CRM001"
@@ -166,6 +169,32 @@ ERROR_CROSS_COUNTERPARTY_NETTING = "CRM016"
 # (it is excluded from the LGD* collateral input rather than valued at 0% cash)
 # and this warning records the pending substitution (one per gated row).
 ERROR_THIRD_PARTY_DEPOSIT_FIRB_DEFERRED = "CRM017"
+# Non-main-index equity collateral eligibility (CRR/PS1-26 Art. 197(1)(f)/198(1)(a),
+# P1.271): equities/convertible bonds are eligible financial collateral under all
+# methods only when included in a MAIN index (Art. 197(1)(f)); a non-main-index
+# equity is eligible only if LISTED on a recognised exchange (Art. 198(1)(a)) and
+# then only under the comprehensive method. A collateral row of equity type that is
+# neither attested main-index nor attested listed (is_main_index and is_listed both
+# False/unset) is ineligible: its value is zeroed, is_eligible_financial_collateral
+# is cleared, and this warning is raised (one per gated row).
+ERROR_NON_MAIN_INDEX_EQUITY_INELIGIBLE = "CRM018"
+# Credit-linked note own-issuance (CRR/PS1-26 Art. 218, P1.274): a credit-linked
+# note is treated as cash collateral only when it is ISSUED BY THE LENDING
+# institution itself (the note's cash proceeds fund the protection). A CLN that
+# is not attested own-issued (is_own_issued_cln False/unset) is not within Art.
+# 218 — its value is materially correlated with the reference entity (Art. 194(4)
+# wrong-way risk), so it is ineligible funded protection: its value is zeroed,
+# is_eligible_financial_collateral is cleared, and this warning is raised (one per
+# gated row).
+ERROR_CREDIT_LINKED_NOTE_NOT_OWN_ISSUED = "CRM019"
+# Life-insurance policy currency unknown (CRR/PS1-26 Art. 232(3) with Art. 233(3),
+# P1.275): a pledged life-insurance policy's surrender value is reduced by the 8%
+# FX volatility haircut when the policy currency differs from the exposure
+# currency. A life-insurance collateral row that carries a currency column but
+# leaves it null cannot prove a currency match, so the 8% reduction is applied
+# conservatively (the anti-conservative full-benefit treatment is disallowed) and
+# this warning is raised (one per row with an unknown policy currency).
+ERROR_LIFE_INSURANCE_CURRENCY_UNKNOWN = "CRM020"
 
 # IRB error codes
 ERROR_PD_OUT_OF_RANGE = "IRB001"

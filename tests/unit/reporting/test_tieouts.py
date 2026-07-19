@@ -101,6 +101,7 @@ def test_consistent_bundles_produce_no_findings():
 def test_seeded_total_inconsistency_is_caught():
     # Arrange: perturb the C 02.00 total so it no longer equals OV1 row 29.
     corep, pillar3 = _consistent_bundles()
+    assert corep.c_02_00 is not None
     broken_c02 = corep.c_02_00.with_columns(
         pl.when(pl.col("row_ref") == "0010")
         .then(pl.lit(_CREDIT_RISK + 5_000.0))

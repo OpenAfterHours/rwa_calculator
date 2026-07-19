@@ -9,6 +9,7 @@ parquet must all miss.
 
 from __future__ import annotations
 
+import json
 import os
 from datetime import date, datetime
 from decimal import Decimal
@@ -19,6 +20,7 @@ import pytest
 
 from rwa_calc.api import run_index
 from rwa_calc.api.models import CalculationResponse, PerformanceMetrics, SummaryStatistics
+from rwa_calc.contracts.bundles import OutputFloorSummary
 
 # =============================================================================
 # Fixtures
@@ -208,7 +210,13 @@ class TestFindLatestForParams:
 # =============================================================================
 
 
-def _response_at(tmp_path: Path, run_id: str, completed_at: datetime) -> CalculationResponse:
+def _response_at(
+    tmp_path: Path,
+    run_id: str,
+    completed_at: datetime,
+    *,
+    output_floor_summary: OutputFloorSummary | None = None,
+) -> CalculationResponse:
     """A successful response with a real results parquet and a pinned timestamp."""
     results = tmp_path / "state" / "runs" / run_id / "last_results.parquet"
     results.parent.mkdir(parents=True, exist_ok=True)
@@ -230,6 +238,7 @@ def _response_at(tmp_path: Path, run_id: str, completed_at: datetime) -> Calcula
             duration_seconds=1.0,
             exposure_count=1,
         ),
+        output_floor_summary=output_floor_summary,
     )
 
 
@@ -334,5 +343,90 @@ class TestPersistence:
         state = tmp_path / "state"
         run_index.configure_persistence(state)
         assert run_index.run_cache_dir("abc") == state / "runs" / "abc"
+
+    def test_roundtrip_preserves_output_floor_summary(self, tmp_path: Path, data_dir: Path) -> None:
+        """A Basel 3.1 run's output_floor_summary must survive a restart —
+        otherwise the same run's Pillar 3 export has populated OV1/CMS1 floor
+        rows before a restart and silently-null ones after."""
+        # Arrange — configure_persistence FIRST: the startup orphan sweep runs
+        # at that call and would otherwise delete a results dir pre-created
+        # under state/runs/ before the state dir is configured (see
+        # _sweep_orphan_run_dirs — it only protects dirs already in the loaded
+        # index, so _response_at must run after configure_persistence, same
+        # ordering as test_startup_sweep_removes_orphan_run_dirs).
+        state = tmp_path / "state"
+        run_index.configure_persistence(state)
+        floor_summary = OutputFloorSummary(
+            u_trea=900_000.0,
+            s_trea=1_000_000.0,
+            floor_pct=0.725,
+            floor_threshold=725_000.0,
+            shortfall=0.0,
+            portfolio_floor_binding=False,
+            floored_modelled_rwa=900_000.0,
+            of_adj=12_345.0,
+            sa_rwa_total=1_000_000.0,
+            total_rwa_post_floor=900_000.0,
+        )
+        response = _response_at(
+            tmp_path,
+            "run-floor",
+            datetime(2026, 7, 10, 12, 0, 0),
+            output_floor_summary=floor_summary,
+        )
+        run_index.register_calculation(_fingerprint(data_dir), "run-floor", response)
+
+        # Act — simulate a restart.
+        run_index.clear()
+        run_index.configure_persistence(state)
+
+        # Assert — the reloaded entry carries an equal OutputFloorSummary.
+        hit = run_index.find_reusable(_fingerprint(data_dir))
+        assert hit is not None
+        assert hit.response.output_floor_summary == floor_summary
+
+    def test_roundtrip_without_output_floor_summary_stays_none(
+        self, tmp_path: Path, data_dir: Path, response: CalculationResponse
+    ) -> None:
+        """A CRR run (no floor) must reload with output_floor_summary still None."""
+        # Arrange
+        assert response.output_floor_summary is None
+        state = tmp_path / "state"
+        run_index.configure_persistence(state)
+        run_index.register_calculation(_fingerprint(data_dir), "run-1", response)
+
+        # Act
+        run_index.clear()
+        run_index.configure_persistence(state)
+
+        # Assert
+        hit = run_index.find_reusable(_fingerprint(data_dir))
+        assert hit is not None
+        assert hit.response.output_floor_summary is None
+
+    def test_old_persisted_file_without_output_floor_summary_key_still_loads(
+        self, tmp_path: Path, data_dir: Path, response: CalculationResponse
+    ) -> None:
+        """Backward compat: a run_index.json written before this field existed
+        has no "output_floor_summary" key in the response block at all — that
+        must load as None (never a KeyError), not just an explicit null."""
+        # Arrange — persist normally, then strip the key to mimic an old file.
+        state = tmp_path / "state"
+        run_index.configure_persistence(state)
+        run_index.register_calculation(_fingerprint(data_dir), "run-1", response)
+        persist_path = state / "run_index.json"
+        raw = json.loads(persist_path.read_text(encoding="utf-8"))
+        for entry in raw["entries"]:
+            del entry["response"]["output_floor_summary"]
+        persist_path.write_text(json.dumps(raw), encoding="utf-8")
+
+        # Act — simulate a restart against the old-shaped file.
+        run_index.clear()
+        run_index.configure_persistence(state)
+
+        # Assert — loads fine, floor summary is None.
+        hit = run_index.find_reusable(_fingerprint(data_dir))
+        assert hit is not None
+        assert hit.response.output_floor_summary is None
         run_index.clear()
         assert run_index.run_cache_dir("abc") is None  # unconfigured -> caller falls back

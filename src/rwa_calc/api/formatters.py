@@ -174,6 +174,7 @@ class ResultFormatter:
             summary_by_class_method_path=cached.summary_by_class_method_path,
             errors=errors,
             performance=performance,
+            output_floor_summary=bundle.output_floor_summary,
         )
 
     def format_error_response(

@@ -34,7 +34,8 @@ if TYPE_CHECKING:
         ComparisonExportResponse,
         ReconciliationResponse,
     )
-    from rwa_calc.contracts.config import OutputFloorConfig
+    from rwa_calc.contracts.bundles import OutputFloorSummary
+    from rwa_calc.contracts.config import OutputFloorConfig, Pillar3CapitalRatioOverrides
     from rwa_calc.reporting.facts import FilingMetadata
 
 logger = logging.getLogger(__name__)
@@ -292,16 +293,29 @@ class ResultExporter:
         output_path: Path,
         *,
         metadata: FilingMetadata | None = None,
+        previous_period_results: pl.LazyFrame | None = None,
+        capital_ratios: Pillar3CapitalRatioOverrides | None = None,
+        output_floor_summary: OutputFloorSummary | None = None,
     ) -> ExportResult:
         """Export results as Pillar III public disclosure templates.
 
         ``metadata``, when supplied, is stamped as a "metadata" sheet in the
-        workbook (``reporting/facts.py::FilingMetadata``).
+        workbook (``reporting/facts.py::FilingMetadata``). ``previous_period_results``,
+        ``capital_ratios`` and ``output_floor_summary`` are threaded straight through
+        to ``Pillar3Generator.generate_from_lazyframe`` — they populate CR8's RWEA
+        flow rows and the CMS1/OV1 pre-floor capital-ratio rows; all three default to
+        ``None`` (unchanged behaviour) when the caller supplies nothing.
         """
         from rwa_calc.reporting.pillar3.generator import Pillar3Generator
 
         generator = Pillar3Generator()
-        bundle = generator.generate(response)
+        bundle = generator.generate_from_lazyframe(
+            response.scan_results(),
+            framework=response.framework,
+            capital_ratios=capital_ratios,
+            output_floor_summary=output_floor_summary,
+            previous_period_results=previous_period_results,
+        )
         return generator.export_to_excel(bundle, output_path, metadata=metadata)
 
     # -- cell facts -----------------------------------------------------------
@@ -347,17 +361,28 @@ class ResultExporter:
         *,
         fmt: Literal["parquet", "ndjson"] = "parquet",
         metadata: FilingMetadata | None = None,
+        previous_period_results: pl.LazyFrame | None = None,
+        capital_ratios: Pillar3CapitalRatioOverrides | None = None,
+        output_floor_summary: OutputFloorSummary | None = None,
     ) -> ExportResult:
         """Export Pillar III as a flat, keyed cell-fact feed (parquet or ndjson).
 
         See ``export_corep_facts`` for the fact shape; this is the same
         traversal over the Pillar III bundle instead of COREP.
+        ``previous_period_results`` / ``capital_ratios`` / ``output_floor_summary``
+        are threaded through as in ``export_to_pillar3``.
         """
         from rwa_calc.reporting.facts import build_fact_frame
         from rwa_calc.reporting.pillar3.generator import Pillar3Generator
 
         generator = Pillar3Generator()
-        bundle = generator.generate(response)
+        bundle = generator.generate_from_lazyframe(
+            response.scan_results(),
+            framework=response.framework,
+            capital_ratios=capital_ratios,
+            output_floor_summary=output_floor_summary,
+            previous_period_results=previous_period_results,
+        )
         frame = build_fact_frame(None, bundle, metadata=metadata)
         return _write_fact_frame(frame, output_path, fmt, "pillar3_facts")
 

@@ -18,7 +18,9 @@ the calculation reaches the engine and produces a non-zero RWA.
 
 from __future__ import annotations
 
+import json
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 import polars as pl
@@ -26,9 +28,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from rwa_calc.api import create_api_app, run_index
+from rwa_calc.api.models import CalculationResponse, SummaryStatistics
+from rwa_calc.api.rest import register_run_with_id
 from rwa_calc.api.service import CreditRiskCalc
 from rwa_calc.ui.views.reconciliation import DEFAULT_MAPPING_TOML
 from tests.fixtures.api_validation.build_mandatory_only import write_mandatory_minimum
+from tests.fixtures.recon_ledger import with_reporting_ledger
 
 # =============================================================================
 # Fixtures
@@ -449,13 +454,205 @@ def test_export_entity_identifier_is_stamped_into_corep_facts(
     )
 
     # Assert — every fact row carries the caller-supplied entity id and the run id.
-    import json
-
     assert resp.status_code == 200
     records = [json.loads(line) for line in resp.content.decode().splitlines() if line]
     assert records
     assert all(r["entity_identifier"] == "LEI999" for r in records)
     assert all(r["run_id"] == run_id for r in records)
+
+
+# =============================================================================
+# Pillar 3 export — prior_run_id (CR8 comparative period)
+# =============================================================================
+
+
+def _seed_irb_run(
+    run_id: str,
+    reporting_date: date,
+    *,
+    firb_rwa: float,
+    airb_rwa: float,
+    results_dir: Path,
+    framework: str = "CRR",
+) -> None:
+    """Register a synthetic IRB-only run so CR8's opening/closing sum has data.
+
+    Bypasses the pipeline: a hand-written results parquet plus a directly
+    constructed CalculationResponse, registered straight into the REST run
+    registry (mirrors ``_seed_reusable_calculation`` in
+    test_ui_reconciliation.py). Only ``approach_applied`` + ``rwa_final``
+    matter to CR8 (see tests/fixtures/p2_48/p2_48.py for the same minimal
+    shape used by the generator's own unit tests); ``with_reporting_ledger``
+    seals the frame to the shape the other Pillar 3 templates (OV1 etc.)
+    require, matching the production aggregator-exit contract.
+    """
+    results_dir.mkdir(parents=True, exist_ok=True)
+    results_path = results_dir / "results.parquet"
+    with_reporting_ledger(
+        pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP-FIRB", "EXP-AIRB"],
+                "approach_applied": ["foundation_irb", "advanced_irb"],
+                "ead_final": [1_000_000.0, 1_000_000.0],
+                "rwa_final": [firb_rwa, airb_rwa],
+            }
+        )
+    ).collect().write_parquet(results_path)
+    response = CalculationResponse(
+        success=True,
+        framework=framework,
+        reporting_date=reporting_date,
+        summary=SummaryStatistics(
+            total_ead=Decimal("2000000"),
+            total_rwa=Decimal(str(firb_rwa + airb_rwa)),
+            exposure_count=2,
+            average_risk_weight=Decimal("0.5"),
+        ),
+        results_path=results_path,
+    )
+    register_run_with_id(run_id, response)
+
+
+def _cr8_opening_value(records: list[dict]) -> object:
+    """The CR8 row-1 ("a") cell value from a pillar3_facts_ndjson payload."""
+    opening = next(
+        r
+        for r in records
+        if r["template_id"] == "cr8" and r["row_ref"] == "1" and r["col_ref"] == "a"
+    )
+    return opening["value"]
+
+
+def test_export_pillar3_with_prior_run_id_populates_cr8_opening_row(
+    client: TestClient, tmp_path: Path
+) -> None:
+    # Arrange — prior period IRB RWA sums to 1,000,000; current to 1,150,000.
+    _seed_irb_run(
+        "prior-cr8",
+        date(2024, 12, 31),
+        firb_rwa=600_000.0,
+        airb_rwa=400_000.0,
+        results_dir=tmp_path / "prior",
+    )
+    _seed_irb_run(
+        "current-cr8",
+        date(2025, 1, 1),
+        firb_rwa=720_000.0,
+        airb_rwa=430_000.0,
+        results_dir=tmp_path / "current",
+    )
+
+    # Act
+    resp = client.get(
+        "/api/export/pillar3_facts_ndjson",
+        params={"run_id": "current-cr8", "prior_run_id": "prior-cr8"},
+    )
+
+    # Assert — CR8 row 1 (opening) is the prior period's IRB rwa_final sum.
+    assert resp.status_code == 200
+    records = [json.loads(line) for line in resp.content.decode().splitlines() if line]
+    assert _cr8_opening_value(records) == pytest.approx(1_000_000.0)
+
+
+def test_export_pillar3_without_prior_run_id_cr8_opening_is_null(
+    client: TestClient, tmp_path: Path
+) -> None:
+    # Arrange
+    _seed_irb_run(
+        "current-cr8-solo",
+        date(2025, 1, 1),
+        firb_rwa=720_000.0,
+        airb_rwa=430_000.0,
+        results_dir=tmp_path / "solo",
+    )
+
+    # Act — no prior_run_id at all
+    resp = client.get("/api/export/pillar3_facts_ndjson", params={"run_id": "current-cr8-solo"})
+
+    # Assert — unchanged behaviour: CR8's opening row stays null.
+    assert resp.status_code == 200
+    records = [json.loads(line) for line in resp.content.decode().splitlines() if line]
+    assert _cr8_opening_value(records) is None
+
+
+def test_export_pillar3_unknown_prior_run_id_is_404(client: TestClient, tmp_path: Path) -> None:
+    # Arrange
+    _seed_irb_run(
+        "current-cr8-404",
+        date(2025, 1, 1),
+        firb_rwa=1.0,
+        airb_rwa=1.0,
+        results_dir=tmp_path / "c404",
+    )
+
+    # Act
+    resp = client.get(
+        "/api/export/pillar3",
+        params={"run_id": "current-cr8-404", "prior_run_id": "does-not-exist"},
+    )
+
+    # Assert
+    assert resp.status_code == 404
+
+
+def test_export_pillar3_prior_run_id_mismatched_framework_is_422(
+    client: TestClient, tmp_path: Path
+) -> None:
+    # Arrange — the prior run targets a different framework than the current run.
+    _seed_irb_run(
+        "prior-cr8-fw",
+        date(2024, 1, 1),
+        firb_rwa=1.0,
+        airb_rwa=1.0,
+        results_dir=tmp_path / "prior_fw",
+        framework="BASEL_3_1",
+    )
+    _seed_irb_run(
+        "current-cr8-fw",
+        date(2025, 1, 1),
+        firb_rwa=1.0,
+        airb_rwa=1.0,
+        results_dir=tmp_path / "current_fw",
+        framework="CRR",
+    )
+
+    # Act
+    resp = client.get(
+        "/api/export/pillar3",
+        params={"run_id": "current-cr8-fw", "prior_run_id": "prior-cr8-fw"},
+    )
+
+    # Assert — an explicit but incompatible prior run must not be silently ignored.
+    assert resp.status_code == 422
+    assert "framework" in resp.json()["detail"]
+
+
+def test_export_pillar3_prior_run_id_not_earlier_is_422(client: TestClient, tmp_path: Path) -> None:
+    # Arrange — the "prior" run's reporting_date is not earlier than the current run's.
+    _seed_irb_run(
+        "prior-cr8-late",
+        date(2025, 6, 1),
+        firb_rwa=1.0,
+        airb_rwa=1.0,
+        results_dir=tmp_path / "prior_late",
+    )
+    _seed_irb_run(
+        "current-cr8-early",
+        date(2025, 1, 1),
+        firb_rwa=1.0,
+        airb_rwa=1.0,
+        results_dir=tmp_path / "current_early",
+    )
+
+    # Act
+    resp = client.get(
+        "/api/export/pillar3",
+        params={"run_id": "current-cr8-early", "prior_run_id": "prior-cr8-late"},
+    )
+
+    # Assert
+    assert resp.status_code == 422
+    assert "reporting_date" in resp.json()["detail"]
 
 
 # =============================================================================

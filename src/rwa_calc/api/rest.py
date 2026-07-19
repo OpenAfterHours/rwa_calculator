@@ -46,6 +46,7 @@ from rwa_calc.api.models import ValidationRequest
 from rwa_calc.api.reconciliation import loads_reconciliation_config
 from rwa_calc.api.service import CreditRiskCalc, get_supported_frameworks
 from rwa_calc.api.validation import DataPathValidator
+from rwa_calc.contracts.config import Pillar3CapitalRatioOverrides
 from rwa_calc.reporting import catalog, lineage
 from rwa_calc.reporting.facts import FilingMetadata
 
@@ -108,11 +109,14 @@ class TemplateBundles:
     pillar3: Pillar3TemplateBundle
 
 
-# Generated template bundles, keyed by run_id. Generating both bundles walks the
-# whole results frame, so the viewer caches per run rather than regenerating on
-# every page view / template switch. Same in-process, non-persistent trade-off as
-# ``_RUNS`` — an entry is only ever a pure function of that run's results.
-_TEMPLATE_BUNDLES: dict[str, TemplateBundles] = {}
+# Generated template bundles, keyed by (run_id, prior_run_id). Generating both
+# bundles walks the whole results frame, so the viewer caches per run rather than
+# regenerating on every page view / template switch. The prior_run_id is part of
+# the key — a bundle generated WITH a comparative prior period (CR8's flow rows
+# are non-null) must never be served for a request without one, and vice versa.
+# Same in-process, non-persistent trade-off as ``_RUNS`` — an entry is only ever a
+# pure function of that (run, prior_run) pair's results.
+_TEMPLATE_BUNDLES: dict[tuple[str, str | None], TemplateBundles] = {}
 
 _MAX_PAGE = 10_000
 
@@ -501,7 +505,7 @@ def reconcile_export(fmt: Literal["csv", "excel"], recon_id: str) -> FileRespons
 
 
 @router.get("/export/{fmt}", responses=_RESP_404)
-def export(
+def export(  # noqa: PLR0913 - the pillar3 comparative-period + capital-ratio inputs
     fmt: Literal[
         "parquet",
         "csv",
@@ -515,6 +519,13 @@ def export(
     ],
     run_id: str,
     entity_identifier: str | None = None,
+    prior_run_id: str | None = None,
+    cet1_ratio_pre_floor: Decimal | None = None,
+    cet1_ratio_pre_floor_transitional: Decimal | None = None,
+    tier1_ratio_pre_floor: Decimal | None = None,
+    tier1_ratio_pre_floor_transitional: Decimal | None = None,
+    total_ratio_pre_floor: Decimal | None = None,
+    total_ratio_pre_floor_transitional: Decimal | None = None,
 ) -> FileResponse:
     """Export a completed run and stream it back for download.
 
@@ -527,6 +538,23 @@ def export(
     metadata stamped onto the fact rows and the workbook metadata sheet — NOT
     onto the filename (it is free-form user input; unlike framework/
     reporting_date it is never sanitised for filesystem/path use).
+
+    The Pillar 3 formats (``pillar3``, ``pillar3_facts_parquet``,
+    ``pillar3_facts_ndjson``) additionally accept:
+
+    - ``prior_run_id``: an already-registered run to use as the comparative
+      prior period for CR8's RWEA flow rows. Selection is explicit only — an
+      unknown id is a 404, and a run that cannot serve as this run's prior
+      period (different framework, or a reporting_date not strictly earlier
+      than this run's) is a 422. Omitted, CR8's opening/flow rows stay null
+      (unchanged behaviour); there is no auto-selected fallback.
+    - The six ``*_ratio_pre_floor*`` query params: optional Pillar 3
+      capital-ratio overrides for the CMS1/OV1 pre-floor disclosure rows
+      (see ``Pillar3CapitalRatioOverrides``). Any field left unset leaves the
+      corresponding row null, as today.
+
+    This run's own output-floor summary is threaded through automatically —
+    it is the run's own data, not a caller input.
     """
     response = _require_run(run_id)
     tmp = Path(tempfile.mkdtemp(prefix="rwa_export_"))
@@ -541,6 +569,21 @@ def export(
     # reporting_date (server-validated, path-safe) — entity_identifier is
     # unsanitised caller input and must never be folded into a filesystem path.
 
+    is_pillar3 = fmt == "pillar3" or (fmt.startswith("pillar3") and "_facts_" in fmt)
+    previous_period_results = None
+    capital_ratios = None
+    if is_pillar3:
+        if prior_run_id is not None:
+            previous_period_results = _require_prior_run(prior_run_id, response).scan_results()
+        capital_ratios = _capital_ratio_overrides(
+            cet1_ratio_pre_floor=cet1_ratio_pre_floor,
+            cet1_ratio_pre_floor_transitional=cet1_ratio_pre_floor_transitional,
+            tier1_ratio_pre_floor=tier1_ratio_pre_floor,
+            tier1_ratio_pre_floor_transitional=tier1_ratio_pre_floor_transitional,
+            total_ratio_pre_floor=total_ratio_pre_floor,
+            total_ratio_pre_floor_transitional=total_ratio_pre_floor_transitional,
+        )
+
     if fmt == "excel":
         out = tmp / metadata.stamped_filename("rwa_results", "xlsx")
         response.to_excel(out)
@@ -551,7 +594,14 @@ def export(
         return _file(out)
     if fmt == "pillar3":
         out = tmp / metadata.stamped_filename("rwa_pillar3", "xlsx")
-        exporter.export_to_pillar3(response, out, metadata=metadata)
+        exporter.export_to_pillar3(
+            response,
+            out,
+            metadata=metadata,
+            previous_period_results=previous_period_results,
+            capital_ratios=capital_ratios,
+            output_floor_summary=response.output_floor_summary,
+        )
         return _file(out)
     if fmt.endswith("_facts_parquet") or fmt.endswith("_facts_ndjson"):
         facts_fmt: Literal["parquet", "ndjson"] = "ndjson" if fmt.endswith("ndjson") else "parquet"
@@ -561,7 +611,15 @@ def export(
         if is_corep:
             exporter.export_corep_facts(response, out, fmt=facts_fmt, metadata=metadata)
         else:
-            exporter.export_pillar3_facts(response, out, fmt=facts_fmt, metadata=metadata)
+            exporter.export_pillar3_facts(
+                response,
+                out,
+                fmt=facts_fmt,
+                metadata=metadata,
+                previous_period_results=previous_period_results,
+                capital_ratios=capital_ratios,
+                output_floor_summary=response.output_floor_summary,
+            )
         return _file(out)
 
     # parquet / csv export to a directory, then zip for a single download.
@@ -651,29 +709,46 @@ def get_run(run_id: str) -> CalculationResponse | None:
     return _RUNS.get(run_id)
 
 
-def get_template_bundles(run_id: str) -> TemplateBundles | None:
+def get_template_bundles(run_id: str, *, prior_run_id: str | None = None) -> TemplateBundles | None:
     """The run's COREP + Pillar 3 bundles, generating them once and caching.
 
     Returns None when the run itself is unknown/expired. Shared by the REST
     template endpoints and the UI's template viewer so a run's templates are
-    generated at most once per process.
+    generated at most once per (run_id, prior_run_id) pair per process.
+
+    ``prior_run_id``, when supplied, must reference an already-registered run
+    usable as *run_id*'s comparative prior period — see ``_require_prior_run``
+    for the exact 404/422 contract (never a silent guess). Its results
+    populate the Pillar 3 CR8 RWEA flow rows; the run's own
+    ``output_floor_summary`` is always threaded through (it is the run's own
+    data, not a caller input).
     """
     response = _RUNS.get(run_id)
     if response is None:
         return None
-    cached = _TEMPLATE_BUNDLES.get(run_id)
+    cache_key = (run_id, prior_run_id)
+    cached = _TEMPLATE_BUNDLES.get(cache_key)
     if cached is not None:
         return cached
 
     from rwa_calc.reporting.corep.generator import COREPGenerator
     from rwa_calc.reporting.pillar3.generator import Pillar3Generator
 
-    logger.info("generating report templates run_id=%s", run_id)
+    previous_period_results = None
+    if prior_run_id is not None:
+        previous_period_results = _require_prior_run(prior_run_id, response).scan_results()
+
+    logger.info("generating report templates run_id=%s prior_run_id=%s", run_id, prior_run_id)
     bundles = TemplateBundles(
         corep=COREPGenerator().generate(response),
-        pillar3=Pillar3Generator().generate(response),
+        pillar3=Pillar3Generator().generate_from_lazyframe(
+            response.scan_results(),
+            framework=response.framework,
+            output_floor_summary=response.output_floor_summary,
+            previous_period_results=previous_period_results,
+        ),
     )
-    _TEMPLATE_BUNDLES[run_id] = bundles
+    _TEMPLATE_BUNDLES[cache_key] = bundles
     return bundles
 
 
@@ -760,6 +835,72 @@ def _require_run(run_id: str) -> CalculationResponse:
     if response is None:
         raise HTTPException(status_code=404, detail=f"unknown run_id: {run_id}")
     return response
+
+
+def _require_prior_run(prior_run_id: str, current: CalculationResponse) -> CalculationResponse:
+    """Look up *prior_run_id* and verify it can serve as *current*'s prior period.
+
+    Mirrors ``_require_run_serves_reconcile``'s explicit-instruction contract: an
+    unknown id is a 404 (via ``_require_run``); a run that cannot serve as the
+    comparative prior period — it failed, targets a different framework, or its
+    reporting_date is not strictly earlier than *current*'s — is a 422. Never a
+    silent guess at which run is "the" prior period.
+
+    What this does NOT check: portfolio/book identity. Two runs can pass every
+    check here while covering different books or data paths — same as
+    ``_require_run_serves_reconcile``, choosing a prior run over the same book
+    is the caller's responsibility, not something this function verifies.
+    """
+    prior = _require_run(prior_run_id)
+
+    def _reject(reason: str) -> HTTPException:
+        return HTTPException(
+            status_code=422,
+            detail=f"run {prior_run_id} not usable as the prior period: {reason}",
+        )
+
+    if not prior.success:
+        raise _reject("the referenced calculation failed")
+    if prior.framework != current.framework:
+        raise _reject(
+            f"framework {prior.framework!r} does not match the current run's {current.framework!r}"
+        )
+    if not prior.reporting_date < current.reporting_date:
+        raise _reject(
+            f"reporting_date {prior.reporting_date.isoformat()} is not strictly earlier "
+            f"than the current run's {current.reporting_date.isoformat()}"
+        )
+    if not Path(prior.results_path).exists():
+        raise _reject("its cached results are no longer available")
+    return prior
+
+
+def _capital_ratio_overrides(
+    *,
+    cet1_ratio_pre_floor: Decimal | None,
+    cet1_ratio_pre_floor_transitional: Decimal | None,
+    tier1_ratio_pre_floor: Decimal | None,
+    tier1_ratio_pre_floor_transitional: Decimal | None,
+    total_ratio_pre_floor: Decimal | None,
+    total_ratio_pre_floor_transitional: Decimal | None,
+) -> Pillar3CapitalRatioOverrides | None:
+    """Build Pillar 3 capital-ratio overrides from query params, or None if unset.
+
+    None (rather than an all-None overrides instance) when the caller supplied
+    nothing, so the generator's own "no overrides supplied" branch applies —
+    it is not this endpoint's job to decide the fallback.
+    """
+    fields = {
+        "cet1_ratio_pre_floor": cet1_ratio_pre_floor,
+        "cet1_ratio_pre_floor_transitional": cet1_ratio_pre_floor_transitional,
+        "tier1_ratio_pre_floor": tier1_ratio_pre_floor,
+        "tier1_ratio_pre_floor_transitional": tier1_ratio_pre_floor_transitional,
+        "total_ratio_pre_floor": total_ratio_pre_floor,
+        "total_ratio_pre_floor_transitional": total_ratio_pre_floor_transitional,
+    }
+    if all(value is None for value in fields.values()):
+        return None
+    return Pillar3CapitalRatioOverrides(**fields)
 
 
 def _require_template_bundles(run_id: str) -> TemplateBundles:

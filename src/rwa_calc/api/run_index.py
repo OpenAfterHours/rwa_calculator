@@ -48,6 +48,7 @@ from pathlib import Path
 from typing import Any
 
 from rwa_calc.api.models import CalculationResponse, SummaryStatistics
+from rwa_calc.contracts.bundles import OutputFloorSummary
 
 logger = logging.getLogger(__name__)
 
@@ -379,6 +380,11 @@ def _entry_to_raw(fingerprint: CalculationFingerprint, entry: ReusableRun) -> di
                 key: (str(value) if isinstance(value, Decimal) else value)
                 for key, value in dataclasses.asdict(response.summary).items()
             },
+            "output_floor_summary": (
+                dataclasses.asdict(response.output_floor_summary)
+                if response.output_floor_summary is not None
+                else None
+            ),
         },
     }
 
@@ -412,6 +418,11 @@ def _entry_from_raw(raw: dict) -> tuple[CalculationFingerprint, ReusableRun]:
         for key, value in resp_raw["summary"].items()
     }
     summary = SummaryStatistics(**summary_kwargs)
+    # ``.get`` (not ``[...]``) — a run_index.json persisted before this field
+    # existed has no "output_floor_summary" key at all; that must load as None
+    # (not a KeyError), same as a run whose floor never applied.
+    floor_raw = resp_raw.get("output_floor_summary")
+    output_floor_summary = OutputFloorSummary(**floor_raw) if floor_raw is not None else None
     response = CalculationResponse(
         success=True,
         framework=resp_raw["framework"],
@@ -421,6 +432,7 @@ def _entry_from_raw(raw: dict) -> tuple[CalculationFingerprint, ReusableRun]:
         summary_by_class_path=_opt_path(resp_raw["summary_by_class_path"]),
         summary_by_approach_path=_opt_path(resp_raw["summary_by_approach_path"]),
         summary_by_class_method_path=_opt_path(resp_raw["summary_by_class_method_path"]),
+        output_floor_summary=output_floor_summary,
     )
     entry = ReusableRun(
         run_id=raw["run_id"],

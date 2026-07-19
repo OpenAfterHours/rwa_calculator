@@ -408,14 +408,20 @@ def _register_pages(app: FastAPI) -> None:
         run_id: str,
         template: str | None = None,
         sheet: str | None = None,
+        prior_run_id: str | None = None,
     ) -> HTMLResponse:
         """Render one COREP / Pillar III template sheet for a completed run.
 
-        The bundles are generated once per run and cached (``get_template_bundles``),
-        so switching template or sheet is a re-render, not a re-generation.
+        The bundles are generated once per (run, prior_run) pair and cached
+        (``get_template_bundles``), so switching template or sheet is a
+        re-render, not a re-generation. ``prior_run_id`` — an already-
+        registered run to use as the comparative prior period for CR8's RWEA
+        flow rows — is explicit only; an unknown or incompatible prior run
+        raises the same 404/422 ``get_template_bundles`` raises for the REST
+        export endpoint (see ``_require_prior_run``), never a silent guess.
         """
         response = get_run(run_id)
-        bundles = get_template_bundles(run_id)
+        bundles = get_template_bundles(run_id, prior_run_id=prior_run_id)
         if response is None or bundles is None:
             return _not_found(request, "That result has expired or does not exist.")
         page = report_templates_view.template_page(

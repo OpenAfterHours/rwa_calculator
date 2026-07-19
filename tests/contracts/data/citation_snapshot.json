@@ -467,6 +467,9 @@
     "CRR Art. 147(5)",
     "PS1/26, paragraph 147"
   ],
+  "rwa_calc.engine.stages.classify.attributes::with_group_annual_revenue": [
+    "PS1/26, paragraph 147"
+  ],
   "rwa_calc.engine.stages.classify.classifier::ExposureClassifier.classify": [
     "CRR Art. 112",
     "CRR Art. 147"

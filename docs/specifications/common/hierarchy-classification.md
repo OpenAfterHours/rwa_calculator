@@ -321,7 +321,19 @@ Under Basel 3.1, Art. 123A has a two-path structure:
 
 ### Large Corporate Revenue Threshold (Basel 3.1)
 
-Under Basel 3.1, corporates with consolidated annual revenue exceeding **EUR 500 million (GBP 440 million)** are classified as **large corporates** and are restricted to **F-IRB only** (cannot use A-IRB). This threshold is distinct from the SME firm-size adjustment threshold (EUR 50m / GBP 44m).
+Under Basel 3.1, corporates with consolidated annual revenue exceeding **EUR 500 million (GBP 440 million)** are classified as **large corporates** and, together with financial corporates, form the Art. 147(2)(c)(ii) subclass restricted to **F-IRB only** (cannot use A-IRB, per Art. 147A(1)(e)). This threshold is distinct from the SME firm-size adjustment threshold (EUR 50m / GBP 44m).
+
+**Group-consolidation basis (Art. 147(4C)(b)(ii)).** The revenue is measured "at the highest level of consolidation which is performed and at which audited financial statements are available" — the *group's* revenue, not the individual counterparty's. The classifier therefore rolls each corporate's own `annual_revenue` up its resolved `ultimate_parent_reference` chain into `cp_group_annual_revenue` before the test (`attributes.with_group_annual_revenue`): the signal is the **maximum** of the counterparty's own turnover and its ultimate parent's own turnover. A parent's own `annual_revenue` is, by convention, its consolidated audited-accounts figure (which subsumes its subsidiaries), so the ultimate parent — the top of the group — carries the highest-consolidation figure. A small subsidiary of a > GBP 440m group is therefore correctly F-IRB-only even when its own turnover is below the threshold. The `max` (rather than a source-preference coalesce) is the conservative direction for a test that *forces* F-IRB: neither a small subsidiary figure nor a data-anomalous small parent figure can let a large obligor escape.
+
+This is deliberately distinct from the entity-level `cp_annual_revenue`, which continues to drive the Art. 4(1)(128D) SME size test and the Art. 501 SME supporting factor — those read the counterparty's *own* turnover, not the group's.
+
+**Null composition.** `max_horizontal` ignores nulls, so a null own turnover under a revenue-bearing parent yields the parent figure; a standalone corporate (null `ultimate_parent_reference`) yields its own; both-null yields null, at which point the existing conservative default applies (a corporate whose group revenue is null and whose `total_assets` does not confirm SME size is treated as large and **CLS008** is emitted). A subsidiary with null own revenue under a large parent is thus resolved by the roll-up and no longer trips CLS008.
+
+**Warning.** When the roll-up itself drives the restriction — the counterparty's own turnover is at/below GBP 440m but its group turnover exceeds it — a **CLS011** classification warning records that F-IRB was forced by the group rather than the entity, for audit transparency (mirroring the CLS010 pattern). CLS008 and CLS011 are mutually exclusive.
+
+**Deferral (3-year averaging).** Art. 147(4C)(b)(ii) prescribes "the average annual amount over the last three years". The counterparty schema carries a single point-in-time `annual_revenue`, so the most-recent-figure convention is used; multi-year revenue inputs are a documented future enhancement.
+
+**CRR.** CRR has no financial-/large-corporates subclass — the whole restriction (and the roll-up) is gated on the `approach_restrictions_b31_applicable` feature and is a no-op under CRR, where A-IRB remains available regardless of revenue.
 
 ### FSE Classification Requirements
 

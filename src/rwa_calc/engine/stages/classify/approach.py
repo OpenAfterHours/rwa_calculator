@@ -187,13 +187,18 @@ def _apply_b31_approach_restrictions(
         (pl.col("cp_is_financial_sector_entity") == True)  # noqa: E712
         .fill_null(False)
     )
-    # Art. 147A(1)(d): the large-corporate F-IRB restriction applies ONLY
-    # to counterparties of entity_type == "corporate". Non-corporate
-    # entity types are governed by their own Art. 147A sub-clauses and
-    # must never trip this branch. Within the corporate slice:
-    #   - When annual_revenue is non-null, compare to the large-corp
+    # Art. 147(4C)(b)(ii) w/ Art. 147A(1)(e): the large-corporate F-IRB
+    # restriction applies ONLY to counterparties of entity_type ==
+    # "corporate". Non-corporate entity types are governed by their own
+    # Art. 147A sub-clauses and must never trip this branch. The revenue
+    # test reads ``cp_group_annual_revenue`` — the counterparty's own
+    # turnover rolled up its ultimate-parent chain (attributes.
+    # with_group_annual_revenue) — because Art. 147(4C)(b)(ii) prescribes
+    # revenue "taken at the highest level of consolidation", so a small
+    # subsidiary of a large group is F-IRB-only. Within the corporate slice:
+    #   - When the group revenue is non-null, compare to the large-corp
     #     threshold (GBP 440m).
-    #   - When annual_revenue is null but total_assets indicates the
+    #   - When group revenue is null but total_assets indicates the
     #     counterparty is SME-sized (assets < EUR 43m per Commission
     #     Rec 2003/361/EC Art. 2), it is definitively not large.
     #   - Otherwise (both fields null, or null revenue with assets that
@@ -204,9 +209,9 @@ def _apply_b31_approach_restrictions(
     )
     is_corporate_cp = pl.col("cp_entity_type").fill_null("") == "corporate"
     is_large_corp = is_corporate_cp & (
-        pl.when(pl.col("cp_annual_revenue").is_not_null())
+        pl.when(pl.col("cp_group_annual_revenue").is_not_null())
         .then(
-            pl.col("cp_annual_revenue")
+            pl.col("cp_group_annual_revenue")
             > float(
                 regulatory_threshold(
                     resolved_pack, "large_corporate_revenue_threshold", config.eur_gbp_rate

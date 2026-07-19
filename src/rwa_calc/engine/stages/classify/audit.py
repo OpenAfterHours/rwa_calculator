@@ -8,14 +8,17 @@ Pipeline position:
     stage-exit materialise, audit trail at bundle build).
 
 Key responsibilities:
-- ``collect_input_warnings``: CLS008 warning for null corporate
-  annual_revenue under Basel 3.1 (Art. 147A(1)(d) conservatism).
+- ``collect_input_warnings``: CLS008 warning for null corporate group
+  annual_revenue under Basel 3.1 (Art. 147A(1)(d) conservatism) and CLS011
+  for a group-revenue roll-up that forces F-IRB (Art. 147(4C)(b)(ii)).
 - ``collect_beel_on_non_defaulted_warnings``: DQ008 aggregate warning for
   ``is_defaulted=False ∧ beel>0`` rows (eager — must run post-materialise).
 - ``build_audit_trail``: per-exposure classification reason frame.
 
 References:
 - PRA PS1/26 Art. 147A(1)(d): large-corporate F-IRB restriction (CLS008)
+- PRA PS1/26 Art. 147(4C)(b)(ii): highest-consolidation group revenue test —
+  the roll-up flip warning (CLS011)
 - PS1/26 Art. 181(1)(h)(ii) / CRR Art. 158(5): BEEL defined for defaulted
   exposures only (DQ008 companion check)
 - CRR Art. 4(1)(128D) / Commission Rec 2003/361/EC Art. 2: SME fallback
@@ -30,6 +33,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from rwa_calc.contracts.errors import (
+    ERROR_LARGE_CORP_GROUP_ROLLUP,
     ERROR_LARGE_CORP_REVENUE_NULL,
     ERROR_LFSE_ASSETS_NULL,
     ERROR_QRRE_GATE_DEMOTION,
@@ -40,7 +44,10 @@ from rwa_calc.contracts.errors import (
     classification_warning,
 )
 from rwa_calc.domain.enums import ExposureClass
-from rwa_calc.engine.stages.classify.attributes import natural_person_expr
+from rwa_calc.engine.stages.classify.attributes import (
+    natural_person_expr,
+    with_group_annual_revenue,
+)
 from rwa_calc.engine.stages.classify.subtypes import (
     qrre_undrawn_cancellable_expr,
     qrre_unsecured_expr,
@@ -69,7 +76,7 @@ def collect_input_warnings(
 ) -> list[CalculationError]:
     """Collect non-blocking warnings for null input data.
 
-    Two warnings fire here, each surfaced as a ``CalculationError`` with
+    Three warnings can fire here, each surfaced as a ``CalculationError`` with
     severity WARNING:
 
     - **LFSE size undetermined** (Art. 153(2), BOTH regimes): when a
@@ -81,10 +88,17 @@ def collect_input_warnings(
       under-statement.
 
     - **Large-corp F-IRB restriction conservatism** (Art. 147A(1)(d),
-      Basel 3.1 only): when ``annual_revenue`` is null on any corporate
-      counterparty, the engine treats the row as large-corp by default (see
+      Basel 3.1 only): when the rolled-up ``group_annual_revenue`` is null on
+      any corporate counterparty (own AND ultimate-parent turnover both
+      absent), the engine treats the row as large-corp by default (see
       ``_is_large_corp`` in ``_apply_b31_approach_restrictions``) and
       emits CLS008.
+
+    - **Group revenue roll-up flip** (Art. 147(4C)(b)(ii), Basel 3.1 only):
+      when a corporate's OWN turnover is at/below GBP 440m but its highest-
+      consolidation group turnover (rolled up the ultimate-parent chain)
+      exceeds it, the large-corporate subclass forces F-IRB. CLS011 records
+      that the restriction was driven by the group, not the entity itself.
 
     Column-absence warnings (the historical CLS005 / CLS007) are gone:
     the counterparty lookup is sealed against
@@ -97,6 +111,13 @@ def collect_input_warnings(
     errors: list[CalculationError] = []
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
 
+    # Roll counterparty turnover up the ultimate-parent chain once, so the
+    # large-corp checks below read the same Art. 147(4C)(b)(ii) highest-
+    # consolidation ``group_annual_revenue`` the classifier's
+    # ``_apply_b31_approach_restrictions`` uses. Only adds one column; every
+    # other check on the frame is untouched.
+    counterparties = with_group_annual_revenue(data.counterparty_lookup.counterparties)
+
     # Art. 153(2) (both regimes): a flagged FSE with null total_assets leaves
     # the LFSE size test (Art. 142(1)(4) / PS1/26 glossary) undetermined, so
     # ``classify_exposure_subtypes`` does not apply the 1.25x scalar. Emit
@@ -108,10 +129,7 @@ def collect_input_warnings(
         & ~pl.col("apply_fi_scalar").fill_null(False)
     )
     lfse_undetermined_count = (
-        data.counterparty_lookup.counterparties.filter(lfse_undetermined_filter)
-        .select(pl.len())
-        .collect()
-        .item()
+        counterparties.filter(lfse_undetermined_filter).select(pl.len()).collect().item()
     )
     if lfse_undetermined_count > 0:
         errors.append(
@@ -134,28 +152,52 @@ def collect_input_warnings(
     if not resolved_pack.feature("approach_restrictions_b31_applicable"):
         return errors
 
-    # Art. 147A(1)(d): null annual_revenue triggers the conservative
-    # large-corp F-IRB restriction — emit CLS008 to flag the conservatism.
-    # Corporate-only count to avoid spurious warnings for non-corporate
-    # entity types where annual_revenue is genuinely irrelevant. The
-    # warning is suppressed when total_assets is populated AND below the
+    # Art. 147A(1)(d): null revenue triggers the conservative large-corp F-IRB
+    # restriction — emit CLS008 to flag the conservatism. Corporate-only count
+    # to avoid spurious warnings for non-corporate entity types where revenue
+    # is genuinely irrelevant. Keyed on the rolled-up ``group_annual_revenue``:
+    # a subsidiary with null own turnover but a revenue-bearing ultimate parent
+    # is resolved by the roll-up (its size is known) and does NOT warn — only a
+    # row whose OWN and GROUP revenue are both null is genuinely unresolved. The
+    # warning is further suppressed when total_assets is populated AND below the
     # SME balance-sheet threshold (CRR Art. 4(1)(128D) / Commission Rec
     # 2003/361/EC Art. 2 fallback) — in that case the counterparty is
     # definitively SME-sized and the restriction is not applied.
     balance_sheet_threshold = float(
         regulatory_threshold(resolved_pack, "sme_balance_sheet_threshold", config.eur_gbp_rate)
     )
+    large_corp_threshold = float(
+        regulatory_threshold(
+            resolved_pack, "large_corporate_revenue_threshold", config.eur_gbp_rate
+        )
+    )
+    is_corporate = pl.col("entity_type").fill_null("") == "corporate"
     unresolved_filter = (
-        (pl.col("entity_type").fill_null("") == "corporate")
-        & pl.col("annual_revenue").is_null()
+        is_corporate
+        & pl.col("group_annual_revenue").is_null()
         & (pl.col("total_assets").is_null() | (pl.col("total_assets") >= balance_sheet_threshold))
     )
-    unresolved_count = (
-        data.counterparty_lookup.counterparties.filter(unresolved_filter)
-        .select(pl.len())
-        .collect()
-        .item()
+    # Art. 147(4C)(b)(ii): a corporate whose OWN turnover is at/below GBP 440m
+    # but whose highest-consolidation group turnover (rolled up the ultimate-
+    # parent chain) exceeds it is restricted to F-IRB by the group, not by
+    # itself — a material, non-obvious classification driver worth surfacing for
+    # the audit trail (mirrors the CLS010 QRRE-gate-demotion pattern). Mutually
+    # exclusive with CLS008 (which needs a null group figure; this needs a >
+    # threshold one), so no counterparty raises both; a row whose own revenue
+    # already exceeds the threshold is large regardless of its group and is out.
+    rollup_driven_filter = (
+        is_corporate
+        & (pl.col("annual_revenue").is_null() | (pl.col("annual_revenue") <= large_corp_threshold))
+        & (pl.col("group_annual_revenue") > large_corp_threshold)
     )
+    # One materialisation for both corporate-size counts (a boolean expression
+    # sums as the count of matching rows).
+    size_counts = counterparties.select(
+        unresolved_filter.sum().alias("_unresolved"),
+        rollup_driven_filter.sum().alias("_rollup_driven"),
+    ).collect()
+    unresolved_count = size_counts["_unresolved"].item()
+    rollup_driven_count = size_counts["_rollup_driven"].item()
     if unresolved_count > 0:
         errors.append(
             CalculationError(
@@ -163,13 +205,30 @@ def collect_input_warnings(
                 message=(
                     f"Art. 147A(1)(d) large-corporate F-IRB restriction applied "
                     f"conservatively for {unresolved_count} corporate counterparty "
-                    f"row(s) with null annual_revenue and no SME-confirming "
-                    f"total_assets — could not confirm size is below the GBP 440m "
-                    f"threshold."
+                    f"row(s) with null annual_revenue (own and rolled-up group) and no "
+                    f"SME-confirming total_assets — could not confirm size is below the "
+                    f"GBP 440m threshold."
                 ),
                 severity=ErrorSeverity.WARNING,
                 category=ErrorCategory.CLASSIFICATION,
                 regulatory_reference="PRA PS1/26 Art. 147A(1)(d)",
+                field_name="annual_revenue",
+            )
+        )
+    if rollup_driven_count > 0:
+        errors.append(
+            CalculationError(
+                code=ERROR_LARGE_CORP_GROUP_ROLLUP,
+                message=(
+                    f"Art. 147(4C)(b)(ii) group-consolidation revenue roll-up restricted "
+                    f"{rollup_driven_count} corporate counterparty row(s) to F-IRB: own "
+                    f"annual_revenue is at or below GBP 440m but the highest-consolidation "
+                    f"group revenue (rolled up the ultimate-parent chain) exceeds it, so "
+                    f"A-IRB is not permitted for the financial/large-corporates subclass."
+                ),
+                severity=ErrorSeverity.WARNING,
+                category=ErrorCategory.CLASSIFICATION,
+                regulatory_reference="PRA PS1/26 Art. 147(4C)(b)(ii)",
                 field_name="annual_revenue",
             )
         )

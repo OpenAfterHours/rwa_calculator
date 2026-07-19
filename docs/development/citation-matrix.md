@@ -239,9 +239,9 @@ Last generated: 2026-07-19.
     --8<-- "src/rwa_calc/engine/sa/risk_weights.py:796:827"
     ```
 
-??? quote "`_build_qualifies_as_retail_expr` — src/rwa_calc/engine/stages/classify/attributes.py:546"
+??? quote "`_build_qualifies_as_retail_expr` — src/rwa_calc/engine/stages/classify/attributes.py:619"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/attributes.py:546:644"
+    --8<-- "src/rwa_calc/engine/stages/classify/attributes.py:619:717"
     ```
 
 
@@ -458,19 +458,19 @@ Last generated: 2026-07-19.
 
 ### CRR Art. 147 — Methodology to assign exposures to exposure classes
 
-??? quote "`_align_irb_exposure_class` — src/rwa_calc/engine/stages/classify/approach.py:347"
+??? quote "`_align_irb_exposure_class` — src/rwa_calc/engine/stages/classify/approach.py:352"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/approach.py:347:385"
+    --8<-- "src/rwa_calc/engine/stages/classify/approach.py:352:390"
     ```
 
-??? quote "`_align_irb_exposure_class` — src/rwa_calc/engine/stages/classify/approach.py:348"
+??? quote "`_align_irb_exposure_class` — src/rwa_calc/engine/stages/classify/approach.py:353"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/approach.py:347:385"
+    --8<-- "src/rwa_calc/engine/stages/classify/approach.py:352:390"
     ```
 
-??? quote "`natural_person_expr` — src/rwa_calc/engine/stages/classify/attributes.py:404"
+??? quote "`natural_person_expr` — src/rwa_calc/engine/stages/classify/attributes.py:477"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/attributes.py:404:420"
+    --8<-- "src/rwa_calc/engine/stages/classify/attributes.py:477:493"
     ```
 
 ??? quote "`classify` — src/rwa_calc/engine/stages/classify/classifier.py:106"
@@ -588,9 +588,9 @@ Last generated: 2026-07-19.
     --8<-- "src/rwa_calc/engine/slotting/transforms.py:159:186"
     ```
 
-??? quote "`_build_is_defaulted_expr` — src/rwa_calc/engine/stages/classify/attributes.py:499"
+??? quote "`_build_is_defaulted_expr` — src/rwa_calc/engine/stages/classify/attributes.py:572"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/attributes.py:498:526"
+    --8<-- "src/rwa_calc/engine/stages/classify/attributes.py:571:599"
     ```
 
 ??? quote "`classify_exposure_subtypes` — src/rwa_calc/engine/stages/classify/subtypes.py:58"
@@ -750,9 +750,9 @@ Last generated: 2026-07-19.
 
 ### CRR Art. 178 — Default of an obligor
 
-??? quote "`_build_is_defaulted_expr` — src/rwa_calc/engine/stages/classify/attributes.py:498"
+??? quote "`_build_is_defaulted_expr` — src/rwa_calc/engine/stages/classify/attributes.py:571"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/attributes.py:498:526"
+    --8<-- "src/rwa_calc/engine/stages/classify/attributes.py:571:599"
     ```
 
 
@@ -1288,9 +1288,9 @@ Last generated: 2026-07-19.
 
 ### PS1/26, paragraph 123A — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_build_qualifies_as_retail_expr` — src/rwa_calc/engine/stages/classify/attributes.py:547"
+??? quote "`_build_qualifies_as_retail_expr` — src/rwa_calc/engine/stages/classify/attributes.py:620"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/attributes.py:546:644"
+    --8<-- "src/rwa_calc/engine/stages/classify/attributes.py:619:717"
     ```
 
 
@@ -1328,9 +1328,9 @@ Last generated: 2026-07-19.
 
 ### PS1/26, paragraph 124E — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_build_has_income_cover_expr` — src/rwa_calc/engine/stages/classify/attributes.py:464"
+??? quote "`_build_has_income_cover_expr` — src/rwa_calc/engine/stages/classify/attributes.py:537"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/attributes.py:464:495"
+    --8<-- "src/rwa_calc/engine/stages/classify/attributes.py:537:568"
     ```
 
 
@@ -1410,14 +1410,19 @@ Last generated: 2026-07-19.
 
 ### PS1/26, paragraph 147 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_align_irb_exposure_class` — src/rwa_calc/engine/stages/classify/approach.py:349"
+??? quote "`_align_irb_exposure_class` — src/rwa_calc/engine/stages/classify/approach.py:354"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/approach.py:347:385"
+    --8<-- "src/rwa_calc/engine/stages/classify/approach.py:352:390"
     ```
 
-??? quote "`natural_person_expr` — src/rwa_calc/engine/stages/classify/attributes.py:405"
+??? quote "`with_group_annual_revenue` — src/rwa_calc/engine/stages/classify/attributes.py:211"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/attributes.py:404:420"
+    --8<-- "src/rwa_calc/engine/stages/classify/attributes.py:211:265"
+    ```
+
+??? quote "`natural_person_expr` — src/rwa_calc/engine/stages/classify/attributes.py:478"
+    ```python
+    --8<-- "src/rwa_calc/engine/stages/classify/attributes.py:477:493"
     ```
 
 ??? quote "`classify_exposure_subtypes` — src/rwa_calc/engine/stages/classify/subtypes.py:62"

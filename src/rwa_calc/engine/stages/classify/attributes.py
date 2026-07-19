@@ -10,6 +10,9 @@ Pipeline position:
 Key responsibilities:
 - Join the 20+ ``cp_*`` counterparty columns and derive the consolidated
   SME size metric (``sme_size_metric_gbp`` / ``sme_size_source``).
+- Roll counterparty revenue up the ultimate-parent chain into
+  ``cp_group_annual_revenue`` for the Art. 147(4C)(b)(ii) large-corporate
+  F-IRB-only subclass test (``with_group_annual_revenue``).
 - Join specialised-lending metadata (``sl_type`` / ``slotting_category`` /
   ``is_hvcre``).
 - Derive every flag that depends only on raw input columns
@@ -106,6 +109,13 @@ def add_counterparty_attributes(
     Art. 501 supporting factor deliberately ignores this column and
     keys off cp_annual_revenue directly (Art. 501(2)(c)).
 
+    Also surfaces ``cp_group_annual_revenue`` — the highest-level-of-
+    consolidation revenue signal for the Art. 147(4C)(b)(ii) large-corporate
+    F-IRB-only subclass test (``with_group_annual_revenue``): the counterparty's
+    own turnover rolled up its ultimate-parent chain. This is deliberately
+    distinct from ``cp_annual_revenue`` (the entity's own turnover) so the group
+    test and the entity-level SME / supporting-factor tests read different bases.
+
     The lookup is sealed against ``CP_LOOKUP_COUNTERPARTIES_EDGE``
     (``CounterpartyLookup.__post_init__``), so every declared column is
     guaranteed present — values may be null, and each consumer applies
@@ -160,9 +170,15 @@ def add_counterparty_attributes(
         # derivative exposure routes through F-IRB/A-IRB instead of falling back
         # to SA (CRR Art. 153(1) corporate IRB; CRR Art. 162(2)(b) derivative M).
         pl.col("internal_model_id").alias("cp_internal_model_id"),
+        # Group-consolidated revenue signal — PS1/26 Art. 147(4C)(b)(ii) large-
+        # corporate F-IRB subclass test (see with_group_annual_revenue). Distinct
+        # from cp_annual_revenue (the entity's own turnover, which continues to
+        # drive the Art. 4(1)(128D) SME size test and the Art. 501 supporting
+        # factor); this column carries the highest-level-of-consolidation figure.
+        pl.col("group_annual_revenue").alias("cp_group_annual_revenue"),
     ]
 
-    cp_cols = counterparties.select(select_cols)
+    cp_cols = with_group_annual_revenue(counterparties).select(select_cols)
 
     joined = exposures.join(
         cp_cols,
@@ -190,6 +206,63 @@ def add_counterparty_attributes(
         ]
     )
     return joined
+
+
+@cites("PS1/26, paragraph 147")
+def with_group_annual_revenue(counterparties: pl.LazyFrame) -> pl.LazyFrame:
+    """Add ``group_annual_revenue`` — the highest-consolidation revenue signal.
+
+    PS1/26 Art. 147(4C)(b)(ii) assigns a corporate to the financial-/large-
+    corporates F-IRB-only subclass (Art. 147A(1)(e)) when its annual revenue
+    exceeds GBP 440m, "taken at the highest level of consolidation which is
+    performed and at which audited financial statements are available". The
+    engine approximates that group figure by rolling the counterparty's own
+    ``annual_revenue`` up its resolved ``ultimate_parent_reference`` chain: a
+    parent's own ``annual_revenue`` is, by convention, its consolidated audited-
+    accounts turnover (which subsumes the subsidiary), so the ultimate parent —
+    the top of the group — carries the highest-consolidation figure.
+
+    The MAX of own and ultimate-parent revenue is taken (not a coalesce that
+    prefers one source), so the group can never be understated by a small
+    subsidiary figure AND a large subsidiary is never let off by a smaller
+    (data-anomalous) parent figure — both are the conservative direction for a
+    test that FORCES F-IRB (own-LGD A-IRB is typically lower RWA than the F-IRB
+    supervisory LGD). ``max_horizontal`` ignores nulls, so a null own revenue
+    under a revenue-bearing parent yields the parent figure, a top-level entity
+    (null ``ultimate_parent_reference`` → no self-join match) yields its own, and
+    both-null yields null (the caller's total_assets / conservative-large default
+    at ``_apply_b31_approach_restrictions`` then applies unchanged).
+
+    3-year averaging (Art. 147(4C)(b)(ii) second sentence — "average annual
+    amount over the last three years") is NOT applied: the counterparty schema
+    carries a single point-in-time ``annual_revenue``. The most-recent-figure
+    convention is used; supplying multi-year revenue would be new schema
+    machinery and is a documented deferral.
+
+    The lookup keys on the (unique) ``counterparty_reference``, so the
+    ultimate-parent self-join matches at most one row and never fans out. When
+    the ultimate parent is absent from the counterparty table the join misses
+    and the own figure stands.
+    """
+    parent_revenue = counterparties.select(
+        pl.col("counterparty_reference").alias("_grp_parent_ref"),
+        pl.col("annual_revenue").alias("_grp_parent_revenue"),
+    )
+    return (
+        counterparties.join(
+            parent_revenue,
+            left_on="ultimate_parent_reference",
+            right_on="_grp_parent_ref",
+            how="left",
+        )
+        .with_columns(
+            pl.max_horizontal(
+                pl.col("annual_revenue"),
+                pl.col("_grp_parent_revenue"),
+            ).alias("group_annual_revenue")
+        )
+        .drop("_grp_parent_revenue")
+    )
 
 
 def join_specialised_lending(

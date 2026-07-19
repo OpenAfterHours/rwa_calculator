@@ -275,6 +275,12 @@ ERROR_RECON_NON_FINITE_VALUE = "REC006"
 # allocation would split the two sides on keys that can never meet.
 ERROR_RECON_METHOD_UNRESOLVED = "REC007"
 
+# Cross-template reporting tie-out codes (reporting.tieouts). Non-fatal:
+# a break means two independently-generated templates (C 02.00 / C 07.00 /
+# C 08.01 / OV1) disagree on a comparable aggregate beyond tolerance. The
+# specific tie is carried on the finding's field_name.
+ERROR_CROSS_TEMPLATE_INCONSISTENCY = "TIE001"
+
 
 # =============================================================================
 # ERROR FACTORY FUNCTIONS

@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- (Next release changes will go here)
+- **Multi-entity reporting: run individual, sub-consolidated, and consolidated submissions from one dataset.** Two new optional input tables — `config/reporting_entities` (a reporting-hierarchy registry) and `mapping/book_entity_mapping` (booking book → reporting entity) — plus new optional `intragroup_entity_reference` / `guarantor_entity_reference` / `book_code` tag columns on the exposure and guarantee schemas, let a scoped run resolve one entity's population: consolidated/sub-consolidated submissions take the entity's subtree with intragroup exposures and guarantees eliminated (CRR Art. 6 / 11-18), individual submissions take the entity alone with intragroup positions retained. Each scope is a full, independent pipeline run — its own output floor, prior-period file, and run-index fingerprint/reconciliation workspace — via a new no-op-by-default `resolve_scope` pipeline stage (six SCP001–SCP006 data-quality codes, never raised). `reporting_entity` / `reporting_basis` are available on `CalculationConfig`, `CreditRiskCalc`, and the calculator/comparison/reconciliation REST endpoints and UI forms; a new `GET /api/entities` + `/hierarchy` page renders the registry tree. Unscoped runs are provably byte-identical to before. Art. 113(6) core-UK-group 0% intragroup treatment is **not** implemented this wave (the `core_uk_group` registry column is future-use only). See [Multi-Entity Reporting](../features/multi-entity-reporting.md).
 
 ### Changed
 - (Next release changes will go here)

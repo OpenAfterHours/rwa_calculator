@@ -17,6 +17,7 @@ Key responsibilities tested:
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -25,11 +26,23 @@ from tests.fixtures.api_validation.build_mandatory_only import write_mandatory_m
 from tests.fixtures.multi_entity.multi_entity import save_multi_entity_fixtures
 
 from rwa_calc.api import run_index
+from rwa_calc.api.reconciliation import loads_reconciliation_config
+from rwa_calc.api.run_index import CalculationFingerprint, ReusableRun
+from rwa_calc.api.service import CreditRiskCalc
+from rwa_calc.domain.enums import ReportingBasis
 from rwa_calc.ui.app.calculator_state import STATE_DIR_ENV_VAR
-from rwa_calc.ui.app.main import _calculation_reuse_context, create_app
+from rwa_calc.ui.app.main import (
+    _calculation_reuse_context,
+    _calculation_worker,
+    _reconciliation_worker,
+    create_app,
+)
+from rwa_calc.ui.app.progress import create_job
+from rwa_calc.ui.app.recon_state import ReconciliationFormState
 from rwa_calc.ui.views.reconciliation import DEFAULT_MAPPING_TOML
 
 _COMPARISON_DATE = date(2026, 6, 30)
+_RUN_DATE = date(2025, 1, 1)
 
 
 @pytest.fixture(autouse=True)
@@ -65,6 +78,34 @@ def multi_entity_dir(tmp_path: Path) -> str:
     root = tmp_path / "data"
     root.mkdir()
     save_multi_entity_fixtures(root)
+    return str(root)
+
+
+@pytest.fixture
+def recon_dir(tmp_path: Path) -> str:
+    """Mandatory-minimum dataset plus a legacy_output.csv derived from our results.
+
+    The legacy file lets the UN-scoped reconciliation worker complete its embedded
+    reconcile (the scoped worker fails at the scope resolver and returns before the
+    legacy load, so it needs no file).
+    """
+    root = tmp_path / "data"
+    root.mkdir()
+    write_mandatory_minimum(root)
+    ours = (
+        CreditRiskCalc(
+            data_path=str(root),
+            framework="CRR",
+            reporting_date=_RUN_DATE,
+            permission_mode="standardised",
+            data_format="parquet",
+        )
+        .calculate()
+        .scan_results()
+        .select("exposure_reference", "ead_final", "rwa_final")
+        .collect()
+    )
+    ours.rename({"ead_final": "EAD", "rwa_final": "RWA"}).write_csv(root / "legacy_output.csv")
     return str(root)
 
 
@@ -223,3 +264,180 @@ def test_reuse_context_matches_only_same_scope(client: TestClient, multi_entity_
         data_format="parquet",
     )
     assert unscoped["reusable_run"] is None
+
+
+# =============================================================================
+# Background worker / reuse-check fingerprint sites fold the scope
+# =============================================================================
+#
+# The three UI compute_fingerprint sites that the calculator/comparison endpoint
+# tests above do not already cover — the calculation worker, the reconciliation
+# worker, and the reconciliation reuse-check inside the route. Each is a scope
+# call site that must fold the reporting scope in, or a scoped run silently
+# fingerprints as unscoped (the Wave-1 fail-silent trap). The workers are exercised
+# through their builders (no edit to main.py); the reuse-check through the route.
+
+
+def _fingerprint_capture(monkeypatch: pytest.MonkeyPatch) -> list:
+    """Capture every ``CalculationFingerprint`` ``run_index.compute_fingerprint`` returns."""
+    captured: list = []
+    real = run_index.compute_fingerprint
+
+    def spy(
+        *,
+        data_path: str | Path,
+        framework: str,
+        reporting_date: date,
+        permission_mode: str,
+        data_format: str,
+        base_currency: str = "GBP",
+        eur_gbp_rate: Decimal = Decimal("0.8732"),
+        reporting_entity: str | None = None,
+        reporting_basis: str | None = None,
+    ) -> CalculationFingerprint:
+        fingerprint = real(
+            data_path=data_path,
+            framework=framework,
+            reporting_date=reporting_date,
+            permission_mode=permission_mode,
+            data_format=data_format,
+            base_currency=base_currency,
+            eur_gbp_rate=eur_gbp_rate,
+            reporting_entity=reporting_entity,
+            reporting_basis=reporting_basis,
+        )
+        captured.append(fingerprint)
+        return fingerprint
+
+    monkeypatch.setattr(run_index, "compute_fingerprint", spy)
+    return captured
+
+
+def test_calculation_worker_folds_scope_into_fingerprint(
+    data_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange — the worker computes its pre-run fingerprint at the top of _work,
+    # before the pipeline runs, so the capture is independent of run success.
+    captured = _fingerprint_capture(monkeypatch)
+
+    # Act — a scoped worker then an unscoped one over identical data.
+    _calculation_worker(
+        data_path=data_dir,
+        framework="CRR",
+        reporting_date=_RUN_DATE,
+        permission_mode="standardised",
+        data_format="parquet",
+        reporting_entity="ACME",
+        reporting_basis=ReportingBasis.CONSOLIDATED,
+    )(create_job())
+    _calculation_worker(
+        data_path=data_dir,
+        framework="CRR",
+        reporting_date=_RUN_DATE,
+        permission_mode="standardised",
+        data_format="parquet",
+    )(create_job())
+
+    # Assert
+    assert len(captured) == 2
+    scoped_fp, unscoped_fp = captured
+    assert scoped_fp.reporting_entity == "ACME"
+    assert scoped_fp.reporting_basis == "consolidated"
+    assert unscoped_fp.reporting_entity is None
+    assert unscoped_fp.reporting_basis is None
+    assert scoped_fp != unscoped_fp
+
+
+def test_reconciliation_worker_folds_scope_into_fingerprint(
+    recon_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    captured = _fingerprint_capture(monkeypatch)
+    settings = loads_reconciliation_config(DEFAULT_MAPPING_TOML, base_dir=recon_dir)
+
+    def _form_state(entity: str, basis: str) -> ReconciliationFormState:
+        return ReconciliationFormState(
+            data_path=recon_dir,
+            reporting_date=_RUN_DATE.isoformat(),
+            framework="CRR",
+            permission_mode="standardised",
+            data_format="parquet",
+            mapping_toml=DEFAULT_MAPPING_TOML,
+            reporting_entity=entity,
+            reporting_basis=basis,
+        )
+
+    # Act
+    _reconciliation_worker(
+        settings=settings,
+        data_path=recon_dir,
+        framework="CRR",
+        reporting_date=_RUN_DATE,
+        permission_mode="standardised",
+        data_format="parquet",
+        form_state=_form_state("ACME", "consolidated"),
+        reporting_entity="ACME",
+        reporting_basis=ReportingBasis.CONSOLIDATED,
+    )(create_job())
+    _reconciliation_worker(
+        settings=settings,
+        data_path=recon_dir,
+        framework="CRR",
+        reporting_date=_RUN_DATE,
+        permission_mode="standardised",
+        data_format="parquet",
+        form_state=_form_state("", ""),
+    )(create_job())
+
+    # Assert
+    assert len(captured) == 2
+    scoped_fp, unscoped_fp = captured
+    assert scoped_fp.reporting_entity == "ACME"
+    assert scoped_fp.reporting_basis == "consolidated"
+    assert unscoped_fp.reporting_entity is None
+    assert scoped_fp != unscoped_fp
+
+
+def test_reconciliation_reuse_check_folds_scope_into_fingerprint(
+    client: TestClient, recon_dir: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange — spy the reuse lookup. ``find_reusable`` is called ONLY by the
+    # route's reuse-check (the background worker never calls it), so the captured
+    # fingerprint is exactly the reuse-check's — and it is computed synchronously
+    # before the 303, so there is no background-thread race.
+    captured: list = []
+    real = run_index.find_reusable
+
+    def spy(fingerprint: CalculationFingerprint) -> ReusableRun | None:
+        captured.append(fingerprint)
+        return real(fingerprint)
+
+    monkeypatch.setattr(run_index, "find_reusable", spy)
+
+    def _post(**scope: str) -> None:
+        client.post(
+            "/reconciliation",
+            data={
+                "data_path": recon_dir,
+                "reporting_date": _RUN_DATE.isoformat(),
+                "mapping_toml": DEFAULT_MAPPING_TOML,
+                "framework": "CRR",
+                "permission_mode": "standardised",
+                "data_format": "parquet",
+                "reuse_calculation": "1",  # triggers the reuse-check
+                **scope,
+            },
+        )
+
+    # Act / Assert — a scoped reuse-check computes a scoped lookup fingerprint.
+    _post(reporting_entity="ACME", reporting_basis="consolidated")
+    assert captured
+    assert captured[-1].reporting_entity == "ACME"
+    assert captured[-1].reporting_basis == "consolidated"
+
+    # An unscoped reuse-check computes an unscoped one over the same data.
+    captured.clear()
+    _post()
+    assert captured
+    assert captured[-1].reporting_entity is None
+    assert captured[-1].reporting_basis is None

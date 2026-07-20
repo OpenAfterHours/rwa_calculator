@@ -79,6 +79,7 @@ def _resolve(bundle, entity: str, basis: ReportingBasis):
 
 
 def _refs(frame: pl.LazyFrame | None, column: str) -> set[str]:
+    assert frame is not None
     return set(frame.collect()[column].to_list())
 
 

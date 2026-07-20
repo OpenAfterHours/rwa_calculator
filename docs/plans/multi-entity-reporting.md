@@ -68,6 +68,12 @@ Deliberately NOT tagged this wave: collateral issued by group entities, CIU hold
 mappings, specialised_lending) are never filtered — dropped exposures simply stop joining
 to them.
 
+Accepted consequence (ruled at Wave-3): aggregate data-quality warnings computed over
+reference tables (e.g. CLS009 over the counterparty table) fire identically on every scoped
+run, including about counterparties whose exposures were eliminated. They describe the input
+feed, not the scoped exposure population. Scoping DQ-warning populations to surviving
+exposures is a possible follow-up refinement, not a defect.
+
 ### `RawDataBundle` (contracts/bundles.py)
 Two new optional frames: `reporting_entities: pl.LazyFrame | None = None`,
 `book_entity_mappings: pl.LazyFrame | None = None`. Loader loads them via two new

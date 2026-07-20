@@ -46,6 +46,7 @@ your browser at the landing page.
 | **Results** | `/results/{run_id}` | Headline metrics, charts and an exposure sample for a run |
 | **Comparison** | `/comparison` | CRR vs Basel 3.1 with the capital-impact waterfall |
 | **Reconciliation** | `/reconciliation` | Reconcile against a legacy calculator, component by component |
+| **Hierarchy** | `/hierarchy` | Browse the reporting-entity registry tree and the scopes each entity can head |
 
 Charts on the results, comparison and reconciliation pages are rendered as inline
 SVG themed with the documentation palette.
@@ -65,6 +66,12 @@ The calculator (`/calculator`) runs the full pipeline through a form.
 | **Permission mode** | Standardised (all SA) or IRB (driven by `model_permissions`) |
 | **Data format** | Parquet (recommended) or CSV |
 | **Reporting date** | Calculation reference date |
+| **Reporting entity** | *Optional.* An `entity_reference` from the [reporting-entity registry](../data-model/input-schemas.md#multi-entity-reporting-schemas) — scopes the run to one entity's submission. Leave blank to run the whole book, unscoped. Requires **Reporting basis** to be set too. See [Multi-Entity Reporting](../features/multi-entity-reporting.md) |
+| **Reporting basis** | *Optional, required with Reporting entity.* Individual, Sub-consolidated, or Consolidated — the submission's level of application (CRR Art. 6 / 11-18) |
+
+The **Hierarchy** page (linked from the calculator form) shows the registered entities and
+which scope each one can head, so you can find the right `entity_reference` before submitting a
+scoped run.
 
 Submitting validates the data path (and the output folder, if set), runs the
 calculation, and redirects to the results page for that run. Results show total
@@ -166,6 +173,7 @@ other tools). Interactive docs are at `/docs` (OpenAPI).
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
 | `GET`  | `/api/frameworks` | List supported frameworks |
+| `GET`  | `/api/entities?data_path=…` | List the reporting-entity registry rows for a data directory (empty list when the file is absent) |
 | `POST` | `/api/validate` | Validate a data directory |
 | `POST` | `/api/calculate` | Run a calculation; returns a `run_id` + summary |
 | `GET`  | `/api/results?run_id=…` | Page exposure-level results |
@@ -202,10 +210,14 @@ your_data_directory/
 │   └── loans.parquet
 ├── collateral/collateral.parquet     # optional
 ├── guarantee/guarantee.parquet       # optional
-└── ratings/ratings.parquet           # optional
+├── ratings/ratings.parquet           # optional
+├── config/reporting_entities.parquet       # optional — multi-entity reporting
+└── mapping/book_entity_mapping.parquet     # optional — multi-entity reporting
 ```
 
-See [Input Schemas](../data-model/input-schemas.md) for field requirements.
+See [Input Schemas](../data-model/input-schemas.md) for field requirements, and
+[Multi-Entity Reporting](../features/multi-entity-reporting.md) for the two optional
+multi-entity tables.
 
 ---
 
@@ -245,3 +257,4 @@ uv run uvicorn "rwa_calc.ui.app.main:create_app" --factory --port 8080
 - [Configuration Guide](configuration.md)
 - [Calculation Methodology](methodology/index.md)
 - [Data Model](../data-model/index.md)
+- [Multi-Entity Reporting](../features/multi-entity-reporting.md)

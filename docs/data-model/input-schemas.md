@@ -29,6 +29,8 @@ This page documents the authoritative schemas for all input data files required 
 | [Facility Mapping](#facility-mapping-schema) | `exposures/facility_mapping.parquet` | Facility-to-loan hierarchy |
 | [Org Mapping](#org-mapping-schema) | `mapping/org_mapping.parquet` | Organisation hierarchy (rating inheritance) |
 | [Lending Mapping](#lending-mapping-schema) | `mapping/lending_mapping.parquet` | Lending groups (retail threshold aggregation) |
+| [Reporting Entity](#multi-entity-reporting-schemas) | `config/reporting_entities.parquet` | Reporting-hierarchy registry (individual / sub-consolidated / consolidated submissions) |
+| [Book-Entity Mapping](#multi-entity-reporting-schemas) | `mapping/book_entity_mapping.parquet` | Booking book &rarr; reporting entity, for scoped runs |
 
 ---
 
@@ -215,6 +217,7 @@ See [Classification](../features/classification.md) for the complete classificat
 | `has_one_day_maturity_floor` | `Boolean` | No | Set True for short-term self-liquidating trade exposures and certain capital-markets-driven exposures eligible for the 1-day `M` floor under CRR Art. 162(3) (otherwise the standard 1-year floor applies) |
 | `is_sft` | `Boolean` | No | Securities Financing Transaction — selects the F-IRB **0.5-year** repo-style supervisory maturity (`M`) under CRR **Art. 162(1)** (a fixed value, not a floor; deleted under Basel 3.1) |
 | `effective_maturity` | `Float64` | No | Explicit numeric `M` override (years) per CRR Art. 162(3) / PS1/26. When populated it supersedes the `maturity_date`-derived `M` and bypasses the 1-year floor — firm-owned judgement for short-term carve-outs |
+| `intragroup_entity_reference` | `String` | No | Non-null tags this facility as an intragroup claim on the named reporting entity (an `entity_reference` in the [Reporting Entity registry](#multi-entity-reporting-schemas)). Null (default) = external counterparty. Eliminated on a `consolidated` / `sub_consolidated` run, retained on `individual` — see [Multi-Entity Reporting](../features/multi-entity-reporting.md) |
 
 **Valid `product_type` values:**
 
@@ -312,6 +315,7 @@ facilities = pl.DataFrame({
 | `netting_agreement_reference` | `String` | No | CRR Art. 195/219 on-balance-sheet netting set. A non-null reference is the sole signal that the loan participates in a netting agreement; exposures net against each other **iff they share the same reference** — independent of facility or counterparty |
 | `due_diligence_performed` | `Boolean` | No | Basel 3.1 Art. 110A: True if the firm has performed the prescribed due-diligence assessment of the obligor. Required for the SA RW override below to apply. Absence raises diagnostic warning **SA004** under B3.1 |
 | `due_diligence_override_rw` | `Float64` | No | Basel 3.1 Art. 110A SA RW override (decimal, e.g. `1.50` for 150%). Applied as `max(calculated_rw, override_rw)` — the override can only **increase** the regulatory RW, never decrease it. CRR-only runs ignore this column |
+| `intragroup_entity_reference` | `String` | No | Intragroup tag — see Facility schema and [Multi-Entity Reporting](../features/multi-entity-reporting.md) |
 
 **Note:** Loans do not have CCF fields (`risk_type`, `ccf_modelled`, `is_short_term_trade_lc`) because CCF only applies to off-balance sheet items. For drawn loans, EAD = `drawn_amount` + `interest` directly.
 
@@ -373,6 +377,7 @@ loans = pl.DataFrame({
 | `bs_type` | `String` | No | `"ONB"` (on-balance-sheet / drawn) or `"OFB"` (off-balance-sheet / undrawn). Default: `"OFB"` |
 | `due_diligence_performed` | `Boolean` | No | Basel 3.1 Art. 110A due-diligence attestation (see Loan schema) |
 | `due_diligence_override_rw` | `Float64` | No | Basel 3.1 Art. 110A SA RW override (max-only — see Loan schema) |
+| `intragroup_entity_reference` | `String` | No | Intragroup tag — see Facility schema and [Multi-Entity Reporting](../features/multi-entity-reporting.md) |
 
 **Example:**
 
@@ -516,6 +521,7 @@ collateral = pl.DataFrame({
 | `beneficiary_reference` | `String` | Yes | Reference to counterparty/facility/loan |
 | `protection_type` | `String` | No | `"guarantee"` (default) or `"credit_derivative"` — drives CRM treatment under CRR Art. 213 vs Art. 215 (credit-derivative-specific eligibility tests) |
 | `includes_restructuring` | `Boolean` | No | True when the credit derivative includes restructuring as a credit event. Required for full recognition under CRR Art. 216(1)(d); when False the recognised cover is reduced to 60% per Art. 216(1)(e) |
+| `guarantor_entity_reference` | `String` | No | Non-null tags the guarantor as the named group reporting entity (an `entity_reference` in the [Reporting Entity registry](#multi-entity-reporting-schemas)). Internal protection is not CRM at the consolidated / sub-consolidated level, so such rows are dropped there; kept on an individual run. Null (default) = external guarantor — see [Multi-Entity Reporting](../features/multi-entity-reporting.md) |
 
 **Valid `guarantee_type` values:**
 
@@ -848,6 +854,8 @@ volatility-haircut (`HE`) inputs.
 | `mpor_floor_category` | `String` | No (default `repo_only`) | MPOR floor `F` selector (margined branch only): `repo_only` → 5 (Art. 285(2)(a)) / `other` → 10 (Art. 285(2)(b)) / `illiquid_or_large` → 20 (Art. 285(3)). Constrained to `VALID_MPOR_FLOOR_CATEGORIES` |
 | `has_margin_dispute_doubling` | `Boolean` | No (default `False`) | `True` doubles `F` for the two quarters following more than two margin disputes (Art. 285(4)) |
 | `mpor_days_override` | `Int16` | No (default `null`) | Explicit MPOR in business days; supersedes the `F + N − 1` derivation when set |
+| `book_code` | `String` | No | Booking-unit code (default `""`) — mirrors the Facility/Loan/Contingent column; joined to the [Book-Entity Mapping](#multi-entity-reporting-schemas) by the scope resolver |
+| `intragroup_entity_reference` | `String` | No | Intragroup tag — see Facility schema and [Multi-Entity Reporting](../features/multi-entity-reporting.md) |
 
 !!! note "The five margining columns are inert on the unmargined-daily path"
     All five margining columns default so that `is_margined = False` with
@@ -950,6 +958,8 @@ for a standalone future codemod. See the
 | `ciu_third_party_calc` | `Boolean` | No | True when the look-through RW has been calculated by an eligible third party (custodian / depositary / management company) per Art. 132(3) — relaxes the holding-level evidence requirement |
 | `fund_reference` | `String` | No | Join key into the [CIU Holdings schema](#ciu-holdings-schema). Required when `ciu_approach = "look_through"` and `ciu_third_party_calc = False` |
 | `fund_nav` | `Float64` | No | Fund NAV — denominator of the look-through RW formula `sum(holding_value_i × rw_i) / fund_nav`. See [equity-approach spec](../specifications/basel31/equity-approach.md) |
+| `book_code` | `String` | No | Booking-unit code (default `""`) — mirrors the Facility/Loan/Contingent column; joined to the [Book-Entity Mapping](#multi-entity-reporting-schemas) by the scope resolver |
+| `intragroup_entity_reference` | `String` | No | Intragroup tag — see Facility schema and [Multi-Entity Reporting](../features/multi-entity-reporting.md) |
 
 **Valid `equity_type` values:**
 
@@ -1082,6 +1092,84 @@ org_mapping = pl.DataFrame({
 | `child_counterparty_reference` | `String` | Yes | Member counterparty reference |
 
 Exposures are aggregated to the group level for retail eligibility (threshold: EUR 1m CRR Art. 123(c) / GBP 880k Basel 3.1 Art. 123(1)(b)(ii)).
+
+---
+
+## Multi-Entity Reporting Schemas
+
+**Purpose:** Two OPTIONAL registries enabling per-scope regulatory submissions (group
+consolidated, sub-consolidated, solo/individual) from one dataset. The scope-resolver
+pipeline stage reads them to resolve a reporting entity's membership subtree and attribute
+booking books to entities; when both are absent the pipeline runs unscoped exactly as before.
+See [Multi-Entity Reporting](../features/multi-entity-reporting.md) for the full feature guide
+(scope semantics, launching a scoped run, the `/hierarchy` page, and the `SCP001`-`SCP006`
+data-quality codes).
+
+### Reporting Entity Schema
+
+**Purpose:** The reporting-hierarchy registry — one row per legal / reporting entity, linked
+into a single-rooted tree by `parent_entity_reference`. This is the table that
+`intragroup_entity_reference`, `guarantor_entity_reference`, and the Book-Entity Mapping's
+`reporting_entity_reference` all point at.
+
+**File:** `config/reporting_entities.parquet`
+
+| Column | Type | Required | Description |
+|--------|------|----------|-------------|
+| `entity_reference` | `String` | Yes | Unique key for the entity |
+| `entity_name` | `String` | No | Display name (falls back to `entity_reference` in the UI) |
+| `lei` | `String` | No | Legal Entity Identifier (ISO 17442) |
+| `parent_entity_reference` | `String` | No | Parent link forming the consolidation tree. Null = group apex (there must be exactly one root) |
+| `institution_type` | `String` | No | Mirrors the `InstitutionType` enum values; feeds output-floor applicability per scope (Art. 92 para 2A) |
+| `core_uk_group` | `Boolean` | No | CRR Art. 113(6) core-UK-group permission perimeter. Default `False`. **Future use only** — see the warning in [Multi-Entity Reporting](../features/multi-entity-reporting.md#regulatory-basis); it does not yet change any risk weight |
+
+**Example:**
+
+```python
+import polars as pl
+
+reporting_entities = pl.DataFrame({
+    "entity_reference": ["UK_BANK_HOLDCO", "RFB_SUBGROUP", "UK_BANK_PLC"],
+    "entity_name": ["UK Bank Holdco", "Ring-Fenced Body Subgroup", "UK Bank plc"],
+    "lei": [None, None, "213800ABCDEFGHIJKL12"],
+    "parent_entity_reference": [None, "UK_BANK_HOLDCO", "RFB_SUBGROUP"],
+    "institution_type": [None, None, "ring_fenced_body"],
+    "core_uk_group": [False, False, False],
+})
+```
+
+### Book-Entity Mapping Schema
+
+**Purpose:** Attributes each booking `book_code` to the reporting entity that owns it, so the
+scope resolver can filter exposure rows to a reporting scope's consolidation membership.
+
+**File:** `mapping/book_entity_mapping.parquet`
+
+| Column | Type | Required | Description |
+|--------|------|----------|-------------|
+| `book_code` | `String` | Yes | Booking-unit code, matched against `book_code` on Facility / Loan / Contingent / Equity Exposure / CCR netting sets / SFT trades |
+| `reporting_entity_reference` | `String` | Yes | The `entity_reference` (from the Reporting Entity registry) that owns this book |
+
+A book whose code is absent from this table cannot be attributed to any entity and is excluded
+from every scoped run (`SCP001`), so every book that should count towards a scope must have a
+mapping row.
+
+**Example:**
+
+```python
+import polars as pl
+
+book_entity_mapping = pl.DataFrame({
+    "book_code": ["CORP_LENDING", "TRADE", "TREASURY_UK_PLC"],
+    "reporting_entity_reference": ["UK_BANK_PLC", "UK_BANK_PLC", "UK_BANK_PLC"],
+})
+```
+
+!!! note "CCR netting sets carry the same tag columns"
+    The CCR **netting-set** schema (not separately catalogued on this page — see
+    [SA-CCR specification](../specifications/crr/ccr/index.md)) carries the same `book_code`
+    and `intragroup_entity_reference` columns as the frames above; the scope resolver filters
+    at netting-set grain and semi-joins surviving trades / collateral onto the result.
 
 ---
 

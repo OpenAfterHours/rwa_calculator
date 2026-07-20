@@ -46,6 +46,7 @@ from rwa_calc.api.rest import (
     get_reconciliation,
     get_run,
     get_template_bundles,
+    read_reporting_entities,
     register_recon_workspace,
     register_reconciliation_with_id,
     register_run_with_id,
@@ -91,6 +92,7 @@ from rwa_calc.ui.app.recon_state import (
 )
 from rwa_calc.ui.views import charts, method_split
 from rwa_calc.ui.views import comparison as comparison_view
+from rwa_calc.ui.views import hierarchy as hierarchy_view
 from rwa_calc.ui.views import lineage as lineage_view
 from rwa_calc.ui.views import reconciliation as reconciliation_view
 from rwa_calc.ui.views import report_templates as report_templates_view
@@ -279,6 +281,20 @@ def _register_pages(app: FastAPI) -> None:
             request=request,
             name="calculator.html",
             context=_nav(_calculator_context()),
+        )
+
+    @app.get("/hierarchy", response_class=HTMLResponse)
+    def hierarchy(request: Request, data_path: str | None = None) -> HTMLResponse:
+        """Render the reporting-entity hierarchy for a data directory.
+
+        ``data_path`` is optional: omitting it shows a prompt (no registry read);
+        a bad path or an unreadable registry re-renders with a friendly callout,
+        never a 500 (see ``_hierarchy_context``).
+        """
+        return templates.TemplateResponse(
+            request=request,
+            name="hierarchy.html",
+            context=_nav(_hierarchy_context(data_path)),
         )
 
     @app.post(
@@ -1422,6 +1438,38 @@ def _calculator_context(
             reporting_basis=context["reporting_basis"] or None,
         )
     )
+    return context
+
+
+def _hierarchy_context(data_path: str | None) -> dict:
+    """Build the reporting-hierarchy page context from an optional data path.
+
+    No ``data_path`` -> a prompt state (no registry read). A path that is not an
+    existing directory, or a registry that fails to read, is a friendly error
+    callout — never a 500. A valid path with no ``config/reporting_entities``
+    file yields an empty view whose template explains what the table is.
+    """
+    trimmed = (data_path or "").strip()
+    context: dict = {
+        "data_path": trimmed,
+        "expected_columns": hierarchy_view.EXPECTED_COLUMNS,
+        "scope_legend": hierarchy_view.SCOPE_LEGEND,
+        "view": None,
+        "error": None,
+    }
+    if not trimmed:
+        return context
+    root = Path(trimmed).expanduser()
+    if not root.is_dir():
+        context["error"] = f"Not a data directory: {trimmed}"
+        return context
+    try:
+        rows = read_reporting_entities(root)
+    except Exception as exc:  # noqa: BLE001 - a malformed registry must not 500 the page
+        logger.warning("could not read reporting entities from %s: %s", trimmed, exc)
+        context["error"] = f"Could not read config/reporting_entities: {exc}"
+        return context
+    context["view"] = hierarchy_view.build_hierarchy(rows)
     return context
 
 

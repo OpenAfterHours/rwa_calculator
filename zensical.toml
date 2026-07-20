@@ -69,6 +69,7 @@ nav = [
     { "Pillar III Disclosures" = "features/pillar3-disclosures.md" },
     { "Report Template Viewer" = "features/report-template-viewer.md" },
     { "Report Cell Lineage" = "features/report-cell-lineage.md" },
+    { "Multi-Entity Reporting" = "features/multi-entity-reporting.md" },
   ]},
   { "Data Model" = [
     "data-model/index.md",

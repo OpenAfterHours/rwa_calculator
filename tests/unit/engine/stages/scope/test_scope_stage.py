@@ -26,6 +26,7 @@ from rwa_calc.domain.enums import ReportingBasis
 from rwa_calc.engine.loader import ParquetLoader
 from rwa_calc.engine.orchestrator import RAW_DATA
 from rwa_calc.engine.stages.scope import run as scope_run
+from rwa_calc.rulebook import RulepackV0
 
 _FIXTURE_DIR = Path(__file__).resolve().parents[4] / "fixtures" / "multi_entity"
 
@@ -67,7 +68,7 @@ def test_unscoped_run_returns_context_unchanged():
     ctx = _ctx(bundle)
     config = CalculationConfig.crr(reporting_date=date(2026, 1, 1))  # no reporting_entity
 
-    result = scope_run(ctx, None, config)
+    result = scope_run(ctx, RulepackV0.from_config(config), config)
 
     assert result is ctx
 
@@ -79,7 +80,7 @@ def test_unscoped_run_leaves_raw_data_bundle_identical():
     ctx = _ctx(bundle)
     config = CalculationConfig.crr(reporting_date=date(2026, 1, 1))
 
-    result = scope_run(ctx, None, config)
+    result = scope_run(ctx, RulepackV0.from_config(config), config)
 
     assert result.get(RAW_DATA) is bundle
 
@@ -100,7 +101,7 @@ def test_scoped_run_republishes_filtered_bundle_on_same_key():
         reporting_basis=ReportingBasis.INDIVIDUAL,
     )
 
-    result = scope_run(ctx, None, config)
+    result = scope_run(ctx, RulepackV0.from_config(config), config)
 
     filtered = result.get(RAW_DATA)
     assert filtered is not bundle

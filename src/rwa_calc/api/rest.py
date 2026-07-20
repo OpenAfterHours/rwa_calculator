@@ -234,7 +234,7 @@ def entities(data_path: str) -> list[dict]:
     root = Path(data_path).expanduser()
     if not data_path.strip() or not root.is_dir():
         raise HTTPException(status_code=422, detail=f"invalid data_path: {data_path!r}")
-    return _read_reporting_entities(root)
+    return read_reporting_entities(root)
 
 
 @router.post("/validate")
@@ -619,13 +619,16 @@ def export(  # noqa: PLR0913 - the pillar3 comparative-period + capital-ratio in
         framework=response.framework,
         run_id=run_id,
         entity_identifier=entity_identifier,
-        # The run's reporting scope (multi-entity submissions). Both None on an
+        # The run's consolidation basis (multi-entity submissions); None on an
         # unscoped run, so the metadata sheet / fact columns / stamped filename
-        # stay byte-identical to pre-feature output. ``reporting_entity`` is the
-        # registry ``entity_reference`` — the only entity handle the run carries
-        # (the display name lives in the registry, not on the response).
+        # stay byte-identical to pre-feature output. ``entity_name`` is left None
+        # deliberately: the response carries only the registry ``entity_reference``
+        # (a key), not the display name ``FilingMetadata.entity_name`` documents —
+        # mislabelling a key as "Entity name" in a regulatory feed is worse than
+        # omitting it. Resolving the display name from the reporting-entities
+        # registry is a possible later enhancement.
         consolidation_basis=response.reporting_basis,
-        entity_name=response.reporting_entity,
+        entity_name=None,
     )
     exporter = ResultExporter()
     # metadata.stamped_filename() intentionally uses only framework/
@@ -842,7 +845,7 @@ _ENTITY_COLUMNS: tuple[str, ...] = (
 )
 
 
-def _read_reporting_entities(root: Path) -> list[dict]:
+def read_reporting_entities(root: Path) -> list[dict]:
     """Read ``config/reporting_entities`` (parquet, then csv) into row dicts.
 
     Returns an empty list when neither file exists — the registry is optional,

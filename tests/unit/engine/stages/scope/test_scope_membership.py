@@ -13,6 +13,7 @@ References:
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import date
 
 import polars as pl
@@ -28,7 +29,7 @@ from rwa_calc.engine.stages.scope import resolver
 _TREE = [("GRP", None), ("BANK_A", "GRP"), ("BANK_B", "GRP"), ("SUB", "BANK_A")]
 
 
-def _registry(rows: list[tuple[str, str | None]]) -> pl.DataFrame:
+def _registry(rows: Sequence[tuple[str, str | None]]) -> pl.DataFrame:
     return pl.DataFrame(
         {
             "entity_reference": [ref for ref, _ in rows],

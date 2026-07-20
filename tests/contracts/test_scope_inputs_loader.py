@@ -111,6 +111,7 @@ class TestScopeInputsLoaded:
 
         bundle = ParquetLoader(tmp_path).load()
 
+        assert bundle.reporting_entities is not None
         df = bundle.reporting_entities.collect()
         assert df["core_uk_group"].to_list() == [False, False]
 

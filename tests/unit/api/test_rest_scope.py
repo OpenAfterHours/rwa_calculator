@@ -26,6 +26,8 @@ from fastapi.testclient import TestClient
 from tests.fixtures.api_validation.build_mandatory_only import write_mandatory_minimum
 
 from rwa_calc.api import create_api_app, run_index
+from rwa_calc.api.models import CalculationResponse
+from rwa_calc.api.run_index import CalculationFingerprint
 
 # =============================================================================
 # Fixtures
@@ -75,9 +77,11 @@ def _fingerprint_spy(monkeypatch: pytest.MonkeyPatch) -> list:
     captured: list = []
     real = run_index.register_calculation
 
-    def spy(fingerprint: object, run_id: str, response: object) -> None:
+    def spy(
+        fingerprint: CalculationFingerprint, run_id: str, response: CalculationResponse
+    ) -> None:
         captured.append((fingerprint, response))
-        return real(fingerprint, run_id, response)  # type: ignore[arg-type]
+        return real(fingerprint, run_id, response)
 
     monkeypatch.setattr(run_index, "register_calculation", spy)
     return captured
@@ -166,6 +170,22 @@ def test_basis_alone_is_accepted(client: TestClient, data_dir: str) -> None:
 
 def test_comparison_rejects_entity_without_basis(client: TestClient, data_dir: str) -> None:
     resp = client.post("/api/comparison", json=_calc_body(data_dir, reporting_entity="ACME"))
+    assert resp.status_code == 422
+
+
+def test_reconcile_rejects_entity_without_basis(client: TestClient, data_dir: str) -> None:
+    # The scope validation is a pydantic model-validator, so it fires during
+    # request parsing (before the endpoint body / mapping load) — a 422, never
+    # the engine ValueError as a 500. The mapping content is irrelevant here.
+    resp = client.post(
+        "/api/reconcile",
+        json={
+            "data_path": data_dir,
+            "reporting_date": "2025-01-01",
+            "mapping_toml": "irrelevant = true",
+            "reporting_entity": "ACME",
+        },
+    )
     assert resp.status_code == 422
 
 

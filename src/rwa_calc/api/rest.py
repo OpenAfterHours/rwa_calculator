@@ -692,12 +692,11 @@ def get_template_bundles(run_id: str, *, prior_run_id: str | None = None) -> Tem
     if prior_run_id is not None:
         previous_period_results = _require_prior_run(prior_run_id, response).scan_results()
 
-    # run_id is server-validated by this point (the _RUNS lookup above already
-    # succeeded); prior_run_id is caller-controlled free text and is never
-    # interpolated into a log line — only whether one was supplied.
+    # Both ids are route-parameter strings (see _safe_log_token); prior_run_id's
+    # raw content is never interpolated at all — only whether one was supplied.
     logger.info(
         "generating report templates run_id=%s has_prior_period=%s",
-        run_id,
+        _safe_log_token(run_id),
         prior_run_id is not None,
     )
     bundles = TemplateBundles(
@@ -766,6 +765,18 @@ def get_recon_workspace(recon_id: str) -> ReconWorkspace | None:
 # =============================================================================
 # Private helpers
 # =============================================================================
+
+
+def _safe_log_token(value: str) -> str:
+    """Strip CR/LF (and other control chars) so a caller-supplied id can't
+    forge log lines (CWE-117 log injection). Route-parameter strings (run_id,
+    prior_run_id, entity_identifier, ...) are tainted from a static-analysis
+    standpoint regardless of what they happen to contain at runtime — a
+    comment asserting "this one's always a UUID" doesn't clear the gate, so
+    every such value is sanitised before it reaches a log call, not just the
+    ones a human judges risky.
+    """
+    return "".join(ch for ch in value if ch.isprintable())
 
 
 def _run_calc(

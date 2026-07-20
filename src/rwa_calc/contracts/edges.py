@@ -443,6 +443,15 @@ def _raw_table_edges() -> dict[str, EdgeContract]:
         "fx_rates": schemas.FX_RATES_SCHEMA,
         "model_permissions": schemas.MODEL_PERMISSIONS_SCHEMA,
         "securitisation_allocations": schemas.SECURITISATION_ALLOCATION_SCHEMA,
+        # Multi-entity reporting registries (CRR Art. 6 / 11-18). Loader edges so
+        # the per-table coverage contract (one edge per RawDataBundle LazyFrame
+        # field, test_edge_contracts.py) holds and the contract-derived test
+        # builders default them to None when absent. Loaded via the standard
+        # optional-table seal path, but intentionally NOT in SEALED_FRAME_FIELDS
+        # (mirrors cva_*) — consumed by the scope resolver before any sealed
+        # downstream edge.
+        "reporting_entities": schemas.REPORTING_ENTITY_SCHEMA,
+        "book_entity_mappings": schemas.BOOK_ENTITY_MAPPING_SCHEMA,
         # P8.60 — BA-CVA counterparty inputs. A loader edge so the per-table
         # coverage contract (one edge per RawDataBundle frame field) holds and
         # the contract-derived test builders default it to None when absent.

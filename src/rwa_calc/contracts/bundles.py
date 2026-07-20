@@ -167,6 +167,17 @@ class RawDataBundle:
         securitisation_allocations: Raw user-supplied mapping of exposures to
             securitisation pools (many rows per exposure). Resolved by the
             SecuritisationAllocator stage; see CRR Art. 244-246.
+        reporting_entities: Optional reporting-hierarchy registry
+            (``REPORTING_ENTITY_SCHEMA``) — one row per legal / reporting
+            entity, linked into a single-rooted tree. Consumed by the scope
+            resolver to run a per-entity submission (group consolidated,
+            sub-consolidated, or solo). None (the default) when no multi-entity
+            scope is configured; the pipeline then runs unscoped,
+            byte-identically to today. See CRR Art. 6 / 11-18.
+        book_entity_mappings: Optional booking-book -> reporting-entity map
+            (``BOOK_ENTITY_MAPPING_SCHEMA``) used by the scope resolver to
+            attribute each ``book_code`` to a reporting entity. None when no
+            multi-entity scope is configured. See CRR Art. 6 / 11-18.
         ccr: Optional Counterparty Credit Risk inputs (trade /
             netting set / margin agreement / CCR collateral). None
             when the firm has no CCR scope; the CCR stage no-ops in
@@ -218,6 +229,15 @@ class RawDataBundle:
     fx_rates: pl.LazyFrame | None = None
     model_permissions: pl.LazyFrame | None = None
     securitisation_allocations: pl.LazyFrame | None = None
+    # Multi-entity reporting registries (CRR Art. 6 / 11-18). Optional and
+    # additive: None when no reporting scope is configured, in which case the
+    # scope-resolver stage no-ops and behaviour is byte-identical to today.
+    # Loaded via the shared loader path (RAW_TABLE_EDGES) but intentionally NOT
+    # registered in SEALED_FRAME_FIELDS — mirroring cva_counterparties /
+    # cva_hedges — since they are consumed by the scope resolver before any
+    # sealed downstream edge.
+    reporting_entities: pl.LazyFrame | None = None
+    book_entity_mappings: pl.LazyFrame | None = None
     ccr: RawCCRBundle | None = None
     # SFT (FCCM) inputs (SFT/FCCM separation Phase 4). Composite optional
     # field like ``ccr`` — None when the firm has no SFT scope. Additive

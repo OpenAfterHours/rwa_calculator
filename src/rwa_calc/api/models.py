@@ -200,6 +200,10 @@ class CalculationResponse:
             only; None under CRR or when the floor did not run). Carried
             through from the run's ``AggregatedResultBundle`` so reporting
             callers (Pillar 3 OV1/CMS1 floor rows) never have to re-derive it.
+        reporting_entity: The reporting-scope entity_reference this run was
+            calculated for (multi-entity submissions); None for an un-scoped run.
+        reporting_basis: The consolidation basis of the run, as the string value
+            of the ``ReportingBasis`` enum (e.g. "consolidated"); None when unset.
     """
 
     success: bool
@@ -213,6 +217,8 @@ class CalculationResponse:
     errors: list[APIError] = field(default_factory=list)
     performance: PerformanceMetrics | None = None
     output_floor_summary: OutputFloorSummary | None = None
+    reporting_entity: str | None = None
+    reporting_basis: str | None = None
 
     def scan_results(self) -> pl.LazyFrame:
         """Lazy-scan the results parquet file."""

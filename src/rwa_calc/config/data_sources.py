@@ -215,6 +215,29 @@ DATA_SOURCES = [
             "feeding the FCCM E* collateral term (CRR Art. 223(5))."
         ),
     ),
+    # Multi-Entity Reporting — group / sub-consolidated / solo submissions.
+    # Two OPTIONAL registries consumed by the scope-resolver stage to run a
+    # full pipeline over a single reporting entity's scope. Both absent → the
+    # pipeline runs unscoped exactly as today.
+    DataSourceFile(
+        id="reporting_entities",
+        relative_path=Path("config/reporting_entities"),
+        requirement=RequirementLevel.OPTIONAL,
+        description=(
+            "Reporting-hierarchy registry (entity tree, LEI, institution type) enabling "
+            "per-scope submissions at the individual / sub-consolidated / consolidated "
+            "levels of application (CRR Art. 6 / 11-18)."
+        ),
+    ),
+    DataSourceFile(
+        id="book_entity_mapping",
+        relative_path=Path("mapping/book_entity_mapping"),
+        requirement=RequirementLevel.OPTIONAL,
+        description=(
+            "Maps booking books (book_code) to reporting entities so exposures can be "
+            "attributed to a reporting scope's consolidation membership (CRR Art. 6 / 11-18)."
+        ),
+    ),
 ]
 
 

@@ -84,6 +84,12 @@ Mappings:
 - Org_mapping               # Mapping between counterparties (parents to children) for rating/turnover inheritance
 - Lending_mapping           # Mapping between connected counterparties for Retail threshold aggregation
 - Exposure_class_mapping    # Mapping of counterparty/exposure attributes to SA/IRB exposure classes
+- Book_entity_mapping       # Maps booking books (book_code) to reporting entities for
+                            # multi-entity scope filtering (CRR Art. 6 / 11-18)
+
+Multi-Entity Reporting Inputs (optional — group / sub-consolidated / solo submissions):
+- Reporting_entities        # Reporting-hierarchy registry: entity tree, LEI, institution
+                            # type per legal entity, for per-scope submissions (CRR Art. 6 / 11-18)
 
   Note: ratings, collateral, provisions and guarantees do NOT use standalone
   *_mapping tables. Ratings link to their counterparty via a counterparty_reference
@@ -257,6 +263,13 @@ FACILITY_SCHEMA: dict[str, ColumnSpec] = {
     #   "subordinated"  -> Art. 161(1)(f) LGD = 100%
     #   "dilution_risk" -> Art. 161(1)(g) LGD = 100% (B3.1) / 75% (CRR)
     "purchased_receivables_subtype": ColumnSpec(pl.String, required=False),
+    # CRR Art. 6 / 11-18 (individual / consolidated / sub-consolidated levels of
+    # application): non-null tags this exposure as an intragroup claim on the
+    # named reporting entity (an ``entity_reference`` in REPORTING_ENTITY_SCHEMA).
+    # The scope-resolver stage eliminates such rows on a consolidated /
+    # sub-consolidated run and keeps them on an individual run. Null = external
+    # counterparty — never fabricated (an absent tag means "not intragroup").
+    "intragroup_entity_reference": ColumnSpec(pl.String, required=False),
 }
 
 LOAN_SCHEMA: dict[str, ColumnSpec] = {
@@ -350,6 +363,13 @@ LOAN_SCHEMA: dict[str, ColumnSpec] = {
     # is withheld (conservative), matching the engine's fill_null(False)
     # handling and the CLASSIFIER_OUTPUT_SCHEMA default.
     "has_income_cover": ColumnSpec(pl.Boolean, default=False, required=False),
+    # CRR Art. 6 / 11-18 (individual / consolidated / sub-consolidated levels of
+    # application): non-null tags this exposure as an intragroup claim on the
+    # named reporting entity (an ``entity_reference`` in REPORTING_ENTITY_SCHEMA).
+    # The scope-resolver stage eliminates such rows on a consolidated /
+    # sub-consolidated run and keeps them on an individual run. Null = external
+    # counterparty — never fabricated (an absent tag means "not intragroup").
+    "intragroup_entity_reference": ColumnSpec(pl.String, required=False),
     # Note: CCF fields (risk_type, ccf_modelled, is_short_term_trade_lc) are NOT included
     # because CCF only applies to off-balance sheet items (undrawn commitments, contingents).
     # Drawn loans are already on-balance sheet, so EAD = drawn_amount + interest directly.
@@ -429,6 +449,13 @@ CONTINGENTS_SCHEMA: dict[str, ColumnSpec] = {
     "exposure_collateral_type": ColumnSpec(pl.String, required=False),
     "exposure_security_cqs": ColumnSpec(pl.Int8, required=False),
     "exposure_security_residual_maturity_years": ColumnSpec(pl.Float64, required=False),
+    # CRR Art. 6 / 11-18 (individual / consolidated / sub-consolidated levels of
+    # application): non-null tags this exposure as an intragroup claim on the
+    # named reporting entity (an ``entity_reference`` in REPORTING_ENTITY_SCHEMA).
+    # The scope-resolver stage eliminates such rows on a consolidated /
+    # sub-consolidated run and keeps them on an individual run. Null = external
+    # counterparty — never fabricated (an absent tag means "not intragroup").
+    "intragroup_entity_reference": ColumnSpec(pl.String, required=False),
 }
 
 COUNTERPARTY_SCHEMA: dict[str, ColumnSpec] = {
@@ -755,6 +782,12 @@ GUARANTEE_SCHEMA: dict[str, ColumnSpec] = {
     # behaviour.
     "attachment_amount": ColumnSpec(pl.Float64, required=False),
     "detachment_amount": ColumnSpec(pl.Float64, required=False),
+    # CRR Art. 6 / 11-18: non-null tags the guarantor as the named group
+    # reporting entity (an ``entity_reference`` in REPORTING_ENTITY_SCHEMA).
+    # Internal protection is not CRM at the consolidated / sub-consolidated
+    # level, so the scope resolver drops such guarantee rows on those runs;
+    # they are kept on an individual run. Null = external guarantor.
+    "guarantor_entity_reference": ColumnSpec(pl.String, required=False),
 }
 
 PROVISION_SCHEMA: dict[str, ColumnSpec] = {
@@ -858,6 +891,16 @@ EQUITY_EXPOSURE_SCHEMA: dict[str, ColumnSpec] = {
     "issuer_reference": ColumnSpec(pl.String, required=False),
     "is_explicitly_hedged": ColumnSpec(pl.Boolean, default=False, required=False),
     # Risk weight: 100% (listed), 250% (unlisted), 400% (speculative)
+    # Booking-unit code, joined to BOOK_ENTITY_MAPPING_SCHEMA by the scope
+    # resolver to attribute the row to a reporting entity (CRR Art. 6 / 11-18).
+    # Mirrors the facility/loan/contingent book_code (default "", nullable).
+    "book_code": ColumnSpec(pl.String, default="", required=False),
+    # CRR Art. 6 / 11-18: non-null tags this equity holding as an intragroup
+    # claim on the named reporting entity (an ``entity_reference`` in
+    # REPORTING_ENTITY_SCHEMA). The scope resolver eliminates such rows on a
+    # consolidated / sub-consolidated run and keeps them on an individual run.
+    # Null = external counterparty (never fabricated).
+    "intragroup_entity_reference": ColumnSpec(pl.String, required=False),
 }
 
 # CIU fund holdings for look-through approach (Art. 132)
@@ -907,6 +950,46 @@ EXPOSURE_CLASS_MAPPING_SCHEMA = {
     "is_sa_class": pl.Boolean,  # Valid for Standardised Approach
     "is_irb_class": pl.Boolean,  # Valid for IRB Approach
     "parent_class_code": pl.String,  # For sub-classifications
+}
+
+
+# =============================================================================
+# MULTI-ENTITY REPORTING SCHEMAS (CRR Art. 6 / 11-18 levels of application)
+# =============================================================================
+# Two OPTIONAL registries enabling per-scope regulatory submissions (group
+# consolidated, sub-consolidated, solo/individual) from one institution. The
+# scope-resolver stage reads them to resolve a reporting entity's membership
+# subtree and to attribute booking books to entities. Absent → the pipeline
+# runs unscoped exactly as today (no scope filtering, no behaviour change).
+# See docs/plans/multi-entity-reporting.md.
+
+# Reporting-hierarchy registry: one row per legal / reporting entity, linked
+# into a single-rooted tree by ``parent_entity_reference``. Keyed by the unique
+# ``entity_reference`` that intragroup_entity_reference / guarantor_entity_reference
+# / BOOK_ENTITY_MAPPING_SCHEMA point at.
+REPORTING_ENTITY_SCHEMA: dict[str, ColumnSpec] = {
+    "entity_reference": ColumnSpec(pl.String),
+    "entity_name": ColumnSpec(pl.String, required=False),
+    # Legal Entity Identifier (ISO 17442); surfaces on filing metadata / display.
+    "lei": ColumnSpec(pl.String, required=False),
+    # Parent link forming the consolidation tree; null = group apex (the single
+    # root). The scope resolver derives an entity's subtree from these links.
+    "parent_entity_reference": ColumnSpec(pl.String, required=False),
+    # Entity classification; values mirror the InstitutionType enum
+    # (domain/enums.py) and drive output-floor applicability per scope.
+    "institution_type": ColumnSpec(pl.String, required=False),
+    # CRR Art. 113(6) core-UK-group permission perimeter — future use (the 0%
+    # intragroup treatment is a follow-up item, not wired this wave). Conservative
+    # default False (outside the permission perimeter).
+    "core_uk_group": ColumnSpec(pl.Boolean, default=False, required=False),
+}
+
+# Booking-book → reporting-entity map: attributes each booking book to the
+# entity that owns it, so exposure rows carrying a ``book_code`` can be filtered
+# to a reporting scope's membership set. Both columns required.
+BOOK_ENTITY_MAPPING_SCHEMA: dict[str, ColumnSpec] = {
+    "book_code": ColumnSpec(pl.String),
+    "reporting_entity_reference": ColumnSpec(pl.String),
 }
 
 
@@ -1249,6 +1332,18 @@ NETTING_SET_SCHEMA: dict[str, ColumnSpec] = {
     # single-trade netting sets carved out for specific WWR. Null on regular
     # netting sets; set to 1.0 by the gate on the synthetic NS row.
     "wwr_lgd_override": ColumnSpec(pl.Float64, default=None, required=False),
+    # Booking-unit code, joined to BOOK_ENTITY_MAPPING_SCHEMA by the scope
+    # resolver to attribute the netting set to a reporting entity (CRR Art. 6 /
+    # 11-18). Mirrors the facility/loan/contingent book_code (default "",
+    # nullable). Scope filtering is at netting-set grain; surviving netting sets
+    # then semi-join their trades.
+    "book_code": ColumnSpec(pl.String, default="", required=False),
+    # CRR Art. 6 / 11-18: non-null tags the netting set as an intragroup claim on
+    # the named reporting entity (an ``entity_reference`` in
+    # REPORTING_ENTITY_SCHEMA). The scope resolver eliminates such netting sets
+    # on a consolidated / sub-consolidated run and keeps them on an individual
+    # run. Null = external counterparty (never fabricated).
+    "intragroup_entity_reference": ColumnSpec(pl.String, required=False),
 }
 
 #: Margin-agreement-level (CSA) input for SA-CCR. Separate from
@@ -1419,6 +1514,15 @@ SFT_TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # modelled LGD => the row falls to SA / FIRB, bit-identical to today.
     # (CRR Art. 143 / Art. 169-171: own-estimate LGD under A-IRB.)
     "ccr_modelled_lgd": ColumnSpec(pl.Float64, required=False),
+    # Booking-unit code, joined to BOOK_ENTITY_MAPPING_SCHEMA by the scope
+    # resolver to attribute the SFT to a reporting entity (CRR Art. 6 / 11-18).
+    # Mirrors the facility/loan/contingent book_code (default "", nullable).
+    "book_code": ColumnSpec(pl.String, default="", required=False),
+    # CRR Art. 6 / 11-18: non-null tags the SFT as an intragroup claim on the
+    # named reporting entity (an ``entity_reference`` in REPORTING_ENTITY_SCHEMA).
+    # The scope resolver eliminates such rows on a consolidated / sub-consolidated
+    # run and keeps them on an individual run. Null = external counterparty.
+    "intragroup_entity_reference": ColumnSpec(pl.String, required=False),
 }
 
 #: Netting-set-keyed collateral received against an SFT, feeding the

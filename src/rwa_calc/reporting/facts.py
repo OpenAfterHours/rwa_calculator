@@ -71,6 +71,7 @@ References:
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -126,9 +127,12 @@ class FilingMetadata:
 
     ``entity_identifier`` (e.g. an LEI) is firm configuration the caller
     supplies — never a rulepack value; the rulepack carries regulatory
-    parameters, not a filer's own identity. ``generator_version`` defaults to
-    the installed ``rwa_calc`` package version so a downstream vendor tool can
-    tell which release produced the feed.
+    parameters, not a filer's own identity. ``entity_name`` and
+    ``consolidation_basis`` are the multi-entity submission's display name and
+    reporting basis (individual / sub_consolidated / consolidated), likewise
+    caller-supplied. ``generator_version`` defaults to the installed
+    ``rwa_calc`` package version so a downstream vendor tool can tell which
+    release produced the feed.
     """
 
     reporting_date: date
@@ -136,21 +140,46 @@ class FilingMetadata:
     run_id: str
     entity_identifier: str | None = None
     generator_version: str = _GENERATOR_VERSION
+    consolidation_basis: str | None = None
+    entity_name: str | None = None
 
     def as_sheet_fields(self) -> dict[str, str]:
-        """Ordered ``{label: value}`` pairs for the workbook metadata sheet."""
-        return {
+        """Ordered ``{label: value}`` pairs for the workbook metadata sheet.
+
+        ``Entity name`` / ``Consolidation basis`` are emitted only when set, so
+        an un-scoped run's metadata sheet is unchanged from before multi-entity
+        reporting existed.
+        """
+        fields = {
             "Reporting date": self.reporting_date.isoformat(),
             "Framework": self.framework,
             "Entity identifier": self.entity_identifier or "",
-            "Run ID": self.run_id,
-            "Generator version": self.generator_version,
         }
+        if self.entity_name is not None:
+            fields["Entity name"] = self.entity_name
+        if self.consolidation_basis is not None:
+            fields["Consolidation basis"] = self.consolidation_basis
+        fields["Run ID"] = self.run_id
+        fields["Generator version"] = self.generator_version
+        return fields
 
     def stamped_filename(self, prefix: str, suffix: str) -> str:
-        """``{prefix}_{framework}_{reporting_date}.{suffix}`` — a filing-identifiable
-        download name (see ``api/rest.py``'s ``/export/{fmt}`` endpoint)."""
-        return f"{prefix}_{self.framework}_{self.reporting_date.isoformat()}.{suffix}"
+        """``{prefix}_{framework}_{reporting_date}[_{entity}_{basis}].{suffix}`` —
+        a filing-identifiable download name (see ``api/rest.py``'s
+        ``/export/{fmt}`` endpoint).
+
+        The optional ``_<entity_identifier>_<basis>`` scope tokens are appended
+        (filesystem-safe, lowercase) only when set, so an un-scoped run keeps
+        exactly the ``{prefix}_{framework}_{reporting_date}.{suffix}`` name.
+        """
+        base = f"{prefix}_{self.framework}_{self.reporting_date.isoformat()}"
+        # Filter on the SLUG, not the raw value: an all-unsafe token (e.g. "***")
+        # is truthy but slugs to "", which would otherwise emit a dangling "_".
+        tokens = [
+            s for t in (self.entity_identifier, self.consolidation_basis) if t and (s := _slug(t))
+        ]
+        scope = f"_{'_'.join(tokens)}" if tokens else ""
+        return f"{base}{scope}.{suffix}"
 
 
 # =============================================================================
@@ -273,15 +302,32 @@ def _text_part(frame: pl.DataFrame, text_refs: list[str]) -> pl.DataFrame:
 
 
 def _stamp_metadata(frame: pl.DataFrame, metadata: FilingMetadata) -> pl.DataFrame:
-    """Stamp reporting_date / entity_identifier / run_id / generator_version.
+    """Stamp reporting_date / entity_identifier / entity_name /
+    consolidation_basis / run_id / generator_version.
 
     ``framework`` is already a per-row column (each cell carries the framework
     of the bundle it came from), so ``metadata.framework`` is not re-stamped
-    as a second column — the two are expected to agree for one run.
+    as a second column — the two are expected to agree for one run. The scope
+    columns ``entity_name`` / ``consolidation_basis`` are stamped as null when
+    unset, matching ``entity_identifier``'s existing null-when-None treatment.
     """
     return frame.with_columns(
         pl.lit(metadata.reporting_date).alias("reporting_date"),
         pl.lit(metadata.entity_identifier, dtype=pl.String).alias("entity_identifier"),
+        pl.lit(metadata.entity_name, dtype=pl.String).alias("entity_name"),
+        pl.lit(metadata.consolidation_basis, dtype=pl.String).alias("consolidation_basis"),
         pl.lit(metadata.run_id).alias("run_id"),
         pl.lit(metadata.generator_version).alias("generator_version"),
     )
+
+
+# Filesystem-safe scope tokens: lowercase, alphanumerics / ``_`` / ``-`` kept,
+# any other run of characters collapsed to a single ``-`` (leading/trailing
+# ``-`` stripped). Keeps the already-safe basis strings ("sub_consolidated")
+# intact while making a free-form entity identifier safe for a download name.
+_UNSAFE_FILENAME_CHARS = re.compile(r"[^a-z0-9_-]+")
+
+
+def _slug(value: str) -> str:
+    """Lowercase, filesystem-safe form of *value* for a stamped download name."""
+    return _UNSAFE_FILENAME_CHARS.sub("-", value.strip().lower()).strip("-")

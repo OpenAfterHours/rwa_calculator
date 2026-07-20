@@ -80,10 +80,13 @@ def run(
 
     # Splitter accumulates errors into the CRM bucket so existing error
     # reporting continues to capture them; skip duplicates already
-    # accounted for upstream by the CRM stage (frozen-dataclass equality).
+    # accounted for upstream by the CRM stage (frozen-dataclass equality,
+    # via set membership: the CRM channel can carry thousands of per-row
+    # warnings, and a list scan here is quadratic in that count).
     # Unified error channel: NEW splitter errors (RE*) reach the result
     # verbatim — original code/severity/category preserved, never PIPELINE_*.
-    new_errors = [error for error in result.crm_errors if error not in crm_adjusted.crm_errors]
+    prior_errors = set(crm_adjusted.crm_errors)
+    new_errors = [error for error in result.crm_errors if error not in prior_errors]
     ctx = append_stage_errors(ctx, *new_errors)
 
     # Opt-in audit cache: per-parent secured/residual split reconciliation.

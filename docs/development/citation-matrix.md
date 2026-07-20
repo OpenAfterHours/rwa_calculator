@@ -800,9 +800,9 @@ Last generated: 2026-07-20.
 
 ### CRR Art. 199 — Additional eligibility for collateral under the IRB Approach
 
-??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:893"
+??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:890"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:893:1518"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:890:1515"
     ```
 
 
@@ -816,9 +816,9 @@ Last generated: 2026-07-20.
 
 ### CRR Art. 211 — Requirements for treating lease exposures as collateralised
 
-??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:894"
+??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:891"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:893:1518"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:890:1515"
     ```
 
 
@@ -1571,17 +1571,17 @@ Last generated: 2026-07-20.
 
 ### PS1/26 Art. 199 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:895"
+??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:892"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:893:1518"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:890:1515"
     ```
 
 
 ### PS1/26 Art. 211 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:896"
+??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:893"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:893:1518"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:890:1515"
     ```
 
 

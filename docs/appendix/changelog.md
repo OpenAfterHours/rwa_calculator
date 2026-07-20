@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - (Next release changes will go here)
 
+### Fixed
+- **The "Real-estate split" stage no longer stalls for minutes on portfolios with unattested equity collateral — the error-channel dedup is linear again, and CRM018 is one rolled-up warning instead of one per row.** The P1.271 listing gate (v0.3.14) conservatively rules equity collateral with unknown index membership / listing ineligible, and emitted a CRM018 warning per gated row — 13k+ warnings on a 100k-exposure book when the attestation columns are unpopulated. The re_split stage adapter dedups splitter errors against the CRM channel with a list-membership scan that is O(N×M) in the two lists, which the flood turned quadratic: ~11s of a ~20s pipeline run at 100k scale, surfacing in the rwa-ui stepper as the "Real-estate split" step hanging (reported in the field as c.40s → 5min+, run abandoned). Fixed at both ends: the dedup builds a set of the prior CRM errors once (frozen-dataclass equality preserved via hashing — identical semantics, linear cost), and `_record_non_main_index_equity_ineligible` rolls CRM018 up to a single count-carrying warning per run, following the splitter's RE002–RE004 per-cause idiom. Measured at 100k (CRR): re_splitter 11,080ms → 254ms, total run 19.9s → 8.1s, error channel 13,361 → 4 entries. The gate itself (value zeroing + eligibility clearing) is untouched — RWA outputs are identical; only warning cardinality and wall time change. Ref: CRR/PS1-26 Art. 197(1)(f)/198(1)(a).
+
 ---
 
 ## [0.3.15] - 2026-07-20

@@ -766,39 +766,36 @@ def _record_non_main_index_equity_ineligible(
     collateral: pl.LazyFrame,
     errors: list[CalculationError],
 ) -> None:
-    """Append one CRM018 warning per non-main-index equity collateral row ruled
-    ineligible by the CRR/PS1-26 Art. 197(1)(f)/198(1)(a) listing gate.
+    """Append ONE rolled-up CRM018 warning counting the equity collateral rows
+    ruled ineligible by the CRR/PS1-26 Art. 197(1)(f)/198(1)(a) listing gate.
 
     The gate itself (value zeroing + is_eligible_financial_collateral clearing) is
     applied in ``HaircutCalculator.apply_haircuts``; this re-derives the SAME
     shared predicate on the post-haircut frame purely to emit the data-quality
-    warning. Targeted collect of the gated rows only — the accepted emission idiom
-    (P1.264); the collateral table is a small dimension frame. Reusing the one
+    warning. Rolled up to a per-cause count (the splitter's RE002-RE004 idiom):
+    portfolios with unattested index/listing flags gate thousands of rows, and
+    per-row emission floods the error channel — 13k+ warnings at 100k-exposure
+    scale made the re_split stage's error dedup quadratic. Reusing the one
     predicate keeps the warning from drifting from the zeroed number.
     """
     names = collateral.collect_schema().names()
     gate = non_main_index_equity_ineligible_expr(names)
-    select_cols: list[pl.Expr] = [gate.alias("_gated")]
-    select_cols.extend(
-        pl.col(c) for c in ("collateral_reference", "beneficiary_reference") if c in names
-    )
-    gated = collateral.filter(gate).select(select_cols).collect()
-    for row in gated.iter_rows(named=True):
-        coll_ref = row.get("collateral_reference")
-        ben_ref = row.get("beneficiary_reference")
-        errors.append(
-            crm_warning(
-                ERROR_NON_MAIN_INDEX_EQUITY_INELIGIBLE,
-                f"Equity collateral '{coll_ref}' securing exposure '{ben_ref}' is "
-                f"neither included in a main index (Art. 197(1)(f)) nor attested "
-                f"listed on a recognised exchange (Art. 198(1)(a); is_main_index and "
-                f"is_listed are both False/unset), so it is ineligible financial "
-                f"collateral; its value is zeroed and it is excluded from credit "
-                f"risk mitigation.",
-                exposure_reference=ben_ref,
-                regulatory_reference="CRR/PS1-26 Art. 197(1)(f)/198(1)(a)",
-            )
+    count_df = collateral.select(gate.cast(pl.UInt32).sum().alias("gated")).collect()
+    count = int(count_df.item() or 0) if count_df.height > 0 else 0
+    if count <= 0:
+        return
+    errors.append(
+        crm_warning(
+            ERROR_NON_MAIN_INDEX_EQUITY_INELIGIBLE,
+            f"{count} equity collateral row(s) are neither included in a main "
+            f"index (Art. 197(1)(f)) nor attested listed on a recognised "
+            f"exchange (Art. 198(1)(a); is_main_index and is_listed both "
+            f"False/unset), so they are ineligible financial collateral; their "
+            f"values are zeroed and they are excluded from credit risk "
+            f"mitigation.",
+            regulatory_reference="CRR/PS1-26 Art. 197(1)(f)/198(1)(a)",
         )
+    )
 
 
 def _record_credit_linked_note_not_own_issued(

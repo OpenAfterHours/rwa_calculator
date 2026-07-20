@@ -12,7 +12,7 @@ Regenerate after annotation changes:
 uv run python scripts/generate_citation_matrix.py
 ```
 
-Last generated: 2026-07-19.
+Last generated: 2026-07-20.
 
 ## CRR (Capital Requirements Regulation)
 
@@ -51,14 +51,14 @@ Last generated: 2026-07-19.
 
 ### CRR Art. 112 — Exposure classes
 
-??? quote "`_add_exposure_class_applied` — src/rwa_calc/engine/aggregator/aggregator.py:421"
+??? quote "`_add_exposure_class_applied` — src/rwa_calc/engine/aggregator/aggregator.py:441"
     ```python
-    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:421:476"
+    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:441:496"
     ```
 
-??? quote "`_add_reporting_projection` — src/rwa_calc/engine/aggregator/aggregator.py:569"
+??? quote "`_add_reporting_projection` — src/rwa_calc/engine/aggregator/aggregator.py:589"
     ```python
-    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:568:653"
+    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:588:673"
     ```
 
 ??? quote "`apply_risk_weights` — src/rwa_calc/engine/sa/risk_weights.py:327"
@@ -224,9 +224,9 @@ Last generated: 2026-07-19.
 
 ### CRR Art. 123 — Retail exposures
 
-??? quote "`_add_exposure_class_applied` — src/rwa_calc/engine/aggregator/aggregator.py:422"
+??? quote "`_add_exposure_class_applied` — src/rwa_calc/engine/aggregator/aggregator.py:442"
     ```python
-    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:421:476"
+    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:441:496"
     ```
 
 ??? quote "`build_entity_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:302"
@@ -1006,19 +1006,19 @@ Last generated: 2026-07-19.
 
 ### CRR Art. 235 — Calculating risk-weighted exposure amounts under the Standardised Approach
 
-??? quote "`_add_post_crm_reporting_class` — src/rwa_calc/engine/aggregator/aggregator.py:479"
+??? quote "`_add_post_crm_reporting_class` — src/rwa_calc/engine/aggregator/aggregator.py:499"
     ```python
-    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:479:510"
+    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:499:530"
     ```
 
-??? quote "`_add_post_crm_reporting_approach` — src/rwa_calc/engine/aggregator/aggregator.py:513"
+??? quote "`_add_post_crm_reporting_approach` — src/rwa_calc/engine/aggregator/aggregator.py:533"
     ```python
-    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:513:538"
+    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:533:558"
     ```
 
-??? quote "`_add_reporting_projection` — src/rwa_calc/engine/aggregator/aggregator.py:568"
+??? quote "`_add_reporting_projection` — src/rwa_calc/engine/aggregator/aggregator.py:588"
     ```python
-    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:568:653"
+    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:588:673"
     ```
 
 ??? quote "`build_domestic_cgcb_guarantor_expr` — src/rwa_calc/engine/eu_sovereign.py:83"
@@ -1248,9 +1248,9 @@ Last generated: 2026-07-19.
     --8<-- "src/rwa_calc/engine/aggregator/_floor.py:108:346"
     ```
 
-??? quote "`aggregate` — src/rwa_calc/engine/aggregator/aggregator.py:76"
+??? quote "`aggregate` — src/rwa_calc/engine/aggregator/aggregator.py:84"
     ```python
-    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:76:413"
+    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:84:433"
     ```
 
 

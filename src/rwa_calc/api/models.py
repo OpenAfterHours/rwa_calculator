@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import (
         CapitalImpactBundle,
         ComparisonBundle,
+        OutputFloorSummary,
         ReconciliationBundle,
     )
 
@@ -195,6 +196,10 @@ class CalculationResponse:
         summary_by_class_method_path: Path to class-by-method summary parquet (or None)
         errors: List of errors/warnings encountered
         performance: Performance metrics for the run
+        output_floor_summary: Portfolio-level output floor summary (Basel 3.1
+            only; None under CRR or when the floor did not run). Carried
+            through from the run's ``AggregatedResultBundle`` so reporting
+            callers (Pillar 3 OV1/CMS1 floor rows) never have to re-derive it.
     """
 
     success: bool
@@ -207,6 +212,7 @@ class CalculationResponse:
     summary_by_class_method_path: Path | None = None
     errors: list[APIError] = field(default_factory=list)
     performance: PerformanceMetrics | None = None
+    output_floor_summary: OutputFloorSummary | None = None
 
     def scan_results(self) -> pl.LazyFrame:
         """Lazy-scan the results parquet file."""

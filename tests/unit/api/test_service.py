@@ -144,6 +144,52 @@ class TestCreditRiskCalcCalculate:
             assert response.reporting_date == date(2024, 12, 31)
 
 
+class TestCreditRiskCalcOutputFloorSummary:
+    """End-to-end: CalculationResponse.output_floor_summary is the REAL run's
+    own output-floor summary, not just a type-level pass-through.
+
+    A real, unmocked pipeline run must actually populate this — the aggregator
+    computes ``OutputFloorSummary`` only when the ``output_floor`` pack Feature
+    is on (Basel 3.1) and the entity is in floor scope; ResultFormatter must
+    carry it onto the response unchanged.
+    """
+
+    def test_basel_3_1_run_populates_output_floor_summary(self, tmp_path: Path) -> None:
+        from tests.fixtures.api_validation.build_mandatory_only import write_mandatory_minimum
+
+        from rwa_calc.contracts.bundles import OutputFloorSummary
+
+        write_mandatory_minimum(tmp_path)
+        response = CreditRiskCalc(
+            data_path=tmp_path,
+            framework="BASEL_3_1",
+            reporting_date=date(2027, 1, 1),
+            permission_mode="standardised",
+            data_format="parquet",
+            cache_dir=tmp_path / "cache",
+        ).calculate()
+
+        assert response.success is True
+        assert isinstance(response.output_floor_summary, OutputFloorSummary)
+
+    def test_crr_run_leaves_output_floor_summary_none(self, tmp_path: Path) -> None:
+        """CRR has no output floor (Art. 92 para 2A is a Basel 3.1 concept)."""
+        from tests.fixtures.api_validation.build_mandatory_only import write_mandatory_minimum
+
+        write_mandatory_minimum(tmp_path)
+        response = CreditRiskCalc(
+            data_path=tmp_path,
+            framework="CRR",
+            reporting_date=date(2025, 1, 1),
+            permission_mode="standardised",
+            data_format="parquet",
+            cache_dir=tmp_path / "cache",
+        ).calculate()
+
+        assert response.success is True
+        assert response.output_floor_summary is None
+
+
 class TestCreditRiskCalcCreateConfig:
     """Tests for CreditRiskCalc._create_config method."""
 

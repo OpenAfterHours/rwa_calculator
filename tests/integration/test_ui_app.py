@@ -20,17 +20,21 @@ from __future__ import annotations
 import re
 import time
 from datetime import date
+from decimal import Decimal
 from html import unescape
 from pathlib import Path
 
+import polars as pl
 import pytest
 from fastapi.testclient import TestClient
 
 from rwa_calc.api import run_index
-from rwa_calc.api.rest import get_run
+from rwa_calc.api.models import CalculationResponse, SummaryStatistics
+from rwa_calc.api.rest import get_run, register_run_with_id
 from rwa_calc.ui.app.calculator_state import STATE_DIR_ENV_VAR
 from rwa_calc.ui.app.main import create_app
 from tests.fixtures.api_validation.build_mandatory_only import write_mandatory_minimum
+from tests.fixtures.recon_ledger import with_reporting_ledger
 
 
 @pytest.fixture(autouse=True)
@@ -308,6 +312,199 @@ def test_template_viewer_unknown_run_is_not_found(client: TestClient) -> None:
 
     # Assert
     assert resp.status_code == 404
+
+
+# =============================================================================
+# Templates page — prior_run_id (CR8 comparative period)
+# =============================================================================
+
+
+def _seed_irb_run(
+    run_id: str,
+    reporting_date: date,
+    *,
+    firb_rwa: float,
+    airb_rwa: float,
+    results_dir: Path,
+    framework: str = "CRR",
+) -> None:
+    """Register a synthetic IRB-only run so CR8's opening/closing sum has data.
+
+    Bypasses the pipeline: a hand-written results parquet plus a directly
+    constructed CalculationResponse, registered straight into the shared REST
+    run registry the UI reads through ``get_run`` / ``get_template_bundles``
+    (mirrors the twin helper in test_rest_api.py). ``with_reporting_ledger``
+    seals the frame to the shape the other Pillar 3 templates (OV1 etc.)
+    require, matching the production aggregator-exit contract.
+    """
+    results_dir.mkdir(parents=True, exist_ok=True)
+    results_path = results_dir / "results.parquet"
+    with_reporting_ledger(
+        pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP-FIRB", "EXP-AIRB"],
+                "approach_applied": ["foundation_irb", "advanced_irb"],
+                "ead_final": [1_000_000.0, 1_000_000.0],
+                "rwa_final": [firb_rwa, airb_rwa],
+            }
+        )
+    ).collect().write_parquet(results_path)
+    response = CalculationResponse(
+        success=True,
+        framework=framework,
+        reporting_date=reporting_date,
+        summary=SummaryStatistics(
+            total_ead=Decimal("2000000"),
+            total_rwa=Decimal(str(firb_rwa + airb_rwa)),
+            exposure_count=2,
+            average_risk_weight=Decimal("0.5"),
+        ),
+        results_path=results_path,
+    )
+    register_run_with_id(run_id, response)
+
+
+def _cr8_opening_cell(html: str) -> str:
+    """Strip-tag text of the CR8 row-1 / col-a cell from a rendered templates page."""
+    match = re.search(
+        r'data-template="cr8"\s+data-sheet=""\s+data-row="1"\s+data-col="a">(.*?)</td>',
+        html,
+        re.S,
+    )
+    assert match is not None, "CR8 row 1 / col a is not on the rendered page"
+    return re.sub(r"<[^>]+>", "", match.group(1)).strip()
+
+
+def test_templates_page_prior_run_id_populates_cr8_opening_cell(
+    client: TestClient, tmp_path: Path
+) -> None:
+    # Arrange — prior period IRB RWA sums to 1,000,000.
+    _seed_irb_run(
+        "ui-prior-cr8",
+        date(2024, 12, 31),
+        firb_rwa=600_000.0,
+        airb_rwa=400_000.0,
+        results_dir=tmp_path / "prior",
+    )
+    _seed_irb_run(
+        "ui-current-cr8",
+        date(2025, 1, 1),
+        firb_rwa=720_000.0,
+        airb_rwa=430_000.0,
+        results_dir=tmp_path / "current",
+    )
+
+    # Act
+    resp = client.get(
+        "/results/ui-current-cr8/templates",
+        params={"template": "cr8", "prior_run_id": "ui-prior-cr8"},
+    )
+
+    # Assert
+    assert resp.status_code == 200
+    assert _cr8_opening_cell(resp.text) == "1,000,000"
+
+
+def test_templates_page_without_prior_run_id_cr8_opening_cell_is_null(
+    client: TestClient, tmp_path: Path
+) -> None:
+    # Arrange
+    _seed_irb_run(
+        "ui-current-cr8-solo",
+        date(2025, 1, 1),
+        firb_rwa=720_000.0,
+        airb_rwa=430_000.0,
+        results_dir=tmp_path / "solo",
+    )
+
+    # Act — no prior_run_id at all
+    resp = client.get("/results/ui-current-cr8-solo/templates", params={"template": "cr8"})
+
+    # Assert — unchanged behaviour: CR8's opening row stays null.
+    assert resp.status_code == 200
+    assert _cr8_opening_cell(resp.text) == "—"
+
+
+def test_templates_page_cache_key_separates_prior_run_id(
+    client: TestClient, tmp_path: Path
+) -> None:
+    """A bundle generated WITH a prior period must not be served for a request
+    without one, and vice versa — the bundle cache is keyed on both ids."""
+    # Arrange
+    _seed_irb_run(
+        "ui-prior-cache",
+        date(2024, 12, 31),
+        firb_rwa=600_000.0,
+        airb_rwa=400_000.0,
+        results_dir=tmp_path / "prior_cache",
+    )
+    _seed_irb_run(
+        "ui-current-cache",
+        date(2025, 1, 1),
+        firb_rwa=720_000.0,
+        airb_rwa=430_000.0,
+        results_dir=tmp_path / "current_cache",
+    )
+
+    # Act — request WITHOUT a prior period first, so a run_id-only cache key
+    # would poison the second (with-prior) request with the null bundle.
+    without_prior = client.get("/results/ui-current-cache/templates", params={"template": "cr8"})
+    with_prior = client.get(
+        "/results/ui-current-cache/templates",
+        params={"template": "cr8", "prior_run_id": "ui-prior-cache"},
+    )
+
+    # Assert — each request gets its own correctly-generated bundle.
+    assert _cr8_opening_cell(without_prior.text) == "—"
+    assert _cr8_opening_cell(with_prior.text) == "1,000,000"
+
+
+def test_templates_page_unknown_prior_run_id_is_404(client: TestClient, tmp_path: Path) -> None:
+    # Arrange
+    _seed_irb_run(
+        "ui-current-404",
+        date(2025, 1, 1),
+        firb_rwa=1.0,
+        airb_rwa=1.0,
+        results_dir=tmp_path / "ui404",
+    )
+
+    # Act
+    resp = client.get(
+        "/results/ui-current-404/templates", params={"prior_run_id": "does-not-exist"}
+    )
+
+    # Assert
+    assert resp.status_code == 404
+
+
+def test_templates_page_prior_run_id_mismatched_framework_is_422(
+    client: TestClient, tmp_path: Path
+) -> None:
+    # Arrange — the prior run targets a different framework than the current run.
+    _seed_irb_run(
+        "ui-prior-fw",
+        date(2024, 1, 1),
+        firb_rwa=1.0,
+        airb_rwa=1.0,
+        results_dir=tmp_path / "ui_prior_fw",
+        framework="BASEL_3_1",
+    )
+    _seed_irb_run(
+        "ui-current-fw",
+        date(2025, 1, 1),
+        firb_rwa=1.0,
+        airb_rwa=1.0,
+        results_dir=tmp_path / "ui_current_fw",
+        framework="CRR",
+    )
+
+    # Act
+    resp = client.get("/results/ui-current-fw/templates", params={"prior_run_id": "ui-prior-fw"})
+
+    # Assert
+    assert resp.status_code == 422
+    assert "framework" in resp.json()["detail"]
 
 
 def test_results_page_offers_download_buttons(client: TestClient, data_dir: str) -> None:

@@ -81,6 +81,7 @@ from rwa_calc.reporting.kernel import (
 )
 from rwa_calc.reporting.kernel import (
     column_name_map,
+    write_metadata_sheet,
     write_template_sheet,
 )
 from rwa_calc.reporting.kernel import (
@@ -97,6 +98,7 @@ if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import OutputFloorSummary
     from rwa_calc.contracts.config import OutputFloorConfig
     from rwa_calc.contracts.results import ExportResult
+    from rwa_calc.reporting.facts import FilingMetadata
 
 logger = logging.getLogger(__name__)
 
@@ -214,14 +216,23 @@ class COREPGenerator:
         *,
         output_floor_summary: OutputFloorSummary | None = None,
         output_floor_config: OutputFloorConfig | None = None,
+        previous_period_results: pl.LazyFrame | None = None,
     ) -> COREPTemplateBundle:
-        """Generate all COREP templates from a calculation results source."""
+        """Generate all COREP templates from a calculation results source.
+
+        When ``previous_period_results`` (a prior-run results LazyFrame of the
+        same sealed shape as the current results) is supplied, the C 08.04
+        RWEA flow statement gains an opening balance (row 0010) and a signed
+        residual (row 0080); otherwise C 08.04 rows 0010-0080 stay null
+        (unchanged behaviour).
+        """
         results_lf = response.scan_results()
         return self.generate_from_lazyframe(
             results_lf,
             framework=response.framework,
             output_floor_summary=output_floor_summary,
             output_floor_config=output_floor_config,
+            previous_period_results=previous_period_results,
         )
 
     def generate_from_lazyframe(
@@ -231,6 +242,7 @@ class COREPGenerator:
         framework: str = "CRR",
         output_floor_summary: OutputFloorSummary | None = None,
         output_floor_config: OutputFloorConfig | None = None,
+        previous_period_results: pl.LazyFrame | None = None,
     ) -> COREPTemplateBundle:
         """Generate all COREP templates from a results LazyFrame.
 
@@ -247,6 +259,10 @@ class COREPGenerator:
                 basis conditionality (Art. 92 para 2A). When provided,
                 gates floor indicator rows and materiality columns on
                 entity-type applicability and reporting basis.
+            previous_period_results: Optional prior-period results LazyFrame
+                (same sealed shape as ``results``) used to populate the
+                C 08.04 opening balance (row 0010) and signed residual
+                (row 0080). When ``None`` C 08.04 rows 0010-0080 stay null.
         """
         errors: list[str] = []
         cols = _available_columns(results)
@@ -268,7 +284,9 @@ class COREPGenerator:
         c08_01 = self._generate_all_c08_01(results, cols, framework, errors)
         c08_02 = self._generate_all_c08_02(results, cols, framework, errors)
         c08_03 = self._generate_all_c08_03(results, cols, framework, errors)
-        c08_04 = self._generate_all_c08_04(results, cols, framework, errors)
+        c08_04 = self._generate_all_c08_04(
+            results, cols, framework, errors, previous_period_results
+        )
         c08_05 = self._generate_all_c08_05(results, cols, framework, errors)
         c08_06 = generate_c08_06(results, cols, framework, errors)
 
@@ -348,6 +366,8 @@ class COREPGenerator:
         self,
         bundle: COREPTemplateBundle,
         output_path: Path,
+        *,
+        metadata: FilingMetadata | None = None,
     ) -> ExportResult:
         """Write COREP templates to a multi-sheet Excel workbook.
 
@@ -355,6 +375,11 @@ class COREPGenerator:
         - "C 07.00 - Corporate", "C 07.00 - Institution", etc.
         - "C 08.01 - Corporate", etc.
         - "C 08.02 - Corporate", etc.
+
+        When *metadata* is supplied, an additional "metadata" sheet carries
+        the run's filing context (reporting date, framework, entity
+        identifier, run id, generator version) — see
+        ``reporting/facts.py::FilingMetadata``.
         """
         from rwa_calc.contracts.results import ExportResult
 
@@ -372,6 +397,8 @@ class COREPGenerator:
         workbook = xw.Workbook(str(output_path))
         try:
             total_rows += self._export_all_template_sheets(workbook, bundle)
+            if metadata is not None:
+                write_metadata_sheet(workbook, metadata.as_sheet_fields())
         finally:
             workbook.close()
 
@@ -761,13 +788,16 @@ class COREPGenerator:
         cols: set[str],
         framework: str,
         errors: list[str],
+        prior_results: pl.LazyFrame | None = None,
     ) -> dict[str, pl.DataFrame]:
         """Generate the per-class C 08.04 RWEA flow templates.
 
         Dispatch-router entry (Phase 7 S8): declarative in
-        ``corep/c08.py::generate_c08_04`` (only the closing row populates).
+        ``corep/c08.py::generate_c08_04``. The closing row (0090) always
+        populates; the opening (0010) and Other (0080) rows populate only
+        when ``prior_results`` (a prior-period frame) is supplied.
         """
-        return generate_c08_04(results, cols, framework, errors)
+        return generate_c08_04(results, cols, framework, errors, prior_results)
 
     def _generate_all_c08_05(
         self,

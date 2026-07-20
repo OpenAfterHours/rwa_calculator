@@ -132,7 +132,10 @@ class LedgerShimCorepGenerator:
         from rwa_calc.reporting.corep.generator import COREPGenerator
 
         class _Shim(COREPGenerator):
-            # Mirrors the parent signature exactly.
+            # Mirrors the parent signature exactly. The prior-period frame is
+            # sealed too: C 08.04 keys its opening RWEA on the sealed
+            # reporting_class_origin / reporting_approach_origin columns, so a
+            # synthetic prior frame must carry them exactly like the current one.
             def generate_from_lazyframe(
                 self,
                 results,
@@ -140,12 +143,19 @@ class LedgerShimCorepGenerator:
                 framework="CRR",
                 output_floor_summary=None,
                 output_floor_config=None,
+                previous_period_results=None,
             ):
+                prior = (
+                    with_reporting_ledger(previous_period_results)
+                    if previous_period_results is not None
+                    else None
+                )
                 return super().generate_from_lazyframe(
                     with_reporting_ledger(results),
                     framework=framework,
                     output_floor_summary=output_floor_summary,
                     output_floor_config=output_floor_config,
+                    previous_period_results=prior,
                 )
 
         return _Shim()

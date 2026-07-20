@@ -84,6 +84,9 @@ def mock_result_with_floor() -> AggregatedResultBundle:
                 "total_ead": [3_000_000.0],
                 "total_rwa": [1_300_000.0],
                 "exposure_count": [2],
+                "total_expected_loss": [0.0],
+                "total_el_shortfall": [0.0],
+                "total_el_excess": [0.0],
             }
         ),
         errors=[],
@@ -110,6 +113,9 @@ def mock_result_no_floor() -> AggregatedResultBundle:
                 "total_ead": [1_000_000.0],
                 "total_rwa": [500_000.0],
                 "exposure_count": [1],
+                "total_expected_loss": [0.0],
+                "total_el_shortfall": [0.0],
+                "total_el_excess": [0.0],
             }
         ),
         errors=[],

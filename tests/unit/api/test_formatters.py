@@ -19,7 +19,7 @@ from tests.fixtures.resolved_bundle import make_aggregated_bundle
 from rwa_calc.api.formatters import ResultFormatter
 from rwa_calc.api.models import CalculationResponse
 from rwa_calc.api.results_cache import ResultsCache
-from rwa_calc.contracts.bundles import AggregatedResultBundle
+from rwa_calc.contracts.bundles import AggregatedResultBundle, OutputFloorSummary
 from rwa_calc.contracts.errors import CalculationError
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
 
@@ -67,7 +67,9 @@ def sample_result_bundle() -> AggregatedResultBundle:
         {
             "exposure_class": ["corporate", "retail"],
             "total_ead": [1750000.0, 500000.0],
+            "exposure_count": [2, 1],
             "total_rwa": [1375000.0, 375000.0],
+            "avg_risk_weight": [0.785714, 0.75],
         }
     )
 
@@ -213,6 +215,67 @@ class TestResultFormatterFormatResponse:
         assert response.performance.exposure_count == 3
         assert response.performance.duration_seconds >= 0
 
+    def test_threads_output_floor_summary_from_bundle(
+        self,
+        cache: ResultsCache,
+    ) -> None:
+        """CalculationResponse.output_floor_summary is the bundle's own summary.
+
+        Downstream Pillar 3 export paths (OV1/CMS1 floor rows) read this off
+        the response — a run's own data, not a caller input — so it must
+        survive the AggregatedResultBundle -> CalculationResponse conversion.
+        """
+        floor_summary = OutputFloorSummary(
+            u_trea=900_000.0,
+            s_trea=1_000_000.0,
+            floor_pct=0.725,
+            floor_threshold=725_000.0,
+            shortfall=0.0,
+            portfolio_floor_binding=False,
+            floored_modelled_rwa=900_000.0,
+        )
+        bundle = make_aggregated_bundle(
+            results=pl.LazyFrame(
+                {
+                    "exposure_reference": ["EXP001"],
+                    "ead_final": [1_000_000.0],
+                    "rwa_final": [900_000.0],
+                }
+            ),
+            output_floor_summary=floor_summary,
+            errors=[],
+        )
+        formatter = ResultFormatter()
+
+        response = formatter.format_response(
+            bundle=bundle,
+            cache=cache,
+            framework="BASEL_3_1",
+            reporting_date=date(2027, 1, 1),
+            started_at=datetime.now(),
+        )
+
+        assert response.output_floor_summary is floor_summary
+
+    def test_output_floor_summary_defaults_to_none(
+        self,
+        sample_result_bundle: AggregatedResultBundle,
+        cache: ResultsCache,
+    ) -> None:
+        """A bundle with no floor summary (CRR, or the floor did not run) leaves
+        the response's output_floor_summary None — unchanged existing behaviour."""
+        formatter = ResultFormatter()
+
+        response = formatter.format_response(
+            bundle=sample_result_bundle,
+            cache=cache,
+            framework="CRR",
+            reporting_date=date(2024, 12, 31),
+            started_at=datetime.now(),
+        )
+
+        assert response.output_floor_summary is None
+
     def test_writes_summary_by_class_parquet(
         self,
         sample_result_bundle: AggregatedResultBundle,
@@ -255,7 +318,9 @@ class TestResultFormatterFormatResponse:
                     "exposure_class": ["corporate"],
                     "method": ["AIRB"],
                     "total_ead": [1_000_000.0],
+                    "exposure_count": [1],
                     "total_rwa": [500_000.0],
+                    "avg_risk_weight": [0.5],
                 }
             ),
             errors=[],

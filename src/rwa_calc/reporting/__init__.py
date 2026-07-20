@@ -15,10 +15,22 @@ from __future__ import annotations
 
 from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBundle
 from rwa_calc.reporting.pillar3.generator import Pillar3Generator, Pillar3TemplateBundle
+from rwa_calc.reporting.tieouts import (
+    NON_COMPARABLE_PAIRS,
+    TIE_OUTS,
+    NonComparablePair,
+    TieOut,
+    check_cross_template_consistency,
+)
 
 __all__ = [
+    "NON_COMPARABLE_PAIRS",
+    "TIE_OUTS",
     "COREPGenerator",
     "COREPTemplateBundle",
+    "NonComparablePair",
     "Pillar3Generator",
     "Pillar3TemplateBundle",
+    "TieOut",
+    "check_cross_template_consistency",
 ]

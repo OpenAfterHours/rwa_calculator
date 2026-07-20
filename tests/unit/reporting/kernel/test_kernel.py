@@ -17,7 +17,12 @@ References:
 
 from __future__ import annotations
 
+import importlib.util
+import sys
+from pathlib import Path
+
 import polars as pl
+import pytest
 
 from rwa_calc.reporting.kernel import (
     available_columns,
@@ -29,6 +34,11 @@ from rwa_calc.reporting.kernel import (
     pick,
     safe_sum,
     safe_sum_or_none,
+    write_metadata_sheet,
+)
+
+XLSXWRITER_AVAILABLE = bool(sys.modules.get("xlsxwriter")) or (
+    importlib.util.find_spec("xlsxwriter") is not None
 )
 
 # ---------------------------------------------------------------------------
@@ -360,3 +370,77 @@ class TestNullRow:
             "0010": None,
             "0020": None,
         }
+
+
+# ---------------------------------------------------------------------------
+# excel.py — write_metadata_sheet
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(not XLSXWRITER_AVAILABLE, reason="xlsxwriter not installed")
+class TestWriteMetadataSheet:
+    """Tests for the filing-metadata workbook sheet (FilingMetadata.as_sheet_fields())."""
+
+    def test_writes_field_value_rows(self, tmp_path: Path) -> None:
+        # Arrange
+        import xlsxwriter as xw
+
+        path = tmp_path / "meta.xlsx"
+        workbook = xw.Workbook(str(path))
+
+        # Act
+        write_metadata_sheet(
+            workbook, {"Reporting date": "2026-07-19", "Framework": "CRR", "Run ID": "run-1"}
+        )
+        workbook.close()
+
+        # Assert
+        df = pl.read_excel(path, sheet_name="metadata")
+        assert df.columns == ["Field", "Value"]
+        assert df.to_dicts() == [
+            {"Field": "Reporting date", "Value": "2026-07-19"},
+            {"Field": "Framework", "Value": "CRR"},
+            {"Field": "Run ID", "Value": "run-1"},
+        ]
+
+    def test_default_sheet_name_is_metadata(self, tmp_path: Path) -> None:
+        # Arrange
+        import xlsxwriter as xw
+
+        path = tmp_path / "meta.xlsx"
+        workbook = xw.Workbook(str(path))
+
+        # Act
+        write_metadata_sheet(workbook, {"Framework": "CRR"})
+        workbook.close()
+
+        # Assert
+        import fastexcel
+
+        assert fastexcel.read_excel(str(path)).sheet_names == ["metadata"]
+
+    def test_leading_equals_value_is_a_literal_string_not_a_formula(self, tmp_path: Path) -> None:
+        """entity_identifier is unsanitised REST input (e.g. ?entity_identifier=...);
+        a leading '=' (or '+'/'-'/'@') must never become a live formula cell in
+        this regulatory workbook."""
+        # Arrange
+        import zipfile
+
+        import xlsxwriter as xw
+
+        path = tmp_path / "meta.xlsx"
+        workbook = xw.Workbook(str(path))
+
+        # Act
+        write_metadata_sheet(workbook, {"Entity identifier": "=1+2"})
+        workbook.close()
+
+        # Assert — the underlying sheet XML carries no <f> formula element; the
+        # cell is a plain inline/shared string, so Excel never evaluates it.
+        with zipfile.ZipFile(path) as zf:
+            sheet_xml = zf.read("xl/worksheets/sheet1.xml").decode()
+        assert "<f>" not in sheet_xml
+
+        # And the value round-trips as the literal text, not a computed "3".
+        df = pl.read_excel(path, sheet_name="metadata")
+        assert df.filter(pl.col("Field") == "Entity identifier")["Value"].to_list() == ["=1+2"]

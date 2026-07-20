@@ -56,6 +56,62 @@ def _irb_flow_with_slotting() -> pl.LazyFrame:
     )
 
 
+def _irb_flow_prior() -> pl.LazyFrame:
+    """Prior-period snapshot, same classes as ``_irb_flow_results`` (lower RWEA).
+
+    Corporate prior RWEA: 2500 + 1500 = 4000. Corporate-SME: 700.
+    Institution: 500. Retail mortgage: 1000. A slotting row is included to
+    prove it is excluded from the opening exactly as it is from the closing.
+    """
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["P1", "P2", "P3", "P4", "P5", "P6"],
+            "approach_applied": [
+                "foundation_irb",
+                "foundation_irb",
+                "foundation_irb",
+                "foundation_irb",
+                "advanced_irb",
+                "slotting",
+            ],
+            "exposure_class": [
+                "corporate",
+                "corporate",
+                "corporate_sme",
+                "institution",
+                "retail_mortgage",
+                "corporate",
+            ],
+            "ead_final": [5000.0, 2800.0, 1100.0, 1800.0, 3500.0, 2000.0],
+            "rwa_final": [2500.0, 1500.0, 700.0, 500.0, 1000.0, 9999.0],
+            "counterparty_reference": ["CP_A", "CP_B", "CP_C", "CP_D", "CP_E", "CP_F"],
+        }
+    )
+
+
+def _irb_flow_prior_corporate_only() -> pl.LazyFrame:
+    """Prior period carrying only a corporate class (institution etc. absent).
+
+    Used to prove a class present ONLY in the current period gets a null
+    opening while its whole closing lands in the Other residual (opening
+    coerces to zero WITH a prior period — the CR8 convention)."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["P1", "P2"],
+            "approach_applied": ["foundation_irb", "foundation_irb"],
+            "exposure_class": ["corporate", "corporate"],
+            "ead_final": [5000.0, 2800.0],
+            "rwa_final": [2500.0, 1500.0],
+            "counterparty_reference": ["CP_A", "CP_B"],
+        }
+    )
+
+
+def _flow_value(df: pl.DataFrame, row_ref: str) -> float | None:
+    """Read the single col-0010 value of a C 08.04 row."""
+    return df.filter(pl.col("row_ref") == row_ref)["0010"][0]
+
+
 class TestC0804TemplateDefinitions:
     """Test C 08.04 / OF 08.04 template structure definitions."""
 
@@ -398,3 +454,132 @@ class TestC0804EdgeCases:
         bundle = gen.generate_from_lazyframe(_irb_flow_results())
         assert hasattr(bundle, "c08_04")
         assert isinstance(bundle.c08_04, dict)
+
+
+class TestC0804PriorPeriod:
+    """C 08.04 with a prior period: opening, signed residual, and footing."""
+
+    def test_opening_equals_prior_closing_corporate(self) -> None:
+        """Row 0010 (opening) == prior period's corporate closing = 2500 + 1500."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_flow_results(), previous_period_results=_irb_flow_prior()
+        )
+        corp = bundle.c08_04["corporate"]
+        assert _flow_value(corp, "0010") == pytest.approx(4000.0, rel=1e-4)
+
+    def test_opening_equals_prior_closing_institution(self) -> None:
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_flow_results(), previous_period_results=_irb_flow_prior()
+        )
+        inst = bundle.c08_04["institution"]
+        assert _flow_value(inst, "0010") == pytest.approx(500.0, rel=1e-4)
+
+    def test_closing_unchanged_with_prior(self) -> None:
+        """Row 0090 (closing) is the current period's sum regardless of prior."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_flow_results(), previous_period_results=_irb_flow_prior()
+        )
+        corp = bundle.c08_04["corporate"]
+        assert _flow_value(corp, "0090") == pytest.approx(4550.0, rel=1e-4)
+
+    def test_other_residual_is_signed_delta(self) -> None:
+        """Row 0080 (Other) == closing − opening = 4550 − 4000 = +550."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_flow_results(), previous_period_results=_irb_flow_prior()
+        )
+        corp = bundle.c08_04["corporate"]
+        assert _flow_value(corp, "0080") == pytest.approx(550.0, rel=1e-4)
+
+    def test_statement_foots_for_every_class(self) -> None:
+        """closing == opening + Σ(flow rows 0020-0080), nulls treated as zero."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_flow_results(), previous_period_results=_irb_flow_prior()
+        )
+        for ec, df in bundle.c08_04.items():
+            opening = _flow_value(df, "0010") or 0.0
+            flows = sum(
+                _flow_value(df, ref) or 0.0
+                for ref in ("0020", "0030", "0040", "0050", "0060", "0070", "0080")
+            )
+            closing = _flow_value(df, "0090") or 0.0
+            assert opening + flows == pytest.approx(closing, rel=1e-4), f"{ec} does not foot"
+
+    def test_driver_rows_stay_null_with_prior(self) -> None:
+        """The 6 attributable driver rows (0020-0070) remain null even with a prior."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_flow_results(), previous_period_results=_irb_flow_prior()
+        )
+        corp = bundle.c08_04["corporate"]
+        for ref in ("0020", "0030", "0040", "0050", "0060", "0070"):
+            assert _flow_value(corp, ref) is None, f"Row {ref} should stay null"
+
+    def test_slotting_excluded_from_opening(self) -> None:
+        """The prior slotting row (rwa 9999) must not inflate the corporate opening."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_flow_results(), previous_period_results=_irb_flow_prior()
+        )
+        corp = bundle.c08_04["corporate"]
+        # Opening excludes slotting: 2500 + 1500 only, not + 9999.
+        assert _flow_value(corp, "0010") == pytest.approx(4000.0, rel=1e-4)
+
+    def test_current_only_class_gets_null_opening(self) -> None:
+        """A class absent from the prior period gets a null opening and its whole
+        closing as the Other residual (opening coerces to zero WITH a prior)."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_flow_results(), previous_period_results=_irb_flow_prior_corporate_only()
+        )
+        inst = bundle.c08_04["institution"]
+        assert _flow_value(inst, "0010") is None
+        assert _flow_value(inst, "0080") == pytest.approx(600.0, rel=1e-4)
+        # Still foots: 0 opening + 600 Other == 600 closing.
+        assert _flow_value(inst, "0090") == pytest.approx(600.0, rel=1e-4)
+
+    def test_decrease_control_negative_residual(self) -> None:
+        """Snapshots swapped (RWEA falls): Other is negative = 4000 − 4550 = −550."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_flow_prior(), previous_period_results=_irb_flow_results()
+        )
+        corp = bundle.c08_04["corporate"]
+        assert _flow_value(corp, "0080") == pytest.approx(-550.0, rel=1e-4)
+
+    def test_b31_prior_period_foots(self) -> None:
+        """The opening/residual wiring is framework-independent (OF 08.04)."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_flow_results(),
+            framework="BASEL_3_1",
+            previous_period_results=_irb_flow_prior(),
+        )
+        corp = bundle.c08_04["corporate"]
+        assert _flow_value(corp, "0010") == pytest.approx(4000.0, rel=1e-4)
+        assert _flow_value(corp, "0080") == pytest.approx(550.0, rel=1e-4)
+
+
+class TestC0804NoPriorUnchanged:
+    """Number-neutrality: passing no prior (or None) is byte-identical to today."""
+
+    def test_none_prior_matches_default(self) -> None:
+        """Explicit previous_period_results=None equals the no-arg output frame."""
+        gen = LedgerShimCorepGenerator()
+        default = gen.generate_from_lazyframe(_irb_flow_results())
+        gen2 = LedgerShimCorepGenerator()
+        with_none = gen2.generate_from_lazyframe(_irb_flow_results(), previous_period_results=None)
+        for ec, df in default.c08_04.items():
+            assert df.equals(with_none.c08_04[ec]), f"{ec} differs when prior=None"
+
+    def test_no_prior_opening_and_other_null(self) -> None:
+        """Without a prior period, opening (0010) and Other (0080) stay null."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_flow_results())
+        corp = bundle.c08_04["corporate"]
+        assert _flow_value(corp, "0010") is None
+        assert _flow_value(corp, "0080") is None

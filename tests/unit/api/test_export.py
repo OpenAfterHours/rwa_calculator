@@ -20,6 +20,7 @@ import sys
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import polars as pl
@@ -33,6 +34,7 @@ from rwa_calc.api.models import (
     SummaryStatistics,
 )
 from rwa_calc.api.results_cache import ResultsCache
+from rwa_calc.reporting.facts import FilingMetadata
 
 XLSXWRITER_AVAILABLE = bool(sys.modules.get("xlsxwriter")) or (
     importlib.util.find_spec("xlsxwriter") is not None
@@ -781,3 +783,292 @@ class TestExportToPillar3:
             pytest.raises(ModuleNotFoundError, match="xlsxwriter"),
         ):
             sample_response.to_pillar3(tmp_path / "pillar3.xlsx")
+
+
+# =============================================================================
+# Filing metadata — workbook sheet + cell-fact export
+# =============================================================================
+
+
+def _filing_metadata(**overrides: object) -> FilingMetadata:
+    fields: dict[str, Any] = {
+        "reporting_date": date(2024, 12, 31),
+        "framework": "CRR",
+        "run_id": "run-abc",
+        "entity_identifier": "LEI-999",
+    }
+    fields.update(overrides)
+    return FilingMetadata(**fields)
+
+
+class TestExportToCorepWithMetadata:
+    """export_to_corep(..., metadata=...) — the workbook metadata sheet hook."""
+
+    @pytest.mark.skipif(not XLSXWRITER_AVAILABLE, reason="xlsxwriter not installed")
+    def test_metadata_sheet_is_written_when_supplied(
+        self, sample_response: CalculationResponse, tmp_path: Path
+    ) -> None:
+        # Arrange
+        output_path = tmp_path / "corep.xlsx"
+
+        # Act
+        ResultExporter().export_to_corep(sample_response, output_path, metadata=_filing_metadata())
+
+        # Assert
+        md = pl.read_excel(output_path, sheet_name="metadata")
+        fields = dict(zip(md["Field"], md["Value"], strict=True))
+        assert fields["Reporting date"] == "2024-12-31"
+        assert fields["Entity identifier"] == "LEI-999"
+        assert fields["Run ID"] == "run-abc"
+
+    @pytest.mark.skipif(not XLSXWRITER_AVAILABLE, reason="xlsxwriter not installed")
+    def test_no_metadata_sheet_when_metadata_omitted(
+        self, sample_response: CalculationResponse, tmp_path: Path
+    ) -> None:
+        # Arrange
+        output_path = tmp_path / "corep.xlsx"
+
+        # Act — no metadata kwarg, matching existing callers unchanged.
+        ResultExporter().export_to_corep(sample_response, output_path)
+
+        # Assert
+        import fastexcel
+
+        sheets = fastexcel.read_excel(str(output_path)).sheet_names
+        assert "metadata" not in sheets
+
+
+class TestExportToPillar3WithMetadata:
+    """export_to_pillar3(..., metadata=...) — the workbook metadata sheet hook."""
+
+    @pytest.mark.skipif(not XLSXWRITER_AVAILABLE, reason="xlsxwriter not installed")
+    def test_metadata_sheet_is_written_when_supplied(
+        self, sample_response: CalculationResponse, tmp_path: Path
+    ) -> None:
+        # Arrange
+        output_path = tmp_path / "pillar3.xlsx"
+
+        # Act
+        ResultExporter().export_to_pillar3(
+            sample_response, output_path, metadata=_filing_metadata()
+        )
+
+        # Assert
+        import fastexcel
+
+        assert "metadata" in fastexcel.read_excel(str(output_path)).sheet_names
+
+
+class TestExportCorepFacts:
+    """Tests for ResultExporter.export_corep_facts (the keyed cell-fact feed)."""
+
+    def test_writes_parquet_by_default(
+        self, sample_response: CalculationResponse, tmp_path: Path
+    ) -> None:
+        # Arrange
+        output_path = tmp_path / "corep_facts.parquet"
+
+        # Act
+        result = ResultExporter().export_corep_facts(sample_response, output_path)
+
+        # Assert
+        assert result.format == "corep_facts_parquet"
+        assert output_path.exists()
+        assert result.row_count > 0
+        frame = pl.read_parquet(output_path)
+        assert frame.height == result.row_count
+        assert "template_id" in frame.columns
+        assert (frame["template_id"] == "c07_00").any()
+
+    def test_writes_ndjson(self, sample_response: CalculationResponse, tmp_path: Path) -> None:
+        # Arrange
+        output_path = tmp_path / "corep_facts.ndjson"
+
+        # Act
+        result = ResultExporter().export_corep_facts(sample_response, output_path, fmt="ndjson")
+
+        # Assert — infer_schema_length=None: sheet/value/text_value/
+        # entity_identifier are all sparse columns (e.g. "sheet" is null for
+        # single-frame templates, a string for per-class ones), so a small
+        # inference sample can type a column Null and then choke on a later
+        # non-null row.
+        assert result.format == "corep_facts_ndjson"
+        frame = pl.read_ndjson(output_path, infer_schema_length=None)
+        assert frame.height == result.row_count
+
+    def test_ndjson_null_cells_are_not_filled(
+        self, sample_response: CalculationResponse, tmp_path: Path
+    ) -> None:
+        # Arrange
+        output_path = tmp_path / "corep_facts.ndjson"
+
+        # Act
+        ResultExporter().export_corep_facts(sample_response, output_path, fmt="ndjson")
+
+        # Assert — same null-preservation guarantee as the parquet path; a
+        # fill_null regression on the ndjson writer must be caught here too.
+        frame = pl.read_ndjson(output_path, infer_schema_length=None)
+        assert frame["value"].null_count() > 0
+
+    def test_stamps_metadata_columns(
+        self, sample_response: CalculationResponse, tmp_path: Path
+    ) -> None:
+        # Arrange
+        output_path = tmp_path / "corep_facts.parquet"
+
+        # Act
+        ResultExporter().export_corep_facts(
+            sample_response, output_path, metadata=_filing_metadata()
+        )
+
+        # Assert
+        frame = pl.read_parquet(output_path)
+        assert (frame["entity_identifier"] == "LEI-999").all()
+        assert (frame["run_id"] == "run-abc").all()
+
+    def test_null_cells_are_not_filled(
+        self, sample_response: CalculationResponse, tmp_path: Path
+    ) -> None:
+        # Arrange
+        output_path = tmp_path / "corep_facts.parquet"
+
+        # Act
+        ResultExporter().export_corep_facts(sample_response, output_path)
+
+        # Assert — a real bundle carries genuine null cells (e.g. inapplicable
+        # memorandum rows); this must not have been coerced to 0.0.
+        frame = pl.read_parquet(output_path)
+        assert frame["value"].null_count() > 0
+
+
+class TestExportPillar3Facts:
+    """Tests for ResultExporter.export_pillar3_facts (the keyed cell-fact feed)."""
+
+    def test_writes_parquet_by_default(
+        self, sample_response: CalculationResponse, tmp_path: Path
+    ) -> None:
+        # Arrange
+        output_path = tmp_path / "pillar3_facts.parquet"
+
+        # Act
+        result = ResultExporter().export_pillar3_facts(sample_response, output_path)
+
+        # Assert
+        assert result.format == "pillar3_facts_parquet"
+        frame = pl.read_parquet(output_path)
+        assert frame.height == result.row_count
+        assert (frame["template_id"] == "ov1").any()
+
+    def test_writes_ndjson(self, sample_response: CalculationResponse, tmp_path: Path) -> None:
+        # Arrange
+        output_path = tmp_path / "pillar3_facts.ndjson"
+
+        # Act
+        result = ResultExporter().export_pillar3_facts(sample_response, output_path, fmt="ndjson")
+
+        # Assert — infer_schema_length=-1: the "sheet" column is sparse (null for
+        # single-frame templates, a string for per-class ones like CR7-A's
+        # "foundation_irb"/"advanced_irb" keys), so a small inference sample can
+        # type it Null and then choke on a later non-null row.
+        assert result.format == "pillar3_facts_ndjson"
+        frame = pl.read_ndjson(output_path, infer_schema_length=None)
+        assert frame.height == result.row_count
+
+
+class TestExportToPillar3WithPriorPeriodAndRatios:
+    """export_to_pillar3 / export_pillar3_facts thread previous_period_results,
+    capital_ratios and output_floor_summary straight through to the generator
+    (rather than through the ResultsSource-only ``generate`` shortcut, which
+    cannot carry capital_ratios/output_floor_summary at all)."""
+
+    def _cr8_opening(self, frame: pl.DataFrame) -> object:
+        row = frame.filter(
+            (pl.col("template_id") == "cr8")
+            & (pl.col("row_ref") == "1")
+            & (pl.col("col_ref") == "a")
+        )
+        assert row.height == 1
+        return row["value"][0]
+
+    def test_previous_period_results_populates_cr8_opening_row(
+        self, sample_response: CalculationResponse, tmp_path: Path
+    ) -> None:
+        # Arrange — sample_response's only IRB row is foundation_irb=375_000.0
+        # (its CR8 closing balance); the prior period sums to 300_000.0.
+        prior_lf = pl.LazyFrame(
+            {
+                "approach_applied": ["foundation_irb"],
+                "rwa_final": [300_000.0],
+            }
+        )
+        output_path = tmp_path / "pillar3_facts.parquet"
+
+        # Act
+        ResultExporter().export_pillar3_facts(
+            sample_response, output_path, previous_period_results=prior_lf
+        )
+
+        # Assert
+        frame = pl.read_parquet(output_path)
+        assert self._cr8_opening(frame) == pytest.approx(300_000.0)
+
+    def test_without_previous_period_results_cr8_opening_row_is_null(
+        self, sample_response: CalculationResponse, tmp_path: Path
+    ) -> None:
+        # Arrange / Act — no previous_period_results kwarg: unchanged behaviour.
+        output_path = tmp_path / "pillar3_facts.parquet"
+        ResultExporter().export_pillar3_facts(sample_response, output_path)
+
+        # Assert
+        frame = pl.read_parquet(output_path)
+        assert self._cr8_opening(frame) is None
+
+    @pytest.mark.skipif(not XLSXWRITER_AVAILABLE, reason="xlsxwriter not installed")
+    def test_capital_ratios_populate_ov1_pre_floor_rows(
+        self, minimal_response: CalculationResponse, tmp_path: Path
+    ) -> None:
+        # Arrange — rows 5a/5b/6a/6b/7a/7b (pre-floor capital ratios) are on the
+        # UKB variant of OV1 only; minimal_response is BASEL_3_1.
+        from rwa_calc.contracts.config import Pillar3CapitalRatioOverrides
+
+        ratios = Pillar3CapitalRatioOverrides(cet1_ratio_pre_floor=Decimal("0.135"))
+        output_path = tmp_path / "pillar3.xlsx"
+
+        # Act — export_to_pillar3 (the Excel path) with the override supplied.
+        ResultExporter().export_to_pillar3(minimal_response, output_path, capital_ratios=ratios)
+
+        # Assert — the OV1 pre-floor CET1 row (col "a" = "RWEAs (T)") is no
+        # longer null. The sheet carries readable column-name headers, not raw
+        # refs (see kernel.write_template_sheet).
+        df = pl.read_excel(output_path, sheet_name="UKB OV1")
+        assert df.filter(pl.col("Row code") == "5a")["RWEAs (T)"][0] is not None
+
+    @pytest.mark.skipif(not XLSXWRITER_AVAILABLE, reason="xlsxwriter not installed")
+    def test_output_floor_summary_populates_ov1_of_adj_row(
+        self, minimal_response: CalculationResponse, tmp_path: Path
+    ) -> None:
+        # Arrange — row 27 ("of which OF-ADJ") reads output_floor_summary.of_adj
+        # via a SideContext binding; minimal_response is BASEL_3_1 (UKB OV1).
+        from rwa_calc.contracts.bundles import OutputFloorSummary
+
+        floor_summary = OutputFloorSummary(
+            u_trea=900_000.0,
+            s_trea=1_000_000.0,
+            floor_pct=0.725,
+            floor_threshold=725_000.0,
+            shortfall=0.0,
+            portfolio_floor_binding=False,
+            floored_modelled_rwa=900_000.0,
+            of_adj=12_345.0,
+        )
+        output_path = tmp_path / "pillar3.xlsx"
+
+        # Act
+        ResultExporter().export_to_pillar3(
+            minimal_response, output_path, output_floor_summary=floor_summary
+        )
+
+        # Assert
+        df = pl.read_excel(output_path, sheet_name="UKB OV1")
+        value = df.filter(pl.col("Row code") == "27")["RWEAs (T)"][0]
+        assert float(value) == pytest.approx(12_345.0)

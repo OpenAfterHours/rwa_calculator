@@ -41,11 +41,14 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from rwa_calc.api import run_index
+from rwa_calc.api.export import ResultExporter
 from rwa_calc.api.models import ValidationRequest
 from rwa_calc.api.reconciliation import loads_reconciliation_config
 from rwa_calc.api.service import CreditRiskCalc, get_supported_frameworks
 from rwa_calc.api.validation import DataPathValidator
+from rwa_calc.contracts.config import Pillar3CapitalRatioOverrides
 from rwa_calc.reporting import catalog, lineage
+from rwa_calc.reporting.facts import FilingMetadata
 
 if TYPE_CHECKING:
     from rwa_calc.api.models import (
@@ -106,11 +109,14 @@ class TemplateBundles:
     pillar3: Pillar3TemplateBundle
 
 
-# Generated template bundles, keyed by run_id. Generating both bundles walks the
-# whole results frame, so the viewer caches per run rather than regenerating on
-# every page view / template switch. Same in-process, non-persistent trade-off as
-# ``_RUNS`` — an entry is only ever a pure function of that run's results.
-_TEMPLATE_BUNDLES: dict[str, TemplateBundles] = {}
+# Generated template bundles, keyed by (run_id, prior_run_id). Generating both
+# bundles walks the whole results frame, so the viewer caches per run rather than
+# regenerating on every page view / template switch. The prior_run_id is part of
+# the key — a bundle generated WITH a comparative prior period (CR8's flow rows
+# are non-null) must never be served for a request without one, and vice versa.
+# Same in-process, non-persistent trade-off as ``_RUNS`` — an entry is only ever a
+# pure function of that (run, prior_run) pair's results.
+_TEMPLATE_BUNDLES: dict[tuple[str, str | None], TemplateBundles] = {}
 
 _MAX_PAGE = 10_000
 
@@ -499,44 +505,91 @@ def reconcile_export(fmt: Literal["csv", "excel"], recon_id: str) -> FileRespons
 
 
 @router.get("/export/{fmt}", responses=_RESP_404)
-def export(
-    fmt: Literal["parquet", "csv", "excel", "corep", "pillar3"], run_id: str
+def export(  # noqa: PLR0913 - the pillar3 comparative-period + capital-ratio inputs
+    fmt: Literal[
+        "parquet",
+        "csv",
+        "excel",
+        "corep",
+        "pillar3",
+        "corep_facts_parquet",
+        "corep_facts_ndjson",
+        "pillar3_facts_parquet",
+        "pillar3_facts_ndjson",
+    ],
+    run_id: str,
+    entity_identifier: str | None = None,
+    prior_run_id: str | None = None,
+    cet1_ratio_pre_floor: Decimal | None = None,
+    cet1_ratio_pre_floor_transitional: Decimal | None = None,
+    tier1_ratio_pre_floor: Decimal | None = None,
+    tier1_ratio_pre_floor_transitional: Decimal | None = None,
+    total_ratio_pre_floor: Decimal | None = None,
+    total_ratio_pre_floor_transitional: Decimal | None = None,
 ) -> FileResponse:
     """Export a completed run and stream it back for download.
 
-    All on-disk paths are built from a fresh temp dir plus fixed, literal
-    filenames — the user-supplied run_id never reaches the filesystem path.
+    All on-disk paths are built from a fresh temp dir plus a filename stamped
+    from server-validated run data (framework, reporting date) — the
+    user-supplied run_id itself never reaches the filesystem path. The
+    ``*_facts_*`` formats stream the flat, keyed cell-fact feed
+    (``reporting/facts.py``) instead of a merged-header workbook.
+    ``entity_identifier`` (e.g. an LEI) is optional, caller-supplied firm-config
+    metadata stamped onto the fact rows and the workbook metadata sheet — NOT
+    onto the filename (it is free-form user input; unlike framework/
+    reporting_date it is never sanitised for filesystem/path use).
+
+    The Pillar 3 and COREP formats (``pillar3``, ``pillar3_facts_parquet``,
+    ``pillar3_facts_ndjson``, ``corep``, ``corep_facts_parquet``,
+    ``corep_facts_ndjson``) additionally accept:
+
+    - ``prior_run_id``: an already-registered run to use as the comparative
+      prior period for Pillar 3 CR8 / COREP C 08.04's RWEA flow rows.
+      Selection is explicit only — an unknown id is a 404, and a run that
+      cannot serve as this run's prior period (different framework, or a
+      reporting_date not strictly earlier than this run's) is a 422.
+      Omitted, CR8 / C 08.04's opening/flow rows stay null (unchanged
+      behaviour); there is no auto-selected fallback.
+    - The six ``*_ratio_pre_floor*`` query params (Pillar 3 formats only):
+      optional capital-ratio overrides for the CMS1/OV1 pre-floor disclosure
+      rows (see ``Pillar3CapitalRatioOverrides``). Any field left unset
+      leaves the corresponding row null, as today.
+
+    This run's own output-floor summary is threaded through automatically for
+    the Pillar 3 formats — it is the run's own data, not a caller input.
     """
     response = _require_run(run_id)
     tmp = Path(tempfile.mkdtemp(prefix="rwa_export_"))
+    metadata = FilingMetadata(
+        reporting_date=response.reporting_date,
+        framework=response.framework,
+        run_id=run_id,
+        entity_identifier=entity_identifier,
+    )
+    exporter = ResultExporter()
+    # metadata.stamped_filename() intentionally uses only framework/
+    # reporting_date (server-validated, path-safe) — entity_identifier is
+    # unsanitised caller input and must never be folded into a filesystem path.
 
-    if fmt == "excel":
-        out = tmp / "rwa_results.xlsx"
-        response.to_excel(out)
-        return _file(out)
-    if fmt == "corep":
-        out = tmp / "rwa_corep.xlsx"
-        response.to_corep(out)
-        return _file(out)
-    if fmt == "pillar3":
-        out = tmp / "rwa_pillar3.xlsx"
-        response.to_pillar3(out)
-        return _file(out)
+    previous_period_results, capital_ratios = _resolve_export_inputs(
+        fmt,
+        response,
+        prior_run_id,
+        cet1_ratio_pre_floor=cet1_ratio_pre_floor,
+        cet1_ratio_pre_floor_transitional=cet1_ratio_pre_floor_transitional,
+        tier1_ratio_pre_floor=tier1_ratio_pre_floor,
+        tier1_ratio_pre_floor_transitional=tier1_ratio_pre_floor_transitional,
+        total_ratio_pre_floor=total_ratio_pre_floor,
+        total_ratio_pre_floor_transitional=total_ratio_pre_floor_transitional,
+    )
 
-    # parquet / csv export to a directory, then zip for a single download.
-    out_dir = tmp / ("csv" if fmt == "csv" else "parquet")
-    out_dir.mkdir(parents=True, exist_ok=True)
-    if fmt == "csv":
-        response.to_csv(out_dir)
-        zip_path = tmp / "rwa_csv.zip"
-    else:
-        response.to_parquet(out_dir)
-        zip_path = tmp / "rwa_parquet.zip"
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for f in sorted(out_dir.rglob("*")):
-            if f.is_file():
-                zf.write(f, f.relative_to(out_dir))
-    return _file(zip_path)
+    if fmt in ("parquet", "csv", "excel"):
+        return _export_raw(fmt, response, tmp, metadata)
+    if fmt.startswith("corep"):
+        return _export_corep(fmt, response, tmp, metadata, exporter, previous_period_results)
+    return _export_pillar3(
+        fmt, response, tmp, metadata, exporter, previous_period_results, capital_ratios
+    )
 
 
 @router.get("/comparison/export/{fmt}", responses=_RESP_404)
@@ -610,29 +663,52 @@ def get_run(run_id: str) -> CalculationResponse | None:
     return _RUNS.get(run_id)
 
 
-def get_template_bundles(run_id: str) -> TemplateBundles | None:
+def get_template_bundles(run_id: str, *, prior_run_id: str | None = None) -> TemplateBundles | None:
     """The run's COREP + Pillar 3 bundles, generating them once and caching.
 
     Returns None when the run itself is unknown/expired. Shared by the REST
     template endpoints and the UI's template viewer so a run's templates are
-    generated at most once per process.
+    generated at most once per (run_id, prior_run_id) pair per process.
+
+    ``prior_run_id``, when supplied, must reference an already-registered run
+    usable as *run_id*'s comparative prior period — see ``_require_prior_run``
+    for the exact 404/422 contract (never a silent guess). Its results
+    populate the Pillar 3 CR8 / COREP C 08.04 RWEA flow rows; the run's own
+    ``output_floor_summary`` is always threaded through to Pillar 3 (it is the
+    run's own data, not a caller input).
     """
     response = _RUNS.get(run_id)
     if response is None:
         return None
-    cached = _TEMPLATE_BUNDLES.get(run_id)
+    cache_key = (run_id, prior_run_id)
+    cached = _TEMPLATE_BUNDLES.get(cache_key)
     if cached is not None:
         return cached
 
     from rwa_calc.reporting.corep.generator import COREPGenerator
     from rwa_calc.reporting.pillar3.generator import Pillar3Generator
 
-    logger.info("generating report templates run_id=%s", run_id)
-    bundles = TemplateBundles(
-        corep=COREPGenerator().generate(response),
-        pillar3=Pillar3Generator().generate(response),
+    previous_period_results = None
+    if prior_run_id is not None:
+        previous_period_results = _require_prior_run(prior_run_id, response).scan_results()
+
+    # Both ids are route-parameter strings (see _safe_log_token); prior_run_id's
+    # raw content is never interpolated at all — only whether one was supplied.
+    logger.info(
+        "generating report templates run_id=%s has_prior_period=%s",
+        _safe_log_token(run_id),
+        prior_run_id is not None,
     )
-    _TEMPLATE_BUNDLES[run_id] = bundles
+    bundles = TemplateBundles(
+        corep=COREPGenerator().generate(response, previous_period_results=previous_period_results),
+        pillar3=Pillar3Generator().generate_from_lazyframe(
+            response.scan_results(),
+            framework=response.framework,
+            output_floor_summary=response.output_floor_summary,
+            previous_period_results=previous_period_results,
+        ),
+    )
+    _TEMPLATE_BUNDLES[cache_key] = bundles
     return bundles
 
 
@@ -691,6 +767,18 @@ def get_recon_workspace(recon_id: str) -> ReconWorkspace | None:
 # =============================================================================
 
 
+def _safe_log_token(value: str) -> str:
+    """Strip CR/LF (and other control chars) so a caller-supplied id can't
+    forge log lines (CWE-117 log injection). Route-parameter strings (run_id,
+    prior_run_id, entity_identifier, ...) are tainted from a static-analysis
+    standpoint regardless of what they happen to contain at runtime — a
+    comment asserting "this one's always a UUID" doesn't clear the gate, so
+    every such value is sanitised before it reaches a log call, not just the
+    ones a human judges risky.
+    """
+    return "".join(ch for ch in value if ch.isprintable())
+
+
 def _run_calc(
     *,
     data_path: str,
@@ -719,6 +807,201 @@ def _require_run(run_id: str) -> CalculationResponse:
     if response is None:
         raise HTTPException(status_code=404, detail=f"unknown run_id: {run_id}")
     return response
+
+
+def _require_prior_run(prior_run_id: str, current: CalculationResponse) -> CalculationResponse:
+    """Look up *prior_run_id* and verify it can serve as *current*'s prior period.
+
+    Mirrors ``_require_run_serves_reconcile``'s explicit-instruction contract: an
+    unknown id is a 404 (via ``_require_run``); a run that cannot serve as the
+    comparative prior period — it failed, targets a different framework, or its
+    reporting_date is not strictly earlier than *current*'s — is a 422. Never a
+    silent guess at which run is "the" prior period.
+
+    What this does NOT check: portfolio/book identity. Two runs can pass every
+    check here while covering different books or data paths — same as
+    ``_require_run_serves_reconcile``, choosing a prior run over the same book
+    is the caller's responsibility, not something this function verifies.
+    """
+    prior = _require_run(prior_run_id)
+
+    def _reject(reason: str) -> HTTPException:
+        return HTTPException(
+            status_code=422,
+            detail=f"run {prior_run_id} not usable as the prior period: {reason}",
+        )
+
+    if not prior.success:
+        raise _reject("the referenced calculation failed")
+    if prior.framework != current.framework:
+        raise _reject(
+            f"framework {prior.framework!r} does not match the current run's {current.framework!r}"
+        )
+    if prior.reporting_date >= current.reporting_date:
+        raise _reject(
+            f"reporting_date {prior.reporting_date.isoformat()} is not strictly earlier "
+            f"than the current run's {current.reporting_date.isoformat()}"
+        )
+    if not Path(prior.results_path).exists():
+        raise _reject("its cached results are no longer available")
+    return prior
+
+
+def _capital_ratio_overrides(
+    *,
+    cet1_ratio_pre_floor: Decimal | None,
+    cet1_ratio_pre_floor_transitional: Decimal | None,
+    tier1_ratio_pre_floor: Decimal | None,
+    tier1_ratio_pre_floor_transitional: Decimal | None,
+    total_ratio_pre_floor: Decimal | None,
+    total_ratio_pre_floor_transitional: Decimal | None,
+) -> Pillar3CapitalRatioOverrides | None:
+    """Build Pillar 3 capital-ratio overrides from query params, or None if unset.
+
+    None (rather than an all-None overrides instance) when the caller supplied
+    nothing, so the generator's own "no overrides supplied" branch applies —
+    it is not this endpoint's job to decide the fallback.
+    """
+    fields = {
+        "cet1_ratio_pre_floor": cet1_ratio_pre_floor,
+        "cet1_ratio_pre_floor_transitional": cet1_ratio_pre_floor_transitional,
+        "tier1_ratio_pre_floor": tier1_ratio_pre_floor,
+        "tier1_ratio_pre_floor_transitional": tier1_ratio_pre_floor_transitional,
+        "total_ratio_pre_floor": total_ratio_pre_floor,
+        "total_ratio_pre_floor_transitional": total_ratio_pre_floor_transitional,
+    }
+    if all(value is None for value in fields.values()):
+        return None
+    return Pillar3CapitalRatioOverrides(**fields)
+
+
+def _resolve_export_inputs(  # noqa: PLR0913 - the six pass-through capital-ratio query params
+    fmt: str,
+    response: CalculationResponse,
+    prior_run_id: str | None,
+    *,
+    cet1_ratio_pre_floor: Decimal | None,
+    cet1_ratio_pre_floor_transitional: Decimal | None,
+    tier1_ratio_pre_floor: Decimal | None,
+    tier1_ratio_pre_floor_transitional: Decimal | None,
+    total_ratio_pre_floor: Decimal | None,
+    total_ratio_pre_floor_transitional: Decimal | None,
+) -> tuple[pl.LazyFrame | None, Pillar3CapitalRatioOverrides | None]:
+    """Resolve the comparative-period + capital-ratio inputs for one ``/export/{fmt}`` call.
+
+    Only the Pillar 3 / COREP format families consult ``prior_run_id`` (via
+    ``_require_prior_run`` — the same 404/422 contract either family gets);
+    only the Pillar 3 family consults the capital-ratio query params. Every
+    other format (parquet/csv/excel) resolves to ``(None, None)``.
+    """
+    is_pillar3 = fmt == "pillar3" or (fmt.startswith("pillar3") and "_facts_" in fmt)
+    is_corep = fmt == "corep" or (fmt.startswith("corep") and "_facts_" in fmt)
+    previous_period_results = None
+    if (is_pillar3 or is_corep) and prior_run_id is not None:
+        previous_period_results = _require_prior_run(prior_run_id, response).scan_results()
+    capital_ratios = None
+    if is_pillar3:
+        capital_ratios = _capital_ratio_overrides(
+            cet1_ratio_pre_floor=cet1_ratio_pre_floor,
+            cet1_ratio_pre_floor_transitional=cet1_ratio_pre_floor_transitional,
+            tier1_ratio_pre_floor=tier1_ratio_pre_floor,
+            tier1_ratio_pre_floor_transitional=tier1_ratio_pre_floor_transitional,
+            total_ratio_pre_floor=total_ratio_pre_floor,
+            total_ratio_pre_floor_transitional=total_ratio_pre_floor_transitional,
+        )
+    return previous_period_results, capital_ratios
+
+
+def _export_raw(
+    fmt: str, response: CalculationResponse, tmp: Path, metadata: FilingMetadata
+) -> FileResponse:
+    """The plain, non-regulatory-template export formats: excel / parquet / csv."""
+    if fmt == "excel":
+        out = tmp / metadata.stamped_filename("rwa_results", "xlsx")
+        response.to_excel(out)
+        return _file(out)
+
+    # parquet / csv export to a directory, then zip for a single download.
+    out_dir = tmp / ("csv" if fmt == "csv" else "parquet")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if fmt == "csv":
+        response.to_csv(out_dir)
+        zip_path = tmp / metadata.stamped_filename("rwa_csv", "zip")
+    else:
+        response.to_parquet(out_dir)
+        zip_path = tmp / metadata.stamped_filename("rwa_parquet", "zip")
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for f in sorted(out_dir.rglob("*")):
+            if f.is_file():
+                zf.write(f, f.relative_to(out_dir))
+    return _file(zip_path)
+
+
+def _export_corep(
+    fmt: str,
+    response: CalculationResponse,
+    tmp: Path,
+    metadata: FilingMetadata,
+    exporter: ResultExporter,
+    previous_period_results: pl.LazyFrame | None,
+) -> FileResponse:
+    """The COREP export formats: corep / corep_facts_parquet / corep_facts_ndjson."""
+    if fmt == "corep":
+        out = tmp / metadata.stamped_filename("rwa_corep", "xlsx")
+        exporter.export_to_corep(
+            response,
+            out,
+            metadata=metadata,
+            previous_period_results=previous_period_results,
+        )
+        return _file(out)
+
+    facts_fmt: Literal["parquet", "ndjson"] = "ndjson" if fmt.endswith("ndjson") else "parquet"
+    out = tmp / metadata.stamped_filename("rwa_corep_facts", facts_fmt)
+    exporter.export_corep_facts(
+        response,
+        out,
+        fmt=facts_fmt,
+        metadata=metadata,
+        previous_period_results=previous_period_results,
+    )
+    return _file(out)
+
+
+def _export_pillar3(
+    fmt: str,
+    response: CalculationResponse,
+    tmp: Path,
+    metadata: FilingMetadata,
+    exporter: ResultExporter,
+    previous_period_results: pl.LazyFrame | None,
+    capital_ratios: Pillar3CapitalRatioOverrides | None,
+) -> FileResponse:
+    """The Pillar 3 export formats: pillar3 / pillar3_facts_parquet / pillar3_facts_ndjson."""
+    if fmt == "pillar3":
+        out = tmp / metadata.stamped_filename("rwa_pillar3", "xlsx")
+        exporter.export_to_pillar3(
+            response,
+            out,
+            metadata=metadata,
+            previous_period_results=previous_period_results,
+            capital_ratios=capital_ratios,
+            output_floor_summary=response.output_floor_summary,
+        )
+        return _file(out)
+
+    facts_fmt: Literal["parquet", "ndjson"] = "ndjson" if fmt.endswith("ndjson") else "parquet"
+    out = tmp / metadata.stamped_filename("rwa_pillar3_facts", facts_fmt)
+    exporter.export_pillar3_facts(
+        response,
+        out,
+        fmt=facts_fmt,
+        metadata=metadata,
+        previous_period_results=previous_period_results,
+        capital_ratios=capital_ratios,
+        output_floor_summary=response.output_floor_summary,
+    )
+    return _file(out)
 
 
 def _require_template_bundles(run_id: str) -> TemplateBundles:

@@ -87,6 +87,7 @@ from rwa_calc.reporting.cellspec import (
     CellSpec,
     Count,
     Formula,
+    PriorPeriod,
     RowPredicate,
     SafeSum,
     SideContext,
@@ -116,7 +117,7 @@ from rwa_calc.reporting.corep.templates import (
     get_c08_columns,
     get_irb_row_sections,
 )
-from rwa_calc.reporting.kernel import col_sum, pick
+from rwa_calc.reporting.kernel import available_columns, col_sum, pick
 from rwa_calc.reporting.metadata import ReportingContext
 
 if TYPE_CHECKING:
@@ -170,6 +171,15 @@ def _observed_rate(cells: Mapping[str, float | None], _prior: bool) -> float | N
     if obligors <= 0:
         return 0.0
     return (cells["0030"] or 0.0) / obligors
+
+
+def _c08_04_other_flow(cells: Mapping[str, float | None], prior_available: bool) -> float | None:
+    """C 08.04 row 0080 (Other) = closing(0090) - opening(0010) with a prior
+    period, else null (the CR8 row-8 convention; a None side coerces to zero —
+    PS1/26 Annex XXII paragraph 11)."""
+    if not prior_available:
+        return None
+    return (cells["0090"] or 0.0) - (cells["0010"] or 0.0)
 
 
 # =============================================================================
@@ -975,8 +985,35 @@ def generate_c08_04(
     cols: set[str],
     framework: str,
     errors: list[str],
+    prior_results: pl.LazyFrame | None = None,
 ) -> dict[str, pl.DataFrame]:
-    """Execute C 08.04 per class sheet (only the closing-RWEA row 0090)."""
+    """Execute C 08.04 per class sheet — closing, opening, and residual flow.
+
+    Mirrors Pillar 3 CR8 (``pillar3/cr8.py``): row 0090 (closing) sums the
+    current period's RWEA; row 0010 (opening) sums the SAME population over
+    the prior-period frame (``prior_results``, filtered identically and keyed
+    per sheet) through the ``PriorPeriod`` binding; row 0080 (Other) carries
+    the signed residual ``closing - opening`` so the statement foots. The six
+    attributable driver rows (0020-0070) stay null — two point-in-time
+    snapshots cannot supply the exposure-level period-over-period lineage they
+    need. With NO prior period every row but the closing stays null (unchanged
+    behaviour; PS1/26 Annex XXII paragraph 11).
+
+    ``prior_results`` must be a prior run of the SAME sealed shape as
+    ``results`` (an aggregator-exit frame): ``rwa_col`` is resolved from the
+    CURRENT frame's columns and reused verbatim over the prior — safe only
+    under that same-shape precondition (a prior frame missing that column
+    yields a null opening, never a raise).
+
+    Prior-only-class limitation (recorded, deliberate — NOT a bug): the sheet
+    loop iterates the CURRENT period's classes only. A class that carried RWEA
+    last period but has zero exposures this period (fully run off) therefore
+    emits NO sheet, and its run-off leaves no trace in any flow statement. This
+    is inherent to the per-class-sheet pattern — every C 08.0x template behaves
+    this way. Unioning current+prior class keys to emit an opening-only run-off
+    sheet is the possible future extension if a supervisor ever requires the
+    run-off to be visible; it is intentionally NOT implemented here.
+    """
     ec_col = pick(cols, "reporting_class_origin")
     if ec_col is None:
         errors.append("C08.04: Missing required column (exposure_class)")
@@ -987,19 +1024,48 @@ def generate_c08_04(
     data_cols = set(irb_df.columns)
     # Deliberately two-wide (no rwa_post_factor) — the retired ladder.
     rwa_col = pick(data_cols, "rwa_final", "rwa")
+    prior_irb_df, prior_ec_col = _c08_04_prior(prior_results)
     column_refs = tuple(col.ref for col in get_c08_04_columns(framework))
     rows = tuple(C08_04_ROWS)
     cells: dict[tuple[str, str], CellSpec] = {}
     if rwa_col is not None:
-        cells[("0090", "0010")] = CellSpec(Sum(rwa_col))
+        cells[("0090", "0010")] = CellSpec(Sum(rwa_col))  # closing RWEA
+        cells[("0010", "0010")] = CellSpec(PriorPeriod(Sum(rwa_col)))  # opening RWEA
+        cells[("0080", "0010")] = CellSpec(
+            Formula(refs=("0090", "0010"), fn=_c08_04_other_flow)  # signed residual
+        )
     spec = TemplateSpec(
         name="c08_04", rows=rows, column_refs=column_refs, cells=cells, empty_cell="null"
     )
     result: dict[str, pl.DataFrame] = {}
     for ec in irb_df[ec_col].drop_nulls().unique().sort().to_list():
         class_df = irb_df.filter(pl.col(ec_col) == ec)
-        result[ec] = execute(spec, class_df)
+        ctx: ReportingContext | None = None
+        if prior_irb_df is not None and prior_ec_col is not None:
+            prior_class = prior_irb_df.filter(pl.col(prior_ec_col) == ec)
+            ctx = ReportingContext(previous_period_results=prior_class.lazy())
+        result[ec] = execute(spec, class_df, ctx)
     return result
+
+
+def _c08_04_prior(
+    prior_results: pl.LazyFrame | None,
+) -> tuple[pl.DataFrame | None, str | None]:
+    """Collect and IRB-filter the prior-period frame for the opening RWEA.
+
+    Returns ``(None, None)`` when no prior period is supplied, or when the
+    prior frame lacks the ``reporting_class_origin`` key the current sheets
+    are keyed on — the opening then stays null (graceful degradation, never a
+    raise). The prior frame is IRB non-slotting filtered exactly as the
+    current one, so its per-class RWEA sum is the like-for-like opening.
+    """
+    if prior_results is None:
+        return None, None
+    prior_cols = available_columns(prior_results)
+    prior_ec_col = pick(prior_cols, "reporting_class_origin")
+    if prior_ec_col is None:
+        return None, None
+    return _non_slotting(prior_results, prior_cols).collect(), prior_ec_col
 
 
 # =============================================================================

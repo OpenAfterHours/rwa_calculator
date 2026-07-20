@@ -86,6 +86,17 @@ SEALED_FRAME_FIELDS: Mapping[str, str | tuple[str, ...]] = {
     # Aggregator exit: the combined results frame is the reporting input
     # contract (Phase 7 consumes it as such).
     "AggregatedResultBundle.results": "aggregator_exit",
+    # Aggregator consumer-read frames: the three summaries plus the floor-impact
+    # and supporting-factor-impact views, each sealed at the aggregator producer
+    # against its own edge. Registered so the UI cards / results cache / analyses
+    # can never receive a reshaped or partially-built summary frame. The two
+    # impact frames are optional (None when the floor / supporting-factor path
+    # did not run), so __post_init__ skips them then.
+    "AggregatedResultBundle.summary_by_class": "summary_by_class",
+    "AggregatedResultBundle.summary_by_approach": "summary_by_approach",
+    "AggregatedResultBundle.summary_by_class_method": "summary_by_class_method",
+    "AggregatedResultBundle.floor_impact": "floor_impact",
+    "AggregatedResultBundle.supporting_factor_impact": "supporting_factor_impact",
 } | {
     f"RawDataBundle.{_field}": f"raw_{_field}"
     for _field in (

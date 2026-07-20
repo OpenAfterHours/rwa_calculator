@@ -22,7 +22,7 @@ import json
 import logging
 import warnings
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import polars as pl
 
@@ -34,7 +34,9 @@ if TYPE_CHECKING:
         ComparisonExportResponse,
         ReconciliationResponse,
     )
-    from rwa_calc.contracts.config import OutputFloorConfig
+    from rwa_calc.contracts.bundles import OutputFloorSummary
+    from rwa_calc.contracts.config import OutputFloorConfig, Pillar3CapitalRatioOverrides
+    from rwa_calc.reporting.facts import FilingMetadata
 
 logger = logging.getLogger(__name__)
 
@@ -248,6 +250,8 @@ class ResultExporter:
         output_path: Path,
         *,
         output_floor_config: OutputFloorConfig | None = None,
+        metadata: FilingMetadata | None = None,
+        previous_period_results: pl.LazyFrame | None = None,
     ) -> ExportResult:
         """
         Export results as COREP regulatory reporting templates.
@@ -266,6 +270,14 @@ class ResultExporter:
             output_floor_config: Optional floor config for reporting
                 basis conditionality (Art. 92 para 2A). Gates floor
                 indicators and materiality columns on entity type.
+            metadata: Optional filing metadata — stamped as a "metadata"
+                sheet in the workbook (``reporting/facts.py::FilingMetadata``).
+            previous_period_results: Optional prior-period results LazyFrame
+                (same sealed shape as the current results — a persisted
+                results parquet scan, never a hand-built frame), threaded
+                straight through to ``COREPGenerator.generate``. Populates
+                C 08.04's RWEA flow opening balance (row 0010) and signed
+                residual (row 0080); ``None`` (default) leaves those rows null.
 
         Returns:
             ExportResult with the written file path and row count
@@ -279,20 +291,116 @@ class ResultExporter:
         bundle = generator.generate(
             response,
             output_floor_config=output_floor_config,
+            previous_period_results=previous_period_results,
         )
-        return generator.export_to_excel(bundle, output_path)
+        return generator.export_to_excel(bundle, output_path, metadata=metadata)
 
     def export_to_pillar3(
         self,
         response: CalculationResponse,
         output_path: Path,
+        *,
+        metadata: FilingMetadata | None = None,
+        previous_period_results: pl.LazyFrame | None = None,
+        capital_ratios: Pillar3CapitalRatioOverrides | None = None,
+        output_floor_summary: OutputFloorSummary | None = None,
     ) -> ExportResult:
-        """Export results as Pillar III public disclosure templates."""
+        """Export results as Pillar III public disclosure templates.
+
+        ``metadata``, when supplied, is stamped as a "metadata" sheet in the
+        workbook (``reporting/facts.py::FilingMetadata``). ``previous_period_results``,
+        ``capital_ratios`` and ``output_floor_summary`` are threaded straight through
+        to ``Pillar3Generator.generate_from_lazyframe`` — they populate CR8's RWEA
+        flow rows and the CMS1/OV1 pre-floor capital-ratio rows; all three default to
+        ``None`` (unchanged behaviour) when the caller supplies nothing.
+        """
         from rwa_calc.reporting.pillar3.generator import Pillar3Generator
 
         generator = Pillar3Generator()
-        bundle = generator.generate(response)
-        return generator.export_to_excel(bundle, output_path)
+        bundle = generator.generate_from_lazyframe(
+            response.scan_results(),
+            framework=response.framework,
+            capital_ratios=capital_ratios,
+            output_floor_summary=output_floor_summary,
+            previous_period_results=previous_period_results,
+        )
+        return generator.export_to_excel(bundle, output_path, metadata=metadata)
+
+    # -- cell facts -----------------------------------------------------------
+
+    def export_corep_facts(
+        self,
+        response: CalculationResponse,
+        output_path: Path,
+        *,
+        fmt: Literal["parquet", "ndjson"] = "parquet",
+        output_floor_config: OutputFloorConfig | None = None,
+        metadata: FilingMetadata | None = None,
+        previous_period_results: pl.LazyFrame | None = None,
+    ) -> ExportResult:
+        """Export COREP as a flat, keyed cell-fact feed (parquet or ndjson).
+
+        One row per populated ``(template_id, sheet, row_ref, col_ref)`` cell
+        — the shape a vendor filing tool maps against, rather than a
+        merged-header spreadsheet. See ``reporting/facts.py`` for the fact
+        schema and null/sign conventions.
+
+        Args:
+            response: CalculationResponse with cached results
+            output_path: Path for the output file
+            fmt: "parquet" (default) or "ndjson"
+            output_floor_config: Optional floor config, as ``export_to_corep``
+            metadata: Optional filing metadata, stamped as constant columns
+            previous_period_results: Optional prior-period results LazyFrame,
+                as ``export_to_corep`` — populates C 08.04's opening/residual
+                RWEA-flow rows.
+
+        Returns:
+            ExportResult with the written file path and fact-row count
+        """
+        from rwa_calc.reporting.corep.generator import COREPGenerator
+        from rwa_calc.reporting.facts import build_fact_frame
+
+        generator = COREPGenerator()
+        bundle = generator.generate(
+            response,
+            output_floor_config=output_floor_config,
+            previous_period_results=previous_period_results,
+        )
+        frame = build_fact_frame(bundle, None, metadata=metadata)
+        return _write_fact_frame(frame, output_path, fmt, "corep_facts")
+
+    def export_pillar3_facts(
+        self,
+        response: CalculationResponse,
+        output_path: Path,
+        *,
+        fmt: Literal["parquet", "ndjson"] = "parquet",
+        metadata: FilingMetadata | None = None,
+        previous_period_results: pl.LazyFrame | None = None,
+        capital_ratios: Pillar3CapitalRatioOverrides | None = None,
+        output_floor_summary: OutputFloorSummary | None = None,
+    ) -> ExportResult:
+        """Export Pillar III as a flat, keyed cell-fact feed (parquet or ndjson).
+
+        See ``export_corep_facts`` for the fact shape; this is the same
+        traversal over the Pillar III bundle instead of COREP.
+        ``previous_period_results`` / ``capital_ratios`` / ``output_floor_summary``
+        are threaded through as in ``export_to_pillar3``.
+        """
+        from rwa_calc.reporting.facts import build_fact_frame
+        from rwa_calc.reporting.pillar3.generator import Pillar3Generator
+
+        generator = Pillar3Generator()
+        bundle = generator.generate_from_lazyframe(
+            response.scan_results(),
+            framework=response.framework,
+            capital_ratios=capital_ratios,
+            output_floor_summary=output_floor_summary,
+            previous_period_results=previous_period_results,
+        )
+        frame = build_fact_frame(None, bundle, metadata=metadata)
+        return _write_fact_frame(frame, output_path, fmt, "pillar3_facts")
 
     # -- reconciliation -----------------------------------------------------
 
@@ -450,6 +558,28 @@ class ResultExporter:
         finally:
             workbook.close()
         return ExportResult(format="excel", files=[output_path], row_count=total_rows)
+
+
+# =============================================================================
+# Cell-fact helpers
+# =============================================================================
+
+
+def _write_fact_frame(
+    frame: pl.DataFrame,
+    output_path: Path,
+    fmt: Literal["parquet", "ndjson"],
+    export_format_label: str,
+) -> ExportResult:
+    """Write a cell-fact frame (``reporting.facts.build_fact_frame``) to disk."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if fmt == "ndjson":
+        frame.write_ndjson(output_path)
+    else:
+        frame.write_parquet(output_path)
+    return ExportResult(
+        format=f"{export_format_label}_{fmt}", files=[output_path], row_count=frame.height
+    )
 
 
 # =============================================================================

@@ -36,10 +36,12 @@ from rwa_calc.contracts.bundles import (
 )
 from rwa_calc.contracts.edges import (
     AGGREGATOR_EXIT_EDGE,
+    AGGREGATOR_SUMMARY_EDGES,
     CLASSIFIER_EXIT_EDGE,
     CP_LOOKUP_EDGES,
     CRM_EXIT_EDGE,
     HIERARCHY_EXIT_EDGE,
+    EdgeContract,
     seal_lenient,
 )
 from tests.fixtures.raw_bundle import seal_raw_table
@@ -187,7 +189,33 @@ def make_aggregated_bundle(
 ) -> AggregatedResultBundle:
     """Drop-in replacement for direct ``AggregatedResultBundle(...)``.
 
-    Same keyword surface; ``results`` is sealed against aggregator_exit,
-    every other field passes through untouched.
+    Same keyword surface; ``results`` is sealed against aggregator_exit and the
+    five consumer-read summary / floor / supporting-factor frames
+    (``AGGREGATOR_SUMMARY_EDGES``) are lenient-sealed against their own edges
+    when supplied — matching the producer seals now registered in
+    ``SEALED_FRAME_FIELDS`` so a hand-rolled summary frame is shape-identical to
+    the one the aggregator emits. Every other field passes through untouched.
     """
+    for field, edge in AGGREGATOR_SUMMARY_EDGES.items():
+        if kwargs.get(field) is not None:
+            kwargs[field] = _seal_summary_frame(kwargs[field], edge)
     return AggregatedResultBundle(results=seal_aggregator_exit(results), **kwargs)
+
+
+def _seal_summary_frame(frame: pl.LazyFrame | pl.DataFrame, edge: EdgeContract) -> pl.LazyFrame:
+    """Seal one aggregator summary / floor frame against ``edge``.
+
+    Uses the lenient seal but asserts NOTHING was null-completed: an
+    under-populated hand-rolled test frame (missing a required column) must fail
+    loudly here rather than be silently filled with typed nulls — the repo's
+    known masking trap. Populate the real producer columns instead of weakening
+    this assert.
+    """
+    lf = frame.lazy() if isinstance(frame, pl.DataFrame) else frame
+    sealed, missing = seal_lenient(lf, edge)
+    assert not missing, (
+        f"{edge.name}: hand-rolled summary frame is missing required column(s) "
+        f"{missing} — populate them (the aggregator producer always emits them); "
+        "do not rely on the lenient seal null-completing them"
+    )
+    return sealed

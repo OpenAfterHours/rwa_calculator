@@ -33,6 +33,21 @@ regulatory drivers. Takes roughly twice a single run.</p>
       <input id="reporting_date" name="reporting_date" type="date" value="{{ default_date }}" required>
     </div>
   </div>
+  <div class="field-row">
+    <div class="field">
+      <label for="reporting_entity">Reporting entity <span class="muted">— optional; applies to both frameworks</span></label>
+      <input id="reporting_entity" name="reporting_entity" value="{{ reporting_entity }}" placeholder="entity_reference (leave blank for the whole book)">
+    </div>
+    <div class="field">
+      <label for="reporting_basis">Reporting basis</label>
+      <select id="reporting_basis" name="reporting_basis">
+        <option value=""{% if not reporting_basis %} selected{% endif %}>— none —</option>
+        <option value="individual"{% if reporting_basis == "individual" %} selected{% endif %}>Individual</option>
+        <option value="sub_consolidated"{% if reporting_basis == "sub_consolidated" %} selected{% endif %}>Sub-consolidated</option>
+        <option value="consolidated"{% if reporting_basis == "consolidated" %} selected{% endif %}>Consolidated</option>
+      </select>
+    </div>
+  </div>
   <button class="btn btn-primary" type="submit">Run comparison</button>
 </form>
 

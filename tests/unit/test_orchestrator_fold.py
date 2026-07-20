@@ -48,6 +48,7 @@ class TestRegistry:
 
     def test_stage_order_is_pinned(self):
         assert [s.name for s in PIPELINE_STAGES] == [
+            "resolve_scope",
             "securitisation_allocator",
             "hierarchy_resolver",
             "ccr_sa_ccr",
@@ -69,6 +70,7 @@ class TestRegistry:
         assert policies["aggregator"] == "merged"
         immediate = {n for n, h in policies.items() if h == "immediate"}
         assert immediate == {
+            "resolve_scope",
             "securitisation_allocator",
             "hierarchy_resolver",
             "ccr_sa_ccr",

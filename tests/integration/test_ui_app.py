@@ -115,7 +115,7 @@ def test_calculate_dispatches_job_then_results_become_available(
     # The job finishes in the background; results are served under the job_id
     status = _wait_for_job(client, job_id)
     assert status["status"] == "done"
-    assert status["total_stages"] == 10
+    assert status["total_stages"] == 11
 
     results = client.get(f"/results/{job_id}")
     assert results.status_code == 200
@@ -595,7 +595,7 @@ def test_calculate_with_output_folder_writes_files(
     # Assert — file on disk, stage count unchanged (the export write is a synthetic
     # tail step, not a registry stage), and the results page reports what was written.
     assert status["status"] == "done"
-    assert status["total_stages"] == 10
+    assert status["total_stages"] == 11
     # The trailing export step is ticked off once the files are written.
     assert "write_exports" in status["completed"]
     assert (out / f"rwa_export_{run_id}" / "results.parquet").exists()

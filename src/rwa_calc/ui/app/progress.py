@@ -66,6 +66,7 @@ class StageInfo:
 # stage added to the registry without a label here, so the count always tracks
 # PIPELINE_STAGES even if a label is momentarily missing.
 _STAGE_LABELS: dict[str, str] = {
+    "resolve_scope": "Reporting scope",
     "securitisation_allocator": "Securitisation",
     "hierarchy_resolver": "Hierarchy & exposures",
     "ccr_sa_ccr": "Counterparty credit risk (SA-CCR)",

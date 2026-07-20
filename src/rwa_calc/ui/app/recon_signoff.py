@@ -72,6 +72,9 @@ def workspace_id(
     our_keys: Sequence[str],
     legacy_keys: Sequence[str],
     legacy_file: str | Path,
+    *,
+    reporting_entity: str | None = None,
+    reporting_basis: str | None = None,
 ) -> str:
     """A short, stable id for the dataset+mapping a reconciliation reconciles.
 
@@ -80,15 +83,23 @@ def workspace_id(
     same data (even after a source fix, or an app restart) maps to the same stored
     decisions. Derived from the parsed mapping, never the raw TOML text, so a
     comment / whitespace edit in the mapping editor does not orphan decisions.
+
+    A multi-entity reporting scope (``reporting_entity`` / ``reporting_basis``)
+    is folded in so two scopes over one dataset get separate sign-off stores.
+    An UN-scoped reconciliation (both None — the only shape before multi-entity
+    reporting existed) appends nothing, so its id is byte-identical to the
+    pre-feature hash and existing sign-off decisions are preserved.
     """
-    canonical = "\n".join(
-        [
-            _resolve(data_path),
-            _resolve(legacy_file),
-            "|".join(our_keys),
-            "|".join(legacy_keys),
-        ]
-    )
+    parts = [
+        _resolve(data_path),
+        _resolve(legacy_file),
+        "|".join(our_keys),
+        "|".join(legacy_keys),
+    ]
+    if reporting_entity is not None or reporting_basis is not None:
+        parts.append(reporting_entity or "")
+        parts.append(reporting_basis or "")
+    canonical = "\n".join(parts)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
 
 

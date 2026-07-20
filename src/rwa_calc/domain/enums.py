@@ -264,6 +264,11 @@ class ErrorCategory(StrEnum):
     CLASSIFICATION = "classification"
     """Exposure classification issues"""
 
+    SCOPE = "scope"
+    """Reporting-scope resolution issues — reporting-entity registry validity,
+    book-to-entity attribution, and intragroup tagging (CRR Art. 6 / 11-18
+    individual / sub-consolidated / consolidated levels of application)."""
+
     CCR_LEGAL = "ccr_legal"
     """CCR legal-enforceability issues — non-enforceable netting set falls
     back to single-trade NS treatment (CRR Art. 272(4); Art. 295-297)."""

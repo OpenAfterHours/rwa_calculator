@@ -17,6 +17,7 @@ Runs locally; packaged via moonlit (entry point ``rwa_calc.ui.app.main:main``).
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import importlib.util
 import json
 import logging
@@ -52,6 +53,7 @@ from rwa_calc.api.rest import (
 from rwa_calc.api.rest import router as api_router
 from rwa_calc.api.service import CreditRiskCalc, get_supported_frameworks
 from rwa_calc.api.validation import validate_data_path, validate_output_path
+from rwa_calc.domain.enums import ReportingBasis
 from rwa_calc.reporting import catalog
 from rwa_calc.reporting import lineage as reporting_lineage
 from rwa_calc.ui.app.calculator_state import (
@@ -284,7 +286,7 @@ def _register_pages(app: FastAPI) -> None:
         response_class=HTMLResponse,
         dependencies=[Depends(require_same_origin)],
     )
-    def run_calculation(
+    def run_calculation(  # noqa: PLR0913 - the optional reporting-scope form fields
         request: Request,
         data_path: Annotated[str, Form()],
         reporting_date: Annotated[str, Form()],
@@ -293,12 +295,14 @@ def _register_pages(app: FastAPI) -> None:
         data_format: Annotated[FormatArg, Form()] = "parquet",
         output_folder: Annotated[str, Form()] = "",
         output_formats: Annotated[list[str] | None, Form()] = None,
+        reporting_entity: Annotated[str, Form()] = "",
+        reporting_basis: Annotated[str, Form()] = "",
     ) -> Response:
         formats = _clean_formats(output_formats)
 
         def _form_error(message: str) -> Response:
             # Re-render the form non-destructively: every field (incl. selects and
-            # the typed output folder/formats) is echoed back with the message.
+            # the typed output folder/formats + reporting scope) is echoed back.
             return templates.TemplateResponse(
                 request=request,
                 name="calculator.html",
@@ -311,11 +315,20 @@ def _register_pages(app: FastAPI) -> None:
                         selected_format=data_format,
                         default_output_folder=output_folder,
                         selected_output_formats=formats,
+                        reporting_entity=reporting_entity,
+                        reporting_basis=reporting_basis,
                         error=message,
                     )
                 ),
                 status_code=400,
             )
+
+        # Resolve the optional reporting scope first: an entity without a basis
+        # (or a bad basis) is a friendly form error, never the config ValueError
+        # surfacing as a 500.
+        entity, basis, scope_error = _parse_scope(reporting_entity, reporting_basis)
+        if scope_error is not None:
+            return _form_error(scope_error)
 
         validation = validate_data_path(data_path=data_path, data_format=data_format)
         if not validation.valid:
@@ -343,6 +356,8 @@ def _register_pages(app: FastAPI) -> None:
                 data_format=data_format,
                 output_folder=output_folder,
                 output_formats=formats,
+                reporting_entity=entity,
+                reporting_basis=basis,
             ),
         )
         return RedirectResponse(url=f"/calculating/{job.job_id}", status_code=303)
@@ -541,6 +556,8 @@ def _register_pages(app: FastAPI) -> None:
                 {
                     "default_path": _default_data_path(),
                     "default_date": "2027-06-30",
+                    "reporting_entity": "",
+                    "reporting_basis": "",
                     "error": None,
                     "result": None,
                 }
@@ -554,15 +571,28 @@ def _register_pages(app: FastAPI) -> None:
         reporting_date: Annotated[str, Form()],
         permission_mode: Annotated[PermissionArg, Form()] = "standardised",
         data_format: Annotated[FormatArg, Form()] = "parquet",
+        reporting_entity: Annotated[str, Form()] = "",
+        reporting_basis: Annotated[str, Form()] = "",
     ) -> HTMLResponse:
-        try:
-            result = _compute_comparison(
-                data_path, date.fromisoformat(reporting_date), permission_mode, data_format
-            )
-            error = None
-        except Exception as exc:  # noqa: BLE001 - surface any run failure to the page
-            logger.warning("comparison failed: %s", exc)
-            result, error = None, str(exc)
+        # One reporting scope applies to BOTH regime runs. An entity without a
+        # basis (or a bad basis) is a friendly form error, not a 500.
+        entity, basis, scope_error = _parse_scope(reporting_entity, reporting_basis)
+        if scope_error is not None:
+            result, error = None, scope_error
+        else:
+            try:
+                result = _compute_comparison(
+                    data_path,
+                    date.fromisoformat(reporting_date),
+                    permission_mode,
+                    data_format,
+                    reporting_entity=entity,
+                    reporting_basis=basis,
+                )
+                error = None
+            except Exception as exc:  # noqa: BLE001 - surface any run failure to the page
+                logger.warning("comparison failed: %s", exc)
+                result, error = None, str(exc)
         return templates.TemplateResponse(
             request=request,
             name="comparison.html",
@@ -570,6 +600,8 @@ def _register_pages(app: FastAPI) -> None:
                 {
                     "default_path": data_path,
                     "default_date": reporting_date,
+                    "reporting_entity": reporting_entity,
+                    "reporting_basis": reporting_basis,
                     "error": error,
                     "result": result,
                 }
@@ -585,7 +617,7 @@ def _register_pages(app: FastAPI) -> None:
         )
 
     @app.post("/reconciliation", response_class=HTMLResponse)
-    def run_reconciliation(
+    def run_reconciliation(  # noqa: PLR0913 - the optional reporting-scope form fields
         request: Request,
         data_path: Annotated[str, Form()],
         reporting_date: Annotated[str, Form()],
@@ -594,14 +626,11 @@ def _register_pages(app: FastAPI) -> None:
         permission_mode: Annotated[PermissionArg, Form()] = "standardised",
         data_format: Annotated[FormatArg, Form()] = "parquet",
         reuse_calculation: Annotated[str | None, Form()] = None,
+        reporting_entity: Annotated[str, Form()] = "",
+        reporting_basis: Annotated[str, Form()] = "",
     ) -> Response:
-        # Parse the mapping (and date) synchronously so a bad config re-renders
-        # the form with an error before any work is dispatched.
-        try:
-            settings = loads_reconciliation_config(mapping_toml, base_dir=data_path or ".")
-            parsed_date = date.fromisoformat(reporting_date)
-        except Exception as exc:  # noqa: BLE001 - surface any parse failure to the page
-            logger.warning("reconciliation config invalid: %s", exc)
+        def _form_error(message: str) -> Response:
+            # Re-render the form (mapping + selects + scope echoed) with an error.
             context = _reconciliation_form_context(
                 default_path=data_path,
                 default_date=reporting_date,
@@ -609,15 +638,32 @@ def _register_pages(app: FastAPI) -> None:
                 selected_framework=framework,
                 selected_permission=permission_mode,
                 selected_format=data_format,
+                reporting_entity=reporting_entity,
+                reporting_basis=reporting_basis,
             )
-            context["error"] = str(exc)
+            context["error"] = message
             return templates.TemplateResponse(
                 request=request, name="reconciliation.html", context=_nav(context), status_code=400
             )
+
+        # Parse the mapping (and date) synchronously so a bad config re-renders
+        # the form with an error before any work is dispatched.
+        try:
+            settings = loads_reconciliation_config(mapping_toml, base_dir=data_path or ".")
+            parsed_date = date.fromisoformat(reporting_date)
+        except Exception as exc:  # noqa: BLE001 - surface any parse failure to the page
+            logger.warning("reconciliation config invalid: %s", exc)
+            return _form_error(str(exc))
+        # An entity without a basis (or a bad basis) is a friendly form error,
+        # never the config ValueError surfacing as a 500.
+        entity, basis, scope_error = _parse_scope(reporting_entity, reporting_basis)
+        if scope_error is not None:
+            return _form_error(scope_error)
         # A ticked reuse checkbox is re-verified NOW against the posted values and
         # the current on-disk data (the rendered form may be stale). A miss is a
         # silent fall-through to the full run — the checkbox is a preference,
-        # never a promise the data kept.
+        # never a promise the data kept. The scope is folded in so a scoped form
+        # only ever reuses a run of the same scope.
         calculation: CalculationResponse | None = None
         if reuse_calculation:
             reuse = run_index.find_reusable(
@@ -627,6 +673,8 @@ def _register_pages(app: FastAPI) -> None:
                     reporting_date=parsed_date,
                     permission_mode=permission_mode,
                     data_format=data_format,
+                    reporting_entity=entity,
+                    reporting_basis=_basis_value(basis),
                 )
             )
             if reuse is not None:
@@ -656,8 +704,12 @@ def _register_pages(app: FastAPI) -> None:
                     permission_mode=permission_mode,
                     data_format=data_format,
                     mapping_toml=mapping_toml,
+                    reporting_entity=reporting_entity,
+                    reporting_basis=reporting_basis,
                 ),
                 calculation=calculation,
+                reporting_entity=entity,
+                reporting_basis=basis,
             ),
         )
         return RedirectResponse(url=f"/reconciling/{job.job_id}", status_code=303)
@@ -872,6 +924,8 @@ def _calculation_worker(
     data_format: FormatArg,
     output_folder: str = "",
     output_formats: Sequence[str] | None = None,
+    reporting_entity: str | None = None,
+    reporting_basis: ReportingBasis | None = None,
 ) -> Callable[[Job], None]:
     """Build the background worker that runs one calculation for a job.
 
@@ -899,6 +953,8 @@ def _calculation_worker(
             reporting_date=reporting_date,
             permission_mode=permission_mode,
             data_format=data_format,
+            reporting_entity=reporting_entity,
+            reporting_basis=_basis_value(reporting_basis),
         )
         response = CreditRiskCalc(
             data_path=data_path,
@@ -909,6 +965,8 @@ def _calculation_worker(
             # Under the state home (when persistence is on) so the cached
             # results — and with them the reuse offer — survive a restart.
             cache_dir=run_index.run_cache_dir(job.job_id),
+            reporting_entity=reporting_entity,
+            reporting_basis=reporting_basis,
         ).calculate()
         register_run_with_id(job.job_id, response)
         run_index.register_calculation(fingerprint, job.job_id, response)
@@ -929,6 +987,8 @@ def _calculation_worker(
                 data_format=data_format,
                 output_folder=output_folder,
                 output_formats=",".join(formats),
+                reporting_entity=reporting_entity or "",
+                reporting_basis=_basis_value(reporting_basis) or "",
             )
         )
         job.finish(success=response.success)
@@ -946,6 +1006,8 @@ def _reconciliation_worker(
     data_format: FormatArg,
     form_state: ReconciliationFormState,
     calculation: CalculationResponse | None = None,
+    reporting_entity: str | None = None,
+    reporting_basis: ReportingBasis | None = None,
 ) -> Callable[[Job], None]:
     """Build the background worker that runs one reconciliation for a job.
 
@@ -977,6 +1039,8 @@ def _reconciliation_worker(
             reporting_date=reporting_date,
             permission_mode=permission_mode,
             data_format=data_format,
+            reporting_entity=reporting_entity,
+            reporting_basis=_basis_value(reporting_basis),
         )
         calc_run_id = uuid.uuid4().hex
         response = CreditRiskCalc(
@@ -986,6 +1050,8 @@ def _reconciliation_worker(
             permission_mode=permission_mode,
             data_format=data_format,
             cache_dir=None if calculation is not None else run_index.run_cache_dir(calc_run_id),
+            reporting_entity=reporting_entity,
+            reporting_basis=reporting_basis,
         ).reconcile(settings, calculation=calculation)
         embedded = response.calculation
         if calculation is None and embedded is not None and embedded.success:
@@ -1002,6 +1068,8 @@ def _reconciliation_worker(
                     settings.mapping.our_keys,
                     settings.mapping.legacy_keys,
                     settings.legacy_file,
+                    reporting_entity=reporting_entity,
+                    reporting_basis=_basis_value(reporting_basis),
                 ),
                 data_path=data_path,
             ),
@@ -1126,9 +1194,20 @@ def _results_context(
 
 
 def _compute_comparison(
-    data_path: str, reporting_date: date, permission_mode: str, data_format: str
+    data_path: str,
+    reporting_date: date,
+    permission_mode: str,
+    data_format: str,
+    *,
+    reporting_entity: str | None = None,
+    reporting_basis: ReportingBasis | None = None,
 ) -> dict:
-    """Run both frameworks and build the comparison template context."""
+    """Run both frameworks and build the comparison template context.
+
+    A configured reporting scope applies identically to both regime runs — it is
+    folded into both pre-run fingerprints AND both framework configs, so the two
+    embedded runs are calculated and indexed under that scope.
+    """
     from rwa_calc.analysis.comparison import CapitalImpactAnalyzer, DualFrameworkRunner
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.domain.enums import PermissionMode
@@ -1137,6 +1216,7 @@ def _compute_comparison(
     # Pre-run fingerprints for both embedded runs (see _calculation_worker for
     # why they are captured before any input file is read).
     started_at = datetime.now()
+    basis_str = _basis_value(reporting_basis)
     fingerprints = {
         fw: run_index.compute_fingerprint(
             data_path=data_path,
@@ -1144,6 +1224,8 @@ def _compute_comparison(
             reporting_date=reporting_date,
             permission_mode=permission_mode,
             data_format=data_format,
+            reporting_entity=reporting_entity,
+            reporting_basis=basis_str,
         )
         for fw in ("CRR", "BASEL_3_1")
     }
@@ -1152,15 +1234,30 @@ def _compute_comparison(
     loader = CSVLoader(base_path=base) if data_format == "csv" else ParquetLoader(base_path=base)
     raw = loader.load()
     mode = PermissionMode(permission_mode)
-    crr_cfg = CalculationConfig.crr(reporting_date=reporting_date, permission_mode=mode)
-    b31_cfg = CalculationConfig.basel_3_1(reporting_date=reporting_date, permission_mode=mode)
+    crr_cfg = CalculationConfig.crr(
+        reporting_date=reporting_date,
+        permission_mode=mode,
+        reporting_entity=reporting_entity,
+        reporting_basis=reporting_basis,
+    )
+    b31_cfg = CalculationConfig.basel_3_1(
+        reporting_date=reporting_date,
+        permission_mode=mode,
+        reporting_entity=reporting_entity,
+        reporting_basis=reporting_basis,
+    )
 
     bundle = DualFrameworkRunner().compare(raw, crr_cfg, b31_cfg)
     impact = CapitalImpactAnalyzer().analyze(bundle)
 
     # Seed the run index with both embedded runs so a follow-up reconciliation
-    # (or the calculator page) can reuse them without another pipeline run.
-    _seed_comparison_runs(bundle, fingerprints, reporting_date, started_at)
+    # (or the calculator page) can reuse them without another pipeline run. The
+    # formatter is scope-agnostic, so the scope is stamped onto the seeded
+    # responses here to match their scoped fingerprints (else a scoped fingerprint
+    # would point at an unscoped response — a cache inconsistency).
+    _seed_comparison_runs(
+        bundle, fingerprints, reporting_date, started_at, reporting_entity, basis_str
+    )
 
     summary = comparison_view.executive_summary(bundle)
     steps = comparison_view.waterfall_steps(impact)
@@ -1207,6 +1304,8 @@ def _seed_comparison_runs(
     fingerprints: Mapping[str, run_index.CalculationFingerprint],
     reporting_date: date,
     started_at: datetime,
+    reporting_entity: str | None = None,
+    reporting_basis: str | None = None,
 ) -> None:
     """Format and index a comparison's two embedded runs for later reuse.
 
@@ -1216,6 +1315,12 @@ def _seed_comparison_runs(
     follow-on notes); this only *seeds* the index so a follow-up reconciliation
     reuses either run. Best-effort by design: seeding is an optimisation, so a
     failure is logged and must never break the comparison page.
+
+    ``ResultFormatter.format_response`` is scope-agnostic (it only sees
+    framework / reporting_date), so the reporting scope is stamped onto each
+    seeded response here — matching the scoped ``fingerprints`` these responses
+    are indexed under, so a scoped fingerprint can never resolve to an unscoped
+    response.
     """
     from rwa_calc.api.formatters import ResultFormatter
     from rwa_calc.api.results_cache import ResultsCache
@@ -1236,6 +1341,9 @@ def _seed_comparison_runs(
                 reporting_date=reporting_date,
                 started_at=started_at,
             )
+            response = dataclasses.replace(
+                response, reporting_entity=reporting_entity, reporting_basis=reporting_basis
+            )
             register_run_with_id(run_id, response)
             run_index.register_calculation(fingerprints[framework], run_id, response)
         except Exception:  # noqa: BLE001 - seeding must never break the page
@@ -1252,6 +1360,8 @@ def _calculator_context(
     selected_format: str | None = None,
     default_output_folder: str | None = None,
     selected_output_formats: Sequence[str] | None = None,
+    reporting_entity: str | None = None,
+    reporting_basis: str | None = None,
 ) -> dict:
     """Build the calculator form context (precedence: override > last run > default).
 
@@ -1292,11 +1402,15 @@ def _calculator_context(
         "selected_output_formats": selected_formats,
         "export_formats": EXPORT_FORMATS,
         "xlsx_available": _xlsxwriter_available(),
+        "reporting_entity": _pick(reporting_entity, saved.reporting_entity if saved else None, ""),
+        "reporting_basis": _pick(reporting_basis, saved.reporting_basis if saved else None, ""),
         "error": error,
     }
     # A fresh matching run gets a non-blocking "view its results" banner (the
     # template ignores the data_changed key — a will-recompute note would be
-    # noise on a page whose whole purpose is to run the calculation).
+    # noise on a page whose whole purpose is to run the calculation). The reuse
+    # lookup carries the reporting scope so a scoped form only ever matches a run
+    # of the same scope (never an unscoped run over the same data).
     context.update(
         _calculation_reuse_context(
             data_path=context["default_path"],
@@ -1304,6 +1418,8 @@ def _calculator_context(
             framework=context["selected_framework"],
             permission_mode=context["selected_permission"],
             data_format=context["selected_format"],
+            reporting_entity=context["reporting_entity"] or None,
+            reporting_basis=context["reporting_basis"] or None,
         )
     )
     return context
@@ -1317,6 +1433,8 @@ def _reconciliation_form_context(
     selected_framework: str | None = None,
     selected_permission: str | None = None,
     selected_format: str | None = None,
+    reporting_entity: str | None = None,
+    reporting_basis: str | None = None,
 ) -> dict:
     """Base template context for the reconciliation page (form fields + no result).
 
@@ -1349,6 +1467,8 @@ def _reconciliation_form_context(
             selected_permission, saved.permission_mode if saved else None, "standardised"
         ),
         "selected_format": _pick(selected_format, saved.data_format if saved else None, "parquet"),
+        "reporting_entity": _pick(reporting_entity, saved.reporting_entity if saved else None, ""),
+        "reporting_basis": _pick(reporting_basis, saved.reporting_basis if saved else None, ""),
         "has_saved_run": saved is not None,
         "error": None,
         "result": None,
@@ -1360,6 +1480,8 @@ def _reconciliation_form_context(
             framework=context["selected_framework"],
             permission_mode=context["selected_permission"],
             data_format=context["selected_format"],
+            reporting_entity=context["reporting_entity"] or None,
+            reporting_basis=context["reporting_basis"] or None,
         )
     )
     return context
@@ -1372,6 +1494,8 @@ def _calculation_reuse_context(
     framework: str,
     permission_mode: str,
     data_format: str,
+    reporting_entity: str | None = None,
+    reporting_basis: str | None = None,
 ) -> dict:
     """The reuse block for the reconciliation form, from the form's effective values.
 
@@ -1379,6 +1503,10 @@ def _calculation_reuse_context(
     ``data_changed`` (the same calculation ran before but an input file changed ->
     a passive will-recompute note) are mutually exclusive; both falsy means no
     matching run is known at all. An unparseable date just means no reuse offer.
+
+    The reporting scope is folded into the fingerprint so a scoped form only
+    matches a run of the same scope — a scoped form must never offer to reuse an
+    unscoped run over the same data (nor vice versa).
     """
     no_reuse = {"reusable_run": None, "data_changed": False}
     try:
@@ -1391,6 +1519,8 @@ def _calculation_reuse_context(
         reporting_date=parsed_date,
         permission_mode=permission_mode,
         data_format=data_format,
+        reporting_entity=reporting_entity,
+        reporting_basis=reporting_basis,
     )
     fresh = run_index.find_reusable(fingerprint)
     if fresh is not None:
@@ -1638,6 +1768,39 @@ def _recon_decisions(recon_id: str) -> dict[str, Decision]:
     """Load the stored sign-off decisions for a run (empty if it has no workspace)."""
     workspace = get_recon_workspace(recon_id)
     return load_decisions(workspace.workspace_id) if workspace else {}
+
+
+def _basis_value(basis: ReportingBasis | None) -> str | None:
+    """The string value of a ``ReportingBasis`` (None passes through unchanged).
+
+    The fingerprint / workspace-hash / form-state layers all store the basis as
+    ``str | None`` (matching the response field), so the enum is rendered to its
+    value at those boundaries and the two stay in lock-step.
+    """
+    return basis.value if basis is not None else None
+
+
+def _parse_scope(
+    reporting_entity: str, reporting_basis: str
+) -> tuple[str | None, ReportingBasis | None, str | None]:
+    """Resolve the optional reporting-scope form fields into typed values.
+
+    Returns ``(entity, basis, error)``. Blank both is the unscoped path
+    ``(None, None, None)``. An unrecognised basis, or an entity given with no
+    basis, yields a friendly ``error`` string so the config-layer ``ValueError``
+    never surfaces as a 500 — the caller re-renders the form with that message.
+    """
+    entity = reporting_entity.strip() or None
+    raw_basis = reporting_basis.strip()
+    basis: ReportingBasis | None = None
+    if raw_basis:
+        try:
+            basis = ReportingBasis(raw_basis)
+        except ValueError:
+            return entity, None, f"Unknown reporting basis: {raw_basis!r}."
+    if entity is not None and basis is None:
+        return entity, None, "Select a reporting basis for the reporting entity."
+    return entity, basis, None
 
 
 def _safe_return_to(return_to: str, fallback: str) -> str:

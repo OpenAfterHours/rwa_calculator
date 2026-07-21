@@ -64,12 +64,25 @@ Cell semantics (recorded decisions, this slice):
   module post-step — the WeightedAvg verb has no such fallback).
 - Column ladders are the retired ones, narrower than C 07/C 08: gross =
   pick(ead_gross, nominal_amount, drawn_amount) (a single column, never a
-  SafeSum); RWEA = pick(rwa_final, rwa) (NO rwa_post_factor); the CRR
-  "pre supporting factors" RWEA equals the post-factor value (0080==0090,
-  0110==0125 — no adjustment is computed; the SF adjustment columns are
-  structurally null).
-- No Annex II "(-)" negation and no provision_held fallback ladder on
-  either template; provisions are the (unsealed) SCRA/GCRA carriers.
+  SafeSum); the POST-SF RWEA = pick(rwa_final, rwa) (NO rwa_post_factor).
+  The CRR "RWEA pre supporting factors" columns (C 09.01 col 0080,
+  C 09.02 col 0110) key ``rwa_pre_factor`` — the pre-Art. 501/501a RWA
+  snapshot, falling back to the post-SF ladder when it is not sealed —
+  exactly as C 07.00's col 0215 / C 08.01's col 0255 do (rectification
+  R15). The SME / Infrastructure "(-)" supporting-factor adjustment
+  columns (0081/0082, 0121/0122) carry Σ(rwa_pre_factor − rwa) over each
+  factor's applied subset (the retired asymmetric dedicated flag names —
+  sme_supporting_factor_applied / infrastructure_factor_applied — falling
+  back to is_sme / is_infrastructure + supporting_factor_applied on the
+  sealed ledger, which never carries the dedicated names), so
+  0080 + 0081 + 0082 = 0090 and 0110 + 0121 + 0122 = 0125 foot. Under B31
+  none of these refs exist (supporting factors are CRR-only), so the change
+  is scoped by column presence, not by regime branching.
+- The Annex II §1.3 "(-)" negation covers ONLY the CRR supporting-factor
+  adjustment columns (0081/0082, 0121/0122), applied by a module post-step
+  AFTER execution (a zero deduction normalised to +0.0, null kept null).
+  No provision_held fallback ladder on either template; provisions are the
+  (unsealed) SCRA/GCRA carriers.
 
 References:
 - Regulation (EU) 2021/451, Annex I/II (C 09.01 / C 09.02)
@@ -177,6 +190,14 @@ _C09_01_SL_TYPE_MAP: dict[str, str] = {
     "sl_project_finance": "project_finance",
 }
 
+# COREP Annex II §1.3 "(-)"-labelled deduction columns, negated post-execute:
+# the CRR-only SME / Infrastructure supporting-factor adjustment columns on
+# C 09.01 (0081/0082) and C 09.02 (0121/0122). Reported negative so the pre-SF
+# RWEA plus the two adjustments foots to the post-SF RWEA (identical convention
+# to C 07.00's 0216/0217 and C 08.01's 0256/0257). B31 frames carry none of
+# these refs, so the negation post-step is an absent-column no-op there.
+_C09_NEGATIVE_COLS: frozenset[str] = frozenset({"0081", "0082", "0121", "0122"})
+
 
 class _Row:
     """Minimal TemplateRow for the geo templates."""
@@ -219,12 +240,14 @@ def generate_c09_01(
     sa_df = c07_population(results, cols).collect()
     if sa_df.height == 0:
         return {}
-    data = sa_df.with_columns(_c09_01_derived_exprs(set(sa_df.columns)))
-    spec, row_preds = _c09_01_spec(set(data.columns), framework)
+    sa_cols = set(sa_df.columns)
+    rwa_col = pick(sa_cols, "rwa_final", "rwa")
+    data = sa_df.with_columns(_c09_01_derived_exprs(sa_cols, rwa_col))
+    spec, row_preds = _c09_01_spec(set(data.columns), framework, rwa_col)
     return _per_country_sheets(data, spec, row_preds, post=None)
 
 
-def _c09_01_derived_exprs(cols: set[str]) -> list[pl.Expr]:
+def _c09_01_derived_exprs(cols: set[str], rwa_col: str | None) -> list[pl.Expr]:
     """The C 09.01 discriminator columns: the defaulted ladder plus the RE-family
     regulatory flag. ``c09_re_qualifying`` fills a null ``is_qualifying_re`` to
     True — identical to C 07.00's ``c07_qualifying_re``, so a real-estate exposure
@@ -234,6 +257,7 @@ def _c09_01_derived_exprs(cols: set[str]) -> list[pl.Expr]:
     exprs: list[pl.Expr] = [_defaulted_expr(cols).alias("c09_defaulted")]
     if "is_qualifying_re" in cols:
         exprs.append(pl.col("is_qualifying_re").fill_null(value=True).alias("c09_re_qualifying"))
+    exprs.extend(_c09_sf_delta_exprs(cols, rwa_col))
     return exprs
 
 
@@ -288,13 +312,16 @@ def _c09_01_re_sl_pred(key: str, basis_col: str) -> RowPredicate | None:
 
 
 def _c09_01_spec(
-    cols: set[str], framework: str
+    cols: set[str], framework: str, rwa_col: str | None
 ) -> tuple[TemplateSpec, dict[str, RowPredicate | None]]:
     column_refs = tuple(col.ref for col in get_c09_01_columns(framework))
     row_defs = get_c09_01_rows(framework)
     ead_gross_col = pick(cols, "ead_gross", "nominal_amount", "drawn_amount")
     ead_col = pick(cols, "ead_final")
-    rwa_col = pick(cols, "rwa_final", "rwa")
+    # Pre-SF RWEA snapshot (col 0080); falls back to the post-SF ladder (rwa_col,
+    # resolved once in the generate call) when the aggregator did not seal it
+    # (mirrors C 07.00 col 0215 / C 08.01 col 0255).
+    rwa_pre_col = "rwa_pre_factor" if "rwa_pre_factor" in cols else rwa_col
     rows = tuple(_Row(row_def.ref, row_def.name) for row_def in row_defs)
     row_preds: dict[str, RowPredicate | None] = {}
     cells: dict[tuple[str, str], CellSpec] = {}
@@ -321,9 +348,13 @@ def _c09_01_spec(
             cells[(ref, null_ref)] = CellSpec(Formula(refs=(), fn=_const(None)))
         cells[(ref, "0075")] = _sum_or_null(ead_col, pred)
         if "0080" in column_refs:
-            cells[(ref, "0080")] = _sum_or_null(rwa_col, pred)
-            cells[(ref, "0081")] = CellSpec(Formula(refs=(), fn=_const(None)))
-            cells[(ref, "0082")] = CellSpec(Formula(refs=(), fn=_const(None)))
+            cells[(ref, "0080")] = _sum_or_null(rwa_pre_col, pred)
+            cells[(ref, "0081")] = _c09_sf_adjustment_cell(
+                pred, cols, "sme_supporting_factor_applied", "is_sme"
+            )
+            cells[(ref, "0082")] = _c09_sf_adjustment_cell(
+                pred, cols, "infrastructure_factor_applied", "is_infrastructure"
+            )
         cells[(ref, "0090")] = _sum_or_null(rwa_col, pred)
     spec = TemplateSpec(
         name="c09_01", rows=rows, column_refs=column_refs, cells=cells, empty_cell="zero"
@@ -357,11 +388,12 @@ def generate_c09_02(
     if irb_df.height == 0:
         return {}
     approach_col = pick(cols, "reporting_approach_origin", "approach")
-    data = _c09_02_prepare(irb_df, cols, approach_col)
+    rwa_col = pick(cols, "rwa_final", "rwa")
+    data = _c09_02_prepare(irb_df, cols, approach_col, rwa_col)
     ead_col = pick(cols, "ead_final")
     pd_col = pick(cols, "pd_floored", "pd")
     lgd_col = pick(cols, "lgd_post_crm")
-    spec, row_preds = _c09_02_spec(cols, framework, approach_col)
+    spec, row_preds = _c09_02_spec(cols, framework, approach_col, rwa_col)
 
     def post(frame: pl.DataFrame, country_df: pl.DataFrame) -> pl.DataFrame:
         return _c09_02_avg_postfix(
@@ -378,7 +410,9 @@ def _irb_population(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:
     return results.filter(pl.col("reporting_approach_origin").is_in(list(_IRB_APPROACHES)))
 
 
-def _c09_02_prepare(data: pl.DataFrame, cols: set[str], approach_col: str | None) -> pl.DataFrame:
+def _c09_02_prepare(
+    data: pl.DataFrame, cols: set[str], approach_col: str | None, rwa_col: str | None
+) -> pl.DataFrame:
     """Derive the C 09.02 discriminators. Null semantics are load-bearing:
     the retired ``!= True`` filters DROP null-flag rows (no fill), while
     the non-SME anti-join KEEPS rows with no SME indicator (fill to
@@ -402,6 +436,7 @@ def _c09_02_prepare(data: pl.DataFrame, cols: set[str], approach_col: str | None
     exprs.append(corp_non_sme.alias("c09_corp_non_sme"))
     if approach_col is not None:
         exprs.append((pl.col(approach_col) == "slotting").alias("c09_slotting"))
+    exprs.extend(_c09_sf_delta_exprs(cols, rwa_col))
     return data.with_columns(exprs)
 
 
@@ -461,13 +496,16 @@ def _c09_02_row_pred(  # noqa: PLR0911 - the retired branch cascade, one return 
 
 
 def _c09_02_spec(
-    cols: set[str], framework: str, approach_col: str | None
+    cols: set[str], framework: str, approach_col: str | None, rwa_col: str | None
 ) -> tuple[TemplateSpec, dict[str, RowPredicate | None]]:
     column_refs = tuple(col.ref for col in get_c09_02_columns(framework))
     row_defs = get_c09_02_rows(framework)
     ead_gross_col = pick(cols, "ead_gross", "nominal_amount", "drawn_amount")
     ead_col = pick(cols, "ead_final")
-    rwa_col = pick(cols, "rwa_final", "rwa")  # deliberately two-wide
+    # rwa_col (deliberately two-wide) is resolved once in the generate call.
+    # Pre-SF RWEA snapshot (col 0110); falls back to the post-SF ladder when the
+    # aggregator did not seal it (mirrors C 07.00 col 0215 / C 08.01 col 0255).
+    rwa_pre_col = "rwa_pre_factor" if "rwa_pre_factor" in cols else rwa_col
     pd_col = pick(cols, "pd_floored", "pd")
     lgd_col = pick(cols, "lgd_post_crm")
     rows = tuple(_Row(row_def.ref, row_def.name) for row_def in row_defs)
@@ -494,12 +532,16 @@ def _c09_02_spec(
         if "0107" in column_refs and ead_col is not None:
             cells[(ref, "0107")] = CellSpec(Sum(ead_col), predicate=def_pred)
         if "0110" in column_refs:
-            cells[(ref, "0110")] = _sum_or_null(rwa_col, pred)
+            cells[(ref, "0110")] = _sum_or_null(rwa_pre_col, pred)
         if rwa_col is not None:
             cells[(ref, "0120")] = CellSpec(Sum(rwa_col), predicate=def_pred)
         if "0121" in column_refs:
-            cells[(ref, "0121")] = CellSpec(Formula(refs=(), fn=_const(None)))
-            cells[(ref, "0122")] = CellSpec(Formula(refs=(), fn=_const(None)))
+            cells[(ref, "0121")] = _c09_sf_adjustment_cell(
+                pred, cols, "sme_supporting_factor_applied", "is_sme"
+            )
+            cells[(ref, "0122")] = _c09_sf_adjustment_cell(
+                pred, cols, "infrastructure_factor_applied", "is_infrastructure"
+            )
         cells[(ref, "0125")] = _sum_or_null(rwa_col, pred)
         cells[(ref, "0130")] = CellSpec(Sum("expected_loss"), predicate=pred)
     spec = TemplateSpec(
@@ -586,7 +628,7 @@ def _one_sheet(
     frame = _null_empty_rows(frame, country_df, row_preds)
     if post is not None:
         frame = post(frame, country_df)
-    return frame
+    return _negate_deduction_cols(frame)
 
 
 def _class_union(*classes: str, col: str = "reporting_class_origin") -> RowPredicate:
@@ -646,6 +688,48 @@ def _wavg_or_null(col: str | None, weight: str | None, pred: RowPredicate) -> Ce
     if col is None or weight is None:
         return CellSpec(Formula(refs=(), fn=_const(None)))
     return CellSpec(WeightedAvg(col, weight=weight), predicate=pred, empty_cell="null")
+
+
+def _c09_sf_delta_exprs(cols: set[str], rwa_col: str | None) -> list[pl.Expr]:
+    """The CRR supporting-factor RWEA delta (rwa_pre_factor − post-SF RWEA, per
+    leg), derived only when ``rwa_pre_factor`` is sealed — the geo twin of
+    C 07.00's ``c07_sf_delta`` and C 08.01's ``c08_sf_delta``. The subtrahend is
+    the SAME resolved post-SF carrier the 0090/0125 cells bind (``rwa_col``,
+    threaded from the generate call), so a row's 0080/0110 (pre) minus the delta
+    over its applied subset foots to its 0090/0125 (post). Absent when there is
+    no pre-factor snapshot (a synthetic frame or a B31 run), which leaves the
+    "(-)" adjustment cells structurally null."""
+    if "rwa_pre_factor" not in cols or rwa_col is None:
+        return []
+    return [
+        (pl.col("rwa_pre_factor").fill_null(0.0) - pl.col(rwa_col).fill_null(0.0)).alias(
+            "c09_sf_delta"
+        )
+    ]
+
+
+def _c09_sf_adjustment_cell(
+    pred: RowPredicate, cols: set[str], dedicated: str, flag_col: str
+) -> CellSpec:
+    """A CRR "(-)" supporting-factor adjustment cell: Σ ``c09_sf_delta`` over the
+    row's applied subset, negated post-execute. Mirrors C 07.00 / C 08.01's
+    ``_sf_adjustment_cell`` verbatim, including the retired asymmetric dedicated
+    flag names (``sme_supporting_factor_applied`` vs
+    ``infrastructure_factor_applied``). Those dedicated names are not on the
+    sealed ledger, so on a real run the fallback fires: the factor's own
+    ``is_sme`` / ``is_infrastructure`` flag conjoined with the generic
+    ``supporting_factor_applied``. Returns the structural-null Formula when no
+    pre-factor snapshot exists (the adjustment cannot be computed)."""
+    if "rwa_pre_factor" not in cols:
+        return CellSpec(Formula(refs=(), fn=_const(None)))
+    if dedicated in cols:
+        return CellSpec(Sum("c09_sf_delta"), predicate=_conjoin(pred, (dedicated, True)))
+    if flag_col in cols and "supporting_factor_applied" in cols:
+        return CellSpec(
+            Sum("c09_sf_delta"),
+            predicate=_narrow(pred, (flag_col, True), ("supporting_factor_applied", True)),
+        )
+    return CellSpec(Formula(refs=(), fn=_const(None)))
 
 
 def _defaulted_expr(cols: set[str]) -> pl.Expr:
@@ -718,3 +802,25 @@ def _apply_overrides(
 def _mean_or_none(series: pl.Series) -> float | None:
     vals = series.drop_nulls()
     return float(cast("float", vals.mean())) if len(vals) > 0 else None
+
+
+def _negate_deduction_cols(frame: pl.DataFrame) -> pl.DataFrame:
+    """COREP Annex II §1.3: emit the CRR "(-)"-labelled supporting-factor
+    adjustment columns as negative figures (after the pre/post pair captured the
+    positive magnitudes). Intersected with the frame's columns, so it is an
+    absent-column no-op on B31 sheets. Identical expression to C 07.00 /
+    C 08.01's negation pass: a zero deduction is normalised to +0.0, null stays
+    null."""
+    targets = [col for col in frame.columns if col in _C09_NEGATIVE_COLS]
+    if not targets:
+        return frame
+    return frame.with_columns(_negate_expr(col) for col in targets)
+
+
+def _negate_expr(col: str) -> pl.Expr:
+    """Negate a "(-)"-labelled deduction column, normalising a zero to +0.0.
+
+    Plain ``-pl.col(col)`` flips the IEEE sign bit, so a ``0.0`` cell would
+    serialise as ``-0.0``; the explicit zero branch keeps a zero deduction as
+    ``+0.0``. Null stays null."""
+    return pl.when(pl.col(col) == 0.0).then(pl.lit(0.0)).otherwise(-pl.col(col)).alias(col)

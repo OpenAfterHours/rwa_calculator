@@ -310,11 +310,15 @@ class TestC0901ColumnValues:
         assert total_row["0090"][0] == pytest.approx(3250.0)
 
     def test_col_0080_crr_pre_supporting_factors(self) -> None:
+        # No ``rwa_pre_factor`` on this frame -> the pre-SF col 0080 falls back to
+        # the post-SF ladder, so pre == post (the no-supporting-factor case).
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_sa_geo_results(), framework="CRR")
         total = bundle.c09_01["TOTAL"]
         total_row = total.filter(pl.col("row_ref") == "0170")
         assert total_row["0080"][0] == pytest.approx(3250.0)
+        # Fallback case foots: pre == post, adjustments 0.0.
+        assert total_row["0090"][0] == pytest.approx(3250.0)
 
     def test_corporate_row_values(self) -> None:
         gen = LedgerShimCorepGenerator()
@@ -709,3 +713,206 @@ class TestC0901CrrRealEstateUnchanged:
         refs = bundle.c09_01["TOTAL"]["row_ref"].to_list()
         for ref in ("0071", "0072", "0073", "0091", "0092", "0093", "0094"):
             assert ref not in refs
+
+
+def _sa_sf_results() -> pl.LazyFrame:
+    """SA book with one SME-supporting-factor exposure + a plain corporate.
+
+    The SME leg carries a distinct ``rwa_pre_factor`` (pre-Art. 501 RWA) and a
+    lower ``rwa_final`` (post-factor); the corporate leg has no supporting factor
+    so its pre == post. The corporate row 0070 fans both classes in.
+    """
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["SME1", "CORP1"],
+            "approach_applied": ["standardised", "standardised"],
+            "exposure_class": ["corporate_sme", "corporate"],
+            "ead_final": [1000.0, 2000.0],
+            "ead_gross": [1000.0, 2000.0],
+            "rwa_final": [380950.0, 2000000.0],
+            "rwa_pre_factor": [500000.0, 2000000.0],
+            "is_sme": [True, False],
+            "is_infrastructure": [False, False],
+            "supporting_factor_applied": [True, False],
+            "cp_country_code": ["GB", "GB"],
+            "default_status": [False, False],
+        }
+    )
+
+
+def _sa_sme_infra_results() -> pl.LazyFrame:
+    """SA corporate book carrying BOTH an SME-supported and an
+    infrastructure-supported leg on the same sheet (+ a plain corporate control).
+
+    All three key the corporate row 0070, so the SME (0081) and infrastructure
+    (0082) reliefs land on one sheet and the pre/adj/post block must still foot.
+    """
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["SME1", "INFRA1", "CORP1"],
+            "approach_applied": ["standardised", "standardised", "standardised"],
+            "exposure_class": ["corporate_sme", "corporate", "corporate"],
+            "ead_final": [1000.0, 1500.0, 2000.0],
+            "ead_gross": [1000.0, 1500.0, 2000.0],
+            "rwa_final": [380950.0, 750000.0, 2000000.0],
+            "rwa_pre_factor": [500000.0, 1000000.0, 2000000.0],
+            "is_sme": [True, False, False],
+            "is_infrastructure": [False, True, False],
+            "supporting_factor_applied": [True, True, False],
+            "cp_country_code": ["GB", "GB", "GB"],
+            "default_status": [False, False, False],
+        }
+    )
+
+
+def _sa_dedicated_sme_flag_results() -> pl.LazyFrame:
+    """Two corporate_sme legs, each with is_sme + supporting_factor_applied True
+    and a distinct pre/post delta, but only leg B carries the dedicated
+    ``sme_supporting_factor_applied`` flag (the name the sealed ledger never has).
+
+    The frame is deliberately internally inconsistent (leg A shows pre != post
+    yet its dedicated flag is False) to isolate branch selection: the dedicated
+    branch keys ``sme_supporting_factor_applied`` and must count leg B only
+    (delta 150000), NOT the is_sme + supporting_factor_applied fallback that
+    would count both legs (delta 119050 + 150000). Footing is therefore not
+    expected here.
+    """
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["A", "B"],
+            "approach_applied": ["standardised", "standardised"],
+            "exposure_class": ["corporate_sme", "corporate_sme"],
+            "ead_final": [1000.0, 1000.0],
+            "ead_gross": [1000.0, 1000.0],
+            "rwa_final": [380950.0, 450000.0],
+            "rwa_pre_factor": [500000.0, 600000.0],
+            "is_sme": [True, True],
+            "is_infrastructure": [False, False],
+            "supporting_factor_applied": [True, True],
+            "sme_supporting_factor_applied": [False, True],
+            "cp_country_code": ["GB", "GB"],
+            "default_status": [False, False],
+        }
+    )
+
+
+class TestC0901SupportingFactorColumns:
+    """C 09.01 CRR supporting-factor columns (rectification R15).
+
+    Before R15 the pre-SF RWEA (col 0080) was bound to the post-SF carrier, so
+    0080 == 0090 and the (-) adjustment cols 0081/0082 were structurally null —
+    the disclosed SME/infrastructure supporting-factor relief was silently
+    zeroed. The pre-SF col now keys ``rwa_pre_factor`` and the adjustment cols
+    carry Σ(pre − post) over each factor's applied subset, negated.
+    """
+
+    @staticmethod
+    def _corp_row() -> dict[str, float]:
+        # Row 0070 is populated, so all four RWEA cells are non-null floats.
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_sf_results(), framework="CRR")
+        row = bundle.c09_01["TOTAL"].filter(pl.col("row_ref") == "0070")
+        return {c: float(row[c][0]) for c in ("0080", "0081", "0082", "0090")}
+
+    def test_pre_sf_uses_rwa_pre_factor(self) -> None:
+        # 0080 = Σ rwa_pre_factor over {corporate, corporate_sme} = 500000 + 2000000.
+        assert self._corp_row()["0080"] == pytest.approx(2500000.0)
+
+    def test_post_sf_unchanged(self) -> None:
+        # 0090 = Σ rwa_final = 380950 + 2000000.
+        assert self._corp_row()["0090"] == pytest.approx(2380950.0)
+
+    def test_sme_adjustment_is_negated_delta(self) -> None:
+        # 0081 = -(rwa_pre_factor - rwa_final) over the SME-applied leg.
+        assert self._corp_row()["0081"] == pytest.approx(-119050.0)
+
+    def test_infrastructure_adjustment_zero(self) -> None:
+        # No infrastructure leg -> 0082 sums an empty subset to +0.0 (not null).
+        assert self._corp_row()["0082"] == pytest.approx(0.0)
+
+    def test_sf_columns_foot(self) -> None:
+        row = self._corp_row()
+        assert row["0080"] + row["0081"] + row["0082"] == pytest.approx(row["0090"])
+
+    def test_delta_equals_supporting_factor_benefit(self) -> None:
+        row = self._corp_row()
+        assert row["0080"] - row["0090"] == pytest.approx(119050.0)
+
+    def test_no_sf_frame_pre_equals_post(self) -> None:
+        # rwa_pre_factor present but supporting_factor_applied False everywhere:
+        # pre == post and the SME adjustment cell is +0.0.
+        frame = pl.LazyFrame(
+            {
+                "exposure_reference": ["C1"],
+                "approach_applied": ["standardised"],
+                "exposure_class": ["corporate"],
+                "ead_final": [2000.0],
+                "ead_gross": [2000.0],
+                "rwa_final": [1000.0],
+                "rwa_pre_factor": [1000.0],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "supporting_factor_applied": [False],
+                "cp_country_code": ["GB"],
+                "default_status": [False],
+            }
+        )
+        gen = LedgerShimCorepGenerator()
+        row = (
+            gen.generate_from_lazyframe(frame, framework="CRR")
+            .c09_01["TOTAL"]
+            .filter(pl.col("row_ref") == "0070")
+        )
+        assert row["0080"][0] == pytest.approx(1000.0)
+        assert row["0090"][0] == pytest.approx(1000.0)
+        assert row["0081"][0] == pytest.approx(0.0)
+
+    def test_b31_has_no_supporting_factor_columns(self) -> None:
+        # The SF frame under B31 carries none of 0080/0081/0082 (CRR-only refs).
+        gen = LedgerShimCorepGenerator()
+        total = gen.generate_from_lazyframe(_sa_sf_results(), framework="BASEL_3_1").c09_01["TOTAL"]
+        for ref in ("0080", "0081", "0082"):
+            assert ref not in total.columns
+
+    def test_consistency_with_c07_supporting_factor_pair(self) -> None:
+        """Template-to-template: C 09.01's TOTAL pre/adj/post equals the sum of
+        C 07.00's per-class 0215/0216/0220 over the same population."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_sf_results(), framework="CRR")
+        geo = bundle.c09_01["TOTAL"].filter(pl.col("row_ref") == "0170")
+
+        def c07_sum(ref: str) -> float:
+            total = 0.0
+            for sheet in bundle.c07_00.values():
+                cell = sheet.filter(pl.col("row_ref") == "0010")[ref][0]
+                total += cell if cell is not None else 0.0
+            return total
+
+        assert geo["0080"][0] == pytest.approx(c07_sum("0215"))
+        assert geo["0081"][0] == pytest.approx(c07_sum("0216"))
+        assert geo["0090"][0] == pytest.approx(c07_sum("0220"))
+
+    def test_infrastructure_and_sme_relief_on_one_sheet(self) -> None:
+        """Both the SME (0081) and infrastructure (0082) adjustments populate on
+        the same corporate sheet, each on its own factor's applied subset, and
+        the pre/adj/post block foots. Pins the ``is_infrastructure`` fallback
+        name, which the reference portfolio cannot exercise."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_sme_infra_results(), framework="CRR")
+        row = bundle.c09_01["TOTAL"].filter(pl.col("row_ref") == "0070")
+        pre, sme, infra, post = (float(row[c][0]) for c in ("0080", "0081", "0082", "0090"))
+        assert sme == pytest.approx(-119050.0)  # -(500000 - 380950)
+        assert infra == pytest.approx(-250000.0)  # -(1000000 - 750000)
+        assert pre == pytest.approx(3500000.0)  # 500000 + 1000000 + 2000000
+        assert post == pytest.approx(3130950.0)  # 380950 + 750000 + 2000000
+        assert pre + sme + infra == pytest.approx(post)
+
+    def test_dedicated_sme_flag_preferred_over_fallback(self) -> None:
+        """The dedicated ``sme_supporting_factor_applied`` flag (present here but
+        never on the sealed ledger) keys col 0081, winning over the is_sme +
+        supporting_factor_applied fallback: only leg B's delta reaches 0081
+        (-150000), not the fallback sum over both is_sme legs (-269050)."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_dedicated_sme_flag_results(), framework="CRR")
+        row = bundle.c09_01["TOTAL"].filter(pl.col("row_ref") == "0070")
+        assert float(row["0081"][0]) == pytest.approx(-150000.0)

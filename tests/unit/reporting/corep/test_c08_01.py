@@ -940,3 +940,116 @@ class TestSection3CalculationApproaches:
         corp = bundle.c08_01["corporate"]
         row_refs = corp["row_ref"].to_list()
         assert "0160" in row_refs
+
+
+def _irb_results_sme_factor() -> pl.LazyFrame:
+    """CRR IRB corporate_sme exposures with the SME supporting factor applied,
+    so col 0256 (the "(-)" SME supporting-factor adjustment) fires non-zero.
+
+    Every row on the corporate_sme sheet is SME-applied, so the total-row
+    footing 0255 + 0256 == 0260 holds exactly (no unadjusted residual):
+        0255 = Σ rwa_pre_factor        = 10000 + 6000 = 16000
+        delta = Σ (rwa_pre_factor - rwa_final) = 1500 + 900 = 2400
+        0256 = -delta                  = -2400  (Annex II §1.3 "(-)")
+        0260 = Σ rwa_final             = 8500 + 5100 = 13600
+    """
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["IRB_SME_1", "IRB_SME_2"],
+            "approach_applied": ["foundation_irb", "foundation_irb"],
+            "exposure_class": ["corporate_sme", "corporate_sme"],
+            "drawn_amount": [10000.0, 6000.0],
+            "undrawn_amount": [0.0, 0.0],
+            "ead_final": [10000.0, 6000.0],
+            "rwa_final": [8500.0, 5100.0],
+            "rwa_pre_factor": [10000.0, 6000.0],
+            "risk_weight": [0.85, 0.85],
+            "pd_floored": [0.02, 0.02],
+            "lgd_floored": [0.45, 0.45],
+            "irb_maturity_m": [2.5, 2.5],
+            "expected_loss": [90.0, 54.0],
+            "scra_provision_amount": [0.0, 0.0],
+            "gcra_provision_amount": [0.0, 0.0],
+            "counterparty_reference": ["CP_S1", "CP_S2"],
+            "sme_supporting_factor_applied": [True, True],
+            "is_sme": [True, True],
+        }
+    )
+
+
+def _irb_results_b31_netting() -> pl.LazyFrame:
+    """B31 IRB exposures carrying an on-balance-sheet netting amount, so col
+    0035 (the "(-)" on-BS netting adjustment, B31-only) fires non-zero."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["IRB_CORP_1", "IRB_CORP_2"],
+            "approach_applied": ["foundation_irb", "foundation_irb"],
+            "exposure_class": ["corporate", "corporate"],
+            "drawn_amount": [5000.0, 3000.0],
+            "undrawn_amount": [0.0, 0.0],
+            "ead_final": [5000.0, 3000.0],
+            "rwa_final": [3500.0, 1800.0],
+            "risk_weight": [0.70, 0.60],
+            "pd_floored": [0.005, 0.01],
+            "lgd_floored": [0.45, 0.45],
+            "irb_maturity_m": [2.5, 3.0],
+            "expected_loss": [11.25, 13.5],
+            "scra_provision_amount": [0.0, 0.0],
+            "gcra_provision_amount": [0.0, 0.0],
+            "counterparty_reference": ["CP_X", "CP_Y"],
+            "on_bs_netting_amount": [500.0, 300.0],
+        }
+    )
+
+
+class TestC0801SignConvention:
+    """Annex II §1.3 "(-)" sign convention on the C 08.01 surface (item R2)."""
+
+    def test_crr_0256_sme_adjustment_is_negative(self) -> None:
+        """CRR col 0256 (SME supporting-factor adjustment) is reported negative."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_results_sme_factor(), framework="CRR")
+        total = _get_total_row(bundle.c08_01["corporate_sme"])
+        assert total["0256"][0] == pytest.approx(-2400.0)
+        assert total["0256"][0] <= 0.0
+
+    def test_crr_0255_plus_0256_foots_to_0260(self) -> None:
+        """0255 + 0256 == 0260 under the "(-)" display convention (0256 signed)."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_results_sme_factor(), framework="CRR")
+        total = _get_total_row(bundle.c08_01["corporate_sme"])
+        pre = total["0255"][0]
+        sme_adj = total["0256"][0]
+        post = total["0260"][0]
+        assert pre == pytest.approx(16000.0)
+        assert post == pytest.approx(13600.0)
+        assert pre + sme_adj == pytest.approx(post)
+
+    def test_crr_waterfall_uses_positive_magnitudes(self) -> None:
+        """The CRM waterfall (0090) is computed BEFORE the display negation, so a
+        substitution outflow does not double-count once its column is flipped.
+
+        SME rows here carry no CRM outflow, so 0090 == 0020 (gross) — the point
+        is only that the sign pass runs after the formula, leaving 0090 positive.
+        """
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_results_sme_factor(), framework="CRR")
+        total = _get_total_row(bundle.c08_01["corporate_sme"])
+        assert total["0090"][0] == pytest.approx(16000.0)
+
+    def test_b31_has_no_supporting_factor_columns(self) -> None:
+        """B31 dropped supporting factors, so 0256/0257 are absent (nothing to negate)."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_results_sme_factor(), framework="BASEL_3_1")
+        corp_sme = bundle.c08_01["corporate_sme"]
+        assert "0256" not in corp_sme.columns
+        assert "0257" not in corp_sme.columns
+
+    def test_b31_0035_on_bs_netting_is_negated(self) -> None:
+        """B31 col 0035 (on-BS netting adjustment) is reported negative when present."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_results_b31_netting(), framework="BASEL_3_1")
+        total = _get_total_row(bundle.c08_01["corporate"])
+        # Σ on_bs_netting_amount = 500 + 300 = 800; emitted as a negative deduction.
+        assert total["0035"][0] == pytest.approx(-800.0)
+        assert total["0035"][0] <= 0.0

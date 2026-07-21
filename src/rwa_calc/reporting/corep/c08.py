@@ -29,8 +29,12 @@ Cell semantics (recorded decisions, this slice):
   asymmetric dedicated flag names preserved), B31 adjustment/output-floor
   columns, and the provisions ladder (SCRA/GCRA sums falling back to
   ``provision_held`` only when they net to ~0 — a value-dependent branch
-  applied as a module post-step). ONLY column 0290 carries the Annex II
-  "(-)" negation (a much smaller set than C 07.00's).
+  applied as a module post-step). The Annex II §1.3 "(-)" negation covers
+  the CRM substitution outflows 0040/0050/0060/0070 (both frameworks), B31's
+  on-BS netting adjustment 0035 and slotting FCCM adjustments 0102/0103
+  (structural-null today), the CRR supporting-factor adjustments 0256/0257,
+  and provisions 0290 — applied AFTER the CRM waterfall (0090) has consumed
+  the positive magnitudes, with a zero deduction normalised to ``+0.0``.
 - The column-presence-vs-value-nullness distinction is load-bearing: e.g.
   column 0280 reads ``el_pre_adjustment`` whenever the COLUMN exists (its
   null values fill to 0.0 — masking ``expected_loss`` on slotting sheets,
@@ -129,8 +133,19 @@ from rwa_calc.reporting.metadata import ReportingContext
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-# Annex II "(-)" negation set for the C 08.01/02 surface — 0290 ONLY.
-_NEGATIVE_COLS: frozenset[str] = frozenset({"0290"})
+# Annex II §1.3 "(-)"-labelled deduction columns on the C 08.01/02 surface,
+# negated post-execute (AFTER the CRM waterfall consumes positive magnitudes):
+# the CRM substitution outflows 0040/0050/0060/0070 (both frameworks), B31's
+# on-balance-sheet netting adjustment 0035, B31's slotting financial-collateral
+# adjustments 0102/0103 (structural-null today — the negation is a no-op that
+# keeps the sign truthful if a carrier is ever wired), the CRR supporting-factor
+# adjustments 0256/0257, and value adjustments/provisions 0290. The set is
+# framework-guarded by intersection with the frame's columns in ``_negate`` —
+# 0035/0102/0103 (B31-only) and 0256/0257 (CRR-only) are absent no-ops in the
+# other regime.
+_NEGATIVE_COLS: frozenset[str] = frozenset(
+    {"0035", "0040", "0050", "0060", "0070", "0102", "0103", "0256", "0257", "0290"}
+)
 
 _IRB_APPROACHES: tuple[str, ...] = ("foundation_irb", "advanced_irb", "slotting")
 
@@ -1541,13 +1556,29 @@ def _provisions_postfix(
     return frame.with_columns(expr.alias(ref))
 
 
+def _negate_expr(col: str) -> pl.Expr:
+    """Negate a "(-)"-labelled deduction column, normalising a zero to ``+0.0``.
+
+    Plain ``-pl.col(col)`` flips the IEEE sign bit, so a ``0.0`` cell would
+    serialise as ``-0.0`` (``+ 0.0`` does NOT clear it in Polars); the explicit
+    zero branch keeps a zero deduction as ``+0.0``. Null stays null (``== 0.0``
+    is null on a null row, so the ``otherwise`` branch returns ``-null``). This
+    is the identical expression used by C 07.00's ``_negate_deduction_cols``."""
+    return pl.when(pl.col(col) == 0.0).then(pl.lit(0.0)).otherwise(-pl.col(col)).alias(col)
+
+
 def _negate(frame: pl.DataFrame) -> pl.DataFrame:
-    """Annex II §1.3: only column 0290 is emitted negative on the C 08
-    surface (-0.0 normalised; null stays null)."""
+    """Annex II §1.3: emit the "(-)"-labelled deduction columns negative on the
+    C 08.01/02 surface (``_NEGATIVE_COLS``), AFTER the CRM waterfall (0090) has
+    consumed their positive magnitudes. Intersecting with the frame's columns
+    makes the framework-specific members (B31's 0035/0102/0103, CRR's 0256/0257)
+    no-ops in the regime where the column is absent. A zero cell is emitted as
+    ``+0.0`` (not ``-0.0`` — plain float negation flips the sign bit and Polars
+    keeps it) and null stays null; identical expression to C 07.00's pass."""
     targets = [col for col in frame.columns if col in _NEGATIVE_COLS]
     if not targets:
         return frame
-    return frame.with_columns(((-pl.col(col)) + pl.lit(0.0)).alias(col) for col in targets)
+    return frame.with_columns(_negate_expr(col) for col in targets)
 
 
 def _empty_frame(column_refs: tuple[str, ...], string_refs: tuple[str, ...] = ()) -> pl.DataFrame:

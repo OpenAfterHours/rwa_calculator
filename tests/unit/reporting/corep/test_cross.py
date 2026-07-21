@@ -887,21 +887,21 @@ class TestSubstitutionFlows:
         assert corp["0090"][0] == pytest.approx(0.0)
 
     def test_c08_guarantee_col_populated(self) -> None:
-        """C 08.01 col 0040 shows guaranteed_portion sum."""
+        """C 08.01 col 0040 shows guaranteed_portion sum — negative per Annex II §1.3."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_substitution())
 
         corp = _get_total_row(bundle.c08_01["corporate"])
-        # IRB_CORP_2 has 800 guaranteed_portion
-        assert corp["0040"][0] == pytest.approx(800.0)
+        # IRB_CORP_2 has 800 guaranteed_portion; stored as a negative deduction.
+        assert corp["0040"][0] == pytest.approx(-800.0)
 
     def test_c08_outflow_populated(self) -> None:
-        """C 08.01 col 0070 shows guaranteed portion leaving the class."""
+        """C 08.01 col 0070 shows guaranteed portion leaving the class — negative per Annex II."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_substitution())
 
         corp = _get_total_row(bundle.c08_01["corporate"])
-        assert corp["0070"][0] == pytest.approx(800.0)
+        assert corp["0070"][0] == pytest.approx(-800.0)
 
     def test_c08_inflow_populated(self) -> None:
         """C 08.01 col 0080 shows guaranteed portion arriving from other classes."""
@@ -912,18 +912,23 @@ class TestSubstitutionFlows:
         assert inst["0080"][0] == pytest.approx(800.0)
 
     def test_c08_net_after_substitution(self) -> None:
-        """C 08.01 col 0090 = 0020 - 0040 - 0070 + 0080."""
+        """C 08.01 col 0090 foots the CRM waterfall.
+
+        The waterfall runs on positive magnitudes BEFORE the display negation, so
+        with 0040/0070 stored negative per Annex II §1.3 the reconstruction adds
+        them back: 0090 = 0020 + 0040 + 0070 + 0080 (0080 the positive inflow).
+        """
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_substitution())
 
         corp = _get_total_row(bundle.c08_01["corporate"])
         v_0020 = corp["0020"][0]
-        v_0040 = corp["0040"][0]
-        v_0070 = corp["0070"][0]
-        v_0080 = corp["0080"][0]
+        v_0040 = corp["0040"][0]  # negative (deduction)
+        v_0070 = corp["0070"][0]  # negative (deduction)
+        v_0080 = corp["0080"][0]  # positive (inflow)
         v_0090 = corp["0090"][0]
 
-        expected = v_0020 - v_0040 - v_0070 + v_0080
+        expected = v_0020 + v_0040 + v_0070 + v_0080
         assert v_0090 == pytest.approx(expected)
 
 
@@ -968,12 +973,12 @@ class TestOnBSNetting:
         assert retail["0035"][0] == pytest.approx(0.0)
 
     def test_c08_col_0035_populated_b31(self) -> None:
-        """C 08.01 col 0035 shows summed on_bs_netting_amount for Basel 3.1."""
+        """C 08.01 col 0035 sums on_bs_netting_amount for Basel 3.1 — negative per Annex II §1.3."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_netting(), framework="BASEL_3_1")
         corp = _get_total_row(bundle.c08_01["corporate"])
-        # IRB_CORP_1 has 300 netting, IRB_CORP_2 has 0 → total 300
-        assert corp["0035"][0] == pytest.approx(300.0)
+        # IRB_CORP_1 has 300 netting, IRB_CORP_2 has 0 → total 300; stored negative.
+        assert corp["0035"][0] == pytest.approx(-300.0)
 
     def test_c08_col_0035_absent_crr(self) -> None:
         """C 08.01 col 0035 doesn't exist under CRR."""
@@ -1161,8 +1166,9 @@ class TestCollateralMethodSplit:
         corp = bundle.c08_01["corporate"]
         total = corp.filter(pl.col("row_ref") == "0010")
 
-        # 0060 = RE + receivables + other_physical = (150+100) + (50+0) + (30+20) = 350
-        assert total["0060"][0] == pytest.approx(350.0)
+        # 0060 = RE + receivables + other_physical = (150+100) + (50+0) + (30+20) = 350;
+        # a "(-)"-labelled CRM deduction, stored negative per Annex II §1.3.
+        assert total["0060"][0] == pytest.approx(-350.0)
 
     def test_no_collateral_class(self) -> None:
         """Columns are 0.0 when no collateral in class (institution has no non-fin)."""
@@ -1223,7 +1229,11 @@ class TestCreditDerivativeTracking:
         assert col_0110 == pytest.approx(3935.0)
 
     def test_c08_guarantee_and_cd_split(self) -> None:
-        """C 08.01 col 0040=guarantee only, col 0050=credit derivative only."""
+        """C 08.01 col 0040=guarantee only, col 0050=credit derivative only.
+
+        Both are "(-)"-labelled CRM substitution deductions, stored negative per
+        Annex II §1.3.
+        """
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(
             _irb_results_with_credit_derivatives(), framework="BASEL_3_1"
@@ -1231,10 +1241,10 @@ class TestCreditDerivativeTracking:
         corp = bundle.c08_01["corporate"]
         total = corp.filter(pl.col("row_ref") == "0010")
 
-        # Col 0040: guarantees only = 800.0 (IRB_CORP_1)
-        assert total["0040"][0] == pytest.approx(800.0)
-        # Col 0050: credit derivatives only = 400.0 (IRB_CORP_2)
-        assert total["0050"][0] == pytest.approx(400.0)
+        # Col 0040: guarantees only = 800.0 (IRB_CORP_1) -> -800.0
+        assert total["0040"][0] == pytest.approx(-800.0)
+        # Col 0050: credit derivatives only = 400.0 (IRB_CORP_2) -> -400.0
+        assert total["0050"][0] == pytest.approx(-400.0)
 
     def test_c08_unfunded_protection_split(self) -> None:
         """C 08.01 col 0150=guarantee, col 0160=credit derivative."""

@@ -46,7 +46,8 @@ docs/plans/phase7-declarative-reporting.md §6):
   - 0070 - 0080 - 0090 + 0100; 0150 = max(0, 0110 - 0130). The COREP
   Annex II §1.3 "(-)" sign convention is applied by a module post-step
   AFTER execution (negating {0030, 0035, 0050, 0060, 0070, 0080, 0090,
-  0130, 0140}; -0.0 normalised; null stays null).
+  0130, 0140} plus the CRR supporting-factor adjustments {0216, 0217};
+  -0.0 normalised; null stays null).
 - Row subsets reproduce the retired section builders as tolerant-equals
   terms over raw and module-derived discriminator columns (defaulted /
   SME / materially-dependent / qualifying-RE ladders, the RW band label,
@@ -99,8 +100,10 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
 # COREP Annex II §1.3 "(-)"-labelled deduction columns, negated post-execute.
+# 0216/0217 are the CRR-only "(-) SME/Infrastructure supporting factor adjustment"
+# columns (Art. 501/501a) — reported negative so 0215 + 0216 + 0217 = 0220 foots.
 _NEGATIVE_COLS: frozenset[str] = frozenset(
-    {"0030", "0035", "0050", "0060", "0070", "0080", "0090", "0130", "0140"}
+    {"0030", "0035", "0050", "0060", "0070", "0080", "0090", "0130", "0140", "0216", "0217"}
 )
 
 # CCF bucket maps: ccf_applied (rounded to 4dp) -> column ref.
@@ -856,9 +859,19 @@ def _null_empty_rows(
 
 def _negate_deduction_cols(frame: pl.DataFrame) -> pl.DataFrame:
     """COREP Annex II §1.3: emit "(-)"-labelled deduction columns as negative
-    figures (after the waterfalls consumed positive magnitudes); -0.0 is
-    normalised to 0.0 and null stays null."""
+    figures (after the waterfalls consumed positive magnitudes); a zero
+    deduction is normalised to ``+0.0`` and null stays null."""
     targets = [col for col in frame.columns if col in _NEGATIVE_COLS]
     if not targets:
         return frame
-    return frame.with_columns(((-pl.col(col)) + pl.lit(0.0)).alias(col) for col in targets)
+    return frame.with_columns(_negate_expr(col) for col in targets)
+
+
+def _negate_expr(col: str) -> pl.Expr:
+    """Negate a "(-)"-labelled deduction column, normalising a zero to ``+0.0``.
+
+    Plain ``-pl.col(col)`` flips the IEEE sign bit, so a ``0.0`` cell would
+    serialise as ``-0.0`` (``+ 0.0`` does NOT clear it in Polars); the explicit
+    zero branch keeps a zero deduction as ``+0.0``. Null stays null. Identical
+    expression to C 08.01/02's ``_negate`` pass."""
+    return pl.when(pl.col(col) == 0.0).then(pl.lit(0.0)).otherwise(-pl.col(col)).alias(col)

@@ -22,7 +22,13 @@ Cell semantics (recorded decisions, this slice):
   by each framework's column refs): gross exposures, the CRM waterfall
   0090 = 0020 - 0040 - 0050 - 0060 - 0070 + 0080 over POSITIVE magnitudes,
   the cross-sheet substitution inflow (0080, total row only) via
-  ``ReportingContext.substitution_inflow``, EAD-weighted PD/LGD, maturity
+  ``ReportingContext.substitution_inflow``, the two "of which: off balance
+  sheet" memo columns on their RECORDED bases (R11): 0100 (POST-CRM PRE-CCF
+  group) = the off-BS slice of the 0090 waterfall, derived per row in
+  ``_c08_off_bs_pre_ccf`` over ``c08_bs == "off"`` legs (the 0080 inflow is
+  excluded — a total-row cross-sheet scalar with no leg-level BS attribution);
+  0120 (EXPOSURE VALUE post-CCF group) = Sum(ead_final) over the off-BS legs,
+  EAD-weighted PD/LGD, maturity
   in DAYS (x365 — ``irb_maturity_m`` is years despite the suffix), LFSE
   sub-splits gated on ``cp_apply_fi_scalar`` presence, defaulted sub-splits
   via the retired detection ladder, CRR supporting-factor deltas (the
@@ -138,6 +144,7 @@ from rwa_calc.reporting.kernel import (
     gross_carrier,
     gross_carriers,
     pick,
+    safe_sum,
 )
 from rwa_calc.reporting.metadata import ReportingContext
 
@@ -459,13 +466,21 @@ def _value_cells(  # noqa: C901, PLR0915 - the full C 08.01/02 column surface
         "0090": CellSpec(
             Formula(refs=("0020", "0040", "0050", "0060", "0070", "0080"), fn=_crm_waterfall)
         ),
-        "0100": CellSpec(Sum(ead_col), predicate=narrowed(("c08_bs", "off"))),
+        # 0100 ("of which: off balance sheet") sits in the POST-CRM PRE-CCF
+        # group (the 0090 waterfall), so it is the off-BS slice of that
+        # pre-conversion-factor quantity — filled by ``_c08_off_bs_pre_ccf``
+        # post-execute (the executor has no intra-row sub-waterfall verb). The
+        # placeholder null is what an inert row keeps (R11).
+        "0100": CellSpec(Formula(refs=(), fn=_const(None))),
         "0101": CellSpec(Formula(refs=(), fn=_const(None))),
         "0102": CellSpec(Formula(refs=(), fn=_const(None))),
         "0103": CellSpec(Formula(refs=(), fn=_const(None))),
         "0104": CellSpec(Formula(refs=(), fn=_const(None))),
         "0110": CellSpec(Sum(ead_col), predicate=member),
-        "0120": CellSpec(Formula(refs=(), fn=_const(None))),
+        # 0120 ("of which: off balance sheet") sits in the EXPOSURE VALUE
+        # (post-CCF) group, so it is Sum(ead_final) over the off-BS legs —
+        # exactly the basis the old 0100 carried before R11 moved it here.
+        "0120": CellSpec(Sum(ead_col), predicate=narrowed(("c08_bs", "off"))),
         "0125": CellSpec(Sum(ead_col), predicate=narrowed(("c08_defaulted", True))),
         "0130": CellSpec(Formula(refs=(), fn=_const(None))),
         "0140": _lfse_cell(cols, lambda: Sum(ead_col), terms),
@@ -662,6 +677,7 @@ def generate_c08_01(
         class_df = irb_df.filter(pl.col(ec_col) == ec)
         ctx = ReportingContext(substitution_inflow=inflow_map.get(ec, 0.0))
         frame = execute(spec, class_df, ctx)
+        frame = _c08_off_bs_pre_ccf(frame, class_df, row_preds)
         frame = _null_empty_rows(frame, class_df, row_preds)
         frame = _provisions_postfix(frame, class_df, row_preds, data_cols, ref="0290")
         result[ec] = _negate(frame)
@@ -722,6 +738,7 @@ def generate_c08_02(
             name="c08_02", rows=rows, column_refs=value_refs, cells=cells, empty_cell="zero"
         )
         frame = execute(spec, keyed)
+        frame = _c08_off_bs_pre_ccf(frame, keyed, row_preds)
         frame = _provisions_postfix(frame, keyed, row_preds, data_cols, ref="0290")
         frame = _negate(frame)
         frame = frame.with_columns(pl.col("row_name").alias("0005"))
@@ -1618,6 +1635,92 @@ def _provisions_postfix(
     for row_ref, value in fixes.items():
         expr = pl.when(pl.col("row_ref") == row_ref).then(pl.lit(value)).otherwise(expr)
     return frame.with_columns(expr.alias(ref))
+
+
+def _c08_off_bs_pre_ccf(
+    frame: pl.DataFrame,
+    class_df: pl.DataFrame,
+    row_preds: Mapping[str, RowPredicate | None],
+) -> pl.DataFrame:
+    """Fill C 08.01/02 col 0100 with the off-BS slice of the 0090 waterfall.
+
+    Col 0100 ("of which: off balance sheet") sits in the POST-CRM PRE-CCF
+    column group (the 0090 "Exposure after CRM substitution pre CCFs"
+    waterfall), so it reports the off-BS share of that PRE-conversion-factor
+    quantity — NOT the post-CCF exposure value (that is col 0120). The
+    executor has no intra-row sub-waterfall verb, so 0100 is derived here per
+    row over the row's ``c08_bs == "off"`` legs, mirroring ``_value_cells`` +
+    ``_crm_waterfall`` component-for-component:
+
+        0100 = off-BS gross (0020: floored drawn+undrawn)
+             - off-BS guarantees (0040)
+             - off-BS credit derivatives (0050)
+             - off-BS other funded collateral (0060)
+             - off-BS substituted portion (0070)
+
+    It is computed on POSITIVE magnitudes read from the raw ``class_df`` (so
+    the result is independent of the later ``_negate`` sign pass). The 0080
+    substitution INFLOW is EXCLUDED: it is a total-row cross-sheet scalar
+    (``ReportingContext.substitution_inflow``, a per-destination-class
+    aggregate with no leg-level on/off-BS attribution), so an off-BS memo
+    cannot claim a share of it — recorded decision, matching 0090's own
+    convention that the inflow only lands on the (constraint-free) total row.
+
+    Every leg is either on- or off-BS (``c08_bs``) and every waterfall carrier
+    is a leg-level amount pro-rated across the two-leg guarantee split, so
+    summing the components over the off-BS legs is the EXACT slice. Inert
+    (None-predicate) rows are left as the null placeholder for
+    ``_null_empty_rows``; C 08.02 has none.
+    """
+    if "0100" not in frame.columns:
+        return frame
+    cols = set(class_df.columns)
+    if "c08_bs" not in cols:
+        return frame
+    active = {ref: pred for ref, pred in row_preds.items() if pred is not None}
+    if not active:
+        return frame
+    gross_cols = gross_carriers(cols, "drawn_amount", "undrawn_amount")
+    collateral_cols = (
+        "collateral_re_value",
+        "collateral_receivables_value",
+        "collateral_other_physical_value",
+    )
+    has_protection = "protection_type" in cols
+    fixes: dict[str, float] = {}
+    for row_ref, subset in subset_rows(class_df, active).items():
+        off = subset.filter(pl.col("c08_bs") == "off")
+        off_cols = set(off.columns)
+        gross = safe_sum(off, off_cols, *gross_cols)
+        if has_protection:
+            out_guarantee = _gp_sum(off, off_cols, pl.col("protection_type") == "guarantee")
+            out_derivative = _gp_sum(
+                off, off_cols, pl.col("protection_type") == "credit_derivative"
+            )
+        else:
+            out_guarantee = _gp_sum(off, off_cols, mask=None)
+            out_derivative = 0.0
+        out_collateral = safe_sum(off, off_cols, *collateral_cols)
+        out_substituted = _gp_sum(off, off_cols, pl.col("c08_substituted"))
+        fixes[row_ref] = gross - out_guarantee - out_derivative - out_collateral - out_substituted
+    expr: pl.Expr = pl.col("0100")
+    for row_ref, value in fixes.items():
+        expr = (
+            pl.when(pl.col("row_ref") == row_ref)
+            .then(pl.lit(value, dtype=pl.Float64))
+            .otherwise(expr)
+        )
+    return frame.with_columns(expr.alias("0100"))
+
+
+def _gp_sum(data: pl.DataFrame, cols: set[str], mask: pl.Expr | None) -> float:
+    """Sum ``guaranteed_portion`` over ``data`` (optionally masked); 0.0 when
+    the column is absent — mirroring the waterfall's ``cells[...] or 0.0``
+    coalesce of an absent CRM-outflow carrier."""
+    if "guaranteed_portion" not in cols:
+        return 0.0
+    sub = data.filter(mask) if mask is not None else data
+    return float(sub["guaranteed_portion"].fill_null(0.0).sum())
 
 
 def _negate_expr(col: str) -> pl.Expr:

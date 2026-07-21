@@ -1053,3 +1053,136 @@ class TestC0801SignConvention:
         # Σ on_bs_netting_amount = 500 + 300 = 800; emitted as a negative deduction.
         assert total["0035"][0] == pytest.approx(-800.0)
         assert total["0035"][0] <= 0.0
+
+
+def _irb_results_on_off_bs() -> pl.LazyFrame:
+    """One on-BS drawn loan + one off-BS facility (with a guarantee) in the
+    corporate class, so the two "of which: off balance sheet" memo columns
+    (0100 pre-CCF, 0120 post-CCF) are non-zero on their RECORDED bases (R11).
+
+    Leg A (on-BS loan):     drawn 5000, undrawn 0,  ead 5000, no CRM.
+    Leg B (off-BS facility): drawn 0,   undrawn 2000, ead 1000 (CCF 0.5),
+                             guaranteed 500 (protection_type = guarantee).
+
+    Hand-calc (positive magnitudes, mirroring _crm_waterfall):
+        0090 total   = (5000 + 2000) - 500                = 6500
+        0100 total   = off-BS gross (2000) - off-BS guar (500) = 1500  (pre-CCF)
+        0110 total   = ead 5000 + 1000                    = 6000
+        0120 total   = off-BS ead 1000                    = 1000  (post-CCF)
+        0090 off-BS row (0030) = 2000 - 500               = 1500
+    """
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["IRB_ON_1", "IRB_OFF_1"],
+            "approach_applied": ["foundation_irb", "foundation_irb"],
+            "exposure_class": ["corporate", "corporate"],
+            "exposure_type": ["loan", "facility"],
+            "drawn_amount": [5000.0, 0.0],
+            "undrawn_amount": [0.0, 2000.0],
+            "ead_final": [5000.0, 1000.0],
+            "rwa_final": [3500.0, 700.0],
+            "risk_weight": [0.70, 0.70],
+            "pd_floored": [0.01, 0.01],
+            "lgd_floored": [0.45, 0.45],
+            "irb_maturity_m": [2.5, 2.5],
+            "expected_loss": [10.0, 2.0],
+            "scra_provision_amount": [0.0, 0.0],
+            "gcra_provision_amount": [0.0, 0.0],
+            "counterparty_reference": ["CP_ON", "CP_OFF"],
+            "guaranteed_portion": [0.0, 500.0],
+            "protection_type": [None, "guarantee"],
+        }
+    )
+
+
+def _irb_results_all_on_bs() -> pl.LazyFrame:
+    """Two on-BS drawn loans (no off-BS legs) with the balance-sheet
+    discriminator present — so the off-BS memo columns are 0.0 (not null) on
+    the populated rows (the golden-mover proof: 0120 was hardwired null)."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["IRB_ON_1", "IRB_ON_2"],
+            "approach_applied": ["foundation_irb", "foundation_irb"],
+            "exposure_class": ["corporate", "corporate"],
+            "exposure_type": ["loan", "loan"],
+            "drawn_amount": [5000.0, 3000.0],
+            "undrawn_amount": [0.0, 0.0],
+            "ead_final": [5000.0, 3000.0],
+            "rwa_final": [3500.0, 1800.0],
+            "risk_weight": [0.70, 0.60],
+            "pd_floored": [0.01, 0.01],
+            "lgd_floored": [0.45, 0.45],
+            "irb_maturity_m": [2.5, 3.0],
+            "expected_loss": [10.0, 6.0],
+            "scra_provision_amount": [0.0, 0.0],
+            "gcra_provision_amount": [0.0, 0.0],
+            "counterparty_reference": ["CP_X", "CP_Y"],
+        }
+    )
+
+
+class TestC0801OffBalanceSheetMemo:
+    """R11: the two "of which: off balance sheet" memo columns are computed on
+    their RECORDED bases — 0100 in the POST-CRM PRE-CCF group (off-BS slice of
+    the 0090 waterfall), 0120 in the EXPOSURE VALUE post-CCF group (off-BS
+    Sum(ead_final)). Before R11, 0100 sat on the post-CCF basis and 0120 was
+    hardwired null."""
+
+    @pytest.mark.parametrize("framework", ["CRR", "BASEL_3_1"])
+    def test_col_0120_off_bs_exposure_value(self, framework: str) -> None:
+        """Col 0120 = Sum(ead_final) over the off-BS legs (post-CCF)."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_results_on_off_bs(), framework=framework)
+        total = _get_total_row(bundle.c08_01["corporate"])
+        assert total["0120"][0] == pytest.approx(1000.0)
+
+    @pytest.mark.parametrize("framework", ["CRR", "BASEL_3_1"])
+    def test_col_0100_off_bs_pre_ccf_slice(self, framework: str) -> None:
+        """Col 0100 = off-BS gross (2000) - off-BS guarantee (500) = 1500."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_results_on_off_bs(), framework=framework)
+        total = _get_total_row(bundle.c08_01["corporate"])
+        assert total["0100"][0] == pytest.approx(1500.0)
+
+    def test_col_0100_pre_ccf_exceeds_0120_post_ccf(self) -> None:
+        """The pre-CCF off-BS memo (0100) exceeds the post-CCF one (0120)
+        because the 50% CCF shrinks the off-BS facility's exposure value."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_results_on_off_bs(), framework="CRR")
+        total = _get_total_row(bundle.c08_01["corporate"])
+        assert total["0100"][0] > total["0120"][0]
+
+    def test_col_0100_equals_0090_on_off_bs_row(self) -> None:
+        """On the off-BS breakdown row (0030), the off-BS slice (0100) equals
+        that row's own CRM waterfall (0090) — the whole row IS off-BS."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_results_on_off_bs(), framework="CRR")
+        off_row = bundle.c08_01["corporate"].filter(pl.col("row_ref") == "0030")
+        assert off_row["0100"][0] == pytest.approx(off_row["0090"][0])
+        assert off_row["0100"][0] == pytest.approx(1500.0)
+
+    def test_waterfall_0090_unchanged(self) -> None:
+        """R11 does not touch the 0090 waterfall (7000 gross - 500 guarantee)."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_results_on_off_bs(), framework="CRR")
+        total = _get_total_row(bundle.c08_01["corporate"])
+        assert total["0090"][0] == pytest.approx(6500.0)
+        assert total["0110"][0] == pytest.approx(6000.0)
+
+    def test_on_bs_row_off_bs_memos_are_zero(self) -> None:
+        """On the on-BS breakdown row (0020) both off-BS memos are 0.0."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_results_on_off_bs(), framework="CRR")
+        on_row = bundle.c08_01["corporate"].filter(pl.col("row_ref") == "0020")
+        assert on_row["0100"][0] == pytest.approx(0.0)
+        assert on_row["0120"][0] == pytest.approx(0.0)
+
+    def test_all_on_bs_memos_zero_not_null(self) -> None:
+        """With no off-BS legs, both memos are 0.0 (not null) on the populated
+        total row — 0120 was hardwired null before R11."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_results_all_on_bs(), framework="CRR")
+        total = _get_total_row(bundle.c08_01["corporate"])
+        assert total["0100"][0] == pytest.approx(0.0)
+        assert total["0120"][0] == pytest.approx(0.0)
+        assert total["0120"][0] is not None

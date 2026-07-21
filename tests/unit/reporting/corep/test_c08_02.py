@@ -124,3 +124,56 @@ class TestC0802SignConvention:
         assert band["0256"][0] == pytest.approx(-2400.0)
         assert band["0256"][0] <= 0.0
         assert band["0255"][0] + band["0256"][0] == pytest.approx(band["0260"][0])
+
+
+def _irb_results_on_off_bs() -> pl.LazyFrame:
+    """One on-BS loan + one off-BS facility (with a guarantee), both PD=1%,
+    in the corporate class — the shared C 08.01/02 value surface, so the two
+    off-BS memo columns must compute on their recorded bases here too (R11).
+
+    Both legs fall in one PD band. Hand-calc (mirroring _crm_waterfall):
+        0100 = off-BS gross (2000) - off-BS guarantee (500) = 1500 (pre-CCF)
+        0120 = off-BS ead 1000                              = 1000 (post-CCF)
+    """
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["IRB_ON_1", "IRB_OFF_1"],
+            "approach_applied": ["foundation_irb", "foundation_irb"],
+            "exposure_class": ["corporate", "corporate"],
+            "exposure_type": ["loan", "facility"],
+            "drawn_amount": [5000.0, 0.0],
+            "undrawn_amount": [0.0, 2000.0],
+            "ead_final": [5000.0, 1000.0],
+            "rwa_final": [3500.0, 700.0],
+            "risk_weight": [0.70, 0.70],
+            "pd_floored": [0.01, 0.01],
+            "lgd_floored": [0.45, 0.45],
+            "irb_maturity_m": [2.5, 2.5],
+            "expected_loss": [10.0, 2.0],
+            "scra_provision_amount": [0.0, 0.0],
+            "gcra_provision_amount": [0.0, 0.0],
+            "counterparty_reference": ["CP_ON", "CP_OFF"],
+            "guaranteed_portion": [0.0, 500.0],
+            "protection_type": [None, "guarantee"],
+        }
+    )
+
+
+class TestC0802OffBalanceSheetMemo:
+    """R11: C 08.02 shares the C 08.01 value surface, so its per-PD-band rows
+    carry the same off-BS memos — 0100 (pre-CCF waterfall slice) and 0120
+    (post-CCF off-BS exposure value)."""
+
+    @pytest.mark.parametrize("framework", ["CRR", "BASEL_3_1"])
+    def test_off_bs_memos_on_populated_band(self, framework: str) -> None:
+        """The single populated PD band reports 0100 = 1500 (pre-CCF) and
+        0120 = 1000 (post-CCF off-BS ead)."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_results_on_off_bs(), framework=framework)
+        corp = bundle.c08_02["corporate"]
+        # Both legs (PD 1%) fall in one band -> a single populated row.
+        assert corp.height == 1
+        band = corp.row(0, named=True)
+        assert band["0110"] == pytest.approx(6000.0)
+        assert band["0100"] == pytest.approx(1500.0)
+        assert band["0120"] == pytest.approx(1000.0)

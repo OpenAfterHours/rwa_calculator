@@ -15,9 +15,12 @@ Key responsibilities:
   unmapped ``book_code``) are excluded with an ``SCP001`` error.
 - Eliminate intragroup exposures on a consolidated / sub-consolidated run
   (``intragroup_entity_reference`` in the membership set); keep them on an
-  individual run (Art. 113(6) 0% treatment is a deferred follow-up, so no
-  risk-weight change this wave). Guarantees whose guarantor is a member are
-  internal protection at the consolidated level and are dropped there.
+  individual run. On an individual run, when the pack ``intragroup_zero_rw``
+  Feature is enabled and both the reporting entity and the tagged intragroup
+  entity are in the core UK group (registry ``core_uk_group=True``), set the
+  ``intragroup_zero_rw_eligible`` carrier so the SA final-RW override applies
+  the CRR Art. 113(6) 0% risk weight. Guarantees whose guarantor is a member
+  are internal protection at the consolidated level and are dropped there.
 - Accumulate reporting-scope data-quality issues as ``CalculationError``s on
   the bundle (never raise): SCP001 (unattributable book), SCP002 (mapping to
   unknown entity), SCP003 (intragroup tag to unknown entity), SCP004 (invalid
@@ -78,7 +81,12 @@ _REG_REF = "CRR Art. 6 / 11-18"
 # =============================================================================
 
 
-def resolve_scope(bundle: RawDataBundle, config: CalculationConfig) -> RawDataBundle:
+def resolve_scope(
+    bundle: RawDataBundle,
+    config: CalculationConfig,
+    *,
+    intragroup_zero_rw: bool = False,
+) -> RawDataBundle:
     """Filter ``bundle`` to the reporting scope named by ``config``.
 
     ``config.reporting_entity`` is an ``entity_reference`` into the
@@ -87,6 +95,13 @@ def resolve_scope(bundle: RawDataBundle, config: CalculationConfig) -> RawDataBu
     the entity is None). Returns a new bundle whose exposure-bearing frames are
     filtered to the resolved membership set, with any SCP data-quality errors
     appended to ``bundle.errors``.
+
+    When ``intragroup_zero_rw`` is enabled (the pack ``intragroup_zero_rw``
+    Feature, passed by the stage adapter) and the run is INDIVIDUAL basis, the
+    resolver additionally sets the ``intragroup_zero_rw_eligible`` carrier on
+    facility / loan / contingent rows whose ``intragroup_entity_reference``
+    names a core-UK-group entity — see :func:`_cug_eligibility` and CRR
+    Art. 113(6). On every other run the carrier keeps its injected False default.
     """
     requested = config.reporting_entity
     basis = config.reporting_basis
@@ -124,18 +139,32 @@ def resolve_scope(bundle: RawDataBundle, config: CalculationConfig) -> RawDataBu
     )
     membership_books = frozenset(book for book, ent in valid_map.items() if ent in membership)
 
+    # CRR Art. 113(6): resolve the core-UK-group set for the 0% intragroup RW.
+    # None => leave the carrier untouched (Feature off, or not individual basis —
+    # the override cannot fire there). A set (possibly EMPTY) => the resolver
+    # authoritatively overwrites the carrier on every individual-run lending row,
+    # clobbering any user-supplied True (bypass closure).
+    cug_eligible = _cug_eligibility(registry_df, requested, basis, enabled=intragroup_zero_rw)
+
     errors = _diagnose(bundle, entity_set, all_mapping_books, unknown_mapping_entities)
 
     logger.info(
-        "scope resolved: entity=%s basis=%s members=%d books=%d issues=%d",
+        "scope resolved: entity=%s basis=%s members=%d books=%d cug=%s issues=%d",
         requested,
         basis.value if basis is not None else None,
         len(membership),
         len(membership_books),
+        "off" if cug_eligible is None else len(cug_eligible),
         len(errors),
     )
 
-    filtered = _filter_bundle(bundle, membership_books, membership, drop_intragroup=drop_intragroup)
+    filtered = _filter_bundle(
+        bundle,
+        membership_books,
+        membership,
+        drop_intragroup=drop_intragroup,
+        cug_eligible=cug_eligible,
+    )
     return _with_errors(filtered, bundle, errors)
 
 
@@ -194,6 +223,52 @@ def _membership(
     return _descendants(requested, children)
 
 
+def _cug_eligibility(
+    registry_df: pl.DataFrame,
+    requested: str | None,
+    basis: ReportingBasis | None,
+    *,
+    enabled: bool,
+) -> frozenset[str] | None:
+    """Resolve the core-UK-group set for the Art. 113(6) 0% intragroup RW.
+
+    Returns ``None`` when the carrier must be left untouched — the pack Feature
+    is off, or the run is not individual basis (on a consolidated /
+    sub-consolidated run intragroup rows are eliminated before weighting, and the
+    SA override does not fire on those runs anyway). Otherwise returns the set of
+    registry entities carrying ``core_uk_group=True`` (the valid 0% targets), or
+    an **empty** set when the reporting entity is not itself in the core UK group
+    — a non-None result signals the caller to overwrite the carrier on EVERY
+    lending row (True where the per-row tag test in :func:`_set_cug_eligibility`
+    matches, explicit False otherwise). Clobbering False on the only path where
+    the override can fire (a scoped individual run) closes the user-loadable
+    ``intragroup_zero_rw_eligible`` bypass: an input file cannot smuggle in a
+    True that survives to the 0% override.
+
+    Note: ``core_uk_group`` is a single Boolean perimeter, so one dataset can
+    model only one core UK group — a firm with two distinct Art. 113(6) groups
+    would need a group-identifier column instead (a future refinement; matches
+    the pinned Wave-4 design).
+    """
+    if not enabled or basis is not ReportingBasis.INDIVIDUAL:
+        return None
+    cug = frozenset(
+        ref
+        for ref, flag in zip(
+            registry_df["entity_reference"].to_list(),
+            registry_df["core_uk_group"].to_list(),
+            strict=True,
+        )
+        if flag
+    )
+    # Condition 2: the reporting entity must itself be in the core UK group.
+    # Not a member -> no row is eligible, but STILL return a set (empty) so the
+    # resolver authoritatively clears the carrier to False on this individual run.
+    if requested not in cug:
+        return frozenset()
+    return cug
+
+
 def _descendants(root: str, children: dict[str, list[str]]) -> frozenset[str]:
     """The inclusive subtree rooted at ``root`` (BFS over the children map)."""
     seen: set[str] = set()
@@ -245,6 +320,7 @@ def _filter_bundle(
     membership: frozenset[str],
     *,
     drop_intragroup: bool,
+    cug_eligible: frozenset[str] | None = None,
 ) -> RawDataBundle:
     """Filter every exposure-bearing frame to the membership set.
 
@@ -252,23 +328,35 @@ def _filter_bundle(
     SCP004 / SCP006 "no scope resolved" case reuses this path). Reference frames
     (ratings, provisions, collateral, mappings, specialised lending) are never
     filtered — dropped exposures simply stop joining to them.
+
+    ``cug_eligible`` (non-None only on an individual-basis run — where
+    ``drop_intragroup`` is False, so the two never interact) is the set of
+    core-UK-group entities. When set, facility / loan / contingent rows tagged
+    intragroup to one of those entities have ``intragroup_zero_rw_eligible``
+    flipped True (CRR Art. 113(6)); every other row keeps False. Equity / CCR /
+    SFT frames are deliberately out of scope this wave and are never tagged.
     """
     books = sorted(membership_books)
     members = sorted(membership)
+    cug_members = sorted(cug_eligible) if cug_eligible is not None else None
 
-    def _lending(frame: pl.LazyFrame | None, field: str) -> pl.LazyFrame | None:
+    def _lending(
+        frame: pl.LazyFrame | None, field: str, *, tag_cug: bool = False
+    ) -> pl.LazyFrame | None:
         if frame is None:
             return None
         filtered = _apply_booking(frame, books)
         if drop_intragroup:
             filtered = _drop_intragroup(filtered, members)
+        if tag_cug and cug_members is not None:
+            filtered = _set_cug_eligibility(filtered, cug_members)
         return seal(filtered, RAW_TABLE_EDGES[field])
 
     return replace(
         bundle,
-        facilities=_lending(bundle.facilities, "facilities"),
-        loans=_lending(bundle.loans, "loans"),
-        contingents=_lending(bundle.contingents, "contingents"),
+        facilities=_lending(bundle.facilities, "facilities", tag_cug=True),
+        loans=_lending(bundle.loans, "loans", tag_cug=True),
+        contingents=_lending(bundle.contingents, "contingents", tag_cug=True),
         equity_exposures=_lending(bundle.equity_exposures, "equity_exposures"),
         guarantees=_filter_guarantees(bundle.guarantees, members, drop_intragroup=drop_intragroup),
         ccr=_filter_ccr(bundle.ccr, books, members, drop_intragroup=drop_intragroup),
@@ -286,6 +374,23 @@ def _drop_intragroup(frame: pl.LazyFrame, members: list[str]) -> pl.LazyFrame:
     """Drop rows whose ``intragroup_entity_reference`` is a membership entity."""
     tag = pl.col("intragroup_entity_reference")
     return frame.filter(tag.is_null() | ~tag.is_in(members))
+
+
+def _set_cug_eligibility(frame: pl.LazyFrame, cug_members: list[str]) -> pl.LazyFrame:
+    """Authoritatively (re)set ``intragroup_zero_rw_eligible`` on every lending row.
+
+    CRR Art. 113(6): a row qualifies for the 0% intragroup risk weight when its
+    ``intragroup_entity_reference`` names a registry entity with
+    ``core_uk_group=True`` (``cug_members``). This OVERWRITES the column on every
+    row — True where the tag matches, explicit False otherwise (external rows,
+    non-CUG tags, and any user-supplied value) — so the resolver, not the input
+    file, is the source of truth on an individual run. An empty ``cug_members``
+    (the reporting entity is not itself in the core UK group) clears every row to
+    False. Called only on an individual-basis run.
+    """
+    tag = pl.col("intragroup_entity_reference")
+    eligible = (tag.is_not_null() & tag.is_in(cug_members)) if cug_members else pl.lit(value=False)
+    return frame.with_columns(eligible.alias("intragroup_zero_rw_eligible"))
 
 
 def _filter_guarantees(

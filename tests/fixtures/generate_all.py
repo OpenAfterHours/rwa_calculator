@@ -4168,12 +4168,16 @@ def _generate_p846_cva_a3(output_dir: Path) -> list[tuple[str, int]]:
 
 def _generate_multi_entity(output_dir: Path) -> list[tuple[str, int]]:
     """
-    Generate the multi-entity solo-vs-consolidated fixture dataset.
+    Generate the multi-entity solo-vs-consolidated fixture dataset (base + CUG).
 
     Writes a full loadable input directory (exposures/, counterparty/,
     mapping/, guarantee/, config/) for the GRP/BANK_A/BANK_B scope-resolver
     integration tests — see tests/fixtures/multi_entity/multi_entity.py for
     the dataset design and per-scope expected row counts.
+
+    Also writes the sibling ``multi_entity_cug/`` variant (identical exposures,
+    registry with core_uk_group=True on all three entities) that drives the CRR
+    Art. 113(6) 0% intragroup risk-weight integration tests.
     """
     _REPO_ROOT_STR = str(_REPO_ROOT)
     if _REPO_ROOT_STR not in sys.path:
@@ -4182,7 +4186,15 @@ def _generate_multi_entity(output_dir: Path) -> list[tuple[str, int]]:
         from tests.fixtures.multi_entity.multi_entity import save_multi_entity_fixtures
 
         saved = save_multi_entity_fixtures(output_dir)
-        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+        saved_cug = save_multi_entity_fixtures(
+            output_dir.parent / "multi_entity_cug", core_uk_group=True
+        )
+        files = [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+        files += [
+            (f"cug/{name}.parquet", pl.read_parquet(path).height)
+            for name, path in saved_cug.items()
+        ]
+        return files
     finally:
         for mod in list(sys.modules.keys()):
             if "multi_entity" in mod:

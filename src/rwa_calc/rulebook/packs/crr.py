@@ -273,6 +273,29 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=False,
         citation=Citation("CRR", "110", "no Art. 110A due-diligence RW override under CRR"),
     ),
+    # CRR Art. 113(6) core-UK-group 0% risk weight. With PRA permission an
+    # institution may assign a 0% risk weight to exposures to counterparties in
+    # the same "core UK group" (same prudential consolidation, established in the
+    # UK, no impediment to the prompt transfer of own funds). It is an
+    # individual-basis treatment: on a consolidated / sub-consolidated run the
+    # intragroup rows are eliminated before weighting, so the 0% only bites solo.
+    # The Feature carries the regime story (enabled under BOTH regimes — PS1/26
+    # retains the permission, so check 17 gates on the Feature, never on is_crr);
+    # the scope resolver computes the per-row eligibility carrier
+    # (intragroup_zero_rw_eligible) and the SA final-RW override in
+    # engine/sa/rw_adjustments.py::apply_intragroup_zero_rw reads the 0% value
+    # below. SA lending rows only — IRB rows reach SA via the Art. 150(1)(e) PPU
+    # route, so they are out of scope here.
+    "intragroup_zero_rw": Feature(
+        name="intragroup_zero_rw",
+        enabled=True,
+        citation=Citation("CRR", "113", "(6) core-UK-group 0% RW permission (individual basis)"),
+    ),
+    "intragroup_zero_rw_pct": ScalarParam(
+        name="intragroup_zero_rw_pct",
+        value=Decimal("0.00"),
+        citation=Citation("CRR", "113", "(6) 0% RW for core-UK-group intragroup exposures"),
+    ),
     # SA RE loan-split regime gates (engine/stages/re_split/flagging.py, run inside
     # the classifier stage). CRR Art. 125/126 vs PS1/26 Art. 124F/124H. Each gates one
     # regulatory limb of the split decision; the split LTV/RW parameter VALUES live in

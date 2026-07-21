@@ -1121,7 +1121,7 @@ into a single-rooted tree by `parent_entity_reference`. This is the table that
 | `lei` | `String` | No | Legal Entity Identifier (ISO 17442) |
 | `parent_entity_reference` | `String` | No | Parent link forming the consolidation tree. Null = group apex (there must be exactly one root) |
 | `institution_type` | `String` | No | Mirrors the `InstitutionType` enum values; feeds output-floor applicability per scope (Art. 92 para 2A) |
-| `core_uk_group` | `Boolean` | No | CRR Art. 113(6) core-UK-group permission perimeter. Default `False`. **Future use only** — see the warning in [Multi-Entity Reporting](../features/multi-entity-reporting.md#regulatory-basis); it does not yet change any risk weight |
+| `core_uk_group` | `Boolean` | No | CRR Art. 113(6) core-UK-group permission perimeter. Default `False`. On an **individual**-basis run, an intragroup exposure is assigned a **0% risk weight** when both the reporting entity and the tagged intragroup entity carry `core_uk_group=True` — see [Multi-Entity Reporting](../features/multi-entity-reporting.md#art-1136-core-uk-group-0-risk-weight). No effect on `consolidated` / `sub_consolidated` runs (intragroup rows are eliminated) or on unscoped runs |
 
 **Example:**
 

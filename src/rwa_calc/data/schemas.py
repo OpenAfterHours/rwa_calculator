@@ -270,6 +270,13 @@ FACILITY_SCHEMA: dict[str, ColumnSpec] = {
     # sub-consolidated run and keeps them on an individual run. Null = external
     # counterparty — never fabricated (an absent tag means "not intragroup").
     "intragroup_entity_reference": ColumnSpec(pl.String, required=False),
+    # CRR Art. 113(6) core-UK-group 0% risk weight. Carrier the scope resolver
+    # overwrites on an individual-basis run when the reporting entity and the
+    # tagged intragroup entity both sit in the "core UK group" (registry
+    # core_uk_group=True); the SA final-RW override then assigns 0%. Default
+    # False — unscoped / non-CUG / consolidated runs leave it all-False, so the
+    # override is a no-op and behaviour is byte-identical.
+    "intragroup_zero_rw_eligible": ColumnSpec(pl.Boolean, default=False, required=False),
 }
 
 LOAN_SCHEMA: dict[str, ColumnSpec] = {
@@ -370,6 +377,10 @@ LOAN_SCHEMA: dict[str, ColumnSpec] = {
     # sub-consolidated run and keeps them on an individual run. Null = external
     # counterparty — never fabricated (an absent tag means "not intragroup").
     "intragroup_entity_reference": ColumnSpec(pl.String, required=False),
+    # CRR Art. 113(6) core-UK-group 0% RW carrier — see FACILITY_SCHEMA for full
+    # notes. Default False; the scope resolver sets it on eligible individual-
+    # basis intragroup rows and the SA final-RW override assigns the 0% value.
+    "intragroup_zero_rw_eligible": ColumnSpec(pl.Boolean, default=False, required=False),
     # Note: CCF fields (risk_type, ccf_modelled, is_short_term_trade_lc) are NOT included
     # because CCF only applies to off-balance sheet items (undrawn commitments, contingents).
     # Drawn loans are already on-balance sheet, so EAD = drawn_amount + interest directly.
@@ -456,6 +467,10 @@ CONTINGENTS_SCHEMA: dict[str, ColumnSpec] = {
     # sub-consolidated run and keeps them on an individual run. Null = external
     # counterparty — never fabricated (an absent tag means "not intragroup").
     "intragroup_entity_reference": ColumnSpec(pl.String, required=False),
+    # CRR Art. 113(6) core-UK-group 0% RW carrier — see FACILITY_SCHEMA for full
+    # notes. Default False; the scope resolver sets it on eligible individual-
+    # basis intragroup rows and the SA final-RW override assigns the 0% value.
+    "intragroup_zero_rw_eligible": ColumnSpec(pl.Boolean, default=False, required=False),
 }
 
 COUNTERPARTY_SCHEMA: dict[str, ColumnSpec] = {
@@ -978,9 +993,11 @@ REPORTING_ENTITY_SCHEMA: dict[str, ColumnSpec] = {
     # Entity classification; values mirror the InstitutionType enum
     # (domain/enums.py) and drive output-floor applicability per scope.
     "institution_type": ColumnSpec(pl.String, required=False),
-    # CRR Art. 113(6) core-UK-group permission perimeter — future use (the 0%
-    # intragroup treatment is a follow-up item, not wired this wave). Conservative
-    # default False (outside the permission perimeter).
+    # CRR Art. 113(6) core-UK-group permission perimeter. On an individual-basis
+    # run the scope resolver assigns the 0% intragroup risk weight when both the
+    # reporting entity and the tagged intragroup entity carry core_uk_group=True
+    # (see engine/stages/scope/resolver.py). Conservative default False (outside
+    # the permission perimeter).
     "core_uk_group": ColumnSpec(pl.Boolean, default=False, required=False),
 }
 

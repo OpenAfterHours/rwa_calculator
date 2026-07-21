@@ -150,6 +150,40 @@ CRR Art. 6/11/18 — do NOT add `@cites` decorators this wave):
 CCR note: filtering is at netting-set grain; trades are then semi-joined onto surviving netting
 sets. Keep frames lazy except the tiny registry/mapping collects.
 
+## Wave 4 — Art. 113(6) core-UK-group 0% RW (solo runs)
+
+CRR Art. 113(6): with permission, exposures to counterparties in the same prudential
+consolidation (full basis, same risk controls, established in the UK, no impediment to prompt
+transfer of own funds) may be assigned a 0% risk weight. PRA implementation = the core UK group
+permission; retained under PS1/26. The registry `core_uk_group` Boolean is the permission proxy.
+
+Eligibility (ALL must hold; computed by the resolver, which alone sees registry + tags):
+1. The run is INDIVIDUAL basis (on consolidated/sub-consolidated the rows are eliminated).
+2. The reporting entity has `core_uk_group=True` in the registry.
+3. The row's `intragroup_entity_reference` names a registry entity with `core_uk_group=True`.
+
+Design decisions (pinned):
+- Carrier: new optional Boolean schema column `intragroup_zero_rw_eligible`
+  (required=False, default False) on FACILITY/LOAN/CONTINGENTS schemas so it auto-derives into
+  the raw edges; the resolver overwrites it from the eligibility rule; threaded through the
+  hierarchy/classification/CRM edge whitelists to the SA stage (memory trap: new CRM→SA
+  columns MUST be whitelisted on the crm_exit edge).
+- Treatment: FINAL SA risk-weight override — eligible rows get the pack's cited 0% value after
+  standard assignment/adjustments. Keyed on the row's OWN tag, so guarantee-split legs of an
+  eligible intragroup loan inherit 0%, while legs of an external loan guaranteed BY a group
+  member do NOT (Art. 113(6) covers direct exposures to members, not protection from them).
+- Pack home: Feature `intragroup_zero_rw` (enabled both regimes) + the 0% value as a cited
+  pack param — CRR cites Art. 113(6), b31 cites the PS1/26 retention. Engine reads the pack
+  (checks 5/6); no regime branching (check 17 — the Feature carries the regime story).
+- Scope: SA lending frames only this wave. Excluded + documented: equity holdings in group
+  entities (participations regime), CCR/SFT netting sets (solo intragroup at normal RW =
+  conservative), IRB rows (Art. 150(1)(e) PPU is the IRB route to SA treatment).
+- Fixture: a `multi_entity_cug/` variant dataset — identical to `multi_entity/` except
+  `core_uk_group=True` on all three entities. Hand-calc: BANK_A individual total RWA
+  3m → 2m (intragroup loan 0%); BANK_B 2m → 1m; GRP consolidated unchanged 3m (elimination
+  precedes weighting); unscoped unchanged 5m (no scope → no eligibility). The base dataset's
+  unchanged totals prove the permission gate.
+
 ## UI hierarchy view (wave 3)
 
 Page `GET /hierarchy?data_path=...` rendering the registry tree (server-side Jinja + inline SVG

@@ -36,16 +36,25 @@ logger = logging.getLogger(__name__)
 
 def run(
     ctx: PipelineContext,
-    rulepack: RulepackV0,  # noqa: ARG001 — uniform stage signature (Phase 4)
+    rulepack: RulepackV0,
     run_config: CalculationConfig,
 ) -> PipelineContext:
     """Run the scope resolver stage.
 
     No-op (returns the context unchanged) when no reporting entity is
-    configured. Otherwise republishes RAW_DATA with the scope-filtered bundle.
+    configured. Otherwise republishes RAW_DATA with the scope-filtered bundle,
+    passing the pack ``intragroup_zero_rw`` Feature so the resolver can compute
+    the CRR Art. 113(6) core-UK-group 0% RW eligibility on an individual run.
     """
     if run_config.reporting_entity is None:
         return ctx
 
     data = ctx.get(RAW_DATA)
-    return ctx.put(RAW_DATA, resolve_scope(data, run_config))
+    return ctx.put(
+        RAW_DATA,
+        resolve_scope(
+            data,
+            run_config,
+            intragroup_zero_rw=rulepack.pack.feature("intragroup_zero_rw"),
+        ),
+    )

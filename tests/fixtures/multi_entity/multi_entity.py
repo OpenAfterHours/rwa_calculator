@@ -80,6 +80,37 @@ docs/plans/multi-entity-reporting.md "Scope resolver stage"):
     intragroup loans are each counted once solo but eliminated at group
     level. This asymmetry is the point of the fixture (solo != consolidated).
 
+CUG variant (tests/fixtures/multi_entity_cug/, core_uk_group=True on GRP,
+BANK_A, BANK_B) -- CRR Art. 113(6) 0% risk weight for core-UK-group intragroup
+exposures on an INDIVIDUAL-basis run. The registry differs (all three entities
+core_uk_group=True) AND the CUG variant adds ONE intragroup facility with
+undrawn headroom on BANK_A's book -- FAC_A1_IG_UNDRAWN (limit 1.5m, intragroup
+to BANK_B) drawn 1m via LOAN_A1_IG_UNDRAWN -> a 0.5m undrawn commitment (FR
+risk_type, 100% CCF -> 0.5m EAD). The base multi_entity/ dataset is unchanged
+(5 facilities / 5 loans). Because both the reporting entity and each tagged
+intragroup entity are in the core UK group, each solo run's intragroup exposures
+(drawn loans AND the undrawn commitment) drop from 100% RW to 0%:
+
+    BANK_A individual : LOAN_A1_EXT (1m) + LOAN_A2_EXT (1m)          -> 2,000,000 RWA
+                        + LOAN_A1_IG_TO_BANK_B (0%)
+                        + LOAN_A1_IG_UNDRAWN (1m drawn, 0%)
+                        + FAC_A1_IG_UNDRAWN undrawn (0.5m EAD, 0%)
+    BANK_B individual : LOAN_B1_EXT (1m)                             -> 1,000,000 RWA
+                        + LOAN_B1_IG_TO_BANK_A (0%)
+                        (FAC_A1_IG_UNDRAWN is on BANK_A's book, out of scope)
+    GRP consolidated  : 3 externals (all intragroup eliminated       -> 3,000,000 RWA
+                        BEFORE weighting, so the 0% never bites)      (unchanged)
+    unscoped          : base 5m + LOAN_A1_IG_UNDRAWN (1m @ 100%)      -> 6,500,000 RWA
+                        + FAC_A1_IG_UNDRAWN undrawn (0.5m @ 100%)
+                        -- no scope -> no eligibility
+
+The guaranteed external loan LOAN_A1_EXT (guarantor BANK_B, a CUG member) is
+untouched: the 0% is keyed on a row's OWN intragroup tag, not on who guarantees
+it (Art. 113(6) covers direct exposures TO members, not protection FROM them),
+so both its guarantee-split legs stay at 100% and it totals 1,000,000 RWA. The
+base dataset's unchanged BANK_A=3m / BANK_B=2m totals prove the permission gate
+(core_uk_group=False -> no eligibility -> normal risk weights).
+
 References:
     - CRR Part One Title II (Art. 6, 11-18): individual / sub-consolidated /
       consolidated levels.
@@ -112,6 +143,10 @@ from rwa_calc.data.schemas import (
 VALUE_DATE = date(2026, 1, 1)
 MATURITY_DATE = date(2030, 12, 31)
 DRAWN_AMOUNT: float = 1_000_000.0
+# CUG-variant-only intragroup facility limit (> DRAWN_AMOUNT) so its undrawn
+# headroom (0.5m at 100% CCF for risk_type FR) exercises the Art. 113(6) 0% on a
+# facility_undrawn row. See the module docstring's CUG hand-calc.
+UNDRAWN_LIMIT: float = 1_500_000.0
 
 # Column names for the multi-entity fields declared on FACILITY_SCHEMA /
 # LOAN_SCHEMA / GUARANTEE_SCHEMA (data/schemas.py) -- used as literal dict
@@ -121,9 +156,15 @@ _GUARANTOR_ENTITY_COL = "guarantor_entity_reference"
 
 
 def main() -> None:
-    """Entry point for multi-entity fixture generation."""
-    saved = save_multi_entity_fixtures(Path(__file__).parent)
+    """Entry point for multi-entity fixture generation (base + CUG variant)."""
+    base_dir = Path(__file__).parent
+    saved = save_multi_entity_fixtures(base_dir)
     print_summary(saved)
+    # CRR Art. 113(6) core-UK-group variant — identical exposures, registry with
+    # core_uk_group=True on all three entities (see the module docstring).
+    cug_dir = base_dir.parent / "multi_entity_cug"
+    saved_cug = save_multi_entity_fixtures(cug_dir, core_uk_group=True)
+    print_summary(saved_cug)
 
 
 # =============================================================================
@@ -354,9 +395,14 @@ def create_counterparties() -> pl.DataFrame:
     return pl.DataFrame([r.to_dict() for r in rows], schema=dtypes_of(COUNTERPARTY_SCHEMA))
 
 
-def create_facilities() -> pl.DataFrame:
-    """Build the 5-row facility table (one per loan; limit == drawn_amount, so
-    there is no undrawn portion)."""
+def create_facilities(*, core_uk_group: bool = False) -> pl.DataFrame:
+    """Build the facility table (5 rows base; 6 in the CUG variant).
+
+    Base: one facility per loan with limit == drawn_amount, so there is no
+    undrawn portion. The CUG variant appends ``FAC_A1_IG_UNDRAWN`` (limit 1.5m,
+    intragroup to BANK_B) whose 0.5m undrawn headroom exercises the Art. 113(6)
+    0% on a synthetic facility_undrawn row on the BANK_A solo run.
+    """
     rows = [
         _Facility("FAC_A1_EXT", "BOOK_A1", "CORP_EXT_A1", DRAWN_AMOUNT),
         _Facility("FAC_A2_EXT", "BOOK_A2", "CORP_EXT_A2", DRAWN_AMOUNT),
@@ -368,11 +414,25 @@ def create_facilities() -> pl.DataFrame:
             "FAC_B1_IG", "BOOK_B1", "BANK_A", DRAWN_AMOUNT, intragroup_entity_reference="BANK_A"
         ),
     ]
+    if core_uk_group:
+        rows.append(
+            _Facility(
+                "FAC_A1_IG_UNDRAWN",
+                "BOOK_A1",
+                "BANK_B",
+                UNDRAWN_LIMIT,
+                intragroup_entity_reference="BANK_B",
+            )
+        )
     return pl.DataFrame([r.to_dict() for r in rows], schema=dtypes_of(FACILITY_SCHEMA))
 
 
-def create_loans() -> pl.DataFrame:
-    """Build the 5-row loan table: 3 external + 2 intragroup (one per direction)."""
+def create_loans(*, core_uk_group: bool = False) -> pl.DataFrame:
+    """Build the loan table (5 rows base; 6 in the CUG variant).
+
+    Base: 3 external + 2 intragroup (one per direction). The CUG variant appends
+    ``LOAN_A1_IG_UNDRAWN`` (1m drawn under FAC_A1_IG_UNDRAWN's 1.5m limit).
+    """
     rows = [
         _Loan("LOAN_A1_EXT", "BOOK_A1", "CORP_EXT_A1", DRAWN_AMOUNT),
         _Loan("LOAN_A2_EXT", "BOOK_A2", "CORP_EXT_A2", DRAWN_AMOUNT),
@@ -392,11 +452,21 @@ def create_loans() -> pl.DataFrame:
             intragroup_entity_reference="BANK_A",
         ),
     ]
+    if core_uk_group:
+        rows.append(
+            _Loan(
+                "LOAN_A1_IG_UNDRAWN",
+                "BOOK_A1",
+                "BANK_B",
+                DRAWN_AMOUNT,
+                intragroup_entity_reference="BANK_B",
+            )
+        )
     return pl.DataFrame([r.to_dict() for r in rows], schema=dtypes_of(LOAN_SCHEMA))
 
 
-def create_facility_mappings() -> pl.DataFrame:
-    """Build the 5-row facility_mapping table -- one parent facility per loan."""
+def create_facility_mappings(*, core_uk_group: bool = False) -> pl.DataFrame:
+    """Build the facility_mapping table (5 rows base; 6 in the CUG variant)."""
     rows = [
         _FacilityMapping("FAC_A1_EXT", "LOAN_A1_EXT"),
         _FacilityMapping("FAC_A2_EXT", "LOAN_A2_EXT"),
@@ -404,6 +474,8 @@ def create_facility_mappings() -> pl.DataFrame:
         _FacilityMapping("FAC_A1_IG", "LOAN_A1_IG_TO_BANK_B"),
         _FacilityMapping("FAC_B1_IG", "LOAN_B1_IG_TO_BANK_A"),
     ]
+    if core_uk_group:
+        rows.append(_FacilityMapping("FAC_A1_IG_UNDRAWN", "LOAN_A1_IG_UNDRAWN"))
     return pl.DataFrame([r.to_dict() for r in rows], schema=dtypes_of(FACILITY_MAPPING_SCHEMA))
 
 
@@ -435,12 +507,24 @@ def create_guarantees() -> pl.DataFrame:
     return pl.DataFrame([r.to_dict() for r in rows], schema=dtypes_of(GUARANTEE_SCHEMA))
 
 
-def create_reporting_entities() -> pl.DataFrame:
-    """Build the 3-row reporting-entity registry: GRP apex, BANK_A, BANK_B."""
+def create_reporting_entities(*, core_uk_group: bool = False) -> pl.DataFrame:
+    """Build the 3-row reporting-entity registry: GRP apex, BANK_A, BANK_B.
+
+    ``core_uk_group`` stamps the CRR Art. 113(6) permission flag on all three
+    entities — the only difference between the base ``multi_entity`` dataset
+    (False) and the ``multi_entity_cug`` variant (True). See the module
+    docstring for the per-scope hand-calc the flag produces.
+    """
     rows = [
-        _ReportingEntity("GRP", "Group PLC", "LEI00000000000000GRP", None),
-        _ReportingEntity("BANK_A", "Bank A Ltd", "LEI00000000000000BKA", "GRP"),
-        _ReportingEntity("BANK_B", "Bank B Ltd", "LEI00000000000000BKB", "GRP"),
+        _ReportingEntity(
+            "GRP", "Group PLC", "LEI00000000000000GRP", None, core_uk_group=core_uk_group
+        ),
+        _ReportingEntity(
+            "BANK_A", "Bank A Ltd", "LEI00000000000000BKA", "GRP", core_uk_group=core_uk_group
+        ),
+        _ReportingEntity(
+            "BANK_B", "Bank B Ltd", "LEI00000000000000BKB", "GRP", core_uk_group=core_uk_group
+        ),
     ]
     return pl.DataFrame([r.to_dict() for r in rows], schema=dtypes_of(REPORTING_ENTITY_SCHEMA))
 
@@ -460,13 +544,21 @@ def create_book_entity_mappings() -> pl.DataFrame:
 # =============================================================================
 
 
-def save_multi_entity_fixtures(output_dir: Path) -> dict[str, Path]:
+def save_multi_entity_fixtures(output_dir: Path, *, core_uk_group: bool = False) -> dict[str, Path]:
     """Write the full input directory tree under ``output_dir``.
 
     Mirrors ``src/rwa_calc/config/data_sources.py`` relative paths so the
     directory can be pointed at directly as ``data_path`` (e.g.
     ``CreditRiskCalc(data_path=output_dir)``) once the two new OPTIONAL
     sources (``reporting_entities``, ``book_entity_mapping``) are registered.
+
+    ``core_uk_group`` selects the variant: False writes the base
+    ``multi_entity`` dataset (normal intragroup risk weights); True writes the
+    ``multi_entity_cug`` variant (all three entities in the CRR Art. 113(6) core
+    UK group), where an individual-basis run applies the 0% intragroup RW. The
+    CUG variant differs by the registry flag PLUS three appended rows exercising
+    the undrawn path (FAC_A1_IG_UNDRAWN / LOAN_A1_IG_UNDRAWN / its mapping); the
+    base dataset's files are unchanged.
 
     Returns:
         Mapping of a short logical name to the written parquet path (used by
@@ -479,15 +571,15 @@ def save_multi_entity_fixtures(output_dir: Path) -> dict[str, Path]:
         ),
         "facilities": (
             output_dir / "exposures" / "facilities.parquet",
-            create_facilities(),
+            create_facilities(core_uk_group=core_uk_group),
         ),
         "loans": (
             output_dir / "exposures" / "loans.parquet",
-            create_loans(),
+            create_loans(core_uk_group=core_uk_group),
         ),
         "facility_mapping": (
             output_dir / "exposures" / "facility_mapping.parquet",
-            create_facility_mappings(),
+            create_facility_mappings(core_uk_group=core_uk_group),
         ),
         "lending_mapping": (
             output_dir / "mapping" / "lending_mapping.parquet",
@@ -503,7 +595,7 @@ def save_multi_entity_fixtures(output_dir: Path) -> dict[str, Path]:
         ),
         "reporting_entities": (
             output_dir / "config" / "reporting_entities.parquet",
-            create_reporting_entities(),
+            create_reporting_entities(core_uk_group=core_uk_group),
         ),
     }
 

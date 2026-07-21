@@ -46,6 +46,14 @@ _NEW_BOOK_CODE_SCHEMAS = {
     "SFT_TRADE_SCHEMA": SFT_TRADE_SCHEMA,
 }
 
+# SA lending schemas that gain the CRR Art. 113(6) 0%-RW eligibility carrier
+# (Wave 4). Deliberately NOT equity / CCR / SFT — those grains are out of scope.
+_ZERO_RW_CARRIER_SCHEMAS = {
+    "FACILITY_SCHEMA": FACILITY_SCHEMA,
+    "LOAN_SCHEMA": LOAN_SCHEMA,
+    "CONTINGENTS_SCHEMA": CONTINGENTS_SCHEMA,
+}
+
 
 class TestReportingEntitySchema:
     """The reporting-hierarchy registry (config/reporting_entities)."""
@@ -118,6 +126,32 @@ class TestIntragroupEntityReferenceColumn:
             assert spec.dtype == pl.String, name
             assert spec.required is False, name
             assert spec.default is None, name
+
+
+class TestIntragroupZeroRwEligibleColumn:
+    """``intragroup_zero_rw_eligible`` — CRR Art. 113(6) 0%-RW carrier (Wave 4)."""
+
+    def test_present_on_the_sa_lending_schemas(self) -> None:
+        for name, schema in _ZERO_RW_CARRIER_SCHEMAS.items():
+            assert "intragroup_zero_rw_eligible" in schema, name
+
+    def test_is_optional_boolean_defaulting_false(self) -> None:
+        # Default False so unscoped / non-CUG / consolidated runs are byte-identical;
+        # the scope resolver overwrites it on eligible individual-basis rows.
+        for name, schema in _ZERO_RW_CARRIER_SCHEMAS.items():
+            spec = schema["intragroup_zero_rw_eligible"]
+            assert spec.dtype == pl.Boolean, name
+            assert spec.required is False, name
+            assert spec.default is False, name
+
+    def test_absent_from_equity_ccr_and_sft_grains(self) -> None:
+        # The 0% treatment is SA lending only this wave.
+        for name, schema in (
+            ("EQUITY_EXPOSURE_SCHEMA", EQUITY_EXPOSURE_SCHEMA),
+            ("NETTING_SET_SCHEMA", NETTING_SET_SCHEMA),
+            ("SFT_TRADE_SCHEMA", SFT_TRADE_SCHEMA),
+        ):
+            assert "intragroup_zero_rw_eligible" not in schema, name
 
 
 class TestGuarantorEntityReferenceColumn:

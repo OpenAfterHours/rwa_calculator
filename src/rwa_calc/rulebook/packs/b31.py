@@ -262,6 +262,20 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=True,
         citation=Citation("PS1/26", "110A", "due-diligence RW override (RW may only increase)"),
     ),
+    # CRR Art. 113(6) core-UK-group 0% RW — retained under Basel 3.1 (PRA PS1/26).
+    # Same individual-basis treatment and same 0% value as CRR; enabled so the SA
+    # final-RW override fires on eligible solo intragroup rows. See packs/crr.py
+    # for the full regime note (the Feature, not is_basel_3_1, carries the story).
+    "intragroup_zero_rw": Feature(
+        name="intragroup_zero_rw",
+        enabled=True,
+        citation=Citation("PS1/26", "113", "core-UK-group 0% RW permission retained (Art. 113(6))"),
+    ),
+    "intragroup_zero_rw_pct": ScalarParam(
+        name="intragroup_zero_rw_pct",
+        value=Decimal("0.00"),
+        citation=Citation("PS1/26", "113", "0% RW for core-UK-group intragroup exposures"),
+    ),
     # SA RE loan-split regime gates. Basel 3.1 (PS1/26 Art. 124F/124H) drops the CRE
     # rental-coverage test, adds the Art. 124(4) all-or-nothing mixed-RE gate, and
     # adds the Art. 124H(3) pure-CRE whole-loan path. Override the CRR Features; the

@@ -22,13 +22,13 @@ positions against it.
   the one legal entity, so intragroup exposures to the rest of the group are **retained** —
   they are third-party exposures from that entity's own perspective.
 
-!!! warning "Art. 113(6) core-UK-group preferential treatment is NOT implemented"
+!!! success "Art. 113(6) core-UK-group 0% risk weight is applied on solo runs"
     CRR Art. 113(6) lets firms in a qualifying "core UK group" apply a **0% risk weight** to
-    retained intragroup exposures on a solo return, subject to PRA permission. This calculator
-    does **not** apply that treatment yet: the `core_uk_group` registry column exists but is
-    **future-use only** — it has no effect on any risk weight today. An individual-basis run
-    keeps intragroup exposures at their normal (non-zero) risk weight regardless of this flag.
-    Wiring the 0% treatment is a deferred follow-up item, not part of this feature.
+    retained intragroup exposures on an individual (solo) return, subject to PRA permission —
+    a treatment retained under PS1/26. The calculator applies it when both the reporting entity
+    and the tagged intragroup counterparty carry `core_uk_group=True` in the registry. See
+    [Art. 113(6) core UK group 0% risk weight](#art-1136-core-uk-group-0-risk-weight) for the
+    exact eligibility conditions and scope.
 
 ## The run-per-scope model
 
@@ -91,13 +91,46 @@ exposure is dropped from scope it simply stops joining to them.
 |--------------------|------------|----------------------|------------------------|
 | `consolidated` | The requested entity's full subtree (inclusive) | **Eliminated** — dropped before calculation | **Eliminated** — internal protection is not CRM at this level |
 | `sub_consolidated` | The requested entity's subtree (inclusive) — mechanically identical to `consolidated`; only the filing label differs | **Eliminated** | **Eliminated** |
-| `individual` | The requested entity alone | **Retained** — risk-weighted as a normal (non-zero-weighted) exposure; see the Art. 113(6) warning above | **Retained** |
+| `individual` | The requested entity alone | **Retained** — normally risk-weighted, or **0%** under the [Art. 113(6) core-UK-group treatment](#art-1136-core-uk-group-0-risk-weight) when eligible | **Retained** |
 
 Every exposure-bearing row is first attributed to a reporting entity by joining its `book_code`
 against the book-entity mapping, then kept only if that entity falls within the resolved
 population. A row whose `book_code` is blank or absent from the mapping cannot be attributed to
 any entity and is **excluded** (with an `SCP001` warning below) — it is never silently assigned
 to the requesting scope by default.
+
+## Art. 113(6) core UK group 0% risk weight
+
+On an **individual**-basis run, an intragroup exposure to a fellow "core UK group" member is
+assigned a **0% risk weight** (CRR Art. 113(6), retained under PS1/26). The scope resolver marks
+a row eligible only when **all three** conditions hold:
+
+1. The run is **individual** basis. (On `consolidated` / `sub_consolidated` runs the intragroup
+   rows are eliminated before weighting, so the 0% never applies.)
+2. The **reporting entity** carries `core_uk_group=True` in the registry.
+3. The row's `intragroup_entity_reference` names a registry entity that also carries
+   `core_uk_group=True`.
+
+The 0% is a **final risk-weight override**, applied after the standard risk-weight assignment and
+all credit-risk-mitigation adjustments. It is keyed on the row's **own** intragroup tag:
+
+- A guarantee-split leg of an eligible intragroup loan **inherits** the 0% (splits copy the row's
+  columns).
+- An **external** loan that merely happens to be *guaranteed by* a group member is **not** given
+  the 0% — Art. 113(6) covers direct exposures *to* members, not protection *from* them.
+
+**Scope (this treatment).** SA-routed lending exposures only (facilities, loans, contingents,
+and their undrawn commitments). Deliberately excluded:
+
+- **IRB exposures** — the IRB route to a 0% intragroup exposure is Art. 150(1)(e) permanent
+  partial use, which reclassifies the exposure to the Standardised Approach upstream; it then
+  picks up this override as an SA row.
+- **Equity holdings** in group entities (participations regime), and **CCR / SFT** netting sets
+  (a solo intragroup position at its normal risk weight is conservative).
+
+With `core_uk_group=False` (the default) no row is ever eligible, so the flag is a pure opt-in:
+an individual run over a non-core-UK-group registry keeps every intragroup exposure at its normal
+risk weight.
 
 ## Launching a scoped run
 

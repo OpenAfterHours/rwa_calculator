@@ -81,7 +81,7 @@ Last generated: 2026-07-21.
 
 ??? quote "`apply_intragroup_zero_rw` — src/rwa_calc/engine/sa/rw_adjustments.py:524"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:524:580"
+    --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:524:595"
     ```
 
 

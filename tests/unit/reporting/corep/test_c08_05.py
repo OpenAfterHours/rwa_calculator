@@ -487,3 +487,94 @@ class TestC0805EdgeCases:
         bundle = gen.generate_from_lazyframe(_irb_pd_backtest_results(), framework="BASEL_3_1")
         assert bundle.framework == "BASEL_3_1"
         assert len(bundle.c08_05) > 0
+
+
+def _irb_backtest_with_prior_year() -> pl.LazyFrame:
+    """Three corporate obligors in PD bucket 0080 with a prior-year carrier.
+
+    Col 0020 = Sum(prior_year_obligor_count) = 5+5+5 = 15 (the prior-year
+    cohort). The CURRENT-period distinct obligor count is 3 (CP_A/B/C). One
+    obligor (CP_C) defaulted, so col 0030 = 1. The two denominators differ
+    deliberately (15 != 3) so a test can prove col 0040 divides by col 0020
+    (the prior cohort) and never by the current-period count.
+    """
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["E1", "E2", "E3"],
+            "approach_applied": ["foundation_irb", "foundation_irb", "foundation_irb"],
+            "exposure_class": ["corporate", "corporate", "corporate"],
+            "ead_final": [1000.0, 2000.0, 500.0],
+            "rwa_final": [500.0, 1000.0, 0.0],
+            "pd_floored": [0.005, 0.006, 0.007],
+            "is_defaulted": [False, False, True],
+            "counterparty_reference": ["CP_A", "CP_B", "CP_C"],
+            "prior_year_obligor_count": [5.0, 5.0, 5.0],
+        }
+    )
+
+
+class TestC0805PriorYearDenominator:
+    """Col 0040 must divide by the prior-year cohort (col 0020) as rendered.
+
+    Regression pins for R13: when ``prior_year_obligor_count`` is supplied,
+    col 0040 = col 0030 / col 0020 exactly as rendered — never col 0030 over
+    the current-period distinct obligor count (the retired postfix defect).
+    """
+
+    def test_col_0020_reports_supplied_prior_count(self) -> None:
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_backtest_with_prior_year(), framework="CRR")
+        corp = bundle.c08_05["corporate"]
+        row = corp.filter(pl.col("row_ref") == "0080")
+        # Sum of the prior-year carrier (5+5+5), NOT the current distinct count (3)
+        assert row["0020"][0] == pytest.approx(15.0)
+
+    def test_col_0040_divides_by_prior_year_count(self) -> None:
+        """The pin that would have caught the bug: 0040 == 0030 / 0020."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_backtest_with_prior_year(), framework="CRR")
+        corp = bundle.c08_05["corporate"]
+        row = corp.filter(pl.col("row_ref") == "0080")
+        assert row["0030"][0] == pytest.approx(1.0)
+        assert row["0040"][0] == pytest.approx(row["0030"][0] / row["0020"][0])
+        assert row["0040"][0] == pytest.approx(1.0 / 15.0)
+
+    def test_col_0040_current_period_count_used_nowhere(self) -> None:
+        """Current-period distinct obligor count (3) must not be the denominator."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_backtest_with_prior_year(), framework="CRR")
+        corp = bundle.c08_05["corporate"]
+        row = corp.filter(pl.col("row_ref") == "0080")
+        assert row["0040"][0] != pytest.approx(1.0 / 3.0)
+
+    def test_col_0050_inherits_corrected_rate(self) -> None:
+        """Without historical data, col 0050 copies the corrected col 0040."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_backtest_with_prior_year(), framework="CRR")
+        corp = bundle.c08_05["corporate"]
+        row = corp.filter(pl.col("row_ref") == "0080")
+        assert row["0050"][0] == pytest.approx(row["0040"][0])
+        assert row["0050"][0] == pytest.approx(1.0 / 15.0)
+
+    def test_zero_prior_denominator_guards_to_zero(self) -> None:
+        """A zero prior-year cohort guards col 0040 to 0.0 (no div-by-zero)."""
+        data = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1"],
+                "approach_applied": ["foundation_irb"],
+                "exposure_class": ["corporate"],
+                "ead_final": [500.0],
+                "rwa_final": [0.0],
+                "pd_floored": [1.0],
+                "is_defaulted": [True],
+                "counterparty_reference": ["CP_A"],
+                "prior_year_obligor_count": [0.0],
+            }
+        )
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(data, framework="CRR")
+        corp = bundle.c08_05["corporate"]
+        row = corp.filter(pl.col("row_ref") == "0170")
+        assert row["0020"][0] == pytest.approx(0.0)
+        assert row["0030"][0] == pytest.approx(1.0)
+        assert row["0040"][0] == pytest.approx(0.0)

@@ -238,7 +238,15 @@ def _copy_of_0040(cells: Mapping[str, float | None], _prior: bool) -> float | No
 
 
 def _observed_rate(cells: Mapping[str, float | None], _prior: bool) -> float | None:
-    """C 08.05 col 0040 = defaults / obligors (0.0 when no obligors)."""
+    """C 08.05 col 0040 = col 0030 / col 0020 as rendered (0.0 when no obligors).
+
+    The denominator is col 0020 — the obligor count at the start of the
+    observation period (prior-year cohort when ``prior_year_obligor_count`` is
+    supplied, else the current-period fallback col 0020 itself reports). Col
+    0030 (defaulted during the year) over col 0020 is the accepted cross-period
+    proxy for the observed default rate; keeping the denominator equal to col
+    0020 makes the disclosure internally consistent (Annex II C 08.05).
+    """
     obligors = cells["0020"] or 0.0
     if obligors <= 0:
         return 0.0
@@ -1044,10 +1052,7 @@ def generate_c08_05(
         spec = TemplateSpec(
             name="c08_05", rows=rows, column_refs=column_refs, cells=cells, empty_cell="zero"
         )
-        frame = execute(spec, banded)
-        if prior_present:
-            frame = _c08_05_rate_postfix(frame, banded, band_rows, data_cols)
-        result[ec] = frame
+        result[ec] = execute(spec, banded)
     return result
 
 
@@ -1060,34 +1065,6 @@ def _c08_05_prepare(data: pl.DataFrame, cols: set[str], report_pd_col: str) -> p
     else:
         flag = pl.lit(value=False)
     return data.with_columns(flag.alias("c08_05_defaulted"))
-
-
-def _c08_05_rate_postfix(
-    frame: pl.DataFrame,
-    banded: pl.DataFrame,
-    band_rows: list[tuple[str, str]],
-    cols: set[str],
-) -> pl.DataFrame:
-    """When a prior-year carrier is supplied, col 0040 still divides by the
-    CURRENT obligor count (not the prior sum in col 0020) — recompute."""
-    cp_present = "counterparty_reference" in cols
-    fixes: dict[str, float] = {}
-    for ref, label in band_rows:
-        bucket = banded.filter(pl.col("c08_pd_range") == label)
-        obligors = (
-            float(bucket["counterparty_reference"].n_unique()) if cp_present else float(len(bucket))
-        )
-        defaulted = bucket.filter(pl.col("c08_05_defaulted"))
-        defaults = (
-            float(defaulted["counterparty_reference"].n_unique())
-            if cp_present
-            else float(len(defaulted))
-        )
-        fixes[ref] = defaults / obligors if obligors > 0 else 0.0
-    expr: pl.Expr = pl.col("0040")
-    for ref, value in fixes.items():
-        expr = pl.when(pl.col("row_ref") == ref).then(pl.lit(value)).otherwise(expr)
-    return frame.with_columns(expr.alias("0040"))
 
 
 # =============================================================================

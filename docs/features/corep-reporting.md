@@ -1699,6 +1699,24 @@ substitution effects).
     | **Removed rows** | — | 0130 (short-term credit assessment) |
     | **Renamed rows** | — | 0090 (RE), 0150 (subordinated debt/equity) |
 
+!!! info "How the Basel 3.1 real-estate and SL rows are keyed"
+    Row **0090 (Real estate exposures)** and its of-which sub-rows key the
+    Basel 3.1 real-estate reporting classes — `retail_mortgage` (retail
+    residential RE) plus the SA loan-splitter's `residential_mortgage` /
+    `commercial_mortgage` secured legs — so RE exposure lands in a class row
+    rather than surviving only in the country Total. The sub-rows split that
+    class: **0091/0092** (regulatory residential / commercial RE) by
+    `property_type` and the qualifying-RE flag, **0093** (other RE) for
+    non-qualifying exposures, **0094** (land ADC) by the ADC flag, and **0095**
+    the SME of-which. Income-producing commercial RE that classifies as
+    `corporate` stays in the corporate parent row 0070 (as it does under CRR),
+    keeping row 0090 a clean class partition. The specialised-lending rows
+    **0071–0073** split the corporate parent row 0070 by `sl_type` (object /
+    commodities / project finance) — SL remains a corporate sub-type under SA
+    (Art. 112(1)(g)), so this adds granularity only. **CRR C 09.01 is
+    unaffected** — its rows key `retail_mortgage` / `corporate` directly and
+    never reach the RE/SL branch.
+
 ---
 
 ## C 09.02 / OF 09.02 — CR GB 2 (Geographical Breakdown IRB)

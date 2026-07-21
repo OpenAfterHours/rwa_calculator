@@ -18,8 +18,12 @@ Cell semantics (recorded decisions, this slice):
   ``reporting_class_origin`` (== raw ``exposure_class`` for the IRB
   book — number-neutral convergence; the IRB template has no default
   row by design) over the ``reporting_approach_origin`` population.
-  Under B31 the RE-split mortgage classes match no class row and
-  surface ONLY in the Total row.
+  Under B31 the RE reporting classes (retail_mortgage /
+  residential_mortgage / commercial_mortgage — the Art. 124A standalone
+  RE class plus the loan-splitter's secured legs) key the "Real estate
+  exposures" row 0090 and its regulatory-RRE / regulatory-CRE / other-RE
+  / ADC / SME "of which" sub-rows (0091-0095); the SA specialised-lending
+  "of which" sub-rows (0071-0073) key sl_type (rectification R7).
 - C 09.01 shares C 07.00's population (``c07_population`` — the SA book
   plus BOTH counterparty-credit-risk populations: FCCM SFT synthetic rows
   and SA-CCR derivative netting sets, admitted by ``risk_type``). That
@@ -28,12 +32,28 @@ Cell semantics (recorded decisions, this slice):
   ``standardised_ccr`` output-floor relabel and never reached either
   template. C 09.02 is the IRB book INCLUDING slotting (the retired inline
   comment claiming exclusion was misleading).
-- The retired reverse-map row keying is preserved: a row whose key is not
-  a ``C09_01_SA_CLASS_MAP`` value renders ALL-NULL (the SME / short-term /
-  CIU / real-estate sub-rows are permanently null — recorded dead code,
-  never "fixed"); the corporate rows fan in corporate + corporate_sme +
-  specialised_lending; retail fans in retail_other (+ retail_qrre /
-  retail_mortgage per template).
+- The reverse-map row keying handles the plain class rows: a row whose key
+  is not a ``C09_01_SA_CLASS_MAP`` value AND not an RE/SL key renders
+  ALL-NULL (the corporate_sme / retail_sme / mortgage_sme, short-term and
+  CIU sub-rows stay permanently null — recorded dead code, out of R7
+  scope; the RE-SME row 0095 IS implemented); the corporate rows fan in
+  corporate + corporate_sme + specialised_lending; retail fans in
+  retail_other (+ retail_qrre / retail_mortgage per template). The B31-only
+  RE rows (0090-0095) and SA specialised-lending rows (0071-0073) bypass
+  the reverse map via ``_c09_01_re_sl_pred`` (rectification R7): these keys
+  never occur in CRR_C09_01_ROWS, so CRR C 09.01 is untouched.
+- Recorded decision (R7): row 0090 keys the SEALED RE classes
+  (retail_mortgage / residential_mortgage / commercial_mortgage). B31
+  Art. 124I / Table A2 places income-producing CRE within the standalone
+  real-estate class, but this pipeline's classifier seals IPRE-CRE as
+  ``reporting_class_origin == "corporate"``, so it deliberately stays in
+  row 0070 — keying 0090 on a secured-by-RE flag instead would count the
+  same leg in both 0070 and 0090 and break the row-0170 Total tie-out this
+  fix restored. If the classifier's IPRE-CRE scoping changes, row 0090
+  follows automatically. The 0091-0094 sub-rows partition the RE class
+  only for well-formed books: an ADC leg whose property_type is also
+  residential/commercial + qualifying lands in 0094 AND 0091/0092, and a
+  qualifying RE leg with an unrecognised property_type sits in 0090 only.
 - Empty class rows render ALL-NULL (the dominant null path); the Total
   rows (0170 / 0150) compute over the WHOLE country frame — never nulled,
   and they aggregate exposures no class row displays.
@@ -121,6 +141,42 @@ _C09_02_RE_ROWS: dict[str, tuple[tuple[str, ...], bool]] = {
 
 _CORPORATE_FAMILY: tuple[str, ...] = ("corporate", "corporate_sme")
 
+# B31 real-estate reporting classes (Art. 124A-124L: under Basel 3.1 real
+# estate is a standalone SA exposure class). The SA loan-splitter
+# (engine/stages/re_split) reclassifies property-secured non-RE exposures into
+# residential_mortgage / commercial_mortgage secured legs; retail residential RE
+# keeps the retail_mortgage class. These are the reporting_class_origin /
+# exposure_class values that key OF 09.01 "Real estate exposures" row 0090.
+_C09_01_RE_CLASSES: tuple[str, ...] = (
+    "retail_mortgage",
+    "residential_mortgage",
+    "commercial_mortgage",
+)
+
+# OF 09.01 real-estate "of which" sub-rows (0091-0095): the presence-tolerant
+# equals terms narrowing the RE class union. property_type / is_adc / is_sme are
+# read raw (a null there correctly excludes the exposure from the sub-row);
+# c09_re_qualifying is the derived null->True regulatory flag (see
+# ``_c09_01_derived_exprs``). ADC (0094) and the SME "of which" (0095) cross-cut
+# the residential/commercial/other partition, mirroring C 07.00's RE memo rows.
+_C09_01_RE_ROW_TERMS: dict[str, tuple[tuple[str, str | bool], ...]] = {
+    "re_residential": (("property_type", "residential"), ("c09_re_qualifying", True)),
+    "re_commercial": (("property_type", "commercial"), ("c09_re_qualifying", True)),
+    "re_other": (("c09_re_qualifying", False),),
+    "re_adc": (("is_adc", True),),
+    "re_sme": (("is_sme", True),),
+}
+
+# OF 09.01 SA specialised-lending "of which" sub-rows (0071-0073) keyed by the
+# basis-independent sl_type discriminator (Art. 122A). SL money already fans
+# into the corporate parent row 0070 via C09_01_SA_CLASS_MAP, so these add only
+# object/commodities/project-finance granularity.
+_C09_01_SL_TYPE_MAP: dict[str, str] = {
+    "sl_object_finance": "object_finance",
+    "sl_commodities_finance": "commodities_finance",
+    "sl_project_finance": "project_finance",
+}
+
 
 class _Row:
     """Minimal TemplateRow for the geo templates."""
@@ -163,9 +219,22 @@ def generate_c09_01(
     sa_df = c07_population(results, cols).collect()
     if sa_df.height == 0:
         return {}
-    data = sa_df.with_columns(_defaulted_expr(cols).alias("c09_defaulted"))
+    data = sa_df.with_columns(_c09_01_derived_exprs(set(sa_df.columns)))
     spec, row_preds = _c09_01_spec(set(data.columns), framework)
     return _per_country_sheets(data, spec, row_preds, post=None)
+
+
+def _c09_01_derived_exprs(cols: set[str]) -> list[pl.Expr]:
+    """The C 09.01 discriminator columns: the defaulted ladder plus the RE-family
+    regulatory flag. ``c09_re_qualifying`` fills a null ``is_qualifying_re`` to
+    True — identical to C 07.00's ``c07_qualifying_re``, so a real-estate exposure
+    with an unset qualifying flag counts as regulatory RE (rows 0091/0092) rather
+    than "other real estate" (row 0093). property_type / is_adc / is_sme are read
+    raw by the RE sub-row predicates (a null there correctly excludes the row)."""
+    exprs: list[pl.Expr] = [_defaulted_expr(cols).alias("c09_defaulted")]
+    if "is_qualifying_re" in cols:
+        exprs.append(pl.col("is_qualifying_re").fill_null(value=True).alias("c09_re_qualifying"))
+    return exprs
 
 
 def _c09_01_row_pred(row_def: COREPRow, basis_col: str) -> RowPredicate | None:
@@ -185,10 +254,37 @@ def _c09_01_row_pred(row_def: COREPRow, basis_col: str) -> RowPredicate | None:
     key = row_def.exposure_class_value
     if key is None:
         return None
+    re_sl = _c09_01_re_sl_pred(key, basis_col)
+    if re_sl is not None:
+        return re_sl
     classes = sorted(ec for ec, mapped in C09_01_SA_CLASS_MAP.items() if mapped == key)
     if not classes:
         return None
     return _class_union(*classes, col=basis_col)
+
+
+def _c09_01_re_sl_pred(key: str, basis_col: str) -> RowPredicate | None:
+    """The B31-only real-estate (rows 0090-0095) and SA specialised-lending
+    (rows 0071-0073) predicates — the retired reverse-map short-circuited these
+    keys to permanently null (recorded dead code, rectification R7). Returns
+    None for every non-RE/SL key so the caller falls through to the reverse map;
+    CRR row keys never reach an RE/SL key, so CRR C 09.01 is untouched.
+
+    - ``real_estate`` (0090): the RE class union over ``basis_col`` (applied
+      basis for the primary columns, original basis for the 0020 memo).
+    - ``re_residential`` / ``re_commercial`` (0091/0092): regulatory RE narrowed
+      by property_type + the qualifying flag.
+    - ``re_other`` (0093): non-regulatory RE (is_qualifying_re explicitly False).
+    - ``re_adc`` (0094) / ``re_sme`` (0095): the ADC and SME "of which".
+    - ``sl_*`` (0071-0073): SA specialised lending by sl_type."""
+    if key in _C09_01_SL_TYPE_MAP:
+        return RowPredicate(equals=(("sl_type", _C09_01_SL_TYPE_MAP[key]),))
+    if key != "real_estate" and key not in _C09_01_RE_ROW_TERMS:
+        return None
+    re_union = _class_union(*_C09_01_RE_CLASSES, col=basis_col)
+    if key == "real_estate":
+        return re_union
+    return _narrow(re_union, *_C09_01_RE_ROW_TERMS[key])
 
 
 def _c09_01_spec(
@@ -503,11 +599,21 @@ def _either_pred(primary: RowPredicate | None, memo: RowPredicate | None) -> Row
     """The row-emptiness basis for C 09.01: a row is null only when BOTH
     its primary (applied-class) and memo (original-class) subsets are
     empty — a class row whose only exposures defaulted keeps its 0020
-    memo while the primary columns move to row 0100."""
+    memo while the primary columns move to row 0100.
+
+    An RE sub-row carries a basis-KEYED class union (any_of over
+    reporting_class_origin vs exposure_class) alongside basis-INDEPENDENT
+    discriminator terms (property_type / qualifying / ADC / SME in equals).
+    Those discriminators are shared across the two bases, so the combined
+    emptiness predicate keeps them (equals) and unions only the class limbs
+    (any_of) — dropping the discriminators here would wrongly un-null a
+    residential sub-row whenever any commercial RE existed."""
     if primary is None:
         return memo
     if memo is None:
         return primary
+    if primary.equals and (primary.any_of or memo.any_of):
+        return RowPredicate(equals=primary.equals, any_of=(*primary.any_of, *memo.any_of))
     limbs: list[RowPredicate] = []
     for pred in (primary, memo):
         if pred.any_of:
@@ -521,6 +627,13 @@ def _either_pred(primary: RowPredicate | None, memo: RowPredicate | None) -> Row
 
 def _conjoin(pred: RowPredicate, term: tuple[str, str | bool]) -> RowPredicate:
     return RowPredicate(equals=(*pred.equals, term), any_of=pred.any_of)
+
+
+def _narrow(pred: RowPredicate, *terms: tuple[str, str | bool]) -> RowPredicate:
+    """Conjoin extra presence-tolerant equals terms onto a (possibly
+    class-union) predicate, preserving its any_of limbs (the variadic
+    ``_conjoin`` used by the RE sub-row predicates)."""
+    return RowPredicate(equals=(*pred.equals, *terms), any_of=pred.any_of)
 
 
 def _sum_or_null(col: str | None, pred: RowPredicate) -> CellSpec:

@@ -530,3 +530,182 @@ class TestC0901DefaultedAllocation:
         assert inst["0010"][0] == pytest.approx(0.0)  # primary moved to 0100
         default_row = total.filter(pl.col("row_ref") == "0100")
         assert default_row["0010"][0] == pytest.approx(600.0)
+
+
+def _b31_re_results() -> pl.LazyFrame:
+    """B31 SA real-estate book — one exposure per RE sub-row plus a corporate
+    control. RE reporting classes: retail_mortgage (retail RRE), and the SA
+    loan-splitter's residential_mortgage / commercial_mortgage secured legs."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["RRE", "RESI", "CRE", "OTHR", "ADC", "CORP"],
+            "approach_applied": ["standardised"] * 6,
+            "exposure_class": [
+                "retail_mortgage",
+                "residential_mortgage",
+                "commercial_mortgage",
+                "commercial_mortgage",
+                "commercial_mortgage",
+                "corporate",
+            ],
+            "ead_final": [400.0, 300.0, 1000.0, 200.0, 150.0, 5000.0],
+            "ead_gross": [400.0, 300.0, 1000.0, 200.0, 150.0, 5000.0],
+            "rwa_final": [140.0, 105.0, 500.0, 300.0, 225.0, 5000.0],
+            "cp_country_code": ["GB"] * 6,
+            "property_type": [
+                "residential",
+                "residential",
+                "commercial",
+                "residential",
+                "adc",
+                None,
+            ],
+            "is_qualifying_re": [True, True, True, False, True, None],
+            "is_adc": [False, False, False, False, True, None],
+            "is_sme": [False, False, False, False, False, False],
+            "default_status": [False] * 6,
+        }
+    )
+
+
+def _b31_sl_results() -> pl.LazyFrame:
+    """B31 SA specialised lending — one exposure per sl_type plus a plain
+    corporate. SL maps to the corporate parent row 0070 (Art. 112(1)(g)); the
+    of-which rows 0071-0073 split it back out by sl_type."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["OF", "CF", "PF", "CORP"],
+            "approach_applied": ["standardised"] * 4,
+            "exposure_class": [
+                "specialised_lending",
+                "specialised_lending",
+                "specialised_lending",
+                "corporate",
+            ],
+            "sl_type": ["object_finance", "commodities_finance", "project_finance", None],
+            "ead_final": [100.0, 200.0, 300.0, 1000.0],
+            "ead_gross": [100.0, 200.0, 300.0, 1000.0],
+            "rwa_final": [100.0, 200.0, 300.0, 1000.0],
+            "cp_country_code": ["GB"] * 4,
+            "default_status": [False] * 4,
+        }
+    )
+
+
+class TestC0901B31RealEstateRows:
+    """OF 09.01 real-estate rows 0090-0095 (rectification R7).
+
+    Before R7 every RE row was permanently null because the reverse map had no
+    ``real_estate`` / ``re_*`` value, so B31 RE money (retail mortgages, the
+    loan-splitter's secured legs) was missing from every class row and only
+    survived in the country Total. These rows now key the RE reporting classes.
+    """
+
+    @staticmethod
+    def _total() -> pl.DataFrame:
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_b31_re_results(), framework="BASEL_3_1")
+        return bundle.c09_01["TOTAL"]
+
+    def test_parent_row_0090_sums_all_re_classes(self) -> None:
+        row = self._total().filter(pl.col("row_ref") == "0090")
+        # retail_mortgage 400 + residential_mortgage 300 + commercial_mortgage (1000+200+150)
+        assert row["0075"][0] == pytest.approx(2050.0)
+        assert row["0010"][0] == pytest.approx(2050.0)
+
+    def test_row_0091_regulatory_residential(self) -> None:
+        # RRE (retail_mortgage, residential, qualifying) + RESI (residential_mortgage).
+        row = self._total().filter(pl.col("row_ref") == "0091")
+        assert row["0075"][0] == pytest.approx(700.0)
+
+    def test_row_0092_regulatory_commercial(self) -> None:
+        # CRE (commercial_mortgage, commercial, qualifying) only.
+        row = self._total().filter(pl.col("row_ref") == "0092")
+        assert row["0075"][0] == pytest.approx(1000.0)
+
+    def test_row_0093_other_real_estate(self) -> None:
+        # OTHR (is_qualifying_re explicitly False).
+        row = self._total().filter(pl.col("row_ref") == "0093")
+        assert row["0075"][0] == pytest.approx(200.0)
+
+    def test_row_0094_land_adc(self) -> None:
+        # ADC (is_adc True).
+        row = self._total().filter(pl.col("row_ref") == "0094")
+        assert row["0075"][0] == pytest.approx(150.0)
+
+    def test_re_sub_rows_partition_the_parent(self) -> None:
+        """0090 == 0091 + 0092 + 0093 + 0094 (the property/qualifying/ADC
+        discriminators partition the RE class for this well-formed book)."""
+        total = self._total()
+
+        def ead(ref: str) -> float:
+            return float(total.filter(pl.col("row_ref") == ref)["0075"][0])
+
+        assert ead("0090") == pytest.approx(ead("0091") + ead("0092") + ead("0093") + ead("0094"))
+
+    def test_row_0095_re_sme_is_null_without_sme(self) -> None:
+        # No RE exposure is SME here -> the SME of-which row stays null.
+        row = self._total().filter(pl.col("row_ref") == "0095")
+        assert row["0075"][0] is None
+
+    def test_re_money_not_double_counted_in_corporate(self) -> None:
+        # commercial_mortgage is an RE class, NOT corporate — the corporate row
+        # holds only the plain corporate control (5000).
+        corp = self._total().filter(pl.col("row_ref") == "0070")
+        assert corp["0075"][0] == pytest.approx(5000.0)
+
+    def test_total_row_still_covers_the_whole_book(self) -> None:
+        # Regression guard for the high-severity finding: RE money is in a class
+        # row now, and the Total equals the sum of all populated class rows.
+        total = self._total()
+        grand = float(total.filter(pl.col("row_ref") == "0170")["0075"][0])
+        assert grand == pytest.approx(2050.0 + 5000.0)
+
+
+class TestC0901B31SpecialisedLendingRows:
+    """OF 09.01 SA specialised-lending of-which rows 0071-0073 (rectification R7)."""
+
+    @staticmethod
+    def _total() -> pl.DataFrame:
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_b31_sl_results(), framework="BASEL_3_1")
+        return bundle.c09_01["TOTAL"]
+
+    def test_sl_stays_in_corporate_parent_row_0070(self) -> None:
+        # SL (object/commodities/project = 600) + corporate 1000 all in row 0070.
+        corp = self._total().filter(pl.col("row_ref") == "0070")
+        assert corp["0075"][0] == pytest.approx(1600.0)
+
+    def test_row_0071_object_finance(self) -> None:
+        row = self._total().filter(pl.col("row_ref") == "0071")
+        assert row["0075"][0] == pytest.approx(100.0)
+
+    def test_row_0072_commodities_finance(self) -> None:
+        row = self._total().filter(pl.col("row_ref") == "0072")
+        assert row["0075"][0] == pytest.approx(200.0)
+
+    def test_row_0073_project_finance(self) -> None:
+        row = self._total().filter(pl.col("row_ref") == "0073")
+        assert row["0075"][0] == pytest.approx(300.0)
+
+
+class TestC0901CrrRealEstateUnchanged:
+    """CRR C 09.01 must be untouched by R7 — its rows key retail_mortgage /
+    corporate directly and never reach the RE/SL branch."""
+
+    def test_crr_retail_mortgage_in_row_0090(self) -> None:
+        # CRR row 0090 is "Secured by mortgages" keyed retail_mortgage.
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_b31_re_results(), framework="CRR")
+        total = bundle.c09_01["TOTAL"]
+        # retail_mortgage 400 -> CRR row 0090; the mortgage-class loan-split legs
+        # (residential_mortgage / commercial_mortgage) have no CRR row and stay in
+        # the Total only (pre-existing CRR behaviour, out of R7 scope).
+        assert total.filter(pl.col("row_ref") == "0090")["0075"][0] == pytest.approx(400.0)
+
+    def test_crr_has_no_re_sl_sub_rows(self) -> None:
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_b31_sl_results(), framework="CRR")
+        refs = bundle.c09_01["TOTAL"]["row_ref"].to_list()
+        for ref in ("0071", "0072", "0073", "0091", "0092", "0093", "0094"):
+            assert ref not in refs

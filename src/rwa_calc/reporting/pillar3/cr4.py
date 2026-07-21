@@ -11,7 +11,14 @@ docs/plans/phase7-declarative-reporting.md §6):
 - The template narrows to the ORIGIN standardised population
   (``reporting_approach_origin`` — the same membership as the retired
   ``approach_applied`` filter; a post-substitution APPROACH retarget remains
-  an open F-decision, matching OV1).
+  an open F-decision, matching OV1) MINUS the non-credit-risk synthetic legs.
+  CR4 is SA CREDIT risk excluding counterparty credit risk and settlement
+  risk (disclosed in CCR1-CCR8), so ``sa_scope.sa_credit_risk_population``
+  drops the SA-CCR / FCCM-SFT netting sets, default-fund and failed-trade
+  legs BEFORE execution — over ALL columns, so a row's RWEA (col e) never
+  covers exposure the on/off-balance-sheet columns (a-d) omit — and
+  reclassifies the ``facility_undrawn`` commitment leg to off-balance-sheet.
+  See ``pillar3/sa_scope.py`` for the recorded population/BS decision.
 - Columns a/b ("exposures before CF/CCF and CRM": gross drawn+interest /
   nominal+undrawn) key each class row on ``reporting_class_origin`` — the
   obligor's applied Art. 112 class, the COREP C 07.00 column 0010 "original
@@ -50,6 +57,7 @@ from rwa_calc.reporting.cellspec import (
     TemplateSpec,
     execute,
 )
+from rwa_calc.reporting.pillar3.sa_scope import sa_credit_risk_population
 from rwa_calc.reporting.pillar3.templates import get_cr4_columns, get_cr4_rows
 
 if TYPE_CHECKING:
@@ -146,10 +154,13 @@ def generate_cr4(
     Preserves the imperative generator's error contract: a missing
     ``ead_final`` or RWA column (impossible on the sealed ledger; reachable
     via direct invocation with synthetic frames) records the CR4 error and
-    yields no template.
+    yields no template. The population is first narrowed to the SA credit-risk
+    book (counterparty-credit-risk and settlement legs dropped; the
+    facility_undrawn commitment reclassified off-balance-sheet) so every
+    column reports over one population — ``sa_scope.sa_credit_risk_population``.
     """
     if "ead_final" not in cols or not ({"rwa_final", "rwa"} & cols):
         errors.append("CR4: missing EAD or RWA column")
         return None
     spec = _CR4_SPECS.get(framework) or build_cr4_spec(framework)
-    return execute(spec, results)
+    return execute(spec, sa_credit_risk_population(results, cols))

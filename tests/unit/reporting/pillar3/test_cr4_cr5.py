@@ -133,6 +133,36 @@ def _make_substituted_data() -> pl.LazyFrame:
     )
 
 
+def _make_mixed_bs_ccr_data() -> pl.LazyFrame:
+    """One corporate loan (on-BS), one corporate facility_undrawn commitment
+    (off-BS — sealed ``reporting_on_balance_sheet`` null), and one institution
+    SA-CCR derivative netting set (counterparty credit risk).
+
+    Reproduces the ``ccr_crr`` golden bug the R3 fix closes at unit grain: the
+    institution row disclosed the derivative RWEA (col e) while its on/off-BS
+    columns (a-d) were empty, and the facility_undrawn commitment was absent
+    from the off-BS columns but present in the RWEA — neither row reconciled
+    ``c + d`` to ``e``. All three legs carry ``standardised`` origin so the
+    exclusion cannot lean on the Basel 3.1 ``standardised_ccr`` relabel.
+    """
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["LN1", "FU1", "NS1"],
+            "approach_applied": ["standardised", "standardised", "standardised"],
+            "exposure_class": ["corporate", "corporate", "institution"],
+            "exposure_type": ["loan", "facility_undrawn", "ccr_netting_set"],
+            "risk_type": [None, None, "CCR_DERIVATIVE"],
+            "ead_final": [1000.0, 500.0, 2000.0],
+            "rwa_final": [1000.0, 500.0, 2500.0],
+            "risk_weight": [1.0, 1.0, 1.25],
+            "drawn_amount": [900.0, 0.0, 2000.0],
+            "interest": [100.0, 0.0, 0.0],
+            "nominal_amount": [0.0, 500.0, 0.0],
+            "undrawn_amount": [0.0, 500.0, 0.0],
+        }
+    )
+
+
 @pytest.fixture
 def generator() -> Pillar3Generator:
     return LedgerShimPillar3Generator()
@@ -390,3 +420,77 @@ class TestCR5CurrencyMismatchBucketing:
             f"Mismatch row EAD (100_000) must NOT be in Other/Deducted ('ac'), "
             f"but got {ead_in_other}."
         )
+
+
+# ---------------------------------------------------------------------------
+# R3 — CR4/CR5 population symmetry (SA credit risk excl. CCR/settlement)
+# ---------------------------------------------------------------------------
+
+
+class TestCR4CR5PopulationSymmetry:
+    """CR4 and CR5 compute every column over the SAME population.
+
+    CR4/CR5 disclose SA CREDIT risk excluding counterparty credit risk and
+    settlement risk (CRR Art. 444(e); CCR disclosed in CCR1-CCR8). The
+    ``sa_scope`` narrowing drops the non-credit-risk synthetic legs entirely
+    and reclassifies the facility_undrawn commitment to off-balance-sheet, so
+    a row's RWEA (CR4 col e) never covers exposure its on/off-BS columns omit.
+    """
+
+    def test_cr4_ccr_leg_excluded_from_every_column(self, generator: Pillar3Generator):
+        """The institution row held ONLY the SA-CCR derivative: excluding it
+        zeroes the whole row (was e=2500 with a/b/c/d=0 — the un-reconciled
+        bug where RWEA was disclosed with no on/off-BS split)."""
+        bundle = generator.generate_from_lazyframe(_make_mixed_bs_ccr_data(), framework="CRR")
+        assert bundle.cr4 is not None
+        inst = bundle.cr4.filter(pl.col("row_ref") == "6")
+        for col in ("a", "b", "c", "d", "e"):
+            assert inst[col][0] == pytest.approx(0.0), col
+
+    def test_cr4_facility_undrawn_classified_off_balance_sheet(self, generator: Pillar3Generator):
+        """The undrawn commitment lands off-BS: its gross feeds col b and its
+        post-CCF EAD feeds col d (both were 0 before the fix), so the corporate
+        row reconciles c+d to the RWEA population."""
+        bundle = generator.generate_from_lazyframe(_make_mixed_bs_ccr_data(), framework="CRR")
+        assert bundle.cr4 is not None
+        corp = bundle.cr4.filter(pl.col("row_ref") == "7")
+        assert corp["a"][0] == pytest.approx(1000.0)  # on-BS gross drawn+interest (loan)
+        assert corp["b"][0] == pytest.approx(1000.0)  # off-BS gross nominal+undrawn (commitment)
+        assert corp["c"][0] == pytest.approx(1000.0)  # on-BS post-CRM EAD (loan)
+        assert corp["d"][0] == pytest.approx(500.0)  # off-BS post-CRM EAD (commitment)
+        assert corp["e"][0] == pytest.approx(1500.0)  # RWEA = loan + commitment; CCR excluded
+
+    def test_cr4_every_row_rwea_reconciles_to_on_off_bs_population(
+        self, generator: Pillar3Generator
+    ):
+        """No CR4 row discloses RWEA (col e) without a reconciling on/off-BS
+        EAD (c+d): the population of col e is exactly the union of the on- and
+        off-balance-sheet split columns."""
+        bundle = generator.generate_from_lazyframe(_make_mixed_bs_ccr_data(), framework="CRR")
+        assert bundle.cr4 is not None
+        for row in bundle.cr4.filter(pl.col("e").is_not_null()).iter_rows(named=True):
+            c, d, e = row["c"] or 0.0, row["d"] or 0.0, row["e"] or 0.0
+            if e > 0.0:
+                assert (c + d) > 0.0, f"row {row['row_ref']}: RWEA {e} with no on/off-BS EAD"
+        total = bundle.cr4.filter(pl.col("row_ref") == "17")
+        # Total post-CRM EAD = loan 1000 + commitment 500; the CCR leg (2000) is excluded.
+        assert (total["c"][0] + total["d"][0]) == pytest.approx(1500.0)
+
+    def test_cr5_ccr_excluded_and_facility_undrawn_off_bs(self, generator: Pillar3Generator):
+        """CR5 uses the same population: the CCR institution row zeroes out and
+        the facility_undrawn commitment reports on the off-BS side (col bb)."""
+        crr = generator.generate_from_lazyframe(_make_mixed_bs_ccr_data(), framework="CRR")
+        assert crr.cr5 is not None
+        # CRR Total col p: institution row is CCR-only -> 0; corporate row keeps
+        # the loan + undrawn commitment EAD (CCR excluded from the population).
+        assert crr.cr5.filter(pl.col("row_ref") == "6")["p"][0] == pytest.approx(0.0)
+        assert crr.cr5.filter(pl.col("row_ref") == "7")["p"][0] == pytest.approx(1500.0)
+
+        b31 = generator.generate_from_lazyframe(_make_mixed_bs_ccr_data(), framework="BASEL_3_1")
+        assert b31.cr5 is not None
+        corp = b31.cr5.filter(pl.col("row_ref") == "7")
+        assert corp["ba"][0] == pytest.approx(1000.0)  # on-BS gross (loan)
+        assert corp["bb"][0] == pytest.approx(1000.0)  # off-BS gross (undrawn commitment)
+        inst = b31.cr5.filter(pl.col("row_ref") == "6")
+        assert inst["ba"][0] == pytest.approx(0.0)  # CCR derivative excluded
+        assert inst["bb"][0] == pytest.approx(0.0)

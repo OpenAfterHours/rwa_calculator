@@ -183,6 +183,15 @@ CR4 shows SA exposures before and after the application of credit conversion fac
 and credit risk mitigation (CRM), by exposure class. It demonstrates the net effect of CRM
 on the firm's SA credit risk.
 
+**Population.** CR4 and CR5 cover SA *credit risk only* (Art. 444(e)): counterparty credit
+risk legs (SA-CCR derivative netting sets, FCCM SFTs), CCP default-fund contributions and
+settlement failed trades are excluded from every cell — they are disclosed in the CCR-series
+templates instead (mirroring OV1's "credit risk excluding CCR" row 1, and deliberately the
+opposite of COREP C 07.00, which includes CCR by risk type). Synthetic `facility_undrawn`
+legs are genuine undrawn commitments and are reported off-balance-sheet. Every column of a
+row therefore reads the same population, so RWEA and the on/off-balance-sheet splits
+internally reconcile.
+
 ### Column Structure
 
 === "CRR (UK CR4)"

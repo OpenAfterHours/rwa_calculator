@@ -9,7 +9,15 @@ Cell semantics (the recorded F3 class-basis decision —
 docs/plans/phase7-declarative-reporting.md §6):
 
 - The template narrows to the ORIGIN standardised population
-  (``reporting_approach_origin``, matching CR4/OV1).
+  (``reporting_approach_origin``, matching CR4/OV1) MINUS the non-credit-risk
+  synthetic legs. CR5 is SA CREDIT risk excluding counterparty credit risk
+  and settlement risk (disclosed in CCR1-CCR8), so
+  ``sa_scope.sa_credit_risk_population`` drops the SA-CCR / FCCM-SFT netting
+  sets, default-fund and failed-trade legs BEFORE execution — over ALL columns
+  (bands, totals, RWEA and the ba/bb on/off-balance-sheet split) — and
+  reclassifies the ``facility_undrawn`` commitment leg to off-balance-sheet so
+  cols bb/bc cover the same population as the band/total columns. See
+  ``pillar3/sa_scope.py`` for the recorded population/BS decision.
 - CR5 carries ONLY post-CF/post-CRM figures (there is no "before CRM" column
   anywhere in the template), so every class row keys uniformly on the
   post-substitution ``reporting_class`` (C 07.00 column 0200 basis: the
@@ -65,6 +73,7 @@ from rwa_calc.reporting.cellspec import (
     WeightedAvg,
     execute,
 )
+from rwa_calc.reporting.pillar3.sa_scope import sa_credit_risk_population
 from rwa_calc.reporting.pillar3.templates import (
     get_cr5_columns,
     get_cr5_risk_weights,
@@ -195,13 +204,16 @@ def generate_cr5(
 
     Preserves the imperative generator's error contract: a missing
     ``ead_final`` or ``risk_weight`` column records the CR5 error and yields
-    no template.
+    no template. The population is first narrowed to the SA credit-risk book
+    (counterparty-credit-risk and settlement legs dropped; the
+    facility_undrawn commitment reclassified off-balance-sheet) so every
+    column reports over one population — ``sa_scope.sa_credit_risk_population``.
     """
     if "ead_final" not in cols or "risk_weight" not in cols:
         errors.append("CR5: missing EAD or risk_weight column")
         return None
     spec = _CR5_SPECS.get(framework) or build_cr5_spec(framework)
-    return execute(spec, _with_rw_bucket(results, cols))
+    return execute(spec, _with_rw_bucket(sa_credit_risk_population(results, cols), cols))
 
 
 def _with_rw_bucket(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:

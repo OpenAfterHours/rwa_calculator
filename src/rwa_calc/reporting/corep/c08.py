@@ -27,19 +27,30 @@ Cell semantics (recorded decisions, this slice):
   sub-splits gated on ``cp_apply_fi_scalar`` presence, defaulted sub-splits
   via the retired detection ladder, CRR supporting-factor deltas (the
   asymmetric dedicated flag names preserved), B31 adjustment/output-floor
-  columns, and the provisions ladder (SCRA/GCRA sums falling back to
-  ``provision_held`` only when they net to ~0 — a value-dependent branch
-  applied as a module post-step). The Annex II §1.3 "(-)" negation covers
+  columns, and the provisions ladder (SCRA/GCRA sums falling back, when they
+  net to ~0, to ``provision_held`` if the frame carries it else the sealed
+  ``provision_allocated`` — R10b; a value-dependent PER-CELL branch applied as
+  a module post-step). The Annex II §1.3 "(-)" negation covers
   the CRM substitution outflows 0040/0050/0060/0070 (both frameworks), B31's
   on-BS netting adjustment 0035 and slotting FCCM adjustments 0102/0103
   (structural-null today), the CRR supporting-factor adjustments 0256/0257,
   and provisions 0290 — applied AFTER the CRM waterfall (0090) has consumed
   the positive magnitudes, with a zero deduction normalised to ``+0.0``.
-- The column-presence-vs-value-nullness distinction is load-bearing: e.g.
-  column 0280 reads ``el_pre_adjustment`` whenever the COLUMN exists (its
-  null values fill to 0.0 — masking ``expected_loss`` on slotting sheets,
-  the recorded golden behaviour), falling back to ``expected_loss`` only
-  when the column is absent.
+- The EL memo columns 0280 (pre post-model adjustment) and its B31 twin 0282
+  (after post-model adjustments) coalesce PER LEG (R10a): they read the
+  formula-IRB ``el_pre_adjustment`` / ``el_after_adjustment`` where non-null
+  else the base ``expected_loss``. The adjustment columns exist whenever ANY
+  formula-IRB leg exists in the run but are NULL on slotting legs (their EL
+  comes from the slotting calculator, on ``expected_loss``), so the retired
+  Sum-with-null-fill reported a masked 0.0 for slotting EL on those sheets
+  while C 08.06 col 0090 (Sum ``expected_loss``) reported it correctly; the
+  coalesce is a value no-op on formula-IRB legs (el_pre == expected_loss
+  there) and surfaces the real slotting EL on slotting legs. The aggregator
+  injects ``el_pre_adjustment`` onto the sealed frame under BOTH frameworks
+  (CRR's ``apply_post_model_adjustments`` copies expected_loss into it), so
+  the coalesce corrects 0280 for either framework's slotting sheets; B31 alone
+  additionally carries 0282 (``el_after_adjustment``). The derived
+  ``c08_el_pre`` / ``c08_el_after`` columns are built in ``_prepare``.
 - C 08.02's rows are data-driven (distinct firm grades when
   ``cp_internal_rating_grade`` has values, else the populated fixed PD
   bands, plus an "Unassigned" residual); ``row_ref == row_name == the
@@ -294,6 +305,33 @@ def _prepare(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
         elif "pd_floored" in cols:
             exprs.append((corp & unrated & (pl.col("pd_floored") <= 0.005)).alias("c08_unrated_ig"))
 
+    # Col 0280/0282 expected-loss coalesce (R10a). The formula-IRB post-model-
+    # adjustment EL columns (``el_pre_adjustment`` / ``el_after_adjustment``,
+    # engine/irb/adjustments.py::apply_post_model_adjustments) are produced ONLY
+    # on the formula-IRB leg, so they are NULL on slotting legs — whose real EL
+    # rides on ``expected_loss`` (from the slotting calculator). A plain
+    # Sum("el_pre_adjustment") fills those slotting nulls to 0.0, masking the
+    # slotting EL that C 08.06 col 0090 reports correctly as Sum("expected_loss").
+    # A PER-LEG coalesce reports the formula-IRB adjustment EL where present, else
+    # the base expected_loss — a value no-op on formula-IRB legs (el_pre_adjustment
+    # == expected_loss there) that surfaces the true slotting EL on slotting legs.
+    if "el_pre_adjustment" in cols:
+        exprs.append(
+            (
+                pl.coalesce("el_pre_adjustment", "expected_loss")
+                if "expected_loss" in cols
+                else pl.col("el_pre_adjustment")
+            ).alias("c08_el_pre")
+        )
+    if "el_after_adjustment" in cols:
+        exprs.append(
+            (
+                pl.coalesce("el_after_adjustment", "expected_loss")
+                if "expected_loss" in cols
+                else pl.col("el_after_adjustment")
+            ).alias("c08_el_after")
+        )
+
     return data.with_columns(exprs)
 
 
@@ -491,11 +529,14 @@ def _value_cells(  # noqa: C901, PLR0915 - the full C 08.01/02 column surface
             else CellSpec(Formula(refs=(), fn=_const(None)))
         ),
         "0280": CellSpec(
-            Sum("el_pre_adjustment" if "el_pre_adjustment" in cols else "expected_loss"),
+            Sum("c08_el_pre" if "el_pre_adjustment" in cols else "expected_loss"),
             predicate=member,
         ),
         "0281": CellSpec(Sum("post_model_adjustment_el"), predicate=member),
-        "0282": CellSpec(Sum("el_after_adjustment"), predicate=member),
+        "0282": CellSpec(
+            Sum("c08_el_after" if "el_after_adjustment" in cols else "el_after_adjustment"),
+            predicate=member,
+        ),
         "0290": CellSpec(
             SafeSum(("scra_provision_amount", "gcra_provision_amount")), predicate=member
         ),
@@ -1528,10 +1569,33 @@ def _provisions_postfix(
     *,
     ref: str,
 ) -> pl.DataFrame:
-    """The retired provisions ladder: when the SCRA/GCRA sum nets to ~0 AND
-    a ``provision_held`` column exists, the cell reports the held sum
-    instead (a value-dependent branch — applied per row subset)."""
-    if ref not in frame.columns or "provision_held" not in cols:
+    """The provisions ladder: when the SCRA/GCRA base sum nets to ~0, swap the
+    whole cell to the best available provisions carrier for the row subset (a
+    value-dependent, PER-CELL branch — the recorded C 08 granularity, distinct
+    from C 07.00's per-row ladder).
+
+    The fallback carrier is ``provision_held`` when the frame carries it (the
+    synthetic COREP unit frames supply it), else the sealed ``provision_allocated``
+    (R10b). The retired ``provision_held``-only fallback was DEAD on every real
+    submission: ``provision_held`` is an input pass-through the aggregator seal
+    strips, so ``"provision_held" not in cols`` returned early and the provisions
+    cells (C 08.01/02 col 0290, C 08.03 col 0110, C 08.06 col 0100) rendered a
+    hard 0.0. ``provision_allocated`` is the sealed provisions carrier that IS
+    meaningful on the IRB book: unlike C 07.00's ``provision_deducted`` (R9), the
+    Art. 111(2) drawn-first deduction is SA-only (engine/crm/provisions.py —
+    IRB/Slotting: provision_on_drawn = 0, provision_on_nominal = 0, so
+    provision_deducted is STRUCTURALLY 0.0 on every IRB/slotting leg), whereas
+    provision_allocated is tracked for all approaches (it feeds the IRB EL
+    shortfall/excess). scra/gcra stay the preferred base; a book that supplies
+    them non-degenerately keeps that granular figure."""
+    fallback_col = (
+        "provision_held"
+        if "provision_held" in cols
+        else "provision_allocated"
+        if "provision_allocated" in cols
+        else None
+    )
+    if ref not in frame.columns or fallback_col is None:
         return frame
     needed: dict[str, RowPredicate | None] = {}
     for row_ref, pred in row_preds.items():
@@ -1547,7 +1611,7 @@ def _provisions_postfix(
     for row_ref, subset in subset_rows(class_df, needed).items():
         if subset.height == 0:
             continue
-        fixes[row_ref] = float(subset["provision_held"].fill_null(0.0).sum())
+        fixes[row_ref] = float(subset[fallback_col].fill_null(0.0).sum())
     if not fixes:
         return frame
     expr: pl.Expr = pl.col(ref)

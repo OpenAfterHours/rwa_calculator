@@ -200,6 +200,7 @@ def _empty_facility_undrawn_frame() -> pl.LazyFrame:
             "product_type": pl.String,
             "book_code": pl.String,
             "intragroup_zero_rw_eligible": pl.Boolean,
+            "is_under_irb_rollout": pl.Boolean,
             "counterparty_reference": pl.String,
             "original_counterparty_reference": pl.String,
             "value_date": pl.Date,
@@ -483,6 +484,10 @@ def _undrawn_select_expressions() -> list[pl.Expr]:
         # solo intragroup facility's headroom is weighted at 0% alongside its drawn
         # legs. MOF waterfall / residual sub-rows inherit the parent facility's value.
         pl.col("intragroup_zero_rw_eligible"),
+        # CRR Art. 148/150 IRB roll-out-plan flag — the facility's own flag
+        # (FACILITY_SCHEMA) flows onto its undrawn commitment row so its headroom
+        # counts alongside the drawn legs in COREP C 08.07 col 0040.
+        pl.col("is_under_irb_rollout"),
         pl.coalesce(
             pl.col("share_counterparty_reference"),
             pl.col("counterparty_reference"),

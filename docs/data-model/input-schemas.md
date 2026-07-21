@@ -218,6 +218,7 @@ See [Classification](../features/classification.md) for the complete classificat
 | `is_sft` | `Boolean` | No | Securities Financing Transaction — selects the F-IRB **0.5-year** repo-style supervisory maturity (`M`) under CRR **Art. 162(1)** (a fixed value, not a floor; deleted under Basel 3.1) |
 | `effective_maturity` | `Float64` | No | Explicit numeric `M` override (years) per CRR Art. 162(3) / PS1/26. When populated it supersedes the `maturity_date`-derived `M` and bypasses the 1-year floor — firm-owned judgement for short-term carve-outs |
 | `intragroup_entity_reference` | `String` | No | Non-null tags this facility as an intragroup claim on the named reporting entity (an `entity_reference` in the [Reporting Entity registry](#multi-entity-reporting-schemas)). Null (default) = external counterparty. Eliminated on a `consolidated` / `sub_consolidated` run, retained on `individual` — see [Multi-Entity Reporting](../features/multi-entity-reporting.md) |
+| `is_under_irb_rollout` | `Boolean` | No | CRR Art. 148: True if this SA-treated exposure is covered by the firm's approved sequential-implementation (roll-out) plan to move to IRB. A reporting-only flag — it changes no RWA/EAD; it splits the SA coverage in COREP C 08.07 / OF 08.07 into col 0040 (% subject to a roll-out plan) and col 0030 (% permanent partial use, Art. 150). Default False (permanent partial use) |
 
 **Valid `product_type` values:**
 
@@ -316,6 +317,7 @@ facilities = pl.DataFrame({
 | `due_diligence_performed` | `Boolean` | No | Basel 3.1 Art. 110A: True if the firm has performed the prescribed due-diligence assessment of the obligor. Required for the SA RW override below to apply. Absence raises diagnostic warning **SA004** under B3.1 |
 | `due_diligence_override_rw` | `Float64` | No | Basel 3.1 Art. 110A SA RW override (decimal, e.g. `1.50` for 150%). Applied as `max(calculated_rw, override_rw)` — the override can only **increase** the regulatory RW, never decrease it. CRR-only runs ignore this column |
 | `intragroup_entity_reference` | `String` | No | Intragroup tag — see Facility schema and [Multi-Entity Reporting](../features/multi-entity-reporting.md) |
+| `is_under_irb_rollout` | `Boolean` | No | CRR Art. 148 IRB roll-out-plan flag — see Facility schema. Reporting-only (COREP C 08.07 / OF 08.07 col 0040); default False |
 
 **Note:** Loans do not have CCF fields (`risk_type`, `ccf_modelled`, `is_short_term_trade_lc`) because CCF only applies to off-balance sheet items. For drawn loans, EAD = `drawn_amount` + `interest` directly.
 
@@ -378,6 +380,7 @@ loans = pl.DataFrame({
 | `due_diligence_performed` | `Boolean` | No | Basel 3.1 Art. 110A due-diligence attestation (see Loan schema) |
 | `due_diligence_override_rw` | `Float64` | No | Basel 3.1 Art. 110A SA RW override (max-only — see Loan schema) |
 | `intragroup_entity_reference` | `String` | No | Intragroup tag — see Facility schema and [Multi-Entity Reporting](../features/multi-entity-reporting.md) |
+| `is_under_irb_rollout` | `Boolean` | No | CRR Art. 148 IRB roll-out-plan flag — see Facility schema. Reporting-only (COREP C 08.07 / OF 08.07 col 0040); default False |
 
 **Example:**
 

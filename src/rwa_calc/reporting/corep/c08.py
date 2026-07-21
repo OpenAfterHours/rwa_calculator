@@ -121,7 +121,15 @@ Cell semantics (recorded decisions, this slice):
   denominators to 0.0; the structural-null rows are a FIXED set (empty
   real-class rows stay 0.0 — the opposite of C 07.00's empty-subset rule);
   B31 materiality columns 0160-0180 are always null (the retired
-  ``output_floor_config`` gate was dead code, recorded).
+  ``output_floor_config`` gate was dead code, recorded). Col 0040 ("% subject
+  to a roll-out plan", CRR Art. 148) carves the roll-out-plan slice out of the
+  SA coverage: the SA-treated legs (``~c0807_irb``) flagged by the optional
+  ``is_under_irb_rollout`` INPUT column go to 0040 and col 0030 drops to
+  permanent-partial-use only (Art. 150), preserving 0030 + 0040 == the whole SA
+  %. Absent the input column the slice is empty, 0040 = 0.0 and 0030 keeps the
+  whole SA share (byte-identical to the pre-R14 output). Col 0040 first carries
+  the roll-out EAD Sum and is rescaled to a percentage post-execute
+  (``_c08_07_rollout_pct``).
 
 References:
 - CRR Art. 142-191 (IRB); Art. 153 (risk weights), Art. 180 (PD
@@ -1416,6 +1424,7 @@ def _copy_of_0010(cells: Mapping[str, float | None], _prior: bool) -> float | No
 # =============================================================================
 
 
+@cites("CRR Art. 148")
 @cites("PS1/26, paragraph 1.3")
 def generate_c08_07(
     results: pl.LazyFrame,
@@ -1428,11 +1437,15 @@ def generate_c08_07(
     SA and IRB both enter (the IRB side is ``approach_applied`` membership
     in the pinned ``C08_07_IRB_APPROACHES`` — slotting counts as IRB; a
     null approach falls to SA); coverage percentages are intra-row
-    formulas guarding a zero denominator to 0.0. Rows with no exposure
-    class binding (and no aggregate rule) render ALL-NULL; empty real-class
-    rows stay 0.0 — the opposite split from C 07.00. The B31 materiality
-    columns 0160-0180 are structurally null regardless of reporting basis
-    (the retired ``output_floor_config`` gate was dead code).
+    formulas guarding a zero denominator to 0.0. Col 0040 ("% subject to a
+    roll-out plan", CRR Art. 148) is the SA-treated slice flagged by the
+    optional ``is_under_irb_rollout`` INPUT column, carved out of col 0030
+    (permanent partial use, Art. 150) so 0030 + 0040 == the whole SA coverage
+    %; with no roll-out input col 0040 is 0.0 and 0030 keeps the whole SA share.
+    Rows with no exposure class binding (and no aggregate rule) render ALL-NULL;
+    empty real-class rows stay 0.0 — the opposite split from C 07.00. The B31
+    materiality columns 0160-0180 are structurally null regardless of reporting
+    basis (the retired ``output_floor_config`` gate was dead code).
     """
     ead_col = pick(cols, "ead_final")
     approach_col = pick(cols, "reporting_approach_origin", "approach")
@@ -1454,10 +1467,24 @@ def generate_c08_07(
     data = data.with_columns(
         pl.col(approach_col).is_in(sorted(C08_07_IRB_APPROACHES)).alias("c0807_irb")
     )
+    # CRR Art. 148/150 roll-out-plan discriminator (col 0040): an SA-treated leg
+    # (``~c0807_irb``) that the firm's approved sequential-implementation plan
+    # schedules to move to IRB. Derived ONLY when the optional input flag is
+    # present — an absent flag leaves ``c0807_rollout`` off the frame, so the
+    # tolerant col-0040 predicate matches nothing (0.0) and col 0030 keeps the
+    # whole SA share, byte-identical to the pre-R14 output.
+    rollout_col = pick(cols, "is_under_irb_rollout")
+    if rollout_col is not None:
+        data = data.with_columns(
+            (~pl.col("c0807_irb") & pl.col(rollout_col).fill_null(value=False)).alias(
+                "c0807_rollout"
+            )
+        )
     rwa_col = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
     row_defs = get_c08_07_rows(framework)
     spec, null_rows = _c08_07_spec(row_defs, ec_col, ead_col, rwa_col, framework)
     frame = execute(spec, data)
+    frame = _c08_07_rollout_pct(frame)
     return _null_fixed_rows(frame, null_rows)
 
 
@@ -1493,9 +1520,15 @@ def _c08_07_spec(
             continue
         total_pred = RowPredicate(equals=class_terms, any_of=union)
         irb_pred = RowPredicate(equals=(*class_terms, ("c0807_irb", True)), any_of=union)
+        rollout_pred = RowPredicate(equals=(*class_terms, ("c0807_rollout", True)), any_of=union)
         cells[(row_ref, "0010")] = CellSpec(Sum(ead_col), predicate=irb_pred)
         cells[(row_ref, "0020")] = CellSpec(Sum(ead_col), predicate=total_pred)
-        cells[(row_ref, "0030")] = CellSpec(Formula(refs=("0010", "0020"), fn=_pct_sa))
+        # Col 0040 first carries the roll-out-plan EAD (SA-treated AND under an
+        # Art. 148 plan); ``_c08_07_rollout_pct`` rescales it to a percentage of
+        # the row total post-execute. A frame without ``c0807_rollout`` makes the
+        # tolerant predicate match nothing -> 0.0 (permanent-partial-use only).
+        cells[(row_ref, "0040")] = CellSpec(Sum(ead_col), predicate=rollout_pred)
+        cells[(row_ref, "0030")] = CellSpec(Formula(refs=("0010", "0020", "0040"), fn=_pct_ppu))
         cells[(row_ref, "0050")] = CellSpec(Formula(refs=("0010", "0020"), fn=_pct_irb))
         if is_b31:
             if rwa_col is not None:
@@ -1510,12 +1543,18 @@ def _c08_07_spec(
     return spec, null_rows
 
 
-def _pct_sa(cells: Mapping[str, float | None], _prior: bool) -> float | None:
-    """0030 = SA share of the row's EAD, % (0.0 on a zero denominator)."""
+def _pct_ppu(cells: Mapping[str, float | None], _prior: bool) -> float | None:
+    """0030 = SA share subject to PERMANENT PARTIAL USE, % (0.0 on a zero
+    denominator): the SA EAD (row total 0020 minus IRB 0010) EXCLUDING the
+    roll-out-plan slice (col 0040, still the raw EAD Sum when this formula runs).
+    0030 + 0040 == the total SA coverage %, so the aggregate the pre-R14 col 0030
+    reported is preserved; with no roll-out data col 0040 is 0.0 and 0030 reduces
+    to the whole SA share, bit-identical to the pre-R14 formula (``x - 0.0 == x``).
+    Art. 148 (roll-out plans) vs Art. 150 (permanent partial use)."""
     total = cells["0020"] or 0.0
     if total <= 0:
         return 0.0
-    return (total - (cells["0010"] or 0.0)) / total * 100.0
+    return (total - (cells["0010"] or 0.0) - (cells["0040"] or 0.0)) / total * 100.0
 
 
 def _pct_irb(cells: Mapping[str, float | None], _prior: bool) -> float | None:
@@ -1524,6 +1563,20 @@ def _pct_irb(cells: Mapping[str, float | None], _prior: bool) -> float | None:
     if total <= 0:
         return 0.0
     return (cells["0010"] or 0.0) / total * 100.0
+
+
+def _c08_07_rollout_pct(frame: pl.DataFrame) -> pl.DataFrame:
+    """Rescale C 08.07 col 0040 from the roll-out-plan EAD (the Sum bound in the
+    spec) to its percentage of the row total (col 0020), guarding a zero
+    denominator to 0.0 — the executor has no verb for "percentage of another
+    cell", so it is derived here post-execute. Col 0030 already excludes this
+    slice (``_pct_ppu``), so 0030 + 0040 == the row's total SA coverage %. A
+    no-op when no roll-out data is present (col 0040 EAD is 0.0)."""
+    if "0040" not in frame.columns or "0020" not in frame.columns:
+        return frame
+    total = pl.col("0020")
+    pct = pl.when(total > 0).then(pl.col("0040") / total * 100.0).otherwise(0.0)
+    return frame.with_columns(pct.alias("0040"))
 
 
 def _sa_rwea(cells: Mapping[str, float | None], _prior: bool) -> float | None:

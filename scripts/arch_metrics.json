@@ -5,7 +5,7 @@
   "engine_collect_schema_sites": 164,
   "engine_eager_collect_sites": 48,
   "max_engine_module_loc": 1694,
-  "cites_decorators": 278,
+  "cites_decorators": 279,
   "max_reporting_module_loc": 2016,
   "reporting_multi_candidate_picks": 30,
   "max_reporting_test_file_loc": 1581

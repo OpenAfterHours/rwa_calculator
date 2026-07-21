@@ -536,6 +536,23 @@ def _hierarchy_resolved_columns() -> dict[str, EdgeColumn]:
             null_meaning="False = not a core-UK-group intragroup exposure; the scope "
             "resolver sets True only on eligible individual-basis rows",
         ),
+        # CRR Art. 148/150 IRB roll-out-plan flag — a firm-owned INPUT threaded
+        # from the lending schemas (loan / facility / contingent) purely so it
+        # survives to the aggregator exit for COREP C 08.07 / OF 08.07 col 0040
+        # ("% subject to a roll-out plan"). Optional with a False default +
+        # Boolean null-fill so CCR/SFT synthetic rows and any diagonal-concat gap
+        # resolve to "not under a roll-out plan". Unlike intragroup_zero_rw_eligible
+        # this is a pure pass-through: no stage sets it and it changes no RWA/EAD.
+        "is_under_irb_rollout": EdgeColumn(
+            dtype=pl.Boolean,
+            required=False,
+            default=False,
+            fill_null_default=True,
+            citation="CRR Art. 148",
+            null_meaning="False = permanent partial use (not scheduled to move to IRB); "
+            "the firm sets True on an SA exposure covered by an approved Art. 148 "
+            "sequential-implementation (roll-out) plan",
+        ),
         "counterparty_reference": EdgeColumn(dtype=pl.String),
         "value_date": EdgeColumn(dtype=pl.Date),
         "maturity_date": EdgeColumn(dtype=pl.Date),
@@ -1322,6 +1339,17 @@ def _calc_output_common_columns() -> dict[str, EdgeColumn]:
         "is_sme": EdgeColumn(dtype=pl.Boolean),
         "is_uk_residential_mortgage_commitment": EdgeColumn(dtype=pl.Boolean),
         "is_under_construction": EdgeColumn(dtype=pl.Boolean),
+        # CRR Art. 148/150 IRB roll-out-plan flag (COREP C 08.07 / OF 08.07 col
+        # 0040). CONDITIONAL (inject=False): the lending schemas declare it, so the
+        # loader injects it and it rides the hierarchy -> classifier -> CRM ->
+        # branch chain to the aggregator on every run carrying lending rows; a
+        # hand-built branch/aggregator test frame that omits it is simply absent
+        # (the C 08.07 reader treats an absent column as "no roll-out", col 0040 =
+        # 0.0). Never injected here, so it forces no shape change on frames that
+        # never carried it.
+        "is_under_irb_rollout": EdgeColumn(
+            dtype=pl.Boolean, required=False, inject=False, citation="CRR Art. 148"
+        ),
         "lending_group_adjusted_exposure": EdgeColumn(dtype=pl.Float64),
         "lending_group_reference": EdgeColumn(dtype=pl.String),
         "lending_group_total_exposure": EdgeColumn(dtype=pl.Float64),

@@ -21,7 +21,7 @@ Cell semantics (recorded decisions, this slice):
 - C 08.01/02 share one value surface (computed framework-agnostic, filtered
   by each framework's column refs): gross exposures, the CRM waterfall
   0090 = 0020 - 0040 - 0050 - 0060 - 0070 + 0080 over POSITIVE magnitudes,
-  the cross-sheet substitution inflow (0080, total row only) via
+  the cross-sheet substitution inflow (0080, C 08.01 Total row only; C 08.02 excludes it) via
   ``ReportingContext.substitution_inflow``, the two "of which: off balance
   sheet" memo columns on their RECORDED bases (R11): 0100 (POST-CRM PRE-CCF
   group) = the off-BS slice of the 0090 waterfall, derived per row in
@@ -61,6 +61,39 @@ Cell semantics (recorded decisions, this slice):
   ``cp_internal_rating_grade`` has values, else the populated fixed PD
   bands, plus an "Unassigned" residual); ``row_ref == row_name == the
   String column 0005``, injected post-execute — the CR9.1 pattern.
+- RECORDED DECISION (R12) — the cross-class substitution INFLOW (col 0080,
+  and hence its contribution to the 0090 waterfall) is DELIBERATELY EXCLUDED
+  from C 08.02: 0080 stays 0.0 on every grade row (``is_total=False`` for all
+  rows, so no ``SideContext`` inflow reaches it). Two facts about the sealed
+  origin-basis ledger make per-grade attribution unsound, not merely omitted:
+  (i) C 08 keys ``reporting_class_origin`` (the obligor basis — a recorded
+  number-neutral convergence decision), so a guaranteed leg substituted from
+  class X into class Y physically sits in X's ORIGIN sheet, reported there as
+  an OUTFLOW (col 0070) at the OBLIGOR's grade — the inflow into Y is made of
+  legs that live in OTHER sheets, never in Y's partition; (ii) that leg carries
+  the OBLIGOR's ``pd_floored`` / ``cp_internal_rating_grade``, NEVER the
+  guarantor's — IRB parameter substitution computes the guarantor RW/EL inside
+  a local swap-restore window without overwriting the leg's own PD/grade
+  (``engine/irb/guarantee.py::_apply_parameter_substitution``), and under CRR
+  the guarantor is SA-RW-substituted with no guarantor PD grade at all. The
+  inflow into Y is a per-destination-class SCALAR
+  (``ReportingContext.substitution_inflow``, ``_substitution_inflows`` grouped
+  by ``post_crm_exposure_class_guaranteed``) that C 08.01 lands on its
+  constraint-free Total row (0010); C 08.02 has NO Total row and no
+  origin-basis grade home for a cross-sheet scalar. Banding it to a grade would
+  require the GUARANTOR's rating grade sealed per-leg (a deferred engine
+  enhancement) — banding by the leg's own grade would misattribute the inflow
+  to a foreign obligor's grade in a different class's rating scale. This
+  mirrors C 08.01's inflow-on-Total-row-only convention and C 07.00's
+  class-level-scalar convention. Reconciliation consequence, pinned as a
+  MONITORED divergence (not silent drift): on a destination sheet the sum over
+  grade rows of col 0080 == 0.0, which is NOT equal to C 08.01's Total 0080,
+  and the sum of col 0090 is short of C 08.01's Total 0090 by exactly the
+  inflow; the OUTFLOW side (col 0070) reconciles. Regulatory basis: Reg (EU)
+  2021/451 Annex II (C 08.01/02 share the CRM-substitution column block);
+  PS1/26 Annex XXII (obligor-basis reporting bars substitution effects from the
+  grade breakdown). Pin:
+  ``tests/unit/reporting/corep/test_c08_02.py::TestC0802SubstitutionInflowDisposition``.
 - C 08.03/05 allocate rows over the 17 fixed PD ranges (B31 allocates on
   the pre-input-floor ``pd``, CRR on ``pd_floored``; the reported PD is
   always post-floor), emit ONLY populated buckets (sparse) plus an

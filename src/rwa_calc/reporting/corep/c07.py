@@ -106,6 +106,15 @@ _NEGATIVE_COLS: frozenset[str] = frozenset(
     {"0030", "0035", "0050", "0060", "0070", "0080", "0090", "0130", "0140", "0216", "0217"}
 )
 
+# Col 0030 provisions carriers, in preference order: the specific / general
+# provision input pass-throughs (never sealed on the aggregator exit — present
+# only on synthetic unit frames a book supplies) then the sealed SA Art. 111(2)
+# deducted provision. Any one present drives the c07_provision derivation in
+# _prepare; none present keeps the retired SafeSum(scra, gcra) binding.
+_PROVISION_SOURCES: frozenset[str] = frozenset(
+    {"scra_provision_amount", "gcra_provision_amount", "provision_deducted"}
+)
+
 # CCF bucket maps: ccf_applied (rounded to 4dp) -> column ref.
 _CCF_MAP_CRR: dict[float, str] = {0.0: "0160", 0.2: "0170", 0.5: "0180", 1.0: "0190"}
 _CCF_MAP_B31: dict[float, str] = {0.1: "0160", 0.2: "0170", 0.4: "0171", 0.5: "0180", 1.0: "0190"}
@@ -507,6 +516,64 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
                 )
             )
 
+    # Col 0030 provisions magnitude (Annex II "(-) Value adjustments and
+    # provisions associated with the original exposure"). SCRA/GCRA-preferred,
+    # SA-carrier fallback ladder — the same preference ORDER as C 08.01/02's
+    # provisions ladder (``_provisions_postfix``), but at a different GRANULARITY
+    # and derived at a different point:
+    #   - Granularity (the recorded C 07 contract): the pick is PER EXPOSURE ROW
+    #     here — each row takes its own scra+gcra when non-degenerate, else its
+    #     own provision_deducted — then the row cell sums those picks. C 08
+    #     decides PER CELL: it aggregates scra/gcra over the whole row subset and
+    #     swaps the entire cell to provision_held only when that aggregate nets
+    #     to ~0. The two diverge only on a frame where some rows carry scra/gcra
+    #     and others do not; per-row is deliberate and pinned by
+    #     test_c07_provisions.py::test_mixed_frame_picks_per_row_not_per_cell.
+    #   - Timing: derived HERE pre-execute (a c07_provision column) rather than as
+    #     a post-execute patch, because col 0040's Formula (0010 - 0030) must
+    #     consume the corrected magnitude in the SAME execute pass (0290 on C 08
+    #     has no dependent formula, so C 08 can patch it after execute).
+    # The fallback carrier is the sealed SA Art. 111(2) deducted provision
+    # (``provision_deducted`` = provision_on_drawn + provision_on_nominal), which
+    # is EXACTLY the amount the EAD math removes from the gross exposure
+    # (engine/crm/guarantees.py: on_bal = drawn - provision_on_drawn; nominal =
+    # nominal - provision_on_nominal), so 0040 reconstructs the engine's own
+    # net-of-provisions basis. ``provision_allocated`` was CONSIDERED AND
+    # REJECTED: it can exceed provision_deducted for an over-provisioned exposure
+    # (the deduction is capped at drawn+nominal by the min() in provisions.py), so
+    # summing it into 0030 would over-report the deduction and break the
+    # 0040 = engine-net-basis identity. scra/gcra are never sealed on the
+    # aggregator exit, so a real submission resolves to provision_deducted; the
+    # synthetic COREP unit frames that supply scra/gcra keep their more granular
+    # figure. CCR synthetic rows carry provision_deducted = null/0 (no Art. 111(2)
+    # drawn-first deduction), so they contribute nothing to 0030.
+    if _PROVISION_SOURCES & cols:
+        carrier = (
+            pl.col("provision_deducted").fill_null(0.0)
+            if "provision_deducted" in cols
+            else pl.lit(0.0)
+        )
+        if {"scra_provision_amount", "gcra_provision_amount"} & cols:
+            scra = (
+                pl.col("scra_provision_amount").fill_null(0.0)
+                if "scra_provision_amount" in cols
+                else pl.lit(0.0)
+            )
+            gcra = (
+                pl.col("gcra_provision_amount").fill_null(0.0)
+                if "gcra_provision_amount" in cols
+                else pl.lit(0.0)
+            )
+            supplied = scra + gcra
+            exprs.append(
+                pl.when(supplied.abs() >= 1e-9)
+                .then(supplied)
+                .otherwise(carrier)
+                .alias("c07_provision")
+            )
+        else:
+            exprs.append(carrier.alias("c07_provision"))
+
     return data.with_columns(exprs) if exprs else data
 
 
@@ -702,8 +769,12 @@ def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row
             SafeSum(gross_carriers(cols, "drawn_amount", "undrawn_amount")), predicate=member
         ),
         "0020": CellSpec(Sum("own_funds_deduction_amount"), predicate=member),
-        "0030": CellSpec(
-            SafeSum(("scra_provision_amount", "gcra_provision_amount")), predicate=member
+        "0030": (
+            CellSpec(Sum("c07_provision"), predicate=member)
+            if _PROVISION_SOURCES & cols
+            else CellSpec(
+                SafeSum(("scra_provision_amount", "gcra_provision_amount")), predicate=member
+            )
         ),
         "0050": (
             CellSpec(

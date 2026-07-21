@@ -134,22 +134,42 @@ def test_deduction_columns_declare_the_annex_ii_sign_convention(source: _Source)
 
 
 def test_a_cell_whose_sources_are_never_produced_says_so(source: _Source, c07) -> None:  # noqa: ANN001
-    # Arrange — col 0030 sums the SCRA/GCRA provision amounts, which the engine
-    # does not produce onto the ledger (a Phase 7 F6 permanently-null source).
+    # Arrange — col 0020 sums own_funds_deduction_amount, which the engine does
+    # not produce onto the ledger (an unproduced source; col 0030 used to be the
+    # showcase here, but R9 rebound it to the sealed provision carrier).
+    reported = c07[_SHEET].filter(_row("0010"))["0020"][0]
+
+    # Act
+    result = lineage.drilldown(source, "c07_00", "0010", "0020", sheet=_SHEET)
+
+    # Assert — the cell reports a structural null (its source column never
+    # reaches the ledger), and the drill-down agrees: "we cannot compute this"
+    # rather than a measured value — no source column, so no contribution.
+    assert result is not None
+    assert reported is None
+    assert result.query.missing_columns == result.query.metric_columns
+    assert result.query.is_source_backed is False
+    assert result.contribution_total is None
+
+
+def test_provisions_cell_is_source_backed_by_the_sealed_carrier(source: _Source, c07) -> None:  # noqa: ANN001
+    # Arrange — R9 rebound col 0030 ("(-) Value adjustments and provisions") from
+    # the never-sealed SCRA/GCRA sum to the sealed SA Art. 111(2) deducted
+    # provision (via the module-derived c07_provision carrier). The portfolio
+    # carries no provisions, so the cell is 0.0 — but now a MEASURED zero.
     reported = c07[_SHEET].filter(_row("0010"))["0030"][0]
 
     # Act
     result = lineage.drilldown(source, "c07_00", "0010", "0030", sheet=_SHEET)
 
-    # Assert — the cell reports 0.0 under the COREP zero policy, but that zero is
-    # NOT a measured zero. The drill-down must distinguish "we computed zero"
-    # from "we cannot compute this": no source column reaches the ledger, so
-    # there is no contribution to total.
+    # Assert — a produced source reaches the ledger, so the zero is measured
+    # (contribution_total is 0.0, not None) and the "(-)" sign is declared.
     assert result is not None
     assert reported == 0.0
-    assert result.query.missing_columns == result.query.metric_columns
-    assert result.query.is_source_backed is False
-    assert result.contribution_total is None
+    assert result.query.missing_columns == ()
+    assert result.query.is_source_backed is True
+    assert result.query.sign == "negated"
+    assert result.contribution_total == pytest.approx(0.0, abs=_ATOL)
 
 
 # =============================================================================

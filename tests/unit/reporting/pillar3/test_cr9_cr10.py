@@ -66,6 +66,43 @@ def _make_slotting_data(**overrides: object) -> pl.LazyFrame:
     return pl.LazyFrame(defaults)
 
 
+def _make_equity_data(**overrides: object) -> pl.LazyFrame:
+    """Create equity legs for CR10.5 tests — one per Art. 155(2) simple-RW band.
+
+    ``equity_method`` is the calculator's method discriminator (``irb_simple``
+    = Art. 155(2), ``sa`` = Art. 133, ``pd_lgd`` = Art. 155(3)); only
+    ``irb_simple`` legs are disclosed in CR10.5. ``risk_weight`` becomes
+    ``reporting_rw`` via the ledger shim, which is what places a leg in its band
+    row (190/290/370%). ``exposure_type`` is left unset so ``reporting_on_balance_sheet``
+    resolves null exactly like a production equity holding.
+    """
+    defaults: dict[str, object] = {
+        "exposure_reference": ["EQ_DIV", "EQ_XT", "EQ_OTHER"],
+        "approach_applied": ["equity", "equity", "equity"],
+        "equity_method": ["irb_simple", "irb_simple", "irb_simple"],
+        "exposure_class": ["equity", "equity", "equity"],
+        "equity_type": ["private_equity_diversified", "exchange_traded", "other"],
+        "ead_final": [1000.0, 2000.0, 3000.0],
+        "risk_weight": [1.90, 2.90, 3.70],
+        "rwa_final": [1900.0, 5800.0, 11100.0],
+        "expected_loss": [8.0, 16.0, 72.0],
+    }
+    defaults.update(overrides)
+    return pl.LazyFrame(defaults)
+
+
+def _slotting_plus_equity(equity_method: str) -> pl.LazyFrame:
+    """One slotting book plus three equity legs tagged ``equity_method``.
+
+    Slotting keeps CR10 emitting even when the equity population is excluded, so
+    the force-emitted CR10.5 sheet is present (and empty) rather than the whole
+    CR10 dict collapsing to ``{}``.
+    """
+    slot = _make_slotting_data().collect()
+    equity = _make_equity_data(equity_method=[equity_method] * 3).collect()
+    return pl.concat([slot, equity], how="diagonal_relaxed").lazy()
+
+
 @pytest.fixture
 def generator() -> Pillar3Generator:
     return LedgerShimPillar3Generator()
@@ -88,8 +125,11 @@ class TestCR10Generation:
     def test_cr10_rows_per_subtemplate(self, generator: Pillar3Generator):
         data = _make_slotting_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
-        for _sl_type, df in bundle.cr10.items():
-            assert df.height == 6  # 5 categories + total
+        for sl_type, df in bundle.cr10.items():
+            if sl_type == "equity":
+                assert df.height == 4  # 3 Art. 155(2) simple-RW bands + total
+            else:
+                assert df.height == 6  # 5 slotting categories + total
 
     def test_cr10_risk_weight_populated(self, generator: Pillar3Generator):
         data = _make_slotting_data()
@@ -121,6 +161,85 @@ class TestCR10Generation:
         expected = {"row_ref", "row_name"} | {c.ref for c in CRR_CR10_COLUMNS}
         for df in bundle.cr10.values():
             assert set(df.columns) == expected
+
+
+class TestCR105Equity:
+    """CR10.5 — CRR equity under the Art. 155(2) IRB simple risk-weight approach.
+
+    The finding this covers (R6): equity legs seal as
+    ``reporting_approach_origin == "equity"`` while the generator filtered CR10
+    to ``slotting``, so the equity RWEA was never disclosed. The fix populates
+    CR10.5 from the simple-RW equity legs (``equity_method == "irb_simple"``).
+    """
+
+    def test_bands_populate_by_applied_risk_weight(self, generator: Pillar3Generator):
+        """Each simple-RW equity leg lands in the band row matching its RW."""
+        bundle = generator.generate_from_lazyframe(_make_equity_data(), framework="CRR")
+        equity = bundle.cr10["equity"]
+        # 190% band -> row 1 (EAD 1000, RWA 1900); 290% -> row 2; 370% -> row 3.
+        assert equity.filter(pl.col("row_ref") == "1")["d"][0] == pytest.approx(1000.0)
+        assert equity.filter(pl.col("row_ref") == "1")["e"][0] == pytest.approx(1900.0)
+        assert equity.filter(pl.col("row_ref") == "2")["e"][0] == pytest.approx(5800.0)
+        assert equity.filter(pl.col("row_ref") == "3")["e"][0] == pytest.approx(11100.0)
+
+    def test_total_row_sums_all_bands(self, generator: Pillar3Generator):
+        bundle = generator.generate_from_lazyframe(_make_equity_data(), framework="CRR")
+        total = bundle.cr10["equity"].filter(pl.col("row_ref") == "4")
+        assert total["d"][0] == pytest.approx(6000.0)  # 1000 + 2000 + 3000
+        assert total["e"][0] == pytest.approx(18800.0)  # 1900 + 5800 + 11100
+        assert total["f"][0] == pytest.approx(96.0)  # 8 + 16 + 72
+
+    def test_on_balance_sheet_mirrors_exposure_value(self, generator: Pillar3Generator):
+        """Equity is an on-BS asset with no off-BS split: col a == col d, col b null."""
+        bundle = generator.generate_from_lazyframe(_make_equity_data(), framework="CRR")
+        total = bundle.cr10["equity"].filter(pl.col("row_ref") == "4")
+        assert total["a"][0] == pytest.approx(6000.0)
+        assert total["d"][0] == pytest.approx(6000.0)
+        assert total["b"][0] is None
+
+    def test_fixed_risk_weight_column(self, generator: Pillar3Generator):
+        """Col c carries the fixed 190/290/370% display RWs; the Total is null."""
+        bundle = generator.generate_from_lazyframe(_make_equity_data(), framework="CRR")
+        equity = bundle.cr10["equity"]
+        assert equity.filter(pl.col("row_ref") == "1")["c"][0] == pytest.approx(190.0)
+        assert equity.filter(pl.col("row_ref") == "2")["c"][0] == pytest.approx(290.0)
+        assert equity.filter(pl.col("row_ref") == "3")["c"][0] == pytest.approx(370.0)
+        assert equity.filter(pl.col("row_ref") == "4")["c"][0] is None
+
+    def test_sa_equity_excluded(self, generator: Pillar3Generator):
+        """Art. 133 SA equity (equity_method='sa') is NOT disclosed in CR10.5."""
+        bundle = generator.generate_from_lazyframe(_slotting_plus_equity("sa"), framework="CRR")
+        equity = bundle.cr10["equity"]
+        total = equity.filter(pl.col("row_ref") == "4")
+        assert total["d"][0] is None
+        assert total["e"][0] is None
+
+    def test_pd_lgd_equity_excluded(self, generator: Pillar3Generator):
+        """Art. 155(3) PD/LGD equity (equity_method='pd_lgd') is excluded from CR10.5."""
+        bundle = generator.generate_from_lazyframe(_slotting_plus_equity("pd_lgd"), framework="CRR")
+        total = bundle.cr10["equity"].filter(pl.col("row_ref") == "4")
+        assert total["e"][0] is None
+
+    def test_force_emitted_empty_keeps_fixed_rw_column(self, generator: Pillar3Generator):
+        """An excluded population still force-emits CR10.5 with its fixed RW column."""
+        bundle = generator.generate_from_lazyframe(_slotting_plus_equity("sa"), framework="CRR")
+        equity = bundle.cr10["equity"]
+        assert equity.height == 4
+        assert equity.filter(pl.col("row_ref") == "2")["c"][0] == pytest.approx(290.0)
+
+    def test_slotting_subtemplates_unaffected(self, generator: Pillar3Generator):
+        """Mixing equity in does not move the slotting book off CR10.1-4."""
+        bundle = generator.generate_from_lazyframe(
+            _slotting_plus_equity("irb_simple"), framework="CRR"
+        )
+        pf = bundle.cr10["project_finance"]
+        assert pf.height == 6  # slotting keeps its 5 categories + total
+        assert pf.filter(pl.col("row_ref") == "1")["d"][0] == pytest.approx(1000.0)
+
+    def test_absent_under_basel_3_1(self, generator: Pillar3Generator):
+        """Basel 3.1 has no equity CR10 subtemplate (Art. 147A removes IRB equity)."""
+        bundle = generator.generate_from_lazyframe(_make_equity_data(), framework="BASEL_3_1")
+        assert "equity" not in bundle.cr10
 
 
 # ---------------------------------------------------------------------------

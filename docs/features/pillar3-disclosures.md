@@ -790,8 +790,18 @@ CRR only, equity exposures under the simple risk-weighted approach).
     | CR10.4 | Commodities finance |
     | CR10.5 | **Equity** under simple risk-weighted approach |
 
-    Rows by regulatory category (Strong, Good, Satisfactory, Weak, Default) with
-    fixed risk weights per Art. 153(5) Table 1 (slotting) or Art. 155(2) (equity).
+    The slotting sub-templates (CR10.1–4) have rows by regulatory category
+    (Strong, Good, Satisfactory, Weak, Default) with fixed risk weights per
+    Art. 153(5) Table 1. **CR10.5 does not use the slotting categories**: it has
+    three fixed-RW band rows (Art. 155(2)(a)/(b)/(c) — 190% diversified private
+    equity, 290% exchange-traded, 370% other) plus a Total, and each equity leg
+    is placed in the band matching its applied risk weight. Its population is the
+    equity legs the engine actually risk-weighted under the **Art. 155(2) IRB
+    simple** approach (tracked by the sealed `equity_method` discriminator);
+    Art. 133 SA equity and Art. 155(3) PD/LGD equity are **excluded**. Equity is
+    an on-balance-sheet holding with no off-BS/CCF component, so col a mirrors
+    col d and col b is null. A firm with IRB equity permission but no simple-RW
+    holdings still emits CR10.5 (empty).
 
 === "Basel 3.1 (UKB CR10)"
 

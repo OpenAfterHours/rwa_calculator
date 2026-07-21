@@ -1643,6 +1643,24 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
         "el_pre_adjustment": EdgeColumn(dtype=pl.Float64),
         "el_shortfall": EdgeColumn(dtype=pl.Float64),
         "equity_type": EdgeColumn(dtype=pl.String, required=False),
+        # The CRR equity method actually applied by the equity calculator
+        # (``sa`` = Art. 133, ``irb_simple`` = Art. 155(2), ``pd_lgd`` =
+        # Art. 155(3)). CONDITIONAL (inject=False): the equity path emits it, so
+        # it is present on any run carrying an equity book (null on non-equity
+        # legs via the diagonal concat) and simply absent from an equity-free
+        # run — never injected, so the eager-backed seal stays a shallow
+        # DataFrame.lazy() wrap (mirrors the other equity-run-only columns).
+        # Pillar 3 CR10.5 partitions the Art. 155(2) simple-RW disclosure on this
+        # (``reporting_approach_origin == "equity"`` AND ``equity_method ==
+        # "irb_simple"``), since the sealed ``reporting_method`` collapses every
+        # equity leg to ``EQUITY``.
+        "equity_method": EdgeColumn(
+            dtype=pl.String,
+            required=False,
+            inject=False,
+            citation="CRR Art. 155(2)",
+            null_meaning="null = non-equity leg; absent = equity-free run; never a method",
+        ),
         "expected_loss": EdgeColumn(dtype=pl.Float64),
         # Applied reporting class: SA rows carry the SME-managed-as-retail /
         # defaulted applied-treatment class; every other approach keeps

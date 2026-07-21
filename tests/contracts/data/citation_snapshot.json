@@ -592,6 +592,10 @@
   "rwa_calc.reporting.pillar3.cms2::build_cms2_spec": [
     "PS1/26, paragraph 456"
   ],
+  "rwa_calc.reporting.pillar3.cr10::build_cr10_equity_spec": [
+    "CRR Art. 438",
+    "CRR Art. 155(2)"
+  ],
   "rwa_calc.reporting.pillar3.cr10::build_cr10_spec": [
     "CRR Art. 438"
   ],

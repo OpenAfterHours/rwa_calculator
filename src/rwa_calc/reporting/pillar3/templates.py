@@ -668,6 +668,31 @@ HVCRE_RISK_WEIGHTS: dict[str, float] = {
     "default": 0.00,
 }
 
+# CR10.5 — Equity exposures under the IRB simple risk-weighted approach
+# (CRR Art. 155(2); disclosed per Art. 438(e)). Basel 3.1 has NO equity CR10
+# subtemplate — Art. 147A removes IRB equity, so B31_CR10_SUBTEMPLATES carries
+# HVCRE at CR10.5 instead. The three fixed supervisory bands, in Art. 155(2)
+# order: (a) diversified private equity 190%, (b) exchange-traded 290%, (c) all
+# other 370%. Rows are NOT the slotting supervisory categories — a leg is mapped
+# to its band by the applied simple risk weight (``reporting_rw``).
+CR10_EQUITY_ROWS: list[P3Row] = [
+    P3Row("1", "Private equity exposures"),
+    P3Row("2", "Exchange-traded equity exposures"),
+    P3Row("3", "Other equity exposures"),
+    P3Row("4", "Total", is_total=True),
+]
+
+# Applied Art. 155(2) simple risk weight (decimal) per CR10.5 band row. Drives
+# both the fixed display column c (x100) and the ``reporting_rw`` band match; the
+# bands are far enough apart (190/290/370%) that a small match tolerance never
+# overlaps. Central-bank equity (0% simple RW) has no band row and falls only
+# into the Total, exactly as the slotting Default row is the sole 0% category.
+CR10_EQUITY_RISK_WEIGHTS: dict[str, float] = {
+    "1": 1.90,
+    "2": 2.90,
+    "3": 3.70,
+}
+
 
 # ---------------------------------------------------------------------------
 # CR9 — IRB PD Back-Testing per Exposure Class (Art. 452(h))

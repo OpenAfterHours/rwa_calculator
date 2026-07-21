@@ -29,11 +29,13 @@ Cell semantics (recorded decisions, this slice):
 - Columns 0010/0020 sum ``rwa_pre_floor`` — the PRE-floor own-approach
   RWA (the mirror image of the estate-wide "rwa_final is already
   post-floor" trap: here the pre-floor carrier is deliberately the
-  source). Column 0020 must NOT sum ``sa_rwa``: that carrier is null on
-  equity rows (equity bypasses the SA calculator), so the standardised
-  partition would silently drop equity's RWA. Column 0040 (the S-TREA
-  leg) sums ``sa_rwa`` over the row's whole population — that is what
-  S-TREA is.
+  source). Column 0020 is the ACTUAL standardised-approach RWA, so it
+  sums ``rwa_pre_floor``, not ``sa_rwa`` (the S-TREA leg in column 0040).
+  Column 0040 (the S-TREA leg) sums ``sa_rwa`` over the row's whole
+  population — that is what S-TREA is. Equity bypasses the SA calculator,
+  so the aggregator populates equity's ``sa_rwa`` as its own pre-floor RWA
+  (Basel 3.1 equity is SA-only, Art. 147A) — without which column 0040
+  would silently drop equity's standardised-equivalent RWA (R4).
 - **Rows.** 0010 ("Credit risk excluding CCR") and 0020 ("Counterparty
   credit risk") partition the credit-risk book by ``risk_type``; 0080
   (Total) is the whole book and hence their sum. Rows 0030-0070

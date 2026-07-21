@@ -155,7 +155,9 @@ class _Run:
 # rich: 14 loans + 1 equity, NO CCR. Modelled = F-IRB 48,244,060.92 + A-IRB
 #   14,625,069.66 + slotting 52,500,000.00 = 115,369,130.58; standardised = the SA
 #   book + equity = 22,080,833.33. They sum to the whole portfolio (== C 02.00 row
-#   0010 TREA). Column d is the book's whole sa_rwa: 161,655,833.33.
+#   0010 TREA). Column d is the book's whole sa_rwa: 164,155,833.33 — including
+#   equity's own 2,500,000 standardised-equivalent RWA (B31 equity is SA-only,
+#   Art. 147A; the aggregator now populates equity's sa_rwa — R4).
 #   Row 0020 is a populated ZERO — the book has no CCR, which is a claim the
 #   calculator can make; Total therefore equals row 0010.
 # ccr: one SA corporate loan (2,500,000) + two SA-CCR netting sets (1,560,296.72).
@@ -169,14 +171,14 @@ _EXPECTED: dict[str, dict[str, dict[str, float]]] = {
             "a": 115_369_130.58029616,
             "b": 22_080_833.333333332,
             "c": 137_449_963.9136295,
-            "d": 161_655_833.3333333,
+            "d": 164_155_833.3333333,
         },
         "0020": {"a": 0.0, "b": 0.0, "c": 0.0, "d": 0.0},
         "0080": {
             "a": 115_369_130.58029616,
             "b": 22_080_833.333333332,
             "c": 137_449_963.9136295,
-            "d": 161_655_833.3333333,
+            "d": 164_155_833.3333333,
         },
     },
     "ccr": {

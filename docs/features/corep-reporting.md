@@ -252,7 +252,11 @@ consumed by [C 02.00 / OF 02.00](#c-0200-of-0200-own-funds-requirements) to appl
 
     Both columns sum the **pre-floor own-approach RWA** (`rwa_pre_floor`). Only col 0040
     sums the SA-equivalent (`sa_rwa`), and it does so over the row's whole population —
-    that is what S-TREA *is*.
+    that is what S-TREA *is*. Equity legs bypass the SA calculator, so the aggregator
+    populates their `sa_rwa` as their own pre-floor RWA (Basel 3.1 equity is
+    standardised-only, Art. 147A); without this, col 0040 (and the equivalent
+    C 02.00 col 0020 / CMS1/CMS2 col d) would silently drop equity's
+    standardised-equivalent RWA.
 
     Until the 2026-07 fix, cols 0010 and 0020 were each summed over the **whole**
     portfolio, so col 0030 reported U-TREA + S-TREA rather than U-TREA. See the

@@ -135,7 +135,15 @@ class OutputAggregator:
         # Concat equity if present
         equity_results = None
         if equity_bundle and equity_bundle.results is not None:
-            equity_prepared = prepare_equity_results(equity_bundle.results)
+            # ``include_sa_equivalent`` mirrors the SA calculator's ``output_floor``
+            # gate on ``sa_rwa``: under Basel 3.1 equity is standardised-only
+            # (Art. 147A), so its sa_rwa = its own pre-floor RWA and must reach the
+            # disclosed S-TREA (OF 02.01 / C 02.00 / CMS). Equity is not
+            # floor-eligible, so the floor base and rwa_final are unaffected.
+            equity_prepared = prepare_equity_results(
+                equity_bundle.results,
+                include_sa_equivalent=resolved_pack.feature("output_floor"),
+            )
             combined_unmultiplied = pl.concat(
                 [combined_unmultiplied, equity_prepared], how="diagonal_relaxed"
             )

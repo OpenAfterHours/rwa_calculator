@@ -92,7 +92,7 @@ from rwa_calc.reporting.corep.templates import (
     get_sa_risk_weight_bands,
     get_sa_row_sections,
 )
-from rwa_calc.reporting.kernel import filter_by_approach, pick
+from rwa_calc.reporting.kernel import filter_by_approach, gross_carriers, pick
 from rwa_calc.reporting.metadata import ReportingContext
 
 if TYPE_CHECKING:
@@ -695,7 +695,9 @@ def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row
         return RowPredicate(equals=(*terms, *extra))
 
     cells: dict[str, CellSpec] = {
-        "0010": CellSpec(SafeSum(("drawn_amount", "undrawn_amount")), predicate=member),
+        "0010": CellSpec(
+            SafeSum(gross_carriers(cols, "drawn_amount", "undrawn_amount")), predicate=member
+        ),
         "0020": CellSpec(Sum("own_funds_deduction_amount"), predicate=member),
         "0030": CellSpec(
             SafeSum(("scra_provision_amount", "gcra_provision_amount")), predicate=member

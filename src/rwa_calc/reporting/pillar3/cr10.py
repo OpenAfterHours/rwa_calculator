@@ -68,11 +68,11 @@ def _row_cells(row_name: str, *, is_total: bool) -> dict[str, CellSpec]:
 
     return {
         "a": CellSpec(
-            SafeSum(("drawn_amount", "interest")),
+            SafeSum(("reporting_gross_drawn", "reporting_gross_interest")),
             predicate=replace(member, on_balance_sheet=True),
         ),
         "b": CellSpec(
-            SafeSum(("nominal_amount", "undrawn_amount")),
+            SafeSum(("reporting_gross_nominal", "reporting_gross_undrawn")),
             predicate=replace(member, on_balance_sheet=False),
         ),
         "d": CellSpec(Sum("reporting_ead"), predicate=member),

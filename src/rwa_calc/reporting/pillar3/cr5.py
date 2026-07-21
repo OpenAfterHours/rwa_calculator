@@ -156,11 +156,11 @@ def build_cr5_spec(framework: str) -> TemplateSpec:
         )
         if is_b31:
             cells[(row.ref, "ba")] = CellSpec(
-                SafeSum(("drawn_amount", "interest")),
+                SafeSum(("reporting_gross_drawn", "reporting_gross_interest")),
                 predicate=replace(member, on_balance_sheet=True),
             )
             cells[(row.ref, "bb")] = CellSpec(
-                SafeSum(("nominal_amount", "undrawn_amount")),
+                SafeSum(("reporting_gross_nominal", "reporting_gross_undrawn")),
                 predicate=replace(member, on_balance_sheet=False),
             )
             cells[(row.ref, "bc")] = CellSpec(

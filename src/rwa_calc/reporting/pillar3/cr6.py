@@ -112,8 +112,12 @@ def _row_cells(row: P3Row, exposure_class: str) -> dict[str, CellSpec]:
         between=() if row.is_total else _band(row),
     )
     return {
-        "b": CellSpec(SafeSum(("drawn_amount", "interest")), predicate=on_bs),
-        "c": CellSpec(SafeSum(("nominal_amount", "undrawn_amount")), predicate=off_bs),
+        "b": CellSpec(
+            SafeSum(("reporting_gross_drawn", "reporting_gross_interest")), predicate=on_bs
+        ),
+        "c": CellSpec(
+            SafeSum(("reporting_gross_nominal", "reporting_gross_undrawn")), predicate=off_bs
+        ),
         "d": CellSpec(WeightedAvg("ccf", weight="reporting_ead"), predicate=off_bs),
         "e": CellSpec(Sum("reporting_ead"), predicate=member, empty_cell="zero"),
         "f": CellSpec(

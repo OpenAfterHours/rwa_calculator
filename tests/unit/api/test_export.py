@@ -296,6 +296,10 @@ class TestExportToParquet:
             "reporting_approach_origin",
             "reporting_ead",
             "reporting_rw",
+            "reporting_gross_drawn",
+            "reporting_gross_interest",
+            "reporting_gross_nominal",
+            "reporting_gross_undrawn",
             "reporting_on_balance_sheet",
         ]
 

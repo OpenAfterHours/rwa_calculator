@@ -1608,6 +1608,16 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
         ),
         "reporting_rw": EdgeColumn(dtype=pl.Float64),
         "reporting_subclass": EdgeColumn(dtype=pl.String),
+        # Floored gross-exposure carriers: the raw drawn/interest/nominal/
+        # undrawn amounts clipped at 0 (CRR Art. 111 SA / Art. 166 IRB), so a
+        # negative on-balance netting deposit never makes a gross-exposure
+        # template cell (COREP C 07/C 08, Pillar 3 CR4/5/6/10) report a
+        # negative figure. Nulls stay null. Produced by the aggregator's
+        # _add_reporting_projection alongside the other reporting_* aliases.
+        "reporting_gross_drawn": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 111"),
+        "reporting_gross_interest": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 111"),
+        "reporting_gross_nominal": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 111"),
+        "reporting_gross_undrawn": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 111"),
         # Phase 7 decision F8 (recorded): the additive per-leg substitution
         # relief, ead_final x guarantee_benefit_rw (borrower-basis RW minus
         # substituted RW, snapshotted at the branch BEFORE supporting

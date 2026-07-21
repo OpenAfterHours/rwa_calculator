@@ -117,7 +117,13 @@ from rwa_calc.reporting.corep.templates import (
     get_c08_columns,
     get_irb_row_sections,
 )
-from rwa_calc.reporting.kernel import available_columns, col_sum, pick
+from rwa_calc.reporting.kernel import (
+    available_columns,
+    col_sum,
+    gross_carrier,
+    gross_carriers,
+    pick,
+)
 from rwa_calc.reporting.metadata import ReportingContext
 
 if TYPE_CHECKING:
@@ -359,8 +365,12 @@ def _value_cells(  # noqa: C901, PLR0915 - the full C 08.01/02 column surface
         "0010": CellSpec(
             WeightedAvg("pd_floored", weight=ead_col), predicate=member, empty_cell="null"
         ),
-        "0020": CellSpec(SafeSum(("drawn_amount", "undrawn_amount")), predicate=member),
-        "0030": _lfse_cell(cols, lambda: SafeSum(("drawn_amount", "undrawn_amount")), terms),
+        "0020": CellSpec(
+            SafeSum(gross_carriers(cols, "drawn_amount", "undrawn_amount")), predicate=member
+        ),
+        "0030": _lfse_cell(
+            cols, lambda: SafeSum(gross_carriers(cols, "drawn_amount", "undrawn_amount")), terms
+        ),
         "0035": CellSpec(Sum("on_bs_netting_amount"), predicate=member),
         "0040": (
             CellSpec(
@@ -766,11 +776,11 @@ def generate_c08_03(
             member = RowPredicate(equals=terms)
             row_preds[ref] = member
             cells[(ref, "0010")] = CellSpec(
-                SafeSum(("drawn_amount", "interest")),
+                SafeSum(gross_carriers(data_cols, "drawn_amount", "interest")),
                 predicate=RowPredicate(equals=(*terms, ("c08_bs", "on"))),
             )
             cells[(ref, "0020")] = CellSpec(
-                Sum("nominal_amount"),
+                Sum(gross_carrier(data_cols, "nominal_amount")),
                 predicate=RowPredicate(equals=(*terms, ("c08_bs", "off"))),
             )
             cells[(ref, "0030")] = CellSpec(
@@ -829,14 +839,14 @@ def _c08_03_bs_fallback(
         if on_empty:
             total = 0.0
             found = False
-            for source in ("drawn_amount", "interest"):
+            for source in gross_carriers(cols, "drawn_amount", "interest"):
                 if source in cols:
                     total += float(bucket[source].fill_null(0.0).sum())
                     found = True
             fixes_0010[ref] = total if found else 0.0
         if off_empty:
             fixes_0020[ref] = (
-                float(bucket["nominal_amount"].fill_null(0.0).sum())
+                float(bucket[gross_carrier(cols, "nominal_amount")].fill_null(0.0).sum())
                 if "nominal_amount" in cols
                 else None
             )
@@ -1201,7 +1211,9 @@ def _c08_06_spec(
         pred = row_preds[ref]
         off_pred = RowPredicate(equals=(*pred.equals, ("c0806_off_bs", True)))
         cells[(ref, "0010")] = CellSpec(
-            SafeSum(("drawn_amount", "interest", "nominal_amount", "undrawn_amount")),
+            SafeSum(
+                gross_carriers(cols, "drawn_amount", "interest", "nominal_amount", "undrawn_amount")
+            ),
             predicate=pred,
         )
         cells[(ref, "0020")] = (
@@ -1210,7 +1222,7 @@ def _c08_06_spec(
             else CellSpec(Formula(refs=("0010",), fn=_copy_of_0010))
         )
         cells[(ref, "0030")] = CellSpec(
-            SafeSum(("nominal_amount", "undrawn_amount")), predicate=off_pred
+            SafeSum(gross_carriers(cols, "nominal_amount", "undrawn_amount")), predicate=off_pred
         )
         if "0031" in column_refs:
             cells[(ref, "0031")] = CellSpec(Formula(refs=(), fn=_const(None)))
@@ -1259,7 +1271,7 @@ def _c08_06_sheet(
             continue
         fixes: dict[str, float | None] = {}
         if subset.filter(pl.col("c0806_off_bs")).height == 0:
-            fixes["0030"] = col_sum(subset, cols, "nominal_amount")
+            fixes["0030"] = col_sum(subset, cols, gross_carrier(cols, "nominal_amount"))
         ead_sum = float(subset[ead_col].fill_null(0.0).sum())
         if ead_sum <= 0.0:
             fixes["0040"] = 0.0

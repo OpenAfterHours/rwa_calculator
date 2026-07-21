@@ -75,12 +75,12 @@ def _row_cells(row: P3Row) -> dict[str, CellSpec] | None:
     classes = row.exposure_classes  # () on the total row -> no class term
     return {
         "a": CellSpec(
-            SafeSum(("drawn_amount", "interest")),
+            SafeSum(("reporting_gross_drawn", "reporting_gross_interest")),
             predicate=RowPredicate(classes_origin=classes, on_balance_sheet=True),
             empty_cell="zero",
         ),
         "b": CellSpec(
-            SafeSum(("nominal_amount", "undrawn_amount")),
+            SafeSum(("reporting_gross_nominal", "reporting_gross_undrawn")),
             predicate=RowPredicate(classes_origin=classes, on_balance_sheet=False),
             empty_cell="zero",
         ),

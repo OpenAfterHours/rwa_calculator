@@ -19,8 +19,15 @@ Cell semantics (recorded decisions, this slice):
   total — never re-floored, never plus ``floor_impact_rwa``.
   ``rwa_pre_floor`` is read ONLY for the row-0034 activation boolean
   (total > pre-floor + 0.01).
-- Equity RWA appears in THREE rows by design (0210 SA class, 0060 SA
-  total, 0420 equity approach) while the flat total counts it once.
+- Equity RWA routes by the sealed ``equity_method`` discriminator (R6):
+  IRB-method equity (Art. 155(2) simple / Art. 155(3) PD-LGD — CRR only)
+  reports at row 0420 "Equity IRB" and folds into the IRB total (row 0220);
+  SA-method equity (Art. 133 — the whole book under Basel 3.1, where
+  Art. 147A removes IRB equity) reports in the SA breakdown (row 0060 total
+  + class row 0210). No leg is booked in both an SA row and 0420, and the
+  flat TREA total counts it once regardless of routing. Equity whose method
+  the ledger did not seal is treated as SA (never disclosed as IRB equity
+  without an explicit method).
 - The SA row 0060 and the SA class rows cover ``_SA_APPROACHES`` — SA
   *and* SA-CCR — so the template foots against rows 0010/0050, which
   are flat ledger sums and always carried the CCR RWEA (recorded fix
@@ -53,8 +60,9 @@ Cell semantics (recorded decisions, this slice):
 
 References:
 - CRR Art. 92 (own funds requirements)
+- CRR Art. 155 (IRB equity — row 0420 population under CRR)
 - PRA PS1/26 Art. 92 para 2A/3A/5 (output floor); Art. 123B (currency
-  mismatch memo)
+  mismatch memo); Art. 147A (IRB equity removed — row 0420 empties under B31)
 - docs/plans/phase7-declarative-reporting.md §8.2 (Kind-9 pre-pass)
 """
 
@@ -102,6 +110,15 @@ type _SubKey = tuple[str, str, bool | None, bool | None, str | None]
 # which correctly scope CCR out under Basel 3.1 (it has CCR1-CCR8).
 _SA_APPROACHES: tuple[str, ...] = ("standardised", "standardised_ccr")
 
+# The sealed ``equity_method`` values (domain.enums.EquityApproach, R6) that
+# report under the IRB umbrella — row 0420 "Equity IRB" plus the IRB total
+# (row 0220): Art. 155(2) simple-RW and Art. 155(3) PD/LGD. Under Basel 3.1
+# no equity leg carries these (Art. 147A removes IRB equity — every leg is
+# stamped ``sa``), so row 0420 empties by construction. Equity whose method the
+# ledger did not seal is treated as SA (never disclosed as IRB equity without an
+# explicit method). Raw strings match this module's approach-label idiom.
+_EQUITY_IRB_METHODS: tuple[str, ...] = ("irb_simple", "pd_lgd")
+
 
 @cites("PS1/26, paragraph 1.3")
 def generate_c02_00(
@@ -142,9 +159,18 @@ def generate_c02_00(
     irb_class_rwa: dict[tuple[str, str], float] = {}
     slotting_type_rwa: dict[str, float] = {}
     irb_sub_rwa: dict[_SubKey, float] = {}
+    equity_sa_rwa = 0.0
+    equity_irb_rwa = 0.0
 
     if approach_col and ec_col:
-        total_rwa, irb_class_rwa, slotting_type_rwa, irb_sub_rwa = _aggregate_by_approach(
+        (
+            total_rwa,
+            irb_class_rwa,
+            slotting_type_rwa,
+            irb_sub_rwa,
+            equity_sa_rwa,
+            equity_irb_rwa,
+        ) = _aggregate_by_approach(
             results, approach_col, ec_col, rwa_col, cols, is_b31, approach_rwa, sa_class_rwa
         )
     else:
@@ -175,11 +201,14 @@ def generate_c02_00(
         floor_activated = total_rwa > pre_floor_total + 0.01
 
     sa_rwa_total = sum(approach_rwa.get(approach, 0.0) for approach in _SA_APPROACHES)
-    equity_rwa = approach_rwa.get("equity", 0.0)
     firb_rwa = approach_rwa.get("foundation_irb", 0.0)
     airb_rwa = approach_rwa.get("advanced_irb", 0.0)
     slotting_rwa = approach_rwa.get("slotting", 0.0)
-    irb_total_rwa = firb_rwa + airb_rwa + slotting_rwa
+    # Row 0220 "Of which: IRB Approach" carries IRB-method equity (Art. 155),
+    # which discloses separately at row 0420; SA-method equity stays in the SA
+    # total (row 0060). This keeps the 0060 + 0220 = 0050 footing under either
+    # routing (Basel 3.1: all equity SA, so equity_irb_rwa is 0).
+    irb_total_rwa = firb_rwa + airb_rwa + slotting_rwa + equity_irb_rwa
 
     # Own funds requirement = 8% x TREA (Art. 92(1))
     own_funds_req = total_rwa * 0.08
@@ -188,7 +217,7 @@ def generate_c02_00(
     row_values["0010"] = {"0010": total_rwa}
     row_values["0040"] = {"0010": own_funds_req}
     row_values["0050"] = {"0010": total_rwa}  # Credit risk = total (only CR in scope)
-    row_values["0060"] = {"0010": sa_rwa_total + equity_rwa}
+    row_values["0060"] = {"0010": sa_rwa_total + equity_sa_rwa}
 
     _sa_rows(row_values, sa_class_rwa, is_b31=is_b31)
     row_values["0220"] = {"0010": irb_total_rwa}
@@ -196,7 +225,9 @@ def generate_c02_00(
     _airb_corp_rows(row_values, airb_rwa, irb_class_rwa, irb_sub_rwa, is_b31=is_b31)
     _airb_retail_rows(row_values, irb_class_rwa, irb_sub_rwa, is_b31=is_b31)
     _slotting_rows(row_values, slotting_rwa, slotting_type_rwa, is_b31=is_b31)
-    row_values["0420"] = {"0010": equity_rwa}
+    # Row 0420 "Equity IRB" — Art. 155 IRB-method equity only (empty under
+    # Basel 3.1, Art. 147A). SA-method equity reports at rows 0060/0210.
+    row_values["0420"] = {"0010": equity_irb_rwa}
 
     _floor_indicator_rows(
         row_values,
@@ -245,18 +276,21 @@ def _aggregate_by_approach(
     is_b31: bool,  # noqa: FBT001 - retired positional signature preserved
     approach_rwa: dict[str, float],
     sa_class_rwa: dict[str, float],
-) -> tuple[float, dict[tuple[str, str], float], dict[str, float], dict[_SubKey, float]]:
+) -> tuple[
+    float, dict[tuple[str, str], float], dict[str, float], dict[_SubKey, float], float, float
+]:
     """The retired instance-state aggregation as a pure function.
 
     Mutates ``approach_rwa`` / ``sa_class_rwa`` in place (the retired
     contract) and RETURNS what used to live on ``self``: the total, the
-    IRB (approach, class) map, the slotting SL-type map, and the B31
-    sub-row map.
+    IRB (approach, class) map, the slotting SL-type map, the B31 sub-row
+    map, and the equity RWA split into (SA-method, IRB-method) sub-totals.
     """
     collected = results.select(
         pl.col(approach_col).alias("_approach"),
         pl.col(ec_col).alias("_ec"),
         pl.col(rwa_col).fill_null(0.0).alias("_rwa"),
+        _equity_method_expr(cols).alias("_eqm"),
     ).collect()
 
     total_rwa = float(collected["_rwa"].sum())
@@ -265,18 +299,34 @@ def _aggregate_by_approach(
     for row in by_approach.iter_rows(named=True):
         approach_rwa[row["_approach"]] = float(row["rwa"])
 
-    # SA class breakdown (equity folds into the SA class group-by). The SA-CCR
-    # legs join it via ``_SA_APPROACHES``, so a derivative reports under its
-    # counterparty's Art. 112 class (an institution -> row 0120) — and, being SA,
-    # they are no longer swept into the IRB residual below.
-    sa_mask = collected["_approach"].is_in(_SA_APPROACHES)
+    # Equity method partition (PS1/26 Art. 147A / CRR Art. 155). Only PROVEN
+    # IRB-method equity (irb_simple / pd_lgd) folds into the IRB total (row 0220)
+    # and the "Equity IRB" disclosure (row 0420); SA-method equity — and any
+    # equity leg whose method the ledger did not seal (null) — stays in the SA
+    # breakdown (row 0060 total + class row 0210). Under Basel 3.1 every equity
+    # leg is stamped ``sa`` (Art. 147A), so the IRB partition is empty.
     equity_mask = collected["_approach"] == "equity"
-    sa_rows = collected.filter(sa_mask | equity_mask)
+    equity_irb_mask = equity_mask & collected["_eqm"].is_in(_EQUITY_IRB_METHODS).fill_null(
+        value=False
+    )
+    equity_sa_mask = equity_mask & ~equity_irb_mask
+    equity_sa_rwa = float(collected.filter(equity_sa_mask)["_rwa"].sum())
+    equity_irb_rwa = float(collected.filter(equity_irb_mask)["_rwa"].sum())
+
+    # SA class breakdown: SA approaches plus SA-method equity (row 0210).
+    # IRB-method equity is excluded here — it reports at row 0420, not a SA class
+    # row. The SA-CCR legs join via ``_SA_APPROACHES``, so a derivative reports
+    # under its counterparty's Art. 112 class (an institution -> row 0120) — and,
+    # being SA, they are not swept into the IRB residual below.
+    sa_mask = collected["_approach"].is_in(_SA_APPROACHES)
+    sa_rows = collected.filter(sa_mask | equity_sa_mask)
     by_class = sa_rows.group_by("_ec").agg(pl.col("_rwa").sum().alias("rwa"))
     for row in by_class.iter_rows(named=True):
         sa_class_rwa[row["_ec"]] = float(row["rwa"])
 
-    # IRB per-approach-and-class breakdown
+    # IRB per-approach-and-class breakdown (the equity approach is excluded
+    # entirely — its RWA reports at row 0420 / the IRB total, never a per-class
+    # IRB row, since there is no equity IRB exposure-class row in the layout).
     irb_rows = collected.filter(~sa_mask & ~equity_mask)
     irb_class_approach = irb_rows.group_by(["_approach", "_ec"]).agg(
         pl.col("_rwa").sum().alias("rwa")
@@ -288,7 +338,27 @@ def _aggregate_by_approach(
 
     slotting_type_rwa = _slotting_type_agg(results, approach_col, rwa_col, cols)
     irb_sub_rwa = _irb_sub_agg(results, approach_col, ec_col, rwa_col, cols) if is_b31 else {}
-    return total_rwa, irb_class_rwa, slotting_type_rwa, irb_sub_rwa
+    return (
+        total_rwa,
+        irb_class_rwa,
+        slotting_type_rwa,
+        irb_sub_rwa,
+        equity_sa_rwa,
+        equity_irb_rwa,
+    )
+
+
+def _equity_method_expr(cols: set[str]) -> pl.Expr:
+    """The sealed ``equity_method`` column, or a typed null when absent.
+
+    ``equity_method`` is a conditional AGGREGATOR_EXIT column (R6) present only
+    on runs carrying an equity book. Absent => equity-free run => the injected
+    null never matches ``_EQUITY_IRB_METHODS``, so every (non-existent) equity
+    leg is treated as SA.
+    """
+    if "equity_method" in cols:
+        return pl.col("equity_method")
+    return pl.lit(None, dtype=pl.String)
 
 
 def _slotting_type_agg(

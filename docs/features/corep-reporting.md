@@ -167,7 +167,7 @@ output-floor indicator rows are inserted.
     | Credit Risk — SA | 0050–0211 (incl. ==0131==) | SA exposure-class breakdown; ==0131== "of which: specialised lending" added |
     | Credit Risk — F-IRB | 0220, 0240, 0250, ==0271==, 0260, ==0290==, ==0295==, ==0296==, ==0297== | Adds SL-excl-slotting and corporate SME / non-SME / financial-and-large splits |
     | Credit Risk — A-IRB | 0300–0410 (incl. ==0350==, ==0355==, ==0356==, ==0382–0385==, ==0410==) | Adds SL-excl-slotting, corporate SME splits, retail residential/commercial SME splits |
-    | Slotting and Equity | ==0411–0416==, 0420 | Slotting broken out by PF / OF / CF / IPRE / HVCRE; Equity IRB retained |
+    | Slotting and Equity | ==0411–0416==, 0420 | Slotting broken out by PF / OF / CF / IPRE / HVCRE; row 0420 "Equity IRB" is structurally retained but **always empty** under Basel 3.1 (Art. 147A removes IRB equity — the whole book is standardised and reports in the SA rows 0060 / 0210) |
     | Other Risk Types | 0430–0680 | Same as CRR — **all null** (out of scope) |
 
 !!! info "New Basel 3.1 output-floor indicator rows"

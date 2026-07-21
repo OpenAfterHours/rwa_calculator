@@ -443,6 +443,15 @@ def _raw_table_edges() -> dict[str, EdgeContract]:
         "fx_rates": schemas.FX_RATES_SCHEMA,
         "model_permissions": schemas.MODEL_PERMISSIONS_SCHEMA,
         "securitisation_allocations": schemas.SECURITISATION_ALLOCATION_SCHEMA,
+        # Multi-entity reporting registries (CRR Art. 6 / 11-18). Loader edges so
+        # the per-table coverage contract (one edge per RawDataBundle LazyFrame
+        # field, test_edge_contracts.py) holds and the contract-derived test
+        # builders default them to None when absent. Loaded via the standard
+        # optional-table seal path, but intentionally NOT in SEALED_FRAME_FIELDS
+        # (mirrors cva_*) — consumed by the scope resolver before any sealed
+        # downstream edge.
+        "reporting_entities": schemas.REPORTING_ENTITY_SCHEMA,
+        "book_entity_mappings": schemas.BOOK_ENTITY_MAPPING_SCHEMA,
         # P8.60 — BA-CVA counterparty inputs. A loader edge so the per-table
         # coverage contract (one edge per RawDataBundle frame field) holds and
         # the contract-derived test builders default it to None when absent.
@@ -512,6 +521,21 @@ def _hierarchy_resolved_columns() -> dict[str, EdgeColumn]:
         "exposure_type": EdgeColumn(dtype=pl.String),
         "product_type": EdgeColumn(dtype=pl.String),
         "book_code": EdgeColumn(dtype=pl.String),
+        # CRR Art. 113(6) core-UK-group 0% RW carrier. Additive scope column
+        # threaded from the lending schemas (facility / loan / contingent) so the
+        # SA final-RW override can read the row's own eligibility after CRM;
+        # stripped at the branch-exit edge (never reaches the aggregator). Optional
+        # with a False default + Boolean null-fill so CCR/SFT synthetic rows (out of
+        # scope this wave) and any diagonal-concat gap resolve to "not eligible".
+        "intragroup_zero_rw_eligible": EdgeColumn(
+            dtype=pl.Boolean,
+            required=False,
+            default=False,
+            fill_null_default=True,
+            citation="CRR Art. 113(6)",
+            null_meaning="False = not a core-UK-group intragroup exposure; the scope "
+            "resolver sets True only on eligible individual-basis rows",
+        ),
         "counterparty_reference": EdgeColumn(dtype=pl.String),
         "value_date": EdgeColumn(dtype=pl.Date),
         "maturity_date": EdgeColumn(dtype=pl.Date),

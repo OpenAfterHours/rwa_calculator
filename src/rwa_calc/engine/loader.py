@@ -264,6 +264,13 @@ class DataSourceConfig:
     # leave ``sft_trades_file`` at None and the SFT bundle stays None.
     sft_trades_file: Path | None = None
     sft_collateral_file: Path | None = None
+    # Multi-entity reporting inputs — two OPTIONAL registries consumed by the
+    # scope-resolver stage (group / sub-consolidated / solo submissions,
+    # CRR Art. 6 / 11-18). Loaded into ``RawDataBundle.reporting_entities`` /
+    # ``RawDataBundle.book_entity_mappings`` via the shared optional-table path.
+    # Both None → the pipeline runs unscoped exactly as today.
+    reporting_entities_file: Path | None = None
+    book_entity_mappings_file: Path | None = None
 
     @classmethod
     def from_registry(
@@ -310,6 +317,8 @@ class DataSourceConfig:
             ccr_collateral_file=get_p("ccr_collateral"),
             sft_trades_file=get_p("sft_trades"),
             sft_collateral_file=get_p("sft_collateral"),
+            reporting_entities_file=get_p("reporting_entities"),
+            book_entity_mappings_file=get_p("book_entity_mapping"),
         )
 
 
@@ -784,6 +793,11 @@ def _build_bundle(
         securitisation_allocations=_opt(
             "securitisation_allocations", config.securitisation_allocations_file
         ),
+        # Multi-entity reporting registries (CRR Art. 6 / 11-18). Loaded via the
+        # same optional-table path as every other optional frame: absent file →
+        # None, non-blocking validation, sealed against RAW_TABLE_EDGES.
+        reporting_entities=_opt("reporting_entities", config.reporting_entities_file),
+        book_entity_mappings=_opt("book_entity_mappings", config.book_entity_mappings_file),
         ccr=ccr_bundle,
         sft=sft_bundle,
     )

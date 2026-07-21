@@ -129,6 +129,10 @@ def _coerce_loans_to_unified(loans: pl.LazyFrame) -> pl.LazyFrame:
         pl.lit("loan").alias("exposure_type"),
         pl.col("product_type"),
         pl.col("book_code").cast(pl.String, strict=False),  # Ensure consistent type
+        # CRR Art. 113(6) core-UK-group 0% RW carrier — declared on LOAN_SCHEMA,
+        # set by the scope resolver; without this pass-through the unified select
+        # would drop it and the SA final-RW override would never see it.
+        pl.col("intragroup_zero_rw_eligible"),
         pl.col("counterparty_reference"),
         pl.col("value_date"),
         pl.col("maturity_date"),
@@ -234,6 +238,9 @@ def _coerce_contingents_to_unified(
             pl.lit("contingent").alias("exposure_type"),
             pl.col("product_type"),
             pl.col("book_code").cast(pl.String, strict=False),
+            # CRR Art. 113(6) core-UK-group 0% RW carrier (see
+            # _coerce_loans_to_unified). Declared on CONTINGENTS_SCHEMA.
+            pl.col("intragroup_zero_rw_eligible"),
             pl.col("counterparty_reference"),
             pl.col("value_date"),
             pl.col("maturity_date"),

@@ -1,0 +1,85 @@
+/* =============================================================================
+   Reporting-hierarchy page (/hierarchy) — nested entity tree + scope badges.
+   Layered on top of app.css; reuses the shared --oah-* tokens and .badge base.
+   ============================================================================= */
+
+.hierarchy-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin: 4px 0 20px;
+  font-size: 12px;
+  color: var(--oah-slate-400);
+}
+.hierarchy-legend .legend-label { text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* Nested list: a connector rail on each descendant level. */
+.tree { list-style: none; margin: 0; padding: 0; }
+.tree .tree {
+  margin: 8px 0 4px 16px;
+  padding-left: 20px;
+  border-left: 1px solid rgba(216, 222, 233, 0.16);
+}
+.tree-node { margin: 8px 0; }
+
+.entity-card {
+  background: var(--oah-slate-800);
+  border: 1px solid rgba(216, 222, 233, 0.10);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.entity-card.is-apex { border-color: var(--oah-orange); }
+.entity-card.is-unattached { border-color: var(--oah-owl-body); }
+
+.entity-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.entity-name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+  color: #fff;
+}
+.entity-apex-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--oah-orange-soft);
+}
+
+.entity-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--oah-slate-400);
+}
+.entity-meta .entity-ref { color: var(--oah-slate-200); }
+
+.scope-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+
+/* Scope-headship badges (extend the shared .badge). */
+.badge-scope-consolidated {
+  background: rgba(255, 145, 0, 0.12);
+  border-color: var(--oah-orange);
+  color: var(--oah-orange-soft);
+}
+.badge-scope-sub_consolidated {
+  background: rgba(61, 214, 140, 0.10);
+  border-color: var(--oah-terminal-green);
+  color: #b9f0d3;
+}
+.badge-scope-individual {
+  background: rgba(216, 222, 233, 0.06);
+  border-color: rgba(216, 222, 233, 0.30);
+  color: var(--oah-slate-300);
+}
+.badge-core {
+  background: rgba(255, 145, 0, 0.16);
+  border-color: var(--oah-orange-bright);
+  color: var(--oah-orange-bright);
+}
+
+.unattached-item { margin: 12px 0; }
+.unattached-reason { margin: 8px 0 0; }

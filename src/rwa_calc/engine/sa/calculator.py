@@ -48,6 +48,7 @@ from rwa_calc.engine.sa.rw_adjustments import (
     apply_due_diligence_override,
     apply_fcsm_rw_substitution,
     apply_guarantee_substitution,
+    apply_intragroup_zero_rw,
     apply_life_insurance_rw_mapping,
     apply_third_party_deposit_rw_mapping,
 )
@@ -118,6 +119,10 @@ class SACalculator:
             .pipe(apply_guarantee_substitution, config, pack=pack)
             .pipe(apply_currency_mismatch_multiplier, config, pack=pack)
             .pipe(apply_due_diligence_override, config, errors=errors, pack=pack)
+            # CRR Art. 113(6): final 0% override for eligible core-UK-group
+            # intragroup rows — runs last so the SA-equivalent RW captured for
+            # the output floor below (and rwa_pre_factor) reflects the 0%.
+            .pipe(apply_intragroup_zero_rw, config, pack=pack)
         )
 
         # Store SA-equivalent RWA for ALL rows before the IRB calculator
@@ -184,6 +189,9 @@ class SACalculator:
             .pipe(apply_guarantee_substitution, config, pack=pack)
             .pipe(apply_currency_mismatch_multiplier, config, pack=pack)
             .pipe(apply_due_diligence_override, config, errors=errors, pack=pack)
+            # CRR Art. 113(6): final 0% override for eligible core-UK-group
+            # intragroup rows (before RWA is computed from risk_weight).
+            .pipe(apply_intragroup_zero_rw, config, pack=pack)
             .pipe(calculate_rwa)
             .pipe(apply_supporting_factors, config, errors=errors, pack=pack)
         )

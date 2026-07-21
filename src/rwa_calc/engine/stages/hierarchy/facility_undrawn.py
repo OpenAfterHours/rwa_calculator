@@ -199,6 +199,7 @@ def _empty_facility_undrawn_frame() -> pl.LazyFrame:
             "exposure_type": pl.String,
             "product_type": pl.String,
             "book_code": pl.String,
+            "intragroup_zero_rw_eligible": pl.Boolean,
             "counterparty_reference": pl.String,
             "original_counterparty_reference": pl.String,
             "value_date": pl.Date,
@@ -477,6 +478,11 @@ def _undrawn_select_expressions() -> list[pl.Expr]:
         pl.lit("facility_undrawn").alias("exposure_type"),
         pl.col("product_type"),
         pl.col("book_code").cast(pl.String, strict=False),
+        # CRR Art. 113(6) core-UK-group 0% RW carrier — the facility's own
+        # eligibility (FACILITY_SCHEMA) flows onto its undrawn commitment row so a
+        # solo intragroup facility's headroom is weighted at 0% alongside its drawn
+        # legs. MOF waterfall / residual sub-rows inherit the parent facility's value.
+        pl.col("intragroup_zero_rw_eligible"),
         pl.coalesce(
             pl.col("share_counterparty_reference"),
             pl.col("counterparty_reference"),

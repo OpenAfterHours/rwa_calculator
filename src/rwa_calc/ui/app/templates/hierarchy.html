@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Reporting hierarchy — RWA Calculator{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="/static/tokens.css">
+<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/hierarchy.css">
+{% endblock %}
+
+{#
+  Server-rendered reporting-entity hierarchy. The registry
+  (config/reporting_entities) is folded into a tree by ui.views.hierarchy; this
+  template only renders it. Malformed rows arrive in view.unattached and render
+  in a clearly-marked section rather than crashing the page.
+#}
+
+{% macro entity_card(node, unattached=false) %}
+<div class="entity-card{% if node.is_apex %} is-apex{% endif %}{% if unattached %} is-unattached{% endif %}">
+  <div class="entity-head">
+    <span class="entity-name">{{ node.name }}</span>
+    {% if node.is_apex %}<span class="entity-apex-tag">Group apex</span>{% endif %}
+    {% if node.core_uk_group %}<span class="badge badge-core">Core UK group</span>{% endif %}
+  </div>
+  <div class="entity-meta">
+    <span class="mono entity-ref">{{ node.reference }}</span>
+    {% if node.lei %}<span>LEI {{ node.lei }}</span>{% endif %}
+    {% if node.institution_type %}<span>{{ node.institution_type }}</span>{% endif %}
+  </div>
+  {% if node.scopes %}
+  <div class="scope-row">
+    {% for scope in node.scopes %}
+    <span class="badge badge-scope-{{ scope.basis }}">{{ scope.label }}</span>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{% macro entity_tree(nodes) %}
+<ul class="tree">
+  {%- for node in nodes recursive %}
+  <li class="tree-node">
+    {{ entity_card(node) }}
+    {%- if node.children %}
+    <ul class="tree">{{ loop(node.children) }}</ul>
+    {%- endif %}
+  </li>
+  {%- endfor %}
+</ul>
+{% endmacro %}
+
+{% macro columns_help() %}
+<div class="panel">
+  <h3><span class="mono">config/reporting_entities</span></h3>
+  <p class="muted">An optional table (parquet or CSV) under your data directory's
+  <span class="mono">config/</span> folder. Add it to run scoped group,
+  sub-consolidated or solo submissions. Expected columns:</p>
+  <div class="table-wrap">
+    <table class="data">
+      <thead><tr><th>Column</th><th>Required</th><th>Notes</th></tr></thead>
+      <tbody>
+        {% for col in expected_columns %}
+        <tr>
+          <td class="mono">{{ col.name }}</td>
+          <td>{{ "yes" if col.required else "no" }}</td>
+          <td>{{ col.notes }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endmacro %}
+
+{% block content %}
+<h1>Reporting hierarchy</h1>
+<p class="muted">The reporting-entity registry for a data directory, and which
+regulatory scope each entity can head.</p>
+
+<form class="form" method="get" action="/hierarchy">
+  <div class="field">
+    <label for="data_path">Data path</label>
+    <input id="data_path" name="data_path" value="{{ data_path }}" placeholder="/path/to/data" required>
+  </div>
+  <button class="btn btn-primary" type="submit">Load hierarchy</button>
+</form>
+
+{% if error %}
+<div class="callout error">{{ error }}</div>
+{{ columns_help() }}
+
+{% elif view is none %}
+<div class="callout info">Enter the path to your data directory above to view its
+reporting hierarchy.</div>
+{{ columns_help() }}
+
+{% elif view.is_empty %}
+<div class="callout info">No <span class="mono">config/reporting_entities</span>
+table was found under this data directory — every calculation runs over the whole
+book (unscoped). Add the registry to enable scoped submissions.</div>
+{{ columns_help() }}
+
+{% else %}
+<p class="muted">{{ view.entity_count }} entit{{ "y" if view.entity_count == 1 else "ies" }}
+across {{ view.roots | length }} group{{ "" if view.roots | length == 1 else "s" }}.</p>
+
+<div class="hierarchy-legend">
+  <span class="legend-label">Scopes a node can head:</span>
+  {% for scope in scope_legend %}
+  <span class="badge badge-scope-{{ scope.basis }}">{{ scope.label }}</span>
+  {% endfor %}
+</div>
+
+{% for root in view.roots %}
+{{ entity_tree([root]) }}
+{% endfor %}
+
+{% if view.unattached %}
+<div class="panel">
+  <h3>Unattached entities</h3>
+  <p class="muted">These rows could not be placed under a group apex — check their
+  <span class="mono">parent_entity_reference</span>.</p>
+  {% for item in view.unattached %}
+  <div class="unattached-item">
+    {{ entity_card(item.node, unattached=true) }}
+    <div class="callout warn unattached-reason">Unattached — {{ item.reason }}</div>
+    {% if item.node.children %}{{ entity_tree(item.node.children) }}{% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

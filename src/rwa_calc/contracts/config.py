@@ -619,6 +619,11 @@ class CalculationConfig:
         reporting_date: As-of date for the calculation
         base_currency: Currency for reporting (default GBP)
         apply_fx_conversion: Whether to convert exposures to base_currency
+        reporting_entity: Optional entity_reference selecting the reporting scope
+            (multi-entity submissions). None = un-scoped single run.
+        reporting_basis: Optional consolidation basis of the submission
+            (individual / sub_consolidated / consolidated). Required whenever
+            reporting_entity is set.
         output_floor: Output floor configuration
         post_model_adjustments: Post-model adjustments (Basel 3.1 only)
         permission_mode: STANDARDISED (all SA) or IRB (model permissions drive routing)
@@ -633,6 +638,14 @@ class CalculationConfig:
     reporting_date: date
     base_currency: str = "GBP"
     apply_fx_conversion: bool = True  # Convert exposures to base_currency using fx_rates
+    # Reporting scope for multi-entity submissions (group / sub-consolidated /
+    # solo). ``reporting_entity`` is an ``entity_reference`` into the
+    # reporting-entities registry; ``reporting_basis`` is the consolidation
+    # basis of the submission. Both default to None — an un-scoped run that is
+    # byte-identical to today. ``reporting_entity`` set without
+    # ``reporting_basis`` is a configuration error (see ``__post_init__``).
+    reporting_entity: str | None = None
+    reporting_basis: ReportingBasis | None = None
     output_floor: OutputFloorConfig = field(default_factory=OutputFloorConfig.crr)
     post_model_adjustments: PostModelAdjustmentConfig = field(
         default_factory=PostModelAdjustmentConfig.crr
@@ -713,12 +726,20 @@ class CalculationConfig:
     audit_cache_max_runs: int | None = None
 
     def __post_init__(self) -> None:
-        """Derive internal irb_permissions from permission_mode and regime_id.
+        """Validate the reporting scope, then derive internal irb_permissions.
 
-        Skips derivation when an explicit ``irb_permissions`` was supplied so
-        callers can override flags like ``psm_lgd_source`` without losing the
-        permission map.
+        ``reporting_entity`` selects a scope in the reporting-entities registry;
+        it is meaningless without a ``reporting_basis`` to consolidate on, so
+        that combination is rejected here (a configuration error — an exception
+        is the correct channel, not the CalculationError list).
+
+        irb_permissions derivation is skipped when an explicit ``irb_permissions``
+        was supplied so callers can override flags like ``psm_lgd_source``
+        without losing the permission map.
         """
+        if self.reporting_entity is not None and self.reporting_basis is None:
+            msg = "reporting_entity requires reporting_basis to be set"
+            raise ValueError(msg)
         if self.irb_permissions is not None:
             return
         if self.permission_mode == PermissionMode.IRB:
@@ -789,6 +810,8 @@ class CalculationConfig:
         mpor_floor_days: int = 10,
         recognise_im: bool = True,
         sft_method: Literal["fccm", "var", "imm"] = "fccm",
+        reporting_entity: str | None = None,
+        reporting_basis: ReportingBasis | None = None,
     ) -> CalculationConfig:
         """
         Create CRR (Basel 3.0) configuration.
@@ -813,6 +836,9 @@ class CalculationConfig:
             sft_method: SFT EAD method (CRR Art. 271(2)). "fccm" (default,
                 Art. 220-223) is implemented; "var"/"imm" are reserved and fail
                 loud in the engine. Sets ``SFTConfig.method`` on the returned config.
+            reporting_entity: Optional reporting-scope entity_reference. Requires
+                reporting_basis to be set (a ValueError otherwise).
+            reporting_basis: Optional consolidation basis of the submission.
 
         Returns:
             Configured CalculationConfig for CRR
@@ -821,6 +847,8 @@ class CalculationConfig:
             regime_id="crr",
             reporting_date=reporting_date,
             base_currency=base_currency,
+            reporting_entity=reporting_entity,
+            reporting_basis=reporting_basis,
             output_floor=OutputFloorConfig.crr(),
             post_model_adjustments=PostModelAdjustmentConfig.crr(),
             ccr=CCRConfig(
@@ -874,6 +902,7 @@ class CalculationConfig:
         mpor_floor_days: int = 10,
         recognise_im: bool = True,
         sft_method: Literal["fccm", "var", "imm"] = "fccm",
+        reporting_entity: str | None = None,
     ) -> CalculationConfig:
         """
         Create Basel 3.1 (PRA PS1/26) configuration.
@@ -897,9 +926,14 @@ class CalculationConfig:
                 for the output floor S-TREA computation (Art. 92 para 2A).
                 Must be declared to the PRA.
             institution_type: Entity type per Art. 92 para 2A for output floor
-                applicability. When None, floor is assumed applicable.
+                applicability. When None, floor is assumed applicable. Also
+                propagated into the OutputFloorConfig (see below).
             reporting_basis: Calculation basis per Rule 2.2A. Required with
-                institution_type for floor applicability check.
+                institution_type for floor applicability check. Set both as the
+                top-level reporting scope AND propagated into the
+                OutputFloorConfig so Art. 92 para 2A applicability keeps working.
+                Required whenever reporting_entity is set (a ValueError otherwise).
+            reporting_entity: Optional reporting-scope entity_reference.
             gcra_amount: General credit risk adjustments for OF-ADJ (Art. 92 para 2A).
                 Capped at 1.25% of S-TREA.
             sa_t2_credit: Art. 62(c) SA T2 credit for general CRAs (OF-ADJ input).
@@ -926,6 +960,13 @@ class CalculationConfig:
             regime_id="b31",
             reporting_date=reporting_date,
             base_currency=base_currency,
+            reporting_entity=reporting_entity,
+            reporting_basis=reporting_basis,
+            # The floor config takes institution_type / reporting_basis directly
+            # from the top-level args here, so the top-level scope is propagated
+            # into it (Art. 92 para 2A applicability). When neither is given the
+            # floor's own fields stay None (backward compatible: floor assumed
+            # applicable).
             output_floor=OutputFloorConfig.basel_3_1(
                 institution_type=institution_type,
                 reporting_basis=reporting_basis,

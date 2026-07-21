@@ -40,7 +40,7 @@ from rwa_calc.contracts.errors import (
     ErrorCategory,
     ErrorSeverity,
 )
-from rwa_calc.domain.enums import CRMCollateralMethod
+from rwa_calc.domain.enums import ApproachType, CRMCollateralMethod, ReportingBasis
 from rwa_calc.engine.eu_sovereign import (
     build_domestic_cgcb_guarantor_expr,
     denomination_currency_expr,
@@ -49,6 +49,7 @@ from rwa_calc.engine.eu_sovereign import (
 from rwa_calc.engine.sa.guarantor_rw import build_guarantor_rw_expr
 from rwa_calc.engine.sa.risk_weights import _SA_B31_RW
 from rwa_calc.rulebook import RulepackV0
+from rwa_calc.rulebook.compile import scalar_value
 from rwa_calc.rulebook.resolve import resolve
 
 if TYPE_CHECKING:
@@ -517,6 +518,80 @@ def apply_due_diligence_override(
             .alias("risk_weight"),
             override_applies.alias("due_diligence_override_applied"),
         ]
+    )
+
+
+@cites("CRR Art. 113")
+def apply_intragroup_zero_rw(
+    lf: pl.LazyFrame,
+    config: CalculationConfig,
+    *,
+    pack: ResolvedRulepack | None = None,
+) -> pl.LazyFrame:
+    """Apply the CRR Art. 113(6) core-UK-group 0% risk weight.
+
+    On an individual-basis run the scope resolver flips
+    ``intragroup_zero_rw_eligible`` True for exposures to a core-UK-group entity
+    (both the reporting entity and the counterparty inside the same permission
+    perimeter). Those rows take the pack's cited 0% final risk weight, applied
+    as the LAST risk-weight step — after standard SA assignment and every CRM
+    adjustment (FCSM, life-insurance, guarantee substitution, currency mismatch,
+    due diligence). The permission is a hard override, not a benefit blended
+    against the counterparty risk weight, so it deliberately wins over the
+    due-diligence increase that precedes it.
+
+    Keyed on the row's OWN eligibility carrier: a guarantee-split leg of an
+    eligible intragroup loan inherits the flag (splits copy row columns), while
+    an external loan merely guaranteed BY a group member is untouched —
+    Art. 113(6) covers direct exposures to members, not protection from them.
+
+    SA-routed rows only. IRB rows are unaffected: the IRB route to a 0%
+    intragroup exposure is Art. 150(1)(e) permanent partial use, which
+    reclassifies the exposure to SA upstream, where this override then fires.
+    The Feature (enabled under both CRR and Basel 3.1 — PS1/26 retains the
+    permission) carries the regime story, so there is no is_crr branch.
+
+    The override fires ONLY on a scoped **individual**-basis run — the one path
+    on which the resolver is authoritative over the carrier. This closes the
+    user-loadable bypass: ``intragroup_zero_rw_eligible`` is a declared (optional)
+    schema column, so an input file could ship it True, but on an unscoped or
+    consolidated run the resolver never overwrites it; gating here means a stray
+    input True can never win the 0% without the PRA permission. Reading
+    ``reporting_entity`` / ``reporting_basis`` is scope gating, not regime
+    branching (arch_check check 17 is untouched).
+
+    No-op when the Feature is disabled, the run is not scoped-individual, or the
+    carrier column is absent (a direct calculator invocation that never went
+    through the scope resolver).
+    """
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    if not resolved_pack.feature("intragroup_zero_rw"):
+        return lf
+
+    # Scope gate (bypass closure): the 0% can only apply where the resolver has
+    # authoritatively set the carrier — a scoped individual-basis run.
+    if config.reporting_entity is None or config.reporting_basis is not ReportingBasis.INDIVIDUAL:
+        return lf
+
+    cols = lf.collect_schema().names()
+    if "intragroup_zero_rw_eligible" not in cols:
+        return lf
+
+    zero_rw = scalar_value(resolved_pack.scalar_param("intragroup_zero_rw_pct"))
+    # A null carrier routes to the ``otherwise`` branch below (unchanged RW),
+    # identical to False — no fill needed (and the edge seal already null-fills).
+    eligible = pl.col("intragroup_zero_rw_eligible")
+    # SA-routed rows only (Art. 150(1)(e) PPU is the IRB route to SA treatment).
+    # On the output-floor path the SA pipe runs over the full unified frame, so
+    # gate on the approach column to leave IRB / slotting SA-equivalent RWs alone.
+    if "approach" in cols:
+        eligible = eligible & (pl.col("approach") == ApproachType.SA.value)
+
+    return lf.with_columns(
+        pl.when(eligible)
+        .then(pl.lit(zero_rw))
+        .otherwise(pl.col("risk_weight"))
+        .alias("risk_weight"),
     )
 
 

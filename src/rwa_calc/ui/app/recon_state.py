@@ -29,6 +29,7 @@ import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,12 @@ _STATE_FILENAME = "reconciliation_last_run.json"
 
 @dataclass(frozen=True, slots=True)
 class ReconciliationFormState:
-    """The six reconciliation form fields, captured verbatim as strings."""
+    """The reconciliation form fields, captured verbatim as strings.
+
+    ``reporting_entity`` / ``reporting_basis`` are the optional multi-entity
+    reporting scope (blank when unscoped); they carry defaults so a state file
+    written before these fields existed still loads (the scope opens blank).
+    """
 
     data_path: str
     reporting_date: str
@@ -46,6 +52,8 @@ class ReconciliationFormState:
     permission_mode: str
     data_format: str
     mapping_toml: str
+    reporting_entity: str = ""
+    reporting_basis: str = ""
 
 
 def save_last_run(state: ReconciliationFormState) -> None:
@@ -74,14 +82,31 @@ def load_last_run() -> ReconciliationFormState | None:
         return None
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
-        field_names = [f.name for f in dataclasses.fields(ReconciliationFormState)]
-        values = {name: raw[name] for name in field_names}
+        values = _read_fields(raw)
         if not all(isinstance(v, str) for v in values.values()):
             raise TypeError("reconciliation state fields must be strings")
         return ReconciliationFormState(**values)
     except (OSError, ValueError, TypeError, KeyError):
         logger.warning("ignoring unreadable reconciliation last-run state", exc_info=True)
         return None
+
+
+def _read_fields(raw: dict) -> dict[str, Any]:
+    """Pull each dataclass field from *raw*, tolerating absent defaulted fields.
+
+    A field with a default (the multi-entity scope fields, added later) is read
+    with ``.get`` and falls back to that default, so an older state file loads
+    without the new keys. A field with no default stays strict (a ``KeyError``
+    bubbles up and the file is treated as unreadable), preserving the original
+    all-or-nothing contract for the core form fields.
+    """
+    values: dict[str, Any] = {}
+    for field in dataclasses.fields(ReconciliationFormState):
+        if field.default is not dataclasses.MISSING:
+            values[field.name] = raw.get(field.name, field.default)
+        else:
+            values[field.name] = raw[field.name]
+    return values
 
 
 def clear_last_run() -> None:

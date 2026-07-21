@@ -12,7 +12,7 @@ Regenerate after annotation changes:
 uv run python scripts/generate_citation_matrix.py
 ```
 
-Last generated: 2026-07-20.
+Last generated: 2026-07-21.
 
 ## CRR (Capital Requirements Regulation)
 
@@ -77,6 +77,11 @@ Last generated: 2026-07-20.
 ??? quote "`calculate_rwa` — src/rwa_calc/engine/sa/factors_output.py:50"
     ```python
     --8<-- "src/rwa_calc/engine/sa/factors_output.py:50:61"
+    ```
+
+??? quote "`apply_intragroup_zero_rw` — src/rwa_calc/engine/sa/rw_adjustments.py:524"
+    ```python
+    --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:524:580"
     ```
 
 
@@ -834,9 +839,9 @@ Last generated: 2026-07-20.
     --8<-- "src/rwa_calc/engine/crm/guarantees.py:242:285"
     ```
 
-??? quote "`apply_guarantee_substitution` — src/rwa_calc/engine/sa/rw_adjustments.py:190"
+??? quote "`apply_guarantee_substitution` — src/rwa_calc/engine/sa/rw_adjustments.py:191"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:190:327"
+    --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:191:328"
     ```
 
 
@@ -884,9 +889,9 @@ Last generated: 2026-07-20.
     --8<-- "src/rwa_calc/engine/crm/simple_method.py:271:373"
     ```
 
-??? quote "`apply_fcsm_rw_substitution` — src/rwa_calc/engine/sa/rw_adjustments.py:68"
+??? quote "`apply_fcsm_rw_substitution` — src/rwa_calc/engine/sa/rw_adjustments.py:69"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:68:117"
+    --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:69:118"
     ```
 
 
@@ -977,14 +982,14 @@ Last generated: 2026-07-20.
     --8<-- "src/rwa_calc/engine/crm/third_party_deposit.py:82:154"
     ```
 
-??? quote "`apply_life_insurance_rw_mapping` — src/rwa_calc/engine/sa/rw_adjustments.py:120"
+??? quote "`apply_life_insurance_rw_mapping` — src/rwa_calc/engine/sa/rw_adjustments.py:121"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:120:151"
+    --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:121:152"
     ```
 
-??? quote "`apply_third_party_deposit_rw_mapping` — src/rwa_calc/engine/sa/rw_adjustments.py:154"
+??? quote "`apply_third_party_deposit_rw_mapping` — src/rwa_calc/engine/sa/rw_adjustments.py:155"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:154:187"
+    --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:155:188"
     ```
 
 
@@ -1256,9 +1261,9 @@ Last generated: 2026-07-20.
 
 ### PS1/26, paragraph 110A — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`apply_due_diligence_override` — src/rwa_calc/engine/sa/rw_adjustments.py:459"
+??? quote "`apply_due_diligence_override` — src/rwa_calc/engine/sa/rw_adjustments.py:460"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:459:520"
+    --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:460:521"
     ```
 
 
@@ -1301,17 +1306,17 @@ Last generated: 2026-07-20.
 
 ### PS1/26, paragraph 123B — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`apply_currency_mismatch_multiplier` — src/rwa_calc/engine/sa/rw_adjustments.py:330"
+??? quote "`apply_currency_mismatch_multiplier` — src/rwa_calc/engine/sa/rw_adjustments.py:331"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:330:456"
+    --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:331:457"
     ```
 
 
 ### PS1/26, paragraph 123B.3 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`apply_currency_mismatch_multiplier` — src/rwa_calc/engine/sa/rw_adjustments.py:331"
+??? quote "`apply_currency_mismatch_multiplier` — src/rwa_calc/engine/sa/rw_adjustments.py:332"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:330:456"
+    --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:331:457"
     ```
 
 

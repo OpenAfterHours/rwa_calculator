@@ -79,6 +79,13 @@ _SFT_TRADE_COLUMNS = {
     # LGD). Additive, required=False, no default value (null = no modelled
     # LGD; feeds the classifier's has_modelled_lgd AIRB gate).
     "ccr_modelled_lgd",
+    # Multi-entity reporting (CRR Art. 6 / 11-18). Additive: book_code
+    # (default "", nullable) attributes the SFT to a reporting entity via
+    # book_entity_mapping; intragroup_entity_reference (nullable, no default)
+    # tags an intragroup claim for the scope resolver to eliminate on a
+    # consolidated / sub-consolidated run.
+    "book_code",
+    "intragroup_entity_reference",
 }
 
 

@@ -83,6 +83,10 @@ class CalculationFingerprint:
         eur_gbp_rate: Exact string form of the Decimal FX rate.
         data_signature: Sorted ``(relative_path, size, mtime_ns)`` per input
             file — stat-based, never content-hashed (cheap on large books).
+        reporting_entity: Reporting-scope entity_reference, or None for an
+            un-scoped run. Two scopes over identical data must not collide.
+        reporting_basis: Consolidation basis string, or None. Defaults to None
+            so a run_index.json written before these fields existed still loads.
     """
 
     data_path: str
@@ -93,6 +97,8 @@ class CalculationFingerprint:
     base_currency: str
     eur_gbp_rate: str
     data_signature: tuple[tuple[str, int, int], ...]
+    reporting_entity: str | None = None
+    reporting_basis: str | None = None
 
 
 def compute_fingerprint(
@@ -104,12 +110,16 @@ def compute_fingerprint(
     data_format: str,
     base_currency: str = "GBP",
     eur_gbp_rate: Decimal = Decimal("0.8732"),
+    reporting_entity: str | None = None,
+    reporting_basis: str | None = None,
 ) -> CalculationFingerprint:
     """Fingerprint a calculation request against the current on-disk data.
 
     Defaults for ``base_currency`` / ``eur_gbp_rate`` mirror ``CreditRiskCalc``
     so callers that never expose those knobs (the UI forms) fingerprint
-    identically to the runs they dispatch.
+    identically to the runs they dispatch. ``reporting_entity`` /
+    ``reporting_basis`` default to None so an un-scoped request fingerprints
+    exactly as it did before multi-entity reporting existed.
     """
     root = Path(data_path).expanduser().resolve()
     return CalculationFingerprint(
@@ -121,6 +131,8 @@ def compute_fingerprint(
         base_currency=base_currency,
         eur_gbp_rate=str(eur_gbp_rate),
         data_signature=_data_signature(root, data_format),
+        reporting_entity=reporting_entity,
+        reporting_basis=reporting_basis,
     )
 
 
@@ -262,7 +274,7 @@ def run_cache_dir(run_id: str) -> Path | None:
 # =============================================================================
 
 
-def _params_key(fp: CalculationFingerprint) -> tuple[str, ...]:
+def _params_key(fp: CalculationFingerprint) -> tuple[str | None, ...]:
     """Every fingerprint field except the data signature, for signature-blind matching."""
     return (
         fp.data_path,
@@ -272,6 +284,8 @@ def _params_key(fp: CalculationFingerprint) -> tuple[str, ...]:
         fp.data_format,
         fp.base_currency,
         fp.eur_gbp_rate,
+        fp.reporting_entity,
+        fp.reporting_basis,
     )
 
 
@@ -385,6 +399,8 @@ def _entry_to_raw(fingerprint: CalculationFingerprint, entry: ReusableRun) -> di
                 if response.output_floor_summary is not None
                 else None
             ),
+            "reporting_entity": response.reporting_entity,
+            "reporting_basis": response.reporting_basis,
         },
     }
 
@@ -398,6 +414,9 @@ def _entry_from_raw(raw: dict) -> tuple[CalculationFingerprint, ReusableRun]:
     (``SummaryStatistics`` has no string fields).
     """
     fp_raw = raw["fingerprint"]
+    # ``.get`` for reporting_entity / reporting_basis — a run_index.json written
+    # before multi-entity reporting existed has no such key; it must load as an
+    # un-scoped fingerprint (None), never a KeyError.
     fingerprint = CalculationFingerprint(
         data_path=fp_raw["data_path"],
         framework=fp_raw["framework"],
@@ -409,6 +428,8 @@ def _entry_from_raw(raw: dict) -> tuple[CalculationFingerprint, ReusableRun]:
         data_signature=tuple(
             (str(rel), int(size), int(mtime_ns)) for rel, size, mtime_ns in fp_raw["data_signature"]
         ),
+        reporting_entity=fp_raw.get("reporting_entity"),
+        reporting_basis=fp_raw.get("reporting_basis"),
     )
     resp_raw = raw["response"]
     # Decimal fields persist as strings (SummaryStatistics has no string fields,
@@ -433,6 +454,9 @@ def _entry_from_raw(raw: dict) -> tuple[CalculationFingerprint, ReusableRun]:
         summary_by_approach_path=_opt_path(resp_raw["summary_by_approach_path"]),
         summary_by_class_method_path=_opt_path(resp_raw["summary_by_class_method_path"]),
         output_floor_summary=output_floor_summary,
+        # ``.get`` — same backward-compat reason as the fingerprint fields above.
+        reporting_entity=resp_raw.get("reporting_entity"),
+        reporting_basis=resp_raw.get("reporting_basis"),
     )
     entry = ReusableRun(
         run_id=raw["run_id"],

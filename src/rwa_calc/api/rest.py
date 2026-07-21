@@ -33,12 +33,12 @@ import zipfile
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, Self
 
 import polars as pl
 from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from rwa_calc.api import run_index
 from rwa_calc.api.export import ResultExporter
@@ -47,6 +47,7 @@ from rwa_calc.api.reconciliation import loads_reconciliation_config
 from rwa_calc.api.service import CreditRiskCalc, get_supported_frameworks
 from rwa_calc.api.validation import DataPathValidator
 from rwa_calc.contracts.config import Pillar3CapitalRatioOverrides
+from rwa_calc.domain.enums import ReportingBasis
 from rwa_calc.reporting import catalog, lineage
 from rwa_calc.reporting.facts import FilingMetadata
 
@@ -132,7 +133,28 @@ router = APIRouter(prefix="/api", tags=["rwa"])
 # =============================================================================
 
 
-class CalculateRequest(BaseModel):
+class _ScopedRequest(BaseModel):
+    """Base for request bodies carrying an optional reporting scope.
+
+    ``reporting_entity`` is an ``entity_reference`` into the reporting-entities
+    registry; ``reporting_basis`` is the consolidation basis, validated against
+    ``ReportingBasis`` so a garbage value is a 422 (not a 500). An entity set
+    without a basis is a config error surfaced as a 422 here, so it never
+    reaches the engine's ``ValueError``. Both blank is the unscoped path,
+    byte-identical to pre-feature behaviour.
+    """
+
+    reporting_entity: str | None = None
+    reporting_basis: ReportingBasis | None = None
+
+    @model_validator(mode="after")
+    def _require_basis_with_entity(self) -> Self:
+        if self.reporting_entity is not None and self.reporting_basis is None:
+            raise ValueError("reporting_entity requires reporting_basis")
+        return self
+
+
+class CalculateRequest(_ScopedRequest):
     """Body for POST /api/calculate."""
 
     data_path: str
@@ -152,8 +174,11 @@ class ValidateRequest(BaseModel):
     permission_mode: Literal["standardised", "irb"] = "standardised"
 
 
-class ComparisonRequest(BaseModel):
-    """Body for POST /api/comparison — runs both frameworks over one dataset."""
+class ComparisonRequest(_ScopedRequest):
+    """Body for POST /api/comparison — runs both frameworks over one dataset.
+
+    A configured reporting scope applies identically to both regime runs.
+    """
 
     data_path: str
     reporting_date: date
@@ -161,7 +186,7 @@ class ComparisonRequest(BaseModel):
     data_format: Literal["parquet", "csv"] = "parquet"
 
 
-class ReconcileRequest(BaseModel):
+class ReconcileRequest(_ScopedRequest):
     """Body for POST /api/reconcile — our run vs a mapped legacy output.
 
     ``mapping_toml`` is the reconciliation config (legacy file path, join keys,
@@ -193,6 +218,23 @@ class ReconcileRequest(BaseModel):
 def frameworks() -> list[dict[str, str]]:
     """List supported regulatory frameworks (for UI form population)."""
     return get_supported_frameworks()
+
+
+@router.get("/entities")
+def entities(data_path: str) -> list[dict]:
+    """List the reporting-entities registry rows for a data directory.
+
+    Reads the OPTIONAL ``config/reporting_entities`` table (parquet or csv) and
+    returns its rows as JSON — ``entity_reference``, ``entity_name``, ``lei``,
+    ``parent_entity_reference``, ``institution_type``, ``core_uk_group`` — for
+    the multi-entity scope pickers. An absent registry file is a clean empty
+    list (the table is optional); a ``data_path`` that is not an existing
+    directory is a 422, mirroring the input-guarding the other endpoints apply.
+    """
+    root = Path(data_path).expanduser()
+    if not data_path.strip() or not root.is_dir():
+        raise HTTPException(status_code=422, detail=f"invalid data_path: {data_path!r}")
+    return read_reporting_entities(root)
 
 
 @router.post("/validate")
@@ -227,6 +269,8 @@ def calculate(req: CalculateRequest) -> dict:
         data_format=req.data_format,
         base_currency=req.base_currency,
         eur_gbp_rate=req.eur_gbp_rate,
+        reporting_entity=req.reporting_entity,
+        reporting_basis=_basis_str(req.reporting_basis),
     )
     response = _run_calc(
         data_path=req.data_path,
@@ -236,6 +280,8 @@ def calculate(req: CalculateRequest) -> dict:
         data_format=req.data_format,
         base_currency=req.base_currency,
         eur_gbp_rate=req.eur_gbp_rate,
+        reporting_entity=req.reporting_entity,
+        reporting_basis=req.reporting_basis,
     )
     run_id = register_run(response)
     run_index.register_calculation(fingerprint, run_id, response)
@@ -405,6 +451,8 @@ def comparison(req: ComparisonRequest) -> dict:
             reporting_date=req.reporting_date,
             permission_mode=req.permission_mode,
             data_format=req.data_format,
+            reporting_entity=req.reporting_entity,
+            reporting_basis=_basis_str(req.reporting_basis),
         )
         for fw in ("CRR", "BASEL_3_1")
     }
@@ -414,6 +462,8 @@ def comparison(req: ComparisonRequest) -> dict:
         reporting_date=req.reporting_date,
         permission_mode=req.permission_mode,
         data_format=req.data_format,
+        reporting_entity=req.reporting_entity,
+        reporting_basis=req.reporting_basis,
     )
     b31 = _run_calc(
         data_path=req.data_path,
@@ -421,6 +471,8 @@ def comparison(req: ComparisonRequest) -> dict:
         reporting_date=req.reporting_date,
         permission_mode=req.permission_mode,
         data_format=req.data_format,
+        reporting_entity=req.reporting_entity,
+        reporting_basis=req.reporting_basis,
     )
     crr_id = register_run(crr)
     b31_id = register_run(b31)
@@ -457,6 +509,8 @@ def reconcile(req: ReconcileRequest) -> dict:
             reporting_date=req.reporting_date,
             permission_mode=req.permission_mode,
             data_format=req.data_format,
+            reporting_entity=req.reporting_entity,
+            reporting_basis=req.reporting_basis,
         ).reconcile(settings, calculation=calculation)
     except (ValueError, FileNotFoundError) as exc:
         raise HTTPException(
@@ -565,6 +619,16 @@ def export(  # noqa: PLR0913 - the pillar3 comparative-period + capital-ratio in
         framework=response.framework,
         run_id=run_id,
         entity_identifier=entity_identifier,
+        # The run's consolidation basis (multi-entity submissions); None on an
+        # unscoped run, so the metadata sheet / fact columns / stamped filename
+        # stay byte-identical to pre-feature output. ``entity_name`` is left None
+        # deliberately: the response carries only the registry ``entity_reference``
+        # (a key), not the display name ``FilingMetadata.entity_name`` documents —
+        # mislabelling a key as "Entity name" in a regulatory feed is worse than
+        # omitting it. Resolving the display name from the reporting-entities
+        # registry is a possible later enhancement.
+        consolidation_basis=response.reporting_basis,
+        entity_name=None,
     )
     exporter = ResultExporter()
     # metadata.stamped_filename() intentionally uses only framework/
@@ -767,6 +831,40 @@ def get_recon_workspace(recon_id: str) -> ReconWorkspace | None:
 # =============================================================================
 
 
+# The registry columns surfaced by GET /api/entities, in display order. Only
+# ``entity_reference`` is guaranteed present (REPORTING_ENTITY_SCHEMA marks the
+# rest optional), so a missing column is filled null rather than dropped — the
+# feed shape is stable regardless of which optional columns the file carries.
+_ENTITY_COLUMNS: tuple[str, ...] = (
+    "entity_reference",
+    "entity_name",
+    "lei",
+    "parent_entity_reference",
+    "institution_type",
+    "core_uk_group",
+)
+
+
+def read_reporting_entities(root: Path) -> list[dict]:
+    """Read ``config/reporting_entities`` (parquet, then csv) into row dicts.
+
+    Returns an empty list when neither file exists — the registry is optional,
+    so its absence is the un-scoped norm, not an error. Missing optional columns
+    are surfaced as null so the row shape is always the six ``_ENTITY_COLUMNS``.
+    """
+    for extension, reader in ((".parquet", pl.read_parquet), (".csv", pl.read_csv)):
+        candidate = root / "config" / f"reporting_entities{extension}"
+        if candidate.exists():
+            frame = reader(candidate)
+            present = set(frame.columns)
+            selected = frame.select(
+                pl.col(name) if name in present else pl.lit(None).alias(name)
+                for name in _ENTITY_COLUMNS
+            )
+            return selected.to_dicts()
+    return []
+
+
 def _safe_log_token(value: str) -> str:
     """Strip CR/LF (and other control chars) so a caller-supplied id can't
     forge log lines (CWE-117 log injection). Route-parameter strings (run_id,
@@ -788,6 +886,8 @@ def _run_calc(
     data_format: Literal["parquet", "csv"],
     base_currency: str = "GBP",
     eur_gbp_rate: Decimal = Decimal("0.8732"),
+    reporting_entity: str | None = None,
+    reporting_basis: ReportingBasis | None = None,
 ) -> CalculationResponse:
     """Construct CreditRiskCalc and run a single calculation."""
     return CreditRiskCalc(
@@ -798,7 +898,20 @@ def _run_calc(
         data_format=data_format,
         base_currency=base_currency,
         eur_gbp_rate=eur_gbp_rate,
+        reporting_entity=reporting_entity,
+        reporting_basis=reporting_basis,
     ).calculate()
+
+
+def _basis_str(basis: ReportingBasis | None) -> str | None:
+    """The string value of a ``ReportingBasis`` for the fingerprint field.
+
+    ``compute_fingerprint`` stores ``reporting_basis`` as ``str | None`` (and
+    ``CreditRiskCalc`` stamps the same string onto the response), so the enum is
+    rendered to its value at every fingerprint call site to keep the two in
+    lock-step. None (unscoped) passes through unchanged.
+    """
+    return basis.value if basis is not None else None
 
 
 def _require_run(run_id: str) -> CalculationResponse:

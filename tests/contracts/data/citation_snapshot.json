@@ -411,6 +411,9 @@
   "rwa_calc.engine.sa.rw_adjustments::apply_guarantee_substitution": [
     "CRR Art. 213"
   ],
+  "rwa_calc.engine.sa.rw_adjustments::apply_intragroup_zero_rw": [
+    "CRR Art. 113"
+  ],
   "rwa_calc.engine.sa.rw_adjustments::apply_life_insurance_rw_mapping": [
     "CRR Art. 232"
   ],

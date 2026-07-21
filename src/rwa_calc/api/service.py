@@ -14,6 +14,7 @@ CreditRiskCalc is the single entry point for RWA calculations:
 
 from __future__ import annotations
 
+import dataclasses
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -80,6 +81,8 @@ class CreditRiskCalc:
         log_format: Literal["text", "json"] = "text",
         audit_cache_dir: Path | None = None,
         audit_cache_max_runs: int | None = None,
+        reporting_entity: str | None = None,
+        reporting_basis: ReportingBasis | None = None,
     ) -> None:
         self.data_path = Path(data_path)
         self.framework = framework
@@ -92,6 +95,8 @@ class CreditRiskCalc:
         self.log_format = log_format
         self.audit_cache_dir = audit_cache_dir
         self.audit_cache_max_runs = audit_cache_max_runs
+        self.reporting_entity = reporting_entity
+        self.reporting_basis = reporting_basis
 
         if cache_dir is None:
             import tempfile
@@ -122,12 +127,14 @@ class CreditRiskCalc:
             )
         )
         if not validation.valid:
-            return self._formatter.format_error_response(
-                errors=validation.errors,
-                cache=self._cache,
-                framework=self.framework,
-                reporting_date=self.reporting_date,
-                started_at=started_at,
+            return self._stamp_scope(
+                self._formatter.format_error_response(
+                    errors=validation.errors,
+                    cache=self._cache,
+                    framework=self.framework,
+                    reporting_date=self.reporting_date,
+                    started_at=started_at,
+                )
             )
 
         try:
@@ -140,22 +147,26 @@ class CreditRiskCalc:
 
             result_bundle = pipeline.run(config)
 
-            return self._formatter.format_response(
-                bundle=result_bundle,
-                cache=self._cache,
-                framework=self.framework,
-                reporting_date=self.reporting_date,
-                started_at=started_at,
+            return self._stamp_scope(
+                self._formatter.format_response(
+                    bundle=result_bundle,
+                    cache=self._cache,
+                    framework=self.framework,
+                    reporting_date=self.reporting_date,
+                    started_at=started_at,
+                )
             )
 
         except Exception as e:
             error = create_load_error(str(e))
-            return self._formatter.format_error_response(
-                errors=[error],
-                cache=self._cache,
-                framework=self.framework,
-                reporting_date=self.reporting_date,
-                started_at=started_at,
+            return self._stamp_scope(
+                self._formatter.format_error_response(
+                    errors=[error],
+                    cache=self._cache,
+                    framework=self.framework,
+                    reporting_date=self.reporting_date,
+                    started_at=started_at,
+                )
             )
 
     def validate(self) -> ValidationResponse:
@@ -243,6 +254,22 @@ class CreditRiskCalc:
             calculation=calc_response,
         )
 
+    def _stamp_scope(self, response: CalculationResponse) -> CalculationResponse:
+        """Stamp the reporting scope onto a formatter-built response.
+
+        The formatter is scope-agnostic — it only sees framework / reporting_date
+        — so the reporting entity and basis are injected here. The basis enum is
+        rendered as its string value to match the response's ``str | None`` field.
+        With no scope configured this replaces None with None: the response is
+        equal to the un-stamped one, so the no-scope path stays byte-identical.
+        """
+        basis = self.reporting_basis.value if self.reporting_basis is not None else None
+        return dataclasses.replace(
+            response,
+            reporting_entity=self.reporting_entity,
+            reporting_basis=basis,
+        )
+
     def _create_config(self) -> CalculationConfig:
         """Create CalculationConfig from instance parameters."""
         from rwa_calc.contracts.config import CalculationConfig
@@ -260,6 +287,8 @@ class CreditRiskCalc:
                 log_format=self.log_format,
                 audit_cache_dir=self.audit_cache_dir,
                 audit_cache_max_runs=self.audit_cache_max_runs,
+                reporting_entity=self.reporting_entity,
+                reporting_basis=self.reporting_basis,
             )
         else:
             return CalculationConfig.basel_3_1(
@@ -270,6 +299,8 @@ class CreditRiskCalc:
                 log_format=self.log_format,
                 audit_cache_dir=self.audit_cache_dir,
                 audit_cache_max_runs=self.audit_cache_max_runs,
+                reporting_entity=self.reporting_entity,
+                reporting_basis=self.reporting_basis,
             )
 
     def _create_loader(self) -> LoaderProtocol:
@@ -298,6 +329,7 @@ if TYPE_CHECKING:
     from rwa_calc.api.reconciliation import ReconciliationSettings
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.contracts.protocols import LoaderProtocol
+    from rwa_calc.domain.enums import ReportingBasis
     from rwa_calc.engine.pipeline import PipelineOrchestrator
 
 

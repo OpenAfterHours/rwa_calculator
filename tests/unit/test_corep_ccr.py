@@ -1113,3 +1113,120 @@ class TestP850C3404CvaRwea:
             "c34_04 must have at least one row. "
             "C 34.04 reports BA-CVA RWEA as a non-empty template."
         )
+
+
+# ---------------------------------------------------------------------------
+# Case 5: R5 — C 34.08 CCP-exposure scoping (synthetic-frame grain)
+# ---------------------------------------------------------------------------
+
+
+# One derivative leg per route, at decode-unique EAD/RWEA values. C 34.08
+# excludes FCCM SFTs (they report under C 07.00 row 0090), so only derivative
+# legs matter here — the CCP restriction is what drops the bilateral one.
+#
+#   leg                       cp_entity_type  cp_is_qccp   EAD        RWEA
+#   ------------------------  --------------  ----------  ---------  --------
+#   QCCP-cleared derivative   ccp             True        1,000,000    20,000
+#   non-QCCP derivative       ccp             False       2,000,000   200,000
+#   bilateral derivative      institution     None        3,000,000 1,500,000
+_C3408_QCCP_EAD, _C3408_QCCP_RWEA = 1_000_000.0, 20_000.0
+_C3408_NONQCCP_EAD, _C3408_NONQCCP_RWEA = 2_000_000.0, 200_000.0
+_C3408_BILAT_EAD, _C3408_BILAT_RWEA = 3_000_000.0, 1_500_000.0
+
+
+def _c3408_ledger() -> pl.LazyFrame:
+    """A CCR derivatives ledger with a QCCP, a non-QCCP, and a bilateral leg."""
+    return pl.LazyFrame(
+        [
+            {
+                "exposure_reference": "ccr__NS_QCCP",
+                "risk_type": "CCR_DERIVATIVE",
+                "cp_entity_type": "ccp",
+                "cp_is_qccp": True,
+                "ead_final": _C3408_QCCP_EAD,
+                "rwa_final": _C3408_QCCP_RWEA,
+            },
+            {
+                "exposure_reference": "ccr__NS_NONQCCP",
+                "risk_type": "CCR_DERIVATIVE",
+                "cp_entity_type": "ccp",
+                "cp_is_qccp": False,
+                "ead_final": _C3408_NONQCCP_EAD,
+                "rwa_final": _C3408_NONQCCP_RWEA,
+            },
+            {
+                "exposure_reference": "ccr__NS_BILAT",
+                "risk_type": "CCR_DERIVATIVE",
+                "cp_entity_type": "institution",
+                "cp_is_qccp": None,
+                "ead_final": _C3408_BILAT_EAD,
+                "rwa_final": _C3408_BILAT_RWEA,
+            },
+        ],
+        schema_overrides={"cp_is_qccp": pl.Boolean, "risk_type": pl.String},
+    )
+
+
+class TestR5C3408CCPScopingSyntheticFrame:
+    """
+    R5 / C 34.08: the CCP-exposures template reports CCP counterparties ONLY.
+
+    C 34.08 (Annex II) restricts its population to ``cp_entity_type == "ccp"``:
+    a QCCP leg → row 0010, a non-qualifying-CCP leg → row 0020, and a bilateral
+    (non-CCP) derivative → NEITHER row (it is disclosed in C 34.01/02, not here).
+    The template is emitted only when the portfolio has CCP exposures.
+
+    References:
+        CRR Art. 306(1): QCCP trade-leg treatment; Art. 107(2)(a): non-QCCP.
+        Reg (EU) 2021/451 Annex II: C 34.08 is a CCP-exposures template.
+    """
+
+    def test_c3408_qccp_row_takes_only_the_qualifying_ccp_leg(self) -> None:
+        """Row 0010 (QCCP) = the qualifying CCP derivative only."""
+        # Arrange
+        lf = _c3408_ledger()
+
+        # Act
+        c34_08 = COREPGenerator()._generate_c34_08(lf, set(lf.collect_schema().names()))
+
+        # Assert
+        assert c34_08 is not None
+        assert _cell(c34_08, "0010", "0010") == pytest.approx(_C3408_QCCP_EAD)
+        assert _cell(c34_08, "0010", "0020") == pytest.approx(_C3408_QCCP_RWEA)
+
+    def test_c3408_non_qccp_row_excludes_the_bilateral_derivative(self) -> None:
+        """Row 0020 (non-QCCP) = the non-qualifying CCP leg only — NOT the bilateral one."""
+        # Arrange
+        lf = _c3408_ledger()
+
+        # Act
+        c34_08 = COREPGenerator()._generate_c34_08(lf, set(lf.collect_schema().names()))
+
+        # Assert — the bilateral derivative (1.5m RWEA) must NOT reach row 0020.
+        assert c34_08 is not None
+        assert _cell(c34_08, "0020", "0010") == pytest.approx(_C3408_NONQCCP_EAD)
+        assert _cell(c34_08, "0020", "0020") == pytest.approx(_C3408_NONQCCP_RWEA)
+
+    def test_c3408_absent_when_no_ccp_legs(self) -> None:
+        """A book of purely bilateral derivatives has no CCP exposure — C 34.08 is None."""
+        # Arrange — keep only the bilateral leg.
+        lf = _c3408_ledger().filter(pl.col("cp_entity_type") != "ccp")
+
+        # Act
+        c34_08 = COREPGenerator()._generate_c34_08(lf, set(lf.collect_schema().names()))
+
+        # Assert
+        assert c34_08 is None
+
+    def test_c3408_present_when_a_qccp_leg_exists(self) -> None:
+        """A single QCCP leg is enough to emit C 34.08."""
+        # Arrange — keep only the QCCP leg (cp_is_qccp True; null/False dropped).
+        lf = _c3408_ledger().filter(pl.col("cp_is_qccp") == True)  # noqa: E712
+
+        # Act
+        c34_08 = COREPGenerator()._generate_c34_08(lf, set(lf.collect_schema().names()))
+
+        # Assert
+        assert c34_08 is not None
+        assert _cell(c34_08, "0010", "0010") == pytest.approx(_C3408_QCCP_EAD)
+        assert _cell(c34_08, "0020", "0010") == pytest.approx(0.0)

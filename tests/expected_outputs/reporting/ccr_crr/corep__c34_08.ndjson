@@ -1,3 +1,3 @@
 {"row_ref":"0010","row_name":"QCCP trade exposures","0010":5496691.101365475,"0020":109933.8220273095}
-{"row_ref":"0020","row_name":"Non-QCCP trade exposures","0010":5496691.101365475,"0020":2748345.5506827375}
+{"row_ref":"0020","row_name":"Non-QCCP trade exposures","0010":0.0,"0020":0.0}
 {"row_ref":"0030","row_name":"Default fund contributions","0010":0.0,"0020":0.0}

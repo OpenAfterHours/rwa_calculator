@@ -749,35 +749,60 @@ class Pillar3Generator:
     ) -> pl.DataFrame | None:
         """Generate the CCR8 QCCP-vs-non-QCCP CCP-exposures table.
 
-        Partitions the ``ccr__`` rows by the QCCP trade-leg discriminator
-        (``cp_entity_type == "ccp"`` AND ``cp_is_qccp.fill_null(True)``, mirror
-        of the aggregator). The QCCP row carries the QCCP trade-leg RWEA
-        (``rwa_ccr_qccp_trade``; CRR Art. 306(1)/(4)); the non-QCCP row carries
-        the default-risk RWEA (``rwa_ccr_default``) — null when all rows are
-        QCCP. Returns ``None`` when no CCR rows exist.
+        CCR8 discloses exposures to CENTRAL COUNTERPARTIES only (CRR Art. 439(i)):
+        the population is RESTRICTED to ``cp_entity_type == "ccp"`` rows, split by
+        the qualifying-CCP flag —
+
+        - row "1" (QCCPs): a CCP the firm treats as qualifying
+          (``cp_is_qccp.fill_null(True)``; CRR Art. 306(1)/(4));
+        - row "2" (non-QCCPs): a CCP the firm does NOT treat as qualifying
+          (``~cp_is_qccp.fill_null(True)``; CRR Art. 107(2)(a)) — NOT the whole
+          non-QCCP-trade complement, which would sweep in every bilateral OTC /
+          SFT counterparty;
+        - row "21" (Total): the whole CCP population = row 1 + row 2.
+
+        A bilateral (non-CCP) derivative or SFT counterparty is NOT a CCP exposure
+        and is excluded from every row — it is disclosed in CCR1/CCR3 instead. A
+        CCP-faced FCCM SFT IS a CCP exposure (CRR Art. 301(1)(b) brings SFTs into
+        the Chapter 6 Section 9 material scope), so the SFT rows are collected too
+        (``include_sft=True``) before the CCP restriction drops any bilateral SFT.
+        Column ``a`` carries the RWEA, column ``b`` the EAD. Returns ``None`` when
+        the portfolio has no CCP exposures at all.
 
         References:
-            CRR Art. 439(i); Art. 306(1)(a) (2% QCCP proprietary trade RW).
+            CRR Art. 439(i); Art. 306(1)(a) (2% QCCP proprietary trade RW);
+            Art. 301(1)(b) (SFTs within the CCP material scope).
         """
-        ccr_rows = _ccr_rows(results, cols)
+        ccr_rows = _ccr_rows(results, cols, include_sft=True)
         if ccr_rows is None or ccr_rows.height == 0:
+            return None
+        if not {"cp_entity_type", "cp_is_qccp"} <= set(ccr_rows.columns):
+            return None
+
+        is_ccp = pl.col("cp_entity_type") == "ccp"
+        is_qccp = is_ccp & pl.col("cp_is_qccp").fill_null(True)
+        is_non_qccp = is_ccp & ~pl.col("cp_is_qccp").fill_null(True)
+
+        # Emission gate: CCR8 reports CCP exposures only (Art. 439(i)). A book
+        # with derivatives/SFTs but no CCP counterparty has nothing to disclose.
+        if ccr_rows.filter(is_ccp).height == 0:
             return None
 
         column_refs = [c.ref for c in CCR8_COLUMNS]
-        has_disc = {"cp_entity_type", "cp_is_qccp"} <= set(ccr_rows.columns)
-
-        qccp_ead = _ccr_ead(ccr_rows, qccp_trade=True) if has_disc else None
-        qccp_rwea = _ccr_rwa(ccr_rows, qccp_trade=True) if has_disc else None
-        non_qccp_ead = _ccr_ead(ccr_rows, qccp_trade=False) if has_disc else None
-        non_qccp_rwea = _ccr_rwa(ccr_rows, qccp_trade=False) if has_disc else None
-        total_ead = _col_sum(ccr_rows, "ead_final")
-        total_rwea = _col_sum(ccr_rows, "rwa_final")
-
         # Col a = RWEA (the disclosure's primary CCP figure), col b = EAD.
         per_ref: dict[str, dict[str, object]] = {
-            "1": {"a": qccp_rwea, "b": qccp_ead},
-            "2": {"a": non_qccp_rwea, "b": non_qccp_ead},
-            "21": {"a": total_rwea, "b": total_ead},
+            "1": {
+                "a": _ccr8_sum(ccr_rows, is_qccp, "rwa_final"),
+                "b": _ccr8_sum(ccr_rows, is_qccp, "ead_final"),
+            },
+            "2": {
+                "a": _ccr8_sum(ccr_rows, is_non_qccp, "rwa_final"),
+                "b": _ccr8_sum(ccr_rows, is_non_qccp, "ead_final"),
+            },
+            "21": {
+                "a": _ccr8_sum(ccr_rows, is_ccp, "rwa_final"),
+                "b": _ccr8_sum(ccr_rows, is_ccp, "ead_final"),
+            },
         }
         rows_out = [
             _make_row(row_def, per_ref.get(row_def.ref, {}), column_refs) for row_def in CCR8_ROWS
@@ -790,19 +815,26 @@ class Pillar3Generator:
 # ---------------------------------------------------------------------------
 
 
-def _ccr_rows(results: pl.LazyFrame, cols: set[str]) -> pl.DataFrame | None:
+def _ccr_rows(
+    results: pl.LazyFrame, cols: set[str], *, include_sft: bool = False
+) -> pl.DataFrame | None:
     """Collect the synthetic ``ccr__``-prefixed CCR rows, or None if absent.
 
     The CCR disclosure tables read the same synthetic netting-set rows the
     aggregator rolls up (CRR Art. 274(2)). Returns ``None`` when the results
     frame carries no ``exposure_reference`` column.
 
-    FCCM SFT rows (``risk_type == "CCR_SFT"``) share the ``ccr__`` prefix but are
-    EXCLUDED here: they are SFT exposures reported under the SA template (COREP
-    C 07.00 row 0090), not the SA-CCR / CCP disclosure tables (CCR1/CCR8). Only
-    OTC derivatives and CCP exposures belong in these CCR templates. The
-    exclusion is gated on ``risk_type`` being present so a portfolio that
-    predates the column is unaffected.
+    ``include_sft`` selects whether FCCM SFT rows (``risk_type == "CCR_SFT"``)
+    are kept. The SA-CCR analysis templates (CCR1/CCR3) are derivatives-only, so
+    they take the default (SFTs EXCLUDED — an SFT uses FCCM under Art. 220-223,
+    not the SA-CCR Art. 274 approach these templates analyse; an SFT that is not
+    faced to a CCP is disclosed under SA template C 07.00 row 0090). CCR8
+    ("Exposures to central counterparties", CRR Art. 439(i)) passes
+    ``include_sft=True`` because a CCP-faced SFT trade exposure IS a CCP exposure
+    (CRR Art. 301(1)(b) brings SFTs into the Chapter 6 Section 9 material scope);
+    CCR8 then restricts the population to CCP counterparties, which is what drops
+    a bilateral SFT. The SFT exclusion (default path) is gated on ``risk_type``
+    being present so a portfolio that predates the column is unaffected.
     """
     ref_col = _pick(cols, "exposure_reference")
     if not ref_col:
@@ -811,6 +843,8 @@ def _ccr_rows(results: pl.LazyFrame, cols: set[str]) -> pl.DataFrame | None:
     # dtype; ``.str.starts_with`` only operates on String. Cast defensively so
     # the CCR filter degenerates to an empty selection rather than raising.
     is_ccr = pl.col(ref_col).cast(pl.String).str.starts_with("ccr__")
+    if include_sft:
+        return results.filter(is_ccr).collect()
     not_sft = pl.col("risk_type") != "CCR_SFT" if "risk_type" in cols else pl.lit(True)
     return results.filter(is_ccr & not_sft).collect()
 
@@ -838,13 +872,17 @@ def _ccr_rwa(ccr_rows: pl.DataFrame, *, qccp_trade: bool) -> float | None:
     return total if total else None
 
 
-def _ccr_ead(ccr_rows: pl.DataFrame, *, qccp_trade: bool) -> float | None:
-    """Sum ``ead_final`` over the QCCP (or non-QCCP) ``ccr__`` partition."""
-    if not {"cp_entity_type", "cp_is_qccp", "ead_final"} <= set(ccr_rows.columns):
+def _ccr8_sum(ccr_rows: pl.DataFrame, predicate: pl.Expr, col: str) -> float | None:
+    """Sum ``col`` over the CCR8 CCP partition selected by ``predicate``.
+
+    The CCR8 partitions are all CCP-restricted (``cp_entity_type == "ccp"`` plus
+    the qualifying split), unlike the CCR1 ``_ccr_rwa`` roll-ups which take the
+    whole non-QCCP-trade complement. A zero (or empty) partition maps to
+    ``None`` — the empty-cell convention the CCR templates use throughout.
+    """
+    if not {"cp_entity_type", "cp_is_qccp", col} <= set(ccr_rows.columns):
         return None
-    predicate = _ccr_qccp_trade_predicate()
-    partition = ccr_rows.filter(predicate if qccp_trade else ~predicate)
-    total = _col_sum(partition, "ead_final")
+    total = _col_sum(ccr_rows.filter(predicate), col)
     return total if total else None
 
 

@@ -156,9 +156,11 @@ class COREPTemplateBundle:
         Basel 3.1 only — None under CRR or when ``cva_rwa`` is absent.
     C 34.08 (CCP exposures): Single DataFrame, QCCP trade-leg (2%/4%),
         non-QCCP, and default-fund EAD (col 0010) / RWEA (col 0020). The
-        QCCP/non-QCCP partition mirrors the aggregator discriminator
-        (``cp_entity_type == "ccp" & cp_is_qccp.fill_null(True)``). None when
-        the portfolio has no CCP exposures.
+        population is restricted to CCP counterparties
+        (``cp_entity_type == "ccp"``), split by ``cp_is_qccp.fill_null(True)``
+        into the QCCP (row 0010) and non-QCCP (row 0020) rows. None when the
+        portfolio has no CCP exposures (no CCP trade legs and no default-fund
+        contributions).
 
     Why: COREP templates are submitted per exposure class to the regulator.
     Each class gets a fixed row structure (totals, exposure types, risk weights,
@@ -672,29 +674,44 @@ class COREPGenerator:
     ) -> pl.DataFrame | None:
         """Generate C 34.08 — CCP exposures (QCCP trade, non-QCCP, default fund).
 
-        Partitions the CCR rows by the QCCP trade-leg discriminator
-        (``cp_entity_type == "ccp" & cp_is_qccp.fill_null(True)``) — mirroring
-        the aggregator exactly — into QCCP (row 0010) and non-QCCP (row 0020)
-        rows, plus a default-fund row (0030) keyed off the
-        ``CCR_DEFAULT_FUND`` risk type. Each row reports EAD (col 0010) and
-        RWEA (col 0020). Returns None when the portfolio has no CCP exposures.
+        C 34.08 discloses exposures to CENTRAL COUNTERPARTIES only (Annex II):
+        the CCR population is RESTRICTED to ``cp_entity_type == "ccp"`` rows,
+        split by the qualifying-CCP flag into QCCP (row 0010,
+        ``cp_is_qccp.fill_null(True)``; CRR Art. 306(1)) and non-QCCP (row 0020,
+        ``~cp_is_qccp.fill_null(True)``; CRR Art. 107(2)(a)) rows — NOT the whole
+        non-QCCP-trade complement, which would sweep every bilateral OTC
+        counterparty into row 0020. A default-fund row (0030) is keyed off the
+        ``CCR_DEFAULT_FUND`` risk type (Art. 308/309 contributions are themselves
+        CCP exposures). Each row reports EAD (col 0010) and RWEA (col 0020).
+        Returns None when the portfolio has no CCP exposures (no CCP trade legs
+        and no default-fund contributions) — a book of purely bilateral
+        derivatives has nothing to disclose here.
 
         References:
             CRR Art. 306(1)(a)/(c): 2% / 4% QCCP trade-leg RW.
+            CRR Art. 107(2)(a): non-QCCP demoted to the institution ladder.
             CRR Art. 308/309: default fund contributions.
         """
         ccr = _collect_ccr_rows(results, cols)
         df_fund_ead, df_fund_rwea = _collect_default_fund(results, cols)
-        if (ccr is None or len(ccr) == 0) and df_fund_rwea <= 0.0:
+
+        has_disc = (
+            ccr is not None
+            and len(ccr) > 0
+            and {"cp_entity_type", "cp_is_qccp"} <= set(ccr.columns)
+        )
+        ccp = ccr.filter(pl.col("cp_entity_type") == "ccp") if has_disc else None
+        has_ccp = ccp is not None and len(ccp) > 0
+        # Emission gate: C 34.08 reports CCP exposures only (Annex II). Emit only
+        # when the portfolio has CCP trade legs or default-fund contributions.
+        if not has_ccp and df_fund_rwea <= 0.0:
             return None
 
         qccp_ead = qccp_rwea = non_qccp_ead = non_qccp_rwea = 0.0
-        if ccr is not None and len(ccr) > 0:
-            is_qccp_trade = (pl.col("cp_entity_type") == "ccp") & pl.col("cp_is_qccp").fill_null(
-                True
-            )
-            qccp = ccr.filter(is_qccp_trade)
-            non_qccp = ccr.filter(~is_qccp_trade)
+        if has_ccp:
+            is_qccp = pl.col("cp_is_qccp").fill_null(True)
+            qccp = ccp.filter(is_qccp)
+            non_qccp = ccp.filter(~is_qccp)
             qccp_ead = float(qccp["ead_final"].fill_null(0.0).sum())
             qccp_rwea = float(qccp["rwa_final"].fill_null(0.0).sum())
             non_qccp_ead = float(non_qccp["ead_final"].fill_null(0.0).sum())

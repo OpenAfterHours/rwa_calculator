@@ -66,6 +66,17 @@ _TIEOUT_CASES: list[tuple[str, str | None, str]] = [
     ("cr5", None, "CRR"),
     ("cms1", None, "BASEL_3_1"),
     ("cms2", None, "BASEL_3_1"),
+    # R22 — four more templates, and the FIRST multi-sheet instrumentations since
+    # C 07.00. c08_04 (per exposure class) is the CR8-clone flow: its opening
+    # (row 0010) / residual (row 0080) rows inherit R20's prior-period refusal.
+    # cr7a (per origin approach) is a clean per-sheet extraction. c08_07 (single
+    # frame, full population) and of_02_01 (single frame, Basel 3.1 only — ties
+    # out against the B31 run, like the CMS pair) carry post-execute passes the
+    # reported generator re-applies.
+    ("c08_04", "corporate", "CRR"),
+    ("cr7a", "advanced_irb", "CRR"),
+    ("c08_07", None, "CRR"),
+    ("of_02_01", None, "BASEL_3_1"),
 ]
 
 

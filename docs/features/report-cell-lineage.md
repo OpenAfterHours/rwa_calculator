@@ -116,16 +116,30 @@ Everything runs on `basis: aggregator_exit` — the sealed per-leg ledger.
 ## Coverage
 
 Lineage is available for templates whose execution plan is exposed (`LINEAGE_PLANS`). Today that is
-**C 07.00** plus the single-frame Pillar 3 templates **OV1** (overview of RWEAs), **CR4** (SA exposure
-and CRM effects), **CR5** (SA risk-weight allocation), **CR6-A** (scope of IRB use), **CR7**
-(credit-derivatives effect on RWEA), **CR8** (IRB RWEA flow) and the Basel-3.1-only **CMS1** /
-**CMS2** (modelled vs standardised RWEA, by risk type / by asset class). Any other template —
-including C 34.x and CCR1–8, which are still imperative and have no `TemplateSpec` to read — returns a
-clean `404`: *no lineage*, never a re-derived guess.
+the **multi-sheet** templates **C 07.00** (SA credit risk, per obligor class), **C 08.04** (IRB RWEA
+flow, per exposure class) and **CR7-A** (extent of IRB CRM techniques, per origin approach); the
+**single-frame** COREP **C 08.07** (IRB scope of use) and the Basel-3.1-only **OF 02.01**
+(output-floor comparison); and the single-frame Pillar 3 templates **OV1** (overview of RWEAs),
+**CR4** (SA exposure and CRM effects), **CR5** (SA risk-weight allocation), **CR6-A** (scope of IRB
+use), **CR7** (credit-derivatives effect on RWEA), **CR8** (IRB RWEA flow) and the Basel-3.1-only
+**CMS1** / **CMS2** (modelled vs standardised RWEA, by risk type / by asset class). Any other
+template — including C 34.x and CCR1–8, which are still imperative and have no `TemplateSpec` to
+read — returns a clean `404`: *no lineage*, never a re-derived guess.
 
-**CMS1 / CMS2 are produced only under Basel 3.1**, so a lineage request for one on a CRR run degrades
-to the same clean `404` as an uninstrumented template — the provider's `plans()` yields nothing rather
-than crashing. **OV1** is the first instrumented template with an out-of-frame `side_context` cell
+**C 08.04** and **CR7-A** are the first multi-sheet instrumentations since C 07.00: a lineage request
+names the sheet (an exposure class for C 08.04, an origin approach for CR7-A). C 08.04 is the CR8-clone
+RWEA flow — its provider drills the **current-period** view (no prior frame), so its opening (row 0010,
+a `prior_period` cell) and residual (row 0080, a `formula` deriving from it) rows are **refused** with
+the same distinct `404` as CR8's opening/residual rows, while the reported generator keeps threading
+the prior frame. **C 08.07** and **OF 02.01** each carry post-execute passes (C 08.07's col-0040
+percentage rescale and its fixed structural-null rows; OF 02.01's fixed out-of-scope rows) that live on
+the *reported* frame — the drill-down reads a cell's value from there, so it honours them rather than
+contradicting the sheet.
+
+**CMS1 / CMS2 and OF 02.01 are produced only under Basel 3.1**, so a lineage request for one on a CRR
+run degrades to the same clean `404` as an uninstrumented template — the provider's `plans()` yields
+nothing rather than crashing. **OV1** is the first instrumented template with an out-of-frame
+`side_context` cell
 (row 27's OF-ADJ) and a `first_non_null` cell (row 26's output-floor multiplier). The drill-down's plan
 carries no output-floor summary, but the *reported* template is generated **with** the run's summary —
 so row 27 would render null on the drill-down against a real figure on the screen. Rather than break

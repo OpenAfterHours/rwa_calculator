@@ -59,6 +59,13 @@ from rwa_calc.reporting.cellspec import (
     WeightedAvg,
 )
 from rwa_calc.reporting.corep.c07 import c07_plans, generate_c07
+from rwa_calc.reporting.corep.c08 import (
+    c08_04_frames,
+    c08_04_plans,
+    c08_07_frames,
+    c08_07_plans,
+)
+from rwa_calc.reporting.corep.of02 import of_02_01_frames, of_02_01_plans
 from rwa_calc.reporting.kernel import available_columns
 from rwa_calc.reporting.pillar3.cms1 import cms1_plans, generate_cms1
 from rwa_calc.reporting.pillar3.cms2 import cms2_plans, generate_cms2
@@ -66,6 +73,7 @@ from rwa_calc.reporting.pillar3.cr4 import cr4_plans, generate_cr4
 from rwa_calc.reporting.pillar3.cr5 import cr5_plans, generate_cr5
 from rwa_calc.reporting.pillar3.cr6a import cr6a_plans, generate_cr6a
 from rwa_calc.reporting.pillar3.cr7 import cr7_plans, generate_cr7
+from rwa_calc.reporting.pillar3.cr7a import cr7a_plans, generate_cr7a
 from rwa_calc.reporting.pillar3.cr8 import cr8_frames, cr8_plans
 from rwa_calc.reporting.pillar3.ov1 import ov1_frames, ov1_plans
 
@@ -379,6 +387,114 @@ LINEAGE_PLANS: dict[str, _Provider] = {
         sheet_label="",
         single_frame=True,
     ),
+    # C 08.04 — IRB RWEA flow (per exposure class; R22). The CR8-clone flow:
+    # c08_04_frames is the lineage-facing generator (the CURRENT-period view, no
+    # prior frame), so the opening (row 0010, prior_period) and residual (row
+    # 0080, formula) rows are refused — as CR8's rows 1/8 are. generate_c08_04
+    # (the prior-aware dispatch entry) keeps threading the prior frame and is NOT
+    # the provider generator. First multi-sheet instrumentation since C 07.00.
+    "c08_04": _Provider(
+        plans=c08_04_plans,
+        generate=c08_04_frames,
+        scope=(
+            "Internal-ratings-based credit-risk legs on the F-IRB and A-IRB "
+            "approaches; slotting (supervisory-slotting specialised lending) is "
+            "excluded — it discloses on C 08.06 (reporting_approach_origin in "
+            "{foundation_irb, advanced_irb})",
+            "Row 0090 (closing RWEA) sums the current period's rwa_final; the "
+            "opening (row 0010) and residual (row 0080) rows need a prior-period "
+            "frame the drill-down does not carry, so they are out of the "
+            "current-period view",
+        ),
+        sheet_label="exposure class",
+    ),
+    # C 08.07 — IRB scope of use (single frame, full population; R22). Its two
+    # post-execute passes (col-0040 rescale, fixed-null structural rows) live on
+    # the reported frame (c08_07_frames), which the drill-down reads a cell's
+    # value from; the plan is the pre-post-pass full-population view.
+    "c08_07": _Provider(
+        plans=c08_07_plans,
+        generate=c08_07_frames,
+        scope=(
+            "The FULL results population — SA and IRB both enter every "
+            "denominator (a null approach falls to SA; slotting counts as IRB via "
+            "approach membership in C08_07_IRB_APPROACHES), keyed on the RAW "
+            "origination class (exposure_class — the Art. 147 taxonomy has no "
+            "defaulted sink)",
+            "Col 0010 sums the IRB EAD (derived c0807_irb), col 0020 the row "
+            "total EAD; the coverage percentages 0030/0050 are intra-row formulas "
+            "guarding a zero denominator to 0.0. Col 0040 (% subject to an Art. "
+            "148 roll-out plan) sums the SA-treated legs flagged by the optional "
+            "is_under_irb_rollout input (derived c0807_rollout) and is rescaled to "
+            "a percentage of the row total post-execute; absent the input the "
+            "slice is empty (0.0). RECORDED LIMITATION: on a book that DID carry "
+            "roll-out legs, col 0040's drill-down legs would sum to the raw EAD, "
+            "not the reported percentage — no fixture carries the input today",
+            "The structural-null rows are a FIXED set (CRR 0060/0100/0130) — rows "
+            "with neither a class binding nor an aggregate rule render all-null "
+            "(an unbound cell), while empty real-class rows stay 0.0 (the opposite "
+            "of C 07.00's empty-subset rule); the B31 materiality columns "
+            "0160-0180 are always null",
+        ),
+        sheet_label="",
+        single_frame=True,
+    ),
+    # OF 02.01 — output-floor comparison (single frame; R22). Basel 3.1 only:
+    # of_02_01_plans yields {} under CRR (like CMS1/CMS2), so a CRR lineage
+    # request degrades to a clean no-lineage. Its _null_fixed_rows post-pass
+    # lives on the reported frame (of_02_01_frames); generate_of_02_01 keeps its
+    # OutputFloorConfig-gated signature and is NOT the provider generator.
+    "of_02_01": _Provider(
+        plans=of_02_01_plans,
+        generate=of_02_01_frames,
+        scope=(
+            "The full sealed per-leg ledger (Basel 3.1 only — OF 02.01 is not "
+            "produced under CRR). Rows 0010 (credit risk excl. CCR) and 0020 "
+            "(CCR) partition the book by the derived of02_is_ccr flag (risk_type "
+            "in the CCR set), never by the approach label the output floor "
+            "relabels; row 0080 (Total) is the whole book and hence their sum",
+            "The columns PARTITION each row's population (Annex II): col 0010 sums "
+            "rwa_pre_floor over the MODELLED approaches (derived of02_is_modelled: "
+            "foundation_irb / advanced_irb / slotting), col 0020 is their "
+            "COMPLEMENT (every non-modelled leg), so col 0030 = 0010 + 0020 is the "
+            "complete portfolio; col 0040 (S-TREA) sums sa_rwa over the row's "
+            "whole population, modelled or not (equity's sa_rwa carries its own "
+            "pre-floor RWA)",
+            "Rows 0030-0070 (CVA / securitisation / market / op-risk / other) are "
+            "a FIXED all-null set — out of scope for a credit-risk calculator, and "
+            "null is not the same claim as 0.0. The OutputFloorConfig entity gate "
+            "stays with the reported generator; the drill-down plan is the "
+            "no-config view",
+        ),
+        sheet_label="",
+        single_frame=True,
+    ),
+    # CR7-A — extent of IRB CRM techniques (per origin approach; R22). No prep and
+    # no post-execute pass beyond the in-spec Formula (column c), so generate_cr7a
+    # is the provider generator directly. Multi-sheet (sheet = origin approach).
+    "cr7a": _Provider(
+        plans=cr7a_plans,
+        generate=generate_cr7a,
+        scope=(
+            "The full sealed per-leg ledger; each sheet is one ORIGIN approach "
+            "(reporting_approach_origin foundation_irb / advanced_irb — an "
+            "approach with no rows produces no sheet), and rows key the obligor's "
+            "applied Art. 147 class (reporting_class_origin), disclosing exposures "
+            "under the obligor class WITHOUT substitution effects (Annex XXII "
+            "column a)",
+            "Column a sums reporting_ead; the FCP/UFCP percentage columns (b "
+            "financial, d immovable property, e receivables, f other physical, k "
+            "guarantees) divide each collateral-allocation sum by the row EAD "
+            "x100, and c = d + e + f. Columns m ('without substitution effects') "
+            "and n ('with substitution effects') are BOTH the actual Sum of "
+            "rwa_final — the recorded m == n approximation (the ledger carries no "
+            "hypothetical no-substitution RWEA)",
+            "Columns g/h/i/j (other-funded-CP sub-splits), l (credit derivatives) "
+            "and the B31 slotting pair o/p stay unbound — the recorded "
+            "not-separately-tracked cells",
+        ),
+        sheet_label="approach",
+    ),
 }
 
 
@@ -619,8 +735,19 @@ def _ref_is_prior_period(spec: TemplateSpec, row_ref: str, col_ref: str, ref: st
     """Resolve a ``Formula`` ref (own-row column first, then own-column row — the
     executor's resolution rule) and report whether it lands on a ``PriorPeriod``
     cell. The executor bars a formula referencing another formula, so one level
-    of resolution suffices."""
+    of resolution suffices.
+
+    The formula's OWN cell ``(row_ref, col_ref)`` is skipped: the executor
+    resolves refs against the cells computed so far, which never include the
+    formula's own (not-yet-computed) cell, so an own-row-column key that equals
+    the formula's own address falls through to the own-column row. This only
+    bites where a template's row and column ref namespaces collide — C 08.04's
+    residual ``(0080, 0010)`` references row ``0010`` while its single column is
+    also ``0010``, so ``(0080, 0010)`` would otherwise resolve to the residual
+    itself (a Formula, not the PriorPeriod opening it must find)."""
     for key in ((row_ref, ref), (ref, col_ref)):
+        if key == (row_ref, col_ref):
+            continue
         target = spec.cells.get(key)
         if target is not None:
             return isinstance(target.binding, PriorPeriod)

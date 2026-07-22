@@ -2,8 +2,16 @@
 Pillar 3 CR7-A — Extent of the use of CRM techniques (IRB), declarative.
 
 Pipeline position:
-    sealed aggregator-exit ledger -> one TemplateSpec per origin approach
-        -> cellspec.execute() -> dict[approach, DataFrame]
+    sealed aggregator-exit ledger -> cr7a_plans() -> one SheetPlan per origin
+        approach -> cellspec.execute() -> dict[approach, DataFrame]
+
+Lineage-instrumented (R22): ``cr7a_plans`` exposes the per-approach execution
+plans so ``reporting.lineage`` can drill into a reported cell. CR7-A is one of
+the first two multi-sheet instrumentations since C 07.00 — its sheet axis is the
+ORIGIN approach (foundation_irb / advanced_irb), so ``plans()`` and
+``generate_cr7a()`` key their sheets identically. No prep and no post-execute
+pass beyond the in-spec Formula (column c), so ``generate_cr7a`` is the provider
+generator directly.
 
 Cell semantics (recorded decisions, this slice):
 
@@ -50,11 +58,13 @@ from rwa_calc.reporting.cellspec import (
     TemplateSpec,
     execute,
 )
+from rwa_calc.reporting.metadata import ReportingContext
 from rwa_calc.reporting.pillar3.templates import (
     CR7A_AIRB_ROWS,
     CR7A_FIRB_ROWS,
     get_cr7a_columns,
 )
+from rwa_calc.reporting.plans import SheetPlan
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -133,17 +143,21 @@ _CR7A_SPECS: dict[tuple[str, str], TemplateSpec] = {
 }
 
 
-def generate_cr7a(
+def cr7a_plans(
     results: pl.LazyFrame,
     cols: set[str],
     framework: str,
     errors: list[str],
-) -> dict[str, pl.DataFrame]:
-    """Execute CR7-A per origin approach over the sealed ledger.
+) -> dict[str, SheetPlan]:
+    """Build the per-origin-approach CR7-A execution plans for lineage.
 
-    Preserves the imperative generator's contracts: missing EAD/RWA/approach
-    columns record the CR7-A error and yield ``{}``; an approach with no
-    rows produces no dict entry.
+    Preserves ``generate_cr7a``'s contracts: missing EAD/RWA/approach columns
+    record the CR7-A error and yield ``{}``; an approach with no rows produces
+    no plan entry, so ``plans()`` and ``generate_cr7a()`` key their sheets
+    IDENTICALLY (the origin approach). The plan frame is the FULL sealed ledger
+    — each spec's own ``approaches_origin`` predicate narrows it per sheet — and
+    CR7-A carries no "(-)"-labelled deduction column, so ``negative_cols`` is
+    empty.
     """
     if (
         "ead_final" not in cols
@@ -153,10 +167,31 @@ def generate_cr7a(
         errors.append("CR7-A: missing required columns")
         return {}
     data = results.collect()
-    result: dict[str, pl.DataFrame] = {}
+    plans: dict[str, SheetPlan] = {}
     for approach, rows in _APPROACH_ROWS:
         if data.filter(pl.col("reporting_approach_origin") == approach).height == 0:
             continue
         spec = _CR7A_SPECS.get((framework, approach)) or build_cr7a_spec(framework, approach, rows)
-        result[approach] = execute(spec, data)
-    return result
+        plans[approach] = SheetPlan(
+            spec=spec, frame=data, ctx=ReportingContext(), negative_cols=frozenset()
+        )
+    return plans
+
+
+def generate_cr7a(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, pl.DataFrame]:
+    """Execute CR7-A per origin approach over the sealed ledger.
+
+    The lineage-facing generator too (keyed like ``cr7a_plans``): it executes
+    each plan, so a cell's reported value and its spec are looked up under the
+    same approach key. CR7-A has no post-execute passes, so this is a plain
+    ``execute``.
+    """
+    return {
+        approach: execute(plan.spec, plan.frame, plan.ctx)
+        for approach, plan in cr7a_plans(results, cols, framework, errors).items()
+    }

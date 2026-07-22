@@ -3,7 +3,14 @@ COREP OF 02.01 — output floor comparison (Basel 3.1 only), declarative.
 
 Pipeline position:
     sealed aggregator-exit ledger + OutputFloorConfig gate
-        -> ONE TemplateSpec -> cellspec.execute() -> DataFrame | None
+        -> of_02_01_plans() -> ONE SheetPlan -> cellspec.execute()
+        -> DataFrame | None
+
+Lineage-instrumented (R22, single frame): ``of_02_01_plans`` exposes the one
+Basel-3.1-only execution plan so ``reporting.lineage`` can drill into a reported
+cell; it degrades to ``{}`` under CRR (a clean no-lineage, like CMS1/CMS2) and
+does not re-apply the ``OutputFloorConfig`` entity gate (the no-config view). The
+``_null_fixed_rows`` post-pass stays on the reported frame (``of_02_01_frames``).
 
 Cell semantics (recorded decisions, this slice):
 
@@ -71,6 +78,8 @@ from rwa_calc.reporting.corep.templates import (
     OF_02_01_COLUMN_REFS,
     OF_02_01_ROW_SECTIONS,
 )
+from rwa_calc.reporting.metadata import ReportingContext
+from rwa_calc.reporting.plans import SheetPlan
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -128,6 +137,10 @@ _CCR_RISK_TYPES: tuple[str, ...] = ("CCR_DERIVATIVE", "CCR_SFT", "CCR_DEFAULT_FU
 _IS_MODELLED: str = "of02_is_modelled"
 _IS_CCR: str = "of02_is_ccr"
 
+# Single-frame lineage key: OF 02.01 has no sheet axis, so its one plan keys
+# under a canonical name (see reporting.plans / _resolve_sheet_key single_frame).
+_OF_02_01_SHEET_KEY = "of_02_01"
+
 
 def _u_trea(cells: Mapping[str, float | None], _prior: bool) -> float | None:
     """0030 (U-TREA) = 0010 + 0020 — the Annex II intra-row sum, over columns
@@ -157,6 +170,15 @@ def generate_of_02_01(
             "(output floor not applied)"
         )
         return None
+    frame = execute(_of_02_01_spec(), _prepare(results, cols))
+    return _null_fixed_rows(frame, list(_NULL_ROWS))
+
+
+def _of_02_01_spec() -> TemplateSpec:
+    """The OF 02.01 spec: rows 0010/0020/0080 partition the credit-risk book by
+    the CCR flag; columns 0010/0020 partition each row by the modelled flag
+    (0030 = their sum), and column 0040 (S-TREA) spans the whole row. Shared by
+    the reported generator and the lineage plan."""
     rows = tuple(row for section in OF_02_01_ROW_SECTIONS for row in section.rows)
     column_refs = tuple(OF_02_01_COLUMN_REFS)
     cells: dict[tuple[str, str], CellSpec] = {}
@@ -172,11 +194,62 @@ def generate_of_02_01(
         cells[(ref, "0030")] = CellSpec(Formula(refs=("0010", "0020"), fn=_u_trea))
         # 0040 (S-TREA) spans the row's whole population, modelled or not.
         cells[(ref, "0040")] = CellSpec(Sum("sa_rwa"), predicate=_predicate(is_ccr, modelled=None))
-    spec = TemplateSpec(
+    return TemplateSpec(
         name="of_02_01", rows=rows, column_refs=column_refs, cells=cells, empty_cell="zero"
     )
-    frame = execute(spec, _prepare(results, cols))
-    return _null_fixed_rows(frame, list(_NULL_ROWS))
+
+
+def of_02_01_plans(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, SheetPlan]:
+    """Build the single OF 02.01 execution plan for lineage (single frame).
+
+    Framework-gated like CMS1/CMS2: a CRR run yields ``{}`` (OF 02.01 is not
+    produced under CRR), so a CRR lineage request degrades to a clean
+    no-lineage. Deliberately does NOT apply the ``OutputFloorConfig`` entity gate
+    — the 4-arg provider signature carries no config, so the lineage plan is the
+    no-config view (the reported frame the tie-out generates carries no config
+    either). Preserves the column-presence error contract. OF 02.01 has no
+    "(-)"-labelled deduction column, so ``negative_cols`` is empty; the plan
+    frame is the prepared full ledger (with the derived ``of02_is_modelled`` /
+    ``of02_is_ccr`` discriminators) and each cell's own predicate narrows it. The
+    ``_null_fixed_rows`` post-pass stays on the reported frame.
+    """
+    if framework != "BASEL_3_1":
+        return {}
+    if "rwa_pre_floor" not in cols or "sa_rwa" not in cols:
+        errors.append(
+            "OF 02.01 skipped: rwa_pre_floor and/or sa_rwa columns not found "
+            "(output floor not applied)"
+        )
+        return {}
+    return {
+        _OF_02_01_SHEET_KEY: SheetPlan(
+            spec=_of_02_01_spec(),
+            frame=_prepare(results, cols).collect(),
+            ctx=ReportingContext(),
+            negative_cols=frozenset(),
+        )
+    }
+
+
+def of_02_01_frames(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, pl.DataFrame]:
+    """Render the single OF 02.01 frame for lineage (keyed like ``of_02_01_plans``).
+
+    Wraps ``generate_of_02_01`` under the single-frame key so a cell's reported
+    value carries the ``_null_fixed_rows`` post-pass. ``generate_of_02_01`` keeps
+    its distinct signature (the ``OutputFloorConfig`` entity gate) and is NOT the
+    provider generator; called with no config here (the no-config view)."""
+    frame = generate_of_02_01(results, cols, framework, errors)
+    return {_OF_02_01_SHEET_KEY: frame} if frame is not None else {}
 
 
 def _prepare(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:

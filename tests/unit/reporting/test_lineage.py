@@ -367,6 +367,86 @@ def test_c07_substitution_inflow_side_context_stays_drillable() -> None:
 
 
 # =============================================================================
+# R22 — two multi-sheet templates (the first since C 07.00) + two single-frame
+# =============================================================================
+
+_R22_MULTI_SHEET_TEMPLATES = ("c08_04", "cr7a")
+_R22_SINGLE_FRAME_TEMPLATES = ("c08_07", "of_02_01")
+
+
+@pytest.mark.parametrize("template_id", _R22_MULTI_SHEET_TEMPLATES)
+def test_r22_multi_sheet_templates_are_instrumented(template_id: str) -> None:
+    # Assert — each R22 multi-sheet template is instrumented as a PER-SHEET
+    # provider (single_frame False -> its cells carry a sheet axis), with a
+    # populated scope and a sheet label naming that axis (c08_04 by exposure
+    # class, cr7a by origin approach).
+    assert lineage.is_instrumented(template_id)
+    provider = lineage.LINEAGE_PLANS[template_id]
+    assert provider.single_frame is False
+    assert provider.scope
+    assert provider.sheet_label != ""
+
+
+@pytest.mark.parametrize("template_id", _R22_SINGLE_FRAME_TEMPLATES)
+def test_r22_single_frame_templates_are_instrumented(template_id: str) -> None:
+    # Assert — each R22 single-frame template is instrumented (no sheet axis ->
+    # cells report sheet=None), with a populated scope and no sheet label.
+    assert lineage.is_instrumented(template_id)
+    provider = lineage.LINEAGE_PLANS[template_id]
+    assert provider.single_frame is True
+    assert provider.scope
+    assert provider.sheet_label == ""
+
+
+def test_c08_04_prior_period_derived_rows_are_refused_by_the_resolver() -> None:
+    # Arrange — a current-period IRB non-slotting frame (C 08.04 keys the sheet on
+    # reporting_class_origin, narrows on reporting_approach_origin, sums rwa_final).
+    frame = pl.DataFrame(
+        {
+            "exposure_reference": ["EXP-FIRB", "EXP-AIRB"],
+            "reporting_class_origin": ["corporate", "corporate"],
+            "reporting_approach_origin": ["foundation_irb", "advanced_irb"],
+            "rwa_final": [720_000.0, 430_000.0],
+        }
+    )
+    resolver = lineage.sheet_lineage(_FrameSource(frame), "c08_04", "corporate")
+    assert resolver is not None
+
+    # Act / Assert — the closing row (0090, current period) resolves and is
+    # row-backed; the opening (0010, PriorPeriod) and residual (0080, Formula over
+    # the opening) rows are prior-period-derived — C 08.04's rows 0010/0080 mirror
+    # CR8's 1/8 — so the resolver DECLINES them (R20's refusal, free).
+    closing = resolver.query("0090", "0010")
+    assert closing is not None
+    assert closing.derives_from_prior_period is False
+    assert resolver.cell("0090", "0010") is not None
+    for prior_row in ("0010", "0080"):
+        query = resolver.query(prior_row, "0010")
+        assert query is not None
+        assert query.derives_from_prior_period is True
+        assert resolver.cell(prior_row, "0010") is None
+
+
+def test_of_02_01_lineage_is_a_clean_no_lineage_under_crr() -> None:
+    # Arrange — OF 02.01 is Basel 3.1 only; its plans() yield nothing under a CRR
+    # run (_FrameSource.framework == "CRR"), exactly like CMS1/CMS2.
+    frame = pl.DataFrame(
+        {
+            "exposure_reference": ["E1"],
+            "approach_applied": ["advanced_irb"],
+            "risk_type": ["CREDIT"],
+            "rwa_pre_floor": [100.0],
+            "sa_rwa": [80.0],
+        }
+    )
+
+    # Act / Assert — the resolver degrades to None (a clean no-lineage), exactly
+    # like an uninstrumented template, rather than producing a CRR frame.
+    assert lineage.is_instrumented("of_02_01")
+    assert lineage.sheet_lineage(_FrameSource(frame), "of_02_01") is None
+
+
+# =============================================================================
 # Sheet-key resolution — multi-sheet vs the single-frame {sheet: None} convention
 # =============================================================================
 

@@ -104,7 +104,12 @@ Cell semantics (recorded decisions, this slice):
   fallbacks for the prior-year/historical carriers.
 - C 08.04 is the CR8-clone flow: only the closing-RWEA cell (row 0090) is
   populated — note its DELIBERATELY two-wide RWA ladder (``rwa_final``,
-  ``rwa`` — no ``rwa_post_factor``).
+  ``rwa`` — no ``rwa_post_factor``). Lineage-instrumented (R22): ``c08_04_plans``
+  exposes the per-class current-period plans (no prior frame), so its opening
+  (row 0010, a ``PriorPeriod`` cell) and residual (row 0080, a ``Formula``
+  deriving from it) rows are refused by the drill-down exactly as CR8 refuses
+  its rows 1/8; the reported ``generate_c08_04`` keeps threading the prior
+  frame.
 - C 08.06 keys per-SL-type sheets (CRR's IPRE absorbs HVCRE when
   ``is_hvcre`` exists; B31 splits HVCRE out; empty SL types emit NO sheet)
   over the slotting-only book, with a per-ROW two-branch policy: empty
@@ -129,7 +134,10 @@ Cell semantics (recorded decisions, this slice):
   %. Absent the input column the slice is empty, 0040 = 0.0 and 0030 keeps the
   whole SA share (byte-identical to the pre-R14 output). Col 0040 first carries
   the roll-out EAD Sum and is rescaled to a percentage post-execute
-  (``_c08_07_rollout_pct``).
+  (``_c08_07_rollout_pct``). Lineage-instrumented (R22, single frame):
+  ``c08_07_plans`` exposes the one full-population plan; the two post-execute
+  passes (col-0040 rescale, ``_null_fixed_rows``) stay on the reported frame
+  (``c08_07_frames``), which the drill-down reads a cell's value from.
 
 References:
 - CRR Art. 142-191 (IRB); Art. 153 (risk weights), Art. 180 (PD
@@ -188,6 +196,7 @@ from rwa_calc.reporting.kernel import (
     safe_sum,
 )
 from rwa_calc.reporting.metadata import ReportingContext
+from rwa_calc.reporting.plans import SheetPlan
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -207,6 +216,10 @@ _NEGATIVE_COLS: frozenset[str] = frozenset(
 )
 
 _IRB_APPROACHES: tuple[str, ...] = ("foundation_irb", "advanced_irb", "slotting")
+
+# Single-frame lineage key: C 08.07 has no sheet axis, so its one plan keys
+# under a canonical name (see reporting.plans / _resolve_sheet_key single_frame).
+_C08_07_SHEET_KEY = "c08_07"
 
 _Terms = tuple[tuple[str, str | bool], ...]
 type _EmptyCell = Literal["zero", "null"]
@@ -1080,6 +1093,85 @@ def _c08_05_prepare(data: pl.DataFrame, cols: set[str], report_pd_col: str) -> p
 # =============================================================================
 
 
+def _c08_04_spec(cols: set[str], framework: str) -> TemplateSpec:
+    """The C 08.04 flow spec (the CR8 clone): closing (row 0090, current
+    period), opening (row 0010, a ``PriorPeriod`` binding) and residual (row
+    0080, a ``Formula`` deriving from both). Shared by the reported generator
+    (which threads a prior-period frame) and the lineage plan (the
+    current-period view — no prior, so the opening/residual rows stay null and
+    are refused by the drill-down exactly as CR8 refuses its rows 1/8). The RWA
+    ladder is deliberately two-wide (no ``rwa_post_factor``) — the retired
+    ladder."""
+    rwa_col = pick(cols, "rwa_final", "rwa")
+    column_refs = tuple(col.ref for col in get_c08_04_columns(framework))
+    rows = tuple(C08_04_ROWS)
+    cells: dict[tuple[str, str], CellSpec] = {}
+    if rwa_col is not None:
+        cells[("0090", "0010")] = CellSpec(Sum(rwa_col))  # closing RWEA
+        cells[("0010", "0010")] = CellSpec(PriorPeriod(Sum(rwa_col)))  # opening RWEA
+        cells[("0080", "0010")] = CellSpec(
+            Formula(refs=("0090", "0010"), fn=_c08_04_other_flow)  # signed residual
+        )
+    return TemplateSpec(
+        name="c08_04", rows=rows, column_refs=column_refs, cells=cells, empty_cell="null"
+    )
+
+
+def c08_04_plans(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, SheetPlan]:
+    """Build the per-class C 08.04 execution plans for lineage (current period).
+
+    The current-period view: no prior-period frame is threaded, so the opening
+    (row 0010, a ``PriorPeriod`` cell) and residual (row 0080, a ``Formula``
+    deriving from it) rows stay null — both are prior-period-derived, so lineage
+    REFUSES them exactly as CR8 refuses its opening/residual rows (R20's refusal,
+    free). Keys the per-class plans on the sealed ``reporting_class_origin``,
+    identically to ``generate_c08_04``, and preserves its error contract. C 08.04
+    carries no "(-)"-labelled deduction column, so ``negative_cols`` is empty.
+    """
+    ec_col = pick(cols, "reporting_class_origin")
+    if ec_col is None:
+        errors.append("C08.04: Missing required column (exposure_class)")
+        return {}
+    irb_df = _non_slotting(results, cols).collect()
+    if len(irb_df) == 0:
+        return {}
+    data_cols = set(irb_df.columns)
+    spec = _c08_04_spec(data_cols, framework)
+    plans: dict[str, SheetPlan] = {}
+    for ec in irb_df[ec_col].drop_nulls().unique().sort().to_list():
+        plans[ec] = SheetPlan(
+            spec=spec,
+            frame=irb_df.filter(pl.col(ec_col) == ec),
+            ctx=ReportingContext(),
+            negative_cols=frozenset(),
+        )
+    return plans
+
+
+def c08_04_frames(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, pl.DataFrame]:
+    """Render the current-period C 08.04 frames for lineage (keyed like
+    ``c08_04_plans``). The lineage-facing generator — no prior-period frame —
+    so a cell's reported value and its spec are looked up under the same class
+    key. C 08.04 has no post-execute passes, so this is a plain ``execute``.
+    ``generate_c08_04`` (the prior-aware dispatch entry) keeps its distinct
+    signature and threads the external prior frame the current-period lineage
+    view cannot carry."""
+    return {
+        key: execute(plan.spec, plan.frame, plan.ctx)
+        for key, plan in c08_04_plans(results, cols, framework, errors).items()
+    }
+
+
 @cites("PS1/26, paragraph 1.3")
 def generate_c08_04(
     results: pl.LazyFrame,
@@ -1123,21 +1215,8 @@ def generate_c08_04(
     if len(irb_df) == 0:
         return {}
     data_cols = set(irb_df.columns)
-    # Deliberately two-wide (no rwa_post_factor) — the retired ladder.
-    rwa_col = pick(data_cols, "rwa_final", "rwa")
     prior_irb_df, prior_ec_col = _c08_04_prior(prior_results)
-    column_refs = tuple(col.ref for col in get_c08_04_columns(framework))
-    rows = tuple(C08_04_ROWS)
-    cells: dict[tuple[str, str], CellSpec] = {}
-    if rwa_col is not None:
-        cells[("0090", "0010")] = CellSpec(Sum(rwa_col))  # closing RWEA
-        cells[("0010", "0010")] = CellSpec(PriorPeriod(Sum(rwa_col)))  # opening RWEA
-        cells[("0080", "0010")] = CellSpec(
-            Formula(refs=("0090", "0010"), fn=_c08_04_other_flow)  # signed residual
-        )
-    spec = TemplateSpec(
-        name="c08_04", rows=rows, column_refs=column_refs, cells=cells, empty_cell="null"
-    )
+    spec = _c08_04_spec(data_cols, framework)
     result: dict[str, pl.DataFrame] = {}
     for ec in irb_df[ec_col].drop_nulls().unique().sort().to_list():
         class_df = irb_df.filter(pl.col(ec_col) == ec)
@@ -1447,6 +1526,28 @@ def generate_c08_07(
     materiality columns 0160-0180 are structurally null regardless of reporting
     basis (the retired ``output_floor_config`` gate was dead code).
     """
+    prepared = _c08_07_prepared(results, cols, framework, errors)
+    if prepared is None:
+        return None
+    spec, data, null_rows = prepared
+    frame = execute(spec, data)
+    frame = _c08_07_rollout_pct(frame)
+    return _null_fixed_rows(frame, null_rows)
+
+
+def _c08_07_prepared(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> tuple[TemplateSpec, pl.DataFrame, list[str]] | None:
+    """Collect + derive the C 08.07 discriminators and build its spec.
+
+    Shared by ``generate_c08_07`` (the reported frame, which re-applies the two
+    post-execute passes) and ``c08_07_plans`` (the lineage plan). Returns
+    ``None`` on the imperative generator's early exits (missing columns / empty
+    population), recording the same error string.
+    """
     ead_col = pick(cols, "ead_final")
     approach_col = pick(cols, "reporting_approach_origin", "approach")
     # Recorded basis: C 08.07 keys the RAW class over the FULL population
@@ -1483,9 +1584,55 @@ def generate_c08_07(
     rwa_col = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
     row_defs = get_c08_07_rows(framework)
     spec, null_rows = _c08_07_spec(row_defs, ec_col, ead_col, rwa_col, framework)
-    frame = execute(spec, data)
-    frame = _c08_07_rollout_pct(frame)
-    return _null_fixed_rows(frame, null_rows)
+    return spec, data, null_rows
+
+
+def c08_07_plans(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, SheetPlan]:
+    """Build the single C 08.07 execution plan for lineage (single frame).
+
+    C 08.07 has no sheet axis, so its one plan keys under the canonical
+    single-frame key. The plan frame is the FULL prepared population (carrying
+    the derived ``c0807_irb`` / ``c0807_rollout`` discriminators) and each cell's
+    own predicate narrows it. C 08.07 has no "(-)"-labelled deduction column, so
+    ``negative_cols`` is empty. The two post-execute passes
+    (``_c08_07_rollout_pct`` rescaling col 0040 to a percentage,
+    ``_null_fixed_rows`` on the structural-null rows) live on the REPORTED frame
+    (``c08_07_frames`` / ``generate_c08_07``): the drill-down reads a cell's
+    ``cell_value`` from there, so col 0040 shows its rescaled percentage and the
+    fixed-null rows read null (they carry no cell binding — an ``unbound`` cell),
+    never contradicting the sheet. Preserves the generator's error contract via
+    ``_c08_07_prepared``.
+    """
+    prepared = _c08_07_prepared(results, cols, framework, errors)
+    if prepared is None:
+        return {}
+    spec, data, _null_rows = prepared
+    return {
+        _C08_07_SHEET_KEY: SheetPlan(
+            spec=spec, frame=data, ctx=ReportingContext(), negative_cols=frozenset()
+        )
+    }
+
+
+def c08_07_frames(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, pl.DataFrame]:
+    """Render the single C 08.07 frame for lineage (keyed like ``c08_07_plans``).
+
+    Wraps ``generate_c08_07`` under the single-frame key so a cell's reported
+    value carries the two post-execute passes the plan does not — the lineage
+    drill-down reads ``cell_value`` from HERE, so it honours the rescaled col
+    0040 and the nulled structural rows."""
+    frame = generate_c08_07(results, cols, framework, errors)
+    return {_C08_07_SHEET_KEY: frame} if frame is not None else {}
 
 
 def _c08_07_spec(

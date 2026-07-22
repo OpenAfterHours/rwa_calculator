@@ -86,6 +86,17 @@ _TIEOUT_CASES: list[tuple[str, str | None, str]] = [
     # enumeration below skips (it is not a numeric report cell).
     ("c08_01", "corporate_sme", "CRR"),
     ("c08_02", "corporate_sme", "CRR"),
+    # R24 — the three C 08 instrument templates. c08_03/05 share the sparse
+    # PD-range row axis (per exposure class); on the loans-only portfolio c08_03's
+    # on/off-BS whole-bucket fallback fires for col 0020 but is a value no-op (the
+    # off-BS split and the fallback both sum to 0.0), so the sweep still ties out.
+    # c08_06 is per SL TYPE (project_finance — the only SL type the fixtures
+    # produce): its empty non-Total category rows carry a FIXED display risk weight
+    # in col 0070, which the per-sheet spec leaves UNBOUND so the sweep sees a
+    # constant-policy cell, not a WeightedAvg with no legs.
+    ("c08_03", "corporate", "CRR"),
+    ("c08_05", "corporate", "CRR"),
+    ("c08_06", "project_finance", "CRR"),
 ]
 
 

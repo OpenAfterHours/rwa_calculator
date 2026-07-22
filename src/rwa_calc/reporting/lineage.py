@@ -62,12 +62,18 @@ from rwa_calc.reporting.corep.c07 import c07_plans, generate_c07
 from rwa_calc.reporting.corep.c08 import (
     c08_01_plans,
     c08_02_plans,
+    c08_03_plans,
     c08_04_frames,
     c08_04_plans,
+    c08_05_plans,
+    c08_06_plans,
     c08_07_frames,
     c08_07_plans,
     generate_c08_01,
     generate_c08_02,
+    generate_c08_03,
+    generate_c08_05,
+    generate_c08_06,
 )
 from rwa_calc.reporting.corep.of02 import of_02_01_frames, of_02_01_plans
 from rwa_calc.reporting.kernel import available_columns
@@ -554,6 +560,95 @@ LINEAGE_PLANS: dict[str, _Provider] = {
             "on the corporate_sme sheet)",
         ),
         sheet_label="exposure class",
+    ),
+    # C 08.03 — IRB by PD range (per exposure class; R24). Sparse PD-range rows
+    # (populated buckets + optional 9999 Unassigned) keyed on the derived
+    # c08_pd_range band label. generate_c08_03 is the provider generator directly:
+    # its two post-execute passes live on the reported frame the drill-down reads.
+    # The retired on/off-BS whole-bucket fallback (cols 0010/0020) fires on a
+    # loans-only book for col 0020 (off-BS empty) but is a VALUE NO-OP there
+    # (loans carry no nominal_amount, so the whole-bucket fallback and the off-BS
+    # binding both sum to 0.0) — recorded as a limitation with the sweep as the
+    # tripwire, the c08_07 col-0040 precedent.
+    "c08_03": _Provider(
+        plans=c08_03_plans,
+        generate=generate_c08_03,
+        scope=(
+            "Internal-ratings-based credit-risk legs on the F-IRB and A-IRB "
+            "approaches; slotting (supervisory-slotting specialised lending) is "
+            "excluded — it discloses on C 08.06 (reporting_approach_origin in "
+            "{foundation_irb, advanced_irb}), keyed on the sealed obligor "
+            "origination class (reporting_class_origin)",
+            "Rows are the populated PD ranges (the derived c08_pd_range band on "
+            "pd_floored under CRR, on the pre-input-floor pd under Basel 3.1; the "
+            "reported PD is always post-floor) plus an optional 9999 'Unassigned' "
+            "residual — sparse: only populated buckets emit a row",
+            "Cols 0010 (on balance sheet) / 0020 (off balance sheet) split each "
+            "band on the derived c08_bs flag; their retired whole-bucket fallback "
+            "runs post-execute on the REPORTED frame (when a band's on/off split is "
+            "empty the column sums the whole band instead). RECORDED LIMITATION: on "
+            "a band where the fallback fires and diverges, the drill-down's legs "
+            "would sum to the split's value, not the whole-band figure — on a "
+            "loans-only book the off-BS split is empty but its fallback is 0.0, so "
+            "no divergence arises today",
+        ),
+        sheet_label="exposure class",
+    ),
+    # C 08.05 — IRB PD back-testing (per exposure class; R24). Shares the sparse
+    # PD-range row axis with C 08.03; R13 deleted its rate postfix, so it is
+    # execute-only — generate_c08_05 is a plain execute of each plan, the cleanest
+    # of the R24 trio.
+    "c08_05": _Provider(
+        plans=c08_05_plans,
+        generate=generate_c08_05,
+        scope=(
+            "Internal-ratings-based credit-risk legs on the F-IRB and A-IRB "
+            "approaches; slotting is excluded (reporting_approach_origin in "
+            "{foundation_irb, advanced_irb}), keyed on the sealed obligor "
+            "origination class (reporting_class_origin)",
+            "Rows are the populated PD ranges (the derived c08_pd_range band) plus "
+            "an optional 9999 'Unassigned' residual — the same sparse axis as "
+            "C 08.03",
+            "Col 0010 is the arithmetic-mean assigned PD (weighted by a constant "
+            "c08_one column); col 0020 the obligors at the start of the observation "
+            "period, col 0030 those defaulted during it; cols 0040 (observed "
+            "default rate) and 0050 (its historical-rate fallback) are intra-row "
+            "formulas. No post-execute pass and no '(-)'-labelled deduction column",
+        ),
+        sheet_label="exposure class",
+    ),
+    # C 08.06 — IRB slotting specialised lending (per SL type; R24). Sheets key
+    # the SL TYPE (CRR IPRE absorbs HVCRE; B31 splits HVCRE; empty SL types emit no
+    # sheet), NOT the class. generate_c08_06 is the provider generator directly:
+    # its three value-dependent post-passes live on the reported frame. Each sheet
+    # gets its OWN spec — an EMPTY non-Total row's col 0070 is a fixed display risk
+    # weight (a zero-fill artefact), left UNBOUND so the drill-down reports the
+    # template's empty policy rather than a WeightedAvg with no legs.
+    "c08_06": _Provider(
+        plans=c08_06_plans,
+        generate=generate_c08_06,
+        scope=(
+            "Internal-ratings-based SLOTTING specialised-lending legs only "
+            "(reporting_approach_origin == slotting); every other IRB approach "
+            "discloses on C 08.01-05",
+            "Sheets key the SL type (the sealed sl_type — project finance, "
+            "income-producing real estate, object finance, commodities finance; "
+            "under CRR IPRE absorbs HVCRE, under Basel 3.1 HVCRE is its own sheet), "
+            "NOT the exposure class; an SL type with no legs emits no sheet",
+            "Rows are the supervisory slotting category (strong/good/satisfactory/"
+            "weak/default) x maturity band (short/long via the derived "
+            "is_short_maturity, with the asymmetric fallback: absent the maturity "
+            "column the short band is empty and the long band absorbs the "
+            "category), plus the two maturity-split Total rows",
+            "An EMPTY non-Total row is hard zero-filled post-execute with the row "
+            "definition's FIXED display risk weight in col 0070 — a template "
+            "artefact, not a measured weighted average — so that one cell is left "
+            "UNBOUND (the drill-down reports the empty policy and reads its value "
+            "from the reported frame); live rows and Total rows compute normally, "
+            "with the 0030 nominal / 0040 clamp / 0070 first-non-null live fixes "
+            "and the provisions ladder applied on the reported frame",
+        ),
+        sheet_label="SL type",
     ),
 }
 

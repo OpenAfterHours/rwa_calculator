@@ -49,13 +49,16 @@ Cell semantics (recorded decisions, this slice):
   substitution inflow, so the Total-row col 0080 (``SideContext``) drills to its
   real value (the C 07.00 pattern); C 08.02's per-grade 0080 is a constant 0.0
   (R12) and its String label col 0005 is skipped by the tie-out value-column sweep.
-  Ratchet note (R23): the extraction bumped ``max_reporting_module_loc``
-  (2016 -> the exact post-R23 count, zero slack) — the mechanical additive
-  cost of exposing the two templates' spec/row-pred/plans builders with their
-  mandated docstrings, no behaviour change. Unlike the c07/cr4/cr8/cr7a
-  extractions this module alone needed a bump: it hosts SEVEN templates in
-  one file. Splitting c08.py per-template is the honest long-term answer —
-  recorded as a deferred follow-up (shared value surface, its own risky item).
+  Ratchet note (R23/R24): each extraction bumped ``max_reporting_module_loc``
+  (2016 -> post-R23 -> 2320 post-R24, zero slack) — the mechanical additive
+  cost of exposing each template's cells/plans builders with their mandated
+  docstrings, no behaviour change. Unlike the c07/cr4/cr8/cr7a extractions this
+  module alone needs a bump per wave: it hosts SEVEN templates in one file.
+  R24 added the ``c08_03_plans`` / ``c08_05_plans`` / ``c08_06_plans`` builders
+  (and split ``_c08_03_cells`` / ``_c08_05_cells`` and the c08_06 row helpers
+  out of their generators). Splitting c08.py per-template is the honest
+  long-term answer — recorded as a deferred follow-up (shared value surface,
+  its own risky item).
 - The EL memo columns 0280 (pre post-model adjustment) and its B31 twin 0282
   (after post-model adjustments) coalesce PER LEG (R10a): they read the
   formula-IRB ``el_pre_adjustment`` / ``el_after_adjustment`` where non-null
@@ -116,6 +119,15 @@ Cell semantics (recorded decisions, this slice):
   yields nothing. C 08.05's averages are null-filled arithmetic means
   (weighted by a constant-one column), with the CR9-style point-in-time
   fallbacks for the prior-year/historical carriers.
+  Lineage-instrumented (R24): ``c08_03_plans`` / ``c08_05_plans`` expose the
+  per-class sparse-PD-range plans (the data-driven c08_02 pattern; each row keys
+  the derived ``c08_pd_range`` band carried in ``row_terms``). C 08.05 is
+  execute-only (R13 deleted the rate postfix). C 08.03's two post-execute passes
+  (the on/off-BS whole-bucket fallback on cols 0010/0020; the provisions ladder
+  on col 0110) stay on the reported frame the drill-down reads: the fallback
+  fires for col 0020 on a loans-only book (off-BS split empty) but is a VALUE
+  NO-OP there (both the fallback and the off-BS binding sum to 0.0), recorded as
+  a limitation with the tie-out sweep as the tripwire.
 - C 08.04 is the CR8-clone flow: only the closing-RWEA cell (row 0090) is
   populated — note its DELIBERATELY two-wide RWA ladder (``rwa_final``,
   ``rwa`` — no ``rwa_post_factor``). Lineage-instrumented (R22): ``c08_04_plans``
@@ -133,7 +145,15 @@ Cell semantics (recorded decisions, this slice):
   CRR's 0080 prefers ``rwa_post_factor``; the maturity fallback is
   asymmetric (no ``is_short_maturity`` column -> short band empty, long
   band absorbs the category); the "substantially stronger" sub-rows are
-  unconditionally empty.
+  unconditionally empty. Lineage-instrumented (R24): ``c08_06_plans`` exposes
+  the per-SL-type plans, and because the row set is number-neutral but the
+  EMPTY-row set is per-sheet, each sheet gets its OWN spec — an empty non-Total
+  row's col 0070 (a fixed display RW, not a measured weighted average) is left
+  UNBOUND (``_c08_06_empty_refs``), so the drill-down reports the template's
+  empty policy and reads its value from the reported frame rather than a
+  WeightedAvg with no legs. The three value-dependent post-passes (empty-row
+  zero-fill; the live 0030/0040/0070 fixes; the provisions ladder) stay on the
+  reported frame.
 - C 08.07 reads the FULL population (SA enters every denominator; null
   approach falls to SA; slotting counts as IRB) keyed on RAW
   ``exposure_class``; percentages are intra-row formulas guarding zero
@@ -1000,14 +1020,79 @@ def _banded_rows(
     return rows, banded
 
 
-@cites("PS1/26, paragraph 1.3")
-def generate_c08_03(
+def _c08_03_cells(  # noqa: PLR0913 - the full C 08.03 sparse-PD-range column surface
+    band_rows: list[tuple[str, str]],
+    cols: set[str],
+    ead_col: str,
+    rwa_col: str,
+    pd_report_col: str,
+    lgd_col: str | None,
+) -> dict[tuple[str, str], CellSpec]:
+    """The C 08.03 per-band cell surface (one PD range = one row).
+
+    Shared by ``c08_03_plans`` (the lineage spec) and ``generate_c08_03`` (the
+    reported frame). Cols 0010/0020 split the band on ``c08_bs`` (on/off balance
+    sheet); their retired whole-bucket fallback still runs post-execute
+    (``_c08_03_bs_fallback``) on the REPORTED frame, so the drill-down reads a
+    band's on/off gross from there."""
+    cells: dict[tuple[str, str], CellSpec] = {}
+    for ref, label in band_rows:
+        terms: _Terms = (("c08_pd_range", label),)
+        member = RowPredicate(equals=terms)
+        cells[(ref, "0010")] = CellSpec(
+            SafeSum(gross_carriers(cols, "drawn_amount", "interest")),
+            predicate=RowPredicate(equals=(*terms, ("c08_bs", "on"))),
+        )
+        cells[(ref, "0020")] = CellSpec(
+            Sum(gross_carrier(cols, "nominal_amount")),
+            predicate=RowPredicate(equals=(*terms, ("c08_bs", "off"))),
+        )
+        cells[(ref, "0030")] = CellSpec(
+            WeightedAvg("ccf", weight="nominal_amount"), predicate=member, empty_cell="null"
+        )
+        cells[(ref, "0040")] = CellSpec(Sum(ead_col), predicate=member)
+        cells[(ref, "0050")] = CellSpec(
+            WeightedAvg(pd_report_col, weight=ead_col), predicate=member, empty_cell="null"
+        )
+        cells[(ref, "0060")] = (
+            CellSpec(Count("counterparty_reference", distinct=True), predicate=member)
+            if "counterparty_reference" in cols
+            else CellSpec(Count("exposure_reference"), predicate=member)
+        )
+        cells[(ref, "0070")] = (
+            CellSpec(WeightedAvg(lgd_col, weight=ead_col), predicate=member, empty_cell="null")
+            if lgd_col is not None
+            else CellSpec(Formula(refs=(), fn=_const(None)))
+        )
+        cells[(ref, "0080")] = CellSpec(
+            WeightedAvg("irb_maturity_m", weight=ead_col), predicate=member, empty_cell="null"
+        )
+        cells[(ref, "0090")] = CellSpec(Sum(rwa_col), predicate=member)
+        cells[(ref, "0100")] = CellSpec(Sum("expected_loss"), predicate=member)
+        cells[(ref, "0110")] = CellSpec(
+            SafeSum(("scra_provision_amount", "gcra_provision_amount")), predicate=member
+        )
+    return cells
+
+
+def c08_03_plans(
     results: pl.LazyFrame,
     cols: set[str],
     framework: str,
     errors: list[str],
-) -> dict[str, pl.DataFrame]:
-    """Execute C 08.03 per class sheet over sparse PD-range rows."""
+) -> dict[str, SheetPlan]:
+    """Build the per-class C 08.03 execution plans for lineage (sparse PD rows).
+
+    Each class sheet has its OWN spec — rows are the populated PD ranges (plus an
+    optional 9999 Unassigned) derived per class by ``_banded_rows`` (the c08_02
+    data-driven pattern), keyed on the derived ``c08_pd_range`` label carried in
+    ``row_terms``. Keys on the sealed ``reporting_class_origin`` over the IRB
+    NON-slotting book, preserving ``generate_c08_03``'s error contract. C 08.03
+    carries no "(-)"-labelled deduction column, so ``negative_cols`` is empty. The
+    two post-execute passes (the retired on/off-BS whole-bucket fallback on cols
+    0010/0020; the provisions ladder on col 0110) live on the REPORTED frame
+    (``generate_c08_03``), which the drill-down reads a cell's value from — so on a
+    bucket where the fallback fires the reported cell stays authoritative."""
     ec_col = pick(cols, "reporting_class_origin")
     ead_col = pick(cols, "ead_final")
     rwa_col = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
@@ -1026,61 +1111,52 @@ def generate_c08_03(
     irb_df = _prepare(irb_df, data_cols)
     column_refs = tuple(col.ref for col in get_c08_03_columns(framework))
     lgd_col = pick(data_cols, "lgd_floored", "lgd_input")
-
-    result: dict[str, pl.DataFrame] = {}
+    pd_report_col = report_pd_col or alloc_pd_col
+    plans: dict[str, SheetPlan] = {}
     for ec in irb_df[ec_col].drop_nulls().unique().sort().to_list():
         class_df = irb_df.filter(pl.col(ec_col) == ec)
         band_rows, banded = _banded_rows(class_df, alloc_pd_col)
-        if not band_rows:
+        cells = _c08_03_cells(band_rows, data_cols, ead_col, rwa_col, pd_report_col, lgd_col)
+        rows = tuple(_Row(ref, label) for ref, label in band_rows)
+        plans[ec] = SheetPlan(
+            spec=TemplateSpec(
+                name="c08_03", rows=rows, column_refs=column_refs, cells=cells, empty_cell="zero"
+            ),
+            frame=banded,
+            ctx=ReportingContext(),
+            negative_cols=frozenset(),
+            row_terms={ref: (("c08_pd_range", label),) for ref, label in band_rows},
+        )
+    return plans
+
+
+@cites("PS1/26, paragraph 1.3")
+def generate_c08_03(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, pl.DataFrame]:
+    """Execute C 08.03 per class sheet over sparse PD-range rows.
+
+    Iterates ``c08_03_plans`` and applies the two post-execute passes on the
+    reported frame — the retired on/off-BS whole-bucket fallback (cols 0010/0020)
+    and the provisions ladder (col 0110) — which the drill-down reads a cell's
+    value from. Each row's predicate is rebuilt from the plan's ``row_terms``
+    (each a ``c08_pd_range`` label)."""
+    column_refs = tuple(col.ref for col in get_c08_03_columns(framework))
+    result: dict[str, pl.DataFrame] = {}
+    for ec, plan in c08_03_plans(results, cols, framework, errors).items():
+        if not plan.spec.rows:
             result[ec] = _empty_frame(column_refs)
             continue
-        cells: dict[tuple[str, str], CellSpec] = {}
-        row_preds: dict[str, RowPredicate | None] = {}
-        for ref, label in band_rows:
-            terms: _Terms = (("c08_pd_range", label),)
-            member = RowPredicate(equals=terms)
-            row_preds[ref] = member
-            cells[(ref, "0010")] = CellSpec(
-                SafeSum(gross_carriers(data_cols, "drawn_amount", "interest")),
-                predicate=RowPredicate(equals=(*terms, ("c08_bs", "on"))),
-            )
-            cells[(ref, "0020")] = CellSpec(
-                Sum(gross_carrier(data_cols, "nominal_amount")),
-                predicate=RowPredicate(equals=(*terms, ("c08_bs", "off"))),
-            )
-            cells[(ref, "0030")] = CellSpec(
-                WeightedAvg("ccf", weight="nominal_amount"), predicate=member, empty_cell="null"
-            )
-            cells[(ref, "0040")] = CellSpec(Sum(ead_col), predicate=member)
-            cells[(ref, "0050")] = CellSpec(
-                WeightedAvg(report_pd_col or alloc_pd_col, weight=ead_col),
-                predicate=member,
-                empty_cell="null",
-            )
-            cells[(ref, "0060")] = (
-                CellSpec(Count("counterparty_reference", distinct=True), predicate=member)
-                if "counterparty_reference" in data_cols
-                else CellSpec(Count("exposure_reference"), predicate=member)
-            )
-            cells[(ref, "0070")] = (
-                CellSpec(WeightedAvg(lgd_col, weight=ead_col), predicate=member, empty_cell="null")
-                if lgd_col is not None
-                else CellSpec(Formula(refs=(), fn=_const(None)))
-            )
-            cells[(ref, "0080")] = CellSpec(
-                WeightedAvg("irb_maturity_m", weight=ead_col), predicate=member, empty_cell="null"
-            )
-            cells[(ref, "0090")] = CellSpec(Sum(rwa_col), predicate=member)
-            cells[(ref, "0100")] = CellSpec(Sum("expected_loss"), predicate=member)
-            cells[(ref, "0110")] = CellSpec(
-                SafeSum(("scra_provision_amount", "gcra_provision_amount")), predicate=member
-            )
-        rows = tuple(_Row(ref, label) for ref, label in band_rows)
-        spec = TemplateSpec(
-            name="c08_03", rows=rows, column_refs=column_refs, cells=cells, empty_cell="zero"
-        )
-        frame = execute(spec, banded)
-        frame = _c08_03_bs_fallback(frame, banded, band_rows, data_cols)
+        banded = plan.frame
+        data_cols = set(banded.columns)
+        row_preds: dict[str, RowPredicate | None] = {
+            ref: RowPredicate(equals=terms) for ref, terms in plan.row_terms.items() if terms
+        }
+        frame = execute(plan.spec, banded)
+        frame = _c08_03_bs_fallback(frame, banded, plan.row_terms, data_cols)
         frame = _provisions_postfix(frame, banded, row_preds, data_cols, ref="0110")
         result[ec] = frame
     return result
@@ -1089,15 +1165,21 @@ def generate_c08_03(
 def _c08_03_bs_fallback(
     frame: pl.DataFrame,
     banded: pl.DataFrame,
-    band_rows: list[tuple[str, str]],
+    row_terms: Mapping[str, _Terms | None],
     cols: set[str],
 ) -> pl.DataFrame:
     """The retired whole-bucket fallback: when a bucket's on-BS (off-BS)
-    split is empty, columns 0010 (0020) sum the WHOLE bucket instead."""
+    split is empty, columns 0010 (0020) sum the WHOLE bucket instead.
+
+    Iterates the plan's ``row_terms`` (ref -> the ``c08_pd_range`` band label), so
+    the reported generator and the lineage plan share one row definition."""
     on_available = "c08_bs" in banded.columns
     fixes_0010: dict[str, float | None] = {}
     fixes_0020: dict[str, float | None] = {}
-    for ref, label in band_rows:
+    for ref, terms in row_terms.items():
+        if not terms:
+            continue
+        label = terms[0][1]
         bucket = banded.filter(pl.col("c08_pd_range") == label)
         on_empty = len(bucket.filter(pl.col("c08_bs") == "on")) == 0 if on_available else True
         off_empty = len(bucket.filter(pl.col("c08_bs") == "off")) == 0 if on_available else True
@@ -1131,14 +1213,69 @@ def _c08_03_bs_fallback(
     return frame.with_columns(exprs)
 
 
-@cites("PS1/26, paragraph 1.3")
-def generate_c08_05(
+def _c08_05_cells(  # noqa: PLR0913 - the full C 08.05 PD-backtesting column surface
+    band_rows: list[tuple[str, str]],
+    cols: set[str],
+    pd_report_col: str,
+    *,
+    prior_present: bool,
+    hist_present: bool,
+) -> dict[tuple[str, str], CellSpec]:
+    """The C 08.05 per-band cell surface (PD back-testing over sparse ranges).
+
+    Shared by ``c08_05_plans`` and ``generate_c08_05``. R13 deleted this
+    template's rate postfix, so it is execute-only — the cleanest of the C 08.03/
+    05/06 trio: col 0040 (observed default rate) is an intra-row Formula and 0050
+    a copy-of-0040 fallback (or the WeightedAvg historical rate when supplied)."""
+    cells: dict[tuple[str, str], CellSpec] = {}
+    for ref, label in band_rows:
+        terms: _Terms = (("c08_pd_range", label),)
+        member = RowPredicate(equals=terms)
+        cells[(ref, "0010")] = CellSpec(
+            WeightedAvg(pd_report_col, weight="c08_one"), predicate=member, empty_cell="null"
+        )
+        if prior_present:
+            cells[(ref, "0020")] = CellSpec(Sum("prior_year_obligor_count"), predicate=member)
+        elif "counterparty_reference" in cols:
+            cells[(ref, "0020")] = CellSpec(
+                Count("counterparty_reference", distinct=True), predicate=member
+            )
+        else:
+            cells[(ref, "0020")] = CellSpec(Count("exposure_reference"), predicate=member)
+        if "counterparty_reference" in cols:
+            cells[(ref, "0030")] = CellSpec(
+                Count("counterparty_reference", distinct=True),
+                predicate=RowPredicate(equals=(*terms, ("c08_05_defaulted", True))),
+            )
+        else:
+            cells[(ref, "0030")] = CellSpec(
+                Count("exposure_reference"),
+                predicate=RowPredicate(equals=(*terms, ("c08_05_defaulted", True))),
+            )
+        cells[(ref, "0040")] = CellSpec(Formula(refs=("0020", "0030"), fn=_observed_rate))
+        if hist_present:
+            cells[(ref, "0050")] = CellSpec(
+                WeightedAvg("historical_annual_default_rate", weight="c08_one"), predicate=member
+            )
+        else:
+            cells[(ref, "0050")] = CellSpec(Formula(refs=("0040",), fn=_copy_of_0040))
+    return cells
+
+
+def c08_05_plans(
     results: pl.LazyFrame,
     cols: set[str],
     framework: str,
     errors: list[str],
-) -> dict[str, pl.DataFrame]:
-    """Execute C 08.05 per class sheet (PD back-testing over sparse ranges)."""
+) -> dict[str, SheetPlan]:
+    """Build the per-class C 08.05 execution plans for lineage (sparse PD rows).
+
+    Shares ``_banded_rows`` / ``_pd_alloc_col`` with C 08.03; each class sheet has
+    its OWN sparse-PD-range spec, keyed on the sealed ``reporting_class_origin``
+    over the IRB NON-slotting book (preserving ``generate_c08_05``'s error
+    contract). Execute-only (R13 deleted the rate postfix), so ``generate_c08_05``
+    is a plain ``execute`` of each plan — no post-execute pass, and no
+    "(-)"-labelled deduction column (``negative_cols`` empty)."""
     ec_col = pick(cols, "reporting_class_origin")
     if ec_col is None:
         errors.append("C08.05: Missing required column (exposure_class)")
@@ -1152,58 +1289,53 @@ def generate_c08_05(
     if len(irb_df) == 0:
         return {}
     data_cols = set(irb_df.columns)
-    irb_df = _c08_05_prepare(_prepare(irb_df, data_cols), data_cols, report_pd_col or alloc_pd_col)
+    pd_report_col = report_pd_col or alloc_pd_col
+    irb_df = _c08_05_prepare(_prepare(irb_df, data_cols), data_cols, pd_report_col)
     column_refs = tuple(col.ref for col in get_c08_05_columns(framework))
     prior_present = "prior_year_obligor_count" in data_cols
     hist_present = "historical_annual_default_rate" in data_cols
-
-    result: dict[str, pl.DataFrame] = {}
+    plans: dict[str, SheetPlan] = {}
     for ec in irb_df[ec_col].drop_nulls().unique().sort().to_list():
         class_df = irb_df.filter(pl.col(ec_col) == ec)
         band_rows, banded = _banded_rows(class_df, alloc_pd_col)
-        if not band_rows:
-            result[ec] = _empty_frame(column_refs)
-            continue
-        cells: dict[tuple[str, str], CellSpec] = {}
-        for ref, label in band_rows:
-            terms: _Terms = (("c08_pd_range", label),)
-            member = RowPredicate(equals=terms)
-            cells[(ref, "0010")] = CellSpec(
-                WeightedAvg(report_pd_col or alloc_pd_col, weight="c08_one"),
-                predicate=member,
-                empty_cell="null",
-            )
-            if prior_present:
-                cells[(ref, "0020")] = CellSpec(Sum("prior_year_obligor_count"), predicate=member)
-            elif "counterparty_reference" in data_cols:
-                cells[(ref, "0020")] = CellSpec(
-                    Count("counterparty_reference", distinct=True), predicate=member
-                )
-            else:
-                cells[(ref, "0020")] = CellSpec(Count("exposure_reference"), predicate=member)
-            if "counterparty_reference" in data_cols:
-                cells[(ref, "0030")] = CellSpec(
-                    Count("counterparty_reference", distinct=True),
-                    predicate=RowPredicate(equals=(*terms, ("c08_05_defaulted", True))),
-                )
-            else:
-                cells[(ref, "0030")] = CellSpec(
-                    Count("exposure_reference"),
-                    predicate=RowPredicate(equals=(*terms, ("c08_05_defaulted", True))),
-                )
-            cells[(ref, "0040")] = CellSpec(Formula(refs=("0020", "0030"), fn=_observed_rate))
-            if hist_present:
-                cells[(ref, "0050")] = CellSpec(
-                    WeightedAvg("historical_annual_default_rate", weight="c08_one"),
-                    predicate=member,
-                )
-            else:
-                cells[(ref, "0050")] = CellSpec(Formula(refs=("0040",), fn=_copy_of_0040))
-        rows = tuple(_Row(ref, label) for ref, label in band_rows)
-        spec = TemplateSpec(
-            name="c08_05", rows=rows, column_refs=column_refs, cells=cells, empty_cell="zero"
+        cells = _c08_05_cells(
+            band_rows,
+            data_cols,
+            pd_report_col,
+            prior_present=prior_present,
+            hist_present=hist_present,
         )
-        result[ec] = execute(spec, banded)
+        rows = tuple(_Row(ref, label) for ref, label in band_rows)
+        plans[ec] = SheetPlan(
+            spec=TemplateSpec(
+                name="c08_05", rows=rows, column_refs=column_refs, cells=cells, empty_cell="zero"
+            ),
+            frame=banded,
+            ctx=ReportingContext(),
+            negative_cols=frozenset(),
+            row_terms={ref: (("c08_pd_range", label),) for ref, label in band_rows},
+        )
+    return plans
+
+
+@cites("PS1/26, paragraph 1.3")
+def generate_c08_05(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, pl.DataFrame]:
+    """Execute C 08.05 per class sheet (PD back-testing over sparse ranges).
+
+    Iterates ``c08_05_plans`` and executes each plan — R13 left this template
+    execute-only, so there is no post-execute pass to reconcile the drill-down
+    against."""
+    column_refs = tuple(col.ref for col in get_c08_05_columns(framework))
+    result: dict[str, pl.DataFrame] = {}
+    for ec, plan in c08_05_plans(results, cols, framework, errors).items():
+        result[ec] = (
+            _empty_frame(column_refs) if not plan.spec.rows else execute(plan.spec, plan.frame)
+        )
     return result
 
 
@@ -1383,21 +1515,84 @@ def _c08_04_prior(
 # =============================================================================
 
 
-@cites("PS1/26, paragraph 1.3")
-def generate_c08_06(
+def _c08_06_row_defs(framework: str) -> list[tuple[str, str, bool | None, str]]:
+    """The C 08.06 category x maturity row definitions (category + Total rows
+    only) for one framework — shared by the spec, the plan and the sheet
+    post-passes."""
+    return [
+        row_def
+        for row_def in get_c08_06_rows(framework)
+        if row_def[1] == "Total" or row_def[1] in C08_06_CATEGORY_MAP
+    ]
+
+
+def _c08_06_row_preds(
+    row_defs: list[tuple[str, str, bool | None, str]], cols: set[str]
+) -> dict[str, RowPredicate]:
+    """Each row's category x maturity subset predicate (the asymmetric
+    ``is_short_maturity`` fallback preserved)."""
+    has_maturity = "is_short_maturity" in cols
+    return {
+        row_def[0]: _c08_06_row_pred(row_def[1], row_def[2], has_maturity=has_maturity)
+        for row_def in row_defs
+    }
+
+
+def _c08_06_empty_refs(
+    type_df: pl.DataFrame,
+    row_defs: list[tuple[str, str, bool | None, str]],
+    row_preds: dict[str, RowPredicate],
+) -> frozenset[str]:
+    """Non-Total rows with an EMPTY subset on this SL-type sheet.
+
+    These rows are hard zero-filled by ``_c08_06_sheet`` (every cell 0.0 except
+    col 0070 = the row definition's FIXED display risk weight), so their col 0070
+    is a display artefact, not a measured weighted average. The per-sheet spec
+    therefore leaves that cell UNBOUND (its value comes from the reported frame's
+    zero-fill pass), so lineage reports it as the template's empty policy rather
+    than a WeightedAvg with no legs whose value would contradict the screen. Uses
+    the SAME emptiness test as ``_c08_06_sheet`` (subset height 0, label != Total)."""
+    subsets = subset_rows(type_df, dict(row_preds))
+    return frozenset(
+        row_def[0]
+        for row_def in row_defs
+        if row_def[1] != "Total" and subsets[row_def[0]].height == 0
+    )
+
+
+def _c08_06_sheets(data: pl.DataFrame, cols: set[str], framework: str) -> dict[str, pl.DataFrame]:
+    """The per-SL-type frames (empty SL types emit no sheet); a frame with no
+    ``sl_type`` column is one ``specialised_lending`` sheet."""
+    if "sl_type" not in cols:
+        return {"specialised_lending": data}
+    sheets: dict[str, pl.DataFrame] = {}
+    for sl_key in get_c08_06_sl_types(framework):
+        type_df = _c08_06_sl_type_sheet(data, sl_key, cols, framework)
+        if type_df.height > 0:
+            sheets[sl_key] = type_df
+    return sheets
+
+
+def c08_06_plans(
     results: pl.LazyFrame,
     cols: set[str],
     framework: str,
     errors: list[str],
-) -> dict[str, pl.DataFrame]:
-    """Execute C 08.06 / OF 08.06 per SL-type sheet (slotting only).
+) -> dict[str, SheetPlan]:
+    """Build the per-SL-type C 08.06 execution plans for lineage (slotting only).
 
-    Rows = slotting category x maturity band (plus the two maturity-split
-    Total rows); the retired two-branch row policy is preserved: an EMPTY
-    non-Total row zero-fills every cell and reports the row definition's
-    fixed display risk weight in 0070, while live rows (and both Total
-    rows, even when empty) compute on data with per-cell null policy.
-    """
+    Keys per-SL-TYPE sheets (CRR's IPRE absorbs HVCRE; B31 splits HVCRE; empty SL
+    types emit NO sheet) over the slotting-only book, preserving
+    ``generate_c08_06``'s error contract. Each sheet gets its OWN spec because the
+    row set is number-neutral but the EMPTY-row set is per-sheet: an empty
+    non-Total row's col 0070 is a fixed display risk weight (a zero-fill artefact),
+    so the spec leaves that one cell UNBOUND (``_c08_06_empty_refs``) — the
+    drill-down then reports it as the template's empty policy and reads its value
+    from the reported frame, honouring the zero-fill without a WeightedAvg that has
+    no legs. The three value-dependent post-passes (empty-row zero-fill; the 0030
+    nominal / 0040 clamp / 0070 first-non-null live fixes; the provisions ladder)
+    live on the REPORTED frame (``generate_c08_06``). C 08.06 carries no
+    "(-)"-labelled deduction column, so ``negative_cols`` is empty."""
     ead_col = pick(cols, "ead_final")
     rwa_col = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
     if ead_col is None or rwa_col is None:
@@ -1417,19 +1612,48 @@ def generate_c08_06(
         errors.append("C08.06: Missing slotting_category column — cannot generate template")
         return {}
     data = _c08_06_prepare(slotting_df, cols)
-    spec, row_defs, row_preds = _c08_06_spec(cols, ead_col, rwa_col, framework)
-    result: dict[str, pl.DataFrame] = {}
-    if "sl_type" in cols:
-        for sl_key in get_c08_06_sl_types(framework):
-            type_df = _c08_06_sl_type_sheet(data, sl_key, cols, framework)
-            if type_df.height == 0:
-                continue
-            result[sl_key] = _c08_06_sheet(spec, type_df, row_defs, row_preds, cols, ead_col)
-    else:
-        result["specialised_lending"] = _c08_06_sheet(
-            spec, data, row_defs, row_preds, cols, ead_col
+    row_defs = _c08_06_row_defs(framework)
+    row_preds = _c08_06_row_preds(row_defs, cols)
+    plans: dict[str, SheetPlan] = {}
+    for sl_key, type_df in _c08_06_sheets(data, cols, framework).items():
+        empty_refs = _c08_06_empty_refs(type_df, row_defs, row_preds)
+        plans[sl_key] = SheetPlan(
+            spec=_c08_06_spec(cols, ead_col, rwa_col, framework, empty_refs),
+            frame=type_df,
+            ctx=ReportingContext(),
+            negative_cols=frozenset(),
         )
-    return result
+    return plans
+
+
+@cites("PS1/26, paragraph 1.3")
+def generate_c08_06(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, pl.DataFrame]:
+    """Execute C 08.06 / OF 08.06 per SL-type sheet (slotting only).
+
+    Rows = slotting category x maturity band (plus the two maturity-split
+    Total rows); the retired two-branch row policy is preserved: an EMPTY
+    non-Total row zero-fills every cell and reports the row definition's
+    fixed display risk weight in 0070, while live rows (and both Total
+    rows, even when empty) compute on data with per-cell null policy. Iterates
+    ``c08_06_plans`` and applies ``_c08_06_sheet``'s value-dependent overrides on
+    each plan's reported frame, which the drill-down reads a cell's value from."""
+    plans = c08_06_plans(results, cols, framework, errors)
+    if not plans:
+        return {}
+    ead_col = pick(cols, "ead_final")
+    if ead_col is None:  # unreachable — a non-empty plan set implies ead_final resolved
+        return {}
+    row_defs = _c08_06_row_defs(framework)
+    row_preds = _c08_06_row_preds(row_defs, cols)
+    return {
+        sl_key: _c08_06_sheet(plan.spec, plan.frame, row_defs, row_preds, cols, ead_col)
+        for sl_key, plan in plans.items()
+    }
 
 
 def _c08_06_prepare(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
@@ -1481,25 +1705,18 @@ def _c08_06_row_pred(label: str, is_short: bool | None, *, has_maturity: bool) -
 
 
 def _c08_06_spec(
-    cols: set[str], ead_col: str, rwa_col: str, framework: str
-) -> tuple[
-    TemplateSpec,
-    list[tuple[str, str, bool | None, str]],
-    dict[str, RowPredicate],
-]:
-    """The C 08.06 spec (framework-shaped, sheet-independent)."""
+    cols: set[str], ead_col: str, rwa_col: str, framework: str, empty_refs: frozenset[str]
+) -> TemplateSpec:
+    """The C 08.06 spec for one SL-type sheet (framework-shaped).
+
+    ``empty_refs`` names the non-Total rows whose subset is empty on THIS sheet:
+    their col 0070 is a fixed display risk weight applied by the zero-fill
+    post-pass, so it is left UNBOUND here (see ``_c08_06_empty_refs``). Every
+    other cell is number-neutral across sheets."""
     column_refs = tuple(col.ref for col in get_c08_06_columns(framework))
-    row_defs = [
-        row_def
-        for row_def in get_c08_06_rows(framework)
-        if row_def[1] == "Total" or row_def[1] in C08_06_CATEGORY_MAP
-    ]
-    has_maturity = "is_short_maturity" in cols
+    row_defs = _c08_06_row_defs(framework)
     rows = tuple(_Row(row_def[0], row_def[1]) for row_def in row_defs)
-    row_preds = {
-        row_def[0]: _c08_06_row_pred(row_def[1], row_def[2], has_maturity=has_maturity)
-        for row_def in row_defs
-    }
+    row_preds = _c08_06_row_preds(row_defs, cols)
     crm_col = pick(cols, "ead_pre_ccf", "exposure_post_crm")
     if framework != "BASEL_3_1" and "rwa_post_factor" in cols:
         rwea_col = "rwa_post_factor"  # CRR prefers the post-supporting-factor RWEA
@@ -1529,9 +1746,14 @@ def _c08_06_spec(
         cells[(ref, "0040")] = CellSpec(Sum(ead_col), predicate=pred)
         cells[(ref, "0050")] = CellSpec(Sum(ead_col), predicate=off_pred, empty_cell="null")
         cells[(ref, "0060")] = CellSpec(Formula(refs=(), fn=_const(None)))
-        cells[(ref, "0070")] = CellSpec(
-            WeightedAvg("risk_weight", weight=ead_col), predicate=pred, empty_cell="null"
-        )
+        # Col 0070 on an EMPTY non-Total row is a fixed display risk weight from
+        # the zero-fill post-pass (not a measured weighted average), so it is left
+        # UNBOUND — the drill-down reads its value from the reported frame and
+        # reports the template's empty policy, never a WeightedAvg with no legs.
+        if ref not in empty_refs:
+            cells[(ref, "0070")] = CellSpec(
+                WeightedAvg("risk_weight", weight=ead_col), predicate=pred, empty_cell="null"
+            )
         cells[(ref, "0080")] = CellSpec(Sum(rwea_col), predicate=pred)
         cells[(ref, "0090")] = (
             CellSpec(Sum("expected_loss"), predicate=pred)
@@ -1541,10 +1763,9 @@ def _c08_06_spec(
         cells[(ref, "0100")] = CellSpec(
             SafeSum(("scra_provision_amount", "gcra_provision_amount")), predicate=pred
         )
-    spec = TemplateSpec(
+    return TemplateSpec(
         name="c08_06", rows=rows, column_refs=column_refs, cells=cells, empty_cell="zero"
     )
-    return spec, row_defs, row_preds
 
 
 def _c08_06_sheet(

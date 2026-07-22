@@ -117,8 +117,10 @@ Everything runs on `basis: aggregator_exit` — the sealed per-leg ledger.
 
 Lineage is available for templates whose execution plan is exposed (`LINEAGE_PLANS`). Today that is
 the **multi-sheet** templates **C 07.00** (SA credit risk, per obligor class), **C 08.01** (IRB
-totals, per exposure class), **C 08.02** (IRB by PD grade, per exposure class), **C 08.04** (IRB RWEA
-flow, per exposure class) and **CR7-A** (extent of IRB CRM techniques, per origin approach); the
+totals, per exposure class), **C 08.02** (IRB by PD grade, per exposure class), **C 08.03** (IRB by PD
+range, per exposure class), **C 08.04** (IRB RWEA flow, per exposure class), **C 08.05** (IRB PD
+back-testing, per exposure class), **C 08.06** (IRB slotting specialised lending, per SL type) and
+**CR7-A** (extent of IRB CRM techniques, per origin approach); the
 **single-frame** COREP **C 08.07** (IRB scope of use) and the Basel-3.1-only **OF 02.01**
 (output-floor comparison); and the single-frame Pillar 3 templates **OV1** (overview of RWEAs),
 **CR4** (SA exposure and CRM effects), **CR5** (SA risk-weight allocation), **CR6-A** (scope of IRB
@@ -148,6 +150,19 @@ down normally rather than being refused. C 08.02 breaks the same book down by **
 (there is no obligor-basis grade home for a cross-class inflow); its string row-label column 0005 is
 injected post-execute and is **not** an addressable report cell — the drill-down offers lineage only
 for the numeric value columns.
+
+**C 08.03**, **C 08.05** and **C 08.06** complete the C 08 estate. C 08.03 (IRB by PD range) and
+C 08.05 (PD back-testing) share a **sparse PD-range** row axis — only populated buckets emit a row,
+each keyed on the derived `c08_pd_range` band. C 08.05 is execute-only; C 08.03 keeps two post-execute
+passes on the *reported* frame (the on/off-balance-sheet whole-bucket fallback on cols 0010/0020; the
+provisions ladder on col 0110). On a loans-only book that fallback fires for col 0020 but is a **value
+no-op** (both the off-balance-sheet split and the whole-bucket fallback sum to `0.0`), a recorded
+limitation the tie-out sweep guards. C 08.06 (IRB slotting specialised lending) keys sheets by **SL
+type** rather than class, and is the first template with a **per-sheet spec**: the row set is
+number-neutral but the *empty*-row set is per sheet, and an empty non-Total category row carries a
+**fixed display risk weight** in col 0070 (a zero-fill artefact, not a measured weighted average), so
+that one cell is left **unbound** — the drill-down reports the template's empty policy and reads the
+value from the reported frame rather than a `WeightedAvg` with no legs that would contradict the screen.
 
 **CMS1 / CMS2 and OF 02.01 are produced only under Basel 3.1**, so a lineage request for one on a CRR
 run degrades to the same clean `404` as an uninstrumented template — the provider's `plans()` yields

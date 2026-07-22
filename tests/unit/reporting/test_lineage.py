@@ -538,6 +538,97 @@ def test_c08_02_substitution_inflow_is_a_constant_zero_at_grade_grain() -> None:
 
 
 # =============================================================================
+# R24 — the three C 08 instrument templates (sparse PD ranges + slotting SL types)
+# =============================================================================
+
+_R24_MULTI_SHEET_TEMPLATES = ("c08_03", "c08_05", "c08_06")
+
+
+@pytest.mark.parametrize("template_id", _R24_MULTI_SHEET_TEMPLATES)
+def test_r24_multi_sheet_templates_are_instrumented(template_id: str) -> None:
+    # Assert — each R24 template is instrumented as a PER-SHEET provider
+    # (single_frame False -> its cells carry a sheet axis), with a populated scope
+    # and a sheet label naming that axis (c08_03/05 by exposure class, c08_06 by
+    # SL type).
+    assert lineage.is_instrumented(template_id)
+    provider = lineage.LINEAGE_PLANS[template_id]
+    assert provider.single_frame is False
+    assert provider.scope
+    assert provider.sheet_label != ""
+
+
+def test_c08_03_pd_band_cell_drills_to_the_bands_legs() -> None:
+    # Arrange — two corporate F-IRB legs at PD 1% fall in one C 08.03 PD band
+    # (the sparse-row axis: only populated buckets emit a row).
+    frame = pl.DataFrame(
+        {
+            "exposure_reference": ["CORP-1", "CORP-2"],
+            "reporting_class_origin": ["corporate", "corporate"],
+            "reporting_approach_origin": ["foundation_irb", "foundation_irb"],
+            "ead_final": [5000.0, 3000.0],
+            "rwa_final": [3500.0, 1800.0],
+            "pd_floored": [0.01, 0.01],
+        }
+    )
+    resolver = lineage.sheet_lineage(_FrameSource(frame), "c08_03", "corporate")
+    assert resolver is not None
+    (row,) = resolver._plan.spec.rows  # noqa: SLF001 - the single populated PD band
+
+    # Act — col 0040 (EAD) sums ead_final over the band's legs.
+    query = resolver.query(row.ref, "0040")
+    result = resolver.cell(row.ref, "0040")
+
+    # Assert — a row-backed cell whose legs ARE the band's two exposures; the
+    # drill-down re-runs the c08_pd_range band predicate the generator ran.
+    assert query is not None
+    assert (query.kind, query.metric, query.metric_columns) == ("rows", "sum", ("ead_final",))
+    assert result is not None
+    assert result.total_rows == 2
+    assert result.contribution_total == pytest.approx(8000.0)
+    assert result.cell_value == pytest.approx(8000.0)
+
+
+def test_c08_06_empty_category_row_col_0070_is_an_unbound_fixed_display_rw() -> None:
+    # Arrange — one slotting project-finance leg in Category 1 (Strong), long
+    # maturity. Every OTHER category x maturity row is empty; an empty non-Total
+    # row is hard zero-filled with the row definition's FIXED display risk weight
+    # in col 0070 (a template artefact, not a measured weighted average).
+    frame = pl.DataFrame(
+        {
+            "exposure_reference": ["PF-1"],
+            "reporting_approach_origin": ["slotting"],
+            "sl_type": ["project_finance"],
+            "slotting_category": ["strong"],
+            "ead_final": [1000.0],
+            "rwa_final": [700.0],
+            "risk_weight": [0.7],
+            "is_short_maturity": [False],
+        }
+    )
+    resolver = lineage.sheet_lineage(_FrameSource(frame), "c08_06", "project_finance")
+    assert resolver is not None
+
+    # Act — row 0050 (Category 3 Satisfactory, short maturity) is empty; its col
+    # 0070 renders the fixed 115% display weight from the zero-fill pass. Row 0020
+    # (Category 1 Strong, long) is the live row.
+    empty_query = resolver.query("0050", "0070")
+    empty_result = resolver.cell("0050", "0070")
+    live_query = resolver.query("0020", "0070")
+
+    # Assert — the empty row's 0070 is UNBOUND (the template's empty policy), so
+    # the drill-down reports no legs and reads the fixed display value from the
+    # reported frame — never a WeightedAvg whose no-leg value would contradict the
+    # 115% on the screen. The live row's 0070 stays a row-backed weighted average.
+    assert empty_query is not None
+    assert empty_query.kind == "unbound"
+    assert empty_result is not None
+    assert empty_result.total_rows == 0
+    assert empty_result.cell_value == pytest.approx(1.15)
+    assert live_query is not None
+    assert (live_query.kind, live_query.metric) == ("rows", "weighted_avg")
+
+
+# =============================================================================
 # Sheet-key resolution — multi-sheet vs the single-frame {sheet: None} convention
 # =============================================================================
 

@@ -66,7 +66,7 @@ from rwa_calc.reporting.pillar3.cr6 import generate_cr6
 from rwa_calc.reporting.pillar3.cr6a import generate_cr6a
 from rwa_calc.reporting.pillar3.cr7 import generate_cr7
 from rwa_calc.reporting.pillar3.cr7a import generate_cr7a
-from rwa_calc.reporting.pillar3.cr8 import generate_cr8
+from rwa_calc.reporting.pillar3.cr8 import generate_cr8, irb_non_slotting_population
 from rwa_calc.reporting.pillar3.cr9 import generate_cr9, generate_cr9_1
 from rwa_calc.reporting.pillar3.cr10 import generate_cr10
 from rwa_calc.reporting.pillar3.ov1 import generate_ov1
@@ -197,12 +197,12 @@ class Pillar3Generator:
         cols = _available_columns(results)
         errors: list[str] = []
 
-        irb_data = _filter_irb_non_slotting(results, cols)
+        irb_data = irb_non_slotting_population(results, cols)
 
         prior_irb_data: pl.LazyFrame | None = None
         if previous_period_results is not None:
             prior_cols = _available_columns(previous_period_results)
-            prior_irb_data = _filter_irb_non_slotting(previous_period_results, prior_cols)
+            prior_irb_data = irb_non_slotting_population(previous_period_results, prior_cols)
 
         return Pillar3TemplateBundle(
             ov1=self._generate_ov1(results, cols, framework, errors, output_floor_summary),
@@ -382,7 +382,7 @@ class Pillar3Generator:
         References:
             CRR Art. 444(e); PRA PS1/26 Annex XX.
         """
-        return generate_cr4(results, cols, framework, errors)
+        return _single_frame(generate_cr4(results, cols, framework, errors))
 
     # ---- CR5 ----
 
@@ -445,7 +445,7 @@ class Pillar3Generator:
         References:
             CRR Art. 452(b); PRA PS1/26 Annex XXII.
         """
-        return generate_cr6a(results, cols, framework, errors)
+        return _single_frame(generate_cr6a(results, cols, framework, errors))
 
     # ---- CR7 ----
 
@@ -466,7 +466,7 @@ class Pillar3Generator:
         References:
             CRR Art. 453(j); PRA PS1/26 Annex XXII.
         """
-        return generate_cr7(results, cols, framework, errors)
+        return _single_frame(generate_cr7(results, cols, framework, errors))
 
     # ---- CR7-A ----
 
@@ -989,15 +989,17 @@ def _filter_by_approach(
     )
 
 
-def _filter_irb_non_slotting(
-    results: pl.LazyFrame,
-    cols: set[str],
-) -> pl.LazyFrame:
-    """Filter to F-IRB and A-IRB exposures (excluding slotting)."""
-    approach_col = _pick(cols, "approach_applied", "approach")
-    if not approach_col:
-        return results.filter(pl.lit(False))
-    return results.filter(pl.col(approach_col).is_in(["foundation_irb", "advanced_irb"]))
+def _single_frame(frames: dict[str, pl.DataFrame]) -> pl.DataFrame | None:
+    """Unwrap a single-frame template's ``{key: frame}`` dict for the bundle field.
+
+    The declarative single-frame Pillar 3 generators (cr4/cr6a/cr7) return the
+    lineage-shaped ``{canonical key: frame}`` dict — the same key their
+    ``<t>_plans`` uses, so ``reporting.lineage`` can read a cell's spec and its
+    reported value under one key. The bundle field is a bare
+    ``pl.DataFrame | None``, so the router takes the one frame (None when the
+    error contract yielded no plan).
+    """
+    return next(iter(frames.values()), None)
 
 
 # ---------------------------------------------------------------------------

@@ -116,8 +116,19 @@ Everything runs on `basis: aggregator_exit` — the sealed per-leg ledger.
 ## Coverage
 
 Lineage is available for templates whose execution plan is exposed (`LINEAGE_PLANS`). Today that is
-**C 07.00**. Any other template — including C 34.x and CCR1–8, which are still imperative and have no
-`TemplateSpec` to read — returns a clean `404`: *no lineage*, never a re-derived guess.
+**C 07.00** plus the single-frame Pillar 3 templates **CR4** (SA exposure and CRM effects), **CR6-A**
+(scope of IRB use), **CR7** (credit-derivatives effect on RWEA) and **CR8** (IRB RWEA flow). Any other
+template — including C 34.x and CCR1–8, which are still imperative and have no `TemplateSpec` to read —
+returns a clean `404`: *no lineage*, never a re-derived guess.
+
+A single-frame template has no sheet axis, so its cells report `sheet = null` and the `sheet` query
+parameter is ignored. CR8 is the first template whose opening row (a `prior_period` cell) and residual
+row (a `formula` deriving from it) carry **prior-period** figures. The drill-down runs on the
+current-period ledger only, so it cannot reproduce those figures — asking for one returns a distinct
+`404` (*cell derives from the prior period; drill-down covers the current-period ledger only*) rather
+than a `200` with a null that would contradict a comparative-period report. The closing row (current
+period) drills down normally. This keeps the never-disagree promise: a drill-down never shows a value
+that differs from the figure on the screen.
 
 The drill-down machinery is template-agnostic (the `SheetPlan` container lives in
 `reporting/plans.py`, shared by every generator), so instrumenting the next template is small and

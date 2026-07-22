@@ -27,6 +27,9 @@ Cell semantics (recorded decisions, this slice):
 - Empty row subsets render null (Pillar 3 policy) — e.g. classes with no
   exposures under the row's approach.
 
+Lineage-instrumented (R20): ``cr7_plans`` exposes the single (no sheet axis)
+execution plan so ``reporting.lineage`` can drill into a reported cell.
+
 References:
 - CRR Art. 453(j); PRA PS1/26 Annex XXII (UK/UKB CR7; CRR rows 1-10 with
   F-IRB/A-IRB subtotals, B31 rows 1-8 adding the slotting subtotal)
@@ -46,10 +49,16 @@ from rwa_calc.reporting.cellspec import (
     TemplateSpec,
     execute,
 )
+from rwa_calc.reporting.metadata import ReportingContext
 from rwa_calc.reporting.pillar3.templates import CR7_COLUMNS, get_cr7_rows
+from rwa_calc.reporting.plans import SheetPlan
 
 if TYPE_CHECKING:
     import polars as pl
+
+# Single-frame lineage key: CR7 has no sheet axis, so its one plan keys under a
+# canonical name (see reporting.plans / _resolve_sheet_key single_frame path).
+_SHEET_KEY = "cr7"
 
 _FIRB = ("foundation_irb",)
 _AIRB = ("advanced_irb",)
@@ -119,19 +128,48 @@ _CR7_SPECS: dict[str, TemplateSpec] = {
 }
 
 
+def cr7_plans(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, SheetPlan]:
+    """Build the single CR7 execution plan (the lineage seam).
+
+    CR7 has no sheet axis and runs over the FULL sealed ledger (its rows key on
+    origin approach x obligor applied class), so the one plan keys under the
+    single-frame canonical key. Preserves the imperative generator's error
+    contract: a missing RWA or approach column records the CR7 error and yields
+    no plan. There is no post-execute pass, so ``negative_cols`` is empty.
+    """
+    if not ({"rwa_final", "rwa"} & cols) or not ({"approach_applied", "approach"} & cols):
+        errors.append("CR7: missing required columns")
+        return {}
+    spec = _CR7_SPECS.get(framework) or build_cr7_spec(framework)
+    return {
+        _SHEET_KEY: SheetPlan(
+            spec=spec,
+            frame=results.collect(),
+            ctx=ReportingContext(),
+            negative_cols=frozenset(),
+        )
+    }
+
+
 def generate_cr7(
     results: pl.LazyFrame,
     cols: set[str],
     framework: str,
     errors: list[str],
-) -> pl.DataFrame | None:
-    """Execute CR7 over the full sealed ledger.
+) -> dict[str, pl.DataFrame]:
+    """Execute CR7 over the full sealed ledger (keyed like ``cr7_plans``).
 
-    Preserves the imperative generator's error contract: a missing RWA or
-    approach column records the CR7 error and yields no template.
+    The thin consumer of ``cr7_plans``: it executes each plan under the same
+    key, so a cell's reported value and its spec agree. CR7 has no post-execute
+    pass, so this is a plain ``execute``. The dispatch router unwraps the
+    single-frame dict for the ``Pillar3TemplateBundle.cr7`` field.
     """
-    if not ({"rwa_final", "rwa"} & cols) or not ({"approach_applied", "approach"} & cols):
-        errors.append("CR7: missing required columns")
-        return None
-    spec = _CR7_SPECS.get(framework) or build_cr7_spec(framework)
-    return execute(spec, results)
+    return {
+        key: execute(plan.spec, plan.frame, plan.ctx)
+        for key, plan in cr7_plans(results, cols, framework, errors).items()
+    }

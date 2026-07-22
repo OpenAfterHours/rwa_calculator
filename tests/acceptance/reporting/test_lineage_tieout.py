@@ -48,6 +48,13 @@ _ATOL = 1e-6
 # the parametrised sweep then covers it with no new test code.
 _TIEOUT_CASES: list[tuple[str, str | None]] = [
     ("c07_00", "corporate"),
+    # R20 — four single-frame Pillar 3 templates (sheet = None per the harness's
+    # single-frame convention). cr8 is the first PriorPeriod template through the
+    # sweep (row 1 prior_period, row 8 formula — neither row-backed).
+    ("cr4", None),
+    ("cr6a", None),
+    ("cr7", None),
+    ("cr8", None),
 ]
 
 
@@ -121,10 +128,22 @@ def test_sheet_lineage_ties_out_to_every_reported_cell(  # noqa: C901 - one swee
         for col_ref, value in record.items():
             if col_ref in ("row_ref", "row_name"):
                 continue
+            query = resolver.query(row_ref, col_ref)
+            assert query is not None, f"{template_id}: no query for {row_ref}/{col_ref}"
+            checked += 1
+
+            # 0. A prior-period-derived cell (CR8 row 1 opening / row 8 residual)
+            #    is a CLEAN REFUSAL: the drill-down runs on the current-period
+            #    ledger only, so it declines rather than reporting a cell_value
+            #    that would contradict a comparative-period figure on the report.
+            if query.derives_from_prior_period:
+                assert resolver.cell(row_ref, col_ref, limit=1000) is None, (
+                    f"{template_id} {row_ref}/{col_ref} must refuse (prior-period-derived)"
+                )
+                continue
+
             result = resolver.cell(row_ref, col_ref, limit=1000)
             assert result is not None, f"{template_id}: no lineage for {row_ref}/{col_ref}"
-            query = result.query
-            checked += 1
 
             # 1. The reported value is echoed verbatim (never recomputed).
             if value is None:
@@ -167,7 +186,13 @@ def test_sheet_lineage_ties_out_to_every_reported_cell(  # noqa: C901 - one swee
                     f"{template_id} {row_ref}/{col_ref} does not reconcile"
                 )
 
-    assert checked > 100, f"{template_id}: the sweep did not cover the sheet"
+    # Every value cell was resolved (the small single-frame Pillar 3 templates —
+    # cr8 is 9 cells — sit well under C 07.00's ~1000; the per-cell
+    # `assert result is not None` above is the real coverage guard).
+    assert checked == reported.height * (len(reported.columns) - 2), (
+        f"{template_id}: the sweep did not cover every cell of the sheet"
+    )
+    assert checked > 0, f"{template_id}: the sweep did not cover the sheet"
 
 
 # =============================================================================

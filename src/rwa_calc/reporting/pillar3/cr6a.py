@@ -26,6 +26,9 @@ Cell semantics (recorded keying decision, this slice):
 - Empty class rows report a/b = 0.0 with null percentages; the Total row
   spans the whole frame.
 
+Lineage-instrumented (R20): ``cr6a_plans`` exposes the single (no sheet axis)
+execution plan so ``reporting.lineage`` can drill into a reported cell.
+
 References:
 - CRR Art. 452(b); PRA PS1/26 Annex XXII (UK/UKB CR6-A)
 - docs/plans/phase7-declarative-reporting.md §3.2/§6 (S8)
@@ -45,7 +48,9 @@ from rwa_calc.reporting.cellspec import (
     TemplateSpec,
     execute,
 )
+from rwa_calc.reporting.metadata import ReportingContext
 from rwa_calc.reporting.pillar3.templates import CR6A_COLUMNS, get_cr6a_rows
+from rwa_calc.reporting.plans import SheetPlan
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -53,6 +58,10 @@ if TYPE_CHECKING:
     import polars as pl
 
     from rwa_calc.reporting.pillar3.templates import P3Row
+
+# Single-frame lineage key: CR6-A has no sheet axis, so its one plan keys under
+# a canonical name (see reporting.plans / _resolve_sheet_key single_frame path).
+_SHEET_KEY = "cr6a"
 
 # The origin approaches counted as "IRB" for scope-of-use purposes
 # (slotting is an IRB permission — templates and the retired imperative agree).
@@ -133,16 +142,19 @@ _CR6A_SPECS: dict[str, TemplateSpec] = {
 }
 
 
-def generate_cr6a(
+def cr6a_plans(
     results: pl.LazyFrame,
     cols: set[str],
     framework: str,
     errors: list[str],
-) -> pl.DataFrame | None:
-    """Execute CR6-A over the full sealed ledger.
+) -> dict[str, SheetPlan]:
+    """Build the single CR6-A execution plan (the lineage seam).
 
-    Preserves the imperative generator's error contract: missing EAD, class
-    or approach columns record the CR6-A error and yield no template.
+    CR6-A has no sheet axis and runs over the FULL sealed ledger (its rows key
+    on the raw origination ``exposure_class``), so the one plan keys under the
+    single-frame canonical key. Preserves the imperative generator's error
+    contract: missing EAD, class or approach columns record the CR6-A error and
+    yield no plan. There is no post-execute pass, so ``negative_cols`` is empty.
     """
     if (
         "ead_final" not in cols
@@ -150,6 +162,32 @@ def generate_cr6a(
         or not ({"approach_applied", "approach"} & cols)
     ):
         errors.append("CR6-A: missing required columns")
-        return None
+        return {}
     spec = _CR6A_SPECS.get(framework) or build_cr6a_spec(framework)
-    return execute(spec, results)
+    return {
+        _SHEET_KEY: SheetPlan(
+            spec=spec,
+            frame=results.collect(),
+            ctx=ReportingContext(),
+            negative_cols=frozenset(),
+        )
+    }
+
+
+def generate_cr6a(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, pl.DataFrame]:
+    """Execute CR6-A over the full sealed ledger (keyed like ``cr6a_plans``).
+
+    The thin consumer of ``cr6a_plans``: it executes each plan under the same
+    key, so a cell's reported value and its spec agree. CR6-A has no
+    post-execute pass, so this is a plain ``execute``. The dispatch router
+    unwraps the single-frame dict for the ``Pillar3TemplateBundle.cr6a`` field.
+    """
+    return {
+        key: execute(plan.spec, plan.frame, plan.ctx)
+        for key, plan in cr6a_plans(results, cols, framework, errors).items()
+    }

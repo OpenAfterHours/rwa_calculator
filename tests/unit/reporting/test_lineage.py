@@ -181,6 +181,60 @@ def test_only_instrumented_templates_have_lineage() -> None:
     assert "ccr1" not in lineage.LINEAGE_PLANS
 
 
+# R20 — the four single-frame Pillar 3 templates (cr4/cr6a/cr7/cr8) instrumented.
+_R20_SINGLE_FRAME_TEMPLATES = ("cr4", "cr6a", "cr7", "cr8")
+
+
+@pytest.mark.parametrize("template_id", _R20_SINGLE_FRAME_TEMPLATES)
+def test_r20_pillar3_templates_are_single_frame_instrumented(template_id: str) -> None:
+    # Assert — each R20 template is instrumented as a SINGLE-FRAME provider (no
+    # sheet axis -> cells report sheet=None), with a populated scope (the
+    # population wording a reviewer checks) and no sheet label.
+    assert lineage.is_instrumented(template_id)
+    provider = lineage.LINEAGE_PLANS[template_id]
+    assert provider.single_frame is True
+    assert provider.scope
+    assert provider.sheet_label == ""
+
+
+def test_cr8_opening_row_is_a_prior_period_cell() -> None:
+    # Assert — CR8's row 1 (opening RWEA) is a PriorPeriod binding, so its cell
+    # kind is "prior_period" (out-of-frame, not row-backed). CR8 is the first
+    # such template through the tie-out sweep.
+    from rwa_calc.reporting.pillar3.cr8 import CR8_SPEC
+
+    binding = CR8_SPEC.cells[("1", "a")].binding
+    kind, metric, _columns, _refs = lineage._binding_facts(binding)
+    assert (kind, metric) == ("prior_period", "sum")
+
+
+def test_cr8_prior_period_derived_cells_are_refused_by_the_resolver() -> None:
+    # Arrange — a current-period IRB frame (CR8 reads approach_applied + rwa_final).
+    frame = pl.DataFrame(
+        {
+            "exposure_reference": ["EXP-FIRB", "EXP-AIRB"],
+            "approach_applied": ["foundation_irb", "advanced_irb"],
+            "rwa_final": [720_000.0, 430_000.0],
+        }
+    )
+    resolver = lineage.sheet_lineage(_FrameSource(frame), "cr8")
+    assert resolver is not None
+
+    # Act / Assert — the closing row (9, current period) resolves and is
+    # row-backed; the opening (1, PriorPeriod) and residual (8, Formula over the
+    # opening) rows are prior-period-derived, so the resolver DECLINES them — a
+    # clean refusal, never a cell_value that could contradict a comparative period.
+    closing = resolver.query("9", "a")
+    assert closing is not None
+    assert closing.derives_from_prior_period is False
+    assert resolver.cell("9", "a") is not None
+    for prior_row in ("1", "8"):
+        query = resolver.query(prior_row, "a")
+        assert query is not None
+        assert query.derives_from_prior_period is True
+        assert resolver.cell(prior_row, "a") is None
+
+
 # =============================================================================
 # Sheet-key resolution — multi-sheet vs the single-frame {sheet: None} convention
 # =============================================================================

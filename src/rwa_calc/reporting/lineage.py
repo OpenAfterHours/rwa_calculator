@@ -60,11 +60,15 @@ from rwa_calc.reporting.cellspec import (
 )
 from rwa_calc.reporting.corep.c07 import c07_plans, generate_c07
 from rwa_calc.reporting.kernel import available_columns
+from rwa_calc.reporting.pillar3.cr4 import cr4_plans, generate_cr4
+from rwa_calc.reporting.pillar3.cr6a import cr6a_plans, generate_cr6a
+from rwa_calc.reporting.pillar3.cr7 import cr7_plans, generate_cr7
+from rwa_calc.reporting.pillar3.cr8 import cr8_frames, cr8_plans
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from rwa_calc.reporting.cellspec import CellSpec, ValueBinding
+    from rwa_calc.reporting.cellspec import CellSpec, TemplateSpec, ValueBinding
     from rwa_calc.reporting.metadata import ResultsSource
     from rwa_calc.reporting.plans import SheetPlan
 
@@ -130,6 +134,14 @@ class CellQuery:
     # measured zero (the Phase 7 F6 permanently-null cells). Saying so is the
     # difference between "we computed zero" and "we cannot compute this".
     missing_columns: tuple[str, ...] = ()
+    # Whether this cell's value derives from the PRIOR period (a PriorPeriod
+    # binding, or a Formula whose refs resolve to one — CR8 row 1 opening and
+    # row 8 residual). Statically knowable from the spec. The drill-down runs on
+    # the CURRENT-period ledger only, so it cannot reproduce the reported figure
+    # for such a cell (its cell_value would be a null that contradicts the screen
+    # once a comparative period is supplied); the resolver declines it instead
+    # (see ``SheetLineage.cell``) and the surfaces give a distinct refusal.
+    derives_from_prior_period: bool = False
 
     @property
     def is_source_backed(self) -> bool:
@@ -187,6 +199,76 @@ LINEAGE_PLANS: dict[str, _Provider] = {
         ),
         sheet_label="obligor class",
     ),
+    # CR4 — SA exposure and CRM effects (single frame; R20). generate_cr4 is the
+    # dict-returning generator; the dispatch router unwraps the one frame.
+    "cr4": _Provider(
+        plans=cr4_plans,
+        generate=generate_cr4,
+        scope=(
+            "Standardised-approach legs by ORIGIN approach "
+            "(reporting_approach_origin == standardised), narrowed to SA CREDIT risk "
+            "only: the counterparty-credit-risk netting sets, CCP default-fund "
+            "contributions and settlement failed-trade synthetic legs are dropped (they "
+            "disclose on CCR1-CCR8) — over ALL columns, so a row's RWEA never covers "
+            "exposure the on/off-balance-sheet columns omit",
+            "The facility_undrawn commitment leg (which the sealed "
+            "reporting_on_balance_sheet leaves null) is reclassified to off-balance-sheet "
+            "so it lands on exactly one side (CRR Art. 111 off-balance-sheet CCF item)",
+            "Pre-CRM columns a/b key the obligor's origination Art. 112 class "
+            "(reporting_class_origin); post-CRM columns c-f key the post-substitution "
+            "class (reporting_class) — the recorded F3 two-basis split",
+        ),
+        sheet_label="",
+        single_frame=True,
+    ),
+    # CR6-A — scope of IRB and SA use (single frame; R20).
+    "cr6a": _Provider(
+        plans=cr6a_plans,
+        generate=generate_cr6a,
+        scope=(
+            "The full sealed per-leg ledger — CR6-A rows key on the raw ORIGINATION "
+            "class (exposure_class), deliberately NOT the applied Art. 112 basis, so an "
+            "SA-treated defaulted obligor still counts under its origination-class row "
+            "(Art. 452(b) discloses the extent of IRB use across the obligor population)",
+            "Column a narrows to the IRB-family origin approaches (foundation_irb / "
+            "advanced_irb / slotting); column b spans all approaches — the two subsets "
+            "partition the row",
+        ),
+        sheet_label="",
+        single_frame=True,
+    ),
+    # CR7 — effect of credit derivatives on RWEA (single frame; R20).
+    "cr7": _Provider(
+        plans=cr7_plans,
+        generate=generate_cr7,
+        scope=(
+            "The full sealed per-leg ledger — CR7 has no population pre-filter; each row "
+            "selects by ORIGIN approach x the obligor's applied Art. 147 class "
+            "(reporting_approach_origin x reporting_class_origin), and Annex XXII keeps "
+            "the credit-derivative substitution as an a->b column effect, never a row move",
+        ),
+        sheet_label="",
+        single_frame=True,
+    ),
+    # CR8 — RWEA flow statement for IRB (single frame; R20). cr8_frames is the
+    # lineage-facing generator: the CURRENT-period view (no prior frame), so the
+    # opening (row 1, prior_period) and residual (row 8, formula) rows are null —
+    # neither is row-backed. generate_cr8 (the prior-aware dispatch entry) keeps
+    # its distinct signature and is NOT the provider generator.
+    "cr8": _Provider(
+        plans=cr8_plans,
+        generate=cr8_frames,
+        scope=(
+            "Internal-ratings-based credit-risk legs on the F-IRB and A-IRB approaches; "
+            "slotting (supervisory-slotting specialised lending) is excluded — it "
+            "discloses on CR10 (approach_applied in {foundation_irb, advanced_irb})",
+            "Row 9 (closing RWEA) sums the current period; the opening (row 1) and "
+            "residual (row 8) rows need a prior-period frame the drill-down does not "
+            "carry, so they are out of the current-period view",
+        ),
+        sheet_label="",
+        single_frame=True,
+    ),
 }
 
 
@@ -237,9 +319,16 @@ class SheetLineage:
     def cell(
         self, row_ref: str, col_ref: str, *, run_id: str = "", offset: int = 0, limit: int = 50
     ) -> CellLineage | None:
-        """The cell's full lineage: its meaning, its reported value, its legs."""
+        """The cell's full lineage: its meaning, its reported value, its legs.
+
+        Declines a prior-period-derived cell (``None``): this resolver holds
+        only the CURRENT-period ledger, so its ``cell_value`` for such a cell is
+        always null — which would contradict the figure the report shows once a
+        comparative period is supplied. A clean refusal keeps the never-disagree
+        promise (honesty rule 1); the surfaces map it to a distinct reason.
+        """
         query = self.query(row_ref, col_ref)
-        if query is None:
+        if query is None or query.derives_from_prior_period:
             return None
         plan = self._plan
         matched = _matching_rows(plan, plan.spec.cells.get((row_ref, col_ref)), query)
@@ -371,12 +460,45 @@ def describe_cell(  # noqa: PLR0913 - the cell's full identity plus its two sour
         refs=refs,
         sign="negated" if col_ref in plan.negative_cols else "positive",
         missing_columns=missing,
+        derives_from_prior_period=_derives_from_prior_period(plan.spec, row_ref, col_ref),
     )
 
 
 # =============================================================================
 # Private helpers
 # =============================================================================
+
+
+def _derives_from_prior_period(spec: TemplateSpec, row_ref: str, col_ref: str) -> bool:
+    """Whether this cell's value derives from the PRIOR period, statically.
+
+    True for a ``PriorPeriod`` binding, and for a ``Formula`` whose refs resolve
+    to a prior-period cell (CR8 row 8 = row 9 − row 1, where row 1 is
+    ``PriorPeriod``). Knowable from the spec alone — no run needed. The drill-down
+    runs on the current-period ledger only, so it cannot honour honesty rule 1
+    (``cell_value`` == the reported figure) for such a cell.
+    """
+    cell = spec.cells.get((row_ref, col_ref))
+    if cell is None:
+        return False
+    binding = cell.binding
+    if isinstance(binding, PriorPeriod):
+        return True
+    if isinstance(binding, Formula):
+        return any(_ref_is_prior_period(spec, row_ref, col_ref, ref) for ref in binding.refs)
+    return False
+
+
+def _ref_is_prior_period(spec: TemplateSpec, row_ref: str, col_ref: str, ref: str) -> bool:
+    """Resolve a ``Formula`` ref (own-row column first, then own-column row — the
+    executor's resolution rule) and report whether it lands on a ``PriorPeriod``
+    cell. The executor bars a formula referencing another formula, so one level
+    of resolution suffices."""
+    for key in ((row_ref, ref), (ref, col_ref)):
+        target = spec.cells.get(key)
+        if target is not None:
+            return isinstance(target.binding, PriorPeriod)
+    return False
 
 
 def _resolve_sheet_key(

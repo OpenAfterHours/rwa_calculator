@@ -393,13 +393,28 @@ def cell_lineage(  # noqa: PLR0913 - the cell key plus paging
             status_code=404,
             detail=f"template {template!r} is not instrumented for lineage",
         )
-    result = lineage.drilldown(
-        response,
-        template,
+    resolver = lineage.sheet_lineage(response, template, sheet or None)
+    query = resolver.query(row, col) if resolver is not None else None
+    if resolver is None or query is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"unknown cell {template}/{sheet or '-'}/{row}/{col}",
+        )
+    if query.derives_from_prior_period:
+        # A distinct refusal (R19 404-with-reason pattern): the cell's value is a
+        # prior-period figure, and this drill-down runs on the current-period
+        # ledger only — so a 200 would report a null that contradicts the screen.
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"cell {template}/{row}/{col} derives from the prior period; "
+                "drill-down covers the current-period ledger only"
+            ),
+        )
+    result = resolver.cell(
         row,
         col,
         run_id=run_id,
-        sheet=sheet or None,
         offset=max(0, offset),
         limit=max(1, min(limit, _MAX_PAGE)),
     )

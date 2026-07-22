@@ -291,7 +291,9 @@ def test_lineage_reports_a_cell_whose_sources_are_never_produced(
     # Arrange
     run_id = _run(client, data_dir)
 
-    # Act — col 0030 sums provision amounts the engine does not put on the ledger
+    # Act — col 0020 sums own_funds_deduction_amount, which the engine does not
+    # put on the ledger (col 0030 used to be the showcase here, but R9 rebound
+    # it to the sealed provision carrier — mirrors test_lineage_tieout.py).
     resp = client.get(
         "/api/lineage",
         params={
@@ -299,7 +301,7 @@ def test_lineage_reports_a_cell_whose_sources_are_never_produced(
             "template": "c07_00",
             "sheet": "corporate",
             "row": "0010",
-            "col": "0030",
+            "col": "0020",
         },
     )
 
@@ -309,7 +311,7 @@ def test_lineage_reports_a_cell_whose_sources_are_never_produced(
     body = resp.json()
     assert body["is_source_backed"] is False
     assert body["missing_columns"] == body["metric_columns"]
-    assert body["sign"] == "negated"
+    assert body["sign"] == "positive"
     assert body["contribution_total"] is None
 
 

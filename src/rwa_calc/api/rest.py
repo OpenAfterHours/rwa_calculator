@@ -388,20 +388,25 @@ def cell_lineage(  # noqa: PLR0913 - the cell key plus paging
     is not on the template is a clean 404, never a re-derived guess.
     """
     response = _require_run(run_id)
+    if not lineage.is_instrumented(template):
+        raise HTTPException(
+            status_code=404,
+            detail=f"template {template!r} is not instrumented for lineage",
+        )
     result = lineage.drilldown(
         response,
         template,
         row,
         col,
         run_id=run_id,
-        sheet=sheet,
+        sheet=sheet or None,
         offset=max(0, offset),
         limit=max(1, min(limit, _MAX_PAGE)),
     )
     if result is None:
         raise HTTPException(
             status_code=404,
-            detail=f"no lineage available for cell {template}/{sheet or '-'}/{row}/{col}",
+            detail=f"unknown cell {template}/{sheet or '-'}/{row}/{col}",
         )
 
     query = result.query

@@ -1,23 +1,28 @@
 """
-Acceptance: report-cell lineage ties out to the REPORTED template cell.
+Acceptance: report-cell lineage ties out to the REPORTED template cells.
 
-Runs the rich reporting portfolio through the real pipeline, generates COREP
-C 07.00, and checks the lineage of its cells against the figures the generator
-actually reported.
+Runs the rich reporting portfolio through the real pipeline, generates the
+COREP / Pillar 3 bundles, and checks the lineage of their cells against the
+figures the generators actually reported.
 
-This is the feature's correctness anchor. Lineage reads the template's own
+This is the feature's correctness anchor. Lineage reads a template's own
 ``TemplateSpec`` and re-runs the same ``RowPredicate`` over the same prepared
 frame, so agreement is structural — but only a test against the GENERATED
 template can prove that the two post-``execute`` passes (all-null inert rows;
 the Annex II §1.3 "(-)" negation) are accounted for rather than quietly
 disagreed with.
 
-The sweep (``test_every_cell_of_the_sheet_is_consistent_with_its_kind``) is what
-makes the model trustworthy beyond the one showcased cell: it asserts EVERY
-row x column of the corporates sheet is consistent with its declared kind.
+The harness is per-template: ``test_sheet_lineage_ties_out_to_every_reported_cell``
+is parametrised over ``_TIEOUT_CASES`` and runs the FULL sweep for each
+instrumented ``(template, sheet)`` — cell value, kind consistency, predicate
+satisfaction and sign-aware reconciliation across the whole sheet. A new
+instrumented template (R20-R26) earns its tie-out by ADDING A TUPLE to
+``_TIEOUT_CASES``, not by cloning this file. The C 07.00 tests below the sweep
+pin that template's specific regulatory knowledge (the RWEA metric, the scope
+wording, the deduction sign, the never-produced vs measured-zero distinction).
 
 References:
-- docs/plans/report-cell-lineage.md §4.5 (B3)
+- docs/plans/report-cell-lineage.md §4.5 (B3 — the fidelity tie-out)
 """
 
 from __future__ import annotations
@@ -30,12 +35,20 @@ from tests.fixtures.reporting_portfolio import build_reporting_bundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
-from rwa_calc.reporting import lineage
+from rwa_calc.reporting import catalog, lineage
 from rwa_calc.reporting.corep.generator import COREPGenerator
+from rwa_calc.reporting.pillar3.generator import Pillar3Generator
 
 _SHEET = "corporate"
 _RTOL = 1e-9
 _ATOL = 1e-6
+
+# The instrumented (template, sheet) pairs under fidelity tie-out. Adding a
+# template to LINEAGE_PLANS (R20-R26) = appending its (template_id, sheet) here;
+# the parametrised sweep then covers it with no new test code.
+_TIEOUT_CASES: list[tuple[str, str | None]] = [
+    ("c07_00", "corporate"),
+]
 
 
 class _Source:
@@ -60,13 +73,105 @@ def source() -> _Source:
 
 
 @pytest.fixture(scope="module")
-def c07(source: _Source):  # noqa: ANN201 - dict[str, pl.DataFrame]
-    """The generated C 07.00 bundle — the figures actually reported."""
-    return COREPGenerator().generate(source).c07_00
+def bundles(source: _Source):  # noqa: ANN201 - (COREPTemplateBundle, Pillar3TemplateBundle)
+    """The generated COREP + Pillar 3 bundles — the figures actually reported.
+
+    Resolved through ``reporting.catalog`` so a tie-out case names any template
+    (COREP or Pillar 3) by its id, without this harness knowing the bundle
+    field shape.
+    """
+    corep = COREPGenerator().generate(source)
+    pillar3 = Pillar3Generator().generate_from_lazyframe(
+        source.scan_results(), framework=source.framework
+    )
+    return corep, pillar3
+
+
+@pytest.fixture(scope="module")
+def c07(bundles):  # noqa: ANN001, ANN201 - dict[str, pl.DataFrame]
+    """The generated C 07.00 bundle (reused from the shared bundles fixture)."""
+    corep, _pillar3 = bundles
+    return corep.c07_00
 
 
 # =============================================================================
-# The showcased cell: C 07.00 / corporate / row 0010 / col 0220 (RWEA)
+# The per-template sweep — every cell of every instrumented sheet
+# =============================================================================
+
+
+@pytest.mark.parametrize(("template_id", "sheet"), _TIEOUT_CASES)
+def test_sheet_lineage_ties_out_to_every_reported_cell(  # noqa: C901 - one sweep, several honesty checks
+    source: _Source,
+    bundles,  # noqa: ANN001
+    template_id: str,
+    sheet: str | None,
+) -> None:
+    # Arrange — the reported frame (what the user saw) and one resolver for the
+    # whole sheet (one plan build, one generation).
+    corep, pillar3 = bundles
+    view = catalog.template_sheet(corep, pillar3, template_id, sheet)
+    assert view is not None, f"{template_id}/{sheet}: no reported frame"
+    reported = view.frame
+    resolver = lineage.sheet_lineage(source, template_id, sheet)
+    assert resolver is not None, f"{template_id}: not instrumented"
+
+    checked = 0
+    for record in reported.iter_rows(named=True):
+        row_ref = record["row_ref"]
+        for col_ref, value in record.items():
+            if col_ref in ("row_ref", "row_name"):
+                continue
+            result = resolver.cell(row_ref, col_ref, limit=1000)
+            assert result is not None, f"{template_id}: no lineage for {row_ref}/{col_ref}"
+            query = result.query
+            checked += 1
+
+            # 1. The reported value is echoed verbatim (never recomputed).
+            if value is None:
+                assert result.cell_value is None, f"{template_id} {row_ref}/{col_ref}"
+            else:
+                assert result.cell_value == pytest.approx(value, rel=_RTOL, abs=_ATOL), (
+                    f"{template_id} {row_ref}/{col_ref}"
+                )
+
+            # 2. Only row-backed cells have contributing legs.
+            if query.kind != "rows":
+                assert result.total_rows == 0, f"{template_id} {row_ref}/{col_ref} is {query.kind}"
+                assert result.rows.height == 0
+
+            # 3. A row-backed cell's returned legs ARE its predicate's rows — the
+            #    drill-down runs the very predicate the generator ran.
+            if query.kind == "rows":
+                assert result.total_rows == _predicate_match_count(resolver, row_ref, col_ref), (
+                    f"{template_id} {row_ref}/{col_ref} rows != predicate matches"
+                )
+
+            # 4. A row-backed cell with NO legs can only be null (inert/empty row)
+            #    or zero (populated row, narrower predicate matched nothing).
+            if query.kind == "rows" and result.total_rows == 0:
+                assert value is None or value == 0.0, (
+                    f"{template_id} {row_ref}/{col_ref} has no legs but reports {value}"
+                )
+
+            # 5. A summed, populated cell reconciles to the reported figure modulo
+            #    the recorded Annex II §1.3 sign convention.
+            if (
+                query.kind == "rows"
+                and query.metric == "sum"
+                and result.total_rows > 0
+                and result.contribution_total is not None
+                and value is not None
+            ):
+                expected = -value if query.sign == "negated" else value
+                assert result.contribution_total == pytest.approx(expected, rel=_RTOL, abs=_ATOL), (
+                    f"{template_id} {row_ref}/{col_ref} does not reconcile"
+                )
+
+    assert checked > 100, f"{template_id}: the sweep did not cover the sheet"
+
+
+# =============================================================================
+# C 07.00 — the showcased cell's regulatory specifics (kept identical in substance)
 # =============================================================================
 
 
@@ -173,66 +278,24 @@ def test_provisions_cell_is_source_backed_by_the_sealed_carrier(source: _Source,
 
 
 # =============================================================================
-# The sweep — every cell of the sheet, not just the showcased one
+# Helpers
 # =============================================================================
 
 
-def test_every_cell_of_the_sheet_is_consistent_with_its_kind(source: _Source, c07) -> None:  # noqa: ANN001, C901
-    # Arrange
-    sheet = c07[_SHEET]
-    reported = {
-        (row["row_ref"], col): row[col]
-        for row in sheet.iter_rows(named=True)
-        for col in sheet.columns
-        if col not in ("row_ref", "row_name")
-    }
+def _predicate_match_count(resolver: lineage.SheetLineage, row_ref: str, col_ref: str) -> int:
+    """Independently re-apply the cell's predicate chain to the plan frame.
 
-    # Act / Assert — one resolver for the whole sheet (one plan, one generation).
-    resolver = lineage.sheet_lineage(source, "c07_00", _SHEET)
-    assert resolver is not None
-    checked = 0
-    for (row_ref, col_ref), value in reported.items():
-        result = resolver.cell(row_ref, col_ref)
-        assert result is not None, f"no lineage for {row_ref}/{col_ref}"
-        query = result.query
-        checked += 1
-
-        # 1. The reported value is always echoed verbatim.
-        if value is None:
-            assert result.cell_value is None, f"{row_ref}/{col_ref}"
-        else:
-            assert result.cell_value == pytest.approx(value, rel=_RTOL, abs=_ATOL)
-
-        # 2. Only row-backed cells have contributing legs.
-        if query.kind != "rows":
-            assert result.total_rows == 0, f"{row_ref}/{col_ref} is {query.kind} but has rows"
-            assert result.rows.height == 0
-
-        # 3. A row-backed cell with NO contributing legs can never report a
-        #    non-zero figure. It is either null (the row itself is inert/empty —
-        #    the _null_empty_rows contract) or zero (the row is populated but
-        #    this cell's own narrower predicate matched nothing, so the COREP
-        #    zero policy applies). Both are legitimate; a number is not.
-        if query.kind == "rows" and result.total_rows == 0:
-            assert value is None or value == 0.0, (
-                f"{row_ref}/{col_ref} has no contributing legs but reports {value}"
-            )
-
-        # 4. A summed, populated cell reconciles to the reported figure (modulo
-        #    the recorded Annex II sign convention).
-        if (
-            query.kind == "rows"
-            and query.metric == "sum"
-            and result.total_rows > 0
-            and result.contribution_total is not None
-            and value is not None
-        ):
-            expected = -value if query.sign == "negated" else value
-            assert result.contribution_total == pytest.approx(expected, rel=_RTOL, abs=_ATOL), (
-                f"{row_ref}/{col_ref} does not reconcile"
-            )
-
-    assert checked > 100, "the sweep did not cover the sheet"
+    Mirrors ``lineage._matching_rows`` using only the public ``RowPredicate.apply``,
+    so the sweep's row count is checked against a second evaluation of the SAME
+    predicate the generator ran — not the drill-down's own internal count.
+    """
+    plan = resolver._plan  # noqa: SLF001 - the sweep verifies the plan the resolver holds
+    cell = plan.spec.cells.get((row_ref, col_ref))
+    frame = plan.frame
+    for predicate in (plan.spec.predicate, cell.predicate if cell is not None else None):
+        if predicate is not None:
+            frame = predicate.apply(frame)
+    return frame.height
 
 
 def _row(ref: str):  # noqa: ANN202 - pl.Expr

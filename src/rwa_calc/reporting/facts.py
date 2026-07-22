@@ -43,14 +43,15 @@ Design decisions:
   post-execute pass applies the negation (e.g.
   ``corep/c07.py::_negate_deduction_cols``) before the frame ever reaches the
   bundle, so no figure here is wrong or missing. A ``sign`` tag ("this cell is
-  a deduction line" semantics, independent of the number's own sign) is only
-  cleanly readable today for C 07.00, via ``reporting/lineage.py``'s
-  ``negative_cols`` — and reading it needs the run's raw results LazyFrame to
-  rebuild the template's ``SheetPlan``, which this module's bundle-only
-  signature does not have (by design — see the traversal note above). Adding
-  that for the other ~29 templates would mean exposing a ``SheetPlan`` from
-  every generator: the invasive template-module change this task explicitly
-  defers. Left for a follow-up if a bundle-only sign source is added.
+  a deduction line" semantics, independent of the number's own sign) lives on a
+  template's ``SheetPlan.negative_cols`` (``reporting/plans.py``) and is read by
+  the lineage drill-down — but reaching it needs the run's raw results LazyFrame
+  to rebuild the ``SheetPlan``, which this module's bundle-only signature does
+  not have (by design — see the traversal note above). Today only the
+  lineage-instrumented templates expose a ``SheetPlan``; wiring the sign tag
+  here for the other ~29 would mean exposing one from every generator (the
+  per-template plan extraction is now cheap, but a bundle-only sign source does
+  not yet exist). Left for a follow-up.
 
 Integrator note: ``sheet``, ``value``, ``text_value`` and ``entity_identifier``
 are all SPARSE columns — each is null for a large fraction of rows by design

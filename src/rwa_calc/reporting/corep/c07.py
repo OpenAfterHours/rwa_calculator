@@ -70,7 +70,6 @@ References:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
@@ -95,6 +94,7 @@ from rwa_calc.reporting.corep.templates import (
 )
 from rwa_calc.reporting.kernel import filter_by_approach, gross_carriers, pick
 from rwa_calc.reporting.metadata import ReportingContext
+from rwa_calc.reporting.plans import SheetPlan
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -217,31 +217,6 @@ def _fully_adjusted(cells: Mapping[str, float | None], _prior: bool) -> float | 
     return max(0.0, (cells["0110"] or 0.0) - (cells["0130"] or 0.0))
 
 
-@dataclass(frozen=True)
-class SheetPlan:
-    """Everything one C 07.00 sheet is executed from.
-
-    The spec + the prepared, partitioned frame + the side context ARE the
-    definition of every cell on that sheet: ``execute(spec, frame, ctx)``
-    produces it. Exposing the plan (rather than only the rendered frame) lets a
-    consumer that must explain a cell — the lineage drill-down — read the very
-    same ``CellSpec`` and run the very same ``RowPredicate`` over the very same
-    rows the generator used, instead of re-deriving the population, the Art.
-    112(1)(g) merge, the derived discriminators and the sheet partition (a copy
-    that could silently drift from the reported figure).
-
-    ``row_terms`` and ``negative_cols`` carry the two post-``execute`` passes
-    (all-null inert rows; the Annex II §1.3 "(-)" negation), so a consumer knows
-    a rendered cell's sign and emptiness policy without re-deciding either.
-    """
-
-    spec: TemplateSpec
-    frame: pl.DataFrame
-    ctx: ReportingContext
-    row_terms: dict[str, _Terms | None]
-    negative_cols: frozenset[str] = _NEGATIVE_COLS
-
-
 @cites("PS1/26, paragraph 1.3")
 def c07_plans(
     results: pl.LazyFrame,
@@ -293,6 +268,7 @@ def c07_plans(
             spec=spec,
             frame=sa_df.filter(pl.col(ec_col) == ec),
             ctx=ReportingContext(substitution_inflow=inflow_map.get(ec, 0.0)),
+            negative_cols=_NEGATIVE_COLS,
             row_terms=row_terms,
         )
     return plans

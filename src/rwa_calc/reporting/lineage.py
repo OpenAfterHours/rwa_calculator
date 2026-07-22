@@ -65,8 +65,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
     from rwa_calc.reporting.cellspec import CellSpec, ValueBinding
-    from rwa_calc.reporting.corep.c07 import SheetPlan
     from rwa_calc.reporting.metadata import ResultsSource
+    from rwa_calc.reporting.plans import SheetPlan
 
 logger = logging.getLogger(__name__)
 
@@ -151,18 +151,28 @@ class CellLineage:
 
 @dataclass(frozen=True)
 class _Provider:
-    """How one template exposes its execution plans, and what its scope is."""
+    """How one template exposes its execution plans, and what its scope is.
+
+    ``single_frame`` marks a template with no sheet axis (cr4, cr7, cr8, ov1,
+    cms1/2, c08_07, of_02_01, …): its ``plans()`` / ``generate()`` return a
+    one-entry dict under a canonical key, and its lineage always reports
+    ``sheet = None`` (see ``_resolve_sheet_key``). Multi-sheet templates (C
+    07.00 by obligor class, C 08.0x by class, C 09.0x by country) resolve a
+    sheet by name.
+    """
 
     plans: Callable[[pl.LazyFrame, set[str], str, list[str]], dict[str, SheetPlan]]
     generate: Callable[[pl.LazyFrame, set[str], str, list[str]], dict[str, pl.DataFrame]]
     scope: tuple[str, ...]
     sheet_label: str
+    single_frame: bool = False
 
 
 # Instrumented templates. Adding one = expose its `<t>_plans()` (the same
-# extraction c07 made) and register it here. Templates absent from this map have
-# no lineage — including C 34.x / CCR1-8, which are still imperative and have no
-# TemplateSpec to read.
+# plan/generate extraction c07 made, returning `dict[str, SheetPlan]`) and
+# register a `_Provider` here — set `single_frame=True` for a template with no
+# sheet axis. Templates absent from this map have no lineage — including C 34.x
+# / CCR1-8, which are still imperative and have no TemplateSpec to read.
 LINEAGE_PLANS: dict[str, _Provider] = {
     "c07_00": _Provider(
         plans=c07_plans,
@@ -248,9 +258,10 @@ def sheet_lineage(
 ) -> SheetLineage | None:
     """Bind a lineage resolver to one template sheet of one run.
 
-    ``sheet`` defaults to the template's first sheet. Returns ``None`` when the
-    template is not instrumented, produced nothing for this run, or has no such
-    sheet — never a fallback computation.
+    ``sheet`` defaults to the template's first sheet (and is always ``None`` for
+    a single-frame template). Returns ``None`` when the template is not
+    instrumented, produced nothing for this run, or has no such sheet — never a
+    fallback computation.
     """
     provider = LINEAGE_PLANS.get(template_id)
     if provider is None:
@@ -263,21 +274,32 @@ def sheet_lineage(
     if not plans:
         return None
 
-    key = next(iter(plans)) if sheet is None else sheet
-    plan = plans.get(key)
-    if plan is None:
+    resolved = _resolve_sheet_key(plans, sheet, single_frame=provider.single_frame)
+    if resolved is None:
         return None
+    key, reported_sheet = resolved
 
     # The REPORTED frame — the figures the user actually saw. Generated once and
     # reused for every cell of this sheet; a cell's value is read from it, never
     # recomputed (the two post-execute passes live here).
-    rendered = provider.generate(results, cols, source.framework, errors).get(key)
+    generated = provider.generate(results, cols, source.framework, errors)
+    if set(generated) != set(plans):
+        # plans() and generate() MUST key identically — a cell's spec (from
+        # plans) and its reported value (from generate) are looked up by the
+        # same key. A mismatch injects a null value silently; log it so the
+        # drift degrades loudly instead.
+        logger.warning(
+            "lineage %s: plan/generate sheet keys disagree (plans=%s, generated=%s)",
+            template_id,
+            sorted(plans),
+            sorted(generated),
+        )
     return SheetLineage(
         template_id=template_id,
-        sheet=key,
+        sheet=reported_sheet,
         _provider=provider,
-        _plan=plan,
-        _rendered=rendered,
+        _plan=plans[key],
+        _rendered=generated.get(key),
         _sealed=cols,
     )
 
@@ -355,6 +377,29 @@ def describe_cell(  # noqa: PLR0913 - the cell's full identity plus its two sour
 # =============================================================================
 # Private helpers
 # =============================================================================
+
+
+def _resolve_sheet_key(
+    plans: dict[str, SheetPlan], sheet: str | None, *, single_frame: bool
+) -> tuple[str, str | None] | None:
+    """Resolve a lineage request to ``(plan key, reported sheet)``.
+
+    A single-frame template keys its one plan under a canonical key and always
+    reports ``sheet = None`` — its cells carry no sheet axis, so a supplied
+    ``sheet`` is ignored. A multi-sheet template resolves by name, defaulting to
+    the first sheet so a caller can address a template without knowing its keys;
+    an unknown sheet is unresolvable (a clean no-lineage, never a wrong sheet).
+
+    ``plans`` is always non-empty here (the caller returns early otherwise).
+    """
+    if single_frame:
+        return next(iter(plans)), None
+    if sheet is None:
+        first = next(iter(plans))
+        return first, first
+    if sheet not in plans:
+        return None
+    return sheet, sheet
 
 
 def _binding_facts(

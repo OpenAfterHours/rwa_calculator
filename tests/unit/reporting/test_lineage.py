@@ -17,8 +17,14 @@ References:
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
+import polars as pl
+import pytest
+
 from rwa_calc.reporting import lineage
 from rwa_calc.reporting.cellspec import (
+    CellSpec,
     Count,
     FirstNonNull,
     Formula,
@@ -29,8 +35,12 @@ from rwa_calc.reporting.cellspec import (
     SafeSum,
     SideContext,
     Sum,
+    TemplateSpec,
     WeightedAvg,
+    execute,
 )
+from rwa_calc.reporting.metadata import ReportingContext
+from rwa_calc.reporting.plans import SheetPlan
 
 # =============================================================================
 # The six cell kinds
@@ -169,3 +179,117 @@ def test_only_instrumented_templates_have_lineage() -> None:
     assert "c07_00" in lineage.LINEAGE_PLANS
     assert "c34_01" not in lineage.LINEAGE_PLANS
     assert "ccr1" not in lineage.LINEAGE_PLANS
+
+
+# =============================================================================
+# Sheet-key resolution — multi-sheet vs the single-frame {sheet: None} convention
+# =============================================================================
+
+
+def _stub_plan() -> SheetPlan:
+    """A minimal SheetPlan — enough for the key-only resolution helper."""
+    return SheetPlan(
+        spec=TemplateSpec(name="t", rows=(), column_refs=(), cells={}, empty_cell="zero"),
+        frame=pl.DataFrame(),
+        ctx=ReportingContext(),
+        negative_cols=frozenset(),
+    )
+
+
+def test_resolve_sheet_key_multi_sheet_defaults_to_first_and_rejects_unknown() -> None:
+    # Arrange
+    plans = {"corporate": _stub_plan(), "retail": _stub_plan()}
+
+    # Act / Assert — sheet=None defaults to the first sheet; a named sheet
+    # resolves to itself; an unknown sheet is unresolvable (a clean no-lineage).
+    assert lineage._resolve_sheet_key(plans, None, single_frame=False) == ("corporate", "corporate")
+    assert lineage._resolve_sheet_key(plans, "retail", single_frame=False) == ("retail", "retail")
+    assert lineage._resolve_sheet_key(plans, "nope", single_frame=False) is None
+
+
+def test_resolve_sheet_key_single_frame_always_reports_sheet_none() -> None:
+    # Arrange — a single-frame template keys its one plan under a canonical key.
+    plans = {"__single__": _stub_plan()}
+
+    # Act / Assert — the sheet param is ignored; the reported sheet is None.
+    assert lineage._resolve_sheet_key(plans, None, single_frame=True) == ("__single__", None)
+    assert lineage._resolve_sheet_key(plans, "anything", single_frame=True) == ("__single__", None)
+
+
+@dataclass(frozen=True)
+class _Row:
+    """A structural TemplateRow for a synthetic spec."""
+
+    ref: str
+    name: str
+
+
+class _FrameSource:
+    """A minimal ResultsSource over a hand-built frame (no parquet round-trip)."""
+
+    framework = "CRR"
+
+    def __init__(self, frame: pl.DataFrame) -> None:
+        self._frame = frame
+
+    def scan_results(self) -> pl.LazyFrame:
+        return self._frame.lazy()
+
+
+def _single_frame_provider() -> tuple[lineage._Provider, pl.DataFrame]:
+    """A synthetic single-frame template: one plan, one Sum cell, sheet=None."""
+    frame = pl.DataFrame(
+        {
+            "reporting_class_origin": ["corporate", "corporate"],
+            "rwa_final": [100.0, 50.0],
+            "exposure_reference": ["E1", "E2"],
+        }
+    )
+    spec = TemplateSpec(
+        name="t_demo",
+        rows=(_Row("0010", "Total"),),
+        column_refs=("0220",),
+        cells={("0010", "0220"): CellSpec(Sum("rwa_final"))},
+        empty_cell="zero",
+    )
+    ctx = ReportingContext()
+    plan = SheetPlan(spec=spec, frame=frame, ctx=ctx, negative_cols=frozenset())
+
+    def _plans(
+        _results: pl.LazyFrame, _cols: set[str], _framework: str, _errors: list[str]
+    ) -> dict[str, SheetPlan]:
+        return {"__single__": plan}
+
+    def _generate(
+        _results: pl.LazyFrame, _cols: set[str], _framework: str, _errors: list[str]
+    ) -> dict[str, pl.DataFrame]:
+        return {"__single__": execute(spec, frame, ctx)}
+
+    provider = lineage._Provider(
+        plans=_plans,
+        generate=_generate,
+        scope=("demo scope",),
+        sheet_label="",
+        single_frame=True,
+    )
+    return provider, frame
+
+
+def test_single_frame_template_resolves_end_to_end_with_sheet_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange — register a synthetic single-frame provider.
+    provider, frame = _single_frame_provider()
+    monkeypatch.setitem(lineage.LINEAGE_PLANS, "t_demo", provider)
+
+    # Act — no sheet named (the single-frame caller passes None).
+    result = lineage.drilldown(_FrameSource(frame), "t_demo", "0010", "0220")
+
+    # Assert — the cell resolves, its sheet axis is None, and its legs sum back.
+    assert result is not None
+    assert result.query.sheet is None
+    assert result.cell_value == pytest.approx(150.0)
+    assert result.contribution_total == pytest.approx(150.0)
+    assert result.total_rows == 2
+    # A single-frame template adds no "Sheet: … = …" scope line.
+    assert not any("Sheet:" in step for step in result.query.scope)

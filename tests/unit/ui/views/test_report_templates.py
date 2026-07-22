@@ -109,6 +109,35 @@ def test_cells_carry_the_generators_values_and_null_flags() -> None:
 
 
 # =============================================================================
+# has_lineage — the drill-down signal (a cell is only linkable where lineage exists)
+# =============================================================================
+
+
+def test_has_lineage_true_for_an_instrumented_template() -> None:
+    # Act — C 07.00 exposes its execution plans (LINEAGE_PLANS).
+    page = _page(template_id="c07_00", sheet="corporate")
+
+    # Assert
+    assert page.selected is not None
+    assert page.has_lineage is True
+
+
+def test_has_lineage_false_for_an_uninstrumented_template() -> None:
+    # Arrange — C 08.01 is declarative but not instrumented for lineage.
+    corep = _corep(c08_01={"corporate": _c07_sheet()})
+
+    # Act
+    page = view.template_page(
+        corep, None, run_id="r1", framework="CRR", template_id="c08_01", sheet="corporate"
+    )
+
+    # Assert — the grid still renders; no cell is offered as a drill-down link.
+    assert page.selected is not None
+    assert page.selected.id == "c08_01"
+    assert page.has_lineage is False
+
+
+# =============================================================================
 # Header band + picker defaults
 # =============================================================================
 

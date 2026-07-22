@@ -265,6 +265,31 @@ import (check 12); **no multi-candidate `pick(cols, a, b)`** — the `reporting_
 ratchet sits at 30 and may not increase; module ≤ 2,010 LOC, new `tests/unit/reporting/**` file
 ≤ 1,581 LOC (ample headroom). No new reporting module trips a count ratchet.
 
+### 4.6 Phase 0 — machinery generalisation (R19, DONE)
+
+v1 shipped with C 07.00 as the sole instrumented template, and the drill-down machinery still
+carried C07-shaped assumptions. R19 generalised it so the remaining declarative templates (R20-R26)
+can be instrumented with a few lines each. What changed from §4.1/§4.2 as written:
+
+- **`SheetPlan` moved out of `corep/c07.py` into the shared `reporting/plans.py`.** Every template's
+  `<t>_plans()` returns the SAME `SheetPlan`, so no template is typed against another's dataclass.
+  `c07.py` imports it back; the extraction stayed golden-byte-identical.
+- **`negative_cols` is now a REQUIRED `SheetPlan` field (no default).** It previously defaulted to
+  C 07.00's Annex II deduction set — a silent mis-sign risk for any future template sharing refs
+  like `0030`/`0050`/`0090`. Each template passes its own set (or `frozenset()`) explicitly.
+- **Single-frame templates** (cr4, cr7, cr8, ov1, cms1/2, c08_07, of_02_01, …) register with
+  `_Provider(single_frame=True)`: their cells report `sheet = None` and their `plans()`/`generate()`
+  return a one-entry dict. `_resolve_sheet_key` (in `reporting/lineage.py`) is the one place that
+  decides the plan key vs the reported sheet, and `sheet_lineage` logs loudly if `plans()` and
+  `generate()` key differently.
+- **REST `sheet` normalisation + differentiated 404s.** `GET /api/lineage` normalises an empty-string
+  `sheet` to `None` (matching the UI), and both surfaces now 404 with a reason — *template not
+  instrumented* vs *unknown cell* vs *unknown run* — instead of one undifferentiated "no lineage".
+- **The fidelity tie-out is parametrised** over `_TIEOUT_CASES`, so an R20-R26 template earns its
+  full sweep (value, kind, predicate satisfaction, sign-aware reconciliation) by adding one tuple.
+
+The per-template recipe lives in `docs/features/report-cell-lineage.md` (§ Coverage).
+
 ---
 
 ## 5. Phase C — wire the drill-down into the cell

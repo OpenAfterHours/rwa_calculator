@@ -119,8 +119,25 @@ Lineage is available for templates whose execution plan is exposed (`LINEAGE_PLA
 **C 07.00**. Any other template — including C 34.x and CCR1–8, which are still imperative and have no
 `TemplateSpec` to read — returns a clean `404`: *no lineage*, never a re-derived guess.
 
-Instrumenting the next template is small and mechanical: expose its `<template>_plans()` (the same
-extraction `c07.py` made, splitting plan-building from execution) and register it.
+The drill-down machinery is template-agnostic (the `SheetPlan` container lives in
+`reporting/plans.py`, shared by every generator), so instrumenting the next template is small and
+mechanical — a few lines, no new lineage logic:
+
+1. **Extract the plan** — in the template's module, split `generate_<t>` into a
+   `<t>_plans(results, cols, framework, errors) -> dict[str, SheetPlan]` builder plus a thin
+   `generate_<t>` that executes each plan. Pass `negative_cols` **explicitly** (the Annex II §1.3
+   "(-)" deduction set for this template, or `frozenset()` if it has none — it is required, so no
+   template silently inherits another's sign convention). This extraction is number-neutral and
+   golden-gated.
+2. **Register it** — add one `_Provider` entry to `LINEAGE_PLANS` in `reporting/lineage.py`, wiring
+   `plans=<t>_plans`, `generate=generate_<t>`, the population `scope` steps in words, and the
+   `sheet_label`. For a template with no sheet axis (a single frame), set `single_frame=True`: its
+   cells report `sheet = None` and its `plans()`/`generate()` return a one-entry dict.
+3. **Add the tie-out** — append `(template_id, sheet)` to `_TIEOUT_CASES` in
+   `tests/acceptance/reporting/test_lineage_tieout.py`. The parametrised sweep then checks every
+   cell of that sheet (value, kind, predicate satisfaction, sign-aware reconciliation) with no new
+   test code.
+4. **Note the coverage** — add the template to the "Today that is …" line above.
 
 ## References
 

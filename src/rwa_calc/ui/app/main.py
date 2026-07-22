@@ -483,6 +483,8 @@ def _register_pages(app: FastAPI) -> None:
         bundles = get_template_bundles(run_id)
         if response is None or bundles is None:
             return _not_found(request, "That result has expired or does not exist.")
+        if not reporting_lineage.is_instrumented(template):
+            return _not_found(request, "That template is not instrumented for lineage.")
 
         result = reporting_lineage.drilldown(
             response, template, row, col, run_id=run_id, sheet=sheet or None, limit=200

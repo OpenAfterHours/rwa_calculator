@@ -53,18 +53,18 @@ Scenario design (P2.48 — CRR Part 8 Art. 438(h) / PS1/26 UKB CR8):
     Backwards-compat (previous_period_results=None):
         Rows 1-8 must remain None; row 9 = 1_150_000.00 (existing behaviour).
 
-Column names consumed by _generate_cr8 / _filter_irb_non_slotting / _col_sum:
-    approach_applied  (str)  — filter values: "foundation_irb", "advanced_irb", "slotting"
-    rwa_final         (f64)  — summed by _col_sum(data, rwa_col) after filter
+Column names consumed by the CR8 path (declarative since Phase 7; the retired
+_generate_cr8 / _filter_irb_non_slotting / _col_sum helpers are gone):
+    approach_applied  (str)  — population values: "foundation_irb", "advanced_irb", "slotting"
+    rwa_final         (f64)  — the summed RWEA carrier
 
 Usage (clean-import check):
     cd /path/to/worktrees/P2.48
     PYTHONPATH=src /path/to/.venv/bin/python tests/fixtures/p2_48/p2_48.py
 
 References:
-    - CR8 generator:      src/rwa_calc/reporting/pillar3/generator.py:577-604 (_generate_cr8)
-    - IRB filter:         src/rwa_calc/reporting/pillar3/generator.py:1101-1109 (_filter_irb_non_slotting)
-    - Column-sum helper:  src/rwa_calc/reporting/pillar3/generator.py:1013-1018 (_col_sum)
+    - CR8 spec + population: src/rwa_calc/reporting/pillar3/cr8.py (CR8_SPEC,
+      irb_non_slotting_population — moved from generator.py in R20/R27c)
     - CR8 template:       src/rwa_calc/reporting/pillar3/templates.py:508-522 (CR8_ROWS, CR8_COLUMNS)
     - CRR Art. 438(h):    CR8 RWEA flow statement disclosure obligation
     - PS1/26 Annex XXII §11: signed-delta convention (increase positive, decrease negative)

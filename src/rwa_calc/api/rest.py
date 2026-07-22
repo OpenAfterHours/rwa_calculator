@@ -384,8 +384,8 @@ def cell_lineage(  # noqa: PLR0913 - the cell key plus paging
     self-describing — and returns ``cell_value`` AS REPORTED (read from the
     generated template, never recomputed) alongside the contributing ledger legs.
 
-    A template with no lineage (still imperative — C 02.00, CCR1-8) or a cell that
-    is not on the template is a clean 404, never a re-derived guess.
+    A template with no lineage (only C 02.00, the imperative kernel hybrid) or a
+    cell that is not on the template is a clean 404, never a re-derived guess.
     """
     response = _require_run(run_id)
     if not lineage.is_instrumented(template):

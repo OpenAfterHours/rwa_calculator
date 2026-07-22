@@ -143,6 +143,18 @@ _TIEOUT_CASES: list[tuple[str, str | None, str]] = [
     # ead_final, so the sweep reconciles a per-sheet summed cell to the reported
     # figure (the bilateral ``NS_CCR_BILAT`` sheet exercises the same path).
     ("c34_02", "NS_CCR_QCCP", "CCR"),
+    # R27c — the Pillar 3 counterparty-credit-risk family (single frame), the
+    # FINAL declarative conversion of the estate. All three tie out against the CCR
+    # derivatives oracle: ccr1 sums the SA-CCR population (col a EAD over both
+    # legs, col b the non-QCCP default-risk RWEA over the bilateral leg); ccr3
+    # allocates that EAD across the risk-weight bands (the QCCP leg in the 2% band,
+    # the bilateral leg in its CQS band, the rest null); ccr8 reconciles the QCCP
+    # row to the QCCP leg while the non-QCCP row is populated-null (no non-QCCP CCP
+    # leg — the R5 CCP restriction). CCR2 (CVA) has no producing fixture here, so
+    # it is pinned by a seeded lineage unit pin instead (the c34_04 precedent).
+    ("ccr1", None, "CCR"),
+    ("ccr3", None, "CCR"),
+    ("ccr8", None, "CCR"),
 ]
 
 

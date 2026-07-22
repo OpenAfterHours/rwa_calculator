@@ -135,12 +135,13 @@ use), **CR7** (credit-derivatives effect on RWEA), **CR8** (IRB RWEA flow) and t
 **C 34.02** (SA-CCR EAD per netting set — one sheet per netting set).
 
 That is the full COREP credit-risk estate (C 07.00, C 08.01–07, C 09.01/02), the full Pillar 3 estate
-(OV1, CR4–CR10, CMS1/2) and all four in-scope **C 34** counterparty-credit-risk templates
-— with a shrinking residual of imperative templates. **C 02.00** (own-funds requirements) is a
+(OV1, CR4–CR10, CMS1/2), all four in-scope **C 34** counterparty-credit-risk templates and — with
+R27c — the Pillar 3 **CCR1/2/3/8** family (CCR by approach, CVA capital, CCR by risk weight, CCP
+exposures). That leaves a **single** imperative residual: **C 02.00** (own-funds requirements) is a
 pre-pass kernel-plus-thin-shell hybrid that never runs through the executor, so it exposes no
-`TemplateSpec` to read; the Pillar 3 **CCR1–8** family is still imperative pending R27c. A lineage
-request for any of these — or any other uninstrumented
-template — returns a clean `404`: *no lineage*, never a re-derived guess. **CR9.1** is a softer gap:
+`TemplateSpec` to read — the only uninstrumented template. A lineage request for it — or for any cell
+not on a template — returns a clean `404`: *no lineage*, never a re-derived guess. **CR9.1** is a
+softer gap:
 it *is* instrumented, but the engine produces neither `ecai_pd_mapping` nor
 `external_rating_equivalent`, so it is empty on the real portfolio (the recorded S1 accept-empty
 decision) and comes alive only on a seeded ECAI book — so it carries a seeded unit pin rather than an

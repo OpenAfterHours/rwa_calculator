@@ -80,8 +80,8 @@ viewer stamps that key on every rendered cell.
 - Read-only. The workbook exports (COREP / Pillar III) remain the submission artefacts; the viewer is
   for inspection.
 - **Click a cell to see which exposures and rules produced it** — see
-  [Report Cell Lineage](report-cell-lineage.md). Cells are only clickable on templates that have
-  lineage (C 07.00 today).
+  [Report Cell Lineage](report-cell-lineage.md). Cells are clickable on every instrumented template
+  (the whole COREP and Pillar 3 credit-risk estate; only C 02.00 has no lineage).
 
 ## References
 

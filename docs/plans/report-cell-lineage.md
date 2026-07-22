@@ -224,9 +224,9 @@ The last two are why a user can finally tell a **structurally empty** cell from 
 one — something Phase A alone cannot do.
 
 Resolution: `LINEAGE_PLANS: dict[str, PlanFn] = {"c07_00": c07_plans}` — one entry in v1; each
-further template is that same extraction plus one line. **C 34.01/02/04/08 and CCR1/2/3/8 remain
-imperative** (the Phase 7 S8-pre deferral) — they have no spec, so they 404 with that reason,
-stated in the docs rather than hidden.
+further template is that same extraction plus one line. C 34.01/02/04/08 (R27a/R27b) and the
+Pillar 3 CCR1/2/3/8 family (R27c) are now instrumented; only **C 02.00** (a pre-pass kernel
+hybrid) has no spec, so it 404s with that reason, stated in the docs rather than hidden.
 
 ### 4.3 Two honesty requirements
 The rendered cell is not the raw executor output (`_null_empty_rows`, `_negate_deduction_cols` —
@@ -332,5 +332,5 @@ fallback computation.
 
 **Out of scope for v1.** Materialised lineage tables (§2.1). Cross-stage per-row provenance (its own
 plan). Templates beyond C 07.00 for lineage (the viewer shows them all; lineage wiring is
-per-template and cheap). C 34.x / CCR1/2/3/8 (still imperative — no spec to read). Editing or
-annotating cells.
+per-template and cheap). C 02.00 (a pre-pass kernel hybrid — no spec to read; C 34.x and the Pillar 3
+CCR1/2/3/8 family are now instrumented, R27a–R27c). Editing or annotating cells.

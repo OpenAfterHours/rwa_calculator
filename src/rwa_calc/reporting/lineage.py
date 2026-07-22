@@ -93,6 +93,16 @@ from rwa_calc.reporting.corep.c34 import (
 )
 from rwa_calc.reporting.corep.of02 import of_02_01_frames, of_02_01_plans
 from rwa_calc.reporting.kernel import available_columns
+from rwa_calc.reporting.pillar3.ccr import (
+    ccr1_frames,
+    ccr1_plans,
+    ccr2_frames,
+    ccr2_plans,
+    ccr3_frames,
+    ccr3_plans,
+    ccr8_frames,
+    ccr8_plans,
+)
 from rwa_calc.reporting.pillar3.cms1 import cms1_plans, generate_cms1
 from rwa_calc.reporting.pillar3.cms2 import cms2_plans, generate_cms2
 from rwa_calc.reporting.pillar3.cr4 import cr4_plans, generate_cr4
@@ -241,10 +251,9 @@ class _Provider:
 # Instrumented templates. Adding one = expose its `<t>_plans()` (the same
 # plan/generate extraction c07 made, returning `dict[str, SheetPlan]`) and
 # register a `_Provider` here — set `single_frame=True` for a template with no
-# sheet axis. Templates absent from this map have no lineage — including C 02.00
-# (a kernel hybrid) and CCR1-8, which are still imperative and have no
-# TemplateSpec to read (C 34.01/04/08 were instrumented in R27a, the per-netting-
-# set C 34.02 in R27b).
+# sheet axis. The ONLY template absent from this map is C 02.00 (a kernel-plus-
+# thin-shell hybrid with no TemplateSpec to read); the whole COREP C 34 family
+# (R27a/R27b) and the Pillar 3 CCR1/2/3/8 family (R27c) are now instrumented.
 LINEAGE_PLANS: dict[str, _Provider] = {
     "c07_00": _Provider(
         plans=c07_plans,
@@ -994,6 +1003,99 @@ LINEAGE_PLANS: dict[str, _Provider] = {
             "legs; CR10 carries no '(-)'-labelled deduction column",
         ),
         sheet_label="subtemplate",
+    ),
+    # CCR1 — analysis of CCR exposure by approach (single frame; R27c). The plan
+    # frame is the pre-filtered SA-CCR netting-set population (FCCM SFTs excluded)
+    # carrying the derived ccr1_default_risk flag; col a sums the whole frame, col
+    # b narrows to the non-QCCP-trade partition.
+    "ccr1": _Provider(
+        plans=ccr1_plans,
+        generate=ccr1_frames,
+        scope=(
+            "The SA-CCR netting-set population — the synthetic ``ccr__``-prefixed "
+            "rows, with FCCM SFTs EXCLUDED (an SFT uses FCCM under Art. 220-223, "
+            "not the SA-CCR Art. 274 approach these templates analyse; it reports "
+            "on SA template C 07.00 row 0090). Admitted by exposure reference (not "
+            "the approach label the output floor relabels)",
+            "The SA-CCR row (1) and the Total row (11) sum ead_final (col a) over "
+            "the whole population — CRR Art. 274(2) SA-CCR EAD = alpha * (RC + "
+            "PFE) — and rwa_final (col b) over the derived ccr1_default_risk "
+            "partition (~((cp_entity_type == ccp) & cp_is_qccp.fill_null(True)) — "
+            "the non-QCCP default-risk RWEA, CRR Art. 107(2)(a)). The IMM / "
+            "Original-exposure rows are structural placeholders left null. None "
+            "when the portfolio has no such rows",
+        ),
+        sheet_label="",
+        single_frame=True,
+    ),
+    # CCR2 — CVA capital charge (single frame; R27c). Presence-gated on cva_rwa
+    # (a CRR run carries none, so a CRR lineage request degrades to a clean
+    # no-lineage). The cell reads the portfolio BA-CVA roll-up as a broadcast
+    # constant (FirstNonNull, the OV1 row-26 / C 34.04 idiom); no producing golden
+    # fixture, so it is pinned by the CVA-A1 unit estate + a seeded lineage pin.
+    "ccr2": _Provider(
+        plans=ccr2_plans,
+        generate=ccr2_frames,
+        scope=(
+            "The full sealed per-leg ledger (presence-gated on cva_rwa — CCR2 is "
+            "not produced when the portfolio carries no CVA charge, which is what "
+            "makes it None under CRR). The BA-CVA row (4) and the Total row (6) "
+            "read the portfolio BA-CVA roll-up (cva_rwa) as a broadcast per-row "
+            "constant via FirstNonNull — the OV1 row-26 idiom; the drill-down "
+            "shows the legs carrying that constant rather than a sum attributable "
+            "to them",
+            "cva_rwa is the BA-CVA own-funds requirement scaled to RWEA (PS1/26 "
+            "App.1 Own Funds Part 4(b): RWEA_CVA = OFR_CVA * 12.5), a "
+            "portfolio-level scalar and not a leg aggregate, so the cell does not "
+            "reconcile to a signed total",
+        ),
+        sheet_label="",
+        single_frame=True,
+    ),
+    # CCR3 — SA-CCR EAD by risk-weight band (single frame; R27c). The plan frame is
+    # the pre-filtered SA-CCR population carrying the derived ccr3_band label; each
+    # band row narrows to its matched band and the Total row sums the whole frame.
+    "ccr3": _Provider(
+        plans=ccr3_plans,
+        generate=ccr3_frames,
+        scope=(
+            "The SA-CCR netting-set population (the ``ccr__``-prefixed rows, FCCM "
+            "SFTs excluded — the CCR1 population) carrying the derived ccr3_band "
+            "label (each row's risk_weight assigned to a CR5 risk-weight band "
+            "within ±0.005, else 'other')",
+            "Each band row (col a) sums ead_final over the rows whose ccr3_band "
+            "matches the band; the 'Other' row keys the unmatched complement; the "
+            "Total row sums the whole population (CRR Art. 444(e); Art. 120(1) "
+            "Table 3 institution CQS bands). An empty band is a null cell (the "
+            "Pillar 3 empty policy). None when no CCR rows exist or risk_weight is "
+            "absent",
+        ),
+        sheet_label="",
+        single_frame=True,
+    ),
+    # CCR8 — exposures to central counterparties (single frame; R27c). The plan
+    # frame is the include_sft=True SA-CCR population carrying the derived
+    # ccr8_qccp flag; each cell's predicate narrows to the CCP subset. The R5 CCP
+    # restriction (a bilateral counterparty is NEITHER row) is preserved exactly —
+    # CCR8 is the disclosure counterpart of the OV1 UK8a QCCP memo row.
+    "ccr8": _Provider(
+        plans=ccr8_plans,
+        generate=ccr8_frames,
+        scope=(
+            "The SA-CCR netting-set population with FCCM SFTs INCLUDED "
+            "(``include_sft=True`` — a CCP-faced SFT IS a CCP exposure, CRR Art. "
+            "301(1)(b)) RESTRICTED to CCP counterparties (cp_entity_type == ccp) — "
+            "a book of purely bilateral derivatives / SFTs has nothing to disclose "
+            "here (the R5 emission gate and CCP restriction)",
+            "Row 1 (QCCPs) and row 2 (non-QCCPs) partition the CCP subset by the "
+            "derived ccr8_qccp flag (cp_is_qccp.fill_null(True) — a null CCP "
+            "treated as qualifying, CRR Art. 306(1); a bilateral OTC counterparty "
+            "is NEITHER row, disclosing on CCR1/CCR3 instead — the R5 fix). Row 21 "
+            "(Total) is the whole CCP population. Each row sums rwa_final (col a) "
+            "and ead_final (col b) over its subset",
+        ),
+        sheet_label="",
+        single_frame=True,
     ),
 }
 

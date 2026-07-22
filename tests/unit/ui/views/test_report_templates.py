@@ -125,9 +125,9 @@ def test_has_lineage_true_for_an_instrumented_template() -> None:
 def test_has_lineage_false_for_an_uninstrumented_template() -> None:
     # Arrange — C 02.00 is the pre-pass kernel-plus-thin-shell hybrid that never
     # runs through the executor, so it exposes no TemplateSpec and is the durable
-    # uninstrumentable example. (R27a instrumented the prior example, C 34.01 —
-    # every DECLARATIVE template now carries lineage; only C 02.00 and the
-    # still-imperative CCR1-8 remain.)
+    # uninstrumentable example. (R27c instrumented the Pillar 3 CCR1/2/3/8 family —
+    # the FINAL declarative conversion — so C 02.00 is now the ONLY template
+    # without lineage.)
     corep = _corep(c_02_00=_c07_sheet())
 
     # Act

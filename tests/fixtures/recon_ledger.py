@@ -120,14 +120,12 @@ class LedgerShimPillar3Generator:
                 results,
                 *,
                 framework="CRR",
-                capital_ratios=None,
                 output_floor_summary=None,
                 previous_period_results=None,
             ):
                 return super().generate_from_lazyframe(
                     with_reporting_ledger(results),
                     framework=framework,
-                    capital_ratios=capital_ratios,
                     output_floor_summary=output_floor_summary,
                     previous_period_results=previous_period_results,
                 )

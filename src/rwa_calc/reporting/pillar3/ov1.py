@@ -48,12 +48,30 @@ Cell semantics (golden-gated):
       the precedent).
   Rows 6/7/UK8a/9 zero-fill — "this book has no CCR" is a claim the
   calculator can make.
-- Row 4a: pre-floor total (Sum of the conditional ``rwa_pre_floor``) — an
-  all-risk-type total, like row 29, and so NOT cut by the CCR exclusion.
-- Rows 5a-7b: pre-floor capital ratios x100 from the ReportingContext
-  overrides (SideContext).
-- Row 24: 250%-RW memo (Sum of ``rwa_final`` where ``reporting_rw`` is in
-  the [2.495, 2.505] band).
+- Row 24: the Art. 48(4) threshold-item 250%-RW memo. UKB OV1 row 24
+  ("Amounts below the thresholds for deduction (subject to 250% risk weight)")
+  is NOT "any leg risk-weighted at 250%" — it is specifically the items subject
+  to a 250% risk weight under Art. 48(4) CRR: deferred-tax assets that arise
+  from temporary differences and significant investments in a financial-sector
+  entity's CET1, each below the 10%-of-CET1 deduction threshold of Art. 48(1)
+  (PS1/26 Annex II, "Template UKB OV1", row 24, pp. 4-5). It is disclosed "for
+  information purposes only as the amount included here is also included in
+  row 1". The sealed ledger carries no flag that positively identifies an
+  Art. 48(4) item, so this is a RECORDED APPROXIMATION: the cell sums
+  ``rwa_final`` over legs whose ORIGIN class is the SA "Other items" bucket
+  (``reporting_class_origin == "other"`` — the CR4/CR5 row-16 class under which
+  the codebase files "items below deduction thresholds") AND whose
+  ``reporting_rw`` is in the [2.495, 2.505] band. Restricting to "other items"
+  is what excludes the equity holdings that carry an exactly-250% SA risk weight
+  under Basel 3.1 (Art. 133): equity exposures are definitionally NOT Art. 48(4)
+  threshold-deduction items, so the earlier unrestricted 250%-RW predicate
+  MIS-STATED row 24 by the whole equity RWEA (the rich B31 book's 2.5M holding).
+  The residual — we cannot distinguish, within the "other" class, a genuine
+  Art. 48(4) item from a hypothetical non-threshold "other item" that happens to
+  carry a 250% RW — is pinned in test_r16_ov1_row24_threshold.py. The
+  approximation also UNDER-includes: a significant investment in a
+  financial-sector entity's CET1 held as shares would classify as an equity
+  exposure, not "other", and is silently excluded here.
 - Rows 11-14 (Basel 3.1 equity sub-approaches): equity-origin legs narrowed
   by the presence-TOLERANT discriminators (``equity_transitional_approach``
   / ``ciu_approach`` — F6 columns the seal strips today, so these cells are
@@ -61,11 +79,12 @@ Cell semantics (golden-gated):
 - Row 26: output-floor multiplier (first non-null ``output_floor_pct``).
 - Row 27: OF-ADJ from the output-floor summary (SideContext).
 - Column b (T-1) stays null throughout; column c = a x 0.08 except the
-  ratio rows and the floor rows 26/27 (the no-shim set).
+  floor rows 26/27 (the no-shim set).
 
 References:
-- CRR Part 8 Art. 438; PRA PS1/26 Annex XX (UKB OV1, incl. rows 11-14
-  Art. 132-132C CIU sub-approaches and the floor rows 26/27)
+- CRR Part 8 Art. 438; Art. 48(4) (row 24 threshold items); PRA PS1/26
+  Annex II ("Template UKB OV1", incl. rows 11-14 Art. 132-132C CIU
+  sub-approaches and the floor rows 26/27)
 - CRR Art. 274-280f (SA-CCR, Chapter 6 Section 3); Art. 283 (IMM,
   Section 6); Art. 300-311 (exposures to CCPs, Section 9 — including
   Art. 301(1)(b), which puts SFTs faced to a CCP in Section 9's scope, and
@@ -98,17 +117,6 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from rwa_calc.contracts.bundles import OutputFloorSummary
-    from rwa_calc.contracts.config import Pillar3CapitalRatioOverrides
-
-# Rows whose column ``a`` is a percentage (no 8% shim; SideContext ratio x100).
-_RATIO_REFS: dict[str, str] = {
-    "5a": "cet1_ratio_pre_floor",
-    "5b": "cet1_ratio_pre_floor_transitional",
-    "6a": "tier1_ratio_pre_floor",
-    "6b": "tier1_ratio_pre_floor_transitional",
-    "7a": "total_ratio_pre_floor",
-    "7b": "total_ratio_pre_floor_transitional",
-}
 
 # Rows whose column ``a`` sums one origin approach (0.0 when absent).
 _APPROACH_REFS: dict[str, tuple[str, ...]] = {
@@ -186,10 +194,6 @@ def _row_a_cell(ref: str) -> CellSpec | None:
         return CellSpec(Sum("rwa_final"))
     if ref == "1":
         return CellSpec(Sum("rwa_final"), predicate=_NON_CCR)
-    if ref == "4a":
-        return CellSpec(Sum("rwa_pre_floor"))
-    if ref in _RATIO_REFS:
-        return CellSpec(SideContext(_RATIO_REFS[ref], scale=100.0))
     if ref in _CCR_ROW_FLAGS:
         return CellSpec(
             Sum("rwa_final"),
@@ -197,7 +201,16 @@ def _row_a_cell(ref: str) -> CellSpec | None:
             empty_cell="zero",
         )
     if ref == "24":
-        return CellSpec(Sum("rwa_final"), predicate=RowPredicate(rw_between=(2.495, 2.505)))
+        # Art. 48(4) threshold items only: the SA "Other items" class (the row-16
+        # bucket where "items below deduction thresholds" are filed) at a 250% RW.
+        # The "other" restriction excludes the Basel 3.1 Art. 133 equity holdings
+        # that also weight exactly 250% but are NOT threshold-deduction items — a
+        # recorded approximation (see module docstring; pins in
+        # test_r16_ov1_row24_threshold.py).
+        return CellSpec(
+            Sum("rwa_final"),
+            predicate=RowPredicate(classes_origin=("other",), rw_between=(2.495, 2.505)),
+        )
     if ref in _EQUITY_SUBAPPROACH_REFS:
         return CellSpec(
             Sum("rwa_final"),
@@ -233,7 +246,7 @@ def build_ov1_spec(framework: str) -> TemplateSpec:
         a_cell = _row_a_cell(row.ref)
         if a_cell is not None:
             cells[(row.ref, "a")] = a_cell
-            if row.ref not in _RATIO_REFS and row.ref not in _FLOOR_NO_SHIM_REFS:
+            if row.ref not in _FLOOR_NO_SHIM_REFS:
                 cells[(row.ref, "c")] = CellSpec(Formula(refs=("a",), fn=_own_funds_shim))
     return TemplateSpec(
         name="ov1",
@@ -254,7 +267,6 @@ def generate_ov1(
     cols: set[str],
     framework: str,
     errors: list[str],
-    capital_ratios: Pillar3CapitalRatioOverrides | None,
     output_floor_summary: OutputFloorSummary | None,
 ) -> pl.DataFrame | None:
     """Execute OV1 over the full sealed ledger.
@@ -267,10 +279,7 @@ def generate_ov1(
         errors.append("OV1: missing RWA column")
         return None
     spec = _OV1_SPECS.get(framework) or build_ov1_spec(framework)
-    ctx = ReportingContext(
-        output_floor_summary=output_floor_summary,
-        capital_ratio_overrides=capital_ratios,
-    )
+    ctx = ReportingContext(output_floor_summary=output_floor_summary)
     return execute(spec, _prepare(results, cols), ctx)
 
 

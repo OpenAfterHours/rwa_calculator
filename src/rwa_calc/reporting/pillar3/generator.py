@@ -105,7 +105,6 @@ if TYPE_CHECKING:
     from xlsxwriter import Workbook
 
     from rwa_calc.contracts.bundles import OutputFloorSummary
-    from rwa_calc.contracts.config import Pillar3CapitalRatioOverrides
     from rwa_calc.contracts.results import ExportResult
     from rwa_calc.reporting.facts import FilingMetadata
 
@@ -185,7 +184,6 @@ class Pillar3Generator:
         results: pl.LazyFrame,
         *,
         framework: str = "CRR",
-        capital_ratios: Pillar3CapitalRatioOverrides | None = None,
         output_floor_summary: OutputFloorSummary | None = None,
         previous_period_results: pl.LazyFrame | None = None,
     ) -> Pillar3TemplateBundle:
@@ -207,9 +205,7 @@ class Pillar3Generator:
             prior_irb_data = _filter_irb_non_slotting(previous_period_results, prior_cols)
 
         return Pillar3TemplateBundle(
-            ov1=self._generate_ov1(
-                results, cols, framework, errors, capital_ratios, output_floor_summary
-            ),
+            ov1=self._generate_ov1(results, cols, framework, errors, output_floor_summary),
             cr4=self._generate_cr4(results, cols, framework, errors),
             cr5=self._generate_cr5(results, cols, framework, errors),
             cr6=self._generate_all_cr6(results, cols, framework, errors),
@@ -354,7 +350,6 @@ class Pillar3Generator:
         cols: set[str],
         framework: str,
         errors: list[str],
-        capital_ratios: Pillar3CapitalRatioOverrides | None = None,
         output_floor_summary: OutputFloorSummary | None = None,
     ) -> pl.DataFrame | None:
         """Generate the OV1 overview of RWEAs.
@@ -364,9 +359,9 @@ class Pillar3Generator:
         the one ``cellspec.execute`` executor.
 
         References:
-            CRR Part 8 Art. 438; PRA PS1/26 Annex XX.
+            CRR Part 8 Art. 438; PRA PS1/26 Annex II.
         """
-        return generate_ov1(results, cols, framework, errors, capital_ratios, output_floor_summary)
+        return generate_ov1(results, cols, framework, errors, output_floor_summary)
 
     # ---- CR4 ----
 

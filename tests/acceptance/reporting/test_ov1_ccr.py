@@ -53,9 +53,8 @@ BOTH regimes get it):
                tests/unit/reporting/pillar3/test_ov1_ccr_routing.py; no fixture
                carries a CCR_DEFAULT_FUND leg, so it is unreachable from here.
 
-Row 29 (Total) and Basel 3.1's row 4a (Total RWEAs pre-floor) are ALL-RISK-TYPE
-totals: they must NOT move. The fix is a re-cut of the row axis, not a change to
-the book.
+Row 29 (Total) is an ALL-RISK-TYPE total: it must NOT move. The fix is a re-cut
+of the row axis, not a change to the book.
 
 The tie-outs at the foot of this file are the point of the exercise — OV1, CCR1
 and CCR8 describe the same netting sets, and any of them would have caught D1 on
@@ -200,8 +199,6 @@ _EXPECTED: dict[tuple[str, str], dict[str, float | None]] = {
         "2": 2_500_000.0,
         "3": 0.0,
         "4": 0.0,
-        # The pre-floor total: an all-risk-type total, UNCHANGED.
-        "4a": 4_060_296.719974031,
         "5": 0.0,
         _ROW_CCR: 1_560_296.719974031,
         _ROW_SA_CCR: 1_462_778.174975654,

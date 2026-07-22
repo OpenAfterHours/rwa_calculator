@@ -1,35 +1,28 @@
-"""Unit tests for P1.162: UKB OV1 pre-floor rows (Basel 3.1).
+"""Unit tests for the UKB OV1 row set — output-floor rows and the CCR block.
 
-Tests cover the 7 new P3Row entries added to B31_OV1_ROWS:
-    4a  — Total RWEAs (pre-floor)
-    5a  — CET1 ratio (pre-floor)
-    5b  — CET1 ratio (pre-floor, transitional)
-    6a  — Tier 1 ratio (pre-floor)
-    6b  — Tier 1 ratio (pre-floor, transitional)
-    7a  — Total capital ratio (pre-floor)
-    7b  — Total capital ratio (pre-floor, transitional)
+R16 rectification (this file): the pre-floor RWEA row ``4a`` and the six
+pre-floor capital-ratio rows ``5a/5b/6a/6b/7a/7b`` that P1.162 grafted onto
+``B31_OV1_ROWS`` were REMOVED — they do NOT belong to UKB OV1. The authoritative
+PS1/26 Annex II ("Template UKB OV1 — Overview of risk-weighted exposure amounts.
+Fixed format", pp. 1-9) runs rows 1..29 whose only output-floor lines are:
 
-...and the 5-row CCR block that BOTH regimes' OV1 must carry (rewritten
-2026-07-14, docs/plans/c07-ccr-derivatives.md §4 D1): row 1 is labelled "Credit
-risk (excluding CCR)" and the instructions are explicit that CCR RWEAs "are
-excluded and disclosed in rows 6 and 16 of this template", so rows
+    26     Output floor multiplier   (Art. 92(5))
+    27     Output floor adjustment   (Art. 92)
 
-    6      Counterparty credit risk – CCR              (the additive parent)
-    7      CCR – Of which the standardised approach    (Section 3, SA-CCR)
-    8      CCR – Of which internal model method (IMM)  (Section 6, null here)
-    UK 8a  CCR – Of which exposures to a CCP           (Section 9)
-    9      CCR – Of which other CCR                    (the explicit residual)
+Rows 25 and 28 are "Empty set in the UK". The pre-floor RWEA line and the
+pre-floor capital-ratio lines are UKB **KM1** rows (KM1 4a "Total risk-weighted
+exposure amounts (RWEA) (pre-floor)"; KM1 5b/6b/7b the pre-floor CET1/Tier1/Total
+ratios — KM1 5a/6a/7a are the "Fully loaded ECL accounting model" ratios, not
+pre-floor). This calculator does not produce KM1, so pre-floor RWEA/ratios are a
+documented gap, not OV1 rows.
 
-are part of the fixed format. The counts these tests pinned (B31 = 20, CRR = 8)
-were pinning the ABSENCE of that block: B31 = 25 and CRR = 13 now.
-
-The block's ``UK 8a`` row takes the ref string ``"UK8a"``, following the row
-list's own existing convention for a UK-specific insert (``UK4a``, the equity
-row) — a bare token, no space.
+The CCR block that BOTH regimes' OV1 must carry (rows 6 / 7 / 8 / UK 8a / 9,
+rewritten 2026-07-14, docs/plans/c07-ccr-derivatives.md §4 D1) is unchanged and
+still pinned here.
 
 References:
-    PRA PS1/26 Disclosure (CRR) Part, Art. 456
-    UKB OV1 template — pre-floor supplementary rows + the CCR block
+    PRA PS1/26 Annex II — "Template UKB OV1" (rows 1-29) and "Template UKB KM1"
+      (rows 4a / 5b / 6b / 7b — where the pre-floor RWEA and ratios live)
     CRR Art. 274-280f (Section 3), Art. 283 (Section 6), Art. 300-311 (Section 9)
     docs/plans/c07-ccr-derivatives.md §4 D1
 
@@ -39,10 +32,7 @@ ordering deviation causes incorrect Pillar III submissions.
 
 from __future__ import annotations
 
-from decimal import Decimal
-
 import polars as pl
-import pytest
 
 from rwa_calc.reporting.pillar3.templates import (
     B31_OV1_ROWS,
@@ -55,26 +45,19 @@ from tests.fixtures.recon_ledger import LedgerShimPillar3Generator
 # ---------------------------------------------------------------------------
 
 # The CCR block, in regulatory order. It is a CONTIGUOUS block sitting after the
-# last "of which" row of row 1 (row 5, A-IRB) and before the memo rows (24) and
-# the Total (29). Where it sits relative to the Basel 3.1 pre-floor/ratio grafts
-# (4a, 5a-7b) is not pinned — those refs are our own supplementary rows, and the
-# CCR block does not collide with them as strings.
+# last "of which" row of row 1 (row 5, A-IRB) and before the equity memo rows
+# (11-14), the threshold memo (24) and the output-floor rows (26/27) — its fixed
+# position in the UKB OV1 template.
 _CCR_BLOCK_REFS: list[str] = ["6", "7", "8", "UK8a", "9"]
 
 # The pre-CCR row sequences — every one of these refs must survive, in order.
+# Note the ABSENCE of 4a and 5a-7b: those are KM1 rows, removed from OV1 (R16).
 _B31_BASE_REFS: list[str] = [
     "1",
     "2",
     "3",
     "4",
-    "4a",
     "5",
-    "5a",
-    "5b",
-    "6a",
-    "6b",
-    "7a",
-    "7b",
     "11",
     "12",
     "13",
@@ -87,8 +70,11 @@ _B31_BASE_REFS: list[str] = [
 
 _CRR_BASE_REFS: list[str] = ["1", "2", "3", "4", "UK4a", "5", "24", "29"]
 
-_EXPECTED_B31_COUNT = len(_B31_BASE_REFS) + len(_CCR_BLOCK_REFS)  # 25
+_EXPECTED_B31_COUNT = len(_B31_BASE_REFS) + len(_CCR_BLOCK_REFS)  # 18
 _EXPECTED_CRR_COUNT = len(_CRR_BASE_REFS) + len(_CCR_BLOCK_REFS)  # 13
+
+# The KM1 rows that MUST NOT appear in OV1 — the P1.162 graft that R16 removed.
+_KM1_ONLY_REFS: list[str] = ["4a", "5a", "5b", "6a", "6b", "7a", "7b"]
 
 
 def _assert_ccr_block(refs: list[str], base: list[str], label: str) -> None:
@@ -120,47 +106,20 @@ def _assert_ccr_block(refs: list[str], base: list[str], label: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Template definition tests — the corrected UKB OV1 row set
 # ---------------------------------------------------------------------------
 
 
-def _make_pre_floor_lf() -> pl.LazyFrame:
-    """Two-row LazyFrame: one IRB row (800/870) and one slotting row (200/218).
+class TestB31Ov1RowSet:
+    """B31_OV1_ROWS = the corrected UKB OV1 layout (no KM1 pre-floor grafts)."""
 
-    rwa_pre_floor = modelled RWA before floor add-on (800 + 200 = 1000).
-    rwa_final    = post-floor RWA (870 + 218 = 1088).
-    """
-    return pl.LazyFrame(
-        {
-            "exposure_reference": ["IRB1", "SL1"],
-            "approach_applied": ["foundation_irb", "slotting"],
-            "exposure_class": ["corporate", "specialised_lending"],
-            "ead_final": [1000.0, 500.0],
-            "rwa_pre_floor": [800.0, 200.0],
-            "rwa_final": [870.0, 218.0],
-        }
-    )
-
-
-# ---------------------------------------------------------------------------
-# Template definition tests
-# ---------------------------------------------------------------------------
-
-
-class TestB31Ov1RowCount:
-    """B31_OV1_ROWS = the 20 P1.162 rows + the 5-row CCR block = 25."""
-
-    def test_b31_ov1_rows_count_is_25(self) -> None:
-        # Arrange / Act — no computation needed; template is a module constant
+    def test_b31_ov1_rows_count_is_18(self) -> None:
+        # Arrange / Act — no computation; the template is a module constant
         # Assert
         assert len(B31_OV1_ROWS) == _EXPECTED_B31_COUNT, (
-            f"B31 OV1 must carry {_EXPECTED_B31_COUNT} rows: the 20 P1.162 rows plus "
-            f"the CCR block {_CCR_BLOCK_REFS}. Got {[r.ref for r in B31_OV1_ROWS]}."
+            f"B31 OV1 must carry {_EXPECTED_B31_COUNT} rows: {_B31_BASE_REFS} plus the "
+            f"CCR block {_CCR_BLOCK_REFS}. Got {[r.ref for r in B31_OV1_ROWS]}."
         )
-
-
-class TestB31Ov1RowOrder:
-    """B31_OV1_ROWS keeps its P1.162 sequence, with the CCR block inserted."""
 
     def test_b31_ov1_row_refs_in_expected_order(self) -> None:
         # Arrange
@@ -168,15 +127,27 @@ class TestB31Ov1RowOrder:
         # Assert
         _assert_ccr_block(actual_refs, _B31_BASE_REFS, "B31_OV1_ROWS")
 
+    def test_b31_ov1_excludes_km1_pre_floor_rows(self) -> None:
+        """Rows 4a / 5a-7b are UKB KM1 rows and must NOT appear in OV1.
+
+        UKB OV1 (PS1/26 Annex II) has no pre-floor RWEA row and no pre-floor
+        capital-ratio rows — those are KM1 4a / 5b / 6b / 7b. The earlier P1.162
+        graft mis-stated the fixed template; R16 removed it.
+        """
+        # Arrange
+        actual_refs = {r.ref for r in B31_OV1_ROWS}
+        # Assert
+        leaked = [ref for ref in _KM1_ONLY_REFS if ref in actual_refs]
+        assert not leaked, (
+            f"B31_OV1_ROWS still carries KM1-only refs {leaked}. UKB OV1 has NO "
+            "pre-floor RWEA row (4a) and NO pre-floor capital-ratio rows (5a-7b); "
+            "those belong to UKB KM1 (rows 4a / 5b / 6b / 7b), a template this "
+            "calculator does not produce."
+        )
+
 
 class TestCrrOv1CcrBlock:
-    """CRR_OV1_ROWS gets the CCR block too — the UKB OV1 carries the same one.
-
-    P1.162's pre-floor rows are Basel 3.1 only, but the CCR block is not: row 1
-    is labelled "Credit risk (excluding CCR)" in BOTH regimes, and under CRR the
-    CCR legs carry ``approach_origin == "standardised"``, so today CRR's row 1
-    AND row 2 both report them. CRR OV1 goes from 8 rows to 13.
-    """
+    """CRR_OV1_ROWS is unchanged: 8 original rows + the shared CCR block = 13."""
 
     def test_crr_ov1_rows_count_is_13(self) -> None:
         # Assert
@@ -193,138 +164,42 @@ class TestCrrOv1CcrBlock:
 
 
 # ---------------------------------------------------------------------------
-# Row 4a — pre-floor total RWEAs
+# Generated-frame regression — the removed rows must not reappear at runtime
 # ---------------------------------------------------------------------------
 
 
-class TestOv1Row4aPreFloorTotalRwea:
-    """Row 4a must sum rwa_pre_floor across all exposures; c = a * 0.08."""
+def _make_lf() -> pl.LazyFrame:
+    """Two-row LazyFrame: one IRB row and one slotting row."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["IRB1", "SL1"],
+            "approach_applied": ["foundation_irb", "slotting"],
+            "exposure_class": ["corporate", "specialised_lending"],
+            "ead_final": [1000.0, 500.0],
+            "rwa_pre_floor": [800.0, 200.0],
+            "rwa_final": [870.0, 218.0],
+        }
+    )
 
-    def test_b31_ov1_row_4a_pre_floor_total_rwea(self) -> None:
-        """generate_from_lazyframe (B31) produces row 4a with a=1000.0, c=80.0."""
 
+class TestB31Ov1GeneratedRowSet:
+    """The generated B31 OV1 frame carries exactly the corrected row set."""
+
+    def test_generated_b31_ov1_has_no_km1_rows(self) -> None:
         # Arrange
-        lf = _make_pre_floor_lf()
         gen = LedgerShimPillar3Generator()
 
         # Act
-        bundle = gen.generate_from_lazyframe(lf, framework="BASEL_3_1")
+        bundle = gen.generate_from_lazyframe(_make_lf(), framework="BASEL_3_1")
 
         # Assert
         assert bundle.ov1 is not None, "OV1 must be generated for B31 framework"
-        df = bundle.ov1
-        row_4a = df.filter(pl.col("row_ref") == "4a")
-        assert row_4a.height == 1, "Exactly one row with ref '4a' must exist"
-
-        a_val = row_4a["a"][0]
-        c_val = row_4a["c"][0]
-        assert a_val == pytest.approx(1000.0, abs=0.01), (
-            f"Row 4a column 'a' (pre-floor total RWEAs): expected 1000.0, got {a_val}"
+        refs = set(bundle.ov1["row_ref"].to_list())
+        leaked = [ref for ref in _KM1_ONLY_REFS if ref in refs]
+        assert not leaked, (
+            f"generated B31 OV1 still emits KM1-only rows {leaked}; they were removed "
+            "from the template (R16)."
         )
-        assert c_val == pytest.approx(80.0, abs=0.01), (
-            f"Row 4a column 'c' (own funds requirement = 8% of a): expected 80.0, got {c_val}"
+        assert bundle.ov1.height == _EXPECTED_B31_COUNT, (
+            f"generated B31 OV1 must have {_EXPECTED_B31_COUNT} rows, got {bundle.ov1.height}"
         )
-
-
-# ---------------------------------------------------------------------------
-# Rows 5a-7b — capital ratio rows default to None
-# ---------------------------------------------------------------------------
-
-_RATIO_ROW_REFS = ["5a", "5b", "6a", "6b", "7a", "7b"]
-
-
-class TestOv1RatioRowsDefaultNone:
-    """Without capital_ratios kwarg, rows 5a-7b must emit None for a/b/c."""
-
-    def test_b31_ov1_rows_5a_to_7b_default_to_none(self) -> None:
-        # Arrange
-        lf = _make_pre_floor_lf()
-        gen = LedgerShimPillar3Generator()
-
-        # Act — no capital_ratios provided
-        bundle = gen.generate_from_lazyframe(lf, framework="BASEL_3_1")
-
-        # Assert
-        assert bundle.ov1 is not None
-        df = bundle.ov1
-        for ref in _RATIO_ROW_REFS:
-            ratio_row = df.filter(pl.col("row_ref") == ref)
-            assert ratio_row.height == 1, f"Row '{ref}' must be present in OV1"
-            for col in ("a", "b", "c"):
-                val = ratio_row[col][0]
-                assert val is None, (
-                    f"Row '{ref}' column '{col}': expected None (no capital_ratios "
-                    f"supplied), got {val}"
-                )
-
-
-# ---------------------------------------------------------------------------
-# Rows 5a-7b — capital ratio rows use override when provided
-# ---------------------------------------------------------------------------
-
-
-class TestOv1RatioRowsUseOverride:
-    """With Pillar3CapitalRatioOverrides, rows 5a/6a/7a carry the supplied ratios."""
-
-    def test_b31_ov1_rows_5a_to_7b_use_override(self) -> None:
-        import importlib
-
-        # Assert the new config struct exists before proceeding — this is the
-        # primary failing assertion when Pillar3CapitalRatioOverrides has not been
-        # added to config.py yet.
-        config_mod = importlib.import_module("rwa_calc.contracts.config")
-        assert hasattr(config_mod, "Pillar3CapitalRatioOverrides"), (
-            "Pillar3CapitalRatioOverrides must be defined in rwa_calc.contracts.config"
-        )
-
-        from rwa_calc.contracts.config import Pillar3CapitalRatioOverrides
-
-        # Arrange
-        overrides = Pillar3CapitalRatioOverrides(
-            cet1_ratio_pre_floor=Decimal("0.135"),  # 13.5%
-            tier1_ratio_pre_floor=Decimal("0.155"),  # 15.5%
-            total_ratio_pre_floor=Decimal("0.185"),  # 18.5%
-        )
-        lf = _make_pre_floor_lf()
-        gen = LedgerShimPillar3Generator()
-
-        # Act
-        bundle = gen.generate_from_lazyframe(
-            lf,
-            framework="BASEL_3_1",
-            capital_ratios=overrides,
-        )
-
-        # Assert
-        assert bundle.ov1 is not None
-        df = bundle.ov1
-
-        # Row 5a — CET1 ratio (pre-floor): 13.5% expressed as percentage points
-        row_5a = df.filter(pl.col("row_ref") == "5a")
-        assert row_5a.height == 1
-        assert row_5a["a"][0] == pytest.approx(13.5, abs=0.001), (
-            f"Row 5a 'a' (CET1 pre-floor %): expected 13.5, got {row_5a['a'][0]}"
-        )
-
-        # Row 6a — Tier 1 ratio (pre-floor): 15.5%
-        row_6a = df.filter(pl.col("row_ref") == "6a")
-        assert row_6a.height == 1
-        assert row_6a["a"][0] == pytest.approx(15.5, abs=0.001), (
-            f"Row 6a 'a' (Tier1 pre-floor %): expected 15.5, got {row_6a['a'][0]}"
-        )
-
-        # Row 7a — Total capital ratio (pre-floor): 18.5%
-        row_7a = df.filter(pl.col("row_ref") == "7a")
-        assert row_7a.height == 1
-        assert row_7a["a"][0] == pytest.approx(18.5, abs=0.001), (
-            f"Row 7a 'a' (Total capital pre-floor %): expected 18.5, got {row_7a['a'][0]}"
-        )
-
-        # Transitional rows 5b, 6b, 7b — still None (no transitional ratios supplied)
-        for ref in ("5b", "6b", "7b"):
-            tr_row = df.filter(pl.col("row_ref") == ref)
-            assert tr_row.height == 1, f"Row '{ref}' must exist"
-            val = tr_row["a"][0]
-            assert val is None, (
-                f"Row '{ref}' column 'a': expected None (transitional not supplied), got {val}"
-            )

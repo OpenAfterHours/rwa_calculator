@@ -115,60 +115,62 @@ across all risk categories. It is the top-level disclosure from which credit ris
     | 4 | Of which: slotting approach |
     | UK 4a | Of which: equities under the simple risk-weighted approach |
     | 5 | Of which: advanced IRB (AIRB) approach |
-    | 24 | Amounts below deduction thresholds (250% RW) — memo |
+    | 6 / 7 / 8 / UK 8a / 9 | Counterparty credit risk — CCR, and its of-which rows |
+    | 24 | Amounts below the thresholds for deduction (250% RW) — Art. 48(4) memo |
     | 29 | **Total** |
 
 === "Basel 3.1 (UKB OV1)"
 
     | Row | Description |
     |-----|-------------|
-    | 1 | Credit risk (excluding CCR) — total (excludes equity rows 11-14) |
+    | 1 | Credit risk (excluding CCR) — total |
     | 2 | Of which: standardised approach (SA) |
     | 3 | Of which: FIRB approach |
     | 4 | Of which: slotting approach |
-    | **4a** | **Total RWEAs (pre-floor)** — all risk categories before the output floor adjustment |
     | 5 | Of which: AIRB approach |
-    | **5a** | **CET1 capital ratio (%)** |
-    | **5b** | **CET1 capital ratio pre-floor (%)** |
-    | **6a** | **Tier 1 capital ratio (%)** |
-    | **6b** | **Tier 1 capital ratio pre-floor (%)** |
-    | **7a** | **Total capital ratio (%)** |
-    | **7b** | **Total capital ratio pre-floor (%)** |
+    | 6 / 7 / 8 / UK 8a / 9 | Counterparty credit risk — CCR, and its of-which rows (SA-CCR, IMM, CCP, other CCR) |
     | **11** | **Equity positions under the IRB Transitional Approach** |
     | **12** | **Equity investments in funds — look-through approach** |
     | **13** | **Equity investments in funds — mandate-based approach** |
     | **14** | **Equity investments in funds — fall-back approach** |
-    | 24 | Amounts below deduction thresholds (250% RW) — memo |
+    | 24 | Amounts below the thresholds for deduction (250% RW) — Art. 48(4) memo |
     | **26** | **Output floor multiplier** |
     | **27** | **Output floor adjustment** |
     | 29 | **Total** |
 
-    Key Basel 3.1 additions (bold): pre-floor RWEA and capital ratio rows
-    (4a, 5a-b, 6a-b, 7a-b), equity transitional rows (11-14), output floor rows
-    (26-27). Row UK 4a (equities under simple RW) is removed — equity goes to
-    rows 11-14 or SA (row 2).
+    Key Basel 3.1 differences (bold): equity transitional rows (11-14) and the
+    output-floor rows (26-27, Art. 92(5)/92). Row UK 4a (equities under simple RW)
+    is removed — equity goes to rows 11-14 or SA (row 2). Rows 25 and 28 are
+    "Empty set in the UK" in the PS1/26 template.
 
     See [Disclosure Differences — OV1 row changes](../framework-comparison/disclosure-differences.md#ov1-overview-of-rweas)
-    for the complete CRR-vs-Basel 3.1 row delta (lines 31, 33, 63-64).
+    for the complete CRR-vs-Basel 3.1 row delta.
 
-!!! warning "Mandatory for output-floor-active institutions"
-    The pre-floor rows (4a, 5a-b, 6a-b, 7a-b) are mandatory under PRA PS1/26
-    Annex XX (Disclosure (CRR) Part, Art. 2 / Art. 438(d)) for institutions whose
-    actual RWEA total reflects the output floor adjustment (Art. 92(5)). They
-    allow market participants to see the firm's pre-floor capital position
-    alongside the post-floor figures, making the magnitude of the output floor
-    constraint transparent. See [Output floor mechanics](../framework-comparison/key-differences.md#output-floor)
-    for how the floor adjustment in row 27 feeds into the post-floor ratios in
-    rows 5a, 6a, 7a.
+!!! warning "Pre-floor RWEA and pre-floor capital ratios are UKB KM1 rows, not OV1"
+    UKB OV1 (PS1/26 Annex II, "Template UKB OV1 — Overview of risk-weighted
+    exposure amounts. Fixed format", pp. 1-9) has **no** pre-floor RWEA row and
+    **no** pre-floor capital-ratio rows. Its only output-floor lines are row 26
+    (output floor multiplier, Art. 92(5)) and row 27 (output floor adjustment,
+    Art. 92); rows 25 and 28 are "Empty set in the UK".
+
+    The pre-floor total RWEA and the pre-floor CET1 / Tier 1 / Total capital
+    ratios live in **UKB KM1** (Key Metrics): KM1 row 4a "Total risk-weighted
+    exposure amounts (RWEA) (pre-floor)" and KM1 rows 5b / 6b / 7b (the pre-floor
+    ratios — KM1 rows 5a / 6a / 7a are the *fully loaded ECL accounting model*
+    ratios, not pre-floor). This calculator does **not** produce KM1, so those
+    figures are a documented gap rather than OV1 rows. (Earlier versions grafted
+    KM1's 4a / 5a-7b onto OV1; removed in the R16 rectification.)
 
 !!! note "Scope"
-    OV1 covers all risk categories (credit, CCR, CVA, market, operational).
-    Only the credit risk rows (1-5, 11-14, 24) are directly populated from the
-    RWA calculator output. Rows 4a and 5a-b/6a-b/7a-b require own funds figures
-    and post-floor RWA totals from upstream capital-summary processes — the
-    calculator surfaces the credit-risk pre-floor RWEA component (col `pre_floor_rwa`
-    in the OF 02.01 / UKB CMS1 outputs) but does not compute consolidated
-    capital ratios.
+    OV1 covers all risk categories (credit, CCR, CVA, market, operational). This
+    credit-risk calculator populates the credit-risk rows (1-5), the CCR block
+    (6-9 — a zero-valued populated block on a book with no counterparty credit
+    risk), the equity memo rows (11-14), the Art. 48(4) 250%-RW memo (row 24) and
+    the output-floor rows (26-27, Basel 3.1). Rows for market / operational /
+    settlement / securitisation risk are out of scope and stay null. The pre-floor
+    RWEA the market reads off UKB KM1 is surfaced here as the `pre_floor_rwa`
+    component of OF 02.01 / UKB CMS1, but OV1 itself carries no pre-floor row and
+    no capital ratios.
 
 ### Reference Documents
 

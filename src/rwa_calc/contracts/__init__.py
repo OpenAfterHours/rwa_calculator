@@ -42,7 +42,6 @@ from rwa_calc.contracts.config import (
     EquityTransitionalConfig,
     IRBPermissions,
     OutputFloorConfig,
-    Pillar3CapitalRatioOverrides,
     PostModelAdjustmentConfig,
 )
 
@@ -130,7 +129,6 @@ __all__ = [
     "IRBPermissions",
     "PermissionMode",
     "OutputFloorConfig",
-    "Pillar3CapitalRatioOverrides",
     "PostModelAdjustmentConfig",
     # Errors
     "CalculationError",

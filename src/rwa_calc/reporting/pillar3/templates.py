@@ -180,8 +180,8 @@ OV1_COLUMNS: list[P3Column] = [
 # a UK-specific insert (``UK4a``): a bare token, no space.
 #
 # Placed immediately after row 5 (the last "of which" of row 1) — the block's
-# regulatory position. The Basel 3.1 pre-floor/ratio rows (4a, 5a-7b) are our own
-# supplementary grafts and do not dictate where the fixed-format block sits.
+# regulatory position in the fixed-format template (CCR rows precede the equity
+# rows 11-14, per the UKB OV1 layout in PS1/26 Annex II).
 #
 # Row 10 (CVA) is deliberately NOT added: the engine's BA-CVA charge is not a
 # per-leg ``rwa_final``, so there is nothing to bind (recorded gap,
@@ -206,20 +206,22 @@ CRR_OV1_ROWS: list[P3Row] = [
     P3Row("29", "Total", is_total=True),
 ]
 
+# The UKB OV1 row set (PS1/26 Annex II, "Template UKB OV1 — Overview of
+# risk-weighted exposure amounts. Fixed format"). The only output-floor lines
+# the fixed template carries are row 26 (output floor multiplier, Art. 92(5))
+# and row 27 (output floor adjustment, Art. 92); rows 25 and 28 are "Empty set
+# in the UK". The pre-floor RWEA line and the pre-floor capital-ratio lines that
+# earlier versions grafted here as refs 4a / 5a-7b do NOT belong to OV1 — they
+# are UKB KM1 rows (KM1 4a "Total RWEAs (pre-floor)", KM1 5b/6b/7b the pre-floor
+# CET1/Tier1/Total ratios); this calculator does not produce KM1. Removed in the
+# R16 rectification (docs/appendix/changelog.md; PS1/26 Annex II pp. 1-9).
 B31_OV1_ROWS: list[P3Row] = [
     P3Row("1", _LBL_CREDIT_RISK_EX_CCR),
     P3Row("2", "Of which: standardised approach"),
     P3Row("3", "Of which: foundation IRB approach"),
     P3Row("4", "Of which: slotting approach"),
-    P3Row("4a", "Total RWEAs (pre-floor)"),
     P3Row("5", "Of which: advanced IRB approach"),
     *_OV1_CCR_ROWS,
-    P3Row("5a", "CET1 ratio (pre-floor)"),
-    P3Row("5b", "CET1 ratio (pre-floor, transitional)"),
-    P3Row("6a", "Tier 1 ratio (pre-floor)"),
-    P3Row("6b", "Tier 1 ratio (pre-floor, transitional)"),
-    P3Row("7a", "Total capital ratio (pre-floor)"),
-    P3Row("7b", "Total capital ratio (pre-floor, transitional)"),
     P3Row("11", "Equity positions under IRB Transitional Approach"),
     P3Row("12", "Equity investments in funds — look-through approach"),
     P3Row("13", "Equity investments in funds — mandate-based approach"),

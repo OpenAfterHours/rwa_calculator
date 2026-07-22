@@ -100,6 +100,83 @@ def with_reporting_ledger(ours: pl.LazyFrame) -> pl.LazyFrame:
             )
         else:
             exprs.append(pl.lit(None, dtype=pl.Boolean).alias("reporting_on_balance_sheet"))
+    # Sealed per-side gross carriers (CRR Art. 111 on/off-BS credit-risk gross
+    # scope). Independent of ``reporting_on_balance_sheet`` by design: a
+    # credit-risk-in-scope exposure type gets a real on/off split even where
+    # that column would null out (e.g. ``facility_undrawn``), while CCR /
+    # settlement legs stay null on both sides. Mirrors the aggregator's
+    # floor-at-0 convention; a null component inside a known-side sum counts
+    # as 0, but a wholly unknown side stays null (never fill Float nulls to
+    # 0.0 — anti-conservative).
+    # "facility" is a legacy off-BS alias: production never emits it, but
+    # R11-era unit fixtures do, and every discriminator (reporting_on_balance_sheet,
+    # filter_off_bs, the c07_bs/c08_bs ladders) maps it off-BS — the carriers
+    # must too, or the null-carrier asymmetry this fix removes is recreated.
+    credit_bs_types = ("loan", "contingent", "facility_undrawn", "facility")
+
+    def _col_or_null(name: str) -> pl.Expr:
+        return pl.col(name) if name in cols else pl.lit(None, dtype=pl.Float64)
+
+    drawn_expr = _col_or_null("drawn_amount")
+    interest_expr = _col_or_null("interest")
+    nominal_expr = _col_or_null("nominal_amount")
+    undrawn_expr = _col_or_null("undrawn_amount")
+    on_bs_sum = (
+        pl.when(drawn_expr.is_null() & interest_expr.is_null())
+        .then(pl.lit(None, dtype=pl.Float64))
+        .otherwise(
+            drawn_expr.clip(lower_bound=0.0).fill_null(0.0)
+            + interest_expr.clip(lower_bound=0.0).fill_null(0.0)
+        )
+    )
+    if "reporting_gross_on_bs" not in cols:
+        if "exposure_type" in cols:
+            exprs.append(
+                pl.when(pl.col("exposure_type").is_in(list(credit_bs_types)))
+                .then(on_bs_sum)
+                .otherwise(pl.lit(None, dtype=pl.Float64))
+                .alias("reporting_gross_on_bs")
+            )
+        else:
+            # Legacy synthetic frame with no exposure_type: on-side sum
+            # applies unconditionally (the retired whole-bucket fallback).
+            exprs.append(on_bs_sum.alias("reporting_gross_on_bs"))
+    if "reporting_gross_off_bs" not in cols:
+        if "exposure_type" in cols:
+            exprs.append(
+                pl.when(pl.col("exposure_type") == "contingent")
+                .then(nominal_expr.clip(lower_bound=0.0))
+                .when(pl.col("exposure_type") == "facility_undrawn")
+                .then(undrawn_expr.clip(lower_bound=0.0))
+                .when(pl.col("exposure_type") == "loan")
+                .then(pl.lit(0.0))
+                .when(pl.col("exposure_type") == "facility")
+                # Legacy off-BS alias: its carrier home is ambiguous (R11-era
+                # fixtures use either nominal or undrawn), so max_horizontal
+                # counts an aliased pair exactly once; all-null -> null.
+                .then(
+                    pl.max_horizontal(
+                        nominal_expr.clip(lower_bound=0.0),
+                        undrawn_expr.clip(lower_bound=0.0),
+                    )
+                )
+                .otherwise(pl.lit(None, dtype=pl.Float64))
+                .alias("reporting_gross_off_bs")
+            )
+        else:
+            # Legacy synthetic frame with no exposure_type: the off-BS gross
+            # can be carried in either raw column (the retired C 08.03
+            # fallback read nominal; the retired C 07/C 08.01 formula read
+            # undrawn), and pipeline facility_undrawn rows alias the two.
+            # max_horizontal counts an aliased pair exactly once and
+            # reproduces both retired behaviours without double-counting;
+            # all-null -> null (amendment, Wave 2 finding).
+            exprs.append(
+                pl.max_horizontal(
+                    nominal_expr.clip(lower_bound=0.0),
+                    undrawn_expr.clip(lower_bound=0.0),
+                ).alias("reporting_gross_off_bs")
+            )
     return ours.with_columns(exprs) if exprs else ours
 
 

@@ -560,7 +560,11 @@ class TestCR4CR5PopulationSymmetry:
         assert bundle.cr4 is not None
         corp = bundle.cr4.filter(pl.col("row_ref") == "7")
         assert corp["a"][0] == pytest.approx(1000.0)  # on-BS gross drawn+interest (loan)
-        assert corp["b"][0] == pytest.approx(1000.0)  # off-BS gross nominal+undrawn (commitment)
+        # off-BS gross = the commitment's headroom counted ONCE. FU1's nominal_amount
+        # and undrawn_amount are aliases of the SAME 500 headroom (hierarchy/facility_undrawn.py),
+        # so summing both (the retired SafeSum(nominal, undrawn)) double-counts it to 1000;
+        # the sealed reporting_gross_off_bs carrier reads undrawn_amount alone -> 500.
+        assert corp["b"][0] == pytest.approx(500.0)
         assert corp["c"][0] == pytest.approx(1000.0)  # on-BS post-CRM EAD (loan)
         assert corp["d"][0] == pytest.approx(500.0)  # off-BS post-CRM EAD (commitment)
         assert corp["e"][0] == pytest.approx(1500.0)  # RWEA = loan + commitment; CCR excluded
@@ -595,7 +599,9 @@ class TestCR4CR5PopulationSymmetry:
         assert b31.cr5 is not None
         corp = b31.cr5.filter(pl.col("row_ref") == "7")
         assert corp["ba"][0] == pytest.approx(1000.0)  # on-BS gross (loan)
-        assert corp["bb"][0] == pytest.approx(1000.0)  # off-BS gross (undrawn commitment)
+        # off-BS gross = the commitment's 500 headroom counted ONCE, not the
+        # nominal+undrawn double-count (see the CR4 col b comment above).
+        assert corp["bb"][0] == pytest.approx(500.0)
         inst = b31.cr5.filter(pl.col("row_ref") == "6")
         assert inst["ba"][0] == pytest.approx(0.0)  # CCR derivative excluded
         assert inst["bb"][0] == pytest.approx(0.0)

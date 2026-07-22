@@ -19,12 +19,15 @@ docs/plans/phase7-declarative-reporting.md §6):
   covers exposure the on/off-balance-sheet columns (a-d) omit — and
   reclassifies the ``facility_undrawn`` commitment leg to off-balance-sheet.
   See ``pillar3/sa_scope.py`` for the recorded population/BS decision.
-- Columns a/b ("exposures before CF/CCF and CRM": gross drawn+interest /
-  nominal+undrawn) key each class row on ``reporting_class_origin`` — the
-  obligor's applied Art. 112 class, the COREP C 07.00 column 0010 "original
-  exposure" basis (Annex II ¶56 first-step assignment). Uniform across a
-  guaranteed exposure's physical legs, so leg gross amounts re-sum to the
-  obligor's original exposure.
+- Columns a/b ("exposures before CF/CCF and CRM") sum the sealed per-side
+  gross carriers (``reporting_gross_on_bs`` / ``reporting_gross_off_bs``) and
+  key each class row on ``reporting_class_origin`` — the obligor's applied
+  Art. 112 class, the COREP C 07.00 column 0010 "original exposure" basis
+  (Annex II ¶56 first-step assignment). The side lives in the carrier (null
+  outside its side), so the predicate carries no on/off-BS term; the population
+  is already ``sa_scope``-narrowed (CCR dropped, ``facility_undrawn``
+  reclassified off-BS). Uniform across a guaranteed exposure's physical legs, so
+  leg gross amounts re-sum to the obligor's original exposure.
 - Columns c/d (post-CF/post-CRM exposure value), e (RWEAs) and f (density
   e/(c+d)) key on ``reporting_class`` — the post-substitution class
   (C 07.00 column 0200 basis: the covered leg lands in the protection
@@ -56,7 +59,6 @@ from rwa_calc.reporting.cellspec import (
     CellSpec,
     Formula,
     RowPredicate,
-    SafeSum,
     Sum,
     TemplateSpec,
     execute,
@@ -93,13 +95,13 @@ def _row_cells(row: P3Row) -> dict[str, CellSpec] | None:
     classes = row.exposure_classes  # () on the total row -> no class term
     return {
         "a": CellSpec(
-            SafeSum(("reporting_gross_drawn", "reporting_gross_interest")),
-            predicate=RowPredicate(classes_origin=classes, on_balance_sheet=True),
+            Sum("reporting_gross_on_bs"),
+            predicate=RowPredicate(classes_origin=classes),
             empty_cell="zero",
         ),
         "b": CellSpec(
-            SafeSum(("reporting_gross_nominal", "reporting_gross_undrawn")),
-            predicate=RowPredicate(classes_origin=classes, on_balance_sheet=False),
+            Sum("reporting_gross_off_bs"),
+            predicate=RowPredicate(classes_origin=classes),
             empty_cell="zero",
         ),
         "c": CellSpec(

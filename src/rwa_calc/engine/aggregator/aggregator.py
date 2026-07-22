@@ -634,6 +634,26 @@ def _add_reporting_projection(lf: pl.LazyFrame) -> pl.LazyFrame:
       gross-exposure template cells sum these floored twins instead (CRR
       Art. 111 SA / Art. 166 IRB). Nulls stay null. Computed after the CRM
       guarantee split so the floored amounts are leg-consistent.
+    - ``reporting_gross_on_bs`` / ``reporting_gross_off_bs`` — the per-side
+      floored gross carriers a template's on/off-balance-sheet gross cells sum
+      DIRECTLY, independent of ``reporting_on_balance_sheet`` (which stays a
+      strict loan/facility/contingent ladder — the unified pipeline emits
+      ``facility_undrawn`` for undrawn commitment headroom, a value that ladder
+      leaves null, silently dropping the leg from both gross sides while its EAD
+      stays in the EAD/RWEA cells). The side rule keys on ``exposure_type``:
+      an on-balance credit type (loan/contingent/facility_undrawn) with an
+      unknown drawn AND interest stays null (unknown stays unknown), else its
+      on-side is the floored drawn + interest (a null component counts as 0);
+      the off-side is a contingent's floored nominal, a facility_undrawn's
+      floored undrawn (counted exactly ONCE — the two carriers alias the same
+      headroom), a loan's true 0.0, else null. The legacy ``"facility"`` alias
+      (never emitted by the pipeline but recognised by the on/off-BS
+      discriminators and R11-era fixtures) joins the on-side credit types and
+      takes the aliased-pair ``max_horizontal(nominal, undrawn)`` off-side, so a
+      type the discriminators put on a side always has that side's carrier
+      populated. CCR / settlement legs are outside the on/off-BS credit-risk
+      gross scope, so both sides are null there (their EAD/RWEA still report).
+      CRR Art. 111 SA / Art. 166 IRB.
     - ``guarantee_rwa_benefit`` (Phase 7 decision F8, recorded) — the additive
       per-leg Art. 235/236 substitution relief:
       ``ead_final x guarantee_benefit_rw`` = leg EAD x (borrower-basis RW -
@@ -674,6 +694,54 @@ def _add_reporting_projection(lf: pl.LazyFrame) -> pl.LazyFrame:
         rwa_benefit = pl.col("ead_final") * pl.col("guarantee_benefit_rw")
     else:
         rwa_benefit = pl.lit(None, dtype=pl.Float64)
+    # Per-side floored gross carriers (CRR Art. 111 SA / Art. 166 IRB). See the
+    # docstring: on-side = floored drawn + interest for the on-balance credit
+    # types (unknown drawn AND interest -> null); off-side = a contingent's
+    # nominal, a facility_undrawn's undrawn (once), a loan's true 0.0. CCR /
+    # settlement legs fall outside the credit-risk gross scope -> null both
+    # sides. sum_horizontal treats a null component as 0 (never fill_null in
+    # engine/), and the is_null guard keeps a wholly-unknown on-side null.
+    # "facility" is a LEGACY OFF-BS ALIAS (Wave 3 amendment): the production
+    # pipeline never emits it, but reporting_on_balance_sheet / filter_off_bs /
+    # the c07_bs+c08_bs ladders all put it off-BS, and R11-era unit fixtures use
+    # it (off-BS gross in undrawn_amount). A type the discriminators put on a
+    # side MUST have that side's carrier populated, so "facility" joins the
+    # credit-type list on-side and takes the aliased-pair off-side rule below.
+    on_bs_carrier = (
+        pl.when(
+            pl.col("exposure_type").is_in(["loan", "contingent", "facility_undrawn", "facility"])
+        )
+        .then(
+            pl.when(pl.col("drawn_amount").is_null() & pl.col("interest").is_null())
+            .then(pl.lit(None, dtype=pl.Float64))
+            .otherwise(
+                pl.sum_horizontal(
+                    pl.col("drawn_amount").clip(lower_bound=0.0),
+                    pl.col("interest").clip(lower_bound=0.0),
+                )
+            )
+        )
+        .otherwise(pl.lit(None, dtype=pl.Float64))
+    )
+    off_bs_carrier = (
+        pl.when(pl.col("exposure_type") == "contingent")
+        .then(pl.col("nominal_amount").clip(lower_bound=0.0))
+        .when(pl.col("exposure_type") == "facility_undrawn")
+        .then(pl.col("undrawn_amount").clip(lower_bound=0.0))
+        .when(pl.col("exposure_type") == "loan")
+        .then(pl.lit(0.0))
+        # Legacy "facility" alias: its off-BS carrier home is ambiguous
+        # (nominal or undrawn), which pipeline facility_undrawn rows alias, so
+        # max_horizontal counts the pair exactly once. All-null -> null.
+        .when(pl.col("exposure_type") == "facility")
+        .then(
+            pl.max_horizontal(
+                pl.col("nominal_amount").clip(lower_bound=0.0),
+                pl.col("undrawn_amount").clip(lower_bound=0.0),
+            )
+        )
+        .otherwise(pl.lit(None, dtype=pl.Float64))
+    )
     return lf.with_columns(
         pl.col("exposure_class_post_crm").alias("reporting_class"),
         pl.col("exposure_class_applied").alias("reporting_class_origin"),
@@ -698,6 +766,8 @@ def _add_reporting_projection(lf: pl.LazyFrame) -> pl.LazyFrame:
         pl.col("interest").clip(lower_bound=0.0).alias("reporting_gross_interest"),
         pl.col("nominal_amount").clip(lower_bound=0.0).alias("reporting_gross_nominal"),
         pl.col("undrawn_amount").clip(lower_bound=0.0).alias("reporting_gross_undrawn"),
+        on_bs_carrier.alias("reporting_gross_on_bs"),
+        off_bs_carrier.alias("reporting_gross_off_bs"),
     )
 
 

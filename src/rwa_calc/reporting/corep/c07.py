@@ -92,7 +92,7 @@ from rwa_calc.reporting.corep.templates import (
     get_sa_risk_weight_bands,
     get_sa_row_sections,
 )
-from rwa_calc.reporting.kernel import filter_by_approach, gross_carriers, pick
+from rwa_calc.reporting.kernel import filter_by_approach, pick
 from rwa_calc.reporting.metadata import ReportingContext
 from rwa_calc.reporting.plans import SheetPlan
 
@@ -382,10 +382,39 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
         exprs.append(
             pl.when(pl.col("exposure_type") == "loan")
             .then(pl.lit("on"))
-            .when(pl.col("exposure_type").is_in(["facility", "contingent"]))
+            .when(pl.col("exposure_type").is_in(["facility", "contingent", "facility_undrawn"]))
             .then(pl.lit("off"))
             .otherwise(pl.lit(None, dtype=pl.String))
             .alias("c07_bs")
+        )
+
+    # Original-exposure gross for the non-credit-risk legs C 07.00 KEEPS but the
+    # credit-risk side carriers (reporting_gross_on_bs / _off_bs) null out. Unlike
+    # C 08.x / CR4-CR6 (which disclose CCR separately and so drop it from their
+    # gross columns), C 07.00 includes counterparty credit risk (Annex II rows
+    # 0090-0130), so col 0010 must carry the CCR / settlement legs' original
+    # exposure too. Their EAD sits in drawn_amount (no CCF applies), so this is
+    # the pre-fix SafeSum(reporting_gross_drawn, reporting_gross_undrawn) restored
+    # for exactly those legs — null on a credit-risk leg, where the side carriers
+    # already carry the gross. The gate list is EXACTLY the four exposure_types the
+    # side carriers populate (loan / contingent / facility_undrawn + the "facility"
+    # legacy alias, Amendment 2), so col 0010's SafeSum(on_bs, off_bs, c07_ccr_gross)
+    # counts every leg once on exactly one carrier — a "facility" leg must be null
+    # here or its off-side gross would double-count.
+    if {"exposure_type", "reporting_gross_drawn", "reporting_gross_undrawn"} <= cols:
+        exprs.append(
+            pl.when(
+                pl.col("exposure_type").is_in(
+                    ["loan", "contingent", "facility_undrawn", "facility"]
+                )
+            )
+            .then(pl.lit(None, dtype=pl.Float64))
+            .otherwise(
+                pl.sum_horizontal(
+                    pl.col("reporting_gross_drawn"), pl.col("reporting_gross_undrawn")
+                )
+            )
+            .alias("c07_ccr_gross")
         )
 
     # RW band label (retired _compute_rw_section_rows assignment).
@@ -742,7 +771,8 @@ def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row
 
     cells: dict[str, CellSpec] = {
         "0010": CellSpec(
-            SafeSum(gross_carriers(cols, "drawn_amount", "undrawn_amount")), predicate=member
+            SafeSum(("reporting_gross_on_bs", "reporting_gross_off_bs", "c07_ccr_gross")),
+            predicate=member,
         ),
         "0020": CellSpec(Sum("own_funds_deduction_amount"), predicate=member),
         "0030": (

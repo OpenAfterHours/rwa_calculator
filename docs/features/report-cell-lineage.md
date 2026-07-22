@@ -182,7 +182,7 @@ columns being CRR-only). **C 09.02** keeps a value-dependent unweighted-mean fal
 averages when a subset's total EAD is non-positive (`_c09_02_avg_postfix`, on the reported frame the
 drill-down reads); it changes no cell's legs, and no fixture subset triggers it — a recorded
 limitation, since the sweep does not reconcile a `WeightedAvg` cell and so is not that fallback's
-tripwire (unlike C 08.03's sum fallback). **CR6** keys the **obligor** basis (`reporting_class_origin`
+tripwire (a `Sum`-cell fallback would be caught). **CR6** keys the **obligor** basis (`reporting_class_origin`
 — Annex XXII bars substitution effects, the opposite basis from CR4/CR5), forces every defaulted leg
 into the 100% PD band (row 17) via the derived `cr6_alloc_pd` column, and injects its String PD-range
 label into col `a` post-execute (not an addressable numeric cell, skipped by the value-column sweep).
@@ -226,11 +226,12 @@ for the numeric value columns.
 
 **C 08.03**, **C 08.05** and **C 08.06** complete the C 08 estate. C 08.03 (IRB by PD range) and
 C 08.05 (PD back-testing) share a **sparse PD-range** row axis — only populated buckets emit a row,
-each keyed on the derived `c08_pd_range` band. C 08.05 is execute-only; C 08.03 keeps two post-execute
-passes on the *reported* frame (the on/off-balance-sheet whole-bucket fallback on cols 0010/0020; the
-provisions ladder on col 0110). On a loans-only book that fallback fires for col 0020 but is a **value
-no-op** (both the off-balance-sheet split and the whole-bucket fallback sum to `0.0`), a recorded
-limitation the tie-out sweep guards. C 08.06 (IRB slotting specialised lending) keys sheets by **SL
+each keyed on the derived `c08_pd_range` band. C 08.05 is execute-only; C 08.03 keeps a single
+post-execute pass on the *reported* frame (the provisions ladder on col 0110). Its on/off-balance-sheet
+gross columns (0010/0020) now bind the **sealed per-side gross carriers** — `reporting_gross_on_bs`
+and `reporting_gross_off_bs`, sealed at the aggregator exit and summed over the band — so a band with
+no off-balance-sheet rows sums `0.0` naturally and the retired on/off whole-bucket fallback (formerly a
+value no-op on a loans-only book) is gone. C 08.06 (IRB slotting specialised lending) keys sheets by **SL
 type** rather than class, and is the first template with a **per-sheet spec**: the row set is
 number-neutral but the *empty*-row set is per sheet, and an empty non-Total category row carries a
 **fixed display risk weight** in col 0070 (a zero-fill artefact, not a measured weighted average), so

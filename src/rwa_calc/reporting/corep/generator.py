@@ -79,6 +79,7 @@ from rwa_calc.reporting.kernel import (
 )
 from rwa_calc.reporting.kernel import (
     column_name_map,
+    ensure_gross_side_carriers,
     write_metadata_sheet,
     write_template_sheet,
 )
@@ -261,6 +262,11 @@ class COREPGenerator:
                 (row 0080). When ``None`` C 08.04 rows 0010-0080 stay null.
         """
         errors: list[str] = []
+        cols = _available_columns(results)
+        # The sealed aggregator exit carries the per-side gross carriers; a
+        # direct/synthetic frame gets the same mirror derivation so every
+        # on/off-BS gross cell (C 07/C 08) can read them unconditionally.
+        results = ensure_gross_side_carriers(results, cols)
         cols = _available_columns(results)
 
         # SA templates (C 07.00)

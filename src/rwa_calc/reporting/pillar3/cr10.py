@@ -9,9 +9,13 @@ Pipeline position:
 Cell semantics (recorded decisions, this slice):
 
 - Each subtemplate draws its OWN population. CR10.1-4 (specialised lending)
-  read the ORIGIN slotting book (``reporting_approach_origin == "slotting"``);
-  a guaranteed slotting exposure's covered leg leaves the slotting approach
-  entirely, so the origin basis is the obligor basis by construction. CR10.5
+  read the ORIGIN slotting book (``reporting_approach_origin == "slotting"``)
+  narrowed by ``irb_scope.irb_credit_risk_population`` (the non-credit-risk CCR /
+  settlement synthetic legs dropped — EU 2021/637 Annex XXIII scopes CR10 to
+  credit risk, the IRB mirror of the CR4/CR5 ``sa_scope`` decision — and the
+  ``facility_undrawn`` commitment reclassified off-balance-sheet); a guaranteed
+  slotting exposure's covered leg leaves the slotting approach entirely, so the
+  origin basis is the obligor basis by construction. CR10.5
   (CRR only) reads the Art. 155(2) simple-RW equity legs
   (``reporting_approach_origin == "equity"`` AND ``equity_method ==
   "irb_simple"``) — Art. 133 SA equity and Art. 155(3) PD/LGD equity are
@@ -66,7 +70,7 @@ Cell semantics (recorded decisions, this slice):
   no legs) and reads its display value from the reported frame rather than a
   binding whose value could differ from the fixed weight on the screen (the
   C 08.06 unbound-0070 precedent; col ``b`` on the equity sheet is unbound the
-  same way). Every OTHER cell (a/b/d/e/f) is a Sum/SafeSum, so the sweep
+  same way). Every OTHER cell (a/b/d/e/f) is a Sum, so the sweep
   reconciles it against its legs. CR10 carries no "(-)"-labelled deduction column,
   so ``negative_cols`` is empty.
 
@@ -78,8 +82,6 @@ References:
 
 from __future__ import annotations
 
-from dataclasses import replace
-
 import polars as pl
 from watchfire import cites
 
@@ -87,12 +89,12 @@ from rwa_calc.domain.enums import EquityApproach
 from rwa_calc.reporting.cellspec import (
     CellSpec,
     RowPredicate,
-    SafeSum,
     Sum,
     TemplateSpec,
     execute,
 )
 from rwa_calc.reporting.metadata import ReportingContext
+from rwa_calc.reporting.pillar3.irb_scope import irb_credit_risk_population
 from rwa_calc.reporting.pillar3.templates import (
     CR10_EQUITY_RISK_WEIGHTS,
     CR10_EQUITY_ROWS,
@@ -136,14 +138,12 @@ def _slotting_row_cells(category: str | None, is_short: bool | None) -> dict[str
     member = RowPredicate(equals=tuple(terms))
 
     return {
-        "a": CellSpec(
-            SafeSum(("reporting_gross_drawn", "reporting_gross_interest")),
-            predicate=replace(member, on_balance_sheet=True),
-        ),
-        "b": CellSpec(
-            SafeSum(("reporting_gross_nominal", "reporting_gross_undrawn")),
-            predicate=replace(member, on_balance_sheet=False),
-        ),
+        # Cols a/b sum the sealed per-side gross carriers over the row (the side
+        # lives in the carrier — null outside its side — so the predicate carries
+        # no on/off-BS term; the irb_scope narrowing drops the CCR legs and
+        # reclassifies facility_undrawn off-BS).
+        "a": CellSpec(Sum("reporting_gross_on_bs"), predicate=member, empty_cell="zero"),
+        "b": CellSpec(Sum("reporting_gross_off_bs"), predicate=member, empty_cell="zero"),
         "d": CellSpec(Sum("reporting_ead"), predicate=member),
         "e": CellSpec(Sum("rwa_final"), predicate=member),
         "f": CellSpec(Sum("expected_loss"), predicate=member),
@@ -259,7 +259,11 @@ def cr10_plans(
     if "ead_final" not in cols or not ({"rwa_final", "rwa"} & cols):
         errors.append("CR10: missing required columns")
         return {}
-    data = results.collect()
+    # Drop the non-credit-risk synthetic CCR / settlement legs (EU 2021/637
+    # Annex XXIII scopes CR10 to credit risk; CCR is disclosed in CCR1-CCR8 —
+    # the IRB mirror of the CR4/CR5 sa_scope decision) and reclassify the
+    # facility_undrawn commitment off-balance-sheet.
+    data = irb_credit_risk_population(results.collect(), cols)
     slotting = _with_is_short(data.filter(pl.col("reporting_approach_origin") == "slotting"))
     equity_simple = _equity_simple_population(data)
     if slotting.height == 0 and equity_simple.height == 0:

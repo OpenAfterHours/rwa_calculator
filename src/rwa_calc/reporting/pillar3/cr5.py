@@ -85,7 +85,6 @@ from rwa_calc.reporting.cellspec import (
     CellSpec,
     Formula,
     RowPredicate,
-    SafeSum,
     Sum,
     TemplateSpec,
     WeightedAvg,
@@ -196,12 +195,14 @@ def build_cr5_spec(framework: str) -> TemplateSpec:
         )
         if is_b31:
             cells[(row.ref, "ba")] = CellSpec(
-                SafeSum(("reporting_gross_drawn", "reporting_gross_interest")),
-                predicate=replace(member, on_balance_sheet=True),
+                Sum("reporting_gross_on_bs"),
+                predicate=member,
+                empty_cell="zero",
             )
             cells[(row.ref, "bb")] = CellSpec(
-                SafeSum(("reporting_gross_nominal", "reporting_gross_undrawn")),
-                predicate=replace(member, on_balance_sheet=False),
+                Sum("reporting_gross_off_bs"),
+                predicate=member,
+                empty_cell="zero",
             )
             cells[(row.ref, "bc")] = CellSpec(
                 WeightedAvg("ccf", weight="reporting_ead"),

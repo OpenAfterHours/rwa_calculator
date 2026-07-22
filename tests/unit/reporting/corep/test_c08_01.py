@@ -237,6 +237,52 @@ def _get_section3_row(df: pl.DataFrame, row_ref: str) -> pl.DataFrame:
     return df.filter(pl.col("row_ref") == row_ref)
 
 
+def _irb_mixed_gross_side_carrier_results() -> pl.LazyFrame:
+    """One corporate class: a loan (with accrued interest), a contingent, and
+    a facility_undrawn commitment."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["LN1", "CO1", "FU1"],
+            "counterparty_reference": ["CP1", "CP2", "CP3"],
+            "exposure_class": ["corporate"] * 3,
+            "approach_applied": ["foundation_irb"] * 3,
+            "exposure_type": ["loan", "contingent", "facility_undrawn"],
+            "risk_weight": [0.7, 0.7, 0.7],
+            "ead_final": [5000.0, 1000.0, 3000.0],
+            "rwa_final": [3500.0, 700.0, 2100.0],
+            "drawn_amount": [5000.0, 0.0, 0.0],
+            "interest": [100.0, 0.0, 0.0],
+            "nominal_amount": [0.0, 2000.0, 4000.0],
+            "undrawn_amount": [0.0, 0.0, 4000.0],
+            "pd_floored": [0.005, 0.005, 0.005],
+            "lgd_floored": [0.45, 0.45, 0.45],
+            "irb_maturity_m": [2.5, 2.5, 2.5],
+            "expected_loss": [10.0, 5.0, 8.0],
+            "scra_provision_amount": [0.0, 0.0, 0.0],
+            "gcra_provision_amount": [0.0, 0.0, 0.0],
+            "ccf": [None, 0.5, 0.75],
+        }
+    )
+
+
+class TestC0801GrossSideCarriers:
+    """R-gross-side-carriers: col 0020 (original exposure) must count a
+    contingent's nominal amount and a loan's accrued interest (today's
+    SafeSum(drawn, undrawn) drops both — a deliberate golden mover, CRR
+    Art. 166). See .claude/state/gross-side-carriers-spec.md.
+    """
+
+    def test_col_0020_includes_contingent_nominal_and_interest(self) -> None:
+        """Total row (0020) = on-BS (loan drawn+interest) + off-BS (contingent
+        nominal + facility_undrawn headroom) = 5100 + 6000 = 11100 (today:
+        drawn 5000 + undrawn 4000 = 9000, dropping the 100 interest and the
+        2000 contingent nominal)."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_mixed_gross_side_carrier_results())
+        corp = _get_total_row(bundle.c08_01["corporate"])
+        assert corp["0020"][0] == pytest.approx(11100.0)
+
+
 class TestC0801:
     """Tests for C 08.01 IRB totals template generation."""
 

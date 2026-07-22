@@ -16,7 +16,12 @@ docs/plans/phase7-declarative-reporting.md §6):
   from the CR4/CR5 tranche; number-neutral for IRB rows (IRB reclassifies
   on the origination class itself and has no defaulted class).
 - The population is the ORIGIN F-IRB/A-IRB book (``reporting_approach_origin``
-  — slotting is excluded from the PD scale); a class produces a sheet only
+  — slotting is excluded from the PD scale), narrowed by
+  ``irb_scope.irb_credit_risk_population`` to drop the non-credit-risk synthetic
+  CCR / settlement legs (EU 2021/637 Annex XXII scopes CR6 to credit risk; CCR
+  is disclosed in CCR1-CCR8 — the IRB mirror of the CR4/CR5 ``sa_scope``
+  decision) and to reclassify the ``facility_undrawn`` commitment leg
+  off-balance-sheet so col d (avg CCF) counts it. A class produces a sheet only
   when present in that population and in the ``IRB_EXPOSURE_CLASSES`` axis.
 - PD-band rows allocate on the derived ``cr6_alloc_pd`` column, half-open
   [lower, upper): Basel 3.1 allocates on the PRE-input-floor ``pd`` and
@@ -70,13 +75,13 @@ from rwa_calc.reporting.cellspec import (
     Count,
     Ratio,
     RowPredicate,
-    SafeSum,
     Sum,
     TemplateSpec,
     WeightedAvg,
     execute,
 )
 from rwa_calc.reporting.metadata import ReportingContext
+from rwa_calc.reporting.pillar3.irb_scope import irb_credit_risk_population
 from rwa_calc.reporting.pillar3.templates import (
     CR6_PD_RANGES,
     IRB_EXPOSURE_CLASSES,
@@ -114,23 +119,18 @@ def _row_cells(row: P3Row, exposure_class: str) -> dict[str, CellSpec]:
     member = (
         base if row.is_total else RowPredicate(classes_origin=(exposure_class,), between=_band(row))
     )
-    on_bs = RowPredicate(
-        classes_origin=(exposure_class,),
-        on_balance_sheet=True,
-        between=() if row.is_total else _band(row),
-    )
     off_bs = RowPredicate(
         classes_origin=(exposure_class,),
         on_balance_sheet=False,
         between=() if row.is_total else _band(row),
     )
     return {
-        "b": CellSpec(
-            SafeSum(("reporting_gross_drawn", "reporting_gross_interest")), predicate=on_bs
-        ),
-        "c": CellSpec(
-            SafeSum(("reporting_gross_nominal", "reporting_gross_undrawn")), predicate=off_bs
-        ),
+        # Cols b/c sum the sealed per-side gross carriers over the whole band
+        # (the side lives in the carrier — null outside its side — so the
+        # predicate carries no on/off-BS term; the irb_scope narrowing has
+        # already patched facility_undrawn off-BS for col d).
+        "b": CellSpec(Sum("reporting_gross_on_bs"), predicate=member),
+        "c": CellSpec(Sum("reporting_gross_off_bs"), predicate=member),
         "d": CellSpec(WeightedAvg("ccf", weight="reporting_ead"), predicate=off_bs),
         "e": CellSpec(Sum("reporting_ead"), predicate=member, empty_cell="zero"),
         "f": CellSpec(
@@ -217,7 +217,7 @@ def cr6_plans(
         errors.append("CR6: missing PD column")
         return {}
 
-    data = results.collect()
+    data = irb_credit_risk_population(results.collect(), cols)
     population = data.filter(pl.col("reporting_approach_origin").is_in(list(_IRB_APPROACHES)))
     if population.height == 0:
         return {}

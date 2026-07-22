@@ -696,12 +696,11 @@ LINEAGE_PLANS: dict[str, _Provider] = {
     # C 08.03 — IRB by PD range (per exposure class; R24). Sparse PD-range rows
     # (populated buckets + optional 9999 Unassigned) keyed on the derived
     # c08_pd_range band label. generate_c08_03 is the provider generator directly:
-    # its two post-execute passes live on the reported frame the drill-down reads.
-    # The retired on/off-BS whole-bucket fallback (cols 0010/0020) fires on a
-    # loans-only book for col 0020 (off-BS empty) but is a VALUE NO-OP there
-    # (loans carry no nominal_amount, so the whole-bucket fallback and the off-BS
-    # binding both sum to 0.0) — recorded as a limitation with the sweep as the
-    # tripwire, the c08_07 col-0040 precedent.
+    # its one post-execute pass (the provisions ladder, col 0110) lives on the
+    # reported frame the drill-down reads. Cols 0010/0020 Sum the sealed per-side
+    # gross carriers (reporting_gross_on_bs / _off_bs) over the band with a
+    # member-only predicate — row-level and null outside their side — so they need
+    # no post-pass.
     "c08_03": _Provider(
         plans=c08_03_plans,
         generate=generate_c08_03,
@@ -715,14 +714,12 @@ LINEAGE_PLANS: dict[str, _Provider] = {
             "pd_floored under CRR, on the pre-input-floor pd under Basel 3.1; the "
             "reported PD is always post-floor) plus an optional 9999 'Unassigned' "
             "residual — sparse: only populated buckets emit a row",
-            "Cols 0010 (on balance sheet) / 0020 (off balance sheet) split each "
-            "band on the derived c08_bs flag; their retired whole-bucket fallback "
-            "runs post-execute on the REPORTED frame (when a band's on/off split is "
-            "empty the column sums the whole band instead). RECORDED LIMITATION: on "
-            "a band where the fallback fires and diverges, the drill-down's legs "
-            "would sum to the split's value, not the whole-band figure — on a "
-            "loans-only book the off-BS split is empty but its fallback is 0.0, so "
-            "no divergence arises today",
+            "Cols 0010 (on balance sheet) / 0020 (off balance sheet) Sum the "
+            "sealed per-side gross carriers (reporting_gross_on_bs / "
+            "reporting_gross_off_bs) over the band. The carriers are row-level and "
+            "null outside their side, so a CCR / settlement leg (null on both "
+            "sides) appears in the EAD/RWEA cells (0040/0090) but not in 0010/0020, "
+            "and a band with no off-balance-sheet rows sums to 0.0 naturally",
         ),
         sheet_label="exposure class",
     ),
@@ -883,9 +880,11 @@ LINEAGE_PLANS: dict[str, _Provider] = {
             "All defaulted exposures are forced into the 100% PD band (row 17) via "
             "the derived column, per Annex XXII ('All defaulted exposures shall be "
             "included in the bucket representing PD of 100%')",
-            "Gross columns b/c sum the floored reporting_gross carriers "
-            "(reporting_gross_drawn/interest on-balance-sheet, "
-            "reporting_gross_nominal/undrawn off-balance-sheet); f/h/i report the "
+            "Gross columns b/c sum the sealed per-side gross carriers over the "
+            "band (reporting_gross_on_bs on-balance-sheet, reporting_gross_off_bs "
+            "off-balance-sheet — the side is in the carrier, so the cells carry no "
+            "on/off-BS predicate; the CCR legs are dropped and facility_undrawn is "
+            "patched off-BS by irb_scope); f/h/i report the "
             "EAD-weighted post-floor pd_floored x100 / lgd_floored x100 / "
             "irb_maturity_m; k is the RWEA density; col m (SCRA provisions) is "
             "permanently null (never produced by the engine). Col a is the String "

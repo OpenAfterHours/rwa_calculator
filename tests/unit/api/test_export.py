@@ -301,6 +301,8 @@ class TestExportToParquet:
             "reporting_gross_nominal",
             "reporting_gross_undrawn",
             "reporting_on_balance_sheet",
+            "reporting_gross_on_bs",
+            "reporting_gross_off_bs",
         ]
 
     def test_parquet_roundtrip_preserves_data(

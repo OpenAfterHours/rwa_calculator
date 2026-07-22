@@ -31,10 +31,23 @@ docs/plans/phase7-declarative-reporting.md §6):
   multiplier was not applied"); the RWEA elsewhere still reflects the
   multiplier.
 - "Other/Deducted" is the residual Formula max(0, Total - Σ bands).
-- "Of which: unrated" equals the Total — ``sa_cqs`` is never produced by the
-  engine and the seal strips undeclared columns, so the all-unrated fallback
-  IS the recorded behaviour (plan F6; an engine rating-presence column is
-  the recorded fix path).
+- "Of which: unrated" (CRR col q / B31 col ae) is the exposure value for which
+  no nominated-ECAI credit assessment is available — an INPUT availability fact
+  (CRR Art. 444(e); PS1/26 Annex XX / EBA Annex XX), NOT a function of whether
+  the class treatment uses the rating. It keys on the sealed own-external-rating
+  carrier ``external_cqs`` (null = the leg carries no own ECAI assessment) via
+  the derived ``cr5_unrated`` flag, applied uniformly across every class row.
+  Because ``external_cqs`` partitions each row's legs into rated / unrated, the
+  column satisfies unrated ≤ Total and rated + unrated == Total per row. Frames
+  lacking the carrier (synthetic unit frames) fall back to all-unrated, so the
+  pre-fix column == Total behaviour is preserved there (mirrors the C 08
+  unrated-corporate discriminator, ``reporting/corep/c08.py``).
+  Known limitation (recorded): a guarantee-substituted ``__G_`` leg keeps the
+  OBLIGOR's ``external_cqs`` (the hierarchy resolves own ratings only; the CRM
+  split never repoints it) while CR5 bands that leg in the GUARANTOR's class
+  row — so a rated-guarantor leg from an unrated obligor counts as unrated in
+  the guarantor's row. Repointing to the guarantor's rating is an out-of-scope
+  engine change; unrated ≤ Total still holds.
 - Basel 3.1 rows 9/9f/9g additionally match the physical 55%-LTV split legs
   by ``re_split_role`` ("secured"/"residual") — the Art. 124F/124L legs
   carry reclassified exposure classes, so the role limb (not the class
@@ -91,6 +104,11 @@ _BAND_TOL = 0.005
 
 # The derived banding column added by ``_with_rw_bucket``.
 _BUCKET_COL = "cr5_rw_bucket"
+
+# The derived rating-presence discriminator added by ``_with_unrated_flag``
+# (True = no own nominated-ECAI assessment → counts in the "of which: unrated"
+# column q / ae).
+_UNRATED_COL = "cr5_unrated"
 
 
 def _membership(row: P3Row) -> RowPredicate | None:
@@ -161,7 +179,9 @@ def build_cr5_spec(framework: str) -> TemplateSpec:
             Sum("reporting_ead"), predicate=member, empty_cell="zero"
         )
         cells[(row.ref, unrated_ref)] = CellSpec(
-            Sum("reporting_ead"), predicate=member, empty_cell="zero"
+            Sum("reporting_ead"),
+            predicate=replace(member, equals=(*member.equals, (_UNRATED_COL, True))),
+            empty_cell="zero",
         )
         if is_b31:
             cells[(row.ref, "ba")] = CellSpec(
@@ -213,7 +233,8 @@ def generate_cr5(
         errors.append("CR5: missing EAD or risk_weight column")
         return None
     spec = _CR5_SPECS.get(framework) or build_cr5_spec(framework)
-    return execute(spec, _with_rw_bucket(sa_credit_risk_population(results, cols), cols))
+    narrowed = sa_credit_risk_population(results, cols)
+    return execute(spec, _with_unrated_flag(_with_rw_bucket(narrowed, cols), cols))
 
 
 def _with_rw_bucket(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:
@@ -234,3 +255,18 @@ def _with_rw_bucket(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:
     else:
         bucket = base
     return results.with_columns(bucket.alias(_BUCKET_COL))
+
+
+def _with_unrated_flag(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:
+    """Add the CR5 ``cr5_unrated`` discriminator (col q / ae).
+
+    CRR Art. 444(e) / PS1/26 Annex XX: "of which: unrated" is the exposure
+    value for which no nominated-ECAI credit assessment is available — an INPUT
+    availability fact keyed on the sealed own-external-rating carrier
+    ``external_cqs`` (null = the leg carries no own ECAI assessment). Frames
+    without the carrier (synthetic unit frames) fall back to all-unrated,
+    preserving the pre-fix column == Total behaviour there — mirrors the C 08
+    unrated-corporate discriminator (``reporting/corep/c08.py``).
+    """
+    unrated = pl.col("external_cqs").is_null() if "external_cqs" in cols else pl.lit(value=True)
+    return results.with_columns(unrated.alias(_UNRATED_COL))

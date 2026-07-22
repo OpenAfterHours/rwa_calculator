@@ -282,6 +282,16 @@ exposure class. It reveals the distribution of risk across the portfolio.
     - Currency mismatch exposures reported against the weight that would apply
       without the 1.5x multiplier (RWEA still reflects it)
 
+!!! note "Of which: unrated (col q / ae)"
+    Reports the post-CRM exposure value of legs for which **no nominated-ECAI
+    credit assessment is available** — an input availability fact, keyed on the
+    sealed own-external-rating carrier (`external_cqs` null = unrated). It is
+    applied uniformly to every class row and is **independent of whether the
+    class treatment uses the rating**: a retail leg (flat 75% RW that ignores
+    ratings) that nonetheless carries an ECAI assessment counts as *rated*, and
+    an unrated corporate counts as *unrated*. The column always satisfies
+    `unrated ≤ Total`, and `rated + unrated == Total` per row.
+
 ### Row Structure
 
 Rows 1-16 by SA exposure class. Basel 3.1 adds the same "of which" real estate and

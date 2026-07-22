@@ -87,6 +87,39 @@ def _make_sa_data_with_mismatch(**overrides: object) -> pl.LazyFrame:
     return pl.LazyFrame(base)
 
 
+def _make_sa_data_with_ratings() -> pl.LazyFrame:
+    """SA legs carrying an own external CQS (``external_cqs``) on some rows.
+
+    R17: CR5 "of which: unrated" (col q / ae) is the exposure value with NO
+    nominated-ECAI assessment available, keyed on ``external_cqs`` (null =
+    unrated). Mixes rated and unrated legs within one class row, and includes a
+    rated retail leg (a class whose flat RW ignores the rating) to pin the
+    documented reading: unrated is an ECAI-availability fact, not a
+    rating-is-used fact — the rated retail leg counts as RATED.
+
+        C_RATED     corporate     CQS 3  ead 1000  -> rated
+        C_UNRATED   corporate     null   ead  400  -> unrated
+        INST_RATED  institution   CQS 2  ead 2000  -> rated
+        RETAIL_RATED retail_other CQS 4  ead  300  -> rated (rating ignored by 75% RW)
+    """
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["C_RATED", "C_UNRATED", "INST_RATED", "RETAIL_RATED"],
+            "approach_applied": ["standardised"] * 4,
+            "exposure_class": ["corporate", "corporate", "institution", "retail_other"],
+            "external_cqs": pl.Series([3, None, 2, 4], dtype=pl.Int8),
+            "ead_final": [1000.0, 400.0, 2000.0, 300.0],
+            "rwa_final": [1000.0, 400.0, 1000.0, 225.0],
+            "risk_weight": [1.0, 1.0, 0.5, 0.75],
+            "drawn_amount": [1000.0, 400.0, 2000.0, 300.0],
+            "interest": [0.0, 0.0, 0.0, 0.0],
+            "nominal_amount": [0.0, 0.0, 0.0, 0.0],
+            "undrawn_amount": [0.0, 0.0, 0.0, 0.0],
+            "exposure_type": ["loan", "loan", "loan", "loan"],
+        }
+    )
+
+
 def _make_defaulted_reclass_data() -> pl.LazyFrame:
     """One SA exposure whose raw class is corporate but whose APPLIED Art. 112
     class is defaulted (Art. 112(1)(j)/127 assessment rank beats corporates) —
@@ -319,9 +352,10 @@ class TestCR5Generation:
         assert "ba" in bundle.cr5.columns
         assert "bd" in bundle.cr5.columns
 
-    def test_cr5_unrated_column(self, generator: Pillar3Generator):
-        """sa_cqs is never produced by the engine (F6 recorded fallback), so
-        every exposure reports as unrated — column q equals the Total."""
+    def test_cr5_unrated_column_all_unrated_fallback(self, generator: Pillar3Generator):
+        """A frame carrying no ``external_cqs`` carrier falls back to all-unrated,
+        so column q equals the Total — the pre-R17 behaviour preserved on frames
+        that supply no rating info (mirrors the C 08 discriminator's fallback)."""
         data = _make_sa_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
         assert bundle.cr5 is not None
@@ -420,6 +454,77 @@ class TestCR5CurrencyMismatchBucketing:
             f"Mismatch row EAD (100_000) must NOT be in Other/Deducted ('ac'), "
             f"but got {ead_in_other}."
         )
+
+
+class TestCR5UnratedDiscriminator:
+    """R17: CR5 "of which: unrated" reports only legs WITHOUT an own ECAI
+    assessment (``external_cqs`` null), not 100% of every class row.
+
+    The reading (CRR Art. 444(e) col q / PS1/26 Annex XX col ae; EBA Annex XX
+    instructions): "unrated" = exposure value for which no nominated-ECAI
+    credit assessment is available — an INPUT availability fact applied to
+    EVERY class row, independent of whether the class RW uses the rating.
+    """
+
+    def test_rated_leg_excluded_from_unrated_column_crr(self, generator: Pillar3Generator):
+        """Corporate row: Total counts both legs, unrated counts only the
+        null-``external_cqs`` leg (the CQS-3 leg is rated → excluded)."""
+        bundle = generator.generate_from_lazyframe(_make_sa_data_with_ratings(), framework="CRR")
+        assert bundle.cr5 is not None
+        corp = bundle.cr5.filter(pl.col("row_ref") == "7")
+        assert corp["p"][0] == pytest.approx(1400.0)  # Total = 1000 rated + 400 unrated
+        assert corp["q"][0] == pytest.approx(400.0)  # unrated = the null-CQS leg only
+
+    def test_fully_rated_row_reports_zero_unrated_crr(self, generator: Pillar3Generator):
+        """Institution row is entirely rated (CQS 2): unrated (q) drops to 0."""
+        bundle = generator.generate_from_lazyframe(_make_sa_data_with_ratings(), framework="CRR")
+        assert bundle.cr5 is not None
+        inst = bundle.cr5.filter(pl.col("row_ref") == "6")
+        assert inst["p"][0] == pytest.approx(2000.0)
+        assert inst["q"][0] == pytest.approx(0.0)
+
+    def test_rated_but_rating_ignored_class_counts_as_rated_crr(self, generator: Pillar3Generator):
+        """A retail leg carrying an ECAI assessment counts as RATED even though
+        the 75% retail RW ignores the rating — the documented availability
+        reading, not a rating-is-used reading."""
+        bundle = generator.generate_from_lazyframe(_make_sa_data_with_ratings(), framework="CRR")
+        assert bundle.cr5 is not None
+        retail = bundle.cr5.filter(pl.col("row_ref") == "8")
+        assert retail["p"][0] == pytest.approx(300.0)
+        assert retail["q"][0] == pytest.approx(0.0)  # rated → excluded from unrated
+
+    def test_total_row_unrated_sums_only_unrated_legs_crr(self, generator: Pillar3Generator):
+        """Grand-total row: unrated (q) = 400 (the single null-CQS leg), not the
+        3700 Total — the R17 bug reported 100% of exposure as unrated."""
+        bundle = generator.generate_from_lazyframe(_make_sa_data_with_ratings(), framework="CRR")
+        assert bundle.cr5 is not None
+        total = bundle.cr5.filter(pl.col("row_ref") == "17")
+        assert total["p"][0] == pytest.approx(3700.0)
+        assert total["q"][0] == pytest.approx(400.0)
+
+    def test_unrated_never_exceeds_total_every_row_crr(self, generator: Pillar3Generator):
+        """Invariant: unrated (q) ≤ Total (p) for every bound CR5 row."""
+        bundle = generator.generate_from_lazyframe(_make_sa_data_with_ratings(), framework="CRR")
+        assert bundle.cr5 is not None
+        for row in bundle.cr5.iter_rows(named=True):
+            total, unrated = row["p"], row["q"]
+            if total is not None and unrated is not None:
+                assert unrated <= total + 1e-9, (
+                    f"row {row['row_ref']}: unrated {unrated} > total {total}"
+                )
+
+    def test_unrated_discriminator_b31_column_ae(self, generator: Pillar3Generator):
+        """Basel 3.1: the discriminator binds the B31 "of which: unrated" column
+        ``ae`` (Total is ``ad``) — corporate row excludes the rated leg."""
+        bundle = generator.generate_from_lazyframe(
+            _make_sa_data_with_ratings(), framework="BASEL_3_1"
+        )
+        assert bundle.cr5 is not None
+        corp = bundle.cr5.filter(pl.col("row_ref") == "7")
+        assert corp["ad"][0] == pytest.approx(1400.0)  # Total
+        assert corp["ae"][0] == pytest.approx(400.0)  # of which unrated
+        total = bundle.cr5.filter(pl.col("row_ref") == "17")
+        assert total["ae"][0] == pytest.approx(400.0)
 
 
 # ---------------------------------------------------------------------------

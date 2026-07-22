@@ -58,7 +58,7 @@ Last generated: 2026-07-22.
 
 ??? quote "`_add_reporting_projection` — src/rwa_calc/engine/aggregator/aggregator.py:597"
     ```python
-    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:596:701"
+    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:596:771"
     ```
 
 ??? quote "`apply_risk_weights` — src/rwa_calc/engine/sa/risk_weights.py:327"
@@ -1023,7 +1023,7 @@ Last generated: 2026-07-22.
 
 ??? quote "`_add_reporting_projection` — src/rwa_calc/engine/aggregator/aggregator.py:596"
     ```python
-    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:596:701"
+    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:596:771"
     ```
 
 ??? quote "`build_domestic_cgcb_guarantor_expr` — src/rwa_calc/engine/eu_sovereign.py:83"

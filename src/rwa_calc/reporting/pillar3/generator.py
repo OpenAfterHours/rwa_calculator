@@ -403,7 +403,7 @@ class Pillar3Generator:
         References:
             CRR Art. 444(e); PRA PS1/26 Annex XX.
         """
-        return generate_cr5(results, cols, framework, errors)
+        return _single_frame(generate_cr5(results, cols, framework, errors))
 
     # ---- CR6 ----
 
@@ -593,7 +593,7 @@ class Pillar3Generator:
         References:
             PRA PS1/26 Art. 456(1)(a), Art. 2a(1).
         """
-        return generate_cms1(results, cols, framework, errors)
+        return _single_frame(generate_cms1(results, cols, framework, errors))
 
     # ---- CMS2 ----
 
@@ -615,7 +615,7 @@ class Pillar3Generator:
         References:
             PRA PS1/26 Art. 456(1)(b), Art. 2a(2).
         """
-        return generate_cms2(results, cols, framework, errors)
+        return _single_frame(generate_cms2(results, cols, framework, errors))
 
     def _generate_ccr1(
         self,
@@ -992,12 +992,13 @@ def _filter_by_approach(
 def _single_frame(frames: dict[str, pl.DataFrame]) -> pl.DataFrame | None:
     """Unwrap a single-frame template's ``{key: frame}`` dict for the bundle field.
 
-    The declarative single-frame Pillar 3 generators (cr4/cr6a/cr7) return the
-    lineage-shaped ``{canonical key: frame}`` dict — the same key their
-    ``<t>_plans`` uses, so ``reporting.lineage`` can read a cell's spec and its
-    reported value under one key. The bundle field is a bare
-    ``pl.DataFrame | None``, so the router takes the one frame (None when the
-    error contract yielded no plan).
+    The declarative single-frame Pillar 3 generators (cr4/cr5/cr6a/cr7, plus
+    the Basel-3.1-only cms1/cms2) return the lineage-shaped
+    ``{canonical key: frame}`` dict — the same key their ``<t>_plans`` uses, so
+    ``reporting.lineage`` can read a cell's spec and its reported value under
+    one key. The bundle field is a bare ``pl.DataFrame | None``, so the router
+    takes the one frame (None when the error contract yielded no plan — and, for
+    cms1/cms2, an empty dict under CRR).
     """
     return next(iter(frames.values()), None)
 

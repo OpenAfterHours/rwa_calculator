@@ -43,18 +43,29 @@ _SHEET = "corporate"
 _RTOL = 1e-9
 _ATOL = 1e-6
 
-# The instrumented (template, sheet) pairs under fidelity tie-out. Adding a
-# template to LINEAGE_PLANS (R20-R26) = appending its (template_id, sheet) here;
-# the parametrised sweep then covers it with no new test code.
-_TIEOUT_CASES: list[tuple[str, str | None]] = [
-    ("c07_00", "corporate"),
+# The instrumented (template, sheet, framework) triples under fidelity tie-out.
+# Adding a template to LINEAGE_PLANS (R20-R26) = appending its (template_id,
+# sheet, framework) here; the parametrised sweep then covers it with no new test
+# code. The framework selects which run the case ties out against (``by_framework``)
+# — CRR for the templates a CRR book produces, BASEL_3_1 for the Basel-3.1-only
+# CMS pair (CMS1/CMS2 are None under CRR, so they have nothing to tie out there).
+_TIEOUT_CASES: list[tuple[str, str | None, str]] = [
+    ("c07_00", "corporate", "CRR"),
     # R20 — four single-frame Pillar 3 templates (sheet = None per the harness's
     # single-frame convention). cr8 is the first PriorPeriod template through the
     # sweep (row 1 prior_period, row 8 formula — neither row-backed).
-    ("cr4", None),
-    ("cr6a", None),
-    ("cr7", None),
-    ("cr8", None),
+    ("cr4", None, "CRR"),
+    ("cr6a", None, "CRR"),
+    ("cr7", None, "CRR"),
+    ("cr8", None, "CRR"),
+    # R21 — four more single-frame Pillar 3 templates. ov1 is the first template
+    # with SideContext (row 27 OF-ADJ) and FirstNonNull (row 26 multiplier) cells
+    # through the sweep. cms1/cms2 are Basel 3.1 only, so they tie out against the
+    # B31 run.
+    ("ov1", None, "CRR"),
+    ("cr5", None, "CRR"),
+    ("cms1", None, "BASEL_3_1"),
+    ("cms2", None, "BASEL_3_1"),
 ]
 
 
@@ -95,6 +106,49 @@ def bundles(source: _Source):  # noqa: ANN201 - (COREPTemplateBundle, Pillar3Tem
 
 
 @pytest.fixture(scope="module")
+def b31_source() -> _Source:
+    """The reporting portfolio run through the real Basel 3.1 pipeline.
+
+    The Basel-3.1-only CMS templates (CMS1/CMS2) are None under CRR, so they
+    tie out against this run. Mirrors the golden harness's B31 config
+    (``test_reporting_golden.py::_b31_config``): the 2027 effective date and
+    ``enforce_retail_granularity=False`` so the compact oracle portfolio keeps
+    its retail exposures instead of reclassifying them all to corporate.
+    """
+    config = CalculationConfig.basel_3_1(
+        reporting_date=date(2027, 6, 1),
+        permission_mode=PermissionMode.IRB,
+        enforce_retail_granularity=False,
+    )
+    result = PipelineOrchestrator().run_with_data(build_reporting_bundle(), config)
+    return _Source(result.results, "BASEL_3_1")
+
+
+@pytest.fixture(scope="module")
+def b31_bundles(b31_source: _Source):  # noqa: ANN201 - (COREPTemplateBundle, Pillar3TemplateBundle)
+    """The generated COREP + Pillar 3 bundles for the Basel 3.1 run."""
+    corep = COREPGenerator().generate(b31_source)
+    pillar3 = Pillar3Generator().generate_from_lazyframe(
+        b31_source.scan_results(), framework=b31_source.framework
+    )
+    return corep, pillar3
+
+
+@pytest.fixture(scope="module")
+def by_framework(source, bundles, b31_source, b31_bundles):  # noqa: ANN001, ANN201
+    """Map each tie-out case's framework to its ``(source, bundles)`` pair.
+
+    Lets one parametrised sweep run a CRR case against the CRR run and a
+    Basel-3.1-only case (CMS1/CMS2) against the B31 run, without either run
+    leaking into the other's cases.
+    """
+    return {
+        "CRR": (source, bundles),
+        "BASEL_3_1": (b31_source, b31_bundles),
+    }
+
+
+@pytest.fixture(scope="module")
 def c07(bundles):  # noqa: ANN001, ANN201 - dict[str, pl.DataFrame]
     """The generated C 07.00 bundle (reused from the shared bundles fixture)."""
     corep, _pillar3 = bundles
@@ -106,15 +160,16 @@ def c07(bundles):  # noqa: ANN001, ANN201 - dict[str, pl.DataFrame]
 # =============================================================================
 
 
-@pytest.mark.parametrize(("template_id", "sheet"), _TIEOUT_CASES)
+@pytest.mark.parametrize(("template_id", "sheet", "framework"), _TIEOUT_CASES)
 def test_sheet_lineage_ties_out_to_every_reported_cell(  # noqa: C901 - one sweep, several honesty checks
-    source: _Source,
-    bundles,  # noqa: ANN001
+    by_framework,  # noqa: ANN001
     template_id: str,
     sheet: str | None,
+    framework: str,
 ) -> None:
     # Arrange — the reported frame (what the user saw) and one resolver for the
-    # whole sheet (one plan build, one generation).
+    # whole sheet (one plan build, one generation), on the case's framework run.
+    source, bundles = by_framework[framework]
     corep, pillar3 = bundles
     view = catalog.template_sheet(corep, pillar3, template_id, sheet)
     assert view is not None, f"{template_id}/{sheet}: no reported frame"
@@ -132,13 +187,17 @@ def test_sheet_lineage_ties_out_to_every_reported_cell(  # noqa: C901 - one swee
             assert query is not None, f"{template_id}: no query for {row_ref}/{col_ref}"
             checked += 1
 
-            # 0. A prior-period-derived cell (CR8 row 1 opening / row 8 residual)
-            #    is a CLEAN REFUSAL: the drill-down runs on the current-period
-            #    ledger only, so it declines rather than reporting a cell_value
-            #    that would contradict a comparative-period figure on the report.
-            if query.derives_from_prior_period:
+            # 0. A cell the resolver cannot reproduce without contradicting the
+            #    screen is a CLEAN REFUSAL (cell() is None): a prior-period-derived
+            #    cell (CR8 row 1 opening / row 8 residual — the current-period
+            #    ledger cannot carry it) or a cell reading an out-of-frame
+            #    SideContext the no-side lineage plan does not thread (OV1 row 27
+            #    OF-ADJ). Either way the drill-down declines rather than reporting
+            #    a null against a real reported figure.
+            if query.derives_from_prior_period or query.reads_unavailable_side_value:
                 assert resolver.cell(row_ref, col_ref, limit=1000) is None, (
-                    f"{template_id} {row_ref}/{col_ref} must refuse (prior-period-derived)"
+                    f"{template_id} {row_ref}/{col_ref} must refuse "
+                    "(prior-period-derived or unavailable side value)"
                 )
                 continue
 

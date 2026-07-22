@@ -39,6 +39,13 @@ Cell semantics (recorded decisions, this slice):
   genuinely out of scope for a credit-risk calculator, and null is not the same
   claim as 0.0. Row 0020 is BOUND and zero-fills on a book with no CCR.
 
+Lineage-instrumented (R21): ``cms1_plans`` exposes the single (no sheet axis)
+execution plan — its frame is the full sealed ledger with the derived
+``cms1_is_modelled`` / ``cms1_is_ccr`` discriminators — so ``reporting.lineage``
+can drill into a reported cell. CMS1 is Basel 3.1 only, so ``cms1_plans`` (like
+``generate_cms1``) yields NOTHING under CRR: lineage then degrades to a clean
+"no lineage" 404, never a crash.
+
 References:
 - PRA PS1/26 Art. 456(1)(a), Art. 2a(1); Annex II (UKB CMS1 instructions)
 - CRR Art. 153(5) (supervisory slotting — an IRB-chapter approach)
@@ -61,10 +68,16 @@ from rwa_calc.reporting.cellspec import (
     TemplateSpec,
     execute,
 )
+from rwa_calc.reporting.metadata import ReportingContext
 from rwa_calc.reporting.pillar3.templates import CMS1_COLUMNS, CMS1_ROWS
+from rwa_calc.reporting.plans import SheetPlan
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+# Single-frame lineage key: CMS1 has no sheet axis, so its one plan keys under a
+# canonical name (see reporting.plans / _resolve_sheet_key single_frame path).
+_SHEET_KEY = "cms1"
 
 # Column a's population: exposures whose RWA is NOT computed under the
 # standardised approach — "ie subject to the credit risk IRB approaches (F-IRB,
@@ -138,25 +151,59 @@ def build_cms1_spec() -> TemplateSpec:
     )
 
 
+def cms1_plans(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, SheetPlan]:
+    """Build the single CMS1 execution plan (the lineage seam).
+
+    CMS1 has no sheet axis, so the one plan keys under the single-frame
+    canonical key. The plan's frame is the full sealed ledger carrying the
+    derived ``cms1_is_modelled`` / ``cms1_is_ccr`` discriminators the cell
+    predicates key off. CMS1 is Basel 3.1 only, so a CRR run yields ``{}`` —
+    lineage then returns a clean "no lineage" rather than crashing. Preserves
+    the imperative generator's error contract: a missing RWA column records the
+    CMS1 error and yields no plan. There is no post-execute pass, so
+    ``negative_cols`` is empty.
+    """
+    if framework != "BASEL_3_1":
+        return {}
+    if not ({"rwa_final", "rwa"} & cols):
+        errors.append("CMS1: missing RWA column")
+        return {}
+    return {
+        _SHEET_KEY: SheetPlan(
+            spec=_CMS1_SPEC,
+            frame=_prepare(results, cols).collect(),
+            ctx=ReportingContext(),
+            negative_cols=frozenset(),
+        )
+    }
+
+
 def generate_cms1(
     results: pl.LazyFrame,
     cols: set[str],
     framework: str,
     errors: list[str],
-) -> pl.DataFrame | None:
-    """Execute CMS1 over the full sealed ledger (Basel 3.1 only).
+) -> dict[str, pl.DataFrame]:
+    """Execute CMS1 over the full sealed ledger (Basel 3.1 only; keyed like
+    ``cms1_plans``).
 
-    Preserves the imperative generator's contracts: None under CRR; a
-    missing RWA column records "CMS1: missing RWA column" and yields no
-    template; column d is null when ``sa_rwa`` is absent (CRR-style frames
-    or portfolios outside the output-floor scope).
+    The thin consumer of ``cms1_plans``: it executes each plan under the same
+    key, so a cell's reported value and its spec agree. Preserves the
+    imperative generator's contracts: an empty dict under CRR (the dispatch
+    router unwraps it to ``None``); a missing RWA column records the CMS1 error
+    and yields no frame; column d is null when ``sa_rwa`` is absent (CRR-style
+    frames or portfolios outside the output-floor scope). CMS1 has no
+    post-execute pass, so this is a plain ``execute``.
     """
-    if framework != "BASEL_3_1":
-        return None
-    if not ({"rwa_final", "rwa"} & cols):
-        errors.append("CMS1: missing RWA column")
-        return None
-    return execute(_CMS1_SPEC, _prepare(results, cols))
+    return {
+        key: execute(plan.spec, plan.frame, plan.ctx)
+        for key, plan in cms1_plans(results, cols, framework, errors).items()
+    }
 
 
 def _prepare(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:

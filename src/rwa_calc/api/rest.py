@@ -411,6 +411,18 @@ def cell_lineage(  # noqa: PLR0913 - the cell key plus paging
                 "drill-down covers the current-period ledger only"
             ),
         )
+    if query.reads_unavailable_side_value:
+        # Same never-disagree contract for an out-of-frame SideContext (OV1 row
+        # 27's OF-ADJ): the reported template is generated WITH the run's
+        # output-floor summary, but this drill-down's plan carries no side input,
+        # so a 200 would report a null that contradicts the figure on the screen.
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"cell {template}/{row}/{col} reads an out-of-frame side value "
+                "this drill-down does not carry"
+            ),
+        )
     result = resolver.cell(
         row,
         col,

@@ -38,6 +38,13 @@ Cell semantics (recorded decisions, this slice):
   0044/0045/0054 (IPRE-HVCRE and purchased-receivables splits — no engine
   discriminators, recorded-null), 0070 Total.
 
+Lineage-instrumented (R21): ``cms2_plans`` exposes the single (no sheet axis)
+execution plan — its frame is the full sealed ledger (CMS2 keys the raw
+origination ``exposure_class`` directly, so no prepared discriminators) — so
+``reporting.lineage`` can drill into a reported cell. CMS2 is Basel 3.1 only, so
+``cms2_plans`` (like ``generate_cms2``) yields NOTHING under CRR: lineage then
+degrades to a clean "no lineage" 404, never a crash.
+
 References:
 - PRA PS1/26 Art. 456(1)(b), Art. 2a(2); Annex II (UKB CMS2 instructions)
 - docs/plans/phase7-declarative-reporting.md §3.2/§6 (S8)
@@ -57,17 +64,23 @@ from rwa_calc.reporting.cellspec import (
     TemplateSpec,
     execute,
 )
+from rwa_calc.reporting.metadata import ReportingContext
 from rwa_calc.reporting.pillar3.cms1 import MODELLED_APPROACHES
 from rwa_calc.reporting.pillar3.templates import (
     CMS2_COLUMNS,
     CMS2_ROWS,
     CMS2_SA_CLASS_MAP,
 )
+from rwa_calc.reporting.plans import SheetPlan
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     import polars as pl
+
+# Single-frame lineage key: CMS2 has no sheet axis, so its one plan keys under a
+# canonical name (see reporting.plans / _resolve_sheet_key single_frame path).
+_SHEET_KEY = "cms2"
 
 # Sub-rows with no engine discriminator — recorded permanently-null.
 _NULL_REFS: frozenset[str] = frozenset({"0044", "0045", "0054"})
@@ -161,21 +174,55 @@ def build_cms2_spec() -> TemplateSpec:
 _CMS2_SPEC: TemplateSpec = build_cms2_spec()
 
 
+def cms2_plans(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, SheetPlan]:
+    """Build the single CMS2 execution plan (the lineage seam).
+
+    CMS2 has no sheet axis, so the one plan keys under the single-frame
+    canonical key. The plan's frame is the full sealed ledger itself — CMS2
+    keys the raw origination ``exposure_class`` directly, so there is no
+    ``_prepare`` step. CMS2 is Basel 3.1 only, so a CRR run yields ``{}`` —
+    lineage then returns a clean "no lineage" rather than crashing. Preserves
+    the imperative generator's error contract: a missing RWA column records the
+    CMS2 error and yields no plan. There is no post-execute pass, so
+    ``negative_cols`` is empty.
+    """
+    if framework != "BASEL_3_1":
+        return {}
+    if not ({"rwa_final", "rwa"} & cols):
+        errors.append("CMS2: missing RWA column")
+        return {}
+    return {
+        _SHEET_KEY: SheetPlan(
+            spec=_CMS2_SPEC,
+            frame=results.collect(),
+            ctx=ReportingContext(),
+            negative_cols=frozenset(),
+        )
+    }
+
+
 def generate_cms2(
     results: pl.LazyFrame,
     cols: set[str],
     framework: str,
     errors: list[str],
-) -> pl.DataFrame | None:
-    """Execute CMS2 over the full sealed ledger (Basel 3.1 only).
+) -> dict[str, pl.DataFrame]:
+    """Execute CMS2 over the full sealed ledger (Basel 3.1 only; keyed like
+    ``cms2_plans``).
 
-    Preserves the imperative generator's contracts: None under CRR; a
-    missing RWA column records "CMS2: missing RWA column" and yields no
-    template; columns b/d are null when ``sa_rwa`` is absent.
+    The thin consumer of ``cms2_plans``: it executes each plan under the same
+    key, so a cell's reported value and its spec agree. Preserves the
+    imperative generator's contracts: an empty dict under CRR (the dispatch
+    router unwraps it to ``None``); a missing RWA column records the CMS2 error
+    and yields no frame; columns b/d are null when ``sa_rwa`` is absent. CMS2
+    has no post-execute pass, so this is a plain ``execute``.
     """
-    if framework != "BASEL_3_1":
-        return None
-    if not ({"rwa_final", "rwa"} & cols):
-        errors.append("CMS2: missing RWA column")
-        return None
-    return execute(_CMS2_SPEC, results)
+    return {
+        key: execute(plan.spec, plan.frame, plan.ctx)
+        for key, plan in cms2_plans(results, cols, framework, errors).items()
+    }

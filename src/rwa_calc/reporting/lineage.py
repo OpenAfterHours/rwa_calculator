@@ -60,10 +60,14 @@ from rwa_calc.reporting.cellspec import (
 )
 from rwa_calc.reporting.corep.c07 import c07_plans, generate_c07
 from rwa_calc.reporting.kernel import available_columns
+from rwa_calc.reporting.pillar3.cms1 import cms1_plans, generate_cms1
+from rwa_calc.reporting.pillar3.cms2 import cms2_plans, generate_cms2
 from rwa_calc.reporting.pillar3.cr4 import cr4_plans, generate_cr4
+from rwa_calc.reporting.pillar3.cr5 import cr5_plans, generate_cr5
 from rwa_calc.reporting.pillar3.cr6a import cr6a_plans, generate_cr6a
 from rwa_calc.reporting.pillar3.cr7 import cr7_plans, generate_cr7
 from rwa_calc.reporting.pillar3.cr8 import cr8_frames, cr8_plans
+from rwa_calc.reporting.pillar3.ov1 import ov1_frames, ov1_plans
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -142,6 +146,18 @@ class CellQuery:
     # once a comparative period is supplied); the resolver declines it instead
     # (see ``SheetLineage.cell``) and the surfaces give a distinct refusal.
     derives_from_prior_period: bool = False
+    # Whether this cell reads an out-of-frame ``SideContext`` value the plan's
+    # OWN ``ReportingContext`` does not carry (``side_value(key) is None``). The
+    # lineage plan is the current-period / no-side-input view: OV1's
+    # ``ov1_plans`` threads NO output-floor summary, so row 27's OF-ADJ (a
+    # ``SideContext("of_adj")``) reads null HERE while the reported template —
+    # generated WITH the run's summary (api/rest.py get_template_bundles) — shows
+    # a real figure. So the resolver declines such a cell exactly as it declines
+    # a prior-period one, keeping honesty rule 1 (a drill-down never contradicts
+    # the screen). CONDITIONAL, never kind-blanket: a SideContext the plan DOES
+    # thread (C 07.00's per-sheet substitution inflow, threaded by ``c07_plans``)
+    # has a non-None value and stays drillable, tying out to its real figure.
+    reads_unavailable_side_value: bool = False
 
     @property
     def is_source_backed(self) -> bool:
@@ -269,6 +285,100 @@ LINEAGE_PLANS: dict[str, _Provider] = {
         sheet_label="",
         single_frame=True,
     ),
+    # OV1 — overview of RWEAs (single frame; R21). ov1_frames is the
+    # lineage-facing generator (no output-floor summary): row 27's OF-ADJ
+    # SideContext reads null, matching the drill-down's no-side view.
+    "ov1": _Provider(
+        plans=ov1_plans,
+        generate=ov1_frames,
+        scope=(
+            "The full sealed per-leg ledger — OV1 has no population pre-filter (row 29 "
+            "Total sums the whole book). Rows 1-5 (credit risk EXCLUDING counterparty "
+            "credit risk) and their per-approach 'of which' rows are cut by the derived "
+            "ov1_is_ccr flag (risk_type in the CCR set), NEVER by the approach label the "
+            "output floor relabels; the CCR block (rows 6/7/UK8a/9) selects the derived "
+            "CCR partition flags by risk type and whether the leg faces a CCP",
+            "Row 24 (Art. 48(4) below-threshold 250%-RW memo) is a RECORDED "
+            "APPROXIMATION: the sealed ledger carries no positive Art. 48(4) flag, so it "
+            "sums the SA 'Other items' origin class (reporting_class_origin == other) at "
+            "a 250% risk weight — over-including any non-threshold other-item at 250% and "
+            "under-including a threshold item held as equity",
+            "Row 26 (output-floor multiplier) reads the sealed output_floor_pct; row 27 "
+            "(OF-ADJ) is an out-of-frame SideContext from the output-floor summary the "
+            "drill-down does not carry, so the resolver REFUSES it (a distinct 404) "
+            "rather than serving a null against a report generated WITH the summary",
+        ),
+        sheet_label="",
+        single_frame=True,
+    ),
+    # CR5 — SA risk-weight allocation (single frame; R21).
+    "cr5": _Provider(
+        plans=cr5_plans,
+        generate=generate_cr5,
+        scope=(
+            "Standardised-approach legs by ORIGIN approach "
+            "(reporting_approach_origin == standardised), narrowed to SA CREDIT risk "
+            "only: the counterparty-credit-risk netting sets, CCP default-fund "
+            "contributions and settlement failed-trade synthetic legs are dropped (they "
+            "disclose on CCR1-CCR8), and the facility_undrawn commitment leg is "
+            "reclassified off-balance-sheet — so every band, total and on/off-BS column "
+            "reports over one population",
+            "Class rows key uniformly on the post-substitution reporting_class (CR5 "
+            "carries only post-CF/post-CRM figures; the covered leg of a guaranteed "
+            "exposure bands in the protection provider's row); the risk-weight band "
+            "columns allocate reporting_ead on the derived cr5_rw_bucket, which for an "
+            "Art. 123B currency-mismatch leg is the PRE-multiplier risk weight "
+            "(PS1/26 Annex XX reporting override)",
+            "The 'of which: unrated' column keys the derived cr5_unrated flag "
+            "(external_cqs is null — the leg carries no own nominated-ECAI assessment), "
+            "an input-availability fact applied uniformly across every class row. "
+            "RECORDED LIMITATION: a guarantee-substituted leg keeps the OBLIGOR's "
+            "external_cqs while banding in the guarantor's row, so a rated-guarantor leg "
+            "from an unrated obligor counts as unrated there",
+        ),
+        sheet_label="",
+        single_frame=True,
+    ),
+    # CMS1 — modelled vs standardised RWEA by risk type (single frame; R21).
+    # Basel 3.1 only: cms1_plans yields {} under CRR, so lineage returns a clean
+    # no-lineage rather than crashing.
+    "cms1": _Provider(
+        plans=cms1_plans,
+        generate=generate_cms1,
+        scope=(
+            "The full sealed per-leg ledger (Basel 3.1 only — CMS1 is not produced under "
+            "CRR). Rows 0010 (credit risk excl. CCR) and 0020 (CCR) partition the book "
+            "by the derived cms1_is_ccr flag (risk_type in the CCR set), never by the "
+            "approach label; 0080 Total is the whole book",
+            "Column a sums the MODELLED approaches (derived cms1_is_modelled: "
+            "foundation_irb / advanced_irb / slotting); column b is their COMPLEMENT "
+            "(every non-modelled leg, including equity and the standardised_ccr relabel), "
+            "so a + b = column c is the row's whole actual RWA; column d recomputes "
+            "sa_rwa over the row's whole population",
+        ),
+        sheet_label="",
+        single_frame=True,
+    ),
+    # CMS2 — modelled vs standardised RWEA by asset class (single frame; R21).
+    # Basel 3.1 only: cms2_plans yields {} under CRR.
+    "cms2": _Provider(
+        plans=cms2_plans,
+        generate=generate_cms2,
+        scope=(
+            "The full sealed per-leg ledger (Basel 3.1 only — CMS2 is not produced under "
+            "CRR). Rows key the raw ORIGINATION class (exposure_class) via tolerant "
+            "per-value limbs — the Art. 147-shaped axis with no defaulted sink, so "
+            "substitution moves no row (column b recomputes the SA-equivalent of the "
+            "SAME population reported in column a)",
+            "Column a sums the actual rwa_final of the MODELLED origin approaches "
+            "(foundation_irb / advanced_irb / slotting) within the row's classes; column "
+            "c is the row's TOTAL actual RWA across ALL approaches; column d recomputes "
+            "sa_rwa over the row's SA-mapped classes. Sub-rows 0041 (of-which F-IRB) / "
+            "0042 (of-which A-IRB) narrow the corporate classes by origin approach",
+        ),
+        sheet_label="",
+        single_frame=True,
+    ),
 }
 
 
@@ -321,14 +431,21 @@ class SheetLineage:
     ) -> CellLineage | None:
         """The cell's full lineage: its meaning, its reported value, its legs.
 
-        Declines a prior-period-derived cell (``None``): this resolver holds
-        only the CURRENT-period ledger, so its ``cell_value`` for such a cell is
-        always null — which would contradict the figure the report shows once a
-        comparative period is supplied. A clean refusal keeps the never-disagree
-        promise (honesty rule 1); the surfaces map it to a distinct reason.
+        Declines (``None``) a cell whose reported value this resolver cannot
+        reproduce without contradicting the screen (honesty rule 1); the
+        surfaces map each refusal to a distinct reason. Two cases:
+
+        - a PRIOR-PERIOD-derived cell — this resolver holds only the
+          CURRENT-period ledger, so its ``cell_value`` is always null, which
+          would contradict a comparative-period figure once one is supplied;
+        - a cell that reads an out-of-frame ``SideContext`` value the plan does
+          not carry (``reads_unavailable_side_value`` — OV1's row-27 OF-ADJ on
+          the no-summary lineage plan): the reported template is generated WITH
+          the run's output-floor summary, so a 200 here would show a null
+          against a real figure on the screen.
         """
         query = self.query(row_ref, col_ref)
-        if query is None or query.derives_from_prior_period:
+        if query is None or query.derives_from_prior_period or query.reads_unavailable_side_value:
             return None
         plan = self._plan
         matched = _matching_rows(plan, plan.spec.cells.get((row_ref, col_ref)), query)
@@ -445,6 +562,14 @@ def describe_cell(  # noqa: PLR0913 - the cell's full identity plus its two sour
     present = set(plan.frame.columns)
     missing = tuple(col for col in metric_columns if col not in present) if kind == "rows" else ()
 
+    # A SideContext cell whose value the plan's OWN ctx does not carry (the OV1
+    # row-27 OF-ADJ on the no-summary lineage plan): the drill-down would render
+    # null against a reported figure. Conditional — a threaded SideContext
+    # (C 07.00's substitution inflow) reads a real value and stays drillable.
+    reads_unavailable_side_value = isinstance(binding, SideContext) and (
+        plan.ctx.side_value(binding.key) is None
+    )
+
     row_name = next((row.name for row in plan.spec.rows if row.ref == row_ref), "")
     return CellQuery(
         template_id=template_id,
@@ -461,6 +586,7 @@ def describe_cell(  # noqa: PLR0913 - the cell's full identity plus its two sour
         sign="negated" if col_ref in plan.negative_cols else "positive",
         missing_columns=missing,
         derives_from_prior_period=_derives_from_prior_period(plan.spec, row_ref, col_ref),
+        reads_unavailable_side_value=reads_unavailable_side_value,
     )
 
 

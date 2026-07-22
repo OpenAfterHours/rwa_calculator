@@ -61,6 +61,11 @@ docs/plans/phase7-declarative-reporting.md §6):
   unbound rows (11/13/14, B31 9a-9e) stay all-null; bc stays null when
   off-BS is empty or ``ccf`` is absent.
 
+Lineage-instrumented (R21): ``cr5_plans`` exposes the single (no sheet axis)
+execution plan — its frame is the SA credit-risk population with the derived
+``cr5_rw_bucket`` banding and ``cr5_unrated`` flag columns — so
+``reporting.lineage`` can drill into a reported cell.
+
 References:
 - CRR Art. 444(e); PRA PS1/26 Annex XX (UK/UKB CR5 instructions, incl. the
   Art. 123B and 55%-LTV two-part reporting overrides)
@@ -86,17 +91,23 @@ from rwa_calc.reporting.cellspec import (
     WeightedAvg,
     execute,
 )
+from rwa_calc.reporting.metadata import ReportingContext
 from rwa_calc.reporting.pillar3.sa_scope import sa_credit_risk_population
 from rwa_calc.reporting.pillar3.templates import (
     get_cr5_columns,
     get_cr5_risk_weights,
     get_cr5_rows,
 )
+from rwa_calc.reporting.plans import SheetPlan
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from rwa_calc.reporting.pillar3.templates import P3Row
+
+# Single-frame lineage key: CR5 has no sheet axis, so its one plan keys under a
+# canonical name (see reporting.plans / _resolve_sheet_key single_frame path).
+_SHEET_KEY = "cr5"
 
 # Band-match tolerance: ±0.5pp half-open window around each disclosed risk
 # weight (generator heritage — a blended RW like 0.2458 lands in the 25% band).
@@ -214,27 +225,60 @@ _CR5_SPECS: dict[str, TemplateSpec] = {
 }
 
 
+def cr5_plans(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, SheetPlan]:
+    """Build the single CR5 execution plan (the lineage seam).
+
+    CR5 has no sheet axis, so the one plan keys under the single-frame
+    canonical key. The plan's frame is the SA credit-risk population
+    (``sa_scope.sa_credit_risk_population`` — counterparty-credit-risk and
+    settlement legs dropped, the ``facility_undrawn`` commitment reclassified
+    off-balance-sheet) carrying the derived ``cr5_rw_bucket`` banding column
+    (the Art. 123B pre-multiplier override) and the ``cr5_unrated`` rating-
+    presence flag, so the band/unrated cell predicates key off columns the
+    frame holds; the spec's origin-standardised ``predicate`` narrows it
+    further per cell, exactly as ``execute`` applies it. Preserves the
+    imperative generator's error contract: a missing ``ead_final`` or
+    ``risk_weight`` column records the CR5 error and yields no plan. There is
+    no post-execute pass, so ``negative_cols`` is empty.
+    """
+    if "ead_final" not in cols or "risk_weight" not in cols:
+        errors.append("CR5: missing EAD or risk_weight column")
+        return {}
+    spec = _CR5_SPECS.get(framework) or build_cr5_spec(framework)
+    narrowed = sa_credit_risk_population(results, cols)
+    frame = _with_unrated_flag(_with_rw_bucket(narrowed, cols), cols).collect()
+    return {
+        _SHEET_KEY: SheetPlan(
+            spec=spec,
+            frame=frame,
+            ctx=ReportingContext(),
+            negative_cols=frozenset(),
+        )
+    }
+
+
 def generate_cr5(
     results: pl.LazyFrame,
     cols: set[str],
     framework: str,
     errors: list[str],
-) -> pl.DataFrame | None:
-    """Execute CR5 over the full sealed ledger (plus the derived bucket).
+) -> dict[str, pl.DataFrame]:
+    """Execute CR5 over the SA credit-risk population (keyed like ``cr5_plans``).
 
-    Preserves the imperative generator's error contract: a missing
-    ``ead_final`` or ``risk_weight`` column records the CR5 error and yields
-    no template. The population is first narrowed to the SA credit-risk book
-    (counterparty-credit-risk and settlement legs dropped; the
-    facility_undrawn commitment reclassified off-balance-sheet) so every
-    column reports over one population — ``sa_scope.sa_credit_risk_population``.
+    The thin consumer of ``cr5_plans``: it executes each plan under the same
+    key, so a cell's reported value and its spec agree. CR5 has no post-execute
+    pass, so this is a plain ``execute``. The dispatch router unwraps the
+    single-frame dict for the ``Pillar3TemplateBundle.cr5`` field.
     """
-    if "ead_final" not in cols or "risk_weight" not in cols:
-        errors.append("CR5: missing EAD or risk_weight column")
-        return None
-    spec = _CR5_SPECS.get(framework) or build_cr5_spec(framework)
-    narrowed = sa_credit_risk_population(results, cols)
-    return execute(spec, _with_unrated_flag(_with_rw_bucket(narrowed, cols), cols))
+    return {
+        key: execute(plan.spec, plan.frame, plan.ctx)
+        for key, plan in cr5_plans(results, cols, framework, errors).items()
+    }
 
 
 def _with_rw_bucket(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:

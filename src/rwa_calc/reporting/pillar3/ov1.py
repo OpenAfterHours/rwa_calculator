@@ -81,6 +81,20 @@ Cell semantics (golden-gated):
 - Column b (T-1) stays null throughout; column c = a x 0.08 except the
   floor rows 26/27 (the no-shim set).
 
+Lineage-instrumented (R21): ``ov1_plans`` exposes the single (no sheet axis)
+execution plan — its frame is the full sealed ledger with the derived CCR
+discriminators (``ov1_is_ccr`` and its three-way partition) — so
+``reporting.lineage`` can drill into a reported cell. The plan carries NO
+output-floor summary (the current-period / no-side view). Because the REPORTED
+template is generated WITH the run's summary (api/rest.py get_template_bundles),
+row 27's OF-ADJ (a ``SideContext``) would render null on this plan — a figure
+that contradicts the screen — so the resolver REFUSES that cell (a distinct 404,
+mirroring the treatment of CR8's prior-period rows) rather than serving the
+null. Row 26's multiplier (a ``FirstNonNull``) reads the sealed
+``output_floor_pct`` and drills down normally. ``generate_ov1`` keeps its
+distinct signature (it threads the summary) and is NOT the provider generator —
+``ov1_frames`` is.
+
 References:
 - CRR Part 8 Art. 438; Art. 48(4) (row 24 threshold items); PRA PS1/26
   Annex II ("Template UKB OV1", incl. rows 11-14 Art. 132-132C CIU
@@ -112,11 +126,16 @@ from rwa_calc.reporting.cellspec import (
 )
 from rwa_calc.reporting.metadata import ReportingContext
 from rwa_calc.reporting.pillar3.templates import OV1_COLUMNS, get_ov1_rows
+from rwa_calc.reporting.plans import SheetPlan
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from rwa_calc.contracts.bundles import OutputFloorSummary
+
+# Single-frame lineage key: OV1 has no sheet axis, so its one plan keys under a
+# canonical name (see reporting.plans / _resolve_sheet_key single_frame path).
+_SHEET_KEY = "ov1"
 
 # Rows whose column ``a`` sums one origin approach (0.0 when absent).
 _APPROACH_REFS: dict[str, tuple[str, ...]] = {
@@ -262,6 +281,62 @@ _OV1_SPECS: dict[str, TemplateSpec] = {
 }
 
 
+def ov1_plans(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, SheetPlan]:
+    """Build the single OV1 execution plan (the lineage seam).
+
+    OV1 has no sheet axis, so the one plan keys under the single-frame
+    canonical key. The plan's frame is the full sealed ledger carrying the four
+    derived CCR discriminator columns (``ov1_is_ccr`` and its three-way
+    partition) the CCR-block cell predicates key off. NO output-floor summary is
+    threaded — the current-period / no-side view — so the resolver REFUSES row
+    27's OF-ADJ (a ``SideContext(of_adj)`` whose ``side_value`` is None here),
+    rather than serving a null the summary-generated report would contradict.
+    Preserves the imperative generator's error contract: a missing ``rwa_final``
+    column records the OV1 error and yields no plan. There is no post-execute
+    pass, so ``negative_cols`` is empty.
+    """
+    if "rwa_final" not in cols:
+        errors.append("OV1: missing RWA column")
+        return {}
+    spec = _OV1_SPECS.get(framework) or build_ov1_spec(framework)
+    return {
+        _SHEET_KEY: SheetPlan(
+            spec=spec,
+            frame=_prepare(results, cols).collect(),
+            ctx=ReportingContext(),
+            negative_cols=frozenset(),
+        )
+    }
+
+
+def ov1_frames(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, pl.DataFrame]:
+    """Render the current-period OV1 frame for lineage (keyed like ``ov1_plans``).
+
+    The lineage-facing generator: it mirrors ``ov1_plans`` and executes each
+    plan under the same key, so a cell's reported value and its spec are looked
+    up under the same key. The plan carries NO output-floor summary, so this
+    frame renders row 27's OF-ADJ as null — which is exactly why the resolver
+    REFUSES that cell rather than serving the null (the report is generated WITH
+    the summary). ``generate_ov1`` is the dispatch entry that threads the summary
+    (its extra parameter keeps it OUT of the 4-arg provider signature). OV1 has
+    no post-execute pass, so this is a plain ``execute``.
+    """
+    return {
+        key: execute(plan.spec, plan.frame, plan.ctx)
+        for key, plan in ov1_plans(results, cols, framework, errors).items()
+    }
+
+
 def generate_ov1(
     results: pl.LazyFrame,
     cols: set[str],
@@ -271,16 +346,20 @@ def generate_ov1(
 ) -> pl.DataFrame | None:
     """Execute OV1 over the full sealed ledger.
 
+    The dispatch entry: it threads the EXTERNAL output-floor summary (which the
+    current-period lineage view cannot carry) into row 27's OF-ADJ
+    ``SideContext``, reusing ``ov1_plans`` for the spec and prepared frame so
+    the reported frame and the lineage view differ ONLY by that side input.
     Preserves the imperative generator's contract: a missing ``rwa_final``
     column (impossible on the sealed ledger; reachable via direct invocation
     with synthetic frames) records the OV1 error and yields no template.
     """
-    if "rwa_final" not in cols:
-        errors.append("OV1: missing RWA column")
+    plans = ov1_plans(results, cols, framework, errors)
+    if not plans:
         return None
-    spec = _OV1_SPECS.get(framework) or build_ov1_spec(framework)
+    plan = plans[_SHEET_KEY]
     ctx = ReportingContext(output_floor_summary=output_floor_summary)
-    return execute(spec, _prepare(results, cols), ctx)
+    return execute(plan.spec, plan.frame, ctx)
 
 
 def _prepare(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:

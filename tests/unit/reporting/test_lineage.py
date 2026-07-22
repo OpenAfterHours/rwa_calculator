@@ -235,6 +235,137 @@ def test_cr8_prior_period_derived_cells_are_refused_by_the_resolver() -> None:
         assert resolver.cell(prior_row, "a") is None
 
 
+# R21 — four more single-frame Pillar 3 templates (ov1/cr5/cms1/cms2) instrumented.
+_R21_SINGLE_FRAME_TEMPLATES = ("ov1", "cr5", "cms1", "cms2")
+
+
+@pytest.mark.parametrize("template_id", _R21_SINGLE_FRAME_TEMPLATES)
+def test_r21_pillar3_templates_are_single_frame_instrumented(template_id: str) -> None:
+    # Assert — each R21 template is instrumented as a SINGLE-FRAME provider (no
+    # sheet axis -> cells report sheet=None), with a populated scope and no sheet
+    # label.
+    assert lineage.is_instrumented(template_id)
+    provider = lineage.LINEAGE_PLANS[template_id]
+    assert provider.single_frame is True
+    assert provider.scope
+    assert provider.sheet_label == ""
+
+
+def test_ov1_floor_rows_are_first_non_null_and_side_context_kinds() -> None:
+    # Assert — OV1 row 26 (output-floor multiplier) is a FirstNonNull (kind
+    # "rows"/first_non_null) and row 27 (OF-ADJ) is a SideContext — OV1 is the
+    # first template with those two kinds through the tie-out sweep.
+    from rwa_calc.reporting.pillar3.ov1 import _OV1_SPECS
+
+    spec = _OV1_SPECS["BASEL_3_1"]
+    assert lineage._binding_facts(spec.cells[("26", "a")].binding) == (
+        "rows",
+        "first_non_null",
+        ("output_floor_pct",),
+        (),
+    )
+    assert lineage._binding_facts(spec.cells[("27", "a")].binding) == (
+        "side_context",
+        "side_context",
+        ("of_adj",),
+        (),
+    )
+
+
+@pytest.mark.parametrize("template_id", ("cms1", "cms2"))
+def test_cms_lineage_is_a_clean_no_lineage_under_crr(template_id: str) -> None:
+    # Arrange — CMS1/CMS2 are Basel 3.1 only; their plans() yield nothing under a
+    # CRR run (_FrameSource.framework == "CRR").
+    frame = pl.DataFrame(
+        {
+            "exposure_reference": ["E1"],
+            "reporting_approach_origin": ["standardised"],
+            "exposure_class": ["corporate"],
+            "rwa_final": [100.0],
+        }
+    )
+
+    # Act / Assert — the resolver degrades to None (a clean no-lineage), exactly
+    # like an uninstrumented template, rather than crashing on a CRR frame.
+    assert lineage.is_instrumented(template_id)
+    assert lineage.sheet_lineage(_FrameSource(frame), template_id) is None
+
+
+def test_ov1_row27_side_context_is_refused_so_it_never_contradicts_a_floored_report() -> None:
+    # Arrange — a Basel 3.1 book. The REPORTED template is generated WITH the
+    # run's output-floor summary (as production does — api/rest.py
+    # get_template_bundles), so row 27's OF-ADJ is a real figure on the screen.
+    from rwa_calc.contracts.bundles import OutputFloorSummary
+    from rwa_calc.reporting.pillar3.ov1 import generate_ov1
+
+    frame = pl.DataFrame(
+        {
+            "exposure_reference": ["E1"],
+            "reporting_approach_origin": ["advanced_irb"],
+            "reporting_class_origin": ["corporate"],
+            "rwa_final": [1_000_000.0],
+            "reporting_rw": [1.0],
+        }
+    )
+    cols = set(frame.columns)
+    summary = OutputFloorSummary(
+        u_trea=1_000_000.0,
+        s_trea=900_000.0,
+        floor_pct=0.725,
+        floor_threshold=902_500.0,
+        shortfall=0.0,
+        portfolio_floor_binding=False,
+        floored_modelled_rwa=1_000_000.0,
+        of_adj=250_000.0,
+    )
+    reported = generate_ov1(frame.lazy(), cols, "BASEL_3_1", [], summary)
+    assert reported is not None
+    row27_reported = reported.filter(pl.col("row_ref") == "27")["a"][0]
+    assert row27_reported == pytest.approx(250_000.0)  # a real OF-ADJ on the screen
+
+    # Act — the drill-down runs the no-side view (ov1_plans threads no summary).
+    resolver = lineage.sheet_lineage(_FrameSource(frame, "BASEL_3_1"), "ov1")
+    assert resolver is not None
+    q27 = resolver.query("27", "a")
+    q26 = resolver.query("26", "a")
+
+    # Assert — row 27 (a SideContext with no of_adj on the plan) is REFUSED, so
+    # the drill-down never serves the null that would contradict the 250,000 on
+    # the screen. The refusal is CONDITIONAL on the SideContext value being
+    # absent — row 26 (a FirstNonNull, not a side context) is NOT refused.
+    assert q27 is not None
+    assert (q27.kind, q27.reads_unavailable_side_value) == ("side_context", True)
+    assert resolver.cell("27", "a") is None
+    assert q26 is not None
+    assert q26.reads_unavailable_side_value is False
+    assert resolver.cell("26", "a") is not None
+
+
+def test_c07_substitution_inflow_side_context_stays_drillable() -> None:
+    # Assert — the refusal is not kind-blanket: C 07.00's col 0100 is a
+    # SideContext whose c07_plans threads the real per-sheet inflow, so its
+    # side_value is present and the cell must NOT be refused (a threaded
+    # SideContext ties out to its real figure).
+    ctx = ReportingContext(substitution_inflow=1234.0)
+    plan = SheetPlan(
+        spec=TemplateSpec(
+            name="t",
+            rows=(_Row("0010", "Total"),),
+            column_refs=("0100",),
+            cells={("0010", "0100"): CellSpec(SideContext("substitution_inflow"))},
+            empty_cell="zero",
+        ),
+        frame=pl.DataFrame({"exposure_reference": ["E1"]}),
+        ctx=ctx,
+        negative_cols=frozenset(),
+    )
+    query = lineage.describe_cell(
+        lineage.LINEAGE_PLANS["c07_00"], plan, "c07_00", None, "0010", "0100", sealed=set()
+    )
+    assert query.kind == "side_context"
+    assert query.reads_unavailable_side_value is False
+
+
 # =============================================================================
 # Sheet-key resolution — multi-sheet vs the single-frame {sheet: None} convention
 # =============================================================================
@@ -281,10 +412,9 @@ class _Row:
 class _FrameSource:
     """A minimal ResultsSource over a hand-built frame (no parquet round-trip)."""
 
-    framework = "CRR"
-
-    def __init__(self, frame: pl.DataFrame) -> None:
+    def __init__(self, frame: pl.DataFrame, framework: str = "CRR") -> None:
         self._frame = frame
+        self.framework = framework
 
     def scan_results(self) -> pl.LazyFrame:
         return self._frame.lazy()

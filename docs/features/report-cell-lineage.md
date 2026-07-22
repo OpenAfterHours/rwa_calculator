@@ -116,10 +116,24 @@ Everything runs on `basis: aggregator_exit` — the sealed per-leg ledger.
 ## Coverage
 
 Lineage is available for templates whose execution plan is exposed (`LINEAGE_PLANS`). Today that is
-**C 07.00** plus the single-frame Pillar 3 templates **CR4** (SA exposure and CRM effects), **CR6-A**
-(scope of IRB use), **CR7** (credit-derivatives effect on RWEA) and **CR8** (IRB RWEA flow). Any other
-template — including C 34.x and CCR1–8, which are still imperative and have no `TemplateSpec` to read —
-returns a clean `404`: *no lineage*, never a re-derived guess.
+**C 07.00** plus the single-frame Pillar 3 templates **OV1** (overview of RWEAs), **CR4** (SA exposure
+and CRM effects), **CR5** (SA risk-weight allocation), **CR6-A** (scope of IRB use), **CR7**
+(credit-derivatives effect on RWEA), **CR8** (IRB RWEA flow) and the Basel-3.1-only **CMS1** /
+**CMS2** (modelled vs standardised RWEA, by risk type / by asset class). Any other template —
+including C 34.x and CCR1–8, which are still imperative and have no `TemplateSpec` to read — returns a
+clean `404`: *no lineage*, never a re-derived guess.
+
+**CMS1 / CMS2 are produced only under Basel 3.1**, so a lineage request for one on a CRR run degrades
+to the same clean `404` as an uninstrumented template — the provider's `plans()` yields nothing rather
+than crashing. **OV1** is the first instrumented template with an out-of-frame `side_context` cell
+(row 27's OF-ADJ) and a `first_non_null` cell (row 26's output-floor multiplier). The drill-down's plan
+carries no output-floor summary, but the *reported* template is generated **with** the run's summary —
+so row 27 would render null on the drill-down against a real figure on the screen. Rather than break
+the never-disagree promise, the resolver **refuses** row 27 with a distinct `404` (*cell reads an
+out-of-frame side value this drill-down does not carry*), exactly as CR8 refuses its prior-period rows.
+The refusal is **conditional**, not blanket: C 07.00's col 0100 is also a `side_context` cell, but its
+plan threads the real per-sheet substitution inflow, so that value is present and the cell drills down
+normally. Row 26 (`first_non_null`) reads the sealed `output_floor_pct` and drills down normally.
 
 A single-frame template has no sheet axis, so its cells report `sheet = null` and the `sheet` query
 parameter is ignored. CR8 is the first template whose opening row (a `prior_period` cell) and residual

@@ -83,6 +83,25 @@ Cell semantics (recorded decisions, this slice):
   AFTER execution (a zero deduction normalised to +0.0, null kept null).
   No provision_held fallback ladder on either template; provisions are the
   (unsealed) SCRA/GCRA carriers.
+- Lineage-instrumented (R25): ``c09_01_plans`` / ``c09_02_plans`` expose the
+  per-COUNTRY execution plans (``TOTAL`` first, then one sheet per sorted non-null
+  ``cp_country_code``), sharing ``_c09_01_prepared`` / ``_c09_02_prepared`` +
+  ``_country_frames`` with the reported generators so a cell's plan and its
+  reported value key identically. Both pass ``_C09_NEGATIVE_COLS`` explicitly —
+  the first C 09-family sign-aware sweep, so the CRR supporting-factor adjustment
+  columns (0081/0082, 0121/0122) reconcile against their legs' positive
+  magnitudes. The two-basis C 09.01 row model drills correctly: a PRIMARY cell
+  (e.g. 0010/0090) runs the APPLIED-class predicate (``reporting_class_origin``)
+  while the 0020 defaulted MEMO runs the ORIGINAL-class predicate
+  (``exposure_class`` + defaulted), so on a defaulted leg whose applied class
+  moved the two cells drill different legs. C 09.02's ``_c09_02_avg_postfix`` is a
+  value-dependent GENERATE post-step (an unweighted-mean fallback when a subset's
+  total EAD is non-positive) on the reported frame the drill-down reads: it does
+  not change a cell's legs (the same subset feeds the WeightedAvg or its
+  fallback), and no portfolio subset triggers it today (recorded limitation — the
+  ``weighted_avg`` label would understate a fired fallback, but the sign-aware
+  sweep does not reconcile a WeightedAvg cell, so it is not that fallback's
+  tripwire, unlike C 08.03's sum fallback).
 
 References:
 - Regulation (EU) 2021/451, Annex I/II (C 09.01 / C 09.02)
@@ -117,6 +136,8 @@ from rwa_calc.reporting.corep.templates import (
     get_c09_02_rows,
 )
 from rwa_calc.reporting.kernel import pick
+from rwa_calc.reporting.metadata import ReportingContext
+from rwa_calc.reporting.plans import SheetPlan
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -221,6 +242,64 @@ def _const(value: float | None):  # noqa: ANN202 - tiny Formula factory
 # =============================================================================
 
 
+def _c09_01_prepared(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> tuple[pl.DataFrame, TemplateSpec, dict[str, RowPredicate | None]] | None:
+    """Collect + prepare the C 09.01 population and build its spec once.
+
+    Shared by ``c09_01_plans`` (the lineage plans) and ``generate_c09_01`` (the
+    reported frames) so both run the SAME predicate over the SAME prepared frame.
+    Returns ``None`` (preserving the generator's error contract) when a required
+    column is missing or the C 07.00 population is empty. ``row_preds`` carries
+    each row's COMBINED two-basis emptiness predicate (the ``_either_pred`` of the
+    applied-class primary and the original-class 0020 memo) — an ``any_of`` union
+    that ``SheetPlan.row_terms`` cannot express, so the generate post-passes read
+    it from here rather than the plan."""
+    if pick(cols, "exposure_class") is None:
+        errors.append("C09.01: Missing required column (exposure_class)")
+        return None
+    if pick(cols, "cp_country_code") is None:
+        errors.append(
+            "C09.01: Missing cp_country_code column — cannot produce geographical breakdown"
+        )
+        return None
+    sa_df = c07_population(results, cols).collect()
+    if sa_df.height == 0:
+        return None
+    sa_cols = set(sa_df.columns)
+    rwa_col = pick(sa_cols, "rwa_final", "rwa")
+    data = sa_df.with_columns(_c09_01_derived_exprs(sa_cols, rwa_col))
+    spec, row_preds = _c09_01_spec(set(data.columns), framework, rwa_col)
+    return data, spec, row_preds
+
+
+def c09_01_plans(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, SheetPlan]:
+    """Build the per-COUNTRY C 09.01 / OF 09.01 execution plans for lineage.
+
+    Keys the per-country plans on the sealed ``cp_country_code`` (``TOTAL`` first,
+    the whole population, then one sheet per sorted non-null country) over the
+    SHARED C 07.00 population — the standardised book plus BOTH counterparty-
+    credit-risk populations (FCCM SFT rows and SA-CCR derivative netting sets),
+    admitted by ``risk_type``. Every country plan shares the one framework spec
+    (the row-selection differs only by the country frame). Passes
+    ``_C09_NEGATIVE_COLS`` EXPLICITLY — the first C 09-family sign-aware sweep, so
+    the CRR SME / Infrastructure supporting-factor adjustment columns (0081/0082)
+    reconcile against the positive magnitudes their legs contribute."""
+    built = _c09_01_prepared(results, cols, framework, errors)
+    if built is None:
+        return {}
+    data, spec, _row_preds = built
+    return _country_plans(data, spec)
+
+
 @cites("PS1/26, paragraph 1.3")
 def generate_c09_01(
     results: pl.LazyFrame,
@@ -228,23 +307,20 @@ def generate_c09_01(
     framework: str,
     errors: list[str],
 ) -> dict[str, pl.DataFrame]:
-    """Execute C 09.01 / OF 09.01 per country over the C 07.00 population."""
-    if pick(cols, "exposure_class") is None:
-        errors.append("C09.01: Missing required column (exposure_class)")
+    """Execute C 09.01 / OF 09.01 per country over the C 07.00 population.
+
+    Shares ``_c09_01_prepared`` + ``_country_frames`` with ``c09_01_plans`` (so a
+    cell's reported value and its plan are keyed identically), then applies the
+    all-null inert-row pass and the Annex II §1.3 "(-)" negation on each reported
+    frame — the drill-down reads a cell's value from HERE, so it honours both."""
+    built = _c09_01_prepared(results, cols, framework, errors)
+    if built is None:
         return {}
-    if pick(cols, "cp_country_code") is None:
-        errors.append(
-            "C09.01: Missing cp_country_code column — cannot produce geographical breakdown"
-        )
-        return {}
-    sa_df = c07_population(results, cols).collect()
-    if sa_df.height == 0:
-        return {}
-    sa_cols = set(sa_df.columns)
-    rwa_col = pick(sa_cols, "rwa_final", "rwa")
-    data = sa_df.with_columns(_c09_01_derived_exprs(sa_cols, rwa_col))
-    spec, row_preds = _c09_01_spec(set(data.columns), framework, rwa_col)
-    return _per_country_sheets(data, spec, row_preds, post=None)
+    data, spec, row_preds = built
+    return {
+        key: _render_sheet(spec, frame, row_preds, post=None)
+        for key, frame in _country_frames(data)
+    }
 
 
 def _c09_01_derived_exprs(cols: set[str], rwa_col: str | None) -> list[pl.Expr]:
@@ -367,6 +443,68 @@ def _c09_01_spec(
 # =============================================================================
 
 
+def _c09_02_prepared(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> tuple[pl.DataFrame, TemplateSpec, dict[str, RowPredicate | None]] | None:
+    """Collect + prepare the C 09.02 IRB book and build its spec once.
+
+    Shared by ``c09_02_plans`` and ``generate_c09_02``. Returns ``None``
+    (preserving the error contract) when a required column is missing or the IRB
+    population is empty. Keys the sealed ``reporting_class_origin`` over the
+    ``reporting_approach_origin`` IRB book INCLUDING slotting (slotting stays IN
+    the population). The spec is built cols-aware from the ORIGINAL sealed set
+    (derived discriminators are bound by name for the executor)."""
+    if pick(cols, "exposure_class") is None:
+        errors.append("C09.02: Missing required column (exposure_class)")
+        return None
+    if pick(cols, "cp_country_code") is None:
+        errors.append(
+            "C09.02: Missing cp_country_code column — cannot produce geographical breakdown"
+        )
+        return None
+    irb_df = _irb_population(results, cols).collect()
+    if irb_df.height == 0:
+        return None
+    approach_col = pick(cols, "reporting_approach_origin", "approach")
+    rwa_col = pick(cols, "rwa_final", "rwa")
+    data = _c09_02_prepare(irb_df, cols, approach_col, rwa_col)
+    spec, row_preds = _c09_02_spec(cols, framework, approach_col, rwa_col)
+    return data, spec, row_preds
+
+
+def c09_02_plans(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, SheetPlan]:
+    """Build the per-COUNTRY C 09.02 / OF 09.02 execution plans for lineage.
+
+    Keys the per-country plans on ``cp_country_code`` (``TOTAL`` first, then one
+    sheet per sorted non-null country) over the IRB book (F-IRB / A-IRB / slotting
+    — slotting stays IN the population). Passes ``_C09_NEGATIVE_COLS`` explicitly
+    so the CRR supporting-factor adjustment columns (0121/0122) reconcile with the
+    sign convention. The value-dependent unweighted-mean fallback (see
+    ``_c09_02_avg_postfix``) is a GENERATE post-step on the reported frame the
+    drill-down reads; it does not change a cell's contributing legs (the same
+    subset feeds either the EAD-weighted average or its fallback), and on this
+    portfolio no country/class subset carries legs with a non-positive total EAD,
+    so the fallback never fires and the reported average IS the declared
+    WeightedAvg (recorded limitation: if a future book made a subset's total EAD
+    non-positive, the drill-down's ``weighted_avg`` label would understate that
+    the rendered value became an unweighted mean — the LEGS stay correct, and the
+    sign-aware sweep does not reconcile a WeightedAvg cell, so it is not the
+    tripwire it is for the C 08.03 sum fallback)."""
+    built = _c09_02_prepared(results, cols, framework, errors)
+    if built is None:
+        return {}
+    data, spec, _row_preds = built
+    return _country_plans(data, spec)
+
+
 @cites("PS1/26, paragraph 1.3")
 def generate_c09_02(
     results: pl.LazyFrame,
@@ -375,32 +513,29 @@ def generate_c09_02(
     errors: list[str],
 ) -> dict[str, pl.DataFrame]:
     """Execute C 09.02 / OF 09.02 per country over the IRB book
-    (F-IRB / A-IRB / slotting — slotting stays IN the population)."""
-    if pick(cols, "exposure_class") is None:
-        errors.append("C09.02: Missing required column (exposure_class)")
+    (F-IRB / A-IRB / slotting — slotting stays IN the population).
+
+    Shares ``_c09_02_prepared`` + ``_country_frames`` with ``c09_02_plans``, then
+    applies the all-null inert-row pass, the value-dependent unweighted-mean
+    fallback (``_c09_02_avg_postfix``) and the Annex II §1.3 "(-)" negation on each
+    reported frame — the drill-down reads a cell's value from HERE."""
+    built = _c09_02_prepared(results, cols, framework, errors)
+    if built is None:
         return {}
-    if pick(cols, "cp_country_code") is None:
-        errors.append(
-            "C09.02: Missing cp_country_code column — cannot produce geographical breakdown"
-        )
-        return {}
-    irb_df = _irb_population(results, cols).collect()
-    if irb_df.height == 0:
-        return {}
-    approach_col = pick(cols, "reporting_approach_origin", "approach")
-    rwa_col = pick(cols, "rwa_final", "rwa")
-    data = _c09_02_prepare(irb_df, cols, approach_col, rwa_col)
+    data, spec, row_preds = built
     ead_col = pick(cols, "ead_final")
     pd_col = pick(cols, "pd_floored", "pd")
     lgd_col = pick(cols, "lgd_post_crm")
-    spec, row_preds = _c09_02_spec(cols, framework, approach_col, rwa_col)
 
     def post(frame: pl.DataFrame, country_df: pl.DataFrame) -> pl.DataFrame:
         return _c09_02_avg_postfix(
             frame, country_df, row_preds, ead_col=ead_col, pd_col=pd_col, lgd_col=lgd_col
         )
 
-    return _per_country_sheets(data, spec, row_preds, post=post)
+    return {
+        key: _render_sheet(spec, frame, row_preds, post=post)
+        for key, frame in _country_frames(data)
+    }
 
 
 def _irb_population(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:
@@ -593,17 +728,12 @@ def _c09_02_avg_postfix(
 # =============================================================================
 
 
-def _per_country_sheets(
-    data: pl.DataFrame,
-    spec: TemplateSpec,
-    row_preds: dict[str, RowPredicate | None],
-    *,
-    post: _PostStep | None,
-) -> dict[str, pl.DataFrame]:
-    """TOTAL first (the whole population, null-country rows included),
-    then one sheet per sorted distinct non-null cp_country_code."""
-    result: dict[str, pl.DataFrame] = {}
-    result["TOTAL"] = _one_sheet(data, spec, row_preds, post)
+def _country_frames(data: pl.DataFrame) -> list[tuple[str, pl.DataFrame]]:
+    """The per-country (key, frame) split: TOTAL first (the whole population,
+    null-country rows included), then one frame per sorted distinct non-null
+    cp_country_code. Shared by the plans builder and the reported generator so a
+    cell's plan and its reported value are keyed identically."""
+    frames: list[tuple[str, pl.DataFrame]] = [("TOTAL", data)]
     countries = (
         data.select(pl.col("cp_country_code"))
         .filter(pl.col("cp_country_code").is_not_null())
@@ -612,18 +742,37 @@ def _per_country_sheets(
         .to_series()
         .to_list()
     )
-    for country in countries:
-        country_df = data.filter(pl.col("cp_country_code") == country)
-        result[country] = _one_sheet(country_df, spec, row_preds, post)
-    return result
+    frames.extend(
+        (country, data.filter(pl.col("cp_country_code") == country)) for country in countries
+    )
+    return frames
 
 
-def _one_sheet(
-    country_df: pl.DataFrame,
+def _country_plans(data: pl.DataFrame, spec: TemplateSpec) -> dict[str, SheetPlan]:
+    """One ``SheetPlan`` per country over the shared framework spec. Every plan
+    carries ``_C09_NEGATIVE_COLS`` so the drill-down's sign-aware reconciliation
+    covers the CRR supporting-factor adjustment columns (0081/0082, 0121/0122)."""
+    return {
+        key: SheetPlan(
+            spec=spec,
+            frame=frame,
+            ctx=ReportingContext(),
+            negative_cols=_C09_NEGATIVE_COLS,
+        )
+        for key, frame in _country_frames(data)
+    }
+
+
+def _render_sheet(
     spec: TemplateSpec,
+    country_df: pl.DataFrame,
     row_preds: dict[str, RowPredicate | None],
+    *,
     post: _PostStep | None,
 ) -> pl.DataFrame:
+    """Execute one country sheet and apply its post-``execute`` passes: the
+    all-null inert/empty rows, an optional value-dependent ``post`` step
+    (C 09.02's unweighted-mean fallback), and the Annex II §1.3 "(-)" negation."""
     frame = execute(spec, country_df)
     frame = _null_empty_rows(frame, country_df, row_preds)
     if post is not None:

@@ -119,8 +119,10 @@ Lineage is available for templates whose execution plan is exposed (`LINEAGE_PLA
 the **multi-sheet** templates **C 07.00** (SA credit risk, per obligor class), **C 08.01** (IRB
 totals, per exposure class), **C 08.02** (IRB by PD grade, per exposure class), **C 08.03** (IRB by PD
 range, per exposure class), **C 08.04** (IRB RWEA flow, per exposure class), **C 08.05** (IRB PD
-back-testing, per exposure class), **C 08.06** (IRB slotting specialised lending, per SL type) and
-**CR7-A** (extent of IRB CRM techniques, per origin approach); the
+back-testing, per exposure class), **C 08.06** (IRB slotting specialised lending, per SL type),
+**C 09.01** (geographical breakdown of SA exposures, per country), **C 09.02** (geographical
+breakdown of IRB exposures, per country), **CR6** (IRB by exposure class and PD range, per obligor
+class) and **CR7-A** (extent of IRB CRM techniques, per origin approach); the
 **single-frame** COREP **C 08.07** (IRB scope of use) and the Basel-3.1-only **OF 02.01**
 (output-floor comparison); and the single-frame Pillar 3 templates **OV1** (overview of RWEAs),
 **CR4** (SA exposure and CRM effects), **CR5** (SA risk-weight allocation), **CR6-A** (scope of IRB
@@ -128,6 +130,24 @@ use), **CR7** (credit-derivatives effect on RWEA), **CR8** (IRB RWEA flow) and t
 **CMS1** / **CMS2** (modelled vs standardised RWEA, by risk type / by asset class). Any other
 template — including C 34.x and CCR1–8, which are still imperative and have no `TemplateSpec` to
 read — returns a clean `404`: *no lineage*, never a re-derived guess.
+
+**C 09.01**, **C 09.02** and **CR6** are the R25 instrumentation. The two **C 09** geo templates are
+the first **C 09-family** sign-aware sweep: their plans pass the CRR supporting-factor adjustment
+columns (C 09.01's 0081/0082, C 09.02's 0121/0122) as `negative_cols`, and both fire non-zero and
+negative on the tie-out fixture, so the drill-down reconciles the negated, row-backed cells against
+their legs' positive magnitudes. **C 09.01** carries the **two-basis** row model: a *primary* cell
+keys the **applied** Art. 112 class (`reporting_class_origin`), while the 0020 "Defaulted exposures"
+**memorandum** keys the raw **original** class (`exposure_class`) plus the defaulted flag — so on a
+defaulted leg whose applied class moved, the two cells of the same row drill *different* legs (Basel
+3.1 additionally exercises R7's real-estate rows 0090/0091 through the sweep, its supporting-factor
+columns being CRR-only). **C 09.02** keeps a value-dependent unweighted-mean fallback for its PD/LGD
+averages when a subset's total EAD is non-positive (`_c09_02_avg_postfix`, on the reported frame the
+drill-down reads); it changes no cell's legs, and no fixture subset triggers it — a recorded
+limitation, since the sweep does not reconcile a `WeightedAvg` cell and so is not that fallback's
+tripwire (unlike C 08.03's sum fallback). **CR6** keys the **obligor** basis (`reporting_class_origin`
+— Annex XXII bars substitution effects, the opposite basis from CR4/CR5), forces every defaulted leg
+into the 100% PD band (row 17) via the derived `cr6_alloc_pd` column, and injects its String PD-range
+label into col `a` post-execute (not an addressable numeric cell, skipped by the value-column sweep).
 
 **C 08.04** and **CR7-A** are the first multi-sheet instrumentations since C 07.00: a lineage request
 names the sheet (an exposure class for C 08.04, an origin approach for CR7-A). C 08.04 is the CR8-clone

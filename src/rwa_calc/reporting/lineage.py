@@ -75,12 +75,19 @@ from rwa_calc.reporting.corep.c08 import (
     generate_c08_05,
     generate_c08_06,
 )
+from rwa_calc.reporting.corep.c09 import (
+    c09_01_plans,
+    c09_02_plans,
+    generate_c09_01,
+    generate_c09_02,
+)
 from rwa_calc.reporting.corep.of02 import of_02_01_frames, of_02_01_plans
 from rwa_calc.reporting.kernel import available_columns
 from rwa_calc.reporting.pillar3.cms1 import cms1_plans, generate_cms1
 from rwa_calc.reporting.pillar3.cms2 import cms2_plans, generate_cms2
 from rwa_calc.reporting.pillar3.cr4 import cr4_plans, generate_cr4
 from rwa_calc.reporting.pillar3.cr5 import cr5_plans, generate_cr5
+from rwa_calc.reporting.pillar3.cr6 import cr6_plans, generate_cr6
 from rwa_calc.reporting.pillar3.cr6a import cr6a_plans, generate_cr6a
 from rwa_calc.reporting.pillar3.cr7 import cr7_plans, generate_cr7
 from rwa_calc.reporting.pillar3.cr7a import cr7a_plans, generate_cr7a
@@ -649,6 +656,117 @@ LINEAGE_PLANS: dict[str, _Provider] = {
             "and the provisions ladder applied on the reported frame",
         ),
         sheet_label="SL type",
+    ),
+    # C 09.01 — geographical breakdown, SA (per country; R25). The FIRST
+    # C 09-family instrumentation and the first sign-aware C 09 sweep: c09_01_plans
+    # passes _C09_NEGATIVE_COLS ({0081,0082,0121,0122}) explicitly, so the CRR
+    # supporting-factor adjustment columns 0081/0082 reconcile against their legs'
+    # positive magnitudes (0081 fires non-zero on the TOTAL sheet). generate_c09_01
+    # is the provider generator directly (its all-null inert-row pass and the
+    # Annex II §1.3 "(-)" negation live on the reported frame the drill-down reads).
+    # TWO-BASIS row model: a PRIMARY cell drills the APPLIED class, the 0020 memo
+    # the ORIGINAL class.
+    "c09_01": _Provider(
+        plans=c09_01_plans,
+        generate=generate_c09_01,
+        scope=(
+            "The SHARED C 07.00 population — the standardised book plus BOTH "
+            "counterparty-credit-risk populations (FCCM SFT synthetic rows and "
+            "SA-CCR derivative netting sets), admitted by risk_type (not by the "
+            "approach label, which the output floor relabels)",
+            "Two-basis row model (Annex II C 09.1): the PRIMARY columns key the "
+            "APPLIED Art. 112 class (reporting_class_origin — a defaulted SA "
+            "exposure moves to row 0100, as C 07.00 assigns it), while the 0020 "
+            "'Defaulted exposures' MEMORANDUM keys the raw ORIGINAL class "
+            "(exposure_class) conjoined with the defaulted flag — the "
+            "counterfactual 'would have been' row. A class row is emptied only "
+            "when BOTH its applied-class and original-class subsets are empty",
+            "Under Basel 3.1 the real-estate reporting classes (retail_mortgage / "
+            "residential_mortgage / commercial_mortgage) key the 'Real estate "
+            "exposures' row 0090 and its regulatory-RRE / regulatory-CRE / other-RE "
+            "/ ADC / SME 'of which' sub-rows (0091-0095); the SA specialised-lending "
+            "'of which' sub-rows (0071-0073) key sl_type. RECORDED DECISION (R7): "
+            "income-producing CRE is sealed reporting_class_origin == corporate, so "
+            "it deliberately stays in row 0070 rather than double-counting into row "
+            "0090 — row 0090 follows automatically if the classifier's IPRE-CRE "
+            "scoping changes",
+            "The CRR 'RWEA pre supporting factors' column (0080) keys "
+            "rwa_pre_factor (falling back to the post-SF ladder when unsealed); the "
+            "SME / Infrastructure '(-)' supporting-factor adjustment columns "
+            "(0081/0082) carry Σ(rwa_pre_factor − rwa) over each factor's applied "
+            "subset, so 0080 + 0081 + 0082 = 0090 foots. Under Basel 3.1 none of "
+            "these refs exist (supporting factors are CRR-only), so the change is "
+            "scoped by column presence, not by regime branching",
+        ),
+        sheet_label="country",
+    ),
+    # C 09.02 — geographical breakdown, IRB (per country; R25). Keys the sealed
+    # reporting_class_origin over the IRB book INCLUDING slotting. generate_c09_02
+    # is the provider generator directly: its all-null inert-row pass, the
+    # value-dependent unweighted-mean fallback (_c09_02_avg_postfix) and the
+    # Annex II §1.3 "(-)" negation live on the reported frame the drill-down reads.
+    "c09_02": _Provider(
+        plans=c09_02_plans,
+        generate=generate_c09_02,
+        scope=(
+            "The IRB book — F-IRB / A-IRB AND slotting "
+            "(reporting_approach_origin in {foundation_irb, advanced_irb, "
+            "slotting}); C 09.02 keeps slotting IN the population, keyed on the "
+            "sealed reporting_class_origin (== raw exposure_class for the IRB book "
+            "— the number-neutral obligor basis, no default row by design)",
+            "The PD/LGD averages weight by ead_final and report RAW ratios (no "
+            "x100 despite the '(%)' labels); a value-dependent module post-step "
+            "preserves the retired UNWEIGHTED-mean fallback for cols 0080/0090/0100 "
+            "when a subset carries a non-positive total EAD (the WeightedAvg verb "
+            "has no such fallback). RECORDED LIMITATION: the fallback does not fire "
+            "on this portfolio, so the reported average IS the declared "
+            "WeightedAvg; if a future book made a subset's total EAD non-positive "
+            "the drill-down's weighted_avg label would understate that the rendered "
+            "value became an unweighted mean — the LEGS stay correct, and the "
+            "sign-aware sweep does not reconcile a WeightedAvg cell, so it is not "
+            "the tripwire it is for C 08.03's sum fallback",
+            "The CRR 'RWEA pre supporting factors' column (0110) keys "
+            "rwa_pre_factor (post-SF fallback); the SME / Infrastructure '(-)' "
+            "supporting-factor adjustment columns (0121/0122) carry "
+            "Σ(rwa_pre_factor − rwa) over each factor's applied subset (0121 fires "
+            "non-zero and negative on the TOTAL sheet), so 0110 + 0121 + 0122 = "
+            "0125 foots. B31 carries none of these refs (supporting factors are "
+            "CRR-only)",
+        ),
+        sheet_label="country",
+    ),
+    # CR6 — IRB exposures by exposure class and PD range (per obligor class; R25).
+    # The OBLIGOR basis (reporting_class_origin — Annex XXII bars substitution
+    # effects), the OPPOSITE of CR4/CR5's post-substitution basis. generate_cr6 is
+    # the provider generator directly: its empty-band all-null pass and the String
+    # col 'a' label injection stay on the reported frame the drill-down reads (the
+    # tie-out sweep skips col 'a' as a String column).
+    "cr6": _Provider(
+        plans=cr6_plans,
+        generate=generate_cr6,
+        scope=(
+            "The ORIGIN F-IRB / A-IRB book (reporting_approach_origin in "
+            "{foundation_irb, advanced_irb} — slotting is excluded from the PD "
+            "scale); each sheet is one obligor class keyed on the sealed "
+            "reporting_class_origin (the recorded F3 OBLIGOR basis — 'without "
+            "considering any substitution effects due to CRM', Annex XXII column a; "
+            "the opposite basis from CR4/CR5, number-neutral for the IRB book which "
+            "has no defaulted class)",
+            "PD-band rows allocate on the derived cr6_alloc_pd column, half-open "
+            "[lower, upper): Basel 3.1 allocates on the PRE-input-floor pd, CRR on "
+            "pd_floored (PS1/26 Annex XXII column a mandates pre-floor allocation). "
+            "All defaulted exposures are forced into the 100% PD band (row 17) via "
+            "the derived column, per Annex XXII ('All defaulted exposures shall be "
+            "included in the bucket representing PD of 100%')",
+            "Gross columns b/c sum the floored reporting_gross carriers "
+            "(reporting_gross_drawn/interest on-balance-sheet, "
+            "reporting_gross_nominal/undrawn off-balance-sheet); f/h/i report the "
+            "EAD-weighted post-floor pd_floored x100 / lgd_floored x100 / "
+            "irb_maturity_m; k is the RWEA density; col m (SCRA provisions) is "
+            "permanently null (never produced by the engine). Col a is the String "
+            "PD-range label injected post-execute (not an addressable numeric cell)",
+        ),
+        sheet_label="exposure class",
     ),
 }
 

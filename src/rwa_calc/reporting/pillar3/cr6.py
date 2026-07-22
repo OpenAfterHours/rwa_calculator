@@ -38,6 +38,17 @@ docs/plans/phase7-declarative-reporting.md §6):
 - An EMPTY PD band renders as an all-null row (the imperative contract);
   a populated band reports 0.0 gross off-BS amounts when its rows are all
   on-BS. The Total row (ref 18) pools the whole class.
+- Lineage-instrumented (R25): ``cr6_plans`` exposes the per-obligor-class
+  execution plans, and ``generate_cr6`` iterates them so a cell's spec and its
+  reported value key identically. Each plan's frame is the WHOLE alloc-PD frame
+  (the ``classes_origin`` predicate lives in the cell specs, so the executor
+  selects the class); the two post-execute passes (``_null_empty_bands`` and the
+  String col ``a`` label injection) stay on the reported frame the drill-down
+  reads — col ``a`` is a String label the tie-out sweep skips, and an empty PD
+  band's all-null cells drill to zero legs against a null reported value. A
+  defaulted leg drills in the 100% band (row 17) via the derived ``cr6_alloc_pd``
+  column. CR6 carries no "(-)"-labelled deduction column, so its ``negative_cols``
+  is empty (the OBLIGOR basis reports no substitution flow).
 
 References:
 - CRR Art. 452(g); PRA PS1/26 Annex XXII (UKB CR6, incl. the pre/post
@@ -65,12 +76,14 @@ from rwa_calc.reporting.cellspec import (
     WeightedAvg,
     execute,
 )
+from rwa_calc.reporting.metadata import ReportingContext
 from rwa_calc.reporting.pillar3.templates import (
     CR6_PD_RANGES,
     IRB_EXPOSURE_CLASSES,
     P3Row,
     get_cr6_columns,
 )
+from rwa_calc.reporting.plans import SheetPlan
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -177,19 +190,25 @@ _CR6_SPECS: dict[tuple[str, str], TemplateSpec] = {
 }
 
 
-def generate_cr6(
+def cr6_plans(
     results: pl.LazyFrame,
     cols: set[str],
     framework: str,
     errors: list[str],
-) -> dict[str, pl.DataFrame]:
-    """Execute CR6 per obligor class over the sealed ledger.
+) -> dict[str, SheetPlan]:
+    """Build the per-obligor-class CR6 execution plans for lineage.
 
-    Preserves the imperative generator's contracts: missing EAD/RWA/class
-    columns record "CR6: missing required columns"; a missing allocation-PD
-    source records "CR6: missing PD column"; an empty IRB population yields
-    ``{}`` silently.
-    """
+    Keys the per-class plans on the sealed ``reporting_class_origin`` (the
+    obligor's applied Art. 147 class — the recorded F3 second-tranche OBLIGOR
+    basis; Annex XXII bars substitution effects) over the ORIGIN F-IRB / A-IRB
+    book (``reporting_approach_origin`` — slotting has no PD scale), preserving
+    ``generate_cr6``'s error contract. Every plan's ``frame`` is the WHOLE
+    alloc-PD frame (each class sheet's spec carries the ``classes_origin``
+    predicate, so the class filter lives in the cell predicates — the executor
+    selects the class inside the spec, not a pre-sliced frame). The derived
+    ``cr6_alloc_pd`` column forces defaulted legs into the 100% PD band (row 17),
+    so a defaulted leg drills in that band. CR6 carries no "(-)"-labelled
+    deduction column, so ``negative_cols`` is empty."""
     if "ead_final" not in cols or not ({"rwa_final", "rwa"} & cols) or "exposure_class" not in cols:
         errors.append("CR6: missing required columns")
         return {}
@@ -204,13 +223,41 @@ def generate_cr6(
         return {}
     data = _with_alloc_pd(data, alloc_source)
 
-    result: dict[str, pl.DataFrame] = {}
+    plans: dict[str, SheetPlan] = {}
     for exposure_class in sorted(_present_classes(population)):
         spec = _CR6_SPECS.get((framework, exposure_class)) or build_cr6_spec(
             framework, exposure_class
         )
-        frame = execute(spec, data)
-        class_data = data.filter(
+        plans[exposure_class] = SheetPlan(
+            spec=spec,
+            frame=data,
+            ctx=ReportingContext(),
+            negative_cols=frozenset(),
+        )
+    return plans
+
+
+def generate_cr6(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, pl.DataFrame]:
+    """Execute CR6 per obligor class over the sealed ledger.
+
+    Iterates ``cr6_plans`` (so a cell's spec and its reported value key
+    identically) and applies the two post-execute passes on each reported frame —
+    the all-null empty-band pass (``_null_empty_bands``) and the String PD-range
+    label injection (col ``a``, which the tie-out sweep skips as a String column)
+    — the drill-down reads a cell's value from HERE. Preserves the imperative
+    generator's contracts: missing EAD/RWA/class columns record "CR6: missing
+    required columns"; a missing allocation-PD source records "CR6: missing PD
+    column"; an empty IRB population yields ``{}`` silently.
+    """
+    result: dict[str, pl.DataFrame] = {}
+    for exposure_class, plan in cr6_plans(results, cols, framework, errors).items():
+        frame = execute(plan.spec, plan.frame)
+        class_data = plan.frame.filter(
             pl.col("reporting_approach_origin").is_in(list(_IRB_APPROACHES))
             & (pl.col("reporting_class_origin") == exposure_class)
         )

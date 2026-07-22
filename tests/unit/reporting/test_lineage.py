@@ -629,6 +629,99 @@ def test_c08_06_empty_category_row_col_0070_is_an_unbound_fixed_display_rw() -> 
 
 
 # =============================================================================
+# R25 — the two C 09 geo templates (per country) + Pillar 3 CR6 (per class)
+# =============================================================================
+
+_R25_MULTI_SHEET_TEMPLATES = ("c09_01", "c09_02", "cr6")
+
+
+@pytest.mark.parametrize("template_id", _R25_MULTI_SHEET_TEMPLATES)
+def test_r25_multi_sheet_templates_are_instrumented(template_id: str) -> None:
+    # Assert — each R25 template is instrumented as a PER-SHEET provider
+    # (single_frame False -> its cells carry a sheet axis), with a populated scope
+    # and a sheet label naming that axis (c09_01/c09_02 by country, cr6 by
+    # exposure class).
+    assert lineage.is_instrumented(template_id)
+    provider = lineage.LINEAGE_PLANS[template_id]
+    assert provider.single_frame is False
+    assert provider.scope
+    assert provider.sheet_label != ""
+
+
+def test_c09_01_two_basis_primary_drills_applied_class_memo_drills_original() -> None:
+    # Arrange — a defaulted corporate leg whose APPLIED class moved to 'defaulted'
+    # (reporting_class_origin) while its ORIGINAL class stayed corporate
+    # (exposure_class), alongside a live non-defaulted corporate leg. No risk_type
+    # column, so the C 07.00 population is just the standardised book.
+    frame = pl.DataFrame(
+        {
+            "exposure_reference": ["CORP-LIVE", "CORP-DEF"],
+            "reporting_approach_origin": ["standardised", "standardised"],
+            "reporting_class_origin": ["corporate", "defaulted"],
+            "exposure_class": ["corporate", "corporate"],
+            "is_defaulted": [False, True],
+            "cp_country_code": ["GB", "GB"],
+            "ead_gross": [5000.0, 2000.0],
+            "ead_final": [5000.0, 2000.0],
+            "rwa_final": [3500.0, 3000.0],
+        }
+    )
+    resolver = lineage.sheet_lineage(_FrameSource(frame), "c09_01", "TOTAL")
+    assert resolver is not None
+
+    # Act — row 0070 (Corporates): col 0090 is a PRIMARY RWEA cell (applied basis),
+    # col 0020 is the defaulted MEMORANDUM (original basis + defaulted).
+    primary = resolver.cell("0070", "0090")
+    memo = resolver.cell("0070", "0020")
+
+    # Assert — the primary cell drills the APPLIED-class leg only (the live
+    # corporate, keyed on reporting_class_origin); the 0020 memo drills the
+    # ORIGINAL-class defaulted leg only (keyed on exposure_class + defaulted). The
+    # two cells of the SAME row select DIFFERENT legs — the two-basis model.
+    assert primary is not None and memo is not None
+    assert primary.cell_value == pytest.approx(3500.0)
+    assert set(primary.rows["exposure_reference"].to_list()) == {"CORP-LIVE"}
+    assert memo.cell_value == pytest.approx(2000.0)
+    assert set(memo.rows["exposure_reference"].to_list()) == {"CORP-DEF"}
+
+
+def test_cr6_defaulted_leg_drills_in_the_100pct_band() -> None:
+    # Arrange — a defaulted F-IRB corporate leg whose model PD (0.02) would band in
+    # row 10, but Annex XXII forces all defaulted exposures into the 100% band (row
+    # 17) via the derived cr6_alloc_pd column.
+    frame = pl.DataFrame(
+        {
+            "exposure_reference": ["CORP-DEF"],
+            "reporting_approach_origin": ["foundation_irb"],
+            "reporting_class_origin": ["corporate"],
+            "exposure_class": ["corporate"],
+            "reporting_on_balance_sheet": [True],
+            "is_defaulted": [True],
+            "pd_floored": [0.02],
+            "reporting_ead": [1000.0],
+            "ead_final": [1000.0],
+            "rwa_final": [1500.0],
+        }
+    )
+    resolver = lineage.sheet_lineage(_FrameSource(frame), "cr6", "corporate")
+    assert resolver is not None
+
+    # Act — col e (EAD) on the 100% band (row 17) vs the leg's model-PD band (row 10).
+    band_100 = resolver.cell("17", "e")
+    band_model = resolver.cell("10", "e")
+
+    # Assert — the defaulted leg lands in the 100% band (forced by cr6_alloc_pd),
+    # not its model-PD band; row 10 has no legs and renders an empty (null) band.
+    assert band_100 is not None
+    assert band_100.total_rows == 1
+    assert band_100.cell_value == pytest.approx(1000.0)
+    assert set(band_100.rows["exposure_reference"].to_list()) == {"CORP-DEF"}
+    assert band_model is not None
+    assert band_model.total_rows == 0
+    assert band_model.cell_value is None
+
+
+# =============================================================================
 # Sheet-key resolution — multi-sheet vs the single-frame {sheet: None} convention
 # =============================================================================
 

@@ -97,6 +97,21 @@ _TIEOUT_CASES: list[tuple[str, str | None, str]] = [
     ("c08_03", "corporate", "CRR"),
     ("c08_05", "corporate", "CRR"),
     ("c08_06", "project_finance", "CRR"),
+    # R25 — the two C 09 geo templates (per country) and Pillar 3 CR6 (per obligor
+    # class). c09_01/c09_02 tie out on the representative TOTAL sheet, and they are
+    # the FIRST C 09-family sign-aware sweeps: c09_01 col 0081 and c09_02 col 0121
+    # fire NON-ZERO and negative, so the sweep proves the {0081,0082,0121,0122}
+    # negation reconciliation on live, row-backed deduction cells. c09_01 also
+    # exercises the two-basis row model (a PRIMARY cell drills the applied class,
+    # the 0020 memo the original class). The B31 c09_01 TOTAL case sweeps R7's
+    # real-estate rows (0090/0091 populated) — its supporting-factor columns are
+    # absent under Basel 3.1, so it exercises the RE keying rather than the sign
+    # convention. cr6 ties out on corporate over the sparse PD-range rows (col a is
+    # the String label the value-column enumeration below skips).
+    ("c09_01", "TOTAL", "CRR"),
+    ("c09_02", "TOTAL", "CRR"),
+    ("c09_01", "TOTAL", "BASEL_3_1"),
+    ("cr6", "corporate", "CRR"),
 ]
 
 

@@ -122,14 +122,25 @@ range, per exposure class), **C 08.04** (IRB RWEA flow, per exposure class), **C
 back-testing, per exposure class), **C 08.06** (IRB slotting specialised lending, per SL type),
 **C 09.01** (geographical breakdown of SA exposures, per country), **C 09.02** (geographical
 breakdown of IRB exposures, per country), **CR6** (IRB by exposure class and PD range, per obligor
-class) and **CR7-A** (extent of IRB CRM techniques, per origin approach); the
+class), **CR7-A** (extent of IRB CRM techniques, per origin approach) and the Basel-3.1-only
+**CR9** / **CR9.1** (IRB PD back-testing, per approach x leaf class — by PD band / by ECAI grade)
+and **CR10** (slotting specialised lending + CRR simple-RW equity, per subtemplate); the
 **single-frame** COREP **C 08.07** (IRB scope of use) and the Basel-3.1-only **OF 02.01**
 (output-floor comparison); and the single-frame Pillar 3 templates **OV1** (overview of RWEAs),
 **CR4** (SA exposure and CRM effects), **CR5** (SA risk-weight allocation), **CR6-A** (scope of IRB
 use), **CR7** (credit-derivatives effect on RWEA), **CR8** (IRB RWEA flow) and the Basel-3.1-only
-**CMS1** / **CMS2** (modelled vs standardised RWEA, by risk type / by asset class). Any other
-template — including C 34.x and CCR1–8, which are still imperative and have no `TemplateSpec` to
-read — returns a clean `404`: *no lineage*, never a re-derived guess.
+**CMS1** / **CMS2** (modelled vs standardised RWEA, by risk type / by asset class).
+
+That is **every declarative template** — the full COREP credit-risk estate (C 07.00, C 08.01–07,
+C 09.01/02) and the full Pillar 3 estate (OV1, CR4–CR10, CMS1/2) — with exactly two deliberate gaps.
+**C 02.00** (own-funds requirements) is a pre-pass kernel-plus-thin-shell hybrid that never runs
+through the executor, so it exposes no `TemplateSpec` to read; and the **C 34.x** / **CCR1–8**
+counterparty-credit-risk family is still imperative for the same reason. A lineage request for any of
+these — or any other uninstrumented template — returns a clean `404`: *no lineage*, never a re-derived
+guess. **CR9.1** is a third, softer gap: it *is* instrumented, but the engine produces neither
+`ecai_pd_mapping` nor `external_rating_equivalent`, so it is empty on the real portfolio (the recorded
+S1 accept-empty decision) and comes alive only on a seeded ECAI book — so it carries a seeded unit pin
+rather than an acceptance tie-out.
 
 **C 09.01**, **C 09.02** and **CR6** are the R25 instrumentation. The two **C 09** geo templates are
 the first **C 09-family** sign-aware sweep: their plans pass the CRR supporting-factor adjustment
@@ -148,6 +159,21 @@ tripwire (unlike C 08.03's sum fallback). **CR6** keys the **obligor** basis (`r
 — Annex XXII bars substitution effects, the opposite basis from CR4/CR5), forces every defaulted leg
 into the 100% PD band (row 17) via the derived `cr6_alloc_pd` column, and injects its String PD-range
 label into col `a` post-execute (not an addressable numeric cell, skipped by the value-column sweep).
+
+**CR9**, **CR9.1** and **CR10** are the R26 instrumentation — the final item, closing the declarative
+estate. All three key a **compound** sheet axis. **CR9** / **CR9.1** key `f"{approach} - {leaf class}"`
+on the **obligor** basis (the CR6 basis — Annex XXII bars substitution effects), Basel 3.1 only: like
+the CMS pair under CRR, `cr9_plans` yields nothing on a CRR run, so a CRR lineage request degrades to
+the same clean `404`. Their value cells are **counts, weighted averages, arithmetic means and
+intra-row formulas — no `Sum` cell at all**, so the tie-out sweep is the first to reconcile a whole
+sheet by *predicate-match count* rather than a signed total (CR9 forces every defaulted leg into the
+100% band via `cr9_alloc_pd`, exactly as CR6 does, and drops empty PD bands post-execute — the sparse
+convention). **CR10** keys per **subtemplate** (`sl_type`, plus the CRR `equity` sheet): its fixed
+col `c` risk weight — "This is a fixed column. It shall not be altered" — is **unbound** in the spec
+and stamped post-execute, so the drill-down reports it as the template's empty policy and reads the
+display weight from the reported frame rather than a binding that could disagree (the C 08.06
+unbound-0070 precedent; the equity sheet's col `b` is unbound the same way, equity having no
+off-balance-sheet leg). Every other CR10 cell is a `Sum`/`SafeSum` and reconciles against its legs.
 
 **C 08.04** and **CR7-A** are the first multi-sheet instrumentations since C 07.00: a lineage request
 names the sheet (an exposure class for C 08.04, an origin approach for CR7-A). C 08.04 is the CR8-clone

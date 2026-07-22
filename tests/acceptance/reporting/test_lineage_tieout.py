@@ -112,6 +112,20 @@ _TIEOUT_CASES: list[tuple[str, str | None, str]] = [
     ("c09_02", "TOTAL", "CRR"),
     ("c09_01", "TOTAL", "BASEL_3_1"),
     ("cr6", "corporate", "CRR"),
+    # R26 — the FINAL instrumentation: the CR9 family (per approach x leaf class,
+    # Basel 3.1 only) and CR10 (per subtemplate). cr9 ties out on two COMPOUND sheet
+    # keys the B31 portfolio produces (an A-IRB and an F-IRB block) — CR9 has NO Sum
+    # cell, so the sweep proves predicate-match-count reconciliation on the
+    # count/mean/formula cells (never a signed total). cr10 ties out on the CRR
+    # project_finance slotting sheet and the CRR equity CR10.5 sheet: their fixed col
+    # c (and equity's col b) are UNBOUND, so the sweep sees constant-policy cells
+    # whose display value is read from the reported frame, while cols a/b/d/e/f
+    # reconcile as Sum/SafeSum. CR9.1 is EMPTY on the real portfolio (no
+    # ecai_pd_mapping), so it has no tie-out — a seeded unit pin guards it instead.
+    ("cr9", "advanced_irb - corporate_sme", "BASEL_3_1"),
+    ("cr9", "foundation_irb - corporate_other_non_sme", "BASEL_3_1"),
+    ("cr10", "project_finance", "CRR"),
+    ("cr10", "equity", "CRR"),
 ]
 
 

@@ -57,6 +57,18 @@ Cell semantics (recorded decisions, this slice):
   kept: R18; null would be the exact-fidelity rendering of "no pre-printed
   weight" if a consumer ever needs it). Pack-homing of the display constants
   remains a recorded follow-up (plan §7).
+- Lineage-instrumented (R26): ``cr10_plans`` exposes the per-subtemplate
+  execution plans (keyed by ``sl_type`` / ``equity``), and ``generate_cr10``
+  iterates them so a cell's spec and its reported value key identically. The
+  fixed col-``c`` risk weight is NOT bound in either spec — it is left UNBOUND and
+  written post-execute by ``_with_risk_weight_column`` / ``_with_equity_risk_weight_column``,
+  so the drill-down reports it as the template's empty policy (kind ``unbound``,
+  no legs) and reads its display value from the reported frame rather than a
+  binding whose value could differ from the fixed weight on the screen (the
+  C 08.06 unbound-0070 precedent; col ``b`` on the equity sheet is unbound the
+  same way). Every OTHER cell (a/b/d/e/f) is a Sum/SafeSum, so the sweep
+  reconciles it against its legs. CR10 carries no "(-)"-labelled deduction column,
+  so ``negative_cols`` is empty.
 
 References:
 - CRR Art. 438(e); Art. 153(5) (Table 1) / Art. 155(2) (CRR equity);
@@ -80,6 +92,7 @@ from rwa_calc.reporting.cellspec import (
     TemplateSpec,
     execute,
 )
+from rwa_calc.reporting.metadata import ReportingContext
 from rwa_calc.reporting.pillar3.templates import (
     CR10_EQUITY_RISK_WEIGHTS,
     CR10_EQUITY_ROWS,
@@ -92,6 +105,7 @@ from rwa_calc.reporting.pillar3.templates import (
     get_cr10_columns,
     get_cr10_subtemplates,
 )
+from rwa_calc.reporting.plans import SheetPlan
 
 # Half-width of the inclusive band that matches an equity leg's applied simple
 # risk weight (``reporting_rw``) to its CR10.5 row. The bands (190/290/370%) are
@@ -216,20 +230,32 @@ _CR10_EQUITY_SPECS: dict[str, TemplateSpec] = {
 }
 
 
-def generate_cr10(
+def cr10_plans(
     results: pl.LazyFrame,
     cols: set[str],
     framework: str,
     errors: list[str],
-) -> dict[str, pl.DataFrame]:
-    """Execute CR10 per subtemplate over the sealed ledger.
+) -> dict[str, SheetPlan]:
+    """Build the per-subtemplate CR10 execution plans for lineage.
 
-    Preserves the imperative generator's contracts: missing EAD/RWA columns
-    record "CR10: missing required columns"; a run with neither a slotting book
-    nor Art. 155(2) simple-RW equity yields ``{}``; an empty non-equity
-    subtemplate produces no dict entry while the CRR equity sheet is
-    force-emitted (populated from the equity-simple population, not slotting).
-    """
+    Each subtemplate draws its OWN population and is keyed by its ``sl_type`` (or
+    ``equity``) — the drill-down sheet key. CR10.1-4 read the ORIGIN slotting book
+    (``reporting_approach_origin == slotting``, with the derived ``cr10_is_short``
+    maturity-band discriminator and the C 08.06 asymmetric fallback: absent the
+    maturity column the short-band rows go empty and the long band absorbs the
+    category), narrowed per subtemplate by ``_type_data`` (CRR groups IPRE + HVCRE
+    under CR10.2). The CRR CR10.5 equity sheet reads the Art. 155(2) simple-RW
+    equity legs (``reporting_approach_origin == equity`` AND ``equity_method ==
+    irb_simple`` — SA and PD/LGD equity excluded) and is force-emitted even when
+    empty. Column c is the FIXED regulatory risk weight; it is left UNBOUND in both
+    specs and injected post-execute from the template constants, so the drill-down
+    reports it as the template's empty policy and reads its display value from the
+    reported frame — never a binding whose value could differ from the fixed weight
+    on the screen (the C 08.06 unbound-0070 precedent). CR10 carries no
+    "(-)"-labelled deduction column, so ``negative_cols`` is empty. Preserves
+    ``generate_cr10``'s error contract: missing EAD/RWA columns record "CR10:
+    missing required columns"; a run with neither a slotting book nor Art. 155(2)
+    simple-RW equity yields ``{}``."""
     if "ead_final" not in cols or not ({"rwa_final", "rwa"} & cols):
         errors.append("CR10: missing required columns")
         return {}
@@ -241,20 +267,56 @@ def generate_cr10(
     slotting_spec = _CR10_SPECS.get(framework) or build_cr10_spec(framework)
     equity_spec = _CR10_EQUITY_SPECS.get(framework) or build_cr10_equity_spec(framework)
 
-    result: dict[str, pl.DataFrame] = {}
+    plans: dict[str, SheetPlan] = {}
     for sl_key in get_cr10_subtemplates(framework):
         if sl_key == "equity":
             # CRR CR10.5: force-emitted (even when empty) to preserve the
             # always-present contract, drawn from the equity-simple population
             # rather than the slotting book.
-            frame = execute(equity_spec, equity_simple)
-            result[sl_key] = _with_equity_risk_weight_column(frame)
+            plans[sl_key] = SheetPlan(
+                spec=equity_spec,
+                frame=equity_simple,
+                ctx=ReportingContext(),
+                negative_cols=frozenset(),
+            )
             continue
         type_data = _type_data(slotting, cols, sl_key, framework)
         if type_data.height == 0:
             continue
-        frame = execute(slotting_spec, type_data)
-        result[sl_key] = _with_risk_weight_column(frame, sl_key)
+        plans[sl_key] = SheetPlan(
+            spec=slotting_spec,
+            frame=type_data,
+            ctx=ReportingContext(),
+            negative_cols=frozenset(),
+        )
+    return plans
+
+
+def generate_cr10(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, pl.DataFrame]:
+    """Execute CR10 per subtemplate over the sealed ledger.
+
+    Iterates ``cr10_plans`` (so a cell's spec and its reported value key
+    identically) and applies the fixed-risk-weight col-``c`` post-step per sheet on
+    the reported frame the drill-down reads — the equity band weights for the
+    equity sheet, the Art. 153(5) Table A slotting weights otherwise. Preserves the
+    imperative generator's contracts: missing EAD/RWA columns record "CR10: missing
+    required columns"; a run with neither a slotting book nor Art. 155(2) simple-RW
+    equity yields ``{}``; an empty non-equity subtemplate produces no dict entry
+    while the CRR equity sheet is force-emitted (populated from the equity-simple
+    population, not slotting).
+    """
+    result: dict[str, pl.DataFrame] = {}
+    for sl_key, plan in cr10_plans(results, cols, framework, errors).items():
+        frame = execute(plan.spec, plan.frame)
+        if sl_key == "equity":
+            result[sl_key] = _with_equity_risk_weight_column(frame)
+        else:
+            result[sl_key] = _with_risk_weight_column(frame, sl_key)
     return result
 
 

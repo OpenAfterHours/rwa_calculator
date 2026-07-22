@@ -92,6 +92,13 @@ from rwa_calc.reporting.pillar3.cr6a import cr6a_plans, generate_cr6a
 from rwa_calc.reporting.pillar3.cr7 import cr7_plans, generate_cr7
 from rwa_calc.reporting.pillar3.cr7a import cr7a_plans, generate_cr7a
 from rwa_calc.reporting.pillar3.cr8 import cr8_frames, cr8_plans
+from rwa_calc.reporting.pillar3.cr9 import (
+    cr9_1_plans,
+    cr9_plans,
+    generate_cr9,
+    generate_cr9_1,
+)
+from rwa_calc.reporting.pillar3.cr10 import cr10_plans, generate_cr10
 from rwa_calc.reporting.pillar3.ov1 import ov1_frames, ov1_plans
 
 if TYPE_CHECKING:
@@ -767,6 +774,117 @@ LINEAGE_PLANS: dict[str, _Provider] = {
             "PD-range label injected post-execute (not an addressable numeric cell)",
         ),
         sheet_label="exposure class",
+    ),
+    # CR9 — IRB PD back-testing per approach x leaf class (Basel 3.1 only; R26). The
+    # FINAL instrumentation item. cr9_plans keys the COMPOUND "approach - leaf class"
+    # sheet; generate_cr9 is the provider generator directly (its sparse
+    # _drop_empty_bands filter and the String label injection stay on the reported
+    # frame the drill-down reads — the sweep skips the String cols a/b). Basel 3.1
+    # ONLY: plans() yields {} under CRR, so a CRR request degrades to a clean
+    # no-lineage (the CMS pattern). Value cells are counts / weighted averages /
+    # arithmetic means / intra-row formulas — NO Sum cell, so the sweep reconciles
+    # each row-backed cell by predicate-match count rather than a signed total.
+    "cr9": _Provider(
+        plans=cr9_plans,
+        generate=generate_cr9,
+        scope=(
+            "The ORIGIN F-IRB / A-IRB book (reporting_approach_origin in "
+            "{foundation_irb, advanced_irb} — slotting has no PD scale), Basel 3.1 "
+            "ONLY (CR9 has no CRR equivalent; a CRR run produces nothing). Each sheet "
+            "is one origin approach x Annex XXII leaf class, keyed on the OBLIGOR "
+            "basis (reporting_class_origin x reporting_approach_origin refined by the "
+            "module-owned leaf taxonomy — is_sme / property_type / financial-large "
+            "discriminators; Annex XXII bars substitution effects, so substitution "
+            "never moves a sheet)",
+            "PD-band rows reuse the 17 fixed CR6 ranges, allocated half-open on the "
+            "derived cr9_alloc_pd (the pre-input-floor pd, falling back to pd_floored), "
+            "with all defaulted exposures forced into the 100% band (row 17) via the "
+            "normalized default flag — the CR6 fix. ONLY populated bands emit a row "
+            "(plus the Total row 18) — the sparse-emission convention, dropped "
+            "post-execute on the reported frame",
+            "The value columns are single-run point-in-time PROXIES (the recorded "
+            "F6-family follow-up — a true back-testing series needs prior-period "
+            "carriers the engine does not produce): c counts distinct obligors (or "
+            "sums prior_year_obligor_count when supplied), d the distinct defaulted "
+            "obligors; e = d/c x100 and its historical-rate fallback h are intra-row "
+            "formulas; f/g the EAD-weighted / arithmetic-mean post-floor PD x100. NO "
+            "Sum cell and no '(-)'-labelled deduction column, so the sweep reconciles "
+            "each row-backed cell by predicate-match count, not a signed total. Cols "
+            "a (class label) and b (PD-range label) are String post-steps, not "
+            "addressable numeric cells",
+        ),
+        sheet_label="approach and leaf class",
+    ),
+    # CR9.1 — IRB ECAI-mapping PD back-testing (Basel 3.1 only; R26). Same compound
+    # sheet key as CR9 but a per-class DATA-DRIVEN grade spec (rows = the class's
+    # distinct ECAI grades). The engine produces NEITHER ecai_pd_mapping NOR
+    # external_rating_equivalent, so cr9_1_plans yields {} on the real portfolio
+    # (both frameworks) — a lineage request degrades to a clean no-lineage, exactly
+    # as CR9/CMS do under CRR. Instrumented for the seeded case; a seeded unit pin
+    # guards the plan/generate parity in the absence of a portfolio tie-out.
+    "cr9_1": _Provider(
+        plans=cr9_1_plans,
+        generate=generate_cr9_1,
+        scope=(
+            "The ORIGIN F-IRB / A-IRB book scoped to obligors flagged ecai_pd_mapping "
+            "(Art. 180(1)(f) ECAI-based PD estimation), Basel 3.1 ONLY. Each sheet is "
+            "one origin approach x Annex XXII leaf class (the CR9 taxonomy), keyed on "
+            "the OBLIGOR basis (reporting_class_origin x reporting_approach_origin)",
+            "Rows are DATA-DRIVEN — the class's distinct firm ECAI grades "
+            "(external_rating_equivalent) plus a Total row — so each sheet carries its "
+            "OWN spec (the C 08.02 pattern). The c-h value verbs are shared with CR9 "
+            "(counts / weighted averages / arithmetic means / intra-row formulas), so "
+            "there is no Sum cell and no '(-)'-labelled deduction column; cols a/b and "
+            "the dynamic grade column are String post-steps",
+            "RECORDED LIMITATION: the engine produces neither ecai_pd_mapping nor "
+            "external_rating_equivalent, so CR9.1 is EMPTY on the real pipeline (the "
+            "recorded S1 accept-empty decision) — plans() yields nothing and a lineage "
+            "request degrades to a clean no-lineage. It comes alive only on a seeded "
+            "frame, which the acceptance tie-out (the real portfolio) cannot exercise; "
+            "a dedicated seeded unit pin guards the instrumentation instead",
+        ),
+        sheet_label="approach and leaf class",
+    ),
+    # CR10 — slotting specialised lending + CRR simple-RW equity (per subtemplate;
+    # R26). cr10_plans keys each subtemplate by its sl_type (equity for the CRR
+    # CR10.5 sheet); generate_cr10 is the provider generator directly (the fixed
+    # col-c risk-weight post-step stays on the reported frame the drill-down reads).
+    # The fixed col c is UNBOUND in both specs, so the drill-down reports it as the
+    # template's empty policy (kind unbound, no legs) and reads the display weight
+    # from the reported frame — never a binding that could disagree (the C 08.06
+    # unbound-0070 precedent; col b on the equity sheet is unbound the same way).
+    "cr10": _Provider(
+        plans=cr10_plans,
+        generate=generate_cr10,
+        scope=(
+            "Each subtemplate draws its OWN population. CR10.1-4 read the ORIGIN "
+            "slotting book (reporting_approach_origin == slotting) — a guaranteed "
+            "slotting exposure's covered leg leaves the slotting approach, so the "
+            "origin basis IS the obligor basis; the sheet is narrowed by sl_type (CRR "
+            "groups IPRE + HVCRE under CR10.2, Basel 3.1 splits HVCRE onto CR10.5). "
+            "The CRR CR10.5 equity sheet reads the Art. 155(2) simple-RW equity legs "
+            "(reporting_approach_origin == equity AND equity_method == irb_simple — "
+            "Art. 133 SA and Art. 155(3) PD/LGD equity excluded) and is force-emitted "
+            "even when empty",
+            "Slotting rows are the five supervisory categories (matched on "
+            "slotting_category) EACH split into two remaining-maturity bands (matched "
+            "on the derived cr10_is_short — the C 08.06 asymmetric fallback: absent "
+            "the maturity column the short band is empty and the long band absorbs the "
+            "category), plus two maturity-split Total rows. Equity rows are the three "
+            "fixed Art. 155(2) bands (a leg lands by its applied reporting_rw) plus "
+            "Total; equity is on-balance-sheet, so col a mirrors col d and col b is "
+            "left unbound (null)",
+            "Column c is the FIXED regulatory risk weight ('This is a fixed column. "
+            "It shall not be altered' — Art. 153(5) Table A / Art. 155(2)): it is left "
+            "UNBOUND in both specs and injected post-execute from the template "
+            "constants (the maturity-correct slotting weight per band, the equity band "
+            "weight for CR10.5; Total rows null), so the drill-down reports it as the "
+            "template's empty policy and reads the display value from the reported "
+            "frame rather than a WeightedAvg with no legs (the C 08.06 unbound-0070 "
+            "precedent). Cols a/b/d/e/f are Sum/SafeSum and reconcile against their "
+            "legs; CR10 carries no '(-)'-labelled deduction column",
+        ),
+        sheet_label="subtemplate",
     ),
 }
 

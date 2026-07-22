@@ -722,6 +722,216 @@ def test_cr6_defaulted_leg_drills_in_the_100pct_band() -> None:
 
 
 # =============================================================================
+# R26 — the CR9 family (per approach x leaf class, Basel 3.1 only) + CR10 (per
+# subtemplate). The FINAL instrumentation item.
+# =============================================================================
+
+_R26_TEMPLATES = ("cr9", "cr9_1", "cr10")
+
+
+@pytest.mark.parametrize("template_id", _R26_TEMPLATES)
+def test_r26_templates_are_instrumented(template_id: str) -> None:
+    # Assert — each R26 template is instrumented as a PER-SHEET provider
+    # (single_frame False -> its cells carry a sheet axis), with a populated scope
+    # and a sheet label naming that axis (cr9/cr9_1 by approach and leaf class, cr10
+    # by subtemplate).
+    assert lineage.is_instrumented(template_id)
+    provider = lineage.LINEAGE_PLANS[template_id]
+    assert provider.single_frame is False
+    assert provider.scope
+    assert provider.sheet_label != ""
+
+
+def _cr9_b31_frame() -> pl.DataFrame:
+    """Two F-IRB and one A-IRB corporate legs — an obligor-basis CR9 book. Absent
+    the SME / financial-large discriminators, the corporate legs collapse onto the
+    non-SME leaf (`corporate_other_non_sme`) under both approaches."""
+    return pl.DataFrame(
+        {
+            "exposure_reference": ["FIRB-1", "FIRB-2", "AIRB-1"],
+            "counterparty_reference": ["CP-1", "CP-2", "CP-3"],
+            "exposure_class": ["corporate", "corporate", "corporate"],
+            "approach_applied": ["foundation_irb", "foundation_irb", "advanced_irb"],
+            "reporting_approach_origin": ["foundation_irb", "foundation_irb", "advanced_irb"],
+            "reporting_class_origin": ["corporate", "corporate", "corporate"],
+            "pd": [0.01, 0.01, 0.02],
+            "pd_floored": [0.01, 0.01, 0.02],
+            "reporting_ead": [1000.0, 2000.0, 1500.0],
+            "ead_final": [1000.0, 2000.0, 1500.0],
+            "is_defaulted": [False, False, False],
+        }
+    )
+
+
+def test_cr9_plans_key_on_the_compound_approach_and_leaf_class() -> None:
+    # Arrange — the F-IRB/A-IRB corporate book (Basel 3.1 only).
+    from rwa_calc.reporting.pillar3.cr9 import cr9_plans, generate_cr9
+
+    frame = _cr9_b31_frame()
+    cols = set(frame.columns)
+
+    # Act — the plans and the reported generator both key by the COMPOUND
+    # "approach - leaf class" sheet key.
+    plans = cr9_plans(frame.lazy(), cols, "BASEL_3_1", [])
+    generated = generate_cr9(frame.lazy(), cols, "BASEL_3_1", [])
+
+    # Assert — the two F-IRB legs and the one A-IRB leg produce the two compound
+    # sheets, and plans() / generate() key identically (the lineage contract).
+    assert set(plans) == {
+        "foundation_irb - corporate_other_non_sme",
+        "advanced_irb - corporate_other_non_sme",
+    }
+    assert set(generated) == set(plans)
+
+    # A band cell drills to the band's legs: the two F-IRB legs at PD 1% band in
+    # row 10 (1.00 to < 2.50%); col c counts their two distinct obligors.
+    resolver = lineage.sheet_lineage(
+        _FrameSource(frame, "BASEL_3_1"), "cr9", "foundation_irb - corporate_other_non_sme"
+    )
+    assert resolver is not None
+    obligors = resolver.cell("10", "c")
+    assert obligors is not None
+    assert (obligors.query.kind, obligors.query.metric) == ("rows", "count")
+    assert obligors.total_rows == 2
+    assert obligors.cell_value == pytest.approx(2.0)
+
+
+def test_cr9_degrades_to_no_lineage_under_crr() -> None:
+    # Arrange — CR9 is Basel 3.1 only; its plans() yield nothing under a CRR run.
+    frame = _cr9_b31_frame()
+
+    # Act / Assert — a CRR lineage request degrades to a clean no-lineage (the CMS
+    # pattern), never a crash.
+    assert lineage.sheet_lineage(_FrameSource(frame, "CRR"), "cr9") is None
+
+
+def test_cr9_1_seeded_frame_plans_and_generate_key_identically() -> None:
+    # Arrange — CR9.1 is EMPTY on the real portfolio (the engine produces neither
+    # ecai_pd_mapping nor external_rating_equivalent), so it has no acceptance
+    # tie-out; a seeded ECAI frame exercises the instrumentation instead.
+    from rwa_calc.reporting.pillar3.cr9 import cr9_1_plans, generate_cr9_1
+
+    frame = pl.DataFrame(
+        {
+            "exposure_reference": ["A-1", "A-2"],
+            "counterparty_reference": ["CP-1", "CP-2"],
+            "exposure_class": ["corporate", "corporate"],
+            "approach_applied": ["advanced_irb", "advanced_irb"],
+            "reporting_approach_origin": ["advanced_irb", "advanced_irb"],
+            "reporting_class_origin": ["corporate", "corporate"],
+            "ecai_pd_mapping": [True, True],
+            "external_rating_equivalent": ["BBB", "BBB"],
+            "pd": [0.01, 0.01],
+            "pd_floored": [0.01, 0.01],
+            "reporting_ead": [1000.0, 2000.0],
+            "ead_final": [1000.0, 2000.0],
+            "is_defaulted": [False, False],
+        }
+    )
+    cols = set(frame.columns)
+
+    # Act
+    plans = cr9_1_plans(frame.lazy(), cols, "BASEL_3_1", [])
+    generated = generate_cr9_1(frame.lazy(), cols, "BASEL_3_1", [])
+
+    # Assert — the seeded ECAI book produces the one compound sheet, keyed
+    # identically by plans() and generate(); the grade row drills to its legs.
+    assert set(plans) == {"advanced_irb - corporate_other_non_sme"}
+    assert set(generated) == set(plans)
+    resolver = lineage.sheet_lineage(
+        _FrameSource(frame, "BASEL_3_1"), "cr9_1", "advanced_irb - corporate_other_non_sme"
+    )
+    assert resolver is not None
+    grade = resolver.cell("BBB", "c")
+    assert grade is not None
+    assert grade.total_rows == 2
+    assert grade.cell_value == pytest.approx(2.0)
+
+
+def test_cr10_fixed_col_c_is_an_unbound_display_weight() -> None:
+    # Arrange — one slotting project-finance leg, Category 1 (Strong), long
+    # maturity. Col c is the FIXED Art. 153(5) display risk weight, injected
+    # post-execute — UNBOUND in the spec (not a measured weighted average).
+    frame = pl.DataFrame(
+        {
+            "exposure_reference": ["PF-1"],
+            "reporting_approach_origin": ["slotting"],
+            "sl_type": ["project_finance"],
+            "slotting_category": ["strong"],
+            "reporting_on_balance_sheet": [True],
+            "is_short_maturity": [False],
+            "reporting_ead": [1000.0],
+            "ead_final": [1000.0],
+            "rwa_final": [700.0],
+            "expected_loss": [5.0],
+            "risk_weight": [0.7],
+            # The CRR CR10.5 equity sheet is force-emitted (over the empty
+            # equity-simple population), and its spec bands on reporting_rw.
+            "reporting_rw": [0.7],
+        }
+    )
+    resolver = lineage.sheet_lineage(_FrameSource(frame), "cr10", "project_finance")
+    assert resolver is not None
+
+    # Act — row 2 is Category 1 Strong / long maturity (>= 2.5y): its col c renders
+    # the fixed 70% weight (x100) from the post-step; col e is the live RWEA sum.
+    c_query = resolver.query("2", "c")
+    c_result = resolver.cell("2", "c")
+    e_query = resolver.query("2", "e")
+    e_result = resolver.cell("2", "e")
+
+    # Assert — col c is UNBOUND (the template's empty policy), so the drill-down
+    # reports no legs and reads the fixed 70.0 display value from the reported frame
+    # — never a binding whose value could differ from the weight on the screen. Col
+    # e stays a row-backed Sum that reconciles to the leg's RWEA.
+    assert c_query is not None
+    assert c_query.kind == "unbound"
+    assert c_result is not None
+    assert c_result.total_rows == 0
+    assert c_result.cell_value == pytest.approx(70.0)
+    assert e_query is not None
+    assert (e_query.kind, e_query.metric) == ("rows", "sum")
+    assert e_result is not None
+    assert e_result.total_rows == 1
+    assert e_result.cell_value == pytest.approx(700.0)
+
+
+def test_cr10_equity_col_b_is_unbound_and_col_a_mirrors_col_d() -> None:
+    # Arrange — one CRR simple-RW equity leg at a 290% applied risk weight (the
+    # Art. 155(2) exchange-traded band, row 2).
+    frame = pl.DataFrame(
+        {
+            "exposure_reference": ["EQ-1"],
+            "reporting_approach_origin": ["equity"],
+            "equity_method": ["irb_simple"],
+            "reporting_rw": [2.9],
+            "reporting_ead": [1_000_000.0],
+            "ead_final": [1_000_000.0],
+            "rwa_final": [2_900_000.0],
+            "expected_loss": [0.0],
+        }
+    )
+    resolver = lineage.sheet_lineage(_FrameSource(frame), "cr10", "equity")
+    assert resolver is not None
+
+    # Act — row 2 (290% band): col a (on-BS) mirrors col d (exposure value); col b
+    # (off-BS) is UNBOUND (equity has no off-balance-sheet component).
+    a_result = resolver.cell("2", "a")
+    b_query = resolver.query("2", "b")
+    b_result = resolver.cell("2", "b")
+    d_result = resolver.cell("2", "d")
+
+    # Assert — a == d (the on-BS mirror), and col b is the unbound (null) policy.
+    assert a_result is not None and d_result is not None
+    assert a_result.cell_value == pytest.approx(1_000_000.0)
+    assert d_result.cell_value == pytest.approx(1_000_000.0)
+    assert b_query is not None
+    assert b_query.kind == "unbound"
+    assert b_result is not None
+    assert b_result.cell_value is None
+
+
+# =============================================================================
 # Sheet-key resolution — multi-sheet vs the single-frame {sheet: None} convention
 # =============================================================================
 

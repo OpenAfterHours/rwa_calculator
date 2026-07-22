@@ -26,11 +26,24 @@ Cell semantics (recorded decisions, this slice):
   the Total 2.5M short of CMS1 on the reference portfolio; column d sums
   ``sa_rwa`` over the row's SA-mapped classes (``CMS2_SA_CLASS_MAP``)
   across the whole book — the per-class full-SA output-floor base.
-- Bespoke sub-rows preserved: 0041 (corporates of-which F-IRB; column c
-  adds the class's standardised-side RWA, column d compares at the parent
-  corporate level), 0042 (of-which A-IRB; column c mirrors a, column d
-  recorded-null), 0044/0045/0054 (IPRE-HVCRE and purchased-receivables
-  splits — no engine discriminators, recorded-null), 0070 Total.
+- Bespoke sub-rows preserved: 0041 (corporates of-which F-IRB; column c is
+  the F-IRB corporate sub-population's own actual RWA. Annex II defines
+  col c as the sum of "IRB RWA + SA RWA" of the ROW's population; an
+  "of which F-IRB" row holds no SA legs, so col c collapses to column a —
+  exactly as the 0042 A-IRB sibling mirrors a. The RECORDED FIX (R18): the
+  retired predicate added the whole corporate class's standardised + equity
+  RWA on top of the F-IRB RWA, over-stating an of-which sub-row by the
+  entire SA book. Column d still compares at the parent corporate level),
+  0042 (of-which A-IRB; column c mirrors a, column d recorded-null),
+  0044/0045/0054 (IPRE-HVCRE and purchased-receivables splits — no engine
+  discriminators, recorded-null), 0070 Total.
+
+Lineage-instrumented (R21): ``cms2_plans`` exposes the single (no sheet axis)
+execution plan — its frame is the full sealed ledger (CMS2 keys the raw
+origination ``exposure_class`` directly, so no prepared discriminators) — so
+``reporting.lineage`` can drill into a reported cell. CMS2 is Basel 3.1 only, so
+``cms2_plans`` (like ``generate_cms2``) yields NOTHING under CRR: lineage then
+degrades to a clean "no lineage" 404, never a crash.
 
 References:
 - PRA PS1/26 Art. 456(1)(b), Art. 2a(2); Annex II (UKB CMS2 instructions)
@@ -51,28 +64,23 @@ from rwa_calc.reporting.cellspec import (
     TemplateSpec,
     execute,
 )
+from rwa_calc.reporting.metadata import ReportingContext
 from rwa_calc.reporting.pillar3.cms1 import MODELLED_APPROACHES
 from rwa_calc.reporting.pillar3.templates import (
     CMS2_COLUMNS,
     CMS2_ROWS,
     CMS2_SA_CLASS_MAP,
 )
+from rwa_calc.reporting.plans import SheetPlan
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     import polars as pl
 
-# Row 0041's standardised-side add (its column c is the corporate class's F-IRB
-# RWA plus the class's standardised-side RWA). Deliberately LOCAL to CMS2 (the
-# of02.py / c02.py precedent): CMS1 retired its shared standardised allow-list
-# when column b became the modelled COMPLEMENT, and widening a SHARED approach
-# tuple with ``standardised_ccr`` is the recorded trap — it would pull the
-# SA-CCR legs into templates that correctly scope CCR out. CMS2's row axis is
-# Art. 147 asset classes; a CCR leg's own class row already carries it via
-# column c's unfiltered class total, and this sub-row add keeps its recorded
-# value.
-_STANDARDISED_APPROACHES: tuple[str, ...] = ("standardised", "equity")
+# Single-frame lineage key: CMS2 has no sheet axis, so its one plan keys under a
+# canonical name (see reporting.plans / _resolve_sheet_key single_frame path).
+_SHEET_KEY = "cms2"
 
 # Sub-rows with no engine discriminator — recorded permanently-null.
 _NULL_REFS: frozenset[str] = frozenset({"0044", "0045", "0054"})
@@ -140,14 +148,7 @@ def build_cms2_spec() -> TemplateSpec:
             firb = _class_member(_CORPORATE_CLASSES, approaches_origin=("foundation_irb",))
             cells[(row.ref, "a")] = CellSpec(Sum("rwa_final"), predicate=firb)
             cells[(row.ref, "b")] = CellSpec(Sum("sa_rwa"), predicate=firb)
-            cells[(row.ref, "c")] = CellSpec(
-                Sum("rwa_final"),
-                predicate=_class_member(
-                    _CORPORATE_CLASSES,
-                    approaches_origin=("foundation_irb", *_STANDARDISED_APPROACHES),
-                ),
-                empty_cell="zero",
-            )
+            cells[(row.ref, "c")] = CellSpec(Sum("rwa_final"), predicate=firb, empty_cell="zero")
             cells[(row.ref, "d")] = CellSpec(
                 Sum("sa_rwa"), predicate=_class_member(_CORPORATE_CLASSES)
             )
@@ -173,21 +174,55 @@ def build_cms2_spec() -> TemplateSpec:
 _CMS2_SPEC: TemplateSpec = build_cms2_spec()
 
 
+def cms2_plans(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, SheetPlan]:
+    """Build the single CMS2 execution plan (the lineage seam).
+
+    CMS2 has no sheet axis, so the one plan keys under the single-frame
+    canonical key. The plan's frame is the full sealed ledger itself — CMS2
+    keys the raw origination ``exposure_class`` directly, so there is no
+    ``_prepare`` step. CMS2 is Basel 3.1 only, so a CRR run yields ``{}`` —
+    lineage then returns a clean "no lineage" rather than crashing. Preserves
+    the imperative generator's error contract: a missing RWA column records the
+    CMS2 error and yields no plan. There is no post-execute pass, so
+    ``negative_cols`` is empty.
+    """
+    if framework != "BASEL_3_1":
+        return {}
+    if not ({"rwa_final", "rwa"} & cols):
+        errors.append("CMS2: missing RWA column")
+        return {}
+    return {
+        _SHEET_KEY: SheetPlan(
+            spec=_CMS2_SPEC,
+            frame=results.collect(),
+            ctx=ReportingContext(),
+            negative_cols=frozenset(),
+        )
+    }
+
+
 def generate_cms2(
     results: pl.LazyFrame,
     cols: set[str],
     framework: str,
     errors: list[str],
-) -> pl.DataFrame | None:
-    """Execute CMS2 over the full sealed ledger (Basel 3.1 only).
+) -> dict[str, pl.DataFrame]:
+    """Execute CMS2 over the full sealed ledger (Basel 3.1 only; keyed like
+    ``cms2_plans``).
 
-    Preserves the imperative generator's contracts: None under CRR; a
-    missing RWA column records "CMS2: missing RWA column" and yields no
-    template; columns b/d are null when ``sa_rwa`` is absent.
+    The thin consumer of ``cms2_plans``: it executes each plan under the same
+    key, so a cell's reported value and its spec agree. Preserves the
+    imperative generator's contracts: an empty dict under CRR (the dispatch
+    router unwraps it to ``None``); a missing RWA column records the CMS2 error
+    and yields no frame; columns b/d are null when ``sa_rwa`` is absent. CMS2
+    has no post-execute pass, so this is a plain ``execute``.
     """
-    if framework != "BASEL_3_1":
-        return None
-    if not ({"rwa_final", "rwa"} & cols):
-        errors.append("CMS2: missing RWA column")
-        return None
-    return execute(_CMS2_SPEC, results)
+    return {
+        key: execute(plan.spec, plan.frame, plan.ctx)
+        for key, plan in cms2_plans(results, cols, framework, errors).items()
+    }

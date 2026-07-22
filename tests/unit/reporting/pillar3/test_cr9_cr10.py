@@ -66,6 +66,43 @@ def _make_slotting_data(**overrides: object) -> pl.LazyFrame:
     return pl.LazyFrame(defaults)
 
 
+def _make_equity_data(**overrides: object) -> pl.LazyFrame:
+    """Create equity legs for CR10.5 tests — one per Art. 155(2) simple-RW band.
+
+    ``equity_method`` is the calculator's method discriminator (``irb_simple``
+    = Art. 155(2), ``sa`` = Art. 133, ``pd_lgd`` = Art. 155(3)); only
+    ``irb_simple`` legs are disclosed in CR10.5. ``risk_weight`` becomes
+    ``reporting_rw`` via the ledger shim, which is what places a leg in its band
+    row (190/290/370%). ``exposure_type`` is left unset so ``reporting_on_balance_sheet``
+    resolves null exactly like a production equity holding.
+    """
+    defaults: dict[str, object] = {
+        "exposure_reference": ["EQ_DIV", "EQ_XT", "EQ_OTHER"],
+        "approach_applied": ["equity", "equity", "equity"],
+        "equity_method": ["irb_simple", "irb_simple", "irb_simple"],
+        "exposure_class": ["equity", "equity", "equity"],
+        "equity_type": ["private_equity_diversified", "exchange_traded", "other"],
+        "ead_final": [1000.0, 2000.0, 3000.0],
+        "risk_weight": [1.90, 2.90, 3.70],
+        "rwa_final": [1900.0, 5800.0, 11100.0],
+        "expected_loss": [8.0, 16.0, 72.0],
+    }
+    defaults.update(overrides)
+    return pl.LazyFrame(defaults)
+
+
+def _slotting_plus_equity(equity_method: str) -> pl.LazyFrame:
+    """One slotting book plus three equity legs tagged ``equity_method``.
+
+    Slotting keeps CR10 emitting even when the equity population is excluded, so
+    the force-emitted CR10.5 sheet is present (and empty) rather than the whole
+    CR10 dict collapsing to ``{}``.
+    """
+    slot = _make_slotting_data().collect()
+    equity = _make_equity_data(equity_method=[equity_method] * 3).collect()
+    return pl.concat([slot, equity], how="diagonal_relaxed").lazy()
+
+
 @pytest.fixture
 def generator() -> Pillar3Generator:
     return LedgerShimPillar3Generator()
@@ -88,32 +125,84 @@ class TestCR10Generation:
     def test_cr10_rows_per_subtemplate(self, generator: Pillar3Generator):
         data = _make_slotting_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
-        for _sl_type, df in bundle.cr10.items():
-            assert df.height == 6  # 5 categories + total
+        for sl_type, df in bundle.cr10.items():
+            if sl_type == "equity":
+                assert df.height == 4  # 3 Art. 155(2) simple-RW bands + total
+            else:
+                # 5 categories x 2 maturity bands + 2 maturity-split totals.
+                assert df.height == 12
 
     def test_cr10_risk_weight_populated(self, generator: Pillar3Generator):
+        """Fixed col c per (category x maturity) row: Strong = 50% (< 2.5y) /
+        70% (>= 2.5y). The synthetic frame sets no is_short_maturity, so the
+        strong leg falls to the >= 2.5y row (row 2); the empty < 2.5y row
+        (row 1) still displays its fixed 50%."""
         data = _make_slotting_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
         pf = bundle.cr10["project_finance"]
-        strong = pf.filter(pl.col("row_ref") == "1")
-        assert strong["c"][0] == pytest.approx(70.0)  # 0.70 * 100
+        strong_short = pf.filter(pl.col("row_ref") == "1")  # Strong < 2.5y
+        strong_long = pf.filter(pl.col("row_ref") == "2")  # Strong >= 2.5y
+        assert strong_short["c"][0] == pytest.approx(50.0)  # < 2.5y preferential
+        assert strong_long["c"][0] == pytest.approx(70.0)  # >= 2.5y
+        # The leg (no maturity set) lands in the >= 2.5y row; short band is empty.
+        assert strong_long["e"][0] == pytest.approx(700.0)
+        assert strong_short["e"][0] is None
 
     def test_cr10_total_ead(self, generator: Pillar3Generator):
         data = _make_slotting_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
         pf = bundle.cr10["project_finance"]
-        total = pf.filter(pl.col("row_ref") == "6")
-        assert total["d"][0] > 0
+        total_long = pf.filter(pl.col("row_ref") == "12")  # Total, >= 2.5y
+        assert total_long["d"][0] > 0
 
     def test_cr10_b31_separates_hvcre(self, generator: Pillar3Generator):
-        """B31 should separate HVCRE from IPRE."""
+        """B31 separates HVCRE (CR10.5) with its OWN maturity-split fixed
+        weights: Strong = 70% (< 2.5y) / 95% (>= 2.5y)."""
         data = _make_slotting_data(sl_type=["project_finance", "project_finance", "hvcre"])
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
         if "hvcre" in bundle.cr10:
             hvcre = bundle.cr10["hvcre"]
-            strong = hvcre.filter(pl.col("row_ref") == "1")
-            # HVCRE Strong = 95%
-            assert strong["c"][0] == pytest.approx(95.0)
+            strong_short = hvcre.filter(pl.col("row_ref") == "1")  # HVCRE Strong < 2.5y
+            strong_long = hvcre.filter(pl.col("row_ref") == "2")  # HVCRE Strong >= 2.5y
+            assert strong_short["c"][0] == pytest.approx(70.0)
+            assert strong_long["c"][0] == pytest.approx(95.0)
+
+    def test_cr10_maturity_split_routes_legs_and_pins_applied_weight(
+        self, generator: Pillar3Generator
+    ):
+        """A Strong leg with remaining maturity < 2.5y lands in the preferential
+        50% row; a Strong leg >= 2.5y in the 70% row. Each band's FIXED display
+        weight (col c) equals the weight the engine applied to that band's legs
+        (reporting_rw x100), so the disclosure is engine-consistent."""
+        data = _make_slotting_data(
+            exposure_reference=["SL_SHORT", "SL_LONG"],
+            approach_applied=["slotting", "slotting"],
+            exposure_class=["specialised_lending", "specialised_lending"],
+            sl_type=["project_finance", "project_finance"],
+            slotting_category=["strong", "strong"],
+            is_short_maturity=[True, False],
+            risk_weight=[0.50, 0.70],  # the engine's applied maturity-split weights
+            ead_final=[1000.0, 2000.0],
+            rwa_final=[500.0, 1400.0],
+            expected_loss=[4.0, 8.0],
+            drawn_amount=[1000.0, 2000.0],
+            nominal_amount=[0.0, 0.0],
+            undrawn_amount=[0.0, 0.0],
+            interest=[0.0, 0.0],
+            exposure_type=["loan", "loan"],
+        )
+        bundle = generator.generate_from_lazyframe(data, framework="CRR")
+        pf = bundle.cr10["project_finance"]
+        strong_short = pf.filter(pl.col("row_ref") == "1")  # Strong < 2.5y
+        strong_long = pf.filter(pl.col("row_ref") == "2")  # Strong >= 2.5y
+        # The short leg lands in row 1 (EAD 1000, RWA 500), fixed col c = 50%.
+        assert strong_short["d"][0] == pytest.approx(1000.0)
+        assert strong_short["e"][0] == pytest.approx(500.0)
+        assert strong_short["c"][0] == pytest.approx(0.50 * 100.0)
+        # The long leg lands in row 2 (EAD 2000, RWA 1400), fixed col c = 70%.
+        assert strong_long["d"][0] == pytest.approx(2000.0)
+        assert strong_long["e"][0] == pytest.approx(1400.0)
+        assert strong_long["c"][0] == pytest.approx(0.70 * 100.0)
 
     def test_cr10_columns_match(self, generator: Pillar3Generator):
         data = _make_slotting_data()
@@ -121,6 +210,86 @@ class TestCR10Generation:
         expected = {"row_ref", "row_name"} | {c.ref for c in CRR_CR10_COLUMNS}
         for df in bundle.cr10.values():
             assert set(df.columns) == expected
+
+
+class TestCR105Equity:
+    """CR10.5 — CRR equity under the Art. 155(2) IRB simple risk-weight approach.
+
+    The finding this covers (R6): equity legs seal as
+    ``reporting_approach_origin == "equity"`` while the generator filtered CR10
+    to ``slotting``, so the equity RWEA was never disclosed. The fix populates
+    CR10.5 from the simple-RW equity legs (``equity_method == "irb_simple"``).
+    """
+
+    def test_bands_populate_by_applied_risk_weight(self, generator: Pillar3Generator):
+        """Each simple-RW equity leg lands in the band row matching its RW."""
+        bundle = generator.generate_from_lazyframe(_make_equity_data(), framework="CRR")
+        equity = bundle.cr10["equity"]
+        # 190% band -> row 1 (EAD 1000, RWA 1900); 290% -> row 2; 370% -> row 3.
+        assert equity.filter(pl.col("row_ref") == "1")["d"][0] == pytest.approx(1000.0)
+        assert equity.filter(pl.col("row_ref") == "1")["e"][0] == pytest.approx(1900.0)
+        assert equity.filter(pl.col("row_ref") == "2")["e"][0] == pytest.approx(5800.0)
+        assert equity.filter(pl.col("row_ref") == "3")["e"][0] == pytest.approx(11100.0)
+
+    def test_total_row_sums_all_bands(self, generator: Pillar3Generator):
+        bundle = generator.generate_from_lazyframe(_make_equity_data(), framework="CRR")
+        total = bundle.cr10["equity"].filter(pl.col("row_ref") == "4")
+        assert total["d"][0] == pytest.approx(6000.0)  # 1000 + 2000 + 3000
+        assert total["e"][0] == pytest.approx(18800.0)  # 1900 + 5800 + 11100
+        assert total["f"][0] == pytest.approx(96.0)  # 8 + 16 + 72
+
+    def test_on_balance_sheet_mirrors_exposure_value(self, generator: Pillar3Generator):
+        """Equity is an on-BS asset with no off-BS split: col a == col d, col b null."""
+        bundle = generator.generate_from_lazyframe(_make_equity_data(), framework="CRR")
+        total = bundle.cr10["equity"].filter(pl.col("row_ref") == "4")
+        assert total["a"][0] == pytest.approx(6000.0)
+        assert total["d"][0] == pytest.approx(6000.0)
+        assert total["b"][0] is None
+
+    def test_fixed_risk_weight_column(self, generator: Pillar3Generator):
+        """Col c carries the fixed 190/290/370% display RWs; the Total is null."""
+        bundle = generator.generate_from_lazyframe(_make_equity_data(), framework="CRR")
+        equity = bundle.cr10["equity"]
+        assert equity.filter(pl.col("row_ref") == "1")["c"][0] == pytest.approx(190.0)
+        assert equity.filter(pl.col("row_ref") == "2")["c"][0] == pytest.approx(290.0)
+        assert equity.filter(pl.col("row_ref") == "3")["c"][0] == pytest.approx(370.0)
+        assert equity.filter(pl.col("row_ref") == "4")["c"][0] is None
+
+    def test_sa_equity_excluded(self, generator: Pillar3Generator):
+        """Art. 133 SA equity (equity_method='sa') is NOT disclosed in CR10.5."""
+        bundle = generator.generate_from_lazyframe(_slotting_plus_equity("sa"), framework="CRR")
+        equity = bundle.cr10["equity"]
+        total = equity.filter(pl.col("row_ref") == "4")
+        assert total["d"][0] is None
+        assert total["e"][0] is None
+
+    def test_pd_lgd_equity_excluded(self, generator: Pillar3Generator):
+        """Art. 155(3) PD/LGD equity (equity_method='pd_lgd') is excluded from CR10.5."""
+        bundle = generator.generate_from_lazyframe(_slotting_plus_equity("pd_lgd"), framework="CRR")
+        total = bundle.cr10["equity"].filter(pl.col("row_ref") == "4")
+        assert total["e"][0] is None
+
+    def test_force_emitted_empty_keeps_fixed_rw_column(self, generator: Pillar3Generator):
+        """An excluded population still force-emits CR10.5 with its fixed RW column."""
+        bundle = generator.generate_from_lazyframe(_slotting_plus_equity("sa"), framework="CRR")
+        equity = bundle.cr10["equity"]
+        assert equity.height == 4
+        assert equity.filter(pl.col("row_ref") == "2")["c"][0] == pytest.approx(290.0)
+
+    def test_slotting_subtemplates_unaffected(self, generator: Pillar3Generator):
+        """Mixing equity in does not move the slotting book off CR10.1-4."""
+        bundle = generator.generate_from_lazyframe(
+            _slotting_plus_equity("irb_simple"), framework="CRR"
+        )
+        pf = bundle.cr10["project_finance"]
+        assert pf.height == 12  # 5 categories x 2 maturity bands + 2 totals
+        # SL1 (strong, no maturity set) lands in the Strong >= 2.5y row (row 2).
+        assert pf.filter(pl.col("row_ref") == "2")["d"][0] == pytest.approx(1000.0)
+
+    def test_absent_under_basel_3_1(self, generator: Pillar3Generator):
+        """Basel 3.1 has no equity CR10 subtemplate (Art. 147A removes IRB equity)."""
+        bundle = generator.generate_from_lazyframe(_make_equity_data(), framework="BASEL_3_1")
+        assert "equity" not in bundle.cr10
 
 
 # ---------------------------------------------------------------------------

@@ -46,18 +46,17 @@ from rwa_calc.reporting.kernel import (
     available_columns as _available_columns,
 )
 from rwa_calc.reporting.kernel import (
-    col_sum,
     column_name_map,
-    filter_by_approach,
-    null_row,
-    safe_sum_or_none,
     write_metadata_sheet,
     write_template_sheet,
 )
-from rwa_calc.reporting.kernel import (
-    pick as _pick,
-)
 from rwa_calc.reporting.metadata import ResultsSource
+from rwa_calc.reporting.pillar3.ccr import (
+    generate_ccr1,
+    generate_ccr2,
+    generate_ccr3,
+    generate_ccr8,
+)
 from rwa_calc.reporting.pillar3.cms1 import generate_cms1
 from rwa_calc.reporting.pillar3.cms2 import generate_cms2
 from rwa_calc.reporting.pillar3.cr4 import generate_cr4
@@ -66,18 +65,15 @@ from rwa_calc.reporting.pillar3.cr6 import generate_cr6
 from rwa_calc.reporting.pillar3.cr6a import generate_cr6a
 from rwa_calc.reporting.pillar3.cr7 import generate_cr7
 from rwa_calc.reporting.pillar3.cr7a import generate_cr7a
-from rwa_calc.reporting.pillar3.cr8 import generate_cr8
+from rwa_calc.reporting.pillar3.cr8 import generate_cr8, irb_non_slotting_population
 from rwa_calc.reporting.pillar3.cr9 import generate_cr9, generate_cr9_1
 from rwa_calc.reporting.pillar3.cr10 import generate_cr10
 from rwa_calc.reporting.pillar3.ov1 import generate_ov1
 from rwa_calc.reporting.pillar3.templates import (
     CCR1_COLUMNS,
-    CCR1_ROWS,
     CCR2_COLUMNS,
-    CCR2_ROWS,
     CCR3_COLUMNS,
     CCR8_COLUMNS,
-    CCR8_ROWS,
     CMS1_COLUMNS,
     CMS2_COLUMNS,
     CR6A_COLUMNS,
@@ -87,9 +83,6 @@ from rwa_calc.reporting.pillar3.templates import (
     CR9_COLUMNS,
     IRB_EXPOSURE_CLASSES,
     OV1_COLUMNS,
-    P3Row,
-    get_ccr3_risk_weights,
-    get_ccr3_rows,
     get_cr4_columns,
     get_cr5_columns,
     get_cr6_columns,
@@ -101,11 +94,9 @@ from rwa_calc.reporting.pillar3.templates import (
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from polars._typing import PolarsDataType
     from xlsxwriter import Workbook
 
     from rwa_calc.contracts.bundles import OutputFloorSummary
-    from rwa_calc.contracts.config import Pillar3CapitalRatioOverrides
     from rwa_calc.contracts.results import ExportResult
     from rwa_calc.reporting.facts import FilingMetadata
 
@@ -185,7 +176,6 @@ class Pillar3Generator:
         results: pl.LazyFrame,
         *,
         framework: str = "CRR",
-        capital_ratios: Pillar3CapitalRatioOverrides | None = None,
         output_floor_summary: OutputFloorSummary | None = None,
         previous_period_results: pl.LazyFrame | None = None,
     ) -> Pillar3TemplateBundle:
@@ -199,17 +189,15 @@ class Pillar3Generator:
         cols = _available_columns(results)
         errors: list[str] = []
 
-        irb_data = _filter_irb_non_slotting(results, cols)
+        irb_data = irb_non_slotting_population(results, cols)
 
         prior_irb_data: pl.LazyFrame | None = None
         if previous_period_results is not None:
             prior_cols = _available_columns(previous_period_results)
-            prior_irb_data = _filter_irb_non_slotting(previous_period_results, prior_cols)
+            prior_irb_data = irb_non_slotting_population(previous_period_results, prior_cols)
 
         return Pillar3TemplateBundle(
-            ov1=self._generate_ov1(
-                results, cols, framework, errors, capital_ratios, output_floor_summary
-            ),
+            ov1=self._generate_ov1(results, cols, framework, errors, output_floor_summary),
             cr4=self._generate_cr4(results, cols, framework, errors),
             cr5=self._generate_cr5(results, cols, framework, errors),
             cr6=self._generate_all_cr6(results, cols, framework, errors),
@@ -354,7 +342,6 @@ class Pillar3Generator:
         cols: set[str],
         framework: str,
         errors: list[str],
-        capital_ratios: Pillar3CapitalRatioOverrides | None = None,
         output_floor_summary: OutputFloorSummary | None = None,
     ) -> pl.DataFrame | None:
         """Generate the OV1 overview of RWEAs.
@@ -364,9 +351,9 @@ class Pillar3Generator:
         the one ``cellspec.execute`` executor.
 
         References:
-            CRR Part 8 Art. 438; PRA PS1/26 Annex XX.
+            CRR Part 8 Art. 438; PRA PS1/26 Annex II.
         """
-        return generate_ov1(results, cols, framework, errors, capital_ratios, output_floor_summary)
+        return generate_ov1(results, cols, framework, errors, output_floor_summary)
 
     # ---- CR4 ----
 
@@ -387,7 +374,7 @@ class Pillar3Generator:
         References:
             CRR Art. 444(e); PRA PS1/26 Annex XX.
         """
-        return generate_cr4(results, cols, framework, errors)
+        return _single_frame(generate_cr4(results, cols, framework, errors))
 
     # ---- CR5 ----
 
@@ -408,7 +395,7 @@ class Pillar3Generator:
         References:
             CRR Art. 444(e); PRA PS1/26 Annex XX.
         """
-        return generate_cr5(results, cols, framework, errors)
+        return _single_frame(generate_cr5(results, cols, framework, errors))
 
     # ---- CR6 ----
 
@@ -450,7 +437,7 @@ class Pillar3Generator:
         References:
             CRR Art. 452(b); PRA PS1/26 Annex XXII.
         """
-        return generate_cr6a(results, cols, framework, errors)
+        return _single_frame(generate_cr6a(results, cols, framework, errors))
 
     # ---- CR7 ----
 
@@ -471,7 +458,7 @@ class Pillar3Generator:
         References:
             CRR Art. 453(j); PRA PS1/26 Annex XXII.
         """
-        return generate_cr7(results, cols, framework, errors)
+        return _single_frame(generate_cr7(results, cols, framework, errors))
 
     # ---- CR7-A ----
 
@@ -598,7 +585,7 @@ class Pillar3Generator:
         References:
             PRA PS1/26 Art. 456(1)(a), Art. 2a(1).
         """
-        return generate_cms1(results, cols, framework, errors)
+        return _single_frame(generate_cms1(results, cols, framework, errors))
 
     # ---- CMS2 ----
 
@@ -620,8 +607,9 @@ class Pillar3Generator:
         References:
             PRA PS1/26 Art. 456(1)(b), Art. 2a(2).
         """
-        return generate_cms2(results, cols, framework, errors)
+        return _single_frame(generate_cms2(results, cols, framework, errors))
 
+    @cites("CRR Art. 274")
     def _generate_ccr1(
         self,
         results: pl.LazyFrame,
@@ -630,39 +618,21 @@ class Pillar3Generator:
     ) -> pl.DataFrame | None:
         """Generate the CCR1 SA-CCR analysis-by-approach table.
 
-        The SA-CCR row (and the Total row) carry the portfolio CCR EAD
-        (Σ ``ead_final`` over the synthetic ``ccr__`` netting-set rows;
-        CRR Art. 274(2)) in column ``a`` and the non-QCCP default-risk RWEA
-        (Σ ``rwa_final`` over the ``ccr__`` rows that are NOT QCCP trade legs;
-        CRR Art. 107(2)(a)) in column ``f``. Both re-derive exactly the
-        AggregatedResultBundle ``ead_ccr_total`` / ``rwa_ccr_default`` roll-ups.
-        Returns ``None`` when the portfolio carries no CCR rows.
+        Dispatch-router entry (Phase 7 S8): CCR1 is declarative — the cell
+        semantics live in ``pillar3/ccr.py::generate_ccr1`` (the SA-CCR / Total
+        rows sum EAD col ``a`` over the ``ccr__`` netting-set population, FCCM
+        SFTs excluded, and the non-QCCP default-risk RWEA col ``b`` over the
+        derived ``ccr1_default_risk`` partition) and run through the one
+        ``cellspec.execute`` executor.
 
         References:
             CRR Art. 439(f); Art. 274(2); Art. 107(2)(a).
         """
-        ccr_rows = _ccr_rows(results, cols)
-        if ccr_rows is None or ccr_rows.height == 0:
-            return None
-
-        column_refs = [c.ref for c in CCR1_COLUMNS]
-        ead_total = _col_sum(ccr_rows, "ead_final")
-        rwea_default = _ccr_rwa(ccr_rows, qccp_trade=False)
-
-        rows_out: list[dict[str, object]] = []
-        for row_def in CCR1_ROWS:
-            if row_def.ref in ("1", "11"):
-                # SA-CCR approach row and Total — both the single SA-CCR phase.
-                # Col a = EAD post-CRM, col b = non-QCCP default-risk RWEA.
-                values: dict[str, object] = {"a": ead_total, "b": rwea_default}
-            else:
-                values = {"a": None, "b": None}
-            rows_out.append(_make_row(row_def, values, column_refs))
-
-        return _build_df(rows_out, column_refs)
+        return generate_ccr1(results, cols)
 
     # ---- CCR2 — CVA capital charge (Art. 439(h)) ----
 
+    @cites("PS1/26, paragraph 4.2")
     def _generate_ccr2(
         self,
         results: pl.LazyFrame,
@@ -672,38 +642,21 @@ class Pillar3Generator:
     ) -> pl.DataFrame | None:
         """Generate the CCR2 BA-CVA capital-charge table.
 
-        Reads the portfolio RWEA_CVA from the ``cva_rwa`` broadcast
-        column the aggregation stage stamps on the results frame (the BA-CVA
-        charge is a standalone scalar, not an EAD-derived per-row figure). The
-        BA-CVA row and the Total row carry that RWEA in column ``b``. Returns
-        ``None`` when no CVA charge is present (CRR, or a portfolio with no
-        in-scope CVA counterparties).
+        Dispatch-router entry (Phase 7 S8): CCR2 is declarative — the cell
+        semantics live in ``pillar3/ccr.py::generate_ccr2`` (the BA-CVA / Total
+        rows read the portfolio ``cva_rwa`` roll-up as a broadcast per-row
+        constant via ``FirstNonNull`` — the C 34.04 idiom; presence-gated, so
+        None under CRR) and run through the one ``cellspec.execute`` executor.
 
         References:
             CRR Art. 439(h); PS1/26 CVA Part 4.2-4.4 (BA-CVA reduced/full);
             Own Funds Part 4(b) (x12.5 RWEA multiplier).
         """
-        cva_col = _pick(cols, "cva_rwa")
-        if not cva_col:
-            return None
-        cva_rwea = _first_non_null(results, cva_col)
-        if cva_rwea is None:
-            return None
-
-        column_refs = [c.ref for c in CCR2_COLUMNS]
-        rows_out: list[dict[str, object]] = []
-        for row_def in CCR2_ROWS:
-            if row_def.ref in ("4", "6"):
-                # BA-CVA row and Total — the single BA-CVA charge (col a = RWEA).
-                values: dict[str, object] = {"a": cva_rwea}
-            else:
-                values = {"a": None}
-            rows_out.append(_make_row(row_def, values, column_refs))
-
-        return _build_df(rows_out, column_refs)
+        return generate_ccr2(results, cols)
 
     # ---- CCR3 — SA-CCR EAD by risk-weight band (Art. 444(e)) ----
 
+    @cites("CRR Art. 444")
     def _generate_ccr3(
         self,
         results: pl.LazyFrame,
@@ -713,34 +666,21 @@ class Pillar3Generator:
     ) -> pl.DataFrame | None:
         """Generate the CCR3 SA-CCR-EAD-by-risk-weight-band table.
 
-        One row per SA risk-weight band: each band row's EAD cell (col ``a``)
-        sums ``ead_final`` over the ``ccr__`` rows whose ``risk_weight`` matches
-        the band rate; unmatched rows fall to the "Other" row; the Total row
-        re-derives ``ead_ccr_total``. Returns ``None`` when no CCR rows exist.
+        Dispatch-router entry (Phase 7 S8): CCR3 is declarative — the cell
+        semantics live in ``pillar3/ccr.py::generate_ccr3`` (one band row per CR5
+        risk-weight band keyed on the derived ``ccr3_band`` label, an "Other"
+        catch-all, the Total row summing the whole SA-CCR population; a missing
+        ``risk_weight`` column records the CCR3 error) and run through the one
+        ``cellspec.execute`` executor.
 
         References:
             CRR Art. 444(e); Art. 120(1) Table 3 (institution CQS bands).
         """
-        ccr_rows = _ccr_rows(results, cols)
-        if ccr_rows is None or ccr_rows.height == 0:
-            return None
-        if "risk_weight" not in ccr_rows.columns:
-            errors.append("CCR3: missing risk_weight column")
-            return None
-
-        rw_bands = get_ccr3_risk_weights(framework)
-        column_refs = [c.ref for c in CCR3_COLUMNS]
-        band_eads = _ccr3_band_eads(ccr_rows, rw_bands)
-
-        rows_out: list[dict[str, object]] = []
-        for i, row_def in enumerate(get_ccr3_rows(framework)):
-            ead = _col_sum(ccr_rows, "ead_final") if row_def.is_total else band_eads[i] or None
-            rows_out.append(_make_row(row_def, {"a": ead}, column_refs))
-
-        return _build_df(rows_out, column_refs)
+        return generate_ccr3(results, cols, framework, errors)
 
     # ---- CCR8 — Exposures to central counterparties (Art. 439(i)) ----
 
+    @cites("CRR Art. 306")
     def _generate_ccr8(
         self,
         results: pl.LazyFrame,
@@ -749,40 +689,18 @@ class Pillar3Generator:
     ) -> pl.DataFrame | None:
         """Generate the CCR8 QCCP-vs-non-QCCP CCP-exposures table.
 
-        Partitions the ``ccr__`` rows by the QCCP trade-leg discriminator
-        (``cp_entity_type == "ccp"`` AND ``cp_is_qccp.fill_null(True)``, mirror
-        of the aggregator). The QCCP row carries the QCCP trade-leg RWEA
-        (``rwa_ccr_qccp_trade``; CRR Art. 306(1)/(4)); the non-QCCP row carries
-        the default-risk RWEA (``rwa_ccr_default``) — null when all rows are
-        QCCP. Returns ``None`` when no CCR rows exist.
+        Dispatch-router entry (Phase 7 S8): CCR8 is declarative — the cell
+        semantics live in ``pillar3/ccr.py::generate_ccr8`` (the CCP population,
+        ``include_sft=True`` per CRR Art. 301(1)(b), split by the derived
+        ``ccr8_qccp`` flag into QCCP row ``1`` / non-QCCP row ``2`` / Total ``21``;
+        the R5 CCP restriction keeps a bilateral counterparty out of every row)
+        and run through the one ``cellspec.execute`` executor.
 
         References:
-            CRR Art. 439(i); Art. 306(1)(a) (2% QCCP proprietary trade RW).
+            CRR Art. 439(i); Art. 306(1)(a) (2% QCCP proprietary trade RW);
+            Art. 301(1)(b) (SFTs within the CCP material scope).
         """
-        ccr_rows = _ccr_rows(results, cols)
-        if ccr_rows is None or ccr_rows.height == 0:
-            return None
-
-        column_refs = [c.ref for c in CCR8_COLUMNS]
-        has_disc = {"cp_entity_type", "cp_is_qccp"} <= set(ccr_rows.columns)
-
-        qccp_ead = _ccr_ead(ccr_rows, qccp_trade=True) if has_disc else None
-        qccp_rwea = _ccr_rwa(ccr_rows, qccp_trade=True) if has_disc else None
-        non_qccp_ead = _ccr_ead(ccr_rows, qccp_trade=False) if has_disc else None
-        non_qccp_rwea = _ccr_rwa(ccr_rows, qccp_trade=False) if has_disc else None
-        total_ead = _col_sum(ccr_rows, "ead_final")
-        total_rwea = _col_sum(ccr_rows, "rwa_final")
-
-        # Col a = RWEA (the disclosure's primary CCP figure), col b = EAD.
-        per_ref: dict[str, dict[str, object]] = {
-            "1": {"a": qccp_rwea, "b": qccp_ead},
-            "2": {"a": non_qccp_rwea, "b": non_qccp_ead},
-            "21": {"a": total_rwea, "b": total_ead},
-        }
-        rows_out = [
-            _make_row(row_def, per_ref.get(row_def.ref, {}), column_refs) for row_def in CCR8_ROWS
-        ]
-        return _build_df(rows_out, column_refs)
+        return generate_ccr8(results, cols)
 
 
 # ---------------------------------------------------------------------------
@@ -790,181 +708,18 @@ class Pillar3Generator:
 # ---------------------------------------------------------------------------
 
 
-def _ccr_rows(results: pl.LazyFrame, cols: set[str]) -> pl.DataFrame | None:
-    """Collect the synthetic ``ccr__``-prefixed CCR rows, or None if absent.
+def _single_frame(frames: dict[str, pl.DataFrame]) -> pl.DataFrame | None:
+    """Unwrap a single-frame template's ``{key: frame}`` dict for the bundle field.
 
-    The CCR disclosure tables read the same synthetic netting-set rows the
-    aggregator rolls up (CRR Art. 274(2)). Returns ``None`` when the results
-    frame carries no ``exposure_reference`` column.
-
-    FCCM SFT rows (``risk_type == "CCR_SFT"``) share the ``ccr__`` prefix but are
-    EXCLUDED here: they are SFT exposures reported under the SA template (COREP
-    C 07.00 row 0090), not the SA-CCR / CCP disclosure tables (CCR1/CCR8). Only
-    OTC derivatives and CCP exposures belong in these CCR templates. The
-    exclusion is gated on ``risk_type`` being present so a portfolio that
-    predates the column is unaffected.
+    The declarative single-frame Pillar 3 generators (cr4/cr5/cr6a/cr7, plus
+    the Basel-3.1-only cms1/cms2) return the lineage-shaped
+    ``{canonical key: frame}`` dict — the same key their ``<t>_plans`` uses, so
+    ``reporting.lineage`` can read a cell's spec and its reported value under
+    one key. The bundle field is a bare ``pl.DataFrame | None``, so the router
+    takes the one frame (None when the error contract yielded no plan — and, for
+    cms1/cms2, an empty dict under CRR).
     """
-    ref_col = _pick(cols, "exposure_reference")
-    if not ref_col:
-        return None
-    # An empty / all-null results frame can carry exposure_reference as a Null
-    # dtype; ``.str.starts_with`` only operates on String. Cast defensively so
-    # the CCR filter degenerates to an empty selection rather than raising.
-    is_ccr = pl.col(ref_col).cast(pl.String).str.starts_with("ccr__")
-    not_sft = pl.col("risk_type") != "CCR_SFT" if "risk_type" in cols else pl.lit(True)
-    return results.filter(is_ccr & not_sft).collect()
-
-
-def _ccr_qccp_trade_predicate() -> pl.Expr:
-    """QCCP trade-leg discriminator — mirrors the aggregator partition exactly.
-
-    ``(cp_entity_type == "ccp") & cp_is_qccp.fill_null(True)`` (CRR Art. 306).
-    """
-    return (pl.col("cp_entity_type") == "ccp") & pl.col("cp_is_qccp").fill_null(True)
-
-
-def _ccr_rwa(ccr_rows: pl.DataFrame, *, qccp_trade: bool) -> float | None:
-    """Sum ``rwa_final`` over the QCCP (or non-QCCP) ``ccr__`` partition.
-
-    Mirrors the aggregator roll-ups: a zero partition total maps to ``None``
-    (``rwa_ccr_default`` / ``rwa_ccr_qccp_trade`` are None when the partition
-    is empty).
-    """
-    if not {"cp_entity_type", "cp_is_qccp", "rwa_final"} <= set(ccr_rows.columns):
-        return None
-    predicate = _ccr_qccp_trade_predicate()
-    partition = ccr_rows.filter(predicate if qccp_trade else ~predicate)
-    total = _col_sum(partition, "rwa_final")
-    return total if total else None
-
-
-def _ccr_ead(ccr_rows: pl.DataFrame, *, qccp_trade: bool) -> float | None:
-    """Sum ``ead_final`` over the QCCP (or non-QCCP) ``ccr__`` partition."""
-    if not {"cp_entity_type", "cp_is_qccp", "ead_final"} <= set(ccr_rows.columns):
-        return None
-    predicate = _ccr_qccp_trade_predicate()
-    partition = ccr_rows.filter(predicate if qccp_trade else ~predicate)
-    total = _col_sum(partition, "ead_final")
-    return total if total else None
-
-
-def _ccr3_band_eads(
-    ccr_rows: pl.DataFrame,
-    rw_bands: list[tuple[float, str]],
-) -> list[float]:
-    """Per-band CCR EAD totals plus a trailing "Other" total.
-
-    Returns a list aligned with the CCR3 band rows: one entry per risk-weight
-    band (``ead_final`` summed over ``ccr__`` rows whose ``risk_weight`` matches
-    the band rate within a small tolerance) followed by the "Other" catch-all
-    (rows whose risk_weight matched no band). The Total row is computed by the
-    caller from the un-partitioned frame.
-    """
-    band_eads: list[float] = []
-    matched_mask = pl.lit(False)
-    for rate, _label in rw_bands:
-        in_band = (pl.col("risk_weight") >= rate - 0.005) & (pl.col("risk_weight") <= rate + 0.005)
-        matched_mask = matched_mask | in_band
-        band = ccr_rows.filter(in_band)
-        band_eads.append(_col_sum(band, "ead_final") or 0.0)
-
-    unmatched = ccr_rows.filter(~matched_mask)
-    band_eads.append(_col_sum(unmatched, "ead_final") or 0.0)
-    return band_eads
-
-
-def _first_non_null(results: pl.LazyFrame, col_name: str) -> float | None:
-    """First non-null value of a broadcast scalar column, as a float."""
-    data = results.select(pl.col(col_name).drop_nulls().first()).collect()
-    if data.height == 0:
-        return None
-    value = data.item()
-    return float(value) if value is not None else None
-
-
-def _col_sum(data: pl.DataFrame, col_name: str | None) -> float | None:
-    """Sum a single column, returning None if absent or empty.
-
-    Thin adapter over ``kernel.col_sum`` keeping the Pillar 3 empty-frame
-    semantics (empty subset -> null cell, ``empty_as_none=True``).
-    """
-    return col_sum(data, set(data.columns), col_name, empty_as_none=True)
-
-
-def _safe_sum(data: pl.DataFrame, *col_names: str) -> float | None:
-    """Sum multiple columns, skipping absent ones.
-
-    Thin adapter over ``kernel.safe_sum_or_none`` keeping the Pillar 3
-    no-column-present semantics (-> null cell).
-    """
-    return safe_sum_or_none(data, set(data.columns), *col_names)
-
-
-def _ead_weighted_avg(
-    data: pl.DataFrame,
-    ead_col: str,
-    metric_col: str | None,
-) -> float | None:
-    """Compute EAD-weighted average of a metric column."""
-    if not metric_col or metric_col not in data.columns or data.height == 0:
-        return None
-    result = data.select(
-        (pl.col(metric_col) * pl.col(ead_col)).sum() / pl.col(ead_col).sum()
-    ).item()
-    return float(result) if result is not None else None
-
-
-def _null_row(row_def: P3Row, column_refs: list[str]) -> dict[str, object]:
-    """Build a row dict with all column values set to None.
-
-    Thin adapter over ``kernel.null_row`` taking a ``P3Row`` definition.
-    """
-    return null_row(row_def.ref, row_def.name, column_refs)
-
-
-def _make_row(
-    row_def: P3Row,
-    values: Mapping[str, object],
-    column_refs: list[str],
-) -> dict[str, object]:
-    """Build a row dict from computed values, filling missing refs with None."""
-    row: dict[str, object] = {"row_ref": row_def.ref, "row_name": row_def.name}
-    for ref in column_refs:
-        row[ref] = values.get(ref)
-    return row
-
-
-def _build_df(rows: list[dict[str, object]], column_refs: list[str]) -> pl.DataFrame:
-    """Materialise a list of row dicts into a typed Polars DataFrame."""
-    schema: dict[str, PolarsDataType] = {"row_ref": pl.String, "row_name": pl.String}
-    schema.update(dict.fromkeys(column_refs, pl.Float64))
-    return pl.DataFrame(rows, schema=schema)
-
-
-def _filter_by_approach(
-    results: pl.LazyFrame,
-    approach_value: str,
-    cols: set[str],
-) -> pl.LazyFrame:
-    """Filter results to a specific approach_applied value.
-
-    Thin adapter over ``kernel.filter_by_approach`` keeping the Pillar 3
-    legacy ``approach`` column alias as a fallback candidate.
-    """
-    return filter_by_approach(
-        results, approach_value, cols, candidates=("approach_applied", "approach")
-    )
-
-
-def _filter_irb_non_slotting(
-    results: pl.LazyFrame,
-    cols: set[str],
-) -> pl.LazyFrame:
-    """Filter to F-IRB and A-IRB exposures (excluding slotting)."""
-    approach_col = _pick(cols, "approach_applied", "approach")
-    if not approach_col:
-        return results.filter(pl.lit(False))
-    return results.filter(pl.col(approach_col).is_in(["foundation_irb", "advanced_irb"]))
+    return next(iter(frames.values()), None)
 
 
 # ---------------------------------------------------------------------------

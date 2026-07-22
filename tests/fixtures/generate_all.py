@@ -692,6 +692,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "multi_entity",
             _generate_multi_entity,
         ),
+        (
+            "R1 (negative on-balance amounts — floored gross carriers + DQ010 bare-negative)",
+            "r1_negative_gross",
+            _generate_r1_negative_gross,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -4198,6 +4203,27 @@ def _generate_multi_entity(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         for mod in list(sys.modules.keys()):
             if "multi_entity" in mod:
+                sys.modules.pop(mod, None)
+
+
+def _generate_r1_negative_gross(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate R1 fixtures (negative on-balance amounts — floored gross carriers).
+
+    Writes the standard four P-code parquet inputs (counterparty / loan / rating /
+    model_permission) for the negative-deposit netting + bare-negative DQ010
+    scenario. See tests/fixtures/r1_negative_gross/r1_negative_gross.py.
+    """
+    _REPO_ROOT_STR = str(_REPO_ROOT)
+    if _REPO_ROOT_STR not in sys.path:
+        sys.path.insert(0, _REPO_ROOT_STR)
+    try:
+        from tests.fixtures.r1_negative_gross.r1_negative_gross import save_r1_fixtures
+
+        saved = save_r1_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        for mod in list(sys.modules.keys()):
+            if "r1_negative_gross" in mod:
                 sys.modules.pop(mod, None)
 
 

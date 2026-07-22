@@ -1,7 +1,7 @@
 {"row_ref":"0010","row_name":"TOTAL RISK EXPOSURE AMOUNT","0010":145511467.28986624}
 {"row_ref":"0040","row_name":"TOTAL OWN FUNDS REQUIREMENTS","0010":11640917.3831893}
 {"row_ref":"0050","row_name":"RISK WEIGHTED EXPOSURE AMOUNTS FOR CREDIT, COUNTERPARTY CREDIT AND DILUTION RISKS AND FREE DELIVERIES","0010":145511467.28986624}
-{"row_ref":"0060","row_name":"Of which: Standardised Approach (SA)","0010":19128450.0}
+{"row_ref":"0060","row_name":"Of which: Standardised Approach (SA)","0010":16228450.0}
 {"row_ref":"0070","row_name":"Central governments and central banks","0010":0.0}
 {"row_ref":"0080","row_name":"Regional governments and local authorities","0010":0.0}
 {"row_ref":"0090","row_name":"Public sector entities","0010":0.0}
@@ -16,9 +16,9 @@
 {"row_ref":"0180","row_name":"Covered bonds","0010":0.0}
 {"row_ref":"0190","row_name":"Short-term credit assessment","0010":0.0}
 {"row_ref":"0200","row_name":"Collective investment undertakings (CIU)","0010":0.0}
-{"row_ref":"0210","row_name":"Equity","0010":2900000.0}
+{"row_ref":"0210","row_name":"Equity","0010":0.0}
 {"row_ref":"0211","row_name":"Other items","0010":0.0}
-{"row_ref":"0220","row_name":"Of which: IRB Approach","0010":126383017.28986624}
+{"row_ref":"0220","row_name":"Of which: IRB Approach","0010":129283017.28986624}
 {"row_ref":"0240","row_name":"Of which: Foundation IRB (F-IRB)","0010":60260987.45769209}
 {"row_ref":"0250","row_name":"F-IRB — Institutions","0010":0.0}
 {"row_ref":"0260","row_name":"F-IRB — Corporates","0010":60260987.45769209}

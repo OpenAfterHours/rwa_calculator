@@ -594,6 +594,23 @@ class TestCMS2Generation:
         # Corporate F-IRB: 4000
         assert firb_row["a"][0] == pytest.approx(4000.0)
 
+    def test_cms2_firb_sub_row_col_c_is_firb_only(self, generator: Pillar3Generator):
+        """R18: row 0041 col c is the F-IRB corporate sub-population's OWN actual
+        RWA (== col a), not F-IRB plus the whole standardised + equity corporate
+        book. Annex II defines col c as "IRB RWA + SA RWA" of the ROW's
+        population; an of-which-F-IRB row holds no SA legs, so col c collapses
+        to col a. The retired predicate summed foundation_irb + standardised +
+        equity corporates, over-stating the of-which row by the SA book."""
+        data = _make_mixed_data_with_sa_rwa()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cms2 is not None
+        firb_row = bundle.cms2.filter(pl.col("row_ref") == "0041")
+        # F-IRB corporate actual RWA = 4000 (IRB1). The standardised corporate
+        # leg (SA1, rwa 1000) is disclosed in the parent row 0040 col c, NOT in
+        # the of-which-F-IRB sub-row: the retired predicate reported 5000 here.
+        assert firb_row["c"][0] == pytest.approx(4000.0)
+        assert firb_row["c"][0] == pytest.approx(firb_row["a"][0])
+
     def test_cms2_airb_sub_row(self, generator: Pillar3Generator):
         """Row 0042 (AIRB) should show corporate A-IRB RWA (zero in test data)."""
         data = _make_mixed_data_with_sa_rwa()

@@ -167,7 +167,7 @@ output-floor indicator rows are inserted.
     | Credit Risk — SA | 0050–0211 (incl. ==0131==) | SA exposure-class breakdown; ==0131== "of which: specialised lending" added |
     | Credit Risk — F-IRB | 0220, 0240, 0250, ==0271==, 0260, ==0290==, ==0295==, ==0296==, ==0297== | Adds SL-excl-slotting and corporate SME / non-SME / financial-and-large splits |
     | Credit Risk — A-IRB | 0300–0410 (incl. ==0350==, ==0355==, ==0356==, ==0382–0385==, ==0410==) | Adds SL-excl-slotting, corporate SME splits, retail residential/commercial SME splits |
-    | Slotting and Equity | ==0411–0416==, 0420 | Slotting broken out by PF / OF / CF / IPRE / HVCRE; Equity IRB retained |
+    | Slotting and Equity | ==0411–0416==, 0420 | Slotting broken out by PF / OF / CF / IPRE / HVCRE; row 0420 "Equity IRB" is structurally retained but **always empty** under Basel 3.1 (Art. 147A removes IRB equity — the whole book is standardised and reports in the SA rows 0060 / 0210) |
     | Other Risk Types | 0430–0680 | Same as CRR — **all null** (out of scope) |
 
 !!! info "New Basel 3.1 output-floor indicator rows"
@@ -252,7 +252,11 @@ consumed by [C 02.00 / OF 02.00](#c-0200-of-0200-own-funds-requirements) to appl
 
     Both columns sum the **pre-floor own-approach RWA** (`rwa_pre_floor`). Only col 0040
     sums the SA-equivalent (`sa_rwa`), and it does so over the row's whole population —
-    that is what S-TREA *is*.
+    that is what S-TREA *is*. Equity legs bypass the SA calculator, so the aggregator
+    populates their `sa_rwa` as their own pre-floor RWA (Basel 3.1 equity is
+    standardised-only, Art. 147A); without this, col 0040 (and the equivalent
+    C 02.00 col 0020 / CMS1/CMS2 col d) would silently drop equity's
+    standardised-equivalent RWA.
 
     Until the 2026-07 fix, cols 0010 and 0020 were each summed over the **whole**
     portfolio, so col 0030 reported U-TREA + S-TREA rather than U-TREA. See the
@@ -1694,6 +1698,24 @@ substitution effects).
     | **RE rows** | "Secured by mortgages" (1 row + SME) | "Real estate exposures" with 4 sub-rows (0091–0094) |
     | **Removed rows** | — | 0130 (short-term credit assessment) |
     | **Renamed rows** | — | 0090 (RE), 0150 (subordinated debt/equity) |
+
+!!! info "How the Basel 3.1 real-estate and SL rows are keyed"
+    Row **0090 (Real estate exposures)** and its of-which sub-rows key the
+    Basel 3.1 real-estate reporting classes — `retail_mortgage` (retail
+    residential RE) plus the SA loan-splitter's `residential_mortgage` /
+    `commercial_mortgage` secured legs — so RE exposure lands in a class row
+    rather than surviving only in the country Total. The sub-rows split that
+    class: **0091/0092** (regulatory residential / commercial RE) by
+    `property_type` and the qualifying-RE flag, **0093** (other RE) for
+    non-qualifying exposures, **0094** (land ADC) by the ADC flag, and **0095**
+    the SME of-which. Income-producing commercial RE that classifies as
+    `corporate` stays in the corporate parent row 0070 (as it does under CRR),
+    keeping row 0090 a clean class partition. The specialised-lending rows
+    **0071–0073** split the corporate parent row 0070 by `sl_type` (object /
+    commodities / project finance) — SL remains a corporate sub-type under SA
+    (Art. 112(1)(g)), so this adds granularity only. **CRR C 09.01 is
+    unaffected** — its rows key `retail_mortgage` / `corporate` directly and
+    never reach the RE/SL branch.
 
 ---
 

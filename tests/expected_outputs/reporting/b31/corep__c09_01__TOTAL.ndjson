@@ -11,9 +11,9 @@
 {"row_ref":"0073","row_name":"  of which: specialised lending - project finance","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
 {"row_ref":"0080","row_name":"Retail","0010":250000.0,"0020":0.0,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":250000.0,"0090":187500.0}
 {"row_ref":"0085","row_name":"  of which: SME","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
-{"row_ref":"0090","row_name":"Real estate exposures","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
+{"row_ref":"0090","row_name":"Real estate exposures","0010":400000.0,"0020":0.0,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":400000.0,"0090":98333.33333333331}
 {"row_ref":"0095","row_name":"  of which: SME","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
-{"row_ref":"0091","row_name":"  of which: regulatory residential real estate","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
+{"row_ref":"0091","row_name":"  of which: regulatory residential real estate","0010":400000.0,"0020":0.0,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":400000.0,"0090":98333.33333333331}
 {"row_ref":"0092","row_name":"  of which: regulatory commercial real estate","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
 {"row_ref":"0093","row_name":"  of which: other real estate","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
 {"row_ref":"0094","row_name":"  of which: land acquisition, development and construction","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}

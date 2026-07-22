@@ -113,6 +113,9 @@ class _Run:
 #   14,625,069.66 + slotting 52,500,000.00 = 115,369,130.58 (== C 02.00 row 0220);
 #   standardised = the SA book + equity = 22,080,833.33 (== C 02.00 row 0060).
 #   They sum to the whole portfolio, 137,449,963.91 (== C 02.00 row 0010).
+#   S-TREA (column 0040) = whole-book sa_rwa = 164,155,833.33, INCLUDING equity's
+#   own 2,500,000 standardised-equivalent RWA (B31 equity is SA-only, Art. 147A;
+#   the aggregator now populates equity's sa_rwa — R4).
 # ccr: one SA corporate loan (2,500,000 RWEA) + two SA-CCR netting sets
 #   (1,560,296.72 RWEA). No models at all -> column 0010 is 0.0 EVERYWHERE.
 _EXPECTED: dict[str, dict[str, dict[str, float]]] = {
@@ -122,7 +125,7 @@ _EXPECTED: dict[str, dict[str, dict[str, float]]] = {
             "0010": 115_369_130.58029616,
             "0020": 22_080_833.333333332,
             "0030": 137_449_963.9136295,
-            "0040": 161_655_833.3333333,
+            "0040": 164_155_833.3333333,
         },
         # Counterparty credit risk — populated, and empty because the book has none.
         "0020": {"0010": 0.0, "0020": 0.0, "0030": 0.0, "0040": 0.0},
@@ -131,7 +134,7 @@ _EXPECTED: dict[str, dict[str, dict[str, float]]] = {
             "0010": 115_369_130.58029616,
             "0020": 22_080_833.333333332,
             "0030": 137_449_963.9136295,
-            "0040": 161_655_833.3333333,
+            "0040": 164_155_833.3333333,
         },
     },
     "ccr": {
@@ -205,8 +208,9 @@ def test_of02_populated_rows_report_the_modelled_standardised_partition(
             f"[{portfolio}] OF 02.01 row {row_ref} column {col}: expected "
             f"{expected[col]:,.6f}, got {actual:,.6f}. Column 0010 is the MODELLED "
             "partition (F-IRB + A-IRB + slotting), column 0020 the STANDARDISED "
-            "partition (SA + SA-CCR + equity, on rwa_pre_floor — not sa_rwa, which is "
-            "null on equity); 0030 = 0010 + 0020; 0040 = sa_rwa (S-TREA)."
+            "partition (SA + SA-CCR + equity, on rwa_pre_floor — the actual "
+            "own-approach RWA); 0030 = 0010 + 0020; 0040 = sa_rwa (S-TREA), which "
+            "now includes equity's standardised-equivalent RWA."
         )
 
 
@@ -422,9 +426,10 @@ def test_of02_standardised_total_ties_to_c02_sa_row(portfolio: str, runs: dict[s
     """Row 0080 column 0020 == C 02.00 row 0060 ("Of which: Standardised Approach").
 
     The standardised partition is everything that is not modelled — SA, SA-CCR AND
-    equity. Equity is why the carrier must be ``rwa_pre_floor`` and not ``sa_rwa``:
-    equity bypasses the SA calculator, so its ``sa_rwa`` is null and a Sum(sa_rwa)
-    would drop its RWA on the floor.
+    equity. The carrier is ``rwa_pre_floor`` (the actual own-approach RWA), not
+    ``sa_rwa`` (the S-TREA leg reported in column 0040). Equity bypasses the SA
+    calculator, so the aggregator now populates equity's ``sa_rwa`` as its own
+    pre-floor RWA (R4) — column 0020 still reports the actual RWA here.
 
     Arrange: a Basel 3.1 reporting portfolio with a non-binding output floor.
     Act:     run the pipeline -> COREP OF 02.01 + C 02.00.

@@ -520,33 +520,6 @@ class IRBPermissions:
         )
 
 
-@dataclass(frozen=True)
-class Pillar3CapitalRatioOverrides:
-    """
-    Optional capital-ratio overrides for the UKB OV1 pre-floor disclosure rows.
-
-    Pillar III templates require pre-floor capital-ratio disclosures that are
-    institution-level capital figures and cannot be derived from the credit-risk
-    pipeline. Callers supply these values explicitly so that rows 5a/5b/6a/6b/
-    7a/7b of UKB OV1 can be populated. Any field left as None causes the
-    generator to emit None for the corresponding row's column 'a'/'b'/'c'.
-
-    All ratios are expressed as decimal fractions (e.g., Decimal("0.135") for
-    13.5%). The generator multiplies by 100 when emitting percentage points.
-
-    References:
-        PRA PS1/26 Disclosure (CRR) Part, Art. 456
-        UKB OV1 template — pre-floor supplementary rows
-    """
-
-    cet1_ratio_pre_floor: Decimal | None = None
-    cet1_ratio_pre_floor_transitional: Decimal | None = None
-    tier1_ratio_pre_floor: Decimal | None = None
-    tier1_ratio_pre_floor_transitional: Decimal | None = None
-    total_ratio_pre_floor: Decimal | None = None
-    total_ratio_pre_floor_transitional: Decimal | None = None
-
-
 @cites("CRR Art. 274(2)")
 @dataclass(frozen=True)
 class CCRConfig:

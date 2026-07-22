@@ -50,12 +50,14 @@ from rwa_calc.reporting.corep.c08 import (
     generate_c08_07,
 )
 from rwa_calc.reporting.corep.c09 import generate_c09_01, generate_c09_02
+from rwa_calc.reporting.corep.c34 import (
+    generate_c34_01,
+    generate_c34_02,
+    generate_c34_04,
+    generate_c34_08,
+)
 from rwa_calc.reporting.corep.of02 import generate_of_02_01
 from rwa_calc.reporting.corep.templates import (
-    C34_01_ROWS,
-    C34_02_ROWS,
-    C34_04_ROWS,
-    C34_08_ROWS,
     IRB_EXPOSURE_CLASS_ROWS,
     OF_02_01_COLUMNS,
     SA_EXPOSURE_CLASS_ROWS,
@@ -71,10 +73,6 @@ from rwa_calc.reporting.corep.templates import (
     get_c08_columns,
     get_c09_01_columns,
     get_c09_02_columns,
-    get_c34_01_columns,
-    get_c34_02_columns,
-    get_c34_04_columns,
-    get_c34_08_columns,
 )
 from rwa_calc.reporting.kernel import (
     available_columns as _available_columns,
@@ -84,15 +82,11 @@ from rwa_calc.reporting.kernel import (
     write_metadata_sheet,
     write_template_sheet,
 )
-from rwa_calc.reporting.kernel import (
-    pick as _pick,
-)
 from rwa_calc.reporting.metadata import ResultsSource
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from polars._typing import PolarsDataType
     from xlsxwriter import Workbook
 
     from rwa_calc.contracts.bundles import OutputFloorSummary
@@ -156,9 +150,11 @@ class COREPTemplateBundle:
         Basel 3.1 only — None under CRR or when ``cva_rwa`` is absent.
     C 34.08 (CCP exposures): Single DataFrame, QCCP trade-leg (2%/4%),
         non-QCCP, and default-fund EAD (col 0010) / RWEA (col 0020). The
-        QCCP/non-QCCP partition mirrors the aggregator discriminator
-        (``cp_entity_type == "ccp" & cp_is_qccp.fill_null(True)``). None when
-        the portfolio has no CCP exposures.
+        population is restricted to CCP counterparties
+        (``cp_entity_type == "ccp"``), split by ``cp_is_qccp.fill_null(True)``
+        into the QCCP (row 0010) and non-QCCP (row 0020) rows. None when the
+        portfolio has no CCP exposures (no CCP trade legs and no default-fund
+        contributions).
 
     Why: COREP templates are submitted per exposure class to the regulator.
     Each class gets a fixed row structure (totals, exposure types, risk weights,
@@ -558,8 +554,13 @@ class COREPGenerator:
         return total
 
     # =========================================================================
-    # C 08.07 / OF 08.07 — IRB Scope of Use
+    # C 34.01 / 02 / 04 / 08 — Counterparty Credit Risk (CCR)
     # =========================================================================
+    # C 34.01 / 04 / 08 are declarative (Phase 7 S8; R27a) — the cell semantics
+    # live in ``corep/c34.py`` and run through the one ``cellspec.execute``
+    # executor — C 34.01/04/08 since R27a, C 34.02 (per netting set) since
+    # R27b. These dispatch-router methods keep their signatures (the R5 unit
+    # suite calls ``_generate_c34_08`` directly).
 
     def _generate_c34_01(
         self,
@@ -568,32 +569,10 @@ class COREPGenerator:
     ) -> pl.DataFrame | None:
         """Generate C 34.01 — SA-CCR analysis by approach (EAD + RWEA total).
 
-        Reports the portfolio SA-CCR exposure value (col 0010) and RWEA
-        (col 0020) summed over the synthetic ``ccr__``-prefixed netting-set
-        rows. Returns None when the portfolio carries no CCR rows — the gated
-        precedent of ``_generate_of_02_01``.
-
-        References:
-            CRR Art. 274(2): SA-CCR EAD = alpha * (RC + PFE).
+        Dispatch-router entry (R27a): declarative in
+        ``corep/c34.py::generate_c34_01``.
         """
-        ccr = _collect_ccr_rows(results, cols)
-        if ccr is None or len(ccr) == 0:
-            return None
-
-        ead_total = float(ccr["ead_final"].fill_null(0.0).sum())
-        rwea_total = float(ccr["rwa_final"].fill_null(0.0).sum())
-
-        column_refs = [c.ref for c in get_c34_01_columns()]
-        rows: list[dict[str, object]] = [
-            {
-                "row_ref": row.ref,
-                "row_name": row.name,
-                "0010": ead_total,
-                "0020": rwea_total,
-            }
-            for row in C34_01_ROWS
-        ]
-        return _c34_frame(rows, column_refs)
+        return generate_c34_01(results, cols)
 
     def _generate_c34_02(
         self,
@@ -602,34 +581,13 @@ class COREPGenerator:
     ) -> dict[str, pl.DataFrame]:
         """Generate C 34.02 — SA-CCR EAD per netting set.
 
-        Returns a dict keyed by ``netting_set_id`` (derived by stripping the
-        ``ccr__`` prefix from ``exposure_reference``). Each value is a 1-row
-        DataFrame carrying that netting set's exposure value (col 0010).
-        Empty dict when the portfolio has no CCR rows.
-
-        References:
-            CRR Art. 274(2): EAD = alpha * (RC + PFE) per netting set.
+        Dispatch-router entry (R27b): declarative in
+        ``corep/c34.py::generate_c34_02`` — one sheet per netting set, keyed by
+        the ``netting_set_id`` stripped from the ``ccr__`` reference prefix, each
+        summing that netting set's ``ead_final`` (col 0010). Empty dict when the
+        portfolio has no SA-CCR rows.
         """
-        ccr = _collect_ccr_rows(results, cols)
-        if ccr is None or len(ccr) == 0:
-            return {}
-
-        column_refs = [c.ref for c in get_c34_02_columns()]
-        per_ns = ccr.group_by("netting_set_id").agg(
-            pl.col("ead_final").fill_null(0.0).sum().alias("_ead")
-        )
-
-        result: dict[str, pl.DataFrame] = {}
-        for ns_row in per_ns.iter_rows(named=True):
-            ns_id = ns_row["netting_set_id"]
-            if ns_id is None:
-                continue
-            rows: list[dict[str, object]] = [
-                {"row_ref": row.ref, "row_name": row.name, "0010": float(ns_row["_ead"])}
-                for row in C34_02_ROWS
-            ]
-            result[str(ns_id)] = _c34_frame(rows, column_refs)
-        return result
+        return generate_c34_02(results, cols)
 
     def _generate_c34_04(
         self,
@@ -639,31 +597,10 @@ class COREPGenerator:
     ) -> pl.DataFrame | None:
         """Generate C 34.04 — CVA capital (BA-CVA RWEA). Basel 3.1 only.
 
-        Reads the portfolio ``cva_rwa`` carried as a constant column on the
-        results frame (surfaced by the aggregation stage's BA-CVA roll-up).
-        Returns None under CRR, or when no ``cva_rwa`` column / value is
-        present — mirroring the ``_generate_of_02_01`` gated-grid precedent.
-
-        References:
-            PRA PS1/26 App.1 CVA Part Ch.4.2-4.4 (BA-CVA reduced);
-            PRA PS1/26 App.1 Own Funds Part 4(b): RWEA_CVA = OFR_CVA * 12.5.
+        Dispatch-router entry (R27a): declarative in
+        ``corep/c34.py::generate_c34_04``.
         """
-        if framework != "BASEL_3_1":
-            return None
-        cva_col = _pick(cols, "cva_rwa")
-        if cva_col is None:
-            return None
-
-        cva_value = results.select(pl.col(cva_col).max().alias("_cva")).collect()["_cva"][0]
-        if cva_value is None or float(cva_value) <= 0.0:
-            return None
-
-        column_refs = [c.ref for c in get_c34_04_columns()]
-        rows: list[dict[str, object]] = [
-            {"row_ref": row.ref, "row_name": row.name, "0010": float(cva_value)}
-            for row in C34_04_ROWS
-        ]
-        return _c34_frame(rows, column_refs)
+        return generate_c34_04(results, cols, framework)
 
     def _generate_c34_08(
         self,
@@ -672,45 +609,11 @@ class COREPGenerator:
     ) -> pl.DataFrame | None:
         """Generate C 34.08 — CCP exposures (QCCP trade, non-QCCP, default fund).
 
-        Partitions the CCR rows by the QCCP trade-leg discriminator
-        (``cp_entity_type == "ccp" & cp_is_qccp.fill_null(True)``) — mirroring
-        the aggregator exactly — into QCCP (row 0010) and non-QCCP (row 0020)
-        rows, plus a default-fund row (0030) keyed off the
-        ``CCR_DEFAULT_FUND`` risk type. Each row reports EAD (col 0010) and
-        RWEA (col 0020). Returns None when the portfolio has no CCP exposures.
-
-        References:
-            CRR Art. 306(1)(a)/(c): 2% / 4% QCCP trade-leg RW.
-            CRR Art. 308/309: default fund contributions.
+        Dispatch-router entry (R27a): declarative in
+        ``corep/c34.py::generate_c34_08`` (the R5 CCP restriction + emission gate
+        preserved exactly).
         """
-        ccr = _collect_ccr_rows(results, cols)
-        df_fund_ead, df_fund_rwea = _collect_default_fund(results, cols)
-        if (ccr is None or len(ccr) == 0) and df_fund_rwea <= 0.0:
-            return None
-
-        qccp_ead = qccp_rwea = non_qccp_ead = non_qccp_rwea = 0.0
-        if ccr is not None and len(ccr) > 0:
-            is_qccp_trade = (pl.col("cp_entity_type") == "ccp") & pl.col("cp_is_qccp").fill_null(
-                True
-            )
-            qccp = ccr.filter(is_qccp_trade)
-            non_qccp = ccr.filter(~is_qccp_trade)
-            qccp_ead = float(qccp["ead_final"].fill_null(0.0).sum())
-            qccp_rwea = float(qccp["rwa_final"].fill_null(0.0).sum())
-            non_qccp_ead = float(non_qccp["ead_final"].fill_null(0.0).sum())
-            non_qccp_rwea = float(non_qccp["rwa_final"].fill_null(0.0).sum())
-
-        row_values: dict[str, tuple[float, float]] = {
-            "0010": (qccp_ead, qccp_rwea),
-            "0020": (non_qccp_ead, non_qccp_rwea),
-            "0030": (df_fund_ead, df_fund_rwea),
-        }
-        column_refs = [c.ref for c in get_c34_08_columns()]
-        rows: list[dict[str, object]] = []
-        for row in C34_08_ROWS:
-            ead, rwea = row_values.get(row.ref, (0.0, 0.0))
-            rows.append({"row_ref": row.ref, "row_name": row.name, "0010": ead, "0020": rwea})
-        return _c34_frame(rows, column_refs)
+        return generate_c34_08(results, cols)
 
     # =========================================================================
     # C 02.00 / OF 02.00 — Own Funds Requirements (CA2)
@@ -836,74 +739,6 @@ class COREPGenerator:
 
 
 _SECTION3_NULL_REFS: frozenset[str] = frozenset({"0160", "0170", "0175", "0180"})
-
-
-def _collect_ccr_rows(results: pl.LazyFrame, cols: set[str]) -> pl.DataFrame | None:
-    """Materialise the synthetic SA-CCR netting-set rows from the results frame.
-
-    Filters to the ``ccr__``-prefixed ``exposure_reference`` rows and derives a
-    ``netting_set_id`` column by stripping that prefix (the per-row
-    ``exposure_reference`` is ``ccr__{netting_set_id}``). Returns None when the
-    discriminating columns are absent (CCR-free portfolio).
-
-    FCCM SFT rows (``risk_type == "CCR_SFT"`` / ``ccr_method == "fccm_sft"``)
-    share the ``ccr__`` reference prefix but are EXCLUDED here: per PS1/26
-    App. 17 they are reported under SA template C 07.00 row 0090
-    ("SFT netting sets"), not the SA-CCR templates (C 34.01/02/08). Only OTC
-    derivatives (``risk_type == "CCR_DERIVATIVE"``) and CCP exposures belong in
-    the SA-CCR templates (CRR Art. 274/306). The exclusion is gated on the
-    ``risk_type`` column being present so a portfolio that predates the column
-    is unaffected.
-
-    References:
-        CRR Art. 274(2): the synthetic SA-CCR rows carry EAD = alpha * (RC + PFE).
-        PS1/26 App. 17: SFTs report under C 07.00 row 0090, not C 34.
-    """
-    if not ({"exposure_reference", "ead_final", "rwa_final"} <= cols):
-        return None
-    is_ccr = pl.col("exposure_reference").str.starts_with("ccr__")
-    not_sft = pl.col("risk_type") != "CCR_SFT" if "risk_type" in cols else pl.lit(True)
-    ccr = (
-        results.filter(is_ccr & not_sft)
-        .with_columns(
-            pl.col("exposure_reference").str.strip_prefix("ccr__").alias("netting_set_id")
-        )
-        .collect()
-    )
-    if len(ccr) == 0:
-        return None
-    return ccr
-
-
-def _collect_default_fund(results: pl.LazyFrame, cols: set[str]) -> tuple[float, float]:
-    """Sum EAD and RWEA over the synthetic ``CCR_DEFAULT_FUND`` rows.
-
-    Returns ``(0.0, 0.0)`` when the ``risk_type`` discriminator is absent or no
-    default-fund rows are present (CRR Art. 308/309).
-    """
-    if "risk_type" not in cols or "rwa_final" not in cols:
-        return 0.0, 0.0
-    ead_expr = (
-        pl.col("ead_final").fill_null(0.0).sum().alias("_ead")
-        if "ead_final" in cols
-        else pl.lit(0.0).alias("_ead")
-    )
-    stats = (
-        results.filter(pl.col("risk_type") == "CCR_DEFAULT_FUND")
-        .select(ead_expr, pl.col("rwa_final").fill_null(0.0).sum().alias("_rwea"))
-        .collect()
-    )
-    if len(stats) == 0:
-        return 0.0, 0.0
-    return float(stats["_ead"][0]), float(stats["_rwea"][0])
-
-
-def _c34_frame(rows: list[dict[str, object]], column_refs: list[str]) -> pl.DataFrame:
-    """Build a C 34.xx DataFrame with the standard row_ref/row_name + refs schema."""
-    schema: dict[str, PolarsDataType] = {"row_ref": pl.String, "row_name": pl.String}
-    for ref in column_refs:
-        schema[ref] = pl.Float64
-    return pl.DataFrame(rows, schema=schema)
 
 
 # =============================================================================

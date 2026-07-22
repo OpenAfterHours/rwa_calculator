@@ -156,7 +156,6 @@ class TestReportingContext:
         assert ctx.template_set is reporting
         assert ctx.output_floor_summary is None
         assert ctx.previous_period_results is None
-        assert ctx.capital_ratio_overrides is None
         assert ctx.reporting_basis is None
         assert ctx.institution_type is None
 

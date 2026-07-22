@@ -1,9 +1,9 @@
 {"row_ref":"0010","row_name":"Sovereign","a":null,"b":null,"c":0.0,"d":0.0}
 {"row_ref":"0011","row_name":"  Of which: categorised as MDB/PSE in SA","a":null,"b":null,"c":0.0,"d":null}
 {"row_ref":"0020","row_name":"Institutions","a":null,"b":null,"c":600000.0,"d":600000.0}
-{"row_ref":"0030","row_name":"Subordinated debt, equity and other own funds","a":null,"b":null,"c":2500000.0,"d":0.0}
+{"row_ref":"0030","row_name":"Subordinated debt, equity and other own funds","a":null,"b":null,"c":2500000.0,"d":2500000.0}
 {"row_ref":"0040","row_name":"Corporates","a":115347556.45478722,"b":142000000.0,"c":134022556.45478722,"d":160675000.0}
-{"row_ref":"0041","row_name":"  Of which are FIRB","a":48244060.92282306,"b":50000000.0,"c":66919060.92282306,"d":160675000.0}
+{"row_ref":"0041","row_name":"  Of which are FIRB","a":48244060.92282306,"b":50000000.0,"c":48244060.92282306,"d":160675000.0}
 {"row_ref":"0042","row_name":"  Of which are AIRB","a":14603495.53196416,"b":17000000.0,"c":14603495.53196416,"d":null}
 {"row_ref":"0043","row_name":"  Of which: specialised lending exposures","a":52500000.0,"b":75000000.0,"c":52500000.0,"d":75000000.0}
 {"row_ref":"0044","row_name":"  Of which: IPRE and HVCRE exposures","a":null,"b":null,"c":null,"d":null}
@@ -14,4 +14,4 @@
 {"row_ref":"0053","row_name":"  Of which: retail secured by residential immovable property","a":null,"b":null,"c":98333.33333333331,"d":98333.33333333331}
 {"row_ref":"0054","row_name":"  Of which: purchased receivables","a":null,"b":null,"c":null,"d":null}
 {"row_ref":"0060","row_name":"Others","a":null,"b":null,"c":20000.0,"d":20000.0}
-{"row_ref":"0070","row_name":"Total","a":115369130.58029616,"b":142075000.0,"c":137449963.91362947,"d":161655833.3333333}
+{"row_ref":"0070","row_name":"Total","a":115369130.58029616,"b":142075000.0,"c":137449963.91362947,"d":164155833.3333333}

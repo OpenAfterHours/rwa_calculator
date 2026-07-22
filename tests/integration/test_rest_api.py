@@ -291,7 +291,9 @@ def test_lineage_reports_a_cell_whose_sources_are_never_produced(
     # Arrange
     run_id = _run(client, data_dir)
 
-    # Act — col 0030 sums provision amounts the engine does not put on the ledger
+    # Act — col 0020 sums own_funds_deduction_amount, which the engine does not
+    # put on the ledger (col 0030 used to be the showcase here, but R9 rebound
+    # it to the sealed provision carrier — mirrors test_lineage_tieout.py).
     resp = client.get(
         "/api/lineage",
         params={
@@ -299,7 +301,7 @@ def test_lineage_reports_a_cell_whose_sources_are_never_produced(
             "template": "c07_00",
             "sheet": "corporate",
             "row": "0010",
-            "col": "0030",
+            "col": "0020",
         },
     )
 
@@ -309,8 +311,71 @@ def test_lineage_reports_a_cell_whose_sources_are_never_produced(
     body = resp.json()
     assert body["is_source_backed"] is False
     assert body["missing_columns"] == body["metric_columns"]
-    assert body["sign"] == "negated"
+    assert body["sign"] == "positive"
     assert body["contribution_total"] is None
+
+
+def test_lineage_serves_a_single_frame_pillar3_template(client: TestClient, data_dir: str) -> None:
+    # Arrange — R20 instrumented four single-frame Pillar 3 templates. CR4 (SA
+    # exposure-and-CRM-effects) is populated by this SA-only run.
+    run_id = _run(client, data_dir)
+
+    # Act — CR4 total row (17) / RWEAs (col e). No sheet param: a single-frame
+    # template has no sheet axis, so its cells report sheet = None.
+    resp = client.get(
+        "/api/lineage",
+        params={"run_id": run_id, "template": "cr4", "row": "17", "col": "e"},
+    )
+
+    # Assert — the cell is self-describing, its sheet axis is None, and the legs
+    # shown sum back to the reported RWEA.
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["cell"]["sheet"] is None
+    assert body["kind"] == "rows"
+    assert body["metric"] == "sum"
+    assert body["metric_columns"] == ["rwa_final"]
+    assert body["basis"] == "aggregator_exit"
+    assert body["cell_value"] > 0
+    assert body["contribution_total"] == pytest.approx(body["cell_value"])
+    assert body["total_rows"] >= 1
+
+
+def test_lineage_refuses_cr8_prior_period_derived_cells(client: TestClient, tmp_path: Path) -> None:
+    # Arrange — a current-period IRB run so CR8's closing row (9) has real data.
+    _seed_irb_run(
+        "current-cr8-lineage",
+        date(2025, 1, 1),
+        firb_rwa=720_000.0,
+        airb_rwa=430_000.0,
+        results_dir=tmp_path / "cur",
+    )
+
+    # Act / Assert — row 9 (closing, CURRENT period) drills down to a real figure.
+    closing = client.get(
+        "/api/lineage",
+        params={"run_id": "current-cr8-lineage", "template": "cr8", "row": "9", "col": "a"},
+    )
+    assert closing.status_code == 200
+    assert closing.json()["cell_value"] == pytest.approx(1_150_000.0)
+
+    # Rows 1 (opening, PriorPeriod) and 8 (residual formula over it) derive from
+    # the PRIOR period. On a comparative-period report those cells show real
+    # figures, but this drill-down runs on the current-period ledger only — so it
+    # returns a DISTINCT 404 (its cell_value would otherwise be a null that
+    # contradicts the screen), never a 200-with-null.
+    for prior_row in ("1", "8"):
+        resp = client.get(
+            "/api/lineage",
+            params={
+                "run_id": "current-cr8-lineage",
+                "template": "cr8",
+                "row": prior_row,
+                "col": "a",
+            },
+        )
+        assert resp.status_code == 404, f"row {prior_row}"
+        assert "prior period" in resp.json()["detail"].lower(), f"row {prior_row}"
 
 
 def test_lineage_unknown_run_template_and_cell_are_404(client: TestClient, data_dir: str) -> None:
@@ -318,19 +383,23 @@ def test_lineage_unknown_run_template_and_cell_are_404(client: TestClient, data_
     run_id = _run(client, data_dir)
     cell = {"template": "c07_00", "sheet": "corporate", "row": "0010", "col": "0220"}
 
-    # Act / Assert — an uninstrumented template (C 34.01 is still imperative) and
-    # an unknown cell are clean 404s, never a re-derived guess.
-    assert client.get("/api/lineage", params={**cell, "run_id": "nope"}).status_code == 404
-    assert (
-        client.get(
-            "/api/lineage", params={**cell, "run_id": run_id, "template": "c34_01"}
-        ).status_code
-        == 404
+    # Act / Assert — an unknown run, an uninstrumented template (C 02.00 is the
+    # kernel-plus-thin-shell hybrid with no TemplateSpec; R27a instrumented the
+    # prior example C 34.01) and an unknown cell are three DISTINCT 404s: the reason
+    # is carried in the detail so a client can tell them apart, never a re-derived guess.
+    unknown_run = client.get("/api/lineage", params={**cell, "run_id": "nope"})
+    assert unknown_run.status_code == 404
+    assert "unknown run" in unknown_run.json()["detail"].lower()
+
+    uninstrumented = client.get(
+        "/api/lineage", params={**cell, "run_id": run_id, "template": "c_02_00"}
     )
-    assert (
-        client.get("/api/lineage", params={**cell, "run_id": run_id, "row": "9999"}).status_code
-        == 404
-    )
+    assert uninstrumented.status_code == 404
+    assert "not instrumented" in uninstrumented.json()["detail"].lower()
+
+    unknown_cell = client.get("/api/lineage", params={**cell, "run_id": run_id, "row": "9999"})
+    assert unknown_cell.status_code == 404
+    assert "unknown cell" in unknown_cell.json()["detail"].lower()
 
 
 def test_templates_unknown_run_and_unknown_template_are_404(

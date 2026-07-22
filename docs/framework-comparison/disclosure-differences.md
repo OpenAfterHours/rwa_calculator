@@ -30,7 +30,7 @@ summarises the key differences. For complete column and row definitions, see the
 | **Naming prefix** | UK (e.g., UK CR6) | UKB (e.g., UKB CR6) |
 | **OV1 equity rows** | Row UK 4a (equity simple RW) | Rows 11-14 (IRB transitional, CIU fund approaches) |
 | **OV1 output floor** | Not applicable | Row 26 (floor multiplier), row 27 (floor adjustment) |
-| **OV1 pre-floor ratios** | Not applicable | Rows 4a, 5a-b, 6a-b, 7a-b |
+| **Pre-floor RWEA / ratios** | Not applicable | UKB **KM1** rows 4a / 5b / 6b / 7b — *not* OV1 (this calculator does not produce KM1) |
 | **CR5 risk weight columns** | 15 buckets (a-o) | 29 buckets (a-ac) — adds 14 granular weights |
 | **CR5 exposure breakdown** | Total only (p, q) | Total + on-BS/off-BS/avg CCF/total (ad-ae, ba-bd) |
 | **CR6 PD allocation** | Based on estimated PD | Based on **pre-input-floor** PDs |
@@ -60,10 +60,16 @@ summarises the key differences. For complete column and row definitions, see the
 | **Added** | 12 | Equity investments in funds — look-through approach |
 | **Added** | 13 | Equity investments in funds — mandate-based approach |
 | **Added** | 14 | Equity investments in funds — fall-back approach |
-| **Added** | 4a | Total RWEAs (pre-floor) |
-| **Added** | 5a-b, 6a-b, 7a-b | Pre-floor capital ratios (CET1, Tier 1, Total) |
-| **Added** | 26 | Output floor multiplier |
-| **Added** | 27 | Output floor adjustment |
+| **Added** | 26 | Output floor multiplier (Art. 92(5)) |
+| **Added** | 27 | Output floor adjustment (Art. 92) |
+
+!!! note "Pre-floor RWEA and pre-floor ratios are KM1 rows, not OV1"
+    UKB OV1 has **no** pre-floor RWEA row and **no** pre-floor capital-ratio
+    rows; its only floor lines are rows 26 and 27. The pre-floor total RWEA and
+    the pre-floor CET1 / Tier 1 / Total ratios are **UKB KM1** rows 4a / 5b / 6b
+    / 7b (PS1/26 Annex II). This calculator does not produce KM1, so they are a
+    documented gap. (Earlier versions grafted KM1's 4a / 5a-7b onto OV1; removed
+    in the R16 rectification.)
 
 ---
 
@@ -436,8 +442,9 @@ column (a). For the COREP C 08.05 / OF 08.05 column structure, see
 
 The disclosure template changes reflect four Basel 3.1 themes:
 
-1. **Output floor transparency** — OV1 gains rows 26-27 and pre-floor ratio rows,
-   giving market participants visibility into the floor's capital impact
+1. **Output floor transparency** — OV1 gains rows 26-27 (floor multiplier and
+   adjustment), giving market participants visibility into the floor's capital
+   impact; the pre-floor RWEA and pre-floor ratios sit in UKB KM1, not OV1
 
 2. **Granular real estate and specialised lending** — CR4, CR5, and CR7-A gain
    detailed sub-rows for regulatory RE categories (residential/commercial, cash-flow

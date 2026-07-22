@@ -1,41 +1,161 @@
 """
-Acceptance: report-cell lineage ties out to the REPORTED template cell.
+Acceptance: report-cell lineage ties out to the REPORTED template cells.
 
-Runs the rich reporting portfolio through the real pipeline, generates COREP
-C 07.00, and checks the lineage of its cells against the figures the generator
-actually reported.
+Runs the rich reporting portfolio through the real pipeline, generates the
+COREP / Pillar 3 bundles, and checks the lineage of their cells against the
+figures the generators actually reported.
 
-This is the feature's correctness anchor. Lineage reads the template's own
+This is the feature's correctness anchor. Lineage reads a template's own
 ``TemplateSpec`` and re-runs the same ``RowPredicate`` over the same prepared
 frame, so agreement is structural — but only a test against the GENERATED
 template can prove that the two post-``execute`` passes (all-null inert rows;
 the Annex II §1.3 "(-)" negation) are accounted for rather than quietly
 disagreed with.
 
-The sweep (``test_every_cell_of_the_sheet_is_consistent_with_its_kind``) is what
-makes the model trustworthy beyond the one showcased cell: it asserts EVERY
-row x column of the corporates sheet is consistent with its declared kind.
+The harness is per-template: ``test_sheet_lineage_ties_out_to_every_reported_cell``
+is parametrised over ``_TIEOUT_CASES`` and runs the FULL sweep for each
+instrumented ``(template, sheet)`` — cell value, kind consistency, predicate
+satisfaction and sign-aware reconciliation across the whole sheet. A new
+instrumented template (R20-R26) earns its tie-out by ADDING A TUPLE to
+``_TIEOUT_CASES``, not by cloning this file. The C 07.00 tests below the sweep
+pin that template's specific regulatory knowledge (the RWEA metric, the scope
+wording, the deduction sign, the never-produced vs measured-zero distinction).
 
 References:
-- docs/plans/report-cell-lineage.md §4.5 (B3)
+- docs/plans/report-cell-lineage.md §4.5 (B3 — the fidelity tie-out)
 """
 
 from __future__ import annotations
 
 from datetime import date
 
+import polars as pl
 import pytest
+from tests.fixtures.reporting_ccr_portfolio import build_reporting_ccr_bundle
 from tests.fixtures.reporting_portfolio import build_reporting_bundle
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
-from rwa_calc.reporting import lineage
+from rwa_calc.reporting import catalog, lineage
 from rwa_calc.reporting.corep.generator import COREPGenerator
+from rwa_calc.reporting.pillar3.generator import Pillar3Generator
 
 _SHEET = "corporate"
 _RTOL = 1e-9
 _ATOL = 1e-6
+
+# The instrumented (template, sheet, framework) triples under fidelity tie-out.
+# Adding a template to LINEAGE_PLANS (R20-R26) = appending its (template_id,
+# sheet, framework) here; the parametrised sweep then covers it with no new test
+# code. The framework selects which run the case ties out against (``by_framework``)
+# — CRR for the templates a CRR book produces, BASEL_3_1 for the Basel-3.1-only
+# CMS pair (CMS1/CMS2 are None under CRR, so they have nothing to tie out there).
+_TIEOUT_CASES: list[tuple[str, str | None, str]] = [
+    ("c07_00", "corporate", "CRR"),
+    # R20 — four single-frame Pillar 3 templates (sheet = None per the harness's
+    # single-frame convention). cr8 is the first PriorPeriod template through the
+    # sweep (row 1 prior_period, row 8 formula — neither row-backed).
+    ("cr4", None, "CRR"),
+    ("cr6a", None, "CRR"),
+    ("cr7", None, "CRR"),
+    ("cr8", None, "CRR"),
+    # R21 — four more single-frame Pillar 3 templates. ov1 is the first template
+    # with SideContext (row 27 OF-ADJ) and FirstNonNull (row 26 multiplier) cells
+    # through the sweep. cms1/cms2 are Basel 3.1 only, so they tie out against the
+    # B31 run.
+    ("ov1", None, "CRR"),
+    ("cr5", None, "CRR"),
+    ("cms1", None, "BASEL_3_1"),
+    ("cms2", None, "BASEL_3_1"),
+    # R22 — four more templates, and the FIRST multi-sheet instrumentations since
+    # C 07.00. c08_04 (per exposure class) is the CR8-clone flow: its opening
+    # (row 0010) / residual (row 0080) rows inherit R20's prior-period refusal.
+    # cr7a (per origin approach) is a clean per-sheet extraction. c08_07 (single
+    # frame, full population) and of_02_01 (single frame, Basel 3.1 only — ties
+    # out against the B31 run, like the CMS pair) carry post-execute passes the
+    # reported generator re-applies.
+    ("c08_04", "corporate", "CRR"),
+    ("cr7a", "advanced_irb", "CRR"),
+    ("c08_07", None, "CRR"),
+    ("of_02_01", None, "BASEL_3_1"),
+    # R23 — the two remaining C 08 instrument templates (per exposure class). Both
+    # tie out on the corporate_sme sheet, where col 0256 (the CRR SME
+    # supporting-factor adjustment) fires NON-ZERO and negative — so the sweep
+    # proves sign-aware reconciliation on a LIVE negated, row-backed cell. c08_02's
+    # sheet also carries the String label col 0005, which the value-column
+    # enumeration below skips (it is not a numeric report cell).
+    ("c08_01", "corporate_sme", "CRR"),
+    ("c08_02", "corporate_sme", "CRR"),
+    # R24 — the three C 08 instrument templates. c08_03/05 share the sparse
+    # PD-range row axis (per exposure class); on the loans-only portfolio c08_03's
+    # on/off-BS whole-bucket fallback fires for col 0020 but is a value no-op (the
+    # off-BS split and the fallback both sum to 0.0), so the sweep still ties out.
+    # c08_06 is per SL TYPE (project_finance — the only SL type the fixtures
+    # produce): its empty non-Total category rows carry a FIXED display risk weight
+    # in col 0070, which the per-sheet spec leaves UNBOUND so the sweep sees a
+    # constant-policy cell, not a WeightedAvg with no legs.
+    ("c08_03", "corporate", "CRR"),
+    ("c08_05", "corporate", "CRR"),
+    ("c08_06", "project_finance", "CRR"),
+    # R25 — the two C 09 geo templates (per country) and Pillar 3 CR6 (per obligor
+    # class). c09_01/c09_02 tie out on the representative TOTAL sheet, and they are
+    # the FIRST C 09-family sign-aware sweeps: c09_01 col 0081 and c09_02 col 0121
+    # fire NON-ZERO and negative, so the sweep proves the {0081,0082,0121,0122}
+    # negation reconciliation on live, row-backed deduction cells. c09_01 also
+    # exercises the two-basis row model (a PRIMARY cell drills the applied class,
+    # the 0020 memo the original class). The B31 c09_01 TOTAL case sweeps R7's
+    # real-estate rows (0090/0091 populated) — its supporting-factor columns are
+    # absent under Basel 3.1, so it exercises the RE keying rather than the sign
+    # convention. cr6 ties out on corporate over the sparse PD-range rows (col a is
+    # the String label the value-column enumeration below skips).
+    ("c09_01", "TOTAL", "CRR"),
+    ("c09_02", "TOTAL", "CRR"),
+    ("c09_01", "TOTAL", "BASEL_3_1"),
+    ("cr6", "corporate", "CRR"),
+    # R26 — the FINAL instrumentation: the CR9 family (per approach x leaf class,
+    # Basel 3.1 only) and CR10 (per subtemplate). cr9 ties out on two COMPOUND sheet
+    # keys the B31 portfolio produces (an A-IRB and an F-IRB block) — CR9 has NO Sum
+    # cell, so the sweep proves predicate-match-count reconciliation on the
+    # count/mean/formula cells (never a signed total). cr10 ties out on the CRR
+    # project_finance slotting sheet and the CRR equity CR10.5 sheet: their fixed col
+    # c (and equity's col b) are UNBOUND, so the sweep sees constant-policy cells
+    # whose display value is read from the reported frame, while cols a/b/d/e/f
+    # reconcile as Sum/SafeSum. CR9.1 is EMPTY on the real portfolio (no
+    # ecai_pd_mapping), so it has no tie-out — a seeded unit pin guards it instead.
+    ("cr9", "advanced_irb - corporate_sme", "BASEL_3_1"),
+    ("cr9", "foundation_irb - corporate_other_non_sme", "BASEL_3_1"),
+    ("cr10", "project_finance", "CRR"),
+    ("cr10", "equity", "CRR"),
+    # R27a — the first COUNTERPARTY-CREDIT-RISK templates instrumented (C 34.01 /
+    # C 34.08, single frame). The rich reporting portfolio has NO derivatives, so
+    # these tie out against a SEPARATE CCR source (the ``build_reporting_ccr_bundle``
+    # oracle that produces the C 34 goldens) under the "CCR" framework key. c34_01
+    # sums the SA-CCR netting-set population (both derivative legs); c34_08's row
+    # 0010 (QCCP) reconciles to the QCCP leg while rows 0020/0030 are populated-zero
+    # (the R5 CCP restriction drops the bilateral leg). C 34.04 (CVA) has no
+    # producing fixture here, so it is pinned by a seeded lineage unit pin instead.
+    ("c34_01", None, "CCR"),
+    ("c34_08", None, "CCR"),
+    # R27b — the FIRST multi-sheet counterparty-credit-risk template. C 34.02
+    # (SA-CCR EAD per netting set) ties out on the QCCP netting set the CCR oracle
+    # produces (``NS_CCR_QCCP``); its single row 0010 sums that netting set's
+    # ead_final, so the sweep reconciles a per-sheet summed cell to the reported
+    # figure (the bilateral ``NS_CCR_BILAT`` sheet exercises the same path).
+    ("c34_02", "NS_CCR_QCCP", "CCR"),
+    # R27c — the Pillar 3 counterparty-credit-risk family (single frame), the
+    # FINAL declarative conversion of the estate. All three tie out against the CCR
+    # derivatives oracle: ccr1 sums the SA-CCR population (col a EAD over both
+    # legs, col b the non-QCCP default-risk RWEA over the bilateral leg); ccr3
+    # allocates that EAD across the risk-weight bands (the QCCP leg in the 2% band,
+    # the bilateral leg in its CQS band, the rest null); ccr8 reconciles the QCCP
+    # row to the QCCP leg while the non-QCCP row is populated-null (no non-QCCP CCP
+    # leg — the R5 CCP restriction). CCR2 (CVA) has no producing fixture here, so
+    # it is pinned by a seeded lineage unit pin instead (the c34_04 precedent).
+    ("ccr1", None, "CCR"),
+    ("ccr3", None, "CCR"),
+    ("ccr8", None, "CCR"),
+]
 
 
 class _Source:
@@ -60,13 +180,211 @@ def source() -> _Source:
 
 
 @pytest.fixture(scope="module")
-def c07(source: _Source):  # noqa: ANN201 - dict[str, pl.DataFrame]
-    """The generated C 07.00 bundle — the figures actually reported."""
-    return COREPGenerator().generate(source).c07_00
+def bundles(source: _Source):  # noqa: ANN201 - (COREPTemplateBundle, Pillar3TemplateBundle)
+    """The generated COREP + Pillar 3 bundles — the figures actually reported.
+
+    Resolved through ``reporting.catalog`` so a tie-out case names any template
+    (COREP or Pillar 3) by its id, without this harness knowing the bundle
+    field shape.
+    """
+    corep = COREPGenerator().generate(source)
+    pillar3 = Pillar3Generator().generate_from_lazyframe(
+        source.scan_results(), framework=source.framework
+    )
+    return corep, pillar3
+
+
+@pytest.fixture(scope="module")
+def b31_source() -> _Source:
+    """The reporting portfolio run through the real Basel 3.1 pipeline.
+
+    The Basel-3.1-only CMS templates (CMS1/CMS2) are None under CRR, so they
+    tie out against this run. Mirrors the golden harness's B31 config
+    (``test_reporting_golden.py::_b31_config``): the 2027 effective date and
+    ``enforce_retail_granularity=False`` so the compact oracle portfolio keeps
+    its retail exposures instead of reclassifying them all to corporate.
+    """
+    config = CalculationConfig.basel_3_1(
+        reporting_date=date(2027, 6, 1),
+        permission_mode=PermissionMode.IRB,
+        enforce_retail_granularity=False,
+    )
+    result = PipelineOrchestrator().run_with_data(build_reporting_bundle(), config)
+    return _Source(result.results, "BASEL_3_1")
+
+
+@pytest.fixture(scope="module")
+def b31_bundles(b31_source: _Source):  # noqa: ANN201 - (COREPTemplateBundle, Pillar3TemplateBundle)
+    """The generated COREP + Pillar 3 bundles for the Basel 3.1 run."""
+    corep = COREPGenerator().generate(b31_source)
+    pillar3 = Pillar3Generator().generate_from_lazyframe(
+        b31_source.scan_results(), framework=b31_source.framework
+    )
+    return corep, pillar3
+
+
+@pytest.fixture(scope="module")
+def ccr_source() -> _Source:
+    """The CCR reporting portfolio (SA-CCR derivatives) run through CRR.
+
+    The rich reporting portfolio has NO derivatives, so the counterparty-
+    credit-risk C 34 templates (R27a) tie out against this separate oracle — the
+    same ``build_reporting_ccr_bundle`` / config that produces the C 34 goldens
+    (``test_reporting_ccr_golden.py``: 2025-12-31, STANDARDISED).
+    """
+    config = CalculationConfig.crr(
+        reporting_date=date(2025, 12, 31), permission_mode=PermissionMode.STANDARDISED
+    )
+    result = PipelineOrchestrator().run_with_data(build_reporting_ccr_bundle(), config)
+    return _Source(result.results, "CRR")
+
+
+@pytest.fixture(scope="module")
+def ccr_bundles(ccr_source: _Source):  # noqa: ANN201 - (COREPTemplateBundle, Pillar3TemplateBundle)
+    """The generated COREP + Pillar 3 bundles for the CCR portfolio run."""
+    corep = COREPGenerator().generate(ccr_source)
+    pillar3 = Pillar3Generator().generate_from_lazyframe(
+        ccr_source.scan_results(), framework=ccr_source.framework
+    )
+    return corep, pillar3
+
+
+@pytest.fixture(scope="module")
+def by_framework(source, bundles, b31_source, b31_bundles, ccr_source, ccr_bundles):  # noqa: ANN001, ANN201
+    """Map each tie-out case's framework to its ``(source, bundles)`` pair.
+
+    Lets one parametrised sweep run a CRR case against the CRR run, a
+    Basel-3.1-only case (CMS1/CMS2) against the B31 run, and the
+    counterparty-credit-risk C 34 cases against the CCR portfolio (the "CCR" key
+    — a CRR run of the derivatives oracle), without any run leaking into another's
+    cases.
+    """
+    return {
+        "CRR": (source, bundles),
+        "BASEL_3_1": (b31_source, b31_bundles),
+        "CCR": (ccr_source, ccr_bundles),
+    }
+
+
+@pytest.fixture(scope="module")
+def c07(bundles):  # noqa: ANN001, ANN201 - dict[str, pl.DataFrame]
+    """The generated C 07.00 bundle (reused from the shared bundles fixture)."""
+    corep, _pillar3 = bundles
+    return corep.c07_00
 
 
 # =============================================================================
-# The showcased cell: C 07.00 / corporate / row 0010 / col 0220 (RWEA)
+# The per-template sweep — every cell of every instrumented sheet
+# =============================================================================
+
+
+@pytest.mark.parametrize(("template_id", "sheet", "framework"), _TIEOUT_CASES)
+def test_sheet_lineage_ties_out_to_every_reported_cell(  # noqa: C901 - one sweep, several honesty checks
+    by_framework,  # noqa: ANN001
+    template_id: str,
+    sheet: str | None,
+    framework: str,
+) -> None:
+    # Arrange — the reported frame (what the user saw) and one resolver for the
+    # whole sheet (one plan build, one generation), on the case's framework run.
+    source, bundles = by_framework[framework]
+    corep, pillar3 = bundles
+    view = catalog.template_sheet(corep, pillar3, template_id, sheet)
+    assert view is not None, f"{template_id}/{sheet}: no reported frame"
+    reported = view.frame
+    resolver = lineage.sheet_lineage(source, template_id, sheet)
+    assert resolver is not None, f"{template_id}: not instrumented"
+
+    # Value cells only: skip the two structural columns AND any String-typed
+    # column. A data-driven label like C 08.02's col 0005 (the grade/PD-band name)
+    # is injected post-execute and carries no CellSpec — it is not a numeric report
+    # cell, so it has no lineage query; the kernel/facts treat 0005 as text.
+    value_cols = [
+        col
+        for col, dtype in reported.schema.items()
+        if col not in ("row_ref", "row_name") and dtype != pl.String
+    ]
+
+    checked = 0
+    for record in reported.iter_rows(named=True):
+        row_ref = record["row_ref"]
+        for col_ref in value_cols:
+            value = record[col_ref]
+            query = resolver.query(row_ref, col_ref)
+            assert query is not None, f"{template_id}: no query for {row_ref}/{col_ref}"
+            checked += 1
+
+            # 0. A cell the resolver cannot reproduce without contradicting the
+            #    screen is a CLEAN REFUSAL (cell() is None): a prior-period-derived
+            #    cell (CR8 row 1 opening / row 8 residual — the current-period
+            #    ledger cannot carry it) or a cell reading an out-of-frame
+            #    SideContext the no-side lineage plan does not thread (OV1 row 27
+            #    OF-ADJ). Either way the drill-down declines rather than reporting
+            #    a null against a real reported figure.
+            if query.derives_from_prior_period or query.reads_unavailable_side_value:
+                assert resolver.cell(row_ref, col_ref, limit=1000) is None, (
+                    f"{template_id} {row_ref}/{col_ref} must refuse "
+                    "(prior-period-derived or unavailable side value)"
+                )
+                continue
+
+            result = resolver.cell(row_ref, col_ref, limit=1000)
+            assert result is not None, f"{template_id}: no lineage for {row_ref}/{col_ref}"
+
+            # 1. The reported value is echoed verbatim (never recomputed).
+            if value is None:
+                assert result.cell_value is None, f"{template_id} {row_ref}/{col_ref}"
+            else:
+                assert result.cell_value == pytest.approx(value, rel=_RTOL, abs=_ATOL), (
+                    f"{template_id} {row_ref}/{col_ref}"
+                )
+
+            # 2. Only row-backed cells have contributing legs.
+            if query.kind != "rows":
+                assert result.total_rows == 0, f"{template_id} {row_ref}/{col_ref} is {query.kind}"
+                assert result.rows.height == 0
+
+            # 3. A row-backed cell's returned legs ARE its predicate's rows — the
+            #    drill-down runs the very predicate the generator ran.
+            if query.kind == "rows":
+                assert result.total_rows == _predicate_match_count(resolver, row_ref, col_ref), (
+                    f"{template_id} {row_ref}/{col_ref} rows != predicate matches"
+                )
+
+            # 4. A row-backed cell with NO legs can only be null (inert/empty row)
+            #    or zero (populated row, narrower predicate matched nothing).
+            if query.kind == "rows" and result.total_rows == 0:
+                assert value is None or value == 0.0, (
+                    f"{template_id} {row_ref}/{col_ref} has no legs but reports {value}"
+                )
+
+            # 5. A summed, populated cell reconciles to the reported figure modulo
+            #    the recorded Annex II §1.3 sign convention.
+            if (
+                query.kind == "rows"
+                and query.metric == "sum"
+                and result.total_rows > 0
+                and result.contribution_total is not None
+                and value is not None
+            ):
+                expected = -value if query.sign == "negated" else value
+                assert result.contribution_total == pytest.approx(expected, rel=_RTOL, abs=_ATOL), (
+                    f"{template_id} {row_ref}/{col_ref} does not reconcile"
+                )
+
+    # Every value cell was resolved (the small single-frame Pillar 3 templates —
+    # cr8 is 9 cells — sit well under C 07.00's ~1000; the per-cell
+    # `assert result is not None` above is the real coverage guard). The count is
+    # over the numeric value columns only (C 08.02's String label col 0005 is not
+    # an addressable report cell).
+    assert checked == reported.height * len(value_cols), (
+        f"{template_id}: the sweep did not cover every cell of the sheet"
+    )
+    assert checked > 0, f"{template_id}: the sweep did not cover the sheet"
+
+
+# =============================================================================
+# C 07.00 — the showcased cell's regulatory specifics (kept identical in substance)
 # =============================================================================
 
 
@@ -134,88 +452,64 @@ def test_deduction_columns_declare_the_annex_ii_sign_convention(source: _Source)
 
 
 def test_a_cell_whose_sources_are_never_produced_says_so(source: _Source, c07) -> None:  # noqa: ANN001
-    # Arrange — col 0030 sums the SCRA/GCRA provision amounts, which the engine
-    # does not produce onto the ledger (a Phase 7 F6 permanently-null source).
-    reported = c07[_SHEET].filter(_row("0010"))["0030"][0]
+    # Arrange — col 0020 sums own_funds_deduction_amount, which the engine does
+    # not produce onto the ledger (an unproduced source; col 0030 used to be the
+    # showcase here, but R9 rebound it to the sealed provision carrier).
+    reported = c07[_SHEET].filter(_row("0010"))["0020"][0]
 
     # Act
-    result = lineage.drilldown(source, "c07_00", "0010", "0030", sheet=_SHEET)
+    result = lineage.drilldown(source, "c07_00", "0010", "0020", sheet=_SHEET)
 
-    # Assert — the cell reports 0.0 under the COREP zero policy, but that zero is
-    # NOT a measured zero. The drill-down must distinguish "we computed zero"
-    # from "we cannot compute this": no source column reaches the ledger, so
-    # there is no contribution to total.
+    # Assert — the cell reports a structural null (its source column never
+    # reaches the ledger), and the drill-down agrees: "we cannot compute this"
+    # rather than a measured value — no source column, so no contribution.
     assert result is not None
-    assert reported == 0.0
+    assert reported is None
     assert result.query.missing_columns == result.query.metric_columns
     assert result.query.is_source_backed is False
     assert result.contribution_total is None
 
 
+def test_provisions_cell_is_source_backed_by_the_sealed_carrier(source: _Source, c07) -> None:  # noqa: ANN001
+    # Arrange — R9 rebound col 0030 ("(-) Value adjustments and provisions") from
+    # the never-sealed SCRA/GCRA sum to the sealed SA Art. 111(2) deducted
+    # provision (via the module-derived c07_provision carrier). The portfolio
+    # carries no provisions, so the cell is 0.0 — but now a MEASURED zero.
+    reported = c07[_SHEET].filter(_row("0010"))["0030"][0]
+
+    # Act
+    result = lineage.drilldown(source, "c07_00", "0010", "0030", sheet=_SHEET)
+
+    # Assert — a produced source reaches the ledger, so the zero is measured
+    # (contribution_total is 0.0, not None) and the "(-)" sign is declared.
+    assert result is not None
+    assert reported == 0.0
+    assert result.query.missing_columns == ()
+    assert result.query.is_source_backed is True
+    assert result.query.sign == "negated"
+    assert result.contribution_total == pytest.approx(0.0, abs=_ATOL)
+
+
 # =============================================================================
-# The sweep — every cell of the sheet, not just the showcased one
+# Helpers
 # =============================================================================
 
 
-def test_every_cell_of_the_sheet_is_consistent_with_its_kind(source: _Source, c07) -> None:  # noqa: ANN001, C901
-    # Arrange
-    sheet = c07[_SHEET]
-    reported = {
-        (row["row_ref"], col): row[col]
-        for row in sheet.iter_rows(named=True)
-        for col in sheet.columns
-        if col not in ("row_ref", "row_name")
-    }
+def _predicate_match_count(resolver: lineage.SheetLineage, row_ref: str, col_ref: str) -> int:
+    """Independently re-apply the cell's predicate chain to the plan frame.
 
-    # Act / Assert — one resolver for the whole sheet (one plan, one generation).
-    resolver = lineage.sheet_lineage(source, "c07_00", _SHEET)
-    assert resolver is not None
-    checked = 0
-    for (row_ref, col_ref), value in reported.items():
-        result = resolver.cell(row_ref, col_ref)
-        assert result is not None, f"no lineage for {row_ref}/{col_ref}"
-        query = result.query
-        checked += 1
-
-        # 1. The reported value is always echoed verbatim.
-        if value is None:
-            assert result.cell_value is None, f"{row_ref}/{col_ref}"
-        else:
-            assert result.cell_value == pytest.approx(value, rel=_RTOL, abs=_ATOL)
-
-        # 2. Only row-backed cells have contributing legs.
-        if query.kind != "rows":
-            assert result.total_rows == 0, f"{row_ref}/{col_ref} is {query.kind} but has rows"
-            assert result.rows.height == 0
-
-        # 3. A row-backed cell with NO contributing legs can never report a
-        #    non-zero figure. It is either null (the row itself is inert/empty —
-        #    the _null_empty_rows contract) or zero (the row is populated but
-        #    this cell's own narrower predicate matched nothing, so the COREP
-        #    zero policy applies). Both are legitimate; a number is not.
-        if query.kind == "rows" and result.total_rows == 0:
-            assert value is None or value == 0.0, (
-                f"{row_ref}/{col_ref} has no contributing legs but reports {value}"
-            )
-
-        # 4. A summed, populated cell reconciles to the reported figure (modulo
-        #    the recorded Annex II sign convention).
-        if (
-            query.kind == "rows"
-            and query.metric == "sum"
-            and result.total_rows > 0
-            and result.contribution_total is not None
-            and value is not None
-        ):
-            expected = -value if query.sign == "negated" else value
-            assert result.contribution_total == pytest.approx(expected, rel=_RTOL, abs=_ATOL), (
-                f"{row_ref}/{col_ref} does not reconcile"
-            )
-
-    assert checked > 100, "the sweep did not cover the sheet"
+    Mirrors ``lineage._matching_rows`` using only the public ``RowPredicate.apply``,
+    so the sweep's row count is checked against a second evaluation of the SAME
+    predicate the generator ran — not the drill-down's own internal count.
+    """
+    plan = resolver._plan  # noqa: SLF001 - the sweep verifies the plan the resolver holds
+    cell = plan.spec.cells.get((row_ref, col_ref))
+    frame = plan.frame
+    for predicate in (plan.spec.predicate, cell.predicate if cell is not None else None):
+        if predicate is not None:
+            frame = predicate.apply(frame)
+    return frame.height
 
 
 def _row(ref: str):  # noqa: ANN202 - pl.Expr
-    import polars as pl
-
     return pl.col("row_ref") == ref

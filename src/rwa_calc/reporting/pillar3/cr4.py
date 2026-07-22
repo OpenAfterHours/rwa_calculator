@@ -11,7 +11,14 @@ docs/plans/phase7-declarative-reporting.md §6):
 - The template narrows to the ORIGIN standardised population
   (``reporting_approach_origin`` — the same membership as the retired
   ``approach_applied`` filter; a post-substitution APPROACH retarget remains
-  an open F-decision, matching OV1).
+  an open F-decision, matching OV1) MINUS the non-credit-risk synthetic legs.
+  CR4 is SA CREDIT risk excluding counterparty credit risk and settlement
+  risk (disclosed in CCR1-CCR8), so ``sa_scope.sa_credit_risk_population``
+  drops the SA-CCR / FCCM-SFT netting sets, default-fund and failed-trade
+  legs BEFORE execution — over ALL columns, so a row's RWEA (col e) never
+  covers exposure the on/off-balance-sheet columns (a-d) omit — and
+  reclassifies the ``facility_undrawn`` commitment leg to off-balance-sheet.
+  See ``pillar3/sa_scope.py`` for the recorded population/BS decision.
 - Columns a/b ("exposures before CF/CCF and CRM": gross drawn+interest /
   nominal+undrawn) key each class row on ``reporting_class_origin`` — the
   obligor's applied Art. 112 class, the COREP C 07.00 column 0010 "original
@@ -28,6 +35,10 @@ docs/plans/phase7-declarative-reporting.md §6):
 - Bound cells a-e report 0.0 for an empty subset (per-cell zero override on
   the Pillar 3 null template); density f is a Formula e/(c+d) so its
   denominator is exactly the on- plus off-BS post amounts, null when zero.
+
+Lineage-instrumented (R20): ``cr4_plans`` exposes the single (no sheet axis)
+execution plan — its frame is the SA credit-risk population — so
+``reporting.lineage`` can drill into a reported cell.
 
 References:
 - CRR Art. 444(e); PRA PS1/26 Annex XX (UK/UKB CR4 instructions)
@@ -50,7 +61,10 @@ from rwa_calc.reporting.cellspec import (
     TemplateSpec,
     execute,
 )
+from rwa_calc.reporting.metadata import ReportingContext
+from rwa_calc.reporting.pillar3.sa_scope import sa_credit_risk_population
 from rwa_calc.reporting.pillar3.templates import get_cr4_columns, get_cr4_rows
+from rwa_calc.reporting.plans import SheetPlan
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -58,6 +72,10 @@ if TYPE_CHECKING:
     import polars as pl
 
     from rwa_calc.reporting.pillar3.templates import P3Row
+
+# Single-frame lineage key: CR4 has no sheet axis, so its one plan keys under a
+# canonical name (see reporting.plans / _resolve_sheet_key single_frame path).
+_SHEET_KEY = "cr4"
 
 
 def _density(cells: Mapping[str, float | None], _prior: bool) -> float | None:
@@ -75,12 +93,12 @@ def _row_cells(row: P3Row) -> dict[str, CellSpec] | None:
     classes = row.exposure_classes  # () on the total row -> no class term
     return {
         "a": CellSpec(
-            SafeSum(("drawn_amount", "interest")),
+            SafeSum(("reporting_gross_drawn", "reporting_gross_interest")),
             predicate=RowPredicate(classes_origin=classes, on_balance_sheet=True),
             empty_cell="zero",
         ),
         "b": CellSpec(
-            SafeSum(("nominal_amount", "undrawn_amount")),
+            SafeSum(("reporting_gross_nominal", "reporting_gross_undrawn")),
             predicate=RowPredicate(classes_origin=classes, on_balance_sheet=False),
             empty_cell="zero",
         ),
@@ -135,21 +153,54 @@ _CR4_SPECS: dict[str, TemplateSpec] = {
 }
 
 
+def cr4_plans(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, SheetPlan]:
+    """Build the single CR4 execution plan (the lineage seam).
+
+    CR4 has no sheet axis, so the one plan keys under the single-frame
+    canonical key. The plan's frame is the SA credit-risk population
+    (``sa_scope.sa_credit_risk_population``) — the full ledger with the
+    counterparty-credit-risk and settlement synthetic legs dropped and the
+    ``facility_undrawn`` commitment reclassified off-balance-sheet — so every
+    column reports over one population; the spec's origin-standardised
+    ``predicate`` narrows it further per cell, exactly as ``execute`` applies it.
+    Preserves the imperative generator's error contract: a missing ``ead_final``
+    or RWA column records the CR4 error and yields no plan. There is no
+    post-execute pass, so ``negative_cols`` is empty.
+    """
+    if "ead_final" not in cols or not ({"rwa_final", "rwa"} & cols):
+        errors.append("CR4: missing EAD or RWA column")
+        return {}
+    spec = _CR4_SPECS.get(framework) or build_cr4_spec(framework)
+    frame = sa_credit_risk_population(results, cols).collect()
+    return {
+        _SHEET_KEY: SheetPlan(
+            spec=spec,
+            frame=frame,
+            ctx=ReportingContext(),
+            negative_cols=frozenset(),
+        )
+    }
+
+
 def generate_cr4(
     results: pl.LazyFrame,
     cols: set[str],
     framework: str,
     errors: list[str],
-) -> pl.DataFrame | None:
-    """Execute CR4 over the full sealed ledger.
+) -> dict[str, pl.DataFrame]:
+    """Execute CR4 over the SA credit-risk population (keyed like ``cr4_plans``).
 
-    Preserves the imperative generator's error contract: a missing
-    ``ead_final`` or RWA column (impossible on the sealed ledger; reachable
-    via direct invocation with synthetic frames) records the CR4 error and
-    yields no template.
+    The thin consumer of ``cr4_plans``: it executes each plan under the same
+    key, so a cell's reported value and its spec agree. CR4 has no post-execute
+    pass, so this is a plain ``execute``. The dispatch router unwraps the
+    single-frame dict for the ``Pillar3TemplateBundle.cr4`` field.
     """
-    if "ead_final" not in cols or not ({"rwa_final", "rwa"} & cols):
-        errors.append("CR4: missing EAD or RWA column")
-        return None
-    spec = _CR4_SPECS.get(framework) or build_cr4_spec(framework)
-    return execute(spec, results)
+    return {
+        key: execute(plan.spec, plan.frame, plan.ctx)
+        for key, plan in cr4_plans(results, cols, framework, errors).items()
+    }

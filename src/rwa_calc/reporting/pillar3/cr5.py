@@ -9,7 +9,15 @@ Cell semantics (the recorded F3 class-basis decision —
 docs/plans/phase7-declarative-reporting.md §6):
 
 - The template narrows to the ORIGIN standardised population
-  (``reporting_approach_origin``, matching CR4/OV1).
+  (``reporting_approach_origin``, matching CR4/OV1) MINUS the non-credit-risk
+  synthetic legs. CR5 is SA CREDIT risk excluding counterparty credit risk
+  and settlement risk (disclosed in CCR1-CCR8), so
+  ``sa_scope.sa_credit_risk_population`` drops the SA-CCR / FCCM-SFT netting
+  sets, default-fund and failed-trade legs BEFORE execution — over ALL columns
+  (bands, totals, RWEA and the ba/bb on/off-balance-sheet split) — and
+  reclassifies the ``facility_undrawn`` commitment leg to off-balance-sheet so
+  cols bb/bc cover the same population as the band/total columns. See
+  ``pillar3/sa_scope.py`` for the recorded population/BS decision.
 - CR5 carries ONLY post-CF/post-CRM figures (there is no "before CRM" column
   anywhere in the template), so every class row keys uniformly on the
   post-substitution ``reporting_class`` (C 07.00 column 0200 basis: the
@@ -23,10 +31,23 @@ docs/plans/phase7-declarative-reporting.md §6):
   multiplier was not applied"); the RWEA elsewhere still reflects the
   multiplier.
 - "Other/Deducted" is the residual Formula max(0, Total - Σ bands).
-- "Of which: unrated" equals the Total — ``sa_cqs`` is never produced by the
-  engine and the seal strips undeclared columns, so the all-unrated fallback
-  IS the recorded behaviour (plan F6; an engine rating-presence column is
-  the recorded fix path).
+- "Of which: unrated" (CRR col q / B31 col ae) is the exposure value for which
+  no nominated-ECAI credit assessment is available — an INPUT availability fact
+  (CRR Art. 444(e); PS1/26 Annex XX / EBA Annex XX), NOT a function of whether
+  the class treatment uses the rating. It keys on the sealed own-external-rating
+  carrier ``external_cqs`` (null = the leg carries no own ECAI assessment) via
+  the derived ``cr5_unrated`` flag, applied uniformly across every class row.
+  Because ``external_cqs`` partitions each row's legs into rated / unrated, the
+  column satisfies unrated ≤ Total and rated + unrated == Total per row. Frames
+  lacking the carrier (synthetic unit frames) fall back to all-unrated, so the
+  pre-fix column == Total behaviour is preserved there (mirrors the C 08
+  unrated-corporate discriminator, ``reporting/corep/c08.py``).
+  Known limitation (recorded): a guarantee-substituted ``__G_`` leg keeps the
+  OBLIGOR's ``external_cqs`` (the hierarchy resolves own ratings only; the CRM
+  split never repoints it) while CR5 bands that leg in the GUARANTOR's class
+  row — so a rated-guarantor leg from an unrated obligor counts as unrated in
+  the guarantor's row. Repointing to the guarantor's rating is an out-of-scope
+  engine change; unrated ≤ Total still holds.
 - Basel 3.1 rows 9/9f/9g additionally match the physical 55%-LTV split legs
   by ``re_split_role`` ("secured"/"residual") — the Art. 124F/124L legs
   carry reclassified exposure classes, so the role limb (not the class
@@ -39,6 +60,11 @@ docs/plans/phase7-declarative-reporting.md §6):
 - Bound cells report 0.0 for an empty subset (per-cell zero override);
   unbound rows (11/13/14, B31 9a-9e) stay all-null; bc stays null when
   off-BS is empty or ``ccf`` is absent.
+
+Lineage-instrumented (R21): ``cr5_plans`` exposes the single (no sheet axis)
+execution plan — its frame is the SA credit-risk population with the derived
+``cr5_rw_bucket`` banding and ``cr5_unrated`` flag columns — so
+``reporting.lineage`` can drill into a reported cell.
 
 References:
 - CRR Art. 444(e); PRA PS1/26 Annex XX (UK/UKB CR5 instructions, incl. the
@@ -65,16 +91,23 @@ from rwa_calc.reporting.cellspec import (
     WeightedAvg,
     execute,
 )
+from rwa_calc.reporting.metadata import ReportingContext
+from rwa_calc.reporting.pillar3.sa_scope import sa_credit_risk_population
 from rwa_calc.reporting.pillar3.templates import (
     get_cr5_columns,
     get_cr5_risk_weights,
     get_cr5_rows,
 )
+from rwa_calc.reporting.plans import SheetPlan
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from rwa_calc.reporting.pillar3.templates import P3Row
+
+# Single-frame lineage key: CR5 has no sheet axis, so its one plan keys under a
+# canonical name (see reporting.plans / _resolve_sheet_key single_frame path).
+_SHEET_KEY = "cr5"
 
 # Band-match tolerance: ±0.5pp half-open window around each disclosed risk
 # weight (generator heritage — a blended RW like 0.2458 lands in the 25% band).
@@ -82,6 +115,11 @@ _BAND_TOL = 0.005
 
 # The derived banding column added by ``_with_rw_bucket``.
 _BUCKET_COL = "cr5_rw_bucket"
+
+# The derived rating-presence discriminator added by ``_with_unrated_flag``
+# (True = no own nominated-ECAI assessment → counts in the "of which: unrated"
+# column q / ae).
+_UNRATED_COL = "cr5_unrated"
 
 
 def _membership(row: P3Row) -> RowPredicate | None:
@@ -152,15 +190,17 @@ def build_cr5_spec(framework: str) -> TemplateSpec:
             Sum("reporting_ead"), predicate=member, empty_cell="zero"
         )
         cells[(row.ref, unrated_ref)] = CellSpec(
-            Sum("reporting_ead"), predicate=member, empty_cell="zero"
+            Sum("reporting_ead"),
+            predicate=replace(member, equals=(*member.equals, (_UNRATED_COL, True))),
+            empty_cell="zero",
         )
         if is_b31:
             cells[(row.ref, "ba")] = CellSpec(
-                SafeSum(("drawn_amount", "interest")),
+                SafeSum(("reporting_gross_drawn", "reporting_gross_interest")),
                 predicate=replace(member, on_balance_sheet=True),
             )
             cells[(row.ref, "bb")] = CellSpec(
-                SafeSum(("nominal_amount", "undrawn_amount")),
+                SafeSum(("reporting_gross_nominal", "reporting_gross_undrawn")),
                 predicate=replace(member, on_balance_sheet=False),
             )
             cells[(row.ref, "bc")] = CellSpec(
@@ -185,23 +225,60 @@ _CR5_SPECS: dict[str, TemplateSpec] = {
 }
 
 
+def cr5_plans(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, SheetPlan]:
+    """Build the single CR5 execution plan (the lineage seam).
+
+    CR5 has no sheet axis, so the one plan keys under the single-frame
+    canonical key. The plan's frame is the SA credit-risk population
+    (``sa_scope.sa_credit_risk_population`` — counterparty-credit-risk and
+    settlement legs dropped, the ``facility_undrawn`` commitment reclassified
+    off-balance-sheet) carrying the derived ``cr5_rw_bucket`` banding column
+    (the Art. 123B pre-multiplier override) and the ``cr5_unrated`` rating-
+    presence flag, so the band/unrated cell predicates key off columns the
+    frame holds; the spec's origin-standardised ``predicate`` narrows it
+    further per cell, exactly as ``execute`` applies it. Preserves the
+    imperative generator's error contract: a missing ``ead_final`` or
+    ``risk_weight`` column records the CR5 error and yields no plan. There is
+    no post-execute pass, so ``negative_cols`` is empty.
+    """
+    if "ead_final" not in cols or "risk_weight" not in cols:
+        errors.append("CR5: missing EAD or risk_weight column")
+        return {}
+    spec = _CR5_SPECS.get(framework) or build_cr5_spec(framework)
+    narrowed = sa_credit_risk_population(results, cols)
+    frame = _with_unrated_flag(_with_rw_bucket(narrowed, cols), cols).collect()
+    return {
+        _SHEET_KEY: SheetPlan(
+            spec=spec,
+            frame=frame,
+            ctx=ReportingContext(),
+            negative_cols=frozenset(),
+        )
+    }
+
+
 def generate_cr5(
     results: pl.LazyFrame,
     cols: set[str],
     framework: str,
     errors: list[str],
-) -> pl.DataFrame | None:
-    """Execute CR5 over the full sealed ledger (plus the derived bucket).
+) -> dict[str, pl.DataFrame]:
+    """Execute CR5 over the SA credit-risk population (keyed like ``cr5_plans``).
 
-    Preserves the imperative generator's error contract: a missing
-    ``ead_final`` or ``risk_weight`` column records the CR5 error and yields
-    no template.
+    The thin consumer of ``cr5_plans``: it executes each plan under the same
+    key, so a cell's reported value and its spec agree. CR5 has no post-execute
+    pass, so this is a plain ``execute``. The dispatch router unwraps the
+    single-frame dict for the ``Pillar3TemplateBundle.cr5`` field.
     """
-    if "ead_final" not in cols or "risk_weight" not in cols:
-        errors.append("CR5: missing EAD or risk_weight column")
-        return None
-    spec = _CR5_SPECS.get(framework) or build_cr5_spec(framework)
-    return execute(spec, _with_rw_bucket(results, cols))
+    return {
+        key: execute(plan.spec, plan.frame, plan.ctx)
+        for key, plan in cr5_plans(results, cols, framework, errors).items()
+    }
 
 
 def _with_rw_bucket(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:
@@ -222,3 +299,18 @@ def _with_rw_bucket(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:
     else:
         bucket = base
     return results.with_columns(bucket.alias(_BUCKET_COL))
+
+
+def _with_unrated_flag(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:
+    """Add the CR5 ``cr5_unrated`` discriminator (col q / ae).
+
+    CRR Art. 444(e) / PS1/26 Annex XX: "of which: unrated" is the exposure
+    value for which no nominated-ECAI credit assessment is available — an INPUT
+    availability fact keyed on the sealed own-external-rating carrier
+    ``external_cqs`` (null = the leg carries no own ECAI assessment). Frames
+    without the carrier (synthetic unit frames) fall back to all-unrated,
+    preserving the pre-fix column == Total behaviour there — mirrors the C 08
+    unrated-corporate discriminator (``reporting/corep/c08.py``).
+    """
+    unrated = pl.col("external_cqs").is_null() if "external_cqs" in cols else pl.lit(value=True)
+    return results.with_columns(unrated.alias(_UNRATED_COL))

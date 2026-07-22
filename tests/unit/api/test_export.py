@@ -296,6 +296,10 @@ class TestExportToParquet:
             "reporting_approach_origin",
             "reporting_ead",
             "reporting_rw",
+            "reporting_gross_drawn",
+            "reporting_gross_interest",
+            "reporting_gross_nominal",
+            "reporting_gross_undrawn",
             "reporting_on_balance_sheet",
         ]
 
@@ -976,10 +980,10 @@ class TestExportPillar3Facts:
 
 
 class TestExportToPillar3WithPriorPeriodAndRatios:
-    """export_to_pillar3 / export_pillar3_facts thread previous_period_results,
-    capital_ratios and output_floor_summary straight through to the generator
-    (rather than through the ResultsSource-only ``generate`` shortcut, which
-    cannot carry capital_ratios/output_floor_summary at all)."""
+    """export_to_pillar3 / export_pillar3_facts thread previous_period_results
+    and output_floor_summary straight through to the generator (rather than
+    through the ResultsSource-only ``generate`` shortcut, which cannot carry
+    output_floor_summary at all)."""
 
     def _cr8_opening(self, frame: pl.DataFrame) -> object:
         row = frame.filter(
@@ -1022,26 +1026,6 @@ class TestExportToPillar3WithPriorPeriodAndRatios:
         # Assert
         frame = pl.read_parquet(output_path)
         assert self._cr8_opening(frame) is None
-
-    @pytest.mark.skipif(not XLSXWRITER_AVAILABLE, reason="xlsxwriter not installed")
-    def test_capital_ratios_populate_ov1_pre_floor_rows(
-        self, minimal_response: CalculationResponse, tmp_path: Path
-    ) -> None:
-        # Arrange — rows 5a/5b/6a/6b/7a/7b (pre-floor capital ratios) are on the
-        # UKB variant of OV1 only; minimal_response is BASEL_3_1.
-        from rwa_calc.contracts.config import Pillar3CapitalRatioOverrides
-
-        ratios = Pillar3CapitalRatioOverrides(cet1_ratio_pre_floor=Decimal("0.135"))
-        output_path = tmp_path / "pillar3.xlsx"
-
-        # Act — export_to_pillar3 (the Excel path) with the override supplied.
-        ResultExporter().export_to_pillar3(minimal_response, output_path, capital_ratios=ratios)
-
-        # Assert — the OV1 pre-floor CET1 row (col "a" = "RWEAs (T)") is no
-        # longer null. The sheet carries readable column-name headers, not raw
-        # refs (see kernel.write_template_sheet).
-        df = pl.read_excel(output_path, sheet_name="UKB OV1")
-        assert df.filter(pl.col("Row code") == "5a")["RWEAs (T)"][0] is not None
 
     @pytest.mark.skipif(not XLSXWRITER_AVAILABLE, reason="xlsxwriter not installed")
     def test_output_floor_summary_populates_ov1_of_adj_row(

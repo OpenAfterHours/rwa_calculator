@@ -33,3 +33,35 @@ def pick(cols: set[str], *candidates: str) -> str | None:
         if c in cols:
             return c
     return None
+
+
+#: Raw gross-exposure carrier -> its floored ``reporting_gross_*`` twin. The
+#: aggregator seals the floored twins (raw amount clipped at 0) so a negative
+#: on-balance netting deposit (CRR Art. 195/219) never makes a gross-exposure
+#: template cell report a negative figure (CRR Art. 111 SA / Art. 166 IRB).
+_GROSS_CARRIER_MAP: dict[str, str] = {
+    "drawn_amount": "reporting_gross_drawn",
+    "interest": "reporting_gross_interest",
+    "nominal_amount": "reporting_gross_nominal",
+    "undrawn_amount": "reporting_gross_undrawn",
+}
+
+
+def gross_carrier(cols: set[str], raw_name: str) -> str:
+    """Resolve a raw gross carrier to its floored ``reporting_gross_*`` twin.
+
+    Prefers the sealed floored twin when present in *cols*, else falls back to
+    the raw column name (older synthetic unit frames that predate the seal).
+    A name with no floored twin is returned unchanged.
+    """
+    floored = _GROSS_CARRIER_MAP.get(raw_name)
+    return floored if floored is not None and floored in cols else raw_name
+
+
+def gross_carriers(cols: set[str], *raw_names: str) -> tuple[str, ...]:
+    """Resolve a group of raw gross carriers to their floored twins.
+
+    Order-preserving convenience over :func:`gross_carrier` for the
+    ``SafeSum`` gross-exposure cells (COREP C 07/C 08).
+    """
+    return tuple(gross_carrier(cols, name) for name in raw_names)

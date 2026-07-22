@@ -536,6 +536,23 @@ def _hierarchy_resolved_columns() -> dict[str, EdgeColumn]:
             null_meaning="False = not a core-UK-group intragroup exposure; the scope "
             "resolver sets True only on eligible individual-basis rows",
         ),
+        # CRR Art. 148/150 IRB roll-out-plan flag — a firm-owned INPUT threaded
+        # from the lending schemas (loan / facility / contingent) purely so it
+        # survives to the aggregator exit for COREP C 08.07 / OF 08.07 col 0040
+        # ("% subject to a roll-out plan"). Optional with a False default +
+        # Boolean null-fill so CCR/SFT synthetic rows and any diagonal-concat gap
+        # resolve to "not under a roll-out plan". Unlike intragroup_zero_rw_eligible
+        # this is a pure pass-through: no stage sets it and it changes no RWA/EAD.
+        "is_under_irb_rollout": EdgeColumn(
+            dtype=pl.Boolean,
+            required=False,
+            default=False,
+            fill_null_default=True,
+            citation="CRR Art. 148",
+            null_meaning="False = permanent partial use (not scheduled to move to IRB); "
+            "the firm sets True on an SA exposure covered by an approved Art. 148 "
+            "sequential-implementation (roll-out) plan",
+        ),
         "counterparty_reference": EdgeColumn(dtype=pl.String),
         "value_date": EdgeColumn(dtype=pl.Date),
         "maturity_date": EdgeColumn(dtype=pl.Date),
@@ -1322,6 +1339,17 @@ def _calc_output_common_columns() -> dict[str, EdgeColumn]:
         "is_sme": EdgeColumn(dtype=pl.Boolean),
         "is_uk_residential_mortgage_commitment": EdgeColumn(dtype=pl.Boolean),
         "is_under_construction": EdgeColumn(dtype=pl.Boolean),
+        # CRR Art. 148/150 IRB roll-out-plan flag (COREP C 08.07 / OF 08.07 col
+        # 0040). CONDITIONAL (inject=False): the lending schemas declare it, so the
+        # loader injects it and it rides the hierarchy -> classifier -> CRM ->
+        # branch chain to the aggregator on every run carrying lending rows; a
+        # hand-built branch/aggregator test frame that omits it is simply absent
+        # (the C 08.07 reader treats an absent column as "no roll-out", col 0040 =
+        # 0.0). Never injected here, so it forces no shape change on frames that
+        # never carried it.
+        "is_under_irb_rollout": EdgeColumn(
+            dtype=pl.Boolean, required=False, inject=False, citation="CRR Art. 148"
+        ),
         "lending_group_adjusted_exposure": EdgeColumn(dtype=pl.Float64),
         "lending_group_reference": EdgeColumn(dtype=pl.String),
         "lending_group_total_exposure": EdgeColumn(dtype=pl.Float64),
@@ -1608,6 +1636,16 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
         ),
         "reporting_rw": EdgeColumn(dtype=pl.Float64),
         "reporting_subclass": EdgeColumn(dtype=pl.String),
+        # Floored gross-exposure carriers: the raw drawn/interest/nominal/
+        # undrawn amounts clipped at 0 (CRR Art. 111 SA / Art. 166 IRB), so a
+        # negative on-balance netting deposit never makes a gross-exposure
+        # template cell (COREP C 07/C 08, Pillar 3 CR4/5/6/10) report a
+        # negative figure. Nulls stay null. Produced by the aggregator's
+        # _add_reporting_projection alongside the other reporting_* aliases.
+        "reporting_gross_drawn": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 111"),
+        "reporting_gross_interest": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 111"),
+        "reporting_gross_nominal": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 111"),
+        "reporting_gross_undrawn": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 111"),
         # Phase 7 decision F8 (recorded): the additive per-leg substitution
         # relief, ead_final x guarantee_benefit_rw (borrower-basis RW minus
         # substituted RW, snapshotted at the branch BEFORE supporting
@@ -1633,6 +1671,24 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
         "el_pre_adjustment": EdgeColumn(dtype=pl.Float64),
         "el_shortfall": EdgeColumn(dtype=pl.Float64),
         "equity_type": EdgeColumn(dtype=pl.String, required=False),
+        # The CRR equity method actually applied by the equity calculator
+        # (``sa`` = Art. 133, ``irb_simple`` = Art. 155(2), ``pd_lgd`` =
+        # Art. 155(3)). CONDITIONAL (inject=False): the equity path emits it, so
+        # it is present on any run carrying an equity book (null on non-equity
+        # legs via the diagonal concat) and simply absent from an equity-free
+        # run — never injected, so the eager-backed seal stays a shallow
+        # DataFrame.lazy() wrap (mirrors the other equity-run-only columns).
+        # Pillar 3 CR10.5 partitions the Art. 155(2) simple-RW disclosure on this
+        # (``reporting_approach_origin == "equity"`` AND ``equity_method ==
+        # "irb_simple"``), since the sealed ``reporting_method`` collapses every
+        # equity leg to ``EQUITY``.
+        "equity_method": EdgeColumn(
+            dtype=pl.String,
+            required=False,
+            inject=False,
+            citation="CRR Art. 155(2)",
+            null_meaning="null = non-equity leg; absent = equity-free run; never a method",
+        ),
         "expected_loss": EdgeColumn(dtype=pl.Float64),
         # Applied reporting class: SA rows carry the SME-managed-as-retail /
         # defaulted applied-treatment class; every other approach keeps

@@ -133,6 +133,11 @@ def _coerce_loans_to_unified(loans: pl.LazyFrame) -> pl.LazyFrame:
         # set by the scope resolver; without this pass-through the unified select
         # would drop it and the SA final-RW override would never see it.
         pl.col("intragroup_zero_rw_eligible"),
+        # CRR Art. 148/150 IRB roll-out-plan flag — declared on LOAN_SCHEMA, a pure
+        # pass-through carried to the aggregator exit for COREP C 08.07 col 0040;
+        # without this the unified select would drop it (dropping it silently
+        # collapses genuine roll-out exposures into permanent-partial-use).
+        pl.col("is_under_irb_rollout"),
         pl.col("counterparty_reference"),
         pl.col("value_date"),
         pl.col("maturity_date"),
@@ -241,6 +246,9 @@ def _coerce_contingents_to_unified(
             # CRR Art. 113(6) core-UK-group 0% RW carrier (see
             # _coerce_loans_to_unified). Declared on CONTINGENTS_SCHEMA.
             pl.col("intragroup_zero_rw_eligible"),
+            # CRR Art. 148/150 IRB roll-out-plan flag (see _coerce_loans_to_unified).
+            # Declared on CONTINGENTS_SCHEMA; carried for COREP C 08.07 col 0040.
+            pl.col("is_under_irb_rollout"),
             pl.col("counterparty_reference"),
             pl.col("value_date"),
             pl.col("maturity_date"),

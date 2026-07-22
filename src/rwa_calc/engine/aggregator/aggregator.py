@@ -135,7 +135,15 @@ class OutputAggregator:
         # Concat equity if present
         equity_results = None
         if equity_bundle and equity_bundle.results is not None:
-            equity_prepared = prepare_equity_results(equity_bundle.results)
+            # ``include_sa_equivalent`` mirrors the SA calculator's ``output_floor``
+            # gate on ``sa_rwa``: under Basel 3.1 equity is standardised-only
+            # (Art. 147A), so its sa_rwa = its own pre-floor RWA and must reach the
+            # disclosed S-TREA (OF 02.01 / C 02.00 / CMS). Equity is not
+            # floor-eligible, so the floor base and rwa_final are unaffected.
+            equity_prepared = prepare_equity_results(
+                equity_bundle.results,
+                include_sa_equivalent=resolved_pack.feature("output_floor"),
+            )
             combined_unmultiplied = pl.concat(
                 [combined_unmultiplied, equity_prepared], how="diagonal_relaxed"
             )
@@ -618,6 +626,14 @@ def _add_reporting_projection(lf: pl.LazyFrame) -> pl.LazyFrame:
       reaches the aggregator, so the exposure-type rule IS today's behaviour).
     - ``reporting_subclass`` / ``reporting_ead`` / ``reporting_rw`` — aliases of
       ``exposure_subclass`` / ``ead_final`` / ``risk_weight``.
+    - ``reporting_gross_drawn`` / ``_interest`` / ``_nominal`` / ``_undrawn`` —
+      the raw gross carriers (``drawn_amount`` / ``interest`` /
+      ``nominal_amount`` / ``undrawn_amount``) clipped at 0. A negative
+      drawn/interest is the on-balance netting convention (a deposit under a
+      ``netting_agreement_reference``); the raw carriers seal negative, so
+      gross-exposure template cells sum these floored twins instead (CRR
+      Art. 111 SA / Art. 166 IRB). Nulls stay null. Computed after the CRM
+      guarantee split so the floored amounts are leg-consistent.
     - ``guarantee_rwa_benefit`` (Phase 7 decision F8, recorded) — the additive
       per-leg Art. 235/236 substitution relief:
       ``ead_final x guarantee_benefit_rw`` = leg EAD x (borrower-basis RW -
@@ -670,6 +686,18 @@ def _add_reporting_projection(lf: pl.LazyFrame) -> pl.LazyFrame:
         pl.col("ead_final").alias("reporting_ead"),
         pl.col("risk_weight").alias("reporting_rw"),
         rwa_benefit.alias("guarantee_rwa_benefit"),
+        # Floored gross-exposure carriers (CRR Art. 111 SA / Art. 166 IRB).
+        # A negative drawn/interest is the on-balance netting convention (a
+        # deposit under a netting_agreement_reference); the EAD path already
+        # floors it, but the RAW carriers seal negative and would make a
+        # gross-exposure template cell (COREP C 07/C 08, Pillar 3 CR4/5/6/10)
+        # report a negative figure. Clip at 0 so gross cells never go negative;
+        # nulls stay null (never fill Float nulls to 0.0 — anti-conservative).
+        # Computed here, after the CRM guarantee split, so they are leg-consistent.
+        pl.col("drawn_amount").clip(lower_bound=0.0).alias("reporting_gross_drawn"),
+        pl.col("interest").clip(lower_bound=0.0).alias("reporting_gross_interest"),
+        pl.col("nominal_amount").clip(lower_bound=0.0).alias("reporting_gross_nominal"),
+        pl.col("undrawn_amount").clip(lower_bound=0.0).alias("reporting_gross_undrawn"),
     )
 
 

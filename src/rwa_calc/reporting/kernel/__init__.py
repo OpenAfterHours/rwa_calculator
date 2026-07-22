@@ -25,7 +25,12 @@ References:
 
 from __future__ import annotations
 
-from rwa_calc.reporting.kernel.columns import available_columns, pick
+from rwa_calc.reporting.kernel.columns import (
+    available_columns,
+    gross_carrier,
+    gross_carriers,
+    pick,
+)
 from rwa_calc.reporting.kernel.excel import (
     column_name_map,
     sanitise_sheet_name,
@@ -47,6 +52,8 @@ __all__ = [
     "filter_by_approach",
     "filter_off_bs",
     "filter_on_bs",
+    "gross_carrier",
+    "gross_carriers",
     "null_row",
     "pick",
     "safe_sum",

@@ -224,9 +224,9 @@ The last two are why a user can finally tell a **structurally empty** cell from 
 one — something Phase A alone cannot do.
 
 Resolution: `LINEAGE_PLANS: dict[str, PlanFn] = {"c07_00": c07_plans}` — one entry in v1; each
-further template is that same extraction plus one line. **C 34.01/02/04/08 and CCR1/2/3/8 remain
-imperative** (the Phase 7 S8-pre deferral) — they have no spec, so they 404 with that reason,
-stated in the docs rather than hidden.
+further template is that same extraction plus one line. C 34.01/02/04/08 (R27a/R27b) and the
+Pillar 3 CCR1/2/3/8 family (R27c) are now instrumented; only **C 02.00** (a pre-pass kernel
+hybrid) has no spec, so it 404s with that reason, stated in the docs rather than hidden.
 
 ### 4.3 Two honesty requirements
 The rendered cell is not the raw executor output (`_null_empty_rows`, `_negate_deduction_cols` —
@@ -264,6 +264,31 @@ Uninstrumented template / unknown cell → clean **404** with the reason. No exi
 import (check 12); **no multi-candidate `pick(cols, a, b)`** — the `reporting_multi_candidate_picks`
 ratchet sits at 30 and may not increase; module ≤ 2,010 LOC, new `tests/unit/reporting/**` file
 ≤ 1,581 LOC (ample headroom). No new reporting module trips a count ratchet.
+
+### 4.6 Phase 0 — machinery generalisation (R19, DONE)
+
+v1 shipped with C 07.00 as the sole instrumented template, and the drill-down machinery still
+carried C07-shaped assumptions. R19 generalised it so the remaining declarative templates (R20-R26)
+can be instrumented with a few lines each. What changed from §4.1/§4.2 as written:
+
+- **`SheetPlan` moved out of `corep/c07.py` into the shared `reporting/plans.py`.** Every template's
+  `<t>_plans()` returns the SAME `SheetPlan`, so no template is typed against another's dataclass.
+  `c07.py` imports it back; the extraction stayed golden-byte-identical.
+- **`negative_cols` is now a REQUIRED `SheetPlan` field (no default).** It previously defaulted to
+  C 07.00's Annex II deduction set — a silent mis-sign risk for any future template sharing refs
+  like `0030`/`0050`/`0090`. Each template passes its own set (or `frozenset()`) explicitly.
+- **Single-frame templates** (cr4, cr7, cr8, ov1, cms1/2, c08_07, of_02_01, …) register with
+  `_Provider(single_frame=True)`: their cells report `sheet = None` and their `plans()`/`generate()`
+  return a one-entry dict. `_resolve_sheet_key` (in `reporting/lineage.py`) is the one place that
+  decides the plan key vs the reported sheet, and `sheet_lineage` logs loudly if `plans()` and
+  `generate()` key differently.
+- **REST `sheet` normalisation + differentiated 404s.** `GET /api/lineage` normalises an empty-string
+  `sheet` to `None` (matching the UI), and both surfaces now 404 with a reason — *template not
+  instrumented* vs *unknown cell* vs *unknown run* — instead of one undifferentiated "no lineage".
+- **The fidelity tie-out is parametrised** over `_TIEOUT_CASES`, so an R20-R26 template earns its
+  full sweep (value, kind, predicate satisfaction, sign-aware reconciliation) by adding one tuple.
+
+The per-template recipe lives in `docs/features/report-cell-lineage.md` (§ Coverage).
 
 ---
 
@@ -307,5 +332,5 @@ fallback computation.
 
 **Out of scope for v1.** Materialised lineage tables (§2.1). Cross-stage per-row provenance (its own
 plan). Templates beyond C 07.00 for lineage (the viewer shows them all; lineage wiring is
-per-template and cheap). C 34.x / CCR1/2/3/8 (still imperative — no spec to read). Editing or
-annotating cells.
+per-template and cheap). C 02.00 (a pre-pass kernel hybrid — no spec to read; C 34.x and the Pillar 3
+CCR1/2/3/8 family are now instrumented, R27a–R27c). Editing or annotating cells.

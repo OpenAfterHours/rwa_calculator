@@ -33,6 +33,7 @@ from rwa_calc.contracts.errors import (
     CalculationError,
     ErrorCategory,
     ErrorSeverity,
+    negative_amount_without_netting_warning,
 )
 from rwa_calc.data.column_spec import ColumnSpec
 
@@ -555,6 +556,7 @@ def validate_bundle_values(
         # downstream but flagged here so firms see the mismatch.
         if table_name in {"facilities", "loans", "contingents"}:
             all_errors.extend(_validate_effective_maturity_range(lf, table_name))
+            all_errors.extend(_validate_negative_amounts_without_netting(lf, table_name))
 
         # PRA PS1/26 Art. 120(2B) / Art. 122(3): short-term rating rows must
         # carry a scope (which exposure they attach to). Flag rows that violate
@@ -855,6 +857,48 @@ def _validate_short_term_rating_scope(lf: pl.LazyFrame) -> list[CalculationError
             )
         )
     return errors
+
+
+def _validate_negative_amounts_without_netting(
+    lf: pl.LazyFrame,
+    context: str,
+) -> list[CalculationError]:
+    """Flag negative ``drawn_amount`` / ``interest`` rows that carry no netting.
+
+    A negative on-balance amount is the deliberate on-balance-sheet netting
+    convention (CRR Art. 195/219): a deposit / credit balance offsets the loans
+    that share its ``netting_agreement_reference``. A negative amount WITHOUT a
+    reference cannot net against anything, so it is a data error — the value is
+    floored at 0 downstream (for EAD and the gross-exposure reporting carriers),
+    never consumed as negative. One aggregate DQ010 warning per offending
+    column. When the table carries no ``netting_agreement_reference`` column,
+    every negative is unreferenced by definition and flagged.
+
+    References:
+    - CRR Art. 111 (SA gross exposure value); Art. 166 (IRB exposure value)
+    - CRR Art. 195/219 (on-balance-sheet netting)
+    """
+    schema_names = lf.collect_schema().names()
+    amount_cols = [c for c in ("drawn_amount", "interest") if c in schema_names]
+    if not amount_cols:
+        return []
+
+    if "netting_agreement_reference" in schema_names:
+        unreferenced = pl.col("netting_agreement_reference").is_null()
+    else:
+        unreferenced = pl.lit(value=True)
+
+    counts = (
+        lf.select([((pl.col(c) < 0) & unreferenced).sum().alias(c) for c in amount_cols])
+        .collect()
+        .row(0, named=True)
+    )
+
+    return [
+        negative_amount_without_netting_warning(context=context, column=c, n=counts[c])
+        for c in amount_cols
+        if counts[c]
+    ]
 
 
 def _validate_table_columns_batched(

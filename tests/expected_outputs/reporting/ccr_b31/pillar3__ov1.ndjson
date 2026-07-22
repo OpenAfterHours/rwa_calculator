@@ -2,19 +2,12 @@
 {"row_ref":"2","row_name":"Of which: standardised approach","a":2500000.0,"b":null,"c":200000.0}
 {"row_ref":"3","row_name":"Of which: foundation IRB approach","a":0.0,"b":null,"c":0.0}
 {"row_ref":"4","row_name":"Of which: slotting approach","a":0.0,"b":null,"c":0.0}
-{"row_ref":"4a","row_name":"Total RWEAs (pre-floor)","a":4060296.719974031,"b":null,"c":324823.7375979225}
 {"row_ref":"5","row_name":"Of which: advanced IRB approach","a":0.0,"b":null,"c":0.0}
 {"row_ref":"6","row_name":"Counterparty credit risk - CCR","a":1560296.719974031,"b":null,"c":124823.73759792247}
 {"row_ref":"7","row_name":"CCR - Of which the standardised approach","a":1462778.174975654,"b":null,"c":117022.25399805233}
 {"row_ref":"8","row_name":"CCR - Of which internal model method (IMM)","a":null,"b":null,"c":null}
 {"row_ref":"UK8a","row_name":"CCR - Of which exposures to a central counterparty (CCP)","a":97518.54499837695,"b":null,"c":7801.4835998701565}
 {"row_ref":"9","row_name":"CCR - Of which other CCR","a":0.0,"b":null,"c":0.0}
-{"row_ref":"5a","row_name":"CET1 ratio (pre-floor)","a":null,"b":null,"c":null}
-{"row_ref":"5b","row_name":"CET1 ratio (pre-floor, transitional)","a":null,"b":null,"c":null}
-{"row_ref":"6a","row_name":"Tier 1 ratio (pre-floor)","a":null,"b":null,"c":null}
-{"row_ref":"6b","row_name":"Tier 1 ratio (pre-floor, transitional)","a":null,"b":null,"c":null}
-{"row_ref":"7a","row_name":"Total capital ratio (pre-floor)","a":null,"b":null,"c":null}
-{"row_ref":"7b","row_name":"Total capital ratio (pre-floor, transitional)","a":null,"b":null,"c":null}
 {"row_ref":"11","row_name":"Equity positions under IRB Transitional Approach","a":null,"b":null,"c":null}
 {"row_ref":"12","row_name":"Equity investments in funds — look-through approach","a":null,"b":null,"c":null}
 {"row_ref":"13","row_name":"Equity investments in funds — mandate-based approach","a":null,"b":null,"c":null}

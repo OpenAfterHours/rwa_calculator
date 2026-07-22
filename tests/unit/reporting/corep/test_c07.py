@@ -590,22 +590,22 @@ class TestSupportingFactors:
         assert corp["0215"][0] == pytest.approx(4400.0)
 
     def test_c07_sme_factor_benefit(self) -> None:
-        """Col 0216 (SME factor benefit) = pre - post for SME-eligible exposures."""
+        """Col 0216 (SME factor benefit) = pre - post, emitted negative per Annex II §1.3."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_phase2_cols())
 
         sme = _get_total_row(bundle.c07_00["corporate_sme"])
-        # corporate_sme: rwa_before_sme_factor=550, rwa_final=467.5, benefit = 82.5
-        assert sme["0216"][0] == pytest.approx(82.5)
+        # rwa_before_sme_factor=550, rwa_final=467.5, benefit=82.5; negative deduction.
+        assert sme["0216"][0] == pytest.approx(-82.5)
 
     def test_c07_infra_factor_benefit(self) -> None:
-        """Col 0217 (infrastructure factor benefit) computed for eligible exposures."""
+        """Col 0217 (infra factor benefit) computed, emitted negative per Annex II §1.3."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_phase2_cols())
 
         corp = _get_total_row(bundle.c07_00["corporate"])
-        # SA_CORP_1 has infra_factor_applied=True: pre=1200, post=1140, benefit=60
-        assert corp["0217"][0] == pytest.approx(60.0)
+        # SA_CORP_1 infra_factor_applied=True: pre=1200, post=1140, benefit=60; negative.
+        assert corp["0217"][0] == pytest.approx(-60.0)
 
     def test_c07_supporting_factors_not_in_b31(self) -> None:
         """Supporting factor columns (0215-0217) absent from Basel 3.1 output."""
@@ -618,16 +618,16 @@ class TestSupportingFactors:
         assert "0217" not in corp.columns
 
     def test_c07_rwea_relationship(self) -> None:
-        """Col 0220 = 0215 - 0216 - 0217 (RWEA after factors)."""
+        """Col 0220 = 0215 + 0216 + 0217 under the "(-)" display convention."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_phase2_cols())
 
         sme = _get_total_row(bundle.c07_00["corporate_sme"])
         pre = sme["0215"][0]
-        sme_benefit = sme["0216"][0]
+        sme_benefit = sme["0216"][0]  # negative per Annex II §1.3
         post = sme["0220"][0]
-        # pre - sme_benefit = post (no infra for SME class)
-        assert post == pytest.approx(pre - sme_benefit)
+        # pre + sme_benefit = post (no infra for SME class; 0216 already signed)
+        assert post == pytest.approx(pre + sme_benefit)
 
 
 class TestECAIUnratedSplit:
@@ -1389,24 +1389,24 @@ class TestC0700SupportingFactorRWEA:
         assert total["0215"][0] == pytest.approx(11200.0)
 
     def test_col_0216_sme_adjustment(self) -> None:
-        """Col 0216 computes SME factor adjustment from pipeline columns."""
+        """Col 0216 computes SME factor adjustment, emitted negative per Annex II §1.3."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_supporting_factors(), framework="CRR")
         corp = bundle.c07_00["corporate"]
         total = corp.filter(pl.col("row_ref") == "0010")
-        # SME adjustment = pre - post for SME rows
-        # SME_1: 1000 - 700 = 300, SME_2: 2000 - 1400 = 600
-        assert total["0216"][0] == pytest.approx(900.0)
+        # SME adjustment = pre - post for SME rows, reported as a negative deduction
+        # SME_1: 1000 - 700 = 300, SME_2: 2000 - 1400 = 600 -> -(300 + 600)
+        assert total["0216"][0] == pytest.approx(-900.0)
 
     def test_col_0217_infra_adjustment(self) -> None:
-        """Col 0217 computes infrastructure factor adjustment."""
+        """Col 0217 infra factor adjustment, emitted negative per Annex II §1.3."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_supporting_factors(), framework="CRR")
         corp = bundle.c07_00["corporate"]
         total = corp.filter(pl.col("row_ref") == "0010")
-        # Infrastructure adjustment = pre - post for infra rows
-        # INFRA_1: 5000 - 3750 = 1250
-        assert total["0217"][0] == pytest.approx(1250.0)
+        # Infrastructure adjustment = pre - post for infra rows, reported negative
+        # INFRA_1: 5000 - 3750 = 1250 -> -1250
+        assert total["0217"][0] == pytest.approx(-1250.0)
 
     def test_col_0220_post_factor_rwa(self) -> None:
         """Col 0220 (post-factor RWEA) is the sum of rwa_final."""
@@ -1418,17 +1418,17 @@ class TestC0700SupportingFactorRWEA:
         assert total["0220"][0] == pytest.approx(9050.0)
 
     def test_pre_minus_adjustments_equals_post(self) -> None:
-        """RWEA integrity: 0215 - 0216 - 0217 ≈ 0220."""
+        """RWEA integrity: 0215 + 0216 + 0217 ≈ 0220 under the "(-)" convention."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_supporting_factors(), framework="CRR")
         corp = bundle.c07_00["corporate"]
         total = corp.filter(pl.col("row_ref") == "0010")
         pre = total["0215"][0]
-        sme_adj = total["0216"][0]
-        infra_adj = total["0217"][0]
+        sme_adj = total["0216"][0]  # negative per Annex II §1.3
+        infra_adj = total["0217"][0]  # negative per Annex II §1.3
         post = total["0220"][0]
-        # 11200 - 900 - 1250 = 9050
-        assert pre - sme_adj - infra_adj == pytest.approx(post)
+        # 11200 + (-900) + (-1250) = 9050
+        assert pre + sme_adj + infra_adj == pytest.approx(post)
 
     def test_col_0216_null_without_pipeline_columns(self) -> None:
         """Col 0216 is null when neither legacy nor pipeline columns exist."""

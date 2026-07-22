@@ -56,7 +56,7 @@ import pytest
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
-from rwa_calc.reporting.pillar3.generator import Pillar3TemplateBundle
+from rwa_calc.reporting.pillar3.generator import Pillar3Generator, Pillar3TemplateBundle
 from tests.fixtures.recon_ledger import LedgerShimPillar3Generator
 
 if TYPE_CHECKING:
@@ -1061,3 +1061,184 @@ class TestCCR2BACVACapital:
         )
         prefix = "UKB" if bundle.framework == "BASEL_3_1" else "UK"
         assert prefix == "UKB", f"P8.51: Basel 3.1 run must use UKB prefix, got {prefix!r}."
+
+
+# ---------------------------------------------------------------------------
+# R5 — CCR8 CCP-exposure scoping (synthetic-frame grain)
+# ---------------------------------------------------------------------------
+
+
+# One CCR/SFT leg per route, at decode-unique EAD/RWEA values so a mis-scoped
+# cell cannot hide inside a sum.
+#
+#   leg                       risk_type        cp_entity_type  cp_is_qccp  EAD        RWEA
+#   ------------------------  ---------------  --------------  ----------  ---------  --------
+#   QCCP-cleared derivative   CCR_DERIVATIVE   ccp             True        1,000,000    20,000
+#   non-QCCP derivative       CCR_DERIVATIVE   ccp             False       2,000,000   200,000
+#   bilateral derivative      CCR_DERIVATIVE   institution     None        3,000,000 1,500,000
+#   CCP-faced SFT             CCR_SFT          ccp             True          500,000    10,000
+#   bilateral SFT             CCR_SFT          institution     None          400,000   200,000
+_QCCP_DERIV_EAD, _QCCP_DERIV_RWEA = 1_000_000.0, 20_000.0
+_NONQCCP_DERIV_EAD, _NONQCCP_DERIV_RWEA = 2_000_000.0, 200_000.0
+_BILAT_DERIV_EAD, _BILAT_DERIV_RWEA = 3_000_000.0, 1_500_000.0
+_SFT_CCP_EAD, _SFT_CCP_RWEA = 500_000.0, 10_000.0
+_SFT_BILAT_EAD, _SFT_BILAT_RWEA = 400_000.0, 200_000.0
+
+
+def _ccr8_ledger() -> pl.LazyFrame:
+    """A CCR/SFT ledger with every CCP / bilateral route, one leg each."""
+    return pl.LazyFrame(
+        [
+            {
+                "exposure_reference": "ccr__NS_QCCP",
+                "risk_type": "CCR_DERIVATIVE",
+                "cp_entity_type": "ccp",
+                "cp_is_qccp": True,
+                "ead_final": _QCCP_DERIV_EAD,
+                "rwa_final": _QCCP_DERIV_RWEA,
+            },
+            {
+                "exposure_reference": "ccr__NS_NONQCCP",
+                "risk_type": "CCR_DERIVATIVE",
+                "cp_entity_type": "ccp",
+                "cp_is_qccp": False,
+                "ead_final": _NONQCCP_DERIV_EAD,
+                "rwa_final": _NONQCCP_DERIV_RWEA,
+            },
+            {
+                "exposure_reference": "ccr__NS_BILAT",
+                "risk_type": "CCR_DERIVATIVE",
+                "cp_entity_type": "institution",
+                "cp_is_qccp": None,
+                "ead_final": _BILAT_DERIV_EAD,
+                "rwa_final": _BILAT_DERIV_RWEA,
+            },
+            {
+                "exposure_reference": "ccr__NS_SFT_CCP",
+                "risk_type": "CCR_SFT",
+                "cp_entity_type": "ccp",
+                "cp_is_qccp": True,
+                "ead_final": _SFT_CCP_EAD,
+                "rwa_final": _SFT_CCP_RWEA,
+            },
+            {
+                "exposure_reference": "ccr__NS_SFT_BILAT",
+                "risk_type": "CCR_SFT",
+                "cp_entity_type": "institution",
+                "cp_is_qccp": None,
+                "ead_final": _SFT_BILAT_EAD,
+                "rwa_final": _SFT_BILAT_RWEA,
+            },
+        ],
+        schema_overrides={"cp_is_qccp": pl.Boolean, "risk_type": pl.String},
+    )
+
+
+def _ccr8_cell(df: pl.DataFrame, row_ref: str, col: str) -> float | None:
+    """Look up a single CCR8 cell by row_ref and column ref (``a`` / ``b``)."""
+    rows = df.filter(pl.col("row_ref") == row_ref)
+    return rows[col][0] if rows.height > 0 else None
+
+
+class TestCCR8CCPScopingSyntheticFrame:
+    """
+    R5 / CCR8: the CCP-exposures table reports CCP counterparties ONLY.
+
+    CCR8 ("Exposures to central counterparties", CRR Art. 439(i)) must restrict
+    its whole population to ``cp_entity_type == "ccp"``: a QCCP leg → row 1, a
+    non-qualifying-CCP leg → row 2, and a bilateral (non-CCP) derivative or SFT →
+    NEITHER row (it belongs in CCR1/CCR3). A CCP-faced FCCM SFT IS a CCP exposure
+    (CRR Art. 301(1)(b)) and joins row 1/2 by its qualifying flag.
+
+    References:
+        CRR Art. 439(i): CCR8 discloses exposures to central counterparties.
+        CRR Art. 306(1): QCCP trade-leg treatment; Art. 107(2)(a): non-QCCP.
+        CRR Art. 301(1)(b): SFTs within the CCP material scope.
+    """
+
+    def test_ccr8_qccp_row_takes_qccp_derivative_and_ccp_faced_sft(self) -> None:
+        """Row 1 (QCCPs) = the QCCP derivative PLUS the CCP-faced SFT, nothing else."""
+        # Arrange
+        lf = _ccr8_ledger()
+
+        # Act
+        ccr8 = Pillar3Generator()._generate_ccr8(lf, set(lf.collect_schema().names()), [])
+
+        # Assert
+        assert ccr8 is not None
+        assert _ccr8_cell(ccr8, "1", "b") == pytest.approx(_QCCP_DERIV_EAD + _SFT_CCP_EAD)
+        assert _ccr8_cell(ccr8, "1", "a") == pytest.approx(_QCCP_DERIV_RWEA + _SFT_CCP_RWEA)
+
+    def test_ccr8_non_qccp_row_takes_only_the_non_qualifying_ccp_leg(self) -> None:
+        """Row 2 (non-QCCPs) = the non-qualifying CCP leg only — NOT bilateral legs."""
+        # Arrange
+        lf = _ccr8_ledger()
+
+        # Act
+        ccr8 = Pillar3Generator()._generate_ccr8(lf, set(lf.collect_schema().names()), [])
+
+        # Assert — the bilateral derivative (1.5m RWEA) must NOT reach row 2.
+        assert ccr8 is not None
+        assert _ccr8_cell(ccr8, "2", "b") == pytest.approx(_NONQCCP_DERIV_EAD)
+        assert _ccr8_cell(ccr8, "2", "a") == pytest.approx(_NONQCCP_DERIV_RWEA)
+
+    def test_ccr8_total_is_the_ccp_population_only(self) -> None:
+        """Row 21 (Total) = row 1 + row 2 = the whole CCP population, no bilateral legs."""
+        # Arrange
+        lf = _ccr8_ledger()
+
+        # Act
+        ccr8 = Pillar3Generator()._generate_ccr8(lf, set(lf.collect_schema().names()), [])
+
+        # Assert
+        assert ccr8 is not None
+        expected_ead = _QCCP_DERIV_EAD + _SFT_CCP_EAD + _NONQCCP_DERIV_EAD
+        expected_rwea = _QCCP_DERIV_RWEA + _SFT_CCP_RWEA + _NONQCCP_DERIV_RWEA
+        assert _ccr8_cell(ccr8, "21", "b") == pytest.approx(expected_ead)
+        assert _ccr8_cell(ccr8, "21", "a") == pytest.approx(expected_rwea)
+
+    def test_ccr8_total_excludes_the_bilateral_book(self) -> None:
+        """The bilateral derivative + bilateral SFT never enter CCR8's total."""
+        # Arrange
+        lf = _ccr8_ledger()
+
+        # Act
+        ccr8 = Pillar3Generator()._generate_ccr8(lf, set(lf.collect_schema().names()), [])
+
+        # Assert — total is strictly below the whole-book EAD by the bilateral legs.
+        assert ccr8 is not None
+        whole_book_ead = (
+            _QCCP_DERIV_EAD + _NONQCCP_DERIV_EAD + _BILAT_DERIV_EAD + _SFT_CCP_EAD + _SFT_BILAT_EAD
+        )
+        total_ead = _ccr8_cell(ccr8, "21", "b")
+        assert total_ead is not None
+        assert total_ead == pytest.approx(whole_book_ead - _BILAT_DERIV_EAD - _SFT_BILAT_EAD)
+
+    def test_ccr8_bilateral_derivative_stays_in_ccr1(self) -> None:
+        """The bilateral derivative that LEAVES CCR8 is still counted in CCR1.
+
+        CCR1 (SA-CCR analysis by approach) is derivatives-only and keys off the
+        SA-CCR EAD total — the bilateral netting set belongs there, not in CCR8.
+        """
+        # Arrange
+        lf = _ccr8_ledger()
+        gen = Pillar3Generator()
+
+        # Act
+        ccr1 = gen._generate_ccr1(lf, set(lf.collect_schema().names()), [])
+
+        # Assert — CCR1 EAD (col a) sums all THREE derivatives (SFTs excluded).
+        assert ccr1 is not None
+        ccr1_ead = ccr1.filter(pl.col("row_ref") == "1")["a"][0]
+        assert ccr1_ead == pytest.approx(_QCCP_DERIV_EAD + _NONQCCP_DERIV_EAD + _BILAT_DERIV_EAD)
+
+    def test_ccr8_returns_none_when_no_ccp_exposures(self) -> None:
+        """A book of purely bilateral CCR legs has no CCP exposure — CCR8 is None."""
+        # Arrange — drop every CCP leg, keeping only the bilateral derivative + SFT.
+        lf = _ccr8_ledger().filter(pl.col("cp_entity_type") != "ccp")
+
+        # Act
+        ccr8 = Pillar3Generator()._generate_ccr8(lf, set(lf.collect_schema().names()), [])
+
+        # Assert
+        assert ccr8 is None

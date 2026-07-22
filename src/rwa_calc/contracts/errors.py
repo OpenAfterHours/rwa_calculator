@@ -98,6 +98,13 @@ ERROR_BEEL_ON_NON_DEFAULTED_EXPOSURE = "DQ008"
 # (CRR/PS1-26 Art. 140(1) / CRE21.16 — short-term assessments are confined to
 # institution / corporate obligors). The mis-scoped override is ignored for RW.
 ERROR_MISSCOPED_SHORT_TERM_RATING = "DQ009"
+# Negative on-balance amount (drawn_amount / interest) carrying no
+# netting_agreement_reference. A negative balance is the on-balance-sheet
+# netting convention (CRR Art. 195/219) — it may offset ONLY the loans that
+# share its reference; without a reference it cannot net against anything and
+# is a data error that would understate the gross exposure value were it not
+# floored at 0 (CRR Art. 111 SA / Art. 166 IRB).
+ERROR_NEGATIVE_AMOUNT_WITHOUT_NETTING = "DQ010"
 
 # Hierarchy error codes
 ERROR_CIRCULAR_HIERARCHY = "HIE001"
@@ -498,6 +505,35 @@ def misscoped_short_term_rating_warning(
         category=ErrorCategory.DATA_QUALITY,
         exposure_reference=exposure_reference,
         regulatory_reference="CRR Art. 140(1)",
+    )
+
+
+def negative_amount_without_netting_warning(
+    *, context: str, column: str, n: int
+) -> CalculationError:
+    """Create a DQ010 warning for a negative on-balance amount with no netting.
+
+    A negative ``drawn_amount`` / ``interest`` is the on-balance-sheet netting
+    convention (CRR Art. 195/219): a deposit / credit balance offsets the loans
+    that share its ``netting_agreement_reference`` (``data/schemas.py``). A
+    negative amount WITHOUT such a reference cannot net against anything — it is
+    a data error that would understate the gross exposure value were it not
+    floored at 0 for both EAD and the gross-exposure reporting carriers
+    (CRR Art. 111 SA / Art. 166 IRB). The row is retained and the negative is
+    clipped to 0; one aggregate warning is emitted per offending column/table.
+    """
+    return CalculationError(
+        code=ERROR_NEGATIVE_AMOUNT_WITHOUT_NETTING,
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.DATA_QUALITY,
+        message=(
+            f"[{context}] {n} row(s) have a negative '{column}' with no "
+            "netting_agreement_reference. A negative balance without a netting "
+            "agreement cannot offset an exposure (CRR Art. 195/219); it is "
+            "floored at 0 for the gross exposure value (Art. 111 / Art. 166)."
+        ),
+        field_name=column,
+        regulatory_reference="CRR Art. 111; Art. 166",
     )
 
 

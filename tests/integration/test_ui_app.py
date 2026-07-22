@@ -293,11 +293,13 @@ def test_uninstrumented_templates_offer_no_dead_drilldown_links(
     job_id = resp.headers["location"].rsplit("/", 1)[1]
     _wait_for_job(client, job_id)
 
-    # Act — C 02.00 has no lineage (its cells are not spec-backed)
+    # Act — C 02.00 has no lineage (its cells are not spec-backed): the pre-pass
+    # kernel-plus-thin-shell hybrid exposes no TemplateSpec. (R27a instrumented
+    # the prior example C 34.01.)
     grid = client.get(f"/results/{job_id}/templates", params={"template": "c_02_00"}).text
     dead = client.get(
         f"/results/{job_id}/lineage",
-        params={"template": "c34_01", "row": "0010", "col": "0010"},
+        params={"template": "c_02_00", "row": "0010", "col": "0010"},
     )
 
     # Assert — a cell is only offered as a link where there is a truthful answer;
@@ -423,6 +425,53 @@ def test_templates_page_without_prior_run_id_cr8_opening_cell_is_null(
     # Assert — unchanged behaviour: CR8's opening row stays null.
     assert resp.status_code == 200
     assert _cr8_opening_cell(resp.text) == "—"
+
+
+def test_cr8_prior_period_cell_refuses_lineage_instead_of_contradicting_the_report(
+    client: TestClient, tmp_path: Path
+) -> None:
+    # Arrange — a comparative-period report: prior IRB RWA sums to 1,000,000.
+    _seed_irb_run(
+        "ui-prior-cr8-lin",
+        date(2024, 12, 31),
+        firb_rwa=600_000.0,
+        airb_rwa=400_000.0,
+        results_dir=tmp_path / "prior",
+    )
+    _seed_irb_run(
+        "ui-current-cr8-lin",
+        date(2025, 1, 1),
+        firb_rwa=720_000.0,
+        airb_rwa=430_000.0,
+        results_dir=tmp_path / "current",
+    )
+
+    # The templates page (WITH the prior period) shows a real opening figure...
+    page = client.get(
+        "/results/ui-current-cr8-lin/templates",
+        params={"template": "cr8", "prior_run_id": "ui-prior-cr8-lin"},
+    )
+    assert page.status_code == 200
+    assert _cr8_opening_cell(page.text) == "1,000,000"
+
+    # ...but the drill-down runs on the current-period ledger only. Rather than a
+    # panel showing a null that contradicts the 1,000,000 on screen, the opening
+    # (row 1, PriorPeriod) and residual (row 8) cells get a DISTINCT refusal.
+    for prior_row in ("1", "8"):
+        refused = client.get(
+            "/results/ui-current-cr8-lin/lineage",
+            params={"template": "cr8", "row": prior_row, "col": "a"},
+        )
+        assert refused.status_code == 404, f"row {prior_row}"
+        assert "prior period" in refused.text.lower(), f"row {prior_row}"
+
+    # The closing row (9, current period) still drills down normally.
+    closing = client.get(
+        "/results/ui-current-cr8-lin/lineage",
+        params={"template": "cr8", "row": "9", "col": "a"},
+    )
+    assert closing.status_code == 200
+    assert "Cell lineage" in closing.text
 
 
 def test_templates_page_cache_key_separates_prior_run_id(

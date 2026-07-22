@@ -483,11 +483,31 @@ def _register_pages(app: FastAPI) -> None:
         bundles = get_template_bundles(run_id)
         if response is None or bundles is None:
             return _not_found(request, "That result has expired or does not exist.")
+        if not reporting_lineage.is_instrumented(template):
+            return _not_found(request, "That template is not instrumented for lineage.")
 
-        result = reporting_lineage.drilldown(
-            response, template, row, col, run_id=run_id, sheet=sheet or None, limit=200
-        )
+        resolver = reporting_lineage.sheet_lineage(response, template, sheet or None)
         view = catalog.template_sheet(bundles.corep, bundles.pillar3, template, sheet or None)
+        query = resolver.query(row, col) if resolver is not None else None
+        if query is not None and query.derives_from_prior_period:
+            # The report may show a comparative-period figure here, but this
+            # drill-down runs on the current-period ledger only — decline with a
+            # distinct reason rather than a null that contradicts the screen.
+            return _not_found(
+                request,
+                "That cell derives from the prior period; the drill-down covers "
+                "the current-period ledger only.",
+            )
+        if query is not None and query.reads_unavailable_side_value:
+            # An out-of-frame SideContext (OV1 row 27's OF-ADJ): the template is
+            # rendered WITH the run's output-floor summary, but this drill-down
+            # carries no side input — decline rather than show a null the screen
+            # contradicts.
+            return _not_found(
+                request,
+                "That cell reads an out-of-frame side value the drill-down does not carry.",
+            )
+        result = resolver.cell(row, col, run_id=run_id, limit=200) if resolver is not None else None
         if result is None or view is None:
             return _not_found(request, "That cell has no lineage.")
 

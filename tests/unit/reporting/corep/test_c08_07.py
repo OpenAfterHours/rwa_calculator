@@ -380,7 +380,9 @@ class TestC0807ColumnValues:
         assert row["0050"][0] == pytest.approx(0.0)
 
     def test_rollout_plan_pct_zero(self) -> None:
-        """Col 0040 (roll-out plan %) is always 0 — not tracked in pipeline."""
+        """Col 0040 (roll-out plan %) is 0 when the fixture supplies no
+        ``is_under_irb_rollout`` input — the whole SA share stays in col 0030
+        (backwards compatible; the split only appears when the input is present)."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_scope_of_use_results())
         df = bundle.c08_07
@@ -575,3 +577,134 @@ class TestC0807EdgeCases:
         refs = df["row_ref"].to_list()
         expected = [r[0] for r in B31_C08_07_ROWS]
         assert refs == expected
+
+
+def _rollout_results() -> pl.LazyFrame:
+    """Mixed SA/IRB portfolio carrying the optional ``is_under_irb_rollout`` flag.
+
+    Corporate (row 0050):
+    - E1: IRB 5000 EAD
+    - E2: SA 3000 EAD, under a roll-out plan
+    - E3: SA 2000 EAD, permanent partial use
+      -> total 10000, IRB 5000, roll-out 3000, PPU 2000.
+
+    Institution (row 0040):
+    - E4: IRB 1000 EAD, roll-out-flagged. Already on IRB, so the flag must NOT
+      count towards col 0040 (a roll-out plan carves the SA slice only).
+    """
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["E1", "E2", "E3", "E4"],
+            "approach_applied": [
+                "foundation_irb",
+                "standardised",
+                "standardised",
+                "foundation_irb",
+            ],
+            "exposure_class": ["corporate", "corporate", "corporate", "institution"],
+            "ead_final": [5000.0, 3000.0, 2000.0, 1000.0],
+            "rwa_final": [2500.0, 1500.0, 1000.0, 400.0],
+            "is_under_irb_rollout": [False, True, False, True],
+        }
+    )
+
+
+class TestC0807RolloutPlan:
+    """Col 0040 ("% subject to a roll-out plan", CRR Art. 148) splits the SA
+    coverage into the roll-out slice (0040) and permanent partial use (0030)."""
+
+    def test_corporate_rollout_pct(self) -> None:
+        """0040 = SA-and-roll-out EAD / row total = 3000/10000 = 30%."""
+        gen = LedgerShimCorepGenerator()
+        df = gen.generate_from_lazyframe(_rollout_results()).c08_07
+        assert df is not None
+        row = df.filter(pl.col("row_ref") == "0050")
+        assert row["0040"][0] == pytest.approx(30.0, rel=1e-9)
+
+    def test_corporate_ppu_pct_excludes_rollout(self) -> None:
+        """0030 (permanent partial use) = (10000 - 5000 IRB - 3000 roll-out) /
+        10000 = 20% — the SA share NOT under a roll-out plan."""
+        gen = LedgerShimCorepGenerator()
+        df = gen.generate_from_lazyframe(_rollout_results()).c08_07
+        assert df is not None
+        row = df.filter(pl.col("row_ref") == "0050")
+        assert row["0030"][0] == pytest.approx(20.0, rel=1e-9)
+
+    def test_corporate_sa_aggregate_preserved(self) -> None:
+        """0030 + 0040 == the total SA coverage % (the pre-R14 col 0030 = 50%)."""
+        gen = LedgerShimCorepGenerator()
+        df = gen.generate_from_lazyframe(_rollout_results()).c08_07
+        assert df is not None
+        row = df.filter(pl.col("row_ref") == "0050")
+        assert row["0030"][0] + row["0040"][0] == pytest.approx(50.0, rel=1e-9)
+
+    def test_corporate_irb_pct_unchanged(self) -> None:
+        """0050 (IRB %) is untouched by the roll-out split = 5000/10000 = 50%."""
+        gen = LedgerShimCorepGenerator()
+        df = gen.generate_from_lazyframe(_rollout_results()).c08_07
+        assert df is not None
+        row = df.filter(pl.col("row_ref") == "0050")
+        assert row["0050"][0] == pytest.approx(50.0, rel=1e-9)
+
+    def test_irb_leg_flag_not_counted_in_rollout(self) -> None:
+        """An IRB leg flagged is_under_irb_rollout=True is already on IRB, so its
+        institution row shows 0% roll-out and 100% IRB (the flag carves the SA
+        slice only)."""
+        gen = LedgerShimCorepGenerator()
+        df = gen.generate_from_lazyframe(_rollout_results()).c08_07
+        assert df is not None
+        row = df.filter(pl.col("row_ref") == "0040")  # Institutions
+        assert row["0040"][0] == pytest.approx(0.0)
+        assert row["0030"][0] == pytest.approx(0.0)
+        assert row["0050"][0] == pytest.approx(100.0)
+
+    def test_total_row_rollout_pct(self) -> None:
+        """Total row 0040 = all roll-out EAD (3000) / grand total (11000)."""
+        gen = LedgerShimCorepGenerator()
+        df = gen.generate_from_lazyframe(_rollout_results()).c08_07
+        assert df is not None
+        total = df.filter(pl.col("row_ref") == "0170")
+        assert total["0040"][0] == pytest.approx(3000.0 / 11000.0 * 100.0, rel=1e-9)
+        assert total["0030"][0] + total["0040"][0] == pytest.approx(
+            (11000.0 - 6000.0) / 11000.0 * 100.0, rel=1e-9
+        )
+
+    def test_absent_column_is_backwards_compatible(self) -> None:
+        """With no ``is_under_irb_rollout`` column, 0040 = 0.0 and 0030 keeps the
+        whole SA share — byte-identical to the pre-R14 output."""
+        gen = LedgerShimCorepGenerator()
+        df = gen.generate_from_lazyframe(_irb_scope_of_use_results()).c08_07
+        assert df is not None
+        row = df.filter(pl.col("row_ref") == "0050")  # Corporate: SA 3000/8000
+        assert row["0040"][0] == pytest.approx(0.0)
+        assert row["0030"][0] == pytest.approx(37.5, rel=1e-4)
+
+    def test_zero_denominator_row(self) -> None:
+        """A class with zero total EAD (but a roll-out flag) reports 0% roll-out —
+        the zero-denominator guard holds."""
+        gen = LedgerShimCorepGenerator()
+        results = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1"],
+                "approach_applied": ["standardised"],
+                "exposure_class": ["corporate"],
+                "ead_final": [0.0],
+                "rwa_final": [0.0],
+                "is_under_irb_rollout": [True],
+            }
+        )
+        df = gen.generate_from_lazyframe(results).c08_07
+        assert df is not None
+        row = df.filter(pl.col("row_ref") == "0050")
+        assert row["0040"][0] == pytest.approx(0.0)
+        assert row["0030"][0] == pytest.approx(0.0)
+
+    def test_b31_rollout_split(self) -> None:
+        """The roll-out split applies identically under Basel 3.1 OF 08.07."""
+        gen = LedgerShimCorepGenerator()
+        df = gen.generate_from_lazyframe(_rollout_results(), framework="BASEL_3_1").c08_07
+        assert df is not None
+        row = df.filter(pl.col("row_ref") == "0200")  # B31 Corporate — other
+        assert row["0040"][0] == pytest.approx(30.0, rel=1e-9)
+        assert row["0030"][0] == pytest.approx(20.0, rel=1e-9)
+        assert row["0050"][0] == pytest.approx(50.0, rel=1e-9)

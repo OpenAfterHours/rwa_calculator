@@ -14,6 +14,9 @@ Key responsibilities:
 - Handle diversified portfolio treatment for private equity
 - Apply transitional floor (PRA Rules 4.1-4.10) during phase-in
 - Calculate RWA = EAD x RW
+- Tag the CRR method actually applied (``equity_method``: ``sa`` / ``irb_simple``
+  / ``pd_lgd``) so the reporting ledger can disclose Art. 155(2) simple-RW
+  equity in Pillar 3 CR10.5 without re-deriving the approach
 - Build audit trail of calculations
 
 Basel 3.1 key changes from CRR:
@@ -553,8 +556,13 @@ class EquityCalculator:
         """
         resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
         if resolved_pack.feature("equity_revised_sa_risk_weights"):
-            return self._apply_b31_equity_weights_sa(exposures, config)
-        return self._apply_crr_equity_weights_sa(exposures, config)
+            weighted = self._apply_b31_equity_weights_sa(exposures, config)
+        else:
+            weighted = self._apply_crr_equity_weights_sa(exposures, config)
+        # Record the CRR equity method actually applied (Art. 133 SA here) so
+        # the reporting ledger can partition simple-RW (Art. 155(2)) equity into
+        # Pillar 3 CR10.5 without re-deriving the approach downstream.
+        return weighted.with_columns(pl.lit(EquityApproach.SA.value).alias("equity_method"))
 
     def _apply_crr_equity_weights_sa(
         self,
@@ -766,6 +774,10 @@ class EquityCalculator:
         return exposures.with_columns(
             risk_weight.alias("risk_weight"),
             (el_rate * pl.col("ead_final")).alias("expected_loss"),
+            # Art. 155(2) simple-RW method tag — the discriminator Pillar 3
+            # CR10.5 filters on (reporting_approach_origin == "equity" AND
+            # equity_method == "irb_simple").
+            pl.lit(EquityApproach.IRB_SIMPLE.value).alias("equity_method"),
         )
 
     @cites("CRR Art. 155(2)")
@@ -958,6 +970,9 @@ class EquityCalculator:
             (rwea > rwea_cap).alias("equity_pd_lgd_cap_binds"),
             rwea_capped.alias("rwa"),
             rwea_capped.alias("rwa_final"),
+            # Art. 155(3) PD/LGD method tag — kept OUT of Pillar 3 CR10.5, which
+            # discloses only the Art. 155(2) simple-RW method.
+            pl.lit(EquityApproach.PD_LGD.value).alias("equity_method"),
         )
 
     def _apply_transitional_floor(

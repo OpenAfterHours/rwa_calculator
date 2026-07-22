@@ -1,9 +1,9 @@
-{"row_ref":"0010","row_name":"TOTAL RISK EXPOSURE AMOUNT","0010":137449963.91362947,"0020":161655833.3333333,"0030":137449963.91362947}
+{"row_ref":"0010","row_name":"TOTAL RISK EXPOSURE AMOUNT","0010":137449963.91362947,"0020":164155833.3333333,"0030":137449963.91362947}
 {"row_ref":"0034","row_name":"Output floor activated","0010":0.0,"0020":0.0,"0030":0.0}
 {"row_ref":"0035","row_name":"Output floor multiplier","0010":0.0,"0020":0.0,"0030":0.0}
 {"row_ref":"0036","row_name":"Output floor adjustment (OF-ADJ)","0010":0.0,"0020":0.0,"0030":0.0}
-{"row_ref":"0040","row_name":"TOTAL OWN FUNDS REQUIREMENTS","0010":10995997.113090359,"0020":12932466.666666666,"0030":10995997.113090359}
-{"row_ref":"0050","row_name":"RISK WEIGHTED EXPOSURE AMOUNTS FOR CREDIT, COUNTERPARTY CREDIT AND DILUTION RISKS AND FREE DELIVERIES","0010":137449963.91362947,"0020":161655833.3333333,"0030":137449963.91362947}
+{"row_ref":"0040","row_name":"TOTAL OWN FUNDS REQUIREMENTS","0010":10995997.113090359,"0020":13132466.666666666,"0030":10995997.113090359}
+{"row_ref":"0050","row_name":"RISK WEIGHTED EXPOSURE AMOUNTS FOR CREDIT, COUNTERPARTY CREDIT AND DILUTION RISKS AND FREE DELIVERIES","0010":137449963.91362947,"0020":164155833.3333333,"0030":137449963.91362947}
 {"row_ref":"0060","row_name":"Of which: Standardised Approach (SA)","0010":22080833.333333332,"0020":22080833.333333332,"0030":22080833.333333332}
 {"row_ref":"0070","row_name":"Central governments and central banks","0010":0.0,"0020":0.0,"0030":0.0}
 {"row_ref":"0080","row_name":"Regional governments and local authorities","0010":0.0,"0020":0.0,"0030":0.0}
@@ -53,7 +53,7 @@
 {"row_ref":"0414","row_name":"Slotting — Commodities finance","0010":0.0,"0020":0.0,"0030":0.0}
 {"row_ref":"0415","row_name":"Slotting — IPRE","0010":0.0,"0020":0.0,"0030":0.0}
 {"row_ref":"0416","row_name":"Slotting — HVCRE","0010":0.0,"0020":0.0,"0030":0.0}
-{"row_ref":"0420","row_name":"Equity IRB","0010":2500000.0,"0020":2500000.0,"0030":2500000.0}
+{"row_ref":"0420","row_name":"Equity IRB","0010":0.0,"0020":0.0,"0030":0.0}
 {"row_ref":"0430","row_name":"Settlement risk","0010":null,"0020":null,"0030":null}
 {"row_ref":"0440","row_name":"Securitisation positions in non-trading book","0010":null,"0020":null,"0030":null}
 {"row_ref":"0460","row_name":"Position, foreign exchange and commodities risk","0010":null,"0020":null,"0030":null}

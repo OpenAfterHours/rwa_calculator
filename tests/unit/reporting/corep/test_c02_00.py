@@ -1121,6 +1121,164 @@ class TestOF0200IRBSubRowSplits:
         assert r0296 == pytest.approx(0.0)
 
 
+def _c02_crr_equity_irb_results() -> pl.LazyFrame:
+    """CRR results with an Art. 155(2) IRB-simple equity leg.
+
+    One SA corporate, one F-IRB corporate, and one equity leg tagged
+    ``irb_simple`` (1,000 EAD x 290% = 2,900 RWA). The equity leg must report
+    at row 0420 and the IRB total (0220), never the SA rows (0060/0210).
+    """
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["S1", "I1", "EQ1"],
+            "approach_applied": ["standardised", "foundation_irb", "equity"],
+            "exposure_class": ["corporate", "corporate", "equity"],
+            "equity_method": [None, None, "irb_simple"],
+            "ead_final": [1000.0, 2000.0, 1000.0],
+            "risk_weight": [1.0, 0.5, 2.9],
+            "rwa_final": [1000.0, 1000.0, 2900.0],
+        }
+    )
+
+
+def _c02_crr_equity_sa_results() -> pl.LazyFrame:
+    """CRR results with an Art. 133 SA-method equity leg (SA-only firm).
+
+    Same shape as the IRB-simple fixture but the equity leg is tagged ``sa`` —
+    it must report in the SA breakdown (0060/0210), and row 0420 empties.
+    """
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["S1", "I1", "EQ1"],
+            "approach_applied": ["standardised", "foundation_irb", "equity"],
+            "exposure_class": ["corporate", "corporate", "equity"],
+            "equity_method": [None, None, "sa"],
+            "ead_final": [1000.0, 2000.0, 1000.0],
+            "risk_weight": [1.0, 0.5, 2.5],
+            "rwa_final": [1000.0, 1000.0, 2500.0],
+        }
+    )
+
+
+def _c02_b31_equity_results() -> pl.LazyFrame:
+    """Basel 3.1 results with an equity leg — always SA-method (Art. 147A).
+
+    Under B31 the equity calculator stamps ``sa`` for every leg (IRB equity is
+    removed), so row 0420 must empty and the book stays in the SA rows.
+    """
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["S1", "I1", "EQ1"],
+            "approach_applied": ["standardised", "foundation_irb", "equity"],
+            "exposure_class": ["corporate", "corporate", "equity"],
+            "equity_method": [None, None, "sa"],
+            "ead_final": [1000.0, 2000.0, 1000.0],
+            "risk_weight": [1.0, 0.5, 2.5],
+            "rwa_final": [1000.0, 1000.0, 2500.0],
+            "rwa_pre_floor": [1000.0, 1000.0, 2500.0],
+            "sa_rwa": [1000.0, 1500.0, 2500.0],
+        }
+    )
+
+
+class TestC0200EquityMethodRouting:
+    """R8: C 02.00 row 0420 "Equity IRB" holds only Art. 155 IRB-method equity.
+
+    Why: Under Basel 3.1 (PS1/26 Art. 147A) IRB equity is removed — every equity
+    leg is SA, so row 0420 must be empty and the book stays in the SA breakdown.
+    Under CRR, only equity actually treated under Art. 155 (irb_simple/pd_lgd)
+    belongs in 0420; SA-treated equity belongs in the SA rows. The fix routes by
+    the sealed ``equity_method`` discriminator and must never change the totals
+    (rows 0010/0040/0050) — it moves RWA between breakdown rows only.
+    """
+
+    def _row(self, df: pl.DataFrame, ref: str) -> float:
+        return float(df.filter(pl.col("row_ref") == ref)["0010"][0])
+
+    def test_b31_equity_irb_row_empty(self) -> None:
+        """B31: row 0420 "Equity IRB" is zero (Art. 147A — no IRB equity)."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_b31_equity_results(), framework="BASEL_3_1")
+        assert bundle.c_02_00 is not None
+        assert self._row(bundle.c_02_00, "0420") == pytest.approx(0.0)
+
+    def test_b31_equity_stays_in_sa_rows(self) -> None:
+        """B31: the equity book (2,500) reports in SA total (0060) and class (0210)."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_b31_equity_results(), framework="BASEL_3_1")
+        assert bundle.c_02_00 is not None
+        df = bundle.c_02_00
+        # SA total = corporate SA (1000) + equity SA (2500) = 3500
+        assert self._row(df, "0060") == pytest.approx(3500.0)
+        # SA equity class row keeps the book
+        assert self._row(df, "0210") == pytest.approx(2500.0)
+
+    def test_b31_totals_unchanged_and_footing_holds(self) -> None:
+        """B31: totals count equity once and 0060 + 0220 == 0050."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_b31_equity_results(), framework="BASEL_3_1")
+        assert bundle.c_02_00 is not None
+        df = bundle.c_02_00
+        # Total = 1000 + 1000 + 2500 = 4500 (equity once)
+        assert self._row(df, "0010") == pytest.approx(4500.0)
+        assert self._row(df, "0050") == pytest.approx(4500.0)
+        assert self._row(df, "0040") == pytest.approx(4500.0 * 0.08)
+        # Footing: SA total + IRB total = credit risk total
+        assert self._row(df, "0060") + self._row(df, "0220") == pytest.approx(self._row(df, "0050"))
+
+    def test_crr_irb_equity_in_row_0420(self) -> None:
+        """CRR irb_simple: row 0420 holds the equity book (2,900)."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_crr_equity_irb_results(), framework="CRR")
+        assert bundle.c_02_00 is not None
+        assert self._row(bundle.c_02_00, "0420") == pytest.approx(2900.0)
+
+    def test_crr_irb_equity_not_in_sa_rows(self) -> None:
+        """CRR irb_simple: SA total (0060) and class row (0210) exclude the equity."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_crr_equity_irb_results(), framework="CRR")
+        assert bundle.c_02_00 is not None
+        df = bundle.c_02_00
+        # SA total = corporate SA only (1000); equity is IRB, not SA
+        assert self._row(df, "0060") == pytest.approx(1000.0)
+        # SA equity class row empties (equity is IRB)
+        assert self._row(df, "0210") == pytest.approx(0.0)
+
+    def test_crr_irb_equity_folds_into_irb_total(self) -> None:
+        """CRR irb_simple: IRB total (0220) includes the equity, footing holds."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_crr_equity_irb_results(), framework="CRR")
+        assert bundle.c_02_00 is not None
+        df = bundle.c_02_00
+        # IRB total = F-IRB (1000) + IRB equity (2900) = 3900
+        assert self._row(df, "0220") == pytest.approx(3900.0)
+        # Totals unchanged; footing holds
+        assert self._row(df, "0010") == pytest.approx(4900.0)
+        assert self._row(df, "0060") + self._row(df, "0220") == pytest.approx(self._row(df, "0050"))
+
+    def test_crr_sa_equity_in_sa_rows_only(self) -> None:
+        """CRR sa-method equity: reports in SA rows only, row 0420 empties."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_crr_equity_sa_results(), framework="CRR")
+        assert bundle.c_02_00 is not None
+        df = bundle.c_02_00
+        # SA total = corporate SA (1000) + equity SA (2500) = 3500
+        assert self._row(df, "0060") == pytest.approx(3500.0)
+        assert self._row(df, "0210") == pytest.approx(2500.0)
+        # IRB total = F-IRB only (1000); row 0420 empty
+        assert self._row(df, "0220") == pytest.approx(1000.0)
+        assert self._row(df, "0420") == pytest.approx(0.0)
+        # Footing holds
+        assert self._row(df, "0060") + self._row(df, "0220") == pytest.approx(self._row(df, "0050"))
+
+    def test_equity_free_run_row_0420_empty(self) -> None:
+        """Equity-free run (no equity_method column): 0420 zero-fills, no crash."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_c02_mixed_results(), framework="CRR")
+        assert bundle.c_02_00 is not None
+        assert self._row(bundle.c_02_00, "0420") == pytest.approx(0.0)
+
+
 class TestOF0200FloorIndicatorRows:
     """Tests for OF 02.00 output floor indicator rows 0034-0036.
 

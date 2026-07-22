@@ -53,9 +53,8 @@ BOTH regimes get it):
                tests/unit/reporting/pillar3/test_ov1_ccr_routing.py; no fixture
                carries a CCR_DEFAULT_FUND leg, so it is unreachable from here.
 
-Row 29 (Total) and Basel 3.1's row 4a (Total RWEAs pre-floor) are ALL-RISK-TYPE
-totals: they must NOT move. The fix is a re-cut of the row axis, not a change to
-the book.
+Row 29 (Total) is an ALL-RISK-TYPE total: it must NOT move. The fix is a re-cut
+of the row axis, not a change to the book.
 
 The tie-outs at the foot of this file are the point of the exercise — OV1, CCR1
 and CCR8 describe the same netting sets, and any of them would have caught D1 on
@@ -63,7 +62,10 @@ day one:
 
     OV1 row 7   == CCR1 row 1 column b   (SA-CCR RWEA — the bilateral leg only)
     OV1 row UK8a == CCR8 row 1 column a  (the QCCP RWEA)
-    OV1 row 6   == CCR8 row 21 column a  == sum(rwa_final) over the CCR risk types
+    OV1 row 6   == sum(rwa_final) over the CCR risk types (the WHOLE CCR book)
+    OV1 row UK8a == CCR8 row 21 column a  (CCR8 is CCP-scoped: its Total is the
+                 CCP population — a subset of the whole-CCR row 6, CRR Art. 439(i);
+                 the bilateral derivative that sits in row 6 is NOT in CCR8's Total)
     OV1 row 1 + row 6 == row 29          (the footing row 1's label promised)
     OV1 row 1  != row 29 on a book with CCR  (the regression pin for D1 itself)
 
@@ -197,8 +199,6 @@ _EXPECTED: dict[tuple[str, str], dict[str, float | None]] = {
         "2": 2_500_000.0,
         "3": 0.0,
         "4": 0.0,
-        # The pre-floor total: an all-risk-type total, UNCHANGED.
-        "4a": 4_060_296.719974031,
         "5": 0.0,
         _ROW_CCR: 1_560_296.719974031,
         _ROW_SA_CCR: 1_462_778.174975654,
@@ -508,35 +508,50 @@ def test_ov1_ccr_of_which_rows_partition_the_ccr_row(
 
 
 @pytest.mark.parametrize("regime", _CCR_CASES)
-def test_ov1_ccr_row_ties_to_ccr8_total_and_to_the_ledger(
+def test_ov1_ccr_row_ties_to_the_ledger_and_ccr8_total_ties_to_the_ccp_row(
     regime: str, runs: dict[tuple[str, str], _Run]
 ) -> None:
-    """Row 6 == CCR8 row 21 column a == sum(``rwa_final``) over the CCR risk types.
+    """Row 6 == the whole CCR book; CCR8 row 21 == OV1 row UK8a (the CCP subset).
 
-    The CCR charge is ONE number, and three surfaces publish it: OV1's CCR row,
-    CCR8's Total, and the sealed ledger. If they disagree, one of them has
-    mis-scoped Chapter 6.
+    OV1 row 6 ("Counterparty credit risk - CCR") is the WHOLE CCR book and must
+    tie to the sealed ledger's rwa_final over the CCR risk types. CCR8 discloses
+    "Exposures to central counterparties" (CRR Art. 439(i)), so its Total (row 21)
+    is the CCP population ONLY — a strict subset of row 6 — and ties to OV1's CCP
+    of-which row UK8a, NOT to row 6. The bilateral (non-CCP) derivative that lives
+    in row 6 must NOT appear in CCR8's Total: that over-inclusion was the R5 defect.
 
-    Arrange: the CCR reporting portfolio.
+    Arrange: the CCR reporting portfolio (one bilateral swap + one QCCP swap).
     Act:     run the pipeline -> Pillar 3 OV1 + CCR8 + the ledger.
-    Assert:  all three agree.
+    Assert:  OV1 row 6 == ledger whole-CCR; CCR8 Total == OV1 UK8a < OV1 row 6.
     """
     # Arrange + Act
     run = runs[(regime, "ccr")]
     assert run.ccr8 is not None, f"[{regime}] CCR8 was not generated for the CCR book"
     ov1_ccr = run.ov1_row(_ROW_CCR)["a"]
+    ov1_ccp = run.ov1_row(_ROW_CCP)["a"]
     ccr8_total = _one_row(run.ccr8, "21", "CCR8")["a"]
     ledger_ccr = run.rwa_final(ccr=True)
 
-    # Assert
+    # Assert — OV1 row 6 is the whole CCR book (unchanged by the CCR8 fix).
     assert ov1_ccr == pytest.approx(ledger_ccr, rel=_REL, abs=_ABS), (
         f"[{regime}] OV1 row {_ROW_CCR} ('Counterparty credit risk - CCR') reports "
         f"{ov1_ccr}, but the ledger carries {ledger_ccr:,.6f} of rwa_final on risk "
         f"types {_CCR_RISK_TYPES}."
     )
-    assert ov1_ccr == pytest.approx(ccr8_total, rel=_REL, abs=_ABS), (
-        f"[{regime}] OV1 row {_ROW_CCR} reports {ov1_ccr} of CCR RWEA while CCR8 row 21 "
-        f"(Total) reports {ccr8_total} on the same book. Two disclosures, one charge."
+    # CCR8's Total is CCP-scoped: it ties to OV1's CCP row, not the whole-CCR row.
+    assert ccr8_total == pytest.approx(ov1_ccp, rel=_REL, abs=_ABS), (
+        f"[{regime}] CCR8 row 21 (Total) reports {ccr8_total} while OV1 row {_ROW_CCP} "
+        f"('Of which exposures to a CCP') reports {ov1_ccp}. CCR8 is "
+        "'Exposures to central counterparties' (Art. 439(i)) — its Total is the CCP "
+        "population, which is exactly OV1's UK8a of-which row."
+    )
+    # The regression pin for R5: the bilateral (non-CCP) derivative sits in row 6
+    # but must be EXCLUDED from CCR8's Total, so on this book CCR8 Total < row 6.
+    assert ccr8_total != pytest.approx(ov1_ccr, rel=_REL, abs=_ABS), (
+        f"[{regime}] CCR8 row 21 (Total, {ccr8_total}) equals OV1 row {_ROW_CCR} "
+        f"(whole CCR, {ov1_ccr}) — but this book carries a bilateral (non-CCP) "
+        "derivative that belongs in CCR1/CCR2, not in the CCP-exposures template. "
+        "CCR8's Total swept in the whole CCR book: that is the R5 defect."
     )
 
 

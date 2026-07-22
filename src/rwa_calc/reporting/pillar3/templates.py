@@ -180,8 +180,8 @@ OV1_COLUMNS: list[P3Column] = [
 # a UK-specific insert (``UK4a``): a bare token, no space.
 #
 # Placed immediately after row 5 (the last "of which" of row 1) — the block's
-# regulatory position. The Basel 3.1 pre-floor/ratio rows (4a, 5a-7b) are our own
-# supplementary grafts and do not dictate where the fixed-format block sits.
+# regulatory position in the fixed-format template (CCR rows precede the equity
+# rows 11-14, per the UKB OV1 layout in PS1/26 Annex II).
 #
 # Row 10 (CVA) is deliberately NOT added: the engine's BA-CVA charge is not a
 # per-leg ``rwa_final``, so there is nothing to bind (recorded gap,
@@ -206,20 +206,22 @@ CRR_OV1_ROWS: list[P3Row] = [
     P3Row("29", "Total", is_total=True),
 ]
 
+# The UKB OV1 row set (PS1/26 Annex II, "Template UKB OV1 — Overview of
+# risk-weighted exposure amounts. Fixed format"). The only output-floor lines
+# the fixed template carries are row 26 (output floor multiplier, Art. 92(5))
+# and row 27 (output floor adjustment, Art. 92); rows 25 and 28 are "Empty set
+# in the UK". The pre-floor RWEA line and the pre-floor capital-ratio lines that
+# earlier versions grafted here as refs 4a / 5a-7b do NOT belong to OV1 — they
+# are UKB KM1 rows (KM1 4a "Total RWEAs (pre-floor)", KM1 5b/6b/7b the pre-floor
+# CET1/Tier1/Total ratios); this calculator does not produce KM1. Removed in the
+# R16 rectification (docs/appendix/changelog.md; PS1/26 Annex II pp. 1-9).
 B31_OV1_ROWS: list[P3Row] = [
     P3Row("1", _LBL_CREDIT_RISK_EX_CCR),
     P3Row("2", "Of which: standardised approach"),
     P3Row("3", "Of which: foundation IRB approach"),
     P3Row("4", "Of which: slotting approach"),
-    P3Row("4a", "Total RWEAs (pre-floor)"),
     P3Row("5", "Of which: advanced IRB approach"),
     *_OV1_CCR_ROWS,
-    P3Row("5a", "CET1 ratio (pre-floor)"),
-    P3Row("5b", "CET1 ratio (pre-floor, transitional)"),
-    P3Row("6a", "Tier 1 ratio (pre-floor)"),
-    P3Row("6b", "Tier 1 ratio (pre-floor, transitional)"),
-    P3Row("7a", "Total capital ratio (pre-floor)"),
-    P3Row("7b", "Total capital ratio (pre-floor, transitional)"),
     P3Row("11", "Equity positions under IRB Transitional Approach"),
     P3Row("12", "Equity investments in funds — look-through approach"),
     P3Row("13", "Equity investments in funds — mandate-based approach"),
@@ -631,18 +633,37 @@ B31_CR10_SUBTEMPLATES: dict[str, str] = {
     "hvcre": "CR10.5 — High volatility commercial RE",
 }
 
-# Slotting rows within each CR10 sub-template (category, pipeline value, risk weight %)
-# Risk weights are for non-HVCRE SL types; HVCRE has different weights (handled by generator)
-CR10_SLOTTING_ROWS: list[P3Row] = [
-    P3Row("1", "Strong"),
-    P3Row("2", "Good"),
-    P3Row("3", "Satisfactory"),
-    P3Row("4", "Weak"),
-    P3Row("5", "Default"),
-    P3Row("6", "Total", is_total=True),
+# CR10.1-CR10.4 slotting rows. Each of the five Art. 153(5) Table A supervisory
+# categories splits into two remaining-maturity bands (< 2.5 years / >= 2.5
+# years): column c ("This is a fixed column. It shall not be altered") is
+# maturity-dependent for Strong (50%/70%) and Good (70%/90%) and flat for
+# Satisfactory/Weak/Default, so a single category row cannot carry one fixed
+# weight when it mixes maturities. Two maturity-split Total rows close the sheet.
+# This mirrors COREP C 08.06 / OF 08.06 (the same Art. 153(5) Table A split), so
+# the COREP and Pillar 3 slotting disclosures stay row-consistent.
+#
+# Each tuple: (row_ref, slotting_category pipeline value | None for a Total row,
+# is_short_maturity, display label). is_short True = remaining maturity < 2.5
+# years, False = >= 2.5 years. The generator stamps the displayed column-c
+# weight per row from SLOTTING_RISK_WEIGHTS / _SHORT (HVCRE variants for CR10.5).
+CR10_SLOTTING_ROWS: list[tuple[str, str | None, bool, str]] = [
+    ("1", "strong", True, "Category 1 (Strong) — remaining maturity < 2.5 years"),
+    ("2", "strong", False, "Category 1 (Strong) — remaining maturity >= 2.5 years"),
+    ("3", "good", True, "Category 2 (Good) — remaining maturity < 2.5 years"),
+    ("4", "good", False, "Category 2 (Good) — remaining maturity >= 2.5 years"),
+    ("5", "satisfactory", True, "Category 3 (Satisfactory) — remaining maturity < 2.5 years"),
+    ("6", "satisfactory", False, "Category 3 (Satisfactory) — remaining maturity >= 2.5 years"),
+    ("7", "weak", True, "Category 4 (Weak) — remaining maturity < 2.5 years"),
+    ("8", "weak", False, "Category 4 (Weak) — remaining maturity >= 2.5 years"),
+    ("9", "default", True, "Category 5 (Default) — remaining maturity < 2.5 years"),
+    ("10", "default", False, "Category 5 (Default) — remaining maturity >= 2.5 years"),
+    ("11", None, True, "Total — remaining maturity < 2.5 years"),
+    ("12", None, False, "Total — remaining maturity >= 2.5 years"),
 ]
 
-# Pipeline slotting_category values
+# Pipeline slotting_category values (display name -> pipeline value). Retained as
+# public reference data; the CR10 row tuples above carry the pipeline value
+# directly.
 CR10_CATEGORY_MAP: dict[str, str] = {
     "Strong": "strong",
     "Good": "good",
@@ -651,7 +672,16 @@ CR10_CATEGORY_MAP: dict[str, str] = {
     "Default": "default",
 }
 
-# Standard slotting risk weights by category (non-HVCRE)
+# Fixed CR10 column-c risk weights per supervisory category (Art. 153(5) Table A
+# / Table 1). The weight is remaining-maturity dependent for Strong/Good and flat
+# for Satisfactory/Weak/Default; column c ("This is a fixed column. It shall not
+# be altered") therefore needs the correct band's weight per maturity-split row.
+# These mirror the engine's pack values (rulebook/packs slotting_rw_base / _short
+# / _hvcre / _hvcre_short) — the pack-homing of these DISPLAY constants is a
+# recorded follow-up (cr10.py docstring; plan §7). "_SHORT" = remaining maturity
+# < 2.5 years; the base maps = remaining maturity >= 2.5 years.
+
+# Non-HVCRE, remaining maturity >= 2.5 years.
 SLOTTING_RISK_WEIGHTS: dict[str, float] = {
     "strong": 0.70,
     "good": 0.90,
@@ -660,12 +690,57 @@ SLOTTING_RISK_WEIGHTS: dict[str, float] = {
     "default": 0.00,
 }
 
+# Non-HVCRE, remaining maturity < 2.5 years (Strong/Good take the preferential
+# weights — CRR/PS1/26 Art. 153(5): Strong 50%, Good 70%).
+SLOTTING_RISK_WEIGHTS_SHORT: dict[str, float] = {
+    "strong": 0.50,
+    "good": 0.70,
+    "satisfactory": 1.15,
+    "weak": 2.50,
+    "default": 0.00,
+}
+
+# HVCRE (Basel 3.1 CR10.5 only — UK CRR has no HVCRE table), maturity >= 2.5y.
 HVCRE_RISK_WEIGHTS: dict[str, float] = {
     "strong": 0.95,
     "good": 1.20,
     "satisfactory": 1.40,
     "weak": 2.50,
     "default": 0.00,
+}
+
+# HVCRE, remaining maturity < 2.5 years (Strong 70%, Good 95%).
+HVCRE_RISK_WEIGHTS_SHORT: dict[str, float] = {
+    "strong": 0.70,
+    "good": 0.95,
+    "satisfactory": 1.40,
+    "weak": 2.50,
+    "default": 0.00,
+}
+
+# CR10.5 — Equity exposures under the IRB simple risk-weighted approach
+# (CRR Art. 155(2); disclosed per Art. 438(e)). Basel 3.1 has NO equity CR10
+# subtemplate — Art. 147A removes IRB equity, so B31_CR10_SUBTEMPLATES carries
+# HVCRE at CR10.5 instead. The three fixed supervisory bands, in Art. 155(2)
+# order: (a) diversified private equity 190%, (b) exchange-traded 290%, (c) all
+# other 370%. Rows are NOT the slotting supervisory categories — a leg is mapped
+# to its band by the applied simple risk weight (``reporting_rw``).
+CR10_EQUITY_ROWS: list[P3Row] = [
+    P3Row("1", "Private equity exposures"),
+    P3Row("2", "Exchange-traded equity exposures"),
+    P3Row("3", "Other equity exposures"),
+    P3Row("4", "Total", is_total=True),
+]
+
+# Applied Art. 155(2) simple risk weight (decimal) per CR10.5 band row. Drives
+# both the fixed display column c (x100) and the ``reporting_rw`` band match; the
+# bands are far enough apart (190/290/370%) that a small match tolerance never
+# overlaps. Central-bank equity (0% simple RW) has no band row and falls only
+# into the Total, exactly as the slotting Default row is the sole 0% category.
+CR10_EQUITY_RISK_WEIGHTS: dict[str, float] = {
+    "1": 1.90,
+    "2": 2.90,
+    "3": 3.70,
 }
 
 

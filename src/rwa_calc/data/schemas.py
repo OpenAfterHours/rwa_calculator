@@ -277,6 +277,15 @@ FACILITY_SCHEMA: dict[str, ColumnSpec] = {
     # False — unscoped / non-CUG / consolidated runs leave it all-False, so the
     # override is a no-op and behaviour is byte-identical.
     "intragroup_zero_rw_eligible": ColumnSpec(pl.Boolean, default=False, required=False),
+    # CRR Art. 148 (sequential IRB implementation) / Art. 150 (permanent partial
+    # use): True flags an SA-treated exposure that the firm's approved roll-out
+    # plan schedules to move to the IRB approach. A firm-owned INPUT fact (not
+    # derivable) surfaced ONLY in COREP C 08.07 / OF 08.07 col 0040 ("Of which:
+    # % subject to a roll-out plan"), which carves this slice out of col 0030
+    # (permanent partial use); it never changes any RWA/EAD figure. Default False
+    # — an absent / unflagged exposure is treated as permanent partial use, so
+    # col 0040 stays 0.0 and behaviour is byte-identical.
+    "is_under_irb_rollout": ColumnSpec(pl.Boolean, default=False, required=False),
 }
 
 LOAN_SCHEMA: dict[str, ColumnSpec] = {
@@ -381,6 +390,9 @@ LOAN_SCHEMA: dict[str, ColumnSpec] = {
     # notes. Default False; the scope resolver sets it on eligible individual-
     # basis intragroup rows and the SA final-RW override assigns the 0% value.
     "intragroup_zero_rw_eligible": ColumnSpec(pl.Boolean, default=False, required=False),
+    # CRR Art. 148/150 IRB roll-out-plan flag — see FACILITY_SCHEMA for full
+    # notes. Default False; surfaced only in COREP C 08.07 / OF 08.07 col 0040.
+    "is_under_irb_rollout": ColumnSpec(pl.Boolean, default=False, required=False),
     # Note: CCF fields (risk_type, ccf_modelled, is_short_term_trade_lc) are NOT included
     # because CCF only applies to off-balance sheet items (undrawn commitments, contingents).
     # Drawn loans are already on-balance sheet, so EAD = drawn_amount + interest directly.
@@ -471,6 +483,9 @@ CONTINGENTS_SCHEMA: dict[str, ColumnSpec] = {
     # notes. Default False; the scope resolver sets it on eligible individual-
     # basis intragroup rows and the SA final-RW override assigns the 0% value.
     "intragroup_zero_rw_eligible": ColumnSpec(pl.Boolean, default=False, required=False),
+    # CRR Art. 148/150 IRB roll-out-plan flag — see FACILITY_SCHEMA for full
+    # notes. Default False; surfaced only in COREP C 08.07 / OF 08.07 col 0040.
+    "is_under_irb_rollout": ColumnSpec(pl.Boolean, default=False, required=False),
 }
 
 COUNTERPARTY_SCHEMA: dict[str, ColumnSpec] = {

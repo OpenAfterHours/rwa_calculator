@@ -46,7 +46,8 @@ docs/plans/phase7-declarative-reporting.md §6):
   - 0070 - 0080 - 0090 + 0100; 0150 = max(0, 0110 - 0130). The COREP
   Annex II §1.3 "(-)" sign convention is applied by a module post-step
   AFTER execution (negating {0030, 0035, 0050, 0060, 0070, 0080, 0090,
-  0130, 0140}; -0.0 normalised; null stays null).
+  0130, 0140} plus the CRR supporting-factor adjustments {0216, 0217};
+  -0.0 normalised; null stays null).
 - Row subsets reproduce the retired section builders as tolerant-equals
   terms over raw and module-derived discriminator columns (defaulted /
   SME / materially-dependent / qualifying-RE ladders, the RW band label,
@@ -69,7 +70,6 @@ References:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
@@ -92,15 +92,27 @@ from rwa_calc.reporting.corep.templates import (
     get_sa_risk_weight_bands,
     get_sa_row_sections,
 )
-from rwa_calc.reporting.kernel import filter_by_approach, pick
+from rwa_calc.reporting.kernel import filter_by_approach, gross_carriers, pick
 from rwa_calc.reporting.metadata import ReportingContext
+from rwa_calc.reporting.plans import SheetPlan
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
 # COREP Annex II §1.3 "(-)"-labelled deduction columns, negated post-execute.
+# 0216/0217 are the CRR-only "(-) SME/Infrastructure supporting factor adjustment"
+# columns (Art. 501/501a) — reported negative so 0215 + 0216 + 0217 = 0220 foots.
 _NEGATIVE_COLS: frozenset[str] = frozenset(
-    {"0030", "0035", "0050", "0060", "0070", "0080", "0090", "0130", "0140"}
+    {"0030", "0035", "0050", "0060", "0070", "0080", "0090", "0130", "0140", "0216", "0217"}
+)
+
+# Col 0030 provisions carriers, in preference order: the specific / general
+# provision input pass-throughs (never sealed on the aggregator exit — present
+# only on synthetic unit frames a book supplies) then the sealed SA Art. 111(2)
+# deducted provision. Any one present drives the c07_provision derivation in
+# _prepare; none present keeps the retired SafeSum(scra, gcra) binding.
+_PROVISION_SOURCES: frozenset[str] = frozenset(
+    {"scra_provision_amount", "gcra_provision_amount", "provision_deducted"}
 )
 
 # CCF bucket maps: ccf_applied (rounded to 4dp) -> column ref.
@@ -205,31 +217,6 @@ def _fully_adjusted(cells: Mapping[str, float | None], _prior: bool) -> float | 
     return max(0.0, (cells["0110"] or 0.0) - (cells["0130"] or 0.0))
 
 
-@dataclass(frozen=True)
-class SheetPlan:
-    """Everything one C 07.00 sheet is executed from.
-
-    The spec + the prepared, partitioned frame + the side context ARE the
-    definition of every cell on that sheet: ``execute(spec, frame, ctx)``
-    produces it. Exposing the plan (rather than only the rendered frame) lets a
-    consumer that must explain a cell — the lineage drill-down — read the very
-    same ``CellSpec`` and run the very same ``RowPredicate`` over the very same
-    rows the generator used, instead of re-deriving the population, the Art.
-    112(1)(g) merge, the derived discriminators and the sheet partition (a copy
-    that could silently drift from the reported figure).
-
-    ``row_terms`` and ``negative_cols`` carry the two post-``execute`` passes
-    (all-null inert rows; the Annex II §1.3 "(-)" negation), so a consumer knows
-    a rendered cell's sign and emptiness policy without re-deciding either.
-    """
-
-    spec: TemplateSpec
-    frame: pl.DataFrame
-    ctx: ReportingContext
-    row_terms: dict[str, _Terms | None]
-    negative_cols: frozenset[str] = _NEGATIVE_COLS
-
-
 @cites("PS1/26, paragraph 1.3")
 def c07_plans(
     results: pl.LazyFrame,
@@ -281,6 +268,7 @@ def c07_plans(
             spec=spec,
             frame=sa_df.filter(pl.col(ec_col) == ec),
             ctx=ReportingContext(substitution_inflow=inflow_map.get(ec, 0.0)),
+            negative_cols=_NEGATIVE_COLS,
             row_terms=row_terms,
         )
     return plans
@@ -504,6 +492,64 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
                 )
             )
 
+    # Col 0030 provisions magnitude (Annex II "(-) Value adjustments and
+    # provisions associated with the original exposure"). SCRA/GCRA-preferred,
+    # SA-carrier fallback ladder — the same preference ORDER as C 08.01/02's
+    # provisions ladder (``_provisions_postfix``), but at a different GRANULARITY
+    # and derived at a different point:
+    #   - Granularity (the recorded C 07 contract): the pick is PER EXPOSURE ROW
+    #     here — each row takes its own scra+gcra when non-degenerate, else its
+    #     own provision_deducted — then the row cell sums those picks. C 08
+    #     decides PER CELL: it aggregates scra/gcra over the whole row subset and
+    #     swaps the entire cell to provision_held only when that aggregate nets
+    #     to ~0. The two diverge only on a frame where some rows carry scra/gcra
+    #     and others do not; per-row is deliberate and pinned by
+    #     test_c07_provisions.py::test_mixed_frame_picks_per_row_not_per_cell.
+    #   - Timing: derived HERE pre-execute (a c07_provision column) rather than as
+    #     a post-execute patch, because col 0040's Formula (0010 - 0030) must
+    #     consume the corrected magnitude in the SAME execute pass (0290 on C 08
+    #     has no dependent formula, so C 08 can patch it after execute).
+    # The fallback carrier is the sealed SA Art. 111(2) deducted provision
+    # (``provision_deducted`` = provision_on_drawn + provision_on_nominal), which
+    # is EXACTLY the amount the EAD math removes from the gross exposure
+    # (engine/crm/guarantees.py: on_bal = drawn - provision_on_drawn; nominal =
+    # nominal - provision_on_nominal), so 0040 reconstructs the engine's own
+    # net-of-provisions basis. ``provision_allocated`` was CONSIDERED AND
+    # REJECTED: it can exceed provision_deducted for an over-provisioned exposure
+    # (the deduction is capped at drawn+nominal by the min() in provisions.py), so
+    # summing it into 0030 would over-report the deduction and break the
+    # 0040 = engine-net-basis identity. scra/gcra are never sealed on the
+    # aggregator exit, so a real submission resolves to provision_deducted; the
+    # synthetic COREP unit frames that supply scra/gcra keep their more granular
+    # figure. CCR synthetic rows carry provision_deducted = null/0 (no Art. 111(2)
+    # drawn-first deduction), so they contribute nothing to 0030.
+    if _PROVISION_SOURCES & cols:
+        carrier = (
+            pl.col("provision_deducted").fill_null(0.0)
+            if "provision_deducted" in cols
+            else pl.lit(0.0)
+        )
+        if {"scra_provision_amount", "gcra_provision_amount"} & cols:
+            scra = (
+                pl.col("scra_provision_amount").fill_null(0.0)
+                if "scra_provision_amount" in cols
+                else pl.lit(0.0)
+            )
+            gcra = (
+                pl.col("gcra_provision_amount").fill_null(0.0)
+                if "gcra_provision_amount" in cols
+                else pl.lit(0.0)
+            )
+            supplied = scra + gcra
+            exprs.append(
+                pl.when(supplied.abs() >= 1e-9)
+                .then(supplied)
+                .otherwise(carrier)
+                .alias("c07_provision")
+            )
+        else:
+            exprs.append(carrier.alias("c07_provision"))
+
     return data.with_columns(exprs) if exprs else data
 
 
@@ -695,10 +741,16 @@ def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row
         return RowPredicate(equals=(*terms, *extra))
 
     cells: dict[str, CellSpec] = {
-        "0010": CellSpec(SafeSum(("drawn_amount", "undrawn_amount")), predicate=member),
+        "0010": CellSpec(
+            SafeSum(gross_carriers(cols, "drawn_amount", "undrawn_amount")), predicate=member
+        ),
         "0020": CellSpec(Sum("own_funds_deduction_amount"), predicate=member),
-        "0030": CellSpec(
-            SafeSum(("scra_provision_amount", "gcra_provision_amount")), predicate=member
+        "0030": (
+            CellSpec(Sum("c07_provision"), predicate=member)
+            if _PROVISION_SOURCES & cols
+            else CellSpec(
+                SafeSum(("scra_provision_amount", "gcra_provision_amount")), predicate=member
+            )
         ),
         "0050": (
             CellSpec(
@@ -854,9 +906,19 @@ def _null_empty_rows(
 
 def _negate_deduction_cols(frame: pl.DataFrame) -> pl.DataFrame:
     """COREP Annex II §1.3: emit "(-)"-labelled deduction columns as negative
-    figures (after the waterfalls consumed positive magnitudes); -0.0 is
-    normalised to 0.0 and null stays null."""
+    figures (after the waterfalls consumed positive magnitudes); a zero
+    deduction is normalised to ``+0.0`` and null stays null."""
     targets = [col for col in frame.columns if col in _NEGATIVE_COLS]
     if not targets:
         return frame
-    return frame.with_columns(((-pl.col(col)) + pl.lit(0.0)).alias(col) for col in targets)
+    return frame.with_columns(_negate_expr(col) for col in targets)
+
+
+def _negate_expr(col: str) -> pl.Expr:
+    """Negate a "(-)"-labelled deduction column, normalising a zero to ``+0.0``.
+
+    Plain ``-pl.col(col)`` flips the IEEE sign bit, so a ``0.0`` cell would
+    serialise as ``-0.0`` (``+ 0.0`` does NOT clear it in Polars); the explicit
+    zero branch keeps a zero deduction as ``+0.0``. Null stays null. Identical
+    expression to C 08.01/02's ``_negate`` pass."""
+    return pl.when(pl.col(col) == 0.0).then(pl.lit(0.0)).otherwise(-pl.col(col)).alias(col)

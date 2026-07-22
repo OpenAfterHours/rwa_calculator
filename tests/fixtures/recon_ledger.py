@@ -69,6 +69,22 @@ def with_reporting_ledger(ours: pl.LazyFrame) -> pl.LazyFrame:
             # as the lenient seal would — the sealed ledger always carries the
             # column, and a null never matches a predicate.
             exprs.append(pl.lit(None, dtype=dtypes[target]).alias(target))
+    # Floored gross-exposure carriers — mirror the aggregator's clip-at-0 of
+    # the raw drawn/interest/nominal/undrawn amounts (a negative on-balance
+    # netting deposit must never make a gross-exposure cell go negative). When
+    # the raw source is absent, inject a typed null exactly as the seal would.
+    for target, source in (
+        ("reporting_gross_drawn", "drawn_amount"),
+        ("reporting_gross_interest", "interest"),
+        ("reporting_gross_nominal", "nominal_amount"),
+        ("reporting_gross_undrawn", "undrawn_amount"),
+    ):
+        if target in cols:
+            continue
+        if source in cols:
+            exprs.append(pl.col(source).clip(lower_bound=0.0).alias(target))
+        else:
+            exprs.append(pl.lit(None, dtype=pl.Float64).alias(target))
     if "reporting_on_balance_sheet" not in cols:
         # Mirrors the aggregator's exposure-type rule (bs_type never reaches
         # the aggregator): loan -> on-BS, facility/contingent -> off-BS,
@@ -104,14 +120,12 @@ class LedgerShimPillar3Generator:
                 results,
                 *,
                 framework="CRR",
-                capital_ratios=None,
                 output_floor_summary=None,
                 previous_period_results=None,
             ):
                 return super().generate_from_lazyframe(
                     with_reporting_ledger(results),
                     framework=framework,
-                    capital_ratios=capital_ratios,
                     output_floor_summary=output_floor_summary,
                     previous_period_results=previous_period_results,
                 )

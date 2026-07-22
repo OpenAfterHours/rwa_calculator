@@ -3,7 +3,7 @@
 {"row_ref":"0020","row_name":"Institutions","a":null,"b":null,"c":1560296.719974031,"d":1560296.719974031}
 {"row_ref":"0030","row_name":"Subordinated debt, equity and other own funds","a":null,"b":null,"c":0.0,"d":null}
 {"row_ref":"0040","row_name":"Corporates","a":null,"b":null,"c":2500000.0,"d":2500000.0}
-{"row_ref":"0041","row_name":"  Of which are FIRB","a":null,"b":null,"c":2500000.0,"d":2500000.0}
+{"row_ref":"0041","row_name":"  Of which are FIRB","a":null,"b":null,"c":0.0,"d":2500000.0}
 {"row_ref":"0042","row_name":"  Of which are AIRB","a":null,"b":null,"c":null,"d":null}
 {"row_ref":"0043","row_name":"  Of which: specialised lending exposures","a":null,"b":null,"c":0.0,"d":null}
 {"row_ref":"0044","row_name":"  Of which: IPRE and HVCRE exposures","a":null,"b":null,"c":null,"d":null}

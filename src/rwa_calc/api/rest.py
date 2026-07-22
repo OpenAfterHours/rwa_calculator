@@ -46,7 +46,6 @@ from rwa_calc.api.models import ValidationRequest
 from rwa_calc.api.reconciliation import loads_reconciliation_config
 from rwa_calc.api.service import CreditRiskCalc, get_supported_frameworks
 from rwa_calc.api.validation import DataPathValidator
-from rwa_calc.contracts.config import Pillar3CapitalRatioOverrides
 from rwa_calc.domain.enums import ReportingBasis
 from rwa_calc.reporting import catalog, lineage
 from rwa_calc.reporting.facts import FilingMetadata
@@ -385,24 +384,56 @@ def cell_lineage(  # noqa: PLR0913 - the cell key plus paging
     self-describing — and returns ``cell_value`` AS REPORTED (read from the
     generated template, never recomputed) alongside the contributing ledger legs.
 
-    A template with no lineage (still imperative — C 34.x, CCR1-8) or a cell that
-    is not on the template is a clean 404, never a re-derived guess.
+    A template with no lineage (only C 02.00, the imperative kernel hybrid) or a
+    cell that is not on the template is a clean 404, never a re-derived guess.
     """
     response = _require_run(run_id)
-    result = lineage.drilldown(
-        response,
-        template,
+    if not lineage.is_instrumented(template):
+        raise HTTPException(
+            status_code=404,
+            detail=f"template {template!r} is not instrumented for lineage",
+        )
+    resolver = lineage.sheet_lineage(response, template, sheet or None)
+    query = resolver.query(row, col) if resolver is not None else None
+    if resolver is None or query is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"unknown cell {template}/{sheet or '-'}/{row}/{col}",
+        )
+    if query.derives_from_prior_period:
+        # A distinct refusal (R19 404-with-reason pattern): the cell's value is a
+        # prior-period figure, and this drill-down runs on the current-period
+        # ledger only — so a 200 would report a null that contradicts the screen.
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"cell {template}/{row}/{col} derives from the prior period; "
+                "drill-down covers the current-period ledger only"
+            ),
+        )
+    if query.reads_unavailable_side_value:
+        # Same never-disagree contract for an out-of-frame SideContext (OV1 row
+        # 27's OF-ADJ): the reported template is generated WITH the run's
+        # output-floor summary, but this drill-down's plan carries no side input,
+        # so a 200 would report a null that contradicts the figure on the screen.
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"cell {template}/{row}/{col} reads an out-of-frame side value "
+                "this drill-down does not carry"
+            ),
+        )
+    result = resolver.cell(
         row,
         col,
         run_id=run_id,
-        sheet=sheet,
         offset=max(0, offset),
         limit=max(1, min(limit, _MAX_PAGE)),
     )
     if result is None:
         raise HTTPException(
             status_code=404,
-            detail=f"no lineage available for cell {template}/{sheet or '-'}/{row}/{col}",
+            detail=f"unknown cell {template}/{sheet or '-'}/{row}/{col}",
         )
 
     query = result.query
@@ -559,7 +590,7 @@ def reconcile_export(fmt: Literal["csv", "excel"], recon_id: str) -> FileRespons
 
 
 @router.get("/export/{fmt}", responses=_RESP_404)
-def export(  # noqa: PLR0913 - the pillar3 comparative-period + capital-ratio inputs
+def export(
     fmt: Literal[
         "parquet",
         "csv",
@@ -574,12 +605,6 @@ def export(  # noqa: PLR0913 - the pillar3 comparative-period + capital-ratio in
     run_id: str,
     entity_identifier: str | None = None,
     prior_run_id: str | None = None,
-    cet1_ratio_pre_floor: Decimal | None = None,
-    cet1_ratio_pre_floor_transitional: Decimal | None = None,
-    tier1_ratio_pre_floor: Decimal | None = None,
-    tier1_ratio_pre_floor_transitional: Decimal | None = None,
-    total_ratio_pre_floor: Decimal | None = None,
-    total_ratio_pre_floor_transitional: Decimal | None = None,
 ) -> FileResponse:
     """Export a completed run and stream it back for download.
 
@@ -604,10 +629,6 @@ def export(  # noqa: PLR0913 - the pillar3 comparative-period + capital-ratio in
       reporting_date not strictly earlier than this run's) is a 422.
       Omitted, CR8 / C 08.04's opening/flow rows stay null (unchanged
       behaviour); there is no auto-selected fallback.
-    - The six ``*_ratio_pre_floor*`` query params (Pillar 3 formats only):
-      optional capital-ratio overrides for the CMS1/OV1 pre-floor disclosure
-      rows (see ``Pillar3CapitalRatioOverrides``). Any field left unset
-      leaves the corresponding row null, as today.
 
     This run's own output-floor summary is threaded through automatically for
     the Pillar 3 formats — it is the run's own data, not a caller input.
@@ -635,25 +656,13 @@ def export(  # noqa: PLR0913 - the pillar3 comparative-period + capital-ratio in
     # reporting_date (server-validated, path-safe) — entity_identifier is
     # unsanitised caller input and must never be folded into a filesystem path.
 
-    previous_period_results, capital_ratios = _resolve_export_inputs(
-        fmt,
-        response,
-        prior_run_id,
-        cet1_ratio_pre_floor=cet1_ratio_pre_floor,
-        cet1_ratio_pre_floor_transitional=cet1_ratio_pre_floor_transitional,
-        tier1_ratio_pre_floor=tier1_ratio_pre_floor,
-        tier1_ratio_pre_floor_transitional=tier1_ratio_pre_floor_transitional,
-        total_ratio_pre_floor=total_ratio_pre_floor,
-        total_ratio_pre_floor_transitional=total_ratio_pre_floor_transitional,
-    )
+    previous_period_results = _resolve_export_inputs(fmt, response, prior_run_id)
 
     if fmt in ("parquet", "csv", "excel"):
         return _export_raw(fmt, response, tmp, metadata)
     if fmt.startswith("corep"):
         return _export_corep(fmt, response, tmp, metadata, exporter, previous_period_results)
-    return _export_pillar3(
-        fmt, response, tmp, metadata, exporter, previous_period_results, capital_ratios
-    )
+    return _export_pillar3(fmt, response, tmp, metadata, exporter, previous_period_results)
 
 
 @router.get("/comparison/export/{fmt}", responses=_RESP_404)
@@ -960,69 +969,22 @@ def _require_prior_run(prior_run_id: str, current: CalculationResponse) -> Calcu
     return prior
 
 
-def _capital_ratio_overrides(
-    *,
-    cet1_ratio_pre_floor: Decimal | None,
-    cet1_ratio_pre_floor_transitional: Decimal | None,
-    tier1_ratio_pre_floor: Decimal | None,
-    tier1_ratio_pre_floor_transitional: Decimal | None,
-    total_ratio_pre_floor: Decimal | None,
-    total_ratio_pre_floor_transitional: Decimal | None,
-) -> Pillar3CapitalRatioOverrides | None:
-    """Build Pillar 3 capital-ratio overrides from query params, or None if unset.
-
-    None (rather than an all-None overrides instance) when the caller supplied
-    nothing, so the generator's own "no overrides supplied" branch applies —
-    it is not this endpoint's job to decide the fallback.
-    """
-    fields = {
-        "cet1_ratio_pre_floor": cet1_ratio_pre_floor,
-        "cet1_ratio_pre_floor_transitional": cet1_ratio_pre_floor_transitional,
-        "tier1_ratio_pre_floor": tier1_ratio_pre_floor,
-        "tier1_ratio_pre_floor_transitional": tier1_ratio_pre_floor_transitional,
-        "total_ratio_pre_floor": total_ratio_pre_floor,
-        "total_ratio_pre_floor_transitional": total_ratio_pre_floor_transitional,
-    }
-    if all(value is None for value in fields.values()):
-        return None
-    return Pillar3CapitalRatioOverrides(**fields)
-
-
-def _resolve_export_inputs(  # noqa: PLR0913 - the six pass-through capital-ratio query params
+def _resolve_export_inputs(
     fmt: str,
     response: CalculationResponse,
     prior_run_id: str | None,
-    *,
-    cet1_ratio_pre_floor: Decimal | None,
-    cet1_ratio_pre_floor_transitional: Decimal | None,
-    tier1_ratio_pre_floor: Decimal | None,
-    tier1_ratio_pre_floor_transitional: Decimal | None,
-    total_ratio_pre_floor: Decimal | None,
-    total_ratio_pre_floor_transitional: Decimal | None,
-) -> tuple[pl.LazyFrame | None, Pillar3CapitalRatioOverrides | None]:
-    """Resolve the comparative-period + capital-ratio inputs for one ``/export/{fmt}`` call.
+) -> pl.LazyFrame | None:
+    """Resolve the comparative-period input for one ``/export/{fmt}`` call.
 
     Only the Pillar 3 / COREP format families consult ``prior_run_id`` (via
-    ``_require_prior_run`` — the same 404/422 contract either family gets);
-    only the Pillar 3 family consults the capital-ratio query params. Every
-    other format (parquet/csv/excel) resolves to ``(None, None)``.
+    ``_require_prior_run`` — the same 404/422 contract either family gets).
+    Every other format (parquet/csv/excel) resolves to ``None``.
     """
     is_pillar3 = fmt == "pillar3" or (fmt.startswith("pillar3") and "_facts_" in fmt)
     is_corep = fmt == "corep" or (fmt.startswith("corep") and "_facts_" in fmt)
-    previous_period_results = None
     if (is_pillar3 or is_corep) and prior_run_id is not None:
-        previous_period_results = _require_prior_run(prior_run_id, response).scan_results()
-    capital_ratios = None
-    if is_pillar3:
-        capital_ratios = _capital_ratio_overrides(
-            cet1_ratio_pre_floor=cet1_ratio_pre_floor,
-            cet1_ratio_pre_floor_transitional=cet1_ratio_pre_floor_transitional,
-            tier1_ratio_pre_floor=tier1_ratio_pre_floor,
-            tier1_ratio_pre_floor_transitional=tier1_ratio_pre_floor_transitional,
-            total_ratio_pre_floor=total_ratio_pre_floor,
-            total_ratio_pre_floor_transitional=total_ratio_pre_floor_transitional,
-        )
-    return previous_period_results, capital_ratios
+        return _require_prior_run(prior_run_id, response).scan_results()
+    return None
 
 
 def _export_raw(
@@ -1088,7 +1050,6 @@ def _export_pillar3(
     metadata: FilingMetadata,
     exporter: ResultExporter,
     previous_period_results: pl.LazyFrame | None,
-    capital_ratios: Pillar3CapitalRatioOverrides | None,
 ) -> FileResponse:
     """The Pillar 3 export formats: pillar3 / pillar3_facts_parquet / pillar3_facts_ndjson."""
     if fmt == "pillar3":
@@ -1098,7 +1059,6 @@ def _export_pillar3(
             out,
             metadata=metadata,
             previous_period_results=previous_period_results,
-            capital_ratios=capital_ratios,
             output_floor_summary=response.output_floor_summary,
         )
         return _file(out)
@@ -1111,7 +1071,6 @@ def _export_pillar3(
         fmt=facts_fmt,
         metadata=metadata,
         previous_period_results=previous_period_results,
-        capital_ratios=capital_ratios,
         output_floor_summary=response.output_floor_summary,
     )
     return _file(out)

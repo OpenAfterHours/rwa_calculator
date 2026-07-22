@@ -34,7 +34,6 @@ if TYPE_CHECKING:
     import polars as pl
 
     from rwa_calc.contracts.bundles import OutputFloorSummary
-    from rwa_calc.contracts.config import Pillar3CapitalRatioOverrides
     from rwa_calc.rulebook.model import ReportingTemplateSet
 
 
@@ -66,8 +65,6 @@ class ReportingContext:
             (Basel 3.1 only; ``None`` under CRR or when the floor did not run).
         previous_period_results: Prior-run results LazyFrame for flow
             templates (CR8, C 08.04 opening RWEA). ``None`` = no prior period.
-        capital_ratio_overrides: Firm-supplied capital ratios for the
-            Pillar 3 capital templates. ``None`` = derive/blank per template.
         reporting_basis: Reporting-basis election (consolidated / solo …)
             from the run config; ``None`` when not elected.
         institution_type: Institution-type election from the run config;
@@ -82,7 +79,6 @@ class ReportingContext:
     template_set: ReportingTemplateSet | None = None
     output_floor_summary: OutputFloorSummary | None = None
     previous_period_results: pl.LazyFrame | None = None
-    capital_ratio_overrides: Pillar3CapitalRatioOverrides | None = None
     reporting_basis: str | None = None
     institution_type: str | None = None
     substitution_inflow: float | None = None
@@ -92,25 +88,11 @@ class ReportingContext:
 
         Explicit key registry — a spec naming an unknown key is a programming
         error and raises. ``of_adj`` reads the output-floor summary (None when
-        the floor did not run); the six ``*_ratio_pre_floor*`` keys read the
-        Pillar 3 capital-ratio overrides (None when not supplied — the OV1
-        ratio rows stay null).
+        the floor did not run); ``substitution_inflow`` is the C 07.00 col 0100
+        cross-sheet scalar.
         """
         if key == "of_adj":
             return float(self.output_floor_summary.of_adj) if self.output_floor_summary else None
         if key == "substitution_inflow":
             return self.substitution_inflow
-        ratio_fields = {
-            "cet1_ratio_pre_floor",
-            "cet1_ratio_pre_floor_transitional",
-            "tier1_ratio_pre_floor",
-            "tier1_ratio_pre_floor_transitional",
-            "total_ratio_pre_floor",
-            "total_ratio_pre_floor_transitional",
-        }
-        if key in ratio_fields:
-            if self.capital_ratio_overrides is None:
-                return None
-            value = getattr(self.capital_ratio_overrides, key)
-            return float(value) if value is not None else None
         raise KeyError(f"unknown ReportingContext side value: {key!r}")

@@ -50,13 +50,12 @@ Cell semantics (recorded decisions, this slice):
   real value (the C 07.00 pattern); C 08.02's per-grade 0080 is a constant 0.0
   (R12) and its String label col 0005 is skipped by the tie-out value-column sweep.
   Ratchet note (R23): the extraction bumped ``max_reporting_module_loc``
-  2016 -> 2092 — the mechanical additive cost of exposing the two templates'
-  spec/row-pred/plans builders with their mandated docstrings, no behaviour
-  change. Unlike the c07/cr4/cr8/cr7a extractions this module alone needed a
-  bump because it hosts SEVEN templates (C 08.01-07) in one file; the baseline
-  equals the exact post-R23 line count (zero slack). Splitting c08.py into
-  per-template modules is the honest long-term answer — recorded as a deferred
-  follow-up, its own risky item (shared value surface).
+  (2016 -> the exact post-R23 count, zero slack) — the mechanical additive
+  cost of exposing the two templates' spec/row-pred/plans builders with their
+  mandated docstrings, no behaviour change. Unlike the c07/cr4/cr8/cr7a
+  extractions this module alone needed a bump: it hosts SEVEN templates in
+  one file. Splitting c08.py per-template is the honest long-term answer —
+  recorded as a deferred follow-up (shared value surface, its own risky item).
 - The EL memo columns 0280 (pre post-model adjustment) and its B31 twin 0282
   (after post-model adjustments) coalesce PER LEG (R10a): they read the
   formula-IRB ``el_pre_adjustment`` / ``el_after_adjustment`` where non-null

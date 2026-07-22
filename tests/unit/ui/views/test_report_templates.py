@@ -123,17 +123,19 @@ def test_has_lineage_true_for_an_instrumented_template() -> None:
 
 
 def test_has_lineage_false_for_an_uninstrumented_template() -> None:
-    # Arrange — C 08.01 is declarative but not instrumented for lineage.
-    corep = _corep(c08_01={"corporate": _c07_sheet()})
+    # Arrange — C 34.01 is still imperative (no TemplateSpec), so it is the
+    # durable uninstrumented example. (R23 instrumented the original example,
+    # C 08.01 — every DECLARATIVE template now carries lineage.)
+    corep = _corep(c34_01=_c07_sheet())
 
     # Act
     page = view.template_page(
-        corep, None, run_id="r1", framework="CRR", template_id="c08_01", sheet="corporate"
+        corep, None, run_id="r1", framework="CRR", template_id="c34_01", sheet=None
     )
 
     # Assert — the grid still renders; no cell is offered as a drill-down link.
     assert page.selected is not None
-    assert page.selected.id == "c08_01"
+    assert page.selected.id == "c34_01"
     assert page.has_lineage is False
 
 

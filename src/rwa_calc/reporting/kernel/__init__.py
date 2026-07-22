@@ -27,6 +27,7 @@ from __future__ import annotations
 
 from rwa_calc.reporting.kernel.columns import (
     available_columns,
+    ensure_gross_side_carriers,
     gross_carrier,
     gross_carriers,
     pick,
@@ -49,6 +50,7 @@ __all__ = [
     "available_columns",
     "col_sum",
     "column_name_map",
+    "ensure_gross_side_carriers",
     "filter_by_approach",
     "filter_off_bs",
     "filter_on_bs",

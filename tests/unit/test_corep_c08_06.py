@@ -506,6 +506,69 @@ class TestC0806ColumnValues:
 
 
 # =============================================================================
+# GROSS-SIDE-CARRIER TESTS (R-gross-side-carriers)
+# =============================================================================
+
+
+def _mixed_gross_side_carrier_data():
+    """One category x maturity row (Strong, short, ref "0010"): a loan, a
+    contingent, and a facility_undrawn commitment, sealed-shape via
+    ``exposure_type``. See .claude/state/gross-side-carriers-spec.md."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["LN1", "CO1", "FU1"],
+            "counterparty_reference": ["CP1", "CP2", "CP3"],
+            "exposure_class": ["specialised_lending"] * 3,
+            "approach_applied": ["slotting"] * 3,
+            "sl_type": ["project_finance"] * 3,
+            "slotting_category": ["strong"] * 3,
+            "is_short_maturity": [True, True, True],
+            "exposure_type": ["loan", "contingent", "facility_undrawn"],
+            "risk_weight": [0.5, 0.5, 0.5],
+            "ead_final": [5000.0, 1000.0, 3000.0],
+            "rwa_final": [2500.0, 500.0, 1500.0],
+            "drawn_amount": [5000.0, 0.0, 0.0],
+            "interest": [0.0, 0.0, 0.0],
+            "nominal_amount": [0.0, 2000.0, 4000.0],
+            "undrawn_amount": [0.0, 0.0, 4000.0],
+            "expected_loss": [10.0, 5.0, 15.0],
+            "provision_held": [1.0, 2.0, 3.0],
+        }
+    )
+
+
+class TestC0806GrossSideCarriers:
+    """Root cause: col 0010 sums ALL FOUR raw carriers (drawn, interest,
+    nominal, undrawn) over the row unconditionally, so a facility_undrawn
+    leg's headroom (aliased onto BOTH nominal_amount and undrawn_amount) is
+    counted TWICE; col 0030 (off-BS gross) predicates on the retired
+    exposure_type ladder ("facility"/"contingent"), which never recognises
+    "facility_undrawn", so a mixed bucket (with a contingent also present)
+    drops the commitment's headroom entirely.
+    """
+
+    def test_col_0010_counts_facility_undrawn_headroom_once(self):
+        """Col 0010 = on-BS (loan 5000) + off-BS (contingent 2000 + FU 4000)
+        = 11000 (today: drawn 5000 + interest 0 + nominal 6000 + undrawn 4000
+        = 15000 — the FU headroom counted via BOTH nominal and undrawn)."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_mixed_gross_side_carrier_data())
+        pf = bundle.c08_06["project_finance"]
+        row = pf.filter(pl.col("row_ref") == "0010")
+        assert row["0010"][0] == pytest.approx(11_000.0)
+
+    def test_col_0030_off_bs_includes_facility_undrawn_in_mixed_bucket(self):
+        """Col 0030 (off-BS gross) = contingent 2000 + FU 4000 = 6000 (today:
+        2000 — the contingent's presence means the whole-bucket fallback does
+        not fire, and the off_bs predicate excludes facility_undrawn)."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_mixed_gross_side_carrier_data())
+        pf = bundle.c08_06["project_finance"]
+        row = pf.filter(pl.col("row_ref") == "0010")
+        assert row["0030"][0] == pytest.approx(6_000.0)
+
+
+# =============================================================================
 # BASEL 3.1 SPECIFIC TESTS
 # =============================================================================
 

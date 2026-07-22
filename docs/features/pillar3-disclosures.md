@@ -311,6 +311,21 @@ CR6 is the most detailed IRB disclosure template, showing exposure values, risk
 parameters (PD, LGD, maturity), RWEAs, and expected loss by fixed PD buckets for each
 exposure class. Separate templates are disclosed for F-IRB and A-IRB exposures.
 
+**Population.** CR6 (and CR10) cover IRB *credit risk only*. The
+`irb_scope.irb_credit_risk_population` narrowing — the IRB mirror of the CR4/CR5 `sa_scope`
+decision — drops the non-credit-risk synthetic legs from every cell: SA-CCR derivative
+netting sets and FCCM SFTs, CCP default-fund contributions (Art. 307-309) and settlement
+failed trades (Art. 378-380). These are disclosed in the CCR-series templates (CCR1-CCR8,
+Art. 439; EU 2021/637 Annex XXII scopes the IRB templates to credit risk) instead —
+deliberately the opposite of COREP C 08.x, which keeps CCR legs in its EAD/RWEA population.
+The synthetic `facility_undrawn` leg is a genuine undrawn commitment (Art. 111) and is
+reclassified off-balance-sheet locally, so the average-CCF column (col d) counts it. The
+on-BS / off-BS gross columns (b / c) bind the **sealed per-side gross carriers**
+(`reporting_gross_on_bs` / `reporting_gross_off_bs`, sealed at the aggregator exit per
+CRR Art. 111 / Art. 166), so the undrawn headroom is counted exactly once and every column
+of a row reads the same population — RWEA and the on/off-balance-sheet splits internally
+reconcile.
+
 ### Column Structure
 
 === "CRR (UK CR6)"
@@ -758,6 +773,15 @@ names with their rating scale mappings.
 
 CR10 discloses specialised lending exposures under the slotting approach (and, under
 CRR only, equity exposures under the simple risk-weighted approach).
+
+**Population.** CR10 shares CR6's IRB credit-risk scope: the
+`irb_scope.irb_credit_risk_population` narrowing drops the non-credit-risk synthetic CCR /
+settlement legs (disclosed in the CCR-series instead) and reclassifies the `facility_undrawn`
+commitment leg off-balance-sheet, and the on-BS / off-BS gross columns (a / b) bind the
+sealed per-side gross carriers (`reporting_gross_on_bs` / `reporting_gross_off_bs`).
+
+> **Details:** See [CR6 — Population](#cr6-irb-exposures-by-exposure-class-and-pd-range) for
+> the shared IRB credit-risk scope decision and the sealed side-carrier basis.
 
 ### Column Structure
 

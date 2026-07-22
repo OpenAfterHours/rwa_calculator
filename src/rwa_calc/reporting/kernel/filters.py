@@ -80,12 +80,17 @@ def filter_off_bs(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
     """Filter to off-balance-sheet exposures.
 
     Uses ``bs_type == "OFB"`` when available, falling back to
-    ``exposure_type in {"facility", "contingent"}``. Returns an EMPTY frame
-    when neither column is present (same missing-column decision as
+    ``exposure_type in {"facility", "contingent", "facility_undrawn"}``.
+    ``facility_undrawn`` is the unified pipeline's undrawn-commitment headroom
+    leg (an off-balance-sheet Art. 111 commitment); ``"facility"`` is a dead
+    legacy value kept for pre-unification synthetic frames. Returns an EMPTY
+    frame when neither column is present (same missing-column decision as
     ``filter_on_bs`` — both generator copies already agreed on empty here).
     """
     if "bs_type" in cols:
         return data.filter(pl.col("bs_type") == "OFB")
     if "exposure_type" in cols:
-        return data.filter(pl.col("exposure_type").is_in(["facility", "contingent"]))
+        return data.filter(
+            pl.col("exposure_type").is_in(["facility", "contingent", "facility_undrawn"])
+        )
     return data.clear()

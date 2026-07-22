@@ -1646,6 +1646,34 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
         "reporting_gross_interest": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 111"),
         "reporting_gross_nominal": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 111"),
         "reporting_gross_undrawn": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 111"),
+        # Per-side floored gross carriers: the on/off-balance-sheet gross a
+        # template cell sums DIRECTLY, independent of reporting_on_balance_sheet
+        # (which stays a strict loan/facility/contingent ladder — the pipeline
+        # emits facility_undrawn, a value that ladder nulls, so its headroom was
+        # silently dropped from both gross sides while its EAD stayed in the
+        # EAD/RWEA cells). on-side = floored drawn + interest for the on-balance
+        # credit types; off-side = a contingent's nominal, a facility_undrawn's
+        # undrawn (once), a loan's true 0.0. Produced by the aggregator's
+        # _add_reporting_projection alongside the other reporting_* aliases.
+        "reporting_gross_on_bs": EdgeColumn(
+            dtype=pl.Float64,
+            citation="CRR Art. 111",
+            null_meaning=(
+                "row is outside the on/off-balance-sheet credit-risk gross scope "
+                "(a CCR / settlement leg — its EAD/RWEA still report), or an "
+                "on-balance credit type whose drawn AND interest are both unknown; "
+                "must NOT be filled to 0.0"
+            ),
+        ),
+        "reporting_gross_off_bs": EdgeColumn(
+            dtype=pl.Float64,
+            citation="CRR Art. 111",
+            null_meaning=(
+                "row is outside the on/off-balance-sheet credit-risk gross scope "
+                "(a CCR / settlement leg — its EAD/RWEA still report); must NOT be "
+                "filled to 0.0"
+            ),
+        ),
         # Phase 7 decision F8 (recorded): the additive per-leg substitution
         # relief, ead_final x guarantee_benefit_rw (borrower-basis RW minus
         # substituted RW, snapshotted at the branch BEFORE supporting

@@ -47,6 +47,7 @@ from rwa_calc.reporting.kernel import (
 )
 from rwa_calc.reporting.kernel import (
     column_name_map,
+    ensure_gross_side_carriers,
     write_metadata_sheet,
     write_template_sheet,
 )
@@ -186,6 +187,11 @@ class Pillar3Generator:
         balance (row 1) and signed residual (row 8). When ``None`` CR8 rows 1-8
         stay null.
         """
+        cols = _available_columns(results)
+        # The sealed aggregator exit carries the per-side gross carriers; a
+        # direct/synthetic frame gets the same mirror derivation so every
+        # on/off-BS gross cell (CR4/CR5/CR6/CR10) can read them unconditionally.
+        results = ensure_gross_side_carriers(results, cols)
         cols = _available_columns(results)
         errors: list[str] = []
 

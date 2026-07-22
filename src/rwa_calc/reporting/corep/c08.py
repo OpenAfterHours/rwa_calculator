@@ -114,20 +114,20 @@ Cell semantics (recorded decisions, this slice):
 - C 08.03/05 allocate rows over the 17 fixed PD ranges (B31 allocates on
   the pre-input-floor ``pd``, CRR on ``pd_floored``; the reported PD is
   always post-floor), emit ONLY populated buckets (sparse) plus an
-  optional 9999 "Unassigned" row, and C 08.03's on/off-BS gross columns
-  keep the retired whole-bucket fallback when the balance-sheet split
-  yields nothing. C 08.05's averages are null-filled arithmetic means
-  (weighted by a constant-one column), with the CR9-style point-in-time
+  optional 9999 "Unassigned" row. C 08.03's on/off-BS gross columns
+  (0010/0020) Sum the sealed per-side gross carriers
+  (``reporting_gross_on_bs`` / ``reporting_gross_off_bs``) over the band with a
+  member-only predicate — the carriers are row-level and null outside their
+  side, so a band with no off-BS rows sums 0.0 naturally (the retired
+  whole-bucket fallback is gone). C 08.05's averages are null-filled arithmetic
+  means (weighted by a constant-one column), with the CR9-style point-in-time
   fallbacks for the prior-year/historical carriers.
   Lineage-instrumented (R24): ``c08_03_plans`` / ``c08_05_plans`` expose the
   per-class sparse-PD-range plans (the data-driven c08_02 pattern; each row keys
   the derived ``c08_pd_range`` band carried in ``row_terms``). C 08.05 is
-  execute-only (R13 deleted the rate postfix). C 08.03's two post-execute passes
-  (the on/off-BS whole-bucket fallback on cols 0010/0020; the provisions ladder
-  on col 0110) stay on the reported frame the drill-down reads: the fallback
-  fires for col 0020 on a loans-only book (off-BS split empty) but is a VALUE
-  NO-OP there (both the fallback and the off-BS binding sum to 0.0), recorded as
-  a limitation with the tie-out sweep as the tripwire.
+  execute-only (R13 deleted the rate postfix). C 08.03 has ONE post-execute pass
+  (the provisions ladder on col 0110), on the reported frame the drill-down reads;
+  cols 0010/0020 need none.
 - C 08.04 is the CR8-clone flow: only the closing-RWEA cell (row 0090) is
   populated — note its DELIBERATELY two-wide RWA ladder (``rwa_final``,
   ``rwa`` — no ``rwa_post_factor``). Lineage-instrumented (R22): ``c08_04_plans``
@@ -223,9 +223,6 @@ from rwa_calc.reporting.corep.templates import (
 )
 from rwa_calc.reporting.kernel import (
     available_columns,
-    col_sum,
-    gross_carrier,
-    gross_carriers,
     pick,
     safe_sum,
 )
@@ -378,7 +375,7 @@ def _prepare(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
         exprs.append(
             pl.when(pl.col("exposure_type") == "loan")
             .then(pl.lit("on"))
-            .when(pl.col("exposure_type").is_in(["facility", "contingent"]))
+            .when(pl.col("exposure_type").is_in(["facility", "contingent", "facility_undrawn"]))
             .then(pl.lit("off"))
             .otherwise(pl.lit(None, dtype=pl.String))
             .alias("c08_bs")
@@ -522,10 +519,10 @@ def _value_cells(  # noqa: C901, PLR0915 - the full C 08.01/02 column surface
             WeightedAvg("pd_floored", weight=ead_col), predicate=member, empty_cell="null"
         ),
         "0020": CellSpec(
-            SafeSum(gross_carriers(cols, "drawn_amount", "undrawn_amount")), predicate=member
+            SafeSum(("reporting_gross_on_bs", "reporting_gross_off_bs")), predicate=member
         ),
         "0030": _lfse_cell(
-            cols, lambda: SafeSum(gross_carriers(cols, "drawn_amount", "undrawn_amount")), terms
+            cols, lambda: SafeSum(("reporting_gross_on_bs", "reporting_gross_off_bs")), terms
         ),
         "0035": CellSpec(Sum("on_bs_netting_amount"), predicate=member),
         "0040": (
@@ -1031,24 +1028,21 @@ def _c08_03_cells(  # noqa: PLR0913 - the full C 08.03 sparse-PD-range column su
     """The C 08.03 per-band cell surface (one PD range = one row).
 
     Shared by ``c08_03_plans`` (the lineage spec) and ``generate_c08_03`` (the
-    reported frame). Cols 0010/0020 split the band on ``c08_bs`` (on/off balance
-    sheet); their retired whole-bucket fallback still runs post-execute
-    (``_c08_03_bs_fallback``) on the REPORTED frame, so the drill-down reads a
-    band's on/off gross from there."""
+    reported frame). Cols 0010/0020 sum the sealed per-side gross carriers
+    (``reporting_gross_on_bs`` / ``reporting_gross_off_bs``) over the whole band
+    — the carriers are row-level and null outside their side, so a band with no
+    off-BS rows sums 0.0 naturally, which is why the retired on/off whole-bucket
+    fallback is gone. Col 0030 weights the average CCF by the off-BS gross."""
     cells: dict[tuple[str, str], CellSpec] = {}
     for ref, label in band_rows:
         terms: _Terms = (("c08_pd_range", label),)
         member = RowPredicate(equals=terms)
-        cells[(ref, "0010")] = CellSpec(
-            SafeSum(gross_carriers(cols, "drawn_amount", "interest")),
-            predicate=RowPredicate(equals=(*terms, ("c08_bs", "on"))),
-        )
-        cells[(ref, "0020")] = CellSpec(
-            Sum(gross_carrier(cols, "nominal_amount")),
-            predicate=RowPredicate(equals=(*terms, ("c08_bs", "off"))),
-        )
+        cells[(ref, "0010")] = CellSpec(Sum("reporting_gross_on_bs"), predicate=member)
+        cells[(ref, "0020")] = CellSpec(Sum("reporting_gross_off_bs"), predicate=member)
         cells[(ref, "0030")] = CellSpec(
-            WeightedAvg("ccf", weight="nominal_amount"), predicate=member, empty_cell="null"
+            WeightedAvg("ccf", weight="reporting_gross_off_bs"),
+            predicate=member,
+            empty_cell="null",
         )
         cells[(ref, "0040")] = CellSpec(Sum(ead_col), predicate=member)
         cells[(ref, "0050")] = CellSpec(
@@ -1089,10 +1083,11 @@ def c08_03_plans(
     ``row_terms``. Keys on the sealed ``reporting_class_origin`` over the IRB
     NON-slotting book, preserving ``generate_c08_03``'s error contract. C 08.03
     carries no "(-)"-labelled deduction column, so ``negative_cols`` is empty. The
-    two post-execute passes (the retired on/off-BS whole-bucket fallback on cols
-    0010/0020; the provisions ladder on col 0110) live on the REPORTED frame
-    (``generate_c08_03``), which the drill-down reads a cell's value from — so on a
-    bucket where the fallback fires the reported cell stays authoritative."""
+    provisions ladder (col 0110) is the one post-execute pass, on the REPORTED
+    frame (``generate_c08_03``), which the drill-down reads a cell's value from.
+    Cols 0010/0020 sum the sealed per-side gross carriers directly (no on/off
+    whole-bucket fallback — the carriers are row-level and null outside their
+    side, so an empty side sums 0.0 naturally)."""
     ec_col = pick(cols, "reporting_class_origin")
     ead_col = pick(cols, "ead_final")
     rwa_col = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
@@ -1139,11 +1134,11 @@ def generate_c08_03(
 ) -> dict[str, pl.DataFrame]:
     """Execute C 08.03 per class sheet over sparse PD-range rows.
 
-    Iterates ``c08_03_plans`` and applies the two post-execute passes on the
-    reported frame — the retired on/off-BS whole-bucket fallback (cols 0010/0020)
-    and the provisions ladder (col 0110) — which the drill-down reads a cell's
-    value from. Each row's predicate is rebuilt from the plan's ``row_terms``
-    (each a ``c08_pd_range`` label)."""
+    Iterates ``c08_03_plans`` and applies the one post-execute pass on the
+    reported frame — the provisions ladder (col 0110) — which the drill-down
+    reads a cell's value from. Cols 0010/0020 (the sealed per-side gross
+    carriers) need no post-pass. Each row's predicate is rebuilt from the plan's
+    ``row_terms`` (each a ``c08_pd_range`` label)."""
     column_refs = tuple(col.ref for col in get_c08_03_columns(framework))
     result: dict[str, pl.DataFrame] = {}
     for ec, plan in c08_03_plans(results, cols, framework, errors).items():
@@ -1156,61 +1151,9 @@ def generate_c08_03(
             ref: RowPredicate(equals=terms) for ref, terms in plan.row_terms.items() if terms
         }
         frame = execute(plan.spec, banded)
-        frame = _c08_03_bs_fallback(frame, banded, plan.row_terms, data_cols)
         frame = _provisions_postfix(frame, banded, row_preds, data_cols, ref="0110")
         result[ec] = frame
     return result
-
-
-def _c08_03_bs_fallback(
-    frame: pl.DataFrame,
-    banded: pl.DataFrame,
-    row_terms: Mapping[str, _Terms | None],
-    cols: set[str],
-) -> pl.DataFrame:
-    """The retired whole-bucket fallback: when a bucket's on-BS (off-BS)
-    split is empty, columns 0010 (0020) sum the WHOLE bucket instead.
-
-    Iterates the plan's ``row_terms`` (ref -> the ``c08_pd_range`` band label), so
-    the reported generator and the lineage plan share one row definition."""
-    on_available = "c08_bs" in banded.columns
-    fixes_0010: dict[str, float | None] = {}
-    fixes_0020: dict[str, float | None] = {}
-    for ref, terms in row_terms.items():
-        if not terms:
-            continue
-        label = terms[0][1]
-        bucket = banded.filter(pl.col("c08_pd_range") == label)
-        on_empty = len(bucket.filter(pl.col("c08_bs") == "on")) == 0 if on_available else True
-        off_empty = len(bucket.filter(pl.col("c08_bs") == "off")) == 0 if on_available else True
-        if on_empty:
-            total = 0.0
-            found = False
-            for source in gross_carriers(cols, "drawn_amount", "interest"):
-                if source in cols:
-                    total += float(bucket[source].fill_null(0.0).sum())
-                    found = True
-            fixes_0010[ref] = total if found else 0.0
-        if off_empty:
-            fixes_0020[ref] = (
-                float(bucket[gross_carrier(cols, "nominal_amount")].fill_null(0.0).sum())
-                if "nominal_amount" in cols
-                else None
-            )
-    if not fixes_0010 and not fixes_0020:
-        return frame
-    exprs = []
-    for col_ref, fixes in (("0010", fixes_0010), ("0020", fixes_0020)):
-        if fixes:
-            expr: pl.Expr = pl.col(col_ref)
-            for ref, value in fixes.items():
-                expr = (
-                    pl.when(pl.col("row_ref") == ref)
-                    .then(pl.lit(value, dtype=pl.Float64))
-                    .otherwise(expr)
-                )
-            exprs.append(expr.alias(col_ref))
-    return frame.with_columns(exprs)
 
 
 def _c08_05_cells(  # noqa: PLR0913 - the full C 08.05 PD-backtesting column surface
@@ -1658,13 +1601,13 @@ def generate_c08_06(
 
 def _c08_06_prepare(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
     """Derive the off-balance discriminator (the kernel filter_off_bs rule:
-    ``bs_type == "OFB"`` else ``exposure_type in {facility, contingent}``
-    else nothing) and the always-False carrier behind the permanently-empty
-    "substantially stronger" sub-rows."""
+    ``bs_type == "OFB"`` else ``exposure_type in {facility, contingent,
+    facility_undrawn}`` else nothing) and the always-False carrier behind the
+    permanently-empty "substantially stronger" sub-rows."""
     if "bs_type" in cols:
         off_bs = pl.col("bs_type") == "OFB"
     elif "exposure_type" in cols:
-        off_bs = pl.col("exposure_type").is_in(["facility", "contingent"])
+        off_bs = pl.col("exposure_type").is_in(["facility", "contingent", "facility_undrawn"])
     else:
         off_bs = pl.lit(value=False)
     return data.with_columns(
@@ -1728,9 +1671,7 @@ def _c08_06_spec(
         pred = row_preds[ref]
         off_pred = RowPredicate(equals=(*pred.equals, ("c0806_off_bs", True)))
         cells[(ref, "0010")] = CellSpec(
-            SafeSum(
-                gross_carriers(cols, "drawn_amount", "interest", "nominal_amount", "undrawn_amount")
-            ),
+            SafeSum(("reporting_gross_on_bs", "reporting_gross_off_bs")),
             predicate=pred,
         )
         cells[(ref, "0020")] = (
@@ -1738,9 +1679,7 @@ def _c08_06_spec(
             if crm_col is not None
             else CellSpec(Formula(refs=("0010",), fn=_copy_of_0010))
         )
-        cells[(ref, "0030")] = CellSpec(
-            SafeSum(gross_carriers(cols, "nominal_amount", "undrawn_amount")), predicate=off_pred
-        )
+        cells[(ref, "0030")] = CellSpec(Sum("reporting_gross_off_bs"), predicate=pred)
         if "0031" in column_refs:
             cells[(ref, "0031")] = CellSpec(Formula(refs=(), fn=_const(None)))
         cells[(ref, "0040")] = CellSpec(Sum(ead_col), predicate=pred)
@@ -1778,10 +1717,12 @@ def _c08_06_sheet(
 ) -> pl.DataFrame:
     """Execute one SL-type sheet and apply the retired value-dependent
     branches: the zero-fill policy for empty non-Total rows (fixed display
-    RW in 0070), the whole-subset nominal fallback for 0030 when the row
-    has no off-balance slice, the >0 clamp on 0040, the first-non-null
-    risk weight when the subset carries zero total EAD, and the SCRA/GCRA
-    -> provision_held provisions ladder."""
+    RW in 0070), the >0 clamp on 0040, the first-non-null risk weight when
+    the subset carries zero total EAD, and the SCRA/GCRA -> provision_held
+    provisions ladder. Col 0030 (off-BS gross) now sums the sealed
+    ``reporting_gross_off_bs`` carrier over the whole row in the spec — the
+    carrier is null outside the off side, so an all-on-BS row sums 0.0
+    naturally and the retired whole-subset nominal fallback is gone."""
     frame = execute(spec, type_df)
     overrides: dict[str, dict[str, float | None]] = {}
     row_subsets = subset_rows(type_df, dict(row_preds))
@@ -1791,8 +1732,6 @@ def _c08_06_sheet(
             overrides[row_ref] = _c08_06_zero_row(spec.column_refs, rw_display)
             continue
         fixes: dict[str, float | None] = {}
-        if subset.filter(pl.col("c0806_off_bs")).height == 0:
-            fixes["0030"] = col_sum(subset, cols, gross_carrier(cols, "nominal_amount"))
         ead_sum = float(subset[ead_col].fill_null(0.0).sum())
         if ead_sum <= 0.0:
             fixes["0040"] = 0.0
@@ -2213,7 +2152,7 @@ def _c08_off_bs_pre_ccf(
     row over the row's ``c08_bs == "off"`` legs, mirroring ``_value_cells`` +
     ``_crm_waterfall`` component-for-component:
 
-        0100 = off-BS gross (0020: floored drawn+undrawn)
+        0100 = off-BS gross (0020: the sealed reporting_gross_off_bs carrier)
              - off-BS guarantees (0040)
              - off-BS credit derivatives (0050)
              - off-BS other funded collateral (0060)
@@ -2241,7 +2180,7 @@ def _c08_off_bs_pre_ccf(
     active = {ref: pred for ref, pred in row_preds.items() if pred is not None}
     if not active:
         return frame
-    gross_cols = gross_carriers(cols, "drawn_amount", "undrawn_amount")
+    gross_cols = ("reporting_gross_off_bs",)
     collateral_cols = (
         "collateral_re_value",
         "collateral_receivables_value",

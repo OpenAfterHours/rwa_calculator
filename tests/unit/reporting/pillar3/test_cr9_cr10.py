@@ -212,6 +212,58 @@ class TestCR10Generation:
             assert set(df.columns) == expected
 
 
+class TestCR10GrossSideCarriersAndCCRExclusion:
+    """R-gross-side-carriers: CR10 must not silently drop the facility_undrawn
+    leg from its off-BS gross column (the same STRICT ``on_balance_sheet``
+    equality bug as CR6), and must exclude CCR legs from its slotting
+    population entirely (the R3 CR4/CR5 decision, not yet mirrored here).
+    See .claude/state/gross-side-carriers-spec.md.
+    """
+
+    def _mixed_slotting_data(self) -> pl.LazyFrame:
+        """One category x maturity row (Strong, >= 2.5y, ref "2"), project_finance:
+        a loan, a facility_undrawn commitment, and a CCR netting-set leg
+        mistakenly tagged with the slotting origin approach."""
+        return pl.LazyFrame(
+            {
+                "exposure_reference": ["LN1", "FU1", "NS1"],
+                "counterparty_reference": ["CP1", "CP2", "CP3"],
+                "approach_applied": ["slotting", "slotting", "slotting"],
+                "exposure_class": ["specialised_lending"] * 3,
+                "sl_type": ["project_finance"] * 3,
+                "slotting_category": ["strong"] * 3,
+                "is_short_maturity": [False, False, False],
+                "exposure_type": ["loan", "facility_undrawn", "ccr_netting_set"],
+                "drawn_amount": [5000.0, 0.0, 0.0],
+                "interest": [0.0, 0.0, 0.0],
+                "nominal_amount": [0.0, 4000.0, 0.0],
+                "undrawn_amount": [0.0, 4000.0, 0.0],
+                "ead_final": [5000.0, 3000.0, 2000.0],
+                "rwa_final": [3500.0, 2100.0, 2500.0],
+            }
+        )
+
+    def test_cr10_facility_undrawn_off_bs_gross(self, generator: Pillar3Generator) -> None:
+        """Col b (off-BS gross) must count the facility_undrawn headroom
+        (today 0.0 — the leg's null on/off classification matches neither
+        side); col a (on-BS gross, the loan) is unaffected."""
+        bundle = generator.generate_from_lazyframe(self._mixed_slotting_data(), framework="CRR")
+        pf = bundle.cr10["project_finance"]
+        row = pf.filter(pl.col("row_ref") == "2")
+        assert row["a"][0] == pytest.approx(5000.0)  # on-BS gross (loan) — unaffected
+        assert row["b"][0] == pytest.approx(4000.0)  # off-BS gross (FU headroom)
+
+    def test_cr10_ccr_leg_excluded_from_ead_and_rwea(self, generator: Pillar3Generator) -> None:
+        """Col d (EAD) and col e (RWEA) must exclude the CCR netting-set leg
+        entirely (today it is counted — CR10's slotting population carries no
+        CCR exclusion)."""
+        bundle = generator.generate_from_lazyframe(self._mixed_slotting_data(), framework="CRR")
+        pf = bundle.cr10["project_finance"]
+        row = pf.filter(pl.col("row_ref") == "2")
+        assert row["d"][0] == pytest.approx(8000.0)  # loan 5000 + FU 3000; CCR excluded
+        assert row["e"][0] == pytest.approx(5600.0)  # loan 3500 + FU 2100; CCR excluded
+
+
 class TestCR105Equity:
     """CR10.5 — CRR equity under the Art. 155(2) IRB simple risk-weight approach.
 

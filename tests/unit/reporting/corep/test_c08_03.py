@@ -522,3 +522,132 @@ class TestC0803EdgeCases:
         # E2 (PD=0.005, row 0080): nominal=0, ccf=0 → null
         row = corp.filter(pl.col("row_ref") == "0080")
         assert row["0030"][0] is None
+
+
+class TestC0803SealedGrossSideCarriers:
+    """Sealed-shape (``exposure_type``-bearing) frames exercising the
+    gross-side-carrier fix.
+
+    Root cause: the legacy on/off-BS ladder classifies ``exposure_type``
+    "loan" -> on, "facility"/"contingent" -> off, anything else -> null — but
+    the unified pipeline never emits "facility" (a dead value), only
+    "facility_undrawn". So every facility_undrawn leg (undrawn commitment
+    headroom) is dropped from BOTH gross columns (0010/0020) while its EAD
+    stays in 0040 — the user-reported symptom (EAD >> gross with no
+    inflows). See .claude/state/gross-side-carriers-spec.md.
+    """
+
+    def _mixed_gross_side_carrier_results(self) -> pl.LazyFrame:
+        """Three PD bands, corporate, foundation_irb:
+
+        - band 0080 (pd 0.005): loan + contingent + facility_undrawn — the
+          reported bug in miniature.
+        - band 0110 (pd 0.03): loan + facility_undrawn only, no contingent —
+          pins that deleting the retired whole-bucket fallback does not
+          regress this simpler case (today's fallback rescues col 0020 to
+          the right number by accident; the sealed carrier must reproduce
+          the SAME value).
+        - band 0100 (pd 0.01): the same trio as 0080 plus a CCR netting-set
+          leg — pins the recorded scope decision that COREP C 08.x keeps CCR
+          in the EAD population (0040) while its null side-carriers keep it
+          OUT of the on/off-BS split (0010/0020).
+        """
+        return pl.LazyFrame(
+            {
+                "exposure_reference": [
+                    "LN_A",
+                    "CO_A",
+                    "FU_A",
+                    "LN_B",
+                    "FU_B",
+                    "LN_C",
+                    "CO_C",
+                    "FU_C",
+                    "NS_C",
+                ],
+                "counterparty_reference": [
+                    "CPA1",
+                    "CPA2",
+                    "CPA3",
+                    "CPB1",
+                    "CPB2",
+                    "CPC1",
+                    "CPC2",
+                    "CPC3",
+                    "CPC4",
+                ],
+                "approach_applied": ["foundation_irb"] * 9,
+                "exposure_class": ["corporate"] * 9,
+                "exposure_type": [
+                    "loan",
+                    "contingent",
+                    "facility_undrawn",
+                    "loan",
+                    "facility_undrawn",
+                    "loan",
+                    "contingent",
+                    "facility_undrawn",
+                    "ccr_netting_set",
+                ],
+                "drawn_amount": [5000.0, 0.0, 0.0, 5000.0, 0.0, 5000.0, 0.0, 0.0, 0.0],
+                "interest": [0.0] * 9,
+                "nominal_amount": [0.0, 2000.0, 4000.0, 0.0, 4000.0, 0.0, 2000.0, 4000.0, 0.0],
+                "undrawn_amount": [0.0, 0.0, 4000.0, 0.0, 4000.0, 0.0, 0.0, 4000.0, 0.0],
+                "ead_final": [
+                    5000.0,
+                    1000.0,
+                    3000.0,
+                    5000.0,
+                    3000.0,
+                    5000.0,
+                    1000.0,
+                    3000.0,
+                    2000.0,
+                ],
+                "rwa_final": [2500.0, 500.0, 1500.0, 2500.0, 1500.0, 2500.0, 500.0, 1500.0, 2500.0],
+                "pd_floored": [0.005, 0.005, 0.005, 0.03, 0.03, 0.01, 0.01, 0.01, 0.01],
+                "lgd_floored": [0.45] * 9,
+                "irb_maturity_m": [2.5] * 9,
+                "ccf": [None, 0.5, 0.75, None, 0.75, None, 0.5, 0.75, None],
+            }
+        )
+
+    def test_c0803_mixed_band_gross_split_and_ead(self) -> None:
+        """Band 0080 (loan+contingent+facility_undrawn): col 0020 must count
+        the facility_undrawn headroom once (today it is dropped entirely),
+        and the gross total (0010+0020) must exceed the EAD (0040) by exactly
+        the off-BS CCF haircut — never fall short of it, as the reported bug
+        did.
+        """
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(self._mixed_gross_side_carrier_results())
+        corp = bundle.c08_03["corporate"]
+        band = corp.filter(pl.col("row_ref") == "0080")
+
+        assert band["0010"][0] == pytest.approx(5000.0)  # on-BS: loan drawn+interest
+        assert band["0020"][0] == pytest.approx(6000.0)  # off-BS: contingent 2000 + FU 4000
+        assert band["0040"][0] == pytest.approx(9000.0)  # EAD unaffected by the bs-split bug
+
+        gross_total = band["0010"][0] + band["0020"][0]
+        ead_total = band["0040"][0]
+        # 2000 nominal * (1 - 0.5 ccf) + 4000 nominal * (1 - 0.75 ccf) = 2000;
+        # gross must EXCEED ead by exactly the CCF haircut, never fall short
+        # of it (falling short — with no inflow to explain it — was the bug).
+        assert gross_total - ead_total == pytest.approx(2000.0)
+
+        # Band 0110 (loan + facility_undrawn, no contingent): the retired
+        # whole-bucket fallback already rescues col 0020 to the right number
+        # by accident today — the sealed carrier must reproduce the SAME
+        # value once the fallback is deleted, not regress it.
+        band_no_contingent = corp.filter(pl.col("row_ref") == "0110")
+        assert band_no_contingent["0010"][0] == pytest.approx(5000.0)
+        assert band_no_contingent["0020"][0] == pytest.approx(4000.0)
+        assert band_no_contingent["0040"][0] == pytest.approx(8000.0)
+
+        # Band 0100 (the mixed trio + a CCR netting-set leg): CCR stays IN
+        # the EAD population (0040 gains its 2000) but its null side-carriers
+        # keep it OUT of the on/off-BS split — 0010/0020 match band 0080.
+        band_with_ccr = corp.filter(pl.col("row_ref") == "0100")
+        assert band_with_ccr["0010"][0] == pytest.approx(5000.0)
+        assert band_with_ccr["0020"][0] == pytest.approx(6000.0)
+        assert band_with_ccr["0040"][0] == pytest.approx(11000.0)  # 9000 + 2000 CCR

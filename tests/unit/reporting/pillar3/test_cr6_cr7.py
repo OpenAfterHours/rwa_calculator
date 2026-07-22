@@ -258,6 +258,62 @@ class TestCR6ObligorClassBasis:
         assert model_band["e"][0] is None
 
 
+class TestCR6GrossSideCarriersAndCCRExclusion:
+    """R-gross-side-carriers: CR6 must not silently drop the facility_undrawn
+    leg from its gross/CCF columns (today's ``on_balance_sheet`` predicate is
+    a STRICT boolean equality — a null-classified facility_undrawn leg
+    matches neither True nor False), and must exclude CCR legs from its IRB
+    population entirely (the R3 CR4/CR5 decision, not yet mirrored here).
+    See .claude/state/gross-side-carriers-spec.md.
+    """
+
+    def _mixed_band_data(self) -> pl.LazyFrame:
+        """One PD band (0.50 to < 0.75%, ref "8"), corporate, foundation_irb:
+        a loan, a facility_undrawn commitment, and a CCR netting-set leg
+        mistakenly sharing the same origin approach tag."""
+        return pl.LazyFrame(
+            {
+                "exposure_reference": ["LN1", "FU1", "NS1"],
+                "counterparty_reference": ["CP1", "CP2", "CP3"],
+                "approach_applied": ["foundation_irb", "foundation_irb", "foundation_irb"],
+                "exposure_class": ["corporate", "corporate", "corporate"],
+                "exposure_type": ["loan", "facility_undrawn", "ccr_netting_set"],
+                "drawn_amount": [5000.0, 0.0, 0.0],
+                "interest": [0.0, 0.0, 0.0],
+                "nominal_amount": [0.0, 4000.0, 0.0],
+                "undrawn_amount": [0.0, 4000.0, 0.0],
+                "ead_final": [5000.0, 3000.0, 2000.0],
+                "rwa_final": [3500.0, 2100.0, 2500.0],
+                "pd_floored": [0.005, 0.005, 0.005],
+                "lgd_floored": [0.45, 0.45, 0.45],
+                "irb_maturity_m": [2.5, 2.5, 2.5],
+                "ccf": [None, 0.75, None],
+            }
+        )
+
+    def test_cr6_facility_undrawn_off_bs_gross_and_ccf(self, generator: Pillar3Generator) -> None:
+        """Col c (off-BS gross) must count the facility_undrawn headroom
+        (today 0.0 — the leg's null on/off classification matches neither
+        side); col d (avg CCF, weighted over the off-BS legs) must include
+        it too (today null — no leg matches the off-BS predicate)."""
+        bundle = generator.generate_from_lazyframe(self._mixed_band_data(), framework="CRR")
+        corp = bundle.cr6["corporate"]
+        band = corp.filter(pl.col("row_ref") == "8")
+        assert band["b"][0] == pytest.approx(5000.0)  # on-BS gross (loan) — unaffected
+        assert band["c"][0] == pytest.approx(4000.0)  # off-BS gross (FU headroom)
+        assert band["d"][0] == pytest.approx(0.75)  # avg CCF over the off-BS legs (FU only)
+
+    def test_cr6_ccr_leg_excluded_from_ead_and_rwea(self, generator: Pillar3Generator) -> None:
+        """Col e (EAD) and col j (RWEA) must exclude the CCR netting-set leg
+        entirely (today it is counted — CR6 carries no CCR population
+        exclusion, unlike CR4/CR5's ``sa_scope`` narrowing)."""
+        bundle = generator.generate_from_lazyframe(self._mixed_band_data(), framework="CRR")
+        corp = bundle.cr6["corporate"]
+        band = corp.filter(pl.col("row_ref") == "8")
+        assert band["e"][0] == pytest.approx(8000.0)  # loan 5000 + FU 3000; CCR excluded
+        assert band["j"][0] == pytest.approx(5600.0)  # loan 3500 + FU 2100; CCR excluded
+
+
 # ---------------------------------------------------------------------------
 # CR6-A — scope of IRB and SA use
 # ---------------------------------------------------------------------------

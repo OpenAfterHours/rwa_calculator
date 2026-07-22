@@ -129,31 +129,80 @@ class TestCR10Generation:
             if sl_type == "equity":
                 assert df.height == 4  # 3 Art. 155(2) simple-RW bands + total
             else:
-                assert df.height == 6  # 5 slotting categories + total
+                # 5 categories x 2 maturity bands + 2 maturity-split totals.
+                assert df.height == 12
 
     def test_cr10_risk_weight_populated(self, generator: Pillar3Generator):
+        """Fixed col c per (category x maturity) row: Strong = 50% (< 2.5y) /
+        70% (>= 2.5y). The synthetic frame sets no is_short_maturity, so the
+        strong leg falls to the >= 2.5y row (row 2); the empty < 2.5y row
+        (row 1) still displays its fixed 50%."""
         data = _make_slotting_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
         pf = bundle.cr10["project_finance"]
-        strong = pf.filter(pl.col("row_ref") == "1")
-        assert strong["c"][0] == pytest.approx(70.0)  # 0.70 * 100
+        strong_short = pf.filter(pl.col("row_ref") == "1")  # Strong < 2.5y
+        strong_long = pf.filter(pl.col("row_ref") == "2")  # Strong >= 2.5y
+        assert strong_short["c"][0] == pytest.approx(50.0)  # < 2.5y preferential
+        assert strong_long["c"][0] == pytest.approx(70.0)  # >= 2.5y
+        # The leg (no maturity set) lands in the >= 2.5y row; short band is empty.
+        assert strong_long["e"][0] == pytest.approx(700.0)
+        assert strong_short["e"][0] is None
 
     def test_cr10_total_ead(self, generator: Pillar3Generator):
         data = _make_slotting_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
         pf = bundle.cr10["project_finance"]
-        total = pf.filter(pl.col("row_ref") == "6")
-        assert total["d"][0] > 0
+        total_long = pf.filter(pl.col("row_ref") == "12")  # Total, >= 2.5y
+        assert total_long["d"][0] > 0
 
     def test_cr10_b31_separates_hvcre(self, generator: Pillar3Generator):
-        """B31 should separate HVCRE from IPRE."""
+        """B31 separates HVCRE (CR10.5) with its OWN maturity-split fixed
+        weights: Strong = 70% (< 2.5y) / 95% (>= 2.5y)."""
         data = _make_slotting_data(sl_type=["project_finance", "project_finance", "hvcre"])
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
         if "hvcre" in bundle.cr10:
             hvcre = bundle.cr10["hvcre"]
-            strong = hvcre.filter(pl.col("row_ref") == "1")
-            # HVCRE Strong = 95%
-            assert strong["c"][0] == pytest.approx(95.0)
+            strong_short = hvcre.filter(pl.col("row_ref") == "1")  # HVCRE Strong < 2.5y
+            strong_long = hvcre.filter(pl.col("row_ref") == "2")  # HVCRE Strong >= 2.5y
+            assert strong_short["c"][0] == pytest.approx(70.0)
+            assert strong_long["c"][0] == pytest.approx(95.0)
+
+    def test_cr10_maturity_split_routes_legs_and_pins_applied_weight(
+        self, generator: Pillar3Generator
+    ):
+        """A Strong leg with remaining maturity < 2.5y lands in the preferential
+        50% row; a Strong leg >= 2.5y in the 70% row. Each band's FIXED display
+        weight (col c) equals the weight the engine applied to that band's legs
+        (reporting_rw x100), so the disclosure is engine-consistent."""
+        data = _make_slotting_data(
+            exposure_reference=["SL_SHORT", "SL_LONG"],
+            approach_applied=["slotting", "slotting"],
+            exposure_class=["specialised_lending", "specialised_lending"],
+            sl_type=["project_finance", "project_finance"],
+            slotting_category=["strong", "strong"],
+            is_short_maturity=[True, False],
+            risk_weight=[0.50, 0.70],  # the engine's applied maturity-split weights
+            ead_final=[1000.0, 2000.0],
+            rwa_final=[500.0, 1400.0],
+            expected_loss=[4.0, 8.0],
+            drawn_amount=[1000.0, 2000.0],
+            nominal_amount=[0.0, 0.0],
+            undrawn_amount=[0.0, 0.0],
+            interest=[0.0, 0.0],
+            exposure_type=["loan", "loan"],
+        )
+        bundle = generator.generate_from_lazyframe(data, framework="CRR")
+        pf = bundle.cr10["project_finance"]
+        strong_short = pf.filter(pl.col("row_ref") == "1")  # Strong < 2.5y
+        strong_long = pf.filter(pl.col("row_ref") == "2")  # Strong >= 2.5y
+        # The short leg lands in row 1 (EAD 1000, RWA 500), fixed col c = 50%.
+        assert strong_short["d"][0] == pytest.approx(1000.0)
+        assert strong_short["e"][0] == pytest.approx(500.0)
+        assert strong_short["c"][0] == pytest.approx(0.50 * 100.0)
+        # The long leg lands in row 2 (EAD 2000, RWA 1400), fixed col c = 70%.
+        assert strong_long["d"][0] == pytest.approx(2000.0)
+        assert strong_long["e"][0] == pytest.approx(1400.0)
+        assert strong_long["c"][0] == pytest.approx(0.70 * 100.0)
 
     def test_cr10_columns_match(self, generator: Pillar3Generator):
         data = _make_slotting_data()
@@ -233,8 +282,9 @@ class TestCR105Equity:
             _slotting_plus_equity("irb_simple"), framework="CRR"
         )
         pf = bundle.cr10["project_finance"]
-        assert pf.height == 6  # slotting keeps its 5 categories + total
-        assert pf.filter(pl.col("row_ref") == "1")["d"][0] == pytest.approx(1000.0)
+        assert pf.height == 12  # 5 categories x 2 maturity bands + 2 totals
+        # SL1 (strong, no maturity set) lands in the Strong >= 2.5y row (row 2).
+        assert pf.filter(pl.col("row_ref") == "2")["d"][0] == pytest.approx(1000.0)
 
     def test_absent_under_basel_3_1(self, generator: Pillar3Generator):
         """Basel 3.1 has no equity CR10 subtemplate (Art. 147A removes IRB equity)."""

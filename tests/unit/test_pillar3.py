@@ -193,8 +193,10 @@ class TestTemplateDefinitions:
         assert len(CRR_OV1_ROWS) == 13
 
     def test_ov1_b31_rows_count(self):
-        # 20 original rows + the 5-row CCR block (6, 7, 8, UK8a, 9).
-        assert len(B31_OV1_ROWS) == 25
+        # R16 removed the 7 KM1 rows (4a / 5a-7b) wrongly grafted onto UKB OV1
+        # (PS1/26 Annex II: OV1 rows 1-29, KM1 owns the pre-floor rows); this
+        # stale assertion (25) was left behind by R16 and is aligned to 18 here.
+        assert len(B31_OV1_ROWS) == 18
 
     def test_ov1_b31_has_equity_rows(self):
         refs = {r.ref for r in B31_OV1_ROWS}
@@ -303,7 +305,18 @@ class TestTemplateDefinitions:
         assert "hvcre" not in CRR_CR10_SUBTEMPLATES
 
     def test_cr10_slotting_rows_count(self):
-        assert len(CR10_SLOTTING_ROWS) == 6  # 5 categories + total
+        # 5 supervisory categories x 2 remaining-maturity bands + 2 maturity-
+        # split Total rows (Art. 153(5) Table A; mirrors COREP C 08.06).
+        assert len(CR10_SLOTTING_ROWS) == 12
+
+    def test_cr10_slotting_rows_split_each_category_by_maturity(self):
+        # Each category has one short (< 2.5y) and one long (>= 2.5y) row.
+        bands = {(cat, is_short) for _ref, cat, is_short, _label in CR10_SLOTTING_ROWS}
+        for cat in ("strong", "good", "satisfactory", "weak", "default"):
+            assert (cat, True) in bands
+            assert (cat, False) in bands
+        assert (None, True) in bands  # Total, < 2.5y
+        assert (None, False) in bands  # Total, >= 2.5y
 
     def test_cr10_category_map_count(self):
         assert len(CR10_CATEGORY_MAP) == 5

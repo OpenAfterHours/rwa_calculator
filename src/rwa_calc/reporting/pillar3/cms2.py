@@ -26,11 +26,17 @@ Cell semantics (recorded decisions, this slice):
   the Total 2.5M short of CMS1 on the reference portfolio; column d sums
   ``sa_rwa`` over the row's SA-mapped classes (``CMS2_SA_CLASS_MAP``)
   across the whole book — the per-class full-SA output-floor base.
-- Bespoke sub-rows preserved: 0041 (corporates of-which F-IRB; column c
-  adds the class's standardised-side RWA, column d compares at the parent
-  corporate level), 0042 (of-which A-IRB; column c mirrors a, column d
-  recorded-null), 0044/0045/0054 (IPRE-HVCRE and purchased-receivables
-  splits — no engine discriminators, recorded-null), 0070 Total.
+- Bespoke sub-rows preserved: 0041 (corporates of-which F-IRB; column c is
+  the F-IRB corporate sub-population's own actual RWA. Annex II defines
+  col c as the sum of "IRB RWA + SA RWA" of the ROW's population; an
+  "of which F-IRB" row holds no SA legs, so col c collapses to column a —
+  exactly as the 0042 A-IRB sibling mirrors a. The RECORDED FIX (R18): the
+  retired predicate added the whole corporate class's standardised + equity
+  RWA on top of the F-IRB RWA, over-stating an of-which sub-row by the
+  entire SA book. Column d still compares at the parent corporate level),
+  0042 (of-which A-IRB; column c mirrors a, column d recorded-null),
+  0044/0045/0054 (IPRE-HVCRE and purchased-receivables splits — no engine
+  discriminators, recorded-null), 0070 Total.
 
 References:
 - PRA PS1/26 Art. 456(1)(b), Art. 2a(2); Annex II (UKB CMS2 instructions)
@@ -62,17 +68,6 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     import polars as pl
-
-# Row 0041's standardised-side add (its column c is the corporate class's F-IRB
-# RWA plus the class's standardised-side RWA). Deliberately LOCAL to CMS2 (the
-# of02.py / c02.py precedent): CMS1 retired its shared standardised allow-list
-# when column b became the modelled COMPLEMENT, and widening a SHARED approach
-# tuple with ``standardised_ccr`` is the recorded trap — it would pull the
-# SA-CCR legs into templates that correctly scope CCR out. CMS2's row axis is
-# Art. 147 asset classes; a CCR leg's own class row already carries it via
-# column c's unfiltered class total, and this sub-row add keeps its recorded
-# value.
-_STANDARDISED_APPROACHES: tuple[str, ...] = ("standardised", "equity")
 
 # Sub-rows with no engine discriminator — recorded permanently-null.
 _NULL_REFS: frozenset[str] = frozenset({"0044", "0045", "0054"})
@@ -140,14 +135,7 @@ def build_cms2_spec() -> TemplateSpec:
             firb = _class_member(_CORPORATE_CLASSES, approaches_origin=("foundation_irb",))
             cells[(row.ref, "a")] = CellSpec(Sum("rwa_final"), predicate=firb)
             cells[(row.ref, "b")] = CellSpec(Sum("sa_rwa"), predicate=firb)
-            cells[(row.ref, "c")] = CellSpec(
-                Sum("rwa_final"),
-                predicate=_class_member(
-                    _CORPORATE_CLASSES,
-                    approaches_origin=("foundation_irb", *_STANDARDISED_APPROACHES),
-                ),
-                empty_cell="zero",
-            )
+            cells[(row.ref, "c")] = CellSpec(Sum("rwa_final"), predicate=firb, empty_cell="zero")
             cells[(row.ref, "d")] = CellSpec(
                 Sum("sa_rwa"), predicate=_class_member(_CORPORATE_CLASSES)
             )

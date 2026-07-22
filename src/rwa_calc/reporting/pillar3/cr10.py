@@ -23,10 +23,20 @@ Cell semantics (recorded decisions, this slice):
   its own CR10.5 and has NO equity sheet (Art. 147A removes IRB equity). An
   empty non-equity subtemplate produces no dict entry.
 - Slotting rows are the five supervisory categories (Strong/Good/Satisfactory/
-  Weak/Default, matched on ``slotting_category``) plus Total. Column a/b are the
+  Weak/Default, matched on ``slotting_category``) EACH split into two
+  remaining-maturity bands (< 2.5 years / >= 2.5 years, matched on the derived
+  ``cr10_is_short`` discriminator), plus two maturity-split Total rows — 12 rows,
+  exactly the official EU/UK CR10 grid (Reg (EU) 2021/637 Annex XXIII, PRA
+  onshored), which splits ALL five categories (Default included) and carries
+  TWO maturity-split Totals with no single combined Total. The COREP C 08.06 /
+  OF 08.06 slotting grid over the same Art. 153(5) Table A is identical, so the
+  two disclosures stay row-consistent. Presentation divergence (recorded): the
+  official row stub is numeric "Category 1..5" with the maturity band as a
+  second stub column; we fold both into one ``row_name``
+  ("Category 1 (Strong) — remaining maturity < 2.5 years"). Column a/b are the
   gross on-/off-BS amounts; d/e/f sum ``reporting_ead`` / ``rwa_final`` /
-  ``expected_loss`` (null on an empty category — the recorded a-b-zero vs
-  d-f-null asymmetry the goldens pin).
+  ``expected_loss`` (null on an empty band — the recorded a-b-zero vs d-f-null
+  asymmetry the goldens pin).
 - Equity (CR10.5) rows are the three fixed Art. 155(2) supervisory bands
   (190/290/370%) plus Total, in Art. 155(2)(a)/(b)/(c) order; a leg lands in a
   band by its applied ``reporting_rw``. Equity is an on-balance-sheet
@@ -36,10 +46,17 @@ Cell semantics (recorded decisions, this slice):
   null.
 - Column c is the FIXED regulatory risk weight ("This is a fixed column. It
   shall not be altered" — Art. 153(5) Table A / Art. 155(2)), injected by a
-  module post-step from the template constants (x100; Total row null) —
-  populated even on empty rows. The slotting constants carry the >= 2.5y
-  reference weights; the short-maturity preferential column-c variant and
-  pack-homing of the display constants are recorded follow-ups (plan §7).
+  module post-step from the template constants (x100; Total rows null) —
+  populated even on empty rows. R18 split each slotting supervisory category
+  into its two remaining-maturity rows so column c carries the maturity-correct
+  fixed weight: non-HVCRE Strong 50%/70%, Good 70%/90% (flat otherwise); the
+  B31 HVCRE sheet (CR10.5) takes Strong 70%/95%, Good 95%/120%. Default is 0%
+  (capital driven via EL, not RWA): the official template prints an em-dash "—"
+  there rather than a weight — a display convention our Float64 column renders
+  as 0.0, the Art. 153(5) table value the engine actually applies (reviewed and
+  kept: R18; null would be the exact-fidelity rendering of "no pre-printed
+  weight" if a consumer ever needs it). Pack-homing of the display constants
+  remains a recorded follow-up (plan §7).
 
 References:
 - CRR Art. 438(e); Art. 153(5) (Table 1) / Art. 155(2) (CRR equity);
@@ -64,12 +81,14 @@ from rwa_calc.reporting.cellspec import (
     execute,
 )
 from rwa_calc.reporting.pillar3.templates import (
-    CR10_CATEGORY_MAP,
     CR10_EQUITY_RISK_WEIGHTS,
     CR10_EQUITY_ROWS,
     CR10_SLOTTING_ROWS,
     HVCRE_RISK_WEIGHTS,
+    HVCRE_RISK_WEIGHTS_SHORT,
     SLOTTING_RISK_WEIGHTS,
+    SLOTTING_RISK_WEIGHTS_SHORT,
+    P3Row,
     get_cr10_columns,
     get_cr10_subtemplates,
 )
@@ -80,13 +99,27 @@ from rwa_calc.reporting.pillar3.templates import (
 # round-trip dust.
 _EQUITY_RW_TOL = 0.05
 
+# The derived per-leg maturity-band discriminator the slotting cell predicates
+# key off. Sealed ``is_short_maturity`` where present, else literal False (every
+# leg falls to the >= 2.5-year band — the C 08.06 asymmetric fallback: the
+# short-band rows go empty and the long-band rows absorb the whole category).
+_CR10_IS_SHORT = "cr10_is_short"
 
-def _row_cells(row_name: str, *, is_total: bool) -> dict[str, CellSpec]:
-    """The Float64 column bindings for one slotting CR10 row (col c is a post-step)."""
-    if is_total:
-        member = RowPredicate()
-    else:
-        member = RowPredicate(equals=(("slotting_category", CR10_CATEGORY_MAP[row_name]),))
+
+def _slotting_row_cells(category: str | None, is_short: bool | None) -> dict[str, CellSpec]:
+    """The Float64 column bindings for one CR10 (category x maturity) slotting
+    row (col c is a post-step).
+
+    ``category`` None marks a maturity-band Total row (no category filter);
+    ``is_short`` None marks a row with no maturity constraint. The maturity band
+    is matched on the derived ``cr10_is_short`` discriminator.
+    """
+    terms: list[tuple[str, str | bool]] = []
+    if is_short is not None:
+        terms.append((_CR10_IS_SHORT, is_short))
+    if category is not None:
+        terms.append(("slotting_category", category))
+    member = RowPredicate(equals=tuple(terms))
 
     return {
         "a": CellSpec(
@@ -130,13 +163,18 @@ def build_cr10_spec(framework: str) -> TemplateSpec:
     """Build the CR10 slotting TemplateSpec (shared across a regime's slotting
     subtemplates — the ``sl_type`` narrowing happens before execution).
 
+    Rows are the five supervisory categories each split into two remaining-
+    maturity bands plus two maturity-split Total rows (``CR10_SLOTTING_ROWS``).
     Carries the Art. 438(e) citation for the slotting disclosure.
     """
-    rows = tuple(CR10_SLOTTING_ROWS)
+    rows = tuple(
+        P3Row(ref, label, is_total=category is None)
+        for ref, category, _is_short, label in CR10_SLOTTING_ROWS
+    )
     cells: dict[tuple[str, str], CellSpec] = {}
-    for row in rows:
-        for col_ref, cell in _row_cells(row.name, is_total=row.is_total).items():
-            cells[(row.ref, col_ref)] = cell
+    for ref, category, is_short, _label in CR10_SLOTTING_ROWS:
+        for col_ref, cell in _slotting_row_cells(category, is_short).items():
+            cells[(ref, col_ref)] = cell
     return TemplateSpec(
         name="cr10",
         rows=rows,
@@ -196,7 +234,7 @@ def generate_cr10(
         errors.append("CR10: missing required columns")
         return {}
     data = results.collect()
-    slotting = data.filter(pl.col("reporting_approach_origin") == "slotting")
+    slotting = _with_is_short(data.filter(pl.col("reporting_approach_origin") == "slotting"))
     equity_simple = _equity_simple_population(data)
     if slotting.height == 0 and equity_simple.height == 0:
         return {}
@@ -236,6 +274,20 @@ def _equity_simple_population(data: pl.DataFrame) -> pl.DataFrame:
     )
 
 
+def _with_is_short(frame: pl.DataFrame) -> pl.DataFrame:
+    """Derive the ``cr10_is_short`` maturity-band discriminator on a slotting
+    frame. ``is_short_maturity`` (remaining maturity < 2.5 years) is sealed onto
+    every slotting leg by the aggregator; when absent (a synthetic frame that
+    never set it) or null (a null maturity date, which the engine treats as
+    long), the leg falls to the >= 2.5-year band — the C 08.06 asymmetric
+    fallback: short-band rows go empty, long-band rows absorb the category."""
+    if "is_short_maturity" in frame.columns:
+        expr = pl.col("is_short_maturity").fill_null(value=False)
+    else:
+        expr = pl.lit(value=False)
+    return frame.with_columns(expr.alias(_CR10_IS_SHORT))
+
+
 def _type_data(slotting: pl.DataFrame, cols: set[str], sl_key: str, framework: str) -> pl.DataFrame:
     """Subset the slotting book for one subtemplate: CRR groups IPRE + HVCRE
     under CR10.2; an absent ``sl_type`` column matches nothing."""
@@ -247,17 +299,18 @@ def _type_data(slotting: pl.DataFrame, cols: set[str], sl_key: str, framework: s
 
 
 def _with_risk_weight_column(frame: pl.DataFrame, sl_key: str) -> pl.DataFrame:
-    """Fill column c with the fixed Art. 153(5) Table A risk weight x100 per
-    category row (Total stays null) — populated even on empty categories."""
-    rw_map = HVCRE_RISK_WEIGHTS if sl_key == "hvcre" else SLOTTING_RISK_WEIGHTS
+    """Fill column c with the FIXED Art. 153(5) Table A risk weight x100 per
+    (category x maturity) row (Total rows stay null) — populated even on empty
+    rows. Strong/Good take the preferential weight in the < 2.5-year band; the
+    B31 HVCRE sheet (CR10.5) uses the HVCRE weight family."""
+    base = HVCRE_RISK_WEIGHTS if sl_key == "hvcre" else SLOTTING_RISK_WEIGHTS
+    short = HVCRE_RISK_WEIGHTS_SHORT if sl_key == "hvcre" else SLOTTING_RISK_WEIGHTS_SHORT
     expr: pl.Expr = pl.lit(None, dtype=pl.Float64)
-    for row in CR10_SLOTTING_ROWS:
-        if row.is_total:
+    for ref, category, is_short, _label in CR10_SLOTTING_ROWS:
+        if category is None:
             continue
-        rw_value = rw_map.get(CR10_CATEGORY_MAP[row.name])
-        if rw_value is None:
-            continue
-        expr = pl.when(pl.col("row_ref") == row.ref).then(pl.lit(rw_value * 100.0)).otherwise(expr)
+        rw_value = (short if is_short else base)[category]
+        expr = pl.when(pl.col("row_ref") == ref).then(pl.lit(rw_value * 100.0)).otherwise(expr)
     ordered = frame.columns
     return frame.with_columns(expr.alias("c")).select(ordered)
 

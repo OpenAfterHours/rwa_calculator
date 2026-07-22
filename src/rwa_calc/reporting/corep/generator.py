@@ -51,15 +51,13 @@ from rwa_calc.reporting.corep.c08 import (
 )
 from rwa_calc.reporting.corep.c09 import generate_c09_01, generate_c09_02
 from rwa_calc.reporting.corep.c34 import (
-    c34_frame,
-    collect_ccr_rows,
     generate_c34_01,
+    generate_c34_02,
     generate_c34_04,
     generate_c34_08,
 )
 from rwa_calc.reporting.corep.of02 import generate_of_02_01
 from rwa_calc.reporting.corep.templates import (
-    C34_02_ROWS,
     IRB_EXPOSURE_CLASS_ROWS,
     OF_02_01_COLUMNS,
     SA_EXPOSURE_CLASS_ROWS,
@@ -75,7 +73,6 @@ from rwa_calc.reporting.corep.templates import (
     get_c08_columns,
     get_c09_01_columns,
     get_c09_02_columns,
-    get_c34_02_columns,
 )
 from rwa_calc.reporting.kernel import (
     available_columns as _available_columns,
@@ -561,9 +558,9 @@ class COREPGenerator:
     # =========================================================================
     # C 34.01 / 04 / 08 are declarative (Phase 7 S8; R27a) — the cell semantics
     # live in ``corep/c34.py`` and run through the one ``cellspec.execute``
-    # executor. These dispatch-router methods keep their signatures (the R5 unit
-    # suite calls ``_generate_c34_08`` directly). C 34.02 stays imperative until
-    # R27b, reading the shared CCR population helper back from ``corep/c34.py``.
+    # executor — C 34.01/04/08 since R27a, C 34.02 (per netting set) since
+    # R27b. These dispatch-router methods keep their signatures (the R5 unit
+    # suite calls ``_generate_c34_08`` directly).
 
     def _generate_c34_01(
         self,
@@ -584,35 +581,13 @@ class COREPGenerator:
     ) -> dict[str, pl.DataFrame]:
         """Generate C 34.02 — SA-CCR EAD per netting set.
 
-        Returns a dict keyed by ``netting_set_id`` (derived by stripping the
-        ``ccr__`` prefix from ``exposure_reference``). Each value is a 1-row
-        DataFrame carrying that netting set's exposure value (col 0010).
-        Empty dict when the portfolio has no CCR rows. Still imperative until
-        R27b — reads the shared CCR population helper from ``corep/c34.py``.
-
-        References:
-            CRR Art. 274(2): EAD = alpha * (RC + PFE) per netting set.
+        Dispatch-router entry (R27b): declarative in
+        ``corep/c34.py::generate_c34_02`` — one sheet per netting set, keyed by
+        the ``netting_set_id`` stripped from the ``ccr__`` reference prefix, each
+        summing that netting set's ``ead_final`` (col 0010). Empty dict when the
+        portfolio has no SA-CCR rows.
         """
-        ccr = collect_ccr_rows(results, cols)
-        if ccr is None or len(ccr) == 0:
-            return {}
-
-        column_refs = [c.ref for c in get_c34_02_columns()]
-        per_ns = ccr.group_by("netting_set_id").agg(
-            pl.col("ead_final").fill_null(0.0).sum().alias("_ead")
-        )
-
-        result: dict[str, pl.DataFrame] = {}
-        for ns_row in per_ns.iter_rows(named=True):
-            ns_id = ns_row["netting_set_id"]
-            if ns_id is None:
-                continue
-            rows: list[dict[str, object]] = [
-                {"row_ref": row.ref, "row_name": row.name, "0010": float(ns_row["_ead"])}
-                for row in C34_02_ROWS
-            ]
-            result[str(ns_id)] = c34_frame(rows, column_refs)
-        return result
+        return generate_c34_02(results, cols)
 
     def _generate_c34_04(
         self,

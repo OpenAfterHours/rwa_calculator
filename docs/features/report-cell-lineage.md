@@ -131,14 +131,15 @@ and **CR10** (slotting specialised lending + CRR simple-RW equity, per subtempla
 use), **CR7** (credit-derivatives effect on RWEA), **CR8** (IRB RWEA flow) and the Basel-3.1-only
 **CMS1** / **CMS2** (modelled vs standardised RWEA, by risk type / by asset class); and the
 **single-frame** COREP counterparty-credit-risk templates **C 34.01** (SA-CCR analysis by approach),
-**C 34.08** (CCP exposures) and the Basel-3.1-only **C 34.04** (CVA capital).
+**C 34.08** (CCP exposures) and the Basel-3.1-only **C 34.04** (CVA capital); and the **multi-sheet**
+**C 34.02** (SA-CCR EAD per netting set — one sheet per netting set).
 
 That is the full COREP credit-risk estate (C 07.00, C 08.01–07, C 09.01/02), the full Pillar 3 estate
-(OV1, CR4–CR10, CMS1/2) and three of the four single-frame **C 34** counterparty-credit-risk templates
+(OV1, CR4–CR10, CMS1/2) and all four in-scope **C 34** counterparty-credit-risk templates
 — with a shrinking residual of imperative templates. **C 02.00** (own-funds requirements) is a
 pre-pass kernel-plus-thin-shell hybrid that never runs through the executor, so it exposes no
-`TemplateSpec` to read; **C 34.02** (SA-CCR per netting set) and the Pillar 3 **CCR1–8** family are
-still imperative pending R27b/R27c. A lineage request for any of these — or any other uninstrumented
+`TemplateSpec` to read; the Pillar 3 **CCR1–8** family is still imperative pending R27c. A lineage
+request for any of these — or any other uninstrumented
 template — returns a clean `404`: *no lineage*, never a re-derived guess. **CR9.1** is a softer gap:
 it *is* instrumented, but the engine produces neither `ecai_pd_mapping` nor
 `external_rating_equivalent`, so it is empty on the real portfolio (the recorded S1 accept-empty
@@ -158,6 +159,14 @@ positive `cva_rwa` is present) reads the portfolio BA-CVA roll-up as a broadcast
 (`FirstNonNull`, the OV1 row-26 idiom): a row-backed cell that does not reconcile to a signed total,
 and — having no producing golden fixture — pinned by the CVA-A1 unit estate plus a seeded lineage unit
 pin rather than an acceptance tie-out.
+
+**C 34.02** (SA-CCR EAD per netting set) is the R27b instrumentation — the first **multi-sheet** C 34
+template. It keys one sheet per netting set on the `netting_set_id` stripped from the `ccr__` reference
+prefix (the C 08.04 pattern), each sheet's plan frame that netting set's slice of the same SA-CCR
+population C 34.01 reports whole (FCCM SFTs excluded). The single row 0010 sums that netting set's
+`ead_final` (CRR Art. 274(2) EAD = alpha * (RC + PFE) per netting set), so the tie-out sweep reconciles
+a per-sheet summed cell to the reported figure on the QCCP netting set the CCR derivatives oracle
+produces.
 
 **C 09.01**, **C 09.02** and **CR6** are the R25 instrumentation. The two **C 09** geo templates are
 the first **C 09-family** sign-aware sweep: their plans pass the CRR supporting-factor adjustment

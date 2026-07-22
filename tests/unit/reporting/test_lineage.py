@@ -174,12 +174,12 @@ def test_no_predicate_means_no_constraint() -> None:
 
 
 def test_only_instrumented_templates_have_lineage() -> None:
-    # Assert — C 34.02 (per netting set, R27b) and CCR1-8 (R27c) are still
-    # imperative: no TemplateSpec to read, so no lineage. C 34.01/04/08 were
-    # instrumented in R27a. Coverage is explicit, never a guess.
+    # Assert — C 34.02 (per netting set) was instrumented in R27b; CCR1-8 (R27c)
+    # are still imperative: no TemplateSpec to read, so no lineage. C 34.01/04/08
+    # were instrumented in R27a. Coverage is explicit, never a guess.
     assert "c07_00" in lineage.LINEAGE_PLANS
     assert "c34_01" in lineage.LINEAGE_PLANS
-    assert "c34_02" not in lineage.LINEAGE_PLANS
+    assert "c34_02" in lineage.LINEAGE_PLANS
     assert "ccr1" not in lineage.LINEAGE_PLANS
 
 
@@ -944,7 +944,7 @@ _R27A_TEMPLATES = ("c34_01", "c34_04", "c34_08")
 def test_r27a_c34_templates_are_single_frame_instrumented(template_id: str) -> None:
     # Assert — each R27a C 34 template is instrumented as a SINGLE-FRAME provider
     # (no sheet axis -> cells report sheet=None), with a populated scope and no
-    # sheet label. C 34.02 (per netting set) stays imperative (R27b).
+    # sheet label. (C 34.02, per netting set, is multi-sheet — R27b covers it.)
     assert lineage.is_instrumented(template_id)
     provider = lineage.LINEAGE_PLANS[template_id]
     assert provider.single_frame is True
@@ -1039,6 +1039,80 @@ def test_c34_04_degrades_to_no_lineage_under_crr() -> None:
     # Act / Assert — a CRR lineage request degrades to a clean no-lineage (the
     # CMS/OF 02.01 pattern), never a crash.
     assert lineage.sheet_lineage(_FrameSource(frame, "CRR"), "c34_04") is None
+
+
+# =============================================================================
+# R27b — C 34.02 SA-CCR EAD per netting set (the first MULTI-SHEET C 34 template)
+# =============================================================================
+
+
+def test_c34_02_is_multi_sheet_instrumented() -> None:
+    # Assert — C 34.02 is instrumented as a MULTI-SHEET provider (one sheet per
+    # netting set), unlike the single-frame R27a C 34 templates: single_frame is
+    # False and the netting-set sheet axis is labelled.
+    assert lineage.is_instrumented("c34_02")
+    provider = lineage.LINEAGE_PLANS["c34_02"]
+    assert provider.single_frame is False
+    assert provider.sheet_label
+    assert provider.scope
+
+
+def _c34_02_ledger() -> pl.DataFrame:
+    """A CCR derivatives ledger with two netting sets — two legs in NS_A, one in
+    NS_B — the per-netting-set partition C 34.02 fans out into sheets."""
+    return pl.DataFrame(
+        {
+            "exposure_reference": ["ccr__NS_A", "ccr__NS_A", "ccr__NS_B"],
+            "risk_type": ["CCR_DERIVATIVE", "CCR_DERIVATIVE", "CCR_DERIVATIVE"],
+            "reporting_class_origin": ["institution", "institution", "corporate"],
+            "reporting_ead": [1_000_000.0, 500_000.0, 2_000_000.0],
+            "ead_final": [1_000_000.0, 500_000.0, 2_000_000.0],
+            "rwa_final": [20_000.0, 10_000.0, 40_000.0],
+        }
+    )
+
+
+def test_c34_02_keys_one_sheet_per_netting_set_and_sums_that_set_ead() -> None:
+    # Arrange — the two-netting-set ledger through the C 34.02 lineage resolver.
+    frame = _c34_02_ledger()
+    cols = set(frame.columns)
+    provider = lineage.LINEAGE_PLANS["c34_02"]
+
+    # Act — plans() and generate() must key IDENTICALLY per netting set (else the
+    # resolver null-injects a value silently); NS_A's sheet sums its two legs
+    # (1.5m), NS_B's its single leg (2m).
+    plans = provider.plans(frame.lazy(), cols, "CRR", [])
+    frames = provider.generate(frame.lazy(), cols, "CRR", [])
+    resolver = lineage.sheet_lineage(_FrameSource(frame), "c34_02", "NS_A")
+
+    # Assert
+    assert set(plans) == {"NS_A", "NS_B"}
+    assert set(frames) == set(plans)
+    assert resolver is not None
+    assert resolver.sheet == "NS_A"
+    cell = resolver.cell("0010", "0010")
+    assert cell is not None
+    assert (cell.query.kind, cell.query.metric) == ("rows", "sum")
+    assert cell.query.sheet == "NS_A"
+    assert cell.cell_value == pytest.approx(1_500_000.0)
+    assert cell.total_rows == 2
+    assert cell.contribution_total == pytest.approx(1_500_000.0)
+
+
+def test_c34_02_degrades_to_no_lineage_without_ccr_rows() -> None:
+    # Arrange — a book with no ``ccr__`` rows produces no C 34.02 sheets.
+    frame = pl.DataFrame(
+        {
+            "exposure_reference": ["LN-1"],
+            "reporting_class_origin": ["corporate"],
+            "ead_final": [500.0],
+            "rwa_final": [100.0],
+        }
+    )
+
+    # Act / Assert — a lineage request degrades to a clean no-lineage (the empty
+    # dict the reported generator returns), never a crash.
+    assert lineage.sheet_lineage(_FrameSource(frame), "c34_02") is None
 
 
 # =============================================================================

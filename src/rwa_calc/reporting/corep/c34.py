@@ -1,27 +1,30 @@
 """
-COREP C 34.01 / C 34.04 / C 34.08 — counterparty credit risk, declarative.
+COREP C 34.01 / C 34.02 / C 34.04 / C 34.08 — counterparty credit risk, declarative.
 
 Pipeline position:
     sealed aggregator-exit ledger
-        -> c34_0x_plans() -> ONE SheetPlan -> cellspec.execute()
-        -> DataFrame | None
+        -> c34_0x_plans() -> SheetPlan(s) -> cellspec.execute()
+        -> DataFrame | None | dict[str, DataFrame]
 
-The three SINGLE-FRAME C 34 templates, converted from the imperative
+The four in-scope C 34 templates, converted from the imperative
 ``COREPGenerator._generate_c34_0x`` methods to declarative ``TemplateSpec``\\s
-run through the one ``cellspec.execute`` executor (Phase 7 S8; R27a). C 34.02
-(per netting set) stays imperative in ``generator.py`` until R27b, so the CCR
-population helpers (``collect_ccr_rows`` / ``collect_default_fund``) live here
-as the CCR home and are imported back by C 34.02.
+run through the one ``cellspec.execute`` executor (Phase 7 S8; R27a the three
+single-frame templates, R27b the per-netting-set C 34.02). The shared CCR
+population helpers (``collect_ccr_rows`` / ``collect_default_fund``) are the CCR
+home for the whole family.
 
-Lineage-instrumented (R27a, single frame): each ``c34_0x_plans`` exposes its one
-execution plan so ``reporting.lineage`` can drill into a reported cell; the
-``c34_0x_frames`` wrappers key the reported frame (with the emission gate) under
-the same single-frame canonical key. None of the three carry a post-``execute``
-pass, so a cell's reported value is a plain ``execute`` of the plan.
+Lineage-instrumented: each ``c34_0x_plans`` exposes its execution plan(s) so
+``reporting.lineage`` can drill into a reported cell; the ``c34_0x_frames``
+wrappers key the reported frame (with the emission gate) under the same key(s) —
+the single-frame canonical key for C 34.01/04/08 (R27a), one key per netting set
+for C 34.02 (R27b, the first multi-sheet C 34 template). None carry a
+post-``execute`` pass, so a cell's reported value is a plain ``execute`` of its
+plan.
 
 Cell semantics (recorded decisions, unchanged from the imperative generators —
-golden-gated for C 34.01 / C 34.08; the CVA C 34.04 has no producing golden
-fixture and is pinned by the CVA-A1 unit estate + a seeded lineage unit pin):
+golden-gated for C 34.01 / C 34.02 / C 34.08; the CVA C 34.04 has no producing
+golden fixture and is pinned by the CVA-A1 unit estate + a seeded lineage unit
+pin):
 
 - **C 34.01 (SA-CCR analysis by approach).** One row (0010, "SA-CCR"): col 0010
   sums ``ead_final`` and col 0020 ``rwa_final`` over the SA-CCR netting-set
@@ -30,6 +33,13 @@ fixture and is pinned by the CVA-A1 unit estate + a seeded lineage unit pin):
   templates; PS1/26 App. 17). The plan frame IS that pre-filtered population (the
   CR8 pattern), so both cells sum the whole frame. None when the portfolio has no
   such rows (the ``generate_of_02_01`` gated precedent).
+- **C 34.02 (SA-CCR EAD per netting set).** ONE sheet per netting set, keyed on
+  the ``netting_set_id`` stripped from the ``ccr__`` reference prefix. Each
+  sheet's single row (0010) sums ``ead_final`` (col 0010) over that netting
+  set's legs — the same SA-CCR population as C 34.01, partitioned by netting set
+  (CRR Art. 274(2) EAD = alpha * (RC + PFE) per netting set; Art. 275 the
+  netting-set boundary). Empty dict when the portfolio has no SA-CCR rows (the
+  imperative ``{}`` preserved).
 - **C 34.04 (CVA capital, BA-CVA).** Basel 3.1 ONLY. One row (0010): col 0010 is
   the portfolio ``cva_rwa`` roll-up — a broadcast per-row constant surfaced by
   the aggregation stage's BA-CVA roll-up, read as a ``FirstNonNull`` over the
@@ -60,8 +70,6 @@ References:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import polars as pl
 from watchfire import cites
 
@@ -76,6 +84,8 @@ from rwa_calc.reporting.cellspec import (
 from rwa_calc.reporting.corep.templates import (
     C34_01_COLUMN_REFS,
     C34_01_ROWS,
+    C34_02_COLUMN_REFS,
+    C34_02_ROWS,
     C34_04_COLUMN_REFS,
     C34_04_ROWS,
     C34_08_COLUMN_REFS,
@@ -85,10 +95,7 @@ from rwa_calc.reporting.kernel import pick
 from rwa_calc.reporting.metadata import ReportingContext
 from rwa_calc.reporting.plans import SheetPlan
 
-if TYPE_CHECKING:
-    from polars._typing import PolarsDataType
-
-# Single-frame lineage keys: each C 34 template has no sheet axis, so its one
+# Single-frame lineage keys: each single-frame C 34 template has no sheet axis, so its one
 # plan keys under a canonical name (see reporting.plans / _resolve_sheet_key
 # single_frame path). The reported catalogue id is the same string.
 _C34_01_KEY = "c34_01"
@@ -171,6 +178,88 @@ def _c34_01_spec() -> TemplateSpec:
             ("0010", "0010"): CellSpec(Sum("ead_final")),
             ("0010", "0020"): CellSpec(Sum("rwa_final")),
         },
+        empty_cell="zero",
+    )
+
+
+# =============================================================================
+# C 34.02 — SA-CCR EAD per netting set (one sheet per netting_set_id)
+# =============================================================================
+
+
+@cites("CRR Art. 274")
+def generate_c34_02(results: pl.LazyFrame, cols: set[str]) -> dict[str, pl.DataFrame]:
+    """Execute C 34.02 (SA-CCR EAD per netting set).
+
+    Returns one 1-row DataFrame per netting set (col 0010 sums that netting
+    set's ``ead_final``), keyed by ``netting_set_id`` — the multi-sheet dict the
+    exporter fans out to ``c34_02__<netting_set_id>`` sheets. Empty dict when the
+    portfolio carries no SA-CCR netting-set rows (the imperative ``{}``).
+    """
+    return _c34_02_render(c34_02_plans(results, cols, "", []))
+
+
+def c34_02_plans(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, SheetPlan]:
+    """Build the per-netting-set C 34.02 execution plans for lineage.
+
+    First multi-sheet C 34 instrumentation (the ``c08_04`` / ``cr7a`` pattern):
+    each sheet's plan frame is that netting set's slice of the pre-filtered
+    SA-CCR population (FCCM SFTs already excluded by ``collect_ccr_rows``), so
+    the single ``Sum("ead_final")`` cell sums exactly that netting set's legs.
+    Sheets key on the ``netting_set_id`` derived from the ``ccr__`` reference
+    prefix, sorted for determinism (the ``c08_04`` keying). Yields ``{}`` when
+    the portfolio has no such rows (a clean no-lineage, the reported empty dict).
+    C 34.02 carries no "(-)"-labelled deduction column, so ``negative_cols`` is
+    empty.
+    """
+    ccr = collect_ccr_rows(results, cols)
+    if ccr is None or len(ccr) == 0:
+        return {}
+    spec = _c34_02_spec()
+    plans: dict[str, SheetPlan] = {}
+    for ns_id in ccr["netting_set_id"].drop_nulls().unique().sort().to_list():
+        plans[ns_id] = SheetPlan(
+            spec=spec,
+            frame=ccr.filter(pl.col("netting_set_id") == ns_id),
+            ctx=ReportingContext(),
+            negative_cols=frozenset(),
+        )
+    return plans
+
+
+def c34_02_frames(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, pl.DataFrame]:
+    """Render the per-netting-set C 34.02 frames for lineage (keyed like
+    ``c34_02_plans``). Identical to the reported ``generate_c34_02`` — C 34.02
+    has no framework dependency, no prior period and no post-execute pass, so a
+    cell's reported value is a plain ``execute`` of its plan."""
+    return _c34_02_render(c34_02_plans(results, cols, framework, errors))
+
+
+def _c34_02_render(plans: dict[str, SheetPlan]) -> dict[str, pl.DataFrame]:
+    """Execute each netting-set plan into its reported frame."""
+    return {key: execute(plan.spec, plan.frame, plan.ctx) for key, plan in plans.items()}
+
+
+def _c34_02_spec() -> TemplateSpec:
+    """The C 34.02 spec: one netting-set row summing EAD (col 0010) over that
+    netting set's slice of the SA-CCR population. Shared by the reported
+    generator and the lineage plans — the per-sheet frame supplies the
+    netting-set narrowing, so the spec itself carries no predicate."""
+    return TemplateSpec(
+        name="c34_02",
+        rows=tuple(C34_02_ROWS),
+        column_refs=tuple(C34_02_COLUMN_REFS),
+        cells={("0010", "0010"): CellSpec(Sum("ead_final"))},
         empty_cell="zero",
     )
 
@@ -445,15 +534,3 @@ def collect_default_fund(results: pl.LazyFrame, cols: set[str]) -> tuple[float, 
     if len(stats) == 0:
         return 0.0, 0.0
     return float(stats["_ead"][0]), float(stats["_rwea"][0])
-
-
-def c34_frame(rows: list[dict[str, object]], column_refs: list[str]) -> pl.DataFrame:
-    """Build a C 34.xx DataFrame with the standard row_ref/row_name + refs schema.
-
-    Retained for the still-imperative C 34.02 (per netting set) generator until
-    R27b; the declarative C 34.01/04/08 build their frames through the executor.
-    """
-    schema: dict[str, PolarsDataType] = {"row_ref": pl.String, "row_name": pl.String}
-    for ref in column_refs:
-        schema[ref] = pl.Float64
-    return pl.DataFrame(rows, schema=schema)

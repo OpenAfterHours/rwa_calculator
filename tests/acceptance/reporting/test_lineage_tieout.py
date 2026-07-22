@@ -137,6 +137,12 @@ _TIEOUT_CASES: list[tuple[str, str | None, str]] = [
     # producing fixture here, so it is pinned by a seeded lineage unit pin instead.
     ("c34_01", None, "CCR"),
     ("c34_08", None, "CCR"),
+    # R27b — the FIRST multi-sheet counterparty-credit-risk template. C 34.02
+    # (SA-CCR EAD per netting set) ties out on the QCCP netting set the CCR oracle
+    # produces (``NS_CCR_QCCP``); its single row 0010 sums that netting set's
+    # ead_final, so the sweep reconciles a per-sheet summed cell to the reported
+    # figure (the bilateral ``NS_CCR_BILAT`` sheet exercises the same path).
+    ("c34_02", "NS_CCR_QCCP", "CCR"),
 ]
 
 

@@ -317,7 +317,7 @@ Source: PS1/26 Annex II §3.4.1 (OF 09.01 row instructions, pp. 139-141 of `docs
 - `docs/assets/ps1-26-annex-ii-reporting-instructions.pdf` — Basel 3.1 reporting instructions
 
 ### Status
-- Generator: Complete — all COREP credit-risk template families are declarative per-template modules (`reporting/corep/{c02,c07,c08,c09,of02}.py`) through the one executor (`reporting/cellspec.py`), C 02.00 as the recorded pre-pass-kernel hybrid: C/OF 02.00, 07.00, 08.01–08.07, 09.01, 09.02, and OF 02.01. Only the C 34.x CCR family remains on the legacy `generator.py` path (deferred with the S8-pre goldens).
+- Generator: Complete — all COREP credit-risk template families are declarative per-template modules (`reporting/corep/{c02,c07,c08,c09,c34,of02}.py`) through the one executor (`reporting/cellspec.py`), C 02.00 as the recorded pre-pass-kernel hybrid: C/OF 02.00, 07.00, 08.01–08.07, 09.01, 09.02, OF 02.01, and the four in-scope C 34 counterparty-credit-risk templates (C 34.01/02/04/08 in `reporting/corep/c34.py` — R27a the single-frame trio, R27b the multi-sheet per-netting-set C 34.02). No credit-risk COREP template remains on the legacy `generator.py` path.
 - OF 02.01: Complete — `reporting/corep/of02.py::generate_of_02_01` populates the credit-risk row (0010, excl. CCR), the CCR row (0020) and the Total row (0080 = their sum); cols 0010/0020 partition the book (modelled vs its complement) and col 0030 = 0010 + 0020 = U-TREA. Rows 0030–0070 (CVA/securitisation/market/op risk/other) are null — out of scope.
 - Template definitions: Complete — all templates use correct 4-digit COREP column references and multi-section row structures matching EBA/PRA layouts.
 - Excel export: Complete — produces per-exposure-class sheets for all templates.

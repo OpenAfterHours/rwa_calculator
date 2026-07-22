@@ -84,6 +84,8 @@ from rwa_calc.reporting.corep.c09 import (
 from rwa_calc.reporting.corep.c34 import (
     c34_01_frames,
     c34_01_plans,
+    c34_02_frames,
+    c34_02_plans,
     c34_04_frames,
     c34_04_plans,
     c34_08_frames,
@@ -240,8 +242,9 @@ class _Provider:
 # plan/generate extraction c07 made, returning `dict[str, SheetPlan]`) and
 # register a `_Provider` here — set `single_frame=True` for a template with no
 # sheet axis. Templates absent from this map have no lineage — including C 02.00
-# (a kernel hybrid), C 34.02 and CCR1-8, which are still imperative and have no
-# TemplateSpec to read (C 34.01/04/08 were instrumented in R27a).
+# (a kernel hybrid) and CCR1-8, which are still imperative and have no
+# TemplateSpec to read (C 34.01/04/08 were instrumented in R27a, the per-netting-
+# set C 34.02 in R27b).
 LINEAGE_PLANS: dict[str, _Provider] = {
     "c07_00": _Provider(
         plans=c07_plans,
@@ -522,6 +525,32 @@ LINEAGE_PLANS: dict[str, _Provider] = {
         ),
         sheet_label="",
         single_frame=True,
+    ),
+    # C 34.02 — SA-CCR EAD per netting set (per netting set; R27b). The FIRST
+    # multi-sheet C 34 instrumentation: c34_02_plans keys one plan per netting
+    # set (the c08_04 pattern), each plan's frame that netting set's slice of the
+    # pre-filtered SA-CCR population, so the single Sum("ead_final") cell sums
+    # exactly that set's legs. c34_02_frames is the lineage-facing generator,
+    # IDENTICAL to the reported generate_c34_02 (no framework dependency, no prior
+    # period, no post-execute pass), so a cell's value is a plain execute of its
+    # plan and plans()/generate() key identically per netting set.
+    "c34_02": _Provider(
+        plans=c34_02_plans,
+        generate=c34_02_frames,
+        scope=(
+            "The SA-CCR netting-set population — the synthetic ``ccr__``-prefixed "
+            "rows, with FCCM SFTs EXCLUDED (they report on C 07.00 row 0090, not "
+            "the SA-CCR templates; PS1/26 App. 17). Admitted by exposure reference "
+            "(not the approach label the output floor relabels), partitioned into "
+            "one sheet per netting set keyed on the netting_set_id stripped from "
+            "the ``ccr__`` reference prefix",
+            "Each sheet's single row (0010) sums ead_final (col 0010) over that "
+            "netting set's legs — CRR Art. 274(2) SA-CCR EAD = alpha * (RC + PFE) "
+            "per netting set (Art. 275 the netting-set boundary; Art. 278 the PFE "
+            "multiplier folded into the sealed ead_final). None when the portfolio "
+            "has no such rows (a clean no-lineage, the reported empty dict)",
+        ),
+        sheet_label="netting set",
     ),
     # C 34.04 — CVA capital (single frame, Basel 3.1 only; R27a). c34_04_plans
     # yields {} under CRR or a non-positive cva_rwa (a clean no-lineage). The cell

@@ -383,15 +383,16 @@ def test_lineage_unknown_run_template_and_cell_are_404(client: TestClient, data_
     run_id = _run(client, data_dir)
     cell = {"template": "c07_00", "sheet": "corporate", "row": "0010", "col": "0220"}
 
-    # Act / Assert — an unknown run, an uninstrumented template (C 34.01 is still
-    # imperative) and an unknown cell are three DISTINCT 404s: the reason is
-    # carried in the detail so a client can tell them apart, never a re-derived guess.
+    # Act / Assert — an unknown run, an uninstrumented template (C 02.00 is the
+    # kernel-plus-thin-shell hybrid with no TemplateSpec; R27a instrumented the
+    # prior example C 34.01) and an unknown cell are three DISTINCT 404s: the reason
+    # is carried in the detail so a client can tell them apart, never a re-derived guess.
     unknown_run = client.get("/api/lineage", params={**cell, "run_id": "nope"})
     assert unknown_run.status_code == 404
     assert "unknown run" in unknown_run.json()["detail"].lower()
 
     uninstrumented = client.get(
-        "/api/lineage", params={**cell, "run_id": run_id, "template": "c34_01"}
+        "/api/lineage", params={**cell, "run_id": run_id, "template": "c_02_00"}
     )
     assert uninstrumented.status_code == 404
     assert "not instrumented" in uninstrumented.json()["detail"].lower()

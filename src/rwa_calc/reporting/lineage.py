@@ -81,6 +81,14 @@ from rwa_calc.reporting.corep.c09 import (
     generate_c09_01,
     generate_c09_02,
 )
+from rwa_calc.reporting.corep.c34 import (
+    c34_01_frames,
+    c34_01_plans,
+    c34_04_frames,
+    c34_04_plans,
+    c34_08_frames,
+    c34_08_plans,
+)
 from rwa_calc.reporting.corep.of02 import of_02_01_frames, of_02_01_plans
 from rwa_calc.reporting.kernel import available_columns
 from rwa_calc.reporting.pillar3.cms1 import cms1_plans, generate_cms1
@@ -231,8 +239,9 @@ class _Provider:
 # Instrumented templates. Adding one = expose its `<t>_plans()` (the same
 # plan/generate extraction c07 made, returning `dict[str, SheetPlan]`) and
 # register a `_Provider` here — set `single_frame=True` for a template with no
-# sheet axis. Templates absent from this map have no lineage — including C 34.x
-# / CCR1-8, which are still imperative and have no TemplateSpec to read.
+# sheet axis. Templates absent from this map have no lineage — including C 02.00
+# (a kernel hybrid), C 34.02 and CCR1-8, which are still imperative and have no
+# TemplateSpec to read (C 34.01/04/08 were instrumented in R27a).
 LINEAGE_PLANS: dict[str, _Provider] = {
     "c07_00": _Provider(
         plans=c07_plans,
@@ -489,6 +498,77 @@ LINEAGE_PLANS: dict[str, _Provider] = {
             "null is not the same claim as 0.0. The OutputFloorConfig entity gate "
             "stays with the reported generator; the drill-down plan is the "
             "no-config view",
+        ),
+        sheet_label="",
+        single_frame=True,
+    ),
+    # C 34.01 — SA-CCR analysis by approach (single frame; R27a). c34_01_frames is
+    # the lineage-facing generator (the emission gate keyed under the single-frame
+    # canonical key); the plan frame IS the pre-filtered SA-CCR netting-set
+    # population (the CR8 pattern), so both cells sum the whole frame.
+    "c34_01": _Provider(
+        plans=c34_01_plans,
+        generate=c34_01_frames,
+        scope=(
+            "The SA-CCR netting-set population — the synthetic ``ccr__``-prefixed "
+            "rows, with FCCM SFTs EXCLUDED (they report on C 07.00 row 0090, not the "
+            "SA-CCR templates; PS1/26 App. 17). Admitted by exposure reference (not "
+            "the approach label the output floor relabels), and the plan frame IS "
+            "that pre-filtered population, so both cells sum the whole frame",
+            "The single SA-CCR row sums ead_final (col 0010) and rwa_final (col "
+            "0020) over the population — CRR Art. 274(2) SA-CCR EAD = "
+            "alpha * (RC + PFE), and the RWEA the netting sets carry. None when the "
+            "portfolio has no such rows (a clean no-lineage, the reported None)",
+        ),
+        sheet_label="",
+        single_frame=True,
+    ),
+    # C 34.04 — CVA capital (single frame, Basel 3.1 only; R27a). c34_04_plans
+    # yields {} under CRR or a non-positive cva_rwa (a clean no-lineage). The cell
+    # reads the portfolio BA-CVA roll-up as a broadcast constant (FirstNonNull, the
+    # OV1 row-26 idiom), so it is row-backed but does NOT reconcile to a signed
+    # total. No producing golden fixture — pinned by the CVA-A1 unit estate + a
+    # seeded lineage unit pin, not an acceptance tie-out.
+    "c34_04": _Provider(
+        plans=c34_04_plans,
+        generate=c34_04_frames,
+        scope=(
+            "The full sealed per-leg ledger (Basel 3.1 only — C 34.04 is not "
+            "produced under CRR, and only when a positive cva_rwa is present). The "
+            "single CVA row reads the portfolio BA-CVA roll-up (cva_rwa) as a "
+            "broadcast per-row constant via FirstNonNull — the OV1 row-26 idiom; the "
+            "drill-down shows the legs carrying that constant rather than a sum "
+            "attributable to them",
+            "cva_rwa is the BA-CVA own-funds requirement scaled to RWEA (PS1/26 "
+            "App.1 Own Funds Part 4(b): RWEA_CVA = OFR_CVA * 12.5), a "
+            "portfolio-level scalar and not a leg aggregate, so the cell does not "
+            "reconcile to a signed total",
+        ),
+        sheet_label="",
+        single_frame=True,
+    ),
+    # C 34.08 — CCP exposures (single frame; R27a). c34_08_frames is the
+    # lineage-facing generator (the R5 emission gate keyed under the single-frame
+    # canonical key). The plan frame is the prepared FULL ledger (derived c34_is_ccr
+    # / c34_qccp discriminators), and each cell's own predicate narrows it — rows
+    # 0010/0020 to the CCP subset of the SA-CCR population, row 0030 to the
+    # CCR_DEFAULT_FUND risk type (its OWN population).
+    "c34_08": _Provider(
+        plans=c34_08_plans,
+        generate=c34_08_frames,
+        scope=(
+            "The SA-CCR netting-set population (the ``ccr__``-prefixed rows, FCCM "
+            "SFTs excluded) RESTRICTED to CCP counterparties (cp_entity_type == ccp) "
+            "for rows 0010/0020, plus the CCR_DEFAULT_FUND risk type for row 0030 — "
+            "a book of purely bilateral derivatives has nothing to disclose here "
+            "(the R5 emission gate and CCP restriction)",
+            "Row 0010 (QCCP trade) and row 0020 (non-QCCP trade) partition the CCP "
+            "subset by the derived c34_qccp flag (cp_is_qccp.fill_null(True) — a null "
+            "CCP treated as qualifying, CRR Art. 306(1); a bilateral OTC "
+            "counterparty is NEITHER row, disclosing on C 34.01/02 instead — the R5 "
+            "fix). Row 0030 (default fund) keys the CCR_DEFAULT_FUND risk type "
+            "(Art. 308/309), its OWN population, not the CCP subset",
+            "Each row sums ead_final (col 0010) and rwa_final (col 0020) over its subset",
         ),
         sheet_label="",
         single_frame=True,

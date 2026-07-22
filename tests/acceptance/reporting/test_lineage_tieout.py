@@ -31,6 +31,7 @@ from datetime import date
 
 import polars as pl
 import pytest
+from tests.fixtures.reporting_ccr_portfolio import build_reporting_ccr_bundle
 from tests.fixtures.reporting_portfolio import build_reporting_bundle
 
 from rwa_calc.contracts.config import CalculationConfig
@@ -126,6 +127,16 @@ _TIEOUT_CASES: list[tuple[str, str | None, str]] = [
     ("cr9", "foundation_irb - corporate_other_non_sme", "BASEL_3_1"),
     ("cr10", "project_finance", "CRR"),
     ("cr10", "equity", "CRR"),
+    # R27a — the first COUNTERPARTY-CREDIT-RISK templates instrumented (C 34.01 /
+    # C 34.08, single frame). The rich reporting portfolio has NO derivatives, so
+    # these tie out against a SEPARATE CCR source (the ``build_reporting_ccr_bundle``
+    # oracle that produces the C 34 goldens) under the "CCR" framework key. c34_01
+    # sums the SA-CCR netting-set population (both derivative legs); c34_08's row
+    # 0010 (QCCP) reconciles to the QCCP leg while rows 0020/0030 are populated-zero
+    # (the R5 CCP restriction drops the bilateral leg). C 34.04 (CVA) has no
+    # producing fixture here, so it is pinned by a seeded lineage unit pin instead.
+    ("c34_01", None, "CCR"),
+    ("c34_08", None, "CCR"),
 ]
 
 
@@ -195,16 +206,45 @@ def b31_bundles(b31_source: _Source):  # noqa: ANN201 - (COREPTemplateBundle, Pi
 
 
 @pytest.fixture(scope="module")
-def by_framework(source, bundles, b31_source, b31_bundles):  # noqa: ANN001, ANN201
+def ccr_source() -> _Source:
+    """The CCR reporting portfolio (SA-CCR derivatives) run through CRR.
+
+    The rich reporting portfolio has NO derivatives, so the counterparty-
+    credit-risk C 34 templates (R27a) tie out against this separate oracle — the
+    same ``build_reporting_ccr_bundle`` / config that produces the C 34 goldens
+    (``test_reporting_ccr_golden.py``: 2025-12-31, STANDARDISED).
+    """
+    config = CalculationConfig.crr(
+        reporting_date=date(2025, 12, 31), permission_mode=PermissionMode.STANDARDISED
+    )
+    result = PipelineOrchestrator().run_with_data(build_reporting_ccr_bundle(), config)
+    return _Source(result.results, "CRR")
+
+
+@pytest.fixture(scope="module")
+def ccr_bundles(ccr_source: _Source):  # noqa: ANN201 - (COREPTemplateBundle, Pillar3TemplateBundle)
+    """The generated COREP + Pillar 3 bundles for the CCR portfolio run."""
+    corep = COREPGenerator().generate(ccr_source)
+    pillar3 = Pillar3Generator().generate_from_lazyframe(
+        ccr_source.scan_results(), framework=ccr_source.framework
+    )
+    return corep, pillar3
+
+
+@pytest.fixture(scope="module")
+def by_framework(source, bundles, b31_source, b31_bundles, ccr_source, ccr_bundles):  # noqa: ANN001, ANN201
     """Map each tie-out case's framework to its ``(source, bundles)`` pair.
 
-    Lets one parametrised sweep run a CRR case against the CRR run and a
-    Basel-3.1-only case (CMS1/CMS2) against the B31 run, without either run
-    leaking into the other's cases.
+    Lets one parametrised sweep run a CRR case against the CRR run, a
+    Basel-3.1-only case (CMS1/CMS2) against the B31 run, and the
+    counterparty-credit-risk C 34 cases against the CCR portfolio (the "CCR" key
+    — a CRR run of the derivatives oracle), without any run leaking into another's
+    cases.
     """
     return {
         "CRR": (source, bundles),
         "BASEL_3_1": (b31_source, b31_bundles),
+        "CCR": (ccr_source, ccr_bundles),
     }
 
 

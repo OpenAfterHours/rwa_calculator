@@ -174,10 +174,12 @@ def test_no_predicate_means_no_constraint() -> None:
 
 
 def test_only_instrumented_templates_have_lineage() -> None:
-    # Assert — C 34.x / CCR1-8 are still imperative: no TemplateSpec to read, so
-    # no lineage. Coverage is explicit, never a guess.
+    # Assert — C 34.02 (per netting set, R27b) and CCR1-8 (R27c) are still
+    # imperative: no TemplateSpec to read, so no lineage. C 34.01/04/08 were
+    # instrumented in R27a. Coverage is explicit, never a guess.
     assert "c07_00" in lineage.LINEAGE_PLANS
-    assert "c34_01" not in lineage.LINEAGE_PLANS
+    assert "c34_01" in lineage.LINEAGE_PLANS
+    assert "c34_02" not in lineage.LINEAGE_PLANS
     assert "ccr1" not in lineage.LINEAGE_PLANS
 
 
@@ -929,6 +931,114 @@ def test_cr10_equity_col_b_is_unbound_and_col_a_mirrors_col_d() -> None:
     assert b_query.kind == "unbound"
     assert b_result is not None
     assert b_result.cell_value is None
+
+
+# =============================================================================
+# R27a — the C 34 counterparty-credit-risk templates (single frame)
+# =============================================================================
+
+_R27A_TEMPLATES = ("c34_01", "c34_04", "c34_08")
+
+
+@pytest.mark.parametrize("template_id", _R27A_TEMPLATES)
+def test_r27a_c34_templates_are_single_frame_instrumented(template_id: str) -> None:
+    # Assert — each R27a C 34 template is instrumented as a SINGLE-FRAME provider
+    # (no sheet axis -> cells report sheet=None), with a populated scope and no
+    # sheet label. C 34.02 (per netting set) stays imperative (R27b).
+    assert lineage.is_instrumented(template_id)
+    provider = lineage.LINEAGE_PLANS[template_id]
+    assert provider.single_frame is True
+    assert provider.scope
+    assert provider.sheet_label == ""
+
+
+def _c34_08_ledger() -> pl.DataFrame:
+    """A CCR derivatives ledger: a QCCP, a non-QCCP, and a bilateral leg (the R5
+    fixture shape). Only the two CCP legs may reach C 34.08."""
+    return pl.DataFrame(
+        {
+            "exposure_reference": ["ccr__NS_QCCP", "ccr__NS_NONQCCP", "ccr__NS_BILAT"],
+            "risk_type": ["CCR_DERIVATIVE", "CCR_DERIVATIVE", "CCR_DERIVATIVE"],
+            "cp_entity_type": ["ccp", "ccp", "institution"],
+            "cp_is_qccp": [True, False, None],
+            "reporting_class_origin": ["institution", "institution", "institution"],
+            "reporting_ead": [1_000_000.0, 2_000_000.0, 3_000_000.0],
+            "ead_final": [1_000_000.0, 2_000_000.0, 3_000_000.0],
+            "rwa_final": [20_000.0, 200_000.0, 1_500_000.0],
+        },
+        schema_overrides={"cp_is_qccp": pl.Boolean},
+    )
+
+
+def test_c34_08_lineage_preserves_the_r5_ccp_restriction() -> None:
+    # Arrange — the R5 ledger through the C 34.08 lineage resolver (single frame).
+    frame = _c34_08_ledger()
+    resolver = lineage.sheet_lineage(_FrameSource(frame), "c34_08")
+    assert resolver is not None
+
+    # Act — row 0010 (QCCP) drills the qualifying CCP leg only; row 0020 (non-QCCP)
+    # drills the non-qualifying CCP leg only — NOT the bilateral (institution) one.
+    qccp = resolver.cell("0010", "0010")
+    non_qccp = resolver.cell("0020", "0010")
+
+    # Assert — the bilateral 3m leg reaches NEITHER row (the R5 CCP restriction),
+    # and each row's drill-down reconciles to its own single CCP leg.
+    assert qccp is not None
+    assert qccp.total_rows == 1
+    assert qccp.cell_value == pytest.approx(1_000_000.0)
+    assert non_qccp is not None
+    assert non_qccp.total_rows == 1
+    assert non_qccp.cell_value == pytest.approx(2_000_000.0)
+    assert 3_000_000.0 not in set(non_qccp.rows["ead_final"].to_list())
+
+
+def _c34_04_seeded_frame() -> pl.DataFrame:
+    """A Basel-3.1 CCR ledger carrying a broadcast ``cva_rwa`` constant."""
+    return pl.DataFrame(
+        {
+            "exposure_reference": ["ccr__NS_CVA", "LN-1"],
+            "risk_type": ["CCR_DERIVATIVE", None],
+            "reporting_class_origin": ["institution", "corporate"],
+            "reporting_ead": [1_000.0, 500.0],
+            "ead_final": [1_000.0, 500.0],
+            "rwa_final": [500.0, 100.0],
+            "cva_rwa": [4_429_997.983, 4_429_997.983],
+        }
+    )
+
+
+def test_c34_04_seeded_frame_plans_and_generate_key_identically() -> None:
+    # Arrange — C 34.04 (CVA) has no producing golden fixture (the CCR portfolio
+    # carries no CVA counterparties), so it has no acceptance tie-out; a seeded
+    # frame with a broadcast cva_rwa exercises the instrumentation instead.
+    from rwa_calc.reporting.corep.c34 import c34_04_frames, c34_04_plans
+
+    frame = _c34_04_seeded_frame()
+    cols = set(frame.columns)
+
+    # Act
+    plans = c34_04_plans(frame.lazy(), cols, "BASEL_3_1", [])
+    generated = c34_04_frames(frame.lazy(), cols, "BASEL_3_1", [])
+
+    # Assert — the one CVA plan is keyed identically by plans() and generate(); the
+    # cell reads the portfolio BA-CVA roll-up as a FirstNonNull broadcast constant.
+    assert set(plans) == {"c34_04"}
+    assert set(generated) == set(plans)
+    resolver = lineage.sheet_lineage(_FrameSource(frame, "BASEL_3_1"), "c34_04")
+    assert resolver is not None
+    cell = resolver.cell("0010", "0010")
+    assert cell is not None
+    assert (cell.query.kind, cell.query.metric) == ("rows", "first_non_null")
+    assert cell.cell_value == pytest.approx(4_429_997.983)
+
+
+def test_c34_04_degrades_to_no_lineage_under_crr() -> None:
+    # Arrange — C 34.04 is Basel 3.1 only; its plans() yield nothing under CRR.
+    frame = _c34_04_seeded_frame()
+
+    # Act / Assert — a CRR lineage request degrades to a clean no-lineage (the
+    # CMS/OF 02.01 pattern), never a crash.
+    assert lineage.sheet_lineage(_FrameSource(frame, "CRR"), "c34_04") is None
 
 
 # =============================================================================

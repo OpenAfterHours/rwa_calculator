@@ -293,11 +293,13 @@ def test_uninstrumented_templates_offer_no_dead_drilldown_links(
     job_id = resp.headers["location"].rsplit("/", 1)[1]
     _wait_for_job(client, job_id)
 
-    # Act — C 02.00 has no lineage (its cells are not spec-backed)
+    # Act — C 02.00 has no lineage (its cells are not spec-backed): the pre-pass
+    # kernel-plus-thin-shell hybrid exposes no TemplateSpec. (R27a instrumented
+    # the prior example C 34.01.)
     grid = client.get(f"/results/{job_id}/templates", params={"template": "c_02_00"}).text
     dead = client.get(
         f"/results/{job_id}/lineage",
-        params={"template": "c34_01", "row": "0010", "col": "0010"},
+        params={"template": "c_02_00", "row": "0010", "col": "0010"},
     )
 
     # Assert — a cell is only offered as a link where there is a truthful answer;

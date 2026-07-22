@@ -60,10 +60,14 @@ from rwa_calc.reporting.cellspec import (
 )
 from rwa_calc.reporting.corep.c07 import c07_plans, generate_c07
 from rwa_calc.reporting.corep.c08 import (
+    c08_01_plans,
+    c08_02_plans,
     c08_04_frames,
     c08_04_plans,
     c08_07_frames,
     c08_07_plans,
+    generate_c08_01,
+    generate_c08_02,
 )
 from rwa_calc.reporting.corep.of02 import of_02_01_frames, of_02_01_plans
 from rwa_calc.reporting.kernel import available_columns
@@ -494,6 +498,62 @@ LINEAGE_PLANS: dict[str, _Provider] = {
             "not-separately-tracked cells",
         ),
         sheet_label="approach",
+    ),
+    # C 08.01 — IRB totals (per exposure class; R23). generate_c08_01 is the
+    # provider generator directly (its four post-execute passes live on the
+    # reported frame the drill-down reads). c08_01_plans threads the real per-class
+    # substitution inflow, so the Total-row col 0080 (SideContext) drills to its
+    # real value; the Annex II §1.3 "(-)" negation set is carried on the plan, so
+    # the sign-aware reconciliation holds on the negated columns (0256 fires on the
+    # corporate_sme sheet).
+    "c08_01": _Provider(
+        plans=c08_01_plans,
+        generate=generate_c08_01,
+        scope=(
+            "Internal-ratings-based credit-risk legs — the F-IRB, A-IRB AND "
+            "slotting approaches (reporting_approach_origin in {foundation_irb, "
+            "advanced_irb, slotting}); C 08.01 reports the whole IRB book by "
+            "obligor class, so unlike C 08.03/04/05 it does NOT exclude slotting",
+            "Sheets key the sealed obligor origination class "
+            "(reporting_class_origin — the Art. 147 taxonomy), with NO "
+            "specialised-lending-into-corporate merge (unlike C 07.00) and no "
+            "applied-class ladder",
+            "The Total row (0010) carries the cross-sheet CRM substitution INFLOW "
+            "(col 0080) — a per-destination-class scalar precomputed over the whole "
+            "IRB population and threaded via ReportingContext.substitution_inflow; "
+            "the sub-rows report 0.0. The deduction columns "
+            "0035/0040/0050/0060/0070/0102/0103/0256/0257/0290 carry the Annex II "
+            "§1.3 '(-)' sign, negated after the CRM waterfall (0090) consumes the "
+            "positive magnitudes",
+        ),
+        sheet_label="exposure class",
+    ),
+    # C 08.02 — IRB by PD grade (per exposure class; R23). Data-driven rows (firm
+    # grades else PD bands + Unassigned): each sheet has its OWN spec (c08_02_plans
+    # builds per-sheet specs). The cross-class substitution inflow is deliberately
+    # excluded (col 0080 a per-grade constant 0.0, R12); the string row label col
+    # 0005 is injected post-execute and is skipped by the tie-out value-cols sweep.
+    "c08_02": _Provider(
+        plans=c08_02_plans,
+        generate=generate_c08_02,
+        scope=(
+            "Internal-ratings-based credit-risk legs — the F-IRB, A-IRB AND "
+            "slotting approaches (reporting_approach_origin in {foundation_irb, "
+            "advanced_irb, slotting}); the whole IRB book keyed on the sealed "
+            "obligor origination class (reporting_class_origin)",
+            "Rows are DATA-DRIVEN: the distinct firm internal-rating grades "
+            "(cp_internal_rating_grade) when present, else the populated fixed PD "
+            "bands plus an 'Unassigned' residual — each row keys the derived "
+            "c08_02_key label (the string label is also mirrored into col 0005 "
+            "post-execute)",
+            "The value surface is shared with C 08.01, but the cross-class CRM "
+            "substitution INFLOW (col 0080) is DELIBERATELY excluded — a per-grade "
+            "constant 0.0 (PS1/26 Annex XXII: obligor-basis reporting bars the "
+            "guarantor's inflow from the origin-obligor's grade breakdown, R12). "
+            "The deduction columns carry the Annex II §1.3 '(-)' sign (0256 fires "
+            "on the corporate_sme sheet)",
+        ),
+        sheet_label="exposure class",
     ),
 }
 

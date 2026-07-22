@@ -6,7 +6,7 @@
   "engine_eager_collect_sites": 48,
   "max_engine_module_loc": 1694,
   "cites_decorators": 279,
-  "max_reporting_module_loc": 2016,
+  "max_reporting_module_loc": 2099,
   "reporting_multi_candidate_picks": 30,
   "max_reporting_test_file_loc": 1581
 }

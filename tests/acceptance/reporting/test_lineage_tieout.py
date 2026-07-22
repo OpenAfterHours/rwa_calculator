@@ -29,6 +29,7 @@ from __future__ import annotations
 
 from datetime import date
 
+import polars as pl
 import pytest
 from tests.fixtures.reporting_portfolio import build_reporting_bundle
 
@@ -77,6 +78,14 @@ _TIEOUT_CASES: list[tuple[str, str | None, str]] = [
     ("cr7a", "advanced_irb", "CRR"),
     ("c08_07", None, "CRR"),
     ("of_02_01", None, "BASEL_3_1"),
+    # R23 — the two remaining C 08 instrument templates (per exposure class). Both
+    # tie out on the corporate_sme sheet, where col 0256 (the CRR SME
+    # supporting-factor adjustment) fires NON-ZERO and negative — so the sweep
+    # proves sign-aware reconciliation on a LIVE negated, row-backed cell. c08_02's
+    # sheet also carries the String label col 0005, which the value-column
+    # enumeration below skips (it is not a numeric report cell).
+    ("c08_01", "corporate_sme", "CRR"),
+    ("c08_02", "corporate_sme", "CRR"),
 ]
 
 
@@ -188,12 +197,21 @@ def test_sheet_lineage_ties_out_to_every_reported_cell(  # noqa: C901 - one swee
     resolver = lineage.sheet_lineage(source, template_id, sheet)
     assert resolver is not None, f"{template_id}: not instrumented"
 
+    # Value cells only: skip the two structural columns AND any String-typed
+    # column. A data-driven label like C 08.02's col 0005 (the grade/PD-band name)
+    # is injected post-execute and carries no CellSpec — it is not a numeric report
+    # cell, so it has no lineage query; the kernel/facts treat 0005 as text.
+    value_cols = [
+        col
+        for col, dtype in reported.schema.items()
+        if col not in ("row_ref", "row_name") and dtype != pl.String
+    ]
+
     checked = 0
     for record in reported.iter_rows(named=True):
         row_ref = record["row_ref"]
-        for col_ref, value in record.items():
-            if col_ref in ("row_ref", "row_name"):
-                continue
+        for col_ref in value_cols:
+            value = record[col_ref]
             query = resolver.query(row_ref, col_ref)
             assert query is not None, f"{template_id}: no query for {row_ref}/{col_ref}"
             checked += 1
@@ -258,8 +276,10 @@ def test_sheet_lineage_ties_out_to_every_reported_cell(  # noqa: C901 - one swee
 
     # Every value cell was resolved (the small single-frame Pillar 3 templates —
     # cr8 is 9 cells — sit well under C 07.00's ~1000; the per-cell
-    # `assert result is not None` above is the real coverage guard).
-    assert checked == reported.height * (len(reported.columns) - 2), (
+    # `assert result is not None` above is the real coverage guard). The count is
+    # over the numeric value columns only (C 08.02's String label col 0005 is not
+    # an addressable report cell).
+    assert checked == reported.height * len(value_cols), (
         f"{template_id}: the sweep did not cover every cell of the sheet"
     )
     assert checked > 0, f"{template_id}: the sweep did not cover the sheet"
@@ -394,6 +414,4 @@ def _predicate_match_count(resolver: lineage.SheetLineage, row_ref: str, col_ref
 
 
 def _row(ref: str):  # noqa: ANN202 - pl.Expr
-    import polars as pl
-
     return pl.col("row_ref") == ref

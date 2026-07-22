@@ -116,7 +116,8 @@ Everything runs on `basis: aggregator_exit` — the sealed per-leg ledger.
 ## Coverage
 
 Lineage is available for templates whose execution plan is exposed (`LINEAGE_PLANS`). Today that is
-the **multi-sheet** templates **C 07.00** (SA credit risk, per obligor class), **C 08.04** (IRB RWEA
+the **multi-sheet** templates **C 07.00** (SA credit risk, per obligor class), **C 08.01** (IRB
+totals, per exposure class), **C 08.02** (IRB by PD grade, per exposure class), **C 08.04** (IRB RWEA
 flow, per exposure class) and **CR7-A** (extent of IRB CRM techniques, per origin approach); the
 **single-frame** COREP **C 08.07** (IRB scope of use) and the Basel-3.1-only **OF 02.01**
 (output-floor comparison); and the single-frame Pillar 3 templates **OV1** (overview of RWEAs),
@@ -135,6 +136,18 @@ the prior frame. **C 08.07** and **OF 02.01** each carry post-execute passes (C 
 percentage rescale and its fixed structural-null rows; OF 02.01's fixed out-of-scope rows) that live on
 the *reported* frame — the drill-down reads a cell's value from there, so it honours them rather than
 contradicting the sheet.
+
+**C 08.01** and **C 08.02** are per-exposure-class IRB templates that share one value surface. C 08.01
+carries the first large Annex II §1.3 "(-)" deduction set through lineage since C 07.00 (columns
+0035/0040/0050/0060/0070/0102/0103/0256/0257/0290) — the sweep proves the sign-aware reconciliation on
+a live negated cell (col 0256, the CRR SME supporting-factor adjustment, fires non-zero on the
+*corporate_sme* sheet). Its Total-row col 0080 is the cross-sheet CRM substitution **inflow**, a
+`side_context` cell whose plan threads the real per-class value (the C 07.00 pattern) — so it drills
+down normally rather than being refused. C 08.02 breaks the same book down by **data-driven** rows
+(firm rating grades, else PD bands) and deliberately holds col 0080 at a constant `0.0` at grade grain
+(there is no obligor-basis grade home for a cross-class inflow); its string row-label column 0005 is
+injected post-execute and is **not** an addressable report cell — the drill-down offers lineage only
+for the numeric value columns.
 
 **CMS1 / CMS2 and OF 02.01 are produced only under Basel 3.1**, so a lineage request for one on a CRR
 run degrades to the same clean `404` as an uninstrumented template — the provider's `plans()` yields

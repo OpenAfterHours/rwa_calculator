@@ -42,6 +42,21 @@ Cell semantics (recorded decisions, this slice):
   (structural-null today), the CRR supporting-factor adjustments 0256/0257,
   and provisions 0290 — applied AFTER the CRM waterfall (0090) has consumed
   the positive magnitudes, with a zero deduction normalised to ``+0.0``.
+  Lineage-instrumented (R23): ``c08_01_plans`` / ``c08_02_plans`` expose the
+  per-class execution plans, passing ``_NEGATIVE_COLS`` explicitly so the
+  drill-down's sign-aware reconciliation holds on the negated columns (0256
+  non-zero on corporate_sme). C 08.01's plans thread the real per-class
+  substitution inflow, so the Total-row col 0080 (``SideContext``) drills to its
+  real value (the C 07.00 pattern); C 08.02's per-grade 0080 is a constant 0.0
+  (R12) and its String label col 0005 is skipped by the tie-out value-column sweep.
+  Ratchet note (R23): the extraction bumped ``max_reporting_module_loc``
+  2016 -> 2092 — the mechanical additive cost of exposing the two templates'
+  spec/row-pred/plans builders with their mandated docstrings, no behaviour
+  change. Unlike the c07/cr4/cr8/cr7a extractions this module alone needed a
+  bump because it hosts SEVEN templates (C 08.01-07) in one file; the baseline
+  equals the exact post-R23 line count (zero slack). Splitting c08.py into
+  per-template modules is the honest long-term answer — recorded as a deferred
+  follow-up, its own risky item (shared value surface).
 - The EL memo columns 0280 (pre post-model adjustment) and its B31 twin 0282
   (after post-model adjustments) coalesce PER LEG (R10a): they read the
   formula-IRB ``el_pre_adjustment`` / ``el_after_adjustment`` where non-null
@@ -666,14 +681,97 @@ def _c08_01_row_terms(framework: str, cols: set[str]) -> dict[str, _Terms | None
     return terms
 
 
-@cites("PS1/26, paragraph 1.3")
-def generate_c08_01(
+def _c08_01_grades_pred() -> RowPredicate:
+    """Row 0070 (obligor grades/pools) — the F-IRB/A-IRB non-slotting union.
+
+    A two-limb ``any_of`` over ``reporting_approach_origin`` (slotting reports on
+    row 0080). Defined once and shared by ``_c08_01_spec`` (merges it into every
+    0070 cell) and ``_c08_01_row_preds`` (rebuilds it for the generate post-passes),
+    so the drill-down's spec and the generator's predicate never drift."""
+    return RowPredicate(
+        any_of=(
+            RowPredicate(equals=(("reporting_approach_origin", "foundation_irb"),)),
+            RowPredicate(equals=(("reporting_approach_origin", "advanced_irb"),)),
+        )
+    )
+
+
+def _c08_01_spec(framework: str, cols: set[str], ead_col: str, rwa_col: str) -> TemplateSpec:
+    """The C 08.01 TemplateSpec for one run (built cols-aware).
+
+    Shared by ``c08_01_plans`` and ``generate_c08_01`` so the drill-down re-runs
+    the exact predicate the generator executed. Row 0070 merges the F-IRB/A-IRB
+    union into every value cell; other rows carry their ``_c08_01_row_terms``, and
+    the Total row (0010) carries the ``SideContext`` inflow (col 0080). ``cols`` is
+    the PRE-``_prepare`` base-column set (``_value_cells`` reads it for base-column
+    membership only, binding derived columns by name for the executor to resolve)."""
+    column_refs = tuple(col.ref for col in get_c08_columns(framework))
+    rows = tuple(row for section in get_irb_row_sections(framework) for row in section.rows)
+    row_terms = _c08_01_row_terms(framework, cols)
+    cells: dict[tuple[str, str], CellSpec] = {}
+    for row in rows:
+        terms = row_terms.get(row.ref)
+        if row.ref == "0070":
+            pred = _c08_01_grades_pred()
+            for col_ref, cell in _value_cells(
+                (), cols, ead_col, rwa_col, column_refs, is_total=False
+            ).items():
+                merged = (
+                    CellSpec(cell.binding, predicate=pred, empty_cell=cell.empty_cell)
+                    if cell.predicate is None or not cell.predicate.equals
+                    else CellSpec(
+                        cell.binding,
+                        predicate=RowPredicate(equals=cell.predicate.equals, any_of=pred.any_of),
+                        empty_cell=cell.empty_cell,
+                    )
+                )
+                cells[(row.ref, col_ref)] = merged
+            continue
+        if terms is None:
+            continue
+        for col_ref, cell in _value_cells(
+            terms, cols, ead_col, rwa_col, column_refs, is_total=row.ref == "0010"
+        ).items():
+            cells[(row.ref, col_ref)] = cell
+    return TemplateSpec(
+        name="c08_01", rows=rows, column_refs=column_refs, cells=cells, empty_cell="zero"
+    )
+
+
+def _c08_01_row_preds(row_terms: dict[str, _Terms | None]) -> dict[str, RowPredicate | None]:
+    """Rebuild the C 08.01 per-row predicates from the plan's row terms.
+
+    The three generate post-passes need each row's ``RowPredicate`` — including row
+    0070's ``any_of`` union, which simple equals-terms cannot express — so it is
+    rebuilt from the same ``row_terms`` the plan carries (deterministic, so
+    identical to the retired inline set). ``None`` = an inert (all-null) row;
+    ``()`` = the constraint-free Total row."""
+    preds: dict[str, RowPredicate | None] = {}
+    for ref, terms in row_terms.items():
+        if ref == "0070":
+            preds[ref] = _c08_01_grades_pred()
+        elif terms is None:
+            preds[ref] = None
+        else:
+            preds[ref] = RowPredicate(equals=terms) if terms else RowPredicate()
+    return preds
+
+
+def c08_01_plans(
     results: pl.LazyFrame,
     cols: set[str],
     framework: str,
     errors: list[str],
-) -> dict[str, pl.DataFrame]:
-    """Execute C 08.01 per obligor-class sheet over the sealed ledger."""
+) -> dict[str, SheetPlan]:
+    """Build the per-obligor-class C 08.01 execution plans for lineage.
+
+    Keys the per-class plans on the sealed ``reporting_class_origin`` over the
+    WHOLE IRB book (F-IRB / A-IRB / slotting — C 08.01 does NOT exclude slotting),
+    preserving ``generate_c08_01``'s error contract. Each plan threads the real
+    per-destination-class CRM substitution INFLOW into its ``ReportingContext`` (the
+    C 07.00 pattern), so the Total row's col 0080 drills to its real value rather
+    than being refused, and passes ``_NEGATIVE_COLS`` EXPLICITLY (the first large
+    Annex II §1.3 "(-)" negation set through lineage since C 07.00)."""
     ec_col = pick(cols, "reporting_class_origin")
     ead_col = pick(cols, "ead_final")
     rwa_col = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
@@ -689,59 +787,42 @@ def generate_c08_01(
     data_cols = set(irb_df.columns)
     irb_df = _prepare(irb_df, data_cols)
     inflow_map = _substitution_inflows(irb_df, data_cols)
-
-    column_refs = tuple(col.ref for col in get_c08_columns(framework))
-    rows = tuple(row for section in get_irb_row_sections(framework) for row in section.rows)
+    spec = _c08_01_spec(framework, data_cols, ead_col, rwa_col)
     row_terms = _c08_01_row_terms(framework, data_cols)
-
-    cells: dict[tuple[str, str], CellSpec] = {}
-    row_preds: dict[str, RowPredicate | None] = {}
-    for row in rows:
-        terms = row_terms.get(row.ref)
-        if row.ref == "0070":
-            # F-IRB/A-IRB (non-slotting) — a two-limb union.
-            pred = RowPredicate(
-                any_of=(
-                    RowPredicate(equals=(("reporting_approach_origin", "foundation_irb"),)),
-                    RowPredicate(equals=(("reporting_approach_origin", "advanced_irb"),)),
-                )
-            )
-            row_preds[row.ref] = pred
-            for col_ref, cell in _value_cells(
-                (), data_cols, ead_col, rwa_col, column_refs, is_total=False
-            ).items():
-                merged = (
-                    CellSpec(cell.binding, predicate=pred, empty_cell=cell.empty_cell)
-                    if cell.predicate is None or not cell.predicate.equals
-                    else CellSpec(
-                        cell.binding,
-                        predicate=RowPredicate(equals=cell.predicate.equals, any_of=pred.any_of),
-                        empty_cell=cell.empty_cell,
-                    )
-                )
-                cells[(row.ref, col_ref)] = merged
-            continue
-        if terms is None:
-            row_preds[row.ref] = None
-            continue
-        row_preds[row.ref] = RowPredicate(equals=terms) if terms else RowPredicate()
-        for col_ref, cell in _value_cells(
-            terms, data_cols, ead_col, rwa_col, column_refs, is_total=row.ref == "0010"
-        ).items():
-            cells[(row.ref, col_ref)] = cell
-
-    spec = TemplateSpec(
-        name="c08_01", rows=rows, column_refs=column_refs, cells=cells, empty_cell="zero"
-    )
-
-    result: dict[str, pl.DataFrame] = {}
+    plans: dict[str, SheetPlan] = {}
     for ec in irb_df[ec_col].drop_nulls().unique().sort().to_list():
-        class_df = irb_df.filter(pl.col(ec_col) == ec)
-        ctx = ReportingContext(substitution_inflow=inflow_map.get(ec, 0.0))
-        frame = execute(spec, class_df, ctx)
-        frame = _c08_off_bs_pre_ccf(frame, class_df, row_preds)
-        frame = _null_empty_rows(frame, class_df, row_preds)
-        frame = _provisions_postfix(frame, class_df, row_preds, data_cols, ref="0290")
+        plans[ec] = SheetPlan(
+            spec=spec,
+            frame=irb_df.filter(pl.col(ec_col) == ec),
+            ctx=ReportingContext(substitution_inflow=inflow_map.get(ec, 0.0)),
+            negative_cols=_NEGATIVE_COLS,
+            row_terms=row_terms,
+        )
+    return plans
+
+
+@cites("PS1/26, paragraph 1.3")
+def generate_c08_01(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, pl.DataFrame]:
+    """Execute C 08.01 per obligor-class sheet over the sealed ledger.
+
+    Iterates ``c08_01_plans`` and applies the four post-execute passes on the
+    reported frame (the off-BS pre-CCF memo 0100, the all-null inert rows, the
+    provisions ladder 0290, the Annex II §1.3 "(-)" negation) — the drill-down
+    reads a cell's value from HERE, so it honours every pass. The per-row
+    predicates the passes need are rebuilt from the plan's ``row_terms``."""
+    result: dict[str, pl.DataFrame] = {}
+    for ec, plan in c08_01_plans(results, cols, framework, errors).items():
+        row_preds = _c08_01_row_preds(plan.row_terms)
+        data_cols = set(plan.frame.columns)
+        frame = execute(plan.spec, plan.frame, plan.ctx)
+        frame = _c08_off_bs_pre_ccf(frame, plan.frame, row_preds)
+        frame = _null_empty_rows(frame, plan.frame, row_preds)
+        frame = _provisions_postfix(frame, plan.frame, row_preds, data_cols, ref="0290")
         result[ec] = _negate(frame)
     return result
 
@@ -751,14 +832,49 @@ def generate_c08_01(
 # =============================================================================
 
 
-@cites("PS1/26, paragraph 1.3")
-def generate_c08_02(
+def _c08_02_spec(
+    labels: list[str],
+    cols: set[str],
+    ead_col: str,
+    rwa_col: str,
+    value_refs: tuple[str, ...],
+) -> TemplateSpec:
+    """One C 08.02 class sheet's data-driven spec (a row per grade/PD-band label).
+
+    Each row keys the derived ``c08_02_key`` label; the value cells are the shared
+    C 08.01/02 surface (``_value_cells``, ``is_total=False`` — no Total row, so col
+    0080 stays a constant 0.0, the R12 disposition). ``labels`` empty -> an empty
+    spec (rows ``()``); the caller emits an ``_empty_frame`` instead of executing.
+    ``cols`` is the PRE-``_prepare`` base-column set (see ``_c08_01_spec``)."""
+    rows = tuple(_Row(label, label) for label in labels)
+    cells: dict[tuple[str, str], CellSpec] = {}
+    for label in labels:
+        terms: _Terms = (("c08_02_key", label),)
+        for col_ref, cell in _value_cells(
+            terms, cols, ead_col, rwa_col, value_refs, is_total=False
+        ).items():
+            cells[(label, col_ref)] = cell
+    return TemplateSpec(
+        name="c08_02", rows=rows, column_refs=value_refs, cells=cells, empty_cell="zero"
+    )
+
+
+def c08_02_plans(
     results: pl.LazyFrame,
     cols: set[str],
     framework: str,
     errors: list[str],
-) -> dict[str, pl.DataFrame]:
-    """Execute C 08.02 per class sheet with data-driven grade/PD-band rows."""
+) -> dict[str, SheetPlan]:
+    """Build the per-class C 08.02 execution plans for lineage (data-driven rows).
+
+    Each class sheet has its OWN spec — rows are the distinct firm grades (else the
+    populated PD bands + "Unassigned") derived per class by ``_c08_02_keyed`` (the
+    CR9.1 pattern), so the plans fn builds per-sheet specs exactly as the generator
+    does. Keys on the sealed ``reporting_class_origin`` over the WHOLE IRB book,
+    preserving ``generate_c08_02``'s error contract. The cross-class substitution
+    INFLOW is DELIBERATELY excluded (col 0080 a per-grade constant 0.0, R12), so
+    each plan carries an empty ``ReportingContext`` and ``_NEGATIVE_COLS`` explicitly
+    (0256 still negates on C 08.02)."""
     ec_col = pick(cols, "reporting_class_origin")
     ead_col = pick(cols, "ead_final")
     rwa_col = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
@@ -775,33 +891,48 @@ def generate_c08_02(
         return {}
     data_cols = set(irb_df.columns)
     irb_df = _prepare(irb_df, data_cols)
-
-    column_refs = tuple(col.ref for col in get_c08_02_columns(framework))
-    value_refs = tuple(ref for ref in column_refs if ref != "0005")
-
-    result: dict[str, pl.DataFrame] = {}
+    value_refs = tuple(col.ref for col in get_c08_02_columns(framework) if col.ref != "0005")
+    plans: dict[str, SheetPlan] = {}
     for ec in irb_df[ec_col].drop_nulls().unique().sort().to_list():
         class_df = irb_df.filter(pl.col(ec_col) == ec)
         labels, keyed = _c08_02_keyed(class_df, pd_col, grade_col)
-        if not labels:
+        plans[ec] = SheetPlan(
+            spec=_c08_02_spec(labels, data_cols, ead_col, rwa_col, value_refs),
+            frame=keyed,
+            ctx=ReportingContext(),
+            negative_cols=_NEGATIVE_COLS,
+        )
+    return plans
+
+
+@cites("PS1/26, paragraph 1.3")
+def generate_c08_02(
+    results: pl.LazyFrame,
+    cols: set[str],
+    framework: str,
+    errors: list[str],
+) -> dict[str, pl.DataFrame]:
+    """Execute C 08.02 per class sheet with data-driven grade/PD-band rows.
+
+    Iterates ``c08_02_plans`` and per sheet applies the off-BS pre-CCF memo (0100),
+    the provisions ladder (0290) and the Annex II §1.3 "(-)" negation, then injects
+    the String row label into col 0005 (the CR9.1 post-execute pattern). An
+    empty-label class emits an ``_empty_frame`` (0005 typed String). Each row's
+    predicate is rebuilt from the plan spec's row refs (each a ``c08_02_key``
+    label)."""
+    column_refs = tuple(col.ref for col in get_c08_02_columns(framework))
+    result: dict[str, pl.DataFrame] = {}
+    for ec, plan in c08_02_plans(results, cols, framework, errors).items():
+        if not plan.spec.rows:
             result[ec] = _empty_frame(column_refs, string_refs=("0005",))
             continue
-        rows = tuple(_Row(label, label) for label in labels)
-        cells: dict[tuple[str, str], CellSpec] = {}
-        row_preds: dict[str, RowPredicate | None] = {}
-        for label in labels:
-            terms: _Terms = (("c08_02_key", label),)
-            row_preds[label] = RowPredicate(equals=terms)
-            for col_ref, cell in _value_cells(
-                terms, data_cols, ead_col, rwa_col, value_refs, is_total=False
-            ).items():
-                cells[(label, col_ref)] = cell
-        spec = TemplateSpec(
-            name="c08_02", rows=rows, column_refs=value_refs, cells=cells, empty_cell="zero"
-        )
-        frame = execute(spec, keyed)
-        frame = _c08_off_bs_pre_ccf(frame, keyed, row_preds)
-        frame = _provisions_postfix(frame, keyed, row_preds, data_cols, ref="0290")
+        row_preds: dict[str, RowPredicate | None] = {
+            row.ref: RowPredicate(equals=(("c08_02_key", row.ref),)) for row in plan.spec.rows
+        }
+        data_cols = set(plan.frame.columns)
+        frame = execute(plan.spec, plan.frame, plan.ctx)
+        frame = _c08_off_bs_pre_ccf(frame, plan.frame, row_preds)
+        frame = _provisions_postfix(frame, plan.frame, row_preds, data_cols, ref="0290")
         frame = _negate(frame)
         frame = frame.with_columns(pl.col("row_name").alias("0005"))
         result[ec] = frame.select(["row_ref", "row_name", *column_refs])

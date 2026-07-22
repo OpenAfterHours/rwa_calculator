@@ -447,6 +447,97 @@ def test_of_02_01_lineage_is_a_clean_no_lineage_under_crr() -> None:
 
 
 # =============================================================================
+# R23 — the two remaining C 08 instrument templates (per exposure class)
+# =============================================================================
+
+_R23_MULTI_SHEET_TEMPLATES = ("c08_01", "c08_02")
+
+
+@pytest.mark.parametrize("template_id", _R23_MULTI_SHEET_TEMPLATES)
+def test_r23_multi_sheet_templates_are_instrumented(template_id: str) -> None:
+    # Assert — each R23 template is instrumented as a PER-SHEET provider
+    # (single_frame False -> its cells carry a sheet axis), keyed by exposure
+    # class, with a populated scope and a sheet label naming that axis.
+    assert lineage.is_instrumented(template_id)
+    provider = lineage.LINEAGE_PLANS[template_id]
+    assert provider.single_frame is False
+    assert provider.scope
+    assert provider.sheet_label == "exposure class"
+
+
+def test_c08_01_substitution_inflow_side_context_drills_to_its_real_value() -> None:
+    # Arrange — a corporate leg guaranteed INTO institution (the R12 cross-class
+    # substitution shape). C 08.01 lands that per-destination-class inflow on the
+    # destination sheet's Total row col 0080 (a SideContext), so the institution
+    # sheet reports a real 800 there.
+    frame = pl.DataFrame(
+        {
+            "exposure_reference": ["CORP-1", "CORP-GTD", "INST-1"],
+            "reporting_class_origin": ["corporate", "corporate", "institution"],
+            "reporting_approach_origin": [
+                "foundation_irb",
+                "foundation_irb",
+                "foundation_irb",
+            ],
+            "ead_final": [5000.0, 3000.0, 2000.0],
+            "rwa_final": [3500.0, 1800.0, 600.0],
+            "guaranteed_portion": [0.0, 800.0, 0.0],
+            "pre_crm_exposure_class": ["corporate", "corporate", "institution"],
+            "post_crm_exposure_class_guaranteed": [
+                "corporate",
+                "institution",
+                "institution",
+            ],
+        }
+    )
+    resolver = lineage.sheet_lineage(_FrameSource(frame), "c08_01", "institution")
+    assert resolver is not None
+
+    # Act
+    query = resolver.query("0010", "0080")
+    result = resolver.cell("0010", "0080")
+
+    # Assert — c08_01_plans threads the real inflow into the plan's ReportingContext,
+    # so the SideContext value is PRESENT (not refused) and the cell drills down to
+    # its real figure — the conditional-refusal escape does NOT fire here.
+    assert query is not None
+    assert (query.kind, query.reads_unavailable_side_value) == ("side_context", False)
+    assert result is not None
+    assert result.cell_value == pytest.approx(800.0)
+
+
+def test_c08_02_substitution_inflow_is_a_constant_zero_at_grade_grain() -> None:
+    # Arrange — C 08.02 has no Total row, so its col 0080 is a per-grade constant
+    # 0.0 (the recorded R12 disposition: a cross-class inflow has no origin-basis
+    # grade home). Two corporate legs at PD 1% fall in one PD band -> one row.
+    frame = pl.DataFrame(
+        {
+            "exposure_reference": ["CORP-1", "CORP-2"],
+            "reporting_class_origin": ["corporate", "corporate"],
+            "reporting_approach_origin": ["foundation_irb", "foundation_irb"],
+            "ead_final": [5000.0, 3000.0],
+            "rwa_final": [3500.0, 1800.0],
+            "pd_floored": [0.01, 0.01],
+        }
+    )
+    resolver = lineage.sheet_lineage(_FrameSource(frame), "c08_02", "corporate")
+    assert resolver is not None
+    (row,) = resolver._plan.spec.rows  # noqa: SLF001 - the single populated PD band
+
+    # Act
+    query = resolver.query(row.ref, "0080")
+    result = resolver.cell(row.ref, "0080")
+
+    # Assert — col 0080 reads as a CONSTANT kind (a refless Formula), so it drills
+    # down with no contributing legs and a reported 0.0 (never the C 08.01 inflow).
+    assert query is not None
+    assert query.kind == "constant"
+    assert result is not None
+    assert result.total_rows == 0
+    assert result.cell_value == pytest.approx(0.0)
+
+
+# =============================================================================
 # Sheet-key resolution — multi-sheet vs the single-frame {sheet: None} convention
 # =============================================================================
 

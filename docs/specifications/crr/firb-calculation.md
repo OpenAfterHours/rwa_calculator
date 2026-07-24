@@ -301,11 +301,32 @@ Institutions that have **not** received permission to use own LGDs and own conve
     receive M = 0.5 years under CRR, overriding any `maturity_date`-derived value
     (`engine/irb/transforms.py` prepare_columns). The override is gated on the CRR framework
     only — Basel 3.1 deleted Art. 162(1), so B31 F-IRB calculates M per Art. 162(2A).
-    Exposures without `is_sft` (or with `is_sft = False`) retain the existing 2.5-year
-    default. Regression: `tests/unit/irb/test_firb_sft_maturity.py`.
+    Regression: `tests/unit/irb/test_firb_sft_maturity.py`.
 
 Alternatively, the competent authority may require the institution to calculate M for each
 exposure using the A-IRB methods in Art. 162(2).
+
+!!! success "2.5-Year Fixed Maturity — Implemented as an Election (`firb_fixed_maturity`)"
+    Which of the two Art. 162(1) sentences binds is a fact about the firm's **Art. 143
+    permission**, not about the regime, so the fixed 2.5-year value for "all other exposures"
+    is a `CalculationConfig` election rather than a regime Feature:
+    `CalculationConfig.crr(..., firb_fixed_maturity=True)` pins every F-IRB non-repo-style row
+    to 2.5 years (derivatives included — Art. 162(1) carves out repos and
+    securities-or-commodities lending only). The regulatory values live on the cited pack
+    scalars `firb_sft_supervisory_maturity_years` (0.5) and
+    `firb_fixed_supervisory_maturity_years` (2.5), and regime availability on the CRR-only
+    `firb_fixed_supervisory_maturity` Feature — PS1/26 Art. 162(1) is
+    "[Note: Provision left blank]", so the election cannot fire under Basel 3.1.
+
+    **The default is `False`**, i.e. the calculator applies the Art. 162(1) second-sentence
+    alternative (per-exposure Art. 162(2) M) unless a firm opts in — do not read the default
+    as an assertion that no Art. 143 permission requires the fixed values. With the election
+    off, a non-repo-style F-IRB row keeps the `maturity_date` derivation clipped to [1, 5]
+    years and only falls back to 2.5 years when `maturity_date` is null. The election sits
+    **below** an explicit `effective_maturity` input and below the Art. 162(3) one-day
+    carve-out in the priority chain, and leaves A-IRB rows untouched. Regressions:
+    `tests/unit/irb/test_p1_249_firb_fixed_maturity.py`,
+    `tests/acceptance/crr/test_p1_249_art_162_1_firb_fixed_maturity.py`.
 
 ### Art. 162(2) — A-IRB Effective Maturity Calculation
 

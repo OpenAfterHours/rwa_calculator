@@ -684,6 +684,22 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("0.5"),
         citation=Citation("CRR", "162(1)", "F-IRB fixed 0.5y supervisory M for repo-style SFTs"),
     ),
+    # CRR Art. 162(1) other limb: the fixed 2.5y supervisory M for "all other
+    # exposures" (everything that is not repo-style / securities-or-commodities
+    # lending) under F-IRB. Like its 0.5y sibling this is a FIXED value, not a floor
+    # and not a clip bound, and it is CRR-only (PS1/26 Art. 162(1) is "Provision left
+    # blank"). Whether it applies is a firm-permission fact — Art. 162(1) second
+    # sentence lets the Art. 143 permission substitute the per-exposure Art. 162(2)
+    # M — so the engine reads it only when the CRR-only Feature
+    # firb_fixed_supervisory_maturity AND the CalculationConfig.firb_fixed_maturity
+    # election are both set. Value-safe in the common pack (B31 never reads it).
+    "firb_fixed_supervisory_maturity_years": ScalarParam(
+        name="firb_fixed_supervisory_maturity_years",
+        value=Decimal("2.5"),
+        citation=Citation(
+            "CRR", "162(1)", "F-IRB fixed 2.5y supervisory M for all non-repo-style exposures"
+        ),
+    ),
     # Entity-type -> exposure-class classification maps (CRR Art. 112 SA / Art.
     # 147 IRB), relocated from data/tables (S13-d). Category labels, not rates —
     # consumed in Python via Expr.replace_strict (engine/entity_class_maps.py

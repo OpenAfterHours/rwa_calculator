@@ -100,6 +100,19 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=True,
         citation=Citation("CRR", "162(1)", "F-IRB fixed 0.5y supervisory M for repo-style SFTs"),
     ),
+    # Art. 162(1) exists under CRR, so its fixed 2.5y "all other exposures" M is
+    # AVAILABLE here — but Art. 162(1) second sentence makes the choice between it
+    # and the per-exposure Art. 162(2) M an Art. 143 permission matter. This Feature
+    # therefore only says "the regime has the provision"; the firm-level election is
+    # CalculationConfig.firb_fixed_maturity (default off, so the engine keeps the
+    # date-derived Art. 162(2) M unless a firm opts in). B31 sets it False.
+    "firb_fixed_supervisory_maturity": Feature(
+        name="firb_fixed_supervisory_maturity",
+        enabled=True,
+        citation=Citation(
+            "CRR", "162(1)", "fixed F-IRB supervisory M available (2.5y non-repo-style)"
+        ),
+    ),
     "one_day_maturity_floor": Feature(
         name="one_day_maturity_floor",
         enabled=True,

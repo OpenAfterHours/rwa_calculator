@@ -94,6 +94,17 @@ ENTRIES: dict[str, RuleEntry] = {
             "PS1/26", "162", "Basel 3.1 deleted the CRR Art. 162(1) SFT supervisory M"
         ),
     ),
+    # PS1/26 Art. 162(1) reads "[Note: Provision left blank]" and Art. 162(2) puts
+    # BOTH the Foundation and the Advanced IRB Approach on the Art. 162(2A) methods,
+    # so the CRR fixed 2.5y "all other exposures" M has no successor. Declared here
+    # (False) so the engine's pack.feature() read never KeyErrors, and so a firm that
+    # sets CalculationConfig.firb_fixed_maturity cannot leak the CRR election into a
+    # Basel 3.1 run.
+    "firb_fixed_supervisory_maturity": Feature(
+        name="firb_fixed_supervisory_maturity",
+        enabled=False,
+        citation=Citation("PS1/26", "162", "Art. 162(1) left blank — no fixed F-IRB supervisory M"),
+    ),
     "one_day_maturity_floor": Feature(
         name="one_day_maturity_floor",
         enabled=False,

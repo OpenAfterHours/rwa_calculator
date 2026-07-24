@@ -315,6 +315,7 @@ def _lgd_floor_expression_with_collateral(
     )
 
 
+@cites("PS1/26, paragraph 161")
 @cites("PS1/26, paragraph 164")
 def _lgd_floor_blended_expression(
     config: CalculationConfig,
@@ -322,11 +323,12 @@ def _lgd_floor_blended_expression(
     pack: ResolvedRulepack | None = None,
 ) -> pl.Expr:
     """
-    Build Polars expression for the Art. 164(4)(c) blended LGD floor.
+    Build Polars expression for the blended (LGD*) A-IRB LGD input floor.
 
-    For retail "other secured" exposures with mixed collateral, the LGD floor
-    is a weighted average of per-type LGDS floors and the unsecured LGDU,
-    weighted by the proportion of EAD covered by each collateral type:
+    Where the institution takes recognised funded credit protection into
+    account, the A-IRB LGD input floor is the Art. 230/231 LGD* — a weighted
+    average of per-type LGDS floors and the unsecured LGDU, weighted by the
+    proportion of EAD covered by each collateral type:
 
         LGD_floor = (E_unsecured / EAD) × LGDU
                   + Σ_i (E_i / EAD) × LGDS_i
@@ -334,19 +336,31 @@ def _lgd_floor_blended_expression(
     Where E_i comes from the Art. 231 sequential waterfall (crm_alloc_* columns)
     and E_unsecured = EAD - total_collateral_for_lgd.
 
-    Applies to:
-        - retail_other (LGDU = 30%)
-        - retail_qrre (LGDU = 50%)
+    This is the SAME formula for both limbs of the Basel 3.1 A-IRB floor — only
+    LGDU differs by exposure class:
+        - corporate / institution (and any other non-retail class): 25%
+          (Art. 161(5)(b)(iii)); the article covers "secured and partially
+          secured exposures", so a part-covered corporate is floored on the
+          blend, not on the flat 25% and not on the bare secured-type LGDS.
+        - retail_other: 30% (Art. 164(4)(c))
+        - retail_qrre: 50% (Art. 164(4)(b)(i))
+
     Does NOT apply to:
         - retail_mortgage (flat 5% floor per Art. 164(4)(a))
+        - exposures with no recognised protection — Art. 161(5)(a) /
+          164(4)(b) flat unsecured floors govern, so the expression returns
+          null and the caller falls back to the single-type floor
         - CRR (no LGD floors)
 
     Requires crm_alloc_* columns from CRM waterfall and ead_gross.
-    Falls back to _lgd_floor_expression_with_collateral() for non-retail or
-    when allocation columns are absent.
+    Falls back to _lgd_floor_expression_with_collateral() when the exposure is
+    retail_mortgage, carries no recognised collateral, or the allocation
+    columns are absent.
 
     References:
-        PRA PS1/26 Art. 164(4)(c)
+        PRA PS1/26 Art. 161(5)(b) — corporates and institutions
+        PRA PS1/26 Art. 164(4)(c) — retail
+        PRA PS1/26 Art. 230(1) / 231(1) — the LGD* formula being floored on
     """
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     if not resolved_pack.feature("airb_lgd_floor"):
@@ -365,11 +379,13 @@ def _lgd_floor_blended_expression(
     alloc_op = pl.col("crm_alloc_other_physical").fill_null(0.0)
     alloc_li = pl.col("crm_alloc_life_insurance").fill_null(0.0)
 
-    # Per-type LGDS floors for retail (Art. 164(4)(c))
+    # Per-type LGDS floors. The Art. 161(5)(b)(iv) (corporate / institution) and
+    # Art. 164(4)(c) (retail) LGDS tables carry identical values, so one set
+    # serves both limbs.
     lgds_fin = floors["financial_collateral"]  # 0%
     lgds_cb = floors["financial_collateral"]  # 0% (treated as financial)
     lgds_rec = floors["receivables"]  # 10%
-    lgds_re = floors["commercial_real_estate"]  # 10% (non-RRE immovable property)
+    lgds_re = floors["commercial_real_estate"]  # 10% (immovable property)
     lgds_op = floors["other_physical"]  # 15%
     lgds_li = floors["financial_collateral"]  # 0% (treated as financial)
 
@@ -383,23 +399,37 @@ def _lgd_floor_blended_expression(
     )
 
     # LGDU depends on exposure class:
-    # - retail_other: 30% (Art. 164(4)(c))
     # - retail_qrre: 50% (Art. 164(4)(b)(i))
+    # - retail_other: 30% (Art. 164(4)(c))
+    # - everything else (corporate, corporate_sme, institution, ...): 25%
+    #   substituted for LGDU per Art. 161(5)(b)(iii)
+    # A null exposure_class leaves every comparison below null, so the
+    # eligibility gate evaluates null and the caller falls back to the flat /
+    # single-type floor — the conservative branch. No null fill here.
     exp_class = pl.col("exposure_class").cast(pl.String).str.to_lowercase()
     lgdu_expr = (
         pl.when(exp_class.is_in(["retail_qrre"]))
         .then(pl.lit(floors["retail_qrre_unsecured"]))  # 50%
-        .otherwise(pl.lit(floors["retail_lgdu"]))  # 30%
+        .when(exp_class.is_in(["retail_other"]))
+        .then(pl.lit(floors["retail_lgdu"]))  # 30%
+        .otherwise(pl.lit(floors["unsecured"]))  # 25% Art. 161(5)(b)(iii)
     )
 
     numerator_with_unsecured = numerator + unsecured_portion * lgdu_expr
 
     blended = pl.when(ead > 0).then(numerator_with_unsecured / ead).otherwise(pl.lit(0.0))
 
-    # Apply blended floor only to retail_other and retail_qrre with collateral.
-    # retail_mortgage uses flat 5% (Art. 164(4)(a)).
-    # Corporate uses single-type floor from _lgd_floor_expression_with_collateral().
-    is_blended_eligible = exp_class.is_in(["retail_other", "retail_qrre"])
+    # Art. 161(5)(b) (corporates and institutions) and Art. 164(4)(c) (retail
+    # other / QRRE) both mandate the Art. 230/231 LGD* blend for secured AND
+    # PARTIALLY secured exposures wherever the firm takes the funded credit
+    # protection into account. ``retail_mortgage`` is the sole carve-out — a
+    # flat 5% floor per Art. 164(4)(a), independent of collateral composition.
+    #
+    # ``has_collateral`` is exactly the Art. 161(5)(a)/(b) fork: nothing
+    # recognised means the firm "chooses not to take into account funded credit
+    # protection", so the flat unsecured floor governs and this expression
+    # returns null for the caller's single-type fallback.
+    is_blended_eligible = ~exp_class.is_in(["retail_mortgage"])
     has_collateral = total_coll > 0
 
     return pl.when(is_blended_eligible & has_collateral).then(blended).otherwise(pl.lit(None))
@@ -477,7 +507,7 @@ def apply_irb_formulas(
                 has_exposure_class=True,
                 pack=resolved_pack,
             )
-        # Art. 164(4)(c) blended floor for retail with mixed collateral
+        # Art. 161(5)(b) / 164(4)(c) LGD* blend for (partially) secured rows
         blended_expr = _lgd_floor_blended_expression(config, pack=resolved_pack)
         lgd_floor_expr = (
             pl.when(blended_expr.is_not_null()).then(blended_expr).otherwise(lgd_floor_expr)

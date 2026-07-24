@@ -235,6 +235,7 @@ def apply_firb_lgd(
     return lf.with_columns([lgd_input_expr.alias("lgd_input")])
 
 
+@cites("CRR Art. 162(1)")
 def prepare_columns(
     lf: pl.LazyFrame, config: CalculationConfig, *, pack: ResolvedRulepack | None = None
 ) -> pl.LazyFrame:
@@ -259,8 +260,10 @@ def prepare_columns(
     #   3. Basel 3.1 revolving + facility_termination_date (Art. 162(2A)(k))
     #   4. maturity_date standard derivation, clipped [1y, 5y]
     #   5. Fallback default 2.5y
-    # CRR F-IRB SFT supervisory M = 0.5y (Art. 162(1)) is applied to the base
-    # chain (4/3) but is superseded by the two explicit overrides above.
+    # The two CRR Art. 162(1) fixed F-IRB supervisory values are applied to the
+    # base chain (4/3) but are superseded by the two explicit overrides above:
+    # repo-style M = 0.5y always (regime Feature), and M = 2.5y for all other
+    # F-IRB exposures under the Art. 143 election (config.firb_fixed_maturity).
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     # Guarantee the CCR maturity-chain inputs exist as typed nulls so the
     # carrier rung / FIRB-CCR_SFT gate never error on lending-only or
@@ -333,10 +336,13 @@ def apply_lgd_floor(
 
     CRR: No LGD floor (A-IRB models LGD freely)
     Basel 3.1: Differentiated floors by collateral type and exposure class:
-        - Corporate unsecured (senior & subordinated): 25% (Art. 161(5))
+        - Corporate unsecured (senior & subordinated): 25% (Art. 161(5)(a))
         - Retail QRRE unsecured: 50% (Art. 164(4)(b)(i))
         - Financial: 0%, Receivables: 10%
         - RRE: 10%, CRE: 10%, Other physical: 15%
+        - Secured / PARTIALLY secured (all classes bar retail_mortgage): the
+          Art. 230/231 LGD* blend of those LGDS values with the class LGDU
+          (Art. 161(5)(b) corporates & institutions, Art. 164(4)(c) retail)
 
     LGD floors only apply to A-IRB own-estimate LGDs. F-IRB supervisory
     LGDs are regulatory values and don't need flooring.
@@ -370,9 +376,9 @@ def apply_lgd_floor(
                 pack=resolved_pack,
             )
 
-        # Art. 164(4)(c) blended floor for retail with mixed collateral
-        # Use blended floor where applicable (retail_other/qrre with collateral),
-        # fall back to single-type floor otherwise
+        # Art. 161(5)(b) / 164(4)(c) LGD* blend: applies to every class except
+        # retail_mortgage once recognised collateral is present; falls back to
+        # the single-type / flat floor otherwise
         blended_expr = _lgd_floor_blended_expression(config, pack=resolved_pack)
         lgd_floor_expr = (
             pl.when(blended_expr.is_not_null()).then(blended_expr).otherwise(lgd_floor_expr)
@@ -930,27 +936,62 @@ def _maturity_base_expr(config: CalculationConfig, *, pack: ResolvedRulepack) ->
     return maturity_from_date
 
 
+def _repo_style_expr() -> pl.Expr:
+    """CRR Art. 162(1) repo-style predicate: repos / securities-or-commodities lending.
+
+    Covers lending repo-style SFTs (``is_sft=True``) AND synthetic FCCM SFT rows
+    (``risk_type == "CCR_SFT"``), which never carry ``is_sft`` (it stays a
+    CRM-only input). Derivatives (``CCR_DERIVATIVE``) are NOT repo-style — for
+    them Art. 162(1) is the "all other exposures" limb.
+    """
+    return pl.col("is_sft").fill_null(False) | pl.col("risk_type").eq_missing(
+        RiskType.CCR_SFT.value
+    )
+
+
 def _apply_firb_sft_supervisory_maturity(
     maturity_expr: pl.Expr, *, pack: ResolvedRulepack
 ) -> pl.Expr:
     """CRR Art. 162(1): F-IRB fixed supervisory maturity for repo-style SFTs (0.5y).
 
-    Fires for lending repo-style SFTs (``is_sft=True``) AND synthetic FCCM SFT
-    rows (``risk_type == "CCR_SFT"``), which never carry ``is_sft`` (it stays a
-    CRM-only input). Derivatives (``CCR_DERIVATIVE``) are excluded — Art. 162(1)
-    covers repos / securities-or-commodities lending only. B31 deleted
-    Art. 162(1); under B31 all IRB firms calculate M per Art. 162(2A) and this
-    feature is off.
+    Fires for the ``_repo_style_expr`` population. B31 deleted Art. 162(1); under
+    B31 all IRB firms calculate M per Art. 162(2A) and this feature is off.
     """
     if not pack.feature("firb_sft_supervisory_maturity"):
         return maturity_expr
     firb_sft_m = float(pack.scalar_param("firb_sft_supervisory_maturity_years").value)
-    is_firb_repo_style = pl.col("is_sft").fill_null(False) | pl.col("risk_type").eq_missing(
-        RiskType.CCR_SFT.value
-    )
     return (
-        pl.when((pl.col("approach") == ApproachType.FIRB.value) & is_firb_repo_style)
+        pl.when((pl.col("approach") == ApproachType.FIRB.value) & _repo_style_expr())
         .then(pl.lit(firb_sft_m))
+        .otherwise(maturity_expr)
+    )
+
+
+def _apply_firb_fixed_supervisory_maturity(
+    maturity_expr: pl.Expr, config: CalculationConfig, *, pack: ResolvedRulepack
+) -> pl.Expr:
+    """CRR Art. 162(1): F-IRB fixed supervisory maturity for all other exposures (2.5y).
+
+    Art. 162(1) first sentence assigns the repo-style 0.5y (see
+    ``_apply_firb_sft_supervisory_maturity``) and M = 2.5y to *all other*
+    exposures — derivatives included — for an institution without own-LGD/own-CF
+    permission. The second sentence lets the Art. 143 permission substitute the
+    per-exposure Art. 162(2) derivation instead, so the applicable limb is a
+    firm-permission fact: the regime availability is the CRR-only
+    ``firb_fixed_supervisory_maturity`` Feature (PS1/26 Art. 162(1) is left
+    blank), and the firm election is ``config.firb_fixed_maturity`` (default
+    False → the date-derived Art. 162(2) M is unchanged).
+
+    Repo-style rows are excluded here so the 0.5y limb is unaffected regardless
+    of the order in which the two Art. 162(1) rungs are composed. A-IRB rows are
+    untouched — Art. 162(1) binds only firms lacking own-LGD/CF permission.
+    """
+    if not (pack.feature("firb_fixed_supervisory_maturity") and config.firb_fixed_maturity):
+        return maturity_expr
+    firb_fixed_m = float(pack.scalar_param("firb_fixed_supervisory_maturity_years").value)
+    return (
+        pl.when((pl.col("approach") == ApproachType.FIRB.value) & ~_repo_style_expr())
+        .then(pl.lit(firb_fixed_m))
         .otherwise(maturity_expr)
     )
 
@@ -996,6 +1037,7 @@ def _build_maturity_exprs(config: CalculationConfig, *, pack: ResolvedRulepack) 
     one_day = float(pack.scalar_param("one_day_maturity_floor_years").value)
 
     maturity_expr = _maturity_base_expr(config, pack=pack)
+    maturity_expr = _apply_firb_fixed_supervisory_maturity(maturity_expr, config, pack=pack)
     maturity_expr = _apply_firb_sft_supervisory_maturity(maturity_expr, pack=pack)
 
     effective_floor_flag = _effective_one_day_floor_flag(config, pack=pack)
@@ -1095,7 +1137,9 @@ def _lgd_floored_expr(
 
     CRR has no LGD floor (the ``airb_lgd_floor`` Feature is off). Basel 3.1
     applies per-collateral-type floors to A-IRB only (F-IRB supervisory LGDs are
-    regulatory values — not floored, per CRE30.41).
+    regulatory values — not floored, per CRE30.41), blended across the secured
+    and unsecured portions per Art. 161(5)(b) / 164(4)(c) wherever recognised
+    collateral is present.
     """
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     if not resolved_pack.feature("airb_lgd_floor"):
@@ -1115,7 +1159,7 @@ def _lgd_floored_expr(
             has_exposure_class=True,
             pack=resolved_pack,
         )
-    # Art. 164(4)(c) blended floor for retail with mixed collateral
+    # Art. 161(5)(b) / 164(4)(c) LGD* blend for (partially) secured rows
     blended_expr = _lgd_floor_blended_expression(config, pack=resolved_pack)
     lgd_floor_expr = (
         pl.when(blended_expr.is_not_null()).then(blended_expr).otherwise(lgd_floor_expr)

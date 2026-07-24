@@ -1,18 +1,24 @@
 """
-Tests for Art. 164(4)(c) blended LGD floor for A-IRB retail with mixed collateral.
+Tests for the blended (LGD*) A-IRB LGD floor for exposures with collateral.
 
-Art. 164(4)(c) specifies that for retail "other secured" exposures, the LGD floor
-is a weighted average of per-type LGDS floors and the unsecured LGDU, using the
-proportion of EAD absorbed by each collateral type from the Art. 231 waterfall.
+Both limbs of the Basel 3.1 A-IRB LGD input floor use the same Art. 230/231
+LGD* shape — a weighted average of per-type LGDS floors and the unsecured LGDU,
+using the proportion of EAD absorbed by each collateral type from the Art. 231
+waterfall:
 
     LGD_floor = (E_unsecured / EAD) × LGDU + Σ_i (E_i / EAD) × LGDS_i
 
 Where:
-    LGDU = 30% for retail_other, 50% for retail_qrre
+    LGDU = 25% corporate / institution (Art. 161(5)(b)(iii)),
+           30% retail_other, 50% retail_qrre (Art. 164(4)(b)(i)/(c))
     LGDS: financial=0%, receivables=10%, real_estate=10%, other_physical=15%
 
+``retail_mortgage`` is the sole carve-out — Art. 164(4)(a) gives it a flat 5%
+floor regardless of collateral composition.
+
 References:
-    PRA PS1/26 Art. 164(4)(c)
+    PRA PS1/26 Art. 161(5)(b) — corporates and institutions (P1.248)
+    PRA PS1/26 Art. 164(4)(c) — retail
 """
 
 from __future__ import annotations
@@ -174,14 +180,53 @@ class TestBlendedExpressionDirect:
         result = lf.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
         assert result["floor"][0] is None
 
-    def test_corporate_returns_null(self):
-        """Corporate exposure is not eligible for blended — returns null."""
+    @pytest.mark.parametrize("exposure_class", ["CORPORATE", "corporate_sme", "institution"])
+    def test_corporate_and_institution_partially_secured_blend(self, exposure_class):
+        """Art. 161(5)(b): 80% financial + 20% unsecured = 0.8*0% + 0.2*25% = 5%."""
         lf = _make_df(
-            exposure_class="CORPORATE",
+            exposure_class=exposure_class,
             crm_alloc_financial=80_000.0,
         )
         result = lf.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
+        assert result["floor"][0] == pytest.approx(0.05)
+
+    def test_corporate_lgdu_is_25pct_not_retail_30pct(self):
+        """Corporate LGDU is 25% (Art. 161(5)(b)(iii)), not the retail 30%."""
+        # 60% other_physical + 40% unsecured = 0.6*15% + 0.4*25% = 19%
+        # (the retail_other answer for the same shape would be 21%)
+        lf = _make_df(
+            exposure_class="corporate",
+            crm_alloc_other_physical=60_000.0,
+        )
+        result = lf.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
+        assert result["floor"][0] == pytest.approx(0.19)
+
+    def test_corporate_fully_secured_equals_single_type_lgds(self):
+        """Fully secured corporate: blend collapses onto the bare LGDS."""
+        lf = _make_df(
+            exposure_class="corporate",
+            crm_alloc_real_estate=100_000.0,
+        )
+        result = lf.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
+        assert result["floor"][0] == pytest.approx(0.10)
+
+    def test_corporate_no_collateral_returns_null(self):
+        """Art. 161(5)(a): no recognised protection → null (flat 25% fallback)."""
+        lf = _make_df(exposure_class="corporate")
+        result = lf.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
         assert result["floor"][0] is None
+
+    def test_corporate_multi_type_blend(self):
+        """Art. 231 multi-collateral: 30% fin + 30% RE + 20% phys + 20% unsecured."""
+        lf = _make_df(
+            exposure_class="corporate",
+            crm_alloc_financial=30_000.0,
+            crm_alloc_real_estate=30_000.0,
+            crm_alloc_other_physical=20_000.0,
+        )
+        # 0.3*0% + 0.3*10% + 0.2*15% + 0.2*25% = 0% + 3% + 3% + 5% = 11%
+        result = lf.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
+        assert result["floor"][0] == pytest.approx(0.11)
 
     def test_zero_ead_returns_null(self):
         """Zero EAD: no exposure, so blended not applicable → null."""
@@ -248,6 +293,7 @@ class TestBlendedFloorIntegration:
         crm_alloc_other_physical: float = 0.0,
         ead_gross: float = 100_000.0,
         total_collateral_for_lgd: float | None = None,
+        collateral_type: str | None = "other_physical",
     ) -> pl.LazyFrame:
         total = crm_alloc_financial + crm_alloc_other_physical
         if total_collateral_for_lgd is None:
@@ -266,9 +312,8 @@ class TestBlendedFloorIntegration:
                 "crm_alloc_real_estate": [0.0],
                 "crm_alloc_other_physical": [crm_alloc_other_physical],
                 "crm_alloc_life_insurance": [0.0],
-                "collateral_type": ["other_physical"],
             }
-        )
+        ).with_columns(pl.lit(collateral_type, dtype=pl.String).alias("collateral_type"))
 
     def test_airb_retail_other_blended_floor_applied(self):
         """A-IRB retail_other gets blended floor, not single-type."""
@@ -312,16 +357,23 @@ class TestBlendedFloorIntegration:
         result = lf.pipe(apply_lgd_floor, CRR).collect()
         assert result["lgd_floored"][0] == pytest.approx(0.10)
 
-    def test_corporate_uses_single_type_floor(self):
-        """Corporate falls through to single-type floor (not blended)."""
+    def test_corporate_uses_blended_floor(self):
+        """A-IRB corporate gets the Art. 161(5)(b) blend, not the single-type floor."""
         lf = self._make_irb_df(
             lgd=0.10,
             exposure_class="CORPORATE",
             crm_alloc_other_physical=60_000.0,
         )
         result = lf.pipe(apply_lgd_floor, B31).collect()
-        # Corporate single-type floor for other_physical = 15%
-        assert result["lgd_floored"][0] == pytest.approx(0.15)
+        # Blended: 0.6*15% + 0.4*25% = 19% (single-type would be 15%; the
+        # collateral-free flat floor would be 25%)
+        assert result["lgd_floored"][0] == pytest.approx(0.19)
+
+    def test_corporate_without_collateral_keeps_flat_25pct(self):
+        """Art. 161(5)(a): corporate with no recognised protection stays at 25%."""
+        lf = self._make_irb_df(lgd=0.10, exposure_class="CORPORATE", collateral_type=None)
+        result = lf.pipe(apply_lgd_floor, B31).collect()
+        assert result["lgd_floored"][0] == pytest.approx(0.25)
 
     def test_retail_mortgage_uses_flat_floor(self):
         """retail_mortgage uses flat 5% floor (Art. 164(4)(a)), not blended."""

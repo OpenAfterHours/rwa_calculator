@@ -438,8 +438,9 @@ class CCFCalculator:
 
         Applies the PRA PS1/26 Art. 111(1) Table A1 Row 4(b) override: a UK
         residential-property commitment (``is_uk_residential_mortgage_commitment``)
-        gets a 50% SA CCF under Basel 3.1, except where the otherwise-resolved
-        CCF is 10% (Row 6 UCC) or 100% (Row 2) — the Row 4(b) carve-out.
+        gets a 50% CCF under Basel 3.1 — on the SA and the F-IRB / Slotting
+        carrier alike (Art. 166C(1)) — except where the otherwise-resolved CCF is
+        10% (Row 7 UCC) or 100% (Row 1/2) — the Row 4(b) carve-out.
 
         References:
         - CRR Art. 111(1) / Annex I: SA CCF buckets.
@@ -500,23 +501,12 @@ class CCFCalculator:
 
         # PRA PS1/26 Art. 111(1) Table A1 Row 4(b): commitments to extend credit
         # secured by residential property attract a 50% CCF — "to the extent
-        # that they are not subject to a conversion factor of 10% or 100%". When
-        # the flag is set under Basel 3.1, override the otherwise-resolved SA CCF
-        # to the MR / Row 4(b) rate (50%), unless that CCF is already 10% (Row 6
-        # UCC) or 100% (Row 2), in which case the carve-out leaves it untouched.
+        # that they are not subject to a conversion factor of 10% or 100%". The
+        # override lands on BOTH the SA and the F-IRB carrier because Art. 166C(1)
+        # defines the F-IRB / Slotting CCF as the Art. 111 SA CCF (P1.251).
         # No effect under CRR (Table A1 is Basel 3.1 only) — see the gate below.
         if is_b31:
-            row_4b_ccf = _SA_CCF_B31_MAP["MR"]
-            carve_out_ccfs = (_SA_CCF_B31_MAP["LR"], _SA_CCF_B31_MAP["FR"])
-            is_resi_commitment = pl.col("is_uk_residential_mortgage_commitment").fill_null(False)
-            sa_not_in_carve_out = ~pl.col("_sa_ccf_from_risk_type").is_in(carve_out_ccfs)
-            exposures = exposures.with_columns(
-                pl.when(is_resi_commitment & sa_not_in_carve_out)
-                .then(pl.lit(row_4b_ccf))
-                .otherwise(pl.col("_sa_ccf_from_risk_type"))
-                .alias("_sa_ccf_from_risk_type"),
-            )
-
+            exposures = self._apply_uk_residential_mortgage_ccf(exposures)
             exposures = self._apply_purchased_receivable_ccf(exposures)
 
         # Art. 111(1)(c): commitment-to-issue lower-of rule.
@@ -664,6 +654,57 @@ class CCFCalculator:
             .then(pl.lit(_OC_SHORT_MATURITY_CCF))
             .otherwise(pl.col("_sa_ccf_from_risk_type"))
             .alias("_sa_ccf_from_risk_type"),
+        )
+
+    # PRA PS1/26 Art. 111(1) Table A1 Row 4(b), read into the F-IRB / Slotting
+    # exposure value by Art. 166C(1). Art. 166C has no CRR equivalent and the
+    # watchfire PS-instrument grammar only accepts numeric paragraphs, so Art.
+    # 166C para 1 is encoded as section 166.1 (see the Art. 166E(5) note below
+    # and docs/development/citation-tracking.md on the PS1/26 form).
+    @cites("PS1/26, paragraph 111")
+    @cites("PS1/26, paragraph 166.1")
+    def _apply_uk_residential_mortgage_ccf(
+        self,
+        exposures: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        """Apply the Table A1 Row 4(b) UK residential-mortgage commitment CCF.
+
+        PRA PS1/26 Art. 111(1) Table A1 Row 4(b): "UK residential mortgage
+        commitments that are not subject to a conversion factor of 10% or 100%"
+        attract a 50% conversion factor. When
+        ``is_uk_residential_mortgage_commitment`` is set, the otherwise-resolved
+        CCF is overridden to that Row 4 rate (50%), unless the row already sits in
+        the carve-out — the Row 7 UCC 10% or the Row 1/2 100% — in which case it
+        is left untouched. The carve-out is tested per carrier, against that
+        carrier's own resolved value.
+
+        Both the SA and the F-IRB carrier are patched: Art. 166C(1) sets the
+        F-IRB and Slotting off-balance-sheet exposure value using "the conversion
+        factor that would be applicable to the off-balance sheet item under the
+        Standardised Approach, as set out in ... Article 111", so Row 4(b)
+        governs the F-IRB conversion factor exactly as it governs the SA one
+        (P1.251). Slotting reads the SA carrier under Basel 3.1.
+
+        Basel-3.1-only: callers gate this on the ``firb_uses_sa_ccf`` pack Feature
+        (S9c); Table A1 Row 4(b) is a PRA construct with no CRR Annex I
+        equivalent, so the flag is a no-op under CRR.
+        """
+        row_4b_ccf = _SA_CCF_B31_MAP["MR"]
+        carve_out_ccfs = (_SA_CCF_B31_MAP["LR"], _SA_CCF_B31_MAP["FR"])
+
+        is_resi_commitment = pl.col("is_uk_residential_mortgage_commitment").fill_null(False)
+        sa_not_in_carve_out = ~pl.col("_sa_ccf_from_risk_type").is_in(carve_out_ccfs)
+        firb_not_in_carve_out = ~pl.col("_firb_ccf_from_risk_type").is_in(carve_out_ccfs)
+
+        return exposures.with_columns(
+            pl.when(is_resi_commitment & sa_not_in_carve_out)
+            .then(pl.lit(row_4b_ccf))
+            .otherwise(pl.col("_sa_ccf_from_risk_type"))
+            .alias("_sa_ccf_from_risk_type"),
+            pl.when(is_resi_commitment & firb_not_in_carve_out)
+            .then(pl.lit(row_4b_ccf))
+            .otherwise(pl.col("_firb_ccf_from_risk_type"))
+            .alias("_firb_ccf_from_risk_type"),
         )
 
     # PRA PS1/26 Art. 166E(5) — no CRR equivalent; the watchfire PS-instrument

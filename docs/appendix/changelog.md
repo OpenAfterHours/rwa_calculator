@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - (Next release changes will go here)
 
+### Fixed
+- **Basel 3.1 F-IRB and Slotting commitments flagged `is_uk_residential_mortgage_commitment` now receive the PRA PS1/26 Art. 111(1) Table A1 Row 4(b) 50% conversion factor (P1.251).** Art. 166C(1) sets the F-IRB / Slotting off-balance-sheet exposure value using "the conversion factor that would be applicable to the off-balance sheet item under the Standardised Approach, as set out in ... Article 111", which includes the PRA-specific Row 4(b) 50% factor for "UK residential mortgage commitments that are not subject to a conversion factor of 10% or 100%". The Row 4(b) override was written to the SA conversion-factor carrier only, so a B31 F-IRB row kept its generic bucket rate (Row 5 "other commitments" 40%, or Row 6 20%) — a GBP 1m fully-undrawn `OC` commitment took EAD 400,000 instead of 500,000 (RWA 369,267.21 instead of 461,584.01 at PD 1% / LGD 45% / M 2.5y, a 20% EAD understatement). The override now lands on both carriers (`engine/ccf.py::CCFCalculator._apply_uk_residential_mortgage_ccf`, mirroring `_apply_purchased_receivable_ccf`), with the Row 4(b) carve-out tested per carrier so Row 7 UCC (10%) and Row 1/2 (100%) rows stay untouched. SA and Slotting numbers are unchanged (they already read the patched SA carrier), and the flag remains inert under CRR, where F-IRB commitments take the Art. 166(8)(d) 75% supervisory factor.
+
 ---
 
 ## [0.3.19] - 2026-07-22

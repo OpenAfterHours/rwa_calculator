@@ -12,7 +12,7 @@ Regenerate after annotation changes:
 uv run python scripts/generate_citation_matrix.py
 ```
 
-Last generated: 2026-07-22.
+Last generated: 2026-07-24.
 
 ## CRR (Capital Requirements Regulation)
 
@@ -35,12 +35,12 @@ Last generated: 2026-07-22.
 
 ??? quote "`_compute_ccf` — src/rwa_calc/engine/ccf.py:419"
     ```python
-    --8<-- "src/rwa_calc/engine/ccf.py:419:603"
+    --8<-- "src/rwa_calc/engine/ccf.py:419:593"
     ```
 
-??? quote "`_apply_oc_original_maturity_ccf` — src/rwa_calc/engine/ccf.py:608"
+??? quote "`_apply_oc_original_maturity_ccf` — src/rwa_calc/engine/ccf.py:598"
     ```python
-    --8<-- "src/rwa_calc/engine/ccf.py:608:667"
+    --8<-- "src/rwa_calc/engine/ccf.py:598:657"
     ```
 
 ??? quote "`resolve_provisions` — src/rwa_calc/engine/crm/provisions.py:37"
@@ -1271,7 +1271,12 @@ Last generated: 2026-07-22.
 
 ??? quote "`_compute_ccf` — src/rwa_calc/engine/ccf.py:420"
     ```python
-    --8<-- "src/rwa_calc/engine/ccf.py:419:603"
+    --8<-- "src/rwa_calc/engine/ccf.py:419:593"
+    ```
+
+??? quote "`_apply_uk_residential_mortgage_ccf` — src/rwa_calc/engine/ccf.py:664"
+    ```python
+    --8<-- "src/rwa_calc/engine/ccf.py:664:708"
     ```
 
 
@@ -1524,11 +1529,19 @@ Last generated: 2026-07-22.
     ```
 
 
+### PS1/26, paragraph 166.1 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
+
+??? quote "`_apply_uk_residential_mortgage_ccf` — src/rwa_calc/engine/ccf.py:665"
+    ```python
+    --8<-- "src/rwa_calc/engine/ccf.py:664:708"
+    ```
+
+
 ### PS1/26, paragraph 166.5 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_apply_purchased_receivable_ccf` — src/rwa_calc/engine/ccf.py:672"
+??? quote "`_apply_purchased_receivable_ccf` — src/rwa_calc/engine/ccf.py:713"
     ```python
-    --8<-- "src/rwa_calc/engine/ccf.py:672:712"
+    --8<-- "src/rwa_calc/engine/ccf.py:713:753"
     ```
 
 

@@ -29,7 +29,9 @@ References:
   domestic-currency 0%)
 - CRR Art. 115: RGLA risk weights (115(1)(b) Table 1B own-rating)
 - CRR Art. 116: PSE risk weights (116(2) Table 2A own-rating)
-- CRR Art. 117: MDB risk weights (117(1) Table 2B; 117(2) named MDBs 0%)
+- CRR Art. 117: MDB risk weights — 117(1) non-named MDBs take the institution
+  treatment (Art. 120/121, no short-term preferential); 117(2) named MDBs 0%.
+  The dedicated MDB Table 2B is PRA PS1/26 Art. 117(1)(a)/(b) only.
 - CRR Art. 118: international organisations — 0% unconditional
 - CRR Art. 119-121: institution risk weights (via
   ``build_institution_guarantor_rw_expr``)
@@ -41,8 +43,8 @@ References:
   (RWSM) for unfunded credit protection
 - CRR Art. 306, CRE54.14-15: QCCP 2% / 4% risk weights
 - PRA PS1/26 Art. 114-122: Basel 3.1 equivalents (PSE / RGLA tables are
-  framework-identical; institution ECRA / SCRA and corporate Table 6 differ
-  and are selected via ``is_basel_3_1``)
+  framework-identical; institution ECRA / SCRA, corporate Table 6 and the
+  non-named-MDB treatment differ and are selected via ``is_basel_3_1``)
 """
 
 from __future__ import annotations
@@ -128,6 +130,7 @@ _HIGH_RISK_RW = scalar_value(_CRR_PACK.scalar_param("high_risk_rw"))
 @cites("CRR Art. 115")
 @cites("CRR Art. 116")
 @cites("CRR Art. 117")
+@cites("PS1/26, paragraph 117")
 @cites("CRR Art. 118")
 @cites("CRR Art. 235")
 def build_guarantor_rw_expr(
@@ -158,7 +161,9 @@ def build_guarantor_rw_expr(
         CCP (CRR Art. 306, CRE54.14-15)
         International Organisation (Art. 118) -> 0%
         Named MDB (Art. 117(2)) -> 0%
-        MDB Table 2B (Art. 117(1))
+        Non-named MDB (Art. 117(1)) — PS1/26 Table 2B under Basel 3.1;
+            institution treatment (Art. 120 Table 3 / Art. 121 unrated,
+            no short-term preferential) under CRR
         Institution (ECRA / SCRA via build_institution_guarantor_rw_expr —
             short-term Art. 120(2) Table 4 when ``short_term_flag_col``
             evaluates True, otherwise long-term Table 3)
@@ -187,8 +192,11 @@ def build_guarantor_rw_expr(
             into ``build_institution_guarantor_rw_expr`` for the B31 unrated
             institution dispatch.
         is_basel_3_1: Select PS1/26 tables (institution ECRA / corporate
-            Table 6) when True, CRR tables when False. PSE / RGLA / MDB /
-            IO / CCP values are framework-identical.
+            Table 6 / MDB Table 2B) when True, CRR tables when False — for
+            MDBs that means the Art. 117(1) institution treatment, since CRR
+            has no MDB table. PSE / RGLA / IO / CCP values are
+            framework-identical. Threaded by both live call sites from the
+            cited ``sa_revised_risk_weight_tables`` pack Feature.
         domestic_cgcb_expr: Caller-supplied Art. 114(4)/(7) domestic-currency
             test (SA and IRB derive domesticity differently). ``None``
             disables the domestic 0% branch (treated as never-domestic).
@@ -243,7 +251,17 @@ def build_guarantor_rw_expr(
         # Named MDB (Art. 117(2)): 0% unconditional.
         .when((gec == "mdb") & (pl.col(entity_type_col).fill_null("") == "mdb_named"))
         .then(pl.lit(float(_MDB_NAMED_ZERO_RW)))
-        # Rated / unrated non-named MDB — Table 2B (Art. 117(1)).
+        # Rated / unrated non-named MDB (Art. 117(1)) — framework-divergent:
+        #   PS1/26 Art. 117(1)(a)/(b): the dedicated Basel 3.1 MDB Table 2B
+        #     (CQS2 30%, unrated 50%).
+        #   CRR Art. 117(1): non-named MDBs "shall be treated in the same manner
+        #     as exposures to institutions" — Art. 120 Table 3 when rated, the
+        #     Art. 121 unrated institution fallback (100%) otherwise. There is no
+        #     MDB table in CRR. The Art. 119(2)/120(2)/121(3) short-term
+        #     preferential "shall not be applied", so ``short_term_flag_col`` is
+        #     deliberately NOT threaded into this branch (unlike the institution
+        #     branch below). Mirrors the direct, non-guarantor CRR MDB path in
+        #     ``sa/risk_weights.py::_apply_crr_risk_weight_overrides`` (P1.253).
         .when(gec == "mdb")
         .then(
             _cqs_table_lookup_expr(
@@ -251,6 +269,8 @@ def build_guarantor_rw_expr(
                 _MDB_RW,
                 float(_MDB_UNRATED_RW),
             )
+            if is_basel_3_1
+            else build_institution_guarantor_rw_expr(cqs_col, is_basel_3_1=False)
         )
         # Institution guarantors — RW driven from institution_rw_crr /
         # institution_rw_b31_ecra so the pack remains the single source of

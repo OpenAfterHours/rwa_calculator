@@ -15,25 +15,30 @@ Key assertion:
     (b) named-MDB guarantors (Art. 117(2): 0% unconditional) — entity_type
         "mdb_named" maps to class "mdb", which today routes through the
         INSTITUTION branch (unrated CRR fallback = 100%, not 0%);
-    (c) rated non-named MDB guarantors — class "mdb" also routes through the
-        INSTITUTION branch (CRR Art. 120 Table 3: CQS 2 = 50%) instead of the
-        MDB Table 2B value adopted by the SA-side reference implementation
-        (MDB_RISK_WEIGHTS_TABLE_2B: CQS 2 = 30%).
+    (c) non-named MDB guarantors — class "mdb" also routes through the
+        INSTITUTION branch, bypassing the regime-specific Art. 117(1) treatment
+        (PS1/26 Table 2B under Basel 3.1).
 
     The SA-side twin (engine/sa/namespace.py::_build_guarantor_rw_expr) already
-    has all three branches (IO 0% → named MDB 0% → MDB Table 2B, ahead of the
+    has all three branches (IO 0% → named MDB 0% → non-named MDB, ahead of the
     institution branch); the shared guarantor RW expression closes them on the
     IRB path. Each test pins the post-fix value and FAILS pre-fix.
 
-    NOTE on framework arm: (c) is pinned on the CRR arm deliberately — under B31
-    the institution-ECRA CQS 2 weight (30%) coincides with Table 2B CQS 2 (30%),
-    so a B31 arm would not discriminate the misroute. The Table 2B dict is
-    framework-shared, so the CRR pin covers the adoption of the table itself.
+    NOTE on framework arms (revised by P1.253): the two regimes diverge for
+    non-named MDBs. CRR Art. 117(1) says they "shall be treated in the same
+    manner as exposures to institutions" and CRR has no MDB table, so the CRR arm
+    pins Art. 120 Table 3 (CQS 2 = 50%). Table-2B adoption is pinned on the B31
+    arm using an UNRATED MDB — Table 2B's 50% versus the institution ECRA/SCRA
+    dispatch's Grade-C 150% — because at CQS 2 the B31 ECRA weight (30%)
+    coincides with Table 2B and would not discriminate.
 
 References:
     - CRR Art. 118 / PRA PS1/26 Art. 118: international organisations — 0%
     - CRR Art. 117(2): named MDBs — 0% unconditional
-    - CRR Art. 117(1) Table 2B (MDB_RISK_WEIGHTS_TABLE_2B): rated MDB CQS 2 = 30%
+    - CRR Art. 117(1): non-named MDBs treated as institutions (Art. 120 Table 3
+      rated / Art. 121 unrated), short-term preferential excluded
+    - PRA PS1/26 Art. 117(1)(a)/(b) (MDB_RISK_WEIGHTS_TABLE_2B): the Basel 3.1
+      MDB table — CQS 2 = 30%, unrated = 50%
     - engine/irb/guarantee.py::_compute_guarantor_rw_sa: bug site (.otherwise(null)
       for IO; mdb routed via the institution branch)
     - engine/sa/namespace.py::_build_guarantor_rw_expr: SA-side reference branches
@@ -49,7 +54,10 @@ import pytest
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import CQS
 from rwa_calc.engine.irb.guarantee import apply_guarantee_substitution
-from rwa_calc.engine.sa.crr_risk_weight_tables import MDB_RISK_WEIGHTS_TABLE_2B
+from rwa_calc.engine.sa.crr_risk_weight_tables import (
+    INSTITUTION_RISK_WEIGHTS_CRR,
+    MDB_RISK_WEIGHTS_TABLE_2B,
+)
 
 # ---------------------------------------------------------------------------
 # Frame constants
@@ -62,7 +70,10 @@ BORROWER_RWA: float = BORROWER_RW * EAD
 # Post-fix expected guarantor risk weights (hand-pinned from the data tables)
 EXPECTED_IO_RW: float = 0.0  # Art. 118: international organisations 0%
 EXPECTED_NAMED_MDB_RW: float = 0.0  # Art. 117(2): named MDBs 0% (MDB_NAMED_ZERO_RW)
-EXPECTED_MDB_CQS2_RW: float = float(MDB_RISK_WEIGHTS_TABLE_2B[CQS.CQS2])  # 0.30
+# CRR Art. 117(1) routes non-named MDBs to the institution tables: Art. 120
+# Table 3 CQS 2 = 50%. B31 keeps the dedicated Table 2B (unrated row = 50%).
+EXPECTED_CRR_MDB_CQS2_RW: float = float(INSTITUTION_RISK_WEIGHTS_CRR[CQS.CQS2])  # 0.50
+EXPECTED_B31_MDB_UNRATED_RW: float = float(MDB_RISK_WEIGHTS_TABLE_2B[CQS.UNRATED])  # 0.50
 
 
 @pytest.fixture
@@ -208,42 +219,76 @@ class TestNamedMdbGuarantor:
         assert result["guarantee_status"][0] == "SA_RW_SUBSTITUTION"
 
 
-class TestRatedMdbGuarantorTable2B:
-    """(c) Rated non-named MDB guarantor → Table 2B. Pre-fix: institution misroute."""
+class TestNonNamedMdbGuarantorRegimeSplit:
+    """(c) Non-named MDB guarantor — Table 2B under B31, institutions under CRR.
 
-    def test_rated_mdb_cqs2_guarantor_substitutes_at_table_2b_value(
+    Revised by P1.253. The original version of this class pinned the CRR arm at
+    Table 2B CQS 2 = 30%, which CRR Art. 117(1) refutes: a non-named MDB "shall
+    be treated in the same manner as exposures to institutions" and CRR has no
+    MDB table, so the CRR arm belongs on Art. 120 Table 3 (CQS 2 = 50%). The
+    Table-2B adoption that this class exists to pin is now asserted on the B31
+    arm, where an unrated MDB discriminates cleanly: Table 2B's 50% unrated row
+    versus the institution ECRA/SCRA dispatch (Grade-C fallback 150%).
+    """
+
+    def test_rated_mdb_cqs2_guarantor_crr_substitutes_at_institution_table_3(
         self, crr_config: CalculationConfig
     ) -> None:
-        """CRR: a rated non-named MDB guarantor (CQS 2) substitutes at the
-        MDB Table 2B value — 30% (MDB_RISK_WEIGHTS_TABLE_2B[CQS2]).
+        """CRR: a rated non-named MDB guarantor (CQS 2) substitutes at 50%.
 
-        Today class "mdb" routes through the INSTITUTION branch: CRR Art. 120
-        Table 3 CQS 2 = 50%. The SA-side reference implementation prices MDB
-        guarantors from Table 2B ahead of the institution branch; the shared
-        expression must do the same on the IRB path.
-
-        (CRR arm only — under B31 the institution-ECRA CQS 2 weight coincides
-        with Table 2B CQS 2 at 30%, so a B31 arm would not discriminate.)
+        CRR Art. 117(1): non-named MDBs take the institution treatment — Art. 120
+        Table 3 CQS 2 = 50%. The PS1/26 Table 2B 30% does not apply under CRR.
 
         Arrange: fully-guaranteed FIRB corporate exposure (borrower RW 0.80),
                  guarantor entity_type="mdb", CQS 2.
         Act:     apply_guarantee_substitution under CRR.
-        Assert:  guarantor_rw = 0.30, rwa = 300,000,
+        Assert:  guarantor_rw = 0.50, rwa = 500,000,
                  guarantee_status = "SA_RW_SUBSTITUTION".
 
-        PRE-FIX: guarantor_rw = 0.50 (INSTITUTION_RISK_WEIGHTS_CRR[CQS2] via the
-        institution misroute) → rwa = 500,000 → FAILS on both pins.
+        Pre-P1.253: guarantor_rw = 0.30 → rwa = 300,000 (200,000 of RWA relief
+        Art. 117(1) does not permit).
         """
         lf = _guaranteed_irb_frame(guarantor_entity_type="mdb", guarantor_cqs=2)
 
         result = apply_guarantee_substitution(lf, crr_config).collect()
 
         actual_rw = result["guarantor_rw"][0]
-        assert actual_rw == pytest.approx(EXPECTED_MDB_CQS2_RW, rel=1e-9), (
+        assert actual_rw == pytest.approx(EXPECTED_CRR_MDB_CQS2_RW, rel=1e-9), (
             f"Rated non-named MDB guarantor CQS 2 should substitute at "
-            f"{EXPECTED_MDB_CQS2_RW:.2f} (MDB_RISK_WEIGHTS_TABLE_2B Table 2B). "
-            f"Got {actual_rw!r} — 0.50 means class 'mdb' is still priced from "
-            f"INSTITUTION_RISK_WEIGHTS_CRR (Art. 120 Table 3) instead of Table 2B."
+            f"{EXPECTED_CRR_MDB_CQS2_RW:.2f} under CRR (Art. 117(1) institution "
+            f"treatment → Art. 120 Table 3). Got {actual_rw!r} — 0.30 means the "
+            f"PS1/26-only Table 2B is still applied under CRR."
         )
-        assert result["rwa"][0] == pytest.approx(EAD * EXPECTED_MDB_CQS2_RW, rel=1e-9)
+        assert result["rwa"][0] == pytest.approx(EAD * EXPECTED_CRR_MDB_CQS2_RW, rel=1e-9)
+        assert result["guarantee_status"][0] == "SA_RW_SUBSTITUTION"
+
+    def test_unrated_mdb_guarantor_b31_substitutes_at_table_2b_value(
+        self, b31_config: CalculationConfig
+    ) -> None:
+        """B31: an unrated non-named MDB guarantor substitutes at Table 2B's 50%.
+
+        PS1/26 Art. 117(1)(b): the dedicated MDB Table 2B unrated row is 50%.
+        This is the band that proves the MDB branch (not the institution branch)
+        prices the row: the institution ECRA path would send a null-CQS guarantor
+        to the SCRA dispatch, whose Grade-C fallback is 150% — above the 0.80
+        borrower RW, so the guarantee would be dropped as non-beneficial.
+
+        Arrange: fully-guaranteed FIRB corporate exposure (borrower RW 0.80),
+                 guarantor entity_type="mdb", no CQS, no SCRA grade.
+        Act:     apply_guarantee_substitution under Basel 3.1.
+        Assert:  guarantor_rw = 0.50, rwa = 500,000,
+                 guarantee_status = "SA_RW_SUBSTITUTION".
+        """
+        lf = _guaranteed_irb_frame(guarantor_entity_type="mdb", guarantor_cqs=None)
+
+        result = apply_guarantee_substitution(lf, b31_config).collect()
+
+        actual_rw = result["guarantor_rw"][0]
+        assert actual_rw == pytest.approx(EXPECTED_B31_MDB_UNRATED_RW, rel=1e-9), (
+            f"Unrated non-named MDB guarantor should substitute at "
+            f"{EXPECTED_B31_MDB_UNRATED_RW:.2f} under B31 (PS1/26 Table 2B unrated "
+            f"row). Got {actual_rw!r} — 1.50 means the row was priced by the "
+            f"institution SCRA dispatch instead of Table 2B."
+        )
+        assert result["rwa"][0] == pytest.approx(EAD * EXPECTED_B31_MDB_UNRATED_RW, rel=1e-9)
         assert result["guarantee_status"][0] == "SA_RW_SUBSTITUTION"

@@ -183,12 +183,24 @@ Art. 117(1) also names four non-0% MDBs: Inter-American Investment Corporation, 
 Trade and Development Bank, Central American Bank for Economic Integration, and CAF —
 Development Bank of Latin America.
 
-!!! warning "Code Divergence (D3.39)"
-    The code defines a separate `MDB_RISK_WEIGHTS_TABLE_2B` in `engine/sa/crr_risk_weight_tables.py` with
-    CQS 2 = 30% and unrated = 50%. This is incorrect for CRR — these are the **Basel 3.1
-    Table 2B** values (PRA PS1/26 Art. 117(1)(a)). Under CRR, non-named MDBs should use the
-    institution tables (Art. 120 Table 3: CQS 2 = **50%**, matching other institutions). The
-    30% value reflects the same misattribution identified in D1.30.
+!!! success "Code Divergence (D3.39) — resolved"
+    `MDB_RISK_WEIGHTS_TABLE_2B` (CQS 2 = 30%, unrated = 50%) holds the **Basel 3.1**
+    Table 2B values (PRA PS1/26 Art. 117(1)(a)) despite living in
+    `engine/sa/crr_risk_weight_tables.py`, and it is now read on the Basel 3.1 arm only.
+    Both CRR pricing paths route non-named MDBs to the institution tables (Art. 120
+    Table 3 rated: CQS 2 = **50%**; Art. 121 unrated), with the short-term preferential
+    excluded: the direct exposure path in
+    `sa/risk_weights.py::_apply_crr_risk_weight_overrides`, and — since P1.253 — the
+    guarantor / RWSM path in `sa/guarantor_rw.py::build_guarantor_rw_expr`. The unrated
+    guarantor case takes the conservative Art. 121 100% fallback because no
+    guarantor-sovereign CQS join exists in the CRM column production (the same
+    documented approximation as for unrated PSE / RGLA guarantors).
+
+    Remaining cosmetic gap: the module *name* still implies a CRR home for a PS1/26
+    table, and the entity-level SA-RW **preview** used to rank facility-share
+    counterparties (`build_entity_rw_expr`) still prices non-named MDBs from Table 2B
+    under both regimes — a deliberate, documented preview approximation (it is
+    non-binding: the selected counterparty is then priced by the full pipeline).
 
 !!! info "Basel 3.1 Change"
     PRA PS1/26 Art. 117(1) introduces a **dedicated MDB risk weight table (Table 2B)**,

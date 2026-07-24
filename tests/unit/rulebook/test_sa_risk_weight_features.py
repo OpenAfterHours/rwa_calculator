@@ -52,6 +52,9 @@ _FEATURE_MATRIX = [
     ("sa_revised_defaulted_treatment", False, True),
     ("sa_currency_mismatch_multiplier", False, True),
     ("sa_due_diligence_override", False, True),
+    # P1.281: PS1/26 Art. 114(2A) has no CRR counterpart (CRR Art. 114 has no
+    # paragraph 2A), so the central-bank/sovereign CQS read-across is B31-only.
+    ("central_bank_uses_sovereign_cqs", False, True),
 ]
 
 
@@ -62,3 +65,17 @@ def test_sa_risk_weight_feature_values_per_regime(
     # Arrange / Act / Assert
     assert _CRR_PACK.feature(name) is crr_enabled
     assert _B31_PACK.feature(name) is b31_enabled
+
+
+def test_ecb_zero_rw_is_regime_invariant_and_not_feature_gated() -> None:
+    """P1.281: Art. 114(3) exists in BOTH frameworks, so it carries no Feature.
+
+    The ECB 0% is a common-pack scalar rather than a regime Feature precisely
+    because CRR Art. 114(3) and PS1/26 Art. 114(3) are identically worded. A
+    Feature here would let one regime silently lose the provision.
+    """
+    # Arrange / Act / Assert — same cited value resolves under both regimes
+    assert float(_CRR_PACK.scalar_param("ecb_zero_rw").value) == 0.0
+    assert _CRR_PACK.scalar("ecb_zero_rw") == _B31_PACK.scalar("ecb_zero_rw")
+    citation = _CRR_PACK.entry("ecb_zero_rw").citation
+    assert citation.article == "114"

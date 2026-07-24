@@ -202,6 +202,25 @@ class TestFIRBFixedMaturityElectionOff:
         # Assert — Art. 162(2) five-year cap, not the fixed 2.5y
         assert m == pytest.approx(5.0)
 
+    def test_null_maturity_date_uses_the_fallback_default_not_the_election(self) -> None:
+        """Null ``maturity_date``, election OFF → the 2.5y *fallback* default still applies.
+
+        The fallback default (last rung of the maturity chain) and the elected Art. 162(1)
+        value are the same number, so on exactly these rows a regression that made the
+        election fire unconditionally would be invisible — the election-OFF rows able to
+        detect that are the date-derived ones above (2.0y). This test pins the other half:
+        that the 2.5 on a null-date row is produced by the **fallback**, so the fallback rung
+        cannot be deleted or re-pointed at ``firb_fixed_maturity`` and still look correct.
+        """
+        # Arrange — nothing to derive M from, election off
+        lf = _irb_frame(maturity_date=None)
+
+        # Act
+        m = _maturity(lf, _crr_config())
+
+        # Assert — fallback default, reached without the Art. 162(1) election
+        assert m == pytest.approx(2.5)
+
 
 class TestFIRBFixedMaturityRegimeGate:
     """PS1/26 Art. 162(1) is "[Note: Provision left blank]" — the election is inert."""

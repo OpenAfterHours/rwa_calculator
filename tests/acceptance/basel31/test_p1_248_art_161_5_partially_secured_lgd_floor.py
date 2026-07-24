@@ -109,7 +109,7 @@ HC_NON_FINANCIAL: float = 0.40
 # ---------------------------------------------------------------------------
 
 
-def _expected_rwa(lgd: float, *, maturity: float = 3.0) -> float:
+def _expected_rwa(lgd: float, *, maturity: float = 3.0, ead: float = EAD) -> float:
     """RWA for the shared corporate A-IRB row at a given floored LGD.
 
     Reproduces CRR/PS1-26 Art. 153(1) from first principles so the expected
@@ -130,7 +130,7 @@ def _expected_rwa(lgd: float, *, maturity: float = 3.0) -> float:
     k = lgd * nd.cdf(inner) - OWN_PD * lgd
     b = (0.11852 - 0.05478 * math.log(OWN_PD)) ** 2
     ma = (1.0 + (maturity - 2.5) * b) / (1.0 - 1.5 * b)
-    return k * 12.5 * 1.0 * EAD * ma
+    return k * 12.5 * 1.0 * ead * ma
 
 
 def _blend(secured: float, lgds: float) -> float:
@@ -166,6 +166,37 @@ SINGLE_TYPE_FLOOR: dict[str, float] = {
     "L-OPHYS": LGDS_OTHER_PHYSICAL,
     "L-RE": LGDS_IMMOVABLE,
 }
+
+# ---------------------------------------------------------------------------
+# Art. 230(1) exposure basis: E' = E x (1 + HE) with E = the CCF=100% value
+# ---------------------------------------------------------------------------
+# An undrawn committed facility separates the two candidate denominators: the
+# Art. 223(4) CRM basis E is the full 1,000,000 nominal, while the post-CCF EAD
+# is only 400,000. Every LGDS sits below every LGDU, so where the recognised
+# collateral fits inside the post-CCF EAD — as the 200,000 cash below does —
+# weighting the secured share by that smaller basis *lowers* the floor beneath
+# the article: the pre-fix engine returned 12.5% here against the mandated 20%.
+# (The old denominator erred in both directions; above the post-CCF EAD the
+# unsecured weight clipped to zero and the floor came out too HIGH instead —
+# neither is a convex combination. tests/unit/test_lgd_floor_blended.py::
+# TestArt2301ExposureBasisDenominator pins both regimes.)
+UNDRAWN_REF: str = "F-L-UNDR_UNDRAWN"
+UNDRAWN_LIMIT: float = 1_000_000.0
+UNDRAWN_CCF: float = 0.40  # PS1/26 Art. 111(1) Table A1 Row 5 — risk_type "OC"
+UNDRAWN_EAD_GROSS: float = UNDRAWN_LIMIT * UNDRAWN_CCF  # 400,000
+UNDRAWN_CASH: float = 200_000.0  # GBP cash: HC = 0, so ES = market value
+UNDRAWN_HE: float = 0.0  # not an SFT — no exposure-side volatility haircut
+
+# LGD* = LGDU x EU / (E x (1 + HE)) + LGDS x ES / (E x (1 + HE))
+#      = 25% x 800,000/1,000,000 + 0% x 200,000/1,000,000 = 20%
+EXPECTED_UNDRAWN_FLOOR: float = LGDU * (
+    (UNDRAWN_LIMIT * (1.0 + UNDRAWN_HE) - UNDRAWN_CASH) / (UNDRAWN_LIMIT * (1.0 + UNDRAWN_HE))
+) + LGDS_FINANCIAL * (UNDRAWN_CASH / (UNDRAWN_LIMIT * (1.0 + UNDRAWN_HE)))
+
+# What the pre-fix ead_gross denominator produced: 25% x 200,000/400,000.
+PRE_FIX_UNDRAWN_FLOOR: float = LGDU * (
+    (UNDRAWN_EAD_GROSS - UNDRAWN_CASH) / UNDRAWN_EAD_GROSS
+) + LGDS_FINANCIAL * (UNDRAWN_CASH / UNDRAWN_EAD_GROSS)
 
 
 # ---------------------------------------------------------------------------
@@ -268,6 +299,65 @@ def _build_bundle() -> RawDataBundle:
             }
         )
 
+    # Art. 230(1) denominator scenario: a wholly undrawn committed facility, so
+    # the synthetic F-L-UNDR_UNDRAWN row carries nominal 1,000,000 at CCF 40%
+    # (ead_gross 400,000, ead_for_crm 1,000,000). The facility itself carries the
+    # A-IRB own LGD and the collateral-data attestation, exactly as the drawn
+    # loans above do — no loan row exists, so the whole limit is headroom.
+    counterparties.append(
+        {
+            "counterparty_reference": "CP-L-UNDR",
+            "counterparty_name": "P1.248 A-IRB Corporate (undrawn commitment)",
+            "entity_type": "corporate",
+            "country_code": "GB",
+            "default_status": False,
+            "is_financial_sector_entity": False,
+            "apply_fi_scalar": False,
+            "annual_revenue": ANNUAL_REVENUE,
+        }
+    )
+    facilities.append(
+        {
+            "facility_reference": "F-L-UNDR",
+            "counterparty_reference": "CP-L-UNDR",
+            "currency": "GBP",
+            "value_date": _REPORTING_DATE,
+            "maturity_date": _MATURITY_DATE,
+            "limit": UNDRAWN_LIMIT,
+            "committed": True,
+            "seniority": "senior",
+            # PS1/26 Art. 111(1) Table A1 Row 5 "other commitments" -> CCF 40%.
+            "risk_type": "OC",
+            "lgd": OWN_LGD,
+            "has_sufficient_collateral_data": True,
+        }
+    )
+    ratings.append(
+        {
+            "rating_reference": "RTG-L-UNDR",
+            "counterparty_reference": "CP-L-UNDR",
+            "rating_type": "internal",
+            "pd": OWN_PD,
+            "model_id": _MODEL_ID,
+            "rating_date": _REPORTING_DATE,
+        }
+    )
+    collateral.append(
+        {
+            "collateral_reference": "C-L-UNDR",
+            "collateral_type": "cash",
+            "currency": "GBP",
+            "market_value": UNDRAWN_CASH,
+            # Pledged at the facility, which is where the undrawn row lives.
+            "beneficiary_type": "facility",
+            "beneficiary_reference": "F-L-UNDR",
+            "is_eligible_financial_collateral": True,
+            "is_eligible_irb_collateral": True,
+            "is_airb_model_collateral": True,
+            "property_type": None,
+        }
+    )
+
     collateral_df = pl.DataFrame(collateral, schema=dtypes_of(COLLATERAL_SCHEMA)).with_columns(
         # No Art. 237-239 maturity mismatch.
         pl.Series("original_maturity_years", [10.0] * len(collateral), dtype=pl.Float64)
@@ -315,8 +405,8 @@ def irb_rows() -> dict[str, dict]:
         "advanced_irb model permission"
     )
     rows = {row["exposure_reference"]: row for row in results.irb_results.collect().to_dicts()}
-    assert set(rows) == {label for label, *_ in _SCENARIOS}, (
-        f"Expected one A-IRB row per scenario, got {sorted(rows)}"
+    assert set(rows) == {label for label, *_ in _SCENARIOS} | {UNDRAWN_REF}, (
+        f"Expected one A-IRB row per scenario plus the undrawn commitment row, got {sorted(rows)}"
     )
     return rows
 
@@ -443,4 +533,113 @@ class TestP1248Art1615PartiallySecuredLGDFloor:
         )
         assert row["rwa"] == pytest.approx(PRE_FIX_RWA, rel=1e-8), (
             f"L-UNSEC: RWA must stay at {PRE_FIX_RWA:,.2f}, got {row['rwa']:,.2f}"
+        )
+
+
+class TestP1248Art2301ExposureBasisIsPreCCF:
+    """PS1/26 Art. 230(1): LGD* divides by E x (1 + HE), E = the CCF=100% value.
+
+    The Art. 161(5)(b) blend inherits the Art. 230(1) denominator, and
+    Art. 223(4) fixes E at 100% of nominal for off-balance-sheet items. A
+    partially collateralised undrawn commitment is the only shape that separates
+    that basis from the post-CCF ``ead_gross``; because every substituted LGDS
+    lies below LGDU, the smaller divisor understates the floor.
+    """
+
+    def test_undrawn_row_shape_is_as_designed(self, irb_rows: dict[str, dict]) -> None:
+        """
+        Guard: the row really is an A-IRB commitment with CCF < 100%.
+
+        Arrange: the wholly undrawn 1,000,000 committed facility.
+        Act:     read approach / CCF / both EAD bases / recognised collateral.
+        Assert:  A-IRB, CCF 40%, ead_gross 400,000 vs ead_for_crm 1,000,000,
+                 HE = 0 and ES = 200,000 — so a floor failure below is a
+                 denominator defect, not a CCF, CRM or routing defect.
+        """
+        row = irb_rows[UNDRAWN_REF]
+
+        assert row["is_airb"] is True, (
+            f"{UNDRAWN_REF} must route to A-IRB, got approach={row['approach']}"
+        )
+        assert row["ccf"] == pytest.approx(UNDRAWN_CCF), (
+            f"CCF must be the Table A1 Row 5 {UNDRAWN_CCF:.0%} for risk_type 'OC', got {row['ccf']}"
+        )
+        assert row["ead_gross"] == pytest.approx(UNDRAWN_EAD_GROSS), (
+            f"post-CCF ead_gross must be {UNDRAWN_EAD_GROSS:,.0f}, got {row['ead_gross']:,.2f}"
+        )
+        assert row["ead_for_crm"] == pytest.approx(UNDRAWN_LIMIT), (
+            f"Art. 223(4) CRM basis must be the full {UNDRAWN_LIMIT:,.0f} nominal, "
+            f"got {row['ead_for_crm']:,.2f}"
+        )
+        assert row["exposure_volatility_haircut"] == pytest.approx(UNDRAWN_HE), (
+            f"a lending commitment carries no Art. 223(5) exposure haircut, "
+            f"got {row['exposure_volatility_haircut']}"
+        )
+        assert row["total_collateral_for_lgd"] == pytest.approx(UNDRAWN_CASH), (
+            f"ES must be the full {UNDRAWN_CASH:,.0f} GBP cash (HC = 0), "
+            f"got {row['total_collateral_for_lgd']:,.2f}"
+        )
+
+    def test_floor_divides_by_the_pre_ccf_basis(self, irb_rows: dict[str, dict]) -> None:
+        """
+        Art. 230(1): the secured share is ES / (E x (1 + HE)), not ES / EAD.
+
+        Arrange: the undrawn commitment — E = 1,000,000, ES = 200,000 cash.
+        Act:     read lgd_floored.
+        Assert:  20.0% = 25% x 800,000/1,000,000 + 0% x 200,000/1,000,000.
+        """
+        actual = irb_rows[UNDRAWN_REF]["lgd_floored"]
+
+        assert actual == pytest.approx(EXPECTED_UNDRAWN_FLOOR, rel=1e-12), (
+            f"Art. 230(1) floor must be {EXPECTED_UNDRAWN_FLOOR:.4f} on the "
+            f"{UNDRAWN_LIMIT:,.0f} pre-CCF basis, got {actual:.6f}"
+        )
+
+    def test_floor_is_not_the_post_ccf_under_floor(self, irb_rows: dict[str, dict]) -> None:
+        """
+        Anti-confound: not the pre-fix ead_gross answer, not the flat limb.
+
+        Arrange: the same undrawn commitment.
+        Act:     read lgd_floored.
+        Assert:  strictly above the 12.5% the post-CCF denominator produced —
+                 the defect was anti-conservative, so a silent revert cannot
+                 pass — and strictly below the 25% flat (a) limb, which a
+                 "give up and use LGDU" fix would produce.
+        """
+        actual = irb_rows[UNDRAWN_REF]["lgd_floored"]
+
+        assert actual != pytest.approx(PRE_FIX_UNDRAWN_FLOOR, rel=1e-9), (
+            f"floor must have moved off the pre-fix post-CCF value "
+            f"{PRE_FIX_UNDRAWN_FLOOR:.4f}, got {actual:.6f}"
+        )
+        assert actual > PRE_FIX_UNDRAWN_FLOOR, (
+            f"the post-CCF denominator was anti-conservative: the corrected floor "
+            f"must exceed {PRE_FIX_UNDRAWN_FLOOR:.4f}, got {actual:.6f}"
+        )
+        assert actual < LGDU, (
+            f"floor must stay below the flat {LGDU:.0%} — 20% of the basis is "
+            f"secured by cash, got {actual:.6f}"
+        )
+
+    def test_undrawn_rwa_matches_hand_calc(self, irb_rows: dict[str, dict]) -> None:
+        """
+        The corrected floor flows through to capital on the post-CCF EAD.
+
+        Arrange: the same undrawn commitment (EAD = 400,000 post-CCF).
+        Act:     read rwa.
+        Assert:  matches the independent Art. 153(1) hand-calc at LGD = 20% and
+                 exceeds the RWA the pre-fix 12.5% floor produced — the fix
+                 raises capital, as an anti-conservative defect must.
+        """
+        expected = _expected_rwa(EXPECTED_UNDRAWN_FLOOR, ead=UNDRAWN_EAD_GROSS)
+        pre_fix = _expected_rwa(PRE_FIX_UNDRAWN_FLOOR, ead=UNDRAWN_EAD_GROSS)
+        actual = irb_rows[UNDRAWN_REF]["rwa"]
+
+        assert actual == pytest.approx(expected, rel=1e-8), (
+            f"{UNDRAWN_REF}: RWA must be {expected:,.2f} at the {EXPECTED_UNDRAWN_FLOOR:.4f} "
+            f"floor on EAD {UNDRAWN_EAD_GROSS:,.0f}, got {actual:,.2f}"
+        )
+        assert actual > pre_fix, (
+            f"{UNDRAWN_REF}: RWA must exceed the pre-fix {pre_fix:,.2f} — the "
+            f"under-floor understated capital"
         )

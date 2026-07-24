@@ -17,6 +17,8 @@ full edge shape and drops calculator-internal inputs such as
 Derived pads mirror upstream stage outputs:
 - ``ead_final`` falls back to a legacy ``ead`` column when present
 - ``ead_gross`` mirrors ``ead_final`` (no CRM reduction)
+- ``ead_for_crm`` mirrors ``ead_gross`` (pure on-balance-sheet row: the
+  Art. 223(4) CCF=100% basis and the post-CCF EAD coincide)
 - ``lgd_post_crm`` mirrors ``lgd`` (no collateral adjustment)
 """
 
@@ -54,6 +56,10 @@ _SIMPLE_DEFAULTS: dict[str, pl.Expr] = {
     # neutral null matches the no-SME derivation result (is_sme=False).
     "turnover_m": pl.lit(None, dtype=pl.Float64),
     "total_collateral_for_lgd": pl.lit(0.0),
+    # CRR Art. 223(5) exposure-side volatility haircut: non-zero only on SFT
+    # rows lending out a debt security, so 0.0 is the production-realistic
+    # neutral for a hand-rolled lending frame (E' = E × (1 + HE) = E).
+    "exposure_volatility_haircut": pl.lit(0.0),
     "crm_alloc_financial": pl.lit(0.0),
     "crm_alloc_covered_bond": pl.lit(0.0),
     "crm_alloc_receivables": pl.lit(0.0),
@@ -90,8 +96,15 @@ def pad_crm_exit_defaults(lf: pl.LazyFrame) -> pl.LazyFrame:
         derived.append(ead_final_src.alias("ead_final"))
     else:
         ead_final_src = pl.lit(0.0)
-    if "ead_gross" not in names:
+    if "ead_gross" in names:
+        ead_for_crm_src = pl.col("ead_gross")
+    else:
         derived.append(ead_final_src.alias("ead_gross"))
+        ead_for_crm_src = ead_final_src
+    # CRR Art. 223(4) CCF=100% CRM basis. Mirrors ead_gross: the two are equal
+    # by construction on the pure on-balance-sheet rows hand frames model.
+    if "ead_for_crm" not in names:
+        derived.append(ead_for_crm_src.alias("ead_for_crm"))
     if "lgd_post_crm" not in names:
         derived.append(pl.col("lgd").alias("lgd_post_crm"))
     if derived:

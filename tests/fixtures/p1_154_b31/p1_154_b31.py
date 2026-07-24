@@ -18,8 +18,8 @@ Key responsibilities:
 Scenario rationale (Basel 3.1 Art. 118 vs Art. 117(1)(a) Table 2B):
 
   entity_type="international_org" (IMF, Art. 118):
-    PRA PS1/26 Art. 118 lists named international organisations — IMF, BIS, ECB, EU, IBRD,
-    IFC, IADB, ADB, AfDB, CEB, NIB, CDB, EBRD, EFSI, ESM, EFSF — that receive 0% risk weight
+    PRA PS1/26 Art. 118(1) lists a closed five-entry list of named international
+    organisations — the EU, IMF, BIS, EFSF and ESM — that receive 0% risk weight
     unconditionally, regardless of CQS or credit assessment.  The "international_org" entity_type
     maps to ExposureClass.INTERNATIONAL_ORGANISATION in the classifier, bypassing the MDB/
     institution branch entirely.

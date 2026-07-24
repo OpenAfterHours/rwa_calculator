@@ -273,6 +273,19 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=True,
         citation=Citation("PS1/26", "110A", "due-diligence RW override (RW may only increase)"),
     ),
+    # PS1/26 Art. 114(2A) (new under Basel 3.1 — see packs/crr.py for the CRR side):
+    # "Exposures to a central bank for which a credit assessment by a nominated ECAI
+    # is not available shall be treated in accordance with paragraph 2 if a credit
+    # assessment by a nominated ECAI is available for the central government of the
+    # jurisdiction of the central bank." The central bank's OWN assessment still wins
+    # where it exists, and where neither is available the Art. 114(1) 100% stands.
+    "central_bank_uses_sovereign_cqs": Feature(
+        name="central_bank_uses_sovereign_cqs",
+        enabled=True,
+        citation=Citation(
+            "PS1/26", "114", "(2A) unrated central bank takes its government's ECAI CQS"
+        ),
+    ),
     # CRR Art. 113(6) core-UK-group 0% RW — retained under Basel 3.1 (PRA PS1/26).
     # Same individual-basis treatment and same 0% value as CRR; enabled so the SA
     # final-RW override fires on eligible solo intragroup rows. See packs/crr.py
@@ -335,7 +348,7 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("0.55"),
         citation=Citation("PS1/26", "124H", "CRE preferential RW up to 55% of value"),
     ),
-    # PRA PS1/26 Art. 111 Table A1 SA CCFs: OC 40% (Row 5) + LR/UCC 10% (Row 6)
+    # PRA PS1/26 Art. 111 Table A1 SA CCFs: OC 40% (Row 5) + LR/UCC 10% (Row 7)
     # override the CRR values; FR/FRC/MR/MLR unchanged. Full table (b31 = common
     # + b31 overlay, so it cannot partially inherit the crr entry).
     "sa_ccf": LookupTable(
@@ -551,6 +564,20 @@ ENTRIES: dict[str, RuleEntry] = {
         name="b31_high_risk_class_applicable",
         enabled=True,
         citation=Citation("PS1/26", "128", "Basel 3.1 re-introduces the 150% high-risk class"),
+    ),
+    # PS1/26 Art. 147(3)(f) assigns exposures to multilateral development banks —
+    # ALL of them, with no 0%-risk-weight qualifier (that binds only the (g)
+    # international-organisations limb) — to the central-government exposure
+    # class, so the CRR Art. 147(4)(c) split of non-named MDBs into the
+    # institutions class does NOT survive into Basel 3.1. See also
+    # B31_SOVEREIGN_LIKE_ENTITY_TYPES (data/schemas.py), which keeps both mdb and
+    # mdb_named quasi-sovereign for the Art. 147A(1)(a) SA-only restriction.
+    "crr_non_named_mdb_institution_irb_class": Feature(
+        name="crr_non_named_mdb_institution_irb_class",
+        enabled=False,
+        citation=Citation(
+            "PS1/26", "147", "Art. 147(3)(f) assigns all MDBs to the quasi-sovereign class"
+        ),
     ),
     # Basel 3.1 Art. 124E(1)(b)/(2): natural-person RRE re-routed to income-
     # producing whole-loan (Art. 124G) above the three-property limit.

@@ -103,74 +103,98 @@ def basel31_sa_only_config() -> CalculationConfig:
 class TestPDFloors:
     """Tests for per-exposure-class PD floor expressions.
 
-    CRR: Uniform 0.03% floor for all exposure classes (Art. 163).
+    CRR: 0.03% for corporates and institutions (Art. 160(1): "The PD of an
+    exposure to a corporate or an institution shall be at least 0,03 %") and for
+    retail (the separate Art. 163(1)). Central governments / central banks are in
+    NEITHER article, so they carry no PD floor (P1.277).
     Basel 3.1: Differentiated floors (CRE30.55):
         - Corporate/SME: 0.05%
         - Retail mortgage: 0.05%
         - QRRE revolvers: 0.10%, transactors: 0.03%
         - Retail other: 0.05%
+
+    These are isolated expression tests on hand-built frames, so they pass
+    ``has_transactor_col=False`` — the documented mode for frames that do not
+    carry ``is_qrre_transactor`` (the pipeline path always does; the column is
+    declared on the classifier / CRM / IRB-branch edge contracts).
     """
 
-    def test_crr_uniform_floor_corporate(
+    def test_crr_corporate_floor(
         self,
         crr_config: CalculationConfig,
     ) -> None:
-        """CRR: Corporate PD floor is 0.03%."""
+        """CRR: Corporate PD floor is 0.03% (Art. 160(1))."""
         lf = pl.LazyFrame({"exposure_class": ["CORPORATE"], "pd": [0.001]})
-        result = lf.with_columns(_pd_floor_expression(crr_config).alias("pd_floor")).collect()
+        result = lf.with_columns(
+            _pd_floor_expression(crr_config, has_transactor_col=False).alias("pd_floor")
+        ).collect()
         assert result["pd_floor"][0] == pytest.approx(0.0003)
 
-    def test_crr_uniform_floor_retail_mortgage(
+    def test_crr_retail_mortgage_floor(
         self,
         crr_config: CalculationConfig,
     ) -> None:
-        """CRR: Retail mortgage PD floor is 0.03% (same as corporate)."""
+        """CRR: Retail mortgage PD floor is 0.03% (Art. 163(1), same rate)."""
         lf = pl.LazyFrame(
             {
                 "exposure_class": ["RETAIL_MORTGAGE"],
                 "pd": [0.001],
             }
         )
-        result = lf.with_columns(_pd_floor_expression(crr_config).alias("pd_floor")).collect()
+        result = lf.with_columns(
+            _pd_floor_expression(crr_config, has_transactor_col=False).alias("pd_floor")
+        ).collect()
         assert result["pd_floor"][0] == pytest.approx(0.0003)
 
-    def test_crr_uniform_floor_qrre(
+    def test_crr_qrre_floor(
         self,
         crr_config: CalculationConfig,
     ) -> None:
-        """CRR: QRRE PD floor is 0.03% (uniform across all classes)."""
+        """CRR: QRRE PD floor is 0.03% (Art. 163(1); no transactor split)."""
         lf = pl.LazyFrame(
             {
                 "exposure_class": ["RETAIL_QRRE"],
                 "pd": [0.001],
             }
         )
-        result = lf.with_columns(_pd_floor_expression(crr_config).alias("pd_floor")).collect()
+        result = lf.with_columns(
+            _pd_floor_expression(crr_config, has_transactor_col=False).alias("pd_floor")
+        ).collect()
         assert result["pd_floor"][0] == pytest.approx(0.0003)
 
-    def test_crr_uniform_floor_all_classes_equal(
+    def test_crr_floor_by_exposure_class(
         self,
         crr_config: CalculationConfig,
     ) -> None:
-        """CRR: All exposure classes receive the same 0.03% PD floor."""
-        classes = [
-            "CORPORATE",
-            "CORPORATE_SME",
-            "RETAIL_MORTGAGE",
-            "RETAIL_QRRE",
-            "RETAIL_OTHER",
-            "INSTITUTION",
-        ]
+        """CRR: 0.03% for every class Art. 160(1) / 163(1) reaches; CGCB unfloored.
+
+        Replaces an earlier ``all_classes_equal`` assertion that pinned a uniform
+        floor across every class — the premise CRR Art. 160(1) refutes for central
+        governments and central banks (P1.277). The expectation is now per class.
+        """
+        expected: dict[str, float] = {
+            "CORPORATE": 0.0003,
+            "CORPORATE_SME": 0.0003,
+            "RETAIL_MORTGAGE": 0.0003,
+            "RETAIL_QRRE": 0.0003,
+            "RETAIL_OTHER": 0.0003,
+            "INSTITUTION": 0.0003,
+            # Art. 160(1) reaches corporates and institutions only; Art. 163(1)
+            # reaches retail. Neither reaches a central government.
+            "CENTRAL_GOVT_CENTRAL_BANK": 0.0,
+        }
         lf = pl.LazyFrame(
             {
-                "exposure_class": classes,
-                "pd": [0.001] * len(classes),
+                "exposure_class": list(expected),
+                "pd": [0.001] * len(expected),
             }
         )
-        result = lf.with_columns(_pd_floor_expression(crr_config).alias("pd_floor")).collect()
-        for i, cls_name in enumerate(classes):
+        result = lf.with_columns(
+            _pd_floor_expression(crr_config, has_transactor_col=False).alias("pd_floor")
+        ).collect()
+        for i, (cls_name, expected_floor) in enumerate(expected.items()):
             assert result["pd_floor"][i] == pytest.approx(
-                0.0003,
+                expected_floor,
                 abs=1e-8,
             ), f"CRR PD floor mismatch for {cls_name}"
 

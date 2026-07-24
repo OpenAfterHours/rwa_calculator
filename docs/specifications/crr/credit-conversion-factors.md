@@ -398,8 +398,9 @@ receivables commitments without a dedicated CCF.
     product-to-risk-type mapping table. The purchased-receivables Art. 166E(5)
     pathway (40% / 10% split based on UCC status) is also not implemented —
     see **IMPLEMENTATION_PLAN.md P2.32**. The UK residential mortgage
-    commitment (Row 4(b)) 50% CCF is applied only when `risk_type = MR` is
-    supplied; automatic enforcement for UK residential mortgage products is
+    commitment (Row 4(b)) 50% CCF is applied to any residential-flagged commitment
+    whose carrier CCF is neither 10% nor 100%, per Table A1 Row 4(b); automatic
+    derivation from a residential product type is
     tracked under **IMPLEMENTATION_PLAN.md P2.33**. Row 3 vs Row 4 COREP
     granularity is also a gap — see **P2.30**.
 

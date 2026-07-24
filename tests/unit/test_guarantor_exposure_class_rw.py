@@ -4,11 +4,14 @@ Unit tests for guarantor risk weight lookup using guarantor_exposure_class.
 Verifies that all valid entity types (sovereign, central_bank, bank, company,
 institution, corporate, mdb) correctly map to the right SA exposure class and
 produce correct guarantor risk weights. Also tests UK domestic sovereign
-treatment under Art. 114(3).
+treatment under Art. 114(4).
 
 References:
 - CRR Art. 114: CGCB risk weights
-- CRR Art. 114(3): 0% RW for domestic sovereign in domestic currency
+- CRR Art. 114(4): 0% RW for the UK central government and the Bank of England
+  denominated and funded in sterling (Art. 114(7) extends it to third-country
+  domestic currency). NOT Art. 114(3), which is the unconditional ECB 0% —
+  see tests/unit/test_p1_281_art_114_ecb_and_central_bank_cqs.py
 - CRR Art. 120-121: Institution risk weights
 - CRR Art. 122: Corporate risk weights
 """
@@ -178,17 +181,17 @@ class TestSAGuarantorExposureClassMapping:
 
 
 class TestSADomesticSovereignTreatment:
-    """Art. 114(3): UK sovereign guarantor in GBP → 0% RW regardless of CQS."""
+    """Art. 114(4): UK sovereign guarantor in GBP → 0% RW regardless of CQS."""
 
     def test_uk_sovereign_cqs3_gbp_zero_rw(self, crr_config: CalculationConfig) -> None:
-        """UK sovereign guarantor (CQS 3) in GBP should get 0% RW under Art. 114(3)."""
+        """UK sovereign guarantor (CQS 3) in GBP should get 0% RW under Art. 114(4)."""
         result = _sa_guarantee_result(
             "sovereign", 3, crr_config, guarantor_country_code="GB", currency="GBP"
         )
         assert result["guarantor_rw"][0] == pytest.approx(0.0)
 
     def test_uk_central_bank_cqs3_gbp_zero_rw(self, crr_config: CalculationConfig) -> None:
-        """UK central bank guarantor (CQS 3) in GBP should get 0% RW under Art. 114(3)."""
+        """UK central bank guarantor (CQS 3) in GBP should get 0% RW under Art. 114(4)."""
         result = _sa_guarantee_result(
             "central_bank", 3, crr_config, guarantor_country_code="GB", currency="GBP"
         )
@@ -234,10 +237,10 @@ class TestIRBGuarantorExposureClassMapping:
 
 
 class TestIRBDomesticSovereignTreatment:
-    """Art. 114(3): UK sovereign guarantor in GBP → 0% RW in IRB namespace."""
+    """Art. 114(4): UK sovereign guarantor in GBP → 0% RW in IRB namespace."""
 
     def test_uk_sovereign_cqs3_gbp_zero_rw(self, crr_config: CalculationConfig) -> None:
-        """UK sovereign guarantor (CQS 3) in GBP should get 0% SA RW under Art. 114(3)."""
+        """UK sovereign guarantor (CQS 3) in GBP should get 0% SA RW under Art. 114(4)."""
         result = _irb_guarantee_result(
             "sovereign", 3, crr_config, guarantor_country_code="GB", currency="GBP"
         )

@@ -24,7 +24,9 @@ References:
     - PRA PS1/26 Art. 147A(1)(a): sovereign restricted to SA under Basel 3.1.
     - PRA PS1/26 Art. 147A(1)(b): institution restricted to F-IRB under Basel 3.1.
     - PRA PS1/26 Art. 161(1)(aa): Basel 3.1 senior non-FSE F-IRB LGD = 40%.
-    - CRR Art. 160(1): uniform 0.03% PD floor for all IRB classes.
+    - CRR Art. 160(1): 0.03% PD floor for corporates and institutions ONLY — retail is
+      floored by the separate Art. 163(1) and central governments / central banks are in
+      neither article, so a CRR sovereign PD is unfloored (P1.277).
     - tests/fixtures/p2_36/p2_36.py: fixture constants and parquet generators.
 """
 
@@ -42,7 +44,9 @@ from tests.fixtures.p2_36.p2_36 import (
     EXPECTED_RW_B31_SOV_OVERRIDE,
     EXPECTED_RWA_B31_FLOORED,
     EXPECTED_RWA_B31_SOV_OVERRIDE,
+    EXPECTED_RWA_SOV_CRR_UNFLOORED,
     INSTITUTION_LOAN_REF,
+    PD_SOVEREIGN,
     SOVEREIGN_LOAN_REF,
 )
 from tests.fixtures.raw_bundle import make_raw_bundle
@@ -185,8 +189,14 @@ class TestOverrideRegressionDispatch:
         the exposure to F-IRB. Overriding the sovereign floor changes the PD floor and
         therefore the IRB RWA, proving the engine reads the sovereign field.
 
-        Default: sovereign floor = 0.0003 → PD floored to 0.0003 → some RWA_default
-        Override: sovereign floor = 0.001  → PD floored to 0.001  → RWA_override > RWA_default
+        Default: CRR sovereign floor = 0 → PD NOT floored, stays 0.0001 → RW ≈ 0.079842,
+            RWA ≈ 79,842. Art. 160(1) floors only corporates and institutions, so a
+            central government carries no PD floor under CRR (P1.277).
+        Override: sovereign floor = 0.001 → PD floored to 0.001 → RWA_override > RWA_default
+
+        This exposure is the repo's ONLY central-government IRB row with a sub-3bp
+        modelled PD, so its default arm is the regression guard for the unfloored
+        sovereign arm — hence the absolute pins below alongside the relative ones.
     """
 
     def test_institution_floor_override_drives_dispatch_not_fallback(self) -> None:
@@ -294,12 +304,14 @@ class TestOverrideRegressionDispatch:
 
         Arrange:
             One CRR config with IRB permissions; two rulepacks:
-            - default: pack sovereign PD floor == 0.0003
+            - default: pack sovereign PD floor == 0 (Art. 160(1) has no CGCB limb)
             - override: pack sovereign PD floor == 0.001 (injected)
         Act:
             Run the P2.36 sovereign exposure (SOV_P236, input PD=0.0001) through both rulepacks.
         Assert:
-            override → IRB RWA materially higher than default (floor lifted from 0.0003 to 0.001).
+            default  → pd_floored == 0.0001 (unfloored) and RWA ≈ 79,842 — the absolute
+                pin for the unfloored CRR sovereign arm (P1.277).
+            override → IRB RWA materially higher than default (floor lifted 0 → 0.001).
             Anti-regression: rwa_override != rwa_default (proves engine reads sovereign floor).
         """
         # Arrange — default CRR config with full IRB permissions
@@ -339,6 +351,28 @@ class TestOverrideRegressionDispatch:
 
         rwa_default = row_default["rwa"]
         rwa_override = row_override["rwa"]
+
+        # Absolute pin on the DEFAULT arm (P1.277): CRR Art. 160(1) floors only
+        # corporates and institutions, so this central-government exposure keeps its
+        # modelled 0.01% PD. This is the repo's only CGCB IRB row with a sub-3bp PD,
+        # so without these two assertions nothing in the suite would notice the
+        # sovereign arm regressing to the old 0.0003 floor — the relative
+        # assertions below all pass either way. Hand-calc (Art. 153(1), CGCB
+        # correlation ladder, CRR 1.06 scaling), PD 0.0001 / LGD 0.45 / M 2.5y:
+        #   R = 0.2394014975, b = 0.3882068111, MA = 2.3941212829,
+        #   K = 0.0060258057, RW = K × 12.5 × 1.06 = 0.0798419258
+        #   RWA = 0.0798419258 × 1,000,000 = 79,841.93
+        assert row_default["pd_floored"] == pytest.approx(PD_SOVEREIGN, rel=1e-9), (
+            f"P2.36-5 default: pd_floored should stay at the modelled {PD_SOVEREIGN} — "
+            f"CRR Art. 160(1) does not floor central governments. "
+            f"Got {row_default['pd_floored']}; 0.0003 means the sovereign arm has "
+            f"regressed to the pre-P1.277 uniform floor."
+        )
+        assert rwa_default == pytest.approx(EXPECTED_RWA_SOV_CRR_UNFLOORED, rel=1e-6), (
+            f"P2.36-5 default: rwa should be ≈{EXPECTED_RWA_SOV_CRR_UNFLOORED:,.0f} "
+            f"(RW 0.079842 × EAD 1,000,000 at the unfloored PD). "
+            f"Got {rwa_default:,.2f}; ≈153,102 means the PD was floored to 0.0003."
+        )
 
         # Anti-regression: the two arms must produce different RWA
         assert rwa_override != pytest.approx(rwa_default, rel=1e-3), (

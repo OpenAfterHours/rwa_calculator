@@ -17,15 +17,22 @@ References:
 
 from __future__ import annotations
 
+from datetime import date
+
 import polars as pl
 import pytest
 
 from rwa_calc.contracts.bundles import AggregatedResultBundle, CRMAdjustedBundle
+from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.contracts.edges import (
     AGGREGATOR_EXIT_EDGE,
     AGGREGATOR_SUMMARY_EDGES,
+    CRM_EXIT_CCR_EDGE,
+    CRM_EXIT_EDGE,
     FLOOR_IMPACT_EDGE,
     RAW_TABLE_EDGES,
+    RE_SPLIT_EXIT_CCR_EDGE,
+    RE_SPLIT_EXIT_EDGE,
     REPORTING_SURFACE,
     SUMMARY_BY_APPROACH_EDGE,
     SUMMARY_BY_CLASS_EDGE,
@@ -39,6 +46,7 @@ from rwa_calc.contracts.edges import (
     seal_lenient,
     sealed_edge_of,
 )
+from rwa_calc.engine.irb.formulas import _lgd_floor_blended_expression
 
 
 def _contract(**overrides: EdgeColumn) -> EdgeContract:
@@ -666,3 +674,124 @@ class TestAggregatorSummaryEdges:
         )
 
         assert bundle.summary_by_class is sealed_summary
+
+
+class TestUnguardedBlendedLGDFloorColumns:
+    """The A-IRB LGD* floor blend's unguarded column reads are edge-guaranteed.
+
+    ``engine/irb/formulas.py::_lgd_floor_blended_expression`` references its
+    input columns unconditionally — neither call site (``apply_irb_formulas``,
+    or ``apply_lgd_floor`` / ``_lgd_floored_expr`` in ``engine/irb/transforms``)
+    wraps them in a presence guard, unlike the sibling single-type floor
+    expressions which the callers gate on ``collateral_type``. A missing column
+    is therefore a ``ColumnNotFoundError`` at collect, not a fallback.
+
+    That is a deliberate choice (P1.248): the only sensible fallback for an
+    absent ``ead_for_crm`` is ``ead_gross``, which is exactly the
+    anti-conservative denominator PS1/26 Art. 230(1) forbids — a degraded mode
+    that silently reinstates the defect is worse than a contract error naming
+    the absent column. The guarantee that makes it safe is the edge contract,
+    so these tests make that guarantee self-enforcing rather than a docstring
+    claim: the column set is derived from the live expression, so widening the
+    expression's reads without checking the edges fails here.
+
+    References:
+        PRA PS1/26 Art. 230(1) — the exposure basis being divided by
+        docs/plans/engine-defensiveness-boundary-hardening.md — producer-sealed
+            contracts replace consumer-side presence guards
+    """
+
+    # Every edge an IRB calculator branch can be fed from: the CRM exit and the
+    # RE-split exit, each in its lending and CCR-bearing variant. All four
+    # re-spread ``_crm_added_columns()``, so a column required on one should be
+    # required on all four — asserted rather than assumed.
+    _IRB_INPUT_EDGES = (
+        CRM_EXIT_EDGE,
+        CRM_EXIT_CCR_EDGE,
+        RE_SPLIT_EXIT_EDGE,
+        RE_SPLIT_EXIT_CCR_EDGE,
+    )
+
+    # The ten columns as of P1.248. Pinned so that *widening* the expression is
+    # a deliberate act: add the column here only after confirming it is REQUIRED
+    # on all four edges above and updating the function's docstring.
+    _EXPECTED_READS = frozenset(
+        {
+            "ead_for_crm",
+            "exposure_volatility_haircut",
+            "total_collateral_for_lgd",
+            "exposure_class",
+            "crm_alloc_financial",
+            "crm_alloc_covered_bond",
+            "crm_alloc_receivables",
+            "crm_alloc_real_estate",
+            "crm_alloc_other_physical",
+            "crm_alloc_life_insurance",
+        }
+    )
+
+    @staticmethod
+    def _blend_root_names() -> frozenset[str]:
+        """Columns the live blend expression reads (Basel 3.1 — CRR has no floor)."""
+        config = CalculationConfig.basel_3_1(reporting_date=date(2027, 1, 1))
+        return frozenset(_lgd_floor_blended_expression(config).meta.root_names())
+
+    def test_expression_reads_exactly_the_pinned_column_set(self):
+        """
+        Widening the blend's unguarded reads is a deliberate act.
+
+        Arrange: the live Basel 3.1 blend expression.
+        Act:     derive its root column names.
+        Assert:  exactly the ten pinned names — a new unguarded read fails here
+                 and sends the author to the edge contract below.
+        """
+        actual = self._blend_root_names()
+
+        assert actual == self._EXPECTED_READS, (
+            f"blend column reads changed: added {sorted(actual - self._EXPECTED_READS)}, "
+            f"removed {sorted(self._EXPECTED_READS - actual)} — confirm every added "
+            f"column is REQUIRED on all four IRB-input edges, then update both this "
+            f"pin and the _lgd_floor_blended_expression docstring"
+        )
+
+    @pytest.mark.parametrize("column", sorted(_EXPECTED_READS))
+    def test_every_unguarded_read_is_required_on_every_irb_input_edge(self, column: str):
+        """
+        The edge contract is what makes the missing guard safe.
+
+        Arrange: one column the blend reads unconditionally.
+        Act:     look it up on all four IRB-input edge contracts.
+        Assert:  declared and ``required=True`` on each — so the sealed branch
+                 input always carries it and the unguarded read cannot raise in
+                 production. Demoting one to ``required=False`` fails here.
+        """
+        for edge in self._IRB_INPUT_EDGES:
+            assert column in edge.columns, (
+                f"{column} is read unconditionally by the A-IRB LGD floor blend but is "
+                f"not declared on {edge.name} — the unguarded read would raise"
+            )
+            assert edge.columns[column].required, (
+                f"{column} is CONDITIONAL on {edge.name} but the A-IRB LGD floor blend "
+                f"reads it with no presence guard — either make it required or guard "
+                f"the read"
+            )
+
+    def test_blend_reads_the_pre_ccf_basis_not_the_post_ccf_ead(self):
+        """
+        Art. 230(1) regression guard at the contract boundary.
+
+        Arrange: the live blend expression.
+        Act:     inspect its root names.
+        Assert:  it reads ``ead_for_crm`` and NOT ``ead_gross``. Pins the
+                 P1.248 denominator against a silent revert, independently of
+                 the numeric tests in tests/unit/test_lgd_floor_blended.py.
+        """
+        roots = self._blend_root_names()
+
+        assert "ead_for_crm" in roots, (
+            "the blend must divide by the Art. 223(4) CCF=100% basis (ead_for_crm)"
+        )
+        assert "ead_gross" not in roots, (
+            "the blend must NOT read the post-CCF ead_gross — dividing by it "
+            "under-floors every off-balance-sheet row (PS1/26 Art. 230(1))"
+        )

@@ -231,7 +231,7 @@ never interact, despite sharing the name and the `schemas.py` module.
 |---|---|---|
 | Carrier | `transaction_type == "sft"` on `SFT_TRADE_SCHEMA` | `is_sft` Boolean on `LOAN` / `CONTINGENT` / `FACILITY` schemas |
 | Concept | Securities financing transaction routed to **FCCM CCR EAD** | A lending exposure that **is** a securities financing transaction for the F-IRB maturity carve-out |
-| What it drives | The `sft_fccm` stage: `E* = max(0, E·(1+HE) − CVA·(1−HC−HFX))` | The F-IRB **0.5-year fixed supervisory maturity (`M`)** for repo-style transactions, in place of the 2.5-year default |
+| What it drives | The `sft_fccm` stage: `E* = max(0, E·(1+HE) − CVA·(1−HC−HFX))` | The F-IRB **0.5-year fixed supervisory maturity (`M`)** for repo-style transactions, in place of the date-derived Art. 162(2) `M` — or of the fixed 2.5 years where the firm has elected them (`firb_fixed_maturity`) |
 | Regulatory basis | CRR Art. 220–223, Art. 271(2) | CRR Art. 162(1) (fixed `M = 0.5y`; **deleted** under Basel 3.1) |
 | Engine site | `engine/sft/fccm.py` | `engine/irb/transforms.py` |
 

@@ -375,8 +375,10 @@ def build_entity_rw_expr(
         cqs_col: Name of the integer CQS column; null / out-of-range values
             fall to each table's unrated default.
         is_basel_3_1: Select the PS1/26 institution ECRA table when True,
-            CRR Art. 120 Table 3 when False. All other preview branches are
-            framework-identical by construction (see corporate note above).
+            CRR Art. 120 Table 3 when False. The remaining preview branches are
+            framework-identical: the corporate branch by name (see note above), and
+            the MDB / CGCB / IO / PSE / RGLA branches because their pack tables carry
+            identical values in both regimes.
         country_code_col: Optional name of the country-code column driving
             the unrated PSE / RGLA GB-vs-other approximation. ``None`` falls
             back to the conservative 100% unrated default.
@@ -416,7 +418,7 @@ def build_entity_rw_expr(
         # Named MDB (Art. 117(2)): 0% unconditional — carved out ahead of Table 2B.
         .when(et == "mdb_named")
         .then(pl.lit(float(_MDB_NAMED_ZERO_RW)))
-        # Rated / unrated non-named MDB — Table 2B (Art. 117(1)).
+        # Rated / unrated non-named MDB — Table 2B (CRR Art. 117(1) / PS1/26 Art. 117(1)(a)-(b)).
         .when(et.is_in(mdb_types))
         .then(_cqs_table_lookup_expr(cqs_col, _MDB_RW, float(_MDB_UNRATED_RW)))
         # Institution — Art. 120 Table 3 / PS1/26 ECRA via the shared builder

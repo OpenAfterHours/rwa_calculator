@@ -609,6 +609,18 @@ def _hierarchy_resolved_columns() -> dict[str, EdgeColumn]:
         "has_income_cover": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 126(2)"),
         "is_defaulted": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 178"),
         "purchased_receivables_subtype": EdgeColumn(dtype=pl.String),
+        "el_estimate": EdgeColumn(
+            dtype=pl.Float64,
+            citation="CRR Art. 160(2) / PS1/26 Art. 160(2)",
+            null_meaning="null = no EL estimate supplied; never fabricated (the "
+            "Art. 160(2) top-down PD is not derived and the row keeps its own PD)",
+        ),
+        "el_dilution_estimate": EdgeColumn(
+            dtype=pl.Float64,
+            citation="CRR Art. 160(6) / PS1/26 Art. 160(6)",
+            null_meaning="null = no dilution-risk EL estimate supplied; never "
+            "fabricated and never substituted by el_estimate",
+        ),
         "exposure_collateral_type": EdgeColumn(dtype=pl.String),
         "exposure_security_cqs": EdgeColumn(dtype=pl.Int8),
         "exposure_security_residual_maturity_years": EdgeColumn(dtype=pl.Float64),
@@ -841,6 +853,7 @@ CP_LOOKUP_COUNTERPARTIES_EDGE: EdgeContract = EdgeContract(
         "is_ccp_client_cleared": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 305-306"),
         "borrower_income_currency": EdgeColumn(dtype=pl.String),
         "sovereign_cqs": EdgeColumn(dtype=pl.Int32),
+        "is_equivalent_jurisdiction": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 116(5)"),
         "local_currency": EdgeColumn(dtype=pl.String),
         "institution_cqs": EdgeColumn(dtype=pl.Int8),
         "eca_score": EdgeColumn(dtype=pl.Int8, citation="CRR Art. 137"),
@@ -940,6 +953,7 @@ def _classifier_added_columns() -> dict[str, EdgeColumn]:
         "cp_is_qccp": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 107"),
         "cp_borrower_income_currency": EdgeColumn(dtype=pl.String),
         "cp_sovereign_cqs": EdgeColumn(dtype=pl.Int32),
+        "cp_is_equivalent_jurisdiction": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 116(5)"),
         "cp_local_currency": EdgeColumn(dtype=pl.String),
         "cp_eca_score": EdgeColumn(dtype=pl.Int8, citation="CRR Art. 137"),
         "cp_institution_cqs": EdgeColumn(dtype=pl.Int8),
@@ -1260,6 +1274,7 @@ def _calc_output_common_columns() -> dict[str, EdgeColumn]:
         "cp_is_natural_person": EdgeColumn(dtype=pl.Boolean),
         "cp_is_qccp": EdgeColumn(dtype=pl.Boolean),
         "cp_is_social_housing": EdgeColumn(dtype=pl.Boolean),
+        "cp_is_equivalent_jurisdiction": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 116(5)"),
         "cp_local_currency": EdgeColumn(dtype=pl.String),
         "cp_qualifying_property_count": EdgeColumn(dtype=pl.Int32),
         "cp_scra_grade": EdgeColumn(dtype=pl.String),

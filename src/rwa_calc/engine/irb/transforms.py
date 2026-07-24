@@ -124,6 +124,8 @@ def classify_approach(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFra
     )
 
 
+@cites("CRR Art. 161")
+@cites("PS1/26, paragraph 161")
 def apply_firb_lgd(
     lf: pl.LazyFrame, config: CalculationConfig, *, pack: ResolvedRulepack | None = None
 ) -> pl.LazyFrame:
@@ -203,6 +205,26 @@ def apply_firb_lgd(
         lf, {"ccr_modelled_lgd": ColumnSpec(pl.Float64, default=None, required=False)}
     )
 
+    # The Art. 161(1)(e)-(g) subtype LGDs bind on BOTH IRB approaches for the
+    # Art. 160(2)/(6) top-down population — they are not a Foundation-only rate:
+    #   - CRR Art. 161(1) opens "Institutions shall use the following LGD values"
+    #     with no approach qualifier, and Art. 161(2) is its only escape, open
+    #     where the institution "can decompose its EL estimates for purchased
+    #     corporate receivables into PDs and LGDs" reliably.
+    #   - PS1/26 Art. 161(2)(a) is explicit the other way round: an institution
+    #     using the Advanced IRB Approach "shall apply" points (e)/(f)/(g) of
+    #     paragraph 1 where PD is determined under Art. 160(2)(a)/(b) or the
+    #     first sentence of Art. 160(6).
+    # A row carrying a subtype with no own AND no modelled LGD is by construction
+    # that population: the decomposition escape presupposes an LGD estimate, so a
+    # firm holding one supplies it and keeps it (CRR Art. 161(2) / PS1/26
+    # Art. 161(2)(b)(i)-(ii)). Gating this on ``approach == FIRB`` let an A-IRB
+    # row reach the generic senior-unsecured value — 45%/40% in place of the 100%
+    # subordinated and 75%/100% dilution rates, i.e. anti-conservative.
+    supervisory_subtype_applies = (
+        pr_subtype.is_not_null() & pl.col("lgd").is_null() & pl.col("ccr_modelled_lgd").is_null()
+    )
+
     lf = lf.with_columns(
         [
             # FIRB rows with a cleared LGD take the supervisory value (the FIRB
@@ -211,7 +233,10 @@ def apply_firb_lgd(
             # a synthetic CCR/SFT A-IRB row carries it on ``ccr_modelled_lgd``
             # (P1.215) rather than the lending ``lgd``, so coalesce those before
             # the supervisory default-fill (CRR Art. 143 own-estimate LGD).
-            pl.when((pl.col("approach") == ApproachType.FIRB.value) & pl.col("lgd").is_null())
+            pl.when(
+                ((pl.col("approach") == ApproachType.FIRB.value) & pl.col("lgd").is_null())
+                | supervisory_subtype_applies
+            )
             .then(firb_lgd_expr)
             .otherwise(
                 pl.coalesce([pl.col("lgd"), pl.col("ccr_modelled_lgd")]).fill_null(default_lgd)

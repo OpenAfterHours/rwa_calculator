@@ -95,9 +95,26 @@ following LGDS values (Art. 161(5)(b)(iv)):
 | Residential real estate | 10% |
 | Other physical | 15% |
 
-A partially secured exposure is therefore floored on the EAD-weighted **blend**, not on the flat 25%
+A partially secured exposure is therefore floored on the **blend**, not on the flat 25%
 and not on the bare collateral-type LGDS. For a GBP 10m corporate loan with GBP 4m of recognised
 financial collateral the floor is `0.6 x 25% + 0.4 x 0% = 15%`.
+
+The weights are shares of the Art. 230(1) exposure basis `E' = E x (1 + HE)`, where `E` is
+`ead_for_crm` — the **CCF=100%** exposure value (Art. 223(4)) — and `HE` is the exposure's own
+volatility haircut (Art. 223(5), non-zero only on securities-lending rows). It is *not* the post-CCF
+`ead_gross`: for a GBP 1m undrawn committed facility at a 40% CCF with GBP 200k of recognised cash,
+the floor is `25% x 800k/1m = 20%`, not the `25% x 200k/400k = 12.5%` a post-CCF divisor gives. Every
+LGDS lies below every LGDU, so the smaller divisor over-weights the secured share and understates the
+floor.
+
+!!! note "Recorded decision: what constitutes the Art. 161(5) election"
+    The engine reads the **presence of eligible recognised collateral** (`total_collateral_for_lgd > 0`
+    after the Art. 199 / 207-210 eligibility gates and the Art. 231 waterfall) as the firm choosing to
+    take funded credit protection into account, i.e. as limb **(b)**. There is currently **no input by
+    which a firm can elect limb (a)** while still supplying that collateral — to sit on the flat 25% it
+    must withhold the collateral row or fail its eligibility flags. Deliberate: the (b) blend is bounded
+    above by LGDU, so such an election could only ever lower the floor, and an unflagged election would
+    be indistinguishable from missing data.
 
 !!! warning "Correction: No 50% Subordinated Floor for Corporate"
     The 25% floor applies to **all** corporate unsecured exposures (both senior and subordinated) under Art. 161(5). The "50% subordinated" floor does not exist for corporate A-IRB — the 50% floor applies to **retail QRRE unsecured** exposures (see below).
@@ -130,7 +147,7 @@ The LGDS values by collateral type are:
 Where no split between secured/unsecured portions is available, the conservative approach is
 to apply the relevant collateral-type LGDS directly (or LGDU=30% if unsecured).
 
-**Implementation:** `src/rwa_calc/engine/irb/formulas.py` — `_lgd_floor_blended_expression()` computes the weighted-average floor using the `crm_alloc_*` columns from the Art. 231 sequential waterfall. The formula: `LGD_floor = (E_unsecured / EAD) × LGDU + Σ_i (E_i / EAD) × LGDS_i`. The same expression serves both limbs — Art. 161(5)(b) for corporates and institutions and Art. 164(4)(c) for retail — because the LGDS tables are identical and only LGDU differs: **50%** `retail_qrre`, **30%** `retail_other`, **25%** every other class. It applies to every exposure class except `retail_mortgage` (flat 5% per Art. 164(4)(a)) once recognised collateral is present, and returns null — deferring to the flat / single-type floor — when nothing is recognised or the allocation columns are absent.
+**Implementation:** `src/rwa_calc/engine/irb/formulas.py` — `_lgd_floor_blended_expression()` computes the weighted-average floor using the `crm_alloc_*` columns from the Art. 231 sequential waterfall. The formula: `LGD_floor = (E_unsecured / E') × LGDU + Σ_i (E_i / E') × LGDS_i`, with `E' = ead_for_crm × (1 + HE)` shared with the LGD* itself via `engine/crm/expressions.py::lgd_star_exposure_basis_expr()`. The same expression serves both limbs — Art. 161(5)(b) for corporates and institutions and Art. 164(4)(c) for retail — because the LGDS tables are identical and only LGDU differs: **50%** `retail_qrre`, **30%** `retail_other`, **25%** every other class. It applies to every exposure class except `retail_mortgage` (flat 5% per Art. 164(4)(a)) once recognised collateral is present, and returns null — deferring to the flat / single-type floor — when nothing is recognised or the allocation columns are absent.
 
 !!! note "Scope of Corporate vs Institution LGD Floors"
     Art. 161(5) is headed "LOSS GIVEN DEFAULT (LGD): CORPORATES AND INSTITUTIONS" and its opening words are "for exposures to corporates and institutions". In practice institution exposures are restricted to F-IRB under Art. 147A(1)(c) and all financial sector entities under Art. 147A(1)(e), so the A-IRB floors rarely bind there — but the implementation still routes `institution` through the same 25% LGDU path rather than carving it out. Art. 161(4) is "[Note: Provision left blank]" in PRA PS1/26 — only Art. 161(5) is active.
@@ -148,6 +165,11 @@ to apply the relevant collateral-type LGDS directly (or LGDU=30% if unsecured).
     Art. 161(5)(b) corporate / institution limb as well as retail. Dedicated tests in
     `tests/unit/test_lgd_floor_blended.py` and
     `tests/acceptance/basel31/test_p1_248_art_161_5_partially_secured_lgd_floor.py`.
+
+    Deferred: the blend's deny-list is `["retail_mortgage"]` only, so
+    `residential_mortgage` / `commercial_mortgage` would blend if they ever reached an
+    IRB row — unreachable today, as both are SA re-splitter outputs
+    (PS1/26 Art. 124C-124K) and never carry an IRB approach.
 
 ## FI Scalar
 

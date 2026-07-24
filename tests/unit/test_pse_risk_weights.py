@@ -13,8 +13,16 @@ PSE treatment (Art. 116) is identical under CRR and PRA PS1/26 Basel 3.1:
     - Unrated PSEs: Sovereign-derived Table 2 (Art. 116(1))
     - Short-term (<=3m): 20% flat (Art. 116(3))
 
+All three are JURISDICTION-GATED by CRR Art. 116(5) (P1.252): a third-country
+PSE reaches them only where the Treasury has determined its jurisdiction's
+supervisory arrangements equivalent, and otherwise takes a flat 100%. The
+non-GB scenarios below therefore assert ``is_equivalent_jurisdiction=True``
+so they keep testing the treatment ladder rather than the gate; the gate
+itself is covered by ``TestPSEJurisdictionEquivalenceGate``.
+
 References:
     - CRR Art. 116 / PRA PS1/26 Art. 116: PSE risk weights
+    - CRR Art. 116(5) / PS1/26 Art. 116(3A): third-country equivalence gate
     - Table 2: Sovereign-derived risk weights
     - Table 2A: Own-rating risk weights
 """
@@ -181,6 +189,7 @@ class TestCRRPSERiskWeights:
             exposure_class="pse",
             cqs=4,
             country_code="DE",
+            is_equivalent_jurisdiction=True,  # CRR Art. 116(5)
             config=crr_config,
         )
         assert result["risk_weight"] == pytest.approx(1.00)
@@ -193,6 +202,7 @@ class TestCRRPSERiskWeights:
             exposure_class="pse",
             cqs=5,
             country_code="DE",
+            is_equivalent_jurisdiction=True,  # CRR Art. 116(5)
             config=crr_config,
         )
         assert result["risk_weight"] == pytest.approx(1.00)
@@ -205,6 +215,7 @@ class TestCRRPSERiskWeights:
             exposure_class="pse",
             cqs=6,
             country_code="DE",
+            is_equivalent_jurisdiction=True,  # CRR Art. 116(5)
             config=crr_config,
         )
         assert result["risk_weight"] == pytest.approx(1.50)
@@ -230,31 +241,32 @@ class TestCRRPSERiskWeights:
             exposure_class="pse",
             cqs=None,
             country_code="DE",
+            is_equivalent_jurisdiction=True,  # CRR Art. 116(5)
             config=crr_config,
         )
         assert result["risk_weight"] == pytest.approx(1.00)
 
     def test_short_term_pse_20pct(self, sa_calculator, crr_config):
-        """CRR: Short-term PSE (≤3m) → 20% regardless of rating (Art. 116(3))."""
+        """CRR: Short-term UK PSE (≤3m) → 20% regardless of rating (Art. 116(3))."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="pse",
             cqs=4,
-            country_code="DE",
+            country_code="GB",  # Art. 116(3) 20% is UK-PSE-only (P1.252 limb (b))
             residual_maturity_years=0.2,
             config=crr_config,
         )
         assert result["risk_weight"] == pytest.approx(0.20)
 
     def test_short_term_unrated_pse_20pct(self, sa_calculator, crr_config):
-        """CRR: Unrated short-term PSE → 20% (short-term overrides sovereign-derived)."""
+        """CRR: Unrated short-term UK PSE → 20% (short-term overrides sovereign-derived)."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="pse",
             cqs=None,
-            country_code="DE",
+            country_code="GB",  # Art. 116(3) 20% is UK-PSE-only (P1.252 limb (b))
             residual_maturity_years=0.1,
             config=crr_config,
         )
@@ -315,6 +327,7 @@ class TestB31PSERiskWeights:
             exposure_class="pse",
             cqs=6,
             country_code="DE",
+            is_equivalent_jurisdiction=True,  # CRR Art. 116(5)
             config=b31_config,
         )
         assert result["risk_weight"] == pytest.approx(1.50)
@@ -340,18 +353,19 @@ class TestB31PSERiskWeights:
             exposure_class="pse",
             cqs=None,
             country_code="DE",
+            is_equivalent_jurisdiction=True,  # CRR Art. 116(5)
             config=b31_config,
         )
         assert result["risk_weight"] == pytest.approx(1.00)
 
     def test_short_term_pse_overrides_cqs(self, sa_calculator, b31_config):
-        """B31: Short-term PSE ≤3m → 20% even with CQS 5 (Art. 116(3))."""
+        """B31: Short-term UK PSE ≤3m → 20% even with CQS 5 (Art. 116(3))."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="pse",
             cqs=5,
-            country_code="DE",
+            country_code="GB",  # Art. 116(3) 20% is UK-PSE-only (P1.252 limb (b))
             residual_maturity_years=0.25,
             config=b31_config,
         )
@@ -365,6 +379,7 @@ class TestB31PSERiskWeights:
             exposure_class="pse",
             cqs=5,
             country_code="DE",
+            is_equivalent_jurisdiction=True,  # CRR Art. 116(5)
             residual_maturity_years=0.5,
             config=b31_config,
         )
@@ -414,6 +429,7 @@ class TestPSEShortTermOriginalMaturityCRR:
             exposure_class="pse",
             cqs=4,
             country_code="DE",
+            is_equivalent_jurisdiction=True,  # CRR Art. 116(5)
             residual_maturity_years=0.1,
             original_maturity_years=5.0,
             config=crr_config,
@@ -428,7 +444,7 @@ class TestPSEShortTermOriginalMaturityCRR:
             ead=Decimal("1000000"),
             exposure_class="pse",
             cqs=4,
-            country_code="DE",
+            country_code="GB",  # Art. 116(3) 20% is UK-PSE-only (P1.252 limb (b))
             residual_maturity_years=0.2,
             original_maturity_years=0.2,
             config=crr_config,
@@ -447,6 +463,7 @@ class TestPSEShortTermOriginalMaturityB31:
             exposure_class="pse",
             cqs=5,
             country_code="DE",
+            is_equivalent_jurisdiction=True,  # CRR Art. 116(5)
             residual_maturity_years=0.1,
             original_maturity_years=10.0,
             config=b31_config,
@@ -456,15 +473,190 @@ class TestPSEShortTermOriginalMaturityB31:
         assert result["risk_weight"] != pytest.approx(0.20)
 
     def test_fresh_bond_original_under_3m_gets_short_term(self, sa_calculator, b31_config):
-        """3-month bond with CQS 5 gets 20% via Art. 116(3) short-term override."""
+        """3-month UK-PSE bond with CQS 5 gets 20% via Art. 116(3) short-term override."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="pse",
             cqs=5,
-            country_code="DE",
+            country_code="GB",  # Art. 116(3) 20% is UK-PSE-only (P1.252 limb (b))
             residual_maturity_years=0.2,
             original_maturity_years=0.2,
             config=b31_config,
         )
         assert result["risk_weight"] == pytest.approx(0.20)
+
+
+# =============================================================================
+# ART. 116(5) THIRD-COUNTRY JURISDICTION-EQUIVALENCE GATE (P1.252)
+# =============================================================================
+
+
+class TestPSEJurisdictionEquivalenceGate:
+    """CRR Art. 116(5) / PS1/26 Art. 116(3A): third-country PSE equivalence gate.
+
+    Art. 116(5): a third-country PSE may take the Art. 116(1)/(2) treatments only
+    where the Treasury has determined the jurisdiction equivalent; "Otherwise the
+    institutions shall apply a risk weight of 100 %". Regime-invariant — PS1/26
+    Art. 116(3A) admits third-country PSEs only "for the purpose of Article
+    116(5) of CRR".
+    """
+
+    @staticmethod
+    def _pse(sa_calculator, config, **kwargs) -> dict:
+        """Third-country PSE, CQS-1 sovereign, 5y — overridable per scenario."""
+        params: dict = {
+            "ead": Decimal("1000000"),
+            "exposure_class": "pse",
+            "country_code": "DE",
+            "sovereign_cqs": 1,
+            "residual_maturity_years": 5.0,
+            "original_maturity_years": 5.0,
+            "config": config,
+        }
+        params.update(kwargs)
+        return calculate_single_sa_exposure(sa_calculator, **params)
+
+    @pytest.mark.parametrize("regime", ["crr", "b31"])
+    def test_null_equivalence_blocks_table_2(
+        self, sa_calculator, crr_config, b31_config, regime
+    ) -> None:
+        """Unasserted equivalence -> 100%, not the Table 2 CQS-1 20%."""
+        config = crr_config if regime == "crr" else b31_config
+        result = self._pse(sa_calculator, config, cqs=None)
+        assert result["risk_weight"] == pytest.approx(float(PSE_UNRATED_DEFAULT_RW))
+        assert result["risk_weight"] != pytest.approx(0.20)
+
+    @pytest.mark.parametrize("regime", ["crr", "b31"])
+    def test_explicit_false_blocks_table_2(
+        self, sa_calculator, crr_config, b31_config, regime
+    ) -> None:
+        """An explicit False is not an assertion of equivalence."""
+        config = crr_config if regime == "crr" else b31_config
+        result = self._pse(sa_calculator, config, cqs=None, is_equivalent_jurisdiction=False)
+        assert result["risk_weight"] == pytest.approx(1.00)
+
+    @pytest.mark.parametrize("regime", ["crr", "b31"])
+    def test_null_equivalence_blocks_short_term_20pct(
+        self, sa_calculator, crr_config, b31_config, regime
+    ) -> None:
+        """The gate also suppresses the Art. 116(3) short-term 20%."""
+        config = crr_config if regime == "crr" else b31_config
+        result = self._pse(
+            sa_calculator,
+            config,
+            cqs=None,
+            residual_maturity_years=0.2,
+            original_maturity_years=0.2,
+        )
+        assert result["risk_weight"] == pytest.approx(1.00)
+        assert result["risk_weight"] != pytest.approx(float(PSE_SHORT_TERM_RW))
+
+    @pytest.mark.parametrize("regime", ["crr", "b31"])
+    def test_null_equivalence_blocks_rated_table_2a(
+        self, sa_calculator, crr_config, b31_config, regime
+    ) -> None:
+        """The gate sits ahead of the rated Table 2A join (CQS 2 would be 50%)."""
+        config = crr_config if regime == "crr" else b31_config
+        result = self._pse(sa_calculator, config, cqs=2)
+        assert result["risk_weight"] == pytest.approx(1.00)
+        assert result["risk_weight"] != pytest.approx(0.50)
+
+    @pytest.mark.parametrize("regime", ["crr", "b31"])
+    def test_asserted_equivalence_opens_table_2(
+        self, sa_calculator, crr_config, b31_config, regime
+    ) -> None:
+        """With equivalence asserted, Table 2 keys on the PSE's own sovereign CQS."""
+        config = crr_config if regime == "crr" else b31_config
+        result = self._pse(sa_calculator, config, cqs=None, is_equivalent_jurisdiction=True)
+        assert result["risk_weight"] == pytest.approx(0.20)
+
+    @pytest.mark.parametrize("regime", ["crr", "b31"])
+    def test_uk_pse_never_consults_the_flag(
+        self, sa_calculator, crr_config, b31_config, regime
+    ) -> None:
+        """A UK PSE is not a third-country PSE — Art. 116(1) applies with no flag."""
+        config = crr_config if regime == "crr" else b31_config
+        result = self._pse(sa_calculator, config, cqs=None, country_code="GB")
+        assert result["risk_weight"] == pytest.approx(0.20)
+
+
+class TestPSEShortTermUKOnly:
+    """Art. 116(3) 20% short-term is available to UK PSEs ONLY (P1.252 limb (b)).
+
+    PS1/26 Art. 116(3) reads "exposures to **UK** public sector entities", and
+    Art. 116(3A) redirects "UK public sector entities" to third-country PSEs for
+    **paragraphs 1 and 2 only** — paragraph 3 keeps its literal UK scope. CRR
+    Art. 116(5) agrees: same-manner treatment is permitted only "in accordance
+    with paragraph 1 or 2". So an EQUIVALENT third-country PSE with a short
+    original maturity falls through to Table 2 / Table 2A rather than taking 20%.
+
+    Every case runs under both regimes: the rule is regime-invariant, and these
+    also give Basel 3.1 coverage independently of the end-to-end pipeline.
+    """
+
+    @staticmethod
+    def _short_pse(sa_calculator, config, **kwargs) -> dict:
+        """Short-dated PSE (original maturity 0.2y) with a CQS-2 sovereign."""
+        params: dict = {
+            "ead": Decimal("1000000"),
+            "exposure_class": "pse",
+            "sovereign_cqs": 2,
+            "residual_maturity_years": 0.2,
+            "original_maturity_years": 0.2,
+            "config": config,
+        }
+        params.update(kwargs)
+        return calculate_single_sa_exposure(sa_calculator, **params)
+
+    @pytest.mark.parametrize("regime", ["crr", "b31"])
+    def test_uk_short_dated_pse_keeps_20pct(
+        self, sa_calculator, crr_config, b31_config, regime
+    ) -> None:
+        """Control: a UK PSE still takes Art. 116(3) 20%, not Table 2 CQS-2 50%."""
+        config = crr_config if regime == "crr" else b31_config
+        result = self._short_pse(sa_calculator, config, country_code="GB")
+        assert result["risk_weight"] == pytest.approx(float(PSE_SHORT_TERM_RW))
+        assert result["risk_weight"] != pytest.approx(0.50)
+
+    @pytest.mark.parametrize("regime", ["crr", "b31"])
+    def test_equivalent_third_country_short_dated_pse_gets_table_2(
+        self, sa_calculator, crr_config, b31_config, regime
+    ) -> None:
+        """Equivalent third-country PSE: Table 2 CQS-2 50%, NOT the 20%."""
+        config = crr_config if regime == "crr" else b31_config
+        result = self._short_pse(
+            sa_calculator, config, country_code="DE", is_equivalent_jurisdiction=True
+        )
+        assert result["risk_weight"] == pytest.approx(0.50)
+        assert result["risk_weight"] != pytest.approx(float(PSE_SHORT_TERM_RW))
+
+    @pytest.mark.parametrize("regime", ["crr", "b31"])
+    def test_equivalent_third_country_short_dated_rated_pse_gets_table_2a(
+        self, sa_calculator, crr_config, b31_config, regime
+    ) -> None:
+        """Equivalent third-country RATED PSE: Table 2A CQS-2 50%, NOT the 20%."""
+        config = crr_config if regime == "crr" else b31_config
+        result = self._short_pse(
+            sa_calculator, config, country_code="DE", cqs=2, is_equivalent_jurisdiction=True
+        )
+        assert result["risk_weight"] == pytest.approx(0.50)
+        assert result["risk_weight"] != pytest.approx(float(PSE_SHORT_TERM_RW))
+
+    @pytest.mark.parametrize("regime", ["crr", "b31"])
+    def test_non_equivalent_third_country_short_dated_pse_gets_100pct(
+        self, sa_calculator, crr_config, b31_config, regime
+    ) -> None:
+        """Limb (a) still wins over limb (b): no assertion -> flat 100%, not 50%."""
+        config = crr_config if regime == "crr" else b31_config
+        result = self._short_pse(sa_calculator, config, country_code="DE")
+        assert result["risk_weight"] == pytest.approx(1.00)
+
+    @pytest.mark.parametrize("regime", ["crr", "b31"])
+    def test_null_country_short_dated_pse_denied_20pct(
+        self, sa_calculator, crr_config, b31_config, regime
+    ) -> None:
+        """A null country code cannot prove UK-ness, so the 20% is denied."""
+        config = crr_config if regime == "crr" else b31_config
+        result = self._short_pse(sa_calculator, config, country_code=None)
+        assert result["risk_weight"] != pytest.approx(float(PSE_SHORT_TERM_RW))

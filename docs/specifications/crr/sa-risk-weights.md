@@ -140,10 +140,82 @@ Where a third-country competent authority applies supervisory and regulatory arr
 !!! info "Basel 3.1 — Art. 116(5) Retained by Cross-Reference"
     PRA PS1/26 Art. 116(5) itself is marked `[Note: Provision not in PRA Rulebook]`, but Art. 116(3A) explicitly cross-refers to "Article 116(5) of CRR" — redirecting "UK PSEs" in paragraphs 1 and 2 to mean third-country PSEs when Art. 116(5) of CRR applies (ps126app1.pdf p.38). CRR Art. 116(5) therefore remains operative as the third-country equivalence gate under Basel 3.1.
 
-**Short-term exposures (≤ 3 months)**: UK PSE exposures with original effective maturity ≤ 3 months receive **20%** risk weight (Art. 116(3)). No domestic currency condition required for PSEs.
+**Short-term exposures (≤ 3 months)**: UK PSE exposures with original effective maturity ≤ 3 months receive **20%** risk weight (Art. 116(3)). No domestic currency condition required for PSEs. Note the paragraph is scoped to **UK** PSEs under PS1/26, and CRR Art. 116(5) permits same-manner treatment only "in accordance with paragraph 1 or 2" — so a third-country PSE reaches the 20% only through the equivalence gate below.
 
-!!! warning "Art. 116(4)/(5) Not Implemented"
-    Neither Art. 116(4) competent-authority equivalence nor Art. 116(5) third-country equivalence is implemented in the SA calculator. PSE exposures are routed solely through Art. 116(1)/(2) Tables 2/2A plus the Art. 116(3) short-term preferential. Firms relying on Art. 116(4) guarantee-backed equivalence must apply the substitution outside the engine.
+**Implementation (P1.252)** — `engine/sa/jurisdiction.py` carries **two distinct
+predicates**, both regime-invariant (no pack Feature) for the reason in the note
+above:
+
+| Predicate | Rule | Effect |
+|---|---|---|
+| `pse_jurisdiction_not_permitted_expr` | Art. 116(5) — third country, no Treasury determination | Flat **100%**, evaluated ahead of every other PSE branch so it suppresses Table 2, Table 2A **and** the Art. 116(3) 20% |
+| `pse_short_term_eligible_expr` | Art. 116(3) — **UK PSEs only** | An *equivalent* third-country PSE with a short original maturity falls through to its Table 2 / Table 2A weight instead of taking the 20% |
+
+The 100% is homed on the cited pack scalar `pse_non_equivalent_jurisdiction_rw` —
+deliberately separate from `pse_unrated_default_rw`, which is the Art. 116(1)
+unrated-central-government fallback. Same number, different provision; do not
+merge them.
+
+#### Why an equivalent third-country PSE is denied the Art. 116(3) 20%
+
+The article appears to offer the 20% to any PSE, so the reasoning is recorded
+here in full. Under **Basel 3.1 it is mandated outright** by the interaction of
+paragraphs 1–3 with the paragraph 3A remap (PS1/26 Art. 116, ps126app1.pdf p.38):
+
+> **1.** *Subject to paragraphs 3 and 3A*, in respect of exposures to **UK public sector entities** for which a credit assessment … is not available: …
+>
+> **2.** *Subject to paragraphs 3 and 3A*, exposures to **UK public sector entities** for which a credit assessment … is available shall be assigned a risk weight in accordance with … Table 2A …
+>
+> **3.** For exposures to **UK public sector entities** with an original maturity of three months or less, the risk weight shall be 20%.
+>
+> **3A.** For the purpose of Article 116(5) of CRR, the references **in paragraphs 1 and 2** to: (a) the central government of the UK means the central government of the jurisdiction in which the third country public sector entity is based; and (b) **UK public sector entities means third country public sector entities**.
+
+Paragraph 3A reaches **paragraphs 1 and 2 only**. Paragraph 3 keeps its literal
+"UK public sector entities" scope and is never remapped, so a third-country PSE —
+equivalent or not — has no route into the 20%. It takes Tables 2/2A instead.
+
+Under **CRR** the point is arguable: Art. 116(3) is unqualified on its face,
+while Art. 116(5) admits third-country PSEs only *"in accordance with paragraph 1
+or 2"*, which does not extend the permission to paragraph 3. The ambiguity is
+resolved **conservatively and identically in both regimes**, because the
+alternative leaves an anti-conservative divergence between the regimes on the
+same population — a 20% displacing a Table 2/2A weight of 50%, 100% or 150%.
+
+!!! danger "Null semantics — null means NOT equivalent"
+    `is_equivalent_jurisdiction` has **no default**. Equivalence is an affirmative
+    Treasury determination, so an absent assertion cannot manufacture one and
+    Art. 116(5)'s own residual (100%) governs; a null `country_code` likewise
+    cannot prove UK-ness. Only an explicit `True` opens the Art. 116(1)/(2)/(3)
+    limbs for a non-GB PSE. UK PSEs never consult the flag, so an entirely UK book
+    needs no data migration — but firms holding third-country PSEs must populate
+    the flag or those exposures will be weighted at 100%.
+
+!!! warning "Art. 116(4) Not Implemented — and it has no PS1/26 successor"
+    Art. 116(4) competent-authority (guarantee-backed) equivalence — treating a
+    PSE as an exposure to its central / regional / local government where an
+    appropriate government guarantee removes the risk difference — is **not**
+    implemented in the SA calculator. Firms relying on it must apply the
+    substitution outside the engine.
+
+    From 1 January 2027 there is nowhere to route it within Art. 116 at all:
+    **PRA PS1/26 Art. 116(4) reads `[Note: Provision left blank]`** and the
+    accompanying note records that the PS1/26 rule corresponds to CRR
+    Art. 116(1)–(3) only. Any guarantee-based sovereign/RGLA override for a PSE
+    must therefore go through the **general CRM guarantee-substitution regime
+    (Art. 235, Chapter 4)**, not an Art. 116-specific carve-out. See also the
+    "Art. 116(4) Not Retained" note above.
+
+    Art. 116(**5**) is now implemented — see the two predicates above.
+
+!!! warning "Guarantor-side Art. 116(5) gate outstanding"
+    The **guarantor** PSE branch (`engine/sa/guarantor_rw.py::build_guarantor_rw_expr`)
+    prices PSE guarantors from Table 2A with a sovereign-derived unrated fallback
+    and does **not** yet apply the Art. 116(5) jurisdiction gate, so a
+    non-equivalent third-country PSE *guarantor* can still confer a 20%/50%
+    substituted weight. Deferred from P1.252: unlike the direct path there is no
+    guarantor-side equivalence column, so the mirror needs a new input threaded
+    through the guarantee join. The Art. 116(3) short-term limb does not arise
+    there (the guarantor branch has no short-term treatment).
 
 ## MDB Exposures (CRR Art. 117)
 
@@ -1333,14 +1405,14 @@ Rated specialised lending exposures use the corporate CQS table (Art. 122A(3)).
 
 | Item | Risk Weight | Reference |
 |------|-------------|-----------|
-| Cash and equivalent (notes, coins) | 0% | Art. 134(1) |
+| Cash and equivalent (notes, coins) | 0% | Art. 134(3) |
 | Gold bullion (held in own vaults or allocated) | 0% | Art. 134(4) |
 | Items in course of collection | 20% | Art. 134(3) |
 | Repo-style transactions — RW of underlying asset | Asset RW | Art. 134(5) |
-| Nth-to-default basket credit derivatives | Per Art. 266-270 | Art. 134(5) |
-| Tangible assets (premises, equipment) | 100% | Art. 134(2) |
+| Nth-to-default basket credit derivatives | Per Art. 266-270 | Art. 134(6) |
+| Tangible assets (premises, equipment) | 100% | Art. 134(1) |
 | Prepaid expenses, accrued income | 100% | Art. 134(2) |
-| Residual value of leased assets | 1/t × 100% (t = remaining lease years, min 1) | Art. 134(6) |
+| Residual value of leased assets | 1/t × 100% (t = remaining lease years, min 1) | Art. 134(7) |
 | All other | 100% | Art. 134(2) |
 
 ## Export Credit Agency Assessments (CRR Art. 137 / Table 9)

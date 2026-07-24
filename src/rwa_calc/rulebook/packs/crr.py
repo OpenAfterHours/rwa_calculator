@@ -179,22 +179,34 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=False,
         citation=Citation("CRR", "161(1)(a)", "flat 45% senior unsecured F-IRB LGD, no FSE split"),
     ),
-    # IRB PD floors (CRR Art. 160(1)): a uniform 0.03% floor across every IRB
-    # exposure class. Basel 3.1 differentiates these (packs/b31.py). Consumed by
-    # engine/irb/formulas.py::_pd_floor_expression via compile.formula_float_map.
+    # IRB PD floors. CRR Art. 160(1) is exhaustive about its scope: "The PD of an
+    # exposure to a corporate or an institution shall be at least 0,03 %" — there
+    # is no central-government / central-bank limb, so ``sovereign`` is 0 (P1.277).
+    # Retail is floored at the same 0.03% by a SEPARATE article, Art. 163(1) ("The
+    # PD of an exposure shall be at least 0,03 %", retail sub-section). Basel 3.1
+    # differentiates all of these (packs/b31.py). Consumed by
+    # engine/irb/formulas.py::_pd_floor_expression via compile.formula_float_map —
+    # note the values are deliberately NON-uniform, which is what keeps that
+    # builder's all-equal scalar shortcut from collapsing the class ladder.
     "pd_floors": FormulaParams(
         name="pd_floors",
         params={
             "corporate": Decimal("0.0003"),
             "corporate_sme": Decimal("0.0003"),
-            "sovereign": Decimal("0.0003"),
+            # Art. 160(1) does not reach central governments or central banks.
+            "sovereign": Decimal("0"),
             "institution": Decimal("0.0003"),
             "retail_mortgage": Decimal("0.0003"),
             "retail_other": Decimal("0.0003"),
             "retail_qrre_transactor": Decimal("0.0003"),
             "retail_qrre_revolver": Decimal("0.0003"),
         },
-        citation=Citation("CRR", "160(1)", "uniform 0.03% IRB PD floor"),
+        citation=Citation(
+            "CRR",
+            "160(1)",
+            "0.03% IRB PD floor for corporates and institutions only "
+            "(retail floored separately by Art. 163(1); no CGCB floor)",
+        ),
     ),
     # A-IRB LGD floors: all zero under CRR (no A-IRB LGD floor — see airb_lgd_floor
     # Feature). Basel 3.1 sets the Art. 161(5)/164(4) floors (packs/b31.py). Keyed
@@ -285,6 +297,17 @@ ENTRIES: dict[str, RuleEntry] = {
         name="sa_due_diligence_override",
         enabled=False,
         citation=Citation("CRR", "110", "no Art. 110A due-diligence RW override under CRR"),
+    ),
+    # PS1/26 Art. 114(2A): an unrated central bank is weighted on the ECAI
+    # assessment of the central government of its jurisdiction. CRR Art. 114 has
+    # NO paragraph 2A — it runs 1, 2, 3, 4 (5/6 deleted) and 7 — so an unrated
+    # central bank stays on the Art. 114(1) 100% fallback here. Only this limb is
+    # regime-specific: the Art. 114(3) ECB 0% exists in both frameworks and is
+    # deliberately NOT Feature-gated (see ecb_zero_rw in packs/common.py).
+    "central_bank_uses_sovereign_cqs": Feature(
+        name="central_bank_uses_sovereign_cqs",
+        enabled=False,
+        citation=Citation("CRR", "114", "no Art. 114(2A) central-bank/sovereign CQS read-across"),
     ),
     # CRR Art. 113(6) core-UK-group 0% risk weight. With PRA permission an
     # institution may assign a 0% risk weight to exposures to counterparties in
@@ -701,6 +724,20 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=False,
         citation=Citation(
             "CRR", "128", "Art. 128 high-risk class omitted from UK CRR (SI 2021/1078)"
+        ),
+    ),
+    # CRR Art. 147(3)(b) admits only the Art. 117(2) named (0% RW) MDBs to the
+    # central-government IRB class; Art. 147(4)(c) puts "exposures to multilateral
+    # development banks which are not assigned a 0 % risk weight under Article 117"
+    # in the INSTITUTIONS class. PS1/26 Art. 147(3)(f) drops that split (all MDBs
+    # are quasi-sovereign there), so the reroute is CRR-only. Gates the
+    # non-named-MDB IRB-class step in engine/stages/classify/attributes.py
+    # (entity_type_to_irb_class itself stays the framework-invariant base map).
+    "crr_non_named_mdb_institution_irb_class": Feature(
+        name="crr_non_named_mdb_institution_irb_class",
+        enabled=True,
+        citation=Citation(
+            "CRR", "147", "Art. 147(4)(c) non-0% MDBs assigned to the institutions IRB class"
         ),
     ),
     # Basel 3.1 Art. 124E(1)(b)/(2): natural-person RRE re-routed to income-

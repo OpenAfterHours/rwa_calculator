@@ -15,8 +15,8 @@ Key responsibilities:
 Scenario rationale (CRR Art. 118 vs Art. 117):
 
   entity_type="international_org" (IMF, Art. 118):
-    CRR Art. 118 lists named international organisations — IMF, BIS, ECB, EU, IBRD, IFC,
-    IADB, ADB, AfDB, CEB, NIB, CDB, EBRD, EFSI, ESM, EFSF — that receive a 0% risk weight
+    CRR Art. 118 lists a closed five-entry list of named international organisations —
+    the EU, IMF, BIS, EFSF and ESM — that receive a 0% risk weight
     unconditionally, regardless of CQS or credit assessment. Under the existing engine the
     "international_org" entity_type is incorrectly routed to the MDB branch (Art. 117),
     which would impose a non-zero risk weight. The new ExposureClass.INTERNATIONAL_ORGANISATION

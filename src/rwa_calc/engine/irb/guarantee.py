@@ -340,7 +340,10 @@ def _apply_parameter_substitution(
     The downstream beneficial-gate uses ``guarantor_rw_post_nbd``.
     """
     if not use_parameter_substitution:
-        # CRR or no guarantor PD: always SA RW substitution
+        # No guarantor PD anywhere in the frame -> SA RW substitution for every
+        # row. This is a SCHEMA test, not a regime test: ``guarantor_pd`` drives
+        # it (see the caller), so the parameter-substitution path is live under
+        # CRR too whenever a modelled guarantor PD is supplied.
         return lf.with_columns(
             [
                 pl.col("guarantor_rw_sa").alias("guarantor_rw"),

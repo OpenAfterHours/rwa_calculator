@@ -9,7 +9,8 @@ Sovereign exposures include:
 | Entity Type | Examples |
 |-------------|----------|
 | Central governments | UK HM Treasury, US Treasury |
-| Central banks | Bank of England, ECB |
+| Central banks (`central_bank`) | Bank of England, Federal Reserve |
+| The ECB (`central_bank_ecb`) | European Central Bank — unconditional 0%, Art. 114(3) |
 | Multilateral development banks (eligible) | IMF, World Bank, EIB |
 | International organisations | BIS, EU institutions |
 | Regional governments (treated as sovereign) | Devolved UK administrations |
@@ -49,7 +50,21 @@ fall back to the standard CQS-based risk weight table.
 ### ECB Treatment (Art. 114(3))
 
 Exposures to the **European Central Bank** receive a **0% risk weight** unconditionally,
-per Art. 114(3). This provision is identical in both CRR and PRA PS1/26.
+per Art. 114(3). This provision is identical in both CRR and PRA PS1/26, so the treatment
+is **not** regime-gated: it applies no currency test and no rating test, and it overrides
+the Art. 114(2) Table 1 CQS ladder.
+
+!!! important "Input convention — tag the ECB with `entity_type = "central_bank_ecb"`"
+    The ECB is supranational, so it cannot be identified from `country_code` (it has no
+    ISO entry, and using a member state's code would wrongly pull it into the Art. 114(7)
+    EU-domestic-currency branch), and a plain `central_bank` cannot be told apart from the
+    Bank of England or the Federal Reserve. Set `entity_type = "central_bank_ecb"` on the
+    counterparty row — the same convention as `mdb_named` for Art. 117(2) named MDBs. Any
+    other central bank keeps `entity_type = "central_bank"`.
+
+    Do not confuse Art. 114(3) with **Art. 114(4)**, which gives 0% to the UK central
+    government and the Bank of England *denominated and funded in sterling* — that branch
+    is currency-conditional and does not reach a EUR-denominated ECB exposure.
 
 ### EU Domestic Currency Treatment (Art. 114(7))
 
@@ -84,14 +99,25 @@ regulatory 0% RW is applied rather than an internal model estimate.
 
 ### Treatment
 
+The ladder below shows the precedence the engine actually applies. Note that the
+**Art. 114(3) ECB branch comes first and is unconditional** — it is not a domestic-currency
+treatment, so it does not belong under this heading, but it outranks everything here and is
+shown for precedence. See [European Central Bank](#european-central-bank) above.
+
 ```python
-if counterparty.country_code == "GB" and exposure.currency == "GBP":
+if counterparty.entity_type == "central_bank_ecb":
+    risk_weight = 0.00  # Art. 114(3) ECB — unconditional, both regimes, no currency test
+elif counterparty.country_code == "GB" and exposure.currency == "GBP":
     risk_weight = 0.00  # Art. 114(4) UK domestic currency 0% RW
 elif is_eu_member(counterparty.country_code) and exposure.currency == domestic_currency(counterparty.country_code):
     risk_weight = 0.00  # Art. 114(7) EU domestic currency 0% RW
     approach = "SA"     # Forced to standardised approach
+elif counterparty.cqs is None and counterparty.sovereign_cqs is not None and is_basel_3_1:
+    # PS1/26 Art. 114(2A): an unrated central bank takes its government's CQS.
+    # Basel 3.1 only — CRR Art. 114 has no paragraph 2A.
+    risk_weight = cqs_lookup(counterparty.sovereign_cqs)
 else:
-    risk_weight = cqs_lookup(counterparty.cqs)  # Standard CQS table
+    risk_weight = cqs_lookup(counterparty.cqs)  # Standard CQS table; 100% when unrated
 ```
 
 ## Foreign Sovereigns
@@ -128,8 +154,16 @@ Central bank exposures receive the same treatment as their sovereign:
 !!! info "Basel 3.1 — Unrated Central Banks (Art. 114(2A))"
     PRA PS1/26 introduces Art. 114(2A): where a central bank has **no ECAI rating**
     but its **central government** does, the central bank exposure shall be treated
-    under Art. 114(2) using the central government's credit assessment. This codifies
-    what was previously implicit practice. CRR has no equivalent paragraph.
+    under Art. 114(2) using the central government's credit assessment. CRR has no
+    equivalent paragraph — its Art. 114 runs 1, 2, 3, 4 and 7 — so the read-across is
+    gated to Basel 3.1 by the `central_bank_uses_sovereign_cqs` pack Feature and an
+    unrated central bank stays at 100% under CRR.
+
+    **Input requirement:** supply the government's credit quality step as
+    `sovereign_cqs` on the central bank's counterparty row. Precedence is: the central
+    bank's own `cqs` where it has one (Art. 114(2A) applies only where an assessment
+    "is not available"), then `sovereign_cqs`, then the Art. 114(1) 100% fallback if
+    neither is present — nothing is inferred when both are absent.
 
 ### Reserves Held
 

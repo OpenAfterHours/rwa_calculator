@@ -102,6 +102,11 @@ def _irb_sme_frame_without_group_key() -> pl.LazyFrame:
             "provision_allocated": [0.0],
             "ava_amount": [0.0],
             "other_own_funds_reductions": [0.0],
+            # Read by the Art. 163(1)(c) QRRE transactor/revolver arm of the PD
+            # floor ladder (declared on CRM_EXIT_EDGE / IRB_BRANCH_EDGE, so
+            # production frames always carry it). False: a CORPORATE row is not a
+            # QRRE transactor, and the QRRE arm is never selected for it.
+            "is_qrre_transactor": [False],
         },
         schema_overrides={
             "lgd": pl.Float64,

@@ -327,11 +327,23 @@ class TestNormalPPF:
 
 
 class TestPDFloorsCRR:
-    """CRR PD floors: uniform 0.03% for all exposure classes."""
+    """CRR PD floors: 0.03% for every class Art. 160(1) / 163(1) reaches."""
 
     @pytest.fixture()
     def crr_config(self) -> CalculationConfig:
         return CalculationConfig.crr(reporting_date=date(2026, 1, 1))
+
+    @staticmethod
+    def _pd_floored(config: CalculationConfig, exposure_class: str) -> float:
+        lf = pl.LazyFrame(
+            {
+                "pd": [0.0001],  # Below floor
+                "lgd": [0.45],
+                "ead_final": [1_000_000.0],
+                "exposure_class": [exposure_class],
+            }
+        )
+        return apply_irb_formulas(lf, config).collect()["pd_floored"][0]
 
     @pytest.mark.parametrize(
         "exposure_class",
@@ -342,21 +354,25 @@ class TestPDFloorsCRR:
             "retail_qrre",
             "retail_other",
             "institution",
-            "central_govt_central_bank",
         ],
     )
-    def test_crr_uniform_floor(self, crr_config: CalculationConfig, exposure_class: str) -> None:
-        """CRR applies 0.03% floor uniformly to all exposure classes (Art. 163)."""
-        lf = pl.LazyFrame(
-            {
-                "pd": [0.0001],  # Below floor
-                "lgd": [0.45],
-                "ead_final": [1_000_000.0],
-                "exposure_class": [exposure_class],
-            }
+    def test_crr_floor_applies_to_wholesale_and_retail(
+        self, crr_config: CalculationConfig, exposure_class: str
+    ) -> None:
+        """CRR floors corporates and institutions (Art. 160(1)) and retail (Art. 163(1)).
+
+        ``central_govt_central_bank`` is deliberately absent from this list — see
+        the sibling test. Art. 160(1) reads "The PD of an exposure to a corporate
+        or an institution shall be at least 0,03 %" and Art. 163(1) covers retail;
+        neither reaches central governments or central banks (P1.277).
+        """
+        assert self._pd_floored(crr_config, exposure_class) == pytest.approx(0.0003, abs=1e-8)
+
+    def test_crr_cgcb_is_unfloored(self, crr_config: CalculationConfig) -> None:
+        """CRR leaves a central-government PD unfloored (no Art. 160(1) CGCB limb)."""
+        assert self._pd_floored(crr_config, "central_govt_central_bank") == pytest.approx(
+            0.0001, abs=1e-8
         )
-        result = apply_irb_formulas(lf, crr_config).collect()
-        assert result["pd_floored"][0] == pytest.approx(0.0003, abs=1e-8)
 
     def test_crr_pd_above_floor_unchanged(self, crr_config: CalculationConfig) -> None:
         """PD above floor passes through unchanged."""

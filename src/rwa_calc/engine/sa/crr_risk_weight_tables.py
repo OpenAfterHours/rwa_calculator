@@ -238,6 +238,12 @@ PSE_SHORT_TERM_RW = _scalar_dec("pse_short_term_rw")
 # Default for unrated PSE when sovereign CQS is unknown (conservative fallback)
 PSE_UNRATED_DEFAULT_RW = _scalar_dec("pse_unrated_default_rw")
 
+# Art. 116(5): a third-country PSE whose jurisdiction carries no Treasury
+# supervisory-equivalence determination takes a flat 100% ("Otherwise the
+# institutions shall apply a risk weight of 100 %"). Same number as
+# PSE_UNRATED_DEFAULT_RW, different provision — see engine/sa/jurisdiction.py.
+PSE_NON_EQUIVALENT_JURISDICTION_RW = _scalar_dec("pse_non_equivalent_jurisdiction_rw")
+
 
 @cites("CRR Art. 116")
 def _create_pse_df() -> pl.DataFrame:
@@ -318,6 +324,13 @@ MDB_NAMED_ZERO_RW = _scalar_dec("mdb_named_zero_rw")
 
 # Default for unrated non-named MDBs (Art. 117(1), Table 2B unrated row)
 MDB_UNRATED_RW = _scalar_dec("mdb_unrated_rw")
+
+# Art. 114(3): exposures to the ECB receive 0% unconditionally — no currency test
+# and no rating test. Regime-invariant (PS1/26 Art. 114(3) is identically worded),
+# so it is a common-pack scalar with no Feature. Distinct from the Art. 114(4)
+# UK/sterling and Art. 114(7) third-country domestic-currency 0% branches, which
+# ARE currency-conditional. Keyed off the ``central_bank_ecb`` entity_type.
+ECB_ZERO_RW = _scalar_dec("ecb_zero_rw")
 
 
 @cites("CRR Art. 117")

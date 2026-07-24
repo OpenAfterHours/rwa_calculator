@@ -263,6 +263,25 @@ FACILITY_SCHEMA: dict[str, ColumnSpec] = {
     #   "subordinated"  -> Art. 161(1)(f) LGD = 100%
     #   "dilution_risk" -> Art. 161(1)(g) LGD = 100% (B3.1) / 75% (CRR)
     "purchased_receivables_subtype": ColumnSpec(pl.String, required=False),
+    # CRR Art. 160(2) / PS1/26 Art. 160(2): the institution's expected-loss estimate
+    # for a purchased corporate receivables pool it cannot produce a compliant PD
+    # for. Expressed as a decimal RATE of the exposure value (0.0225 = 2.25%),
+    # matching the IRB identity EL = PD x LGD — NOT a monetary amount. Read only
+    # when ``purchased_receivables_subtype`` is set, and only for the "senior" /
+    # "subordinated" subtypes:
+    #   "senior"       -> Art. 160(2)(a) PD = el_estimate / supervisory LGD
+    #   "subordinated" -> Art. 160(2)(b) PD = el_estimate
+    # Null (the default) means "no estimate supplied": the exposure keeps whatever
+    # PD it already has and, absent one, stays on the Standardised Approach. A zero
+    # or negative value is treated the same way — it must never become PD 0%.
+    "el_estimate": ColumnSpec(pl.Float64, required=False),
+    # CRR Art. 160(6) first sentence / PS1/26 Art. 160(6): the institution's EL
+    # estimate for DILUTION risk of a purchased corporate receivables pool, again a
+    # decimal rate. Read only on the "dilution_risk" subtype, where PD = this value
+    # directly (no LGD division). Deliberately separate from ``el_estimate``: the
+    # default-risk and dilution-risk EL estimates are distinct regulatory inputs and
+    # one must never stand in for the other.
+    "el_dilution_estimate": ColumnSpec(pl.Float64, required=False),
     # CRR Art. 6 / 11-18 (individual / consolidated / sub-consolidated levels of
     # application): non-null tags this exposure as an intragroup claim on the
     # named reporting entity (an ``entity_reference`` in REPORTING_ENTITY_SCHEMA).
@@ -306,6 +325,23 @@ LOAN_SCHEMA: dict[str, ColumnSpec] = {
     # that do not report a separate funding currency (mirrors the Art. 237(2)(a)
     # original-maturity null fallback).
     "funding_currency": ColumnSpec(pl.String, required=False),
+    # LEASE INPUT CONVENTION (CRR Art. 166(4) IRB / Art. 134(7) SA; PS1/26 Art.
+    # 166A(4) IRB / Art. 134(7) SA — identical wording in all four): "the exposure
+    # value for leases shall be the discounted minimum lease payments". For a
+    # finance-lease receivable ``drawn_amount`` must therefore ARRIVE ALREADY
+    # DISCOUNTED — the engine has no lease product type, no minimum-lease-payment
+    # schedule input and no discount-rate input, so it can neither perform the
+    # discounting nor validate that the feed did. An IFRS 16 / IAS 17 net
+    # investment in a finance lease already IS the discounted MLP; an undiscounted
+    # gross-investment feed overstates the exposure value. Deliberately NO lease
+    # flag: a Boolean no code reads would read as a compliance attestation while
+    # guaranteeing nothing, and the consistency check that would justify one
+    # (discount rate vs undiscounted flows) is unbuildable until those inputs
+    # exist. Requirement is regime- AND approach-invariant. The residual-value leg
+    # is a separate exposure (``other_residual_lease`` entity type, Art. 134(7)
+    # 1/t x 100%); the Art. 201/213 third-party residual-value guarantee limb of
+    # the same provisions is not implemented. See
+    # docs/data-model/input-schemas.md (Loan schema, "Lease exposures").
     "drawn_amount": ColumnSpec(pl.Float64, default=0.0, required=False),
     "interest": ColumnSpec(pl.Float64, default=0.0, required=False),
     "lgd": ColumnSpec(pl.Float64, required=False),
@@ -348,6 +384,25 @@ LOAN_SCHEMA: dict[str, ColumnSpec] = {
     #   "subordinated"  -> Art. 161(1)(f) LGD = 100%
     #   "dilution_risk" -> Art. 161(1)(g) LGD = 100% (B3.1) / 75% (CRR)
     "purchased_receivables_subtype": ColumnSpec(pl.String, required=False),
+    # CRR Art. 160(2) / PS1/26 Art. 160(2): the institution's expected-loss estimate
+    # for a purchased corporate receivables pool it cannot produce a compliant PD
+    # for. Expressed as a decimal RATE of the exposure value (0.0225 = 2.25%),
+    # matching the IRB identity EL = PD x LGD — NOT a monetary amount. Read only
+    # when ``purchased_receivables_subtype`` is set, and only for the "senior" /
+    # "subordinated" subtypes:
+    #   "senior"       -> Art. 160(2)(a) PD = el_estimate / supervisory LGD
+    #   "subordinated" -> Art. 160(2)(b) PD = el_estimate
+    # Null (the default) means "no estimate supplied": the exposure keeps whatever
+    # PD it already has and, absent one, stays on the Standardised Approach. A zero
+    # or negative value is treated the same way — it must never become PD 0%.
+    "el_estimate": ColumnSpec(pl.Float64, required=False),
+    # CRR Art. 160(6) first sentence / PS1/26 Art. 160(6): the institution's EL
+    # estimate for DILUTION risk of a purchased corporate receivables pool, again a
+    # decimal rate. Read only on the "dilution_risk" subtype, where PD = this value
+    # directly (no LGD division). Deliberately separate from ``el_estimate``: the
+    # default-risk and dilution-risk EL estimates are distinct regulatory inputs and
+    # one must never stand in for the other.
+    "el_dilution_estimate": ColumnSpec(pl.Float64, required=False),
     # CRR Art. 159(1) Pool B components (c)/(d): additional value adjustments
     # (AVAs per Art. 34/105) and other own funds reductions associated with the
     # exposure. Enter the per-exposure Pool B exactly once at the IRB EL
@@ -465,6 +520,25 @@ CONTINGENTS_SCHEMA: dict[str, ColumnSpec] = {
     #   "subordinated"  -> Art. 161(1)(f) LGD = 100%
     #   "dilution_risk" -> Art. 161(1)(g) LGD = 100% (B3.1) / 75% (CRR)
     "purchased_receivables_subtype": ColumnSpec(pl.String, required=False),
+    # CRR Art. 160(2) / PS1/26 Art. 160(2): the institution's expected-loss estimate
+    # for a purchased corporate receivables pool it cannot produce a compliant PD
+    # for. Expressed as a decimal RATE of the exposure value (0.0225 = 2.25%),
+    # matching the IRB identity EL = PD x LGD — NOT a monetary amount. Read only
+    # when ``purchased_receivables_subtype`` is set, and only for the "senior" /
+    # "subordinated" subtypes:
+    #   "senior"       -> Art. 160(2)(a) PD = el_estimate / supervisory LGD
+    #   "subordinated" -> Art. 160(2)(b) PD = el_estimate
+    # Null (the default) means "no estimate supplied": the exposure keeps whatever
+    # PD it already has and, absent one, stays on the Standardised Approach. A zero
+    # or negative value is treated the same way — it must never become PD 0%.
+    "el_estimate": ColumnSpec(pl.Float64, required=False),
+    # CRR Art. 160(6) first sentence / PS1/26 Art. 160(6): the institution's EL
+    # estimate for DILUTION risk of a purchased corporate receivables pool, again a
+    # decimal rate. Read only on the "dilution_risk" subtype, where PD = this value
+    # directly (no LGD division). Deliberately separate from ``el_estimate``: the
+    # default-risk and dilution-risk EL estimates are distinct regulatory inputs and
+    # one must never stand in for the other.
+    "el_dilution_estimate": ColumnSpec(pl.Float64, required=False),
     # CRR Art. 223(5) FCCM exposure volatility haircut (HE) inputs — see
     # LOAN_SCHEMA for full notes. Mirrored on contingents for symmetry with
     # the loans schema; populated only when the contingent exposure is itself
@@ -519,11 +593,11 @@ COUNTERPARTY_SCHEMA: dict[str, ColumnSpec] = {
     #   Specialised lending (CRR Art. 112(1)(g) / Art. 147(8)):
     #     - "specialised_lending" → SA: CORPORATE (sub-type), IRB: SPECIALISED_LENDING
     #   Other items class (CRR Art. 112(q), Art. 134):
-    #     - "other_cash"              → SA: OTHER, 0% RW (Art. 134(1))
+    #     - "other_cash"              → SA: OTHER, 0% RW (Art. 134(3) 2nd sentence)
     #     - "other_gold"              → SA: OTHER, 0% RW (Art. 134(4))
     #     - "other_items_in_collection" → SA: OTHER, 20% RW (Art. 134(3))
-    #     - "other_tangible"          → SA: OTHER, 100% RW (Art. 134(2))
-    #     - "other_residual_lease"    → SA: OTHER, 1/t × 100% RW (Art. 134(6))
+    #     - "other_tangible"          → SA: OTHER, 100% RW (Art. 134(1)/(2))
+    #     - "other_residual_lease"    → SA: OTHER, 1/t × 100% RW (Art. 134(7))
     "entity_type": ColumnSpec(pl.String),
     "country_code": ColumnSpec(pl.String, required=False),
     "annual_revenue": ColumnSpec(pl.Float64, required=False),
@@ -548,6 +622,25 @@ COUNTERPARTY_SCHEMA: dict[str, ColumnSpec] = {
     "sovereign_cqs": ColumnSpec(pl.Int32, required=False),
     "local_currency": ColumnSpec(pl.String, required=False),
     "institution_cqs": ColumnSpec(pl.Int8, required=False),
+    # CRR Art. 116(5): True where the Treasury has determined by regulations
+    # that this counterparty's third-country jurisdiction "applies supervisory
+    # and regulatory arrangements at least equivalent to those applied in the
+    # United Kingdom". Gates the Art. 116(1)/(2)/(3) PSE treatments for
+    # third-country PSEs; without it Art. 116(5) mandates a flat 100%
+    # ("Otherwise the institutions shall apply a risk weight of 100 %").
+    #
+    # NULL MEANS NOT EQUIVALENT — deliberately NO default. Equivalence is an
+    # affirmative Treasury determination, so the absence of an assertion cannot
+    # manufacture one, and the article's own residual is the 100% weight. Only
+    # an explicit True opens the Table 2 / Table 2A / short-term limbs.
+    # UK counterparties never consult this flag (a UK PSE is not a
+    # third-country PSE), so it may stay null for an entirely UK book.
+    #
+    # This is the PRUDENTIAL-SUPERVISION equivalence determination. It is NOT
+    # the Art. 115(4) / 116(4) "treated as exposures to the central government"
+    # concept, which is modelled by the rgla_sovereign / pse_sovereign
+    # entity_type values.
+    "is_equivalent_jurisdiction": ColumnSpec(pl.Boolean, required=False),
     # CRR Art. 137(1)-(2) Table 9: nominated ECA's minimum export insurance
     # premium (MEIP) score 0-7 used as a direct sovereign risk-weight input
     # when no ECAI rating is available. Null when ECA path is not used.
@@ -1769,6 +1862,17 @@ ASSET_CLASS_SHORT_CODE: dict[str, str] = {
 VALID_ENTITY_TYPES = {
     "sovereign",
     "central_bank",
+    # CRR Art. 114(3) / PS1/26 Art. 114(3): "Exposures to the [European] Central
+    # Bank shall be assigned a 0% risk weight" — unconditionally, under BOTH
+    # regimes. The ECB needs its own entity_type because none of the existing
+    # inputs can identify it: it is supranational so ``country_code`` has no ISO
+    # entry (and a member state's code would wrongly pull it into the Art. 114(7)
+    # EU-domestic-currency branch), ``counterparty_name`` is free text and is not
+    # a regulatory identifier, and plain ``central_bank`` cannot be told apart
+    # from the Bank of England or the Federal Reserve. This mirrors the
+    # ``mdb_named`` convention below — a distinct entity_type VALUE, not a new
+    # column. Use it only for the ECB itself.
+    "central_bank_ecb",
     "rgla_sovereign",
     "rgla_institution",
     "pse_sovereign",
@@ -1852,6 +1956,9 @@ NATURAL_PERSON_ENTITY_TYPES: tuple[str, ...] = (
 B31_SOVEREIGN_LIKE_ENTITY_TYPES: tuple[str, ...] = (
     "sovereign",
     "central_bank",
+    # The ECB is a central bank, so PS1/26 Art. 147(3) puts it in the sovereign
+    # class and Art. 147A(1)(a) makes it SA-only — exactly as for "central_bank".
+    "central_bank_ecb",
     "rgla_sovereign",
     "rgla_institution",
     "pse_sovereign",
@@ -2344,6 +2451,12 @@ HIERARCHY_OUTPUT_SCHEMA: dict[str, ColumnSpec] = {
     "cp_sovereign_cqs": ColumnSpec(pl.Int32, required=False),
     "cp_local_currency": ColumnSpec(pl.String, required=False),
     "cp_institution_cqs": ColumnSpec(pl.Int8, required=False),
+    # CRR Art. 116(5) third-country supervisory-equivalence determination,
+    # propagated from COUNTERPARTY_SCHEMA. Gates the Art. 116(1)/(2)/(3) PSE
+    # treatments for non-UK PSEs; NO default — null means NOT equivalent, so a
+    # third-country PSE without an explicit True takes the Art. 116(5) flat
+    # 100%. See COUNTERPARTY_SCHEMA.is_equivalent_jurisdiction.
+    "cp_is_equivalent_jurisdiction": ColumnSpec(pl.Boolean, required=False),
     # CRR Art. 137(1)-(2) Table 9 — nominated ECA MEIP score (0-7).
     "cp_eca_score": ColumnSpec(pl.Int8, required=False),
     # CRR Art. 227(3) / PRA PS1/26 Art. 227(3) — core market participant flag

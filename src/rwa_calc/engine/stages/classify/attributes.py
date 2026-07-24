@@ -155,6 +155,11 @@ def add_counterparty_attributes(
         pl.col("borrower_income_currency").alias("cp_borrower_income_currency"),
         # Sovereign floor for FX institution exposures (Art. 121(6) / CRE20.22)
         pl.col("sovereign_cqs").alias("cp_sovereign_cqs"),
+        # CRR Art. 116(5) third-country supervisory-equivalence determination —
+        # gates the Art. 116(1)/(2)/(3) PSE treatments. Null-VALUE semantics are
+        # applied downstream in engine/sa/risk_weights.py: null means NOT
+        # equivalent, so only an explicit True opens the PSE tables.
+        pl.col("is_equivalent_jurisdiction").alias("cp_is_equivalent_jurisdiction"),
         pl.col("local_currency").alias("cp_local_currency"),
         # ECA / MEIP score for unrated sovereign Art. 137(1)-(2) Table 9 path.
         pl.col("eca_score").alias("cp_eca_score"),
@@ -293,6 +298,8 @@ def join_specialised_lending(
 # =========================================================================
 
 
+@cites("CRR Art. 147")
+@cites("PS1/26, paragraph 147")
 def derive_independent_flags(
     exposures: pl.LazyFrame,
     config: CalculationConfig,
@@ -368,6 +375,22 @@ def derive_independent_flags(
             .then(pl.lit(ExposureClass.OTHER.value))
             .otherwise(pl.col("_sa_class"))
             .alias("_sa_class"),
+        )
+
+    # CRR Art. 147(3)(b) admits only the Art. 117(2) named (0% RW) MDBs to the
+    # central-government IRB class; Art. 147(4)(c) assigns "exposures to
+    # multilateral development banks which are not assigned a 0 % risk weight
+    # under Article 117" to the INSTITUTIONS class. PS1/26 Art. 147(3)(f) drops
+    # the split — every MDB is quasi-sovereign there — so the reroute reads the
+    # cited CRR-only pack Feature and the base map stays framework-invariant
+    # (same shape as the high-risk demotion above). ``mdb_named`` is untouched
+    # in both regimes (P1.276).
+    if resolved_pack.feature("crr_non_named_mdb_institution_irb_class"):
+        exposures = exposures.with_columns(
+            pl.when(pl.col("cp_entity_type") == "mdb")
+            .then(pl.lit(ExposureClass.INSTITUTION.value))
+            .otherwise(pl.col("_irb_class"))
+            .alias("_irb_class"),
         )
 
     sl_class = pl.lit(ExposureClass.SPECIALISED_LENDING.value)

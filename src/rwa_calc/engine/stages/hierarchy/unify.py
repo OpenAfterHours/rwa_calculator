@@ -196,6 +196,12 @@ def _coerce_loans_to_unified(loans: pl.LazyFrame) -> pl.LazyFrame:
             ("is_defaulted", pl.Boolean),
             # PRA PS1/26 Art. 161(1)(e)/(f)/(g): purchased receivables F-IRB LGD subtype.
             ("purchased_receivables_subtype", pl.String),
+            # CRR Art. 160(2)/(6) top-down PD inputs for purchased corporate
+            # receivables (EL rates, not amounts). The classify stage derives the
+            # Art. 160(2)(a)/(b) / 160(6) PD from these before the IRB approach gate
+            # reads ``internal_pd``, so they must survive the unified select.
+            ("el_estimate", pl.Float64),
+            ("el_dilution_estimate", pl.Float64),
             # CRR Art. 223(5) FCCM exposure volatility haircut (HE) inputs — used
             # by the CRM engine to gross up E by (1 + HE) when the exposure is
             # itself a debt security (typically SFTs lending out a bond). The CRM

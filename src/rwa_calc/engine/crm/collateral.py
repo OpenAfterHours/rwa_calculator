@@ -46,6 +46,7 @@ from rwa_calc.engine.crm.expressions import (
     collateral_category_expr,
     collateral_lgd_expr,
     is_financial_collateral_type_expr,
+    lgd_star_exposure_basis_expr,
     overcollateralisation_ratio_expr,
     subordinated_unsecured_lgd,
     supervisory_lgd_values,
@@ -1442,17 +1443,14 @@ def _apply_collateral_unified(
     # FIRB / Slotting / AIRB keep ead_gross because under those approaches
     # collateral modifies LGD (via lgd_post_crm), not EAD.
     schema_for_he = exposures.collect_schema().names()
-    if "exposure_volatility_haircut" in schema_for_he:
-        he_factor = pl.lit(1.0) + pl.col("exposure_volatility_haircut").fill_null(0.0)
-    else:
-        he_factor = pl.lit(1.0)
+    _has_he_col = "exposure_volatility_haircut" in schema_for_he
+    # E' = ead_for_crm × (1 + HE), shared with the A-IRB LGD input floor blend.
+    e_for_lgd_star = lgd_star_exposure_basis_expr(has_volatility_haircut=_has_he_col)
     exposures = exposures.with_columns(
         [
             pl.when(pl.col("approach") == ApproachType.SA.value)
             .then(
-                (pl.col("ead_for_crm") * he_factor - pl.col("collateral_adjusted_value")).clip(
-                    lower_bound=0
-                )
+                (e_for_lgd_star - pl.col("collateral_adjusted_value")).clip(lower_bound=0)
                 * pl.col("effective_ccf")
             )
             .otherwise(pl.col("ead_gross"))
@@ -1473,9 +1471,9 @@ def _apply_collateral_unified(
     # grossed up by its own volatility haircut HE — E' = E(1 + HE) — so
     #   LGD* = (LGDS · min(C, E') + LGDU · max(0, E' - C)) / E'.
     # HE (exposure_volatility_haircut, Art. 223(5)) is non-zero only for SFT rows
-    # lending out a debt security, so he_factor == 1 for every other row and
+    # lending out a debt security, so the HE factor == 1 for every other row and
     # E' == E; the SFT-FCCM path is unaffected (it emits E* directly).
-    e_for_lgd_star = pl.col("ead_for_crm") * he_factor
+    # ``e_for_lgd_star`` is built above from ``lgd_star_exposure_basis_expr``.
     lgd_star_expr = (
         (
             pl.col("lgd_secured")

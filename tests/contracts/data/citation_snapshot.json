@@ -118,6 +118,10 @@
     "CRR Art. 223",
     "CRR Art. 238"
   ],
+  "rwa_calc.engine.crm.expressions::lgd_star_exposure_basis_expr": [
+    "CRR Art. 223(4)",
+    "PS1/26 Art. 230(1)"
+  ],
   "rwa_calc.engine.crm.expressions::overcollateralisation_ratio_expr": [
     "PS1/26 Art. 230(1)"
   ],
@@ -259,6 +263,7 @@
     "CRR Art. 161"
   ],
   "rwa_calc.engine.irb.formulas::_pd_floor_expression": [
+    "CRR Art. 160",
     "CRR Art. 163",
     "PS1/26, paragraph 163"
   ],
@@ -286,6 +291,10 @@
   "rwa_calc.engine.irb.guarantee::apply_guarantee_substitution": [
     "CRR Art. 161(3)"
   ],
+  "rwa_calc.engine.irb.transforms::apply_firb_lgd": [
+    "CRR Art. 161",
+    "PS1/26, paragraph 161"
+  ],
   "rwa_calc.engine.irb.transforms::apply_lgd_floor": [
     "CRR Art. 164",
     "PS1/26, paragraph 164"
@@ -303,11 +312,25 @@
   "rwa_calc.engine.irb.transforms::calculate_maturity_adjustment": [
     "CRR Art. 162"
   ],
+  "rwa_calc.engine.irb.transforms::prepare_columns": [
+    "CRR Art. 162(1)"
+  ],
   "rwa_calc.engine.sa.b31_risk_weight_tables::_create_b31_covered_bond_df": [
     "PS1/26, paragraph 129"
   ],
   "rwa_calc.engine.sa.b31_risk_weight_tables::get_b31_combined_cqs_risk_weights": [
     "PS1/26, paragraph 122"
+  ],
+  "rwa_calc.engine.sa.central_bank::ecb_rw_expr": [
+    "CRR Art. 114(3)",
+    "PS1/26, paragraph 114"
+  ],
+  "rwa_calc.engine.sa.central_bank::is_ecb_expr": [
+    "CRR Art. 114(3)",
+    "PS1/26, paragraph 114"
+  ],
+  "rwa_calc.engine.sa.central_bank::lift_central_bank_cqs": [
+    "PS1/26, paragraph 114"
   ],
   "rwa_calc.engine.sa.crr_risk_weight_tables::_create_covered_bond_df": [
     "CRR Art. 129"
@@ -355,6 +378,14 @@
     "CRR Art. 119",
     "CRR Art. 120",
     "CRR Art. 121"
+  ],
+  "rwa_calc.engine.sa.jurisdiction::pse_jurisdiction_not_permitted_expr": [
+    "CRR Art. 116(5)",
+    "PS1/26, paragraph 116"
+  ],
+  "rwa_calc.engine.sa.jurisdiction::pse_short_term_eligible_expr": [
+    "CRR Art. 116(3)",
+    "PS1/26, paragraph 116"
   ],
   "rwa_calc.engine.sa.risk_weights::_apply_b31_risk_weight_overrides": [
     "CRR Art. 134",
@@ -475,6 +506,10 @@
     "CRR Art. 123",
     "PS1/26, paragraph 123A"
   ],
+  "rwa_calc.engine.stages.classify.attributes::derive_independent_flags": [
+    "CRR Art. 147",
+    "PS1/26, paragraph 147"
+  ],
   "rwa_calc.engine.stages.classify.attributes::natural_person_expr": [
     "CRR Art. 147(5)",
     "PS1/26, paragraph 147"
@@ -501,6 +536,11 @@
   "rwa_calc.engine.stages.classify.subtypes::derive_exposure_subclass": [
     "PS1/26, paragraph 147A.1"
   ],
+  "rwa_calc.engine.stages.classify.subtypes::derive_purchased_receivables_pd": [
+    "CRR Art. 160(2)",
+    "CRR Art. 160(6)",
+    "PS1/26, paragraph 160"
+  ],
   "rwa_calc.engine.stages.classify.subtypes::qrre_undrawn_cancellable_expr": [
     "CRR Art. 154(4)",
     "PS1/26, paragraph 147"
@@ -511,6 +551,7 @@
   ],
   "rwa_calc.engine.stages.classify.subtypes::sync_irb_exposure_class": [
     "CRR Art. 147(5)",
+    "CRR Art. 147(4)",
     "PS1/26, paragraph 147"
   ],
   "rwa_calc.engine.stages.hierarchy.enrich::_apply_obligor_short_term_spillover": [

@@ -71,6 +71,7 @@ def calculate_single_sa_exposure(
     local_currency: str | None = None,
     institution_cqs: int | None = None,
     is_hedged: bool = False,
+    is_equivalent_jurisdiction: bool | None = None,
 ) -> dict:
     """Calculate SA RWA for a single exposure via calculate_branch."""
     data: dict = {
@@ -109,6 +110,10 @@ def calculate_single_sa_exposure(
         "cp_is_social_housing": [cp_is_social_housing],
         "is_payroll_loan": [is_payroll_loan],
         "cp_sovereign_cqs": [sovereign_cqs],
+        # CRR Art. 116(5) Treasury equivalence determination — None means "not
+        # asserted", which for a third-country PSE gates Art. 116(1)/(2)/(3)
+        # off and yields a flat 100%.
+        "cp_is_equivalent_jurisdiction": [is_equivalent_jurisdiction],
         "cp_local_currency": [local_currency],
         "cp_institution_cqs": [institution_cqs],
         "is_hedged": [is_hedged],
@@ -153,6 +158,11 @@ def calculate_single_irb_exposure(
         "exposure_reference": ["SINGLE"],
         "ead_final": [float(ead)],
         "ead_gross": [float(ead)],
+        # CRR Art. 223(4) CCF=100% CRM basis + Art. 223(5) exposure-side
+        # volatility haircut: this is a pure on-balance-sheet row, so the basis
+        # equals ead_gross and HE is zero (E' = E x (1 + HE) = ead_gross).
+        "ead_for_crm": [float(ead)],
+        "exposure_volatility_haircut": [0.0],
         "pd": [float(pd)],
         "maturity": [float(maturity)],
         "exposure_class": [exposure_class],

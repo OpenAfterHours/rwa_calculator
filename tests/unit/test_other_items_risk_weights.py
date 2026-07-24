@@ -5,20 +5,20 @@ Why these tests matter:
     Art. 134 defines risk weights for miscellaneous items not covered by other
     exposure classes. Without explicit handling, all Other Items exposures
     silently default to 100% via the CQS join fallback. This is correct for
-    tangible assets (Art. 134(2)) but wrong for:
-    - Cash/gold: should be 0% (Art. 134(1)/(4)) — 100% default OVERSTATES
+    tangible assets (Art. 134(1)) but wrong for:
+    - Cash/gold: should be 0% (Art. 134(3)/(4)) — 100% default OVERSTATES
     - Items in collection: should be 20% (Art. 134(3)) — 100% default OVERSTATES
-    - Residual lease value: should be 1/t × 100% (Art. 134(6)) — can differ
+    - Residual lease value: should be 1/t × 100% (Art. 134(7)) — can differ
 
     The entity_type sub-values (other_cash, other_gold, other_items_in_collection,
     other_tangible, other_residual_lease) drive sub-type routing in the SA calculator.
 
 Other Items treatment is identical under CRR and PRA PS1/26 Basel 3.1:
-    - Cash and equivalent: 0% (Art. 134(1))
+    - Cash and equivalent: 0% (Art. 134(3))
     - Gold bullion in own vaults: 0% (Art. 134(4))
     - Items in course of collection: 20% (Art. 134(3))
-    - Tangible assets, prepaid expenses: 100% (Art. 134(2))
-    - Residual value of leased assets: 1/t × 100% where t ≥ 1 (Art. 134(6))
+    - Tangible assets, prepaid expenses: 100% (Art. 134(1))
+    - Residual value of leased assets: 1/t × 100% where t ≥ 1 (Art. 134(7))
     - All other: 100% (Art. 134(2))
 
 References:
@@ -77,7 +77,7 @@ class TestOtherItemsRiskWeightConstants:
     """Tests for Art. 134 risk weight constants."""
 
     def test_cash_rw_zero(self):
-        """Art. 134(1): Cash and equivalent → 0%."""
+        """Art. 134(3): Cash and equivalent → 0%."""
         assert Decimal("0.00") == OTHER_ITEMS_CASH_RW
 
     def test_gold_rw_zero(self):
@@ -89,7 +89,7 @@ class TestOtherItemsRiskWeightConstants:
         assert Decimal("0.20") == OTHER_ITEMS_COLLECTION_RW
 
     def test_tangible_rw_hundred(self):
-        """Art. 134(2): Tangible assets → 100%."""
+        """Art. 134(1): Tangible assets → 100%."""
         assert Decimal("1.00") == OTHER_ITEMS_TANGIBLE_RW
 
     def test_default_rw_hundred(self):
@@ -110,7 +110,7 @@ class TestCRROtherItemsRiskWeights:
     """Tests for Other Items risk weights through the CRR SA calculator."""
 
     def test_cash_zero_percent(self, sa_calculator, crr_config):
-        """CRR Art. 134(1): Cash and equivalent → 0% RW."""
+        """CRR Art. 134(3): Cash and equivalent → 0% RW."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("5000000"),
@@ -146,7 +146,7 @@ class TestCRROtherItemsRiskWeights:
         assert result["rwa"] == pytest.approx(400000.0)
 
     def test_tangible_hundred_percent(self, sa_calculator, crr_config):
-        """CRR Art. 134(2): Tangible assets → 100% RW."""
+        """CRR Art. 134(1): Tangible assets → 100% RW."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
@@ -158,7 +158,7 @@ class TestCRROtherItemsRiskWeights:
         assert result["rwa"] == pytest.approx(1000000.0)
 
     def test_residual_lease_five_years(self, sa_calculator, crr_config):
-        """CRR Art. 134(6): Residual lease value, t=5 years → 1/5 = 20% RW."""
+        """CRR Art. 134(7): Residual lease value, t=5 years → 1/5 = 20% RW."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
@@ -171,7 +171,7 @@ class TestCRROtherItemsRiskWeights:
         assert result["rwa"] == pytest.approx(200000.0)
 
     def test_residual_lease_one_year(self, sa_calculator, crr_config):
-        """CRR Art. 134(6): Residual lease value, t=1 year → 1/1 = 100% RW."""
+        """CRR Art. 134(7): Residual lease value, t=1 year → 1/1 = 100% RW."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
@@ -183,7 +183,7 @@ class TestCRROtherItemsRiskWeights:
         assert result["risk_weight"] == pytest.approx(1.0)
 
     def test_residual_lease_two_point_five_years(self, sa_calculator, crr_config):
-        """CRR Art. 134(6): Residual lease value, t=2.5 years → 1/2.5 = 40% RW."""
+        """CRR Art. 134(7): Residual lease value, t=2.5 years → 1/2.5 = 40% RW."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
@@ -195,7 +195,7 @@ class TestCRROtherItemsRiskWeights:
         assert result["risk_weight"] == pytest.approx(0.40)
 
     def test_residual_lease_sub_one_year_floors_to_one(self, sa_calculator, crr_config):
-        """CRR Art. 134(6): Residual lease t < 1 year floors to 1 → 100% RW."""
+        """CRR Art. 134(7): Residual lease t < 1 year floors to 1 → 100% RW."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
@@ -207,7 +207,7 @@ class TestCRROtherItemsRiskWeights:
         assert result["risk_weight"] == pytest.approx(1.0)
 
     def test_residual_lease_null_maturity_defaults_to_hundred(self, sa_calculator, crr_config):
-        """CRR Art. 134(6): Residual lease with null maturity → 100% (conservative)."""
+        """CRR Art. 134(7): Residual lease with null maturity → 100% (conservative)."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
@@ -241,7 +241,7 @@ class TestB31OtherItemsRiskWeights:
     """
 
     def test_cash_zero_percent(self, sa_calculator, b31_config):
-        """B31 Art. 134(1): Cash and equivalent → 0% RW (unchanged from CRR)."""
+        """B31 Art. 134(3): Cash and equivalent → 0% RW (unchanged from CRR)."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("5000000"),
@@ -276,7 +276,7 @@ class TestB31OtherItemsRiskWeights:
         assert result["rwa"] == pytest.approx(400000.0)
 
     def test_tangible_hundred_percent(self, sa_calculator, b31_config):
-        """B31 Art. 134(2): Tangible assets → 100% RW (unchanged from CRR)."""
+        """B31 Art. 134(1): Tangible assets → 100% RW (unchanged from CRR)."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
@@ -287,7 +287,7 @@ class TestB31OtherItemsRiskWeights:
         assert result["risk_weight"] == pytest.approx(1.0)
 
     def test_residual_lease_five_years(self, sa_calculator, b31_config):
-        """B31 Art. 134(6): Residual lease value, t=5 years → 20% RW."""
+        """B31 Art. 134(7): Residual lease value, t=5 years → 20% RW."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
@@ -299,7 +299,7 @@ class TestB31OtherItemsRiskWeights:
         assert result["risk_weight"] == pytest.approx(0.20)
 
     def test_residual_lease_ten_years(self, sa_calculator, b31_config):
-        """B31 Art. 134(6): Residual lease value, t=10 years → 10% RW."""
+        """B31 Art. 134(7): Residual lease value, t=10 years → 10% RW."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
@@ -311,7 +311,7 @@ class TestB31OtherItemsRiskWeights:
         assert result["risk_weight"] == pytest.approx(0.10)
 
     def test_residual_lease_sub_one_year_floors(self, sa_calculator, b31_config):
-        """B31 Art. 134(6): Residual lease t < 1yr floors to t=1 → 100% RW."""
+        """B31 Art. 134(7): Residual lease t < 1yr floors to t=1 → 100% RW."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),

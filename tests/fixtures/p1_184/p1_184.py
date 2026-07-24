@@ -17,7 +17,7 @@ Regulatory routing summary (CRR Art. 117 / PRA PS1/26 Art. 117):
 
   entity_type="mdb_named":
     Art. 117(2): named MDB list → 0% risk weight unconditionally.
-    MDB_NAMED_ZERO_RW = 0.00 (src/rwa_calc/data/tables/crr_risk_weights.py).
+    MDB_NAMED_ZERO_RW = 0.00 (rulepack: "mdb_named_rw" / Art. 117(2) named-MDB 0%).
 
   entity_type="mdb" + rated (institution_cqs present):
     Art. 117(1): treated as institution → Table 2B CQS lookup.

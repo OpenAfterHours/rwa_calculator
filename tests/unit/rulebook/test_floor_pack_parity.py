@@ -24,11 +24,16 @@ from rwa_calc.rulebook.resolve import resolve
 _CRR_PACK = resolve("crr", date(2026, 1, 1))
 _B31_PACK = resolve("b31", date(2027, 1, 1))
 
-# CRR Art. 160(1): a uniform 0.03% PD floor across every IRB exposure class.
+# CRR Art. 160(1): 0.03% PD floor for corporates and institutions only ("The PD
+# of an exposure to a corporate or an institution shall be at least 0,03 %").
+# Retail is floored at the same rate by the separate Art. 163(1). Central
+# governments / central banks are in neither article, so ``sovereign`` is 0
+# (P1.277) — which is also what keeps _pd_floor_expression's all-equal scalar
+# shortcut from collapsing the CRR class ladder.
 _CRR_PD_FLOORS = {
     "corporate": Decimal("0.0003"),
     "corporate_sme": Decimal("0.0003"),
-    "sovereign": Decimal("0.0003"),
+    "sovereign": Decimal("0"),
     "institution": Decimal("0.0003"),
     "retail_mortgage": Decimal("0.0003"),
     "retail_other": Decimal("0.0003"),

@@ -33,11 +33,20 @@ the table below (subject to the overcollateralisation ratios).
 
 Source: `docs/specifications/crr/credit-risk-mitigation.md` lines 188–206.
 
-## PD Floor (Art. 163)
+## PD Floor (Art. 160(1) wholesale / Art. 163(1) retail)
 
-**CRR:** Single floor of **0.03%** for all exposure classes.
+**CRR:** **0.03%**, but only for the classes the two articles reach:
 
-(Basel 3.1 introduces differentiated PD floors — see the `basel31` skill.)
+- **Art. 160(1)** — "The PD of an exposure to a **corporate or an institution** shall be
+  at least 0,03 %."
+- **Art. 163(1)** — retail: "The PD of an exposure shall be at least 0,03 %."
+- **Central governments / central banks: NO floor.** Neither article has a CGCB limb, so
+  a CRR CGCB IRB exposure keeps its modelled PD however low. Under Art. 161(3) this also
+  means a central-government *guarantor*'s substituted PD is unfloored, because the
+  benchmark is "a comparable, direct exposure to the guarantor".
+
+(Basel 3.1 introduces differentiated PD floors and **does** floor sovereigns at 0.05% —
+see the `basel31` skill.)
 
 ## Asset Correlation Formulas (Art. 153)
 

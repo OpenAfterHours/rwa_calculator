@@ -67,6 +67,7 @@ from rwa_calc.engine.stages.classify.permissions import (
 from rwa_calc.engine.stages.classify.subtypes import (
     classify_exposure_subtypes,
     derive_exposure_subclass,
+    derive_purchased_receivables_pd,
     reclassify_corporate_to_retail,
     sync_irb_exposure_class,
 )
@@ -149,7 +150,11 @@ class ExposureClassifier:
         classified = flag_property_reclassification_candidates(
             classified, config, schema_names, pack=resolved_pack
         )
-        classified = sync_irb_exposure_class(classified)
+        classified = sync_irb_exposure_class(classified, pack=resolved_pack)
+        # CRR Art. 160(2)/(6): the top-down PD for purchased corporate receivables
+        # must land BEFORE assign_approach — the IRB gate is internal_pd non-null,
+        # so without it a pool with no obligor PD falls to SA.
+        classified = derive_purchased_receivables_pd(classified, config, pack=resolved_pack)
 
         has_model_permissions = data.model_permissions is not None
         if data.model_permissions is not None:

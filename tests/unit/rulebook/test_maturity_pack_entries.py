@@ -56,6 +56,28 @@ def test_firb_sft_supervisory_maturity_years_value() -> None:
     assert float(entry.value) == 0.5
 
 
+def test_firb_fixed_supervisory_maturity_years_value() -> None:
+    # Act
+    entry = _CRR_PACK.scalar_param("firb_fixed_supervisory_maturity_years")
+    # Assert — P1.249: Art. 162(1) "all other exposures M of 2,5 years" (a FIXED
+    # value, the sibling of the 0.5y repo-style limb — not a floor, not a clip bound)
+    assert isinstance(entry, ScalarParam)
+    assert float(entry.value) == 2.5
+
+
+def test_firb_fixed_supervisory_maturity_feature_is_crr_only() -> None:
+    # Assert — CRR has Art. 162(1); PS1/26 Art. 162(1) is "Provision left blank",
+    # so the fixed-M election can never fire under Basel 3.1.
+    assert _CRR_PACK.feature("firb_fixed_supervisory_maturity") is True
+    assert _B31_PACK.feature("firb_fixed_supervisory_maturity") is False
+
+
+def test_firb_fixed_supervisory_maturity_feature_declared_in_both_packs() -> None:
+    # Act / Assert — declared in both packs (avoids the pack.feature KeyError trap)
+    assert isinstance(_CRR_PACK.entry("firb_fixed_supervisory_maturity"), Feature)
+    assert isinstance(_B31_PACK.entry("firb_fixed_supervisory_maturity"), Feature)
+
+
 def test_irb_maturity_floor_repo_sft_years_is_five_over_365() -> None:
     # Act
     entry = _CRR_PACK.scalar_param("irb_maturity_floor_repo_sft_years")
@@ -103,6 +125,8 @@ def test_new_entries_carry_citations() -> None:
         "irb_maturity_floor_repo_sft_years",
         "irb_maturity_floor_collateralised_deriv_years",
         "firb_sft_supervisory_maturity_years",
+        "firb_fixed_supervisory_maturity_years",
+        "firb_fixed_supervisory_maturity",
         "ccr_synthetic_maturity",
         "mna_intermediate_floor_requires_daily_condition",
     ):

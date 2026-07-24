@@ -358,8 +358,9 @@ def _align_irb_exposure_class(exposures: pl.LazyFrame) -> pl.LazyFrame:
     The IRB calculator reads ``exposure_class`` (not ``exposure_class_irb``)
     for correlation / LGD / floor selection, so any IRB-routed row whose IRB
     class legitimately differs from its SA class must have ``exposure_class``
-    rewritten to the IRB value. Two entity populations diverge after
-    ``sync_irb_exposure_class`` and no other:
+    rewritten to the IRB value. Three entity populations diverge after
+    ``sync_irb_exposure_class``; the first two are aligned here, the third is
+    deliberately not:
 
     - rgla_* / pse_* rows, whose SA labels RGLA / PSE differ from the IRB
       CGCB / INSTITUTION class (CRR Art. 147(3)/147(4)(b)).
@@ -370,9 +371,28 @@ def _align_irb_exposure_class(exposures: pl.LazyFrame) -> pl.LazyFrame:
       their ``exposure_class_irb`` to RETAIL_OTHER; this step propagates it to
       ``exposure_class`` so the retail IRB formula applies.
 
-    Both are gated on the ``exposure_class_irb != exposure_class`` difference
-    (a no-op for every other IRB-routed row, where the two are already equal),
-    so QRRE / mortgage / SME subtyping is never reverted.
+    - CRR non-named ``mdb`` rows, whose IRB class is INSTITUTION (Art.
+      147(4)(c)) while their SA class stays MDB — the ``preserve_derived_irb_class``
+      limb of ``sync_irb_exposure_class``, gated on the
+      ``crr_non_named_mdb_institution_irb_class`` pack Feature (P1.276).
+      **This population is intentionally NOT aligned.** Under CRR every IRB
+      formula parameter is identical across MDB / INSTITUTION / CGCB — the
+      correlation tuple is the same (``CORRELATION_PARAMS``; MDB falls through
+      to CORPORATE), the FI 1.25x scalar reads ``requires_fi_scalar`` rather
+      than the class, the F-IRB supervisory LGD keys on
+      ``(collateral_type, seniority, is_fse)``, and ``_pd_floor_expression``
+      selects on ``exposure_class`` (so an MDB takes the corporate floor arm
+      either way). Alignment would therefore be a parameter no-op that
+      needlessly moved the reported exposure class. If institution-specific IRB
+      treatment is ever introduced, this omission stops being a no-op and this
+      row population must be added to ``needs_alignment``.
+
+    The first two are gated on the ``exposure_class_irb != exposure_class``
+    difference (a no-op for every other IRB-routed row, where the two are
+    already equal), so QRRE / mortgage / SME subtyping is never reverted. Note
+    the gate is the ``is_rgla_pse | natural_person_diverged`` predicate below,
+    NOT the generic inequality — which is what keeps the MDB divergence
+    unpropagated.
     """
     is_rgla_pse = pl.col("cp_entity_type").is_in(list(RGLA_PSE_ENTITY_TYPES))
     natural_person_diverged = natural_person_expr() & (

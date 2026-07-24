@@ -81,7 +81,7 @@ The `entity_type` field is the **authoritative source** for determining both SA 
 | `pse_sovereign` | PSE | CENTRAL_GOVT_CENTRAL_BANK | CRR Art. 116 - govt guaranteed |
 | `pse_institution` | PSE | INSTITUTION | CRR Art. 116 - commercial PSE |
 | **MDB/International Org Class** |
-| `mdb` | MDB | CENTRAL_GOVT_CENTRAL_BANK | CRR Art. 117(1) — non-named MDB; institution table (CRR) / dedicated Table 2B (PS1/26 Art. 117(1)(a)) |
+| `mdb` | MDB | INSTITUTION (CRR only) | CRR Art. 147(4)(c) — an MDB not carrying a 0% Art. 117 RW is assigned to the **institutions** IRB class, and SA prices it from the institution tables (Art. 117(1)). Not applicable under PS1/26 Art. 147(3)(f), where every MDB is quasi-sovereign and SA uses the dedicated Table 2B (Art. 117(1)(a)) |
 | `mdb_named` | MDB | CENTRAL_GOVT_CENTRAL_BANK | CRR Art. 117(2) / PS1/26 Art. 117(2) — named MDBs on the eligible list (e.g. IBRD, IFC, EIB, EBRD) qualify for **0% RW**. Use `mdb` for non-named MDBs that fall back to the institution / Table 2B treatment |
 | `international_org` | MDB | CENTRAL_GOVT_CENTRAL_BANK | CRR Art. 118 — international organisations (e.g. IMF, BIS); 0% RW |
 | **Institution Class** |
@@ -109,9 +109,9 @@ The `entity_type` field is the **authoritative source** for determining both SA 
 | **Other Items Class (CRR Art. 134 / PS1/26 Art. 134)** |
 | `other_cash` | OTHER | OTHER | CRR Art. 134(3) / PS1/26 Art. 134(3) — cash in hand and equivalent items; **0% RW** |
 | `other_gold` | OTHER | OTHER | CRR Art. 134(4) / PS1/26 Art. 134(4) — gold bullion held in own vaults or on an allocated basis (backed by bullion liabilities); **0% RW** |
-| `other_items_in_collection` | OTHER | OTHER | CRR Art. 134(2) / PS1/26 Art. 134(2) — cash items in the process of collection; **20% RW** |
-| `other_tangible` | OTHER | OTHER | CRR Art. 134(7) / PS1/26 Art. 134(7) — other tangible assets, prepayments, and accrued income (where the counterparty cannot be identified); **100% RW** |
-| `other_residual_lease` | OTHER | OTHER | CRR Art. 134(7) / PS1/26 Art. 134(7) — residual value of leasing exposures (i.e. the portion not captured as a lease receivable on the obligor); **100% RW** |
+| `other_items_in_collection` | OTHER | OTHER | CRR Art. 134(3) / PS1/26 Art. 134(3) — cash items in the process of collection; **20% RW** |
+| `other_tangible` | OTHER | OTHER | CRR Art. 134(1)/(2) / PS1/26 Art. 134(1)/(2) — other tangible assets, prepayments, and accrued income (where the counterparty cannot be identified); **100% RW** |
+| `other_residual_lease` | OTHER | OTHER | CRR Art. 134(7) / PS1/26 Art. 134(7) — residual value of leasing exposures (i.e. the portion not captured as a lease receivable on the obligor); **100% RW**. For the receivable leg see [Lease exposures](#lease-exposures-the-drawn_amount-convention) |
 
 !!! warning "Art. 128 (high-risk items) is omitted from current UK CRR"
     Art. 128 was **omitted from UK onshored CRR by SI 2021/1078** (the Capital Requirements Regulation (Amendment) Regulations 2021). The high-risk exposure class is therefore a **dead letter under current UK CRR (pre-2027)** — exposures tagged with any `high_risk*` `entity_type` will fall through to other classes under a CRR-mode run. The class is **re-introduced under PRA PS1/26 Art. 128** with effect 1 January 2027. Use the `high_risk*` entity types only when running in Basel 3.1 mode, or accept that the row will be reclassified under CRR. See [SA risk weights spec - High-risk exposures](../specifications/crr/sa-risk-weights.md#high-risk-exposures-art-128).
@@ -301,7 +301,7 @@ facilities = pl.DataFrame({
 | `value_date` | `Date` | No | Loan origination date |
 | `maturity_date` | `Date` | No | Loan maturity date |
 | `currency` | `String` | No | ISO 4217 currency code |
-| `drawn_amount` | `Float64` | No | Outstanding principal balance (default `0.0`) |
+| `drawn_amount` | `Float64` | No | Outstanding principal balance (default `0.0`). For a **finance lease** this must arrive already discounted — see [Lease exposures](#lease-exposures-the-drawn_amount-convention) below |
 | `interest` | `Float64` | No | Accrued interest (adds to on-balance-sheet EAD) |
 | `lgd` | `Float64` | No | Internal LGD estimate (A-IRB) |
 | `lgd_unsecured` | `Float64` | No | A-IRB unsecured LGD estimate, applied to the residual EAD after eligible collateral (CRR Art. 181) |
@@ -320,6 +320,58 @@ facilities = pl.DataFrame({
 | `is_under_irb_rollout` | `Boolean` | No | CRR Art. 148 IRB roll-out-plan flag — see Facility schema. Reporting-only (COREP C 08.07 / OF 08.07 col 0040); default False |
 
 **Note:** Loans do not have CCF fields (`risk_type`, `ccf_modelled`, `is_short_term_trade_lc`) because CCF only applies to off-balance sheet items. For drawn loans, EAD = `drawn_amount` + `interest` directly.
+
+#### Lease exposures — the `drawn_amount` convention
+
+For a finance-lease receivable, the regulatory exposure value is the **discounted
+minimum lease payments**. Minimum lease payments are the payments over the lease term
+that the lessee is (or can be required to be) obliged to make, plus any bargain option
+whose exercise is reasonably certain.
+
+This is a **feed-side convention: `drawn_amount` must arrive already discounted.** The
+engine has no lease product type, no minimum-lease-payment schedule input and no
+discount-rate input, so it cannot perform the discounting and does not validate that it
+was performed. Supplying an undiscounted gross lease investment overstates the exposure
+value and therefore the RWA.
+
+| Regime | Approach | Provision |
+|--------|----------|-----------|
+| CRR | IRB | Art. 166(4) — "The exposure value for leases shall be the discounted minimum lease payments" |
+| CRR | SA | Art. 134(7) — same rule, same wording |
+| PS1/26 | IRB | Art. 166A(4) — "An institution shall set the exposure value for leases as the discounted minimum lease payments" (Art. 166 itself is left blank) |
+| PS1/26 | SA | Art. 134(7) — same rule, same wording |
+
+The requirement is therefore **regime- and approach-invariant**: it binds SA and IRB
+rows identically under both frameworks.
+
+!!! tip "An IFRS 16 / IAS 17 finance-lease receivable already satisfies this"
+    A lessor's net investment in a finance lease, measured at amortised cost, *is* the
+    discounted minimum lease payments — so a standard accounting feed needs no
+    adjustment. The exposure to check is a feed that reports the **gross** investment
+    (undiscounted rentals) or that adds unearned finance income back onto the balance.
+
+!!! warning "There is no lease flag, and that is deliberate"
+    No schema field asserts "this row is a discounted lease". A Boolean that the engine
+    never reads would look like a compliance attestation while guaranteeing nothing, and
+    the consistency check that would justify one (discount rate vs undiscounted flows)
+    cannot be written until those inputs exist. If you want lease rows tagged for your
+    own reporting, use the free-text `product_type` (e.g. `finance_lease`) — the engine
+    does not consult it for lease purposes. Avoid values containing `MORTGAGE` or
+    `INFRASTRUCTURE`, or equal to `DEVELOPMENT_FINANCE` / `CONSTRUCTION_LOAN`: the
+    classifier does read `product_type` for those unrelated signals.
+
+Two adjacent lease mechanics are separate from this convention:
+
+- **Residual value** of a leased asset is its own exposure, carried by
+  `entity_type = "other_residual_lease"` on the counterparty and risk-weighted at
+  1/t × 100% (CRR / PS1/26 Art. 134(7)). See [Counterparty Schema](#counterparty-schema).
+- **The leased asset as collateral** (CRR Art. 199(7)/211) is supplied as an ordinary
+  non-financial collateral row with `is_lease_collateral_attested = True`. See
+  [Collateral Schema](#collateral-schema).
+
+A third-party obligation to cover the residual value, recognisable as unfunded credit
+protection where it meets Art. 201 and Art. 213, is **not implemented** — the last
+sentence of each provision above is out of scope and tracked separately.
 
 **Example:**
 
@@ -928,7 +980,7 @@ The acronym "SFT" denotes **two unrelated concepts** that never interact:
 |---|---|---|
 | Carrier | `transaction_type == "sft"` on `SFT_TRADE_SCHEMA` | `is_sft` Boolean on `LOAN` / `CONTINGENT` / `FACILITY` schemas |
 | Concept | Securities financing transaction routed to **FCCM CCR EAD** | A lending exposure flagged as an SFT for the F-IRB maturity carve-out |
-| Drives | The `sft_fccm` stage: `E* = max(0, E·(1+HE) − CVA·(1−HC−HFX))` | The F-IRB **0.5-year fixed supervisory maturity (`M`)** for repo-style transactions, in place of the 2.5-year default |
+| Drives | The `sft_fccm` stage: `E* = max(0, E·(1+HE) − CVA·(1−HC−HFX))` | The F-IRB **0.5-year fixed supervisory maturity (`M`)** for repo-style transactions, in place of the date-derived Art. 162(2) `M` — or of the fixed 2.5 years where the firm has elected them (`firb_fixed_maturity`) |
 | Regulatory basis | CRR Art. 220–223, Art. 271(2) | CRR Art. 162(1) (fixed `M = 0.5y`; deleted under Basel 3.1) |
 | Engine site | `engine/sft/fccm.py` | `engine/irb/transforms.py` |
 

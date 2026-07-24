@@ -102,6 +102,33 @@ def subordinated_unsecured_lgd(pack: ResolvedRulepack) -> float:
     return rows[("unsecured", "subordinated", False)]
 
 
+@cites("CRR Art. 223(4)")
+@cites("PS1/26 Art. 230(1)")
+def lgd_star_exposure_basis_expr(*, has_volatility_haircut: bool = True) -> pl.Expr:
+    """The Art. 230(1) exposure basis E' = E x (1 + HE) that LGD* divides by.
+
+    ``E`` is ``ead_for_crm``, the CCF=100% exposure value (CRR Art. 223(4) /
+    PS1/26 Art. 223(4)) — NOT the post-CCF ``ead_gross``: an off-balance-sheet
+    item enters credit risk mitigation at 100% of nominal, so the collateral
+    shares that weight the LGD* blend are shares of the pre-CCF basis. ``HE``
+    is the exposure's own volatility haircut (Art. 223(5)), non-zero only where
+    the row lends out a debt security, so E' == E on every other row.
+
+    The single home for this quantity: the F-IRB / A-IRB LGD* formula and the
+    Art. 161(5)(b) / 164(4)(c) A-IRB LGD *input floor* blend must divide by the
+    same basis (``engine/crm/collateral.py``, ``engine/irb/formulas.py``).
+
+    Args:
+        has_volatility_haircut: False where the caller's frame predates the
+            ``exposure_volatility_haircut`` column (pre-seal CRM inputs built
+            by direct unit-test callers), which is equivalent to HE = 0.
+    """
+    if not has_volatility_haircut:
+        return pl.col("ead_for_crm")
+    he_factor = pl.lit(1.0) + pl.col("exposure_volatility_haircut").fill_null(0.0)
+    return pl.col("ead_for_crm") * he_factor
+
+
 def collateral_lgd_expr(pack: ResolvedRulepack) -> pl.Expr:
     """Build expression mapping collateral_type to supervisory LGD.
 

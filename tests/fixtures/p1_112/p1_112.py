@@ -4,9 +4,36 @@ Generate P1.112 fixtures: non-UK unrated PSE sovereign-derived risk weight.
 Pipeline position:
     fixture-builder output -> test-writer -> engine-implementer (sa/namespace.py fix)
 
+Reconciled with P1.252 (CRR Art. 116(5) third-country PSE equivalence gate):
+    Germany is a third country for UK CRR purposes, so Art. 116(1) Table 2 is
+    available to this PSE only where the Treasury has determined the jurisdiction
+    equivalent — otherwise Art. 116(5) mandates a flat 100%. The counterparty
+    therefore carries ``is_equivalent_jurisdiction=True`` and this scenario is now
+    the POSITIVE CONTROL for the equivalent third-country limb.
+
+    READ THIS BEFORE REUSING THE NUMBER: the 20% / RWA 20,000,000 below is
+    numerically unchanged from the original P1.112 hand-calc, but it now
+    *DEPENDS ON* the ``is_equivalent_jurisdiction=True`` assertion. Do NOT read
+    the unchanged number as evidence that the Art. 116(5) gate does not apply to
+    this row — it does apply, and the row passes it. Delete the assertion and
+    this fixture yields 100% / RWA 100,000,000.
+
+    P1.112's regulatory point survives intact, namely that Table 2 keys on the
+    PSE's OWN sovereign CQS (PS1/26 Art. 116(3A)(a)) and not on GB-ness. What
+    P1.112 originally got wrong was concluding that jurisdiction is irrelevant —
+    it analysed Art. 116(1) in isolation and never reached Art. 116(5). The
+    non-equivalent case (same row, no assertion -> 100%) is pinned in
+    tests/acceptance/test_p1_252_art_116_5_pse_jurisdiction_equivalence.py.
+
+    The 5-year maturity also keeps this row clear of the SECOND P1.252
+    predicate (Art. 116(3) short-term 20%, which is UK-PSE-only): at 5y the
+    short-term branch never engages, so this fixture exercises the Art. 116(1)
+    Table 2 path only.
+
 Key responsibilities:
 - Produce one counterparty row: German PSE (entity_type=pse_institution),
-  sovereign_cqs=1, own cqs=null (unrated), country_code=DE.
+  sovereign_cqs=1, own cqs=null (unrated), country_code=DE,
+  is_equivalent_jurisdiction=True (Art. 116(5)).
 - Produce one facility row: EUR, committed, 5-year term.
 - Produce one loan row: fully drawn, EUR 100,000,000.
 - Produce one facility-mapping row linking facility to loan.
@@ -18,21 +45,30 @@ Defect under test (pre-fix):
         otherwise                ->  100% (pse_unrated fallback)
     A non-UK PSE backed by a CQS 1 sovereign should receive 20%, not 100%.
 
-Post-fix assertion (Art. 116(1) Table 2, PSE_RISK_WEIGHTS_SOVEREIGN_DERIVED):
+Post-fix assertion (Art. 116(1) Table 2, PSE_RISK_WEIGHTS_SOVEREIGN_DERIVED;
+requires the Art. 116(5) equivalence assertion — see the reconciliation note above):
     cp_sovereign_cqs=1 -> risk_weight=0.20
     EAD=100_000_000, RWA=20_000_000
 
 Hand-calculation (Basel 3.1, CalculationConfig.basel_3_1()):
     Step 1 - Classification: entity_type="pse_institution" -> exposure_class="pse"
     Step 2 - Domestic check: cp_country_code="DE", currency="EUR" -> not UK domestic
+    Step 2a- Art. 116(5) jurisdiction gate: third country, but
+             is_equivalent_jurisdiction=True -> Art. 116(1)/(2) permitted
+             (had it been null/False: flat 100%, RWA 100,000,000)
     Step 3 - Short-term carve-out (Art. 116(3)): maturity=5yr -> does NOT apply
     Step 4 - Unrated PSE branch: cqs=null -> sentinel=-1 -> unrated path
     Step 5 - Sovereign-derived lookup (Art. 116(1) Table 2):
              cp_sovereign_cqs=1 -> PSE_RISK_WEIGHTS_SOVEREIGN_DERIVED[1] = 0.20
     Step 6 - RWA: EAD=100_000_000 x RW=0.20 = 20_000_000
 
-    Current bug: code uses country_code != "GB" -> pse_unrated=1.00 -> RWA=100_000_000
-                 (5x overstatement)
+    Original defect (fixed by P1.112): the code keyed the 20% on
+                 country_code == "GB" and sent every non-GB PSE to
+                 pse_unrated=1.00, ignoring the sovereign CQS entirely — so an
+                 EQUIVALENT-jurisdiction PSE was overstated 5x. Note this is a
+                 different predicate from the Art. 116(5) equivalence gate added
+                 by P1.252: GB-ness is not equivalence, and the 100% is now
+                 reached only where no Treasury determination is asserted.
 
 References:
     - CRR Art. 116(1) Table 2 — sovereign-derived PSE risk weights (unrated PSE)
@@ -101,6 +137,14 @@ class _Counterparty:
     sovereign_cqs: int  # CQS of the backing sovereign (Germany = 1)
     default_status: bool
     apply_fi_scalar: bool
+    # CRR Art. 116(5) Treasury equivalence determination (P1.252). Germany is a
+    # THIRD COUNTRY for UK CRR purposes, so Art. 116(1) Table 2 is available to
+    # this PSE only where the jurisdiction is determined equivalent; without the
+    # assertion Art. 116(5) mandates a flat 100%. Asserting it here keeps this
+    # scenario's regulatory point intact — that Table 2 keys on the PSE's OWN
+    # sovereign CQS (PS1/26 Art. 116(3A)(a)) rather than on GB-ness — and makes
+    # the fixture the positive control for the equivalent third-country limb.
+    is_equivalent_jurisdiction: bool
 
     def to_dict(self) -> dict:
         return {
@@ -110,6 +154,7 @@ class _Counterparty:
             "sovereign_cqs": self.sovereign_cqs,
             "default_status": self.default_status,
             "apply_fi_scalar": self.apply_fi_scalar,
+            "is_equivalent_jurisdiction": self.is_equivalent_jurisdiction,
         }
 
 
@@ -237,6 +282,7 @@ def create_p1112_counterparty() -> pl.DataFrame:
             sovereign_cqs=SOVEREIGN_CQS,
             default_status=False,
             apply_fi_scalar=False,
+            is_equivalent_jurisdiction=True,
         )
     ]
     return pl.DataFrame([r.to_dict() for r in rows], schema=dtypes_of(COUNTERPARTY_SCHEMA))
@@ -363,9 +409,10 @@ def print_summary(saved: dict[str, Path]) -> None:
         print(f"  {name:<20} {len(df):>3} row(s)  ->  {path}")
     print("-" * 70)
     print("Scenario: German PSE (pse_institution), DE, sovereign_cqs=1,")
-    print("          own cqs=null (unrated), committed EUR 100m 5-yr term loan.")
+    print("          own cqs=null (unrated), committed EUR 100m 5-yr term loan,")
+    print("          is_equivalent_jurisdiction=True (CRR Art. 116(5)).")
     print("Post-fix: risk_weight=0.20, RWA=20_000_000 (Art. 116(1) Table 2).")
-    print("Bug:      risk_weight=1.00, RWA=100_000_000 (wrong country_code guard).")
+    print("Without the Art. 116(5) equivalence assertion: 1.00 / 100_000_000.")
 
 
 def main() -> None:

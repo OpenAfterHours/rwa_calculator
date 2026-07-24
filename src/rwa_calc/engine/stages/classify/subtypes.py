@@ -13,6 +13,9 @@ Key responsibilities:
   requires_fi_scalar, is_hvcre.
 - Art. 147(5) corporate→retail reclassification
   (``reclassify_corporate_to_retail``).
+- CRR Art. 160(2)/(6) top-down PD for purchased corporate receivables
+  (``derive_purchased_receivables_pd``) — runs before the approach ladder
+  because the IRB gate reads ``internal_pd``.
 - Re-align ``exposure_class_irb`` with the mutated ``exposure_class``
   (``sync_irb_exposure_class``), excluding RGLA / PSE entity types.
 - Derive the Basel 3.1 corporate ``exposure_subclass``
@@ -24,6 +27,8 @@ References:
   individuals, unsecured + unconditionally-cancellable-when-undrawn, aggregate limit
 - CRR Art. 4(1)(128D): SME size test (via ``attributes.is_sme_by_size_expr``)
 - CRR Art. 147(3)/147(4)(b): RGLA / PSE IRB class exclusion
+- CRR Art. 160(2)(a)/(b) + 160(6) / PS1/26 Art. 160(2)/(6): purchased-receivables
+  top-down PD (senior EL/LGD, subordinated EL, dilution-risk EL)
 - PS1/26, paragraph 147A.1: corporate exposure_subclass three-way split
 - PRA PS1/26 Art. 124(3) / Art. 124K: ADC exclusion from CORPORATE_SME
 """
@@ -38,6 +43,7 @@ from watchfire import cites
 
 from rwa_calc.data.schemas import RGLA_PSE_ENTITY_TYPES
 from rwa_calc.domain.enums import ExposureClass, ExposureSubclass
+from rwa_calc.engine.irb.formulas import firb_supervisory_lgd_values
 from rwa_calc.engine.stages.classify.attributes import is_sme_by_size_expr, natural_person_expr
 from rwa_calc.engine.thresholds import regulatory_threshold
 from rwa_calc.engine.utils import partition_by_nullable
@@ -302,6 +308,109 @@ def qrre_undrawn_cancellable_expr() -> pl.Expr:
 
 
 # =========================================================================
+# Purchased-receivables top-down PD (CRR Art. 160(2)/(6); 1 .with_columns)
+# =========================================================================
+
+
+@cites("CRR Art. 160(2)")
+@cites("CRR Art. 160(6)")
+@cites("PS1/26, paragraph 160")
+def derive_purchased_receivables_pd(
+    exposures: pl.LazyFrame,
+    config: CalculationConfig,
+    *,
+    pack: ResolvedRulepack | None = None,
+) -> pl.LazyFrame:
+    """
+    Derive the Art. 160(2)/(6) top-down PD for purchased corporate receivables.
+
+    Where an institution "is not able to estimate PDs or an institution's PD
+    estimates do not meet the requirements set out in Section 6", the PD is
+    prescribed rather than modelled:
+
+    - Art. 160(2)(a) — senior claims: ``PD = EL / LGD`` for those receivables.
+    - Art. 160(2)(b) — subordinated claims: ``PD = EL`` (no division).
+    - Art. 160(6) first sentence — dilution risk: ``PD = EL`` for dilution risk,
+      taken from the separate ``el_dilution_estimate`` input.
+
+    The (a) denominator is not a free choice. CRR Art. 161(1)(e)/(f)/(g) fix the
+    supervisory purchased-receivables LGDs for exactly the population that cannot
+    estimate PDs, and PS1/26 Art. 161(1)(e)-(g) with Art. 161(2)(a) bind the same
+    values to "where PD is determined in accordance with point (a) of Article
+    160(2)" for Foundation *and* Advanced IRB alike. So the denominator is the
+    subtype's supervisory LGD read from the same pack table the LGD side uses —
+    never a firm-supplied LGD, which removes any divide-by-null/zero surface.
+
+    Runs before the approach ladder because the IRB gate is
+    ``internal_pd.is_not_null()``: without this the pool has no PD at all and
+    falls to the Standardised Approach.
+
+    Null semantics (conservative): a null, zero or negative EL estimate derives
+    nothing, leaving ``internal_pd`` / ``pd`` exactly as they were — an absent
+    estimate must never become PD 0%. A firm-supplied PD always wins, because
+    Art. 160(2) applies only where the institution cannot produce one.
+
+    The derived PD is capped at 1.0 — ``EL / LGD`` is unbounded above (an EL rate
+    of 60% over a 45% LGD gives 1.33) but a PD is a probability, and 100% is the
+    Art. 160(3) value for a defaulted obligor. No floor is applied here: the
+    Art. 160(1) 0.03% (PS1/26 0.05%) input floor is applied downstream by
+    ``engine/irb/transforms.py::apply_pd_floor`` for every PD alike.
+
+    Class scope: purchased *corporate* receivables only — CORPORATE /
+    CORPORATE_SME on ``exposure_class_irb``. Art. 160(2) and Art. 160(6) both name
+    the corporate population, and the (a) denominator is a corporate supervisory
+    LGD (Art. 161(1)(e)); retail IRB is own-estimate only, with no supervisory LGD
+    and no Art. 163 senior EL/LGD limb to authorise the division. A retail row
+    carrying a subtype therefore derives nothing and keeps its existing route.
+
+    Regime scope: both. PS1/26 Art. 160(2)(a)-(c) and 160(6) carry the CRR text
+    over, so there is no regime Feature — only the pack's regime-keyed LGD values.
+    """
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    lgd_table = firb_supervisory_lgd_values(resolved_pack)
+    # Art. 161(1)(e): the senior supervisory LGD — a cited pack value, always
+    # non-zero, so the Art. 160(2)(a) division is total.
+    senior_lgd = float(lgd_table["purchased_receivables_senior"])
+
+    subtype = pl.col("purchased_receivables_subtype")
+    # Art. 160(2) and Art. 160(6) both read "purchased CORPORATE receivables", and
+    # the Art. 161(1)(e)-(g) LGDs that supply the (a) denominator are likewise
+    # corporate rates. Retail IRB is own-estimate only — Art. 163 has no senior
+    # EL/LGD limb and no supervisory retail LGD exists — so without this gate a
+    # retail row carrying a subtype would divide its EL by the CORPORATE senior
+    # LGD and manufacture an unauthorised retail PD. Gating on the IRB class keeps
+    # the derivation inside the population the article names (``exposure_class_irb``
+    # is already synced by ``sync_irb_exposure_class``, which runs immediately
+    # before this transform in the classifier).
+    is_corporate = pl.col("exposure_class_irb").is_in(
+        [ExposureClass.CORPORATE.value, ExposureClass.CORPORATE_SME.value]
+    )
+    # A usable estimate is strictly positive: 0.0 is "not supplied", not "no loss".
+    default_risk_el = pl.when(pl.col("el_estimate") > 0.0).then(pl.col("el_estimate"))
+    dilution_el = pl.when(pl.col("el_dilution_estimate") > 0.0).then(pl.col("el_dilution_estimate"))
+
+    top_down_pd = (
+        pl.when(~is_corporate)
+        .then(pl.lit(None, dtype=pl.Float64))
+        .when(subtype == "senior")
+        .then(default_risk_el / pl.lit(senior_lgd))
+        .when(subtype == "subordinated")
+        .then(default_risk_el)
+        .when(subtype == "dilution_risk")
+        .then(dilution_el)
+        .otherwise(pl.lit(None, dtype=pl.Float64))
+        .clip(upper_bound=1.0)
+    )
+
+    # coalesce, not fill_null: the firm's own PD outranks the derivation, and a
+    # null derivation leaves the column untouched (no Float null ever filled).
+    derived_pd = pl.coalesce([pl.col("internal_pd"), top_down_pd])
+    return exposures.with_columns(
+        [derived_pd.alias("internal_pd"), pl.coalesce([pl.col("pd"), top_down_pd]).alias("pd")]
+    )
+
+
+# =========================================================================
 # Corporate → retail reclassification (1 .with_columns)
 # =========================================================================
 
@@ -368,8 +477,13 @@ def reclassify_corporate_to_retail(
 
 
 @cites("CRR Art. 147(5)")
+@cites("CRR Art. 147(4)")
 @cites("PS1/26, paragraph 147")
-def sync_irb_exposure_class(exposures: pl.LazyFrame) -> pl.LazyFrame:
+def sync_irb_exposure_class(
+    exposures: pl.LazyFrame,
+    *,
+    pack: ResolvedRulepack,
+) -> pl.LazyFrame:
     """Sync exposure_class_irb with the (possibly mutated) exposure_class.
 
     Subtype classification and corporate→retail reclassification mutate
@@ -382,6 +496,16 @@ def sync_irb_exposure_class(exposures: pl.LazyFrame) -> pl.LazyFrame:
     classes are definitionally different (CRR Art. 147(3)/147(4)(b)) —
     ``exposure_class_irb`` already carries the correct CGCB / INSTITUTION
     value from ``ENTITY_TYPE_TO_IRB_CLASS`` and must not be overwritten.
+
+    Non-named MDBs join that exclusion under CRR only (P1.276): CRR
+    Art. 147(4)(c) assigns "exposures to multilateral development banks which
+    are not assigned a 0 % risk weight under Article 117" to the INSTITUTIONS
+    class while Art. 112 keeps them in their own SA class, so the two classes
+    are definitionally different in exactly the rgla_* / pse_* sense and the
+    derived ``exposure_class_irb`` must survive. Gated on the cited
+    ``crr_non_named_mdb_institution_irb_class`` pack Feature — PS1/26
+    Art. 147(3)(f) has no such split (all MDBs are quasi-sovereign there), so
+    under Basel 3.1 the MDB rows keep syncing to their SA class as before.
 
     Natural-person IRB retail restoration (CRR Art. 147(5)(a)(i) / PS1/26
     Art. 147(5)(a)(i)): the SA regulatory-retail test (``qualifies_as_retail``,
@@ -407,8 +531,16 @@ def sync_irb_exposure_class(exposures: pl.LazyFrame) -> pl.LazyFrame:
         & (pl.col("exposure_class") == ExposureClass.CORPORATE.value)
         & managed_as_retail
     )
+    # Entity types whose derived IRB class is definitionally distinct from the
+    # SA class and must not be overwritten by the sync.
+    preserve_derived_irb_class = pl.col("cp_entity_type").is_in(list(RGLA_PSE_ENTITY_TYPES))
+    if pack.feature("crr_non_named_mdb_institution_irb_class"):
+        preserve_derived_irb_class = preserve_derived_irb_class | (
+            pl.col("cp_entity_type") == "mdb"
+        )
+
     return exposures.with_columns(
-        pl.when(pl.col("cp_entity_type").is_in(list(RGLA_PSE_ENTITY_TYPES)))
+        pl.when(preserve_derived_irb_class)
         .then(pl.col("exposure_class_irb"))
         .when(restore_retail_irb)
         .then(pl.lit(ExposureClass.RETAIL_OTHER.value))

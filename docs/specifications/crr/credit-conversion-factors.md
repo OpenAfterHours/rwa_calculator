@@ -110,7 +110,7 @@ a NIF/RUF can be tagged `is_obs_commitment=True` to opt back into 75%.
     Row 4 captures two specific **commitment** types at 50%: (a) note issuance facilities (NIFs) and revolving underwriting facilities (RUFs); (b) UK residential mortgage commitments. Under CRR, NIFs/RUFs were Medium Risk (50%) in Annex I. Residential mortgage commitments had no separate CRR category — they were classified by maturity (>1yr = MR 50%, ≤1yr = MLR 20%). Both sub-categories map to `risk_type = MR` (medium_risk) in the code.
 
 !!! warning "PRA Deviation — UK Residential Mortgage Commitments (Row 4(b))"
-    Row 4(b) is a **PRA-specific addition** not present in the BCBS framework (CRE20.93–20.98). Under BCBS, residential mortgage commitments would fall into the "any other commitment" bucket at 40% (Row 5). The PRA carved them out at **50%** to maintain a more conservative treatment, consistent with the CRR treatment for commitments >1 year. This prevents the Basel 3.1 maturity-distinction removal from inadvertently reducing capital for irrevocable mortgage offer letters. The Row 4(b) carve-out only applies to commitments that are not unconditionally cancellable (Row 7, 10%) and not certain-drawdown (Row 2, 100%).
+    Row 4(b) is a **PRA-specific addition** not present in the BCBS framework (CRE20.93–20.98). Under BCBS, residential mortgage commitments would fall into the "any other commitment" bucket at 40% (Row 5). The PRA carved them out at **50%** to maintain a more conservative treatment, consistent with the CRR treatment for commitments >1 year. This prevents the Basel 3.1 maturity-distinction removal from inadvertently reducing capital for irrevocable mortgage offer letters. The Row 4(b) carve-out only applies to commitments that are not unconditionally cancellable (Row 7, 10%) and not certain-drawdown (Row 2, 100%). Because Art. 166C(1) sets the F-IRB and Slotting off-balance sheet exposure value using "the conversion factor that would be applicable to the off-balance sheet item under the Standardised Approach, as set out in ... Article 111", the Row 4(b) 50% factor applies on those approaches too — not only on the SA (P1.251).
 
 ### Commitment-to-Issue Lower-Of Rule (Art. 111(1)(c))
 
@@ -398,8 +398,9 @@ receivables commitments without a dedicated CCF.
     product-to-risk-type mapping table. The purchased-receivables Art. 166E(5)
     pathway (40% / 10% split based on UCC status) is also not implemented —
     see **IMPLEMENTATION_PLAN.md P2.32**. The UK residential mortgage
-    commitment (Row 4(b)) 50% CCF is applied only when `risk_type = MR` is
-    supplied; automatic enforcement for UK residential mortgage products is
+    commitment (Row 4(b)) 50% CCF is applied to any residential-flagged commitment
+    whose carrier CCF is neither 10% nor 100%, per Table A1 Row 4(b); automatic
+    derivation from a residential product type is
     tracked under **IMPLEMENTATION_PLAN.md P2.33**. Row 3 vs Row 4 COREP
     granularity is also a gap — see **P2.30**.
 

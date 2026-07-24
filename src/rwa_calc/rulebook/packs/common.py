@@ -484,6 +484,20 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("1.00"),
         citation=Citation("CRR", "116", "unrated PSE conservative fallback 100%"),
     ),
+    # Art. 116(5) residual for a THIRD-COUNTRY PSE whose jurisdiction has no
+    # Treasury equivalence determination: "Otherwise the institutions shall
+    # apply a risk weight of 100 %." Distinct from pse_unrated_default_rw
+    # (the Art. 116(1) unrated-central-government fallback) — same number,
+    # different provision, so it carries its own citation.
+    # Regime-invariant: PS1/26 Art. 116(3A) admits third-country PSEs only
+    # "for the purpose of Article 116(5) of CRR", and records Art. 116(5)
+    # itself as "[Note: Provision not in PRA Rulebook]" because the Treasury
+    # equivalence power stays in CRR. No Feature — one gate, both regimes.
+    "pse_non_equivalent_jurisdiction_rw": ScalarParam(
+        name="pse_non_equivalent_jurisdiction_rw",
+        value=Decimal("1.00"),
+        citation=Citation("CRR", "116", "(5) third-country PSE without Treasury equivalence 100%"),
+    ),
     "rgla_uk_devolved_rw": ScalarParam(
         name="rgla_uk_devolved_rw",
         value=Decimal("0.00"),
@@ -503,6 +517,17 @@ ENTRIES: dict[str, RuleEntry] = {
         name="rgla_unrated_default_rw",
         value=Decimal("1.00"),
         citation=Citation("CRR", "115", "unrated RGLA conservative fallback 100%"),
+    ),
+    # CRR Art. 114(3) / PS1/26 Art. 114(3): "Exposures to the [European] Central
+    # Bank shall be assigned a 0 % risk weight". Regime-INVARIANT — the provision
+    # is present, and identically worded, in both frameworks, so it lives in the
+    # common pack and is NOT gated by a Feature. Distinct from the Art. 114(4)
+    # UK/sterling and Art. 114(7) third-country domestic-currency 0% branches,
+    # which are currency-conditional; this one is unconditional.
+    "ecb_zero_rw": ScalarParam(
+        name="ecb_zero_rw",
+        value=Decimal("0.00"),
+        citation=Citation("CRR", "114", "(3) exposures to the ECB 0%"),
     ),
     "mdb_named_zero_rw": ScalarParam(
         name="mdb_named_zero_rw",
@@ -684,6 +709,22 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("0.5"),
         citation=Citation("CRR", "162(1)", "F-IRB fixed 0.5y supervisory M for repo-style SFTs"),
     ),
+    # CRR Art. 162(1) other limb: the fixed 2.5y supervisory M for "all other
+    # exposures" (everything that is not repo-style / securities-or-commodities
+    # lending) under F-IRB. Like its 0.5y sibling this is a FIXED value, not a floor
+    # and not a clip bound, and it is CRR-only (PS1/26 Art. 162(1) is "Provision left
+    # blank"). Whether it applies is a firm-permission fact — Art. 162(1) second
+    # sentence lets the Art. 143 permission substitute the per-exposure Art. 162(2)
+    # M — so the engine reads it only when the CRR-only Feature
+    # firb_fixed_supervisory_maturity AND the CalculationConfig.firb_fixed_maturity
+    # election are both set. Value-safe in the common pack (B31 never reads it).
+    "firb_fixed_supervisory_maturity_years": ScalarParam(
+        name="firb_fixed_supervisory_maturity_years",
+        value=Decimal("2.5"),
+        citation=Citation(
+            "CRR", "162(1)", "F-IRB fixed 2.5y supervisory M for all non-repo-style exposures"
+        ),
+    ),
     # Entity-type -> exposure-class classification maps (CRR Art. 112 SA / Art.
     # 147 IRB), relocated from data/tables (S13-d). Category labels, not rates —
     # consumed in Python via Expr.replace_strict (engine/entity_class_maps.py
@@ -698,6 +739,10 @@ ENTRIES: dict[str, RuleEntry] = {
         entries={
             "sovereign": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
             "central_bank": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
+            # CRR / PS1/26 Art. 114(3): the ECB is a central bank, so it takes the
+            # CGCB class; the unconditional 0% RW is applied in the SA risk-weight
+            # ladder, not by a class of its own (there is no ECB exposure class).
+            "central_bank_ecb": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
             "rgla_sovereign": ExposureClass.RGLA.value,
             "rgla_institution": ExposureClass.RGLA.value,
             "pse_sovereign": ExposureClass.PSE.value,
@@ -738,6 +783,9 @@ ENTRIES: dict[str, RuleEntry] = {
         entries={
             "sovereign": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
             "central_bank": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
+            # Art. 147(3) / PS1/26 Art. 147(3): the ECB is a central bank and takes
+            # the CGCB IRB class (PS1/26 Art. 147A(1)(a) then makes it SA-only).
+            "central_bank_ecb": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
             # Art. 147(3): RGLA/PSE sovereign-equivalence under IRB.
             "rgla_sovereign": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
             # Art. 147(4)(b): RGLA/PSE institution treatment under IRB.

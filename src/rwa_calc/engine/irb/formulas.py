@@ -31,6 +31,7 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.domain.enums import ExposureClass
+from rwa_calc.engine.crm.expressions import lgd_star_exposure_basis_expr
 from rwa_calc.engine.irb.stats_backend import normal_cdf, normal_ppf
 from rwa_calc.engine.thresholds import regulatory_threshold
 from rwa_calc.rulebook import RulepackV0
@@ -106,6 +107,7 @@ def firb_supervisory_lgd_values(pack: ResolvedRulepack) -> dict[str, Decimal]:
 # =============================================================================
 
 
+@cites("CRR Art. 160")
 @cites("CRR Art. 163")
 @cites("PS1/26, paragraph 163")
 def _pd_floor_expression(
@@ -119,7 +121,12 @@ def _pd_floor_expression(
     """
     Build Polars expression for per-exposure-class PD floor.
 
-    Under CRR (Art. 163): Uniform 0.03% floor for all exposure classes.
+    Under CRR the 0.03% floor has two separate homes and one gap:
+        - Art. 160(1): corporates and institutions ("The PD of an exposure to a
+          corporate or an institution shall be at least 0,03 %").
+        - Art. 163(1): retail (its own sub-section article).
+        - Central governments / central banks: NO floor — neither article reaches
+          them, so the pack's ``sovereign`` floor is 0 (P1.277).
     Under Basel 3.1 (CRE30.55): Differentiated floors:
         - Corporate/SME: 0.05%
         - Retail mortgage: 0.10% (Art. 163(1)(b))
@@ -142,17 +149,27 @@ def _pd_floor_expression(
             not QRRE), but the parameter is exposed for symmetry with
             ``exposure_class_col``.
 
+    Required columns (no presence guard — see below):
+        - ``exposure_class_col``: always dereferenced.
+        - ``transactor_col``: dereferenced only when ``has_transactor_col`` is
+          True (the default). Isolated / hand-built frames that do not carry it
+          must pass ``has_transactor_col=False``, which selects the conservative
+          revolver floor.
+
+    Both columns are declared on every edge contract that feeds this builder —
+    ``classifier_exit``, ``crm_exit`` and ``irb_branch`` carry ``exposure_class``,
+    ``is_qrre_transactor`` and ``guarantor_exposure_class`` — so safety comes from
+    the producer seal rather than from a runtime presence check. A presence guard
+    here would be worse than a loud failure: falling back to a scalar floor would
+    silently reinstate the pre-P1.277 behaviour of ignoring the exposure class
+    (and with it the absent CGCB floor).
+
     Returns a Polars expression evaluating to the per-row PD floor value.
     """
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     floors = formula_float_map(resolved_pack.formula("pd_floors"))
 
-    # Optimisation: if all floors are the same (CRR case), return a scalar
-    all_values = set(floors.values())
-    if len(all_values) == 1:
-        return pl.lit(all_values.pop())
-
-    # Basel 3.1: differentiated floors by exposure class
+    # Per-exposure-class floors (CRR Art. 160(1) / 163(1); B31 differentiated)
     exp_class = pl.col(exposure_class_col).cast(pl.String).fill_null("CORPORATE").str.to_uppercase()
 
     # QRRE transactor/revolver distinction (CRE30.55):
@@ -315,6 +332,7 @@ def _lgd_floor_expression_with_collateral(
     )
 
 
+@cites("PS1/26, paragraph 161")
 @cites("PS1/26, paragraph 164")
 def _lgd_floor_blended_expression(
     config: CalculationConfig,
@@ -322,31 +340,96 @@ def _lgd_floor_blended_expression(
     pack: ResolvedRulepack | None = None,
 ) -> pl.Expr:
     """
-    Build Polars expression for the Art. 164(4)(c) blended LGD floor.
+    Build Polars expression for the blended (LGD*) A-IRB LGD input floor.
 
-    For retail "other secured" exposures with mixed collateral, the LGD floor
-    is a weighted average of per-type LGDS floors and the unsecured LGDU,
-    weighted by the proportion of EAD covered by each collateral type:
+    Where the institution takes recognised funded credit protection into
+    account, the A-IRB LGD input floor is the Art. 230/231 LGD* — a weighted
+    average of per-type LGDS floors and the unsecured LGDU, weighted by the
+    proportion of the Art. 230(1) exposure basis E' = E × (1 + HE) covered by
+    each collateral type:
 
-        LGD_floor = (E_unsecured / EAD) × LGDU
-                  + Σ_i (E_i / EAD) × LGDS_i
+        LGD_floor = (E_unsecured / E') × LGDU
+                  + Σ_i (E_i / E') × LGDS_i
 
     Where E_i comes from the Art. 231 sequential waterfall (crm_alloc_* columns)
-    and E_unsecured = EAD - total_collateral_for_lgd.
+    and E_unsecured = E' - total_collateral_for_lgd. E is ``ead_for_crm``, the
+    CCF=100% exposure value (Art. 223(4)) — dividing by the post-CCF
+    ``ead_gross`` instead understates the floor on every off-balance-sheet row.
 
-    Applies to:
-        - retail_other (LGDU = 30%)
-        - retail_qrre (LGDU = 50%)
+    This is the SAME formula for both limbs of the Basel 3.1 A-IRB floor — only
+    LGDU differs by exposure class:
+        - corporate / institution (and any other non-retail class): 25%
+          (Art. 161(5)(b)(iii)); the article covers "secured and partially
+          secured exposures", so a part-covered corporate is floored on the
+          blend, not on the flat 25% and not on the bare secured-type LGDS.
+        - retail_other: 30% (Art. 164(4)(c))
+        - retail_qrre: 50% (Art. 164(4)(b)(i))
+
     Does NOT apply to:
         - retail_mortgage (flat 5% floor per Art. 164(4)(a))
+        - exposures with no recognised protection — Art. 161(5)(a) /
+          164(4)(b) flat unsecured floors govern, so the expression returns
+          null and the caller falls back to the single-type floor
         - CRR (no LGD floors)
 
-    Requires crm_alloc_* columns from CRM waterfall and ead_gross.
-    Falls back to _lgd_floor_expression_with_collateral() for non-retail or
-    when allocation columns are absent.
+    Recorded decision — what counts as the firm's Art. 161(5) election: the
+    engine treats the PRESENCE of eligible recognised collateral
+    (``total_collateral_for_lgd > 0``, i.e. protection that survived the
+    Art. 199/207-210 eligibility gates and the Art. 231 waterfall) as the firm
+    "choosing to take into account funded credit protection", and hence as the
+    (b) limb. There is currently NO input by which a firm can elect the flat
+    limb (a) while still supplying that collateral — to sit on limb (a) it must
+    withhold the collateral row (or fail its eligibility flags). This is
+    deliberate: the (b) blend is bounded above by LGDU, so the election could
+    only ever lower the floor, and an unflagged election would be
+    indistinguishable from missing data.
+
+    Deferred: the blend deny-list is ``["retail_mortgage"]`` only, so
+    ``residential_mortgage`` / ``commercial_mortgage`` would blend if they ever
+    reached an IRB row. Unreachable today — both are SA re-splitter outputs
+    (PS1/26 Art. 124C-124K) and never carry an IRB approach.
+
+    Returns null — deferring to whichever single-type / flat floor expression the
+    caller built (``_lgd_floor_expression_with_collateral`` when
+    ``collateral_type`` is on the frame, else ``_lgd_floor_expression``) — in
+    exactly two cases: the exposure is ``retail_mortgage``, or it carries no
+    recognised collateral. There is NO third "columns absent" case.
+
+    Required columns — NOT runtime-guarded. This expression references ten
+    columns unconditionally, and a frame missing any of them raises
+    ``ColumnNotFoundError`` at collect rather than falling back:
+
+        ead_for_crm, exposure_volatility_haircut, total_collateral_for_lgd,
+        exposure_class, crm_alloc_{financial,covered_bond,receivables,
+        real_estate,other_physical,life_insurance}
+
+    (``ead_gross`` is no longer among them — the Art. 230(1) basis replaced it.)
+
+    Production safety comes from the **crm_exit edge contract**, not from a
+    guard: all ten are declared REQUIRED on ``CRM_EXIT_EDGE`` (inherited by
+    ``RE_SPLIT_EXIT_EDGE``), so the sealed IRB branch input always carries them.
+    Unlike the sibling single-type expressions — which the callers gate behind
+    ``if "collateral_type" in schema_names`` — neither call site
+    (``apply_irb_formulas`` here, ``apply_lgd_floor`` / ``_lgd_floored_expr`` in
+    ``engine/irb/transforms.py``) guards this set. Direct callers that hand-roll
+    a narrow frame must therefore supply all ten themselves; the test helpers
+    ``tests/fixtures/contract_columns.py::pad_crm_exit_defaults`` and
+    ``tests/fixtures/single_exposure.py`` exist for that and pad every one.
+
+    No fallback is offered deliberately: the only sensible substitute for an
+    absent ``ead_for_crm`` is ``ead_gross``, which is precisely the
+    anti-conservative denominator Art. 230(1) forbids (see below), so a degraded
+    mode would silently reinstate the defect. A ``ColumnNotFoundError`` naming
+    the absent column is the better failure. The edge guarantee above is pinned
+    by ``tests/contracts/test_edge_contracts.py::
+    TestUnguardedBlendedLGDFloorColumns``, which derives this column set from
+    the live expression so widening it cannot go unnoticed.
 
     References:
-        PRA PS1/26 Art. 164(4)(c)
+        PRA PS1/26 Art. 161(5)(b) — corporates and institutions
+        PRA PS1/26 Art. 164(4)(c) — retail
+        PRA PS1/26 Art. 230(1) / 231(1) — the LGD* formula being floored on
+        CRR Art. 223(4) — E is the CCF=100% basis for off-balance-sheet items
     """
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     if not resolved_pack.feature("airb_lgd_floor"):
@@ -354,8 +437,27 @@ def _lgd_floor_blended_expression(
 
     floors = formula_float_map(resolved_pack.formula("lgd_floors"))
 
-    ead = pl.col("ead_gross")
+    # Art. 230(1) denominator: E' = E × (1 + HE) with E = ead_for_crm, the
+    # CCF=100% basis (Art. 223(4)) — NOT the post-CCF ead_gross (G), which is
+    # ≤ E' whenever CCF < 100%. Dividing by G was wrong in BOTH directions, the
+    # sign turning on whether the collateral C fits inside G:
+    #   C ≤ G: pre − post = (N − C·LGDU)(1/G − 1/E') where N = Σ alloc·LGDS.
+    #          Every LGDS (0/10/10/15%) is below every LGDU (25/30/50%) and
+    #          Σ alloc == C, so N ≤ C·LGDU and the difference is ≤ 0 — the old
+    #          floor sat BELOW the article (anti-conservative). This is the
+    #          common case and the reason this fix exists.
+    #   C > G: the old unsecured weight clipped to 0, leaving N/G — above the
+    #          article, and not a convex combination at all (weights summed to
+    #          C/G > 1, so a fully collateralised OBS row returned 0.375,
+    #          exceeding even the 25% LGDU ceiling).
+    # Shared with the F-IRB / A-IRB LGD* itself (engine/crm/collateral.py).
+    ead = lgd_star_exposure_basis_expr()
     total_coll = pl.col("total_collateral_for_lgd").fill_null(0.0)
+    # Convexity: the Art. 231 waterfall caps its allocations at ead_for_crm, so
+    # Σ crm_alloc_* == total_collateral_for_lgd ≤ ead_for_crm ≤ E'. The secured
+    # weights and this clipped unsecured weight therefore sum to exactly 1 and
+    # each lies in [0, 1] — including the overcollateralised case, where the
+    # waterfall has already absorbed the excess collateral.
     unsecured_portion = (ead - total_coll).clip(lower_bound=0.0)
 
     alloc_fin = pl.col("crm_alloc_financial").fill_null(0.0)
@@ -365,11 +467,13 @@ def _lgd_floor_blended_expression(
     alloc_op = pl.col("crm_alloc_other_physical").fill_null(0.0)
     alloc_li = pl.col("crm_alloc_life_insurance").fill_null(0.0)
 
-    # Per-type LGDS floors for retail (Art. 164(4)(c))
+    # Per-type LGDS floors. The Art. 161(5)(b)(iv) (corporate / institution) and
+    # Art. 164(4)(c) (retail) LGDS tables carry identical values, so one set
+    # serves both limbs.
     lgds_fin = floors["financial_collateral"]  # 0%
     lgds_cb = floors["financial_collateral"]  # 0% (treated as financial)
     lgds_rec = floors["receivables"]  # 10%
-    lgds_re = floors["commercial_real_estate"]  # 10% (non-RRE immovable property)
+    lgds_re = floors["commercial_real_estate"]  # 10% (immovable property)
     lgds_op = floors["other_physical"]  # 15%
     lgds_li = floors["financial_collateral"]  # 0% (treated as financial)
 
@@ -383,23 +487,37 @@ def _lgd_floor_blended_expression(
     )
 
     # LGDU depends on exposure class:
-    # - retail_other: 30% (Art. 164(4)(c))
     # - retail_qrre: 50% (Art. 164(4)(b)(i))
+    # - retail_other: 30% (Art. 164(4)(c))
+    # - everything else (corporate, corporate_sme, institution, ...): 25%
+    #   substituted for LGDU per Art. 161(5)(b)(iii)
+    # A null exposure_class leaves every comparison below null, so the
+    # eligibility gate evaluates null and the caller falls back to the flat /
+    # single-type floor — the conservative branch. No null fill here.
     exp_class = pl.col("exposure_class").cast(pl.String).str.to_lowercase()
     lgdu_expr = (
         pl.when(exp_class.is_in(["retail_qrre"]))
         .then(pl.lit(floors["retail_qrre_unsecured"]))  # 50%
-        .otherwise(pl.lit(floors["retail_lgdu"]))  # 30%
+        .when(exp_class.is_in(["retail_other"]))
+        .then(pl.lit(floors["retail_lgdu"]))  # 30%
+        .otherwise(pl.lit(floors["unsecured"]))  # 25% Art. 161(5)(b)(iii)
     )
 
     numerator_with_unsecured = numerator + unsecured_portion * lgdu_expr
 
     blended = pl.when(ead > 0).then(numerator_with_unsecured / ead).otherwise(pl.lit(0.0))
 
-    # Apply blended floor only to retail_other and retail_qrre with collateral.
-    # retail_mortgage uses flat 5% (Art. 164(4)(a)).
-    # Corporate uses single-type floor from _lgd_floor_expression_with_collateral().
-    is_blended_eligible = exp_class.is_in(["retail_other", "retail_qrre"])
+    # Art. 161(5)(b) (corporates and institutions) and Art. 164(4)(c) (retail
+    # other / QRRE) both mandate the Art. 230/231 LGD* blend for secured AND
+    # PARTIALLY secured exposures wherever the firm takes the funded credit
+    # protection into account. ``retail_mortgage`` is the sole carve-out — a
+    # flat 5% floor per Art. 164(4)(a), independent of collateral composition.
+    #
+    # ``has_collateral`` is exactly the Art. 161(5)(a)/(b) fork: nothing
+    # recognised means the firm "chooses not to take into account funded credit
+    # protection", so the flat unsecured floor governs and this expression
+    # returns null for the caller's single-type fallback.
+    is_blended_eligible = ~exp_class.is_in(["retail_mortgage"])
     has_collateral = total_coll > 0
 
     return pl.when(is_blended_eligible & has_collateral).then(blended).otherwise(pl.lit(None))
@@ -477,7 +595,7 @@ def apply_irb_formulas(
                 has_exposure_class=True,
                 pack=resolved_pack,
             )
-        # Art. 164(4)(c) blended floor for retail with mixed collateral
+        # Art. 161(5)(b) / 164(4)(c) LGD* blend for (partially) secured rows
         blended_expr = _lgd_floor_blended_expression(config, pack=resolved_pack)
         lgd_floor_expr = (
             pl.when(blended_expr.is_not_null()).then(blended_expr).otherwise(lgd_floor_expr)

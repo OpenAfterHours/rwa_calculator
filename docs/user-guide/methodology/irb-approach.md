@@ -149,6 +149,15 @@ M = max(1, min(5, weighted_average_life))
 | Repo-style transactions (repos, securities/commodities lending) | 0.5 years |
 | All other exposures | 2.5 years |
 
+!!! note "The 2.5-year value is an opt-in election, defaulting to off"
+    Which Art. 162(1) sentence binds is a fact about the firm's Art. 143 permission, not
+    the regime, so the fixed 2.5 years is a `CalculationConfig` election
+    (`CalculationConfig.crr(..., firb_fixed_maturity=True)`) and **defaults to `False`**.
+    With it off, a non-repo-style F-IRB row keeps the `maturity_date`-derived M clipped to
+    [1, 5] years and falls back to 2.5 years only when `maturity_date` is null. The
+    0.5-year repo-style value is unconditional. See
+    [F-IRB Calculation](../../specifications/crr/firb-calculation.md#art-1621-f-irb-fixed-supervisory-maturities).
+
 **Basel 3.1** deletes Art. 162(1) — all IRB firms must calculate M from cash flows or
 contractual terms. Revolving exposures must use the **maximum contractual termination date**
 (Art. 162(2A)(k)), not the current drawing repayment date.

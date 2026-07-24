@@ -83,6 +83,7 @@ from rwa_calc.engine.sa.b31_risk_weight_tables import (
     b31_sa_sl_rw_expr,
     get_b31_combined_cqs_risk_weights,
 )
+from rwa_calc.engine.sa.central_bank import ecb_rw_expr, is_ecb_expr, lift_central_bank_cqs
 from rwa_calc.engine.sa.crr_risk_weight_tables import (
     CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
     COMMERCIAL_RE_PARAMS,
@@ -103,6 +104,7 @@ from rwa_calc.engine.sa.crr_risk_weight_tables import (
     IO_ZERO_RW,
     MDB_NAMED_ZERO_RW,
     MDB_UNRATED_RW,
+    PSE_NON_EQUIVALENT_JURISDICTION_RW,
     PSE_RISK_WEIGHTS_SOVEREIGN_DERIVED,
     PSE_SHORT_TERM_RW,
     PSE_UNRATED_DEFAULT_RW,
@@ -114,6 +116,10 @@ from rwa_calc.engine.sa.crr_risk_weight_tables import (
     get_combined_cqs_risk_weights,
 )
 from rwa_calc.engine.sa.guarantor_rw import build_institution_guarantor_rw_expr
+from rwa_calc.engine.sa.jurisdiction import (
+    pse_jurisdiction_not_permitted_expr,
+    pse_short_term_eligible_expr,
+)
 from rwa_calc.rulebook import RulepackV0
 from rwa_calc.rulebook.compile import lookup_float_map, scalar_value
 from rwa_calc.rulebook.resolve import resolve
@@ -205,9 +211,9 @@ _SA_SHARED_RW: dict[str, float] = {
     # QCCP trade exposures (CRR Art. 306, CRE54.14-15)
     "qccp_client_cleared": scalar_value(_CRR_PACK.scalar_param("qccp_client_cleared_rw")),
     "qccp_proprietary": scalar_value(_CRR_PACK.scalar_param("qccp_proprietary_rw")),
-    # PSE short-term & unrated (Art. 116)
     "pse_short_term": float(PSE_SHORT_TERM_RW),
     "pse_unrated": float(PSE_UNRATED_DEFAULT_RW),
+    "pse_non_equivalent_jurisdiction": float(PSE_NON_EQUIVALENT_JURISDICTION_RW),
     # RGLA (Art. 115)
     "rgla_uk_devolved": float(RGLA_UK_DEVOLVED_RW),
     "rgla_domestic": float(RGLA_DOMESTIC_CURRENCY_RW),
@@ -1055,6 +1061,9 @@ def _prepare_risk_weight_lookup(
         .alias("cqs")
     )
 
+    # PS1/26 Art. 114(2A) — B31-Feature-gated; see engine/sa/central_bank.py.
+    exposures = lift_central_bank_cqs(exposures, resolved_pack)
+
     # PRA PS1/26 Art. 139(2B): for the purposes of Art. 122B(1) (the SA
     # specialised-lending routing), inferred / issuer-level (non-issue-specific)
     # ECAI assessments are disapplied. An SL exposure whose only resolved
@@ -1151,6 +1160,8 @@ def _apply_b31_risk_weight_overrides(
             pl.col("risk_type") == _CCR_DEFAULT_FUND_RISK_TYPE
         )  # P8.49 default fund (Art. 308/309)
         .then(pl.lit(_OWN_FUNDS_TO_RWA_FACTOR))
+        .when(is_ecb_expr())  # Art. 114(3): ECB 0%, unconditional, both regimes
+        .then(ecb_rw_expr())
         .when(uc.str.contains("CENTRAL_GOVT", literal=True) & is_domestic_currency)
         .then(pl.lit(0.0))
         # Art. 137(1)-(2) Table 9: nominated ECA / MEIP score → direct sovereign
@@ -1190,14 +1201,10 @@ def _apply_b31_risk_weight_overrides(
 
     # Sovereign-like treatments (PSE then RGLA).
     chain = (
-        # PSE short-term (Art. 116(3)): original maturity <= 3m -> 20% flat.
-        # Art. 116(3) keys on ORIGINAL maturity — a seasoned long-dated PSE
-        # bond with short residual does not qualify.
-        chain.when(
-            (uc == "PSE")
-            & pl.col("original_maturity_years").is_not_null()
-            & (pl.col("original_maturity_years") <= 0.25)
-        )
+        chain.when((uc == "PSE") & pse_jurisdiction_not_permitted_expr())
+        .then(pl.lit(_SA_SHARED_RW["pse_non_equivalent_jurisdiction"]))
+        # PSE short-term (Art. 116(3)): UK PSE, ORIGINAL maturity <= 3m -> 20%.
+        .when((uc == "PSE") & pse_short_term_eligible_expr(0.25))  # Art. 116(3) 3 months
         .then(pl.lit(_SA_SHARED_RW["pse_short_term"]))
         # PSE unrated: sovereign-derived RW lookup (Art. 116(1), Table 2).
         # Maps cp_sovereign_cqs -> RW; falls back to 100% when sovereign
@@ -1357,6 +1364,8 @@ def _apply_crr_risk_weight_overrides(
             pl.col("risk_type") == _CCR_DEFAULT_FUND_RISK_TYPE
         )  # P8.49 default fund (Art. 308/309)
         .then(pl.lit(_OWN_FUNDS_TO_RWA_FACTOR))
+        .when(is_ecb_expr())  # Art. 114(3): ECB 0%, ahead of 114(4)/(7)
+        .then(ecb_rw_expr())
         # Art. 114(4)/(7): Domestic CGCB -> 0% RW (overrides all CQS).
         .when(uc.str.contains("CENTRAL_GOVT", literal=True) & is_domestic_currency)
         .then(pl.lit(0.0))
@@ -1409,12 +1418,10 @@ def _apply_crr_risk_weight_overrides(
 
     # Sovereign-like (PSE, RGLA, MDB, IO).
     chain = (
-        # PSE short-term (Art. 116(3)): original maturity <= 3m -> 20%.
-        chain.when(
-            (uc == "PSE")
-            & pl.col("original_maturity_years").is_not_null()
-            & (pl.col("original_maturity_years") <= 0.25)
-        )
+        chain.when((uc == "PSE") & pse_jurisdiction_not_permitted_expr())
+        .then(pl.lit(_SA_SHARED_RW["pse_non_equivalent_jurisdiction"]))
+        # PSE short-term (Art. 116(3)): UK PSE, ORIGINAL maturity <= 3m -> 20%.
+        .when((uc == "PSE") & pse_short_term_eligible_expr(0.25))  # Art. 116(3) 3 months
         .then(pl.lit(_SA_SHARED_RW["pse_short_term"]))
         # PSE unrated: sovereign-derived RW lookup (Art. 116(1), Table 2).
         # Maps cp_sovereign_cqs -> RW; falls back to 100% when sovereign

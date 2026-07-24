@@ -232,9 +232,10 @@ class TestELGuaranteeAdjustment:
         assert result["expected_loss_irb_original"][0] == pytest.approx(4_500.0)
         assert result["expected_loss"][0] == pytest.approx(2_340.0)
 
-    def test_irb_guarantor_pd_floored_to_crr_minimum(self, crr_config: CalculationConfig) -> None:
-        """Guarantor PD below CRR 0.03% floor should be floored."""
-        lf = pl.LazyFrame(
+    @staticmethod
+    def _sub_floor_guarantor_frame(guarantor_entity_type: str) -> pl.LazyFrame:
+        """Fully-guaranteed corporate borrower whose IRB guarantor's PD is 1bp."""
+        return pl.LazyFrame(
             {
                 "exposure_reference": ["EXP001"],
                 "pd": [0.01],
@@ -247,18 +248,47 @@ class TestELGuaranteeAdjustment:
                 "expected_loss": [4_500.0],
                 "guaranteed_portion": [1_000_000.0],
                 "unguaranteed_portion": [0.0],
-                "guarantor_entity_type": ["sovereign"],
+                "guarantor_entity_type": [guarantor_entity_type],
                 "guarantor_cqs": [1],
                 "guarantor_approach": ["irb"],
-                "guarantor_pd": [0.0001],  # 0.01% — below CRR 0.03% floor
+                "guarantor_pd": [0.0001],  # 0.01% — below the Art. 160(1) 0.03% floor
             }
         )
 
+    def test_irb_corporate_guarantor_pd_floored_to_crr_minimum(
+        self, crr_config: CalculationConfig
+    ) -> None:
+        """A corporate guarantor's sub-floor PD is floored to the CRR 0.03%.
+
+        Revised by P1.277: this test used to use a ``sovereign`` guarantor, but
+        CRR Art. 160(1) floors only corporates and institutions, so the floor is
+        pinned on a class the article actually reaches. EL = 0.0003 × 0.45 × 1M.
+        """
+        lf = self._sub_floor_guarantor_frame("corporate")
+
         result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
 
-        # PD floored to 0.0003 (CRR 0.03%)
-        # EL = 0.0003 × 0.45 × 1M = 135.0
+        # PD floored to 0.0003 (Art. 160(1)) -> EL = 0.0003 × 0.45 × 1M = 135.0
         assert result["expected_loss"][0] == pytest.approx(135.0)
+
+    def test_irb_sovereign_guarantor_pd_is_not_floored(self, crr_config: CalculationConfig) -> None:
+        """A central-government guarantor's sub-floor PD passes through unfloored.
+
+        CRR Art. 161(3) benchmarks the covered portion against "a comparable,
+        direct exposure to the guarantor", and a direct CRR CGCB exposure carries
+        no PD floor (Art. 160(1) reaches corporates and institutions only), so the
+        modelled 1bp survives into the guaranteed leg's EL (P1.277).
+
+        Pre-P1.277: EL was 135.0 — the guarantor PD was floored to 3bp regardless
+        of the guarantor's class, because a uniform CRR floor bundle collapsed the
+        class ladder to one scalar.
+        """
+        lf = self._sub_floor_guarantor_frame("sovereign")
+
+        result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
+
+        # PD unfloored at 0.0001 -> EL = 0.0001 × 0.45 × 1M = 45.0
+        assert result["expected_loss"][0] == pytest.approx(45.0)
 
     def test_no_expected_loss_column_backward_compat(self, crr_config: CalculationConfig) -> None:
         """Method should still work when expected_loss column is absent."""

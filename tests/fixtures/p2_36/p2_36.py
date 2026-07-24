@@ -63,9 +63,14 @@ Hand-calculation (Basel 3.1, CalculationConfig.basel_3_1()):
         Expected: RW ≈ 0.263591, RWA ≈ 263,591
 
     CRR (CalculationConfig.crr()):
-        Sovereign input PD=0.0001 → floored to 0.0003 (uniform CRR floor)
+        Sovereign input PD=0.0001 → NOT floored. CRR Art. 160(1) reads "The PD of an
+            exposure to a corporate or an institution shall be at least 0,03 %" and
+            retail is floored by the separate Art. 163(1); neither article reaches
+            central governments or central banks, so the CRR sovereign floor is 0
+            and the modelled 0.01% passes through (P1.277).
         Institution input PD=0.0003 → NOT floored (0.0003 == CRR floor, floor does not bind)
-        Expected sovereign CRR: pd_floored=0.0003
+        Expected sovereign CRR: pd_floored=0.0001 (RW ≈ 0.079842, RWA ≈ 79,842 at
+            LGD=0.45 / M=2.5 / EAD=1,000,000 with the CRR 1.06 scaling factor)
 
     EL (expected loss):
         EL = PD × LGD × EAD = 0.0005 × 0.40 × 1,000,000 = 200 GBP
@@ -145,9 +150,11 @@ EFFECTIVE_MATURITY: float = 2.5  # M = 2.5y (explicit override avoids date arith
 # Basel 3.1: Art. 160(1) — sovereign and institution both 0.05%
 EXPECTED_PD_FLOORED_B31: float = 0.0005  # 0.05% for both sovereign and institution
 
-# CRR: Art. 160(1) uniform 0.03% floor
-# Sovereign input PD=0.0001 < 0.0003 → floor binds → pd_floored = 0.0003
-EXPECTED_PD_FLOORED_SOV_CRR: float = 0.0003
+# CRR: Art. 160(1) floors corporates and institutions at 0.03%; Art. 163(1) floors
+# retail at the same rate. Central governments / central banks are in NEITHER, so the
+# CRR sovereign floor is 0 and a sovereign PD is never lifted (P1.277).
+# Sovereign input PD=0.0001 → no floor applies → pd_floored = 0.0001
+EXPECTED_PD_FLOORED_SOV_CRR: float = 0.0001
 # Institution input PD=0.0003 == 0.0003 → floor is exactly at the boundary, does not lift PD
 EXPECTED_PD_FLOORED_INST_CRR: float = 0.0003
 
@@ -155,6 +162,19 @@ EXPECTED_PD_FLOORED_INST_CRR: float = 0.0003
 # Under CRR Art. 161(1)(a) = 45%
 EXPECTED_LGD_B31: float = 0.40
 EXPECTED_LGD_CRR: float = 0.45
+
+# Hand-calc (CRR, sovereign): the UNFLOORED PD 0.0001 with LGD=0.45, M=2.5,
+# EAD=1,000,000 and the CRR 1.06 scaling factor — Art. 153(1) on the CGCB
+# correlation ladder (0.12/0.24, k=50), derived independently of the engine:
+#   f(PD) = (1 - exp(-50 × 0.0001)) / (1 - exp(-50))  ≈ 0.0049875
+#   R     = 0.12 × f(PD) + 0.24 × (1 - f(PD))         ≈ 0.2394014975
+#   b     = (0.11852 - 0.05478 × ln 0.0001)^2         ≈ 0.3882068111
+#   MA    = (1 + (2.5 - 2.5) × b) / (1 - 1.5 × b)     ≈ 2.3941212829
+#   K     = 0.45 × (cond_PD - PD) × MA                ≈ 0.0060258057
+#   RW    = K × 12.5 × 1.06                           ≈ 0.0798419258
+# Pre-P1.277 (PD floored to 0.0003) these were RW ≈ 0.153102 / RWA ≈ 153,102.
+EXPECTED_RW_SOV_CRR_UNFLOORED: float = 0.0798419258
+EXPECTED_RWA_SOV_CRR_UNFLOORED: float = 79_841.925755
 
 # Hand-calc results (Basel 3.1): PD floored to 0.0005, LGD=0.40, M=2.5
 # See module docstring for derivation. Sovereign and institution are identical

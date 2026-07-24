@@ -424,10 +424,20 @@ supervisory value (Art. 161(1)(a) 45% CRR / Art. 161(1)(aa) 40% B31 non-FSE), an
 `CRM014` warning is raised.
 
 !!! note "Scope"
-    P1.273 covers the F-IRB Foundation Collateral Method secured-LGD path only. The
-    SA-side lease input convention (the drawn amount as the discounted minimum lease
-    payments) and residual-value treatment (Art. 134(7), the `other_residual_lease`
-    entity type → OTHER class 100% RW) are separate and unaffected.
+    P1.273 covers the F-IRB Foundation Collateral Method secured-LGD path only. Two
+    adjacent lease mechanics are separate and unaffected by it:
+
+    - The **lease input convention** — `drawn_amount` must arrive as the discounted
+      minimum lease payments. It is not SA-only: the identical rule binds the IRB
+      exposure value (CRR Art. 166(4) / PS1/26 Art. 166A(4)) and the SA exposure value
+      (Art. 134(7) in both frameworks). Documented at
+      [Lease exposures — the `drawn_amount` convention](../../data-model/input-schemas.md#lease-exposures-the-drawn_amount-convention).
+    - **Residual-value treatment** (Art. 134(7), the `other_residual_lease` entity type
+      → OTHER class 100% RW at 1/t × 100%).
+
+    The third-party residual-value payment obligation recognisable as unfunded credit
+    protection under Art. 201 / Art. 213 — the closing sentence of Art. 166(4),
+    Art. 166A(4) and Art. 134(7) — remains unimplemented and is tracked separately.
 
 ### Overcollateralisation Ratios
 

@@ -6,9 +6,10 @@ Pipeline position:
     Loader -> HierarchyResolver -> Classifier -> CRMProcessor -> SACalculator -> Aggregator
 
 Key responsibilities:
-- Validate CRR Art. 118: named international organisations (IMF, BIS, ECB, EU, IBRD, IFC,
-  IADB, ADB, AfDB, CEB, NIB, CDB, EBRD, EFSI, ESM, EFSF) must be classified as
-  ExposureClass.INTERNATIONAL_ORGANISATION — not collapsed into the MDB class.
+- Validate CRR Art. 118: the named international organisations (the EU, IMF, BIS, EFSF
+  and ESM — a closed five-entry list; Art. 118(f) omitted from UK CRR by SI 2019/1232)
+  must be classified as ExposureClass.INTERNATIONAL_ORGANISATION — not collapsed into
+  the MDB class.
 - Validate Art. 118 unconditional 0% risk weight: the 0% must flow from the
   INTERNATIONAL_ORGANISATION exposure class, not from any coincidental MDB check.
 - Validate the MDB control row (non-named MDB CQS 3) is unaffected by the new

@@ -3749,3 +3749,194 @@ class TestCommitmentToIssueLowerOf:
         without_rule = result.filter(pl.col("exposure_reference") == "WITHOUT_RULE")
         assert with_rule["ead_from_ccf"][0] == pytest.approx(10_000.0)
         assert without_rule["ead_from_ccf"][0] == pytest.approx(100_000.0)
+
+
+# =============================================================================
+# P1.251 — Art. 166C(1) routes the Table A1 Row 4(b) override into F-IRB
+# =============================================================================
+
+
+class TestUKResiMortgageCommitmentCCFAcrossApproaches:
+    """PS1/26 Art. 166C(1) with Art. 111(1) Table A1 Row 4(b) (P1.251).
+
+    Art. 166C(1): the F-IRB / Slotting off-balance-sheet exposure value is the
+    nominal value times "the conversion factor that would be applicable to the
+    off-balance sheet item under the Standardised Approach, as set out in
+    Article 111" — which includes the PRA-specific Table A1 Row 4(b) 50% CCF for
+    "UK residential mortgage commitments that are not subject to a conversion
+    factor of 10% or 100%".
+
+    The Row 4(b) override must therefore reach BOTH CCF carriers under Basel 3.1
+    (the SA one and the F-IRB one), not just the SA one:
+        OC  (Row 5, 40%) + flag -> 50% on SA, Slotting AND F-IRB
+        MLR (Row 6, 20%) + flag -> 50% on SA, Slotting AND F-IRB
+        LR  (Row 7, 10%) + flag -> 10% (Row 4(b) carve-out, unchanged)
+        FR  (Row 1, 100%) + flag -> 100% (Row 4(b) carve-out, unchanged)
+
+    Table A1 is Basel 3.1 only, so the flag is inert under CRR (where F-IRB
+    commitments take the Art. 166(8)(d) 75% supervisory CCF).
+    """
+
+    @pytest.fixture
+    def ccf_calculator(self) -> CCFCalculator:
+        return CCFCalculator()
+
+    @pytest.fixture
+    def crr_config(self) -> CalculationConfig:
+        return CalculationConfig.crr(reporting_date=date(2024, 12, 31))
+
+    @pytest.fixture
+    def b31_config(self) -> CalculationConfig:
+        return CalculationConfig.basel_3_1(reporting_date=date(2027, 6, 30))
+
+    @staticmethod
+    def _commitment(
+        risk_type: str,
+        approach: str,
+        *,
+        flagged: bool = True,
+        nominal: float = 1_000_000.0,
+    ) -> pl.LazyFrame:
+        """Single fully-undrawn commitment carrying the Row 4(b) flag."""
+        return pl.DataFrame(
+            {
+                "exposure_reference": ["RESI_COMMIT"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [nominal],
+                "risk_type": [risk_type],
+                "approach": [approach],
+                "is_uk_residential_mortgage_commitment": [flagged],
+            }
+        ).lazy()
+
+    # --- F-IRB: the P1.251 defect ---
+
+    def test_b31_firb_oc_resi_commitment_gets_row_4b_50_pct(
+        self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
+    ) -> None:
+        """B31 F-IRB OC + Row 4(b) flag -> 50% CCF, EAD 500k (pre-fix: 40% / 400k)."""
+        # Arrange
+        exposures = self._commitment("OC", "foundation_irb")
+
+        # Act
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+
+        # Assert
+        assert result["ccf"][0] == pytest.approx(0.50), (
+            "PS1/26 Art. 166C(1) makes the F-IRB CCF the Art. 111 SA CCF, so the "
+            "Table A1 Row 4(b) 50% override must reach the F-IRB carrier too; "
+            f"got {result['ccf'][0]:.4f} (the un-overridden Row 5 OC 40%)."
+        )
+        assert result["ead_from_ccf"][0] == pytest.approx(500_000.0)
+
+    def test_b31_firb_mlr_resi_commitment_gets_row_4b_50_pct(
+        self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
+    ) -> None:
+        """B31 F-IRB MLR + Row 4(b) flag -> 50% CCF (pre-fix: the Row 6 20%)."""
+        # Arrange
+        exposures = self._commitment("MLR", "foundation_irb")
+
+        # Act
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+
+        # Assert
+        assert result["ccf"][0] == pytest.approx(0.50)
+        assert result["ead_from_ccf"][0] == pytest.approx(500_000.0)
+
+    def test_b31_firb_unflagged_oc_commitment_stays_40_pct(
+        self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
+    ) -> None:
+        """Control: B31 F-IRB OC without the flag keeps the Row 5 40% CCF."""
+        # Arrange
+        exposures = self._commitment("OC", "foundation_irb", flagged=False)
+
+        # Act
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+
+        # Assert
+        assert result["ccf"][0] == pytest.approx(0.40)
+        assert result["ead_from_ccf"][0] == pytest.approx(400_000.0)
+
+    # --- Row 4(b) carve-out: "not subject to a conversion factor of 10% or 100%" ---
+
+    def test_b31_firb_ucc_resi_commitment_stays_10_pct(
+        self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
+    ) -> None:
+        """B31 F-IRB LR (Row 7 UCC) + flag stays 10% — Row 4(b) carve-out."""
+        # Arrange
+        exposures = self._commitment("LR", "foundation_irb")
+
+        # Act
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+
+        # Assert
+        assert result["ccf"][0] == pytest.approx(0.10)
+
+    def test_b31_firb_full_risk_resi_commitment_stays_100_pct(
+        self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
+    ) -> None:
+        """B31 F-IRB FR (Row 1) + flag stays 100% — Row 4(b) carve-out."""
+        # Arrange
+        exposures = self._commitment("FR", "foundation_irb")
+
+        # Act
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+
+        # Assert
+        assert result["ccf"][0] == pytest.approx(1.00)
+
+    # --- Slotting and SA: Art. 166C(1) covers Slotting, Art. 111 covers SA ---
+
+    def test_b31_slotting_oc_resi_commitment_gets_row_4b_50_pct(
+        self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
+    ) -> None:
+        """B31 Slotting OC + flag -> 50% (Art. 166C(1) names the Slotting Approach)."""
+        # Arrange
+        exposures = self._commitment("OC", "slotting")
+
+        # Act
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+
+        # Assert
+        assert result["ccf"][0] == pytest.approx(0.50)
+
+    def test_b31_sa_oc_resi_commitment_gets_row_4b_50_pct(
+        self, ccf_calculator: CCFCalculator, b31_config: CalculationConfig
+    ) -> None:
+        """Regression guard: B31 SA OC + flag -> 50% (Table A1 Row 4(b) direct)."""
+        # Arrange
+        exposures = self._commitment("OC", "standardised")
+
+        # Act
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+
+        # Assert
+        assert result["ccf"][0] == pytest.approx(0.50)
+
+    # --- CRR inertness: Table A1 is Basel 3.1 only ---
+
+    def test_crr_firb_resi_commitment_keeps_art_166_8_d_75_pct(
+        self, ccf_calculator: CCFCalculator, crr_config: CalculationConfig
+    ) -> None:
+        """CRR F-IRB MR + flag stays at the Art. 166(8)(d) 75% — flag is inert."""
+        # Arrange
+        exposures = self._commitment("MR", "foundation_irb")
+
+        # Act
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        # Assert
+        assert result["ccf"][0] == pytest.approx(0.75)
+
+    def test_crr_sa_resi_commitment_keeps_annex_i_50_pct(
+        self, ccf_calculator: CCFCalculator, crr_config: CalculationConfig
+    ) -> None:
+        """CRR SA MLR + flag stays at the Annex I 20% — no Table A1 under CRR."""
+        # Arrange
+        exposures = self._commitment("MLR", "standardised")
+
+        # Act
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        # Assert
+        assert result["ccf"][0] == pytest.approx(0.20)

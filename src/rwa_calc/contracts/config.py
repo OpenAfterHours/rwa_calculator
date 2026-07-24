@@ -639,6 +639,19 @@ class CalculationConfig:
     # Set False to force the passed-in / default rate regardless of input data.
     sync_eur_gbp_rate_from_fx_table: bool = True
     enable_double_default: bool = False  # CRR Art. 153(3) double default treatment
+    # CRR Art. 162(1): firm-level Art. 143 permission election for the FIXED F-IRB
+    # supervisory maturity. Art. 162(1) first sentence assigns M = 0.5y to repo-style
+    # exposures and M = 2.5y to all other exposures for an institution WITHOUT
+    # own-LGD/own-CF permission; the second sentence makes the per-exposure Art. 162(2)
+    # M available "as part of the permission referred to in Article 143". Which limb
+    # applies is therefore a fact about the firm's permission, not about the regime —
+    # hence a config field, with the regulatory values (0.5y / 2.5y) in the rulepack.
+    # When True, F-IRB non-repo-style rows are pinned to 2.5y (repo-style stays 0.5y);
+    # the Art. 162(3) one-day carve-out and an explicit ``effective_maturity`` input
+    # still outrank both. Default False keeps the historic date-derived Art. 162(2) M.
+    # Inert under Basel 3.1 — PS1/26 Art. 162(1) is "[Note: Provision left blank]", so
+    # the pack Feature ``firb_fixed_supervisory_maturity`` is off there.
+    firb_fixed_maturity: bool = False
     # CRR Art. 155(3): when True and the firm has IRB permissions under CRR,
     # equity exposures use the PD/LGD approach (Art. 165 supervisory parameters)
     # instead of the Art. 155(2) IRB Simple risk weights. Ignored under Basel 3.1
@@ -769,6 +782,7 @@ class CalculationConfig:
         base_currency: str = "GBP",
         eur_gbp_rate: Decimal = Decimal("0.8732"),
         enable_double_default: bool = False,
+        firb_fixed_maturity: bool = False,
         crm_collateral_method: CRMCollateralMethod = CRMCollateralMethod.COMPREHENSIVE,
         airb_collateral_method: AIRBCollateralMethod = AIRBCollateralMethod.LGD_MODELLING,
         enable_collateral_link_splitting: bool = True,
@@ -804,6 +818,10 @@ class CalculationConfig:
             permission_mode: STANDARDISED (all SA) or IRB (model permissions drive routing)
             eur_gbp_rate: EUR/GBP exchange rate for threshold conversion
             enable_double_default: Enable double default treatment for eligible guarantees
+            firb_fixed_maturity: Art. 162(1) election — when True, F-IRB non-repo-style
+                exposures take the fixed supervisory M of 2.5y (repo-style stays 0.5y)
+                instead of the per-exposure Art. 162(2) derivation. Set it only for a
+                firm whose Art. 143 permission does not require the Art. 162(2) M.
             collect_engine: Polars engine for .collect() - 'cpu' (default) for
                 in-memory processing, 'streaming' for batched lower-memory execution.
             sft_method: SFT EAD method (CRR Art. 271(2)). "fccm" (default,
@@ -835,6 +853,7 @@ class CalculationConfig:
             permission_mode=permission_mode,
             eur_gbp_rate=eur_gbp_rate,
             enable_double_default=enable_double_default,
+            firb_fixed_maturity=firb_fixed_maturity,
             crm_collateral_method=crm_collateral_method,
             airb_collateral_method=airb_collateral_method,
             enable_collateral_link_splitting=enable_collateral_link_splitting,

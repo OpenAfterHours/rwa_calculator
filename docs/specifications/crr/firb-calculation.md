@@ -50,11 +50,85 @@ in the LGD in accordance with Chapter 4.
     credits or allowances to the obligor. It always applies to the dilution component regardless
     of PD estimation capability.
 
-!!! warning "Not Yet Implemented — Purchased Receivables LGD"
-    The code does not implement separate LGD paths for Art. 161(1)(e)/(f)/(g). Purchased
-    receivables exposures currently receive the standard unsecured LGD (45% senior / 75%
-    subordinated). The 100% subordinated purchased receivables LGD and the 75% dilution
-    risk LGD are not applied. See D3.10.
+!!! success "Purchased Receivables LGD — Implemented"
+    `purchased_receivables_subtype` (`"senior"` / `"subordinated"` / `"dilution_risk"`) on the
+    Facility / Loan / Contingent input row routes the Art. 161(1)(e)/(f)/(g) supervisory LGD
+    (`engine/irb/transforms.py::apply_firb_lgd`), taking precedence over the seniority-based
+    selector and over the CRM-derived `lgd_post_crm` — these are unsecured supervisory rates
+    that do not benefit from collateral adjustment.
+
+!!! success "Art. 160(2)/(6) Top-Down PD — Implemented (P1.278)"
+    Art. 161(1)(e)/(f) and Art. 160(2) are a matched pair: the supervisory LGDs apply to
+    exactly the population that cannot produce a Section-6 compliant PD, and for that
+    population Art. 160(2) prescribes the PD instead of modelling it:
+
+    | Subtype | Derived PD | Reference |
+    |---------|-----------|-----------|
+    | `senior` | `el_estimate` ÷ senior supervisory LGD (45% CRR / 40% B31) | Art. 160(2)(a) |
+    | `subordinated` | `el_estimate` (no division) | Art. 160(2)(b) |
+    | `dilution_risk` | `el_dilution_estimate` | Art. 160(6), first sentence |
+
+    Two nullable Float64 inputs carry the estimates — `el_estimate` (default risk) and
+    `el_dilution_estimate` (dilution risk), both **decimal rates** of the exposure value
+    (0.0225 = 2.25%), matching the identity `EL = PD × LGD`; neither is a monetary amount, and
+    one never substitutes for the other. The derivation runs in the classify stage
+    (`engine/stages/classify/subtypes.py::derive_purchased_receivables_pd`) because the IRB
+    approach gate is `internal_pd.is_not_null()` — before this, a pool with no obligor PD fell
+    to the Standardised Approach entirely.
+
+    Null semantics: a null, zero or negative EL estimate derives nothing and leaves the row
+    exactly where it was (SA, absent any other PD) — an absent estimate never becomes PD 0%.
+    A firm-supplied PD always wins, since Art. 160(2) applies only where the institution cannot
+    produce one. The derived PD is capped at 100% (`EL ÷ LGD` is unbounded above) and is then
+    floored downstream by the ordinary Art. 160(1) 0.03% (PS1/26 0.05%) input floor.
+
+    Class scope: purchased **corporate** receivables only — CORPORATE / CORPORATE_SME on
+    `exposure_class_irb`. Art. 160(2) and Art. 160(6) both name the corporate population and
+    the (a) denominator is a corporate supervisory LGD (Art. 161(1)(e)), so a retail row
+    carrying a subtype derives nothing: retail IRB is own-estimate only, with no supervisory
+    LGD and no Art. 163 senior EL/LGD limb to authorise the division.
+
+    Regime scope: **both**. PS1/26 Art. 160(2)(a)–(c) and 160(6) carry the CRR text over, and
+    PS1/26 Art. 161(2)(a) extends the same supervisory LGDs to Advanced IRB firms using this
+    PD — so no regime Feature gates it, only the pack's regime-keyed LGD values.
+
+    Deferred: Art. 160(2)(c) / 160(6) second sentence — the permission-gated **decomposition**
+    of an EL estimate into its own PD and LGD (with PS1/26 Art. 161(2)(b) then requiring the
+    decomposed LGD). That needs a decomposed PD/LGD input pair plus an Art. 143 permission
+    flag, and is the only route by which an A-IRB firm may use own estimates for these pools.
+
+!!! warning "The subtype LGD binds on A-IRB too — not only Foundation"
+    The derived PD is what opens the IRB gate, and on the **org-wide** permission path
+    `airb_expr` requires only `has_internal_rating` — it carries no modelled-LGD limb
+    (`engine/stages/classify/permissions.py::_build_orgwide_permission_exprs`), unlike the
+    model-permission path which does require `has_modelled_lgd`. A top-down pool with no LGD
+    of any kind therefore can and does land on **A-IRB**. Do not reason that a null `lgd`
+    forces the row to Foundation "where the supervisory LGD is applied" — that holds only
+    under model-level permissions, and it is the premise that hid an anti-conservative LGD.
+
+    `apply_firb_lgd` consequently applies the Art. 161(1)(e)–(g) subtype LGD whenever a row
+    carries a `purchased_receivables_subtype` and has **no** own or modelled LGD, on either
+    IRB approach — it is **not** gated on `approach == FIRB`. That is what the articles
+    require, not a convenience:
+
+    - **CRR Art. 161(1)** opens "Institutions shall use the following LGD values" with *no*
+      approach qualifier, and **Art. 161(2)** is its only escape — available where the
+      institution "can decompose its EL estimates for purchased corporate receivables into
+      PDs and LGDs" in a manner the competent authority considers reliable.
+    - **PS1/26 Art. 161(2)(a)** states it positively: an institution using the Advanced IRB
+      Approach "shall apply" points (e)/(f)/(g) of paragraph 1 where PD is determined under
+      Art. 160(2)(a)/(b) or the first sentence of Art. 160(6).
+
+    A firm-supplied LGD still wins, because that *is* the decomposition escape (CRR
+    Art. 161(2); PS1/26 Art. 161(2)(b)(i)–(ii) requires the decomposed LGD). This is why the
+    condition keys on the absence of an own estimate rather than on the approach.
+
+    Before this, a `subordinated` pool on A-IRB took the generic senior-unsecured LGD (45%
+    CRR / 40% B31) in place of 100%, and a `dilution_risk` pool in place of 75% CRR / 100%
+    B31 — understating LGD by 30–60pp. Note `IRBPermissions.full_irb_b31()` masks the defect
+    on a large corporate, because PS1/26 Art. 147A forces those rows to F-IRB anyway; it is
+    reachable under both regimes wherever A-IRB is genuinely granted. Regressions:
+    `tests/unit/classifier/test_p1_278_top_down_pd.py`.
 
 ### Art. 230 Table 5 LGDS Values (Foundation Collateral Method)
 
@@ -134,8 +208,12 @@ Under Basel 3.1, senior unsecured LGD is differentiated by whether the counterpa
 
 ## PD Floor
 
-**CRR:** Single floor of **0.03%** (3 basis points) for all non-defaulted exposure classes
-(Art. 160(1) for corporate/sovereign/institution; Art. 163(1) for retail).
+**CRR:** **0.03%** (3 basis points) for every non-defaulted exposure class the two
+flooring articles reach — Art. 160(1) for **corporates and institutions**, Art. 163(1)
+for **retail**. Central governments and central banks are in neither: Art. 160(1) reads
+"The PD of an exposure to a corporate or an institution shall be at least 0,03 %", so a
+CRR CGCB IRB exposure carries **no PD floor** and its modelled PD passes through
+(P1.277). Basel 3.1 does floor sovereigns, at 0.05% (PS1/26 Art. 160(1)).
 
 ### Basel 3.1 PD Floors by Exposure Class (PRA PS1/26 Art. 160/163)
 
@@ -144,7 +222,7 @@ Under Basel 3.1, PD floors are differentiated by exposure class:
 | Exposure Class | CRR PD Floor | Basel 3.1 PD Floor | Reference |
 |---------------|-------------|--------------------|-----------| 
 | Corporate / SME | 0.03% | **0.05%** | Art. 160(1) |
-| Sovereign | 0.03% | 0.05% | Art. 160(1) |
+| Sovereign | **none** | 0.05% | Art. 160(1) — no CRR CGCB limb |
 | Institution | 0.03% | 0.05% | Art. 160(1) |
 | Retail — mortgage | 0.03% | **0.10%** | Art. 163(1)(b) |
 | Retail — QRRE (transactor) | 0.03% | **0.05%** | Art. 163(1)(c) |
@@ -301,11 +379,63 @@ Institutions that have **not** received permission to use own LGDs and own conve
     receive M = 0.5 years under CRR, overriding any `maturity_date`-derived value
     (`engine/irb/transforms.py` prepare_columns). The override is gated on the CRR framework
     only — Basel 3.1 deleted Art. 162(1), so B31 F-IRB calculates M per Art. 162(2A).
-    Exposures without `is_sft` (or with `is_sft = False`) retain the existing 2.5-year
-    default. Regression: `tests/unit/irb/test_firb_sft_maturity.py`.
+    Regression: `tests/unit/irb/test_firb_sft_maturity.py`.
 
 Alternatively, the competent authority may require the institution to calculate M for each
 exposure using the A-IRB methods in Art. 162(2).
+
+!!! success "2.5-Year Fixed Maturity — Implemented as an Election (`firb_fixed_maturity`)"
+    Which of the two Art. 162(1) sentences binds is a fact about the firm's **Art. 143
+    permission**, not about the regime, so the fixed 2.5-year value for "all other exposures"
+    is a `CalculationConfig` election rather than a regime Feature:
+    `CalculationConfig.crr(..., firb_fixed_maturity=True)` pins every F-IRB non-repo-style row
+    to 2.5 years (derivatives included — Art. 162(1) carves out repos and
+    securities-or-commodities lending only). The regulatory values live on the cited pack
+    scalars `firb_sft_supervisory_maturity_years` (0.5) and
+    `firb_fixed_supervisory_maturity_years` (2.5), and regime availability on the CRR-only
+    `firb_fixed_supervisory_maturity` Feature — PS1/26 Art. 162(1) is
+    "[Note: Provision left blank]", so the election cannot fire under Basel 3.1.
+
+    **The default is `False`**, i.e. the calculator applies the Art. 162(1) second-sentence
+    alternative (per-exposure Art. 162(2) M) unless a firm opts in — do not read the default
+    as an assertion that no Art. 143 permission requires the fixed values. With the election
+    off, a non-repo-style F-IRB row keeps the `maturity_date` derivation clipped to [1, 5]
+    years and only falls back to 2.5 years when `maturity_date` is null. The election leaves
+    A-IRB rows untouched. Regressions:
+    `tests/unit/irb/test_p1_249_firb_fixed_maturity.py`,
+    `tests/acceptance/crr/test_p1_249_art_162_1_firb_fixed_maturity.py`.
+
+!!! warning "Known divergence — the one-day floor outranks the paragraph-1 fixed values"
+    In the engine's maturity priority chain
+    (`engine/irb/transforms.py::_build_maturity_exprs`) both Art. 162(1) fixed values sit
+    **below** the [Art. 162(3) one-day
+    carve-out](#art-1623-one-day-maturity-floor-exceptions) and below an explicit
+    `effective_maturity` input. An F-IRB row with the election on **and**
+    `has_one_day_maturity_floor` set therefore resolves to one day (1/365 ≈ 0.00274 years),
+    not 2.5 years — a large RWA reduction.
+
+    **The primary text does not support that ordering.** Art. 162(3) contains no
+    "notwithstanding paragraphs 1 and 2" clause. It reaches exposures only because
+    paragraph 2 pulls it in: Art. 162(2) directs firms permitted to use own LGDs and own
+    conversion factors to calculate M "as set out in points (a) to (e) of this paragraph
+    **and subject to paragraphs 3 to 5 of this Article**" (CRR Art. 162(2), first sentence).
+    Read plainly, the one-day floor is a **paragraph-2 carve-out** and does not displace a
+    paragraph-1 firm's fixed M — which is how
+    [Art. 162(3)](#art-1623-one-day-maturity-floor-exceptions) is scoped below ("overriding
+    the longer minimums in paragraph 2"). The two passages agree; the engine is the outlier.
+
+    The divergence is **recorded and retained deliberately**, not an oversight. The ordering
+    pre-dates this election — the one-day floor has always outranked the 0.5-year repo-style
+    sibling of the same sentence — so reordering it would move live numbers on today's F-IRB
+    SFT rows carrying a one-day floor, beyond the scope of adding the 2.5-year election.
+    Because `firb_fixed_maturity` defaults to `False`, the 2.5-year limb is **opt-in only and
+    inert at the default**: no live number is exposed by it. Pinned by
+    `test_one_day_floor_still_outranks_the_fixed_value`.
+
+    The same precedence question applies to an explicit `effective_maturity` input outranking
+    the fixed value (`test_firm_supplied_effective_maturity_still_outranks_the_fixed_value`):
+    a firm on the paragraph-1 fixed values arguably has no per-exposure M to supply at all.
+    That rung is likewise pre-existing and left unchanged here.
 
 ### Art. 162(2) — A-IRB Effective Maturity Calculation
 
@@ -327,7 +457,10 @@ M shall not exceed 5 years (except under Art. 384(1) for CVA). Key methods:
 
 Where documentation requires **daily re-margining and daily revaluation** with provisions for
 prompt liquidation or set-off of collateral, M shall be at least **one day** (overriding the
-longer minimums in paragraph 2) for:
+longer minimums in paragraph 2 — paragraph 2 itself makes its M *"subject to paragraphs 3 to 5
+of this Article"*, and paragraph 1 has no equivalent hook; see the
+[known divergence](#art-1621-f-irb-fixed-supervisory-maturities) recorded under Art. 162(1),
+where the engine nonetheless applies this floor over the fixed values) for:
 
 - (a) Fully/nearly-fully collateralised derivatives (Annex II)
 - (b) Fully/nearly-fully collateralised margin lending

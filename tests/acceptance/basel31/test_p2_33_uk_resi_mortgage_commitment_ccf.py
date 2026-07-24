@@ -38,7 +38,7 @@ Test strategy:
 References:
     - PRA PS1/26 Art. 111(1) Table A1: Row 4(b) residential-property commitment 50%
     - PRA PS1/26 Art. 111(1) Table A1: Row 5 "other commitments" (OC) 40%
-    - src/rwa_calc/data/tables/ccf.py: SA_CCF_B31 — OC=0.40, MR=0.50
+    - src/rwa_calc/rulebook/packs/b31.py: "sa_ccf" LookupTable — OC=0.40, MR=0.50
     - src/rwa_calc/engine/ccf.py: CCFCalculator.apply_ccf
     - tests/fixtures/p2_33/p2_33.py: scenario constants
 """

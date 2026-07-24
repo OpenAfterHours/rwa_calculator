@@ -332,6 +332,11 @@
   "rwa_calc.engine.sa.central_bank::lift_central_bank_cqs": [
     "PS1/26, paragraph 114"
   ],
+  "rwa_calc.engine.sa.cqs_lift::lift_institution_cqs": [
+    "CRR Art. 117(1)",
+    "CRR Art. 107(2)",
+    "PS1/26, paragraph 117"
+  ],
   "rwa_calc.engine.sa.crr_risk_weight_tables::_create_covered_bond_df": [
     "CRR Art. 129"
   ],

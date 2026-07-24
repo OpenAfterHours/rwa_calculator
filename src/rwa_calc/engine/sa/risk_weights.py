@@ -84,6 +84,7 @@ from rwa_calc.engine.sa.b31_risk_weight_tables import (
     get_b31_combined_cqs_risk_weights,
 )
 from rwa_calc.engine.sa.central_bank import ecb_rw_expr, is_ecb_expr, lift_central_bank_cqs
+from rwa_calc.engine.sa.cqs_lift import lift_institution_cqs
 from rwa_calc.engine.sa.crr_risk_weight_tables import (
     CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
     COMMERCIAL_RE_PARAMS,
@@ -1034,32 +1035,9 @@ def _prepare_risk_weight_lookup(
     # classes. Sentinel -1 for null CQS so the left join matches.
     upper = pl.col("exposure_class").str.to_uppercase()
 
-    # CRR Art. 117(1) / PRA PS1/26 Art. 117(1)(a): non-named MDBs are treated
-    # as institutions, so their primary CQS source is ``cp_institution_cqs``
-    # (the MDB's own ECAI rating expressed as a CQS). When the exposure has
-    # no top-level ``cqs`` (no rating attached at the rating-mapping stage)
-    # but the counterparty carries an ``institution_cqs``, lift it into
-    # ``cqs`` here so the downstream CQS-keyed branches and joins see it.
-    # Named MDBs (mdb_named) bypass CQS entirely later — coalescing here is
-    # harmless for them.
-    is_mdb_class = upper == "MDB"
-    # CRR Art. 107(2)(a): a non-qualifying CCP counterparty (entity_type "ccp"
-    # demoted past the Art. 306(1) 2%/4% pin by cp_is_qccp=False) is treated as
-    # an ordinary institution. Its own ECAI rating is carried on the synthetic
-    # CCR row as ``cp_institution_cqs`` (the CCR adapter surfaces no top-level
-    # ``cqs``), so lift it into ``cqs`` here — mirroring the MDB treatment —
-    # so the Art. 120(1) Table 3 institution ladder resolves (e.g. CQS 2 -> 50%)
-    # instead of the unrated 100% fallback. Scoped to ``ccp`` entity_type with a
-    # null ``cqs`` so rated institutions and lending rows are untouched.
-    is_non_qccp_institution = (pl.col("cp_entity_type").fill_null("") == "ccp") & ~pl.col(
-        "cp_is_qccp"
-    ).fill_null(True)
-    exposures = exposures.with_columns(
-        pl.when((is_mdb_class | is_non_qccp_institution) & pl.col("cqs").is_null())
-        .then(pl.col("cp_institution_cqs"))
-        .otherwise(pl.col("cqs"))
-        .alias("cqs")
-    )
+    # CRR Art. 117(1) / Art. 107(2)(a) — non-named MDBs and demoted non-QCCPs
+    # take the institution ladder; see engine/sa/cqs_lift.py.
+    exposures = lift_institution_cqs(exposures, upper)
 
     # PS1/26 Art. 114(2A) — B31-Feature-gated; see engine/sa/central_bank.py.
     exposures = lift_central_bank_cqs(exposures, resolved_pack)

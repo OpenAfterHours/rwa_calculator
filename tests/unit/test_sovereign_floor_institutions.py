@@ -344,25 +344,40 @@ class TestTradeExemption:
 
 
 class TestBackwardCompatibility:
-    """Null sovereign CQS or missing columns → no floor applied."""
+    """Null / missing sovereign inputs.
 
-    def test_null_sovereign_cqs_no_floor(
+    A null ``sovereign_cqs`` is an UNRATED sovereign and floors at the
+    Art. 114(1) 100% residual (P1.254). Only a frame that omits the column
+    entirely — a synthetic unit-test shape, never a production row — is
+    left unfloored.
+    """
+
+    def test_null_sovereign_cqs_floors_at_art_114_1_unrated(
         self, sa_calculator: SACalculator, b31_config: CalculationConfig
     ) -> None:
-        """Null sovereign CQS → no floor, backward compatible."""
+        """Null sovereign CQS → floor binds at the Art. 114(1) 100% residual.
+
+        Inverted by P1.254. This previously asserted 40% under a
+        "backward compatible" rationale, which codified the defect: a null
+        ``cp_sovereign_cqs`` disabled the floor entirely. Art. 121(6) floors
+        an unrated FX institution exposure at the RW of its jurisdiction's
+        central government "as set out in Article 114(1) and (2)", and
+        Art. 114(1) assigns an unrated central government 100%. An unrated
+        sovereign is a regulatory state, not missing data, so the floor binds.
+        """
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
             exposure_class="INSTITUTION",
             config=b31_config,
             scra_grade="A",
-            sovereign_cqs=None,  # No sovereign CQS
+            sovereign_cqs=None,  # Unrated sovereign → Art. 114(1) 100%
             local_currency="TRY",
             currency="USD",
             country_code="TR",
         )
-        # SCRA A = 40% stands — no sovereign data
-        assert result["risk_weight"] == pytest.approx(0.40)
+        # SCRA A 40% is floored up to the Art. 114(1) unrated-CGCB 100%.
+        assert result["risk_weight"] == pytest.approx(1.00)
 
     def test_missing_columns_backward_compat(
         self, sa_calculator: SACalculator, b31_config: CalculationConfig

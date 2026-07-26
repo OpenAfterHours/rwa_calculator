@@ -229,6 +229,10 @@ _SA_SHARED_RW: dict[str, float] = {
     "other_default": scalar_value(_CRR_PACK.scalar_param("other_items_default_rw")),
     # Regulatory retail — 75% flat (Art. 123 / CRE20.65)
     "retail": scalar_value(_CRR_PACK.scalar_param("retail_risk_weight")),
+    # Art. 114(1) residual for a central government carrying no ECAI assessment
+    # — the floor value the Art. 121(6) institution floor reads when the
+    # sovereign is unrated (identical under CRR and PS1/26).
+    "cgcb_unrated": float(CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS[CQS.UNRATED]),
 }
 
 # CCR Art. 92(3)(ca) own-funds -> RWA factor (12.5), pins failed-trade RW (P8.43).
@@ -1519,26 +1523,42 @@ def _apply_sovereign_floor_for_institutions(
     from the movement of goods with original maturity ≤ 1 year are not
     subject to this floor (CRE20.22 footnote 13).
 
-    Requires ``cp_sovereign_cqs`` to be present and non-null on the
-    exposure. When absent or null, no floor is applied (backward
-    compatible). ``cp_local_currency`` enables accurate FX detection;
-    when absent, falls back to the UK/EU domestic currency expression.
+    The floor is defined by reference to Art. 114(1) **and** (2), so an
+    unrated sovereign does not escape it: Art. 114(2) Table 1 prices the
+    rated ladder and Art. 114(1) supplies the 100% residual for a central
+    government with no ECAI assessment. A null ``cp_sovereign_cqs``
+    therefore floors at 100%, not at nothing (P1.254). Art. 121(6) cites
+    only paragraphs (1) and (2) of Art. 114, so the ECB 0% relief and the
+    UK-sterling 0% relief sit deliberately outside the cross-reference and
+    are not consulted here — the floor exists precisely for exposures that
+    are NOT in the local currency.
+
+    Asymmetry, recorded rather than papered over: a frame that never
+    carries ``cp_sovereign_cqs`` **at all** is still left unfloored, as
+    ``test_missing_columns_backward_compat`` pins. That shape only arises
+    in synthetic unit frames — production rows always carry the column
+    (nullable) off the sealed ``crm_exit`` edge — so no capital number
+    depends on it. Do not "fix" it by asserting the contract null-fill
+    covers the case; it demonstrably does not. See P1.312.
+    ``cp_local_currency`` enables accurate FX detection; when absent,
+    falls back to the UK/EU domestic currency expression.
 
     References:
     - CRR Art. 121(6)
     - PRA PS1/26 Art. 121(6)
+    - PRA PS1/26 Art. 114(1)-(2) — the floor's value source
     - CRE20.22 (Basel 3.1 SCRA sovereign floor)
     """
     _uc = pl.col("_upper_class")
 
-    # Sovereign CQS → risk weight mapping (Art. 114 table —
-    # CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS). Unknown CQS → null so the
-    # downstream floor predicate (`_floor_applies` requires _sovereign_rw
-    # to be non-null) leaves the exposure unchanged.
+    # Sovereign CQS → risk weight mapping (Art. 114(2) Table 1 —
+    # CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS), falling back to the
+    # Art. 114(1) unrated-sovereign residual so the floor still binds when
+    # the jurisdiction's central government carries no ECAI assessment.
     _sovereign_rw = _cqs_table_lookup_expr(
         "cp_sovereign_cqs",
         CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
-        pl.lit(None).cast(pl.Float64),
+        _SA_SHARED_RW["cgcb_unrated"],
     )
 
     # Compute sovereign RW as a temporary column
@@ -1558,18 +1578,13 @@ def _apply_sovereign_floor_for_institutions(
         pl.col("original_maturity_years").fill_null(5.0) <= 1.0
     )
 
-    # Floor applies to: unrated institution exposures in FX with
-    # a known sovereign CQS, excluding trade-exempt items.
+    # Floor applies to every unrated institution exposure in FX, excluding
+    # trade-exempt items. No sovereign-CQS gate: ``_sovereign_rw`` is total
+    # over the Art. 114(1)+(2) domain, so an unrated sovereign floors at 100%.
     _is_unrated = pl.col("cqs").is_null() | (pl.col("cqs") <= 0)
     _is_institution = _uc.str.contains("INSTITUTION", literal=True)
 
-    _floor_applies = (
-        _is_institution
-        & _is_unrated
-        & _is_fx
-        & ~_is_trade_exempt
-        & pl.col("_sovereign_rw").is_not_null()
-    )
+    _floor_applies = _is_institution & _is_unrated & _is_fx & ~_is_trade_exempt
 
     exposures = exposures.with_columns(
         pl.when(_floor_applies)

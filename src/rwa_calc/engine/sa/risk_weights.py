@@ -1290,15 +1290,31 @@ def _apply_crr_risk_weight_overrides(
             & (pl.col("qualifies_as_retail") == True)  # noqa: E712
         )
         .then(pl.lit(_SA_SHARED_RW["retail"]))
-        # Corporate SME: 100% — unrated only (Art. 122). A rated SME (CQS 1-6)
-        # keeps its Art. 122 CQS-table weight from the rw_table join; SME relief
-        # is delivered separately via the Art. 501 supporting factor.
+        # Art. 122(2): an unrated corporate takes "a 100 % risk weight or the
+        # risk weight of exposures to the central government of the jurisdiction
+        # in which the corporate is incorporated, whichever is the HIGHER".
+        # Only a CQS6 sovereign (150%) binds — the Art. 114 ladder is
+        # 0/20/50/100/100/150 and an unrated sovereign is 100%, so the 100% floor
+        # dominates everywhere else.
+        #
+        # Covers SME and non-SME alike: CRR Art. 122 draws no SME distinction
+        # (the former SME arm here was just Art. 122(2) restated), and CRR SME
+        # relief is the Art. 501 supporting factor, not a risk weight. A rated
+        # corporate is untouched — Art. 122(2) reaches only exposures "for which
+        # such a credit assessment is not available".
         .when(
             uc.str.contains("CORPORATE", literal=True)
-            & uc.str.contains("SME", literal=True)
             & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
         )
-        .then(pl.lit(_SA_CRR_RW["corporate_sme"]))
+        .then(
+            pl.max_horizontal(
+                pl.lit(_SA_CRR_RW["corporate_sme"]),
+                _sovereign_derived_rw_expr(
+                    CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
+                    _SA_SHARED_RW["cgcb_unrated"],
+                ),
+            )
+        )
     )
 
     # Retail-class branches (Art. 123).

@@ -392,6 +392,15 @@
     "CRR Art. 116(3)",
     "PS1/26, paragraph 116"
   ],
+  "rwa_calc.engine.sa.rgla::is_rgla_sovereign_expr": [
+    "CRR Art. 115",
+    "PS1/26, paragraph 115"
+  ],
+  "rwa_calc.engine.sa.rgla::rgla_sovereign_rw_expr": [
+    "CRR Art. 115",
+    "CRR Art. 114",
+    "PS1/26, paragraph 115"
+  ],
   "rwa_calc.engine.sa.risk_weights::_apply_b31_risk_weight_overrides": [
     "CRR Art. 134",
     "CRR Art. 137"

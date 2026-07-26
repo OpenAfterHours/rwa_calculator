@@ -121,6 +121,7 @@ from rwa_calc.engine.sa.jurisdiction import (
     pse_jurisdiction_not_permitted_expr,
     pse_short_term_eligible_expr,
 )
+from rwa_calc.engine.sa.rgla import is_rgla_sovereign_expr, rgla_sovereign_rw_expr
 from rwa_calc.rulebook import RulepackV0
 from rwa_calc.rulebook.compile import lookup_float_map, scalar_value
 from rwa_calc.rulebook.resolve import resolve
@@ -1198,13 +1199,10 @@ def _apply_b31_risk_weight_overrides(
                 _SA_SHARED_RW["pse_unrated"],
             )
         )
-        # RGLA UK devolved govt -> 0% (PRA designation).
-        .when(
-            (uc == "RGLA")
-            & (pl.col("cp_entity_type").fill_null("") == "rgla_sovereign")
-            & (pl.col("cp_country_code") == "GB")
-        )
-        .then(pl.lit(_SA_SHARED_RW["rgla_uk_devolved"]))
+        # Art. 115(2)/(4) — RGLAs treated as their central government are
+        # priced on the Art. 114 ladder, not pinned to 0%; see engine/sa/rgla.py.
+        .when(is_rgla_sovereign_expr(uc))
+        .then(rgla_sovereign_rw_expr(is_uk_domestic))
         # RGLA domestic currency -> 20% (Art. 115(5)). Scoped to the UK/GBP
         # limb only: Art. 115(5) restricts the flat 20% to UK RGLAs
         # denominated (and funded) in sterling. EU-domestic-currency RGLAs
@@ -1415,13 +1413,10 @@ def _apply_crr_risk_weight_overrides(
                 _SA_SHARED_RW["pse_unrated"],
             )
         )
-        # RGLA UK devolved govt -> 0% (PRA designation).
-        .when(
-            (uc == "RGLA")
-            & (pl.col("cp_entity_type").fill_null("") == "rgla_sovereign")
-            & (pl.col("cp_country_code") == "GB")
-        )
-        .then(pl.lit(_SA_SHARED_RW["rgla_uk_devolved"]))
+        # Art. 115(2)/(4) — RGLAs treated as their central government are
+        # priced on the Art. 114 ladder, not pinned to 0%; see engine/sa/rgla.py.
+        .when(is_rgla_sovereign_expr(uc))
+        .then(rgla_sovereign_rw_expr(is_uk_domestic))
         # RGLA domestic currency -> 20% (Art. 115(5)). Scoped to the UK/GBP
         # limb only: Art. 115(5) restricts the flat 20% to UK RGLAs
         # denominated (and funded) in sterling. EU-domestic-currency RGLAs

@@ -83,7 +83,12 @@ _IRB_SIMPLE_EL = lookup_float_map(resolve("crr", date(2026, 1, 1)).lookup("equit
 # Punitive weight incentivises firms to use look-through or mandate-based approaches.
 CIU_FALLBACK_RW = _CRR_SA_RW[EquityType.CIU]
 
-# Art. 132b(2): multiplier for third-party CIU mandate calculations (20% uplift)
+# Art. 132(4): multiplier for third-party CIU calculations (20% uplift). Applies
+# to BOTH approaches -- point (b) requires the third party to calculate "in
+# accordance with the approaches set out in Article 132A(1), (2) or (3)", and
+# 132A(1) IS the look-through approach. (The previous "Art. 132b(2)" attribution
+# here was uncorroborated; the rule is Art. 132(4), verified against
+# ps126app1.pdf pp.63-64.)
 _CIU_THIRD_PARTY_MULTIPLIER = 1.2
 
 # No multiplier for internally-managed CIU mandate calculations
@@ -101,6 +106,9 @@ _EQUITY_INPUT_CONTRACT: dict[str, ColumnSpec] = {
     "ciu_approach": ColumnSpec(pl.String, required=False),
     "ciu_mandate_rw": ColumnSpec(pl.Float64, required=False),
     "ciu_third_party_calc": ColumnSpec(pl.Boolean, required=False),
+    # Art. 132(4) derogation: unrestricted access to the third party's detailed
+    # calculations disapplies the 1.2x factor.
+    "ciu_unrestricted_access": ColumnSpec(pl.Boolean, default=False, required=False),
     "fund_reference": ColumnSpec(pl.String, required=False),
     "ciu_look_through_rw": ColumnSpec(pl.Float64, required=False),
     "fund_nav": ColumnSpec(pl.Float64, required=False),
@@ -124,11 +132,53 @@ _AUDIT_RWA_ROUND = 0
 
 
 @cites("PS1/26, paragraph 132")
+def _ciu_computed_rw_expr(rw_col: str) -> pl.Expr:
+    """Art. 132(4): a CIU approach's own RW, uplifted 1.2x for third-party calcs.
+
+    Two things the previous shape got wrong, both fixed here:
+
+    - **The uplift reaches look-through, not just mandate-based.** Art. 132(4)(b)
+      requires the third party to calculate "in accordance with the approaches set
+      out in Article 132A(1), (2) or (3)", and 132A(1) *is* the look-through
+      approach. Gating the multiplier on ``mandate_based`` recognised
+      third-party look-through RW 20% too low.
+    - **The fall-back is never uplifted.** Art. 132(4) multiplies the RWEA
+      "resulting from those calculations". A null ``rw_col`` means there is no
+      third-party calculation to multiply, so the row takes the Art. 132(2)
+      1,250% fall-back flat. The old ``fill_null(CIU_FALLBACK_RW) * 1.2``
+      produced 1,500% -- a weight no provision authorises, reachable purely
+      from missing data.
+
+    The derogation in the final sub-paragraph ("where the institution has
+    unrestricted access to the detailed calculations carried out by the third
+    party, the factor of 1.2 shall not apply") is an affirmative carve-out: a
+    null ``ciu_unrestricted_access`` keeps the uplift.
+    """
+    # Both operands are filled before combining: a frame that carries the column
+    # as an all-null literal has dtype Null, and `~` on Null raises rather than
+    # returning null. Production frames always arrive Boolean via the contract
+    # default, so this only guards synthetic single-row test frames.
+    is_third_party = pl.col("ciu_third_party_calc").fill_null(False)
+    has_unrestricted_access = pl.col("ciu_unrestricted_access").fill_null(False)
+    multiplier = (
+        pl.when(is_third_party & ~has_unrestricted_access)
+        .then(pl.lit(_CIU_THIRD_PARTY_MULTIPLIER))
+        .otherwise(pl.lit(_CIU_INTERNAL_MULTIPLIER))
+    )
+    return (
+        pl.when(pl.col(rw_col).is_null())
+        .then(pl.lit(CIU_FALLBACK_RW))
+        .otherwise(pl.col(rw_col) * multiplier)
+    )
+
+
+@cites("PS1/26, paragraph 132")
 def _append_ciu_branches(chain: pl.Expr) -> ChainedThen:
     """Append CIU approach-aware risk weight branches to a when/then chain (Art. 132-132C).
 
-    Covers: fallback (1,250%), mandate_based (ciu_mandate_rw x1.2 if third-party),
-    look_through (ciu_look_through_rw), and unclassified CIU (1,250% default).
+    Covers: fallback (1,250%), mandate_based and look_through (each x1.2 where the
+    calculation is a third party's and Art. 132(4)'s unrestricted-access
+    derogation does not apply), and unclassified CIU (1,250% default).
     """
     _is_ciu = pl.col("equity_type").str.to_lowercase() == "ciu"
     # The piped-in chain is an in-progress when/then; narrow for the checker.
@@ -137,14 +187,9 @@ def _append_ciu_branches(chain: pl.Expr) -> ChainedThen:
         then_chain.when(_is_ciu & (pl.col("ciu_approach") == "fallback"))
         .then(pl.lit(CIU_FALLBACK_RW))
         .when(_is_ciu & (pl.col("ciu_approach") == "mandate_based"))
-        .then(
-            pl.col("ciu_mandate_rw").fill_null(CIU_FALLBACK_RW)
-            * pl.when(pl.col("ciu_third_party_calc").fill_null(False))
-            .then(pl.lit(_CIU_THIRD_PARTY_MULTIPLIER))
-            .otherwise(pl.lit(_CIU_INTERNAL_MULTIPLIER))
-        )
+        .then(_ciu_computed_rw_expr("ciu_mandate_rw"))
         .when(_is_ciu & (pl.col("ciu_approach") == "look_through"))
-        .then(pl.col("ciu_look_through_rw").fill_null(CIU_FALLBACK_RW))
+        .then(_ciu_computed_rw_expr("ciu_look_through_rw"))
         .when(_is_ciu)
         .then(pl.lit(CIU_FALLBACK_RW))
     )

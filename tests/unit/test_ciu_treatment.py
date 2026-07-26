@@ -206,7 +206,20 @@ class TestCIUMandateBasedThirdParty:
         equity_calculator: EquityCalculator,
         sa_config: CalculationConfig,
     ):
-        """Third-party flag has no effect on look-through approach."""
+        """Look-through with NO third-party RW supplied takes the flat fall-back.
+
+        Renamed and re-documented by P1.258. The old name and docstring
+        ("Third-party flag has no effect on look-through approach") asserted a
+        rule that does not exist: Art. 132(4)(b) covers "the approaches set out
+        in Article 132A(1), (2) or (3)", and 132A(1) IS look-through, so the
+        1.2x uplift does reach it.
+
+        This row never tested that, because ``ciu_look_through_rw`` is unset. It
+        exercises the Art. 132(2) fall-back, which is correctly NOT uplifted --
+        there is no third-party calculation to multiply. The assertion is
+        unchanged; only the false claim around it is gone. See
+        ``test_look_through_third_party_applies_1_2x_factor`` for the real rule.
+        """
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("1000000"),
@@ -217,12 +230,86 @@ class TestCIUMandateBasedThirdParty:
         )
         assert result["risk_weight"] == pytest.approx(12.50)
 
+    def test_p1_258_look_through_third_party_applies_1_2x_factor(
+        self,
+        equity_calculator: EquityCalculator,
+        sa_config: CalculationConfig,
+    ):
+        """Art. 132(4): the 1.2x uplift reaches look-through, not just mandate-based.
+
+        Art. 132(4)(b) requires the third party to calculate "in accordance with
+        the approaches set out in Article 132A(1), (2) or (3)"; 132A(1) is the
+        look-through approach. Verified against ps126app1.pdf pp.63-64.
+        """
+        result = calculate_single_equity_exposure(
+            equity_calculator,
+            ead=Decimal("1000000"),
+            equity_type="ciu",
+            config=sa_config,
+            ciu_approach="look_through",
+            ciu_look_through_rw=0.35,
+            ciu_third_party_calc=True,
+        )
+        # 0.35 x 1.2. Anti-confound: must NOT be the un-multiplied 0.35.
+        assert result["risk_weight"] == pytest.approx(0.42)
+        assert result["risk_weight"] != pytest.approx(0.35)
+
+    def test_p1_258_look_through_internal_calc_has_no_factor(
+        self,
+        equity_calculator: EquityCalculator,
+        sa_config: CalculationConfig,
+    ):
+        """Control: an internally-computed look-through RW is not uplifted."""
+        result = calculate_single_equity_exposure(
+            equity_calculator,
+            ead=Decimal("1000000"),
+            equity_type="ciu",
+            config=sa_config,
+            ciu_approach="look_through",
+            ciu_look_through_rw=0.35,
+            ciu_third_party_calc=False,
+        )
+        assert result["risk_weight"] == pytest.approx(0.35)
+
+    def test_p1_258_unrestricted_access_disapplies_1_2x_factor(
+        self,
+        equity_calculator: EquityCalculator,
+        sa_config: CalculationConfig,
+    ):
+        """Art. 132(4) final sub-paragraph: unrestricted access disapplies the factor.
+
+        "By way of derogation from the second sub-paragraph, where the institution
+        has unrestricted access to the detailed calculations carried out by the
+        third party, the factor of 1.2 shall not apply."
+        """
+        result = calculate_single_equity_exposure(
+            equity_calculator,
+            ead=Decimal("1000000"),
+            equity_type="ciu",
+            config=sa_config,
+            ciu_approach="look_through",
+            ciu_look_through_rw=0.35,
+            ciu_third_party_calc=True,
+            ciu_unrestricted_access=True,
+        )
+        # Derogation fires -> no uplift. Anti-confound: must NOT be 0.42.
+        assert result["risk_weight"] == pytest.approx(0.35)
+        assert result["risk_weight"] != pytest.approx(0.42)
+
     def test_third_party_with_null_mandate_rw_uses_fallback(
         self,
         equity_calculator: EquityCalculator,
         sa_config: CalculationConfig,
     ):
-        """Third-party with null mandate_rw uses 1,250% fallback * 1.2 = 1,500%."""
+        """Third-party with null mandate_rw takes the 1,250% fall-back UNMULTIPLIED.
+
+        Inverted by P1.258. This previously asserted 15.00 and documented it as
+        "1,250% fallback * 1.2", codifying a defect: Art. 132(4) multiplies the
+        RWEA "resulting from those calculations", and a null mandate RW means
+        there is no third-party calculation to multiply. The row falls to the
+        Art. 132(2) fall-back, which no provision authorises uplifting -- 1,500%
+        was reachable purely from missing data.
+        """
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("1000000"),
@@ -231,7 +318,7 @@ class TestCIUMandateBasedThirdParty:
             ciu_approach="mandate_based",
             ciu_third_party_calc=True,
         )
-        assert result["risk_weight"] == pytest.approx(15.00)
+        assert result["risk_weight"] == pytest.approx(12.50)
 
 
 # =============================================================================

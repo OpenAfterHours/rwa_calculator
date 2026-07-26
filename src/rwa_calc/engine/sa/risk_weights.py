@@ -84,20 +84,18 @@ from rwa_calc.engine.sa.b31_risk_weight_tables import (
     get_b31_combined_cqs_risk_weights,
 )
 from rwa_calc.engine.sa.central_bank import ecb_rw_expr, is_ecb_expr, lift_central_bank_cqs
+from rwa_calc.engine.sa.covered_bond import b31_unrated_cb_rw_expr, crr_unrated_cb_rw_expr
 from rwa_calc.engine.sa.cqs_lift import lift_institution_cqs
 from rwa_calc.engine.sa.crr_risk_weight_tables import (
     CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
     COMMERCIAL_RE_PARAMS,
     CORPORATE_RISK_WEIGHTS,
-    COVERED_BOND_UNRATED_DERIVATION_B31,
-    COVERED_BOND_UNRATED_DERIVATION_CRR,
     CRR_CORPORATE_SME_RW,
     CRR_DEFAULTED_PROVISION_THRESHOLD,
     CRR_DEFAULTED_RW_HIGH_PROVISION,
     CRR_DEFAULTED_RW_LOW_PROVISION,
     CRR_NON_REGULATORY_RETAIL_RW,
     CRR_SHORT_TERM_ECAI_RISK_WEIGHTS,
-    INSTITUTION_RISK_WEIGHTS_B31_ECRA,
     INSTITUTION_RISK_WEIGHTS_CRR,
     INSTITUTION_RISK_WEIGHTS_SOVEREIGN_DERIVED,
     INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR,
@@ -514,90 +512,6 @@ def _eca_meip_rw_expr() -> pl.Expr:
     for score in range(1, 8):
         expr = expr.when(col == score).then(pl.lit(_ECA_MEIP_RW[score]))
     return expr.otherwise(pl.lit(None, dtype=pl.Float64))
-
-
-# ---------------------------------------------------------------------------
-# Covered bond unrated derivation helpers (CRR Art. 129(5))
-# ---------------------------------------------------------------------------
-
-
-@cites("CRR Art. 129")
-def _crr_unrated_cb_rw_expr() -> pl.Expr:
-    """Build Polars expression for CRR Art. 129(5) unrated covered bond RW derivation.
-
-    Derives covered bond RW from the issuing institution's CQS via two-step lookup:
-      1. Institution CQS → institution RW (Art. 120 Table 3)
-      2. Institution RW → covered bond RW (Art. 129(5) derivation table)
-
-    When ``cp_institution_cqs`` is null (institution itself is unrated), uses
-    Art. 121 fallback institution RW (100%) → CB 50%.
-
-    References:
-        CRR Art. 120 Table 3: Institution risk weights (CQS 2 = 50%)
-        CRR Art. 129(5): Unrated covered bond derivation from institution RW
-    """
-    inst_table = INSTITUTION_RISK_WEIGHTS_CRR
-
-    # Pre-compute CQS → CB RW by chaining institution RW through the derivation table.
-    # CRR Art. 129(5) admits only four sub-paragraphs (a)-(d); use the CRR-specific
-    # 4-key dict so (b) maps 0.50 -> 0.20, not the B31 value 0.25.
-    cqs_to_cb_rw: dict[int, float] = {}
-    for cqs_val in [CQS.CQS1, CQS.CQS2, CQS.CQS3, CQS.CQS4, CQS.CQS5, CQS.CQS6]:
-        inst_rw = inst_table[cqs_val]
-        cb_rw = COVERED_BOND_UNRATED_DERIVATION_CRR[inst_rw]
-        cqs_to_cb_rw[int(cqs_val)] = float(cb_rw)
-
-    # Unrated institution: sovereign-derived
-    unrated_inst_rw = inst_table[CQS.UNRATED]
-    unrated_cb_rw = float(COVERED_BOND_UNRATED_DERIVATION_CRR[unrated_inst_rw])
-
-    # Build when/then chain from cp_institution_cqs
-    expr = pl.when(pl.col("cp_institution_cqs") == 1).then(pl.lit(cqs_to_cb_rw[1]))
-    for cqs_int in [2, 3, 4, 5, 6]:
-        expr = expr.when(pl.col("cp_institution_cqs") == cqs_int).then(
-            pl.lit(cqs_to_cb_rw[cqs_int])
-        )
-    # Fallback: cp_institution_cqs is null (unrated institution) or unexpected value
-    return expr.otherwise(pl.lit(unrated_cb_rw))
-
-
-@cites("CRR Art. 129")
-@cites("PS1/26, paragraph 129")
-def _b31_unrated_cb_rw_expr() -> pl.Expr:
-    """Build Polars expression for B31 Art. 129(5) unrated covered bond RW derivation.
-
-    Derives covered bond RW from the issuing institution's senior unsecured RW,
-    which can come from either source:
-      1. ECRA (rated institution): cp_institution_cqs → institution RW → CB RW
-      2. SCRA (unrated institution): cp_scra_grade → CB RW
-
-    Art. 129(5) operates on the resulting institution RW regardless of source
-    (ECRA or SCRA). The ECRA path is checked first; if cp_institution_cqs is
-    null, falls back to the SCRA path.
-
-    References:
-        PRA PS1/26 Art. 120 Table 3 ECRA: Institution risk weights (CQS 2 = 30%)
-        PRA PS1/26 Art. 120A: SCRA institution risk weights
-        PRA PS1/26 Art. 129(5): Unrated covered bond derivation from institution RW
-    """
-    inst_table = INSTITUTION_RISK_WEIGHTS_B31_ECRA
-    cqs_to_cb_rw: dict[int, float] = {}
-    for cqs_val in [CQS.CQS1, CQS.CQS2, CQS.CQS3, CQS.CQS4, CQS.CQS5, CQS.CQS6]:
-        inst_rw = inst_table[cqs_val]
-        cb_rw = COVERED_BOND_UNRATED_DERIVATION_B31[inst_rw]
-        cqs_to_cb_rw[int(cqs_val)] = float(cb_rw)
-
-    # Build when/then: ECRA first (cp_institution_cqs)
-    expr = pl.when(pl.col("cp_institution_cqs") == 1).then(pl.lit(cqs_to_cb_rw[1]))
-    for cqs_int in [2, 3, 4, 5, 6]:
-        expr = expr.when(pl.col("cp_institution_cqs") == cqs_int).then(
-            pl.lit(cqs_to_cb_rw[cqs_int])
-        )
-    # SCRA fallback (cp_scra_grade) for unrated issuers
-    for grade, cb_rw in B31_COVERED_BOND_UNRATED_FROM_SCRA.items():
-        expr = expr.when(pl.col("cp_scra_grade") == grade).then(pl.lit(float(cb_rw)))
-    # Conservative default: Grade C equivalent (B31_COVERED_BOND_UNRATED_FROM_SCRA["C"])
-    return expr.otherwise(pl.lit(_SA_B31_RW["unrated_cb_default"]))
 
 
 # ---------------------------------------------------------------------------
@@ -1170,13 +1084,7 @@ def _apply_b31_risk_weight_overrides(
         )
         # Subordinated debt: flat 150% (CRE20.47) — overrides all CQS-based
         # weights for institution + corporate.
-        .when(
-            (pl.col("seniority").fill_null("senior") == "subordinated")
-            & (
-                uc.str.contains("INSTITUTION", literal=True)
-                | uc.str.contains("CORPORATE", literal=True)
-            )
-        )
+        .when(_is_b31_subordinated_debt(uc))
         .then(pl.lit(_SA_B31_RW["sub_debt"]))
     )
 
@@ -1297,7 +1205,7 @@ def _apply_b31_risk_weight_overrides(
             uc.str.contains("COVERED_BOND", literal=True)
             & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
         )
-        .then(_b31_unrated_cb_rw_expr())
+        .then(b31_unrated_cb_rw_expr(_SA_B31_RW["unrated_cb_default"]))
         # Other Items (Art. 134): sub-type-specific risk weights.
         .when(
             (uc == "OTHER")
@@ -1472,7 +1380,7 @@ def _apply_crr_risk_weight_overrides(
             uc.str.contains("COVERED_BOND", literal=True)
             & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
         )
-        .then(_crr_unrated_cb_rw_expr())
+        .then(crr_unrated_cb_rw_expr())
         # CRR Art. 128 (high-risk items, 150%) was OMITTED from UK onshored CRR
         # by SI 2021/1078 reg. 6(3)(a) with effect from 1 January 2022. Exposures
         # that map to HIGH_RISK under the entity-type table therefore fall through
@@ -1593,6 +1501,64 @@ def _apply_sovereign_floor_for_institutions(
 
 @cites("CRR Art. 127")
 @cites("PS1/26, paragraph 127")
+@cites("CRR Art. 127")
+def _crr_defaulted_re_secured_share(upper_class: pl.Expr) -> pl.Expr:
+    """CRR Art. 127(3): the Art. 125-secured share of a defaulted RRE exposure.
+
+    Art. 127(3) gives a flat 100% to "the exposure value remaining after
+    specific credit risk adjustments of exposures **fully and completely
+    secured** by mortgages on residential property **in accordance with
+    Article 125**". Art. 124(1) defines that phrase as a capped PART of the
+    exposure — "the part treated as fully and completely secured shall not be
+    higher than the pledged amount of the market value" — with Art. 125(2)(d)
+    setting the cap at 80% of value. The remainder is not "fully and completely
+    secured" and stays on Art. 127(1), which by its own words governs only
+    "the unsecured part". Hence a share, blended by the caller, rather than a
+    flat override of the whole row.
+
+    Returns **null** where the rule does not apply, so the caller keeps the
+    Art. 127(1) provision RW untouched. Null is also the answer for a null or
+    non-positive ``ltv``: without a usable LTV there is no defensible secured
+    share, and defaulting it to "fully secured" would hand out the 100% leg on
+    missing data — the anti-conservative failure mode this batch keeps finding.
+
+    **Art. 127(4) (commercial property) is deliberately NOT implemented here.**
+    Its trigger is "secured … in accordance with Article 126", and the engine's
+    only proxy for the Art. 126(2) qualifying test is ``has_income_cover``,
+    which **P1.263 records as carrying the INVERTED sense** on the CRR branch.
+    Because this blend REDUCES RWA, building the commercial limb on a flag that
+    is known to be backwards would grant relief to the wrong population.
+    Gating on the CRE class alone would be broader than the article allows,
+    also in the relieving direction. Deferred to P1.315, after P1.263 settles
+    the flag's meaning.
+    """
+    ltv = pl.col("ltv")
+    is_rre_only = _is_residential_re_class(upper_class) & ~_is_commercial_re_class(upper_class)
+    return (
+        pl.when(is_rre_only & ltv.is_not_null() & (ltv > 0.0))
+        .then(pl.min_horizontal(pl.lit(1.0), pl.lit(_SA_CRR_RW["resi_ltv_threshold"]) / ltv))
+        .otherwise(pl.lit(None).cast(pl.Float64))
+    )
+
+
+@cites("PS1/26, paragraph 133")
+def _is_b31_subordinated_debt(upper_class: pl.Expr) -> pl.Expr:
+    """B31 subordinated-debt predicate — Art. 112 Table A2 priority 3.
+
+    Shared by the risk-weight chain and the defaulted override so the two
+    cannot drift, and so the single ``seniority.fill_null`` site is not
+    duplicated (check-11 ratchets ``engine_fill_null_sites``).
+
+    Scoped to institution/corporate deliberately: the Art. 133 150% is not a
+    universal subordinated weight, and widening it would re-price subordinated
+    sovereign and retail rows that today correctly take their class weight.
+    """
+    return (pl.col("seniority").fill_null("senior") == "subordinated") & (
+        upper_class.str.contains("INSTITUTION", literal=True)
+        | upper_class.str.contains("CORPORATE", literal=True)
+    )
+
+
 def _apply_defaulted_risk_weight(
     exposures: pl.LazyFrame,
     config: CalculationConfig,
@@ -1651,8 +1617,12 @@ def _apply_defaulted_risk_weight(
             .otherwise(pl.lit(_SA_B31_RW["defaulted_low"]))
         )
 
+        # Predicate order IS the Art. 112 Table A2 waterfall:
+        # row 3 subordinated > row 7 real estate > row 5 default (P1.256).
         defaulted_rw = (
-            pl.when(is_resi_re_non_income)
+            pl.when(_is_b31_subordinated_debt(_uc))
+            .then(pl.lit(_SA_B31_RW["sub_debt"]))
+            .when(is_resi_re_non_income)
             .then(pl.lit(_SA_B31_RW["defaulted_resi_re_non_income"]))
             .otherwise(provision_rw)
         )
@@ -1660,13 +1630,31 @@ def _apply_defaulted_risk_weight(
         # CRR Art. 127(1): denominator is the pre-provision exposure value
         # (ead_final is post-provision, so add provision_deducted back).
         unsecured_pre_prov = ead + pl.col("provision_deducted")
-        defaulted_rw = (
+        provision_rw = (
             pl.when(
                 pl.col("provision_allocated")
                 >= _SA_CRR_RW["defaulted_threshold"] * unsecured_pre_prov
             )
             .then(pl.lit(_SA_CRR_RW["defaulted_high"]))
             .otherwise(pl.lit(_SA_CRR_RW["defaulted_low"]))
+        )
+        # CRR Art. 127(3)/(4): the part "fully and completely secured by
+        # mortgages on residential/commercial property in accordance with
+        # Article 125/126" takes a flat 100%; Art. 127(1)'s provision test
+        # governs only "the unsecured part". Art. 124(1) caps the secured part
+        # at the Art. 125(2)(d) 80% / Art. 126(2)(d) 50% of value, so the two
+        # coexist as a blend rather than a flat override — assigning 100% to
+        # the WHOLE exposure (as the audit bullet proposed) would under-
+        # capitalise the slice above the cap. Gated on a usable LTV: a null
+        # LTV must not buy the 100% leg off missing data (P1.257).
+        secured_share = _crr_defaulted_re_secured_share(_uc)
+        defaulted_rw = (
+            pl.when(secured_share.is_not_null())
+            .then(
+                pl.lit(_SA_CRR_RW["defaulted_high"]) * secured_share
+                + provision_rw * (1.0 - secured_share)
+            )
+            .otherwise(provision_rw)
         )
 
     # Art. 128 (HIGH_RISK) takes precedence per Table A2 priority 4 > 5

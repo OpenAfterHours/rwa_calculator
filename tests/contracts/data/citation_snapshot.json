@@ -335,6 +335,13 @@
   "rwa_calc.engine.sa.central_bank::lift_central_bank_cqs": [
     "PS1/26, paragraph 114"
   ],
+  "rwa_calc.engine.sa.covered_bond::b31_unrated_cb_rw_expr": [
+    "CRR Art. 129",
+    "PS1/26, paragraph 129"
+  ],
+  "rwa_calc.engine.sa.covered_bond::crr_unrated_cb_rw_expr": [
+    "CRR Art. 129"
+  ],
   "rwa_calc.engine.sa.cqs_lift::lift_institution_cqs": [
     "CRR Art. 117(1)",
     "CRR Art. 107(2)",
@@ -412,10 +419,6 @@
     "CRR Art. 134",
     "CRR Art. 137"
   ],
-  "rwa_calc.engine.sa.risk_weights::_apply_defaulted_risk_weight": [
-    "CRR Art. 127",
-    "PS1/26, paragraph 127"
-  ],
   "rwa_calc.engine.sa.risk_weights::_apply_obligor_st_contamination_override": [
     "CRR Art. 140",
     "PS1/26, paragraph 140"
@@ -429,21 +432,22 @@
   "rwa_calc.engine.sa.risk_weights::_b31_append_retail_branches": [
     "PS1/26, paragraph 123"
   ],
-  "rwa_calc.engine.sa.risk_weights::_b31_unrated_cb_rw_expr": [
-    "CRR Art. 129",
-    "PS1/26, paragraph 129"
-  ],
   "rwa_calc.engine.sa.risk_weights::_crr_append_real_estate_branches": [
     "CRR Art. 124"
   ],
   "rwa_calc.engine.sa.risk_weights::_crr_append_retail_branches": [
     "CRR Art. 123"
   ],
-  "rwa_calc.engine.sa.risk_weights::_crr_unrated_cb_rw_expr": [
-    "CRR Art. 129"
+  "rwa_calc.engine.sa.risk_weights::_crr_defaulted_re_secured_share": [
+    "CRR Art. 127",
+    "PS1/26, paragraph 127",
+    "CRR Art. 127"
   ],
   "rwa_calc.engine.sa.risk_weights::_eca_meip_rw_expr": [
     "CRR Art. 137"
+  ],
+  "rwa_calc.engine.sa.risk_weights::_is_b31_subordinated_debt": [
+    "PS1/26, paragraph 133"
   ],
   "rwa_calc.engine.sa.risk_weights::_prepare_risk_weight_lookup": [
     "PS1/26, paragraph 139",

@@ -26,9 +26,13 @@ References:
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 import polars as pl
 from watchfire import cites
+
+if TYPE_CHECKING:
+    from polars.expr.whenthen import ChainedThen
 
 from rwa_calc.domain.enums import CQS
 from rwa_calc.engine.sa.b31_risk_weight_tables import B31_COVERED_BOND_UNRATED_FROM_SCRA
@@ -53,7 +57,7 @@ def _cqs_to_cb_rw(inst_table: dict, derivation: dict) -> dict[int, float]:
     return {int(cqs): float(derivation[inst_table[cqs]]) for cqs in _RATED_CQS}
 
 
-def _ecra_chain(cqs_to_cb_rw: dict[int, float]) -> pl.Expr:
+def _ecra_chain(cqs_to_cb_rw: dict[int, float]) -> ChainedThen:
     """Build the ``cp_institution_cqs`` when/then ladder shared by both regimes."""
     expr = pl.when(pl.col("cp_institution_cqs") == 1).then(pl.lit(cqs_to_cb_rw[1]))
     for cqs_int in (2, 3, 4, 5, 6):

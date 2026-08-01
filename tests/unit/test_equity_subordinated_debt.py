@@ -300,6 +300,9 @@ class TestSubordinatedDebtMixedBatch:
                 "ciu_mandate_rw": [None, None, None, None],
                 "ciu_third_party_calc": [None, None, None, None],
                 "ciu_look_through_rw": [None, None, None, None],
+                # Art. 132(4) unrestricted-access derogation (P1.258); this test
+                # builds its frame inline and bypasses the equity input contract.
+                "ciu_unrestricted_access": [None, None, None, None],
             }
         ).lazy()
 

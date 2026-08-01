@@ -202,18 +202,27 @@ def apply_floor_with_impact(
     #    rwa_final (post-floor), output_floor_pct for COREP reporting.
     floor_eligible_approaches = list(FLOOR_ELIGIBLE_APPROACHES)
     is_eligible = pl.col("approach_applied").is_in(floor_eligible_approaches)
-    sa_rwa_filled = pl.col("sa_rwa").fill_null(0.0)
+    # Non-finite guard: Polars float ``.sum()`` propagates NaN, so one poisoned
+    # row would turn U-TREA/S-TREA — and through the pro-rata shortfall every
+    # eligible row's post-floor rwa_final — into NaN. A non-finite ``sa_rwa``
+    # follows the existing null convention (counts as 0 in S-TREA); a row whose
+    # ``rwa_pre_floor`` is non-finite is excluded from the floor computation
+    # entirely — no share, no total contribution — and keeps its own value,
+    # which the aggregator's AGG001 scan reports per-row.
+    sa_rwa_filled = pl.when(pl.col("sa_rwa").is_finite()).then(pl.col("sa_rwa")).otherwise(0.0)
+    pre_floor_finite = pl.col("rwa_pre_floor").is_finite().fill_null(value=False)
+    is_eligible_finite = is_eligible & pre_floor_finite
 
     result = (
         result
         # Step 1: Portfolio-level totals (broadcast as scalar to every row)
         .with_columns(
-            pl.when(is_eligible)
+            pl.when(is_eligible_finite)
             .then(pl.col("rwa_pre_floor"))
             .otherwise(0.0)
             .sum()
             .alias("_u_trea"),
-            pl.when(is_eligible).then(sa_rwa_filled).otherwise(0.0).sum().alias("_s_trea"),
+            pl.when(is_eligible_finite).then(sa_rwa_filled).otherwise(0.0).sum().alias("_s_trea"),
         )
         # Step 2: Floor threshold = x * S-TREA + OF-ADJ
         .with_columns(
@@ -228,7 +237,7 @@ def apply_floor_with_impact(
         )
         # Step 3: Each eligible exposure's share of total S-TREA
         .with_columns(
-            pl.when(is_eligible & (pl.col("_s_trea") > 0))
+            pl.when(is_eligible_finite & (pl.col("_s_trea") > 0))
             .then(sa_rwa_filled / pl.col("_s_trea"))
             .otherwise(0.0)
             .alias("_sa_share"),
@@ -238,19 +247,20 @@ def apply_floor_with_impact(
             (sa_rwa_filled * floor_pct).alias("floor_rwa"),
             pl.lit(floor_pct).alias("output_floor_pct"),
             # Pro-rata add-on: shortfall × this exposure's S-TREA share
-            pl.when(is_eligible)
+            pl.when(is_eligible_finite)
             .then(pl.col("_shortfall") * pl.col("_sa_share"))
             .otherwise(0.0)
             .alias("floor_impact_rwa"),
             # Portfolio-level binding flag (same for all eligible rows)
-            pl.when(is_eligible)
+            pl.when(is_eligible_finite)
             .then(pl.col("_portfolio_floor_binds"))
             .otherwise(pl.lit(False))
             .alias("is_floor_binding"),
         )
-        # Step 5: Final RWA = pre-floor + pro-rata add-on
+        # Step 5: Final RWA = pre-floor + pro-rata add-on. A non-finite
+        # pre-floor row keeps its own (AGG001-flagged) value untouched.
         .with_columns(
-            pl.when(is_eligible)
+            pl.when(is_eligible_finite)
             .then(pl.col("rwa_pre_floor") + pl.col("floor_impact_rwa"))
             .otherwise(pl.col("rwa_pre_floor"))
             .alias("rwa_final"),
@@ -275,13 +285,13 @@ def apply_floor_with_impact(
         pl.col("_floor_threshold").first().fill_null(0.0),
         pl.col("_shortfall").first().fill_null(0.0),
         pl.col("_portfolio_floor_binds").first().fill_null(False),
-        pl.when(is_sa)
+        pl.when(is_sa & pre_floor_finite)
         .then(pl.col("rwa_pre_floor"))
         .otherwise(0.0)
         .sum()
         .fill_null(0.0)
         .alias("_sa_rwa_total"),
-        pl.when(is_equity)
+        pl.when(is_equity & pre_floor_finite)
         .then(pl.col("rwa_pre_floor"))
         .otherwise(0.0)
         .sum()
@@ -361,14 +371,17 @@ def _portfolio_sa_equity_totals(combined: pl.LazyFrame) -> tuple[float, float]:
 
     is_sa = pl.col("approach_applied").is_in(list(SA_APPROACHES))
     is_equity = pl.col("approach_applied").is_in(list(EQUITY_APPROACHES))
+    # Non-finite rwa_final rows count as 0 here — one NaN row must not blank
+    # the portfolio totals (the per-row value is still AGG001-reported).
+    rwa_finite = pl.col("rwa_final").is_finite().fill_null(value=False)
     totals = combined.select(
-        pl.when(is_sa)
+        pl.when(is_sa & rwa_finite)
         .then(pl.col("rwa_final"))
         .otherwise(0.0)
         .sum()
         .fill_null(0.0)
         .alias("sa_total"),
-        pl.when(is_equity)
+        pl.when(is_equity & rwa_finite)
         .then(pl.col("rwa_final"))
         .otherwise(0.0)
         .sum()

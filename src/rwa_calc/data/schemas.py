@@ -986,6 +986,12 @@ EQUITY_EXPOSURE_SCHEMA: dict[str, ColumnSpec] = {
     "ciu_approach": ColumnSpec(pl.String, required=False),
     "ciu_mandate_rw": ColumnSpec(pl.Float64, required=False),
     "ciu_third_party_calc": ColumnSpec(pl.Boolean, default=False, required=False),
+    # Art. 132(4) final sub-paragraph: "By way of derogation ... where the
+    # institution has unrestricted access to the detailed calculations carried
+    # out by the third party, the factor of 1.2 shall not apply." An affirmative
+    # carve-out, so absence cannot manufacture one -- default False keeps the
+    # 1.2x uplift, which is the conservative reading.
+    "ciu_unrestricted_access": ColumnSpec(pl.Boolean, default=False, required=False),
     "fund_reference": ColumnSpec(pl.String, required=False),
     "fund_nav": ColumnSpec(pl.Float64, required=False),
     # Number of years the underlying business has existed.

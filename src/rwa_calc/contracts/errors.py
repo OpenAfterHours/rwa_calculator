@@ -105,6 +105,12 @@ ERROR_MISSCOPED_SHORT_TERM_RATING = "DQ009"
 # is a data error that would understate the gross exposure value were it not
 # floored at 0 (CRR Art. 111 SA / Art. 166 IRB).
 ERROR_NEGATIVE_AMOUNT_WITHOUT_NETTING = "DQ010"
+# Non-finite (NaN / ±inf) value in a float column of a raw input table.
+# Nulled at the pipeline entry (contracts/validation.py::scrub_non_finite_values)
+# before any calculation: a NaN survives every arithmetic step (unlike null,
+# which downstream semantics handle), poisoning rwa_final on the affected rows
+# and — through the Basel 3.1 portfolio output floor — the whole portfolio.
+ERROR_NON_FINITE_RAW_INPUT = "DQ011"
 
 # Hierarchy error codes
 ERROR_CIRCULAR_HIERARCHY = "HIE001"
@@ -534,6 +540,39 @@ def negative_amount_without_netting_warning(
         ),
         field_name=column,
         regulatory_reference="CRR Art. 111; Art. 166",
+    )
+
+
+def non_finite_raw_input_error(
+    *, table: str, column: str, count: int, references: list[str] | None = None
+) -> CalculationError:
+    """Create a DQ011 error for non-finite (NaN / ±inf) raw input values.
+
+    Emitted by the pipeline-entry scrub (``scrub_non_finite_values``) — one
+    aggregate error per affected (table, column). The offending values are
+    replaced with null so the affected rows degrade per the documented
+    downstream null semantics instead of a NaN silently surviving every
+    arithmetic step: unscrubbed, a single NaN poisons the exposure's
+    ``rwa_final`` (AGG001) and, through the Basel 3.1 portfolio output floor,
+    every other row's post-floor RWA. ``references`` carries up to a handful
+    of affected row references for triage.
+    """
+    sample = ""
+    if references:
+        shown = ", ".join(references)
+        sample = f" (e.g. {shown})"
+    return CalculationError(
+        code=ERROR_NON_FINITE_RAW_INPUT,
+        severity=ErrorSeverity.ERROR,
+        category=ErrorCategory.DATA_QUALITY,
+        message=(
+            f"{count} non-finite (NaN/inf) value(s) in raw input "
+            f"'{table}.{column}'{sample} replaced with null; affected rows "
+            "degrade per downstream null semantics instead of poisoning "
+            "portfolio totals. Check the source data feed."
+        ),
+        field_name=column,
+        actual_value=str(count),
     )
 
 

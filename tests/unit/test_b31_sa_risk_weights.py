@@ -3031,6 +3031,97 @@ class TestB31SubordinatedDebt:
         # Subordinated overrides SME treatment → 150%
         assert float(result["risk_weight"]) == pytest.approx(1.50)
 
+    def test_p1_256_defaulted_subordinated_corporate_keeps_150pct_b31(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Defaulted subordinated corporate keeps the 150% sub-debt weight (B31).
+
+        PS1/26 Art. 112 Table A2 priority ordering places subordinated debt /
+        equity / own funds instruments at priority 3 and exposures in default
+        at priority 5, so the subordinated class wins: the Art. 133 flat 150%
+        (CRE20.49) survives the Art. 127 defaulted override rather than being
+        pulled down to the provision-coverage weight.
+
+        Provisions are deliberately >= the 20% threshold so the current
+        Art. 127 expression is pinned to exactly 100% and cannot emit 150% by
+        coincidence.
+        """
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="CORPORATE",
+            cqs=1,
+            seniority="subordinated",
+            is_defaulted=True,
+            # 300k / 1m = 30% >= 20% → Art. 127 alone would give exactly 100%
+            provision_allocated=Decimal("300000"),
+            provision_deducted=Decimal("0"),
+            config=b31_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(1.50)
+        assert float(result["rwa"]) == pytest.approx(1_500_000.0)
+
+    def test_p1_256_defaulted_senior_corporate_uses_provision_rw_b31(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Seniority is the discriminator: a defaulted SENIOR corporate stays 100%.
+
+        Identical to the subordinated case above but ``seniority="senior"``.
+        Proves the 150% comes from the Art. 133 subordinated carve-out and not
+        from the Art. 127 override silently ceasing to fire.
+        """
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="CORPORATE",
+            cqs=1,
+            seniority="senior",
+            is_defaulted=True,
+            provision_allocated=Decimal("300000"),
+            provision_deducted=Decimal("0"),
+            config=b31_config,
+        )
+
+        # Art. 127(1)(b): provisions >= 20% of the unsecured part → 100%
+        assert float(result["risk_weight"]) == pytest.approx(1.00)
+
+    def test_p1_256_defaulted_subordinated_corporate_unchanged_under_crr(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CRR has no SA subordinated carve-out — the defaulted row is untouched.
+
+        Leak guard. CRR keeps subordinated debt on the ordinary CQS ladder
+        (see ``test_subordinated_not_applied_under_crr``), so this row must
+        still resolve through Art. 127: provisions 300k >= 20% x 1m → 100%.
+
+        The tripwire is the second assertion. If the B31 carve-out were ever
+        implemented by adding ``seniority`` to the shared ``is_defaulted``
+        mask, this row would skip the Art. 127 override altogether and fall
+        back to the chain's CQS-1 corporate weight of 20% — a catastrophic
+        under-weighting of a defaulted exposure.
+        """
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="CORPORATE",
+            cqs=1,
+            seniority="subordinated",
+            is_defaulted=True,
+            provision_allocated=Decimal("300000"),
+            provision_deducted=Decimal("0"),
+            config=crr_config,
+        )
+
+        assert float(result["risk_weight"]) == pytest.approx(1.00)
+        assert float(result["risk_weight"]) != pytest.approx(0.20)
+
 
 # =============================================================================
 # CURRENCY MISMATCH MULTIPLIER (Basel 3.1 Art. 123B / CRE20.93)

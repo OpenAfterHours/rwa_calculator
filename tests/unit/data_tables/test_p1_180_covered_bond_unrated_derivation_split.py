@@ -10,7 +10,7 @@ will introduce in the next wave:
 Also pins the nested CRR bug: today's shared dict maps 0.50 → 0.25 (the B31
 Art. 129(5)(b) value); CRR Art. 129(5)(b) requires 0.50 → 0.20.
 
-The behavioural test (Step E) exercises the _crr_unrated_cb_rw_expr() helper
+The behavioural test (Step E) exercises the crr_unrated_cb_rw_expr() helper
 with a one-row LazyFrame (cp_institution_cqs=3), confirming it resolves to
 0.20 under CRR once the split is applied. Today the helper returns 0.25.
 
@@ -27,8 +27,8 @@ import polars as pl
 import pytest
 
 import rwa_calc.engine.sa.crr_risk_weight_tables as _crr_mod
+from rwa_calc.engine.sa.covered_bond import crr_unrated_cb_rw_expr
 from rwa_calc.engine.sa.crr_risk_weight_tables import INSTITUTION_RISK_WEIGHTS_CRR
-from rwa_calc.engine.sa.risk_weights import _crr_unrated_cb_rw_expr
 
 
 def _get_crr_table() -> dict:
@@ -222,12 +222,12 @@ class TestCRRDerivationCoverage:
 
 
 # =============================================================================
-# BEHAVIOURAL PIN — STEP E: _crr_unrated_cb_rw_expr() for CQS3 issuer
+# BEHAVIOURAL PIN — STEP E: crr_unrated_cb_rw_expr() for CQS3 issuer
 # =============================================================================
 
 
 class TestCRRUnratedCBHelperExpression:
-    """_crr_unrated_cb_rw_expr() must resolve CQS3 issuer to 20% CB RW under CRR.
+    """crr_unrated_cb_rw_expr() must resolve CQS3 issuer to 20% CB RW under CRR.
 
     Chain (CRR Art. 120 Table 3 / Art. 129(5)):
         cp_institution_cqs = 3
@@ -238,11 +238,11 @@ class TestCRRUnratedCBHelperExpression:
     After the split it must return 0.20.
     """
 
-    def test_crr_unrated_cb_rw_expr_cqs3_returns_0_20(self) -> None:
-        """_crr_unrated_cb_rw_expr() for CQS3 institution issuer must return 0.20.
+    def testcrr_unrated_cb_rw_expr_cqs3_returns_0_20(self) -> None:
+        """crr_unrated_cb_rw_expr() for CQS3 institution issuer must return 0.20.
 
         Arrange: one-row LazyFrame with cp_institution_cqs = 3.
-        Act:     evaluate _crr_unrated_cb_rw_expr() as column 'rw'.
+        Act:     evaluate crr_unrated_cb_rw_expr() as column 'rw'.
         Assert:  rw == 0.20 (Art. 129(5)(b) correct value, not 0.25 bug value).
         """
         # Arrange
@@ -253,7 +253,7 @@ class TestCRRUnratedCBHelperExpression:
         )
 
         # Act
-        result = lf.with_columns(_crr_unrated_cb_rw_expr().alias("rw")).collect()
+        result = lf.with_columns(crr_unrated_cb_rw_expr().alias("rw")).collect()
 
         # Assert
         actual = result.get_column("rw")[0]

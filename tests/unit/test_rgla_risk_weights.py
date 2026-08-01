@@ -396,3 +396,144 @@ class TestB31RGLARiskWeights:
             entity_type="rgla_sovereign",
         )
         assert result["risk_weight"] == pytest.approx(0.0)
+
+
+# =============================================================================
+# P1.282 — RGLA SOVEREIGN-EQUIVALENCE ROUTED THROUGH ART. 114 (CGCB)
+# =============================================================================
+
+
+@pytest.fixture(params=["crr", "b31"])
+def either_regime_config(request) -> CalculationConfig:
+    """Both regimes — Art. 114/115 sovereign-equivalence is regime-invariant."""
+    if request.param == "crr":
+        return CalculationConfig.crr(reporting_date=date(2024, 12, 31))
+    return CalculationConfig.basel_3_1(reporting_date=date(2027, 6, 30))
+
+
+class TestP1282RGLASovereignEquivalenceViaCGCB:
+    """
+    P1.282: sovereign-equivalent RGLAs must price off the Art. 114 CGCB ladder.
+
+    Art. 115(2) directs exposures to the Scottish Government, the Welsh
+    Government and the Northern Ireland Executive to be "treated as exposures
+    to the central government of the UK and assigned a risk weight in
+    accordance with Article 114" — not pinned at 0% irrespective of the
+    sovereign's CQS. The CRR Art. 115(4) equivalence-list mechanism survives
+    under PS1/26 (the PRA left the provision out of the Rulebook), so the same
+    Art. 114 routing applies to a non-UK ``rgla_sovereign``.
+
+    The engine currently short-circuits ``rgla_sovereign`` two ways, both wrong:
+      - GB rows are pinned to 0% regardless of currency and sovereign CQS
+        (understates once the UK CQS exceeds 1 on a non-sterling exposure);
+      - non-GB rows fall into the ordinary Art. 115(1)(a) Table 1A chain and
+        take 100% at CQS 3 where Art. 114 gives 50% (overstates).
+
+    CQS 3 is the discriminating point: CGCB Table 1 gives 50%, Table 1A gives
+    100%, the Art. 115(5) sterling flat gives 20% and the hardcoded devolved
+    branch gives 0% — all four separate cleanly, so a leak cannot hide.
+
+    References:
+        - PS1/26 Art. 115(2) — devolved administrations take Art. 114
+        - CRR Art. 115(4) — third-country RGLA sovereign equivalence
+        - PS1/26 Art. 114(2) Table 1 — CGCB CQS 3 -> 50%
+        - PS1/26 Art. 115(1)(a) Table 1A — sovereign-derived CQS 3 -> 100%
+    """
+
+    def test_p1_282_gb_rgla_sovereign_non_sterling_uses_cgcb_ladder(
+        self, sa_calculator, either_regime_config
+    ):
+        """T1: GB devolved govt, USD, sovereign CQS 3 → Art. 114 50%, not 0%."""
+        # Arrange / Act
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="rgla",
+            config=either_regime_config,
+            country_code="GB",
+            currency="USD",
+            entity_type="rgla_sovereign",
+            sovereign_cqs=3,
+        )
+
+        # Assert — Art. 115(2) routes to Art. 114(2) Table 1, CQS 3 = 50%.
+        assert result["risk_weight"] == pytest.approx(0.50)
+        assert result["rwa"] == pytest.approx(5_000_000.0)
+
+    def test_p1_282_non_gb_rgla_sovereign_uses_cgcb_ladder(
+        self, sa_calculator, either_regime_config
+    ):
+        """T2: non-GB sovereign-equivalent RGLA, sovereign CQS 3 → 50%, not 100%."""
+        # Arrange / Act
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="rgla",
+            config=either_regime_config,
+            country_code="DE",
+            currency="USD",
+            entity_type="rgla_sovereign",
+            sovereign_cqs=3,
+        )
+
+        # Assert — Art. 115(4) equivalence takes Art. 114 (50%), not the
+        # ordinary Art. 115(1)(a) Table 1A 100%. This limb REDUCES RWA.
+        assert result["risk_weight"] == pytest.approx(0.50)
+
+    def test_p1_282_ordinary_rgla_not_routed_through_cgcb(
+        self, sa_calculator, either_regime_config
+    ):
+        """C1: ordinary RGLA with a sovereign CQS stays on Table 1A (100%)."""
+        # Arrange / Act
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="rgla",
+            config=either_regime_config,
+            country_code="GB",
+            currency="USD",
+            entity_type="rgla_institution",
+            sovereign_cqs=3,
+        )
+
+        # Assert — Art. 115(1)(a) Table 1A CQS 3 = 100%; the sovereign-
+        # equivalence re-route must not leak onto ordinary RGLAs.
+        assert result["risk_weight"] == pytest.approx(1.00)
+
+    def test_p1_282_gb_sterling_rgla_sovereign_still_zero(
+        self, sa_calculator, either_regime_config
+    ):
+        """C2: GB devolved govt in sterling keeps the 0% base case."""
+        # Arrange / Act
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="rgla",
+            config=either_regime_config,
+            country_code="GB",
+            currency="GBP",
+            entity_type="rgla_sovereign",
+            sovereign_cqs=3,
+        )
+
+        # Assert
+        assert result["risk_weight"] == pytest.approx(0.0)
+
+    def test_p1_282_rgla_sovereign_without_sovereign_cqs_still_zero(
+        self, sa_calculator, either_regime_config
+    ):
+        """C3: no sovereign CQS → the Art. 114 route does not fire; 0% stands."""
+        # Arrange / Act
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="rgla",
+            config=either_regime_config,
+            country_code="GB",
+            currency="USD",
+            entity_type="rgla_sovereign",
+            sovereign_cqs=None,
+        )
+
+        # Assert
+        assert result["risk_weight"] == pytest.approx(0.0)

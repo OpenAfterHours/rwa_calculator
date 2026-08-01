@@ -1258,6 +1258,53 @@ class TestDefaultedExposureRiskWeights:
         # Should be 150% (no provisions), NOT the 35% LTV-based weight
         assert result["risk_weight"] == pytest.approx(1.50)
 
+    def test_p1_257_crr_defaulted_residential_re_blends_secured_share(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CRR defaulted RRE blends the Art. 127(3) 100% over the secured share.
+
+        Art. 127(1) assigns 100%/150% by provision coverage to the *unsecured
+        part* of a defaulted item. Art. 127(3) reaches only the part "fully and
+        completely secured by mortgages on residential property in accordance
+        with Article 125" and assigns it 100% (Art. 127(4) does the same for
+        Art. 126 commercial property). Art. 125 recognises security up to 80%
+        LTV, so the secured share is ``min(1, 0.80 / ltv)`` and the exposure
+        splits:
+
+            rw = 1.00 x secured_share + provision_rw x (1 - secured_share)
+
+        Here ltv = 1.00 → secured_share = 0.80, and provisions of 0 fail the
+        20% test (0 < 0.20 x 500k) → provision_rw = 1.50. So:
+
+            1.00 x 0.80 + 1.50 x 0.20 = 1.10  →  RWA 550,000
+
+        A flat 100% would under-capitalise the 20% that Art. 125 does not
+        secure. 1.10 is unreachable by the pre-fix CRR arm (which emits only
+        1.00 or 1.50) and is distinct from the chain's non-defaulted 0.43
+        (= 0.35 x 0.80 + 0.75 x 0.20), so it cannot arise from the Art. 127
+        override being skipped.
+
+        The null-LTV guard is already covered by
+        ``test_crr_defaulted_mortgage_gets_defaulted_rw`` above: an unset
+        ``ltv`` must keep the flat 150% rather than blending off a null.
+        """
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("500000"),
+            exposure_class="RETAIL_MORTGAGE",
+            cqs=None,
+            ltv=Decimal("1.00"),
+            is_defaulted=True,
+            provision_allocated=Decimal("0"),
+            provision_deducted=Decimal("0"),
+            config=crr_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(1.10)
+        assert result["rwa"] == pytest.approx(550_000.0)
+
     def test_crr_non_defaulted_corporate_unchanged(
         self,
         sa_calculator: SACalculator,

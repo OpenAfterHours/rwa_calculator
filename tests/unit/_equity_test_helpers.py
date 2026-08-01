@@ -39,6 +39,10 @@ def apply_b31_equity_weight_sa(equity_type: str, **kwargs: bool | str | float | 
             "ciu_mandate_rw": [kwargs.get("ciu_mandate_rw")],
             "ciu_third_party_calc": [kwargs.get("ciu_third_party_calc")],
             "ciu_look_through_rw": [None],
+            # Art. 132(4) unrestricted-access derogation (P1.258). This helper
+            # calls the weight functions directly, bypassing the equity input
+            # contract, so every column the expressions read must be present here.
+            "ciu_unrestricted_access": [kwargs.get("ciu_unrestricted_access")],
         }
     ).lazy()
     result = calculator._apply_b31_equity_weights_sa(df, config).collect()

@@ -52,6 +52,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from rwa_calc.contracts.context import PipelineContext
+from rwa_calc.contracts.validation import scrub_non_finite_values
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.fx_rate_sync import extract_eur_gbp_rate
 from rwa_calc.engine.materialise import (
@@ -251,6 +252,22 @@ class PipelineOrchestrator:
                     "run_id": run_id,
                 },
             )
+            # Non-finite input gate (DQ011): null NaN/±inf in the raw float
+            # columns before ANY consumer — including the fx-rate sync below —
+            # sees them. A NaN survives every downstream arithmetic step and
+            # poisons rwa_final (AGG001) and, via the B31 portfolio output
+            # floor, the whole portfolio; null degrades per the documented
+            # null semantics instead. Runs here (not the file loader) so the
+            # in-memory run_with_data entry path is covered too.
+            pre_scrub_error_count = len(data.errors)
+            data = scrub_non_finite_values(data)
+            if len(data.errors) > pre_scrub_error_count:
+                logger.warning(
+                    "non-finite input gate nulled values in %d table column(s); "
+                    "see DQ011 errors for detail",
+                    len(data.errors) - pre_scrub_error_count,
+                )
+
             # Keep eur_gbp_rate in step with the loaded fx_rates table so the IRB
             # SME correlation and the pack-derived regulatory thresholds (EUR
             # bases × eur_gbp_rate, engine/thresholds.py) use the same rate as FX

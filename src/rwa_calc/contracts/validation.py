@@ -34,6 +34,7 @@ from rwa_calc.contracts.errors import (
     ErrorCategory,
     ErrorSeverity,
     negative_amount_without_netting_warning,
+    non_finite_raw_input_error,
 )
 from rwa_calc.data.column_spec import ColumnSpec
 
@@ -568,6 +569,115 @@ def validate_bundle_values(
     all_errors.extend(validate_collateral_links(bundle))
 
     return all_errors
+
+
+def scrub_non_finite_values(bundle: RawDataBundle) -> RawDataBundle:
+    """Null out non-finite (NaN / ±inf) float values in every raw input table.
+
+    The pipeline-entry gate for the DQ011 error family: a NaN in any float
+    input column (a guarantee ``amount_covered``, a loan ``drawn_amount`` /
+    ``effective_maturity``, a rating ``pd``, ...) survives every downstream
+    arithmetic step — Polars ``.sum()`` propagates NaN — poisoning the
+    affected exposure's ``rwa_final`` (surfacing only later as an aggregator
+    AGG001 error) and, through the Basel 3.1 portfolio output floor, every
+    other row's post-floor RWA. Null is the documented degradation value
+    (see ``missing_required_column_error``): downstream null semantics
+    exclude the value instead of blanking totals.
+
+    Iterates the ``RAW_TABLE_EDGES`` frames (the ``RawDataBundle`` LazyFrame
+    fields; the nested CCR/SFT composite bundles are out of scope here — the
+    aggregator AGG001 scan still nets any non-finite they produce). Per
+    table: one aggregate pass counts non-finite values per float column;
+    clean tables pass through untouched (a fully clean bundle is returned
+    identically). Dirty columns are nulled, the frame is re-branded for its
+    loader edge, and one :func:`non_finite_raw_input_error` per (table,
+    column) — carrying up to five affected row references — is appended to
+    the bundle's error list.
+
+    Called by ``PipelineOrchestrator.run_with_data`` so both entry paths
+    (file loader and in-memory bundles) are covered.
+    """
+    from rwa_calc.contracts.edges import RAW_TABLE_EDGES, brand
+
+    replacements: dict[str, pl.LazyFrame] = {}
+    new_errors: list[CalculationError] = []
+
+    for field_name, edge in RAW_TABLE_EDGES.items():
+        frame = getattr(bundle, field_name, None)
+        if frame is None:
+            continue
+        scrubbed = _scrub_table_non_finite(frame, field_name, new_errors)
+        if scrubbed is not None:
+            replacements[field_name] = brand(scrubbed, edge.name)
+
+    if not replacements:
+        return bundle
+
+    from dataclasses import replace
+
+    return replace(bundle, errors=list(bundle.errors) + new_errors, **replacements)
+
+
+def _scrub_table_non_finite(
+    lf: pl.LazyFrame,
+    table_name: str,
+    errors: list[CalculationError],
+) -> pl.LazyFrame | None:
+    """Null non-finite values in ``lf``'s float columns; ``None`` when clean.
+
+    One aggregate ``.collect()`` counts non-finite values per float column
+    (``is_finite()`` is null on null, so nulls are never counted); a second,
+    dirty-tables-only collect samples up to five row references per affected
+    column for the DQ011 message. The reference column is the first String
+    column named ``*_reference`` in table order (``loan_reference``,
+    ``guarantee_reference``, ...); tables without one emit no samples.
+    """
+    schema = lf.collect_schema()
+    float_cols = [c for c, dt in schema.items() if dt in (pl.Float32, pl.Float64)]
+    if not float_cols:
+        return None
+
+    counts = (
+        lf.select(
+            [(~pl.col(c).is_finite()).fill_null(value=False).sum().alias(c) for c in float_cols]
+        )
+        .collect()
+        .row(0, named=True)
+    )
+    dirty = [c for c in float_cols if counts[c]]
+    if not dirty:
+        return None
+
+    ref_col = next(
+        (c for c in schema.names() if c.endswith("_reference") and schema[c] == pl.String),
+        None,
+    )
+    samples: dict[str, list[str]] = {}
+    if ref_col is not None:
+        non_finite = [(~pl.col(c).is_finite()).fill_null(value=False) for c in dirty]
+        sample_df = (
+            lf.filter(pl.any_horizontal(non_finite))
+            .select([pl.col(ref_col), *(pl.col(c) for c in dirty)])
+            .head(100)
+            .collect()
+        )
+        for c in dirty:
+            mask = (~sample_df.get_column(c).is_finite()).fill_null(value=False)
+            refs = sample_df.filter(mask).get_column(ref_col).cast(pl.String).to_list()
+            samples[c] = list(dict.fromkeys(refs))[:5]
+
+    errors.extend(
+        non_finite_raw_input_error(
+            table=table_name,
+            column=c,
+            count=int(counts[c]),
+            references=samples.get(c),
+        )
+        for c in dirty
+    )
+    return lf.with_columns(
+        [pl.when(pl.col(c).is_finite()).then(pl.col(c)).otherwise(None).alias(c) for c in dirty]
+    )
 
 
 def validate_collateral_links(bundle: RawDataBundle) -> list[CalculationError]:

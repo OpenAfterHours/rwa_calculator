@@ -9,6 +9,7 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.bundles import OutputFloorSummary
+from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.reporting.corep.generator import COREPTemplateBundle
 from rwa_calc.reporting.corep.templates import (
     B31_C02_00_COLUMN_REFS,
@@ -21,19 +22,70 @@ from rwa_calc.reporting.corep.templates import (
     get_c02_00_columns,
     get_c02_00_row_sections,
 )
+from rwa_calc.reporting.validations.scope import SHEET_INDEX_MAPS
 from tests.fixtures.recon_ledger import LedgerShimCorepGenerator
 from tests.unit.reporting.corep._builders import (
     _sa_results_with_currency_mismatch,
 )
 
+#: C 02.00 / OF 02.00 Art. 112(1) class row -> the C 07.00 / OF 07.00 sheet code
+#: for the same letter. Rows 0070-0211 are "See CR SA template" (COREP Annex II
+#: §1.3.1 p.29-30; PS1/26 Annex II §1.3.1 p.30-31), so each pair is a published
+#: identity. The two Art. 112(1) letters this calculator emits no exposure in —
+#: (n) short-term assessment (s0014/r0190) and (o) CIU (s0015/r0200) — are
+#: absent from BOTH sides and so are not listed here.
+_C02_ROW_TO_C07_SHEET: dict[str, str] = {
+    "0070": "0002",  # (a) central governments or central banks
+    "0080": "0003",  # (b) regional governments or local authorities
+    "0090": "0004",  # (c) public sector entities
+    "0100": "0005",  # (d) multilateral development banks
+    "0110": "0006",  # (e) international organisations
+    "0120": "0007",  # (f) institutions
+    "0130": "0008",  # (g) corporates
+    "0140": "0009",  # (h) retail
+    "0150": "0010",  # (i) secured by immovable property / real estate
+    "0160": "0011",  # (j) exposures in default
+    "0170": "0012",  # (k) items associated with particularly high risk
+    "0180": "0013",  # (l) covered bonds
+    "0210": "0016",  # (p) equity
+    "0211": "0017",  # (q) other items
+}
+
+#: Classes a C 02.00 row carries that its CR SA sheet map does not list, with
+#: the reason each is legitimate rather than a routing slip.
+_C02_ROW_EXTRA_CLASSES: dict[str, tuple[str, ...]] = {
+    # PS1/26 Art. 122A/122B assign SA specialised lending to Art. 112(1)(g);
+    # OF 02.00 row 0131 is its of-which. C 07.00 has no SA SL sheet.
+    "0130": ("specialised_lending",),
+    # The Art. 124A/124H loan-splitter legs, which report under (i) alongside
+    # retail_mortgage — the same union as C 09.01 row 0090
+    # (``c09.py::_C09_01_RE_CLASSES``).
+    "0150": ("residential_mortgage", "commercial_mortgage"),
+    # ``scope.py`` gives s0012 EMPTY bundle keys, i.e. "a class we do not
+    # model". ``ExposureClass.HIGH_RISK`` does exist and C 09.01 / OF 09.01 row
+    # 0110 keys it, so C 02.00 routes it rather than dropping it. The empty
+    # sheet entry is a gap on the scope-map side, not a C 02.00 routing slip.
+    "0170": ("high_risk",),
+}
+
 
 def _c02_sa_results() -> pl.LazyFrame:
-    """SA-only results for C 02.00 testing."""
+    """SA-only results for C 02.00 testing.
+
+    ``exposure_class`` carries ``domain.enums.ExposureClass`` members — the
+    vocabulary the aggregator seals onto ``reporting_class_origin``, which is
+    what the C 02.00 class rows key.
+    """
     return pl.LazyFrame(
         {
             "exposure_reference": ["S1", "S2", "S3", "S4"],
             "approach_applied": ["standardised"] * 4,
-            "exposure_class": ["corporate", "institution", "retail", "central_government"],
+            "exposure_class": [
+                "corporate",
+                "institution",
+                "retail_other",
+                "central_govt_central_bank",
+            ],
             "ead_final": [1000.0, 500.0, 300.0, 200.0],
             "risk_weight": [1.0, 0.2, 0.75, 0.0],
             "rwa_final": [1000.0, 100.0, 225.0, 0.0],
@@ -499,10 +551,49 @@ class TestC0200TemplateDefinitions:
         for ref in ["0382", "0383", "0384", "0385"]:
             assert ref in refs, f"Missing A-IRB retail row {ref}"
 
-    def test_sa_class_map_covers_major_classes(self) -> None:
-        """SA class map has entries for major exposure classes."""
-        for cls in ["corporate", "institution", "retail", "central_government", "equity"]:
-            assert cls in C02_00_SA_CLASS_MAP, f"Missing SA class mapping for {cls}"
+    def test_sa_class_map_keys_are_real_exposure_classes(self) -> None:
+        """Every SA class-map key is a class the aggregator can actually seal.
+
+        A key outside ``ExposureClass`` never matches, so its row silently
+        zero-fills while the RWEA it should have carried drops out of the
+        0070-0211 breakdown — the defect that broke EBA v0207_m.
+        """
+        # Arrange
+        real = {member.value for member in ExposureClass}
+
+        # Act
+        phantom = sorted(key for key in C02_00_SA_CLASS_MAP if key not in real)
+
+        # Assert
+        assert not phantom, f"SA class map keys are not ExposureClass members: {phantom}"
+
+    @pytest.mark.parametrize(("row_ref", "sheet_code"), sorted(_C02_ROW_TO_C07_SHEET.items()))
+    @pytest.mark.parametrize("sheet_map", ["c07", "of07"])
+    def test_sa_class_row_groups_the_same_classes_as_its_c07_sheet(
+        self, row_ref: str, sheet_code: str, sheet_map: str
+    ) -> None:
+        """Each Art. 112(1) class row groups exactly its CR SA sheet's classes.
+
+        Rows 0070-0211 are "See CR SA template", so each is a published identity
+        against the C 07.00 / OF 07.00 sheet for the same Art. 112(1) letter
+        (EBA v4240_i r0130 = s0008; v4241_i r0140 = s0009; v3334_i r0150 =
+        s0010; v3338_i r0211 = s0017). The only admitted differences are the
+        C 02.00-side extras recorded in ``_C02_ROW_EXTRA_CLASSES``.
+        """
+        # Arrange
+        sheet_classes = set(SHEET_INDEX_MAPS[sheet_map][sheet_code].bundle_keys)
+        row_classes = {cls for cls, ref in C02_00_SA_CLASS_MAP.items() if ref == row_ref}
+
+        # Act
+        dropped = sorted(sheet_classes - row_classes)
+        allowed = sheet_classes | set(_C02_ROW_EXTRA_CLASSES.get(row_ref, ()))
+        unexplained = sorted(row_classes - allowed)
+
+        # Assert
+        assert not dropped, f"row {row_ref} drops CR SA sheet {sheet_code} classes: {dropped}"
+        assert not unexplained, (
+            f"row {row_ref} claims classes CR SA sheet {sheet_code} does not: {unexplained}"
+        )
 
     def test_get_columns_selector(self) -> None:
         """get_c02_00_columns returns framework-appropriate columns."""

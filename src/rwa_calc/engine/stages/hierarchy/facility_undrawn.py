@@ -217,6 +217,7 @@ def _empty_facility_undrawn_frame() -> pl.LazyFrame:
             "risk_type": pl.String,
             "mof_risk_type_source": pl.String,
             "underlying_risk_type": pl.String,
+            "obs_product": pl.String,
             "ccf_modelled": pl.Float64,
             "ead_modelled": pl.Float64,
             "is_short_term_trade_lc": pl.Boolean,
@@ -514,6 +515,12 @@ def _undrawn_select_expressions() -> list[pl.Expr]:
         ).alias("risk_type"),
         pl.col("mof_risk_type_source"),
         pl.col("underlying_risk_type"),
+        # CRR Annex I / Art. 111(1): the facility's concrete OBS product, carried
+        # to the CCF stage so the product -> risk_type fill can run on undrawn
+        # commitment rows. MOF waterfall / residual sub-rows inherit the parent
+        # facility's product; the sub-row's own risk_type still wins via
+        # mof_risk_type above, and an explicit risk_type always beats the fill.
+        pl.col("obs_product"),
         pl.col("ccf_modelled").cast(pl.Float64, strict=False),
         pl.col("ead_modelled").cast(pl.Float64, strict=False),
         pl.col("is_short_term_trade_lc"),

@@ -694,18 +694,20 @@ class TestC0901B31SpecialisedLendingRows:
 
 
 class TestC0901CrrRealEstateUnchanged:
-    """CRR C 09.01 must be untouched by R7 — its rows key retail_mortgage /
-    corporate directly and never reach the RE/SL branch."""
+    """CRR C 09.01 keeps its flat row axis (no RE/SL sub-rows), but row 0090
+    must still collect every real-estate class."""
 
-    def test_crr_retail_mortgage_in_row_0090(self) -> None:
-        # CRR row 0090 is "Secured by mortgages" keyed retail_mortgage.
+    def test_crr_all_real_estate_classes_in_row_0090(self) -> None:
+        # CRR row 0090 is "Secured by mortgages on immovable property", i.e.
+        # Art. 112(1)(i) (COREP Annex II). The class is defined by the security,
+        # so it takes the commercial leg and the loan-splitter's residential leg
+        # as well as retail_mortgage: 400 + 300 + 1000 + 200 + 150 = 2050.
+        # Before the Art. 112(1)(i) fix only retail_mortgage (400) was mapped and
+        # the other 1650 fell out of the template into the Total alone.
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_b31_re_results(), framework="CRR")
         total = bundle.c09_01["TOTAL"]
-        # retail_mortgage 400 -> CRR row 0090; the mortgage-class loan-split legs
-        # (residential_mortgage / commercial_mortgage) have no CRR row and stay in
-        # the Total only (pre-existing CRR behaviour, out of R7 scope).
-        assert total.filter(pl.col("row_ref") == "0090")["0075"][0] == pytest.approx(400.0)
+        assert total.filter(pl.col("row_ref") == "0090")["0075"][0] == pytest.approx(2050.0)
 
     def test_crr_has_no_re_sl_sub_rows(self) -> None:
         gen = LedgerShimCorepGenerator()
@@ -713,6 +715,166 @@ class TestC0901CrrRealEstateUnchanged:
         refs = bundle.c09_01["TOTAL"]["row_ref"].to_list()
         for ref in ("0071", "0072", "0073", "0091", "0092", "0093", "0094"):
             assert ref not in refs
+
+
+def _sa_sme_of_which_results() -> pl.LazyFrame:
+    """SA book with an SME leg under EACH of the three of-which SME parents.
+
+    ``sme_supporting_factor_eligible`` is the discriminator C 07.00 row 0020
+    selects on, and every SME leg here carries a non-SME sibling in the same
+    parent row so the of-which rows can only tie out by narrowing, never by
+    accidentally reporting the parent.
+    """
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["CSME", "CORP", "RSME", "ROTH", "MSME", "MORT"],
+            "approach_applied": ["standardised"] * 6,
+            "exposure_class": [
+                "corporate_sme",
+                "corporate",
+                "retail_other",
+                "retail_other",
+                "retail_mortgage",
+                "retail_mortgage",
+            ],
+            "ead_final": [100.0, 900.0, 20.0, 80.0, 5.0, 45.0],
+            "ead_gross": [100.0, 900.0, 20.0, 80.0, 5.0, 45.0],
+            "rwa_final": [50.0, 900.0, 15.0, 60.0, 2.0, 18.0],
+            "sme_supporting_factor_eligible": [True, False, True, False, True, False],
+            "cp_country_code": ["GB"] * 6,
+            "default_status": [False] * 6,
+        }
+    )
+
+
+def _sa_pre_conversion_results() -> pl.LazyFrame:
+    """A corporate book with one leg on each gross side plus a CCR leg.
+
+    ``LOAN`` is drawn (on-balance-sheet), ``CONT`` is an off-balance-sheet
+    contingent whose 2000 nominal converts to 1000 of EAD at a 50% CCF, and
+    ``DERIV`` is a counterparty-credit-risk leg whose per-side gross carriers are
+    null by design. Col 0010 must report the PRE-conversion 1000 + 2000 + 500,
+    while col 0075 reports the post-conversion exposure value 1000 + 1000 + 500.
+    """
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["LOAN", "CONT", "DERIV"],
+            "approach_applied": ["standardised"] * 3,
+            "exposure_class": ["corporate"] * 3,
+            "exposure_type": ["loan", "contingent", "derivative"],
+            "drawn_amount": [1000.0, None, 500.0],
+            "nominal_amount": [None, 2000.0, None],
+            "ead_final": [1000.0, 1000.0, 500.0],
+            "ead_gross": [1000.0, 1000.0, 500.0],
+            "rwa_final": [1000.0, 1000.0, 500.0],
+            "cp_country_code": ["GB"] * 3,
+            "default_status": [False, False, False],
+        }
+    )
+
+
+class TestC0901OfWhichSmeRows:
+    """C 09.01 / OF 09.01 "of which: SME" rows 0075 / 0085 / 0095.
+
+    Annex II and PS1/26 Annex II both define all three as "Same definition as for
+    row 0020 of [OF] CR SA template". The retired reverse map had no entry mapping
+    onto the ``corporate_sme`` / ``retail_sme`` / ``mortgage_sme`` keys, so every
+    one rendered permanently null and the geographical breakdown dropped the SME
+    disclosure entirely (published rules v5773_q-v5776_q, boe_b0225-b0227).
+    """
+
+    @staticmethod
+    def _total(framework: str = "CRR") -> pl.DataFrame:
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_sme_of_which_results(), framework=framework)
+        return bundle.c09_01["TOTAL"]
+
+    def test_row_0075_reports_the_corporate_sme_subset(self) -> None:
+        row = self._total().filter(pl.col("row_ref") == "0075")
+        assert row["0010"][0] == pytest.approx(100.0)
+        assert row["0075"][0] == pytest.approx(100.0)
+        assert row["0090"][0] == pytest.approx(50.0)
+
+    def test_row_0085_reports_the_retail_sme_subset(self) -> None:
+        row = self._total().filter(pl.col("row_ref") == "0085")
+        assert row["0010"][0] == pytest.approx(20.0)
+
+    def test_row_0095_reports_the_mortgage_sme_subset(self) -> None:
+        row = self._total().filter(pl.col("row_ref") == "0095")
+        assert row["0010"][0] == pytest.approx(5.0)
+
+    def test_of_which_rows_never_exceed_their_parent(self) -> None:
+        """The published ERROR rules v0411_m / v0412_m / v0413_m."""
+        total = self._total()
+
+        def gross(ref: str) -> float:
+            return float(total.filter(pl.col("row_ref") == ref)["0010"][0])
+
+        assert gross("0075") <= gross("0070")
+        assert gross("0085") <= gross("0080")
+        assert gross("0095") <= gross("0090")
+
+    def test_parent_rows_still_aggregate_sme_and_non_sme(self) -> None:
+        total = self._total()
+        assert total.filter(pl.col("row_ref") == "0070")["0010"][0] == pytest.approx(1000.0)
+        assert total.filter(pl.col("row_ref") == "0080")["0010"][0] == pytest.approx(100.0)
+        assert total.filter(pl.col("row_ref") == "0090")["0010"][0] == pytest.approx(50.0)
+
+    def test_of_which_rows_are_not_added_to_the_total(self) -> None:
+        """The of-which rows narrow their parent; the Total counts each leg once."""
+        total = self._total()
+        assert total.filter(pl.col("row_ref") == "0170")["0010"][0] == pytest.approx(1150.0)
+
+    def test_b31_row_0075_also_populates(self) -> None:
+        row = self._total("BASEL_3_1").filter(pl.col("row_ref") == "0075")
+        assert row["0010"][0] == pytest.approx(100.0)
+
+    def test_row_null_when_the_parent_has_no_sme_leg(self) -> None:
+        """An all-non-SME book keeps the of-which row ALL-NULL, not 0.0."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_geo_results(), framework="CRR")
+        row = bundle.c09_01["TOTAL"].filter(pl.col("row_ref") == "0075")
+        assert row["0010"][0] is None
+
+
+class TestC0901PreConversionGrossColumn:
+    """C 09.01 col 0010 is ORIGINAL EXPOSURE PRE-CONVERSION FACTORS.
+
+    Annex II: "Same definition as for column 0010 of CR SA template". The retired
+    ladder bound the post-CCF ``ead_gross``, so on an off-balance-sheet book the
+    geographical breakdown reported the conversion-factor-reduced figure in a
+    pre-conversion column and the nominal vanished (published rules v5769_q /
+    boe_b0222).
+    """
+
+    @staticmethod
+    def _total() -> pl.DataFrame:
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_pre_conversion_results(), framework="CRR")
+        return bundle.c09_01["TOTAL"]
+
+    def test_col_0010_carries_the_off_balance_sheet_nominal(self) -> None:
+        row = self._total().filter(pl.col("row_ref") == "0070")
+        assert row["0010"][0] == pytest.approx(3500.0)
+
+    def test_col_0075_stays_the_post_conversion_exposure_value(self) -> None:
+        row = self._total().filter(pl.col("row_ref") == "0070")
+        assert row["0075"][0] == pytest.approx(2500.0)
+
+    def test_ccr_leg_original_exposure_is_not_lost(self) -> None:
+        """A CCR leg's per-side carriers are null by design, so col 0010 needs the
+        dedicated term C 07.00's col 0010 also carries — without it the derivative
+        leg's 500 would disappear from the pre-conversion column."""
+        total = self._total()
+        assert total.filter(pl.col("row_ref") == "0170")["0010"][0] == pytest.approx(3500.0)
+
+    def test_frame_without_raw_gross_inputs_keeps_the_ead_gross_pick(self) -> None:
+        """A synthetic frame carrying only ``ead_gross`` has structurally all-null
+        side carriers, so it must keep the retired single-column pick."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_geo_results(), framework="CRR")
+        row = bundle.c09_01["TOTAL"].filter(pl.col("row_ref") == "0070")
+        assert row["0010"][0] == pytest.approx(1800.0)
 
 
 def _sa_sf_results() -> pl.LazyFrame:

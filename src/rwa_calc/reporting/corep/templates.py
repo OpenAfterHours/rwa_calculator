@@ -1188,19 +1188,34 @@ CRR_C08_07_ROWS: list[tuple[str, str, str | None]] = [
     ("0170", "Total", None),
 ]
 
-# Basel 3.1 OF 08.07 rows: Art. 147B roll-out classes (9 rows + materiality)
+# Basel 3.1 OF 08.07 rows: the EIGHT Art. 147B(1) roll-out classes (rows
+# 0180-0250, in the (a)-(h) order of the Article), then Total (0260) and the
+# aggregate permanent-partial-use materiality percentage (0270).
+#
+# There is NO sovereign roll-out class — PS1/26 withdraws the IRB approach for
+# sovereign exposures, and Art. 147B(1) starts at institutions. Purchased
+# receivables (points (c) and (g)) are roll-out classes in their own right but
+# have no exposure class in our Art. 147(2) taxonomy, so their rows carry no
+# binding and render structurally null.
+#
+# References:
+# - PS1/26 Art. 147B(1)(a)-(h) (roll-out classes)
+# - PS1/26 Annex II §3.3.10.2 rows: "0180-0250 ... by roll-out class"; "0260
+#   TOTAL — Institutions shall report the sum of the values reported in rows
+#   0180-0250 for each of columns 0060-0150"; "0270 PERCENTAGE SUBJECT TO
+#   PERMANENT PARTIAL USE PERMISSION (IMMATERIALITY IN AGGREGATE)"
+# - boe_b0779 (r0260 = sum r0180-0250), boe_b1046 (r0270 c0180 <= 0.05)
 B31_C08_07_ROWS: list[tuple[str, str, str | None]] = [
-    ("0180", "Sovereign and central bank", "central_govt_central_bank"),
-    ("0190", "Institutions", "institution"),
-    ("0200", "Corporate — other", "corporate"),
-    ("0210", "Corporate — specialised lending (excl. slotting)", None),
-    ("0220", "Corporate — specialised lending (slotting)", "specialised_lending"),
-    ("0230", "Corporate — SME", "corporate_sme"),
-    ("0240", "Retail — secured by immovable property", "retail_mortgage"),
-    ("0250", "Retail — qualifying revolving", "retail_qrre"),
-    ("0260", "Retail — other", "retail_other"),
-    ("0270", "Total", None),
-    ("0280", "Aggregate immateriality %", None),
+    ("0180", "Institutions", "institution"),
+    ("0190", "Specialised lending", "specialised_lending"),
+    ("0200", "Corporate — purchased receivables", None),
+    ("0210", "Financial corporates, large corporates and other general corporates", None),
+    ("0220", "Retail — qualifying revolving", "retail_qrre"),
+    ("0230", "Retail — secured by residential immovable property", "retail_mortgage"),
+    ("0240", "Retail — purchased receivables", None),
+    ("0250", "Retail — other", "retail_other"),
+    ("0260", "Total", None),
+    ("0270", "Percentage subject to permanent partial use (immateriality in aggregate)", None),
 ]
 
 # Exposure classes that count as "retail" for row aggregation in CRR rows 0090-0140
@@ -1211,6 +1226,32 @@ C08_07_CRR_RETAIL_CLASSES: frozenset[str] = frozenset(
         "retail_other",
     }
 )
+
+# Art. 147B(1)(d) — ONE roll-out class covering financial corporates and large
+# corporates (Art. 147(2)(c)(ii)) together with other general corporates
+# (Art. 147(2)(c)(iii)), which our taxonomy splits SME / non-SME.
+B31_C08_07_CORPORATE_CLASSES: frozenset[str] = frozenset({"corporate", "corporate_sme"})
+
+# Every Art. 147B(1) roll-out class our exposure-class taxonomy realises. The
+# OF 08.07 Total row (0260) is defined as the SUM of rows 0180-0250, so it must
+# NOT reach classes outside the roll-out taxonomy (sovereigns, equity, other
+# non-credit obligation assets), unlike the CRR Total row (0170), which is the
+# whole population.
+B31_C08_07_ROLLOUT_CLASSES: frozenset[str] = (
+    frozenset({"institution", "specialised_lending"})
+    | B31_C08_07_CORPORATE_CLASSES
+    | C08_07_CRR_RETAIL_CLASSES
+)
+
+#: Rows whose exposure-class binding is a UNION of classes rather than a single
+#: class (a display aggregate), per framework. Read by ``_c08_07_spec``; a row
+#: that is neither singly-bound nor listed here and is not the framework's
+#: whole-population Total renders structurally null.
+CRR_C08_07_ROW_UNIONS: dict[str, frozenset[str]] = {"0090": C08_07_CRR_RETAIL_CLASSES}
+B31_C08_07_ROW_UNIONS: dict[str, frozenset[str]] = {
+    "0210": B31_C08_07_CORPORATE_CLASSES,
+    "0260": B31_C08_07_ROLLOUT_CLASSES,
+}
 
 # Exposure classes that count as IRB approaches (not SA)
 C08_07_IRB_APPROACHES: frozenset[str] = frozenset(
@@ -1230,6 +1271,17 @@ def get_c08_07_columns(framework: str = "CRR") -> list[COREPColumn]:
 def get_c08_07_rows(framework: str = "CRR") -> list[tuple[str, str, str | None]]:
     """Return the C 08.07 / OF 08.07 row definitions for the given framework."""
     return B31_C08_07_ROWS if framework == "BASEL_3_1" else CRR_C08_07_ROWS
+
+
+def get_c08_07_row_unions(framework: str = "CRR") -> dict[str, frozenset[str]]:
+    """Return the C 08.07 / OF 08.07 display-aggregate row bindings.
+
+    Maps a row ref onto the SET of exposure classes it aggregates, for rows whose
+    binding is a union rather than the single class carried in the row definition
+    (CRR's "Retail" display row; the Basel 3.1 combined-corporates roll-out class
+    and Total row).
+    """
+    return B31_C08_07_ROW_UNIONS if framework == "BASEL_3_1" else CRR_C08_07_ROW_UNIONS
 
 
 # =============================================================================
@@ -1483,30 +1535,48 @@ B31_C02_00_ROW_SECTIONS: list[RowSection] = [
 CRR_C02_00_COLUMN_REFS: list[str] = [c.ref for c in CRR_C02_00_COLUMNS]
 B31_C02_00_COLUMN_REFS: list[str] = [c.ref for c in B31_C02_00_COLUMNS]
 
-# Mapping from pipeline approach_applied values to C 02.00 row structure.
-# Used by the generator to route RWEA into correct rows.
+# Mapping from sealed ``reporting_class_origin`` values to the C 02.00 /
+# OF 02.00 Art. 112(1) class rows 0070-0211. Used by the generator to route SA
+# RWEA into the correct row; many-to-one entries ACCUMULATE (c02.py::_sa_rows).
+#
+# The keys are ``domain.enums.ExposureClass`` members — the vocabulary the
+# aggregator actually seals. They MUST be, because rows 0070-0211 are "See CR SA
+# template" (COREP Annex II §1.3.1; PS1/26 Annex II §1.3.1), i.e. each row is an
+# identity against the C 07.00 sheet for the same Art. 112(1) letter. The
+# groupings below therefore mirror ``validations/scope.py::_C07_SHEETS`` /
+# ``_OF07_SHEETS`` letter for letter:
+#   0130 (g) corporates  <- corporate + corporate_sme + specialised_lending
+#                           (PS1/26 Art. 122A/122B assign SA SL to (g); it also
+#                           discloses at the B31 of-which row 0131)
+#   0140 (h) retail      <- retail_other + retail_qrre — NOT retail_mortgage
+#   0150 (i) immovable-property-secured (CRR) / real estate (B31)
+#                        <- retail_mortgage + the Art. 124A/124H loan-splitter
+#                           legs, the same union as C 09.01 row 0090
+#                           (c09.py::_C09_01_RE_CLASSES)
+# Rows 0190 (n, short-term assessment) and 0200 (o, CIU) have NO key: this
+# calculator emits no exposure in either class, exactly as ``_C07_SHEETS`` gives
+# s0014 / s0015 empty bundle keys. An absent key zero-fills the row; it never
+# silently re-homes RWEA into a neighbouring class.
 C02_00_SA_CLASS_MAP: dict[str, str] = {
-    "central_government": "0070",
-    "regional_government": "0080",
-    "public_sector_entity": "0090",
-    "multilateral_development_bank": "0100",
+    "central_govt_central_bank": "0070",
+    "rgla": "0080",
+    "pse": "0090",
+    "mdb": "0100",
     "international_organisation": "0110",
     "institution": "0120",
     "corporate": "0130",
-    "retail": "0140",
-    "secured_by_property": "0150",
-    "defaulted": "0160",
-    "higher_risk": "0170",
-    "covered_bond": "0180",
-    "short_term": "0190",
-    "ciu": "0200",
-    "equity": "0210",
-    "other_items": "0211",
-    # Additional SA class aliases
-    "retail_mortgage": "0140",
-    "retail_qrre": "0140",
-    "retail_other": "0140",
+    "corporate_sme": "0130",
     "specialised_lending": "0130",
+    "retail_other": "0140",
+    "retail_qrre": "0140",
+    "retail_mortgage": "0150",
+    "residential_mortgage": "0150",
+    "commercial_mortgage": "0150",
+    "defaulted": "0160",
+    "high_risk": "0170",
+    "covered_bond": "0180",
+    "equity": "0210",
+    "other": "0211",
 }
 
 # Rows that are populated from pipeline data (credit risk scope).
@@ -1818,7 +1888,15 @@ C09_01_SA_CLASS_MAP: dict[str, str] = {
     "corporate_sme": "corporate",
     "retail_other": "retail",
     "retail_qrre": "retail",
+    # All three real-estate classes key row 0090 "Secured by mortgages on
+    # immovable property" (COREP Annex II: "Point (i) of Article 112 CRR").
+    # Class (i) is defined by the security, so it holds the commercial leg as
+    # well as the residential one; without these two entries a
+    # ``commercial_mortgage`` / ``residential_mortgage`` row maps to no row key
+    # at all and its exposure silently leaves the template.
     "retail_mortgage": "retail_mortgage",
+    "residential_mortgage": "retail_mortgage",
+    "commercial_mortgage": "retail_mortgage",
     "defaulted": "defaulted",
     "high_risk": "high_risk",
     "covered_bond": "covered_bond",

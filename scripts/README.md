@@ -90,11 +90,13 @@ EOF
 
 ## download_docs.py
 
-Downloads regulatory reference documents (PDFs and templates) to `docs/assets/`.
+Downloads regulatory reference documents (PDFs, reporting templates and the two
+supervisory validation-rule workbooks) to `docs/assets/`.
 
 New collaborators should run this after cloning and installing dependencies. Files with
 known direct URLs are fetched automatically; remaining files are listed with manual
-download instructions.
+download instructions. Everything it fetches is gitignored, so this script — not the
+repository — is how `docs/assets/` gets populated and repopulated.
 
 ### Usage
 
@@ -111,6 +113,51 @@ uv run python scripts/download_docs.py --list
 # Dry run (show what would be done)
 uv run python scripts/download_docs.py --dry-run
 ```
+
+### Archive extraction
+
+A manifest entry may set `extract_member` / `extract_as` to pull one member out of a
+downloaded archive. The BoE validation-rules zip uses this to extract
+`boe-validation-rules-banking-reporting-v4.0.0.xlsx` alongside itself; such entries
+add a second line to the run summary under a new `extracted` status.
+
+Extraction honours the flags above: skipped when the target already exists, redone under
+`--force`, reported as `would extract` under `--dry-run`. It runs independently of the
+download outcome, so a deleted member is re-extracted from an already-present archive
+without re-downloading it. A missing member is reported as a failure and sets a non-zero
+exit code rather than raising.
+
+See [Scripts & Automation](../docs/development/scripts.md) for the narrative version.
+
+## extract_validation_rules.py
+
+Extracts the credit-risk supervisory validation rules from the two workbooks fetched by
+`download_docs.py` into committed JSON under `docs/reference/validation-rules/`:
+
+- `crr-eba-v3.0-credit-risk.json` — EBA rules for COREP C 02.00 / C 07.00 / C 08.0x /
+  C 09.0x / C 34.xx (CRR)
+- `basel31-boe-v4.0.0-credit-risk.json` — BoE rules for OF02 / OF07 / OF08 / OF09 /
+  C08.04 / C09.04 / C34.xx (Basel 3.1)
+
+The source workbooks are gitignored; the JSON extracts are the committed artefact, so
+downstream consumers and CI never need the raw xlsx. Re-run this only when the workbooks
+are refreshed, and commit the regenerated JSON with it.
+
+### Usage
+
+```bash
+# Re-extract and write the JSON
+uv run python scripts/extract_validation_rules.py
+
+# Fail non-zero if the committed JSON is stale (CI gate)
+uv run python scripts/extract_validation_rules.py --check
+
+# Print N parsed rules per source for inspection
+uv run python scripts/extract_validation_rules.py --sample 3
+```
+
+If either workbook is missing, the script exits non-zero and points back at
+`download_docs.py` rather than failing obscurely.
 
 ## worktree.py
 

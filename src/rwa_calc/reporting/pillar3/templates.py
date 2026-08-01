@@ -138,7 +138,15 @@ SA_DISCLOSURE_CLASSES: list[tuple[str, str, tuple[str, ...]]] = [
     ("6", "Institutions", ("institution",)),
     ("7", "Corporates", ("corporate", "corporate_sme")),
     ("8", "Retail", ("retail_other", "retail_qrre")),
-    ("9", "Secured by mortgages on immovable property", ("retail_mortgage",)),
+    # Art. 112(1)(i) is defined by the security, not the counterparty, so this
+    # row carries the commercial and splitter-emitted residential legs too —
+    # without them CR4 row 7 sheds a reclassified exposure that row 9 never
+    # picks up, and the Total row stops footing.
+    (
+        "9",
+        "Secured by mortgages on immovable property",
+        ("retail_mortgage", "residential_mortgage", "commercial_mortgage"),
+    ),
     ("10", "Exposures in default", ("defaulted",)),
     ("11", "Items associated with particularly high risk", ()),
     ("12", "Covered bonds", ("covered_bond",)),

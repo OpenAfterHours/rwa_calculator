@@ -58,6 +58,7 @@ from rwa_calc.engine.aggregator._summaries import (
     method_label_expr,
 )
 from rwa_calc.engine.aggregator._supporting_factors import generate_supporting_factor_impact
+from rwa_calc.engine.sa.risk_weights import is_commercial_re_class
 from rwa_calc.rulebook import RulepackV0
 
 if TYPE_CHECKING:
@@ -448,13 +449,14 @@ class OutputAggregator:
 
 @cites("CRR Art. 112")
 @cites("CRR Art. 123")
+@cites("CRR Art. 126")
 def _add_exposure_class_applied(lf: pl.LazyFrame) -> pl.LazyFrame:
     """Add ``exposure_class_applied`` — the approach-agnostic applied class.
 
     The routing ``exposure_class`` records origination + guarantee substitution
-    but omits two SA-only applied-treatment movements, so the reconciliation and
+    but omits three SA-only applied-treatment movements, so the reconciliation and
     COREP class dimensions previously mis-bucketed those rows (the RWA is correct
-    in both cases — only the class label was wrong):
+    in every case — only the class label was wrong):
 
     - **SME managed as retail** (CRR Art. 123 / PS1/26 Art. 123A) — a
       corporate-SME row that took the 75% retail risk weight logically belongs
@@ -465,6 +467,37 @@ def _add_exposure_class_applied(lf: pl.LazyFrame) -> pl.LazyFrame:
       belongs to the "Exposures in default" class, which wins over origination
       (PS1/26 Table A2 priority 5). High-risk (Art. 128, Basel 3.1) still outranks
       default (priority 4), so a defaulted high-risk row keeps its class.
+    - **Secured by a mortgage on commercial immovable property** (CRR
+      Art. 112(1)(i) / Art. 126; PS1/26 Art. 112(1)(i) / Art. 124H-124I) — an
+      exposure whose SA risk weight is set by the commercial real-estate branch
+      belongs to Art. 112(1)(i), not to the counterparty's class. It reuses the
+      dispatcher's own :func:`is_commercial_re_class` predicate, whose
+      ``property_type == "commercial"`` limb is precisely what lets a
+      ``corporate``-routed exposure take the Art. 126 50% (or Art. 124I
+      income-producing) risk weight; sharing one expression is what stops the
+      reported class and the applied risk weight from drifting apart again.
+
+    Both frameworks rank the real-estate class the same way and both make the
+    protection — not the counterparty — the classifying fact. PS1/26 Art. 112(2)
+    Table A2 is explicit ("Where an exposure meets the criteria for more than one
+    exposure class it shall be assigned to the exposure class that has the highest
+    position in Table A2"): real estate is row (7), retail row (14), corporates
+    row (15). COREP Annex II ¶62 gives the CRR twin ranking — "Exposures secured
+    by mortgages on immovable property" is rank 6, corporates and retail rank 9 —
+    and ¶58 notes class (i) is the one class where "a protection effect is
+    intrinsically part of the definition of an exposure class". So the limb sits
+    BELOW default/high-risk (which outrank real estate in both rankings) and ABOVE
+    the retail limb. Rows already in a real-estate class are left alone: they are
+    in Art. 112(1)(i) already, and re-labelling them would only shuffle the
+    C 09.01 "of which" sub-rows without changing the class total.
+
+    ¶60 is what makes this a reporting-side overlay rather than a classifier
+    change: the prioritisation governs "the assignment of the Original exposure
+    pre-conversion factor by exposure classes, without prejudice to the specific
+    treatment (risk weight) that each specific exposure shall receive within the
+    assigned exposure class". The routing ``exposure_class`` keeps driving
+    approach selection, CRM and the risk-weight tables; only the reported class
+    moves, so no RWA changes.
 
     Only SA rows (``approach_applied == "standardised"``) are re-mapped: IRB
     already reclassifies corporate→retail on ``exposure_class`` and reports
@@ -484,11 +517,33 @@ def _add_exposure_class_applied(lf: pl.LazyFrame) -> pl.LazyFrame:
     guaranteed portion out of that class and understate it.
     """
     is_sa = pl.col("approach_applied") == ApproachType.SA.value
+    upper_class = pl.col("exposure_class").str.to_uppercase()
     is_high_risk = pl.col("exposure_class") == ExposureClass.HIGH_RISK.value
     sme_managed_as_retail = (
-        pl.col("exposure_class").str.to_uppercase().str.contains("SME", literal=True)
+        upper_class.str.contains("SME", literal=True)
         & (pl.col("cp_is_managed_as_retail") == True)  # noqa: E712
         & (pl.col("qualifies_as_retail") == True)  # noqa: E712
+    )
+    # Classes that outrank real estate in BOTH rankings (PS1/26 Table A2 rows
+    # (1)-(6); COREP Annex II para 62 ranks 1-5) and so keep their own class even
+    # when property-secured. Defaulted is already handled by the limb above.
+    outranks_real_estate = pl.col("exposure_class").is_in(
+        [
+            ExposureClass.HIGH_RISK.value,
+            ExposureClass.EQUITY.value,
+            ExposureClass.COVERED_BOND.value,
+            ExposureClass.DEFAULTED.value,
+        ]
+    )
+    already_real_estate = pl.col("exposure_class").is_in(
+        [
+            ExposureClass.RETAIL_MORTGAGE.value,
+            ExposureClass.RESIDENTIAL_MORTGAGE.value,
+            ExposureClass.COMMERCIAL_MORTGAGE.value,
+        ]
+    )
+    commercial_real_estate = (
+        is_commercial_re_class(upper_class) & ~outranks_real_estate & ~already_real_estate
     )
     return lf.with_columns(
         pl.when(~is_sa)
@@ -497,6 +552,10 @@ def _add_exposure_class_applied(lf: pl.LazyFrame) -> pl.LazyFrame:
         # so no fill_null is needed — keep the applied class off origination.
         .when((pl.col("is_defaulted") == True) & ~is_high_risk)  # noqa: E712
         .then(pl.lit(ExposureClass.DEFAULTED.value))
+        # Art. 112(1)(i) outranks corporates and retail in both frameworks, so
+        # this limb must precede the retail one below.
+        .when(commercial_real_estate)
+        .then(pl.lit(ExposureClass.COMMERCIAL_MORTGAGE.value))
         .when(sme_managed_as_retail)
         .then(pl.lit(ExposureClass.RETAIL_OTHER.value))
         .otherwise(pl.col("exposure_class"))

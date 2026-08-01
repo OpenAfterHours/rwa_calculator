@@ -159,6 +159,11 @@ def _coerce_loans_to_unified(loans: pl.LazyFrame) -> pl.LazyFrame:
         pl.col("seniority"),
         pl.lit(None).cast(pl.String).alias("risk_type"),  # N/A for drawn loans
         pl.lit(None).cast(pl.String).alias("underlying_risk_type"),  # N/A for drawn loans
+        # CRR Annex I / Art. 111(1) concrete OBS product. Not declared on
+        # LOAN_SCHEMA — a drawn loan has no off-balance-sheet product — so emit
+        # a typed null purely for schema alignment with the contingent /
+        # facility_undrawn legs, which do carry it.
+        pl.lit(None).cast(pl.String).alias("obs_product"),
         pl.lit(None).cast(pl.Float64).alias("ccf_modelled"),  # N/A for drawn loans
         pl.lit(None).cast(pl.Float64).alias("ead_modelled"),  # N/A for drawn loans
         pl.lit(None).cast(pl.Boolean).alias("is_short_term_trade_lc"),  # N/A for drawn loans
@@ -285,6 +290,14 @@ def _coerce_contingents_to_unified(
             .then(pl.lit(None).cast(pl.String))
             .otherwise(pl.col("underlying_risk_type"))
             .alias("underlying_risk_type"),
+            # CRR Annex I / Art. 111(1): the concrete OBS product the CCF stage
+            # resolves risk_type from when none was supplied explicitly. Carried
+            # for OFB rows and nullified for drawn (ONB) rows alongside the other
+            # CCF fields, which do not apply once the item is on balance sheet.
+            pl.when(is_drawn)
+            .then(pl.lit(None).cast(pl.String))
+            .otherwise(pl.col("obs_product"))
+            .alias("obs_product"),
             pl.when(is_drawn)
             .then(pl.lit(None).cast(pl.Float64))
             .otherwise(pl.col("ccf_modelled").cast(pl.Float64, strict=False))

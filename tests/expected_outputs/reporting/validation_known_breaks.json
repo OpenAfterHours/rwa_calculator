@@ -1,0 +1,598 @@
+{
+  "notes": {
+    "what_this_is": "Known supervisory validation breaks and coverage holes, ratcheted by tests/acceptance/reporting/test_supervisory_validations.py. An entry is a LIABILITY, not a waiver: an ERROR-severity break rejects the entire return at submission.",
+    "how_to_read_a_reason": "Each entry names the DEFECT, not the symptom. A reason beginning 'unattributed - needs investigation' means the mechanism is written out but the cause is not established - it is a lead, not a shrug.",
+    "caution_on_unattributed": "'Unattributed' can mean the question was framed too narrowly, not only that the evidence is thin. Worked example: boe_b0378 was recorded as 'c0060 is a signed outflow column, so of-which <= total inverts' - a real-looking question whose answer was neither limb offered, because the total should never have been negative at all (the carrier was uncapped, upstream of the sign question). Re-derive the framing before trusting an unattributed entry's framing.",
+    "caution_on_arithmetic_coincidence": "Do not read an arithmetic coincidence as evidence of a mechanism. boe_b0752_22/24 were once attributed to a class-level figure being 'broadcast' onto every PD-grade row, on the evidence that the grade sum was exactly 7x the total across 7 grades. That is equally consistent with a genuine per-grade average whose inputs coincide - which is what it was. The decisive evidence was float dust (1672.9999999999995 on one row of seven): a broadcast constant would be bit-identical.",
+    "pattern_boe_summation_templates": "The BoE summation rules do not distinguish ADDITIVE columns from AVERAGED ones. 'r0070 = sum(grade rows)' is applied across all ~36 columns of OF 08.01/08.02, including exposure-weighted averages, where it cannot hold unless there is exactly one grade row. Same shape as boe_b0779 on c0050 and v09782_m/v09783_m on C 08.06's risk-weight column. Recognise it before re-deriving it a fourth time."
+  },
+  "summary": {
+    "crr/rich": {
+      "PASS": 172,
+      "FAIL": 4,
+      "VACUOUS": 80,
+      "NOT_EVALUATED": 485,
+      "rules_enforced": 741,
+      "rules_executed": 256,
+      "templates_emitted": 11,
+      "templates_covered": 11
+    },
+    "b31/rich": {
+      "PASS": 192,
+      "FAIL": 4,
+      "VACUOUS": 219,
+      "NOT_EVALUATED": 393,
+      "rules_enforced": 808,
+      "rules_executed": 415,
+      "templates_emitted": 12,
+      "templates_covered": 12
+    },
+    "crr/off-bs": {
+      "PASS": 48,
+      "FAIL": 1,
+      "VACUOUS": 69,
+      "NOT_EVALUATED": 623,
+      "rules_enforced": 741,
+      "rules_executed": 118,
+      "templates_emitted": 4,
+      "templates_covered": 4
+    },
+    "b31/off-bs": {
+      "PASS": 51,
+      "FAIL": 3,
+      "VACUOUS": 123,
+      "NOT_EVALUATED": 631,
+      "rules_enforced": 808,
+      "rules_executed": 177,
+      "templates_emitted": 5,
+      "templates_covered": 5
+    },
+    "crr/ccr": {
+      "PASS": 57,
+      "FAIL": 1,
+      "VACUOUS": 63,
+      "NOT_EVALUATED": 620,
+      "rules_enforced": 741,
+      "rules_executed": 121,
+      "templates_emitted": 7,
+      "templates_covered": 6
+    },
+    "b31/ccr": {
+      "PASS": 65,
+      "FAIL": 3,
+      "VACUOUS": 108,
+      "NOT_EVALUATED": 632,
+      "rules_enforced": 808,
+      "rules_executed": 176,
+      "templates_emitted": 8,
+      "templates_covered": 5
+    },
+    "crr/sa-classes": {
+      "PASS": 63,
+      "FAIL": 1,
+      "VACUOUS": 80,
+      "NOT_EVALUATED": 597,
+      "rules_enforced": 741,
+      "rules_executed": 144,
+      "templates_emitted": 4,
+      "templates_covered": 4
+    },
+    "b31/sa-classes": {
+      "PASS": 62,
+      "FAIL": 3,
+      "VACUOUS": 124,
+      "NOT_EVALUATED": 619,
+      "rules_enforced": 808,
+      "rules_executed": 189,
+      "templates_emitted": 5,
+      "templates_covered": 5
+    },
+    "crr/irb-classes": {
+      "PASS": 75,
+      "FAIL": 9,
+      "VACUOUS": 25,
+      "NOT_EVALUATED": 632,
+      "rules_enforced": 741,
+      "rules_executed": 109,
+      "templates_emitted": 8,
+      "templates_covered": 8
+    },
+    "b31/irb-classes": {
+      "PASS": 145,
+      "FAIL": 16,
+      "VACUOUS": 180,
+      "NOT_EVALUATED": 467,
+      "rules_enforced": 808,
+      "rules_executed": 341,
+      "templates_emitted": 11,
+      "templates_covered": 11
+    }
+  },
+  "known_broken_rules": [
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0638",
+      "severity": "ERROR",
+      "reason": "OF 02.00 c0020 is populated with the SA-equivalent recomputation - our own column definition is 'Standardised approaches only (S-TREA components)', filled from sa_equiv_rwa - where this rule requires the NON-MODELLED RWEA that OF 08.01 c0276 carries. Two different quantities, ~2x apart (4,198,446 against 8,250,000 for institutions; 15,908 against 33,750 for QRRE). Which side moves is a mapping decision: either these OF 02.00 rows take a different source column, or c0276 is wrong",
+      "portfolios": [
+        "irb-classes"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "OF02.00.01.01"
+      ],
+      "expression": "{t: OF02.00.01.01, r: 0271, c: 0020} = {t: OF08.01.01.01, r: 0010, c: 0276, z: 0006}"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0652",
+      "severity": "ERROR",
+      "reason": "OF 02.00 c0020 is populated with the SA-equivalent recomputation - our own column definition is 'Standardised approaches only (S-TREA components)', filled from sa_equiv_rwa - where this rule requires the NON-MODELLED RWEA that OF 08.01 c0276 carries. Two different quantities, ~2x apart (4,198,446 against 8,250,000 for institutions; 15,908 against 33,750 for QRRE). Which side moves is a mapping decision: either these OF 02.00 rows take a different source column, or c0276 is wrong",
+      "portfolios": [
+        "irb-classes"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "OF02.00.01.01"
+      ],
+      "expression": "{t: OF02.00.01.01, r: 0390, c: 0020} = {t: OF08.01.01.01, r: 0010, c: 0276, z: 0015}"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0703",
+      "severity": "WARNING",
+      "reason": "OF 07.00 cols 0230/0235 (the two RWEA 'of which' determinants) are not emitted, so c0220 = c0230 + c0235 compares a populated total (600,000) against empty components",
+      "portfolios": [
+        "ccr",
+        "irb-classes",
+        "off-bs",
+        "rich",
+        "sa-classes"
+      ],
+      "failing_coordinates": 18,
+      "coordinates": [
+        "OF07.00.01.01[institution][r0010]",
+        "OF07.00.01.01[institution][r0182]",
+        "OF07.00.01.01[corporate][r0010]",
+        "OF07.00.01.01[corporate][r0220]",
+        "OF07.00.01.01[corporate][r0230]"
+      ],
+      "expression": "{t: OF07.00.01.01, c: 0220} = {t: OF07.00.01.01, c: 0230} + {t: OF07.00.01.01, c: 0235}"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0710",
+      "severity": "ERROR",
+      "reason": "unattributed - needs investigation: OF 07.00 c0150 carries on-balance-sheet exposure while cols 0160-0190 break down conversion-factor buckets, so the identity cannot hold on any row with on-BS exposure. BOTH sides recorded, because the reading is textual and NOT established. Against us: PS1/26 Annex II p.85 qualifies c0150 as 'prior to the application of any applicable conversion factors' - a PRE-CCF qualifier, not an off-balance-sheet-only one - and the very next block spends the words 'of off-balance sheet items' exactly where c0150 does not, which reads as deliberate. For us: the EBA equivalent v6364_m is scoped to row 0080 alone and PASSES for us, while the BoE scope carries 26 rows including r0010 TOTAL. Needs a regulatory reading, not a code change",
+      "portfolios": [
+        "ccr",
+        "irb-classes",
+        "off-bs",
+        "rich",
+        "sa-classes"
+      ],
+      "failing_coordinates": 15,
+      "coordinates": [
+        "OF07.00.01.01[central_govt_central_bank][r0010]",
+        "OF07.00.01.01[institution][r0010]",
+        "OF07.00.01.01[corporate][r0010]",
+        "OF07.00.01.01[corporate_sme][r0010]",
+        "OF07.00.01.01[corporate_sme][r0020]"
+      ],
+      "expression": "{t: OF07.00.01.01, c: 0150} = {t: OF07.00.01.01, c: 0160} + {t: OF07.00.01.01, c: 0170} + {t: OF07.00.01.01, c: 0180} + {t: OF07.00.01.01, c: 0190} + {t: OF07.00.01.01, c: 0171}"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0752_22",
+      "severity": "ERROR",
+      "reason": "limit of the published rule, not of our output: c0230 and c0250 are exposure-weighted AVERAGES, and summing an average down the 7 PD-grade rows cannot equal the class-level average unless there is exactly one grade row (0.4 against 2.8; 1,673 against 11,711). Our per-grade values are correctly computed, not broadcast: c0110 differs on every grade row, and c0250 carries float dust on one of the seven (1672.9999999999995), which a broadcast constant could not. They coincide only because every corporate leg in this fixture shares the same supervisory F-IRB LGD and maturity. See notes.pattern_boe_summation_templates",
+      "portfolios": [
+        "irb-classes"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "OF08.01.01.01[corporate]"
+      ],
+      "expression": "{t: OF08.01.01.01, r: 0070, c: 0230} = sum({t: OF08.02.01.01, c: 0230})"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0752_24",
+      "severity": "ERROR",
+      "reason": "limit of the published rule, not of our output: c0230 and c0250 are exposure-weighted AVERAGES, and summing an average down the 7 PD-grade rows cannot equal the class-level average unless there is exactly one grade row (0.4 against 2.8; 1,673 against 11,711). Our per-grade values are correctly computed, not broadcast: c0110 differs on every grade row, and c0250 carries float dust on one of the seven (1672.9999999999995), which a broadcast constant could not. They coincide only because every corporate leg in this fixture shares the same supervisory F-IRB LGD and maturity. See notes.pattern_boe_summation_templates",
+      "portfolios": [
+        "irb-classes"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "OF08.01.01.01[corporate]"
+      ],
+      "expression": "{t: OF08.01.01.01, r: 0070, c: 0250} = sum({t: OF08.02.01.01, c: 0250})"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0756",
+      "severity": "ERROR",
+      "reason": "limit of the published rule, not of our output: the exposure-weighted RESTATEMENT of boe_b0752_22 / boe_b0752_24, and it fails for exactly the same reason. The weighting factor is identical on both sides - b0756 multiplies both by (sum(c0110) - sum(c0140)), b0758 both by sum(c0110) - so it cancels and the rule reduces to the same 'class average = sum of grade averages' assertion. Verified arithmetically: b0756's 20,440,000 vs 143,080,000 is 0.4 vs 2.8 scaled by 51,100,000, and b0758's 85,490,300,000 vs 598,432,100,000 is 1,673 vs 11,711 scaled by the same. NB the rule LOOKS like it intends the correct paired identity - each grade's average times that grade's own exposure - but as published it multiplies two separate sums, which the simplified expression cannot express as a per-grade pairing. Either reading leaves it unsatisfiable against a correct return. See notes.pattern_boe_summation_templates",
+      "portfolios": [
+        "irb-classes"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "OF08.01.01.01[corporate]"
+      ],
+      "expression": "{t: OF08.01.01.01, r: 0070, c: 0230} * (sum({t: OF08.02.01.01, c: 0110}) - sum({t: OF08.02.01.01, c: 0140})) = sum({t: OF08.02.01.01, c: 0230}) * (sum({t: OF08.02.01.01, c: 0110}) - sum({t: OF08.02.01.01, c: 0140}))"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0758",
+      "severity": "ERROR",
+      "reason": "limit of the published rule, not of our output: the exposure-weighted RESTATEMENT of boe_b0752_22 / boe_b0752_24, and it fails for exactly the same reason. The weighting factor is identical on both sides - b0756 multiplies both by (sum(c0110) - sum(c0140)), b0758 both by sum(c0110) - so it cancels and the rule reduces to the same 'class average = sum of grade averages' assertion. Verified arithmetically: b0756's 20,440,000 vs 143,080,000 is 0.4 vs 2.8 scaled by 51,100,000, and b0758's 85,490,300,000 vs 598,432,100,000 is 1,673 vs 11,711 scaled by the same. NB the rule LOOKS like it intends the correct paired identity - each grade's average times that grade's own exposure - but as published it multiplies two separate sums, which the simplified expression cannot express as a per-grade pairing. Either reading leaves it unsatisfiable against a correct return. See notes.pattern_boe_summation_templates",
+      "portfolios": [
+        "irb-classes"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "OF08.01.01.01[corporate]"
+      ],
+      "expression": "{t: OF08.01.01.01, r: 0070, c: 0250} * sum({t: OF08.02.01.01, c: 0110}) = sum({t: OF08.02.01.01, c: 0250}) * sum({t: OF08.02.01.01, c: 0110})"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0768",
+      "severity": "ERROR",
+      "reason": "C 08.03 / C 08.05 row refs are assigned to a FLAT ladder of 17 mutually exclusive PD bands (C08_03_PD_RANGES, templates.py), but the published row taxonomy is NESTED: r0070 is the parent '0.75 to < 2.50%' of r0080/r0090, where our r0070 is the disjoint band '0.25 to < 0.50%'. Parent and children are therefore mutually exclusive in our model and the identity can never hold at any figure - a structural template defect, not a data gap. Fixing it means re-cutting the row axis onto the published parent/child bands, which also moves every C 08.03/08.05 golden",
+      "portfolios": [
+        "irb-classes"
+      ],
+      "failing_coordinates": 5,
+      "coordinates": [
+        "OF08.03.01.01[corporate][c0010]",
+        "OF08.03.01.01[corporate][c0040]",
+        "OF08.03.01.01[corporate][c0060]",
+        "OF08.03.01.01[corporate][c0090]",
+        "OF08.03.01.01[corporate][c0100]"
+      ],
+      "expression": "{t: OF08.03.01.01, r: 0070} = sum({t: OF08.03.01.01, r: 0080; 0090})"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0769",
+      "severity": "ERROR",
+      "reason": "C 08.03 / C 08.05 row refs are assigned to a FLAT ladder of 17 mutually exclusive PD bands (C08_03_PD_RANGES, templates.py), but the published row taxonomy is NESTED: r0070 is the parent '0.75 to < 2.50%' of r0080/r0090, where our r0070 is the disjoint band '0.25 to < 0.50%'. Parent and children are therefore mutually exclusive in our model and the identity can never hold at any figure - a structural template defect, not a data gap. Fixing it means re-cutting the row axis onto the published parent/child bands, which also moves every C 08.03/08.05 golden",
+      "portfolios": [
+        "irb-classes"
+      ],
+      "failing_coordinates": 5,
+      "coordinates": [
+        "OF08.03.01.01[corporate][c0010]",
+        "OF08.03.01.01[corporate][c0040]",
+        "OF08.03.01.01[corporate][c0060]",
+        "OF08.03.01.01[corporate][c0090]",
+        "OF08.03.01.01[corporate][c0100]"
+      ],
+      "expression": "{t: OF08.03.01.01, r: 0100} = sum({t: OF08.03.01.01, r: 0110; 0120})"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0770",
+      "severity": "ERROR",
+      "reason": "C 08.03 / C 08.05 row refs are assigned to a FLAT ladder of 17 mutually exclusive PD bands (C08_03_PD_RANGES, templates.py), but the published row taxonomy is NESTED: r0070 is the parent '0.75 to < 2.50%' of r0080/r0090, where our r0070 is the disjoint band '0.25 to < 0.50%'. Parent and children are therefore mutually exclusive in our model and the identity can never hold at any figure - a structural template defect, not a data gap. Fixing it means re-cutting the row axis onto the published parent/child bands, which also moves every C 08.03/08.05 golden",
+      "portfolios": [
+        "irb-classes"
+      ],
+      "failing_coordinates": 5,
+      "coordinates": [
+        "OF08.03.01.01[corporate][c0010]",
+        "OF08.03.01.01[corporate][c0040]",
+        "OF08.03.01.01[corporate][c0060]",
+        "OF08.03.01.01[corporate][c0090]",
+        "OF08.03.01.01[corporate][c0100]"
+      ],
+      "expression": "{t: OF08.03.01.01, r: 0130} = sum({t: OF08.03.01.01, r: 0140; 0150; 0160})"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0774",
+      "severity": "ERROR",
+      "reason": "C 08.03 / C 08.05 row refs are assigned to a FLAT ladder of 17 mutually exclusive PD bands (C08_03_PD_RANGES, templates.py), but the published row taxonomy is NESTED: r0070 is the parent '0.75 to < 2.50%' of r0080/r0090, where our r0070 is the disjoint band '0.25 to < 0.50%'. Parent and children are therefore mutually exclusive in our model and the identity can never hold at any figure - a structural template defect, not a data gap. Fixing it means re-cutting the row axis onto the published parent/child bands, which also moves every C 08.03/08.05 golden. On C 08.05 the same defect presents in OBLIGOR COUNTS rather than amounts (1 against 2), because that template counts obligors per band",
+      "portfolios": [
+        "irb-classes"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "OF08.05.00.01[corporate][c0020]"
+      ],
+      "expression": "{t: OF08.05.00.01, r: 0070} = sum({t: OF08.05.00.01, r: 0080; 0090})"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0775",
+      "severity": "ERROR",
+      "reason": "C 08.03 / C 08.05 row refs are assigned to a FLAT ladder of 17 mutually exclusive PD bands (C08_03_PD_RANGES, templates.py), but the published row taxonomy is NESTED: r0070 is the parent '0.75 to < 2.50%' of r0080/r0090, where our r0070 is the disjoint band '0.25 to < 0.50%'. Parent and children are therefore mutually exclusive in our model and the identity can never hold at any figure - a structural template defect, not a data gap. Fixing it means re-cutting the row axis onto the published parent/child bands, which also moves every C 08.03/08.05 golden. On C 08.05 the same defect presents in OBLIGOR COUNTS rather than amounts (1 against 2), because that template counts obligors per band",
+      "portfolios": [
+        "irb-classes"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "OF08.05.00.01[corporate][c0020]"
+      ],
+      "expression": "{t: OF08.05.00.01, r: 0100} = sum({t: OF08.05.00.01, r: 0110; 0120})"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0776",
+      "severity": "ERROR",
+      "reason": "C 08.03 / C 08.05 row refs are assigned to a FLAT ladder of 17 mutually exclusive PD bands (C08_03_PD_RANGES, templates.py), but the published row taxonomy is NESTED: r0070 is the parent '0.75 to < 2.50%' of r0080/r0090, where our r0070 is the disjoint band '0.25 to < 0.50%'. Parent and children are therefore mutually exclusive in our model and the identity can never hold at any figure - a structural template defect, not a data gap. Fixing it means re-cutting the row axis onto the published parent/child bands, which also moves every C 08.03/08.05 golden. On C 08.05 the same defect presents in OBLIGOR COUNTS rather than amounts (1 against 2), because that template counts obligors per band",
+      "portfolios": [
+        "irb-classes"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "OF08.05.00.01[corporate][c0020]"
+      ],
+      "expression": "{t: OF08.05.00.01, r: 0130} = sum({t: OF08.05.00.01, r: 0140; 0150; 0160})"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0778",
+      "severity": "ERROR",
+      "reason": "limit of the published rule, not of our output: after the DPM-fraction fix these now fail ONLY on roll-out-class rows with ZERO exposure, where every coordinate reads lhs=0.0 against rhs=1.0. A row with no exposure admits no partition - 0/0 has no answer - and the rule carries no emptiness guard, so it demands the three shares total 1 on a row where there is nothing to share. Coordinate counts now vary by portfolio (6-14 CRR, 3-7 B3.1) purely with how many roll-out classes each leaves empty",
+      "portfolios": [
+        "ccr",
+        "irb-classes",
+        "off-bs",
+        "rich",
+        "sa-classes"
+      ],
+      "failing_coordinates": 7,
+      "coordinates": [
+        "OF08.07.01.01[r0200]",
+        "OF08.07.01.01[r0220]",
+        "OF08.07.01.01[r0240]"
+      ],
+      "expression": "sum({t: OF08.07.01.01, c: 0030; 0040; 0050}) = 1"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0779",
+      "severity": "ERROR",
+      "reason": "limit of the published rules, not of our output: boe_b0779 and boe_b0778 CONTRADICT each other on c0050 and cannot both hold. b0778 requires the three share columns 0030/0040/0050 to total 1 on each row; b0779 requires row 0260 to equal the sum of rows 0180-0250 - but c0050 is a RATIO, so summing it down eight roll-out rows cannot equal the total row's own ratio (0.868 against 2.068). The instruction text resolves in b0779's favour on scope: row 0260 sums rows 0180-0250 'for each of columns 0060-0150', and c0050 is not in that set, so the rule should never have reached this column. We report the ratio; the single remaining coordinate is c0050 alone",
+      "portfolios": [
+        "irb-classes",
+        "rich"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "OF08.07.01.01[c0050]"
+      ],
+      "expression": "{t: OF08.07.01.01, r: 0260} = sum({t: OF08.07.01.01, r: 0180; 0190; 0200; 0210; 0220; 0230; 0240; 0250})"
+    },
+    {
+      "regime": "crr",
+      "rule_id": "v09753_m",
+      "severity": "WARNING",
+      "reason": "C 08.03 / C 08.05 row refs are assigned to a FLAT ladder of 17 mutually exclusive PD bands (C08_03_PD_RANGES, templates.py), but the published row taxonomy is NESTED: r0070 is the parent '0.75 to < 2.50%' of r0080/r0090, where our r0070 is the disjoint band '0.25 to < 0.50%'. Parent and children are therefore mutually exclusive in our model and the identity can never hold at any figure - a structural template defect, not a data gap. Fixing it means re-cutting the row axis onto the published parent/child bands, which also moves every C 08.03/08.05 golden",
+      "portfolios": [
+        "irb-classes"
+      ],
+      "failing_coordinates": 5,
+      "coordinates": [
+        "C 08.03[central_govt_central_bank][c0010]",
+        "C 08.03[central_govt_central_bank][c0040]",
+        "C 08.03[central_govt_central_bank][c0060]",
+        "C 08.03[central_govt_central_bank][c0090]",
+        "C 08.03[central_govt_central_bank][c0100]"
+      ],
+      "expression": "{r0010} = {r0020} + {r0030}"
+    },
+    {
+      "regime": "crr",
+      "rule_id": "v09754_m",
+      "severity": "WARNING",
+      "reason": "C 08.03 / C 08.05 row refs are assigned to a FLAT ladder of 17 mutually exclusive PD bands (C08_03_PD_RANGES, templates.py), but the published row taxonomy is NESTED: r0070 is the parent '0.75 to < 2.50%' of r0080/r0090, where our r0070 is the disjoint band '0.25 to < 0.50%'. Parent and children are therefore mutually exclusive in our model and the identity can never hold at any figure - a structural template defect, not a data gap. Fixing it means re-cutting the row axis onto the published parent/child bands, which also moves every C 08.03/08.05 golden",
+      "portfolios": [
+        "irb-classes"
+      ],
+      "failing_coordinates": 5,
+      "coordinates": [
+        "C 08.03[corporate][c0010]",
+        "C 08.03[corporate][c0040]",
+        "C 08.03[corporate][c0060]",
+        "C 08.03[corporate][c0090]",
+        "C 08.03[corporate][c0100]"
+      ],
+      "expression": "{r0070} = {r0080} + {r0090}"
+    },
+    {
+      "regime": "crr",
+      "rule_id": "v09755_m",
+      "severity": "WARNING",
+      "reason": "C 08.03 / C 08.05 row refs are assigned to a FLAT ladder of 17 mutually exclusive PD bands (C08_03_PD_RANGES, templates.py), but the published row taxonomy is NESTED: r0070 is the parent '0.75 to < 2.50%' of r0080/r0090, where our r0070 is the disjoint band '0.25 to < 0.50%'. Parent and children are therefore mutually exclusive in our model and the identity can never hold at any figure - a structural template defect, not a data gap. Fixing it means re-cutting the row axis onto the published parent/child bands, which also moves every C 08.03/08.05 golden",
+      "portfolios": [
+        "irb-classes"
+      ],
+      "failing_coordinates": 5,
+      "coordinates": [
+        "C 08.03[corporate][c0010]",
+        "C 08.03[corporate][c0040]",
+        "C 08.03[corporate][c0060]",
+        "C 08.03[corporate][c0090]",
+        "C 08.03[corporate][c0100]"
+      ],
+      "expression": "{r0100} = {r0110} + {r0120}"
+    },
+    {
+      "regime": "crr",
+      "rule_id": "v09756_m",
+      "severity": "WARNING",
+      "reason": "C 08.03 / C 08.05 row refs are assigned to a FLAT ladder of 17 mutually exclusive PD bands (C08_03_PD_RANGES, templates.py), but the published row taxonomy is NESTED: r0070 is the parent '0.75 to < 2.50%' of r0080/r0090, where our r0070 is the disjoint band '0.25 to < 0.50%'. Parent and children are therefore mutually exclusive in our model and the identity can never hold at any figure - a structural template defect, not a data gap. Fixing it means re-cutting the row axis onto the published parent/child bands, which also moves every C 08.03/08.05 golden",
+      "portfolios": [
+        "irb-classes"
+      ],
+      "failing_coordinates": 5,
+      "coordinates": [
+        "C 08.03[corporate][c0010]",
+        "C 08.03[corporate][c0040]",
+        "C 08.03[corporate][c0060]",
+        "C 08.03[corporate][c0090]",
+        "C 08.03[corporate][c0100]"
+      ],
+      "expression": "{r0130} = {r0140} + {r0150} + {r0160}"
+    },
+    {
+      "regime": "crr",
+      "rule_id": "v09757_m",
+      "severity": "WARNING",
+      "reason": "C 08.03 / C 08.05 row refs are assigned to a FLAT ladder of 17 mutually exclusive PD bands (C08_03_PD_RANGES, templates.py), but the published row taxonomy is NESTED: r0070 is the parent '0.75 to < 2.50%' of r0080/r0090, where our r0070 is the disjoint band '0.25 to < 0.50%'. Parent and children are therefore mutually exclusive in our model and the identity can never hold at any figure - a structural template defect, not a data gap. Fixing it means re-cutting the row axis onto the published parent/child bands, which also moves every C 08.03/08.05 golden. On C 08.05 the same defect presents in OBLIGOR COUNTS rather than amounts (1 against 2), because that template counts obligors per band",
+      "portfolios": [
+        "irb-classes"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "C 08.05[central_govt_central_bank][c0020]"
+      ],
+      "expression": "{r0010} = {r0020} + {r0030}"
+    },
+    {
+      "regime": "crr",
+      "rule_id": "v09758_m",
+      "severity": "WARNING",
+      "reason": "C 08.03 / C 08.05 row refs are assigned to a FLAT ladder of 17 mutually exclusive PD bands (C08_03_PD_RANGES, templates.py), but the published row taxonomy is NESTED: r0070 is the parent '0.75 to < 2.50%' of r0080/r0090, where our r0070 is the disjoint band '0.25 to < 0.50%'. Parent and children are therefore mutually exclusive in our model and the identity can never hold at any figure - a structural template defect, not a data gap. Fixing it means re-cutting the row axis onto the published parent/child bands, which also moves every C 08.03/08.05 golden. On C 08.05 the same defect presents in OBLIGOR COUNTS rather than amounts (1 against 2), because that template counts obligors per band",
+      "portfolios": [
+        "irb-classes"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "C 08.05[corporate][c0020]"
+      ],
+      "expression": "{r0070} = {r0080} + {r0090}"
+    },
+    {
+      "regime": "crr",
+      "rule_id": "v09759_m",
+      "severity": "WARNING",
+      "reason": "C 08.03 / C 08.05 row refs are assigned to a FLAT ladder of 17 mutually exclusive PD bands (C08_03_PD_RANGES, templates.py), but the published row taxonomy is NESTED: r0070 is the parent '0.75 to < 2.50%' of r0080/r0090, where our r0070 is the disjoint band '0.25 to < 0.50%'. Parent and children are therefore mutually exclusive in our model and the identity can never hold at any figure - a structural template defect, not a data gap. Fixing it means re-cutting the row axis onto the published parent/child bands, which also moves every C 08.03/08.05 golden. On C 08.05 the same defect presents in OBLIGOR COUNTS rather than amounts (1 against 2), because that template counts obligors per band",
+      "portfolios": [
+        "irb-classes"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "C 08.05[corporate][c0020]"
+      ],
+      "expression": "{r0100} = {r0110} + {r0120}"
+    },
+    {
+      "regime": "crr",
+      "rule_id": "v09760_m",
+      "severity": "WARNING",
+      "reason": "C 08.03 / C 08.05 row refs are assigned to a FLAT ladder of 17 mutually exclusive PD bands (C08_03_PD_RANGES, templates.py), but the published row taxonomy is NESTED: r0070 is the parent '0.75 to < 2.50%' of r0080/r0090, where our r0070 is the disjoint band '0.25 to < 0.50%'. Parent and children are therefore mutually exclusive in our model and the identity can never hold at any figure - a structural template defect, not a data gap. Fixing it means re-cutting the row axis onto the published parent/child bands, which also moves every C 08.03/08.05 golden. On C 08.05 the same defect presents in OBLIGOR COUNTS rather than amounts (1 against 2), because that template counts obligors per band",
+      "portfolios": [
+        "irb-classes"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "C 08.05[corporate][c0020]"
+      ],
+      "expression": "{r0130} = {r0140} + {r0150} + {r0160}"
+    },
+    {
+      "regime": "crr",
+      "rule_id": "v09782_m",
+      "severity": "WARNING",
+      "reason": "unattributed - needs investigation: C 08.06 total rows 0110/0120 do not foot their slotting-category rows. The rule is columns_scope '(All)', so the publisher asserts the identity on c0070 'Risk weight' too, where our total row carries an exposure-weighted average rather than a sum of the category risk weights. Not established whether our total is wrong or the identity is impractical on a parameter column",
+      "portfolios": [
+        "rich"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "C 08.06[project_finance][c0070]"
+      ],
+      "expression": "{r0110} = {r0010} + {r0030} + {r0050} + {r0070} + {r0090}"
+    },
+    {
+      "regime": "crr",
+      "rule_id": "v09783_m",
+      "severity": "WARNING",
+      "reason": "unattributed - needs investigation: C 08.06 total rows 0110/0120 do not foot their slotting-category rows. The rule is columns_scope '(All)', so the publisher asserts the identity on c0070 'Risk weight' too, where our total row carries an exposure-weighted average rather than a sum of the category risk weights. Not established whether our total is wrong or the identity is impractical on a parameter column",
+      "portfolios": [
+        "rich"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "C 08.06[project_finance][c0070]"
+      ],
+      "expression": "{r0120} = {r0020} + {r0040} + {r0060} + {r0080} + {r0100}"
+    },
+    {
+      "regime": "crr",
+      "rule_id": "v09796_m",
+      "severity": "WARNING",
+      "reason": "limit of the published rule, not of our output: after the DPM-fraction fix these now fail ONLY on roll-out-class rows with ZERO exposure, where every coordinate reads lhs=0.0 against rhs=1.0. A row with no exposure admits no partition - 0/0 has no answer - and the rule carries no emptiness guard, so it demands the three shares total 1 on a row where there is nothing to share. Coordinate counts now vary by portfolio (6-14 CRR, 3-7 B3.1) purely with how many roll-out classes each leaves empty",
+      "portfolios": [
+        "ccr",
+        "irb-classes",
+        "off-bs",
+        "rich",
+        "sa-classes"
+      ],
+      "failing_coordinates": 14,
+      "coordinates": [
+        "C 08.07[r0020]",
+        "C 08.07[r0030]",
+        "C 08.07[r0060]",
+        "C 08.07[r0100]",
+        "C 08.07[r0120]"
+      ],
+      "expression": "{c0030} + {c0040} + {c0050} = 1"
+    },
+    {
+      "regime": "crr",
+      "rule_id": "v4721_m",
+      "severity": "WARNING",
+      "reason": "C 07.00 row 0015 is emitted on every exposure-class sheet; COREP Annex II restricts it to the 'particularly high risk' and 'equity' classes, which is what v4721_m/v4728_m encode by forcing it empty on every other sheet",
+      "portfolios": [
+        "rich"
+      ],
+      "failing_coordinates": 17,
+      "coordinates": [
+        "C 07.00.a[defaulted][c0010]",
+        "C 07.00.a[defaulted][c0030]",
+        "C 07.00.a[defaulted][c0040]",
+        "C 07.00.a[defaulted][c0050]",
+        "C 07.00.a[defaulted][c0060]"
+      ],
+      "expression": "{r0015} = empty"
+    }
+  ],
+  "known_uncovered_templates": [
+    {
+      "regime": "b31",
+      "portfolio": "ccr",
+      "template": "c34_01",
+      "reason": "the C 34.x counterparty-credit-risk templates are stubs - C 34.02 emits a single 1 row x 1 column frame per netting set - so no published rule can resolve a reference against them and they go into a submission unchecked. Production cannot block on this (it would reject correct CCR returns), so this ratchet is what keeps pressure on it",
+      "rules_executed_on_this_run": 176
+    },
+    {
+      "regime": "b31",
+      "portfolio": "ccr",
+      "template": "c34_02",
+      "reason": "the C 34.x counterparty-credit-risk templates are stubs - C 34.02 emits a single 1 row x 1 column frame per netting set - so no published rule can resolve a reference against them and they go into a submission unchecked. Production cannot block on this (it would reject correct CCR returns), so this ratchet is what keeps pressure on it",
+      "rules_executed_on_this_run": 176
+    },
+    {
+      "regime": "b31",
+      "portfolio": "ccr",
+      "template": "c34_08",
+      "reason": "the C 34.x counterparty-credit-risk templates are stubs - C 34.02 emits a single 1 row x 1 column frame per netting set - so no published rule can resolve a reference against them and they go into a submission unchecked. Production cannot block on this (it would reject correct CCR returns), so this ratchet is what keeps pressure on it",
+      "rules_executed_on_this_run": 176
+    },
+    {
+      "regime": "crr",
+      "portfolio": "ccr",
+      "template": "c34_02",
+      "reason": "the C 34.x counterparty-credit-risk templates are stubs - C 34.02 emits a single 1 row x 1 column frame per netting set - so no published rule can resolve a reference against them and they go into a submission unchecked. Production cannot block on this (it would reject correct CCR returns), so this ratchet is what keeps pressure on it",
+      "rules_executed_on_this_run": 121
+    }
+  ]
+}

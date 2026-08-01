@@ -16,5 +16,6 @@ logs/
 *.pdfdocs/assets/crr-annex-xx-instructions-regarding-disclosure.PDF
 docs/assets/*.pdf
 docs/assets/*.PDF
+docs/assets/*.zip
 
 .claude/state/

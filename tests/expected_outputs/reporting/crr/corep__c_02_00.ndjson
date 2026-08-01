@@ -8,16 +8,16 @@
 {"row_ref":"0100","row_name":"Multilateral development banks","0010":0.0}
 {"row_ref":"0110","row_name":"International organisations","0010":0.0}
 {"row_ref":"0120","row_name":"Institutions","0010":1000000.0}
-{"row_ref":"0130","row_name":"Corporates","0010":13000000.0}
-{"row_ref":"0140","row_name":"Retail","0010":327500.0}
-{"row_ref":"0150","row_name":"Secured by mortgages on immovable property","0010":0.0}
+{"row_ref":"0130","row_name":"Corporates","0010":8380950.0}
+{"row_ref":"0140","row_name":"Retail","0010":187500.0}
+{"row_ref":"0150","row_name":"Secured by mortgages on immovable property","0010":5140000.0}
 {"row_ref":"0160","row_name":"Exposures in default","0010":1500000.0}
 {"row_ref":"0170","row_name":"Higher-risk items","0010":0.0}
 {"row_ref":"0180","row_name":"Covered bonds","0010":0.0}
 {"row_ref":"0190","row_name":"Short-term credit assessment","0010":0.0}
 {"row_ref":"0200","row_name":"Collective investment undertakings (CIU)","0010":0.0}
 {"row_ref":"0210","row_name":"Equity","0010":0.0}
-{"row_ref":"0211","row_name":"Other items","0010":0.0}
+{"row_ref":"0211","row_name":"Other items","0010":20000.0}
 {"row_ref":"0220","row_name":"Of which: IRB Approach","0010":129283017.28986624}
 {"row_ref":"0240","row_name":"Of which: Foundation IRB (F-IRB)","0010":60260987.45769209}
 {"row_ref":"0250","row_name":"F-IRB — Institutions","0010":0.0}

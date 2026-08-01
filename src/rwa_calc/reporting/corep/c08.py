@@ -1,13 +1,12 @@
 """
-COREP C 08.01/02/03/04/05/06/07 — IRB credit risk, declarative.
+COREP C 08.01/02/03/04/05/06 — IRB credit risk, declarative.
 
 Pipeline position:
     sealed aggregator-exit ledger -> _prepare() -> per-template TemplateSpecs
     (C 08.01 static rows; C 08.02 data-driven grade/PD-band rows; C 08.03/05
     sparse PD-range rows; C 08.04 fixed flow rows; C 08.06 per-SL-type
-    category x maturity rows; C 08.07 scope-of-use class rows over the FULL
-    population) -> cellspec.execute() -> dict[class, DataFrame] each
-    (C 08.07: one DataFrame | None)
+    category x maturity rows) -> cellspec.execute() -> dict[class, DataFrame]
+    each. C 08.07 is a separate module (``corep/c08_07.py``).
 
 Cell semantics (recorded decisions, this slice):
 
@@ -15,9 +14,37 @@ Cell semantics (recorded decisions, this slice):
   ``exposure_class`` for IRB rows — the obligor basis, number-neutral
   convergence; no applied-class ladder and NO specialised-lending merge,
   unlike C 07.00). The population is the origin IRB book keyed on
-  ``reporting_approach_origin`` (F-IRB / A-IRB / slotting); C 08.03/04/05
+  ``reporting_approach_origin`` (F-IRB / A-IRB / slotting); C 08.02/03/04/05
   exclude slotting per template. C 08.07 alone keeps the RAW class key
   (Art. 147 origination taxonomy over the FULL population).
+- SLOTTING IS OUT OF SCOPE OF C 08.02 (recorded, evidenced): PS1/26 Annex II
+  §3.3.4 paragraph 77A — "Institutions shall complete this template in respect
+  of exposures subject to the AIRB approach and the FIRB approach, but not in
+  respect of exposures subject to the slotting approach". §3.3.2 paragraph 76
+  says the same structurally under BOTH frameworks — "CR IRB 2 provides a
+  breakdown of total exposures assigned to obligor grades or pools (exposures
+  reported under row 0070 of CR IRB 1)" — and C 08.01 row 0070 is the F-IRB/
+  A-IRB union while slotting reports on row 0080 ("SPECIALISED LENDING SLOTTING
+  APPROACH: TOTAL"). A slotting leg has no PD-derived obligor grade by
+  construction (Art. 153(5)), so the retired behaviour banded the whole slotting
+  book onto C 08.02's "Unassigned" residual row and broke the published
+  cross-template identity ``{OF08.01 r0070} = sum({OF08.02})`` on every shared
+  column (boe_b0752_*/boe_b0814_*). C 08.02 therefore reads ``_non_slotting``,
+  exactly as C 08.03/05 already did — a slotting-only class emits NO C 08.02
+  sheet at all.
+- Col 0060 ("OTHER FUNDED CREDIT PROTECTION") reads the Art. 232(1) / Art. 200(1)
+  carriers ONLY — protection treated as a guarantee, which acts on the obligor's
+  PD through substitution. The Art. 199 collateral (immovable property,
+  receivables, other physical) is NOT in this column: it is an LGD mitigant, and
+  Annex II routes it by name to the CRM-in-LGD-estimates block at cols
+  0190/0200/0210, where ``_value_cells`` already reports it. Summing it here too
+  was a DOUBLE COUNT that drove col 0090 negative — the same defect and the same
+  remedy as C 07.00 col 0080. The block (0040/0050/0060) is additionally CAPPED
+  PER LEG at the original exposure pre-conversion factors, the excess shed
+  proportionally (``_c08_capped_protection``, C 07.00's ``_block_cap_scale``
+  precedent) — Annex II mandates that twice, though it is inert once the Art. 199
+  collateral is out. Col 0070 (the outflow) is outside the cap block. See the
+  helper for the quoted instructions behind each of these.
 - C 08.01/02 share one value surface (computed framework-agnostic, filtered
   by each framework's column refs): gross exposures, the CRM waterfall
   0090 = 0020 - 0040 - 0050 - 0060 - 0070 + 0080 over POSITIVE magnitudes,
@@ -28,6 +55,9 @@ Cell semantics (recorded decisions, this slice):
   ``_c08_off_bs_pre_ccf`` over ``c08_bs == "off"`` legs (the 0080 inflow is
   excluded — a total-row cross-sheet scalar with no leg-level BS attribution);
   0120 (EXPOSURE VALUE post-CCF group) = Sum(ead_final) over the off-BS legs,
+  the after-all-CRM total 0104 (= 0090 + 0101 + 0102 on the REPORTED signs,
+  ``_c08_after_all_crm``; another post-execute pass because the executor refuses a
+  formula that references a formula and all three inputs are ``Formula`` cells),
   EAD-weighted PD/LGD, maturity
   in DAYS (x365 — ``irb_maturity_m`` is years despite the suffix), LFSE
   sub-splits gated on ``cp_apply_fi_scalar`` presence, defaulted sub-splits
@@ -154,24 +184,9 @@ Cell semantics (recorded decisions, this slice):
   WeightedAvg with no legs. The three value-dependent post-passes (empty-row
   zero-fill; the live 0030/0040/0070 fixes; the provisions ladder) stay on the
   reported frame.
-- C 08.07 reads the FULL population (SA enters every denominator; null
-  approach falls to SA; slotting counts as IRB) keyed on RAW
-  ``exposure_class``; percentages are intra-row formulas guarding zero
-  denominators to 0.0; the structural-null rows are a FIXED set (empty
-  real-class rows stay 0.0 — the opposite of C 07.00's empty-subset rule);
-  B31 materiality columns 0160-0180 are always null (the retired
-  ``output_floor_config`` gate was dead code, recorded). Col 0040 ("% subject
-  to a roll-out plan", CRR Art. 148) carves the roll-out-plan slice out of the
-  SA coverage: the SA-treated legs (``~c0807_irb``) flagged by the optional
-  ``is_under_irb_rollout`` INPUT column go to 0040 and col 0030 drops to
-  permanent-partial-use only (Art. 150), preserving 0030 + 0040 == the whole SA
-  %. Absent the input column the slice is empty, 0040 = 0.0 and 0030 keeps the
-  whole SA share (byte-identical to the pre-R14 output). Col 0040 first carries
-  the roll-out EAD Sum and is rescaled to a percentage post-execute
-  (``_c08_07_rollout_pct``). Lineage-instrumented (R22, single frame):
-  ``c08_07_plans`` exposes the one full-population plan; the two post-execute
-  passes (col-0040 rescale, ``_null_fixed_rows``) stay on the reported frame
-  (``c08_07_frames``), which the drill-down reads a cell's value from.
+- C 08.07 / OF 08.07 lives in its own module (``corep/c08_07.py``): it shares
+  none of the C 08.01/02 value surface, reads the FULL population rather than
+  the IRB book, and is the one COREP sheet keyed on the RAW ``exposure_class``.
 
 References:
 - CRR Art. 142-191 (IRB); Art. 153 (risk weights), Art. 180 (PD
@@ -206,8 +221,6 @@ from rwa_calc.reporting.corep.templates import (
     C08_03_PD_RANGES,
     C08_04_ROWS,
     C08_06_CATEGORY_MAP,
-    C08_07_CRR_RETAIL_CLASSES,
-    C08_07_IRB_APPROACHES,
     PD_BANDS,
     get_c08_02_columns,
     get_c08_03_columns,
@@ -216,8 +229,6 @@ from rwa_calc.reporting.corep.templates import (
     get_c08_06_columns,
     get_c08_06_rows,
     get_c08_06_sl_types,
-    get_c08_07_columns,
-    get_c08_07_rows,
     get_c08_columns,
     get_irb_row_sections,
 )
@@ -251,6 +262,25 @@ _IRB_APPROACHES: tuple[str, ...] = ("foundation_irb", "advanced_irb", "slotting"
 # Single-frame lineage key: C 08.07 has no sheet axis, so its one plan keys
 # under a canonical name (see reporting.plans / _resolve_sheet_key single_frame).
 _C08_07_SHEET_KEY = "c08_07"
+
+# C 08.01/02 col 0060 "OTHER FUNDED CREDIT PROTECTION" — the Art. 232(1) /
+# Art. 200(1) list (third-party deposits, pledged life policies, instruments
+# repurchased on request), i.e. protection treated AS A GUARANTEE and therefore
+# acting on the OBLIGOR'S PD through substitution. This is the same carrier pair
+# C 07.00 reads for its own Art. 232 column (``corep/c07.py::_OFCP_CARRIERS``).
+#
+# The Art. 199 collateral (immovable property, receivables, other physical) is
+# DELIBERATELY NOT HERE: it is an LGD mitigant, not a PD one, and Annex II routes
+# it by name to the CRM-in-LGD-estimates block at cols 0190/0200/0210 — see
+# ``_c08_capped_protection`` for the quoted instructions.
+_C08_OFCP_CARRIERS: tuple[str, ...] = (
+    "life_ins_collateral_value",
+    "third_party_deposit_value",
+)
+
+# The per-leg pre-conversion-factor gross carriers that col 0020 sums — the cap
+# basis for the substitution block (see ``_c08_block_cap_scale``).
+_C08_GROSS_CARRIERS: tuple[str, ...] = ("reporting_gross_on_bs", "reporting_gross_off_bs")
 
 _Terms = tuple[tuple[str, str | bool], ...]
 type _EmptyCell = Literal["zero", "null"]
@@ -432,7 +462,154 @@ def _prepare(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
             ).alias("c08_el_after")
         )
 
+    # Col 0251 RWEA-pre-adjustments coalesce — the R10a EL pattern, same cause.
+    # ``rwa_pre_adjustments`` (engine/irb/adjustments.py::apply_post_model_adjustments)
+    # is produced ONLY on the formula-IRB leg, so it is NULL on slotting legs. A plain
+    # Sum fills those nulls to 0.0, and OF 08.01/02 then report col 0251 (RWEA PRE
+    # adjustments) as 0.0 against a populated col 0260 (RWEA AFTER adjustments) —
+    # breaking ``{c0260} = sum({c0251;0252;0253;0254})`` (boe_b0751/boe_b0763) on
+    # every slotting row. A PER-LEG coalesce reports the formula-IRB pre-adjustment
+    # RWEA where present, else the leg's own RWEA: a value no-op on formula-IRB legs,
+    # and correct on slotting legs, which carry NONE of the three Art. 153(5A)/154(4A)
+    # adjustments cols 0252-0254 report (PS1/26 Annex II makes this explicit for col
+    # 0254 — "This column shall not be reported for sheets relating to the FIRB
+    # approach or the slotting approach"), so their 0260 == 0251 by construction.
+    if "rwa_pre_adjustments" in cols:
+        rwa_fallback = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
+        exprs.append(
+            (
+                pl.coalesce("rwa_pre_adjustments", rwa_fallback)
+                if rwa_fallback is not None
+                else pl.col("rwa_pre_adjustments")
+            ).alias("c08_rwa_pre_adj")
+        )
+
+    exprs.extend(_c08_capped_protection(cols))
+
     return data.with_columns(exprs)
+
+
+def _c08_block_cap_scale(cols: set[str], block_total: pl.Expr) -> pl.Expr:
+    """The 0-1 factor that caps the substitution block at the leg's own exposure.
+
+    ``1.0`` unless the block over-runs the cap basis, in which case
+    ``basis / block_total`` (well-defined: an over-run implies a positive total).
+    Degrades to ``1.0`` — uncapped — only on a frame carrying neither a gross
+    carrier nor ``ead_final``, which the sealed ledger never is. This is C 07.00's
+    ``_block_cap_scale`` (``corep/c07.py``) on the IRB surface; the basis differs
+    (see ``_c08_capped_protection``) and there is no provisions term, because the
+    Art. 111(2) drawn-first deduction is SA-only.
+    """
+    gross = [pl.col(col).fill_null(0.0) for col in _C08_GROSS_CARRIERS if col in cols]
+    if not gross and "ead_final" in cols:
+        gross = [pl.col("ead_final").fill_null(0.0)]
+    if not gross:
+        return pl.lit(1.0)
+    basis = pl.sum_horizontal(gross).clip(lower_bound=0.0)
+    return pl.when(block_total > basis).then(basis / block_total).otherwise(1.0)
+
+
+def _c08_capped_protection(cols: set[str]) -> list[pl.Expr]:
+    """Per-leg capped twins of the C 08.01/02 substitution-block carriers.
+
+    WHAT THE BLOCK CONTAINS — cols 0040/0050/0060 sit under "CREDIT RISK
+    MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE", the
+    route where the protection provider's risk replaces the obligor's, i.e. an
+    effect on PD. Annex II says so of col 0060 in three ways: "Collateral that
+    has an effect on the **PD** of the exposure shall be capped ..."; "Where own
+    estimates of LGD are not used, **Article 232(1)** CRR applies" (the
+    Art. 200(1) list — third-party deposits, pledged life policies, instruments
+    repurchased on request — treated AS A GUARANTEE); and, decisively, the
+    routing sentence "**Where an adjustment is made in the LGD, that amount shall
+    be reported in column 170**". PS1/26 is blunter still: "Other funded credit
+    protection that is treated as a guarantee in accordance with Article 232 ...
+    shall be included. Other funded credit protection that is not treated as a
+    guarantee ... shall be reported in 0172."
+
+    WHY THE ART. 199 COLLATERAL IS NOT HERE (recorded — this column previously
+    summed it, and that was a DOUBLE COUNT, not a magnitude problem). Immovable
+    property, receivables and other physical collateral are LGD mitigants under
+    both IRB variants — recognised through Art. 230 where own LGD estimates are
+    not used, and through Art. 181(1)(e)-(f) where they are — never through
+    substitution, so they never touch PD. Annex II routes them BY NAME to the
+    "CRM TECHNIQUES TAKEN INTO ACCOUNT IN LGD ESTIMATES" block, whose heading
+    excludes substitution effects outright ("CRM techniques that have an impact on
+    LGD estimates as a result of the application of the substitution effect of CRM
+    techniques shall not be included in these columns") and whose columns cite the
+    exact paragraphs: 0190 REAL ESTATE "Article 199(2), (3) and (4)"; 0200 OTHER
+    PHYSICAL COLLATERAL "Article 199(6) and (8)"; 0210 RECEIVABLES "Articles
+    199(5) and 229(2)". ``_value_cells`` already binds all three there, so the
+    same 500,000 of property was being reported twice on one sheet — once
+    correctly at col 0190 and once as a -500,000 exposure reduction at col 0060,
+    driving col 0090 ("exposure after CRM substitution effects pre-conversion
+    factors") to -200,000 on a supervisory return. Removing it from col 0060
+    loses nothing: col 0190 is untouched. Same defect and same remedy as C 07.00
+    col 0080 (``corep/c07.py``); the SA/IRB difference is only WHERE the
+    collateral does belong — SA: the exposure class; IRB: this LGD block.
+
+    THE CAP ITSELF still applies to what legitimately remains in the block, and
+    Annex II mandates it twice: cols 0040-0050 "shall be capped at the exposure
+    value", col 0060 "shall be capped at the value of the original exposure pre
+    conversion factors". It is inert on every committed portfolio now that the
+    Art. 199 collateral is gone, and is kept because the requirement is real —
+    an Art. 232 deposit or a guarantee CAN exceed the exposure it covers.
+
+    THE BLOCK, NOT THE COLUMN (C 07.00's recorded reasoning): capping each column
+    at the exposure separately still lets the columns SUM past it, so the cap is
+    applied to the block total and the excess shed PROPORTIONALLY across the
+    components — Annex II prescribes no priority between the protection routes,
+    so no route may be preferred.
+
+    THE PRE-CCF BASIS: the two cap sentences name nominally different bases ("the
+    exposure value" for 0040-0050, "the original exposure pre conversion factors"
+    for 0060). The PRE-conversion-factor basis (what col 0020 sums) is the one
+    adopted for the whole block, because the block feeds the PRE-CCF waterfall at
+    col 0090; capping against the post-CCF exposure value inside a pre-CCF
+    waterfall would leave 0090 able to go negative.
+
+    COL 0070 IS DELIBERATELY OUTSIDE THE BLOCK. It is not a protection valuation
+    that can exceed the exposure: Annex II defines the substitution outflow as
+    "the covered part of the original exposure pre-conversion factors that is
+    deducted from the obligor's exposure class", i.e. already a portion of the cap
+    basis. Including it would also make the cap bite on legs that are not
+    over-collateralised at all, because a guaranteed leg that migrates class is
+    counted by ``_crm_waterfall`` in BOTH col 0040 and col 0070 — the same
+    double-subtraction C 07.00 removed from its own waterfall, currently inert
+    here (no leg in any committed portfolio sits in both) and recorded as a
+    separate follow-up rather than fixed under a cap change.
+
+    Returns the ``c08_prot_*`` twins for whichever raw carriers the frame has;
+    an empty list when it has none (the cells then keep their raw bindings and
+    behave exactly as before).
+    """
+    parts = [pl.col(col).fill_null(0.0) for col in _C08_OFCP_CARRIERS if col in cols]
+    unfunded: pl.Expr | None = None
+    if "guaranteed_portion" in cols:
+        gp = pl.col("guaranteed_portion").fill_null(0.0)
+        # Cols 0040/0050 split the same carrier by protection type, so a leg
+        # contributes to the block only through the type it actually carries;
+        # with no ``protection_type`` column col 0040 takes the whole amount.
+        unfunded = (
+            pl.when(pl.col("protection_type").is_in(["guarantee", "credit_derivative"]))
+            .then(gp)
+            .otherwise(pl.lit(0.0))
+            if "protection_type" in cols
+            else gp
+        )
+        parts.append(unfunded)
+    if not parts:
+        return []
+    scale = _c08_block_cap_scale(cols, pl.sum_horizontal(parts))
+    exprs = [
+        (pl.col(col).fill_null(0.0) * scale).alias(f"c08_prot_{col}")
+        for col in _C08_OFCP_CARRIERS
+        if col in cols
+    ]
+    if unfunded is not None:
+        exprs.append(
+            (pl.col("guaranteed_portion").fill_null(0.0) * scale).alias("c08_prot_guaranteed")
+        )
+    return exprs
 
 
 def _substitution_inflows(irb_df: pl.DataFrame, cols: set[str]) -> dict[str, float]:
@@ -514,6 +691,12 @@ def _value_cells(  # noqa: C901, PLR0915 - the full C 08.01/02 column surface
         return RowPredicate(equals=(*terms, *extra))
 
     lgd_col = pick(cols, "lgd_floored", "lgd_input")
+    # The substitution block (0040/0050/0060) reads the Annex II-capped twins
+    # ``_c08_capped_protection`` derives; col 0070 (the outflow) stays RAW — see
+    # that helper for why it is outside the cap block. A frame with no raw
+    # carrier gets no twin, so the raw name is kept and behaviour is unchanged.
+    gp_col = "c08_prot_guaranteed" if "guaranteed_portion" in cols else "guaranteed_portion"
+    prot_cols = tuple(f"c08_prot_{col}" if col in cols else col for col in _C08_OFCP_CARRIERS)
     cells: dict[str, CellSpec] = {
         "0010": CellSpec(
             WeightedAvg("pd_floored", weight=ead_col), predicate=member, empty_cell="null"
@@ -526,30 +709,19 @@ def _value_cells(  # noqa: C901, PLR0915 - the full C 08.01/02 column surface
         ),
         "0035": CellSpec(Sum("on_bs_netting_amount"), predicate=member),
         "0040": (
-            CellSpec(
-                Sum("guaranteed_portion"), predicate=narrowed(("protection_type", "guarantee"))
-            )
+            CellSpec(Sum(gp_col), predicate=narrowed(("protection_type", "guarantee")))
             if "protection_type" in cols
-            else CellSpec(Sum("guaranteed_portion"), predicate=member)
+            else CellSpec(Sum(gp_col), predicate=member)
         ),
         "0050": (
             CellSpec(
-                Sum("guaranteed_portion"),
+                Sum(gp_col),
                 predicate=narrowed(("protection_type", "credit_derivative")),
             )
             if "protection_type" in cols
             else CellSpec(Formula(refs=(), fn=_const(0.0)))
         ),
-        "0060": CellSpec(
-            SafeSum(
-                (
-                    "collateral_re_value",
-                    "collateral_receivables_value",
-                    "collateral_other_physical_value",
-                )
-            ),
-            predicate=member,
-        ),
+        "0060": CellSpec(SafeSum(prot_cols), predicate=member),
         "0070": CellSpec(Sum("guaranteed_portion"), predicate=narrowed(("c08_substituted", True))),
         "0080": (
             CellSpec(SideContext("substitution_inflow"))
@@ -568,6 +740,11 @@ def _value_cells(  # noqa: C901, PLR0915 - the full C 08.01/02 column surface
         "0101": CellSpec(Formula(refs=(), fn=_const(None))),
         "0102": CellSpec(Formula(refs=(), fn=_const(None))),
         "0103": CellSpec(Formula(refs=(), fn=_const(None))),
+        # 0104 ("exposure after ALL CRM pre-conversion factors") = the 0090
+        # waterfall adjusted for the slotting FCCM columns — filled by
+        # ``_c08_after_all_crm`` post-execute, because 0090/0101/0102 are all
+        # Formula cells and the executor forbids a formula referencing a formula.
+        # The placeholder null is what an inert row keeps (the 0100 convention).
         "0104": CellSpec(Formula(refs=(), fn=_const(None))),
         "0110": CellSpec(Sum(ead_col), predicate=member),
         # 0120 ("of which: off balance sheet") sits in the EXPOSURE VALUE
@@ -616,7 +793,10 @@ def _value_cells(  # noqa: C901, PLR0915 - the full C 08.01/02 column surface
             predicate=member,
             empty_cell="null",
         ),
-        "0251": CellSpec(Sum("rwa_pre_adjustments"), predicate=member),
+        "0251": CellSpec(
+            Sum("c08_rwa_pre_adj" if "rwa_pre_adjustments" in cols else "rwa_pre_adjustments"),
+            predicate=member,
+        ),
         "0252": CellSpec(Sum("post_model_adjustment_rwa"), predicate=member),
         "0253": CellSpec(Sum("mortgage_rw_floor_adjustment"), predicate=member),
         "0254": CellSpec(Sum("unrecognised_exposure_adjustment"), predicate=member),
@@ -826,17 +1006,19 @@ def generate_c08_01(
 ) -> dict[str, pl.DataFrame]:
     """Execute C 08.01 per obligor-class sheet over the sealed ledger.
 
-    Iterates ``c08_01_plans`` and applies the four post-execute passes on the
-    reported frame (the off-BS pre-CCF memo 0100, the all-null inert rows, the
-    provisions ladder 0290, the Annex II §1.3 "(-)" negation) — the drill-down
-    reads a cell's value from HERE, so it honours every pass. The per-row
-    predicates the passes need are rebuilt from the plan's ``row_terms``."""
+    Iterates ``c08_01_plans`` and applies the five post-execute passes on the
+    reported frame (the off-BS pre-CCF memo 0100, the after-all-CRM total 0104,
+    the all-null inert rows, the provisions ladder 0290, the Annex II §1.3 "(-)"
+    negation) — the drill-down reads a cell's value from HERE, so it honours every
+    pass. The per-row predicates the passes need are rebuilt from the plan's
+    ``row_terms``."""
     result: dict[str, pl.DataFrame] = {}
     for ec, plan in c08_01_plans(results, cols, framework, errors).items():
         row_preds = _c08_01_row_preds(plan.row_terms)
         data_cols = set(plan.frame.columns)
         frame = execute(plan.spec, plan.frame, plan.ctx)
         frame = _c08_off_bs_pre_ccf(frame, plan.frame, row_preds)
+        frame = _c08_after_all_crm(frame)
         frame = _null_empty_rows(frame, plan.frame, row_preds)
         frame = _provisions_postfix(frame, plan.frame, row_preds, data_cols, ref="0290")
         result[ec] = _negate(frame)
@@ -886,7 +1068,9 @@ def c08_02_plans(
     Each class sheet has its OWN spec — rows are the distinct firm grades (else the
     populated PD bands + "Unassigned") derived per class by ``_c08_02_keyed`` (the
     CR9.1 pattern), so the plans fn builds per-sheet specs exactly as the generator
-    does. Keys on the sealed ``reporting_class_origin`` over the WHOLE IRB book,
+    does. Keys on the sealed ``reporting_class_origin`` over the IRB NON-slotting
+    book (PS1/26 Annex II §3.3.4 paragraph 77A — see the module docstring; a
+    slotting-only class emits no sheet, as on C 08.03/05),
     preserving ``generate_c08_02``'s error contract. The cross-class substitution
     INFLOW is DELIBERATELY excluded (col 0080 a per-grade constant 0.0, R12), so
     each plan carries an empty ``ReportingContext`` and ``_NEGATIVE_COLS`` explicitly
@@ -902,7 +1086,7 @@ def c08_02_plans(
     if pd_col is None:
         errors.append("C08.02: No PD column available — skipping PD grade breakdown")
         return {}
-    irb_df = _irb_population(results, cols).collect()
+    irb_df = _non_slotting(results, cols).collect()
     if len(irb_df) == 0:
         return {}
     data_cols = set(irb_df.columns)
@@ -931,7 +1115,8 @@ def generate_c08_02(
     """Execute C 08.02 per class sheet with data-driven grade/PD-band rows.
 
     Iterates ``c08_02_plans`` and per sheet applies the off-BS pre-CCF memo (0100),
-    the provisions ladder (0290) and the Annex II §1.3 "(-)" negation, then injects
+    the after-all-CRM total (0104), the provisions ladder (0290) and the Annex II
+    §1.3 "(-)" negation, then injects
     the String row label into col 0005 (the CR9.1 post-execute pattern). An
     empty-label class emits an ``_empty_frame`` (0005 typed String). Each row's
     predicate is rebuilt from the plan spec's row refs (each a ``c08_02_key``
@@ -948,6 +1133,7 @@ def generate_c08_02(
         data_cols = set(plan.frame.columns)
         frame = execute(plan.spec, plan.frame, plan.ctx)
         frame = _c08_off_bs_pre_ccf(frame, plan.frame, row_preds)
+        frame = _c08_after_all_crm(frame)
         frame = _provisions_postfix(frame, plan.frame, row_preds, data_cols, ref="0290")
         frame = _negate(frame)
         frame = frame.with_columns(pl.col("row_name").alias("0005"))
@@ -1789,256 +1975,6 @@ def _copy_of_0010(cells: Mapping[str, float | None], _prior: bool) -> float | No
 
 
 # =============================================================================
-# C 08.07 / OF 08.07 — IRB scope of use (single frame, full population)
-# =============================================================================
-
-
-@cites("CRR Art. 148")
-@cites("PS1/26, paragraph 1.3")
-def generate_c08_07(
-    results: pl.LazyFrame,
-    cols: set[str],
-    framework: str,
-    errors: list[str],
-) -> pl.DataFrame | None:
-    """Execute C 08.07 / OF 08.07 over the FULL results population.
-
-    SA and IRB both enter (the IRB side is ``approach_applied`` membership
-    in the pinned ``C08_07_IRB_APPROACHES`` — slotting counts as IRB; a
-    null approach falls to SA); coverage percentages are intra-row
-    formulas guarding a zero denominator to 0.0. Col 0040 ("% subject to a
-    roll-out plan", CRR Art. 148) is the SA-treated slice flagged by the
-    optional ``is_under_irb_rollout`` INPUT column, carved out of col 0030
-    (permanent partial use, Art. 150) so 0030 + 0040 == the whole SA coverage
-    %; with no roll-out input col 0040 is 0.0 and 0030 keeps the whole SA share.
-    Rows with no exposure class binding (and no aggregate rule) render ALL-NULL;
-    empty real-class rows stay 0.0 — the opposite split from C 07.00. The B31
-    materiality columns 0160-0180 are structurally null regardless of reporting
-    basis (the retired ``output_floor_config`` gate was dead code).
-    """
-    prepared = _c08_07_prepared(results, cols, framework, errors)
-    if prepared is None:
-        return None
-    spec, data, null_rows = prepared
-    frame = execute(spec, data)
-    frame = _c08_07_rollout_pct(frame)
-    return _null_fixed_rows(frame, null_rows)
-
-
-def _c08_07_prepared(
-    results: pl.LazyFrame,
-    cols: set[str],
-    framework: str,
-    errors: list[str],
-) -> tuple[TemplateSpec, pl.DataFrame, list[str]] | None:
-    """Collect + derive the C 08.07 discriminators and build its spec.
-
-    Shared by ``generate_c08_07`` (the reported frame, which re-applies the two
-    post-execute passes) and ``c08_07_plans`` (the lineage plan). Returns
-    ``None`` on the imperative generator's early exits (missing columns / empty
-    population), recording the same error string.
-    """
-    ead_col = pick(cols, "ead_final")
-    approach_col = pick(cols, "reporting_approach_origin", "approach")
-    # Recorded basis: C 08.07 keys the RAW class over the FULL population
-    # (Art. 147 origination taxonomy has no "defaulted" class) — the one
-    # COREP sheet key deliberately NOT retargeted to the applied ladder.
-    ec_col = pick(cols, "exposure_class")
-    if ead_col is None or approach_col is None or ec_col is None:
-        missing = [
-            name
-            for name, value in (("ead", ead_col), ("approach", approach_col), ("class", ec_col))
-            if value is None
-        ]
-        errors.append(f"C 08.07: missing columns: {', '.join(missing)}")
-        return None
-    data = results.collect()
-    if data.height == 0:
-        return None
-    data = data.with_columns(
-        pl.col(approach_col).is_in(sorted(C08_07_IRB_APPROACHES)).alias("c0807_irb")
-    )
-    # CRR Art. 148/150 roll-out-plan discriminator (col 0040): an SA-treated leg
-    # (``~c0807_irb``) that the firm's approved sequential-implementation plan
-    # schedules to move to IRB. Derived ONLY when the optional input flag is
-    # present — an absent flag leaves ``c0807_rollout`` off the frame, so the
-    # tolerant col-0040 predicate matches nothing (0.0) and col 0030 keeps the
-    # whole SA share, byte-identical to the pre-R14 output.
-    rollout_col = pick(cols, "is_under_irb_rollout")
-    if rollout_col is not None:
-        data = data.with_columns(
-            (~pl.col("c0807_irb") & pl.col(rollout_col).fill_null(value=False)).alias(
-                "c0807_rollout"
-            )
-        )
-    rwa_col = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
-    row_defs = get_c08_07_rows(framework)
-    spec, null_rows = _c08_07_spec(row_defs, ec_col, ead_col, rwa_col, framework)
-    return spec, data, null_rows
-
-
-def c08_07_plans(
-    results: pl.LazyFrame,
-    cols: set[str],
-    framework: str,
-    errors: list[str],
-) -> dict[str, SheetPlan]:
-    """Build the single C 08.07 execution plan for lineage (single frame).
-
-    C 08.07 has no sheet axis, so its one plan keys under the canonical
-    single-frame key. The plan frame is the FULL prepared population (carrying
-    the derived ``c0807_irb`` / ``c0807_rollout`` discriminators) and each cell's
-    own predicate narrows it. C 08.07 has no "(-)"-labelled deduction column, so
-    ``negative_cols`` is empty. The two post-execute passes
-    (``_c08_07_rollout_pct`` rescaling col 0040 to a percentage,
-    ``_null_fixed_rows`` on the structural-null rows) live on the REPORTED frame
-    (``c08_07_frames`` / ``generate_c08_07``): the drill-down reads a cell's
-    ``cell_value`` from there, so col 0040 shows its rescaled percentage and the
-    fixed-null rows read null (they carry no cell binding — an ``unbound`` cell),
-    never contradicting the sheet. Preserves the generator's error contract via
-    ``_c08_07_prepared``.
-    """
-    prepared = _c08_07_prepared(results, cols, framework, errors)
-    if prepared is None:
-        return {}
-    spec, data, _null_rows = prepared
-    return {
-        _C08_07_SHEET_KEY: SheetPlan(
-            spec=spec, frame=data, ctx=ReportingContext(), negative_cols=frozenset()
-        )
-    }
-
-
-def c08_07_frames(
-    results: pl.LazyFrame,
-    cols: set[str],
-    framework: str,
-    errors: list[str],
-) -> dict[str, pl.DataFrame]:
-    """Render the single C 08.07 frame for lineage (keyed like ``c08_07_plans``).
-
-    Wraps ``generate_c08_07`` under the single-frame key so a cell's reported
-    value carries the two post-execute passes the plan does not — the lineage
-    drill-down reads ``cell_value`` from HERE, so it honours the rescaled col
-    0040 and the nulled structural rows."""
-    frame = generate_c08_07(results, cols, framework, errors)
-    return {_C08_07_SHEET_KEY: frame} if frame is not None else {}
-
-
-def _c08_07_spec(
-    row_defs: list[tuple[str, str, str | None]],
-    ec_col: str,
-    ead_col: str,
-    rwa_col: str | None,
-    framework: str,
-) -> tuple[TemplateSpec, list[str]]:
-    """The C 08.07 spec + the fixed structural-null row set (CRR 0060/0100/
-    0130; B31 0210/0280 — rows with neither a class binding nor an
-    aggregate rule)."""
-    is_b31 = framework == "BASEL_3_1"
-    column_refs = tuple(col.ref for col in get_c08_07_columns(framework))
-    rows = tuple(_Row(row_def[0], row_def[1]) for row_def in row_defs)
-    cells: dict[tuple[str, str], CellSpec] = {}
-    null_rows: list[str] = []
-    for row_ref, row_name, ec_value in row_defs:
-        union: tuple[RowPredicate, ...] = ()
-        if row_name == "Total":
-            class_terms: _Terms = ()
-        elif ec_value is not None:
-            class_terms = ((ec_col, ec_value),)
-        elif row_ref == "0090":
-            # The CRR "Retail" display aggregate — three retail classes.
-            class_terms = ()
-            union = tuple(
-                RowPredicate(equals=((ec_col, ec),)) for ec in sorted(C08_07_CRR_RETAIL_CLASSES)
-            )
-        else:
-            null_rows.append(row_ref)
-            continue
-        total_pred = RowPredicate(equals=class_terms, any_of=union)
-        irb_pred = RowPredicate(equals=(*class_terms, ("c0807_irb", True)), any_of=union)
-        rollout_pred = RowPredicate(equals=(*class_terms, ("c0807_rollout", True)), any_of=union)
-        cells[(row_ref, "0010")] = CellSpec(Sum(ead_col), predicate=irb_pred)
-        cells[(row_ref, "0020")] = CellSpec(Sum(ead_col), predicate=total_pred)
-        # Col 0040 first carries the roll-out-plan EAD (SA-treated AND under an
-        # Art. 148 plan); ``_c08_07_rollout_pct`` rescales it to a percentage of
-        # the row total post-execute. A frame without ``c0807_rollout`` makes the
-        # tolerant predicate match nothing -> 0.0 (permanent-partial-use only).
-        cells[(row_ref, "0040")] = CellSpec(Sum(ead_col), predicate=rollout_pred)
-        cells[(row_ref, "0030")] = CellSpec(Formula(refs=("0010", "0020", "0040"), fn=_pct_ppu))
-        cells[(row_ref, "0050")] = CellSpec(Formula(refs=("0010", "0020"), fn=_pct_irb))
-        if is_b31:
-            if rwa_col is not None:
-                cells[(row_ref, "0060")] = CellSpec(Sum(rwa_col), predicate=total_pred)
-                cells[(row_ref, "0150")] = CellSpec(Sum(rwa_col), predicate=irb_pred)
-                cells[(row_ref, "0140")] = CellSpec(Formula(refs=("0060", "0150"), fn=_sa_rwea))
-            for ref in ("0160", "0170", "0180"):
-                cells[(row_ref, ref)] = CellSpec(Formula(refs=(), fn=_const(None)))
-    spec = TemplateSpec(
-        name="c08_07", rows=rows, column_refs=column_refs, cells=cells, empty_cell="zero"
-    )
-    return spec, null_rows
-
-
-def _pct_ppu(cells: Mapping[str, float | None], _prior: bool) -> float | None:
-    """0030 = SA share subject to PERMANENT PARTIAL USE, % (0.0 on a zero
-    denominator): the SA EAD (row total 0020 minus IRB 0010) EXCLUDING the
-    roll-out-plan slice (col 0040, still the raw EAD Sum when this formula runs).
-    0030 + 0040 == the total SA coverage %, so the aggregate the pre-R14 col 0030
-    reported is preserved; with no roll-out data col 0040 is 0.0 and 0030 reduces
-    to the whole SA share, bit-identical to the pre-R14 formula (``x - 0.0 == x``).
-    Art. 148 (roll-out plans) vs Art. 150 (permanent partial use)."""
-    total = cells["0020"] or 0.0
-    if total <= 0:
-        return 0.0
-    return (total - (cells["0010"] or 0.0) - (cells["0040"] or 0.0)) / total * 100.0
-
-
-def _pct_irb(cells: Mapping[str, float | None], _prior: bool) -> float | None:
-    """0050 = IRB share of the row's EAD, % (0.0 on a zero denominator)."""
-    total = cells["0020"] or 0.0
-    if total <= 0:
-        return 0.0
-    return (cells["0010"] or 0.0) / total * 100.0
-
-
-def _c08_07_rollout_pct(frame: pl.DataFrame) -> pl.DataFrame:
-    """Rescale C 08.07 col 0040 from the roll-out-plan EAD (the Sum bound in the
-    spec) to its percentage of the row total (col 0020), guarding a zero
-    denominator to 0.0 — the executor has no verb for "percentage of another
-    cell", so it is derived here post-execute. Col 0030 already excludes this
-    slice (``_pct_ppu``), so 0030 + 0040 == the row's total SA coverage %. A
-    no-op when no roll-out data is present (col 0040 EAD is 0.0)."""
-    if "0040" not in frame.columns or "0020" not in frame.columns:
-        return frame
-    total = pl.col("0020")
-    pct = pl.when(total > 0).then(pl.col("0040") / total * 100.0).otherwise(0.0)
-    return frame.with_columns(pct.alias("0040"))
-
-
-def _sa_rwea(cells: Mapping[str, float | None], _prior: bool) -> float | None:
-    """B31 0140 = SA RWEA lumped as "other" (total 0060 minus IRB 0150 —
-    no ``sa_use_reason`` carrier exists, so 0070-0130 stay 0.0 and the
-    additive identity 0060 = Σ(0070..0140) + 0150 holds by construction)."""
-    return (cells["0060"] or 0.0) - (cells["0150"] or 0.0)
-
-
-def _null_fixed_rows(frame: pl.DataFrame, row_refs: list[str]) -> pl.DataFrame:
-    """Render a FIXED row set all-null (the C 08.07 structural rows — NOT
-    empty-subset detection: empty real-class rows must stay 0.0)."""
-    if not row_refs:
-        return frame
-    value_cols = [col for col in frame.columns if col not in ("row_ref", "row_name")]
-    return frame.with_columns(
-        pl.when(pl.col("row_ref").is_in(row_refs))
-        .then(pl.lit(None, dtype=pl.Float64))
-        .otherwise(pl.col(col))
-        .alias(col)
-        for col in value_cols
-    )
-
-
-# =============================================================================
 # Shared post-steps + small helpers
 # =============================================================================
 
@@ -2181,10 +2117,11 @@ def _c08_off_bs_pre_ccf(
     if not active:
         return frame
     gross_cols = ("reporting_gross_off_bs",)
-    collateral_cols = (
-        "collateral_re_value",
-        "collateral_receivables_value",
-        "collateral_other_physical_value",
+    # Mirror _value_cells component-for-component: the substitution block reads
+    # the Annex II-capped twins, the outflow reads the raw carrier.
+    gp_col = "c08_prot_guaranteed" if "c08_prot_guaranteed" in cols else "guaranteed_portion"
+    collateral_cols = tuple(
+        f"c08_prot_{col}" if f"c08_prot_{col}" in cols else col for col in _C08_OFCP_CARRIERS
     )
     has_protection = "protection_type" in cols
     fixes: dict[str, float] = {}
@@ -2193,12 +2130,14 @@ def _c08_off_bs_pre_ccf(
         off_cols = set(off.columns)
         gross = safe_sum(off, off_cols, *gross_cols)
         if has_protection:
-            out_guarantee = _gp_sum(off, off_cols, pl.col("protection_type") == "guarantee")
+            out_guarantee = _gp_sum(
+                off, off_cols, pl.col("protection_type") == "guarantee", col=gp_col
+            )
             out_derivative = _gp_sum(
-                off, off_cols, pl.col("protection_type") == "credit_derivative"
+                off, off_cols, pl.col("protection_type") == "credit_derivative", col=gp_col
             )
         else:
-            out_guarantee = _gp_sum(off, off_cols, mask=None)
+            out_guarantee = _gp_sum(off, off_cols, mask=None, col=gp_col)
             out_derivative = 0.0
         out_collateral = safe_sum(off, off_cols, *collateral_cols)
         out_substituted = _gp_sum(off, off_cols, pl.col("c08_substituted"))
@@ -2213,14 +2152,63 @@ def _c08_off_bs_pre_ccf(
     return frame.with_columns(expr.alias("0100"))
 
 
-def _gp_sum(data: pl.DataFrame, cols: set[str], mask: pl.Expr | None) -> float:
-    """Sum ``guaranteed_portion`` over ``data`` (optionally masked); 0.0 when
-    the column is absent — mirroring the waterfall's ``cells[...] or 0.0``
-    coalesce of an absent CRM-outflow carrier."""
-    if "guaranteed_portion" not in cols:
+def _c08_after_all_crm(frame: pl.DataFrame) -> pl.DataFrame:
+    """Fill C 08.01/02 col 0104 — exposure after ALL CRM, pre-conversion factors.
+
+    PS1/26 Annex II (OF 08.01 col 0104): "Institutions shall report the value
+    reported in column 0090 after adjusting for the reduction in exposure due to
+    the Financial Collateral Comprehensive Method reported in columns 0101-0103."
+    The published identity (boe_b1040) states it additively over the REPORTED
+    (signed) cells::
+
+        0104 = 0090 + 0101 + 0102
+
+    — col 0103 is an "of which" sub-item of 0102 and is excluded, and 0102 is a
+    "(-)"-labelled deduction, so on the POSITIVE magnitudes this pass sees (it
+    runs before ``_negate``) the arithmetic is ``0090 + 0101 - 0102``.
+
+    Cols 0101-0103 apply to slotting exposures only ("An institution shall only
+    report values for exposures subject to the slotting approach") and are
+    structural nulls today — no FCCM-under-slotting carrier is sealed — so 0104
+    currently reproduces 0090 on every row. The subtraction is written out
+    anyway so the cell stays truthful the day a carrier is wired.
+
+    This is a post-execute pass and not a ``Formula`` cell because 0090, 0101 and
+    0102 are themselves ``Formula`` cells and the executor refuses a formula that
+    references another formula. A null 0090 (an inert row) keeps 0104 null for
+    ``_null_empty_rows``; a frame without col 0104 (CRR, which has no FCCM
+    column block) is left untouched.
+    """
+    if "0104" not in frame.columns or "0090" not in frame.columns:
+        return frame
+    total = pl.col("0090").fill_null(0.0)
+    if "0101" in frame.columns:
+        total = total + pl.col("0101").fill_null(0.0)
+    if "0102" in frame.columns:
+        total = total - pl.col("0102").fill_null(0.0)
+    return frame.with_columns(
+        pl.when(pl.col("0090").is_null())
+        .then(pl.lit(None, dtype=pl.Float64))
+        .otherwise(total)
+        .alias("0104")
+    )
+
+
+def _gp_sum(
+    data: pl.DataFrame,
+    cols: set[str],
+    mask: pl.Expr | None,
+    col: str = "guaranteed_portion",
+) -> float:
+    """Sum a guaranteed-portion carrier over ``data`` (optionally masked); 0.0
+    when the column is absent — mirroring the waterfall's ``cells[...] or 0.0``
+    coalesce of an absent CRM-outflow carrier. ``col`` selects the Annex II-capped
+    twin (``c08_prot_guaranteed``) for the substitution-block components and the
+    raw carrier for the outflow, matching ``_value_cells``."""
+    if col not in cols:
         return 0.0
     sub = data.filter(mask) if mask is not None else data
-    return float(sub["guaranteed_portion"].fill_null(0.0).sum())
+    return float(sub[col].fill_null(0.0).sum())
 
 
 def _negate_expr(col: str) -> pl.Expr:

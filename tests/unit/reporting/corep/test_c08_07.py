@@ -105,10 +105,11 @@ class TestC0807TemplateDefinitions:
 
         assert len(CRR_C08_07_ROWS) == 17
 
-    def test_b31_c0807_has_11_rows(self) -> None:
+    def test_b31_c0807_has_10_rows(self) -> None:
+        """Eight Art. 147B(1) roll-out classes + Total (0260) + immateriality (0270)."""
         from rwa_calc.reporting.corep.templates import B31_C08_07_ROWS
 
-        assert len(B31_C08_07_ROWS) == 11
+        assert len(B31_C08_07_ROWS) == 10
 
     def test_column_refs_match_crr_columns(self) -> None:
         from rwa_calc.reporting.corep.templates import C08_07_COLUMN_REFS, CRR_C08_07_COLUMNS
@@ -160,15 +161,19 @@ class TestC0807TemplateDefinitions:
         assert CRR_C08_07_ROWS[-1][0] == "0170"
 
     def test_b31_total_and_materiality_rows(self) -> None:
-        """B31 has Total (0270) and Aggregate immateriality % (0280) rows."""
+        """B31 has Total (0260) and the aggregate-immateriality row (0270).
+
+        PS1/26 Annex II §3.3.10.2 rows: "0260 TOTAL"; "0270 PERCENTAGE SUBJECT TO
+        PERMANENT PARTIAL USE PERMISSION (IMMATERIALITY IN AGGREGATE)".
+        """
         from rwa_calc.reporting.corep.templates import B31_C08_07_ROWS
 
         total_row = [r for r in B31_C08_07_ROWS if r[1] == "Total"]
         assert len(total_row) == 1
-        assert total_row[0][0] == "0270"
+        assert total_row[0][0] == "0260"
         mat_row = [r for r in B31_C08_07_ROWS if "immateriality" in r[1]]
         assert len(mat_row) == 1
-        assert mat_row[0][0] == "0280"
+        assert mat_row[0][0] == "0270"
 
     def test_irb_approaches_frozenset(self) -> None:
         from rwa_calc.reporting.corep.templates import C08_07_IRB_APPROACHES
@@ -229,11 +234,11 @@ class TestC0807Generation:
         assert bundle.c08_07 is not None
         assert len(bundle.c08_07) == 17
 
-    def test_c0807_b31_has_11_rows(self) -> None:
+    def test_c0807_b31_has_10_rows(self) -> None:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_scope_of_use_results(), framework="BASEL_3_1")
         assert bundle.c08_07 is not None
-        assert len(bundle.c08_07) == 11
+        assert len(bundle.c08_07) == 10
 
     def test_c0807_none_for_sa_only(self) -> None:
         """Returns None when no IRB or SA data (empty results)."""
@@ -294,54 +299,54 @@ class TestC0807ColumnValues:
         assert row["0020"][0] == pytest.approx(8000.0)
 
     def test_corporate_sa_pct(self) -> None:
-        """Col 0030 (SA %) for corporate = 3000/8000 * 100 = 37.5%."""
+        """Col 0030 (SA share) for corporate = 3000/8000 = 0.375 (a DPM fraction)."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_scope_of_use_results())
         df = bundle.c08_07
         assert df is not None
         row = df.filter(pl.col("row_ref") == "0050")
-        assert row["0030"][0] == pytest.approx(37.5, rel=1e-4)
+        assert row["0030"][0] == pytest.approx(0.375, rel=1e-4)
 
     def test_corporate_irb_pct(self) -> None:
-        """Col 0050 (IRB %) for corporate = 5000/8000 * 100 = 62.5%."""
+        """Col 0050 (IRB share) for corporate = 5000/8000 = 0.625."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_scope_of_use_results())
         df = bundle.c08_07
         assert df is not None
         row = df.filter(pl.col("row_ref") == "0050")
-        assert row["0050"][0] == pytest.approx(62.5, rel=1e-4)
+        assert row["0050"][0] == pytest.approx(0.625, rel=1e-4)
 
     def test_institution_fully_irb(self) -> None:
-        """Institution is 100% IRB: SA%=0, IRB%=100."""
+        """Institution is fully IRB: SA share 0, IRB share 1."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_scope_of_use_results())
         df = bundle.c08_07
         assert df is not None
         row = df.filter(pl.col("row_ref") == "0040")
         assert row["0030"][0] == pytest.approx(0.0)
-        assert row["0050"][0] == pytest.approx(100.0)
+        assert row["0050"][0] == pytest.approx(1.0)
         assert row["0010"][0] == pytest.approx(2000.0)
 
     def test_retail_mortgage_fully_sa(self) -> None:
-        """Retail mortgage is 100% SA: IRB EAD=0, SA%=100."""
+        """Retail mortgage is fully SA: IRB EAD=0, SA share 1."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_scope_of_use_results())
         df = bundle.c08_07
         assert df is not None
         row = df.filter(pl.col("row_ref") == "0110")
         assert row["0010"][0] == pytest.approx(0.0)
-        assert row["0030"][0] == pytest.approx(100.0)
+        assert row["0030"][0] == pytest.approx(1.0)
         assert row["0050"][0] == pytest.approx(0.0)
 
     def test_specialised_lending_fully_irb(self) -> None:
-        """Specialised lending (slotting) row 0070 is 100% IRB."""
+        """Specialised lending (slotting) row 0070 is fully IRB."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_scope_of_use_results())
         df = bundle.c08_07
         assert df is not None
         row = df.filter(pl.col("row_ref") == "0070")
         assert row["0010"][0] == pytest.approx(3000.0)
-        assert row["0050"][0] == pytest.approx(100.0)
+        assert row["0050"][0] == pytest.approx(1.0)
 
     def test_total_row_sums(self) -> None:
         """Total row (0170) aggregates all classes correctly."""
@@ -354,8 +359,8 @@ class TestC0807ColumnValues:
         assert row["0010"][0] == pytest.approx(11000.0)
         # Total EAD: 11000 + 3000 + 4000 + 500 = 18500
         assert row["0020"][0] == pytest.approx(18500.0)
-        # IRB%: 11000/18500 * 100 ≈ 59.459%
-        assert row["0050"][0] == pytest.approx(11000.0 / 18500.0 * 100.0, rel=1e-4)
+        # IRB share: 11000/18500 ~ 0.59459
+        assert row["0050"][0] == pytest.approx(11000.0 / 18500.0, rel=1e-4)
 
     def test_retail_aggregate_row(self) -> None:
         """CRR row 0090 (Retail) aggregates mortgage + QRRE + other."""
@@ -395,14 +400,19 @@ class TestC0807B31Features:
     """Tests for Basel 3.1 OF 08.07 specific features."""
 
     def test_b31_total_rwea(self) -> None:
-        """Col 0060 (total RWEA) present and correct under B31."""
+        """Col 0060 (total RWEA) on the Total row (0260) sums the ROLL-OUT CLASSES.
+
+        Equity is not an Art. 147B(1) roll-out class, so its 750 + 500 = 1250 RWA
+        is outside the OF 08.07 Total (unlike the CRR Total, which is the whole
+        population).
+        """
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_scope_of_use_results(), framework="BASEL_3_1")
         df = bundle.c08_07
         assert df is not None
-        total = df.filter(pl.col("row_ref") == "0270")
-        # Total RWA: 2500 + 1500 + 800 + 1200 + 200 + 2100 + 750 + 500 = 9550
-        assert total["0060"][0] == pytest.approx(9550.0)
+        total = df.filter(pl.col("row_ref") == "0260")
+        # Roll-out-class RWA: 2500 + 1500 + 800 + 1200 + 200 + 2100 = 8300
+        assert total["0060"][0] == pytest.approx(8300.0)
 
     def test_b31_irb_rwea(self) -> None:
         """Col 0150 (IRB RWEA) correct under B31."""
@@ -410,19 +420,19 @@ class TestC0807B31Features:
         bundle = gen.generate_from_lazyframe(_irb_scope_of_use_results(), framework="BASEL_3_1")
         df = bundle.c08_07
         assert df is not None
-        total = df.filter(pl.col("row_ref") == "0270")
-        # IRB RWA: 2500 + 800 + 200 + 2100 = 5600
+        total = df.filter(pl.col("row_ref") == "0260")
+        # IRB RWA: 2500 + 800 + 200 + 2100 = 5600 (all inside roll-out classes)
         assert total["0150"][0] == pytest.approx(5600.0)
 
     def test_b31_sa_rwea_other(self) -> None:
-        """Col 0140 (SA RWEA: other) = total SA RWEA when no sa_use_reason."""
+        """Col 0140 (SA RWEA: other) = roll-out-class SA RWEA when no sa_use_reason."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_scope_of_use_results(), framework="BASEL_3_1")
         df = bundle.c08_07
         assert df is not None
-        total = df.filter(pl.col("row_ref") == "0270")
-        # SA RWA: 1500 + 1200 + 750 + 500 = 3950
-        assert total["0140"][0] == pytest.approx(3950.0)
+        total = df.filter(pl.col("row_ref") == "0260")
+        # SA RWA inside the roll-out classes: 1500 + 1200 = 2700 (equity excluded)
+        assert total["0140"][0] == pytest.approx(2700.0)
 
     def test_b31_materiality_columns_null_for_total(self) -> None:
         """Materiality cols 0160-0180 are null (requires institutional config)."""
@@ -430,27 +440,27 @@ class TestC0807B31Features:
         bundle = gen.generate_from_lazyframe(_irb_scope_of_use_results(), framework="BASEL_3_1")
         df = bundle.c08_07
         assert df is not None
-        total = df.filter(pl.col("row_ref") == "0270")
+        total = df.filter(pl.col("row_ref") == "0260")
         assert total["0160"][0] is None
         assert total["0170"][0] is None
         assert total["0180"][0] is None
 
     def test_b31_materiality_row_present(self) -> None:
-        """B31 has an aggregate immateriality % row (0280)."""
+        """B31 has an aggregate immateriality row (0270)."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_scope_of_use_results(), framework="BASEL_3_1")
         df = bundle.c08_07
         assert df is not None
-        mat_row = df.filter(pl.col("row_ref") == "0280")
+        mat_row = df.filter(pl.col("row_ref") == "0270")
         assert len(mat_row) == 1
 
     def test_b31_corporate_class_row(self) -> None:
-        """B31 row 0200 (Corporate — other) maps to corporate class."""
+        """B31 row 0210 is the Art. 147B(1)(d) combined-corporates roll-out class."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_scope_of_use_results(), framework="BASEL_3_1")
         df = bundle.c08_07
         assert df is not None
-        row = df.filter(pl.col("row_ref") == "0200")
+        row = df.filter(pl.col("row_ref") == "0210")
         assert row["0010"][0] == pytest.approx(5000.0)  # IRB corporate EAD
         assert row["0020"][0] == pytest.approx(8000.0)  # Total corporate EAD
 
@@ -460,7 +470,7 @@ class TestC0807B31Features:
         bundle = gen.generate_from_lazyframe(_irb_scope_of_use_results(), framework="BASEL_3_1")
         df = bundle.c08_07
         assert df is not None
-        total = df.filter(pl.col("row_ref") == "0270")
+        total = df.filter(pl.col("row_ref") == "0260")
         for ref in ["0070", "0080", "0090", "0100", "0110", "0120", "0130"]:
             assert total[ref][0] == pytest.approx(0.0)
 
@@ -470,7 +480,7 @@ class TestC0807B31Features:
         bundle = gen.generate_from_lazyframe(_irb_scope_of_use_results(), framework="BASEL_3_1")
         df = bundle.c08_07
         assert df is not None
-        total = df.filter(pl.col("row_ref") == "0270")
+        total = df.filter(pl.col("row_ref") == "0260")
         sa_breakdown = sum(
             total[ref][0]
             for ref in ["0070", "0080", "0090", "0100", "0110", "0120", "0130", "0140"]
@@ -503,7 +513,7 @@ class TestC0807EdgeCases:
         assert bundle.c08_07 is not None
         total = bundle.c08_07.filter(pl.col("row_ref") == "0170")
         assert total["0010"][0] == pytest.approx(1000.0)
-        assert total["0050"][0] == pytest.approx(100.0)
+        assert total["0050"][0] == pytest.approx(1.0)
 
     def test_c0807_all_sa(self) -> None:
         """All SA exposures: IRB EAD = 0, IRB% = 0 everywhere."""
@@ -523,7 +533,7 @@ class TestC0807EdgeCases:
         assert total["0010"][0] == pytest.approx(0.0)
         assert total["0020"][0] == pytest.approx(3000.0)
         assert total["0050"][0] == pytest.approx(0.0)
-        assert total["0030"][0] == pytest.approx(100.0)
+        assert total["0030"][0] == pytest.approx(1.0)
 
     def test_c0807_without_rwa_column(self) -> None:
         """Works even when rwa_final column is absent (CRR only needs EAD)."""
@@ -614,49 +624,49 @@ class TestC0807RolloutPlan:
     coverage into the roll-out slice (0040) and permanent partial use (0030)."""
 
     def test_corporate_rollout_pct(self) -> None:
-        """0040 = SA-and-roll-out EAD / row total = 3000/10000 = 30%."""
+        """0040 = SA-and-roll-out EAD / row total = 3000/10000 = 0.30."""
         gen = LedgerShimCorepGenerator()
         df = gen.generate_from_lazyframe(_rollout_results()).c08_07
         assert df is not None
         row = df.filter(pl.col("row_ref") == "0050")
-        assert row["0040"][0] == pytest.approx(30.0, rel=1e-9)
+        assert row["0040"][0] == pytest.approx(0.30, rel=1e-9)
 
     def test_corporate_ppu_pct_excludes_rollout(self) -> None:
         """0030 (permanent partial use) = (10000 - 5000 IRB - 3000 roll-out) /
-        10000 = 20% — the SA share NOT under a roll-out plan."""
+        10000 = 0.20 — the SA share NOT under a roll-out plan."""
         gen = LedgerShimCorepGenerator()
         df = gen.generate_from_lazyframe(_rollout_results()).c08_07
         assert df is not None
         row = df.filter(pl.col("row_ref") == "0050")
-        assert row["0030"][0] == pytest.approx(20.0, rel=1e-9)
+        assert row["0030"][0] == pytest.approx(0.20, rel=1e-9)
 
     def test_corporate_sa_aggregate_preserved(self) -> None:
-        """0030 + 0040 == the total SA coverage % (the pre-R14 col 0030 = 50%)."""
+        """0030 + 0040 == the total SA coverage (the pre-R14 col 0030 = 0.50)."""
         gen = LedgerShimCorepGenerator()
         df = gen.generate_from_lazyframe(_rollout_results()).c08_07
         assert df is not None
         row = df.filter(pl.col("row_ref") == "0050")
-        assert row["0030"][0] + row["0040"][0] == pytest.approx(50.0, rel=1e-9)
+        assert row["0030"][0] + row["0040"][0] == pytest.approx(0.50, rel=1e-9)
 
     def test_corporate_irb_pct_unchanged(self) -> None:
-        """0050 (IRB %) is untouched by the roll-out split = 5000/10000 = 50%."""
+        """0050 (IRB share) is untouched by the roll-out split = 5000/10000 = 0.50."""
         gen = LedgerShimCorepGenerator()
         df = gen.generate_from_lazyframe(_rollout_results()).c08_07
         assert df is not None
         row = df.filter(pl.col("row_ref") == "0050")
-        assert row["0050"][0] == pytest.approx(50.0, rel=1e-9)
+        assert row["0050"][0] == pytest.approx(0.50, rel=1e-9)
 
     def test_irb_leg_flag_not_counted_in_rollout(self) -> None:
         """An IRB leg flagged is_under_irb_rollout=True is already on IRB, so its
-        institution row shows 0% roll-out and 100% IRB (the flag carves the SA
-        slice only)."""
+        institution row shows no roll-out share and a full IRB share (the flag
+        carves the SA slice only)."""
         gen = LedgerShimCorepGenerator()
         df = gen.generate_from_lazyframe(_rollout_results()).c08_07
         assert df is not None
         row = df.filter(pl.col("row_ref") == "0040")  # Institutions
         assert row["0040"][0] == pytest.approx(0.0)
         assert row["0030"][0] == pytest.approx(0.0)
-        assert row["0050"][0] == pytest.approx(100.0)
+        assert row["0050"][0] == pytest.approx(1.0)
 
     def test_total_row_rollout_pct(self) -> None:
         """Total row 0040 = all roll-out EAD (3000) / grand total (11000)."""
@@ -664,20 +674,20 @@ class TestC0807RolloutPlan:
         df = gen.generate_from_lazyframe(_rollout_results()).c08_07
         assert df is not None
         total = df.filter(pl.col("row_ref") == "0170")
-        assert total["0040"][0] == pytest.approx(3000.0 / 11000.0 * 100.0, rel=1e-9)
+        assert total["0040"][0] == pytest.approx(3000.0 / 11000.0, rel=1e-9)
         assert total["0030"][0] + total["0040"][0] == pytest.approx(
-            (11000.0 - 6000.0) / 11000.0 * 100.0, rel=1e-9
+            (11000.0 - 6000.0) / 11000.0, rel=1e-9
         )
 
     def test_absent_column_is_backwards_compatible(self) -> None:
         """With no ``is_under_irb_rollout`` column, 0040 = 0.0 and 0030 keeps the
-        whole SA share — byte-identical to the pre-R14 output."""
+        whole SA share."""
         gen = LedgerShimCorepGenerator()
         df = gen.generate_from_lazyframe(_irb_scope_of_use_results()).c08_07
         assert df is not None
         row = df.filter(pl.col("row_ref") == "0050")  # Corporate: SA 3000/8000
         assert row["0040"][0] == pytest.approx(0.0)
-        assert row["0030"][0] == pytest.approx(37.5, rel=1e-4)
+        assert row["0030"][0] == pytest.approx(0.375, rel=1e-4)
 
     def test_zero_denominator_row(self) -> None:
         """A class with zero total EAD (but a roll-out flag) reports 0% roll-out —
@@ -704,7 +714,7 @@ class TestC0807RolloutPlan:
         gen = LedgerShimCorepGenerator()
         df = gen.generate_from_lazyframe(_rollout_results(), framework="BASEL_3_1").c08_07
         assert df is not None
-        row = df.filter(pl.col("row_ref") == "0200")  # B31 Corporate — other
-        assert row["0040"][0] == pytest.approx(30.0, rel=1e-9)
-        assert row["0030"][0] == pytest.approx(20.0, rel=1e-9)
-        assert row["0050"][0] == pytest.approx(50.0, rel=1e-9)
+        row = df.filter(pl.col("row_ref") == "0210")  # B31 combined corporates
+        assert row["0040"][0] == pytest.approx(0.30, rel=1e-9)
+        assert row["0030"][0] == pytest.approx(0.20, rel=1e-9)
+        assert row["0050"][0] == pytest.approx(0.50, rel=1e-9)

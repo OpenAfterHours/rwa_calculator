@@ -586,6 +586,29 @@ def _hierarchy_resolved_columns() -> dict[str, EdgeColumn]:
         "seniority": EdgeColumn(dtype=pl.String),
         "risk_type": EdgeColumn(dtype=pl.String),
         "underlying_risk_type": EdgeColumn(dtype=pl.String),
+        # CRR Annex I paras 1-4 / Art. 111(1): the concrete OBS product key
+        # (ACCEPTANCE / DOCUMENTARY_CREDIT / PERFORMANCE_BOND / ...), declared on
+        # FACILITY_SCHEMA and CONTINGENTS_SCHEMA. Threaded to the CCF stage,
+        # which resolves the abstract Annex I risk_type bucket from it when (and
+        # only when) no explicit risk_type was supplied. Without this pass-through
+        # the unify select dropped it and that fill was unreachable end-to-end,
+        # so a documentary credit booked on obs_product alone silently took the
+        # conservative 50% MR default instead of its 20% MLR rate.
+        # required=False: a loan leg has no OBS product, and the CCR / SFT
+        # synthetic legs never carry one — conform injects a typed null, which
+        # the fill reads as "no product supplied" and leaves risk_type untouched.
+        "obs_product": EdgeColumn(
+            dtype=pl.String,
+            required=False,
+            citation="CRR Art. 111",
+            null_meaning=(
+                "no concrete Annex I off-balance-sheet product reported for this "
+                "row (an on-balance-sheet loan leg, a CCR/SFT synthetic leg, or a "
+                "book that reports risk_type directly); the CCF stage's "
+                "product -> risk_type fill is a no-op and any explicit risk_type "
+                "stands. Must NOT be defaulted to a product."
+            ),
+        ),
         "ccf_modelled": EdgeColumn(dtype=pl.Float64),
         "ead_modelled": EdgeColumn(dtype=pl.Float64),
         "is_short_term_trade_lc": EdgeColumn(dtype=pl.Boolean),

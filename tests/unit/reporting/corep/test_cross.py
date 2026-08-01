@@ -394,10 +394,10 @@ def _sa_results_with_sign_convention_cols() -> pl.LazyFrame:
             "post_crm_exposure_class_guaranteed": ["institution"],
             # 0070: fcsm_collateral_value (Simple method)
             "fcsm_collateral_value": [75.0],
-            # 0080: collateral_re_value + collateral_receivables_value + collateral_other_physical_value
+            # 0080: Art. 232 other funded credit protection. collateral_re_value is a
+            # NEGATIVE CONTROL — Art. 199 collateral is IRB-only (0080 stays 120, not 240).
+            "life_ins_collateral_value": [120.0],
             "collateral_re_value": [120.0],
-            "collateral_receivables_value": [0.0],
-            "collateral_other_physical_value": [0.0],
             # 0130 / 0140: Cvam and market value
             "collateral_adjusted_value": [60.0],
             "collateral_market_value": [70.0],
@@ -868,23 +868,22 @@ class TestSubstitutionFlows:
         assert retail["0100"][0] == pytest.approx(0.0)
 
     def test_c07_net_exposure_after_substitution(self) -> None:
-        """Col 0110 = net exposure after all CRM deductions (guaranteed outflow removes 500)."""
+        """Col 0110 = 0040 + 0090 + 0100 — the outflow is removed exactly ONCE."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_substitution())
 
         corp = _get_total_row(bundle.c07_00["corporate"])
-        v_0110 = corp["0110"][0]
+        # Engine: 0040=3455, 0090=-500 (= col 0050), 0100=0 → 0110 = 2955
+        assert corp["0110"][0] == pytest.approx(2955.0)
 
-        # Engine: 0040=3455, 0050=-500 (deduction), 0090=-500 (outflow deduction) → 0110=2455
-        assert v_0110 == pytest.approx(2455.0)
-
-    def test_c07_outflow_zero_without_substitution_cols(self) -> None:
-        """Without pre/post CRM columns, outflow defaults to 0."""
+    def test_c07_outflow_reported_without_substitution_cols(self) -> None:
+        """Outflow is the CRM block subtotal, not a detected class migration."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results())
 
         corp = _get_total_row(bundle.c07_00["corporate"])
-        assert corp["0090"][0] == pytest.approx(0.0)
+        assert corp["0090"][0] == pytest.approx(-500.0)
+        assert corp["0100"][0] == pytest.approx(0.0)
 
     def test_c08_guarantee_col_populated(self) -> None:
         """C 08.01 col 0040 shows guaranteed_portion sum — negative per Annex II §1.3."""
@@ -1084,8 +1083,8 @@ class TestCollateralMethodSplit:
 
         # 0070: Simple method not used → 0.0
         assert total["0070"][0] == pytest.approx(0.0)
-        # 0080: Other funded = RE + receivables + other_physical = 30+10+10 = 50; negative per Annex II §1.3
-        assert total["0080"][0] == pytest.approx(-50.0)
+        # 0080: Art. 232 only — RE/receivables/other-physical is Art. 199 IRB-only.
+        assert total["0080"][0] == pytest.approx(0.0)
         # 0120: He = 0 for loans
         assert total["0120"][0] == pytest.approx(0.0)
 
@@ -1110,8 +1109,8 @@ class TestCollateralMethodSplit:
         corp = bundle.c07_00["corporate"]
         total = corp.filter(pl.col("row_ref") == "0010")
 
-        # Engine: 0110=2405, 0130=-150 (negative deduction per Annex II §1.3), 0150=2255
-        assert total["0150"][0] == pytest.approx(2255.0)
+        # Engine: 0040=2955, 0090=-500 → 0110=2455; 0130=-150 → 0150=2305.
+        assert total["0150"][0] == pytest.approx(2305.0)
 
     def test_c08_collateral_type_breakdown(self) -> None:
         """C 08.01 cols 0180/0190/0200/0210 populated from per-type collateral values."""
@@ -1158,7 +1157,10 @@ class TestCollateralMethodSplit:
         assert total["0150"][0] == pytest.approx(500.0)
 
     def test_c08_other_funded_for_irb(self) -> None:
-        """C 08.01 col 0060 = non-financial collateral total."""
+        """C 08.01 col 0060 (Art. 232 substitution route) excludes Art. 199
+        collateral — an LGD mitigant, asserted at cols 0190/0200/0210 by
+        ``test_c08_collateral_type_breakdown`` above (250+50+50 = the 350 this
+        column double-counted). Why: test_c08_dpm_conformance.py."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(
             _irb_results_with_collateral_split(), framework="BASEL_3_1"
@@ -1166,9 +1168,7 @@ class TestCollateralMethodSplit:
         corp = bundle.c08_01["corporate"]
         total = corp.filter(pl.col("row_ref") == "0010")
 
-        # 0060 = RE + receivables + other_physical = (150+100) + (50+0) + (30+20) = 350;
-        # a "(-)"-labelled CRM deduction, stored negative per Annex II §1.3.
-        assert total["0060"][0] == pytest.approx(-350.0)
+        assert total["0060"][0] == pytest.approx(0.0)
 
     def test_no_collateral_class(self) -> None:
         """Columns are 0.0 when no collateral in class (institution has no non-fin)."""
@@ -1476,7 +1476,7 @@ class TestSignConvention:
 
     def test_c07_col_0080_negative_b31(self) -> None:
         """C 07.00 col 0080 (-) other funded credit protection emits -120.0 (B3.1)."""
-        # Arrange — collateral_re_value=120
+        # Arrange — life_ins=120; the fixture's Art. 199 RE=120 must not leak in.
         bundle = self._sa_bundle_b31()
         corp = bundle.c07_00["corporate"]
         total = corp.filter(pl.col("row_ref") == "0010")
@@ -1484,13 +1484,13 @@ class TestSignConvention:
         assert total["0080"][0] == pytest.approx(-120.0)
 
     def test_c07_col_0090_negative_b31(self) -> None:
-        """C 07.00 col 0090 (-) substitution outflows emits -200.0 (B3.1)."""
-        # Arrange — guaranteed_portion=200 migrates to different class → outflow=200
+        """C 07.00 col 0090 (-) substitution outflows emits -395.0 (B3.1)."""
+        # Arrange — outflow subtotal 0050+0060+0070+0080 = 200 + 0 + 75 + 120.
         bundle = self._sa_bundle_b31()
         corp = bundle.c07_00["corporate"]
         total = corp.filter(pl.col("row_ref") == "0010")
         # Act / Assert
-        assert total["0090"][0] == pytest.approx(-200.0)
+        assert total["0090"][0] == pytest.approx(-395.0)
 
     def test_c07_col_0130_negative_b31(self) -> None:
         """C 07.00 col 0130 (-) Cvam collateral adjusted value emits -60.0 (B3.1)."""

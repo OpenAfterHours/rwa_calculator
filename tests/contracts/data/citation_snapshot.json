@@ -10,7 +10,8 @@
   ],
   "rwa_calc.engine.aggregator.aggregator::_add_exposure_class_applied": [
     "CRR Art. 112",
-    "CRR Art. 123"
+    "CRR Art. 123",
+    "CRR Art. 126"
   ],
   "rwa_calc.engine.aggregator.aggregator::_add_post_crm_reporting_approach": [
     "CRR Art. 235"
@@ -642,7 +643,7 @@
   "rwa_calc.reporting.corep.c08::generate_c08_06": [
     "PS1/26, paragraph 1.3"
   ],
-  "rwa_calc.reporting.corep.c08::generate_c08_07": [
+  "rwa_calc.reporting.corep.c08_07::generate_c08_07": [
     "CRR Art. 148",
     "PS1/26, paragraph 1.3"
   ],

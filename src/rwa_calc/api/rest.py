@@ -41,7 +41,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, model_validator
 
 from rwa_calc.api import run_index
-from rwa_calc.api.export import ResultExporter
+from rwa_calc.api.export import ResultExporter, summarise_validation
 from rwa_calc.api.models import ValidationRequest
 from rwa_calc.api.reconciliation import loads_reconciliation_config
 from rwa_calc.api.service import CreditRiskCalc, get_supported_frameworks
@@ -61,6 +61,7 @@ if TYPE_CHECKING:
     )
     from rwa_calc.reporting.corep.generator import COREPTemplateBundle
     from rwa_calc.reporting.pillar3.generator import Pillar3TemplateBundle
+    from rwa_calc.reporting.validations import RuleOutcome
 
 logger = logging.getLogger(__name__)
 
@@ -363,6 +364,65 @@ def template(template_id: str, run_id: str, sheet: str | None = None) -> dict:
         "sheet": view.sheet,
         "columns": [dataclasses.asdict(col) for col in view.columns],
         "rows": frame.to_dicts(),
+    }
+
+
+@router.get("/validations", responses=_RESP_404)
+def supervisory_validations(run_id: str) -> dict:
+    """Answer "can this run be submitted?" against the published validation rules.
+
+    Runs the supervisors' own catalogue (EBA for CRR, BoE for Basel 3.1) over the
+    run's generated COREP estate and returns the verdict. ``is_submittable`` is
+    the headline: false whenever ANY Error-severity rule is broken (one Error
+    break rejects the entire return — every template, not just the one that
+    broke), and equally false when ``was_checked`` is false — an estate nothing
+    ran against also reports zero breaks, so a client must key off
+    ``is_submittable`` and never off an empty ``blocking_breaks`` list.
+
+    ``templates_uncovered`` is reported but does NOT block: an emitted template
+    no rule reached is a real gap and a standing one (the C 34.x stubs), so
+    blocking on it would reject correct returns. Clients should show it.
+
+    ``framework`` is taken from the stored run, not from the caller — it reaches
+    ``load_rules``, which raises on an unrecognised value by design.
+
+    Reuses the cached template bundles (as ``/templates`` does), so asking is
+    cheap once a run's templates have been generated. Broken rules are data, not
+    faults: a blocked submission is a 200 with ``is_submittable`` false, never an
+    error status.
+
+    The passing and vacuous rules are summarised in ``counts`` rather than
+    listed — the payload carries the rules that need a filer's attention.
+    """
+    response = _require_run(run_id)
+    bundles = _require_template_bundles(run_id)
+    result = summarise_validation(bundles.corep, bundles.pillar3, response.framework)
+    return {
+        "run_id": run_id,
+        "framework": result.framework,
+        "publisher": result.publisher,
+        "is_submittable": result.is_submittable,
+        "was_checked": result.was_checked,
+        "is_coverage_complete": result.is_coverage_complete,
+        "coverage_shortfall": result.coverage_shortfall,
+        "headline": result.headline(),
+        "counts": {
+            "rules_loaded": result.rules_loaded,
+            "rules_enforced": result.rules_enforced,
+            "rules_executed": result.rules_executed,
+            "passed": result.passed,
+            "failed": result.failed,
+            "vacuous": result.vacuous,
+            "not_evaluated": result.not_evaluated,
+            "blocking": result.blocking_count,
+            "warning": result.warning_count,
+        },
+        "templates_emitted": list(result.templates_emitted),
+        "templates_uncovered": list(result.templates_uncovered),
+        "blocking_breaks": [_serialize_rule_outcome(o) for o in result.blocking_breaks],
+        "warning_breaks": [_serialize_rule_outcome(o) for o in result.warning_breaks],
+        "not_evaluated_reasons": result.not_evaluated_reasons(),
+        "errors": [dataclasses.asdict(e) for e in result.errors],
     }
 
 
@@ -1172,6 +1232,15 @@ def _serialize_perf(p: PerformanceMetrics | None) -> dict | None:
         "exposure_count": p.exposure_count,
         "exposures_per_second": p.exposures_per_second,
     }
+
+
+def _serialize_rule_outcome(outcome: RuleOutcome) -> dict:
+    """Convert one broken supervisory rule into a JSON-friendly dict.
+
+    ``coordinates`` is a property (the human addresses of the recorded failing
+    cells), so it is stamped on alongside the dataclass fields.
+    """
+    return {**dataclasses.asdict(outcome), "coordinates": list(outcome.coordinates)}
 
 
 def _serialize_validation(v: ValidationResponse) -> dict:

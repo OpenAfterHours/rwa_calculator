@@ -26,12 +26,15 @@ Use this guide to find the right reference file for your question:
 | How are provisions treated (SA vs IRB)? | [references/provisions-and-el.md](references/provisions-and-el.md) |
 | What are the SME/infrastructure supporting factors? | [references/supporting-factors.md](references/supporting-factors.md) |
 | How are exposures classified by entity type? | [references/exposure-classification.md](references/exposure-classification.md) |
+| What must my COREP template tie out to? (EBA validation rules) | [references/reporting-validation-rules.md](references/reporting-validation-rules.md) |
 
 ## External Regulatory Sources
 
 - **PRA Rulebook (CRR firms):** https://www.prarulebook.co.uk/pra-rules/crr-firms
 - **UK CRR (legislation.gov.uk):** https://www.legislation.gov.uk/eur/2013/575/contents
 - **Source PDF:** `docs/assets/crr.pdf` — use to verify specific articles against the authoritative text
+- **EBA reporting frameworks (validation rules):** https://www.eba.europa.eu/risk-and-data-analysis/reporting/reporting-frameworks
+- **EBA validation rules workbook (up to 3.5, 2026-06-10):** https://www.eba.europa.eu/sites/default/files/2026-06/12d2a6ae-9f58-47ab-a684-cdc9924ed4aa/%28up%20to%203.5%29%20EBA_validation_rules_2026-06-10.xlsx — raw at `docs/assets/eba-validation-rules.xlsx` (gitignored; `uv run python scripts/download_docs.py`), extract at `src/rwa_calc/reporting/validations/rules/crr-eba-v3.0-credit-risk.json`
 
 ## Project Specification Files
 

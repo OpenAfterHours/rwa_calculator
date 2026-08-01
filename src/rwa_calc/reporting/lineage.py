@@ -67,14 +67,13 @@ from rwa_calc.reporting.corep.c08 import (
     c08_04_plans,
     c08_05_plans,
     c08_06_plans,
-    c08_07_frames,
-    c08_07_plans,
     generate_c08_01,
     generate_c08_02,
     generate_c08_03,
     generate_c08_05,
     generate_c08_06,
 )
+from rwa_calc.reporting.corep.c08_07 import c08_07_frames, c08_07_plans
 from rwa_calc.reporting.corep.c09 import (
     c09_01_plans,
     c09_02_plans,

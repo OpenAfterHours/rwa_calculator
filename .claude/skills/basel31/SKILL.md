@@ -37,6 +37,7 @@ framework shifts emphasis from risk sensitivity to comparability and floors.
 | What changed in CRM (haircuts, methods)? | [references/crm-changes.md](references/crm-changes.md) |
 | What changed in slotting risk weights? | [references/slotting-changes.md](references/slotting-changes.md) |
 | What changed in reporting templates? | [references/reporting-changes.md](references/reporting-changes.md) |
+| What must my OF template tie out to? (BoE validation rules) | [references/reporting-validation-rules.md](references/reporting-validation-rules.md) |
 
 ## External Regulatory Sources
 
@@ -44,6 +45,8 @@ framework shifts emphasis from risk sensitivity to comparability and floors.
 - **PRA PS1/26 Appendix 1 (full rules):** https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/policy-statement/2026/january/ps126app1.pdf
 - **BCBS CRE Standards:** https://www.bis.org/basel_framework/standard/CRE.htm
 - **Source PDFs:** `docs/assets/ps126app1.pdf` (full rules), `docs/assets/comparison-of-the-final-rules.pdf` (delta summary) — use to verify specific articles against the authoritative text
+- **BoE regulatory reporting (banking sector):** https://www.bankofengland.co.uk/prudential-regulation/regulatory-reporting/regulatory-reporting-banking-sector
+- **BoE banking XBRL taxonomy validations v4.0.0:** https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/regulatory-reporting/banking/2026/february/boebankingtaxonomyvalidationsv400.zip — raw at `docs/assets/boe-banking-taxonomy-validations-v4.0.0.zip` (gitignored; `uv run python scripts/download_docs.py`), extract at `src/rwa_calc/reporting/validations/rules/basel31-boe-v4.0.0-credit-risk.json`
 
 ## Project Specification & Comparison Files
 

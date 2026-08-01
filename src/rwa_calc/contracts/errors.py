@@ -294,6 +294,27 @@ ERROR_RECON_METHOD_UNRESOLVED = "REC007"
 # specific tie is carried on the finding's field_name.
 ERROR_CROSS_TEMPLATE_INCONSISTENCY = "TIE001"
 
+# Published supervisory validation-rule codes (reporting.validations). These are
+# the SUPERVISOR's own arithmetic checks on the submitted return, not in-house
+# ones: the EBA DPM rules for COREP under CRR and the BoE banking taxonomy rules
+# under PS1/26. As with TIE001 the broken rule id is carried on the finding's
+# field_name and both figures in the message (one code per failure mode, not one
+# per rule).
+#
+# VAL001 is a BLOCKING defect in the filing: an Error-severity rule break means
+# the supervisor rejects the entire return, so it is not a quality nit.
+ERROR_VALIDATION_RULE_ERROR = "VAL001"
+# VAL002 is a Warning-severity break: the return is accepted, but the firm is
+# expected to explain or correct the flagged figure.
+ERROR_VALIDATION_RULE_WARNING = "VAL002"
+# VAL003 says the estate was not checked well enough for the ABSENCE of VAL001 /
+# VAL002 to mean anything: either no rule executed at all, or an emitted template
+# had no rule executed against it. Without it the natural gate
+# ``if not check_supervisory_validations(...): submit()`` fails OPEN — an
+# unreadable estate yields zero breaks and looks identical to a clean one. Error
+# severity because it blocks a submission DECISION, not because a figure is wrong.
+ERROR_VALIDATION_COVERAGE_INSUFFICIENT = "VAL003"
+
 
 # =============================================================================
 # ERROR FACTORY FUNCTIONS

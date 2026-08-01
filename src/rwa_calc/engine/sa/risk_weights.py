@@ -525,13 +525,21 @@ def _eca_meip_rw_expr() -> pl.Expr:
 # ---------------------------------------------------------------------------
 
 
-def _is_commercial_re_class(uc: pl.Expr) -> pl.Expr:
+def is_commercial_re_class(uc: pl.Expr) -> pl.Expr:
     """Match commercial real-estate exposures by class string or property_type.
 
     Used by the SA RE dispatchers and the Art. 127(3) defaulted-RESI rule
     to route ahead of the residential branch — ``COMMERCIAL_MORTGAGE``
     contains the ``MORTGAGE`` substring, so the residential dispatch
     would otherwise grab it.
+
+    The ``property_type == "commercial"`` limb is why an exposure can take the
+    Art. 126 / Art. 124H-124I commercial risk weight while its routing
+    ``exposure_class`` still says ``corporate``. PUBLIC because the aggregator's
+    applied-class overlay (``_add_exposure_class_applied``) reuses this exact
+    predicate to put such an exposure in Art. 112(1)(i) for reporting: sharing
+    one expression is what keeps the reported class and the applied risk weight
+    from drifting apart.
     """
     return (
         uc.str.contains("COMMERCIAL", literal=True)
@@ -598,7 +606,7 @@ def _b31_append_retail_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
 def _b31_append_real_estate_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
     """Append Basel 3.1 real-estate branches (ADC / other-RE / CRE / resi)."""
     is_re_class = (
-        _is_commercial_re_class(uc)
+        is_commercial_re_class(uc)
         | _is_residential_re_class(uc)
         | (pl.col("property_type").fill_null("").is_in(["residential", "commercial"]))
     )
@@ -610,8 +618,8 @@ def _b31_append_real_estate_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThe
         # Null is_qualifying_re defaults to qualifying — backward compatible.
         .when(is_non_qualifying & is_re_class)
         .then(b31_other_re_rw_expr("_cqs_risk_weight"))
-        # Commercial RE must precede residential — see _is_commercial_re_class.
-        .when(_is_commercial_re_class(uc))
+        # Commercial RE must precede residential — see is_commercial_re_class.
+        .when(is_commercial_re_class(uc))
         .then(b31_commercial_rw_expr("_cqs_risk_weight"))
         .when(_is_residential_re_class(uc))
         .then(b31_residential_rw_expr("_cqs_risk_weight"))
@@ -777,9 +785,9 @@ def _crr_append_real_estate_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThe
         pl.lit(float(CORPORATE_RISK_WEIGHTS[CQS.UNRATED])),
     )
     return (
-        # Commercial RE must precede residential — see _is_commercial_re_class.
+        # Commercial RE must precede residential — see is_commercial_re_class.
         # CRR Art. 126: LTV + income cover.
-        chain.when(_is_commercial_re_class(uc))
+        chain.when(is_commercial_re_class(uc))
         .then(
             pl.when(pl.col("has_income_cover").fill_null(False))
             .then(
@@ -1549,7 +1557,7 @@ def _crr_defaulted_re_secured_share(upper_class: pl.Expr) -> pl.Expr:
     the flag's meaning.
     """
     ltv = pl.col("ltv")
-    is_rre_only = _is_residential_re_class(upper_class) & ~_is_commercial_re_class(upper_class)
+    is_rre_only = _is_residential_re_class(upper_class) & ~is_commercial_re_class(upper_class)
     return (
         pl.when(is_rre_only & ltv.is_not_null() & (ltv > 0.0))
         .then(pl.min_horizontal(pl.lit(1.0), pl.lit(_SA_CRR_RW["resi_ltv_threshold"]) / ltv))
@@ -1615,7 +1623,7 @@ def _apply_defaulted_risk_weight(
         # B31 RESI RE non-income-dependent: 100% flat (Art. 127(3) / CRE20.88).
         is_resi_re_non_income = (
             _is_residential_re_class(_uc)
-            & ~_is_commercial_re_class(_uc)
+            & ~is_commercial_re_class(_uc)
             & ~pl.col("has_income_cover").fill_null(False)
         )
 

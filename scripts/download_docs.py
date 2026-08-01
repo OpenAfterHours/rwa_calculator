@@ -2,9 +2,10 @@
 """
 Download regulatory reference documents to docs/assets/.
 
-Downloads PRA PS1/26, CRR, and EBA template documents needed for
-development. Files with known direct URLs are fetched automatically;
-remaining files are listed with manual download instructions.
+Downloads PRA PS1/26, CRR, EBA template and reporting validation-rule
+documents needed for development. Files with known direct URLs are fetched
+automatically; remaining files are listed with manual download instructions.
+An archive entry may also name a member to extract after download.
 
 Usage:
     python scripts/download_docs.py
@@ -19,6 +20,7 @@ import argparse
 import sys
 import urllib.error
 import urllib.request
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -34,15 +36,30 @@ PRA_RULEBOOK = "https://www.prarulebook.co.uk/pra-rules/crr-firms"
 
 BOE_CRR_BASE = "https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/policy-statement/2023/november/"
 
+BOE_REPORTING_LANDING = "https://www.bankofengland.co.uk/prudential-regulation/regulatory-reporting/regulatory-reporting-banking-sector"
+EBA_REPORTING_LANDING = (
+    "https://www.eba.europa.eu/risk-and-data-analysis/reporting/reporting-frameworks"
+)
+
+# Download outcomes after which a post-download extraction step still applies.
+# A "manual" or "failed" entry has no usable archive on disk.
+EXTRACTABLE_STATUSES = frozenset({"downloaded", "skipped", "dry-run"})
+
 
 @dataclass(frozen=True)
 class DocEntry:
-    """A regulatory document to download or acquire manually."""
+    """A regulatory document to download or acquire manually.
+
+    Setting ``extract_member`` marks the download as an archive: after it is
+    fetched (or found already present), that member is extracted alongside it.
+    """
 
     filename: str
     description: str
     url: str | None  # None = manual download required
     source: str  # Landing page or source description for manual downloads
+    extract_member: str | None = None  # Archive member to extract post-download
+    extract_as: str | None = None  # Extracted filename (defaults to the member's own name)
 
 
 # ── Manifest ─────────────────────────────────────────────────────────────────
@@ -130,6 +147,27 @@ MANIFEST: list[DocEntry] = [
         url="https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/regulatory-reporting/banking/pillar3-specialised-lending-instructions.pdf",
         source=PRA_RULEBOOK,
     ),
+    # --- Reporting validation rules ---
+    DocEntry(
+        filename="eba-validation-rules.xlsx",
+        description=(
+            "EBA validation rules for COREP/FINREP "
+            "(all framework versions; sheet 'v3.0(3.0.1)' = current CRR)"
+        ),
+        url="https://www.eba.europa.eu/sites/default/files/2026-06/12d2a6ae-9f58-47ab-a684-cdc9924ed4aa/%28up%20to%203.5%29%20EBA_validation_rules_2026-06-10.xlsx",
+        source=EBA_REPORTING_LANDING,
+    ),
+    DocEntry(
+        filename="boe-banking-taxonomy-validations-v4.0.0.zip",
+        description=(
+            "BoE banking XBRL taxonomy validation rules v4.0.0 "
+            "(Banking reporting module — contains the OF credit-risk tables)"
+        ),
+        url="https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/regulatory-reporting/banking/2026/february/boebankingtaxonomyvalidationsv400.zip",
+        source=BOE_REPORTING_LANDING,
+        extract_member="Bank of England Banking Taxonomy Validations Banking reporting v4.0.0.xlsx",
+        extract_as="boe-validation-rules-banking-reporting-v4.0.0.xlsx",
+    ),
     # --- Reporting templates (manual download) ---
     # DocEntry(
     #     filename="0F07 - annex-i-of-07-00-credit-risk-sa-reporting-template.xlsx",
@@ -202,73 +240,24 @@ def download_documents(
     force: bool = False,
     dry_run: bool = False,
 ) -> list[dict[str, str | int]]:
-    """Iterate the manifest and download files with known URLs.
+    """Iterate the manifest, download files with known URLs and extract archives.
 
     Returns a list of result dicts with keys: filename, status, detail, bytes.
+    An archive entry yields two results: one for the archive, one for the
+    member extracted from it.
     """
     results: list[dict[str, str | int]] = []
 
     for entry in manifest:
-        dest = assets_dir / entry.filename
+        archive = assets_dir / entry.filename
+        result = _acquire(entry, archive, force=force, dry_run=dry_run)
+        results.append(result)
 
-        if entry.url is None:
-            results.append(
-                {
-                    "filename": entry.filename,
-                    "status": "manual",
-                    "detail": entry.source,
-                    "bytes": 0,
-                }
-            )
+        if entry.extract_member is None or result["status"] not in EXTRACTABLE_STATUSES:
             continue
 
-        if dest.exists() and not force:
-            size = dest.stat().st_size
-            print(f"  skip     {entry.filename} (already exists, {_fmt_size(size)})")
-            results.append(
-                {
-                    "filename": entry.filename,
-                    "status": "skipped",
-                    "detail": "already exists",
-                    "bytes": size,
-                }
-            )
-            continue
-
-        if dry_run:
-            print(f"  would download  {entry.filename}")
-            results.append(
-                {
-                    "filename": entry.filename,
-                    "status": "dry-run",
-                    "detail": entry.url,
-                    "bytes": 0,
-                }
-            )
-            continue
-
-        print(f"  fetch    {entry.filename} ...", end=" ", flush=True)
-        try:
-            nbytes = _download_file(entry.url, dest)
-            print(f"done ({_fmt_size(nbytes)})")
-            results.append(
-                {
-                    "filename": entry.filename,
-                    "status": "downloaded",
-                    "detail": "ok",
-                    "bytes": nbytes,
-                }
-            )
-        except (urllib.error.URLError, urllib.error.HTTPError, OSError) as exc:
-            print(f"FAILED ({exc})")
-            results.append(
-                {
-                    "filename": entry.filename,
-                    "status": "failed",
-                    "detail": str(exc),
-                    "bytes": 0,
-                }
-            )
+        dest = assets_dir / (entry.extract_as or Path(entry.extract_member).name)
+        results.append(_extract(archive, entry.extract_member, dest, force=force, dry_run=dry_run))
 
     return results
 
@@ -276,22 +265,26 @@ def download_documents(
 def print_summary(results: list[dict[str, str | int]]) -> None:
     """Print a summary of download results and manual download instructions."""
     downloaded = [r for r in results if r["status"] == "downloaded"]
+    extracted = [r for r in results if r["status"] == "extracted"]
     skipped = [r for r in results if r["status"] == "skipped"]
     failed = [r for r in results if r["status"] == "failed"]
     manual = [r for r in results if r["status"] == "manual"]
     dry_run = [r for r in results if r["status"] == "dry-run"]
 
     total_bytes = sum(int(r["bytes"]) for r in downloaded)
+    extracted_bytes = sum(int(r["bytes"]) for r in extracted)
 
     print()
     print("Download Summary")
     print("=" * 50)
     if downloaded:
         print(f"  Downloaded:  {len(downloaded)} files ({_fmt_size(total_bytes)})")
+    if extracted:
+        print(f"  Extracted:   {len(extracted)} files ({_fmt_size(extracted_bytes)})")
     if skipped:
-        print(f"  Skipped:     {len(skipped)} files (already exist)")
+        print(f"  Skipped:     {len(skipped)} files (already present)")
     if dry_run:
-        print(f"  Dry run:     {len(dry_run)} files (would download)")
+        print(f"  Dry run:     {len(dry_run)} files (would download or extract)")
     if failed:
         print(f"  Failed:      {len(failed)} files")
     if manual:
@@ -299,7 +292,7 @@ def print_summary(results: list[dict[str, str | int]]) -> None:
 
     if failed:
         print()
-        print("Failed downloads:")
+        print("Failures:")
         for r in failed:
             print(f"  - {r['filename']}: {r['detail']}")
 
@@ -308,6 +301,116 @@ def print_summary(results: list[dict[str, str | int]]) -> None:
 
 
 # ── Private helpers ──────────────────────────────────────────────────────────
+
+
+def _acquire(
+    entry: DocEntry,
+    dest: Path,
+    *,
+    force: bool,
+    dry_run: bool,
+) -> dict[str, str | int]:
+    """Fetch one manifest entry to ``dest``. Returns a result dict, never raises."""
+    if entry.url is None:
+        return {
+            "filename": entry.filename,
+            "status": "manual",
+            "detail": entry.source,
+            "bytes": 0,
+        }
+
+    if dest.exists() and not force:
+        size = dest.stat().st_size
+        print(f"  skip     {entry.filename} (already exists, {_fmt_size(size)})")
+        return {
+            "filename": entry.filename,
+            "status": "skipped",
+            "detail": "already exists",
+            "bytes": size,
+        }
+
+    if dry_run:
+        print(f"  would download  {entry.filename}")
+        return {
+            "filename": entry.filename,
+            "status": "dry-run",
+            "detail": entry.url,
+            "bytes": 0,
+        }
+
+    print(f"  fetch    {entry.filename} ...", end=" ", flush=True)
+    try:
+        nbytes = _download_file(entry.url, dest)
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError) as exc:
+        print(f"FAILED ({exc})")
+        return {
+            "filename": entry.filename,
+            "status": "failed",
+            "detail": str(exc),
+            "bytes": 0,
+        }
+
+    print(f"done ({_fmt_size(nbytes)})")
+    return {
+        "filename": entry.filename,
+        "status": "downloaded",
+        "detail": "ok",
+        "bytes": nbytes,
+    }
+
+
+def _extract(
+    archive: Path,
+    member: str,
+    dest: Path,
+    *,
+    force: bool,
+    dry_run: bool,
+) -> dict[str, str | int]:
+    """Extract one member of ``archive`` to ``dest``. Returns a result dict, never raises.
+
+    A missing archive, a missing member or an unreadable zip is reported as a
+    "failed" result so it flows into print_summary and the main() exit code.
+    """
+    if dest.exists() and not force:
+        size = dest.stat().st_size
+        print(f"  skip     {dest.name} (already extracted, {_fmt_size(size)})")
+        return {
+            "filename": dest.name,
+            "status": "skipped",
+            "detail": "already extracted",
+            "bytes": size,
+        }
+
+    if dry_run:
+        print(f"  would extract   {dest.name} from {archive.name}")
+        return {
+            "filename": dest.name,
+            "status": "dry-run",
+            "detail": f"{archive.name} :: {member}",
+            "bytes": 0,
+        }
+
+    print(f"  extract  {dest.name} ...", end=" ", flush=True)
+    try:
+        with zipfile.ZipFile(archive) as bundle:
+            data = bundle.read(member)
+        dest.write_bytes(data)
+    except KeyError:
+        detail = f"member not found in {archive.name}: {member}"
+        print(f"FAILED ({detail})")
+        return {"filename": dest.name, "status": "failed", "detail": detail, "bytes": 0}
+    except (zipfile.BadZipFile, OSError) as exc:
+        print(f"FAILED ({exc})")
+        return {"filename": dest.name, "status": "failed", "detail": str(exc), "bytes": 0}
+
+    print(f"done ({_fmt_size(len(data))})")
+    return {
+        "filename": dest.name,
+        "status": "extracted",
+        "detail": f"from {archive.name}",
+        "bytes": len(data),
+    }
 
 
 def _print_manual_instructions(manual: list[dict[str, str | int]]) -> None:
@@ -362,6 +465,9 @@ def _print_manifest() -> None:
         for entry in auto:
             print(f"  {entry.filename}")
             print(f"    {entry.description}")
+            if entry.extract_member is not None:
+                extracted = entry.extract_as or Path(entry.extract_member).name
+                print(f"    -> extracts {extracted}")
 
     if manual:
         print(f"\nManual download ({len(manual)}):")

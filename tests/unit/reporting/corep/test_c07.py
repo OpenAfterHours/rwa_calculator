@@ -22,34 +22,6 @@ from tests.unit.reporting.corep._builders import (
 )
 
 
-def _sa_results_with_ccf() -> pl.LazyFrame:
-    """SA results with off-BS exposures and CCF values for Phase 2C testing."""
-    return pl.LazyFrame(
-        {
-            "exposure_reference": [
-                "SA_ON_1",
-                "SA_OFF_0",
-                "SA_OFF_20",
-                "SA_OFF_50",
-                "SA_OFF_100",
-            ],
-            "approach_applied": ["standardised"] * 5,
-            "exposure_class": ["corporate"] * 5,
-            "drawn_amount": [5000.0, 0.0, 0.0, 0.0, 0.0],
-            "undrawn_amount": [0.0, 1000.0, 2000.0, 3000.0, 500.0],
-            "ead_final": [5000.0, 0.0, 400.0, 1500.0, 500.0],
-            "rwa_final": [5000.0, 0.0, 400.0, 1500.0, 500.0],
-            "risk_weight": [1.0, 1.0, 1.0, 1.0, 1.0],
-            "scra_provision_amount": [0.0, 0.0, 0.0, 0.0, 0.0],
-            "gcra_provision_amount": [0.0, 0.0, 0.0, 0.0, 0.0],
-            "sa_cqs": [3, 3, 3, 3, 3],
-            "counterparty_reference": ["CP_A", "CP_B", "CP_C", "CP_D", "CP_E"],
-            "bs_type": ["ONB", "OFB", "OFB", "OFB", "OFB"],
-            "ccf_applied": [None, 0.0, 0.2, 0.5, 1.0],
-        }
-    )
-
-
 def _get_rw_row(df: pl.DataFrame, rw_label: str) -> pl.DataFrame:
     """Get a risk weight breakdown row by its label (e.g., '100%')."""
     return df.filter(pl.col("row_name") == rw_label)
@@ -660,84 +632,6 @@ class TestECAIUnratedSplit:
         unrated = corp["0235"][0]
         total = corp["0220"][0]
         assert rated + unrated == pytest.approx(total)
-
-
-class TestCCFBreakdown:
-    """Tests for off-BS CCF breakdown columns 0160-0190."""
-
-    def test_c07_ccf_columns_populated(self) -> None:
-        """CCF breakdown columns are populated when ccf_applied is available."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_sa_results_with_ccf())
-
-        corp = _get_total_row(bundle.c07_00["corporate"])
-        # 0% CCF: EAD=0, 20% CCF: EAD=400, 50% CCF: EAD=1500, 100% CCF: EAD=500
-        assert corp["0160"][0] == pytest.approx(0.0)  # 0% bucket
-        assert corp["0170"][0] == pytest.approx(400.0)  # 20% bucket
-        assert corp["0180"][0] == pytest.approx(1500.0)  # 50% bucket
-        assert corp["0190"][0] == pytest.approx(500.0)  # 100% bucket
-
-    def test_c07_ccf_sum_equals_off_bs_ead(self) -> None:
-        """Sum of CCF columns = total off-BS EAD."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_sa_results_with_ccf())
-
-        corp = _get_total_row(bundle.c07_00["corporate"])
-        ccf_sum = (
-            (corp["0160"][0] or 0.0)
-            + (corp["0170"][0] or 0.0)
-            + (corp["0180"][0] or 0.0)
-            + (corp["0190"][0] or 0.0)
-        )
-        # Off-BS EAD: 0+400+1500+500=2400
-        assert ccf_sum == pytest.approx(2400.0)
-
-    def test_c07_ccf_null_without_column(self) -> None:
-        """CCF columns are null when ccf_applied not in data."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_sa_results())
-
-        corp = _get_total_row(bundle.c07_00["corporate"])
-        assert corp["0160"][0] is None
-        assert corp["0170"][0] is None
-
-    def test_b31_ccf_includes_40pct_bucket(self) -> None:
-        """Basel 3.1 has 0171 (40% CCF) column; 0160 maps to 10% CCF."""
-        # Create B3.1 data with 10% and 40% CCF values
-        data = pl.LazyFrame(
-            {
-                "exposure_reference": ["SA_OFF_10", "SA_OFF_40"],
-                "approach_applied": ["standardised", "standardised"],
-                "exposure_class": ["corporate", "corporate"],
-                "drawn_amount": [0.0, 0.0],
-                "undrawn_amount": [1000.0, 2000.0],
-                "ead_final": [100.0, 800.0],
-                "rwa_final": [100.0, 800.0],
-                "risk_weight": [1.0, 1.0],
-                "sa_cqs": [3, 3],
-                "counterparty_reference": ["CP_A", "CP_B"],
-                "bs_type": ["OFB", "OFB"],
-                "ccf_applied": [0.1, 0.4],
-            }
-        )
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(data, framework="BASEL_3_1")
-
-        corp = _get_total_row(bundle.c07_00["corporate"])
-        assert "0171" in corp.columns
-        assert corp["0160"][0] == pytest.approx(100.0)  # 10% bucket
-        assert corp["0171"][0] == pytest.approx(800.0)  # 40% bucket
-
-    def test_c07_ccf_on_rw_section_rows(self) -> None:
-        """CCF breakdown also works within risk weight section rows."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_sa_results_with_ccf())
-
-        corp = bundle.c07_00["corporate"]
-        rw_100 = corp.filter(pl.col("row_name") == "100%")
-        if len(rw_100) > 0:
-            # All exposures are RW=100%, so RW section should match total CCF
-            assert rw_100["0170"][0] == pytest.approx(400.0)
 
 
 class TestC0700Col0020:

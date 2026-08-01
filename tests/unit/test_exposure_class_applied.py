@@ -1,21 +1,27 @@
 """Unit tests for the applied reporting class (``exposure_class_applied``).
 
 The routing ``exposure_class`` records origination + guarantee substitution but
-not two SA-only applied-treatment movements, so the reconciliation and COREP
+not three SA-only applied-treatment movements, so the reconciliation and COREP
 class dimensions previously mis-bucketed those rows (RWA is correct; only the
 class label was wrong):
 
 - SME managed as retail took the 75% retail RW but stayed ``corporate_sme``.
 - Defaulted SA exposures kept their origination class instead of routing to the
   "Exposures in default" class (CRR Art. 112(1)(j)).
+- Exposures secured by a mortgage on commercial immovable property took the
+  Art. 126 / Art. 124H-124I commercial risk weight — which the SA dispatcher
+  routes off ``property_type``, not off the class — but stayed ``corporate`` /
+  ``retail_other`` instead of moving to Art. 112(1)(i).
 
-The aggregator now derives ``exposure_class_applied`` so both are reported under
-the class that matches the applied risk weight. IRB / slotting / equity rows keep
-``exposure_class`` untouched.
+The aggregator now derives ``exposure_class_applied`` so all three are reported
+under the class that matches the applied risk weight. IRB / slotting / equity
+rows keep ``exposure_class`` untouched.
 
 References:
 - CRR Art. 112(1)(j) / Art. 127: exposures in default
 - CRR Art. 123 / PS1/26 Art. 123A: SME retail treatment
+- CRR Art. 112(1)(i) / Art. 126; PS1/26 Art. 112(2) Table A2 row (7),
+  Art. 124H-124I: real estate outranks corporates and retail
 """
 
 from __future__ import annotations
@@ -46,6 +52,7 @@ def _applied(rows: list[dict[str, object]]) -> list[str | None]:
             "is_defaulted": pl.Boolean,
             "cp_is_managed_as_retail": pl.Boolean,
             "qualifies_as_retail": pl.Boolean,
+            "property_type": pl.String,
         },
     )
     return _add_exposure_class_applied(lf).collect()["exposure_class_applied"].to_list()
@@ -58,6 +65,7 @@ def _row(
     defaulted: bool = False,
     managed_as_retail: bool = False,
     qualifies: bool = False,
+    property_type: str | None = None,
 ) -> dict[str, object]:
     return {
         "approach_applied": approach,
@@ -65,6 +73,7 @@ def _row(
         "is_defaulted": defaulted,
         "cp_is_managed_as_retail": managed_as_retail,
         "qualifies_as_retail": qualifies,
+        "property_type": property_type,
     }
 
 
@@ -106,6 +115,62 @@ class TestAddExposureClassApplied:
     def test_performing_corporate_unchanged(self) -> None:
         """A plain performing corporate keeps its origination class."""
         result = _applied([_row(ec="corporate")])
+        assert result[0] == ExposureClass.CORPORATE.value
+
+    def test_commercial_property_corporate_becomes_commercial_mortgage(self) -> None:
+        """A corporate secured on commercial property reports in Art. 112(1)(i).
+
+        This is the whole point: the SA dispatcher gives such an exposure the
+        Art. 126 / Art. 124H-124I commercial risk weight off ``property_type``
+        while ``exposure_class`` still says corporate, so the reported class has
+        to follow the treatment.
+        """
+        result = _applied([_row(ec="corporate", property_type="commercial")])
+        assert result[0] == ExposureClass.COMMERCIAL_MORTGAGE.value
+
+    def test_commercial_property_retail_becomes_commercial_mortgage(self) -> None:
+        """Real estate outranks retail too (Table A2 row (7) vs (14))."""
+        result = _applied([_row(ec="retail_other", property_type="commercial")])
+        assert result[0] == ExposureClass.COMMERCIAL_MORTGAGE.value
+
+    def test_residential_property_corporate_unchanged(self) -> None:
+        """Residential property alone does NOT re-class a corporate.
+
+        ``_is_residential_re_class`` has no ``property_type`` limb, so such a row
+        keeps the counterparty risk weight — re-classing it would put it in a
+        class its risk weight does not come from.
+        """
+        result = _applied([_row(ec="corporate", property_type="residential")])
+        assert result[0] == ExposureClass.CORPORATE.value
+
+    def test_defaulted_wins_over_commercial_real_estate(self) -> None:
+        """Default outranks real estate (Table A2 row (5) vs (7))."""
+        result = _applied([_row(ec="corporate", defaulted=True, property_type="commercial")])
+        assert result[0] == ExposureClass.DEFAULTED.value
+
+    @pytest.mark.parametrize(
+        "exposure_class",
+        [
+            ExposureClass.HIGH_RISK.value,
+            ExposureClass.EQUITY.value,
+            ExposureClass.COVERED_BOND.value,
+        ],
+    )
+    def test_classes_outranking_real_estate_keep_their_class(self, exposure_class: str) -> None:
+        """High risk / equity / covered bonds sit above real estate in both rankings."""
+        result = _applied([_row(ec=exposure_class, property_type="commercial")])
+        assert result[0] == exposure_class
+
+    def test_retail_mortgage_keeps_its_class(self) -> None:
+        """A row already in a real-estate class is left alone — it is already in (i)."""
+        result = _applied([_row(ec="retail_mortgage", property_type="commercial")])
+        assert result[0] == ExposureClass.RETAIL_MORTGAGE.value
+
+    def test_irb_commercial_property_keeps_exposure_class(self) -> None:
+        """The overlay is SA-only; IRB keeps its own class taxonomy."""
+        result = _applied(
+            [_row(approach="foundation_irb", ec="corporate", property_type="commercial")]
+        )
         assert result[0] == ExposureClass.CORPORATE.value
 
     def test_irb_defaulted_keeps_exposure_class(self) -> None:
@@ -155,6 +220,7 @@ def _applied_with_guarantee(rows: list[dict[str, object]]) -> list[str | None]:
             "is_defaulted": pl.Boolean,
             "cp_is_managed_as_retail": pl.Boolean,
             "qualifies_as_retail": pl.Boolean,
+            "property_type": pl.String,
             "is_guaranteed": pl.Boolean,
         },
     )
@@ -230,6 +296,7 @@ def _post_crm(rows: list[dict[str, object]]) -> list[str | None]:
             "is_defaulted": pl.Boolean,
             "cp_is_managed_as_retail": pl.Boolean,
             "qualifies_as_retail": pl.Boolean,
+            "property_type": pl.String,
             "is_guaranteed": pl.Boolean,
             "post_crm_exposure_class_guaranteed": pl.String,
         },

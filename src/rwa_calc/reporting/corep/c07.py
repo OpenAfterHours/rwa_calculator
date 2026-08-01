@@ -32,18 +32,32 @@ docs/plans/phase7-declarative-reporting.md §6):
   Row 0130 (contractual cross-product netting sets, Art. 295(c)) is inert
   because it is NOT MODELLED — no input carrier exists for a cross-product
   netting agreement. See ``docs/plans/c07-ccr-derivatives.md``.
-- Substitution outflow (col 0090) sums the guaranteed portions migrating
-  OUT of each row subset (``guaranteed_portion > 0`` and the pre-CRM class
-  differs from the guarantor class — the raw-twin semantics preserved
-  verbatim; the two-leg-ledger equivalence is pinned at the aggregator
-  layer by ``test_substitution_flows_reconstruct_by_grouping``).
-  Substitution inflow (col 0100) is a CROSS-SHEET number — precomputed
-  over the whole population per destination class and threaded to the
-  total row 0010 via the ``ReportingContext.substitution_inflow`` side
-  input (the out-of-frame escape; sub-rows report 0.0).
+- The CRM substitution block (cols 0050-0090) reports ONLY what Annex II
+  admits there — see ``_protection_exprs``. Cols 0050/0060 are the eligible
+  unfunded protection (guarantees / credit derivatives), col 0070 the
+  financial collateral incorporated under the Simple Method, col 0080 the
+  Art. 232 "other funded credit protection" (Art. 200(1)(a)/(b)/(c)). SA
+  immovable-property, receivables and other-physical collateral are
+  DELIBERATELY ABSENT: Art. 199 makes them eligible under the IRB Approach
+  only, and under SA the mortgage benefit arrives through the exposure class
+  and its Art. 124-126 risk weight, so reporting them here would double-count
+  it. The whole block is capped at the row's own exposure ("Collateral that
+  has an effect on the exposure value ... shall be capped at the exposure
+  value"), which is what keeps col 0110 non-negative.
+- Substitution outflow (col 0090) is the Annex II subtotal of that block,
+  0050 + 0060 + 0070 + 0080 — the covered part of each exposure that leaves
+  the obligor's class for the protection provider's (rules ``v0305_m`` /
+  ``boe_b0694``). Substitution inflow (col 0100) is a CROSS-SHEET number —
+  precomputed over the whole population per destination class from the
+  guarantee migrations and threaded to the total row 0010 via the
+  ``ReportingContext.substitution_inflow`` side input (the out-of-frame
+  escape; sub-rows report 0.0). The inflow mirror of the FUNDED limbs (0070 /
+  0080) is not modelled: no collateral-issuer exposure class is carried.
 - The intra-row waterfalls are Formulas over positive magnitudes:
-  0040 = 0010 - 0030 (- 0035 under Basel 3.1); 0110 = 0040 - 0050 - 0060
-  - 0070 - 0080 - 0090 + 0100; 0150 = max(0, 0110 - 0130). The COREP
+  0040 = 0010 - 0030 (- 0035 under Basel 3.1); 0090 = 0050 + 0060 + 0070
+  + 0080; 0110 = 0040 - 0090 + 0100; 0150 = max(0, 0110 - 0130). 0110
+  subtracts the components ONCE, through the 0090 subtotal — subtracting
+  both the components and 0090 double-counts the outflow. The COREP
   Annex II §1.3 "(-)" sign convention is applied by a module post-step
   AFTER execution (negating {0030, 0035, 0050, 0060, 0070, 0080, 0090,
   0130, 0140} plus the CRR supporting-factor adjustments {0216, 0217};
@@ -60,16 +74,33 @@ docs/plans/phase7-declarative-reporting.md §6):
   carrier is sealed; the CCF buckets and supporting-factor adjustments
   when their carriers are absent), preserving the recorded structural-null
   cells.
+- The CCF buckets (0160-0190) are a breakdown of the **fully adjusted
+  exposure value of off-balance-sheet items** — Annex II heads that block
+  "BREAKDOWN OF THE FULLY ADJUSTED EXPOSURE VALUE OF OFF-BALANCE SHEET
+  ITEMS BY CONVERSION FACTORS". They therefore sum the PRE-conversion
+  off-balance-sheet gross (``reporting_gross_off_bs`` — the same carrier
+  col 0010 sums on the off-side, so 0150 decomposes into them by
+  construction), narrowed to the off-balance-sheet side, NOT the
+  post-conversion ``ead_final``. Col 0200 is what survives conversion, and
+  the two are related by the supervisory identity ``boe_b0471``:
+  ``{c0200} = {c0150} - 0.9*{c0160} - 0.8*{c0170} - 0.6*{c0171}
+  - 0.5*{c0180}``. Summing EAD here would break that rule, ``v6364_m``
+  (``{c0150} = {c0160}+{c0170}+{c0180}+{c0190}`` on row 0080) and the EBA
+  equivalents ``v1659_m`` / ``v1661_m`` simultaneously.
 
 References:
 - CRR Art. 111-113 (SA exposure values / RWEA); Art. 501/501a
-  (supporting factors); COREP Annex II C 07.00 ¶40-43/¶56/¶56A (class
-  assignment + substitution); PRA PS1/26 Annex II/App. 17 (OF 07.00)
+  (supporting factors); Art. 199 (collateral eligible under IRB only),
+  Art. 200/232 (other funded credit protection), Art. 222 (FCSM),
+  Art. 235 (covered / uncovered split); COREP Annex II C 07.00
+  ¶40-43/¶56/¶56A (class assignment + substitution); PRA PS1/26
+  Annex II/App. 17 (OF 07.00)
 - docs/plans/phase7-declarative-reporting.md §3.2/§6 (S8, decision F4)
 """
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
@@ -99,6 +130,8 @@ from rwa_calc.reporting.plans import SheetPlan
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+logger = logging.getLogger(__name__)
+
 # COREP Annex II §1.3 "(-)"-labelled deduction columns, negated post-execute.
 # 0216/0217 are the CRR-only "(-) SME/Infrastructure supporting factor adjustment"
 # columns (Art. 501/501a) — reported negative so 0215 + 0216 + 0217 = 0220 foots.
@@ -115,10 +148,62 @@ _PROVISION_SOURCES: frozenset[str] = frozenset(
     {"scra_provision_amount", "gcra_provision_amount", "provision_deducted"}
 )
 
-# CCF bucket maps: ccf_applied (rounded to 4dp) -> column ref.
+# CCF bucket maps: the applied conversion factor (rounded to 4dp) -> column ref.
+# CRR Art. 111 / Annex I has four buckets; PRA PS1/26 Art. 111 Table A1 has five
+# (Row 5 "other commitments" 40% is new, and Row 7 UCC moves 0% -> 10%).
 _CCF_MAP_CRR: dict[float, str] = {0.0: "0160", 0.2: "0170", 0.5: "0180", 1.0: "0190"}
 _CCF_MAP_B31: dict[float, str] = {0.1: "0160", 0.2: "0170", 0.4: "0171", 0.5: "0180", 1.0: "0190"}
 _CCF_REFS: tuple[str, ...] = ("0160", "0170", "0171", "0180", "0190")
+
+# Applied-CCF carriers, in preference order. ``ccf`` is the sealed
+# aggregator-exit name the pipeline really produces (and the one C 08.01 / CR5 /
+# CR6 already read); ``ccf_applied`` is the synthetic COREP/Pillar 3 unit-frame
+# spelling, kept so the shim estate keeps working. C 07.00 read ONLY the latter
+# until 2026-08, so every real submission published structurally-null CCF buckets
+# and four supervisory rules were unevaluable — hence the resolution is a single
+# named ladder and its absence is logged, never silently tolerated. Converging
+# the synthetic estate onto ``ccf`` is a recorded follow-up, not done here.
+_CCF_CARRIERS: tuple[str, ...] = ("ccf", "ccf_applied")
+
+# Pre-conversion off-balance-sheet gross: what the CCF buckets break down, and
+# the same carrier col 0010 sums on the off-side (so 0150 decomposes into the
+# buckets by construction — see the module docstring on boe_b0471 / v6364_m).
+_OFF_BS_GROSS_COL: str = "reporting_gross_off_bs"
+
+# Col 0080 "(-) Other funded credit protection, Article 232 CRR": the SA
+# carriers for the protection Art. 232 recognises, which is exactly the
+# Art. 200(1) list — (a) cash on deposit with a third-party institution
+# (Art. 232(1), treated as a guarantee by that institution) and (b) life
+# insurance policies pledged to the lender (Art. 232(2)). Art. 200(1)(c)
+# instruments repurchased on request (Art. 232(4)) is NOT MODELLED — no input
+# carrier exists — so it is absent rather than silently folded in.
+#
+# What is deliberately NOT here: ``collateral_re_value`` /
+# ``collateral_receivables_value`` / ``collateral_other_physical_value``. Those
+# are the Art. 199 IRB carriers (C 08.01 cols 0190/0200/0210 read them, which is
+# where they belong). Art. 199 is headed "Additional eligibility for collateral
+# under the IRB Approach" and opens "institutions that calculate risk-weighted
+# exposure amounts and expected loss amounts under the IRB Approach may also use
+# the following forms of collateral: (a) immovable property collateral ...;
+# (b) receivables ...; (c) other physical collateral". None of it is eligible
+# funded credit protection under the Standardised Approach, so none of it can
+# produce an SA substitution effect: under SA an immovable-property security
+# drives the exposure CLASS and the Art. 124-126 risk weight instead. Reporting
+# it in col 0080 while also risk-weighting the mortgage at its RE weight
+# double-counts the same benefit, and it drove col 0110 negative (a 60%-LTV
+# mortgage put 666,667 of property against a 400,000 exposure).
+_OFCP_CARRIERS: tuple[str, ...] = ("life_ins_collateral_value", "third_party_deposit_value")
+
+# Col 0070 "(-) Financial collateral: Simple method" (Art. 222(1)-(2)).
+_FCSM_CARRIER: str = "fcsm_collateral_value"
+
+# Col 0010's gross carriers — reused as the cap basis for the 0050-0100 block
+# (the row's own contribution to col 0040, i.e. gross net of value adjustments).
+_GROSS_CARRIERS: tuple[str, ...] = (
+    "reporting_gross_on_bs",
+    _OFF_BS_GROSS_COL,
+    "c07_ccr_gross",
+)
 
 # What counts as counterparty credit risk in C 07.00: the population limb
 # (``c07_population``) and the "of which: arising from CCR" discriminator (cols
@@ -199,17 +284,29 @@ def _net_of_adjustments(cells: Mapping[str, float | None], _prior: bool) -> floa
     return (cells["0010"] or 0.0) - (cells["0030"] or 0.0) - (cells.get("0035") or 0.0)
 
 
+def _substitution_outflow(cells: Mapping[str, float | None], _prior: bool) -> float | None:
+    """0090 = 0050 + 0060 + 0070 + 0080 (positive magnitudes).
+
+    Annex II C 07.00 cols 0090/0100: "Outflows shall correspond to the covered
+    part of the Original Exposure pre-conversion factors that is deducted from
+    the obligor's exposure class and subsequently assigned to the protection
+    provider's exposure class" — for exposures under the risk-weight
+    substitution method AND for collateral recognised under the Financial
+    Collateral Simple Method or the Other Funded Credit Protection Method. The
+    covered part under each of those four routes is exactly cols 0050-0080, so
+    the outflow is their subtotal (rules ``v0305_m`` / ``boe_b0694``).
+    """
+    return sum((cells.get(ref) or 0.0) for ref in ("0050", "0060", "0070", "0080"))
+
+
 def _net_after_substitution(cells: Mapping[str, float | None], _prior: bool) -> float | None:
-    """0110 = 0040 - 0050 - 0060 - 0070 - 0080 - 0090 + 0100."""
-    return (
-        (cells["0040"] or 0.0)
-        - (cells["0050"] or 0.0)
-        - (cells["0060"] or 0.0)
-        - (cells["0070"] or 0.0)
-        - (cells["0080"] or 0.0)
-        - (cells["0090"] or 0.0)
-        + (cells["0100"] or 0.0)
-    )
+    """0110 = 0040 - 0090 + 0100 (rule ``v0306_m`` / ``boe_b0697``).
+
+    0090 already IS 0050 + 0060 + 0070 + 0080, so the components are removed
+    once, through the subtotal. Subtracting both them and 0090 — as this did
+    before — deducts every substitution outflow twice.
+    """
+    return (cells["0040"] or 0.0) - (cells["0090"] or 0.0) + (cells["0100"] or 0.0)
 
 
 def _fully_adjusted(cells: Mapping[str, float | None], _prior: bool) -> float | None:
@@ -255,6 +352,7 @@ def c07_plans(
     )
     data_cols = set(sa_df.columns)
     sa_df = _prepare(sa_df, data_cols, framework)
+    _warn_if_ccf_buckets_unreportable(sa_df, data_cols)
     inflow_map = _substitution_inflows(sa_df, data_cols)
 
     row_terms = _row_terms(framework, data_cols)
@@ -324,6 +422,43 @@ def c07_population(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:
     )
 
 
+def _has_bs_side(cols: set[str]) -> bool:
+    """True when ``_prepare`` can derive ``c07_bs`` from this column set.
+
+    The single source of truth for that question. ``_prepare`` prefers
+    ``bs_type`` and falls back to ``exposure_type``; any cell narrowing on
+    ``c07_bs`` must ask the SAME question or it silently stops narrowing on the
+    ledger path, where only ``exposure_type`` is sealed.
+    """
+    return "bs_type" in cols or "exposure_type" in cols
+
+
+def _warn_if_ccf_buckets_unreportable(data: pl.DataFrame, cols: set[str]) -> None:
+    """WARN when C 07.00 will publish null CCF buckets despite off-BS exposure.
+
+    Cols 0160-0190 need an applied-CCF carrier. When none is present the cells
+    render structurally null and ``boe_b0471`` / ``v6364_m`` / ``v1659_m`` /
+    ``v1661_m`` cannot be evaluated on the submission. That is legitimate for a
+    book with no off-balance-sheet items, so the warning is gated on there being
+    something to break down — otherwise every on-balance-only frame would warn.
+
+    This exists because the carrier-name defect (C 07.00 read ``ccf_applied``,
+    which no pipeline run produces) failed silently for the life of the template.
+    """
+    if pick(cols, *_CCF_CARRIERS) is not None or _OFF_BS_GROSS_COL not in cols:
+        return
+    off_bs_total = float(data[_OFF_BS_GROSS_COL].fill_null(0.0).sum())
+    if off_bs_total <= 0.0:
+        return
+    logger.warning(
+        "C 07.00: no applied-CCF carrier (tried %s) but %.0f of off-balance-sheet "
+        "gross exposure is in scope — columns 0160-0190 will report null and the "
+        "CCF-breakdown validation rules cannot be evaluated",
+        ", ".join(_CCF_CARRIERS),
+        off_bs_total,
+    )
+
+
 def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame:
     """Add the module-derived discriminator columns (each only when its
     sources exist — an underived column makes its tolerant terms match
@@ -369,6 +504,10 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
         exprs.append(pl.lit(value=False).alias("c07_substituted"))
 
     # On/off-balance-sheet (kernel rule: bs_type preferred, else exposure_type).
+    # Derivability is asked ONCE, via _has_bs_side: the CCF-bucket cells narrow on
+    # ``c07_bs`` and used to gate that narrowing on ``bs_type`` alone — a column
+    # the aggregator never seals — so on the ledger path the narrowing silently
+    # never applied. The two sites must not drift again.
     if "bs_type" in cols:
         exprs.append(
             pl.when(pl.col("bs_type") == "ONB")
@@ -431,15 +570,15 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
             )
         exprs.append(band_expr.alias("c07_rw_band"))
 
-    # CCF bucket ref (retired _c07_ccf_cols map).
-    if "ccf_applied" in cols:
+    # CCF bucket ref (retired _c07_ccf_cols map), off the resolved carrier.
+    ccf_col = pick(cols, *_CCF_CARRIERS)
+    if ccf_col is not None:
         ccf_map = _CCF_MAP_B31 if framework == "BASEL_3_1" else _CCF_MAP_CRR
         bucket_expr: pl.Expr = pl.lit(None, dtype=pl.String)
         for ccf_value, ref in ccf_map.items():
             bucket_expr = (
                 pl.when(
-                    pl.col("ccf_applied").cast(pl.Float64, strict=False).round(4)
-                    == round(ccf_value, 4)
+                    pl.col(ccf_col).cast(pl.Float64, strict=False).round(4) == round(ccf_value, 4)
                 )
                 .then(pl.lit(ref))
                 .otherwise(bucket_expr)
@@ -579,7 +718,98 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
         else:
             exprs.append(carrier.alias("c07_provision"))
 
-    return data.with_columns(exprs) if exprs else data
+    prepared = data.with_columns(exprs) if exprs else data
+    # Second pass: the CRM substitution block reads c07_provision / c07_ccr_gross
+    # derived above, so it cannot share their ``with_columns``.
+    return prepared.with_columns(_protection_exprs(set(prepared.columns)))
+
+
+def _protection_exprs(cols: set[str]) -> list[pl.Expr]:
+    """Per-row magnitudes for the Annex II substitution block (cols 0050-0080).
+
+    Annex II C 07.00 heads cols 0050-0100 "CREDIT RISK MITIGATION (CRM)
+    TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE" and is closed about
+    what may appear there — "Items to be reported here: collateral,
+    incorporated in accordance with the Financial Collateral Simple Method;
+    eligible unfunded credit protection" (PS1/26 adds the third named limb,
+    "other funded credit protection, incorporated in accordance with the Other
+    Funded Credit Protection Method"). So four magnitudes, one per column:
+
+        0050  guarantees            Art. 203 unfunded protection
+        0060  credit derivatives    Art. 204
+        0070  financial collateral  Art. 222(1)-(2), Simple Method
+        0080  other funded          Art. 232 / Art. 200(1) — see _OFCP_CARRIERS
+
+    and nothing else. Art. 199 immovable-property / receivables / other-physical
+    collateral is IRB-only and is NOT one of them.
+
+    All four are capped TOGETHER at the row's own exposure: "Collateral that has
+    an effect on the exposure value (e.g. if used for credit risk mitigation
+    techniques with substitution effects on the exposure) shall be capped at the
+    exposure value." The cap is applied per row (Art. 235 splits each individual
+    exposure into a covered and an uncovered part), on the BLOCK total rather
+    than per column, because it is the block total that becomes the col 0090
+    outflow: capping each column separately would still let their sum exceed the
+    exposure and drive col 0110 negative. Where the block over-runs, the excess
+    is shed proportionally — Annex II prescribes no priority between the four
+    routes, and a proportional shed is the only order-independent choice.
+
+    The cap basis is the row's contribution to col 0040 (gross pre-conversion
+    factors, net of value adjustments and provisions), floored at zero. That is
+    tighter than col 0010's "exposure value" and it is what makes
+    ``0110 = 0040 - 0090 + 0100`` non-negative by construction — the property
+    rules ``v10293_s`` / ``boe_b0667`` ({template} >= 0) assert.
+    """
+    guaranteed = (
+        pl.col("guaranteed_portion").fill_null(0.0) if "guaranteed_portion" in cols else pl.lit(0.0)
+    )
+    if "protection_type" in cols:
+        # Same split the retired 0050/0060 cell predicates made: a null
+        # protection_type contributes to neither column.
+        guarantee = (
+            pl.when(pl.col("protection_type") == "guarantee").then(guaranteed).otherwise(0.0)
+        )
+        credit_derivative = (
+            pl.when(pl.col("protection_type") == "credit_derivative")
+            .then(guaranteed)
+            .otherwise(0.0)
+        )
+    else:
+        guarantee = guaranteed
+        credit_derivative = pl.lit(0.0)
+
+    fcsm = pl.col(_FCSM_CARRIER).fill_null(0.0) if _FCSM_CARRIER in cols else pl.lit(0.0)
+    ofcp_parts = [pl.col(col).fill_null(0.0) for col in _OFCP_CARRIERS if col in cols]
+    other_funded = pl.sum_horizontal(ofcp_parts) if ofcp_parts else pl.lit(0.0)
+
+    scale = _block_cap_scale(cols, guarantee + credit_derivative + fcsm + other_funded)
+    return [
+        (guarantee * scale).alias("c07_prot_guarantee"),
+        (credit_derivative * scale).alias("c07_prot_credit_derivative"),
+        (fcsm * scale).alias("c07_prot_fcsm"),
+        (other_funded * scale).alias("c07_prot_other_funded"),
+    ]
+
+
+def _block_cap_scale(cols: set[str], block_total: pl.Expr) -> pl.Expr:
+    """The 0-1 factor that caps the substitution block at the row's exposure.
+
+    ``1.0`` unless the block over-runs the cap basis, in which case
+    ``basis / block_total`` (well-defined: an over-run implies a positive
+    total). Degrades to ``1.0`` — uncapped, the pre-2026-08 behaviour — only on
+    a frame that carries neither a gross carrier nor ``ead_final``, which the
+    sealed ledger never is.
+    """
+    gross = [pl.col(col).fill_null(0.0) for col in _GROSS_CARRIERS if col in cols]
+    if not gross and "ead_final" in cols:
+        gross = [pl.col("ead_final").fill_null(0.0)]
+    if not gross:
+        return pl.lit(1.0)
+    basis = pl.sum_horizontal(gross)
+    if "c07_provision" in cols:
+        basis = basis - pl.col("c07_provision").fill_null(0.0)
+    basis = basis.clip(lower_bound=0.0)
+    return pl.when(block_total > basis).then(basis / block_total).otherwise(1.0)
 
 
 def _substitution_inflows(sa_df: pl.DataFrame, cols: set[str]) -> dict[str, float]:
@@ -782,40 +1012,25 @@ def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row
                 SafeSum(("scra_provision_amount", "gcra_provision_amount")), predicate=member
             )
         ),
-        "0050": (
-            CellSpec(
-                Sum("guaranteed_portion"),
-                predicate=narrowed(("protection_type", "guarantee")),
-            )
-            if "protection_type" in cols
-            else CellSpec(Sum("guaranteed_portion"), predicate=member)
+        # 0050-0080: the four block-capped substitution magnitudes derived by
+        # ``_protection_exprs`` (which owns the protection_type split the 0050 /
+        # 0060 cell predicates used to make). 0070 / 0080 keep the SafeSum
+        # binding when their carriers are absent so a frame that seals none of
+        # them still renders the recorded structural null rather than a 0.0.
+        "0050": CellSpec(Sum("c07_prot_guarantee"), predicate=member),
+        "0060": CellSpec(Sum("c07_prot_credit_derivative"), predicate=member),
+        "0070": (
+            CellSpec(Sum("c07_prot_fcsm"), predicate=member)
+            if _FCSM_CARRIER in cols
+            else CellSpec(SafeSum((_FCSM_CARRIER,)), predicate=member)
         ),
-        "0060": (
-            CellSpec(
-                Sum("guaranteed_portion"),
-                predicate=narrowed(("protection_type", "credit_derivative")),
-            )
-            if "protection_type" in cols
-            else CellSpec(Formula(refs=(), fn=_const(0.0)))
+        "0080": (
+            CellSpec(Sum("c07_prot_other_funded"), predicate=member)
+            if set(_OFCP_CARRIERS) & cols
+            else CellSpec(SafeSum(_OFCP_CARRIERS), predicate=member)
         ),
-        "0070": CellSpec(SafeSum(("fcsm_collateral_value",)), predicate=member),
-        "0080": CellSpec(
-            SafeSum(
-                (
-                    "collateral_re_value",
-                    "collateral_receivables_value",
-                    "collateral_other_physical_value",
-                )
-            ),
-            predicate=member,
-        ),
-        "0090": CellSpec(Sum("guaranteed_portion"), predicate=narrowed(("c07_substituted", True))),
-        "0110": CellSpec(
-            Formula(
-                refs=("0040", "0050", "0060", "0070", "0080", "0090", "0100"),
-                fn=_net_after_substitution,
-            )
-        ),
+        "0090": CellSpec(Formula(refs=("0050", "0060", "0070", "0080"), fn=_substitution_outflow)),
+        "0110": CellSpec(Formula(refs=("0040", "0090", "0100"), fn=_net_after_substitution)),
         "0120": CellSpec(Formula(refs=(), fn=_const(0.0))),
         "0130": CellSpec(Sum("collateral_adjusted_value"), predicate=member),
         "0140": (
@@ -858,14 +1073,31 @@ def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row
             terms, cols, "infrastructure_factor_applied", "is_infrastructure"
         )
 
-    # CCF buckets: bucketed sums when the carrier exists, else structural null.
+    # CCF buckets (0160-0190): the PRE-conversion off-balance-sheet gross per
+    # bucket, not the post-conversion EAD — Annex II heads the block "fully
+    # adjusted exposure value of off-balance sheet items", and col 0200 is what
+    # survives conversion (see the module docstring on boe_b0471 / v6364_m).
+    #
+    # The off-side narrowing is load-bearing, not cosmetic: a drawn loan carries
+    # ccf = 0.0, which is a REAL bucket under CRR (Art. 111 / Annex I LR 0% ->
+    # col 0160), so without it every on-balance loan would land in the 0% bucket.
+    # Its gross there is 0.0, so the numbers would not move — the cell would just
+    # silently stop being a statement about off-balance-sheet items.
+    #
+    # empty_cell="null": a row with no off-balance-sheet item in the bucket
+    # reports blank, not 0.0 — the template's recorded empty-subset contract
+    # (the retired _null_row semantics these cells replaced).
     ccf_refs = [ref for ref in _CCF_REFS if ref in column_refs]
     for ref in ccf_refs:
-        if "ccf_applied" in cols:
+        if pick(cols, *_CCF_CARRIERS) is not None and _OFF_BS_GROSS_COL in cols:
             bucket_terms: _Terms = (*terms, ("c07_ccf_bucket", ref))
-            if "bs_type" in cols:
+            if _has_bs_side(cols):
                 bucket_terms = (*bucket_terms, ("c07_bs", "off"))
-            cells[ref] = CellSpec(Sum(ead_col), predicate=RowPredicate(equals=bucket_terms))
+            cells[ref] = CellSpec(
+                Sum(_OFF_BS_GROSS_COL),
+                predicate=RowPredicate(equals=bucket_terms),
+                empty_cell="null",
+            )
         else:
             cells[ref] = CellSpec(Formula(refs=(), fn=_const(None)))
 

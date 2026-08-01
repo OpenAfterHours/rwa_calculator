@@ -419,6 +419,59 @@ class TestC0902EdgeCases:
         assert total_row["0105"][0] == pytest.approx(0.0)
 
 
+def _irb_pre_conversion_results() -> pl.LazyFrame:
+    """An F-IRB corporate book with one drawn loan and one off-balance-sheet
+    contingent whose 2000 nominal converts to 1000 of EAD at a 50% CCF."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["LOAN", "CONT"],
+            "approach_applied": ["foundation_irb", "foundation_irb"],
+            "exposure_class": ["corporate", "corporate"],
+            "exposure_type": ["loan", "contingent"],
+            "drawn_amount": [1000.0, None],
+            "nominal_amount": [None, 2000.0],
+            "ead_final": [1000.0, 1000.0],
+            "ead_gross": [1000.0, 1000.0],
+            "rwa_final": [700.0, 700.0],
+            "cp_country_code": ["GB", "GB"],
+            "default_status": [False, False],
+            "pd_floored": [0.01, 0.01],
+            "lgd_post_crm": [0.45, 0.45],
+            "expected_loss": [4.5, 4.5],
+        }
+    )
+
+
+class TestC0902PreConversionGrossColumn:
+    """C 09.02 col 0010 is ORIGINAL EXPOSURE PRE-CONVERSION FACTORS.
+
+    Annex II: "Same definition as for column 0020 of CR IRB template" — the sealed
+    per-side gross carriers, with no counterparty-credit-risk term (C 08.x
+    discloses CCR separately). The retired ladder bound the post-CCF ``ead_gross``,
+    losing the off-balance-sheet nominal; the same defect as C 09.01 col 0010.
+    """
+
+    @staticmethod
+    def _total() -> pl.DataFrame:
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_pre_conversion_results(), framework="CRR")
+        return bundle.c09_02["TOTAL"]
+
+    def test_col_0010_carries_the_off_balance_sheet_nominal(self) -> None:
+        row = self._total().filter(pl.col("row_ref") == "0030")
+        assert row["0010"][0] == pytest.approx(3000.0)
+
+    def test_col_0105_stays_the_post_conversion_exposure_value(self) -> None:
+        row = self._total().filter(pl.col("row_ref") == "0030")
+        assert row["0105"][0] == pytest.approx(2000.0)
+
+    def test_frame_without_raw_gross_inputs_keeps_the_ead_gross_pick(self) -> None:
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_geo_results(), framework="CRR")
+        row = bundle.c09_02["TOTAL"].filter(pl.col("row_ref") == "0030")
+        assert row["0010"][0] == pytest.approx(1800.0)
+
+
 def _irb_sf_results() -> pl.LazyFrame:
     """IRB book with one SME-supporting-factor exposure + a plain corporate.
 

@@ -33,15 +33,36 @@ Cell semantics (recorded decisions, this slice):
   template. C 09.02 is the IRB book INCLUDING slotting (the retired inline
   comment claiming exclusion was misleading).
 - The reverse-map row keying handles the plain class rows: a row whose key
-  is not a ``C09_01_SA_CLASS_MAP`` value AND not an RE/SL key renders
-  ALL-NULL (the corporate_sme / retail_sme / mortgage_sme, short-term and
-  CIU sub-rows stay permanently null — recorded dead code, out of R7
-  scope; the RE-SME row 0095 IS implemented); the corporate rows fan in
-  corporate + corporate_sme + specialised_lending; retail fans in
-  retail_other (+ retail_qrre / retail_mortgage per template). The B31-only
-  RE rows (0090-0095) and SA specialised-lending rows (0071-0073) bypass
-  the reverse map via ``_c09_01_re_sl_pred`` (rectification R7): these keys
-  never occur in CRR_C09_01_ROWS, so CRR C 09.01 is untouched.
+  is not a ``C09_01_SA_CLASS_MAP`` value AND not an RE/SL/SME sub-row key
+  renders ALL-NULL (the short-term and CIU sub-rows stay permanently null —
+  recorded dead code); the corporate rows fan in corporate + corporate_sme +
+  specialised_lending; retail fans in retail_other (+ retail_qrre /
+  retail_mortgage per template). The B31-only RE rows (0090-0095) and SA
+  specialised-lending rows (0071-0073) bypass the reverse map via
+  ``_c09_01_re_sl_pred`` (rectification R7): these keys never occur in
+  CRR_C09_01_ROWS, so CRR C 09.01 is untouched.
+- The three "of which: SME" rows (0075 corporate_sme / 0085 retail_sme /
+  0095 mortgage_sme, ``_C09_01_SME_PARENT_KEYS``) key their PARENT row's
+  class union narrowed by ``c09_sme``, C 07.00's own row-0020 SME ladder:
+  Annex II and PS1/26 Annex II both define all three as "Same definition as
+  for row 0020 of [OF] CR SA template". The retired reverse map had no entry
+  mapping onto those keys, so they rendered permanently null and the
+  geographical breakdown silently dropped the SME disclosure while the
+  parent rows correctly aggregated it (v5773_q-v5776_q, boe_b0225-b0227,
+  and — because a null of-which reads as zero against a NEGATIVE
+  supporting-factor adjustment on the parent — v0411_m). B31 row 0095 is
+  ``re_sme`` instead and keeps the raw ``is_sme`` narrowing of the RE class
+  union (recorded R7, mirroring C 07.00's own RE memo rows).
+- Cols 0010/0020 (C 09.01) and 0010/0030 (C 09.02) are ORIGINAL EXPOSURE
+  PRE-CONVERSION FACTORS, defined by reference to C 07.00 col 0010 and
+  C 08.01 col 0020 respectively, so they bind the same sealed per-side gross
+  carriers those columns bind (``_pre_ccf_gross_binding``) — C 09.01 with
+  C 07.00's counterparty-credit-risk term, C 09.02 without one, as C 08.01
+  has none. The retired ladder picked ``ead_gross``, the POST-CCF exposure:
+  on an off-balance-sheet book the geographical breakdown reported the
+  conversion-factor-reduced figure in a pre-conversion column and the whole
+  off-BS nominal vanished (v5769_q / boe_b0222). A synthetic frame carrying
+  no raw gross input keeps the retired pick — generate-time variant.
 - Recorded decision (R7): row 0090 keys the SEALED RE classes
   (retail_mortgage / residential_mortgage / commercial_mortgage). B31
   Art. 124I / Table A2 places income-producing CRE within the standalone
@@ -62,9 +83,8 @@ Cell semantics (recorded decisions, this slice):
   labels), read ``lgd_post_crm`` only, and preserve the retired
   UNWEIGHTED-mean fallback when the subset carries zero total EAD (a
   module post-step — the WeightedAvg verb has no such fallback).
-- Column ladders are the retired ones, narrower than C 07/C 08: gross =
-  pick(ead_gross, nominal_amount, drawn_amount) (a single column, never a
-  SafeSum); the POST-SF RWEA = pick(rwa_final, rwa) (NO rwa_post_factor).
+- The POST-SF RWEA ladder is the retired one, narrower than C 07/C 08:
+  pick(rwa_final, rwa) (NO rwa_post_factor).
   The CRR "RWEA pre supporting factors" columns (C 09.01 col 0080,
   C 09.02 col 0110) key ``rwa_pre_factor`` — the pre-Art. 501/501a RWA
   snapshot, falling back to the post-SF ladder when it is not sealed —
@@ -120,6 +140,7 @@ from rwa_calc.reporting.cellspec import (
     CellSpec,
     Formula,
     RowPredicate,
+    SafeSum,
     Sum,
     TemplateSpec,
     WeightedAvg,
@@ -144,6 +165,7 @@ if TYPE_CHECKING:
 
     type _PostStep = Callable[[pl.DataFrame, pl.DataFrame], pl.DataFrame]
 
+    from rwa_calc.reporting.cellspec import ValueBinding
     from rwa_calc.reporting.corep.templates import COREPRow
 
 _IRB_APPROACHES: tuple[str, ...] = ("foundation_irb", "advanced_irb", "slotting")
@@ -201,6 +223,22 @@ _C09_01_RE_ROW_TERMS: dict[str, tuple[tuple[str, str | bool], ...]] = {
     "re_sme": (("is_sme", True),),
 }
 
+# C 09.01 "of which: SME" sub-rows -> the parent class row whose subset they
+# narrow. Annex II / PS1/26 Annex II define every one of them as "Same definition
+# as for row 0020 of [OF] CR SA template", so each is its parent row's class
+# union conjoined with the SAME SME discriminator C 07.00 row 0020 uses
+# (``c09_sme``, see ``_c09_01_derived_exprs``). The retired reverse map had no
+# entry mapping ONTO these keys, so all three rendered permanently null
+# (v5773_q-v5776_q / boe_b0225-b0227 / v0411_m). ``re_sme`` (B31 row 0095) is NOT
+# here: it narrows the real-estate class union and is keyed by the raw ``is_sme``
+# borrower flag through ``_C09_01_RE_ROW_TERMS`` — the recorded R7 behaviour,
+# mirroring C 07.00's own RE memo rows rather than its row 0020.
+_C09_01_SME_PARENT_KEYS: dict[str, str] = {
+    "corporate_sme": "corporate",
+    "retail_sme": "retail",
+    "mortgage_sme": "retail_mortgage",
+}
+
 # OF 09.01 SA specialised-lending "of which" sub-rows (0071-0073) keyed by the
 # basis-independent sl_type discriminator (Art. 122A). SL money already fans
 # into the corporate parent row 0070 via C09_01_SA_CLASS_MAP, so these add only
@@ -218,6 +256,37 @@ _C09_01_SL_TYPE_MAP: dict[str, str] = {
 # to C 07.00's 0216/0217 and C 08.01's 0256/0257). B31 frames carry none of
 # these refs, so the negation post-step is an absent-column no-op there.
 _C09_NEGATIVE_COLS: frozenset[str] = frozenset({"0081", "0082", "0121", "0122"})
+
+# The "ORIGINAL EXPOSURE PRE-CONVERSION FACTORS" ladder (C 09.01 cols 0010/0020,
+# C 09.02 cols 0010/0030). Annex II defines each of them by reference — C 09.01
+# col 0010 "Same definition as for column 0010 of CR SA template", C 09.02
+# col 0010 "Same definition as for column 0020 of CR IRB template" (PS1/26
+# Annex II words OF 09.01 / OF 09.02 identically) — so they bind the SAME sealed
+# per-side gross carriers those columns bind. The retired ladder picked
+# ``ead_gross``, which is the POST-CCF exposure (drawn + CCF-adjusted undrawn):
+# on an off-balance-sheet book that reported the conversion-factor-reduced figure
+# in a pre-conversion column and lost the nominal (v5769_q / boe_b0222).
+_PRE_CCF_SIDE_COLS: tuple[str, ...] = ("reporting_gross_on_bs", "reporting_gross_off_bs")
+
+# C 09.01 shares C 07.00's population, which includes the counterparty-credit-risk
+# legs (Annex II rows 0090-0130) whose per-side carriers are null by design. Their
+# original exposure sits in the drawn/undrawn carriers, so col 0010 adds this
+# CCR-only term exactly as C 07.00's col 0010 adds ``c07_ccr_gross``. C 09.02
+# mirrors C 08.01 col 0020, which carries no such term.
+_C09_CCR_GROSS_COL: str = "c09_ccr_gross"
+
+# Raw gross inputs the per-side carriers are derived from. A frame carrying NONE
+# of them (a synthetic unit frame handed straight to the generator, which only
+# knows ``ead_gross``) gets all-null carriers from ``ensure_gross_side_carriers``,
+# so the pre-conversion ladder would report nothing at all there: those frames
+# keep the retired single-column pick — a generate-time variant, as the C 09.02
+# retail-RE property filter already is.
+_RAW_GROSS_INPUTS: tuple[str, ...] = (
+    "drawn_amount",
+    "interest",
+    "nominal_amount",
+    "undrawn_amount",
+)
 
 
 class _Row:
@@ -324,23 +393,58 @@ def generate_c09_01(
 
 
 def _c09_01_derived_exprs(cols: set[str], rwa_col: str | None) -> list[pl.Expr]:
-    """The C 09.01 discriminator columns: the defaulted ladder plus the RE-family
-    regulatory flag. ``c09_re_qualifying`` fills a null ``is_qualifying_re`` to
-    True — identical to C 07.00's ``c07_qualifying_re``, so a real-estate exposure
-    with an unset qualifying flag counts as regulatory RE (rows 0091/0092) rather
-    than "other real estate" (row 0093). property_type / is_adc / is_sme are read
-    raw by the RE sub-row predicates (a null there correctly excludes the row)."""
-    exprs: list[pl.Expr] = [_defaulted_expr(cols).alias("c09_defaulted")]
+    """The C 09.01 discriminator columns: the defaulted ladder, the SME flag, the
+    RE-family regulatory flag and the CCR original-exposure term.
+
+    ``c09_sme`` is C 07.00's ``c07_sme`` ladder verbatim — the of-which SME rows
+    are defined as "Same definition as for row 0020 of CR SA template", so they
+    must select exactly the legs that row selects or the cross-template tie-out
+    cannot hold. ``c09_re_qualifying`` fills a null ``is_qualifying_re`` to True —
+    identical to C 07.00's ``c07_qualifying_re``, so a real-estate exposure with an
+    unset qualifying flag counts as regulatory RE (rows 0091/0092) rather than
+    "other real estate" (row 0093). property_type / is_adc / is_sme are read raw by
+    the RE sub-row predicates (a null there correctly excludes the row).
+    ``c09_ccr_gross`` is C 07.00's ``c07_ccr_gross`` verbatim: the original exposure
+    of the counterparty-credit-risk / settlement legs, whose per-side gross carriers
+    are null by design. Its gate list is EXACTLY the four exposure_types the side
+    carriers populate, so col 0010's SafeSum counts every leg on one carrier only.
+    """
+    exprs: list[pl.Expr] = [
+        _defaulted_expr(cols).alias("c09_defaulted"),
+        _sme_expr(cols).alias("c09_sme"),
+    ]
     if "is_qualifying_re" in cols:
         exprs.append(pl.col("is_qualifying_re").fill_null(value=True).alias("c09_re_qualifying"))
+    if {"exposure_type", "reporting_gross_drawn", "reporting_gross_undrawn"} <= cols:
+        exprs.append(
+            pl.when(
+                pl.col("exposure_type").is_in(
+                    ["loan", "contingent", "facility_undrawn", "facility"]
+                )
+            )
+            .then(pl.lit(None, dtype=pl.Float64))
+            .otherwise(
+                pl.sum_horizontal(
+                    pl.col("reporting_gross_drawn"), pl.col("reporting_gross_undrawn")
+                )
+            )
+            .alias(_C09_CCR_GROSS_COL)
+        )
     exprs.extend(_c09_sf_delta_exprs(cols, rwa_col))
     return exprs
 
 
 def _c09_01_row_pred(row_def: COREPRow, basis_col: str) -> RowPredicate | None:
     """The reverse-map keying over ``basis_col``: rows whose key is not a
-    class-map VALUE are permanently null (the map short-circuits before
-    the SME / RE / SL / CIU sub-filters ever run — recorded dead code).
+    class-map VALUE and not an RE/SL/SME sub-row key are permanently null
+    (the short-term and CIU sub-rows — recorded dead code).
+
+    An "of which: SME" row (0075/0085/0095, ``_C09_01_SME_PARENT_KEYS``) keys its
+    PARENT row's class union narrowed by ``c09_sme``: Annex II defines all three
+    as "Same definition as for row 0020 of CR SA template", and the narrowing
+    term is basis-INDEPENDENT so it survives the two-basis ``_either_pred`` union
+    unchanged. The retired reverse map had no entry mapping onto these keys, so
+    they rendered permanently null.
 
     Recorded fix (2026-07-12, Annex II C 09.1 instructions): the PRIMARY
     columns key the APPLIED Art. 112 class (``reporting_class_origin`` —
@@ -357,10 +461,12 @@ def _c09_01_row_pred(row_def: COREPRow, basis_col: str) -> RowPredicate | None:
     re_sl = _c09_01_re_sl_pred(key, basis_col)
     if re_sl is not None:
         return re_sl
-    classes = sorted(ec for ec, mapped in C09_01_SA_CLASS_MAP.items() if mapped == key)
+    parent = _C09_01_SME_PARENT_KEYS.get(key)
+    classes = sorted(ec for ec, mapped in C09_01_SA_CLASS_MAP.items() if mapped == (parent or key))
     if not classes:
         return None
-    return _class_union(*classes, col=basis_col)
+    union = _class_union(*classes, col=basis_col)
+    return union if parent is None else _narrow(union, ("c09_sme", True))
 
 
 def _c09_01_re_sl_pred(key: str, basis_col: str) -> RowPredicate | None:
@@ -392,7 +498,7 @@ def _c09_01_spec(
 ) -> tuple[TemplateSpec, dict[str, RowPredicate | None]]:
     column_refs = tuple(col.ref for col in get_c09_01_columns(framework))
     row_defs = get_c09_01_rows(framework)
-    ead_gross_col = pick(cols, "ead_gross", "nominal_amount", "drawn_amount")
+    gross_pre_ccf = _pre_ccf_gross_binding(cols, with_ccr=True)
     ead_col = pick(cols, "ead_final")
     # Pre-SF RWEA snapshot (col 0080); falls back to the post-SF ladder (rwa_col,
     # resolved once in the generate call) when the aggregator did not seal it
@@ -412,10 +518,14 @@ def _c09_01_spec(
         if pred is None:
             continue
         ref = row_def.ref
-        cells[(ref, "0010")] = _sum_or_null(ead_gross_col, pred)
-        if ead_gross_col is not None and memo_pred is not None:
+        cells[(ref, "0010")] = _bind_or_null(gross_pre_ccf, pred)
+        if gross_pre_ccf is not None and memo_pred is not None:
+            # The 0020 memo is "Original exposure pre-conversion factors for those
+            # exposures which have been classified as exposures in default", so it
+            # reads the SAME pre-conversion ladder as col 0010 over the ORIGINAL
+            # class + defaulted subset.
             cells[(ref, "0020")] = CellSpec(
-                Sum(ead_gross_col),
+                gross_pre_ccf,
                 predicate=_conjoin(memo_pred, ("c09_defaulted", True)),
             )
         cells[(ref, "0050")] = CellSpec(Sum("gcra_provision_amount"), predicate=pred)
@@ -635,7 +745,10 @@ def _c09_02_spec(
 ) -> tuple[TemplateSpec, dict[str, RowPredicate | None]]:
     column_refs = tuple(col.ref for col in get_c09_02_columns(framework))
     row_defs = get_c09_02_rows(framework)
-    ead_gross_col = pick(cols, "ead_gross", "nominal_amount", "drawn_amount")
+    # Col 0010 is "Same definition as for column 0020 of CR IRB template", which
+    # binds the two per-side gross carriers and NO counterparty-credit-risk term
+    # (C 08.x discloses CCR separately) — so C 09.02's does not carry one either.
+    gross_pre_ccf = _pre_ccf_gross_binding(cols, with_ccr=False)
     ead_col = pick(cols, "ead_final")
     # rwa_col (deliberately two-wide) is resolved once in the generate call.
     # Pre-SF RWEA snapshot (col 0110); falls back to the post-SF ladder when the
@@ -653,9 +766,11 @@ def _c09_02_spec(
             continue
         ref = row_def.ref
         def_pred = _conjoin(pred, ("c09_defaulted", True))
-        cells[(ref, "0010")] = _sum_or_null(ead_gross_col, pred)
-        if ead_gross_col is not None:
-            cells[(ref, "0030")] = CellSpec(Sum(ead_gross_col), predicate=def_pred)
+        cells[(ref, "0010")] = _bind_or_null(gross_pre_ccf, pred)
+        if gross_pre_ccf is not None:
+            # 0030 "Of which defaulted" is the ORIGINAL exposure value of the
+            # defaulted subset — the same pre-conversion ladder as col 0010.
+            cells[(ref, "0030")] = CellSpec(gross_pre_ccf, predicate=def_pred)
         for null_ref in ("0040", "0060", "0070"):
             cells[(ref, null_ref)] = CellSpec(Formula(refs=(), fn=_const(None)))
         cells[(ref, "0050")] = CellSpec(Sum("gcra_provision_amount"), predicate=pred)
@@ -833,6 +948,14 @@ def _sum_or_null(col: str | None, pred: RowPredicate) -> CellSpec:
     return CellSpec(Sum(col), predicate=pred)
 
 
+def _bind_or_null(binding: ValueBinding | None, pred: RowPredicate) -> CellSpec:
+    """``_sum_or_null`` for an already-resolved binding (the pre-conversion gross
+    ladder, which is a SafeSum over carriers rather than a single column)."""
+    if binding is None:
+        return CellSpec(Formula(refs=(), fn=_const(None)))
+    return CellSpec(binding, predicate=pred)
+
+
 def _wavg_or_null(col: str | None, weight: str | None, pred: RowPredicate) -> CellSpec:
     if col is None or weight is None:
         return CellSpec(Formula(refs=(), fn=_const(None)))
@@ -879,6 +1002,36 @@ def _c09_sf_adjustment_cell(
             predicate=_narrow(pred, (flag_col, True), ("supporting_factor_applied", True)),
         )
     return CellSpec(Formula(refs=(), fn=_const(None)))
+
+
+def _pre_ccf_gross_binding(cols: set[str], *, with_ccr: bool) -> ValueBinding | None:
+    """The "original exposure pre-conversion factors" binding for cols 0010/0020
+    (C 09.01) and 0010/0030 (C 09.02).
+
+    On a sealed frame this is the per-side gross SafeSum the referenced column of
+    C 07.00 (col 0010, ``with_ccr=True``) / C 08.01 (col 0020, ``with_ccr=False``)
+    binds. ``ensure_gross_side_carriers`` guarantees the two side columns exist at
+    generator entry, but on a synthetic frame that carries no RAW gross input at
+    all they are structurally all-null, so such a frame keeps the retired
+    single-column ``ead_gross`` pick (which is post-CCF, and the only gross figure
+    those frames carry). Returns None when neither basis exists."""
+    if any(name in cols for name in _RAW_GROSS_INPUTS):
+        side = (*_PRE_CCF_SIDE_COLS, _C09_CCR_GROSS_COL) if with_ccr else _PRE_CCF_SIDE_COLS
+        return SafeSum(side)
+    ead_gross_col = pick(cols, "ead_gross", "nominal_amount", "drawn_amount")
+    return None if ead_gross_col is None else Sum(ead_gross_col)
+
+
+def _sme_expr(cols: set[str]) -> pl.Expr:
+    """C 07.00's ``c07_sme`` ladder: the SME discriminator its row 0020 selects on,
+    which the C 09.01 of-which SME rows are defined by reference to. Nulls fold to
+    False so the flag is a non-null Boolean the ``equals`` terms can match (a null
+    ``sme_supporting_factor_eligible`` never matched ``== True`` either)."""
+    if "sme_supporting_factor_eligible" in cols:
+        return (pl.col("sme_supporting_factor_eligible") == True).fill_null(value=False)  # noqa: E712
+    if "exposure_class" in cols:
+        return pl.col("exposure_class").str.contains("sme").fill_null(value=False)
+    return pl.lit(value=False)
 
 
 def _defaulted_expr(cols: set[str]) -> pl.Expr:

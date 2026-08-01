@@ -2,6 +2,10 @@
 
 Summary of COREP and Pillar 3 template changes from CRR to Basel 3.1.
 
+> **Once a template is generated, see [reporting-validation-rules.md](reporting-validation-rules.md)**
+> for the published BoE validation rules it must satisfy (808 live credit-risk rules, 514 of them
+> Error severity and so submission-blocking).
+
 ---
 
 ## Template Renames

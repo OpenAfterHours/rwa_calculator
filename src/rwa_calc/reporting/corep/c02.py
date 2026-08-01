@@ -35,8 +35,13 @@ Cell semantics (recorded decisions, this slice):
 - Class rows key the APPLIED Art. 112 class (``reporting_class_origin``
   — recorded fix 2026-07-12, tying the SA breakdown to C 07.00: defaulted
   SA RWA reports under row 0160) through the many-to-one ACCUMULATING
-  ``C02_00_SA_CLASS_MAP`` (retail fans four classes into 0140; corporate
-  absorbs specialised_lending into 0130). Identical for IRB rows.
+  ``C02_00_SA_CLASS_MAP``. Rows 0070-0211 are "See CR SA template", so
+  the map's groupings ARE the C 07.00 sheet groupings (recorded fix
+  2026-08-01: the map had been keyed on a vocabulary ``ExposureClass``
+  never emitted, so corporate_sme / other dropped out of the roll-up and
+  retail_mortgage reported as retail (h) instead of immovable-property
+  (i) — EBA v0207_m / v3334_i / v3338_i / v4240_i / v4241_i). Identical
+  for IRB rows.
 - The ``_irb_*_split`` fallbacks are NOT filters: with no sub-row data the
   whole total lands in one bucket (corporate -> non-SME 0297/0356; RE ->
   residential-non-SME 0383; retail-other -> SME 0400 for CRR heritage).

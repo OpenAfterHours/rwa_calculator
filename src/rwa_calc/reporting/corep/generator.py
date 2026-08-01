@@ -47,8 +47,8 @@ from rwa_calc.reporting.corep.c08 import (
     generate_c08_04,
     generate_c08_05,
     generate_c08_06,
-    generate_c08_07,
 )
+from rwa_calc.reporting.corep.c08_07 import generate_c08_07
 from rwa_calc.reporting.corep.c09 import generate_c09_01, generate_c09_02
 from rwa_calc.reporting.corep.c34 import (
     generate_c34_01,

@@ -87,9 +87,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     an issuer class sealed per collateral leg. (2) C 07.00 col 0200 sums raw EAD over the
     ORIGIN population and never reflects substitution while cols 0100→0110→0150 net it
     (`v0308_m` / `v8726_m` / `boe_b0471` / `boe_b0556`) — **a genuine defect in our
-    output, not a published-rule artifact**, and the first measured consequence of
-    recorded decision F3, which keeps cols 0200/0110/0260 on the origin basis. Fixing it
-    moves EAD and RWEA bases across the whole reporting estate and is out of scope here.
+    output, not a published-rule artifact**. Note this is a build shortfall against a
+    recorded decision, *not* a recorded decision with a measured cost: Phase 7 decision F3
+    cites "C 07.00 col 0200 basis" as the **definition** of the post-substitution basis
+    (it keys Pillar 3 CR4 cols c-f and all CR5 rows on it), i.e. it assumed col 0200 was
+    already post-substitution. The F4 slice that actually built C 07.00 made only the
+    0040/0110/0150 waterfall substitution-aware and never extended that treatment to col
+    0200 or the CCF buckets. It is not fixed here because col 0200 feeds the CCF-bucket
+    identities and the C 08.01 cousins 0110/0260 sit on the same basis, so rebinding col
+    0200 alone risks making the return inconsistent elsewhere; it needs its own scoped
+    change and golden regen.
 - **The fixed PD scale on C 08.03 / C 08.05 and Pillar 3 CR6 / CR9 was a flat ladder of
   invented bands; it is now the published hierarchical scale.** Both templates carried
   17 mutually exclusive PD buckets (`0.00 to < 0.03%`, `0.03 to < 0.05%`, …,

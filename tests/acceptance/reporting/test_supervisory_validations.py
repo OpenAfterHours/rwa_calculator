@@ -211,6 +211,20 @@ REGISTER_NOTES: dict[str, str] = {
         "which is what it was. The decisive evidence was float dust (1672.9999999999995 on "
         "one row of seven): a broadcast constant would be bit-identical."
     ),
+    "caution_on_plan_doc_definitions": (
+        "A plan document naming a column as the DEFINITION of a basis is not evidence the "
+        "column implements it. Worked example: docs/plans/phase7-declarative-reporting.md's "
+        "F3 decision (the Pillar 3 CR4/CR5 tranche) cites 'C 07.00 col 0200 basis' as what "
+        "'post-substitution' MEANS - it assumed col 0200 already carried that basis, not that "
+        "it should. v0308_m/boe_b0471/v8726_m/boe_b0556 exist because that assumption was "
+        "false: C 07.00's own col 0200 is Sum(ead_col) over the ORIGIN population (the F4 "
+        "build, docs/plans/phase7-declarative-reporting.md, never extended substitution-"
+        "awareness to it), while CR4/CR5 (reporting/pillar3/cr4.py, cr5.py) genuinely do key "
+        "on the post-substitution `reporting_class` they cite the same definition for - so two "
+        "parts of the estate that cite one shared basis are no longer consistent with each "
+        "other. Verify a definition is IMPLEMENTED before citing it as evidence a related gap "
+        "is a deliberate decision rather than a build shortfall."
+    ),
     "pattern_boe_summation_templates": (
         "The BoE summation rules do not distinguish ADDITIVE columns from AVERAGED ones. "
         "'r0070 = sum(grade rows)' is applied across all ~36 columns of OF 08.01/08.02, "

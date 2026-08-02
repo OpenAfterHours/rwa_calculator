@@ -1037,6 +1037,13 @@ RWEA, EL) across comparable PD bands. This template excludes slotting exposures
 
 ### Row Structure
 
+The PD scale is **hierarchical, not a partition**. Rows 0010, 0070, 0100 and 0130 are
+parent bands that repeat their span as the finer sub-breakdown indented beneath them, so
+a parent row *overlaps* its children and equals their sum. The published validation rules
+assert exactly that — EBA `v09753`–`v09756` / BoE `boe_b0767`–`boe_b0770`, e.g.
+`{r0070} = {r0080} + {r0090}`. Summing every emitted row therefore double-counts;
+aggregate over the leaf bands only.
+
 === "CRR (C 08.03)"
 
     | Ref | PD Range |
@@ -1064,7 +1071,8 @@ RWEA, EL) across comparable PD bands. This template excludes slotting exposures
     | Ref | PD Range | vs CRR |
     |-----|----------|--------|
     | 0010 | 0.00 to < 0.15 | |
-    | 0020 | &emsp;0.00 to < 0.10 | |
+    | 0015 | &emsp;0.00 to < 0.05 | **New** — CRR row 0020 is split at 0.05% |
+    | 0025 | &emsp;0.05 to < 0.10 | **New** — the other half of CRR row 0020 |
     | 0030 | &emsp;0.10 to < 0.15 | |
     | 0040 | 0.15 to < 0.25 | |
     | 0050 | 0.25 to < 0.50 | |
@@ -1086,6 +1094,12 @@ RWEA, EL) across comparable PD bands. This template excludes slotting exposures
         **without** input floor adjustments (pre-floor PD). The weighted average PD reported
         in column 0050 uses the **post-floor** PD. Slotting exposures are excluded from this
         template and reported in OF 08.06.
+
+    !!! warning "18 rows, not 17"
+        OF 08.03 splits the CRR `0.00 to < 0.10` child band at 0.05%, replacing row 0020
+        with rows **0015** and **0025**. That is the only row-axis change from C 08.03,
+        and it takes the template to 18 rows. Pillar 3 template UKB CR6 does **not**
+        follow — it keeps `0.00 to < 0.10` in both regimes.
 
 === "Differences Summary"
 
@@ -1190,7 +1204,7 @@ and merge it with the generated template.
 ## C 08.05 / OF 08.05 — CR IRB PD Back-Testing
 
 C 08.05 reports **PD model back-testing** per IRB exposure class — comparing
-model-assigned PDs against realised one-year default rates across the same 17 fixed
+model-assigned PDs against realised one-year default rates across the same fixed
 PD range buckets used in C 08.03. This template is the supervisory back-testing view
 that supports IRB model validation under CRR Art. 180. One submission is filed per
 IRB exposure class. Slotting and CCR exposures are excluded.
@@ -1259,8 +1273,10 @@ PD — the same convention as OF 08.03.
 
 ### Row Structure
 
-The 17 PD range buckets are **identical** to C 08.03 / OF 08.03. Defaulted exposures
-are assigned to the 100% bucket (row 0170).
+The PD range buckets are **identical** to C 08.03 / OF 08.03 — the same hierarchical
+scale, and the same Basel 3.1 split of the first sub-band into rows 0015 / 0025 (17 rows
+under CRR, 18 under Basel 3.1). Defaulted exposures are assigned to the 100% bucket
+(row 0170).
 
 === "CRR (C 08.05)"
 
@@ -1286,7 +1302,8 @@ are assigned to the 100% bucket (row 0170).
 
 === "Basel 3.1 (OF 08.05)"
 
-    Identical row structure (17 PD range buckets, 0010–0170). Allocation uses
+    Identical row structure to OF 08.03 (18 PD range buckets: 0010–0170 with the
+    0015 / 0025 split replacing CRR's row 0020). Allocation uses
     **pre-input-floor** PD — see [PRA PS1/26 Annex II §3.3.7](https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/policy-statement/2026/january/ps126app1.pdf)
     "PD RANGE (PRE-INPUT FLOOR) (%)".
 

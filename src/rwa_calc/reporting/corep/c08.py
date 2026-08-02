@@ -154,7 +154,8 @@ Cell semantics (recorded decisions, this slice):
   fallbacks for the prior-year/historical carriers.
   Lineage-instrumented (R24): ``c08_03_plans`` / ``c08_05_plans`` expose the
   per-class sparse-PD-range plans (the data-driven c08_02 pattern; each row keys
-  the derived ``c08_pd_range`` band carried in ``row_terms``). C 08.05 is
+  the derived ``c08_pd_range`` leaf band — or ``c08_pd_parent`` for the four
+  hierarchical parent bands — carried in ``row_terms``). C 08.05 is
   execute-only (R13 deleted the rate postfix). C 08.03 has ONE post-execute pass
   (the provisions ladder on col 0110), on the reported frame the drill-down reads;
   cols 0010/0020 need none.
@@ -217,8 +218,8 @@ from rwa_calc.reporting.cellspec import (
     matched_counts,
     subset_rows,
 )
+from rwa_calc.reporting.corep.pd_scale import banded_rows
 from rwa_calc.reporting.corep.templates import (
-    C08_03_PD_RANGES,
     C08_04_ROWS,
     C08_06_CATEGORY_MAP,
     PD_BANDS,
@@ -1183,28 +1184,8 @@ def _pd_alloc_col(cols: set[str], framework: str) -> str | None:
     return pick(cols, "pd_floored", "pd")
 
 
-def _banded_rows(
-    class_df: pl.DataFrame, alloc_pd_col: str
-) -> tuple[list[tuple[str, str]], pl.DataFrame]:
-    """Assign the 17 fixed PD ranges; return the populated (ref, label) rows
-    in canonical order (plus 9999 Unassigned) and the banded frame."""
-    band_expr: pl.Expr = pl.lit("Unassigned")
-    for lower, upper, _ref, label in reversed(C08_03_PD_RANGES):
-        band_expr = (
-            pl.when((pl.col(alloc_pd_col) >= lower) & (pl.col(alloc_pd_col) < upper))
-            .then(pl.lit(label))
-            .otherwise(band_expr)
-        )
-    banded = class_df.with_columns(band_expr.alias("c08_pd_range"))
-    present = set(banded["c08_pd_range"].to_list())
-    rows = [(ref, label) for _lo, _hi, ref, label in C08_03_PD_RANGES if label in present]
-    if "Unassigned" in present:
-        rows.append(("9999", "Unassigned"))
-    return rows, banded
-
-
 def _c08_03_cells(  # noqa: PLR0913 - the full C 08.03 sparse-PD-range column surface
-    band_rows: list[tuple[str, str]],
+    band_rows: list[tuple[str, str, str]],
     cols: set[str],
     ead_col: str,
     rwa_col: str,
@@ -1220,8 +1201,8 @@ def _c08_03_cells(  # noqa: PLR0913 - the full C 08.03 sparse-PD-range column su
     off-BS rows sums 0.0 naturally, which is why the retired on/off whole-bucket
     fallback is gone. Col 0030 weights the average CCF by the off-BS gross."""
     cells: dict[tuple[str, str], CellSpec] = {}
-    for ref, label in band_rows:
-        terms: _Terms = (("c08_pd_range", label),)
+    for ref, label, term_col in band_rows:
+        terms: _Terms = ((term_col, label),)
         member = RowPredicate(equals=terms)
         cells[(ref, "0010")] = CellSpec(Sum("reporting_gross_on_bs"), predicate=member)
         cells[(ref, "0020")] = CellSpec(Sum("reporting_gross_off_bs"), predicate=member)
@@ -1263,10 +1244,11 @@ def c08_03_plans(
 ) -> dict[str, SheetPlan]:
     """Build the per-class C 08.03 execution plans for lineage (sparse PD rows).
 
-    Each class sheet has its OWN spec — rows are the populated PD ranges (plus an
-    optional 9999 Unassigned) derived per class by ``_banded_rows`` (the c08_02
-    data-driven pattern), keyed on the derived ``c08_pd_range`` label carried in
-    ``row_terms``. Keys on the sealed ``reporting_class_origin`` over the IRB
+    Each class sheet has its OWN spec — rows are the populated bands of the fixed
+    regulatory PD scale (plus an optional 9999 Unassigned) derived per class by
+    ``pd_scale.banded_rows`` (the c08_02 data-driven pattern), keyed on the derived
+    ``c08_pd_range`` / ``c08_pd_parent`` label carried in ``row_terms``. The scale
+    is hierarchical, so parent bands overlap and sum their sub-bands. Keys on the sealed ``reporting_class_origin`` over the IRB
     NON-slotting book, preserving ``generate_c08_03``'s error contract. C 08.03
     carries no "(-)"-labelled deduction column, so ``negative_cols`` is empty. The
     provisions ladder (col 0110) is the one post-execute pass, on the REPORTED
@@ -1296,9 +1278,9 @@ def c08_03_plans(
     plans: dict[str, SheetPlan] = {}
     for ec in irb_df[ec_col].drop_nulls().unique().sort().to_list():
         class_df = irb_df.filter(pl.col(ec_col) == ec)
-        band_rows, banded = _banded_rows(class_df, alloc_pd_col)
+        band_rows, banded = banded_rows(class_df, alloc_pd_col, framework)
         cells = _c08_03_cells(band_rows, data_cols, ead_col, rwa_col, pd_report_col, lgd_col)
-        rows = tuple(_Row(ref, label) for ref, label in band_rows)
+        rows = tuple(_Row(ref, label) for ref, label, _col in band_rows)
         plans[ec] = SheetPlan(
             spec=TemplateSpec(
                 name="c08_03", rows=rows, column_refs=column_refs, cells=cells, empty_cell="zero"
@@ -1306,7 +1288,7 @@ def c08_03_plans(
             frame=banded,
             ctx=ReportingContext(),
             negative_cols=frozenset(),
-            row_terms={ref: (("c08_pd_range", label),) for ref, label in band_rows},
+            row_terms={ref: ((col, label),) for ref, label, col in band_rows},
         )
     return plans
 
@@ -1324,7 +1306,8 @@ def generate_c08_03(
     reported frame — the provisions ladder (col 0110) — which the drill-down
     reads a cell's value from. Cols 0010/0020 (the sealed per-side gross
     carriers) need no post-pass. Each row's predicate is rebuilt from the plan's
-    ``row_terms`` (each a ``c08_pd_range`` label)."""
+    ``row_terms`` (a ``c08_pd_range`` leaf label, or ``c08_pd_parent`` for a
+    parent band)."""
     column_refs = tuple(col.ref for col in get_c08_03_columns(framework))
     result: dict[str, pl.DataFrame] = {}
     for ec, plan in c08_03_plans(results, cols, framework, errors).items():
@@ -1343,7 +1326,7 @@ def generate_c08_03(
 
 
 def _c08_05_cells(  # noqa: PLR0913 - the full C 08.05 PD-backtesting column surface
-    band_rows: list[tuple[str, str]],
+    band_rows: list[tuple[str, str, str]],
     cols: set[str],
     pd_report_col: str,
     *,
@@ -1357,8 +1340,8 @@ def _c08_05_cells(  # noqa: PLR0913 - the full C 08.05 PD-backtesting column sur
     05/06 trio: col 0040 (observed default rate) is an intra-row Formula and 0050
     a copy-of-0040 fallback (or the WeightedAvg historical rate when supplied)."""
     cells: dict[tuple[str, str], CellSpec] = {}
-    for ref, label in band_rows:
-        terms: _Terms = (("c08_pd_range", label),)
+    for ref, label, term_col in band_rows:
+        terms: _Terms = ((term_col, label),)
         member = RowPredicate(equals=terms)
         cells[(ref, "0010")] = CellSpec(
             WeightedAvg(pd_report_col, weight="c08_one"), predicate=member, empty_cell="null"
@@ -1399,7 +1382,7 @@ def c08_05_plans(
 ) -> dict[str, SheetPlan]:
     """Build the per-class C 08.05 execution plans for lineage (sparse PD rows).
 
-    Shares ``_banded_rows`` / ``_pd_alloc_col`` with C 08.03; each class sheet has
+    Shares ``pd_scale.banded_rows`` / ``_pd_alloc_col`` with C 08.03; each class sheet has
     its OWN sparse-PD-range spec, keyed on the sealed ``reporting_class_origin``
     over the IRB NON-slotting book (preserving ``generate_c08_05``'s error
     contract). Execute-only (R13 deleted the rate postfix), so ``generate_c08_05``
@@ -1426,7 +1409,7 @@ def c08_05_plans(
     plans: dict[str, SheetPlan] = {}
     for ec in irb_df[ec_col].drop_nulls().unique().sort().to_list():
         class_df = irb_df.filter(pl.col(ec_col) == ec)
-        band_rows, banded = _banded_rows(class_df, alloc_pd_col)
+        band_rows, banded = banded_rows(class_df, alloc_pd_col, framework)
         cells = _c08_05_cells(
             band_rows,
             data_cols,
@@ -1434,7 +1417,7 @@ def c08_05_plans(
             prior_present=prior_present,
             hist_present=hist_present,
         )
-        rows = tuple(_Row(ref, label) for ref, label in band_rows)
+        rows = tuple(_Row(ref, label) for ref, label, _col in band_rows)
         plans[ec] = SheetPlan(
             spec=TemplateSpec(
                 name="c08_05", rows=rows, column_refs=column_refs, cells=cells, empty_cell="zero"
@@ -1442,7 +1425,7 @@ def c08_05_plans(
             frame=banded,
             ctx=ReportingContext(),
             negative_cols=frozenset(),
-            row_terms={ref: (("c08_pd_range", label),) for ref, label in band_rows},
+            row_terms={ref: ((col, label),) for ref, label, col in band_rows},
         )
     return plans
 

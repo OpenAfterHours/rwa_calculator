@@ -746,39 +746,70 @@ B31_C08_02_COLUMNS: list[COREPColumn] = [
 # C 08.03 / OF 08.03 — IRB PD RANGES (regulatory fixed buckets)
 # =============================================================================
 
-# C 08.03 uses 17 fixed regulatory PD range buckets (unlike C 08.02 which uses
+# C 08.03 uses the fixed regulatory PD scale (unlike C 08.02, which uses
 # firm-specific internal rating grades). One submission per IRB exposure class.
 # Slotting exposures are excluded.
 # Each tuple: (lower_bound_inclusive, upper_bound_exclusive, row_ref, display_label)
 #
-# Basel 3.1 distinction: Row allocation uses pre-input-floor PD
-# ("PD RANGE (PRE-INPUT FLOOR)"), but column 0050 reports the post-input-floor
-# exposure-weighted average PD ("EXPOSURE WEIGHTED AVERAGE PD (POST INPUT FLOOR)").
+# The scale is HIERARCHICAL, not flat: eight top-level bands partition [0, inf),
+# and four of them repeat as a finer sub-breakdown on the rows immediately below.
+# A parent row therefore OVERLAPS its own children and equals their sum. The
+# published validation rules assert exactly that, and are the reason the flat
+# 17-bucket scale this table used to carry could never have tied out:
+#   EBA v09753-v09756 / BoE boe_b0767-boe_b0770
+#     {r0010} = {r0020} + {r0030}          (CRR)   / {r0015}+{r0025}+{r0030} (B3.1)
+#     {r0070} = {r0080} + {r0090}
+#     {r0100} = {r0110} + {r0120}
+#     {r0130} = {r0140} + {r0150} + {r0160}
+# Bounds are decimal PD (0.0015 = 0.15%). Labels are reproduced verbatim from the
+# published template, including its inconsistent decimal formatting.
+#
+# Basel 3.1 distinction: OF 08.03 splits the first sub-band again at 0.05% —
+# rows 0015 / 0025 replace the single CRR row 0020 — giving 18 rows against the
+# CRR template's 17. (Pillar 3 CR6 does NOT follow: it keeps 0.00 to <0.10 in
+# both regimes. See ``pillar3.templates.CR6_PD_RANGES``.)
+#
+# Row allocation uses pre-input-floor PD ("PD RANGE (PRE-INPUT FLOOR)"), but
+# column 0050 reports the post-input-floor exposure-weighted average PD
+# ("EXPOSURE WEIGHTED AVERAGE PD (POST INPUT FLOOR)").
 #
 # References:
-# - CRR Art. 153 (IRB PD distribution), Regulation (EU) 2021/451 Annex I
+# - CRR Art. 153 (IRB PD distribution), Regulation (EU) 2021/451 Annex I (C 08.03)
 # - PRA PS1/26 Annex I (OF 08.03 template layout)
-# - PRA PS1/26 Annex II (OF 08.03 reporting instructions)
+# - PRA PS1/26 Annex II §3.3.5 (OF 08.03 reporting instructions)
 
-C08_03_PD_RANGES: list[tuple[float, float, str, str]] = [
-    (0.0, 0.0003, "0010", "0.00 to < 0.03%"),
-    (0.0003, 0.0005, "0020", "0.03 to < 0.05%"),
-    (0.0005, 0.0010, "0030", "0.05 to < 0.10%"),
-    (0.0010, 0.0015, "0040", "0.10 to < 0.15%"),
-    (0.0015, 0.0020, "0050", "0.15 to < 0.20%"),
-    (0.0020, 0.0025, "0060", "0.20 to < 0.25%"),
-    (0.0025, 0.0050, "0070", "0.25 to < 0.50%"),
-    (0.0050, 0.0075, "0080", "0.50 to < 0.75%"),
-    (0.0075, 0.0100, "0090", "0.75 to < 1.00%"),
-    (0.0100, 0.0250, "0100", "1.00 to < 2.50%"),
-    (0.0250, 0.0500, "0110", "2.50 to < 5.00%"),
-    (0.0500, 0.1000, "0120", "5.00 to < 10.00%"),
-    (0.1000, 0.2000, "0130", "10.00 to < 20.00%"),
-    (0.2000, 0.3000, "0140", "20.00 to < 30.00%"),
-    (0.3000, 0.5000, "0150", "30.00 to < 50.00%"),
-    (0.5000, 1.0000, "0160", "50.00 to < 100%"),
-    (1.0000, float("inf"), "0170", "100% (Default)"),
+CRR_C08_03_PD_RANGES: list[tuple[float, float, str, str]] = [
+    (0.0000, 0.0015, "0010", "0.00 to <0.15"),
+    (0.0000, 0.0010, "0020", "0.00 to <0.10"),
+    (0.0010, 0.0015, "0030", "0.10 to <0.15"),
+    (0.0015, 0.0025, "0040", "0.15 to <0.25"),
+    (0.0025, 0.0050, "0050", "0.25 to <0.50"),
+    (0.0050, 0.0075, "0060", "0.50 to <0.75"),
+    (0.0075, 0.0250, "0070", "0.75 to <2.5"),
+    (0.0075, 0.0175, "0080", "0.75 to <1.75"),
+    (0.0175, 0.0250, "0090", "1.75 to <2.5"),
+    (0.0250, 0.1000, "0100", "2.5 to <10"),
+    (0.0250, 0.0500, "0110", "2.5 to <5"),
+    (0.0500, 0.1000, "0120", "5 to <10"),
+    (0.1000, 1.0000, "0130", "10 to <100"),
+    (0.1000, 0.2000, "0140", "10 to <20"),
+    (0.2000, 0.3000, "0150", "20 to <30"),
+    (0.3000, 1.0000, "0160", "30 to <100"),
+    (1.0000, float("inf"), "0170", "100 (Default)"),
 ]
+
+B31_C08_03_PD_RANGES: list[tuple[float, float, str, str]] = [
+    (0.0000, 0.0015, "0010", "0.00 to <0.15"),
+    (0.0000, 0.0005, "0015", "0.00 to <0.05"),
+    (0.0005, 0.0010, "0025", "0.05 to <0.10"),
+    (0.0010, 0.0015, "0030", "0.10 to <0.15"),
+    *CRR_C08_03_PD_RANGES[3:],
+]
+
+# The parent rows: each equals the sum of the sub-band rows that follow it.
+# Consumers that treat the scale as a partition must exclude these, or they
+# double-count. Shared by both regimes (only the first parent's CHILDREN differ).
+C08_03_PD_PARENT_REFS: frozenset[str] = frozenset({"0010", "0070", "0100", "0130"})
 
 # C 08.03 / OF 08.03 has 11 columns — simpler than C 08.01/08.02.
 # References: Regulation (EU) 2021/451 Annex I (C 08.03), PRA PS1/26 Annex I (OF 08.03)
@@ -1942,6 +1973,16 @@ def get_c08_02_columns(framework: str = "CRR") -> list[COREPColumn]:
 def get_c08_03_columns(framework: str = "CRR") -> list[COREPColumn]:
     """Return the C 08.03 / OF 08.03 column definitions for the given framework."""
     return B31_C08_03_COLUMNS if framework == "BASEL_3_1" else CRR_C08_03_COLUMNS
+
+
+def get_c08_03_pd_ranges(framework: str = "CRR") -> list[tuple[float, float, str, str]]:
+    """Return the fixed PD scale rows for C 08.03 / C 08.05 (shared axis).
+
+    OF 08.03 splits the 0.00-0.10 child at 0.05% (rows 0015 / 0025), giving 18
+    rows against the CRR template's 17. Both regimes carry the same four parent
+    rows (``C08_03_PD_PARENT_REFS``), which overlap and sum their children.
+    """
+    return B31_C08_03_PD_RANGES if framework == "BASEL_3_1" else CRR_C08_03_PD_RANGES
 
 
 def get_sa_row_sections(framework: str = "CRR") -> list[RowSection]:

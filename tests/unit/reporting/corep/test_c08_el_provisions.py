@@ -24,6 +24,7 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
+from rwa_calc.reporting.corep.templates import C08_03_PD_PARENT_REFS
 from tests.fixtures.recon_ledger import LedgerShimCorepGenerator
 from tests.unit.reporting.corep._builders import _get_total_row
 
@@ -299,5 +300,8 @@ class TestC08ProvisionsSealedCarrier:
         bundle = gen.generate_from_lazyframe(_irb_pd_bucket_allocated_only())
 
         corp = bundle.c08_03["corporate"]
-        # One populated bucket; 0110 is positive (C 08.03 has no §1.3 negation).
-        assert float(corp["0110"].sum()) == pytest.approx(60.0)
+        # One populated LEAF bucket; 0110 is positive (C 08.03 has no §1.3
+        # negation). Parent bands repeat their children's span, so they are
+        # excluded from the sum — including them would double-count.
+        leaves = corp.filter(~pl.col("row_ref").is_in(list(C08_03_PD_PARENT_REFS)))
+        assert float(leaves["0110"].sum()) == pytest.approx(60.0)

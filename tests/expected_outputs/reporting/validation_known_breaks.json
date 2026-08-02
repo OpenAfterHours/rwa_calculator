@@ -88,8 +88,8 @@
       "templates_covered": 5
     },
     "crr/irb-classes": {
-      "PASS": 75,
-      "FAIL": 9,
+      "PASS": 83,
+      "FAIL": 1,
       "VACUOUS": 25,
       "NOT_EVALUATED": 632,
       "rules_enforced": 741,
@@ -98,12 +98,12 @@
       "templates_covered": 8
     },
     "b31/irb-classes": {
-      "PASS": 145,
-      "FAIL": 16,
+      "PASS": 153,
+      "FAIL": 10,
       "VACUOUS": 180,
-      "NOT_EVALUATED": 467,
+      "NOT_EVALUATED": 465,
       "rules_enforced": 808,
-      "rules_executed": 341,
+      "rules_executed": 343,
       "templates_emitted": 11,
       "templates_covered": 11
     }
@@ -239,102 +239,6 @@
     },
     {
       "regime": "b31",
-      "rule_id": "boe_b0768",
-      "severity": "ERROR",
-      "reason": "C 08.03 / C 08.05 row refs are assigned to a FLAT ladder of 17 mutually exclusive PD bands (C08_03_PD_RANGES, templates.py), but the published row taxonomy is NESTED: r0070 is the parent '0.75 to < 2.50%' of r0080/r0090, where our r0070 is the disjoint band '0.25 to < 0.50%'. Parent and children are therefore mutually exclusive in our model and the identity can never hold at any figure - a structural template defect, not a data gap. Fixing it means re-cutting the row axis onto the published parent/child bands, which also moves every C 08.03/08.05 golden",
-      "portfolios": [
-        "irb-classes"
-      ],
-      "failing_coordinates": 5,
-      "coordinates": [
-        "OF08.03.01.01[corporate][c0010]",
-        "OF08.03.01.01[corporate][c0040]",
-        "OF08.03.01.01[corporate][c0060]",
-        "OF08.03.01.01[corporate][c0090]",
-        "OF08.03.01.01[corporate][c0100]"
-      ],
-      "expression": "{t: OF08.03.01.01, r: 0070} = sum({t: OF08.03.01.01, r: 0080; 0090})"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0769",
-      "severity": "ERROR",
-      "reason": "C 08.03 / C 08.05 row refs are assigned to a FLAT ladder of 17 mutually exclusive PD bands (C08_03_PD_RANGES, templates.py), but the published row taxonomy is NESTED: r0070 is the parent '0.75 to < 2.50%' of r0080/r0090, where our r0070 is the disjoint band '0.25 to < 0.50%'. Parent and children are therefore mutually exclusive in our model and the identity can never hold at any figure - a structural template defect, not a data gap. Fixing it means re-cutting the row axis onto the published parent/child bands, which also moves every C 08.03/08.05 golden",
-      "portfolios": [
-        "irb-classes"
-      ],
-      "failing_coordinates": 5,
-      "coordinates": [
-        "OF08.03.01.01[corporate][c0010]",
-        "OF08.03.01.01[corporate][c0040]",
-        "OF08.03.01.01[corporate][c0060]",
-        "OF08.03.01.01[corporate][c0090]",
-        "OF08.03.01.01[corporate][c0100]"
-      ],
-      "expression": "{t: OF08.03.01.01, r: 0100} = sum({t: OF08.03.01.01, r: 0110; 0120})"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0770",
-      "severity": "ERROR",
-      "reason": "C 08.03 / C 08.05 row refs are assigned to a FLAT ladder of 17 mutually exclusive PD bands (C08_03_PD_RANGES, templates.py), but the published row taxonomy is NESTED: r0070 is the parent '0.75 to < 2.50%' of r0080/r0090, where our r0070 is the disjoint band '0.25 to < 0.50%'. Parent and children are therefore mutually exclusive in our model and the identity can never hold at any figure - a structural template defect, not a data gap. Fixing it means re-cutting the row axis onto the published parent/child bands, which also moves every C 08.03/08.05 golden",
-      "portfolios": [
-        "irb-classes"
-      ],
-      "failing_coordinates": 5,
-      "coordinates": [
-        "OF08.03.01.01[corporate][c0010]",
-        "OF08.03.01.01[corporate][c0040]",
-        "OF08.03.01.01[corporate][c0060]",
-        "OF08.03.01.01[corporate][c0090]",
-        "OF08.03.01.01[corporate][c0100]"
-      ],
-      "expression": "{t: OF08.03.01.01, r: 0130} = sum({t: OF08.03.01.01, r: 0140; 0150; 0160})"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0774",
-      "severity": "ERROR",
-      "reason": "C 08.03 / C 08.05 row refs are assigned to a FLAT ladder of 17 mutually exclusive PD bands (C08_03_PD_RANGES, templates.py), but the published row taxonomy is NESTED: r0070 is the parent '0.75 to < 2.50%' of r0080/r0090, where our r0070 is the disjoint band '0.25 to < 0.50%'. Parent and children are therefore mutually exclusive in our model and the identity can never hold at any figure - a structural template defect, not a data gap. Fixing it means re-cutting the row axis onto the published parent/child bands, which also moves every C 08.03/08.05 golden. On C 08.05 the same defect presents in OBLIGOR COUNTS rather than amounts (1 against 2), because that template counts obligors per band",
-      "portfolios": [
-        "irb-classes"
-      ],
-      "failing_coordinates": 1,
-      "coordinates": [
-        "OF08.05.00.01[corporate][c0020]"
-      ],
-      "expression": "{t: OF08.05.00.01, r: 0070} = sum({t: OF08.05.00.01, r: 0080; 0090})"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0775",
-      "severity": "ERROR",
-      "reason": "C 08.03 / C 08.05 row refs are assigned to a FLAT ladder of 17 mutually exclusive PD bands (C08_03_PD_RANGES, templates.py), but the published row taxonomy is NESTED: r0070 is the parent '0.75 to < 2.50%' of r0080/r0090, where our r0070 is the disjoint band '0.25 to < 0.50%'. Parent and children are therefore mutually exclusive in our model and the identity can never hold at any figure - a structural template defect, not a data gap. Fixing it means re-cutting the row axis onto the published parent/child bands, which also moves every C 08.03/08.05 golden. On C 08.05 the same defect presents in OBLIGOR COUNTS rather than amounts (1 against 2), because that template counts obligors per band",
-      "portfolios": [
-        "irb-classes"
-      ],
-      "failing_coordinates": 1,
-      "coordinates": [
-        "OF08.05.00.01[corporate][c0020]"
-      ],
-      "expression": "{t: OF08.05.00.01, r: 0100} = sum({t: OF08.05.00.01, r: 0110; 0120})"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0776",
-      "severity": "ERROR",
-      "reason": "C 08.03 / C 08.05 row refs are assigned to a FLAT ladder of 17 mutually exclusive PD bands (C08_03_PD_RANGES, templates.py), but the published row taxonomy is NESTED: r0070 is the parent '0.75 to < 2.50%' of r0080/r0090, where our r0070 is the disjoint band '0.25 to < 0.50%'. Parent and children are therefore mutually exclusive in our model and the identity can never hold at any figure - a structural template defect, not a data gap. Fixing it means re-cutting the row axis onto the published parent/child bands, which also moves every C 08.03/08.05 golden. On C 08.05 the same defect presents in OBLIGOR COUNTS rather than amounts (1 against 2), because that template counts obligors per band",
-      "portfolios": [
-        "irb-classes"
-      ],
-      "failing_coordinates": 1,
-      "coordinates": [
-        "OF08.05.00.01[corporate][c0020]"
-      ],
-      "expression": "{t: OF08.05.00.01, r: 0130} = sum({t: OF08.05.00.01, r: 0140; 0150; 0160})"
-    },
-    {
-      "regime": "b31",
       "rule_id": "boe_b0778",
       "severity": "ERROR",
       "reason": "limit of the published rule, not of our output: after the DPM-fraction fix these now fail ONLY on roll-out-class rows with ZERO exposure, where every coordinate reads lhs=0.0 against rhs=1.0. A row with no exposure admits no partition - 0/0 has no answer - and the rule carries no emptiness guard, so it demands the three shares total 1 on a row where there is nothing to share. Coordinate counts now vary by portfolio (6-14 CRR, 3-7 B3.1) purely with how many roll-out classes each leaves empty",
@@ -367,134 +271,6 @@
         "OF08.07.01.01[c0050]"
       ],
       "expression": "{t: OF08.07.01.01, r: 0260} = sum({t: OF08.07.01.01, r: 0180; 0190; 0200; 0210; 0220; 0230; 0240; 0250})"
-    },
-    {
-      "regime": "crr",
-      "rule_id": "v09753_m",
-      "severity": "WARNING",
-      "reason": "C 08.03 / C 08.05 row refs are assigned to a FLAT ladder of 17 mutually exclusive PD bands (C08_03_PD_RANGES, templates.py), but the published row taxonomy is NESTED: r0070 is the parent '0.75 to < 2.50%' of r0080/r0090, where our r0070 is the disjoint band '0.25 to < 0.50%'. Parent and children are therefore mutually exclusive in our model and the identity can never hold at any figure - a structural template defect, not a data gap. Fixing it means re-cutting the row axis onto the published parent/child bands, which also moves every C 08.03/08.05 golden",
-      "portfolios": [
-        "irb-classes"
-      ],
-      "failing_coordinates": 5,
-      "coordinates": [
-        "C 08.03[central_govt_central_bank][c0010]",
-        "C 08.03[central_govt_central_bank][c0040]",
-        "C 08.03[central_govt_central_bank][c0060]",
-        "C 08.03[central_govt_central_bank][c0090]",
-        "C 08.03[central_govt_central_bank][c0100]"
-      ],
-      "expression": "{r0010} = {r0020} + {r0030}"
-    },
-    {
-      "regime": "crr",
-      "rule_id": "v09754_m",
-      "severity": "WARNING",
-      "reason": "C 08.03 / C 08.05 row refs are assigned to a FLAT ladder of 17 mutually exclusive PD bands (C08_03_PD_RANGES, templates.py), but the published row taxonomy is NESTED: r0070 is the parent '0.75 to < 2.50%' of r0080/r0090, where our r0070 is the disjoint band '0.25 to < 0.50%'. Parent and children are therefore mutually exclusive in our model and the identity can never hold at any figure - a structural template defect, not a data gap. Fixing it means re-cutting the row axis onto the published parent/child bands, which also moves every C 08.03/08.05 golden",
-      "portfolios": [
-        "irb-classes"
-      ],
-      "failing_coordinates": 5,
-      "coordinates": [
-        "C 08.03[corporate][c0010]",
-        "C 08.03[corporate][c0040]",
-        "C 08.03[corporate][c0060]",
-        "C 08.03[corporate][c0090]",
-        "C 08.03[corporate][c0100]"
-      ],
-      "expression": "{r0070} = {r0080} + {r0090}"
-    },
-    {
-      "regime": "crr",
-      "rule_id": "v09755_m",
-      "severity": "WARNING",
-      "reason": "C 08.03 / C 08.05 row refs are assigned to a FLAT ladder of 17 mutually exclusive PD bands (C08_03_PD_RANGES, templates.py), but the published row taxonomy is NESTED: r0070 is the parent '0.75 to < 2.50%' of r0080/r0090, where our r0070 is the disjoint band '0.25 to < 0.50%'. Parent and children are therefore mutually exclusive in our model and the identity can never hold at any figure - a structural template defect, not a data gap. Fixing it means re-cutting the row axis onto the published parent/child bands, which also moves every C 08.03/08.05 golden",
-      "portfolios": [
-        "irb-classes"
-      ],
-      "failing_coordinates": 5,
-      "coordinates": [
-        "C 08.03[corporate][c0010]",
-        "C 08.03[corporate][c0040]",
-        "C 08.03[corporate][c0060]",
-        "C 08.03[corporate][c0090]",
-        "C 08.03[corporate][c0100]"
-      ],
-      "expression": "{r0100} = {r0110} + {r0120}"
-    },
-    {
-      "regime": "crr",
-      "rule_id": "v09756_m",
-      "severity": "WARNING",
-      "reason": "C 08.03 / C 08.05 row refs are assigned to a FLAT ladder of 17 mutually exclusive PD bands (C08_03_PD_RANGES, templates.py), but the published row taxonomy is NESTED: r0070 is the parent '0.75 to < 2.50%' of r0080/r0090, where our r0070 is the disjoint band '0.25 to < 0.50%'. Parent and children are therefore mutually exclusive in our model and the identity can never hold at any figure - a structural template defect, not a data gap. Fixing it means re-cutting the row axis onto the published parent/child bands, which also moves every C 08.03/08.05 golden",
-      "portfolios": [
-        "irb-classes"
-      ],
-      "failing_coordinates": 5,
-      "coordinates": [
-        "C 08.03[corporate][c0010]",
-        "C 08.03[corporate][c0040]",
-        "C 08.03[corporate][c0060]",
-        "C 08.03[corporate][c0090]",
-        "C 08.03[corporate][c0100]"
-      ],
-      "expression": "{r0130} = {r0140} + {r0150} + {r0160}"
-    },
-    {
-      "regime": "crr",
-      "rule_id": "v09757_m",
-      "severity": "WARNING",
-      "reason": "C 08.03 / C 08.05 row refs are assigned to a FLAT ladder of 17 mutually exclusive PD bands (C08_03_PD_RANGES, templates.py), but the published row taxonomy is NESTED: r0070 is the parent '0.75 to < 2.50%' of r0080/r0090, where our r0070 is the disjoint band '0.25 to < 0.50%'. Parent and children are therefore mutually exclusive in our model and the identity can never hold at any figure - a structural template defect, not a data gap. Fixing it means re-cutting the row axis onto the published parent/child bands, which also moves every C 08.03/08.05 golden. On C 08.05 the same defect presents in OBLIGOR COUNTS rather than amounts (1 against 2), because that template counts obligors per band",
-      "portfolios": [
-        "irb-classes"
-      ],
-      "failing_coordinates": 1,
-      "coordinates": [
-        "C 08.05[central_govt_central_bank][c0020]"
-      ],
-      "expression": "{r0010} = {r0020} + {r0030}"
-    },
-    {
-      "regime": "crr",
-      "rule_id": "v09758_m",
-      "severity": "WARNING",
-      "reason": "C 08.03 / C 08.05 row refs are assigned to a FLAT ladder of 17 mutually exclusive PD bands (C08_03_PD_RANGES, templates.py), but the published row taxonomy is NESTED: r0070 is the parent '0.75 to < 2.50%' of r0080/r0090, where our r0070 is the disjoint band '0.25 to < 0.50%'. Parent and children are therefore mutually exclusive in our model and the identity can never hold at any figure - a structural template defect, not a data gap. Fixing it means re-cutting the row axis onto the published parent/child bands, which also moves every C 08.03/08.05 golden. On C 08.05 the same defect presents in OBLIGOR COUNTS rather than amounts (1 against 2), because that template counts obligors per band",
-      "portfolios": [
-        "irb-classes"
-      ],
-      "failing_coordinates": 1,
-      "coordinates": [
-        "C 08.05[corporate][c0020]"
-      ],
-      "expression": "{r0070} = {r0080} + {r0090}"
-    },
-    {
-      "regime": "crr",
-      "rule_id": "v09759_m",
-      "severity": "WARNING",
-      "reason": "C 08.03 / C 08.05 row refs are assigned to a FLAT ladder of 17 mutually exclusive PD bands (C08_03_PD_RANGES, templates.py), but the published row taxonomy is NESTED: r0070 is the parent '0.75 to < 2.50%' of r0080/r0090, where our r0070 is the disjoint band '0.25 to < 0.50%'. Parent and children are therefore mutually exclusive in our model and the identity can never hold at any figure - a structural template defect, not a data gap. Fixing it means re-cutting the row axis onto the published parent/child bands, which also moves every C 08.03/08.05 golden. On C 08.05 the same defect presents in OBLIGOR COUNTS rather than amounts (1 against 2), because that template counts obligors per band",
-      "portfolios": [
-        "irb-classes"
-      ],
-      "failing_coordinates": 1,
-      "coordinates": [
-        "C 08.05[corporate][c0020]"
-      ],
-      "expression": "{r0100} = {r0110} + {r0120}"
-    },
-    {
-      "regime": "crr",
-      "rule_id": "v09760_m",
-      "severity": "WARNING",
-      "reason": "C 08.03 / C 08.05 row refs are assigned to a FLAT ladder of 17 mutually exclusive PD bands (C08_03_PD_RANGES, templates.py), but the published row taxonomy is NESTED: r0070 is the parent '0.75 to < 2.50%' of r0080/r0090, where our r0070 is the disjoint band '0.25 to < 0.50%'. Parent and children are therefore mutually exclusive in our model and the identity can never hold at any figure - a structural template defect, not a data gap. Fixing it means re-cutting the row axis onto the published parent/child bands, which also moves every C 08.03/08.05 golden. On C 08.05 the same defect presents in OBLIGOR COUNTS rather than amounts (1 against 2), because that template counts obligors per band",
-      "portfolios": [
-        "irb-classes"
-      ],
-      "failing_coordinates": 1,
-      "coordinates": [
-        "C 08.05[corporate][c0020]"
-      ],
-      "expression": "{r0130} = {r0140} + {r0150} + {r0160}"
     },
     {
       "regime": "crr",

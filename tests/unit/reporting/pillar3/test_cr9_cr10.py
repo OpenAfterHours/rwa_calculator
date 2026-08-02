@@ -653,16 +653,18 @@ class TestCR9PDAllocation:
     """Tests for PD range bucket assignment in CR9."""
 
     def test_pd_allocation_uses_original_pd(self, generator: Pillar3Generator):
-        """B31 allocates by pd (pre-input-floor), not pd_floored."""
+        """B31 allocates by pd (pre-input-floor), not pd_floored.
+
+        CP2 (F-IRB institution) straddles a band boundary: pd=0.004 (0.40%)
+        belongs to row "5" (0.25 to <0.50) while pd_floored=0.005 (0.50%) would
+        land in row "6" (0.50 to <0.75), so the two bases are distinguishable.
+        """
         data = _make_cr9_irb_data()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
-        # P2.49: CP1 (F-IRB corporate, cp_is_financial_sector_entity=False) →
-        # foundation_irb - corporate_other_non_sme
-        corp = bundle.cr9["foundation_irb - corporate_other_non_sme"]
-        # Corporate: pd=0.018 → bucket "10" (1.00-2.50%)
-        non_total = corp.filter(pl.col("row_ref") != "18")
-        refs = non_total["row_ref"].to_list()
-        assert "10" in refs  # 1.00 to < 2.50%
+        inst = bundle.cr9["foundation_irb - institution"]
+        refs = inst.filter(pl.col("row_ref") != "18")["row_ref"].to_list()
+        assert "5" in refs  # 0.25 to <0.50 — the pre-input-floor band
+        assert "6" not in refs  # 0.50 to <0.75 — the post-floor band, not used
 
     def test_defaulted_in_100_percent_bucket(self, generator: Pillar3Generator):
         """Defaulted exposures (PD=1.0) should be in the 100% (Default) bucket."""

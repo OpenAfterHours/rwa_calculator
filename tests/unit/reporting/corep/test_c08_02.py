@@ -215,20 +215,35 @@ def _irb_results_cross_class_substitution() -> pl.LazyFrame:
     )
 
 
-class TestC0802SubstitutionInflowDisposition:
-    """R12 — recorded decision: C 08.02 (the by-PD-grade breakdown) deliberately
-    does NOT receive the cross-class substitution INFLOW (col 0080), so the
-    inflow is a MONITORED, documented divergence from C 08.01 — not silent drift.
+class TestC0802InflowLandsOnUnassignedRow:
+    """R12's inflow-free CONCLUSION is SUPERSEDED; its per-grade reasoning is
+    not. Both halves are pinned here, with the published rules that forced
+    the reversal.
 
-    Basis (see ``corep/c08.py`` module docstring): C 08 keys every sheet on the
-    obligor-basis ``reporting_class_origin``. A guaranteed leg substituted from
-    class X into class Y sits in X's ORIGIN sheet (reported as an OUTFLOW, col
-    0070, at the OBLIGOR's grade) and carries the obligor's PD grade, never the
-    guarantor's — so the inflow into Y is composed of legs that never appear in
-    Y's partition. C 08.01 lands that per-destination-class scalar on its Total
-    row; C 08.02 has no Total row and no origin-basis grade home for it, so 0080
-    stays 0.0 on every grade row. Attributing it per grade would require the
-    guarantor's rating grade sealed per-leg (a deferred engine enhancement).
+    R12 (recorded decision, retired) held that C 08.02's col 0080 stays a
+    constant 0.0 on EVERY grade row, on the basis that a guaranteed leg
+    substituted from class X into class Y sits in X's ORIGIN sheet and carries
+    the OBLIGOR's PD grade, never the guarantor's — so the inflow into Y is
+    made of legs that never appear in Y's origin-basis partition, and
+    attributing it to a specific grade would require the guarantor's rating
+    grade sealed per-leg (a deferred engine enhancement). That reasoning about
+    per-GRADE attribution is still correct and still load-bearing (see
+    ``test_no_graded_row_carries_the_inflow`` below) — it is R12's CONCLUSION
+    that C 08.02 therefore carries no inflow at all which was wrong.
+
+    Four LIVE ERROR-severity published rules require C 08.02 to sum to
+    C 08.01 row 0070's inflow:
+        boe_b0752_8 == boe_b0814_07 : {OF08.01 r0070, c0080} = sum({OF08.02, c0080})
+        boe_b0752_9 == boe_b0814_08 : {OF08.01 r0070, c0090} = sum({OF08.02, c0090})
+    Leaving C 08.02 inflow-free made all four unsatisfiable on every
+    guaranteed portfolio. The fix keeps R12's reasoning intact — no GRADED row
+    claims a guarantor grade it does not have — and lands the inflow on
+    C 08.02's existing "Unassigned" residual row instead: an inflow whose
+    guarantor grade the ledger does not carry genuinely IS an exposure with no
+    assigned grade, so that row states exactly what is known without
+    inventing a grade. Measured result: this rule quartet (plus ``v0338_m`` /
+    ``boe_b0745`` / ``boe_b0744``) now passes; the portfolio went from
+    CRR 6 / B3.1 18 failing supervisory rules to CRR 3 / B3.1 13.
 
     Fixture: IRB_CORP_2 (corporate, PD 1%, guaranteed_portion 800) migrates into
     institution; IRB_INST_1 (institution, PD 0.2%) is the sole institution-origin
@@ -238,44 +253,54 @@ class TestC0802SubstitutionInflowDisposition:
     _INFLOW = 800.0
 
     @pytest.mark.parametrize("framework", ["CRR", "BASEL_3_1"])
-    def test_destination_sheet_has_zero_inflow(self, framework: str) -> None:
-        """C 08.02[institution] carries NO substitution inflow under either
-        framework: col 0080 sums to 0.0 across its grade rows (the inflow legs
-        are not in this origin partition)."""
+    def test_inflow_lands_on_the_unassigned_row(self, framework: str) -> None:
+        """The "Unassigned" row carries the full inflow on both cols 0080 and
+        0090 (it has no native exposure of its own — 0020 stays 0.0)."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(
             _irb_results_cross_class_substitution(), framework=framework
         )
-        inst = bundle.c08_02["institution"]
-        assert inst["0080"].fill_null(0.0).sum() == pytest.approx(0.0)
+        unassigned = bundle.c08_02["institution"].filter(pl.col("row_ref") == "Unassigned")
+        assert unassigned.height == 1
+        assert unassigned["0020"][0] == pytest.approx(0.0)
+        assert unassigned["0080"][0] == pytest.approx(self._INFLOW)
+        assert unassigned["0090"][0] == pytest.approx(self._INFLOW)
 
-    def test_inflow_diverges_from_c0801_total(self) -> None:
-        """The monitored divergence: the sum of C 08.02[institution] col 0080 is
-        0.0, while C 08.01's Total row carries the full inflow (800) — the two
-        differ by exactly the inbound amount."""
+    def test_no_graded_row_carries_the_inflow(self) -> None:
+        """R12's actual reasoning, still pinned: the graded row (the sole
+        institution-origin leg's own PD band) carries ONLY its own book — no
+        inflow, because the guarantor's grade is not sealed per-leg."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_results_cross_class_substitution())
+        graded = bundle.c08_02["institution"].filter(pl.col("row_ref") != "Unassigned")
+        assert graded.height > 0
+        assert graded["0080"].fill_null(0.0).sum() == pytest.approx(0.0)
+        assert graded["0090"].fill_null(0.0).sum() == pytest.approx(2_000.0)
+
+    def test_col_0080_ties_out_with_c0801(self) -> None:
+        """``boe_b0752_8`` / ``boe_b0814_07``: {C 08.01 r0070, c0080} = sum({C 08.02, c0080})."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_cross_class_substitution())
         c0802_inflow = bundle.c08_02["institution"]["0080"].fill_null(0.0).sum()
         c0801_inflow = _get_total_row(bundle.c08_01["institution"])["0080"][0]
         assert c0801_inflow == pytest.approx(self._INFLOW)
-        assert c0802_inflow == pytest.approx(0.0)
-        assert c0801_inflow - c0802_inflow == pytest.approx(self._INFLOW)
+        assert c0802_inflow == pytest.approx(c0801_inflow)
 
-    def test_exposure_after_substitution_short_by_inflow(self) -> None:
-        """Correspondingly, C 08.02[institution] col 0090 (exposure after CRM
-        substitution) is short of C 08.01's Total 0090 by the inflow: the grade
-        breakdown foots the origin book (0020 only), while the C 08.01 total adds
-        the inbound 800 on top."""
+    def test_col_0090_ties_out_with_c0801(self) -> None:
+        """``boe_b0752_9`` / ``boe_b0814_08``: {C 08.01 r0070, c0090} = sum({C 08.02, c0090})."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_cross_class_substitution())
         c0802_0090 = bundle.c08_02["institution"]["0090"].fill_null(0.0).sum()
         c0801_0090 = _get_total_row(bundle.c08_01["institution"])["0090"][0]
-        assert c0801_0090 - c0802_0090 == pytest.approx(self._INFLOW)
+        assert c0801_0090 == pytest.approx(2_800.0)
+        assert c0802_0090 == pytest.approx(c0801_0090)
 
-    def test_outflow_side_reconciles(self) -> None:
-        """Positive control — the divergence is inflow-only: on the ORIGIN sheet
+    def test_outflow_side_still_reconciles(self) -> None:
+        """Positive control, unaffected by the inflow fix: on the ORIGIN sheet
         the substitution OUTFLOW (col 0070) reconciles between C 08.02 and
-        C 08.01 (both -800 after the Annex II §1.3 negation)."""
+        C 08.01 (both -800 after the Annex II §1.3 negation) — the outflow
+        side was never part of the divergence R12's inflow-free conclusion
+        caused, so it must still hold unchanged."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_cross_class_substitution())
         c0802_outflow = bundle.c08_02["corporate"]["0070"].fill_null(0.0).sum()

@@ -51,11 +51,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     exercised the block. Firms reporting guaranteed exposures will see col 0070 populate
     where it previously read zero, col 0090 rise by the amount that was being deducted
     twice, and inflows appear on the guarantor's sheet.
-  - **Recorded residual**: the outflow subtotal counts every route in the block, but only
-    the unfunded routes carry a destination class — the sealed ledger holds a guarantor
-    class for guarantee and credit-derivative legs only. C 07.00's funded limbs and
-    C 08.01's col 0060 therefore still produce an outflow with no matching inflow.
-    Closing it needs an issuer class sealed per collateral leg.
+  - **The inflow now lands on the published row decompositions, not only the Total row.**
+    C 08.01 decomposes its total row twice over the same columns and both are live ERROR
+    rules — `boe_b0744` on the balance-sheet axis and `boe_b0745` / `v0338_m` on the IRB
+    treatment axis — and C 07.00 does the same on its risk-weight axis (`v0312_m` /
+    `boe_b0719`). A Total-row-only inflow breached all of them by exactly the inflow. The
+    inflow is now split by balance-sheet side, by post-substitution IRB treatment, and by
+    risk-weight band, and landed on the matching rows.
+  - **Recorded decision R12 is superseded** (it shipped in 0.3.18 as "C 08.02 deliberately
+    does not receive the cross-class CRM substitution inflow … no output change"). Four
+    live ERROR rules — `boe_b0752_8` / `boe_b0752_9` / `boe_b0814_07` / `boe_b0814_08` —
+    require `{C 08.01 r0070, c0080/c0090} = sum({C 08.02, same col})`, which an
+    inflow-free C 08.02 cannot satisfy. R12's *reasoning* survives intact: per-grade
+    attribution is unsound because the origin-basis ledger carries the obligor's grade and
+    never the guarantor's. So the inflow lands on C 08.02's existing **"Unassigned"**
+    residual row — an inflow whose guarantor grade the ledger does not carry is an
+    exposure with no assigned grade — and no graded row carries any of it.
+  - **The post-model-adjustment disclosure carriers are rebased onto the substituted
+    basis.** All four were left on the borrower basis after substitution re-blends the
+    RWA, so `{c0260} = sum({c0251..c0254})` (`boe_b0751` / `boe_b0763`, live) diverged by
+    exactly the Art. 235 relief on every guaranteed leg. Col 0251 is now
+    `rwa_pre_adjustments x retained_share + guaranteed_portion x guarantor_rw` with each
+    adjustment scaled by the retained share — which is also substantively right, since
+    only the retained share of a mortgage-floor or unrecognised-exposure overlay survives
+    into reported RWEA and the substituted part carries no model overlay. **No RWA number
+    moves**; this is the disclosure decomposition only.
+  - **Coverage**: the new portfolio is wired into the supervisory validation register for
+    both regimes — the first in the estate with non-zero substitution cells. On it, failing
+    rules fall **CRR 6 → 3** and **Basel 3.1 18 → 13**.
+  - **Recorded residuals**, both banked in `validation_known_breaks.json` with written
+    reasons: (1) the outflow subtotal counts every route in the block, but only the
+    unfunded routes carry a destination class — the sealed ledger holds a guarantor class
+    for guarantee and credit-derivative legs only — so C 07.00's funded limbs and
+    C 08.01's col 0060 still produce an outflow with no matching inflow; closing it needs
+    an issuer class sealed per collateral leg. (2) C 07.00 col 0200 sums raw EAD over the
+    ORIGIN population and never reflects substitution while cols 0100→0110→0150 net it
+    (`v0308_m` / `v8726_m` / `boe_b0471` / `boe_b0556`) — **a genuine defect in our
+    output, not a published-rule artifact**, and the first measured consequence of
+    recorded decision F3, which keeps cols 0200/0110/0260 on the origin basis. Fixing it
+    moves EAD and RWEA bases across the whole reporting estate and is out of scope here.
 - **The fixed PD scale on C 08.03 / C 08.05 and Pillar 3 CR6 / CR9 was a flat ladder of
   invented bands; it is now the published hierarchical scale.** Both templates carried
   17 mutually exclusive PD buckets (`0.00 to < 0.03%`, `0.03 to < 0.05%`, …,

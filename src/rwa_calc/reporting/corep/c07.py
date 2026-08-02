@@ -129,14 +129,14 @@ from rwa_calc.reporting.cellspec import (
     execute,
     matched_counts,
 )
-from rwa_calc.reporting.corep.crm_substitution import substitution_inflows
+from rwa_calc.reporting.corep.crm_substitution import irb_origin_inflows
 from rwa_calc.reporting.corep.templates import (
     get_c07_columns,
     get_sa_risk_weight_bands,
     get_sa_row_sections,
 )
 from rwa_calc.reporting.kernel import filter_by_approach, pick
-from rwa_calc.reporting.metadata import ReportingContext
+from rwa_calc.reporting.metadata import SUBSTITUTION_INFLOW_RW_PREFIX, ReportingContext
 from rwa_calc.reporting.plans import SheetPlan
 
 if TYPE_CHECKING:
@@ -208,6 +208,15 @@ _OFCP_CARRIERS: tuple[str, ...] = ("life_ins_collateral_value", "third_party_dep
 
 # Col 0070 "(-) Financial collateral: Simple method" (Art. 222(1)-(2)).
 _FCSM_CARRIER: str = "fcsm_collateral_value"
+
+# The capped unfunded limb (cols 0050 + 0060 per row) that col 0100's inflow is
+# measured on — see ``_protection_exprs``.
+_UNFUNDED_COL: str = "c07_prot_unfunded"
+
+# The guarantor's exposure class (the col 0100 destination key) and the origin
+# approaches whose inflow half ``crm_substitution.irb_origin_inflows`` owns.
+_POST_CRM_CLASS_COL: str = "post_crm_exposure_class_guaranteed"
+_IRB_ORIGINS: tuple[str, ...] = ("foundation_irb", "advanced_irb", "slotting")
 
 # Col 0010's gross carriers — reused as the cap basis for the 0050-0100 block
 # (the row's own contribution to col 0040, i.e. gross net of value adjustments).
@@ -355,7 +364,7 @@ def c07_plans(
     # Resolved BEFORE the empty-population guard: an all-IRB book guaranteed by
     # an SA counterparty has NO SA leg of its own, and the early exit would drop
     # the inflow this template is the only home for.
-    inflow_map = _sa_inflows(results, cols)
+    inflow_map, inflow_bands = _sa_inflows(results, cols, framework)
     if len(sa_df) == 0 and not inflow_map:
         return {}
 
@@ -369,6 +378,9 @@ def c07_plans(
     data_cols = set(sa_df.columns)
     sa_df = _prepare(sa_df, data_cols, framework)
     _warn_if_ccf_buckets_unreportable(sa_df, data_cols)
+    # The SA-origin half joins the cross-template half only now: it is measured on
+    # THIS template's capped carrier, which _prepare has just derived.
+    inflow_map, inflow_bands = _add_sa_origin_inflows(inflow_map, inflow_bands, sa_df)
 
     row_terms = _row_terms(framework, data_cols)
     spec = _build_spec(framework, data_cols, ead_col, rwa_col, row_terms)
@@ -385,9 +397,13 @@ def c07_plans(
         plans[ec] = SheetPlan(
             spec=spec,
             frame=sa_df.filter(pl.col(ec_col) == ec),
-            ctx=ReportingContext(substitution_inflow=inflow_map.get(ec, 0.0)),
+            ctx=ReportingContext(
+                substitution_inflow=inflow_map.get(ec, 0.0),
+                substitution_inflow_by_rw=inflow_bands.get(ec, {}),
+            ),
             negative_cols=_NEGATIVE_COLS,
             row_terms=row_terms,
+            inflow_rows=_inflow_rows(row_terms, inflow_bands.get(ec, {})),
         )
     return plans
 
@@ -403,7 +419,7 @@ def generate_c07(
     result: dict[str, pl.DataFrame] = {}
     for ec, plan in c07_plans(results, cols, framework, errors).items():
         frame = execute(plan.spec, plan.frame, plan.ctx)
-        frame = _null_empty_rows(frame, plan.frame, plan.row_terms)
+        frame = _null_empty_rows(frame, plan.frame, plan.row_terms, plan.inflow_rows)
         result[ec] = _negate_deduction_cols(frame)
     return result
 
@@ -563,17 +579,7 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
 
     # RW band label (retired _compute_rw_section_rows assignment).
     if "risk_weight" in cols:
-        band_expr = pl.lit("Other risk weights")
-        for rw_value, label in reversed(get_sa_risk_weight_bands(framework)):
-            band_expr = (
-                pl.when(
-                    pl.col("risk_weight").cast(pl.Float64, strict=False).round(4)
-                    == round(rw_value, 4)
-                )
-                .then(pl.lit(label))
-                .otherwise(band_expr)
-            )
-        exprs.append(band_expr.alias("c07_rw_band"))
+        exprs.append(_rw_band_expr(framework).alias("c07_rw_band"))
 
     # CCF bucket ref (retired _c07_ccf_cols map), off the resolved carrier.
     ccf_col = pick(cols, *_CCF_CARRIERS)
@@ -729,6 +735,28 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
     return prepared.with_columns(_protection_exprs(set(prepared.columns)))
 
 
+def _rw_band_expr(framework: str) -> pl.Expr:
+    """The risk-weight band LABEL for one row — the C 07.00 section-2 row axis.
+
+    One definition, used twice: ``_prepare`` derives ``c07_rw_band`` from it for the
+    band rows themselves, and ``_sa_inflows`` hands the SAME expression to the
+    substitution router so a banded inflow lands on a row that exists. The ladder
+    is regime-shaped (``get_sa_risk_weight_bands``; Basel 3.1 adds 15/25/30/40/45/
+    60/65/80/85/105/110/130/135% sub-bands) and ends in the "Other risk weights"
+    catch-all, so a weight matching no band is reported, never dropped.
+    """
+    band_expr: pl.Expr = pl.lit("Other risk weights")
+    for rw_value, label in reversed(get_sa_risk_weight_bands(framework)):
+        band_expr = (
+            pl.when(
+                pl.col("risk_weight").cast(pl.Float64, strict=False).round(4) == round(rw_value, 4)
+            )
+            .then(pl.lit(label))
+            .otherwise(band_expr)
+        )
+    return band_expr
+
+
 def _protection_exprs(cols: set[str]) -> list[pl.Expr]:
     """Per-row magnitudes for the Annex II substitution block (cols 0050-0080).
 
@@ -793,6 +821,15 @@ def _protection_exprs(cols: set[str]) -> list[pl.Expr]:
         (credit_derivative * scale).alias("c07_prot_credit_derivative"),
         (fcsm * scale).alias("c07_prot_fcsm"),
         (other_funded * scale).alias("c07_prot_other_funded"),
+        # The UNFUNDED half of the block — cols 0050 + 0060 per row, i.e. the only
+        # part of the col 0090 outflow that carries a destination class. The col
+        # 0100 INFLOW binds this so it is the SAME capped magnitude the outflow
+        # reports: reading the raw ``guaranteed_portion`` booked more on the way in
+        # than ever left, creating money whenever the cap bit. It inherits the
+        # protection_type split above, so a row carrying an out-of-vocabulary
+        # protection type (non-blocking validation lets one through) contributes
+        # zero to BOTH sides rather than zero out and a full amount in.
+        ((guarantee + credit_derivative) * scale).alias(_UNFUNDED_COL),
     ]
 
 
@@ -817,28 +854,131 @@ def _block_cap_scale(cols: set[str], block_total: pl.Expr) -> pl.Expr:
     return pl.when(block_total > basis).then(basis / block_total).otherwise(1.0)
 
 
-def _sa_inflows(results: pl.LazyFrame, cols: set[str]) -> dict[str, float]:
+def _sa_inflows(
+    results: pl.LazyFrame, cols: set[str], framework: str
+) -> tuple[dict[str, float], dict[str, dict[str, float]]]:
     """The SA-destined substitution inflows, keyed the way C 07.00 keys sheets.
 
-    ``corep/crm_substitution.py`` routes the inflow by the approach the
-    substituted leg is treated under, over the WHOLE population — an inflow whose
-    guarantor is IRB belongs on C 08.01, not here. Its keys are raw guarantor
-    exposure classes, so the Art. 112 Table A2 merge this template applies to its
-    sheet axis (specialised lending is a corporate sub-type under SA) is applied
-    to them too: otherwise an inflow into an SL guarantor would key a sheet
-    C 07.00 does not have.
+    TWO HALVES, because the inflow must be measured with the cap of the template
+    that REPORTED the matching outflow and the two templates cap on different
+    bases (this one nets provisions off the basis — ``_block_cap_scale`` — under
+    the Art. 111(2) drawn-first deduction; the IRB basis does not):
+
+    - IRB-origin legs guaranteed by an SA protection provider. Their outflow is
+      reported on C 08.01, so ``crm_substitution.irb_origin_inflows`` measures
+      them on the IRB capped carrier. This is the cross-template half, and
+      dropping it was the defect that left a sovereign-guaranteed IRB corporate
+      loan's covered part reported as an outflow and as an inflow nowhere.
+    - SA-origin legs, added here from this template's OWN prepared frame so they
+      carry THIS cap. ``_post_crm_approach_expr`` gives an SA-origin leg an SA
+      destination under both of its branches, so no SA-origin leg can be missing
+      from C 08.01 by being counted here.
+
+    Keys are raw guarantor exposure classes, so the Art. 112 Table A2 merge this
+    template applies to its sheet axis (specialised lending is a corporate
+    sub-type under SA) is applied to them too: otherwise an inflow into an SL
+    guarantor would key a sheet C 07.00 does not have.
     """
     merged: dict[str, float] = {}
-    for exposure_class, amount in substitution_inflows(
-        results, cols, destination="standardised"
+    bands: dict[str, dict[str, float]] = {}
+    # The on/off-BS and graded/slotting splits are NOT read here: C 07.00's own
+    # row sum ``boe_b0717`` is scoped to cols 0200/0220, neither of which the
+    # inflow touches, so its rows 0070/0080 impose no constraint on col 0100. The
+    # RISK-WEIGHT split is read, because ``v0312_m`` / ``boe_b0719`` decompose row
+    # 0010 over the band rows on col 0150, which the inflow does reach (through
+    # 0110). ``risk_weight`` is absent on a frame too thin to band; the router then
+    # returns no split and the band rows keep their ordinary empty policy.
+    band_expr = _rw_band_expr(framework) if "risk_weight" in cols else None
+    for exposure_class, inflow in irb_origin_inflows(
+        results, cols, destination="standardised", band_expr=band_expr
     ).items():
-        key = (
-            ExposureClass.CORPORATE.value
-            if exposure_class == ExposureClass.SPECIALISED_LENDING.value
-            else exposure_class
+        _accumulate(merged, exposure_class, inflow.total)
+        for band, amount in inflow.by_rw_band.items():
+            _accumulate_band(bands, exposure_class, band, amount)
+    return merged, bands
+
+
+def _add_sa_origin_inflows(
+    inflows: dict[str, float], bands: dict[str, dict[str, float]], sa_df: pl.DataFrame
+) -> tuple[dict[str, float], dict[str, dict[str, float]]]:
+    """Add the SA-origin half of col 0100, off this template's own capped frame.
+
+    ``sa_df`` is post-``_prepare``, so it carries ``_UNFUNDED_COL`` — the same
+    capped magnitude cols 0050/0060 report and col 0090 subtotals. Summing that
+    (rather than the raw covered carrier) is what makes the inflow equal and
+    opposite to the outflow when the Annex II block cap bites.
+
+    IRB-origin rows are excluded here because ``irb_origin_inflows`` already
+    counted them on the IRB cap. The exclusion is not redundant: ``c07_population``
+    admits the counterparty-credit-risk rows by ``risk_type`` with NO approach
+    filter, so an IRB-origin CCR row can legitimately sit in this frame and would
+    otherwise be counted twice.
+    """
+    cols = set(sa_df.columns)
+    if not {_UNFUNDED_COL, _POST_CRM_CLASS_COL} <= cols:
+        return inflows, bands
+    frame = sa_df.filter((pl.col(_UNFUNDED_COL) > 0) & pl.col(_POST_CRM_CLASS_COL).is_not_null())
+    if "reporting_approach_origin" in cols:
+        frame = frame.filter(~pl.col("reporting_approach_origin").is_in(list(_IRB_ORIGINS)))
+    grouped = frame.group_by(_POST_CRM_CLASS_COL).agg(pl.col(_UNFUNDED_COL).sum().alias("inflow"))
+    merged = dict(inflows)
+    for row in grouped.iter_rows(named=True):
+        _accumulate(merged, row[_POST_CRM_CLASS_COL], float(row["inflow"]))
+    merged_bands = {key: dict(value) for key, value in bands.items()}
+    if "c07_rw_band" in cols:
+        banded = frame.group_by(_POST_CRM_CLASS_COL, "c07_rw_band").agg(
+            pl.col(_UNFUNDED_COL).sum().alias("inflow")
         )
-        merged[key] = merged.get(key, 0.0) + amount
-    return merged
+        for row in banded.iter_rows(named=True):
+            _accumulate_band(
+                merged_bands,
+                row[_POST_CRM_CLASS_COL],
+                row["c07_rw_band"],
+                float(row["inflow"]),
+            )
+    return merged, merged_bands
+
+
+def _accumulate_band(
+    bands: dict[str, dict[str, float]], exposure_class: str, band: str, amount: float
+) -> None:
+    """Add one destination-class/band amount under this template's sheet key."""
+    key = (
+        ExposureClass.CORPORATE.value
+        if exposure_class == ExposureClass.SPECIALISED_LENDING.value
+        else exposure_class
+    )
+    per_class = bands.setdefault(key, {})
+    per_class[band] = per_class.get(band, 0.0) + amount
+
+
+def _accumulate(merged: dict[str, float], exposure_class: str, amount: float) -> None:
+    """Add one destination-class amount under this template's sheet key."""
+    key = (
+        ExposureClass.CORPORATE.value
+        if exposure_class == ExposureClass.SPECIALISED_LENDING.value
+        else exposure_class
+    )
+    merged[key] = merged.get(key, 0.0) + amount
+
+
+def _inflow_rows(row_terms: dict[str, _Terms | None], bands: dict[str, float]) -> frozenset[str]:
+    """Band rows carrying a NON-ZERO inflow on this sheet.
+
+    ``_null_empty_rows`` renders a row all-null when its own subset is empty,
+    which would delete the banded inflow on exactly the sheets that need it most —
+    an inflow-only destination class has no native rows at all. Exempting them is
+    what makes the row-0010 decomposition foot there."""
+    if not bands:
+        return frozenset()
+    return frozenset(
+        ref
+        for ref, terms in row_terms.items()
+        if terms is not None
+        and len(terms) == 1
+        and terms[0][0] == "c07_rw_band"
+        and bands.get(str(terms[0][1]))
+    )
 
 
 def _row_terms(framework: str, cols: set[str]) -> dict[str, _Terms | None]:
@@ -980,7 +1120,13 @@ def _build_spec(
         if terms is None:
             continue
         for col_ref, cell in _row_cells(
-            terms, cols, ead_col, rwa_col, column_refs, is_b31=is_b31, is_total=row.ref == "0010"
+            terms,
+            cols,
+            ead_col,
+            rwa_col,
+            column_refs,
+            is_b31=is_b31,
+            inflow_key=_inflow_key_for(row.ref, terms),
         ).items():
             cells[(row.ref, col_ref)] = cell
     return TemplateSpec(
@@ -992,6 +1138,23 @@ def _build_spec(
     )
 
 
+def _inflow_key_for(ref: str, terms: _Terms) -> str | None:
+    """Which ``ReportingContext`` inflow component this row's col 0100 takes.
+
+    The Total row takes the whole inflow; a RISK-WEIGHT BAND row takes the share
+    of it reported at that band. Band rows are recognised by their own membership
+    terms — a lone ``c07_rw_band`` equals-term — rather than by a hardcoded ref
+    ladder, so the regime-specific axis (Basel 3.1 adds thirteen sub-bands) and
+    the two-term memo rows 0300/0320 (defaulted AND banded, which are "of which"
+    memos and NOT part of the row-0010 decomposition) both fall out correctly.
+    """
+    if ref == "0010":
+        return "substitution_inflow"
+    if len(terms) == 1 and terms[0][0] == "c07_rw_band":
+        return f"{SUBSTITUTION_INFLOW_RW_PREFIX}{terms[0][1]}"
+    return None
+
+
 def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row
     terms: _Terms,
     cols: set[str],
@@ -1000,7 +1163,7 @@ def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row
     column_refs: tuple[str, ...],
     *,
     is_b31: bool,
-    is_total: bool,
+    inflow_key: str | None,
 ) -> dict[str, CellSpec]:
     member = RowPredicate(equals=terms)
 
@@ -1065,8 +1228,14 @@ def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row
         "0220": CellSpec(Sum(rwa_col), predicate=member),
         "0240": CellSpec(Formula(refs=(), fn=_const(None))),
     }
-    if is_total:
-        cells["0100"] = CellSpec(SideContext("substitution_inflow"))
+    # Col 0100 lands on the Total row AND on the risk-weight band row matching the
+    # weight each substituted amount is reported at. ``v0312_m`` (C 07.00.a,
+    # reactivated 2015-02-27) and ``boe_b0719`` (OF07.00.01.01, live) decompose row
+    # 0010 over the band rows on col 0150, which the inflow reaches through col
+    # 0110 — so a Total-row-only inflow breaches both by exactly the inflow, and an
+    # inflow-only sheet has no populated band row at all. See ``_inflow_key_for``.
+    if inflow_key is not None:
+        cells["0100"] = CellSpec(SideContext(inflow_key))
     if is_b31:
         cells["0035"] = CellSpec(Sum("on_bs_netting_amount"), predicate=member)
         cells["0040"] = CellSpec(Formula(refs=("0010", "0030", "0035"), fn=_net_of_adjustments))
@@ -1146,7 +1315,10 @@ def _sf_adjustment_cell(terms: _Terms, cols: set[str], dedicated: str, flag_col:
 
 
 def _null_empty_rows(
-    frame: pl.DataFrame, class_df: pl.DataFrame, row_terms: dict[str, _Terms | None]
+    frame: pl.DataFrame,
+    class_df: pl.DataFrame,
+    row_terms: dict[str, _Terms | None],
+    keep: frozenset[str] = frozenset(),
 ) -> pl.DataFrame:
     """Render inert rows and rows with EMPTY subsets all-null — the retired
     ``_null_row`` contract (the COREP zero policy applies only to populated
@@ -1160,7 +1332,7 @@ def _null_empty_rows(
     null_refs = [
         ref
         for ref, terms in row_terms.items()
-        if terms is None or (len(terms) > 0 and counts[ref] == 0)
+        if ref not in keep and (terms is None or (len(terms) > 0 and counts[ref] == 0))
     ]
     if not null_refs:
         return frame

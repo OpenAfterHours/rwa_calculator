@@ -31,10 +31,19 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     import polars as pl
 
     from rwa_calc.contracts.bundles import OutputFloorSummary
     from rwa_calc.rulebook.model import ReportingTemplateSet
+
+# ``SideContext`` key prefix for the per-risk-weight-band substitution inflow.
+# The registry below stays explicit — this is a documented NAMESPACE, not an open
+# door: the suffix is a risk-weight band label from the template's own row axis
+# (C 07.00 rows 0140-0280), and a band the sheet did not receive resolves to 0.0
+# rather than raising, because every band row is bound on every sheet.
+SUBSTITUTION_INFLOW_RW_PREFIX = "substitution_inflow_rw::"
 
 
 class ResultsSource(Protocol):
@@ -70,10 +79,27 @@ class ReportingContext:
         institution_type: Institution-type election from the run config;
             ``None`` when not elected.
         substitution_inflow: The CRM substitution inflow into the sheet's
-            exposure class (COREP C 07.00 col 0100 — a cross-sheet number:
-            guaranteed portions migrating INTO this class from other
-            obligor classes, precomputed over the whole population and
-            threaded per sheet execution). ``None`` when not applicable.
+            exposure class (COREP C 07.00 col 0100 / C 08.01 col 0080 — a
+            cross-sheet number: guaranteed portions migrating INTO this class
+            from other obligor classes, precomputed over the whole population
+            and threaded per sheet execution). ``None`` when not applicable.
+        substitution_inflow_on_bs / _off_bs: That same inflow split by the
+            balance-sheet side of the legs it came from, for C 08.01 rows 0020
+            and 0030.
+        substitution_inflow_graded / _slotting: That same inflow split by the
+            post-substitution IRB treatment of the legs it came from, for
+            C 08.01 rows 0070 and 0080.
+
+    WHY THE INFLOW NEEDS FOUR SPLITS AS WELL AS A TOTAL. C 08.01 decomposes its
+    total row TWICE over the same columns, and both decompositions are published
+    as live ERROR-severity rules: ``boe_b0744`` is
+    ``{r0010} = sum({r: 0020; 0030; 0040; 0050; 0060})`` (the balance-sheet axis)
+    and ``boe_b0745`` is ``{r0010} = sum({r: 0070; 0080; 0170; 0180})`` (the IRB
+    treatment axis); the EBA twin ``v0338_m`` restates the second. Landing the
+    inflow on the total row alone breaches BOTH by exactly the inflow, on cols
+    0080/0090/0104 — measured, not inferred. A native exposure appears in one row
+    of each decomposition, so a substituted-in amount must too; the two splits are
+    the same money counted along two different axes, not two different amounts.
     """
 
     template_set: ReportingTemplateSet | None = None
@@ -82,17 +108,34 @@ class ReportingContext:
     reporting_basis: str | None = None
     institution_type: str | None = None
     substitution_inflow: float | None = None
+    substitution_inflow_on_bs: float | None = None
+    substitution_inflow_off_bs: float | None = None
+    substitution_inflow_graded: float | None = None
+    substitution_inflow_slotting: float | None = None
+    substitution_inflow_by_rw: Mapping[str, float] | None = None
 
     def side_value(self, key: str) -> float | None:
         """Resolve a named out-of-frame scalar for a ``SideContext`` binding.
 
         Explicit key registry — a spec naming an unknown key is a programming
         error and raises. ``of_adj`` reads the output-floor summary (None when
-        the floor did not run); ``substitution_inflow`` is the C 07.00 col 0100
-        cross-sheet scalar.
+        the floor did not run); the ``substitution_inflow*`` family is the
+        C 07.00 col 0100 / C 08.01 col 0080 cross-sheet scalar and its two
+        published row decompositions.
         """
         if key == "of_adj":
             return float(self.output_floor_summary.of_adj) if self.output_floor_summary else None
         if key == "substitution_inflow":
             return self.substitution_inflow
+        if key == "substitution_inflow_on_bs":
+            return self.substitution_inflow_on_bs
+        if key == "substitution_inflow_off_bs":
+            return self.substitution_inflow_off_bs
+        if key == "substitution_inflow_graded":
+            return self.substitution_inflow_graded
+        if key == "substitution_inflow_slotting":
+            return self.substitution_inflow_slotting
+        if key.startswith(SUBSTITUTION_INFLOW_RW_PREFIX):
+            band = key[len(SUBSTITUTION_INFLOW_RW_PREFIX) :]
+            return (self.substitution_inflow_by_rw or {}).get(band, 0.0)
         raise KeyError(f"unknown ReportingContext side value: {key!r}")

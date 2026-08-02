@@ -153,26 +153,62 @@ def apply_guarantee_substitution(
 
     lf = redistribute_non_beneficial(lf)
 
-    # Calculate blended RWA using substitution approach
-    lf = lf.with_columns(
-        [
-            pl.when(
-                (pl.col("guaranteed_portion").fill_null(0) > 0)
-                & (pl.col("guarantor_rw").is_not_null())
-                & (pl.col("is_guarantee_beneficial"))
-            )
-            .then(
-                pl.col("rwa_irb_original")
-                * pl.when(pl.col(ead_col) > 0)
-                .then(pl.col("unguaranteed_portion") / pl.col(ead_col))
-                .otherwise(pl.lit(1.0))
-                .fill_null(1.0)
-                + pl.col("guaranteed_portion") * pl.col("guarantor_rw")
-            )
-            .otherwise(pl.col("rwa_irb_original"))
-            .alias("rwa"),
-        ]
+    # Calculate blended RWA using substitution approach. The predicate and the
+    # retained share are named once and reused below, so the post-model-adjustment
+    # DISCLOSURE carriers cannot drift from the RWA they decompose.
+    substituted = (
+        (pl.col("guaranteed_portion").fill_null(0) > 0)
+        & (pl.col("guarantor_rw").is_not_null())
+        & (pl.col("is_guarantee_beneficial"))
     )
+    retained_share = (
+        pl.when(pl.col(ead_col) > 0)
+        .then(pl.col("unguaranteed_portion") / pl.col(ead_col))
+        .otherwise(pl.lit(1.0))
+        .fill_null(1.0)
+    )
+    substituted_rwa = pl.col("rwa_irb_original") * retained_share + pl.col(
+        "guaranteed_portion"
+    ) * pl.col("guarantor_rw")
+    blend_exprs = [
+        pl.when(substituted)
+        .then(substituted_rwa)
+        .otherwise(pl.col("rwa_irb_original"))
+        .alias("rwa")
+    ]
+    # PUT THE POST-MODEL-ADJUSTMENT DISCLOSURE CARRIERS ON THE SUBSTITUTED BASIS.
+    # ``apply_post_model_adjustments`` runs BEFORE this function, so its four
+    # carriers are all measured on the BORROWER basis. PS1/26 Annex II §3.3.1
+    # defines OF 08.01 col 0260 as ``0251 + 0252 + 0253 + 0254`` and the published
+    # rules state it as live ERROR checks (``boe_b0751`` / ``boe_b0763``). Writing
+    # out the blend shows why leaving them alone cannot satisfy it:
+    #     rwa = (rwa_pre_adjustments + SUM adj) * share + gp * guarantor_rw
+    # so the identity holds only when col 0251 is
+    # ``rwa_pre_adjustments * share + gp * guarantor_rw`` and each adjustment is
+    # ``adj * share``. Leaving them on the borrower basis overstated the
+    # adjustments by ``adj * (1 - share)`` and left col 0251 exceeding col 0260 by
+    # exactly the Art. 235 relief (reproduced at 326,708.85 on one guaranteed leg).
+    # Scaling is substantively right independently of the identity: only the
+    # RETAINED share of a mortgage-floor or unrecognised-exposure overlay survives
+    # into the reported RWEA, and the substituted part carries no model overlay at
+    # all — which is why the whole ``gp x guarantor_rw`` term lands in the col 0251
+    # BASE. Art. 235 relief has no home among the three named adjustment columns
+    # and is NOT forced into one. Disclosure carriers only: ``rwa`` above is final
+    # and is not read here, so no RWA number moves.
+    rebased_disclosure = {
+        "rwa_pre_adjustments": pl.col("rwa_pre_adjustments") * retained_share
+        + pl.col("guaranteed_portion") * pl.col("guarantor_rw"),
+        "post_model_adjustment_rwa": pl.col("post_model_adjustment_rwa") * retained_share,
+        "mortgage_rw_floor_adjustment": pl.col("mortgage_rw_floor_adjustment") * retained_share,
+        "unrecognised_exposure_adjustment": pl.col("unrecognised_exposure_adjustment")
+        * retained_share,
+    }
+    blend_exprs.extend(
+        pl.when(substituted).then(expr).otherwise(pl.col(name)).alias(name)
+        for name, expr in rebased_disclosure.items()
+        if name in cols
+    )
+    lf = lf.with_columns(blend_exprs)
 
     # Calculate blended risk weight for reporting. Guard the divisor so a
     # zero-EAD guaranteed row yields a finite 0.0 rather than 0/0 -> NaN (or

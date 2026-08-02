@@ -66,6 +66,12 @@ class SheetPlan:
     ``negative_cols`` and ``row_terms`` carry the two post-``execute`` passes
     (the Annex II §1.3 "(-)" negation; the all-null inert rows), so a consumer
     knows a rendered cell's sign and emptiness policy without re-deciding either.
+
+    ``inflow_rows`` names the rows that carry a CRM substitution inflow component
+    on this sheet (C 08.01 cols 0080/0090). Those rows are exempt from the
+    all-null empty-row pass: their content comes from legs in OTHER sheets, so an
+    empty own-subset does not make them empty, and nulling them would delete the
+    component the published row sums (``boe_b0744`` / ``boe_b0745``) require.
     """
 
     spec: TemplateSpec
@@ -73,3 +79,4 @@ class SheetPlan:
     ctx: ReportingContext
     negative_cols: frozenset[str]
     row_terms: dict[str, RowTerms | None] = field(default_factory=dict)
+    inflow_rows: frozenset[str] = frozenset()

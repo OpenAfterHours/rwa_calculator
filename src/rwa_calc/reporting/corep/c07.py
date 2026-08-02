@@ -47,12 +47,23 @@ docs/plans/phase7-declarative-reporting.md §6):
 - Substitution outflow (col 0090) is the Annex II subtotal of that block,
   0050 + 0060 + 0070 + 0080 — the covered part of each exposure that leaves
   the obligor's class for the protection provider's (rules ``v0305_m`` /
-  ``boe_b0694``). Substitution inflow (col 0100) is a CROSS-SHEET number —
-  precomputed over the whole population per destination class from the
-  guarantee migrations and threaded to the total row 0010 via the
-  ``ReportingContext.substitution_inflow`` side input (the out-of-frame
-  escape; sub-rows report 0.0). The inflow mirror of the FUNDED limbs (0070 /
-  0080) is not modelled: no collateral-issuer exposure class is carried.
+  ``boe_b0694``). Substitution inflow (col 0100) is a CROSS-SHEET and
+  CROSS-TEMPLATE number, computed by ``corep/crm_substitution.py`` over the
+  whole population per destination class and threaded to the total row 0010 via
+  the ``ReportingContext.substitution_inflow`` side input (the out-of-frame
+  escape; sub-rows report 0.0). Two properties of it are load-bearing and were
+  both defects: it counts SAME-CLASS migrations (Annex II "Inflows and outflows
+  within the same exposure classes shall also be reported" — gating it on a class
+  change while the outflow subtotal counts every covered part made a same-class
+  guarantee leak the covered amount out of col 0110), and it is ROUTED by the
+  approach the substituted leg is treated under, so an SA guarantor's inflow
+  reaches this template even when the guaranteed exposure is IRB. The sheet axis
+  is correspondingly the union of the classes present and the classes receiving
+  an inflow. The inflow mirror of the FUNDED limbs (0070 / 0080) is still not
+  modelled: no collateral-issuer exposure class is carried, so those two limbs
+  produce an outflow with no matching inflow — the recorded residual, kept
+  visible rather than hidden by re-gating the outflow (which the live rule
+  ``v0305_m`` fixes as the subtotal). C 08.01 col 0060 carries the same residual.
 - The intra-row waterfalls are Formulas over positive magnitudes:
   0040 = 0010 - 0030 (- 0035 under Basel 3.1); 0090 = 0050 + 0060 + 0070
   + 0080; 0110 = 0040 - 0090 + 0100; 0150 = max(0, 0110 - 0130). 0110
@@ -118,6 +129,7 @@ from rwa_calc.reporting.cellspec import (
     execute,
     matched_counts,
 )
+from rwa_calc.reporting.corep.crm_substitution import substitution_inflows
 from rwa_calc.reporting.corep.templates import (
     get_c07_columns,
     get_sa_risk_weight_bands,
@@ -340,7 +352,11 @@ def c07_plans(
         return {}
 
     sa_df = c07_population(results, cols).collect()
-    if len(sa_df) == 0:
+    # Resolved BEFORE the empty-population guard: an all-IRB book guaranteed by
+    # an SA counterparty has NO SA leg of its own, and the early exit would drop
+    # the inflow this template is the only home for.
+    inflow_map = _sa_inflows(results, cols)
+    if len(sa_df) == 0 and not inflow_map:
         return {}
 
     # Art. 112 Table A2: SL is a corporate sub-type under SA.
@@ -353,15 +369,19 @@ def c07_plans(
     data_cols = set(sa_df.columns)
     sa_df = _prepare(sa_df, data_cols, framework)
     _warn_if_ccf_buckets_unreportable(sa_df, data_cols)
-    inflow_map = _substitution_inflows(sa_df, data_cols)
 
     row_terms = _row_terms(framework, data_cols)
     spec = _build_spec(framework, data_cols, ead_col, rwa_col, row_terms)
 
     plans: dict[str, SheetPlan] = {}
     # Sealed-ledger rule: the class column always exists; a null key
-    # (no source on a synthetic frame) partitions into NO sheet.
-    for ec in sa_df[ec_col].drop_nulls().unique().sort().to_list():
+    # (no source on a synthetic frame) partitions into NO sheet. The axis is the
+    # UNION of the classes present and the classes RECEIVING an inflow — Annex II
+    # requires in- and outflows to and from other templates to be taken into
+    # account, which an inflow with no sheet to land on cannot satisfy. An
+    # inflow-only sheet keeps its constraint-free total row 0010 (every other row
+    # renders all-null through ``_null_empty_rows``) and reports 0110 = 0100.
+    for ec in sorted(set(sa_df[ec_col].drop_nulls().unique().to_list()) | set(inflow_map)):
         plans[ec] = SheetPlan(
             spec=spec,
             frame=sa_df.filter(pl.col(ec_col) == ec),
@@ -487,21 +507,6 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
         exprs.append(
             pl.col("exposure_class").str.contains("sme").fill_null(value=False).alias("c07_sme")
         )
-
-    # Substitution flag (retired outflow filter: gp>0 and pre != post).
-    if {"guaranteed_portion", "pre_crm_exposure_class", "post_crm_exposure_class_guaranteed"} <= (
-        cols
-    ):
-        exprs.append(
-            (
-                (pl.col("guaranteed_portion") > 0)
-                & (pl.col("pre_crm_exposure_class") != pl.col("post_crm_exposure_class_guaranteed"))
-            )
-            .fill_null(value=False)
-            .alias("c07_substituted")
-        )
-    else:
-        exprs.append(pl.lit(value=False).alias("c07_substituted"))
 
     # On/off-balance-sheet (kernel rule: bs_type preferred, else exposure_type).
     # Derivability is asked ONCE, via _has_bs_side: the CCF-bucket cells narrow on
@@ -812,25 +817,28 @@ def _block_cap_scale(cols: set[str], block_total: pl.Expr) -> pl.Expr:
     return pl.when(block_total > basis).then(basis / block_total).otherwise(1.0)
 
 
-def _substitution_inflows(sa_df: pl.DataFrame, cols: set[str]) -> dict[str, float]:
-    """Per-destination-class substitution inflows (retired
-    _compute_substitution_flows, inflow side): guaranteed portions of
-    substituted rows grouped by the guarantor's class."""
-    if not (
-        {"guaranteed_portion", "pre_crm_exposure_class", "post_crm_exposure_class_guaranteed"}
-        <= cols
-    ):
-        return {}
-    migrated = sa_df.filter(pl.col("c07_substituted"))
-    if len(migrated) == 0:
-        return {}
-    grouped = migrated.group_by("post_crm_exposure_class_guaranteed").agg(
-        pl.col("guaranteed_portion").fill_null(0.0).sum().alias("inflow")
-    )
-    return {
-        row["post_crm_exposure_class_guaranteed"]: float(row["inflow"])
-        for row in grouped.iter_rows(named=True)
-    }
+def _sa_inflows(results: pl.LazyFrame, cols: set[str]) -> dict[str, float]:
+    """The SA-destined substitution inflows, keyed the way C 07.00 keys sheets.
+
+    ``corep/crm_substitution.py`` routes the inflow by the approach the
+    substituted leg is treated under, over the WHOLE population — an inflow whose
+    guarantor is IRB belongs on C 08.01, not here. Its keys are raw guarantor
+    exposure classes, so the Art. 112 Table A2 merge this template applies to its
+    sheet axis (specialised lending is a corporate sub-type under SA) is applied
+    to them too: otherwise an inflow into an SL guarantor would key a sheet
+    C 07.00 does not have.
+    """
+    merged: dict[str, float] = {}
+    for exposure_class, amount in substitution_inflows(
+        results, cols, destination="standardised"
+    ).items():
+        key = (
+            ExposureClass.CORPORATE.value
+            if exposure_class == ExposureClass.SPECIALISED_LENDING.value
+            else exposure_class
+        )
+        merged[key] = merged.get(key, 0.0) + amount
+    return merged
 
 
 def _row_terms(framework: str, cols: set[str]) -> dict[str, _Terms | None]:

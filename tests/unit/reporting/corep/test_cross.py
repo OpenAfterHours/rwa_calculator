@@ -1,6 +1,10 @@
-"""Cross-template COREP behaviours (C 07 + C 08 asserted together: combined generation, Excel export, substitution flows, netting, collateral method split, credit derivatives, equity transitional, sign convention).
+"""Cross-template COREP behaviours (C 07 + C 08 asserted together: combined generation, Excel export, netting, collateral method split, credit derivatives, equity transitional, sign convention).
 
-Split from tests/unit/test_corep.py (Phase 7 Sn) — bodies verbatim.
+Split from tests/unit/test_corep.py (Phase 7 Sn) — bodies verbatim. The CRM
+substitution-flow cases (``TestSubstitutionFlows``) later moved out to
+``test_c07_crm_substitution.py`` / ``test_c08_crm_substitution.py`` (the
+dedicated per-template files) to keep this file under the
+``max_reporting_test_file_loc`` ratchet.
 """
 
 from __future__ import annotations
@@ -45,96 +49,6 @@ def _sa_results_with_bs_split() -> pl.LazyFrame:
             "sa_cqs": [3, 3, 3],
             "counterparty_reference": ["CP_A", "CP_B", "CP_C"],
             "bs_type": ["ONB", "ONB", "OFB"],
-        }
-    )
-
-
-def _sa_results_with_substitution() -> pl.LazyFrame:
-    """SA results with CRM substitution columns for Task 2H testing.
-
-    Scenario: Corporate exposure SA_CORP_2 has a guarantee from an institution.
-    The guaranteed portion (500) flows out of corporate class into institution class.
-    """
-    return pl.LazyFrame(
-        {
-            "exposure_reference": [
-                "SA_CORP_1",
-                "SA_CORP_2",
-                "SA_INST_1",
-                "SA_RETAIL_1",
-            ],
-            "approach_applied": ["standardised"] * 4,
-            "exposure_class": [
-                "corporate",
-                "corporate",
-                "institution",
-                "retail_other",
-            ],
-            "drawn_amount": [1000.0, 2000.0, 3000.0, 200.0],
-            "undrawn_amount": [500.0, 0.0, 0.0, 50.0],
-            "ead_final": [1200.0, 2000.0, 3000.0, 225.0],
-            "rwa_final": [1140.0, 1900.0, 600.0, 168.75],
-            "risk_weight": [1.0, 1.0, 0.20, 0.75],
-            "scra_provision_amount": [10.0, 20.0, 0.0, 2.0],
-            "gcra_provision_amount": [5.0, 10.0, 15.0, 1.0],
-            "sa_cqs": [3, 0, 2, 0],
-            "counterparty_reference": ["CP_A", "CP_B", "CP_D", "CP_E"],
-            "guaranteed_portion": [0.0, 500.0, 0.0, 0.0],
-            # Pre-CRM: both corporates are in "corporate" class
-            "pre_crm_exposure_class": [
-                "corporate",
-                "corporate",
-                "institution",
-                "retail_other",
-            ],
-            # Post-CRM: SA_CORP_2's guaranteed portion migrates to "institution"
-            "post_crm_exposure_class_guaranteed": [
-                "corporate",
-                "institution",
-                "institution",
-                "retail_other",
-            ],
-        }
-    )
-
-
-def _irb_results_with_substitution() -> pl.LazyFrame:
-    """IRB results with CRM substitution columns for Task 2H testing.
-
-    Scenario: Corporate IRB exposure IRB_CORP_2 guaranteed by institution.
-    The guaranteed portion (800) flows out of corporate class into institution class.
-    """
-    return pl.LazyFrame(
-        {
-            "exposure_reference": ["IRB_CORP_1", "IRB_CORP_2", "IRB_INST_1"],
-            "approach_applied": [
-                "foundation_irb",
-                "foundation_irb",
-                "foundation_irb",
-            ],
-            "exposure_class": ["corporate", "corporate", "institution"],
-            "drawn_amount": [5000.0, 3000.0, 2000.0],
-            "undrawn_amount": [1000.0, 0.0, 0.0],
-            "ead_final": [5500.0, 3000.0, 2000.0],
-            "rwa_final": [3850.0, 1800.0, 600.0],
-            "risk_weight": [0.70, 0.60, 0.30],
-            "pd_floored": [0.005, 0.01, 0.002],
-            "lgd_floored": [0.45, 0.45, 0.45],
-            "irb_maturity_m": [2.5, 3.0, 1.5],
-            "expected_loss": [12.375, 13.5, 1.8],
-            "irb_capital_k": [0.056, 0.048, 0.024],
-            "provision_held": [15.0, 10.0, 3.0],
-            "scra_provision_amount": [10.0, 5.0, 2.0],
-            "gcra_provision_amount": [5.0, 5.0, 1.0],
-            "counterparty_reference": ["CP_X", "CP_Y", "CP_W"],
-            "bs_type": ["ONB", "ONB", "ONB"],
-            "guaranteed_portion": [0.0, 800.0, 0.0],
-            "pre_crm_exposure_class": ["corporate", "corporate", "institution"],
-            "post_crm_exposure_class_guaranteed": [
-                "corporate",
-                "institution",
-                "institution",
-            ],
         }
     )
 
@@ -830,107 +744,6 @@ class TestEdgeCases:
         assert sme_ead == pytest.approx(550.0)
 
 
-class TestSubstitutionFlows:
-    """Task 2H: CRM substitution flow columns (C 07.00: 0090/0100/0110;
-    C 08.01: 0040/0070/0080/0090).
-
-    Why: COREP requires reporting how CRM guarantees cause exposure to
-    'flow' between exposure classes. Outflows show guaranteed portions
-    leaving the borrower's class; inflows show guaranteed portions
-    arriving from other classes via the guarantor's class assignment.
-    """
-
-    def test_c07_outflow_populated(self) -> None:
-        """Col 0090 shows guaranteed portion leaving the class — emitted negative per Annex II §1.3."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_sa_results_with_substitution())
-
-        corp = _get_total_row(bundle.c07_00["corporate"])
-        # SA_CORP_2 has 500 guaranteed_portion migrating to institution; stored as negative deduction
-        assert corp["0090"][0] == pytest.approx(-500.0)
-
-    def test_c07_inflow_populated(self) -> None:
-        """Col 0100 shows guaranteed portion arriving from other classes."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_sa_results_with_substitution())
-
-        inst = _get_total_row(bundle.c07_00["institution"])
-        # SA_CORP_2's 500 guaranteed portion flows into institution class
-        assert inst["0100"][0] == pytest.approx(500.0)
-
-    def test_c07_no_flow_class_has_zero(self) -> None:
-        """Class with no substitution has 0 outflow and 0 inflow."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_sa_results_with_substitution())
-
-        retail = _get_total_row(bundle.c07_00["retail_other"])
-        assert retail["0090"][0] == pytest.approx(0.0)
-        assert retail["0100"][0] == pytest.approx(0.0)
-
-    def test_c07_net_exposure_after_substitution(self) -> None:
-        """Col 0110 = 0040 + 0090 + 0100 — the outflow is removed exactly ONCE."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_sa_results_with_substitution())
-
-        corp = _get_total_row(bundle.c07_00["corporate"])
-        # Engine: 0040=3455, 0090=-500 (= col 0050), 0100=0 → 0110 = 2955
-        assert corp["0110"][0] == pytest.approx(2955.0)
-
-    def test_c07_outflow_reported_without_substitution_cols(self) -> None:
-        """Outflow is the CRM block subtotal, not a detected class migration."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_sa_results())
-
-        corp = _get_total_row(bundle.c07_00["corporate"])
-        assert corp["0090"][0] == pytest.approx(-500.0)
-        assert corp["0100"][0] == pytest.approx(0.0)
-
-    def test_c08_guarantee_col_populated(self) -> None:
-        """C 08.01 col 0040 shows guaranteed_portion sum — negative per Annex II §1.3."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_irb_results_with_substitution())
-
-        corp = _get_total_row(bundle.c08_01["corporate"])
-        # IRB_CORP_2 has 800 guaranteed_portion; stored as a negative deduction.
-        assert corp["0040"][0] == pytest.approx(-800.0)
-
-    def test_c08_outflow_populated(self) -> None:
-        """C 08.01 col 0070 shows guaranteed portion leaving the class — negative per Annex II."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_irb_results_with_substitution())
-
-        corp = _get_total_row(bundle.c08_01["corporate"])
-        assert corp["0070"][0] == pytest.approx(-800.0)
-
-    def test_c08_inflow_populated(self) -> None:
-        """C 08.01 col 0080 shows guaranteed portion arriving from other classes."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_irb_results_with_substitution())
-
-        inst = _get_total_row(bundle.c08_01["institution"])
-        assert inst["0080"][0] == pytest.approx(800.0)
-
-    def test_c08_net_after_substitution(self) -> None:
-        """C 08.01 col 0090 foots the CRM waterfall.
-
-        The waterfall runs on positive magnitudes BEFORE the display negation, so
-        with 0040/0070 stored negative per Annex II §1.3 the reconstruction adds
-        them back: 0090 = 0020 + 0040 + 0070 + 0080 (0080 the positive inflow).
-        """
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_irb_results_with_substitution())
-
-        corp = _get_total_row(bundle.c08_01["corporate"])
-        v_0020 = corp["0020"][0]
-        v_0040 = corp["0040"][0]  # negative (deduction)
-        v_0070 = corp["0070"][0]  # negative (deduction)
-        v_0080 = corp["0080"][0]  # positive (inflow)
-        v_0090 = corp["0090"][0]
-
-        expected = v_0020 + v_0040 + v_0070 + v_0080
-        assert v_0090 == pytest.approx(expected)
-
-
 class TestOnBSNetting:
     """Task 3D: On-balance-sheet netting (COREP col 0035).
 
@@ -1215,7 +1028,17 @@ class TestCreditDerivativeTracking:
         assert total["0060"][0] == pytest.approx(0.0)
 
     def test_c07_col_0110_includes_cd_deduction(self) -> None:
-        """C 07.00 col 0110 deducts both guarantees and credit derivatives."""
+        """C 07.00 col 0110 nets guarantees and credit derivatives against
+        their matching same-class inflow (Annex II: "Inflows and outflows
+        within the same exposure classes shall also be reported" — both
+        SA_CORP_1's guarantee and SA_CORP_2's credit derivative migrate to
+        "corporate", their OWN class).
+
+        Engine: 0040=4435, 0090 (outflow subtotal, positive at execute time) =
+        200 (guarantee) + 300 (credit derivative) = 500, 0100 (same-class
+        inflow) = 500 → 0110 = 4435 - 500 + 500 = 4435 (unchanged from 0040,
+        not the 3935 a same-class-excluded inflow gave).
+        """
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(
             _sa_results_with_credit_derivatives(), framework="BASEL_3_1"
@@ -1225,8 +1048,8 @@ class TestCreditDerivativeTracking:
 
         col_0110 = total["0110"][0]
 
-        # Engine: 0040=4435, 0050=-200 (guarantee), 0060=-300 (credit derivative) → 0110=3935
-        assert col_0110 == pytest.approx(3935.0)
+        assert col_0110 == pytest.approx(4435.0)
+        assert col_0110 == pytest.approx(total["0040"][0])
 
     def test_c08_guarantee_and_cd_split(self) -> None:
         """C 08.01 col 0040=guarantee only, col 0050=credit derivative only.

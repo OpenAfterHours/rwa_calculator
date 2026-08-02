@@ -11,6 +11,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - (Next release changes will go here)
 
 ### Fixed
+- **The CRM substitution block on C 07.00 / C 08.01 / C 08.02 removed guaranteed exposure
+  more than once, and lost it entirely when the guarantor sat outside the reporting
+  template.** Six published validation rules already shipped in this repo pin the
+  arithmetic and every one of them was breached. The whole block was uncovered — every
+  CRM-substitution cell in all 70+ frozen golden files was exactly `0.0`, because no
+  golden portfolio contained a guaranteed exposure that migrates exposure class.
+  - **Col 0070 is the block subtotal, not an independent sum.** It was
+    `Sum(guaranteed_portion)` gated on "the guarantor's class differs from the obligor's",
+    which reported **0** for a same-class guarantee while col 0040 still showed the
+    amount, and ignored col 0060 (Art. 232 other funded credit protection) entirely.
+    It is now `0040 + 0050 + 0060` — EBA `v1663_m` / `v1665_m` and BoE `boe_b0747` /
+    `boe_b0761`, all live.
+  - **Col 0090 deducted the same money twice**, subtracting both the 0040/0050/0060
+    breakdown and the 0070 subtotal. It is now `0020 - 0035 - 0070 + 0080` — EBA
+    `v1662_m` / `v0347_m` and BoE `boe_b0746` / `boe_b0760`. The Basel 3.1 col 0035
+    on-balance-sheet netting term is row-scoped: `boe_b0746_1` drops it on the
+    off-balance-sheet row family, because Art. 166(3) netting of loans and deposits
+    cannot reduce an off-balance-sheet row. The off-BS memo col 0100 re-derived the same
+    arithmetic independently and carried the same defect; it now binds the same per-leg
+    subtotal so the two cannot drift apart.
+  - **Same-class substitutions now produce a matching inflow.** The inflow side was gated
+    on a class change while the outflow side was not, so a guarantee whose guarantor sat
+    in the obligor's own class reported an outflow with nothing coming back — money left
+    the return. Annex II, both templates and both regimes: "Inflows and outflows within
+    the same exposure classes … shall also be considered."
+  - **Substitutions crossing the SA/IRB boundary now reach the right template.** Each
+    template derived its inflow from its own approach-filtered population, so an IRB
+    exposure guaranteed by an SA counterparty was deducted on C 08.01 and added back
+    nowhere. A new `reporting/corep/crm_substitution.py` computes the inflow once over
+    the whole sealed population and routes it by the sealed post-substitution approach —
+    SA guarantor to C 07.00 (Art. 235 risk-weight substitution), IRB guarantor to
+    C 08.01 (Art. 161 parameter substitution). The sheet axis is now the union of the
+    classes present and the classes receiving an inflow, so a guarantor class with no
+    exposure of its own still gets a sheet, and a template with no native population of
+    its own is still emitted when it is the only home for an inflow.
+  - **Amounts on existing returns are unchanged**: no frozen golden number moved and the
+    supervisory-validation register is unaffected, because no committed portfolio
+    exercised the block. Firms reporting guaranteed exposures will see col 0070 populate
+    where it previously read zero, col 0090 rise by the amount that was being deducted
+    twice, and inflows appear on the guarantor's sheet.
+  - **Recorded residual**: the outflow subtotal counts every route in the block, but only
+    the unfunded routes carry a destination class — the sealed ledger holds a guarantor
+    class for guarantee and credit-derivative legs only. C 07.00's funded limbs and
+    C 08.01's col 0060 therefore still produce an outflow with no matching inflow.
+    Closing it needs an issuer class sealed per collateral leg.
 - **The fixed PD scale on C 08.03 / C 08.05 and Pillar 3 CR6 / CR9 was a flat ladder of
   invented bands; it is now the published hierarchical scale.** Both templates carried
   17 mutually exclusive PD buckets (`0.00 to < 0.03%`, `0.03 to < 0.05%`, …,

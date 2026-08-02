@@ -35,7 +35,7 @@ import polars as pl
 import pytest
 
 from tests.fixtures.recon_ledger import LedgerShimCorepGenerator
-from tests.unit.reporting.corep._builders import _get_total_row
+from tests.unit.reporting.corep._builders import _get_total_row, _sa_results
 
 # The four block columns, in Annex II order, and the outflow subtotal.
 _BLOCK_COLS = ("0050", "0060", "0070", "0080")
@@ -238,6 +238,77 @@ class TestSubstitutionOutflowSubtotal:
         assert total["0150"][0] == pytest.approx(4_000.0)
 
 
+def _sa_results_same_class_guarantee() -> pl.LazyFrame:
+    """One un-guaranteed SA corporate loan + one guaranteed by ANOTHER SA
+    corporate counterparty in the SAME class.
+
+    Annex II C 07.00 cols 0090/0100: "Inflows and outflows within the same
+    exposure classes shall also be reported" — a same-class guarantee must
+    produce an equal-and-opposite inflow (col 0100) alongside its outflow
+    (col 0090), netting col 0110 back to the un-guaranteed total.
+    """
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["SA_CORP_1", "SA_CORP_2"],
+            "counterparty_reference": ["CP_A", "CP_B"],
+            "exposure_class": ["corporate", "corporate"],
+            "approach_applied": ["standardised"] * 2,
+            "exposure_type": ["loan", "loan"],
+            "drawn_amount": [5_000.0, 3_000.0],
+            "undrawn_amount": [0.0, 0.0],
+            "ead_final": [5_000.0, 3_000.0],
+            "rwa_final": [5_000.0, 3_000.0],
+            "risk_weight": [1.0, 1.0],
+            "scra_provision_amount": [0.0, 0.0],
+            "gcra_provision_amount": [0.0, 0.0],
+            "guaranteed_portion": [0.0, 500.0],
+            "protection_type": [None, "guarantee"],
+            "pre_crm_exposure_class": ["corporate", "corporate"],
+            "post_crm_exposure_class_guaranteed": ["corporate", "corporate"],
+        }
+    )
+
+
+class TestSameClassInflowConservation:
+    """Annex II: "Inflows and outflows within the same exposure classes ...
+    shall also be reported" (C 07.00 cols 0090/0100) — a same-class guarantee
+    must produce an equal inflow alongside its outflow. Pins ``v0305_m`` (the
+    0090 subtotal, already correct) together with ``v0306_m`` (the 0110
+    waterfall) and the same-class inflow gate this closes.
+    """
+
+    def test_same_class_guarantee_produces_an_inflow(self) -> None:
+        """Col 0100 must equal the guaranteed amount, not 0.0 — the retired
+        binding gated the inflow on ``pre_crm_exposure_class !=
+        post_crm_exposure_class_guaranteed``, which a same-class migration
+        never satisfies, so it excluded the inflow entirely."""
+        # Arrange
+        gen = LedgerShimCorepGenerator()
+
+        # Act
+        bundle = gen.generate_from_lazyframe(_sa_results_same_class_guarantee())
+        total = _get_total_row(bundle.c07_00["corporate"])
+
+        # Assert
+        assert total["0100"][0] == pytest.approx(500.0)
+
+    def test_net_exposure_unchanged_by_a_same_class_guarantee(self) -> None:
+        """``v0306_m``: 0110 = 0040 + 0090 + 0100. With the same-class inflow
+        restored, a self-contained guarantee has no net effect on 0110 —
+        today it reports 7,500 (the outflow with no matching inflow), not
+        the correct 8,000."""
+        # Arrange
+        gen = LedgerShimCorepGenerator()
+
+        # Act
+        bundle = gen.generate_from_lazyframe(_sa_results_same_class_guarantee())
+        total = _get_total_row(bundle.c07_00["corporate"])
+
+        # Assert
+        assert total["0110"][0] == pytest.approx(total["0040"][0])
+        assert total["0110"][0] == pytest.approx(8_000.0)
+
+
 class TestBlockCappedAtExposureValue:
     """Annex II cols 0050-0100: "Collateral that has an effect on the exposure
     value … shall be capped at the exposure value"."""
@@ -265,3 +336,192 @@ class TestBlockCappedAtExposureValue:
         # Assert
         assert total["0050"][0] == pytest.approx(-500.0)
         assert total["0070"][0] == pytest.approx(-500.0)
+
+
+def _sa_results_with_substitution() -> pl.LazyFrame:
+    """SA results with CRM substitution columns for Task 2H testing.
+
+    Scenario: Corporate exposure SA_CORP_2 has a guarantee from an institution.
+    The guaranteed portion (500) flows out of corporate class into institution class.
+
+    Moved here from ``test_cross.py`` (arch_check ``max_reporting_test_file_loc``
+    ratchet) — bodies verbatim.
+    """
+    return pl.LazyFrame(
+        {
+            "exposure_reference": [
+                "SA_CORP_1",
+                "SA_CORP_2",
+                "SA_INST_1",
+                "SA_RETAIL_1",
+            ],
+            "approach_applied": ["standardised"] * 4,
+            "exposure_class": [
+                "corporate",
+                "corporate",
+                "institution",
+                "retail_other",
+            ],
+            "drawn_amount": [1000.0, 2000.0, 3000.0, 200.0],
+            "undrawn_amount": [500.0, 0.0, 0.0, 50.0],
+            "ead_final": [1200.0, 2000.0, 3000.0, 225.0],
+            "rwa_final": [1140.0, 1900.0, 600.0, 168.75],
+            "risk_weight": [1.0, 1.0, 0.20, 0.75],
+            "scra_provision_amount": [10.0, 20.0, 0.0, 2.0],
+            "gcra_provision_amount": [5.0, 10.0, 15.0, 1.0],
+            "sa_cqs": [3, 0, 2, 0],
+            "counterparty_reference": ["CP_A", "CP_B", "CP_D", "CP_E"],
+            "guaranteed_portion": [0.0, 500.0, 0.0, 0.0],
+            # Pre-CRM: both corporates are in "corporate" class
+            "pre_crm_exposure_class": [
+                "corporate",
+                "corporate",
+                "institution",
+                "retail_other",
+            ],
+            # Post-CRM: SA_CORP_2's guaranteed portion migrates to "institution"
+            "post_crm_exposure_class_guaranteed": [
+                "corporate",
+                "institution",
+                "institution",
+                "retail_other",
+            ],
+        }
+    )
+
+
+class TestSubstitutionFlows:
+    """Task 2H: CRM substitution flow columns (C 07.00: 0090/0100/0110).
+
+    Why: COREP requires reporting how CRM guarantees cause exposure to
+    'flow' between exposure classes. Outflows show guaranteed portions
+    leaving the borrower's class; inflows show guaranteed portions
+    arriving from other classes via the guarantor's class assignment.
+
+    Moved here from ``test_cross.py`` (arch_check ``max_reporting_test_file_loc``
+    ratchet) — bodies verbatim; the C 08.01 half of this class lives in
+    ``test_c08_crm_substitution.py``.
+    """
+
+    def test_c07_outflow_populated(self) -> None:
+        """Col 0090 shows guaranteed portion leaving the class — emitted negative per Annex II §1.3."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_results_with_substitution())
+
+        corp = _get_total_row(bundle.c07_00["corporate"])
+        # SA_CORP_2 has 500 guaranteed_portion migrating to institution; stored as negative deduction
+        assert corp["0090"][0] == pytest.approx(-500.0)
+
+    def test_c07_inflow_populated(self) -> None:
+        """Col 0100 shows guaranteed portion arriving from other classes."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_results_with_substitution())
+
+        inst = _get_total_row(bundle.c07_00["institution"])
+        # SA_CORP_2's 500 guaranteed portion flows into institution class
+        assert inst["0100"][0] == pytest.approx(500.0)
+
+    def test_c07_no_flow_class_has_zero(self) -> None:
+        """Class with no substitution has 0 outflow and 0 inflow."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_results_with_substitution())
+
+        retail = _get_total_row(bundle.c07_00["retail_other"])
+        assert retail["0090"][0] == pytest.approx(0.0)
+        assert retail["0100"][0] == pytest.approx(0.0)
+
+    def test_c07_net_exposure_after_substitution(self) -> None:
+        """Col 0110 = 0040 + 0090 + 0100 — the outflow is removed exactly ONCE."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_results_with_substitution())
+
+        corp = _get_total_row(bundle.c07_00["corporate"])
+        # Engine: 0040=3455, 0090=-500 (= col 0050), 0100=0 → 0110 = 2955
+        assert corp["0110"][0] == pytest.approx(2955.0)
+
+    def test_c07_outflow_reported_without_substitution_cols(self) -> None:
+        """Outflow is the CRM block subtotal, not a detected class migration."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_results())
+
+        corp = _get_total_row(bundle.c07_00["corporate"])
+        assert corp["0090"][0] == pytest.approx(-500.0)
+        assert corp["0100"][0] == pytest.approx(0.0)
+
+
+def _irb_book_with_sa_guarantor() -> pl.LazyFrame:
+    """An all-IRB-origin book whose only guarantee has an SA guarantor.
+
+    IRB_CORP_1 is unguaranteed (5,000). IRB_CORP_2 (3,000) is guaranteed
+    1,500 by an institution treated under the STANDARDISED approach post-CRM
+    (``approach_post_crm="standardised"`` — the CRR Art. 235 risk-weight
+    substitution route), while both rows' ORIGIN approach is
+    ``foundation_irb``. So ``c07_population`` (keyed on
+    ``reporting_approach_origin``) sees NO row from this book at all — the SA
+    guarantor never has its own exposure here — yet the inflow the guarantee
+    generates is destined for C 07.00's ``institution`` sheet by the guarantor's
+    POST-crm approach (``corep/crm_substitution.py``).
+    """
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["IRB_CORP_1", "IRB_CORP_2"],
+            "approach_applied": ["foundation_irb", "foundation_irb"],
+            "approach_post_crm": ["foundation_irb", "standardised"],
+            "exposure_class": ["corporate", "corporate"],
+            "drawn_amount": [5_000.0, 3_000.0],
+            "undrawn_amount": [0.0, 0.0],
+            "ead_final": [5_000.0, 3_000.0],
+            "rwa_final": [3_500.0, 1_800.0],
+            "risk_weight": [0.70, 0.60],
+            "pd_floored": [0.005, 0.01],
+            "lgd_floored": [0.45, 0.45],
+            "irb_maturity_m": [2.5, 3.0],
+            "expected_loss": [12.375, 13.5],
+            "scra_provision_amount": [0.0, 0.0],
+            "gcra_provision_amount": [0.0, 0.0],
+            "counterparty_reference": ["CP_A", "CP_B"],
+            "guaranteed_portion": [0.0, 1_500.0],
+            "protection_type": [None, "guarantee"],
+            "pre_crm_exposure_class": ["corporate", "corporate"],
+            "post_crm_exposure_class_guaranteed": ["corporate", "institution"],
+        }
+    )
+
+
+class TestEmptyPopulationStillEmitsInflowOnlySheet:
+    """D6: a destination template with NO native population of its own must
+    still emit the inflow-only sheet — the empty-population early exit used to
+    run BEFORE the inflow map was computed, so an all-IRB book guaranteed by
+    an SA counterparty dropped the inflow a second time (on top of D5)."""
+
+    def test_c07_gets_an_institution_sheet_despite_an_empty_sa_population(self) -> None:
+        """C 07.00's own population (SA-origin rows) is empty here — both
+        loans are IRB-origin, so ``corporate`` never gets a native C 07.00
+        sheet — but ``institution`` must still be emitted to carry the inflow."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_book_with_sa_guarantor())
+
+        assert "institution" in bundle.c07_00
+        assert "corporate" not in bundle.c07_00
+
+    def test_inflow_only_sheet_reports_the_guaranteed_amount(self) -> None:
+        """The inflow-only sheet has zero native exposure (0010) but the full
+        covered amount on col 0100, and 0110 = 0100 (nothing else on the sheet)."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_book_with_sa_guarantor())
+
+        inst = _get_total_row(bundle.c07_00["institution"])
+        assert inst["0010"][0] == pytest.approx(0.0)
+        assert inst["0100"][0] == pytest.approx(1_500.0)
+        assert inst["0110"][0] == pytest.approx(1_500.0)
+
+    def test_c08_01_does_not_also_claim_the_sa_routed_inflow(self) -> None:
+        """The SA/IRB routing partitions the population — C 08.01's institution
+        sheet (if it exists at all) must NOT also carry this inflow, or the
+        same covered amount would be double-counted across templates."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_book_with_sa_guarantor())
+
+        if "institution" in bundle.c08_01:
+            inst = _get_total_row(bundle.c08_01["institution"])
+            assert inst["0080"][0] == pytest.approx(0.0)

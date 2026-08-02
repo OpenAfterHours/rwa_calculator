@@ -121,6 +121,49 @@ class TestPromoteUnreleased:
 
         assert result == content_with_version
 
+    def test_multiline_bullet_survives_promotion_intact(self):
+        """A wrapped bullet with nested sub-bullets promotes whole, not just its first line."""
+        body = (
+            "\n"
+            "### Fixed\n"
+            "- **A defect whose description wraps across several lines** and keeps\n"
+            "  going onto a continuation line that carries the closing detail.\n"
+            "  - A nested sub-bullet with its own wrapped\n"
+            "    continuation line.\n"
+            "  - A second nested sub-bullet.\n"
+            "- A second top-level bullet.\n"
+            "\n"
+        )
+        content = _wrap(body)
+
+        result = promote_unreleased(content, "0.2.15", today=TODAY)
+
+        new_section = result.split("## [0.2.15]")[1].split("## [0.2.14]")[0]
+        assert "  going onto a continuation line that carries the closing detail." in new_section
+        assert "  - A nested sub-bullet with its own wrapped" in new_section
+        assert "    continuation line." in new_section
+        assert "  - A second nested sub-bullet." in new_section
+        assert "- A second top-level bullet." in new_section
+        # The wrapped body must not leak back into the reset [Unreleased] block.
+        unreleased_section = result.split("## [Unreleased]")[1].split("## [0.2.15]")[0]
+        assert "nested sub-bullet" not in unreleased_section
+
+    def test_blank_line_inside_a_bullet_is_kept(self):
+        body = (
+            "\n"
+            "### Fixed\n"
+            "- Opening line of the bullet.\n"
+            "\n"
+            "  A second paragraph belonging to the same bullet.\n"
+            "\n"
+        )
+        content = _wrap(body)
+
+        result = promote_unreleased(content, "0.2.15", today=TODAY)
+
+        new_section = result.split("## [0.2.15]")[1].split("## [0.2.14]")[0]
+        assert "  A second paragraph belonging to the same bullet." in new_section
+
     def test_subsection_order_is_preserved(self):
         body = (
             "\n"

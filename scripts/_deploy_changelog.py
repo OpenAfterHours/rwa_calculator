@@ -88,20 +88,45 @@ def update_version_table(
 
 
 def _parse_subsections(body: str) -> dict[str, list[str]]:
-    """Split an [Unreleased] body into `{section_name: [bullet_line, ...]}`."""
+    """
+    Split an [Unreleased] body into `{section_name: [bullet_block, ...]}`.
+
+    A bullet block is a top-level `- ` line plus every indented continuation or
+    nested line that follows it, joined with newlines. Bullets in this changelog
+    routinely run to dozens of wrapped lines with nested sub-bullets, so a parser
+    that kept only the first line of each would silently truncate the release
+    notes down to a sentence fragment.
+    """
     sections: dict[str, list[str]] = {}
     current: str | None = None
+    block: list[str] = []
+
+    def flush() -> None:
+        nonlocal block
+        if current is not None and block:
+            while block and not block[-1].strip():
+                block.pop()
+            sections[current].append("\n".join(block))
+        block = []
 
     for line in body.split("\n"):
         if line.startswith("###") and line[3:4].isspace():
+            flush()
             current = line[3:].strip()
             sections.setdefault(current, [])
             continue
         if current is None:
             continue
         if line.startswith("- "):
-            sections[current].append(line)
+            flush()
+            block = [line]
+            continue
+        # Continuation of the open bullet: wrapped text, a nested sub-bullet, or a
+        # blank line between them. Anything else ends the block.
+        if block and (not line.strip() or line.startswith((" ", "\t"))):
+            block.append(line)
 
+    flush()
     return sections
 
 

@@ -17,7 +17,7 @@ Inspect a single module's dependencies and dependents directly:
 uv run curfew report rwa_calc.engine.classifier
 ```
 
-Last generated: 2026-08-01.
+Last generated: 2026-08-02.
 
 
 ## Package overview
@@ -83,7 +83,7 @@ flowchart LR
 
 The complete graph, one node per module, exactly as `curfew show --mermaid` emits it.
 
-??? note "Full module-level graph (237 modules)"
+??? note "Full module-level graph (239 modules)"
 
     ```mermaid
     flowchart LR
@@ -260,77 +260,79 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n170["rwa_calc.reporting.corep.c08_07"]
         n171["rwa_calc.reporting.corep.c09"]
         n172["rwa_calc.reporting.corep.c34"]
-        n173["rwa_calc.reporting.corep.generator"]
-        n174["rwa_calc.reporting.corep.of02"]
-        n175["rwa_calc.reporting.corep.templates"]
-        n176["rwa_calc.reporting.facts"]
-        n177["rwa_calc.reporting.kernel"]
-        n178["rwa_calc.reporting.kernel.columns"]
-        n179["rwa_calc.reporting.kernel.excel"]
-        n180["rwa_calc.reporting.kernel.filters"]
-        n181["rwa_calc.reporting.kernel.rows"]
-        n182["rwa_calc.reporting.kernel.sums"]
-        n183["rwa_calc.reporting.lineage"]
-        n184["rwa_calc.reporting.metadata"]
-        n185["rwa_calc.reporting.pillar3"]
-        n186["rwa_calc.reporting.pillar3.ccr"]
-        n187["rwa_calc.reporting.pillar3.cms1"]
-        n188["rwa_calc.reporting.pillar3.cms2"]
-        n189["rwa_calc.reporting.pillar3.cr10"]
-        n190["rwa_calc.reporting.pillar3.cr4"]
-        n191["rwa_calc.reporting.pillar3.cr5"]
-        n192["rwa_calc.reporting.pillar3.cr6"]
-        n193["rwa_calc.reporting.pillar3.cr6a"]
-        n194["rwa_calc.reporting.pillar3.cr7"]
-        n195["rwa_calc.reporting.pillar3.cr7a"]
-        n196["rwa_calc.reporting.pillar3.cr8"]
-        n197["rwa_calc.reporting.pillar3.cr9"]
-        n198["rwa_calc.reporting.pillar3.generator"]
-        n199["rwa_calc.reporting.pillar3.irb_scope"]
-        n200["rwa_calc.reporting.pillar3.ov1"]
-        n201["rwa_calc.reporting.pillar3.sa_scope"]
-        n202["rwa_calc.reporting.pillar3.templates"]
-        n203["rwa_calc.reporting.plans"]
-        n204["rwa_calc.reporting.tieouts"]
-        n205["rwa_calc.reporting.validations"]
-        n206["rwa_calc.reporting.validations.checker"]
-        n207["rwa_calc.reporting.validations.evaluate"]
-        n208["rwa_calc.reporting.validations.rules"]
-        n209["rwa_calc.reporting.validations.scope"]
-        n210["rwa_calc.rulebook"]
-        n211["rwa_calc.rulebook.audit"]
-        n212["rwa_calc.rulebook.compile"]
-        n213["rwa_calc.rulebook.model"]
-        n214["rwa_calc.rulebook.packs"]
-        n215["rwa_calc.rulebook.packs.b31"]
-        n216["rwa_calc.rulebook.packs.common"]
-        n217["rwa_calc.rulebook.packs.crr"]
-        n218["rwa_calc.rulebook.registry"]
-        n219["rwa_calc.rulebook.resolve"]
-        n220["rwa_calc.rulebook.v0"]
-        n221["rwa_calc.ui"]
-        n222["rwa_calc.ui.app"]
-        n223["rwa_calc.ui.app.calculator_state"]
-        n224["rwa_calc.ui.app.main"]
-        n225["rwa_calc.ui.app.output_writer"]
-        n226["rwa_calc.ui.app.progress"]
-        n227["rwa_calc.ui.app.recon_signoff"]
-        n228["rwa_calc.ui.app.recon_state"]
-        n229["rwa_calc.ui.views"]
-        n230["rwa_calc.ui.views.charts"]
-        n231["rwa_calc.ui.views.comparison"]
-        n232["rwa_calc.ui.views.hierarchy"]
-        n233["rwa_calc.ui.views.lineage"]
-        n234["rwa_calc.ui.views.method_split"]
-        n235["rwa_calc.ui.views.reconciliation"]
-        n236["rwa_calc.ui.views.report_templates"]
+        n173["rwa_calc.reporting.corep.crm_substitution"]
+        n174["rwa_calc.reporting.corep.generator"]
+        n175["rwa_calc.reporting.corep.of02"]
+        n176["rwa_calc.reporting.corep.pd_scale"]
+        n177["rwa_calc.reporting.corep.templates"]
+        n178["rwa_calc.reporting.facts"]
+        n179["rwa_calc.reporting.kernel"]
+        n180["rwa_calc.reporting.kernel.columns"]
+        n181["rwa_calc.reporting.kernel.excel"]
+        n182["rwa_calc.reporting.kernel.filters"]
+        n183["rwa_calc.reporting.kernel.rows"]
+        n184["rwa_calc.reporting.kernel.sums"]
+        n185["rwa_calc.reporting.lineage"]
+        n186["rwa_calc.reporting.metadata"]
+        n187["rwa_calc.reporting.pillar3"]
+        n188["rwa_calc.reporting.pillar3.ccr"]
+        n189["rwa_calc.reporting.pillar3.cms1"]
+        n190["rwa_calc.reporting.pillar3.cms2"]
+        n191["rwa_calc.reporting.pillar3.cr10"]
+        n192["rwa_calc.reporting.pillar3.cr4"]
+        n193["rwa_calc.reporting.pillar3.cr5"]
+        n194["rwa_calc.reporting.pillar3.cr6"]
+        n195["rwa_calc.reporting.pillar3.cr6a"]
+        n196["rwa_calc.reporting.pillar3.cr7"]
+        n197["rwa_calc.reporting.pillar3.cr7a"]
+        n198["rwa_calc.reporting.pillar3.cr8"]
+        n199["rwa_calc.reporting.pillar3.cr9"]
+        n200["rwa_calc.reporting.pillar3.generator"]
+        n201["rwa_calc.reporting.pillar3.irb_scope"]
+        n202["rwa_calc.reporting.pillar3.ov1"]
+        n203["rwa_calc.reporting.pillar3.sa_scope"]
+        n204["rwa_calc.reporting.pillar3.templates"]
+        n205["rwa_calc.reporting.plans"]
+        n206["rwa_calc.reporting.tieouts"]
+        n207["rwa_calc.reporting.validations"]
+        n208["rwa_calc.reporting.validations.checker"]
+        n209["rwa_calc.reporting.validations.evaluate"]
+        n210["rwa_calc.reporting.validations.rules"]
+        n211["rwa_calc.reporting.validations.scope"]
+        n212["rwa_calc.rulebook"]
+        n213["rwa_calc.rulebook.audit"]
+        n214["rwa_calc.rulebook.compile"]
+        n215["rwa_calc.rulebook.model"]
+        n216["rwa_calc.rulebook.packs"]
+        n217["rwa_calc.rulebook.packs.b31"]
+        n218["rwa_calc.rulebook.packs.common"]
+        n219["rwa_calc.rulebook.packs.crr"]
+        n220["rwa_calc.rulebook.registry"]
+        n221["rwa_calc.rulebook.resolve"]
+        n222["rwa_calc.rulebook.v0"]
+        n223["rwa_calc.ui"]
+        n224["rwa_calc.ui.app"]
+        n225["rwa_calc.ui.app.calculator_state"]
+        n226["rwa_calc.ui.app.main"]
+        n227["rwa_calc.ui.app.output_writer"]
+        n228["rwa_calc.ui.app.progress"]
+        n229["rwa_calc.ui.app.recon_signoff"]
+        n230["rwa_calc.ui.app.recon_state"]
+        n231["rwa_calc.ui.views"]
+        n232["rwa_calc.ui.views.charts"]
+        n233["rwa_calc.ui.views.comparison"]
+        n234["rwa_calc.ui.views.hierarchy"]
+        n235["rwa_calc.ui.views.lineage"]
+        n236["rwa_calc.ui.views.method_split"]
+        n237["rwa_calc.ui.views.reconciliation"]
+        n238["rwa_calc.ui.views.report_templates"]
         n2 --> n21
         n3 --> n2
         n3 --> n21
         n3 --> n22
         n3 --> n96
-        n3 --> n210
-        n3 --> n219
+        n3 --> n212
+        n3 --> n221
         n5 --> n4
         n5 --> n21
         n5 --> n25
@@ -355,10 +357,10 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n9 --> n22
         n9 --> n25
         n9 --> n27
-        n9 --> n173
-        n9 --> n176
-        n9 --> n198
-        n9 --> n205
+        n9 --> n174
+        n9 --> n178
+        n9 --> n200
+        n9 --> n207
         n10 --> n8
         n10 --> n11
         n10 --> n14
@@ -376,11 +378,11 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n13 --> n17
         n13 --> n33
         n13 --> n164
-        n13 --> n173
-        n13 --> n176
-        n13 --> n183
-        n13 --> n198
-        n13 --> n205
+        n13 --> n174
+        n13 --> n178
+        n13 --> n185
+        n13 --> n200
+        n13 --> n207
         n15 --> n11
         n15 --> n21
         n16 --> n5
@@ -397,7 +399,7 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n16 --> n93
         n16 --> n96
         n16 --> n158
-        n16 --> n210
+        n16 --> n212
         n17 --> n8
         n17 --> n11
         n17 --> n19
@@ -421,7 +423,7 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n26 --> n25
         n26 --> n27
         n26 --> n69
-        n26 --> n219
+        n26 --> n221
         n28 --> n21
         n28 --> n24
         n28 --> n25
@@ -441,11 +443,11 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n39 --> n21
         n39 --> n41
         n39 --> n45
-        n39 --> n212
-        n39 --> n219
+        n39 --> n214
+        n39 --> n221
         n40 --> n25
         n40 --> n33
-        n40 --> n219
+        n40 --> n221
         n44 --> n41
         n44 --> n45
         n46 --> n21
@@ -462,14 +464,14 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n46 --> n43
         n46 --> n44
         n46 --> n110
-        n46 --> n210
-        n46 --> n219
+        n46 --> n212
+        n46 --> n221
         n47 --> n22
         n47 --> n31
         n47 --> n33
-        n47 --> n210
         n47 --> n212
-        n47 --> n219
+        n47 --> n214
+        n47 --> n221
         n48 --> n49
         n48 --> n53
         n48 --> n54
@@ -479,25 +481,25 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n48 --> n58
         n48 --> n59
         n48 --> n60
-        n49 --> n212
-        n49 --> n219
-        n50 --> n212
-        n50 --> n219
+        n49 --> n214
+        n49 --> n221
+        n50 --> n214
+        n50 --> n221
         n51 --> n22
-        n51 --> n212
-        n51 --> n219
+        n51 --> n214
+        n51 --> n221
         n52 --> n22
-        n52 --> n212
-        n52 --> n219
+        n52 --> n214
+        n52 --> n221
         n53 --> n31
-        n54 --> n212
-        n54 --> n219
+        n54 --> n214
+        n54 --> n221
         n55 --> n22
         n55 --> n30
         n55 --> n31
         n55 --> n57
-        n55 --> n212
-        n55 --> n219
+        n55 --> n214
+        n55 --> n221
         n56 --> n21
         n56 --> n22
         n56 --> n25
@@ -510,22 +512,22 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n56 --> n55
         n56 --> n57
         n56 --> n59
-        n56 --> n212
-        n56 --> n219
+        n56 --> n214
+        n56 --> n221
         n58 --> n21
         n58 --> n22
         n58 --> n25
         n58 --> n33
         n59 --> n89
-        n59 --> n212
-        n59 --> n219
+        n59 --> n214
+        n59 --> n221
         n60 --> n21
         n60 --> n25
         n60 --> n30
         n60 --> n31
         n60 --> n33
-        n60 --> n212
-        n60 --> n219
+        n60 --> n214
+        n60 --> n221
         n61 --> n124
         n62 --> n67
         n62 --> n68
@@ -538,13 +540,13 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n63 --> n64
         n63 --> n67
         n63 --> n159
-        n63 --> n210
         n63 --> n212
-        n63 --> n219
+        n63 --> n214
+        n63 --> n221
         n64 --> n31
         n64 --> n92
-        n64 --> n212
-        n64 --> n219
+        n64 --> n214
+        n64 --> n221
         n65 --> n22
         n65 --> n25
         n65 --> n30
@@ -555,24 +557,24 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n65 --> n80
         n65 --> n92
         n65 --> n157
-        n65 --> n210
         n65 --> n212
-        n65 --> n219
-        n66 --> n219
+        n65 --> n214
+        n65 --> n221
+        n66 --> n221
         n67 --> n22
         n67 --> n30
         n67 --> n31
         n67 --> n66
-        n67 --> n210
         n67 --> n212
-        n67 --> n219
+        n67 --> n214
+        n67 --> n221
         n68 --> n22
         n68 --> n25
         n68 --> n31
         n68 --> n80
         n68 --> n157
-        n68 --> n212
-        n68 --> n219
+        n68 --> n214
+        n68 --> n221
         n69 --> n22
         n69 --> n25
         n69 --> n64
@@ -600,29 +602,29 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n71 --> n110
         n71 --> n157
         n71 --> n159
-        n71 --> n210
-        n71 --> n219
+        n71 --> n212
+        n71 --> n221
         n72 --> n22
         n72 --> n33
         n72 --> n47
         n72 --> n92
-        n72 --> n210
-        n72 --> n219
+        n72 --> n212
+        n72 --> n221
         n73 --> n22
         n73 --> n33
         n73 --> n100
         n73 --> n105
-        n73 --> n210
         n73 --> n212
-        n73 --> n219
+        n73 --> n214
+        n73 --> n221
         n74 --> n25
         n74 --> n31
         n74 --> n33
         n74 --> n107
         n75 --> n76
-        n76 --> n212
-        n76 --> n219
-        n77 --> n219
+        n76 --> n214
+        n76 --> n221
+        n77 --> n221
         n78 --> n79
         n79 --> n21
         n79 --> n22
@@ -632,33 +634,33 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n79 --> n87
         n79 --> n100
         n79 --> n105
-        n79 --> n210
         n79 --> n212
-        n79 --> n219
-        n80 --> n219
+        n79 --> n214
+        n79 --> n221
+        n80 --> n221
         n81 --> n136
         n83 --> n137
         n84 --> n86
         n84 --> n87
         n85 --> n22
         n85 --> n25
-        n85 --> n210
-        n85 --> n219
+        n85 --> n212
+        n85 --> n221
         n86 --> n22
         n86 --> n25
         n86 --> n90
         n86 --> n155
-        n86 --> n210
-        n86 --> n219
+        n86 --> n212
+        n86 --> n221
         n87 --> n22
         n87 --> n33
         n87 --> n64
         n87 --> n85
         n87 --> n89
         n87 --> n156
-        n87 --> n210
         n87 --> n212
-        n87 --> n219
+        n87 --> n214
+        n87 --> n221
         n88 --> n22
         n88 --> n65
         n88 --> n77
@@ -666,9 +668,9 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n88 --> n87
         n88 --> n107
         n88 --> n156
-        n88 --> n210
         n88 --> n212
-        n88 --> n219
+        n88 --> n214
+        n88 --> n221
         n90 --> n22
         n90 --> n25
         n90 --> n30
@@ -678,9 +680,9 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n90 --> n88
         n90 --> n156
         n90 --> n157
-        n90 --> n210
         n90 --> n212
-        n90 --> n219
+        n90 --> n214
+        n90 --> n221
         n91 --> n92
         n92 --> n31
         n92 --> n157
@@ -712,7 +714,7 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n95 --> n137
         n95 --> n145
         n95 --> n158
-        n95 --> n210
+        n95 --> n212
         n96 --> n21
         n96 --> n22
         n96 --> n23
@@ -726,8 +728,8 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n96 --> n98
         n96 --> n158
         n96 --> n159
-        n96 --> n210
-        n96 --> n211
+        n96 --> n212
+        n96 --> n213
         n97 --> n145
         n98 --> n95
         n98 --> n121
@@ -744,31 +746,31 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n99 --> n101
         n100 --> n33
         n100 --> n105
-        n100 --> n219
+        n100 --> n221
         n101 --> n22
         n101 --> n25
         n101 --> n33
         n101 --> n106
         n101 --> n110
         n101 --> n111
-        n101 --> n210
-        n101 --> n219
+        n101 --> n212
+        n101 --> n221
         n102 --> n105
-        n102 --> n219
+        n102 --> n221
         n103 --> n33
         n103 --> n100
         n103 --> n105
         n105 --> n33
-        n105 --> n219
+        n105 --> n221
         n106 --> n22
         n106 --> n25
         n106 --> n30
         n106 --> n155
-        n106 --> n219
+        n106 --> n221
         n107 --> n33
         n107 --> n77
-        n107 --> n212
-        n107 --> n219
+        n107 --> n214
+        n107 --> n221
         n109 --> n33
         n109 --> n105
         n110 --> n22
@@ -784,9 +786,9 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n110 --> n107
         n110 --> n108
         n110 --> n109
-        n110 --> n210
         n110 --> n212
-        n110 --> n219
+        n110 --> n214
+        n110 --> n221
         n111 --> n22
         n111 --> n25
         n111 --> n33
@@ -795,9 +797,9 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n111 --> n80
         n111 --> n107
         n111 --> n110
-        n111 --> n210
         n111 --> n212
-        n111 --> n219
+        n111 --> n214
+        n111 --> n221
         n112 --> n113
         n113 --> n21
         n113 --> n22
@@ -806,29 +808,29 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n114 --> n115
         n115 --> n21
         n115 --> n66
-        n115 --> n219
+        n115 --> n221
         n116 --> n117
         n117 --> n22
         n117 --> n25
         n117 --> n118
         n117 --> n155
-        n117 --> n210
-        n117 --> n219
+        n117 --> n212
+        n117 --> n221
         n118 --> n22
         n118 --> n25
         n118 --> n111
         n118 --> n157
-        n118 --> n210
         n118 --> n212
-        n118 --> n213
-        n118 --> n219
+        n118 --> n214
+        n118 --> n215
+        n118 --> n221
         n120 --> n21
         n121 --> n22
         n121 --> n23
         n121 --> n24
         n121 --> n75
         n121 --> n95
-        n121 --> n210
+        n121 --> n212
         n122 --> n22
         n122 --> n23
         n122 --> n24
@@ -839,7 +841,7 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n122 --> n94
         n122 --> n95
         n122 --> n155
-        n122 --> n210
+        n122 --> n212
         n123 --> n22
         n123 --> n23
         n123 --> n24
@@ -849,7 +851,7 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n123 --> n94
         n123 --> n95
         n123 --> n120
-        n123 --> n210
+        n123 --> n212
         n124 --> n128
         n124 --> n130
         n125 --> n22
@@ -860,16 +862,16 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n125 --> n126
         n125 --> n129
         n125 --> n156
-        n125 --> n210
-        n125 --> n219
+        n125 --> n212
+        n125 --> n221
         n126 --> n22
         n126 --> n31
         n126 --> n33
         n126 --> n77
         n126 --> n156
         n126 --> n157
-        n126 --> n210
-        n126 --> n219
+        n126 --> n212
+        n126 --> n221
         n127 --> n21
         n127 --> n22
         n127 --> n25
@@ -877,8 +879,8 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n127 --> n126
         n127 --> n131
         n127 --> n156
-        n127 --> n210
-        n127 --> n219
+        n127 --> n212
+        n127 --> n221
         n128 --> n21
         n128 --> n22
         n128 --> n24
@@ -890,8 +892,8 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n128 --> n129
         n128 --> n131
         n128 --> n146
-        n128 --> n210
-        n128 --> n219
+        n128 --> n212
+        n128 --> n221
         n129 --> n22
         n129 --> n25
         n129 --> n33
@@ -899,7 +901,7 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n130 --> n23
         n130 --> n95
         n130 --> n159
-        n130 --> n210
+        n130 --> n212
         n131 --> n22
         n131 --> n31
         n131 --> n33
@@ -907,17 +909,17 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n131 --> n126
         n131 --> n156
         n131 --> n157
-        n131 --> n210
-        n131 --> n219
+        n131 --> n212
+        n131 --> n221
         n132 --> n22
         n132 --> n23
         n132 --> n95
-        n132 --> n210
+        n132 --> n212
         n133 --> n22
         n133 --> n23
         n133 --> n95
         n133 --> n159
-        n133 --> n210
+        n133 --> n212
         n134 --> n135
         n134 --> n136
         n135 --> n22
@@ -959,7 +961,7 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n143 --> n95
         n143 --> n113
         n143 --> n159
-        n143 --> n210
+        n143 --> n212
         n144 --> n21
         n144 --> n22
         n144 --> n25
@@ -971,25 +973,25 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n145 --> n149
         n146 --> n22
         n146 --> n33
-        n146 --> n210
-        n146 --> n219
-        n147 --> n212
-        n147 --> n219
+        n146 --> n212
+        n146 --> n221
+        n147 --> n214
+        n147 --> n221
         n148 --> n21
         n148 --> n22
         n148 --> n24
         n148 --> n25
         n148 --> n33
         n148 --> n147
-        n148 --> n210
-        n148 --> n219
+        n148 --> n212
+        n148 --> n221
         n149 --> n22
         n149 --> n23
         n149 --> n24
         n149 --> n94
         n149 --> n95
         n149 --> n159
-        n149 --> n210
+        n149 --> n212
         n150 --> n151
         n150 --> n152
         n151 --> n21
@@ -1001,11 +1003,11 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n152 --> n23
         n152 --> n95
         n152 --> n151
-        n152 --> n210
+        n152 --> n212
         n153 --> n22
         n153 --> n23
         n153 --> n95
-        n153 --> n210
+        n153 --> n212
         n154 --> n22
         n154 --> n23
         n154 --> n24
@@ -1013,15 +1015,15 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n154 --> n95
         n154 --> n115
         n154 --> n120
-        n154 --> n210
+        n154 --> n212
         n155 --> n22
         n155 --> n25
         n155 --> n33
         n155 --> n156
-        n155 --> n210
         n155 --> n212
-        n155 --> n219
-        n156 --> n219
+        n155 --> n214
+        n155 --> n221
+        n156 --> n221
         n158 --> n159
         n158 --> n160
         n158 --> n161
@@ -1030,266 +1032,270 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n159 --> n160
         n162 --> n160
         n162 --> n161
-        n163 --> n173
-        n163 --> n198
-        n163 --> n204
-        n164 --> n173
-        n164 --> n175
-        n164 --> n198
-        n164 --> n202
-        n165 --> n177
-        n165 --> n184
-        n166 --> n173
-        n166 --> n175
+        n163 --> n174
+        n163 --> n200
+        n163 --> n206
+        n164 --> n174
+        n164 --> n177
+        n164 --> n200
+        n164 --> n204
+        n165 --> n179
+        n165 --> n186
+        n166 --> n174
+        n166 --> n177
         n167 --> n21
         n167 --> n22
-        n167 --> n175
         n167 --> n177
+        n167 --> n179
         n168 --> n33
         n168 --> n165
-        n168 --> n175
+        n168 --> n173
         n168 --> n177
-        n168 --> n184
-        n168 --> n203
+        n168 --> n179
+        n168 --> n186
+        n168 --> n205
         n169 --> n165
-        n169 --> n175
+        n169 --> n173
+        n169 --> n176
         n169 --> n177
-        n169 --> n184
-        n169 --> n203
+        n169 --> n179
+        n169 --> n186
+        n169 --> n205
         n170 --> n165
-        n170 --> n175
         n170 --> n177
-        n170 --> n184
-        n170 --> n203
+        n170 --> n179
+        n170 --> n186
+        n170 --> n205
         n171 --> n165
         n171 --> n168
-        n171 --> n175
         n171 --> n177
-        n171 --> n184
-        n171 --> n203
+        n171 --> n179
+        n171 --> n186
+        n171 --> n205
         n172 --> n165
-        n172 --> n175
         n172 --> n177
-        n172 --> n184
-        n172 --> n203
-        n173 --> n21
-        n173 --> n22
-        n173 --> n27
-        n173 --> n167
-        n173 --> n168
-        n173 --> n169
-        n173 --> n170
-        n173 --> n171
-        n173 --> n172
-        n173 --> n174
-        n173 --> n175
-        n173 --> n176
-        n173 --> n177
-        n173 --> n184
+        n172 --> n179
+        n172 --> n186
+        n172 --> n205
+        n174 --> n21
         n174 --> n22
-        n174 --> n165
+        n174 --> n27
+        n174 --> n167
+        n174 --> n168
+        n174 --> n169
+        n174 --> n170
+        n174 --> n171
+        n174 --> n172
         n174 --> n175
-        n174 --> n184
-        n174 --> n203
-        n176 --> n0
-        n176 --> n164
-        n176 --> n173
-        n176 --> n198
-        n177 --> n178
-        n177 --> n179
-        n177 --> n180
-        n177 --> n181
-        n177 --> n182
-        n180 --> n178
-        n183 --> n165
-        n183 --> n168
-        n183 --> n169
-        n183 --> n170
-        n183 --> n171
-        n183 --> n172
-        n183 --> n174
-        n183 --> n177
-        n183 --> n184
-        n183 --> n186
-        n183 --> n187
-        n183 --> n188
-        n183 --> n189
-        n183 --> n190
-        n183 --> n191
-        n183 --> n192
-        n183 --> n193
-        n183 --> n194
-        n183 --> n195
-        n183 --> n196
-        n183 --> n197
-        n183 --> n200
-        n183 --> n203
-        n184 --> n21
-        n184 --> n213
+        n174 --> n177
+        n174 --> n178
+        n174 --> n179
+        n174 --> n186
+        n175 --> n22
+        n175 --> n165
+        n175 --> n177
+        n175 --> n186
+        n175 --> n205
+        n176 --> n177
+        n178 --> n0
+        n178 --> n164
+        n178 --> n174
+        n178 --> n200
+        n179 --> n180
+        n179 --> n181
+        n179 --> n182
+        n179 --> n183
+        n179 --> n184
+        n182 --> n180
+        n185 --> n165
+        n185 --> n168
+        n185 --> n169
+        n185 --> n170
+        n185 --> n171
+        n185 --> n172
+        n185 --> n175
+        n185 --> n179
+        n185 --> n186
+        n185 --> n188
+        n185 --> n189
+        n185 --> n190
+        n185 --> n191
+        n185 --> n192
+        n185 --> n193
+        n185 --> n194
+        n185 --> n195
+        n185 --> n196
+        n185 --> n197
         n185 --> n198
-        n186 --> n165
-        n186 --> n177
-        n186 --> n184
-        n186 --> n202
-        n186 --> n203
-        n187 --> n165
-        n187 --> n184
-        n187 --> n202
-        n187 --> n203
+        n185 --> n199
+        n185 --> n202
+        n185 --> n205
+        n186 --> n21
+        n186 --> n215
+        n187 --> n200
         n188 --> n165
-        n188 --> n184
-        n188 --> n187
-        n188 --> n202
-        n188 --> n203
-        n189 --> n33
+        n188 --> n179
+        n188 --> n186
+        n188 --> n204
+        n188 --> n205
         n189 --> n165
-        n189 --> n184
-        n189 --> n199
-        n189 --> n202
-        n189 --> n203
+        n189 --> n186
+        n189 --> n204
+        n189 --> n205
         n190 --> n165
-        n190 --> n184
-        n190 --> n201
-        n190 --> n202
-        n190 --> n203
+        n190 --> n186
+        n190 --> n189
+        n190 --> n204
+        n190 --> n205
+        n191 --> n33
         n191 --> n165
-        n191 --> n184
+        n191 --> n186
         n191 --> n201
-        n191 --> n202
-        n191 --> n203
+        n191 --> n204
+        n191 --> n205
         n192 --> n165
-        n192 --> n184
-        n192 --> n199
-        n192 --> n202
+        n192 --> n186
         n192 --> n203
+        n192 --> n204
+        n192 --> n205
         n193 --> n165
-        n193 --> n184
-        n193 --> n202
+        n193 --> n186
         n193 --> n203
+        n193 --> n204
+        n193 --> n205
         n194 --> n165
-        n194 --> n184
-        n194 --> n202
-        n194 --> n203
+        n194 --> n186
+        n194 --> n201
+        n194 --> n204
+        n194 --> n205
         n195 --> n165
-        n195 --> n184
-        n195 --> n202
-        n195 --> n203
+        n195 --> n186
+        n195 --> n204
+        n195 --> n205
         n196 --> n165
-        n196 --> n177
-        n196 --> n184
-        n196 --> n202
-        n196 --> n203
+        n196 --> n186
+        n196 --> n204
+        n196 --> n205
         n197 --> n165
-        n197 --> n184
-        n197 --> n202
-        n197 --> n203
-        n198 --> n21
-        n198 --> n27
-        n198 --> n176
-        n198 --> n177
-        n198 --> n184
+        n197 --> n186
+        n197 --> n204
+        n197 --> n205
+        n198 --> n165
+        n198 --> n179
         n198 --> n186
-        n198 --> n187
-        n198 --> n188
-        n198 --> n189
-        n198 --> n190
-        n198 --> n191
-        n198 --> n192
-        n198 --> n193
-        n198 --> n194
-        n198 --> n195
-        n198 --> n196
-        n198 --> n197
-        n198 --> n200
-        n198 --> n202
+        n198 --> n204
+        n198 --> n205
+        n199 --> n165
+        n199 --> n186
+        n199 --> n204
+        n199 --> n205
         n200 --> n21
-        n200 --> n165
-        n200 --> n184
+        n200 --> n27
+        n200 --> n178
+        n200 --> n179
+        n200 --> n186
+        n200 --> n188
+        n200 --> n189
+        n200 --> n190
+        n200 --> n191
+        n200 --> n192
+        n200 --> n193
+        n200 --> n194
+        n200 --> n195
+        n200 --> n196
+        n200 --> n197
+        n200 --> n198
+        n200 --> n199
         n200 --> n202
-        n200 --> n203
-        n203 --> n165
-        n203 --> n184
-        n204 --> n25
-        n204 --> n33
-        n204 --> n173
-        n204 --> n198
-        n205 --> n206
-        n205 --> n207
-        n205 --> n208
-        n205 --> n209
+        n200 --> n204
+        n202 --> n21
+        n202 --> n165
+        n202 --> n186
+        n202 --> n204
+        n202 --> n205
+        n205 --> n165
+        n205 --> n186
         n206 --> n25
         n206 --> n33
-        n206 --> n173
-        n206 --> n198
-        n206 --> n207
-        n206 --> n208
-        n206 --> n209
+        n206 --> n174
+        n206 --> n200
         n207 --> n208
         n207 --> n209
-        n209 --> n173
-        n209 --> n198
-        n209 --> n208
-        n210 --> n220
-        n211 --> n219
-        n212 --> n213
-        n215 --> n33
-        n215 --> n213
-        n216 --> n33
-        n216 --> n213
+        n207 --> n210
+        n207 --> n211
+        n208 --> n25
+        n208 --> n33
+        n208 --> n174
+        n208 --> n200
+        n208 --> n209
+        n208 --> n210
+        n208 --> n211
+        n209 --> n210
+        n209 --> n211
+        n211 --> n174
+        n211 --> n200
+        n211 --> n210
+        n212 --> n222
+        n213 --> n221
+        n214 --> n215
         n217 --> n33
-        n217 --> n213
+        n217 --> n215
         n218 --> n33
-        n219 --> n213
-        n219 --> n218
-        n220 --> n22
+        n218 --> n215
+        n219 --> n33
+        n219 --> n215
         n220 --> n33
-        n220 --> n218
-        n220 --> n219
-        n224 --> n3
-        n224 --> n10
-        n224 --> n11
-        n224 --> n12
-        n224 --> n13
-        n224 --> n14
-        n224 --> n15
-        n224 --> n16
-        n224 --> n17
-        n224 --> n21
-        n224 --> n22
-        n224 --> n33
-        n224 --> n93
-        n224 --> n158
-        n224 --> n164
-        n224 --> n183
-        n224 --> n223
-        n224 --> n225
-        n224 --> n226
-        n224 --> n227
-        n224 --> n228
-        n224 --> n230
-        n224 --> n231
-        n224 --> n232
-        n224 --> n233
-        n224 --> n234
-        n224 --> n235
-        n224 --> n236
-        n225 --> n11
-        n225 --> n27
-        n226 --> n98
-        n231 --> n21
-        n233 --> n183
-        n233 --> n236
-        n234 --> n230
-        n235 --> n4
-        n235 --> n5
-        n235 --> n11
-        n235 --> n227
-        n235 --> n234
-        n236 --> n164
-        n236 --> n173
-        n236 --> n183
-        n236 --> n198
+        n221 --> n215
+        n221 --> n220
+        n222 --> n22
+        n222 --> n33
+        n222 --> n220
+        n222 --> n221
+        n226 --> n3
+        n226 --> n10
+        n226 --> n11
+        n226 --> n12
+        n226 --> n13
+        n226 --> n14
+        n226 --> n15
+        n226 --> n16
+        n226 --> n17
+        n226 --> n21
+        n226 --> n22
+        n226 --> n33
+        n226 --> n93
+        n226 --> n158
+        n226 --> n164
+        n226 --> n185
+        n226 --> n225
+        n226 --> n227
+        n226 --> n228
+        n226 --> n229
+        n226 --> n230
+        n226 --> n232
+        n226 --> n233
+        n226 --> n234
+        n226 --> n235
+        n226 --> n236
+        n226 --> n237
+        n226 --> n238
+        n227 --> n11
+        n227 --> n27
+        n228 --> n98
+        n233 --> n21
+        n235 --> n185
+        n235 --> n238
+        n236 --> n232
+        n237 --> n4
+        n237 --> n5
+        n237 --> n11
+        n237 --> n229
+        n237 --> n236
+        n238 --> n164
+        n238 --> n174
+        n238 --> n185
+        n238 --> n200
         classDef first_party fill:#e8f0fe,stroke:#1a73e8,color:#202124
-        class n0,n1,n2,n3,n4,n5,n6,n7,n8,n9,n10,n11,n12,n13,n14,n15,n16,n17,n18,n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,n30,n31,n32,n33,n34,n35,n36,n37,n38,n39,n40,n41,n42,n43,n44,n45,n46,n47,n48,n49,n50,n51,n52,n53,n54,n55,n56,n57,n58,n59,n60,n61,n62,n63,n64,n65,n66,n67,n68,n69,n70,n71,n72,n73,n74,n75,n76,n77,n78,n79,n80,n81,n82,n83,n84,n85,n86,n87,n88,n89,n90,n91,n92,n93,n94,n95,n96,n97,n98,n99,n100,n101,n102,n103,n104,n105,n106,n107,n108,n109,n110,n111,n112,n113,n114,n115,n116,n117,n118,n119,n120,n121,n122,n123,n124,n125,n126,n127,n128,n129,n130,n131,n132,n133,n134,n135,n136,n137,n138,n139,n140,n141,n142,n143,n144,n145,n146,n147,n148,n149,n150,n151,n152,n153,n154,n155,n156,n157,n158,n159,n160,n161,n162,n163,n164,n165,n166,n167,n168,n169,n170,n171,n172,n173,n174,n175,n176,n177,n178,n179,n180,n181,n182,n183,n184,n185,n186,n187,n188,n189,n190,n191,n192,n193,n194,n195,n196,n197,n198,n199,n200,n201,n202,n203,n204,n205,n206,n207,n208,n209,n210,n211,n212,n213,n214,n215,n216,n217,n218,n219,n220,n221,n222,n223,n224,n225,n226,n227,n228,n229,n230,n231,n232,n233,n234,n235,n236 first_party
+        class n0,n1,n2,n3,n4,n5,n6,n7,n8,n9,n10,n11,n12,n13,n14,n15,n16,n17,n18,n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,n30,n31,n32,n33,n34,n35,n36,n37,n38,n39,n40,n41,n42,n43,n44,n45,n46,n47,n48,n49,n50,n51,n52,n53,n54,n55,n56,n57,n58,n59,n60,n61,n62,n63,n64,n65,n66,n67,n68,n69,n70,n71,n72,n73,n74,n75,n76,n77,n78,n79,n80,n81,n82,n83,n84,n85,n86,n87,n88,n89,n90,n91,n92,n93,n94,n95,n96,n97,n98,n99,n100,n101,n102,n103,n104,n105,n106,n107,n108,n109,n110,n111,n112,n113,n114,n115,n116,n117,n118,n119,n120,n121,n122,n123,n124,n125,n126,n127,n128,n129,n130,n131,n132,n133,n134,n135,n136,n137,n138,n139,n140,n141,n142,n143,n144,n145,n146,n147,n148,n149,n150,n151,n152,n153,n154,n155,n156,n157,n158,n159,n160,n161,n162,n163,n164,n165,n166,n167,n168,n169,n170,n171,n172,n173,n174,n175,n176,n177,n178,n179,n180,n181,n182,n183,n184,n185,n186,n187,n188,n189,n190,n191,n192,n193,n194,n195,n196,n197,n198,n199,n200,n201,n202,n203,n204,n205,n206,n207,n208,n209,n210,n211,n212,n213,n214,n215,n216,n217,n218,n219,n220,n221,n222,n223,n224,n225,n226,n227,n228,n229,n230,n231,n232,n233,n234,n235,n236,n237,n238 first_party
     ```
 

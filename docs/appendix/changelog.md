@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - (Next release changes will go here)
 
+### Changed
+- (Next release changes will go here)
+
+---
+
+## [0.3.21] - 2026-08-02
+
 ### Fixed
 - **The CRM substitution block on C 07.00 / C 08.01 / C 08.02 removed guaranteed exposure
   more than once, and lost it entirely when the guarantor sat outside the reporting
@@ -129,9 +136,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     removed are the PD-scale sum rules the register had already diagnosed as "a
     structural template defect, not a data gap". CRR `irb-classes` FAIL 9 → 1, Basel 3.1
     16 → 10, with two further rules now executable.
-
-### Changed
-- (Next release changes will go here)
 
 ---
 

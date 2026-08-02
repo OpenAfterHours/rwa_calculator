@@ -373,6 +373,31 @@ reconcile.
     - Expected loss (col l) includes post-model adjustments per Art. 158(6A)
     - Slotting exposures are **excluded** (reported in CR10)
 
+### Row Structure — Fixed PD Scale
+
+Each class sheet carries the same fixed 17-row PD scale, which is
+**hierarchical, not a partition**: four of its bands repeat their span as the finer
+sub-breakdown indented beneath them, so a parent row *overlaps* its children and
+equals their sum. Aggregating across rows must use the leaf bands only.
+
+| Row | PD range | | Row | PD range |
+|-----|----------|-|-----|----------|
+| 1 | 0.00 to < 0.15 | | 10 | 2.50 to < 10.00 |
+| 2 | &emsp;0.00 to < 0.10 | | 11 | &emsp;2.50 to < 5.00 |
+| 3 | &emsp;0.10 to < 0.15 | | 12 | &emsp;5.00 to < 10.00 |
+| 4 | 0.15 to < 0.25 | | 13 | 10.00 to < 100.00 |
+| 5 | 0.25 to < 0.50 | | 14 | &emsp;10.00 to < 20.00 |
+| 6 | 0.50 to < 0.75 | | 15 | &emsp;20.00 to < 30.00 |
+| 7 | 0.75 to < 2.50 | | 16 | &emsp;30.00 to < 100.00 |
+| 8 | &emsp;0.75 to < 1.75 | | 17 | 100.00 (Default) |
+| 9 | &emsp;1.75 to < 2.50 | | | |
+
+!!! note "Pillar 3 does not follow COREP's Basel 3.1 split"
+    The scale is the same 17 rows under **both** regimes. COREP OF 08.03 / OF 08.05
+    split the `0.00 to < 0.10` band at 0.05% under Basel 3.1 (rows 0015 / 0025);
+    UKB CR6 and UK CR9 keep the coarser band. See
+    [COREP reporting](corep-reporting.md) for that divergence.
+
 ### Row Structure — Exposure Class Breakdown
 
 === "CRR (UK CR6)"

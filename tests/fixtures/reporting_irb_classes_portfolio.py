@@ -27,45 +27,50 @@ Composition — the sheet axis (Art. 147 IRB exposure classes):
     LN_QRRE          | retail_qrre               | A-IRB    | Art. 154(4)
     LN_CORP_*        | corporate                 | F-IRB    | Art. 147(2)(c)
 
-and the row axis (C 08.03 / C 08.05 PD ranges), which is why there are three
-sovereigns and a fourteen-grade corporate masterscale rather than one of each:
+and the row axis (the fixed C 08.03 / C 08.05 PD scale), which is why there is a
+fourteen-grade corporate masterscale rather than one exposure per decade of PD:
 
-    ref              | PD      | band                      | CRR  | B3.1
-    -----------------|---------|---------------------------|------|------
-    LN_SOV_A         | 0.020%  | 0.00 to < 0.03%           | 0010 |  --
-    LN_SOV_B         | 0.040%  | 0.03 to < 0.05%           | 0020 |  --
-    LN_SOV_C         | 0.070%  | 0.05 to < 0.10%           | 0030 |  --
-    corporate G01    | 0.020%  | see below                 | 0020 | 0010
-    corporate G02-14 | 0.12-70%| 0.10% .. < 100%, one each | 0040 | 0040
-                     |         |                     ..0160| 0160 | 0160
+    ref              | PD      | leaf band        | CRR  | B3.1
+    -----------------|---------|------------------|------|------
+    LN_SOV_A         | 0.020%  | 0.00 to <0.10    | 0020 |  --
+    LN_SOV_B         | 0.040%  | 0.00 to <0.10    | 0020 |  --
+    LN_SOV_C         | 0.070%  | 0.00 to <0.10    | 0020 |  --
+    corporate G01    | 0.020%  | see below        | 0020 | 0015
+    corporate G02    | 0.070%  | see below        | 0020 | 0025
+    corporate G03-14 | 0.12-70%| 0.10% .. < 100%  | 0030 | 0030
+                     |         |            ..0160| 0160 | 0160
 
-The corporate grades are a 14-point internal MASTERSCALE, not one exposure per
-decade of PD, because the published PD-range rules are PARENT/CHILD sums within
-a single sheet: ``v09754_m`` is ``{r0070} = {r0080} + {r0090}`` and
-``v09756_m`` is ``{r0130} = {r0140} + {r0150} + {r0160}``. A coordinate is only
-evaluated when the parent band AND every child band it references are populated
-on the SAME class sheet, so a sparse ladder leaves every one of those rules
-NOT_EVALUATED — which is exactly the state the estate was in. See
-``CORP_MASTERSCALE`` for the grade-to-band mapping.
+The corporate grades are a 14-point internal MASTERSCALE because the published
+PD-range rules are PARENT/CHILD sums within a single sheet: ``v09754_m`` is
+``{r0070} = {r0080} + {r0090}`` and ``v09756_m`` is
+``{r0130} = {r0140} + {r0150} + {r0160}``. A coordinate is only evaluated when
+the parent band AND every child band it references are populated on the SAME
+class sheet, so a sparse ladder leaves every one of those rules NOT_EVALUATED.
+The masterscale puts one obligor in each of the thirteen LEAF bands, which
+populates all four parent bands and makes every published group evaluable on the
+corporate sheet under both regimes. See ``CORP_MASTERSCALE`` for the mapping.
 
-``LN_SOV_A`` is the load-bearing row and the reason the low bands are carried by
-SOVEREIGNS rather than corporates. CRR Art. 160(1) floors PD at 0.03% for
-exposures to corporates and institutions but NOT for central governments and
-central banks, so the ``0.00 to < 0.03%`` band is structurally unreachable for
-any other class: a corporate booked at 0.02% arrives at the template floored to
-0.03% and lands one band up. Every published sum-check that references that band
-therefore has a coordinate only when a sovereign occupies it. The three
-sovereigns sit on ONE sheet on purpose — the rules that were blocked are
-same-sheet identities across adjacent bands, so scattering the bands across
-classes would leave them just as unevaluable.
+Note the scale is hierarchical: parent rows 0010/0070/0100/0130 repeat the span
+of the sub-bands beneath them, so they are populated implicitly and summing every
+emitted row double-counts.
 
-``LN_CORP_FLOOR`` carries the SAME 0.02% PD as ``LN_SOV_A`` and lands in a
-DIFFERENT band in each regime. That is not an inconsistency in the fixture but a
-property of the estate it exists to pin: ``c08.py::_pd_alloc_col`` allocates
-C 08.03 / C 08.05 on ``pd_floored`` under CRR and on the unfloored ``pd`` under
-Basel 3.1, so a floored corporate reports one band up under CRR and in its
-as-booked band under Basel 3.1. It is the only route to the Basel 3.1 lowest
-band at all, since PS1/26 takes the sovereign class out of the IRB book.
+The three sovereigns exercise the CRR-only sovereign IRB sheet and the Art.
+160(1) no-floor treatment (the 0.03% PD floor binds corporates and institutions,
+not central governments and central banks). All three land in the SAME leaf band,
+``0.00 to <0.10`` (CRR row 0020) — the published scale has no sub-0.03% band for
+a floored corporate to be excluded from, so unlike an earlier revision of this
+fixture they are not the only route into a low band. They are kept because the
+sovereign sheet itself is CRR-only and worth emitting.
+
+``LN_CORP_FLOOR`` (grade G01) carries the SAME 0.02% PD as ``LN_SOV_A`` and is
+still load-bearing, because it pins the ALLOCATION BASIS:
+``c08.py::_pd_alloc_col`` allocates C 08.03 / C 08.05 on ``pd_floored`` under CRR
+and on the unfloored ``pd`` under Basel 3.1. Under Basel 3.1 the 0.05% corporate
+PD input floor falls exactly on the 0015 / 0025 boundary, so G01 lands in 0015
+(``0.00 to <0.05``) on the pre-floor basis and would land in 0025 on the
+post-floor one — the sharpest available discriminator between the two bases.
+Under CRR the 0.03% floor sits INSIDE the first leaf band (``0.00 to <0.10``), so
+there the floor cannot move a corporate across a band boundary at all.
 
 ``LN_QRRE`` is drawn to exactly its parent facility's limit. That is deliberate:
 a facility with headroom emits a synthetic ``_UNDRAWN`` exposure which inherits
@@ -82,7 +87,7 @@ with Art. 147(3) makes the sovereign class Standardised-only, so under Basel 3.1
 the three sovereign rows route SA and the ``central_govt_central_bank`` IRB sheet
 is legitimately absent. The Basel 3.1 arm of this portfolio therefore covers the
 institution / retail-mortgage / QRRE sheets and the PD-band rows; the CRR arm
-covers those plus the sovereign sheet and the sub-0.03% band.
+covers those plus the sovereign sheet.
 
 Deliberately OUT of scope:
 - A-IRB specialised lending. The rich portfolio owns the slotting sheet, and
@@ -159,23 +164,26 @@ FAC_QRRE: str = "IRC-FAC-QRRE"
 #: for the first time.
 #:
 #: ``G01`` is the floored grade: 0.02% as booked, which CRR Art. 160(1) lifts to
-#: the 0.03% minimum for corporates. It reports one band up under CRR and in its
-#: as-booked band under Basel 3.1 — see the module docstring.
+#: the 0.03% minimum for corporates — see the module docstring.
+#:
+#: Every grade below names the LEAF band it occupies. The parent bands (0010,
+#: 0070, 0100, 0130) are populated implicitly, because a parent spans its
+#: children: no grade is booked "into" a parent.
 CORP_MASTERSCALE: tuple[tuple[str, float], ...] = (
-    ("G01", 0.0002),  # -> CRR band 0020 (floored) / B3.1 band 0010 (as booked)
-    ("G02", 0.0012),  # -> 0040   0.10 to < 0.15%
-    ("G03", 0.0017),  # -> 0050   0.15 to < 0.20%
-    ("G04", 0.0022),  # -> 0060   0.20 to < 0.25%
-    ("G05", 0.0035),  # -> 0070   0.25 to < 0.50%   (parent of 0080 + 0090)
-    ("G06", 0.0060),  # -> 0080   0.50 to < 0.75%
-    ("G07", 0.0085),  # -> 0090   0.75 to < 1.00%
-    ("G08", 0.0150),  # -> 0100   1.00 to < 2.50%   (parent of 0110 + 0120)
-    ("G09", 0.0350),  # -> 0110   2.50 to < 5.00%
-    ("G10", 0.0700),  # -> 0120   5.00 to < 10.00%
-    ("G11", 0.1200),  # -> 0130  10.00 to < 20.00%  (parent of 0140/0150/0160)
-    ("G12", 0.2500),  # -> 0140  20.00 to < 30.00%
-    ("G13", 0.4000),  # -> 0150  30.00 to < 50.00%
-    ("G14", 0.7000),  # -> 0160  50.00 to < 100%
+    ("G01", 0.0002),  # -> CRR 0020 (0.00 to <0.10) / B3.1 0015 (0.00 to <0.05)
+    ("G02", 0.0007),  # -> CRR 0020 (0.00 to <0.10) / B3.1 0025 (0.05 to <0.10)
+    ("G03", 0.0012),  # -> 0030   0.10 to <0.15
+    ("G04", 0.0020),  # -> 0040   0.15 to <0.25
+    ("G05", 0.0035),  # -> 0050   0.25 to <0.50
+    ("G06", 0.0060),  # -> 0060   0.50 to <0.75
+    ("G07", 0.0120),  # -> 0080   0.75 to <1.75   (child of 0070)
+    ("G08", 0.0200),  # -> 0090   1.75 to <2.5    (child of 0070)
+    ("G09", 0.0350),  # -> 0110   2.5 to <5       (child of 0100)
+    ("G10", 0.0700),  # -> 0120   5 to <10        (child of 0100)
+    ("G11", 0.1200),  # -> 0140  10 to <20        (child of 0130)
+    ("G12", 0.2500),  # -> 0150  20 to <30        (child of 0130)
+    ("G13", 0.4000),  # -> 0160  30 to <100       (child of 0130)
+    ("G14", 0.7000),  # -> 0160  30 to <100       (second obligor in the band)
 )
 
 

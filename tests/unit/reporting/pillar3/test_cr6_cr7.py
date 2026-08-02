@@ -268,7 +268,7 @@ class TestCR6GrossSideCarriersAndCCRExclusion:
     """
 
     def _mixed_band_data(self) -> pl.LazyFrame:
-        """One PD band (0.50 to < 0.75%, ref "8"), corporate, foundation_irb:
+        """One PD band (0.50 to <0.75, ref "6"), corporate, foundation_irb:
         a loan, a facility_undrawn commitment, and a CCR netting-set leg
         mistakenly sharing the same origin approach tag."""
         return pl.LazyFrame(
@@ -298,7 +298,7 @@ class TestCR6GrossSideCarriersAndCCRExclusion:
         it too (today null — no leg matches the off-BS predicate)."""
         bundle = generator.generate_from_lazyframe(self._mixed_band_data(), framework="CRR")
         corp = bundle.cr6["corporate"]
-        band = corp.filter(pl.col("row_ref") == "8")
+        band = corp.filter(pl.col("row_ref") == "6")
         assert band["b"][0] == pytest.approx(5000.0)  # on-BS gross (loan) — unaffected
         assert band["c"][0] == pytest.approx(4000.0)  # off-BS gross (FU headroom)
         assert band["d"][0] == pytest.approx(0.75)  # avg CCF over the off-BS legs (FU only)
@@ -309,7 +309,7 @@ class TestCR6GrossSideCarriersAndCCRExclusion:
         exclusion, unlike CR4/CR5's ``sa_scope`` narrowing)."""
         bundle = generator.generate_from_lazyframe(self._mixed_band_data(), framework="CRR")
         corp = bundle.cr6["corporate"]
-        band = corp.filter(pl.col("row_ref") == "8")
+        band = corp.filter(pl.col("row_ref") == "6")
         assert band["e"][0] == pytest.approx(8000.0)  # loan 5000 + FU 3000; CCR excluded
         assert band["j"][0] == pytest.approx(5600.0)  # loan 3500 + FU 2100; CCR excluded
 

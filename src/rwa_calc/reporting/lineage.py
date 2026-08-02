@@ -693,8 +693,8 @@ LINEAGE_PLANS: dict[str, _Provider] = {
         sheet_label="exposure class",
     ),
     # C 08.03 — IRB by PD range (per exposure class; R24). Sparse PD-range rows
-    # (populated buckets + optional 9999 Unassigned) keyed on the derived
-    # c08_pd_range band label. generate_c08_03 is the provider generator directly:
+    # (populated bands + optional 9999 Unassigned) keyed on the derived
+    # c08_pd_range / c08_pd_parent band labels. generate_c08_03 is the provider generator directly:
     # its one post-execute pass (the provisions ladder, col 0110) lives on the
     # reported frame the drill-down reads. Cols 0010/0020 Sum the sealed per-side
     # gross carriers (reporting_gross_on_bs / _off_bs) over the band with a
@@ -709,10 +709,14 @@ LINEAGE_PLANS: dict[str, _Provider] = {
             "excluded — it discloses on C 08.06 (reporting_approach_origin in "
             "{foundation_irb, advanced_irb}), keyed on the sealed obligor "
             "origination class (reporting_class_origin)",
-            "Rows are the populated PD ranges (the derived c08_pd_range band on "
-            "pd_floored under CRR, on the pre-input-floor pd under Basel 3.1; the "
-            "reported PD is always post-floor) plus an optional 9999 'Unassigned' "
-            "residual — sparse: only populated buckets emit a row",
+            "Rows are the populated bands of the fixed regulatory PD scale, "
+            "allocated on pd_floored under CRR and on the pre-input-floor pd under "
+            "Basel 3.1 (the reported PD is always post-floor), plus an optional "
+            "9999 'Unassigned' residual — sparse: only populated bands emit a row. "
+            "The scale is hierarchical: rows 0010/0070/0100/0130 are parent bands "
+            "that OVERLAP and sum the sub-bands below them (keyed on the derived "
+            "c08_pd_parent label; leaves key on c08_pd_range), so summing every "
+            "emitted row double-counts",
             "Cols 0010 (on balance sheet) / 0020 (off balance sheet) Sum the "
             "sealed per-side gross carriers (reporting_gross_on_bs / "
             "reporting_gross_off_bs) over the band. The carriers are row-level and "
@@ -734,9 +738,9 @@ LINEAGE_PLANS: dict[str, _Provider] = {
             "approaches; slotting is excluded (reporting_approach_origin in "
             "{foundation_irb, advanced_irb}), keyed on the sealed obligor "
             "origination class (reporting_class_origin)",
-            "Rows are the populated PD ranges (the derived c08_pd_range band) plus "
-            "an optional 9999 'Unassigned' residual — the same sparse axis as "
-            "C 08.03",
+            "Rows are the populated bands of the fixed regulatory PD scale plus "
+            "an optional 9999 'Unassigned' residual — the same sparse, hierarchical "
+            "axis as C 08.03 (parent bands overlap and sum their sub-bands)",
             "Col 0010 is the arithmetic-mean assigned PD (weighted by a constant "
             "c08_one column); col 0020 the obligors at the start of the observation "
             "period, col 0030 those defaulted during it; cols 0040 (observed "

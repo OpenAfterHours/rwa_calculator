@@ -5,6 +5,7 @@ Split from tests/unit/test_corep.py (Phase 7 Sn) — bodies verbatim.
 
 from __future__ import annotations
 
+import itertools
 import math
 
 import polars as pl
@@ -17,12 +18,15 @@ from tests.fixtures.recon_ledger import LedgerShimCorepGenerator
 def _irb_pd_range_results() -> pl.LazyFrame:
     """Synthetic IRB results spanning multiple PD ranges for C 08.03 testing.
 
-    Covers 5 exposures across 4 PD range buckets:
-    - PD 0.002 (0.20%) → "0.15 to < 0.25%" bucket (row 0060)
-    - PD 0.005 (0.50%) → "0.50 to < 0.75%" bucket (row 0080)
-    - PD 0.01 (1.00%) → "1.00 to < 2.50%" bucket (row 0100)
-    - PD 0.03 (3.00%) → "2.50 to < 5.00%" bucket (row 0110)
-    - PD 1.0 (100%) → "100% (Default)" bucket (row 0170)
+    Covers 5 exposures across 5 leaf PD ranges (CRR allocation, on pd_floored):
+    - PD 0.002 (0.20%) → "0.15 to <0.25"  (row 0040)
+    - PD 0.005 (0.50%) → "0.50 to <0.75"  (row 0060)
+    - PD 0.01  (1.00%) → "0.75 to <1.75"  (row 0080, under parent 0070)
+    - PD 0.03  (3.00%) → "2.5 to <5"      (row 0110, under parent 0100)
+    - PD 1.0   (100%)  → "100 (Default)"  (row 0170)
+
+    Two of the five sit under a parent band, so the sheet emits 7 rows: five
+    leaves plus parents 0070 and 0100.
     """
     return pl.LazyFrame(
         {
@@ -107,31 +111,91 @@ class TestC0803TemplateDefinitions:
 
         assert len(B31_C08_03_COLUMNS) == 11
 
-    def test_c0803_pd_ranges_has_17_buckets(self) -> None:
-        """C 08.03 PD ranges define exactly 17 regulatory buckets."""
-        from rwa_calc.reporting.corep.templates import C08_03_PD_RANGES
+    def test_crr_row_axis_matches_published_template(self) -> None:
+        """CRR C 08.03 reproduces the published PD scale row-for-row.
 
-        assert len(C08_03_PD_RANGES) == 17
+        Source: Regulation (EU) 2021/451 Annex I, template C 08.03 (sheet 8.3 of
+        the onshored COREP own-funds workbook in docs/assets).
+        """
+        from rwa_calc.reporting.corep.templates import get_c08_03_pd_ranges
 
-    def test_pd_ranges_cover_full_spectrum(self) -> None:
-        """PD ranges cover 0% to 100% (default) without gaps."""
-        from rwa_calc.reporting.corep.templates import C08_03_PD_RANGES
+        assert [(ref, label) for _lo, _hi, ref, label in get_c08_03_pd_ranges("CRR")] == [
+            ("0010", "0.00 to <0.15"),
+            ("0020", "0.00 to <0.10"),
+            ("0030", "0.10 to <0.15"),
+            ("0040", "0.15 to <0.25"),
+            ("0050", "0.25 to <0.50"),
+            ("0060", "0.50 to <0.75"),
+            ("0070", "0.75 to <2.5"),
+            ("0080", "0.75 to <1.75"),
+            ("0090", "1.75 to <2.5"),
+            ("0100", "2.5 to <10"),
+            ("0110", "2.5 to <5"),
+            ("0120", "5 to <10"),
+            ("0130", "10 to <100"),
+            ("0140", "10 to <20"),
+            ("0150", "20 to <30"),
+            ("0160", "30 to <100"),
+            ("0170", "100 (Default)"),
+        ]
 
-        # First range starts at 0
-        assert C08_03_PD_RANGES[0][0] == pytest.approx(0.0, abs=1e-10)
-        # Last range upper bound is infinity (captures 100% default)
-        assert math.isinf(C08_03_PD_RANGES[-1][1])
-        # Ranges are contiguous (upper of i == lower of i+1)
-        for i in range(len(C08_03_PD_RANGES) - 1):
-            assert C08_03_PD_RANGES[i][1] == C08_03_PD_RANGES[i + 1][0]
+    def test_b31_row_axis_splits_the_first_sub_band_at_five_basis_points(self) -> None:
+        """OF 08.03 replaces CRR row 0020 with rows 0015/0025, giving 18 rows.
 
-    def test_pd_range_row_refs_are_sequential(self) -> None:
-        """Row refs run from 0010 to 0170 in steps of 10."""
-        from rwa_calc.reporting.corep.templates import C08_03_PD_RANGES
+        Source: PRA PS1/26 Annex I, template OF 08.03.
+        """
+        from rwa_calc.reporting.corep.templates import get_c08_03_pd_ranges
 
-        refs = [r[2] for r in C08_03_PD_RANGES]
-        expected = [f"{i:04d}" for i in range(10, 180, 10)]
-        assert refs == expected
+        b31 = get_c08_03_pd_ranges("BASEL_3_1")
+        assert [(ref, label) for _lo, _hi, ref, label in b31[:4]] == [
+            ("0010", "0.00 to <0.15"),
+            ("0015", "0.00 to <0.05"),
+            ("0025", "0.05 to <0.10"),
+            ("0030", "0.10 to <0.15"),
+        ]
+        # Everything from 0.15% up is identical to CRR.
+        assert b31[4:] == get_c08_03_pd_ranges("CRR")[3:]
+
+    @pytest.mark.parametrize("framework", ["CRR", "BASEL_3_1"])
+    def test_parent_rows_span_exactly_their_children(self, framework: str) -> None:
+        """Each parent row's band is the union of the sub-band rows below it.
+
+        This is the structure the published validation rules assert — EBA
+        v09753-v09756 / BoE boe_b0767-boe_b0770, e.g. {r0070} = {r0080}+{r0090}
+        — and it is what a flat, non-overlapping scale can never satisfy.
+        """
+        from rwa_calc.reporting.corep.templates import (
+            C08_03_PD_PARENT_REFS,
+            get_c08_03_pd_ranges,
+        )
+
+        ranges = get_c08_03_pd_ranges(framework)
+        parent_idx = [i for i, band in enumerate(ranges) if band[2] in C08_03_PD_PARENT_REFS]
+        assert len(parent_idx) == 4
+
+        for i in parent_idx:
+            lower, upper, ref, _label = ranges[i]
+            children = list(itertools.takewhile(lambda b, hi=upper: b[0] < hi, ranges[i + 1 :]))
+            assert len(children) >= 2, f"row {ref} has no sub-breakdown"
+            assert children[0][0] == pytest.approx(lower), f"row {ref} children start late"
+            assert children[-1][1] == pytest.approx(upper), f"row {ref} children end early"
+            for first, second in itertools.pairwise(children):
+                assert first[1] == pytest.approx(second[0]), f"row {ref} children have a gap"
+
+    @pytest.mark.parametrize("framework", ["CRR", "BASEL_3_1"])
+    def test_leaf_rows_partition_the_pd_spectrum(self, framework: str) -> None:
+        """Stripping the parents leaves a clean tiling of [0, inf), so every
+        exposure lands in exactly one row and is counted exactly once."""
+        from rwa_calc.reporting.corep.templates import (
+            C08_03_PD_PARENT_REFS,
+            get_c08_03_pd_ranges,
+        )
+
+        leaves = [b for b in get_c08_03_pd_ranges(framework) if b[2] not in C08_03_PD_PARENT_REFS]
+        assert leaves[0][0] == pytest.approx(0.0, abs=1e-10)
+        assert math.isinf(leaves[-1][1])
+        for first, second in itertools.pairwise(leaves):
+            assert first[1] == pytest.approx(second[0])
 
     def test_column_refs_list_matches_columns(self) -> None:
         """C08_03_COLUMN_REFS is derived from CRR_C08_03_COLUMNS refs."""
@@ -224,34 +288,39 @@ class TestC0803Generation:
 class TestC0803PDRangeAssignment:
     """Tests for correct PD range bucket assignment in C 08.03."""
 
-    def test_pd_002_lands_in_020_025_bucket(self) -> None:
-        """PD 0.002 (0.20%) falls in '0.20 to < 0.25%' bucket (row 0060)."""
+    def test_pd_002_lands_in_015_025_bucket(self) -> None:
+        """PD 0.002 (0.20%) falls in the '0.15 to <0.25' band (row 0040)."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_pd_range_results())
+        corp = bundle.c08_03["corporate"]
+        row = corp.filter(pl.col("row_ref") == "0040")
+        assert len(row) == 1
+        assert row["row_name"][0] == "0.15 to <0.25"
+
+    def test_pd_005_lands_in_050_075_bucket(self) -> None:
+        """PD 0.005 (0.50%) falls in the '0.50 to <0.75' band (row 0060)."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_range_results())
         corp = bundle.c08_03["corporate"]
         row = corp.filter(pl.col("row_ref") == "0060")
         assert len(row) == 1
-        assert row["row_name"][0] == "0.20 to < 0.25%"
+        assert row["row_name"][0] == "0.50 to <0.75"
 
-    def test_pd_005_lands_in_050_075_bucket(self) -> None:
-        """PD 0.005 (0.50%) falls in '0.50 to < 0.75%' bucket (row 0080)."""
+    def test_pd_001_lands_in_075_175_bucket_under_its_parent(self) -> None:
+        """PD 0.01 (1.00%) falls in the '0.75 to <1.75' leaf (row 0080), and
+        its parent '0.75 to <2.5' (row 0070) is emitted alongside it."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_range_results())
         corp = bundle.c08_03["corporate"]
-        row = corp.filter(pl.col("row_ref") == "0080")
-        assert len(row) == 1
-        assert row["row_name"][0] == "0.50 to < 0.75%"
-
-    def test_pd_001_lands_in_100_250_bucket(self) -> None:
-        """PD 0.01 (1.00%) falls in '1.00 to < 2.50%' bucket (row 0100)."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_irb_pd_range_results())
-        corp = bundle.c08_03["corporate"]
-        row = corp.filter(pl.col("row_ref") == "0100")
-        assert len(row) == 1
+        leaf = corp.filter(pl.col("row_ref") == "0080")
+        assert len(leaf) == 1
+        assert leaf["row_name"][0] == "0.75 to <1.75"
+        parent = corp.filter(pl.col("row_ref") == "0070")
+        assert len(parent) == 1
+        assert parent["row_name"][0] == "0.75 to <2.5"
 
     def test_pd_003_lands_in_250_500_bucket(self) -> None:
-        """PD 0.03 (3.00%) falls in '2.50 to < 5.00%' bucket (row 0110)."""
+        """PD 0.03 (3.00%) falls in the '2.5 to <5' band (row 0110)."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_range_results())
         corp = bundle.c08_03["corporate"]
@@ -259,21 +328,33 @@ class TestC0803PDRangeAssignment:
         assert len(row) == 1
 
     def test_pd_100_lands_in_default_bucket(self) -> None:
-        """PD 1.0 (100%) falls in '100% (Default)' bucket (row 0170)."""
+        """PD 1.0 (100%) falls in the '100 (Default)' band (row 0170)."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_range_results())
         corp = bundle.c08_03["corporate"]
         row = corp.filter(pl.col("row_ref") == "0170")
         assert len(row) == 1
-        assert row["row_name"][0] == "100% (Default)"
+        assert row["row_name"][0] == "100 (Default)"
 
     def test_empty_buckets_omitted(self) -> None:
         """PD range buckets with no exposures are not included in output."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_range_results())
         corp = bundle.c08_03["corporate"]
-        # Only 5 buckets should have data (PDs: 0.002, 0.005, 0.01, 0.03, 1.0)
-        assert len(corp) == 5
+        # 5 populated leaves (PDs 0.002, 0.005, 0.01, 0.03, 1.0) + the 2 parent
+        # bands enclosing them (0070 over 0080, 0100 over 0110).
+        assert len(corp) == 7
+        assert corp["row_ref"].to_list() == ["0040", "0060", "0070", "0080", "0100", "0110", "0170"]
+
+    def test_parent_row_never_emits_without_its_children(self) -> None:
+        """A parent band is only reported when at least one of its sub-bands
+        is populated, so a parent row can never appear alone."""
+        from rwa_calc.reporting.corep.templates import C08_03_PD_PARENT_REFS
+
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_pd_range_results())
+        refs = set(bundle.c08_03["corporate"]["row_ref"].to_list())
+        assert refs & C08_03_PD_PARENT_REFS == {"0070", "0100"}
 
 
 class TestC0803ColumnValues:
@@ -284,7 +365,7 @@ class TestC0803ColumnValues:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_range_results())
         corp = bundle.c08_03["corporate"]
-        row = corp.filter(pl.col("row_ref") == "0080")
+        row = corp.filter(pl.col("row_ref") == "0060")
         # E2: PD=0.005, EAD=3000
         assert row["0040"][0] == pytest.approx(3000.0, rel=1e-4)
 
@@ -293,7 +374,7 @@ class TestC0803ColumnValues:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_range_results())
         corp = bundle.c08_03["corporate"]
-        row = corp.filter(pl.col("row_ref") == "0080")
+        row = corp.filter(pl.col("row_ref") == "0060")
         # E2: RWA=1800
         assert row["0090"][0] == pytest.approx(1800.0, rel=1e-4)
 
@@ -302,7 +383,7 @@ class TestC0803ColumnValues:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_range_results())
         corp = bundle.c08_03["corporate"]
-        row = corp.filter(pl.col("row_ref") == "0080")
+        row = corp.filter(pl.col("row_ref") == "0060")
         # E2: PD=0.005
         assert row["0050"][0] == pytest.approx(0.005, rel=1e-6)
 
@@ -311,7 +392,7 @@ class TestC0803ColumnValues:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_range_results())
         corp = bundle.c08_03["corporate"]
-        row = corp.filter(pl.col("row_ref") == "0080")
+        row = corp.filter(pl.col("row_ref") == "0060")
         # E2: LGD=0.45
         assert row["0070"][0] == pytest.approx(0.45, rel=1e-6)
 
@@ -320,7 +401,7 @@ class TestC0803ColumnValues:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_range_results())
         corp = bundle.c08_03["corporate"]
-        row = corp.filter(pl.col("row_ref") == "0080")
+        row = corp.filter(pl.col("row_ref") == "0060")
         # E2: maturity=3.0 years
         assert row["0080"][0] == pytest.approx(3.0, rel=1e-4)
 
@@ -329,7 +410,7 @@ class TestC0803ColumnValues:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_range_results())
         corp = bundle.c08_03["corporate"]
-        row = corp.filter(pl.col("row_ref") == "0080")
+        row = corp.filter(pl.col("row_ref") == "0060")
         # E2: EL=6.75
         assert row["0100"][0] == pytest.approx(6.75, rel=1e-4)
 
@@ -338,7 +419,7 @@ class TestC0803ColumnValues:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_range_results())
         corp = bundle.c08_03["corporate"]
-        row = corp.filter(pl.col("row_ref") == "0080")
+        row = corp.filter(pl.col("row_ref") == "0060")
         # E2: scra=4.0 + gcra=4.0 = 8.0
         assert row["0110"][0] == pytest.approx(8.0, rel=1e-4)
 
@@ -347,7 +428,7 @@ class TestC0803ColumnValues:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_range_results())
         corp = bundle.c08_03["corporate"]
-        row = corp.filter(pl.col("row_ref") == "0080")
+        row = corp.filter(pl.col("row_ref") == "0060")
         # E2: 1 counterparty (CP_B)
         assert row["0060"][0] == pytest.approx(1.0)
 
@@ -356,7 +437,7 @@ class TestC0803ColumnValues:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_range_results())
         corp = bundle.c08_03["corporate"]
-        row = corp.filter(pl.col("row_ref") == "0080")
+        row = corp.filter(pl.col("row_ref") == "0060")
         # E2: drawn=3000, no interest column so drawn only
         assert row["0010"][0] == pytest.approx(3000.0, rel=1e-4)
 
@@ -365,7 +446,7 @@ class TestC0803ColumnValues:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_range_results())
         corp = bundle.c08_03["corporate"]
-        row = corp.filter(pl.col("row_ref") == "0060")
+        row = corp.filter(pl.col("row_ref") == "0040")
         # E1: nominal=1000
         assert row["0020"][0] == pytest.approx(1000.0, rel=1e-4)
 
@@ -384,41 +465,42 @@ class TestC0803B31Features:
     def test_b31_row_allocation_uses_pre_floor_pd(self) -> None:
         """Basel 3.1 OF 08.03 allocates rows using pre-input-floor PD.
 
-        E1 has pd=0.001 (0.10%) which falls in '0.10 to < 0.15%'
-        bucket (row 0040), even though pd_floored=0.002 (0.20%) would
-        fall in '0.20 to < 0.25%' (row 0060).
+        E1 has pd=0.001 (0.10%), which falls in "0.10 to <0.15" (row 0030),
+        even though pd_floored=0.002 (0.20%) would fall in "0.15 to <0.25"
+        (row 0040). Asserting 0040 is ABSENT is what pins the basis.
         """
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_range_results(), framework="BASEL_3_1")
         corp = bundle.c08_03["corporate"]
-        # E1: pd_original=0.001 → "0.10 to < 0.15%" (row 0040)
-        row = corp.filter(pl.col("row_ref") == "0040")
-        assert len(row) == 1
+        refs = corp["row_ref"].to_list()
+        assert "0030" in refs  # pre-input-floor band
+        assert "0040" not in refs  # the post-floor band, not used for allocation
 
     def test_b31_pd_value_reports_post_floor(self) -> None:
         """Basel 3.1 OF 08.03 col 0050 reports post-input-floor PD.
 
-        E1 is in '0.10 to < 0.15%' bucket (by original PD 0.001) but
+        E1 is in the "0.10 to <0.15" band (by original PD 0.001) but
         col 0050 should report floored PD 0.002.
         """
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_range_results(), framework="BASEL_3_1")
         corp = bundle.c08_03["corporate"]
-        row = corp.filter(pl.col("row_ref") == "0040")
+        row = corp.filter(pl.col("row_ref") == "0030")
         # E1: post-floor PD=0.002
         assert row["0050"][0] == pytest.approx(0.002, rel=1e-6)
 
     def test_crr_uses_floored_pd_for_allocation(self) -> None:
         """CRR C 08.03 uses floored PD for both allocation and reporting.
 
-        E1 has pd_floored=0.002 (0.20%) → '0.20 to < 0.25%' bucket (row 0060).
+        E1 has pd_floored=0.002 (0.20%) → "0.15 to <0.25" (row 0040), while
+        its pre-floor pd=0.001 would have landed in row 0030.
         """
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_range_results(), framework="CRR")
         corp = bundle.c08_03["corporate"]
-        # E1: pd_floored=0.002 → "0.20 to < 0.25%" (row 0060)
-        row = corp.filter(pl.col("row_ref") == "0060")
-        assert len(row) == 1
+        refs = corp["row_ref"].to_list()
+        assert "0040" in refs  # the floored band
+        assert "0030" not in refs  # the pre-floor band, not used under CRR
 
     def test_b31_has_11_columns(self) -> None:
         """Basel 3.1 C 08.03 still produces 11 data columns + 2 metadata."""
@@ -487,31 +569,52 @@ class TestC0803EdgeCases:
         assert len(unassigned) == 1
         assert unassigned["0040"][0] == pytest.approx(2000.0)
 
-    def test_total_ead_across_buckets(self) -> None:
-        """Total EAD across all PD range buckets equals total input EAD."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_irb_pd_range_results())
-        corp = bundle.c08_03["corporate"]
-        total_ead = corp["0040"].sum()
-        # Sum of all input EADs: 5500 + 3000 + 2200 + 1000 + 500 = 12200
-        assert total_ead == pytest.approx(12200.0, rel=1e-4)
+    def test_total_ead_across_leaf_buckets(self) -> None:
+        """EAD summed over the LEAF bands equals total input EAD.
 
-    def test_total_rwea_across_buckets(self) -> None:
-        """Total RWEA across all PD range buckets equals total input RWEA."""
+        Parent bands must be excluded: they repeat their children's span, so
+        summing every emitted row would double-count.
+        """
+        from rwa_calc.reporting.corep.templates import C08_03_PD_PARENT_REFS
+
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_range_results())
         corp = bundle.c08_03["corporate"]
-        total_rwea = corp["0090"].sum()
+        leaves = corp.filter(~pl.col("row_ref").is_in(list(C08_03_PD_PARENT_REFS)))
+        # Sum of all input EADs: 5500 + 3000 + 2200 + 1000 + 500 = 12200
+        assert leaves["0040"].sum() == pytest.approx(12200.0, rel=1e-4)
+
+    def test_total_rwea_across_leaf_buckets(self) -> None:
+        """RWEA summed over the LEAF bands equals total input RWEA."""
+        from rwa_calc.reporting.corep.templates import C08_03_PD_PARENT_REFS
+
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_pd_range_results())
+        corp = bundle.c08_03["corporate"]
+        leaves = corp.filter(~pl.col("row_ref").is_in(list(C08_03_PD_PARENT_REFS)))
         # Sum: 2750 + 1800 + 1540 + 750 + 0 = 6840
-        assert total_rwea == pytest.approx(6840.0, rel=1e-4)
+        assert leaves["0090"].sum() == pytest.approx(6840.0, rel=1e-4)
+
+    def test_parent_band_equals_sum_of_its_children(self) -> None:
+        """Row 0070 = row 0080 + row 0090 on every additive column — the
+        invariant EBA v09754 / BoE boe_b0768 assert. Only 0080 is populated
+        here, so the parent must equal it exactly.
+        """
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_irb_pd_range_results())
+        corp = bundle.c08_03["corporate"]
+        parent = corp.filter(pl.col("row_ref") == "0070")
+        child = corp.filter(pl.col("row_ref") == "0080")
+        for col in ("0010", "0020", "0040", "0060", "0090", "0100", "0110"):
+            assert parent[col][0] == pytest.approx(child[col][0]), col
 
     def test_ccf_average_weighted_by_nominal(self) -> None:
         """Col 0030 (avg CCF) is weighted by nominal amount, not EAD."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_range_results())
         corp = bundle.c08_03["corporate"]
-        # E1 (PD=0.002, row 0060): nominal=1000, ccf=0.5 → avg=0.5
-        row = corp.filter(pl.col("row_ref") == "0060")
+        # E1 (PD=0.002, row 0040): nominal=1000, ccf=0.5 → avg=0.5
+        row = corp.filter(pl.col("row_ref") == "0040")
         assert row["0030"][0] == pytest.approx(0.5, rel=1e-4)
 
     def test_zero_nominal_bucket_has_null_ccf(self) -> None:
@@ -519,8 +622,8 @@ class TestC0803EdgeCases:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_pd_range_results())
         corp = bundle.c08_03["corporate"]
-        # E2 (PD=0.005, row 0080): nominal=0, ccf=0 → null
-        row = corp.filter(pl.col("row_ref") == "0080")
+        # E2 (PD=0.005, row 0060): nominal=0, ccf=0 → null
+        row = corp.filter(pl.col("row_ref") == "0060")
         assert row["0030"][0] is None
 
 
@@ -540,14 +643,14 @@ class TestC0803SealedGrossSideCarriers:
     def _mixed_gross_side_carrier_results(self) -> pl.LazyFrame:
         """Three PD bands, corporate, foundation_irb:
 
-        - band 0080 (pd 0.005): loan + contingent + facility_undrawn — the
+        - band 0060 (pd 0.005): loan + contingent + facility_undrawn — the
           reported bug in miniature.
         - band 0110 (pd 0.03): loan + facility_undrawn only, no contingent —
           pins that deleting the retired whole-bucket fallback does not
           regress this simpler case (today's fallback rescues col 0020 to
           the right number by accident; the sealed carrier must reproduce
           the SAME value).
-        - band 0100 (pd 0.01): the same trio as 0080 plus a CCR netting-set
+        - band 0080 (pd 0.01): the same trio as 0060 plus a CCR netting-set
           leg — pins the recorded scope decision that COREP C 08.x keeps CCR
           in the EAD population (0040) while its null side-carriers keep it
           OUT of the on/off-BS split (0010/0020).
@@ -613,7 +716,7 @@ class TestC0803SealedGrossSideCarriers:
         )
 
     def test_c0803_mixed_band_gross_split_and_ead(self) -> None:
-        """Band 0080 (loan+contingent+facility_undrawn): col 0020 must count
+        """Band 0060 (loan+contingent+facility_undrawn): col 0020 must count
         the facility_undrawn headroom once (today it is dropped entirely),
         and the gross total (0010+0020) must exceed the EAD (0040) by exactly
         the off-BS CCF haircut — never fall short of it, as the reported bug
@@ -622,7 +725,7 @@ class TestC0803SealedGrossSideCarriers:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(self._mixed_gross_side_carrier_results())
         corp = bundle.c08_03["corporate"]
-        band = corp.filter(pl.col("row_ref") == "0080")
+        band = corp.filter(pl.col("row_ref") == "0060")
 
         assert band["0010"][0] == pytest.approx(5000.0)  # on-BS: loan drawn+interest
         assert band["0020"][0] == pytest.approx(6000.0)  # off-BS: contingent 2000 + FU 4000
@@ -644,10 +747,10 @@ class TestC0803SealedGrossSideCarriers:
         assert band_no_contingent["0020"][0] == pytest.approx(4000.0)
         assert band_no_contingent["0040"][0] == pytest.approx(8000.0)
 
-        # Band 0100 (the mixed trio + a CCR netting-set leg): CCR stays IN
+        # Band 0080 (the mixed trio + a CCR netting-set leg): CCR stays IN
         # the EAD population (0040 gains its 2000) but its null side-carriers
-        # keep it OUT of the on/off-BS split — 0010/0020 match band 0080.
-        band_with_ccr = corp.filter(pl.col("row_ref") == "0100")
+        # keep it OUT of the on/off-BS split — 0010/0020 match band 0060.
+        band_with_ccr = corp.filter(pl.col("row_ref") == "0080")
         assert band_with_ccr["0010"][0] == pytest.approx(5000.0)
         assert band_with_ccr["0020"][0] == pytest.approx(6000.0)
         assert band_with_ccr["0040"][0] == pytest.approx(11000.0)  # 9000 + 2000 CCR

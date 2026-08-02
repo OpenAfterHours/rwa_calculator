@@ -10,6 +10,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - (Next release changes will go here)
 
+### Fixed
+- **The fixed PD scale on C 08.03 / C 08.05 and Pillar 3 CR6 / CR9 was a flat ladder of
+  invented bands; it is now the published hierarchical scale.** Both templates carried
+  17 mutually exclusive PD buckets (`0.00 to < 0.03%`, `0.03 to < 0.05%`, …,
+  `50.00 to < 100%`) that matched the published row *count* but not a single published
+  row *label*. The real scale — Regulation (EU) 2021/451 Annex I for C 08.03/08.05, PRA
+  PS1/26 Annex I for OF 08.03/08.05, and PS1/26 Annex XXI for UKB CR6 / UK CR9 — is
+  **hierarchical**: eight top-level bands partition `[0, ∞)` and four of them repeat
+  their span as a finer sub-breakdown on the rows immediately below, so a parent row
+  overlaps its children and equals their sum. Row 0080 is `0.75 to < 1.75` under the
+  parent `0.75 to < 2.50`, not `0.75 to < 1.00`. Every exposure was therefore reported
+  against a mislabelled PD range, and the four published parent/child sum rules per
+  template (EBA `v09753`–`v09756` and `v09757`–`v09760`, BoE `boe_b0767`–`boe_b0770` and
+  `boe_b0773`–`boe_b0776`) could never hold at any figure, because parent and children
+  were disjoint by construction.
+  - COREP now resolves its row axis per regime: **17 rows under CRR**, and **18 under
+    Basel 3.1**, where OF 08.03 / OF 08.05 split the `0.00 to < 0.10` child at 0.05%
+    (rows **0015** / **0025** replace CRR's row 0020). Pillar 3 does *not* follow — UKB
+    CR6 and UK CR9 keep the coarser band in both regimes, so the two estates now carry
+    their own tables (`get_c08_03_pd_ranges` / `CR6_PD_RANGES`).
+  - The hierarchy needs two row keys, since an exposure sits in exactly one leaf band
+    while a parent spans several. A new `reporting/corep/pd_scale.py` derives both
+    (`c08_pd_range` = leaf, `c08_pd_parent` = enclosing parent), keeping every row a
+    single equality term for `row_terms` and the drill-down predicates. `CR6`/`CR9`
+    already keyed range predicates, so they needed only the corrected table.
+  - **Amounts are unchanged**; this is a row-axis correction. A band that previously
+    emitted one mislabelled row now emits the correctly-labelled leaf plus its parent,
+    carrying the same figures. Anything aggregating across PD rows must now sum the
+    **leaf** bands only — summing every emitted row double-counts.
+  - Known supervisory-validation breaks fall **28 → 14** with no new breaks: all 14
+    removed are the PD-scale sum rules the register had already diagnosed as "a
+    structural template defect, not a data gap". CRR `irb-classes` FAIL 9 → 1, Basel 3.1
+    16 → 10, with two further rules now executable.
+
 ### Changed
 - (Next release changes will go here)
 

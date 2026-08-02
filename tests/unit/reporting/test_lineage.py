@@ -586,7 +586,9 @@ def test_c08_03_pd_band_cell_drills_to_the_bands_legs() -> None:
     )
     resolver = lineage.sheet_lineage(_FrameSource(frame), "c08_03", "corporate")
     assert resolver is not None
-    (row,) = resolver._plan.spec.rows  # noqa: SLF001 - the single populated PD band
+    # PD 1% populates the "0.75 to <1.75" leaf and its "0.75 to <2.5" parent.
+    parent, row = resolver._plan.spec.rows  # noqa: SLF001 - the populated PD band pair
+    assert (parent.ref, row.ref) == ("0070", "0080")
 
     # Act — col 0040 (EAD) sums ead_final over the band's legs.
     query = resolver.query(row.ref, "0040")
@@ -598,6 +600,13 @@ def test_c08_03_pd_band_cell_drills_to_the_bands_legs() -> None:
     assert (query.kind, query.metric, query.metric_columns) == ("rows", "sum", ("ead_final",))
     assert result is not None
     assert result.total_rows == 2
+
+    # The parent band drills to the SAME legs — it spans its children, so here
+    # (only one child populated) it must reproduce the leaf exactly.
+    parent_result = resolver.cell(parent.ref, "0040")
+    assert parent_result is not None
+    assert parent_result.total_rows == 2
+    assert parent_result.cell_value == pytest.approx(result.cell_value)
     assert result.contribution_total == pytest.approx(8000.0)
     assert result.cell_value == pytest.approx(8000.0)
 
@@ -798,12 +807,12 @@ def test_cr9_plans_key_on_the_compound_approach_and_leaf_class() -> None:
     assert set(generated) == set(plans)
 
     # A band cell drills to the band's legs: the two F-IRB legs at PD 1% band in
-    # row 10 (1.00 to < 2.50%); col c counts their two distinct obligors.
+    # row 8 (0.75 to <1.75); col c counts their two distinct obligors.
     resolver = lineage.sheet_lineage(
         _FrameSource(frame, "BASEL_3_1"), "cr9", "foundation_irb - corporate_other_non_sme"
     )
     assert resolver is not None
-    obligors = resolver.cell("10", "c")
+    obligors = resolver.cell("8", "c")
     assert obligors is not None
     assert (obligors.query.kind, obligors.query.metric) == ("rows", "count")
     assert obligors.total_rows == 2

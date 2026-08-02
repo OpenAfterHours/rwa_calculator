@@ -449,26 +449,51 @@ B31_CR6_COLUMNS: list[P3Column] = [
     P3Column("m", "Value adjustments and provisions"),
 ]
 
-# 17 fixed regulatory PD range buckets (same as COREP C 08.03)
+# The fixed regulatory PD scale ("This is a fixed PD range which shall not be
+# altered" — PS1/26 Annex XXII / CRR Annex XX, template CR6 row instructions).
+#
+# The scale is HIERARCHICAL, not flat: eight top-level bands partition [0, inf),
+# and four of them (0.00-0.15, 0.75-2.50, 2.50-10.00, 10.00-100.00) each repeat
+# themselves as a finer sub-breakdown on the rows immediately below. A parent row
+# therefore OVERLAPS its own children by construction and equals their sum — do
+# not read the 17 entries as a partition.
+#
+# Bounds are decimal PD (0.0015 = 0.15%). Labels are reproduced verbatim from the
+# published template, including its inconsistent decimal formatting ("2.50 to
+# <10.00" alongside "2.5 to <5"), because the row axis is fixed by the regulator.
+#
+# Pillar 3 keeps the coarser "0.00 to <0.10" / "0.10 to <0.15" split in BOTH
+# regimes. COREP OF 08.03 diverges under Basel 3.1 by splitting the first child
+# again at 0.05% — see ``corep.templates.B31_C08_03_PD_RANGES``.
+#
+# References:
+# - PS1/26 Annex XXI, templates UKB CR6 and UK CR9 (Basel 3.1)
+# - CRR Annex XXI, templates EU CR6 / EU CR9 (as onshored)
+# Each tuple: (lower_bound_inclusive, upper_bound_exclusive, row_ref, label)
 CR6_PD_RANGES: list[tuple[float, float, str, str]] = [
-    (0.0000, 0.0003, "1", "0.00 to < 0.03%"),
-    (0.0003, 0.0005, "2", "0.03 to < 0.05%"),
-    (0.0005, 0.0010, "3", "0.05 to < 0.10%"),
-    (0.0010, 0.0015, "4", "0.10 to < 0.15%"),
-    (0.0015, 0.0020, "5", "0.15 to < 0.20%"),
-    (0.0020, 0.0025, "6", "0.20 to < 0.25%"),
-    (0.0025, 0.0050, "7", "0.25 to < 0.50%"),
-    (0.0050, 0.0075, "8", "0.50 to < 0.75%"),
-    (0.0075, 0.0100, "9", "0.75 to < 1.00%"),
-    (0.0100, 0.0250, "10", "1.00 to < 2.50%"),
-    (0.0250, 0.0500, "11", "2.50 to < 5.00%"),
-    (0.0500, 0.1000, "12", "5.00 to < 10.00%"),
-    (0.1000, 0.2000, "13", "10.00 to < 20.00%"),
-    (0.2000, 0.3000, "14", "20.00 to < 30.00%"),
-    (0.3000, 0.5000, "15", "30.00 to < 50.00%"),
-    (0.5000, 1.0000, "16", "50.00 to < 100%"),
-    (1.0000, float("inf"), "17", "100% (Default)"),
+    (0.0000, 0.0015, "1", "0.00 to <0.15"),
+    (0.0000, 0.0010, "2", "0.00 to <0.10"),
+    (0.0010, 0.0015, "3", "0.10 to <0.15"),
+    (0.0015, 0.0025, "4", "0.15 to <0.25"),
+    (0.0025, 0.0050, "5", "0.25 to <0.50"),
+    (0.0050, 0.0075, "6", "0.50 to <0.75"),
+    (0.0075, 0.0250, "7", "0.75 to <2.50"),
+    (0.0075, 0.0175, "8", "0.75 to <1.75"),
+    (0.0175, 0.0250, "9", "1.75 to <2.5"),
+    (0.0250, 0.1000, "10", "2.50 to <10.00"),
+    (0.0250, 0.0500, "11", "2.5 to <5"),
+    (0.0500, 0.1000, "12", "5 to <10"),
+    (0.1000, 1.0000, "13", "10.00 to <100.00"),
+    (0.1000, 0.2000, "14", "10 to <20"),
+    (0.2000, 0.3000, "15", "20 to <30"),
+    (0.3000, 1.0000, "16", "30.00 to <100.00"),
+    (1.0000, float("inf"), "17", "100.00 (Default)"),
 ]
+
+# The parent rows of CR6_PD_RANGES: each equals the sum of the sub-band rows that
+# follow it. Consumers that treat the scale as a partition (summing every row)
+# must exclude these, or they double-count.
+CR6_PD_PARENT_REFS: frozenset[str] = frozenset({"1", "7", "10", "13"})
 
 # ---------------------------------------------------------------------------
 # CR6-A — Scope of IRB and SA Use (Art. 452(b))

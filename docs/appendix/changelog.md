@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - (Next release changes will go here)
 
+### Fixed
+- **The release changelog promoter truncated every multi-line bullet to its first line.**
+  `scripts/_deploy_changelog.py` collected only lines beginning `- ` when moving
+  `[Unreleased]` into a new version section, so wrapped continuation text and nested
+  sub-bullets were silently dropped — a bullet running to dozens of lines promoted as a
+  single unclosed sentence fragment. It caught the 0.3.21 release, where 118 lines of
+  release notes across two bullets collapsed to two fragments; the notes were restored
+  and the tag moved before either was pushed. The parser now accumulates each top-level
+  bullet together with the indented lines that follow it. Every pre-existing unit test
+  used single-line bullets, which is why the defect survived: the two new regression
+  tests assert a wrapped bullet with nested sub-bullets, and a bullet containing a blank
+  line, both promote intact.
+
 ---
 
 ## [0.3.21] - 2026-08-02

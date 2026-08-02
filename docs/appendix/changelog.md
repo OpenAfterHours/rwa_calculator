@@ -11,6 +11,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - (Next release changes will go here)
 
 ### Fixed
+- **The CRM substitution block on C 07.00 / C 08.01 / C 08.02 removed guaranteed exposure
+  more than once, and lost it entirely when the guarantor sat outside the reporting
+  template.** Six published validation rules already shipped in this repo pin the
+  arithmetic and every one of them was breached. The whole block was uncovered — every
+  CRM-substitution cell in all 70+ frozen golden files was exactly `0.0`, because no
+  golden portfolio contained a guaranteed exposure that migrates exposure class.
+  - **Col 0070 is the block subtotal, not an independent sum.** It was
+    `Sum(guaranteed_portion)` gated on "the guarantor's class differs from the obligor's",
+    which reported **0** for a same-class guarantee while col 0040 still showed the
+    amount, and ignored col 0060 (Art. 232 other funded credit protection) entirely.
+    It is now `0040 + 0050 + 0060` — EBA `v1663_m` / `v1665_m` and BoE `boe_b0747` /
+    `boe_b0761`, all live.
+  - **Col 0090 deducted the same money twice**, subtracting both the 0040/0050/0060
+    breakdown and the 0070 subtotal. It is now `0020 - 0035 - 0070 + 0080` — EBA
+    `v1662_m` / `v0347_m` and BoE `boe_b0746` / `boe_b0760`. The Basel 3.1 col 0035
+    on-balance-sheet netting term is row-scoped: `boe_b0746_1` drops it on the
+    off-balance-sheet row family, because Art. 166(3) netting of loans and deposits
+    cannot reduce an off-balance-sheet row. The off-BS memo col 0100 re-derived the same
+    arithmetic independently and carried the same defect; it now binds the same per-leg
+    subtotal so the two cannot drift apart.
+  - **Same-class substitutions now produce a matching inflow.** The inflow side was gated
+    on a class change while the outflow side was not, so a guarantee whose guarantor sat
+    in the obligor's own class reported an outflow with nothing coming back — money left
+    the return. Annex II, both templates and both regimes: "Inflows and outflows within
+    the same exposure classes … shall also be considered."
+  - **Substitutions crossing the SA/IRB boundary now reach the right template.** Each
+    template derived its inflow from its own approach-filtered population, so an IRB
+    exposure guaranteed by an SA counterparty was deducted on C 08.01 and added back
+    nowhere. A new `reporting/corep/crm_substitution.py` computes the inflow once over
+    the whole sealed population and routes it by the sealed post-substitution approach —
+    SA guarantor to C 07.00 (Art. 235 risk-weight substitution), IRB guarantor to
+    C 08.01 (Art. 161 parameter substitution). The sheet axis is now the union of the
+    classes present and the classes receiving an inflow, so a guarantor class with no
+    exposure of its own still gets a sheet, and a template with no native population of
+    its own is still emitted when it is the only home for an inflow.
+  - **Amounts on existing returns are unchanged**: no frozen golden number moved and the
+    supervisory-validation register is unaffected, because no committed portfolio
+    exercised the block. Firms reporting guaranteed exposures will see col 0070 populate
+    where it previously read zero, col 0090 rise by the amount that was being deducted
+    twice, and inflows appear on the guarantor's sheet.
+  - **The inflow now lands on the published row decompositions, not only the Total row.**
+    C 08.01 decomposes its total row twice over the same columns and both are live ERROR
+    rules — `boe_b0744` on the balance-sheet axis and `boe_b0745` / `v0338_m` on the IRB
+    treatment axis — and C 07.00 does the same on its risk-weight axis (`v0312_m` /
+    `boe_b0719`). A Total-row-only inflow breached all of them by exactly the inflow. The
+    inflow is now split by balance-sheet side, by post-substitution IRB treatment, and by
+    risk-weight band, and landed on the matching rows.
+  - **Recorded decision R12 is superseded** (it shipped in 0.3.18 as "C 08.02 deliberately
+    does not receive the cross-class CRM substitution inflow … no output change"). Four
+    live ERROR rules — `boe_b0752_8` / `boe_b0752_9` / `boe_b0814_07` / `boe_b0814_08` —
+    require `{C 08.01 r0070, c0080/c0090} = sum({C 08.02, same col})`, which an
+    inflow-free C 08.02 cannot satisfy. R12's *reasoning* survives intact: per-grade
+    attribution is unsound because the origin-basis ledger carries the obligor's grade and
+    never the guarantor's. So the inflow lands on C 08.02's existing **"Unassigned"**
+    residual row — an inflow whose guarantor grade the ledger does not carry is an
+    exposure with no assigned grade — and no graded row carries any of it.
+  - **The post-model-adjustment disclosure carriers are rebased onto the substituted
+    basis.** All four were left on the borrower basis after substitution re-blends the
+    RWA, so `{c0260} = sum({c0251..c0254})` (`boe_b0751` / `boe_b0763`, live) diverged by
+    exactly the Art. 235 relief on every guaranteed leg. Col 0251 is now
+    `rwa_pre_adjustments x retained_share + guaranteed_portion x guarantor_rw` with each
+    adjustment scaled by the retained share — which is also substantively right, since
+    only the retained share of a mortgage-floor or unrecognised-exposure overlay survives
+    into reported RWEA and the substituted part carries no model overlay. **No RWA number
+    moves**; this is the disclosure decomposition only.
+  - **Coverage**: the new portfolio is wired into the supervisory validation register for
+    both regimes — the first in the estate with non-zero substitution cells. On it, failing
+    rules fall **CRR 6 → 3** and **Basel 3.1 18 → 13**.
+  - **Recorded residuals**, both banked in `validation_known_breaks.json` with written
+    reasons: (1) the outflow subtotal counts every route in the block, but only the
+    unfunded routes carry a destination class — the sealed ledger holds a guarantor class
+    for guarantee and credit-derivative legs only — so C 07.00's funded limbs and
+    C 08.01's col 0060 still produce an outflow with no matching inflow; closing it needs
+    an issuer class sealed per collateral leg. (2) C 07.00 col 0200 sums raw EAD over the
+    ORIGIN population and never reflects substitution while cols 0100→0110→0150 net it
+    (`v0308_m` / `v8726_m` / `boe_b0471` / `boe_b0556`) — **a genuine defect in our
+    output, not a published-rule artifact**. Note this is a build shortfall against a
+    recorded decision, *not* a recorded decision with a measured cost: Phase 7 decision F3
+    cites "C 07.00 col 0200 basis" as the **definition** of the post-substitution basis
+    (it keys Pillar 3 CR4 cols c-f and all CR5 rows on it), i.e. it assumed col 0200 was
+    already post-substitution. The F4 slice that actually built C 07.00 made only the
+    0040/0110/0150 waterfall substitution-aware and never extended that treatment to col
+    0200 or the CCF buckets. It is not fixed here because col 0200 feeds the CCF-bucket
+    identities and the C 08.01 cousins 0110/0260 sit on the same basis, so rebinding col
+    0200 alone risks making the return inconsistent elsewhere; it needs its own scoped
+    change and golden regen.
 - **The fixed PD scale on C 08.03 / C 08.05 and Pillar 3 CR6 / CR9 was a flat ladder of
   invented bands; it is now the published hierarchical scale.** Both templates carried
   17 mutually exclusive PD buckets (`0.00 to < 0.03%`, `0.03 to < 0.05%`, …,

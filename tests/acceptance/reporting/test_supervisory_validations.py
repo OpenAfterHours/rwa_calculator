@@ -39,32 +39,40 @@ Why the key is ``(regime, rule_id)`` and not the failing coordinate:
     key on ``rule_id`` alone silently drops half.
 
 Cost, and why every run is load-bearing:
-    This file is the most expensive test in the suite: five portfolios x two
-    regimes, plus a prior-period run for each of the four IRB ones, is FOURTEEN
-    full pipeline runs — roughly 33s warm, 115s cold. That is a standing
-    temptation to trim the run set, so the justification lives here rather than
-    only in a commit message. Each run is the SOLE reachability route for a
-    family of published rules, and dropping one does not make those rules pass —
-    it makes them NOT_EVALUATED, which is indistinguishable from passing on the
-    error channel:
+    This file is the most expensive test in the suite: six portfolios x two
+    regimes, plus a prior-period run for each of the six IRB ones, is EIGHTEEN
+    full pipeline runs. That is a standing temptation to trim the run set, so
+    the justification lives here rather than only in a commit message. Each run
+    is the SOLE reachability route for a family of published rules, and
+    dropping one does not make those rules pass — it makes them NOT_EVALUATED,
+    which is indistinguishable from passing on the error channel:
 
-    - ``rich``        the broad book — but entirely drawn, and IRB-thin;
-    - ``off-bs``      the ONLY route to the C 07.00 conversion-factor columns
-                      (0160-0190) and every rule written over them;
-    - ``ccr``         the ONLY portfolio emitting C 34.x, and therefore the only
-                      place its standing coverage hole is visible at all;
-    - ``sa-classes``  the SA exposure-class sheet axis;
-    - ``irb-classes`` the ONLY route to the C 08.03 / C 08.05 PD-band row rules
-                      and the thin C 08.xx class sheets.
+    - ``rich``             the broad book — but entirely drawn, and IRB-thin;
+    - ``off-bs``           the ONLY route to the C 07.00 conversion-factor
+                           columns (0160-0190) and every rule written over
+                           them;
+    - ``ccr``              the ONLY portfolio emitting C 34.x, and therefore
+                           the only place its standing coverage hole is
+                           visible at all;
+    - ``sa-classes``       the SA exposure-class sheet axis;
+    - ``irb-classes``      the ONLY route to the C 08.03 / C 08.05 PD-band row
+                           rules and the thin C 08.xx class sheets;
+    - ``crm-substitution`` the ONLY portfolio with a non-zero CRM-substitution
+                           cell anywhere in the estate (C 07.00 cols
+                           0050/0060/0090/0100, C 08.01 cols
+                           0040/0050/0070/0080, C 08.02 col 0080) — the sole
+                           route to every rule written over the
+                           outflow/inflow columns.
 
-    Measured: the last two together move 53 CRR and 32 Basel 3.1 rules out of
-    NOT_EVALUATED. The four prior-period runs exist because C 08.04 reports
-    RWEA *flows* — COREP Annex II §3.3.6.1 ¶79 defines them against the PRIOR
-    reference date — so without one, rows 0010-0080 are null by construction and
-    the flow rules cannot be evaluated at all. Each prior run uses a genuinely
-    EARLIER reference date rather than re-passing the current frame, so the
-    opening balance is a real prior figure with a non-zero residual rather than a
-    fiction asserting nothing moved in the period.
+    Measured: ``sa-classes`` and ``irb-classes`` together move 53 CRR and 32
+    Basel 3.1 rules out of NOT_EVALUATED. The six prior-period runs exist
+    because C 08.04 reports RWEA *flows* — COREP Annex II §3.3.6.1 ¶79 defines
+    them against the PRIOR reference date — so without one, rows 0010-0080 are
+    null by construction and the flow rules cannot be evaluated at all. Each
+    prior run uses a genuinely EARLIER reference date rather than re-passing the
+    current frame, so the opening balance is a real prior figure with a
+    non-zero residual rather than a fiction asserting nothing moved in the
+    period.
 
     If this must be trimmed, drop whole portfolios deliberately and record the
     rules that go dark; do not silently reduce the matrix.
@@ -125,6 +133,9 @@ from typing import TYPE_CHECKING, NamedTuple
 import pytest
 from tests.acceptance.reporting.test_reporting_golden import _b31_config, _crr_config
 from tests.fixtures.reporting_ccr_portfolio import build_reporting_ccr_bundle
+from tests.fixtures.reporting_crm_substitution_portfolio import (
+    build_reporting_crm_substitution_bundle,
+)
 from tests.fixtures.reporting_irb_classes_portfolio import build_reporting_irb_classes_bundle
 from tests.fixtures.reporting_offbs_portfolio import build_reporting_offbs_bundle
 from tests.fixtures.reporting_portfolio import build_reporting_bundle
@@ -200,12 +211,36 @@ REGISTER_NOTES: dict[str, str] = {
         "which is what it was. The decisive evidence was float dust (1672.9999999999995 on "
         "one row of seven): a broadcast constant would be bit-identical."
     ),
+    "caution_on_plan_doc_definitions": (
+        "A plan document naming a column as the DEFINITION of a basis is not evidence the "
+        "column implements it. Worked example: docs/plans/phase7-declarative-reporting.md's "
+        "F3 decision (the Pillar 3 CR4/CR5 tranche) cites 'C 07.00 col 0200 basis' as what "
+        "'post-substitution' MEANS - it assumed col 0200 already carried that basis, not that "
+        "it should. v0308_m/boe_b0471/v8726_m/boe_b0556 exist because that assumption was "
+        "false: C 07.00's own col 0200 is Sum(ead_col) over the ORIGIN population (the F4 "
+        "build, docs/plans/phase7-declarative-reporting.md, never extended substitution-"
+        "awareness to it), while CR4/CR5 (reporting/pillar3/cr4.py, cr5.py) genuinely do key "
+        "on the post-substitution `reporting_class` they cite the same definition for - so two "
+        "parts of the estate that cite one shared basis are no longer consistent with each "
+        "other. Verify a definition is IMPLEMENTED before citing it as evidence a related gap "
+        "is a deliberate decision rather than a build shortfall."
+    ),
     "pattern_boe_summation_templates": (
         "The BoE summation rules do not distinguish ADDITIVE columns from AVERAGED ones. "
         "'r0070 = sum(grade rows)' is applied across all ~36 columns of OF 08.01/08.02, "
         "including exposure-weighted averages, where it cannot hold unless there is exactly "
         "one grade row. Same shape as boe_b0779 on c0050 and v09782_m/v09783_m on C 08.06's "
         "risk-weight column. Recognise it before re-deriving it a fourth time."
+    ),
+    "pattern_empty_subrow_vs_negated_column": (
+        "An inequality between an 'of which' sub-row and its parent inverts when the parent "
+        "is a genuinely negative Annex II Sec.1.3 '(-)' deduction column and the sub-row's own "
+        "subset is empty: our empty-subset convention renders the sub-row ALL-NULL, the "
+        "evaluator coalesces that null to 0.0 for the comparison, and 0 <= a negative number "
+        "reads false however correct that negative figure is. Same shape as the zero-exposure "
+        "ratio family (boe_b0778/v09782_m and boe_b0779's 'no emptiness guard' — see the caution "
+        "on unattributed entries above before assuming the parent's negative figure is itself "
+        "the bug, as it genuinely was in the boe_b0378 worked example there)."
     ),
 }
 
@@ -290,7 +325,7 @@ class GateInput(NamedTuple):
     build_prior_config: Callable[[], CalculationConfig] | None = None
 
 
-#: The ten runs, each the sole reachability route for a family of published
+#: The twelve runs, each the sole reachability route for a family of published
 #: rules. See "Cost, and why every run is load-bearing" in the module docstring
 #: before trimming this list — a dropped run does not make its rules pass, it
 #: makes them NOT_EVALUATED, which reads the same on the error channel.
@@ -337,6 +372,22 @@ RUNS: tuple[GateInput, ...] = (
         "BASEL_3_1",
         "irb-classes",
         build_reporting_irb_classes_bundle,
+        lambda: _irb_config("BASEL_3_1"),
+        lambda: _prior_config("BASEL_3_1"),
+    ),
+    GateInput(
+        "crr",
+        "CRR",
+        "crm-substitution",
+        build_reporting_crm_substitution_bundle,
+        lambda: _irb_config("CRR"),
+        lambda: _prior_config("CRR"),
+    ),
+    GateInput(
+        "b31",
+        "BASEL_3_1",
+        "crm-substitution",
+        build_reporting_crm_substitution_bundle,
         lambda: _irb_config("BASEL_3_1"),
         lambda: _prior_config("BASEL_3_1"),
     ),

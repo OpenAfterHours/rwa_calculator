@@ -4,7 +4,9 @@
     "how_to_read_a_reason": "Each entry names the DEFECT, not the symptom. A reason beginning 'unattributed - needs investigation' means the mechanism is written out but the cause is not established - it is a lead, not a shrug.",
     "caution_on_unattributed": "'Unattributed' can mean the question was framed too narrowly, not only that the evidence is thin. Worked example: boe_b0378 was recorded as 'c0060 is a signed outflow column, so of-which <= total inverts' - a real-looking question whose answer was neither limb offered, because the total should never have been negative at all (the carrier was uncapped, upstream of the sign question). Re-derive the framing before trusting an unattributed entry's framing.",
     "caution_on_arithmetic_coincidence": "Do not read an arithmetic coincidence as evidence of a mechanism. boe_b0752_22/24 were once attributed to a class-level figure being 'broadcast' onto every PD-grade row, on the evidence that the grade sum was exactly 7x the total across 7 grades. That is equally consistent with a genuine per-grade average whose inputs coincide - which is what it was. The decisive evidence was float dust (1672.9999999999995 on one row of seven): a broadcast constant would be bit-identical.",
-    "pattern_boe_summation_templates": "The BoE summation rules do not distinguish ADDITIVE columns from AVERAGED ones. 'r0070 = sum(grade rows)' is applied across all ~36 columns of OF 08.01/08.02, including exposure-weighted averages, where it cannot hold unless there is exactly one grade row. Same shape as boe_b0779 on c0050 and v09782_m/v09783_m on C 08.06's risk-weight column. Recognise it before re-deriving it a fourth time."
+    "caution_on_plan_doc_definitions": "A plan document naming a column as the DEFINITION of a basis is not evidence the column implements it. Worked example: docs/plans/phase7-declarative-reporting.md's F3 decision (the Pillar 3 CR4/CR5 tranche) cites 'C 07.00 col 0200 basis' as what 'post-substitution' MEANS - it assumed col 0200 already carried that basis, not that it should. v0308_m/boe_b0471/v8726_m/boe_b0556 exist because that assumption was false: C 07.00's own col 0200 is Sum(ead_col) over the ORIGIN population (the F4 build, docs/plans/phase7-declarative-reporting.md, never extended substitution-awareness to it), while CR4/CR5 (reporting/pillar3/cr4.py, cr5.py) genuinely do key on the post-substitution `reporting_class` they cite the same definition for - so two parts of the estate that cite one shared basis are no longer consistent with each other. Verify a definition is IMPLEMENTED before citing it as evidence a related gap is a deliberate decision rather than a build shortfall.",
+    "pattern_boe_summation_templates": "The BoE summation rules do not distinguish ADDITIVE columns from AVERAGED ones. 'r0070 = sum(grade rows)' is applied across all ~36 columns of OF 08.01/08.02, including exposure-weighted averages, where it cannot hold unless there is exactly one grade row. Same shape as boe_b0779 on c0050 and v09782_m/v09783_m on C 08.06's risk-weight column. Recognise it before re-deriving it a fourth time.",
+    "pattern_empty_subrow_vs_negated_column": "An inequality between an 'of which' sub-row and its parent inverts when the parent is a genuinely negative Annex II Sec.1.3 '(-)' deduction column and the sub-row's own subset is empty: our empty-subset convention renders the sub-row ALL-NULL, the evaluator coalesces that null to 0.0 for the comparison, and 0 <= a negative number reads false however correct that negative figure is. Same shape as the zero-exposure ratio family (boe_b0778/v09782_m and boe_b0779's 'no emptiness guard' \u2014 see the caution on unattributed entries above before assuming the parent's negative figure is itself the bug, as it genuinely was in the boe_b0378 worked example there)."
   },
   "summary": {
     "crr/rich": {
@@ -106,15 +108,102 @@
       "rules_executed": 343,
       "templates_emitted": 11,
       "templates_covered": 11
+    },
+    "crr/crm-substitution": {
+      "PASS": 114,
+      "FAIL": 3,
+      "VACUOUS": 94,
+      "NOT_EVALUATED": 530,
+      "rules_enforced": 741,
+      "rules_executed": 211,
+      "templates_emitted": 10,
+      "templates_covered": 10
+    },
+    "b31/crm-substitution": {
+      "PASS": 162,
+      "FAIL": 13,
+      "VACUOUS": 173,
+      "NOT_EVALUATED": 460,
+      "rules_enforced": 808,
+      "rules_executed": 348,
+      "templates_emitted": 11,
+      "templates_covered": 11
     }
   },
   "known_broken_rules": [
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0378",
+      "severity": "ERROR",
+      "reason": "known limitation of the published rule, not a defect in our output (notes.pattern_empty_subrow_vs_negated_column): row 0017 ('of which: revolving loan commitments') has zero population on this fixture (no revolving product is modelled) and renders structurally null under the empty-subset convention; the evaluator coalesces that null to 0.0 for the comparison. The failing columns (0040/0050/0070) are the Annex II Sec.1.3 '(-)' substitution-block deduction columns, which we report NEGATIVE and non-zero for the first time on any portfolio (this is the first guarantee outflow the estate has ever exercised). VERIFIED not the notes.caution_on_unattributed trap (a prior boe_b0378 case where the negative total was itself an uncapped-carrier bug): c0040's -12,300,000 is exactly the sum of the three 'guarantee'-type legs' covered amounts (S1 2,000,000 + S3 4,900,000 + S5 5,400,000 = 12,300,000, per tests/fixtures/reporting_crm_substitution_portfolio.py), and c0050's -3,300,000 is exactly S2's 'credit_derivative' covered amount - both figures are correct. The inequality is written for positive magnitudes: on a negative Total it inverts, so 0.0 <= a genuinely negative (and correct) figure reads false. Same mechanism as boe_b0379 (row 0200 vs row 0190, identical coordinates and figures)",
+      "portfolios": [
+        "crm-substitution"
+      ],
+      "failing_coordinates": 3,
+      "coordinates": [
+        "OF08.01.01.01[corporate][c0040]",
+        "OF08.01.01.01[corporate][c0050]",
+        "OF08.01.01.01[corporate][c0070]"
+      ],
+      "expression": "{t: OF08.01.01.01, r: 0017} <= {t: OF08.01.01.01, r: 0010}"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0379",
+      "severity": "ERROR",
+      "reason": "known limitation of the published rule, not a defect in our output (notes.pattern_empty_subrow_vs_negated_column): row 0200 ('of which: investment grade', a sub-row of unrated-corporate row 0190) has zero population on this fixture (no counterparty is modelled as internally-assessed investment grade) and renders structurally null under the empty-subset convention; the evaluator coalesces that null to 0.0 for the comparison. Row 0190 IS the whole corporate sheet here (every corporate obligor is unrated, so 0190 equals row 0010 on these columns), and the failing columns (0040/0050/0070) are the Annex II Sec.1.3 '(-)' substitution-block deduction columns, which we report NEGATIVE and non-zero for the first time on any portfolio. VERIFIED not the notes.caution_on_unattributed trap: c0040's -12,300,000 is exactly the sum of the three 'guarantee'-type legs' covered amounts (S1 2,000,000 + S3 4,900,000 + S5 5,400,000, per tests/fixtures/reporting_crm_substitution_portfolio.py) and c0050's -3,300,000 is exactly S2's 'credit_derivative' covered amount - both correct. The inequality is written for positive magnitudes: on a negative parent row it inverts, so 0.0 <= a genuinely negative (and correct) figure reads false. Same mechanism as boe_b0378 (row 0017 vs row 0010, identical coordinates and figures)",
+      "portfolios": [
+        "crm-substitution"
+      ],
+      "failing_coordinates": 3,
+      "coordinates": [
+        "OF08.01.01.01[corporate][c0040]",
+        "OF08.01.01.01[corporate][c0050]",
+        "OF08.01.01.01[corporate][c0070]"
+      ],
+      "expression": "{t: OF08.01.01.01, r: 0200} <= {t: OF08.01.01.01, r: 0190}"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0471",
+      "severity": "ERROR",
+      "reason": "GENUINE DEFECT in our output - NOT a published-rule artifact, and NOT the same family as the boe_b0378/boe_b0379 entries sitting next to it (those are a genuine null-vs-negated-column limitation of the rule; this is wrong output). What is wrong: C 07.00 col 0200 ('exposure value after CRM substitution effects, post-conversion factors') is bound to Sum(ead_col) over the origin/obligor population only (reporting/corep/c07.py), so it never reflects the CRM-substitution outflow leaving or the inflow arriving, while cols 0100->0110->0150 correctly net it through the waterfall and, since the risk-weight-banding fix, correctly band it per row too. Evidence: the CGCB inflow-only sheet's Total row shows 0100=0110=0150=4,900,000 but c0200=0.0; institution's 30% risk-weight-band row shows 0100=0110=0150=4,300,000 but c0200=1,500,000 (the native leg's EAD only, missing the 2,800,000 inflow); corporate's 30% band row shows 0100=0110=0150=0 (fully outflowed under substitution) but c0200=2,800,000 (the guaranteed leg's raw EAD, still counted at its origin sheet/row). Why not fixed here (notes.caution_on_plan_doc_definitions): F3 does NOT decide that col 0200 stays origin-basis - it does the opposite. F3's own text (docs/plans/phase7-declarative-reporting.md:573-576, the CR4/CR5 tranche) reads 'CR4 cols c/d/e/f and ALL CR5 rows key on `reporting_class` (post-substitution - C 07.00 col 0200 basis; the covered leg lands in the protection provider's row)' - it cites 'C 07.00 col 0200 basis' AS THE DEFINITION of the post-substitution basis, i.e. it assumed col 0200 already implemented it. CONSEQUENCE, CONFIRMED in the code, not just the plan doc: reporting/cellspec.py's shared RowPredicate binds two DELIBERATELY DIFFERENT fields - `classes=` to `pl.col('reporting_class')` (post-substitution) and `classes_origin=` to `pl.col('reporting_class_origin')` (origin). reporting/pillar3/cr4.py uses `classes_origin` for cols a/b and `classes` for cols c/d/e/f (an explicit origin/post-substitution split within one template); reporting/pillar3/cr5.py uses `classes` for every row and `classes_origin` NOWHERE (grep count: reporting_class x2, reporting_class_origin x0) - CR5's own recorded-limitation comment confirms a guaranteed `__G_` leg bands in the GUARANTOR'S row, not the obligor's. So CR4 cols c-f and ALL of CR5 are GENUINELY on the post-substitution basis F3 names. C 07.00's col 0200 is not: its binding is `CellSpec(Sum(ead_col), predicate=member)` (reporting/corep/c07.py) against the SHEET's own origin-class membership, with no substitution-netting Formula anywhere in it (contrast cols 0110/0150, which ARE Formulas over the waterfall). CR4 cols c-f / CR5 and C 07.00 col 0200 are therefore CONFIRMED on different bases, despite F3 citing one as the definition of the other. The actual gap is in F4 (S8-C07.00, same doc), which built C 07.00 and made only the 0040/0110/0150 waterfall substitution-aware; col 0200 and the CCF-bucket columns 0160-0190 were never brought into that treatment. This is a BUILD SHORTFALL against a recorded decision, not a recorded decision with a measured cost - this portfolio is the first to expose it. Why still not fixed in this PR: the remedy is not a one-line rebinding - col 0200 feeds the CCF-bucket identities (cols 0150-0180) this same rule tests, and the C 08.01 cousins (cols 0110/0260) sit on the same origin basis, so moving col 0200 alone risks making the return internally inconsistent in a different place. It needs its own scoped change with its own golden regen; the implementer has been made aware.",
+      "portfolios": [
+        "crm-substitution"
+      ],
+      "failing_coordinates": 6,
+      "coordinates": [
+        "OF07.00.01.01[central_govt_central_bank][r0010]",
+        "OF07.00.01.01[central_govt_central_bank][r0140]",
+        "OF07.00.01.01[institution][r0010]",
+        "OF07.00.01.01[institution][r0182]",
+        "OF07.00.01.01[corporate][r0010]"
+      ],
+      "expression": "{t: OF07.00.01.01, c: 0200} = {t: OF07.00.01.01, c: 0150} - (0.9 * {t: OF07.00.01.01, c: 0160}) - (0.8 * {t: OF07.00.01.01, c: 0170}) - (0.6 * {t: OF07.00.01.01, c: 0171}) - (0.5 * {t: OF07.00.01.01, c: 0180})"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0556",
+      "severity": "WARNING",
+      "reason": "GENUINE DEFECT in our output - NOT a published-rule artifact, and NOT the boe_b0378/boe_b0379 family. The weaker inequality form of boe_b0471/v0308_m - see that entry for the full mechanism: col 0200 sums raw EAD off the origin population, oblivious to CRM substitution, while col 0150 is post-substitution; F3 assumed col 0200 already implemented that basis (it defines 'post-substitution' BY REFERENCE to col 0200) rather than deciding col 0200 should stay origin-basis, so this is a build shortfall against F3/F4, not F3's decision, and it leaves C 07.00 col 0200 inconsistent with Pillar 3 CR4 cols c-f and ALL of CR5 (reporting/pillar3/cr4.py, cr5.py), confirmed in the code (reporting/cellspec.py's `classes=` vs `classes_origin=` RowPredicate split) to key on the SAME cited 'C 07.00 col 0200 basis' and DO correctly route a guaranteed leg to the protection provider's row. Fails wherever the sign flips: corporate's 30% risk-weight-band row reports c0200=2,800,000 (the guaranteed leg's raw EAD) against c0150=0 (fully outflowed under substitution), so 0200 <= 0150 is violated. Remedy: same as boe_b0471, and scoped together with it (col 0200's CCF-bucket dependents and the C 08.01 cousins on the same basis mean this needs its own change and golden regen, not a one-line rebinding). Not fixed in this PR.",
+      "portfolios": [
+        "crm-substitution"
+      ],
+      "failing_coordinates": 3,
+      "coordinates": [
+        "OF07.00.01.01[corporate][r0010]",
+        "OF07.00.01.01[corporate][r0070]",
+        "OF07.00.01.01[corporate][r0182]"
+      ],
+      "expression": "{t: OF07.00.01.01, c: 0200} <= {t: OF07.00.01.01, c: 0150}"
+    },
     {
       "regime": "b31",
       "rule_id": "boe_b0638",
       "severity": "ERROR",
       "reason": "OF 02.00 c0020 is populated with the SA-equivalent recomputation - our own column definition is 'Standardised approaches only (S-TREA components)', filled from sa_equiv_rwa - where this rule requires the NON-MODELLED RWEA that OF 08.01 c0276 carries. Two different quantities, ~2x apart (4,198,446 against 8,250,000 for institutions; 15,908 against 33,750 for QRRE). Which side moves is a mapping decision: either these OF 02.00 rows take a different source column, or c0276 is wrong",
       "portfolios": [
+        "crm-substitution",
         "irb-classes"
       ],
       "failing_coordinates": 1,
@@ -144,6 +233,7 @@
       "reason": "OF 07.00 cols 0230/0235 (the two RWEA 'of which' determinants) are not emitted, so c0220 = c0230 + c0235 compares a populated total (600,000) against empty components",
       "portfolios": [
         "ccr",
+        "crm-substitution",
         "irb-classes",
         "off-bs",
         "rich",
@@ -166,6 +256,7 @@
       "reason": "unattributed - needs investigation: OF 07.00 c0150 carries on-balance-sheet exposure while cols 0160-0190 break down conversion-factor buckets, so the identity cannot hold on any row with on-BS exposure. BOTH sides recorded, because the reading is textual and NOT established. Against us: PS1/26 Annex II p.85 qualifies c0150 as 'prior to the application of any applicable conversion factors' - a PRE-CCF qualifier, not an off-balance-sheet-only one - and the very next block spends the words 'of off-balance sheet items' exactly where c0150 does not, which reads as deliberate. For us: the EBA equivalent v6364_m is scoped to row 0080 alone and PASSES for us, while the BoE scope carries 26 rows including r0010 TOTAL. Needs a regulatory reading, not a code change",
       "portfolios": [
         "ccr",
+        "crm-substitution",
         "irb-classes",
         "off-bs",
         "rich",
@@ -187,6 +278,7 @@
       "severity": "ERROR",
       "reason": "limit of the published rule, not of our output: c0230 and c0250 are exposure-weighted AVERAGES, and summing an average down the 7 PD-grade rows cannot equal the class-level average unless there is exactly one grade row (0.4 against 2.8; 1,673 against 11,711). Our per-grade values are correctly computed, not broadcast: c0110 differs on every grade row, and c0250 carries float dust on one of the seven (1672.9999999999995), which a broadcast constant could not. They coincide only because every corporate leg in this fixture shares the same supervisory F-IRB LGD and maturity. See notes.pattern_boe_summation_templates",
       "portfolios": [
+        "crm-substitution",
         "irb-classes"
       ],
       "failing_coordinates": 1,
@@ -201,6 +293,7 @@
       "severity": "ERROR",
       "reason": "limit of the published rule, not of our output: c0230 and c0250 are exposure-weighted AVERAGES, and summing an average down the 7 PD-grade rows cannot equal the class-level average unless there is exactly one grade row (0.4 against 2.8; 1,673 against 11,711). Our per-grade values are correctly computed, not broadcast: c0110 differs on every grade row, and c0250 carries float dust on one of the seven (1672.9999999999995), which a broadcast constant could not. They coincide only because every corporate leg in this fixture shares the same supervisory F-IRB LGD and maturity. See notes.pattern_boe_summation_templates",
       "portfolios": [
+        "crm-substitution",
         "irb-classes"
       ],
       "failing_coordinates": 1,
@@ -215,6 +308,7 @@
       "severity": "ERROR",
       "reason": "limit of the published rule, not of our output: the exposure-weighted RESTATEMENT of boe_b0752_22 / boe_b0752_24, and it fails for exactly the same reason. The weighting factor is identical on both sides - b0756 multiplies both by (sum(c0110) - sum(c0140)), b0758 both by sum(c0110) - so it cancels and the rule reduces to the same 'class average = sum of grade averages' assertion. Verified arithmetically: b0756's 20,440,000 vs 143,080,000 is 0.4 vs 2.8 scaled by 51,100,000, and b0758's 85,490,300,000 vs 598,432,100,000 is 1,673 vs 11,711 scaled by the same. NB the rule LOOKS like it intends the correct paired identity - each grade's average times that grade's own exposure - but as published it multiplies two separate sums, which the simplified expression cannot express as a per-grade pairing. Either reading leaves it unsatisfiable against a correct return. See notes.pattern_boe_summation_templates",
       "portfolios": [
+        "crm-substitution",
         "irb-classes"
       ],
       "failing_coordinates": 1,
@@ -229,6 +323,7 @@
       "severity": "ERROR",
       "reason": "limit of the published rule, not of our output: the exposure-weighted RESTATEMENT of boe_b0752_22 / boe_b0752_24, and it fails for exactly the same reason. The weighting factor is identical on both sides - b0756 multiplies both by (sum(c0110) - sum(c0140)), b0758 both by sum(c0110) - so it cancels and the rule reduces to the same 'class average = sum of grade averages' assertion. Verified arithmetically: b0756's 20,440,000 vs 143,080,000 is 0.4 vs 2.8 scaled by 51,100,000, and b0758's 85,490,300,000 vs 598,432,100,000 is 1,673 vs 11,711 scaled by the same. NB the rule LOOKS like it intends the correct paired identity - each grade's average times that grade's own exposure - but as published it multiplies two separate sums, which the simplified expression cannot express as a per-grade pairing. Either reading leaves it unsatisfiable against a correct return. See notes.pattern_boe_summation_templates",
       "portfolios": [
+        "crm-substitution",
         "irb-classes"
       ],
       "failing_coordinates": 1,
@@ -244,6 +339,7 @@
       "reason": "limit of the published rule, not of our output: after the DPM-fraction fix these now fail ONLY on roll-out-class rows with ZERO exposure, where every coordinate reads lhs=0.0 against rhs=1.0. A row with no exposure admits no partition - 0/0 has no answer - and the rule carries no emptiness guard, so it demands the three shares total 1 on a row where there is nothing to share. Coordinate counts now vary by portfolio (6-14 CRR, 3-7 B3.1) purely with how many roll-out classes each leaves empty",
       "portfolios": [
         "ccr",
+        "crm-substitution",
         "irb-classes",
         "off-bs",
         "rich",
@@ -263,6 +359,7 @@
       "severity": "ERROR",
       "reason": "limit of the published rules, not of our output: boe_b0779 and boe_b0778 CONTRADICT each other on c0050 and cannot both hold. b0778 requires the three share columns 0030/0040/0050 to total 1 on each row; b0779 requires row 0260 to equal the sum of rows 0180-0250 - but c0050 is a RATIO, so summing it down eight roll-out rows cannot equal the total row's own ratio (0.868 against 2.068). The instruction text resolves in b0779's favour on scope: row 0260 sums rows 0180-0250 'for each of columns 0060-0150', and c0050 is not in that set, so the rule should never have reached this column. We report the ratio; the single remaining coordinate is c0050 alone",
       "portfolios": [
+        "crm-substitution",
         "irb-classes",
         "rich"
       ],
@@ -271,6 +368,24 @@
         "OF08.07.01.01[c0050]"
       ],
       "expression": "{t: OF08.07.01.01, r: 0260} = sum({t: OF08.07.01.01, r: 0180; 0190; 0200; 0210; 0220; 0230; 0240; 0250})"
+    },
+    {
+      "regime": "crr",
+      "rule_id": "v0308_m",
+      "severity": "ERROR",
+      "reason": "GENUINE DEFECT in our output - NOT a published-rule artifact. The CRR twin of boe_b0471 (same identity, coarser CCF-bucket coefficients: no 0171/0.6 term). What is wrong: C 07.00 col 0200 is bound to Sum(ead_col) over the origin/obligor population only (reporting/corep/c07.py), so it never reflects the CRM-substitution outflow leaving or the inflow arriving, while cols 0100->0110->0150 correctly net it through the waterfall. Evidence: the CGCB inflow-only sheet's Total/0% band rows show 0100=0110=0150=4,900,000 but c0200=0.0; corporate's Total row shows 0110=0150=5,200,000 (net of the 2,800,000 outflow) but c0200=8,000,000 (both legs' raw EAD, unreduced by the outflow). Why not fixed here (notes.caution_on_plan_doc_definitions): F3 does NOT decide that col 0200 stays origin-basis - it does the opposite. F3's own text (docs/plans/phase7-declarative-reporting.md:573-576, the CR4/CR5 tranche) reads 'CR4 cols c/d/e/f and ALL CR5 rows key on `reporting_class` (post-substitution - C 07.00 col 0200 basis; the covered leg lands in the protection provider's row)' - it cites 'C 07.00 col 0200 basis' AS THE DEFINITION of the post-substitution basis, i.e. it assumed col 0200 already implemented it. CONSEQUENCE, CONFIRMED in the code, not just the plan doc: reporting/cellspec.py's shared RowPredicate binds two DELIBERATELY DIFFERENT fields - `classes=` to `pl.col('reporting_class')` (post-substitution) and `classes_origin=` to `pl.col('reporting_class_origin')` (origin). reporting/pillar3/cr4.py uses `classes_origin` for cols a/b and `classes` for cols c/d/e/f (an explicit origin/post-substitution split within one template); reporting/pillar3/cr5.py uses `classes` for every row and `classes_origin` NOWHERE (grep count: reporting_class x2, reporting_class_origin x0) - CR5's own recorded-limitation comment confirms a guaranteed `__G_` leg bands in the GUARANTOR'S row, not the obligor's. So CR4 cols c-f and ALL of CR5 are GENUINELY on the post-substitution basis F3 names. C 07.00's col 0200 is not: its binding is `CellSpec(Sum(ead_col), predicate=member)` (reporting/corep/c07.py) against the SHEET's own origin-class membership, with no substitution-netting Formula anywhere in it (contrast cols 0110/0150, which ARE Formulas over the waterfall). CR4 cols c-f / CR5 and C 07.00 col 0200 are therefore CONFIRMED on different bases, despite F3 citing one as the definition of the other. The actual gap is in F4 (S8-C07.00, same doc), which built C 07.00 and made only the 0040/0110/0150 waterfall substitution-aware; col 0200 and the CCF-bucket columns were never brought into that treatment. This is a BUILD SHORTFALL against a recorded decision, not a recorded decision with a measured cost - this portfolio is the first to expose it. Why still not fixed in this PR: the remedy is not a one-line rebinding - col 0200 feeds the CCF-bucket identities this same rule tests, and the C 08.01 cousins (cols 0110/0260) sit on the same origin basis, so moving col 0200 alone risks making the return internally inconsistent in a different place. It needs its own scoped change with its own golden regen; the implementer has been made aware.",
+      "portfolios": [
+        "crm-substitution"
+      ],
+      "failing_coordinates": 6,
+      "coordinates": [
+        "C 07.00.a[central_govt_central_bank][r0010]",
+        "C 07.00.a[central_govt_central_bank][r0140]",
+        "C 07.00.a[corporate][r0010]",
+        "C 07.00.a[corporate][r0200]",
+        "C 07.00.a[institution][r0010]"
+      ],
+      "expression": "{c0200} = {c0150} - {c0160} - (0.8 * {c0170}) - (0.5 * {c0180})"
     },
     {
       "regime": "crr",
@@ -307,6 +422,7 @@
       "reason": "limit of the published rule, not of our output: after the DPM-fraction fix these now fail ONLY on roll-out-class rows with ZERO exposure, where every coordinate reads lhs=0.0 against rhs=1.0. A row with no exposure admits no partition - 0/0 has no answer - and the rule carries no emptiness guard, so it demands the three shares total 1 on a row where there is nothing to share. Coordinate counts now vary by portfolio (6-14 CRR, 3-7 B3.1) purely with how many roll-out classes each leaves empty",
       "portfolios": [
         "ccr",
+        "crm-substitution",
         "irb-classes",
         "off-bs",
         "rich",
@@ -339,6 +455,21 @@
         "C 07.00.a[defaulted][c0060]"
       ],
       "expression": "{r0015} = empty"
+    },
+    {
+      "regime": "crr",
+      "rule_id": "v8726_m",
+      "severity": "WARNING",
+      "reason": "GENUINE DEFECT in our output - NOT a published-rule artifact. The weaker inequality form of v0308_m - see that entry for the full mechanism: col 0200 sums raw EAD off the origin population, oblivious to CRM substitution, while col 0150 is post-substitution; F3 assumed col 0200 already implemented that basis (it defines 'post-substitution' BY REFERENCE to col 0200) rather than deciding col 0200 should stay origin-basis, so this is a build shortfall against F3/F4, not F3's decision, and it leaves C 07.00 col 0200 inconsistent with Pillar 3 CR4 cols c-f and ALL of CR5 (reporting/pillar3/cr4.py, cr5.py), confirmed in the code (reporting/cellspec.py's `classes=` vs `classes_origin=` RowPredicate split) to key on the SAME cited 'C 07.00 col 0200 basis' and DO correctly route a guaranteed leg to the protection provider's row. Fails on corporate's Total row: c0200=8,000,000 (both legs' raw EAD) against c0150=5,200,000 (net of the 2,800,000 outflow), so 0200 <= 0150 is violated. Remedy: same as v0308_m, and scoped together with it (col 0200's CCF-bucket dependents and the C 08.01 cousins on the same basis mean this needs its own change and golden regen, not a one-line rebinding). Not fixed in this PR.",
+      "portfolios": [
+        "crm-substitution"
+      ],
+      "failing_coordinates": 2,
+      "coordinates": [
+        "C 07.00.a[corporate][r0010]",
+        "C 07.00.a[corporate][r0200]"
+      ],
+      "expression": "{c0200} <= {c0150}"
     }
   ],
   "known_uncovered_templates": [

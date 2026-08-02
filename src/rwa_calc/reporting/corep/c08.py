@@ -41,13 +41,44 @@ Cell semantics (recorded decisions, this slice):
   was a DOUBLE COUNT that drove col 0090 negative — the same defect and the same
   remedy as C 07.00 col 0080. The block (0040/0050/0060) is additionally CAPPED
   PER LEG at the original exposure pre-conversion factors, the excess shed
-  proportionally (``_c08_capped_protection``, C 07.00's ``_block_cap_scale``
+  proportionally (``irb_protection_exprs``, C 07.00's ``_block_cap_scale``
   precedent) — Annex II mandates that twice, though it is inert once the Art. 199
-  collateral is out. Col 0070 (the outflow) is outside the cap block. See the
-  helper for the quoted instructions behind each of these.
+  collateral is out. Col 0070 (the outflow) is the already-capped SUBTOTAL of
+  that block and so is not capped again. See the helper for the quoted
+  instructions behind each of these.
+- The CRM SUBSTITUTION BLOCK IS A TWO-STEP WATERFALL — the C 07.00 shape
+  (``corep/c07.py::_substitution_outflow`` / ``::_net_after_substitution``) on
+  the IRB surface, written to the published identities rather than re-derived:
+  ``0070 = 0040 + 0050 + 0060`` (live ``v1663_m`` / ``v1665_m``, BoE
+  ``boe_b0747`` / ``boe_b0761``) then ``0090 = 0020 - 0035 - 0070 + 0080``
+  (``v1662_m`` / live ``v0347_m``, BoE ``boe_b0746`` / ``boe_b0760``; published
+  additively over the reported signs, where 0035/0070 are "(-)" deductions).
+  What this replaced were two reproduced defects: col 0070 was an INDEPENDENT
+  ``Sum(guaranteed_portion)`` gated on the guarantor's class DIFFERING from the
+  obligor's — so a same-class guarantee reported a populated col 0040 against
+  ``0070 = 0``, a flat breach of ``v1663_m``, and Art. 232 other funded
+  protection never reached the outflow at all — and col 0090 then subtracted the
+  breakdown AND the subtotal, deducting every covered part twice. Col 0070 binds
+  the per-leg subtotal ``irb_protection_exprs`` derives (``c08_prot_block``),
+  so the first identity holds by construction however the frame degrades, and it
+  stays a value binding rather than a ``Formula`` so col 0090 may reference it —
+  the executor refuses a formula that references a formula. The B31-only col 0035
+  term is row-scoped; see ``crm_substitution.C08_01_NETTING_EXEMPT_ROWS``.
+- The INFLOW side (col 0080) is routed ACROSS templates by
+  ``corep/crm_substitution.py``, over the whole population and keyed on the
+  sealed post-substitution approach: an inflow whose substituted leg is treated
+  under SA belongs on C 07.00, not here. Reading it off this template's own
+  IRB-filtered frame dropped a sovereign-guaranteed IRB corporate loan's inflow
+  entirely (Annex II: "Exposures stemming from possible in- and outflows from
+  and to other templates shall be taken into account"). The C 08.01 sheet axis
+  is the UNION of the classes present in the IRB book and the classes receiving
+  an inflow, so a guarantor class with no native IRB exposure still has a sheet
+  to land on. That module's docstring records the one residual this leaves —
+  col 0060's Art. 232 limb produces an outflow with no destination class — as a
+  named follow-up rather than hiding it behind a re-gated col 0070.
 - C 08.01/02 share one value surface (computed framework-agnostic, filtered
-  by each framework's column refs): gross exposures, the CRM waterfall
-  0090 = 0020 - 0040 - 0050 - 0060 - 0070 + 0080 over POSITIVE magnitudes,
+  by each framework's column refs): gross exposures, that CRM waterfall over
+  POSITIVE magnitudes,
   the cross-sheet substitution inflow (0080, C 08.01 Total row only; C 08.02 excludes it) via
   ``ReportingContext.substitution_inflow``, the two "of which: off balance
   sheet" memo columns on their RECORDED bases (R11): 0100 (POST-CRM PRE-CCF
@@ -109,10 +140,9 @@ Cell semantics (recorded decisions, this slice):
   bands, plus an "Unassigned" residual); ``row_ref == row_name == the
   String column 0005``, injected post-execute — the CR9.1 pattern.
 - RECORDED DECISION (R12) — the cross-class substitution INFLOW (col 0080,
-  and hence its contribution to the 0090 waterfall) is DELIBERATELY EXCLUDED
-  from C 08.02: 0080 stays 0.0 on every grade row (``is_total=False`` for all
-  rows, so no ``SideContext`` inflow reaches it). Two facts about the sealed
-  origin-basis ledger make per-grade attribution unsound, not merely omitted:
+  and hence its contribution to the 0090 waterfall) is kept off every GRADE row
+  of C 08.02, landing instead on its residual "Unassigned" row. Two facts about
+  the sealed origin-basis ledger make per-grade attribution unsound:
   (i) C 08 keys ``reporting_class_origin`` (the obligor basis — a recorded
   number-neutral convergence decision), so a guaranteed leg substituted from
   class X into class Y physically sits in X's ORIGIN sheet, reported there as
@@ -124,23 +154,31 @@ Cell semantics (recorded decisions, this slice):
   (``engine/irb/guarantee.py::_apply_parameter_substitution``), and under CRR
   the guarantor is SA-RW-substituted with no guarantor PD grade at all. The
   inflow into Y is a per-destination-class SCALAR
-  (``ReportingContext.substitution_inflow``, ``_substitution_inflows`` grouped
-  by ``post_crm_exposure_class_guaranteed``) that C 08.01 lands on its
-  constraint-free Total row (0010); C 08.02 has NO Total row and no
-  origin-basis grade home for a cross-sheet scalar. Banding it to a grade would
-  require the GUARANTOR's rating grade sealed per-leg (a deferred engine
-  enhancement) — banding by the leg's own grade would misattribute the inflow
-  to a foreign obligor's grade in a different class's rating scale. This
-  mirrors C 08.01's inflow-on-Total-row-only convention and C 07.00's
-  class-level-scalar convention. Reconciliation consequence, pinned as a
-  MONITORED divergence (not silent drift): on a destination sheet the sum over
-  grade rows of col 0080 == 0.0, which is NOT equal to C 08.01's Total 0080,
-  and the sum of col 0090 is short of C 08.01's Total 0090 by exactly the
-  inflow; the OUTFLOW side (col 0070) reconciles. Regulatory basis: Reg (EU)
+  (``ReportingContext.substitution_inflow``, ``corep/crm_substitution.py``
+  grouped by ``post_crm_exposure_class_guaranteed``) that C 08.01 lands on its
+  constraint-free Total row (0010) and on one row of each of its two published
+  row decompositions.
+  R12's CONCLUSION IS SUPERSEDED; ITS REASONING IS NOT. Four live ERROR rules —
+  ``boe_b0752_8`` / ``boe_b0814_07`` (col 0080) and ``boe_b0752_9`` /
+  ``boe_b0814_08`` (col 0090), two distinct identities each stated twice in the
+  pack — require ``{OF08.01 r0070} = sum({OF08.02})`` on those columns. Together
+  with ``boe_b0745`` / ``v0338_m`` (which put the inflow on row 0070) that is a
+  published statement that C 08.02 MUST carry the inflow, so "excluded entirely"
+  was never available and the MONITORED divergence R12 recorded here was in fact
+  a standing breach of four ERROR-severity rules. What survives is the reason
+  per-GRADE attribution is unsound — the ledger carries the obligor's grade,
+  never the guarantor's — and that is precisely why the inflow lands on the
+  residual "Unassigned" row (``_C08_02_INFLOW_ROW``) rather than on any grade:
+  the row already means "an exposure whose grade we do not carry", which is
+  exactly what a cross-sheet inflow is. C 08.02 takes the GRADED component only
+  (it excludes slotting, and the tie-out is against C 08.01 row 0070, the
+  F-IRB/A-IRB union). Sealing the GUARANTOR's rating grade per leg remains the
+  enhancement that would allow a true per-grade split. Regulatory basis: Reg (EU)
   2021/451 Annex II (C 08.01/02 share the CRM-substitution column block);
   PS1/26 Annex XXII (obligor-basis reporting bars substitution effects from the
-  grade breakdown). Pin:
-  ``tests/unit/reporting/corep/test_c08_02.py::TestC0802SubstitutionInflowDisposition``.
+  grade breakdown — which the Unassigned landing respects, since it asserts no
+  grade). Pin:
+  ``tests/unit/reporting/corep/test_c08_02.py::TestC0802InflowLandsOnUnassignedRow``.
 - C 08.03/05 allocate rows over the 17 fixed PD ranges (B31 allocates on
   the pre-input-floor ``pd``, CRR on ``pd_floored``; the reported PD is
   always post-floor), emit ONLY populated buckets (sparse) plus an
@@ -218,6 +256,16 @@ from rwa_calc.reporting.cellspec import (
     matched_counts,
     subset_rows,
 )
+from rwa_calc.reporting.corep.crm_substitution import (
+    C08_01_NETTING_EXEMPT_ROWS,
+    IRB_BLOCK_COL,
+    IRB_OFCP_CARRIERS,
+    InflowBreakdown,
+    crm_waterfall,
+    irb_origin_inflows,
+    irb_protection_exprs,
+    waterfall_refs,
+)
 from rwa_calc.reporting.corep.pd_scale import banded_rows
 from rwa_calc.reporting.corep.templates import (
     C08_04_ROWS,
@@ -260,28 +308,55 @@ _NEGATIVE_COLS: frozenset[str] = frozenset(
 
 _IRB_APPROACHES: tuple[str, ...] = ("foundation_irb", "advanced_irb", "slotting")
 
+# Which ``ReportingContext`` inflow component each C 08.01 row's col 0080 takes.
+# The Total row 0010 takes the whole inflow; rows 0020/0030 take its balance-sheet
+# split. Both are needed: row 0010 is decomposed TWICE over the same columns by
+# live ERROR rules — ``boe_b0744`` on the balance-sheet axis (r0020+r0030+r0040+
+# r0050+r0060) and ``boe_b0745`` / EBA ``v0338_m`` on the IRB treatment axis
+# (r0070+r0080+r0170+r0180) — and a Total-row-only inflow breached BOTH by exactly
+# the inflow on cols 0080/0090/0104 (measured on the CRM-substitution portfolio,
+# not inferred). The balance-sheet split is unambiguous: the side is a property of
+# the underlying asset and substitution does not change it.
+#
+# ROWS 0070/0080 CARRY THE TREATMENT SPLIT, and binding them is only coherent
+# BECAUSE C 08.02 now carries the inflow too. Four live ERROR rules —
+# ``boe_b0752_8`` / ``boe_b0814_07`` (col 0080) and ``boe_b0752_9`` /
+# ``boe_b0814_08`` (col 0090), two distinct identities each stated twice in the
+# pack — require ``{OF08.01 r0070} = sum({OF08.02})`` on those columns. So the
+# published set jointly demands that the inflow reach row 0070 AND that the
+# C 08.02 grade rows sum to it: binding row 0070 alone would fix ``boe_b0745`` /
+# ``v0338_m`` and break both identities. See ``_C08_02_INFLOW_ROW``.
+
+# The C 08.02 row the substitution inflow lands on — the residual "Unassigned"
+# grade bucket ``_c08_02_keyed`` already emits for legs with no rating grade.
+#
+# WHY THAT ROW AND NOT A GRADE (recorded decision R12, superseded in its
+# conclusion but not in its reasoning). R12 kept C 08.02 inflow-free because the
+# origin-basis ledger carries the OBLIGOR's grade and never the guarantor's, so a
+# per-grade split would misattribute the inflow to a foreign obligor's grade in a
+# different class's rating scale. That reasoning is intact and is exactly why the
+# inflow does NOT go on a grade row. What R12 got wrong was the conclusion that it
+# therefore goes nowhere: the four tie-out rules above are a published statement
+# that C 08.02 must sum to C 08.01 row 0070 on cols 0080/0090, so "nowhere" is not
+# available. The Unassigned residual row states precisely what is known — an
+# exposure whose grade the ledger does not carry — without inventing a grade it
+# does not have, which is the same thing the row already means for a leg with a
+# null ``cp_internal_rating_grade``. A destination class with no unassigned-grade
+# legs of its own has the row added for the inflow (``c08_02_plans``).
+_C08_02_INFLOW_ROW: str = "Unassigned"
+
+_C08_01_INFLOW_KEYS: dict[str, str] = {
+    "0010": "substitution_inflow",
+    "0020": "substitution_inflow_on_bs",
+    "0030": "substitution_inflow_off_bs",
+    "0070": "substitution_inflow_graded",
+    "0080": "substitution_inflow_slotting",
+}
+
 # Single-frame lineage key: C 08.07 has no sheet axis, so its one plan keys
 # under a canonical name (see reporting.plans / _resolve_sheet_key single_frame).
 _C08_07_SHEET_KEY = "c08_07"
 
-# C 08.01/02 col 0060 "OTHER FUNDED CREDIT PROTECTION" — the Art. 232(1) /
-# Art. 200(1) list (third-party deposits, pledged life policies, instruments
-# repurchased on request), i.e. protection treated AS A GUARANTEE and therefore
-# acting on the OBLIGOR'S PD through substitution. This is the same carrier pair
-# C 07.00 reads for its own Art. 232 column (``corep/c07.py::_OFCP_CARRIERS``).
-#
-# The Art. 199 collateral (immovable property, receivables, other physical) is
-# DELIBERATELY NOT HERE: it is an LGD mitigant, not a PD one, and Annex II routes
-# it by name to the CRM-in-LGD-estimates block at cols 0190/0200/0210 — see
-# ``_c08_capped_protection`` for the quoted instructions.
-_C08_OFCP_CARRIERS: tuple[str, ...] = (
-    "life_ins_collateral_value",
-    "third_party_deposit_value",
-)
-
-# The per-leg pre-conversion-factor gross carriers that col 0020 sums — the cap
-# basis for the substitution block (see ``_c08_block_cap_scale``).
-_C08_GROSS_CARRIERS: tuple[str, ...] = ("reporting_gross_on_bs", "reporting_gross_off_bs")
 
 _Terms = tuple[tuple[str, str | bool], ...]
 type _EmptyCell = Literal["zero", "null"]
@@ -302,18 +377,6 @@ def _const(value: float | None):  # noqa: ANN202 - tiny Formula factory
         return value
 
     return fn
-
-
-def _crm_waterfall(cells: Mapping[str, float | None], _prior: bool) -> float | None:
-    """0090 = 0020 - 0040 - 0050 - 0060 - 0070 + 0080 (positive magnitudes)."""
-    return (
-        (cells["0020"] or 0.0)
-        - (cells["0040"] or 0.0)
-        - (cells["0050"] or 0.0)
-        - (cells["0060"] or 0.0)
-        - (cells["0070"] or 0.0)
-        + (cells["0080"] or 0.0)
-    )
 
 
 def _copy_of_0040(cells: Mapping[str, float | None], _prior: bool) -> float | None:
@@ -376,21 +439,6 @@ def _prepare(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
         exprs.append((pl.col(class_col) == "defaulted").alias("c08_defaulted"))
     elif "pd_floored" in cols:
         exprs.append((pl.col("pd_floored") >= 1.0).alias("c08_defaulted"))
-
-    # Substitution flag (retired outflow filter: gp>0 and pre != post).
-    if {"guaranteed_portion", "pre_crm_exposure_class", "post_crm_exposure_class_guaranteed"} <= (
-        cols
-    ):
-        exprs.append(
-            (
-                (pl.col("guaranteed_portion") > 0)
-                & (pl.col("pre_crm_exposure_class") != pl.col("post_crm_exposure_class_guaranteed"))
-            )
-            .fill_null(value=False)
-            .alias("c08_substituted")
-        )
-    else:
-        exprs.append(pl.lit(value=False).alias("c08_substituted"))
 
     # On/off-balance-sheet (kernel rule: bs_type preferred, else exposure_type).
     if "bs_type" in cols:
@@ -485,152 +533,9 @@ def _prepare(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
             ).alias("c08_rwa_pre_adj")
         )
 
-    exprs.extend(_c08_capped_protection(cols))
+    exprs.extend(irb_protection_exprs(cols))
 
     return data.with_columns(exprs)
-
-
-def _c08_block_cap_scale(cols: set[str], block_total: pl.Expr) -> pl.Expr:
-    """The 0-1 factor that caps the substitution block at the leg's own exposure.
-
-    ``1.0`` unless the block over-runs the cap basis, in which case
-    ``basis / block_total`` (well-defined: an over-run implies a positive total).
-    Degrades to ``1.0`` — uncapped — only on a frame carrying neither a gross
-    carrier nor ``ead_final``, which the sealed ledger never is. This is C 07.00's
-    ``_block_cap_scale`` (``corep/c07.py``) on the IRB surface; the basis differs
-    (see ``_c08_capped_protection``) and there is no provisions term, because the
-    Art. 111(2) drawn-first deduction is SA-only.
-    """
-    gross = [pl.col(col).fill_null(0.0) for col in _C08_GROSS_CARRIERS if col in cols]
-    if not gross and "ead_final" in cols:
-        gross = [pl.col("ead_final").fill_null(0.0)]
-    if not gross:
-        return pl.lit(1.0)
-    basis = pl.sum_horizontal(gross).clip(lower_bound=0.0)
-    return pl.when(block_total > basis).then(basis / block_total).otherwise(1.0)
-
-
-def _c08_capped_protection(cols: set[str]) -> list[pl.Expr]:
-    """Per-leg capped twins of the C 08.01/02 substitution-block carriers.
-
-    WHAT THE BLOCK CONTAINS — cols 0040/0050/0060 sit under "CREDIT RISK
-    MITIGATION (CRM) TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE", the
-    route where the protection provider's risk replaces the obligor's, i.e. an
-    effect on PD. Annex II says so of col 0060 in three ways: "Collateral that
-    has an effect on the **PD** of the exposure shall be capped ..."; "Where own
-    estimates of LGD are not used, **Article 232(1)** CRR applies" (the
-    Art. 200(1) list — third-party deposits, pledged life policies, instruments
-    repurchased on request — treated AS A GUARANTEE); and, decisively, the
-    routing sentence "**Where an adjustment is made in the LGD, that amount shall
-    be reported in column 170**". PS1/26 is blunter still: "Other funded credit
-    protection that is treated as a guarantee in accordance with Article 232 ...
-    shall be included. Other funded credit protection that is not treated as a
-    guarantee ... shall be reported in 0172."
-
-    WHY THE ART. 199 COLLATERAL IS NOT HERE (recorded — this column previously
-    summed it, and that was a DOUBLE COUNT, not a magnitude problem). Immovable
-    property, receivables and other physical collateral are LGD mitigants under
-    both IRB variants — recognised through Art. 230 where own LGD estimates are
-    not used, and through Art. 181(1)(e)-(f) where they are — never through
-    substitution, so they never touch PD. Annex II routes them BY NAME to the
-    "CRM TECHNIQUES TAKEN INTO ACCOUNT IN LGD ESTIMATES" block, whose heading
-    excludes substitution effects outright ("CRM techniques that have an impact on
-    LGD estimates as a result of the application of the substitution effect of CRM
-    techniques shall not be included in these columns") and whose columns cite the
-    exact paragraphs: 0190 REAL ESTATE "Article 199(2), (3) and (4)"; 0200 OTHER
-    PHYSICAL COLLATERAL "Article 199(6) and (8)"; 0210 RECEIVABLES "Articles
-    199(5) and 229(2)". ``_value_cells`` already binds all three there, so the
-    same 500,000 of property was being reported twice on one sheet — once
-    correctly at col 0190 and once as a -500,000 exposure reduction at col 0060,
-    driving col 0090 ("exposure after CRM substitution effects pre-conversion
-    factors") to -200,000 on a supervisory return. Removing it from col 0060
-    loses nothing: col 0190 is untouched. Same defect and same remedy as C 07.00
-    col 0080 (``corep/c07.py``); the SA/IRB difference is only WHERE the
-    collateral does belong — SA: the exposure class; IRB: this LGD block.
-
-    THE CAP ITSELF still applies to what legitimately remains in the block, and
-    Annex II mandates it twice: cols 0040-0050 "shall be capped at the exposure
-    value", col 0060 "shall be capped at the value of the original exposure pre
-    conversion factors". It is inert on every committed portfolio now that the
-    Art. 199 collateral is gone, and is kept because the requirement is real —
-    an Art. 232 deposit or a guarantee CAN exceed the exposure it covers.
-
-    THE BLOCK, NOT THE COLUMN (C 07.00's recorded reasoning): capping each column
-    at the exposure separately still lets the columns SUM past it, so the cap is
-    applied to the block total and the excess shed PROPORTIONALLY across the
-    components — Annex II prescribes no priority between the protection routes,
-    so no route may be preferred.
-
-    THE PRE-CCF BASIS: the two cap sentences name nominally different bases ("the
-    exposure value" for 0040-0050, "the original exposure pre conversion factors"
-    for 0060). The PRE-conversion-factor basis (what col 0020 sums) is the one
-    adopted for the whole block, because the block feeds the PRE-CCF waterfall at
-    col 0090; capping against the post-CCF exposure value inside a pre-CCF
-    waterfall would leave 0090 able to go negative.
-
-    COL 0070 IS DELIBERATELY OUTSIDE THE BLOCK. It is not a protection valuation
-    that can exceed the exposure: Annex II defines the substitution outflow as
-    "the covered part of the original exposure pre-conversion factors that is
-    deducted from the obligor's exposure class", i.e. already a portion of the cap
-    basis. Including it would also make the cap bite on legs that are not
-    over-collateralised at all, because a guaranteed leg that migrates class is
-    counted by ``_crm_waterfall`` in BOTH col 0040 and col 0070 — the same
-    double-subtraction C 07.00 removed from its own waterfall, currently inert
-    here (no leg in any committed portfolio sits in both) and recorded as a
-    separate follow-up rather than fixed under a cap change.
-
-    Returns the ``c08_prot_*`` twins for whichever raw carriers the frame has;
-    an empty list when it has none (the cells then keep their raw bindings and
-    behave exactly as before).
-    """
-    parts = [pl.col(col).fill_null(0.0) for col in _C08_OFCP_CARRIERS if col in cols]
-    unfunded: pl.Expr | None = None
-    if "guaranteed_portion" in cols:
-        gp = pl.col("guaranteed_portion").fill_null(0.0)
-        # Cols 0040/0050 split the same carrier by protection type, so a leg
-        # contributes to the block only through the type it actually carries;
-        # with no ``protection_type`` column col 0040 takes the whole amount.
-        unfunded = (
-            pl.when(pl.col("protection_type").is_in(["guarantee", "credit_derivative"]))
-            .then(gp)
-            .otherwise(pl.lit(0.0))
-            if "protection_type" in cols
-            else gp
-        )
-        parts.append(unfunded)
-    if not parts:
-        return []
-    scale = _c08_block_cap_scale(cols, pl.sum_horizontal(parts))
-    exprs = [
-        (pl.col(col).fill_null(0.0) * scale).alias(f"c08_prot_{col}")
-        for col in _C08_OFCP_CARRIERS
-        if col in cols
-    ]
-    if unfunded is not None:
-        exprs.append(
-            (pl.col("guaranteed_portion").fill_null(0.0) * scale).alias("c08_prot_guaranteed")
-        )
-    return exprs
-
-
-def _substitution_inflows(irb_df: pl.DataFrame, cols: set[str]) -> dict[str, float]:
-    """Per-destination-class substitution inflows (retired
-    _compute_substitution_flows, inflow side)."""
-    if not (
-        {"guaranteed_portion", "pre_crm_exposure_class", "post_crm_exposure_class_guaranteed"}
-        <= cols
-    ):
-        return {}
-    migrated = irb_df.filter(pl.col("c08_substituted"))
-    if len(migrated) == 0:
-        return {}
-    grouped = migrated.group_by("post_crm_exposure_class_guaranteed").agg(
-        pl.col("guaranteed_portion").fill_null(0.0).sum().alias("inflow")
-    )
-    return {
-        row["post_crm_exposure_class_guaranteed"]: float(row["inflow"])
-        for row in grouped.iter_rows(named=True)
-    }
 
 
 # =============================================================================
@@ -684,20 +589,22 @@ def _value_cells(  # noqa: C901, PLR0915 - the full C 08.01/02 column surface
     rwa_col: str,
     column_refs: tuple[str, ...],
     *,
-    is_total: bool,
+    inflow_key: str | None,
+    netting_in_waterfall: bool,
 ) -> dict[str, CellSpec]:
     member = RowPredicate(equals=terms)
+    refs_0090 = waterfall_refs(column_refs, netting=netting_in_waterfall)
 
     def narrowed(*extra: tuple[str, str | bool]) -> RowPredicate:
         return RowPredicate(equals=(*terms, *extra))
 
     lgd_col = pick(cols, "lgd_floored", "lgd_input")
     # The substitution block (0040/0050/0060) reads the Annex II-capped twins
-    # ``_c08_capped_protection`` derives; col 0070 (the outflow) stays RAW — see
+    # ``irb_protection_exprs`` derives; col 0070 (the outflow) stays RAW — see
     # that helper for why it is outside the cap block. A frame with no raw
     # carrier gets no twin, so the raw name is kept and behaviour is unchanged.
     gp_col = "c08_prot_guaranteed" if "guaranteed_portion" in cols else "guaranteed_portion"
-    prot_cols = tuple(f"c08_prot_{col}" if col in cols else col for col in _C08_OFCP_CARRIERS)
+    prot_cols = tuple(f"c08_prot_{col}" if col in cols else col for col in IRB_OFCP_CARRIERS)
     cells: dict[str, CellSpec] = {
         "0010": CellSpec(
             WeightedAvg("pd_floored", weight=ead_col), predicate=member, empty_cell="null"
@@ -723,15 +630,25 @@ def _value_cells(  # noqa: C901, PLR0915 - the full C 08.01/02 column surface
             else CellSpec(Formula(refs=(), fn=_const(0.0)))
         ),
         "0060": CellSpec(SafeSum(prot_cols), predicate=member),
-        "0070": CellSpec(Sum("guaranteed_portion"), predicate=narrowed(("c08_substituted", True))),
+        # 0070 (the substitution OUTFLOW) binds the per-leg subtotal of the block
+        # above it, so ``{c0070} = {c0040} + {c0050} + {c0060}`` (live rules
+        # ``v1663_m`` / ``v1665_m``) holds by construction — see the module
+        # docstring for the class-change-gated Sum this replaced. A value
+        # binding, not a Formula, so col 0090 may reference it.
+        "0070": CellSpec(Sum(IRB_BLOCK_COL), predicate=member),
+        # 0080 (the substitution INFLOW) lands on the Total row AND on one row of
+        # each published decomposition of it — ``boe_b0744`` (balance-sheet axis,
+        # rows 0020/0030) and ``boe_b0745`` / ``v0338_m`` (IRB treatment axis, rows
+        # 0070/0080). Both are live ERROR rules and both are stated over the same
+        # columns, so a Total-row-only inflow breaches each by exactly the inflow.
+        # ``inflow_key`` names which component this row takes; None = a row outside
+        # both decompositions, which reports the recorded constant 0.0.
         "0080": (
-            CellSpec(SideContext("substitution_inflow"))
-            if is_total
+            CellSpec(SideContext(inflow_key))
+            if inflow_key is not None
             else CellSpec(Formula(refs=(), fn=_const(0.0)))
         ),
-        "0090": CellSpec(
-            Formula(refs=("0020", "0040", "0050", "0060", "0070", "0080"), fn=_crm_waterfall)
-        ),
+        "0090": CellSpec(Formula(refs=refs_0090, fn=crm_waterfall)),
         # 0100 ("of which: off balance sheet") sits in the POST-CRM PRE-CCF
         # group (the 0090 waterfall), so it is the off-BS slice of that
         # pre-conversion-factor quantity — filled by ``_c08_off_bs_pre_ccf``
@@ -908,10 +825,17 @@ def _c08_01_spec(framework: str, cols: set[str], ead_col: str, rwa_col: str) -> 
     cells: dict[tuple[str, str], CellSpec] = {}
     for row in rows:
         terms = row_terms.get(row.ref)
+        netting = row.ref not in C08_01_NETTING_EXEMPT_ROWS
         if row.ref == "0070":
             pred = _c08_01_grades_pred()
             for col_ref, cell in _value_cells(
-                (), cols, ead_col, rwa_col, column_refs, is_total=False
+                (),
+                cols,
+                ead_col,
+                rwa_col,
+                column_refs,
+                inflow_key=_C08_01_INFLOW_KEYS.get("0070"),
+                netting_in_waterfall=True,
             ).items():
                 merged = (
                     CellSpec(cell.binding, predicate=pred, empty_cell=cell.empty_cell)
@@ -927,7 +851,13 @@ def _c08_01_spec(framework: str, cols: set[str], ead_col: str, rwa_col: str) -> 
         if terms is None:
             continue
         for col_ref, cell in _value_cells(
-            terms, cols, ead_col, rwa_col, column_refs, is_total=row.ref == "0010"
+            terms,
+            cols,
+            ead_col,
+            rwa_col,
+            column_refs,
+            inflow_key=_C08_01_INFLOW_KEYS.get(row.ref),
+            netting_in_waterfall=netting,
         ).items():
             cells[(row.ref, col_ref)] = cell
     return TemplateSpec(
@@ -968,7 +898,19 @@ def c08_01_plans(
     per-destination-class CRM substitution INFLOW into its ``ReportingContext`` (the
     C 07.00 pattern), so the Total row's col 0080 drills to its real value rather
     than being refused, and passes ``_NEGATIVE_COLS`` EXPLICITLY (the first large
-    Annex II §1.3 "(-)" negation set through lineage since C 07.00)."""
+    Annex II §1.3 "(-)" negation set through lineage since C 07.00).
+
+    The inflow is routed by ``corep/crm_substitution.py`` over the WHOLE
+    population, not over the IRB book: an inflow whose substituted leg is treated
+    under the standardised approach belongs on C 07.00, and reading it off this
+    template's own approach-filtered frame dropped it entirely. The sheet axis is
+    correspondingly the UNION of the classes present in the IRB book and the
+    classes RECEIVING an inflow — Annex II's "Exposures stemming from possible in-
+    and outflows from and to other templates shall be taken into account" is not
+    satisfied by an inflow with nowhere to land, so a guarantor class with no
+    native IRB exposure gets an inflow-only sheet (its Total row 0010 is
+    constraint-free, so it survives ``_null_empty_rows`` and reports
+    ``0090 = 0080``)."""
     ec_col = pick(cols, "reporting_class_origin")
     ead_col = pick(cols, "ead_final")
     rwa_col = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
@@ -979,23 +921,59 @@ def c08_01_plans(
             errors.append("C08.01: Missing exposure_class column")
         return {}
     irb_df = _irb_population(results, cols).collect()
-    if len(irb_df) == 0:
+    # Resolved BEFORE the empty-population guard: a book whose IRB-destined
+    # inflow comes entirely from legs outside this template would lose it to the
+    # early exit, which is the same dropped-inflow defect one level up.
+    inflow_map = irb_origin_inflows(results, cols, destination="irb")
+    if len(irb_df) == 0 and not inflow_map:
         return {}
     data_cols = set(irb_df.columns)
     irb_df = _prepare(irb_df, data_cols)
-    inflow_map = _substitution_inflows(irb_df, data_cols)
     spec = _c08_01_spec(framework, data_cols, ead_col, rwa_col)
     row_terms = _c08_01_row_terms(framework, data_cols)
     plans: dict[str, SheetPlan] = {}
-    for ec in irb_df[ec_col].drop_nulls().unique().sort().to_list():
+    sheet_keys = set(irb_df[ec_col].drop_nulls().unique().to_list()) | set(inflow_map)
+    for ec in sorted(sheet_keys):
+        inflow = inflow_map.get(ec)
         plans[ec] = SheetPlan(
             spec=spec,
             frame=irb_df.filter(pl.col(ec_col) == ec),
-            ctx=ReportingContext(substitution_inflow=inflow_map.get(ec, 0.0)),
+            ctx=ReportingContext(
+                substitution_inflow=inflow.total if inflow else 0.0,
+                substitution_inflow_on_bs=inflow.on_bs if inflow else 0.0,
+                substitution_inflow_off_bs=inflow.off_bs if inflow else 0.0,
+                substitution_inflow_graded=inflow.graded if inflow else 0.0,
+                substitution_inflow_slotting=inflow.slotting if inflow else 0.0,
+            ),
             negative_cols=_NEGATIVE_COLS,
             row_terms=row_terms,
+            inflow_rows=_inflow_rows(inflow),
         )
     return plans
+
+
+def _inflow_rows(inflow: InflowBreakdown | None) -> frozenset[str]:
+    """The C 08.01 rows carrying a NON-ZERO inflow component on this sheet.
+
+    ``_null_empty_rows`` renders a row all-null when its subset is empty, which is
+    right for a row with nothing in it — but a row that receives an inflow is not
+    empty, it is made entirely of money that lives in other sheets. Nulling it
+    would delete the very component the published row sums need (and does, on an
+    inflow-only sheet, where every constrained subset is empty). So the rows with
+    a live inflow component are exempted."""
+    if inflow is None:
+        return frozenset()
+    parts = {
+        "0010": inflow.total,
+        "0020": inflow.on_bs,
+        "0030": inflow.off_bs,
+        "0070": inflow.graded,
+        "0080": inflow.slotting,
+    }
+    # Gated on the bound key set, so a row whose component exists but is not bound
+    # (rows 0070/0080 today — see ``_C08_01_INFLOW_KEYS``) keeps the ordinary
+    # empty-row policy rather than being exempted from a pass it does not need.
+    return frozenset(ref for ref, value in parts.items() if value and ref in _C08_01_INFLOW_KEYS)
 
 
 @cites("PS1/26, paragraph 1.3")
@@ -1020,7 +998,7 @@ def generate_c08_01(
         frame = execute(plan.spec, plan.frame, plan.ctx)
         frame = _c08_off_bs_pre_ccf(frame, plan.frame, row_preds)
         frame = _c08_after_all_crm(frame)
-        frame = _null_empty_rows(frame, plan.frame, row_preds)
+        frame = _null_empty_rows(frame, plan.frame, row_preds, plan.inflow_rows)
         frame = _provisions_postfix(frame, plan.frame, row_preds, data_cols, ref="0290")
         result[ec] = _negate(frame)
     return result
@@ -1041,16 +1019,24 @@ def _c08_02_spec(
     """One C 08.02 class sheet's data-driven spec (a row per grade/PD-band label).
 
     Each row keys the derived ``c08_02_key`` label; the value cells are the shared
-    C 08.01/02 surface (``_value_cells``, ``is_total=False`` — no Total row, so col
-    0080 stays a constant 0.0, the R12 disposition). ``labels`` empty -> an empty
-    spec (rows ``()``); the caller emits an ``_empty_frame`` instead of executing.
-    ``cols`` is the PRE-``_prepare`` base-column set (see ``_c08_01_spec``)."""
+    C 08.01/02 surface (``_value_cells``). ``labels`` empty -> an empty spec (rows
+    ``()``); the caller emits an ``_empty_frame`` instead of executing. ``cols`` is
+    the PRE-``_prepare`` base-column set (see ``_c08_01_spec``).
+
+    The substitution INFLOW lands on the "Unassigned" residual row and nowhere
+    else — see ``_C08_02_INFLOW_ROW`` for why that row and not a grade."""
     rows = tuple(_Row(label, label) for label in labels)
     cells: dict[tuple[str, str], CellSpec] = {}
     for label in labels:
         terms: _Terms = (("c08_02_key", label),)
         for col_ref, cell in _value_cells(
-            terms, cols, ead_col, rwa_col, value_refs, is_total=False
+            terms,
+            cols,
+            ead_col,
+            rwa_col,
+            value_refs,
+            inflow_key=("substitution_inflow_graded" if label == _C08_02_INFLOW_ROW else None),
+            netting_in_waterfall=True,
         ).items():
             cells[(label, col_ref)] = cell
     return TemplateSpec(
@@ -1073,9 +1059,9 @@ def c08_02_plans(
     book (PS1/26 Annex II §3.3.4 paragraph 77A — see the module docstring; a
     slotting-only class emits no sheet, as on C 08.03/05),
     preserving ``generate_c08_02``'s error contract. The cross-class substitution
-    INFLOW is DELIBERATELY excluded (col 0080 a per-grade constant 0.0, R12), so
-    each plan carries an empty ``ReportingContext`` and ``_NEGATIVE_COLS`` explicitly
-    (0256 still negates on C 08.02)."""
+    INFLOW lands on the "Unassigned" residual row (``_C08_02_INFLOW_ROW``), which
+    is what makes the published C 08.01 r0070 tie-out hold; ``_NEGATIVE_COLS`` is
+    passed explicitly (0256 still negates on C 08.02)."""
     ec_col = pick(cols, "reporting_class_origin")
     ead_col = pick(cols, "ead_final")
     rwa_col = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
@@ -1088,19 +1074,29 @@ def c08_02_plans(
         errors.append("C08.02: No PD column available — skipping PD grade breakdown")
         return {}
     irb_df = _non_slotting(results, cols).collect()
-    if len(irb_df) == 0:
+    # The GRADED component only: C 08.02 excludes slotting, and the tie-out it must
+    # satisfy is against C 08.01 row 0070, which is the F-IRB/A-IRB union.
+    inflow_map = irb_origin_inflows(results, cols, destination="irb")
+    graded = {ec: flow.graded for ec, flow in inflow_map.items() if flow.graded}
+    if len(irb_df) == 0 and not graded:
         return {}
     data_cols = set(irb_df.columns)
     irb_df = _prepare(irb_df, data_cols)
     value_refs = tuple(col.ref for col in get_c08_02_columns(framework) if col.ref != "0005")
     plans: dict[str, SheetPlan] = {}
-    for ec in irb_df[ec_col].drop_nulls().unique().sort().to_list():
+    sheet_keys = set(irb_df[ec_col].drop_nulls().unique().to_list()) | set(graded)
+    for ec in sorted(sheet_keys):
         class_df = irb_df.filter(pl.col(ec_col) == ec)
         labels, keyed = _c08_02_keyed(class_df, pd_col, grade_col)
+        if graded.get(ec) and _C08_02_INFLOW_ROW not in labels:
+            # A destination class whose own book has no unassigned-grade legs (or no
+            # legs at all) still needs the row the inflow lands on, or the C 08.01
+            # r0070 tie-out has nothing to sum against.
+            labels = [*labels, _C08_02_INFLOW_ROW]
         plans[ec] = SheetPlan(
             spec=_c08_02_spec(labels, data_cols, ead_col, rwa_col, value_refs),
             frame=keyed,
-            ctx=ReportingContext(),
+            ctx=ReportingContext(substitution_inflow_graded=graded.get(ec, 0.0)),
             negative_cols=_NEGATIVE_COLS,
         )
     return plans
@@ -1971,9 +1967,17 @@ def _non_slotting(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:
 
 
 def _null_empty_rows(
-    frame: pl.DataFrame, class_df: pl.DataFrame, row_preds: dict[str, RowPredicate | None]
+    frame: pl.DataFrame,
+    class_df: pl.DataFrame,
+    row_preds: dict[str, RowPredicate | None],
+    keep: frozenset[str] = frozenset(),
 ) -> pl.DataFrame:
-    """Render inert rows and rows with EMPTY subsets all-null."""
+    """Render inert rows and rows with EMPTY subsets all-null.
+
+    ``keep`` exempts rows whose content is a cross-sheet inflow: their own subset
+    is legitimately empty (the money lives in other sheets), so nulling them would
+    delete the component the published row sums need — visibly so on an
+    inflow-only sheet, where EVERY constrained subset is empty."""
     constrained = {
         ref: pred
         for ref, pred in row_preds.items()
@@ -1983,7 +1987,7 @@ def _null_empty_rows(
     null_refs = [
         ref
         for ref, pred in row_preds.items()
-        if pred is None or ((pred.equals or pred.any_of) and counts[ref] == 0)
+        if ref not in keep and (pred is None or ((pred.equals or pred.any_of) and counts[ref] == 0))
     ]
     if not null_refs:
         return frame
@@ -2069,13 +2073,26 @@ def _c08_off_bs_pre_ccf(
     quantity — NOT the post-CCF exposure value (that is col 0120). The
     executor has no intra-row sub-waterfall verb, so 0100 is derived here per
     row over the row's ``c08_bs == "off"`` legs, mirroring ``_value_cells`` +
-    ``_crm_waterfall`` component-for-component:
+    ``crm_substitution.crm_waterfall`` term-for-term:
 
         0100 = off-BS gross (0020: the sealed reporting_gross_off_bs carrier)
-             - off-BS guarantees (0040)
-             - off-BS credit derivatives (0050)
-             - off-BS other funded collateral (0060)
-             - off-BS substituted portion (0070)
+             - off-BS substitution outflow (0070: the ``c08_prot_block``
+               subtotal cols 0040/0050/0060 break down)
+
+    It carries the waterfall's OWN correction: reading the breakdown columns AND
+    the outflow subtotal — as this did before — deducts the same covered part
+    twice, exactly as ``crm_waterfall`` did. Binding the same per-leg subtotal
+    col 0070 binds keeps the memo a true slice of 0090 by construction rather
+    than by two derivations agreeing.
+
+    THE B31 COL 0035 TERM IS DELIBERATELY ABSENT, and that is load-bearing rather
+    than an oversight: col 0035 is the Art. 166(3) on-balance-sheet netting of
+    loans and deposits, so it has no off-balance-sheet share to slice. The BoE
+    scoping says the same thing structurally — ``boe_b0746_1`` drops the 0035 term
+    from the col 0090 waterfall on exactly the off-balance-sheet row family
+    (``crm_substitution.C08_01_NETTING_EXEMPT_ROWS``), so an off-BS memo that
+    subtracted it would contradict the published rule for row 0030 while claiming
+    to be its slice. Do not "restore" it for symmetry with the on-BS rows.
 
     It is computed on POSITIVE magnitudes read from the raw ``class_df`` (so
     the result is independent of the later ``_negate`` sign pass). The 0080
@@ -2085,11 +2102,10 @@ def _c08_off_bs_pre_ccf(
     cannot claim a share of it — recorded decision, matching 0090's own
     convention that the inflow only lands on the (constraint-free) total row.
 
-    Every leg is either on- or off-BS (``c08_bs``) and every waterfall carrier
-    is a leg-level amount pro-rated across the two-leg guarantee split, so
-    summing the components over the off-BS legs is the EXACT slice. Inert
-    (None-predicate) rows are left as the null placeholder for
-    ``_null_empty_rows``; C 08.02 has none.
+    Every leg is either on- or off-BS (``c08_bs``) and the outflow carrier is a
+    leg-level amount pro-rated across the two-leg guarantee split, so summing it
+    over the off-BS legs is the EXACT slice. Inert (None-predicate) rows are left
+    as the null placeholder for ``_null_empty_rows``; C 08.02 has none.
     """
     if "0100" not in frame.columns:
         return frame
@@ -2099,32 +2115,12 @@ def _c08_off_bs_pre_ccf(
     active = {ref: pred for ref, pred in row_preds.items() if pred is not None}
     if not active:
         return frame
-    gross_cols = ("reporting_gross_off_bs",)
-    # Mirror _value_cells component-for-component: the substitution block reads
-    # the Annex II-capped twins, the outflow reads the raw carrier.
-    gp_col = "c08_prot_guaranteed" if "c08_prot_guaranteed" in cols else "guaranteed_portion"
-    collateral_cols = tuple(
-        f"c08_prot_{col}" if f"c08_prot_{col}" in cols else col for col in _C08_OFCP_CARRIERS
-    )
-    has_protection = "protection_type" in cols
     fixes: dict[str, float] = {}
     for row_ref, subset in subset_rows(class_df, active).items():
         off = subset.filter(pl.col("c08_bs") == "off")
         off_cols = set(off.columns)
-        gross = safe_sum(off, off_cols, *gross_cols)
-        if has_protection:
-            out_guarantee = _gp_sum(
-                off, off_cols, pl.col("protection_type") == "guarantee", col=gp_col
-            )
-            out_derivative = _gp_sum(
-                off, off_cols, pl.col("protection_type") == "credit_derivative", col=gp_col
-            )
-        else:
-            out_guarantee = _gp_sum(off, off_cols, mask=None, col=gp_col)
-            out_derivative = 0.0
-        out_collateral = safe_sum(off, off_cols, *collateral_cols)
-        out_substituted = _gp_sum(off, off_cols, pl.col("c08_substituted"))
-        fixes[row_ref] = gross - out_guarantee - out_derivative - out_collateral - out_substituted
+        gross = safe_sum(off, off_cols, "reporting_gross_off_bs")
+        fixes[row_ref] = gross - safe_sum(off, off_cols, IRB_BLOCK_COL)
     expr: pl.Expr = pl.col("0100")
     for row_ref, value in fixes.items():
         expr = (
@@ -2175,23 +2171,6 @@ def _c08_after_all_crm(frame: pl.DataFrame) -> pl.DataFrame:
         .otherwise(total)
         .alias("0104")
     )
-
-
-def _gp_sum(
-    data: pl.DataFrame,
-    cols: set[str],
-    mask: pl.Expr | None,
-    col: str = "guaranteed_portion",
-) -> float:
-    """Sum a guaranteed-portion carrier over ``data`` (optionally masked); 0.0
-    when the column is absent — mirroring the waterfall's ``cells[...] or 0.0``
-    coalesce of an absent CRM-outflow carrier. ``col`` selects the Annex II-capped
-    twin (``c08_prot_guaranteed``) for the substitution-block components and the
-    raw carrier for the outflow, matching ``_value_cells``."""
-    if col not in cols:
-        return 0.0
-    sub = data.filter(mask) if mask is not None else data
-    return float(sub[col].fill_null(0.0).sum())
 
 
 def _negate_expr(col: str) -> pl.Expr:

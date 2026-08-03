@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - (Next release changes will go here)
 
+---
+
+## [0.3.22] - 2026-08-03
+
 ### Fixed
 - **C 08.01 / C 08.02 reported every guarantee twice — once in the CRM substitution block
   and again in the CRM-in-LGD block.** Cols 0150 (guarantees) and 0160 (credit

@@ -14,6 +14,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - (Next release changes will go here)
 
 ### Fixed
+- **C 08.01 / C 08.02 reported every guarantee twice — once in the CRM substitution block
+  and again in the CRM-in-LGD block.** Cols 0150 (guarantees) and 0160 (credit
+  derivatives) bound `Sum("guaranteed_portion")` behind the *same* `protection_type`
+  predicate cols 0040/0050 already use, so a single £400k guarantee was published as a
+  £400k "(-)" substitution outflow at col 0040 **and** a £400k LGD mitigant at col 0150 on
+  the same sheet.
+  - **The two blocks are mutually exclusive by instruction.** Annex II partitions unfunded
+    protection by effect — "Guarantees shall be reported in column 0040 where the
+    adjustment is not made in the LGD. Where the adjustment is made in the LGD, the amount
+    of the guarantee shall be reported in column 0150" — and the cols 0150-0210 heading
+    bars the other side outright: "CRM techniques that have an impact on LGD estimates as a
+    result of the application of the substitution effect of CRM techniques shall not be
+    included in these columns". PS1/26 Annex II partitions the same population by named
+    method: 0040/0050 are the Risk-Weight Substitution and Parameter Substitution Methods,
+    0150/0160 the Article 183 LGD Adjustment Method.
+  - **The engine only ever produces the substitution half.**
+    `engine/irb/guarantee.py::apply_guarantee_substitution` implements SA risk-weight
+    substitution (Art. 235), parameter substitution (Art. 161(3) / CRE22.70-85) and double
+    default (Art. 153(3)) — none of which is the LGD Adjustment Method. Cols 0150/0160
+    therefore now report the recorded constant `0.0`, the convention cols 0170-0173 already
+    followed. The funded half of the block (cols 0180-0210, Art. 197/199 collateral) is
+    untouched and keeps reporting: collateral genuinely is an LGD mitigant.
+  - **The two bindings did not even agree in magnitude.** Cols 0040/0050 read the Annex II
+    block-capped twin (`c08_prot_guaranteed`); cols 0150/0160 read the raw carrier. On a
+    leg where the cap bit, the template published a full-value 0150 against a scaled-down
+    0040 with nothing to flag the divergence.
+  - **No golden file moved.** Cols 0150/0160 are `0.0` in every committed C 08.01/02
+    expected output because no reporting golden portfolio carries a guaranteed IRB leg —
+    which is exactly why the duplication survived. The four new regression tests supply
+    that missing coverage.
+  - **Known residual, tracked separately:** Annex II routes double-default unfunded
+    protection to col 0220 *instead of* col 0040, and a double-default leg is not
+    substituted at all, so it should raise no outflow. Today such a leg reports in
+    0040/0070 and 0220. Correcting it moves the col 0090 waterfall, so it is not bundled
+    here.
 - **The release changelog promoter truncated every multi-line bullet to its first line.**
   `scripts/_deploy_changelog.py` collected only lines beginning `- ` when moving
   `[Unreleased]` into a new version section, so wrapped continuation text and nested

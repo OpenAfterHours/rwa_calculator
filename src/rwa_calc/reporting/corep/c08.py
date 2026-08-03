@@ -46,6 +46,16 @@ Cell semantics (recorded decisions, this slice):
   collateral is out. Col 0070 (the outflow) is the already-capped SUBTOTAL of
   that block and so is not capped again. See the helper for the quoted
   instructions behind each of these.
+- THE TWO CRM BLOCKS ARE MUTUALLY EXCLUSIVE, so cols 0150/0160 report a constant
+  0.0 instead of restating cols 0040/0050 (which they did, behind the very same
+  ``protection_type`` predicate, publishing every guarantee twice per sheet).
+  Annex II splits unfunded protection by EFFECT — its cols 0150-0210 heading bars
+  "the substitution effect of CRM techniques" outright — and PS1/26 by NAMED
+  METHOD: 0040/0050 = Risk-Weight / Parameter Substitution, 0150/0160 = the
+  Art. 183 LGD Adjustment Method, which ``engine/irb/guarantee.py`` never
+  applies. The FUNDED half (0180-0210, Art. 197/199 collateral) still reports.
+  Rationale, evidence and the col 0220 double-default residual: see the pin
+  ``test_c08_crm_substitution.py::TestCrmInLgdBlockExcludesSubstitutedProtection``.
 - The CRM SUBSTITUTION BLOCK IS A TWO-STEP WATERFALL — the C 07.00 shape
   (``corep/c07.py::_substitution_outflow`` / ``::_net_after_substitution``) on
   the IRB surface, written to the published identities rather than re-derived:
@@ -672,21 +682,11 @@ def _value_cells(  # noqa: C901, PLR0915 - the full C 08.01/02 column surface
         "0125": CellSpec(Sum(ead_col), predicate=narrowed(("c08_defaulted", True))),
         "0130": CellSpec(Formula(refs=(), fn=_const(None))),
         "0140": _lfse_cell(cols, lambda: Sum(ead_col), terms),
-        "0150": (
-            CellSpec(
-                Sum("guaranteed_portion"), predicate=narrowed(("protection_type", "guarantee"))
-            )
-            if "protection_type" in cols
-            else CellSpec(Sum("guaranteed_portion"), predicate=member)
-        ),
-        "0160": (
-            CellSpec(
-                Sum("guaranteed_portion"),
-                predicate=narrowed(("protection_type", "credit_derivative")),
-            )
-            if "protection_type" in cols
-            else CellSpec(Formula(refs=(), fn=_const(0.0)))
-        ),
+        # 0150/0160: the CRM-in-LGD twins of cols 0040/0050, mutually exclusive
+        # with them and empty on today's calculator (module docstring). The
+        # recorded constant 0.0 is the convention cols 0170-0173 already follow.
+        "0150": CellSpec(Formula(refs=(), fn=_const(0.0))),
+        "0160": CellSpec(Formula(refs=(), fn=_const(0.0))),
         "0170": CellSpec(Formula(refs=(), fn=_const(0.0))),
         "0171": CellSpec(Formula(refs=(), fn=_const(0.0))),
         "0172": CellSpec(Formula(refs=(), fn=_const(0.0))),

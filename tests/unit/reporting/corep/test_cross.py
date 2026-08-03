@@ -958,7 +958,15 @@ class TestCollateralMethodSplit:
         assert total["0173"][0] == pytest.approx(0.0)
 
     def test_c08_guarantees_unfunded(self) -> None:
-        """C 08.01 col 0150 = guaranteed_portion sum."""
+        """C 08.01 reports a guarantee at col 0040, not at col 0150.
+
+        The two CRM blocks are mutually exclusive (Annex II cols 0150-0210
+        heading; PS1/26 splits the same population by named method), and the
+        engine only produces the substitution half, so the CRM-in-LGD unfunded
+        column is structurally empty. This assertion previously read col 0150 —
+        the duplicated half — see ``corep/c08.py`` and
+        ``test_c08_crm_substitution.py::TestCrmInLgdBlockExcludesSubstitutedProtection``.
+        """
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(
             _irb_results_with_collateral_split(), framework="BASEL_3_1"
@@ -966,8 +974,9 @@ class TestCollateralMethodSplit:
         corp = bundle.c08_01["corporate"]
         total = corp.filter(pl.col("row_ref") == "0010")
 
-        # guaranteed_portion = 0 + 500 = 500
-        assert total["0150"][0] == pytest.approx(500.0)
+        # guaranteed_portion = 0 + 500 = 500, reported as a "(-)" outflow
+        assert total["0040"][0] == pytest.approx(-500.0)
+        assert total["0150"][0] == pytest.approx(0.0)
 
     def test_c08_other_funded_for_irb(self) -> None:
         """C 08.01 col 0060 (Art. 232 substitution route) excludes Art. 199
@@ -1070,7 +1079,12 @@ class TestCreditDerivativeTracking:
         assert total["0050"][0] == pytest.approx(-400.0)
 
     def test_c08_unfunded_protection_split(self) -> None:
-        """C 08.01 col 0150=guarantee, col 0160=credit derivative."""
+        """C 08.01 col 0040=guarantee, col 0050=credit derivative.
+
+        The protection_type split lives in the SUBSTITUTION block; its
+        CRM-in-LGD twins (0150/0160) are structurally empty on today's
+        calculator, which produces no Art. 183 LGD Adjustment Method route.
+        """
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(
             _irb_results_with_credit_derivatives(), framework="BASEL_3_1"
@@ -1078,10 +1092,13 @@ class TestCreditDerivativeTracking:
         corp = bundle.c08_01["corporate"]
         total = corp.filter(pl.col("row_ref") == "0010")
 
-        # Col 0150: unfunded guarantees = 800.0
-        assert total["0150"][0] == pytest.approx(800.0)
-        # Col 0160: unfunded credit derivatives = 400.0
-        assert total["0160"][0] == pytest.approx(400.0)
+        # Col 0040: unfunded guarantees = 800.0, as a "(-)" outflow
+        assert total["0040"][0] == pytest.approx(-800.0)
+        # Col 0050: unfunded credit derivatives = 400.0, as a "(-)" outflow
+        assert total["0050"][0] == pytest.approx(-400.0)
+        # Their CRM-in-LGD twins must not restate the same protection
+        assert total["0150"][0] == pytest.approx(0.0)
+        assert total["0160"][0] == pytest.approx(0.0)
 
     def test_c08_pre_credit_derivatives_rwea(self) -> None:
         """C 08.01 col 0310 = total RWEA (pre-credit-derivative baseline)."""

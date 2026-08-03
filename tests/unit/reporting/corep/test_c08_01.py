@@ -693,13 +693,27 @@ class TestDoubleDefaultCOREP:
                 assert total["0220"][0] is None or total["0220"][0] == pytest.approx(0.0)
 
     def test_dd_unfunded_included_in_total_guarantees(self) -> None:
-        """DD unfunded is a subset of total unfunded protection."""
+        """DD unfunded is a subset of total unfunded protection.
+
+        Measured against col 0040 (the SUBSTITUTION guarantees column) rather
+        than col 0150: the CRM-in-LGD twin is structurally empty now that the
+        two blocks no longer restate each other, so comparing against it would
+        assert nothing. Col 0040 carries the "(-)" Annex II sign, hence the abs.
+
+        KNOWN RESIDUAL this test now makes visible: Annex II routes DD unfunded
+        protection to col 0220 INSTEAD of col 0040 ("Regarding exposures subject
+        to the double default treatment, the value of unfunded credit protection
+        shall be reported in column 0220"), so a DD leg should raise no outflow
+        at all. Today it reports in both. Correcting that moves the col 0090
+        waterfall and is tracked separately; the subset relation asserted here
+        holds either way.
+        """
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_double_default(), framework="CRR")
         corp = bundle.c08_01["corporate"]
         total = corp.filter(pl.col("row_ref") == "0010")
         dd_amount = total["0220"][0]
-        guar_amount = total["0150"][0] if "0150" in total.columns else None
+        guar_amount = abs(total["0040"][0]) if total["0040"][0] is not None else None
         # DD unfunded should be <= total guarantees (DD is a subset of guarantee treatments)
         if dd_amount is not None and guar_amount is not None:
             assert dd_amount <= guar_amount + 0.01

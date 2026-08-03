@@ -672,3 +672,118 @@ class TestC0802OutflowSubtotal:
         expected = row["0020"][0] + row["0070"][0]
         assert row["0090"][0] == pytest.approx(expected)
         assert row["0090"][0] == pytest.approx(2_200.0)
+
+
+class TestCrmInLgdBlockExcludesSubstitutedProtection:
+    """Cols 0150/0160 must NOT restate the protection cols 0040/0050 report.
+
+    The two blocks are mutually exclusive by instruction, and the engine only
+    ever produces the substitution half, so the CRM-in-LGD unfunded columns are
+    structurally empty on today's calculator (the convention cols 0170-0173
+    already follow).
+
+    Annex II (CR IRB, docs/assets/crr-annex-ii-reporting-instructins.pdf p.99):
+      col 0040 "Guarantees shall be reported in column 0040 where the adjustment
+      is NOT made in the LGD. Where the adjustment IS made in the LGD, the amount
+      of the guarantee shall be reported in column 0150."
+      col 0050 "Where the adjustment is made in the LGD, the amount of the credit
+      derivatives shall be reported in column 0160."
+      cols 0150-0210 heading (p.100) "CRM techniques that have an impact on LGD
+      estimates as a result of the application of the substitution effect of CRM
+      techniques shall NOT be included in these columns."
+
+    PS1/26 Annex II (OF 08.01, ps1-26-annex-ii-reporting-instructions.pdf p.102-107)
+    names the methods instead of the effect, and partitions them the same way:
+      col 0040 "Guarantees shall be reported in column 0040 where the Risk Weight
+      Substitution Method or the Parameter Substitution Method ... is applied."
+      col 0150 "Exposures subject to the LGD Adjustment Method (in accordance with
+      Article 183 ...) shall be included."
+      cols 0150-0210 heading "CRM techniques that have an impact on LGD estimates
+      as a result of the application of the Parameter Substitution Method shall
+      not be included in these columns."
+
+    ``engine/irb/guarantee.py::apply_guarantee_substitution`` implements exactly
+    three routes — SA risk-weight substitution (Art. 235), parameter substitution
+    (Art. 161(3) / CRE22.70-85) and double default (Art. 153(3)) — and none of
+    them is the Art. 183 LGD Adjustment Method. Every guarantee the engine
+    recognises therefore belongs in 0040/0050 and none in 0150/0160.
+
+    What this replaced: both columns bound ``Sum("guaranteed_portion")`` behind
+    the SAME ``protection_type`` predicate cols 0040/0050 use, so every guarantee
+    was reported twice on one sheet — once as a "(-)" substitution outflow and
+    once as an LGD mitigant. The two bindings were not even the same magnitude:
+    0040/0050 read the Annex II-capped twin (``c08_prot_guaranteed``) while
+    0150/0160 read the RAW carrier, so on a leg where the block cap bit they
+    disagreed silently. Not caught by the golden estate because no reporting
+    golden portfolio carries a guaranteed IRB leg — cols 0150/0160 are 0.0 in
+    every committed C 08.01/02 expected-output file.
+    """
+
+    def test_guarantee_reported_only_in_the_substitution_block(self) -> None:
+        """A guarantee lands on col 0040 and NOT on col 0150."""
+        # Arrange
+        gen = LedgerShimCorepGenerator()
+
+        # Act
+        bundle = gen.generate_from_lazyframe(_irb_results_different_class_guarantee())
+        total = _get_total_row(bundle.c08_01["corporate"])
+
+        # Assert
+        assert total["0040"][0] == pytest.approx(-800.0)
+        assert total["0150"][0] == pytest.approx(0.0)
+
+    def test_credit_derivative_reported_only_in_the_substitution_block(self) -> None:
+        """A credit derivative lands on col 0050 and NOT on col 0160."""
+        # Arrange
+        gen = LedgerShimCorepGenerator()
+
+        # Act
+        bundle = gen.generate_from_lazyframe(_irb_results_credit_derivative_different_class())
+        total = _get_total_row(bundle.c08_01["corporate"])
+
+        # Assert
+        assert total["0050"][0] == pytest.approx(-600.0)
+        assert total["0160"][0] == pytest.approx(0.0)
+
+    def test_c08_02_shares_the_exclusion(self) -> None:
+        """C 08.02 shares ``_value_cells``, so its grade rows exclude it too.
+
+        ``boe_b0752_12`` / ``boe_b0752_13`` (live, ERROR) tie
+        ``{OF08.01 r0070, c0150}`` and ``{c0160}`` to ``sum({OF08.02})`` on the
+        same columns, so the two templates must agree — 0 == 0 here.
+        """
+        # Arrange
+        gen = LedgerShimCorepGenerator()
+
+        # Act
+        bundle = gen.generate_from_lazyframe(_irb_results_different_class_guarantee())
+        row = bundle.c08_02["corporate"].filter(pl.col("row_ref") == "0.75% - 2.50%")
+        graded = bundle.c08_01["corporate"].filter(pl.col("row_ref") == "0070")
+
+        # Assert
+        assert row["0150"][0] == pytest.approx(0.0)
+        assert row["0160"][0] == pytest.approx(0.0)
+        assert graded["0150"][0] == pytest.approx(0.0)
+        assert graded["0160"][0] == pytest.approx(0.0)
+
+    def test_art_199_collateral_columns_are_untouched(self) -> None:
+        """The FUNDED half of the CRM-in-LGD block still reports.
+
+        Cols 0180-0210 are the Art. 199 / Art. 197 collateral columns — genuine
+        LGD mitigants that never route through substitution — so removing the
+        unfunded duplication must not touch them.
+        """
+        # Arrange
+        gen = LedgerShimCorepGenerator()
+        frame = _irb_results_different_class_guarantee().with_columns(
+            pl.Series("collateral_re_value", [0.0, 500.0, 0.0]),
+            pl.Series("collateral_financial_value", [250.0, 0.0, 0.0]),
+        )
+
+        # Act
+        bundle = gen.generate_from_lazyframe(frame)
+        total = _get_total_row(bundle.c08_01["corporate"])
+
+        # Assert
+        assert total["0180"][0] == pytest.approx(250.0)
+        assert total["0190"][0] == pytest.approx(500.0)

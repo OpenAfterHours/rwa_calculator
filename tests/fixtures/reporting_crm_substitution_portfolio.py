@@ -10,9 +10,14 @@ Why this portfolio: every substitution cell (C 07.00 cols 0050/0060/0090/0100,
 C 08.01 cols 0040/0050/0070/0080, C 08.02 col 0080) is exactly 0.0 in every one of
 the 70+ frozen golden ndjson files under ``tests/expected_outputs/reporting/`` —
 no golden portfolio contains a guaranteed exposure that migrates exposure class.
-This portfolio closes that blind spot with five guarantee legs, each on a
+This portfolio closes that blind spot with guarantee legs, each on a
 distinct obligor/guarantor pair with a distinct round guaranteed amount so a
-mis-posted cell is identifiable on sight.
+mis-posted cell is identifiable on sight. S1-S5 are all BENEFICIALLY substituted
+(``is_guarantee_beneficial`` derives True); S6 adds the DECLINED complement
+(Finding 4 / ``engine/aggregator/aggregator.py::_beneficial_gate``) — a guarantee
+that exists (``is_guaranteed=True``, positive ``guaranteed_portion``) but must
+NOT migrate class/approach or book any outflow/inflow, because the guarantor's
+risk weight is no better than the obligor's own.
 
 CRM substitution physically splits a guaranteed loan into a ``__G_<guarantor>``
 guaranteed leg and a ``__REM`` retained leg (``engine/crm/guarantees.py``). The
@@ -28,6 +33,19 @@ per leg:
         therefore never appears as a ROW on the guarantor's own class sheet —
         it stays on the obligor's ORIGIN sheet, contributing to that sheet's
         outflow column (C 07.00 col 0090 / C 08.01 col 0070).
+        NO LONGER TRUE FOR C 07.00 as of task #8 (landed): C 07.00's exposure
+        value / RWEA columns (0200/0210/0211/0215/0216/0217/0220/0230/0235 +
+        the CCF buckets) now read a per-sheet UNION of the origin and
+        post-substitution populations (``c07_basis_origin`` /
+        ``c07_basis_post`` in ``reporting/corep/c07.py::_prepare``), so a
+        beneficially-substituted leg DOES appear as a row on the guarantor's
+        own C 07.00 sheet for those columns — the flow/gross columns still
+        key on the origin population alone, so the SENTENCE'S ORIGIN-sheet-
+        KEYING claim (which sheet a leg's outflow posts to) remains true; only
+        the stronger "never appears as a row at all" reading is now false.
+        Kept rather than deleted because the keying half still holds and the
+        distinction is easy to miss. C 08.01 is unaffected (task #8 scoped to
+        C 07.00 only; see task #9/S3 for the equivalent C 08.01 work).
     reporting_class / reporting_approach = the POST-substitution twin
         (``exposure_class_post_crm`` / ``approach_post_crm``) — the guarantor's
         class on the ``__G_`` leg. This is NOT a sheet key; it feeds the
@@ -47,9 +65,14 @@ per leg:
         complement and routes to C 07.00 — independent of which population
         the OUTFLOW leg itself sits in, so an IRB-origin obligor with an
         SA-treated guarantor puts the outflow on C 08.01 and the inflow on
-        C 07.00 (see S3 below). Every leg with a positive
-        ``guaranteed_portion`` is counted, including one whose guarantor sits
-        in the obligor's own class (see S5 below).
+        C 07.00 (see S3 below). Every BENEFICIALLY-SUBSTITUTED leg is
+        counted (``is_guarantee_beneficial`` True — the guarantor's risk
+        weight beats the obligor's own), including one whose guarantor sits
+        in the obligor's own class (see S5 below); a DECLINED leg (guarantor
+        no better than the obligor — see S6 below) is NOT counted and
+        produces no outflow/inflow at all despite keeping a positive
+        ``guaranteed_portion`` (Finding 4 /
+        ``engine/aggregator/aggregator.py::_beneficial_gate``).
 
 ``substitution_inflows`` retired the two former per-template helpers
 (``c07.py``'s and ``c08.py``'s own class-inequality-gated inflow builders,
@@ -57,7 +80,7 @@ each keyed to its OWN approach-filtered population) precisely because that
 split could report an outflow on one template and land its inflow on
 NEITHER — the defect S3 isolates — and its class-inequality gate excluded a
 same-class migration from both sides at once — the defect S5 isolates. This
-is what makes the five scenarios below orthogonal rather than redundant:
+is what makes the scenarios below orthogonal rather than redundant:
 
     ref    | obligor        | guarantor              | outflow | inflow  | what it exercises
     -------|----------------|-------------------------|---------|---------|------------------------------
@@ -89,6 +112,25 @@ is what makes the five scenarios below orthogonal rather than redundant:
            |                |                          |         |         | destination sheet IS the
            |                |                          |         |         | origin sheet, not merely a
            |                |                          |         |         | sheet that happens to exist
+    S6     | slotting       | unrated non-GB sovereign, | none   | none    | DECLINED: guarantor SA RW
+           | (specialised_  | NO own exposure          |         |         | (1.00, CQS.UNRATED) is NOT
+           | lending,       |                          |         |         | better than the slotting
+           | "strong")      |                          |         |         | "strong" weight (0.70), so
+           |                |                          |         |         | ``is_guarantee_beneficial``
+           |                |                          |         |         | derives False through the
+           |                |                          |         |         | real engine path (Art. 213 /
+           |                |                          |         |         | 193(1)) — no migration, no
+           |                |                          |         |         | outflow, no inflow, despite
+           |                |                          |         |         | a positive
+           |                |                          |         |         | ``guaranteed_portion``. Also
+           |                |                          |         |         | the fixture's only slotting-
+           |                |                          |         |         | origin leg (S1-S5 cover only
+           |                |                          |         |         | IRB-graded and SA obligors)
+           |                |                          |         |         | — reproduces Finding 4's
+           |                |                          |         |         | worked example verbatim
+           |                |                          |         |         | (10,000,000 "strong" slotting
+           |                |                          |         |         | loan, unrated non-GB sovereign
+           |                |                          |         |         | guarantor)
 
 S1/S4 are the happy-path pair (one IRB, one SA) proving the mechanism works
 when the destination class already has a native row. S2 isolates the
@@ -104,23 +146,43 @@ where ``pre_crm_exposure_class == post_crm_exposure_class_guaranteed`` and a
 correct implementation must still recognise BOTH an outflow (col 0070 /
 C 07.00 col 0090) and an equal inflow (col 0080 / C 07.00 col 0100) on that
 one sheet, netting to no change in the post-substitution total (col 0090 /
-col 0110) despite nothing leaving the class. This is the fixture-level
-reproduction backing the CRM substitution investigation tracked against
+col 0110) despite nothing leaving the class. S6 isolates a FOURTH, orthogonal
+case none of S1-S5 exercise at all: the guarantee GATE itself. S1-S5 are all
+beneficially substituted by construction, so a reporting-layer regression that
+deleted the ``is_guarantee_beneficial`` check entirely (migrating every
+guarantee regardless of benefit) would move none of their numbers — S6 is the
+only scenario that would move if that gate regressed, and it doubles as the
+fixture's only slotting-origin leg. This is the fixture-level reproduction
+backing the CRM substitution investigation tracked against
 C 07.00/C 08.01/C 08.02; see the module-level ``NOTE`` below for the specific
 behaviour observed when this fixture was built and verified.
 
-NOTE (as observed 2026-08-02, CRR, on ``fix/corep-crm-substitution-waterfall``
-— re-verify against a live run before relying on this as a current-state
-claim, since it was recorded mid-investigation): all five scenarios land
-correctly, and portfolio-wide gross (40,500,000) reconciles exactly to net
-across every sheet with zero leakage. Per sheet, Total row:
+NOTE (as observed 2026-08-04, CRR and B31, via a direct
+``PipelineOrchestrator`` + ``COREPGenerator`` run against the fixture-builder
+verification build — re-verify against a live run before relying on this as a
+current-state claim): all six scenarios land correctly and identically under
+both regimes, and portfolio-wide gross (50,500,000, up from 40,500,000 with
+S6's 10,000,000 added) reconciles exactly to net across every sheet with zero
+leakage. Per sheet, Total row (unchanged from the S1-S5-only figures below —
+S6 perturbs neither, by design):
 
-    c08_01 corporate    : 0020=27,000,000  0040=-12,300,000  0050=-3,300,000  0070=-15,600,000  0080=+5,400,000  0090=16,800,000
-    c08_01 institution   : 0020= 4,000,000                                                        0080=+2,000,000  0090= 6,000,000
-    c08_01 retail_other  : 0020=         0                                                          0080=+3,300,000  0090= 3,300,000   <- S2, inflow-only sheet
-    c07_00 corporate     : 0010= 8,000,000                                    0060=-2,800,000  0090=-2,800,000                    0110= 5,200,000
-    c07_00 institution   : 0010= 1,500,000                                                                          0100=+2,800,000  0110= 4,300,000
-    c07_00 cgcb          : 0010=         0                                                                          0100=+4,900,000  0110= 4,900,000   <- S3, inflow-only sheet
+    c08_01 corporate            : 0020=27,000,000  0040=-12,300,000  0050=-3,300,000  0070=-15,600,000  0080=+5,400,000  0090=16,800,000
+    c08_01 institution           : 0020= 4,000,000                                                        0080=+2,000,000  0090= 6,000,000
+    c08_01 retail_other          : 0020=         0                                                          0080=+3,300,000  0090= 3,300,000   <- S2, inflow-only sheet
+    c08_01 specialised_lending   : 0020=10,000,000                             0070=         0  0080=         0  0090=10,000,000   <- S6, DECLINED
+    c07_00 corporate             : 0010= 8,000,000                                    0060=-2,800,000  0090=-2,800,000                    0110= 5,200,000
+    c07_00 institution           : 0010= 1,500,000                                                                          0100=+2,800,000  0110= 4,300,000
+    c07_00 cgcb                  : 0010=         0                                                                          0100=+4,900,000  0110= 4,900,000   <- S3 ONLY
+
+S6's ``specialised_lending`` sheet has NO outflow and NO inflow (0070/0080
+both 0) — its net (col 0090) equals its gross (col 0020) with nothing having
+moved, and ``rwa_final`` sums to 7,000,000 (== 10,000,000 x 0.70, the
+undiminished slotting weight) under BOTH regimes identically. The ``cgcb``
+sheet's col 0100 stays exactly S3's 4,900,000 — S6's guarantor shares that
+SAME class, so a regression that applied the decline anyway would inflate
+this EXISTING, already-asserted cell to 9,400,000 rather than create a new
+one, which is what makes S6 the sharpest possible pin on the gate (see
+``DECLINED_GUARANTEE_DESIGN`` below).
 
 S5's isolated ``corporate`` sheet Total row (S5 alone, no other scenario on
 the sheet) reports ``0020=9,000,000 / 0040=-5,400,000 / 0070=-5,400,000 /
@@ -129,11 +191,13 @@ Annex II requires), matching ``v1663_m`` ({c0070} = {c0040}+{c0050}+{c0060})
 and the corrected col 0090 waterfall.
 
 Every guarantee is PARTIAL cover (never 100%), so a retained ``__REM`` leg
-genuinely coexists with the ``__G_`` leg on all five scenarios, and every
+genuinely coexists with the ``__G_`` leg on all six scenarios, and every
 guaranteed amount is a distinct round GBP figure so any template cell is
-traceable to exactly one leg. ``protection_type`` covers both values Annex II
-splits (C 08.01 cols 0040/0050): S1/S3/S5 are ``"guarantee"``, S2/S4 are
-``"credit_derivative"``.
+traceable to exactly one leg — including S6, whose decline means that figure
+should appear on NO outflow/inflow cell anywhere; its only footprint is the
+undiminished gross total on its own native sheet. ``protection_type`` covers
+both values Annex II splits (C 08.01 cols 0040/0050): S1/S3/S5/S6 are
+``"guarantee"``, S2/S4 are ``"credit_derivative"``.
 
 No CRR/Basel 3.1 regime divergence is exercised here (deliberately, unlike
 ``reporting_irb_classes_portfolio.py``'s sovereign-class carve-out) — every
@@ -146,23 +210,35 @@ diverge.
 References:
 - CRR Art. 235 / PS1/26 Art. 235: SA risk-weight substitution (RWSM).
 - CRR Art. 161 / CRE22.70-85: IRB parameter substitution (PSM).
+- CRR Art. 153(5) / PS1/26 Art. 153(5): specialised-lending slotting
+  categories and risk weights (S6's obligor).
 - CRR Art. 114(4)/(7) / Art. 235(3): the domestic-currency CGCB 0% RW
-  extension to a centrally-guaranteed exposure (S3's guarantor).
+  extension to a centrally-guaranteed exposure (S3's guarantor); S6's
+  guarantor is a non-GB sovereign specifically so this extension does NOT
+  apply and the unrated CQS fallback (1.00) governs instead.
+- CRR Art. 213 / Art. 193(1) / Art. 113(3): a guarantee must never raise
+  capital — the basis for declining a non-beneficial guarantee (S6). See
+  task #13 (S0-revise) for the citation-basis correction from Art. 213 alone
+  to Art. 193(1) (mandatory, per-exposure) + Art. 113(3) (the permissive
+  amendment hook Art. 235(1) is framed against).
 - CRR Art. 201: eligible-guarantor eligibility gate.
 - COREP Annex II, C 07.00 / C 08.01 / C 08.02: the outflow/inflow columns,
   including the same-exposure-class inflow/outflow requirement (S5).
 - engine/crm/guarantees.py: the ``__G_`` / ``__REM`` physical split.
 - engine/aggregator/aggregator.py: ``_add_reporting_projection`` (the sealed
-  ``reporting_class`` / ``reporting_class_origin`` twins).
+  ``reporting_class`` / ``reporting_class_origin`` twins) and
+  ``_beneficial_gate`` (the S6 decline gate this fixture pins — Finding 4).
 - reporting/corep/c07.py, reporting/corep/c08.py: module docstrings on sheet
   keying (each reads its per-class rows off ``reporting_class_origin``, the
   obligor basis).
 - reporting/corep/crm_substitution.py: ``substitution_inflows`` — the single
   cross-template inflow router keyed on ``reporting_approach`` (S3), which
-  counts every leg with a positive ``guaranteed_portion`` including same-class
-  ones (S5); ``crm_waterfall`` / ``waterfall_refs`` — the C 08.01/02 col 0090
-  identity this fixture also exercises (0090 = 0020 - 0070 + 0080 over
-  positive magnitudes, col 0070 as the single whole-outflow subtotal).
+  counts every BENEFICIALLY-SUBSTITUTED leg (not merely every leg with a
+  positive ``guaranteed_portion`` — S6 has one and is excluded) including
+  same-class ones (S5); ``crm_waterfall`` / ``waterfall_refs`` — the
+  C 08.01/02 col 0090 identity this fixture also exercises (0090 = 0020 -
+  0070 + 0080 over positive magnitudes, col 0070 as the single whole-outflow
+  subtotal).
 """
 
 from __future__ import annotations
@@ -173,7 +249,13 @@ import polars as pl
 
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.data.column_spec import dtypes_of
-from rwa_calc.data.schemas import COUNTERPARTY_SCHEMA, GUARANTEE_SCHEMA, LOAN_SCHEMA, RATINGS_SCHEMA
+from rwa_calc.data.schemas import (
+    COUNTERPARTY_SCHEMA,
+    GUARANTEE_SCHEMA,
+    LOAN_SCHEMA,
+    RATINGS_SCHEMA,
+    SPECIALISED_LENDING_SCHEMA,
+)
 from tests.fixtures.irb_test_helpers import create_full_irb_model_permissions
 from tests.fixtures.raw_bundle import make_raw_bundle
 
@@ -217,6 +299,15 @@ GTOR_S5: str = "CSUB-CP-GTOR-S5"
 LN_S5: str = "CSUB-LN-S5"
 GUAR_S5: str = "CSUB-GUAR-S5"
 
+# -- S6: slotting obligor, unrated non-GB sovereign guarantor -- DECLINED ---
+# (guarantor SA RW >= the slotting weight, so ``is_guarantee_beneficial``
+# derives False through the real engine path; no own exposure needed since
+# a declined guarantee never creates an inflow to pre-establish a sheet for).
+OB_S6: str = "CSUB-CP-OB-S6"
+GTOR_S6: str = "CSUB-CP-GTOR-S6"
+LN_S6: str = "CSUB-LN-S6"
+GUAR_S6: str = "CSUB-GUAR-S6"
+
 #: Drawn amounts (GBP), each a distinct round figure. EAD = drawn_amount (no
 #: facility / CCF machinery involved — every row is a plain drawn term loan).
 DRAWN_S1: float = 5_000_000.0
@@ -226,14 +317,21 @@ DRAWN_S3: float = 7_000_000.0
 DRAWN_S4: float = 8_000_000.0
 DRAWN_S4_GTOR_OWN: float = 1_500_000.0
 DRAWN_S5: float = 9_000_000.0
+#: Matches Finding 4's worked reproduction verbatim (see
+#: ``engine/aggregator/aggregator.py::_beneficial_gate``) — a 10,000,000
+#: project-finance "strong" slotting loan.
+DRAWN_S6: float = 10_000_000.0
 
 #: Guarantee coverage — always PARTIAL, so a retained ``__REM`` leg coexists
-#: with the ``__G_`` leg on every scenario. Distinct percentages per scenario.
+#: with the ``__G_`` leg on every scenario, including the DECLINED S6 (a
+#: decline is not the same thing as no cover — the protection exists, the
+#: engine just must not apply it). Distinct percentages per scenario.
 PCT_COVERED_S1: float = 0.40
 PCT_COVERED_S2: float = 0.55
 PCT_COVERED_S3: float = 0.70
 PCT_COVERED_S4: float = 0.35
 PCT_COVERED_S5: float = 0.60
+PCT_COVERED_S6: float = 0.45
 
 #: amount_covered = drawn_amount * pct_covered, rounded to a clean GBP figure.
 AMOUNT_COVERED_S1: float = DRAWN_S1 * PCT_COVERED_S1  # 2,000,000
@@ -241,6 +339,9 @@ AMOUNT_COVERED_S2: float = DRAWN_S2 * PCT_COVERED_S2  # 3,300,000
 AMOUNT_COVERED_S3: float = DRAWN_S3 * PCT_COVERED_S3  # 4,900,000
 AMOUNT_COVERED_S4: float = DRAWN_S4 * PCT_COVERED_S4  # 2,800,000
 AMOUNT_COVERED_S5: float = DRAWN_S5 * PCT_COVERED_S5  # 5,400,000
+#: S6 is DECLINED, so this figure should appear on NO outflow/inflow cell —
+#: see ``DECLINED_GUARANTEE_DESIGN`` below.
+AMOUNT_COVERED_S6: float = DRAWN_S6 * PCT_COVERED_S6  # 4,500,000
 
 #: Internal PDs (IRB legs only). Each guarantor with an internal PD is a
 #: deliberately IRB-routing signal — see ``_assign_guarantor_approach``
@@ -264,6 +365,17 @@ PD_GTOR_S5: float = 0.0045
 CQS_GTOR_S3: int = 1
 #: CQS 2 institution -> a defined, non-zero SA risk weight.
 CQS_GTOR_S4: int = 2
+#: GTOR_S6 carries NO rating row at all (unrated) — the ``cgcb_risk_weights``
+#: pack table's ``CQS.UNRATED`` entry (1.00, both regimes) then governs, well
+#: above the 0.70 "strong" slotting weight it is compared against. Its
+#: country_code is deliberately non-GB so the Art. 114(4)/(7) domestic-CGCB
+#: 0% short-circuit (S3's path) does NOT apply here — this is the plain
+#: unrated-sovereign fallback, not the domestic carve-out.
+
+#: S6's obligor slotting category (CRR/PS1/26 Art. 153(5) Table A, remaining
+#: maturity >= 2.5y, non-HVCRE): "strong" -> 0.70 under BOTH regimes
+#: (identical entries in ``rulebook/packs/{crr,b31}.py::slotting_rw_base``).
+SLOTTING_CATEGORY_S6: str = "strong"
 
 _VALUE_DATE: date = date(2020, 1, 1)
 #: Beyond both reporting dates under test (CRR 2025-06-30, B31 2027-06-30).
@@ -293,6 +405,12 @@ LOAN_EXPECTED_ORIGIN_SHEET_CRR: dict[str, tuple[str, str]] = {
     LN_S4: ("c07", "corporate"),
     LN_S4_GTOR_OWN: ("c07", "institution"),
     LN_S5: ("c08_01", "corporate"),
+    # Slotting is its OWN IRB exposure class (ExposureClass.SPECIALISED_LENDING),
+    # not merged into "corporate" — that Art. 112 Table A2 merge is a C 07.00
+    # SA-side rule only (``c07.py::_merge_specialised_lending``); C 08.01 keys
+    # slotting-origin legs on the raw class ("C 08.01 does NOT exclude
+    # slotting" — ``c08.py::c08_01_plans``). No S1-S5 loan reaches this sheet.
+    LN_S6: ("c08_01", "specialised_lending"),
 }
 #: No regime divergence is exercised in this portfolio (see module docstring)
 #: — identical to the CRR map.
@@ -378,6 +496,53 @@ SUBSTITUTION_INFLOW_DESIGN: dict[str, dict[str, object]] = {
         "destination_has_native_population": True,
         "same_class": True,
     },
+    # GUAR_S6 is DELIBERATELY ABSENT: it is DECLINED, so it has no
+    # destination — see ``DECLINED_GUARANTEE_DESIGN`` below. Adding it here
+    # with a zero/blank destination would silently corrupt
+    # ``TestPerScenarioInflowLandsOnce`` (``test_crm_substitution_flows.py``),
+    # which iterates this dict generically and asserts the recorded
+    # ``guaranteed_amount`` lands on the recorded destination sheet: S6's
+    # guarantor shares GTOR_S3's class (``central_govt_central_bank``), which
+    # already has a real inflow from S3, so a zero-amount S6 entry would
+    # wrongly assert that shared sheet's inflow column is 0.0.
+}
+
+#: S6's declined-guarantee design intent (Finding 4 /
+#: ``engine/aggregator/aggregator.py::_beneficial_gate``): a guarantee the
+#: engine DECLINES — guarantor SA risk weight no better than the leg's own —
+#: produces NO substitution effect at all. The covered leg keeps the
+#: obligor's basis end to end:
+#:   - ``exposure_class_post_crm`` stays ``exposure_class_applied``
+#:     (no class migration)
+#:   - ``approach_post_crm`` stays ``approach_applied`` (no approach migration)
+#:   - the origin sheet's outflow column (C 08.01 col 0070) gets NO
+#:     contribution from this leg
+#:   - NO guarantor-class sheet anywhere receives an inflow from this leg —
+#:     in particular, GTOR_S6's class (``central_govt_central_bank``) already
+#:     carries a real inflow from S3 (``AMOUNT_COVERED_S3`` on C 07.00 col
+#:     0100); a regression that applied S6 anyway would inflate THAT existing
+#:     cell by exactly ``AMOUNT_COVERED_S6``, not create a new one — the
+#:     sharpest possible pin, since it reuses an already-asserted cell rather
+#:     than an empty one
+#: even though ``is_guaranteed`` stays True and ``guaranteed_portion`` stays
+#: positive throughout (the physical ``__G_`` / ``__REM`` split happens
+#: upstream of the benefit decision — see ``engine/crm/guarantees.py``).
+#: fixture-builder does not assert the engine's CURRENT behaviour here (that
+#: is test-writer's job over a live pipeline run) — this dict only records
+#: the fixture's DESIGN intent, as required by Finding 4 / task #7's fix.
+DECLINED_GUARANTEE_DESIGN: dict[str, dict[str, object]] = {
+    GUAR_S6: {
+        "loan_reference": LN_S6,
+        "guarantor_reference": GTOR_S6,
+        "guaranteed_amount": AMOUNT_COVERED_S6,
+        "origin_class": "specialised_lending",
+        "origin_template": "c08_01",
+        # The class a beneficial substitution WOULD have targeted, and the
+        # sheet that already exists (from S3) to receive it if the gate ever
+        # regresses.
+        "would_be_destination_class": "central_govt_central_bank",
+        "would_be_destination_template": "c07",
+    },
 }
 
 
@@ -412,6 +577,7 @@ def build_reporting_crm_substitution_bundle() -> RawDataBundle:
         loans=_loans(),
         ratings=_ratings(),
         guarantees=_guarantees(),
+        specialised_lending=_specialised_lending(),
         model_permissions=create_full_irb_model_permissions(),
     )
 
@@ -422,16 +588,25 @@ def build_reporting_crm_substitution_bundle() -> RawDataBundle:
 
 
 def _counterparties() -> pl.DataFrame:
-    """Five obligor/guarantor pairs, one per scenario.
+    """Six obligor/guarantor pairs, one per scenario.
 
-    Obligors are all ``corporate`` (S1-S3/S5 above the SME revenue ceiling so
-    the supporting factor never perturbs a substitution cell; S4 unrated so
-    its own-basis SA risk weight is unambiguous). Guarantors span the four SA
-    classes ``ENTITY_TYPE_TO_SA_CLASS`` can reach from a counterparty
-    (``institution`` x2, ``individual`` -> retail_other, ``sovereign`` ->
+    Obligors S1-S3/S5 are ``corporate`` above the SME revenue ceiling so the
+    supporting factor never perturbs a substitution cell; S4 is unrated so its
+    own-basis SA risk weight is unambiguous; S6 is ``corporate`` too — like
+    ``reporting_portfolio.py``'s slotting counterparty, specialised-lending
+    routing comes from the ``specialised_lending`` join row (``_specialised_
+    lending``), NOT from ``entity_type`` — plus a matching ``model_id``-only
+    (no PD) rating so F-IRB/A-IRB stay unavailable and the exposure falls to
+    slotting (CRR Art. 153(5)). Guarantors span the four SA classes
+    ``ENTITY_TYPE_TO_SA_CLASS`` can reach from a counterparty (``institution``
+    x2, ``individual`` -> retail_other, ``sovereign`` x2 ->
     central_govt_central_bank), PLUS a fifth guarantor deliberately in the
     SAME class as its obligor (``corporate`` — S5) — see the module docstring
-    table.
+    table. GTOR_S6 is UNRATED (no rating row at all, like OB_S4) and non-GB
+    (``US``) so neither an ECAI rating nor the Art. 114(4)/(7) domestic-CGCB
+    0% carve-out can make its guarantee beneficial — only the plain
+    ``CQS.UNRATED`` fallback (1.00) applies, strictly above the 0.70 slotting
+    weight it is compared against.
     """
     rows: list[dict] = [
         {
@@ -496,6 +671,19 @@ def _counterparties() -> pl.DataFrame:
             "country_code": "GB",
             "annual_revenue": _LARGE_CORPORATE_REVENUE,
         },
+        {
+            "counterparty_reference": OB_S6,
+            "entity_type": "corporate",
+            "country_code": "GB",
+            "annual_revenue": _LARGE_CORPORATE_REVENUE,
+        },
+        {
+            # Unrated, non-GB: the plain CQS.UNRATED sovereign fallback (1.00)
+            # applies — see the docstring above.
+            "counterparty_reference": GTOR_S6,
+            "entity_type": "sovereign",
+            "country_code": "US",
+        },
     ]
     return pl.DataFrame(rows, schema_overrides=dtypes_of(COUNTERPARTY_SCHEMA))
 
@@ -503,7 +691,10 @@ def _counterparties() -> pl.DataFrame:
 def _ratings() -> pl.DataFrame:
     """Internal PD ratings for IRB legs, external CQS ratings for SA legs.
 
-    OB_S4 is deliberately unrated (no row at all) — a plain Standardised loan.
+    OB_S4 and GTOR_S6 are deliberately unrated (no row at all) — a plain
+    Standardised loan and an unrated sovereign guarantor respectively. OB_S6
+    carries a ``model_id``-only rating (no PD) — see ``_internal_no_pd`` and
+    the ``_counterparties`` docstring.
     """
     rows: list[dict] = [
         _internal(OB_S1, pd=PD_OB_S1),
@@ -515,19 +706,24 @@ def _ratings() -> pl.DataFrame:
         _external(GTOR_S4, cqs=CQS_GTOR_S4),
         _internal(OB_S5, pd=PD_OB_S5),
         _internal(GTOR_S5, pd=PD_GTOR_S5),
+        _internal_no_pd(OB_S6),
     ]
     return pl.DataFrame(rows, schema_overrides=dtypes_of(RATINGS_SCHEMA))
 
 
 def _loans() -> pl.DataFrame:
-    """The five obligor loans plus the two guarantors' own exposures.
+    """The six obligor loans plus the two guarantors' own exposures.
 
-    GTOR_S5 gets NO own loan — S5's whole point is that its class already has
-    an origin sheet (``corporate``, from OB_S1/OB_S2/OB_S3/OB_S5 alike), so no
-    separate own-exposure is needed to pre-establish it.
+    GTOR_S5 and GTOR_S6 get NO own loan — S5's class already has an origin
+    sheet (``corporate``, from OB_S1/OB_S2/OB_S3/OB_S5 alike) and S6 is
+    DECLINED so it never creates an inflow that would need a sheet
+    pre-established for it (see the module docstring).
 
     No ``lgd`` is supplied on any row, so every IRB leg resolves F-IRB
     (supervisory LGD) — consistent with ``reporting_irb_classes_portfolio.py``.
+    LN_S6 is a plain drawn term loan like every other row here — slotting
+    routing comes entirely from the ``specialised_lending`` join
+    (``_specialised_lending``), not from ``product_type``.
     """
     rows: list[dict] = [
         _loan(LN_S1, OB_S1, DRAWN_S1),
@@ -537,19 +733,44 @@ def _loans() -> pl.DataFrame:
         _loan(LN_S4, OB_S4, DRAWN_S4),
         _loan(LN_S4_GTOR_OWN, GTOR_S4, DRAWN_S4_GTOR_OWN),
         _loan(LN_S5, OB_S5, DRAWN_S5),
+        _loan(LN_S6, OB_S6, DRAWN_S6),
     ]
     return pl.DataFrame(rows, schema_overrides=dtypes_of(LOAN_SCHEMA))
 
 
+def _specialised_lending() -> pl.DataFrame:
+    """S6's one project-finance slotting exposure ("strong" category).
+
+    Mirrors ``reporting_portfolio.py``'s ``_specialised_lending`` exactly —
+    the same (``sl_type``, ``slotting_category``, ``is_hvcre``) combination,
+    a PROVEN pattern already exercised by that widely-used golden fixture.
+    """
+    return pl.DataFrame(
+        [
+            {
+                "counterparty_reference": OB_S6,
+                "sl_type": "project_finance",
+                "slotting_category": SLOTTING_CATEGORY_S6,
+                "is_hvcre": False,
+            }
+        ],
+        schema_overrides=dtypes_of(SPECIALISED_LENDING_SCHEMA),
+    )
+
+
 def _guarantees() -> pl.DataFrame:
-    """The five guarantee rows — one per scenario, each partial cover.
+    """The six guarantee rows — one per scenario, each partial cover.
 
     ``protection_type`` alternates ``"guarantee"`` / ``"credit_derivative"``
     so both C 08.01 cols 0040/0050 are exercised. ``includes_restructuring``,
     matched maturity/currency, and both unilateral flags False on every row —
     no eligibility gate or maturity-mismatch haircut should zero any leg (see
     the module docstring; confirmed empirically, not merely asserted, in the
-    fixture-builder verification run).
+    fixture-builder verification run). GUAR_S6's ELIGIBILITY is unaffected by
+    any of this — it is fully eligible protection that the engine correctly
+    declines to APPLY because it would not help (guarantor RW >= own RW),
+    which is a wholly different gate (CRR Art. 213 / Art. 193(1), not
+    Art. 201).
     """
     rows: list[dict] = [
         _guarantee(GUAR_S1, GTOR_S1, LN_S1, AMOUNT_COVERED_S1, PCT_COVERED_S1, "guarantee"),
@@ -557,6 +778,7 @@ def _guarantees() -> pl.DataFrame:
         _guarantee(GUAR_S3, GTOR_S3, LN_S3, AMOUNT_COVERED_S3, PCT_COVERED_S3, "guarantee"),
         _guarantee(GUAR_S4, GTOR_S4, LN_S4, AMOUNT_COVERED_S4, PCT_COVERED_S4, "credit_derivative"),
         _guarantee(GUAR_S5, GTOR_S5, LN_S5, AMOUNT_COVERED_S5, PCT_COVERED_S5, "guarantee"),
+        _guarantee(GUAR_S6, GTOR_S6, LN_S6, AMOUNT_COVERED_S6, PCT_COVERED_S6, "guarantee"),
     ]
     return pl.DataFrame(rows, schema_overrides=dtypes_of(GUARANTEE_SCHEMA))
 
@@ -631,4 +853,19 @@ def _external(counterparty_reference: str, *, cqs: int) -> dict:
         "cqs": cqs,
         "rating_date": _VALUE_DATE,
         "is_solicited": True,
+    }
+
+
+def _internal_no_pd(counterparty_reference: str) -> dict:
+    """Internal rating carrying only ``model_id`` (no PD) — for slotting
+    routing (mirrors ``reporting_portfolio.py``'s helper of the same name):
+    with no internal PD the F-IRB/A-IRB branches are unavailable, so a
+    counterparty with a matching ``specialised_lending`` row falls to
+    slotting (CRR Art. 153(5))."""
+    return {
+        "rating_reference": f"CSUB-RTG-{counterparty_reference}",
+        "counterparty_reference": counterparty_reference,
+        "rating_type": "internal",
+        "model_id": _MODEL_ID,
+        "rating_date": _VALUE_DATE,
     }

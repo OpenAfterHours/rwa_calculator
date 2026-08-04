@@ -1660,6 +1660,29 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
         "reporting_approach_origin": EdgeColumn(dtype=pl.String),
         "reporting_class": EdgeColumn(dtype=pl.String, citation="CRR Art. 235"),
         "reporting_class_origin": EdgeColumn(dtype=pl.String, citation="CRR Art. 112"),
+        # The geographical mirror of the class pair (PS1/26 Annex II §3.4
+        # ¶86/¶87): the origin twin is the obligor's own cp_country_code, the
+        # post twin the guarantor's country on a BENEFICIALLY guaranteed leg.
+        # C 09.01 / C 09.02 report the pre-conversion original exposure at the
+        # immediate obligor's country and the exposure value / RWEA at the
+        # ultimate obligor's, so the geographical sheet axis needs both.
+        "reporting_country": EdgeColumn(
+            dtype=pl.String,
+            citation="CRR Art. 235",
+            null_meaning=(
+                "neither the guarantor's nor the obligor's country of "
+                "incorporation is known for this leg (cp_country_code is itself "
+                "null) — the leg reports on no country sheet; must NOT be filled"
+            ),
+        ),
+        "reporting_country_origin": EdgeColumn(
+            dtype=pl.String,
+            null_meaning=(
+                "the obligor's country of incorporation is unknown "
+                "(cp_country_code is null) — the leg reports on no country "
+                "sheet; must NOT be filled"
+            ),
+        ),
         "reporting_ead": EdgeColumn(dtype=pl.Float64),
         "reporting_leg_role": EdgeColumn(dtype=pl.String, citation="CRR Art. 235"),
         "reporting_method": EdgeColumn(dtype=pl.String),
@@ -1850,6 +1873,8 @@ REPORTING_SURFACE: frozenset[str] = frozenset(
         "reporting_approach_origin",
         "reporting_class",
         "reporting_class_origin",
+        "reporting_country",
+        "reporting_country_origin",
         "reporting_ead",
         "reporting_leg_role",
         "reporting_method",

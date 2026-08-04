@@ -569,6 +569,24 @@ def _add_exposure_class_applied(lf: pl.LazyFrame) -> pl.LazyFrame:
 # read of it is presence-tolerant.
 _BENEFICIAL_COL = "is_guarantee_beneficial"
 
+# The guarantor's country of incorporation, joined by ``guarantor_reference``
+# (``engine/crm/guarantees.py::_join_guarantor_counterparty``). Present only once
+# the CRM guarantee sub-step has run, so it is read through the same
+# absence-tolerant selector as ``_BENEFICIAL_COL``.
+_GUARANTOR_COUNTRY_COL = "guarantor_country_code"
+
+
+def _optional_country(column: str) -> pl.Expr:
+    """``column`` where the frame has it, a typed null String where it does not.
+
+    The value-column counterpart of :func:`_beneficial_gate`'s selector: a
+    ``require_all=False`` name selector expands to nothing on a frame without the
+    column, and the trailing literal keeps ``coalesce`` well-formed in that case.
+    Expressing absence this way instead of a ``collect_schema()``-guarded branch
+    keeps the country twins fully lazy and their input contract narrow.
+    """
+    return pl.coalesce(cs.by_name(column, require_all=False), pl.lit(None, dtype=pl.String))
+
 
 def _beneficial_gate() -> pl.Expr:
     """True where a guarantee actually substituted; null/False where it did NOT.
@@ -778,6 +796,21 @@ def _add_reporting_projection(lf: pl.LazyFrame) -> pl.LazyFrame:
       guaranteed exposure's legs (Art. 112/123) = ``exposure_class_applied``.
     - ``reporting_approach`` / ``reporting_approach_origin`` — the post- and
       pre-substitution approach twins (``approach_post_crm`` / ``approach_applied``).
+    - ``reporting_country`` / ``reporting_country_origin`` — the post- and
+      pre-substitution COUNTRY twins, the geographical mirror of the class pair.
+      PS1/26 Annex II §3.4 ¶86 says outright that "CRM techniques with
+      substitution effects can change the allocation of an exposure to a
+      country", and ¶87 splits the geographical breakdown by column: "original
+      exposure pre-conversion factors" reports at the country of residence of
+      the IMMEDIATE obligor, "exposure value" and "risk-weighted exposure
+      amounts" at the country of residence of the ULTIMATE obligor. So the
+      origin twin is the obligor's own ``cp_country_code`` on every leg, and the
+      post twin is the guarantor's country on a BENEFICIALLY guaranteed leg —
+      gated identically to ``reporting_class`` (see
+      :func:`_add_post_crm_reporting_class`), because a guarantee the engine
+      DECLINES moves neither the class nor the country. Degrades to the
+      obligor's country wherever the guarantor's is unknown, so a run with no
+      CRM guarantee sub-step reports one country on both twins.
     - ``reporting_method`` — the STD/FIRB/AIRB/SLOTTING/EQUITY methodology label
       of the post-substitution approach (``method_label_expr`` materialised).
     - ``reporting_leg_role`` — ``guaranteed`` (the ``__G_`` leg,
@@ -860,6 +893,29 @@ def _add_reporting_projection(lf: pl.LazyFrame) -> pl.LazyFrame:
         rwa_benefit = pl.col("ead_final") * pl.col("guarantee_benefit_rw")
     else:
         rwa_benefit = pl.lit(None, dtype=pl.Float64)
+    # The ¶87 ULTIMATE-obligor country. Read through the same absence-tolerant
+    # selector ``_beneficial_gate`` uses rather than a schema branch: an
+    # unguaranteed run never joined a guarantor counterparty, so
+    # ``guarantor_country_code`` is simply not there and the coalesce yields the
+    # typed null the gate then routes to ``otherwise``. An empty string is
+    # treated as unknown for the same reason the class twin does it — a joined
+    # counterparty row with a blank country is not a country.
+    guarantor_country = _optional_country(_GUARANTOR_COUNTRY_COL)
+    # The obligor's own country is read through the same selector, not as a bare
+    # column: it is a required aggregator-exit column, but the projection is also
+    # exercised directly on minimal frames, and a hard read would make the
+    # function's input contract wider than the two twins actually need.
+    obligor_country = _optional_country("cp_country_code")
+    country_post = (
+        pl.when(
+            (pl.col("is_guaranteed") == True)  # noqa: E712
+            & _beneficial_gate()
+            & guarantor_country.is_not_null()
+            & (guarantor_country != "")
+        )
+        .then(guarantor_country)
+        .otherwise(obligor_country)
+    )
     # Per-side floored gross carriers (CRR Art. 111 SA / Art. 166 IRB). See the
     # docstring: on-side = floored drawn + interest for the on-balance credit
     # types (unknown drawn AND interest -> null); off-side = a contingent's
@@ -913,6 +969,8 @@ def _add_reporting_projection(lf: pl.LazyFrame) -> pl.LazyFrame:
         pl.col("exposure_class_applied").alias("reporting_class_origin"),
         pl.col("approach_post_crm").alias("reporting_approach"),
         pl.col("approach_applied").alias("reporting_approach_origin"),
+        country_post.alias("reporting_country"),
+        obligor_country.alias("reporting_country_origin"),
         method_label_expr("approach_post_crm").alias("reporting_method"),
         leg_role.alias("reporting_leg_role"),
         on_balance_sheet.alias("reporting_on_balance_sheet"),

@@ -17,6 +17,85 @@ Cell semantics (recorded decisions, this slice):
   ``reporting_approach_origin`` (F-IRB / A-IRB / slotting); C 08.02/03/04/05
   exclude slotting per template. C 08.07 alone keeps the RAW class key
   (Art. 147 origination taxonomy over the FULL population).
+- C 08.01 ALONE IS TWO POPULATIONS PER SHEET — the recorded two-basis decision,
+  C 07.00's (``corep/c07.py``) on the IRB surface. A sheet's cells split by
+  BASIS, the flags derived by ``kernel/bases.py``:
+    * ORIGIN basis (``c08_basis_origin``) — the obligor's own book. Cols
+      0010-0104: the gross exposure, the LFSE memo, the on-balance-sheet
+      netting, the CRM substitution block and the pre-conversion waterfall. A
+      guaranteed leg belongs here on the OBLIGOR's sheet, because that is where
+      its covered part is "deducted from the obligor's exposure class" (col
+      0070). Also the CRM-in-LGD block (0150-0220) and the parameter, EL,
+      provisions and obligor-count columns — see below.
+    * POST basis (``c08_basis_post``) — after substitution. Cols 0110-0140
+      (exposure value and its of-which breakdowns) and 0251-0276 (RWEA, its
+      adjustments and the output floor's SA-equivalent twins). PS1/26 Annex II
+      col 0110: "The exposure values determined in accordance with Article 166A
+      to 166D ... **CRM techniques affecting the exposure value shall be taken
+      into account**." Art. 235/236 substitution is such a technique, so the
+      covered part's exposure value and RWEA must leave the obligor's sheet and
+      land on the protection provider's, exactly as cols 0070/0080 already move
+      it pre-conversion.
+  Binding cols 0110/0260 to the ORIGIN population was a build shortfall, not a
+  decision: a 10,000,000 slotting loan fully guaranteed by a CQS1 corporate
+  reported ``0090 = 0`` (the whole exposure had left) while simultaneously
+  reporting ``0110 = 10,000,000`` and ``0260 = 2,000,000`` as still there — and
+  since the C 07.00 fix put the same money on the guarantor's SA sheet, the
+  estate DOUBLE-COUNTED it across two templates.
+  UNDER CRR THE COL 0110 CLAUSE IS ABSENT (PS1/26 added it), and the basis rests
+  instead on two things Annex II states positively: col 0110 is the post-CCF
+  continuation of col 0090 — itself "after taking into account outflows and
+  inflows due to CRM techniques with substitution effects" — through
+  Art. 166(8)-(10); and cols 0300/0310 carve THEMSELVES out of the redistribution
+  ("**without taking into account the effect of CRM techniques (in particular
+  redistribution effects)**"; "presented in the exposure classes relevant for the
+  exposures to the **original obligor**"), which only means something if the
+  surrounding exposure-value and RWEA columns do take it into account.
+  THE PARAMETER AVERAGES STAY ON THE ORIGIN BASIS AND THAT IS DELIBERATE (cols
+  0010 PD, 0230/0240 LGD, 0250 maturity, plus the EL memos 0280-0282 and
+  provisions 0290). Annex II weights those averages BY col 0110, which is an
+  argument to move them; against it, the sealed ledger carries the OBLIGOR's
+  ``pd_floored`` / ``lgd_floored`` / ``irb_maturity_m`` on every leg and NEVER
+  the guarantor's (``engine/irb/guarantee.py`` swaps and restores inside a local
+  window; under CRR the guarantor is SA-risk-weight-substituted and has no IRB
+  parameters at all), so a post-basis average would publish the obligor's PD and
+  LGD on the guarantor's sheet — the exact misattribution R12's surviving
+  reasoning forbids for the grade axis. Sealing the guarantor's parameters per leg
+  is the enhancement that would allow the move. Cost, on the record: a
+  fully-outflowed sheet reports a real LGD and maturity against ``0110 = 0``.
+- C 08.02 MOVES WITH C 08.01, MEASURED, and the seam is only C 08.03-06. The
+  premise this was first built to — that ``{OF08.01 r0070} = sum({OF08.02})`` is
+  stated over cols 0080/0090 alone (``boe_b0752_8`` / ``_9``, ``boe_b0814_07`` /
+  ``_08``) — is FALSE: those are two members of a family stated once per SHARED
+  COLUMN, all live ERROR, and it reaches every column this split moves
+  (``boe_b0752_10`` c0110, ``_11`` c0140, ``_25`` c0251, ``_26``-``_28``
+  c0252-0254, ``_29`` c0260, ``_30`` c0265, ``_31`` c0270, plus the
+  ``boe_b0814_09`` / ``_18`` twins). Leaving C 08.02 behind broke five of them on
+  the CRM-substitution portfolio the moment C 08.01 moved — measured, not
+  predicted: 6,000,000 vs 4,000,000 on c0110 and 4,283,321 vs 2,855,547 on
+  c0251/c0260, across three sheets.
+  WHERE AN ARRIVED LEG LANDS ON C 08.02 IS R12'S DECISION, EXTENDED FROM THE
+  SCALAR TO THE FRAME: the "Unassigned" residual row, via the derived
+  ``c08_02_key_post`` (``_c08_02_keyed``). R12's reasoning is untouched — the
+  ledger carries the OBLIGOR's grade, never the guarantor's — so an arrived leg's
+  exposure value and RWEA may not assert a grade in this sheet's scale either,
+  and the row already meaning "an exposure whose grade we do not carry" is where
+  the col 0080 scalar and the legs that make it up both belong.
+- C 08.03-06 STAY SINGLE-BASIS. The seam is the ``both_bases`` default on
+  ``_irb_population`` / the ``basis`` default on ``_value_cells``, so widening
+  C 08.01/02 did not silently widen the four templates sharing the population.
+- SURFACED BY THIS CHANGE AND NOT FIXED HERE (measured on the CRM-substitution
+  portfolio, both regimes): the dependents that tie to the moved columns and are
+  still keyed on the origin class — C 09.02's geographical cols 0105/0110
+  (``boe_b0277`` / ``_0283`` / ``_0292``, EBA ``v0421_m`` / ``v0423_m`` /
+  ``v0426_m`` / ``v0428_m`` / ``v0441_m`` / ``v0443_m`` / ``v0466_m`` /
+  ``v0468_m``) and OF 02.00's per-class IRB RWEA row 0271 (``boe_b0616``). The
+  C 09.02 rebinding is NOT mechanical: it sheets on the obligor's
+  ``cp_country_code`` and the ledger seals no guarantor country, so keying the
+  class post-substitution while the country stays the obligor's would close all
+  eleven rules — every one on the all-geographies TOTAL — while silently
+  mis-allocating the per-country breakdown. Same open question as C 09.01's
+  (recorded on the C 07.00 change), and it needs the same answer.
 - SLOTTING IS OUT OF SCOPE OF C 08.02 (recorded, evidenced): PS1/26 Annex II
   §3.3.4 paragraph 77A — "Institutions shall complete this template in respect
   of exposures subject to the AIRB approach and the FIRB approach, but not in
@@ -120,16 +199,16 @@ Cell semantics (recorded decisions, this slice):
   substitution inflow, so the Total-row col 0080 (``SideContext``) drills to its
   real value (the C 07.00 pattern); C 08.02's per-grade 0080 is a constant 0.0
   (R12) and its String label col 0005 is skipped by the tie-out value-column sweep.
-  Ratchet note (R23/R24): each extraction bumped ``max_reporting_module_loc``
-  (2016 -> post-R23 -> 2320 post-R24, zero slack) — the mechanical additive
-  cost of exposing each template's cells/plans builders with their mandated
-  docstrings, no behaviour change. Unlike the c07/cr4/cr8/cr7a extractions this
-  module alone needs a bump per wave: it hosts SEVEN templates in one file.
-  R24 added the ``c08_03_plans`` / ``c08_05_plans`` / ``c08_06_plans`` builders
-  (and split ``_c08_03_cells`` / ``_c08_05_cells`` and the c08_06 row helpers
-  out of their generators). Splitting c08.py per-template is the honest
+  Ratchet note: R23/R24's lineage extractions each bumped
+  ``max_reporting_module_loc`` (2016 -> 2320) with zero slack left, because this
+  module alone hosts SEVEN templates. The two-basis change repaid that instead
+  of bumping again, by lifting the POST-EXECUTE PASSES this file shared with
+  C 07.00 / C 09.0x into ``corep/postpass.py`` (``null_empty_rows``,
+  ``negate_deduction_cols``, ``provisions_postfix``, ``c08_off_bs_pre_ccf``,
+  ``c08_after_all_crm``) and the two-basis discriminators into
+  ``kernel/bases.py``. Splitting c08.py per-TEMPLATE is still the honest
   long-term answer — recorded as a deferred follow-up (shared value surface,
-  its own risky item).
+  its own risky item); the pass extraction is one coherent slice of it.
 - The EL memo columns 0280 (pre post-model adjustment) and its B31 twin 0282
   (after post-model adjustments) coalesce PER LEG (R10a): they read the
   formula-IRB ``el_pre_adjustment`` / ``el_after_adjustment`` where non-null
@@ -263,7 +342,6 @@ from rwa_calc.reporting.cellspec import (
     TemplateSpec,
     WeightedAvg,
     execute,
-    matched_counts,
     subset_rows,
 )
 from rwa_calc.reporting.corep.crm_substitution import (
@@ -277,6 +355,15 @@ from rwa_calc.reporting.corep.crm_substitution import (
     waterfall_refs,
 )
 from rwa_calc.reporting.corep.pd_scale import banded_rows
+from rwa_calc.reporting.corep.postpass import (
+    c08_06_apply_overrides,
+    c08_06_zero_row,
+    c08_after_all_crm,
+    c08_off_bs_pre_ccf,
+    negate_deduction_cols,
+    null_empty_rows,
+    provisions_postfix,
+)
 from rwa_calc.reporting.corep.templates import (
     C08_04_ROWS,
     C08_06_CATEGORY_MAP,
@@ -292,9 +379,13 @@ from rwa_calc.reporting.corep.templates import (
     get_irb_row_sections,
 )
 from rwa_calc.reporting.kernel import (
+    TwoBasis,
     available_columns,
+    class_keys,
     pick,
-    safe_sum,
+    population_flags,
+    sheet_axis,
+    sheet_frame,
 )
 from rwa_calc.reporting.metadata import ReportingContext
 from rwa_calc.reporting.plans import SheetPlan
@@ -317,6 +408,13 @@ _NEGATIVE_COLS: frozenset[str] = frozenset(
 )
 
 _IRB_APPROACHES: tuple[str, ...] = ("foundation_irb", "advanced_irb", "slotting")
+
+# The C 08.01 two-basis discriminators (see the module docstring). The mechanism
+# — derived boolean columns rather than ``RowPredicate`` fields, and why that is
+# the only shape the post basis can DEGRADE in — lives in
+# ``reporting/kernel/bases.py``, shared with C 07.00. C 08.02-06 stay
+# single-basis: they read ``_irb_population``'s origin-only default.
+_BASIS: TwoBasis = TwoBasis("c08")
 
 # Which ``ReportingContext`` inflow component each C 08.01 row's col 0080 takes.
 # The Total row 0010 takes the whole inflow; rows 0020/0030 take its balance-sheet
@@ -423,12 +521,30 @@ def _c08_04_other_flow(cells: Mapping[str, float | None], prior_available: bool)
 # =============================================================================
 
 
-def _irb_population(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:
-    """The IRB book (retired _filter_by_irb_approach): F-IRB/A-IRB/slotting."""
-    approach_col = pick(cols, "reporting_approach_origin")
-    if approach_col is None:
-        return results.filter(pl.lit(value=False))
-    return results.filter(pl.col(approach_col).is_in(list(_IRB_APPROACHES)))
+def _irb_population(
+    results: pl.LazyFrame, cols: set[str], *, both_bases: bool = False
+) -> pl.LazyFrame:
+    """The IRB book (retired _filter_by_irb_approach): F-IRB/A-IRB/slotting.
+
+    ``both_bases`` selects WHICH IRB book. The default is the ORIGIN-approach one
+    — the obligor's own book, which is what C 08.02/03/04/05/06 read. C 08.01
+    takes the UNION of it and the POST-substitution book, tagged with
+    ``c08_pop_origin`` / ``c08_pop_post`` so each cell reads its own basis (see
+    the module docstring). A leg with no substitution is in both, which is why
+    the split is number-neutral on a book that never substitutes.
+
+    The post book is a SUBSET of the origin one here, unlike C 07.00's:
+    ``aggregator._post_crm_approach_expr`` maps an SA guarantor to the SA literal
+    and everything else to the obligor's own approach, so an IRB-origin leg can
+    only LEAVE the IRB population post-substitution (to an SA guarantor) and an
+    SA-origin leg can never enter it. No dedupe is needed, and the row-0070/0080
+    approach-partition terms — which key ``reporting_approach_origin`` — stay a
+    valid partition of the post population.
+    """
+    tagged = results.with_columns(population_flags(_BASIS, cols, _IRB_APPROACHES))
+    if both_bases:
+        return tagged.filter(pl.col(_BASIS.pop_origin) | pl.col(_BASIS.pop_post))
+    return tagged.filter(pl.col(_BASIS.pop_origin)).drop(_BASIS.pop_origin, _BASIS.pop_post)
 
 
 def _prepare(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
@@ -601,12 +717,32 @@ def _value_cells(  # noqa: C901, PLR0915 - the full C 08.01/02 column surface
     *,
     inflow_key: str | None,
     netting_in_waterfall: bool,
+    basis: TwoBasis | None = None,
+    post_terms: _Terms | None = None,
 ) -> dict[str, CellSpec]:
-    member = RowPredicate(equals=terms)
+    # The two-basis split (module docstring). ``basis=None`` is the single-basis
+    # surface C 08.03-06 keep: both term tuples collapse to the caller's own, so
+    # every predicate is byte-identical to the pre-split one. Every basis-split
+    # predicate carries a flag, INCLUDING the Total row's (whose ``terms`` are
+    # empty) — an unflagged predicate would silently sum both populations.
+    # ``post_terms`` lets the post basis key a DIFFERENT row axis from the origin
+    # one: C 08.01 keys the same rows on both, C 08.02 routes an arrived leg to
+    # its "Unassigned" residual row rather than to a grade it does not carry.
+    base_post: _Terms = terms if post_terms is None else post_terms
+    origin: _Terms = terms if basis is None else ((basis.basis_origin, True), *terms)
+    post: _Terms = base_post if basis is None else ((basis.basis_post, True), *base_post)
+    member = RowPredicate(equals=origin)
+    post_member = RowPredicate(equals=post)
     refs_0090 = waterfall_refs(column_refs, netting=netting_in_waterfall)
 
     def narrowed(*extra: tuple[str, str | bool]) -> RowPredicate:
-        return RowPredicate(equals=(*terms, *extra))
+        """A further-narrowed ORIGIN-basis predicate (the substitution block)."""
+        return RowPredicate(equals=(*origin, *extra))
+
+    def narrowed_post(*extra: tuple[str, str | bool]) -> RowPredicate:
+        """A further-narrowed POST-basis predicate — every caller (cols
+        0120/0125/0265) is an exposure-value or RWEA breakdown."""
+        return RowPredicate(equals=(*post, *extra))
 
     lgd_col = pick(cols, "lgd_floored", "lgd_input")
     # The substitution block (0040/0050/0060) reads the Annex II-capped twins
@@ -623,7 +759,7 @@ def _value_cells(  # noqa: C901, PLR0915 - the full C 08.01/02 column surface
             SafeSum(("reporting_gross_on_bs", "reporting_gross_off_bs")), predicate=member
         ),
         "0030": _lfse_cell(
-            cols, lambda: SafeSum(("reporting_gross_on_bs", "reporting_gross_off_bs")), terms
+            cols, lambda: SafeSum(("reporting_gross_on_bs", "reporting_gross_off_bs")), origin
         ),
         "0035": CellSpec(Sum("on_bs_netting_amount"), predicate=member),
         "0040": (
@@ -674,14 +810,20 @@ def _value_cells(  # noqa: C901, PLR0915 - the full C 08.01/02 column surface
         # Formula cells and the executor forbids a formula referencing a formula.
         # The placeholder null is what an inert row keeps (the 0100 convention).
         "0104": CellSpec(Formula(refs=(), fn=_const(None))),
-        "0110": CellSpec(Sum(ead_col), predicate=member),
+        # Col 0110 onwards are POST-basis. PS1/26 Annex II defines col 0110 as
+        # "the exposure values determined in accordance with Article 166A to
+        # 166D ... CRM techniques affecting the exposure value shall be taken
+        # into account" — Art. 235/236 substitution is a CRM technique affecting
+        # the exposure value, so the covered part's exposure value and RWEA
+        # follow its col 0070/0080 flow onto the protection provider's sheet.
+        "0110": CellSpec(Sum(ead_col), predicate=post_member),
         # 0120 ("of which: off balance sheet") sits in the EXPOSURE VALUE
         # (post-CCF) group, so it is Sum(ead_final) over the off-BS legs —
         # exactly the basis the old 0100 carried before R11 moved it here.
-        "0120": CellSpec(Sum(ead_col), predicate=narrowed(("c08_bs", "off"))),
-        "0125": CellSpec(Sum(ead_col), predicate=narrowed(("c08_defaulted", True))),
+        "0120": CellSpec(Sum(ead_col), predicate=narrowed_post(("c08_bs", "off"))),
+        "0125": CellSpec(Sum(ead_col), predicate=narrowed_post(("c08_defaulted", True))),
         "0130": CellSpec(Formula(refs=(), fn=_const(None))),
-        "0140": _lfse_cell(cols, lambda: Sum(ead_col), terms),
+        "0140": _lfse_cell(cols, lambda: Sum(ead_col), post),
         # 0150/0160: the CRM-in-LGD twins of cols 0040/0050, mutually exclusive
         # with them and empty on today's calculator (module docstring). The
         # recorded constant 0.0 is the convention cols 0170-0173 already follow.
@@ -702,7 +844,7 @@ def _value_cells(  # noqa: C901, PLR0915 - the full C 08.01/02 column surface
             else CellSpec(Formula(refs=(), fn=_const(None)))
         ),
         "0240": (
-            _lfse_cell(cols, lambda: WeightedAvg(lgd_col, weight=ead_col), terms)
+            _lfse_cell(cols, lambda: WeightedAvg(lgd_col, weight=ead_col), origin)
             if lgd_col is not None
             else CellSpec(Formula(refs=(), fn=_const(None)))
         ),
@@ -711,26 +853,33 @@ def _value_cells(  # noqa: C901, PLR0915 - the full C 08.01/02 column surface
             predicate=member,
             empty_cell="null",
         ),
+        # The RWEA block is POST-basis with the exposure value it weights:
+        # Art. 153/154 applied to col 0110's population, so 0251-0254 foot into
+        # 0260 and (under CRR) 0255 + 0256 + 0257 = 0260, on one population.
         "0251": CellSpec(
             Sum("c08_rwa_pre_adj" if "rwa_pre_adjustments" in cols else "rwa_pre_adjustments"),
-            predicate=member,
+            predicate=post_member,
         ),
-        "0252": CellSpec(Sum("post_model_adjustment_rwa"), predicate=member),
-        "0253": CellSpec(Sum("mortgage_rw_floor_adjustment"), predicate=member),
-        "0254": CellSpec(Sum("unrecognised_exposure_adjustment"), predicate=member),
+        "0252": CellSpec(Sum("post_model_adjustment_rwa"), predicate=post_member),
+        "0253": CellSpec(Sum("mortgage_rw_floor_adjustment"), predicate=post_member),
+        "0254": CellSpec(Sum("unrecognised_exposure_adjustment"), predicate=post_member),
         "0255": CellSpec(
-            Sum("rwa_pre_factor" if "rwa_pre_factor" in cols else rwa_col), predicate=member
+            Sum("rwa_pre_factor" if "rwa_pre_factor" in cols else rwa_col), predicate=post_member
         ),
-        "0256": _sf_adjustment_cell(terms, cols, "sme_supporting_factor_applied", "is_sme"),
+        "0256": _sf_adjustment_cell(post, cols, "sme_supporting_factor_applied", "is_sme"),
         "0257": _sf_adjustment_cell(
-            terms, cols, "infrastructure_factor_applied", "is_infrastructure"
+            post, cols, "infrastructure_factor_applied", "is_infrastructure"
         ),
-        "0260": CellSpec(Sum(rwa_col), predicate=member),
-        "0265": CellSpec(Sum(rwa_col), predicate=narrowed(("c08_defaulted", True))),
-        "0270": _lfse_cell(cols, lambda: Sum(rwa_col), terms),
-        "0275": CellSpec(Sum(ead_col), predicate=member),
+        "0260": CellSpec(Sum(rwa_col), predicate=post_member),
+        "0265": CellSpec(Sum(rwa_col), predicate=narrowed_post(("c08_defaulted", True))),
+        "0270": _lfse_cell(cols, lambda: Sum(rwa_col), post),
+        # 0275/0276 are the output floor's SA-equivalent twins of 0110/0260, and
+        # Annex II gives 0275 col 0110's own clause verbatim ("Exposure value
+        # shall be provided after taking into account value adjustments, ALL
+        # CREDIT RISK MITIGANTS and conversion factors").
+        "0275": CellSpec(Sum(ead_col), predicate=post_member),
         "0276": (
-            CellSpec(Sum("sa_rwa"), predicate=member)
+            CellSpec(Sum("sa_rwa"), predicate=post_member)
             if "sa_rwa" in cols
             else CellSpec(Formula(refs=(), fn=_const(None)))
         ),
@@ -836,6 +985,7 @@ def _c08_01_spec(framework: str, cols: set[str], ead_col: str, rwa_col: str) -> 
                 column_refs,
                 inflow_key=_C08_01_INFLOW_KEYS.get("0070"),
                 netting_in_waterfall=True,
+                basis=_BASIS,
             ).items():
                 merged = (
                     CellSpec(cell.binding, predicate=pred, empty_cell=cell.empty_cell)
@@ -858,6 +1008,7 @@ def _c08_01_spec(framework: str, cols: set[str], ead_col: str, rwa_col: str) -> 
             column_refs,
             inflow_key=_C08_01_INFLOW_KEYS.get(row.ref),
             netting_in_waterfall=netting,
+            basis=_BASIS,
         ).items():
             cells[(row.ref, col_ref)] = cell
     return TemplateSpec(
@@ -904,13 +1055,17 @@ def c08_01_plans(
     population, not over the IRB book: an inflow whose substituted leg is treated
     under the standardised approach belongs on C 07.00, and reading it off this
     template's own approach-filtered frame dropped it entirely. The sheet axis is
-    correspondingly the UNION of the classes present in the IRB book and the
-    classes RECEIVING an inflow — Annex II's "Exposures stemming from possible in-
-    and outflows from and to other templates shall be taken into account" is not
-    satisfied by an inflow with nowhere to land, so a guarantor class with no
-    native IRB exposure gets an inflow-only sheet (its Total row 0010 is
-    constraint-free, so it survives ``_null_empty_rows`` and reports
-    ``0090 = 0080``)."""
+    correspondingly the UNION of the classes present in the IRB book ON EITHER
+    BASIS and the classes RECEIVING an inflow — Annex II's "Exposures stemming
+    from possible in- and outflows from and to other templates shall be taken
+    into account" is not satisfied by an inflow with nowhere to land, so a
+    guarantor class with no native IRB exposure gets an inflow-only sheet (its
+    Total row 0010 is constraint-free, so it survives ``null_empty_rows`` and
+    reports ``0090 = 0080``). The post-basis limb is belt-and-braces: a
+    beneficially-substituted leg's guarantor class is an inflow key too, so in
+    practice it adds no sheet — but without it a leg whose inflow the Annex II
+    block cap shed to zero would drop its exposure value and RWEA out of the
+    template silently."""
     ec_col = pick(cols, "reporting_class_origin")
     ead_col = pick(cols, "ead_final")
     rwa_col = pick(cols, "rwa_final", "rwa_post_factor", "rwa")
@@ -920,24 +1075,28 @@ def c08_01_plans(
         if ec_col is None:
             errors.append("C08.01: Missing exposure_class column")
         return {}
-    irb_df = _irb_population(results, cols).collect()
+    irb_df = _irb_population(results, cols, both_bases=True).collect()
     # Resolved BEFORE the empty-population guard: a book whose IRB-destined
     # inflow comes entirely from legs outside this template would lose it to the
     # early exit, which is the same dropped-inflow defect one level up.
     inflow_map = irb_origin_inflows(results, cols, destination="irb")
     if len(irb_df) == 0 and not inflow_map:
         return {}
+    # The two sheet keys. C 08 applies NO key transform (no specialised-lending
+    # merge, unlike C 07.00), and the post key degrades to the origin key on a
+    # frame that seals no ``reporting_class``.
+    irb_df = irb_df.with_columns(class_keys(_BASIS, set(irb_df.columns), ec_col))
     data_cols = set(irb_df.columns)
     irb_df = _prepare(irb_df, data_cols)
     spec = _c08_01_spec(framework, data_cols, ead_col, rwa_col)
     row_terms = _c08_01_row_terms(framework, data_cols)
     plans: dict[str, SheetPlan] = {}
-    sheet_keys = set(irb_df[ec_col].drop_nulls().unique().to_list()) | set(inflow_map)
+    sheet_keys = sheet_axis(_BASIS, irb_df) | set(inflow_map)
     for ec in sorted(sheet_keys):
         inflow = inflow_map.get(ec)
         plans[ec] = SheetPlan(
             spec=spec,
-            frame=irb_df.filter(pl.col(ec_col) == ec),
+            frame=sheet_frame(_BASIS, irb_df, ec),
             ctx=ReportingContext(
                 substitution_inflow=inflow.total if inflow else 0.0,
                 substitution_inflow_on_bs=inflow.on_bs if inflow else 0.0,
@@ -994,14 +1153,34 @@ def generate_c08_01(
     result: dict[str, pl.DataFrame] = {}
     for ec, plan in c08_01_plans(results, cols, framework, errors).items():
         row_preds = _c08_01_row_preds(plan.row_terms)
+        origin_preds = _origin_preds(row_preds)
         data_cols = set(plan.frame.columns)
         frame = execute(plan.spec, plan.frame, plan.ctx)
-        frame = _c08_off_bs_pre_ccf(frame, plan.frame, row_preds)
-        frame = _c08_after_all_crm(frame)
-        frame = _null_empty_rows(frame, plan.frame, row_preds, plan.inflow_rows)
-        frame = _provisions_postfix(frame, plan.frame, row_preds, data_cols, ref="0290")
-        result[ec] = _negate(frame)
+        frame = c08_off_bs_pre_ccf(frame, plan.frame, origin_preds)
+        frame = c08_after_all_crm(frame)
+        frame = null_empty_rows(frame, plan.frame, row_preds, plan.inflow_rows)
+        frame = provisions_postfix(frame, plan.frame, origin_preds, data_cols, ref="0290")
+        result[ec] = negate_deduction_cols(frame, _NEGATIVE_COLS)
     return result
+
+
+def _origin_preds(
+    preds: Mapping[str, RowPredicate | None],
+) -> dict[str, RowPredicate | None]:
+    """The same per-row predicates narrowed to the ORIGIN basis.
+
+    Cols 0100 and 0290 are origin-basis (the off-BS slice of the col 0090
+    waterfall, and value adjustments booked against the obligor's own exposure),
+    so their post-passes must not see a leg that ARRIVED on this sheet — it would
+    add an off-balance-sheet gross and a provision the obligor's book never had.
+    ``null_empty_rows`` deliberately keeps the BASIS-FREE predicates instead, so
+    its emptiness count is over the union of both bases (see that function).
+    """
+    flag: tuple[str, str | bool] = (_BASIS.basis_origin, True)
+    return {
+        ref: None if pred is None else RowPredicate(equals=(flag, *pred.equals), any_of=pred.any_of)
+        for ref, pred in preds.items()
+    }
 
 
 # =============================================================================
@@ -1024,7 +1203,10 @@ def _c08_02_spec(
     the PRE-``_prepare`` base-column set (see ``_c08_01_spec``).
 
     The substitution INFLOW lands on the "Unassigned" residual row and nowhere
-    else — see ``_C08_02_INFLOW_ROW`` for why that row and not a grade."""
+    else — see ``_C08_02_INFLOW_ROW`` for why that row and not a grade. The POST
+    basis keys ``c08_02_key_post``, which routes an ARRIVED leg to that same row
+    (``_c08_02_keyed``), so the pre-conversion scalar and the post-conversion legs
+    that make it up report on one row."""
     rows = tuple(_Row(label, label) for label in labels)
     cells: dict[tuple[str, str], CellSpec] = {}
     for label in labels:
@@ -1037,6 +1219,8 @@ def _c08_02_spec(
             value_refs,
             inflow_key=("substitution_inflow_graded" if label == _C08_02_INFLOW_ROW else None),
             netting_in_waterfall=True,
+            basis=_BASIS,
+            post_terms=(("c08_02_key_post", label),),
         ).items():
             cells[(label, col_ref)] = cell
     return TemplateSpec(
@@ -1073,25 +1257,31 @@ def c08_02_plans(
     if pd_col is None:
         errors.append("C08.02: No PD column available — skipping PD grade breakdown")
         return {}
-    irb_df = _non_slotting(results, cols).collect()
+    irb_df = _non_slotting(results, cols, both_bases=True).collect()
     # The GRADED component only: C 08.02 excludes slotting, and the tie-out it must
     # satisfy is against C 08.01 row 0070, which is the F-IRB/A-IRB union.
     inflow_map = irb_origin_inflows(results, cols, destination="irb")
     graded = {ec: flow.graded for ec, flow in inflow_map.items() if flow.graded}
     if len(irb_df) == 0 and not graded:
         return {}
+    irb_df = irb_df.with_columns(class_keys(_BASIS, set(irb_df.columns), ec_col))
     data_cols = set(irb_df.columns)
     irb_df = _prepare(irb_df, data_cols)
     value_refs = tuple(col.ref for col in get_c08_02_columns(framework) if col.ref != "0005")
     plans: dict[str, SheetPlan] = {}
-    sheet_keys = set(irb_df[ec_col].drop_nulls().unique().to_list()) | set(graded)
+    sheet_keys = sheet_axis(_BASIS, irb_df) | set(graded)
     for ec in sorted(sheet_keys):
-        class_df = irb_df.filter(pl.col(ec_col) == ec)
+        class_df = sheet_frame(_BASIS, irb_df, ec)
         labels, keyed = _c08_02_keyed(class_df, pd_col, grade_col)
-        if graded.get(ec) and _C08_02_INFLOW_ROW not in labels:
+        arrived = bool(
+            len(keyed.filter(pl.col(_BASIS.basis_post) & pl.col(_BASIS.basis_origin).not_()))
+        )
+        if (graded.get(ec) or arrived) and _C08_02_INFLOW_ROW not in labels:
             # A destination class whose own book has no unassigned-grade legs (or no
             # legs at all) still needs the row the inflow lands on, or the C 08.01
-            # r0070 tie-out has nothing to sum against.
+            # r0070 tie-out has nothing to sum against. ``arrived`` is the
+            # belt-and-braces limb: a leg whose inflow the Annex II block cap shed
+            # to zero still brings its exposure value and RWEA onto this sheet.
             labels = [*labels, _C08_02_INFLOW_ROW]
         plans[ec] = SheetPlan(
             spec=_c08_02_spec(labels, data_cols, ead_col, rwa_col, value_refs),
@@ -1124,15 +1314,15 @@ def generate_c08_02(
         if not plan.spec.rows:
             result[ec] = _empty_frame(column_refs, string_refs=("0005",))
             continue
-        row_preds: dict[str, RowPredicate | None] = {
-            row.ref: RowPredicate(equals=(("c08_02_key", row.ref),)) for row in plan.spec.rows
-        }
+        row_preds: dict[str, RowPredicate | None] = _origin_preds(
+            {row.ref: RowPredicate(equals=(("c08_02_key", row.ref),)) for row in plan.spec.rows}
+        )
         data_cols = set(plan.frame.columns)
         frame = execute(plan.spec, plan.frame, plan.ctx)
-        frame = _c08_off_bs_pre_ccf(frame, plan.frame, row_preds)
-        frame = _c08_after_all_crm(frame)
-        frame = _provisions_postfix(frame, plan.frame, row_preds, data_cols, ref="0290")
-        frame = _negate(frame)
+        frame = c08_off_bs_pre_ccf(frame, plan.frame, row_preds)
+        frame = c08_after_all_crm(frame)
+        frame = provisions_postfix(frame, plan.frame, row_preds, data_cols, ref="0290")
+        frame = negate_deduction_cols(frame, _NEGATIVE_COLS)
         frame = frame.with_columns(pl.col("row_name").alias("0005"))
         result[ec] = frame.select(["row_ref", "row_name", *column_refs])
     return result
@@ -1141,20 +1331,45 @@ def generate_c08_02(
 def _c08_02_keyed(
     class_df: pl.DataFrame, pd_col: str, grade_col: str | None
 ) -> tuple[list[str], pl.DataFrame]:
-    """Derive the C 08.02 row key column: distinct firm grades when the
-    grade column has values (null grades -> "Unassigned"), else the
-    populated fixed PD bands (out-of-band/null PD -> "Unassigned")."""
+    """Derive the C 08.02 row key columns and the sheet's row labels.
+
+    ``c08_02_key`` (the ORIGIN axis) is the retired rule: distinct firm grades
+    when the grade column has values (null grades -> "Unassigned"), else the
+    populated fixed PD bands (out-of-band/null PD -> "Unassigned").
+
+    ``c08_02_key_post`` (the POST axis) is the same key EXCEPT on a leg that
+    ARRIVED on this sheet by substitution (post-basis here, origin-basis
+    elsewhere), which keys the "Unassigned" residual row. That is R12's landing
+    decision applied to the frame-based columns rather than only to the col 0080
+    scalar: the ledger carries the OBLIGOR's ``cp_internal_rating_grade``, never
+    the guarantor's, so an arrived leg's grade is a label in a FOREIGN class's
+    rating scale and asserting it here would misattribute the exposure value and
+    RWEA to a grade this sheet's scale does not mean. "Unassigned" already means
+    "an exposure whose grade we do not carry", which is exactly what an arrived
+    leg is — and it puts the post-conversion legs on the same row as the
+    pre-conversion scalar they make up.
+
+    BOTH THE LABEL SET AND THE GRADE-VS-BAND CHOICE ARE MADE ON THE ORIGIN LEGS
+    ALONE — they answer "what rating scale does THIS sheet publish?", which an
+    arrived leg cannot speak to. Without that an arrived leg would open a
+    spurious grade row on the guarantor's sheet, empty on every origin column.
+    """
+    native = (
+        class_df.filter(pl.col(_BASIS.basis_origin))
+        if _BASIS.basis_origin in class_df.columns
+        else class_df
+    )
     if grade_col is not None and grade_col in class_df.columns:
-        non_null = class_df.filter(pl.col(grade_col).is_not_null())
+        non_null = native.filter(pl.col(grade_col).is_not_null())
         if len(non_null) > 0:
             keyed = class_df.with_columns(
-                pl.col(grade_col).fill_null("Unassigned").alias("c08_02_key")
+                pl.col(grade_col).fill_null(_C08_02_INFLOW_ROW).alias("c08_02_key")
             )
             labels = non_null[grade_col].unique().sort().to_list()
-            if len(non_null) < len(class_df):
-                labels.append("Unassigned")
-            return labels, keyed
-    band_expr: pl.Expr = pl.lit("Unassigned")
+            if len(non_null) < len(native):
+                labels.append(_C08_02_INFLOW_ROW)
+            return labels, _c08_02_post_key(keyed)
+    band_expr: pl.Expr = pl.lit(_C08_02_INFLOW_ROW)
     for lower, upper, label in reversed(PD_BANDS):
         band_expr = (
             pl.when((pl.col(pd_col) >= lower) & (pl.col(pd_col) < upper))
@@ -1162,11 +1377,28 @@ def _c08_02_keyed(
             .otherwise(band_expr)
         )
     keyed = class_df.with_columns(band_expr.alias("c08_02_key"))
-    present = set(keyed["c08_02_key"].to_list())
+    present = set(
+        keyed.filter(pl.col(_BASIS.basis_origin))["c08_02_key"].to_list()
+        if _BASIS.basis_origin in keyed.columns
+        else keyed["c08_02_key"].to_list()
+    )
     labels = [label for _lo, _hi, label in PD_BANDS if label in present]
-    if "Unassigned" in present:
-        labels.append("Unassigned")
-    return labels, keyed
+    if _C08_02_INFLOW_ROW in present:
+        labels.append(_C08_02_INFLOW_ROW)
+    return labels, _c08_02_post_key(keyed)
+
+
+def _c08_02_post_key(keyed: pl.DataFrame) -> pl.DataFrame:
+    """Add ``c08_02_key_post`` — the origin key, except "Unassigned" on a leg
+    that arrived here by substitution (see :func:`_c08_02_keyed`)."""
+    if _BASIS.basis_origin not in keyed.columns:
+        return keyed.with_columns(pl.col("c08_02_key").alias("c08_02_key_post"))
+    return keyed.with_columns(
+        pl.when(pl.col(_BASIS.basis_post) & pl.col(_BASIS.basis_origin).not_())
+        .then(pl.lit(_C08_02_INFLOW_ROW))
+        .otherwise(pl.col("c08_02_key"))
+        .alias("c08_02_key_post")
+    )
 
 
 # =============================================================================
@@ -1316,7 +1548,7 @@ def generate_c08_03(
             ref: RowPredicate(equals=terms) for ref, terms in plan.row_terms.items() if terms
         }
         frame = execute(plan.spec, banded)
-        frame = _provisions_postfix(frame, banded, row_preds, data_cols, ref="0110")
+        frame = provisions_postfix(frame, banded, row_preds, data_cols, ref="0110")
         result[ec] = frame
     return result
 
@@ -1646,6 +1878,30 @@ def _c08_06_row_preds(
     }
 
 
+def _c08_06_post(pred: RowPredicate) -> RowPredicate:
+    """The row predicate narrowed to the POST-substitution slotting book.
+
+    Annex II defines C 08.06 cols 0020/0040/0080 BY CROSS-REFERENCE to C 08.01
+    cols 0090/0110/0260 ("See CR-IRB 1 instructions for column 0090", etc.),
+    and those three moved to the post-substitution basis with C 08.01. A leg
+    whose guarantee substituted onto an SA guarantor is no longer risk-weighted
+    under Art. 153(5) at all, so it must leave the category grid for those
+    columns — otherwise the two IRB templates state different values for
+    quantities the regulator defines as identical.
+
+    Cols 0010/0030 (original exposure pre-CCF) stay on the ORIGIN basis: the
+    grid is the obligor's slotting book by origination, and that is the column
+    the covered part is deducted FROM.
+
+    Uses ``RowPredicate.approaches``, NOT a tolerant ``equals`` term: that field
+    DEGRADES to ``reporting_approach_origin`` on a frame sealing no
+    post-substitution approach, whereas an absent ``equals`` column compiles to
+    match-nothing and would silently zero every one of these columns on the
+    synthetic unit and lineage frames.
+    """
+    return RowPredicate(equals=pred.equals, any_of=pred.any_of, approaches=("slotting",))
+
+
 def _c08_06_empty_refs(
     type_df: pl.DataFrame,
     row_defs: list[tuple[str, str, bool | None, str]],
@@ -1660,7 +1916,7 @@ def _c08_06_empty_refs(
     zero-fill pass), so lineage reports it as the template's empty policy rather
     than a WeightedAvg with no legs whose value would contradict the screen. Uses
     the SAME emptiness test as ``_c08_06_sheet`` (subset height 0, label != Total)."""
-    subsets = subset_rows(type_df, dict(row_preds))
+    subsets = subset_rows(type_df, {ref: _c08_06_post(p) for ref, p in row_preds.items()})
     return frozenset(
         row_def[0]
         for row_def in row_defs
@@ -1825,7 +2081,6 @@ def _c08_06_spec(
     row_defs = _c08_06_row_defs(framework)
     rows = tuple(_Row(row_def[0], row_def[1]) for row_def in row_defs)
     row_preds = _c08_06_row_preds(row_defs, cols)
-    crm_col = pick(cols, "ead_pre_ccf", "exposure_post_crm")
     if framework != "BASEL_3_1" and "rwa_post_factor" in cols:
         rwea_col = "rwa_post_factor"  # CRR prefers the post-supporting-factor RWEA
     else:
@@ -1835,20 +2090,31 @@ def _c08_06_spec(
         ref = row_def[0]
         pred = row_preds[ref]
         off_pred = RowPredicate(equals=(*pred.equals, ("c0806_off_bs", True)))
+        post_pred = _c08_06_post(pred)
+        off_post = _c08_06_post(off_pred)
         cells[(ref, "0010")] = CellSpec(
             SafeSum(("reporting_gross_on_bs", "reporting_gross_off_bs")),
             predicate=pred,
         )
-        cells[(ref, "0020")] = (
-            CellSpec(Sum(crm_col), predicate=pred)
-            if crm_col is not None
-            else CellSpec(Formula(refs=("0010",), fn=_copy_of_0010))
+        # Col 0020 "EXPOSURE AFTER CRM SUBSTITUTION EFFECTS PRE CONVERSION
+        # FACTORS" — Annex II: "See CR-IRB 1 instructions for column 0090", the
+        # substitution waterfall. It binds col 0010's OWN pre-CCF gross carriers
+        # over the POST population, which IS that quantity: the covered part has
+        # left, so what remains is the exposure after substitution effects, still
+        # pre-conversion. The retired binding was wrong twice — ``ead_pre_ccf`` /
+        # ``exposure_post_crm`` are FUNDED-CRM carriers, not the substitution
+        # waterfall, and their absent-carrier fallback was a Formula copying col
+        # 0010, which no predicate can narrow, so the column could not follow the
+        # basis at all.
+        cells[(ref, "0020")] = CellSpec(
+            SafeSum(("reporting_gross_on_bs", "reporting_gross_off_bs")),
+            predicate=post_pred,
         )
         cells[(ref, "0030")] = CellSpec(Sum("reporting_gross_off_bs"), predicate=pred)
         if "0031" in column_refs:
             cells[(ref, "0031")] = CellSpec(Formula(refs=(), fn=_const(None)))
-        cells[(ref, "0040")] = CellSpec(Sum(ead_col), predicate=pred)
-        cells[(ref, "0050")] = CellSpec(Sum(ead_col), predicate=off_pred, empty_cell="null")
+        cells[(ref, "0040")] = CellSpec(Sum(ead_col), predicate=post_pred)
+        cells[(ref, "0050")] = CellSpec(Sum(ead_col), predicate=off_post, empty_cell="null")
         cells[(ref, "0060")] = CellSpec(Formula(refs=(), fn=_const(None)))
         # Col 0070 on an EMPTY non-Total row is a fixed display risk weight from
         # the zero-fill post-pass (not a measured weighted average), so it is left
@@ -1856,9 +2122,9 @@ def _c08_06_spec(
         # reports the template's empty policy, never a WeightedAvg with no legs.
         if ref not in empty_refs:
             cells[(ref, "0070")] = CellSpec(
-                WeightedAvg("risk_weight", weight=ead_col), predicate=pred, empty_cell="null"
+                WeightedAvg("risk_weight", weight=ead_col), predicate=post_pred, empty_cell="null"
             )
-        cells[(ref, "0080")] = CellSpec(Sum(rwea_col), predicate=pred)
+        cells[(ref, "0080")] = CellSpec(Sum(rwea_col), predicate=post_pred)
         cells[(ref, "0090")] = (
             CellSpec(Sum("expected_loss"), predicate=pred)
             if "expected_loss" in cols
@@ -1890,11 +2156,18 @@ def _c08_06_sheet(
     naturally and the retired whole-subset nominal fallback is gone."""
     frame = execute(spec, type_df)
     overrides: dict[str, dict[str, float | None]] = {}
-    row_subsets = subset_rows(type_df, dict(row_preds))
+    # THE SECOND EMPTINESS TEST, and it must key the SAME basis as the first.
+    # ``_c08_06_empty_refs`` decides whether the spec BINDS col 0070; this loop
+    # decides whether the FIXED display weight is INJECTED. Move one without the
+    # other and a fully-substituted category publishes a gross with no risk
+    # weight at all — measured NULL with only the spec moved, 0.0 with only this
+    # one. Their docstrings say they use the same test, which is exactly what
+    # makes moving one silently dangerous.
+    row_subsets = subset_rows(type_df, {ref: _c08_06_post(p) for ref, p in row_preds.items()})
     for row_ref, label, _is_short, rw_display in row_defs:
         subset = row_subsets[row_ref]
         if subset.height == 0 and label != "Total":
-            overrides[row_ref] = _c08_06_zero_row(spec.column_refs, rw_display)
+            overrides[row_ref] = c08_06_zero_row(spec.column_refs, rw_display)
             continue
         fixes: dict[str, float | None] = {}
         ead_sum = float(subset[ead_col].fill_null(0.0).sum())
@@ -1905,52 +2178,8 @@ def _c08_06_sheet(
             fixes["0070"] = float(rw_vals[0]) if len(rw_vals) > 0 else None
         if fixes:
             overrides[row_ref] = fixes
-    frame = _c08_06_apply_overrides(frame, overrides)
-    return _provisions_postfix(frame, type_df, row_preds, cols, ref="0100")
-
-
-def _c08_06_zero_row(column_refs: tuple[str, ...], rw_display: str) -> dict[str, float | None]:
-    """The retired zero-fill for an empty non-Total row: every cell 0.0
-    except 0070 = the row definition's display risk weight ("50%" -> 0.5;
-    unparseable/blank -> None)."""
-    values: dict[str, float | None] = dict.fromkeys(column_refs, 0.0)
-    if rw_display:
-        try:
-            values["0070"] = float(rw_display.replace("%", "").strip()) / 100.0
-        except ValueError:
-            values["0070"] = None
-    else:
-        values["0070"] = None
-    return values
-
-
-def _c08_06_apply_overrides(
-    frame: pl.DataFrame, overrides: dict[str, dict[str, float | None]]
-) -> pl.DataFrame:
-    if not overrides:
-        return frame
-    exprs: list[pl.Expr] = []
-    value_cols = [col for col in frame.columns if col not in ("row_ref", "row_name")]
-    for col in value_cols:
-        expr = pl.col(col)
-        touched = False
-        for row_ref, values in overrides.items():
-            if col in values:
-                expr = (
-                    pl.when(pl.col("row_ref") == row_ref)
-                    .then(pl.lit(values[col], dtype=pl.Float64))
-                    .otherwise(expr)
-                )
-                touched = True
-        if touched:
-            exprs.append(expr.alias(col))
-    return frame.with_columns(exprs) if exprs else frame
-
-
-def _copy_of_0010(cells: Mapping[str, float | None], _prior: bool) -> float | None:
-    """C 08.06 col 0020 falls back to col 0010 when no post-CRM carrier
-    (``ead_pre_ccf`` / ``exposure_post_crm``) exists."""
-    return cells["0010"]
+    frame = c08_06_apply_overrides(frame, overrides)
+    return provisions_postfix(frame, type_df, row_preds, cols, ref="0100")
 
 
 # =============================================================================
@@ -1958,244 +2187,14 @@ def _copy_of_0010(cells: Mapping[str, float | None], _prior: bool) -> float | No
 # =============================================================================
 
 
-def _non_slotting(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:
-    irb = _irb_population(results, cols)
+def _non_slotting(
+    results: pl.LazyFrame, cols: set[str], *, both_bases: bool = False
+) -> pl.LazyFrame:
+    irb = _irb_population(results, cols, both_bases=both_bases)
     approach_col = pick(cols, "reporting_approach_origin", "approach")
     if approach_col is not None:
         return irb.filter(pl.col(approach_col) != "slotting")
     return irb
-
-
-def _null_empty_rows(
-    frame: pl.DataFrame,
-    class_df: pl.DataFrame,
-    row_preds: dict[str, RowPredicate | None],
-    keep: frozenset[str] = frozenset(),
-) -> pl.DataFrame:
-    """Render inert rows and rows with EMPTY subsets all-null.
-
-    ``keep`` exempts rows whose content is a cross-sheet inflow: their own subset
-    is legitimately empty (the money lives in other sheets), so nulling them would
-    delete the component the published row sums need — visibly so on an
-    inflow-only sheet, where EVERY constrained subset is empty."""
-    constrained = {
-        ref: pred
-        for ref, pred in row_preds.items()
-        if pred is not None and (pred.equals or pred.any_of)
-    }
-    counts = matched_counts(class_df, constrained)
-    null_refs = [
-        ref
-        for ref, pred in row_preds.items()
-        if ref not in keep and (pred is None or ((pred.equals or pred.any_of) and counts[ref] == 0))
-    ]
-    if not null_refs:
-        return frame
-    value_cols = [col for col in frame.columns if col not in ("row_ref", "row_name")]
-    return frame.with_columns(
-        pl.when(pl.col("row_ref").is_in(null_refs))
-        .then(pl.lit(None, dtype=pl.Float64))
-        .otherwise(pl.col(col))
-        .alias(col)
-        for col in value_cols
-    )
-
-
-def _provisions_postfix(
-    frame: pl.DataFrame,
-    class_df: pl.DataFrame,
-    row_preds: Mapping[str, RowPredicate | None],
-    cols: set[str],
-    *,
-    ref: str,
-) -> pl.DataFrame:
-    """The provisions ladder: when the SCRA/GCRA base sum nets to ~0, swap the
-    whole cell to the best available provisions carrier for the row subset (a
-    value-dependent, PER-CELL branch — the recorded C 08 granularity, distinct
-    from C 07.00's per-row ladder).
-
-    The fallback carrier is ``provision_held`` when the frame carries it (the
-    synthetic COREP unit frames supply it), else the sealed ``provision_allocated``
-    (R10b). The retired ``provision_held``-only fallback was DEAD on every real
-    submission: ``provision_held`` is an input pass-through the aggregator seal
-    strips, so ``"provision_held" not in cols`` returned early and the provisions
-    cells (C 08.01/02 col 0290, C 08.03 col 0110, C 08.06 col 0100) rendered a
-    hard 0.0. ``provision_allocated`` is the sealed provisions carrier that IS
-    meaningful on the IRB book: unlike C 07.00's ``provision_deducted`` (R9), the
-    Art. 111(2) drawn-first deduction is SA-only (engine/crm/provisions.py —
-    IRB/Slotting: provision_on_drawn = 0, provision_on_nominal = 0, so
-    provision_deducted is STRUCTURALLY 0.0 on every IRB/slotting leg), whereas
-    provision_allocated is tracked for all approaches (it feeds the IRB EL
-    shortfall/excess). scra/gcra stay the preferred base; a book that supplies
-    them non-degenerately keeps that granular figure."""
-    fallback_col = (
-        "provision_held"
-        if "provision_held" in cols
-        else "provision_allocated"
-        if "provision_allocated" in cols
-        else None
-    )
-    if ref not in frame.columns or fallback_col is None:
-        return frame
-    needed: dict[str, RowPredicate | None] = {}
-    for row_ref, pred in row_preds.items():
-        if pred is None:
-            continue
-        current = frame.filter(pl.col("row_ref") == row_ref)
-        if current.height == 0 or current[ref][0] is None:
-            continue
-        if abs(current[ref][0]) >= 1e-9:
-            continue
-        needed[row_ref] = pred
-    fixes: dict[str, float] = {}
-    for row_ref, subset in subset_rows(class_df, needed).items():
-        if subset.height == 0:
-            continue
-        fixes[row_ref] = float(subset[fallback_col].fill_null(0.0).sum())
-    if not fixes:
-        return frame
-    expr: pl.Expr = pl.col(ref)
-    for row_ref, value in fixes.items():
-        expr = pl.when(pl.col("row_ref") == row_ref).then(pl.lit(value)).otherwise(expr)
-    return frame.with_columns(expr.alias(ref))
-
-
-def _c08_off_bs_pre_ccf(
-    frame: pl.DataFrame,
-    class_df: pl.DataFrame,
-    row_preds: Mapping[str, RowPredicate | None],
-) -> pl.DataFrame:
-    """Fill C 08.01/02 col 0100 with the off-BS slice of the 0090 waterfall.
-
-    Col 0100 ("of which: off balance sheet") sits in the POST-CRM PRE-CCF
-    column group (the 0090 "Exposure after CRM substitution pre CCFs"
-    waterfall), so it reports the off-BS share of that PRE-conversion-factor
-    quantity — NOT the post-CCF exposure value (that is col 0120). The
-    executor has no intra-row sub-waterfall verb, so 0100 is derived here per
-    row over the row's ``c08_bs == "off"`` legs, mirroring ``_value_cells`` +
-    ``crm_substitution.crm_waterfall`` term-for-term:
-
-        0100 = off-BS gross (0020: the sealed reporting_gross_off_bs carrier)
-             - off-BS substitution outflow (0070: the ``c08_prot_block``
-               subtotal cols 0040/0050/0060 break down)
-
-    It carries the waterfall's OWN correction: reading the breakdown columns AND
-    the outflow subtotal — as this did before — deducts the same covered part
-    twice, exactly as ``crm_waterfall`` did. Binding the same per-leg subtotal
-    col 0070 binds keeps the memo a true slice of 0090 by construction rather
-    than by two derivations agreeing.
-
-    THE B31 COL 0035 TERM IS DELIBERATELY ABSENT, and that is load-bearing rather
-    than an oversight: col 0035 is the Art. 166(3) on-balance-sheet netting of
-    loans and deposits, so it has no off-balance-sheet share to slice. The BoE
-    scoping says the same thing structurally — ``boe_b0746_1`` drops the 0035 term
-    from the col 0090 waterfall on exactly the off-balance-sheet row family
-    (``crm_substitution.C08_01_NETTING_EXEMPT_ROWS``), so an off-BS memo that
-    subtracted it would contradict the published rule for row 0030 while claiming
-    to be its slice. Do not "restore" it for symmetry with the on-BS rows.
-
-    It is computed on POSITIVE magnitudes read from the raw ``class_df`` (so
-    the result is independent of the later ``_negate`` sign pass). The 0080
-    substitution INFLOW is EXCLUDED: it is a total-row cross-sheet scalar
-    (``ReportingContext.substitution_inflow``, a per-destination-class
-    aggregate with no leg-level on/off-BS attribution), so an off-BS memo
-    cannot claim a share of it — recorded decision, matching 0090's own
-    convention that the inflow only lands on the (constraint-free) total row.
-
-    Every leg is either on- or off-BS (``c08_bs``) and the outflow carrier is a
-    leg-level amount pro-rated across the two-leg guarantee split, so summing it
-    over the off-BS legs is the EXACT slice. Inert (None-predicate) rows are left
-    as the null placeholder for ``_null_empty_rows``; C 08.02 has none.
-    """
-    if "0100" not in frame.columns:
-        return frame
-    cols = set(class_df.columns)
-    if "c08_bs" not in cols:
-        return frame
-    active = {ref: pred for ref, pred in row_preds.items() if pred is not None}
-    if not active:
-        return frame
-    fixes: dict[str, float] = {}
-    for row_ref, subset in subset_rows(class_df, active).items():
-        off = subset.filter(pl.col("c08_bs") == "off")
-        off_cols = set(off.columns)
-        gross = safe_sum(off, off_cols, "reporting_gross_off_bs")
-        fixes[row_ref] = gross - safe_sum(off, off_cols, IRB_BLOCK_COL)
-    expr: pl.Expr = pl.col("0100")
-    for row_ref, value in fixes.items():
-        expr = (
-            pl.when(pl.col("row_ref") == row_ref)
-            .then(pl.lit(value, dtype=pl.Float64))
-            .otherwise(expr)
-        )
-    return frame.with_columns(expr.alias("0100"))
-
-
-def _c08_after_all_crm(frame: pl.DataFrame) -> pl.DataFrame:
-    """Fill C 08.01/02 col 0104 — exposure after ALL CRM, pre-conversion factors.
-
-    PS1/26 Annex II (OF 08.01 col 0104): "Institutions shall report the value
-    reported in column 0090 after adjusting for the reduction in exposure due to
-    the Financial Collateral Comprehensive Method reported in columns 0101-0103."
-    The published identity (boe_b1040) states it additively over the REPORTED
-    (signed) cells::
-
-        0104 = 0090 + 0101 + 0102
-
-    — col 0103 is an "of which" sub-item of 0102 and is excluded, and 0102 is a
-    "(-)"-labelled deduction, so on the POSITIVE magnitudes this pass sees (it
-    runs before ``_negate``) the arithmetic is ``0090 + 0101 - 0102``.
-
-    Cols 0101-0103 apply to slotting exposures only ("An institution shall only
-    report values for exposures subject to the slotting approach") and are
-    structural nulls today — no FCCM-under-slotting carrier is sealed — so 0104
-    currently reproduces 0090 on every row. The subtraction is written out
-    anyway so the cell stays truthful the day a carrier is wired.
-
-    This is a post-execute pass and not a ``Formula`` cell because 0090, 0101 and
-    0102 are themselves ``Formula`` cells and the executor refuses a formula that
-    references another formula. A null 0090 (an inert row) keeps 0104 null for
-    ``_null_empty_rows``; a frame without col 0104 (CRR, which has no FCCM
-    column block) is left untouched.
-    """
-    if "0104" not in frame.columns or "0090" not in frame.columns:
-        return frame
-    total = pl.col("0090").fill_null(0.0)
-    if "0101" in frame.columns:
-        total = total + pl.col("0101").fill_null(0.0)
-    if "0102" in frame.columns:
-        total = total - pl.col("0102").fill_null(0.0)
-    return frame.with_columns(
-        pl.when(pl.col("0090").is_null())
-        .then(pl.lit(None, dtype=pl.Float64))
-        .otherwise(total)
-        .alias("0104")
-    )
-
-
-def _negate_expr(col: str) -> pl.Expr:
-    """Negate a "(-)"-labelled deduction column, normalising a zero to ``+0.0``.
-
-    Plain ``-pl.col(col)`` flips the IEEE sign bit, so a ``0.0`` cell would
-    serialise as ``-0.0`` (``+ 0.0`` does NOT clear it in Polars); the explicit
-    zero branch keeps a zero deduction as ``+0.0``. Null stays null (``== 0.0``
-    is null on a null row, so the ``otherwise`` branch returns ``-null``). This
-    is the identical expression used by C 07.00's ``_negate_deduction_cols``."""
-    return pl.when(pl.col(col) == 0.0).then(pl.lit(0.0)).otherwise(-pl.col(col)).alias(col)
-
-
-def _negate(frame: pl.DataFrame) -> pl.DataFrame:
-    """Annex II §1.3: emit the "(-)"-labelled deduction columns negative on the
-    C 08.01/02 surface (``_NEGATIVE_COLS``), AFTER the CRM waterfall (0090) has
-    consumed their positive magnitudes. Intersecting with the frame's columns
-    makes the framework-specific members (B31's 0035/0102/0103, CRR's 0256/0257)
-    no-ops in the regime where the column is absent. A zero cell is emitted as
-    ``+0.0`` (not ``-0.0`` — plain float negation flips the sign bit and Polars
-    keeps it) and null stays null; identical expression to C 07.00's pass."""
-    targets = [col for col in frame.columns if col in _NEGATIVE_COLS]
-    if not targets:
-        return frame
-    return frame.with_columns(_negate_expr(col) for col in targets)
 
 
 def _empty_frame(column_refs: tuple[str, ...], string_refs: tuple[str, ...] = ()) -> pl.DataFrame:

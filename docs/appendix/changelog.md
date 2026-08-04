@@ -13,6 +13,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - (Next release changes will go here)
 
+### Fixed
+- **CRM substitution: the covered part's exposure value and RWEA never followed it to the
+  guarantor.** A guaranteed exposure's covered part correctly left the obligor's sheet
+  through the pre-CCF flow columns, but every *exposure-value* and *RWEA* column stayed
+  keyed to the obligor. A £10m slotting loan guaranteed by a CQS1 corporate at 20%
+  reported cols 0100/0110/0150 = £10m on the guarantor's C 07.00 sheet with col 0200 = 0
+  and col 0220 = 0 — the £2m of RWEA appeared nowhere on the template. With a 0%-RW
+  sovereign guarantor col 0220 = 0 is right by coincidence, which is how it survived.
+  - **Annex II is explicit.** Col 0200 is the "exposure value after taking into account
+    value adjustments, **all credit risk mitigants** and conversion factors"; substitution
+    is a credit risk mitigant. Cols 0090/0100 say the covered part is "deducted from the
+    obligor's exposure class and **subsequently assigned to the protection provider's**".
+  - Fixed across **C 07.00, C 08.01, C 08.06, C 09.01, C 09.02, C 02.00, OV1 and CR10**,
+    which had to move together: several are defined by cross-reference to one another, so
+    moving one alone makes two templates state different values for a quantity the
+    regulator defines as identical.
+  - **Geography follows the same split**, as PS1/26 Annex II §3.4 ¶87 prescribes:
+    original exposure pre-CCF by the *immediate* obligor, exposure value and RWEA by the
+    *ultimate* obligor. A GB borrower guaranteed by a German institution now reports its
+    exposure value on the DE sheet.
+- **A declined guarantee no longer migrates anything.** Where the engine declines a
+  guarantee because it would not improve capital (CRR Art. 193(1) — "no exposure ... shall
+  produce a higher risk-weighted exposure amount ... than an otherwise identical exposure
+  ... with no credit risk mitigation"), the exposure kept its own risk weight for capital
+  but still moved class and approach for reporting, booking a substitution outflow and
+  inflow for protection that was never recognised. A 70% slotting weight was published on
+  the SA central-governments sheet, where no such weight exists.
+- **A substituted-away leg no longer distorts the slotting grid.** C 08.06 and CR10 kept a
+  covered part that had left the slotting approach, so a category holding one substituted
+  and one plain leg reported the EAD-weighted blend of their weights — 60.5% inside a
+  fixed Art. 153(5) 90% band, with CR10 printing 90% beside an implied 60.5%.
+- **The covered part no longer appears as the guarantor's specialised lending.** `sl_type`
+  is the obligor's characteristic, so a slotting-origin inflow was populating "of which:
+  specialised lending" on a corporate guarantor's sheet. Annex II admits those rows only
+  for exposures applying the Art. 122B treatment, which a substituted-in part does not.
+- Nineteen published EBA/BoE supervisory validation rules stop breaking, including four
+  Error-severity. Zero new breaks across both regimes and all six portfolios.
+
 ---
 
 ## [0.3.22] - 2026-08-03

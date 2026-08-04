@@ -184,16 +184,28 @@ type ValueBinding = (
 class RowPredicate:
     """A conjunctive row filter over the sealed reporting-ledger columns.
 
-    Post-substitution fields (``classes`` / ``method``) and origin fields
-    (``classes_origin`` / ``approaches_origin``) are both available so each
-    template keys on its RECORDED basis (COREP C 07.00 keys origin; the
+    Post-substitution fields (``classes`` / ``approaches`` / ``method``) and
+    origin fields (``classes_origin`` / ``approaches_origin``) are both
+    available so each template keys on its RECORDED basis (the
     post-substitution retargets are per-template recorded decisions — plan
     F3/F4). Unset fields (empty tuple / None) impose no constraint.
+
+    ``approaches`` is the post-substitution twin of ``approaches_origin``
+    (sealed ``reporting_approach`` = the aggregator's ``approach_post_crm``).
+    A leg whose guarantee the engine applied under Art. 235 is a direct
+    exposure to the protection provider and is treated under the PROVIDER's
+    approach, so a template disclosing "of which: the standardised approach"
+    keys this, while one disclosing the obligor's own book keys the origin
+    twin. Both are needed and neither is the default. Unlike every other
+    field here it compiles in ``_compile``, not ``to_expr``, because it
+    DEGRADES to the origin twin on a frame that seals no post-substitution
+    approach — see the note there.
     """
 
     classes: tuple[str, ...] = ()
     classes_origin: tuple[str, ...] = ()
     method: str | None = None
+    approaches: tuple[str, ...] = ()
     approaches_origin: tuple[str, ...] = ()
     leg_role: Literal["whole", "guaranteed", "retained"] | None = None
     on_balance_sheet: bool | None = None
@@ -274,6 +286,23 @@ class RowPredicate:
         ):
             return pl.lit(False)
         expr = self.to_expr()
+        if self.approaches:
+            # DEGRADES to the origin twin, and compiles HERE rather than in
+            # ``to_expr`` because only here are the frame's columns known. A
+            # frame that seals no post-substitution approach (the synthetic
+            # unit/lineage frames, which carry ``reporting_approach_origin``
+            # alone) then reports exactly what it did before the post-basis
+            # retarget, instead of raising ColumnNotFoundError or — worse, had
+            # this been a tolerant ``equals`` — silently zeroing every
+            # per-approach cell. Matching only where a leg substituted is the
+            # whole point: post == origin wherever nothing did.
+            approach_col = (
+                "reporting_approach"
+                if "reporting_approach" in cols
+                else "reporting_approach_origin"
+            )
+            if approach_col in cols:
+                expr = _conj(expr, pl.col(approach_col).is_in(list(self.approaches)))
         for col, value in self.equals:
             expr = _conj(expr, pl.col(col) == value)
         for col, low, high in self.between:

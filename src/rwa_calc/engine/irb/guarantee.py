@@ -14,6 +14,8 @@ Key responsibilities:
 References:
 - CRR Art. 153(3), 202-203: Double default treatment
 - CRR Art. 161(3): Guarantor PD substitution for expected loss
+- CRR Art. 193(1), (3): CRM recognition principles — the no-worse RWEA/EL cap
+  and the election to amend, i.e. the basis for declining a guarantee
 - CRR Art. 213, 215-217: Guarantee eligibility and substitution
 - CRR Art. 235 / PRA PS1/26 Art. 235: SA risk-weight substitution method (RWSM)
 - CRR Art. 114-122: guarantor SA risk weights (shared builder —
@@ -131,8 +133,15 @@ def apply_guarantee_substitution(
     # --- Blend RWA and adjust expected loss ---
     ead_col = "ead_final" if "ead_final" in cols else "ead"
 
-    # Check if guarantee is beneficial (guarantor RW < borrower IRB RW)
-    # Non-beneficial guarantees should NOT be applied per CRR Art. 213
+    # The Art. 193(1) benefit test on the IRB leg (guarantor RW < borrower IRB
+    # RW). Art. 193(1) binds the EXPECTED LOSS amount as well as the RWEA, and
+    # Art. 193(3)'s "may amend" reaches the IRB approach explicitly — which is
+    # why the basis here is Art. 193 and NOT Art. 113(3) (Chapter 2, SA-only) or
+    # Art. 213 (an eligibility gate on the protection contract, gated upstream).
+    # Declining rather than applying-and-capping, and the strict ``<``, are both
+    # elections the text does not force: the single recorded basis for this flag
+    # and every consumer of it is
+    # ``engine/sa/rw_adjustments.py::apply_guarantee_substitution``.
     lf = lf.with_columns(
         [
             pl.when(

@@ -106,6 +106,11 @@ _DESTINATION_CLASS_COL: str = "post_crm_exposure_class_guaranteed"
 # The raw covered-part carrier. Its PRESENCE gates the whole mechanism; its VALUE
 # is never summed directly — see :data:`IRB_UNFUNDED_COL`.
 _COVERED_COL: str = "guaranteed_portion"
+# The calculators' "the substitution was actually applied" flag
+# (``engine/sa/rw_adjustments.py`` / ``engine/irb/guarantee.py``). CONDITIONAL on
+# the aggregator exit (``inject=False``), and absent altogether from the synthetic
+# unit frames, so every read of it is presence-tolerant. See :func:`_decline_gate`.
+_BENEFICIAL_COL: str = "is_guarantee_beneficial"
 # The covered part of the original exposure pre-conversion factors, AS REPORTED —
 # i.e. after the Annex II block cap. Reading the RAW ``guaranteed_portion`` here
 # instead created money: the outflow sheds proportionally when the protection
@@ -249,14 +254,33 @@ def irb_origin_inflows(
     aggregator rule ever grows a branch that maps an SA origin to an IRB
     destination, this docstring and ``_sa_inflows`` are the two places to revisit.
 
+    ONLY LEGS WHOSE SUBSTITUTION WAS ACTUALLY APPLIED PRODUCE AN INFLOW, and that
+    needs no filter here: :func:`_decline_gate` has already zeroed the covered
+    carrier on a declined leg, so the ``> 0`` filter below drops it. What entitles
+    the covered part to the GUARANTOR's sheet is Art. 235 risk-weight substitution
+    having FIRED; a positive ``guaranteed_portion`` only says protection was
+    ATTACHED. Art. 193(1) bars a guarantee from RAISING the RWEA and Art. 193(3)
+    makes amending the calculation an election, so the calculators DECLINE such a
+    guarantee and leave the leg on the borrower basis
+    (``is_guarantee_beneficial=False``). Booking an inflow for one of those
+    published the BORROWER's risk weight on the guarantor's sheet, because the
+    band split (:func:`_band_split`) reads ``risk_weight``, which on a declined
+    leg is still the obligor's: a slotting project-finance leg that declined a
+    100%-RW sovereign guarantee landed 10,000,000 on the
+    ``central_govt_central_bank`` sheet banded at its own 70% slotting weight — a
+    weight no SA sovereign row can carry in either framework. Gating the carrier
+    rather than this filter is what keeps the outflow and the inflow off the SAME
+    decision, so a declined guarantee cannot leave one template without arriving
+    on the other.
+
     Returns ``{guarantor exposure class: covered amount}`` as POSITIVE magnitudes
     measured on the CAPPED carrier (see :data:`IRB_UNFUNDED_COL`), empty when the
     frame carries no substitution carriers. Legs with no destination class are
     dropped rather than grouped under a null key: the sheet axis has no null
-    member, so a null-keyed inflow could only be silently lost. Every leg with a
-    positive covered part is counted — including one whose guarantor sits in the
-    obligor's own class (Annex II "Inflows and outflows within the same exposure
-    classes ... shall also be considered").
+    member, so a null-keyed inflow could only be silently lost. Every REMAINING
+    leg with a positive covered part is counted — including one whose guarantor
+    sits in the obligor's own class (Annex II "Inflows and outflows within the
+    same exposure classes ... shall also be considered").
     """
     if not {_COVERED_COL, _DESTINATION_CLASS_COL} <= cols:
         return {}
@@ -309,11 +333,18 @@ def _band_split(
     ``band_expr`` is supplied by the CALLER because the band ladder is that
     template's own regime-shaped axis (``corep/c07.py::_rw_band_expr`` over
     ``get_sa_risk_weight_bands``) — the same expression its own rows key on, so a
-    banded inflow lands on a row that exists. It is measured on the SOURCE leg's
-    ``risk_weight``, which on a guaranteed leg IS the guarantor's substituted
-    weight (CRR Art. 235 risk-weight substitution), i.e. the weight the
-    destination sheet should report the inflow at. The ladder ends in an "Other
-    risk weights" catch-all, so no leg can be silently dropped.
+    banded inflow lands on a row that exists. The ladder ends in an "Other risk
+    weights" catch-all, so no leg can be silently dropped.
+
+    IT IS MEASURED ON THE SOURCE LEG'S ``risk_weight``, and that is the
+    guarantor's substituted weight (CRR Art. 235) ONLY BECAUSE ``migrated`` HAS
+    ALREADY BEEN FILTERED TO BENEFICIALLY-SUBSTITUTED LEGS — a precondition the
+    caller establishes, not a property of guaranteed legs in general. On a leg
+    whose guarantee the engine declined, ``risk_weight`` is still the OBLIGOR's,
+    and banding it here is exactly what leaked a 70% slotting weight onto the
+    ``central_govt_central_bank`` sheet (see :func:`irb_origin_inflows`). Any
+    future caller that widens the filter must supply the substituted weight
+    itself rather than rely on this equivalence.
     """
     if band_expr is None:
         return {}
@@ -365,6 +396,31 @@ def _slotting(cols: set[str]) -> pl.Expr:
     if _DESTINATION_APPROACH_COL not in cols:
         return pl.lit(value=False)
     return (pl.col(_DESTINATION_APPROACH_COL) == "slotting").fill_null(value=False)
+
+
+def _decline_gate(cols: set[str], magnitude: pl.Expr) -> pl.Expr:
+    """Zero a protection magnitude where the engine DECLINED the guarantee.
+
+    A guarantee the engine DECLINED (``is_guarantee_beneficial`` false/null — it
+    would have RAISED capital, which CRR Art. 193(1) forbids) produces NO
+    substitution effect: the RWA stays on the borrower basis. This gate moves no
+    RWA itself; what it reports is the DECLINE MECHANISM, not merely the
+    Art. 193(1) outcome — an apply-and-cap implementation reaches the same
+    capital under CRR and WOULD book these flows, so this gate is correct only
+    because the calculators decline. That election and the CRR-conditionality of
+    its capital-neutrality are recorded on
+    ``engine/sa/rw_adjustments.py::apply_guarantee_substitution``.
+    Annex II heads this block "CRM TECHNIQUES
+    WITH SUBSTITUTION EFFECTS ON THE EXPOSURE", so a declined guarantee does not
+    belong in it, and reporting one booked a phantom outflow against a phantom
+    inflow. Gating the carrier here gates BOTH sides at once — the substitution
+    inflow binds this same column — so conservation is preserved by construction
+    rather than by two gates agreeing. Absent column = the CRM guarantee sub-step
+    never ran, so there is nothing to decline and the gate is a no-op.
+    """
+    if _BENEFICIAL_COL not in cols:
+        return magnitude
+    return pl.when(pl.col(_BENEFICIAL_COL) == True).then(magnitude).otherwise(pl.lit(0.0))  # noqa: E712
 
 
 def irb_block_cap_scale(cols: set[str], block_total: pl.Expr) -> pl.Expr:
@@ -460,6 +516,18 @@ def irb_protection_exprs(cols: set[str]) -> list[pl.Expr]:
     pipeline (a 1,500,000 guarantee deducted twice from a 51,100,000 corporate
     sheet), and it is now fixed in ``_crm_waterfall``, not deferred.
 
+    A DECLINED GUARANTEE IS NOT IN THE BLOCK AT ALL. The heading is "CRM
+    TECHNIQUES **WITH SUBSTITUTION EFFECTS ON THE EXPOSURE**", and a guarantee the
+    calculator declined has none — Art. 193(1) bars a guarantee from raising the
+    RWEA and Art. 193(3) leaves amending the calculation an election, so where the
+    guarantor's risk does not beat the obligor's the engine leaves the RWA on the
+    borrower basis. :func:`_decline_gate` therefore zeroes the unfunded
+    magnitude on both the col 0040/0050 twin and the col 0070 subtotal, which also
+    removes the leg from the col 0080 inflow (it binds
+    :data:`IRB_UNFUNDED_COL`). The Art. 232 OFCP carriers are deliberately NOT
+    gated: they are not the guarantee whose benefit was measured, and no
+    beneficial flag speaks for them.
+
     Returns the ``c08_prot_*`` twins for whichever raw carriers the frame has,
     plus the ``c08_prot_block`` subtotal — a constant 0.0 on a frame with no
     protection carrier at all, so col 0070 reports the same zero deduction as the
@@ -480,6 +548,7 @@ def irb_protection_exprs(cols: set[str]) -> list[pl.Expr]:
             if "protection_type" in cols
             else gp
         )
+        unfunded = _decline_gate(cols, unfunded)
         parts.append(unfunded)
     if not parts:
         return [pl.lit(0.0).alias(IRB_BLOCK_COL), pl.lit(0.0).alias(IRB_UNFUNDED_COL)]
@@ -490,8 +559,16 @@ def irb_protection_exprs(cols: set[str]) -> list[pl.Expr]:
         if col in cols
     ]
     if unfunded is not None:
+        # Cols 0040/0050 bind this ONE twin and make their guarantee /
+        # credit-derivative split by cell PREDICATE, so it stays raw of the
+        # protection_type gate — but it must carry the DECLINE gate, or col 0070
+        # (the ``IRB_BLOCK_COL`` subtotal, which does) would shed a declined
+        # guarantee that cols 0040/0050 still report and break the live identity
+        # ``{c0070} = {c0040} + {c0050} + {c0060}`` (``v1663_m`` / ``v1665_m``).
         exprs.append(
-            (pl.col("guaranteed_portion").fill_null(0.0) * scale).alias("c08_prot_guaranteed")
+            (_decline_gate(cols, pl.col("guaranteed_portion").fill_null(0.0)) * scale).alias(
+                "c08_prot_guaranteed"
+            )
         )
     # The col 0070 subtotal: the SAME capped magnitudes cols 0040/0050/0060 sum,
     # added up once per leg. ``unfunded`` already carries the protection_type

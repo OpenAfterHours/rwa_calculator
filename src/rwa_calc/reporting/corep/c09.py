@@ -8,25 +8,69 @@ Pipeline position:
 
 Cell semantics (recorded decisions, this slice):
 
-- C 09.01's PRIMARY columns key the APPLIED Art. 112 class
+- BOTH templates split BY COLUMN on the basis Annex II §3.4 ¶87 names.
+  ¶86: "This concept can be applied on an immediate-obligor basis and on
+  an ultimate-risk basis. Hence, CRM techniques with substitution effects
+  can change the allocation of an exposure to a country." ¶87: "Data
+  regarding 'original exposure pre-conversion factors' shall be reported
+  referring to the country of residence of the IMMEDIATE obligor. Data
+  regarding 'exposure value' and 'Risk-weighted exposure amounts' shall be
+  reported as of the country of residence of the ULTIMATE obligor." So the
+  pre-conversion original exposure and the provisions columns (C 09.01
+  0010/0020/0050/0055, C 09.02 0010/0030/0050/0055) key the IMMEDIATE
+  obligor and the exposure-value / RWEA columns (C 09.01 0075/0080/0081/
+  0082/0090, C 09.02 0105/0107/0110/0120/0121/0122/0125) key the ULTIMATE
+  one — on BOTH axes at once, the row (class) and the sheet (country),
+  since a beneficial substitution moves both together. Each cell carries
+  its own population flag, its own class key and its own country flag;
+  widening the frame to both populations WITHOUT that per-cell
+  discrimination is the measured failure mode (a prototype inflated
+  C 09.01 col 0010 by 61% and broke the row-0170 total).
+- C 09.01's IMMEDIATE-obligor columns key the APPLIED Art. 112 class
   (``reporting_class_origin`` — recorded fix 2026-07-12: the Annex II
   instructions define them "same as the CR SA template", so a defaulted
   SA exposure moves to row 0100 exactly as C 07.00 assigns it), while the
   0020 "Defaulted exposures" MEMORANDUM keys the raw ORIGINAL class (the
-  instruction's counterfactual "would have been" row) — a two-basis
-  template like Pillar 3 CR4. C 09.02 keys the sealed
-  ``reporting_class_origin`` (== raw ``exposure_class`` for the IRB
-  book — number-neutral convergence; the IRB template has no default
-  row by design) over the ``reporting_approach_origin`` population.
+  instruction's counterfactual "would have been" row) — a THREE-predicate
+  row, since the ULTIMATE-obligor columns key the sealed
+  ``reporting_class`` over the post-substitution population as well.
+  C 09.02 keys the same pair over the ``reporting_approach_origin`` /
+  ``reporting_approach`` IRB books (its origin key == raw
+  ``exposure_class`` for that book — number-neutral convergence; the IRB
+  template has no default row by design).
+  The rows 0071-0073 SA specialised-lending "of which" cells take one
+  extra POST-basis-only term: a covered part substituted onto a provider's
+  risk weight stops applying its own Art. 122B treatment and leaves those
+  rows, exactly as C 07.00's rows 0021-0026 do (``_SL_OWN_RW_COL``).
   Under B31 the RE reporting classes (retail_mortgage /
   residential_mortgage / commercial_mortgage — the Art. 124A standalone
   RE class plus the loan-splitter's secured legs) key the "Real estate
   exposures" row 0090 and its regulatory-RRE / regulatory-CRE / other-RE
   / ADC / SME "of which" sub-rows (0091-0095); the SA specialised-lending
   "of which" sub-rows (0071-0073) key sl_type (rectification R7).
-- C 09.01 shares C 07.00's population (``c07_population`` — the SA book
-  plus BOTH counterparty-credit-risk populations: FCCM SFT synthetic rows
-  and SA-CCR derivative netting sets, admitted by ``risk_type``). That
+- The COUNTRY axis is the SAME two-basis machinery as the class axis, run
+  on the country as the sheet key (``_GEO_BASIS`` over
+  ``kernel/bases.py::sheet_axis`` / ``sheet_frame``). A beneficially
+  guaranteed cross-border leg therefore sits on TWO country sheets at
+  once: its obligor's, reporting the pre-conversion original exposure, and
+  its guarantor's, reporting the exposure value and RWEA. The keys are the
+  sealed ``reporting_country`` / ``reporting_country_origin`` twins
+  (aggregator ``_add_reporting_projection``, gated identically to the
+  class twin — a DECLINED guarantee moves neither), degrading to the raw
+  ``cp_country_code`` on a frame that seals neither. ``TOTAL`` is the
+  all-geographies sheet and carries every leg on both geographical flags;
+  a null country still partitions into no country sheet.
+- C 09.01 shares C 07.00's population (``c07_population(both_bases=True)``
+  — the SA book on the OBLIGOR's approach unioned with the SA book on the
+  post-substitution approach, plus BOTH counterparty-credit-risk
+  populations: FCCM SFT synthetic rows and SA-CCR derivative netting sets,
+  admitted by ``risk_type``). The post limb is what carries an IRB-origin
+  leg guaranteed by an SA protection provider onto this template — its
+  exposure value and RWEA belong on the guarantor's class under Art. 235,
+  which is where C 07.00's col 0100 already routes its inflow, and the
+  cross-template rules v5746_q-v5772_q / boe_b0191-b0224 tie C 09.01's
+  ¶87 columns straight to C 07.00's own post-substitution cols
+  0200/0215/0220. That
   shared population is why the Basel 3.1 institution row is now populated:
   the derivative netting sets used to be dropped by the
   ``standardised_ccr`` output-floor relabel and never reached either
@@ -104,17 +148,20 @@ Cell semantics (recorded decisions, this slice):
   No provision_held fallback ladder on either template; provisions are the
   (unsealed) SCRA/GCRA carriers.
 - Lineage-instrumented (R25): ``c09_01_plans`` / ``c09_02_plans`` expose the
-  per-COUNTRY execution plans (``TOTAL`` first, then one sheet per sorted non-null
-  ``cp_country_code``), sharing ``_c09_01_prepared`` / ``_c09_02_prepared`` +
+  per-COUNTRY execution plans (``TOTAL`` first, then one sheet per sorted country
+  key contributed by EITHER basis), sharing ``_c09_01_prepared`` /
+  ``_c09_02_prepared`` +
   ``_country_frames`` with the reported generators so a cell's plan and its
   reported value key identically. Both pass ``_C09_NEGATIVE_COLS`` explicitly —
   the first C 09-family sign-aware sweep, so the CRR supporting-factor adjustment
   columns (0081/0082, 0121/0122) reconcile against their legs' positive
-  magnitudes. The two-basis C 09.01 row model drills correctly: a PRIMARY cell
-  (e.g. 0010/0090) runs the APPLIED-class predicate (``reporting_class_origin``)
-  while the 0020 defaulted MEMO runs the ORIGINAL-class predicate
-  (``exposure_class`` + defaulted), so on a defaulted leg whose applied class
-  moved the two cells drill different legs. C 09.02's ``_c09_02_avg_postfix`` is a
+  magnitudes. The multi-basis C 09.01 row model drills correctly: an
+  IMMEDIATE-obligor cell (0010) runs the APPLIED-class predicate
+  (``reporting_class_origin``), the 0020 defaulted MEMO runs the ORIGINAL-class
+  predicate (``exposure_class`` + defaulted) and an ULTIMATE-obligor cell
+  (0075/0090) runs the post-substitution predicate (``reporting_class``), so on
+  a defaulted or a guaranteed leg the three cells of one row drill different
+  legs. C 09.02's ``_c09_02_avg_postfix`` is a
   value-dependent GENERATE post-step (an unweighted-mean fallback when a subset's
   total EAD is non-positive) on the reported frame the drill-down reads: it does
   not change a cell's legs (the same subset feeds the WeightedAvg or its
@@ -125,7 +172,9 @@ Cell semantics (recorded decisions, this slice):
 
 References:
 - Regulation (EU) 2021/451, Annex I/II (C 09.01 / C 09.02)
-- PRA PS1/26 Annex I/II (OF 09.01 / OF 09.02); CRR Art. 112 / Art. 147
+- PRA PS1/26 Annex I/II (OF 09.01 / OF 09.02), §3.4 ¶86/¶87 — the
+  immediate-obligor / ultimate-obligor column basis; CRR Art. 112 / Art. 147
+- CRR Art. 235 (risk-weight substitution) — what moves the class AND the country
 - docs/plans/phase7-declarative-reporting.md §3.2/§6 (S8)
 """
 
@@ -145,10 +194,10 @@ from rwa_calc.reporting.cellspec import (
     TemplateSpec,
     WeightedAvg,
     execute,
-    matched_counts,
     subset_rows,
 )
 from rwa_calc.reporting.corep.c07 import c07_population
+from rwa_calc.reporting.corep.postpass import negate_deduction_cols, null_empty_rows
 from rwa_calc.reporting.corep.templates import (
     C09_01_SA_CLASS_MAP,
     get_c09_01_columns,
@@ -156,7 +205,7 @@ from rwa_calc.reporting.corep.templates import (
     get_c09_02_columns,
     get_c09_02_rows,
 )
-from rwa_calc.reporting.kernel import pick
+from rwa_calc.reporting.kernel import TwoBasis, pick, population_flags, sheet_axis, sheet_frame
 from rwa_calc.reporting.metadata import ReportingContext
 from rwa_calc.reporting.plans import SheetPlan
 
@@ -169,6 +218,40 @@ if TYPE_CHECKING:
     from rwa_calc.reporting.corep.templates import COREPRow
 
 _IRB_APPROACHES: tuple[str, ...] = ("foundation_irb", "advanced_irb", "slotting")
+
+# C 09.02's own two-basis namespace (C 09.01 keys C 07.00's, via c07_population).
+# Annex II §3.4 ¶87 splits this template BY COLUMN: "original exposure
+# pre-conversion factors" reports at the IMMEDIATE obligor, while "exposure
+# value" and "risk-weighted exposure amounts" report at the ULTIMATE obligor —
+# which is the origin/post pair under the regulator's own vocabulary, and ¶86
+# says so outright ("CRM techniques with substitution effects can change the
+# allocation of an exposure to a country").
+_C09_BASIS: TwoBasis = TwoBasis("c09")
+# C 09.01's population flags, materialised by ``c07_population(both_bases=True)``
+# under C 07.00's own namespace — C 09.01 IS a geographical cut of that
+# population, so it must read the same two membership flags rather than
+# re-deriving them (an SA-guarantor leg whose obligor is IRB is in the POST
+# population only, and is exactly what the ¶87 columns exist to report).
+_C07_BASIS: TwoBasis = TwoBasis("c07")
+# The sealed post-substitution class twin (the ULTIMATE obligor of ¶87).
+_POST_CLASS_COL: str = "reporting_class"
+
+# The per-COUNTRY sheet axis, run on the SAME two-basis machinery as the class
+# axis (``kernel/bases.py``) — a country IS the sheet key here. ¶86 states it
+# outright: "CRM techniques with substitution effects can change the allocation
+# of an exposure to a country", so a beneficially guaranteed leg sits on TWO
+# country sheets at once (its obligor's for the pre-conversion original
+# exposure, its guarantor's for the exposure value and RWEA) exactly as it sits
+# on two class sheets. The keys are the sealed ``reporting_country`` twins,
+# degrading to the raw ``cp_country_code`` on a frame that seals neither, which
+# is what keeps the split number-neutral on a book that never substitutes across
+# a border.
+_GEO_BASIS: TwoBasis = TwoBasis("c09_geo")
+_COUNTRY_ORIGIN_COL: str = "reporting_country_origin"
+_COUNTRY_POST_COL: str = "reporting_country"
+#: The raw per-exposure country the sealed twins are derived from, and the
+#: fallback both keys degrade to on a synthetic frame that seals neither.
+_RAW_COUNTRY_COL: str = "cp_country_code"
 
 # C 09.02 row keys that map directly to a single exposure_class value.
 _C09_02_DIRECT_EC: frozenset[str] = frozenset(
@@ -249,6 +332,26 @@ _C09_01_SL_TYPE_MAP: dict[str, str] = {
     "sl_project_finance": "project_finance",
 }
 
+# The CRM decline flag on the sealed ledger (``inject=False``, so it is simply
+# absent on a run with no guarantee sub-step), and the derived "does this leg
+# still apply its OWN Art. 122B risk weight?" gate it drives.
+#
+# ``sl_type`` is the OBLIGOR's characteristic and the CRM split never reassigns
+# it, so a covered part substituted onto a protection provider's risk weight
+# carries the obligor's ``sl_type`` into the post-basis columns. Annex II admits
+# an exposure to a specialised-lending "of which" row on THREE conjunctive
+# conditions, the third being the applied risk weight ("apply the risk weight
+# treatment in accordance with Articles 122B(2)(c) or 122B(4)" — PS1/26 Annex II
+# p.89), and ¶43 says the substitution effect "shall reflect the risk weighting
+# treatment effectively applicable to the covered part of the exposure". The
+# covered part applies the PROVIDER's Art. 122 weight, so it fails that third
+# condition and belongs in none of rows 0071-0073. This is C 07.00's own
+# ``_SL_OWN_RW_COL`` gate (rows 0021-0026), applied to the geographical twin of
+# the rows it protects — the two must agree or the cross-template rules
+# (boe_b0975 / boe_b0977) break in whichever direction only one of them moved.
+_BENEFICIAL_COL: str = "is_guarantee_beneficial"
+_SL_OWN_RW_COL: str = "c09_sl_own_rw"
+
 # COREP Annex II §1.3 "(-)"-labelled deduction columns, negated post-execute:
 # the CRR-only SME / Infrastructure supporting-factor adjustment columns on
 # C 09.01 (0081/0082) and C 09.02 (0121/0122). Reported negative so the pre-SF
@@ -323,10 +426,11 @@ def _c09_01_prepared(
     reported frames) so both run the SAME predicate over the SAME prepared frame.
     Returns ``None`` (preserving the generator's error contract) when a required
     column is missing or the C 07.00 population is empty. ``row_preds`` carries
-    each row's COMBINED two-basis emptiness predicate (the ``_either_pred`` of the
-    applied-class primary and the original-class 0020 memo) — an ``any_of`` union
-    that ``SheetPlan.row_terms`` cannot express, so the generate post-passes read
-    it from here rather than the plan."""
+    each row's COMBINED emptiness predicate — the ``_either_pred`` union of the
+    immediate-obligor primary, the original-class 0020 memo and the
+    ultimate-obligor post predicate — an ``any_of`` union that
+    ``SheetPlan.row_terms`` cannot express, so the generate post-passes read it
+    from here rather than the plan."""
     if pick(cols, "exposure_class") is None:
         errors.append("C09.01: Missing required column (exposure_class)")
         return None
@@ -335,12 +439,13 @@ def _c09_01_prepared(
             "C09.01: Missing cp_country_code column — cannot produce geographical breakdown"
         )
         return None
-    sa_df = c07_population(results, cols).collect()
+    sa_df = c07_population(results, cols, both_bases=True).collect()
     if sa_df.height == 0:
         return None
     sa_cols = set(sa_df.columns)
     rwa_col = pick(sa_cols, "rwa_final", "rwa")
     data = sa_df.with_columns(_c09_01_derived_exprs(sa_cols, rwa_col))
+    data = data.with_columns(_geo_keys(sa_cols, _C07_BASIS))
     spec, row_preds = _c09_01_spec(set(data.columns), framework, rwa_col)
     return data, spec, row_preds
 
@@ -353,9 +458,10 @@ def c09_01_plans(
 ) -> dict[str, SheetPlan]:
     """Build the per-COUNTRY C 09.01 / OF 09.01 execution plans for lineage.
 
-    Keys the per-country plans on the sealed ``cp_country_code`` (``TOTAL`` first,
-    the whole population, then one sheet per sorted non-null country) over the
-    SHARED C 07.00 population — the standardised book plus BOTH counterparty-
+    Keys the per-country plans on the sealed ``reporting_country`` twins
+    (``TOTAL`` first, the whole population, then one sheet per sorted country
+    contributed by EITHER basis — §3.4 ¶86/¶87) over the SHARED C 07.00
+    population on BOTH bases — the standardised book plus BOTH counterparty-
     credit-risk populations (FCCM SFT rows and SA-CCR derivative netting sets),
     admitted by ``risk_type``. Every country plan shares the one framework spec
     (the row-selection differs only by the country frame). Passes
@@ -415,6 +521,16 @@ def _c09_01_derived_exprs(cols: set[str], rwa_col: str | None) -> list[pl.Expr]:
     ]
     if "is_qualifying_re" in cols:
         exprs.append(pl.col("is_qualifying_re").fill_null(value=True).alias("c09_re_qualifying"))
+    if _BENEFICIAL_COL in cols:
+        # The post-basis specialised-lending gate (see _SL_OWN_RW_COL), read the
+        # same null-safe way C 07.00 reads it: an unknown benefit is not a
+        # substitution, so the leg keeps applying its own Art. 122B weight.
+        exprs.append(
+            (pl.col(_BENEFICIAL_COL) == True)  # noqa: E712 - null-safe, see _SL_OWN_RW_COL
+            .fill_null(value=False)
+            .not_()
+            .alias(_SL_OWN_RW_COL)
+        )
     if {"exposure_type", "reporting_gross_drawn", "reporting_gross_undrawn"} <= cols:
         exprs.append(
             pl.when(
@@ -469,6 +585,40 @@ def _c09_01_row_pred(row_def: COREPRow, basis_col: str) -> RowPredicate | None:
     return union if parent is None else _narrow(union, ("c09_sme", True))
 
 
+def _post_class_col(cols: set[str]) -> str:
+    """The ¶87 ULTIMATE-obligor class key, DEGRADING to the origin twin.
+
+    ``kernel/bases.py::class_keys``'s rule applied to a CELL key rather than a
+    sheet key, and it is load-bearing for exactly the reason recorded there: the
+    post-basis terms compile to presence-TOLERANT ``equals``, so on a frame that
+    seals no ``reporting_class`` a hardcoded name yields an EMPTY subset and
+    silently zeroes every exposure-value and RWEA cell on the template. Every
+    synthetic unit frame in the COREP estate is such a frame. Degrading instead
+    makes those frames report the same class under both bases — the split is
+    number-neutral wherever nothing substitutes, which is the whole basis on
+    which it is safe to apply it estate-wide.
+    """
+    return _POST_CLASS_COL if _POST_CLASS_COL in cols else "reporting_class_origin"
+
+
+def _post_sl_gate(row_def: COREPRow, cols: set[str]) -> tuple[tuple[str, str | bool], ...]:
+    """The POST-basis-only narrowing of the specialised-lending rows 0071-0073.
+
+    Those rows key ``sl_type`` alone, which the CRM split leaves on the covered
+    part, so on the post basis they would report a leg that has stopped applying
+    its own Art. 122B risk weight — see ``_SL_OWN_RW_COL`` for the Annex II
+    basis and C 07.00's ``_post_sl_terms`` for the row-0021-0026 twin of this.
+
+    Empty when no substitution gate is sealed: the frame then carries no
+    beneficially-substituted leg to exclude, and a presence-tolerant term on an
+    underived column would zero the SL rows of every synthetic unit frame.
+    """
+    key = row_def.exposure_class_value
+    if key not in _C09_01_SL_TYPE_MAP or _BENEFICIAL_COL not in cols:
+        return ()
+    return ((_SL_OWN_RW_COL, True),)
+
+
 def _c09_01_re_sl_pred(key: str, basis_col: str) -> RowPredicate | None:
     """The B31-only real-estate (rows 0090-0095) and SA specialised-lending
     (rows 0071-0073) predicates — the retired reverse-map short-circuited these
@@ -507,15 +657,38 @@ def _c09_01_spec(
     rows = tuple(_Row(row_def.ref, row_def.name) for row_def in row_defs)
     row_preds: dict[str, RowPredicate | None] = {}
     cells: dict[tuple[str, str], CellSpec] = {}
+    origin_terms = _basis_terms(_C07_BASIS.pop_origin, _GEO_BASIS.basis_origin)
+    post_terms = _basis_terms(_C07_BASIS.pop_post, _GEO_BASIS.basis_post)
     for row_def in row_defs:
-        # Primary columns: the APPLIED Art. 112 class (the sealed obligor
-        # applied ladder — defaulted exposures sit in row 0100, as C 07.00).
-        pred = _c09_01_row_pred(row_def, "reporting_class_origin")
+        # Annex II §3.4 ¶87 splits this template BY COLUMN, so each row carries
+        # TWO class predicates plus the 0020 memo's third. ``pred`` is the
+        # IMMEDIATE obligor (origin class over the origin population, on the
+        # obligor's country sheet) for the pre-conversion original exposure and
+        # the provisions columns; ``post_pred`` is the ULTIMATE obligor (the
+        # sealed post-substitution class over the post population, on the
+        # guarantor's country sheet) for the exposure value and the RWEA.
+        #
+        # EVERY predicate carries its OWN population and country flags. Widening
+        # the frame to both populations without that per-ROW discrimination is
+        # the measured failure mode: an origin-keyed cell silently absorbs the
+        # post-only legs (a prototype inflated col 0010 by 61% and broke the
+        # row-0170 total by 4,900,000 that way).
+        pred = _narrow_opt(_c09_01_row_pred(row_def, "reporting_class_origin"), *origin_terms)
         # 0020 memo: the raw ORIGINAL class + defaulted (the counterfactual
-        # "would have been" row of the instruction).
-        memo_pred = _c09_01_row_pred(row_def, "exposure_class")
-        row_preds[row_def.ref] = _either_pred(pred, memo_pred)
-        if pred is None:
+        # "would have been" row of the instruction) — an ORIGIN-basis column,
+        # so it takes the origin population and the obligor's country.
+        memo_pred = _narrow_opt(_c09_01_row_pred(row_def, "exposure_class"), *origin_terms)
+        post_pred = _narrow_opt(
+            _c09_01_row_pred(row_def, _post_class_col(cols)),
+            *post_terms,
+            *_post_sl_gate(row_def, cols),
+        )
+        # The all-null post-pass counts the UNION of all three: keyed on the
+        # origin basis alone it nulls the very rows the post columns exist to
+        # publish (an inflow-only sheet — CGCB here — has no origin-basis leg at
+        # all, yet must report the exposure value and RWEA that arrived on it).
+        row_preds[row_def.ref] = _either_pred(_either_pred(pred, memo_pred), post_pred)
+        if pred is None or post_pred is None:
             continue
         ref = row_def.ref
         cells[(ref, "0010")] = _bind_or_null(gross_pre_ccf, pred)
@@ -532,16 +705,23 @@ def _c09_01_spec(
         cells[(ref, "0055")] = CellSpec(Sum("scra_provision_amount"), predicate=pred)
         for null_ref in ("0040", "0060", "0061", "0070"):
             cells[(ref, null_ref)] = CellSpec(Formula(refs=(), fn=_const(None)))
-        cells[(ref, "0075")] = _sum_or_null(ead_col, pred)
+        # ¶87 ULTIMATE-obligor columns: the exposure value (0075) and the RWEA
+        # (0080/0090), plus the CRR supporting-factor adjustments that must foot
+        # 0080 + 0081 + 0082 = 0090. These are the columns v5746_q-v5772_q /
+        # boe_b0191-b0224 tie to C 07.00's own post-substitution cols
+        # 0200/0215/0220, so leaving them on the origin basis asserted that the
+        # covered part had left the obligor's class on one template and stayed
+        # on the other.
+        cells[(ref, "0075")] = _sum_or_null(ead_col, post_pred)
         if "0080" in column_refs:
-            cells[(ref, "0080")] = _sum_or_null(rwa_pre_col, pred)
+            cells[(ref, "0080")] = _sum_or_null(rwa_pre_col, post_pred)
             cells[(ref, "0081")] = _c09_sf_adjustment_cell(
-                pred, cols, "sme_supporting_factor_applied", "is_sme"
+                post_pred, cols, "sme_supporting_factor_applied", "is_sme"
             )
             cells[(ref, "0082")] = _c09_sf_adjustment_cell(
-                pred, cols, "infrastructure_factor_applied", "is_infrastructure"
+                post_pred, cols, "infrastructure_factor_applied", "is_infrastructure"
             )
-        cells[(ref, "0090")] = _sum_or_null(rwa_col, pred)
+        cells[(ref, "0090")] = _sum_or_null(rwa_col, post_pred)
     spec = TemplateSpec(
         name="c09_01", rows=rows, column_refs=column_refs, cells=cells, empty_cell="zero"
     )
@@ -563,10 +743,12 @@ def _c09_02_prepared(
 
     Shared by ``c09_02_plans`` and ``generate_c09_02``. Returns ``None``
     (preserving the error contract) when a required column is missing or the IRB
-    population is empty. Keys the sealed ``reporting_class_origin`` over the
-    ``reporting_approach_origin`` IRB book INCLUDING slotting (slotting stays IN
-    the population). The spec is built cols-aware from the ORIGINAL sealed set
-    (derived discriminators are bound by name for the executor)."""
+    population is empty. Keys the sealed ``reporting_class_origin`` /
+    ``reporting_class`` pair and the ``reporting_country`` pair over the
+    ``reporting_approach_origin`` / ``reporting_approach`` IRB books INCLUDING
+    slotting (slotting stays IN the population). The spec is built cols-aware
+    from the ORIGINAL sealed set (derived discriminators are bound by name for
+    the executor)."""
     if pick(cols, "exposure_class") is None:
         errors.append("C09.02: Missing required column (exposure_class)")
         return None
@@ -581,6 +763,7 @@ def _c09_02_prepared(
     approach_col = pick(cols, "reporting_approach_origin", "approach")
     rwa_col = pick(cols, "rwa_final", "rwa")
     data = _c09_02_prepare(irb_df, cols, approach_col, rwa_col)
+    data = data.with_columns(_geo_keys(set(irb_df.columns), _C09_BASIS))
     spec, row_preds = _c09_02_spec(cols, framework, approach_col, rwa_col)
     return data, spec, row_preds
 
@@ -593,8 +776,9 @@ def c09_02_plans(
 ) -> dict[str, SheetPlan]:
     """Build the per-COUNTRY C 09.02 / OF 09.02 execution plans for lineage.
 
-    Keys the per-country plans on ``cp_country_code`` (``TOTAL`` first, then one
-    sheet per sorted non-null country) over the IRB book (F-IRB / A-IRB / slotting
+    Keys the per-country plans on the sealed ``reporting_country`` twins
+    (``TOTAL`` first, then one sheet per sorted country contributed by EITHER
+    basis — §3.4 ¶86/¶87) over the IRB book (F-IRB / A-IRB / slotting
     — slotting stays IN the population). Passes ``_C09_NEGATIVE_COLS`` explicitly
     so the CRR supporting-factor adjustment columns (0121/0122) reconcile with the
     sign convention. The value-dependent unweighted-mean fallback (see
@@ -649,10 +833,21 @@ def generate_c09_02(
 
 
 def _irb_population(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:
-    """The retired _filter_by_irb_approach: keyed to approach_applied only."""
-    if "reporting_approach_origin" not in cols:
-        return results.filter(pl.lit(value=False))
-    return results.filter(pl.col("reporting_approach_origin").is_in(list(_IRB_APPROACHES)))
+    """The IRB book on BOTH bases, tagged (mirrors ``c08.py::_irb_population``).
+
+    Returns the UNION of the origin-approach IRB book and the post-substitution
+    one, with ``c09_pop_origin`` / ``c09_pop_post`` recording which each leg is
+    in. A leg with no substitution is in both, which is why the split is
+    number-neutral on a book that never substitutes.
+
+    The post book is a SUBSET of the origin one here, exactly as on C 08.01:
+    ``aggregator._post_crm_approach_expr`` maps an SA guarantor to the SA literal
+    and everything else to the obligor's own approach, so an IRB-origin leg can
+    only LEAVE the IRB population post-substitution and an SA-origin leg can
+    never enter it. So the union IS the origin book, and the flags do the work.
+    """
+    tagged = results.with_columns(population_flags(_C09_BASIS, cols, _IRB_APPROACHES))
+    return tagged.filter(pl.col(_C09_BASIS.pop_origin) | pl.col(_C09_BASIS.pop_post))
 
 
 def _c09_02_prepare(
@@ -686,49 +881,53 @@ def _c09_02_prepare(
 
 
 def _c09_02_row_pred(  # noqa: PLR0911 - the retired branch cascade, one return per row family
-    row_def: COREPRow, cols: set[str], approach_col: str | None
+    row_def: COREPRow, cols: set[str], approach_col: str | None, basis_col: str
 ) -> RowPredicate | None:
-    """The retired _filter_c09_02_row branch cascade as predicates."""
+    """The retired _filter_c09_02_row branch cascade as predicates.
+
+    ``basis_col`` is the class column the row keys on — the ORIGIN twin for the
+    original-exposure and provisions columns, the POST twin for exposure value
+    and RWEA (Annex II §3.4 ¶87). Every class term routes through it, so the two
+    bases cannot drift apart in one branch of the cascade.
+    """
     if row_def.ref == "0150":
         return RowPredicate()
     key = row_def.exposure_class_value
     if key is None or key in _C09_02_EMPTY_KEYS:
         return None
     if key in _C09_02_DIRECT_EC:
-        return RowPredicate(equals=(("reporting_class_origin", key),))
+        return RowPredicate(equals=((basis_col, key),))
     if key == "corporate":
-        return _class_union(*_CORPORATE_FAMILY, "specialised_lending")
+        return _class_union(*_CORPORATE_FAMILY, "specialised_lending", col=basis_col)
     if key == "sl_excl_slotting":
-        terms: tuple[tuple[str, str | bool], ...] = (
-            ("reporting_class_origin", "specialised_lending"),
-        )
+        terms: tuple[tuple[str, str | bool], ...] = ((basis_col, "specialised_lending"),)
         if approach_col is not None:
             terms = (*terms, ("c09_slotting", False))
         return RowPredicate(equals=terms)
     if key == "sl_slotting":
         if approach_col is None:
             return None
-        return RowPredicate(
-            equals=(("reporting_class_origin", "specialised_lending"), ("c09_slotting", True))
-        )
+        return RowPredicate(equals=((basis_col, "specialised_lending"), ("c09_slotting", True)))
     if key == "corporate_sme":
-        return _conjoin(_class_union(*_CORPORATE_FAMILY), ("c09_sme", True))
+        return _conjoin(_class_union(*_CORPORATE_FAMILY, col=basis_col), ("c09_sme", True))
     if key == "corporate_fse_large":
-        return _conjoin(_class_union(*_CORPORATE_FAMILY), ("cp_apply_fi_scalar", True))
+        return _conjoin(
+            _class_union(*_CORPORATE_FAMILY, col=basis_col), ("cp_apply_fi_scalar", True)
+        )
     if key == "corporate_non_sme":
-        return _conjoin(_class_union(*_CORPORATE_FAMILY), ("c09_corp_non_sme", True))
+        return _conjoin(_class_union(*_CORPORATE_FAMILY, col=basis_col), ("c09_corp_non_sme", True))
     if key == "retail":
-        return _class_union("retail_mortgage", "retail_qrre", "retail_other")
+        return _class_union("retail_mortgage", "retail_qrre", "retail_other", col=basis_col)
     if key in ("retail_mortgage_sme", "retail_mortgage_non_sme"):
         flag = "c09_sme" if key == "retail_mortgage_sme" else "c09_non_sme"
-        return RowPredicate(equals=(("reporting_class_origin", "retail_mortgage"), (flag, True)))
+        return RowPredicate(equals=((basis_col, "retail_mortgage"), (flag, True)))
     if key in ("retail_other_sme", "retail_other_non_sme"):
         flag = "c09_sme" if key == "retail_other_sme" else "c09_non_sme"
-        return RowPredicate(equals=(("reporting_class_origin", "retail_other"), (flag, True)))
+        return RowPredicate(equals=((basis_col, "retail_other"), (flag, True)))
     if key in _C09_02_RE_ROWS:
         ptypes, is_sme = _C09_02_RE_ROWS[key]
         terms = (
-            ("reporting_class_origin", "retail_mortgage"),
+            (basis_col, "retail_mortgage"),
             ("c09_sme" if is_sme else "c09_non_sme", True),
         )
         # The retired code skips the property filter when the column is
@@ -760,12 +959,34 @@ def _c09_02_spec(
     row_preds: dict[str, RowPredicate | None] = {}
     cells: dict[tuple[str, str], CellSpec] = {}
     for row_def in row_defs:
-        pred = _c09_02_row_pred(row_def, cols, approach_col)
-        row_preds[row_def.ref] = pred
-        if pred is None:
+        # Annex II §3.4 ¶87 splits this template by COLUMN, so each row carries
+        # TWO predicates. ``pred`` is the IMMEDIATE obligor (origin class, origin
+        # population) for the original-exposure and provisions columns;
+        # ``post_pred`` is the ULTIMATE obligor (post class, post population) for
+        # exposure value and RWEA. Each is narrowed to its own population, or a
+        # leg that left the IRB book post-substitution would leak into the
+        # origin-keyed columns — the C 09.01 prototype measured that leak at a
+        # 61% inflation of the original-exposure column. Each also carries its
+        # own COUNTRY basis (¶86: substitution changes the allocation of an
+        # exposure to a country), so a cross-border guarantee moves the exposure
+        # value and RWEA onto the guarantor's sheet while the original exposure
+        # stays on the obligor's.
+        pred = _narrow_opt(
+            _c09_02_row_pred(row_def, cols, approach_col, "reporting_class_origin"),
+            *_basis_terms(_C09_BASIS.pop_origin, _GEO_BASIS.basis_origin),
+        )
+        post_pred = _narrow_opt(
+            _c09_02_row_pred(row_def, cols, approach_col, _post_class_col(cols)),
+            *_basis_terms(_C09_BASIS.pop_post, _GEO_BASIS.basis_post),
+        )
+        # The all-null post-pass must count the UNION: keying it on the origin
+        # basis alone nulls the very rows the post columns exist to populate.
+        row_preds[row_def.ref] = _either_pred(pred, post_pred)
+        if pred is None or post_pred is None:
             continue
         ref = row_def.ref
         def_pred = _conjoin(pred, ("c09_defaulted", True))
+        post_def_pred = _conjoin(post_pred, ("c09_defaulted", True))
         cells[(ref, "0010")] = _bind_or_null(gross_pre_ccf, pred)
         if gross_pre_ccf is not None:
             # 0030 "Of which defaulted" is the ORIGINAL exposure value of the
@@ -778,21 +999,26 @@ def _c09_02_spec(
         cells[(ref, "0080")] = _wavg_or_null(pd_col, ead_col, pred)
         cells[(ref, "0090")] = _wavg_or_null(lgd_col, ead_col, pred)
         cells[(ref, "0100")] = _wavg_or_null(lgd_col, ead_col, def_pred)
-        cells[(ref, "0105")] = _sum_or_null(ead_col, pred)
+        # ¶87 ULTIMATE-obligor columns: exposure value and RWEA, plus the CRR
+        # supporting-factor adjustments that must foot against 0125. The PD/LGD
+        # averages (0080/0090/0100) and expected loss (0130) stay on the
+        # IMMEDIATE obligor — ¶87 names only the two quantities below, and a
+        # risk parameter is a property of the obligor whose book the row is.
+        cells[(ref, "0105")] = _sum_or_null(ead_col, post_pred)
         if "0107" in column_refs and ead_col is not None:
-            cells[(ref, "0107")] = CellSpec(Sum(ead_col), predicate=def_pred)
+            cells[(ref, "0107")] = CellSpec(Sum(ead_col), predicate=post_def_pred)
         if "0110" in column_refs:
-            cells[(ref, "0110")] = _sum_or_null(rwa_pre_col, pred)
+            cells[(ref, "0110")] = _sum_or_null(rwa_pre_col, post_pred)
         if rwa_col is not None:
-            cells[(ref, "0120")] = CellSpec(Sum(rwa_col), predicate=def_pred)
+            cells[(ref, "0120")] = CellSpec(Sum(rwa_col), predicate=post_def_pred)
         if "0121" in column_refs:
             cells[(ref, "0121")] = _c09_sf_adjustment_cell(
-                pred, cols, "sme_supporting_factor_applied", "is_sme"
+                post_pred, cols, "sme_supporting_factor_applied", "is_sme"
             )
             cells[(ref, "0122")] = _c09_sf_adjustment_cell(
-                pred, cols, "infrastructure_factor_applied", "is_infrastructure"
+                post_pred, cols, "infrastructure_factor_applied", "is_infrastructure"
             )
-        cells[(ref, "0125")] = _sum_or_null(rwa_col, pred)
+        cells[(ref, "0125")] = _sum_or_null(rwa_col, post_pred)
         cells[(ref, "0130")] = CellSpec(Sum("expected_loss"), predicate=pred)
     spec = TemplateSpec(
         name="c09_02", rows=rows, column_refs=column_refs, cells=cells, empty_cell="zero"
@@ -843,22 +1069,55 @@ def _c09_02_avg_postfix(
 # =============================================================================
 
 
+def _geo_keys(cols: set[str], population: TwoBasis) -> list[pl.Expr]:
+    """The per-COUNTRY sheet keys, on the template's own population flags.
+
+    Materialises ``_GEO_BASIS`` — the country axis expressed in the same
+    ``TwoBasis`` vocabulary the class axis uses, so ``sheet_axis`` /
+    ``sheet_frame`` partition countries with no second implementation. The two
+    "class" keys are the sealed ``reporting_country`` twins and the two
+    population flags are ALIASES of the template's own (C 07.00's for C 09.01,
+    C 09.02's for itself), so a leg is on a country sheet only if it is in that
+    basis's population to begin with.
+
+    Both keys degrade to the raw ``cp_country_code`` on a frame that seals no
+    country twin (every synthetic unit frame in the COREP estate), which reports
+    the same country under both bases instead of emptying the ¶87 columns — the
+    same degradation rule ``kernel/bases.py::class_keys`` applies to the class
+    key, and for the same reason.
+    """
+    origin_col = _COUNTRY_ORIGIN_COL if _COUNTRY_ORIGIN_COL in cols else _RAW_COUNTRY_COL
+    post_col = _COUNTRY_POST_COL if _COUNTRY_POST_COL in cols else origin_col
+    return [
+        pl.col(population.pop_origin).alias(_GEO_BASIS.pop_origin),
+        pl.col(population.pop_post).alias(_GEO_BASIS.pop_post),
+        pl.col(origin_col).alias(_GEO_BASIS.class_origin),
+        pl.col(post_col).alias(_GEO_BASIS.class_post),
+    ]
+
+
 def _country_frames(data: pl.DataFrame) -> list[tuple[str, pl.DataFrame]]:
-    """The per-country (key, frame) split: TOTAL first (the whole population,
-    null-country rows included), then one frame per sorted distinct non-null
-    cp_country_code. Shared by the plans builder and the reported generator so a
-    cell's plan and its reported value are keyed identically."""
-    frames: list[tuple[str, pl.DataFrame]] = [("TOTAL", data)]
-    countries = (
-        data.select(pl.col("cp_country_code"))
-        .filter(pl.col("cp_country_code").is_not_null())
-        .unique()
-        .sort("cp_country_code")
-        .to_series()
-        .to_list()
+    """The per-country (key, frame) split, each frame tagged with its two bases.
+
+    ``TOTAL`` first — the whole population, null-country rows included, both
+    geographical flags True because every leg is in the all-geographies total on
+    the basis it belongs to (its population flag still discriminates). Then one
+    frame per sorted distinct country key contributed by EITHER basis, carrying
+    the legs on that country under either and tagging which — so the guarantor's
+    sheet gains the exposure value and RWEA of a leg whose original exposure
+    stays reported on the obligor's.
+
+    Shared by the plans builder and the reported generator so a cell's plan and
+    its reported value are keyed identically.
+    """
+    total = data.with_columns(
+        pl.lit(value=True).alias(_GEO_BASIS.basis_origin),
+        pl.lit(value=True).alias(_GEO_BASIS.basis_post),
     )
+    frames: list[tuple[str, pl.DataFrame]] = [("TOTAL", total)]
     frames.extend(
-        (country, data.filter(pl.col("cp_country_code") == country)) for country in countries
+        (country, sheet_frame(_GEO_BASIS, data, country))
+        for country in sorted(sheet_axis(_GEO_BASIS, data))
     )
     return frames
 
@@ -889,10 +1148,10 @@ def _render_sheet(
     all-null inert/empty rows, an optional value-dependent ``post`` step
     (C 09.02's unweighted-mean fallback), and the Annex II §1.3 "(-)" negation."""
     frame = execute(spec, country_df)
-    frame = _null_empty_rows(frame, country_df, row_preds)
+    frame = null_empty_rows(frame, country_df, row_preds)
     if post is not None:
         frame = post(frame, country_df)
-    return _negate_deduction_cols(frame)
+    return negate_deduction_cols(frame, _C09_NEGATIVE_COLS)
 
 
 def _class_union(*classes: str, col: str = "reporting_class_origin") -> RowPredicate:
@@ -902,33 +1161,51 @@ def _class_union(*classes: str, col: str = "reporting_class_origin") -> RowPredi
 
 
 def _either_pred(primary: RowPredicate | None, memo: RowPredicate | None) -> RowPredicate | None:
-    """The row-emptiness basis for C 09.01: a row is null only when BOTH
-    its primary (applied-class) and memo (original-class) subsets are
-    empty — a class row whose only exposures defaulted keeps its 0020
-    memo while the primary columns move to row 0100.
+    """The row-emptiness basis: a row is null only when EVERY basis it publishes
+    a column on has an empty subset — a class row whose only exposures defaulted
+    keeps its 0020 memo while the primary columns move to row 0100, and an
+    inflow-only sheet's row keeps the exposure value and RWEA that arrived on it
+    while having no origin-basis leg at all.
 
-    An RE sub-row carries a basis-KEYED class union (any_of over
-    reporting_class_origin vs exposure_class) alongside basis-INDEPENDENT
-    discriminator terms (property_type / qualifying / ADC / SME in equals).
-    Those discriminators are shared across the two bases, so the combined
-    emptiness predicate keeps them (equals) and unions only the class limbs
-    (any_of) — dropping the discriminators here would wrongly un-null a
-    residential sub-row whenever any commercial RE existed."""
+    This is a true DISJUNCTION, computed by distributing each operand's shared
+    ``equals`` into its own ``any_of`` limbs (``RowPredicate`` forbids nesting an
+    ``any_of`` inside a limb, so a flat union is the only representable form).
+    Keeping one operand's ``equals`` at the top — the shape this had while both
+    operands were origin-basis and their ``equals`` therefore identical — silently
+    imposes the FIRST basis's population and country flags on the second's limbs,
+    which is precisely how the two-basis prototype nulled the row it had just
+    populated. An RE sub-row's basis-INDEPENDENT discriminators (property_type /
+    qualifying / ADC / SME) ride along inside every distributed limb, so a
+    residential sub-row still cannot be un-nulled by commercial RE.
+
+    An operand with no terms at all constrains nothing, so its union with
+    anything constrains nothing either (returned as the constraint-free
+    predicate, never as the other operand)."""
     if primary is None:
         return memo
     if memo is None:
         return primary
-    if primary.equals and (primary.any_of or memo.any_of):
-        return RowPredicate(equals=primary.equals, any_of=(*primary.any_of, *memo.any_of))
-    limbs: list[RowPredicate] = []
-    for pred in (primary, memo):
-        if pred.any_of:
-            limbs.extend(pred.any_of)
-        elif pred.equals:
-            limbs.append(RowPredicate(equals=pred.equals))
-    if not limbs:
+    if not _is_constrained(primary) or not _is_constrained(memo):
         return RowPredicate()
-    return RowPredicate(any_of=tuple(limbs))
+    limbs = [*_flat_limbs(primary), *_flat_limbs(memo)]
+    return limbs[0] if len(limbs) == 1 else RowPredicate(any_of=tuple(limbs))
+
+
+def _is_constrained(pred: RowPredicate) -> bool:
+    """Does this predicate select a strict subset? (The Total rows do not.)"""
+    return bool(pred.equals or pred.any_of)
+
+
+def _flat_limbs(pred: RowPredicate) -> list[RowPredicate]:
+    """``pred`` as a list of pure-conjunction limbs whose union is ``pred``.
+
+    Only the two fields the C 09 predicates ever populate (``equals`` /
+    ``any_of``) are carried — the sealed-column fields are unused on this
+    template, which keys its classes through presence-tolerant ``equals`` terms
+    so the two-basis class column can vary per cell."""
+    if not pred.any_of:
+        return [pred]
+    return [RowPredicate(equals=(*pred.equals, *limb.equals)) for limb in pred.any_of]
 
 
 def _conjoin(pred: RowPredicate, term: tuple[str, str | bool]) -> RowPredicate:
@@ -940,6 +1217,21 @@ def _narrow(pred: RowPredicate, *terms: tuple[str, str | bool]) -> RowPredicate:
     class-union) predicate, preserving its any_of limbs (the variadic
     ``_conjoin`` used by the RE sub-row predicates)."""
     return RowPredicate(equals=(*pred.equals, *terms), any_of=pred.any_of)
+
+
+def _narrow_opt(pred: RowPredicate | None, *terms: tuple[str, str | bool]) -> RowPredicate | None:
+    """``_narrow`` for a predicate the row cascade may decline to build."""
+    return None if pred is None else _narrow(pred, *terms)
+
+
+def _basis_terms(population: str, geography: str) -> tuple[tuple[str, str | bool], ...]:
+    """The two flags that pin one cell to ONE basis: the template's population
+    membership on that basis, and the country sheet it keys on that basis.
+
+    Both are derived Boolean columns and both are always materialised on the
+    frames the executor sees, so they are read through the presence-TOLERANT
+    ``equals`` channel like every other derived discriminator here."""
+    return ((population, True), (geography, True))
 
 
 def _sum_or_null(col: str | None, pred: RowPredicate) -> CellSpec:
@@ -1048,36 +1340,6 @@ def _defaulted_expr(cols: set[str]) -> pl.Expr:
     return pl.lit(value=False)
 
 
-def _null_empty_rows(
-    frame: pl.DataFrame,
-    country_df: pl.DataFrame,
-    row_preds: Mapping[str, RowPredicate | None],
-) -> pl.DataFrame:
-    """Render dead rows (no predicate) and empty class subsets ALL-NULL —
-    the Total row (no equals/any_of terms) is never nulled."""
-    constrained = {
-        ref: pred
-        for ref, pred in row_preds.items()
-        if pred is not None and (pred.equals or pred.any_of)
-    }
-    counts = matched_counts(country_df, constrained)
-    null_refs = [
-        ref
-        for ref, pred in row_preds.items()
-        if pred is None or ((pred.equals or pred.any_of) and counts[ref] == 0)
-    ]
-    if not null_refs:
-        return frame
-    value_cols = [col for col in frame.columns if col not in ("row_ref", "row_name")]
-    return frame.with_columns(
-        pl.when(pl.col("row_ref").is_in(null_refs))
-        .then(pl.lit(None, dtype=pl.Float64))
-        .otherwise(pl.col(col))
-        .alias(col)
-        for col in value_cols
-    )
-
-
 def _apply_overrides(
     frame: pl.DataFrame, overrides: dict[str, dict[str, float | None]]
 ) -> pl.DataFrame:
@@ -1104,25 +1366,3 @@ def _apply_overrides(
 def _mean_or_none(series: pl.Series) -> float | None:
     vals = series.drop_nulls()
     return float(cast("float", vals.mean())) if len(vals) > 0 else None
-
-
-def _negate_deduction_cols(frame: pl.DataFrame) -> pl.DataFrame:
-    """COREP Annex II §1.3: emit the CRR "(-)"-labelled supporting-factor
-    adjustment columns as negative figures (after the pre/post pair captured the
-    positive magnitudes). Intersected with the frame's columns, so it is an
-    absent-column no-op on B31 sheets. Identical expression to C 07.00 /
-    C 08.01's negation pass: a zero deduction is normalised to +0.0, null stays
-    null."""
-    targets = [col for col in frame.columns if col in _C09_NEGATIVE_COLS]
-    if not targets:
-        return frame
-    return frame.with_columns(_negate_expr(col) for col in targets)
-
-
-def _negate_expr(col: str) -> pl.Expr:
-    """Negate a "(-)"-labelled deduction column, normalising a zero to +0.0.
-
-    Plain ``-pl.col(col)`` flips the IEEE sign bit, so a ``0.0`` cell would
-    serialise as ``-0.0``; the explicit zero branch keeps a zero deduction as
-    ``+0.0``. Null stays null."""
-    return pl.when(pl.col(col) == 0.0).then(pl.lit(0.0)).otherwise(-pl.col(col)).alias(col)

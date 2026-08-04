@@ -122,6 +122,25 @@ _EQUITY_RW_TOL = 0.05
 _CR10_IS_SHORT = "cr10_is_short"
 
 
+def _post_slotting(member: RowPredicate) -> RowPredicate:
+    """The band predicate narrowed to the POST-substitution slotting book.
+
+    Cols d/e (exposure amount, RWEA) take the same treatment as C 08.06 cols
+    0040/0080: a leg whose guarantee substituted onto an SA guarantor is no
+    longer risk-weighted under Art. 153(5), so it leaves the category grid for
+    the value columns. Col a (on-balance-sheet gross) stays on the ORIGIN book,
+    mirroring C 08.06 col 0010 — the grid is the obligor's slotting book by
+    origination. Col c is the FIXED supervisory weight and is bound NOWHERE (a
+    post-step injects it), so it cannot drift with the population.
+
+    Uses ``RowPredicate.approaches``, which DEGRADES to
+    ``reporting_approach_origin`` where no post-substitution approach is sealed;
+    a tolerant ``equals`` term would instead match nothing and blank both
+    columns on every synthetic frame.
+    """
+    return RowPredicate(equals=member.equals, any_of=member.any_of, approaches=("slotting",))
+
+
 def _slotting_row_cells(category: str | None, is_short: bool | None) -> dict[str, CellSpec]:
     """The Float64 column bindings for one CR10 (category x maturity) slotting
     row (col c is a post-step).
@@ -144,8 +163,8 @@ def _slotting_row_cells(category: str | None, is_short: bool | None) -> dict[str
         # reclassifies facility_undrawn off-BS).
         "a": CellSpec(Sum("reporting_gross_on_bs"), predicate=member, empty_cell="zero"),
         "b": CellSpec(Sum("reporting_gross_off_bs"), predicate=member, empty_cell="zero"),
-        "d": CellSpec(Sum("reporting_ead"), predicate=member),
-        "e": CellSpec(Sum("rwa_final"), predicate=member),
+        "d": CellSpec(Sum("reporting_ead"), predicate=_post_slotting(member)),
+        "e": CellSpec(Sum("rwa_final"), predicate=_post_slotting(member)),
         "f": CellSpec(Sum("expected_loss"), predicate=member),
     }
 

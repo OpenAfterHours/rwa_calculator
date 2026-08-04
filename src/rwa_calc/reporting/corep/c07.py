@@ -9,12 +9,40 @@ Pipeline position:
 Cell semantics (the recorded F4 decision —
 docs/plans/phase7-declarative-reporting.md §6):
 
-- Sheets key the OBLIGOR applied class (the ``exposure_class_applied`` ->
-  ``exposure_class`` ladder — identical to the sealed
-  ``reporting_class_origin`` on ledger frames; the raw ladder is kept so
-  the synthetic COREP unit estate needs no shim). Specialised lending is
-  merged into corporate before keying (Art. 112(1)(g): SL is a corporate
-  sub-type under SA; the SL "of which" rows split it back via sl_type).
+- EVERY SHEET IS TWO POPULATIONS, NOT ONE — the recorded two-basis decision.
+  Annex II makes the front of the template and the back of it answer
+  different questions, so a sheet's cells split by BASIS:
+    * ORIGIN basis (``c07_basis_origin``) — the obligor's own book. Cols
+      0010-0150: the gross exposure, the value adjustments, the CRM
+      substitution block and the pre-conversion waterfall. A guaranteed leg
+      belongs here on the OBLIGOR's sheet, because that is where its covered
+      part is "deducted from the obligor's exposure class" (col 0090).
+    * POST basis (``c07_basis_post``) — after substitution. Cols 0160-0235:
+      the CCF breakdown, the exposure value, and the RWEA. Col 0200 is
+      defined as the "exposure value after taking into account value
+      adjustments, ALL CREDIT RISK MITIGANTS and conversion factors" —
+      substitution is a credit risk mitigant, so the covered part must leave
+      the obligor's sheet and land on the protection provider's, exactly as
+      col 0090/0100 already move it pre-conversion. Cols 0160-0190 follow it
+      because they break down col 0150, which is already post-substitution,
+      and because ``v0308_m`` / ``boe_b0471`` test col 0200 AGAINST them.
+  Binding col 0200/0220 to the ORIGIN population was a recorded build
+  shortfall (F4 never extended substitution-awareness past the waterfall),
+  not a decision: it left a fully-outflowed row reporting its raw EAD at the
+  obligor's sheet and an inflow-only sheet reporting none at all, breaking
+  ``v0308_m`` / ``v8726_m`` / ``boe_b0471`` / ``boe_b0556`` and putting this
+  template on a different basis from Pillar 3 CR4 cols c-f and all of CR5,
+  which cite col 0200 as the DEFINITION of their own post-substitution basis.
+- Sheets key the OBLIGOR applied class on the origin basis (the sealed
+  ``reporting_class_origin``) and the GUARANTOR class on the post basis (the
+  sealed ``reporting_class``); the sheet AXIS is the union of both plus the
+  classes receiving an inflow. Specialised lending is merged into corporate
+  on BOTH keys (Art. 112(1)(g): SL is a corporate sub-type under SA; the SL
+  "of which" rows split it back via sl_type) — an SL guarantor must key a
+  sheet this template has. A frame that seals no ``reporting_class`` /
+  ``reporting_approach`` (synthetic unit frames) degrades the post basis to
+  the origin basis, so a book with no substitution reports identically under
+  both and the split is number-neutral by construction.
 - The population is the standardised book plus BOTH counterparty-credit-risk
   populations (``risk_type in {"CCR_SFT", "CCR_DERIVATIVE"}`` — SA-risk-weighted
   but tagged ``standardised_ccr`` under the output floor, so they are admitted by
@@ -91,8 +119,9 @@ docs/plans/phase7-declarative-reporting.md §6):
   ITEMS BY CONVERSION FACTORS". They therefore sum the PRE-conversion
   off-balance-sheet gross (``reporting_gross_off_bs`` — the same carrier
   col 0010 sums on the off-side, so 0150 decomposes into them by
-  construction), narrowed to the off-balance-sheet side, NOT the
-  post-conversion ``ead_final``. Col 0200 is what survives conversion, and
+  construction, on the POST basis they share with it), narrowed to the
+  off-balance-sheet side, NOT the post-conversion ``ead_final``. Col 0200
+  is what survives conversion, and
   the two are related by the supervisory identity ``boe_b0471``:
   ``{c0200} = {c0150} - 0.9*{c0160} - 0.8*{c0170} - 0.6*{c0171}
   - 0.5*{c0180}``. Summing EAD here would break that rule, ``v6364_m``
@@ -112,7 +141,7 @@ References:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 import polars as pl
 from watchfire import cites
@@ -127,15 +156,23 @@ from rwa_calc.reporting.cellspec import (
     Sum,
     TemplateSpec,
     execute,
-    matched_counts,
 )
 from rwa_calc.reporting.corep.crm_substitution import irb_origin_inflows
+from rwa_calc.reporting.corep.postpass import negate_deduction_cols, null_empty_rows
 from rwa_calc.reporting.corep.templates import (
     get_c07_columns,
     get_sa_risk_weight_bands,
     get_sa_row_sections,
 )
-from rwa_calc.reporting.kernel import filter_by_approach, pick
+from rwa_calc.reporting.kernel import (
+    TwoBasis,
+    class_keys,
+    pick,
+    population_flags,
+    sheet_axis,
+    sheet_frame,
+)
+from rwa_calc.reporting.kernel.bases import ORIGIN_APPROACH_SOURCE
 from rwa_calc.reporting.metadata import SUBSTITUTION_INFLOW_RW_PREFIX, ReportingContext
 from rwa_calc.reporting.plans import SheetPlan
 
@@ -150,6 +187,20 @@ logger = logging.getLogger(__name__)
 _NEGATIVE_COLS: frozenset[str] = frozenset(
     {"0030", "0035", "0050", "0060", "0070", "0080", "0090", "0130", "0140", "0216", "0217"}
 )
+
+# The two-basis discriminators (see the module docstring). The mechanism —
+# derived boolean columns rather than ``RowPredicate`` fields, and why that is
+# the only shape the post basis can DEGRADE in — lives in
+# ``reporting/kernel/bases.py``, shared with C 08.01.
+_BASIS: TwoBasis = TwoBasis("c07")
+_BASIS_ORIGIN_COL: str = _BASIS.basis_origin
+_BASIS_POST_COL: str = _BASIS.basis_post
+_ORIGIN_APPROACH_SOURCE: str = ORIGIN_APPROACH_SOURCE
+
+# The ``c07_bs`` labels rows 0070 / 0080 filter on, and the keys the col 0100
+# inflow is split by when it lands on them.
+_ON_BS: str = "on"
+_OFF_BS: str = "off"
 
 # Col 0030 provisions carriers, in preference order: the specific / general
 # provision input pass-throughs (never sealed on the aggregator exit — present
@@ -212,6 +263,14 @@ _FCSM_CARRIER: str = "fcsm_collateral_value"
 # The capped unfunded limb (cols 0050 + 0060 per row) that col 0100's inflow is
 # measured on — see ``_protection_exprs``.
 _UNFUNDED_COL: str = "c07_prot_unfunded"
+# The CRM decline flag — CONDITIONAL on the edge, so every read is presence-tolerant.
+# A DECLINED guarantee (it would have raised capital, which CRR Art. 193(1)
+# forbids) produces no substitution effect, so it must not appear in the Annex II
+# block headed "CRM TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE". Gating
+# the unfunded magnitude gates the col 0100 INFLOW too, since that binds the same
+# carrier. Basis and the recorded elections (decline vs apply-and-cap; the strict
+# ``<``): ``engine/sa/rw_adjustments.py::apply_guarantee_substitution``.
+_BENEFICIAL_COL: str = "is_guarantee_beneficial"
 
 # The guarantor's exposure class (the col 0100 destination key) and the origin
 # approaches whose inflow half ``crm_substitution.irb_origin_inflows`` owns.
@@ -259,6 +318,32 @@ _PF_PHASE_MAP: dict[str, str] = {
     "0025": "operational",
     "0026": "high_quality_operational",
 }
+# The POST-basis gate on the specialised-lending "of which" rows 0021-0026: does
+# this leg still apply its OWN Art. 122B risk-weight treatment? ``sl_type`` is
+# the OBLIGOR's characteristic and the CRM split never reassigns it, so a covered
+# part substituted onto a protection provider's risk weight carries the obligor's
+# ``sl_type`` onto the GUARANTOR's sheet, where the post-basis cells (0160-0235)
+# would report it as the guarantor's specialised lending.
+#
+# Annex II admits a row 0021-0026 exposure on THREE conjunctive conditions, the
+# third of which is the applied risk weight: row 0023 is "only exposures which
+# are 'project finance exposures' ..., assigned to the exposure class 'Exposures
+# to corporates' ..., [and] apply the risk weight treatment in accordance with
+# Articles 122B(2)(c) or 122B(4)" (PS1/26 Annex II p.89; rows 0024-0026 spell the
+# same limb "(d) subject to the risk weight treatment in accordance with Article
+# 122B(2)(c)"). A substituted-in covered part applies the PROVIDER's Art. 122
+# weight, not Art. 122B — and ¶43 says so directly: "the substitution effect ...
+# shall reflect the risk weighting treatment effectively applicable to the
+# covered part of the exposure". So it fails the third condition and belongs in
+# NEITHER row 0023 nor its phase children.
+#
+# ORIGIN basis deliberately UNCHANGED: cols 0010-0150 are the obligor's own book,
+# where ¶42/¶56A require the covered part to be shown leaving the obligor's class
+# through col 0090. Derived rather than expressed as a bare
+# ``(_BENEFICIAL_COL, False)`` term for the ``c07_qccp`` reason — that compiles to
+# ``== False``, so a NULL flag would drop every unguaranteed SL exposure out of
+# its own row.
+_SL_OWN_RW_COL: str = "c07_sl_own_rw"
 _CIU_ROW_APPROACH: dict[str, str] = {
     "0281": "look_through",
     "0282": "mandate_based",
@@ -360,52 +445,72 @@ def c07_plans(
             errors.append("C07: Missing exposure_class column")
         return {}
 
-    sa_df = c07_population(results, cols).collect()
+    sa_df = c07_population(results, cols, both_bases=True).collect()
     # Resolved BEFORE the empty-population guard: an all-IRB book guaranteed by
     # an SA counterparty has NO SA leg of its own, and the early exit would drop
     # the inflow this template is the only home for.
-    inflow_map, inflow_bands = _sa_inflows(results, cols, framework)
-    if len(sa_df) == 0 and not inflow_map:
+    inflows = _sa_inflows(results, cols, framework)
+    if len(sa_df) == 0 and not inflows.total:
         return {}
 
-    # Art. 112 Table A2: SL is a corporate sub-type under SA.
+    # The two sheet keys, Art. 112 Table A2 merge applied to BOTH (SL is a
+    # corporate sub-type under SA). The post key degrades to the origin key on a
+    # frame that seals no ``reporting_class``, which is what makes the two-basis
+    # split number-neutral wherever nothing substitutes.
     sa_df = sa_df.with_columns(
-        pl.when(pl.col(ec_col) == ExposureClass.SPECIALISED_LENDING.value)
-        .then(pl.lit(ExposureClass.CORPORATE.value))
-        .otherwise(pl.col(ec_col))
-        .alias(ec_col)
+        class_keys(_BASIS, set(sa_df.columns), ec_col, key=_merge_specialised_lending)
     )
     data_cols = set(sa_df.columns)
     sa_df = _prepare(sa_df, data_cols, framework)
     _warn_if_ccf_buckets_unreportable(sa_df, data_cols)
     # The SA-origin half joins the cross-template half only now: it is measured on
     # THIS template's capped carrier, which _prepare has just derived.
-    inflow_map, inflow_bands = _add_sa_origin_inflows(inflow_map, inflow_bands, sa_df)
+    inflows = _add_sa_origin_inflows(inflows, sa_df)
 
     row_terms = _row_terms(framework, data_cols)
     spec = _build_spec(framework, data_cols, ead_col, rwa_col, row_terms)
 
     plans: dict[str, SheetPlan] = {}
-    # Sealed-ledger rule: the class column always exists; a null key
-    # (no source on a synthetic frame) partitions into NO sheet. The axis is the
-    # UNION of the classes present and the classes RECEIVING an inflow — Annex II
-    # requires in- and outflows to and from other templates to be taken into
-    # account, which an inflow with no sheet to land on cannot satisfy. An
-    # inflow-only sheet keeps its constraint-free total row 0010 (every other row
-    # renders all-null through ``_null_empty_rows``) and reports 0110 = 0100.
-    for ec in sorted(set(sa_df[ec_col].drop_nulls().unique().to_list()) | set(inflow_map)):
+    # Sealed-ledger rule: the class columns always exist; a null key (no source
+    # on a synthetic frame) partitions into NO sheet. The axis is the UNION of
+    # the classes present on EITHER basis and the classes RECEIVING an inflow —
+    # Annex II requires in- and outflows to and from other templates to be taken
+    # into account, which an inflow with no sheet to land on cannot satisfy. The
+    # post-basis limb is belt-and-braces: a beneficially-substituted leg's
+    # guarantor class is an inflow key too, so in practice it adds no sheet — but
+    # without it a leg whose inflow the block cap shed to zero would drop its
+    # exposure value and RWEA out of the template silently. An inflow-only sheet
+    # keeps its constraint-free total row 0010 and reports 0110 = 0100.
+    axis = sheet_axis(_BASIS, sa_df) | set(inflows.total)
+    for ec in sorted(axis):
+        sides = inflows.by_side.get(ec, {})
+        bands = inflows.by_rw_band.get(ec, {})
         plans[ec] = SheetPlan(
             spec=spec,
-            frame=sa_df.filter(pl.col(ec_col) == ec),
+            frame=sheet_frame(_BASIS, sa_df, ec),
             ctx=ReportingContext(
-                substitution_inflow=inflow_map.get(ec, 0.0),
-                substitution_inflow_by_rw=inflow_bands.get(ec, {}),
+                substitution_inflow=inflows.total.get(ec, 0.0),
+                substitution_inflow_on_bs=sides.get(_ON_BS, 0.0),
+                substitution_inflow_off_bs=sides.get(_OFF_BS, 0.0),
+                substitution_inflow_by_rw=bands,
             ),
             negative_cols=_NEGATIVE_COLS,
             row_terms=row_terms,
-            inflow_rows=_inflow_rows(row_terms, inflow_bands.get(ec, {})),
+            inflow_rows=_inflow_rows(row_terms, sides, bands),
         )
     return plans
+
+
+def _merge_specialised_lending(class_col: str) -> pl.Expr:
+    """Art. 112 Table A2: SL is a corporate sub-type under SA, so it is merged
+    into corporate before keying a sheet (the SL "of which" rows split it back
+    via ``sl_type``). Applied to BOTH sheet keys, so an SL guarantor's covered
+    part keys a sheet this template actually has."""
+    return (
+        pl.when(pl.col(class_col) == ExposureClass.SPECIALISED_LENDING.value)
+        .then(pl.lit(ExposureClass.CORPORATE.value))
+        .otherwise(pl.col(class_col))
+    )
 
 
 @cites("PS1/26, paragraph 1.3")
@@ -419,40 +524,62 @@ def generate_c07(
     result: dict[str, pl.DataFrame] = {}
     for ec, plan in c07_plans(results, cols, framework, errors).items():
         frame = execute(plan.spec, plan.frame, plan.ctx)
-        frame = _null_empty_rows(frame, plan.frame, plan.row_terms, plan.inflow_rows)
-        result[ec] = _negate_deduction_cols(frame)
+        # ``row_terms`` -> predicates: ``None`` is an inert row, ``()`` the
+        # constraint-free Total row (never nulled), anything else constrained.
+        preds = {
+            ref: None if terms is None else RowPredicate(equals=terms)
+            for ref, terms in plan.row_terms.items()
+        }
+        frame = null_empty_rows(frame, plan.frame, preds, plan.inflow_rows)
+        result[ec] = negate_deduction_cols(frame, _NEGATIVE_COLS)
     return result
 
 
 @cites("PS1/26")
-def c07_population(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:
+def c07_population(
+    results: pl.LazyFrame, cols: set[str], *, both_bases: bool = False
+) -> pl.LazyFrame:
     """The C 07.00 population: the standardised book plus the CCR rows.
 
-    The CCR limb admits BOTH counterparty-credit-risk risk types (FCCM SFT
-    synthetic rows and SA-CCR derivative netting sets) by ``risk_type`` —
-    Annex II puts them in rows 0090-0130, and C 07.00 risk-weights under SA the
-    very exposures C 34 analyses by approach. Admission cannot key the approach
-    label: under the output floor ``engine/stages/calc.py`` relabels CCR rows to
-    ``standardised_ccr`` so they route into the floor-eligible approaches, which
-    is load-bearing and must NOT be undone here.
+    ``both_bases`` selects WHICH standardised book. The default is the
+    ORIGIN-approach one — the obligor's own book, and the only thing C 09.01
+    (which shares this population for its geographical breakdown) asks for.
+    C 07.00 itself takes the UNION of the origin-approach book and the
+    POST-substitution one, tagged with ``c07_pop_origin`` / ``c07_pop_post`` so
+    each cell reads its own basis (module docstring). A leg with no substitution
+    is in both, which is why the split is number-neutral on a book that never
+    substitutes. The post limb is what carries an IRB-origin leg guaranteed by an
+    SA protection provider onto this template: its exposure value and RWEA belong
+    on the guarantor's SA sheet under Art. 235, which is where col 0100 already
+    routes its inflow. Widening C 09.01 the same way is a separate question with
+    its own goldens, so the default deliberately does not.
 
-    Under CRR the derivative rows already arrive on the ``"standardised"`` limb;
-    the ``unique`` dedupe means admitting them again costs nothing (the CRR
-    totals do not move). Under Basel 3.1 this limb is the only one that admits
-    them at all.
+    The CCR limb admits ALL THREE counterparty-credit-risk risk types by
+    ``risk_type`` — Annex II puts them in rows 0090-0130, and C 07.00
+    risk-weights under SA the very exposures C 34 analyses by approach.
+    Admission cannot key the approach label: under the output floor
+    ``engine/stages/calc.py`` relabels CCR rows to ``standardised_ccr`` so they
+    route into the floor-eligible approaches, which is load-bearing and must NOT
+    be undone here. CCR legs join BOTH bases: substitution does not move them.
+
+    The dedupe keys the exposure reference, which the sealed ledger always
+    carries. The ``subset=None`` fallback (synthetic unit frames only, where no
+    reference column exists) dedupes on ALL columns — two genuinely distinct
+    exposures identical in every column would collapse into one. Harmless where
+    it can fire; do not promote this fallback to the ledger path.
     """
-    sa = filter_by_approach(
-        results, "standardised", cols, candidates=("reporting_approach_origin",)
+    ccr = (
+        pl.col("risk_type").is_in(_CCR_RISK_TYPES).fill_null(value=False)
+        if "risk_type" in cols
+        else None
     )
-    if "risk_type" not in cols:
-        return sa
-    ccr = results.filter(pl.col("risk_type").is_in(_CCR_RISK_TYPES))
-    # The dedupe keys the exposure reference, which the sealed ledger always
-    # carries. The `subset=None` fallback (synthetic unit frames only, where no
-    # reference column exists) dedupes on ALL columns — two genuinely distinct
-    # exposures identical in every column would collapse into one. Harmless
-    # where it can fire; do not promote this fallback to the ledger path.
-    return pl.concat([sa, ccr], how="diagonal_relaxed").unique(
+    tagged = results.with_columns(population_flags(_BASIS, cols, ("standardised",), admit=ccr))
+    admitted = (
+        tagged.filter(pl.col(_BASIS.pop_origin) | pl.col(_BASIS.pop_post))
+        if both_bases
+        else tagged.filter(pl.col(_BASIS.pop_origin)).drop(_BASIS.pop_origin, _BASIS.pop_post)
+    )
+    return admitted.unique(
         subset=["exposure_reference"] if "exposure_reference" in cols else None,
         keep="first",
     )
@@ -618,6 +745,20 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
         )
     if "sa_cqs" in cols:
         exprs.append(pl.col("sa_cqs").is_not_null().alias("c07_rated"))
+
+    # Post-basis specialised-lending gate (rows 0021-0026) — see _SL_OWN_RW_COL.
+    # The complement of the ``_protection_exprs`` substitution gate, read the same
+    # null-safe way (an unknown benefit is not a substitution), so the row
+    # exclusion and the col 0090/0100 flow are driven by ONE flag and cannot
+    # drift: exactly the legs whose covered part left for a provider's risk
+    # weight are the legs that stop applying Art. 122B.
+    if _BENEFICIAL_COL in cols:
+        exprs.append(
+            (pl.col(_BENEFICIAL_COL) == True)  # noqa: E712 - null-safe, see _protection_exprs
+            .fill_null(value=False)
+            .not_()
+            .alias(_SL_OWN_RW_COL)
+        )
 
     # CCR discriminators (cols 0210/0211). 0210 = "of which: arising from
     # counterparty credit risk"; 0211 = the same, excluding the Art. 301(1)
@@ -792,6 +933,18 @@ def _protection_exprs(cols: set[str]) -> list[pl.Expr]:
     tighter than col 0010's "exposure value" and it is what makes
     ``0110 = 0040 - 0090 + 0100`` non-negative by construction — the property
     rules ``v10293_s`` / ``boe_b0667`` ({template} >= 0) assert.
+
+    A DECLINED GUARANTEE CONTRIBUTES NOTHING TO COLS 0050/0060. The block heading
+    is "CRM TECHNIQUES **WITH SUBSTITUTION EFFECTS ON THE EXPOSURE**", and a
+    guarantee the calculator declined has none: Art. 193(1) bars a guarantee from
+    raising the RWEA and Art. 193(3) leaves amending the calculation an election,
+    so where the guarantor's weight does not beat the obligor's the engine leaves
+    the RWA on the borrower basis and ``is_guarantee_beneficial`` is
+    false. Reporting it here booked a col 0090 outflow that no exposure ever left
+    and — because the col 0100 inflow binds the same ``_UNFUNDED_COL`` — a
+    matching phantom inflow onto the guarantor's sheet, banded at the BORROWER's
+    own risk weight. Gating the CARRIER, not the two cells, is what keeps outflow
+    and inflow on a single decision, so neither can move without the other.
     """
     guaranteed = (
         pl.col("guaranteed_portion").fill_null(0.0) if "guaranteed_portion" in cols else pl.lit(0.0)
@@ -810,6 +963,15 @@ def _protection_exprs(cols: set[str]) -> list[pl.Expr]:
     else:
         guarantee = guaranteed
         credit_derivative = pl.lit(0.0)
+
+    if _BENEFICIAL_COL in cols:
+        # A DECLINED guarantee has no substitution effect at all, so it belongs in
+        # neither the outflow nor the inflow — see the docstring's closing note.
+        # ``== True`` is the null-safe reading: an unknown benefit is not a
+        # substitution, and it must not be filled the other way.
+        applied = pl.col(_BENEFICIAL_COL) == True  # noqa: E712 - null-safe, see above
+        guarantee = pl.when(applied).then(guarantee).otherwise(pl.lit(0.0))
+        credit_derivative = pl.when(applied).then(credit_derivative).otherwise(pl.lit(0.0))
 
     fcsm = pl.col(_FCSM_CARRIER).fill_null(0.0) if _FCSM_CARRIER in cols else pl.lit(0.0)
     ofcp_parts = [pl.col(col).fill_null(0.0) for col in _OFCP_CARRIERS if col in cols]
@@ -854,9 +1016,50 @@ def _block_cap_scale(cols: set[str], block_total: pl.Expr) -> pl.Expr:
     return pl.when(block_total > basis).then(basis / block_total).otherwise(1.0)
 
 
-def _sa_inflows(
-    results: pl.LazyFrame, cols: set[str], framework: str
-) -> tuple[dict[str, float], dict[str, dict[str, float]]]:
+class _Inflows(NamedTuple):
+    """The col 0100 inflow per destination class, on the three row axes C 07.00
+    decomposes it over.
+
+    ``total`` lands on the Total row 0010; ``by_side`` on the balance-sheet rows
+    0070 / 0080 (keyed by the ``c07_bs`` label those rows filter on); ``by_rw_band``
+    on the section-2 risk-weight rows. Each axis re-counts the SAME money — a
+    native exposure appears once in each decomposition, so a substituted-in amount
+    must too.
+
+    THE BALANCE-SHEET AXIS BECAME LOAD-BEARING WITH THE TWO-BASIS SPLIT. It was
+    once correctly absent: the recorded reasoning was that C 07.00's own row sum
+    ``boe_b0717`` is scoped to cols 0200/0220, "neither of which the inflow
+    touches", so rows 0070/0080 imposed no constraint on col 0100. Col 0200 is
+    now on the POST basis, so it DOES report the arriving legs — and it reports
+    them on row 0070/0080 as well as on row 0010, because the arriving leg's own
+    balance-sheet side is in the frame. Leaving those two rows' col 0150 without
+    the inflow left them declaring an exposure value larger than the fully
+    adjusted exposure it came from, breaching ``boe_b0556`` / ``v8726_m``
+    ({c0200} <= {c0150}) on precisely the sheets the substitution reached.
+
+    IT IS NOT ``boe_b0717`` THAT FORCES THIS, AND THE DIFFERENCE IS INSTRUCTIVE —
+    two reviewers predicted that rule as the casualty, and it was MEASURED not to
+    be (it passes with the split, without it, and before the two-basis change:
+    6 evaluated, 5 passing; its EBA twin ``v0310_m`` likewise). Its row
+    decomposition is scoped to cols 0200/0220 ONLY, and those columns read the
+    arriving LEGS THEMSELVES off the post-basis frame — each carries its own
+    ``c07_bs``, so rows 0070/0080 pick it up with no out-of-frame scalar at all
+    and the sum foots by construction. ``boe_b0556`` breaks because it STRADDLES
+    the two mechanisms: col 0200 gets the arriving legs from the frame while col
+    0150 gets the arriving amount only from the ``SideContext`` scalar, which
+    landed on row 0010 and the band rows but not on 0070/0080. A rule confined to
+    either mechanism alone is safe; the ones to check are the ones spanning both.
+    (The CCR rows in ``boe_b0717``'s list — 0090/0110/0130 — take no inflow at
+    all: they key ``risk_type``, which ``_inflow_key_for`` does not recognise, and
+    0130 is inert. Verified, not assumed.)
+    """
+
+    total: dict[str, float]
+    by_side: dict[str, dict[str, float]]
+    by_rw_band: dict[str, dict[str, float]]
+
+
+def _sa_inflows(results: pl.LazyFrame, cols: set[str], framework: str) -> _Inflows:
     """The SA-destined substitution inflows, keyed the way C 07.00 keys sheets.
 
     TWO HALVES, because the inflow must be measured with the cap of the template
@@ -880,27 +1083,27 @@ def _sa_inflows(
     guarantor would key a sheet C 07.00 does not have.
     """
     merged: dict[str, float] = {}
+    sides: dict[str, dict[str, float]] = {}
     bands: dict[str, dict[str, float]] = {}
-    # The on/off-BS and graded/slotting splits are NOT read here: C 07.00's own
-    # row sum ``boe_b0717`` is scoped to cols 0200/0220, neither of which the
-    # inflow touches, so its rows 0070/0080 impose no constraint on col 0100. The
-    # RISK-WEIGHT split is read, because ``v0312_m`` / ``boe_b0719`` decompose row
-    # 0010 over the band rows on col 0150, which the inflow does reach (through
-    # 0110). ``risk_weight`` is absent on a frame too thin to band; the router then
-    # returns no split and the band rows keep their ordinary empty policy.
+    # The graded/slotting split is NOT read: C 07.00 has no IRB-treatment row
+    # axis. The other two are — ``v0312_m`` / ``boe_b0719`` decompose row 0010
+    # over the band rows and ``boe_b0717`` over rows 0070/0080, on columns the
+    # inflow now reaches (col 0150 through 0110, and col 0200 through the post
+    # basis). ``risk_weight`` is absent on a frame too thin to band; the router
+    # then returns no split and the band rows keep their ordinary empty policy.
     band_expr = _rw_band_expr(framework) if "risk_weight" in cols else None
     for exposure_class, inflow in irb_origin_inflows(
         results, cols, destination="standardised", band_expr=band_expr
     ).items():
         _accumulate(merged, exposure_class, inflow.total)
+        _accumulate_split(sides, exposure_class, _ON_BS, inflow.on_bs)
+        _accumulate_split(sides, exposure_class, _OFF_BS, inflow.off_bs)
         for band, amount in inflow.by_rw_band.items():
-            _accumulate_band(bands, exposure_class, band, amount)
-    return merged, bands
+            _accumulate_split(bands, exposure_class, band, amount)
+    return _Inflows(merged, sides, bands)
 
 
-def _add_sa_origin_inflows(
-    inflows: dict[str, float], bands: dict[str, dict[str, float]], sa_df: pl.DataFrame
-) -> tuple[dict[str, float], dict[str, dict[str, float]]]:
+def _add_sa_origin_inflows(inflows: _Inflows, sa_df: pl.DataFrame) -> _Inflows:
     """Add the SA-origin half of col 0100, off this template's own capped frame.
 
     ``sa_df`` is post-``_prepare``, so it carries ``_UNFUNDED_COL`` — the same
@@ -913,72 +1116,121 @@ def _add_sa_origin_inflows(
     admits the counterparty-credit-risk rows by ``risk_type`` with NO approach
     filter, so an IRB-origin CCR row can legitimately sit in this frame and would
     otherwise be counted twice.
+
+    DECLINED GUARANTEES ARE EXCLUDED TOO, and without a filter of their own:
+    ``_protection_exprs`` has already zeroed ``_UNFUNDED_COL`` on a leg whose
+    guarantee the calculator declined, so the ``> 0`` filter below drops it. It is
+    Art. 235 substitution ACTUALLY BEING APPLIED that entitles the covered part to
+    the guarantor's sheet; a positive covered carrier only says protection was
+    attached. Art. 193(1) bars a guarantee from raising the RWEA and Art. 193(3)
+    makes amending the calculation an election, so the SA calculator DECLINES a
+    guarantee whose guarantor weight does not beat the obligor's
+    (``is_guarantee_beneficial=False``) and leaves the RWA on the borrower basis.
+    Booking that as an inflow moved the covered part onto the guarantor's sheet
+    banded — via ``c07_rw_band`` — at the BORROWER's own risk weight, reproduced
+    as a full 10,000,000 phantom inflow onto ``central_govt_central_bank`` at
+    100%. Sharing the carrier with the col 0090 outflow is what keeps both sides
+    off the SAME decision, so a declined guarantee can neither leave nor arrive.
     """
     cols = set(sa_df.columns)
     if not {_UNFUNDED_COL, _POST_CRM_CLASS_COL} <= cols:
-        return inflows, bands
-    frame = sa_df.filter((pl.col(_UNFUNDED_COL) > 0) & pl.col(_POST_CRM_CLASS_COL).is_not_null())
-    if "reporting_approach_origin" in cols:
-        frame = frame.filter(~pl.col("reporting_approach_origin").is_in(list(_IRB_ORIGINS)))
+        return inflows
+    # The ORIGIN population only: this half speaks for legs whose OUTFLOW this
+    # template reported, and only an origin-basis leg has one here. Post-basis-
+    # only legs are IRB-origin by construction (they are in the post population
+    # and not the origin one), so they arrive from ``irb_origin_inflows`` already
+    # measured on the IRB cap — counting them again would create money.
+    frame = sa_df.filter(
+        pl.col(_BASIS.pop_origin)
+        & (pl.col(_UNFUNDED_COL) > 0)
+        & pl.col(_POST_CRM_CLASS_COL).is_not_null()
+    )
+    if _ORIGIN_APPROACH_SOURCE in cols:
+        frame = frame.filter(~pl.col(_ORIGIN_APPROACH_SOURCE).is_in(list(_IRB_ORIGINS)))
     grouped = frame.group_by(_POST_CRM_CLASS_COL).agg(pl.col(_UNFUNDED_COL).sum().alias("inflow"))
-    merged = dict(inflows)
+    merged = dict(inflows.total)
     for row in grouped.iter_rows(named=True):
         _accumulate(merged, row[_POST_CRM_CLASS_COL], float(row["inflow"]))
-    merged_bands = {key: dict(value) for key, value in bands.items()}
-    if "c07_rw_band" in cols:
-        banded = frame.group_by(_POST_CRM_CLASS_COL, "c07_rw_band").agg(
-            pl.col(_UNFUNDED_COL).sum().alias("inflow")
-        )
-        for row in banded.iter_rows(named=True):
-            _accumulate_band(
-                merged_bands,
-                row[_POST_CRM_CLASS_COL],
-                row["c07_rw_band"],
-                float(row["inflow"]),
-            )
-    return merged, merged_bands
-
-
-def _accumulate_band(
-    bands: dict[str, dict[str, float]], exposure_class: str, band: str, amount: float
-) -> None:
-    """Add one destination-class/band amount under this template's sheet key."""
-    key = (
-        ExposureClass.CORPORATE.value
-        if exposure_class == ExposureClass.SPECIALISED_LENDING.value
-        else exposure_class
+    # The two split axes, each a group_by on the SAME frame. A leg the frame
+    # cannot place on a balance-sheet side (null ``c07_bs``) joins the ON side,
+    # matching ``crm_substitution._off_bs``'s convention — that is what keeps
+    # on + off == total, and therefore keeps ``boe_b0717`` footing.
+    merged_sides = _add_split(inflows.by_side, frame, _side_label(cols))
+    merged_bands = _add_split(
+        inflows.by_rw_band, frame, pl.col("c07_rw_band") if "c07_rw_band" in cols else None
     )
-    per_class = bands.setdefault(key, {})
-    per_class[band] = per_class.get(band, 0.0) + amount
+    return _Inflows(merged, merged_sides, merged_bands)
+
+
+def _side_label(cols: set[str]) -> pl.Expr:
+    """The ``c07_bs`` label rows 0070/0080 filter on, defaulting to the ON side."""
+    if "c07_bs" not in cols:
+        return pl.lit(_ON_BS)
+    return pl.when(pl.col("c07_bs") == _OFF_BS).then(pl.lit(_OFF_BS)).otherwise(pl.lit(_ON_BS))
+
+
+def _add_split(
+    existing: dict[str, dict[str, float]], frame: pl.DataFrame, label: pl.Expr | None
+) -> dict[str, dict[str, float]]:
+    """Accumulate one inflow split axis over the SA-origin frame into a copy of
+    ``existing`` (the cross-template half). ``None`` label = axis unavailable on
+    this frame; its rows then keep their ordinary empty policy."""
+    merged = {key: dict(value) for key, value in existing.items()}
+    if label is None:
+        return merged
+    grouped = (
+        frame.with_columns(label.alias("_axis"))
+        .group_by(_POST_CRM_CLASS_COL, "_axis")
+        .agg(pl.col(_UNFUNDED_COL).sum().alias("inflow"))
+    )
+    for row in grouped.iter_rows(named=True):
+        _accumulate_split(merged, row[_POST_CRM_CLASS_COL], row["_axis"], float(row["inflow"]))
+    return merged
+
+
+def _accumulate_split(
+    split: dict[str, dict[str, float]], exposure_class: str, axis: str, amount: float
+) -> None:
+    """Add one destination-class/axis amount under this template's sheet key."""
+    per_class = split.setdefault(_sheet_key(exposure_class), {})
+    per_class[axis] = per_class.get(axis, 0.0) + amount
 
 
 def _accumulate(merged: dict[str, float], exposure_class: str, amount: float) -> None:
     """Add one destination-class amount under this template's sheet key."""
-    key = (
-        ExposureClass.CORPORATE.value
-        if exposure_class == ExposureClass.SPECIALISED_LENDING.value
-        else exposure_class
-    )
+    key = _sheet_key(exposure_class)
     merged[key] = merged.get(key, 0.0) + amount
 
 
-def _inflow_rows(row_terms: dict[str, _Terms | None], bands: dict[str, float]) -> frozenset[str]:
-    """Band rows carrying a NON-ZERO inflow on this sheet.
+def _sheet_key(exposure_class: str) -> str:
+    """A raw guarantor class as this template's sheet key — the Art. 112 Table A2
+    merge the sheet axis applies (SL is a corporate sub-type under SA), so an
+    inflow into an SL guarantor cannot key a sheet C 07.00 does not have."""
+    if exposure_class == ExposureClass.SPECIALISED_LENDING.value:
+        return ExposureClass.CORPORATE.value
+    return exposure_class
+
+
+def _inflow_rows(
+    row_terms: dict[str, _Terms | None], sides: dict[str, float], bands: dict[str, float]
+) -> frozenset[str]:
+    """Split rows carrying a NON-ZERO inflow on this sheet.
 
     ``_null_empty_rows`` renders a row all-null when its own subset is empty,
-    which would delete the banded inflow on exactly the sheets that need it most —
+    which would delete the split inflow on exactly the sheets that need it most —
     an inflow-only destination class has no native rows at all. Exempting them is
-    what makes the row-0010 decomposition foot there."""
-    if not bands:
-        return frozenset()
-    return frozenset(
-        ref
-        for ref, terms in row_terms.items()
-        if terms is not None
-        and len(terms) == 1
-        and terms[0][0] == "c07_rw_band"
-        and bands.get(str(terms[0][1]))
-    )
+    what makes the row-0010 decompositions foot there. A row qualifies by its own
+    single membership term, the same way ``_inflow_key_for`` recognises it, so the
+    regime-specific band axis needs no hardcoded ref ladder."""
+    keep: set[str] = set()
+    for ref, terms in row_terms.items():
+        if terms is None or len(terms) != 1:
+            continue
+        column, value = terms[0]
+        split = bands if column == "c07_rw_band" else sides if column == "c07_bs" else None
+        if split is not None and split.get(str(value)):
+            keep.add(ref)
+    return frozenset(keep)
 
 
 def _row_terms(framework: str, cols: set[str]) -> dict[str, _Terms | None]:
@@ -1141,18 +1393,41 @@ def _build_spec(
 def _inflow_key_for(ref: str, terms: _Terms) -> str | None:
     """Which ``ReportingContext`` inflow component this row's col 0100 takes.
 
-    The Total row takes the whole inflow; a RISK-WEIGHT BAND row takes the share
-    of it reported at that band. Band rows are recognised by their own membership
-    terms — a lone ``c07_rw_band`` equals-term — rather than by a hardcoded ref
-    ladder, so the regime-specific axis (Basel 3.1 adds thirteen sub-bands) and
-    the two-term memo rows 0300/0320 (defaulted AND banded, which are "of which"
-    memos and NOT part of the row-0010 decomposition) both fall out correctly.
+    The Total row takes the whole inflow; a BALANCE-SHEET row (0070/0080) and a
+    RISK-WEIGHT BAND row each take the share of it reported on their side / at
+    their band. Both are recognised by their own single membership term rather
+    than by a hardcoded ref ladder, so the regime-specific band axis (Basel 3.1
+    adds thirteen sub-bands) and the two-term memo rows 0300/0320 (defaulted AND
+    banded, which are "of which" memos and NOT part of the row-0010
+    decomposition) both fall out correctly.
     """
     if ref == "0010":
         return "substitution_inflow"
-    if len(terms) == 1 and terms[0][0] == "c07_rw_band":
-        return f"{SUBSTITUTION_INFLOW_RW_PREFIX}{terms[0][1]}"
+    if len(terms) != 1:
+        return None
+    column, value = terms[0]
+    if column == "c07_rw_band":
+        return f"{SUBSTITUTION_INFLOW_RW_PREFIX}{value}"
+    if column == "c07_bs":
+        return "substitution_inflow_off_bs" if value == _OFF_BS else "substitution_inflow_on_bs"
     return None
+
+
+def _post_sl_terms(terms: _Terms, cols: set[str]) -> _Terms:
+    """The POST-basis-only narrowing of the specialised-lending "of which" rows.
+
+    A row keying ``sl_type`` (0021-0026) admits a leg on the post basis only
+    while that leg still applies its own Art. 122B risk weight — see
+    ``_SL_OWN_RW_COL`` for the Annex II basis. Recognised by the row's own
+    membership term rather than a hardcoded ref ladder, so the phase children
+    (which key ``sl_type`` AND ``sl_project_phase``) fall out with the parent.
+    Empty when no substitution gate is sealed: the frame then carries no
+    beneficially-substituted leg to exclude, and a term on an underived column
+    would zero the SL rows of every synthetic unit frame.
+    """
+    if _BENEFICIAL_COL not in cols or not any(column == "sl_type" for column, _ in terms):
+        return ()
+    return ((_SL_OWN_RW_COL, True),)
 
 
 def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row
@@ -1165,10 +1440,19 @@ def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row
     is_b31: bool,
     inflow_key: str | None,
 ) -> dict[str, CellSpec]:
-    member = RowPredicate(equals=terms)
+    # The two-basis split (module docstring): cols 0010-0150 read the obligor's
+    # own book, cols 0160-0235 read the post-substitution population. Every
+    # predicate carries its basis flag, INCLUDING the total row's (whose ``terms``
+    # are empty) — an unflagged predicate would silently sum both populations.
+    origin_terms: _Terms = ((_BASIS_ORIGIN_COL, True), *terms)
+    post_terms: _Terms = ((_BASIS_POST_COL, True), *terms, *_post_sl_terms(terms, cols))
+    member = RowPredicate(equals=origin_terms)
+    post_member = RowPredicate(equals=post_terms)
 
     def narrowed(*extra: tuple[str, str | bool]) -> RowPredicate:
-        return RowPredicate(equals=(*terms, *extra))
+        """A further-narrowed POST-basis predicate — every caller (cols
+        0210/0211/0230/0235) is an exposure-value or RWEA breakdown."""
+        return RowPredicate(equals=(*post_terms, *extra))
 
     cells: dict[str, CellSpec] = {
         "0010": CellSpec(
@@ -1210,7 +1494,13 @@ def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row
             else CellSpec(Formula(refs=(), fn=_const(None)))
         ),
         "0150": CellSpec(Formula(refs=("0110", "0130"), fn=_fully_adjusted)),
-        "0200": CellSpec(Sum(ead_col), predicate=member),
+        # Col 0200 onwards are POST-basis. Annex II defines col 0200 as the
+        # "exposure value after taking into account value adjustments, ALL CREDIT
+        # RISK MITIGANTS and conversion factors that is to be assigned to risk
+        # weights in accordance with Article 113" — Art. 235 substitution is a
+        # credit risk mitigant, so the covered part's exposure value and RWEA
+        # follow its col 0090/0100 flow onto the protection provider's sheet.
+        "0200": CellSpec(Sum(ead_col), predicate=post_member),
         # Annex II col 0200: "Exposure values for CCR business shall be the same
         # as reported in column 0210" — so 0210 is the row's exposure value
         # narrowed to its CCR rows, and 0211 narrows further by excluding the
@@ -1225,7 +1515,7 @@ def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row
             if {"risk_type", "cp_entity_type"} <= cols
             else CellSpec(Formula(refs=(), fn=_const(None)))
         ),
-        "0220": CellSpec(Sum(rwa_col), predicate=member),
+        "0220": CellSpec(Sum(rwa_col), predicate=post_member),
         "0240": CellSpec(Formula(refs=(), fn=_const(None))),
     }
     # Col 0100 lands on the Total row AND on the risk-weight band row matching the
@@ -1241,13 +1531,16 @@ def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row
         cells["0040"] = CellSpec(Formula(refs=("0010", "0030", "0035"), fn=_net_of_adjustments))
     else:
         cells["0040"] = CellSpec(Formula(refs=("0010", "0030"), fn=_net_of_adjustments))
-        # CRR supporting-factor columns (Art. 501/501a).
+        # CRR supporting-factor columns (Art. 501/501a) — POST basis with col
+        # 0220, which they have to foot against (0215 + 0216 + 0217 = 0220).
         cells["0215"] = CellSpec(
-            Sum("rwa_pre_factor" if "rwa_pre_factor" in cols else rwa_col), predicate=member
+            Sum("rwa_pre_factor" if "rwa_pre_factor" in cols else rwa_col), predicate=post_member
         )
-        cells["0216"] = _sf_adjustment_cell(terms, cols, "sme_supporting_factor_applied", "is_sme")
+        cells["0216"] = _sf_adjustment_cell(
+            post_terms, cols, "sme_supporting_factor_applied", "is_sme"
+        )
         cells["0217"] = _sf_adjustment_cell(
-            terms, cols, "infrastructure_factor_applied", "is_infrastructure"
+            post_terms, cols, "infrastructure_factor_applied", "is_infrastructure"
         )
 
     # CCF buckets (0160-0190): the PRE-conversion off-balance-sheet gross per
@@ -1264,10 +1557,16 @@ def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row
     # empty_cell="null": a row with no off-balance-sheet item in the bucket
     # reports blank, not 0.0 — the template's recorded empty-subset contract
     # (the retired _null_row semantics these cells replaced).
+    #
+    # POST basis, with col 0200 rather than with the gross col 0010 they read the
+    # carrier of: they break down col 0150, which is ALREADY post-substitution
+    # (it nets the col 0090 outflow and adds the col 0100 inflow), and
+    # ``v0308_m`` / ``boe_b0471`` test col 0200 AGAINST them. Leaving them on the
+    # origin basis while col 0200 moved would break that identity the other way.
     ccf_refs = [ref for ref in _CCF_REFS if ref in column_refs]
     for ref in ccf_refs:
         if pick(cols, *_CCF_CARRIERS) is not None and _OFF_BS_GROSS_COL in cols:
-            bucket_terms: _Terms = (*terms, ("c07_ccf_bucket", ref))
+            bucket_terms: _Terms = (*post_terms, ("c07_ccf_bucket", ref))
             if _has_bs_side(cols):
                 bucket_terms = (*bucket_terms, ("c07_bs", "off"))
             cells[ref] = CellSpec(
@@ -1312,55 +1611,3 @@ def _sf_adjustment_cell(terms: _Terms, cols: set[str], dedicated: str, flag_col:
             ),
         )
     return CellSpec(Formula(refs=(), fn=_const(None)))
-
-
-def _null_empty_rows(
-    frame: pl.DataFrame,
-    class_df: pl.DataFrame,
-    row_terms: dict[str, _Terms | None],
-    keep: frozenset[str] = frozenset(),
-) -> pl.DataFrame:
-    """Render inert rows and rows with EMPTY subsets all-null — the retired
-    ``_null_row`` contract (the COREP zero policy applies only to populated
-    rows' unbound cells)."""
-    constrained = {
-        ref: RowPredicate(equals=terms)
-        for ref, terms in row_terms.items()
-        if terms is not None and len(terms) > 0
-    }
-    counts = matched_counts(class_df, constrained)
-    null_refs = [
-        ref
-        for ref, terms in row_terms.items()
-        if ref not in keep and (terms is None or (len(terms) > 0 and counts[ref] == 0))
-    ]
-    if not null_refs:
-        return frame
-    value_cols = [col for col in frame.columns if col not in ("row_ref", "row_name")]
-    return frame.with_columns(
-        pl.when(pl.col("row_ref").is_in(null_refs))
-        .then(pl.lit(None, dtype=pl.Float64))
-        .otherwise(pl.col(col))
-        .alias(col)
-        for col in value_cols
-    )
-
-
-def _negate_deduction_cols(frame: pl.DataFrame) -> pl.DataFrame:
-    """COREP Annex II §1.3: emit "(-)"-labelled deduction columns as negative
-    figures (after the waterfalls consumed positive magnitudes); a zero
-    deduction is normalised to ``+0.0`` and null stays null."""
-    targets = [col for col in frame.columns if col in _NEGATIVE_COLS]
-    if not targets:
-        return frame
-    return frame.with_columns(_negate_expr(col) for col in targets)
-
-
-def _negate_expr(col: str) -> pl.Expr:
-    """Negate a "(-)"-labelled deduction column, normalising a zero to ``+0.0``.
-
-    Plain ``-pl.col(col)`` flips the IEEE sign bit, so a ``0.0`` cell would
-    serialise as ``-0.0`` (``+ 0.0`` does NOT clear it in Polars); the explicit
-    zero branch keeps a zero deduction as ``+0.0``. Null stays null. Identical
-    expression to C 08.01/02's ``_negate`` pass."""
-    return pl.when(pl.col(col) == 0.0).then(pl.lit(0.0)).otherwise(-pl.col(col)).alias(col)

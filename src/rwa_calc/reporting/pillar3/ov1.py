@@ -137,7 +137,18 @@ if TYPE_CHECKING:
 # canonical name (see reporting.plans / _resolve_sheet_key single_frame path).
 _SHEET_KEY = "ov1"
 
-# Rows whose column ``a`` sums one origin approach (0.0 when absent).
+# Rows whose column ``a`` sums one POST-SUBSTITUTION approach (0.0 when absent).
+#
+# These are "of which" splits of row 1 by the approach the RWEA was actually
+# calculated under after CRM. CRR Art. 235 makes the covered part of a
+# guaranteed exposure a direct exposure to the protection provider, treated
+# under the PROVIDER's approach, so a slotting exposure fully guaranteed by an
+# SA counterparty contributes to row 2, not row 4 — keying the origin approach
+# disclosed the whole RWEA under "Supervisory slotting" for an exposure that is
+# no longer slotted. Row 1 (their parent) is a flat non-CCR sum and is basis-
+# independent, so the split moves between rows without changing their total.
+# Moved with COREP C 02.00 rows 0060/0220, which make the same disclosure
+# (f94be554 put C 07.00's exposure-value and RWEA columns on this basis first).
 _APPROACH_REFS: dict[str, tuple[str, ...]] = {
     "2": ("standardised", "equity"),
     "3": ("foundation_irb",),
@@ -242,10 +253,11 @@ def _row_a_cell(ref: str) -> CellSpec | None:
     if ref == "27":
         return CellSpec(SideContext("of_adj"))
     if ref in _APPROACH_REFS:
-        # An "of which" of row 1 inherits row 1's CCR exclusion.
+        # An "of which" of row 1 inherits row 1's CCR exclusion. POST-substitution
+        # approach — see the module docstring and _APPROACH_REFS.
         return CellSpec(
             Sum("rwa_final"),
-            predicate=RowPredicate(approaches_origin=_APPROACH_REFS[ref], equals=_NON_CCR.equals),
+            predicate=RowPredicate(approaches=_APPROACH_REFS[ref], equals=_NON_CCR.equals),
             empty_cell="zero",
         )
     return None

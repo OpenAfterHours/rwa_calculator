@@ -37,7 +37,24 @@ The comparable ties (all hold on both frameworks on a real IRB+SA pipeline run):
 - ``irb_rwea_c08_01_vs_c02``   Σ C 08.01 sheets [0010][0260] == C 02.00 [0220]
                                (IRB of-which line).
 - ``irb_rwea_c08_01_vs_ov1``   Σ C 08.01 sheets [0010][0260] == OV1 [3]+[4]+[5]
-                               (F-IRB + slotting + A-IRB) — same origin basis.
+                               (F-IRB + slotting + A-IRB).
+
+THE TWO IRB TIES SPANNED A BASIS MIGRATION, AND BOTH SIDES HAVE NOW CROSSED.
+Their right-hand sides (C 02.00 row 0220, OV1 rows 3/4/5) moved to the
+POST-substitution approach with the C 02.00 / OV1 slice; their left-hand side
+(C 08.01 col 0260) followed one commit later, together with C 02.00's IRB CLASS
+key. Neither tie was ever weakened — the IRB RWEA a firm discloses must be the
+same number on every template — and they are what DETECTED the C 08.01 slice
+being incomplete.
+
+A 0%-RW GUARANTOR CANNOT VERIFY THESE TIES, and that is the trap to remember:
+the crossing RWEA is then zero, so both sides agree whichever basis they sit on
+and green means nothing. Verified against a NON-ZERO-RW guarantor, measured
+both ways — S3's F-IRB corporate leg re-run with a CQS2 SA institution
+guarantor crosses 2,450,000 of RWEA under CRR (Art. 120: 50%) and 1,470,000
+under Basel 3.1 (ECRA: 30%). With one side migrated, BOTH ties break by exactly
+that amount in both regimes; with both migrated, both are green. Any future
+change to either basis must be re-measured the same way.
 
 References:
 - CRR Art. 92(3) (own-funds requirement roll-up); COREP Annex II C 02.00 /
@@ -195,12 +212,14 @@ def check_cross_template_consistency(
 # identity here and the extraction mechanics separately.
 #
 # Basis note for the C 02.00 ties (sa_rwea_c07_vs_c02 / irb_rwea_c08_01_vs_c02):
-# C 02.00 keys the APPLIED approach (approach_applied) while C 07.00 / C 08.01
-# key the ORIGIN approach (reporting_approach_origin). These coincide today
-# because CRM substitution does NOT retarget an exposure's approach (the open
-# F-decision recorded in the c07/cr4 module docstrings). If that retarget ever
-# lands, these two ties may legitimately diverge and must be re-derived — unlike
-# the obligor-basis pairs below, which diverge by REGULATION even today.
+# both sides now key the POST-SUBSTITUTION twins. The retarget this note once
+# called an open F-decision HAS LANDED: ``reporting_approach`` /
+# ``reporting_class`` (the aggregator's ``approach_post_crm`` /
+# ``exposure_class_post_crm``) carry Art. 235/236 substitution, C 07.00 and
+# C 08.01 key them on their exposure-value and RWEA columns, and C 02.00 keys
+# them on all three of its breakdowns. So the ties no longer "coincide" — they
+# hold by construction. The pairs recorded below still diverge by REGULATION,
+# which is a different thing and is not affected by any of this.
 
 
 TIE_OUTS: list[TieOut] = [
@@ -256,8 +275,11 @@ TIE_OUTS: list[TieOut] = [
     TieOut(
         name="irb_rwea_c08_01_vs_c02",
         description=(
-            "Aggregate IRB RWEA across the C 08.01 obligor-class sheets equals "
-            "the C 02.00 IRB of-which line (row 0220)."
+            "Aggregate IRB RWEA across the C 08.01 class sheets equals the "
+            "C 02.00 IRB of-which line (row 0220). BOTH sides key the "
+            "POST-substitution approach. Verify any change to either with a "
+            "NON-zero-RW guarantor — a 0%-RW one crosses no RWEA and cannot "
+            "tell a correct basis from an incomplete one."
         ),
         regulatory_reference=(
             "CRR Art. 92(3)(a); COREP Annex II C 08.01 col 0260 / C 02.00 row "
@@ -272,9 +294,11 @@ TIE_OUTS: list[TieOut] = [
     TieOut(
         name="irb_rwea_c08_01_vs_ov1",
         description=(
-            "Aggregate IRB RWEA across the C 08.01 obligor-class sheets equals "
-            "the Pillar 3 OV1 IRB rows (F-IRB row 3 + slotting row 4 + A-IRB "
-            "row 5) — the same reporting-approach-origin basis."
+            "Aggregate IRB RWEA across the C 08.01 class sheets equals the "
+            "Pillar 3 OV1 IRB rows (F-IRB row 3 + slotting row 4 + A-IRB row "
+            "5). BOTH sides key the POST-substitution approach. Verify any "
+            "change to either with a NON-zero-RW guarantor — a 0%-RW one "
+            "crosses no RWEA and cannot tell correct from incomplete."
         ),
         regulatory_reference=(
             "COREP Annex II C 08.01 col 0260; Pillar 3 OV1 rows 3/4/5 "

@@ -1336,7 +1336,7 @@ def redistribute_non_beneficial(exposures: pl.LazyFrame) -> pl.LazyFrame:
     Single-guarantor and non-guaranteed exposures pass through unchanged.
 
     References:
-        CRR Art. 213: Only beneficial guarantees should be applied
+        CRR Art. 193(1): a guarantee must never raise the RWEA (sa/rw_adjustments.py)
         CRR Art. 215-217: Guarantee substitution with multiple protections
     """
     schema = exposures.collect_schema()

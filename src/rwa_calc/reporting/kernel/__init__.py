@@ -8,6 +8,7 @@ Pipeline position:
 Key responsibilities:
 - Column discovery and candidate-name resolution (``columns``)
 - Approach and balance-sheet-side row filters (``filters``)
+- The origin / post-substitution two-basis discriminators (``bases``)
 - Null-safe column summation primitives (``sums``)
 - Template row-dict construction (``rows``)
 - Excel sheet writing with a readable-name header band (``excel``)
@@ -25,6 +26,14 @@ References:
 
 from __future__ import annotations
 
+from rwa_calc.reporting.kernel.bases import (
+    POST_APPROACH_SOURCE,
+    TwoBasis,
+    class_keys,
+    population_flags,
+    sheet_axis,
+    sheet_frame,
+)
 from rwa_calc.reporting.kernel.columns import (
     available_columns,
     ensure_gross_side_carriers,
@@ -47,7 +56,10 @@ from rwa_calc.reporting.kernel.rows import null_row
 from rwa_calc.reporting.kernel.sums import col_sum, safe_sum, safe_sum_or_none
 
 __all__ = [
+    "POST_APPROACH_SOURCE",
+    "TwoBasis",
     "available_columns",
+    "class_keys",
     "col_sum",
     "column_name_map",
     "ensure_gross_side_carriers",
@@ -58,9 +70,12 @@ __all__ = [
     "gross_carriers",
     "null_row",
     "pick",
+    "population_flags",
     "safe_sum",
     "safe_sum_or_none",
     "sanitise_sheet_name",
+    "sheet_axis",
+    "sheet_frame",
     "write_metadata_sheet",
     "write_template_sheet",
 ]

@@ -140,29 +140,47 @@ class TestPublishedIdentitiesEndToEnd:
 
 class TestPerScenarioInflowLandsOnce:
     """Every scenario's guaranteed amount arrives on its recorded destination
-    (template, class) as an inflow of exactly the covered amount — driven
-    generically off ``SUBSTITUTION_INFLOW_DESIGN`` so a sixth scenario added
-    to the fixture is covered without a code change here."""
+    (template, class) as an inflow — driven generically off
+    ``SUBSTITUTION_INFLOW_DESIGN`` so an eighth scenario added to the fixture
+    is covered without a code change here.
+
+    Two or more scenarios may legitimately share one destination (S1 and S7
+    both land on institution/C 08.01 — see the fixture module docstring), so
+    the assertion is grouped by (template, class) and compares the sheet's
+    inflow cell against the SUM of every scenario's ``guaranteed_amount``
+    that the design table maps to that destination — not any single
+    scenario's amount in isolation. "Lands once" is still enforced by that
+    grouping, not diluted by it: the comparison is exact equality against the
+    sum of ONLY the entries recorded for that one destination, so it still
+    fails if a leg's inflow lands on the wrong sheet (its true destination's
+    sum comes up short), lands twice (its destination's sum comes up long —
+    equality, not `>=`, catches this), or never lands at all (its
+    destination's sum comes up short, including a destination with exactly
+    one design entry, which is the original one-to-one case degenerating out
+    of the general grouped one)."""
 
     @pytest.mark.parametrize("regime_key", list(_REGIMES))
     def test_destination_inflow_equals_the_guaranteed_amount(self, regime_key: str) -> None:
         _results, corep = _run(regime_key)
 
-        for guar_ref, design in SUBSTITUTION_INFLOW_DESIGN.items():
-            template = design["destination_template"]
-            dest_class = design["destination_class"]
-            amount = design["guaranteed_amount"]
+        destination_totals: dict[tuple[str, str], float] = {}
+        for design in SUBSTITUTION_INFLOW_DESIGN.values():
+            key = (design["destination_template"], design["destination_class"])
+            destination_totals[key] = destination_totals.get(key, 0.0) + design["guaranteed_amount"]
+
+        for (template, dest_class), expected_amount in destination_totals.items():
             _gross_ref, _outflow_ref, inflow_ref, _net_ref = _TEMPLATE_COLS[template]
 
             sheets = _sheets(corep, template)
             assert dest_class in sheets, (
-                f"{regime_key}/{guar_ref}: no {template} sheet for destination class "
+                f"{regime_key}: no {template} sheet for destination class "
                 f"{dest_class!r} — the inflow has nowhere to land"
             )
             total = _total_row(sheets[dest_class])
-            assert total[inflow_ref][0] == pytest.approx(amount), (
-                f"{regime_key}/{guar_ref}: {template}[{dest_class}] col {inflow_ref} "
-                f"expected {amount}, got {total[inflow_ref][0]}"
+            assert total[inflow_ref][0] == pytest.approx(expected_amount), (
+                f"{regime_key}: {template}[{dest_class}] col {inflow_ref} expected "
+                f"{expected_amount} (sum of every scenario mapped to this destination "
+                f"in SUBSTITUTION_INFLOW_DESIGN), got {total[inflow_ref][0]}"
             )
 
 

@@ -446,9 +446,29 @@ With:
 - `r_g` = the Step 1–4 result above (`guarantor_rw` post-substitution)
 
 The benefit gate (`is_guarantee_beneficial = guarantor_rw < risk_weight_irb_original`)
-disapplies PSM when it would *worsen* the capital outcome, in line with the implicit
-Art. 213 economic-substance test and the explicit Art. 160(4) "no better than
-direct" floor.
+disapplies PSM when it would *worsen* the capital outcome, in line with the explicit
+CRR Art. 193(1) cap — "No exposure in respect of which an institution obtains credit
+risk mitigation shall produce a higher risk-weighted exposure amount **or expected
+loss amount** than an otherwise identical exposure in respect of which an institution
+has no credit risk mitigation" — and the explicit Art. 160(4) "no better than direct"
+floor.
+
+Art. 193(1) is mandatory and per-exposure, so the gate is compliance with a cap, not
+an election. The matching permissive limb is Art. 193(3) ("institutions **may amend**
+the calculation of risk-weighted exposure amounts under the Standardised Approach and
+the calculation of risk-weighted exposure amounts and expected loss amounts under the
+IRB Approach"), which is the hook that reaches the IRB leg — Art. 113(3) speaks only
+to the SA risk weight. Earlier revisions cited an "implicit Art. 213 economic-substance
+test"; Art. 213 is an eligibility article (conditions on the protection contract) and
+carries no benefit test. It is a *precondition* of the Art. 193(3) election, not the
+election itself, which is how the two came to be conflated.
+
+> **PS1/26 caveat.** The Art. 193(1) cap is verified for CRR only. The PRA Credit Risk
+> Mitigation (CRR) Part is not held locally, and a full search of `ps126app1.pdf`
+> returns no equivalent language. If PS1/26 carries no such cap, then from 1 Jan 2027
+> this gate stops being compelled and becomes a firm election with a capital
+> consequence — see the CRR-vs-B3.1 caveat under
+> [Anti-Double-Counting and Consistency Rules](#anti-double-counting-and-consistency-rules).
 
 ### Expected Loss Under PSM (Art. 236(1A))
 

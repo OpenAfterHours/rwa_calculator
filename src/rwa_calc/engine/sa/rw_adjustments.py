@@ -3,7 +3,7 @@ Standardised Approach post-base risk-weight adjustments.
 
 Plain typed functions applied after the base SA risk-weight assignment, in
 regulatory order: Art. 222 FCSM substitution, Art. 232 life-insurance
-mapping, Art. 213-217 guarantee substitution, the Basel 3.1 Art. 123B
+mapping, Art. 235 guarantee substitution, the Basel 3.1 Art. 123B
 currency-mismatch multiplier, and the Basel 3.1 Art. 110A due-diligence
 override. ``SACalculator`` composes them via ``LazyFrame.pipe``.
 
@@ -13,12 +13,16 @@ Pipeline position:
 Key responsibilities:
 - Art. 222 Financial Collateral Simple Method RW substitution
 - Art. 232 life-insurance collateral RW mapping
-- Art. 213-217 unfunded credit protection (guarantee substitution)
+- Art. 235 unfunded credit protection (guarantee substitution)
 - PRA PS1/26 Art. 123B currency-mismatch multiplier (Basel 3.1)
 - PRA PS1/26 Art. 110A due-diligence override (Basel 3.1)
 
 References:
-- CRR Art. 213-217: Unfunded credit protection (guarantee substitution)
+- CRR Art. 193: CRM recognition principles (the no-worse cap and the
+  election to amend the calculation) — the basis for declining a guarantee
+- CRR Art. 235: SA guarantee substitution formula
+- CRR Art. 213-217: Eligibility of the protection (gated upstream in
+  ``engine/crm/guarantees.py``, not here)
 - CRR Art. 222: Financial Collateral Simple Method
 - CRR Art. 232: Life insurance collateral
 - PRA PS1/26 Art. 110A: Basel 3.1 due diligence override
@@ -188,7 +192,8 @@ def apply_third_party_deposit_rw_mapping(lf: pl.LazyFrame) -> pl.LazyFrame:
     )
 
 
-@cites("CRR Art. 213")
+@cites("CRR Art. 193")
+@cites("CRR Art. 235")
 def apply_guarantee_substitution(
     lf: pl.LazyFrame,
     config: CalculationConfig,
@@ -197,11 +202,114 @@ def apply_guarantee_substitution(
 ) -> pl.LazyFrame:
     """Apply guarantee substitution for unfunded credit protection.
 
-    For guaranteed portions, the risk weight is substituted with the
-    guarantor's risk weight. The final RWA is calculated using blended
-    risk weight based on guaranteed vs unguaranteed portions.
+    For guaranteed portions the risk weight is substituted with the guarantor's
+    risk weight, and the row's RWA is the Art. 235(1) blend of the two:
+    ``max(0, E - GA) x r + GA x g``.
 
-    CRR Art. 213-217: Unfunded credit protection.
+    THE DECLINE AND ITS AUTHORITY. This is the canonical account for the whole
+    ``is_guarantee_beneficial`` machinery — its IRB twin
+    (``engine/irb/guarantee.py``) and the three reporting consumers that gate on
+    it (``engine/aggregator/aggregator.py::_beneficial_gate``,
+    ``reporting/corep/crm_substitution.py::_decline_gate``,
+    ``reporting/corep/c07.py::_protection_exprs``) all point here rather than
+    restating it.
+
+    THE BASIS IS ART. 193, NOT ART. 213. Art. 213 ("Requirements common to
+    guarantees and credit derivatives") is an ELIGIBILITY gate on the protection
+    CONTRACT — the protection is direct, its extent clearly defined and
+    incontrovertible, no clause permitting unilateral cancellation / cost
+    escalation on credit deterioration / obstruction of timely payout / reduction
+    of protection maturity, legally effective and enforceable — plus
+    concentration-risk systems (213(2)) and contractual/statutory fulfilment
+    (213(3)). It says nothing about whether a recognised guarantee must be
+    APPLIED, yet this code recorded "recognition is permissive (Art. 213)" in six
+    places. The two provisions that actually carry the decline both sit in
+    Art. 193, "Principles for recognising the effect of credit risk mitigation
+    techniques":
+
+    - Art. 193(1), MANDATORY, about the OUTCOME: "No exposure in respect of which
+      an institution obtains credit risk mitigation shall produce a higher
+      risk-weighted exposure amount or expected loss amount than an otherwise
+      identical exposure in respect of which an institution has no credit risk
+      mitigation." The unit is THE EXPOSURE, not the portfolio, and it binds the
+      EXPECTED LOSS amount as well as the RWEA — which is what makes it the right
+      authority for the IRB leg too.
+    - Art. 193(3), PERMISSIVE, about the MECHANISM: "Where the provisions in
+      Sections 2 and 3 are met, institutions MAY amend the calculation of
+      risk-weighted exposure amounts under the Standardised Approach and the
+      calculation of risk-weighted exposure amounts and expected loss amounts
+      under the IRB Approach in accordance with the provisions of Sections 4, 5
+      and 6." Art. 213 sits IN Section 2 — it is one of the preconditions 193(3)
+      makes the election conditional on, which is exactly why it kept being
+      mistaken for the election itself.
+
+    Art. 113(3) ("Where an exposure is subject to credit protection the risk
+    weight applicable to that item may be amended in accordance with Chapter 4")
+    says the same thing per ITEM, and is the hook Art. 235(1) opens with — "For
+    the purposes of Article 113(3) institutions shall calculate ..." — so that
+    ``shall`` governs HOW you compute if you amend, not WHETHER you amend. But
+    113(3) lives in Chapter 2 and speaks only to the SA risk weight; it does not
+    reach the IRB path. Art. 193(3) covers both, so it is the citation of record.
+
+    THE ARGUMENT THAT NEEDS NO CITATION. The Art. 235(1) formula carries no
+    ``min`` against ``E x r``. Applied mechanically with ``g > r`` it returns a
+    HIGHER RWEA than the identical unprotected exposure — a credit risk
+    mitigation chapter that penalises mitigation. That reading cannot be right,
+    which is precisely why Art. 193(1) exists.
+
+    TWO ELECTIONS THE TEXT DOES NOT FORCE, recorded because nothing else records
+    them:
+
+    (1) DECLINE vs APPLY-AND-CAP — AND ITS CAPITAL-NEUTRALITY IS CRR-CONDITIONAL,
+        WHICH IS THE WHOLE POINT. Art. 193(1) mandates the OUTCOME, not the
+        mechanism, so under CRR there are exactly TWO compliant implementations:
+        decline the guarantee, or apply Art. 235(1) and then cap the RWEA at the
+        unmitigated amount. They give IDENTICAL CAPITAL — but only BECAUSE the
+        Art. 193(1) cap is MANDATORY. That is what collapses the two onto one
+        number and leaves the choice affecting DISCLOSURE alone: under
+        apply-and-cap Art. 235 HAS fired, the covered part HAS been assigned to
+        the guarantor's class, and the C 07.00 / C 08.01 outflow and inflow would
+        both be reported. We decline; that is an implementation election, not a
+        reading of the text. Remove the mandatory cap and a THIRD option appears
+        — apply Art. 235(1) UNCAPPED, returning a HIGHER RWEA — at which point
+        the election stops being capital-neutral and our decline stops being the
+        only permissible behaviour. Whether that coincidence survives into
+        PS1/26 is UNVERIFIED (below); if it does not, this election acquires a
+        capital consequence and needs a recorded policy basis rather than a code
+        comment. Note the scope: this is the ENGINE gate, which moves RWA. The
+        reporting gates that consume its flag
+        (``engine/aggregator/aggregator.py::_beneficial_gate``,
+        ``reporting/corep/crm_substitution.py::_decline_gate``) move no RWA at
+        all, so THEIR capital-neutrality is unconditional and nothing here
+        qualifies it.
+    (2) THE STRICT ``<``. The benefit test below is
+        ``guarantor_rw < pre_crm_risk_weight`` (the IRB twin is identical against
+        ``risk_weight_irb_original``). At EQUALITY Art. 193(1) is SILENT — equal
+        is not "higher" — so an equally-weighted guarantor is declined BY CHOICE:
+        zero capital effect, and a real effect on which sheet the exposure
+        appears on.
+
+    A PS1/26 GAP, STATED RATHER THAN GLOSSED. PS1/26 Art. 113(3) is word for word
+    the CRR text with "the Credit Risk Mitigation (CRR) Part" substituted for
+    "Chapter 4", so the permissive hook carries into 2027. A PS1/26 equivalent of
+    Art. 193(1) has NOT been verified: the PRA renumbers (in ``ps126app1.pdf``
+    "Article 193" is the CRR Art. 161 IRB-parameter-substitution rule — read the
+    ``[Note: This rule corresponds to Article NNN of CRR ...]`` line, never the
+    number), and the PRA Credit Risk Mitigation (CRR) Part is not in
+    ``docs/assets/`` at all. The consequence matters: under CRR the decline is
+    COMPELLED, so doing neither it nor apply-and-cap is a breach; if the PRA CRM
+    Part turns out to lack the equivalent, from 1 Jan 2027 this becomes a pure
+    ELECTION — and an election needs a recorded policy basis in a way that
+    compliance with a mandatory cap does not. No PS1/26 citation is asserted
+    here, because none has been read.
+
+    References:
+        CRR Art. 193(1), (3): CRM recognition principles — the no-worse outcome
+            cap, and the election to amend the calculation at all.
+        CRR Art. 113(3): the SA per-item permissive hook Art. 235(1) hangs off.
+        CRR Art. 235: SA risk-weight substitution formula.
+        CRR Art. 213-217: eligibility of the protection itself, gated upstream in
+            ``engine/crm/guarantees.py``.
     """
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     exposures = lf
@@ -261,8 +369,12 @@ def apply_guarantee_substitution(
         ).alias("guarantor_rw"),
     ).drop(short_term_flag_col)
 
-    # Check if guarantee is beneficial (guarantor RW < borrower RW)
-    # Non-beneficial guarantees should NOT be applied per CRR Art. 213
+    # The Art. 193(1) benefit test: no exposure with CRM may produce a HIGHER
+    # RWEA than the identical unprotected exposure, and the Art. 235(1) formula
+    # carries no ``min`` to stop it. DECLINING (rather than applying Art. 235
+    # then capping) and the STRICT ``<`` (equality is declined too) are both
+    # elections the text does not force — see this function's docstring, which is
+    # the single recorded basis for every consumer of this flag.
     exposures = exposures.with_columns(
         [
             pl.when(
@@ -596,7 +708,7 @@ def apply_intragroup_zero_rw(
 
 
 # ---------------------------------------------------------------------------
-# Guarantee-substitution helpers (CRR Art. 213-217)
+# Guarantee-substitution helpers (CRR Art. 235; guarantor eligibility Art. 213-217)
 #
 # The guarantee-substitution stage relies on a few columns that may be missing
 # when the calculator is invoked directly from tests (i.e. bypassing the CRM

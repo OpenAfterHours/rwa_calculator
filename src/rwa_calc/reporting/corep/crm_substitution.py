@@ -259,8 +259,9 @@ def irb_origin_inflows(
     carrier on a declined leg, so the ``> 0`` filter below drops it. What entitles
     the covered part to the GUARANTOR's sheet is Art. 235 risk-weight substitution
     having FIRED; a positive ``guaranteed_portion`` only says protection was
-    ATTACHED. Recognition is permissive (Art. 213), so the calculators decline a
-    guarantee that would raise capital and leave the leg on the borrower basis
+    ATTACHED. Art. 193(1) bars a guarantee from RAISING the RWEA and Art. 193(3)
+    makes amending the calculation an election, so the calculators DECLINE such a
+    guarantee and leave the leg on the borrower basis
     (``is_guarantee_beneficial=False``). Booking an inflow for one of those
     published the BORROWER's risk weight on the guarantor's sheet, because the
     band split (:func:`_band_split`) reads ``risk_weight``, which on a declined
@@ -401,8 +402,15 @@ def _decline_gate(cols: set[str], magnitude: pl.Expr) -> pl.Expr:
     """Zero a protection magnitude where the engine DECLINED the guarantee.
 
     A guarantee the engine DECLINED (``is_guarantee_beneficial`` false/null — it
-    would have RAISED capital, CRR Art. 213) produces NO substitution effect: the
-    RWA stays on the borrower basis. Annex II heads this block "CRM TECHNIQUES
+    would have RAISED capital, which CRR Art. 193(1) forbids) produces NO
+    substitution effect: the RWA stays on the borrower basis. This gate moves no
+    RWA itself; what it reports is the DECLINE MECHANISM, not merely the
+    Art. 193(1) outcome — an apply-and-cap implementation reaches the same
+    capital under CRR and WOULD book these flows, so this gate is correct only
+    because the calculators decline. That election and the CRR-conditionality of
+    its capital-neutrality are recorded on
+    ``engine/sa/rw_adjustments.py::apply_guarantee_substitution``.
+    Annex II heads this block "CRM TECHNIQUES
     WITH SUBSTITUTION EFFECTS ON THE EXPOSURE", so a declined guarantee does not
     belong in it, and reporting one booked a phantom outflow against a phantom
     inflow. Gating the carrier here gates BOTH sides at once — the substitution
@@ -510,9 +518,10 @@ def irb_protection_exprs(cols: set[str]) -> list[pl.Expr]:
 
     A DECLINED GUARANTEE IS NOT IN THE BLOCK AT ALL. The heading is "CRM
     TECHNIQUES **WITH SUBSTITUTION EFFECTS ON THE EXPOSURE**", and a guarantee the
-    calculator declined has none — Art. 213 recognition is permissive, so where
-    the guarantor's risk does not beat the obligor's the engine leaves the RWA on
-    the borrower basis. :func:`_decline_gate` therefore zeroes the unfunded
+    calculator declined has none — Art. 193(1) bars a guarantee from raising the
+    RWEA and Art. 193(3) leaves amending the calculation an election, so where the
+    guarantor's risk does not beat the obligor's the engine leaves the RWA on the
+    borrower basis. :func:`_decline_gate` therefore zeroes the unfunded
     magnitude on both the col 0040/0050 twin and the col 0070 subtotal, which also
     removes the leg from the col 0080 inflow (it binds
     :data:`IRB_UNFUNDED_COL`). The Art. 232 OFCP carriers are deliberately NOT

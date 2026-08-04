@@ -574,8 +574,8 @@ def _beneficial_gate() -> pl.Expr:
     """True where a guarantee actually substituted; null/False where it did NOT.
 
     A guarantee the engine DECLINES — ``guarantor_rw >= borrower RW``, so applying
-    it would raise capital (CRR Art. 213) — leaves the RWA on the borrower basis:
-    ``apply_guarantee_substitution`` takes its ``.otherwise()`` branch and
+    it would raise capital, which CRR Art. 193(1) forbids — leaves the RWA on the
+    borrower basis: ``apply_guarantee_substitution`` takes its ``.otherwise()`` and
     ``rwa == rwa_irb_original``. The leg nonetheless keeps a positive
     ``guaranteed_portion`` and a resolved ``post_crm_exposure_class_guaranteed``,
     so the post-CRM class/approach twins used to migrate it anyway and publish the
@@ -622,6 +622,21 @@ def _beneficial_gate() -> pl.Expr:
     sovereign sheet, one a 0% weight onto a corporate sheet, one churns a 0%
     weight within a single sheet — and one gate has to stop all three.
 
+    WHAT THIS GATE IS DOWNSTREAM OF, AND WHY THAT MATTERS HERE. This gate moves
+    no RWA, so the capital-neutrality recorded above is unconditional and holds
+    whatever the calculators do. What it DOES depend on is that the calculators
+    DECLINE rather than apply-and-cap. Art. 193(1) mandates the OUTCOME — no
+    exposure with CRM may produce a higher RWEA or EL than the identical
+    unprotected exposure — not the mechanism, and applying Art. 235(1) then
+    capping the RWEA at the unmitigated amount complies just as well. Under that
+    reading Art. 235 HAS fired and the covered part HAS been assigned to the
+    guarantor's class, so the outflow and inflow WOULD be booked and this gate
+    would be wrong. It is correct BECAUSE we decline. That election, its
+    CRR-conditional capital-neutrality, why the basis is Art. 193 and not
+    Art. 213, the strict-``<`` election and the unverified PS1/26 position are
+    all recorded on
+    ``engine/sa/rw_adjustments.py::apply_guarantee_substitution``.
+
     THE THREE-WAY PRESENCE/NULL/VALUE READING IS THE SELECTOR'S, NOT A SCHEMA
     BRANCH. ``all_horizontal`` over a ``require_all=False`` name selector yields
     the column where the frame has it, and the vacuous ``True`` where it does not
@@ -661,10 +676,11 @@ def _add_post_crm_reporting_class(lf: pl.LazyFrame) -> pl.LazyFrame:
     ``is_guaranteed`` means protection EXISTS (``guaranteed_portion > 0``); what
     MOVES an exposure into the guarantor's class is Art. 235 risk-weight
     substitution actually being applied. Where the calculators decline it
-    (Art. 213 recognition is permissive and a guarantee must never INCREASE
-    capital) there is no covered part to move, so the leg keeps the obligor's
-    applied class. See :func:`_beneficial_gate` for the reproduction and the
-    null/absence convention.
+    (Art. 193(1) bars a guarantee from RAISING the RWEA, and Art. 193(3) makes
+    amending the calculation an election rather than a duty) there is no covered
+    part to move, so the leg keeps the obligor's applied class. See
+    :func:`_beneficial_gate` for the reproduction, the null/absence convention
+    and the decline-vs-apply-and-cap election this gate depends on.
     """
     guarantor_class = pl.col("post_crm_exposure_class_guaranteed")
     return lf.with_columns(

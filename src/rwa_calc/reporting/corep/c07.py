@@ -275,10 +275,12 @@ _FCSM_CARRIER: str = "fcsm_collateral_value"
 # measured on — see ``_protection_exprs``.
 _UNFUNDED_COL: str = "c07_prot_unfunded"
 # The CRM decline flag — CONDITIONAL on the edge, so every read is presence-tolerant.
-# A DECLINED guarantee (it would have raised capital, CRR Art. 213) produces no
-# substitution effect, so it must not appear in the Annex II block headed "CRM
-# TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE". Gating the unfunded
-# magnitude gates the col 0100 INFLOW too, since that binds the same carrier.
+# A DECLINED guarantee (it would have raised capital, which CRR Art. 193(1)
+# forbids) produces no substitution effect, so it must not appear in the Annex II
+# block headed "CRM TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE". Gating
+# the unfunded magnitude gates the col 0100 INFLOW too, since that binds the same
+# carrier. Basis and the recorded elections (decline vs apply-and-cap; the strict
+# ``<``): ``engine/sa/rw_adjustments.py::apply_guarantee_substitution``.
 _BENEFICIAL_COL: str = "is_guarantee_beneficial"
 
 # The guarantor's exposure class (the col 0100 destination key) and the origin
@@ -950,9 +952,10 @@ def _protection_exprs(cols: set[str]) -> list[pl.Expr]:
 
     A DECLINED GUARANTEE CONTRIBUTES NOTHING TO COLS 0050/0060. The block heading
     is "CRM TECHNIQUES **WITH SUBSTITUTION EFFECTS ON THE EXPOSURE**", and a
-    guarantee the calculator declined has none: recognition is permissive
-    (Art. 213), so where the guarantor's weight does not beat the obligor's the
-    engine leaves the RWA on the borrower basis and ``is_guarantee_beneficial`` is
+    guarantee the calculator declined has none: Art. 193(1) bars a guarantee from
+    raising the RWEA and Art. 193(3) leaves amending the calculation an election,
+    so where the guarantor's weight does not beat the obligor's the engine leaves
+    the RWA on the borrower basis and ``is_guarantee_beneficial`` is
     false. Reporting it here booked a col 0090 outflow that no exposure ever left
     and — because the col 0100 inflow binds the same ``_UNFUNDED_COL`` — a
     matching phantom inflow onto the guarantor's sheet, banded at the BORROWER's
@@ -1135,8 +1138,9 @@ def _add_sa_origin_inflows(inflows: _Inflows, sa_df: pl.DataFrame) -> _Inflows:
     guarantee the calculator declined, so the ``> 0`` filter below drops it. It is
     Art. 235 substitution ACTUALLY BEING APPLIED that entitles the covered part to
     the guarantor's sheet; a positive covered carrier only says protection was
-    attached. Recognition is permissive (Art. 213), so the SA calculator declines
-    a guarantee whose guarantor weight does not beat the obligor's
+    attached. Art. 193(1) bars a guarantee from raising the RWEA and Art. 193(3)
+    makes amending the calculation an election, so the SA calculator DECLINES a
+    guarantee whose guarantor weight does not beat the obligor's
     (``is_guarantee_beneficial=False``) and leaves the RWA on the borrower basis.
     Booking that as an inflow moved the covered part onto the guarantor's sheet
     banded — via ``c07_rw_band`` — at the BORROWER's own risk weight, reproduced

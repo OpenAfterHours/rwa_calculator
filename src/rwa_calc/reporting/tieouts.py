@@ -37,7 +37,20 @@ The comparable ties (all hold on both frameworks on a real IRB+SA pipeline run):
 - ``irb_rwea_c08_01_vs_c02``   Σ C 08.01 sheets [0010][0260] == C 02.00 [0220]
                                (IRB of-which line).
 - ``irb_rwea_c08_01_vs_ov1``   Σ C 08.01 sheets [0010][0260] == OV1 [3]+[4]+[5]
-                               (F-IRB + slotting + A-IRB) — same origin basis.
+                               (F-IRB + slotting + A-IRB).
+
+THE TWO IRB TIES SPAN A BASIS MIGRATION IN PROGRESS. Their right-hand sides
+(C 02.00 row 0220, OV1 rows 3/4/5) moved to the POST-substitution approach with
+the C 02.00 / OV1 slice; their left-hand side (C 08.01 col 0260) still keys the
+obligor's origin approach and moves with the C 08.01 slice. Both ties are still
+the RIGHT assertion — the IRB RWEA a firm discloses must be the same number on
+every template — so neither is weakened here; they are what will detect the
+C 08.01 slice being incomplete. Until it lands they hold only while no
+beneficially-substituted leg crosses the SA/IRB boundary carrying non-zero RWEA.
+Measured, not assumed: an F-IRB corporate leg guaranteed by a 0%-RW SA
+counterparty leaves both ties green (the crossing RWEA is 0), and the SAME leg
+against a 50%-RW SA guarantor breaks BOTH by exactly the substituted
+1,000,000.
 
 References:
 - CRR Art. 92(3) (own-funds requirement roll-up); COREP Annex II C 02.00 /
@@ -257,7 +270,10 @@ TIE_OUTS: list[TieOut] = [
         name="irb_rwea_c08_01_vs_c02",
         description=(
             "Aggregate IRB RWEA across the C 08.01 obligor-class sheets equals "
-            "the C 02.00 IRB of-which line (row 0220)."
+            "the C 02.00 IRB of-which line (row 0220). Row 0220 keys the "
+            "POST-substitution approach; C 08.01 still keys the obligor's "
+            "origin approach until its own slice lands — see the module "
+            "docstring on the basis migration these two ties span."
         ),
         regulatory_reference=(
             "CRR Art. 92(3)(a); COREP Annex II C 08.01 col 0260 / C 02.00 row "
@@ -274,7 +290,9 @@ TIE_OUTS: list[TieOut] = [
         description=(
             "Aggregate IRB RWEA across the C 08.01 obligor-class sheets equals "
             "the Pillar 3 OV1 IRB rows (F-IRB row 3 + slotting row 4 + A-IRB "
-            "row 5) — the same reporting-approach-origin basis."
+            "row 5). OV1 keys the POST-substitution approach; C 08.01 still "
+            "keys the obligor's origin approach until its own slice lands — see "
+            "the module docstring on the basis migration these two ties span."
         ),
         regulatory_reference=(
             "COREP Annex II C 08.01 col 0260; Pillar 3 OV1 rows 3/4/5 "

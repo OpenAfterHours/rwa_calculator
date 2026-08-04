@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - (Next release changes will go here)
 
+---
+
+## [0.3.23] - 2026-08-05
+
 ### Fixed
 - **CRM substitution: the covered part's exposure value and RWEA never followed it to the
   guarantor.** A guaranteed exposure's covered part correctly left the obligor's sheet

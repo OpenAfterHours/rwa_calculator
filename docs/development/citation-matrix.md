@@ -12,7 +12,7 @@ Regenerate after annotation changes:
 uv run python scripts/generate_citation_matrix.py
 ```
 
-Last generated: 2026-08-04.
+Last generated: 2026-08-05.
 
 ## CRR (Capital Requirements Regulation)
 
@@ -56,9 +56,9 @@ Last generated: 2026-08-04.
     --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:451:564"
     ```
 
-??? quote "`_add_reporting_projection` — src/rwa_calc/engine/aggregator/aggregator.py:762"
+??? quote "`_add_reporting_projection` — src/rwa_calc/engine/aggregator/aggregator.py:781"
     ```python
-    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:761:936"
+    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:780:995"
     ```
 
 ??? quote "`apply_risk_weights` — src/rwa_calc/engine/sa/risk_weights.py:337"
@@ -79,9 +79,9 @@ Last generated: 2026-08-04.
     --8<-- "src/rwa_calc/engine/sa/factors_output.py:50:61"
     ```
 
-??? quote "`apply_intragroup_zero_rw` — src/rwa_calc/engine/sa/rw_adjustments.py:621"
+??? quote "`apply_intragroup_zero_rw` — src/rwa_calc/engine/sa/rw_adjustments.py:636"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:621:692"
+    --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:636:707"
     ```
 
 
@@ -866,7 +866,7 @@ Last generated: 2026-08-04.
 
 ??? quote "`apply_guarantee_substitution` — src/rwa_calc/engine/sa/rw_adjustments.py:195"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:195:425"
+    --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:195:440"
     ```
 
 
@@ -1115,19 +1115,19 @@ Last generated: 2026-08-04.
 
 ### CRR Art. 235 — Calculating risk-weighted exposure amounts under the Standardised Approach
 
-??? quote "`_add_post_crm_reporting_class` — src/rwa_calc/engine/aggregator/aggregator.py:653"
+??? quote "`_add_post_crm_reporting_class` — src/rwa_calc/engine/aggregator/aggregator.py:672"
     ```python
-    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:653:695"
+    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:672:714"
     ```
 
-??? quote "`_add_post_crm_reporting_approach` — src/rwa_calc/engine/aggregator/aggregator.py:698"
+??? quote "`_add_post_crm_reporting_approach` — src/rwa_calc/engine/aggregator/aggregator.py:717"
     ```python
-    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:698:723"
+    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:717:742"
     ```
 
-??? quote "`_add_reporting_projection` — src/rwa_calc/engine/aggregator/aggregator.py:761"
+??? quote "`_add_reporting_projection` — src/rwa_calc/engine/aggregator/aggregator.py:780"
     ```python
-    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:761:936"
+    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:780:995"
     ```
 
 ??? quote "`build_domestic_cgcb_guarantor_expr` — src/rwa_calc/engine/eu_sovereign.py:83"
@@ -1152,7 +1152,7 @@ Last generated: 2026-08-04.
 
 ??? quote "`apply_guarantee_substitution` — src/rwa_calc/engine/sa/rw_adjustments.py:196"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:195:425"
+    --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:195:440"
     ```
 
 ??? quote "`apply_guarantee_substitution` — src/rwa_calc/engine/slotting/transforms.py:195"
@@ -1370,9 +1370,9 @@ Last generated: 2026-08-04.
 
 ### PS1/26, paragraph 110A — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`apply_due_diligence_override` — src/rwa_calc/engine/sa/rw_adjustments.py:557"
+??? quote "`apply_due_diligence_override` — src/rwa_calc/engine/sa/rw_adjustments.py:572"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:557:618"
+    --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:572:633"
     ```
 
 
@@ -1477,17 +1477,17 @@ Last generated: 2026-08-04.
 
 ### PS1/26, paragraph 123B — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`apply_currency_mismatch_multiplier` — src/rwa_calc/engine/sa/rw_adjustments.py:428"
+??? quote "`apply_currency_mismatch_multiplier` — src/rwa_calc/engine/sa/rw_adjustments.py:443"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:428:554"
+    --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:443:569"
     ```
 
 
 ### PS1/26, paragraph 123B.3 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`apply_currency_mismatch_multiplier` — src/rwa_calc/engine/sa/rw_adjustments.py:429"
+??? quote "`apply_currency_mismatch_multiplier` — src/rwa_calc/engine/sa/rw_adjustments.py:444"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:428:554"
+    --8<-- "src/rwa_calc/engine/sa/rw_adjustments.py:443:569"
     ```
 
 

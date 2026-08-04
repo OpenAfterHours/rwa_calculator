@@ -978,9 +978,12 @@ LINEAGE_PLANS: dict[str, _Provider] = {
         generate=generate_cr10,
         scope=(
             "Each subtemplate draws its OWN population. CR10.1-4 read the ORIGIN "
-            "slotting book (reporting_approach_origin == slotting) — a guaranteed "
-            "slotting exposure's covered leg leaves the slotting approach, so the "
-            "origin basis IS the obligor basis; the sheet is narrowed by sl_type (CRR "
+            "slotting book (reporting_approach_origin == slotting) — a beneficially "
+            "guaranteed slotting leg KEEPS reporting_approach_origin == slotting "
+            "(only reporting_approach moves to the guarantor's), so it stays IN this "
+            "population, which is why cols d/e narrow further to the POST approach: "
+            "the grid is the obligor's book by origination but its exposure value and "
+            "RWEA are no longer Art. 153(5) quantities; the sheet is narrowed by sl_type (CRR "
             "groups IPRE + HVCRE under CR10.2, Basel 3.1 splits HVCRE onto CR10.5). "
             "The CRR CR10.5 equity sheet reads the Art. 155(2) simple-RW equity legs "
             "(reporting_approach_origin == equity AND equity_method == irb_simple — "

@@ -356,6 +356,8 @@ from rwa_calc.reporting.corep.crm_substitution import (
 )
 from rwa_calc.reporting.corep.pd_scale import banded_rows
 from rwa_calc.reporting.corep.postpass import (
+    c08_06_apply_overrides,
+    c08_06_zero_row,
     c08_after_all_crm,
     c08_off_bs_pre_ccf,
     negate_deduction_cols,
@@ -1876,6 +1878,30 @@ def _c08_06_row_preds(
     }
 
 
+def _c08_06_post(pred: RowPredicate) -> RowPredicate:
+    """The row predicate narrowed to the POST-substitution slotting book.
+
+    Annex II defines C 08.06 cols 0020/0040/0080 BY CROSS-REFERENCE to C 08.01
+    cols 0090/0110/0260 ("See CR-IRB 1 instructions for column 0090", etc.),
+    and those three moved to the post-substitution basis with C 08.01. A leg
+    whose guarantee substituted onto an SA guarantor is no longer risk-weighted
+    under Art. 153(5) at all, so it must leave the category grid for those
+    columns — otherwise the two IRB templates state different values for
+    quantities the regulator defines as identical.
+
+    Cols 0010/0030 (original exposure pre-CCF) stay on the ORIGIN basis: the
+    grid is the obligor's slotting book by origination, and that is the column
+    the covered part is deducted FROM.
+
+    Uses ``RowPredicate.approaches``, NOT a tolerant ``equals`` term: that field
+    DEGRADES to ``reporting_approach_origin`` on a frame sealing no
+    post-substitution approach, whereas an absent ``equals`` column compiles to
+    match-nothing and would silently zero every one of these columns on the
+    synthetic unit and lineage frames.
+    """
+    return RowPredicate(equals=pred.equals, any_of=pred.any_of, approaches=("slotting",))
+
+
 def _c08_06_empty_refs(
     type_df: pl.DataFrame,
     row_defs: list[tuple[str, str, bool | None, str]],
@@ -1890,7 +1916,7 @@ def _c08_06_empty_refs(
     zero-fill pass), so lineage reports it as the template's empty policy rather
     than a WeightedAvg with no legs whose value would contradict the screen. Uses
     the SAME emptiness test as ``_c08_06_sheet`` (subset height 0, label != Total)."""
-    subsets = subset_rows(type_df, dict(row_preds))
+    subsets = subset_rows(type_df, {ref: _c08_06_post(p) for ref, p in row_preds.items()})
     return frozenset(
         row_def[0]
         for row_def in row_defs
@@ -2055,7 +2081,6 @@ def _c08_06_spec(
     row_defs = _c08_06_row_defs(framework)
     rows = tuple(_Row(row_def[0], row_def[1]) for row_def in row_defs)
     row_preds = _c08_06_row_preds(row_defs, cols)
-    crm_col = pick(cols, "ead_pre_ccf", "exposure_post_crm")
     if framework != "BASEL_3_1" and "rwa_post_factor" in cols:
         rwea_col = "rwa_post_factor"  # CRR prefers the post-supporting-factor RWEA
     else:
@@ -2065,20 +2090,31 @@ def _c08_06_spec(
         ref = row_def[0]
         pred = row_preds[ref]
         off_pred = RowPredicate(equals=(*pred.equals, ("c0806_off_bs", True)))
+        post_pred = _c08_06_post(pred)
+        off_post = _c08_06_post(off_pred)
         cells[(ref, "0010")] = CellSpec(
             SafeSum(("reporting_gross_on_bs", "reporting_gross_off_bs")),
             predicate=pred,
         )
-        cells[(ref, "0020")] = (
-            CellSpec(Sum(crm_col), predicate=pred)
-            if crm_col is not None
-            else CellSpec(Formula(refs=("0010",), fn=_copy_of_0010))
+        # Col 0020 "EXPOSURE AFTER CRM SUBSTITUTION EFFECTS PRE CONVERSION
+        # FACTORS" — Annex II: "See CR-IRB 1 instructions for column 0090", the
+        # substitution waterfall. It binds col 0010's OWN pre-CCF gross carriers
+        # over the POST population, which IS that quantity: the covered part has
+        # left, so what remains is the exposure after substitution effects, still
+        # pre-conversion. The retired binding was wrong twice — ``ead_pre_ccf`` /
+        # ``exposure_post_crm`` are FUNDED-CRM carriers, not the substitution
+        # waterfall, and their absent-carrier fallback was a Formula copying col
+        # 0010, which no predicate can narrow, so the column could not follow the
+        # basis at all.
+        cells[(ref, "0020")] = CellSpec(
+            SafeSum(("reporting_gross_on_bs", "reporting_gross_off_bs")),
+            predicate=post_pred,
         )
         cells[(ref, "0030")] = CellSpec(Sum("reporting_gross_off_bs"), predicate=pred)
         if "0031" in column_refs:
             cells[(ref, "0031")] = CellSpec(Formula(refs=(), fn=_const(None)))
-        cells[(ref, "0040")] = CellSpec(Sum(ead_col), predicate=pred)
-        cells[(ref, "0050")] = CellSpec(Sum(ead_col), predicate=off_pred, empty_cell="null")
+        cells[(ref, "0040")] = CellSpec(Sum(ead_col), predicate=post_pred)
+        cells[(ref, "0050")] = CellSpec(Sum(ead_col), predicate=off_post, empty_cell="null")
         cells[(ref, "0060")] = CellSpec(Formula(refs=(), fn=_const(None)))
         # Col 0070 on an EMPTY non-Total row is a fixed display risk weight from
         # the zero-fill post-pass (not a measured weighted average), so it is left
@@ -2086,9 +2122,9 @@ def _c08_06_spec(
         # reports the template's empty policy, never a WeightedAvg with no legs.
         if ref not in empty_refs:
             cells[(ref, "0070")] = CellSpec(
-                WeightedAvg("risk_weight", weight=ead_col), predicate=pred, empty_cell="null"
+                WeightedAvg("risk_weight", weight=ead_col), predicate=post_pred, empty_cell="null"
             )
-        cells[(ref, "0080")] = CellSpec(Sum(rwea_col), predicate=pred)
+        cells[(ref, "0080")] = CellSpec(Sum(rwea_col), predicate=post_pred)
         cells[(ref, "0090")] = (
             CellSpec(Sum("expected_loss"), predicate=pred)
             if "expected_loss" in cols
@@ -2120,11 +2156,18 @@ def _c08_06_sheet(
     naturally and the retired whole-subset nominal fallback is gone."""
     frame = execute(spec, type_df)
     overrides: dict[str, dict[str, float | None]] = {}
-    row_subsets = subset_rows(type_df, dict(row_preds))
+    # THE SECOND EMPTINESS TEST, and it must key the SAME basis as the first.
+    # ``_c08_06_empty_refs`` decides whether the spec BINDS col 0070; this loop
+    # decides whether the FIXED display weight is INJECTED. Move one without the
+    # other and a fully-substituted category publishes a gross with no risk
+    # weight at all — measured NULL with only the spec moved, 0.0 with only this
+    # one. Their docstrings say they use the same test, which is exactly what
+    # makes moving one silently dangerous.
+    row_subsets = subset_rows(type_df, {ref: _c08_06_post(p) for ref, p in row_preds.items()})
     for row_ref, label, _is_short, rw_display in row_defs:
         subset = row_subsets[row_ref]
         if subset.height == 0 and label != "Total":
-            overrides[row_ref] = _c08_06_zero_row(spec.column_refs, rw_display)
+            overrides[row_ref] = c08_06_zero_row(spec.column_refs, rw_display)
             continue
         fixes: dict[str, float | None] = {}
         ead_sum = float(subset[ead_col].fill_null(0.0).sum())
@@ -2135,52 +2178,8 @@ def _c08_06_sheet(
             fixes["0070"] = float(rw_vals[0]) if len(rw_vals) > 0 else None
         if fixes:
             overrides[row_ref] = fixes
-    frame = _c08_06_apply_overrides(frame, overrides)
+    frame = c08_06_apply_overrides(frame, overrides)
     return provisions_postfix(frame, type_df, row_preds, cols, ref="0100")
-
-
-def _c08_06_zero_row(column_refs: tuple[str, ...], rw_display: str) -> dict[str, float | None]:
-    """The retired zero-fill for an empty non-Total row: every cell 0.0
-    except 0070 = the row definition's display risk weight ("50%" -> 0.5;
-    unparseable/blank -> None)."""
-    values: dict[str, float | None] = dict.fromkeys(column_refs, 0.0)
-    if rw_display:
-        try:
-            values["0070"] = float(rw_display.replace("%", "").strip()) / 100.0
-        except ValueError:
-            values["0070"] = None
-    else:
-        values["0070"] = None
-    return values
-
-
-def _c08_06_apply_overrides(
-    frame: pl.DataFrame, overrides: dict[str, dict[str, float | None]]
-) -> pl.DataFrame:
-    if not overrides:
-        return frame
-    exprs: list[pl.Expr] = []
-    value_cols = [col for col in frame.columns if col not in ("row_ref", "row_name")]
-    for col in value_cols:
-        expr = pl.col(col)
-        touched = False
-        for row_ref, values in overrides.items():
-            if col in values:
-                expr = (
-                    pl.when(pl.col("row_ref") == row_ref)
-                    .then(pl.lit(values[col], dtype=pl.Float64))
-                    .otherwise(expr)
-                )
-                touched = True
-        if touched:
-            exprs.append(expr.alias(col))
-    return frame.with_columns(exprs) if exprs else frame
-
-
-def _copy_of_0010(cells: Mapping[str, float | None], _prior: bool) -> float | None:
-    """C 08.06 col 0020 falls back to col 0010 when no post-CRM carrier
-    (``ead_pre_ccf`` / ``exposure_post_crm``) exists."""
-    return cells["0010"]
 
 
 # =============================================================================

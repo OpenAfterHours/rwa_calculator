@@ -27,6 +27,7 @@ References:
 from __future__ import annotations
 
 from rwa_calc.reporting.kernel.bases import (
+    POST_APPROACH_SOURCE,
     TwoBasis,
     class_keys,
     population_flags,
@@ -55,6 +56,7 @@ from rwa_calc.reporting.kernel.rows import null_row
 from rwa_calc.reporting.kernel.sums import col_sum, safe_sum, safe_sum_or_none
 
 __all__ = [
+    "POST_APPROACH_SOURCE",
     "TwoBasis",
     "available_columns",
     "class_keys",

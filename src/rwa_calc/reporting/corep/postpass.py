@@ -297,3 +297,41 @@ def provisions_postfix(
     for row_ref, value in fixes.items():
         expr = pl.when(pl.col("row_ref") == row_ref).then(pl.lit(value)).otherwise(expr)
     return frame.with_columns(expr.alias(ref))
+
+
+def c08_06_zero_row(column_refs: tuple[str, ...], rw_display: str) -> dict[str, float | None]:
+    """C 08.06: the zero-fill for an empty non-Total row: every cell 0.0
+    except 0070 = the row definition's display risk weight ("50%" -> 0.5;
+    unparseable/blank -> None)."""
+    values: dict[str, float | None] = dict.fromkeys(column_refs, 0.0)
+    if rw_display:
+        try:
+            values["0070"] = float(rw_display.replace("%", "").strip()) / 100.0
+        except ValueError:
+            values["0070"] = None
+    else:
+        values["0070"] = None
+    return values
+
+
+def c08_06_apply_overrides(
+    frame: pl.DataFrame, overrides: dict[str, dict[str, float | None]]
+) -> pl.DataFrame:
+    if not overrides:
+        return frame
+    exprs: list[pl.Expr] = []
+    value_cols = [col for col in frame.columns if col not in ("row_ref", "row_name")]
+    for col in value_cols:
+        expr = pl.col(col)
+        touched = False
+        for row_ref, values in overrides.items():
+            if col in values:
+                expr = (
+                    pl.when(pl.col("row_ref") == row_ref)
+                    .then(pl.lit(values[col], dtype=pl.Float64))
+                    .otherwise(expr)
+                )
+                touched = True
+        if touched:
+            exprs.append(expr.alias(col))
+    return frame.with_columns(exprs) if exprs else frame

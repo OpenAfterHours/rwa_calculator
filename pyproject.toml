@@ -13,7 +13,7 @@ maintainers = [
 ]
 keywords = ["basel", "rwa", "credit-risk", "pra", "regulatory", "capital", "banking", "risk-management", "polars"]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Financial and Insurance Industry",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",

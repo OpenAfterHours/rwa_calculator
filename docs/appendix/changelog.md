@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - (Next release changes will go here)
 
 ### Changed
-- (Next release changes will go here)
+- PyPI development status promoted from `2 - Pre-Alpha` to `3 - Alpha`.
 
 ---
 

@@ -212,6 +212,12 @@ _FCSM_CARRIER: str = "fcsm_collateral_value"
 # The capped unfunded limb (cols 0050 + 0060 per row) that col 0100's inflow is
 # measured on — see ``_protection_exprs``.
 _UNFUNDED_COL: str = "c07_prot_unfunded"
+# The CRM decline flag — CONDITIONAL on the edge, so every read is presence-tolerant.
+# A DECLINED guarantee (it would have raised capital, CRR Art. 213) produces no
+# substitution effect, so it must not appear in the Annex II block headed "CRM
+# TECHNIQUES WITH SUBSTITUTION EFFECTS ON THE EXPOSURE". Gating the unfunded
+# magnitude gates the col 0100 INFLOW too, since that binds the same carrier.
+_BENEFICIAL_COL: str = "is_guarantee_beneficial"
 
 # The guarantor's exposure class (the col 0100 destination key) and the origin
 # approaches whose inflow half ``crm_substitution.irb_origin_inflows`` owns.
@@ -792,6 +798,17 @@ def _protection_exprs(cols: set[str]) -> list[pl.Expr]:
     tighter than col 0010's "exposure value" and it is what makes
     ``0110 = 0040 - 0090 + 0100`` non-negative by construction — the property
     rules ``v10293_s`` / ``boe_b0667`` ({template} >= 0) assert.
+
+    A DECLINED GUARANTEE CONTRIBUTES NOTHING TO COLS 0050/0060. The block heading
+    is "CRM TECHNIQUES **WITH SUBSTITUTION EFFECTS ON THE EXPOSURE**", and a
+    guarantee the calculator declined has none: recognition is permissive
+    (Art. 213), so where the guarantor's weight does not beat the obligor's the
+    engine leaves the RWA on the borrower basis and ``is_guarantee_beneficial`` is
+    false. Reporting it here booked a col 0090 outflow that no exposure ever left
+    and — because the col 0100 inflow binds the same ``_UNFUNDED_COL`` — a
+    matching phantom inflow onto the guarantor's sheet, banded at the BORROWER's
+    own risk weight. Gating the CARRIER, not the two cells, is what keeps outflow
+    and inflow on a single decision, so neither can move without the other.
     """
     guaranteed = (
         pl.col("guaranteed_portion").fill_null(0.0) if "guaranteed_portion" in cols else pl.lit(0.0)
@@ -810,6 +827,15 @@ def _protection_exprs(cols: set[str]) -> list[pl.Expr]:
     else:
         guarantee = guaranteed
         credit_derivative = pl.lit(0.0)
+
+    if _BENEFICIAL_COL in cols:
+        # A DECLINED guarantee has no substitution effect at all, so it belongs in
+        # neither the outflow nor the inflow — see the docstring's closing note.
+        # ``== True`` is the null-safe reading: an unknown benefit is not a
+        # substitution, and it must not be filled the other way.
+        applied = pl.col(_BENEFICIAL_COL) == True  # noqa: E712 - null-safe, see above
+        guarantee = pl.when(applied).then(guarantee).otherwise(pl.lit(0.0))
+        credit_derivative = pl.when(applied).then(credit_derivative).otherwise(pl.lit(0.0))
 
     fcsm = pl.col(_FCSM_CARRIER).fill_null(0.0) if _FCSM_CARRIER in cols else pl.lit(0.0)
     ofcp_parts = [pl.col(col).fill_null(0.0) for col in _OFCP_CARRIERS if col in cols]
@@ -913,6 +939,20 @@ def _add_sa_origin_inflows(
     admits the counterparty-credit-risk rows by ``risk_type`` with NO approach
     filter, so an IRB-origin CCR row can legitimately sit in this frame and would
     otherwise be counted twice.
+
+    DECLINED GUARANTEES ARE EXCLUDED TOO, and without a filter of their own:
+    ``_protection_exprs`` has already zeroed ``_UNFUNDED_COL`` on a leg whose
+    guarantee the calculator declined, so the ``> 0`` filter below drops it. It is
+    Art. 235 substitution ACTUALLY BEING APPLIED that entitles the covered part to
+    the guarantor's sheet; a positive covered carrier only says protection was
+    attached. Recognition is permissive (Art. 213), so the SA calculator declines
+    a guarantee whose guarantor weight does not beat the obligor's
+    (``is_guarantee_beneficial=False``) and leaves the RWA on the borrower basis.
+    Booking that as an inflow moved the covered part onto the guarantor's sheet
+    banded — via ``c07_rw_band`` — at the BORROWER's own risk weight, reproduced
+    as a full 10,000,000 phantom inflow onto ``central_govt_central_bank`` at
+    100%. Sharing the carrier with the col 0090 outflow is what keeps both sides
+    off the SAME decision, so a declined guarantee can neither leave nor arrive.
     """
     cols = set(sa_df.columns)
     if not {_UNFUNDED_COL, _POST_CRM_CLASS_COL} <= cols:

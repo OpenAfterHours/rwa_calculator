@@ -28,6 +28,7 @@ import logging
 from typing import TYPE_CHECKING
 
 import polars as pl
+import polars.selectors as cs
 from watchfire import cites
 
 from rwa_calc.contracts.bundles import AggregatedResultBundle
@@ -563,6 +564,78 @@ def _add_exposure_class_applied(lf: pl.LazyFrame) -> pl.LazyFrame:
     )
 
 
+# The CRM decline flag (``engine/sa/rw_adjustments.py`` / ``engine/irb/guarantee.py``).
+# CONDITIONAL on the edge (``inject=False``), unlike ``is_guaranteed``, so every
+# read of it is presence-tolerant.
+_BENEFICIAL_COL = "is_guarantee_beneficial"
+
+
+def _beneficial_gate() -> pl.Expr:
+    """True where a guarantee actually substituted; null/False where it did NOT.
+
+    A guarantee the engine DECLINES — ``guarantor_rw >= borrower RW``, so applying
+    it would raise capital (CRR Art. 213) — leaves the RWA on the borrower basis:
+    ``apply_guarantee_substitution`` takes its ``.otherwise()`` branch and
+    ``rwa == rwa_irb_original``. The leg nonetheless keeps a positive
+    ``guaranteed_portion`` and a resolved ``post_crm_exposure_class_guaranteed``,
+    so the post-CRM class/approach twins used to migrate it anyway and publish the
+    BORROWER's risk weight on the GUARANTOR's sheet. Reproduced end to end: a
+    10,000,000 project-finance "strong" slotting loan (RW 0.70) fully guaranteed
+    by an unrated non-GB sovereign (SA RW 1.00, so the guarantee is DECLINED)
+    kept ``risk_weight`` 0.70 and 7,000,000 of RWA, yet reported
+    ``reporting_class=central_govt_central_bank`` /
+    ``reporting_approach=standardised`` — materialising a C 07.00 sovereign sheet
+    for a firm with no SA book at all (breaching the live ``v8643_n``,
+    ``{C 07.00.a} = empty``) and banding 10,000,000 on its 70% row 0210, a weight
+    no SA sovereign row can carry under either framework. Capital was identical
+    with and without the gate, which is exactly why nothing else caught it: this
+    is a pure disclosure defect.
+
+    TWO FURTHER REPRODUCTIONS ON THE SA PATH, at the opposite end of the weight
+    scale, kept SEPARATELY ATTRIBUTED because they land differently and a merged
+    retelling of them was wrong in both directions:
+
+    (a) CROSS-SHEET. A 1,000,000 guarantee from ``SAC-CP-CORP`` (a ``financial``
+        counterparty carrying an external rating, guarantor RW 1.00) over
+        ``SAC-LN-RGLA-UK`` (UK RGLA, SA RW 0.00) in the
+        ``reporting_sa_classes`` portfolio is DECLINED, yet migrates: the
+        ``rgla`` sheet books a -1,000,000 outflow (cols 0050/0090, col 0010
+        6,500,000) while the ``corporate`` sheet books a +1,000,000 inflow at
+        col 0100, its col 0110 rising 9,000,000 -> 10,000,000 — 1,000,000
+        published on the corporate sheet still carrying the BORROWER's 0%
+        weight. Total portfolio RWEA 14,600,000 with and without the declined
+        guarantee. ``sum(0040) == sum(0110) == 34,000,000`` held throughout,
+        which is why conservation checks never flagged it.
+
+    (b) SAME-CLASS. A purpose-built two-counterparty bundle — a 1,000,000 UK
+        RGLA loan fully covered by an unrated corporate guarantor (RW 1.00,
+        DECLINED) — resolves no guarantor class, so the covered part is deducted
+        from the obligor's class and added straight back: the ``rgla`` sheet
+        alone books -1,000,000 at cols 0050/0090 against +1,000,000 at col 0100,
+        banded on the 0% row 0140. Portfolio RWEA 0 either way. Note row 0070
+        (on-balance-sheet) takes the outflow but receives NO inflow, so its cols
+        0110/0150 read 0 while row 0010 reads 1,000,000 — the inflow reaches only
+        the Total and risk-weight-band rows, so the on/off-balance-sheet
+        decomposition stops footing against its own total.
+
+    The three cases bracket the defect: one carries a 70% slotting weight onto a
+    sovereign sheet, one a 0% weight onto a corporate sheet, one churns a 0%
+    weight within a single sheet — and one gate has to stop all three.
+
+    THE THREE-WAY PRESENCE/NULL/VALUE READING IS THE SELECTOR'S, NOT A SCHEMA
+    BRANCH. ``all_horizontal`` over a ``require_all=False`` name selector yields
+    the column where the frame has it, and the vacuous ``True`` where it does not
+    — so an ABSENT flag (the CRM guarantee sub-step never ran, hence nothing to
+    decline, and ``is_guaranteed`` is null on every row anyway) leaves the twins
+    exactly as they were, while a NULL flag makes the predicate null, which
+    ``pl.when`` routes to ``otherwise``. That is the required null-safe reading:
+    an unknown benefit is NOT a substitution, and it must never be filled the
+    other way. Expressing it as an expression rather than a
+    ``collect_schema()``-guarded branch also keeps the twins fully lazy.
+    """
+    return pl.all_horizontal(cs.by_name(_BENEFICIAL_COL, require_all=False))
+
+
 @cites("CRR Art. 235")
 def _add_post_crm_reporting_class(lf: pl.LazyFrame) -> pl.LazyFrame:
     """Add ``exposure_class_post_crm`` — the post-guarantee (post-substitution) class.
@@ -583,11 +656,21 @@ def _add_post_crm_reporting_class(lf: pl.LazyFrame) -> pl.LazyFrame:
     consumed by the reconciliation's by-class allocation so our totals per class
     tie to a post-guarantee legacy extract. A guaranteed leg whose guarantor class
     is unresolved (null / empty) falls back to the applied class.
+
+    THE GATE IS ``is_guaranteed AND BENEFICIAL``, not ``is_guaranteed`` alone.
+    ``is_guaranteed`` means protection EXISTS (``guaranteed_portion > 0``); what
+    MOVES an exposure into the guarantor's class is Art. 235 risk-weight
+    substitution actually being applied. Where the calculators decline it
+    (Art. 213 recognition is permissive and a guarantee must never INCREASE
+    capital) there is no covered part to move, so the leg keeps the obligor's
+    applied class. See :func:`_beneficial_gate` for the reproduction and the
+    null/absence convention.
     """
     guarantor_class = pl.col("post_crm_exposure_class_guaranteed")
     return lf.with_columns(
         pl.when(
             (pl.col("is_guaranteed") == True)  # noqa: E712
+            & _beneficial_gate()
             & guarantor_class.is_not_null()
             & (guarantor_class != "")
         )
@@ -641,10 +724,18 @@ def _post_crm_approach_expr() -> pl.Expr:
     all sealed on every calculator branch exit. A null ``is_guaranteed`` makes the
     predicate null, which ``when`` routes to ``otherwise`` (the obligor's approach),
     so no fill is needed — mirroring ``_add_post_crm_reporting_class``.
+
+    It carries the SAME beneficial gate as its class twin, and must: the two have
+    to partition the same money the same way, so an approach that migrates while
+    the class does not (or the reverse) would key a leg onto a sheet/template pair
+    that never existed. A declined guarantee applies neither Art. 235 nor
+    Art. 161, so the leg keeps the approach its RWA was computed under. See
+    :func:`_beneficial_gate`.
     """
     return (
         pl.when(
             (pl.col("is_guaranteed") == True)  # noqa: E712
+            & _beneficial_gate()
             & (pl.col("guarantor_approach") == "sa")
         )
         .then(pl.lit(ApproachType.SA.value))

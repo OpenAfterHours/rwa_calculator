@@ -318,6 +318,32 @@ _PF_PHASE_MAP: dict[str, str] = {
     "0025": "operational",
     "0026": "high_quality_operational",
 }
+# The POST-basis gate on the specialised-lending "of which" rows 0021-0026: does
+# this leg still apply its OWN Art. 122B risk-weight treatment? ``sl_type`` is
+# the OBLIGOR's characteristic and the CRM split never reassigns it, so a covered
+# part substituted onto a protection provider's risk weight carries the obligor's
+# ``sl_type`` onto the GUARANTOR's sheet, where the post-basis cells (0160-0235)
+# would report it as the guarantor's specialised lending.
+#
+# Annex II admits a row 0021-0026 exposure on THREE conjunctive conditions, the
+# third of which is the applied risk weight: row 0023 is "only exposures which
+# are 'project finance exposures' ..., assigned to the exposure class 'Exposures
+# to corporates' ..., [and] apply the risk weight treatment in accordance with
+# Articles 122B(2)(c) or 122B(4)" (PS1/26 Annex II p.89; rows 0024-0026 spell the
+# same limb "(d) subject to the risk weight treatment in accordance with Article
+# 122B(2)(c)"). A substituted-in covered part applies the PROVIDER's Art. 122
+# weight, not Art. 122B — and ¶43 says so directly: "the substitution effect ...
+# shall reflect the risk weighting treatment effectively applicable to the
+# covered part of the exposure". So it fails the third condition and belongs in
+# NEITHER row 0023 nor its phase children.
+#
+# ORIGIN basis deliberately UNCHANGED: cols 0010-0150 are the obligor's own book,
+# where ¶42/¶56A require the covered part to be shown leaving the obligor's class
+# through col 0090. Derived rather than expressed as a bare
+# ``(_BENEFICIAL_COL, False)`` term for the ``c07_qccp`` reason — that compiles to
+# ``== False``, so a NULL flag would drop every unguaranteed SL exposure out of
+# its own row.
+_SL_OWN_RW_COL: str = "c07_sl_own_rw"
 _CIU_ROW_APPROACH: dict[str, str] = {
     "0281": "look_through",
     "0282": "mandate_based",
@@ -719,6 +745,20 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
         )
     if "sa_cqs" in cols:
         exprs.append(pl.col("sa_cqs").is_not_null().alias("c07_rated"))
+
+    # Post-basis specialised-lending gate (rows 0021-0026) — see _SL_OWN_RW_COL.
+    # The complement of the ``_protection_exprs`` substitution gate, read the same
+    # null-safe way (an unknown benefit is not a substitution), so the row
+    # exclusion and the col 0090/0100 flow are driven by ONE flag and cannot
+    # drift: exactly the legs whose covered part left for a provider's risk
+    # weight are the legs that stop applying Art. 122B.
+    if _BENEFICIAL_COL in cols:
+        exprs.append(
+            (pl.col(_BENEFICIAL_COL) == True)  # noqa: E712 - null-safe, see _protection_exprs
+            .fill_null(value=False)
+            .not_()
+            .alias(_SL_OWN_RW_COL)
+        )
 
     # CCR discriminators (cols 0210/0211). 0210 = "of which: arising from
     # counterparty credit risk"; 0211 = the same, excluding the Art. 301(1)
@@ -1373,6 +1413,23 @@ def _inflow_key_for(ref: str, terms: _Terms) -> str | None:
     return None
 
 
+def _post_sl_terms(terms: _Terms, cols: set[str]) -> _Terms:
+    """The POST-basis-only narrowing of the specialised-lending "of which" rows.
+
+    A row keying ``sl_type`` (0021-0026) admits a leg on the post basis only
+    while that leg still applies its own Art. 122B risk weight — see
+    ``_SL_OWN_RW_COL`` for the Annex II basis. Recognised by the row's own
+    membership term rather than a hardcoded ref ladder, so the phase children
+    (which key ``sl_type`` AND ``sl_project_phase``) fall out with the parent.
+    Empty when no substitution gate is sealed: the frame then carries no
+    beneficially-substituted leg to exclude, and a term on an underived column
+    would zero the SL rows of every synthetic unit frame.
+    """
+    if _BENEFICIAL_COL not in cols or not any(column == "sl_type" for column, _ in terms):
+        return ()
+    return ((_SL_OWN_RW_COL, True),)
+
+
 def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row
     terms: _Terms,
     cols: set[str],
@@ -1388,7 +1445,7 @@ def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row
     # predicate carries its basis flag, INCLUDING the total row's (whose ``terms``
     # are empty) — an unflagged predicate would silently sum both populations.
     origin_terms: _Terms = ((_BASIS_ORIGIN_COL, True), *terms)
-    post_terms: _Terms = ((_BASIS_POST_COL, True), *terms)
+    post_terms: _Terms = ((_BASIS_POST_COL, True), *terms, *_post_sl_terms(terms, cols))
     member = RowPredicate(equals=origin_terms)
     post_member = RowPredicate(equals=post_terms)
 

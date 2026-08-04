@@ -32,13 +32,16 @@ Cell semantics (recorded decisions, this slice):
   *and* SA-CCR — so the template foots against rows 0010/0050, which
   are flat ledger sums and always carried the CCR RWEA (recorded fix
   2026-07-12; see the constant for why it is not shared).
-- THREE keys, one per tied template: the approach rows and the SA class
-  rows key the POST-SUBSTITUTION twins (``reporting_approach`` /
-  ``reporting_class``, tying the SA breakdown to C 07.00), while the IRB
-  class rows stay on ``reporting_class_origin`` until C 08.01 follows. See
-  the long note at the binding site for why that PRESERVES the 2026-07-12
-  fix (whose stated purpose was that tie) rather than reversing it, why the
-  IRB half is a sequencing decision, and why Art. 92 is unaffected. Rows
+- THREE keys, one per tied template, and all three now POST-SUBSTITUTION
+  (``reporting_approach`` / ``reporting_class``): the approach rows and the
+  SA class rows tie to C 07.00, the IRB class rows to C 08.01, and both
+  those templates have moved their exposure-value and RWEA columns onto
+  that basis. See the long note at the binding site for why that PRESERVES
+  the 2026-07-12 fix (whose stated purpose was that tie) rather than
+  reversing it, why the IRB half followed one commit later, why Art. 92 is
+  unaffected, and — recorded there rather than fixed here — the
+  ``(foundation_irb, retail_other)`` pair that has no row, which is
+  downstream evidence of a missing CRR Art. 201 eligibility gate. Rows
   0070-0211 route through the many-to-one ACCUMULATING
   ``C02_00_SA_CLASS_MAP``. Rows 0070-0211 are "See CR SA template", so
   the map's groupings ARE the C 07.00 sheet groupings (recorded fix
@@ -78,6 +81,7 @@ References:
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, cast
 
 import polars as pl
@@ -91,6 +95,8 @@ from rwa_calc.reporting.corep.templates import (
     get_c02_00_row_sections,
 )
 from rwa_calc.reporting.kernel import null_row, pick
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import OutputFloorSummary
@@ -119,6 +125,19 @@ type _SubKey = tuple[str, str, bool | None, bool | None, str | None]
 # shared SA-approach constant would also widen the Pillar 3 CR4/CR5 disclosures,
 # which correctly scope CCR out under Basel 3.1 (it has CCR1-CCR8).
 _SA_APPROACHES: tuple[str, ...] = ("standardised", "standardised_ccr")
+
+# The IRB retail classes. CRR Art. 151(4) puts retail exposures under the
+# ADVANCED approach only (own LGD estimates are mandatory), which is why the
+# layout carries retail rows at 0370-0400 under A-IRB and NONE under F-IRB —
+# see ``_placeable_irb_class`` for the pair this makes impossible.
+_RETAIL_CLASSES: tuple[str, ...] = ("retail_mortgage", "retail_qrre", "retail_other")
+
+# The F-IRB / A-IRB detail rows each approach's "of which" breakdown must foot
+# against, for the stranding net (``_warn_if_irb_detail_strands``).
+_IRB_DETAIL_ROWS: dict[str, tuple[str, ...]] = {
+    "0240": ("0250", "0260"),
+    "0300": ("0310", "0330", "0340", "0370"),
+}
 
 # The sealed ``equity_method`` values (domain.enums.EquityApproach, R6) that
 # report under the IRB umbrella — row 0420 "Equity IRB" plus the IRB total
@@ -164,7 +183,7 @@ def generate_c02_00(
     #   approach_col   POST  (``reporting_approach``)      rows 0060 / 0220 / 0240 …
     #   sa_ec_col      POST  (``reporting_class``)         rows 0070-0211, "See CR SA
     #                                                      template" -> C 07.00
-    #   irb_ec_col     ORIGIN(``reporting_class_origin``)  rows 0250-0420 -> C 08.01
+    #   irb_ec_col     POST  (``reporting_class``)         rows 0250-0420 -> C 08.01
     #
     # This PRESERVES the 2026-07-12 fix rather than reversing it. That fix moved
     # the class rows off the origination class onto the applied Art. 112 class for
@@ -178,15 +197,40 @@ def generate_c02_00(
     # substituted leg counted at the obligor's sheet on one template and the
     # guarantor's on the other).
     #
-    # THE IRB CLASS ROWS DELIBERATELY STAY ON THE ORIGIN KEY, and that is a
-    # SEQUENCING decision, not a different answer to the same question. They tie
-    # to C 08.01 col 0260 (``boe_b0616``, ERROR: {OF 02.00 r0271 c0010} =
-    # {OF 08.01 r0010 c0260 z0006}), and C 08.01 still sheets the obligor class.
-    # Moving this key alone broke that rule by exactly one leg — the S1 guarantee,
-    # F-IRB corporate covered by an F-IRB institution: C 02.00 r0271 4,283,321.07
-    # against C 08.01's 2,855,547.38, a difference of 1,427,773.69 = that leg's
-    # rwa_final. Art. 161 substitution does make it an institution exposure, so
-    # BOTH sides should move — together, when C 08.01 does.
+    # THE IRB CLASS ROWS HAVE NOW FOLLOWED, and this was always the PAIRED half of
+    # that sequencing decision rather than a different answer. They tie to C 08.01
+    # col 0260 (``boe_b0616``, ERROR: {OF 02.00 r0271 c0010} = {OF 08.01 r0010
+    # c0260 z0006}), and C 08.01's exposure-value / RWEA columns have moved to the
+    # post-substitution basis. When only ONE side had moved the rule broke by
+    # exactly one leg either way — the S1 guarantee, an F-IRB corporate covered by
+    # an F-IRB institution (1,427,773.69 = that leg's rwa_final): 4,283,321.07 vs
+    # 2,855,547.38 with C 02.00 ahead, and 2,855,547.38 vs 4,283,321.07 with
+    # C 08.01 ahead. Art. 161 substitution makes it an institution exposure on both
+    # templates, so both keys sit on ``reporting_class`` and the rule foots.
+    #
+    # THE IMPOSSIBLE-PAIR TRAP, MEASURED AND ROOT-CAUSED. A post class key against
+    # the obligor's retained approach can produce an (approach, class) pair with no
+    # row — the aggregator moves the class but keeps the obligor's approach for a
+    # non-SA guarantor. Here that is ``(foundation_irb, retail_other)``, which
+    # Art. 151(4) makes impossible (retail is A-IRB only), and its RWEA would fall
+    # out of rows 0250/0260 while row 0240 still counted it — invisible to every
+    # published rule, because the rules only check rows that DO exist. Measured on
+    # the CRM-substitution portfolio: 2,028,365.78 (CRR) / 1,700,935.66 (B31).
+    #
+    # THE CAUSE IS NOT THIS KEY, AND MUST NOT BE PAPERED OVER HERE. The single leg
+    # producing it is an F-IRB corporate loan whose covered part is guaranteed by a
+    # RETAIL counterparty. CRR Art. 201(1) is an exhaustive list of eligible
+    # providers of unfunded credit protection — (a) central governments/banks,
+    # (b) RGLAs, (c) MDBs, (d) 0%-RW international organisations, (e) PSEs,
+    # (f) institutions, (g) other CORPORATE entities, (h) QCCPs — and it has NO
+    # retail limb, while Art. 201(2) additionally requires an IRB guarantor to be
+    # internally rated. So the guarantee is ineligible and should never have
+    # migrated the class at all; the impossible pair is DOWNSTREAM EVIDENCE of a
+    # missing Art. 201 eligibility gate in ``engine/crm/``, not a reporting-layer
+    # keying problem. Re-measured with such a gate applied, stranding is 0.00 in
+    # both regimes. Normalising the pair into an adjacent row here would launder an
+    # ineligible guarantee into a valid-looking disclosure, so it is deliberately
+    # NOT done. Do not "fix" this by remapping the class or the approach.
     #
     # The 2026-07-12 note also said "identical values for IRB rows (raw ==
     # applied for the IRB book)". That is NO LONGER TRUE, and it is the defect
@@ -208,7 +252,14 @@ def generate_c02_00(
     sa_ec_col = pick(
         cols, "reporting_class" if "reporting_class" in cols else "reporting_class_origin"
     )
-    irb_ec_col = pick(cols, "reporting_class_origin")
+    # Written out rather than aliased to ``sa_ec_col``: the two keys are distinct
+    # QUESTIONS that currently have the same answer, and the seam is what let the
+    # SA half move in f94be554/a7ced69e while the IRB half waited for C 08.01.
+    irb_ec_col = pick(
+        cols, "reporting_class" if "reporting_class" in cols else "reporting_class_origin"
+    )
+    # The origin twin, kept for the Art. 151(4) revert in ``_placeable_irb_class``.
+    origin_ec_col = pick(cols, "reporting_class_origin")
     approach_col = pick(
         cols, "reporting_approach" if "reporting_approach" in cols else "approach_applied"
     )
@@ -234,6 +285,7 @@ def generate_c02_00(
             approach_col,
             sa_ec_col,
             irb_ec_col,
+            origin_ec_col or irb_ec_col,
             rwa_col,
             cols,
             is_b31,
@@ -296,6 +348,7 @@ def generate_c02_00(
     # Basel 3.1, Art. 147A). SA-method equity reports at rows 0060/0210.
     row_values["0420"] = {"0010": equity_irb_rwa}
 
+    _warn_if_irb_detail_strands(row_values)
     _floor_indicator_rows(
         row_values,
         output_floor_summary,
@@ -339,6 +392,7 @@ def _aggregate_by_approach(  # noqa: PLR0913 - two class keys, one per tied temp
     approach_col: str,
     sa_ec_col: str,
     irb_ec_col: str,
+    origin_ec_col: str,
     rwa_col: str,
     cols: set[str],
     is_b31: bool,  # noqa: FBT001 - retired positional signature preserved
@@ -355,14 +409,16 @@ def _aggregate_by_approach(  # noqa: PLR0913 - two class keys, one per tied temp
     map, and the equity RWA split into (SA-method, IRB-method) sub-totals.
 
     TWO CLASS KEYS, one per tied template — see the caller's note.
-    ``sa_ec_col`` (post-substitution) keys the SA class rows, which tie to
-    C 07.00; ``irb_ec_col`` (origin) keys the IRB class rows, which tie to
-    C 08.01. They are the same column wherever nothing substitutes.
+    ``sa_ec_col`` keys the SA class rows, which tie to C 07.00; ``irb_ec_col``
+    keys the IRB class rows, which tie to C 08.01. BOTH are now the
+    post-substitution class, because both tied templates have moved; they stay
+    two parameters because they are two questions, and they answered differently
+    for the one commit between C 07.00 moving and C 08.01 following.
     """
     collected = results.select(
         pl.col(approach_col).alias("_approach"),
         pl.col(sa_ec_col).alias("_ec_sa"),
-        pl.col(irb_ec_col).alias("_ec_irb"),
+        _placeable_irb_class(irb_ec_col, origin_ec_col, approach_col).alias("_ec_irb"),
         pl.col(rwa_col).fill_null(0.0).alias("_rwa"),
         _equity_method_expr(cols).alias("_eqm"),
     ).collect()
@@ -420,6 +476,79 @@ def _aggregate_by_approach(  # noqa: PLR0913 - two class keys, one per tied temp
         equity_sa_rwa,
         equity_irb_rwa,
     )
+
+
+def _warn_if_irb_detail_strands(row_values: dict[str, dict[str, object]]) -> None:
+    """WARN when an approach's "of which" class rows do not foot to its total.
+
+    The net for the impossible-pair trap ``_placeable_irb_class`` describes. That
+    revert is deliberately narrow — it fixes only the Art. 151(4) pair we have
+    measured — so any OTHER (approach, class) combination the layout has no row
+    for would strand its RWEA out of the breakdown while the approach total still
+    counted it, and NO published rule would notice: the rules only check rows
+    that exist. This turns that silence into a log line naming the amount.
+
+    Not an error channel: the figures published are still correct at the approach
+    and Art. 92 totals, and a residual is a disclosure-granularity defect
+    upstream of this template, not a miscalculation in it.
+    """
+    for total_ref, detail_refs in _IRB_DETAIL_ROWS.items():
+        total = row_values.get(total_ref, {}).get("0010")
+        if not isinstance(total, (int, float)):
+            continue
+        detail = sum(
+            value
+            for ref in detail_refs
+            if isinstance(value := row_values.get(ref, {}).get("0010"), (int, float))
+        )
+        residual = float(total) - float(detail)
+        if abs(residual) > 0.01:
+            logger.warning(
+                "C 02.00: row %s (%.2f) exceeds its class breakdown %s (%.2f) by %.2f — "
+                "an (approach, class) pair with no row in the layout; the RWEA is counted "
+                "in the approach total but absent from the of-which rows",
+                total_ref,
+                float(total),
+                "+".join(detail_refs),
+                float(detail),
+                residual,
+            )
+
+
+def _placeable_irb_class(post_ec_col: str, origin_ec_col: str, approach_col: str) -> pl.Expr:
+    """The post-substitution IRB class, REVERTED where that class cannot exist
+    under the leg's approach.
+
+    THE IMPOSSIBLE-PAIR TRAP, AND WHY IT IS HANDLED HERE RATHER THAN IGNORED.
+    A post class key against the obligor's RETAINED approach can name a pair the
+    C 02.00 layout has no row for: the aggregator moves the class to the
+    guarantor's but keeps the obligor's approach whenever the guarantor is not
+    SA, so an F-IRB corporate loan covered by a RETAIL guarantor emits
+    ``(foundation_irb, retail_other)``. CRR Art. 151(4) makes that impossible —
+    retail exposures are A-IRB only, so the layout has retail rows under A-IRB
+    (0370-0400) and none under F-IRB (0250/0260 are institutions and corporates).
+    Its RWEA then fell out of rows 0250/0260 while row 0240 still counted it:
+    2,028,365.78 (CRR) / 1,700,935.66 (B31) on the CRM-substitution portfolio,
+    INVISIBLE to every published rule, because the rules only check rows that
+    exist. Reverting the class keeps the "of which" breakdown a true partition of
+    row 0240.
+
+    THIS IS A REPORTING GUARD, NOT THE FIX. The engine should never have
+    recognised the guarantee: CRR Art. 201(1) is an exhaustive list of eligible
+    unfunded-protection providers — central governments/banks, RGLAs, MDBs,
+    0%-RW international organisations, PSEs, institutions, other corporates,
+    QCCPs — and has NO retail limb. Closing that gap is a separate, capital-
+    affecting change with its own regulatory review. Until it lands, C 02.00
+    must not silently drop RWEA it is required to break down, and reverting to
+    the origin class puts the leg exactly where a declined guarantee would have
+    left it. Deliberately narrow: only the Art. 151(4) pair is reverted, so a
+    genuinely new impossible pair strands visibly rather than being absorbed —
+    ``_warn_if_irb_detail_strands`` is the net that catches it.
+    """
+    retail_under_firb = (pl.col(approach_col) == "foundation_irb") & pl.col(post_ec_col).is_in(
+        list(_RETAIL_CLASSES)
+    )
+    return pl.when(retail_under_firb).then(pl.col(origin_ec_col)).otherwise(pl.col(post_ec_col))
 
 
 def _equity_method_expr(cols: set[str]) -> pl.Expr:

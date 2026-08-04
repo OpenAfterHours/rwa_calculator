@@ -156,15 +156,23 @@ from rwa_calc.reporting.cellspec import (
     Sum,
     TemplateSpec,
     execute,
-    matched_counts,
 )
 from rwa_calc.reporting.corep.crm_substitution import irb_origin_inflows
+from rwa_calc.reporting.corep.postpass import negate_deduction_cols, null_empty_rows
 from rwa_calc.reporting.corep.templates import (
     get_c07_columns,
     get_sa_risk_weight_bands,
     get_sa_row_sections,
 )
-from rwa_calc.reporting.kernel import pick
+from rwa_calc.reporting.kernel import (
+    TwoBasis,
+    class_keys,
+    pick,
+    population_flags,
+    sheet_axis,
+    sheet_frame,
+)
+from rwa_calc.reporting.kernel.bases import ORIGIN_APPROACH_SOURCE
 from rwa_calc.reporting.metadata import SUBSTITUTION_INFLOW_RW_PREFIX, ReportingContext
 from rwa_calc.reporting.plans import SheetPlan
 
@@ -180,33 +188,14 @@ _NEGATIVE_COLS: frozenset[str] = frozenset(
     {"0030", "0035", "0050", "0060", "0070", "0080", "0090", "0130", "0140", "0216", "0217"}
 )
 
-# The two-basis discriminators (see the module docstring). Four derived columns
-# carry the split; nothing about it reaches ``RowPredicate``, whose ``classes`` /
-# ``classes_origin`` fields are per-CELL keys against the sealed ledger, while a
-# basis here is a per-SHEET question ("is this leg on THIS sheet, on THIS basis?")
-# answered against a class that varies sheet by sheet. Expressing it as derived
-# booleans keeps ONE spec shared across every sheet, keeps the population
-# definition in ``c07_population`` alone, and — decisively — lets the post basis
-# DEGRADE to the origin basis on a frame that seals no post-substitution columns.
-# A strict ``RowPredicate(classes=...)`` term cannot degrade: it would either
-# raise on the missing column or (as a tolerant ``equals``) silently zero the
-# exposure-value and RWEA columns of every synthetic unit frame.
-#
-# Membership of each APPROACH population (both include the CCR limb):
-_POP_ORIGIN_COL: str = "c07_pop_origin"
-_POP_POST_COL: str = "c07_pop_post"
-# The sheet keys, Art. 112 Table A2 merge applied (SL -> corporate):
-_CLASS_ORIGIN_COL: str = "c07_class_origin"
-_CLASS_POST_COL: str = "c07_class_post"
-# Per-SHEET: population membership AND that basis' class == this sheet's class.
-_BASIS_ORIGIN_COL: str = "c07_basis_origin"
-_BASIS_POST_COL: str = "c07_basis_post"
-# The sealed post-substitution twins the post basis reads (``reporting_class`` =
-# the guarantor's class on a beneficially-guaranteed leg, ``reporting_approach`` =
-# the approach that leg is treated under). Both absent -> post degrades to origin.
-_POST_CLASS_SOURCE: str = "reporting_class"
-_POST_APPROACH_SOURCE: str = "reporting_approach"
-_ORIGIN_APPROACH_SOURCE: str = "reporting_approach_origin"
+# The two-basis discriminators (see the module docstring). The mechanism —
+# derived boolean columns rather than ``RowPredicate`` fields, and why that is
+# the only shape the post basis can DEGRADE in — lives in
+# ``reporting/kernel/bases.py``, shared with C 08.01.
+_BASIS: TwoBasis = TwoBasis("c07")
+_BASIS_ORIGIN_COL: str = _BASIS.basis_origin
+_BASIS_POST_COL: str = _BASIS.basis_post
+_ORIGIN_APPROACH_SOURCE: str = ORIGIN_APPROACH_SOURCE
 
 # The ``c07_bs`` labels rows 0070 / 0080 filter on, and the keys the col 0100
 # inflow is split by when it lands on them.
@@ -442,10 +431,8 @@ def c07_plans(
     # corporate sub-type under SA). The post key degrades to the origin key on a
     # frame that seals no ``reporting_class``, which is what makes the two-basis
     # split number-neutral wherever nothing substitutes.
-    post_class_col = _POST_CLASS_SOURCE if _POST_CLASS_SOURCE in sa_df.columns else ec_col
     sa_df = sa_df.with_columns(
-        _merge_specialised_lending(ec_col).alias(_CLASS_ORIGIN_COL),
-        _merge_specialised_lending(post_class_col).alias(_CLASS_POST_COL),
+        class_keys(_BASIS, set(sa_df.columns), ec_col, key=_merge_specialised_lending)
     )
     data_cols = set(sa_df.columns)
     sa_df = _prepare(sa_df, data_cols, framework)
@@ -468,17 +455,13 @@ def c07_plans(
     # without it a leg whose inflow the block cap shed to zero would drop its
     # exposure value and RWEA out of the template silently. An inflow-only sheet
     # keeps its constraint-free total row 0010 and reports 0110 = 0100.
-    axis = (
-        set(_sheet_keys(sa_df, _POP_ORIGIN_COL, _CLASS_ORIGIN_COL))
-        | set(_sheet_keys(sa_df, _POP_POST_COL, _CLASS_POST_COL))
-        | set(inflows.total)
-    )
+    axis = sheet_axis(_BASIS, sa_df) | set(inflows.total)
     for ec in sorted(axis):
         sides = inflows.by_side.get(ec, {})
         bands = inflows.by_rw_band.get(ec, {})
         plans[ec] = SheetPlan(
             spec=spec,
-            frame=_sheet_frame(sa_df, ec),
+            frame=sheet_frame(_BASIS, sa_df, ec),
             ctx=ReportingContext(
                 substitution_inflow=inflows.total.get(ec, 0.0),
                 substitution_inflow_on_bs=sides.get(_ON_BS, 0.0),
@@ -504,28 +487,6 @@ def _merge_specialised_lending(class_col: str) -> pl.Expr:
     )
 
 
-def _sheet_keys(data: pl.DataFrame, population_col: str, class_col: str) -> list[str]:
-    """The distinct sheet keys one basis contributes to the sheet axis."""
-    return data.filter(pl.col(population_col))[class_col].drop_nulls().unique().to_list()
-
-
-def _sheet_frame(data: pl.DataFrame, exposure_class: str) -> pl.DataFrame:
-    """One sheet's frame: the legs on it under EITHER basis, each tagged with
-    which. The union is what lets one cell read the obligor's own book (cols
-    0010-0150) while its neighbour reads the post-substitution population (cols
-    0160-0235) — see the module docstring. A leg on neither basis is dropped, so
-    the frame is never wider than the sheet."""
-    tagged = data.with_columns(
-        (pl.col(_POP_ORIGIN_COL) & (pl.col(_CLASS_ORIGIN_COL) == exposure_class))
-        .fill_null(value=False)
-        .alias(_BASIS_ORIGIN_COL),
-        (pl.col(_POP_POST_COL) & (pl.col(_CLASS_POST_COL) == exposure_class))
-        .fill_null(value=False)
-        .alias(_BASIS_POST_COL),
-    )
-    return tagged.filter(pl.col(_BASIS_ORIGIN_COL) | pl.col(_BASIS_POST_COL))
-
-
 @cites("PS1/26, paragraph 1.3")
 def generate_c07(
     results: pl.LazyFrame,
@@ -537,8 +498,14 @@ def generate_c07(
     result: dict[str, pl.DataFrame] = {}
     for ec, plan in c07_plans(results, cols, framework, errors).items():
         frame = execute(plan.spec, plan.frame, plan.ctx)
-        frame = _null_empty_rows(frame, plan.frame, plan.row_terms, plan.inflow_rows)
-        result[ec] = _negate_deduction_cols(frame)
+        # ``row_terms`` -> predicates: ``None`` is an inert row, ``()`` the
+        # constraint-free Total row (never nulled), anything else constrained.
+        preds = {
+            ref: None if terms is None else RowPredicate(equals=terms)
+            for ref, terms in plan.row_terms.items()
+        }
+        frame = null_empty_rows(frame, plan.frame, preds, plan.inflow_rows)
+        result[ec] = negate_deduction_cols(frame, _NEGATIVE_COLS)
     return result
 
 
@@ -575,44 +542,21 @@ def c07_population(
     exposures identical in every column would collapse into one. Harmless where
     it can fire; do not promote this fallback to the ledger path.
     """
-    tagged = results.with_columns(_population_exprs(cols))
+    ccr = (
+        pl.col("risk_type").is_in(_CCR_RISK_TYPES).fill_null(value=False)
+        if "risk_type" in cols
+        else None
+    )
+    tagged = results.with_columns(population_flags(_BASIS, cols, ("standardised",), admit=ccr))
     admitted = (
-        tagged.filter(pl.col(_POP_ORIGIN_COL) | pl.col(_POP_POST_COL))
+        tagged.filter(pl.col(_BASIS.pop_origin) | pl.col(_BASIS.pop_post))
         if both_bases
-        else tagged.filter(pl.col(_POP_ORIGIN_COL)).drop(_POP_ORIGIN_COL, _POP_POST_COL)
+        else tagged.filter(pl.col(_BASIS.pop_origin)).drop(_BASIS.pop_origin, _BASIS.pop_post)
     )
     return admitted.unique(
         subset=["exposure_reference"] if "exposure_reference" in cols else None,
         keep="first",
     )
-
-
-def _population_exprs(cols: set[str]) -> list[pl.Expr]:
-    """The two population-membership flags (see :func:`c07_population`).
-
-    ``_is_standardised`` mirrors ``filter_by_approach``'s missing-column rule —
-    no approach discriminator means an EMPTY population, never a silent
-    pass-through. The post limb falls back to the ORIGIN approach when no
-    post-substitution approach is sealed, so a synthetic frame reports the same
-    figures under both bases instead of zeroing its exposure-value columns.
-    """
-    ccr = (
-        pl.col("risk_type").is_in(_CCR_RISK_TYPES).fill_null(value=False)
-        if "risk_type" in cols
-        else pl.lit(value=False)
-    )
-    origin = _is_standardised(cols, _ORIGIN_APPROACH_SOURCE)
-    post = (
-        _is_standardised(cols, _POST_APPROACH_SOURCE) if _POST_APPROACH_SOURCE in cols else origin
-    )
-    return [(origin | ccr).alias(_POP_ORIGIN_COL), (post | ccr).alias(_POP_POST_COL)]
-
-
-def _is_standardised(cols: set[str], approach_col: str) -> pl.Expr:
-    """Is this leg standardised under ``approach_col``? (Absent column = no.)"""
-    if approach_col not in cols:
-        return pl.lit(value=False)
-    return (pl.col(approach_col) == "standardised").fill_null(value=False)
 
 
 def _has_bs_side(cols: set[str]) -> bool:
@@ -1157,7 +1101,7 @@ def _add_sa_origin_inflows(inflows: _Inflows, sa_df: pl.DataFrame) -> _Inflows:
     # and not the origin one), so they arrive from ``irb_origin_inflows`` already
     # measured on the IRB cap — counting them again would create money.
     frame = sa_df.filter(
-        pl.col(_POP_ORIGIN_COL)
+        pl.col(_BASIS.pop_origin)
         & (pl.col(_UNFUNDED_COL) > 0)
         & pl.col(_POST_CRM_CLASS_COL).is_not_null()
     )
@@ -1610,65 +1554,3 @@ def _sf_adjustment_cell(terms: _Terms, cols: set[str], dedicated: str, flag_col:
             ),
         )
     return CellSpec(Formula(refs=(), fn=_const(None)))
-
-
-def _null_empty_rows(
-    frame: pl.DataFrame,
-    class_df: pl.DataFrame,
-    row_terms: dict[str, _Terms | None],
-    keep: frozenset[str] = frozenset(),
-) -> pl.DataFrame:
-    """Render inert rows and rows with EMPTY subsets all-null — the retired
-    ``_null_row`` contract (the COREP zero policy applies only to populated
-    rows' unbound cells).
-
-    THE COUNT IS OVER THE UNION OF BOTH BASES, deliberately: ``class_df`` is the
-    sheet frame and each row's terms are the BASIS-FREE ones, so a row is nulled
-    only when it is empty on the origin basis AND on the post basis. Keying it on
-    the origin basis alone would null out the very cells the two-basis split
-    exists to publish — an inflow-only sheet's band row has no origin-basis leg
-    at all, yet must report the exposure value and RWEA that arrived on it. The
-    converse costs a fully-outflowed row a null it used to get: it now reports
-    real zeros in cols 0200/0220 against its real gross in col 0010, which is
-    what ``v8726_m`` / ``boe_b0556`` ({c0200} <= {c0150}) ask of it."""
-    constrained = {
-        ref: RowPredicate(equals=terms)
-        for ref, terms in row_terms.items()
-        if terms is not None and len(terms) > 0
-    }
-    counts = matched_counts(class_df, constrained)
-    null_refs = [
-        ref
-        for ref, terms in row_terms.items()
-        if ref not in keep and (terms is None or (len(terms) > 0 and counts[ref] == 0))
-    ]
-    if not null_refs:
-        return frame
-    value_cols = [col for col in frame.columns if col not in ("row_ref", "row_name")]
-    return frame.with_columns(
-        pl.when(pl.col("row_ref").is_in(null_refs))
-        .then(pl.lit(None, dtype=pl.Float64))
-        .otherwise(pl.col(col))
-        .alias(col)
-        for col in value_cols
-    )
-
-
-def _negate_deduction_cols(frame: pl.DataFrame) -> pl.DataFrame:
-    """COREP Annex II §1.3: emit "(-)"-labelled deduction columns as negative
-    figures (after the waterfalls consumed positive magnitudes); a zero
-    deduction is normalised to ``+0.0`` and null stays null."""
-    targets = [col for col in frame.columns if col in _NEGATIVE_COLS]
-    if not targets:
-        return frame
-    return frame.with_columns(_negate_expr(col) for col in targets)
-
-
-def _negate_expr(col: str) -> pl.Expr:
-    """Negate a "(-)"-labelled deduction column, normalising a zero to ``+0.0``.
-
-    Plain ``-pl.col(col)`` flips the IEEE sign bit, so a ``0.0`` cell would
-    serialise as ``-0.0`` (``+ 0.0`` does NOT clear it in Polars); the explicit
-    zero branch keeps a zero deduction as ``+0.0``. Null stays null. Identical
-    expression to C 08.01/02's ``_negate`` pass."""
-    return pl.when(pl.col(col) == 0.0).then(pl.lit(0.0)).otherwise(-pl.col(col)).alias(col)

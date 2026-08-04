@@ -668,8 +668,10 @@ collateral.
   [IRB Parameter Substitution (B31-D7)](#irb-parameter-substitution-b31-d7)
   (PSM, Art. 236) or the SA Risk-Weight Substitution Method (Art. 235), per
   the [Method Selection by Approach](#method-selection-by-approach) table.
-- The no-double-counting obligation is anchored in Art. 191A(2)(d) /
-  Art. 193(2); see [Anti-Double-Counting and Consistency Rules](#anti-double-counting-and-consistency-rules)
+- The no-double-counting obligation is anchored in Art. 191A(2)(d) under PS1/26
+  and, for the pre-2027 CRR regime, in Art. 193(2) — two separate framework
+  provisions, not joint anchors; see
+  [Anti-Double-Counting and Consistency Rules](#anti-double-counting-and-consistency-rules)
   immediately below.
 - Maturity-mismatch handling on each leg is governed by
   [Art. 237–239](#maturity-mismatch-art-237-239) — the GA / CVAM
@@ -699,6 +701,26 @@ collateral.
     look-through across two protection layers).
 
 ### Anti-Double-Counting and Consistency Rules
+
+!!! note "CRR vs Basel 3.1 — which framework each article belongs to"
+    The paragraph references below are **PS1/26 Art. 191A**. Their CRR-regime
+    counterpart is the general no-double-counting obligation of **CRR Art. 193(2)**
+    ("Where the risk-weighted exposure amount already takes account of credit
+    protection under Chapter 2 or Chapter 3 … institutions shall not take into
+    account that credit protection in the calculations under this Chapter"). The two
+    are separate provisions in separate frameworks and should not be cited as joint
+    anchors — CRR has no equivalent of the Art. 191A(2)(e) / (f) look-through, which
+    is why the pre-2027 route ran through Art. 193(2) plus per-form CRM application.
+
+    The same framework caution applies to the **Art. 193(1)** no-worse cap relied on
+    by the PSM benefit gate above: it is verified for **CRR only**. The PRA Credit
+    Risk Mitigation (CRR) Part is not held in `docs/assets/`, and a full search of
+    `ps126app1.pdf` returns no equivalent language — the PRA also renumbers, so
+    "Article 193" there is the CRR Art. 161 parameter-substitution rule, not this
+    one. Read the `[Note: This rule corresponds to Article NNN of CRR …]` line, never
+    the number. If PS1/26 carries no equivalent cap, the benefit gate stops being
+    compelled from 1 Jan 2027 and becomes a firm election with a capital
+    consequence.
 
 - **Para 2(d)**: Funded and unfunded CRM must not be recognised simultaneously on the same
   portion of an exposure (no double-counting).

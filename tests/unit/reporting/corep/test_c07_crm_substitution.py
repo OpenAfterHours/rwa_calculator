@@ -452,38 +452,76 @@ class TestSubstitutionFlows:
 def _irb_book_with_sa_guarantor() -> pl.LazyFrame:
     """An all-IRB-origin book whose only guarantee has an SA guarantor.
 
-    IRB_CORP_1 is unguaranteed (5,000). IRB_CORP_2 (3,000) is guaranteed
-    1,500 by an institution treated under the STANDARDISED approach post-CRM
-    (``approach_post_crm="standardised"`` — the CRR Art. 235 risk-weight
-    substitution route), while both rows' ORIGIN approach is
-    ``foundation_irb``. So ``c07_population`` (keyed on
-    ``reporting_approach_origin``) sees NO row from this book at all — the SA
-    guarantor never has its own exposure here — yet the inflow the guarantee
-    generates is destined for C 07.00's ``institution`` sheet by the guarantor's
-    POST-crm approach (``corep/crm_substitution.py``).
+    IRB_CORP_1 is unguaranteed (5,000). IRB_CORP_2 (3,000) is guaranteed 1,500
+    by an institution treated under the STANDARDISED approach post-CRM (the
+    CRR Art. 235 risk-weight substitution route), while every row's ORIGIN
+    approach is ``foundation_irb``. So the origin-approach population sees NO
+    row from this book at all — the SA guarantor never has its own exposure
+    here — yet the inflow the guarantee generates is destined for C 07.00's
+    ``institution`` sheet by the guarantor's POST-crm approach
+    (``corep/crm_substitution.py``).
+
+    TWO THINGS HERE ARE LOAD-BEARING AND WERE BOTH WRONG BEFORE.
+
+    1. THE POST-CRM TWINS ARE SET AS A PAIR. This frame used to set
+       ``approach_post_crm="standardised"`` with NO ``exposure_class_post_crm``,
+       so the shim sealed ``reporting_approach="standardised"`` alongside
+       ``reporting_class="corporate"`` — a leg simultaneously claiming to be an
+       SA exposure and to sit in the obligor's own class. PRODUCTION CANNOT EMIT
+       THAT: ``aggregator.py::_add_post_crm_reporting_class`` and
+       ``_post_crm_approach_expr`` carry the SAME is_guaranteed-and-beneficial
+       gate precisely so the two partition the same money the same way, and the
+       latter's docstring says an approach that migrates while the class does not
+       "would key a leg onto a sheet/template pair that never existed". Once
+       C 07.00's exposure-value and RWEA columns moved to the post-substitution
+       basis they read that pair, and the impossible state materialised a
+       phantom ``corporate`` sheet carrying the leg's whole EAD. If this test
+       ever fails again, FIX THE FRAME, NOT THE ASSERTION — a divergent pair is
+       the bug, not the thing under test.
+
+    2. THE GUARANTEED EXPOSURE IS SPLIT INTO ITS TWO LEGS, as CRM does
+       (``engine/crm/guarantees.py`` emits ``__G_<guarantor>`` and ``__REM``).
+       The single-row form is what made (1) impossible to express correctly: a
+       post-CRM class is a per-LEG attribute, so one row cannot say "only the
+       covered 1,500 migrated" — the whole 3,000 would land on the guarantor's
+       sheet. With the split, col 0200 on the institution sheet is the covered
+       1,500 and agrees with the col 0100 inflow instead of contradicting it.
+       Book totals are preserved (8,000 EAD / 5,300 RWEA); the retained and
+       covered halves keep the borrower's 0.60 weight because no assertion here
+       concerns risk weights and inventing a guarantor weight would pin a number
+       nothing tests.
     """
     return pl.LazyFrame(
         {
-            "exposure_reference": ["IRB_CORP_1", "IRB_CORP_2"],
-            "approach_applied": ["foundation_irb", "foundation_irb"],
-            "approach_post_crm": ["foundation_irb", "standardised"],
-            "exposure_class": ["corporate", "corporate"],
-            "drawn_amount": [5_000.0, 3_000.0],
-            "undrawn_amount": [0.0, 0.0],
-            "ead_final": [5_000.0, 3_000.0],
-            "rwa_final": [3_500.0, 1_800.0],
-            "risk_weight": [0.70, 0.60],
-            "pd_floored": [0.005, 0.01],
-            "lgd_floored": [0.45, 0.45],
-            "irb_maturity_m": [2.5, 3.0],
-            "expected_loss": [12.375, 13.5],
-            "scra_provision_amount": [0.0, 0.0],
-            "gcra_provision_amount": [0.0, 0.0],
-            "counterparty_reference": ["CP_A", "CP_B"],
-            "guaranteed_portion": [0.0, 1_500.0],
-            "protection_type": [None, "guarantee"],
-            "pre_crm_exposure_class": ["corporate", "corporate"],
-            "post_crm_exposure_class_guaranteed": ["corporate", "institution"],
+            "exposure_reference": ["IRB_CORP_1", "IRB_CORP_2__REM", "IRB_CORP_2__G_INST_GTOR"],
+            "approach_applied": ["foundation_irb"] * 3,
+            # The two post-CRM twins, always set together — see the docstring.
+            "approach_post_crm": ["foundation_irb", "foundation_irb", "standardised"],
+            "exposure_class": ["corporate"] * 3,
+            "exposure_class_post_crm": ["corporate", "corporate", "institution"],
+            "drawn_amount": [5_000.0, 1_500.0, 1_500.0],
+            "undrawn_amount": [0.0, 0.0, 0.0],
+            "ead_final": [5_000.0, 1_500.0, 1_500.0],
+            "rwa_final": [3_500.0, 900.0, 900.0],
+            "risk_weight": [0.70, 0.60, 0.60],
+            "pd_floored": [0.005, 0.01, 0.01],
+            "lgd_floored": [0.45, 0.45, 0.45],
+            "irb_maturity_m": [2.5, 3.0, 3.0],
+            "expected_loss": [12.375, 6.75, 6.75],
+            "scra_provision_amount": [0.0, 0.0, 0.0],
+            "gcra_provision_amount": [0.0, 0.0, 0.0],
+            "counterparty_reference": ["CP_A", "CP_B", "CP_B"],
+            "guaranteed_portion": [0.0, 0.0, 1_500.0],
+            "protection_type": [None, None, "guarantee"],
+            # Art. 235 substitution ACTUALLY applied on the covered leg. Stated
+            # explicitly rather than left absent: absence makes the decline gate
+            # a no-op, which happens to give the same answer here but says
+            # "the CRM sub-step never ran" rather than "the guarantee was
+            # recognised", and only the latter entitles the covered part to the
+            # guarantor's sheet.
+            "is_guarantee_beneficial": [None, None, True],
+            "pre_crm_exposure_class": ["corporate"] * 3,
+            "post_crm_exposure_class_guaranteed": ["corporate", "corporate", "institution"],
         }
     )
 

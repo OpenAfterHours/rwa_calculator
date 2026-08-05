@@ -56,9 +56,9 @@ Last generated: 2026-08-05.
     --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:451:564"
     ```
 
-??? quote "`_add_reporting_projection` — src/rwa_calc/engine/aggregator/aggregator.py:781"
+??? quote "`_add_reporting_projection` — src/rwa_calc/engine/aggregator/aggregator.py:794"
     ```python
-    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:780:995"
+    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:793:1054"
     ```
 
 ??? quote "`apply_risk_weights` — src/rwa_calc/engine/sa/risk_weights.py:337"
@@ -872,14 +872,14 @@ Last generated: 2026-08-05.
 
 ### CRR Art. 194 — Principles governing the eligibility of credit risk mitigation techniques
 
-??? quote "`get_crm_unified_bundle` — src/rwa_calc/engine/crm/processor.py:566"
+??? quote "`get_crm_unified_bundle` — src/rwa_calc/engine/crm/processor.py:567"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/processor.py:566:733"
+    --8<-- "src/rwa_calc/engine/crm/processor.py:567:742"
     ```
 
-??? quote "`_apply_own_issue_collateral_gate` — src/rwa_calc/engine/crm/processor.py:827"
+??? quote "`_apply_own_issue_collateral_gate` — src/rwa_calc/engine/crm/processor.py:836"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/processor.py:827:917"
+    --8<-- "src/rwa_calc/engine/crm/processor.py:836:926"
     ```
 
 
@@ -911,15 +911,15 @@ Last generated: 2026-08-05.
 
 ??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:891"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:891:1513"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:891:1599"
     ```
 
 
 ### CRR Art. 201 — Eligibility of protection providers under all approaches
 
-??? quote "`_assign_guarantor_approach` — src/rwa_calc/engine/crm/guarantees.py:403"
+??? quote "`_assign_guarantor_approach` — src/rwa_calc/engine/crm/guarantees.py:417"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:403:500"
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:417:514"
     ```
 
 
@@ -927,33 +927,33 @@ Last generated: 2026-08-05.
 
 ??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:892"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:891:1513"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:891:1599"
     ```
 
 
 ### CRR Art. 213 — Requirements common to guarantees and credit derivatives
 
-??? quote "`apply_guarantees` — src/rwa_calc/engine/crm/guarantees.py:97"
+??? quote "`apply_guarantees` — src/rwa_calc/engine/crm/guarantees.py:111"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:97:176"
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:111:190"
     ```
 
-??? quote "`_gate_unilateral_protection` — src/rwa_calc/engine/crm/guarantees.py:242"
+??? quote "`_gate_unilateral_protection` — src/rwa_calc/engine/crm/guarantees.py:256"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:242:285"
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:256:299"
     ```
 
 
 ### CRR Art. 217 — Requirements to qualify for the treatment set out in Article 153(3)
 
-??? quote "`apply_guarantees` — src/rwa_calc/engine/crm/guarantees.py:98"
+??? quote "`apply_guarantees` — src/rwa_calc/engine/crm/guarantees.py:112"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:97:176"
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:111:190"
     ```
 
-??? quote "`_apply_maturity_mismatch_to_guarantees` — src/rwa_calc/engine/crm/guarantees.py:1494"
+??? quote "`_apply_maturity_mismatch_to_guarantees` — src/rwa_calc/engine/crm/guarantees.py:1509"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:1494:1686"
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:1509:1701"
     ```
 
 
@@ -1081,6 +1081,11 @@ Last generated: 2026-08-05.
     --8<-- "src/rwa_calc/engine/crm/life_insurance.py:92:234"
     ```
 
+??? quote "`route_other_funded_protection` — src/rwa_calc/engine/crm/ofcp_routing.py:56"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/ofcp_routing.py:56:142"
+    ```
+
 ??? quote "`compute_third_party_deposit_columns` — src/rwa_calc/engine/crm/third_party_deposit.py:82"
     ```python
     --8<-- "src/rwa_calc/engine/crm/third_party_deposit.py:82:154"
@@ -1107,27 +1112,32 @@ Last generated: 2026-08-05.
 
 ### CRR Art. 234 — Calculating risk-weighted exposure amounts and expected loss amounts in the event of partial protection and tranching
 
-??? quote "`_build_remainder_sub_rows` — src/rwa_calc/engine/crm/guarantees.py:914"
+??? quote "`_build_remainder_sub_rows` — src/rwa_calc/engine/crm/guarantees.py:929"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:914:975"
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:929:990"
     ```
 
 
 ### CRR Art. 235 — Calculating risk-weighted exposure amounts under the Standardised Approach
 
-??? quote "`_add_post_crm_reporting_class` — src/rwa_calc/engine/aggregator/aggregator.py:672"
+??? quote "`_add_post_crm_reporting_class` — src/rwa_calc/engine/aggregator/aggregator.py:685"
     ```python
-    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:672:714"
+    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:685:727"
     ```
 
-??? quote "`_add_post_crm_reporting_approach` — src/rwa_calc/engine/aggregator/aggregator.py:717"
+??? quote "`_add_post_crm_reporting_approach` — src/rwa_calc/engine/aggregator/aggregator.py:730"
     ```python
-    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:717:742"
+    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:730:755"
     ```
 
-??? quote "`_add_reporting_projection` — src/rwa_calc/engine/aggregator/aggregator.py:780"
+??? quote "`_add_reporting_projection` — src/rwa_calc/engine/aggregator/aggregator.py:793"
     ```python
-    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:780:995"
+    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:793:1054"
+    ```
+
+??? quote "`_build_guarantor_sub_rows` — src/rwa_calc/engine/crm/guarantees.py:900"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:900:926"
     ```
 
 ??? quote "`build_domestic_cgcb_guarantor_expr` — src/rwa_calc/engine/eu_sovereign.py:83"
@@ -1163,9 +1173,9 @@ Last generated: 2026-08-05.
 
 ### CRR Art. 237 — Maturity mismatch
 
-??? quote "`_apply_maturity_mismatch_to_guarantees` — src/rwa_calc/engine/crm/guarantees.py:1495"
+??? quote "`_apply_maturity_mismatch_to_guarantees` — src/rwa_calc/engine/crm/guarantees.py:1510"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:1494:1686"
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:1509:1701"
     ```
 
 ??? quote "`apply_maturity_mismatch` — src/rwa_calc/engine/crm/haircuts.py:814"
@@ -1747,19 +1757,27 @@ Last generated: 2026-08-05.
     ```
 
 
+### PS1/26, paragraph 169A — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
+
+??? quote "`route_other_funded_protection` — src/rwa_calc/engine/crm/ofcp_routing.py:57"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/ofcp_routing.py:56:142"
+    ```
+
+
 ### PS1/26, paragraph 201 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_assign_guarantor_approach` — src/rwa_calc/engine/crm/guarantees.py:404"
+??? quote "`_assign_guarantor_approach` — src/rwa_calc/engine/crm/guarantees.py:418"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:403:500"
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:417:514"
     ```
 
 
 ### PS1/26, paragraph 213 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_gate_unilateral_protection` — src/rwa_calc/engine/crm/guarantees.py:243"
+??? quote "`_gate_unilateral_protection` — src/rwa_calc/engine/crm/guarantees.py:257"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:242:285"
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:256:299"
     ```
 
 
@@ -1783,9 +1801,9 @@ Last generated: 2026-08-05.
 
 ### PS1/26, paragraph 237 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_apply_maturity_mismatch_to_guarantees` — src/rwa_calc/engine/crm/guarantees.py:1496"
+??? quote "`_apply_maturity_mismatch_to_guarantees` — src/rwa_calc/engine/crm/guarantees.py:1511"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/guarantees.py:1494:1686"
+    --8<-- "src/rwa_calc/engine/crm/guarantees.py:1509:1701"
     ```
 
 
@@ -1793,7 +1811,7 @@ Last generated: 2026-08-05.
 
 ??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:893"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:891:1513"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:891:1599"
     ```
 
 
@@ -1801,7 +1819,7 @@ Last generated: 2026-08-05.
 
 ??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:894"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:891:1513"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:891:1599"
     ```
 
 

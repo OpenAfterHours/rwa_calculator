@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - (Next release changes will go here)
 
+### Fixed
+- **Guaranteed exposures published their collateral once per leg.** CRM physically
+  splits a guaranteed exposure into `__G_<guarantor>` and `__REM` legs, but the
+  columns pro-rated onto those legs omitted every collateral valuation, so each leg
+  inherited the full value. COREP C 08.01/02 cols 0180-0210, C 07.00 col 0130 and
+  Pillar 3 CR7-A all bind those carriers on the origin basis — both legs land in one
+  reported row — so an N-leg split disclosed N x the collateral actually held. The
+  seven collateral valuations are now split pro-rata. No capital number moves:
+  `apply_collateral` runs before `apply_guarantees`, so the SA Comprehensive-Method
+  `E*` is already spent by split time. The Art. 231 waterfall allocations
+  (`crm_alloc_*`, `total_collateral_for_lgd`) are deliberately NOT split — their only
+  post-split consumer is the blended LGD input floor, a rate over the unsplit
+  `ead_for_crm`, so splitting the numerator alone would have silently raised it.
+
 ### Changed
 - PyPI development status promoted from `2 - Pre-Alpha` to `3 - Alpha`.
 

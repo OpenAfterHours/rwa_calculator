@@ -872,14 +872,14 @@ Last generated: 2026-08-05.
 
 ### CRR Art. 194 — Principles governing the eligibility of credit risk mitigation techniques
 
-??? quote "`get_crm_unified_bundle` — src/rwa_calc/engine/crm/processor.py:567"
+??? quote "`get_crm_unified_bundle` — src/rwa_calc/engine/crm/processor.py:568"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/processor.py:567:742"
+    --8<-- "src/rwa_calc/engine/crm/processor.py:568:743"
     ```
 
-??? quote "`_apply_own_issue_collateral_gate` — src/rwa_calc/engine/crm/processor.py:836"
+??? quote "`_apply_own_issue_collateral_gate` — src/rwa_calc/engine/crm/processor.py:837"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/processor.py:836:926"
+    --8<-- "src/rwa_calc/engine/crm/processor.py:837:927"
     ```
 
 
@@ -1006,9 +1006,9 @@ Last generated: 2026-08-05.
     --8<-- "src/rwa_calc/engine/crm/collateral.py:428:566"
     ```
 
-??? quote "`lgd_star_exposure_basis_expr` — src/rwa_calc/engine/crm/expressions.py:105"
+??? quote "`lgd_star_exposure_basis_expr` — src/rwa_calc/engine/crm/expressions.py:106"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/expressions.py:105:129"
+    --8<-- "src/rwa_calc/engine/crm/expressions.py:106:130"
     ```
 
 ??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:110"
@@ -1081,9 +1081,9 @@ Last generated: 2026-08-05.
     --8<-- "src/rwa_calc/engine/crm/life_insurance.py:92:234"
     ```
 
-??? quote "`route_other_funded_protection` — src/rwa_calc/engine/crm/ofcp_routing.py:56"
+??? quote "`route_other_funded_protection` — src/rwa_calc/engine/crm/ofcp_routing.py:76"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/ofcp_routing.py:56:142"
+    --8<-- "src/rwa_calc/engine/crm/ofcp_routing.py:76:172"
     ```
 
 ??? quote "`compute_third_party_deposit_columns` — src/rwa_calc/engine/crm/third_party_deposit.py:82"
@@ -1759,9 +1759,9 @@ Last generated: 2026-08-05.
 
 ### PS1/26, paragraph 169A — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`route_other_funded_protection` — src/rwa_calc/engine/crm/ofcp_routing.py:57"
+??? quote "`route_other_funded_protection` — src/rwa_calc/engine/crm/ofcp_routing.py:77"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/ofcp_routing.py:56:142"
+    --8<-- "src/rwa_calc/engine/crm/ofcp_routing.py:76:172"
     ```
 
 
@@ -1835,13 +1835,13 @@ Last generated: 2026-08-05.
     --8<-- "src/rwa_calc/engine/crm/collateral.py:428:566"
     ```
 
-??? quote "`lgd_star_exposure_basis_expr` — src/rwa_calc/engine/crm/expressions.py:106"
+??? quote "`lgd_star_exposure_basis_expr` — src/rwa_calc/engine/crm/expressions.py:107"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/expressions.py:105:129"
+    --8<-- "src/rwa_calc/engine/crm/expressions.py:106:130"
     ```
 
-??? quote "`overcollateralisation_ratio_expr` — src/rwa_calc/engine/crm/expressions.py:158"
+??? quote "`overcollateralisation_ratio_expr` — src/rwa_calc/engine/crm/expressions.py:159"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/expressions.py:158:190"
+    --8<-- "src/rwa_calc/engine/crm/expressions.py:159:191"
     ```
 

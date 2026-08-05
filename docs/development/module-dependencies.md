@@ -83,7 +83,7 @@ flowchart LR
 
 The complete graph, one node per module, exactly as `curfew show --mermaid` emits it.
 
-??? note "Full module-level graph (241 modules)"
+??? note "Full module-level graph (243 modules)"
 
     ```mermaid
     flowchart LR
@@ -151,190 +151,192 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n61["rwa_calc.engine.classifier"]
         n62["rwa_calc.engine.crm"]
         n63["rwa_calc.engine.crm.collateral"]
-        n64["rwa_calc.engine.crm.expressions"]
-        n65["rwa_calc.engine.crm.guarantees"]
-        n66["rwa_calc.engine.crm.haircut_tables"]
-        n67["rwa_calc.engine.crm.haircuts"]
-        n68["rwa_calc.engine.crm.life_insurance"]
-        n69["rwa_calc.engine.crm.link_allocation"]
-        n70["rwa_calc.engine.crm.look_through"]
-        n71["rwa_calc.engine.crm.processor"]
-        n72["rwa_calc.engine.crm.provisions"]
-        n73["rwa_calc.engine.crm.simple_method"]
-        n74["rwa_calc.engine.crm.third_party_deposit"]
-        n75["rwa_calc.engine.cva"]
-        n76["rwa_calc.engine.cva.ba_cva"]
-        n77["rwa_calc.engine.entity_class_maps"]
-        n78["rwa_calc.engine.equity"]
-        n79["rwa_calc.engine.equity.calculator"]
-        n80["rwa_calc.engine.eu_sovereign"]
-        n81["rwa_calc.engine.fx_converter"]
-        n82["rwa_calc.engine.fx_rate_sync"]
-        n83["rwa_calc.engine.hierarchy"]
-        n84["rwa_calc.engine.irb"]
-        n85["rwa_calc.engine.irb.adjustments"]
-        n86["rwa_calc.engine.irb.calculator"]
-        n87["rwa_calc.engine.irb.formulas"]
-        n88["rwa_calc.engine.irb.guarantee"]
-        n89["rwa_calc.engine.irb.stats_backend"]
-        n90["rwa_calc.engine.irb.transforms"]
-        n91["rwa_calc.engine.kernels"]
-        n92["rwa_calc.engine.kernels.allocation"]
-        n93["rwa_calc.engine.loader"]
-        n94["rwa_calc.engine.materialise"]
-        n95["rwa_calc.engine.orchestrator"]
-        n96["rwa_calc.engine.pipeline"]
-        n97["rwa_calc.engine.re_splitter"]
-        n98["rwa_calc.engine.registry"]
-        n99["rwa_calc.engine.sa"]
-        n100["rwa_calc.engine.sa.b31_risk_weight_tables"]
-        n101["rwa_calc.engine.sa.calculator"]
-        n102["rwa_calc.engine.sa.central_bank"]
-        n103["rwa_calc.engine.sa.covered_bond"]
-        n104["rwa_calc.engine.sa.cqs_lift"]
-        n105["rwa_calc.engine.sa.crr_risk_weight_tables"]
-        n106["rwa_calc.engine.sa.factors_output"]
-        n107["rwa_calc.engine.sa.guarantor_rw"]
-        n108["rwa_calc.engine.sa.jurisdiction"]
-        n109["rwa_calc.engine.sa.rgla"]
-        n110["rwa_calc.engine.sa.risk_weights"]
-        n111["rwa_calc.engine.sa.rw_adjustments"]
-        n112["rwa_calc.engine.securitisation"]
-        n113["rwa_calc.engine.securitisation.allocator"]
-        n114["rwa_calc.engine.sft"]
-        n115["rwa_calc.engine.sft.fccm"]
-        n116["rwa_calc.engine.slotting"]
-        n117["rwa_calc.engine.slotting.calculator"]
-        n118["rwa_calc.engine.slotting.transforms"]
-        n119["rwa_calc.engine.stages"]
-        n120["rwa_calc.engine.stages._ccr_shared"]
-        n121["rwa_calc.engine.stages.aggregate"]
-        n122["rwa_calc.engine.stages.calc"]
-        n123["rwa_calc.engine.stages.ccr"]
-        n124["rwa_calc.engine.stages.classify"]
-        n125["rwa_calc.engine.stages.classify.approach"]
-        n126["rwa_calc.engine.stages.classify.attributes"]
-        n127["rwa_calc.engine.stages.classify.audit"]
-        n128["rwa_calc.engine.stages.classify.classifier"]
-        n129["rwa_calc.engine.stages.classify.permissions"]
-        n130["rwa_calc.engine.stages.classify.stage"]
-        n131["rwa_calc.engine.stages.classify.subtypes"]
-        n132["rwa_calc.engine.stages.crm"]
-        n133["rwa_calc.engine.stages.equity"]
-        n134["rwa_calc.engine.stages.fx"]
-        n135["rwa_calc.engine.stages.fx.conversion"]
-        n136["rwa_calc.engine.stages.fx.converter"]
-        n137["rwa_calc.engine.stages.hierarchy"]
-        n138["rwa_calc.engine.stages.hierarchy.enrich"]
-        n139["rwa_calc.engine.stages.hierarchy.facility_undrawn"]
-        n140["rwa_calc.engine.stages.hierarchy.graph"]
-        n141["rwa_calc.engine.stages.hierarchy.ratings"]
-        n142["rwa_calc.engine.stages.hierarchy.resolver"]
-        n143["rwa_calc.engine.stages.hierarchy.stage"]
-        n144["rwa_calc.engine.stages.hierarchy.unify"]
-        n145["rwa_calc.engine.stages.re_split"]
-        n146["rwa_calc.engine.stages.re_split.flagging"]
-        n147["rwa_calc.engine.stages.re_split.params"]
-        n148["rwa_calc.engine.stages.re_split.splitter"]
-        n149["rwa_calc.engine.stages.re_split.stage"]
-        n150["rwa_calc.engine.stages.scope"]
-        n151["rwa_calc.engine.stages.scope.resolver"]
-        n152["rwa_calc.engine.stages.scope.stage"]
-        n153["rwa_calc.engine.stages.securitisation"]
-        n154["rwa_calc.engine.stages.sft"]
-        n155["rwa_calc.engine.supporting_factors"]
-        n156["rwa_calc.engine.thresholds"]
-        n157["rwa_calc.engine.utils"]
-        n158["rwa_calc.observability"]
-        n159["rwa_calc.observability.audit_cache"]
-        n160["rwa_calc.observability.context"]
-        n161["rwa_calc.observability.formatters"]
-        n162["rwa_calc.observability.logging_setup"]
-        n163["rwa_calc.reporting"]
-        n164["rwa_calc.reporting.catalog"]
-        n165["rwa_calc.reporting.cellspec"]
-        n166["rwa_calc.reporting.corep"]
-        n167["rwa_calc.reporting.corep.c02"]
-        n168["rwa_calc.reporting.corep.c07"]
-        n169["rwa_calc.reporting.corep.c08"]
-        n170["rwa_calc.reporting.corep.c08_07"]
-        n171["rwa_calc.reporting.corep.c09"]
-        n172["rwa_calc.reporting.corep.c34"]
-        n173["rwa_calc.reporting.corep.crm_substitution"]
-        n174["rwa_calc.reporting.corep.generator"]
-        n175["rwa_calc.reporting.corep.of02"]
-        n176["rwa_calc.reporting.corep.pd_scale"]
-        n177["rwa_calc.reporting.corep.postpass"]
-        n178["rwa_calc.reporting.corep.templates"]
-        n179["rwa_calc.reporting.facts"]
-        n180["rwa_calc.reporting.kernel"]
-        n181["rwa_calc.reporting.kernel.bases"]
-        n182["rwa_calc.reporting.kernel.columns"]
-        n183["rwa_calc.reporting.kernel.excel"]
-        n184["rwa_calc.reporting.kernel.filters"]
-        n185["rwa_calc.reporting.kernel.rows"]
-        n186["rwa_calc.reporting.kernel.sums"]
-        n187["rwa_calc.reporting.lineage"]
-        n188["rwa_calc.reporting.metadata"]
-        n189["rwa_calc.reporting.pillar3"]
-        n190["rwa_calc.reporting.pillar3.ccr"]
-        n191["rwa_calc.reporting.pillar3.cms1"]
-        n192["rwa_calc.reporting.pillar3.cms2"]
-        n193["rwa_calc.reporting.pillar3.cr10"]
-        n194["rwa_calc.reporting.pillar3.cr4"]
-        n195["rwa_calc.reporting.pillar3.cr5"]
-        n196["rwa_calc.reporting.pillar3.cr6"]
-        n197["rwa_calc.reporting.pillar3.cr6a"]
-        n198["rwa_calc.reporting.pillar3.cr7"]
-        n199["rwa_calc.reporting.pillar3.cr7a"]
-        n200["rwa_calc.reporting.pillar3.cr8"]
-        n201["rwa_calc.reporting.pillar3.cr9"]
-        n202["rwa_calc.reporting.pillar3.generator"]
-        n203["rwa_calc.reporting.pillar3.irb_scope"]
-        n204["rwa_calc.reporting.pillar3.ov1"]
-        n205["rwa_calc.reporting.pillar3.sa_scope"]
-        n206["rwa_calc.reporting.pillar3.templates"]
-        n207["rwa_calc.reporting.plans"]
-        n208["rwa_calc.reporting.tieouts"]
-        n209["rwa_calc.reporting.validations"]
-        n210["rwa_calc.reporting.validations.checker"]
-        n211["rwa_calc.reporting.validations.evaluate"]
-        n212["rwa_calc.reporting.validations.rules"]
-        n213["rwa_calc.reporting.validations.scope"]
-        n214["rwa_calc.rulebook"]
-        n215["rwa_calc.rulebook.audit"]
-        n216["rwa_calc.rulebook.compile"]
-        n217["rwa_calc.rulebook.model"]
-        n218["rwa_calc.rulebook.packs"]
-        n219["rwa_calc.rulebook.packs.b31"]
-        n220["rwa_calc.rulebook.packs.common"]
-        n221["rwa_calc.rulebook.packs.crr"]
-        n222["rwa_calc.rulebook.registry"]
-        n223["rwa_calc.rulebook.resolve"]
-        n224["rwa_calc.rulebook.v0"]
-        n225["rwa_calc.ui"]
-        n226["rwa_calc.ui.app"]
-        n227["rwa_calc.ui.app.calculator_state"]
-        n228["rwa_calc.ui.app.main"]
-        n229["rwa_calc.ui.app.output_writer"]
-        n230["rwa_calc.ui.app.progress"]
-        n231["rwa_calc.ui.app.recon_signoff"]
-        n232["rwa_calc.ui.app.recon_state"]
-        n233["rwa_calc.ui.views"]
-        n234["rwa_calc.ui.views.charts"]
-        n235["rwa_calc.ui.views.comparison"]
-        n236["rwa_calc.ui.views.hierarchy"]
-        n237["rwa_calc.ui.views.lineage"]
-        n238["rwa_calc.ui.views.method_split"]
-        n239["rwa_calc.ui.views.reconciliation"]
-        n240["rwa_calc.ui.views.report_templates"]
+        n64["rwa_calc.engine.crm.collateral_type_check"]
+        n65["rwa_calc.engine.crm.expressions"]
+        n66["rwa_calc.engine.crm.guarantees"]
+        n67["rwa_calc.engine.crm.haircut_tables"]
+        n68["rwa_calc.engine.crm.haircuts"]
+        n69["rwa_calc.engine.crm.life_insurance"]
+        n70["rwa_calc.engine.crm.link_allocation"]
+        n71["rwa_calc.engine.crm.look_through"]
+        n72["rwa_calc.engine.crm.ofcp_routing"]
+        n73["rwa_calc.engine.crm.processor"]
+        n74["rwa_calc.engine.crm.provisions"]
+        n75["rwa_calc.engine.crm.simple_method"]
+        n76["rwa_calc.engine.crm.third_party_deposit"]
+        n77["rwa_calc.engine.cva"]
+        n78["rwa_calc.engine.cva.ba_cva"]
+        n79["rwa_calc.engine.entity_class_maps"]
+        n80["rwa_calc.engine.equity"]
+        n81["rwa_calc.engine.equity.calculator"]
+        n82["rwa_calc.engine.eu_sovereign"]
+        n83["rwa_calc.engine.fx_converter"]
+        n84["rwa_calc.engine.fx_rate_sync"]
+        n85["rwa_calc.engine.hierarchy"]
+        n86["rwa_calc.engine.irb"]
+        n87["rwa_calc.engine.irb.adjustments"]
+        n88["rwa_calc.engine.irb.calculator"]
+        n89["rwa_calc.engine.irb.formulas"]
+        n90["rwa_calc.engine.irb.guarantee"]
+        n91["rwa_calc.engine.irb.stats_backend"]
+        n92["rwa_calc.engine.irb.transforms"]
+        n93["rwa_calc.engine.kernels"]
+        n94["rwa_calc.engine.kernels.allocation"]
+        n95["rwa_calc.engine.loader"]
+        n96["rwa_calc.engine.materialise"]
+        n97["rwa_calc.engine.orchestrator"]
+        n98["rwa_calc.engine.pipeline"]
+        n99["rwa_calc.engine.re_splitter"]
+        n100["rwa_calc.engine.registry"]
+        n101["rwa_calc.engine.sa"]
+        n102["rwa_calc.engine.sa.b31_risk_weight_tables"]
+        n103["rwa_calc.engine.sa.calculator"]
+        n104["rwa_calc.engine.sa.central_bank"]
+        n105["rwa_calc.engine.sa.covered_bond"]
+        n106["rwa_calc.engine.sa.cqs_lift"]
+        n107["rwa_calc.engine.sa.crr_risk_weight_tables"]
+        n108["rwa_calc.engine.sa.factors_output"]
+        n109["rwa_calc.engine.sa.guarantor_rw"]
+        n110["rwa_calc.engine.sa.jurisdiction"]
+        n111["rwa_calc.engine.sa.rgla"]
+        n112["rwa_calc.engine.sa.risk_weights"]
+        n113["rwa_calc.engine.sa.rw_adjustments"]
+        n114["rwa_calc.engine.securitisation"]
+        n115["rwa_calc.engine.securitisation.allocator"]
+        n116["rwa_calc.engine.sft"]
+        n117["rwa_calc.engine.sft.fccm"]
+        n118["rwa_calc.engine.slotting"]
+        n119["rwa_calc.engine.slotting.calculator"]
+        n120["rwa_calc.engine.slotting.transforms"]
+        n121["rwa_calc.engine.stages"]
+        n122["rwa_calc.engine.stages._ccr_shared"]
+        n123["rwa_calc.engine.stages.aggregate"]
+        n124["rwa_calc.engine.stages.calc"]
+        n125["rwa_calc.engine.stages.ccr"]
+        n126["rwa_calc.engine.stages.classify"]
+        n127["rwa_calc.engine.stages.classify.approach"]
+        n128["rwa_calc.engine.stages.classify.attributes"]
+        n129["rwa_calc.engine.stages.classify.audit"]
+        n130["rwa_calc.engine.stages.classify.classifier"]
+        n131["rwa_calc.engine.stages.classify.permissions"]
+        n132["rwa_calc.engine.stages.classify.stage"]
+        n133["rwa_calc.engine.stages.classify.subtypes"]
+        n134["rwa_calc.engine.stages.crm"]
+        n135["rwa_calc.engine.stages.equity"]
+        n136["rwa_calc.engine.stages.fx"]
+        n137["rwa_calc.engine.stages.fx.conversion"]
+        n138["rwa_calc.engine.stages.fx.converter"]
+        n139["rwa_calc.engine.stages.hierarchy"]
+        n140["rwa_calc.engine.stages.hierarchy.enrich"]
+        n141["rwa_calc.engine.stages.hierarchy.facility_undrawn"]
+        n142["rwa_calc.engine.stages.hierarchy.graph"]
+        n143["rwa_calc.engine.stages.hierarchy.ratings"]
+        n144["rwa_calc.engine.stages.hierarchy.resolver"]
+        n145["rwa_calc.engine.stages.hierarchy.stage"]
+        n146["rwa_calc.engine.stages.hierarchy.unify"]
+        n147["rwa_calc.engine.stages.re_split"]
+        n148["rwa_calc.engine.stages.re_split.flagging"]
+        n149["rwa_calc.engine.stages.re_split.params"]
+        n150["rwa_calc.engine.stages.re_split.splitter"]
+        n151["rwa_calc.engine.stages.re_split.stage"]
+        n152["rwa_calc.engine.stages.scope"]
+        n153["rwa_calc.engine.stages.scope.resolver"]
+        n154["rwa_calc.engine.stages.scope.stage"]
+        n155["rwa_calc.engine.stages.securitisation"]
+        n156["rwa_calc.engine.stages.sft"]
+        n157["rwa_calc.engine.supporting_factors"]
+        n158["rwa_calc.engine.thresholds"]
+        n159["rwa_calc.engine.utils"]
+        n160["rwa_calc.observability"]
+        n161["rwa_calc.observability.audit_cache"]
+        n162["rwa_calc.observability.context"]
+        n163["rwa_calc.observability.formatters"]
+        n164["rwa_calc.observability.logging_setup"]
+        n165["rwa_calc.reporting"]
+        n166["rwa_calc.reporting.catalog"]
+        n167["rwa_calc.reporting.cellspec"]
+        n168["rwa_calc.reporting.corep"]
+        n169["rwa_calc.reporting.corep.c02"]
+        n170["rwa_calc.reporting.corep.c07"]
+        n171["rwa_calc.reporting.corep.c08"]
+        n172["rwa_calc.reporting.corep.c08_07"]
+        n173["rwa_calc.reporting.corep.c09"]
+        n174["rwa_calc.reporting.corep.c34"]
+        n175["rwa_calc.reporting.corep.crm_substitution"]
+        n176["rwa_calc.reporting.corep.generator"]
+        n177["rwa_calc.reporting.corep.of02"]
+        n178["rwa_calc.reporting.corep.pd_scale"]
+        n179["rwa_calc.reporting.corep.postpass"]
+        n180["rwa_calc.reporting.corep.templates"]
+        n181["rwa_calc.reporting.facts"]
+        n182["rwa_calc.reporting.kernel"]
+        n183["rwa_calc.reporting.kernel.bases"]
+        n184["rwa_calc.reporting.kernel.columns"]
+        n185["rwa_calc.reporting.kernel.excel"]
+        n186["rwa_calc.reporting.kernel.filters"]
+        n187["rwa_calc.reporting.kernel.rows"]
+        n188["rwa_calc.reporting.kernel.sums"]
+        n189["rwa_calc.reporting.lineage"]
+        n190["rwa_calc.reporting.metadata"]
+        n191["rwa_calc.reporting.pillar3"]
+        n192["rwa_calc.reporting.pillar3.ccr"]
+        n193["rwa_calc.reporting.pillar3.cms1"]
+        n194["rwa_calc.reporting.pillar3.cms2"]
+        n195["rwa_calc.reporting.pillar3.cr10"]
+        n196["rwa_calc.reporting.pillar3.cr4"]
+        n197["rwa_calc.reporting.pillar3.cr5"]
+        n198["rwa_calc.reporting.pillar3.cr6"]
+        n199["rwa_calc.reporting.pillar3.cr6a"]
+        n200["rwa_calc.reporting.pillar3.cr7"]
+        n201["rwa_calc.reporting.pillar3.cr7a"]
+        n202["rwa_calc.reporting.pillar3.cr8"]
+        n203["rwa_calc.reporting.pillar3.cr9"]
+        n204["rwa_calc.reporting.pillar3.generator"]
+        n205["rwa_calc.reporting.pillar3.irb_scope"]
+        n206["rwa_calc.reporting.pillar3.ov1"]
+        n207["rwa_calc.reporting.pillar3.sa_scope"]
+        n208["rwa_calc.reporting.pillar3.templates"]
+        n209["rwa_calc.reporting.plans"]
+        n210["rwa_calc.reporting.tieouts"]
+        n211["rwa_calc.reporting.validations"]
+        n212["rwa_calc.reporting.validations.checker"]
+        n213["rwa_calc.reporting.validations.evaluate"]
+        n214["rwa_calc.reporting.validations.rules"]
+        n215["rwa_calc.reporting.validations.scope"]
+        n216["rwa_calc.rulebook"]
+        n217["rwa_calc.rulebook.audit"]
+        n218["rwa_calc.rulebook.compile"]
+        n219["rwa_calc.rulebook.model"]
+        n220["rwa_calc.rulebook.packs"]
+        n221["rwa_calc.rulebook.packs.b31"]
+        n222["rwa_calc.rulebook.packs.common"]
+        n223["rwa_calc.rulebook.packs.crr"]
+        n224["rwa_calc.rulebook.registry"]
+        n225["rwa_calc.rulebook.resolve"]
+        n226["rwa_calc.rulebook.v0"]
+        n227["rwa_calc.ui"]
+        n228["rwa_calc.ui.app"]
+        n229["rwa_calc.ui.app.calculator_state"]
+        n230["rwa_calc.ui.app.main"]
+        n231["rwa_calc.ui.app.output_writer"]
+        n232["rwa_calc.ui.app.progress"]
+        n233["rwa_calc.ui.app.recon_signoff"]
+        n234["rwa_calc.ui.app.recon_state"]
+        n235["rwa_calc.ui.views"]
+        n236["rwa_calc.ui.views.charts"]
+        n237["rwa_calc.ui.views.comparison"]
+        n238["rwa_calc.ui.views.hierarchy"]
+        n239["rwa_calc.ui.views.lineage"]
+        n240["rwa_calc.ui.views.method_split"]
+        n241["rwa_calc.ui.views.reconciliation"]
+        n242["rwa_calc.ui.views.report_templates"]
         n2 --> n21
         n3 --> n2
         n3 --> n21
         n3 --> n22
-        n3 --> n96
-        n3 --> n214
-        n3 --> n223
+        n3 --> n98
+        n3 --> n216
+        n3 --> n225
         n5 --> n4
         n5 --> n21
         n5 --> n25
@@ -343,7 +345,7 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n6 --> n21
         n6 --> n22
         n6 --> n33
-        n6 --> n96
+        n6 --> n98
         n7 --> n4
         n7 --> n9
         n7 --> n11
@@ -359,10 +361,10 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n9 --> n22
         n9 --> n25
         n9 --> n27
-        n9 --> n174
-        n9 --> n179
-        n9 --> n202
-        n9 --> n209
+        n9 --> n176
+        n9 --> n181
+        n9 --> n204
+        n9 --> n211
         n10 --> n8
         n10 --> n11
         n10 --> n14
@@ -379,12 +381,12 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n13 --> n16
         n13 --> n17
         n13 --> n33
-        n13 --> n164
-        n13 --> n174
-        n13 --> n179
-        n13 --> n187
-        n13 --> n202
-        n13 --> n209
+        n13 --> n166
+        n13 --> n176
+        n13 --> n181
+        n13 --> n189
+        n13 --> n204
+        n13 --> n211
         n15 --> n11
         n15 --> n21
         n16 --> n5
@@ -398,10 +400,10 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n16 --> n22
         n16 --> n26
         n16 --> n33
-        n16 --> n93
-        n16 --> n96
-        n16 --> n158
-        n16 --> n214
+        n16 --> n95
+        n16 --> n98
+        n16 --> n160
+        n16 --> n216
         n17 --> n8
         n17 --> n11
         n17 --> n19
@@ -424,8 +426,8 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n26 --> n22
         n26 --> n25
         n26 --> n27
-        n26 --> n69
-        n26 --> n223
+        n26 --> n70
+        n26 --> n225
         n28 --> n21
         n28 --> n24
         n28 --> n25
@@ -433,9 +435,9 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n28 --> n31
         n31 --> n30
         n32 --> n33
-        n34 --> n83
-        n34 --> n93
-        n34 --> n96
+        n34 --> n85
+        n34 --> n95
+        n34 --> n98
         n35 --> n46
         n36 --> n31
         n37 --> n21
@@ -445,11 +447,11 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n39 --> n21
         n39 --> n41
         n39 --> n45
-        n39 --> n216
-        n39 --> n223
+        n39 --> n218
+        n39 --> n225
         n40 --> n25
         n40 --> n33
-        n40 --> n223
+        n40 --> n225
         n44 --> n41
         n44 --> n45
         n46 --> n21
@@ -465,15 +467,15 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n46 --> n42
         n46 --> n43
         n46 --> n44
-        n46 --> n110
-        n46 --> n214
-        n46 --> n223
+        n46 --> n112
+        n46 --> n216
+        n46 --> n225
         n47 --> n22
         n47 --> n31
         n47 --> n33
-        n47 --> n214
         n47 --> n216
-        n47 --> n223
+        n47 --> n218
+        n47 --> n225
         n48 --> n49
         n48 --> n53
         n48 --> n54
@@ -483,25 +485,25 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n48 --> n58
         n48 --> n59
         n48 --> n60
-        n49 --> n216
-        n49 --> n223
-        n50 --> n216
-        n50 --> n223
+        n49 --> n218
+        n49 --> n225
+        n50 --> n218
+        n50 --> n225
         n51 --> n22
-        n51 --> n216
-        n51 --> n223
+        n51 --> n218
+        n51 --> n225
         n52 --> n22
-        n52 --> n216
-        n52 --> n223
+        n52 --> n218
+        n52 --> n225
         n53 --> n31
-        n54 --> n216
-        n54 --> n223
+        n54 --> n218
+        n54 --> n225
         n55 --> n22
         n55 --> n30
         n55 --> n31
         n55 --> n57
-        n55 --> n216
-        n55 --> n223
+        n55 --> n218
+        n55 --> n225
         n56 --> n21
         n56 --> n22
         n56 --> n25
@@ -514,798 +516,809 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n56 --> n55
         n56 --> n57
         n56 --> n59
-        n56 --> n216
-        n56 --> n223
+        n56 --> n218
+        n56 --> n225
         n58 --> n21
         n58 --> n22
         n58 --> n25
         n58 --> n33
-        n59 --> n89
-        n59 --> n216
-        n59 --> n223
+        n59 --> n91
+        n59 --> n218
+        n59 --> n225
         n60 --> n21
         n60 --> n25
         n60 --> n30
         n60 --> n31
         n60 --> n33
-        n60 --> n216
-        n60 --> n223
-        n61 --> n124
-        n62 --> n67
+        n60 --> n218
+        n60 --> n225
+        n61 --> n126
         n62 --> n68
-        n62 --> n71
+        n62 --> n69
+        n62 --> n73
         n63 --> n22
         n63 --> n25
         n63 --> n30
         n63 --> n31
         n63 --> n33
-        n63 --> n64
-        n63 --> n67
-        n63 --> n159
-        n63 --> n214
+        n63 --> n65
+        n63 --> n68
+        n63 --> n161
         n63 --> n216
-        n63 --> n223
-        n64 --> n31
-        n64 --> n92
-        n64 --> n216
-        n64 --> n223
-        n65 --> n22
-        n65 --> n25
-        n65 --> n30
+        n63 --> n218
+        n63 --> n225
+        n64 --> n25
+        n64 --> n65
         n65 --> n31
-        n65 --> n33
-        n65 --> n47
-        n65 --> n77
-        n65 --> n80
-        n65 --> n92
-        n65 --> n157
-        n65 --> n214
-        n65 --> n216
-        n65 --> n223
-        n66 --> n223
-        n67 --> n22
-        n67 --> n30
-        n67 --> n31
-        n67 --> n66
-        n67 --> n214
-        n67 --> n216
-        n67 --> n223
+        n65 --> n94
+        n65 --> n218
+        n65 --> n225
+        n66 --> n22
+        n66 --> n25
+        n66 --> n30
+        n66 --> n31
+        n66 --> n33
+        n66 --> n47
+        n66 --> n65
+        n66 --> n79
+        n66 --> n82
+        n66 --> n94
+        n66 --> n159
+        n66 --> n216
+        n66 --> n218
+        n66 --> n225
+        n67 --> n225
         n68 --> n22
-        n68 --> n25
+        n68 --> n30
         n68 --> n31
-        n68 --> n80
-        n68 --> n157
+        n68 --> n67
         n68 --> n216
-        n68 --> n223
+        n68 --> n218
+        n68 --> n225
         n69 --> n22
         n69 --> n25
-        n69 --> n64
-        n69 --> n92
+        n69 --> n31
+        n69 --> n82
+        n69 --> n159
+        n69 --> n218
+        n69 --> n225
+        n70 --> n22
         n70 --> n25
-        n70 --> n30
-        n71 --> n21
-        n71 --> n22
-        n71 --> n24
+        n70 --> n65
+        n70 --> n94
         n71 --> n25
-        n71 --> n33
-        n71 --> n47
-        n71 --> n63
-        n71 --> n64
-        n71 --> n65
-        n71 --> n67
-        n71 --> n68
-        n71 --> n69
-        n71 --> n70
-        n71 --> n72
-        n71 --> n73
-        n71 --> n74
-        n71 --> n92
-        n71 --> n94
-        n71 --> n110
-        n71 --> n157
-        n71 --> n159
-        n71 --> n214
-        n71 --> n223
+        n71 --> n30
         n72 --> n22
+        n72 --> n30
         n72 --> n33
-        n72 --> n47
-        n72 --> n92
-        n72 --> n214
-        n72 --> n223
+        n72 --> n63
+        n72 --> n216
+        n72 --> n225
+        n73 --> n21
         n73 --> n22
+        n73 --> n24
+        n73 --> n25
         n73 --> n33
-        n73 --> n100
-        n73 --> n105
-        n73 --> n214
+        n73 --> n47
+        n73 --> n63
+        n73 --> n64
+        n73 --> n65
+        n73 --> n66
+        n73 --> n68
+        n73 --> n69
+        n73 --> n70
+        n73 --> n71
+        n73 --> n72
+        n73 --> n74
+        n73 --> n75
+        n73 --> n76
+        n73 --> n94
+        n73 --> n96
+        n73 --> n112
+        n73 --> n159
+        n73 --> n161
         n73 --> n216
-        n73 --> n223
-        n74 --> n25
-        n74 --> n31
+        n73 --> n225
+        n74 --> n22
         n74 --> n33
-        n74 --> n107
-        n75 --> n76
-        n76 --> n216
-        n76 --> n223
-        n77 --> n223
-        n78 --> n79
-        n79 --> n21
-        n79 --> n22
-        n79 --> n25
-        n79 --> n30
-        n79 --> n33
-        n79 --> n87
-        n79 --> n100
-        n79 --> n105
-        n79 --> n214
-        n79 --> n216
-        n79 --> n223
-        n80 --> n223
-        n81 --> n136
-        n83 --> n137
-        n84 --> n86
-        n84 --> n87
-        n85 --> n22
-        n85 --> n25
-        n85 --> n214
-        n85 --> n223
-        n86 --> n22
-        n86 --> n25
-        n86 --> n90
-        n86 --> n155
-        n86 --> n214
-        n86 --> n223
+        n74 --> n47
+        n74 --> n94
+        n74 --> n216
+        n74 --> n225
+        n75 --> n22
+        n75 --> n33
+        n75 --> n102
+        n75 --> n107
+        n75 --> n216
+        n75 --> n218
+        n75 --> n225
+        n76 --> n25
+        n76 --> n31
+        n76 --> n33
+        n76 --> n109
+        n77 --> n78
+        n78 --> n218
+        n78 --> n225
+        n79 --> n225
+        n80 --> n81
+        n81 --> n21
+        n81 --> n22
+        n81 --> n25
+        n81 --> n30
+        n81 --> n33
+        n81 --> n89
+        n81 --> n102
+        n81 --> n107
+        n81 --> n216
+        n81 --> n218
+        n81 --> n225
+        n82 --> n225
+        n83 --> n138
+        n85 --> n139
+        n86 --> n88
+        n86 --> n89
         n87 --> n22
-        n87 --> n33
-        n87 --> n64
-        n87 --> n85
-        n87 --> n89
-        n87 --> n156
-        n87 --> n214
+        n87 --> n25
         n87 --> n216
-        n87 --> n223
+        n87 --> n225
         n88 --> n22
-        n88 --> n65
-        n88 --> n77
-        n88 --> n80
-        n88 --> n87
-        n88 --> n107
-        n88 --> n156
-        n88 --> n214
+        n88 --> n25
+        n88 --> n92
+        n88 --> n157
         n88 --> n216
-        n88 --> n223
+        n88 --> n225
+        n89 --> n22
+        n89 --> n33
+        n89 --> n65
+        n89 --> n87
+        n89 --> n91
+        n89 --> n158
+        n89 --> n216
+        n89 --> n218
+        n89 --> n225
         n90 --> n22
-        n90 --> n25
-        n90 --> n30
-        n90 --> n33
-        n90 --> n85
-        n90 --> n87
-        n90 --> n88
-        n90 --> n156
-        n90 --> n157
-        n90 --> n214
+        n90 --> n66
+        n90 --> n79
+        n90 --> n82
+        n90 --> n89
+        n90 --> n109
+        n90 --> n158
         n90 --> n216
-        n90 --> n223
-        n91 --> n92
-        n92 --> n31
-        n92 --> n157
-        n93 --> n19
-        n93 --> n21
-        n93 --> n24
-        n93 --> n25
-        n93 --> n26
-        n93 --> n28
-        n93 --> n30
-        n93 --> n31
-        n93 --> n157
-        n94 --> n22
-        n94 --> n24
+        n90 --> n218
+        n90 --> n225
+        n92 --> n22
+        n92 --> n25
+        n92 --> n30
+        n92 --> n33
+        n92 --> n87
+        n92 --> n89
+        n92 --> n90
+        n92 --> n158
+        n92 --> n159
+        n92 --> n216
+        n92 --> n218
+        n92 --> n225
+        n93 --> n94
+        n94 --> n31
+        n94 --> n159
+        n95 --> n19
         n95 --> n21
-        n95 --> n22
-        n95 --> n23
         n95 --> n24
         n95 --> n25
         n95 --> n26
-        n95 --> n35
-        n95 --> n71
-        n95 --> n79
-        n95 --> n86
-        n95 --> n101
-        n95 --> n113
-        n95 --> n117
-        n95 --> n124
-        n95 --> n137
-        n95 --> n145
-        n95 --> n158
-        n95 --> n214
-        n96 --> n21
+        n95 --> n28
+        n95 --> n30
+        n95 --> n31
+        n95 --> n159
         n96 --> n22
-        n96 --> n23
-        n96 --> n26
-        n96 --> n28
-        n96 --> n33
-        n96 --> n82
-        n96 --> n93
-        n96 --> n94
-        n96 --> n95
-        n96 --> n98
-        n96 --> n158
-        n96 --> n159
-        n96 --> n214
-        n96 --> n215
-        n97 --> n145
+        n96 --> n24
+        n97 --> n21
+        n97 --> n22
+        n97 --> n23
+        n97 --> n24
+        n97 --> n25
+        n97 --> n26
+        n97 --> n35
+        n97 --> n73
+        n97 --> n81
+        n97 --> n88
+        n97 --> n103
+        n97 --> n115
+        n97 --> n119
+        n97 --> n126
+        n97 --> n139
+        n97 --> n147
+        n97 --> n160
+        n97 --> n216
+        n98 --> n21
+        n98 --> n22
+        n98 --> n23
+        n98 --> n26
+        n98 --> n28
+        n98 --> n33
+        n98 --> n84
         n98 --> n95
-        n98 --> n121
-        n98 --> n122
-        n98 --> n123
-        n98 --> n124
-        n98 --> n132
-        n98 --> n133
-        n98 --> n137
-        n98 --> n145
-        n98 --> n150
-        n98 --> n153
-        n98 --> n154
-        n99 --> n101
-        n100 --> n33
-        n100 --> n105
-        n100 --> n223
-        n101 --> n22
-        n101 --> n25
-        n101 --> n33
-        n101 --> n106
-        n101 --> n110
-        n101 --> n111
-        n101 --> n214
-        n101 --> n223
-        n102 --> n105
-        n102 --> n223
+        n98 --> n96
+        n98 --> n97
+        n98 --> n100
+        n98 --> n160
+        n98 --> n161
+        n98 --> n216
+        n98 --> n217
+        n99 --> n147
+        n100 --> n97
+        n100 --> n123
+        n100 --> n124
+        n100 --> n125
+        n100 --> n126
+        n100 --> n134
+        n100 --> n135
+        n100 --> n139
+        n100 --> n147
+        n100 --> n152
+        n100 --> n155
+        n100 --> n156
+        n101 --> n103
+        n102 --> n33
+        n102 --> n107
+        n102 --> n225
+        n103 --> n22
+        n103 --> n25
         n103 --> n33
-        n103 --> n100
-        n103 --> n105
+        n103 --> n108
+        n103 --> n112
+        n103 --> n113
+        n103 --> n216
+        n103 --> n225
+        n104 --> n107
+        n104 --> n225
         n105 --> n33
-        n105 --> n223
-        n106 --> n22
-        n106 --> n25
-        n106 --> n30
-        n106 --> n155
-        n106 --> n223
+        n105 --> n102
+        n105 --> n107
         n107 --> n33
-        n107 --> n77
-        n107 --> n216
-        n107 --> n223
+        n107 --> n225
+        n108 --> n22
+        n108 --> n25
+        n108 --> n30
+        n108 --> n157
+        n108 --> n225
         n109 --> n33
-        n109 --> n105
-        n110 --> n22
-        n110 --> n30
-        n110 --> n31
-        n110 --> n33
-        n110 --> n80
-        n110 --> n100
-        n110 --> n102
-        n110 --> n103
-        n110 --> n104
-        n110 --> n105
-        n110 --> n107
-        n110 --> n108
-        n110 --> n109
-        n110 --> n214
-        n110 --> n216
-        n110 --> n223
-        n111 --> n22
-        n111 --> n25
+        n109 --> n79
+        n109 --> n218
+        n109 --> n225
         n111 --> n33
-        n111 --> n65
-        n111 --> n77
-        n111 --> n80
         n111 --> n107
-        n111 --> n110
-        n111 --> n214
-        n111 --> n216
-        n111 --> n223
-        n112 --> n113
-        n113 --> n21
+        n112 --> n22
+        n112 --> n30
+        n112 --> n31
+        n112 --> n33
+        n112 --> n82
+        n112 --> n102
+        n112 --> n104
+        n112 --> n105
+        n112 --> n106
+        n112 --> n107
+        n112 --> n109
+        n112 --> n110
+        n112 --> n111
+        n112 --> n216
+        n112 --> n218
+        n112 --> n225
         n113 --> n22
         n113 --> n25
         n113 --> n33
+        n113 --> n66
+        n113 --> n79
+        n113 --> n82
+        n113 --> n109
+        n113 --> n112
+        n113 --> n216
+        n113 --> n218
+        n113 --> n225
         n114 --> n115
         n115 --> n21
-        n115 --> n66
-        n115 --> n223
+        n115 --> n22
+        n115 --> n25
+        n115 --> n33
         n116 --> n117
-        n117 --> n22
-        n117 --> n25
-        n117 --> n118
-        n117 --> n155
-        n117 --> n214
-        n117 --> n223
-        n118 --> n22
-        n118 --> n25
-        n118 --> n111
-        n118 --> n157
-        n118 --> n214
-        n118 --> n216
-        n118 --> n217
-        n118 --> n223
-        n120 --> n21
-        n121 --> n22
-        n121 --> n23
-        n121 --> n24
-        n121 --> n75
-        n121 --> n95
-        n121 --> n214
-        n122 --> n22
-        n122 --> n23
-        n122 --> n24
-        n122 --> n25
-        n122 --> n30
-        n122 --> n33
-        n122 --> n41
-        n122 --> n94
-        n122 --> n95
-        n122 --> n155
-        n122 --> n214
+        n117 --> n21
+        n117 --> n67
+        n117 --> n225
+        n118 --> n119
+        n119 --> n22
+        n119 --> n25
+        n119 --> n120
+        n119 --> n157
+        n119 --> n216
+        n119 --> n225
+        n120 --> n22
+        n120 --> n25
+        n120 --> n113
+        n120 --> n159
+        n120 --> n216
+        n120 --> n218
+        n120 --> n219
+        n120 --> n225
+        n122 --> n21
         n123 --> n22
         n123 --> n23
         n123 --> n24
-        n123 --> n48
-        n123 --> n51
-        n123 --> n52
-        n123 --> n94
-        n123 --> n95
-        n123 --> n120
-        n123 --> n214
-        n124 --> n128
-        n124 --> n130
+        n123 --> n77
+        n123 --> n97
+        n123 --> n216
+        n124 --> n22
+        n124 --> n23
+        n124 --> n24
+        n124 --> n25
+        n124 --> n30
+        n124 --> n33
+        n124 --> n41
+        n124 --> n96
+        n124 --> n97
+        n124 --> n157
+        n124 --> n216
         n125 --> n22
-        n125 --> n30
-        n125 --> n31
-        n125 --> n33
-        n125 --> n80
-        n125 --> n126
-        n125 --> n129
-        n125 --> n156
-        n125 --> n214
-        n125 --> n223
-        n126 --> n22
-        n126 --> n31
-        n126 --> n33
-        n126 --> n77
-        n126 --> n156
-        n126 --> n157
-        n126 --> n214
-        n126 --> n223
-        n127 --> n21
+        n125 --> n23
+        n125 --> n24
+        n125 --> n48
+        n125 --> n51
+        n125 --> n52
+        n125 --> n96
+        n125 --> n97
+        n125 --> n122
+        n125 --> n216
+        n126 --> n130
+        n126 --> n132
         n127 --> n22
-        n127 --> n25
+        n127 --> n30
+        n127 --> n31
         n127 --> n33
-        n127 --> n126
+        n127 --> n82
+        n127 --> n128
         n127 --> n131
-        n127 --> n156
-        n127 --> n214
-        n127 --> n223
-        n128 --> n21
+        n127 --> n158
+        n127 --> n216
+        n127 --> n225
         n128 --> n22
-        n128 --> n24
-        n128 --> n25
-        n128 --> n94
-        n128 --> n125
-        n128 --> n126
-        n128 --> n127
-        n128 --> n129
-        n128 --> n131
-        n128 --> n146
-        n128 --> n214
-        n128 --> n223
+        n128 --> n31
+        n128 --> n33
+        n128 --> n79
+        n128 --> n158
+        n128 --> n159
+        n128 --> n216
+        n128 --> n225
+        n129 --> n21
         n129 --> n22
         n129 --> n25
         n129 --> n33
+        n129 --> n128
+        n129 --> n133
+        n129 --> n158
+        n129 --> n216
+        n129 --> n225
+        n130 --> n21
         n130 --> n22
-        n130 --> n23
-        n130 --> n95
-        n130 --> n159
-        n130 --> n214
+        n130 --> n24
+        n130 --> n25
+        n130 --> n96
+        n130 --> n127
+        n130 --> n128
+        n130 --> n129
+        n130 --> n131
+        n130 --> n133
+        n130 --> n148
+        n130 --> n216
+        n130 --> n225
         n131 --> n22
-        n131 --> n31
+        n131 --> n25
         n131 --> n33
-        n131 --> n87
-        n131 --> n126
-        n131 --> n156
-        n131 --> n157
-        n131 --> n214
-        n131 --> n223
         n132 --> n22
         n132 --> n23
-        n132 --> n95
-        n132 --> n214
+        n132 --> n97
+        n132 --> n161
+        n132 --> n216
         n133 --> n22
-        n133 --> n23
-        n133 --> n95
+        n133 --> n31
+        n133 --> n33
+        n133 --> n89
+        n133 --> n128
+        n133 --> n158
         n133 --> n159
-        n133 --> n214
-        n134 --> n135
-        n134 --> n136
+        n133 --> n216
+        n133 --> n225
+        n134 --> n22
+        n134 --> n23
+        n134 --> n97
+        n134 --> n216
         n135 --> n22
-        n135 --> n136
-        n136 --> n22
-        n137 --> n142
-        n137 --> n143
-        n138 --> n21
-        n138 --> n25
-        n138 --> n77
-        n138 --> n92
-        n138 --> n157
-        n139 --> n21
-        n139 --> n22
-        n139 --> n47
-        n139 --> n107
-        n139 --> n140
-        n139 --> n157
+        n135 --> n23
+        n135 --> n97
+        n135 --> n161
+        n135 --> n216
+        n136 --> n137
+        n136 --> n138
+        n137 --> n22
+        n137 --> n138
+        n138 --> n22
+        n139 --> n144
+        n139 --> n145
         n140 --> n21
-        n140 --> n24
         n140 --> n25
-        n140 --> n33
-        n140 --> n141
-        n140 --> n157
+        n140 --> n79
+        n140 --> n94
+        n140 --> n159
+        n141 --> n21
+        n141 --> n22
+        n141 --> n47
+        n141 --> n109
+        n141 --> n142
+        n141 --> n159
         n142 --> n21
-        n142 --> n22
         n142 --> n24
         n142 --> n25
-        n142 --> n134
-        n142 --> n138
-        n142 --> n139
-        n142 --> n140
-        n142 --> n141
-        n142 --> n144
-        n143 --> n22
-        n143 --> n23
-        n143 --> n24
-        n143 --> n94
-        n143 --> n95
-        n143 --> n113
-        n143 --> n159
-        n143 --> n214
+        n142 --> n33
+        n142 --> n143
+        n142 --> n159
         n144 --> n21
         n144 --> n22
+        n144 --> n24
         n144 --> n25
-        n144 --> n138
-        n144 --> n139
+        n144 --> n136
         n144 --> n140
-        n145 --> n146
-        n145 --> n148
-        n145 --> n149
+        n144 --> n141
+        n144 --> n142
+        n144 --> n143
+        n144 --> n146
+        n145 --> n22
+        n145 --> n23
+        n145 --> n24
+        n145 --> n96
+        n145 --> n97
+        n145 --> n115
+        n145 --> n161
+        n145 --> n216
+        n146 --> n21
         n146 --> n22
-        n146 --> n33
-        n146 --> n214
-        n146 --> n223
-        n147 --> n216
-        n147 --> n223
-        n148 --> n21
+        n146 --> n25
+        n146 --> n140
+        n146 --> n141
+        n146 --> n142
+        n147 --> n148
+        n147 --> n150
+        n147 --> n151
         n148 --> n22
-        n148 --> n24
-        n148 --> n25
         n148 --> n33
-        n148 --> n147
-        n148 --> n214
-        n148 --> n223
-        n149 --> n22
-        n149 --> n23
-        n149 --> n24
-        n149 --> n94
-        n149 --> n95
-        n149 --> n159
-        n149 --> n214
-        n150 --> n151
-        n150 --> n152
-        n151 --> n21
+        n148 --> n216
+        n148 --> n225
+        n149 --> n218
+        n149 --> n225
+        n150 --> n21
+        n150 --> n22
+        n150 --> n24
+        n150 --> n25
+        n150 --> n33
+        n150 --> n149
+        n150 --> n216
+        n150 --> n225
         n151 --> n22
+        n151 --> n23
         n151 --> n24
-        n151 --> n25
-        n151 --> n33
-        n152 --> n22
-        n152 --> n23
-        n152 --> n95
-        n152 --> n151
-        n152 --> n214
+        n151 --> n96
+        n151 --> n97
+        n151 --> n161
+        n151 --> n216
+        n152 --> n153
+        n152 --> n154
+        n153 --> n21
         n153 --> n22
-        n153 --> n23
-        n153 --> n95
-        n153 --> n214
+        n153 --> n24
+        n153 --> n25
+        n153 --> n33
         n154 --> n22
         n154 --> n23
-        n154 --> n24
-        n154 --> n94
-        n154 --> n95
-        n154 --> n115
-        n154 --> n120
-        n154 --> n214
+        n154 --> n97
+        n154 --> n153
+        n154 --> n216
         n155 --> n22
-        n155 --> n25
-        n155 --> n33
-        n155 --> n156
-        n155 --> n214
+        n155 --> n23
+        n155 --> n97
         n155 --> n216
-        n155 --> n223
-        n156 --> n223
-        n158 --> n159
-        n158 --> n160
-        n158 --> n161
-        n158 --> n162
-        n159 --> n22
-        n159 --> n160
-        n162 --> n160
-        n162 --> n161
-        n163 --> n174
-        n163 --> n202
-        n163 --> n208
-        n164 --> n174
-        n164 --> n178
-        n164 --> n202
-        n164 --> n206
-        n165 --> n180
-        n165 --> n188
-        n166 --> n174
-        n166 --> n178
-        n167 --> n21
-        n167 --> n22
-        n167 --> n178
-        n167 --> n180
-        n168 --> n33
-        n168 --> n165
-        n168 --> n173
-        n168 --> n177
-        n168 --> n178
+        n156 --> n22
+        n156 --> n23
+        n156 --> n24
+        n156 --> n96
+        n156 --> n97
+        n156 --> n117
+        n156 --> n122
+        n156 --> n216
+        n157 --> n22
+        n157 --> n25
+        n157 --> n33
+        n157 --> n158
+        n157 --> n216
+        n157 --> n218
+        n157 --> n225
+        n158 --> n225
+        n160 --> n161
+        n160 --> n162
+        n160 --> n163
+        n160 --> n164
+        n161 --> n22
+        n161 --> n162
+        n164 --> n162
+        n164 --> n163
+        n165 --> n176
+        n165 --> n204
+        n165 --> n210
+        n166 --> n176
+        n166 --> n180
+        n166 --> n204
+        n166 --> n208
+        n167 --> n182
+        n167 --> n190
+        n168 --> n176
         n168 --> n180
-        n168 --> n181
-        n168 --> n188
-        n168 --> n207
-        n169 --> n165
-        n169 --> n173
-        n169 --> n176
-        n169 --> n177
-        n169 --> n178
+        n169 --> n21
+        n169 --> n22
         n169 --> n180
-        n169 --> n188
-        n169 --> n207
-        n170 --> n165
-        n170 --> n178
+        n169 --> n182
+        n170 --> n33
+        n170 --> n167
+        n170 --> n175
+        n170 --> n179
         n170 --> n180
-        n170 --> n188
-        n170 --> n207
-        n171 --> n165
-        n171 --> n168
-        n171 --> n177
+        n170 --> n182
+        n170 --> n183
+        n170 --> n190
+        n170 --> n209
+        n171 --> n167
+        n171 --> n175
         n171 --> n178
+        n171 --> n179
         n171 --> n180
-        n171 --> n188
-        n171 --> n207
-        n172 --> n165
-        n172 --> n178
+        n171 --> n182
+        n171 --> n190
+        n171 --> n209
+        n172 --> n167
         n172 --> n180
-        n172 --> n188
-        n172 --> n207
-        n174 --> n21
-        n174 --> n22
-        n174 --> n27
+        n172 --> n182
+        n172 --> n190
+        n172 --> n209
+        n173 --> n167
+        n173 --> n170
+        n173 --> n179
+        n173 --> n180
+        n173 --> n182
+        n173 --> n190
+        n173 --> n209
         n174 --> n167
-        n174 --> n168
-        n174 --> n169
-        n174 --> n170
-        n174 --> n171
-        n174 --> n172
-        n174 --> n175
-        n174 --> n178
-        n174 --> n179
         n174 --> n180
-        n174 --> n188
-        n175 --> n22
-        n175 --> n165
-        n175 --> n178
-        n175 --> n188
-        n175 --> n207
-        n176 --> n178
-        n177 --> n165
-        n177 --> n173
+        n174 --> n182
+        n174 --> n190
+        n174 --> n209
+        n176 --> n21
+        n176 --> n22
+        n176 --> n27
+        n176 --> n169
+        n176 --> n170
+        n176 --> n171
+        n176 --> n172
+        n176 --> n173
+        n176 --> n174
+        n176 --> n177
+        n176 --> n180
+        n176 --> n181
+        n176 --> n182
+        n176 --> n190
+        n177 --> n22
+        n177 --> n167
         n177 --> n180
-        n179 --> n0
-        n179 --> n164
-        n179 --> n174
-        n179 --> n202
-        n180 --> n181
-        n180 --> n182
-        n180 --> n183
-        n180 --> n184
-        n180 --> n185
-        n180 --> n186
-        n184 --> n182
-        n187 --> n165
-        n187 --> n168
-        n187 --> n169
-        n187 --> n170
-        n187 --> n171
-        n187 --> n172
-        n187 --> n175
-        n187 --> n180
-        n187 --> n188
-        n187 --> n190
-        n187 --> n191
-        n187 --> n192
-        n187 --> n193
-        n187 --> n194
-        n187 --> n195
-        n187 --> n196
-        n187 --> n197
-        n187 --> n198
-        n187 --> n199
-        n187 --> n200
-        n187 --> n201
-        n187 --> n204
-        n187 --> n207
-        n188 --> n21
-        n188 --> n217
+        n177 --> n190
+        n177 --> n209
+        n178 --> n180
+        n179 --> n167
+        n179 --> n175
+        n179 --> n182
+        n181 --> n0
+        n181 --> n166
+        n181 --> n176
+        n181 --> n204
+        n182 --> n183
+        n182 --> n184
+        n182 --> n185
+        n182 --> n186
+        n182 --> n187
+        n182 --> n188
+        n186 --> n184
+        n189 --> n167
+        n189 --> n170
+        n189 --> n171
+        n189 --> n172
+        n189 --> n173
+        n189 --> n174
+        n189 --> n177
+        n189 --> n182
+        n189 --> n190
+        n189 --> n192
+        n189 --> n193
+        n189 --> n194
+        n189 --> n195
+        n189 --> n196
+        n189 --> n197
+        n189 --> n198
+        n189 --> n199
+        n189 --> n200
+        n189 --> n201
         n189 --> n202
-        n190 --> n165
-        n190 --> n180
-        n190 --> n188
-        n190 --> n206
-        n190 --> n207
-        n191 --> n165
-        n191 --> n188
-        n191 --> n206
-        n191 --> n207
-        n192 --> n165
-        n192 --> n188
-        n192 --> n191
-        n192 --> n206
-        n192 --> n207
-        n193 --> n33
-        n193 --> n165
-        n193 --> n188
-        n193 --> n203
-        n193 --> n206
-        n193 --> n207
-        n194 --> n165
-        n194 --> n188
-        n194 --> n205
-        n194 --> n206
-        n194 --> n207
-        n195 --> n165
-        n195 --> n188
+        n189 --> n203
+        n189 --> n206
+        n189 --> n209
+        n190 --> n21
+        n190 --> n219
+        n191 --> n204
+        n192 --> n167
+        n192 --> n182
+        n192 --> n190
+        n192 --> n208
+        n192 --> n209
+        n193 --> n167
+        n193 --> n190
+        n193 --> n208
+        n193 --> n209
+        n194 --> n167
+        n194 --> n190
+        n194 --> n193
+        n194 --> n208
+        n194 --> n209
+        n195 --> n33
+        n195 --> n167
+        n195 --> n190
         n195 --> n205
-        n195 --> n206
-        n195 --> n207
-        n196 --> n165
-        n196 --> n188
-        n196 --> n203
-        n196 --> n206
+        n195 --> n208
+        n195 --> n209
+        n196 --> n167
+        n196 --> n190
         n196 --> n207
-        n197 --> n165
-        n197 --> n188
-        n197 --> n206
+        n196 --> n208
+        n196 --> n209
+        n197 --> n167
+        n197 --> n190
         n197 --> n207
-        n198 --> n165
-        n198 --> n188
-        n198 --> n206
-        n198 --> n207
-        n199 --> n165
-        n199 --> n188
-        n199 --> n206
-        n199 --> n207
-        n200 --> n165
-        n200 --> n180
-        n200 --> n188
-        n200 --> n206
-        n200 --> n207
-        n201 --> n165
-        n201 --> n188
-        n201 --> n206
-        n201 --> n207
-        n202 --> n21
-        n202 --> n27
-        n202 --> n179
-        n202 --> n180
-        n202 --> n188
+        n197 --> n208
+        n197 --> n209
+        n198 --> n167
+        n198 --> n190
+        n198 --> n205
+        n198 --> n208
+        n198 --> n209
+        n199 --> n167
+        n199 --> n190
+        n199 --> n208
+        n199 --> n209
+        n200 --> n167
+        n200 --> n190
+        n200 --> n208
+        n200 --> n209
+        n201 --> n167
+        n201 --> n190
+        n201 --> n208
+        n201 --> n209
+        n202 --> n167
+        n202 --> n182
         n202 --> n190
-        n202 --> n191
-        n202 --> n192
-        n202 --> n193
-        n202 --> n194
-        n202 --> n195
-        n202 --> n196
-        n202 --> n197
-        n202 --> n198
-        n202 --> n199
-        n202 --> n200
-        n202 --> n201
-        n202 --> n204
-        n202 --> n206
+        n202 --> n208
+        n202 --> n209
+        n203 --> n167
+        n203 --> n190
+        n203 --> n208
+        n203 --> n209
         n204 --> n21
-        n204 --> n165
-        n204 --> n188
+        n204 --> n27
+        n204 --> n181
+        n204 --> n182
+        n204 --> n190
+        n204 --> n192
+        n204 --> n193
+        n204 --> n194
+        n204 --> n195
+        n204 --> n196
+        n204 --> n197
+        n204 --> n198
+        n204 --> n199
+        n204 --> n200
+        n204 --> n201
+        n204 --> n202
+        n204 --> n203
         n204 --> n206
-        n204 --> n207
-        n207 --> n165
-        n207 --> n188
-        n208 --> n25
-        n208 --> n33
-        n208 --> n174
-        n208 --> n202
-        n209 --> n210
-        n209 --> n211
-        n209 --> n212
-        n209 --> n213
+        n204 --> n208
+        n206 --> n21
+        n206 --> n167
+        n206 --> n190
+        n206 --> n208
+        n206 --> n209
+        n209 --> n167
+        n209 --> n190
         n210 --> n25
         n210 --> n33
-        n210 --> n174
-        n210 --> n202
-        n210 --> n211
-        n210 --> n212
-        n210 --> n213
+        n210 --> n176
+        n210 --> n204
         n211 --> n212
         n211 --> n213
-        n213 --> n174
-        n213 --> n202
-        n213 --> n212
-        n214 --> n224
-        n215 --> n223
-        n216 --> n217
-        n219 --> n33
-        n219 --> n217
-        n220 --> n33
-        n220 --> n217
+        n211 --> n214
+        n211 --> n215
+        n212 --> n25
+        n212 --> n33
+        n212 --> n176
+        n212 --> n204
+        n212 --> n213
+        n212 --> n214
+        n212 --> n215
+        n213 --> n214
+        n213 --> n215
+        n215 --> n176
+        n215 --> n204
+        n215 --> n214
+        n216 --> n226
+        n217 --> n225
+        n218 --> n219
         n221 --> n33
-        n221 --> n217
+        n221 --> n219
         n222 --> n33
-        n223 --> n217
-        n223 --> n222
-        n224 --> n22
+        n222 --> n219
+        n223 --> n33
+        n223 --> n219
         n224 --> n33
-        n224 --> n222
-        n224 --> n223
-        n228 --> n3
-        n228 --> n10
-        n228 --> n11
-        n228 --> n12
-        n228 --> n13
-        n228 --> n14
-        n228 --> n15
-        n228 --> n16
-        n228 --> n17
-        n228 --> n21
-        n228 --> n22
-        n228 --> n33
-        n228 --> n93
-        n228 --> n158
-        n228 --> n164
-        n228 --> n187
-        n228 --> n227
-        n228 --> n229
-        n228 --> n230
-        n228 --> n231
-        n228 --> n232
-        n228 --> n234
-        n228 --> n235
-        n228 --> n236
-        n228 --> n237
-        n228 --> n238
-        n228 --> n239
-        n228 --> n240
-        n229 --> n11
-        n229 --> n27
-        n230 --> n98
-        n235 --> n21
-        n237 --> n187
-        n237 --> n240
-        n238 --> n234
-        n239 --> n4
-        n239 --> n5
-        n239 --> n11
-        n239 --> n231
-        n239 --> n238
-        n240 --> n164
-        n240 --> n174
-        n240 --> n187
-        n240 --> n202
+        n225 --> n219
+        n225 --> n224
+        n226 --> n22
+        n226 --> n33
+        n226 --> n224
+        n226 --> n225
+        n230 --> n3
+        n230 --> n10
+        n230 --> n11
+        n230 --> n12
+        n230 --> n13
+        n230 --> n14
+        n230 --> n15
+        n230 --> n16
+        n230 --> n17
+        n230 --> n21
+        n230 --> n22
+        n230 --> n33
+        n230 --> n95
+        n230 --> n160
+        n230 --> n166
+        n230 --> n189
+        n230 --> n229
+        n230 --> n231
+        n230 --> n232
+        n230 --> n233
+        n230 --> n234
+        n230 --> n236
+        n230 --> n237
+        n230 --> n238
+        n230 --> n239
+        n230 --> n240
+        n230 --> n241
+        n230 --> n242
+        n231 --> n11
+        n231 --> n27
+        n232 --> n100
+        n237 --> n21
+        n239 --> n189
+        n239 --> n242
+        n240 --> n236
+        n241 --> n4
+        n241 --> n5
+        n241 --> n11
+        n241 --> n233
+        n241 --> n240
+        n242 --> n166
+        n242 --> n176
+        n242 --> n189
+        n242 --> n204
         classDef first_party fill:#e8f0fe,stroke:#1a73e8,color:#202124
-        class n0,n1,n2,n3,n4,n5,n6,n7,n8,n9,n10,n11,n12,n13,n14,n15,n16,n17,n18,n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,n30,n31,n32,n33,n34,n35,n36,n37,n38,n39,n40,n41,n42,n43,n44,n45,n46,n47,n48,n49,n50,n51,n52,n53,n54,n55,n56,n57,n58,n59,n60,n61,n62,n63,n64,n65,n66,n67,n68,n69,n70,n71,n72,n73,n74,n75,n76,n77,n78,n79,n80,n81,n82,n83,n84,n85,n86,n87,n88,n89,n90,n91,n92,n93,n94,n95,n96,n97,n98,n99,n100,n101,n102,n103,n104,n105,n106,n107,n108,n109,n110,n111,n112,n113,n114,n115,n116,n117,n118,n119,n120,n121,n122,n123,n124,n125,n126,n127,n128,n129,n130,n131,n132,n133,n134,n135,n136,n137,n138,n139,n140,n141,n142,n143,n144,n145,n146,n147,n148,n149,n150,n151,n152,n153,n154,n155,n156,n157,n158,n159,n160,n161,n162,n163,n164,n165,n166,n167,n168,n169,n170,n171,n172,n173,n174,n175,n176,n177,n178,n179,n180,n181,n182,n183,n184,n185,n186,n187,n188,n189,n190,n191,n192,n193,n194,n195,n196,n197,n198,n199,n200,n201,n202,n203,n204,n205,n206,n207,n208,n209,n210,n211,n212,n213,n214,n215,n216,n217,n218,n219,n220,n221,n222,n223,n224,n225,n226,n227,n228,n229,n230,n231,n232,n233,n234,n235,n236,n237,n238,n239,n240 first_party
+        class n0,n1,n2,n3,n4,n5,n6,n7,n8,n9,n10,n11,n12,n13,n14,n15,n16,n17,n18,n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,n30,n31,n32,n33,n34,n35,n36,n37,n38,n39,n40,n41,n42,n43,n44,n45,n46,n47,n48,n49,n50,n51,n52,n53,n54,n55,n56,n57,n58,n59,n60,n61,n62,n63,n64,n65,n66,n67,n68,n69,n70,n71,n72,n73,n74,n75,n76,n77,n78,n79,n80,n81,n82,n83,n84,n85,n86,n87,n88,n89,n90,n91,n92,n93,n94,n95,n96,n97,n98,n99,n100,n101,n102,n103,n104,n105,n106,n107,n108,n109,n110,n111,n112,n113,n114,n115,n116,n117,n118,n119,n120,n121,n122,n123,n124,n125,n126,n127,n128,n129,n130,n131,n132,n133,n134,n135,n136,n137,n138,n139,n140,n141,n142,n143,n144,n145,n146,n147,n148,n149,n150,n151,n152,n153,n154,n155,n156,n157,n158,n159,n160,n161,n162,n163,n164,n165,n166,n167,n168,n169,n170,n171,n172,n173,n174,n175,n176,n177,n178,n179,n180,n181,n182,n183,n184,n185,n186,n187,n188,n189,n190,n191,n192,n193,n194,n195,n196,n197,n198,n199,n200,n201,n202,n203,n204,n205,n206,n207,n208,n209,n210,n211,n212,n213,n214,n215,n216,n217,n218,n219,n220,n221,n222,n223,n224,n225,n226,n227,n228,n229,n230,n231,n232,n233,n234,n235,n236,n237,n238,n239,n240,n241,n242 first_party
     ```
 

@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - (Next release changes will go here)
 
+### Changed
+- (Next release changes will go here)
+
+---
+
+## [0.3.24] - 2026-08-05
+
 ### Fixed
 - **Guaranteed exposures published their collateral once per leg.** CRM physically
   splits a guaranteed exposure into `__G_<guarantor>` and `__REM` legs, but the

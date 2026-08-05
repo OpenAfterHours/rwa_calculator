@@ -588,6 +588,19 @@ def _optional_country(column: str) -> pl.Expr:
     return pl.coalesce(cs.by_name(column, require_all=False), pl.lit(None, dtype=pl.String))
 
 
+def _optional_amount(column: str) -> pl.Expr:
+    """``column`` where the frame has it, a typed null Float64 where it does not.
+
+    The amount-column twin of :func:`_optional_country`, and for the same
+    reason: ``_add_reporting_projection`` is exercised directly on MINIMAL
+    frames (``tests/contracts/test_r1_gross_carrier_edge.py``), so reading a
+    declared-but-absent carrier as a bare ``pl.col`` would widen the
+    projection's input contract to every column it names. A present-but-null
+    value stays null — the selector only covers absence.
+    """
+    return pl.coalesce(cs.by_name(column, require_all=False), pl.lit(None, dtype=pl.Float64))
+
+
 def _beneficial_gate() -> pl.Expr:
     """True where a guarantee actually substituted; null/False where it did NOT.
 
@@ -853,6 +866,37 @@ def _add_reporting_projection(lf: pl.LazyFrame) -> pl.LazyFrame:
       populated. CCR / settlement legs are outside the on/off-BS credit-risk
       gross scope, so both sides are null there (their EAD/RWEA still report).
       CRR Art. 111 SA / Art. 166 IRB.
+    - ``reporting_crm_lgd_financial`` / ``_real_estate`` / ``_other_physical`` /
+      ``_receivables`` (W5) — the four "CRM techniques taken into account in LGD
+      estimates" amounts (COREP C 08.01/02 cols 0180/0190/0200/0210), with the
+      METHOD-DEPENDENT basis resolved here, once, so no template re-derives it:
+      an AIRB leg reports the ESTIMATED MARKET VALUE, every other leg the
+      ADJUSTED value C_i (PS1/26 Annex II p.108 "where exposures are subject to
+      the Foundation Collateral Method … the adjusted value of collateral Ci …
+      where exposures are subject to the AIRB approach … the estimated market
+      value"; CRR Annex II p.101 keys the same split on "where own estimates of
+      LGD are (not) used" — CRR Art. 181(1)(e)-(f)). The discriminator is
+      ``approach_applied``, NOT the post-substitution twin, because the C 08
+      sheets themselves key on ``reporting_approach_origin``: resolving the
+      basis on the post twin would report a market-value figure on a sheet
+      selected by the origin approach. The financial carrier folds cash on
+      deposit in (defect D4): ``collateral_category_expr`` routes cash/deposit
+      to its own category ahead of financial, but Art. 197(1)(a) makes it
+      eligible financial collateral and col 0180 is where it belongs — the
+      Art. 231 waterfall already groups the two together. The fold mirrors
+      ``reporting_gross_on_bs``'s two-component convention: a null component
+      counts as 0, but BOTH null stays null.
+    - ``reporting_ofcp_lgd_cash_deposit`` / ``_life_insurance`` /
+      ``reporting_ofcp_substitution`` (RD-8) — plain aliases of the three
+      Art. 200(1) "other funded credit protection" amounts the CRM stage has
+      ALREADY routed. Whether a leg's protection reports as an Art. 232
+      guarantee (col 0060) or under the AIRB LGD Modelling Collateral Method
+      (cols 0171/0172) turns on the run-level ``AIRBCollateralMethod``
+      election, which never reaches a template — so ``engine/crm/``, holding
+      the config and the pack, decides once and the projection adds no logic
+      here. The three are mutually exclusive by construction, which is what
+      makes the ``{c0170} = {c0171}+{c0172}+{c0173}`` identity and the
+      0060/0171-0172 exclusivity structural rather than conventional.
     - ``guarantee_rwa_benefit`` (Phase 7 decision F8, recorded) — the additive
       per-leg Art. 235/236 substitution relief:
       ``ead_final x guarantee_benefit_rw`` = leg EAD x (borrower-basis RW -
@@ -945,6 +989,11 @@ def _add_reporting_projection(lf: pl.LazyFrame) -> pl.LazyFrame:
         )
         .otherwise(pl.lit(None, dtype=pl.Float64))
     )
+    # The method-dependent CRM-in-LGD basis (COREP C 08.01/02 cols 0180-0210).
+    # See the docstring: AIRB legs report the estimated market value, every
+    # other leg the adjusted value C_i, keyed on the ORIGIN approach because
+    # that is the approach the C 08 sheets themselves are selected by.
+    crm_lgd_financial, crm_lgd_re, crm_lgd_other_physical, crm_lgd_receivables = _crm_lgd_carriers()
     off_bs_carrier = (
         pl.when(pl.col("exposure_type") == "contingent")
         .then(pl.col("nominal_amount").clip(lower_bound=0.0))
@@ -992,6 +1041,49 @@ def _add_reporting_projection(lf: pl.LazyFrame) -> pl.LazyFrame:
         pl.col("undrawn_amount").clip(lower_bound=0.0).alias("reporting_gross_undrawn"),
         on_bs_carrier.alias("reporting_gross_on_bs"),
         off_bs_carrier.alias("reporting_gross_off_bs"),
+        # CRM techniques taken into account in LGD estimates, on the
+        # method-resolved basis (COREP C 08.01/02 cols 0180/0190/0200/0210).
+        crm_lgd_financial.alias("reporting_crm_lgd_financial"),
+        crm_lgd_re.alias("reporting_crm_lgd_real_estate"),
+        crm_lgd_other_physical.alias("reporting_crm_lgd_other_physical"),
+        crm_lgd_receivables.alias("reporting_crm_lgd_receivables"),
+        # RD-8: plain aliases of the three already-routed Art. 200(1) amounts.
+        _optional_amount("ofcp_lgd_cash_deposit").alias("reporting_ofcp_lgd_cash_deposit"),
+        _optional_amount("ofcp_lgd_life_insurance").alias("reporting_ofcp_lgd_life_insurance"),
+        _optional_amount("ofcp_substitution_amount").alias("reporting_ofcp_substitution"),
+    )
+
+
+def _crm_lgd_carriers() -> tuple[pl.Expr, pl.Expr, pl.Expr, pl.Expr]:
+    """The four method-resolved CRM-in-LGD amounts (financial, RE, other
+    physical, receivables) — see :func:`_add_reporting_projection`.
+
+    An AIRB leg reports the estimated market value, every other leg the
+    adjusted value C_i (CRR Art. 181(1)(e)-(f); PS1/26 Annex II p.108). The
+    financial amount folds cash on deposit in — Art. 197(1)(a) eligible
+    financial collateral, defect D4.
+    """
+    is_airb = pl.col("approach_applied") == ApproachType.AIRB.value
+
+    def basis(adjusted: str, market: str) -> pl.Expr:
+        return pl.when(is_airb).then(_optional_amount(market)).otherwise(_optional_amount(adjusted))
+
+    financial = basis("collateral_financial_value", "collateral_financial_market_value")
+    cash = basis("collateral_cash_value", "collateral_cash_market_value")
+    # Two-component fold, mirroring ``reporting_gross_on_bs``: sum_horizontal
+    # counts a null component as 0, and the both-null guard keeps a leg whose
+    # collateral was never computed null (never fill Float nulls to 0.0 —
+    # anti-conservative).
+    financial_with_cash = (
+        pl.when(financial.is_null() & cash.is_null())
+        .then(pl.lit(None, dtype=pl.Float64))
+        .otherwise(pl.sum_horizontal(financial, cash))
+    )
+    return (
+        financial_with_cash,
+        basis("collateral_re_value", "collateral_re_market_value"),
+        basis("collateral_other_physical_value", "collateral_other_physical_market_value"),
+        basis("collateral_receivables_value", "collateral_receivables_market_value"),
     )
 
 

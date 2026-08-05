@@ -26,6 +26,14 @@ Cell semantics (recorded decisions, this slice):
   collateral-allocation sum by the row EAD x100 (b financial, d immovable
   property, e receivables, f other physical, k guarantees); c = d + e + f
   (null when all are zero, the imperative convention).
+- The four funded-collateral numerators (b/d/e/f, and so c) are "capped at the
+  individual exposure value" — the cap binds PER LEG, before the ratio sums it,
+  via the derived ``cr7a_capped_*`` columns. Capping the summed numerator
+  against the summed EAD is a DIFFERENT computation: it lets an
+  over-collateralised leg subsidise an under-collateralised one on the same
+  row. Column k (guarantees) carries no such clause in either instruction set
+  and stays uncapped, as does COREP C 08.01/02 cols 0180-0210 reading the same
+  carriers — the cap is recorded per template, not derived once (RD-2).
 - Columns m and n are BOTH the actual Sum of ``rwa_final`` — the "RWEA
   without substitution effects" (m) vs "with substitution effects" (n)
   distinction the instructions draw needs a hypothetical no-substitution
@@ -86,6 +94,22 @@ _PCT_SOURCES: dict[str, str] = {
     "k": "guaranteed_portion",
 }
 
+# The sources whose numerator the instructions cap at the individual exposure
+# value (cols b/d/e/f — the clause repeats verbatim per column and per approach
+# limb), reported through the derived per-leg column below. The UFCP source
+# (col k) carries no cap clause and is absent here.
+_CAPPED_SOURCES: tuple[str, ...] = (
+    "collateral_financial_value",
+    "collateral_re_value",
+    "collateral_receivables_value",
+    "collateral_other_physical_value",
+)
+
+# Prefix of the derived per-leg capped numerators added by
+# ``_with_capped_collateral`` (the module-owned derived-column pattern —
+# cf. ``cr5_rw_bucket``).
+_CAPPED_PREFIX = "cr7a_capped_"
+
 
 def _other_collateral(cells: Mapping[str, float | None], _prior: bool) -> float | None:
     """Column c = d + e + f, null when every component is zero/absent."""
@@ -109,8 +133,19 @@ def _row_cells(row: P3Row) -> dict[str, CellSpec] | None:
         "n": CellSpec(Sum("rwa_final"), predicate=member),
     }
     for col_ref, source in _PCT_SOURCES.items():
-        cells[col_ref] = CellSpec(Ratio(source, "reporting_ead", scale=100.0), predicate=member)
+        cells[col_ref] = CellSpec(
+            Ratio(_numerator(source), "reporting_ead", scale=100.0), predicate=member
+        )
     return cells
+
+
+def _numerator(source: str) -> str:
+    """The ratio numerator for one collateral source.
+
+    The derived per-leg capped column where the instructions cap the amount at
+    the individual exposure value, else the raw carrier.
+    """
+    return f"{_CAPPED_PREFIX}{source}" if source in _CAPPED_SOURCES else source
 
 
 @cites("CRR Art. 453")
@@ -157,7 +192,8 @@ def cr7a_plans(
     IDENTICALLY (the origin approach). The plan frame is the FULL sealed ledger
     — each spec's own ``approaches_origin`` predicate narrows it per sheet — and
     CR7-A carries no "(-)"-labelled deduction column, so ``negative_cols`` is
-    empty.
+    empty. The plan frame carries the derived ``cr7a_capped_*`` numerators, so
+    the collateral cells' bindings read columns the frame holds.
     """
     if (
         "ead_final" not in cols
@@ -166,7 +202,7 @@ def cr7a_plans(
     ):
         errors.append("CR7-A: missing required columns")
         return {}
-    data = results.collect()
+    data = _with_capped_collateral(results, cols).collect()
     plans: dict[str, SheetPlan] = {}
     for approach, rows in _APPROACH_ROWS:
         if data.filter(pl.col("reporting_approach_origin") == approach).height == 0:
@@ -195,3 +231,31 @@ def generate_cr7a(
         approach: execute(plan.spec, plan.frame, plan.ctx)
         for approach, plan in cr7a_plans(results, cols, framework, errors).items()
     }
+
+
+def _with_capped_collateral(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:
+    """Add the per-leg capped collateral numerators ``cr7a_capped_*``.
+
+    PS1/26 Annex XXII / the CRR Pillar 3 IRB instructions cap each collateral
+    amount "at the individual exposure value", so the cap binds on the LEG,
+    before the ratio sums it — ``Ratio`` divides sum(numerator) by
+    sum(denominator), and capping the aggregate instead would let an
+    over-collateralised leg subsidise an under-collateralised one on the same
+    row. ``when(value > ead)`` rather than ``min_horizontal`` (which drops
+    nulls, so a null valuation would report as the full EAD): a null valuation
+    stays null and a leg with no sealed EAD stays uncapped. A source the frame
+    does not carry is skipped — its column stays absent and the cell resolves
+    null exactly as the raw binding did.
+    """
+    if "reporting_ead" not in cols:
+        return results
+    ead = pl.col("reporting_ead")
+    capped = [
+        pl.when(pl.col(source) > ead)
+        .then(ead)
+        .otherwise(pl.col(source))
+        .alias(f"{_CAPPED_PREFIX}{source}")
+        for source in _CAPPED_SOURCES
+        if source in cols
+    ]
+    return results.with_columns(capped) if capped else results

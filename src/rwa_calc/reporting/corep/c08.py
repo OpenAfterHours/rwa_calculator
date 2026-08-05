@@ -112,19 +112,18 @@ Cell semantics (recorded decisions, this slice):
   exactly as C 08.03/05 already did — a slotting-only class emits NO C 08.02
   sheet at all.
 - Col 0060 ("OTHER FUNDED CREDIT PROTECTION") reads the Art. 232(1) / Art. 200(1)
-  carriers ONLY — protection treated as a guarantee, which acts on the obligor's
-  PD through substitution. The Art. 199 collateral (immovable property,
-  receivables, other physical) is NOT in this column: it is an LGD mitigant, and
-  Annex II routes it by name to the CRM-in-LGD-estimates block at cols
-  0190/0200/0210, where ``_value_cells`` already reports it. Summing it here too
-  was a DOUBLE COUNT that drove col 0090 negative — the same defect and the same
-  remedy as C 07.00 col 0080. The block (0040/0050/0060) is additionally CAPPED
-  PER LEG at the original exposure pre-conversion factors, the excess shed
-  proportionally (``irb_protection_exprs``, C 07.00's ``_block_cap_scale``
-  precedent) — Annex II mandates that twice, though it is inert once the Art. 199
-  collateral is out. Col 0070 (the outflow) is the already-capped SUBTOTAL of
-  that block and so is not capped again. See the helper for the quoted
-  instructions behind each of these.
+  protection treated as a guarantee, which acts on the obligor's PD through
+  substitution. The Art. 199 collateral is NOT in this column — it is an LGD
+  mitigant, Annex II routes it by name to cols 0190/0200/0210, and summing it
+  here too was a DOUBLE COUNT that drove col 0090 negative. Cols 0040/0050/0060
+  are CAPPED PER LEG at the original exposure pre-conversion factors, the excess
+  shed proportionally; col 0070 is that block's already-capped SUBTOTAL and is
+  not capped again. Full reasoning: ``crm_substitution.irb_protection_exprs``.
+- THE CRM-IN-LGD BLOCK READS SEALED CARRIERS ONLY (cols 0060/0170-0173, 0180-
+  0210). The Art. 200(1) route choice and the method-dependent basis of 0180-0210
+  (AIRB market value vs FIRB adjusted Ci) are decided ONCE in ``engine/crm``, so
+  no framework gate lives here; col 0060 is then block-capped like 0040/0050, and
+  0180-0210 carry NO CAP. See ``crm_substitution.IRB_OFCP_CARRIERS``.
 - THE TWO CRM BLOCKS ARE MUTUALLY EXCLUSIVE, so cols 0150/0160 report a constant
   0.0 instead of restating cols 0040/0050 (which they did, behind the very same
   ``protection_type`` predicate, publishing every guarantee twice per sheet).
@@ -348,6 +347,7 @@ from rwa_calc.reporting.corep.crm_substitution import (
     C08_01_NETTING_EXEMPT_ROWS,
     IRB_BLOCK_COL,
     IRB_OFCP_CARRIERS,
+    OFCP_LGD_CARRIERS,
     InflowBreakdown,
     crm_waterfall,
     irb_origin_inflows,
@@ -745,10 +745,9 @@ def _value_cells(  # noqa: C901, PLR0915 - the full C 08.01/02 column surface
         return RowPredicate(equals=(*post, *extra))
 
     lgd_col = pick(cols, "lgd_floored", "lgd_input")
-    # The substitution block (0040/0050/0060) reads the Annex II-capped twins
-    # ``irb_protection_exprs`` derives; col 0070 (the outflow) stays RAW — see
-    # that helper for why it is outside the cap block. A frame with no raw
-    # carrier gets no twin, so the raw name is kept and behaviour is unchanged.
+    # Cols 0040/0050 read the Annex II-capped twin ``irb_protection_exprs``
+    # derives; col 0070 (the outflow) stays RAW — see that helper. A frame with
+    # no raw carrier gets no twin, so the raw name is kept and behaviour holds.
     gp_col = "c08_prot_guaranteed" if "guaranteed_portion" in cols else "guaranteed_portion"
     prot_cols = tuple(f"c08_prot_{col}" if col in cols else col for col in IRB_OFCP_CARRIERS)
     cells: dict[str, CellSpec] = {
@@ -825,18 +824,19 @@ def _value_cells(  # noqa: C901, PLR0915 - the full C 08.01/02 column surface
         "0130": CellSpec(Formula(refs=(), fn=_const(None))),
         "0140": _lfse_cell(cols, lambda: Sum(ead_col), post),
         # 0150/0160: the CRM-in-LGD twins of cols 0040/0050, mutually exclusive
-        # with them and empty on today's calculator (module docstring). The
-        # recorded constant 0.0 is the convention cols 0170-0173 already follow.
+        # with them and empty on today's calculator (module docstring).
         "0150": CellSpec(Formula(refs=(), fn=_const(0.0))),
         "0160": CellSpec(Formula(refs=(), fn=_const(0.0))),
-        "0170": CellSpec(Formula(refs=(), fn=_const(0.0))),
-        "0171": CellSpec(Formula(refs=(), fn=_const(0.0))),
-        "0172": CellSpec(Formula(refs=(), fn=_const(0.0))),
+        # 0170 subtotals its components' own carriers; 0173 has no carrier.
+        "0170": CellSpec(SafeSum(OFCP_LGD_CARRIERS), predicate=member),
+        "0171": CellSpec(Sum("reporting_ofcp_lgd_cash_deposit"), predicate=member),
+        "0172": CellSpec(Sum("reporting_ofcp_lgd_life_insurance"), predicate=member),
         "0173": CellSpec(Formula(refs=(), fn=_const(0.0))),
-        "0180": CellSpec(Sum("collateral_financial_value"), predicate=member),
-        "0190": CellSpec(Sum("collateral_re_value"), predicate=member),
-        "0200": CellSpec(Sum("collateral_other_physical_value"), predicate=member),
-        "0210": CellSpec(Sum("collateral_receivables_value"), predicate=member),
+        # Sealed, method-resolved and UNCAPPED — module docstring.
+        "0180": CellSpec(Sum("reporting_crm_lgd_financial"), predicate=member),
+        "0190": CellSpec(Sum("reporting_crm_lgd_real_estate"), predicate=member),
+        "0200": CellSpec(Sum("reporting_crm_lgd_other_physical"), predicate=member),
+        "0210": CellSpec(Sum("reporting_crm_lgd_receivables"), predicate=member),
         "0220": CellSpec(Sum("double_default_unfunded_protection"), predicate=member),
         "0230": (
             CellSpec(WeightedAvg(lgd_col, weight=ead_col), predicate=member, empty_cell="null")

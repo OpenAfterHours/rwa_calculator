@@ -181,7 +181,10 @@ class TestOtherCollateralColumnsAlsoCapped:
         self, generator: Pillar3Generator, column_ref: str, collateral_field: str
     ) -> None:
         # Arrange
-        data = _make_frame([_airb_row("EXP1", ead=300_000.0, **{collateral_field: 500_000.0})])
+        # Dict-merge rather than ``**kwargs`` unpacking: a dynamically-keyed
+        # mapping cannot be matched against named parameters by the checker.
+        row = _airb_row("EXP1", ead=300_000.0) | {collateral_field: 500_000.0}
+        data = _make_frame([row])
 
         # Act
         bundle = generator.generate_from_lazyframe(data, framework="CRR")

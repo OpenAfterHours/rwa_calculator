@@ -577,4 +577,6 @@ class TestRegressionGuardAdjustedValueCarrierUnchanged:
 
         # Assert
         twin = ADJUSTED_TWIN_CARRIER[category]
+        # The parametrize filters `twin is not None`; narrow it for the checker.
+        assert twin is not None
         assert result[twin][0] == pytest.approx(CATEGORY_MARKET_VALUES[category], rel=1e-6)

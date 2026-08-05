@@ -2036,6 +2036,26 @@ COVERED_BOND_COLLATERAL_TYPES: list[str] = ["covered_bond", "covered_bonds"]
 
 LIFE_INSURANCE_COLLATERAL_TYPES: list[str] = ["life_insurance"]
 
+# Every collateral_type string ``collateral_category_expr`` recognises, unioned
+# from the six sets above so it cannot drift from them. A value OUTSIDE this set
+# falls through that expression's ``.otherwise()`` to the "other" category, where
+# it reports in no CRM column and silently changes RWA — CRM021 names it.
+#
+# NOTE "other" and "other_physical" are legitimate members of
+# OTHER_PHYSICAL_COLLATERAL_TYPES and are therefore RECOGNISED. They are matched
+# one branch before the fallback, which merely happens to carry the same label;
+# a row whose collateral_type literally reads "other" must not be warned about.
+# ``cash`` / ``deposit`` are matched by an inline branch in the expression but
+# are also FINANCIAL_COLLATERAL_TYPES members, so they are covered here too.
+RECOGNISED_COLLATERAL_TYPES: list[str] = [
+    *LIFE_INSURANCE_COLLATERAL_TYPES,
+    *COVERED_BOND_COLLATERAL_TYPES,
+    *FINANCIAL_COLLATERAL_TYPES,
+    *RECEIVABLE_COLLATERAL_TYPES,
+    *REAL_ESTATE_COLLATERAL_TYPES,
+    *OTHER_PHYSICAL_COLLATERAL_TYPES,
+]
+
 # CRR/PS1-26 Art. 200(a)/232(2): cash-on-deposit collateral types eligible for the
 # third-party-deposit (other-funded-protection) treatment when held at another
 # institution (P1.239/P1.240).

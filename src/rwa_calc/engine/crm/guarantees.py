@@ -36,6 +36,7 @@ from rwa_calc.engine.ccf import (
     on_balance_ead,
     sa_ccf_expression,
 )
+from rwa_calc.engine.crm.expressions import COLLATERAL_VALUE_CARRIERS
 from rwa_calc.engine.entity_class_maps import ENTITY_TYPE_TO_SA_CLASS
 from rwa_calc.engine.eu_sovereign import (
     build_domestic_cgcb_guarantor_expr,
@@ -61,7 +62,16 @@ if TYPE_CHECKING:
 def _stock_split_cols() -> tuple[str, ...]:
     """Stock columns that must be split proportionally when guarantee row-splits
     occur, so downstream per-counterparty aggregations (e.g. SME supporting
-    factor) and cross-approach CCF recalculations remain correct."""
+    factor) and cross-approach CCF recalculations remain correct.
+
+    The collateral VALUATIONS are such a stock; leaving them whole published
+    N x the collateral held. Deliberately EXCLUDED are the rates and the
+    Art. 231 allocations (``crm_alloc_*``, ``total_collateral_for_lgd``) — the
+    latter ARE stocks, but their only post-split consumer divides them by the
+    unsplit ``ead_for_crm``, so splitting them alone would move capital. Full
+    argument: ``tests/unit/crm/test_guarantee_collateral_split.py``.
+    Both consumers skip any entry absent from the frame.
+    """
     return (
         "drawn_amount",
         "undrawn_amount",
@@ -73,6 +83,10 @@ def _stock_split_cols() -> tuple[str, ...]:
         "provision_on_drawn",
         "provision_on_nominal",
         "nominal_after_provision",
+        # Art. 230/231 funded-protection VALUATIONS (disclosure carriers only),
+        # named once in expressions.py so the adjusted and market-value bases
+        # cannot drift apart again.
+        *COLLATERAL_VALUE_CARRIERS,
     )
 
 
@@ -883,6 +897,7 @@ def _join_multi_guarantees(
     ), join_names
 
 
+@cites("CRR Art. 235")
 def _build_guarantor_sub_rows(multi_joined: pl.LazyFrame, schema_names: list[str]) -> pl.LazyFrame:
     """Build the per-guarantor sub-rows for guaranteed exposures.
 

@@ -239,7 +239,11 @@ def _over_collateralised_results() -> pl.LazyFrame:
             "rwa_final": [90000.0, 140000.0],
             "pd_floored": [0.006, 0.006],
             "lgd_floored": [0.15, 0.15],
-            "collateral_re_value": [500000.0, 100000.0],
+            # RD-8/W5: col 0190 reads the sealed reporting_crm_lgd_real_estate
+            # twin directly, and col 0060 reads reporting_ofcp_substitution — no
+            # Art. 200(1) protection here, so it is sealed 0.0, not absent.
+            "reporting_crm_lgd_real_estate": [500000.0, 100000.0],
+            "reporting_ofcp_substitution": [0.0, 0.0],
             "counterparty_reference": ["CP_1", "CP_2"],
         }
     )
@@ -351,7 +355,11 @@ class TestC0801SubstitutionBlockCap:
         Arrange: 400,000 of Art. 232(1) third-party deposit against a 300,000
                  exposure — the carrier col 0060 legitimately reports.
         Act:     generate OF 08.01.
-        Assert:  col 0060 is -300,000, and col 0090 lands on exactly 0.
+        Assert:  col 0060 is -300,000 (the 400,000 raw amount capped at the
+                 300,000 exposure), col 0090 lands on exactly 0, and the
+                 published ``v1663_m`` identity {c0070} = {c0040}+{c0050}+{c0060}
+                 holds on the SAME capped magnitude — proving the cap reaches
+                 col 0060 itself rather than only the col 0070 subtotal.
         """
         gen = LedgerShimCorepGenerator()
         results = pl.LazyFrame(
@@ -366,6 +374,14 @@ class TestC0801SubstitutionBlockCap:
                 "pd_floored": [0.01],
                 "lgd_floored": [0.45],
                 "third_party_deposit_value": [400000.0],
+                # RD-8: col 0060 reads this sealed, routed carrier — the raw,
+                # uncapped 400,000 the engine emits before the block cap is
+                # applied downstream (crm_substitution.irb_protection_exprs).
+                "reporting_ofcp_substitution": [400000.0],
+                # No guarantee on this leg — sealed 0.0, not absent, so col
+                # 0040 reads a real (capped) 0.0 rather than nulling out the
+                # v1663_m identity check below.
+                "guaranteed_portion": [0.0],
                 "counterparty_reference": ["CP_D"],
             }
         )
@@ -374,6 +390,12 @@ class TestC0801SubstitutionBlockCap:
         row = bundle.c08_01["corporate"].filter(pl.col("row_ref") == "0010")
         assert row["0060"][0] == pytest.approx(-300000.0)
         assert row["0090"][0] == pytest.approx(0.0)
+        # v1663_m: the cap must land on col 0060 itself, not just on the col
+        # 0070 subtotal — a defect that broke this identity by exactly the
+        # 100,000 shed by the cap (0070 == -300,000 while an uncapped 0060
+        # would report -400,000).
+        assert row["0070"][0] == pytest.approx(row["0040"][0] + row["0050"][0] + row["0060"][0])
+        assert row["0070"][0] == pytest.approx(-300000.0)
 
 
 def _scope_of_use_results() -> pl.LazyFrame:

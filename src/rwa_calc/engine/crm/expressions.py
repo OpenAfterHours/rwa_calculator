@@ -36,6 +36,7 @@ from rwa_calc.data.schemas import (
     OTHER_PHYSICAL_COLLATERAL_TYPES,
     REAL_ESTATE_COLLATERAL_TYPES,
     RECEIVABLE_COLLATERAL_TYPES,
+    RECOGNISED_COLLATERAL_TYPES,
 )
 from rwa_calc.engine.kernels.allocation import (
     beneficiary_level_expr as kernel_beneficiary_level_expr,
@@ -242,6 +243,22 @@ def collateral_category_expr() -> pl.Expr:
     )
 
 
+def unrecognised_collateral_type_expr() -> pl.Expr:
+    """Build expression flagging a ``collateral_type`` no category set matches.
+
+    The complement of ``collateral_category_expr``'s when-chain: a row this
+    returns True for is exactly a row that reaches the ``.otherwise()`` fallback,
+    so it is recognised at no LGDS in the Art. 231 waterfall and reports in no
+    CRM column. Drives the CRM021 warning (D5).
+
+    Case-insensitive, matching the classification it mirrors. A NULL
+    ``collateral_type`` yields NULL rather than True (Kleene ``is_in``), so a
+    caller filtering on this expression skips it — nulls are permissive here by
+    the project's convention, not flagged as a defect.
+    """
+    return ~_coll_type_lower().is_in(RECOGNISED_COLLATERAL_TYPES)
+
+
 # Waterfall ordering for Art. 231 sequential fill (lowest LGDS first).
 # Each tuple: (category_filter_values, lgds_key, aggregate_suffix)
 WATERFALL_ORDER: list[tuple[list[str], str, str]] = [
@@ -268,6 +285,34 @@ CRM_ALLOC_COLUMNS: dict[str, str] = {
     "op": "crm_alloc_other_physical",
     "li": "crm_alloc_life_insurance",
 }
+
+# Every per-leg collateral VALUATION carrier, on both reporting bases: the
+# adjusted (post-haircut) twins that FIRB / the Foundation Collateral Method
+# reports, and the market-value twins that AIRB reports (PS1/26 Annex II cols
+# 0180-0210). Currency stocks, so a guarantee row-split must pro-rate every one
+# of them (``engine/crm/guarantees.py::_stock_split_cols``) or a split exposure
+# publishes N x the collateral it holds. Named ONCE here because the two lists
+# drifted the moment the market-value basis was added — the adjusted twins were
+# split and the new market twins were not, silently reintroducing the very
+# double count they were added alongside. Deliberately EXCLUDES the Art. 231
+# waterfall allocations (``CRM_ALLOC_COLUMNS``) and ``total_collateral_for_lgd``:
+# those feed the blended LGD input floor, a rate over the unsplit
+# ``ead_for_crm``, so splitting them would move capital.
+COLLATERAL_VALUE_CARRIERS: tuple[str, ...] = (
+    "collateral_adjusted_value",
+    "collateral_market_value",
+    "collateral_financial_value",
+    "collateral_cash_value",
+    "collateral_re_value",
+    "collateral_receivables_value",
+    "collateral_other_physical_value",
+    "collateral_financial_market_value",
+    "collateral_cash_market_value",
+    "collateral_re_market_value",
+    "collateral_receivables_market_value",
+    "collateral_other_physical_market_value",
+    "collateral_life_insurance_market_value",
+)
 
 
 def beneficiary_level_expr(bt_col: str = "beneficiary_type") -> pl.Expr:

@@ -131,8 +131,14 @@ NUMERIC_TABLE_ALLOWLIST: dict[str, set[str]] = {}
 VALIDATION_ENUM_ALLOWLIST: dict[str, set[str]] = {
     # ApproachType enum values + aggregator fallback labels (internal routing)
     _PATH_AGGREGATOR_SCHEMAS: {"IRB_APPROACHES", "SA_APPROACHES", "EQUITY_APPROACHES"},
-    # Art. 231 allocation column mapping (PR #249 — retained as engine config)
-    "engine/crm/expressions.py": {"CRM_ALLOC_COLUMNS"},
+    # Art. 231 allocation column mapping (PR #249 — retained as engine config).
+    # COLLATERAL_VALUE_CARRIERS is the same kind of thing: the per-leg collateral
+    # VALUATION column names on both reporting bases, named once so the producer
+    # (collateral.py) and the guarantee leg-split (guarantees.py) cannot drift —
+    # they did drift the moment the market-value basis was added, silently
+    # reintroducing an N-per-leg double count. Engine-internal output column
+    # names, not an input-domain validation enum.
+    "engine/crm/expressions.py": {"CRM_ALLOC_COLUMNS", "COLLATERAL_VALUE_CARRIERS"},
     # Nullable-partition-key registry for the partition_by_nullable helper.
     # These are engine-internal column names tightly coupled to the helper's
     # AST-level contract test; keeping them in `data/schemas.py` would split

@@ -123,16 +123,65 @@ IRB_BLOCK_COL: str = "c08_prot_block"
 # C 08.01/02 col 0060 "OTHER FUNDED CREDIT PROTECTION" — the Art. 232(1) /
 # Art. 200(1) list (third-party deposits, pledged life policies, instruments
 # repurchased on request), i.e. protection treated AS A GUARANTEE and therefore
-# acting on the OBLIGOR'S PD through substitution. This is the same carrier pair
-# C 07.00 reads for its own Art. 232 column (``corep/c07.py::_OFCP_CARRIERS``).
+# acting on the OBLIGOR'S PD through substitution.
+#
+# THE SEALED, ROUTED CARRIER — not the raw ``life_ins_collateral_value`` /
+# ``third_party_deposit_value`` pair. Those raw carriers say only that the
+# protection EXISTS; ``engine/crm/ofcp_routing.py`` decides whether it takes the
+# Art. 232 substitution route (here) or the AIRB LGD Modelling Collateral Method
+# route (:data:`OFCP_LGD_CARRIERS`, cols 0171/0172), and emits the substitution
+# limb uncapped precisely so this block cap can size it jointly with cols
+# 0040/0050. Reading the raw pair here instead would double-count an amount the
+# router had already sent to 0171/0172, and would leave col 0060 reporting a
+# magnitude the col 0070 subtotal never capped — breaking ``{c0070} = {c0040} +
+# {c0050} + {c0060}`` (``v1663_m`` / ``v1665_m``, ``boe_b0747`` / ``boe_b0761``).
+# The routing chooses the COLUMN; this cap chooses the AMOUNT.
+#
+# C 07.00 keeps the RAW pair (``corep/c07.py::_OFCP_CARRIERS``) and must not
+# follow this change: it is the SA template, and the RD-8 routing is an IRB-only
+# decision — an SA leg never elects the LGD Modelling Collateral Method, so there
+# is no fork to resolve and no sealed substitution carrier on its rows.
 #
 # The Art. 199 collateral (immovable property, receivables, other physical) is
 # DELIBERATELY NOT HERE: it is an LGD mitigant, not a PD one, and Annex II routes
 # it by name to the CRM-in-LGD-estimates block at cols 0190/0200/0210 — see
 # :func:`irb_protection_exprs` for the quoted instructions.
-IRB_OFCP_CARRIERS: tuple[str, ...] = (
-    "life_ins_collateral_value",
-    "third_party_deposit_value",
+IRB_OFCP_CARRIERS: tuple[str, ...] = ("reporting_ofcp_substitution",)
+
+# C 08.01/02 cols 0171/0172 — the OTHER limb of the Art. 200(1) fork, sealed.
+#
+# PS1/26 col 0060 (p.103) makes the two limbs mutually exclusive per leg, and
+# names both: "Other funded credit protection that is treated as a guarantee in
+# accordance with Article 232 ... shall be included [in 0060]. ... Other funded
+# credit protection recognised by firms applying the AIRB approach and using the
+# LGD Modelling Collateral Method shall be reported in columns 0171, 0172 and
+# 0173." Cols 0171/0172/0173 are Art. 200(1)(a) cash on deposit, (b) pledged
+# life policies and (c) instruments repurchased on request, each "limited to the
+# value of the exposure at the level of an individual exposure" (p.107).
+#
+# WHICH LIMB A LEG TAKES IS NOT KNOWABLE HERE. It turns on the run-level
+# ``AIRBCollateralMethod`` election, and the COREP generators receive only
+# ``(results, cols, framework, errors)`` — no config, no resolved pack, no
+# per-row method flag. Re-deriving the election in ``reporting/`` would put a
+# regulatory decision in the presentation layer, against the sealed-ledger
+# design. So ``engine/crm`` — which already holds the config and the pack —
+# decides ONCE, applies the Art. 200(1) cap on its own side of the seal, and
+# emits three amounts that are mutually exclusive BY CONSTRUCTION:
+#
+#     reporting_ofcp_substitution        -> col 0060 (Art. 232 guarantee route)
+#     reporting_ofcp_lgd_cash_deposit    -> col 0171 (Art. 200(1)(a))
+#     reporting_ofcp_lgd_life_insurance  -> col 0172 (Art. 200(1)(b))
+#
+# ``_value_cells`` then binds each with a plain sum carrying no gate of its own,
+# and col 0170 subtotals these two — so ``{c0170} = {c0171} + {c0172} + {c0173}``
+# (``boe_b0750``, ``v09752_m``, ``v09751_m``) and ``{c017x} <= {c0170}``
+# (``boe_b0375/6/7``) hold by construction, col 0173 being a constant 0.0 for
+# want of any carrier for instruments repurchased on request. Under CRR the
+# LGD-Modelling limb cannot arise at all — ``airb_lgd_collateral_method_
+# applicable`` is a Basel-3.1-only pack Feature — so the CRR limb is unchanged.
+OFCP_LGD_CARRIERS: tuple[str, ...] = (
+    "reporting_ofcp_lgd_cash_deposit",
+    "reporting_ofcp_lgd_life_insurance",
 )
 
 # The per-leg pre-conversion-factor gross carriers that col 0020 sums — the cap

@@ -199,13 +199,19 @@ def _irb_results_with_collateral_split() -> pl.LazyFrame:
             "scra_provision_amount": [10.0, 5.0],
             "gcra_provision_amount": [5.0, 5.0],
             "counterparty_reference": ["CP_X", "CP_Y"],
-            # Collateral columns
-            "collateral_financial_value": [200.0, 0.0],
-            "collateral_cash_value": [80.0, 0.0],
-            "collateral_re_value": [150.0, 100.0],
-            "collateral_receivables_value": [50.0, 0.0],
-            "collateral_other_physical_value": [30.0, 20.0],
+            # Collateral columns — RD-8/W5: cols 0180/0190/0200/0210 read the
+            # sealed reporting_crm_lgd_* twins directly (the aggregator's D4
+            # cash-into-financial fold is a producer-side concern, out of scope
+            # for a reporting-layer fixture that populates the sealed carrier).
+            "reporting_crm_lgd_financial": [200.0, 0.0],
+            "reporting_crm_lgd_real_estate": [150.0, 100.0],
+            "reporting_crm_lgd_receivables": [50.0, 0.0],
+            "reporting_crm_lgd_other_physical": [30.0, 20.0],
             "guaranteed_portion": [0.0, 500.0],
+            # No Art. 200(1) protection on either leg — sealed 0.0, not absent.
+            "reporting_ofcp_substitution": [0.0, 0.0],
+            "reporting_ofcp_lgd_cash_deposit": [0.0, 0.0],
+            "reporting_ofcp_lgd_life_insurance": [0.0, 0.0],
         }
     )
 

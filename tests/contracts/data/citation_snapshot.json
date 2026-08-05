@@ -135,6 +135,9 @@
     "CRR Art. 201",
     "PS1/26, paragraph 201"
   ],
+  "rwa_calc.engine.crm.guarantees::_build_guarantor_sub_rows": [
+    "CRR Art. 235"
+  ],
   "rwa_calc.engine.crm.guarantees::_build_remainder_sub_rows": [
     "CRR Art. 234"
   ],
@@ -176,6 +179,10 @@
   "rwa_calc.engine.crm.link_allocation::CollateralLinkAllocator.allocate_links": [
     "CRR Art. 230",
     "CRR Art. 231"
+  ],
+  "rwa_calc.engine.crm.ofcp_routing::route_other_funded_protection": [
+    "CRR Art. 232",
+    "PS1/26, paragraph 169A"
   ],
   "rwa_calc.engine.crm.processor::CRMProcessor._apply_own_issue_collateral_gate": [
     "CRR Art. 194"

@@ -208,6 +208,17 @@ ERROR_CREDIT_LINKED_NOTE_NOT_OWN_ISSUED = "CRM019"
 # conservatively (the anti-conservative full-benefit treatment is disallowed) and
 # this warning is raised (one per row with an unknown policy currency).
 ERROR_LIFE_INSURANCE_CURRENCY_UNKNOWN = "CRM020"
+# Unrecognised collateral type (CRR/PS1-26 Art. 230-231, D5): a collateral_type
+# matching none of the known category sets (data/schemas.py
+# RECOGNISED_COLLATERAL_TYPES) falls through collateral_category_expr to the
+# "other" fallback category. The Art. 231 waterfall keys on the same sets, so the
+# row is recognised at no LGDS, reports in no CRM column, and CHANGES RWA — all
+# silently. Typically a spelling/mapping error in the source feed (e.g.
+# "residential_real_estate" for "real_estate"). This warning names the collateral
+# reference and the offending value (one per row). A NULL collateral_type does
+# NOT warn: absence is the project's null-permissive convention, not an asserted
+# defect.
+ERROR_UNRECOGNISED_COLLATERAL_TYPE = "CRM021"
 
 # IRB error codes
 ERROR_PD_OUT_OF_RANGE = "IRB001"

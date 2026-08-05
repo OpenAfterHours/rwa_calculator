@@ -86,6 +86,10 @@ def _irb_results_different_class_guarantee() -> pl.LazyFrame:
             "protection_type": [None, "guarantee", None],
             "pre_crm_exposure_class": ["corporate", "corporate", "institution"],
             "post_crm_exposure_class_guaranteed": ["corporate", "institution", "institution"],
+            # No Art. 200(1) protection on any leg — sealed 0.0, not absent, per
+            # ofcp_routing.py's own producer contract (every leg gets a real
+            # float; the routing carrier is never left null).
+            "reporting_ofcp_substitution": [0.0, 0.0, 0.0],
         }
     )
 
@@ -143,6 +147,8 @@ def _irb_results_credit_derivative_different_class() -> pl.LazyFrame:
             "protection_type": [None, "credit_derivative", None],
             "pre_crm_exposure_class": ["corporate", "corporate", "institution"],
             "post_crm_exposure_class_guaranteed": ["corporate", "institution", "institution"],
+            # No Art. 200(1) protection on any leg — sealed 0.0, not absent.
+            "reporting_ofcp_substitution": [0.0, 0.0, 0.0],
         }
     )
 
@@ -168,6 +174,11 @@ def _irb_results_other_funded_protection() -> pl.LazyFrame:
             "gcra_provision_amount": [0.0],
             "counterparty_reference": ["CP_A"],
             "third_party_deposit_value": [400.0],
+            # RD-8: col 0060 (Art. 232 route) reads this sealed carrier directly,
+            # not the raw third_party_deposit_value it is derived from. 400 is
+            # well inside the 5,000 exposure cap, so this is the same value
+            # ofcp_routing.py would emit uncapped — no cap event to reconcile.
+            "reporting_ofcp_substitution": [400.0],
         }
     )
 
@@ -776,8 +787,10 @@ class TestCrmInLgdBlockExcludesSubstitutedProtection:
         # Arrange
         gen = LedgerShimCorepGenerator()
         frame = _irb_results_different_class_guarantee().with_columns(
-            pl.Series("collateral_re_value", [0.0, 500.0, 0.0]),
-            pl.Series("collateral_financial_value", [250.0, 0.0, 0.0]),
+            # RD-8/W5: cols 0180/0190 read the sealed reporting_crm_lgd_* twins
+            # directly, not the raw collateral_*_value carriers they replaced.
+            pl.Series("reporting_crm_lgd_real_estate", [0.0, 500.0, 0.0]),
+            pl.Series("reporting_crm_lgd_financial", [250.0, 0.0, 0.0]),
         )
 
         # Act

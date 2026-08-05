@@ -1114,6 +1114,19 @@ def _crm_added_columns() -> dict[str, EdgeColumn]:
         "collateral_re_value": EdgeColumn(dtype=pl.Float64),
         "collateral_receivables_value": EdgeColumn(dtype=pl.Float64),
         "collateral_other_physical_value": EdgeColumn(dtype=pl.Float64),
+        # Per-category MARKET value (pre-haircut) — the AIRB reporting limb of
+        # PS1/26 + CRR Annex II cols 0180/0190/0200/0210, whose Foundation limb
+        # is served by the ``_value`` twins above. Reporting-only carriers.
+        "collateral_financial_market_value": EdgeColumn(
+            dtype=pl.Float64, citation="PS1/26 Art. 169A"
+        ),
+        "collateral_cash_market_value": EdgeColumn(dtype=pl.Float64),
+        "collateral_re_market_value": EdgeColumn(dtype=pl.Float64),
+        "collateral_receivables_market_value": EdgeColumn(dtype=pl.Float64),
+        "collateral_other_physical_market_value": EdgeColumn(dtype=pl.Float64),
+        "collateral_life_insurance_market_value": EdgeColumn(
+            dtype=pl.Float64, citation="CRR Art. 212"
+        ),
         "collateral_coverage_pct": EdgeColumn(dtype=pl.Float64),
         "crm_alloc_financial": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 230"),
         "crm_alloc_covered_bond": EdgeColumn(dtype=pl.Float64),
@@ -1129,6 +1142,15 @@ def _crm_added_columns() -> dict[str, EdgeColumn]:
         "life_ins_secured_rw": EdgeColumn(dtype=pl.Float64),
         "third_party_deposit_value": EdgeColumn(dtype=pl.Float64),
         "third_party_deposit_secured_rw": EdgeColumn(dtype=pl.Float64),
+        # Art. 200(1) other-funded-protection ROUTING (RD-8). Mutually exclusive
+        # per leg: an amount reports EITHER through the Art. 232 substitution
+        # block (COREP C 08.01/02 col 0060) or through the AIRB LGD Modelling
+        # Collateral Method block (cols 0171-0173), never both. The engine picks
+        # once, here, because the run-level AIRBCollateralMethod election never
+        # reaches the COREP generator.
+        "ofcp_lgd_cash_deposit": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 200(1)"),
+        "ofcp_lgd_life_insurance": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 200(1)"),
+        "ofcp_substitution_amount": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 232"),
         "crm_calculation": EdgeColumn(dtype=pl.String),
         # Guarantees / substitution (CRR Art. 233-236)
         "is_guaranteed": EdgeColumn(dtype=pl.Boolean),
@@ -1272,12 +1294,22 @@ def _calc_output_common_columns() -> dict[str, EdgeColumn]:
         "ccf_unguaranteed": EdgeColumn(dtype=pl.Float64),
         "collateral_adjusted_value": EdgeColumn(dtype=pl.Float64),
         "collateral_allocated": EdgeColumn(dtype=pl.Float64),
+        "collateral_cash_market_value": EdgeColumn(dtype=pl.Float64),
         "collateral_cash_value": EdgeColumn(dtype=pl.Float64),
         "collateral_coverage_pct": EdgeColumn(dtype=pl.Float64),
+        "collateral_financial_market_value": EdgeColumn(
+            dtype=pl.Float64, citation="PS1/26 Art. 169A"
+        ),
         "collateral_financial_value": EdgeColumn(dtype=pl.Float64),
+        "collateral_life_insurance_market_value": EdgeColumn(
+            dtype=pl.Float64, citation="CRR Art. 212"
+        ),
         "collateral_market_value": EdgeColumn(dtype=pl.Float64),
+        "collateral_other_physical_market_value": EdgeColumn(dtype=pl.Float64),
         "collateral_other_physical_value": EdgeColumn(dtype=pl.Float64),
+        "collateral_re_market_value": EdgeColumn(dtype=pl.Float64),
         "collateral_re_value": EdgeColumn(dtype=pl.Float64),
+        "collateral_receivables_market_value": EdgeColumn(dtype=pl.Float64),
         "collateral_receivables_value": EdgeColumn(dtype=pl.Float64),
         "commercial_collateral_value_uncapped": EdgeColumn(dtype=pl.Float64),
         "counterparty_reference": EdgeColumn(dtype=pl.String),
@@ -1411,6 +1443,25 @@ def _calc_output_common_columns() -> dict[str, EdgeColumn]:
         "netting_agreement_reference": EdgeColumn(dtype=pl.String),
         "nominal_after_provision": EdgeColumn(dtype=pl.Float64),
         "nominal_amount": EdgeColumn(dtype=pl.Float64),
+        # Art. 200(1) "other funded credit protection" routing amounts (RD-8).
+        # The Art. 232-guarantee route (col 0060) and the AIRB LGD-Modelling
+        # route (cols 0171/0172) are MUTUALLY EXCLUSIVE per leg, and which one
+        # applies depends on the run-level AIRBCollateralMethod election, which
+        # never reaches a template. So engine/crm/ — which holds the config and
+        # the pack — decides once and emits the three amounts already routed;
+        # the aggregator only aliases them onto the sealed ledger. OPTIONAL
+        # (inject=True) while the producing CRM sub-step is still being built:
+        # an absent carrier injects a typed null and the sealed twin reads
+        # null, never 0.0.
+        "ofcp_lgd_cash_deposit": EdgeColumn(
+            dtype=pl.Float64, required=False, citation="CRR Art. 200"
+        ),
+        "ofcp_lgd_life_insurance": EdgeColumn(
+            dtype=pl.Float64, required=False, citation="CRR Art. 200"
+        ),
+        "ofcp_substitution_amount": EdgeColumn(
+            dtype=pl.Float64, required=False, citation="CRR Art. 232"
+        ),
         "on_bs_for_ead": EdgeColumn(dtype=pl.Float64),
         "on_bs_netting_amount": EdgeColumn(dtype=pl.Float64),
         "original_amount": EdgeColumn(dtype=pl.Float64),
@@ -1733,6 +1784,88 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
                 "row is outside the on/off-balance-sheet credit-risk gross scope "
                 "(a CCR / settlement leg — its EAD/RWEA still report); must NOT be "
                 "filled to 0.0"
+            ),
+        ),
+        # CRM techniques taken into account in LGD estimates (COREP C 08.01/02
+        # cols 0180/0190/0200/0210), with the METHOD-DEPENDENT basis resolved
+        # once by the aggregator's _add_reporting_projection: an AIRB leg
+        # carries the ESTIMATED MARKET VALUE, every other leg the ADJUSTED
+        # value C_i (PS1/26 Annex II p.108; CRR Annex II p.101 keys the same
+        # split on "where own estimates of LGD are (not) used"). Templates read
+        # these instead of picking among the raw collateral_*_value /
+        # collateral_*_market_value twins — the basis is a regulatory decision,
+        # not a presentation one. The financial carrier folds cash on deposit
+        # in: the CRM stage categorises cash ahead of financial, but
+        # Art. 197(1)(a) makes it eligible financial collateral and col 0180 is
+        # its home (the Art. 231 waterfall already groups the two).
+        "reporting_crm_lgd_financial": EdgeColumn(
+            dtype=pl.Float64,
+            citation="CRR Art. 197",
+            null_meaning=(
+                "neither financial nor cash collateral was computed for this leg "
+                "on the basis its approach selects (both carriers null) — NOT an "
+                "absence of collateral; must NOT be filled to 0.0"
+            ),
+        ),
+        "reporting_crm_lgd_real_estate": EdgeColumn(
+            dtype=pl.Float64,
+            citation="CRR Art. 181",
+            null_meaning=(
+                "immovable-property collateral was never computed for this leg on "
+                "the basis its approach selects — NOT an absence of collateral; "
+                "must NOT be filled to 0.0"
+            ),
+        ),
+        "reporting_crm_lgd_other_physical": EdgeColumn(
+            dtype=pl.Float64,
+            citation="CRR Art. 181",
+            null_meaning=(
+                "other physical collateral was never computed for this leg on the "
+                "basis its approach selects — NOT an absence of collateral; must "
+                "NOT be filled to 0.0"
+            ),
+        ),
+        "reporting_crm_lgd_receivables": EdgeColumn(
+            dtype=pl.Float64,
+            citation="CRR Art. 181",
+            null_meaning=(
+                "receivables collateral was never computed for this leg on the "
+                "basis its approach selects — NOT an absence of collateral; must "
+                "NOT be filled to 0.0"
+            ),
+        ),
+        # RD-8: the sealed twins of the three Art. 200(1) routing amounts.
+        # engine/crm/ resolves the Art. 232-guarantee vs AIRB-LGD-Modelling
+        # route ONCE per leg (the run-level AIRBCollateralMethod election never
+        # reaches a template), so these are plain aliases — the aggregator adds
+        # no logic. Mutually exclusive by construction, which is what makes
+        # {c0170} = {c0171}+{c0172}+{c0173} and the 0060/0171-0172 exclusivity
+        # structural rather than a reporting-layer convention.
+        "reporting_ofcp_lgd_cash_deposit": EdgeColumn(
+            dtype=pl.Float64,
+            citation="CRR Art. 200",
+            null_meaning=(
+                "the CRM stage's Art. 200(1) routing did not run for this leg "
+                "(the carrier is absent upstream) — NOT a zero amount; must NOT "
+                "be filled to 0.0"
+            ),
+        ),
+        "reporting_ofcp_lgd_life_insurance": EdgeColumn(
+            dtype=pl.Float64,
+            citation="CRR Art. 200",
+            null_meaning=(
+                "the CRM stage's Art. 200(1) routing did not run for this leg "
+                "(the carrier is absent upstream) — NOT a zero amount; must NOT "
+                "be filled to 0.0"
+            ),
+        ),
+        "reporting_ofcp_substitution": EdgeColumn(
+            dtype=pl.Float64,
+            citation="CRR Art. 232",
+            null_meaning=(
+                "the CRM stage's Art. 200(1) routing did not run for this leg "
+                "(the carrier is absent upstream) — NOT a zero amount; must NOT "
+                "be filled to 0.0"
             ),
         ),
         # Phase 7 decision F8 (recorded): the additive per-leg substitution

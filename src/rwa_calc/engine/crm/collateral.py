@@ -1108,6 +1108,31 @@ def _apply_collateral_unified(
             _split_aggs(f"_e{suffix}", pl.col("effectively_secured"), cat.is_in(cat_values))
         )
 
+    # Per-category MARKET-value aggregates, metric -> (category, carrier). These
+    # mirror the ``_adj_*`` set one-for-one through the same multi-level blend but
+    # sum the pre-haircut ``market_value``, and are pure reporting carriers —
+    # nothing in engine/ consumes them.
+    #
+    # PS1/26 Annex II col 0190 (likewise 0180/0200/0210): "Where exposures are
+    # subject to the Foundation Collateral Method … the adjusted value of
+    # collateral Ci … Where exposures are subject to the AIRB approach, the amount
+    # to be reported shall be the estimated market value." CRR Annex II cols
+    # 0150-0210 make the same split on whether own LGD estimates are used. The
+    # ``_adj_*`` twins serve the Foundation limb; these serve the AIRB limb, which
+    # the adjusted basis understates wherever a supervisory haircut applies (40%
+    # on real estate under Basel 3.1, 0% under CRR).
+    market_value_carriers = {
+        "_mv_fin": ("financial", "collateral_financial_market_value"),
+        "_mv_cash": ("cash", "collateral_cash_market_value"),
+        "_mv_re": ("real_estate", "collateral_re_market_value"),
+        "_mv_rec": ("receivables", "collateral_receivables_market_value"),
+        "_mv_oth": ("other_physical", "collateral_other_physical_market_value"),
+        "_mv_li": ("life_insurance", "collateral_life_insurance_market_value"),
+    }
+    market_value_aggs: list[pl.Expr] = []
+    for metric, (category, _) in market_value_carriers.items():
+        market_value_aggs.extend(_split_aggs(metric, pl.col("market_value"), cat == category))
+
     all_coll = (
         annotated.with_columns(
             beneficiary_level_expr().alias("_level"),
@@ -1122,21 +1147,30 @@ def _apply_collateral_unified(
             + _split_aggs("_adj_re", pl.col("adjusted_value"), cat == "real_estate")
             + _split_aggs("_adj_rec", pl.col("adjusted_value"), cat == "receivables")
             + _split_aggs("_adj_oth", pl.col("adjusted_value"), cat == "other_physical")
+            + market_value_aggs
             + waterfall_aggs
         )
     )
 
     _wf_suffixes = [suffix for _, _, suffix in WATERFALL_ORDER]
-    _metrics = [
-        "_cv",
-        "_mv",
-        "_rn",
-        "_adj_fin",
-        "_adj_cash",
-        "_adj_re",
-        "_adj_rec",
-        "_adj_oth",
-    ] + [f"_e{s}" for s in _wf_suffixes]
+    # The market-value metrics allocate on a POOL-AGNOSTIC basis (see
+    # ``_pool_agnostic_metrics`` below); every other metric keeps the
+    # pool-gated allocation that drives LGD / EAD.
+    _pool_agnostic_metrics = list(market_value_carriers)
+    _metrics = (
+        [
+            "_cv",
+            "_mv",
+            "_rn",
+            "_adj_fin",
+            "_adj_cash",
+            "_adj_re",
+            "_adj_rec",
+            "_adj_oth",
+        ]
+        + _pool_agnostic_metrics
+        + [f"_e{s}" for s in _wf_suffixes]
+    )
     # Each metric has both _n (non-AIRB pool) and _a (AIRB pool) variants in the
     # aggregated frame; the level suffix (_d/_f/_c) is appended on rename below.
     _agg = [f"{m}_{p}" for m in _metrics for p in ("n", "a")]
@@ -1172,7 +1206,9 @@ def _apply_collateral_unified(
     # facility subtree). Produces pre-weighted, ancestor-summed ``{m}_{p}_f``
     # columns that ``_sum6`` adds in directly (the pro-rata weight is already
     # baked in, so no further ``_fw`` multiply is needed).
-    exposures = _cascade_facility_collateral(exposures, coll_facility, _metrics)
+    exposures = _cascade_facility_collateral(
+        exposures, coll_facility, _metrics, _pool_agnostic_metrics
+    )
 
     exposures = exposures.join(
         coll_counterparty,
@@ -1211,12 +1247,22 @@ def _apply_collateral_unified(
     # off-BS items at CCF=100% for CRM allocation purposes), so the share
     # an exposure receives of a CP collateral pool is proportional to its full
     # pre-CCF basis rather than its post-CCF EAD.
+    # ``_cw_n_all`` is the pool-AGNOSTIC counterparty weight used by the
+    # market-value reporting carriers only: it drops the ``in_non_airb`` gate and
+    # shares over the whole counterparty population (``_cp_ead_total``) rather
+    # than the non-AIRB sub-pool. Dropping the gate while keeping the sub-pool
+    # denominator would allocate the pledge in full to BOTH pools; sharing on
+    # ``_cp_ead_total`` keeps it conserved. See ``_sum6_pool_agnostic``.
     exposures = exposures.with_columns(
         [
             pl.when(in_non_airb & (pl.col("_cp_ead_total_non_airb") > 0))
             .then(pl.col("ead_for_crm") / pl.col("_cp_ead_total_non_airb"))
             .otherwise(pl.lit(0.0))
             .alias("_cw_n"),
+            pl.when(pl.col("_cp_ead_total") > 0)
+            .then(pl.col("ead_for_crm") / pl.col("_cp_ead_total"))
+            .otherwise(pl.lit(0.0))
+            .alias("_cw_n_all"),
             pl.when(in_airb & (pl.col("_cp_ead_total_airb") > 0))
             .then(pl.col("ead_for_crm") / pl.col("_cp_ead_total_airb"))
             .otherwise(pl.lit(0.0))
@@ -1247,6 +1293,27 @@ def _apply_collateral_unified(
             + pl.col(f"{metric}_a_c") * pl.col("_cw_a")
         )
 
+    # POOL-AGNOSTIC blend, for the market-value reporting carriers only. Same six
+    # terms and the same flagged (``_a``) weights — flagged collateral is in the
+    # firm's internal LGD model and still never reaches a non-AIRB exposure — but
+    # the two UNFLAGGED indirect terms share over the whole population instead of
+    # the non-AIRB sub-pool: ``_cw_n_all`` at counterparty level, and at facility
+    # level the ``{m}_n_f`` column, which ``_cascade_facility_collateral`` has
+    # already pre-weighted with the all-descendants subtree weight for exactly
+    # these metrics. Direct (``_n_d``) is unconditional on both blends.
+    # PS1/26 Art. 169A(1)-(2): recognition is an institution-level election, so an
+    # A-IRB row reports collateral pledged against it whether or not that pledge
+    # moved the modelled LGD. The Foundation election is applied below.
+    def _sum6_pool_agnostic(metric: str) -> pl.Expr:
+        return (
+            pl.col(f"{metric}_n_d")
+            + pl.col(f"{metric}_a_d") * pl.col("_airb_match")
+            + pl.col(f"{metric}_n_f")
+            + pl.col(f"{metric}_a_f")
+            + pl.col(f"{metric}_n_c") * pl.col("_cw_n_all")
+            + pl.col(f"{metric}_a_c") * pl.col("_cw_a")
+        )
+
     combine_exprs = [
         _sum6("_cv").alias("collateral_adjusted_value"),
         _sum6("_mv").alias("collateral_market_value"),
@@ -1257,6 +1324,24 @@ def _apply_collateral_unified(
         _sum6("_adj_oth").alias("collateral_other_physical_value"),
         _sum6("_rn").alias("_raw_nf_a"),
     ]
+    # RD-5 / PS1/26 Art. 169A(1)-(2): recognition of collateral in LGD estimates is
+    # an institution-level ELECTION, so the AIRB market-value limb of Annex II cols
+    # 0180-0210 (RD-1) is only open to an A-IRB row whose modelled LGD actually
+    # stands. ``_is_airb_pool`` IS ``airb_lgd_preserved_expr`` materialised on the
+    # frame, so reading it here keeps this gate and the pool definition on one
+    # expression: an A-IRB row loses the market-value limb exactly when that
+    # expression says its modelled LGD does not survive — the firm elected the
+    # Foundation Collateral Method, or Art. 169B insufficient-data drops the row
+    # back to the supervisory formula. Both cases report through the ``_adj_*``
+    # twins instead. Non-A-IRB rows (FIRB / SA / slotting) are unaffected.
+    _mv_limb_open = in_airb | (pl.col("approach") != ApproachType.AIRB.value)
+    for _mv_metric, (_, _mv_carrier) in market_value_carriers.items():
+        combine_exprs.append(
+            pl.when(_mv_limb_open)
+            .then(_sum6_pool_agnostic(_mv_metric))
+            .otherwise(pl.lit(0.0))
+            .alias(_mv_carrier)
+        )
     # Per-category effectively_secured after multi-level combination
     for suffix in _wf_suffixes:
         combine_exprs.append(_sum6(f"_e{suffix}").alias(f"_eff_{suffix}_a"))
@@ -1363,6 +1448,7 @@ def _apply_collateral_unified(
             "_cp_ead_total_airb",
             "_cp_ead_total_non_airb",
             "_cw_n",
+            "_cw_n_all",
             "_cw_a",
             "_airb_match",
             "_is_airb_pool",
@@ -1517,6 +1603,7 @@ def _cascade_facility_collateral(
     exposures: pl.LazyFrame,
     coll_facility: pl.LazyFrame,
     metrics: list[str],
+    pool_agnostic_metrics: list[str],
 ) -> pl.LazyFrame:
     """Distribute facility-level collateral over each exposure's ancestor set.
 
@@ -1529,18 +1616,35 @@ def _cascade_facility_collateral(
     For every (exposure, ancestor facility) pair the exposure receives
     ``ead_for_crm / subtree_ead[F, pool]`` of ``F``'s pooled facility
     collateral; contributions are summed across ancestor levels, so a pledge at
-    the grandparent and one at the direct parent stack. Pool-aware: the
-    non-AIRB subtree denominator applies to non-AIRB-pool exposures and the AIRB
-    denominator to AIRB-pool exposures, so unflagged collateral never leaks into
-    the AIRB pool (CRR Art. 181 / Basel 3.1 Art. 169A).
+    the grandparent and one at the direct parent stack.
+
+    Three weights, one per (pool, basis) combination:
+
+    - ``_w_a`` — FLAGGED (``is_airb_model_collateral``) collateral, shared over
+      the AIRB-pool subtree only, so collateral built into the firm's internal
+      LGD model never reaches a non-AIRB exposure (CRR Art. 181 / Basel 3.1
+      Art. 169A). Applies to every metric.
+    - ``_w_n`` — UNFLAGGED collateral for the metrics that drive LGD / EAD:
+      shared over the non-AIRB subtree and zeroed for AIRB-pool members, so
+      unflagged collateral never leaks into the AIRB pool. Unchanged.
+    - ``_w_n_all`` — UNFLAGGED collateral for ``pool_agnostic_metrics`` (the
+      market-value reporting carriers): no pool gate, shared over the WHOLE
+      subtree. Sharing on the all-descendants total is what conserves the
+      pledge — the shares over a subtree sum to exactly one pledge — whereas
+      dropping the gate while keeping the non-AIRB denominator would allocate
+      it in full to both pools. PS1/26 Art. 169A(1)-(2): recognition is an
+      institution-level election, so the pledge is reported against every
+      exposure it secures.
 
     Returns ``exposures`` with one ``{metric}_n_f`` and ``{metric}_a_f`` column
-    per metric, each already pro-rata-weighted and ancestor-summed (so ``_sum6``
-    adds them in without a further weight multiply). Reduces exactly to the
-    legacy single-level allocation when every ``ancestor_facilities`` is its
-    ``[parent]``.
+    per metric, each already pro-rata-weighted and ancestor-summed (so the
+    ``_sum6`` family adds them in without a further weight multiply); for a
+    ``pool_agnostic_metrics`` entry the ``_n_f`` column carries ``_w_n_all``
+    rather than ``_w_n``. Reduces exactly to the legacy single-level allocation
+    when every ``ancestor_facilities`` is its ``[parent]``.
     """
     agg_cols = [f"{m}_{p}_f" for m in metrics for p in ("n", "a")]
+    pool_gated = [m for m in metrics if m not in set(pool_agnostic_metrics)]
 
     # (exposure, ancestor facility) edge list with pool flag + EAD basis.
     edges = (
@@ -1555,10 +1659,13 @@ def _cascade_facility_collateral(
         .filter(pl.col("_anc_fac").is_not_null())
     )
 
-    # Pool-aware subtree EAD per ancestor facility (over ALL descendant exposures).
+    # Subtree EAD per ancestor facility (over ALL descendant exposures): one
+    # total per pool for the gated weights, plus the whole-subtree total for the
+    # pool-agnostic weight.
     subtree = edges.group_by("_anc_fac").agg(
         pl.col("ead_for_crm").filter(pl.col("_pool")).sum().alias("_sub_airb"),
         pl.col("ead_for_crm").filter(~pl.col("_pool")).sum().alias("_sub_non_airb"),
+        pl.col("ead_for_crm").sum().alias("_sub_all"),
     )
 
     contrib = (
@@ -1574,13 +1681,21 @@ def _cascade_facility_collateral(
             .then(pl.col("ead_for_crm") / pl.col("_sub_non_airb"))
             .otherwise(pl.lit(0.0))
             .alias("_w_n"),
+            pl.when(pl.col("_sub_all") > 0)
+            .then(pl.col("ead_for_crm") / pl.col("_sub_all"))
+            .otherwise(pl.lit(0.0))
+            .alias("_w_n_all"),
             pl.when(pl.col("_pool") & (pl.col("_sub_airb") > 0))
             .then(pl.col("ead_for_crm") / pl.col("_sub_airb"))
             .otherwise(pl.lit(0.0))
             .alias("_w_a"),
         )
         .with_columns(
-            [(pl.col(f"{m}_n_f") * pl.col("_w_n")).alias(f"{m}_n_f") for m in metrics]
+            [(pl.col(f"{m}_n_f") * pl.col("_w_n")).alias(f"{m}_n_f") for m in pool_gated]
+            + [
+                (pl.col(f"{m}_n_f") * pl.col("_w_n_all")).alias(f"{m}_n_f")
+                for m in pool_agnostic_metrics
+            ]
             + [(pl.col(f"{m}_a_f") * pl.col("_w_a")).alias(f"{m}_a_f") for m in metrics]
         )
         .group_by("exposure_reference")

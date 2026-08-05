@@ -62,10 +62,12 @@ from rwa_calc.engine.ccf import CCFCalculator
 from rwa_calc.engine.crm import collateral as collateral_mod
 from rwa_calc.engine.crm import guarantees as guarantees_mod
 from rwa_calc.engine.crm import provisions as provisions_mod
+from rwa_calc.engine.crm.collateral_type_check import record_unrecognised_collateral_type
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
 from rwa_calc.engine.crm.life_insurance import compute_life_insurance_columns
 from rwa_calc.engine.crm.link_allocation import RANK_METRIC_COLUMN, CollateralLinkAllocator
 from rwa_calc.engine.crm.look_through import apply_funded_only_look_through
+from rwa_calc.engine.crm.ofcp_routing import route_other_funded_protection
 from rwa_calc.engine.crm.simple_method import compute_fcsm_columns, undo_sa_ead_reduction
 from rwa_calc.engine.crm.third_party_deposit import (
     compute_third_party_deposit_columns,
@@ -670,6 +672,14 @@ class CRMProcessor:
             exposures, third_party_deposits, config, errors, pack=pack
         )
 
+        # Step 4d: split the Art. 200(1) amounts both preceding steps produced
+        # between the Art. 232 substitution block (C 08.01/02 col 0060) and the
+        # A-IRB LGD Modelling block (cols 0171-0173). PS1/26 Annex II makes the
+        # two mutually exclusive per leg and the choice turns on the run-level
+        # election, which never reaches the COREP generator — so it is decided
+        # here, once, and emitted as exclusive-by-construction carriers (RD-8).
+        exposures = route_other_funded_protection(exposures, config, pack=pack)
+
         # The second sanctioned INTRA-STAGE checkpoint (with crm_post_ead).
         # Empirically irreducible on Polars 1.37: the guarantee module's
         # 3-path concat (no-guarantee / single / multi-guarantor split)
@@ -982,6 +992,9 @@ class CRMProcessor:
             # Cheap no-op unless the collateral table actually carries the
             # is_airb_model_collateral flag (early-return inside the finder).
             self._record_misdirected_airb_errors(exposures, collateral, config, errors, pack=pack)
+            # CRR/PS1-26 Art. 230-231 (D5): a collateral_type matching no category
+            # set falls through to "other", losing all CRM recognition silently.
+            record_unrecognised_collateral_type(collateral, errors)
             exposures = self.apply_collateral(
                 exposures, collateral, config, pack=pack, errors=errors
             )

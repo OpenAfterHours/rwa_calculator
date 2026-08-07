@@ -14,6 +14,7 @@ The development guide covers:
 - [**Code Style**](code-style.md) - Coding standards and conventions
 - [**Citation Tracking**](citation-tracking.md) - `@cites` decorator conventions, watchfire CLI usage, strict-gate behaviour
 - [**Citation Coverage Matrix**](citation-matrix.md) - Auto-generated article -> implementing-function index with click-to-expand source snippets
+- [**Escape Log**](escape-log.md) - Defects that reached production, and the gate change that now stops each one
 
 ## Development Setup
 

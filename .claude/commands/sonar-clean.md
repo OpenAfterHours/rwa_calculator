@@ -213,7 +213,9 @@ Targeted test path: `<derived test path>`
   - For `src/rwa_calc/engine/<sub>/<mod>.py` try `tests/unit/test_<mod>.py`
     first; if missing, fall back to `tests/unit/test_<sub>_<mod>.py`,
     then to `tests/unit/<sub>/` (directory).
-  - For `src/rwa_calc/data/tables/<mod>.py` try `tests/unit/test_<mod>.py`.
+  - For `src/rwa_calc/rulebook/packs/<mod>.py` try
+    `tests/unit/rulebook/test_<mod>.py`, then `tests/unit/rulebook/`.
+    (The `data/tables/` package no longer exists.)
   - For `src/rwa_calc/ui/marimo/*.py` there is often no unit test. If
     you cannot find a targeted test, report `targeted_test: none — orchestrator will run global suite` and skip that step. Do NOT invent one.
 

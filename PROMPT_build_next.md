@@ -5,14 +5,15 @@ iteration:
 
 - you need to pick the next item from P-coded items from
   `IMPLEMENTATION_PLAN.md` to implement,
-- it will then run the four agent stages as four parallel waves
-  (scenario-architect → fixture-builder → test-writer →
-  engine-implementer), with N items in flight per wave,
-- runs the global validation gate
-  (`uv run python scripts/arch_check.py && uv run ruff check src/ && uv run ruff format --check src/ && uv run ty src/ && uv run pytest tests/contracts/ --benchmark-skip -q`)
-  exactly once at the end of the engine-implementer wave —
-  per-agent gate runs are forbidden because they would
-  N×-redundantly churn ruff/format on each other's edits,
+- it will then run the five agent stages as five parallel waves
+  (premise-auditor → scenario-architect → fixture-builder →
+  test-writer → engine-implementer), with N items in flight per wave,
+- runs the global validation gate exactly once at the end of the
+  engine-implementer wave — per-agent gate runs are forbidden because
+  they would N×-redundantly churn ruff/format on each other's edits.
+  The gate runs in tiers and **Tier 2 is mandatory** (`tests/oracle/`
+  plus `tests/acceptance/reporting/` — the supervisory validation
+  ratchet and the reporting goldens),
 - on green: commits the item, then ticks the item off
   `IMPLEMENTATION_PLAN.md` in one final
   `chore(plan): tick N code item` commit and pushes.

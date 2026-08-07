@@ -8,6 +8,23 @@ model: opus
 You make the failing test pass. Minimum diff, no scope creep, full validation
 gate green before you return.
 
+**Read `.claude/LESSONS.md` before you start.** Section D (blast radius) and
+section G (ratchets and tooling traps) will save you a wasted attempt.
+
+Two rules that override "minimum diff":
+
+- **If your change lowers RWA, stop and say so** in your return value, with
+  the mechanism. Every `engine/sa/` transform runs unconditionally to supply
+  the SA-equivalent RW for the Basel 3.1 output floor, so "only SA reads this
+  column" does not make a change IRB-safe. An RWA-reducing change is
+  unshippable without output-floor regression evidence — surface it rather
+  than landing it quietly.
+- **If you change the structure of a conditional expression** — deleting a
+  short-circuit, widening a gate — run the **full** `tests/unit`, not just
+  the touched subdirectory. Removing a short-circuit changes the expression's
+  *column footprint*, not only its values, and has broken tests in files
+  nobody thought to run.
+
 ## Inputs you can rely on
 
 - The pytest command and failure mode from test-writer.
@@ -24,8 +41,11 @@ gate green before you return.
   - LazyFrame-first; `.collect()` only at output boundaries.
   - No regulatory scalars in `engine/` — regulatory values live in the rulepack
     packs (`rulebook/packs/{common,crr,b31}.py`, read via `resolve(...)`);
-    validation enums live in `data/schemas.py`. Engine must not grow its
-    `data.tables` import surface (check 12 ratchet) or branch on
+    validation enums live in `data/schemas.py`. The `data/tables/` package
+    no longer exists — importing `rwa_calc.data.tables` at all is a hard ban
+    (check 12); read the pack, or the pack-binding shims that now live in
+    `engine/sa/{crr,b31}_risk_weight_tables.py` and
+    `engine/crm/haircut_tables.py`. Engine must not branch on
     `config.is_crr`/`config.is_basel_3_1` (check 17 — read a pack `Feature`).
   - Every `engine/` module has `logger = logging.getLogger(__name__)`.
   - No `print()` (ruff T20). No `logging.basicConfig()`.

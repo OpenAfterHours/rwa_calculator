@@ -1,5 +1,16 @@
 Batch state files for /next-items live here. Format:
   next-items-<batch-id>.json
 The orchestrator reads this directory at every turn during a live
-batch to recover its supervisor state. Files are deleted at end
-of Step 8.
+batch to recover its supervisor state.
+
+At the end of Step 8 a completed batch file is MOVED to
+`archive/`, not deleted. The archive is the record of what each
+reviewer caught, which waves needed revision, and why items were
+dropped — /postmortem reads it to trace a production defect back to
+the batch that produced it, and drop reasons across batches are the
+input to tuning the Step 4d reviewer criteria.
+
+This directory is git-ignored, so the archive is local to one
+machine. Anything that must survive a fresh clone belongs in
+`.claude/LESSONS.md` (traps agents must know) or
+`docs/development/escape-log.md` (defects that reached production).

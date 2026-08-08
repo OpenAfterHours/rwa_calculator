@@ -202,14 +202,18 @@ LADDER: tuple[Gate, ...] = (
 )
 
 
-def ladder_for(name: str) -> tuple[Gate, ...]:
-    """``legacy`` = the gates that predate this project; ``full`` = all of them."""
+def ladder_for(name: str) -> tuple[str, tuple[Gate, ...]]:
+    """``legacy`` = the gates that predate this project; ``full`` = all of them.
+
+    Returns the matched literal alongside the gates, so downstream records
+    (the scorecard JSON) embed the canonical name, never the raw CLI string.
+    """
     if name == "full":
-        return LADDER
+        return "full", LADDER
     if name == "legacy":
-        return tuple(gate for gate in LADDER if gate.legacy)
+        return "legacy", tuple(gate for gate in LADDER if gate.legacy)
     if name == "fast":
-        return tuple(gate for gate in LADDER if gate.tier <= 2)
+        return "fast", tuple(gate for gate in LADDER if gate.tier <= 2)
     raise SystemExit(f"unknown ladder {name!r}; choose legacy, full or fast")
 
 
@@ -684,7 +688,7 @@ def main() -> int:
         mutants = [mutant for mutant in mutants if mutant.id not in done]
         print(f"resuming: {len(done)} already scored, {len(mutants)} to go")
 
-    gates = ladder_for(args.ladder)
+    ladder, gates = ladder_for(args.ladder)
     if args.timeout is not None:
         gates = tuple(
             Gate(g.name, g.tier, g.cmd, g.legacy, args.timeout, g.baseline_cmd) for g in gates
@@ -721,7 +725,7 @@ def main() -> int:
     )
 
     payload = {
-        "ladder": args.ladder,
+        "ladder": ladder,
         "gates": [g.name for g in gates],
         "runtime_seconds": round(time.perf_counter() - started, 1),
         "baseline_digest": baseline_digest,

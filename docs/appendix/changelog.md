@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Per-article confidence matrix.** `scripts/generate_confidence_matrix.py`
+  joins five evidence layers per regulatory article (`@cites` snapshot, cited
+  pack entries, oracle records, a heuristic test scan, a source-name scan) into
+  [docs/development/confidence-matrix.md](../development/confidence-matrix.md)
+  plus a machine-readable snapshot, tiered HIGH / MEDIUM / LOW / UNCITED / GAP.
+  GAP (32 articles) is the actionable coverage-hole list; the SA-CCR cluster is
+  correctly shown as implemented-but-uncitable (watchfire index gap), not as
+  missing. Freshness-gated by `tests/contracts/test_confidence_matrix_freshness.py`.
+- **Differential shadow fuzzing.** `tests/oracle/derivations/branch_sa.py`
+  turns the shadow calculator into a callable stdlib-only SA branch oracle, and
+  `tests/properties/test_differential_shadow.py` fuzzes the engine against it:
+  a 49-case deterministic matrix exhaustive over entity × CQS × framework plus
+  a hypothesis fuzz on top. No engine/shadow disagreement found on any in-scope
+  input under either regime; excluded branches are enumerated, never silent.
+- **Cross-regime delta regression.** `tests/properties/test_regime_deltas.py`
+  runs one all-SA portfolio under both CRR and Basel 3.1 and asserts a curated,
+  cited delta map: 8 no-change legs (exact RW equality), 4 changed legs with
+  exact values both sides (corporate CQS3 100%→75%, institution CQS2 50%→30%,
+  SME rated/unrated via the Art. 501 supporting-factor removal), and a
+  bookkeeping identity tying each regime's total RWA to the sum of per-leg
+  deltas. Every value re-derived from the source PDFs in adversarial review.
+
+### Fixed
+- **Corporate risk-weight citation label.** The CRR pack's
+  `corporate_risk_weights` citation (and the regime-delta suite's citations)
+  now reference CRR Art. 122 **Table 6** — Table 5 is Art. 121's
+  unrated-institution table. Values were always correct; the pointer was not.
+- **Stale register note.** The supervisory-validation register's
+  `caution_on_plan_doc_definitions` note described the already-fixed
+  C 07.00 col 0200 origin-basis defect in the present tense; rewritten
+  past-tense with the resolution in both the JSON register and the test's
+  `REGISTER_NOTES`.
+
 ### Changed
 - **One work queue.** `DOCS_IMPLEMENTATION_PLAN.md` is retired: its open items
   merged into `IMPLEMENTATION_PLAN.md` (Tier 5 is now the docs queue that

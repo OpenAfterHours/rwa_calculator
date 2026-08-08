@@ -121,6 +121,45 @@ Two corollaries, both of which the current estate violates in places:
 
 Ordered by value-per-unit-effort, not by build order.
 
+### 3.0 Which component catches which kind of defect
+
+The two jobs — finding what is **already wrong** and catching what a **change
+breaks** — need different machinery, and conflating them is why the estate is in
+its current position.
+
+A regression gate structurally cannot find a latent defect: if the bug was
+present when the baseline was captured, the diff is zero and the golden says
+"expected". Only a causally independent source of truth finds those.
+
+| Component | Finds defects already present | Catches defects a change introduces |
+|---|---|---|
+| C1 impact report | No — diffs against the previous commit | **Yes**, primary |
+| C2 properties | **Yes** | Yes |
+| C3 shadow calculator | **Yes**, primary | Yes |
+| C4 cell re-derivation | **Yes**, primary | Yes |
+| C5 coverage ratchets | **Yes** — a dead cell is usually already wrong | Yes — stops new blind spots |
+| C6 scorecard | Neither: it measures how well the others do | |
+
+Two consequences:
+
+- **The estate's regression half is weaker than the test count suggests.** It
+  catches changes to *covered* cells. It misses the silent classes: a cell no
+  portfolio populates moves freely; nothing forces anyone to explain a movement
+  that does appear; and a bulk golden regen launders a real defect into the
+  baseline. C1 closes the second, C5 the first, and C1 makes the third visible
+  because a bulk regen shows as unexplained movement across hundreds of cells.
+- **Ordering matters.** Building only regression gates freezes today's defects in
+  place permanently — ratcheting on top of a wrong baseline, which is roughly
+  where the estate already is. The independence work is what makes the
+  regression work trustworthy.
+
+### 3.0.1 What properties cannot do
+
+C2 is blind to a **wrong constant**. If a risk weight is 45% where the regulation
+says 50%, conservation still holds, monotonicity still holds, bounds still hold,
+and every property passes. That defect class belongs to C3 alone, which is the
+argument for paying its cost.
+
 ### C1. Numeric change-impact report on every change *(smallest effort, largest immediate return)*
 
 `scripts/parity_gate.py` already captures a full pipeline snapshot over the
@@ -180,9 +219,14 @@ wrongness without anyone deriving an expected value.
 
 **Identities**
 
-- B3.1: `rwa_final ≥ 0.725 × SA-equivalent RWA` on every run. Cheap, and it
-  directly guards the `engine/sa/` → output-floor coupling that `LESSONS.md` D1
-  warns is the most misjudged blast radius in the codebase.
+- B3.1 output floor. **This was specified wrongly in the first draft of this
+  plan and is corrected here.** The draft said `rwa_final ≥ 0.725 × SA-equivalent
+  RWA`. That is not an identity: OF-ADJ can be negative, and the transitional
+  phase-in means the multiplier is below 72.5% before 2030. The correct assertion
+  is against the Art. 92 para 2A published threshold, plus a separate check that
+  the fully-phased-in multiplier IS 72.5% and that the transitional one is below
+  it. As built, it guards the `engine/sa/` → output-floor coupling that
+  `LESSONS.md` D1 warns is the most misjudged blast radius in the codebase.
 - `rwa_final` is post-floor — assert it is never re-floored or re-added
   downstream.
 
@@ -309,6 +353,21 @@ The mutant catalogue is not invented — it is already written down:
 The output is a single number — **detection rate** — plus the layer that caught
 each one and the mean layers-deep. That converts "we have 10,500 tests" into
 "we catch 87% of realistic defects, and here are the 13% we do not".
+
+**A mutant must be proven REACHABLE, not merely APPLICABLE.** Learned the hard
+way while validating C2: mutating the rulepack's `output_floor_pct_full` from
+0.725 to 0.100 changed nothing — 52/52 properties passed — which looked like
+proof that the floor properties were vacuous. They are not. That pack entry is
+only consumed under a `skip_transitional` election no property exercises, so the
+mutation applied cleanly to a **dead path**. Re-mutating the reachable schedule
+step instead failed three properties immediately, including the
+`portfolio_floor_binding` anti-vacuity guard.
+
+So C6 must verify each mutant *changes observable output* — one cheap run whose
+result must differ from the unmutated baseline — before running the ladder, and
+must report `UNREACHABLE` as a third category distinct from "not detected".
+Without that, an unreachable mutant scores as an escape and the headline
+detection rate is fiction in the pessimistic direction.
 
 Target: **≥ 90% detection on the escape-log-derived mutants** (these have
 already escaped once; failing to catch them is inexcusable), and a published,

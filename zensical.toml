@@ -145,6 +145,7 @@ nav = [
     { "Documentation Conventions" = "development/documentation-conventions.md" },
     { "Citation Tracking" = "development/citation-tracking.md" },
     { "Citation Coverage Matrix" = "development/citation-matrix.md" },
+    { "Confidence & Evidence Matrix" = "development/confidence-matrix.md" },
     { "Module Dependencies" = "development/module-dependencies.md" },
     { "Change-Impact Report" = "development/impact-report.md" },
     { "Escape Log" = "development/escape-log.md" },

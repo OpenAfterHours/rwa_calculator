@@ -70,6 +70,49 @@ sums? Is a new fixture that reaches previously-dead columns registered in
 `RUNS` in `tests/acceptance/reporting/test_supervisory_validations.py`? Were
 goldens or the validation baseline regenerated to reach green?
 
+**8. Attack the guard set with the codebase's own precedent.** A guard set is
+usually complete against the wrong implementations the author *thought of*.
+The dangerous variant is the one the repo itself suggests. So: for every
+predicate the design adds, find the nearest existing sibling that gates on the
+same column, and check whether copying that sibling's shape would pass every
+guard. If it would, the guard set is incomplete — say which row closes it.
+
+Worked example (batch 20260808-1624, P1.316). The design added
+`~is_short_term_trade_lc` to exclude Art. 121(4) trade finance, and cited the
+sibling floor exemption at `risk_weights.py:1504` as precedent — twice. That
+sibling is `is_short_term_trade_lc & (original_mty <= 1.0)`. An implementer
+copying it gets a *maturity-gated* exclusion that passes all ten guards and
+all six acceptance rows, because both trade-finance guards were pinned at
+`0.5y`, inside the 1-year window — and at a 5-year trade LC it re-opens 0.20
+at sovereign CQS 1 against a required 0.50. **A design that cites a sibling as
+precedent must pin its difference from that sibling.**
+
+**9. Probe production-reachability of any oracle-sourced claim.** `tests/oracle/
+drivers.py` says in its own docstring that it "bypasses hierarchy / classifier
+/ CRM". So an oracle case can exhibit a disagreement that **production cannot
+reach**, and a plan bullet written from the register will then file it as a
+defect. Before accepting that a register entry describes a live defect, run the
+class/flag it depends on through the *full* `PipelineOrchestrator` and confirm
+the row shape is reachable.
+
+Worked example (batch 20260808-1624, P1.319). ORC-141 showed a
+`commercial_mortgage` exposure taking the IRB mortgage floor. Real: the oracle
+driver injects the class directly. Unreachable: `commercial_mortgage` and
+`residential_mortgage` are written only by the RE loan-splitter, every site
+masked by `_sa_bound_mask` (`re_split/splitter.py:122`,
+`_SA_BOUND_APPROACHES = (SA, EQUITY)`). One of the bullet's three limbs did not
+exist. Enumerate the actual population by spying on the transform across
+several real pipeline runs — do not reason about it from the enum.
+
+**10. Separate a wrong *justification* from a wrong *prescription*.** A design
+can reach the right expression by an argument that is false, and you should
+say so without necessarily failing it. State plainly which of the two is
+broken. If the prescription is right and only the reasoning is wrong, the
+correction belongs in the record so later waves do not inherit it — a `revise`
+is for a wrong prescription, or for reasoning whose falsity would change what
+a later wave *does*. Two claims in P1.316 r2 were false (a NULL-provenance
+chain, and a blast-radius row) while the prescribed predicate was correct.
+
 ## Output format
 
 Same verdict grammar as `reviewer` — the orchestrator parses the first line

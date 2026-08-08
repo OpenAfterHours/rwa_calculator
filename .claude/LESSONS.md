@@ -212,6 +212,26 @@ added to `RUNS` in `tests/acceptance/reporting/test_supervisory_validations.py`.
 The gate fails open — an unread bundle makes every rule NOT_EVALUATED, which is
 indistinguishable from a clean estate.
 
+**⚠ RECURRED 2026-08-08 (batch 20260808-1624), in a form `RUNS` registration does
+not catch.** The portfolio *was* registered; the **cell** was dead. C 08.01
+r0253 held `0.00` in all six golden portfolios, so `tests/acceptance/reporting`
+ran fully green under a simulated fix and the mandatory Tier 2 gate was
+structurally incapable of seeing a change to that column. Closing it took a
+**two-leg** fixture — a live cell that *survives* the change plus one that
+*moves* — because a single moving row leaves the cell at `0.00` afterwards, and
+a test that cannot tell "the fix worked" from "the fix zeroed the cell" is not a
+test of the change. Result: five previously-`VACUOUS` rules activated to `PASS`,
+including `boe_b0752_27`, the r0253 tie-out itself.
+
+**This is the second production-class recurrence, so it graduates rather than
+staying prose: the executable form is the `dead_cells` / `never_evaluated_rules`
+ratchet already specified in P5.21** (`scripts/coverage_report.py` computes both
+today and gates on neither). Registration-in-`RUNS` is necessary and not
+sufficient; the ratchet is what makes a dead *cell* fail. Until P5.21 lands, the
+manual form is: before trusting a green Tier 2 on a reporting-adjacent change,
+measure the cell you are changing across every golden portfolio and confirm it
+is non-zero somewhere.
+
 ### B6. An (approach, class) pair with no row is invisible to every published rule
 
 **Trap.** After a re-key, RWEA falls out of the breakdown rows while the parent
@@ -489,6 +509,10 @@ the move here and delete the prose entry above.
 | Date | Lesson | Graduated to |
 |---|---|---|
 | 2026-08-08 | Skill files restate rulepack values and drift (CQS5 100%→150% in 3 files; QRRE 100k vs pack 90k; CRR institution CQS2 30% vs 50%, which reached the P8.20 fixture) | `scripts/generate_regulatory_tables.py` now renders pack values into marked regions of the `basel31`/`crr` skill files, and `scripts/check_skill_values.py` bans percentages in skill prose outside those regions. Both gated by `tests/contracts/test_docs_freshness.py`. Prose entry A4 keeps only the *lookup order*, which no check can express. |
+| 2026-08-08 | A guard set is complete against the wrong implementations the author imagined, but not against the variant the **repo's own sibling code** suggests (P1.316: a maturity-gated trade-finance exclusion copied from `risk_weights.py:1504` passed all ten guards and re-opened a 30pp understatement outside the guarded maturity band) | **Attack 8** in `.claude/agents/skeptic.md` — for every predicate a design adds, find the nearest sibling gating on the same column and check whether copying its shape passes every guard. A design that cites a sibling as precedent must pin its difference from that sibling. |
+| 2026-08-08 | An oracle case can exhibit a disagreement production cannot reach, because `tests/oracle/drivers.py` bypasses hierarchy/classifier/CRM — and the plan then files it as a defect (P1.319 ORC-141: `commercial_mortgage` is SA-bound and never reaches the IRB branch) | **Attack 9** in `.claude/agents/skeptic.md` — probe production-reachability of any oracle-sourced claim by enumerating the population through the full `PipelineOrchestrator`, not by reasoning from the enum. |
+| 2026-08-08 | A design can reach the right expression by an argument that is false, and a reviewer that fails it on the reasoning alone destroys correct work (P1.316 r2: two false narrative claims, correct prescription) | **Attack 10** in `.claude/agents/skeptic.md` — state which of prescription and justification is broken. `revise` is for a wrong prescription, or reasoning whose falsity would change what a later wave *does*. |
+| 2026-08-08 | **B5 recurrence** — a registered portfolio can still leave the *cell* dead, so Tier 2 passes green over a change it cannot see (C 08.01 r0253 was `0.00` in all six goldens) | Pointed at **P5.21**'s `dead_cells` / `never_evaluated_rules` ratchet, which `scripts/coverage_report.py` already computes and gates on neither. B5's prose now carries the two-leg fixture pattern as the interim manual form. |
 
 Candidates currently identified but not yet graduated (file as plan bullets):
 

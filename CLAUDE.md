@@ -180,8 +180,8 @@ Project subagents in `.claude/agents/` (role-based, not domain-based — regulat
 - **`engine-implementer`** — owns `src/rwa_calc/`. Makes the failing test pass with the minimum diff and a green validation gate (arch_check, ruff, ty, contracts).
 - **`reviewer`** — **conformance** gate dispatched after every wave of `/next-items`. Critiques a role-agent's output against operator-supplied wave criteria and returns `VERDICT: pass | revise | drop`. Owns nothing on disk; has `Bash(uv run pytest:*)` solely so it can verify a claimed test outcome rather than trusting a quoted summary line.
 - **`skeptic`** — **adversarial** reviewer running in parallel with `reviewer` on the design and implementation waves. Re-derives the number, re-runs the test, and attacks the test's ability to fail. Same verdict grammar; the worst verdict of the two decides the item. Its default is "unproven" — an untested claim is `revise`, not `pass`.
-- **`plan-curator`** — owns the two work-queue files at the repo root: `IMPLEMENTATION_PLAN.md` and `DOCS_IMPLEMENTATION_PLAN.md`. Audits code/specs/PDFs against each other and writes prioritised bullet items.
-- **`doc-writer`** — owns `docs/`. Writes or updates one canonical docs page per `DOCS_IMPLEMENTATION_PLAN.md` item; runs `uv run zensical build` before returning.
+- **`plan-curator`** — owns the single work-queue file at the repo root: `IMPLEMENTATION_PLAN.md` (Tier 5 is the docs queue; `DOCS_IMPLEMENTATION_PLAN.md` was merged into it 2026-08-08 — migrated items keep their D-codes). Audits code/specs/PDFs against each other and writes prioritised bullet items.
+- **`doc-writer`** — owns `docs/`. Writes or updates one canonical docs page per Tier 5 item in `IMPLEMENTATION_PLAN.md`; runs `uv run zensical build` before returning.
 
 Orchestration lives in slash commands, not in agents. Each `loop.sh` mode maps to one slash command. The default build / docs_build commands are the **parallel batch** orchestrators (`/next-items`, `/next-docs`); the strict-serial single-item commands (`/next-scenario`, `/next-doc`) remain available for one-off / debugging use.
 
@@ -191,7 +191,7 @@ Orchestration lives in slash commands, not in agents. Each `loop.sh` mode maps t
 | `loop.sh ccr` | `PROMPT_ccr.md` | `/next-items 3 ccr` | `/implement-scenario <P8.x>` |
 | `loop.sh plan` | `PROMPT_plan.md` | `/refresh-plan` | — |
 | `loop.sh docs_build` | `PROMPT_docs_build.md` | `/next-docs 3` | `/next-doc` |
-| `loop.sh docs_plan` | `PROMPT_docs_plan.md` | `/refresh-docs-plan` | — |
+| `loop.sh docs_plan` | `PROMPT_docs_plan.md` | `/refresh-docs-plan` (audits Tier 5 of the single plan) | — |
 
 The batch commands pick N non-conflicting items and run the validation gate (or `uv run zensical build`) **once at the end** — not per agent. `/next-items` provisions one git worktree per item on `batch/<batch-id>/<P-code>` and drives the **five-wave** pipeline (`premise-auditor` → `scenario-architect` → `fixture-builder` → `test-writer` → `engine-implementer`) as an event-driven supervisor: agents are dispatched in the background (`run_in_background: true`), a `reviewer` gates every wave (`pass | revise | drop`) with a `skeptic` alongside it on the design and implementation waves, one revision retry per wave per item is allowed, and the orchestrator persists batch state to `.claude/state/next-items-<batch-id>.json` so it can survive context compactions and operator interjections across multiple turns.
 
@@ -227,7 +227,7 @@ prose — graduate it to an executable check, or file the graduation as a Tier 1
 plan item. `scripts/arch_check.py`'s 17 numbered checks and the supervisory
 validation register are what graduated lessons look like.
 
-Agents never commit or push — commits land in the slash-command orchestrator only. The call graph is uniformly one level deep (orchestrator → role-agent or reviewer); sub-agents do not spawn other sub-agents. Claude Code does not propagate the project's `.claude/agents/` registry into sub-sessions, so a nested Agent call from a sub-agent cannot dispatch project role-agents — keep all dispatch in the slash-command orchestrator. The two root plan files (`IMPLEMENTATION_PLAN.md`, `DOCS_IMPLEMENTATION_PLAN.md`) are the source of truth for outstanding work; `docs/plans/implementation-plan.md` is published narrative on the Zensical site.
+Agents never commit or push — commits land in the slash-command orchestrator only. The call graph is uniformly one level deep (orchestrator → role-agent or reviewer); sub-agents do not spawn other sub-agents. Claude Code does not propagate the project's `.claude/agents/` registry into sub-sessions, so a nested Agent call from a sub-agent cannot dispatch project role-agents — keep all dispatch in the slash-command orchestrator. The single root plan file (`IMPLEMENTATION_PLAN.md`) is the source of truth for outstanding work — Tier 5 is the docs queue drained by `/next-docs`, every other tier belongs to `/next-items`; `docs/plans/implementation-plan.md` is published narrative on the Zensical site.
 
 ## Documentation
 

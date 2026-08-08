@@ -14,11 +14,10 @@ That single slash command drives the whole `loop.sh plan` iteration:
 After `/refresh-plan` returns, do this housekeeping in the top-level
 session:
 
-1. If the curator surfaced a cross-file dependency (e.g. a P-code
-   that blocks a docs item), append a one-line note to
-   `DOCS_IMPLEMENTATION_PLAN.md` so the next `/refresh-docs-plan`
-   picks it up. Use the `plan-curator` agent for that one-line edit
-   so file ownership stays consistent.
+1. If the curator surfaced a dependency between a code item and a
+   Tier 5 docs item (e.g. a P-code that blocks a docs page), make
+   sure both bullets carry the cross-reference — same file, so this
+   is an ordinary `Ref:`/`blocked on` note, no cross-file edit.
 2. If unrelated source code looks subtly drifted (you spotted it
    while reading), capture it in `IMPLEMENTATION_PLAN.md` as a new
    P-coded bullet — do not fix it from a plan-only loop.
@@ -27,9 +26,9 @@ session:
 
 - Plan-only. No edits in `src/`, `tests/`, `docs/`, or
   `tests/fixtures/`.
-- Single sources of truth — do not duplicate items between
-  `IMPLEMENTATION_PLAN.md` and `DOCS_IMPLEMENTATION_PLAN.md`.
-  Cross-reference via the bullet's `Ref:` field instead.
+- Single source of truth — `IMPLEMENTATION_PLAN.md` is the only
+  work queue (Tier 5 is the docs queue). Do not duplicate an item
+  across tiers; cross-reference via the bullet's `Ref:` field.
 - Do NOT assume functionality is missing without searching first.
   Treat `src/rwa_calc/contracts/` and `src/rwa_calc/domain/` as
   shared protocols / bundles / enums; consolidated implementations

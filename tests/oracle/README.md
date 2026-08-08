@@ -81,6 +81,14 @@ Record it in `KNOWN_DISAGREEMENTS` in `test_oracle.py` as a strict xfail, with
 the article, both figures, which intermediate diverges, and the direction of the
 error. Remove the entry when the *engine* changes — never when the oracle does.
 
+**Enumerate the whole rule family before stating a direction.** A defect found
+at two members of a table is not thereby characterised: the Art. 121 Table 5
+finding reads as purely conservative at CQS 1 and 2, agrees by coincidence at
+CQS 3–5, and is anti-conservative at CQS 6. Reporting the direction from the
+first two members alone would have under-prioritised a capital shortfall. Pin
+every member, including the ones that pass — those are exactly the ones a future
+change can move silently.
+
 Correcting an oracle's **inputs** is a different thing and is legitimate: if a
 fact pattern accidentally triggered a condition it did not mean to (a
 third-country PSE without an equivalence determination, say), the inputs were
@@ -116,7 +124,7 @@ test skips it and the gap stays visible.
   and CRM by calling the relevant calculator's `calculate_branch` directly.
   This is deliberate: the oracle isolates regulatory math from pipeline
   plumbing.
-- **Not exhaustive.** 119 exposures across phases O1, O2 and O4. Credit risk
+- **Not exhaustive.** 123 exposures across phases O1, O2 and O4. Credit risk
   mitigation (O3), off-balance-sheet conversion factors and the entity-level
   output floor are out of scope — see the "Scope not yet covered" section of
   `ORACLE_DERIVATIONS.md`.

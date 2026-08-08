@@ -232,6 +232,8 @@ Agents never commit or push — commits land in the slash-command orchestrator o
 ## Documentation
 
 - **Zensical site**: Source in `docs/`, config in `zensical.toml`. Run locally: `uv run zensical serve`
+- **Generated pages — never hand-edit**: `docs/data-model/regulatory-tables.md` is rendered from the resolved rulepacks by `scripts/generate_regulatory_tables.py` (freshness gated by `tests/contracts/test_docs_freshness.py` — regenerate after any pack change); `docs/development/citation-matrix.md` by `scripts/generate_citation_matrix.py`.
+- **Dead-link ratchet**: `scripts/check_doc_links.py --check` two-way ratchets the docs dead-link count against `scripts/docs_link_baseline.json` (same contract test). Fixing links requires banking the lower count with `--update-baseline`.
 - **Specifications**: Single source of truth is `docs/specifications/`. Do not create a separate `specs/` directory.
 - **Docstrings**: All public classes and functions must have docstrings following the module docstring pattern (purpose, responsibilities, references)
 - **Changelog**: Update `docs/appendix/changelog.md` for any user-facing changes

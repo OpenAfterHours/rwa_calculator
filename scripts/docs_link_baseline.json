@@ -1,0 +1,4 @@
+{
+  "_comment": "Docs dead-link ratchet (scripts/check_doc_links.py --check). The count may not INCREASE; a decrease must be banked here. Drive to zero (P4.56) then delete this file for a hard-zero gate.",
+  "broken_links": 76
+}

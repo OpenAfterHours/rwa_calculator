@@ -299,7 +299,7 @@ GBP 2,500,000 (RESI 60%, CRE 40%). LTV = 80% on the aggregate. Both parts qualif
     `property_type = "commercial"` and `property_value` = V_CRE — each with
     `EAD = total_EAD × (V_part / V_total)` and `is_qualifying_re` reflecting that
     part's own Art. 124A status. This matches the regulation's outcome but places the
-    split-logic obligation on the firm. See D3.59 in `DOCS_IMPLEMENTATION_PLAN.md`.
+    split-logic obligation on the firm. See D3.59 in `IMPLEMENTATION_PLAN.md`.
 
 > **Details:** See [Mixed Real Estate Split (Art. 124(4))](../../specifications/basel31/sa-risk-weights.md#mixed-real-estate-split-art-1244) for the full all-or-nothing gate, worked example, and CRR comparison.
 

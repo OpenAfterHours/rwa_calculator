@@ -45,7 +45,7 @@ For firms with IRB permission, a different risk weight schedule applies:
 | All other equity (unlisted, speculative, CIU, other) | 370% | Art. 155(2)(c) |
 
 !!! warning "Art. 155 has exactly three categories"
-    CRR Art. 155(2) defines only the three risk weight buckets shown above. The code additionally maps `GOVERNMENT_SUPPORTED` and `CENTRAL_BANK` equity types to 190% and 0% respectively — these are implementation-specific mappings with no direct basis in Art. 155 text. Government-supported equity at 100% under SA (Art. 133) is a legislative programme treatment, not an IRB Simple category. See [D3.4 in DOCS_IMPLEMENTATION_PLAN.md](../../../DOCS_IMPLEMENTATION_PLAN.md) and the [Equity Approach Specification](../../specifications/crr/equity-approach.md#crr-irb-simple-risk-weight-method-art-155) for details.
+    CRR Art. 155(2) defines only the three risk weight buckets shown above. The code additionally maps `GOVERNMENT_SUPPORTED` and `CENTRAL_BANK` equity types to 190% and 0% respectively — these are implementation-specific mappings with no direct basis in Art. 155 text. Government-supported equity at 100% under SA (Art. 133) is a legislative programme treatment, not an IRB Simple category. Recorded as docs-plan item D3.4 (retired plan file, 2026-08-08 merge); see the [Equity Approach Specification](../../specifications/crr/equity-approach.md#crr-irb-simple-risk-weight-method-art-155) for details.
 
 ### Diversified Portfolio Treatment
 

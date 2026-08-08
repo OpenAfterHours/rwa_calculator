@@ -7,7 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **One work queue.** `DOCS_IMPLEMENTATION_PLAN.md` is retired: its open items
+  merged into `IMPLEMENTATION_PLAN.md` (Tier 5 is now the docs queue that
+  `/next-docs` drains; migrated items keep their D-codes), and the misfiled
+  code items it had accumulated moved into the code tiers. One list, one audit
+  cadence, no cross-file bookkeeping.
+- **`docs/data-model/regulatory-tables.md` is now generated.** Rendered from
+  the resolved rulepacks by `scripts/generate_regulatory_tables.py` (all ~250
+  cited entries, CRR and Basel 3.1 side by side, citations included) and
+  freshness-gated by `tests/contracts/test_docs_freshness.py` — the page can no
+  longer drift from the packs. Never hand-edit it.
+
 ### Added
+- **Docs dead-link ratchet.** `scripts/check_doc_links.py` counts broken
+  relative links and dead intra-page anchors across `docs/` (76 at baseline,
+  banked in `scripts/docs_link_baseline.json`) and two-way ratchets the count
+  in the contract suite: a new dead link fails, a fixed one must be banked.
+  Burn-down tracked as P4.56/P1.309.
 - **Independent validation system.** Six components addressing the fact that the
   estate's ~10,500 tests almost all compare against *recorded engine output*, so
   they detect change rather than wrongness. Plan:

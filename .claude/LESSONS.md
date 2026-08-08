@@ -118,6 +118,33 @@ than implying verification.
 
 ---
 
+### A4. The rulepack is the source of truth for every regulatory value
+
+**Trap.** An agent takes a risk weight, floor or threshold from a skill file, a
+spec page, or its own memory, designs a scenario around it, and the number is
+not what the engine uses.
+
+**Why.** Values had four homes — the pack, the skills, the spec pages and model
+memory — and only one of them is what `resolve(regime, date)` actually returns.
+Measured: corporate CQS5 under Basel 3.1 was stated as **100%** in three skill
+files against a pack, engine and PS1/26 Art. 122(2) Table 6 value of **150%**;
+the QRRE limit was stated as GBP 100k against a pack value of GBP 90k; and an
+earlier CRR institution CQS 2 hint (30%, the Basel 3.1 ECRA value, not the CRR
+50%) **seeded a wrong scalar into the P8.20 fixture** before a reviewer caught
+it. Three instances, one of which reached a fixture.
+
+**Detect.** Never read a value out of prose. In order of preference:
+
+1. The generated table in the skill reference file — inside
+   `<!-- BEGIN/END GENERATED -->`, rendered from the pack with its citation.
+2. `rg '<entry_name>' src/rwa_calc/rulebook/packs/` for the cited source.
+3. `docs/data-model/regulatory-tables.md` for every entry, both regimes.
+
+If a PDF and the pack disagree, the finding is against the **pack** — fix it
+there and regenerate, never patch the prose. Note that the skill files can no
+longer carry a stale value (see the Graduation ledger), but **spec pages under
+`docs/specifications/` are still hand-written** and remain a drift risk.
+
 ## B. Silent failure and negative space
 
 ### B1. A presence guard on a wrong column name fails silently, forever
@@ -461,7 +488,7 @@ the move here and delete the prose entry above.
 
 | Date | Lesson | Graduated to |
 |---|---|---|
-| — | *(seed: no entries yet — the retro appends here)* | — |
+| 2026-08-08 | Skill files restate rulepack values and drift (CQS5 100%→150% in 3 files; QRRE 100k vs pack 90k; CRR institution CQS2 30% vs 50%, which reached the P8.20 fixture) | `scripts/generate_regulatory_tables.py` now renders pack values into marked regions of the `basel31`/`crr` skill files, and `scripts/check_skill_values.py` bans percentages in skill prose outside those regions. Both gated by `tests/contracts/test_docs_freshness.py`. Prose entry A4 keeps only the *lookup order*, which no check can express. |
 
 Candidates currently identified but not yet graduated (file as plan bullets):
 

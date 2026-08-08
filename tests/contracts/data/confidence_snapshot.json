@@ -5891,6 +5891,7 @@
         "tests/acceptance/basel31/test_p2_18_art_226_1_b31_secured_lending_fx.py",
         "tests/acceptance/basel31/test_p5_15_art_123a_granularity.py",
         "tests/acceptance/ccr/test_ccr_e1_e5_default_risk_routing.py",
+        "tests/contracts/test_docs_freshness.py",
         "tests/fixtures/ccr/p845_e1_e5_builder.py",
         "tests/fixtures/collateral/collateral.py",
         "tests/fixtures/generate_all.py",

@@ -12,6 +12,23 @@ description: >
 The UK CRR (EU Regulation 575/2013, as onshored) defines the current credit risk framework
 for UK banks, effective until 31 December 2026 when Basel 3.1 takes over.
 
+## Where the numbers live
+
+**This skill does not state regulatory values.** Every value table in the reference files
+below is generated from the rulepack (`src/rwa_calc/rulebook/packs/{common,crr}.py`) by
+`uv run python scripts/generate_regulatory_tables.py`, and
+`scripts/check_skill_values.py` fails the build if a value is reintroduced as prose.
+
+When you need a number:
+
+1. **Read the generated table** in the relevant reference file — each `### entry_name`
+   heading is the literal pack key, with its citation.
+2. **Or grep the pack**: `rg 'corporate_risk_weights' src/rwa_calc/rulebook/packs/`.
+3. **Or read the whole rendered pack**: `docs/data-model/regulatory-tables.md`.
+
+Use `docs/assets/crr.pdf` to *audit* a pack value you have reason to doubt — not for
+routine lookup. If the PDF and the pack disagree, the fix goes in the **pack**.
+
 ## Quick Navigation
 
 Use this guide to find the right reference file for your question:
@@ -60,28 +77,32 @@ acceptance test results:
 | Art. 111 | CCFs for off-balance sheet items |
 | Art. 112-134 | SA exposure classes and risk weights |
 | Art. 114 | Sovereign risk weights |
-| Art. 120-121 | Institution risk weights (CQS 2 = 50%; 30% is the Basel 3.1 / PRA PS1/26 ECRA value, not CRR) |
+| Art. 120-121 | Institution risk weights — ⚠️ the CRR CQS 2 weight differs from the Basel 3.1 ECRA weight; never carry one into the other |
 | Art. 122 | Corporate risk weights |
-| Art. 123 | Retail risk weights (75%) |
-| Art. 125 | Residential mortgage risk weights (35%) |
-| Art. 126 | Commercial real estate (50%/100%) |
-| Art. 127 | Defaulted exposures (100%/150%) |
+| Art. 123 | Retail risk weights |
+| Art. 125 | Residential mortgage — LTV split, not a flat weight |
+| Art. 126 | Commercial real estate — LTV plus rental-coverage test |
+| Art. 127 | Defaulted exposures — threshold on provisions |
 | Art. 133 | Equity risk weights |
 | Art. 134 | Other items |
+| Art. 138 | Multiple ECAI assessment resolution |
 | Art. 143-154 | IRB approach (PD, LGD, correlation, K formula) |
-| Art. 153(2) | FI scalar (1.25x correlation) |
+| Art. 153(2) | FI correlation scalar |
 | Art. 153(5) | Slotting approach for specialised lending |
-| Art. 155 | Equity IRB simple method (290%/190%/370%) |
+| Art. 155 | Equity IRB simple method |
 | Art. 158-159 | Expected loss and EL shortfall/excess |
-| Art. 161-163 | Supervisory LGD values and PD floor (0.03%) |
+| Art. 160(1), 163(1) | PD floors — note the **absent CGCB limb** |
+| Art. 161-162 | Supervisory LGD values and effective maturity |
 | Art. 166 | FIRB CCFs |
 | Art. 192-241 | Credit risk mitigation (collateral, guarantees) |
+| Art. 199 | Collateral eligibility — **IRB only** |
+| Art. 201 | Eligible guarantors — exhaustive list, **no retail limb** |
 | Art. 224 | Supervisory haircuts |
 | Art. 230 | Overcollateralisation ratios |
-| Art. 233 | FX mismatch haircut (8%) |
+| Art. 233 | FX mismatch haircut |
 | Art. 238 | Maturity mismatch adjustment |
-| Art. 501 | SME supporting factor (0.7619/0.85) |
-| Art. 501a | Infrastructure supporting factor (0.75) |
+| Art. 501 | SME supporting factor |
+| Art. 501a | Infrastructure supporting factor |
 
 ## CRR SA Exposure Classes (Art. 112)
 

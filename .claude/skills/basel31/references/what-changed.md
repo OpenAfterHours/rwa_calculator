@@ -1,93 +1,116 @@
 # Basel 3.1 — What Changed from CRR
 
-Master delta summary. Every major parameter change in one place.
+Master delta summary.
+
+> **Numbers come from the rulepack, not from this page.** The divergence table below is
+> generated: it lists *every* parameter carried under both regimes whose value differs,
+> computed by comparing the resolved `crr` and `b31` packs. Nothing to maintain, and
+> nothing that can silently go stale. Regenerate with
+> `uv run python scripts/generate_regulatory_tables.py`.
 
 ---
 
-## Framework-Level Changes
+## Structural changes (no single parameter to compare)
 
-| Parameter | CRR | Basel 3.1 | Impact |
-|-----------|-----|-----------|--------|
-| RWA scaling factor | 1.06 | Removed | IRB RWA -5.7% |
-| Output floor | None | 72.5% of SA | IRB benefit capped |
-| SME supporting factor | 0.7619 / 0.85 | Removed | SME RWA increase |
-| Infrastructure factor | 0.75 | Removed | Infra RWA increase |
-| PD floor | 0.03% (uniform) | 0.05%-0.10% (differentiated) | Higher floors |
-| A-IRB LGD floors | None | 0%-50% by type | New constraint |
-| A-IRB scope | All exposure classes | Restricted (no large corp, FI, bank) | More to F-IRB |
-| Equity IRB | PD/LGD + simple RW | Removed (SA only) | 250%/400% |
-| Double default | Available | Removed | Higher RWA |
+These are the changes that a value table cannot express, because the *mechanism* moved
+rather than a number:
 
-## SA Risk Weight Changes
+| Change | Nature of the change |
+|--------|----------------------|
+| Output floor | New constraint with no CRR analogue — see [output-floor.md](output-floor.md) |
+| SME / infrastructure supporting factors | Withdrawn entirely (`supporting_factors` off) |
+| IRB scaling factor | Withdrawn (`irb_scaling_factor` moves to unity) |
+| A-IRB LGD floors | New floor concept — CRR had none to compare against |
+| A-IRB scope | Restricted: large corporates, FIs and institutions become F-IRB only |
+| Equity IRB | Removed — SA only, with a transitional phase-in schedule |
+| Double default | Removed (`double_default_treatment` off) |
+| Real estate | Becomes a standalone exposure class using PRA **loan-splitting** |
+| Institution (unrated) | Sovereign-derived weights replaced by the SCRA grade method |
+| Retail sub-categories | Transactor and payroll/pension categories introduced |
+| CRM method taxonomy | Renamed and scoped: FCM, PSM, LGD-AM — see [crm-changes.md](crm-changes.md) |
+| Post-model adjustments | New mandatory concept (Art. 146(3)) with no CRR equivalent |
+| Currency mismatch | New multiplier for unhedged retail / RRE (Art. 123B) |
 
-| Exposure | CRR RW | Basel 3.1 RW | Change |
-|----------|--------|--------------|--------|
-| Corporate CQS 3 | 100% | 75% | -25pp |
-| Corporate CQS 5 | 150% | 100% | -50pp |
-| Investment-grade corporate | 100% | 65% | -35pp |
-| SME corporate | 100% + 0.7619 SF | 85% | ~+8pp net |
-| Subordinated debt | 100-150% | 150% (flat) | Standardised |
-| Institution (unrated) | 40% (sovereign-based) | SCRA: 40/75/150% | Method change |
-| Retail transactor | 75% | 45% | -30pp |
-| Payroll/pension loans | 75% | 35% | -40pp |
-| Equity (standard) | 100% | 250% | +150pp |
-| Equity (higher risk) | 250-400% | 400% | Standardised |
-| RESI RE (general) | 35% flat | 20% secured / cpty RW residual | Loan-splitting |
-| CRE (income-producing) | 100% | 100%/110% by LTV | LTV-based |
-| ADC | 100% | 150% | +50pp |
+Because the pack names these differently under each regime (`corporate_risk_weights` vs
+`b31_corporate_risk_weights`, and so on), structural changes do **not** appear in the
+generated table below. For those, read the per-topic reference pages, each of which
+carries its own generated tables.
 
-## IRB Parameter Changes
+## Every divergent parameter
 
-| Parameter | CRR | Basel 3.1 | Change |
-|-----------|-----|-----------|--------|
-| PD floor (corporate) | 0.03% | 0.05% | +0.02pp |
-| PD floor (retail mortgage) | 0.03% | 0.10% | +0.07pp |
-| PD floor (QRRE revolver) | 0.03% | 0.10% | +0.07pp |
-| F-IRB LGD senior corp (non-FI) | 45% | 40% | -5pp |
-| F-IRB LGD receivables | 35% | 20% | -15pp |
-| F-IRB LGD CRE/RRE | 35% | 20% | -15pp |
-| F-IRB LGD other physical | 40% | 25% | -15pp |
-| A-IRB LGD floor (unsecured) | None | 25% | New |
-| A-IRB LGD floor (RESI RE) | None | 5% | New |
-| A-IRB LGD floor (QRRE unsecured) | None | 50% | New |
-| A-IRB CCF | Own estimate | Floor: 50% of SA CCF | New constraint |
-| UK RESI RE IRB RW floor | None | 10% (PRA-specific) | New |
-| Post-model adjustments | None | Mandatory (Art. 146(3)) | New concept |
+Entries carried under **both** regimes whose resolved value differs. A blank CRR or
+Basel 3.1 cell means the entry is not a simple scalar under that regime.
 
-## CCF Changes
+<!-- BEGIN GENERATED: regime-divergence -->
+| Name | CRR | Basel 3.1 | Citation |
+|---|---|---|---|
+| `airb_ead_floor_applies` | off | on | CRR Art. 166 / PS1/26, paragraph 166D |
+| `airb_lgd_collateral_method_applicable` | off | on | CRR Art. 181 / PS1/26, paragraph 169A |
+| `airb_lgd_floor` | off | on | CRR Art. 164 / PS1/26, paragraph 161 |
+| `approach_restrictions_b31_applicable` | off | on | CRR Art. 147 / PS1/26, paragraph 147A |
+| `b31_art_124e_three_property_limit_applies` | off | on | CRR Art. 124 / PS1/26, paragraph 124E |
+| `b31_exposure_subclass_reporting_applies` | off | on | CRR Art. 147 / PS1/26, paragraph 147A |
+| `b31_high_risk_class_applicable` | off | on | CRR Art. 128 / PS1/26, paragraph 128 |
+| `ccr_transitional_alpha_addon_applicable` | off | on | CRR Art. 274 / PS1/26, paragraph 274 |
+| `central_bank_uses_sovereign_cqs` | off | on | CRR Art. 114 / PS1/26, paragraph 114 |
+| `collateral_haircut_maturity_bands_revised` | off | on | CRR Art. 224 / PS1/26, paragraph 224 |
+| `crr_non_named_mdb_institution_irb_class` | on | off | CRR Art. 147 / PS1/26, paragraph 147 |
+| `crr_retail_re_portfolio_lgd_floor` | on | off | CRR Art. 164 / PS1/26, paragraph 164 |
+| `double_default_treatment` | on | off | CRR Art. 153(3) / PS1/26, paragraph 153 |
+| `equity_irb_approaches_available` | on | off | CRR Art. 155 / PS1/26, paragraph 133 |
+| `equity_revised_sa_risk_weights` | off | on | CRR Art. 133 / PS1/26, paragraph 133 |
+| `equity_transitional` | off | on | CRR Art. 133 / PS1/26, paragraph 4.1 |
+| `firb_fixed_supervisory_maturity` | on | off | CRR Art. 162(1) / PS1/26, paragraph 162 |
+| `firb_fse_senior_lgd_split` | off | on | CRR Art. 161(1)(a) / PS1/26, paragraph 161 |
+| `firb_min_collateralisation_threshold_applies` | on | off | CRR Art. 230 / PS1/26, paragraph 230 |
+| `firb_overcollateralisation_divisor_applies` | on | off | CRR Art. 230 / PS1/26, paragraph 230 |
+| `firb_sft_supervisory_maturity` | on | off | CRR Art. 162(1) / PS1/26, paragraph 162 |
+| `firb_uses_sa_ccf` | off | on | CRR Art. 166 / PS1/26, paragraph 166C |
+| `irb_correlation_sme_gbp_native` | off | on | CRR Art. 153(4) / PS1/26, paragraph 153 |
+| `irb_scaling_factor` | `1.06` | `1.0` | CRR Art. 153(1) / PS1/26, paragraph 153 |
+| `mna_intermediate_floor_requires_daily_condition` | off | on | CRR Art. 162(2) / PS1/26, paragraph 162 |
+| `one_day_maturity_floor` | on | off | CRR Art. 162(3) / PS1/26, paragraph 162 |
+| `output_floor` | off | on | CRR Art. 92 / PS1/26, paragraph 92 |
+| `post_model_adjustments` | off | on | CRR Art. 153 / PS1/26, paragraph 154 |
+| `re_split_cre_secured_ltv_cap` | `0.50` | `0.55` | CRR Art. 126 / PS1/26, paragraph 124H |
+| `re_split_rre_secured_ltv_cap` | `0.80` | `0.55` | CRR Art. 125 / PS1/26, paragraph 124F |
+| `regulatory_thresholds_fx_derived` | on | off | CRR Art. 123 / PS1/26, paragraph 147 |
+| `retail_art_123a_two_path_applicable` | off | on | CRR Art. 123 / PS1/26, paragraph 123A |
+| `revolving_uses_termination_maturity` | off | on | CRR Art. 162 / PS1/26, paragraph 162 |
+| `sa_currency_mismatch_multiplier` | off | on | CRR Art. 123 / PS1/26, paragraph 123B |
+| `sa_due_diligence_override` | off | on | CRR Art. 110 / PS1/26, paragraph 110A |
+| `sa_re_split_art_124_4_all_or_nothing` | off | on | CRR Art. 124 / PS1/26, paragraph 124 |
+| `sa_re_split_cre_rental_coverage_required` | on | off | CRR Art. 126 / PS1/26, paragraph 124H |
+| `sa_re_split_revised_parameters` | off | on | CRR Art. 125 / PS1/26, paragraph 124F |
+| `sa_re_split_whole_loan_path_applies` | off | on | CRR Art. 126 / PS1/26, paragraph 124H |
+| `sa_revised_ccf_table` | off | on | CRR Art. 111 / PS1/26, paragraph 111 |
+| `sa_revised_defaulted_treatment` | off | on | CRR Art. 127 / PS1/26, paragraph 127 |
+| `sa_revised_risk_weight_overrides` | off | on | CRR Art. 112 / PS1/26, paragraph 122 |
+| `sa_revised_risk_weight_tables` | off | on | CRR Art. 122 / PS1/26, paragraph 122 |
+| `sa_sl_inferred_rating_disapplied` | off | on | CRR Art. 139 / PS1/26, paragraph 139 |
+| `slotting_revised_tables` | off | on | CRR Art. 153(5) / PS1/26, paragraph 153 |
+| `supporting_factors` | on | off | CRR Art. 501 / PS1/26, paragraph 501 |
+| `ucp_unilateral_change_ineligible` | off | on | CRR Art. 213 / PS1/26, paragraph 213 |
+<!-- END GENERATED: regime-divergence -->
 
-| Item Type | CRR | Basel 3.1 | Change |
-|-----------|-----|-----------|--------|
-| Unconditionally cancellable (SA) | 0% | 10% | +10pp |
-| Other commitments (SA) | 0%/20%/50% | 40% | Unified |
-| Low risk (F-IRB) | 0% | 40% | +40pp |
-| A-IRB own estimates | All items | Revolving only | Restricted |
+## Direction of travel
 
-## CRM Changes
+Which way a portfolio moves is a question about *composition*, not about any single
+parameter, so it stays prose:
 
-| Aspect | CRR | Basel 3.1 | Change |
-|--------|-----|-----------|--------|
-| Haircut maturity bands | 3 (0-1y, 1-5y, 5y+) | 5 (0-1y, 1-3y, 3-5y, 5-10y, 10y+) | More granular |
-| Main index equity haircut | 15% | 20% | +5pp |
-| Other equity haircut | 25% | 30% | +5pp |
-| Unfunded protection | Cancellable test | +changeable test | Stricter |
-| Method names | Various | FCM, PSM, LGD-AM | Clarified |
-
-## Capital Impact Summary
-
-| Portfolio Type | Direction | Driver |
+| Portfolio type | Direction | Driver |
 |---------------|-----------|--------|
-| Low-risk IRB | Increase | Output floor |
-| SME | Increase | Factor removal |
-| Infrastructure | Increase | Factor removal |
-| Equity | Increase | 250%/400% from 100% |
-| Unhedged FX retail/RE | Increase | 1.5x multiplier |
-| High LTV mortgages | Decrease | Better SA RWs |
-| Low LTV mortgages | Decrease | Better SA RWs |
-| High-risk corporate | Decrease | CQS 5: 150% -> 100% |
-| Retail transactor | Decrease | 75% -> 45% |
-| Standard corporate | Neutral | — |
+| Low-risk IRB | Increase | Output floor binds where models produce thin RWA |
+| SME | Increase | Supporting factor withdrawn, only partly offset by the SME weight |
+| Infrastructure | Increase | Supporting factor withdrawn |
+| Equity | Increase | SA-only treatment at materially higher weights |
+| Unhedged FX retail / RE | Increase | New currency-mismatch multiplier |
+| Mortgages | Decrease | Loan-splitting is favourable at both low and high LTV |
+| High-risk corporate | Decrease | CQS 5 and CQS 3 both improve under Table 6 |
+| Retail transactor | Decrease | New sub-category below the base retail weight |
+| Standard corporate | Neutral | CQS 1, 2, 4 and 6 unchanged |
 
 ---
 
 > **Full detail:** `docs/framework-comparison/key-differences.md`
+> **All pack entries:** `docs/data-model/regulatory-tables.md`

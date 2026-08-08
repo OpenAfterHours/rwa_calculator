@@ -227,12 +227,23 @@ prose — graduate it to an executable check, or file the graduation as a Tier 1
 plan item. `scripts/arch_check.py`'s 17 numbered checks and the supervisory
 validation register are what graduated lessons look like.
 
+The clearest worked example is the **skill-value graduation (2026-08-08)**. The
+regulatory skills restated rulepack values as prose tables and drifted three
+times — corporate CQS5 stated as 100% in three files against a pack value of
+150%, the QRRE limit as GBP 100k against 90k, and a CRR institution CQS 2 hint
+that seeded a wrong scalar into the P8.20 fixture. Each was fixed as prose, and
+each recurred. The graduation removed the *category* rather than the instances:
+values are now generated into the skills from the pack, and prose that states a
+value fails the build. Note the shape — the fix was not "be more careful with
+the skills" but "make the skills structurally incapable of holding a value".
+
 Agents never commit or push — commits land in the slash-command orchestrator only. The call graph is uniformly one level deep (orchestrator → role-agent or reviewer); sub-agents do not spawn other sub-agents. Claude Code does not propagate the project's `.claude/agents/` registry into sub-sessions, so a nested Agent call from a sub-agent cannot dispatch project role-agents — keep all dispatch in the slash-command orchestrator. The single root plan file (`IMPLEMENTATION_PLAN.md`) is the source of truth for outstanding work — Tier 5 is the docs queue drained by `/next-docs`, every other tier belongs to `/next-items`; `docs/plans/implementation-plan.md` is published narrative on the Zensical site.
 
 ## Documentation
 
 - **Zensical site**: Source in `docs/`, config in `zensical.toml`. Run locally: `uv run zensical serve`
-- **Generated pages — never hand-edit**: `docs/data-model/regulatory-tables.md` is rendered from the resolved rulepacks by `scripts/generate_regulatory_tables.py` (freshness gated by `tests/contracts/test_docs_freshness.py` — regenerate after any pack change); `docs/development/citation-matrix.md` by `scripts/generate_citation_matrix.py`.
+- **Generated pages — never hand-edit**: `docs/data-model/regulatory-tables.md` is rendered from the resolved rulepacks by `scripts/generate_regulatory_tables.py` (freshness gated by `tests/contracts/test_docs_freshness.py` — regenerate after any pack change); `docs/development/citation-matrix.md` by `scripts/generate_citation_matrix.py`; `docs/development/confidence-matrix.md` + `tests/contracts/data/confidence_snapshot.json` by `scripts/generate_confidence_matrix.py` (its evidence layers include a **text scan of the test tree**, so merely naming an article in a test docstring makes it stale).
+- **The skills state no regulatory values**: the same `generate_regulatory_tables.py` fills `<!-- BEGIN/END GENERATED: id -->` regions inside `.claude/skills/{basel31,crr}/**/*.md` from the pack, and `scripts/check_skill_values.py` fails any percentage written into skill *prose* outside those regions (justified exceptions go in its `ALLOWANCES` list). Skill prose carries judgment — precedence, scope, mechanics, PRA-vs-BCBS divergence, traps — and names pack entries instead of quoting their values. To add a value to a skill, add the entry to `FRAGMENTS` in the generator and regenerate; never type the number.
 - **Dead-link ratchet**: `scripts/check_doc_links.py --check` two-way ratchets the docs dead-link count against `scripts/docs_link_baseline.json` (same contract test). Fixing links requires banking the lower count with `--update-baseline`.
 - **Specifications**: Single source of truth is `docs/specifications/`. Do not create a separate `specs/` directory.
 - **Docstrings**: All public classes and functions must have docstrings following the module docstring pattern (purpose, responsibilities, references)

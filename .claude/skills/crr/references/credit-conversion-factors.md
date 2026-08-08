@@ -1,39 +1,125 @@
 # CRR Credit Conversion Factors
 
-Quick-reference for SA and F-IRB CCF tables under CRR.
-
 **Regulatory Reference:** CRR Articles 111, 166
+
+> Values are generated from the rulepack — see the table below. Regenerate with
+> `uv run python scripts/generate_regulatory_tables.py`.
 
 ---
 
-## SA CCFs (Art. 111)
+## The CRR shape
 
-| CCF Category | CCF | Description |
-|-------------|-----|-------------|
-| Full Risk (FR) | 100% | Direct credit substitutes, guarantees |
-| Medium Risk (MR) | 50% | Undrawn commitments > 1 year |
-| Medium-Low Risk (MLR) | 20% | Undrawn commitments <= 1 year, trade-related LCs |
-| Low Risk (LR) | 0% | Unconditionally cancellable commitments |
+CRR runs **two separate CCF schedules**, and the F-IRB one is generally *more* punitive
+than SA for the middle categories — the opposite of the intuition that IRB is always the
+lighter approach:
 
-## F-IRB CCFs (Art. 166(8)-(9))
+- **SA (Art. 111)** — `sa_ccf`, keyed by risk category, with `sa_ccf_default` as the
+  fallback.
+- **F-IRB (Art. 166(8)-(9))** — `firb_credit_line_ccf` for general commitments, with
+  `firb_trade_lc_ccf` as the Art. 166(9) exception for short-term trade letters of credit
+  covering goods movements, and `firb_obs_fallback_ccf` for anything unmapped.
 
-| CCF Category | CCF | Notes |
-|-------------|-----|-------|
-| Full Risk (FR) | 100% | Same as SA |
-| Medium Risk (MR) | 75% | Higher than SA 50% |
-| Medium-Low Risk (MLR) | 75% | Higher than SA 20% (general) |
-| MLR (trade LCs) | 20% | Short-term trade LCs for goods (Art. 166(9) exception) |
-| Low Risk (LR) | 0% | Same as SA |
+Basel 3.1 collapses both onto SA Table A1 (`firb_uses_sa_ccf`) — so a CRR F-IRB CCF must
+never be reused in a Basel 3.1 scenario.
+
+Commitment classification under CRR turns on **maturity**: `oc_short_maturity_ccf` applies
+below `oc_short_maturity_threshold_days`, with the longer-dated case taking the medium-risk
+category. Basel 3.1 replaces that split with a single flat "other commitments" factor.
+
+`obs_product_to_risk_type` is the map from product string to risk category. It is the
+classification step that decides *which* CCF applies, and the usual reason a hand-calc
+disagrees with the engine.
+
+<!-- BEGIN GENERATED: crr-ccf-values -->
+### `sa_ccf`
+
+**CRR** — CRR Art. 111
+ *(SA CCFs (Annex I): FR/FRC 100%, MR/OC 50%, MLR 20%, LR 0%)*
+
+Key column: `risk_type`; default `0.50`
+
+| Key | Value |
+|---|---|
+| `FR` | `1.00` |
+| `FRC` | `1.00` |
+| `MR` | `0.50` |
+| `MR_ISSUED` | `0.50` |
+| `OC` | `0.50` |
+| `MLR` | `0.20` |
+| `LR` | `0.00` |
+
+**Basel 3.1** — PS1/26, paragraph 111
+ *(Table A1 SA CCFs (OC 40% Row 5, LR/UCC 10% Row 6))*
+
+Key column: `risk_type`; default `0.50`
+
+| Key | Value |
+|---|---|
+| `FR` | `1.00` |
+| `FRC` | `1.00` |
+| `MR` | `0.50` |
+| `MR_ISSUED` | `0.50` |
+| `OC` | `0.40` |
+| `MLR` | `0.20` |
+| `LR` | `0.10` |
+
+| Name | CRR | Basel 3.1 | Citation |
+|---|---|---|---|
+| `sa_ccf_default` | `0.50` | `0.50` | CRR Art. 111 |
+
+### `obs_product_to_risk_type`
+
+**Both regimes** — CRR Art. 111
+ *(Annex I OBS product -> risk_type bucket)*
+
+Key column: `obs_product`
+
+| Key | Value |
+|---|---|
+| `ACCEPTANCE` | `FR` |
+| `PERFORMANCE_BOND` | `MLR` |
+| `WARRANTY` | `MLR` |
+| `TENDER_BOND` | `MLR` |
+| `BID_BOND` | `MLR` |
+| `DOCUMENTARY_CREDIT` | `MLR` |
+| `TRADE_LC` | `MLR` |
+
+| Name | CRR | Basel 3.1 | Citation |
+|---|---|---|---|
+| `oc_short_maturity_ccf` | `0.20` | `0.20` | CRR Art. 111 |
+| `oc_short_maturity_threshold_days` | `365` | `365` | CRR Art. 111 |
+| `firb_credit_line_ccf` | `0.75` | — | CRR Art. 166 |
+| `firb_trade_lc_ccf` | `0.20` | — | CRR Art. 166 |
+
+### `firb_obs_fallback_ccf`
+
+**CRR** — CRR Art. 166
+ *((10) F-IRB fallback: FR 100%, MR/OC 50%, MLR 20%, LR 0%)*
+
+Key column: `risk_type`; default `0.50`
+
+| Key | Value |
+|---|---|
+| `FR` | `1.00` |
+| `FRC` | `1.00` |
+| `MR` | `0.50` |
+| `MR_ISSUED` | `0.50` |
+| `OC` | `0.50` |
+| `MLR` | `0.20` |
+| `LR` | `0.00` |
+<!-- END GENERATED: crr-ccf-values -->
 
 ## EAD Formula
 
 ```
-EAD = Drawn Amount + Accrued Interest + (Undrawn Amount x CCF)
+EAD = drawn_amount + accrued_interest + (undrawn_amount x CCF)
 ```
 
-When provisions are present (SA only), they are deducted before CCF application
-via the drawn-first deduction approach (see provisions reference).
+Where provisions are present (**SA only**), they are deducted before the CCF is applied,
+using the drawn-first deduction approach — see
+[provisions-and-el.md](provisions-and-el.md).
 
 ---
 
 > **Full detail:** `docs/specifications/crr/credit-conversion-factors.md`
+> **All pack entries:** `docs/data-model/regulatory-tables.md`

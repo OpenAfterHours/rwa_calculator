@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **The regulatory skills no longer state regulatory values.**
+  `scripts/generate_regulatory_tables.py` now renders pack values into
+  `<!-- BEGIN/END GENERATED -->` regions inside the `basel31` and `crr` skill
+  reference files (33 fragments across 17 files), and the new
+  `scripts/check_skill_values.py` fails any percentage written into skill
+  *prose* outside those regions, with a justified `ALLOWANCES` list for genuine
+  exceptions (verbatim article quotations, published EBA rule expressions).
+  Both are gated by `tests/contracts/test_docs_freshness.py`. Skill prose now
+  carries only what the pack cannot — precedence, scope, mechanics, PRA-vs-BCBS
+  divergences and traps — and names pack entries instead of quoting values.
+  A `what-changed.md` fragment renders the CRR↔B3.1 divergence table by
+  *comparing the resolved packs*, so it maintains itself. The generator hard-
+  fails (exit 2) on a fragment id with no marker, a marker no fragment fills, or
+  an entry name in neither pack — so a pack rename cannot silently empty a skill.
 - **Per-article confidence matrix.** `scripts/generate_confidence_matrix.py`
   joins five evidence layers per regulatory article (`@cites` snapshot, cited
   pack entries, oracle records, a heuristic test scan, a source-name scan) into
@@ -31,6 +45,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deltas. Every value re-derived from the source PDFs in adversarial review.
 
 ### Fixed
+- **Two wrong values in the `basel31` skill, both now impossible to reintroduce.**
+  Corporate CQS5 under Basel 3.1 was stated as 100% in three places
+  (`references/sa-risk-weights.md` and twice in `references/what-changed.md`)
+  against PS1/26 Art. 122(2) Table 6, the pack and the engine, all of which say
+  **150%**; and the QRRE limit was stated as GBP 100k against a pack value of
+  **GBP 90k**. Both were prose-only defects — the engine was always correct —
+  but the skills are read by every role-agent before it designs a scenario, and
+  an earlier defect of exactly this class (CRR institution CQS 2 quoted as the
+  Basel 3.1 ECRA 30% rather than 50%) demonstrably seeded a wrong scalar into
+  the P8.20 fixture. Recorded as a graduated lesson in `.claude/LESSONS.md`.
 - **Corporate risk-weight citation label.** The CRR pack's
   `corporate_risk_weights` citation (and the regime-delta suite's citations)
   now reference CRR Art. 122 **Table 6** — Table 5 is Art. 121's

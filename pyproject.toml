@@ -67,6 +67,7 @@ dev = [
     "mkdocstrings[python]>=0.24.0",
     "numpy>=1.26.0",  # For benchmark data generation only
     "watchfire==0.3.1",
+    "hypothesis>=6.100.0",  # tests/properties/ portfolio search + shrinking
 ]
 all = [
     "rwa-calc[ui,dev]",
@@ -171,4 +172,5 @@ dev = [
     "httpx>=0.27.0",  # FastAPI TestClient; the REST/UI test gate needs it in the default-synced group
     "psutil>=5.9.0",  # scripts/profile_memory.py peak-RSS sampling (degrades gracefully if absent)
     "openpyxl>=3.1.5",  # scripts/extract_validation_rules.py reads the EBA/BoE rule workbooks
+    "hypothesis>=6.100.0",  # tests/properties/ runs in the default gate; must be default-synced
 ]

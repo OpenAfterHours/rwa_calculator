@@ -19,3 +19,11 @@ docs/assets/*.PDF
 docs/assets/*.zip
 
 .claude/state/
+# impact_report.py snapshot output (scripts/impact_report.py capture)
+.impact/
+
+# coverage_report.py full output (3 MB; the ratchet baseline lives in arch_metrics.json)
+scripts/coverage_metrics.json
+
+# defect_injection.py campaign output
+scripts/defect_scorecard.json

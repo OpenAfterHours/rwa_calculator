@@ -1,0 +1,8 @@
+{
+  "_comment": "Coverage ratchet baseline (scripts/coverage_report.py --check). union_binding_* and template_cell_liveness_bp may not DECREASE; dead_cells and never_evaluated_rules may not INCREASE. Update only after a deliberate, recorded improvement \u2014 never to clear a red gate.",
+  "union_binding_rules_crr": 251,
+  "union_binding_rules_b31": 277,
+  "template_cell_liveness_bp": 1298,
+  "dead_cells": 52817,
+  "never_evaluated_rules": 785
+}

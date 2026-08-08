@@ -4,6 +4,15 @@
 mistakes that have reached production or cost a batch, written so you can
 *detect* them, not just nod at them.
 
+> **Tracked in git since 2026-08-08, and that is load-bearing.** This file was
+> untracked for its whole life, so it existed only in the main checkout. A git
+> worktree materialises tracked files only — which meant that every agent
+> dispatched by `/next-items` into `.claude/worktrees/<item>/`, and every agent
+> in the independent-validation batch, was told "read `.claude/LESSONS.md`
+> first" and got *file does not exist*. The accumulated trap knowledge was
+> invisible to precisely the agents it was written for. If you move or rename
+> this file, keep it tracked.
+
 This is **not an archive**. An entry earns its place only while it is still
 prose. The moment a lesson can be expressed as a check — an `arch_check.py`
 rule, a ratchet entry, a contract test — it graduates out of this file and
@@ -42,27 +51,44 @@ Report `PREMISE: refuted` as a success, not a failure. Specific tells:
   `docs/plans/compliance-audit-crr-111-241-rectification.md` §5 usually
   preserves information the bullet lost. Read both.
 
-### A2. Sub-agents cannot read the regulatory PDFs — the orchestrator must paste the text
+### A2. Read the PDFs with pymupdf — never reconstruct an article from memory
 
 **Trap.** An agent "confirms a citation" by reconstructing the article from
 model memory, in confident language, and is wrong.
 
-**Why.** `Read` on `docs/assets/*.pdf` shells out to `pdftoppm`, which is not
-installed here. Agents silently fall back to in-repo transcriptions
-(`docs/specifications/`) and to training data. Both have been observed wrong.
+**Why.** The `Read` TOOL fails on `docs/assets/*.pdf` — it shells out to
+`pdftoppm`, which is not installed. An agent that stops there silently falls
+back to in-repo transcriptions (`docs/specifications/`) and to training data.
+Both have been observed wrong.
 
-**Detect.** The orchestrator extracts and pastes verbatim text into the prompt:
+**Corrected 2026-08-08.** This entry used to say sub-agents *cannot* read the
+PDFs and that only the orchestrator could paste text in. That is false, and it
+was costing accuracy — it sent agents to the transcriptions on purpose. The
+limitation is the `Read` tool, not the agent: **pymupdf via Bash works for
+anyone.** The C3 oracle build sourced all 123 of its regulatory constants from
+article text this way and found two real engine defects that the skill
+transcriptions would not have settled.
+
+**Detect.** Extract the text yourself:
 
 ```bash
 uv run python -c "
 import fitz  # pymupdf is installed; pypdf is not
-doc = fitz.open('docs/assets/ps126app1.pdf')
-print(doc[63].get_text())
+doc = fitz.open(r'C:\Users\philm\PycharmProjects\rwa_calculator\docs\assets\crr.pdf')
+print(doc[119].get_text())          # CRR Art. 121 + Table 5
 "
 ```
 
-**Mandatory whenever the change reduces RWA.** Never ask an agent to "confirm
-the citation" — it cannot.
+Two mechanics that otherwise waste a cycle:
+
+- `docs/assets/` is **gitignored**, so the PDFs are absent from every git
+  worktree. Use an ABSOLUTE path into the main checkout.
+- Search for the article rather than guessing the page: iterate
+  `doc[i].get_text()` looking for `"Article 121"`, then read the `[Note:
+  corresponds to Article NNN]` line (see A3) rather than the heading number.
+
+**Mandatory whenever the change reduces RWA.** Quote the text you actually read
+into the derivation note; do not paraphrase it.
 
 ### A3. PS1/26 renumbers, and its two "[Note: ...]" forms are not synonyms
 

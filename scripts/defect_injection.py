@@ -72,6 +72,10 @@ from scripts.defect_catalogue import CATALOGUE, Mutant, select, targets  # noqa:
 
 DEFAULT_OUT = _REPO_ROOT / "scripts" / "defect_scorecard.json"
 
+#: The scorecard may land inside the repo or in a sibling directory, never
+#: anywhere else — a faulty ``--out`` must not be able to write elsewhere.
+_ALLOWED_ROOT = _REPO_ROOT.parent
+
 VERDICT_DETECTED = "DETECTED"
 VERDICT_ESCAPED = "ESCAPED"
 VERDICT_UNREACHABLE = "UNREACHABLE"
@@ -214,7 +218,7 @@ def ladder_for(name: str) -> tuple[Gate, ...]:
 # =============================================================================
 
 
-class DirtyTree(SystemExit):
+class DirtyTree(RuntimeError):
     """Refuse to mutate a file that already has uncommitted work in it."""
 
 
@@ -435,50 +439,68 @@ def run_campaign(
     results: list[MutantResult] = []
     for position, mutant in enumerate(mutants, start=1):
         print(f"\n[{position}/{len(mutants)}] {mutant.id} ({mutant.category})", flush=True)
-        result = MutantResult(mutant.id, mutant.category, mutant.summary, VERDICT_ERROR)
-
-        reachable, _, seconds = probe_reachable(mutant, baseline_digest, wide_baseline_digest)
-        result.reachable = reachable
-        result.reachability_seconds = seconds
-        print(f"      reachability: {'REACHABLE' if reachable else 'UNREACHABLE'} ({seconds}s)")
-
-        if mutant.expect_unreachable and reachable:
-            result.note = (
-                "catalogue expected this mutant to be unreachable but it moved "
-                "output; the expectation or the code has changed"
+        results.append(
+            _score_mutant(
+                mutant,
+                gates,
+                baseline_dir,
+                baseline_digest,
+                reachability_only=reachability_only,
+                wide_baseline_digest=wide_baseline_digest,
             )
-        elif not mutant.expect_unreachable and not reachable:
-            result.note = (
-                "catalogue expected this mutant to be reachable but it moved "
-                "nothing; either the probe is too narrow or the path is dead"
-            )
-
-        if not reachable:
-            result.verdict = VERDICT_UNREACHABLE
-            results.append(result)
-            continue
-
-        if reachability_only:
-            result.verdict = "PROBED"
-            results.append(result)
-            continue
-
-        with injected(mutant):
-            for gate in gates:
-                outcome = run_gate(gate, baseline_dir)
-                result.gates.append(outcome)
-                print(
-                    f"      tier {gate.tier} {gate.name:<16} {outcome.outcome} ({outcome.seconds}s)"
-                )
-                if outcome.outcome == OUTCOME_RED:
-                    result.verdict = VERDICT_DETECTED
-                    result.caught_by = gate.name
-                    result.caught_at_tier = gate.tier
-                    break
-            else:
-                result.verdict = VERDICT_ESCAPED
-        results.append(result)
+        )
     return results
+
+
+def _score_mutant(
+    mutant: Mutant,
+    gates: tuple[Gate, ...],
+    baseline_dir: Path,
+    baseline_digest: str,
+    *,
+    reachability_only: bool,
+    wide_baseline_digest: str | None,
+) -> MutantResult:
+    """Probe one mutant, then walk it up the gate ladder until something goes red."""
+    result = MutantResult(mutant.id, mutant.category, mutant.summary, VERDICT_ERROR)
+
+    reachable, _, seconds = probe_reachable(mutant, baseline_digest, wide_baseline_digest)
+    result.reachable = reachable
+    result.reachability_seconds = seconds
+    print(f"      reachability: {'REACHABLE' if reachable else 'UNREACHABLE'} ({seconds}s)")
+
+    if mutant.expect_unreachable and reachable:
+        result.note = (
+            "catalogue expected this mutant to be unreachable but it moved "
+            "output; the expectation or the code has changed"
+        )
+    elif not mutant.expect_unreachable and not reachable:
+        result.note = (
+            "catalogue expected this mutant to be reachable but it moved "
+            "nothing; either the probe is too narrow or the path is dead"
+        )
+
+    if not reachable:
+        result.verdict = VERDICT_UNREACHABLE
+        return result
+
+    if reachability_only:
+        result.verdict = "PROBED"
+        return result
+
+    with injected(mutant):
+        for gate in gates:
+            outcome = run_gate(gate, baseline_dir)
+            result.gates.append(outcome)
+            print(f"      tier {gate.tier} {gate.name:<16} {outcome.outcome} ({outcome.seconds}s)")
+            if outcome.outcome == OUTCOME_RED:
+                result.verdict = VERDICT_DETECTED
+                result.caught_by = gate.name
+                result.caught_at_tier = gate.tier
+                break
+        else:
+            result.verdict = VERDICT_ESCAPED
+    return result
 
 
 # =============================================================================
@@ -629,16 +651,22 @@ def main() -> int:
     parser.add_argument("--resume", action="store_true", help="skip mutants already in --out")
     args = parser.parse_args()
 
+    out = _confine_path(args.out)
+
     if args.self_test:
         return self_test()
 
-    assert_targets_clean()
+    try:
+        assert_targets_clean()
+    except DirtyTree as exc:
+        print(exc)
+        return 1
 
     mutants = select(args.mutants, args.categories)
-    if args.resume and args.out.exists():
+    if args.resume and out.exists():
         done = {
             entry["mutant_id"]
-            for entry in json.loads(args.out.read_text(encoding="utf-8")).get("results", [])
+            for entry in json.loads(out.read_text(encoding="utf-8")).get("results", [])
         }
         mutants = [mutant for mutant in mutants if mutant.id not in done]
         print(f"resuming: {len(done)} already scored, {len(mutants)} to go")
@@ -687,10 +715,23 @@ def main() -> int:
         "scorecard": scorecard(results),
         "results": [asdict(result) for result in results],
     }
-    args.out.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    out.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     print_scorecard(payload)
-    print(f"\nWrote {args.out.name} in {payload['runtime_seconds']}s")
+    print(f"\nWrote {out.name} in {payload['runtime_seconds']}s")
     return 0
+
+
+def _confine_path(raw: Path) -> Path:
+    """Resolve a CLI-supplied path and reject anything outside ``_ALLOWED_ROOT``.
+
+    Same guard as ``scripts/parity_gate.py``: ``--out`` is operator-supplied,
+    and resolving first collapses ``..`` segments so the containment check
+    cannot be bypassed.
+    """
+    resolved = raw.expanduser().resolve()
+    if not resolved.is_relative_to(_ALLOWED_ROOT):
+        raise SystemExit(f"path escapes {_ALLOWED_ROOT}: {raw}")
+    return resolved
 
 
 if __name__ == "__main__":

@@ -83,6 +83,10 @@ DEFAULT_OUT = _REPO_ROOT / "scripts" / "coverage_metrics.json"
 FIXTURES_DIR = _REPO_ROOT / "tests" / "fixtures"
 GENERATE_ALL = FIXTURES_DIR / "generate_all.py"
 
+#: The metrics JSON may land inside the repo or in a sibling directory, never
+#: anywhere else — a faulty ``--out`` must not be able to write elsewhere.
+_ALLOWED_ROOT = _REPO_ROOT.parent
+
 # Parquet-writing fixture modules deliberately NOT registered in generate_all.py.
 # An entry needs a written reason; an entry with no reason is not an entry. Verified
 # 2026-08-08: both write parquet only inside save_*_fixtures() called from main()
@@ -236,23 +240,33 @@ def _absorb_cells(
     for attribute, sheets in index.frames.items():
         template = template_of.get(attribute, attribute)
         for sheet, frame in sheets.items():
-            if frame.is_empty():
-                continue
-            rows = _row_refs(frame)
-            for column, dtype in zip(frame.columns, frame.dtypes, strict=True):
-                # Template cells are numeric. The string columns are the row
-                # axis labels (row_ref / row_name / label), which carry no
-                # assertion and would inflate the denominator.
-                if not dtype.is_numeric():
-                    continue
-                values = frame.get_column(column).to_list()
-                for row, value in zip(rows, values, strict=True):
-                    address = CellAddress(regime, template, sheet, row, column)
-                    observation.cells_declared.add(address)
-                    if value is not None:
-                        observation.cells_live.add(address)
-                        if value != 0:
-                            observation.cells_nonzero.add(address)
+            if not frame.is_empty():
+                _absorb_frame(observation, regime, template, sheet, frame)
+
+
+def _absorb_frame(
+    observation: Observation,
+    regime: str,
+    template: str,
+    sheet: str,
+    frame: pl.DataFrame,
+) -> None:
+    """Fold one emitted sheet's numeric cells into the liveness sets."""
+    rows = _row_refs(frame)
+    for column, dtype in zip(frame.columns, frame.dtypes, strict=True):
+        # Template cells are numeric. The string columns are the row
+        # axis labels (row_ref / row_name / label), which carry no
+        # assertion and would inflate the denominator.
+        if not dtype.is_numeric():
+            continue
+        values = frame.get_column(column).to_list()
+        for row, value in zip(rows, values, strict=True):
+            address = CellAddress(regime, template, sheet, row, column)
+            observation.cells_declared.add(address)
+            if value is not None:
+                observation.cells_live.add(address)
+                if value != 0:
+                    observation.cells_nonzero.add(address)
 
 
 def _template_codes(bindings: Any) -> dict[str, str]:
@@ -492,58 +506,17 @@ def _referenced_names(path: Path) -> set[str]:
 def print_summary(payload: dict[str, Any]) -> None:
     """Human summary, ERROR-severity never-evaluated rules first."""
     metrics = payload["metrics"]
-    cells = payload["cells"]
 
     print()
     print("=" * 78)
     print("REPORTING COVERAGE - estate-wide, union over the RUNS matrix")
     print("=" * 78)
 
-    print("\nBinding rules (PASS or FAIL somewhere; VACUOUS excluded)")
-    for regime in ("crr", "b31"):
-        binding = metrics.get(f"union_binding_rules_{regime}")
-        if binding is None:
-            continue
-        enforced = metrics.get(f"rules_enforced_{regime}", 0)
-        pct = metrics.get(f"union_binding_pct_{regime}", 0.0)
-        print(f"  {regime:4} {binding:>5} of {enforced:>5} enforced   {pct:>6.2f}%")
-
-    print("\nTemplate cells")
-    print(f"  declared             {cells['declared']:>7}")
-    print(f"  live (non-null)      {cells['live']:>7}")
-    print(f"  dead                 {cells['dead']:>7}")
-    print(f"  live but always zero {cells['live_but_always_zero']:>7}")
-    print(f"  liveness             {metrics['template_cell_liveness']:>7.4f}")
-
-    never = payload["never_evaluated_list"]
-    errors = [entry for entry in never if entry["severity"] == "ERROR"]
-    print(f"\nNever-evaluated rules: {len(never)} ({len(errors)} at ERROR severity)")
-    if errors:
-        print("  ERROR severity - the estate is unchecked where a break is fatal:")
-        for entry in errors[:PRINTED_ROWS]:
-            reasons = ", ".join(entry["reasons"]) or "unknown"
-            tables = ",".join(entry["tables"][:3])
-            print(f"    {entry['regime']:4} {entry['rule_id']:<16} {tables:<28} {reasons}")
-        if len(errors) > PRINTED_ROWS:
-            print(f"    ... {len(errors) - PRINTED_ROWS} more (full list in the JSON)")
-
-    dead_list = payload["dead_cell_list"]
-    rollup = payload["dead_cells_by_template"]
-    if dead_list:
-        print(f"\nDead cells: {len(dead_list)}, worst templates first")
-        for entry in rollup[:PRINTED_ROWS]:
-            print(f"    {entry['regime']:4} {entry['template']:<24} {entry['dead']:>6}")
-        if len(rollup) > PRINTED_ROWS:
-            print(f"    ... {len(rollup) - PRINTED_ROWS} more templates")
-        print(f"    first dead cell: {dead_list[0]}")
-        print("    (full per-cell list in the JSON)")
-
-    print("\nChecks")
-    for check in payload["checks"].values():
-        status = "PASS" if check["passed"] else "FAIL"
-        print(f"  [{status}] {check['name']}")
-        for entry in check["unregistered"]:
-            print(f"           {entry if isinstance(entry, str) else entry['module']}")
+    _print_binding(metrics)
+    _print_cells(metrics, payload["cells"])
+    _print_never_evaluated(payload["never_evaluated_list"])
+    _print_dead_cells(payload["dead_cell_list"], payload["dead_cells_by_template"])
+    _print_checks(payload["checks"])
 
     print("\nMetric names for arch_metrics.json:")
     for name in (
@@ -556,12 +529,80 @@ def print_summary(payload: dict[str, Any]) -> None:
         print(f"  {name:<32} {metrics[name]}")
 
 
+def _print_binding(metrics: dict[str, Any]) -> None:
+    print("\nBinding rules (PASS or FAIL somewhere; VACUOUS excluded)")
+    for regime in ("crr", "b31"):
+        binding = metrics.get(f"union_binding_rules_{regime}")
+        if binding is None:
+            continue
+        enforced = metrics.get(f"rules_enforced_{regime}", 0)
+        pct = metrics.get(f"union_binding_pct_{regime}", 0.0)
+        print(f"  {regime:4} {binding:>5} of {enforced:>5} enforced   {pct:>6.2f}%")
+
+
+def _print_cells(metrics: dict[str, Any], cells: dict[str, Any]) -> None:
+    print("\nTemplate cells")
+    print(f"  declared             {cells['declared']:>7}")
+    print(f"  live (non-null)      {cells['live']:>7}")
+    print(f"  dead                 {cells['dead']:>7}")
+    print(f"  live but always zero {cells['live_but_always_zero']:>7}")
+    print(f"  liveness             {metrics['template_cell_liveness']:>7.4f}")
+
+
+def _print_never_evaluated(never: list[dict[str, Any]]) -> None:
+    errors = [entry for entry in never if entry["severity"] == "ERROR"]
+    print(f"\nNever-evaluated rules: {len(never)} ({len(errors)} at ERROR severity)")
+    if not errors:
+        return
+    print("  ERROR severity - the estate is unchecked where a break is fatal:")
+    for entry in errors[:PRINTED_ROWS]:
+        reasons = ", ".join(entry["reasons"]) or "unknown"
+        tables = ",".join(entry["tables"][:3])
+        print(f"    {entry['regime']:4} {entry['rule_id']:<16} {tables:<28} {reasons}")
+    if len(errors) > PRINTED_ROWS:
+        print(f"    ... {len(errors) - PRINTED_ROWS} more (full list in the JSON)")
+
+
+def _print_dead_cells(dead_list: list[str], rollup: list[dict[str, Any]]) -> None:
+    if not dead_list:
+        return
+    print(f"\nDead cells: {len(dead_list)}, worst templates first")
+    for entry in rollup[:PRINTED_ROWS]:
+        print(f"    {entry['regime']:4} {entry['template']:<24} {entry['dead']:>6}")
+    if len(rollup) > PRINTED_ROWS:
+        print(f"    ... {len(rollup) - PRINTED_ROWS} more templates")
+    print(f"    first dead cell: {dead_list[0]}")
+    print("    (full per-cell list in the JSON)")
+
+
+def _print_checks(checks: dict[str, Any]) -> None:
+    print("\nChecks")
+    for check in checks.values():
+        status = "PASS" if check["passed"] else "FAIL"
+        print(f"  [{status}] {check['name']}")
+        for entry in check["unregistered"]:
+            print(f"           {entry if isinstance(entry, str) else entry['module']}")
+
+
 def _display(path: Path) -> str:
     """Repo-relative when it can be, absolute otherwise."""
     try:
         return str(path.relative_to(_REPO_ROOT)).replace("\\", "/")
     except ValueError:
         return str(path)
+
+
+def _confine_path(raw: Path) -> Path:
+    """Resolve a CLI-supplied path and reject anything outside ``_ALLOWED_ROOT``.
+
+    Same guard as ``scripts/parity_gate.py``: ``--out`` is operator-supplied,
+    and resolving first collapses ``..`` segments so the containment check
+    cannot be bypassed.
+    """
+    resolved = raw.expanduser().resolve()
+    if not resolved.is_relative_to(_ALLOWED_ROOT):
+        raise SystemExit(f"path escapes {_ALLOWED_ROOT}: {raw}")
+    return resolved
 
 
 BASELINE_PATH = _REPO_ROOT / "scripts" / "coverage_baseline.json"
@@ -580,6 +621,27 @@ _RATCHET_MAX = ("dead_cells", "never_evaluated_rules")
 def _ratchet_values(payload: dict[str, Any]) -> dict[str, int]:
     metrics = payload["metrics"]
     return {name: int(metrics[name]) for name in (*_RATCHET_MIN, *_RATCHET_MAX)}
+
+
+def _ratchet_deltas(
+    baseline: dict[str, Any], measured: dict[str, int]
+) -> tuple[list[str], list[str]]:
+    """(regressions, improvements) of the measured metrics against the baseline."""
+    regressions: list[str] = []
+    improvements: list[str] = []
+    for name in _RATCHET_MIN:
+        was, now = int(baseline[name]), measured[name]
+        if now < was:
+            regressions.append(f"{name}: {was} -> {now} (may not decrease)")
+        elif now > was:
+            improvements.append(f"{name}: {was} -> {now}")
+    for name in _RATCHET_MAX:
+        was, now = int(baseline[name]), measured[name]
+        if now > was:
+            regressions.append(f"{name}: {was} -> {now} (may not increase)")
+        elif now < was:
+            improvements.append(f"{name}: {was} -> {now}")
+    return regressions, improvements
 
 
 def _write_baseline(payload: dict[str, Any], *, partial: bool) -> int:
@@ -616,21 +678,7 @@ def _check_baseline(payload: dict[str, Any], *, partial: bool) -> int:
         return 1
 
     baseline = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
-    measured = _ratchet_values(payload)
-    regressions: list[str] = []
-    improvements: list[str] = []
-    for name in _RATCHET_MIN:
-        was, now = int(baseline[name]), measured[name]
-        if now < was:
-            regressions.append(f"{name}: {was} -> {now} (may not decrease)")
-        elif now > was:
-            improvements.append(f"{name}: {was} -> {now}")
-    for name in _RATCHET_MAX:
-        was, now = int(baseline[name]), measured[name]
-        if now > was:
-            regressions.append(f"{name}: {was} -> {now} (may not increase)")
-        elif now < was:
-            improvements.append(f"{name}: {was} -> {now}")
+    regressions, improvements = _ratchet_deltas(baseline, _ratchet_values(payload))
 
     print("\nCoverage ratchet")
     for line in improvements:
@@ -671,6 +719,7 @@ def main() -> int:
         "after a deliberate, recorded improvement — never to clear a red gate",
     )
     args = parser.parse_args()
+    out = _confine_path(args.out)
 
     started = time.perf_counter()
     print(
@@ -686,9 +735,9 @@ def main() -> int:
     payload["runtime_seconds"] = round(time.perf_counter() - started, 1)
     payload["partial"] = bool(args.limit)
 
-    args.out.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    out.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     print_summary(payload)
-    print(f"\nWrote {args.out.relative_to(_REPO_ROOT)} in {payload['runtime_seconds']}s")
+    print(f"\nWrote {_display(out)} in {payload['runtime_seconds']}s")
 
     if args.update_baseline:
         return _write_baseline(payload, partial=bool(args.limit))

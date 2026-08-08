@@ -42,6 +42,11 @@ from dataclasses import dataclass
 #: so this doubles as the allowlist of files the harness may ever write to.
 CATEGORIES = ("known_defect", "lessons", "generic", "control")
 
+#: Mutation targets shared by several entries.
+TARGET_C02 = "src/rwa_calc/reporting/corep/c02.py"
+TARGET_IRB_FORMULAS = "src/rwa_calc/engine/irb/formulas.py"
+TARGET_B31_PACK = "src/rwa_calc/rulebook/packs/b31.py"
+
 
 @dataclass(frozen=True)
 class Mutant:
@@ -71,7 +76,7 @@ CATALOGUE: tuple[Mutant, ...] = (
     Mutant(
         id="known-c02-phantom-class-key",
         category="known_defect",
-        target="src/rwa_calc/reporting/corep/c02.py",
+        target=TARGET_C02,
         old='irb_class_rwa.get(("advanced_irb", "institution"), 0.0)',
         new='irb_class_rwa.get(("advanced_irb", "institutions"), 0.0)',
         summary="C 02.00 row 0330 keyed on a class string no enum member produces",
@@ -87,7 +92,7 @@ CATALOGUE: tuple[Mutant, ...] = (
     Mutant(
         id="known-c02-stranded-subclass",
         category="known_defect",
-        target="src/rwa_calc/reporting/corep/c02.py",
+        target=TARGET_C02,
         old='row_values["0340"] = {"0010": airb_corp + airb_sl_excl}',
         new='row_values["0340"] = {"0010": airb_corp}',
         summary="C 02.00 row 0340 drops the specialised-lending limb",
@@ -191,7 +196,7 @@ CATALOGUE: tuple[Mutant, ...] = (
     Mutant(
         id="generic-corporate-correlation-low",
         category="generic",
-        target="src/rwa_calc/engine/irb/formulas.py",
+        target=TARGET_IRB_FORMULAS,
         old="r_corporate = 0.12 * f_pd_corp + 0.24 * (1.0 - f_pd_corp)",
         new="r_corporate = 0.14 * f_pd_corp + 0.24 * (1.0 - f_pd_corp)",
         summary="Corporate asset correlation lower bound 0.12 -> 0.14",
@@ -203,7 +208,7 @@ CATALOGUE: tuple[Mutant, ...] = (
     Mutant(
         id="generic-retail-correlation",
         category="generic",
-        target="src/rwa_calc/engine/irb/formulas.py",
+        target=TARGET_IRB_FORMULAS,
         old="r_retail_other = 0.03 * f_pd_retail + 0.16 * (1.0 - f_pd_retail)",
         new="r_retail_other = 0.05 * f_pd_retail + 0.16 * (1.0 - f_pd_retail)",
         summary="Retail asset correlation lower bound 0.03 -> 0.05",
@@ -212,7 +217,7 @@ CATALOGUE: tuple[Mutant, ...] = (
     Mutant(
         id="generic-maturity-adjustment-b",
         category="generic",
-        target="src/rwa_calc/engine/irb/formulas.py",
+        target=TARGET_IRB_FORMULAS,
         old="b = (0.11852 - 0.05478 * pd_safe.log()) ** 2",
         new="b = (0.11852 - 0.05578 * pd_safe.log()) ** 2",
         summary="Maturity adjustment coefficient 0.05478 -> 0.05578",
@@ -224,7 +229,7 @@ CATALOGUE: tuple[Mutant, ...] = (
     Mutant(
         id="generic-correlation-decay",
         category="generic",
-        target="src/rwa_calc/engine/irb/formulas.py",
+        target=TARGET_IRB_FORMULAS,
         old="corporate_denom = 1.0 - math.exp(-50.0)",
         new="corporate_denom = 1.0 - math.exp(-45.0)",
         summary="Corporate correlation decay factor -50 -> -45",
@@ -270,7 +275,7 @@ CATALOGUE: tuple[Mutant, ...] = (
     Mutant(
         id="generic-b31-institution-cqs2",
         category="generic",
-        target="src/rwa_calc/rulebook/packs/b31.py",
+        target=TARGET_B31_PACK,
         old='    "institution_rw_b31_ecra": LookupTable(\n        name="institution_rw_b31_ecra",',
         new='    "institution_rw_b31_ecra": LookupTable(\n        name="institution_rw_b31_ecra_MUTANT",',
         summary="Basel 3.1 institution ECRA table renamed so its lookup misses",
@@ -283,7 +288,7 @@ CATALOGUE: tuple[Mutant, ...] = (
     Mutant(
         id="generic-corporate-correlation-high",
         category="generic",
-        target="src/rwa_calc/engine/irb/formulas.py",
+        target=TARGET_IRB_FORMULAS,
         old="r_corporate = 0.12 * f_pd_corp + 0.24 * (1.0 - f_pd_corp)",
         new="r_corporate = 0.12 * f_pd_corp + 0.22 * (1.0 - f_pd_corp)",
         summary="Corporate asset correlation upper bound 0.24 -> 0.22",
@@ -297,7 +302,7 @@ CATALOGUE: tuple[Mutant, ...] = (
     Mutant(
         id="generic-retail-correlation-decay",
         category="generic",
-        target="src/rwa_calc/engine/irb/formulas.py",
+        target=TARGET_IRB_FORMULAS,
         old="retail_denom = 1.0 - math.exp(-35.0)",
         new="retail_denom = 1.0 - math.exp(-30.0)",
         summary="Retail correlation decay factor -35 -> -30",
@@ -310,7 +315,7 @@ CATALOGUE: tuple[Mutant, ...] = (
     Mutant(
         id="generic-scaling-regime-inverted",
         category="generic",
-        target="src/rwa_calc/engine/irb/formulas.py",
+        target=TARGET_IRB_FORMULAS,
         old="scaling = 1.06 if apply_scaling_factor else 1.0",
         new="scaling = 1.0 if apply_scaling_factor else 1.06",
         summary="IRB scaling factor applied to the wrong regime",
@@ -324,7 +329,7 @@ CATALOGUE: tuple[Mutant, ...] = (
     Mutant(
         id="generic-firb-institution-key",
         category="generic",
-        target="src/rwa_calc/reporting/corep/c02.py",
+        target=TARGET_C02,
         old='firb_inst = irb_class_rwa.get(("foundation_irb", "institution"), 0.0)',
         new='firb_inst = irb_class_rwa.get(("foundation_irb", "institutions"), 0.0)',
         summary="C 02.00 F-IRB institution row keyed on a non-enum string",
@@ -338,7 +343,7 @@ CATALOGUE: tuple[Mutant, ...] = (
     Mutant(
         id="generic-firb-corporate-stranded",
         category="generic",
-        target="src/rwa_calc/reporting/corep/c02.py",
+        target=TARGET_C02,
         old='firb_sl = irb_class_rwa.get(("foundation_irb", "specialised_lending"), 0.0)',
         new="firb_sl = 0.0",
         summary="C 02.00 F-IRB specialised-lending RWEA stranded at zero",
@@ -355,7 +360,7 @@ CATALOGUE: tuple[Mutant, ...] = (
     Mutant(
         id="control-unreachable-output-floor-full",
         category="control",
-        target="src/rwa_calc/rulebook/packs/b31.py",
+        target=TARGET_B31_PACK,
         old=('    "output_floor_pct_full": ScalarParam(\n        name="output_floor_pct_full",'),
         new=(
             '    "output_floor_pct_full_MUTANT": ScalarParam(\n'
@@ -375,7 +380,7 @@ CATALOGUE: tuple[Mutant, ...] = (
     Mutant(
         id="control-reachable-output-floor-schedule",
         category="control",
-        target="src/rwa_calc/rulebook/packs/b31.py",
+        target=TARGET_B31_PACK,
         old='(date(2027, 1, 1), Decimal("0.60")),',
         new='(date(2027, 1, 1), Decimal("0.95")),',
         summary="The output-floor schedule step that IS read, raised to 95%",

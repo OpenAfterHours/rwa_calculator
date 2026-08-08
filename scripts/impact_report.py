@@ -188,6 +188,10 @@ _EXIT_STALE = 3
 _DEFAULT_TOP = 25
 
 
+class UsageError(RuntimeError):
+    """A CLI argument the operator can fix — reported as usage, never a verdict."""
+
+
 # ---------------------------------------------------------------------------
 # Snapshot records
 # ---------------------------------------------------------------------------
@@ -551,7 +555,7 @@ def main(argv: list[str] | None = None) -> int:
             name: None if getattr(args, name, None) is None else _confine_path(getattr(args, name))
             for name in ("out", "baseline", "current", "json", "markdown")
         }
-    except SystemExit as exc:
+    except UsageError as exc:
         print(exc)
         return _EXIT_USAGE
 
@@ -800,14 +804,18 @@ def _diff_value(grain: str, key: str, before: Value, after: Value) -> Movement |
         if before.text == after.text and before.dtype == after.dtype:
             return None
         return Movement(grain, key, STATUS_CHANGED, before, after, None, None)
-
     # Both sides are non-null numerics by the guards above.
+    return _numeric_movement(grain, key, before, after)
+
+
+def _numeric_movement(grain: str, key: str, before: Value, after: Value) -> Movement | None:
+    """Delta and relative move for two non-null numeric values."""
     left = before.num if before.num is not None else 0.0
     right = after.num if after.num is not None else 0.0
     if _close(left, right):
         return None
     delta = right - left
-    relative = delta / abs(left) if left != 0.0 and math.isfinite(left) else None
+    relative = delta / abs(left) if math.isfinite(left) and abs(left) > 0.0 else None
     return Movement(grain, key, STATUS_CHANGED, before, after, delta, relative)
 
 
@@ -938,15 +946,12 @@ def _parse_entry(index: int, raw: Any) -> AllowEntry:
 def _markdown_verdict(comparison: Comparison) -> list[str]:
     moved = len(comparison.movements)
     unexplained = len(comparison.unexplained)
-    verdict = (
-        "**PASS** - nothing moved."
-        if moved == 0
-        else (
-            f"**PASS** - {moved} movement(s), all accounted for in `{ALLOWLIST_PATH.name}`."
-            if unexplained == 0
-            else f"**BLOCKED** - {unexplained} of {moved} movement(s) are UNEXPLAINED."
-        )
-    )
+    if moved == 0:
+        verdict = "**PASS** - nothing moved."
+    elif unexplained == 0:
+        verdict = f"**PASS** - {moved} movement(s), all accounted for in `{ALLOWLIST_PATH.name}`."
+    else:
+        verdict = f"**BLOCKED** - {unexplained} of {moved} movement(s) are UNEXPLAINED."
     baseline_git = comparison.baseline_meta.get("git", {})
     current_git = comparison.current_meta.get("git", {})
     warning = (
@@ -1156,7 +1161,8 @@ def _git_state() -> dict[str, Any]:
 
     def _run(*args: str) -> str:
         try:
-            return subprocess.run(  # noqa: S603 - fixed argv, no shell
+            # Fixed argv, no shell.
+            return subprocess.run(  # noqa: S603
                 ["git", *args], cwd=REPO_ROOT, capture_output=True, text=True, check=True
             ).stdout.strip()
         except (OSError, subprocess.CalledProcessError):
@@ -1188,7 +1194,7 @@ def _confine_path(raw: Path) -> Path:
     """
     resolved = raw.expanduser().resolve()
     if not resolved.is_relative_to(_ALLOWED_ROOT):
-        raise SystemExit(f"path escapes {_ALLOWED_ROOT}: {raw}")
+        raise UsageError(f"path escapes {_ALLOWED_ROOT}: {raw}")
     return resolved
 
 

@@ -3,7 +3,7 @@
 {"row_ref":"3","row_name":"0.10 to <0.15","a":"0.10 to <0.15","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
 {"row_ref":"4","row_name":"0.15 to <0.25","a":"0.15 to <0.25","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
 {"row_ref":"5","row_name":"0.25 to <0.50","a":"0.25 to <0.50","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
-{"row_ref":"6","row_name":"0.50 to <0.75","a":"0.50 to <0.75","b":300000.0,"c":0.0,"d":null,"e":300000.0,"f":0.6,"g":1.0,"h":15.0,"i":5.0,"j":42238.94491467031,"k":0.14079648304890105,"l":270.0,"m":null}
+{"row_ref":"6","row_name":"0.50 to <0.75","a":"0.50 to <0.75","b":550000.0,"c":0.0,"d":null,"e":550000.0,"f":0.6,"g":2.0,"h":10.454545454545453,"i":5.0,"j":53971.9851687454,"k":0.09813088212499163,"l":345.0,"m":null}
 {"row_ref":"7","row_name":"0.75 to <2.50","a":"0.75 to <2.50","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
 {"row_ref":"8","row_name":"0.75 to <1.75","a":"0.75 to <1.75","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
 {"row_ref":"9","row_name":"1.75 to <2.5","a":"1.75 to <2.5","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
@@ -14,5 +14,5 @@
 {"row_ref":"14","row_name":"10 to <20","a":"10 to <20","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
 {"row_ref":"15","row_name":"20 to <30","a":"20 to <30","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
 {"row_ref":"16","row_name":"30.00 to <100.00","a":"30.00 to <100.00","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
-{"row_ref":"17","row_name":"100.00 (Default)","a":"100.00 (Default)","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
-{"row_ref":"18","row_name":"Total","a":"Total","b":300000.0,"c":0.0,"d":null,"e":300000.0,"f":0.6,"g":1.0,"h":15.0,"i":5.0,"j":42238.94491467031,"k":0.14079648304890105,"l":270.0,"m":null}
+{"row_ref":"17","row_name":"100.00 (Default)","a":"100.00 (Default)","b":200000.0,"c":0.0,"d":null,"e":200000.0,"f":0.6,"g":1.0,"h":5.0,"i":5.0,"j":0.0,"k":0.0,"l":10000.0,"m":null}
+{"row_ref":"18","row_name":"Total","a":"Total","b":750000.0,"c":0.0,"d":null,"e":750000.0,"f":0.6,"g":3.0,"h":9.0,"i":5.0,"j":53971.9851687454,"k":0.07196264689166053,"l":10345.0,"m":null}

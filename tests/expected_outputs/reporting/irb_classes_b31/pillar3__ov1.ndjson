@@ -1,8 +1,8 @@
-{"row_ref":"1","row_name":"Credit risk (excluding CCR)","a":89931289.47783288,"b":null,"c":7194503.158226631}
+{"row_ref":"1","row_name":"Credit risk (excluding CCR)","a":89956289.47783288,"b":null,"c":7196503.158226631}
 {"row_ref":"2","row_name":"Of which: standardised approach","a":21000000.0,"b":null,"c":1680000.0}
 {"row_ref":"3","row_name":"Of which: foundation IRB approach","a":68875533.81922278,"b":null,"c":5510042.705537822}
 {"row_ref":"4","row_name":"Of which: slotting approach","a":0.0,"b":null,"c":0.0}
-{"row_ref":"5","row_name":"Of which: advanced IRB approach","a":55755.65861009869,"b":null,"c":4460.452688807895}
+{"row_ref":"5","row_name":"Of which: advanced IRB approach","a":80755.65861009869,"b":null,"c":6460.452688807895}
 {"row_ref":"6","row_name":"Counterparty credit risk - CCR","a":0.0,"b":null,"c":0.0}
 {"row_ref":"7","row_name":"CCR - Of which the standardised approach","a":0.0,"b":null,"c":0.0}
 {"row_ref":"8","row_name":"CCR - Of which internal model method (IMM)","a":null,"b":null,"c":null}
@@ -15,4 +15,4 @@
 {"row_ref":"24","row_name":"Amounts below deduction thresholds (250% RW)","a":null,"b":null,"c":null}
 {"row_ref":"26","row_name":"Output floor multiplier","a":0.6,"b":null,"c":null}
 {"row_ref":"27","row_name":"Output floor adjustment","a":null,"b":null,"c":null}
-{"row_ref":"29","row_name":"Total","a":89931289.47783288,"b":null,"c":7194503.158226631}
+{"row_ref":"29","row_name":"Total","a":89956289.47783288,"b":null,"c":7196503.158226631}

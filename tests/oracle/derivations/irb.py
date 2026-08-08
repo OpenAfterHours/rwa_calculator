@@ -656,6 +656,129 @@ def _uk_residential_mortgage_b31() -> dict[str, Any]:
             "scaling_factor": B31_IRB_SCALING_FACTOR,
             "modelled_rwea": modelled_rwea,
             "rwea_floor": floor_rwea,
+            "mortgage_rwea_floor_adjustment": floor_rwea - modelled_rwea,
+        },
+    )
+
+
+# -----------------------------------------------------------------------------
+# Art. 154(4A)(b) -- the scope of the 10% RWEA floor
+# -----------------------------------------------------------------------------
+# Verbatim from ps126app1.pdf p104, Art. 154(4A):
+#
+#   "An institution shall increase the total risk-weighted exposure amounts
+#    calculated under paragraphs 1, 3 and 4 for retail exposures to reflect: ...
+#    (b) any amount needed to ensure that risk-weighted exposure amounts for
+#    NON-DEFAULTED exposures which are RETAIL exposures secured by UK
+#    RESIDENTIAL immovable property are greater than or equal to 10% of the
+#    exposure value for such exposures ..."
+#
+# Three cumulative conditions, so three ways to be out of scope. ORC-100 pins
+# the in-scope case where the floor binds; the three oracles below pin each
+# out-of-scope limb. Each asserts ``mortgage_rwea_floor_adjustment == 0``, which
+# is derivable straight from the article without having to settle what the risk
+# weight should be.
+def floor_scope() -> list[dict[str, Any]]:
+    return [_floor_scope_defaulted(), _floor_scope_commercial(), _floor_scope_non_uk()]
+
+
+def _floor_scope_defaulted() -> dict[str, Any]:
+    """Limb 1: the floor reaches only NON-DEFAULTED exposures."""
+    lgd = B31_LGD_FLOOR_RETAIL_RRE
+    beel = B31_LGD_FLOOR_RETAIL_RRE
+    risk_weight = irb_risk_weight_defaulted_airb(lgd, beel)
+    return oracle(
+        oracle_id="ORC-140",
+        phase=PHASE,
+        framework="BASEL_3_1",
+        approach="AIRB",
+        exposure_class="retail_mortgage",
+        regulation="PS1/26 Art. 154(1)(a) with Art. 154(4A)(b): a DEFAULTED "
+        "retail residential mortgage takes RW = max(0, 12.5 * (LGD - BEEL)), and "
+        "the 10% RWEA floor does not reach it -- Art. 154(4A)(b) is expressly "
+        "confined to non-defaulted exposures",
+        ead=EAD,
+        risk_weight=risk_weight,
+        rwa=EAD * risk_weight,
+        inputs={
+            "exposure_class": "retail_mortgage",
+            "pd_value": 1.0,
+            "lgd": lgd,
+            "beel": beel,
+            "is_defaulted": True,
+        },
+        intermediate={
+            "lgd_applied": lgd,
+            "beel_applied": beel,
+            "mortgage_rwea_floor_adjustment": 0.0,
+        },
+    )
+
+
+def _floor_scope_commercial() -> dict[str, Any]:
+    """Limb 2: the floor reaches only exposures secured by RESIDENTIAL property."""
+    return oracle(
+        oracle_id="ORC-141",
+        phase=PHASE,
+        framework="BASEL_3_1",
+        approach="AIRB",
+        exposure_class="commercial_mortgage",
+        regulation="PS1/26 Art. 154(4A)(b): the 10% RWEA floor reaches only "
+        "exposures secured by UK RESIDENTIAL immovable property, so a "
+        "commercial real estate exposure is out of scope whatever its risk weight",
+        ead=EAD,
+        risk_weight=0.0,
+        rwa=0.0,
+        inputs={
+            "exposure_class": "commercial_mortgage",
+            "pd_value": 0.0005,
+            "lgd": 0.05,
+        },
+        intermediate={"mortgage_rwea_floor_adjustment": 0.0},
+        # The correlation for a commercial-real-estate row reaching the IRB
+        # RETAIL branch is a classification question Art. 154 does not settle:
+        # Art. 154(3) gives R = 0.15 to "retail exposures secured by immovable
+        # property", and whether a commercial mortgage is a retail exposure at
+        # all depends on Art. 147(5), not on Art. 154. The risk weight and RWEA
+        # are therefore published as zero placeholders and NOT asserted -- only
+        # the floor-scope claim, which the article does settle, is compared.
+        unasserted=("risk_weight", "rwa"),
+    )
+
+
+def _floor_scope_non_uk() -> dict[str, Any]:
+    """Limb 3: the floor reaches only property located in the UK."""
+    pd_value = 0.01
+    lgd = B31_LGD_FLOOR_RETAIL_RRE
+    risk_weight = irb_risk_weight_retail(
+        pd_value=pd_value,
+        lgd=lgd,
+        correlation=CORRELATION_RETAIL_MORTGAGE,
+        scaling_factor=B31_IRB_SCALING_FACTOR,
+    )
+    return oracle(
+        oracle_id="ORC-142",
+        phase=PHASE,
+        framework="BASEL_3_1",
+        approach="AIRB",
+        exposure_class="retail_mortgage",
+        regulation="PS1/26 Art. 154(4A)(b): the 10% RWEA floor reaches only "
+        "exposures secured by UK residential immovable property -- identical to "
+        "ORC-100 but for property outside the UK, so the modelled RWEA stands",
+        ead=EAD,
+        risk_weight=risk_weight,
+        rwa=EAD * risk_weight,
+        inputs={
+            "exposure_class": "retail_mortgage",
+            "pd_value": pd_value,
+            "lgd": 0.02,
+            "country_code": "US",
+        },
+        intermediate={
+            "pd_applied": pd_value,
+            "lgd_applied": lgd,
+            "correlation_R": CORRELATION_RETAIL_MORTGAGE,
+            "mortgage_rwea_floor_adjustment": 0.0,
         },
     )
 
@@ -715,4 +838,5 @@ def all_oracles() -> list[dict[str, Any]]:
         *b31_corporate(),
         *b31_retail(),
         *defaulted(),
+        *floor_scope(),
     ]

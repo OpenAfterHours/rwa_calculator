@@ -82,6 +82,17 @@ _ART_121_TABLE_5 = (
     "(null sovereign CQS -> 100%) is correct."
 )
 
+_ART_154_4A_B_SCOPE = (
+    "PS1/26 Art. 154(4A)(b) confines the 10% RWEA floor to (i) NON-DEFAULTED, "
+    "(ii) RETAIL exposures, (iii) secured by UK RESIDENTIAL immovable property. "
+    "engine/irb/adjustments.py:200-206 gates on none of those three: it matches "
+    "exposure_class against the regex MORTGAGE|RESIDENTIAL and nothing else. "
+    "Differing intermediate: mortgage_rwea_floor_adjustment. Direction: the "
+    "floor can only raise RWEA, so every limb of this over-reach is "
+    "conservative -- unlike the Art. 121 finding, that holds for the whole "
+    "domain and does not depend on which cases were sampled."
+)
+
 KNOWN_DISAGREEMENTS: dict[str, str] = {
     "ORC-105": f"{_ART_121_TABLE_5} Here: CQS 1, oracle 20%, engine 100% (overstated).",
     "ORC-020": f"{_ART_121_TABLE_5} Here: CQS 2, oracle 50%, engine 100% (overstated).",
@@ -90,6 +101,26 @@ KNOWN_DISAGREEMENTS: dict[str, str] = {
         "UNDERSTATED by a third. This is the capital-shortfall limb and the "
         "reason the family is pinned across its whole domain rather than at "
         "the two steps that were looked at first."
+    ),
+    "ORC-140": (
+        f"{_ART_154_4A_B_SCOPE} Here: limb (i). A DEFAULTED retail residential "
+        "mortgage correctly takes RW 0 under Art. 154(1)(a) with LGD = BEEL, "
+        "then receives a floor add-on of 1,000,000 on 10,000,000 of EAD. "
+        "Oracle floor adjustment 0.00, engine 1,000,000.00."
+    ),
+    "ORC-141": (
+        f"{_ART_154_4A_B_SCOPE} Here: limb (ii). A COMMERCIAL real estate "
+        "exposure matches the regex through the substring 'MORTGAGE' and "
+        "receives the floor. Oracle floor adjustment 0.00, engine 56,745.41."
+    ),
+    "ORC-142": (
+        f"{_ART_154_4A_B_SCOPE} Here: limb (iii). The floor is applied to "
+        "residential property outside the UK. Note this limb is not merely "
+        "mis-gated but UNREPRESENTABLE: no module under engine/irb/ reads any "
+        "obligor or property country column at all (the only country carrier "
+        "there is guarantor_country_code, for the guarantee substitution path), "
+        "so no input could switch it off. Oracle floor adjustment 0.00, engine "
+        "373,345.27."
     ),
 }
 
@@ -196,6 +227,7 @@ _COMPARISONS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("maturity_adj_MA", ("maturity_adjustment",)),
     ("scaling_factor", ("scaling_factor",)),
     ("risk_weight", ("risk_weight",)),
+    ("mortgage_rwea_floor_adjustment", ("mortgage_rw_floor_adjustment",)),
     ("supporting_factor", ("supporting_factor",)),
     ("rwa", ("rwa_final", "rwa_post_factor", "rwa")),
 )

@@ -140,6 +140,69 @@ unrated counterparty that routes to Art. 121(1) Table 5, whose CQS-2 row is 50%.
 **Regulation:** Art. 116(1) Table 2, CQS 3 → 100%.
 **Arithmetic:** `RW = 1.00`; `RWA = 1,000,000.00`.
 
+### Third-country PSEs and the Art. 116(5) equivalence determination
+
+Art. 116(5), verbatim from `crr.pdf` p114:
+
+> When competent authorities of a third country jurisdiction, which apply
+> supervisory and regulatory arrangements at least equivalent to those applied
+> in the [United Kingdom], treat exposures to public sector entities in
+> accordance with paragraph 1 or 2, institutions **may** risk weight exposures
+> to such public sector entities in the same manner. **Otherwise the
+> institutions shall apply a risk weight of 100 %.**
+
+Two lawful outcomes, selected by whether the determination has been made. The
+six oracles below pin the whole input domain — the flag asserted, denied, and
+simply not asserted, across both PSE entity types — on a third-country PSE whose
+central government is CQS 1. All six agree with the engine.
+
+They exist because this was first reported as a defect ("the equivalence flag is
+inert"). That report was **wrong**: the flag had been passed to the driver under
+a name that was not in its alias map, so it never reached
+`cp_is_equivalent_jurisdiction` and the engine saw the default of null. The
+driver now rejects any input that resolves to no engine column
+(`drivers.reject_unknown_columns`), and these oracles keep the real behaviour
+pinned.
+
+## ORC-130 — SA third-country PSE, equivalence determined (CRR)
+
+**Inputs:** EAD £1,000,000; class `pse`; entity type `pse_sovereign`; unrated;
+central government CQS 1; US/USD; equivalence determination **made**.
+**Regulation:** Art. 116(5) first limb with Art. 116(1) Table 2, CQS 1 → 20%.
+**Arithmetic:** `RW = 0.20`; `RWA = 200,000.00`.
+
+## ORC-131 — SA third-country PSE, equivalence denied (CRR)
+
+**Inputs:** as ORC-130, determination **denied**.
+**Regulation:** Art. 116(5) second limb — "otherwise … 100 %".
+**Arithmetic:** `RW = 1.00`; `RWA = 1,000,000.00`.
+
+## ORC-132 — SA third-country PSE, equivalence not asserted (CRR)
+
+**Inputs:** as ORC-130, determination **not asserted** (null).
+**Regulation:** Art. 116(5) second limb. Absence of a determination is not a
+determination, so the 100% fallback applies.
+**Arithmetic:** `RW = 1.00`; `RWA = 1,000,000.00`.
+
+## ORC-133 — SA third-country PSE, institution-typed, equivalence determined (CRR)
+
+**Inputs:** as ORC-130 but entity type `pse_institution`.
+**Regulation:** Art. 116(5) first limb with Art. 116(1) Table 2 → 20%. The
+entity type does not change the Art. 116(5) test.
+**Arithmetic:** `RW = 0.20`; `RWA = 200,000.00`.
+
+## ORC-134 — SA third-country PSE, institution-typed, equivalence denied (CRR)
+
+**Inputs:** as ORC-133, determination denied.
+**Regulation:** Art. 116(5) second limb.
+**Arithmetic:** `RW = 1.00`; `RWA = 1,000,000.00`.
+
+## ORC-135 — SA third-country PSE, institution-typed, equivalence not asserted (CRR)
+
+**Inputs:** as ORC-133, determination not asserted.
+**Regulation:** Art. 116(5) second limb.
+**Arithmetic:** `RW = 1.00`; `RWA = 1,000,000.00`.
+
 ## ORC-014 — SA multilateral development bank, named (CRR)
 
 **Inputs:** EAD £1,000,000; class `mdb`; entity type `mdb_named`.
@@ -1161,7 +1224,91 @@ RWA           = 1,000,000.00
 
 Art. 154(4A)(b) is worded as an increase to the risk-weighted exposure amount,
 not to the risk weight, so the risk weight itself stays at the modelled
-0.06266547285 and only the RWEA moves.
+0.06266547285 and only the RWEA moves. The increase itself —
+`1,000,000.00 − 626,654.73 = 373,345.27` — is compared as
+`mortgage_rwea_floor_adjustment`.
+
+### The scope of the Art. 154(4A)(b) floor
+
+Verbatim from `ps126app1.pdf` p104, Art. 154(4A):
+
+> An institution shall increase the total risk-weighted exposure amounts
+> calculated under paragraphs 1, 3 and 4 for retail exposures to reflect: …
+> (b) any amount needed to ensure that risk-weighted exposure amounts for
+> **non-defaulted** exposures which are **retail** exposures secured by **UK
+> residential** immovable property are greater than or equal to 10% of the
+> exposure value for such exposures …
+
+Three cumulative conditions, so three ways to be out of scope. ORC-100 pins the
+in-scope case; the three oracles below pin one out-of-scope limb each. Each
+asserts `mortgage_rwea_floor_adjustment = 0.00`, which follows straight from the
+article without having to settle what the risk weight should be.
+
+## ORC-140 — Defaulted retail residential mortgage (PS1/26)
+
+**Inputs:** EAD £10,000,000; class `retail_mortgage`; PD 100%; own LGD 5%;
+EL_BE 5%; defaulted.
+**Regulation:** Art. 154(1)(a) gives `RW = max(0, 12.5 · (LGD − EL_BE))`.
+Art. 154(4A)(b) reaches only **non-defaulted** exposures, so it contributes
+nothing.
+**Arithmetic:**
+
+```
+RW                       = max(0, 12.5 × (0.05 − 0.05)) = 0.00
+RWA                      = 10,000,000 × 0.00 = 0.00
+floor adjustment (4A(b)) = 0.00   -- out of scope, exposure is defaulted
+```
+
+LGD is set equal to EL_BE deliberately: it drives the modelled RWEA to zero, so
+whether the floor is applied is directly observable rather than masked by a
+risk weight that already exceeds 10%.
+
+> **Known disagreement.** The engine adds a floor adjustment of £1,000,000. See
+> `test_oracle.py::KNOWN_DISAGREEMENTS`.
+
+## ORC-141 — Commercial real estate exposure (PS1/26)
+
+**Inputs:** EAD £10,000,000; class `commercial_mortgage`; PD 0.05%; own LGD 5%.
+**Regulation:** Art. 154(4A)(b) reaches only exposures secured by **residential**
+immovable property. A commercial real estate exposure is out of scope whatever
+its risk weight.
+**Arithmetic:** `floor adjustment = 0.00`.
+
+> **Not asserted:** the risk weight and the RWEA. The correlation for a
+> commercial-real-estate row reaching the IRB *retail* branch is a
+> classification question Art. 154 does not settle — Art. 154(3) gives R = 0.15
+> to "retail exposures secured by immovable property", and whether a commercial
+> mortgage is a retail exposure at all turns on Art. 147(5), not on Art. 154.
+> Only the floor-scope claim, which the article does settle, is compared.
+
+> **Known disagreement.** The engine adds a floor adjustment of £56,745.41: the
+> class name matches its `MORTGAGE|RESIDENTIAL` regex through the substring
+> "MORTGAGE". See `test_oracle.py::KNOWN_DISAGREEMENTS`.
+
+## ORC-142 — Residential mortgage on non-UK property (PS1/26)
+
+**Inputs:** identical to ORC-100 — EAD £10,000,000; class `retail_mortgage`;
+PD 1%; own LGD 2% floored to 5% — but the property is outside the UK.
+**Regulation:** Art. 154(3) for the correlation, Art. 164(4)(a) for the LGD
+floor, and Art. 154(4A)(b) **not** applying, because the property is not UK
+residential immovable property.
+**Arithmetic:**
+
+```
+LGD                      = max(0.02, 0.05) = 0.05
+R                        = 0.15
+RW                       = 0.06266547285          (identical to ORC-100)
+RWA                      = 10,000,000 × 0.06266547285 = 626,654.73
+floor adjustment (4A(b)) = 0.00   -- out of scope, property is not in the UK
+```
+
+> **Known disagreement, and worse than a mis-gate.** The engine applies the
+> floor regardless, giving £1,000,000. This limb is not merely un-implemented
+> but **unrepresentable**: no module under `engine/irb/` reads any obligor or
+> property country column at all — the only country carrier there is
+> `guarantor_country_code`, for the guarantee substitution path — so no input
+> could switch the floor off. The oracle supplies `cp_country_code = "US"`,
+> which the IRB branch ignores. See `test_oracle.py::KNOWN_DISAGREEMENTS`.
 
 ## ORC-101 — A-IRB non-transactor QRRE at both floors (PS1/26)
 

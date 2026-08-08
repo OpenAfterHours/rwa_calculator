@@ -170,7 +170,28 @@ _INPUT_ALIASES = {
     "is_natural_person": "cp_is_natural_person",
     "is_social_housing": "cp_is_social_housing",
     "is_diversified": "is_diversified_portfolio",
+    "is_equivalent_jurisdiction": "cp_is_equivalent_jurisdiction",
 }
+
+#: Engine columns an oracle may legitimately set that are absent from the
+#: defaults above, because they are only meaningful for a few fact patterns.
+_EXTRA_INPUT_COLUMNS = frozenset(
+    {
+        "is_qualifying_re",  # PS1/26 Art. 124A regulatory real estate flag
+        "is_qrre_transactor",  # PS1/26 Art. 123(3)(a) transactor flag
+        "is_revolving",
+        "beel",  # Art. 154(1)(a) best estimate of expected loss
+        "cp_is_financial_sector_entity",  # Art. 153(2)
+        "requires_fi_scalar",
+        "approach",
+        "slotting_category",
+        "is_hvcre",
+        "is_short_maturity",
+        "is_pre_operational",
+        "has_short_term_ecai",
+        "cp_eca_score",
+    }
+)
 
 
 def resolve_aliases(overrides: dict[str, Any]) -> dict[str, Any]:
@@ -178,9 +199,34 @@ def resolve_aliases(overrides: dict[str, Any]) -> dict[str, Any]:
     return {_INPUT_ALIASES.get(key, key): value for key, value in overrides.items()}
 
 
+def reject_unknown_columns(columns: dict[str, Any], defaults: dict[str, Any]) -> None:
+    """Fail loudly on an override that resolves to no engine column.
+
+    An unrecognised key would otherwise be added to the frame as a dead column:
+    the engine reads the *default* value of the column the oracle meant to set,
+    the oracle silently tests the wrong fact pattern, and the resulting
+    disagreement looks like an engine defect. That is exactly how a spurious
+    "``cp_is_equivalent_jurisdiction`` has no effect" finding was produced --
+    the alias for it was missing, so the flag never reached the column.
+
+    This is the ``LESSONS.md`` B1 failure mode (a presence guard on a name no
+    pipeline produces) applied to the oracle's own harness.
+    """
+    allowed = set(defaults) | set(_SA_SCHEMA) | set(_IRB_SCHEMA) | _EXTRA_INPUT_COLUMNS
+    unknown = sorted(set(columns) - allowed)
+    if unknown:
+        raise ValueError(
+            f"oracle input(s) {unknown} match no engine column and no alias in "
+            f"_INPUT_ALIASES. They would be added to the frame as dead columns "
+            f"and the oracle would silently test the wrong fact pattern. Add the "
+            f"alias, or add the column to _EXTRA_INPUT_COLUMNS if it is real."
+        )
+
+
 def run_sa(*, framework: str, ead: float, **overrides: Any) -> dict[str, Any]:
     """Run the SA branch on one row. Returns the collected row as a dict."""
     columns, elections = split_elections(resolve_aliases(overrides))
+    reject_unknown_columns(columns, _SA_DEFAULTS)
     data = dict(_SA_DEFAULTS)
     data["ead_final"] = ead
     data["ead_gross"] = ead
@@ -274,7 +320,9 @@ def run_irb(
     data["lgd"] = lgd
     data["lgd_post_crm"] = lgd if lgd_post_crm is _MIRROR_LGD else lgd_post_crm
     data["approach"] = approach
-    data.update(resolve_aliases(overrides))
+    columns = resolve_aliases(overrides)
+    reject_unknown_columns(columns, _IRB_DEFAULTS)
+    data.update(columns)
 
     lf = _frame(data).lazy()
     config = config_for(framework, PermissionMode.IRB)
@@ -306,7 +354,9 @@ def run_slotting(*, framework: str, ead: float, **overrides: Any) -> dict[str, A
     """Run the slotting branch on one row."""
     data = dict(_SLOTTING_DEFAULTS)
     data["ead_final"] = ead
-    data.update(resolve_aliases(overrides))
+    columns = resolve_aliases(overrides)
+    reject_unknown_columns(columns, _SLOTTING_DEFAULTS)
+    data.update(columns)
     lf = _frame(data, extra_schema={"maturity_date": pl.Date()}).lazy()
     config = config_for(framework, PermissionMode.IRB)
     return SlottingCalculator().calculate_branch(lf, config).collect().to_dicts()[0]
@@ -347,7 +397,9 @@ def run_equity(
     """Run the equity branch on one row."""
     data = dict(_EQUITY_DEFAULTS)
     data["ead_final"] = ead
-    data.update(resolve_aliases(overrides))
+    columns = resolve_aliases(overrides)
+    reject_unknown_columns(columns, _EQUITY_DEFAULTS | _EQUITY_SCHEMA)
+    data.update(columns)
     lf = _frame(data, extra_schema=_EQUITY_SCHEMA).lazy()
     config = config_for(framework, permission)
     return EquityCalculator().calculate_branch(lf, config).collect().to_dicts()[0]

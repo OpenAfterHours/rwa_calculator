@@ -94,6 +94,15 @@ fact pattern accidentally triggered a condition it did not mean to (a
 third-country PSE without an equivalence determination, say), the inputs were
 wrong, not the derived value.
 
+**Before reporting a disagreement, check it is not your own driver.** An input
+whose name matches no engine column used to be added to the frame as a dead
+column: the engine then read the *default* of the column you meant to set, the
+oracle silently tested the wrong fact pattern, and the result looked exactly
+like an engine defect. That produced one false-positive finding
+(`cp_is_equivalent_jurisdiction` reported as inert — it works correctly; the
+alias for it was simply missing). `drivers.reject_unknown_columns` now rejects
+any such input loudly, and ORC-130 to ORC-135 pin the real behaviour.
+
 ## Adding a new oracle
 
 1. **Write the derivation.** Add a section to `ORACLE_DERIVATIONS.md` following
@@ -124,7 +133,7 @@ test skips it and the gap stays visible.
   and CRM by calling the relevant calculator's `calculate_branch` directly.
   This is deliberate: the oracle isolates regulatory math from pipeline
   plumbing.
-- **Not exhaustive.** 123 exposures across phases O1, O2 and O4. Credit risk
+- **Not exhaustive.** 132 exposures across phases O1, O2 and O4. Credit risk
   mitigation (O3), off-balance-sheet conversion factors and the entity-level
   output floor are out of scope — see the "Scope not yet covered" section of
   `ORACLE_DERIVATIONS.md`.

@@ -177,6 +177,7 @@ def public_sector() -> list[dict[str, Any]]:
             _PSE_TABLE_2[3],
             {"cqs": None, "entity_type": "pse_sovereign", "sovereign_cqs": 3, **_UK},
         ),
+        *third_country_pse_equivalence(),
         _sa(
             "ORC-014",
             "mdb",
@@ -192,6 +193,79 @@ def public_sector() -> list[dict[str, Any]]:
             {"cqs": None, "entity_type": "international_org", **_FOREIGN},
         ),
     ]
+
+
+# -----------------------------------------------------------------------------
+# Third-country PSEs and the Art. 116(5) equivalence determination
+# -----------------------------------------------------------------------------
+# Art. 116(5), verbatim from crr.pdf p114:
+#
+#   "When competent authorities of a third country jurisdiction, which apply
+#    supervisory and regulatory arrangements at least equivalent to those
+#    applied in the [United Kingdom], treat exposures to public sector entities
+#    in accordance with paragraph 1 or 2, institutions may risk weight exposures
+#    to such public sector entities in the same manner. Otherwise the
+#    institutions shall apply a risk weight of 100 %."
+#
+# So the determination is a switch with two lawful outcomes, and this pins both
+# limbs across the whole input domain: the flag asserted, denied, and simply not
+# asserted, on each of the two PSE entity types. A third-country PSE whose
+# central government is CQS 1 therefore takes 20% where the determination is
+# made, and 100% in every other case.
+#
+# This enumeration exists because it was first reported as a defect -- "the
+# equivalence flag is inert" -- which was wrong. The flag had been passed under
+# a name the driver did not alias, so it never reached
+# ``cp_is_equivalent_jurisdiction`` and the engine saw the default of null.
+# ``drivers.reject_unknown_columns`` now makes that mistake impossible; these
+# oracles keep the real behaviour pinned.
+_PSE_EQUIVALENCE_IDS = {
+    ("pse_sovereign", True): "ORC-130",
+    ("pse_sovereign", False): "ORC-131",
+    ("pse_sovereign", None): "ORC-132",
+    ("pse_institution", True): "ORC-133",
+    ("pse_institution", False): "ORC-134",
+    ("pse_institution", None): "ORC-135",
+}
+
+_THIRD_COUNTRY = {"country_code": "US", "currency": "USD"}
+
+
+def third_country_pse_equivalence() -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for (entity_type, determined), oracle_id in _PSE_EQUIVALENCE_IDS.items():
+        if determined is True:
+            risk_weight = _PSE_TABLE_2[1]
+            reg = (
+                "CRR Art. 116(5) first limb with Art. 116(1) Table 2: the "
+                "Treasury has determined the third country equivalent, so a PSE "
+                "whose central government is CQS 1 may be risk weighted in the "
+                "same manner -> 20% RW"
+            )
+        else:
+            risk_weight = 1.00
+            state = "denied" if determined is False else "not asserted"
+            reg = (
+                f"CRR Art. 116(5) second limb: equivalence {state}, so "
+                f"'otherwise the institutions shall apply a risk weight of "
+                f"100 %' -> 100% RW"
+            )
+        out.append(
+            _sa(
+                oracle_id,
+                "pse",
+                reg,
+                risk_weight,
+                {
+                    "cqs": None,
+                    "entity_type": entity_type,
+                    "sovereign_cqs": 1,
+                    "is_equivalent_jurisdiction": determined,
+                    **_THIRD_COUNTRY,
+                },
+            )
+        )
+    return out
 
 
 # -----------------------------------------------------------------------------

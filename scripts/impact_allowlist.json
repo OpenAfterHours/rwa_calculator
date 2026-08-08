@@ -1,0 +1,27 @@
+{
+  "notes": {
+    "what_this_is": "The register of ACCEPTED numeric movements for scripts/impact_report.py. An entry is a recorded decision that a number moved and that the new figure is right - the same preserve-or-fix convention the reporting goldens and the supervisory validation register use. It is NOT a waiver: `compare` exits non-zero on any movement that has no entry here.",
+    "when_to_add_an_entry": "Only after you have established WHY the figure moved and that the NEW figure is correct. If you cannot write that sentence, the movement is a defect, not an entry.",
+    "when_to_remove_an_entry": "As soon as the movement it accounts for is in the new baseline. An entry survives exactly one baseline refresh: once the baseline is re-captured, the movement is gone and the entry is stale. Run `compare --stale-check` to find entries that no longer match anything.",
+    "entry_shape": {
+      "grain": "one of: total | class | cell | error",
+      "key": "the '|'-joined coordinate exactly as the report prints it; see key_fields below",
+      "reason": "free text, mandatory - at least 20 characters and 4 words, and not a placeholder. Say what moved and why the new number is right, with the regulatory or code reason.",
+      "accepted_under": "the commit sha or PR number the decision was taken under"
+    },
+    "key_fields": {
+      "total": "regime|portfolio|metric  (portfolio '*ALL*' is the per-regime roll-up)",
+      "class": "regime|portfolio|approach|exposure_class",
+      "cell": "regime|portfolio|template|sheet|row|col  (sheet '-' for single-frame templates)",
+      "error": "regime|portfolio|category|severity|code"
+    },
+    "wildcards": "A key containing *, ? or [ is matched with fnmatch. Wildcards are permitted because a legitimate change can move thousands of cells at once, but they widen silently - the report prints how many movements each entry matched, so a wildcard's blast radius is always visible. Prefer the narrowest pattern that covers the change.",
+    "example_entry_do_not_treat_as_live": {
+      "grain": "cell",
+      "key": "b31|rich|c07_00|corporate|0010|0110",
+      "reason": "Art. 111 CCF schedule change under PS1/26 raises the undrawn conversion factor from 20% to 40% for this bucket, so the exposure value rises; verified by hand against PS1/26 Table A1 and against tests/acceptance/basel31/test_p1_111_ccf.py.",
+      "accepted_under": "PR #999"
+    }
+  },
+  "entries": []
+}

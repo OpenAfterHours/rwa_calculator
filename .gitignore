@@ -19,3 +19,5 @@ docs/assets/*.PDF
 docs/assets/*.zip
 
 .claude/state/
+# impact_report.py snapshot output (scripts/impact_report.py capture)
+.impact/

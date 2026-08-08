@@ -564,6 +564,90 @@ def _display(path: Path) -> str:
         return str(path)
 
 
+BASELINE_PATH = _REPO_ROOT / "scripts" / "coverage_baseline.json"
+
+# Coverage must ratchet the RIGHT WAY on each metric. Binding rules and cell
+# liveness may not fall; dead cells and never-evaluated rules may not rise.
+#
+# This deliberately does NOT live in arch_check.py's ratchet, which runs on
+# every commit via the pre-commit hook: measuring these costs a ~46s full-matrix
+# pipeline run, and a gate that adds 46s to every commit is a gate somebody
+# switches off. Run `--check` in CI instead.
+_RATCHET_MIN = ("union_binding_rules_crr", "union_binding_rules_b31", "template_cell_liveness_bp")
+_RATCHET_MAX = ("dead_cells", "never_evaluated_rules")
+
+
+def _ratchet_values(payload: dict[str, Any]) -> dict[str, int]:
+    metrics = payload["metrics"]
+    return {name: int(metrics[name]) for name in (*_RATCHET_MIN, *_RATCHET_MAX)}
+
+
+def _write_baseline(payload: dict[str, Any], *, partial: bool) -> int:
+    if partial:
+        print("\nREFUSING to write a baseline from a partial matrix (--limit).")
+        return 1
+    BASELINE_PATH.write_text(
+        json.dumps(
+            {
+                "_comment": (
+                    "Coverage ratchet baseline (scripts/coverage_report.py --check). "
+                    "union_binding_* and template_cell_liveness_bp may not DECREASE; "
+                    "dead_cells and never_evaluated_rules may not INCREASE. Update only "
+                    "after a deliberate, recorded improvement — never to clear a red gate."
+                ),
+                **_ratchet_values(payload),
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    print(f"\nWrote baseline {BASELINE_PATH.relative_to(_REPO_ROOT)}")
+    return 0
+
+
+def _check_baseline(payload: dict[str, Any], *, partial: bool) -> int:
+    if partial:
+        print("\nREFUSING to ratchet against a partial matrix (--limit): the metrics")
+        print("are computed as a union across runs and a short matrix understates them.")
+        return 1
+    if not BASELINE_PATH.exists():
+        print(f"\nNo baseline at {BASELINE_PATH.relative_to(_REPO_ROOT)}; --update-baseline first.")
+        return 1
+
+    baseline = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
+    measured = _ratchet_values(payload)
+    regressions: list[str] = []
+    improvements: list[str] = []
+    for name in _RATCHET_MIN:
+        was, now = int(baseline[name]), measured[name]
+        if now < was:
+            regressions.append(f"{name}: {was} -> {now} (may not decrease)")
+        elif now > was:
+            improvements.append(f"{name}: {was} -> {now}")
+    for name in _RATCHET_MAX:
+        was, now = int(baseline[name]), measured[name]
+        if now > was:
+            regressions.append(f"{name}: {was} -> {now} (may not increase)")
+        elif now < was:
+            improvements.append(f"{name}: {was} -> {now}")
+
+    print("\nCoverage ratchet")
+    for line in improvements:
+        print(f"  [IMPROVED] {line}")
+    if regressions:
+        for line in regressions:
+            print(f"  [REGRESSED] {line}")
+        print("\nCoverage went backwards. Either restore it, or update the baseline")
+        print("deliberately with --update-baseline and say why in the commit message.")
+        return 1
+    if improvements:
+        print("\n  Coverage improved. Re-run with --update-baseline to bank it.")
+    else:
+        print("  [OK] no metric moved")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help="JSON output path")
@@ -573,6 +657,18 @@ def main() -> int:
         default=None,
         help="run only the first N entries of RUNS (smoke testing only — the "
         "metrics are meaningless on a partial matrix)",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="ratchet the measured metrics against scripts/coverage_baseline.json "
+        "and exit non-zero on a regression (CI, not pre-commit — this takes ~46s)",
+    )
+    parser.add_argument(
+        "--update-baseline",
+        action="store_true",
+        help="rewrite scripts/coverage_baseline.json from this run. Only ever "
+        "after a deliberate, recorded improvement — never to clear a red gate",
     )
     args = parser.parse_args()
 
@@ -593,6 +689,11 @@ def main() -> int:
     args.out.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     print_summary(payload)
     print(f"\nWrote {args.out.relative_to(_REPO_ROOT)} in {payload['runtime_seconds']}s")
+
+    if args.update_baseline:
+        return _write_baseline(payload, partial=bool(args.limit))
+    if args.check:
+        return _check_baseline(payload, partial=bool(args.limit))
     return 0
 
 

@@ -1125,7 +1125,7 @@ ENTRIES: dict[str, RuleEntry] = {
             CQS.UNRATED: Decimal("1.00"),
         },
         key="cqs",
-        citation=Citation("CRR", "122", "Table 5 corporate RW by CQS"),
+        citation=Citation("CRR", "122", "Table 6 corporate RW by CQS"),
         default=Decimal("1.00"),
     ),
     "covered_bond_risk_weights": LookupTable(

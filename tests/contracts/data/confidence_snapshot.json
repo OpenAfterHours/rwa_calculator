@@ -6024,6 +6024,7 @@
         "tests/fixtures/p5_15/p5_15.py",
         "tests/properties/portfolios.py",
         "tests/properties/strategies.py",
+        "tests/properties/test_differential_shadow.py",
         "tests/properties/test_homogeneity.py",
         "tests/unit/classifier/test_p1_243_natural_person_irb_retail_cap.py",
         "tests/unit/test_art123a_retail_criteria.py",

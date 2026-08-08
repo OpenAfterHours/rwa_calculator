@@ -409,7 +409,7 @@ Key column: `cqs`; default `1.00`
 ### `corporate_risk_weights`
 
 **CRR** — CRR Art. 122
- *(Table 5 corporate RW by CQS)*
+ *(Table 6 corporate RW by CQS)*
 
 Key column: `cqs`; default `1.00`
 

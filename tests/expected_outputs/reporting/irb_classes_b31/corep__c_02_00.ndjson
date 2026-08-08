@@ -1,9 +1,9 @@
-{"row_ref":"0010","row_name":"TOTAL RISK EXPOSURE AMOUNT","0010":89931289.47783288,"0020":80457500.0,"0030":89931289.47783288}
+{"row_ref":"0010","row_name":"TOTAL RISK EXPOSURE AMOUNT","0010":89956289.47783288,"0020":80718958.33333333,"0030":89956289.47783288}
 {"row_ref":"0034","row_name":"Output floor activated","0010":0.0,"0020":0.0,"0030":0.0}
 {"row_ref":"0035","row_name":"Output floor multiplier","0010":0.0,"0020":0.0,"0030":0.0}
 {"row_ref":"0036","row_name":"Output floor adjustment (OF-ADJ)","0010":0.0,"0020":0.0,"0030":0.0}
-{"row_ref":"0040","row_name":"TOTAL OWN FUNDS REQUIREMENTS","0010":7194503.158226631,"0020":6436600.0,"0030":7194503.158226631}
-{"row_ref":"0050","row_name":"RISK WEIGHTED EXPOSURE AMOUNTS FOR CREDIT, COUNTERPARTY CREDIT AND DILUTION RISKS AND FREE DELIVERIES","0010":89931289.47783288,"0020":80457500.0,"0030":89931289.47783288}
+{"row_ref":"0040","row_name":"TOTAL OWN FUNDS REQUIREMENTS","0010":7196503.158226631,"0020":6457516.666666666,"0030":7196503.158226631}
+{"row_ref":"0050","row_name":"RISK WEIGHTED EXPOSURE AMOUNTS FOR CREDIT, COUNTERPARTY CREDIT AND DILUTION RISKS AND FREE DELIVERIES","0010":89956289.47783288,"0020":80718958.33333333,"0030":89956289.47783288}
 {"row_ref":"0060","row_name":"Of which: Standardised Approach (SA)","0010":21000000.0,"0020":21000000.0,"0030":21000000.0}
 {"row_ref":"0070","row_name":"Central governments and central banks","0010":21000000.0,"0020":21000000.0,"0030":21000000.0}
 {"row_ref":"0080","row_name":"Regional governments and local authorities","0010":0.0,"0020":0.0,"0030":0.0}
@@ -22,7 +22,7 @@
 {"row_ref":"0200","row_name":"Collective investment undertakings (CIU)","0010":0.0,"0020":0.0,"0030":0.0}
 {"row_ref":"0210","row_name":"Equity","0010":0.0,"0020":0.0,"0030":0.0}
 {"row_ref":"0211","row_name":"Other items","0010":0.0,"0020":0.0,"0030":0.0}
-{"row_ref":"0220","row_name":"Of which: IRB Approach","0010":68931289.47783288,"0020":0.0,"0030":0.0}
+{"row_ref":"0220","row_name":"Of which: IRB Approach","0010":68956289.47783288,"0020":0.0,"0030":0.0}
 {"row_ref":"0240","row_name":"Of which: Foundation IRB (F-IRB)","0010":68875533.81922278,"0020":0.0,"0030":0.0}
 {"row_ref":"0250","row_name":"F-IRB — Institutions","0010":4198445.904632194,"0020":4198445.904632194,"0030":4198445.904632194}
 {"row_ref":"0271","row_name":"F-IRB — Institutions (detail)","0010":4198445.904632194,"0020":4198445.904632194,"0030":4198445.904632194}
@@ -31,17 +31,17 @@
 {"row_ref":"0295","row_name":"F-IRB — Financial and large corporates","0010":0.0,"0020":0.0,"0030":0.0}
 {"row_ref":"0296","row_name":"F-IRB — Other general corporates SME","0010":0.0,"0020":0.0,"0030":0.0}
 {"row_ref":"0297","row_name":"F-IRB — Other general corporates non-SME","0010":64677087.91459059,"0020":64677087.91459059,"0030":64677087.91459059}
-{"row_ref":"0300","row_name":"Of which: Advanced IRB (A-IRB)","0010":55755.65861009869,"0020":0.0,"0030":0.0}
+{"row_ref":"0300","row_name":"Of which: Advanced IRB (A-IRB)","0010":80755.65861009869,"0020":0.0,"0030":0.0}
 {"row_ref":"0310","row_name":"A-IRB — Central governments and central banks","0010":0.0,"0020":0.0,"0030":0.0}
 {"row_ref":"0330","row_name":"A-IRB — Institutions","0010":0.0,"0020":0.0,"0030":0.0}
 {"row_ref":"0340","row_name":"A-IRB — Corporates","0010":0.0,"0020":0.0,"0030":0.0}
 {"row_ref":"0350","row_name":"A-IRB — SL excluding slotting","0010":0.0,"0020":0.0,"0030":0.0}
 {"row_ref":"0355","row_name":"A-IRB — Other general corporates SME","0010":0.0,"0020":0.0,"0030":0.0}
 {"row_ref":"0356","row_name":"A-IRB — Other general corporates non-SME","0010":0.0,"0020":0.0,"0030":0.0}
-{"row_ref":"0370","row_name":"A-IRB — Retail","0010":55755.65861009869,"0020":55755.65861009869,"0030":55755.65861009869}
-{"row_ref":"0380","row_name":"A-IRB — Retail, secured by immovable property","0010":39848.06124025501,"0020":39848.06124025501,"0030":39848.06124025501}
+{"row_ref":"0370","row_name":"A-IRB — Retail","0010":80755.65861009869,"0020":80755.65861009869,"0030":80755.65861009869}
+{"row_ref":"0380","row_name":"A-IRB — Retail, secured by immovable property","0010":64848.06124025501,"0020":64848.06124025501,"0030":64848.06124025501}
 {"row_ref":"0382","row_name":"A-IRB — Retail, residential immovable SME","0010":0.0,"0020":0.0,"0030":0.0}
-{"row_ref":"0383","row_name":"A-IRB — Retail, residential immovable non-SME","0010":39848.06124025501,"0020":39848.06124025501,"0030":39848.06124025501}
+{"row_ref":"0383","row_name":"A-IRB — Retail, residential immovable non-SME","0010":64848.06124025501,"0020":64848.06124025501,"0030":64848.06124025501}
 {"row_ref":"0384","row_name":"A-IRB — Retail, commercial RE SME","0010":0.0,"0020":0.0,"0030":0.0}
 {"row_ref":"0385","row_name":"A-IRB — Retail, commercial RE non-SME","0010":0.0,"0020":0.0,"0030":0.0}
 {"row_ref":"0390","row_name":"A-IRB — Retail, qualifying revolving (QRRE)","0010":15907.59736984368,"0020":15907.59736984368,"0030":15907.59736984368}

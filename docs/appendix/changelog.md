@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **PS1/26 Art. 154(4A)(b): the 10% IRB mortgage RWEA floor is now confined to
+  non-defaulted retail exposures secured by residential immovable property
+  (P1.319).** The engine gated the floor on a bare `MORTGAGE|RESIDENTIAL`
+  substring match against `exposure_class`, so it also floored **defaulted**
+  retail mortgages, which the article excludes by name. The gate is now a
+  positive equality on `retail_mortgage` — the engine's closest available proxy
+  for the Art. 147(5B)(d)(ii) subclass — combined with a non-defaulted test on
+  the `is_defaulted` carrier.
+
+  **This lowers RWA.** The floor is only ever *added* to RWEA, so narrowing its
+  scope can only remove capital. Measured on the `irb-classes` Basel 3.1
+  portfolio: one affected exposure, **−20,000.00 of RWEA**. The Basel 3.1 output
+  floor does not bind on that portfolio (U-TREA 68.96m against 0.6 × S-TREA
+  35.83m), so the reduction is unoffset there; in general `TREA = max(U-TREA,
+  floor)` bounds the effect at no more than the row-level delta. Set containment
+  was proven (`new ⊆ old`), so **no non-defaulted retail mortgage loses the
+  floor**.
+
+  Two limbs of the original finding did not survive audit. `commercial_mortgage`
+  and `residential_mortgage` are SA-bound and cannot reach the IRB branch in
+  production. The article's **UK**-property condition remains unimplemented —
+  no property-country carrier exists on the sealed `re_split_exit` edge
+  (`cp_country_code` is the *obligor's* country) — and its oracle case stays a
+  strict xfail rather than being quietly claimed as covered.
+
+  Firms should note the residual: a retail obligor secured **only on commercial
+  property** is still classified `retail_mortgage` and still receives the floor,
+  because the classifier's property-collateral test spans both property types.
+  That is conservative, strictly narrower than the previous behaviour, and
+  tracked separately.
+
 ### Added
 - **The regulatory skills no longer state regulatory values.**
   `scripts/generate_regulatory_tables.py` now renders pack values into

@@ -25,6 +25,7 @@ from rwa_calc.contracts.config import (
     CalculationConfig,
     PostModelAdjustmentConfig,
 )
+from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.engine.irb.transforms import (
     apply_post_model_adjustments,
 )
@@ -38,8 +39,18 @@ def _make_irb_frame(
     risk_weight: float = 0.50,
     ead_final: float = 2000.0,
     expected_loss: float = 10.0,
+    is_defaulted: bool = False,
 ) -> pl.LazyFrame:
-    """Minimal IRB frame with columns expected by apply_post_model_adjustments."""
+    """Minimal IRB frame with columns expected by apply_post_model_adjustments.
+
+    ``is_defaulted`` is the CRR Art. 178 default flag. It is emitted
+    unconditionally because PS1/26 Art. 154(4A)(b) confines the mortgage RWEA
+    floor to NON-defaulted exposures, so the transform reads the column on every
+    row. It is ``required=True`` on the ``crm_exit``/``re_split_exit`` sealed
+    edges and ``apply_defaulted_treatment`` — same module, strictly earlier on
+    every production path — already dereferences it, so no production frame can
+    reach ``apply_post_model_adjustments`` without it.
+    """
     return pl.LazyFrame(
         {
             "exposure_reference": ["EXP_1"],
@@ -48,6 +59,7 @@ def _make_irb_frame(
             "risk_weight": [risk_weight],
             "ead_final": [ead_final],
             "expected_loss": [expected_loss],
+            "is_defaulted": pl.Series([is_defaulted], dtype=pl.Boolean),
         }
     )
 
@@ -233,8 +245,22 @@ class TestPostModelAdjustmentsBasel31:
         )
         assert result["rwa"][0] == pytest.approx(1000.0)
 
-    def test_residential_exposure_class_triggers_mortgage_floor(self) -> None:
-        """'residential_mortgage' exposure class triggers mortgage RW floor."""
+    def test_sa_residential_mortgage_class_does_not_trigger_mortgage_floor(self) -> None:
+        """'residential_mortgage' is the SA loan-splitter's class, not Art. 147(5B)(d)(ii).
+
+        INVERTED (P1.319). This test previously asserted that the class DID
+        trigger the floor, which pinned the defect: the gate matched
+        ``exposure_class`` against the regex ``MORTGAGE|RESIDENTIAL`` and nothing
+        else.
+
+        PS1/26 Art. 154(4A)(b) reaches only "retail exposures secured by
+        residential immovable property", i.e. the Art. 147(5B) subclass
+        (d)(ii) — whose engine carrier is ``ExposureClass.RETAIL_MORTGAGE``.
+        ``residential_mortgage`` is the SA real-estate loan-splitter's
+        non-retail RRE child (``domain/enums.py``), is SA-bound by
+        ``engine/stages/re_split/splitter.py`` and is not an Art. 147(5B)
+        subclass at all. It must NOT receive the IRB post-model floor.
+        """
         config, pack = _b31_config(mortgage_rw_floor=Decimal("0.15"))
         lf = _make_irb_frame(
             exposure_class="residential_mortgage",
@@ -243,7 +269,7 @@ class TestPostModelAdjustmentsBasel31:
             ead_final=2000.0,
         )
         result = lf.pipe(apply_post_model_adjustments, config, pack=pack).collect()
-        assert result["mortgage_rw_floor_adjustment"][0] == pytest.approx(100.0)
+        assert result["mortgage_rw_floor_adjustment"][0] == pytest.approx(0.0)
 
 
 class TestPostModelAdjustmentConfig:
@@ -402,6 +428,10 @@ class TestPMASequencing:
                 "risk_weight": [0.05, 0.50],
                 "ead_final": [2000.0, 2000.0],
                 "expected_loss": [5.0, 50.0],
+                # Both rows NON-defaulted, so the Art. 154(4A)(b) scope gate is a
+                # no-op here and every asserted value below is preserved exactly.
+                # The column is emitted because the transform reads it per row.
+                "is_defaulted": [False, False],
             }
         )
         result = lf.pipe(apply_post_model_adjustments, config, pack=pack).collect()
@@ -495,3 +525,370 @@ class TestPMAELMonotonicity:
         config = PostModelAdjustmentConfig.crr()
         assert config.enabled is False
         assert config.pma_el_scalar == Decimal("0.0")
+
+
+# =============================================================================
+# P1.319 — the Art. 154(4A)(b) scope of the mortgage RWEA floor
+# =============================================================================
+
+#: Every P1.319 row carries the same exposure value, so a floor add-on is
+#: readable as ``(floor - modelled RW) x EAD`` without a per-row lookup.
+_P1319_EAD: float = 10_000_000.0
+
+#: The Basel 3.1 ``mortgage_rw_floor`` pack scalar (PS1/26 Art. 154(4A)(b)),
+#: injected through ``_b31_config`` so the expected values below are exact and
+#: independent of the pack. ``test_p1319_injected_floor_matches_the_pack_scalar``
+#: pins it back to the pack, so a pack move fails loudly on that one assertion
+#: rather than scattering across the whole table.
+_P1319_FLOOR: Decimal = Decimal("0.10")
+
+#: The seven-row scope frame of the P1.319 design, plus the eighth hardening row.
+#: Columns: (reference, exposure_class, is_defaulted, risk_weight, rwa, EL).
+#: ``exposure_class`` values are taken from ``ExposureClass`` rather than typed as
+#: strings — a hand-written class name that is not an enum member would silently
+#: fall to the ``otherwise`` branch and the row would prove nothing.
+_P1319_ROWS: tuple[tuple[str, str, bool | None, float, float, float], ...] = (
+    # 1 L1-DEMO      the ORC-140 replica: defaulted, Art. 154(1)(a) drives RW to 0
+    ("P1319_DEF_RRE", ExposureClass.RETAIL_MORTGAGE.value, True, 0.00, 0.0, 500_000.0),
+    # 2 L1-CONTROL   in scope on BOTH limbs — must be bit-identical before/after
+    ("P1319_LIVE_RRE", ExposureClass.RETAIL_MORTGAGE.value, False, 0.04, 400_000.0, 5_000.0),
+    # 3 L2-DEMO-a    the ORC-141 replica: matched the old regex through "MORTGAGE"
+    ("P1319_CRE", ExposureClass.COMMERCIAL_MORTGAGE.value, False, 0.04, 400_000.0, 20_000.0),
+    # 4 L2-DEMO-b    the SA loan-splitter's non-retail RRE child
+    ("P1319_RESI_SA", ExposureClass.RESIDENTIAL_MORTGAGE.value, False, 0.04, 400_000.0, 20_000.0),
+    # 5 L2-GUARD     Art. 147(5C) other retail — zero on both sides; the sole
+    #                catcher of an over-broad ``starts_with("retail")`` gate
+    ("P1319_RET_OTH", ExposureClass.RETAIL_OTHER.value, False, 0.04, 400_000.0, 30_000.0),
+    # 6 L1-NULL-GUARD null is_defaulted resolves to NOT defaulted (conservative)
+    ("P1319_NULL_DEF", ExposureClass.RETAIL_MORTGAGE.value, None, 0.04, 400_000.0, 5_000.0),
+    # 7 L1-PROXY-KILLER defaulted WITH a positive modelled RW — see its own test
+    ("P1319_DEF_RRE_RW", ExposureClass.RETAIL_MORTGAGE.value, True, 0.04, 400_000.0, 350_000.0),
+    # 8 L1-ZERO-RW-KILLER non-defaulted WITH a zero modelled RW — see its own test
+    ("P1319_ND_RRE_ZERO", ExposureClass.RETAIL_MORTGAGE.value, False, 0.00, 0.0, 500_000.0),
+)
+
+#: reference -> (mortgage_rw_floor_adjustment, rwa) once Art. 154(4A)(b) scope is
+#: honoured. The trailing comment on each line is what the PRE-fix engine
+#: produces, i.e. the fail-first evidence.
+_P1319_EXPECTED: dict[str, tuple[float, float]] = {
+    "P1319_DEF_RRE": (0.0, 0.0),  # pre-fix 1,000,000.00 / 1,000,000.00
+    "P1319_LIVE_RRE": (600_000.0, 1_000_000.0),  # unchanged by the fix
+    "P1319_CRE": (0.0, 400_000.0),  # pre-fix   600,000.00 / 1,000,000.00
+    "P1319_RESI_SA": (0.0, 400_000.0),  # pre-fix   600,000.00 / 1,000,000.00
+    "P1319_RET_OTH": (0.0, 400_000.0),  # unchanged by the fix
+    "P1319_NULL_DEF": (600_000.0, 1_000_000.0),  # unchanged by the fix
+    "P1319_DEF_RRE_RW": (0.0, 400_000.0),  # pre-fix   600,000.00 / 1,000,000.00
+    "P1319_ND_RRE_ZERO": (1_000_000.0, 1_000_000.0),  # unchanged by the fix
+}
+
+#: The seven columns ``apply_post_model_adjustments`` is contractually required to
+#: emit on EVERY row of EVERY regime. C 08.01 cols 0251-0254 and 0280-0282 read
+#: them directly, so a dropped column or a null silently zeroes a published cell.
+_P1319_PMA_COLUMNS: tuple[str, ...] = (
+    "rwa_pre_adjustments",
+    "post_model_adjustment_rwa",
+    "mortgage_rw_floor_adjustment",
+    "unrecognised_exposure_adjustment",
+    "el_pre_adjustment",
+    "post_model_adjustment_el",
+    "el_after_adjustment",
+)
+
+
+def _make_p1319_frame() -> pl.LazyFrame:
+    """The P1.319 scope frame — every row at the same EAD, PMA scalars at zero."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": [row[0] for row in _P1319_ROWS],
+            "exposure_class": [row[1] for row in _P1319_ROWS],
+            "is_defaulted": pl.Series([row[2] for row in _P1319_ROWS], dtype=pl.Boolean),
+            "risk_weight": [row[3] for row in _P1319_ROWS],
+            "rwa": [row[4] for row in _P1319_ROWS],
+            "ead_final": [_P1319_EAD] * len(_P1319_ROWS),
+            "expected_loss": [row[5] for row in _P1319_ROWS],
+        }
+    )
+
+
+@pytest.fixture(scope="module")
+def p1319_b31() -> dict[str, dict[str, float]]:
+    """Run the P1.319 frame through the Basel 3.1 branch; index it by reference."""
+    config, pack = _b31_config(mortgage_rw_floor=_P1319_FLOOR)
+    result = _make_p1319_frame().pipe(apply_post_model_adjustments, config, pack=pack).collect()
+    return {row["exposure_reference"]: row for row in result.to_dicts()}
+
+
+@pytest.fixture(scope="module")
+def p1319_b31_frame() -> pl.DataFrame:
+    """The same run, unindexed, for the total and presence assertions."""
+    config, pack = _b31_config(mortgage_rw_floor=_P1319_FLOOR)
+    return _make_p1319_frame().pipe(apply_post_model_adjustments, config, pack=pack).collect()
+
+
+class TestMortgageFloorScopeArt154_4Ab:
+    """PS1/26 Art. 154(4A)(b): the 10% RWEA floor has a scope, and the engine ignored it.
+
+    Verbatim (``ps126app1.pdf``, Art. 154(4A)):
+
+        (b) any amount needed to ensure that risk-weighted exposure amounts for
+        NON-DEFAULTED exposures which are RETAIL exposures secured by UK
+        RESIDENTIAL immovable property are greater than or equal to 10% of the
+        exposure value for such exposures ...
+
+    Three cumulative conditions. Before P1.319 the gate matched ``exposure_class``
+    against the regex ``MORTGAGE|RESIDENTIAL`` and tested none of them, so the
+    floor reached defaulted exposures (ORC-140) and commercial real estate
+    (ORC-141). This class pins the first two:
+
+    - **non-defaulted** — exactly, off ``is_defaulted``;
+    - **retail secured by residential immovable property** — via the engine's
+      closest available proxy, ``ExposureClass.RETAIL_MORTGAGE``, which is
+      OVER-INCLUSIVE of retail exposures secured only by COMMERCIAL property
+      (``hierarchy/enrich.py`` computes ``property_collateral_value`` over both
+      property kinds by design, so ``classify/attributes.py`` sets ``is_mortgage``
+      for either). That residual is conservative and is a separate item.
+
+    The **UK** limb is not implementable — no property-country column reaches the
+    IRB branch — so ``ORC-142`` stays a recorded disagreement.
+
+    Direction: the floor can only ADD RWEA, so every limb of this narrowing
+    REMOVES RWEA. That is why rows 2, 5, 6 and 8 are here: a change that moved
+    them would have over-reached in the capital-shortfall direction.
+    """
+
+    def test_p1319_injected_floor_matches_the_pack_scalar(self) -> None:
+        """The floor this frame is built on is the production Basel 3.1 pack value.
+
+        Anchors the whole expected table to the rulepack rather than to a number
+        typed next to the assertions. If the pack scalar moves, this fails first
+        and says so, instead of the table failing for an unrelated reason.
+        """
+        # Arrange / Act
+        pack_floor = resolve("b31", date(2028, 3, 31)).scalar("mortgage_rw_floor")
+
+        # Assert
+        assert pack_floor == _P1319_FLOOR
+
+    def test_p1319_exposure_classes_are_real_enum_members(self) -> None:
+        """Every class string in the frame is an actual ``ExposureClass`` member.
+
+        A class name that is not an enum member would fall to the ``otherwise``
+        branch for the wrong reason and the row would pass while proving nothing
+        — the shape that let ``C02_00_SA_CLASS_MAP`` zero-fill for its whole life.
+        """
+        # Arrange / Act
+        used = {row[1] for row in _P1319_ROWS}
+
+        # Assert
+        assert used <= {member.value for member in ExposureClass}
+
+    @pytest.mark.parametrize("reference", list(_P1319_EXPECTED))
+    def test_p1319_floor_add_on_and_rwea_per_row(
+        self, reference: str, p1319_b31: dict[str, dict[str, float]]
+    ) -> None:
+        """Each row takes the Art. 154(4A)(b) add-on its scope entitles it to.
+
+        Arrange: the eight-row scope frame at a 10% pack floor, PMA scalars zero.
+        Act:     one ``apply_post_model_adjustments`` pass over the whole frame.
+        Assert:  the row's floor add-on and post-adjustment RWEA.
+        """
+        # Arrange / Act
+        row = p1319_b31[reference]
+        expected_adjustment, expected_rwa = _P1319_EXPECTED[reference]
+
+        # Assert
+        assert row["mortgage_rw_floor_adjustment"] == pytest.approx(expected_adjustment)
+        assert row["rwa"] == pytest.approx(expected_rwa)
+
+    def test_p1319_defaulted_retail_mortgage_with_positive_rw_loses_the_floor(
+        self, p1319_b31: dict[str, dict[str, float]]
+    ) -> None:
+        """``is_defaulted`` is the carrier — ``risk_weight`` and ``rwa`` are not proxies.
+
+        DO NOT DELETE THIS ROW AS REDUNDANT WITH ``P1319_DEF_RRE``. Twenty-four
+        candidate gates were mutation-tested against the six-row frame this design
+        started from. ``P1319_DEF_RRE_RW`` is the SOLE killer of three of them:
+
+            (risk_weight > 0) & (exposure_class == "retail_mortgage")
+            (rwa > 0)         & (exposure_class == "retail_mortgage")
+            ~(is_defaulted & (risk_weight == 0)) & (exposure_class == ...)
+
+        All three survive without it, because every OTHER defaulted row in the
+        frame models to RW 0 — under F-IRB a defaulted row takes ``K = 0``
+        unconditionally, and the A-IRB replica sets ``LGD = BEEL``. That
+        coincidence is exactly what invites "defaulted <=> RW 0" as a shortcut.
+
+        This row breaks the coincidence: it is DEFAULTED and models to
+        ``risk_weight = 0.04``, identical to the non-defaulted control
+        ``P1319_LIVE_RRE``, so the two rows differ ONLY in ``is_defaulted``.
+        Production reaches it whenever an A-IRB defaulted mortgage has
+        ``LGD > BEEL``: Art. 154(1)(a) then gives ``K > 0`` and hence ``RW > 0``
+        on an exposure Art. 154(4A)(b) still excludes.
+
+        ``P1319_DEF_RRE`` is the ORC-140 replica and is the only row proving the
+        full ``0.10 x EAD`` over-statement; neither row substitutes for the other.
+        """
+        # Arrange / Act
+        defaulted = p1319_b31["P1319_DEF_RRE_RW"]
+        control = p1319_b31["P1319_LIVE_RRE"]
+
+        # Assert — same class, same modelled RW, same EAD; only the flag differs
+        assert defaulted["risk_weight"] == pytest.approx(control["risk_weight"])
+        assert defaulted["exposure_class"] == control["exposure_class"]
+        assert defaulted["mortgage_rw_floor_adjustment"] == pytest.approx(0.0)
+        assert control["mortgage_rw_floor_adjustment"] == pytest.approx(600_000.0)
+
+    def test_p1319_non_defaulted_retail_mortgage_modelling_to_zero_rw_keeps_the_floor(
+        self, p1319_b31: dict[str, dict[str, float]]
+    ) -> None:
+        """A zero modelled RW does not put a NON-defaulted mortgage out of scope.
+
+        The mirror image of the row above, and the capital-SHORTFALL direction.
+        Three further wrong gates survive the seven-row frame, the strongest being
+
+            (risk_weight != 0) & ~is_defaulted & (exposure_class == "retail_mortgage")
+
+        which drops the floor from a non-defaulted retail mortgage that happens to
+        model to RW 0 — precisely the case Art. 154(4A)(b) exists to catch, since
+        the floor's whole purpose is to bind where the model output is lowest.
+        The same row also kills the EL-threshold survivors, which read
+        ``expected_loss`` as a default proxy.
+
+        This combination is not reachable under Basel 3.1 today (the retail-RRE
+        LGD and PD input floors keep a non-defaulted modelled RW off zero), so
+        this is hardening rather than a live defect — but the gate must not
+        DEPEND on that, because the coupling is a floor value away from breaking.
+
+        With ``P1319_DEF_RRE`` this row also closes the question structurally,
+        not case by case. The two are IDENTICAL on every column the transform can
+        read — same class, same ``risk_weight`` 0.00, same ``rwa`` 0.00, same
+        ``expected_loss`` 500,000.00, same ``ead_final`` — and differ ONLY in
+        ``is_defaulted``, while their required add-ons differ by the full
+        ``0.10 x EAD``. No gate that fails to read ``is_defaulted`` can satisfy
+        both, whatever it reads instead.
+        """
+        # Arrange / Act
+        row = p1319_b31["P1319_ND_RRE_ZERO"]
+        defaulted_twin = p1319_b31["P1319_DEF_RRE"]
+
+        # Assert — the twins differ in the flag and nothing else the gate can see
+        for column in ("exposure_class", "risk_weight", "rwa_pre_adjustments", "ead_final"):
+            assert row[column] == defaulted_twin[column], f"the twins diverged on {column}"
+        assert row["el_pre_adjustment"] == pytest.approx(defaulted_twin["el_pre_adjustment"])
+        assert row["is_defaulted"] is False and defaulted_twin["is_defaulted"] is True
+
+        # Assert — the floor binds in full: 0.10 x 10,000,000
+        assert row["mortgage_rw_floor_adjustment"] == pytest.approx(1_000_000.0)
+        assert row["rwa"] == pytest.approx(1_000_000.0)
+
+    def test_p1319_null_default_flag_resolves_to_non_defaulted(
+        self, p1319_b31: dict[str, dict[str, float]]
+    ) -> None:
+        """A null ``is_defaulted`` keeps the floor — the conservative side.
+
+        ``is_defaulted`` genuinely reaches this branch null in production (the
+        ``crm_exit`` edge column has ``fill_null_default=False``), and
+        ``apply_defaulted_treatment`` in the same module already resolves it with
+        ``fill_null(False)``. Resolving it the other way would REMOVE RWEA on a
+        missing input, which is the direction a data gap must never take.
+        """
+        # Arrange / Act
+        row = p1319_b31["P1319_NULL_DEF"]
+
+        # Assert
+        assert row["mortgage_rw_floor_adjustment"] == pytest.approx(600_000.0)
+        assert row["rwa"] == pytest.approx(1_000_000.0)
+
+    def test_p1319_frame_totals(self, p1319_b31_frame: pl.DataFrame) -> None:
+        """The frame's column totals, so a per-row regression cannot net to zero.
+
+        Pre-fix the engine produces ``5,000,000.00`` of floor add-on and
+        ``7,400,000.00`` of RWEA on this frame — a 40.5% over-statement.
+        """
+        # Arrange / Act
+        totals = {
+            name: p1319_b31_frame[name].sum()
+            for name in ("ead_final", "rwa_pre_adjustments", "mortgage_rw_floor_adjustment", "rwa")
+        }
+
+        # Assert
+        assert totals["ead_final"] == pytest.approx(80_000_000.0)
+        assert totals["rwa_pre_adjustments"] == pytest.approx(2_400_000.0)
+        assert totals["mortgage_rw_floor_adjustment"] == pytest.approx(2_200_000.0)
+        assert totals["rwa"] == pytest.approx(4_600_000.0)
+        assert p1319_b31_frame["el_after_adjustment"].sum() == pytest.approx(1_430_000.0)
+
+    def test_p1319_every_pma_column_is_emitted_and_non_null(
+        self, p1319_b31_frame: pl.DataFrame
+    ) -> None:
+        """All seven PMA columns exist and carry a value on every row.
+
+        The fix must set an out-of-scope add-on to ``0.0`` — NEVER to null and
+        never by dropping the column. C 08.01 col 0253 is
+        ``Sum("mortgage_rw_floor_adjustment")``; a null there is indistinguishable
+        from a legitimate zero in the template and would zero the cell for the
+        whole regime without anything raising.
+        """
+        # Arrange / Act
+        emitted = set(p1319_b31_frame.columns)
+
+        # Assert
+        assert set(_P1319_PMA_COLUMNS) <= emitted
+        for name in _P1319_PMA_COLUMNS:
+            assert p1319_b31_frame[name].null_count() == 0, f"{name} published a null"
+
+    def test_p1319_rwea_foots_to_its_components_on_every_row(
+        self, p1319_b31_frame: pl.DataFrame
+    ) -> None:
+        """``rwa == pre + floor + pma + unrecognised`` per row — the C 08.01 footing.
+
+        This is the ``0251 + 0252 + 0253 + 0254 = 0260`` identity at row level. A
+        breakdown that silently drops a component still foots against a total that
+        was computed the same wrong way, so it is asserted against the sealed
+        ``rwa`` rather than against a re-derived sum of the same parts.
+        """
+        # Arrange / Act
+        footed = p1319_b31_frame.with_columns(
+            (
+                pl.col("rwa_pre_adjustments")
+                + pl.col("mortgage_rw_floor_adjustment")
+                + pl.col("post_model_adjustment_rwa")
+                + pl.col("unrecognised_exposure_adjustment")
+                - pl.col("rwa")
+            )
+            .abs()
+            .alias("footing_gap")
+        )
+
+        # Assert
+        assert footed["footing_gap"].max() == pytest.approx(0.0, abs=1e-6)
+        assert footed["el_after_adjustment"].to_list() == pytest.approx(
+            (footed["el_pre_adjustment"] + footed["post_model_adjustment_el"]).to_list()
+        )
+
+    def test_p1319_crr_branch_emits_every_pma_column_as_a_nil_control(self) -> None:
+        """CRR: the PMA feature is off, so the same frame gets zero adjustments.
+
+        The CRR limb is a NIL control, not a demonstration — ``packs/crr.py``
+        carries ``Feature("post_model_adjustments", enabled=False)`` and the
+        transform short-circuits. What matters is that it still emits the whole
+        column set, because C 08.01 reads those columns on both regimes.
+        """
+        # Arrange
+        config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
+
+        # Act
+        result = _make_p1319_frame().pipe(apply_post_model_adjustments, config).collect()
+
+        # Assert
+        assert set(_P1319_PMA_COLUMNS) <= set(result.columns)
+        for name in _P1319_PMA_COLUMNS:
+            assert result[name].null_count() == 0, f"{name} published a null under CRR"
+        for name in (
+            "post_model_adjustment_rwa",
+            "mortgage_rw_floor_adjustment",
+            "unrecognised_exposure_adjustment",
+            "post_model_adjustment_el",
+        ):
+            assert result[name].to_list() == pytest.approx([0.0] * len(_P1319_ROWS))
+        assert result["rwa"].sum() == pytest.approx(2_400_000.0)

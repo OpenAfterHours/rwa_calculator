@@ -56,9 +56,13 @@ from tests.acceptance.reporting.test_reporting_golden import (
 )
 from tests.fixtures.reporting_irb_classes_portfolio import (
     CORP_MASTERSCALE,
+    DRAWN_RRE_DEF,
     IRB_CLASS_EXPECTED_APPROACH,
     IRB_CLASS_EXPECTED_SHEET_B31,
     IRB_CLASS_EXPECTED_SHEET_CRR,
+    LN_RRE,
+    LN_RRE_DEF,
+    LN_RRE_FLOOR,
     build_reporting_irb_classes_bundle,
 )
 
@@ -67,6 +71,7 @@ from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBundle
 from rwa_calc.reporting.pillar3.generator import Pillar3Generator
+from rwa_calc.rulebook.resolve import resolve
 
 # regime key -> (golden subdir, framework string)
 _REGIMES: dict[str, tuple[str, str]] = {
@@ -297,4 +302,136 @@ def test_the_masterscale_grades_are_distinct_and_ordered() -> None:
     assert pds == sorted(pds) and len(set(pds)) == len(pds), (
         "the masterscale PDs must strictly increase — two grades in one band "
         "would empty a band the published sum-checks reference"
+    )
+
+
+# =============================================================================
+# P1.319 — C 08.01 col 0253, the Art. 154(4A)(b) mortgage RWEA floor
+# =============================================================================
+
+#: C 08.01 col 0253 on the Basel 3.1 ``retail_mortgage`` sheet, MEASURED on the
+#: pre-P1.319 engine with the ``LN_RRE_FLOOR`` / ``LN_RRE_DEF`` pair in place
+#: (batch 20260808-1624, Wave 2, reproduced by two reviewers). Full precision on
+#: purpose: the live-cell control's contribution is a model output and must not be
+#: re-typed at reduced significance. Col 0260 is the sheet's total RWEA.
+_R0253_PRE_P1319: float = 33_931.09409992916
+_R0260_PRE_P1319: float = 84_848.06124025502
+
+#: The C 08.01 RWEA block: ``{c0260} = sum({c0251;0252;0253;0254})``
+#: (``boe_b0751`` / ``boe_b0763``).
+_C08_01_RWEA_COMPONENTS: tuple[str, ...] = ("0251", "0252", "0253", "0254")
+
+
+def _b31_mortgage_rw_floor() -> float:
+    """The Basel 3.1 ``mortgage_rw_floor`` pack scalar (PS1/26 Art. 154(4A)(b))."""
+    return float(resolve("b31", date(2027, 6, 1)).scalar("mortgage_rw_floor"))
+
+
+def test_c08_01_r0253_drops_the_defaulted_retail_mortgage_but_keeps_the_live_leg() -> None:
+    """PS1/26 Art. 154(4A)(b): C 08.01 col 0253 excludes DEFAULTED exposures.
+
+    Why this is a reporting test and not only a unit one: col 0253 is
+    ``CellSpec(Sum("mortgage_rw_floor_adjustment"))`` and, before the
+    ``LN_RRE_FLOOR`` / ``LN_RRE_DEF`` pair existed, it was ``0.00`` in EVERY
+    golden portfolio in this estate. A cell that is structurally always zero
+    cannot distinguish a correctly-scoped floor from an absent one, and every
+    published rule written over it reads NOT_EVALUATED — indistinguishable from
+    a clean estate. The whole reporting tier was blind to this change.
+
+    The two legs are what make the assertion two-sided:
+
+    - ``LN_RRE_DEF`` is DEFAULTED and models to RW 0 (Art. 154(1)(a), LGD =
+      BEEL), so its pre-fix contribution is exactly ``mortgage_rw_floor x EAD``
+      and its correct contribution is ``0.00``. That is the ENTIRE movement.
+    - ``LN_RRE_FLOOR`` is NON-defaulted and models below the floor, so its
+      contribution is positive and must SURVIVE. If col 0253 went to zero the
+      fix would have over-reached — and a one-legged test could not tell the two
+      apart.
+
+    Arrange: the IRB class portfolio under Basel 3.1.
+    Act:     run the pipeline and generate COREP.
+    Assert:  col 0253 is emitted, non-null and strictly positive; it moved by
+             exactly ``-mortgage_rw_floor x DRAWN_RRE_DEF``; the defaulted row
+             contributes nothing; and the RWEA block still foots into col 0260.
+    """
+    # Arrange / Act
+    results, corep = _run("b31")
+    sheets = corep.c08_01
+    assert "retail_mortgage" in sheets, (
+        "C 08.01 has no retail_mortgage sheet — every Art. 154(4A) rule scoped to "
+        "it reports NOT_EVALUATED, which reads exactly like a pass"
+    )
+    sheet = sheets["retail_mortgage"]
+    assert set(_C08_01_RWEA_COMPONENTS) | {"0260"} <= set(sheet.columns), (
+        f"C 08.01 retail_mortgage is missing RWEA columns; emitted: {sorted(sheet.columns)}"
+    )
+    row = sheet.filter(pl.col("row_ref") == "0010")
+    cells = {ref: row[ref][0] for ref in (*_C08_01_RWEA_COMPONENTS, "0260")}
+
+    #: Exactly what the defaulted leg contributed while it was in scope. Derived
+    #: from the pack scalar and the fixture's drawn amount, not typed as a value.
+    defaulted_leg = _b31_mortgage_rw_floor() * DRAWN_RRE_DEF
+
+    add_ons = dict(
+        results.select("exposure_reference", "mortgage_rw_floor_adjustment").iter_rows()  # type: ignore[arg-type]
+    )
+
+    # Assert — the cell is published at all, and carries money rather than a null
+    for ref, value in cells.items():
+        assert value is not None, f"C 08.01 retail_mortgage col {ref} published a null"
+
+    # Assert — the live-cell control survives: 0253 is positive on BOTH sides
+    assert cells["0253"] > 0.0, (
+        "C 08.01 col 0253 is zero on a sheet that provably carries a non-defaulted "
+        f"IRB retail mortgage below the {_b31_mortgage_rw_floor():.0%} floor "
+        f"({LN_RRE_FLOOR}) — the floor was not narrowed, it was switched off"
+    )
+
+    # Assert — the movement is exactly the defaulted leg, and nothing else
+    assert defaulted_leg == pytest.approx(20_000.00)
+    assert cells["0253"] == pytest.approx(_R0253_PRE_P1319 - defaulted_leg, rel=1e-9)
+    assert cells["0260"] == pytest.approx(_R0260_PRE_P1319 - defaulted_leg, rel=1e-9)
+
+    # Assert — per row: only the defaulted leg moved
+    assert add_ons[LN_RRE_DEF] == pytest.approx(0.0), (
+        f"{LN_RRE_DEF} is defaulted; Art. 154(4A)(b) reaches non-defaulted exposures only"
+    )
+    assert add_ons[LN_RRE_FLOOR] > 0.0
+    assert add_ons[LN_RRE] == pytest.approx(0.0), (
+        f"{LN_RRE} models ABOVE the floor, so its add-on is zero for a different reason"
+    )
+
+    # Assert — the breakdown sums to its parent (boe_b0751 / boe_b0763), and to
+    # the per-row carrier the parent is built from
+    assert sum(cells[ref] for ref in _C08_01_RWEA_COMPONENTS) == pytest.approx(
+        cells["0260"], rel=1e-9
+    )
+    assert cells["0253"] == pytest.approx(
+        add_ons[LN_RRE] + add_ons[LN_RRE_FLOOR] + add_ons[LN_RRE_DEF], rel=1e-9
+    )
+
+
+def test_c08_01_carries_no_pma_columns_under_crr() -> None:
+    """CRR emits no 0251-0254 block at all — the Art. 154(4A) cells are Basel 3.1 only.
+
+    Recorded so the P1.319 assertion above is never "helpfully" parametrised
+    across both regimes: ``packs/crr.py`` carries
+    ``Feature("post_model_adjustments", enabled=False)``, and the CRR C 08.01
+    layout goes ``0250, 0255, 0256, 0257, 0260`` with no post-model block. An
+    ``== 0.00`` assertion on col 0253 under CRR would reference an absent column,
+    not a zero.
+
+    Arrange: the IRB class portfolio under CRR.
+    Act:     generate COREP.
+    Assert:  the sheet is emitted, and carries none of the PMA columns.
+    """
+    # Arrange / Act
+    _results, corep = _run("crr")
+    sheet = corep.c08_01["retail_mortgage"]
+
+    # Assert
+    assert "0260" in sheet.columns, "CRR C 08.01 must still publish total RWEA"
+    assert not set(_C08_01_RWEA_COMPONENTS) & set(sheet.columns), (
+        "CRR C 08.01 gained a post-model-adjustment column; the regime gate is a "
+        f"pack Feature, so this is a regime leak. Emitted: {sorted(sheet.columns)}"
     )

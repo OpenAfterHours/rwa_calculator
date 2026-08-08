@@ -2593,7 +2593,9 @@
         "tests/acceptance/crr/test_beel_does_not_trigger_default.py",
         "tests/benchmarks/data_generators.py",
         "tests/fixtures/p1_127/p1_127.py",
-        "tests/unit/test_classifier.py"
+        "tests/fixtures/reporting_irb_classes_portfolio.py",
+        "tests/unit/test_classifier.py",
+        "tests/unit/test_irb_post_model_adjustments.py"
       ],
       "watchfire_index_gap": false
     },
@@ -6901,9 +6903,12 @@
         "rulebook/packs/b31.py"
       ],
       "test_files": [
+        "tests/acceptance/reporting/test_reporting_irb_classes_golden.py",
+        "tests/fixtures/reporting_irb_classes_portfolio.py",
         "tests/oracle/derivations/formulas.py",
         "tests/oracle/derivations/irb.py",
-        "tests/oracle/test_oracle.py"
+        "tests/oracle/test_oracle.py",
+        "tests/unit/test_irb_post_model_adjustments.py"
       ],
       "watchfire_index_gap": false
     },
@@ -7052,6 +7057,7 @@
         "tests/fixtures/p2_36/p2_36.py",
         "tests/fixtures/p2_41/p2_41.py",
         "tests/fixtures/p2_43/p2_43.py",
+        "tests/fixtures/reporting_irb_classes_portfolio.py",
         "tests/oracle/derivations/irb.py",
         "tests/unit/classifier/test_p1_278_top_down_pd.py",
         "tests/unit/config/test_p2_36_sovereign_institution_pd_floors.py",

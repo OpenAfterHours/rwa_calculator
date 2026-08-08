@@ -24,6 +24,8 @@ Composition — the sheet axis (Art. 147 IRB exposure classes):
     LN_SOV_A/B/C     | central_govt_central_bank | F-IRB    | Art. 147(2)(a)
     LN_INST          | institution               | F-IRB    | Art. 147(2)(b)
     LN_RRE           | retail_mortgage           | A-IRB    | Art. 154(3)
+    LN_RRE_FLOOR     | retail_mortgage           | A-IRB    | Art. 154(3) + 154(4A)
+    LN_RRE_DEF       | retail_mortgage, defaulted| A-IRB    | Art. 154(3) + 154(4A)
     LN_QRRE          | retail_qrre               | A-IRB    | Art. 154(4)
     LN_CORP_*        | corporate                 | F-IRB    | Art. 147(2)(c)
 
@@ -82,6 +84,32 @@ below both the EUR 100k (CRR) and GBP 90k (PS1/26) caps. The facility supplies
 classifier reads all four off the drawn leg after the hierarchy stage coalesces
 them (the pattern ``tests/fixtures/p1_244`` pins).
 
+``LN_RRE_FLOOR`` and ``LN_RRE_DEF`` are the C 08.01 **row 0253** axis — the
+PS1/26 Art. 154(4A) post-model mortgage RWEA floor
+(``CellSpec(Sum("mortgage_rw_floor_adjustment"))``). Before they existed that cell
+was ``0.00`` in EVERY golden portfolio in this estate, because ``LN_RRE`` models
+to a risk weight ABOVE the ``mortgage_rw_floor`` pack scalar and so contributes
+nothing. A cell that is structurally always zero cannot distinguish a working
+floor from an absent one, and every published rule written over it reads
+NOT_EVALUATED — the fail-open shape. The pair is deliberately two-legged, because
+one leg alone cannot tell "the floor moved" from "the floor was zeroed":
+
+- ``LN_RRE_FLOOR`` is the LIVE-CELL CONTROL. Non-defaulted, and its own-estimate
+  LGD is set to exactly the Basel 3.1 ``lgd_floors.retail_rre`` pack value so the
+  LGD *input* floor is non-binding and the modelled RW lands strictly BELOW
+  ``mortgage_rw_floor``. Its r0253 contribution is positive and must SURVIVE any
+  narrowing of the floor's scope — if a change zeroes it, the change over-reached.
+- ``LN_RRE_DEF`` is the DEMONSTRATION. Its obligor carries ``default_status=True``
+  and its ``beel`` equals its LGD, so Art. 154(1)(a) gives
+  ``K = max(0, LGD - BEEL) = 0`` and the modelled RW is ``0.00``. It therefore
+  takes the full ``mortgage_rw_floor x EAD`` add-on, which Art. 154(4A)(b) confines
+  to NON-defaulted exposures.
+
+The two obligors are separate legal entities from ``CP_RRE`` because
+``default_status`` and the internal PD are both obligor-level attributes, and
+because ``LN_RRE`` itself is load-bearing at its current values (it is the only
+retail-mortgage row whose modelled RW sits ABOVE the floor).
+
 Regime divergence is expected and is not a defect: PS1/26 Art. 147A(1)(a) read
 with Art. 147(3) makes the sovereign class Standardised-only, so under Basel 3.1
 the three sovereign rows route SA and the ``central_govt_central_bank`` IRB sheet
@@ -105,6 +133,8 @@ References:
 - CRR Art. 147(2)-(5) / PS1/26 Art. 147: IRB exposure classes
 - CRR Art. 160(1): the 0.03% PD floor, scoped to corporates and institutions
 - CRR Art. 154(3)-(4) / PS1/26 Art. 147(5A): retail mortgage and QRRE sub-classes
+- PS1/26 Art. 154(1)(a): defaulted A-IRB K = max(0, LGD - BEEL)
+- PS1/26 Art. 154(4A)(b): the post-model mortgage RWEA floor -> C 08.01 row 0253
 - PS1/26 Art. 147A(1)(a): the Basel 3.1 SA-only sovereign class
 - COREP Annex II, C 08.03 / C 08.05: the PD-range row breakdowns
 - tests/fixtures/p1_244/p1_244.py: the QRRE drawn-leg wiring this mirrors
@@ -141,12 +171,16 @@ CP_SOV_B: str = "IRC-CP-SOV-B"
 CP_SOV_C: str = "IRC-CP-SOV-C"
 CP_INST: str = "IRC-CP-INST"
 CP_RRE: str = "IRC-CP-RRE"
+CP_RRE_FLOOR: str = "IRC-CP-RRE-FLOOR"
+CP_RRE_DEF: str = "IRC-CP-RRE-DEF"
 CP_QRRE: str = "IRC-CP-QRRE"
 LN_SOV_A: str = "IRC-LN-SOV-A"
 LN_SOV_B: str = "IRC-LN-SOV-B"
 LN_SOV_C: str = "IRC-LN-SOV-C"
 LN_INST: str = "IRC-LN-INST"
 LN_RRE: str = "IRC-LN-RRE"
+LN_RRE_FLOOR: str = "IRC-LN-RRE-FLOOR"
+LN_RRE_DEF: str = "IRC-LN-RRE-DEF"
 LN_QRRE: str = "IRC-LN-QRRE"
 
 FAC_QRRE: str = "IRC-FAC-QRRE"
@@ -212,6 +246,25 @@ PD_INST: float = 0.0040
 PD_RRE: float = 0.0060
 PD_QRRE: float = 0.0200
 
+#: Own-estimate LGD for the two Art. 154(4A) rows. Set to exactly the Basel 3.1
+#: ``lgd_floors.retail_rre`` pack scalar (``rulebook/packs/b31.py``, cited to
+#: PS1/26 Art. 161(5) / 164(4)) so the LGD INPUT floor is exactly non-binding and
+#: the modelled risk weight is a pure function of ``PD_RRE`` and the fixed
+#: Art. 154(3) retail-RRE asset correlation. Chosen because it lands the modelled
+#: RW strictly BELOW the ``mortgage_rw_floor`` scalar — which is the whole point of
+#: ``LN_RRE_FLOOR`` and is what ``LN_RRE`` (LGD 0.15, RW above the floor) cannot do.
+#: The CRR pack entry for the same key is 0.0, so the value is unfloored there too.
+#: If the pack value moves, this literal must move with it or the row stops
+#: exercising the threshold; the goldens will show it.
+LGD_RRE_AT_FLOOR: float = 0.05
+
+#: Best-estimate expected loss for ``LN_RRE_DEF``, set EQUAL to
+#: ``LGD_RRE_AT_FLOOR`` so PS1/26 Art. 154(1)(a) gives K = max(0, LGD - BEEL) = 0
+#: and the modelled risk weight is exactly 0.00. That puts the whole of the row's
+#: RWEA into the ``mortgage_rw_floor`` add-on, so its C 08.01 r0253 contribution is
+#: an exact ``mortgage_rw_floor x EAD`` with no model noise in it.
+BEEL_RRE_DEF: float = 0.05
+
 #: Drawn amounts, in GBP. Distinct per row so a mis-classified or mis-banded
 #: exposure is identifiable from a single cell value.
 DRAWN_SOV_A: float = 8_000_000.0
@@ -219,6 +272,8 @@ DRAWN_SOV_B: float = 7_000_000.0
 DRAWN_SOV_C: float = 6_000_000.0
 DRAWN_INST: float = 5_500_000.0
 DRAWN_RRE: float = 300_000.0
+DRAWN_RRE_FLOOR: float = 250_000.0
+DRAWN_RRE_DEF: float = 200_000.0
 DRAWN_QRRE: float = QRRE_LIMIT
 #: Masterscale drawn amounts step by 100k from G01, so a mis-banded grade is
 #: identifiable from a single C 08.03 cell value without a reverse lookup.
@@ -238,6 +293,11 @@ IRB_CLASS_EXPECTED_SHEET_CRR: dict[str, str] = {
     LN_SOV_C: "central_govt_central_bank",
     LN_INST: "institution",
     LN_RRE: "retail_mortgage",
+    LN_RRE_FLOOR: "retail_mortgage",
+    # Defaulted, but the IRB branch keeps its Art. 147 class: the aggregator's
+    # ``DEFAULTED`` literal is SA-only (its first limb is ``when(~is_sa)``), so a
+    # defaulted A-IRB row still reports on the retail_mortgage sheet.
+    LN_RRE_DEF: "retail_mortgage",
     LN_QRRE: "retail_qrre",
     **{corp_ln(grade): "corporate" for grade, _pd in CORP_MASTERSCALE},
 }
@@ -260,6 +320,8 @@ IRB_CLASS_EXPECTED_APPROACH: dict[str, tuple[str, str]] = {
     LN_SOV_C: ("foundation_irb", "standardised"),
     LN_INST: ("foundation_irb", "foundation_irb"),
     LN_RRE: ("advanced_irb", "advanced_irb"),
+    LN_RRE_FLOOR: ("advanced_irb", "advanced_irb"),
+    LN_RRE_DEF: ("advanced_irb", "advanced_irb"),
     LN_QRRE: ("advanced_irb", "advanced_irb"),
     **{corp_ln(grade): ("foundation_irb", "foundation_irb") for grade, _pd in CORP_MASTERSCALE},
 }
@@ -304,9 +366,14 @@ def _counterparties() -> pl.DataFrame:
     The non-GB codes also give the C 09.02 geographic breakdown more than one
     country sheet to partition.
 
-    The two retail obligors carry ``is_natural_person`` and
+    The four retail obligors carry ``is_natural_person`` and
     ``is_managed_as_retail`` so the Art. 123 retail limbs pass and the QRRE gate
     is decided only by the Art. 154(4)(b) facility attributes under test.
+
+    ``CP_RRE_DEF`` is the only defaulted obligor in the portfolio. Default is
+    obligor-level (``default_status``, CRR Art. 178) and propagates to every
+    exposure of that counterparty, which is why it is a separate legal entity from
+    ``CP_RRE`` rather than a second facility on the same one.
     """
     rows: list[dict] = [
         {"counterparty_reference": CP_SOV_A, "entity_type": "sovereign", "country_code": "US"},
@@ -319,6 +386,25 @@ def _counterparties() -> pl.DataFrame:
             "country_code": "GB",
             "is_natural_person": True,
             "is_managed_as_retail": True,
+        },
+        {
+            "counterparty_reference": CP_RRE_FLOOR,
+            "entity_type": "individual",
+            "country_code": "GB",
+            "is_natural_person": True,
+            "is_managed_as_retail": True,
+        },
+        {
+            "counterparty_reference": CP_RRE_DEF,
+            "entity_type": "individual",
+            "country_code": "GB",
+            "is_natural_person": True,
+            "is_managed_as_retail": True,
+            # CRR Art. 178 obligor-level default. This is the ONLY carrier the
+            # Art. 154(4A)(b) "non-defaulted" limb can read: the IRB branch never
+            # sees an exposure_class of ``defaulted`` (that literal is SA-only) and
+            # neither ``risk_weight`` nor ``rwa`` is a proxy for default status.
+            "default_status": True,
         },
         {
             "counterparty_reference": CP_QRRE,
@@ -351,6 +437,11 @@ def _ratings() -> pl.DataFrame:
         _internal(CP_SOV_C, pd=PD_SOV_C),
         _internal(CP_INST, pd=PD_INST),
         _internal(CP_RRE, pd=PD_RRE),
+        # Both share CP_RRE's obligor grade, so the modelled risk-weight gap
+        # between LN_RRE and LN_RRE_FLOOR is attributable to the own-estimate LGD
+        # alone rather than to a PD difference.
+        _internal(CP_RRE_FLOOR, pd=PD_RRE),
+        _internal(CP_RRE_DEF, pd=PD_RRE),
         _internal(CP_QRRE, pd=PD_QRRE),
         *(_internal(corp_cp(grade), pd=pd_value) for grade, pd_value in CORP_MASTERSCALE),
     ]
@@ -363,7 +454,7 @@ def _loans() -> pl.DataFrame:
     The sovereign, institution and corporate rows carry NO firm LGD estimate, so
     the A-IRB branch is unavailable and they resolve F-IRB on the Art. 161
     supervisory LGD — which is also the only approach Art. 147A permits for
-    institutions under Basel 3.1. The two retail rows carry ``lgd`` +
+    institutions under Basel 3.1. The four retail rows carry ``lgd`` +
     ``has_sufficient_collateral_data`` so they resolve A-IRB (Art. 154(3)/(4)
     retail is A-IRB-only in both regimes).
     """
@@ -379,6 +470,35 @@ def _loans() -> pl.DataFrame:
             CP_RRE,
             DRAWN_RRE,
             lgd=0.15,
+            has_sufficient_collateral_data=True,
+            property_type="residential",
+            ltv=0.60,
+        ),
+        # The C 08.01 r0253 live-cell control: LN_RRE's PD and LTV, but an
+        # own-estimate LGD sitting exactly on the retail-RRE input floor, which
+        # drops the modelled RW below ``mortgage_rw_floor`` and makes the
+        # Art. 154(4A) add-on positive. Non-defaulted, so its contribution must
+        # SURVIVE any narrowing of the floor's scope. A distinct drawn amount so a
+        # mis-attributed cell is identifiable without a reverse lookup.
+        _loan(
+            LN_RRE_FLOOR,
+            CP_RRE_FLOOR,
+            DRAWN_RRE_FLOOR,
+            lgd=LGD_RRE_AT_FLOOR,
+            has_sufficient_collateral_data=True,
+            property_type="residential",
+            ltv=0.60,
+        ),
+        # The C 08.01 r0253 demonstration: defaulted (via the obligor), with BEEL
+        # equal to LGD so Art. 154(1)(a) gives K = 0 and the modelled RW is 0.00.
+        # Its entire RWEA is the ``mortgage_rw_floor x EAD`` add-on that
+        # Art. 154(4A)(b) confines to NON-defaulted exposures.
+        _loan(
+            LN_RRE_DEF,
+            CP_RRE_DEF,
+            DRAWN_RRE_DEF,
+            lgd=LGD_RRE_AT_FLOOR,
+            beel=BEEL_RRE_DEF,
             has_sufficient_collateral_data=True,
             property_type="residential",
             ltv=0.60,
@@ -444,12 +564,18 @@ def _facility_mappings() -> pl.DataFrame:
 
 
 def _collateral() -> pl.DataFrame:
-    """The residential property behind ``LN_RRE``.
+    """The residential properties behind the three retail-mortgage loans.
 
     The loan-level ``property_type`` / ``ltv`` alone do not move an exposure into
     RETAIL_MORTGAGE — a property collateral row linked with
     ``beneficiary_type="loan"`` is what makes the HierarchyResolver populate the
-    collateral-value columns the mortgage predicate reads.
+    collateral-value columns the mortgage predicate reads. So the two Art. 154(4A)
+    rows each need their own property row or they leave the retail_mortgage sheet
+    entirely and the C 08.01 r0253 coverage they exist for never materialises.
+
+    Every property is valued at ``drawn / 0.60`` so all three rows share one LTV
+    and the modelled risk-weight difference between them is attributable to the
+    own-estimate LGD alone.
     """
     return pl.DataFrame(
         [
@@ -462,7 +588,27 @@ def _collateral() -> pl.DataFrame:
                 "property_ltv": 0.60,
                 "beneficiary_type": "loan",
                 "beneficiary_reference": LN_RRE,
-            }
+            },
+            {
+                "collateral_reference": "IRC-COLL-RRE-FLOOR",
+                "collateral_type": "real_estate",
+                "property_type": "residential",
+                # 250k loan / 416,666.67 value -> 60% LTV.
+                "market_value": 416_666.67,
+                "property_ltv": 0.60,
+                "beneficiary_type": "loan",
+                "beneficiary_reference": LN_RRE_FLOOR,
+            },
+            {
+                "collateral_reference": "IRC-COLL-RRE-DEF",
+                "collateral_type": "real_estate",
+                "property_type": "residential",
+                # 200k loan / 333,333.33 value -> 60% LTV.
+                "market_value": 333_333.33,
+                "property_ltv": 0.60,
+                "beneficiary_type": "loan",
+                "beneficiary_reference": LN_RRE_DEF,
+            },
         ]
     )
 
@@ -478,6 +624,7 @@ def _loan(
     drawn_amount: float,
     *,
     lgd: float | None = None,
+    beel: float | None = None,
     has_sufficient_collateral_data: bool = False,
     property_type: str | None = None,
     ltv: float | None = None,
@@ -497,6 +644,11 @@ def _loan(
     }
     if lgd is not None:
         row["lgd"] = lgd
+    # Best-estimate expected loss. Only meaningful on a defaulted exposure, where
+    # PS1/26 Art. 154(1)(a) makes K = max(0, LGD - BEEL); left unset elsewhere so
+    # the schema default applies and no non-defaulted row gains an EL shortfall.
+    if beel is not None:
+        row["beel"] = beel
     if property_type is not None:
         row["property_type"] = property_type
     if ltv is not None:

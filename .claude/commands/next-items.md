@@ -82,11 +82,16 @@ single-stream by the hard-exclusion rule below — that is expected.
 2. Tier 2: Test Coverage Gaps
 3. Tier 3: COREP Reporting Completeness
 4. Tier 4: Pillar III Disclosure Gaps
-5. (skip Tier 5: Documentation — that's `/next-docs` territory)
+5. (skip Tier 5: the docs queue — that's `/next-docs` territory)
 6. Tier 6: Code Quality
 7. (skip Tier 7: Future / v2.0)
 8. (skip Tier 8: CCR — only reached via the `ccr` scope above)
 9. (skip Tier 9 and beyond unless promoted into Tiers 1–6)
+
+Items migrated from the retired docs plan (2026-08-08) carry legacy
+`D<n>.<n>` codes but are ordinary items — use the D-code wherever
+these instructions say P-code (worktree branch names, state file
+keys, commit messages).
 
 For each candidate item, infer its expected change footprint by
 reading the bullet's `Ref:` field, the cited file paths, and the
@@ -928,6 +933,22 @@ file that concurrent agents would race on.
    as prose. Graduate it now, or file its graduation as Tier 1. Say so
    explicitly in the report — a repeat is the strongest signal the
    harness gives you.
+
+7. **File the batch's docs impact.** Docs staleness is an emitted
+   work item, not a hoped-for side effect. Walk the batch's merged
+   diff against these doc-bearing surfaces and, for each hit, append
+   a bullet to **Tier 5 (the docs queue) of `IMPLEMENTATION_PLAN.md`**
+   naming the change, the affected page, and the batch id:
+
+   | Change in the batch | Docs item to file |
+   |---|---|
+   | rulepack pack value added/changed | regenerate `docs/data-model/regulatory-tables.md` (`scripts/generate_regulatory_tables.py`) — usually done in-batch; file only if skipped |
+   | new/renamed pipeline stage or registry entry | `docs/architecture/pipeline.md` + `docs/specifications/architecture.md` |
+   | new input schema column | `docs/data-model/input-schemas.md` |
+   | new reporting template/cell coverage | the matching `docs/features/*-reporting.md` page |
+   | behaviour change a user would notice | `docs/appendix/changelog.md` (should already be in-batch; file if missing) |
+
+   No hit → say "no docs impact" in the report; do not invent items.
 
 Commit any harness changes separately:
 

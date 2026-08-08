@@ -1,23 +1,25 @@
 ---
-description: Refresh DOCS_IMPLEMENTATION_PLAN.md — audit docs/ vs the regulatory PDFs and source code for new gaps. Plan-only; no docs/ edits.
+description: Refresh Tier 5 (the docs queue) of IMPLEMENTATION_PLAN.md — audit docs/ vs the regulatory PDFs and source code for new gaps. Plan-only; no docs/ edits.
 ---
 
-You are refreshing the project's documentation work queue at
-`DOCS_IMPLEMENTATION_PLAN.md` (root of the repo). Plan-only
-iteration — no `docs/` or `src/` edits are allowed.
+You are refreshing the project's documentation work queue — **Tier 5
+of `IMPLEMENTATION_PLAN.md`** (root of the repo). There is no
+separate docs plan file (`DOCS_IMPLEMENTATION_PLAN.md` was merged in
+on 2026-08-08). Plan-only iteration — no `docs/` or `src/` edits are
+allowed.
 
 ## Step 1 — delegate to plan-curator
 
 Invoke the `plan-curator` agent. Prompt:
 
-> Curate `DOCS_IMPLEMENTATION_PLAN.md`. Audit `docs/`
-> end-to-end against the regulatory PDFs in `docs/assets/` and
-> against `src/rwa_calc/`. Apply your standard workflow, with the
-> **audit pass first** — no skipping it on the grounds that the
-> queue looks fine:
+> Curate **Tier 5 (the docs queue)** of `IMPLEMENTATION_PLAN.md`.
+> Audit `docs/` end-to-end against the regulatory PDFs in
+> `docs/assets/` and against `src/rwa_calc/`. Apply your standard
+> workflow, with the **audit pass first** — no skipping it on the
+> grounds that the queue looks fine:
 >
-> 1. **Audit every existing item — open *and* completed.** Both
->    plan files are trust anchors for downstream agents; a wrong
+> 1. **Audit every existing Tier 5 item — open *and* completed.**
+>    The plan is a trust anchor for downstream agents; a wrong
 >    bullet gets implemented as if it described a real gap. For
 >    each bullet, verify: **claim is independently verifiable**
 >    (don't take the bullet's reading of the regulation or the
@@ -27,51 +29,52 @@ Invoke the `plan-curator` agent. Prompt:
 >    misses or misstates the rule), cited target page still
 >    exists, the gap is still real (the docs page hasn't been
 >    written or corrected since the bullet was filed), no newer
->    duplicate, in the right plan file, right priority bucket,
->    right scope. Close `closed-claim-invalid` for bullets that
->    were wrong when filed; escalate `Unverifiable` when a claim
->    can't be confirmed in a reasonable spot-check rather than
->    leaving it silently in the queue. Close / re-prioritise /
->    re-scope / merge as needed per your system prompt's audit
->    rules. Surface items that should live on the code plan
->    instead.
+>    duplicate, right position within the tier, right scope. Close
+>    `closed-claim-invalid` for bullets that were wrong when
+>    filed; escalate `Unverifiable` when a claim can't be
+>    confirmed in a reasonable spot-check rather than leaving it
+>    silently in the queue. **Refile any Tier 5 bullet that turns
+>    out to need a `src/` or `tests/` change into the code tier
+>    that matches — Tier 5 is docs-only.** Pages whose `verified:`
+>    front-matter stamp is older than ~2 months are staleness
+>    candidates to check first.
 > 2. **Scan for new findings**:
 >    - PDF-to-docs mapping per `PROMPT_docs_plan.md`
 >      (`ps126app1.pdf`, `crr.pdf`, comparison PDF, COREP/Pillar 3
 >      instruction PDFs).
 >    - Code-docs alignment — risk weights, formulas, article
->      references, scenario-ID coverage.
+>      references, scenario-ID coverage. Note
+>      `docs/data-model/regulatory-tables.md` is GENERATED from
+>      the rulepacks — a wrong value there is a rulepack bullet
+>      (code tier), never a docs bullet.
 >    - Basel 3.1 spec parity vs. the matching CRR specs.
-> 3. **Add new items** in priority order with the standard bullet
->    format. Use the existing `Phase N Findings` sub-headings or
->    open a new dated phase if appropriate.
+> 3. **Add new items** to Tier 5 in priority position with the
+>    standard bullet format. Use the next free P-code — migrated
+>    D-codes are legacy; do not mint new D-codes.
 >
 > Cite every regulatory scalar via the `basel31` or `crr` Skill.
-> Do not edit any file other than `DOCS_IMPLEMENTATION_PLAN.md`.
+> Do not edit any file other than `IMPLEMENTATION_PLAN.md`.
 > Return the structured audit summary (Added / Closed /
-> Re-scoped / Merged / Unverifiable / Cross-file) defined in your
+> Re-scoped / Merged / Unverifiable / Refiled) defined in your
 > system prompt.
 
 ## Step 2 — review (top level)
 
 Once plan-curator returns:
 
-1. Run `git diff DOCS_IMPLEMENTATION_PLAN.md` and skim — focus on
-   the audit changes (Closed, Re-scoped, Merged) as well as the
-   Added list. Audit changes are easy to miss in diff because
+1. Run `git diff IMPLEMENTATION_PLAN.md` and skim — focus on the
+   audit changes (Closed, Re-scoped, Merged, Refiled) as well as
+   the Added list. Audit changes are easy to miss in diff because
    they're often a single bullet edit, but they're the load-bearing
    part of a refresh.
-2. Confirm the diff is confined to `DOCS_IMPLEMENTATION_PLAN.md`.
-3. If plan-curator's return value flagged any **cross-file
-   recommendations** — items that are really code bugs and belong
-   in `IMPLEMENTATION_PLAN.md` (Priority 3 "Docs Correct, Code Has
-   Known Issue") — surface them and offer to trigger
-   `/refresh-plan` afterwards.
+2. Confirm the diff is confined to `IMPLEMENTATION_PLAN.md`.
+3. If the curator refiled items into code tiers, surface them to
+   the operator so the next `/next-items` selection sees them.
 
 ## Step 3 — commit
 
 Stage, commit, and push to the current branch with a message
-`chore(plan): refresh DOCS_IMPLEMENTATION_PLAN.md (+N items, -M completed)`.
+`chore(plan): refresh docs queue (Tier 5) (+N items, -M completed)`.
 
 ## Constraints
 

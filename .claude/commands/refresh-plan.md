@@ -31,7 +31,9 @@ Invoke the `plan-curator` agent. Prompt:
 >    can't be confirmed in a reasonable spot-check rather than
 >    leaving it silently in the queue. Close / re-tier / re-scope
 >    / merge as needed per your system prompt's audit rules.
->    Surface items that should live on the docs plan instead.
+>    Refile pure docs-page fixes into Tier 5 (the docs queue) and
+>    Tier 5 bullets that need code into the matching code tier —
+>    same file, ordinary edits, listed under `Refiled`.
 > 2. **Scan for new findings** — TODO / FIXME / HACK markers,
 >    `pytest.mark.skip`, conditional fixture guards,
 >    acceptance-test gaps, regulatory scalar drift between
@@ -58,13 +60,12 @@ Once plan-curator returns:
    of a refresh.
 2. Confirm the diff is confined to `IMPLEMENTATION_PLAN.md`.
    If anything else changed, stop and ask the operator.
-3. If plan-curator's return value flagged any **cross-file
-   recommendations** (an item that should move to the docs plan),
-   surface them to the operator and offer to trigger
-   `/refresh-docs-plan` afterwards.
-4. If plan-curator surfaced a cross-file dependency (e.g. "P1.x
-   blocks docs item D2.y"), capture it for the operator — as a
-   commit message footer or by triggering `/refresh-docs-plan`.
+3. If plan-curator's return value listed **Refiled** items (moved
+   between Tier 5 and a code tier), surface them to the operator so
+   the right loop sees them next.
+4. If plan-curator surfaced a dependency between a code item and a
+   Tier 5 docs item (e.g. "P1.x blocks D3.61"), confirm both
+   bullets carry the cross-reference.
 
 ## Step 3 — commit
 

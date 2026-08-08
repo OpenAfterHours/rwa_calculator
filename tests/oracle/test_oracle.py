@@ -1,68 +1,102 @@
 """
-Oracle test suite.
+Oracle test suite -- the shadow calculator.
 
 Validates engine outputs against independent hand-calculations whose arithmetic
 is documented in ORACLE_DERIVATIONS.md and reproduced programmatically by
-derive.py (stdlib-only). The point of this suite is to break the self-referential
-loop in tests/expected_outputs/{crr,basel31}/, where expected values are recorded
-engine outputs and therefore cannot detect a wrong implementation -- only a
-*regression* relative to current behaviour.
+derive.py + derivations/ (stdlib-only). The point of this suite is to break the
+self-referential loop in tests/expected_outputs/{crr,basel31}/, where expected
+values are recorded engine outputs and therefore cannot detect a wrong
+implementation -- only a *regression* relative to current behaviour.
+
+It is also the only layer that can see a **wrong constant**. If a risk weight
+is 45% where the regulation says 50%, conservation still holds, monotonicity
+still holds, bounds still hold, and every property in tests/properties/ passes.
+Only an independent re-derivation catches that.
 
 Lock mechanism: expected_values.json embeds a SHA-256 hash of
-ORACLE_DERIVATIONS.md (with line endings normalised to LF). The first test below
-asserts that hash is current. If the doc changes without a corresponding
+ORACLE_DERIVATIONS.md (with line endings normalised to LF). The first test
+below asserts that hash is current. If the doc changes without a corresponding
 re-derivation, that test fails loudly with instructions on how to recover -- so
 it is impossible to silently re-pin oracle values to engine output.
 
-Tolerance: relative error <= 1e-6 against the hand-derived value. This is
-significantly tighter than the 1% tolerance used by the regression-style
-acceptance tests, because the oracle is testing analytical correctness, not
-data-quality robustness.
+Independence: test_derivations_never_import_rwa_calc parses every derivation
+module and fails on any rwa_calc import. Only drivers.py -- which supplies
+*inputs* and collects outputs, never expected values -- is allowed to.
+
+Tolerance: relative error <= 1e-6 against the hand-derived value. This is far
+tighter than the 1% used by the regression-style acceptance tests, because the
+oracle is testing analytical correctness, not data-quality robustness.
 
 Pipeline position tested: each oracle calls the relevant calculator's
-`calculate_branch` directly via tests/fixtures/single_exposure.py. This deliberately
-bypasses hierarchy / classifier / CRM stages so the oracle exercises only the
+`calculate_branch` directly via tests/oracle/drivers.py. This deliberately
+bypasses hierarchy / classifier / CRM so the oracle exercises only the
 regulatory math. Pipeline-integration concerns are tested elsewhere.
 """
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
-from datetime import date
-from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.domain.enums import PermissionMode
-from rwa_calc.engine.irb.calculator import IRBCalculator
-from rwa_calc.engine.sa.calculator import SACalculator
-from tests.fixtures.single_exposure import (
-    calculate_single_irb_exposure,
-    calculate_single_sa_exposure,
-)
+from tests.oracle import drivers
 
 HERE = Path(__file__).parent
 DOC_PATH = HERE / "ORACLE_DERIVATIONS.md"
 JSON_PATH = HERE / "expected_values.json"
+DERIVATIONS_DIR = HERE / "derivations"
+
+PAYLOAD: dict[str, Any] = json.loads(JSON_PATH.read_text())
+ORACLES: list[dict[str, Any]] = PAYLOAD["oracles"]
+TOLERANCE = PAYLOAD["tolerance_relative"]
 
 
 # =============================================================================
-# Oracle data + lock
+# Known disagreements between the oracle and the engine
 # =============================================================================
+#
+# An entry here is a *finding*, not a fix. Adjusting a derivation so it agrees
+# with the engine would destroy the only independent evidence this suite
+# produces. Each entry records the article, both figures, and which
+# intermediate diverges, so it is triageable rather than merely red.
+#
+# Remove an entry only when the engine changes, never when the oracle does.
+_ART_121_TABLE_5 = (
+    "CRR Art. 121(1) Table 5 is not applied to the institution exposure class. "
+    "An unrated institution incorporated in a jurisdiction whose central "
+    "government carries a CQS should be weighted off that CQS "
+    "(1 -> 20%, 2 -> 50%, 3/4/5 -> 100%, 6 -> 150%); the engine returns a flat "
+    "100% for every sovereign CQS. Differing intermediate: risk_weight. The "
+    "sovereign-derived ladder itself is correct and is used for the RGLA and "
+    "PSE classes (and, via the MDB branch, from the very table named "
+    "INSTITUTION_RISK_WEIGHTS_SOVEREIGN_DERIVED) -- it is only the INSTITUTION "
+    "branch that never reads cp_sovereign_cqs. "
+    "DIRECTION IS NOT UNIFORM across the ladder: CQS 1 and 2 are OVERSTATED "
+    "(conservative), CQS 3/4/5 agree only because the flat fallback coincides "
+    "with Table 5 there, and CQS 6 is UNDERSTATED at 100% against a required "
+    "150% -- an anti-conservative limb and a capital shortfall. Art. 121(2) "
+    "(null sovereign CQS -> 100%) is correct."
+)
+
+KNOWN_DISAGREEMENTS: dict[str, str] = {
+    "ORC-105": f"{_ART_121_TABLE_5} Here: CQS 1, oracle 20%, engine 100% (overstated).",
+    "ORC-020": f"{_ART_121_TABLE_5} Here: CQS 2, oracle 50%, engine 100% (overstated).",
+    "ORC-109": (
+        f"{_ART_121_TABLE_5} Here: CQS 6, oracle 150%, engine 100% -- "
+        "UNDERSTATED by a third. This is the capital-shortfall limb and the "
+        "reason the family is pinned across its whole domain rather than at "
+        "the two steps that were looked at first."
+    ),
+}
 
 
-@pytest.fixture(scope="module")
-def oracle_payload() -> dict[str, Any]:
-    return json.loads(JSON_PATH.read_text())
-
-
-@pytest.fixture(scope="module")
-def oracles_by_id(oracle_payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    return {o["exposure_id"]: o for o in oracle_payload["oracles"]}
+# =============================================================================
+# Locks -- doc hash and derivation independence
+# =============================================================================
 
 
 def _normalised_doc_hash() -> str:
@@ -70,14 +104,14 @@ def _normalised_doc_hash() -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
-def test_derivations_doc_hash_matches_lock(oracle_payload: dict[str, Any]) -> None:
+def test_derivations_doc_hash_matches_lock() -> None:
     """ORACLE_DERIVATIONS.md and expected_values.json may not drift apart.
 
     If this fails, ORACLE_DERIVATIONS.md has been edited since
     expected_values.json was last regenerated. To recover:
 
       1. Confirm the new derivations are correct.
-      2. Update derive.py to match (constants, formulas).
+      2. Update tests/oracle/derivations/ to match (constants, formulas).
       3. Run: uv run python tests/oracle/derive.py
       4. Re-run this test suite.
 
@@ -85,7 +119,7 @@ def test_derivations_doc_hash_matches_lock(oracle_payload: dict[str, Any]) -> No
     defeats the purpose of the oracle.
     """
     actual = _normalised_doc_hash()
-    expected = oracle_payload["derivations_doc_hash"]
+    expected = PAYLOAD["derivations_doc_hash"]
     assert actual == expected, (
         f"\nORACLE_DERIVATIONS.md hash drift detected.\n"
         f"  doc (actual):  {actual}\n"
@@ -94,148 +128,199 @@ def test_derivations_doc_hash_matches_lock(oracle_payload: dict[str, Any]) -> No
     )
 
 
-# =============================================================================
-# Configurations
-# =============================================================================
+def test_derivations_never_import_rwa_calc() -> None:
+    """The derivation chain must stay causally independent of the engine.
 
-
-@pytest.fixture(scope="module")
-def crr_sa_config() -> CalculationConfig:
-    return CalculationConfig.crr(
-        reporting_date=date(2025, 12, 31),
-        permission_mode=PermissionMode.STANDARDISED,
-    )
-
-
-@pytest.fixture(scope="module")
-def crr_irb_config() -> CalculationConfig:
-    return CalculationConfig.crr(
-        reporting_date=date(2025, 12, 31),
-        permission_mode=PermissionMode.IRB,
-    )
-
-
-# =============================================================================
-# Assertion helper
-# =============================================================================
-
-
-def _assert_oracle_match(
-    actual_rwa: float,
-    actual_rw: float | None,
-    oracle: dict[str, Any],
-    tol_rel: float,
-) -> None:
-    expected_rwa = float(oracle["expected"]["rwa"])
-    expected_rw = float(oracle["expected"]["risk_weight"])
-    oid = oracle["exposure_id"]
-    reg = oracle["regulation"]
-
-    if expected_rwa == 0:
-        assert actual_rwa == 0, f"{oid}: expected RWA 0, got {actual_rwa}"
-    else:
-        rel = abs(actual_rwa - expected_rwa) / abs(expected_rwa)
-        assert rel <= tol_rel, (
-            f"\n{oid}: RWA mismatch beyond {tol_rel:.0e} relative tolerance.\n"
-            f"  expected: {expected_rwa:,.10f}  (per {reg})\n"
-            f"  actual:   {actual_rwa:,.10f}\n"
-            f"  rel err:  {rel:.3e}"
-        )
-
-    if actual_rw is not None and expected_rw != 0:
-        rw_rel = abs(actual_rw - expected_rw) / abs(expected_rw)
-        assert rw_rel <= tol_rel, (
-            f"\n{oid}: risk-weight mismatch beyond {tol_rel:.0e} relative tolerance.\n"
-            f"  expected RW: {expected_rw:.10f}  (per {reg})\n"
-            f"  actual RW:   {actual_rw:.10f}\n"
-            f"  rel err:     {rw_rel:.3e}"
-        )
-
-
-# =============================================================================
-# Oracles
-# =============================================================================
-
-
-def test_orc_001_sa_corporate_unrated(
-    oracles_by_id: dict[str, dict[str, Any]],
-    oracle_payload: dict[str, Any],
-    crr_sa_config: CalculationConfig,
-) -> None:
-    """ORC-001: SA unrated corporate -> 100% RW (CRR Art. 122(2))."""
-    oracle = oracles_by_id["ORC-001"]
-    sa = SACalculator()
-    result = calculate_single_sa_exposure(
-        sa,
-        ead=Decimal(str(oracle["inputs"]["ead"])),
-        exposure_class="CORPORATE",
-        config=crr_sa_config,
-        cqs=oracle["inputs"]["cqs"],
-    )
-    _assert_oracle_match(
-        actual_rwa=float(result["rwa"]),
-        actual_rw=float(result.get("risk_weight", 0.0)),
-        oracle=oracle,
-        tol_rel=oracle_payload["tolerance_relative"],
-    )
-
-
-def test_orc_002_sa_sovereign_cqs2(
-    oracles_by_id: dict[str, dict[str, Any]],
-    oracle_payload: dict[str, Any],
-    crr_sa_config: CalculationConfig,
-) -> None:
-    """ORC-002: SA CQS-2 sovereign (foreign ccy) -> 20% RW (CRR Art. 114(2) Table 1).
-
-    Country US + currency USD avoids the Art. 114(3) UK domestic 0% override
-    so this oracle exercises the Table 1 ECAI lookup cleanly.
+    An expected value that came from ``rwa_calc`` -- however indirectly -- is
+    worthless as evidence about ``rwa_calc``. This walks the AST of every
+    derivation module plus ``derive.py`` and fails on any import of the
+    package under test.
     """
-    oracle = oracles_by_id["ORC-002"]
-    sa = SACalculator()
-    result = calculate_single_sa_exposure(
-        sa,
-        ead=Decimal(str(oracle["inputs"]["ead"])),
-        exposure_class=oracle["exposure_class"],
-        config=crr_sa_config,
-        cqs=oracle["inputs"]["cqs"],
-        country_code=oracle["inputs"]["country_code"],
-        currency=oracle["inputs"]["currency"],
-    )
-    _assert_oracle_match(
-        actual_rwa=float(result["rwa"]),
-        actual_rw=float(result.get("risk_weight", 0.0)),
-        oracle=oracle,
-        tol_rel=oracle_payload["tolerance_relative"],
+    sources = [HERE / "derive.py", *sorted(DERIVATIONS_DIR.glob("*.py"))]
+    offenders: list[str] = []
+    for path in sources:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                names = [node.module or ""]
+            else:
+                continue
+            for name in names:
+                if name == "rwa_calc" or name.startswith("rwa_calc."):
+                    offenders.append(f"{path.name}:{node.lineno} imports {name}")
+
+    assert not offenders, (
+        "\nThe oracle derivations imported the engine they are meant to check:\n  "
+        + "\n  ".join(offenders)
+        + "\nDerive every expected value from the regulation instead."
     )
 
 
-def test_orc_003_firb_corporate(
-    oracles_by_id: dict[str, dict[str, Any]],
-    oracle_payload: dict[str, Any],
-    crr_irb_config: CalculationConfig,
-) -> None:
-    """ORC-003: F-IRB corporate, full Art. 153(1) risk-weight formula.
+def test_every_oracle_has_a_derivation_section() -> None:
+    """Each ORC-nnn in the JSON has a matching section in the derivations doc."""
+    doc = DOC_PATH.read_text(encoding="utf-8")
+    missing = [o["exposure_id"] for o in ORACLES if f"## {o['exposure_id']}" not in doc]
+    assert not missing, (
+        f"\n{len(missing)} oracle(s) have no section in ORACLE_DERIVATIONS.md: "
+        f"{missing}\nEvery oracle must carry a worked derivation and a citation."
+    )
 
-    Tightest oracle in the suite -- exercises the inverse normal, correlation,
-    and maturity-adjustment compositions. A bug in any of those would surface
-    here even when the SA oracles still pass.
-    """
-    oracle = oracles_by_id["ORC-003"]
-    irb = IRBCalculator()
-    result = calculate_single_irb_exposure(
-        irb,
-        ead=Decimal(str(oracle["inputs"]["ead"])),
-        pd=Decimal(str(oracle["inputs"]["pd"])),
-        lgd=Decimal(str(oracle["inputs"]["lgd"])),
-        maturity=Decimal(str(oracle["inputs"]["maturity"])),
-        exposure_class="CORPORATE",
-        config=crr_irb_config,
-    )
-    rwa_field = result.get("rwa_post_factor", result.get("rwa"))
-    rw_field = result.get("risk_weight")
-    _assert_oracle_match(
-        actual_rwa=float(rwa_field) if rwa_field is not None else 0.0,
-        actual_rw=float(rw_field) if rw_field is not None else None,
-        oracle=oracle,
-        tol_rel=oracle_payload["tolerance_relative"],
-    )
+
+def test_every_oracle_carries_a_citation() -> None:
+    """No oracle may exist without naming the article it came from."""
+    uncited = [
+        o["exposure_id"]
+        for o in ORACLES
+        if not any(token in o["regulation"] for token in ("Art.", "Article"))
+    ]
+    assert not uncited, f"oracles with no article citation: {uncited}"
+
+
+# =============================================================================
+# Engine comparison
+# =============================================================================
+
+#: Oracle key -> engine column candidates, in the order the calculation
+#: performs them. The FIRST entry that disagrees is the one reported as the
+#: driver of the difference, so a mismatch says "the correlation is wrong"
+#: rather than only "the RWA is wrong".
+_COMPARISONS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("ead", ("ead_final",)),
+    ("pd_applied", ("pd_floored",)),
+    ("firb_supervisory_lgd", ("lgd",)),
+    ("lgd_applied", ("lgd_floored",)),
+    ("maturity_applied", ("irb_maturity_m",)),
+    ("correlation_R", ("correlation",)),
+    ("maturity_adj_MA", ("maturity_adjustment",)),
+    ("scaling_factor", ("scaling_factor",)),
+    ("risk_weight", ("risk_weight",)),
+    ("supporting_factor", ("supporting_factor",)),
+    ("rwa", ("rwa_final", "rwa_post_factor", "rwa")),
+)
+
+
+def _params() -> list[Any]:
+    out = []
+    for record in ORACLES:
+        oid = record["exposure_id"]
+        marks = []
+        if oid in KNOWN_DISAGREEMENTS:
+            marks.append(pytest.mark.xfail(strict=True, reason=KNOWN_DISAGREEMENTS[oid]))
+        out.append(pytest.param(record, id=oid, marks=marks))
+    return out
+
+
+@pytest.mark.parametrize("record", _params())
+def test_engine_matches_oracle(record: dict[str, Any]) -> None:
+    """The engine reproduces the independently-derived figure for one exposure."""
+    actual = _run(record)
+    expected = _expected_values(record)
+
+    unasserted = set(record.get("unasserted", ()))
+
+    diffs: list[tuple[str, float, float, float]] = []
+    for key, candidates in _COMPARISONS:
+        if key not in expected or key in unasserted:
+            continue
+        engine_value = _pick(actual, candidates)
+        if engine_value is None:
+            continue
+        want = float(expected[key])
+        got = float(engine_value)
+        error = _relative_error(want, got)
+        if error > TOLERANCE:
+            diffs.append((key, want, got, error))
+
+    assert not diffs, _report(record, diffs, actual)
+
+
+# =============================================================================
+# Private helpers
+# =============================================================================
+
+_IRB_APPROACH_COLUMN = {"FIRB": "foundation_irb", "AIRB": "advanced_irb"}
+
+
+def _run(record: dict[str, Any]) -> dict[str, Any]:
+    """Drive the engine with the oracle's inputs."""
+    inputs = dict(record["inputs"])
+    ead = inputs.pop("ead")
+    framework = record["framework"]
+    approach = record["approach"]
+
+    if approach == "SA":
+        return drivers.run_sa(framework=framework, ead=ead, **inputs)
+    if approach in _IRB_APPROACH_COLUMN:
+        return drivers.run_irb(
+            framework=framework,
+            ead=ead,
+            pd_value=inputs.pop("pd_value"),
+            lgd=inputs.pop("lgd"),
+            approach=_IRB_APPROACH_COLUMN[approach],
+            **inputs,
+        )
+    if approach == "SLOTTING":
+        return drivers.run_slotting(framework=framework, ead=ead, **inputs)
+    if approach == "EQUITY":
+        permission = drivers.PermissionMode.STANDARDISED
+        if inputs.pop("permission", None) == "IRB":
+            permission = drivers.PermissionMode.IRB
+        return drivers.run_equity(framework=framework, ead=ead, permission=permission, **inputs)
+    raise ValueError(f"{record['exposure_id']}: unknown approach {approach!r}")
+
+
+def _expected_values(record: dict[str, Any]) -> dict[str, Any]:
+    """Everything the oracle claims, keyed the way _COMPARISONS expects."""
+    return {
+        "ead": record["inputs"]["ead"],
+        **record.get("intermediate", {}),
+        **record["expected"],
+    }
+
+
+def _pick(row: dict[str, Any], candidates: tuple[str, ...]) -> float | None:
+    for name in candidates:
+        value = row.get(name)
+        if value is not None:
+            return value
+    return None
+
+
+def _relative_error(want: float, got: float) -> float:
+    if want == 0.0:
+        return 0.0 if got == 0.0 else float("inf")
+    return abs(got - want) / abs(want)
+
+
+def _report(
+    record: dict[str, Any],
+    diffs: list[tuple[str, float, float, float]],
+    actual: dict[str, Any],
+) -> str:
+    """A triageable failure message: what diverged first, and by how much."""
+    oid = record["exposure_id"]
+    driver, *_ = diffs
+    lines = [
+        "",
+        f"{oid} ({record['framework']} {record['approach']} "
+        f"{record['exposure_class']}) disagrees with the oracle.",
+        f"  regulation:   {record['regulation']}",
+        f"  first divergence: {driver[0]}",
+        "",
+        f"  {'field':<20}{'oracle (derived)':>24}{'engine':>24}{'rel err':>12}",
+    ]
+    for key, want, got, error in diffs:
+        lines.append(f"  {key:<20}{want:>24.10f}{got:>24.10f}{error:>12.2e}")
+    lines += [
+        "",
+        "  This is either an engine defect or an error in the derivation.",
+        f"  Read the worked arithmetic at ORACLE_DERIVATIONS.md '## {oid}'",
+        "  and settle it against the article text. Do NOT adjust the oracle",
+        "  to match the engine -- record the disagreement in",
+        "  KNOWN_DISAGREEMENTS instead.",
+        "",
+        f"  engine approach_applied = {actual.get('approach_applied')}",
+    ]
+    return "\n".join(lines)

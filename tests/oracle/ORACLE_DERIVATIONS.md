@@ -1263,8 +1263,12 @@ LGD is set equal to EL_BE deliberately: it drives the modelled RWEA to zero, so
 whether the floor is applied is directly observable rather than masked by a
 risk weight that already exceeds 10%.
 
-> **Known disagreement.** The engine adds a floor adjustment of £1,000,000. See
-> `test_oracle.py::KNOWN_DISAGREEMENTS`.
+> **Was a known disagreement; resolved by P1.319.** The engine used to add a
+> floor adjustment of £1,000,000 here, because the gate matched `exposure_class`
+> against the regex `MORTGAGE|RESIDENTIAL` and read no default flag at all. It
+> now gates on `is_defaulted` and agrees at 0.00. Note that `is_defaulted` is the
+> only correct carrier: `risk_weight` and `rwa` are not proxies for it, because
+> an A-IRB defaulted mortgage with LGD > EL_BE has `K > 0` and hence `RW > 0`.
 
 ## ORC-141 — Commercial real estate exposure (PS1/26)
 
@@ -1281,9 +1285,19 @@ its risk weight.
 > mortgage is a retail exposure at all turns on Art. 147(5), not on Art. 154.
 > Only the floor-scope claim, which the article does settle, is compared.
 
-> **Known disagreement.** The engine adds a floor adjustment of £56,745.41: the
-> class name matches its `MORTGAGE|RESIDENTIAL` regex through the substring
-> "MORTGAGE". See `test_oracle.py::KNOWN_DISAGREEMENTS`.
+> **Was a known disagreement; resolved by P1.319.** The engine used to add a
+> floor adjustment of £56,745.41, because the class name matched its
+> `MORTGAGE|RESIDENTIAL` regex through the substring "MORTGAGE". The gate now
+> tests `exposure_class == retail_mortgage` exactly, so `commercial_mortgage` is
+> out of scope and the engine agrees at 0.00.
+>
+> That equality is the engine's closest available PROXY for the Art. 147(5B)(d)(ii)
+> subclass, not the subclass itself, and it is over-inclusive in one direction the
+> oracles do not currently sample: a *retail* exposure secured only on *commercial*
+> property is classified `retail_mortgage` upstream — `hierarchy/enrich.py`
+> computes `property_collateral_value` over both property kinds by design — and
+> still takes the floor. That residual is conservative (the floor can only raise
+> RWEA) and is tracked as its own item.
 
 ## ORC-142 — Residential mortgage on non-UK property (PS1/26)
 

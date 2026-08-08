@@ -84,11 +84,17 @@ _ART_121_TABLE_5 = (
 
 _ART_154_4A_B_SCOPE = (
     "PS1/26 Art. 154(4A)(b) confines the 10% RWEA floor to (i) NON-DEFAULTED, "
-    "(ii) RETAIL exposures, (iii) secured by UK RESIDENTIAL immovable property. "
-    "engine/irb/adjustments.py:200-206 gates on none of those three: it matches "
-    "exposure_class against the regex MORTGAGE|RESIDENTIAL and nothing else. "
+    "(ii) RETAIL exposures secured by RESIDENTIAL immovable property, (iii) in "
+    "the UK. Since P1.319, engine/irb/adjustments.py gates on the first two and "
+    "not the third. Limb (i) is exact, off is_defaulted. Limb (ii) is the "
+    "engine's closest available proxy -- exposure_class == retail_mortgage -- "
+    "which is OVER-INCLUSIVE: hierarchy/enrich.py computes "
+    "property_collateral_value over both residential AND commercial property by "
+    "design, so classify/attributes.py sets is_mortgage for either, and a retail "
+    "exposure secured only on commercial property still carries the class and "
+    "still takes the floor. Limb (iii) is UNREPRESENTABLE (see ORC-142). "
     "Differing intermediate: mortgage_rwea_floor_adjustment. Direction: the "
-    "floor can only raise RWEA, so every limb of this over-reach is "
+    "floor can only raise RWEA, so every limb of the residual over-reach is "
     "conservative -- unlike the Art. 121 finding, that holds for the whole "
     "domain and does not depend on which cases were sampled."
 )
@@ -102,17 +108,12 @@ KNOWN_DISAGREEMENTS: dict[str, str] = {
         "reason the family is pinned across its whole domain rather than at "
         "the two steps that were looked at first."
     ),
-    "ORC-140": (
-        f"{_ART_154_4A_B_SCOPE} Here: limb (i). A DEFAULTED retail residential "
-        "mortgage correctly takes RW 0 under Art. 154(1)(a) with LGD = BEEL, "
-        "then receives a floor add-on of 1,000,000 on 10,000,000 of EAD. "
-        "Oracle floor adjustment 0.00, engine 1,000,000.00."
-    ),
-    "ORC-141": (
-        f"{_ART_154_4A_B_SCOPE} Here: limb (ii). A COMMERCIAL real estate "
-        "exposure matches the regex through the substring 'MORTGAGE' and "
-        "receives the floor. Oracle floor adjustment 0.00, engine 56,745.41."
-    ),
+    # ORC-140 (limb (i), defaulted) and ORC-141 (limb (ii), commercial real
+    # estate) were entries here until P1.319 narrowed the gate. They now AGREE
+    # with the oracle and must run as ordinary passing cases -- these marks are
+    # xfail(strict=True), so leaving them would turn the fix into an XPASS, i.e.
+    # a hard failure. Do not re-add them without an engine change that re-breaks
+    # them.
     "ORC-142": (
         f"{_ART_154_4A_B_SCOPE} Here: limb (iii). The floor is applied to "
         "residential property outside the UK. Note this limb is not merely "

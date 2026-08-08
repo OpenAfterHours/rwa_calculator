@@ -28,6 +28,7 @@ from rwa_calc.contracts.errors import (
     ErrorCategory,
     ErrorSeverity,
 )
+from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.rulebook import RulepackV0
 
 if TYPE_CHECKING:
@@ -131,7 +132,10 @@ def apply_post_model_adjustments(
     PRA PS1/26 Art. 153(5A), 154(4A), 158(6A) require firms to apply
     adjustments for known model deficiencies. Three RWEA components:
 
-    1. Mortgage RW floor: min risk weight for residential mortgage exposures
+    1. Mortgage RW floor: min risk weight for **non-defaulted** retail
+       exposures secured by residential immovable property (Art. 154(4A)(b),
+       via the ``retail_mortgage`` class as an over-inclusive proxy for the
+       Art. 147(5B)(d)(ii) subclass — see the scope comment below)
     2. General PMA: scalar add-on to post-floor RWEA (supervisory requirement)
     3. Unrecognised exposure: scalar for model coverage gaps
 
@@ -195,15 +199,22 @@ def apply_post_model_adjustments(
     mortgage_rw_floor = float(resolved_pack.scalar("mortgage_rw_floor"))
     unrecognised_scalar = float(pma_config.unrecognised_exposure_scalar)
 
-    # Mortgage RW floor: applies to residential mortgage IRB exposures
-    # Adjustment = max(0, floor_rw - modelled_rw) × EAD × 12.5
+    # Mortgage RW floor scope — Art. 154(4A)(b), two separable limbs:
+    #   1. "non-defaulted exposures" — is_defaulted is the carrier (a null reads as
+    #      not-defaulted, the conservative side, matching apply_defaulted_treatment
+    #      above). Modelled risk_weight/rwa are NOT proxies for it: an A-IRB
+    #      defaulted mortgage with LGD > BEEL has RW > 0.
+    #   2. "retail exposures secured by ... residential immovable property" — the
+    #      Art. 147(5B)(d)(ii) subclass. RETAIL_MORTGAGE is the engine's closest
+    #      available proxy for that subclass, over-inclusive of retail exposures
+    #      secured by commercial property (property_collateral_value spans both).
+    #      The over-inclusion is conservative; correcting it is a separate item.
+    # The third limb of (4A)(b) — UK-situated property — is not implementable: no
+    # property-country carrier exists on the sealed edge.
+    # Adjustment = max(0, floor_rw - modelled_rw) × EAD
     is_mortgage = (
-        pl.col("exposure_class")
-        .cast(pl.String)
-        .fill_null("")
-        .str.to_uppercase()
-        .str.contains("MORTGAGE|RESIDENTIAL")
-    )
+        pl.col("exposure_class").cast(pl.String) == ExposureClass.RETAIL_MORTGAGE.value
+    ) & (pl.col("is_defaulted").eq_missing(True).not_())
 
     rw_col = "risk_weight" if "risk_weight" in cols else None
     if rw_col and mortgage_rw_floor > 0:

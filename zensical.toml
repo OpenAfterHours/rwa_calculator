@@ -147,6 +147,7 @@ nav = [
     { "Citation Coverage Matrix" = "development/citation-matrix.md" },
     { "Module Dependencies" = "development/module-dependencies.md" },
     { "Change-Impact Report" = "development/impact-report.md" },
+    { "Escape Log" = "development/escape-log.md" },
   ]},
   { "Plans" = [
     "plans/index.md",

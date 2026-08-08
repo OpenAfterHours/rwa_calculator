@@ -1,21 +1,37 @@
 ---
-description: Pick top N non-conflicting items from IMPLEMENTATION_PLAN.md and drive them through the four-wave pipeline (scenario-architect → fixture-builder → test-writer → engine-implementer) per item, with a reviewer gate between every wave and one revision retry per wave per item. Agents run in the background so the operator can chat with the orchestrator mid-batch. Default N=3, capped at 5. Hard-excludes items that touch shared engine files. An optional scope arg (e.g. `ccr` / `tier8`) restricts selection to a single tier.
+description: Pick top N non-conflicting items from IMPLEMENTATION_PLAN.md and drive them through the five-wave pipeline (premise-auditor → scenario-architect → fixture-builder → test-writer → engine-implementer) per item, with a reviewer gate between every wave, an adversarial skeptic on the design and implementation waves, and one revision retry per wave per item. Agents run in the background so the operator can chat with the orchestrator mid-batch. Default N=3, capped at 5. Hard-excludes items that touch shared engine files. An optional scope arg (e.g. `ccr` / `tier8`) restricts selection to a single tier.
 argument-hint: [N] [scope]
 ---
 
 You are draining `IMPLEMENTATION_PLAN.md` in batches. Each item runs
 in its **own git worktree**, on its own `batch/<batch-id>/<P-code>`
-branch. You drive the four-wave scenario-architect → fixture-builder →
-test-writer → engine-implementer chain directly, with a `reviewer`
-gate between every wave. Agents run with `run_in_background: true` so
-your turns end after dispatch and the operator can chat with you
-freely while the batch is in flight.
+branch. You drive the five-wave premise-auditor → scenario-architect →
+fixture-builder → test-writer → engine-implementer chain directly, with
+a `reviewer` gate after every wave and an adversarial `skeptic`
+alongside it on the design and implementation waves. Agents run with
+`run_in_background: true` so your turns end after dispatch and the
+operator can chat with you freely while the batch is in flight.
 
 After all items have either reached `merge_ready` or been dropped,
 you squash-merge each surviving worktree branch back into the
 **current branch** (the operator pre-creates a feature branch before
 invoking this command), run the global validation gate **once** on
-the merged tree, then tick the plan and clean up the worktrees.
+the merged tree, run the **retro** that turns this batch's failures
+into gates, then tick the plan and clean up the worktrees.
+
+## Why the pipeline starts with a refutation
+
+The four-wave chain that preceded this one was a closed inference
+loop: the architect derived a hand-calc from the plan bullet, the
+test asserted the architect's numbers, the implementer made them pass,
+and the reviewer checked the chain against itself. Nothing in it could
+notice that the **bullet was wrong** — and measured across two
+consecutive drains, 6 of 10 and then 10 of 10 bullets had a materially
+wrong premise, two of them prescribing actively unsafe fixes.
+
+Wave 0 exists to kill those before any work is done, and the `skeptic`
+exists so at least one node in each item is allowed to disagree with
+the chain. Treat a `PREMISE: refuted` as the batch's cheapest success.
 
 Parse `$ARGUMENTS` as an integer **N** (default 3, cap 5) optionally
 followed by a **scope** token. The integer is N (if absent or not an
@@ -54,7 +70,7 @@ the highest-priority unchecked (`[ ]`) `P8.*` items in plan order,
 skipping anything explicitly marked `DEFERRED v2.0` / Phase 10. Do
 **not** fall through to any other tier — if Tier 8 has no eligible
 unchecked items left, report "no CCR work to do" and stop. Everything
-else in this command (worktrees, four-wave pipeline, reviewer loop,
+else in this command (worktrees, five-wave pipeline, reviewer loop,
 hard exclusions, merge, gate, tick) is unchanged. Note that many CCR
 items touch shared files (`engine/pipeline.py`, `contracts/bundles.py`,
 `contracts/protocols.py`, `engine/registry.py`) and so will be forced
@@ -83,7 +99,10 @@ disqualifier — the worktree merge surfaces conflicts cleanly):
    `engine/irb/`, `engine/crm/`, `engine/slotting/`, `engine/equity/`,
    `engine/stages/re_split/`, `engine/stages/hierarchy/`,
    `engine/stages/classify/`).
-2. Distinct file in `src/rwa_calc/rulebook/packs/` or `src/rwa_calc/data/tables/`.
+2. Distinct file in `src/rwa_calc/rulebook/packs/`, or a distinct
+   pack-binding shim (`engine/sa/{crr,b31}_risk_weight_tables.py`,
+   `engine/crm/haircut_tables.py`). The `data/tables/` package no
+   longer exists.
 3. Distinct new test path under `tests/`.
 
 If two candidates clearly target the same shared helper or the same
@@ -123,7 +142,7 @@ commits will land on master unless they abort and check out a feature
 branch.
 
 State to the operator, one line per item:
-`<P-code> | Tier <n> | engine: <subpkg> | table: <file or none> | test: <path> | branch: batch/<batch-id>/<P-code> | worktree: ../rwa_calculator-<P-code>`
+`<P-code> | Tier <n> | engine: <subpkg> | pack: <file or none> | test: <path> | branch: batch/<batch-id>/<P-code> | worktree: ../rwa_calculator-<P-code>`
 
 If any candidate was downgraded to single-stream, say so and skip
 Step 3 (no worktree).
@@ -150,13 +169,23 @@ git worktree list
 
 Expect the main tree plus N sibling entries.
 
-## Step 4 — drive the four-wave pipeline (background, with reviewer loop)
+## Step 4 — drive the five-wave pipeline (background, with reviewer loop)
 
 This step is multi-turn. It begins with a kickoff (Step 4a), then the
 orchestrator processes one turn at a time (Step 4b) until every item
 has reached `merge_ready` or `dropped`. The reviewer dispatch and
 revision-retry mechanics are in Steps 4c–4e. The per-wave reviewer
 criteria are in Step 4d.
+
+The waves, in order:
+
+| # | Wave | Agent | Reviewed by |
+|---|---|---|---|
+| 0 | `premise_audit` | `premise-auditor` | `reviewer` |
+| 1 | `scenario_architect` | `scenario-architect` | `reviewer` + `skeptic` |
+| 2 | `fixture_builder` | `fixture-builder` | `reviewer` |
+| 3 | `test_writer` | `test-writer` | `reviewer` |
+| 4 | `engine_implementer` | `engine-implementer` | `reviewer` + `skeptic` |
 
 ### Step 4a — kickoff
 
@@ -179,17 +208,21 @@ Use the Write tool to overwrite the file as a complete JSON document
       "stream": "worktree",
       "branch": "batch/<batch-id>/P1.114",
       "worktree_path": "<absolute worktree path>",
-      "current_wave": "scenario_architect",
+      "current_wave": "premise_audit",
       "agent_status": "in_flight",
+      "premise_verdict": null,
       "revision_count": {
+        "premise_audit": 0,
         "scenario_architect": 0,
         "fixture_builder": 0,
         "test_writer": 0,
         "engine_implementer": 0
       },
+      "review_verdicts": {"conformance": null, "skeptic": null},
       "outputs": {},
       "drop_reason": null,
-      "current_agent_name": "scenario-architect-P1.114-r0"
+      "retro_notes": [],
+      "current_agent_name": "premise-auditor-P1.114-r0"
     }
   ]
 }
@@ -199,26 +232,60 @@ Use the Write tool to overwrite the file as a complete JSON document
 single-stream / hard-excluded items. For `main_tree` items,
 `worktree_path` is `null`.
 
-In a single message, dispatch one `scenario-architect` Agent call per
-item, **all with `run_in_background: true`** and a stable `name` of
-the form `scenario-architect-<P-CODE>-r0`. Use the prompt template:
+`premise_verdict` is set from Wave 0 and is `confirmed`, `rescoped`,
+or `refuted`. `review_verdicts` holds the current wave's verdicts and
+is reset to `{"conformance": null, "skeptic": null}` on every wave
+advance. `retro_notes` accumulates anything Step 7.5 should consider —
+append to it whenever a reviewer or the gate surfaces something that
+looks repeatable rather than item-specific.
 
-> Design the work needed for **<P-CODE>**. Read the bullet from
-> `IMPLEMENTATION_PLAN.md` below and the cited spec. Produce the
-> structured proposal per your system prompt.
+**Before dispatching Wave 0, extract the regulatory text yourself.**
+Role-agents cannot read `docs/assets/*.pdf` — `Read` needs `pdftoppm`,
+which is not installed — so a `premise-auditor` left to its own devices
+may quote an article from memory and sound certain. For each item,
+locate and extract the controlling article:
+
+```bash
+uv run python -c "
+import fitz
+doc = fitz.open('docs/assets/ps126app1.pdf')
+print(doc[63].get_text())
+"
+```
+
+Paste the verbatim text into the Wave 0 prompt. This is **mandatory**
+for any item whose fix would reduce RWA. If you cannot locate the
+article, say so in the prompt rather than omitting it silently.
+
+In a single message, dispatch one `premise-auditor` Agent call per
+item, **all with `run_in_background: true`** and a stable `name` of
+the form `premise-auditor-<P-CODE>-r0`. Use the prompt template:
+
+> This is a NEW item. It is NOT any item you may have seen before.
+>
+> Try to **refute** the plan bullet for **<P-CODE>** below. Answer the
+> four questions in your system prompt and return a structured verdict.
+> A refutation is a success — do not look for reasons to confirm.
 >
 > --- plan item ---
 > {{exact bullet text}}
+>
+> --- audit entry (if this is a compliance-audit item) ---
+> {{the matching §5 entry from
+> docs/plans/compliance-audit-crr-111-241-rectification.md, verbatim}}
+>
+> --- verbatim regulatory text (extracted by the orchestrator) ---
+> {{PDF text, with filename and page index — or an explicit statement
+> that it could not be located}}
 
-`scenario-architect` is read-only and operates in the main tree; do
-not include the worktree preamble for this wave.
+`premise-auditor` is read-only and operates in the main tree; do not
+include the worktree preamble for this wave.
 
 End the kickoff turn with a one-line summary to the operator:
 
-> Batch `<batch-id>` kicked off: N items in flight at Wave 1
-> (scenario-architect). I'll continue when each returns; you can ask
-> me anything — status, drop an item, inspect outputs — in the
-> meantime.
+> Batch `<batch-id>` kicked off: N items in flight at Wave 0
+> (premise-auditor). I'll continue when each returns; you can ask me
+> anything — status, drop an item, inspect outputs — in the meantime.
 
 ### Step 4b — supervisor protocol (every subsequent turn)
 
@@ -252,11 +319,42 @@ the operator or processing notifications:
    | Current state | Trigger | Next action |
    |---|---|---|
    | `agent_status: in_flight` | (no completion yet) | keep waiting |
-   | `agent_status: returned` (role-agent just finished) | — | dispatch reviewer per Step 4c; set `agent_status: in_review`; set `current_agent_name: reviewer-<wave>-<P-CODE>-r<N>` |
-   | `agent_status: in_review` | reviewer returned `VERDICT: pass` | advance `current_wave` to the next wave; if past Wave 4, set `current_wave: merge_ready` and stop dispatching for this item; otherwise dispatch the next role-agent (Step 4c again, with that wave's prompt) and set `agent_status: in_flight` with `current_agent_name: <next-wave>-<P-CODE>-r0` |
-   | `agent_status: in_review` | reviewer returned `VERDICT: revise` AND `revision_count[<wave>] == 0` | re-dispatch the original role-agent per Step 4e; increment `revision_count[<wave>]`; set `agent_status: in_flight` with `current_agent_name: <wave>-<P-CODE>-r1` |
-   | `agent_status: in_review` | reviewer returned `VERDICT: revise` AND `revision_count[<wave>] >= 1` | drop. Set `agent_status: dropped`, `drop_reason: "revision-failed-<wave>"`. Stop dispatching for this item. |
-   | `agent_status: in_review` | reviewer returned `VERDICT: drop` | drop. Set `agent_status: dropped`, `drop_reason: "reviewer-drop-<wave>: <reviewer's drop-reason text>"`. Stop dispatching for this item. |
+   | `agent_status: returned` (role-agent just finished) | — | dispatch the review set for this wave per Step 4c; set `agent_status: in_review`; reset `review_verdicts` to nulls |
+   | `agent_status: in_review` | **some** dispatched reviewer still outstanding | record the returned verdict in `review_verdicts` and keep waiting — do **not** advance on a single `pass` |
+   | `agent_status: in_review` | all dispatched reviewers returned, **worst** verdict `pass` | advance `current_wave` to the next wave; if past Wave 4, set `current_wave: merge_ready` and stop dispatching for this item; otherwise dispatch the next role-agent (Step 4c again, with that wave's prompt) and set `agent_status: in_flight` with `current_agent_name: <next-wave>-<P-CODE>-r0` |
+   | `agent_status: in_review` | worst verdict `revise` AND `revision_count[<wave>] == 0` | re-dispatch the original role-agent per Step 4e with **both** reviewers' feedback; increment `revision_count[<wave>]`; set `agent_status: in_flight` with `current_agent_name: <wave>-<P-CODE>-r1` |
+   | `agent_status: in_review` | worst verdict `revise` AND `revision_count[<wave>] >= 1` | drop. Set `agent_status: dropped`, `drop_reason: "revision-failed-<wave>"`. Stop dispatching for this item. |
+   | `agent_status: in_review` | worst verdict `drop` | drop. Set `agent_status: dropped`, `drop_reason: "reviewer-drop-<wave>: <drop-reason text>"`. Stop dispatching for this item. |
+
+   **Verdict precedence** on waves with two reviewers: `drop` beats
+   `revise` beats `pass`. Both must return before the item moves. A
+   `skeptic` `revise` on a `reviewer` `pass` is the normal, expected
+   case — it is the whole reason the skeptic exists, so do not treat
+   the disagreement as an error to be arbitrated.
+
+3a. **Wave 0 verdict handling** (before the table above applies).
+   When the `premise-auditor` returns, record `premise_verdict` and
+   act on it:
+
+   - `confirmed` → dispatch `reviewer` per Step 4c, then proceed
+     normally.
+   - `rescoped` → dispatch `reviewer` per Step 4c. On pass, advance to
+     Wave 1 and pass the auditor's **Corrected premise** as the
+     authoritative task, with the original bullet included only as
+     context marked *superseded*. Note the rescope in `retro_notes`
+     and surface it to the operator — the bullet in
+     `IMPLEMENTATION_PLAN.md` will need correcting at Step 7.
+   - `refuted` → **stop the item.** Set `agent_status: dropped`,
+     `drop_reason: "premise-refuted: <auditor's one-line basis>"`.
+     Append the refutation to `retro_notes`. This is a **success**, not
+     a failure — report it that way to the operator, and note that
+     Step 7 must close the bullet in `IMPLEMENTATION_PLAN.md` as
+     `closed-claim-invalid` rather than leaving it to be re-picked by
+     the next batch.
+
+   Wave 0 gets the same one-revision allowance as any other wave: a
+   `reviewer` `revise` on a thin or unsourced audit re-dispatches the
+   `premise-auditor` once.
 
 4. **Persist state**: after processing all changes in this turn,
    write the updated state file. Use atomic-write semantics: write
@@ -271,7 +369,7 @@ the operator or processing notifications:
    - If you only processed an operator message and no new dispatches
      were made, end the turn after responding.
 
-### Step 4c — reviewer dispatch
+### Step 4c — review dispatch
 
 When a role-agent returns and you're advancing to review:
 
@@ -291,16 +389,55 @@ and return a structured verdict per your system prompt.
 Plan bullet:
 {{bullet_text}}
 
+Premise verdict: {{premise_verdict}}
+{{the auditor's Corrected premise, if rescoped}}
+
 {{prior wave outputs, if any — e.g. for fixture-builder review,
 include the scenario proposal verbatim}}
 
 Worktree path: {{worktree_path or "n/a (main_tree)"}}
+Main venv path (for `UV_PROJECT_ENVIRONMENT`): {{main_venv_path}}
 
 --- agent output ---
 {{role-agent's full return value}}
 ```
 
-After dispatching, set `agent_status: in_review` in the state file.
+**On Waves 1 and 4 only**, dispatch a `skeptic` in the *same message*,
+with `run_in_background: true` and
+`name: skeptic-<wave>-<P-CODE>-r<revision-count>`. It runs in parallel
+with the reviewer, not after it. Prompt template:
+
+```
+Attack the output of the `<wave>` agent for item **<P-CODE>** in
+batch `<batch-id>`. Run every applicable attack from your system
+prompt and return a structured verdict. Your default is "unproven" —
+a claim you could not test is `revise`, not `pass`.
+
+--- what is being claimed ---
+{{role-agent's full return value}}
+
+--- premise (authoritative over the plan bullet) ---
+Verdict: {{premise_verdict}}
+{{the auditor's Corrected premise and Verbatim regulatory text}}
+{{the auditor's Defect-pinning tests and Hazards sections}}
+
+--- prior context ---
+{{the scenario proposal verbatim; for Wave 4, also the test-writer
+report and the exact targeted pytest path}}
+
+Worktree path: {{worktree_path or "n/a (main_tree)"}}
+Main venv path (for `UV_PROJECT_ENVIRONMENT`): {{main_venv_path}}
+
+--- specific attacks the orchestrator wants run ---
+{{name any that apply to this item: RWA direction, crossing amount,
+column-footprint change, defect-pinning survivors, RUNS registration,
+golden/baseline regen}}
+```
+
+After dispatching, set `agent_status: in_review` and reset
+`review_verdicts` to `{"conformance": null, "skeptic": null}` (leave
+`skeptic` as `"n/a"` on waves 0, 2 and 3 so the "all returned" test
+is unambiguous).
 
 ### Step 4d — per-wave reviewer criteria (operator-visible)
 
@@ -308,6 +445,37 @@ These checklists are pasted verbatim into the reviewer's prompt at
 Step 4c. They are deliberately written here, not derived implicitly
 from each role-agent's system prompt, so the operator can audit and
 tune them in this single file.
+
+#### Wave 0 — premise-auditor verdict
+
+```
+C0.1 — First line is exactly `PREMISE: confirmed|refuted|rescoped`,
+       alone on its own line.
+C0.2 — All four questions answered explicitly (rule says what the
+       bullet claims / code diverges / direction / scope), each with
+       a one-line justification.
+C0.3 — The "Verbatim regulatory text" section contains actual quoted
+       article text with a named source (skill name, or PDF filename
+       + page index) — OR an explicit statement that source text
+       could not be obtained. A confident paraphrase with no source
+       is a `revise`: that is precisely the failure mode this wave
+       exists to prevent.
+C0.4 — Question 3 (direction) states the sign. If the answer is
+       RWA-reducing, it is flagged as such in capitals.
+C0.5 — For `refuted` / `rescoped`: the "Corrected premise" section is
+       present and concrete enough for scenario-architect to design
+       from without re-reading the bullet.
+C0.6 — The defect-pinning-test search was performed and its result
+       reported (paths + function names, or an explicit "none
+       found"). Any test whose assertion is RELATIVE to a baseline is
+       called out.
+C0.7 — Use Read on the cited source file to confirm the divergence
+       claim in question 2 points at code that exists and says what
+       the auditor says it says.
+C0.8 — The verdict follows from the four answers. A `confirmed` with
+       any question answered against the bullet is incoherent —
+       `revise`.
+```
 
 #### Wave 1 — scenario-architect proposal
 
@@ -324,8 +492,10 @@ C1.3 — Hand-calc shows every regulatory term on its own line. Each
        scalar (risk weight, CCF, LGD floor, supervisory haircut,
        slotting band, supporting factor, output floor percentage) is
        attributed either to the relevant Skill (`basel31` / `crr`)
-       OR to a specific rulepack pack entry (`rulebook/packs/*.py`) or
-       `data/tables/` shim.
+       OR to a specific rulepack pack entry (`rulebook/packs/*.py`)
+       or pack-binding shim (`engine/sa/{crr,b31}_risk_weight_tables.py`,
+       `engine/crm/haircut_tables.py`). `data/tables/` no longer
+       exists — a citation to it is stale.
 C1.4 — Expected outputs include exact RWA, EAD, risk weight, and K
        (or the subset the test will assert on, with the unused
        fields explicitly listed as out-of-scope under C1.5).
@@ -336,6 +506,18 @@ C1.6 — Citations point to real files / articles. Use Read on at
        confirm it exists; use the relevant Skill (`basel31` /
        `crr`) to confirm at least one cited article actually
        contains the rule.
+C1.7 — "Presence expectations" section is present and names what must
+       be EMITTED and NON-NULL (template/sheet or bundle key, the
+       cells that must carry a value where there is exposure, and any
+       breakdown that must sum to a named parent total). "The values
+       are in section 4" is not a substitute — absence is the
+       dominant escape class.
+C1.8 — "Direction and blast radius" section states whether the change
+       raises or lowers RWA. An RWA-reducing proposal says so in
+       capitals and names the output-floor evidence it will need.
+C1.9 — Consistency with Wave 0: if `premise_verdict` was `rescoped`,
+       the proposal designs the auditor's Corrected premise, not the
+       original bullet. Designing the superseded bullet is a `revise`.
 ```
 
 #### Wave 2 — fixture-builder report
@@ -355,6 +537,21 @@ C2.4 — The number of rows added per parquet matches the proposal's
 C2.5 — If the proposal said "no new fixtures", the report explicitly
        says "skipped" and explains why (typically: existing fixtures
        cover the scenario shape).
+C2.6 — Every NEW builder module is registered in
+       `tests/fixtures/generate_all.py`. Grep the file to confirm.
+       The parquets are git-ignored build artifacts, so an
+       unregistered builder passes locally and fails on a fresh
+       checkout and in CI.
+C2.7 — If the fixture reaches a reporting column or template no
+       existing portfolio exercises, it is registered in `RUNS` in
+       `tests/acceptance/reporting/test_supervisory_validations.py`
+       — or the report explains why it is not needed. The gate FAILS
+       OPEN: an unreached column makes every rule over it
+       NOT_EVALUATED, which is indistinguishable from passing.
+C2.8 — For a substitution / basis scenario, the report states the
+       CROSSING AMOUNT and it is non-zero. A 0%-RW guarantor makes
+       both bases agree, so the scenario could not distinguish a
+       correct basis from an incomplete one.
 ```
 
 #### Wave 3 — test-writer report
@@ -373,6 +570,27 @@ C3.5 — Asserted bundle fields cover the proposal's expected outputs
        (e.g. if proposal expects RWA=12345 and EAD=10000, the test
        asserts on `rwa` and `ead` columns of the aggregated bundle).
 C3.6 — No edits outside `tests/{unit,acceptance,contracts,integration}/`.
+C3.7 — NEGATIVE SPACE. The test asserts the proposal's C1.7 presence
+       expectations, not only its values: the sheet / template /
+       bundle key is emitted, in-scope cells are non-null where the
+       portfolio has exposure, and any new breakdown sums to its
+       named parent total. Read the test to confirm — a report that
+       claims this without the assertions present is a `revise`.
+C3.8 — THE TEST CAN FAIL. Read the assertions and check:
+       (a) no assertion is RELATIVE to a baseline
+           (`rwa_override > rwa_default`) where an absolute expected
+           value was available;
+       (b) class/row expectations are anchored to a source of truth
+           that cannot drift with the code — the enum
+           (`{m.value for m in ExposureClass}`), the sealed carrier,
+           `validations/scope.py::SHEET_INDEX_MAPS` — not a
+           hand-written list copied from the implementation.
+       A test written from the same sentence as the code validates
+       nothing.
+C3.9 — The defect-pinning grep was run (`uniform`, `all classes`,
+       `flat`, `backward compat`, `ignored for`, `has no effect on`)
+       and its result reported. If Wave 0 named such tests, the
+       report accounts for each one.
 ```
 
 #### Wave 4 — engine-implementer report
@@ -410,25 +628,49 @@ C4.6 — Reporting-slice criteria (any item touching `src/rwa_calc/reporting/`
            matrix) and proves the deleted site dead.
 C4.4 — Targeted pytest path matches what the test-writer reported
        in Wave 3.
-C4.5 — The targeted pytest result is PASS. The report quotes the
-       pytest summary line ("X passed in Ys") or equivalent.
+C4.5 — The targeted pytest result is PASS — and YOU RAN IT. Do not
+       accept the report's quoted summary line as evidence; execute
+       `uv run pytest <path> --benchmark-skip` yourself (prefixed
+       with `UV_PROJECT_ENVIRONMENT=<main venv path>` for a worktree
+       item) and compare. If your run disagrees with the report,
+       your run wins.
+C4.7 — RWA DIRECTION. The report states whether the change raises or
+       lowers RWA and agrees with the proposal's C1.8. An
+       RWA-reducing change without output-floor evidence is a
+       `revise`, not a `pass` — remember every `engine/sa/` transform
+       runs unconditionally to feed the Basel 3.1 output floor, so
+       "only SA reads this column" does not make a change IRB-safe.
+C4.8 — If the change altered the structure of a conditional
+       expression (deleted a short-circuit, widened a gate), the
+       report shows the FULL `tests/unit` run, not just the touched
+       subdirectory. Such a change alters the expression's column
+       footprint and has broken tests in unrelated files.
+C4.9 — No golden or validation-baseline regeneration was used to
+       reach green (see C4.6(a)). `REGEN_VALIDATION_BASELINE=1`
+       without a per-entry written reason is a `drop`.
 ```
 
 ### Step 4e — re-dispatch on revision
 
-When a reviewer returns `VERDICT: revise` and the wave's revision
-count is 0:
+When the worst verdict is `revise` and the wave's revision count is 0:
 
 Spawn a fresh role-agent of the original wave's type, with
 `run_in_background: true` and `name: <wave>-<P-CODE>-r1`. Prompt:
 
 ```
-Your prior output for **<P-CODE>** failed review. Address the
-following feedback and resubmit. Do not re-design unless the
-feedback explicitly asks you to.
+Your prior output for **<P-CODE>** failed review. Address ALL of the
+following feedback and resubmit. Do not re-design unless the feedback
+explicitly asks you to.
 
---- reviewer feedback ---
-{{reviewer's "Feedback" section verbatim}}
+--- conformance feedback (reviewer) ---
+{{reviewer's "Feedback" section verbatim, or "passed"}}
+
+--- adversarial findings (skeptic) ---
+{{skeptic's "Findings" section verbatim, or "n/a for this wave"}}
+
+The skeptic's findings are about whether the work is CORRECT, not
+whether it is well-formed. Where the two reviewers disagree, satisfy
+both — a conformance pass does not excuse a broken attack.
 
 --- your prior output ---
 {{role-agent's prior return value}}
@@ -517,38 +759,184 @@ arch_check spots a violation introduced by the merge resolution).
 
 ## Step 6 — single global validation gate
 
-Run once, on the merged tree, in this order:
+Run once, on the merged tree, in **tier order**. Do not reorder, and
+do not stop before Tier 2 — Tier 2 is the tier that catches the
+defects this project actually ships.
+
+If any item added a `@cites` decorator, regenerate the citation
+snapshot **before** running anything:
+`uv run python scripts/generate_citation_matrix.py`.
+
+**Tier 0 — static (fast, fails early)**
 
 ```
 uv run python scripts/arch_check.py
-uv run ruff check src/ && uv run ruff format --check src/
-uv run ty src/
-uv run pytest tests/contracts/ --benchmark-skip -q
-uv run pytest <union of all merged items' new test paths> -x --benchmark-skip
+uv run ruff check src/ tests/ && uv run ruff format --check src/ tests/
+uv run ty check src/rwa_calc/
 ```
+
+**Tier 1 — contracts and the batch's own tests**
+
+```
+uv run pytest tests/contracts/ --benchmark-skip -q
+uv run pytest <union of all merged items' new test paths> --benchmark-skip
+```
+
+Note: no `-x` on the union run. You want the full failure list for
+attribution, not the first one.
+
+**Tier 2 — the oracle tier (MANDATORY — never skip, never defer)**
+
+```
+uv run pytest tests/oracle/ --benchmark-skip -q
+uv run pytest tests/acceptance/reporting/ --benchmark-skip -q
+```
+
+`tests/acceptance/reporting/` contains the supervisory validation
+ratchet (741 published EBA/BoE rules, ratcheted **both** ways) and the
+reporting goldens. This is the only part of the estate that has
+reliably caught the reporting defects that reach production: on one
+CRM substitution block a fully green 10,552-test suite found **none**
+of ten real defects, while wiring the portfolio into the register
+found three in the first hour.
+
+It is expensive — the validation test alone is eighteen full pipeline
+runs — and it is expensive **once per batch**, against a batch that
+took hours. That trade is not close. If you are tempted to skip it
+because the batch "didn't touch reporting", don't: the ledger is
+sealed on aggregator exit, so an engine change reaches it.
+
+**Tier 3 — full suite**
+
+Run as **two foreground chunks** — background Bash tasks are hard-killed
+at ~600s:
+
+```
+uv run pytest tests/unit -q
+uv run pytest tests/acceptance tests/integration tests/contracts tests/oracle -q
+```
+
+Tier 3 is mandatory when any item changed the structure of a
+conditional expression (a deleted short-circuit changes an
+expression's *column footprint* and breaks tests in unrelated files),
+added or narrowed an eligibility gate, or altered a shared carrier.
+When in doubt, run it: `loop.sh` pushes to a feature branch where CI
+does **not** fire, so if you skip Tier 3 nothing runs the full suite
+until the PR — dozens of items later, when attribution is hopeless.
+
+If an xdist worker reports "node down", re-run before treating the
+suite as red — that failure mode is transient.
 
 The "merged items" set excludes anything dropped in Steps 4 or 5.
 
 If anything fails, surface:
-- the gate command that failed,
+- the gate command and tier that failed,
 - the failing test names or arch_check messages,
 - a best-effort attribution to the merged item (match failing file
-  paths to the engine sub-package each item targeted in Step 1).
+  paths to the engine sub-package each item targeted in Step 1),
+- for a Tier 2 failure, whether the break is **new** or a **baseline
+  entry that has been fixed**. The register ratchets both ways, so
+  `test_no_baseline_break_has_been_fixed_without_being_removed`
+  failing is the design working — the entry is removed deliberately,
+  with its written reason. **Never** regenerate goldens or the
+  validation baseline to reach green; that banks a live defect as
+  expected behaviour.
 
 **Do not tick the plan if the gate is red.** The squash commits are
 already on the feature branch — the operator decides whether to
 revert specific commits, fix forward, or push as-is for review.
+Record every gate failure in the failing item's `retro_notes` before
+you move on: Step 7.5 needs them.
 
 ## Step 7 — tick the plan
 
 For each item that successfully merged **and** survived the global
 gate, edit `IMPLEMENTATION_PLAN.md` at the top level: toggle from
-`[ ]` to `[x] FIXED v<x.y.z>` with a one-line summary. One Edit per
-item, then a single commit:
+`[ ]` to `[x] FIXED v<x.y.z>` with a one-line summary.
+
+**Also resolve the Wave 0 outcomes** — otherwise a refuted bullet sits
+in the queue and the next batch pays to refute it again:
+
+- `premise_verdict: refuted` → close the bullet as
+  `[x] closed-claim-invalid: <auditor's one-line basis>` and move it
+  to `## Completed`. Do **not** leave it unchecked.
+- `premise_verdict: rescoped` → rewrite the bullet's summary and
+  `Ref:` to the auditor's corrected premise, whether or not the item
+  went on to merge. The next reader must not inherit the wrong claim.
+
+One Edit per item, then a single commit:
 
 ```
 chore(plan): tick N code items [batch <batch-id>]
 ```
+
+## Step 7.5 — retro (turn this batch's failures into gates)
+
+**Run this before Step 8 destroys the evidence.** This is the step
+that makes the harness learn; skipping it means the next batch repeats
+this batch's mistakes at full price.
+
+You run this yourself — not via a sub-agent. You are the only party
+with the whole batch in view, and `.claude/LESSONS.md` is a shared
+file that concurrent agents would race on.
+
+1. **Gather.** From the state file, collect every: `revision_count`
+   above 0, `drop_reason`, `premise_verdict` of `refuted`/`rescoped`,
+   skeptic `Findings`, entry in `retro_notes`, and Step 6 gate
+   failure.
+
+2. **Separate one-offs from patterns.** For each, ask: *would this
+   recur on an unrelated item?* A typo is a one-off. "The agent
+   asserted against a hand-written list" is a pattern. Discard the
+   one-offs — this is not a diary.
+
+3. **Graduate, don't narrate.** For every pattern, take the **first**
+   option that is achievable in this pass:
+
+   | Preference | Form | Where |
+   |---|---|---|
+   | 1 (best) | executable check | a numbered check in `scripts/arch_check.py` + a `tests/contracts/` test |
+   | 2 | ratchet | a metric in `scripts/arch_metrics.json` |
+   | 3 | fixture coverage | a portfolio registered in `RUNS` |
+   | 4 | reviewer criterion | a `C<n>.<m>` in Step 4d, or an attack in `.claude/agents/skeptic.md` |
+   | 5 (last) | prose | an entry in `.claude/LESSONS.md` |
+
+   Prose is the **fallback**, not the default. `arch_check.py` already
+   carries 17 numbered checks and the validation register carries
+   hundreds of entries — every one of them is a lesson that graduated.
+   That is what "learning" looks like here; a paragraph nobody rereads
+   is not.
+
+   If the right check is too large for this pass, file it as a **Tier
+   1** bullet in `IMPLEMENTATION_PLAN.md` and add the prose entry as
+   the interim. Record the bullet ID in the prose entry so the two
+   stay linked.
+
+4. **Write it.** For each graduated lesson, add a row to the
+   **Graduation ledger** at the bottom of `.claude/LESSONS.md`
+   (date | lesson | graduated to) and do **not** also add prose. For
+   each prose entry, use the file's `Trap` / `Why` / `Detect` format —
+   **an entry with no `Detect` line is not finished.**
+
+5. **Keep the working set small.** `.claude/LESSONS.md` is capped at
+   ~30 entries. If your additions push it over, graduate or delete a
+   stale entry in the same pass and say which. A lessons file nobody
+   can read in one sitting is a lessons file nobody reads.
+
+6. **Check for recurrence.** If a pattern this batch hit was *already*
+   in `.claude/LESSONS.md`, that lesson has proven it cannot survive
+   as prose. Graduate it now, or file its graduation as Tier 1. Say so
+   explicitly in the report — a repeat is the strongest signal the
+   harness gives you.
+
+Commit any harness changes separately:
+
+```
+chore(harness): retro from batch <batch-id> — <N> graduated, <M> recorded
+```
+
+Report to the operator: what recurred, what graduated and into what,
+what stayed prose and why, and any Tier 1 bullets filed.
 
 ## Step 8 — cleanup and push
 
@@ -563,11 +951,23 @@ git branch -D batch/<batch-id>/<P-code>
 Sanity check: `git worktree list` should show only the main tree;
 `git branch --list 'batch/*'` should be empty.
 
-Delete the state file:
+**Archive the state file — do not delete it:**
 
 ```
-rm .claude/state/next-items-<batch-id>.json
+mkdir -p .claude/state/archive
+mv .claude/state/next-items-<batch-id>.json .claude/state/archive/
 ```
+
+The archive is the only record of what each reviewer caught, which
+waves needed revision, and why items were dropped. `/postmortem` reads
+it to find the batch that produced a defect, and drop reasons across
+batches are the highest-signal dataset for tuning the Step 4d
+criteria. Deleting it — as this command used to — threw away exactly
+the evidence needed to stop the next escape.
+
+(`.claude/state/` is git-ignored, so the archive is local to this
+machine. That is fine for tuning; anything that must survive a fresh
+clone belongs in `.claude/LESSONS.md` or `docs/development/escape-log.md`.)
 
 Push the merge-target branch to its remote (`loop.sh` also does this
 on iteration end, but pushing here makes the batch boundary
@@ -577,21 +977,39 @@ observable).
 
 - Cap N at 5 even if the user asks for more.
 - Never tick the plan if the global gate is red.
+- **Tier 2 of the gate is not optional.** No batch merges on Tier 0+1
+  alone. If you are short of time, drop an item — never a tier.
+- **Never skip Step 7.5.** A batch that merges without a retro has
+  spent the money and thrown away the lesson. If nothing generalisable
+  happened, say so explicitly in the report — that is a valid outcome,
+  silence is not.
 - Do not run the global gate inside any role-agent or reviewer — it
-  runs once at Step 6 on the merged tree.
+  runs once at Step 6 on the merged tree. The `reviewer` and `skeptic`
+  may run the item's **targeted** test to verify a claim; that is not
+  the gate.
 - The call graph is exactly one level deep: this orchestrator → one
-  of `scenario-architect` / `fixture-builder` / `test-writer` /
-  `engine-implementer` / `reviewer`. The orchestrator drives every
-  wave and every reviewer dispatch directly; sub-agents do not spawn
-  other sub-agents.
-- Hard cap of one revision per wave per item. Two reviewer-`revise`
-  verdicts on the same wave drops the item. Reviewer-`drop` drops
-  immediately, no revision.
+  of `premise-auditor` / `scenario-architect` / `fixture-builder` /
+  `test-writer` / `engine-implementer` / `reviewer` / `skeptic`. The
+  orchestrator drives every wave and every review dispatch directly;
+  sub-agents do not spawn other sub-agents.
+- **The orchestrator owns PDF extraction.** Role-agents cannot read
+  `docs/assets/*.pdf`. Extract with pymupdf and paste verbatim text
+  into the prompt — mandatory for any RWA-reducing item. Never ask an
+  agent to "confirm the citation": it cannot, and its confident quote
+  may be reconstructed from memory.
+- Hard cap of one revision per wave per item. Two `revise` verdicts on
+  the same wave drops the item. A `drop` verdict drops immediately, no
+  revision. On two-reviewer waves the worst verdict decides.
 - All role-agent and reviewer dispatches use `run_in_background:
   true` with a stable, unique `name` of the form
   `<role>-<P-CODE>-r<revision-count>` (or
-  `reviewer-<wave>-<P-CODE>-r<revision-count>`). Foreground dispatch
+  `reviewer-<wave>-<P-CODE>-r<revision-count>` /
+  `skeptic-<wave>-<P-CODE>-r<revision-count>`). Foreground dispatch
   defeats the conversational supervision the state file enables.
+- The orchestrator owns `.claude/LESSONS.md`, `docs/appendix/changelog.md`,
+  the citation matrix, and `scripts/arch_metrics.json`. Agents must
+  never write them — concurrent writes to shared files have already
+  cost misattributed commits and a silently dropped import line.
 - The state file at `.claude/state/next-items-<batch-id>.json` is
   authoritative. Read it at the start of every turn before reacting
   to anything else. Persist via atomic write (`<file>.tmp` then
@@ -604,3 +1022,11 @@ observable).
   (Step 3 and Step 5's merge are both skipped). Step 4's per-wave
   dispatch and reviewer loop are unchanged except the worktree
   preamble is omitted for waves 2/3/4.
+- Every agent is told to read `.claude/LESSONS.md` first. Do not
+  paste its contents into prompts — point at it, so there is one copy
+  and the retro's edits take effect on the next dispatch.
+- A batch where every reviewer passed everything and the retro found
+  nothing is a warning sign, not a triumph. Measured baseline: 6 of 10
+  then 10 of 10 plan bullets had a materially wrong premise. If Wave 0
+  confirms every bullet in a batch, say so to the operator and treat
+  the audit itself as suspect.

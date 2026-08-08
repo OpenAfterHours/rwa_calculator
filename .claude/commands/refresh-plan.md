@@ -35,7 +35,9 @@ Invoke the `plan-curator` agent. Prompt:
 > 2. **Scan for new findings** — TODO / FIXME / HACK markers,
 >    `pytest.mark.skip`, conditional fixture guards,
 >    acceptance-test gaps, regulatory scalar drift between
->    `src/rwa_calc/data/tables/` and the PDFs.
+>    `src/rwa_calc/rulebook/packs/{common,crr,b31}.py` (and the
+>    pack-binding shims in `engine/`) and the PDFs. The
+>    `data/tables/` package no longer exists.
 > 3. **Add new items** in tier order with the standard bullet
 >    format. Use the next free P-code integer in sequence.
 >

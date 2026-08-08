@@ -173,11 +173,13 @@ Reference stage skeleton and format details — see `docs/specifications/observa
 
 Project subagents in `.claude/agents/` (role-based, not domain-based — regulatory knowledge stays in the `basel31` and `crr` skills):
 
-- **`scenario-architect`** — read-only. Designs one CRR-* / B31-* / P-coded item end-to-end (inputs, hand-calc, citations).
+- **`premise-auditor`** — read-only, Wave 0. Tries to **refute** a plan bullet before any design work starts: does the rule say what the bullet claims, does the code actually diverge, what is the RWA direction, is the scope right. Returns `PREMISE: confirmed | rescoped | refuted`. A refutation is a success.
+- **`scenario-architect`** — read-only. Designs one CRR-* / B31-* / P-coded item end-to-end (inputs, hand-calc, citations). The premise audit is authoritative over the bullet.
 - **`fixture-builder`** — owns `tests/fixtures/`. Implements parquet rows and builders from a scenario proposal.
 - **`test-writer`** — owns `tests/{unit,acceptance,contracts,integration}/`. Writes the failing test that drives the next implementation step.
 - **`engine-implementer`** — owns `src/rwa_calc/`. Makes the failing test pass with the minimum diff and a green validation gate (arch_check, ruff, ty, contracts).
-- **`reviewer`** — read-only quality gate dispatched between every wave of `/next-items`. Critiques a role-agent's output against operator-supplied wave criteria and returns `VERDICT: pass | revise | drop`. Owns nothing on disk.
+- **`reviewer`** — **conformance** gate dispatched after every wave of `/next-items`. Critiques a role-agent's output against operator-supplied wave criteria and returns `VERDICT: pass | revise | drop`. Owns nothing on disk; has `Bash(uv run pytest:*)` solely so it can verify a claimed test outcome rather than trusting a quoted summary line.
+- **`skeptic`** — **adversarial** reviewer running in parallel with `reviewer` on the design and implementation waves. Re-derives the number, re-runs the test, and attacks the test's ability to fail. Same verdict grammar; the worst verdict of the two decides the item. Its default is "unproven" — an untested claim is `revise`, not `pass`.
 - **`plan-curator`** — owns the two work-queue files at the repo root: `IMPLEMENTATION_PLAN.md` and `DOCS_IMPLEMENTATION_PLAN.md`. Audits code/specs/PDFs against each other and writes prioritised bullet items.
 - **`doc-writer`** — owns `docs/`. Writes or updates one canonical docs page per `DOCS_IMPLEMENTATION_PLAN.md` item; runs `uv run zensical build` before returning.
 
@@ -191,9 +193,39 @@ Orchestration lives in slash commands, not in agents. Each `loop.sh` mode maps t
 | `loop.sh docs_build` | `PROMPT_docs_build.md` | `/next-docs 3` | `/next-doc` |
 | `loop.sh docs_plan` | `PROMPT_docs_plan.md` | `/refresh-docs-plan` | — |
 
-The batch commands pick N non-conflicting items and run the validation gate (or `uv run zensical build`) **once at the end** — not per agent. `/next-items` provisions one git worktree per item on `batch/<batch-id>/<P-code>` and drives the four-wave pipeline as an event-driven supervisor: agents are dispatched in the background (`run_in_background: true`), a `reviewer` agent gates every wave (`pass | revise | drop`), one revision retry per wave per item is allowed, and the orchestrator persists batch state to `.claude/state/next-items-<batch-id>.json` so it can survive context compactions and operator interjections across multiple turns. The operator can chat with the orchestrator mid-batch — ask for status, drop an item, inspect outputs — without interrupting in-flight agents. After all items reach `merge_ready` or `dropped`, the orchestrator squash-merges the surviving worktree branches into the current feature branch before the gate runs. `/next-docs` keeps the flat parallel `doc-writer` dispatch (no worktree, no reviewer — docs writes don't collide). Items that touch shared engine/reporting-projection files (`engine/pipeline.py`, `engine/registry.py`, `engine/orchestrator.py`, `contracts/protocols.py`, `contracts/bundles.py`, `contracts/edges.py`, any module under `engine/aggregator/`, `analysis/reconciliation.py`, `reporting/cellspec.py`, `reporting/metadata.py`) are forced single-stream by `/next-items` even when N>1 was requested, and run in the main tree without worktree machinery (the reviewer loop and background dispatch still apply).
+The batch commands pick N non-conflicting items and run the validation gate (or `uv run zensical build`) **once at the end** — not per agent. `/next-items` provisions one git worktree per item on `batch/<batch-id>/<P-code>` and drives the **five-wave** pipeline (`premise-auditor` → `scenario-architect` → `fixture-builder` → `test-writer` → `engine-implementer`) as an event-driven supervisor: agents are dispatched in the background (`run_in_background: true`), a `reviewer` gates every wave (`pass | revise | drop`) with a `skeptic` alongside it on the design and implementation waves, one revision retry per wave per item is allowed, and the orchestrator persists batch state to `.claude/state/next-items-<batch-id>.json` so it can survive context compactions and operator interjections across multiple turns.
 
-Plus `/implement-scenario <ID>` for ad-hoc one-off work on a specific P-code or scenario ID.
+The end-of-batch gate runs in **tiers**, and **Tier 2 is mandatory**: `tests/oracle/` plus `tests/acceptance/reporting/` (the two-way-ratcheted supervisory validation register and the reporting goldens). Tiers 0–1 alone have repeatedly merged green over defects that Tier 2 catches. `loop.sh` pushes to a feature branch where CI does not fire, so Tier 3 (the full suite, in two foreground chunks) is the only thing that runs the whole estate before the PR. The operator can chat with the orchestrator mid-batch — ask for status, drop an item, inspect outputs — without interrupting in-flight agents. After all items reach `merge_ready` or `dropped`, the orchestrator squash-merges the surviving worktree branches into the current feature branch before the gate runs. `/next-docs` keeps the flat parallel `doc-writer` dispatch (no worktree, no reviewer — docs writes don't collide). Items that touch shared engine/reporting-projection files (`engine/pipeline.py`, `engine/registry.py`, `engine/orchestrator.py`, `contracts/protocols.py`, `contracts/bundles.py`, `contracts/edges.py`, any module under `engine/aggregator/`, `analysis/reconciliation.py`, `reporting/cellspec.py`, `reporting/metadata.py`) are forced single-stream by `/next-items` even when N>1 was requested, and run in the main tree without worktree machinery (the reviewer loop and background dispatch still apply).
+
+Plus `/implement-scenario <ID>` for ad-hoc one-off work on a specific P-code or scenario ID, and `/postmortem <commit|PR|description>` when a defect reaches production.
+
+## The learning loop
+
+Gates catch what they were built to catch. The harness only improves if every
+escape and every wasted batch turns into a new gate — so three artifacts are
+load-bearing:
+
+- **`.claude/LESSONS.md`** — the working set of traps this project has already
+  paid for, in `Trap` / `Why` / `Detect` form. **Every agent reads it before
+  starting work**, and its system prompt says so. It is capped at ~30 entries
+  and is explicitly *not* an archive: an entry earns its place only while it is
+  still prose.
+- **`/next-items` Step 7.5 (retro)** — runs before cleanup, while the batch's
+  evidence still exists. It separates one-off slips from repeatable patterns and
+  **graduates** each pattern into the strongest available form: an `arch_check`
+  check → a ratchet → fixture coverage in `RUNS` → a reviewer criterion →
+  prose, in that order of preference. Prose is the fallback, not the default.
+  Completed batch state is archived to `.claude/state/archive/`, never deleted.
+- **`/postmortem` + `docs/development/escape-log.md`** — for defects that reach
+  production. The deliverable is not the code fix but the answer to *which gate
+  should have caught this, and why didn't it* — classified into one of seven
+  escape classes, each of which prescribes its own gate change. The gate change
+  is mandatory; the code fix may be deferred.
+
+A lesson that reaches production **twice** has proven it cannot survive as
+prose — graduate it to an executable check, or file the graduation as a Tier 1
+plan item. `scripts/arch_check.py`'s 17 numbered checks and the supervisory
+validation register are what graduated lessons look like.
 
 Agents never commit or push — commits land in the slash-command orchestrator only. The call graph is uniformly one level deep (orchestrator → role-agent or reviewer); sub-agents do not spawn other sub-agents. Claude Code does not propagate the project's `.claude/agents/` registry into sub-sessions, so a nested Agent call from a sub-agent cannot dispatch project role-agents — keep all dispatch in the slash-command orchestrator. The two root plan files (`IMPLEMENTATION_PLAN.md`, `DOCS_IMPLEMENTATION_PLAN.md`) are the source of truth for outstanding work; `docs/plans/implementation-plan.md` is published narrative on the Zensical site.
 

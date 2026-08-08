@@ -8,17 +8,19 @@ only**:
   Counterparty Credit Risk (CCR) Integration** (`P8.*`) in
   `IMPLEMENTATION_PLAN.md`, in plan order, skipping anything marked
   `DEFERRED v2.0` / Phase 10. It does **not** consider any other tier,
-- runs the four agent stages as four parallel waves
-  (scenario-architect → fixture-builder → test-writer →
-  engine-implementer), with N items in flight per wave and a reviewer
-  gate between every wave,
-- runs the global validation gate
-  (`uv run python scripts/arch_check.py && uv run ruff check src/ && uv run ruff format --check src/ && uv run ty src/ && uv run pytest tests/contracts/ --benchmark-skip -q`)
-  exactly once at the end of the engine-implementer wave —
-  per-agent gate runs are forbidden because they would
-  N×-redundantly churn ruff/format on each other's edits,
-- on green: commits each item separately, then ticks the items off
-  `IMPLEMENTATION_PLAN.md` in one final
+- runs the five agent stages as five parallel waves
+  (premise-auditor → scenario-architect → fixture-builder →
+  test-writer → engine-implementer), with N items in flight per wave,
+  a reviewer gate after every wave and a skeptic alongside it on the
+  design and implementation waves,
+- runs the global validation gate exactly once at the end of the
+  engine-implementer wave — per-agent gate runs are forbidden because
+  they would N×-redundantly churn ruff/format on each other's edits.
+  The gate runs in tiers and **Tier 2 is mandatory** (`tests/oracle/`
+  plus `tests/acceptance/reporting/`), followed by the full suite in
+  two foreground chunks,
+- on green: commits each item separately, runs the Step 7.5 retro,
+  then ticks the items off `IMPLEMENTATION_PLAN.md` in one final
   `chore(plan): tick N CCR items` commit and pushes.
 
 Expect frequent single-stream downgrades: many CCR items touch shared

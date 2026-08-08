@@ -1,0 +1,269 @@
+#
+# C4b — independent re-derivation of template MONEY cells.
+#
+# A second, separately-authored predicate and metric for each cell, taken from
+# the published Annex II instruction text and held HERE rather than in
+# `reporting/cellspec.py`. The duplication IS the control: `reporting/lineage.py`
+# re-runs the generator's own predicate by design, so without this nothing in the
+# estate gives a second opinion on whether a cell's predicate is the RIGHT
+# predicate. A wrong CellSpec today produces a number that is self-consistent,
+# lineage-explicable, golden-matching and rule-passing.
+#
+# ---------------------------------------------------------------------------
+# Semantics
+# ---------------------------------------------------------------------------
+#
+# Each [[cell]] names a template cell and states how to rebuild it from the
+# SEALED aggregator-exit ledger:
+#
+#   metric  = "sum"                 the only metric these cells need
+#   carrier = "<ledger column>"     which column carries the money
+#   scale   = <float>               applied after the sum (0.08 for own funds)
+#   where   = [ {column, op, value|values}, ... ]   AND-ed clauses
+#   ops     = in | not_in | equals | not_equals | not_starts_with
+#
+# The control is over the PREDICATE and the CARRIER, not over the upstream
+# numbers: both sides read the same sealed ledger, so a difference can only come
+# from disagreeing about which rows and which column a cell is made of.
+#
+# `basis` records, per cell, what this re-derivation does NOT independently
+# settle — see meta.limits.
+#
+
+[meta]
+authored = "2026-08-08"
+sources = [
+  "UK Pillar 3 Annex II, Template UK OV1 (docs/assets/crr-pillar3-risk-weighted-exposure-instructions-leverage-ratio.pdf, pp. 1-2)",
+  "CRR Art. 92(1)-(3), Art. 153(5), Art. 155(2), Art. 438(d)",
+]
+limits = """
+Two things this file deliberately does NOT settle, stated so a green run is not
+over-read:
+
+1. PRE- vs POST-SUBSTITUTION BASIS. Rows 2-5 and UK 4a are cut on
+   `reporting_approach_origin`, matching the basis recorded for this template.
+   The generated portfolio carries no guarantees, so origin and applied coincide
+   on every leg and the choice is arithmetically untested here. Settling it needs
+   a portfolio with a boundary-crossing guarantee whose crossing RWEA is non-zero
+   (.claude/LESSONS.md C2).
+
+2. CCR EXCLUSION. Row 1's "excluding CCR" cut is expressed as "not a synthetic
+   CCR leg". The portfolio has no derivatives, so the clause is inert and the
+   cut is not exercised. What IS exercised is the carrier and the scale, which
+   is the defect class this component targets.
+"""
+
+# ===========================================================================
+# UK OV1 — Overview of risk-weighted exposure amounts (Art. 438(d))
+#
+# Column a: "Risk weighted exposure amounts (RWEAs) — Risk-weighted exposure
+#           amount calculated in accordance with Articles 92(3), 95, 96 and 98
+#           CRR." So the carrier is the FINAL, post-floor RWEA the own funds
+#           requirement is computed on — `rwa_final` — never `rwa_pre_floor`,
+#           `sa_rwa` (the SA-equivalent every leg carries for the output floor)
+#           or `rwa_pre_factor`.
+# Column c: "Total own funds requirements — Own fund requirements corresponding
+#           to the RWEAs for the different risk categories", i.e. Art. 92(1)'s
+#           8% of the same RWEA. Any column-c cell that is not exactly 0.08x its
+#           own column-a cell is a sign/scale defect.
+# ===========================================================================
+
+[[cell]]
+id = "ov1-1-a"
+template = "OV1"
+row = "1"
+column = "a"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "rwa_final"
+scale = 1.0
+where = [{ column = "exposure_reference", op = "not_starts_with", value = "ccr__" }]
+citation = "UK OV1 row 1; CRR Art. 92(3), Chapters 1-4 of Title II of Part Three"
+note = """
+"Credit risk (excluding CCR). RWEAs ... calculated in accordance with Chapters 1
+to 4 of Title II of Part Three CRR, and with Article 379 CRR. RWEAs for
+securitisation exposures in the non-trading book and for CCR are excluded and
+disclosed in rows 6 and 16 of this template."
+"""
+
+[[cell]]
+id = "ov1-1-c"
+template = "OV1"
+row = "1"
+column = "c"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "rwa_final"
+scale = 0.08
+where = [{ column = "exposure_reference", op = "not_starts_with", value = "ccr__" }]
+citation = "UK OV1 column c; CRR Art. 92(1)"
+
+[[cell]]
+id = "ov1-2-a"
+template = "OV1"
+row = "2"
+column = "a"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "rwa_final"
+scale = 1.0
+where = [
+  { column = "exposure_reference", op = "not_starts_with", value = "ccr__" },
+  { column = "reporting_approach_origin", op = "in", values = ["standardised", "equity"] },
+]
+citation = "UK OV1 row 2; CRR Chapter 2 of Title II of Part Three, Art. 379"
+note = """
+"Of which the standardised approach". The equity legs are inside it: under CRR
+the simple-risk-weight equity treatment is an IRB method (Art. 155(2)) and gets
+its own row UK 4a, but this calculator routes equity through the SA equity risk
+weights and labels the approach `equity`, so the SA row is where its RWEA is
+calculated. Row UK 4a is asserted separately and the two must not double-count.
+"""
+
+[[cell]]
+id = "ov1-2-c"
+template = "OV1"
+row = "2"
+column = "c"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "rwa_final"
+scale = 0.08
+where = [
+  { column = "exposure_reference", op = "not_starts_with", value = "ccr__" },
+  { column = "reporting_approach_origin", op = "in", values = ["standardised", "equity"] },
+]
+citation = "UK OV1 row 2, column c; CRR Art. 92(1)"
+
+[[cell]]
+id = "ov1-3-a"
+template = "OV1"
+row = "3"
+column = "a"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "rwa_final"
+scale = 1.0
+where = [
+  { column = "exposure_reference", op = "not_starts_with", value = "ccr__" },
+  { column = "reporting_approach_origin", op = "equals", value = "foundation_irb" },
+]
+citation = "UK OV1 row 3; CRR Chapter 3 of Title II of Part Three"
+note = """
+"Of which the foundation IRB (FIRB) approach ... EXCLUDING the RWEAs disclosed in
+row 4 for specialised lending exposures subject to the slotting approach and in
+row UK 4a for equities under the simple risk weighted approach." The exclusion is
+carried by the approach label itself: a slotting leg carries `slotting`, not
+`foundation_irb`, so no extra clause is needed — but the exclusion is REAL and
+row 3 + row 4 must not double-count, which the partition assertion checks.
+"""
+
+[[cell]]
+id = "ov1-3-c"
+template = "OV1"
+row = "3"
+column = "c"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "rwa_final"
+scale = 0.08
+where = [
+  { column = "exposure_reference", op = "not_starts_with", value = "ccr__" },
+  { column = "reporting_approach_origin", op = "equals", value = "foundation_irb" },
+]
+citation = "UK OV1 row 3, column c; CRR Art. 92(1)"
+
+[[cell]]
+id = "ov1-4-a"
+template = "OV1"
+row = "4"
+column = "a"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "rwa_final"
+scale = 1.0
+where = [
+  { column = "exposure_reference", op = "not_starts_with", value = "ccr__" },
+  { column = "reporting_approach_origin", op = "equals", value = "slotting" },
+]
+citation = "UK OV1 row 4; CRR Art. 153(5)"
+note = """
+"Of which: slotting approach. RWEAs and own funds requirements for specialised
+lending exposures subject to the slotting approach in accordance with Article
+153(5) CRR."
+"""
+
+[[cell]]
+id = "ov1-4-c"
+template = "OV1"
+row = "4"
+column = "c"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "rwa_final"
+scale = 0.08
+where = [
+  { column = "exposure_reference", op = "not_starts_with", value = "ccr__" },
+  { column = "reporting_approach_origin", op = "equals", value = "slotting" },
+]
+citation = "UK OV1 row 4, column c; CRR Art. 92(1)"
+
+[[cell]]
+id = "ov1-5-a"
+template = "OV1"
+row = "5"
+column = "a"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "rwa_final"
+scale = 1.0
+where = [
+  { column = "exposure_reference", op = "not_starts_with", value = "ccr__" },
+  { column = "reporting_approach_origin", op = "equals", value = "advanced_irb" },
+]
+citation = "UK OV1 row 5; CRR Chapter 3 of Title II of Part Three"
+
+[[cell]]
+id = "ov1-5-c"
+template = "OV1"
+row = "5"
+column = "c"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "rwa_final"
+scale = 0.08
+where = [
+  { column = "exposure_reference", op = "not_starts_with", value = "ccr__" },
+  { column = "reporting_approach_origin", op = "equals", value = "advanced_irb" },
+]
+citation = "UK OV1 row 5, column c; CRR Art. 92(1)"
+
+[[cell]]
+id = "ov1-29-a"
+template = "OV1"
+row = "29"
+column = "a"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "rwa_final"
+scale = 1.0
+where = []
+citation = "UK OV1 row 29; CRR Art. 92(3)"
+note = """
+The all-risk-type total. Over the WHOLE ledger, with no exclusion — including any
+CCR leg, which rows 1-5 exclude. On a book with no derivatives row 29 equals row
+1 by arithmetic, not by definition, and the two are authored separately here so
+that identity is a MEASUREMENT rather than a restatement.
+"""
+
+[[cell]]
+id = "ov1-29-c"
+template = "OV1"
+row = "29"
+column = "c"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "rwa_final"
+scale = 0.08
+where = []
+citation = "UK OV1 row 29, column c; CRR Art. 92(1)"

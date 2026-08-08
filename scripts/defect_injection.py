@@ -635,6 +635,19 @@ def print_scorecard(payload: dict[str, Any]) -> None:
 # =============================================================================
 
 
+def _confine_path(raw: Path) -> Path:
+    """Resolve a CLI-supplied path and reject anything outside ``_ALLOWED_ROOT``.
+
+    Same guard as ``scripts/parity_gate.py``: ``--out`` is operator-supplied,
+    and resolving first collapses ``..`` segments so the containment check
+    cannot be bypassed.
+    """
+    resolved = raw.expanduser().resolve()
+    if not resolved.is_relative_to(_ALLOWED_ROOT):
+        raise SystemExit(f"path escapes {_ALLOWED_ROOT}: {raw}")
+    return resolved
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Defect-injection scorecard (C6)")
     parser.add_argument(
@@ -719,19 +732,6 @@ def main() -> int:
     print_scorecard(payload)
     print(f"\nWrote {out.name} in {payload['runtime_seconds']}s")
     return 0
-
-
-def _confine_path(raw: Path) -> Path:
-    """Resolve a CLI-supplied path and reject anything outside ``_ALLOWED_ROOT``.
-
-    Same guard as ``scripts/parity_gate.py``: ``--out`` is operator-supplied,
-    and resolving first collapses ``..`` segments so the containment check
-    cannot be bypassed.
-    """
-    resolved = raw.expanduser().resolve()
-    if not resolved.is_relative_to(_ALLOWED_ROOT):
-        raise SystemExit(f"path escapes {_ALLOWED_ROOT}: {raw}")
-    return resolved
 
 
 if __name__ == "__main__":

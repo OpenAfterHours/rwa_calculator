@@ -159,6 +159,20 @@ VALIDATION_ENUM_ALLOWLIST: dict[str, set[str]] = {
     # because moving them to data/schemas.py would split the rule from the
     # code that enforces it.
     "engine/aggregator/_securitisation.py": {"MONEY_COLS"},
+    # Per-leg carrier classification for the RE loan-splitter. Same rationale
+    # as MONEY_COLS and COLLATERAL_VALUE_CARRIERS: these are engine-internal
+    # OUTPUT column names, not an input-domain validation enum. The splitter
+    # runs after the CRM processor, so any money carrier it does not rewrite is
+    # inherited whole by every emitted leg and double-counts in COREP C 07.00
+    # / Pillar 3 CR4 — naming the allocated sets once is what stops the
+    # classification drifting away from the code that applies it, and moving
+    # them to data/schemas.py would split the rule from its enforcement.
+    "engine/stages/re_split/carriers.py": {
+        "_PRORATA_CARRIERS",
+        "_RE_COLLATERAL_CARRIERS",
+        "_RESIDENTIAL_ONLY_CARRIERS",
+        "_COMMERCIAL_ONLY_CARRIERS",
+    },
 }
 
 # Engine modules permitted a direct regime-boolean read — ``config.is_crr`` /

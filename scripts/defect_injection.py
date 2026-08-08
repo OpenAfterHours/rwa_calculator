@@ -288,12 +288,24 @@ def injected(mutant: Mutant) -> Iterator[None]:
 # =============================================================================
 
 
-def output_digest() -> str:
+NARROW_PROBE_PORTFOLIOS: tuple[str, ...] = ("rich",)
+
+
+def output_digest(portfolios: tuple[str, ...] | None = NARROW_PROBE_PORTFOLIOS) -> str:
     """A stable digest of what the estate produces, engine and reporting alike.
 
-    Runs one portfolio through both regimes and hashes every generated template
-    cell. Two regimes because a Basel-3.1-only mutant moves nothing under CRR,
-    and the whole point is to avoid mistaking "wrong regime" for "dead path".
+    Runs the named portfolios through both regimes and hashes every generated
+    template cell. ``None`` means the WHOLE matrix. Two regimes always, because a
+    Basel-3.1-only mutant moves nothing under CRR and the whole point is to avoid
+    mistaking "wrong regime" for "dead path".
+
+    Why the default is narrow and ``probe_reachable`` escalates: one portfolio is
+    ~11s and the full matrix ~60s, but ``rich`` alone does NOT exercise every
+    (approach, class) pair. It carries no A-IRB institution and no F-IRB
+    institution leg, so a mutant on those C 02.00 row keys moves nothing there and
+    scores a FALSE unreachable — which silently drops the reporting half of the
+    catalogue out of the denominator. Measured: 7 of 22 mutants came back
+    unreachable on ``rich`` alone, 4 of them wrongly.
 
     Imported lazily and re-imported per call: the mutants edit modules that are
     already loaded, so a cached import would measure the pre-mutation code.
@@ -310,7 +322,7 @@ def output_digest() -> str:
 
     digest = hashlib.sha256()
     for run in RUNS:
-        if run.portfolio != "rich":
+        if portfolios is not None and run.portfolio not in portfolios:
             continue
         result = PipelineOrchestrator().run_with_data(run.build_bundle(), run.build_config())
         corep = COREPGenerator().generate_from_lazyframe(result.results, framework=run.framework)
@@ -327,11 +339,27 @@ def output_digest() -> str:
     return digest.hexdigest()
 
 
-def probe_reachable(mutant: Mutant, baseline: str) -> tuple[bool, str, float]:
-    """Does this mutant move any output at all? Returns (reachable, digest, secs)."""
+def probe_reachable(
+    mutant: Mutant, baseline: str, wide_baseline: str | None = None
+) -> tuple[bool, str, float]:
+    """Does this mutant move any output at all? Returns (reachable, digest, secs).
+
+    Two stages. The narrow probe (``rich`` only) is cheap and settles most
+    mutants. A mutant that moves nothing there is NOT yet unreachable — ``rich``
+    does not exercise every (approach, class) pair — so it is re-probed against
+    the whole RUNS matrix before the verdict is recorded. Only a mutant that moves
+    nothing anywhere is UNREACHABLE.
+
+    Getting this wrong is expensive in the direction that flatters nobody: a false
+    unreachable drops the mutant from the denominator, so the detection rate is
+    computed over a silently narrowed catalogue.
+    """
     started = time.perf_counter()
     with injected(mutant):
         digest = output_digest()
+        if digest == baseline and wide_baseline is not None:
+            wide = output_digest(portfolios=None)
+            return wide != wide_baseline, wide, round(time.perf_counter() - started, 1)
     return digest != baseline, digest, round(time.perf_counter() - started, 1)
 
 
@@ -401,6 +429,7 @@ def run_campaign(
     baseline_digest: str,
     *,
     reachability_only: bool,
+    wide_baseline_digest: str | None = None,
 ) -> list[MutantResult]:
     """Probe, then ladder, one mutant at a time."""
     results: list[MutantResult] = []
@@ -408,7 +437,7 @@ def run_campaign(
         print(f"\n[{position}/{len(mutants)}] {mutant.id} ({mutant.category})", flush=True)
         result = MutantResult(mutant.id, mutant.category, mutant.summary, VERDICT_ERROR)
 
-        reachable, _, seconds = probe_reachable(mutant, baseline_digest)
+        reachable, _, seconds = probe_reachable(mutant, baseline_digest, wide_baseline_digest)
         result.reachable = reachable
         result.reachability_seconds = seconds
         print(f"      reachability: {'REACHABLE' if reachable else 'UNREACHABLE'} ({seconds}s)")
@@ -626,7 +655,9 @@ def main() -> int:
     started = time.perf_counter()
     print("Capturing the unmutated baseline digest ...", flush=True)
     baseline_digest = output_digest()
-    print(f"  baseline {baseline_digest[:16]}")
+    print(f"  narrow baseline {baseline_digest[:16]} (rich)")
+    wide_baseline_digest = output_digest(portfolios=None)
+    print(f"  wide   baseline {wide_baseline_digest[:16]} (whole RUNS matrix)")
 
     if not args.reachability_only:
         for gate in gates:
@@ -645,6 +676,7 @@ def main() -> int:
         baseline_dir,
         baseline_digest,
         reachability_only=args.reachability_only,
+        wide_baseline_digest=wide_baseline_digest,
     )
 
     payload = {

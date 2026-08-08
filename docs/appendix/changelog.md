@@ -8,10 +8,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- (Next release changes will go here)
+- **Independent validation system.** Six components addressing the fact that the
+  estate's ~10,500 tests almost all compare against *recorded engine output*, so
+  they detect change rather than wrongness. Plan:
+  [Independent Validation System](../plans/independent-validation-system.md).
+  - `tests/properties/` — 185 regulation-derived properties (conservation,
+    structural invariants, monotonicity, homogeneity, output-floor identities,
+    template row-axis coverage). Finds wrongness without anyone deriving an
+    expected value. 157s.
+  - `tests/oracle/` — the independent shadow calculator grown from **3 to 132**
+    exposures, stdlib-only and self-enforced by
+    `test_derivations_never_import_rwa_calc`. The only component that can catch a
+    wrong *constant*.
+  - `tests/conformance/` — an externally-authored classification decision table
+    (710 combinations, 602 in scope, 2,396 assertions; an unmapped combination is
+    a hard failure) and independent OV1 cell re-derivation from Annex II text.
+  - `scripts/impact_report.py` — change-impact reporting over 128,127 template
+    cells at four grains, with appeared/disappeared cells reported loudly and an
+    allowlist requiring a written reason.
+  - `scripts/coverage_report.py` + `coverage_baseline.json` — estate-wide
+    published-rule and template-cell coverage, ratcheted.
+  - `scripts/defect_injection.py` — defect-injection scorecard: 22 mutants, a
+    data-driven gate ladder, and reachability as a first-class verdict.
+
+### Fixed
+- Nothing yet — the findings below are **recorded as strict xfails, not fixed**,
+  because each moves published template numbers and needs its own preserve-or-fix
+  decision.
+
+### Known issues (found by the new validation layers, all recorded as strict xfails)
+- **A Basel 3.1 equity leg is calculated and then dropped.** `risk_weight` resolves
+  to 2.5 (PS1/26 Art. 133) and `rwa_pre_factor`, `rwa_post_factor` and `rwa_final`
+  are all null. 3,750,000 of RWEA and 300,000 of own funds leave the submission with
+  no error, no null cell and no failing published rule.
+- **C 02.00 IRB class rows do not foot to their approach totals.** ~13.6m (CRR) and
+  ~14.6m (Basel 3.1) of A-IRB RWEA on the rich portfolio, and 6.56m of F-IRB
+  sovereign RWEA on the irb-classes portfolio, are counted in the approach total and
+  absent from every of-which row. `corporate_sme` is never looked up; row 0310 is
+  keyed on `central_government`, which is not an `ExposureClass` value.
+- **CRR Art. 121(1) Table 5 is never applied to the institution class.** Unrated
+  institutions take a flat 100% instead of their sovereign's ladder. Conservative at
+  CQS 1-2, coincidentally correct at 3-5, and **under-weighted at CQS 6** (100%
+  against a required 150%).
+- **PS1/26 Art. 154(4A)(b)'s 10% floor is applied outside its scope** — no
+  non-defaulted gate, no retail gate, no UK-property gate. The UK limb is not
+  mis-gated but unrepresentable: nothing under `engine/irb/` reads an obligor or
+  property country column.
+- **Pillar 3 `high_risk` reaches no CR4/CR5 class row under Basel 3.1** —
+  `SA_DISCLOSURE_CLASSES` row 11 maps to an empty tuple.
+- Five classification defects (B31 large-corporate F-IRB aliases; QRRE
+  per-individual double-count; `sync_irb_exposure_class` overwriting the Art. 147(3)
+  class so MDBs, international organisations and covered bonds cannot reach IRB).
 
 ### Changed
-- (Next release changes will go here)
+- `.claude/LESSONS.md` is now **tracked in git**. It never was, so it existed only in
+  the main checkout and was absent from every git worktree — meaning every agent
+  dispatched into a worktree was told to read it and got "file does not exist".
+- Corrected `LESSONS.md` A2: sub-agents *can* read the regulatory PDFs. The
+  limitation is the `Read` tool (no `pdftoppm`), not the agent — pymupdf via Bash
+  works, and the entry was routing agents to transcriptions it elsewhere records as
+  wrong.
+- Added `hypothesis` to the dev dependencies (portfolio search and shrinking).
 
 ---
 

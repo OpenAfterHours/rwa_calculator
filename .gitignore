@@ -24,3 +24,6 @@ docs/assets/*.zip
 
 # coverage_report.py full output (3 MB; the ratchet baseline lives in arch_metrics.json)
 scripts/coverage_metrics.json
+
+# defect_injection.py campaign output
+scripts/defect_scorecard.json

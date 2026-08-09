@@ -340,6 +340,72 @@ def test_the_grade_and_slotting_rows_do_not_double_count(templates) -> None:
     assert not breaks, "grade / slotting rows do not partition r0010:\n  " + "\n  ".join(breaks)
 
 
+#: The OV1 "of which" rows that partition row 1. UK 4a is absent from the Basel 3.1
+#: template (PS1/26 Art. 147A removes the IRB equity treatment the row discloses),
+#: so it is filtered on presence rather than asserted into existence.
+_OV1_OF_WHICH: tuple[str, ...] = ("2", "3", "4", "UK4a", "5")
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "OV1 double-counts an SA equity leg: it is summed into row 2 AND into row UK 4a. "
+        "Measured on the portfolio below — CRR row 1 a = 30,098,477.21 against an of-which sum "
+        "(rows 2 + 3 + 4 + UK 4a + 5) of 31,598,477.21, over by exactly UK 4a's 1,500,000.00. "
+        "The same defect is already BANKED in the shipped golden "
+        "tests/expected_outputs/reporting/crr/pillar3__ov1.ndjson, where row 1 a = "
+        "145,511,467.29 against an of-which sum of 148,411,467.29, over by that portfolio's "
+        "UK 4a of 2,900,000.00. Root cause: src/rwa_calc/reporting/pillar3/ov1.py's "
+        "_APPROACH_REFS maps '2' -> ('standardised', 'equity') and 'UK4a' -> ('equity',), so "
+        "UK 4a is keyed on the approach LABEL. The published instruction keys it on the "
+        "treatment: UK 4a is 'equities under the simple risk weighted approach' per CRR "
+        "Art. 155(2), an IRB method, while rows 2/3/5 each read 'excluding the RWEAs disclosed "
+        "in row 4 ... and in row UK 4a' — so the of-which block is meant to partition row 1. "
+        "This leg is Art. 133 SA equity, so it belongs in row 2 and NOT in UK 4a, which makes "
+        "row 2's own 9,850,000.00 correct and UK 4a's repetition the defect. Note for whoever "
+        "fixes it: this is NOT a one-line key swap. The discriminator that would separate the "
+        "two treatments, `equity_method`, is absent from the aggregator exit entirely on this "
+        "portfolio — the only equity column the sealed ledger carries is `equity_type`, and it "
+        "is null on the leg — so the method has to be plumbed through before UK 4a can be keyed "
+        "on it. Basel 3.1 is blind to all of this twice over: the B31 template emits no UK 4a "
+        "row at all, and the B31 equity leg's rwa_final is null anyway (the "
+        "test_every_equity_leg_carries_its_rwea_to_rwa_final defect), so B31 partitions at "
+        "0.00 for two wrong reasons. That is the .claude/LESSONS.md C7 shape — a regime that "
+        "cannot see the defect is not evidence the defect is absent."
+    ),
+)
+def test_the_of_which_rows_partition_the_credit_risk_total(templates) -> None:
+    """OV1 row 1 equals the sum of its "of which" approach rows.
+
+    Arrange: the generated OV1 frames for both regimes.
+    Act: add rows 2, 3, 4, UK 4a and 5 and compare against row 1.
+    Assert: they agree. Rows 2, 3 and 5 each carry the instruction "excluding the
+    RWEAs disclosed in row 4 for specialised lending exposures subject to the
+    slotting approach and in row UK 4a for equities under the simple risk weighted
+    approach", which makes the block a partition of row 1 rather than a set of
+    overlapping subsets. Nothing else in the estate asserts this: the cells check
+    each row against the ledger one at a time, so a leg counted by TWO rows agrees
+    with both of them and only the partition catches it.
+    """
+    breaks: list[str] = []
+    for regime in REGIMES:
+        frame = templates[regime].get("OV1")
+        if frame is None:
+            continue
+        # Presence, not non-zero: a legitimately 0.00 of-which row must stay in the
+        # sum and in the message, or a later reader cannot tell which rows were added.
+        present = [ref for ref in _OV1_OF_WHICH if frame.filter(pl.col("row_ref") == ref).height]
+        whole = _published(frame, "1", "a")
+        pieces = sum(_published(frame, ref, "a") for ref in present)
+        logger.info("C4b %s OV1 row 1 = %.2f vs %s = %.2f", regime, whole, present, pieces)
+        if abs(whole - pieces) > MONEY_TOLERANCE:
+            breaks.append(
+                f"{regime} OV1 r1/a = {whole:,.2f} but rows {'+'.join(present)} sum to "
+                f"{pieces:,.2f} (delta {whole - pieces:,.2f})"
+            )
+    assert not breaks, "OV1 of-which rows do not partition row 1:\n  " + "\n  ".join(breaks)
+
+
 def test_own_funds_columns_are_exactly_eight_percent_of_their_rwea(templates) -> None:
     """Every OV1 column-c cell is 8% of the column-a cell on the SAME row.
 

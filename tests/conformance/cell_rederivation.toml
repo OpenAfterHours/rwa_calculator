@@ -212,9 +212,23 @@ note = """
 the simple-risk-weight equity treatment is an IRB method (Art. 155(2)) and gets
 its own row UK 4a, but this calculator routes equity through the SA equity risk
 weights and labels the approach `equity`, so the SA row is where its RWEA is
-calculated. Row UK 4a is asserted separately and the two must not double-count.
+calculated. Row UK 4a is NOT authored as a cell here, and the two DO double-count
+today — see basis.
 """
-basis = "Origin vs applied basis untested (limits 1)."
+basis = """
+Origin vs applied basis untested (limits 1).
+
+Corrected 2026-08-09, and the correction is the point. This note previously said
+"Row UK 4a is asserted separately and the two must not double-count", which was
+false on both halves: there is no UK 4a cell among these 78, and until now nothing
+in the estate asserted the of-which partition. The sentence was inherited from the
+2026-08-08 draft and carried forward unchecked, which is worse than a wrong
+predicate — it told a later reader the partition was covered, so nobody wrote the
+assertion that finds the live double count.
+`test_the_of_which_rows_partition_the_credit_risk_total` now asserts it and
+xfails: this cell's own 9,850,000.00 (CRR) is believed RIGHT — an Art. 133 SA
+equity leg belongs in row 2 — and it is UK 4a that wrongly repeats it.
+"""
 
 [[cell]]
 id = "ov1-2-c"
@@ -252,9 +266,17 @@ row 4 for specialised lending exposures subject to the slotting approach and in
 row UK 4a for equities under the simple risk weighted approach." The exclusion is
 carried by the approach label itself: a slotting leg carries `slotting`, not
 `foundation_irb`, so no extra clause is needed — but the exclusion is REAL and
-row 3 + row 4 must not double-count, which the partition assertion checks.
+row 3 + row 4 must not double-count.
 """
-basis = "Origin vs applied basis untested (limits 1)."
+basis = """
+Origin vs applied basis untested (limits 1).
+
+Corrected 2026-08-09: this note claimed the double-count was checked by "the
+partition assertion", which did not exist. It does now
+(`test_the_of_which_rows_partition_the_credit_risk_total`), and the row 3 / row 4
+pair is in fact clean — the approach labels are mutually exclusive. It is the
+equity pair (row 2 / UK 4a) that overlaps.
+"""
 
 [[cell]]
 id = "ov1-3-c"
@@ -700,15 +722,23 @@ where = [
 citation = "CRR Annex II C 07.00 r0070 (p.92) / PS1/26 OF 07.00 r0070 (p.93); CRR Art. 24"
 note = """
 "On balance sheet exposures subject to credit risk. Assets referred to in Article
-24 CRR not included in any other category." The side is taken from the CARRIER,
-not from a Boolean clause, because that is what the instruction describes: the
-on-balance-sheet row holds the on-balance-sheet amount of the class, and a leg
-that has both an on- and an off-balance-sheet component contributes to both rows.
+24 CRR not included in any other category." The side is taken from the CARRIER
+rather than from a Boolean clause, because that is what the instruction describes:
+the on-balance-sheet row holds the on-balance-sheet amount of the class.
 """
 basis = """
 Together with r0080 this must partition r0010's c0010 exactly; the test asserts
 that separately. Does not settle which legs are Article 24 assets — a leg wrongly
 typed would move both this row and the total consistently.
+
+Corrected 2026-08-09: this note used to add "and a leg that has both an on- and an
+off-balance-sheet component contributes to both rows", describing a shape this
+portfolio does not contain. MEASURED: 0 legs carry a non-zero
+`reporting_gross_on_bs` AND a non-zero `reporting_gross_off_bs` — the aggregator
+emits a loan row and a contingent row separately, so the two carriers never
+co-occur. The carrier-versus-clause distinction is therefore INERT here, not a
+live claim. Making it live needs a single leg carrying both sides (the
+`facility_undrawn` shape), which would need a new builder leg.
 """
 
 [[cell]]
@@ -750,10 +780,18 @@ where = [
 ]
 citation = "CRR Annex II C 07.00 r0070 x c0200 (pp. 89, 92); CRR Art. 111"
 basis = """
-Here the side IS a row predicate rather than a carrier choice, because the
-exposure value is one number per leg and the leg sits on one side. That asymmetry
-with r0070 x c0010 is deliberate and is itself a claim: if the generator resolved
-the side the same way in both columns, one of the two cells would break.
+Here the side IS a row predicate rather than a carrier choice, because the exposure
+value is one number per leg and the leg sits on one side.
+
+Corrected 2026-08-09: this basis used to call that asymmetry with r0070 x c0010 "a
+claim: if the generator resolved the side the same way in both columns, one of the
+two cells would break." It cannot. MEASURED: 0 legs on this portfolio carry both a
+non-zero `reporting_gross_on_bs` and a non-zero `reporting_gross_off_bs`, so the
+carrier formulation and the Boolean formulation select the same rows and the two
+cells cannot diverge. The asymmetry is a faithful reading of two differently-worded
+instructions, but it is INERT as a discriminator until a leg carries both sides.
+What this cell does still settle is the CCF gap to r0080 x c0200 and the exclusion
+of the null-sided (CCR / settlement) legs from both rows.
 """
 
 [[cell]]
@@ -1465,10 +1503,27 @@ citation = "CRR Annex II C 08.02 rows/columns (p.108) referring to C 08.01 c0110
 basis = """
 Two bands are populated on this sheet, so the band boundary is load-bearing: a
 cell that took the whole class would break here. Slotting is excluded because
-C 08.02 is a grade breakdown and a slotting leg has no obligor grade. The band
-LABEL is the generated row_ref — the boundaries are the published COREP scale,
-but their rendering as a string is not something the instruction text fixes, so
-the address itself is the one part of this cell not independently sourced.
+C 08.02 is a grade breakdown and a slotting leg has no obligor grade.
+
+WEAKEST CELL IN THE FILE ON THE INDEPENDENCE AXIS, corrected 2026-08-09. This
+basis used to say "the boundaries are the published COREP scale". They are NOT
+published anywhere. C 08.01 r0070 (p.107) is explicit in the other direction: "A
+supervisory master scale is not used. Instead, institutions shall determine the
+scale to be used themselves." C 08.02's published row axis is the institution's OWN
+grades in ascending PD order, so ANY banding of them is a reporting choice, and the
+0.25/0.50/0.75/2.50 boundaries used here are the engine's own
+`reporting/corep/templates.py::PD_BANDS` constant, as is the label string. That
+makes the whole ROW AXIS of these two cells engine-derived rather than
+independently sourced — a second copy, not a second opinion, on that axis.
+(.claude/LESSONS.md E4 says the same thing from the other side: band labels live
+only in the template workbook, not the instruction PDFs.)
+
+They still earn their place, on a narrower claim: given the engine's own band
+edges, these cells independently assert WHICH LEGS fall in each band and WHICH
+CARRIER the cell sums, so a band swap, a carrier swap or a widened interval is
+detected — that was demonstrated by mutation (widening this band to 0.025 produced
+a 8,750,000.00 delta). What they cannot detect is a wrong band edge, because both
+sides would move together.
 """
 
 [[cell]]
@@ -1488,7 +1543,11 @@ where = [
   { column = "pd_floored", op = "lt", value = "0.025" },
 ]
 citation = "CRR Annex II C 08.02 rows/columns (p.108) referring to C 08.01 c0110 (p.100); CRR Art. 180"
-basis = "As c0802-corporate-pd025-0110."
+basis = """
+As c0802-corporate-pd025-0110, including its recorded weakness: the band edges and
+the label are the engine's `PD_BANDS`, not a published scale, so this cell's row
+axis is not independently sourced.
+"""
 
 # ===========================================================================
 # C 02.00 / OF 02.00 — own funds requirements (CA2), the footing template.

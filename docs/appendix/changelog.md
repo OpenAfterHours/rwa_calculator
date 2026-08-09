@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **The test suite no longer oversubscribes the machine: 10m50s → 3m56s on the
+  reference dev box, with identical results.** Polars sizes its thread pool from
+  the core count the first time it is imported, and `pytest-xdist` sized its
+  worker fleet the same way via `-n auto`. On a 16-core box that was 16 workers
+  each holding a 16-thread pool — 256 threads contending for 16 cores, each pool
+  carrying its own buffers — while practically every test here pushes a handful
+  of rows through the pipeline, so that parallelism bought nothing.
+
+  `tests/conftest.py` now sets `POLARS_MAX_THREADS=1` (via `os.environ.setdefault`,
+  before the first `import polars`, so it applies in the controller and in every
+  xdist worker), and `addopts` pins `-n 8` instead of `-n auto` because the
+  binding constraint is RAM rather than cores. Measured on the same commit:
+  **652s → 237s wall, peak system memory 4819 MB → 4419 MB**, with the failure
+  set unchanged. On a fully green tree the memory saving is larger — a
+  green-to-green comparison measured **7301 MB → 4350 MB peak** and available
+  memory at the low-water mark rising from 508 MB to 3459 MB.
+
+  Two guards come with it. `tests/contracts/test_polars_thread_cap.py` asserts
+  the pool size actually agrees with the environment, because setting the
+  variable after the first `import polars` is a silent no-op that costs the
+  whole win while leaving every test green. And the CI benchmark job now exports
+  the real core count, so benchmarks keep measuring production-like throughput;
+  `setdefault` is what lets that override win. Note that
+  `POLARS_MAX_THREADS=0` must never be used — Polars accepts it at import and
+  then panics at compute time with "Worker threads cannot be set to 0".
+
+  `-v` is also dropped from `addopts`: 11k verbose result lines were pushed
+  through the xdist protocol and scrolled past, and `--tb=short` already gives
+  the diagnostic on failure. Override per-invocation as usual (`-n auto`,
+  `-n 0`, `-v`); a single-file run is much faster serially — 13.4s → 2.3s for
+  `tests/unit/test_ccf.py`, since below roughly a dozen files the worker
+  startup costs more than the tests.
+
 ### Fixed
 - **PS1/26 Art. 154(4A)(b): the 10% IRB mortgage RWEA floor is now confined to
   non-defaulted retail exposures secured by residential immovable property

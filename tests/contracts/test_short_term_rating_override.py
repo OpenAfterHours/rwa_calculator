@@ -15,8 +15,8 @@ corporates). The engine trusts the producer.
 
 References:
 - PRA PS1/26 Art. 120(2B), Art. 122(3): short-term ECAI assessment tables
-- src/rwa_calc/engine/hierarchy.py::HierarchyResolver._apply_short_term_rating_override
-- src/rwa_calc/engine/sa/namespace.py::_b31_append_institution_maturity_branches
+- src/rwa_calc/engine/stages/hierarchy/resolver.py::HierarchyResolver._apply_short_term_rating_override
+- src/rwa_calc/engine/sa/risk_weights.py::_b31_append_institution_maturity_branches
 """
 
 from __future__ import annotations

@@ -53,7 +53,7 @@ References:
     - PRA PS1/26 Art. 128: re-introduction of high-risk 150% from 1 Jan 2027.
     - docs/specifications/crr/sa-risk-weights.md §High-Risk Exposures (Art. 128).
     - src/rwa_calc/data/schemas.py: VALID_ENTITY_TYPES (lines 547-549).
-    - src/rwa_calc/engine/classifier.py: entity_class_mapping (lines 60-64).
+    - engine/stages/classify/: entity_class_mapping (lines 60-64).
 
 Usage:
     uv run python tests/fixtures/p2_14/p2_14.py

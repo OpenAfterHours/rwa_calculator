@@ -202,7 +202,7 @@ counterparties = (
 **Input:** `RawDataBundle`
 **Output:** `ResolvedHierarchyBundle`
 
-See the [`engine/stages/hierarchy/`](https://github.com/OpenAfterHours/rwa_calculator/tree/master/src/rwa_calc/engine/stages/hierarchy) package (`resolver.py`, `graph.py`, `ratings.py`, …) for implementation. (`engine/hierarchy.py` is now a back-compat import shim.)
+See the [`engine/stages/hierarchy/`](https://github.com/OpenAfterHours/rwa_calculator/tree/master/src/rwa_calc/engine/stages/hierarchy) package (`resolver.py`, `graph.py`, `ratings.py`, …) for implementation.
 
 Transformations:
 - Resolve parent-child relationships
@@ -230,7 +230,7 @@ See [`engine/stages/hierarchy/resolver.py`](https://github.com/OpenAfterHours/rw
 **Input:** `ResolvedHierarchyBundle`
 **Output:** `ClassifiedExposuresBundle`
 
-See the [`engine/stages/classify/`](https://github.com/OpenAfterHours/rwa_calculator/tree/master/src/rwa_calc/engine/stages/classify) package (`classifier.py`, `attributes.py`, `subtypes.py`, `permissions.py`, `approach.py`, `audit.py`) for implementation. (`engine/classifier.py` is now a back-compat import shim.)
+See the [`engine/stages/classify/`](https://github.com/OpenAfterHours/rwa_calculator/tree/master/src/rwa_calc/engine/stages/classify) package (`classifier.py`, `attributes.py`, `subtypes.py`, `permissions.py`, `approach.py`, `audit.py`) for implementation.
 
 Transformations:
 - Assign exposure class

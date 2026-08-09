@@ -39,7 +39,7 @@ from rwa_calc.contracts.bundles import (
 )
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, PermissionMode
-from rwa_calc.engine.classifier import ExposureClassifier
+from rwa_calc.engine.stages.classify import ExposureClassifier
 
 # ---------------------------------------------------------------------------
 # Helpers

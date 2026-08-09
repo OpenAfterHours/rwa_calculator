@@ -30,13 +30,13 @@ from rwa_calc.contracts.bundles import (
 )
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.schemas import RATINGS_SCHEMA
-from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.crm.processor import CRMProcessor
-from rwa_calc.engine.hierarchy import HierarchyResolver
 from rwa_calc.engine.irb.calculator import IRBCalculator
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from rwa_calc.engine.sa.calculator import SACalculator
 from rwa_calc.engine.slotting.calculator import SlottingCalculator
+from rwa_calc.engine.stages.classify import ExposureClassifier
+from rwa_calc.engine.stages.hierarchy import HierarchyResolver
 from tests.fixtures.irb_test_helpers import (
     create_firb_only_model_permissions,
     create_full_irb_model_permissions,

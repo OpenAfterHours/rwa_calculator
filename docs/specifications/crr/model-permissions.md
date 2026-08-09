@@ -310,7 +310,7 @@ per-exposure `model_id` lookup against the `model_permissions` data source.
   — `IRBPermissions`, `PermissionMode`, `CalculationConfig.permission_mode`.
 - Per-exposure `model_id` lookup against the `model_permissions` data source happens
   in [`engine/stages/classify/permissions.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/classify/permissions.py)
-  (the `engine/classifier.py` shim re-exports it for back-compat)
+  (imported from the `engine/stages/classify/` package)
   — fall-back to SA on missing/invalid `model_id` is documented there.
 - Schema for the `model_permissions` data source is in
   [`data/schemas.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/data/schemas.py)

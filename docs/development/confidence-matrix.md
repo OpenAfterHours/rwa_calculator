@@ -48,7 +48,7 @@ Package version `0.3.24`. Resolved packs:
 |---|---|---|---|---|---|---|
 | 1 | 0 | 0 | 0 | 0 | 1 | GAP |
 | 2 | 0 | 0 | 0 | 0 | 1 | GAP |
-| 4 | 0 | 0 | 10 | 0 | 4 | UNCITED |
+| 4 | 0 | 0 | 9 | 0 | 4 | UNCITED |
 | 6 | 0 | 0 | 8 | 0 | 6 | UNCITED |
 | 34 | 0 | 0 | 3 | 0 | 3 | UNCITED |
 | 36 | 0 | 0 | 0 | 0 | 3 | GAP |
@@ -60,7 +60,7 @@ Package version `0.3.24`. Resolved packs:
 | 109 | 1 | 0 | 5 | 0 | 1 | MEDIUM |
 | 110 | 0 | 1 | 4 | 0 | 6 | MEDIUM |
 | 111 | 6 | 10 | 20 | 0 | 32 | MEDIUM |
-| 112 | 4 | 3 | 19 | 0 | 31 | MEDIUM |
+| 112 | 4 | 3 | 18 | 0 | 31 | MEDIUM |
 | 113 | 2 | 2 | 11 | 0 | 10 | MEDIUM |
 | 114 | 8 | 6 | 14 | 7 | 27 | HIGH |
 | 115 | 5 | 10 | 6 | 2 | 9 | HIGH |
@@ -73,7 +73,7 @@ Package version `0.3.24`. Resolved packs:
 | 122 | 3 | 4 | 5 | 6 | 64 | HIGH |
 | 123 | 4 | 7 | 12 | 2 | 25 | HIGH |
 | 124 | 1 | 2 | 6 | 2 | 6 | HIGH |
-| 125 | 1 | 3 | 15 | 2 | 11 | HIGH |
+| 125 | 1 | 3 | 14 | 2 | 11 | HIGH |
 | 126 | 2 | 4 | 10 | 2 | 11 | HIGH |
 | 127 | 1 | 4 | 3 | 2 | 7 | HIGH |
 | 128 | 0 | 3 | 7 | 0 | 5 | MEDIUM |
@@ -93,7 +93,7 @@ Package version `0.3.24`. Resolved packs:
 | 141 | 1 | 0 | 1 | 0 | 0 | LOW |
 | 142 | 1 | 0 | 4 | 0 | 5 | MEDIUM |
 | 143 | 1 | 0 | 6 | 0 | 8 | MEDIUM |
-| 147 | 5 | 5 | 21 | 0 | 22 | MEDIUM |
+| 147 | 5 | 5 | 20 | 0 | 22 | MEDIUM |
 | 148 | 2 | 0 | 8 | 0 | 5 | MEDIUM |
 | 150 | 1 | 0 | 4 | 0 | 5 | MEDIUM |
 | 151 | 1 | 0 | 2 | 0 | 4 | MEDIUM |
@@ -139,7 +139,7 @@ Package version `0.3.24`. Resolved packs:
 | 221 | 0 | 0 | 2 | 0 | 1 | UNCITED |
 | 222 | 2 | 10 | 5 | 0 | 7 | MEDIUM |
 | 223 | 4 | 0 | 17 | 0 | 26 | MEDIUM |
-| 224 | 4 | 10 | 12 | 0 | 43 | MEDIUM |
+| 224 | 4 | 10 | 11 | 0 | 43 | MEDIUM |
 | 226 | 2 | 0 | 4 | 0 | 19 | MEDIUM |
 | 227 | 0 | 2 | 3 | 0 | 1 | MEDIUM |
 | 228 | 0 | 0 | 1 | 0 | 2 | UNCITED |
@@ -231,7 +231,7 @@ Package version `0.3.24`. Resolved packs:
 | 124A | 0 | 0 | 0 | 0 | 4 | GAP |
 | 124C | 0 | 0 | 4 | 0 | 0 | UNCITED |
 | 124E | 1 | 2 | 2 | 0 | 2 | MEDIUM |
-| 124F | 1 | 4 | 10 | 2 | 14 | HIGH |
+| 124F | 1 | 4 | 9 | 2 | 14 | HIGH |
 | 124G | 0 | 3 | 1 | 2 | 5 | HIGH |
 | 124H | 0 | 5 | 5 | 1 | 3 | HIGH |
 | 124I | 0 | 4 | 2 | 2 | 3 | HIGH |
@@ -332,7 +332,7 @@ These articles are named in `src/rwa_calc/` production source but carry no `@cit
 | CRR 6 | 8 | 0 | 6 | — | — |
 | CRR 280b | 1 | 0 | 6 | — | — |
 | PS1/26 222 | 4 | 0 | 5 | — | CRR Art. 222 |
-| CRR 4 | 10 | 0 | 4 | — | PS1/26 para. 4 |
+| CRR 4 | 9 | 0 | 4 | — | PS1/26 para. 4 |
 | PS1/26 239 | 1 | 0 | 4 | — | — |
 | CRR 34 | 3 | 0 | 3 | — | — |
 | PS1/26 120A | 4 | 0 | 3 | — | — |

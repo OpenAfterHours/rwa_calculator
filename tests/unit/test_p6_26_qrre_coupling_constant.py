@@ -6,8 +6,15 @@ Three assertions:
 3. Behaviour-preservation pin: QRRE columns propagate through HierarchyResolver
    unchanged after the refactor.
 
-Tests 1 and 2 are expected to FAIL until the engine-implementer lands the change.
-Test 3 is expected to PASS (regression guard against accidental breakage).
+All three must PASS — the P6.26 refactor has landed, so these are standing
+regression guards.
+
+The constant and the two coupled sites moved into the
+``rwa_calc.engine.stages.hierarchy`` stage package (migration Phase 4 Slice 2):
+the constant lives in the package ``__init__``, Site A in ``facility_undrawn``
+and Site B in ``enrich``. Test 2 therefore scans the whole stage package rather
+than a single module — while it pointed at the old ``engine/hierarchy.py``
+back-compat shell it was vacuous, because the shell held no implementation.
 """
 
 from __future__ import annotations
@@ -18,9 +25,9 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-import rwa_calc.engine.hierarchy as hierarchy_module
+import rwa_calc.engine.stages.hierarchy as hierarchy_module
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.engine.hierarchy import HierarchyResolver
+from rwa_calc.engine.stages.hierarchy import HierarchyResolver
 from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
@@ -47,7 +54,7 @@ def test_facility_qrre_coupled_columns_constant_exists() -> None:
     # Act / Assert — test fails here until the constant is added
     assert hasattr(hierarchy_module, "_FACILITY_QRRE_COUPLED_COLUMNS"), (
         "missing module-level constant _FACILITY_QRRE_COUPLED_COLUMNS in "
-        "rwa_calc.engine.hierarchy; add it as part of the P6.26 refactor"
+        "rwa_calc.engine.stages.hierarchy; add it as part of the P6.26 refactor"
     )
     assert expected == hierarchy_module._FACILITY_QRRE_COUPLED_COLUMNS, (
         f"_FACILITY_QRRE_COUPLED_COLUMNS = {hierarchy_module._FACILITY_QRRE_COUPLED_COLUMNS!r} "
@@ -62,15 +69,23 @@ def test_facility_qrre_coupled_columns_constant_exists() -> None:
 
 def test_qrre_coupling_todo_marker_removed() -> None:
     """The TODO(qrre-coupling) comment must be replaced by an explanatory
-    comment referencing _FACILITY_QRRE_COUPLED_COLUMNS after the P6.26
-    refactor lands."""
-    # Arrange
-    source_path = Path(hierarchy_module.__file__)
-    source = source_path.read_text()
+    comment referencing _FACILITY_QRRE_COUPLED_COLUMNS.
 
-    # Act / Assert — test fails here until the TODO is removed
-    assert "TODO(qrre-coupling)" not in source, (
-        "TODO(qrre-coupling) marker still present in rwa_calc/engine/hierarchy.py; "
+    Scans every module in the hierarchy stage package, not just the one that
+    declares the constant — the marker's original home was the undrawn-synthesis
+    and enrich code paths, which now live in sibling modules.
+    """
+    # Arrange
+    package_dir = Path(hierarchy_module.__file__).parent
+    sources = sorted(package_dir.glob("*.py"))
+    assert sources, f"no modules found under {package_dir}; the scan would be vacuous"
+
+    # Act
+    offenders = [p.name for p in sources if "TODO(qrre-coupling)" in p.read_text()]
+
+    # Assert
+    assert not offenders, (
+        f"TODO(qrre-coupling) marker still present in {offenders} under {package_dir}; "
         "P6.26 requires replacing it with an explanatory comment that references "
         "_FACILITY_QRRE_COUPLED_COLUMNS"
     )

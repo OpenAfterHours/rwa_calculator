@@ -11,26 +11,27 @@ Each component implements a protocol from rwa_calc.contracts.protocols.
 
 Modules:
     loader: Data loading from files/databases
-    hierarchy: Counterparty and facility hierarchy resolution
-    classifier: Exposure classification and approach assignment
-    aggregator: Result aggregation and output floor application
-    pipeline: Pipeline orchestration
+    registry: The ordered, literal StageSpec list folded by the orchestrator
+    orchestrator: run_stages — threads an immutable PipelineContext
+    pipeline: Run-lifecycle facade (run_id, edge capture, audit persistence)
 
 Subpackages:
+    stages: One package or module per registered pipeline stage. Each holds
+        its own stage recipe plus the uniform
+        ``run(ctx, rulepack, run_config)`` adapter — e.g. stages.hierarchy
+        (HierarchyResolver), stages.classify (ExposureClassifier),
+        stages.re_split (RealEstateSplitter), stages.fx (FXConverter).
     crm: Credit Risk Mitigation processing
     sa: Standardised Approach calculator
     irb: IRB approach calculator
     slotting: Specialised lending slotting calculator
-
-Polars Namespaces:
-    All namespaces are registered when their parent modules are imported.
-    - lf.irb: IRB approach calculations
-    - lf.slotting: Specialised lending slotting
+    equity: Equity exposure calculator
+    aggregator: Result aggregation and output floor application
 """
 
-from .hierarchy import HierarchyResolver
 from .loader import CSVLoader, ParquetLoader
 from .pipeline import PipelineOrchestrator, create_pipeline, create_test_pipeline
+from .stages.hierarchy import HierarchyResolver
 
 __all__ = [
     "ParquetLoader",

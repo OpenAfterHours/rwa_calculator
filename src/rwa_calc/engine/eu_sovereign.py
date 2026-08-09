@@ -143,7 +143,7 @@ def denomination_currency_expr(schema_names: list[str] | set[str]) -> pl.Expr:
     """
     Return the expression for an exposure's denomination (pre-FX) currency.
 
-    The pipeline's FX converter (``engine/fx_converter.py``) overwrites
+    The pipeline's FX converter (``engine/stages/fx/``) overwrites
     ``currency`` with the reporting currency and stores the original
     denomination in ``original_currency``. Every check that compares the
     exposure's currency against a regulatory domestic currency (CRR Art. 114(4)

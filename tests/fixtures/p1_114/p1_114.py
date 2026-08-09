@@ -32,7 +32,7 @@ Optional FIRB RWA (CRR Art. 153(1), Art. 161(1)(a)):
     Hand-calc: K≈0.0805, RWA≈1_066_427 on EAD=1_000_000.
 
 References:
-    - src/rwa_calc/engine/classifier.py (defect site)
+    - engine/stages/classify/ (defect site)
     - CRR Art. 143 (model use scope)
     - CRR Art. 153(1), Art. 161(1)(a) (FIRB risk-weight formula + LGD)
     - tests/fixtures/model_permissions/model_permissions.py (existing pattern)

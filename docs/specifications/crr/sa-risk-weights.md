@@ -1076,7 +1076,7 @@ A naïve LTV-band reading ("90% LTV → 75%") would assign 75% to the whole
     regardless of whether the borrower is an individual, SME, corporate, or
     institution. In the calculator the eligibility routes are:
 
-    - **`RETAIL_MORTGAGE`** — assigned by `engine/classifier.py` when the
+    - **`RETAIL_MORTGAGE`** — assigned by `engine/stages/classify/` when the
       exposure is `is_mortgage=True` and the counterparty is an individual
       (or already classified as `RETAIL_OTHER`). This bucket consumes the
       Art. 125 split directly in the SA calculator.

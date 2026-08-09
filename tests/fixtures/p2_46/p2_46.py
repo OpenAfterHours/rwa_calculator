@@ -63,7 +63,7 @@ References:
     - COREP C 07.00/OF 07.00 Section 1 rows 0050/0060 (templates.py L298-299)
     - data/schemas.py L733 MODEL_PERMISSIONS_SCHEMA
     - data/schemas.py L1368 VALID_MODEL_PERMISSION_APPROACHES
-    - engine/classifier.py L1374-1492 _resolve_model_permissions / sa_block
+    - engine/stages/classify/ _resolve_model_permissions / sa_block
     - reporting/corep/generator.py L3703-3725 _c07_section1_subset
 
 Usage:

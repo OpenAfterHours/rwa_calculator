@@ -14,6 +14,8 @@ Each stage receives an immutable bundle, returns a new immutable bundle. Never m
 
 The stages are wired as a fold (migration Phase 4): `engine/registry.py` is the single ordered, **literal** stage list (`StageSpec` entries — no conditionals; arch_check check 15), `engine/orchestrator.py::run_stages` threads an immutable `PipelineContext` (typed `ArtifactKey[T]` map, `contracts/context.py`) through one `run(ctx, rulepack, run_config) -> PipelineContext` adapter per stage under `engine/stages/` (arch_check check 16). `rulepack` is `RulepackV0` (`rwa_calc.rulebook`), the frozen regime facade built once per run. `engine/pipeline.py` remains the facade owning the run lifecycle (run_id, edge capture, FX-rate sync, error merge, audit persistence).
 
+Each stage package is the **single home** of its component — there is no top-level alias module. Import `HierarchyResolver` from `engine.stages.hierarchy`, `ExposureClassifier` from `engine.stages.classify`, `RealEstateSplitter` from `engine.stages.re_split`, `FXConverter` from `engine.stages.fx`. When an implementation moves, delete the old module and repoint its importers; never leave a back-compat shell behind (arch_check check 18). The four shells the Phase 4 slices left behind were deleted once one of them was found silently disarming a regression guard that read `module.__file__`.
+
 ### Key Design Patterns
 - **Protocols** (`contracts/protocols.py`): All components implement structural `Protocol` interfaces — not abstract base classes. New components must define and implement a protocol.
 - **Frozen dataclass bundles** (`contracts/bundles.py`): All inter-stage data transfer uses `@dataclass(frozen=True)`. Never use plain dicts for stage outputs.
@@ -224,7 +226,7 @@ load-bearing:
 
 A lesson that reaches production **twice** has proven it cannot survive as
 prose — graduate it to an executable check, or file the graduation as a Tier 1
-plan item. `scripts/arch_check.py`'s 17 numbered checks and the supervisory
+plan item. `scripts/arch_check.py`'s 18 numbered checks and the supervisory
 validation register are what graduated lessons look like.
 
 The clearest worked example is the **skill-value graduation (2026-08-08)**. The

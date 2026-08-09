@@ -63,6 +63,36 @@
         "regime": "b31"
       },
       {
+        "source": "reporting",
+        "portfolio": "re-split",
+        "regime": "crr"
+      },
+      {
+        "source": "reporting",
+        "portfolio": "re-split",
+        "regime": "b31"
+      },
+      {
+        "source": "reporting",
+        "portfolio": "fcsm",
+        "regime": "crr"
+      },
+      {
+        "source": "reporting",
+        "portfolio": "fcsm",
+        "regime": "b31"
+      },
+      {
+        "source": "reporting",
+        "portfolio": "art199",
+        "regime": "crr"
+      },
+      {
+        "source": "reporting",
+        "portfolio": "art199",
+        "regime": "b31"
+      },
+      {
         "source": "corpus",
         "portfolio": "sa_broad",
         "regime": "crr"
@@ -127,27 +157,27 @@
       "BASEL_3_1",
       "CRR"
     ],
-    "runs": 24,
-    "prior_period_runs": 6,
+    "runs": 30,
+    "prior_period_runs": 8,
     "config_source": "each portfolio runs under its OWN canonical config - RUNS in tests/acceptance/reporting/test_supervisory_validations.py for the reporting fixtures, tests/properties/portfolios.py::config_for for the corpus. One uniform config would strand six portfolios in the missing-model_permissions SA fallback and record their IRB columns dead.",
     "excludes": {
       "tests/fixtures/reporting_re_split_portfolio.py": "not referenced in RUNS as at 2026-08-09; its canonical config lives in tests/acceptance/reporting/test_re_split_template_coverage.py. Register it in RUNS and re-bank - the RE-split columns it exercises are currently NO_FIXTURE.",
       "tests/fixtures/reporting_funded_protection_portfolio.py": "not referenced in RUNS as at 2026-08-09; its canonical config lives in tests/acceptance/reporting/test_funded_protection_coverage.py. Register it in RUNS and re-bank - it should move the Simple Method (C 07.00 col 0070) and Art. 199 (C 08.01/02 cols 0200/0210, CR7-A cols e/f) columns off NO_FIXTURE."
     },
-    "seconds": 348.6
+    "seconds": 194.7
   },
   "counts": {
     "template_column_pairs": 339,
-    "live": 203,
-    "dead": 136,
+    "live": 210,
+    "dead": 129,
     "emitted_pairs": 329,
     "never_emitted_pairs": 10,
     "non_numeric_columns_excluded": 4,
-    "frames": 626,
-    "numeric_cells": 211270,
-    "non_null_cells": 37069,
-    "non_zero_cells": 10442,
-    "cell_fill_pct": 4.94
+    "frames": 719,
+    "numeric_cells": 237861,
+    "non_null_cells": 43073,
+    "non_zero_cells": 11494,
+    "cell_fill_pct": 4.83
   },
   "caveats": [
     "reporting/rich/crr: C 02.00: row 0300 (13622029.83) exceeds its class breakdown 0310+0330+0340+0370 (15245.72) by 13606784.12 \u2014 an (approach, class) pair with no row in the layout; the RWEA is counted in the approach total but absent from the of-which rows",
@@ -310,18 +340,6 @@
       "status": "always_zero"
     },
     {
-      "id": "corep/c08_01/0200",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Other eligible collateral: other physical (Art. 199) - binds reporting_crm_lgd_other_physical; no IRB fixture pledges it, fixtures for the Art. 199 non-financial collateral columns are in flight.",
-      "status": "always_zero"
-    },
-    {
-      "id": "corep/c08_01/0210",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Other eligible collateral: receivables (Art. 199) - binds reporting_crm_lgd_receivables; no IRB fixture pledges it, fixtures for the Art. 199 non-financial collateral columns are in flight.",
-      "status": "always_zero"
-    },
-    {
       "id": "corep/c08_01/0220",
       "reason_code": "NO_FIXTURE",
       "reason": "Subject to double default treatment - binds double_default_unfunded_protection, a declared input; no fixture elects double default.",
@@ -469,18 +487,6 @@
       "id": "corep/c08_02/0173",
       "reason_code": "ENGINE_CANNOT_PRODUCE",
       "reason": "Instruments held by a third party - bound to the recorded constant 0.0; the sub-item has no carrier.",
-      "status": "always_zero"
-    },
-    {
-      "id": "corep/c08_02/0200",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Other eligible collateral: other physical (Art. 199) - binds reporting_crm_lgd_other_physical; no IRB fixture pledges it, fixtures for the Art. 199 non-financial collateral columns are in flight.",
-      "status": "always_zero"
-    },
-    {
-      "id": "corep/c08_02/0210",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Other eligible collateral: receivables (Art. 199) - binds reporting_crm_lgd_receivables; no IRB fixture pledges it, fixtures for the Art. 199 non-financial collateral columns are in flight.",
       "status": "always_zero"
     },
     {
@@ -784,12 +790,6 @@
       "status": "always_zero"
     },
     {
-      "id": "p3/cr5/m",
-      "reason_code": "NO_FIXTURE",
-      "reason": "SA exposures by risk weight, bucket CRR 370% / B31 60% - no exposure in the estate is weighted here.",
-      "status": "always_zero"
-    },
-    {
       "id": "p3/cr5/n",
       "reason_code": "NO_FIXTURE",
       "reason": "SA exposures by risk weight, bucket CRR 1250% / B31 65% - no exposure in the estate is weighted here.",
@@ -865,18 +865,6 @@
       "id": "p3/cr7a/b",
       "reason_code": "NO_FIXTURE",
       "reason": "FCP: financial collateral (%) - binds cr7a_capped_collateral_financial_value over EAD, and collateral_financial_value is zero on every run in the estate, including the A-IRB legs that pledge cash. A fixture pledging eligible financial collateral to an IRB obligor should light it; if it cannot, the binding is the defect.",
-      "status": "always_zero"
-    },
-    {
-      "id": "p3/cr7a/e",
-      "reason_code": "NO_FIXTURE",
-      "reason": "FCP: receivables (%) (Art. 199) - no IRB fixture pledges receivables, fixtures for the Art. 199 non-financial collateral columns are in flight.",
-      "status": "always_zero"
-    },
-    {
-      "id": "p3/cr7a/f",
-      "reason_code": "NO_FIXTURE",
-      "reason": "FCP: other physical collateral (%) (Art. 199) - no IRB fixture pledges it, fixtures for the Art. 199 non-financial collateral columns are in flight.",
       "status": "always_zero"
     },
     {
@@ -1011,6 +999,8 @@
     "corep/c08_01/0125",
     "corep/c08_01/0180",
     "corep/c08_01/0190",
+    "corep/c08_01/0200",
+    "corep/c08_01/0210",
     "corep/c08_01/0230",
     "corep/c08_01/0250",
     "corep/c08_01/0251",
@@ -1036,6 +1026,8 @@
     "corep/c08_02/0125",
     "corep/c08_02/0180",
     "corep/c08_02/0190",
+    "corep/c08_02/0200",
+    "corep/c08_02/0210",
     "corep/c08_02/0230",
     "corep/c08_02/0250",
     "corep/c08_02/0251",
@@ -1145,6 +1137,7 @@
     "p3/cr5/j",
     "p3/cr5/k",
     "p3/cr5/l",
+    "p3/cr5/m",
     "p3/cr5/p",
     "p3/cr5/q",
     "p3/cr5/r",
@@ -1168,6 +1161,8 @@
     "p3/cr7a/a",
     "p3/cr7a/c",
     "p3/cr7a/d",
+    "p3/cr7a/e",
+    "p3/cr7a/f",
     "p3/cr7a/k",
     "p3/cr7a/m",
     "p3/cr7a/n",

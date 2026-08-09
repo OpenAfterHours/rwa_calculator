@@ -375,6 +375,8 @@
         "tests/fixtures/reporting_offbs_portfolio.py",
         "tests/properties/corpus.py",
         "tests/properties/portfolios.py",
+        "tests/properties/test_collapse_conservation.py",
+        "tests/properties/test_source_conservation.py",
         "tests/properties/test_structural_invariants.py",
         "tests/unit/classifier/test_p1_244_qrre_gates.py",
         "tests/unit/crm/test_ead_for_crm.py",
@@ -1089,6 +1091,7 @@
         "engine/sa/risk_weights.py",
         "engine/stages/classify/attributes.py",
         "engine/stages/hierarchy/enrich.py",
+        "engine/stages/re_split/carriers.py",
         "engine/supporting_factors.py",
         "engine/thresholds.py",
         "rulebook/packs/common.py",
@@ -1144,15 +1147,20 @@
         "data/schemas.py",
         "engine/sa/risk_weights.py",
         "engine/stages/re_split/__init__.py",
+        "engine/stages/re_split/carriers.py",
         "engine/stages/re_split/flagging.py",
         "engine/stages/re_split/splitter.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_181_art_126_cre_proportion_split.py",
+        "tests/acceptance/reporting/test_re_split_template_coverage.py",
         "tests/fixtures/p1_181/p1_181.py",
+        "tests/fixtures/reporting_re_split_portfolio.py",
+        "tests/integration/test_re_split_carrier_conservation.py",
         "tests/integration/test_re_split_pipeline_mixed.py",
         "tests/oracle/derivations/sa_crr.py",
         "tests/unit/reporting/corep/test_c07.py",
+        "tests/unit/test_re_split_carrier_classification.py",
         "tests/unit/test_real_estate_splitter.py"
       ],
       "watchfire_index_gap": false
@@ -1184,6 +1192,7 @@
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/risk_weights.py",
         "engine/stages/re_split/__init__.py",
+        "engine/stages/re_split/carriers.py",
         "engine/stages/re_split/flagging.py",
         "engine/stages/re_split/params.py",
         "engine/stages/re_split/splitter.py",
@@ -1193,13 +1202,22 @@
       ],
       "test_files": [
         "tests/acceptance/crr/test_scenario_crr_a_sa.py",
+        "tests/acceptance/reporting/test_re_split_template_coverage.py",
+        "tests/contracts/test_collapse_additivity.py",
+        "tests/fixtures/reporting_re_split_portfolio.py",
+        "tests/integration/test_re_split_carrier_conservation.py",
         "tests/integration/test_re_split_pipeline.py",
         "tests/integration/test_re_split_pipeline_mixed.py",
         "tests/oracle/derivations/branch_sa.py",
         "tests/oracle/derivations/formulas.py",
         "tests/oracle/derivations/sa_crr.py",
+        "tests/properties/corpus.py",
+        "tests/properties/portfolios.py",
+        "tests/properties/test_collapse_conservation.py",
         "tests/properties/test_differential_shadow.py",
+        "tests/properties/test_re_split_financial_collateral.py",
         "tests/properties/test_regime_deltas.py",
+        "tests/properties/test_source_conservation.py",
         "tests/unit/crr/test_crr_tables.py",
         "tests/unit/rulebook/test_re_split_features.py",
         "tests/unit/test_real_estate_splitter.py"
@@ -1233,6 +1251,7 @@
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/risk_weights.py",
         "engine/stages/hierarchy/enrich.py",
+        "engine/stages/re_split/carriers.py",
         "engine/stages/re_split/flagging.py",
         "engine/stages/re_split/params.py",
         "engine/stages/re_split/splitter.py"
@@ -1240,12 +1259,16 @@
       "test_files": [
         "tests/acceptance/crr/test_p1_181_art_126_cre_proportion_split.py",
         "tests/acceptance/crr/test_scenario_crr_a_sa.py",
+        "tests/acceptance/reporting/test_re_split_template_coverage.py",
         "tests/fixtures/exposures/loans.py",
         "tests/fixtures/generate_all.py",
         "tests/fixtures/p1_181/p1_181.py",
         "tests/fixtures/reporting_portfolio.py",
+        "tests/fixtures/reporting_re_split_portfolio.py",
         "tests/integration/test_re_split_pipeline_mixed.py",
         "tests/oracle/derivations/sa_crr.py",
+        "tests/properties/corpus.py",
+        "tests/properties/portfolios.py",
         "tests/unit/crr/test_crr_tables.py",
         "tests/unit/rulebook/test_re_split_features.py",
         "tests/unit/test_real_estate_splitter.py"
@@ -2213,6 +2236,7 @@
         "engine/stages/classify/classifier.py",
         "engine/stages/classify/subtypes.py",
         "engine/stages/hierarchy/unify.py",
+        "engine/stages/re_split/carriers.py",
         "rulebook/packs/crr.py"
       ],
       "test_files": [
@@ -2281,6 +2305,7 @@
         "tests/acceptance/crr/test_p1_273_art_211_lease_collateral.py",
         "tests/acceptance/crr/test_p1_278_art_160_2_top_down_pd.py",
         "tests/acceptance/crr/test_scenario_crr_b_firb.py",
+        "tests/contracts/test_collateral_type_dispatch.py",
         "tests/fixtures/ccr/golden_ccr_irb1.py",
         "tests/fixtures/ccr/golden_ccr_sft_irb_maturity.py",
         "tests/fixtures/exposures/loans.py",
@@ -2521,6 +2546,7 @@
         "tests/fixtures/p1_197/p1_197.py",
         "tests/fixtures/p2_30/p2_30.py",
         "tests/fixtures/p2_32/p2_32.py",
+        "tests/properties/test_source_conservation.py",
         "tests/unit/reporting/corep/test_c07_gross_side_carriers.py",
         "tests/unit/reporting/corep/test_c08_01.py",
         "tests/unit/rulebook/test_ccf_features.py",
@@ -2650,6 +2676,8 @@
         "engine/crm/simple_method.py"
       ],
       "test_files": [
+        "tests/acceptance/reporting/test_funded_protection_coverage.py",
+        "tests/fixtures/reporting_funded_protection_portfolio.py",
         "tests/unit/crm/test_simple_method.py"
       ],
       "watchfire_index_gap": false
@@ -2751,6 +2779,7 @@
         "tests/contracts/test_r1_gross_carrier_edge.py",
         "tests/fixtures/exposures/loans.py",
         "tests/fixtures/r1_negative_gross/r1_negative_gross.py",
+        "tests/properties/test_source_conservation.py",
         "tests/unit/crm/test_collateral_submodules.py",
         "tests/unit/test_hierarchy.py",
         "tests/unit/test_r1_negative_amount_dq.py"
@@ -2780,12 +2809,17 @@
         "tests/acceptance/crr/test_p1_234_art_197_securitisation_collateral.py",
         "tests/acceptance/crr/test_p1_271_art_198_non_main_index_equity.py",
         "tests/acceptance/crr/test_p1_96_art_197_covered_bond_eligibility.py",
+        "tests/contracts/test_collateral_type_dispatch.py",
         "tests/contracts/test_errors.py",
         "tests/fixtures/collateral/collateral.py",
         "tests/fixtures/generate_all.py",
         "tests/fixtures/p1_186/p1_186.py",
         "tests/fixtures/p1_233/p1_233.py",
         "tests/fixtures/p1_96/p1_96.py",
+        "tests/fixtures/reporting_re_split_portfolio.py",
+        "tests/properties/portfolios.py",
+        "tests/properties/test_re_split_financial_collateral.py",
+        "tests/properties/test_source_conservation.py",
         "tests/unit/crm/test_bond_eligibility.py",
         "tests/unit/crm/test_crm018_rollup.py"
       ],
@@ -2830,10 +2864,14 @@
         "tests/acceptance/crr/test_p1_165_art_230_receivables_no_volatility_haircut.py",
         "tests/acceptance/crr/test_p1_235_art_199_firb_fcm_eligibility.py",
         "tests/acceptance/crr/test_p1_273_art_211_lease_collateral.py",
+        "tests/acceptance/reporting/test_funded_protection_coverage.py",
+        "tests/contracts/test_collateral_type_dispatch.py",
         "tests/fixtures/p1_165/p1_165.py",
         "tests/fixtures/p1_190/p1_190.py",
         "tests/fixtures/p1_235/p1_235.py",
         "tests/fixtures/p1_273/p1_273.py",
+        "tests/fixtures/reporting_funded_protection_portfolio.py",
+        "tests/properties/portfolios.py",
         "tests/unit/crm/test_p1_235_firb_fcm_eligibility_gate.py",
         "tests/unit/crm/test_p1_273_lease_collateral.py",
         "tests/unit/reporting/corep/test_c07_crm_substitution.py"
@@ -2851,7 +2889,8 @@
       "source_files": [
         "contracts/edges.py",
         "engine/crm/ofcp_routing.py",
-        "engine/crm/third_party_deposit.py"
+        "engine/crm/third_party_deposit.py",
+        "engine/stages/re_split/carriers.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_239_art_232_third_party_deposit.py",
@@ -3168,8 +3207,11 @@
         "tests/acceptance/basel31/test_scenario_b31_p1106_fcsm_inst_cqs2.py",
         "tests/acceptance/crr/test_art_222_fcsm_unified_pipeline.py",
         "tests/acceptance/crr/test_p1_104_art_239_1_fcsm_maturity_eligibility.py",
+        "tests/acceptance/reporting/test_funded_protection_coverage.py",
         "tests/fixtures/collateral/collateral.py",
         "tests/fixtures/p1_104_art_239_1_fcsm_maturity/p1_104.py",
+        "tests/fixtures/reporting_funded_protection_portfolio.py",
+        "tests/properties/portfolios.py",
         "tests/unit/crm/test_simple_method.py"
       ],
       "watchfire_index_gap": false
@@ -3229,6 +3271,8 @@
         "tests/fixtures/single_exposure.py",
         "tests/integration/test_nested_facility_collateral.py",
         "tests/integration/test_sft_stage_dark_launch.py",
+        "tests/properties/portfolios.py",
+        "tests/properties/test_re_split_financial_collateral.py",
         "tests/unit/crm/test_collateral_market_value_carriers.py",
         "tests/unit/crm/test_crm_error_propagation.py",
         "tests/unit/crm/test_ead_for_crm.py",
@@ -3461,6 +3505,7 @@
         "tests/fixtures/p1_165/p1_165.py",
         "tests/fixtures/p1_190/p1_190.py",
         "tests/fixtures/p1_273/p1_273.py",
+        "tests/fixtures/reporting_funded_protection_portfolio.py",
         "tests/fixtures/single_exposure.py",
         "tests/integration/test_collateral_links_pipeline.py",
         "tests/integration/test_nested_facility_collateral.py",
@@ -5218,6 +5263,7 @@
         "engine/stages/calc.py",
         "engine/stages/classify/attributes.py",
         "engine/stages/classify/classifier.py",
+        "engine/stages/re_split/carriers.py",
         "engine/supporting_factors.py",
         "rulebook/packs/b31.py",
         "rulebook/packs/crr.py"
@@ -5508,6 +5554,7 @@
         "tests/fixtures/p2_33/p2_33.py",
         "tests/fixtures/reporting_offbs_portfolio.py",
         "tests/properties/corpus.py",
+        "tests/properties/test_source_conservation.py",
         "tests/unit/reporting/corep/test_c07_ccf_buckets.py",
         "tests/unit/rulebook/test_provisions_features.py",
         "tests/unit/test_ccf.py"
@@ -6057,6 +6104,7 @@
         "engine/sa/b31_risk_weight_tables.py",
         "engine/sa/risk_weights.py",
         "engine/sa/rw_adjustments.py",
+        "engine/stages/re_split/carriers.py",
         "reporting/corep/c02.py",
         "reporting/corep/templates.py",
         "rulebook/packs/b31.py",
@@ -6105,8 +6153,10 @@
       "test_files": [
         "tests/acceptance/basel31/test_p1_140_adc_classification_derivation.py",
         "tests/acceptance/basel31/test_p1_141_art_124_4_all_or_nothing_gate.py",
+        "tests/acceptance/reporting/test_re_split_template_coverage.py",
         "tests/fixtures/p1_140/p1_140.py",
         "tests/fixtures/p1_141/p1_141.py",
+        "tests/fixtures/reporting_re_split_portfolio.py",
         "tests/integration/test_re_split_pipeline_mixed.py",
         "tests/unit/test_real_estate_splitter.py"
       ],
@@ -6192,6 +6242,7 @@
         "domain/enums.py",
         "engine/re_splitter.py",
         "engine/sa/b31_risk_weight_tables.py",
+        "engine/stages/re_split/carriers.py",
         "engine/stages/re_split/flagging.py",
         "engine/stages/re_split/params.py",
         "engine/stages/re_split/splitter.py",
@@ -6203,16 +6254,26 @@
         "tests/acceptance/basel31/test_p1_141_art_124_4_all_or_nothing_gate.py",
         "tests/acceptance/basel31/test_p1_142_three_property_income_dependent.py",
         "tests/acceptance/basel31/test_scenario_b31_a_sa.py",
+        "tests/acceptance/reporting/test_re_split_template_coverage.py",
+        "tests/contracts/test_collapse_additivity.py",
         "tests/fixtures/p1_141/p1_141.py",
         "tests/fixtures/p1_142/p1_142.py",
+        "tests/fixtures/reporting_re_split_portfolio.py",
+        "tests/integration/test_re_split_carrier_conservation.py",
         "tests/integration/test_re_split_pipeline.py",
         "tests/integration/test_re_split_pipeline_mixed.py",
         "tests/oracle/derivations/branch_sa.py",
         "tests/oracle/derivations/formulas.py",
         "tests/oracle/derivations/sa_b31.py",
+        "tests/properties/corpus.py",
+        "tests/properties/portfolios.py",
+        "tests/properties/test_collapse_conservation.py",
+        "tests/properties/test_re_split_financial_collateral.py",
+        "tests/properties/test_source_conservation.py",
         "tests/unit/rulebook/test_re_split_features.py",
         "tests/unit/test_b31_re_junior_charges.py",
         "tests/unit/test_b31_sa_risk_weights.py",
+        "tests/unit/test_re_split_carrier_classification.py",
         "tests/unit/test_real_estate_splitter.py"
       ],
       "watchfire_index_gap": false
@@ -6238,6 +6299,7 @@
       "test_files": [
         "tests/acceptance/basel31/test_p1_142_three_property_income_dependent.py",
         "tests/fixtures/p1_142/p1_142.py",
+        "tests/fixtures/reporting_re_split_portfolio.py",
         "tests/oracle/derivations/branch_sa.py",
         "tests/oracle/derivations/sa_b31.py",
         "tests/unit/test_b31_re_junior_charges.py"
@@ -6263,11 +6325,14 @@
       "source_files": [
         "domain/enums.py",
         "engine/sa/b31_risk_weight_tables.py",
+        "engine/stages/re_split/carriers.py",
         "engine/stages/re_split/flagging.py",
         "engine/stages/re_split/params.py",
         "engine/stages/re_split/splitter.py"
       ],
       "test_files": [
+        "tests/acceptance/reporting/test_re_split_template_coverage.py",
+        "tests/fixtures/reporting_re_split_portfolio.py",
         "tests/integration/test_re_split_pipeline_mixed.py",
         "tests/oracle/derivations/sa_b31.py",
         "tests/unit/test_real_estate_splitter.py"
@@ -6342,6 +6407,7 @@
       "test_files": [
         "tests/acceptance/basel31/test_p1_140_adc_classification_derivation.py",
         "tests/fixtures/p1_140/p1_140.py",
+        "tests/fixtures/reporting_re_split_portfolio.py",
         "tests/oracle/derivations/sa_b31.py"
       ],
       "watchfire_index_gap": false
@@ -6362,11 +6428,15 @@
         "b31_rre_residual_rw_social_housing_floor@b31"
       ],
       "source_files": [
+        "engine/stages/re_split/carriers.py",
         "engine/stages/re_split/splitter.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_142_three_property_income_dependent.py",
+        "tests/acceptance/reporting/test_re_split_template_coverage.py",
         "tests/fixtures/p1_142/p1_142.py",
+        "tests/fixtures/reporting_re_split_portfolio.py",
+        "tests/integration/test_re_split_carrier_conservation.py",
         "tests/unit/test_b31_re_junior_charges.py"
       ],
       "watchfire_index_gap": false
@@ -7343,7 +7413,8 @@
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_161_art_191a_two_layer_protection.py",
-        "tests/fixtures/p1_161/p1_161.py"
+        "tests/fixtures/p1_161/p1_161.py",
+        "tests/fixtures/reporting_funded_protection_portfolio.py"
       ],
       "watchfire_index_gap": false
     },

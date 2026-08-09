@@ -67,13 +67,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   neighbour that could *also* match whitespace (`\s*` beside a dot-matches-all
   `.*?`, or beside a negated class), so on input that failed to match the engine
   retried every split of the gap; these now use negated classes, an anchored
-  possessive run, or caller-side stripping. The other two began an **unanchored**
-  pattern with an unbounded run (`\s+and\s+`, `[A-Z_]+\(`), so the search
-  re-entered the same run at every offset — a cost incurred *across* start
-  positions, which a possessive quantifier does not fix. Those are now gated by a
-  negative lookbehind (`(?<!\s)`, `(?<![A-Z_])`) so a match can only begin where
-  the run does; a leftmost match always did, so the gate rejects only positions
-  that could never have matched.
+  possessive run, or caller-side stripping.
+
+  The other two began an **unanchored** pattern with an unbounded run
+  (`\s+and\s+`, `[A-Z_]+\(`), so the search re-entered the same run at every
+  offset. That cost is paid *across* start positions, so neither a possessive
+  quantifier nor a lookbehind gate removes it — both were tried and measured no
+  better. The unbounded run is now gone from the head of each: the prerequisite
+  splitter matches a single `\sand\s` (surrounding whitespace was already
+  stripped by its caller), and the BoE label parser splits the cell on its `|`
+  terminator in Python and matches each segment **anchored**.
 
   Affected: the docs heading scanner (`scripts/check_doc_links.py`), the BoE
   label and severity cell parsers (`scripts/extract_validation_rules.py`), the
@@ -81,12 +84,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   prerequisite splitter (`reporting/validations/rules.py`) and the
   qualified-reference parser (`reporting/validations/scope.py`).
 
-  Measured on pathological non-matching input, the two lookbehind-gated patterns
-  go from 4× to 2× cost per doubling of input length — **298ms → 0.22ms at
-  n=8,000**. Every rewrite was checked for behavioural equivalence against the
-  pattern it replaces: by hand over the documented cell shapes, by 200,000
-  randomised inputs per pattern, and by the docs dead-link census returning its
-  banked count of 76 unchanged.
+  Measured on pathological non-matching input, the two rewritten scans go from
+  quadratic to flat — **500ms → 0.03ms at n=8,000**. Every rewrite was checked
+  for behavioural equivalence against the pattern it replaces: over the **real
+  committed rule extracts** (1,011 EBA prerequisite strings, 539 of them
+  carrying a conjunction, and 4,100 BoE label cells rebuilt from their parsed
+  values — 0 divergences), by 200,000 randomised inputs per pattern, and by the
+  docs dead-link census returning its banked count of 76 unchanged.
+
+  One case is deliberately narrowed: a BoE label segment no longer parses if
+  non-whitespace garbage precedes its kind token. The workbook does not produce
+  that shape — a segment begins with its kind token — and requiring it is the
+  more faithful reading of the documented format.
 - **PS1/26 Art. 154(4A)(b): the 10% IRB mortgage RWEA floor is now confined to
   non-defaulted retail exposures secured by residential immovable property
   (P1.319).** The engine gated the floor on a bare `MORTGAGE|RESIDENTIAL`

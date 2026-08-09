@@ -130,17 +130,21 @@ BOE_COL_TABLES = range(17, 21)  # T1..T4
 
 # ── Parsing patterns ─────────────────────────────────────────────────────────
 
-# "SHORT_LABEL(en) - some text|" / "DESCRIPTION(en) - v5745_q|"
+# ONE "SHORT_LABEL(en) - some text" segment, matched ANCHORED against a cell the
+# caller has already split on "|" (see `_parse_label_segments`).
 #
-# Two changes keep this linear. The body is `[^|]*` rather than a lazy `.*?`:
-# excluding the terminator makes the scan to it deterministic, where `\s*` beside
-# a dot-matches-all `.*?` is ambiguous over the separator's spaces. And the
-# leading run is gated by `(?<![A-Z_])`, so a match can only START where the run
-# does — without it the scan re-enters the same run at every offset, which is
-# quadratic in a long unmatched run of capitals. A leftmost match always begins
-# at the run's start anyway, so the gate rejects only positions that could never
-# have matched. Leading space is left in and stripped by the caller.
-LABEL_SEGMENT = re.compile(r"(?<![A-Z_])([A-Z_]+)\(([a-z]{2})\)\s*-([^|]*)\|")
+# Splitting first is what keeps this linear. Scanning the whole cell for the
+# `[A-Z_]+` kind token left an unbounded run at the head of an UNANCHORED
+# pattern, so the search re-entered the same run of capitals at every offset —
+# quadratic in its length, and a cost paid ACROSS start positions that neither a
+# possessive quantifier nor a lookbehind removes. Anchoring at a segment start
+# means there is only ever one start position.
+#
+# This narrows one case: a kind token no longer parses if non-whitespace garbage
+# precedes it within a segment. That is not a shape the BoE workbook produces —
+# a segment begins with its kind token — and it is the more faithful reading of
+# the documented format.
+LABEL_SEGMENT = re.compile(r"\s*([A-Z_]+)\(([a-z]{2})\)\s*-(.*)", re.DOTALL)
 
 # EBA rule identifiers as they appear inside BoE DESCRIPTION segments: v5745_q, e4893_n
 EBA_RULE_ID = re.compile(r"\b([ve]\d+_[a-z]+)\b")
@@ -498,11 +502,19 @@ def _parse_boe_severity(value: Any) -> tuple[str, tuple[str, ...]]:
 
 
 def _parse_label_segments(value: Any) -> dict[str, str]:
-    """Parse `KIND(en) - text|` segments into a {KIND: text} dict."""
+    """Parse `KIND(en) - text|` segments into a {KIND: text} dict.
+
+    The cell is split on the "|" terminator here rather than scanned for it by
+    the pattern — see `LABEL_SEGMENT` for why that keeps the parse linear.
+    Dropping the final piece keeps the old behaviour that only a TERMINATED
+    segment counts: a cell ending in "|" leaves an empty tail, and a trailing
+    fragment without one was never matched.
+    """
     text = _clean(value)
     if not text:
         return {}
-    return {kind: body.strip() for kind, _lang, body in LABEL_SEGMENT.findall(text)}
+    segments = (LABEL_SEGMENT.match(piece) for piece in text.split("|")[:-1])
+    return {m.group(1): m.group(3).strip() for m in segments if m is not None}
 
 
 def _rule_to_dict(rule: EbaRule | BoeRule) -> dict[str, Any]:

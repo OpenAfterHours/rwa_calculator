@@ -111,3 +111,34 @@ jobs:
       # so no fixture generation step is needed.
       - name: Spill parity + materialise tests
         run: uv run pytest tests/integration/test_spill_edges_parity.py tests/unit/test_materialise.py -q -o addopts=
+
+  template-coverage:
+    name: Template Cell Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Generate test fixtures
+        run: uv run python tests/fixtures/generate_all.py
+
+      # Two-way ratchet on which (template, column) pairs any portfolio ever
+      # populates: a live column going dead is a regression, a dead one going
+      # live must be banked. The census walks 12 portfolios x 2 regimes through
+      # the real COREP and Pillar 3 generators -- measured 361s -- so it is
+      # marked `slow` and the dev loop and the `test` job both exclude it.
+      # This job is therefore the ONLY place the ratchet actually executes, and
+      # without it the gate would exist without ever running, which is the
+      # failure mode it was built to prevent (.claude/LESSONS.md B5).
+      #
+      # Invoked as the script rather than through `pytest -m slow` on purpose:
+      # the exit code is then the gate's own, there is no marker plumbing to get
+      # wrong, and the check stays legible to a reader who has never seen this
+      # project's pytest markers.
+      - name: Template cell-coverage ratchet
+        run: uv run python scripts/check_template_cell_coverage.py --check

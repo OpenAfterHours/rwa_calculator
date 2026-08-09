@@ -90,9 +90,9 @@
       "templates_covered": 5
     },
     "crr/irb-classes": {
-      "PASS": 83,
+      "PASS": 85,
       "FAIL": 1,
-      "VACUOUS": 25,
+      "VACUOUS": 23,
       "NOT_EVALUATED": 632,
       "rules_enforced": 741,
       "rules_executed": 109,
@@ -100,9 +100,9 @@
       "templates_covered": 8
     },
     "b31/irb-classes": {
-      "PASS": 153,
+      "PASS": 155,
       "FAIL": 10,
-      "VACUOUS": 180,
+      "VACUOUS": 178,
       "NOT_EVALUATED": 465,
       "rules_enforced": 808,
       "rules_executed": 343,
@@ -128,6 +128,66 @@
       "rules_executed": 357,
       "templates_emitted": 12,
       "templates_covered": 12
+    },
+    "crr/re-split": {
+      "PASS": 57,
+      "FAIL": 1,
+      "VACUOUS": 62,
+      "NOT_EVALUATED": 621,
+      "rules_enforced": 741,
+      "rules_executed": 120,
+      "templates_emitted": 4,
+      "templates_covered": 4
+    },
+    "b31/re-split": {
+      "PASS": 69,
+      "FAIL": 6,
+      "VACUOUS": 146,
+      "NOT_EVALUATED": 587,
+      "rules_enforced": 808,
+      "rules_executed": 221,
+      "templates_emitted": 5,
+      "templates_covered": 5
+    },
+    "crr/fcsm": {
+      "PASS": 48,
+      "FAIL": 1,
+      "VACUOUS": 61,
+      "NOT_EVALUATED": 631,
+      "rules_enforced": 741,
+      "rules_executed": 110,
+      "templates_emitted": 4,
+      "templates_covered": 4
+    },
+    "b31/fcsm": {
+      "PASS": 58,
+      "FAIL": 3,
+      "VACUOUS": 112,
+      "NOT_EVALUATED": 635,
+      "rules_enforced": 808,
+      "rules_executed": 173,
+      "templates_emitted": 5,
+      "templates_covered": 5
+    },
+    "crr/art199": {
+      "PASS": 53,
+      "FAIL": 1,
+      "VACUOUS": 31,
+      "NOT_EVALUATED": 656,
+      "rules_enforced": 741,
+      "rules_executed": 85,
+      "templates_emitted": 8,
+      "templates_covered": 8
+    },
+    "b31/art199": {
+      "PASS": 101,
+      "FAIL": 1,
+      "VACUOUS": 74,
+      "NOT_EVALUATED": 632,
+      "rules_enforced": 808,
+      "rules_executed": 176,
+      "templates_emitted": 9,
+      "templates_covered": 9
     }
   },
   "known_broken_rules": [
@@ -202,8 +262,10 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "fcsm",
         "irb-classes",
         "off-bs",
+        "re-split",
         "rich",
         "sa-classes"
       ],
@@ -225,8 +287,10 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "fcsm",
         "irb-classes",
         "off-bs",
+        "re-split",
         "rich",
         "sa-classes"
       ],
@@ -306,10 +370,13 @@
       "severity": "ERROR",
       "reason": "limit of the published rule, not of our output: after the DPM-fraction fix these now fail ONLY on roll-out-class rows with ZERO exposure, where every coordinate reads lhs=0.0 against rhs=1.0. A row with no exposure admits no partition - 0/0 has no answer - and the rule carries no emptiness guard, so it demands the three shares total 1 on a row where there is nothing to share. Coordinate counts now vary by portfolio (6-14 CRR, 3-7 B3.1) purely with how many roll-out classes each leaves empty",
       "portfolios": [
+        "art199",
         "ccr",
         "crm-substitution",
+        "fcsm",
         "irb-classes",
         "off-bs",
+        "re-split",
         "rich",
         "sa-classes"
       ],
@@ -336,6 +403,48 @@
         "OF08.07.01.01[c0050]"
       ],
       "expression": "{t: OF08.07.01.01, r: 0260} = sum({t: OF08.07.01.01, r: 0180; 0190; 0200; 0210; 0220; 0230; 0240; 0250})"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0990",
+      "severity": "WARNING",
+      "reason": "OF 09.01 r0095 c0010 (geographic breakdown, original exposure pre-CCF) reports 825,000.00 where OF 07.00 sheet 0010 r0020 c0010 reports 0.00. Cross-template class-row mapping defect between the geographic breakdown and the SA template: one side attributes the real-estate split's secured leg to a class row the other leaves empty. PRE-EXISTING and newly REACHABLE, not newly broken -- it fires identically on the unfixed engine, and became visible only when the re-split and funded-protection portfolios were registered in RUNS. WARNING severity, so it does not reject a submission. Filed as a plan item; not caused by the carrier-conservation batch.",
+      "portfolios": [
+        "re-split"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "OF07.00.01.01"
+      ],
+      "expression": "{t: OF09.01.01.01, r: 0095, c: 0010, filter: [eba_dim:CEG] = [eba_GA:x1]} = {t: OF07.00.01.01, r: 0020, c: 0010, z: 0010}"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0991",
+      "severity": "WARNING",
+      "reason": "As boe_b0990 on the exposure-value axis: OF 09.01 r0095 c0075 reports 825,000.00 against OF 07.00 sheet 0010 r0020 c0200 at 0.00. Same cross-template class-row mapping defect, same pre-existing-and-newly-reachable status (fires on the unfixed engine), WARNING severity. Filed with boe_b0990 as one item -- the three are one defect seen on three columns, so they must be fixed and un-banked together.",
+      "portfolios": [
+        "re-split"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "OF07.00.01.01"
+      ],
+      "expression": "{t: OF09.01.01.01, r: 0095, c: 0075, filter: [eba_dim:CEG] = [eba_GA:x1]} = {t: OF07.00.01.01, r: 0020, c: 0200, z: 0010}"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0992",
+      "severity": "WARNING",
+      "reason": "As boe_b0990 on the RWEA axis: OF 09.01 r0095 c0090 reports 495,000.00 against OF 07.00 sheet 0010 r0020 c0220 at 0.00. Same cross-template class-row mapping defect, pre-existing (fires on the unfixed engine), WARNING severity. The RWEA is 60% of the exposure value, consistent with an Art. 124L residual leg at the counterparty weight, which is a hint at where the mapping diverges. Filed with boe_b0990/0991 as one item.",
+      "portfolios": [
+        "re-split"
+      ],
+      "failing_coordinates": 1,
+      "coordinates": [
+        "OF07.00.01.01"
+      ],
+      "expression": "{t: OF09.01.01.01, r: 0095, c: 0090, filter: [eba_dim:CEG] = [eba_GA:x1]} = {t: OF07.00.01.01, r: 0020, c: 0220, z: 0010}"
     },
     {
       "regime": "crr",
@@ -373,14 +482,17 @@
       "severity": "WARNING",
       "reason": "limit of the published rule, not of our output: after the DPM-fraction fix these now fail ONLY on roll-out-class rows with ZERO exposure, where every coordinate reads lhs=0.0 against rhs=1.0. A row with no exposure admits no partition - 0/0 has no answer - and the rule carries no emptiness guard, so it demands the three shares total 1 on a row where there is nothing to share. Coordinate counts now vary by portfolio (6-14 CRR, 3-7 B3.1) purely with how many roll-out classes each leaves empty",
       "portfolios": [
+        "art199",
         "ccr",
         "crm-substitution",
+        "fcsm",
         "irb-classes",
         "off-bs",
+        "re-split",
         "rich",
         "sa-classes"
       ],
-      "failing_coordinates": 14,
+      "failing_coordinates": 15,
       "coordinates": [
         "C 08.07[r0020]",
         "C 08.07[r0030]",

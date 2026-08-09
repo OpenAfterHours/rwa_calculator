@@ -185,6 +185,144 @@ EDGE_CASES: tuple[ExposureSpec, ...] = (
     ExposureSpec(entity_type="corporate", drawn=1_000_000.0, off_bs_nominal=0.0, external_cqs=None),
 )
 
+#: Exposures that the real-estate loan-splitter actually FANS OUT, one parent
+#: exposure into a secured leg plus a residual leg.
+#:
+#: Deliberately kept OUT of :data:`CORPUS` below. Every property module
+#: parametrises over ``CORPUS``, so adding it there would subject seven unrelated
+#: property suites (monotonicity, regime deltas, homogeneity, the output-floor
+#: identities, ...) to a row-count-changing stage in one step, and a failure in
+#: any of them would be indistinguishable from the split defect this portfolio
+#: exists to expose. Import it by name instead. Promoting it into ``CORPUS`` is
+#: worth doing once the split legs are conserved, and needs a full-suite blast
+#: radius measurement rather than a grep (`.claude/LESSONS.md` D2, D3).
+#:
+#: Every leg is unrated so the residual takes the corporate unrated risk weight
+#: and the arithmetic of the split is legible: a changed number is the split, not
+#: a changed rating lookup.
+RE_SPLIT: tuple[ExposureSpec, ...] = (
+    # Exactly-covered: property value == exposure, so the secured leg is the
+    # regime's LTV cap outright (80% CRR Art. 125 / 55% PS1/26 Art. 124F) and the
+    # residual is the remainder. This is the measured reproducer for the
+    # carrier-duplication defect.
+    ExposureSpec(
+        entity_type="corporate",
+        drawn=1_000_000.0,
+        external_cqs=None,
+        collateral_value=1_000_000.0,
+        collateral_property_type="residential",
+    ),
+    # Under-collateralised: the cap binds well below the exposure, so the residual
+    # leg is the larger of the two and a residual-side error cannot hide behind a
+    # small number.
+    ExposureSpec(
+        entity_type="corporate",
+        drawn=2_000_000.0,
+        external_cqs=None,
+        collateral_value=1_000_000.0,
+        collateral_property_type="residential",
+    ),
+    # Over-collateralised commercial: the property exceeds the exposure, so the
+    # cap is slack on the CRE side. ``rental_to_interest_ratio`` is attested
+    # because CRR Art. 126(2)(d) makes the preferential CRE treatment conditional
+    # on rental income covering interest costs — without it the CRE limb is
+    # ineligible and this leg would silently stop being a split at all.
+    ExposureSpec(
+        entity_type="corporate",
+        drawn=1_000_000.0,
+        external_cqs=None,
+        collateral_value=1_500_000.0,
+        collateral_property_type="commercial",
+        collateral_rental_to_interest_ratio=2.0,
+    ),
+    # A prior charge ranking ahead of us, which PS1/26 Art. 124F(2) deducts from
+    # the secured cap. Under CRR Art. 125 there is no such deduction, so this leg
+    # is also the one that makes the two regimes disagree on the split point.
+    ExposureSpec(
+        entity_type="corporate",
+        drawn=1_000_000.0,
+        external_cqs=None,
+        collateral_value=1_000_000.0,
+        collateral_property_type="residential",
+        collateral_prior_charge_ltv=0.2,
+    ),
+)
+
+#: Exposures that BOTH reach the real-estate loan-splitter AND carry eligible
+#: financial collateral — one exposure, two mitigation routes.
+#:
+#: Also deliberately kept OUT of :data:`CORPUS`, for the same reason
+#: :data:`RE_SPLIT` is: it changes the row count.
+#:
+#: This is the only shape on which ``collateral_adjusted_value`` is non-zero on a
+#: row the splitter emitted. On an RE-only split it is 0.0 on every leg, because
+#: immovable property is recognised through the exposure class and the Art. 125 /
+#: Art. 124F cap rather than through the Art. 223 volatility-adjusted collateral
+#: value. So a carrier that the splitter allocates across legs and the collapse
+#: path must sum back up was, for that carrier, exercised by nothing in the
+#: estate: every fixture either split with no financial collateral or carried
+#: financial collateral without splitting. A leg-share that the collapse dropped
+#: would leave the parent silently holding one leg's fraction — and
+#: ``collateral_adjusted_value`` is compared by the reconciliation engine, so the
+#: consequence is a real reconciliation break rather than a cosmetic one.
+#:
+#: Property values are set so the split point differs between the regimes (the
+#: caps are ``re_split_{rre,cre}_secured_ltv_cap``, and only Basel 3.1 deducts a
+#: prior charge), and the financial pledge is sized well below the exposure so
+#: the Art. 223 adjusted value is a genuine partial cover with a remainder — a
+#: fully covered exposure has no remainder and hides a mis-weighted blend.
+RE_SPLIT_WITH_FINANCIAL: tuple[ExposureSpec, ...] = (
+    # Residential property plus cash. Cash takes a zero volatility adjustment
+    # (Art. 224 Table 1), so the adjusted value equals the market value and the
+    # allocation across legs is legible by inspection.
+    ExposureSpec(
+        entity_type="corporate",
+        drawn=2_000_000.0,
+        external_cqs=None,
+        collateral_value=1_000_000.0,
+        collateral_property_type="residential",
+        financial_collateral_value=400_000.0,
+        financial_collateral_type="cash",
+    ),
+    # Residential property plus a sovereign bond, which DOES take a volatility
+    # adjustment, so the adjusted value is strictly below the market value and a
+    # leg that carried the raw value instead would be distinguishable.
+    ExposureSpec(
+        entity_type="corporate",
+        drawn=2_000_000.0,
+        external_cqs=None,
+        collateral_value=1_000_000.0,
+        collateral_property_type="residential",
+        financial_collateral_value=600_000.0,
+        financial_collateral_type="government_bond",
+    ),
+    # A prior charge on the property, so the two regimes split this exposure at
+    # different points (PS1/26 Art. 124F(2) deducts it, CRR Art. 125 does not)
+    # while the financial pledge is identical — the leg shares therefore differ
+    # by regime and a hardcoded share would fail on one of them.
+    ExposureSpec(
+        entity_type="corporate",
+        drawn=2_000_000.0,
+        external_cqs=None,
+        collateral_value=1_000_000.0,
+        collateral_property_type="residential",
+        collateral_prior_charge_ltv=0.2,
+        financial_collateral_value=400_000.0,
+        financial_collateral_type="cash",
+    ),
+    # No property: financial collateral only, and therefore NO split. The
+    # control leg — it keeps ``collateral_adjusted_value`` populated on an
+    # unsplit row, so a change to the split-leg allocation is distinguishable
+    # from a change to the carrier itself (`.claude/LESSONS.md` B5).
+    ExposureSpec(
+        entity_type="corporate",
+        drawn=2_000_000.0,
+        external_cqs=None,
+        financial_collateral_value=500_000.0,
+        financial_collateral_type="cash",
+    ),
+)
+
 #: Name -> portfolio. Parametrise over ``.items()`` so a failure names the
 #: portfolio rather than printing a wall of specs.
 CORPUS: dict[str, tuple[ExposureSpec, ...]] = {

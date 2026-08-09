@@ -136,9 +136,14 @@ from tests.fixtures.reporting_ccr_portfolio import build_reporting_ccr_bundle
 from tests.fixtures.reporting_crm_substitution_portfolio import (
     build_reporting_crm_substitution_bundle,
 )
+from tests.fixtures.reporting_funded_protection_portfolio import (
+    build_reporting_art199_bundle,
+    build_reporting_fcsm_bundle,
+)
 from tests.fixtures.reporting_irb_classes_portfolio import build_reporting_irb_classes_bundle
 from tests.fixtures.reporting_offbs_portfolio import build_reporting_offbs_bundle
 from tests.fixtures.reporting_portfolio import build_reporting_bundle
+from tests.fixtures.reporting_re_split_portfolio import build_reporting_re_split_bundle
 from tests.fixtures.reporting_sa_classes_portfolio import build_reporting_sa_classes_bundle
 
 from rwa_calc.contracts.config import CalculationConfig
@@ -327,10 +332,22 @@ class GateInput(NamedTuple):
     build_prior_config: Callable[[], CalculationConfig] | None = None
 
 
-#: The twelve runs, each the sole reachability route for a family of published
+#: The eighteen runs, each the sole reachability route for a family of published
 #: rules. See "Cost, and why every run is load-bearing" in the module docstring
 #: before trimming this list — a dropped run does not make its rules pass, it
 #: makes them NOT_EVALUATED, which reads the same on the error channel.
+#:
+#: The last six were added with the real-estate carrier-conservation batch. They
+#: are registered here rather than left as standalone acceptance fixtures because
+#: LESSONS B5 requires it without qualification: a fixture that exercises a
+#: previously-dead column must enter the gated population, or the batch
+#: demonstrates the trap while reproducing it. Between them they light eight
+#: columns this register previously never evaluated — C 07.00 col 0070 (Art. 222
+#: Simple Method), the C 07.00 residential-mortgage sheet, Pillar 3 CR5 rows
+#: 9f/9g, C 08.01 cols 0200/0210 and CR7-A cols e/f (Art. 199 receivables and
+#: other-physical collateral). ``scripts/check_template_cell_coverage.py`` reads
+#: this tuple verbatim, so registration also moves them inside the cell-coverage
+#: ratchet with no edit to that script.
 RUNS: tuple[GateInput, ...] = (
     GateInput(
         "crr", "CRR", "rich", build_reporting_bundle, _crr_config, lambda: _prior_config("CRR")
@@ -390,6 +407,42 @@ RUNS: tuple[GateInput, ...] = (
         "BASEL_3_1",
         "crm-substitution",
         build_reporting_crm_substitution_bundle,
+        lambda: _irb_config("BASEL_3_1"),
+        lambda: _prior_config("BASEL_3_1"),
+    ),
+    # RE loan-split: SA-bound by construction (the splitter passes IRB and
+    # slotting legs through untouched), so no IRB permission and no prior frame.
+    GateInput("crr", "CRR", "re-split", build_reporting_re_split_bundle, lambda: _sa_config("CRR")),
+    GateInput(
+        "b31",
+        "BASEL_3_1",
+        "re-split",
+        build_reporting_re_split_bundle,
+        lambda: _sa_config("BASEL_3_1"),
+    ),
+    # Financial collateral under the Art. 222 Simple Method — C 07.00 col 0070.
+    # SA-only: the Simple Method is a standardised-approach election.
+    GateInput("crr", "CRR", "fcsm", build_reporting_fcsm_bundle, lambda: _sa_config("CRR")),
+    GateInput(
+        "b31", "BASEL_3_1", "fcsm", build_reporting_fcsm_bundle, lambda: _sa_config("BASEL_3_1")
+    ),
+    # Art. 199 receivables / other-physical collateral — C 08.01 cols 0200/0210
+    # and CR7-A cols e/f. IRB-only (Art. 199 is additional eligibility for firms
+    # using own LGD estimates), so it takes an IRB permission and a prior frame
+    # like the other IRB runs.
+    GateInput(
+        "crr",
+        "CRR",
+        "art199",
+        build_reporting_art199_bundle,
+        lambda: _irb_config("CRR"),
+        lambda: _prior_config("CRR"),
+    ),
+    GateInput(
+        "b31",
+        "BASEL_3_1",
+        "art199",
+        build_reporting_art199_bundle,
         lambda: _irb_config("BASEL_3_1"),
         lambda: _prior_config("BASEL_3_1"),
     ),

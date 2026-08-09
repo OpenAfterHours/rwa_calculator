@@ -128,10 +128,26 @@ class ExposureSpec:
 
     Frozen and hashable so a whole portfolio is a cache key and a Hypothesis
     counter-example prints as a literal.
+
+    Collateral comes in TWO independent slots, and the split is by mitigation
+    route rather than by count. ``collateral_value`` (+ ``collateral_type`` /
+    ``collateral_property_type``) is the primary pledge; setting
+    ``financial_collateral_value`` adds a SECOND pledge that is always eligible
+    financial collateral. Two slots, not a list, because the shape worth
+    expressing is one exposure carrying protection down two DIFFERENT routes at
+    once — immovable property through the Art. 125/126 loan-split and financial
+    collateral through Art. 197/223 — which is an ordinary bank exposure that a
+    single-pledge builder cannot describe. It is also the only shape on which
+    ``collateral_adjusted_value`` is non-zero on a leg the RE splitter emitted,
+    so nothing in the estate exercised the split-then-collapse path for that
+    carrier until this slot existed. ``financial_collateral_value=0.0`` (the
+    default) emits no second row at all, so every existing portfolio is
+    byte-identical to before.
     """
 
     entity_type: str = "corporate"
     drawn: float = 1_000_000.0
+    interest: float | None = None
     off_bs_nominal: float = 0.0
     off_bs_risk_type: str = "MR"
     maturity_years: float = 5.0
@@ -143,6 +159,11 @@ class ExposureSpec:
     country_code: str = "GB"
     collateral_value: float = 0.0
     collateral_type: str = "cash"
+    collateral_property_type: str | None = None
+    collateral_prior_charge_ltv: float = 0.0
+    collateral_rental_to_interest_ratio: float | None = None
+    financial_collateral_value: float = 0.0
+    financial_collateral_type: str = "cash"
     guarantee_amount: float = 0.0
     guarantor_entity_type: str = "sovereign"
     guarantor_cqs: int | None = 1
@@ -162,13 +183,30 @@ def scale_eads(portfolio: Portfolio, k: float) -> Portfolio:
     Collateral, guarantee and provision amounts scale with the exposure — the
     homogeneity property is about a uniformly larger book, not about a book whose
     protection stayed the same size.
+
+    EVERY monetary field must appear below. ``interest`` was added to
+    ``ExposureSpec`` and omitted here, which would have broken
+    ``test_homogeneity``'s linearity assertion the moment any corpus portfolio set
+    it: the on-balance-sheet gross carrier is ``drawn + interest``, so scaling one
+    component and not the other makes the scaled book a different book rather than
+    a larger one. It was latent only because no corpus spec sets ``interest``
+    today — which is exactly what would have made it bite silently, months later,
+    in a test that looks unrelated. If you add a monetary field to
+    ``ExposureSpec``, add it here in the same edit.
     """
     return tuple(
         replace(
             spec,
             drawn=spec.drawn * k,
+            # The second component of the on-BS gross carrier; None stays None so
+            # a spec that never set it is untouched.
+            interest=None if spec.interest is None else spec.interest * k,
             off_bs_nominal=spec.off_bs_nominal * k,
             collateral_value=spec.collateral_value * k,
+            # Scales with the exposure for the same reason the primary pledge
+            # does. A spec that never set it stays at 0.0 x k == 0.0, so no
+            # existing portfolio's scaled image changes.
+            financial_collateral_value=spec.financial_collateral_value * k,
             guarantee_amount=spec.guarantee_amount * k,
             provision_amount=spec.provision_amount * k,
             annual_revenue=spec.annual_revenue,
@@ -205,6 +243,8 @@ def build_bundle(portfolio: Portfolio) -> RawDataBundle:
             ratings.append(rating)
         if spec.collateral_value > 0.0:
             collateral.append(_collateral(f"CL{i:03d}", loan_ref, spec))
+        if spec.financial_collateral_value > 0.0:
+            collateral.append(_financial_collateral(f"CLF{i:03d}", loan_ref, spec))
         if spec.guarantee_amount > 0.0:
             g_ref = f"GCP{i:03d}"
             counterparties.append(_guarantor_counterparty(g_ref, spec))
@@ -374,6 +414,11 @@ def _loan(ref: str, cp_ref: str, spec: ExposureSpec) -> dict:
     if spec.firm_lgd is not None:
         row["lgd"] = spec.firm_lgd
         row["has_sufficient_collateral_data"] = True
+    if spec.interest is not None:
+        # Only emitted when asked for. The gross on-balance-sheet carrier is
+        # drawn + interest, so leaving it null keeps every pre-existing portfolio
+        # byte-identical while letting a test exercise the second component.
+        row["interest"] = spec.interest
     return row
 
 
@@ -434,10 +479,31 @@ def _collateral(ref: str, loan_ref: str, spec: ExposureSpec) -> dict:
     Eligibility is attested on both limbs on purpose: ``is_eligible_irb_collateral``
     gates the Art. 199 non-financial route, and a fixture that leaves it unset is
     silently zeroed there (recorded in memory as the P1.235 blast radius).
+
+    Setting ``collateral_property_type`` turns the pledge into REAL ESTATE and is
+    the only way to make a generated portfolio reach the loan-splitter. The
+    splitter's candidate gate needs the property attestation columns, not just a
+    ``collateral_type`` string: without ``property_type`` / ``is_qualifying_re`` /
+    ``property_ltv`` the classifier leaves ``re_split_mode`` NULL and the exposure
+    is never flagged, so the whole split stage passes it through. That is the
+    mechanical reason no pre-existing corpus portfolio — and no reporting golden
+    portfolio — ever split, despite two of them pledging property.
+
+    A property pledge is deliberately NOT eligible financial collateral: Art. 197
+    is the financial-collateral list, and immovable property is recognised through
+    Art. 125/126 loan-splitting (SA) or Art. 199 (IRB) instead. Attesting both
+    would route one pledge down two mitigation paths at once.
+
+    References:
+    - CRR Art. 125 / Art. 126: preferential RRE / CRE treatment on the secured part
+    - CRR Art. 126(2)(d): CRE rental income must cover interest costs
+    - CRR Art. 199: non-financial collateral eligible under IRB
+    - PS1/26 Art. 124F / 124H: Basel 3.1 loan-splitting and its prior-charge deduction
     """
-    return {
+    is_real_estate = spec.collateral_property_type is not None
+    row = {
         "collateral_reference": ref,
-        "collateral_type": spec.collateral_type,
+        "collateral_type": "real_estate" if is_real_estate else spec.collateral_type,
         "currency": "GBP",
         "market_value": spec.collateral_value,
         "nominal_value": spec.collateral_value,
@@ -447,11 +513,76 @@ def _collateral(ref: str, loan_ref: str, spec: ExposureSpec) -> dict:
         "issuer_type": "sovereign",
         "residual_maturity_years": spec.maturity_years,
         "original_maturity_years": spec.maturity_years,
-        "is_eligible_financial_collateral": True,
+        "is_eligible_financial_collateral": not is_real_estate,
         "is_eligible_irb_collateral": True,
         "valuation_date": VALUE_DATE,
         "valuation_type": "market",
     }
+    if not is_real_estate:
+        return row
+    return row | {
+        "property_type": spec.collateral_property_type,
+        "property_ltv": _property_ltv(spec),
+        "is_qualifying_re": True,
+        "is_income_producing": False,
+        "is_adc": False,
+        "is_presold": False,
+        "prior_charge_ltv": spec.collateral_prior_charge_ltv,
+        "rental_to_interest_ratio": spec.collateral_rental_to_interest_ratio,
+    }
+
+
+def _financial_collateral(ref: str, loan_ref: str, spec: ExposureSpec) -> dict:
+    """The SECOND pledge: always eligible financial collateral (Art. 197).
+
+    Emitted only when ``financial_collateral_value > 0.0``, so it is purely
+    additive — a spec that leaves it at the default produces exactly the
+    collateral table it produced before this slot existed.
+
+    Never real estate, whatever ``collateral_property_type`` says about the
+    primary pledge. That is what makes the pair express two mitigation routes on
+    one exposure: the property pledge drives the Art. 125/126 loan-split and the
+    exposure CLASS, while this one drives an Art. 223 volatility-adjusted value
+    (``collateral_adjusted_value``) and, under the Simple Method election, an
+    Art. 222 risk-weight substitution. ``is_eligible_irb_collateral`` is False:
+    Art. 199 is the *additional* IRB list for non-financial forms, and financial
+    collateral is already recognised under Art. 197 on both approaches, so
+    attesting the Art. 199 limb as well would route one pledge twice.
+
+    References:
+    - CRR Art. 197(1): eligible financial collateral under all methods
+    - CRR Art. 223 / Art. 224: comprehensive-method volatility adjustments
+    - CRR Art. 222: Simple Method risk-weight substitution (SA election)
+    """
+    return {
+        "collateral_reference": ref,
+        "collateral_type": spec.financial_collateral_type,
+        "currency": "GBP",
+        "market_value": spec.financial_collateral_value,
+        "nominal_value": spec.financial_collateral_value,
+        "beneficiary_type": "loan",
+        "beneficiary_reference": loan_ref,
+        "issuer_cqs": 1,
+        "issuer_type": "sovereign",
+        "residual_maturity_years": spec.maturity_years,
+        "original_maturity_years": spec.maturity_years,
+        "is_eligible_financial_collateral": True,
+        "is_eligible_irb_collateral": False,
+        "valuation_date": VALUE_DATE,
+        "valuation_type": "market",
+    }
+
+
+def _property_ltv(spec: ExposureSpec) -> float | None:
+    """Exposure-to-property-value ratio, or None when there is nothing to divide.
+
+    Derived rather than taken as an input so it cannot drift out of step with the
+    amounts it describes — an LTV that disagrees with ``drawn / market_value``
+    would make a split allocation untraceable to the spec that produced it.
+    """
+    if spec.collateral_value <= 0.0:
+        return None
+    return (spec.drawn + spec.off_bs_nominal) / spec.collateral_value
 
 
 def _guarantee(ref: str, guarantor_ref: str, loan_ref: str, spec: ExposureSpec) -> dict:

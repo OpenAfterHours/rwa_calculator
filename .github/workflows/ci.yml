@@ -1,11 +1,47 @@
 name: CI
 
+# CI fires on EVERY branch push, not just `master`. `loop.sh` and `/next-items`
+# push their work to feature and per-item batch branches and only open a PR at the
+# end, so a `master`-only push trigger meant the MAJORITY of commits never met CI
+# at all — the gates existed but did not run, which is the failure mode the whole
+# learning loop is built to prevent (.claude/LESSONS.md, "Graduation ledger").
+#
+# `'**'` rather than an enumerated prefix list, deliberately. A list has to be
+# maintained against a naming convention that drifts, and its failure mode is
+# SILENT: a new prefix means pushes skip CI and nobody finds out until a red
+# master. That is the same shape as the hole this trigger exists to close, so the
+# fix removes the category instead of patching instances — the pattern of the
+# skill-value graduation in CLAUDE.md, where the answer was not "be more careful
+# with the list" but "make the list unnecessary".
+#
+# Measured, for anyone who ever wants to narrow it again: history holds 16 slash
+# prefixes (feat 142, claude 88, fix 45, docs 25, refactor 22, chore 17, bug 12,
+# wt 7, then blog/plan/rename/... at 1-2 each), ~25 single-segment names
+# (`spec-gap-fixes`, `loans-ccf-fix`, ...), `worktree-*` from EnterWorktree, and
+# GitHub's auto-generated `revert-<PR#>-<branch>`. Re-derive the prefix histogram
+# with:
+#
+#   git log --merges --format='%s' | grep -oP 'OpenAfterHours/\K[^/]+(?=/)' \
+#     | sort | uniq -c | sort -rn
+#
+# Note that naming a `branches` filter at all is what keeps TAG pushes from
+# triggering this workflow: `branches` and `tags` are separate filters, and a tag
+# push matches no branch pattern. A bare `on: push:` would fire the whole suite on
+# every release tag.
 on:
   push:
-    branches: [master]
+    branches: ['**']
   pull_request:
     branches: [master]
 
+# Keyed on `github.ref`, which is per-branch (`refs/heads/feat/x`) and so
+# partitions every branch correctly under `'**'` with no change. Deliberately NOT
+# collapsed with the PR event's ref, which is `refs/pull/<n>/merge`: the two events
+# are in separate groups today and cannot cancel each other, whereas a shared group
+# would let whichever run STARTS LATER cancel the earlier one — so the victim could
+# be either the push run or the pull_request run, and branch protection reads a
+# cancelled required check as "not passing". The cost is that pushing to a branch
+# with an open PR runs CI twice on that commit.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -152,3 +188,40 @@ jobs:
       # project's pytest markers.
       - name: Template cell-coverage ratchet
         run: uv run python scripts/check_template_cell_coverage.py --check
+
+  coverage-ratchet:
+    name: Reporting Coverage Ratchet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Generate test fixtures
+        run: uv run python tests/fixtures/generate_all.py
+
+      # Four-way ratchet on how much of the estate the gates can actually SEE,
+      # measured over the same portfolio x regime matrix the supervisory register
+      # runs (`RUNS`, imported not re-declared): binding rules per regime and
+      # template-cell liveness may not FALL, dead cells and never-evaluated rules
+      # may not RISE.
+      #
+      # Until this job existed, `--check` was implemented and invoked by nothing —
+      # absent from ci.yml, from arch_check.py and from every test — so a change
+      # could kill a live cell, un-bind a published rule, or open a new blind spot
+      # with every gate still green. That is LESSONS B5 in its purest form: the
+      # register FAILS OPEN, and an unreachable rule is indistinguishable from a
+      # clean estate.
+      #
+      # It is a separate job rather than a step in `test` because it drives 24 full
+      # pipeline runs (16 portfolio x regime combinations plus a prior-period run
+      # for each of the 8 with IRB permission) and both reporting generators. It is
+      # invoked as the script, not through pytest, so the exit code is the gate's
+      # own — the sibling `slow` contract test in
+      # tests/contracts/test_coverage_ratchet.py is the local-dev mirror.
+      - name: Reporting coverage ratchet
+        run: uv run python scripts/coverage_report.py --check

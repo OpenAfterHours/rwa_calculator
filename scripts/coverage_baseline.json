@@ -1,8 +1,79 @@
 {
-  "_comment": "Coverage ratchet baseline (scripts/coverage_report.py --check). union_binding_* and template_cell_liveness_bp may not DECREASE; dead_cells and never_evaluated_rules may not INCREASE. Update only after a deliberate, recorded improvement \u2014 never to clear a red gate.",
-  "union_binding_rules_crr": 251,
-  "union_binding_rules_b31": 277,
-  "template_cell_liveness_bp": 1298,
-  "dead_cells": 52817,
+  "_comment": "Coverage ratchet baseline (scripts/coverage_report.py --check). union_binding_*, cells_live and template_cell_liveness_bp may not DECREASE; dead_cells and never_evaluated_rules may not INCREASE. Update only after a deliberate, recorded improvement \u2014 never to clear a red gate. READ THIS BEFORE TRUSTING A GREEN: cells_live is the cell-coverage floor. template_cell_liveness_bp is a RATIO whose denominator shrinks with its numerator and dead_cells is declared-minus-live, so both can IMPROVE while coverage is destroyed \u2014 measured, deleting the b31/rich run loses 689 live cells while moving liveness 1285->1374bp and dead 55553->47123. Only cells_live and the binding-rule counts fail on that. Separately, every metric is a UNION over the portfolio x regime matrix recorded in provenance, so growing RUNS makes dead_cells RISE and template_cell_liveness_bp FALL by declaring cells no portfolio fills yet; on a matrix change --check reports the comparison as INVALID rather than as a regression, and the right response is to re-measure and bank the new matrix with the reason in _note \u2014 never to drop a portfolio so the old numbers fit again.",
+  "_note": "Re-banked 2026-08-09 over the 16-run matrix. TWO changes, both deliberate. (1) FIRST BANK TO RECORD PROVENANCE. The predecessor was a 12-run measurement taken before the real-estate carrier batch registered re-split x2 and art199 x2 - and of an OLDER TREE: its figures no longer reproduce at either matrix size (re-measuring the 12-run matrix as it stood at the baseline commit gives crr 253 / b31 279 / 1300bp / 52803 dead against the banked 251 / 277 / 1298 / 52817), so those numbers are not a target and cannot be reproduced. dead_cells is banked WORSE in absolute terms (52817 -> 55553) and template_cell_liveness_bp LOWER (1298 -> 1285), and that is a coverage INCREASE, not a loosened gate. What settles it is holding the matrix constant, NOT the direction the metrics moved: cell metrics down while rule metrics up is equally consistent with a real cell loss plus an unrelated rule gain. The decisive figures are absolute - live cells rose 7891 -> 8193 while declared rose 60694 -> 63746, so coverage cannot have fallen. Every one of the 2873 newly-dead cells sits on the C 07.00 / OF 07.00 residential_mortgage sheet, which NO run emitted at 12 and which re-split emits at 16; 123 cells dead at 12 runs are live at 16 (C 07.00 commercial_mortgage, C 09.01 GB/TOTAL); and a live cell CANNOT go dead across a matrix growth because live is a union accumulator over runs and runs 1-12 are identical in both measurements. (2) cells_live ADDED AS THE CELL-COVERAGE FLOOR, banked at 8193. The other two cell numbers are not floors and are sometimes ANTI-signal: liveness is a ratio whose denominator moves with its numerator and dead_cells is declared-minus-live, so dropping declared cells faster than live ones improves both. Measured over all 16 leave-one-out deletions of this matrix: on 4 of 16 BOTH cell metrics moved the passing way while live cells were destroyed - worst is b31/rich, which loses 689 live cells while liveness RISES 1285 -> 1374bp and dead_cells FALLS 55553 -> 47123 (also crr/sa-classes -441, b31/sa-classes -367 with bp -> 1458, b31/re-split -141); on 6 more exactly one of the two passed; only 4 of 16 were caught by both. cells_live fell on all 14 deletions that actually cost live cells and never rose on a loss. The two it did not move for, crr/art199 and b31/art199, cost ZERO live cells - neither contributes a uniquely-live cell, so there was nothing for any cell metric to catch (cells only; that probe did not measure whether those runs are load-bearing for RULE binding). MEASUREMENT PROVENANCE: taken against a pristine `git archive HEAD src` export, not the working tree, because the shared checkout had in-flight engine work at the time (engine/sa/risk_weights.py plus a new engine/sa/sovereign_derived.py - the Art. 121 Table 5 sovereign-derived institution weights). So these numbers describe the COMMITTED engine, which is what the coverage-ratchet CI job measures. Expect the binding-rule counts to RISE when that work lands: --check reports an improvement and exits 0, and banking it is then a normal re-bank. never_evaluated_rules is 785 in every measurement taken.",
+  "provenance": {
+    "runs": 16,
+    "portfolios": [
+      {
+        "regime": "crr",
+        "portfolio": "rich"
+      },
+      {
+        "regime": "b31",
+        "portfolio": "rich"
+      },
+      {
+        "regime": "crr",
+        "portfolio": "off-bs"
+      },
+      {
+        "regime": "b31",
+        "portfolio": "off-bs"
+      },
+      {
+        "regime": "crr",
+        "portfolio": "ccr"
+      },
+      {
+        "regime": "b31",
+        "portfolio": "ccr"
+      },
+      {
+        "regime": "crr",
+        "portfolio": "sa-classes"
+      },
+      {
+        "regime": "b31",
+        "portfolio": "sa-classes"
+      },
+      {
+        "regime": "crr",
+        "portfolio": "irb-classes"
+      },
+      {
+        "regime": "b31",
+        "portfolio": "irb-classes"
+      },
+      {
+        "regime": "crr",
+        "portfolio": "crm-substitution"
+      },
+      {
+        "regime": "b31",
+        "portfolio": "crm-substitution"
+      },
+      {
+        "regime": "crr",
+        "portfolio": "re-split"
+      },
+      {
+        "regime": "b31",
+        "portfolio": "re-split"
+      },
+      {
+        "regime": "crr",
+        "portfolio": "art199"
+      },
+      {
+        "regime": "b31",
+        "portfolio": "art199"
+      }
+    ]
+  },
+  "union_binding_rules_crr": 257,
+  "union_binding_rules_b31": 289,
+  "cells_live": 8193,
+  "template_cell_liveness_bp": 1285,
+  "dead_cells": 55553,
   "never_evaluated_rules": 785
 }

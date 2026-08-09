@@ -79,13 +79,50 @@ Why the key is ``(regime, rule_id)`` and not the failing coordinate:
     the two populations disjoint by construction, since a rule that FAILs
     anywhere has reached a real verdict and is therefore not vacuity-only.
 
-    What that granularity does NOT catch, stated so nobody reads more into a
-    green (f): membership is the union over portfolios — a rule is vacuity-only
-    when NO registered run gets a real verdict out of it. A defect that empties
-    a column on one portfolio while another still exercises the same rule leaves
-    this population unmoved. That case is the goldens' job (the emptied cell
-    moves in ``test_reporting_*_golden.py``); (f) is for the rule that stops
-    asserting anything ANYWHERE, which is precisely the case no other gate sees.
+    What legs (f)/(g) do NOT catch. Read this before treating a green (f) as
+    evidence the estate is still being checked — an earlier draft of this
+    paragraph overclaimed twice and a reviewer measured both claims false.
+
+    FIRST, the union. Membership is the union over the sixteen runs: a rule is
+    vacuity-only when NO run gets a real verdict out of it. A change that empties
+    a column on ONE portfolio while another still exercises the same rule leaves
+    this population unmoved, and 221 rules (130 of them ERROR) currently hold a
+    real verdict on exactly one run, so that is a wide surface. It cuts both ways
+    on leg (g): a listed rule only leaves the population when the change reaches
+    EVERY run where it was vacuous. Measured instance — ``crr/v3332_i`` is
+    vacuous on both ``rich`` and ``crm-substitution``, so darkening it on ``rich``
+    keeps it in the register and (g) stays green.
+
+    SECOND, and this is the real hole: these legs are scoped to the ``VACUOUS``
+    status. ``PASS -> NOT_EVALUATED`` escapes all six legs of this gate. Dropping
+    one emitted row (``C 02.00`` r0160) from ``crr/rich`` moves two ERROR rules
+    out of ``PASS`` into ``NOT_EVALUATED`` — one of them ``v3335_i``, which passed
+    on ``rich`` alone, so afterwards it has no verdict anywhere in the matrix —
+    and every leg here stays green with ``templates_uncovered`` unmoved, because a
+    darkened rule is not a break, not a vacuity, and does not uncover its
+    template. The worked example is ``v0207_m``: an ERROR rule on the C 02.00
+    hierarchy that PASSes on six portfolios today and is VACUOUS on the other two,
+    and which BOTH of that reviewer's mutations darken. It is a handful of dropped
+    rows from silently joining ``v0204_m`` / ``v0205_m`` / ``v0210_m`` /
+    ``v0211_m`` — four live ERROR rules that are already evaluated NOWHERE in the
+    matrix, and which no leg here objects to.
+
+    The mitigation, and its limits. ``scripts/coverage_report.py --check``
+    ratchets ``never_evaluated_rules`` (a MAX, banked at 785) and
+    ``union_binding_rules_{crr,b31}`` (a MIN, 257/289), and by those definitions
+    the row-drop moves both. But (i) that is inference from the metric
+    definitions, not a measured ``--check`` under the mutation; (ii) both are
+    COUNTS, so one rule going dark while another activates nets to zero; and
+    (iii) it is a DIFFERENT gate from this one, and this file is the mandatory
+    Tier 2 register. So the ``NOT_EVALUATED`` half is mitigated, not closed, and
+    it is owed work — not a property of legs (f)/(g).
+
+    Where the single-portfolio case actually goes, stated per portfolio rather
+    than waved at ``test_reporting_*_golden.py``: only FIVE goldens exist — rich,
+    ccr, irb-classes, off-bs, sa-classes. ``crm-substitution``, ``re-split`` and
+    ``art199`` have NO golden, only focused acceptance tests pinning the columns
+    each fixture was built for: strong on those columns, silent elsewhere. Golden
+    coverage for those three is owed work too.
 
 Cost, and why every run is load-bearing:
     This file is the most expensive test in the suite: eight portfolios x two
@@ -261,9 +298,23 @@ REGISTER_NOTES: dict[str, str] = {
         "hole; it is a check we are not getting. Membership is the union over portfolios: a rule "
         "PASSing or FAILing anywhere is NOT here, which also makes this list disjoint from "
         "known_broken_rules. It is ratcheted BOTH ways, exactly like a break - a rule that falls "
-        "to vacuous outside this list fails the gate (a PASS -> VACUOUS regression, which moves "
+        "to vacuous outside this list fails the gate (the PASS -> VACUOUS regression, which moves "
         "neither the break set nor template coverage and was invisible before), and a listed rule "
-        "that starts asserting something must be REMOVED from the list."
+        "that stops being vacuous on every run must be REMOVED from the list."
+    ),
+    "what_the_vacuity_ratchet_does_NOT_catch": (
+        "Two limits, both measured, both stated because a green leg is otherwise read as more "
+        "than it is. (1) UNION: a change that empties a column on one portfolio while another "
+        "still gets a real verdict out of the same rule moves nothing here, and 221 rules (130 "
+        "ERROR) currently hold a real verdict on exactly ONE run. Same masking on the removal "
+        "leg: crr/v3332_i is vacuous on both rich and crm-substitution, so darkening it on rich "
+        "leaves the entry standing. (2) STATUS SCOPE: these legs see VACUOUS only, so "
+        "PASS -> NOT_EVALUATED escapes every leg of this gate - dropping one emitted row (C 02.00 "
+        "r0160) from crr/rich darkens two ERROR rules, one of them (v3335_i) passing on rich "
+        "alone, and the whole gate stays green. scripts/coverage_report.py --check mitigates that "
+        "by ratcheting never_evaluated_rules (max 785) and union_binding_rules (min 257/289), but "
+        "those are counts in a different gate, so one rule going dark nets against another "
+        "activating. The NOT_EVALUATED half is owed work, not a property of this register."
     ),
     "how_to_discharge_a_vacuity_entry": (
         "Make one cell the rule addresses carry a real figure on a registered portfolio, then "
@@ -274,7 +325,9 @@ REGISTER_NOTES: dict[str, str] = {
         "because a single moving row leaves the cell at 0.00 afterwards - and activated five "
         "previously-VACUOUS rules to PASS, boe_b0752_27 (the r0253 tie-out) among them. Do NOT "
         "discharge an entry by deleting the rule, narrowing a portfolio, or making the cell "
-        "structurally absent: absence is NOT_EVALUATED, which is worse than vacuity, not better."
+        "structurally absent: absence is NOT_EVALUATED, which is worse than vacuity, not better - "
+        "and per what_the_vacuity_ratchet_does_NOT_catch, that route may not even redden a leg, so "
+        "nothing here will stop you doing it."
     ),
     "reading_a_vacuity_reason": (
         "The mechanism sentence names WHICH limb the measured evidence supports. 'emitted but "
@@ -1091,9 +1144,16 @@ def test_no_rule_falls_to_vacuous_outside_the_baseline(gate_run: GateRun) -> Non
         "Error-severity. Every operand was null or exactly zero, so the rule asserts nothing "
         "about our figures while still reporting a green outcome:\n"
         f"{_describe_vacuity(fallen, gate_run.vacuous)}\n"
-        "This is how a defect that empties a column passes this gate (LESSONS B5, recurrence "
-        "2026-08-08). Find what emptied the cells. Only if the vacuity is accepted, add it to "
-        f"{BASELINE_PATH.name} under known_vacuous_rules with a written reason."
+        "TWO provenances reach this state and the gate cannot tell them apart - it holds no "
+        "prior status - so establish which before acting:\n"
+        "  PASS -> VACUOUS is a REGRESSION. Something emptied cells this rule was checking. "
+        "This is exactly how a defect that empties a column passes this gate (LESSONS B5, "
+        "recurrence 2026-08-08). Find what emptied them; do not bank it.\n"
+        "  NOT_EVALUATED -> VACUOUS is an IMPROVEMENT. A cell that was structurally absent is "
+        "now emitted (as null or zero), so a rule from the never-evaluated pool has started "
+        "reaching a verdict. Bank it: add the entry with a written reason saying so.\n"
+        f"Either way the entry belongs in {BASELINE_PATH.name} under known_vacuous_rules only "
+        "once the vacuity is accepted in writing."
     )
 
 
@@ -1105,11 +1165,18 @@ def test_no_baseline_vacuous_rule_asserts_again_without_being_removed(gate_run: 
     its entry becomes a lie. The gate fails until the entry is deleted, exactly as
     a fixed break must be removed from ``known_broken_rules``.
 
-    Read the failure before banking it, though: leaving this population is not
-    always progress. A rule also leaves it by becoming NOT_EVALUATED — a cell
-    that stopped being emitted at all, a portfolio dropped from ``RUNS`` — and
-    that estate is WORSE, not better. PASS or FAIL is the discharge; absence is a
-    regression wearing the same shirt.
+    Read the failure before banking it: leaving this population is not always
+    progress. A rule also leaves by becoming NOT_EVALUATED on every run where it
+    was vacuous — a cell that stopped being emitted, a portfolio dropped from
+    ``RUNS`` — and that estate is WORSE, not better. PASS or FAIL is the
+    discharge; absence is a regression wearing the same shirt.
+
+    Do not read the converse into that, though. This leg does NOT catch a rule
+    going dark: it fires only when the rule leaves the population ENTIRELY, which
+    takes a change reaching every run where it was vacuous. A rule darkened on one
+    run and still vacuous on another stays listed and this leg stays green —
+    measured on ``crr/v3332_i`` (vacuous on ``rich`` and ``crm-substitution``).
+    See "What legs (f)/(g) do NOT catch" in the module docstring.
 
     Arrange: the committed register plus the current vacuity population.
     Act:     find register entries that now reach a real verdict.

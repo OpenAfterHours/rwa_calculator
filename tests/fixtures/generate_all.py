@@ -593,6 +593,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p1264,
         ),
         (
+            "P1.316 (Art. 121(1) Table 5 sovereign-derived unrated-institution RW)",
+            "p1_316",
+            _generate_p1316,
+        ),
+        (
             "P1.227 (Art. 201 guarantor-eligibility gate)",
             "p1_227",
             _generate_p1227,
@@ -3184,6 +3189,19 @@ def _generate_p1264(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_264", None)
+
+
+def _generate_p1316(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.316 fixtures (Art. 121(1) Table 5 sovereign-derived institution RW)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_316 import save_p1316_fixtures
+
+        saved = save_p1316_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_316", None)
 
 
 def _generate_p1227(output_dir: Path) -> list[tuple[str, int]]:

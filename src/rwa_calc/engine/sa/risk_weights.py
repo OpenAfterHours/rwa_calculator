@@ -38,7 +38,6 @@ from __future__ import annotations
 
 import logging
 from datetime import date
-from decimal import Decimal
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -120,6 +119,11 @@ from rwa_calc.engine.sa.jurisdiction import (
     pse_short_term_eligible_expr,
 )
 from rwa_calc.engine.sa.rgla import is_rgla_sovereign_expr, rgla_sovereign_rw_expr
+from rwa_calc.engine.sa.sovereign_derived import (
+    cqs_table_lookup_expr,
+    crr_art_121_4_trade_finance_expr,
+    sovereign_derived_rw_expr,
+)
 from rwa_calc.rulebook import RulepackV0
 from rwa_calc.rulebook.compile import lookup_float_map, scalar_value
 from rwa_calc.rulebook.resolve import resolve
@@ -438,61 +442,6 @@ def _apply_obligor_st_contamination_override(exposures: pl.LazyFrame) -> pl.Lazy
 
 
 # ---------------------------------------------------------------------------
-# Sovereign-derived risk-weight helpers (PSE Art. 116(1) Table 2 /
-# RGLA Art. 115(1)(a) Table 1A)
-# ---------------------------------------------------------------------------
-
-
-def _sovereign_derived_rw_expr(
-    table: dict[CQS, Decimal],
-    unrated_default: float,
-) -> pl.Expr:
-    """Build Polars expression for sovereign-CQS-derived RW lookup.
-
-    Used for unrated PSEs (Art. 116(1) Table 2) and unrated non-domestic
-    RGLAs (Art. 115(1)(a) Table 1A). Both tables map sovereign CQS (1-6) to
-    a risk weight; when ``cp_sovereign_cqs`` is null/unknown, the
-    conservative ``unrated_default`` (100%) is applied.
-
-    References:
-        CRR Art. 116(1) Table 2 — sovereign-derived PSE risk weights
-        CRR Art. 115(1)(a) Table 1A — sovereign-derived RGLA risk weights
-        PRA PS1/26 Art. 116 / 115 (identical values)
-    """
-    cqs_order: list[CQS] = [CQS.CQS1, CQS.CQS2, CQS.CQS3, CQS.CQS4, CQS.CQS5, CQS.CQS6]
-    expr = pl.when(pl.col("cp_sovereign_cqs") == int(cqs_order[0])).then(
-        pl.lit(float(table[cqs_order[0]]))
-    )
-    for cqs_val in cqs_order[1:]:
-        expr = expr.when(pl.col("cp_sovereign_cqs") == int(cqs_val)).then(
-            pl.lit(float(table[cqs_val]))
-        )
-    return expr.otherwise(pl.lit(unrated_default))
-
-
-def _cqs_table_lookup_expr(
-    cqs_col: str,
-    table: dict[CQS, Decimal],
-    unrated_default: pl.Expr | float,
-) -> pl.Expr:
-    """Build a when/then chain mapping a CQS-bearing column to RW from a CQS table.
-
-    Mirrors the structure of ``_sovereign_derived_rw_expr`` but parameterised
-    on the CQS source column so it can drive any CQS-keyed regulatory table
-    (CGCB Art. 114, MDB Table 2B Art. 117(1), PSE Table 2A Art. 116(2),
-    RGLA Table 1B Art. 115(1)(b), Corporate Art. 122). Caller controls the
-    unrated fallback (constant or Polars expression).
-    """
-    cqs_order: list[CQS] = [CQS.CQS1, CQS.CQS2, CQS.CQS3, CQS.CQS4, CQS.CQS5, CQS.CQS6]
-    expr = pl.when(pl.col(cqs_col) == int(cqs_order[0])).then(pl.lit(float(table[cqs_order[0]])))
-    for cqs_val in cqs_order[1:]:
-        expr = expr.when(pl.col(cqs_col) == int(cqs_val)).then(pl.lit(float(table[cqs_val])))
-    if isinstance(unrated_default, pl.Expr):
-        return expr.otherwise(unrated_default)
-    return expr.otherwise(pl.lit(unrated_default))
-
-
-# ---------------------------------------------------------------------------
 # ECA / MEIP direct sovereign RW (CRR Art. 137(1)-(2) Table 9)
 # ---------------------------------------------------------------------------
 
@@ -779,7 +728,7 @@ def _crr_append_real_estate_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThe
     # than via the join-derived ``risk_weight``) so the rule still fires when
     # the upstream class lookup did not resolve to CORPORATE (e.g. exposures
     # reclassified to COMMERCIAL_MORTGAGE by the real-estate splitter).
-    cre_residual_rw = _cqs_table_lookup_expr(
+    cre_residual_rw = cqs_table_lookup_expr(
         "cqs",
         CORPORATE_RISK_WEIGHTS,
         pl.lit(float(CORPORATE_RISK_WEIGHTS[CQS.UNRATED])),
@@ -810,14 +759,19 @@ def _crr_append_real_estate_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThe
     )
 
 
+@cites("CRR Art. 121")
 def _crr_append_institution_maturity_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
-    """Append CRR Art. 120/121/131 short-term institution branches.
+    """Append CRR Art. 120/121/131 institution branches, short-dated first.
 
     The Art. 131 Table 7 dedicated short-term ECAI branch is prepended ahead of
     the Art. 120(2) Table 4 general short-term branch: when the exposure carries
     an issue-specific short-term credit assessment (``has_short_term_ecai=True``)
     Table 7 applies regardless of the residual-maturity gate that drives the
     Table 4 path. Mirrors the Basel 3.1 Table 4A pattern.
+
+    The unrated limbs close the chain, short-dated before long-dated, so the
+    Art. 121(3) flat 20% takes precedence over the Art. 121(1) Table 5
+    sovereign-derived lookup that follows it.
     """
     is_institution = uc.str.contains("INSTITUTION", literal=True)
     is_rated = pl.col("cqs").is_not_null() & (pl.col("cqs") > 0)
@@ -859,6 +813,22 @@ def _crr_append_institution_maturity_branches(chain: _RWChain, uc: pl.Expr) -> C
         # floor (applied later) still raises this in FX.
         .when(is_institution & is_unrated & (original_mty <= 0.25))
         .then(pl.lit(_SA_CRR_RW["inst_unrated_st"]))
+        # Art. 121(1) Table 5: an unrated institution takes the risk weight of
+        # the CQS to which the central government of its jurisdiction of
+        # incorporation is assigned — 1/2/3/4/5/6 -> 20/50/100/100/100/150%.
+        # Long-dated only: it sits BEHIND the Art. 121(3) branch above, which
+        # is why it carries no maturity gate of its own. Art. 121(2) (central
+        # government unrated -> 100%) is the ``unrated_default`` that
+        # ``sovereign_derived_rw_expr`` applies when cp_sovereign_cqs is null.
+        # Art. 121(4) trade finance is EXCLUDED at ANY maturity — see
+        # ``crr_art_121_4_trade_finance_expr``.
+        .when(is_institution & is_unrated & ~crr_art_121_4_trade_finance_expr())
+        .then(
+            sovereign_derived_rw_expr(
+                INSTITUTION_RISK_WEIGHTS_SOVEREIGN_DERIVED,
+                float(INSTITUTION_RISK_WEIGHTS_CRR[CQS.UNRATED]),
+            )
+        )
     )
 
 
@@ -1110,7 +1080,7 @@ def _apply_b31_risk_weight_overrides(
         # CQS is unknown.
         .when((uc == "PSE") & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0)))
         .then(
-            _sovereign_derived_rw_expr(
+            sovereign_derived_rw_expr(
                 PSE_RISK_WEIGHTS_SOVEREIGN_DERIVED,
                 _SA_SHARED_RW["pse_unrated"],
             )
@@ -1132,7 +1102,7 @@ def _apply_b31_risk_weight_overrides(
         # sovereign CQS is unknown.
         .when((uc == "RGLA") & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0)))
         .then(
-            _sovereign_derived_rw_expr(
+            sovereign_derived_rw_expr(
                 RGLA_RISK_WEIGHTS_SOVEREIGN_DERIVED,
                 _SA_SHARED_RW["rgla_unrated"],
             )
@@ -1317,7 +1287,7 @@ def _apply_crr_risk_weight_overrides(
         .then(
             pl.max_horizontal(
                 pl.lit(_SA_CRR_RW["corporate_sme"]),
-                _sovereign_derived_rw_expr(
+                sovereign_derived_rw_expr(
                     CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
                     _SA_SHARED_RW["cgcb_unrated"],
                 ),
@@ -1340,7 +1310,7 @@ def _apply_crr_risk_weight_overrides(
         # CQS is unknown.
         .when((uc == "PSE") & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0)))
         .then(
-            _sovereign_derived_rw_expr(
+            sovereign_derived_rw_expr(
                 PSE_RISK_WEIGHTS_SOVEREIGN_DERIVED,
                 _SA_SHARED_RW["pse_unrated"],
             )
@@ -1362,7 +1332,7 @@ def _apply_crr_risk_weight_overrides(
         # sovereign CQS is unknown.
         .when((uc == "RGLA") & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0)))
         .then(
-            _sovereign_derived_rw_expr(
+            sovereign_derived_rw_expr(
                 RGLA_RISK_WEIGHTS_SOVEREIGN_DERIVED,
                 _SA_SHARED_RW["rgla_unrated"],
             )
@@ -1386,7 +1356,7 @@ def _apply_crr_risk_weight_overrides(
         # fallback (100%) when the MDB's home sovereign CQS is unknown.
         .when((uc == "MDB") & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0)))
         .then(
-            _sovereign_derived_rw_expr(
+            sovereign_derived_rw_expr(
                 INSTITUTION_RISK_WEIGHTS_SOVEREIGN_DERIVED,
                 float(INSTITUTION_RISK_WEIGHTS_CRR[CQS.UNRATED]),
             )
@@ -1482,7 +1452,7 @@ def _apply_sovereign_floor_for_institutions(
     # CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS), falling back to the
     # Art. 114(1) unrated-sovereign residual so the floor still binds when
     # the jurisdiction's central government carries no ECAI assessment.
-    _sovereign_rw = _cqs_table_lookup_expr(
+    _sovereign_rw = cqs_table_lookup_expr(
         "cp_sovereign_cqs",
         CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
         _SA_SHARED_RW["cgcb_unrated"],

@@ -241,12 +241,17 @@ either value.
 
 **Table 5 is pinned across its whole domain** — ORC-105, ORC-020, ORC-106,
 ORC-107, ORC-108, ORC-109 for CQS 1 to 6, plus ORC-021 for the Art. 121(2)
-unrated-sovereign case. The engine returns a flat 100% throughout, which is
+unrated-sovereign case. The engine agreed at every step from 2026-08-09
+(P1.316); before that it returned a flat 100% throughout, which was
 conservative at CQS 1 and 2, correct **by coincidence** at CQS 3, 4 and 5, and
 anti-conservative at CQS 6. Sampling only the low steps produced exactly the
-wrong severity reading — the whole family is enumerated here for that reason.
-The CQS 3/4/5 oracles pass today, and are kept so a future change to the flat
-fallback cannot move them silently.
+wrong severity reading — the whole family is enumerated here for that reason,
+and enumerating it is what made the CQS-6 shortfall visible at all.
+
+Now that the ladder is live, the whole family is the regression guard, and the
+two halves guard different failures. A fix that mis-keys the table moves CQS
+3/4/5 off 100%; a fix that makes the branch unconditional moves ORC-021 off
+100%. Keep all seven.
 
 ## ORC-016 — SA rated institution, CQS 1 (CRR)
 
@@ -282,25 +287,26 @@ preferential treatment does not apply.
 **Regulation:** Art. 121(1) Table 5, CQS 1 → 20%.
 **Arithmetic:** `RW = 0.20`; `RWA = 200,000.00`.
 
-> **Known disagreement.** The engine returns 100% — overstated. See
-> `test_oracle.py::KNOWN_DISAGREEMENTS`.
+This is the largest relative movement in the family — 100% → 20%, and in the
+**reducing** direction. It was a known disagreement (engine 100%, overstated)
+until P1.316.
 
 ## ORC-020 — SA unrated institution, central government CQS 2 (CRR)
 
 **Regulation:** Art. 121(1) Table 5, CQS 2 → 50%.
 **Arithmetic:** `RW = 0.50`; `RWA = 500,000.00`.
 
-> **Known disagreement.** The engine returns 100% — overstated. See
-> `test_oracle.py::KNOWN_DISAGREEMENTS`.
+Also RWA-reducing (100% → 50%), and a known disagreement until P1.316.
 
 ## ORC-106 — SA unrated institution, central government CQS 3 (CRR)
 
 **Regulation:** Art. 121(1) Table 5, CQS 3 → 100%.
 **Arithmetic:** `RW = 1.00`; `RWA = 1,000,000.00`.
 
-The engine agrees here, but only because its flat 100% fallback coincides with
-the Table 5 value at this step. The oracle pins the number so that coincidence
-cannot quietly become a divergence.
+The engine agreed here even before P1.316, because the flat 100% fallback
+coincided with the Table 5 value at this step. Post-fix the value comes from
+Table 5 itself. Keeping the oracle is what distinguishes a correctly-keyed
+table from a mis-keyed one — a fix that read the wrong row would move this cell.
 
 ## ORC-107 — SA unrated institution, central government CQS 4 (CRR)
 
@@ -317,11 +323,10 @@ cannot quietly become a divergence.
 **Regulation:** Art. 121(1) Table 5, CQS 6 → 150%.
 **Arithmetic:** `RW = 1.50`; `RWA = 1,500,000.00`.
 
-> **Known disagreement — anti-conservative.** The engine returns 100% against a
-> required 150%, understating the risk-weighted exposure amount by a third.
-> This is the capital-shortfall limb of the Art. 121 finding: the same flat
-> fallback that is merely over-cautious at CQS 1 and 2 under-weights here. See
-> `test_oracle.py::KNOWN_DISAGREEMENTS`.
+The capital-shortfall limb. Until P1.316 the engine returned 100% against a
+required 150%, understating the risk-weighted exposure amount by a third — the
+same flat fallback that was merely over-cautious at CQS 1 and 2 under-weighted
+here. It is the only step of the six that the fix moves **upward**.
 
 ## ORC-021 — SA unrated institution, unrated central government (CRR)
 
@@ -330,6 +335,11 @@ sovereign CQS; residual and original maturity 5y.
 **Regulation:** Art. 121(2) — 100% for an unrated institution incorporated in a
 country whose central government is unrated.
 **Arithmetic:** `RW = 1.00`; `RWA = 1,000,000.00`.
+
+This is the discriminator for the Table 5 ladder: it must stay at 100%. A fix
+that made the sovereign-derived branch unconditional rather than falling back
+to the Art. 121(2) residual would move this cell, and nothing else in the
+family would notice.
 
 ### Corporates (Art. 122)
 

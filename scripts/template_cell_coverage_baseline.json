@@ -74,16 +74,6 @@
       },
       {
         "source": "reporting",
-        "portfolio": "fcsm",
-        "regime": "crr"
-      },
-      {
-        "source": "reporting",
-        "portfolio": "fcsm",
-        "regime": "b31"
-      },
-      {
-        "source": "reporting",
         "portfolio": "art199",
         "regime": "crr"
       },
@@ -157,14 +147,14 @@
       "BASEL_3_1",
       "CRR"
     ],
-    "runs": 30,
+    "runs": 28,
     "prior_period_runs": 8,
     "config_source": "each portfolio runs under its OWN canonical config - RUNS in tests/acceptance/reporting/test_supervisory_validations.py for the reporting fixtures, tests/properties/portfolios.py::config_for for the corpus. One uniform config would strand six portfolios in the missing-model_permissions SA fallback and record their IRB columns dead.",
     "excludes": {
       "tests/fixtures/reporting_re_split_portfolio.py": "not referenced in RUNS as at 2026-08-09; its canonical config lives in tests/acceptance/reporting/test_re_split_template_coverage.py. Register it in RUNS and re-bank - the RE-split columns it exercises are currently NO_FIXTURE.",
       "tests/fixtures/reporting_funded_protection_portfolio.py": "not referenced in RUNS as at 2026-08-09; its canonical config lives in tests/acceptance/reporting/test_funded_protection_coverage.py. Register it in RUNS and re-bank - it should move the Simple Method (C 07.00 col 0070) and Art. 199 (C 08.01/02 cols 0200/0210, CR7-A cols e/f) columns off NO_FIXTURE."
     },
-    "seconds": 194.7
+    "seconds": 198.7
   },
   "counts": {
     "template_column_pairs": 339,
@@ -173,11 +163,11 @@
     "emitted_pairs": 329,
     "never_emitted_pairs": 10,
     "non_numeric_columns_excluded": 4,
-    "frames": 719,
-    "numeric_cells": 237861,
-    "non_null_cells": 43073,
-    "non_zero_cells": 11494,
-    "cell_fill_pct": 4.83
+    "frames": 694,
+    "numeric_cells": 231379,
+    "non_null_cells": 41430,
+    "non_zero_cells": 11318,
+    "cell_fill_pct": 4.89
   },
   "caveats": [
     "reporting/rich/crr: C 02.00: row 0300 (13622029.83) exceeds its class breakdown 0310+0330+0340+0370 (15245.72) by 13606784.12 \u2014 an (approach, class) pair with no row in the layout; the RWEA is counted in the approach total but absent from the of-which rows",

@@ -39,9 +39,9 @@ Why the key is ``(regime, rule_id)`` and not the failing coordinate:
     key on ``rule_id`` alone silently drops half.
 
 Cost, and why every run is load-bearing:
-    This file is the most expensive test in the suite: six portfolios x two
-    regimes, plus a prior-period run for each of the six IRB ones, is EIGHTEEN
-    full pipeline runs. That is a standing temptation to trim the run set, so
+    This file is the most expensive test in the suite: eight portfolios x two
+    regimes, plus a prior-period run for each of the eight IRB ones, is
+    TWENTY-FOUR full pipeline runs. That is a standing temptation to trim the run set, so
     the justification lives here rather than only in a commit message. Each run
     is the SOLE reachability route for a family of published rules, and
     dropping one does not make those rules pass — it makes them NOT_EVALUATED,
@@ -138,7 +138,6 @@ from tests.fixtures.reporting_crm_substitution_portfolio import (
 )
 from tests.fixtures.reporting_funded_protection_portfolio import (
     build_reporting_art199_bundle,
-    build_reporting_fcsm_bundle,
 )
 from tests.fixtures.reporting_irb_classes_portfolio import build_reporting_irb_classes_bundle
 from tests.fixtures.reporting_offbs_portfolio import build_reporting_offbs_bundle
@@ -332,12 +331,12 @@ class GateInput(NamedTuple):
     build_prior_config: Callable[[], CalculationConfig] | None = None
 
 
-#: The eighteen runs, each the sole reachability route for a family of published
+#: The sixteen runs, each the sole reachability route for a family of published
 #: rules. See "Cost, and why every run is load-bearing" in the module docstring
 #: before trimming this list — a dropped run does not make its rules pass, it
 #: makes them NOT_EVALUATED, which reads the same on the error channel.
 #:
-#: The last six were added with the real-estate carrier-conservation batch. They
+#: The last four were added with the real-estate carrier-conservation batch. They
 #: are registered here rather than left as standalone acceptance fixtures because
 #: LESSONS B5 requires it without qualification: a fixture that exercises a
 #: previously-dead column must enter the gated population, or the batch
@@ -420,12 +419,35 @@ RUNS: tuple[GateInput, ...] = (
         build_reporting_re_split_bundle,
         lambda: _sa_config("BASEL_3_1"),
     ),
-    # Financial collateral under the Art. 222 Simple Method — C 07.00 col 0070.
-    # SA-only: the Simple Method is a standardised-approach election.
-    GateInput("crr", "CRR", "fcsm", build_reporting_fcsm_bundle, lambda: _sa_config("CRR")),
-    GateInput(
-        "b31", "BASEL_3_1", "fcsm", build_reporting_fcsm_bundle, lambda: _sa_config("BASEL_3_1")
-    ),
+    # DELIBERATELY NOT REGISTERED: the ``fcsm`` portfolio
+    # (tests/fixtures/reporting_funded_protection_portfolio.py). It exists, works,
+    # and its acceptance test passes — but registering it here needs a config
+    # electing the Art. 222 Financial Collateral SIMPLE Method, because the
+    # Art. 191A election is not a parameter of ``_sa_config`` and that factory
+    # defaults to ``comprehensive``. Registered against ``_sa_config`` the fixture
+    # is in the gate while the one feature it exists to exercise is silenced:
+    # C 07.00 col 0070 reads 0.00 under ``comprehensive`` and non-zero under
+    # ``SIMPLE``, on the identical bundle.
+    #
+    # Registered CORRECTLY it exposes SIX breaks, TWO of them ERROR-severity
+    # (boe_b0471 and v0308_m, both 4,000,000 vs 2,800,000) — which reject a
+    # submission. Those are PRE-EXISTING on the Art. 222 path, not caused by the
+    # carrier-conservation fix: on the unfixed engine the same rules break at
+    # 4,450,000 / 3,800,000 vs 7,500,000 over 14 and 4 cells, and the fix reduces
+    # them to 3 and 2 cells and clears v1659_m outright. It improves them
+    # substantially and does not resolve them.
+    #
+    # Banking two submission-rejecting breaks is a regulatory-posture decision
+    # that deserves its own review rather than riding on a carrier fix, so this
+    # registration and the residual Art. 222 defect are filed together as one
+    # Tier 1 item with the measured before/after above. Registering it is a
+    # one-line change plus an operator-gated baseline regeneration.
+    #
+    # Note this is LESSONS B5 in a THIRD form: B5 began as "unregistered
+    # portfolio", recurred as "registered portfolio, dead cell", and this is
+    # "registered portfolio, wrong config, dead cell". Registration is necessary;
+    # so is a live column; neither is sufficient if the config silences the
+    # feature.
     # Art. 199 receivables / other-physical collateral — C 08.01 cols 0200/0210
     # and CR7-A cols e/f. IRB-only (Art. 199 is additional eligibility for firms
     # using own LGD estimates), so it takes an IRB permission and a prior frame

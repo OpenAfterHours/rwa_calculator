@@ -149,26 +149,6 @@
       "templates_emitted": 5,
       "templates_covered": 5
     },
-    "crr/fcsm": {
-      "PASS": 48,
-      "FAIL": 1,
-      "VACUOUS": 61,
-      "NOT_EVALUATED": 631,
-      "rules_enforced": 741,
-      "rules_executed": 110,
-      "templates_emitted": 4,
-      "templates_covered": 4
-    },
-    "b31/fcsm": {
-      "PASS": 58,
-      "FAIL": 3,
-      "VACUOUS": 112,
-      "NOT_EVALUATED": 635,
-      "rules_enforced": 808,
-      "rules_executed": 173,
-      "templates_emitted": 5,
-      "templates_covered": 5
-    },
     "crr/art199": {
       "PASS": 53,
       "FAIL": 1,
@@ -262,7 +242,6 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
-        "fcsm",
         "irb-classes",
         "off-bs",
         "re-split",
@@ -287,7 +266,6 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
-        "fcsm",
         "irb-classes",
         "off-bs",
         "re-split",
@@ -373,7 +351,6 @@
         "art199",
         "ccr",
         "crm-substitution",
-        "fcsm",
         "irb-classes",
         "off-bs",
         "re-split",
@@ -485,7 +462,6 @@
         "art199",
         "ccr",
         "crm-substitution",
-        "fcsm",
         "irb-classes",
         "off-bs",
         "re-split",

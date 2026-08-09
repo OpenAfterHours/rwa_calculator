@@ -48,10 +48,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **The defect-injection harness runs where `uv` does not.**
     `DEFECT_INJECTION_PYTHON` retargets the whole gate ladder at a named
     interpreter through a single chokepoint, with a pre-flight import probe and a
-    hard error on any command it cannot rewrite. Previously every gate was
-    spawned via `uv run`; on a runner without `uv` each gate would have failed to
-    spawn, every failure would have scored as a *detection*, and the harness
-    would have published a detection rate near 100% while detecting nothing.
+    hard error on any command it cannot rewrite. Previously every gate was spawned
+    via `uv run`; where that path is unusable each gate fails to spawn, every
+    failure scores as a *detection*, and the harness publishes a detection rate
+    near 100% while detecting nothing. That is measured rather than theoretical —
+    on the sandbox this was developed in, `uv run` exits 2 with
+    `Could not acquire lock … Read-only file system`. The detection rate itself is
+    still unpublished: no campaign has been scored yet.
   - **Credit risk mitigation has independent oracle coverage** — CRM joins the
     stdlib-only shadow calculator, which is the only layer that can catch a wrong
     constant rather than a changed one.

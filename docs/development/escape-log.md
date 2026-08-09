@@ -290,11 +290,14 @@ gate that shipped.
   harness existed nobody could say whether the rate was 40% or 90%; that
   sentence is still true, because building the instrument and reading it are
   different acts. (2) Every gate command in the ladder was hardcoded to spawn
-  through `uv run`. On any runner without `uv` — a bare venv, a CI image, this
-  project's own sandbox — every gate would have failed to spawn, each failure
-  scoring as a *detection*, and the harness would have published a fictitious
-  detection rate near 100%. The one number the harness exists to produce was the
-  number it was most likely to get wrong.
+  through `uv run`. On a runner without a usable `uv`, every gate fails to spawn,
+  each failure scores as a *detection*, and the harness publishes a fictitious
+  detection rate near 100%. **This is measured, not hypothetical**: on this
+  project's own sandbox the default `uv run` path exits 2 with
+  `Could not acquire lock … Read-only file system`, so `--ladder legacy` run here
+  before the fix would have reported ~100% detection and zero escapes. The one
+  number the harness exists to produce was the number it was most likely to get
+  wrong.
 - **Rule**: Not a regulatory escape.
 - **Origin**: `scripts/defect_injection.py`, merged 2026-08-08 with the
   independent validation system.
@@ -310,35 +313,56 @@ gate that shipped.
   developer types, and on a developer's machine `uv run` works; the failure mode
   only appears on a runner nobody had tried.
 - **Gate change**: in this change-set, from the injection-harness runner
-  override — `DEFECT_INJECTION_PYTHON` retargets the ladder through a named interpreter via
-  a single `resolve_command` chokepoint, which every gate command and the
-  baseline command pass through. A partially retargeted ladder is worse than an
-  unretargeted one, so a command it cannot rewrite is a hard error rather than a
-  silent pass-through, and a pre-flight probe imports `rwa_calc.engine.pipeline`
-  (not bare `rwa_calc`, whose lazy `__init__` imports in ~150µs without touching
-  polars) under a 60s timeout, so a broken interpreter is reported as such
-  instead of reddening every gate.
-- **Verified red**: with `DEFECT_INJECTION_PYTHON` pointed at
-  `.venv/bin/python`, `resolve_command` rewrote
-  `uv run python scripts/arch_check.py` to that interpreter, and refused both
-  shapes it cannot rewrite instead of passing them through:
+  override — `DEFECT_INJECTION_PYTHON` (`INTERPRETER_ENV_VAR`,
+  `scripts/defect_injection.py:127`) retargets the ladder through a named
+  interpreter via a single `resolve_command` chokepoint (`:150`) that every gate
+  command and the baseline command pass through. A partially retargeted ladder is
+  worse than an unretargeted one, so a command it cannot rewrite is a hard error
+  rather than a silent pass-through. `preflight()` (`:187`) then imports
+  `rwa_calc.engine.pipeline` — not bare `rwa_calc`, whose lazy `__init__` imports
+  in ~150µs without touching polars — and raises `InterpreterUnusable`, exiting 2
+  from `main()`, so a broken interpreter aborts the campaign instead of reddening
+  every gate.
+
+  **Owed, not done**: no test guards any of this. Nothing under `tests/` imports
+  `defect_injection` at all. The graduation target is a contract test asserting
+  that an unset env var leaves every `LADDER` command and `baseline_cmd` byte
+  identical, and that `preflight()` raises on a nonexistent interpreter. Until
+  that exists the guard is correct-by-inspection-and-one-manual-run, which is what
+  this file exists to stop people calling a gate.
+- **Verified red**: the pre-flight aborting a real campaign invocation
+  (`--ladder fast --mutants control-reachable-output-floor-schedule`) with
+  `DEFECT_INJECTION_PYTHON=/nonexistent/python`, exit code 2, before the baseline
+  digest capture and before any mutant was applied:
 
   ```
-  DEFECT_INJECTION_PYTHON is set, but this command does not begin with 'uv run'
-  and so cannot be retargeted: ('bash', '-c', 'echo hi')
-  DEFECT_INJECTION_PYTHON is set, but 'watchfire' is not something this harness
-  knows how to run through an interpreter: ('uv', 'run', 'watchfire', 'check')
+  SPAWN PRE-FLIGHT FAILED — CAMPAIGN ABORTED, NOTHING SCORED
+    command   /nonexistent/python -c import rwa_calc.engine.pipeline
+    reason    the executable does not exist ([Errno 2] No such file or directory: '/nonexistent/python')
   ```
 
-  Observed in-process while writing this entry, so the silent-pass-through
-  failure mode — the one that would restore the fictitious detection rate — is
-  demonstrably closed. **The campaign itself is still unrun**: the detection rate
-  over the 22 catalogued mutants remains unpublished, filed as task 0.1, with the
-  nightly campaign and a detection-rate ratchet as task S.3. A second instrument
-  defect surfaced on the first attempt to run it — the reachability probe's
-  *unreachable control* comes back reachable, filed as task 0.1a — which is the
-  same failure shape as limb (2) and the reason this entry is closed for the
-  runner and open for the measurement.
+  Two further reds from the same guard: `/usr/bin/python3` spawns but cannot
+  import (`reason  it exited 1`, with the `ModuleNotFoundError` quoted), and **the
+  default `uv run` path in this sandbox** gives `reason  it exited 2` with
+  `Could not acquire lock … Read-only file system` — the escape this guard actually
+  closes. Separately, I exercised `resolve_command` in-process and saw it refuse
+  both shapes it cannot rewrite (a command not beginning `uv run`, and
+  `uv run watchfire check`) rather than passing them through, which is the
+  silent-partial-retarget failure mode.
+
+  **The campaign itself is still unrun, and no scorecard exists.** Only
+  `--reachability-only` probes have run, which execute no gates; their two outputs
+  were written under `tmp/dij/` and deleted by another agent's `rm -rf tmp`, and a
+  third run died in `out.write_text` because `main()` never creates `--out`'s
+  parent directory. The default output path is `scripts/defect_scorecard.json`,
+  which is gitignored. **Anyone quoting a detection rate for this workstream today
+  is quoting a number that does not exist.** Filed as task 0.1, with the nightly
+  campaign and a detection-rate ratchet as task S.3. A second instrument defect
+  surfaced on the first attempt to run it — the reachability probe's *unreachable
+  control* comes back reachable, task 0.1a — which is the same failure shape as
+  limb (2), and a third, task 0.1b, has the harness rewriting mutation targets
+  with CRLF line endings. This entry is closed for the runner and open for the
+  measurement.
 - **Lesson**: this is the second of these four entries whose class is
   `gate-not-run` for the same underlying reason — the estate's habit is to build
   the measurement and stop before wiring it. That is a pattern rather than two

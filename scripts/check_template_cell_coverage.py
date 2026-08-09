@@ -14,9 +14,9 @@ nothing. This script answers the coarser, reviewable question it cannot:
 non-zero figure into**, over COREP *and* Pillar 3, so a column that legitimately
 has no data can be told apart from one that silently stopped reporting.
 
-The census is a union over 12 portfolios x 2 regimes:
+The census is a union over 14 portfolios x 2 regimes (28 runs):
 
-- the six reporting fixtures, taken from ``RUNS`` in
+- the eight reporting fixtures, taken from ``RUNS`` in
   ``tests/acceptance/reporting/test_supervisory_validations.py`` — imported,
   never re-declared, so each portfolio runs under its OWN canonical config
   (including the prior-period run that C 08.04 needs). A single uniform config
@@ -135,15 +135,18 @@ BASELINE_COMMENT = (
 #: of any fixture that exercises a previously-dead column) pulls it in
 #: automatically, and the ratchet then fires as an IMPROVEMENT to be banked.
 EXCLUDED_PORTFOLIOS: dict[str, str] = {
-    "tests/fixtures/reporting_re_split_portfolio.py": (
-        "not referenced in RUNS as at 2026-08-09; its canonical config lives in "
-        "tests/acceptance/reporting/test_re_split_template_coverage.py. Register it in "
-        "RUNS and re-bank - the RE-split columns it exercises are currently NO_FIXTURE."
-    ),
     "tests/fixtures/reporting_funded_protection_portfolio.py": (
-        "not referenced in RUNS as at 2026-08-09; its canonical config lives in "
-        "tests/acceptance/reporting/test_funded_protection_coverage.py. Register it in "
-        "RUNS and re-bank - it should move the Simple Method (C 07.00 col 0070) and "
+        "WITHHELD from RUNS deliberately, not an oversight. Registering it needs a "
+        "config electing the Art. 222 SIMPLE Method (_fcsm_config); registered against "
+        "_sa_config, which defaults to comprehensive, the fixture sits in the gate with "
+        "its own feature silenced - C 07.00 col 0070 reads 0.00 under comprehensive and "
+        "non-zero under SIMPLE on the identical bundle, and dropping its two runs left "
+        "this census at 210 live / 129 dead unchanged, so it contributed no liveness. "
+        "Registered CORRECTLY it exposes two ERROR-severity supervisory breaks "
+        "(boe_b0471, v0308_m) that predate the carrier fix, so the registration is filed "
+        "as a Tier 1 item with the Art. 222 defect rather than banked here. Its canonical "
+        "config lives in tests/acceptance/reporting/test_funded_protection_coverage.py. "
+        "Registering it should move the Simple Method (C 07.00 col 0070) and "
         "Art. 199 (C 08.01/02 cols 0200/0210, CR7-A cols e/f) columns off NO_FIXTURE."
     ),
 }
@@ -252,7 +255,10 @@ def declared_columns() -> frozenset[ColumnKey]:
     the exact failure mode this census is built to detect.
     """
     keys: set[ColumnKey] = set()
-    for spec in catalog._TEMPLATES:  # noqa: SLF001 - the only registry; see docstring
+    # catalog._TEMPLATES is private but is the ONLY registry of frozen layouts;
+    # see this function's docstring. ruff does not select SLF001, so no per-line
+    # ignore is warranted.
+    for spec in catalog._TEMPLATES:
         for framework in ("CRR", "BASEL_3_1"):
             for column in spec.columns(framework):
                 keys.add(ColumnKey(spec.family, spec.id, column.ref))
@@ -321,26 +327,15 @@ def census(limit: int | None = None) -> Census:
         _fail_on_degradation(spec, captured)
         warnings.extend(f"{spec.describe()}: {message}" for message in captured)
 
-        run_frames = 0
-        run_cells = 0
-        for key, frame in _template_frames(corep, pillar3):
-            run_frames += 1
-            for column, dtype in zip(frame.columns, frame.dtypes, strict=True):
-                if column in catalog.STRUCTURAL_COLS:
-                    continue
-                address = key._replace(column=column)
-                if not dtype.is_numeric():
-                    non_numeric.add(address)
-                    continue
-                observed.add(address)
-                series = frame.get_column(column)
-                column_non_zero = int(series.fill_null(0).ne(0).sum())
-                cells += series.len()
-                run_cells += series.len()
-                nulls += series.null_count()
-                non_zero += column_non_zero
-                if column_non_zero:
-                    live.add(address)
+        scan = _scan_run(corep, pillar3)
+        observed |= scan.observed
+        non_numeric |= scan.non_numeric
+        live |= scan.live
+        cells += scan.cells
+        nulls += scan.nulls
+        non_zero += scan.non_zero
+        run_frames = scan.frames
+        run_cells = scan.cells
 
         frames += run_frames
         runs.append(
@@ -575,7 +570,10 @@ def _generate(spec: RunSpec) -> tuple[Any, Any]:
             # rows dead for a harness reason rather than an estate one.
             previous_period_results=None if prior is None else prior.results,
         )
-    except Exception as error:  # noqa: BLE001 - re-raised as a fatal census failure
+    # Broad on purpose: ANY generator failure must become a fatal census error,
+    # because a run that produces no frames is indistinguishable from one whose
+    # columns are all zero. Re-raised below as SystemExit.
+    except Exception as error:
         raise SystemExit(
             f"FATAL: {spec.describe()} raised {type(error).__name__}: {error}\n"
             "A portfolio that produces no frames is indistinguishable from one whose "
@@ -585,27 +583,88 @@ def _generate(spec: RunSpec) -> tuple[Any, Any]:
     return corep, pillar3
 
 
+class _RunScan(NamedTuple):
+    """The coverage facts one portfolio-regime run contributes."""
+
+    observed: frozenset[ColumnKey]
+    non_numeric: frozenset[ColumnKey]
+    live: frozenset[ColumnKey]
+    cells: int
+    nulls: int
+    non_zero: int
+    frames: int
+
+
+def _scan_run(corep: Any, pillar3: Any) -> _RunScan:
+    """Tally one run's frames into a :class:`_RunScan`.
+
+    Extracted from ``census`` so that function reads as the matrix walk it is:
+    the per-column tallying is a separate concern and nesting it there put the
+    loop body three levels deep.
+    """
+    observed: set[ColumnKey] = set()
+    non_numeric: set[ColumnKey] = set()
+    live: set[ColumnKey] = set()
+    cells = nulls = non_zero = frames = 0
+
+    for key, frame in _template_frames(corep, pillar3):
+        frames += 1
+        for column, dtype in zip(frame.columns, frame.dtypes, strict=True):
+            if column in catalog.STRUCTURAL_COLS:
+                continue
+            address = key._replace(column=column)
+            if not dtype.is_numeric():
+                non_numeric.add(address)
+                continue
+            observed.add(address)
+            series = frame.get_column(column)
+            column_non_zero = int(series.fill_null(0).ne(0).sum())
+            cells += series.len()
+            nulls += series.null_count()
+            non_zero += column_non_zero
+            if column_non_zero:
+                live.add(address)
+
+    return _RunScan(
+        observed=frozenset(observed),
+        non_numeric=frozenset(non_numeric),
+        live=frozenset(live),
+        cells=cells,
+        nulls=nulls,
+        non_zero=non_zero,
+        frames=frames,
+    )
+
+
+def _field_frames(value: Any) -> Iterator[pl.DataFrame]:
+    """The non-empty frames a single bundle field holds.
+
+    A field is either ``pl.DataFrame | None`` or ``dict[str, pl.DataFrame]``;
+    normalising both shapes here keeps the shape-dispatch out of the walk.
+    """
+    if isinstance(value, pl.DataFrame):
+        if not value.is_empty():
+            yield value
+    elif isinstance(value, dict):
+        for frame in value.values():
+            if isinstance(frame, pl.DataFrame) and not frame.is_empty():
+                yield frame
+
+
 def _template_frames(corep: Any, pillar3: Any) -> Iterator[tuple[ColumnKey, pl.DataFrame]]:
     """Every emitted template frame, keyed by (family, template, "").
 
     Templates are enumerated by walking ``dataclasses.fields()`` of the two
-    bundles rather than from a list here: a field is either
-    ``pl.DataFrame | None`` or ``dict[str, pl.DataFrame]``, and a hand-written
-    template list would silently stop covering a newly added template.
+    bundles rather than from a list here: a hand-written template list would
+    silently stop covering a newly added template.
     """
     for family, bundle in (("corep", corep), ("pillar3", pillar3)):
         for field in dataclasses.fields(bundle):
             if field.name in NON_TEMPLATE_FIELDS:
                 continue
-            value = getattr(bundle, field.name)
             key = ColumnKey(family, field.name, "")
-            if isinstance(value, pl.DataFrame):
-                if not value.is_empty():
-                    yield key, value
-            elif isinstance(value, dict):
-                for frame in value.values():
-                    if isinstance(frame, pl.DataFrame) and not frame.is_empty():
-                        yield key, frame
+            for frame in _field_frames(getattr(bundle, field.name)):
+                yield key, frame
 
 
 class _WarningCollector(logging.Handler):
@@ -619,7 +678,12 @@ class _WarningCollector(logging.Handler):
         self.messages.append(record.getMessage())
 
 
-class _captured_warnings:  # noqa: N801 - context-manager helper, not a type
+# Lower-case name on purpose: this is a context-manager helper used as
+# ``with _captured_warnings() as w:``, so it reads as a verb phrase at the call
+# site rather than as a type. ruff does not select N801, so no suppression is
+# needed here — a per-line ignore comment previously suppressed nothing while
+# implying a rule was being overridden.
+class _captured_warnings:
     """Capture one run's pipeline warnings so degradation cannot pass as silence."""
 
     def __init__(self) -> None:

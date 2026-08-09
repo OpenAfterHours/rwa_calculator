@@ -62,7 +62,8 @@ def _load_census_module() -> Any:
     (``.claude/LESSONS.md`` B3).
     """
     spec = importlib.util.spec_from_file_location("_template_cell_census", SCRIPT_PATH)
-    assert spec is not None and spec.loader is not None, f"cannot import {SCRIPT_PATH}"
+    assert spec is not None, f"no import spec for {SCRIPT_PATH}"
+    assert spec.loader is not None, f"import spec for {SCRIPT_PATH} carries no loader"
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
@@ -106,9 +107,13 @@ def test_coverage_baseline_is_internally_coherent_and_still_addresses_real_colum
     assert len(set(live)) == len(live), "duplicate id in live_columns"
     assert len(set(dead_ids)) == len(dead_ids), "duplicate id in dead_columns"
     assert not set(live) & set(dead_ids), "a column is banked as both live and dead"
-    assert counts["live"] == len(live) and counts["dead"] == len(dead), (
-        f"counts disagree with the lists: counts say {counts['live']} live / "
-        f"{counts['dead']} dead, the lists hold {len(live)} / {len(dead)}.\n{REGENERATE}"
+    assert counts["live"] == len(live), (
+        f"live count disagrees with the list: counts say {counts['live']} live, "
+        f"the list holds {len(live)}.\n{REGENERATE}"
+    )
+    assert counts["dead"] == len(dead), (
+        f"dead count disagrees with the list: counts say {counts['dead']} dead, "
+        f"the list holds {len(dead)}.\n{REGENERATE}"
     )
     assert counts["template_column_pairs"] == len(banked), (
         f"template_column_pairs ({counts['template_column_pairs']}) is not "

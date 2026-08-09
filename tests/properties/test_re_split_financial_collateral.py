@@ -45,11 +45,16 @@ References:
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import polars as pl
 import pytest
 
 from tests.properties import portfolios as P
 from tests.properties.corpus import RE_SPLIT, RE_SPLIT_WITH_FINANCIAL
+
+if TYPE_CHECKING:
+    from tests.properties.portfolios import ExposureSpec
 
 _CARRIER: str = "collateral_adjusted_value"
 
@@ -80,7 +85,7 @@ def _legs_of(results: pl.DataFrame, parent: str) -> pl.DataFrame:
     return _parent_of(results).filter(pl.col("parent") == parent)
 
 
-def _spec(index: int):  # noqa: ANN202 - ExposureSpec, imported only for its fields
+def _spec(index: int) -> ExposureSpec:
     return RE_SPLIT_WITH_FINANCIAL[index]
 
 
@@ -180,7 +185,15 @@ class TestTheCarrierReachesBothLegs:
             legs = _legs_of(results, _parent_ref(index))
             parent_ead = float(legs["ead_final"].fill_null(0.0).sum())
             parent_carrier = float(legs[_CARRIER].fill_null(0.0).sum())
-            assert parent_ead > 0.0 and parent_carrier > 0.0
+            assert parent_ead > 0.0, (
+                f"{regime}/{_parent_ref(index)}: parent EAD is {parent_ead}, so the "
+                "share below would divide by zero and the assertion could not fail"
+            )
+            assert parent_carrier > 0.0, (
+                f"{regime}/{_parent_ref(index)}: parent {_CARRIER} is "
+                f"{parent_carrier}, so this parent pledges nothing and the "
+                "proportionality check would be vacuous"
+            )
 
             for row in legs.iter_rows(named=True):
                 ead_share = float(row["ead_final"] or 0.0) / parent_ead

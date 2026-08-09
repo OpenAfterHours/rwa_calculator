@@ -12,7 +12,7 @@ Regenerate after annotation changes:
 uv run python scripts/generate_citation_matrix.py
 ```
 
-Last generated: 2026-08-05.
+Last generated: 2026-08-09.
 
 ## CRR (Capital Requirements Regulation)
 
@@ -61,9 +61,9 @@ Last generated: 2026-08-05.
     --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:793:1054"
     ```
 
-??? quote "`apply_risk_weights` — src/rwa_calc/engine/sa/risk_weights.py:337"
+??? quote "`apply_risk_weights` — src/rwa_calc/engine/sa/risk_weights.py:341"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:337:394"
+    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:341:398"
     ```
 
 ??? quote "`classify` — src/rwa_calc/engine/stages/classify/classifier.py:106"
@@ -248,6 +248,16 @@ Last generated: 2026-08-05.
     --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:455:541"
     ```
 
+??? quote "`_crr_append_institution_maturity_branches` — src/rwa_calc/engine/sa/risk_weights.py:762"
+    ```python
+    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:762:832"
+    ```
+
+??? quote "`crr_art_121_4_trade_finance_expr` — src/rwa_calc/engine/sa/sovereign_derived.py:103"
+    ```python
+    --8<-- "src/rwa_calc/engine/sa/sovereign_derived.py:103:130"
+    ```
+
 
 ### CRR Art. 122 — Exposures to corporates
 
@@ -279,9 +289,9 @@ Last generated: 2026-08-05.
     --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:316:452"
     ```
 
-??? quote "`_crr_append_retail_branches` — src/rwa_calc/engine/sa/risk_weights.py:730"
+??? quote "`_crr_append_retail_branches` — src/rwa_calc/engine/sa/risk_weights.py:679"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:730:761"
+    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:679:710"
     ```
 
 ??? quote "`_build_qualifies_as_retail_expr` — src/rwa_calc/engine/stages/classify/attributes.py:642"
@@ -292,17 +302,17 @@ Last generated: 2026-08-05.
 
 ### CRR Art. 124 — Exposures secured by mortgages on immovable property
 
-??? quote "`_crr_append_real_estate_branches` — src/rwa_calc/engine/sa/risk_weights.py:764"
+??? quote "`_crr_append_real_estate_branches` — src/rwa_calc/engine/sa/risk_weights.py:713"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:764:810"
+    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:713:759"
     ```
 
 
 ### CRR Art. 125 — Exposures fully and completely secured by mortgages on residential property
 
-??? quote "`split` — src/rwa_calc/engine/stages/re_split/splitter.py:171"
+??? quote "`split` — src/rwa_calc/engine/stages/re_split/splitter.py:203"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/re_split/splitter.py:171:222"
+    --8<-- "src/rwa_calc/engine/stages/re_split/splitter.py:203:254"
     ```
 
 
@@ -313,22 +323,22 @@ Last generated: 2026-08-05.
     --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:451:564"
     ```
 
-??? quote "`split` — src/rwa_calc/engine/stages/re_split/splitter.py:172"
+??? quote "`split` — src/rwa_calc/engine/stages/re_split/splitter.py:204"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/re_split/splitter.py:171:222"
+    --8<-- "src/rwa_calc/engine/stages/re_split/splitter.py:203:254"
     ```
 
 
 ### CRR Art. 127 — Exposures in default
 
-??? quote "`_crr_defaulted_re_secured_share` — src/rwa_calc/engine/sa/risk_weights.py:1526"
+??? quote "`_crr_defaulted_re_secured_share` — src/rwa_calc/engine/sa/risk_weights.py:1496"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:1526:1565"
+    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:1496:1535"
     ```
 
-??? quote "`_crr_defaulted_re_secured_share` — src/rwa_calc/engine/sa/risk_weights.py:1528"
+??? quote "`_crr_defaulted_re_secured_share` — src/rwa_calc/engine/sa/risk_weights.py:1498"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:1526:1565"
+    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:1496:1535"
     ```
 
 
@@ -393,14 +403,14 @@ Last generated: 2026-08-05.
 
 ### CRR Art. 134 — Other items
 
-??? quote "`_apply_b31_risk_weight_overrides` — src/rwa_calc/engine/sa/risk_weights.py:1032"
+??? quote "`_apply_b31_risk_weight_overrides` — src/rwa_calc/engine/sa/risk_weights.py:1002"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:1032:1239"
+    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:1002:1209"
     ```
 
-??? quote "`_apply_crr_risk_weight_overrides` — src/rwa_calc/engine/sa/risk_weights.py:1242"
+??? quote "`_apply_crr_risk_weight_overrides` — src/rwa_calc/engine/sa/risk_weights.py:1212"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:1242:1435"
+    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:1212:1405"
     ```
 
 
@@ -422,19 +432,19 @@ Last generated: 2026-08-05.
 
 ### CRR Art. 137 — Use of credit assessments by export credit agencies
 
-??? quote "`_eca_meip_rw_expr` — src/rwa_calc/engine/sa/risk_weights.py:500"
+??? quote "`_eca_meip_rw_expr` — src/rwa_calc/engine/sa/risk_weights.py:449"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:500:514"
+    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:449:463"
     ```
 
-??? quote "`_apply_b31_risk_weight_overrides` — src/rwa_calc/engine/sa/risk_weights.py:1033"
+??? quote "`_apply_b31_risk_weight_overrides` — src/rwa_calc/engine/sa/risk_weights.py:1003"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:1032:1239"
+    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:1002:1209"
     ```
 
-??? quote "`_apply_crr_risk_weight_overrides` — src/rwa_calc/engine/sa/risk_weights.py:1243"
+??? quote "`_apply_crr_risk_weight_overrides` — src/rwa_calc/engine/sa/risk_weights.py:1213"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:1242:1435"
+    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:1212:1405"
     ```
 
 
@@ -456,9 +466,9 @@ Last generated: 2026-08-05.
 
 ### CRR Art. 140 — Long-term and short-term credit assessments
 
-??? quote "`_apply_obligor_st_contamination_override` — src/rwa_calc/engine/sa/risk_weights.py:397"
+??? quote "`_apply_obligor_st_contamination_override` — src/rwa_calc/engine/sa/risk_weights.py:401"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:397:437"
+    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:401:441"
     ```
 
 ??? quote "`apply_short_term_rating_override` — src/rwa_calc/engine/stages/hierarchy/enrich.py:162"
@@ -1463,17 +1473,17 @@ Last generated: 2026-08-05.
     --8<-- "src/rwa_calc/engine/sa/b31_risk_weight_tables.py:453:484"
     ```
 
-??? quote "`_prepare_risk_weight_lookup` — src/rwa_calc/engine/sa/risk_weights.py:904"
+??? quote "`_prepare_risk_weight_lookup` — src/rwa_calc/engine/sa/risk_weights.py:874"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:903:1029"
+    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:873:999"
     ```
 
 
 ### PS1/26, paragraph 123 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_b31_append_retail_branches` — src/rwa_calc/engine/sa/risk_weights.py:571"
+??? quote "`_b31_append_retail_branches` — src/rwa_calc/engine/sa/risk_weights.py:520"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:571:602"
+    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:520:551"
     ```
 
 
@@ -1503,9 +1513,9 @@ Last generated: 2026-08-05.
 
 ### PS1/26, paragraph 124 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_b31_append_real_estate_branches` — src/rwa_calc/engine/sa/risk_weights.py:605"
+??? quote "`_b31_append_real_estate_branches` — src/rwa_calc/engine/sa/risk_weights.py:554"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:605:626"
+    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:554:575"
     ```
 
 
@@ -1527,25 +1537,25 @@ Last generated: 2026-08-05.
 
 ### PS1/26, paragraph 124F — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`split` — src/rwa_calc/engine/stages/re_split/splitter.py:173"
+??? quote "`split` — src/rwa_calc/engine/stages/re_split/splitter.py:205"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/re_split/splitter.py:171:222"
+    --8<-- "src/rwa_calc/engine/stages/re_split/splitter.py:203:254"
     ```
 
 
 ### PS1/26, paragraph 127 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_crr_defaulted_re_secured_share` — src/rwa_calc/engine/sa/risk_weights.py:1527"
+??? quote "`_crr_defaulted_re_secured_share` — src/rwa_calc/engine/sa/risk_weights.py:1497"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:1526:1565"
+    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:1496:1535"
     ```
 
 
 ### PS1/26, paragraph 128 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_b31_append_high_risk_branch` — src/rwa_calc/engine/sa/risk_weights.py:556"
+??? quote "`_b31_append_high_risk_branch` — src/rwa_calc/engine/sa/risk_weights.py:505"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:556:568"
+    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:505:517"
     ```
 
 
@@ -1582,25 +1592,25 @@ Last generated: 2026-08-05.
     --8<-- "src/rwa_calc/engine/equity/calculator.py:645:747"
     ```
 
-??? quote "`_is_b31_subordinated_debt` — src/rwa_calc/engine/sa/risk_weights.py:1568"
+??? quote "`_is_b31_subordinated_debt` — src/rwa_calc/engine/sa/risk_weights.py:1538"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:1568:1583"
+    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:1538:1553"
     ```
 
 
 ### PS1/26, paragraph 139 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_prepare_risk_weight_lookup` — src/rwa_calc/engine/sa/risk_weights.py:903"
+??? quote "`_prepare_risk_weight_lookup` — src/rwa_calc/engine/sa/risk_weights.py:873"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:903:1029"
+    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:873:999"
     ```
 
 
 ### PS1/26, paragraph 140 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_apply_obligor_st_contamination_override` — src/rwa_calc/engine/sa/risk_weights.py:398"
+??? quote "`_apply_obligor_st_contamination_override` — src/rwa_calc/engine/sa/risk_weights.py:402"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:397:437"
+    --8<-- "src/rwa_calc/engine/sa/risk_weights.py:401:441"
     ```
 
 ??? quote "`_apply_obligor_st_contamination_flags` — src/rwa_calc/engine/stages/hierarchy/enrich.py:959"

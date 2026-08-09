@@ -40,10 +40,33 @@ uncommitted work can be destroyed. Restoration is belt-and-braces: a context
 manager with ``try/finally``, an ``atexit`` hook, and a post-restore verification
 that the bytes really came back.
 
+The spawn pre-flight
+--------------------
+Every gate scores a mutant by an exit code, so an interpreter that cannot start
+makes every gate red, every mutant ``DETECTED``, and the campaign report a rate
+of ~100% — fiction, and arithmetically indistinguishable from a
+genuinely airtight estate. That is the exact failure this harness exists to
+expose, so it must not be able to produce it. Before any gate runs, the resolved
+interpreter is made to import an engine entry point once; if it cannot spawn,
+cannot import, or hangs, the campaign aborts non-zero **without scoring a single
+mutant**. ``--self-test`` and ``--reachability-only`` spawn no interpreter — the
+reachability probe imports in-process — and are exempt.
+
 Run:
     uv run python scripts/defect_injection.py --self-test          # applies nothing
     uv run python scripts/defect_injection.py --reachability-only  # probe, no gates
     uv run python scripts/defect_injection.py --ladder legacy      # full campaign
+
+Where ``uv`` is unavailable — a bare venv, a CI runner, a git worktree with no
+``.venv`` — set ``DEFECT_INJECTION_PYTHON`` to an interpreter (optionally with
+leading flags; it is ``shlex``-split) and every gate command is retargeted
+through it, ``baseline_cmd`` included:
+
+    DEFECT_INJECTION_PYTHON=/repo/.venv/bin/python \\
+        /repo/.venv/bin/python scripts/defect_injection.py --ladder legacy
+
+Unset, the commands run byte-for-byte as written above. See ``resolve_command``:
+retargeting happens in one place, so gates move together or not at all.
 
 Every pytest gate carries ``-n 0``: the machine this runs on has ~2.7 GB free
 and ``-n auto`` would spawn sixteen workers each building session fixtures.
@@ -55,6 +78,8 @@ import argparse
 import atexit
 import hashlib
 import json
+import os
+import shlex
 import subprocess
 import sys
 import time
@@ -87,6 +112,151 @@ OUTCOME_TIMEOUT = "TIMEOUT"
 
 
 # =============================================================================
+# The interpreter
+# =============================================================================
+
+
+#: Every command in ``LADDER`` is declared in the form a developer types by
+#: hand. This prefix is what ``resolve_command`` swaps out, and it is the only
+#: place that knows how a gate is spawned.
+_UV_PREFIX: tuple[str, ...] = ("uv", "run")
+
+#: Set to an interpreter — ``/path/to/python``, optionally with leading flags —
+#: to run every gate through it instead of through ``uv``. Unset is today's
+#: behaviour, exactly.
+INTERPRETER_ENV_VAR = "DEFECT_INJECTION_PYTHON"
+
+#: What the pre-flight imports. ``rwa_calc`` alone is too weak a probe — the
+#: package ``__init__`` is lazy and imports in ~150us without touching polars, so
+#: an interpreter with a broken dependency stack would sail through it and then
+#: redden every gate. An engine entry point drags in the real stack for ~0.3s.
+_PREFLIGHT_IMPORT = "import rwa_calc.engine.pipeline"
+
+#: The probe, declared in the same form as a gate so it resolves through the same
+#: code path and therefore tests what the gates will really run.
+_PREFLIGHT_CMD: tuple[str, ...] = (*_UV_PREFIX, "python", "-c", _PREFLIGHT_IMPORT)
+
+#: The import measures ~0.3s warm. A minute means something is wrong with the
+#: interpreter, and a hung pre-flight must not stall a campaign that will not run.
+_PREFLIGHT_TIMEOUT_SECONDS = 60.0
+
+
+def interpreter_override() -> tuple[str, ...] | None:
+    """The operator-supplied interpreter, or ``None`` to keep ``uv run``."""
+    raw = os.environ.get(INTERPRETER_ENV_VAR, "").strip()
+    return tuple(shlex.split(raw)) if raw else None
+
+
+def resolve_command(cmd: tuple[str, ...]) -> tuple[str, ...]:
+    """Turn one declared gate command into a spawnable one. The only such place.
+
+    Unset ``DEFECT_INJECTION_PYTHON`` returns the tuple unchanged, so the default
+    is byte-identical to what the docstring says you can type. Set, it rewrites
+    ``uv run python X`` to ``<interpreter> X`` and ``uv run pytest X`` to
+    ``<interpreter> -m pytest X``.
+
+    Every command goes through here — gate commands and ``baseline_cmd`` alike —
+    because a *partially* retargeted ladder is worse than an unretargeted one: the
+    gates that could not spawn would go red on every mutant and score as
+    detections. For the same reason a command this function does not recognise is
+    a hard error, never a silent pass-through.
+    """
+    override = interpreter_override()
+    if override is None:
+        return cmd
+    if cmd[: len(_UV_PREFIX)] != _UV_PREFIX:
+        raise SystemExit(
+            f"{INTERPRETER_ENV_VAR} is set, but this command does not begin with "
+            f"{' '.join(_UV_PREFIX)!r} and so cannot be retargeted: {cmd!r}"
+        )
+    tool, *arguments = cmd[len(_UV_PREFIX) :]
+    if tool == "python":
+        return (*override, *arguments)
+    if tool == "pytest":
+        return (*override, "-m", "pytest", *arguments)
+    raise SystemExit(
+        f"{INTERPRETER_ENV_VAR} is set, but {tool!r} is not something this harness "
+        f"knows how to run through an interpreter: {cmd!r}"
+    )
+
+
+class InterpreterUnusable(RuntimeError):
+    """The resolved interpreter cannot be spawned, or cannot import ``rwa_calc``."""
+
+
+def preflight() -> None:
+    """Prove the interpreter works before a single mutant is scored.
+
+    A gate is scored by its exit code and nothing else, so an interpreter that
+    cannot start is not a degraded campaign — it is a campaign that reports every
+    mutant as ``DETECTED`` and a detection rate of ~100%, with no signal anywhere
+    in the output that the number is fiction. Manufacturing that result is the
+    single worst thing this harness could do, which is why this raises instead of
+    warning: aborting with nothing measured is strictly better than publishing a
+    perfect score that measures only a broken invocation.
+    """
+    cmd = resolve_command(_PREFLIGHT_CMD)
+    printable = " ".join(cmd)
+    try:
+        proc = subprocess.run(
+            cmd,
+            cwd=_REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=_PREFLIGHT_TIMEOUT_SECONDS,
+        )
+    except FileNotFoundError as exc:
+        raise InterpreterUnusable(
+            _preflight_failure(printable, f"the executable does not exist ({exc})")
+        ) from exc
+    except OSError as exc:
+        raise InterpreterUnusable(
+            _preflight_failure(printable, f"it could not be executed ({exc})")
+        ) from exc
+    except subprocess.TimeoutExpired as exc:
+        raise InterpreterUnusable(
+            _preflight_failure(
+                printable, f"it did not finish within {_PREFLIGHT_TIMEOUT_SECONDS:.0f}s"
+            )
+        ) from exc
+    if proc.returncode != 0:
+        tail = "\n".join(((proc.stderr or "") + (proc.stdout or "")).strip().splitlines()[-12:])
+        raise InterpreterUnusable(
+            _preflight_failure(printable, f"it exited {proc.returncode}", tail)
+        )
+    print(f"Spawn pre-flight OK: {printable}", flush=True)
+
+
+def _preflight_failure(printable: str, reason: str, tail: str = "") -> str:
+    """The abort message. It has to explain why failing beats proceeding."""
+    lines = [
+        "=" * 78,
+        "SPAWN PRE-FLIGHT FAILED — CAMPAIGN ABORTED, NOTHING SCORED",
+        "=" * 78,
+        f"  command   {printable}",
+        f"  reason    {reason}",
+    ]
+    if tail:
+        lines += ["", "  output", *(f"    {line}" for line in tail.splitlines())]
+    lines += [
+        "",
+        "  Why this aborts instead of carrying on:",
+        "  every gate is scored by its exit code, so an interpreter that cannot",
+        "  run would make EVERY gate red on EVERY mutant. The campaign would",
+        "  report ~100% detection and name no escapes — a fabricated perfect",
+        "  score, indistinguishable in the scorecard from a genuinely airtight",
+        "  estate. A campaign that measures nothing is recoverable; one that",
+        "  publishes fiction is not.",
+        "",
+        f"  Fix: point {INTERPRETER_ENV_VAR} at an interpreter that can run the",
+        "  import below, or unset it where `uv run` works. Verify by hand first:",
+        f"    {printable}",
+        "=" * 78,
+    ]
+    return "\n".join(lines)
+
+
+# =============================================================================
 # The ladder
 # =============================================================================
 
@@ -101,6 +271,10 @@ class Gate:
     ``baseline_cmd`` runs once on the clean tree and prepares whatever the gate
     compares against (the impact report needs a captured snapshot). ``{baseline}``
     in either command is substituted with a per-run scratch path.
+
+    Both commands are declared in ``uv run …`` form — what a developer types —
+    and both are passed through ``resolve_command`` before spawning, so a new
+    gate is retargetable by ``DEFECT_INJECTION_PYTHON`` for free.
     """
 
     name: str
@@ -402,7 +576,7 @@ class MutantResult:
 
 def run_gate(gate: Gate, baseline_dir: Path) -> GateResult:
     """One rung. A non-zero exit is a detection; a timeout is neither."""
-    cmd = tuple(part.format(baseline=baseline_dir.as_posix()) for part in gate.cmd)
+    cmd = resolve_command(tuple(part.format(baseline=baseline_dir.as_posix()) for part in gate.cmd))
     started = time.perf_counter()
     try:
         proc = subprocess.run(
@@ -679,6 +853,16 @@ def main() -> int:
         print(exc)
         return 1
 
+    # Before anything is mutated or measured. Skipped only where no gate will be
+    # spawned: --reachability-only probes in-process, so a broken interpreter
+    # cannot corrupt its verdicts.
+    if not args.reachability_only:
+        try:
+            preflight()
+        except InterpreterUnusable as exc:
+            print(exc, file=sys.stderr)
+            return 2
+
     mutants = select(args.mutants, args.categories)
     if args.resume and out.exists():
         done = {
@@ -710,7 +894,9 @@ def main() -> int:
                 continue
             print(f"Preparing baseline for {gate.name} ...", flush=True)
             subprocess.run(
-                tuple(p.format(baseline=baseline_dir.as_posix()) for p in gate.baseline_cmd),
+                resolve_command(
+                    tuple(p.format(baseline=baseline_dir.as_posix()) for p in gate.baseline_cmd)
+                ),
                 cwd=_REPO_ROOT,
                 check=False,
             )
@@ -726,6 +912,9 @@ def main() -> int:
 
     payload = {
         "ladder": ladder,
+        # Provenance: a scorecard has to say which interpreter produced it, or a
+        # reader cannot tell an override apart from the default.
+        "interpreter": " ".join(interpreter_override() or _UV_PREFIX),
         "gates": [g.name for g in gates],
         "runtime_seconds": round(time.perf_counter() - started, 1),
         "baseline_digest": baseline_digest,

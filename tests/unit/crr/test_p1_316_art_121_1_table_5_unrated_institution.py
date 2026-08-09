@@ -274,11 +274,23 @@ class TestP1316Art1214TradeFinanceIsHeldOut:
         maturity_years: float,
         sovereign_cqs: int,
     ) -> None:
-        """Art. 121(4) prescribes 50% (20% at <=3m residual); neither rate exists yet.
+        """Art. 121(4) trade finance lands on the 100% residual — the interim value.
 
-        So these rows must keep the conservative Art. 121 100% residual rather
-        than take the ladder. 100% over-states a required 50%; the ladder would
-        UNDER-state it by 30pp at sovereign CQS 1.
+        Three values are defensible for this population and the estate must not
+        drift between them silently:
+
+            100%  what the engine returns today — the Art. 121 unrated residual
+                  reached by falling through the base CQS join. A DELIBERATE
+                  INTERIM: no Art. 121(4) branch exists.
+             50%  Art. 121(4) read purposively, as a trade-finance floor.
+             20%  Art. 121(4) read literally — it says "Notwithstanding
+                  paragraphs 2 and 3", NOT 1, so Table 5 would still govern
+                  and sovereign CQS 1 would give 20%.
+
+        The interim is conservative against both readings, which is the right
+        way to be wrong while the question is open; it is filed as a finding,
+        not settled here. This test pins 100% so that whichever way the
+        interpretation lands, the change is a visible, deliberate edit.
 
         **The maturity parametrisation is the point of this test.** P1.316 was
         dropped once because a maturity-gated exclusion —
@@ -298,6 +310,10 @@ class TestP1316Art1214TradeFinanceIsHeldOut:
         )
 
         assert actual == pytest.approx(1.00)
+        # Name both alternatives so a future edit toward either reading trips
+        # here rather than only shifting the number above.
+        assert actual != pytest.approx(0.50), "an Art. 121(4) 50% branch was added"
+        assert actual != pytest.approx(0.20), "trade finance leaked into the Table 5 ladder"
 
     @pytest.mark.parametrize("maturity_years", [0.5, 1.0, 1.5, 5.0])
     def test_p1_316_the_same_row_without_the_trade_flag_takes_the_ladder(

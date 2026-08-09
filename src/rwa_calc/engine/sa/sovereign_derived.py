@@ -106,13 +106,27 @@ def crr_art_121_4_trade_finance_expr() -> pl.Expr:
 
     Art. 121(4) prescribes a flat **50%** (20% where residual maturity is three
     months or less) for trade finance under Art. 162(3) second subparagraph
-    point (b), "notwithstanding paragraphs 2 and 3" — so it outranks the
-    Art. 121(1) Table 5 ladder as lex specialis.
+    point (b), "Notwithstanding paragraphs 2 and 3".
 
-    Neither rate is implemented and no pack entry exists for either (P1.326 /
-    P7.8 own them), so these rows are held OUT of the Table 5 ladder and keep
-    the Art. 121 unrated 100% residual. 100% over-states a required 50%;
-    letting the ladder through would UNDER-state it by 30pp at sovereign CQS 1.
+    **Which paragraph (4) displaces is genuinely ambiguous, and this predicate
+    does not resolve it.** It names (2) and (3), *not* (1). So:
+
+    - On a PURPOSIVE reading, (4) is a floor for trade finance generally and
+      the answer is 50%.
+    - On a LITERAL reading, (4) never displaces (1), so Table 5 still governs
+      and the answer is 20% at sovereign CQS 1.
+
+    The two readings differ by 30pp in OPPOSITE directions. Neither rate is
+    implemented and no pack entry exists for either (P1.326 / P7.8 own them),
+    so this predicate holds the rows OUT of the ladder and they land on the
+    Art. 121 unrated **100%** residual via the base CQS join — over-stating
+    both candidates, which is the right way to be wrong while the question is
+    open. Do NOT add a 50% branch on the strength of this docstring; settling
+    it needs the primary text read against the PRA Rulebook rendering.
+
+    What is NOT ambiguous is the direction of the error if these rows are let
+    into the ladder: 20% against a required 50% is a 30pp UNDERSTATEMENT, and
+    that is why the exclusion exists at all.
 
     **There is deliberately no maturity gate.** Only Art. 121(4)'s 20% limb is
     maturity-conditioned; its 50% limb applies at every maturity. The sibling

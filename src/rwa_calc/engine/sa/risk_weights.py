@@ -820,8 +820,21 @@ def _crr_append_institution_maturity_branches(chain: _RWChain, uc: pl.Expr) -> C
         # is why it carries no maturity gate of its own. Art. 121(2) (central
         # government unrated -> 100%) is the ``unrated_default`` that
         # ``sovereign_derived_rw_expr`` applies when cp_sovereign_cqs is null.
+        #
         # Art. 121(4) trade finance is EXCLUDED at ANY maturity — see
-        # ``crr_art_121_4_trade_finance_expr``.
+        # ``crr_art_121_4_trade_finance_expr``. Excluded rows are NOT given
+        # Art. 121(4)'s 50%: no such branch exists, so they fall through to the
+        # base CQS join and land on INSTITUTION_RISK_WEIGHTS_CRR[UNRATED] =
+        # 100%. That is a DELIBERATE INTERIM, not a derived answer, and it is
+        # conservative against BOTH candidate readings of the article:
+        #   - purposive (4) as a trade-finance floor  -> 50%
+        #   - literal (4) ("Notwithstanding paragraphs 2 and 3", NOT 1, so
+        #     Table 5 is never displaced)             -> 20% at sovereign CQS 1
+        # 100% over-states both. Settling which reading governs needs the
+        # primary text read against the PRA Rulebook rendering and is filed as
+        # a finding, not decided here. Pinned by
+        # ``test_p1_316_trade_finance_stays_on_the_100pct_residual`` so the
+        # value cannot drift silently between the three candidates.
         .when(is_institution & is_unrated & ~crr_art_121_4_trade_finance_expr())
         .then(
             sovereign_derived_rw_expr(

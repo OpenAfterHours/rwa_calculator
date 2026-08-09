@@ -215,6 +215,18 @@ def test_coverage_baseline_is_well_formed_and_every_metric_declares_a_direction(
     ``summarise()`` no longer emits turns the gate into a ``KeyError`` two
     minutes into a CI job. Both are checked here, for free.
 
+    This earned its place within an hour of landing. ``cells_live`` was added to
+    ``_RATCHET_MIN`` in the same change that introduced it, and the baseline was
+    not re-banked in the same breath — so ``--check`` would have raised
+    ``KeyError: 'cells_live'`` about 150s into the new CI job, on every run, with
+    no coverage defect anywhere. This test failed in 0.30s instead, naming the
+    metric and the fix::
+
+        directed but unbanked (--check would KeyError): ['cells_live']
+
+    That is the whole argument for the cheap half of this file: the expensive gate
+    cannot report its own disarming, because it dies before it computes anything.
+
     Arrange: the committed baseline and the script's direction declarations.
     Act:     read the baseline's metric keys and the metric names the script
              emits, using an empty observation so no pipeline runs.

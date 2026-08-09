@@ -4,10 +4,16 @@ Back-compat shim for the exposure classification stage.
 The implementation moved to the stage package
 ``rwa_calc.engine.stages.classify`` (migration Phase 4 Slice 3):
 ``classifier`` (ExposureClassifier recipe), ``attributes``, ``subtypes``,
-``re_split_flags``, ``permissions``, ``approach``, ``audit``, and the
-``stage`` adapter. This module remains only so historical imports
-(``from rwa_calc.engine.classifier import ExposureClassifier``) keep
-working; new code should import from the stage package directly.
+``permissions``, ``approach``, ``audit``, and the ``stage`` adapter. The
+real-estate candidate flagging the classifier invokes lives one package
+over, in ``rwa_calc.engine.stages.re_split.flagging``.
+
+This module forwards ``ExposureClassifier`` and nothing else. It is
+scheduled for removal: the only remaining callers are test modules plus
+the module-path string lists in ``tests/contracts/test_logging_contract.py``
+and ``tests/integration/test_logging_pipeline.py``, and retiring it is a
+mechanical import repoint held back only so it lands on a quiet tree.
+Import from the stage package in new code; do not add callers here.
 
 References:
 - CRR Art. 112-134: Exposure classes

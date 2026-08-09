@@ -114,7 +114,7 @@ def run(
     # synthetic row so the downstream SA Institution lookup (CRR
     # Art. 120(1) Table 3, keyed off ``cqs``) and any IRB routing (keyed
     # off ``internal_pd``) see the same rating that
-    # ``hierarchy._attach_counterparty_rating`` joined onto traditional
+    # ``enrich.attach_counterparty_rating`` joined onto traditional
     # lending rows. Without this enrichment, CCR rows arrive at the SA
     # calculator with ``cqs=None`` and fall through to the 100%
     # unrated-institution fallback.

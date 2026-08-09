@@ -27,7 +27,7 @@ import pytest
 
 from rwa_calc.contracts.bundles import ResolvedHierarchyBundle
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.engine.classifier import ExposureClassifier
+from rwa_calc.engine.stages.classify import ExposureClassifier
 from tests.fixtures.p1_125.p1_125 import (
     make_corporate_exposure,
     make_counterparty_with_fse_column,

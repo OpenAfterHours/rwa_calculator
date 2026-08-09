@@ -48,7 +48,7 @@ Regulatory references:
     - PRA PS1/26 Art. 122 Table 6: unrated corporate SA RW = 100%
     - PRA PS1/26 Art. 123(3)(b): regulatory retail SA RW = 75%
     - BCBS CRE20.66: granularity criterion
-    - src/rwa_calc/engine/classifier.py: _build_qualifies_as_retail_expr (insertion point)
+    - engine/stages/classify/: _build_qualifies_as_retail_expr (insertion point)
     - tests/fixtures/p5_15/p5_15.py: portfolio constants
 """
 

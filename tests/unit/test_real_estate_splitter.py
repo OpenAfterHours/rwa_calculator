@@ -27,7 +27,7 @@ import pytest
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.engine.re_splitter import RealEstateSplitter
+from rwa_calc.engine.stages.re_split import RealEstateSplitter
 from tests.fixtures.resolved_bundle import make_crm_bundle
 
 _REPORTING_DATE = date(2026, 12, 31)

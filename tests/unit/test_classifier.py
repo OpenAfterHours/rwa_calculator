@@ -24,7 +24,7 @@ from rwa_calc.contracts.bundles import (
 )
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, ExposureClass, PermissionMode
-from rwa_calc.engine.classifier import ExposureClassifier
+from rwa_calc.engine.stages.classify import ExposureClassifier
 from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolved_bundle
 
 if TYPE_CHECKING:

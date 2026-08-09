@@ -26,9 +26,8 @@ class ExposureClass(str, Enum):
 
 ### Step 2: Add Classification Logic
 
-Classification logic lives in the `engine/stages/classify/` package
-(`engine/classifier.py` is now only a back-compat shim re-exporting
-`ExposureClassifier`). Add the class-determination rule in the relevant module,
+Classification logic lives in the `engine/stages/classify/` package, which is
+its only home. Add the class-determination rule in the relevant module,
 e.g. `attributes.py` / `subtypes.py`:
 
 ```python

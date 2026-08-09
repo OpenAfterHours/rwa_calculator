@@ -14,10 +14,10 @@ Layout:
   load-bearing — enrichment and classifier thresholds assume
   reporting-currency amounts)
 
-``rwa_calc.engine.fx_converter`` remains as a thin back-compat shim
-re-exporting ``FXConverter`` and ``create_fx_converter`` from here.
-``engine/fx_rate_sync.py`` (EUR/GBP rate sync consumed by the pipeline
-facade) is deliberately not part of this package.
+This package is the only home of the FX conversion kernel; import
+``FXConverter`` from here and its ``create_fx_converter`` factory from
+``stages.fx.converter``. ``engine/fx_rate_sync.py`` (EUR/GBP rate sync
+consumed by the pipeline facade) is deliberately not part of this package.
 
 References:
 - CRR Art. 224 / Art. 233(3)-(4): downstream FX-mismatch haircuts read the

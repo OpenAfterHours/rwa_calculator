@@ -56,8 +56,8 @@ import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, ExposureClass
-from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.irb.formulas import get_correlation_params
+from rwa_calc.engine.stages.classify import ExposureClassifier
 from rwa_calc.rulebook import RulepackV0
 from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolved_bundle
 

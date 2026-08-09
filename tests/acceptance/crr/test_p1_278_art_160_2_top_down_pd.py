@@ -66,13 +66,13 @@ from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolv
 
 from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
 from rwa_calc.domain.enums import ApproachType, ExposureClass
-from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.irb.transforms import (
     apply_all_formulas,
     apply_firb_lgd,
     classify_approach,
     prepare_columns,
 )
+from rwa_calc.engine.stages.classify import ExposureClassifier
 
 # ---------------------------------------------------------------------------
 # Scenario inputs

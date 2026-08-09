@@ -58,7 +58,7 @@ References:
     - CRR Art. 155: simple risk weight method and PD/LGD method for equity
       (permitted under CRR — test uses CRR as a control, not to exercise IRB).
     - docs/specifications/crr/sa-risk-weights.md: Equity section.
-    - src/rwa_calc/engine/classifier.py: _build_approach_expr() (lines 1570-1652).
+    - engine/stages/classify/: _build_approach_expr() (lines 1570-1652).
 
 Usage:
     uv run python tests/fixtures/p2_39/p2_39.py

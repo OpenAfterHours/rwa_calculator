@@ -16,8 +16,8 @@ Layout:
   ``re_split_*`` candidate columns it emits are consumed only by the
   splitter
 
-``rwa_calc.engine.re_splitter`` remains as a thin back-compat shim
-re-exporting ``RealEstateSplitter`` from here. Split parameters live in
+This package is the only home of the RE loan-splitter stage; import
+``RealEstateSplitter`` from here. Split parameters live in
 ``params.py``, resolving their LTV caps from the rulepack
 (``re_split_{rre,cre}_secured_ltv_cap`` in packs/{crr,b31}.py).
 

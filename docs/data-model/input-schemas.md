@@ -169,7 +169,7 @@ counterparties = pl.DataFrame({
 
 ### Classification Algorithm Summary
 
-The classifier (`engine/classifier.py`) processes counterparties through these steps:
+The classifier (`engine/stages/classify/`) processes counterparties through these steps:
 
 1. **Entity Type Mapping**: Maps `entity_type` to both SA and IRB exposure classes
 2. **SME Classification**: Checks if `annual_revenue < EUR 50m` for corporates

@@ -185,6 +185,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   past-tense with the resolution in both the JSON register and the test's
   `REGISTER_NOTES`.
 
+### Removed
+- **The four back-compat shells left by the Phase 4 stage migration are
+  deleted.** `engine/classifier.py`, `engine/hierarchy.py`,
+  `engine/re_splitter.py` and `engine/fx_converter.py` had been reduced to
+  23–29 lines apiece — a docstring, a re-export, and a module logger that could
+  never emit — while their implementations lived in `engine/stages/{classify,
+  hierarchy,re_split,fx}/`. No production code imported them; they were kept
+  alive by 47 test and script files. Every importer now names the stage package
+  directly, and `rwa_calc.engine` re-exports `HierarchyResolver` from
+  `stages.hierarchy`.
+
+  **This was masking a broken test.**
+  `test_p6_26_qrre_coupling_constant.py::test_qrre_coupling_todo_marker_removed`
+  read `Path(hierarchy_module.__file__).read_text()` to assert a forbidden
+  `TODO(qrre-coupling)` marker was absent. Once the implementation moved,
+  `__file__` resolved to the 28-line shell, so the guard scanned a file that
+  could never contain the marker and passed unconditionally. It now scans every
+  module in the `stages/hierarchy/` package — verified to fail when the marker
+  is reintroduced into `facility_undrawn.py`. The private constant
+  `_FACILITY_QRRE_COUPLED_COLUMNS` was being re-exported through the shell
+  solely to satisfy that test's `hasattr` probe.
+
+  Two further artefacts went with them: `tests/contracts/test_logging_contract.py`
+  asserted the module-logger contract against the three shell paths (now the
+  real recipe modules), and `_NAMESPACE_LOGGER_NAMES` in
+  `tests/integration/test_logging_pipeline.py` was dead — defined, never read.
+
+  **New `arch_check` check 18** bans pure re-export shells under `engine/`: a
+  module with no defs whose body is only imports plus a docstring, `__future__`,
+  `__all__` or the module logger. `REEXPORT_SHELL_ALLOWLIST` is empty by design.
+
 ### Changed
 - **One work queue.** `DOCS_IMPLEMENTATION_PLAN.md` is retired: its open items
   merged into `IMPLEMENTATION_PLAN.md` (Tier 5 is now the docs queue that

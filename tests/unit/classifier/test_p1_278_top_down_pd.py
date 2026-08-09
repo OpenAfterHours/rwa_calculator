@@ -46,8 +46,8 @@ import pytest
 
 from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
 from rwa_calc.domain.enums import ApproachType, ExposureClass
-from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.irb.transforms import apply_firb_lgd, classify_approach
+from rwa_calc.engine.stages.classify import ExposureClassifier
 from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolved_bundle
 

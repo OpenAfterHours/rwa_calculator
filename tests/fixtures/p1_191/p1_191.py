@@ -3,7 +3,7 @@ Generate P1.191 fixtures: QRRE per-individual aggregate nominal qualification te
 
 Pipeline position:
     fixture-builder output -> test-writer -> engine-implementer
-    (engine/classifier.py _combine_classifications)
+    (engine/stages/classify/ _combine_classifications)
 
 Key responsibilities:
 - Produce two individual retail counterparties: QRRE_AGG (aggregate breach) and
@@ -31,8 +31,8 @@ Expected classification (post-fix):
 References:
     - CRR Art. 154(4)(c): QRRE aggregate nominal ≤ EUR 100,000 per individual
     - PRA PS1/26 Art. 147(5A)(c): QRRE aggregate nominal ≤ GBP 90,000 per individual
-    - engine/classifier.py:870-877: _combine_classifications is_qrre per-row defect
-    - engine/classifier.py:2182-2242: obligor-aggregate pattern to reuse
+    - engine/stages/classify/: _combine_classifications is_qrre per-row defect
+    - engine/stages/classify/: obligor-aggregate pattern to reuse
     - contracts/config.py:605 (EUR 100,000), :658 (CRR GBP 87,320), :687 (B31 GBP 90,000)
     - docs/specifications/common/hierarchy-classification.md:245: portfolio-level note
     - tests/unit/test_classifier_qrre_warnings.py: QRRE column/warning contract

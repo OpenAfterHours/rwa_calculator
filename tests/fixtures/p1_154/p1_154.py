@@ -2,7 +2,7 @@
 Generate P1.154 fixtures: CRR Art. 118 international organisation vs Art. 117 non-named MDB.
 
 Pipeline position:
-    fixture-builder output -> test-writer -> engine-implementer (domain/enums.py, engine/classifier.py)
+    fixture-builder output -> test-writer -> engine-implementer (domain/enums.py, engine/stages/classify/)
 
 Key responsibilities:
 - Produce two counterparty rows: one named international organisation (IMF, Art. 118)
@@ -53,7 +53,7 @@ References:
     - CRR Art. 117(1): non-named MDB treated as institution → Table 2B CQS lookup
     - CRR Art. 112(1)(e): exposure class for international organisations
     - src/rwa_calc/domain/enums.py: ExposureClass (new INTERNATIONAL_ORGANISATION member)
-    - src/rwa_calc/engine/classifier.py: ENTITY_TYPE_TO_SA_CLASS mapping (~line 80)
+    - engine/stages/classify/: ENTITY_TYPE_TO_SA_CLASS mapping (~line 80)
     - src/rwa_calc/data/tables/crr_risk_weights.py: MDB_RISK_WEIGHTS_TABLE_2B (CQS 3 = 0.50)
     - data/schemas.py: VALID_ENTITY_TYPES — "international_org" already present at line 538
 

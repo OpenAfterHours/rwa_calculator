@@ -21,8 +21,8 @@ Layout:
 RE loan-split candidate flagging is co-located with the splitter in
 ``stages/re_split/flagging.py`` (Slice 4) and invoked from ``classifier``.
 
-``rwa_calc.engine.classifier`` remains as a thin back-compat shim
-re-exporting ``ExposureClassifier`` from here.
+This package is the only home of the classification stage; import
+``ExposureClassifier`` from here.
 
 References:
 - CRR Art. 112: SA exposure classes; CRR Art. 147: IRB exposure classes

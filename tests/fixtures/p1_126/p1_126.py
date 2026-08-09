@@ -44,7 +44,7 @@ apply, so null revenue is irrelevant and approach remains "airb".
 
 References:
     - PRA PS1/26 Art. 147A(1)(d): Large corporate revenue GBP 440m → F-IRB only
-    - src/rwa_calc/engine/classifier.py: _is_large_corp expression, _resolve_approach()
+    - engine/stages/classify/: _is_large_corp expression, _resolve_approach()
     - tests/fixtures/p1_125/p1_125.py: analogous CLS007 pattern
 """
 

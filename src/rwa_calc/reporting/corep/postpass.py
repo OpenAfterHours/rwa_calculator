@@ -114,15 +114,20 @@ def negate_deduction_cols(frame: pl.DataFrame, negative_cols: frozenset[str]) ->
     the regime that lacks them.
 
     A zero deduction is normalised to ``+0.0``: plain ``-pl.col(col)`` flips the
-    IEEE sign bit, so a ``0.0`` cell would serialise as ``-0.0`` (``+ 0.0`` does
-    NOT clear it in Polars). Null stays null — ``== 0.0`` is null on a null row,
-    so the ``otherwise`` branch returns ``-null``.
+    IEEE sign bit, so a ``0.0`` cell would serialise as ``-0.0``. Neither
+    ``+ 0.0`` nor ``0.0 - col`` clears it in Polars — both compile back to the
+    bare negation — so the zero has to be selected for and replaced. The test is
+    deliberately an EXACT comparison (``Expr.eq``, the method spelling of ``==``
+    on an expression): the target is the sign bit of a true zero, and a
+    tolerance would rewrite small non-zero deductions to zero. Null stays null —
+    the predicate is null on a null row, so the ``otherwise`` branch returns
+    ``-null``.
     """
     targets = [col for col in frame.columns if col in negative_cols]
     if not targets:
         return frame
     return frame.with_columns(
-        pl.when(pl.col(col) == 0.0).then(pl.lit(0.0)).otherwise(-pl.col(col)).alias(col)
+        pl.when(pl.col(col).eq(0.0)).then(pl.lit(0.0)).otherwise(-pl.col(col)).alias(col)
         for col in targets
     )
 

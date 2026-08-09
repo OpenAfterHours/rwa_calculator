@@ -105,7 +105,7 @@ def run(
     # Inherit the resolved counterparty rating columns onto each SFT synthetic
     # row so the SA institution lookup (CRR Art. 120(1) Table 3, keyed off
     # ``cqs``) and any IRB routing (keyed off ``internal_pd``) see the same
-    # rating that ``hierarchy._attach_counterparty_rating`` joined onto
+    # rating that ``enrich.attach_counterparty_rating`` joined onto
     # traditional lending rows.
     sft_exposure_rows = enrich_ccr_rows_with_ratings(
         sft_exposure_rows, resolved.counterparty_lookup

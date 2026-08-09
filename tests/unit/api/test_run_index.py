@@ -82,7 +82,12 @@ def _fingerprint(data_dir: Path, **overrides: object) -> run_index.CalculationFi
 
 class TestComputeFingerprint:
     def test_stable_for_unchanged_inputs(self, data_dir: Path) -> None:
-        assert _fingerprint(data_dir) == _fingerprint(data_dir)
+        # Two SEPARATE computations over the same untouched directory — the
+        # determinism of the fingerprint is the property under test.
+        first = _fingerprint(data_dir)
+        second = _fingerprint(data_dir)
+
+        assert first == second
 
     def test_signature_covers_nested_files(self, data_dir: Path) -> None:
         rels = {rel for rel, _, _ in _fingerprint(data_dir).data_signature}

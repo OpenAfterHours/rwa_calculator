@@ -16,17 +16,22 @@ Modules:
     pipeline: Run-lifecycle facade (run_id, edge capture, audit persistence)
 
 Subpackages:
-    stages: One package or module per registered pipeline stage. Each holds
-        its own stage recipe plus the uniform
-        ``run(ctx, rulepack, run_config)`` adapter — e.g. stages.hierarchy
+    stages: The stage packages the fold runs — where the stage implementations
+        actually live. Each holds its own stage recipe plus the uniform
+        ``run(ctx, rulepack, run_config)`` adapter: stages.hierarchy
         (HierarchyResolver), stages.classify (ExposureClassifier),
-        stages.re_split (RealEstateSplitter), stages.fx (FXConverter).
+        stages.re_split (RealEstateSplitter), stages.fx (FXConverter), ...
     crm: Credit Risk Mitigation processing
     sa: Standardised Approach calculator
     irb: IRB approach calculator
     slotting: Specialised lending slotting calculator
     equity: Equity exposure calculator
     aggregator: Result aggregation and output floor application
+    kernels: Shared expression kernels reused across calculators
+    securitisation: Securitisation pool allocation
+    sft: Securities-financing transaction exposure
+    ccr: Counterparty credit risk (SA-CCR)
+    cva: Credit valuation adjustment
 """
 
 from .loader import CSVLoader, ParquetLoader

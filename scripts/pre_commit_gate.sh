@@ -15,15 +15,23 @@ echo "$COMMAND" | grep -qE '\bgit\b.*\bcommit\b' || exit 0
 ERRORS=""
 FAILED=0
 
+# Both gate steps run with --no-build --no-sync: the hook fires on every commit,
+# so it executes in the environment the developer already has rather than
+# resolving one. --no-sync keeps uv out of the dependency solver entirely, and
+# --no-build refuses to run a source distribution's setup scripts if it ever did
+# reach the solver. The two are a pair — --no-build ALONE fails outright, because
+# the editable local project (rwa-calc) has no binary distribution to install
+# from. Re-sync explicitly with `uv sync --all-groups` after changing deps.
+
 # Architectural linter
-ARCH_OUT=$(uv run python scripts/arch_check.py 2>&1)
+ARCH_OUT=$(uv run --no-build --no-sync python scripts/arch_check.py 2>&1)
 if [[ $? -ne 0 ]]; then
     FAILED=1
     ERRORS="${ARCH_OUT}"$'\n'
 fi
 
 # Ruff lint check
-RUFF_OUT=$(uv run ruff check src/ 2>&1)
+RUFF_OUT=$(uv run --no-build --no-sync ruff check src/ 2>&1)
 if [[ $? -ne 0 ]]; then
     FAILED=1
     ERRORS="${ERRORS}${RUFF_OUT}"$'\n'

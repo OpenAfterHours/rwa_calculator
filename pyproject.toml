@@ -117,7 +117,12 @@ pythonpath = ["."]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
-addopts = "-v --tb=short --strict-markers --benchmark-disable -m 'not slow and not stress and not scale_1m and not benchmark' -n auto --dist=loadfile"
+# -n is fixed rather than `auto` on purpose: `auto` sizes the fleet from the
+# core count, but the binding constraint is RAM (the reference dev box is 16
+# cores to 7.8 GB). With the Polars thread cap in tests/conftest.py, 8 workers
+# cost ~28s against 16 but give back ~2 GB of peak and leave the machine usable
+# while the suite runs. Override per-invocation with `-n auto` / `-n 0`.
+addopts = "--tb=short --strict-markers --benchmark-disable -m 'not slow and not stress and not scale_1m and not benchmark' -n 8 --dist=loadfile"
 markers = [
     "benchmark: mark test as a benchmark (excluded from the default dev loop; run via -m benchmark)",
     "slow: mark test as slow (1M scale, may take several minutes)",

@@ -62,8 +62,12 @@ jobs:
       - name: Generate test fixtures
         run: uv run python tests/fixtures/generate_all.py
 
+      # `-n auto` overrides the `-n 8` default in addopts, which is tuned for the
+      # RAM-constrained dev box. The runner has a different core-to-RAM ratio, so
+      # it keeps sizing the fleet from its own core count; the Polars thread cap
+      # in tests/conftest.py still applies and is a win here too.
       - name: Run tests
-        run: uv run pytest tests/ --benchmark-disable -m 'not slow and not benchmark'
+        run: uv run pytest tests/ --benchmark-disable -m 'not slow and not benchmark' -n auto
 
   benchmarks:
     name: Benchmarks
@@ -80,10 +84,16 @@ jobs:
       - name: Generate test fixtures
         run: uv run python tests/fixtures/generate_all.py
 
-      # addopts is cleared so xdist (-n auto) and --benchmark-disable don't
-      # suppress pytest-benchmark; scale_1m benchmarks stay excluded via 'not slow'.
+      # addopts is cleared so xdist and --benchmark-disable don't suppress
+      # pytest-benchmark; scale_1m benchmarks stay excluded via 'not slow'.
+      #
+      # POLARS_MAX_THREADS is set explicitly so the `setdefault` in
+      # tests/conftest.py does not apply: benchmarks measure production-like
+      # throughput and need the real thread pool, not the dev-loop cap of 1.
       - name: Run benchmarks
-        run: uv run pytest tests/benchmarks -m 'benchmark and not slow' -o addopts= --benchmark-json=benchmark-results.json -v --tb=short
+        run: |
+          export POLARS_MAX_THREADS="$(nproc)"
+          uv run pytest tests/benchmarks -m 'benchmark and not slow' -o addopts= --benchmark-json=benchmark-results.json -v --tb=short
 
       - name: Upload benchmark results
         uses: actions/upload-artifact@v4

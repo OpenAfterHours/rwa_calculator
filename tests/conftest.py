@@ -6,16 +6,38 @@ Currently provides:
   facility_mappings, lending_mappings) into a directory and returns a
   ``DataSourceConfig`` pointing at them. Used by CCR loader / fixture-builder
   tests that need a valid base CRR dataset before wiring optional CCR files.
+- The Polars thread-pool cap for the whole test session (see below).
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import os
 
-import polars as pl
-import pytest
+# Polars sizes its thread pool from the core count the first time it is
+# imported, and pytest-xdist sizes its worker fleet the same way. Left alone on
+# a 16-core box that is 16 workers each holding a 16-thread pool — 256 threads
+# contending for 16 cores, each pool carrying its own buffers. Practically every
+# test here pushes a handful of rows through the pipeline, so that parallelism
+# buys nothing and costs both wall time and resident memory: capping it to one
+# thread took the dev-loop suite from 8m43s / 7.3 GB peak to 3m38s / 4.35 GB on
+# the reference box, with identical results.
+#
+# This must run before the first ``import polars`` anywhere in the process,
+# which is why it sits above the imports rather than in a fixture — conftest is
+# imported before any test module, in the controller and in every xdist worker.
+#
+# ``setdefault`` leaves an explicit outer value in charge: the CI benchmark job
+# exports the real core count so it still measures production-like throughput.
+# Never set this to 0 — Polars accepts it at import and then panics at compute
+# time with "Worker threads cannot be set to 0".
+os.environ.setdefault("POLARS_MAX_THREADS", "1")
 
-from rwa_calc.engine.loader import DataSourceConfig
+from typing import TYPE_CHECKING  # noqa: E402
+
+import polars as pl  # noqa: E402
+import pytest  # noqa: E402
+
+from rwa_calc.engine.loader import DataSourceConfig  # noqa: E402
 
 if TYPE_CHECKING:
     from collections.abc import Callable

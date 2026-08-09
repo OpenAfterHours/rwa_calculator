@@ -58,15 +58,15 @@
       <thead>
         {% if page.groups %}
         <tr class="band">
-          <th class="rowhead-ref"></th>
-          <th class="rowhead-name"></th>
-          {% for group in page.groups %}<th colspan="{{ group.span }}">{{ group.name }}</th>{% endfor %}
+          <th class="rowhead-ref" scope="col"></th>
+          <th class="rowhead-name" scope="col"></th>
+          {% for group in page.groups %}<th colspan="{{ group.span }}" scope="colgroup">{{ group.name }}</th>{% endfor %}
         </tr>
         {% endif %}
         <tr class="refs{% if not page.groups %} refs--only{% endif %}">
-          <th class="rowhead-ref">Row</th>
-          <th class="rowhead-name">Name</th>
-          {% for col in page.columns %}<th title="{{ col.name }}">{{ col.ref }}</th>{% endfor %}
+          <th class="rowhead-ref" scope="col">Row</th>
+          <th class="rowhead-name" scope="col">Name</th>
+          {% for col in page.columns %}<th title="{{ col.name }}" scope="col">{{ col.ref }}</th>{% endfor %}
         </tr>
       </thead>
       <tbody>

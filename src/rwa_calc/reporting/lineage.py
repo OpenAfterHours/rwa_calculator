@@ -1192,9 +1192,10 @@ def sheet_lineage(
     instrumented, produced nothing for this run, or has no such sheet — never a
     fallback computation.
     """
-    provider = LINEAGE_PLANS.get(template_id)
-    if provider is None:
+    registered = _registered_template(template_id)
+    if registered is None:
         return None
+    canonical_id, provider = registered
 
     results = source.scan_results()
     cols = available_columns(results)
@@ -1219,7 +1220,7 @@ def sheet_lineage(
         # drift degrades loudly instead.
         logger.warning(
             "lineage %s: plan/generate sheet keys disagree (plans=%s, generated=%s)",
-            template_id,
+            canonical_id,
             sorted(plans),
             sorted(generated),
         )
@@ -1316,6 +1317,21 @@ def describe_cell(  # noqa: PLR0913 - the cell's full identity plus its two sour
 # =============================================================================
 # Private helpers
 # =============================================================================
+
+
+def _registered_template(template_id: str) -> tuple[str, _Provider] | None:
+    """The registry's OWN key and provider for ``template_id``, or None.
+
+    Returns the matched key rather than the caller's string so that the key is
+    safe to log. ``template_id`` arrives straight off an HTTP route, and a
+    tainted value stays tainted through a character-filtering sanitiser — only
+    substituting a literal this module controls clears a log-forging flow
+    (CWE-117). The two strings compare equal, so the log line is unchanged.
+    """
+    for key, provider in LINEAGE_PLANS.items():
+        if key == template_id:
+            return key, provider
+    return None
 
 
 def _derives_from_prior_period(spec: TemplateSpec, row_ref: str, col_ref: str) -> bool:

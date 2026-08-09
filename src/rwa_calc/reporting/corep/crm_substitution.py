@@ -247,9 +247,10 @@ def waterfall_refs(column_refs: tuple[str, ...], *, netting: bool) -> tuple[str,
     is load-bearing besides: a ref naming a column outside ``column_refs`` raises
     in the executor rather than degrading.
     """
+    refs = ["0020", "0070", "0080"]
     if netting and "0035" in column_refs:
-        return ("0020", "0035", "0070", "0080")
-    return ("0020", "0070", "0080")
+        refs.insert(1, "0035")
+    return tuple(refs)
 
 
 def crm_waterfall(cells: Mapping[str, float | None], _prior: bool) -> float | None:

@@ -29,8 +29,13 @@ class TestArtifactKey:
     """ArtifactKey identity semantics."""
 
     def test_keys_with_same_name_are_equal(self):
-        assert ArtifactKey("x") == ArtifactKey("x")
-        assert hash(ArtifactKey("x")) == hash(ArtifactKey("x"))
+        # Two SEPARATELY constructed keys: identity by name is the property under
+        # test, so the assertion must not compare an object with itself.
+        minted_here: ArtifactKey[int] = ArtifactKey("x")
+        minted_elsewhere: ArtifactKey[int] = ArtifactKey("x")
+
+        assert minted_here == minted_elsewhere
+        assert hash(minted_here) == hash(minted_elsewhere)
 
     def test_keys_with_different_names_differ(self):
         assert ArtifactKey("x") != ArtifactKey("y")

@@ -34,6 +34,8 @@ from typing import TYPE_CHECKING
 from rwa_calc.reporting import catalog, lineage
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from rwa_calc.reporting.corep.generator import COREPTemplateBundle
     from rwa_calc.reporting.pillar3.generator import Pillar3TemplateBundle
 
@@ -45,6 +47,10 @@ logger = logging.getLogger(__name__)
 _NULL_DISPLAY = "—"
 
 _THOUSAND = 1000.0
+
+#: What ``_known`` logs in place of a value it cannot vouch for.
+_UNSET_DISPLAY = "<none>"
+_UNKNOWN_DISPLAY = "<unknown>"
 
 
 @dataclass(frozen=True)
@@ -126,7 +132,12 @@ def template_page(
     chosen = template_id or infos[0].id
     view = catalog.template_sheet(corep, pillar3, chosen, sheet)
     if view is None:
-        logger.warning("template viewer: no sheet for template=%s sheet=%s", chosen, sheet)
+        known_sheets = next((info.sheets for info in infos if info.id == chosen), ())
+        logger.warning(
+            "template viewer: no sheet for template=%s sheet=%s",
+            _known([info.id for info in infos], chosen),
+            _known(known_sheets, sheet),
+        )
         return TemplatePage(
             run_id=run_id,
             framework=framework,
@@ -183,7 +194,7 @@ def format_value(value: object) -> tuple[str, bool]:
     number = float(value)
     if not math.isfinite(number):
         return _NULL_DISPLAY, True
-    if number == 0.0:
+    if not number:  # exact zero — a REPORTED zero, rendered distinctly from null
         return "0", False
     magnitude = abs(number)
     if magnitude >= _THOUSAND:
@@ -196,6 +207,24 @@ def format_value(value: object) -> tuple[str, bool]:
 # =============================================================================
 # Private helpers
 # =============================================================================
+
+
+def _known(candidates: Iterable[str], value: str | None) -> str:
+    """``value`` echoed back as the matching literal from ``candidates``.
+
+    The template id and sheet key both arrive as query parameters, so writing
+    one into a log record is a log-forging sink (CWE-117). Filtering characters
+    out of a request string does not stop it being the caller's string —
+    returning OUR matching literal does, and it compares equal, so a recognised
+    value logs exactly as before. The unrecognised value this warning exists to
+    report is never echoed back.
+    """
+    if value is None:
+        return _UNSET_DISPLAY
+    for candidate in candidates:
+        if candidate == value:
+            return candidate
+    return _UNKNOWN_DISPLAY
 
 
 def _rows(view: catalog.TemplateSheet) -> tuple[TemplateRow, ...]:

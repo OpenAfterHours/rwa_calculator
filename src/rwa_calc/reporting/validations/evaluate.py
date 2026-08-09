@@ -132,7 +132,10 @@ GEOGRAPHY_TOTAL_SHEET: Final = "TOTAL"
 
 #: BoE ``filter: [eba_dim:CEG] = [eba_GA:x1]`` / EBA ``[CEG=eba_GA:x1]``.
 _BOE_FILTER = re.compile(r"^\[eba_dim:(?P<dim>[A-Za-z_]+)\]\s*=\s*\[(?P<member>[^]]+)\]$")
-_EBA_FILTER = re.compile(r"^\[(?P<dim>[A-Za-z_]+)\s*=\s*(?P<member>[^]]+)\]$")
+# No `\s*` after the "=": `[^]]+` already accepts the separating space, so having
+# both makes their boundary ambiguous and the engine tries every split of the gap
+# on a filter that fails to match. ``_parse_filter`` strips both groups anyway.
+_EBA_FILTER = re.compile(r"^\[(?P<dim>[A-Za-z_]+)\s*=(?P<member>[^]]+)\]$")
 
 #: Aggregate functions whose arguments expand every unbound axis to ALL values,
 #: rather than inheriting the current coordinate.
@@ -592,8 +595,14 @@ class _Context:
     vacuous: bool = True
 
     def observe(self, value: float) -> None:
-        """Record a contributing cell; a non-zero one makes the rule non-vacuous."""
-        if value != 0.0:
+        """Record a contributing cell; a non-zero one makes the rule non-vacuous.
+
+        Vacuity is an exact-zero property — a rule over cells that are all
+        precisely 0.0 proves nothing — so this tests the float's own truthiness
+        rather than comparing against a tolerance, which would silently declare
+        a rule vacuous over small but real numbers.
+        """
+        if value:
             self.vacuous = False
 
 
@@ -611,7 +620,12 @@ def _value_of(node: object, context: _Context, *, aggregated: bool) -> float:
 
 
 def _apply_binop(node: BinOp, context: _Context, *, aggregated: bool) -> float:
-    """Apply an arithmetic operator, refusing division by zero."""
+    """Apply an arithmetic operator, refusing division by zero.
+
+    The divisor guard is an exact-zero test (a falsy float is ``0.0`` or
+    ``-0.0``): only a true zero makes the quotient undefined, and refusing
+    divisors merely *close* to zero would skip coordinates the rule can answer.
+    """
     lhs = _value_of(node.lhs, context, aggregated=aggregated)
     rhs = _value_of(node.rhs, context, aggregated=aggregated)
     if node.op == "+":
@@ -620,7 +634,7 @@ def _apply_binop(node: BinOp, context: _Context, *, aggregated: bool) -> float:
         return lhs - rhs
     if node.op == "*":
         return lhs * rhs
-    if rhs == 0.0:
+    if not rhs:
         raise SkipCoordinate(SKIP_NON_FINITE_VALUE, "division by zero")
     return lhs / rhs
 

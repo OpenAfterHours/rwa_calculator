@@ -753,7 +753,11 @@ _NON_DATA_COLUMNS: Final[frozenset[str]] = frozenset({"row_ref", "row_name", "ro
 #: ``{C 08.01.a, r0070, c0020}`` / ``{t: OF08.01.01.01, r: 0070, c: 0020}`` — a
 #: reference whose FIRST part names a table, so its columns are attributable to
 #: that table rather than to the rule's home.
-_QUALIFIED_REF = re.compile(r"\{\s*(?:t:\s*)?([A-Za-z][A-Za-z0-9. ]*?)\s*,([^{}]*)\}")
+#: The table run is greedy and unpadded: its class excludes the "," it stops at,
+#: so the scan is deterministic, whereas the lazy form plus a trailing `\s*` left
+#: the separating spaces claimable by either and backtracked quadratically on a
+#: brace group with no comma. The caller strips the captured name.
+_QUALIFIED_REF = re.compile(r"\{\s*(?:t:\s*)?([A-Za-z][A-Za-z0-9. ]*),([^{}]*)\}")
 #: A column id in either grammar (``c0020`` / ``c: 0020``).
 _COLUMN_ID = re.compile(r"\bc[:\s]*(\d{3,5})\b")
 
@@ -814,7 +818,8 @@ def _attributed_columns(framework: str) -> Mapping[str, frozenset[str]]:
     collected: dict[str, set[str]] = {}
     for rule in load_rules(framework).enforced:
         expression = rule.expression or ""
-        for table, body in _QUALIFIED_REF.findall(expression):
+        for qualified, body in _QUALIFIED_REF.findall(expression):
+            table = qualified.strip()
             if table in rule.tables:
                 collected.setdefault(table, set()).update(_COLUMN_ID.findall(body))
         if len(rule.tables) != 1:

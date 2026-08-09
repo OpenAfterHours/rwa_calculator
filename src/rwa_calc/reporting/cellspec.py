@@ -618,14 +618,14 @@ def _evaluate(
             return None if empty_as_none else 0.0
         weights = data[binding.weight].fill_null(0.0)
         total = float(weights.sum())
-        if total == 0.0:
+        if not total:  # exact zero — an all-zero weight vector has no average
             return None if empty_as_none else 0.0
         weighted = float((data[binding.col].fill_null(0.0) * weights).sum())
         return weighted / total * binding.scale
     if isinstance(binding, Ratio):
         num = col_sum(data, cols, binding.numerator, empty_as_none=empty_as_none)
         den = col_sum(data, cols, binding.denominator, empty_as_none=empty_as_none)
-        if num is None or den is None or den == 0.0:
+        if num is None or den is None or not den:  # exact zero — ratio undefined
             return None if empty_as_none else 0.0
         return num / den * binding.scale
     if isinstance(binding, Count):

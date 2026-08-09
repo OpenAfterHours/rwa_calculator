@@ -131,13 +131,21 @@ BOE_COL_TABLES = range(17, 21)  # T1..T4
 # ── Parsing patterns ─────────────────────────────────────────────────────────
 
 # "SHORT_LABEL(en) - some text|" / "DESCRIPTION(en) - v5745_q|"
-LABEL_SEGMENT = re.compile(r"([A-Z_]+)\(([a-z]{2})\)\s*-\s*(.*?)\|", re.DOTALL)
+# The body is `[^|]*` rather than a lazy `.*?`: excluding the terminator makes the
+# scan to it deterministic, where `\s*` followed by a dot-matches-all `.*?` is
+# ambiguous over the separator's spaces and backtracks quadratically on a segment
+# that has no closing "|". Leading space is left in and stripped by the caller.
+LABEL_SEGMENT = re.compile(r"([A-Z_]+)\(([a-z]{2})\)\s*-([^|]*)\|")
 
 # EBA rule identifiers as they appear inside BoE DESCRIPTION segments: v5745_q, e4893_n
 EBA_RULE_ID = re.compile(r"\b([ve]\d+_[a-z]+)\b")
 
-# "WARNING - PRA001|" -> severity token + module codes
-BOE_SEVERITY = re.compile(r"^([A-Za-z]+)\s*(?:-\s*(.*?))?\|?\s*$", re.DOTALL)
+# "WARNING - PRA001|" -> severity token + module codes. The cell's single trailing
+# "|" is removed by the caller before matching rather than by an optional `\|?`
+# here: that trailing group sat between a lazy `(.*?)` and a `\s*$`, and the three
+# together made every tail position a candidate split — quadratic on a cell that
+# does not match at all.
+BOE_SEVERITY = re.compile(r"^([A-Za-z]+)\s*(?:-(.*))?$", re.DOTALL)
 
 # A scope id token is "well-formed" only at the current 4-digit DPM width.
 FOUR_DIGIT_ID = re.compile(r"^\d{4}$")
@@ -476,7 +484,7 @@ def _parse_boe_severity(value: Any) -> tuple[str, tuple[str, ...]]:
     text = _clean(value)
     if not text:
         return "", ()
-    match = BOE_SEVERITY.match(text)
+    match = BOE_SEVERITY.match(text.rstrip().removesuffix("|"))
     if not match:
         return text.upper(), ()
     severity = match.group(1).upper()

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- **An unrecognised report-template or run identifier is no longer written into
+  a log line.** Three log statements interpolated a value taken straight from an
+  HTTP route or query parameter (`reporting/lineage.py`, `api/rest.py`,
+  `ui/views/report_templates.py`), which lets a caller forge log records
+  (CWE-117). Each now echoes back the *matching literal held by the server* —
+  the key stored in the run registry, the lineage plan registry, or the run's
+  template catalogue — so a recognised id logs exactly as before, and an
+  unrecognised one is replaced by `<unknown>` / `<unregistered>` rather than
+  reproduced. Filtering control characters out of the caller's string
+  (`_safe_log_token`, retained as a second layer) narrows what can be injected;
+  substituting our own literal removes the caller's bytes from the record.
+- **The pre-commit gate no longer permits a source distribution's setup scripts
+  to run.** `scripts/pre_commit_gate.sh` invokes `uv run` on every commit; both
+  call sites now pass `--no-build --no-sync`, so the gate executes in the
+  environment the developer already has instead of resolving (and potentially
+  building) one. The two flags are a pair — `--no-build` alone fails outright,
+  because the editable local project has no binary distribution to install from.
+  Re-sync explicitly with `uv sync --all-groups` after changing dependencies.
+
 ### Changed
 - **The test suite no longer oversubscribes the machine: 10m50s → 3m56s on the
   reference dev box, with identical results.** Polars sizes its thread pool from
@@ -42,6 +62,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   startup costs more than the tests.
 
 ### Fixed
+- **Six regular expressions with super-linear backtracking were made linear.**
+  Each paired an unbounded whitespace run against a neighbouring pattern that
+  could also match whitespace (`\s*` beside a dot-matches-all `.*?`, or beside a
+  negated class), so on input that failed to match, the engine retried every
+  split of the gap. Affected: the docs heading scanner
+  (`scripts/check_doc_links.py`), the BoE label and severity cell parsers
+  (`scripts/extract_validation_rules.py`), the EBA dimensional-filter parser
+  (`reporting/validations/evaluate.py`), the prerequisite splitter
+  (`reporting/validations/rules.py`) and the qualified-reference parser
+  (`reporting/validations/scope.py`). Every rewrite was checked for behavioural
+  equivalence against the pattern it replaces — by hand over the documented
+  cell shapes, by 200,000 randomised inputs per extractor pattern, and by the
+  docs dead-link census returning its banked count of 76 unchanged.
 - **PS1/26 Art. 154(4A)(b): the 10% IRB mortgage RWEA floor is now confined to
   non-defaulted retail exposures secured by residential immovable property
   (P1.319).** The engine gated the floor on a bare `MORTGAGE|RESIDENTIAL`

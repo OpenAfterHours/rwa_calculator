@@ -112,7 +112,10 @@ _BOE_SCOPE_KEY = re.compile(r"\b([a-z]+)\s*:\s*([^,}]*)")
 
 #: EBA prerequisites read as ``"C 07.00.a and C 07.00.b"`` — a conjunction of
 #: table codes that must be reported for the rule to run at all.
-_PREREQUISITE_SPLIT = re.compile(r"\s+and\s+", re.IGNORECASE)
+#: The leading run is possessive: "and" cannot itself be whitespace, so giving
+#: characters back from that run can never make the literal match, and letting the
+#: engine retry every length of it is quadratic on a long run of spaces.
+_PREREQUISITE_SPLIT = re.compile(r"\s++and\s+", re.IGNORECASE)
 
 
 # =============================================================================

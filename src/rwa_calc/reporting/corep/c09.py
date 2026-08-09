@@ -614,9 +614,9 @@ def _post_sl_gate(row_def: COREPRow, cols: set[str]) -> tuple[tuple[str, str | b
     underived column would zero the SL rows of every synthetic unit frame.
     """
     key = row_def.exposure_class_value
-    if key not in _C09_01_SL_TYPE_MAP or _BENEFICIAL_COL not in cols:
-        return ()
-    return ((_SL_OWN_RW_COL, True),)
+    sealed = key in _C09_01_SL_TYPE_MAP and _BENEFICIAL_COL in cols
+    narrowing: list[tuple[str, str | bool]] = [(_SL_OWN_RW_COL, True)] if sealed else []
+    return tuple(narrowing)
 
 
 def _c09_01_re_sl_pred(key: str, basis_col: str) -> RowPredicate | None:

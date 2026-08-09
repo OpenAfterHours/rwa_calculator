@@ -69,6 +69,10 @@ logger = logging.getLogger(__name__)
 # generated run_id so results/export endpoints can find the cached parquet.
 _RUNS: dict[str, CalculationResponse] = {}
 
+#: Stands in for a run id that is not in ``_RUNS`` wherever one would be logged
+#: (see ``_registered_run_key``) — an unregistered id is never echoed back.
+_UNREGISTERED_RUN_ID = "<unregistered>"
+
 # Parallel registry for reconciliation runs, keyed by a generated recon_id so the
 # forensic-tier filter and export endpoints can re-read a cached result without
 # recomputing. Same in-process / non-persistent trade-off as ``_RUNS``.
@@ -825,11 +829,13 @@ def get_template_bundles(run_id: str, *, prior_run_id: str | None = None) -> Tem
     if prior_run_id is not None:
         previous_period_results = _require_prior_run(prior_run_id, response).scan_results()
 
-    # Both ids are route-parameter strings (see _safe_log_token); prior_run_id's
-    # raw content is never interpolated at all — only whether one was supplied.
+    # Both ids are route-parameter strings; neither is ever interpolated raw.
+    # run_id is echoed back as the REGISTRY's own key (_registered_run_key —
+    # the lookup above already proved it is registered), and prior_run_id only
+    # as whether one was supplied.
     logger.info(
         "generating report templates run_id=%s has_prior_period=%s",
-        _safe_log_token(run_id),
+        _registered_run_key(run_id),
         prior_run_id is not None,
     )
     bundles = TemplateBundles(
@@ -944,6 +950,23 @@ def _safe_log_token(value: str) -> str:
     ones a human judges risky.
     """
     return "".join(ch for ch in value if ch.isprintable())
+
+
+def _registered_run_key(run_id: str) -> str:
+    """The registry's OWN key for an already-registered run — the id to log.
+
+    Filtering characters out of a route parameter does not make it a value this
+    module owns; ``_safe_log_token`` alone therefore leaves the log-forging flow
+    intact. Matching against ``_RUNS`` and returning the stored key does: every
+    key is minted server-side (``register_run``'s uuid4 hex, or the UI job id
+    ``register_run_with_id`` registers under), and it compares equal to the
+    caller's string, so the log line reads exactly as before. An id that is not
+    registered never reaches a log line at all.
+    """
+    for key in _RUNS:
+        if key == run_id:
+            return _safe_log_token(key)
+    return _UNREGISTERED_RUN_ID
 
 
 def _run_calc(

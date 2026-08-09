@@ -142,9 +142,13 @@ class TestContentHash:
         scalar = ScalarParam(
             name="x", value=Decimal("1.06"), citation=Citation("CRR", "153", "scaling")
         )
-        assert _content_hash("crr", _DATE, {"x": scalar}) == _content_hash(
-            "crr", _DATE, {"x": scalar}
-        )
+
+        # Two SEPARATE hashings of an equal entry — stability across calls is the
+        # property under test.
+        first = _content_hash("crr", _DATE, {"x": scalar})
+        second = _content_hash("crr", _DATE, {"x": scalar})
+
+        assert first == second
 
 
 class TestReportingContext:

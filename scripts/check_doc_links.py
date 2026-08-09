@@ -47,7 +47,11 @@ BASELINE_PATH = REPO_ROOT / "scripts" / "docs_link_baseline.json"
 EXCLUDED_DIRS = {"assets", "overrides"}
 
 _LINK_RE = re.compile(r"!?\[[^\]]*\]\(\s*([^)\s]+?)(?:\s+\"[^\"]*\")?\s*\)")
-_HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*$")
+# The heading text is captured to end-of-line and right-stripped by the caller.
+# Trimming it with a trailing ``\s*$`` instead would make the gap between the
+# lazy ``(.*?)`` and that ``\s*`` ambiguous, and the engine would try every split
+# of it — quadratic in the length of a heading it fails to match.
+_HEADING_RE = re.compile(r"^(#{1,6})\s++(.*)$")
 _ATTR_ID_RE = re.compile(r"\{[:#][^}]*\}\s*$")
 _ATTR_ID_CAPTURE_RE = re.compile(r"#([\w-]+)")
 _HTML_ID_RE = re.compile(r"<a\s+(?:id|name)=[\"']([^\"']+)[\"']")
@@ -204,7 +208,7 @@ def _page_anchors(page: Path) -> set[str]:
     for line in _content_lines(page):
         heading = _HEADING_RE.match(line)
         if heading:
-            text = heading.group(2)
+            text = heading.group(2).rstrip()
             attr = _ATTR_ID_RE.search(text)
             if attr:
                 explicit = _ATTR_ID_CAPTURE_RE.search(attr.group(0))

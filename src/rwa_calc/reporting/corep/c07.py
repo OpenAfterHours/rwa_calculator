@@ -1243,20 +1243,31 @@ def _row_terms(framework: str, cols: set[str]) -> dict[str, _Terms | None]:
     return terms
 
 
+def _terms(*pairs: tuple[str, str | bool]) -> _Terms:
+    """One row's membership terms, as (column, value) pairs.
+
+    A row keys zero, one, or two columns, so the count is data rather than part
+    of a signature — building the tuple through a call says that, where a table
+    of bare tuple literals reads as a set of differently-shaped records (and
+    drops the singleton's easily-lost trailing comma).
+    """
+    return pairs
+
+
 def _terms_for_row(  # noqa: PLR0911, PLR0912, C901 - a direct table of the retired dispatch
     section_index: int, ref: str, name: str, cols: set[str]
 ) -> _Terms | None:
     if section_index == 0:
         if ref == "0010":
-            return ()
+            return _terms()
         if ref == "0015":
-            return (("c07_defaulted", True),)
+            return _terms(("c07_defaulted", True))
         if ref == "0020":
-            return (("c07_sme", True),)
+            return _terms(("c07_sme", True))
         if ref in _SL_TYPE_MAP:
-            return (("sl_type", _SL_TYPE_MAP[ref]),)
+            return _terms(("sl_type", _SL_TYPE_MAP[ref]))
         if ref in _PF_PHASE_MAP:
-            return (("sl_type", "project_finance"), ("sl_project_phase", _PF_PHASE_MAP[ref]))
+            return _terms(("sl_type", "project_finance"), ("sl_project_phase", _PF_PHASE_MAP[ref]))
         if ref in _RE_ROW_FILTERS:
             return _re_terms(cols, **_RE_ROW_FILTERS[ref])  # type: ignore[arg-type]
         if ref == "0030":
@@ -1264,51 +1275,51 @@ def _terms_for_row(  # noqa: PLR0911, PLR0912, C901 - a direct table of the reti
         if ref == "0035":
             return _supporting_factor_terms(cols, "infrastructure")
         if ref == "0050":
-            return (("c07_ppu", True),)
+            return _terms(("c07_ppu", True))
         if ref == "0060":
-            return (("ppu_reason", "art_148_rollout"),)
+            return _terms(("ppu_reason", "art_148_rollout"))
         return None
     if section_index == 1:
         if ref == "0070":
-            return (("c07_bs", "on"),)
+            return _terms(("c07_bs", "on"))
         if ref == "0080":
-            return (("c07_bs", "off"),)
+            return _terms(("c07_bs", "off"))
         if ref == "0090":
-            return (("risk_type", "CCR_SFT"),)
+            return _terms(("risk_type", "CCR_SFT"))
         if ref == "0100":  # of which: SFT netting sets cleared through a QCCP
-            return (("risk_type", "CCR_SFT"), ("c07_qccp", True))
+            return _terms(("risk_type", "CCR_SFT"), ("c07_qccp", True))
         if ref == "0110":  # derivative + long-settlement netting sets — the
             # ADDITIVE PARENT of 0120: every netting set, INCLUDING the
             # QCCP-cleared ones. Writing it as "derivative AND NOT qccp" would
             # make 0120 a sibling and the breakdown would stop footing.
-            return (("risk_type", "CCR_DERIVATIVE"),)
+            return _terms(("risk_type", "CCR_DERIVATIVE"))
         if ref == "0120":  # of which: derivative netting sets cleared via a QCCP
-            return (("risk_type", "CCR_DERIVATIVE"), ("c07_qccp", True))
+            return _terms(("risk_type", "CCR_DERIVATIVE"), ("c07_qccp", True))
         # 0130 (contractual cross-product netting sets, Art. 295(c)) is NOT
         # MODELLED: no input carrier exists for a cross-product netting
         # agreement. Inert, not "checked and found empty".
         return None
     if section_index == 2:  # noqa: PLR2004 - RW band section
-        return (("c07_rw_band", name),)
+        return _terms(("c07_rw_band", name))
     if section_index == 3:  # noqa: PLR2004 - CIU section
         if ref in _CIU_ROW_APPROACH:
-            return (("ciu_approach", _CIU_ROW_APPROACH[ref]),)
+            return _terms(("ciu_approach", _CIU_ROW_APPROACH[ref]))
         return None
     # Section 5: memorandum items
     if ref in _EQUITY_TRANSITIONAL_FILTERS:
         approach, higher_risk = _EQUITY_TRANSITIONAL_FILTERS[ref]
-        base: _Terms = (("equity_transitional_approach", approach),)
+        base: _Terms = _terms(("equity_transitional_approach", approach))
         if "equity_higher_risk" in cols:
-            return (*base, ("equity_higher_risk", higher_risk))
+            return _terms(*base, ("equity_higher_risk", higher_risk))
         if higher_risk:
             return None
         return base
     if ref == "0380":
-        return (("currency_mismatch_multiplier_applied", True),)
+        return _terms(("currency_mismatch_multiplier_applied", True))
     if ref in _MEMO_DEFAULTED_RW:
-        return (("c07_defaulted", True), ("c07_rw_band", _MEMO_DEFAULTED_RW[ref]))
+        return _terms(("c07_defaulted", True), ("c07_rw_band", _MEMO_DEFAULTED_RW[ref]))
     if ref in _MEMO_RE_SECURED:
-        return (("property_type", _MEMO_RE_SECURED[ref]),)
+        return _terms(("property_type", _MEMO_RE_SECURED[ref]))
     return None
 
 
@@ -1348,9 +1359,10 @@ def _supporting_factor_terms(cols: set[str], factor_type: str) -> _Terms | None:
     if flag_col not in cols:
         return None
     applied = pick(cols, f"{factor_type}_supporting_factor_applied", "supporting_factor_applied")
-    if applied is None:
-        return ((flag_col, True),)
-    return ((flag_col, True), (applied, True))
+    terms: list[tuple[str, str | bool]] = [(flag_col, True)]
+    if applied is not None:
+        terms.append((applied, True))
+    return tuple(terms)
 
 
 def _build_spec(
@@ -1425,9 +1437,9 @@ def _post_sl_terms(terms: _Terms, cols: set[str]) -> _Terms:
     beneficially-substituted leg to exclude, and a term on an underived column
     would zero the SL rows of every synthetic unit frame.
     """
-    if _BENEFICIAL_COL not in cols or not any(column == "sl_type" for column, _ in terms):
-        return ()
-    return ((_SL_OWN_RW_COL, True),)
+    sealed = _BENEFICIAL_COL in cols and any(column == "sl_type" for column, _ in terms)
+    narrowing: list[tuple[str, str | bool]] = [(_SL_OWN_RW_COL, True)] if sealed else []
+    return tuple(narrowing)
 
 
 def _row_cells(  # noqa: PLR0913 - the full 24-column surface of one row

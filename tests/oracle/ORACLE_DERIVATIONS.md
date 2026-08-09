@@ -1480,11 +1480,834 @@ portfolio; IRB permission.
 
 ---
 
+# Phase O3 — Credit risk mitigation, Standardised Approach side
+
+Every oracle in this phase runs the **CRM stage** and then the SA branch
+(`drivers.run_crm_sa`). It is the one place in this suite where the CRM stage is
+not bypassed, and it has to be: Art. 222 writes columns only the SA risk-weight
+substitution reads, Art. 223 rewrites the exposure value, and Art. 235 splits
+the exposure into two legs.
+
+## The shared fact pattern
+
+Unless a section says otherwise:
+
+- **Obligor.** A corporate rated CQS 5. Art. 122(1) Table 6 puts that at **150%**,
+  which is deliberately far from the Art. 222(3) 20% floor and from every
+  collateral and guarantor weight used below, so a blended weight can only come
+  out right for the right reason. A 100%-weighted obligor would make several of
+  these oracles pass on a coincidence.
+- **Exposure.** `E = £1,000,000`, drawn, on balance sheet, sterling. Art. 223(3)
+  gives `E_VA = E × (1 + H_E)` and `H_E = 0` throughout: Art. 223(3) applies the
+  exposure-side adjustment to the exposure itself, which is non-zero only where
+  the exposure *is* a security (an SFT lending a bond out). These are all cash
+  loans, so `E_VA = E`.
+- **Pledge.** `C = £300,000` market value, sterling, pledged directly against the
+  exposure. 30% cover is chosen so both the covered and the uncovered portion are
+  material — a defect in either leg moves the answer.
+- **Exposure maturity 0.25 years.** This input is load-bearing and is not
+  cosmetic. Art. 238(1) caps the effective maturity of the underlying at five
+  years, and the engine assumes that cap when the exposure carries no maturity —
+  which puts an Art. 237/238 maturity-mismatch factor of `(t − 0.25)/(T − 0.25)`
+  on every pledge maturing inside five years. At `T = 0.25` (the Art. 238 lower
+  bound) every pledge below has `t ≥ T`, the factor is exactly 1.0, and what is
+  measured is the Art. 224 volatility adjustment alone. Remove this input and
+  these become maturity-mismatch oracles by accident: the first draft of this
+  section read a 42% "understatement" at CQS 1 that was Art. 238 working
+  correctly.
+
+Art. 228(1) makes `E*` the SA exposure value, so under the Comprehensive Method
+`RWEA = E* × 150%` and **the risk weight is untouched** — asserting `risk_weight
+= 1.50` on every one of those oracles is itself a check that the collateral
+benefit is taken once, on the exposure value, and not a second time on the
+weight.
+
+## Art. 224(1) Table 1 — debt securities
+
+Read verbatim from the PDF. Columns 4–6 are the adjustments for securities issued
+by the entities described in **Art. 197(1)(b)** (central governments and central
+banks, plus the Art. 197(2) assimilations); columns 7–9 those for
+**Art. 197(1)(c) and (d)** (institutions, and other entities). The securitisation
+columns are not used here — see the note at the end of this phase.
+
+| CQS | Residual maturity | Art. 197(1)(b), 20d | 10d | 5d | Art. 197(1)(c)/(d), 20d | 10d | 5d |
+|---|---|---|---|---|---|---|---|
+| 1 | ≤ 1 year | 0,707 | 0,5 | 0,354 | 1,414 | 1 | 0,707 |
+| 1 | > 1 ≤ 5 years | 2,828 | 2 | 1,414 | 5,657 | 4 | 2,828 |
+| 1 | > 5 years | 5,657 | 4 | 2,828 | 11,314 | 8 | 5,657 |
+| 2–3 | ≤ 1 year | 1,414 | 1 | 0,707 | 2,828 | 2 | 1,414 |
+| 2–3 | > 1 ≤ 5 years | 4,243 | 3 | 2,121 | 8,485 | 6 | 4,243 |
+| 2–3 | > 5 years | 8,485 | 6 | 4,243 | 16,971 | 12 | 8,485 |
+| 4 | all bands | 21,213 | 15 | 10,607 | N/A | N/A | N/A |
+
+## Art. 224(1) Table 3 — other collateral, and Table 4 — currency mismatch
+
+| Item | 20d | 10d | 5d |
+|---|---|---|---|
+| Main index equities, main index convertible bonds | 21,213 | 15 | 10,607 |
+| Other equities or convertible bonds listed on a recognised exchange | 35,355 | 25 | 17,678 |
+| Cash | 0 | 0 | 0 |
+| Gold | 21,213 | 15 | 10,607 |
+| **Table 4** — currency mismatch | 11,314 | 8 | 5,657 |
+
+## Which column applies, and the square-root-of-time relation
+
+Art. 224(2) fixes the liquidation period by transaction type: **(a)** 20 business
+days for secured lending, **(b)** 5 for repurchase and securities lending or
+borrowing, **(c)** 10 for other capital-market-driven transactions.
+
+The three columns are one number scaled by the square root of time, and the
+printed figures are that number rounded to three decimal places of a percent:
+2% at ten days is 2.828427…% at twenty, printed "2,828". The oracle is compared
+at a relative tolerance of 1e-6 and the printed 3-dp figure is only good to about
+1e-4, so `derivations/crm_sa.py::_scaled` returns the unrounded value — and
+`_assert_printed_columns` checks it against **every** printed 20-day and 5-day
+figure this phase uses, at import, so the relation is evidenced rather than
+assumed. If a future reading of the table disagrees, `derive.py` fails there
+rather than quietly publishing a figure no column of Table 1 contains.
+
+## Art. 224(1) Table 1 at the 10-day column — ORC-200 to ORC-220
+
+Twelve populated sovereign cells and nine non-sovereign cells: the **whole**
+populated domain of Table 1 excluding securitisations. Every member is pinned,
+including the ones that agree today. A defect measured at two cells of a table is
+not a characterised defect — the Art. 121 Table 5 finding recorded in
+`test_oracle.py` reads as purely conservative at the first two steps, coincides
+at the middle three, and is anti-conservative at the last.
+
+Shared inputs for all twenty-one: as "the shared fact pattern" above, with the
+pledge given `liquidation_period_days = 10` (Art. 224(2)(c)). Shared arithmetic:
+`C_VA = 300,000 × (1 − H_C)`, `E* = 1,000,000 − C_VA`, `RWA = E* × 1.50`.
+
+## ORC-200 — FCCM, Art. 197(1)(b) security, CQS 1, ≤ 1 year (CRR)
+
+**Regulation:** Art. 224(1) Table 1, 10-day column → `H_C = 0.5%`.
+**Arithmetic:** `C_VA = 300,000 × 0.995 = 298,500.00`; `E* = 701,500.00`;
+`RWA = 1,052,250.00`.
+
+## ORC-201 — FCCM, Art. 197(1)(b) security, CQS 1, > 1 ≤ 5 years (CRR)
+
+**Regulation:** Art. 224(1) Table 1, 10-day column → `H_C = 2%`.
+**Arithmetic:** `C_VA = 300,000 × 0.98 = 294,000.00`; `E* = 706,000.00`;
+`RWA = 1,059,000.00`.
+
+## ORC-202 — FCCM, Art. 197(1)(b) security, CQS 1, > 5 years (CRR)
+
+**Regulation:** Art. 224(1) Table 1, 10-day column → `H_C = 4%`.
+**Arithmetic:** `C_VA = 300,000 × 0.96 = 288,000.00`; `E* = 712,000.00`;
+`RWA = 1,068,000.00`.
+
+## ORC-203 — FCCM, Art. 197(1)(b) security, CQS 2, ≤ 1 year (CRR)
+
+**Regulation:** Art. 224(1) Table 1, 10-day column, CQS 2–3 row → `H_C = 1%`.
+**Arithmetic:** `C_VA = 297,000.00`; `E* = 703,000.00`; `RWA = 1,054,500.00`.
+
+## ORC-204 — FCCM, Art. 197(1)(b) security, CQS 2, > 1 ≤ 5 years (CRR)
+
+**Regulation:** Art. 224(1) Table 1, 10-day column → `H_C = 3%`.
+**Arithmetic:** `C_VA = 291,000.00`; `E* = 709,000.00`; `RWA = 1,063,500.00`.
+
+## ORC-205 — FCCM, Art. 197(1)(b) security, CQS 2, > 5 years (CRR)
+
+**Regulation:** Art. 224(1) Table 1, 10-day column → `H_C = 6%`.
+**Arithmetic:** `C_VA = 282,000.00`; `E* = 718,000.00`; `RWA = 1,077,000.00`.
+
+## ORC-206 — FCCM, Art. 197(1)(b) security, CQS 3, ≤ 1 year (CRR)
+
+**Regulation:** Art. 224(1) Table 1 bands CQS 2 and 3 together → `H_C = 1%`.
+The CQS 3 triple is pinned separately from CQS 2 precisely because the article
+shares a row: a change that split them would otherwise move CQS 3 silently.
+**Arithmetic:** `C_VA = 297,000.00`; `E* = 703,000.00`; `RWA = 1,054,500.00`.
+
+## ORC-207 — FCCM, Art. 197(1)(b) security, CQS 3, > 1 ≤ 5 years (CRR)
+
+**Regulation:** Art. 224(1) Table 1, 10-day column → `H_C = 3%`.
+**Arithmetic:** `C_VA = 291,000.00`; `E* = 709,000.00`; `RWA = 1,063,500.00`.
+
+## ORC-208 — FCCM, Art. 197(1)(b) security, CQS 3, > 5 years (CRR)
+
+**Regulation:** Art. 224(1) Table 1, 10-day column → `H_C = 6%`.
+**Arithmetic:** `C_VA = 282,000.00`; `E* = 718,000.00`; `RWA = 1,077,000.00`.
+
+## ORC-209 — FCCM, Art. 197(1)(b) security, CQS 4, ≤ 1 year (CRR)
+
+**Regulation:** Art. 224(1) Table 1, 10-day column → `H_C = 15%`. The CQS 4 row
+is **band-invariant** — 15% in all three maturity bands — and all three are
+pinned, because band-invariance is exactly the property a change can break
+without moving the band that happened to be sampled.
+**Arithmetic:** `C_VA = 255,000.00`; `E* = 745,000.00`; `RWA = 1,117,500.00`.
+
+## ORC-210 — FCCM, Art. 197(1)(b) security, CQS 4, > 1 ≤ 5 years (CRR)
+
+**Regulation:** Art. 224(1) Table 1, 10-day column → `H_C = 15%`.
+**Arithmetic:** `C_VA = 255,000.00`; `E* = 745,000.00`; `RWA = 1,117,500.00`.
+
+## ORC-211 — FCCM, Art. 197(1)(b) security, CQS 4, > 5 years (CRR)
+
+**Regulation:** Art. 224(1) Table 1, 10-day column → `H_C = 15%`.
+**Arithmetic:** `C_VA = 255,000.00`; `E* = 745,000.00`; `RWA = 1,117,500.00`.
+
+## ORC-212 — FCCM, Art. 197(1)(c)/(d) security, CQS 1, ≤ 1 year (CRR)
+
+**Regulation:** Art. 224(1) Table 1, 10-day column → `H_C = 1%`.
+**Arithmetic:** `C_VA = 297,000.00`; `E* = 703,000.00`; `RWA = 1,054,500.00`.
+
+## ORC-213 — FCCM, Art. 197(1)(c)/(d) security, CQS 1, > 1 ≤ 5 years (CRR)
+
+**Regulation:** Art. 224(1) Table 1, 10-day column → `H_C = 4%`.
+**Arithmetic:** `C_VA = 288,000.00`; `E* = 712,000.00`; `RWA = 1,068,000.00`.
+
+## ORC-214 — FCCM, Art. 197(1)(c)/(d) security, CQS 1, > 5 years (CRR)
+
+**Regulation:** Art. 224(1) Table 1, 10-day column → `H_C = 8%`.
+**Arithmetic:** `C_VA = 276,000.00`; `E* = 724,000.00`; `RWA = 1,086,000.00`.
+
+## ORC-215 — FCCM, Art. 197(1)(c)/(d) security, CQS 2, ≤ 1 year (CRR)
+
+**Regulation:** Art. 224(1) Table 1, 10-day column → `H_C = 2%`.
+**Arithmetic:** `C_VA = 294,000.00`; `E* = 706,000.00`; `RWA = 1,059,000.00`.
+
+## ORC-216 — FCCM, Art. 197(1)(c)/(d) security, CQS 2, > 1 ≤ 5 years (CRR)
+
+**Regulation:** Art. 224(1) Table 1, 10-day column → `H_C = 6%`.
+**Arithmetic:** `C_VA = 282,000.00`; `E* = 718,000.00`; `RWA = 1,077,000.00`.
+
+## ORC-217 — FCCM, Art. 197(1)(c)/(d) security, CQS 2, > 5 years (CRR)
+
+**Regulation:** Art. 224(1) Table 1, 10-day column → `H_C = 12%`.
+**Arithmetic:** `C_VA = 264,000.00`; `E* = 736,000.00`; `RWA = 1,104,000.00`.
+
+## ORC-218 — FCCM, Art. 197(1)(c)/(d) security, CQS 3, ≤ 1 year (CRR)
+
+**Regulation:** Art. 224(1) Table 1, 10-day column → `H_C = 2%`.
+**Arithmetic:** `C_VA = 294,000.00`; `E* = 706,000.00`; `RWA = 1,059,000.00`.
+
+## ORC-219 — FCCM, Art. 197(1)(c)/(d) security, CQS 3, > 1 ≤ 5 years (CRR)
+
+**Regulation:** Art. 224(1) Table 1, 10-day column → `H_C = 6%`.
+**Arithmetic:** `C_VA = 282,000.00`; `E* = 718,000.00`; `RWA = 1,077,000.00`.
+
+## ORC-220 — FCCM, Art. 197(1)(c)/(d) security, CQS 3, > 5 years (CRR)
+
+**Regulation:** Art. 224(1) Table 1, 10-day column → `H_C = 12%`.
+**Arithmetic:** `C_VA = 264,000.00`; `E* = 736,000.00`; `RWA = 1,104,000.00`.
+
+## Art. 224(1) Table 3 at the 10-day column — ORC-221 to ORC-224
+
+Every row of Table 3. Shared inputs and arithmetic as for ORC-200 to ORC-220.
+
+## ORC-221 — FCCM, cash collateral (CRR)
+
+**Regulation:** Art. 224(1) Table 3, cash → `H_C = 0%` in every column.
+**Arithmetic:** `C_VA = 300,000.00`; `E* = 700,000.00`; `RWA = 1,050,000.00`.
+
+## ORC-222 — FCCM, gold (CRR)
+
+**Regulation:** Art. 224(1) Table 3, gold, 10-day → `H_C = 15%`.
+**Arithmetic:** `C_VA = 255,000.00`; `E* = 745,000.00`; `RWA = 1,117,500.00`.
+
+## ORC-223 — FCCM, main-index equity (CRR)
+
+**Inputs:** as shared, pledge is equity with `is_main_index = true`,
+`is_listed = true`.
+**Regulation:** Art. 224(1) Table 3, "Main Index Equities, Main Index Convertible
+Bonds", 10-day → `H_C = 15%`. Eligible under Art. 197(1)(f).
+**Arithmetic:** `C_VA = 255,000.00`; `E* = 745,000.00`; `RWA = 1,117,500.00`.
+
+## ORC-224 — FCCM, other equity listed on a recognised exchange (CRR)
+
+**Inputs:** as shared, pledge is equity with `is_main_index = false`,
+`is_listed = true`.
+**Regulation:** Art. 224(1) Table 3, "Other Equities or Convertible Bonds listed
+on a recognised exchange", 10-day → `H_C = 25%`. Eligible under Art. 198(1)(a),
+which is available because the firm is on the Comprehensive Method.
+**Arithmetic:** `C_VA = 225,000.00`; `E* = 775,000.00`; `RWA = 1,162,500.00`.
+
+## Art. 197 eligibility under the Comprehensive Method — ORC-225 to ORC-232, ORC-282
+
+Art. 197(1)(b) admits a central-government security only where its ECAI
+assessment is associated with "credit quality step **4 or above**";
+Art. 197(1)(c) and (d) admit an institution's or another entity's only at "credit
+quality step **3 or above**". A security outside those steps is not eligible
+collateral. Neither is an **unrated** one: the limb is conditioned on *having* an
+assessment, so absence fails it. (Art. 197(4) opens a narrow route for unrated
+*institution* securities meeting five listed criteria; it does not reach an
+unrated sovereign or corporate security, and no oracle here asserts it.)
+
+Art. 197(1)(f) admits equity only where it is "included in a main index".
+Art. 198(1)(a) extends that to non-main-index equity "traded on a recognised
+exchange" — but expressly only "where an institution uses the Financial
+Collateral Comprehensive Method set out in Article 223". So the ineligible equity
+here is the pledge that fails **both** tests.
+
+Art. 218 makes a credit linked note cash collateral only where it was "issued by
+the lending institution"; a third-party note is an ordinary debt security of
+another entity and needs Art. 197(1)(d)'s CQS 3 or above.
+
+Ineligible collateral contributes nothing: `C_VA = 0`, `E* = E = 1,000,000.00`,
+`RWA = 1,500,000.00`. Shared inputs as above with the pledge at residual maturity
+3 years and a 10-day liquidation period.
+
+## ORC-225 — FCCM, CQS 5 central-government security is ineligible (CRR)
+
+**Regulation:** Art. 197(1)(b) — CQS 5 is below "credit quality step 4 or above".
+**Arithmetic:** `C_VA = 0.00`; `E* = 1,000,000.00`; `RWA = 1,500,000.00`.
+
+## ORC-226 — FCCM, CQS 6 central-government security is ineligible (CRR)
+
+**Regulation:** Art. 197(1)(b).
+**Arithmetic:** `C_VA = 0.00`; `E* = 1,000,000.00`; `RWA = 1,500,000.00`.
+
+## ORC-227 — FCCM, unrated central-government security is ineligible (CRR)
+
+**Regulation:** Art. 197(1)(b) — the limb requires an ECAI assessment.
+**Arithmetic:** `C_VA = 0.00`; `E* = 1,000,000.00`; `RWA = 1,500,000.00`.
+
+## ORC-228 — FCCM, CQS 4 other-entity security is ineligible (CRR)
+
+**Regulation:** Art. 197(1)(d) — CQS 4 is below "credit quality step 3 or above".
+**Arithmetic:** `C_VA = 0.00`; `E* = 1,000,000.00`; `RWA = 1,500,000.00`.
+
+## ORC-229 — FCCM, CQS 5 other-entity security is ineligible (CRR)
+
+**Regulation:** Art. 197(1)(d).
+**Arithmetic:** `C_VA = 0.00`; `E* = 1,000,000.00`; `RWA = 1,500,000.00`.
+
+## ORC-230 — FCCM, CQS 6 other-entity security is ineligible (CRR)
+
+**Regulation:** Art. 197(1)(d).
+**Arithmetic:** `C_VA = 0.00`; `E* = 1,000,000.00`; `RWA = 1,500,000.00`.
+
+## ORC-231 — FCCM, unrated other-entity security is ineligible (CRR)
+
+**Regulation:** Art. 197(1)(d) — the limb requires an ECAI assessment.
+**Arithmetic:** `C_VA = 0.00`; `E* = 1,000,000.00`; `RWA = 1,500,000.00`.
+
+## ORC-232 — FCCM, equity neither in a main index nor listed is ineligible (CRR)
+
+**Inputs:** pledge is equity with `is_main_index = false`, `is_listed = false`.
+**Regulation:** Art. 197(1)(f) fails on main-index membership and Art. 198(1)(a)
+fails on listing.
+**Arithmetic:** `C_VA = 0.00`; `E* = 1,000,000.00`; `RWA = 1,500,000.00`.
+
+## ORC-282 — FCCM, unrated third-party credit linked note is ineligible (CRR)
+
+**Inputs:** pledge is a credit linked note, `is_own_issued_cln = false`, unrated.
+**Regulation:** Art. 218 (only a note issued by the lending institution is cash
+collateral) with Art. 197(1)(d) (an unrated other-entity security is not
+eligible).
+**Arithmetic:** `C_VA = 0.00`; `E* = 1,000,000.00`; `RWA = 1,500,000.00`.
+
+This oracle is the **control for ORC-281**, which is the same pledge under the
+Simple Method. A pair whose Simple-Method half disagrees with the engine and
+whose Comprehensive half agrees localises a defect to one method rather than to
+the rule; without the control, "the Art. 218 gate is missing" cannot be told
+apart from "the Art. 218 gate does not exist".
+
+## Currency mismatch and the three liquidation periods — ORC-233 to ORC-240
+
+Art. 223(1), second sub-paragraph: where the collateral is denominated in a
+different currency from the exposure, institutions "shall add an adjustment
+reflecting currency volatility to the volatility adjustment appropriate to the
+collateral". Art. 223(2) then subtracts the sum:
+`C_VA = C × (1 − H_C − H_fx)`.
+
+## ORC-233 — FCCM, EUR cash against a GBP exposure, 10-day (CRR)
+
+**Inputs:** pledge £300,000-equivalent cash denominated in EUR; 10-day period.
+**Regulation:** Art. 224(1) Table 3 cash → `H_C = 0%`; Table 4, 10-day →
+`H_fx = 8%`.
+**Arithmetic:** `C_VA = 300,000 × (1 − 0 − 0.08) = 276,000.00`;
+`E* = 724,000.00`; `RWA = 1,086,000.00`.
+
+## ORC-234 — FCCM, the two adjustments compose additively (CRR)
+
+**Inputs:** pledge EUR CQS 1 central-government security, residual maturity
+3 years; 10-day period.
+**Regulation:** Art. 223(1)/(2) with Table 1 (`H_C = 2%`) and Table 4
+(`H_fx = 8%`).
+**Arithmetic:** `C_VA = 300,000 × (1 − 0.02 − 0.08) = 270,000.00`;
+`E* = 730,000.00`; `RWA = 1,095,000.00`.
+
+## ORC-235 — FCCM, secured lending, cash (CRR)
+
+**Inputs:** pledge £300,000 cash, GBP, **no** explicit liquidation period, so
+Art. 224(2)(a)'s 20 business days applies.
+**Regulation:** Art. 224(2)(a); Table 3 cash is 0% in every column.
+**Arithmetic:** `C_VA = 300,000.00`; `E* = 700,000.00`; `RWA = 1,050,000.00`.
+This is the case that shows the period change is not silently rescaling a zero:
+it is the same answer as ORC-221 *because* cash carries no adjustment at any
+period, and ORC-236 to ORC-238 on the same 20-day basis do move.
+
+## ORC-236 — FCCM, secured lending, CQS 1 sovereign security, 3 years (CRR)
+
+**Inputs:** as ORC-235 but the pledge is a CQS 1 central-government security,
+residual maturity 3 years.
+**Regulation:** Art. 224(1) Table 1, 20-day column → 2,828%, i.e.
+`H_C = 0.02 × √2 = 0.0282842712…`.
+**Arithmetic:** `C_VA = 300,000 × (1 − 0.0282842712) = 291,514.7186…`;
+`E* = 708,485.2814…`; `RWA = 1,062,727.9221…`.
+
+## ORC-237 — FCCM, secured lending, gold (CRR)
+
+**Regulation:** Art. 224(1) Table 3, gold, 20-day column → 21,213%, i.e.
+`H_C = 0.15 × √2 = 0.2121320344…`.
+**Arithmetic:** `C_VA = 236,360.3897…`; `E* = 763,639.6103…`;
+`RWA = 1,145,459.4155…`.
+
+## ORC-238 — FCCM, secured lending, EUR cash (CRR)
+
+**Regulation:** Art. 224(1) Table 4, 20-day column → 11,314%, i.e.
+`H_fx = 0.08 × √2 = 0.1131370850…`.
+**Arithmetic:** `C_VA = 300,000 × (1 − 0 − 0.1131370850) = 266,058.8745…`;
+`E* = 733,941.1255…`; `RWA = 1,100,911.6882…`.
+
+## ORC-239 — FCCM, repurchase transaction, CQS 1 sovereign security, 3 years (CRR)
+
+**Inputs:** as ORC-236 but the exposure carries `is_sft = true`, which is how the
+engine selects Art. 224(2)(b)'s 5 business days. This is a period selector, not a
+full repo model — the row is still a drawn on-balance-sheet exposure.
+**Regulation:** Art. 224(1) Table 1, 5-day column → 1,414%, i.e.
+`H_C = 0.02 × √0.5 = 0.0141421356…`.
+**Arithmetic:** `C_VA = 295,757.3593…`; `E* = 704,242.6407…`;
+`RWA = 1,056,363.9610…`.
+
+## ORC-240 — FCCM, repurchase transaction, EUR cash (CRR)
+
+**Regulation:** Art. 224(1) Table 4, 5-day column → 5,657%, i.e.
+`H_fx = 0.08 × √0.5 = 0.0565685425…`.
+**Arithmetic:** `C_VA = 283,029.4373…`; `E* = 716,970.5627…`;
+`RWA = 1,075,455.8441…`.
+
+## The Art. 223(5) composition itself — ORC-241 to ORC-243
+
+## ORC-241 — FCCM, over-collateralisation floors E* at zero (CRR)
+
+**Inputs:** pledge £1,200,000 cash, GBP, 10-day period, against a £1,000,000
+exposure.
+**Regulation:** Art. 223(5), `E* = max(0, E_VA − C_VAM)`.
+**Arithmetic:** `C_VA = 1,200,000.00`; `E* = max(0, 1,000,000 − 1,200,000) =
+0.00`; `RWA = 0.00`. A negative exposure value is not produced.
+
+## ORC-242 — FCCM, the composition is a difference, not a ratio (CRR)
+
+**Inputs:** `E = £500,000`; pledge £300,000 cash, GBP, 10-day period.
+**Regulation:** Art. 223(5).
+**Arithmetic:** `C_VA = 300,000.00`; `E* = 200,000.00`; `RWA = 300,000.00`.
+Not `500,000 × (1 − 0.3) = 350,000`, which is the answer a proportional
+implementation would give and which this oracle exists to exclude.
+
+## ORC-243 — FCCM, two collateral items each take their own adjustment (CRR)
+
+**Inputs:** two pledges — £200,000 cash and £200,000 gold — both GBP, 10-day.
+**Regulation:** Art. 223(7): where the collateral consists of a number of
+eligible items each carries the adjustment applicable to it.
+**Arithmetic:** `C_VA = 200,000 × 1.00 + 200,000 × 0.85 = 200,000 + 170,000 =
+370,000.00`; `E* = 630,000.00`; `RWA = 945,000.00`.
+
+## Art. 222 Financial Collateral Simple Method — ORC-244 to ORC-258, ORC-274 to ORC-281
+
+Art. 222(2) assigns eligible financial collateral "a value equal to its market
+value" — **no volatility adjustment at all**. Art. 222(3) then assigns "to those
+portions of exposure values that are collateralised by the market value of
+eligible collateral the risk weight that they would assign … where the lending
+institution had a direct exposure to the collateral instrument", subject to a
+floor: "The risk weight of the collateralised portion shall be at least 20%
+except as specified in paragraphs 4 to 6", and "Institutions shall apply to the
+remainder of the exposure value the risk weight that they would assign to an
+unsecured exposure to the counterparty".
+
+So the Simple Method **does not reduce the exposure value** — it is a
+risk-weight substitution. Every oracle below therefore asserts
+`ead = 1,000,000.00` as well as the blended weight, and that assertion is not a
+formality: reducing EAD *and* substituting the weight would double-count the
+collateral.
+
+`RW_blended = (C_recognised / E) × RW_collateral + (1 − C_recognised / E) ×
+150%`, with `C_recognised / E` capped at 1.
+
+Art. 222(6) is the carve-out from the 20% floor, for a **non-SFT** exposure where
+"the exposure and the collateral are denominated in the same currency" and either
+"(a) the collateral is cash on deposit or a cash assimilated instrument" or
+"(b) the collateral is in the form of debt securities issued by central
+governments or central banks eligible for a 0% risk weight under Article 114, and
+its market value has been discounted by 20%".
+
+The weights a direct exposure to the collateral instrument would carry:
+Art. 114(2) Table 1 for a central-government security (CQS 1 → 0%, 2 → 20%,
+3 → 50%, 4 → 100%, 5 → 100%, 6 → 150%; Art. 114(1) → 100% unrated);
+Art. 122(1) Table 6 for a corporate security (1 → 20%, 2 → 50%, 3 → 100%,
+4 → 100%, 5 → 150%, 6 → 150%; 100% unrated); Art. 133(1) 100% for equity;
+Art. 134 0% for cash and gold.
+
+Shared inputs for all of these: the shared fact pattern, plus
+`crm_method = "simple"` (the Art. 191A method election).
+
+## ORC-244 — FCSM, same-currency cash takes 0% (CRR)
+
+**Inputs:** pledge £300,000 cash, GBP.
+**Regulation:** Art. 222(6)(a) — same currency, cash on deposit, non-SFT — so the
+Art. 222(3) 20% floor does not apply.
+**Arithmetic:** collateralised value 300,000.00 at 0%; `RW = 0.3 × 0.00 +
+0.7 × 1.50 = 1.05`; `EAD = 1,000,000.00`; `RWA = 1,050,000.00`.
+
+## ORC-245 — FCSM, EUR cash fails the same-currency condition (CRR)
+
+**Inputs:** pledge £300,000-equivalent cash denominated in EUR.
+**Regulation:** Art. 222(6) requires the exposure and the collateral to be in the
+same currency, so the carve-out is unavailable and Art. 222(3) applies:
+`max(0%, 20%) = 20%`.
+**Arithmetic:** 300,000.00 at 20%; `RW = 0.3 × 0.20 + 0.7 × 1.50 = 1.11`;
+`RWA = 1,110,000.00`. The 6 percentage points of difference from ORC-244 *is* the
+floor, measured.
+
+## ORC-246 — FCSM, Art. 222(6)(b) 0% after the 20% market-value discount (CRR)
+
+**Inputs:** pledge £500,000 CQS 1 central-government security, GBP, residual
+maturity 3 years.
+**Regulation:** Art. 222(6)(b). Art. 114(2) Table 1 makes a CQS 1 sovereign 0%,
+so the security qualifies — but only on a market value "discounted by 20%".
+**Arithmetic:** recognised value `500,000 × 0.80 = 400,000.00` at 0%;
+`RW = 0.4 × 0.00 + 0.6 × 1.50 = 0.90`; `RWA = 900,000.00`.
+
+## ORC-247 — FCSM, EUR CQS 1 sovereign security: no carve-out, no discount (CRR)
+
+**Inputs:** as ORC-246 but denominated in EUR.
+**Regulation:** the Art. 222(6)(b) carve-out fails on currency, so neither the 0%
+weight nor the 20% market-value discount that conditions it applies. The whole
+£500,000 is recognised at the Art. 222(3) floor.
+**Arithmetic:** 500,000.00 at 20%; `RW = 0.5 × 0.20 + 0.5 × 1.50 = 0.85`;
+`RWA = 850,000.00`. Note this is *lower* than ORC-246's 0.90 — losing the
+carve-out costs the 20% discount too, and on these numbers the discount matters
+more than the floor. That is the article's arithmetic, not an anomaly, and it is
+why both members are pinned.
+
+## ORC-248 — FCSM, CQS 2 central-government security (CRR)
+
+**Regulation:** Art. 222(3) with Art. 114(2) Table 1 → 20%, exactly the floor.
+**Arithmetic:** 300,000.00 at 20%; `RW = 1.11`; `RWA = 1,110,000.00`.
+
+## ORC-249 — FCSM, CQS 3 central-government security (CRR)
+
+**Regulation:** Art. 222(3) with Art. 114(2) Table 1 → 50%, above the floor.
+**Arithmetic:** 300,000.00 at 50%; `RW = 0.3 × 0.50 + 0.7 × 1.50 = 1.20`;
+`RWA = 1,200,000.00`.
+
+## ORC-250 — FCSM, CQS 4 central-government security (CRR)
+
+**Regulation:** Art. 222(3) with Art. 114(2) Table 1 → 100%.
+**Arithmetic:** `RW = 0.3 × 1.00 + 0.7 × 1.50 = 1.35`; `RWA = 1,350,000.00`.
+
+## ORC-251 — FCSM, CQS 1 other-entity security (CRR)
+
+**Regulation:** Art. 222(3) with Art. 122(1) Table 6 → 20%.
+**Arithmetic:** `RW = 1.11`; `RWA = 1,110,000.00`.
+
+## ORC-252 — FCSM, CQS 2 other-entity security (CRR)
+
+**Regulation:** Art. 222(3) with Art. 122(1) Table 6 → 50%.
+**Arithmetic:** `RW = 1.20`; `RWA = 1,200,000.00`.
+
+## ORC-253 — FCSM, CQS 3 other-entity security (CRR)
+
+**Regulation:** Art. 222(3) with Art. 122(1) Table 6 → 100%.
+**Arithmetic:** `RW = 1.35`; `RWA = 1,350,000.00`.
+
+## ORC-254 — FCSM, main-index equity (CRR)
+
+**Regulation:** Art. 222(1)/(3) with Art. 133(1) → 100%. Note that the
+instrument's *collateral* character governs: there is no Art. 222 carve-out for
+equity and no route to a higher equity weight here.
+**Arithmetic:** `RW = 1.35`; `RWA = 1,350,000.00`.
+
+## ORC-255 — FCSM, gold takes the 20% floor (CRR)
+
+**Regulation:** Art. 134(4) would weight gold at 0% as a direct exposure, but
+gold is neither "cash on deposit or a cash assimilated instrument" nor a
+central-government security, so no Art. 222(6) carve-out reaches it and
+Art. 222(3)'s floor binds at 20%.
+**Arithmetic:** 300,000.00 at 20%; `RW = 1.11`; `RWA = 1,110,000.00`.
+Contrast ORC-244: same 0% underlying weight, same currency, different answer,
+because the carve-out is written by instrument type.
+
+## ORC-256 — FCSM, over-collateralisation leaves no remainder (CRR)
+
+**Inputs:** pledge £1,200,000 cash, GBP.
+**Regulation:** Art. 222(3) — the collateralised portion cannot exceed the
+exposure value, so there is no "remainder of the exposure value" to weight.
+**Arithmetic:** collateralised value capped at 1,000,000.00 at 0%; `RW = 0.00`;
+`EAD = 1,000,000.00`; `RWA = 0.00`.
+
+## Art. 197 eligibility under the Simple Method — ORC-257, ORC-258, ORC-274 to ORC-281
+
+Art. 222(2) and (3) both speak of "**eligible** financial collateral" and "the
+market value of **eligible** collateral". Art. 197 is what makes collateral
+eligible, and it is not method-specific — it is headed "Eligibility of collateral
+under all approaches and methods". So every ineligibility that applies under the
+Comprehensive Method (ORC-225 to ORC-232, ORC-282) applies identically here, and
+an ineligible pledge collateralises no portion of the exposure: the whole
+£1,000,000 keeps the obligor's 150% and `RWA = 1,500,000.00`.
+
+Only the members whose own weight is **below** the obligor's 150% can show a
+missing gate at all. A CQS 6 security carries the same 150% the obligor does, so
+recognising it changes nothing and the oracle agrees for the wrong reason. Those
+members are pinned precisely because they agree: a future change to the
+collateral weight would move them silently otherwise. This is the Art. 121 Table
+5 shape recorded in `test_oracle.py` — sampling the interesting members
+mis-characterises the family.
+
+## ORC-257 — FCSM, CQS 5 central-government security is ineligible (CRR)
+
+**Regulation:** Art. 197(1)(b) via Art. 222(2).
+**Arithmetic:** collateralised value 0.00; `RW = 1.50`; `RWA = 1,500,000.00`.
+
+## ORC-258 — FCSM, CQS 4 other-entity security is ineligible (CRR)
+
+**Regulation:** Art. 197(1)(d) via Art. 222(2).
+**Arithmetic:** collateralised value 0.00; `RW = 1.50`; `RWA = 1,500,000.00`.
+
+## ORC-274 — FCSM, CQS 6 central-government security is ineligible (CRR)
+
+**Regulation:** Art. 197(1)(b) via Art. 222(2). Art. 114(2) Table 1 would weight
+this security at 150%, the obligor's own weight, so this member cannot
+distinguish a working eligibility gate from a missing one — it is pinned to fix
+the value, not to catch a defect.
+**Arithmetic:** collateralised value 0.00; `RW = 1.50`; `RWA = 1,500,000.00`.
+
+## ORC-275 — FCSM, unrated central-government security is ineligible (CRR)
+
+**Regulation:** Art. 197(1)(b) via Art. 222(2) — the limb requires an ECAI
+assessment.
+**Arithmetic:** collateralised value 0.00; `RW = 1.50`; `RWA = 1,500,000.00`.
+
+## ORC-276 — FCSM, CQS 5 other-entity security is ineligible (CRR)
+
+**Regulation:** Art. 197(1)(d) via Art. 222(2). Art. 122(1) Table 6 weights it at
+150% — coincident with the unsecured answer, as ORC-274.
+**Arithmetic:** collateralised value 0.00; `RW = 1.50`; `RWA = 1,500,000.00`.
+
+## ORC-277 — FCSM, CQS 6 other-entity security is ineligible (CRR)
+
+**Regulation:** Art. 197(1)(d) via Art. 222(2). Also 150%, also coincident.
+**Arithmetic:** collateralised value 0.00; `RW = 1.50`; `RWA = 1,500,000.00`.
+
+## ORC-278 — FCSM, unrated other-entity security is ineligible (CRR)
+
+**Regulation:** Art. 197(1)(d) via Art. 222(2).
+**Arithmetic:** collateralised value 0.00; `RW = 1.50`; `RWA = 1,500,000.00`.
+
+## ORC-279 — FCSM, non-main-index equity is ineligible even when listed (CRR)
+
+**Inputs:** pledge is equity with `is_main_index = false`, `is_listed = true` —
+i.e. the pledge ORC-224 recognises at a 25% haircut under the Comprehensive
+Method.
+**Regulation:** Art. 197(1)(f) via Art. 222(2). Art. 198(1)(a)'s extension to
+non-main-index listed equity is expressly confined to a firm using the
+Comprehensive Method, so listing does not rescue it here. This pair — ORC-224 and
+ORC-279, the same instrument, eligible under one method and not the other — is
+what makes Art. 198(1)(a)'s method-conditionality testable at all.
+**Arithmetic:** collateralised value 0.00; `RW = 1.50`; `RWA = 1,500,000.00`.
+
+## ORC-280 — FCSM, CQS 5 central-government security at full cover (CRR)
+
+**Inputs:** pledge £1,000,000 CQS 5 central-government security, GBP, residual
+maturity 3 years — full cover of the £1,000,000 exposure.
+**Regulation:** Art. 197(1)(b) via Art. 222(2). This is the **magnitude** case: if
+the eligibility gate is missing, the whole exposure moves from the obligor's 150%
+to the security's own Art. 114(2) 100%, so the oracle and a gate-less
+implementation differ by a third of RWEA rather than by a tenth.
+**Arithmetic:** collateralised value 0.00; `RW = 1.50`; `RWA = 1,500,000.00`.
+
+## ORC-281 — FCSM, unrated third-party credit linked note is ineligible (CRR)
+
+**Inputs:** pledge £300,000 credit linked note, `is_own_issued_cln = false`,
+unrated, GBP.
+**Regulation:** Art. 218 with Art. 197(1)(d), via Art. 222(2). ORC-282 is the
+Comprehensive-Method control for this oracle.
+**Arithmetic:** collateralised value 0.00; `RW = 1.50`; `RWA = 1,500,000.00`.
+
+## Art. 235 substitution and Art. 201 eligibility — ORC-259 to ORC-273
+
+Art. 235(1): `RWEA = max(0, E − G_A) × r + G_A × g`, where `r` is the obligor's
+risk weight, `g` the protection provider's, and `G_A` the protection value from
+Art. 233(3) further adjusted for maturity mismatch (no mismatch here — these
+oracles carry no maturity on either side). Art. 235(2) permits the formula only
+where the protected and unprotected parts of the exposure rank equally, which
+they do.
+
+Art. 233(3): `G* = G × (1 − H_fx)` where the protection is denominated in a
+different currency from the exposure. Art. 233(4) fixes that adjustment on a
+**10-business-day** liquidation period — Art. 224(1) Table 4's middle column, 8%
+— "assuming daily revaluation". That is a different basis from the collateral
+side, which follows the transaction's own period under Art. 224(2), and the pair
+ORC-259 / ORC-260 is what pins it: if the guarantee adjustment were scaled to the
+20 days a secured lending transaction uses, `H_fx` would be 11.3137…% rather than
+8%, `G*` would be 354,745.17 rather than 368,000.00, and RWEA would be
+1,038,831.28 rather than 1,021,600.00 — a 1.7% difference the oracle would catch.
+
+Art. 201(1) lists the eligible providers of unfunded credit protection
+exhaustively: (a) central governments and central banks; (b) regional governments
+or local authorities; (c) multilateral development banks; (d) 0%-weighted
+international organisations; (e) public sector entities under Art. 116;
+(f) institutions, and Art. 119(5) financial institutions; (g) other corporate
+entities where either "(i) those other corporate entities have a credit
+assessment by an ECAI" or "(ii) in the case of institutions calculating
+risk-weighted exposure amounts … under the IRB Approach", an internal rating;
+(h) qualifying central counterparties. **There is no retail or natural-person
+limb**, and limb (g)(ii) is closed to a firm on the Standardised Approach.
+
+Where the protection is not recognised the whole exposure keeps `r`:
+`RWEA = 1,000,000 × 1.50 = 1,500,000.00`.
+
+Shared inputs: the shared fact pattern, with a single guarantee of £400,000
+covering part of the £1,000,000 exposure and no collateral.
+
+## ORC-259 — Art. 235(1), CQS 1 institution guarantor, partial cover (CRR)
+
+**Regulation:** Art. 201(1)(f) makes an institution eligible; Art. 120(1) Table 3
+weights a CQS 1 institution at 20%.
+**Arithmetic:** `G* = G_A = 400,000.00`; `RWEA = 600,000 × 1.50 +
+400,000 × 0.20 = 900,000 + 80,000 = 980,000.00`; `RW = 0.98`.
+
+## ORC-260 — Art. 233(3), the same guarantee in EUR (CRR)
+
+**Inputs:** the guarantee is denominated in EUR; the exposure in GBP.
+**Regulation:** Art. 233(3)/(4) with Art. 224(1) Table 4, 10-day → `H_fx = 8%`.
+**Arithmetic:** `G* = 400,000 × 0.92 = 368,000.00`; `G_A = 368,000.00`;
+`RWEA = 632,000 × 1.50 + 368,000 × 0.20 = 948,000 + 73,600 = 1,021,600.00`;
+`RW = 1.0216`.
+
+## ORC-261 — Art. 235(1), CQS 3 institution guarantor (CRR)
+
+**Regulation:** Art. 120(1) Table 3, CQS 3 → 50%.
+**Arithmetic:** `RWEA = 600,000 × 1.50 + 400,000 × 0.50 = 1,100,000.00`;
+`RW = 1.10`.
+
+## ORC-262 — Art. 235(1), CQS 1 central-government guarantor (CRR)
+
+**Regulation:** Art. 201(1)(a) with Art. 114(2) Table 1, CQS 1 → 0%.
+**Arithmetic:** `RWEA = 600,000 × 1.50 + 400,000 × 0.00 = 900,000.00`;
+`RW = 0.90`.
+
+## ORC-263 — Art. 235(1), CQS 3 central-government guarantor (CRR)
+
+**Regulation:** Art. 114(2) Table 1, CQS 3 → 50%.
+**Arithmetic:** `RWEA = 1,100,000.00`; `RW = 1.10`.
+
+## ORC-264 — Art. 235(1), CQS 1 regional-government guarantor (CRR)
+
+**Regulation:** Art. 201(1)(b) makes a regional government or local authority
+eligible; Art. 115(1) weights it as an institution, so CQS 1 → 20%.
+**Arithmetic:** `RWEA = 980,000.00`; `RW = 0.98`.
+
+## ORC-265 — Art. 235(1), CQS 1 public-sector-entity guarantor (CRR)
+
+**Regulation:** Art. 201(1)(e) makes a public sector entity treated under
+Art. 116 eligible; Art. 116(2) weights it as an institution, so CQS 1 → 20%.
+**Arithmetic:** `RWEA = 980,000.00`; `RW = 0.98`.
+
+## ORC-266 — Art. 235(1), named multilateral development bank guarantor (CRR)
+
+**Regulation:** Art. 201(1)(c) with Art. 117(2) — an MDB on the Art. 117(2) list
+carries 0%.
+**Arithmetic:** `RWEA = 900,000.00`; `RW = 0.90`.
+
+## ORC-267 — Art. 235(1), unlisted unrated MDB guarantor (CRR)
+
+**Regulation:** Art. 201(1)(c) still makes it eligible, but Art. 117(1) requires
+an MDB not referred to in paragraph 2 to be "treated the same as exposures to
+institutions", and Art. 121(2) weights an unrated institution at 100%. Same
+eligibility limb as ORC-266, very different weight — which is why both are
+pinned.
+**Arithmetic:** `RWEA = 600,000 × 1.50 + 400,000 × 1.00 = 1,300,000.00`;
+`RW = 1.30`.
+
+## ORC-268 — Art. 201(1)(g)(i), rated corporate guarantor (CRR)
+
+**Regulation:** a corporate *with* an ECAI credit assessment is eligible;
+Art. 122(1) Table 6 weights CQS 2 at 50%.
+**Arithmetic:** `RWEA = 1,100,000.00`; `RW = 1.10`.
+
+## ORC-269 — Art. 201(1)(g), unrated corporate guarantor is ineligible (CRR)
+
+**Regulation:** limb (g)(i) requires an ECAI assessment and limb (g)(ii) is open
+only to a firm calculating under the IRB Approach. Neither is satisfied, so the
+protection is not recognised.
+**Arithmetic:** `G_A = 0.00`; `RWEA = 1,000,000 × 1.50 = 1,500,000.00`;
+`RW = 1.50`.
+
+## ORC-270 — Art. 201(1), individual guarantor is ineligible (CRR)
+
+**Regulation:** the Art. 201(1) list is exhaustive and has no retail or
+natural-person limb.
+**Arithmetic:** `G_A = 0.00`; `RWEA = 1,500,000.00`; `RW = 1.50`.
+
+## ORC-271 — Art. 193(1), a non-beneficial guarantee is not applied (CRR)
+
+**Inputs:** guarantor is a CQS 6 corporate, which Art. 122(1) Table 6 weights at
+150% — the obligor's own weight.
+**Regulation:** the guarantor is eligible under Art. 201(1)(g)(i), but Art. 193(1)
+forbids an exposure with credit protection producing a higher RWEA than the same
+exposure unprotected, and Art. 235(1) carries no `min` of its own. At equal
+weights the substitution can only fail to help, and the engine's recorded
+election (see `engine/sa/rw_adjustments.py`) is to decline it.
+**Arithmetic:** `RWEA = 1,000,000 × 1.50 = 1,500,000.00`; `RW = 1.50`. Note the
+answer is the same whether the substitution is applied or declined — this oracle
+pins the value, and the *decision* is documented rather than measured here.
+
+## ORC-272 — Art. 235(1) at full cover (CRR)
+
+**Inputs:** guarantee of £1,000,000 from a CQS 1 institution.
+**Regulation:** Art. 235(1) — `max(0, E − G_A) = 0`, so `RWEA = E × g`.
+**Arithmetic:** `RWEA = 0 × 1.50 + 1,000,000 × 0.20 = 200,000.00`; `RW = 0.20`.
+
+## ORC-273 — Art. 235(1) with protection above the exposure value (CRR)
+
+**Inputs:** guarantee of £1,400,000 over a £1,000,000 exposure.
+**Regulation:** Art. 235(1) — `max(0, E − G_A)` floors at zero and the covered
+amount cannot exceed E, so the excess £400,000 buys nothing.
+**Arithmetic:** `RWEA = 200,000.00`; `RW = 0.20`. Identical to ORC-272, which is
+the point: over-protection must not produce a negative uncovered leg.
+
+## Note on the securitisation columns of Art. 224(1) Table 1
+
+Columns 10–12 of Table 1 (securitisation positions meeting Art. 197(1)(h)) are
+**not** pinned, and are excluded from `_assert_printed_columns`. Three of their
+printed figures are not the 3-decimal-place rounding of the square-root-of-time
+relation the rest of the table follows: CQS 1 ≤ 1 year reads 2,829 at 20 days
+against a derived 2.828, CQS 2–3 > 5 years reads 33,942 against 33.941, and the
+5-day CQS 1 > 5 years cell reads 11,313 against 11.314. Whether those are
+typesetting artefacts or a deliberately different base is a question the
+securitisation family needs answered before it can be pinned, and answering it
+needs Art. 261–264 read as well (Art. 197(1)(h) conditions eligibility on the
+position's own risk weight being 100% or lower).
+
+---
+
 # Scope not yet covered
 
-- **Phase O3 (credit risk mitigation)** — financial collateral, the financial
-  collateral comprehensive method haircuts, guarantees and maturity mismatch —
-  is not scaffolded. Every oracle here bypasses the CRM stage.
+- **Phase O3 is partially covered.** The Simple Method (Art. 222), the
+  Comprehensive Method's supervisory volatility adjustments and composition
+  (Art. 223, 224, 228(1)), the Art. 233(3) currency-mismatch adjustment and the
+  Art. 235(1) guarantee substitution are covered by ORC-200 to ORC-282. Three
+  things are not:
+  - **F-IRB `LGD*`** (Art. 228(2), 230, 231), and with it the PS1/26
+    Art. 161(5)(b) and 164(4)(c) variable LGD input floors. Every O3 oracle is an
+    SA exposure.
+  - **The Art. 237/238 maturity-mismatch adjustment.** Held deliberately off, not
+    merely absent — see the phase O3 preamble. Note for whoever picks it up: the
+    Comprehensive-Method path takes `t` from the collateral's
+    `residual_maturity_years`, the same column the Art. 224 maturity band reads,
+    and `T` from the exposure's `maturity_date` defaulting to 5 years; while the
+    Simple Method's Art. 239(1) binary gate reads a `residual_maturity_years`
+    column **on the exposure frame**, which `CLASSIFIER_EXIT_EDGE` does not
+    declare — so that gate cannot fire in a pipeline run at all. That is an
+    observation from building this phase, not a finding this suite asserts.
+  - **The securitisation columns of Art. 224(1) Table 1** — see the note at the
+    end of phase O3.
+- **Basel 3.1 CRM.** Every O3 oracle is CRR. PS1/26 revises the Art. 224 tables
+  (five maturity bands rather than three, and different gold and equity
+  adjustments), so the B31 half of this phase is a distinct reading and is owed.
 - **The output floor** (PS1/26 Art. 92(2A), `TREA = max{U-TREA; 0.725 · S-TREA +
   OF-ADJ}`) is an entity-level quantity, not a per-exposure one, so it cannot be
   driven through a single-row `calculate_branch` call. The 72.5% identity is

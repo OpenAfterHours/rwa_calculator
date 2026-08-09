@@ -99,6 +99,33 @@ _ART_154_4A_B_SCOPE = (
     "domain and does not depend on which cases were sampled."
 )
 
+_ART_197_FCSM_ELIGIBILITY = (
+    "The Art. 197 collateral-eligibility gate is not applied on the Art. 222 "
+    "Financial Collateral Simple Method path. engine/crm/processor.py runs "
+    "compute_fcsm_columns at Step 3.8, BEFORE apply_haircuts at Step 4 -- and "
+    "apply_haircuts is the only place the engine overrides the firm-supplied "
+    "is_eligible_financial_collateral flag for an Art. 197-ineligible pledge "
+    "(haircuts.py _bond_ineligible / _equity_listing_ineligible / _cln_ineligible). "
+    "simple_method.py::_prepare_eligible_collateral filters on the raw input "
+    "attestation alone, so the Simple Method recognises collateral the "
+    "Comprehensive Method rejects, at the collateral's own SA risk weight floored "
+    "at 20%. Differing intermediate: fcsm_collateral_value (engine recognises the "
+    "pledge, oracle recognises 0.00), which drives risk_weight and rwa. ead_final "
+    "agrees -- Art. 222 correctly does not reduce EAD. "
+    "DIRECTION IS UNIFORMLY ANTI-CONSERVATIVE OR NEUTRAL, never conservative: the "
+    "blend is share*collateral_RW + (1-share)*obligor_RW and every affected "
+    "instrument carries <= the obligor's 150%. ORC-274, ORC-276 and ORC-277 are "
+    "equally ungated but PASS, because a CQS 6 security carries the obligor's own "
+    "150% -- they are pinned to fix the value, not to catch the defect, and must "
+    "not be marked xfail. The Comprehensive-Method control ORC-282 passes, which "
+    "localises the defect to the one method. Not reachable by the estate's only "
+    "FCSM golden portfolio (reporting_funded_protection_portfolio.py), whose two "
+    "pledges are both CQS 1. A fix is NOT a step reorder: Step 3.8 must precede "
+    "the Comprehensive computation, which is still needed for IRB LGD, so the "
+    "Art. 197 gate has to be factored out of apply_haircuts and applied to the "
+    "FCSM input as well."
+)
+
 KNOWN_DISAGREEMENTS: dict[str, str] = {
     "ORC-105": f"{_ART_121_TABLE_5} Here: CQS 1, oracle 20%, engine 100% (overstated).",
     "ORC-020": f"{_ART_121_TABLE_5} Here: CQS 2, oracle 50%, engine 100% (overstated).",
@@ -122,6 +149,45 @@ KNOWN_DISAGREEMENTS: dict[str, str] = {
         "there is guarantor_country_code, for the guarantee substitution path), "
         "so no input could switch it off. Oracle floor adjustment 0.00, engine "
         "373,345.27."
+    ),
+    "ORC-257": (
+        f"{_ART_197_FCSM_ELIGIBILITY} Here: Art. 197(1)(b), CQS 5 sovereign at "
+        "30% cover. Oracle 1,500,000, engine 1,350,000 -- UNDERSTATED 10.0%."
+    ),
+    "ORC-258": (
+        f"{_ART_197_FCSM_ELIGIBILITY} Here: Art. 197(1)(d), CQS 4 corporate at "
+        "30% cover. Oracle 1,500,000, engine 1,350,000 -- UNDERSTATED 10.0%."
+    ),
+    "ORC-275": (
+        f"{_ART_197_FCSM_ELIGIBILITY} Here: Art. 197(1)(b), UNRATED sovereign -- "
+        "the limb is conditioned on having an ECAI assessment. Oracle 1,500,000, "
+        "engine 1,350,000 -- UNDERSTATED 10.0%."
+    ),
+    "ORC-278": (
+        f"{_ART_197_FCSM_ELIGIBILITY} Here: Art. 197(1)(d), UNRATED corporate. "
+        "Oracle 1,500,000, engine 1,350,000 -- UNDERSTATED 10.0%."
+    ),
+    "ORC-279": (
+        f"{_ART_197_FCSM_ELIGIBILITY} Here: Art. 197(1)(f) equity. Art. 198(1)(a) "
+        "extends eligibility to non-main-index LISTED equity only 'where an "
+        "institution uses the Financial Collateral Comprehensive Method', so "
+        "listing does not rescue it under Art. 222. ORC-224 is the same instrument, "
+        "correctly eligible at a 25% haircut under the Comprehensive Method. "
+        "Oracle 1,500,000, engine 1,350,000 -- UNDERSTATED 10.0%."
+    ),
+    "ORC-280": (
+        f"{_ART_197_FCSM_ELIGIBILITY} Here: the MAGNITUDE case -- CQS 5 sovereign "
+        "at FULL cover. Oracle 1,500,000, engine 1,000,000 -- UNDERSTATED 33.3%, "
+        "the whole exposure moving from the obligor's 150% to the security's own "
+        "Art. 114(2) 100%."
+    ),
+    "ORC-281": (
+        f"{_ART_197_FCSM_ELIGIBILITY} Here: Art. 218 -- only a credit linked note "
+        "issued by the LENDING institution is cash collateral; an unrated "
+        "third-party note also fails Art. 197(1)(d). The engine raises CRM019 on "
+        "this row and then recognises it anyway. ORC-282 is the passing "
+        "Comprehensive-Method control. Oracle 1,500,000, engine 1,350,000 -- "
+        "UNDERSTATED 10.0%."
     ),
 }
 

@@ -131,11 +131,16 @@ BOE_COL_TABLES = range(17, 21)  # T1..T4
 # ── Parsing patterns ─────────────────────────────────────────────────────────
 
 # "SHORT_LABEL(en) - some text|" / "DESCRIPTION(en) - v5745_q|"
-# The body is `[^|]*` rather than a lazy `.*?`: excluding the terminator makes the
-# scan to it deterministic, where `\s*` followed by a dot-matches-all `.*?` is
-# ambiguous over the separator's spaces and backtracks quadratically on a segment
-# that has no closing "|". Leading space is left in and stripped by the caller.
-LABEL_SEGMENT = re.compile(r"([A-Z_]+)\(([a-z]{2})\)\s*-([^|]*)\|")
+#
+# Two changes keep this linear. The body is `[^|]*` rather than a lazy `.*?`:
+# excluding the terminator makes the scan to it deterministic, where `\s*` beside
+# a dot-matches-all `.*?` is ambiguous over the separator's spaces. And the
+# leading run is gated by `(?<![A-Z_])`, so a match can only START where the run
+# does — without it the scan re-enters the same run at every offset, which is
+# quadratic in a long unmatched run of capitals. A leftmost match always begins
+# at the run's start anyway, so the gate rejects only positions that could never
+# have matched. Leading space is left in and stripped by the caller.
+LABEL_SEGMENT = re.compile(r"(?<![A-Z_])([A-Z_]+)\(([a-z]{2})\)\s*-([^|]*)\|")
 
 # EBA rule identifiers as they appear inside BoE DESCRIPTION segments: v5745_q, e4893_n
 EBA_RULE_ID = re.compile(r"\b([ve]\d+_[a-z]+)\b")

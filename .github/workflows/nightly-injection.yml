@@ -1,0 +1,204 @@
+name: Nightly Defect Injection
+
+# Measures whether the validation estate would actually CATCH a defect, rather
+# than assuming it. `scripts/defect_injection.py` injects one known-realistic
+# mutant into `src/` at a time, walks a ladder of gates cheapest-first, and
+# records which gate — if any — went red. See docs/development/defect-injection.md.
+#
+# WHAT THIS WORKFLOW DOES NOT DO YET: it does not gate on a detection rate,
+# because no detection rate has ever been measured. The campaign has never been
+# run end to end. `scripts/injection_baseline.json` is committed in an explicitly
+# UN-BANKED state and `scripts/injection_ratchet.py --check` exits NON-ZERO while
+# it stays that way, so this workflow is red-by-design until the first campaign is
+# measured and banked. That is deliberate: a workflow claiming to gate on a number
+# nobody has measured would be worse than no workflow. The blockers, and the exact
+# banking command, are recorded in the baseline file and in the doc.
+#
+# It is scheduled rather than per-PR because a campaign is hours of runner time —
+# 22 mutants, each probed for reachability and then walked up to nine gates — and
+# because its subject (whether the gates work) changes on the timescale of days,
+# not commits. The per-PR gates live in ci.yml.
+
+on:
+  # 02:17 UTC daily.
+  #
+  # Off-peak on two axes. GitHub's hosted-runner fleet is busiest during US and
+  # European working hours, and scheduled workflows are queued, not guaranteed —
+  # a cron at a quiet hour actually starts near its time. More importantly this
+  # is ~03:17 UK, well outside the operator's working day, so an hours-long
+  # campaign never competes with interactive CI for runner concurrency, and the
+  # result is waiting at the start of the next working day.
+  #
+  # `:17` rather than `:00` on purpose: GitHub queues scheduled workflows in bulk
+  # on the hour, and on-the-hour crons are the most delayed of all. An odd minute
+  # offset measurably reduces the queue wait.
+  #
+  # Two mechanics worth knowing before wondering why a nightly did not run:
+  #   * `schedule` fires ONLY on the repository's default branch. A nightly that
+  #     lives on a feature branch never runs — the same silent-no-op shape as the
+  #     `master`-only push trigger ci.yml was built to fix. This file has to reach
+  #     `master` to do anything.
+  #   * GitHub disables scheduled workflows after 60 days with no repository
+  #     activity, and mails the owner. Re-enable from the Actions tab.
+  schedule:
+    - cron: '17 2 * * *'
+
+  # Hand-triggerable, and that matters more than the cron for now: the FIRST real
+  # run will be a manual one, once the reachability-control and quiet-tree
+  # blockers clear, and its output is what gets banked as the baseline.
+  #
+  # Deliberately no inputs. A filtered campaign (`--mutants`, `--categories`)
+  # cannot be banked — the ratchet refuses a scorecard that does not carry a
+  # verdict for every catalogue mutant, because the un-run ones would bank as
+  # though they did not exist. Debugging runs belong on a developer machine.
+  workflow_dispatch:
+
+# Never cancel an in-flight campaign. A manual dispatch queues BEHIND a running
+# nightly rather than killing hours of work, which is the opposite of ci.yml's
+# choice and correct for the opposite reason: here the run is expensive and
+# nothing is waiting on its verdict to merge.
+concurrency:
+  group: nightly-injection
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  campaign:
+    name: Campaign (${{ matrix.ladder }} ladder)
+    runs-on: ubuntu-latest
+    # The 6-hour hosted-runner ceiling would cancel the job opaquely. Failing at
+    # 330 minutes with our own timeout is legible in the log instead.
+    #
+    # UNMEASURED: nobody has run a full campaign, so the real wall clock is
+    # unknown. If a leg hits this ceiling, the fix is NOT to raise it past 360 —
+    # it is to shard the catalogue across more matrix legs. Note that
+    # `--resume` is not a shortcut for this: it filters the mutants it runs but
+    # overwrites `--out` with only the resumed subset, so a resumed scorecard is
+    # incomplete and the ratchet will refuse it.
+    timeout-minutes: 330
+    strategy:
+      # Both ladders run to completion even if one fails. `legacy` is the BEFORE
+      # rate and `full` is the AFTER rate; losing one to the other's failure
+      # would throw away half the measurement. This does not soften anything —
+      # a failed leg still fails the workflow, and `ratchet` below needs both.
+      fail-fast: false
+      matrix:
+        # `legacy` = the gates that predate the independent-validation work.
+        # `full` = those plus the oracle, the property suite, the coverage report
+        # and the impact report. One build, before and after.
+        ladder: [legacy, full]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Generate test fixtures
+        run: uv run python tests/fixtures/generate_all.py
+
+      # Before spending hours: prove every mutant still applies. `old` must occur
+      # exactly once in its target and the replacement must not be a no-op. This
+      # is what stops the catalogue rotting silently as the code moves underneath
+      # it, and it costs seconds.
+      - name: Catalogue self-test
+        run: uv run python scripts/defect_injection.py --self-test
+
+      # No DEFECT_INJECTION_PYTHON here: the runner has uv, so every gate spawns
+      # as written. The override exists for machines where it does not, and the
+      # harness's spawn pre-flight aborts the campaign rather than scoring a
+      # fabricated ~100% detection rate if the interpreter cannot start.
+      - name: Run campaign
+        run: |
+          mkdir -p nightly-injection
+          uv run python scripts/defect_injection.py \
+            --ladder '${{ matrix.ladder }}' \
+            --out "nightly-injection/scorecard-${{ matrix.ladder }}.json"
+
+      # A renderer, not a gate — the ratchet job below is the gate. Publishes
+      # this ladder's board into the run summary so the result is readable in the
+      # GitHub UI without downloading anything.
+      - name: Render this ladder's board
+        run: |
+          uv run python scripts/injection_ratchet.py --summary \
+            --scorecard "nightly-injection/scorecard-${{ matrix.ladder }}.json" \
+            --out "nightly-injection/summary-${{ matrix.ladder }}.md"
+          cat "nightly-injection/summary-${{ matrix.ladder }}.md" >> "$GITHUB_STEP_SUMMARY"
+
+      # `if-no-files-found: error`, as the benchmarks job does. An absent
+      # scorecard must fail the job, never read as a clean run — absence is this
+      # project's dominant escape class (.claude/LESSONS.md B4).
+      - name: Upload scorecard
+        uses: actions/upload-artifact@v4
+        with:
+          name: injection-scorecard-${{ matrix.ladder }}
+          path: |
+            nightly-injection/scorecard-${{ matrix.ladder }}.json
+            nightly-injection/summary-${{ matrix.ladder }}.md
+          if-no-files-found: error
+
+  ratchet:
+    name: Detection-Rate Ratchet
+    # Both ladders required. The before/after pair from one build is the point of
+    # running two, and a single-ladder run cannot answer whether the added gates
+    # were worth their cost. If either leg fails this job is skipped and the
+    # workflow is red from that leg.
+    needs: [campaign]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Download both scorecards
+        uses: actions/download-artifact@v4
+        with:
+          pattern: injection-scorecard-*
+          merge-multiple: true
+          path: nightly-injection
+
+      # Rendered and uploaded BEFORE the gate runs, on purpose. `--check` is
+      # expected to fail while the baseline is un-banked, and the board — the
+      # detection rate, the mean tier of detection, and the ESCAPED list — is the
+      # artefact that has to survive that failure.
+      - name: Render the combined before/after board
+        run: |
+          uv run python scripts/injection_ratchet.py --summary \
+            --scorecard nightly-injection/scorecard-legacy.json \
+            --scorecard nightly-injection/scorecard-full.json \
+            --out nightly-injection/summary.md
+          cat nightly-injection/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the combined board
+        uses: actions/upload-artifact@v4
+        with:
+          name: injection-summary
+          path: nightly-injection/summary.md
+          if-no-files-found: error
+
+      # THE GATE, and the last step so its exit code is the job's verdict.
+      #
+      # It fails on any of: a catalogue mutant with no verdict, a mutant whose
+      # reachability contradicts its `expect_unreachable` flag (which is what
+      # licenses every "not detected" verdict), any gate that TIMED OUT (neither
+      # a pass nor a failure — a gate that never finished, so an ESCAPED verdict
+      # resting on it is unproven), known-defect detection below 90%, an
+      # un-banked baseline, or any movement in the banked verdict sets.
+      #
+      # Invoked as the script rather than through pytest so the exit code is the
+      # gate's own — the pattern the template-coverage and coverage-ratchet jobs
+      # in ci.yml already use.
+      - name: Detection-rate ratchet
+        run: |
+          uv run python scripts/injection_ratchet.py --check \
+            --scorecard nightly-injection/scorecard-legacy.json \
+            --scorecard nightly-injection/scorecard-full.json

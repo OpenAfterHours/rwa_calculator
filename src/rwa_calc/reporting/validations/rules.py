@@ -112,10 +112,12 @@ _BOE_SCOPE_KEY = re.compile(r"\b([a-z]+)\s*:\s*([^,}]*)")
 
 #: EBA prerequisites read as ``"C 07.00.a and C 07.00.b"`` — a conjunction of
 #: table codes that must be reported for the rule to run at all.
-#: The leading run is possessive: "and" cannot itself be whitespace, so giving
-#: characters back from that run can never make the literal match, and letting the
-#: engine retry every length of it is quadratic on a long run of spaces.
-_PREREQUISITE_SPLIT = re.compile(r"\s++and\s+", re.IGNORECASE)
+#: `(?<!\s)` gates the leading run so a match can only START where the run does.
+#: Without it the search re-enters the same run of spaces at every offset, which
+#: is quadratic in the run's length; the cost is across start positions, so a
+#: possessive quantifier does NOT fix it. A leftmost match always begins at the
+#: run's start, so the gate rejects only positions that could never have matched.
+_PREREQUISITE_SPLIT = re.compile(r"(?<!\s)\s+and\s+", re.IGNORECASE)
 
 
 # =============================================================================

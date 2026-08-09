@@ -362,6 +362,7 @@
         "tests/acceptance/crr/test_scenario_crr_h_complex.py",
         "tests/acceptance/reporting/test_r1_negative_gross_carriers.py",
         "tests/acceptance/reporting/test_reporting_offbs_golden.py",
+        "tests/conformance/rederive.py",
         "tests/contracts/test_ccf_tables.py",
         "tests/contracts/test_errors.py",
         "tests/contracts/test_r1_gross_carrier_edge.py",
@@ -445,6 +446,7 @@
         "tests/acceptance/ccr/test_ccr_ls_long_settlement_inert.py",
         "tests/acceptance/crr/test_p1_154_art_118_international_organisation_class.py",
         "tests/conformance/portfolios.py",
+        "tests/conformance/test_cell_rederivation.py",
         "tests/conformance/test_classification_conformance.py",
         "tests/conformance/test_reporting_class_keys.py",
         "tests/fixtures/p1_154/p1_154.py",
@@ -527,7 +529,14 @@
         "ORC-006",
         "ORC-007",
         "ORC-008",
-        "ORC-009"
+        "ORC-009",
+        "ORC-246",
+        "ORC-248",
+        "ORC-249",
+        "ORC-250",
+        "ORC-262",
+        "ORC-263",
+        "ORC-274"
       ],
       "pack_entries": [
         "central_bank_uses_sovereign_cqs@crr",
@@ -598,7 +607,8 @@
       "layer_count": 5,
       "oracle_cases": [
         "ORC-010",
-        "ORC-011"
+        "ORC-011",
+        "ORC-264"
       ],
       "pack_entries": [
         "rgla_domestic_currency_rw@b31",
@@ -653,7 +663,8 @@
         "ORC-132",
         "ORC-133",
         "ORC-134",
-        "ORC-135"
+        "ORC-135",
+        "ORC-265"
       ],
       "pack_entries": [
         "pse_non_equivalent_jurisdiction_rw@b31",
@@ -699,7 +710,9 @@
       "framework": "CRR",
       "layer_count": 5,
       "oracle_cases": [
-        "ORC-014"
+        "ORC-014",
+        "ORC-266",
+        "ORC-267"
       ],
       "pack_entries": [
         "mdb_named_zero_rw@b31",
@@ -726,6 +739,7 @@
         "tests/fixtures/p1_154_b31/p1_154_b31.py",
         "tests/fixtures/p1_184/p1_184.py",
         "tests/fixtures/reporting_sa_classes_portfolio.py",
+        "tests/oracle/derivations/crm_sa.py",
         "tests/oracle/derivations/sa_crr.py",
         "tests/unit/classifier/test_p1_276_crr_non_named_mdb_irb_class.py",
         "tests/unit/irb/test_irb_guarantor_sa_rw_io_mdb.py",
@@ -795,7 +809,9 @@
         "ORC-016",
         "ORC-017",
         "ORC-018",
-        "ORC-019"
+        "ORC-019",
+        "ORC-259",
+        "ORC-261"
       ],
       "pack_entries": [
         "institution_rw_crr@crr",
@@ -928,7 +944,8 @@
         "ORC-106",
         "ORC-107",
         "ORC-108",
-        "ORC-109"
+        "ORC-109",
+        "ORC-267"
       ],
       "pack_entries": [
         "institution_rw_sovereign_derived@crr",
@@ -975,7 +992,12 @@
         "ORC-023",
         "ORC-024",
         "ORC-025",
-        "ORC-038"
+        "ORC-038",
+        "ORC-251",
+        "ORC-252",
+        "ORC-253",
+        "ORC-268",
+        "ORC-271"
       ],
       "pack_entries": [
         "corporate_cqs_rw@crr",
@@ -1462,7 +1484,8 @@
       "framework": "CRR",
       "layer_count": 5,
       "oracle_cases": [
-        "ORC-036"
+        "ORC-036",
+        "ORC-254"
       ],
       "pack_entries": [
         "equity_revised_sa_risk_weights@crr",
@@ -1501,7 +1524,8 @@
       "framework": "CRR",
       "layer_count": 5,
       "oracle_cases": [
-        "ORC-037"
+        "ORC-037",
+        "ORC-255"
       ],
       "pack_entries": [
         "other_items_cash_rw@b31",
@@ -2703,10 +2727,12 @@
       "code_functions": [
         "rwa_calc.engine.sa.rw_adjustments::apply_guarantee_substitution"
       ],
-      "confidence": "MEDIUM",
+      "confidence": "HIGH",
       "framework": "CRR",
-      "layer_count": 3,
-      "oracle_cases": [],
+      "layer_count": 4,
+      "oracle_cases": [
+        "ORC-271"
+      ],
       "pack_entries": [],
       "source_files": [
         "contracts/bundles.py",
@@ -2723,6 +2749,7 @@
       ],
       "test_files": [
         "tests/integration/test_collateral_links_pipeline.py",
+        "tests/oracle/derivations/crm_sa.py",
         "tests/properties/test_monotonicity.py",
         "tests/unit/contracts/test_validation_collateral_links.py",
         "tests/unit/crm/test_collateral_link_allocation.py",
@@ -2791,10 +2818,30 @@
       "code_functions": [
         "rwa_calc.engine.crm.haircuts::non_main_index_equity_ineligible_expr"
       ],
-      "confidence": "MEDIUM",
+      "confidence": "HIGH",
       "framework": "CRR",
-      "layer_count": 3,
-      "oracle_cases": [],
+      "layer_count": 4,
+      "oracle_cases": [
+        "ORC-225",
+        "ORC-226",
+        "ORC-227",
+        "ORC-228",
+        "ORC-229",
+        "ORC-230",
+        "ORC-231",
+        "ORC-232",
+        "ORC-257",
+        "ORC-258",
+        "ORC-274",
+        "ORC-275",
+        "ORC-276",
+        "ORC-277",
+        "ORC-278",
+        "ORC-279",
+        "ORC-280",
+        "ORC-281",
+        "ORC-282"
+      ],
       "pack_entries": [],
       "source_files": [
         "contracts/edges.py",
@@ -2817,6 +2864,7 @@
         "tests/fixtures/p1_233/p1_233.py",
         "tests/fixtures/p1_96/p1_96.py",
         "tests/fixtures/reporting_re_split_portfolio.py",
+        "tests/oracle/derivations/crm_sa.py",
         "tests/properties/portfolios.py",
         "tests/properties/test_re_split_financial_collateral.py",
         "tests/properties/test_source_conservation.py",
@@ -2830,10 +2878,13 @@
       "code_functions": [
         "rwa_calc.engine.crm.haircuts::non_main_index_equity_ineligible_expr"
       ],
-      "confidence": "MEDIUM",
+      "confidence": "HIGH",
       "framework": "CRR",
-      "layer_count": 3,
-      "oracle_cases": [],
+      "layer_count": 4,
+      "oracle_cases": [
+        "ORC-232",
+        "ORC-279"
+      ],
       "pack_entries": [],
       "source_files": [
         "data/schemas.py",
@@ -2904,10 +2955,20 @@
       "code_functions": [
         "rwa_calc.engine.crm.guarantees::_assign_guarantor_approach"
       ],
-      "confidence": "MEDIUM",
+      "confidence": "HIGH",
       "framework": "CRR",
-      "layer_count": 3,
-      "oracle_cases": [],
+      "layer_count": 4,
+      "oracle_cases": [
+        "ORC-259",
+        "ORC-262",
+        "ORC-264",
+        "ORC-265",
+        "ORC-266",
+        "ORC-267",
+        "ORC-268",
+        "ORC-269",
+        "ORC-270"
+      ],
       "pack_entries": [],
       "source_files": [
         "engine/crm/guarantees.py",
@@ -2916,7 +2977,8 @@
       "test_files": [
         "tests/acceptance/crr/test_p1_227_art_201_guarantor_eligibility.py",
         "tests/fixtures/p1_227/p1_227.py",
-        "tests/fixtures/reporting_crm_substitution_portfolio.py"
+        "tests/fixtures/reporting_crm_substitution_portfolio.py",
+        "tests/oracle/derivations/crm_sa.py"
       ],
       "watchfire_index_gap": false
     },
@@ -3083,10 +3145,13 @@
       "code_functions": [
         "rwa_calc.engine.crm.haircuts::credit_linked_note_ineligible_expr"
       ],
-      "confidence": "MEDIUM",
+      "confidence": "HIGH",
       "framework": "CRR",
-      "layer_count": 3,
-      "oracle_cases": [],
+      "layer_count": 4,
+      "oracle_cases": [
+        "ORC-281",
+        "ORC-282"
+      ],
       "pack_entries": [],
       "source_files": [
         "data/schemas.py",
@@ -3094,6 +3159,7 @@
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_274_art_218_credit_linked_note.py",
+        "tests/oracle/derivations/crm_sa.py",
         "tests/unit/crm/test_p1_274_credit_linked_note_own_issue.py"
       ],
       "watchfire_index_gap": false
@@ -3179,10 +3245,33 @@
         "rwa_calc.engine.crm.simple_method::compute_fcsm_columns",
         "rwa_calc.engine.sa.rw_adjustments::apply_fcsm_rw_substitution"
       ],
-      "confidence": "MEDIUM",
+      "confidence": "HIGH",
       "framework": "CRR",
-      "layer_count": 4,
-      "oracle_cases": [],
+      "layer_count": 5,
+      "oracle_cases": [
+        "ORC-244",
+        "ORC-245",
+        "ORC-246",
+        "ORC-247",
+        "ORC-248",
+        "ORC-249",
+        "ORC-250",
+        "ORC-251",
+        "ORC-252",
+        "ORC-253",
+        "ORC-254",
+        "ORC-255",
+        "ORC-256",
+        "ORC-257",
+        "ORC-258",
+        "ORC-274",
+        "ORC-275",
+        "ORC-276",
+        "ORC-277",
+        "ORC-278",
+        "ORC-279",
+        "ORC-280"
+      ],
       "pack_entries": [
         "fcsm_equity_collateral_rw@b31",
         "fcsm_equity_collateral_rw@crr",
@@ -3211,6 +3300,7 @@
         "tests/fixtures/collateral/collateral.py",
         "tests/fixtures/p1_104_art_239_1_fcsm_maturity/p1_104.py",
         "tests/fixtures/reporting_funded_protection_portfolio.py",
+        "tests/oracle/derivations/crm_sa.py",
         "tests/properties/portfolios.py",
         "tests/unit/crm/test_simple_method.py"
       ],
@@ -3224,10 +3314,41 @@
         "rwa_calc.engine.crm.expressions::lgd_star_exposure_basis_expr",
         "rwa_calc.engine.sft.fccm::sft_bundle_to_exposures"
       ],
-      "confidence": "MEDIUM",
+      "confidence": "HIGH",
       "framework": "CRR",
-      "layer_count": 3,
-      "oracle_cases": [],
+      "layer_count": 4,
+      "oracle_cases": [
+        "ORC-200",
+        "ORC-201",
+        "ORC-202",
+        "ORC-203",
+        "ORC-204",
+        "ORC-205",
+        "ORC-206",
+        "ORC-207",
+        "ORC-208",
+        "ORC-209",
+        "ORC-210",
+        "ORC-211",
+        "ORC-212",
+        "ORC-213",
+        "ORC-214",
+        "ORC-215",
+        "ORC-216",
+        "ORC-217",
+        "ORC-218",
+        "ORC-219",
+        "ORC-220",
+        "ORC-221",
+        "ORC-222",
+        "ORC-223",
+        "ORC-224",
+        "ORC-233",
+        "ORC-234",
+        "ORC-241",
+        "ORC-242",
+        "ORC-243"
+      ],
       "pack_entries": [],
       "source_files": [
         "config/data_sources.py",
@@ -3271,6 +3392,7 @@
         "tests/fixtures/single_exposure.py",
         "tests/integration/test_nested_facility_collateral.py",
         "tests/integration/test_sft_stage_dark_launch.py",
+        "tests/oracle/derivations/crm_sa.py",
         "tests/properties/portfolios.py",
         "tests/properties/test_re_split_financial_collateral.py",
         "tests/unit/crm/test_collateral_market_value_carriers.py",
@@ -3288,10 +3410,44 @@
         "rwa_calc.engine.crm.haircuts::HaircutCalculator.apply_haircuts",
         "rwa_calc.engine.sft.fccm::sft_bundle_to_exposures"
       ],
-      "confidence": "MEDIUM",
+      "confidence": "HIGH",
       "framework": "CRR",
-      "layer_count": 4,
-      "oracle_cases": [],
+      "layer_count": 5,
+      "oracle_cases": [
+        "ORC-200",
+        "ORC-201",
+        "ORC-202",
+        "ORC-203",
+        "ORC-204",
+        "ORC-205",
+        "ORC-206",
+        "ORC-207",
+        "ORC-208",
+        "ORC-209",
+        "ORC-210",
+        "ORC-211",
+        "ORC-212",
+        "ORC-213",
+        "ORC-214",
+        "ORC-215",
+        "ORC-216",
+        "ORC-217",
+        "ORC-218",
+        "ORC-219",
+        "ORC-220",
+        "ORC-221",
+        "ORC-222",
+        "ORC-223",
+        "ORC-224",
+        "ORC-233",
+        "ORC-234",
+        "ORC-235",
+        "ORC-236",
+        "ORC-237",
+        "ORC-238",
+        "ORC-239",
+        "ORC-240"
+      ],
       "pack_entries": [
         "collateral_haircut_maturity_bands_revised@crr",
         "collateral_haircuts@crr",
@@ -3347,6 +3503,7 @@
         "tests/fixtures/p1_270/p1_270.py",
         "tests/fixtures/p1_271/p1_271.py",
         "tests/fixtures/p1_96/p1_96.py",
+        "tests/oracle/derivations/crm_sa.py",
         "tests/unit/crm/test_collateral_fx_mismatch.py",
         "tests/unit/crm/test_collateral_pool_gating.py",
         "tests/unit/crm/test_crm_basel31.py",
@@ -3431,8 +3588,34 @@
       "code_functions": [],
       "confidence": "UNCITED",
       "framework": "CRR",
-      "layer_count": 2,
-      "oracle_cases": [],
+      "layer_count": 3,
+      "oracle_cases": [
+        "ORC-200",
+        "ORC-201",
+        "ORC-202",
+        "ORC-203",
+        "ORC-204",
+        "ORC-205",
+        "ORC-206",
+        "ORC-207",
+        "ORC-208",
+        "ORC-209",
+        "ORC-210",
+        "ORC-211",
+        "ORC-212",
+        "ORC-213",
+        "ORC-214",
+        "ORC-215",
+        "ORC-216",
+        "ORC-217",
+        "ORC-218",
+        "ORC-219",
+        "ORC-220",
+        "ORC-221",
+        "ORC-222",
+        "ORC-223",
+        "ORC-224"
+      ],
       "pack_entries": [],
       "source_files": [
         "engine/crm/collateral.py"
@@ -3575,10 +3758,12 @@
       "code_functions": [
         "rwa_calc.engine.crm.life_insurance::compute_life_insurance_columns"
       ],
-      "confidence": "MEDIUM",
+      "confidence": "HIGH",
       "framework": "CRR",
-      "layer_count": 4,
-      "oracle_cases": [],
+      "layer_count": 5,
+      "oracle_cases": [
+        "ORC-260"
+      ],
       "pack_entries": [
         "restructuring_exclusion_haircut@b31",
         "restructuring_exclusion_haircut@crr"
@@ -3600,6 +3785,7 @@
         "tests/fixtures/p1_218/p1_218.py",
         "tests/fixtures/p1_219/p1_219.py",
         "tests/fixtures/p1_275/p1_275.py",
+        "tests/oracle/derivations/crm_sa.py",
         "tests/unit/crm/test_collateral_fx_mismatch.py",
         "tests/unit/crm/test_guarantee_fx_mismatch.py",
         "tests/unit/crm/test_guarantee_submodules.py",
@@ -3659,10 +3845,18 @@
         "rwa_calc.engine.sa.rw_adjustments::apply_guarantee_substitution",
         "rwa_calc.engine.slotting.transforms::apply_guarantee_substitution"
       ],
-      "confidence": "MEDIUM",
+      "confidence": "HIGH",
       "framework": "CRR",
-      "layer_count": 4,
-      "oracle_cases": [],
+      "layer_count": 5,
+      "oracle_cases": [
+        "ORC-259",
+        "ORC-260",
+        "ORC-261",
+        "ORC-262",
+        "ORC-263",
+        "ORC-272",
+        "ORC-273"
+      ],
       "pack_entries": [
         "slotting_guarantee_substitution@crr"
       ],
@@ -3695,6 +3889,7 @@
         "tests/fixtures/p1_30e/p1_30e.py",
         "tests/fixtures/reporting_crm_substitution_portfolio.py",
         "tests/integration/test_pre_post_crm_reporting.py",
+        "tests/oracle/derivations/crm_sa.py",
         "tests/properties/corpus.py",
         "tests/properties/test_monotonicity.py",
         "tests/unit/crm/test_guarantee_submodules.py",

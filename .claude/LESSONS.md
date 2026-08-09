@@ -616,6 +616,19 @@ and run the checker from the venv binary rather than `uv run`.
 - **Background Bash tasks are hard-killed at ~600s.** The full suite must run as
   two **foreground** chunks: `tests/unit`, then
   `acceptance + integration + contracts + oracle`.
+- **Run `scripts/defect_injection.py` in the FOREGROUND only** — a campaign or
+  even a `--reachability-only` probe. It restores mutated files through a
+  `finally` and an `atexit` hook, and **SIGKILL runs neither**; a 22-mutant probe
+  takes ~1,164s against the ~600s kill above, so the kill is the expected
+  outcome, not an edge case. A killed run leaves a mutation applied in `src/` and
+  every agent sharing the tree then measures a mutated engine without knowing it
+  — measured 2026-08-09, three agents spent an hour mistrusting their own results
+  before the stray mutation was traced. Chunk with `--mutants` / `--categories`
+  if it will not fit one window. If a run vanishes, do **not** re-run it: check
+  `git status` for a modified catalogue target and `git checkout --` it first.
+  The harness's dirty-target refusal is the second line of defence, not the
+  first. Note `git diff --stat` may show the whole file changed — the restore
+  path normalises CRLF to LF — so check `git diff --ignore-cr-at-eol` too.
 - **xdist workers crash transiently** ("node down"). Re-run before trusting red.
 - **`uv sync` strips the dev extra** (ty, pytest, pytest-cov live in
   optional-dependencies). Use `uv sync --all-extras`.

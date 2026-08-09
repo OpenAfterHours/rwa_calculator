@@ -15,10 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     the `coverage-ratchet` job and is mirrored for local development by
     `tests/contracts/test_coverage_ratchet.py`, one of whose tests asserts that
     CI still invokes the script — the failure being fixed here was an inert
-    ratchet, not a missing one. Five metrics in
-    `scripts/coverage_baseline.json` now ratchet directionally: published-rule
-    binding counts and template-cell liveness may not fall, dead cells and
-    never-evaluated rules may not rise. Measured over the current 16-run matrix,
+    ratchet, not a missing one. Six metrics in `scripts/coverage_baseline.json`
+    ratchet directionally: published-rule binding counts, live cells and
+    template-cell liveness may not fall, dead cells and never-evaluated rules may
+    not rise. Measured over the current 16-run matrix,
     the estate stands at **12.85% template-cell liveness (8,193 live cells of
     63,746 declared), 55,553 dead cells, 785 never-evaluated rules, and 257 (CRR)
     / 289 (Basel 3.1) published rules binding**, and the baseline now carries a
@@ -28,10 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     figures it replaces reproduced at neither the matrix they were taken on nor
     today's: they had stopped describing the estate before the matrix grew, and
     nothing could tell, because a baseline that records no matrix cannot say what
-    it describes. The same pass adds `cells_live` as a genuine floor, banked at
-    8,193: a ratio whose denominator shrinks with its numerator is not a floor, and
-    neither is a count of the complement — dropping any region less live than the
-    estate average *improved* both cell metrics while real coverage fell.
+    it describes. The same pass adds `cells_live` as a genuine floor at 8,193: a
+    ratio whose denominator shrinks with its numerator is not a floor, and neither
+    is a count of the complement — dropping any region less live than the estate
+    average *improved* both cell metrics while real coverage fell. The floor is in
+    the ratchet's metric list ahead of being banked in the baseline, so `--check`
+    raises on the missing key until the accompanying re-bank lands.
 
     Note the scope. Every one of these metrics is **value-insensitive**: liveness
     counts cells that are non-null, and "binding" counts a rule that reaches
@@ -73,8 +75,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   observed **red before the fix**, with three permitted routes to producing that
   red; and the log is seeded with six entries. Four are the escapes this project
   had already established — the ungated coverage ratchet, unratcheted vacuity, the
-  unmeasured detection rate, and four oracle disagreements parked as strict
-  xfails. That last one needed an eighth class, `caught-and-parked`: the other
+  unmeasured detection rate, and oracle disagreements parked as strict xfails (a
+  register that grew from four entries to **eleven, eight of them understating
+  capital**, during the batch that wrote the entry describing that mechanism). That last one needed an eighth class, `caught-and-parked`: the other
   seven all answer *why didn't a gate catch it*, and there the gate caught it and
   the record of the finding became its resting place. The other two came out of
   writing them up — a **measured** escape (a term dropped from a C 02.00 subtotal,

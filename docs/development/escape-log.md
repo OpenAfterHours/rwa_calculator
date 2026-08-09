@@ -28,12 +28,15 @@ permanent capability.
   | `ungateable` | not mechanically detectable | `.claude/LESSONS.md` entry, with reasoning |
   | `caught-and-parked` | a gate fired, and the record of the finding became its resting place | ratchet the finding register; give every parked entry an owning bullet |
 
-  `caught-and-parked` was added on 2026-08-09 with the first entry that needed
-  it. The other seven all answer *why didn't a gate catch it*; this one is for
-  the case where a gate did catch it, said so, and the wrong number shipped
-  anyway. Forcing that into `no-gate-exists` or `ungateable` would record the
-  opposite of what happened, and its fix is not a new detector — detection
-  already works — but a disposition rule for the register the finding sits in.
+  `caught-and-parked` was added on 2026-08-09. It is for the case where a gate did
+  catch it, said so, and the wrong number shipped anyway. It is a distinct class
+  because its fix targets **the register of tolerated findings** rather than the
+  output — the only one of the eight that does — and because the shape recurs
+  across at least four parallel registers here (`KNOWN_DISAGREEMENTS`,
+  `classification_table.toml`'s `[[known_disagreement]]`, `known_broken_rules`,
+  `known_vacuous_rules`) plus strict xfails and plan bullets. Note that
+  `no-gate-exists` would prescribe roughly the right fix, so narrative fidelity
+  alone is not the argument.
 
   An entry may also carry **no class**, and say why. A defect *in* a gate is not a
   defect that escaped one, and the eight classes all presume the latter — so
@@ -110,9 +113,20 @@ gate that shipped.
 - **Why every gate missed it**: the gate was not weak, absent or wrongly
   anchored — it was unwired. A ratchet that no runner invokes has exactly the
   same effect on a defect as no ratchet, while reading in the repository like
-  coverage is under control. Two of that condition's consequences were already
-  paid for (B5 and its 2026-08-08 recurrence) before anyone noticed the ratchet
-  was inert. **And the same inertness rotted the baseline it ratchets against.**
+  coverage is under control.
+
+  Be precise about what wiring it would have bought, because the obvious claim is
+  false. `coverage_report.py` was added on 2026-08-08 (`2a1e200c`), and the
+  off-balance-sheet portfolio that surfaced the original B5 C 07.00 defects was
+  built on 2026-08-01 (`00b13b83`) — the ratchet did not exist when they escaped.
+  More fundamentally, **a ratchet fails on movement**: a cell that was already dead
+  moves nothing, so wiring this gate would not have caught either the original B5
+  defects or their recurrence. What it prevents is the *next* one — a live cell
+  going dead, or a binding rule un-binding — and what it makes visible is the
+  standing blind spot's size. That is worth having, and it is not the same claim as
+  "this would have caught B5".
+
+  **And the same inertness rotted the baseline it ratchets against.**
   The figures banked until this batch (`251 / 277 / 1298 / 52817`) reproduce at
   **neither** matrix: re-measured on today's tree against the exact `RUNS` tuple of
   the commit that banked them (`13046bee`, recovered with `git show`), the same
@@ -124,12 +138,13 @@ gate that shipped.
   failure mode of an unwired instrument, and the one that survives the wiring.
 
   Do not read the `dead_cells` rise (52,817 → 55,553) as lost coverage: **live
-  cells rose 7,891 → 8,193 at constant matrix**, against 63,746 declared, so the
-  ceiling moved because the declared population grew. And do not reason from the
-  metric families moving in opposite directions — they are independent, so a real
-  cell-coverage loss alongside an unrelated rule-coverage gain would look
-  identical. The live-cell count is the decisive evidence; the direction of
-  `dead_cells` alone is not evidence of anything.
+  cells rose 7,891 → 8,193**, against 63,746 declared, so the ceiling moved because
+  the declared population grew. And do not reason from the metric families moving in
+  opposite directions — they are independent, so a real cell-coverage loss alongside
+  an unrelated rule-coverage gain would look identical. The live-cell count is the
+  decisive evidence; the direction of `dead_cells` alone is not evidence of
+  anything. That property is the subject of its own entry below — the two cell
+  metrics are not floors.
 - **Gate change**: in this change-set, from task 0.2 —
   `tests/contracts/test_coverage_ratchet.py` (three always-on structural tests,
   including `test_the_coverage_ratchet_is_invoked_by_ci`, which asserts the CI job
@@ -150,35 +165,41 @@ gate that shipped.
   say what they described. Reducing the blind spot itself remains task 1.4.
 - **Verified red**: two — one attacking the wiring, one attacking the ratchet.
 
-  The one that matches this escape class — the invocation deleted from a scratch
-  copy of `ci.yml`, which is precisely the state the estate was in:
+  The one that matches this escape class — the `coverage-ratchet` job removed from
+  a scratch copy of `ci.yml`, which is precisely the state the estate was in:
 
   ```
-  .github/workflows/ci.yml does not invoke `scripts/coverage_report.py --check`.
-  The coverage ratchet is implemented but unrun, which is how it spent its whole
-  life before P5.21: a change can kill a live cell or un-bind a published rule
-  with every gate still green. Restore the `coverage-ratchet` job.
+  .github/workflows/ci.yml has no `coverage-ratchet` job. The coverage ratchet is
+  implemented but unrun, which is how it spent its whole life before P5.21: a
+  change can kill a live cell or un-bind a published rule with every gate still
+  green (.claude/LESSONS.md B5). Restore the job.
   ```
 
-  And the ratchet itself rejecting a regression, fed a synthetic measurement
-  through `coverage_report.py::_check_baseline` with one metric moved in each
-  direction, as a defect that kills one column would move them (exit 1):
+  And the ratchet itself rejecting a regression — a measurement moved as a defect
+  that kills one column would move it, against the banked figures:
 
   ```
-  [REGRESSED] union_binding_rules_crr: 251 -> 250 (may not decrease)
-  [REGRESSED] dead_cells: 52817 -> 52818 (may not increase)
+  [REGRESSED] union_binding_rules_crr: 257 -> 256 (may not decrease)
+  [REGRESSED] cells_live: 8193 -> 8181 (may not decrease)
+  [REGRESSED] dead_cells: 55553 -> 55565 (may not increase)
   [REGRESSED] never_evaluated_rules: 785 -> 786 (may not increase)
-  Coverage went backwards. Either restore it, or update the baseline
-  deliberately with --update-baseline and say why in the commit message.
   ```
-
-  The `was` side of those deltas is the **stale committed baseline**, not the
-  estate's current position — the figures the paragraph above explains.
 
   Both run without mutating the tree. Task 0.2 also drove the real test body
-  through six perturbations — including a typo'd metric name, which would
-  otherwise surface as a `KeyError` 46 seconds into CI — and ran the `slow` test
-  for real to a genuine `1 failed in 46.66s`.
+  through six perturbations — including a typo'd metric name, which would otherwise
+  surface as a `KeyError` 46 seconds into CI — and ran the `slow` test for real to a
+  genuine `1 failed in 46.66s`.
+
+  **Live caveat, and it belongs in this field rather than a footnote: `--check`
+  does not run at all as of this commit.** `cells_live` is in `_RATCHET_MIN` and is
+  not in the banked baseline, so `_check_baseline` raises `KeyError: 'cells_live'`
+  — which is the typo'd-metric-name failure mode arriving for real, from a metric
+  addition rather than a typo. The invocation guard passes throughout, because it
+  asserts that CI *invokes* the script, not that the script *works*. So the red
+  above was produced against the baseline with `cells_live` banked at 8,193, which
+  is the state task 0.2b is landing, not the state on disk. Until that lands the
+  gate is wired and broken, and the honest reading of this entry is that its
+  escape is closed and its replacement gate is not yet demonstrably running.
 
   **The invocation guard is weaker than its own red suggests, and saying so here
   is the point of the field.** Its verified red exercises only the form where the
@@ -190,8 +211,15 @@ gate that shipped.
   `dead_cells` ceiling can reward coverage *loss*, since dropping a template
   removes dead cells; ratcheting `cells_live` instead is filed. An escape log that
   overstates a gate's strength commits the error it exists to record.
-- **Lesson**: graduated. `.claude/LESSONS.md` B5's closing note already pointed
-  at this ratchet as the executable form of the lesson; it is now executable.
+- **Lesson**: **partially graduated — B5 stays as prose.** The ledger's 2026-08-09
+  row records B5 as `PARTIALLY GRADUATED … STILL OPEN, narrowed to three`: the
+  cell-granular case (the C 08.01 r0253 shape), the row-granular case (C 08.04's
+  single column is live while six of nine movement rows never carry a figure), and
+  `never_evaluated_rules`, the supervisory-register half. The first of those is
+  exactly what the paragraph above concedes these metrics cannot see. Since the
+  ledger's convention is that graduated prose gets deleted, calling this "graduated"
+  would invite destroying the two-leg fixture pattern that is currently the only
+  form the cell-granular case has. Do not delete it.
 
 ## 2026-08-09 — A defect that empties a column leaves all five register ratchets green
 
@@ -221,6 +249,18 @@ gate that shipped.
   two-leg fixture (a live cell that survives the change plus one that moves) and
   activated five previously-`VACUOUS` rules to `PASS`, including `boe_b0752_27`,
   the r0253 tie-out itself.
+
+  **The same interlock is live right now on the FCSM path, which is what makes this
+  worth reading twice.** The seven Art. 197 capital understatements in the last
+  entry are *unreachable by the estate's only FCSM golden portfolio*
+  (`reporting_funded_protection_portfolio.py`), because both of its pledges are
+  CQS 1 — a CQS 1 security carries the obligor's own weight, so the defect cannot
+  express itself there. And that portfolio is the one **deliberately withheld from
+  `RUNS`**, having been registered against a config that silenced the very feature
+  it exists to exercise (B5's third form). So the defect sits behind two
+  independent layers of unreachability: a portfolio outside the register, and a
+  fixture shape that would not show it even inside. Neither vacuity nor coverage
+  can see that; only the oracle did.
 - **Gate change**: in this change-set, from task 0.3 — a two-way vacuity ratchet
   in the same register, keyed on `(regime, rule_id)` and stored as
   `known_vacuous_rules` in
@@ -286,10 +326,10 @@ gate that shipped.
 - **Defect**: Two compounding things. (1) `scripts/defect_injection.py` — 22
   mutants, a data-driven gate ladder, reachability as a first-class verdict —
   has never been run as a campaign, so no scorecard exists and the estate's
-  detection rate is unmeasured. Its own documentation says that before the
-  harness existed nobody could say whether the rate was 40% or 90%; that
-  sentence is still true, because building the instrument and reading it are
-  different acts. (2) Every gate command in the ladder was hardcoded to spawn
+  detection rate is unmeasured. The plan that commissioned it
+  (`docs/plans/independent-validation-system.md:455`) says that before the harness
+  existed nobody could say whether the rate was 40% or 90%; that sentence is still
+  true, because building the instrument and reading it are different acts. (2) Every gate command in the ladder was hardcoded to spawn
   through `uv run`. On a runner without a usable `uv`, every gate fails to spawn,
   each failure scores as a *detection*, and the harness publishes a fictitious
   detection rate near 100%. **This is measured, not hypothetical**: on this
@@ -357,74 +397,108 @@ gate that shipped.
   parent directory. The default output path is `scripts/defect_scorecard.json`,
   which is gitignored. **Anyone quoting a detection rate for this workstream today
   is quoting a number that does not exist.** Filed as task 0.1, with the nightly
-  campaign and a detection-rate ratchet as task S.3. A second instrument defect
-  surfaced on the first attempt to run it — the reachability probe's *unreachable
-  control* comes back reachable, task 0.1a — which is the same failure shape as
-  limb (2), and a third, task 0.1b, has the harness rewriting mutation targets
-  with CRLF line endings. This entry is closed for the runner and open for the
-  measurement.
+  campaign and a detection-rate ratchet as task S.3.
+
+  **Closed for the runner override; the reachability probe is a separate instrument
+  and it is open.** A 22-mutant probe run (1,164s) produced **four mismatches out of
+  22, including the deliberate UNREACHABLE control moving output** — so the probe
+  currently reports reachable for a mutant chosen to be unreachable, which would
+  corrupt the denominator of any detection rate it is used to compute
+  (`UNREACHABLE` mutants are excluded from numerator and denominator both). Task
+  0.1a. A third defect, task 0.1b, has the harness rewriting mutation targets with
+  CRLF line endings. Splitting the claim matters here: two of the three instrument
+  defects in this entry are still live, and only the spawn path is demonstrably
+  fixed.
 - **Lesson**: this is the second of these four entries whose class is
   `gate-not-run` for the same underlying reason — the estate's habit is to build
   the measurement and stop before wiring it. That is a pattern rather than two
   slips, and the coverage ratchet's `test_the_coverage_ratchet_is_invoked_by_ci`
   is the shape of its fix: an instrument ships with a test that it is invoked.
 
-## 2026-08-09 — Four wrong numbers were found by the oracle and parked as accepted disagreements
+## 2026-08-09 — Eleven wrong numbers found by the oracle and parked as accepted disagreements, eight of them understating capital
 
-- **Defect**: `tests/oracle/` found four engine/oracle disagreements and all four
-  sit in `KNOWN_DISAGREEMENTS` as `xfail(strict=True)` rather than fixed. One
-  understates capital; the other three are conservative, which is not the same as
-  harmless — they are wrong numbers in published templates:
-  - **`ORC-109`** — CRR Art. 121(1) Table 5 is never applied to the institution
-    exposure class; an unrated institution takes a flat 100% for every sovereign
-    CQS. At **CQS 6 the engine returns 100% against a required 150% — an
-    understatement of capital by a third**. Scope is narrower than the finding's
-    original framing: a currency-mismatched row already reaches 150% via the
-    PS1/26 Art. 121(6) floor (measured during the P1.316 Wave 0 audit), so the
-    shortfall is the local-currency case. `ORC-105` (CQS 1, 20% vs 100%) and
-    `ORC-020` (CQS 2, 50% vs 100%) are the conservative limbs of the same
-    unwired ladder, and the family is pinned across its whole domain precisely
-    because its direction is not uniform.
-  - **`ORC-142`** — PS1/26 Art. 154(4A)(b) limb (iii). The 10% IRB mortgage
-    RWEA floor is applied to residential property outside the UK: oracle floor
-    adjustment 0.00, engine 373,345.27. Conservative in direction, but the limb
-    is not mis-gated — it is **unrepresentable**. No module under `engine/irb/`
-    reads any obligor or property country column (the only country carrier there
-    is `guarantor_country_code`, for guarantee substitution), so no input could
-    switch it off. The same missing carrier blocks **P2.50**.
-- **Rule**: CRR Art. 121(1) Table 5 and Art. 121(2); PS1/26 Art. 121(6),
+- **Defect**: `KNOWN_DISAGREEMENTS` in `tests/oracle/test_oracle.py` holds **11
+  entries, all `xfail(strict=True)` rather than fixed, and eight of them understate
+  capital.** Seven of the eight were added *inside this batch* by the CRM oracle
+  (`7c454be1`), which is the fact this entry is really about: the register grew
+  **4 → 11 in a matter of hours** with nothing constraining its size.
+  - **`ORC-280` — the largest.** Art. 197 collateral eligibility is never applied
+    on the Art. 222 Financial Collateral Simple Method path. At full cover on a
+    CQS 5 sovereign security the oracle gives 1,500,000 against the engine's
+    1,000,000 — an **understatement of 33.3%**, the whole exposure moving from the
+    obligor's 150% to the security's own Art. 114(2) 100%.
+  - **`ORC-257`, `ORC-258`, `ORC-275`, `ORC-278`, `ORC-279`, `ORC-281`** — the same
+    defect at 30% cover, each **understating 10.0%** (1,500,000 against 1,350,000),
+    across Art. 197(1)(b) rated and unrated sovereigns, Art. 197(1)(d) rated and
+    unrated corporates, Art. 197(1)(f) equity, and the Art. 218 credit-linked note
+    on which the engine raises `CRM019` and then recognises the pledge anyway. The
+    family's own reason text is unambiguous: *"DIRECTION IS UNIFORMLY
+    ANTI-CONSERVATIVE OR NEUTRAL, never conservative."* Mechanism:
+    `engine/crm/processor.py` runs `compute_fcsm_columns` at Step 3.8, **before**
+    `apply_haircuts` at Step 4 — and `apply_haircuts` is the only place the engine
+    overrides a firm-supplied eligibility attestation, so the Simple Method
+    recognises collateral the Comprehensive Method rejects. `ORC-282`, the
+    Comprehensive-Method control, passes, which localises it to the one method.
+  - **`ORC-109`** — CRR Art. 121(1) Table 5 not applied to the institution class:
+    at CQS 6 the engine returned 100% against a required 150%, an understatement by
+    a third, with `ORC-105` (CQS 1) and `ORC-020` (CQS 2) as the conservative limbs
+    of the same unwired ladder. **This family is being discharged as this entry is
+    written** — P1.316 has wired `cp_sovereign_cqs` through Table 5 under task S.2,
+    so all three leave the register. It is recorded here because it was parked for
+    a day with a known capital shortfall in it, not because it is still open.
+  - **`ORC-142`** — PS1/26 Art. 154(4A)(b) limb (iii): the 10% IRB mortgage RWEA
+    floor applied to residential property outside the UK (oracle 0.00, engine
+    373,345.27). Conservative in direction, and **unrepresentable** rather than
+    mis-gated: no module under `engine/irb/` reads any obligor or property country
+    column, so no input could switch it off. Rescoped under task #21 — the fix
+    needs a `property_country_code` carrier, *not* the obligor-country gate the
+    original framing implied.
+
+  **The count in this paragraph is a snapshot, and that is the point.** It was 4
+  when the entry was drafted, 11 when it was corrected, and lower again by the time
+  P1.316 lands. A register whose size is recorded in prose is stale the moment the
+  register moves, which is exactly why the fix is a ratchet and not a sentence.
+- **Rule**: CRR Art. 197(1)(b)/(d)/(f), Art. 198(1)(a), Art. 218, Art. 222,
+  Art. 114(2); CRR Art. 121(1) Table 5 and Art. 121(2); PS1/26 Art. 121(6),
   Art. 154(4A)(b), Art. 163(1)(b)-(c).
 - **Origin**: found 2026-08-08 by the independent oracle, on merge of the
   validation estate. The engine defects themselves predate it.
-- **Escape class**: `caught-and-parked` — the eighth class, added with this
-  entry. Every other class in the table answers *why didn't a gate catch it*, and
-  here the gate worked exactly as designed: it derived the number independently,
-  disagreed, and said so in the article's own terms. What failed is the
-  disposition of that output. Classifying it `no-gate-exists` or `ungateable`
-  would record the opposite of what happened, and `test-shared-the-assumption` is
-  the reverse of the truth — the oracle refused to share the assumption, which is
-  why it found this at all.
-- **Why every gate missed it**: no gate missed it. `strict=True` is real
-  discipline in one direction — it prevents a silent *fix*, because an entry that
-  starts agreeing becomes an XPASS and a hard failure — and no discipline at all
-  in the other. `KNOWN_DISAGREEMENTS` has no size ratchet, no owning bullet per
-  entry, and no expiry, so a live capital understatement can rest there
-  indefinitely while the suite reports green. The register was built to make
-  findings triageable and became the place they are stored instead.
-- **Gate change**: **deferred, and named.** The code fixes are tracked
-  (`ORC-105`/`ORC-020`/`ORC-109` under **P1.316**, which must delete all three
-  register entries in the same change; `ORC-142` needs the property-location
-  carrier that **P2.50** also needs, and has no bullet of its own yet), and the
-  workstream item is task S.2, ORC-109 first as the only anti-conservative limb.
-  The *gate* change this class prescribes is separate and not yet filed: a two-way
-  ratchet on the size of `KNOWN_DISAGREEMENTS`, plus a requirement that each entry
-  names an owning plan bullet, so parking a finding costs something and ageing one
-  is visible.
-- **Verified red**: n/a for detection — the disagreements are red today, by
-  design, as strict xfails. **NOT VERIFIED** for the disposition ratchet, which
-  does not exist yet. By this file's closing rule the escape therefore remains
-  open, which is the correct state to record: what exists today is the detection,
-  not the correction.
+- **Escape class**: `caught-and-parked` — the eighth class, added with this entry.
+  The case for a new class is **not** that the existing labels read wrong
+  narratively; this file's own discriminator is that *the class determines the fix*,
+  and `no-gate-exists` → "create the gate" would in fact produce the register
+  ratchet named below. A class added to fit one datum is fitted, not derived. It
+  earns its place on two other grounds. First, **the shape recurs across at least
+  four parallel registers in this repository** — `KNOWN_DISAGREEMENTS`,
+  `classification_table.toml`'s `[[known_disagreement]]` D1-D7, `known_broken_rules`
+  and `known_vacuous_rules` — plus strict xfails and plan bullets, so it is a
+  standing structural feature rather than one incident. Second, **its fix targets
+  the register rather than a detector**, which none of the other seven prescribe:
+  every one of them ends in something that *looks at the output*, and this one ends
+  in something that looks at the list of things we have agreed to tolerate. The
+  4 → 11 growth inside hours of the class being coined is the class earning its keep.
+- **Why every gate missed it**: no gate missed it. `strict=True` is real discipline
+  in one direction — it prevents a silent *fix*, because an entry that starts
+  agreeing becomes an XPASS and a hard failure — and none at all in the other.
+  `KNOWN_DISAGREEMENTS` has no size ratchet, no owning bullet per entry and no
+  expiry, so seven new capital understatements were added in one batch and every
+  gate stayed green. The register was built to make findings triageable and became
+  the place they are stored.
+- **Gate change**: **filed as task #28 while this entry was being corrected** — a
+  two-way ratchet on the size of `KNOWN_DISAGREEMENTS` plus a requirement that each
+  entry names an owning plan bullet. The 4 → 11 growth is what moved it from a
+  nice-to-have to the urgent item: the entry described a mechanism, and the
+  mechanism then fired. Code fixes tracked separately: the Art. 121 family under
+  **P1.316** (landing now, task S.2, which must delete all three entries in the same
+  change), the FCSM family needing the Art. 197 gate factored out of
+  `apply_haircuts` so it applies to the Simple Method input as well — explicitly
+  **not** a step reorder, since Step 3.8 must precede the Comprehensive computation
+  that IRB LGD still needs — and `ORC-142` under task #21.
+- **Verified red**: n/a for detection — the disagreements are red today, by design,
+  as strict xfails. **NOT VERIFIED** for the disposition ratchet, which does not
+  exist yet. By this file's closing rule the escape therefore remains open, which is
+  the correct state to record: what exists today is the detection, not the
+  correction.
 - **Lesson**: candidate for `.claude/LESSONS.md` — *a strict xfail is a decision
   to ship the wrong number; it needs an owner and a date, not just a reason.*
   Filed with the team lead rather than added here, since this file does not own
@@ -454,13 +528,17 @@ gate that shipped.
   is never evaluated. That is the class's definition exactly, and it is why
   `no-gate-exists` would be the wrong label: the fix is to make an existing rule
   run, not to invent a check.
-- **Why every gate missed it**: `v0211_m` is one of **five** live ERROR rules on
-  the C 02.00 hierarchy — `v0204_m`, `v0205_m`, `v0207_m`, `v0210_m`, `v0211_m` —
-  that appear **nowhere** in `validation_known_breaks.json`, neither as broken nor
-  as vacuous. They do not run at all. The leading hypothesis, filed as task #19,
-  is that C 02.00 never passes through the cellspec executor the register reads, so
-  the whole template sits outside the machinery. Two consequences worth stating
-  plainly:
+- **Why every gate missed it**: `v0211_m` is one of **four live ERROR rules** on the
+  C 02.00 hierarchy that are never evaluated anywhere — `v0204_m`, `v0207_m`,
+  `v0210_m`, `v0211_m`; the fifth rule in that family, `v0205_m`, is **WARNING**
+  severity, and `v0207_m` **does** evaluate, so "none of them runs" is false and the
+  split is the evidence. The mechanism is **not** that C 02.00 sits outside the
+  machinery: the recorded reason is `{'row_not_emitted': 8}`, so C 02.00 *is* in the
+  cellspec executor and the **rows the rules name are not emitted**. `v0210_m` needs
+  r0250-0300 and `v0211_m` needs r0310-0410, which the repo does not emit;
+  `v0207_m` needs r0060-0211, which it does — hence one evaluates and the others do
+  not. That mechanism is already written verbatim in plan item **P1.318**, uncited
+  until now. Two consequences worth stating plainly:
 
   - **The estate ships the rule that detects its own headline own-funds defect and
     never runs it.** `v0204_m` asserts
@@ -482,12 +560,14 @@ gate that shipped.
   `never_evaluated_rules`** that entry counts and that nothing gated. These five
   are concrete instances of that aggregate, which is what an aggregate is for.
 - **Gate change**: **deferred and filed** — task #16 for this data point (it feeds
-  step 0.1's scorecard), task #17 for the row-axis shift, task #19 for the five
-  unevaluated rules. The order matters: making `v0204_m`/`v0210_m`/`v0211_m`
-  evaluate is the cheapest of the three and, on the evidence above, catches the
-  row shift and the subtotal composition together. Independent re-derivation of
-  C 02.00's class rows in `tests/conformance/` is the belt-and-braces second layer,
-  not the first move.
+  step 0.1's scorecard), task #17 for the row-axis shift, task #19 for the four
+  unevaluated ERROR rules. Making `v0204_m`/`v0210_m`/`v0211_m` evaluate is the
+  fix that catches the row shift and the subtotal composition together, but it is
+  **not cheap**: emitting the rows those rules address is plan item **P1.318**,
+  **Effort: L, single-stream**, moving 10 golden frames plus the validation
+  baseline. I said "cheapest of the three" in an earlier draft and that was wrong.
+  Independent re-derivation of C 02.00's class rows in `tests/conformance/` remains
+  the second layer.
 - **Verified red**: **inverted — the gate was observed not firing**, which is the
   strongest evidence in this file. A full supervisory run with the mutation live
   reported `8 passed`. That is a measured negative result rather than an inference
@@ -533,10 +613,14 @@ gate that shipped.
   metrics do correctly. None asks whether the quantity being ratcheted is the
   quantity that matters. Only leave-one-out measurement over the real matrix
   exposes it, and nothing in the estate does that automatically.
-- **Gate change**: in this change-set, from task 0.2b — `cells_live` added to
-  `_RATCHET_MIN` as a true floor, banked at **8,193**. It is already computed as
-  `payload["cells"]["live"]`, it fell in 15 of the 16 deletions and in both
-  config-silencing variants, and it never rose on a loss. Filed separately:
+- **Gate change**: in this change-set, from task 0.2b, and **half-landed as of this
+  commit** — `cells_live` is in `_RATCHET_MIN` in the code and is **not** in the
+  banked baseline, so `--check` currently raises `KeyError: 'cells_live'` rather
+  than gating. The floor value is 8,193; banking it is what completes this, and
+  until then the gate this entry describes is broken rather than working. It is
+  already computed as `payload["cells"]["live"]`, it fell in 15 of the 16 deletions
+  and in both config-silencing variants, and it never rose on a loss. Filed
+  separately:
   `never_evaluated_error_severity_{crr,b31}` (175 / 195) is computed and
   unratcheted, so swapping one ERROR-severity never-evaluated rule in for one INFO
   out is invisible to the flat total — while the script's own docstring calls an

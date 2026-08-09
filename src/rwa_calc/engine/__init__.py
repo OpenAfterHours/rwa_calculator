@@ -17,15 +17,12 @@ Modules:
     pipeline: Pipeline orchestration
 
 Subpackages:
+    stages: The stage packages the fold runs (hierarchy, classify, re_split,
+        fx, ...) — where the stage implementations actually live
     crm: Credit Risk Mitigation processing
     sa: Standardised Approach calculator
     irb: IRB approach calculator
     slotting: Specialised lending slotting calculator
-
-Polars Namespaces:
-    All namespaces are registered when their parent modules are imported.
-    - lf.irb: IRB approach calculations
-    - lf.slotting: Specialised lending slotting
 """
 
 from .hierarchy import HierarchyResolver

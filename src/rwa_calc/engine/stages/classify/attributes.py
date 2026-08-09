@@ -167,7 +167,7 @@ def add_counterparty_attributes(
         pl.col("institution_cqs").alias("cp_institution_cqs"),
         # Internal-model id resolved by the rating-inheritance pipeline onto the
         # counterparty lookup. Traditional lending rows already carry ``model_id``
-        # (hierarchy._attach_counterparty_rating renames internal_model_id ->
+        # (enrich.attach_counterparty_rating renames internal_model_id ->
         # model_id per exposure), but synthetic CCR rows are appended AFTER that
         # attach and reach the classifier with ``model_id = null``. Surfacing the
         # counterparty's ``internal_model_id`` here lets _resolve_model_permissions

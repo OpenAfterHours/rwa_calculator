@@ -3237,6 +3237,33 @@ ADDITIVE_OUTPUT_FIELDS: frozenset[str] = frozenset(
         "provision_on_drawn",
         "provision_on_nominal",
         "expected_loss",
+        # Both are pro-rata allocated across real-estate split legs by
+        # ``engine/stages/re_split/carriers.py::_PRORATA_CARRIERS``, so the collapse
+        # MUST sum them; ``_collapse.py`` takes ``.first()`` for every non-member,
+        # which returns one leg's share instead of the parent total.
+        # ``collateral_adjusted_value`` is additionally a reconciliation component
+        # (``analysis/recon_registry.py``), so omitting it understated a compared
+        # value. ``interest`` is the second component of the
+        # ``reporting_gross_on_bs`` carrier alongside ``drawn_amount``; leaving one
+        # summed and the other ``.first()``-ed made the two halves of one gross
+        # figure disagree. Measured pre-fix: interest collapsed to 30,769.23 of a
+        # 40,000.00 parent (-23.1% CRR, -47% B31).
+        "collateral_adjusted_value",
+        "interest",
+        # Read off the COLLAPSED frame by analysis/reconciliation.py, which takes
+        # ``*spec.explain_columns, *spec.input_columns`` and not only
+        # ``our_columns``. All five are pro-rata allocated across split legs, so
+        # ``.first()`` returned one leg's share: a collateral break report showed
+        # four type-level inputs that did not foot to the
+        # ``collateral_adjusted_value`` they exist to explain. No compared verdict
+        # changed -- these are explanatory payload -- but a self-inconsistent
+        # diagnostic on a frame a human debugs is worse than a wrong number
+        # nobody reads.
+        "collateral_financial_value",
+        "collateral_re_value",
+        "collateral_receivables_value",
+        "collateral_other_physical_value",
+        "guarantee_amount",
     }
 )
 

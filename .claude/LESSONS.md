@@ -329,6 +329,104 @@ the named two produced 5 new ERROR breaks the moment the parent moved.
 
 ---
 
+### C7. A conservation identity can be satisfied in one regime by an offsetting basis change
+
+**Trap.** A conservation identity over a two-regime quantity is checked under one
+regime only — or parametrised over both, seen to fail in one, and "fixed" until
+both are green. It passes in the other regime not because the engine is correct
+there, but because a regime-specific change of basis happens to cancel the error
+exactly.
+
+**Why.** Two measured instances from the RE loan-split carrier duplication
+(2026-08-09), of two different kinds.
+
+*Regime-dependent satisfaction, and the carrier that caused it.*
+`reporting_crm_lgd_real_estate` was inherited whole onto both split legs. On a
+four-exposure portfolio pledging 4,500,000 of property, CRR summed to
+**7,500,000** — a 3,000,000 violation of `collateral <= pledged`. Basel 3.1
+summed to **exactly 4,500,000** and the inequality HELD; the post-fix value is
+**2,700,000**, so that green assertion had been concealing **1,800,000 of pure
+duplication**. The decisive detail: the DUPLICATION was present in BOTH regimes —
+the raw, regime-invariant `collateral_re_market_value` summed to 7,500,000 under
+Basel 3.1 too. What differed was not the defect but the CARRIER:
+`reporting_crm_lgd_*` reports a method-dependent basis, and the B31 adjusted
+basis was small enough that doubling it landed on the pledge. **A basis-dependent
+carrier can mask a defect that a basis-invariant carrier beside it exposes in
+every regime.**
+
+*Regime-dependent severity.* The sibling collapse defect (a carrier allocated
+across legs but not summed when they collapse back) understated a 40,000 interest
+parent by **23% under CRR and 47% under Basel 3.1** — the Art. 124F 55% cap
+shrinks the secured leg, and `.first()` kept that smaller leg.
+
+A Basel-3.1-only test would have concluded the collateral defect did not exist. A
+both-regimes test whose author trusted the green half would have concluded the
+same.
+
+**Detect.** Mechanical, no judgement required:
+- Any conservation identity over a carrier whose BASIS differs by regime — the
+  `reporting_crm_lgd_*` family, anything resolved through `approach_applied`,
+  anything the pack expresses as a regime `Feature` — must be parametrised over
+  both regimes AND shown to fail in each regime SEPARATELY. One red across a
+  both-regimes parametrisation proves one regime, not two.
+- Where a quantity is available as both a raw, regime-invariant carrier and a
+  basis-adjusted one, state the identity over the RAW carrier. The adjusted one
+  can be satisfied by its own basis; the raw one cannot.
+- An identity stated as an INEQUALITY that passes as an exact EQUALITY is an
+  alarm, not a reassurance. `4,500,000 <= 4,500,000` on a path containing
+  haircuts, caps and eligibility gates means something cancelled.
+- If a regime CANNOT be made to fail, that is a FINDING, not a licence to drop it
+  from the parametrisation. Record which regime could not be reddened and why,
+  keep it parametrised, and treat the gap as owed coverage.
+- Both instances were found by MEASUREMENT, not review. Print both sides per
+  regime and read the numbers.
+
+---
+
+### C8. A measurement and the claim you attach to it are separate assertions
+
+**Trap.** You measure something correctly, then state a consequence that does not
+follow, in the same confident breath. The measurement survives review because it
+is right; the consequence rides along unchecked.
+
+**Why.** Five instances in one batch (2026-08-09), each time the *plausible*
+reading:
+- `interest` measured as understated 23.1% on the per-parent collapse ->
+  claimed "a false reconciliation break". It is not a reconciliation component.
+- A mutation probe reported a vacuity guard as not failing -> claimed "the guard
+  is vacuous". The probe had applied a different mutation than the guard catches.
+- `collateral_financial_value == 0.00` for a `bond` pledge -> claimed "the pledge
+  contributes nothing, 1,500,000 dead in our own fixture". It receives the SAME
+  relief as `government_bond` (-485,857.86); the working carrier is
+  `collateral_adjusted_value`. **The direction of the whole finding was
+  backwards.**
+- "Nothing reads those carriers off the collapsed frame" -> `reconciliation.py`
+  reads `explain_columns` and `input_columns`, not only `our_columns`. Five
+  allocated columns were being read.
+- A scenario reported "eight newly-live columns"; the census — the authoritative
+  measure — said seven, and chasing the eighth found a registration defect.
+
+The third would have shipped a plan item whose prescribed fix pointed the wrong
+way. Note the fourth: the rule derived from the first three would have caught it,
+and the error predates the drafting.
+
+**Detect.**
+- **Measure the noun in the claim.** If the sentence says EAD, RWA, a template
+  cell, or a reconciliation break, measure EAD, RWA, that cell, or that
+  comparison. This engine carries many near-synonymous money carriers —
+  `collateral_financial_value` vs `_adjusted_value` vs `_cash_value` vs the
+  `_market_value` twins vs `reporting_crm_lgd_*` — and reading the wrong one
+  yields a plausible wrong answer every time.
+- Before asserting a consequence for a named consumer, **enumerate the
+  consumers** — grep the registry, the cellspec, the edge contract. "X is wrong,
+  therefore Y breaks" needs Y's definition read, not assumed.
+- When a probe reports a *negative*, suspect the probe first: a mutation that
+  does not redden a test may be the wrong mutation rather than a dead assertion.
+- Prefer a set diff to arithmetic on totals. Net +7 live / -7 dead is equally
+  consistent with 8 gained and 1 lost; diff the id sets.
+
+---
+
 ## D. Blast radius
 
 ### D1. Every `engine/sa/` transform is an indirect IRB consumer
@@ -513,6 +611,7 @@ the move here and delete the prose entry above.
 | 2026-08-08 | An oracle case can exhibit a disagreement production cannot reach, because `tests/oracle/drivers.py` bypasses hierarchy/classifier/CRM — and the plan then files it as a defect (P1.319 ORC-141: `commercial_mortgage` is SA-bound and never reaches the IRB branch) | **Attack 9** in `.claude/agents/skeptic.md` — probe production-reachability of any oracle-sourced claim by enumerating the population through the full `PipelineOrchestrator`, not by reasoning from the enum. |
 | 2026-08-08 | A design can reach the right expression by an argument that is false, and a reviewer that fails it on the reasoning alone destroys correct work (P1.316 r2: two false narrative claims, correct prescription) | **Attack 10** in `.claude/agents/skeptic.md` — state which of prescription and justification is broken. `revise` is for a wrong prescription, or reasoning whose falsity would change what a later wave *does*. |
 | 2026-08-08 | **B5 recurrence** — a registered portfolio can still leave the *cell* dead, so Tier 2 passes green over a change it cannot see (C 08.01 r0253 was `0.00` in all six goldens) | Pointed at **P5.21**'s `dead_cells` / `never_evaluated_rules` ratchet, which `scripts/coverage_report.py` already computes and gates on neither. B5's prose now carries the two-leg fixture pattern as the interim manual form. |
+| 2026-08-09 | **B5 PARTIALLY GRADUATED, and recurred a THIRD time in a new form** | **Graduated:** `scripts/check_template_cell_coverage.py` + `scripts/template_cell_coverage_baseline.json` + `tests/contracts/test_template_cell_coverage.py` two-way ratchet the **(template, column)** live/dead sets over 28 portfolio×regime runs, 339 pairs / 210 live / 129 dead, each dead column classified `ENGINE_CANNOT_PRODUCE` (53) or `NO_FIXTURE` with a reason verified against generator source — reason codes deliberately exceed P5.21's spec, because a classified dead column is reviewable where a counted one is only tracked. Gated per-PR by the `template-coverage` job in `.github/workflows/ci.yml` (~5 min, invoking `--check` directly so the exit code is the gate's own). The census **fails loudly** — a raising portfolio, a silently-degraded one, and a short matrix are each a hard exit, all three demonstrated. **THIRD FORM FOUND:** the `fcsm` fixture was registered in `RUNS` against `_sa_config`, which defaults to `comprehensive`, while the portfolio exists to exercise the Art. 222 SIMPLE Method — so it sat inside the gate with its own feature silenced (col 0070 reads 0.00 vs non-zero on the identical bundle; the census showed 30→28 runs left 210/129 unchanged, i.e. it contributed no liveness). So B5 is now: "unregistered" → "registered, dead cell" → **"registered, WRONG CONFIG, dead cell"**. Registration is necessary; so is a live column; neither is sufficient if the config silences the feature. **STILL OPEN, narrowed to three:** (i) the **cell**-granular case (the C 08.01 r0253 shape); (ii) the **row**-granular case, which this ratchet is also blind to (C 08.04's single column is live while six of nine movement rows never carry a figure); (iii) `never_evaluated_rules`, the supervisory-register half. |
 
 Candidates currently identified but not yet graduated (file as plan bullets):
 

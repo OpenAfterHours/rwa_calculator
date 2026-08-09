@@ -11,9 +11,11 @@ Key responsibilities:
 - Hold the regime-as-data content: ``common`` (regime-invariant),
   ``crr`` (pre-Basel-3.1), and ``b31`` (Basel 3.1 / PRA PS1/26) layers.
 
-This is the small proof pack for migration Phase 5 Slice 1 — it exercises
-every rule shape with genuine cited values, not the full table migration
-(Slices 4-10).
+These packs are the value home for the whole engine. The table migration
+completed in Phase 5 S12/S13: ``data/tables/`` was emptied and deleted, and
+``engine/**`` now reads every regulatory value back from the resolved pack.
+A new regulatory value belongs here, with a ``Citation`` — never in engine
+module scope (enforced by ``scripts/arch_check.py`` checks 5, 6 and 12).
 
 References:
 - docs/plans/target-architecture-migration.md (Phase 5 — "Regimes are

@@ -1,8 +1,9 @@
 """
 Domain module for RWA calculator.
 
-Contains core domain entities, enumerations, and value objects
-used throughout the calculation pipeline.
+Holds the shared enumerations (``enums.py``) used throughout the calculation
+pipeline. There are no domain entities or value objects here — typed data
+transfer lives in ``rwa_calc.contracts.bundles``.
 """
 
 from rwa_calc.domain.enums import (

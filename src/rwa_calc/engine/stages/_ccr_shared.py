@@ -7,7 +7,7 @@ Pipeline position:
 Key responsibilities:
 - ``enrich_ccr_rows_with_ratings``: join the resolved counterparty rating
   columns onto synthetic CCR/SFT exposure rows, mirroring the per-exposure
-  rating attach that ``hierarchy._attach_counterparty_rating`` performs for
+  rating attach that ``enrich.attach_counterparty_rating`` performs for
   traditional lending rows. Both the SA-CCR stage (``engine/stages/ccr.py``)
   and the SFT FCCM stage (``engine/stages/sft.py``) append synthetic rows
   AFTER hierarchy resolution, so each needs this enrichment before the
@@ -40,7 +40,7 @@ def enrich_ccr_rows_with_ratings(
     """Join the resolved counterparty rating columns onto CCR/SFT rows.
 
     Mirrors the per-exposure rating attach performed by
-    ``hierarchy._attach_counterparty_rating`` for traditional lending
+    ``enrich.attach_counterparty_rating`` for traditional lending
     rows. The CCR/SFT stages run AFTER hierarchy resolution and append
     synthetic rows via ``diagonal_relaxed`` concat, so without this
     enrichment those rows reach the SA calculator with ``cqs=None``

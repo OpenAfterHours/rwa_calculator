@@ -73,6 +73,33 @@ audit and COREP reconciliation):
 - ``residual`` — uncollateralised remainder at counterparty RW
 - ``whole`` — B3.1 Art. 124H(3) non-NP/SME corporate CRE-only path
 
+Carrier-allocation contract (``carriers.py``):
+
+The splitter runs AFTER the CRM processor, so every per-exposure money
+carrier is already on the parent row when a split emits two or three legs.
+A carrier this stage does not rewrite is inherited WHOLE by each leg and
+double-counts in every downstream sum. Each carrier therefore falls into
+exactly one of three classes, enumerated in ``carriers.py``:
+
+- **Allocated pro-rata** by the leg's share of the parent EAD — the
+  extensive money amounts (drawn / interest / undrawn / nominal, the EAD
+  waterfall snapshots, the provision and non-RE collateral / guarantee
+  amounts). Members of a common ratio are allocated together so the ratio
+  is invariant under the split.
+- **Real-estate collateral value** — attributed to the secured leg(s) only,
+  split by component value on a mixed RRE+CRE parent. The residual leg is
+  given NO property value: CRR Art. 124(1), first subparagraph, second
+  sentence and PRA PS1/26 Art. 124F(1)(b) with Art. 124L(e) each put it at
+  the risk weight for an *unsecured* exposure to the counterparty, precisely
+  because it is the uncollateralised remainder — so property value on that
+  row would contradict its own risk weight.
+- **Inherited unchanged** — intensive quantities (rates, ratios, per-unit
+  attributes), counterparty / lending-group aggregates carried per row only
+  as threshold comparands, and this stage's own decision provenance.
+
+``whole`` and pass-through rows are 1:1 with their parent and are never
+rescaled.
+
 References:
 - CRR Art. 124(1): "any part of an exposure" framing for partial security.
 - CRR Art. 125: Residential mortgage 35% on portion up to 80% LTV.
@@ -113,6 +140,11 @@ from rwa_calc.contracts.errors import (
     re_split_warning,
 )
 from rwa_calc.domain.enums import ApproachType, ExposureClass
+from rwa_calc.engine.stages.re_split.carriers import (
+    residual_carrier_exprs,
+    scale_provision_expr,
+    secured_carrier_exprs,
+)
 from rwa_calc.engine.stages.re_split.params import (
     SplitParameters,
     re_split_parameters,
@@ -306,17 +338,31 @@ def _split_unified_frame(
 
     rre_secured_rows = (
         split_base.filter(pl.col("_re_rre_secured_ead") > 0.0)
-        .with_columns(_secured_columns(component="rre", is_basel_3_1=is_basel_3_1, ead_col=ead_col))
+        .with_columns(
+            _secured_columns(
+                component="rre",
+                is_basel_3_1=is_basel_3_1,
+                ead_col=ead_col,
+                schema_names=schema_names,
+            )
+        )
         .pipe(_strip_temp_columns)
     )
     cre_secured_rows = (
         split_base.filter(pl.col("_re_cre_secured_ead") > 0.0)
-        .with_columns(_secured_columns(component="cre", is_basel_3_1=is_basel_3_1, ead_col=ead_col))
+        .with_columns(
+            _secured_columns(
+                component="cre",
+                is_basel_3_1=is_basel_3_1,
+                ead_col=ead_col,
+                schema_names=schema_names,
+            )
+        )
         .pipe(_strip_temp_columns)
     )
-    residual_rows = split_base.with_columns(_residual_columns(ead_col=ead_col)).pipe(
-        _strip_temp_columns
-    )
+    residual_rows = split_base.with_columns(
+        _residual_columns(ead_col=ead_col, schema_names=schema_names)
+    ).pipe(_strip_temp_columns)
 
     new_unified = pl.concat(
         [pass_through, whole_rows, rre_secured_rows, cre_secured_rows, residual_rows],
@@ -626,15 +672,22 @@ def _secured_columns(
     component: str,
     is_basel_3_1: bool,
     ead_col: str,
+    schema_names: set[str],
 ) -> list[pl.Expr]:
     """Build the with_columns expression list for one secured child row.
 
     Mixed splits emit ``secured_rre`` + ``secured_cre`` so audit
     consumers can identify mixed-collateral lineage; single-component
     splits keep the legacy ``secured`` role for backward compat.
+
+    The overrides below are the splitter's own decision output; the
+    extensive money carriers and the real-estate collateral values are
+    allocated by ``carriers.secured_carrier_exprs`` (see the module
+    docstring's carrier-allocation contract). The two lists are disjoint.
     """
     meta = _COMPONENT_META[component]
-    return [
+    other = _COMPONENT_META["cre" if component == "rre" else "rre"]
+    overrides = [
         pl.lit(meta.target_class).alias("exposure_class"),
         pl.col(meta.secured_ead_col).alias(ead_col),
         pl.col(meta.component_value_col).alias("property_collateral_value"),
@@ -651,7 +704,9 @@ def _secured_columns(
         # B3.1 + RRE always pass False so the general Art. 124F/H
         # path is taken (income-producing branches are bypassed).
         _has_income_cover_for_component(is_basel_3_1, meta.prop_type).alias("has_income_cover"),
-        _scale_provision_expr(numerator=meta.secured_ead_col).alias("provision_allocated"),
+        scale_provision_expr(numerator=meta.secured_ead_col, parent_ead_col=ead_col).alias(
+            "provision_allocated"
+        ),
         pl.col("exposure_reference").alias("split_parent_id"),
         pl.when(pl.col("_re_is_mixed"))
         .then(pl.col("exposure_reference") + pl.lit(meta.ref_suffix_mixed))
@@ -662,29 +717,51 @@ def _secured_columns(
         .otherwise(pl.lit("secured"))
         .alias("re_split_role"),
     ]
+    return overrides + secured_carrier_exprs(
+        schema_names=schema_names,
+        parent_ead_col=ead_col,
+        secured_ead_col=meta.secured_ead_col,
+        component_value_col=meta.component_value_col,
+        other_component_value_col=other.component_value_col,
+        is_residential_component=meta.prop_type == "residential",
+    )
 
 
-def _residual_columns(*, ead_col: str) -> list[pl.Expr]:
+def _residual_columns(*, ead_col: str, schema_names: set[str]) -> list[pl.Expr]:
     """Build the with_columns list for a residual row.
 
     The residual carries the uncollateralised EAD and keeps the original
     counterparty exposure class so the SA calculator's standard corporate
-    / retail RW path applies (CRR Art. 124(1) ¶3 / PS1/26 Art. 124L).
+    / retail RW path applies (CRR Art. 124(1), first subparagraph, second
+    sentence / PS1/26 Art. 124F(1)(b) with Art. 124L).
     Zero-EAD residuals are still emitted so per-parent reconciliation
     (sum_child_ead == parent_ead) holds.
+
+    ``carriers.residual_carrier_exprs`` supplies the pro-rata share of every
+    extensive carrier and nulls the remaining real-estate collateral values;
+    ``residential_collateral_value`` stays in the list below because it is
+    nulled unconditionally (an older fixture that lacks the column still
+    receives it as a typed null).
     """
-    return [
+    overrides = [
         pl.col("_re_residual_ead").alias(ead_col),
         pl.lit(None).cast(pl.Float64).alias("property_collateral_value"),
         pl.lit(None).cast(pl.Float64).alias("residential_collateral_value"),
         pl.lit(None).cast(pl.Float64).alias("ltv"),
         pl.lit(None).cast(pl.String).alias("property_type"),
         pl.lit(False).alias("has_income_cover"),
-        _scale_provision_expr(numerator="_re_residual_ead").alias("provision_allocated"),
+        scale_provision_expr(numerator="_re_residual_ead", parent_ead_col=ead_col).alias(
+            "provision_allocated"
+        ),
         pl.col("exposure_reference").alias("split_parent_id"),
         (pl.col("exposure_reference") + pl.lit("_res")).alias("exposure_reference"),
         pl.lit("residual").alias("re_split_role"),
     ]
+    return overrides + residual_carrier_exprs(
+        schema_names=schema_names,
+        parent_ead_col=ead_col,
+        residual_ead_col="_re_residual_ead",
+    )
 
 
 def _new_ltv_for_whole_expr(ead_col: str) -> pl.Expr:
@@ -727,20 +804,6 @@ def _has_income_cover_for_component(is_basel_3_1: bool, prop_type: str) -> pl.Ex
     if is_basel_3_1 or prop_type == "residential":
         return pl.lit(False)
     return pl.lit(True)
-
-
-def _scale_provision_expr(*, numerator: str) -> pl.Expr:
-    """Allocate provisions pro-rata to the child row's EAD share."""
-    parent_ead = pl.col("ead_final").fill_null(0.0)
-    return (
-        pl.when(parent_ead > 0.0)
-        .then(
-            pl.col("provision_allocated").fill_null(0.0)
-            * pl.col(numerator).fill_null(0.0)
-            / parent_ead
-        )
-        .otherwise(pl.lit(0.0))
-    )
 
 
 def _accumulate_split_errors(

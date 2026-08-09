@@ -2,12 +2,18 @@
 # C4b — independent re-derivation of template MONEY cells.
 #
 # A second, separately-authored predicate and metric for each cell, taken from
-# the published Annex II instruction text and held HERE rather than in
+# the published Annex II / Pillar 3 instruction text and held HERE rather than in
 # `reporting/cellspec.py`. The duplication IS the control: `reporting/lineage.py`
 # re-runs the generator's own predicate by design, so without this nothing in the
 # estate gives a second opinion on whether a cell's predicate is the RIGHT
 # predicate. A wrong CellSpec today produces a number that is self-consistent,
 # lineage-explicable, golden-matching and rule-passing.
+#
+# Every cell below was authored from the instruction PDF listed in `meta.sources`
+# — read with pymupdf, quoted into the cell's `note` — and NOT from the
+# generator. Where the two disagree the cell carries a `known_difference` and the
+# suite xfails it STRICTLY, so the liability is visible and a later fix forces the
+# entry out rather than silently passing.
 #
 # ---------------------------------------------------------------------------
 # Semantics
@@ -16,41 +22,128 @@
 # Each [[cell]] names a template cell and states how to rebuild it from the
 # SEALED aggregator-exit ledger:
 #
-#   metric  = "sum"                 the only metric these cells need
-#   carrier = "<ledger column>"     which column carries the money
-#   scale   = <float>               applied after the sum (0.08 for own funds)
+#   template = "OV1" | "C0700" | "C0801" | "C0802" | "C0200"
+#   member  = "<sheet key>"        the per-exposure-class sheet, where the
+#                                  template is published once per class
+#   metric  = "sum"                the only metric these cells need
+#   carrier = "<ledger column>"    which column carries the money, or a LIST of
+#                                  columns summed row-wise (see below)
+#   scale   = <float>              applied after the sum (0.08 for own funds)
 #   where   = [ {column, op, value|values}, ... ]   AND-ed clauses
 #   ops     = in | not_in | equals | not_equals | not_starts_with
+#           | is_true | is_false | eq_num | ge | lt
 #
 # The control is over the PREDICATE and the CARRIER, not over the upstream
 # numbers: both sides read the same sealed ledger, so a difference can only come
 # from disagreeing about which rows and which column a cell is made of.
 #
-# `basis` records, per cell, what this re-derivation does NOT independently
-# settle — see meta.limits.
+# `basis` is MANDATORY and records, per cell, what this re-derivation does NOT
+# independently settle. `rederive.py` refuses to load a cell without it.
+#
+# ---------------------------------------------------------------------------
+# Vocabulary extensions, and why each was unavoidable
+# ---------------------------------------------------------------------------
+#
+# The 2026-08-08 file had five string operators and a single carrier. Extending
+# beyond UK OV1 needed four additions, each because a published axis is not
+# expressible in the old vocabulary at all:
+#
+# 1. `member` — C 07.00, C 08.01 and C 08.02 are published ONCE PER EXPOSURE
+#    CLASS ("The information in CR SA is required for the total exposure classes
+#    and individually for each of the exposure classes", CRR Annex II ¶47), so a
+#    cell address needs a sheet as well as a row and a column. This also makes
+#    the SHEET axis part of the second opinion: the member clause here is an
+#    independently authored statement about which class a sheet holds.
+#
+# 2. A LIST-valued `carrier` — "Original exposure pre-conversion factors" is
+#    additive over the on- and off-balance-sheet sides (CRR Art. 111 for SA,
+#    Art. 166 for IRB) and NO single sealed column holds it. Expressing it as one
+#    carrier would have meant either picking a side or inventing a ledger column,
+#    and inventing a column is how a second opinion stops being independent.
+#
+# 3. `is_true` / `is_false` — rows 0070/0080 of C 07.00 and 0020/0030 of C 08.01
+#    partition by balance-sheet side, which is a Boolean ledger column. A null
+#    satisfies NEITHER limb, deliberately: `reporting_on_balance_sheet` is null
+#    exactly on the legs outside the on/off-balance-sheet credit-risk scope
+#    (CCR, settlement), and Annex II puts those in rows 0090-0130 instead.
+#
+# 4. `eq_num` / `ge` / `lt` — two published axes are NUMERIC INTERVALS, not
+#    string categories: C 07.00 rows 0140-0280 are the "BREAKDOWN OF EXPOSURES BY
+#    RISK WEIGHTS" and C 08.02's rows are PD bands. String equality cannot
+#    express either. `eq_num` compares within 1e-9 because a risk weight is a
+#    Float64 built from a decimal literal.
+#
+# No arithmetic between cells was added, and no operator can reference a
+# generated value — a cell is still a filter, a carrier and a scale.
 #
 
 [meta]
 authored = "2026-08-08"
+extended = "2026-08-09"
+# PAGE-NUMBER CONVENTION. Every "p.N" below is the PRINTED page of the source
+# document — the number in its page header — which in both Annex II files is the
+# PDF page index + 1. To re-read a citation:
+#     import fitz; print(fitz.open(<path>)[N - 1].get_text())
+# Nine citation families in the first draft of this file named the section-header
+# page rather than the page carrying the row definition, each off by exactly one;
+# all were re-checked against the PDFs on 2026-08-09 and corrected. If you add a
+# cell, verify the page the same way rather than copying a neighbour's.
 sources = [
   "UK Pillar 3 Annex II, Template UK OV1 (docs/assets/crr-pillar3-risk-weighted-exposure-instructions-leverage-ratio.pdf, pp. 1-2)",
-  "CRR Art. 92(1)-(3), Art. 153(5), Art. 155(2), Art. 438(d)",
+  "CRR Annex II reporting instructions (docs/assets/crr-annex-ii-reporting-instructins.pdf): C 07.00 columns pp. 86-90, C 07.00 rows pp. 91-95, C 08.01 columns pp. 98-105, C 08.01 rows pp. 105-107, C 08.02 p. 108, C 02.00 rows pp. 28-34",
+  "PS1/26 Annex II reporting instructions (docs/assets/ps1-26-annex-ii-reporting-instructions.pdf): OF 02.00 rows pp. 28-38 and columns p. 39, OF 07.00 columns pp. 81-87, OF 07.00 rows pp. 88-94, OF 08.01 columns pp. 102-115, OF 08.01 rows pp. 115-118",
+  "CRR Art. 92(1)-(3), Art. 111, Art. 113, Art. 153(5), Art. 155(2), Art. 158, Art. 166, Art. 438(d), Art. 501/501a",
+  "PRA PS1/26 Art. 92(2a)/(3a)/(5) (output floor), Art. 113, Art. 122A/122B, Art. 153(5A), Art. 154(4A), Art. 158(6A)",
 ]
 limits = """
-Two things this file deliberately does NOT settle, stated so a green run is not
+Things this file deliberately does NOT settle, stated so a green run is not
 over-read:
 
-1. PRE- vs POST-SUBSTITUTION BASIS. Rows 2-5 and UK 4a are cut on
-   `reporting_approach_origin`, matching the basis recorded for this template.
-   The generated portfolio carries no guarantees, so origin and applied coincide
-   on every leg and the choice is arithmetically untested here. Settling it needs
-   a portfolio with a boundary-crossing guarantee whose crossing RWEA is non-zero
-   (.claude/LESSONS.md C2).
+1. PRE- vs POST-SUBSTITUTION BASIS. This is the largest remaining hole and it is
+   the one the reporting estate has already been bitten by
+   (tests/expected_outputs/reporting/validation_known_breaks.json,
+   `caution_on_plan_doc_definitions`). Annex II ¶56/¶65 splits every SA and IRB
+   sheet across two bases: the "Original exposure pre-conversion factors" column
+   is cut on the ORIGIN exposure class, and the "Exposure value" / RWEA columns
+   on the class AFTER substitution. Every cell below states which basis it takes
+   (`reporting_class_origin` / `reporting_approach_origin` vs `reporting_class` /
+   `reporting_approach`), but the generated portfolio carries NO guarantees, so
+   origin and applied coincide on every leg and the choice is arithmetically
+   untested. Settling it needs a portfolio with a boundary-crossing guarantee
+   whose crossing RWEA is non-zero (.claude/LESSONS.md C2), which is a bigger
+   adjudication job than adding the cells: every basis-cut cell on both sheets
+   would move at once.
 
-2. CCR EXCLUSION. Row 1's "excluding CCR" cut is expressed as "not a synthetic
-   CCR leg". The portfolio has no derivatives, so the clause is inert and the
-   cut is not exercised. What IS exercised is the carrier and the scale, which
-   is the defect class this component targets.
+2. CCR EXCLUSION AND CCR ROWS. Row 1 of OV1 expresses its "excluding CCR" cut as
+   "not a synthetic CCR leg"; C 07.00 rows 0090-0130 and C 08.01 rows 0040-0060
+   are the CCR breakdowns. The portfolio has no derivatives and no SFTs, so none
+   of that is exercised.
+
+3. SUPPORTING FACTORS. CRR C 07.00 c0215 vs c0220 and C 08.01 c0255 vs c0260 are
+   the pre- and post-Art. 501/501a pair. No obligor in the portfolio is an SME or
+   an infrastructure entity, so `supporting_factor` is 1.0 everywhere and the two
+   cells of each pair are numerically identical. Their carriers differ, so a
+   defect that populated one and not the other WOULD be caught; a defect in the
+   supporting-factor arithmetic itself would not.
+
+4. THE PORTFOLIO OUTPUT FLOOR. `rwa_pre_floor` and `rwa_final` are equal on this
+   portfolio (the floor does not bind), so every cell that had to choose between
+   them is untested on that choice. `test_output_floor_column_is_the_floor_amount`
+   attacks the floor column directly instead.
+
+5. POST-MODEL ADJUSTMENTS. B31 C 08.01 c0280 (EL pre post-model adjustments) and
+   c0282 (EL after) are separate published columns; no leg here carries a PMA, so
+   only c0282 is authored and the pair's distinction is not settled.
+
+6. NON-MONEY CELLS. Exposure-weighted averages (PD, LGD, maturity) and counts
+   (number of obligors) are out of scope by construction — `metric` is "sum".
+   C 08.01 c0010/c0230/c0250/c0300 are therefore unasserted here.
+
+7. TEMPLATE COVERAGE. Four of the nineteen template modules are covered
+   (pillar3/ov1, corep/c07, corep/c08 for C 08.01 and C 08.02, corep/c02 for
+   C 02.00 / OF 02.00). C 08.03/04/05/06/07, C 09.01/02, C 34.*, OF 02.01 and the
+   Pillar 3 CR4/CR5/CR6/CR7/CR8/CR9/CR10/CMS1/CMS2 templates have no second
+   opinion.
 """
 
 # ===========================================================================
@@ -85,6 +178,7 @@ to 4 of Title II of Part Three CRR, and with Article 379 CRR. RWEAs for
 securitisation exposures in the non-trading book and for CCR are excluded and
 disclosed in rows 6 and 16 of this template."
 """
+basis = "The CCR cut is inert (limits 2). What IS exercised is the carrier and the scale."
 
 [[cell]]
 id = "ov1-1-c"
@@ -97,6 +191,7 @@ carrier = "rwa_final"
 scale = 0.08
 where = [{ column = "exposure_reference", op = "not_starts_with", value = "ccr__" }]
 citation = "UK OV1 column c; CRR Art. 92(1)"
+basis = "As ov1-1-a, plus the 8% scale."
 
 [[cell]]
 id = "ov1-2-a"
@@ -119,6 +214,7 @@ its own row UK 4a, but this calculator routes equity through the SA equity risk
 weights and labels the approach `equity`, so the SA row is where its RWEA is
 calculated. Row UK 4a is asserted separately and the two must not double-count.
 """
+basis = "Origin vs applied basis untested (limits 1)."
 
 [[cell]]
 id = "ov1-2-c"
@@ -134,6 +230,7 @@ where = [
   { column = "reporting_approach_origin", op = "in", values = ["standardised", "equity"] },
 ]
 citation = "UK OV1 row 2, column c; CRR Art. 92(1)"
+basis = "As ov1-2-a, plus the 8% scale."
 
 [[cell]]
 id = "ov1-3-a"
@@ -157,6 +254,7 @@ carried by the approach label itself: a slotting leg carries `slotting`, not
 `foundation_irb`, so no extra clause is needed — but the exclusion is REAL and
 row 3 + row 4 must not double-count, which the partition assertion checks.
 """
+basis = "Origin vs applied basis untested (limits 1)."
 
 [[cell]]
 id = "ov1-3-c"
@@ -172,6 +270,7 @@ where = [
   { column = "reporting_approach_origin", op = "equals", value = "foundation_irb" },
 ]
 citation = "UK OV1 row 3, column c; CRR Art. 92(1)"
+basis = "As ov1-3-a, plus the 8% scale."
 
 [[cell]]
 id = "ov1-4-a"
@@ -192,6 +291,7 @@ note = """
 lending exposures subject to the slotting approach in accordance with Article
 153(5) CRR."
 """
+basis = "Origin vs applied basis untested (limits 1)."
 
 [[cell]]
 id = "ov1-4-c"
@@ -207,6 +307,7 @@ where = [
   { column = "reporting_approach_origin", op = "equals", value = "slotting" },
 ]
 citation = "UK OV1 row 4, column c; CRR Art. 92(1)"
+basis = "As ov1-4-a, plus the 8% scale."
 
 [[cell]]
 id = "ov1-5-a"
@@ -222,6 +323,7 @@ where = [
   { column = "reporting_approach_origin", op = "equals", value = "advanced_irb" },
 ]
 citation = "UK OV1 row 5; CRR Chapter 3 of Title II of Part Three"
+basis = "Origin vs applied basis untested (limits 1)."
 
 [[cell]]
 id = "ov1-5-c"
@@ -237,6 +339,7 @@ where = [
   { column = "reporting_approach_origin", op = "equals", value = "advanced_irb" },
 ]
 citation = "UK OV1 row 5, column c; CRR Art. 92(1)"
+basis = "As ov1-5-a, plus the 8% scale."
 
 [[cell]]
 id = "ov1-29-a"
@@ -255,6 +358,7 @@ CCR leg, which rows 1-5 exclude. On a book with no derivatives row 29 equals row
 1 by arithmetic, not by definition, and the two are authored separately here so
 that identity is a MEASUREMENT rather than a restatement.
 """
+basis = "Equals row 1 by arithmetic here, not by definition (limits 2)."
 
 [[cell]]
 id = "ov1-29-c"
@@ -267,3 +371,1470 @@ carrier = "rwa_final"
 scale = 0.08
 where = []
 citation = "UK OV1 row 29, column c; CRR Art. 92(1)"
+basis = "As ov1-29-a, plus the 8% scale."
+
+# ===========================================================================
+# C 07.00 / OF 07.00 — CR SA, published once per SA exposure class.
+#
+# Columns, verbatim from the instruction text:
+#
+# c0010 "ORIGINAL EXPOSURE PRE-CONVERSION FACTORS. Exposure value calculated in
+#       accordance with Article 111 CRR without taking into account value
+#       adjustments and provisions, deductions, conversion factors and the effect
+#       of credit risk mitigation techniques" (CRR Annex II p.86; PS1/26 p.81 is
+#       word-for-word bar the Rulebook Part names). So: GROSS, both balance-sheet
+#       sides, ORIGIN class — ¶56(a) "the Original exposure pre-conversion
+#       factors shall be classified into the corresponding (original) exposure
+#       class ... In a second step the exposures may be redistributed".
+#
+# c0200 "Exposure value ... after taking into account value adjustments, all
+#       credit risk mitigants and credit conversion factors that is to be
+#       assigned to risk weights" (CRR p.89; PS1/26 p.85). POST-substitution.
+#
+# c0215 "Risk weighted exposure amount pre supporting factors ... without taking
+#       into account the SME and infrastructure supporting factors laid down in
+#       Article 501 and Article 501a CRR" (CRR p.90). CRR only.
+#
+# c0220 CRR: "Risk weighted exposure amount after supporting factors ... taking
+#       into account the SME and infrastructure supporting factors" (p.90).
+#       PS1/26: "Risk-weighted exposure amount. Paragraphs 1 to 5 of Article 113"
+#       (p.86) — Basel 3.1 deleted both supporting factors, so the one column is
+#       the post-factor figure in both regimes and `rwa_post_factor` is its
+#       carrier under each.
+#
+# Rows: 0010 "Total exposures"; 0070 "On balance sheet exposures subject to
+#       credit risk"; 0080 "Off balance sheet exposures subject to credit risk";
+#       0140-0280 "BREAKDOWN OF EXPOSURES BY RISK WEIGHTS" with 0140 = 0%,
+#       0180 = 20%, 0200 = 50%, 0220 = 75%, 0230 = 100%. CRR rows: r0010 on p.91,
+#       r0070/r0080 on p.92, the risk-weight rows on p.93.
+# ===========================================================================
+
+# --- Total row x the three money columns, once per emitted sheet -----------
+
+[[cell]]
+id = "c0700-cgcb-0010-0010"
+template = "C0700"
+member = "central_govt_central_bank"
+row = "0010"
+column = "0010"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = ["reporting_gross_on_bs", "reporting_gross_off_bs"]
+scale = 1.0
+where = [
+  { column = "reporting_approach_origin", op = "equals", value = "standardised" },
+  { column = "reporting_class_origin", op = "equals", value = "central_govt_central_bank" },
+]
+citation = "CRR Annex II C 07.00 c0010 (p.86) / PS1/26 Annex II OF 07.00 c0010 (p.81); CRR Art. 111"
+basis = """
+Gross, pre-CCF, pre-CRM, origin-class. Does not settle the origin/applied choice
+(limits 1) nor value adjustments — c0030 is not authored, so the "without taking
+into account value adjustments and provisions" half of the definition is asserted
+only by the absence of a provision carrier, not by a provisioned leg moving.
+"""
+
+[[cell]]
+id = "c0700-cgcb-0010-0200"
+template = "C0700"
+member = "central_govt_central_bank"
+row = "0010"
+column = "0200"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "reporting_ead"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "equals", value = "standardised" },
+  { column = "reporting_class", op = "equals", value = "central_govt_central_bank" },
+]
+citation = "CRR Annex II C 07.00 c0200 (p.89) / PS1/26 OF 07.00 c0200 (p.85); CRR Art. 111"
+basis = "Post-substitution basis untested (limits 1). No CCF or haircut moves this class here."
+
+[[cell]]
+id = "c0700-cgcb-0010-0220"
+template = "C0700"
+member = "central_govt_central_bank"
+row = "0010"
+column = "0220"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "rwa_post_factor"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "equals", value = "standardised" },
+  { column = "reporting_class", op = "equals", value = "central_govt_central_bank" },
+]
+citation = "CRR Annex II C 07.00 c0220 (p.90) / PS1/26 OF 07.00 c0220 (p.86); CRR Art. 113(1)-(5)"
+basis = """
+A domestic CGCB is 0% (Art. 114(4)), so this cell agrees at 0.00 and is VACUOUS
+as an RWEA assertion — it is kept because a non-zero value here would be a defect
+and nothing else in the estate says so. The class's exposure-value and gross cells
+above are non-zero and carry the real assertion.
+"""
+
+[[cell]]
+id = "c0700-corporate-0010-0010"
+template = "C0700"
+member = "corporate"
+row = "0010"
+column = "0010"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = ["reporting_gross_on_bs", "reporting_gross_off_bs"]
+scale = 1.0
+where = [
+  { column = "reporting_approach_origin", op = "equals", value = "standardised" },
+  { column = "reporting_class_origin", op = "equals", value = "corporate" },
+]
+citation = "CRR Annex II C 07.00 c0010 (p.86) / PS1/26 OF 07.00 c0010 (p.81); CRR Art. 111"
+basis = "As c0700-cgcb-0010-0010. This is the one sheet where both carriers are non-zero."
+
+[[cell]]
+id = "c0700-corporate-0010-0200"
+template = "C0700"
+member = "corporate"
+row = "0010"
+column = "0200"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "reporting_ead"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "equals", value = "standardised" },
+  { column = "reporting_class", op = "equals", value = "corporate" },
+]
+citation = "CRR Annex II C 07.00 c0200 (p.89) / PS1/26 OF 07.00 c0200 (p.85); CRR Art. 111"
+basis = """
+Post-substitution basis untested (limits 1). The gap between this cell and
+c0700-corporate-0010-0010 IS the conversion-factor effect on the two off-balance
+-sheet legs, so a CCF defect moves one and not the other — that much is settled.
+"""
+
+[[cell]]
+id = "c0700-corporate-0010-0220"
+template = "C0700"
+member = "corporate"
+row = "0010"
+column = "0220"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "rwa_post_factor"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "equals", value = "standardised" },
+  { column = "reporting_class", op = "equals", value = "corporate" },
+]
+citation = "CRR Annex II C 07.00 c0220 (p.90) / PS1/26 OF 07.00 c0220 (p.86); CRR Art. 113(1)-(5)"
+basis = "Supporting factors are 1.0 here (limits 3). Post-substitution basis untested (limits 1)."
+
+[[cell]]
+id = "c0700-institution-0010-0010"
+template = "C0700"
+member = "institution"
+row = "0010"
+column = "0010"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = ["reporting_gross_on_bs", "reporting_gross_off_bs"]
+scale = 1.0
+where = [
+  { column = "reporting_approach_origin", op = "equals", value = "standardised" },
+  { column = "reporting_class_origin", op = "equals", value = "institution" },
+]
+citation = "CRR Annex II C 07.00 c0010 (p.86) / PS1/26 OF 07.00 c0010 (p.81); CRR Art. 111"
+basis = "As c0700-cgcb-0010-0010."
+
+[[cell]]
+id = "c0700-institution-0010-0200"
+template = "C0700"
+member = "institution"
+row = "0010"
+column = "0200"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "reporting_ead"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "equals", value = "standardised" },
+  { column = "reporting_class", op = "equals", value = "institution" },
+]
+citation = "CRR Annex II C 07.00 c0200 (p.89) / PS1/26 OF 07.00 c0200 (p.85); CRR Art. 111"
+basis = """
+Post-substitution basis untested (limits 1) — and this is the sheet a
+guarantee-driven inflow would land on, so it is the cell most affected by that
+hole rather than least.
+"""
+
+[[cell]]
+id = "c0700-institution-0010-0220"
+template = "C0700"
+member = "institution"
+row = "0010"
+column = "0220"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "rwa_post_factor"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "equals", value = "standardised" },
+  { column = "reporting_class", op = "equals", value = "institution" },
+]
+citation = "CRR Annex II C 07.00 c0220 (p.90) / PS1/26 OF 07.00 c0220 (p.86); CRR Art. 113(1)-(5)"
+basis = """
+Carries the CRR-vs-B31 ECRA divergence: the same CQS2 institution leg is 50%
+under CRR Art. 120 and 30% under PS1/26 Art. 120, so this cell is one of the few
+whose two regimes differ by a RISK WEIGHT rather than by a population.
+"""
+
+[[cell]]
+id = "c0700-retail-0010-0010"
+template = "C0700"
+member = "retail_other"
+row = "0010"
+column = "0010"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = ["reporting_gross_on_bs", "reporting_gross_off_bs"]
+scale = 1.0
+where = [
+  { column = "reporting_approach_origin", op = "equals", value = "standardised" },
+  { column = "reporting_class_origin", op = "equals", value = "retail_other" },
+]
+citation = "CRR Annex II C 07.00 c0010 (p.86) / PS1/26 OF 07.00 c0010 (p.81); CRR Art. 111"
+basis = "As c0700-cgcb-0010-0010."
+
+[[cell]]
+id = "c0700-retail-0010-0200"
+template = "C0700"
+member = "retail_other"
+row = "0010"
+column = "0200"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "reporting_ead"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "equals", value = "standardised" },
+  { column = "reporting_class", op = "equals", value = "retail_other" },
+]
+citation = "CRR Annex II C 07.00 c0200 (p.89) / PS1/26 OF 07.00 c0200 (p.85); CRR Art. 111"
+basis = "Post-substitution basis untested (limits 1)."
+
+[[cell]]
+id = "c0700-retail-0010-0220"
+template = "C0700"
+member = "retail_other"
+row = "0010"
+column = "0220"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "rwa_post_factor"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "equals", value = "standardised" },
+  { column = "reporting_class", op = "equals", value = "retail_other" },
+]
+citation = "CRR Annex II C 07.00 c0220 (p.90) / PS1/26 OF 07.00 c0220 (p.86); CRR Art. 123"
+basis = """
+75% in both regimes, so unlike the institution cell this pair does not exercise a
+regime divergence. Retail granularity is disabled on the B31 config
+(see tests/properties/portfolios.py::config_for), so the class is comparable.
+"""
+
+# --- CRR-only: the pre-supporting-factor twin -------------------------------
+
+[[cell]]
+id = "c0700-corporate-0010-0215"
+template = "C0700"
+member = "corporate"
+row = "0010"
+column = "0215"
+regimes = ["CRR"]
+metric = "sum"
+carrier = "rwa_pre_factor"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "equals", value = "standardised" },
+  { column = "reporting_class", op = "equals", value = "corporate" },
+]
+citation = "CRR Annex II C 07.00 c0215 (p.90); CRR Art. 113(1)-(5), Art. 501, Art. 501a"
+basis = """
+Numerically equal to c0220 on this portfolio (limits 3). The value of the cell is
+that it names a DIFFERENT carrier: a defect that published the post-factor figure
+in both columns, or left c0215 unpopulated, would break here and not there.
+"""
+
+[[cell]]
+id = "c0700-institution-0010-0215"
+template = "C0700"
+member = "institution"
+row = "0010"
+column = "0215"
+regimes = ["CRR"]
+metric = "sum"
+carrier = "rwa_pre_factor"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "equals", value = "standardised" },
+  { column = "reporting_class", op = "equals", value = "institution" },
+]
+citation = "CRR Annex II C 07.00 c0215 (p.90); CRR Art. 113(1)-(5), Art. 501, Art. 501a"
+basis = "As c0700-corporate-0010-0215."
+
+# --- The balance-sheet-side partition, on the one sheet that has both sides --
+
+[[cell]]
+id = "c0700-corporate-0070-0010"
+template = "C0700"
+member = "corporate"
+row = "0070"
+column = "0010"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "reporting_gross_on_bs"
+scale = 1.0
+where = [
+  { column = "reporting_approach_origin", op = "equals", value = "standardised" },
+  { column = "reporting_class_origin", op = "equals", value = "corporate" },
+]
+citation = "CRR Annex II C 07.00 r0070 (p.92) / PS1/26 OF 07.00 r0070 (p.93); CRR Art. 24"
+note = """
+"On balance sheet exposures subject to credit risk. Assets referred to in Article
+24 CRR not included in any other category." The side is taken from the CARRIER,
+not from a Boolean clause, because that is what the instruction describes: the
+on-balance-sheet row holds the on-balance-sheet amount of the class, and a leg
+that has both an on- and an off-balance-sheet component contributes to both rows.
+"""
+basis = """
+Together with r0080 this must partition r0010's c0010 exactly; the test asserts
+that separately. Does not settle which legs are Article 24 assets — a leg wrongly
+typed would move both this row and the total consistently.
+"""
+
+[[cell]]
+id = "c0700-corporate-0080-0010"
+template = "C0700"
+member = "corporate"
+row = "0080"
+column = "0010"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "reporting_gross_off_bs"
+scale = 1.0
+where = [
+  { column = "reporting_approach_origin", op = "equals", value = "standardised" },
+  { column = "reporting_class_origin", op = "equals", value = "corporate" },
+]
+citation = "CRR Annex II C 07.00 r0080 (p.92) / PS1/26 OF 07.00 r0080 (p.93); CRR Annex I"
+note = """
+"Off balance sheet exposures subject to credit risk. Off-balance sheet positions
+comprise the items listed in Annex I CRR." PS1/26 substitutes "the commitments
+and other issued off-balance sheet items listed in Table A1 of Article 111".
+"""
+basis = "As r0070. .claude/LESSONS.md B5 records four C 07.00 defects that lived in exactly these columns because no golden portfolio had an off-balance-sheet leg."
+
+[[cell]]
+id = "c0700-corporate-0070-0200"
+template = "C0700"
+member = "corporate"
+row = "0070"
+column = "0200"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "reporting_ead"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "equals", value = "standardised" },
+  { column = "reporting_class", op = "equals", value = "corporate" },
+  { column = "reporting_on_balance_sheet", op = "is_true" },
+]
+citation = "CRR Annex II C 07.00 r0070 x c0200 (pp. 89, 92); CRR Art. 111"
+basis = """
+Here the side IS a row predicate rather than a carrier choice, because the
+exposure value is one number per leg and the leg sits on one side. That asymmetry
+with r0070 x c0010 is deliberate and is itself a claim: if the generator resolved
+the side the same way in both columns, one of the two cells would break.
+"""
+
+[[cell]]
+id = "c0700-corporate-0080-0200"
+template = "C0700"
+member = "corporate"
+row = "0080"
+column = "0200"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "reporting_ead"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "equals", value = "standardised" },
+  { column = "reporting_class", op = "equals", value = "corporate" },
+  { column = "reporting_on_balance_sheet", op = "is_false" },
+]
+citation = "CRR Annex II C 07.00 r0080 x c0200 (pp. 89, 92); CRR Art. 111, Annex I"
+basis = """
+This is the post-conversion-factor off-balance-sheet exposure value — the cell
+whose gap to r0080 x c0010 is the whole CCF effect. Which CCF bucket each leg
+falls in (c0160-c0190) is NOT authored.
+"""
+
+[[cell]]
+id = "c0700-corporate-0080-0220"
+template = "C0700"
+member = "corporate"
+row = "0080"
+column = "0220"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "rwa_post_factor"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "equals", value = "standardised" },
+  { column = "reporting_class", op = "equals", value = "corporate" },
+  { column = "reporting_on_balance_sheet", op = "is_false" },
+]
+citation = "CRR Annex II C 07.00 r0080 x c0220 (pp. 90, 92); CRR Art. 113(1)-(5)"
+basis = "As c0700-corporate-0080-0200, on the RWEA carrier."
+
+# --- CRR risk-weight rows: the axis nothing else in the estate re-derives ---
+
+[[cell]]
+id = "c0700-cgcb-rw000-0200"
+template = "C0700"
+member = "central_govt_central_bank"
+row = "0140"
+column = "0200"
+regimes = ["CRR"]
+metric = "sum"
+carrier = "reporting_ead"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "equals", value = "standardised" },
+  { column = "reporting_class", op = "equals", value = "central_govt_central_bank" },
+  { column = "reporting_rw", op = "eq_num", value = "0.0" },
+]
+citation = "CRR Annex II C 07.00 r0140 = 0% (p.93); CRR Art. 114(4)"
+basis = """
+The risk-weight axis is authored for CRR only. PS1/26 renumbered these rows and
+the row-to-weight mapping lives in the template workbook rather than in the
+instruction text (.claude/LESSONS.md E4), so a B31 twin would rest on the
+generator's own row labels — which is the one source this file may not use.
+"""
+
+[[cell]]
+id = "c0700-institution-rw050-0200"
+template = "C0700"
+member = "institution"
+row = "0200"
+column = "0200"
+regimes = ["CRR"]
+metric = "sum"
+carrier = "reporting_ead"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "equals", value = "standardised" },
+  { column = "reporting_class", op = "equals", value = "institution" },
+  { column = "reporting_rw", op = "eq_num", value = "0.5" },
+]
+citation = "CRR Annex II C 07.00 r0200 = 50% (p.93); CRR Art. 120(1) Table 3"
+basis = "As c0700-cgcb-rw000-0200. Confirms the CQS2 institution weight lands in the 50% row and not the 30% one."
+
+[[cell]]
+id = "c0700-institution-rw050-0220"
+template = "C0700"
+member = "institution"
+row = "0200"
+column = "0220"
+regimes = ["CRR"]
+metric = "sum"
+carrier = "rwa_post_factor"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "equals", value = "standardised" },
+  { column = "reporting_class", op = "equals", value = "institution" },
+  { column = "reporting_rw", op = "eq_num", value = "0.5" },
+]
+citation = "CRR Annex II C 07.00 r0200 x c0220 (pp. 90, 93); CRR Art. 113(1)-(5)"
+basis = "As c0700-institution-rw050-0200, on the RWEA carrier."
+
+[[cell]]
+id = "c0700-corporate-rw100-0200"
+template = "C0700"
+member = "corporate"
+row = "0230"
+column = "0200"
+regimes = ["CRR"]
+metric = "sum"
+carrier = "reporting_ead"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "equals", value = "standardised" },
+  { column = "reporting_class", op = "equals", value = "corporate" },
+  { column = "reporting_rw", op = "eq_num", value = "1.0" },
+]
+citation = "CRR Annex II C 07.00 r0230 = 100% (p.93); CRR Art. 122(1) Table 6"
+basis = """
+As c0700-cgcb-rw000-0200. Equals the class total here because every SA corporate
+leg is CQS3 at 100% — so this cell tests the ROW ADDRESS, not the partition.
+"""
+
+[[cell]]
+id = "c0700-retail-rw075-0200"
+template = "C0700"
+member = "retail_other"
+row = "0220"
+column = "0200"
+regimes = ["CRR"]
+metric = "sum"
+carrier = "reporting_ead"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "equals", value = "standardised" },
+  { column = "reporting_class", op = "equals", value = "retail_other" },
+  { column = "reporting_rw", op = "eq_num", value = "0.75" },
+]
+citation = "CRR Annex II C 07.00 r0220 = 75% (p.93); CRR Art. 123"
+basis = "As c0700-corporate-rw100-0200."
+
+# ===========================================================================
+# C 08.01 / OF 08.01 — CR IRB 1, published once per IRB exposure class.
+#
+# The sheet population is "the exposures for which the risk weighted exposure
+# amounts are calculated in accordance with Articles 151 to 157" (CRR Annex II
+# ¶73), which INCLUDES the Art. 153(5) slotting approach — row 0080 is
+# "SPECIALISED LENDING SLOTTING APPROACH: TOTAL". So every sheet's approach
+# clause admits foundation_irb, advanced_irb and slotting, and it is the class
+# clause that separates them; the slotting legs carry the specialised_lending
+# class and so appear on that sheet alone.
+#
+# Columns (CRR / PS1/26 where renumbered):
+#   c0020  ORIGINAL EXPOSURE PRE-CONVERSION FACTORS — "the exposure value before
+#          taking into account any value adjustments, provisions, effects due to
+#          credit risk mitigation techniques or credit conversion factors"
+#          (CRR p.98, PS1/26 p.102). Gross, both sides, ORIGIN class.
+#   c0110  EXPOSURE VALUE — Art. 166 / Art. 166A-166D. POST-substitution.
+#   c0255  (CRR) RWEA pre supporting factors.
+#   c0251  (B31) RISK-WEIGHTED EXPOSURE AMOUNT PRE-ADJUSTMENTS — "The adjustments
+#          set out in Articles 153(5A) and 154(4A) shall not be taken into
+#          account" (PS1/26 p.111).
+#   c0260  RWEA after supporting factors (CRR) / after adjustments (B31, "the
+#          value reported in column 0251 and adjust for values reported in
+#          columns 0252 to 0254", p.112).
+#   c0276  (B31) NON-MODELLED APPROACHES RISK-WEIGHTED EXPOSURE AMOUNT —
+#          "Standardised approach equivalent risk-weighted exposure amount ...
+#          for the purpose of institutions' compliance with the output floor"
+#          (p.113). This is the SA-equivalent every leg carries, `sa_rwa`.
+#   c0280  (CRR) EXPECTED LOSS AMOUNT / (B31) EL pre post-model adjustments.
+#   c0282  (B31) EXPECTED LOSS AMOUNT AFTER POST-MODEL ADJUSTMENTS.
+#
+# Rows: 0010 TOTAL EXPOSURES; 0020 on-balance-sheet items; 0030 off-balance-sheet
+#       items; 0070 exposures assigned to obligor grades or pools: total;
+#       0080 specialised lending slotting approach: total (CRR pp. 105-107,
+#       PS1/26 pp. 115-117).
+# ===========================================================================
+
+[[cell]]
+id = "c0801-corporate-0010-0020"
+template = "C0801"
+member = "corporate"
+row = "0010"
+column = "0020"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = ["reporting_gross_on_bs", "reporting_gross_off_bs"]
+scale = 1.0
+where = [
+  { column = "reporting_approach_origin", op = "in", values = ["foundation_irb", "advanced_irb", "slotting"] },
+  { column = "reporting_class_origin", op = "equals", value = "corporate" },
+]
+citation = "CRR Annex II C 08.01 c0020 (p.98) / PS1/26 OF 08.01 c0020 (p.102); CRR Art. 24, Art. 166"
+basis = """
+Origin-class, gross, pre-CCF (limits 1). The FIRB corporate leg carries an
+off-balance-sheet commitment so both carriers are live on this sheet.
+"""
+
+[[cell]]
+id = "c0801-corporate-0010-0110"
+template = "C0801"
+member = "corporate"
+row = "0010"
+column = "0110"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "reporting_ead"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "in", values = ["foundation_irb", "advanced_irb", "slotting"] },
+  { column = "reporting_class", op = "equals", value = "corporate" },
+]
+citation = "CRR Annex II C 08.01 c0110 (p.100) / PS1/26 OF 08.01 c0110 (p.106); CRR Art. 166"
+basis = "Post-substitution basis untested (limits 1)."
+
+[[cell]]
+id = "c0801-corporate-0010-0260"
+template = "C0801"
+member = "corporate"
+row = "0010"
+column = "0260"
+regimes = ["CRR"]
+metric = "sum"
+carrier = "rwa_final"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "in", values = ["foundation_irb", "advanced_irb", "slotting"] },
+  { column = "reporting_class", op = "equals", value = "corporate" },
+]
+citation = "CRR Annex II C 08.01 c0260 (p.104); CRR Art. 153(1)-(4)"
+basis = """
+CRR has no portfolio output floor, so `rwa_final` IS the post-supporting-factor
+RWEA with nothing else folded in. The B31 twin is a separate cell on
+`rwa_pre_floor` for exactly that reason.
+"""
+
+[[cell]]
+id = "c0801-corporate-0010-0255"
+template = "C0801"
+member = "corporate"
+row = "0010"
+column = "0255"
+regimes = ["CRR"]
+metric = "sum"
+carrier = "rwa"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "in", values = ["foundation_irb", "advanced_irb", "slotting"] },
+  { column = "reporting_class", op = "equals", value = "corporate" },
+]
+citation = "CRR Annex II C 08.01 c0255 (p.104); CRR Art. 153(1)-(4), Art. 501, Art. 501a"
+basis = "Numerically equal to c0260 here (limits 3); the carrier differs, which is the assertion."
+
+[[cell]]
+id = "c0801-corporate-0010-0280"
+template = "C0801"
+member = "corporate"
+row = "0010"
+column = "0280"
+regimes = ["CRR"]
+metric = "sum"
+carrier = "expected_loss"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "in", values = ["foundation_irb", "advanced_irb", "slotting"] },
+  { column = "reporting_class", op = "equals", value = "corporate" },
+]
+citation = "CRR Annex II C 08.01 c0280 (p.105); CRR Art. 5(3), Art. 158"
+basis = """
+The EL column is the one money cell on this sheet that is NOT an RWEA, so a
+defect that published RWEA-derived numbers across the sheet would break here
+first. Value adjustments (c0290) are not authored.
+"""
+
+[[cell]]
+id = "c0801-corporate-0010-0251"
+template = "C0801"
+member = "corporate"
+row = "0010"
+column = "0251"
+regimes = ["B31"]
+metric = "sum"
+carrier = "rwa"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "in", values = ["foundation_irb", "advanced_irb", "slotting"] },
+  { column = "reporting_class", op = "equals", value = "corporate" },
+]
+citation = "PS1/26 Annex II OF 08.01 c0251 (p.111); PS1/26 Art. 153, Art. 153(5A), Art. 154(4A)"
+basis = """
+`rwa` rather than `rwa_pre_adjustments`: the latter is null on a slotting leg,
+which has no Art. 153(5A)/154(4A) adjustments to exclude, so its pre-adjustment
+RWEA simply IS its RWEA. No leg here carries a post-model adjustment, so c0251
+and c0260 cannot be told apart on this portfolio (limits 5).
+"""
+
+[[cell]]
+id = "c0801-corporate-0010-0260-b31"
+template = "C0801"
+member = "corporate"
+row = "0010"
+column = "0260"
+regimes = ["B31"]
+metric = "sum"
+carrier = "rwa_pre_floor"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "in", values = ["foundation_irb", "advanced_irb", "slotting"] },
+  { column = "reporting_class", op = "equals", value = "corporate" },
+]
+citation = "PS1/26 Annex II OF 08.01 c0260 (p.112); PS1/26 Art. 153, Art. 154"
+basis = """
+`rwa_pre_floor`, not `rwa_final`: c0260 is defined as c0251 adjusted for
+c0252-c0254 only, and the Art. 92(2a) portfolio floor is not one of those
+adjustments. The two carriers are equal on this portfolio (limits 4), so the
+choice is stated but not tested — a portfolio where the floor binds would settle
+it, and would show whether the template folds a portfolio-level max into a
+per-class RWEA.
+"""
+
+[[cell]]
+id = "c0801-corporate-0010-0276"
+template = "C0801"
+member = "corporate"
+row = "0010"
+column = "0276"
+regimes = ["B31"]
+metric = "sum"
+carrier = "sa_rwa"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "in", values = ["foundation_irb", "advanced_irb", "slotting"] },
+  { column = "reporting_class", op = "equals", value = "corporate" },
+]
+citation = "PS1/26 Annex II OF 08.01 c0276 (p.113); PS1/26 Art. 92(3a), Art. 113"
+basis = """
+The SA-equivalent recomputation. This is the only per-class cell in the estate
+that reads `sa_rwa`, and it is the number the output floor is built on, so a
+defect here propagates straight into OF 02.00 c0020 and into the floor itself.
+Does not settle whether the SA-equivalent risk weight is the RIGHT one — that is
+an engine question, not a template question.
+"""
+
+[[cell]]
+id = "c0801-corporate-0010-0282"
+template = "C0801"
+member = "corporate"
+row = "0010"
+column = "0282"
+regimes = ["B31"]
+metric = "sum"
+carrier = "expected_loss"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "in", values = ["foundation_irb", "advanced_irb", "slotting"] },
+  { column = "reporting_class", op = "equals", value = "corporate" },
+]
+citation = "PS1/26 Annex II OF 08.01 c0282 (p.113); PS1/26 Art. 158, Art. 158(6A)"
+basis = "`expected_loss` is the post-adjustment figure. c0280 is not authored (limits 5)."
+
+[[cell]]
+id = "c0801-corporate-0020-0020"
+template = "C0801"
+member = "corporate"
+row = "0020"
+column = "0020"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "reporting_gross_on_bs"
+scale = 1.0
+where = [
+  { column = "reporting_approach_origin", op = "in", values = ["foundation_irb", "advanced_irb", "slotting"] },
+  { column = "reporting_class_origin", op = "equals", value = "corporate" },
+]
+citation = "CRR Annex II C 08.01 r0020 (p.106) / PS1/26 OF 08.01 r0020 (p.115); CRR Art. 24"
+basis = "As the C 07.00 r0070 pair. Must partition r0010 with r0030; asserted separately."
+
+[[cell]]
+id = "c0801-corporate-0030-0020"
+template = "C0801"
+member = "corporate"
+row = "0030"
+column = "0020"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "reporting_gross_off_bs"
+scale = 1.0
+where = [
+  { column = "reporting_approach_origin", op = "in", values = ["foundation_irb", "advanced_irb", "slotting"] },
+  { column = "reporting_class_origin", op = "equals", value = "corporate" },
+]
+citation = "CRR Annex II C 08.01 r0030 (p.106) / PS1/26 OF 08.01 r0030 (p.115); CRR Art. 166(8), Annex I"
+basis = """
+Previously dead: no IRB leg in any golden portfolio carried an off-balance-sheet
+commitment, so this row published nothing for the template's life
+(.claude/LESSONS.md B5, in its IRB form). The re-derivation portfolio adds one.
+"""
+
+[[cell]]
+id = "c0801-institution-0010-0020"
+template = "C0801"
+member = "institution"
+row = "0010"
+column = "0020"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = ["reporting_gross_on_bs", "reporting_gross_off_bs"]
+scale = 1.0
+where = [
+  { column = "reporting_approach_origin", op = "in", values = ["foundation_irb", "advanced_irb", "slotting"] },
+  { column = "reporting_class_origin", op = "equals", value = "institution" },
+]
+citation = "CRR Annex II C 08.01 c0020 (p.98) / PS1/26 OF 08.01 c0020 (p.102); CRR Art. 24, Art. 166"
+basis = "As c0801-corporate-0010-0020."
+
+[[cell]]
+id = "c0801-institution-0010-0110"
+template = "C0801"
+member = "institution"
+row = "0010"
+column = "0110"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "reporting_ead"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "in", values = ["foundation_irb", "advanced_irb", "slotting"] },
+  { column = "reporting_class", op = "equals", value = "institution" },
+]
+citation = "CRR Annex II C 08.01 c0110 (p.100) / PS1/26 OF 08.01 c0110 (p.106); CRR Art. 166"
+basis = "Post-substitution basis untested (limits 1)."
+
+[[cell]]
+id = "c0801-institution-0010-0260"
+template = "C0801"
+member = "institution"
+row = "0010"
+column = "0260"
+regimes = ["CRR"]
+metric = "sum"
+carrier = "rwa_final"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "in", values = ["foundation_irb", "advanced_irb", "slotting"] },
+  { column = "reporting_class", op = "equals", value = "institution" },
+]
+citation = "CRR Annex II C 08.01 c0260 (p.104); CRR Art. 153(1)-(4)"
+basis = "As c0801-corporate-0010-0260. This leg also carries the Art. 153(2) FI correlation multiplier."
+
+[[cell]]
+id = "c0801-institution-0010-0260-b31"
+template = "C0801"
+member = "institution"
+row = "0010"
+column = "0260"
+regimes = ["B31"]
+metric = "sum"
+carrier = "rwa_pre_floor"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "in", values = ["foundation_irb", "advanced_irb", "slotting"] },
+  { column = "reporting_class", op = "equals", value = "institution" },
+]
+citation = "PS1/26 Annex II OF 08.01 c0260 (p.112); PS1/26 Art. 153"
+basis = "As c0801-corporate-0010-0260-b31."
+
+[[cell]]
+id = "c0801-institution-0010-0276"
+template = "C0801"
+member = "institution"
+row = "0010"
+column = "0276"
+regimes = ["B31"]
+metric = "sum"
+carrier = "sa_rwa"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "in", values = ["foundation_irb", "advanced_irb", "slotting"] },
+  { column = "reporting_class", op = "equals", value = "institution" },
+]
+citation = "PS1/26 Annex II OF 08.01 c0276 (p.113); PS1/26 Art. 92(3a), Art. 113"
+basis = """
+The most informative c0276 cell in the set: the SA-equivalent (2,700,000 at the
+30% ECRA weight of PS1/26 Art. 120) is LARGER than the modelled 1,448,098.83, and
+on the corporate sheet the inequality runs the other way (10,750,000 SA-equivalent
+against 12,716,194.89 modelled). A defect that silently published the modelled
+figure in c0276 therefore cannot hide behind a sign convention on this portfolio.
+"""
+
+[[cell]]
+id = "c0801-institution-0010-0282"
+template = "C0801"
+member = "institution"
+row = "0010"
+column = "0282"
+regimes = ["B31"]
+metric = "sum"
+carrier = "expected_loss"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "in", values = ["foundation_irb", "advanced_irb", "slotting"] },
+  { column = "reporting_class", op = "equals", value = "institution" },
+]
+citation = "PS1/26 Annex II OF 08.01 c0282 (p.113); PS1/26 Art. 158"
+basis = "As c0801-corporate-0010-0282."
+
+[[cell]]
+id = "c0801-retail-0010-0110"
+template = "C0801"
+member = "retail_other"
+row = "0010"
+column = "0110"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "reporting_ead"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "in", values = ["foundation_irb", "advanced_irb", "slotting"] },
+  { column = "reporting_class", op = "equals", value = "retail_other" },
+]
+citation = "CRR Annex II C 08.01 c0110 (p.100) / PS1/26 OF 08.01 c0110 (p.106); CRR Art. 166"
+basis = "Post-substitution basis untested (limits 1). Retail is A-IRB only (Art. 151(4))."
+
+[[cell]]
+id = "c0801-retail-0010-0260"
+template = "C0801"
+member = "retail_other"
+row = "0010"
+column = "0260"
+regimes = ["CRR"]
+metric = "sum"
+carrier = "rwa_final"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "in", values = ["foundation_irb", "advanced_irb", "slotting"] },
+  { column = "reporting_class", op = "equals", value = "retail_other" },
+]
+citation = "CRR Annex II C 08.01 c0260 (p.104); CRR Art. 154(1)"
+basis = "As c0801-corporate-0010-0260, on the Art. 154(1) retail formula."
+
+[[cell]]
+id = "c0801-retail-0010-0260-b31"
+template = "C0801"
+member = "retail_other"
+row = "0010"
+column = "0260"
+regimes = ["B31"]
+metric = "sum"
+carrier = "rwa_pre_floor"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "in", values = ["foundation_irb", "advanced_irb", "slotting"] },
+  { column = "reporting_class", op = "equals", value = "retail_other" },
+]
+citation = "PS1/26 Annex II OF 08.01 c0260 (p.112); PS1/26 Art. 154"
+basis = "As c0801-corporate-0010-0260-b31."
+
+[[cell]]
+id = "c0801-retail-0010-0276"
+template = "C0801"
+member = "retail_other"
+row = "0010"
+column = "0276"
+regimes = ["B31"]
+metric = "sum"
+carrier = "sa_rwa"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "in", values = ["foundation_irb", "advanced_irb", "slotting"] },
+  { column = "reporting_class", op = "equals", value = "retail_other" },
+]
+citation = "PS1/26 Annex II OF 08.01 c0276 (p.113); PS1/26 Art. 92(3a), Art. 123"
+basis = "As c0801-institution-0010-0276; the SA-equivalent is 75% of EAD and again exceeds the modelled figure."
+
+[[cell]]
+id = "c0801-sl-0010-0020"
+template = "C0801"
+member = "specialised_lending"
+row = "0010"
+column = "0020"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = ["reporting_gross_on_bs", "reporting_gross_off_bs"]
+scale = 1.0
+where = [
+  { column = "reporting_approach_origin", op = "in", values = ["foundation_irb", "advanced_irb", "slotting"] },
+  { column = "reporting_class_origin", op = "equals", value = "specialised_lending" },
+]
+citation = "CRR Annex II C 08.01 c0020 (p.98) / PS1/26 OF 08.01 c0020 (p.102); CRR Art. 147(8), Art. 166"
+basis = "As c0801-corporate-0010-0020."
+
+[[cell]]
+id = "c0801-sl-0080-0110"
+template = "C0801"
+member = "specialised_lending"
+row = "0080"
+column = "0110"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "reporting_ead"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "equals", value = "slotting" },
+  { column = "reporting_class", op = "equals", value = "specialised_lending" },
+]
+citation = "CRR Annex II C 08.01 r0080 (p.107) / PS1/26 OF 08.01 r0080 (p.117); CRR Art. 153(5)"
+note = """
+"SPECIALISED LENDING SLOTTING APPROACH: TOTAL. Article 153(5) CRR. This shall
+only apply to the exposure class corporate - specialised lending." The row is the
+slotting counterpart of r0070 ("EXPOSURES ASSIGNED TO OBLIGOR GRADES OR POOLS")
+and the two must not double-count, which the test asserts.
+"""
+basis = "Post-substitution basis untested (limits 1)."
+
+[[cell]]
+id = "c0801-sl-0080-0260"
+template = "C0801"
+member = "specialised_lending"
+row = "0080"
+column = "0260"
+regimes = ["CRR"]
+metric = "sum"
+carrier = "rwa_final"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "equals", value = "slotting" },
+  { column = "reporting_class", op = "equals", value = "specialised_lending" },
+]
+citation = "CRR Annex II C 08.01 r0080 x c0260 (pp. 104, 107); CRR Art. 153(5)"
+basis = "As c0801-corporate-0010-0260, on the slotting category table rather than a formula."
+
+[[cell]]
+id = "c0801-sl-0080-0276"
+template = "C0801"
+member = "specialised_lending"
+row = "0080"
+column = "0276"
+regimes = ["B31"]
+metric = "sum"
+carrier = "sa_rwa"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "equals", value = "slotting" },
+  { column = "reporting_class", op = "equals", value = "specialised_lending" },
+]
+citation = "PS1/26 Annex II OF 08.01 r0080 x c0276 (pp. 113, 117); PS1/26 Art. 92(3a), Art. 122A/122B"
+basis = """
+The SA-equivalent of a slotting leg is its PS1/26 Art. 122B specialised-lending
+weight, which is a different table from the slotting one, so this cell is the only
+place the two are asserted to differ.
+"""
+
+[[cell]]
+id = "c0801-sl-0080-0282"
+template = "C0801"
+member = "specialised_lending"
+row = "0080"
+column = "0282"
+regimes = ["B31"]
+metric = "sum"
+carrier = "expected_loss"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "equals", value = "slotting" },
+  { column = "reporting_class", op = "equals", value = "specialised_lending" },
+]
+citation = "PS1/26 Annex II OF 08.01 c0282 (p.113); CRR Art. 158(6), PS1/26 Art. 158"
+basis = """
+A slotting leg's EL is a category-driven rate rather than PD x LGD x EAD, and
+`el_pre_adjustment` / `el_after_adjustment` are both null on it — so the carrier
+that works here is the plain `expected_loss`. That the engine agrees is evidence
+its slotting EL reaches the template at all (.claude/LESSONS.md B4).
+"""
+
+# ===========================================================================
+# C 08.02 / OF 08.02 — CR IRB 2, the same columns broken down by obligor grade.
+#
+# "Instructions for each of these columns are the same as for the corresponding
+# numbered columns in CR IRB 1 template" (CRR Annex II p.107), and the rows are
+# "filled in in the order corresponding to the PD assigned to the obligor grade
+# or pool". The rows are therefore a NUMERIC PARTITION of the sheet's population
+# by regulatory PD, and unlike C 08.03/CR9 the grades do not nest — so summing
+# the rows is legitimate and the row addresses are intervals.
+#
+# The PD is the one used in the calculation, i.e. AFTER the Art. 160(1)/163(1)
+# input floors: PS1/26 c0280 requires the reported figures to be "based on the
+# risk parameters approved by the PRA following the application of any applicable
+# PD and LGD input floors". Carrier for the axis: `pd_floored`.
+# ===========================================================================
+
+[[cell]]
+id = "c0802-corporate-pd025-0110"
+template = "C0802"
+member = "corporate"
+row = "0.25% - 0.50%"
+column = "0110"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "reporting_ead"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "in", values = ["foundation_irb", "advanced_irb"] },
+  { column = "reporting_class", op = "equals", value = "corporate" },
+  { column = "pd_floored", op = "ge", value = "0.0025" },
+  { column = "pd_floored", op = "lt", value = "0.005" },
+]
+citation = "CRR Annex II C 08.02 rows/columns (p.108) referring to C 08.01 c0110 (p.100); CRR Art. 180"
+basis = """
+Two bands are populated on this sheet, so the band boundary is load-bearing: a
+cell that took the whole class would break here. Slotting is excluded because
+C 08.02 is a grade breakdown and a slotting leg has no obligor grade. The band
+LABEL is the generated row_ref — the boundaries are the published COREP scale,
+but their rendering as a string is not something the instruction text fixes, so
+the address itself is the one part of this cell not independently sourced.
+"""
+
+[[cell]]
+id = "c0802-corporate-pd075-0110"
+template = "C0802"
+member = "corporate"
+row = "0.75% - 2.50%"
+column = "0110"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "reporting_ead"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "in", values = ["foundation_irb", "advanced_irb"] },
+  { column = "reporting_class", op = "equals", value = "corporate" },
+  { column = "pd_floored", op = "ge", value = "0.0075" },
+  { column = "pd_floored", op = "lt", value = "0.025" },
+]
+citation = "CRR Annex II C 08.02 rows/columns (p.108) referring to C 08.01 c0110 (p.100); CRR Art. 180"
+basis = "As c0802-corporate-pd025-0110."
+
+# ===========================================================================
+# C 02.00 / OF 02.00 — own funds requirements (CA2), the footing template.
+#
+# Every row of this template is a RISK EXPOSURE AMOUNT, not an own funds figure:
+# row 0010 is "TOTAL RISK EXPOSURE AMOUNT" (Art. 92(3)), and the EBA validation
+# rule shipped in this repo makes the hierarchy explicit —
+#   v0204_m: {r0010} = {r0040} + {r0490} + {r0520} + {r0590} + {r0630} + {r0640}
+#            + {r0680} + {r0690}
+#   v0205_m: {r0040} = {r0050} + {r0240} + {r0460} + {r0470}
+#   v0207_m: {r0060} = {r0070} + ... + {r0211}
+#   v0210_m: {r0250} = {r0260} + {r0270} + {r0280} + {r0290} + {r0300}
+#   v0211_m: {r0310} = {r0320} + ... + {r0410}
+# so r0040 is the credit-risk RWEA, r0050 the standardised total, r0240 the IRB
+# total, r0250 the F-IRB total and r0310 the A-IRB total. PS1/26 keeps all five
+# numbers and re-labels the children (OF 02.00 rows, pp. 28-32).
+#
+# The single CRR column and B31 column 0010 are "All approaches"; B31 c0020 is
+# "Standardised approaches only (output floor)" — "Rows containing totals by risk
+# type should reflect entire current portfolios using standardised approaches
+# only" (PS1/26 Annex II p.39).
+# ===========================================================================
+
+[[cell]]
+id = "c0200-0010-0010"
+template = "C0200"
+row = "0010"
+column = "0010"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "rwa_final"
+scale = 1.0
+where = []
+citation = "CRR Annex II C 02.00 r0010 (p.28) / PS1/26 OF 02.00 r0010 (p.28); CRR Art. 92(3)"
+basis = """
+The whole-ledger total. Equal to OV1 row 29 by arithmetic — the two are authored
+against different instruction documents, so their agreement is a cross-template
+measurement rather than a restatement.
+"""
+
+[[cell]]
+id = "c0200-0040-0010"
+template = "C0200"
+row = "0040"
+column = "0010"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "rwa_final"
+scale = 1.0
+where = []
+citation = "CRR Annex II C 02.00 r0040 (p.28) / PS1/26 OF 02.00 r0040 (p.29); CRR Art. 92(3)(a),(f)"
+note = """
+"1.1 RISK WEIGHTED EXPOSURE AMOUNTS FOR CREDIT, COUNTERPARTY CREDIT AND DILUTION
+RISKS AND FREE DELIVERIES. Points (a) and (f) of Article 92(3) CRR." An RWEA row,
+and v0204_m sums it into r0010 alongside the other risk types — an own funds
+figure in this row would make r0010 = r0040 impossible on a credit-only book.
+"""
+basis = """
+Equals r0010 on a credit-risk-only book, so this cell does not settle the
+credit/market/operational split. It DOES settle whether the row carries an RWEA
+or an own funds requirement, which is the 12.5x question.
+"""
+known_difference = """
+The engine labels this row "TOTAL OWN FUNDS REQUIREMENTS" and publishes 8% of the
+TREA in it: 2,407,878.18 (CRR) / 2,036,887.99 (B31) against a re-derived
+30,098,477.21 / 25,461,099.93. The engine is believed WRONG. Every row of C 02.00
+is a risk exposure amount — r0010 is "TOTAL RISK EXPOSURE AMOUNT", and the EBA
+rule v0204_m shipped in this repo sums r0040 into r0010 with the other risk
+types, which is arithmetically impossible if r0040 is one-twelve-and-a-halfth of
+its own parent. Own funds requirements are C 03.00's subject, not CA2's. Direction
+of the error: the credit-risk RWEA line of the return understates by
+27,690,599.04 (CRR) / 23,424,211.93 (B31). Logged rather than fixed: the operator
+instruction for this run is that new defects are registered now and actioned in a
+later run.
+"""
+
+[[cell]]
+id = "c0200-0050-0010"
+template = "C0200"
+row = "0050"
+column = "0010"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "rwa_final"
+scale = 1.0
+where = [{ column = "reporting_approach", op = "in", values = ["standardised", "equity"] }]
+citation = "CRR Annex II C 02.00 r0050 (p.29) / PS1/26 OF 02.00 r0050 (p.29); CRR Chapter 2 of Title II of Part Three"
+note = """
+"1.1.1 Standardised Approach (SA). CR SA and SEC SA templates at the level of
+total exposures." The equity legs are inside it for the same reason as OV1 row 2:
+this calculator risk-weights equity through the SA equity weights, and CRR
+Annex II gives equity its own SA class row (0210) under this parent.
+"""
+basis = "Post-substitution basis untested (limits 1). Securitisation is out of scope."
+known_difference = """
+The engine publishes the WHOLE credit-risk RWEA in r0050 — 30,098,477.21 (CRR) /
+25,461,099.93 (B31) — against a re-derived standardised total of 9,850,000.00 /
+6,187,500.00. Same root cause as c0200-0040-0010: the approach parents sit one
+level up from where the published template puts them, so r0050 holds r0040's
+content. The engine's own r0060 ("SA exposure classes excluding securitisation
+positions") already carries the correct standardised figure and ties to the class
+rows, which is what makes the misplacement visible rather than ambiguous.
+Direction: the standardised line overstates by 20,248,477.21 / 19,273,599.93.
+"""
+
+[[cell]]
+id = "c0200-0060-0010"
+template = "C0200"
+row = "0060"
+column = "0010"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "rwa_final"
+scale = 1.0
+where = [{ column = "reporting_approach", op = "in", values = ["standardised", "equity"] }]
+citation = "CRR Annex II C 02.00 r0060 (p.29) / PS1/26 OF 02.00 r0060 (p.29); CRR Art. 112"
+basis = """
+Authored identically to r0050 because the instruction text makes them equal on a
+book with no securitisation positions ("SA exposure classes excluding
+securitisation positions"). That the engine agrees here and not on r0050 is what
+localises the r0050 defect to the row address rather than to the population.
+"""
+
+[[cell]]
+id = "c0200-0120-0010"
+template = "C0200"
+row = "0120"
+column = "0010"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "rwa_final"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "equals", value = "standardised" },
+  { column = "reporting_class", op = "equals", value = "institution" },
+]
+citation = "CRR Annex II C 02.00 r0120 (p.29) / PS1/26 OF 02.00 r0120 (p.30); CRR Art. 112(1)(f)"
+basis = """
+"See CR SA template", so this must equal C 07.00[institution] r0010 c0220. It is
+authored on `rwa_final` while that cell is authored on `rwa_post_factor` — the
+two carriers coincide on an SA leg, and stating them differently means a defect
+that diverged them would break one cell and not the other.
+"""
+
+[[cell]]
+id = "c0200-0130-0010"
+template = "C0200"
+row = "0130"
+column = "0010"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "rwa_final"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "equals", value = "standardised" },
+  { column = "reporting_class", op = "equals", value = "corporate" },
+]
+citation = "CRR Annex II C 02.00 r0130 (p.29) / PS1/26 OF 02.00 r0130 (p.30); CRR Art. 112(1)(g)"
+basis = "As c0200-0120-0010."
+
+[[cell]]
+id = "c0200-0140-0010"
+template = "C0200"
+row = "0140"
+column = "0010"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "rwa_final"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "equals", value = "standardised" },
+  { column = "reporting_class", op = "equals", value = "retail_other" },
+]
+citation = "CRR Annex II C 02.00 r0140 (p.29) / PS1/26 OF 02.00 r0140 (p.30); CRR Art. 112(1)(h)"
+basis = "As c0200-0120-0010."
+
+[[cell]]
+id = "c0200-0210-0010"
+template = "C0200"
+row = "0210"
+column = "0010"
+regimes = ["CRR"]
+metric = "sum"
+carrier = "rwa_final"
+scale = 1.0
+where = [{ column = "reporting_approach", op = "equals", value = "equity" }]
+citation = "CRR Annex II C 02.00 r0210 (p.30); CRR Art. 112(1)(p), Art. 133"
+basis = """
+CRR only. Under Basel 3.1 the same leg's `rwa_final` is NULL — the defect the OV1
+xfail records — so a B31 twin would agree with the engine at 0.00 while 3,750,000
+of RWEA is missing from the return. Authoring it would manufacture false comfort;
+`test_every_equity_leg_carries_its_rwea_to_rwa_final` is where that lives.
+"""
+
+[[cell]]
+id = "c0200-0240-0010"
+template = "C0200"
+row = "0240"
+column = "0010"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "rwa_final"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "in", values = ["foundation_irb", "advanced_irb", "slotting"] },
+]
+citation = "CRR Annex II C 02.00 r0240 (p.30) / PS1/26 OF 02.00 r0240 (p.31); CRR Chapter 3 of Title II of Part Three"
+note = """
+"1.1.2 Internal ratings based Approach (IRB)". v0205_m sums r0050 and r0240 into
+r0040, and v0209_m (deleted, but numbered on the same scheme) decomposed r0240
+into r0250 + r0310 + r0420 + r0430 + r0450 — so r0240 is the IRB TOTAL, slotting
+and IRB equity included.
+"""
+basis = """
+No IRB-method equity leg exists here (Basel 3.1 Art. 147A removes it and the CRR
+run routes equity through the SA weights), so the clause's silence about
+`equity` is untested.
+"""
+known_difference = """
+The engine publishes the F-IRB total in r0240 — 9,117,934.37 (CRR) /
+14,164,293.72 (B31) — against a re-derived IRB total of 20,248,477.21 /
+19,273,599.93. It carries the correct IRB total in r0220, a row the published
+CRR and PS1/26 templates do not contain (both go 0211 -> 0240). Same single root
+cause as c0200-0040-0010 and c0200-0050-0010: the approach parents are shifted
+one level. Direction: the IRB line understates by 11,130,542.84 / 5,109,306.20.
+"""
+
+[[cell]]
+id = "c0200-0250-0010"
+template = "C0200"
+row = "0250"
+column = "0010"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "rwa_final"
+scale = 1.0
+where = [{ column = "reporting_approach", op = "equals", value = "foundation_irb" }]
+citation = "CRR Annex II C 02.00 r0250 (p.30) / PS1/26 OF 02.00 r0250 (p.31); CRR Art. 143, Art. 151"
+note = """
+CRR: "1.1.2.1 IRB Approaches when neither own estimates of LGD nor Conversion
+Factors are used" — the F-IRB total, decomposed by v0210_m into r0260-r0300.
+PS1/26: "1.1.2.1 Exposures subject to the FIRB approach", decomposed into r0271
+and r0290-r0297.
+"""
+basis = "Post-substitution basis untested (limits 1)."
+known_difference = """
+The engine publishes F-IRB INSTITUTIONS in r0250 — 1,726,857.86 (CRR) /
+1,448,098.83 (B31) — against a re-derived F-IRB total of 9,117,934.37 /
+14,164,293.72. Under B31 the frame proves it internally: r0271 ("F-IRB —
+Institutions (detail)", which IS the PS1/26 institutions child) carries the same
+1,448,098.83, so one figure is published twice and the parent total is nowhere.
+Direction: the F-IRB line understates by 7,391,076.51 (CRR) / 12,716,194.89 (B31).
+"""
+
+[[cell]]
+id = "c0200-0310-0010"
+template = "C0200"
+row = "0310"
+column = "0010"
+regimes = ["CRR", "B31"]
+metric = "sum"
+carrier = "rwa_final"
+scale = 1.0
+where = [{ column = "reporting_approach", op = "equals", value = "advanced_irb" }]
+citation = "CRR Annex II C 02.00 r0310 (p.31) / PS1/26 OF 02.00 r0310 (p.31); CRR Art. 143, Art. 151"
+note = """
+CRR: "1.1.2.2 IRB Approaches when own estimates of LGD and/or Conversion Factor
+are used", decomposed by v0211_m into r0320-r0410. PS1/26: "1.1.2.2 Exposures
+subject to the AIRB approach".
+"""
+basis = "Post-substitution basis untested (limits 1)."
+known_difference = """
+The engine publishes 0.00 in r0310 against a re-derived A-IRB total of
+6,230,542.84 (CRR) / 209,306.20 (B31): its r0310 is labelled "A-IRB — Central
+governments and central banks", the row the published template numbers 0320. The
+A-IRB total sits in the engine's r0300 (measured: exactly 6,230,542.84 /
+209,306.20), which the published templates do not contain. Same root cause.
+Direction: the A-IRB line understates by its whole amount — a return in which the
+A-IRB parent is empty while its children are populated.
+"""
+
+[[cell]]
+id = "c0200-0411-0010"
+template = "C0200"
+row = "0411"
+column = "0010"
+regimes = ["B31"]
+metric = "sum"
+carrier = "rwa_final"
+scale = 1.0
+where = [{ column = "reporting_approach", op = "equals", value = "slotting" }]
+citation = "PS1/26 Annex II OF 02.00 r0411 (p.32); PS1/26 Art. 153(5)"
+note = """
+"1.1.2.3 Exposures subject to the slotting approach. See CR IRB 6 template."
+B31 only: the CRR template has no slotting parent — Annex II puts slotting inside
+the F-IRB and A-IRB branches as the "Corporates - Specialised Lending" children
+(r0290 / r0350), and neither of those rows exists in the generated CRR frame.
+"""
+basis = """
+Agrees, which is worth noting for what it implies: the slotting rows are the part
+of this template the engine numbers correctly, so the r0040/r0050/r0240/r0250/
+r0310 shift is not a wholesale renumbering but a defect in the approach parents.
+"""
+
+[[cell]]
+id = "c0200-0412-0010"
+template = "C0200"
+row = "0412"
+column = "0010"
+regimes = ["B31"]
+metric = "sum"
+carrier = "rwa_final"
+scale = 1.0
+where = [
+  { column = "reporting_approach", op = "equals", value = "slotting" },
+  { column = "sl_type", op = "equals", value = "project_finance" },
+]
+citation = "PS1/26 Annex II OF 02.00 r0412 (p.32); PS1/26 Art. 153(5), Art. 122A"
+basis = """
+One SL type is populated, so this cell equals its parent r0411 and tests the row
+ADDRESS rather than the partition. A second SL type would be needed to make the
+`sl_type` clause load-bearing.
+"""
+
+[[cell]]
+id = "c0200-0010-0020"
+template = "C0200"
+row = "0010"
+column = "0020"
+regimes = ["B31"]
+metric = "sum"
+carrier = "sa_rwa"
+scale = 1.0
+where = []
+citation = "PS1/26 Annex II OF 02.00 c0020 (p.39), r0010 (p.28); PS1/26 Art. 92(2a), Art. 92(3a)"
+note = """
+"0020 Standardised approaches only (output floor). Captures risk exposure amounts
+calculated under standardised approaches per exposure class, where relevant. Rows
+containing totals by risk type should reflect entire current portfolios using
+standardised approaches only." Row 0010 is a total by risk type, so the cell is
+S-TREA over the WHOLE book — the SA legs at their own weights and the modelled
+legs at their SA-equivalent — which is the `sa_rwa` carrier, unfiltered.
+"""
+basis = """
+This is the number the whole output floor rests on (PS1/26 Art. 92(2a):
+TREA = max(U-TREA, x * S-TREA + OF-ADJ)). It includes the equity leg's 3,750,000
+SA-equivalent even though that leg's `rwa_final` is null, so S-TREA and the
+c0010 total are not comparable leg-for-leg on this portfolio.
+"""

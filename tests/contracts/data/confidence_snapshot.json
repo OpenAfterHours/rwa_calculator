@@ -628,7 +628,7 @@
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/guarantor_rw.py",
         "engine/sa/rgla.py",
-        "engine/sa/risk_weights.py"
+        "engine/sa/sovereign_derived.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_pse_rgla_guarantor_irb_sa_substitution.py",
@@ -682,7 +682,7 @@
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/guarantor_rw.py",
         "engine/sa/jurisdiction.py",
-        "engine/sa/risk_weights.py",
+        "engine/sa/sovereign_derived.py",
         "engine/stages/classify/attributes.py"
       ],
       "test_files": [
@@ -727,12 +727,14 @@
         "engine/sa/cqs_lift.py",
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/guarantor_rw.py",
-        "engine/sa/risk_weights.py"
+        "engine/sa/risk_weights.py",
+        "engine/sa/sovereign_derived.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_154_b31_art_118_international_organisation_class.py",
         "tests/acceptance/crr/test_p1_154_art_118_international_organisation_class.py",
         "tests/acceptance/crr/test_p1_184_art_117_mdb_institution_routing.py",
+        "tests/acceptance/reporting/test_c07_risk_weight_rows.py",
         "tests/acceptance/reporting/test_reporting_sa_classes_golden.py",
         "tests/fixtures/generate_all.py",
         "tests/fixtures/p1_154/p1_154.py",
@@ -905,6 +907,7 @@
         "tests/fixtures/p1_223/p1_223.py",
         "tests/fixtures/p1_239/p1_239.py",
         "tests/fixtures/p1_30e/p1_30e.py",
+        "tests/fixtures/p1_316/p1_316.py",
         "tests/fixtures/p1_99/__init__.py",
         "tests/fixtures/p1_99/p1_99.py",
         "tests/fixtures/reporting_offbs_portfolio.py",
@@ -919,6 +922,7 @@
         "tests/unit/crr/test_crr_sa.py",
         "tests/unit/crr/test_crr_tables.py",
         "tests/unit/crr/test_irb_transforms.py",
+        "tests/unit/crr/test_p1_316_art_121_1_table_5_unrated_institution.py",
         "tests/unit/data_tables/test_p1_180_covered_bond_unrated_derivation_split.py",
         "tests/unit/test_b31_sa_risk_weights.py",
         "tests/unit/test_corep_ccr.py",
@@ -931,7 +935,9 @@
     {
       "article": "121",
       "code_functions": [
-        "rwa_calc.engine.sa.guarantor_rw::build_institution_guarantor_rw_expr"
+        "rwa_calc.engine.sa.guarantor_rw::build_institution_guarantor_rw_expr",
+        "rwa_calc.engine.sa.risk_weights::_crr_append_institution_maturity_branches",
+        "rwa_calc.engine.sa.sovereign_derived::crr_art_121_4_trade_finance_expr"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -955,6 +961,7 @@
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/guarantor_rw.py",
         "engine/sa/risk_weights.py",
+        "engine/sa/sovereign_derived.py",
         "engine/stages/_ccr_shared.py",
         "rulebook/packs/crr.py"
       ],
@@ -966,11 +973,13 @@
         "tests/fixtures/generate_all.py",
         "tests/fixtures/p1_121/__init__.py",
         "tests/fixtures/p1_121/p1_121.py",
+        "tests/fixtures/p1_316/__init__.py",
+        "tests/fixtures/p1_316/p1_316.py",
         "tests/oracle/derivations/branch_sa.py",
         "tests/oracle/derivations/sa_crr.py",
-        "tests/oracle/test_oracle.py",
         "tests/properties/test_regime_deltas.py",
         "tests/unit/crr/test_crr_institution_standard.py",
+        "tests/unit/crr/test_p1_316_art_121_1_table_5_unrated_institution.py",
         "tests/unit/test_b31_sa_risk_weights.py",
         "tests/unit/test_sovereign_floor_institutions.py"
       ],
@@ -2400,6 +2409,7 @@
         "engine/irb/calculator.py",
         "engine/irb/formulas.py",
         "engine/irb/transforms.py",
+        "engine/sa/sovereign_derived.py",
         "engine/sft/fccm.py",
         "engine/stages/classify/attributes.py",
         "engine/stages/classify/permissions.py",
@@ -2423,12 +2433,14 @@
         "tests/fixtures/p1_118/p1_118.py",
         "tests/fixtures/p1_165/p1_165.py",
         "tests/fixtures/p1_231/p1_231.py",
+        "tests/fixtures/p1_316/p1_316.py",
         "tests/oracle/derivations/irb.py",
         "tests/properties/test_monotonicity.py",
         "tests/unit/crm/test_art237_guarantee_ineligibility.py",
         "tests/unit/crm/test_art237_ineligibility.py",
         "tests/unit/crr/test_crr_irb.py",
         "tests/unit/crr/test_irb_transforms.py",
+        "tests/unit/crr/test_p1_316_art_121_1_table_5_unrated_institution.py",
         "tests/unit/irb/test_ccr_maturity_rung.py",
         "tests/unit/irb/test_firb_sft_maturity.py",
         "tests/unit/irb/test_irb_formulas.py",
@@ -5859,7 +5871,8 @@
       "pack_entries": [],
       "source_files": [
         "engine/sa/crr_risk_weight_tables.py",
-        "engine/sa/rgla.py"
+        "engine/sa/rgla.py",
+        "engine/sa/sovereign_derived.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_222_rgla_uk_gbp_flat_20.py",
@@ -5887,7 +5900,6 @@
       "source_files": [
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/jurisdiction.py",
-        "engine/sa/risk_weights.py",
         "rulebook/packs/common.py"
       ],
       "test_files": [
@@ -7018,6 +7030,7 @@
         "tests/acceptance/basel31/test_scenario_b31_m_model_permissions.py",
         "tests/acceptance/reporting/test_reporting_irb_classes_golden.py",
         "tests/conformance/portfolios.py",
+        "tests/conformance/test_cell_rederivation.py",
         "tests/fixtures/p1_125/p1_125.py",
         "tests/fixtures/p1_126/p1_126.py",
         "tests/fixtures/p1_245/p1_245.py",

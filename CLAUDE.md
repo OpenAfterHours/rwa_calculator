@@ -218,9 +218,18 @@ load-bearing:
   Completed batch state is archived to `.claude/state/archive/`, never deleted.
 - **`/postmortem` + `docs/development/escape-log.md`** — for defects that reach
   production. The deliverable is not the code fix but the answer to *which gate
-  should have caught this, and why didn't it* — classified into one of seven
+  should have caught this, and why didn't it* — classified into one of eight
   escape classes, each of which prescribes its own gate change. The gate change
   is mandatory; the code fix may be deferred.
+
+**The closing rule: a defect found in output is closed by its escape-log entry,
+not by its fix commit.** `docs/development/escape-log.md` is the ticket-closing
+artifact, and an entry closes a defect only when it carries an escape class, a
+named gate change (file path, or a Tier 1 bullet ID if deferred), and evidence
+the new gate was **observed red before the fix**. Any of the three missing means
+the defect is still open — say so rather than reporting it done. The file sat at
+zero entries while defects reached production output, which is exactly what a
+fix-commit-closes-it convention produces.
 
 A lesson that reaches production **twice** has proven it cannot survive as
 prose — graduate it to an executable check, or file the graduation as a Tier 1

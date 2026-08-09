@@ -7,6 +7,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **The correctness estate now gates instead of merely measuring.** The
+  independent validation layers merged on 2026-08-08 could all report a blind
+  spot and none of them could fail a build over one. Six changes close that:
+  - **Coverage is a gate.** `scripts/coverage_report.py --check` runs in CI as
+    the `coverage-ratchet` job and is mirrored for local development by
+    `tests/contracts/test_coverage_ratchet.py`, one of whose tests asserts that
+    CI still invokes the script — the failure being fixed here was an inert
+    ratchet, not a missing one. Five metrics in
+    `scripts/coverage_baseline.json` now ratchet directionally: published-rule
+    binding counts and template-cell liveness may not fall, dead cells and
+    never-evaluated rules may not rise. Measured over the current 16-run matrix,
+    the estate stands at **12.85% template-cell liveness (8,193 live cells of
+    63,746 declared), 55,553 dead cells, 785 never-evaluated rules, and 257 (CRR)
+    / 289 (Basel 3.1) published rules binding**, and the baseline now carries a
+    `provenance` block naming the runs behind those numbers — so a matrix change
+    reports as **INVALID** rather than as a regression, and the right response is
+    to re-measure rather than to drop a portfolio until the old numbers fit. The
+    figures it replaces reproduced at neither the matrix they were taken on nor
+    today's: they had stopped describing the estate before the matrix grew, and
+    nothing could tell, because a baseline that records no matrix cannot say what
+    it describes. The same pass adds `cells_live` as a genuine floor, banked at
+    8,193: a ratio whose denominator shrinks with its numerator is not a floor, and
+    neither is a count of the complement — dropping any region less live than the
+    estate average *improved* both cell metrics while real coverage fell.
+
+    Note the scope. Every one of these metrics is **value-insensitive**: liveness
+    counts cells that are non-null, and "binding" counts a rule that reaches
+    `PASS` *or* `FAIL`. This gate therefore makes blind spots visible and cannot
+    see a wrong number in a cell that stays populated — that remains the
+    supervisory register's job.
+  - **Vacuity is ratcheted.** A supervisory rule whose operands are all null or
+    zero evaluates to `VACUOUS`, and that count was informational: a change that
+    emptied a column flipped its rules `PASS` → `VACUOUS` and left every test in
+    the register green. A two-way ratchet over 218 baselined known-vacuous rules
+    now fails a `PASS` → `VACUOUS` regression and requires the list to shrink
+    when a rule activates, so a rule that is evaluable today cannot become
+    unevaluable without a written reason.
+  - **The defect-injection harness runs where `uv` does not.**
+    `DEFECT_INJECTION_PYTHON` retargets the whole gate ladder at a named
+    interpreter through a single chokepoint, with a pre-flight import probe and a
+    hard error on any command it cannot rewrite. Previously every gate was
+    spawned via `uv run`; on a runner without `uv` each gate would have failed to
+    spawn, every failure would have scored as a *detection*, and the harness
+    would have published a detection rate near 100% while detecting nothing.
+  - **Credit risk mitigation has independent oracle coverage** — CRM joins the
+    stdlib-only shadow calculator, which is the only layer that can catch a wrong
+    constant rather than a changed one.
+  - **Independent cell re-derivation extends beyond OV1**, so more published
+    template cells are derived from instruction text rather than compared against
+    recorded engine output.
+  - **CI fires on the branches the development loop actually pushes** — `batch/**`,
+    `claude/**`, `feat/**` and the rest, not `master` alone. The loop pushes to
+    feature and per-item batch branches and only opens a PR at the end, so a
+    `master`-only trigger meant the majority of commits never met CI at all.
+- **A defect found in output is now closed by its escape-log entry, not by its
+  fix commit.** `docs/development/escape-log.md` had a seven-class escape
+  taxonomy, a "verified red" requirement, and zero entries while defects were
+  reaching published output. `/postmortem` now refuses to conclude without an
+  escape class, a named gate change and recorded evidence the new gate was
+  observed **red before the fix**, with three permitted routes to producing that
+  red; and the log is seeded with six entries. Four are the escapes this project
+  had already established — the ungated coverage ratchet, unratcheted vacuity, the
+  unmeasured detection rate, and four oracle disagreements parked as strict
+  xfails. That last one needed an eighth class, `caught-and-parked`: the other
+  seven all answer *why didn't a gate catch it*, and there the gate caught it and
+  the record of the finding became its resting place. The other two came out of
+  writing them up — a **measured** escape (a term dropped from a C 02.00 subtotal,
+  with a full supervisory run reporting `8 passed` alongside it, because the live
+  ERROR rule that would catch it ships in this repo and is never evaluated), and a
+  defect in a gate that had not yet shipped, which carries no class because all
+  eight presume a defect that reached production.
+
 ### Security
 - **An unrecognised report-template or run identifier is no longer written into
   a log line.** Three log statements interpolated a value taken straight from an

@@ -245,6 +245,45 @@ total still counts it. No rule objects, because rules only check rows that exist
 row builder and assert `0.00`. Do **not** verify by reading the row list — the
 missing pair is by definition not in it.
 
+### B7. A strict xfail is a decision to ship the wrong number
+
+**Trap.** Registering an oracle or property disagreement as `xfail(strict=True)`
+and treating the item as handled.
+
+**Why.** Registering it is the *right* immediate move — `tests/oracle/README.md` is
+emphatic that when the engine and the oracle disagree you adjust neither, and the
+mark is a real gate in one direction: it fails if the number starts agreeing, so a
+silent fix is impossible. What the mark does not carry is an owner. Nothing limits
+how many entries a register holds, how long one may sit there, or who is
+responsible for it, so the correct first move becomes a resting place. Four
+disagreements have sat in `KNOWN_DISAGREEMENTS` since 2026-08-08, including
+`ORC-109`, a CRR Art. 121(1) Table 5 limb that under-states capital by a third at
+CQS 6. The suite is green and the wrong number ships. Escape class
+`caught-and-parked`, `docs/development/escape-log.md` 2026-08-09.
+
+**Detect.** Register the disagreement, then put an owning plan bullet in its reason
+string and file that bullet in the same change. A register entry naming no bullet
+is the thing to catch in review — not the xfail.
+
+### B8. Ratchet the quantity you care about, not a ratio of it nor its complement
+
+**Trap.** Gating on a coverage *ratio* (or on a "dead" complement) and reading it
+as a floor. A ratio's denominator moves with its numerator, so it can improve while
+the thing you care about shrinks.
+
+**Why.** Measured on the reporting coverage ratchet: `template_cell_liveness_bp` is
+`live / declared` and `dead_cells` is `declared − live`, so dropping N declared
+cells of which K are live passes **both** whenever `K / N <= 0.1285`. Deleting the
+`b31/rich` portfolio loses **689 live cells** while liveness *improves*
+1285 -> 1374bp and dead cells *improve* 55,553 -> 47,123. Across 16 leave-one-out
+runs the two cell metrics never caught a loss on their own, and on 4 of 16 they
+reported an improvement while real coverage fell.
+
+**Detect.** Ratchet the absolute accumulator — here `cells_live`, a union over runs
+that cannot fall unless coverage genuinely falls. Keep the ratio as a *reported*
+figure, and never write "may not fall" next to a ratio in a comment: every
+reviewer who does not do the algebra will read it as a floor.
+
 ---
 
 ## C. Test validity

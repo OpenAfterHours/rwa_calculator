@@ -803,36 +803,44 @@ def main() -> int:
 
     # Confine every operator-supplied path BEFORE it reaches a read or a write, so
     # each downstream `read_text` / `write_text` / `mkdir` provably operates on a
-    # path inside the repository. Done here rather than at each call site because
-    # one choke point cannot be partially applied.
-    args.scorecard = [_confine_path(path) for path in args.scorecard]
-    args.baseline = _confine_path(args.baseline)
-    if args.out is not None:
-        args.out = _confine_path(args.out)
+    # path inside the repository. One choke point, because a containment check
+    # cannot be partially applied.
+    #
+    # The confined values are bound to LOCALS and only the locals are used below.
+    # Writing them back onto `args` instead would be equivalent at runtime but is
+    # NOT equivalent to a taint analyser: assigning through an attribute of the
+    # argparse Namespace leaves `args.baseline` looking like the raw CLI source at
+    # every later use, so the sanitiser goes unrecognised and the finding stays
+    # open. Measured — the first attempt at this fix did exactly that and
+    # pythonsecurity:S2083 survived it. Keep the dataflow
+    # `tainted -> _confine_path -> local -> sink` visible and unbroken.
+    scorecard_paths = [_confine_path(path) for path in args.scorecard]
+    baseline_path = _confine_path(args.baseline)
+    out_path = _confine_path(args.out) if args.out is not None else None
 
-    for path in args.scorecard:
+    for path in scorecard_paths:
         if not path.exists():
             print(f"scorecard does not exist: {path}", file=sys.stderr)
             return 1
-    if not args.baseline.exists():
-        print(f"baseline does not exist: {args.baseline}", file=sys.stderr)
+    if not baseline_path.exists():
+        print(f"baseline does not exist: {baseline_path}", file=sys.stderr)
         return 1
 
-    boards = load_boards(args.scorecard)
-    baseline = json.loads(args.baseline.read_text(encoding="utf-8"))
+    boards = load_boards(scorecard_paths)
+    baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
 
     if args.bank:
         if not args.note.strip():
             print("--bank requires --note explaining why the baseline moved", file=sys.stderr)
             return 1
-        return bank(boards, args.baseline, args.note.strip())
+        return bank(boards, baseline_path, args.note.strip())
 
     if args.summary:
         markdown = render_summary(boards, baseline)
-        if args.out is not None:
-            args.out.parent.mkdir(parents=True, exist_ok=True)
-            args.out.write_text(markdown, encoding="utf-8")
-            print(f"wrote {args.out}")
+        if out_path is not None:
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(markdown, encoding="utf-8")
+            print(f"wrote {out_path}")
         else:
             print(markdown)
         return 0

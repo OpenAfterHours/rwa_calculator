@@ -65,6 +65,31 @@ if str(_REPO_ROOT) not in sys.path:
 
 from scripts.defect_catalogue import CATALOGUE  # noqa: E402
 
+#: Every path this script reads or writes must resolve inside the repository.
+#: The nightly workflow only ever passes repo-relative paths
+#: (`nightly-injection/scorecard-*.json`, `nightly-injection/summary*.md`, and the
+#: default baseline); the `$GITHUB_STEP_SUMMARY` append is done by `cat` in the
+#: workflow shell, never by this script, so nothing legitimate needs to escape.
+_ALLOWED_ROOT = _REPO_ROOT
+
+
+def _confine_path(raw: Path) -> Path:
+    """Resolve a CLI-supplied path and reject anything outside ``_ALLOWED_ROOT``.
+
+    Same guard as ``scripts/coverage_report.py`` and ``scripts/parity_gate.py``:
+    ``--scorecard``, ``--baseline`` and ``--out`` are operator-supplied, and
+    resolving FIRST collapses ``..`` segments so the containment check cannot be
+    bypassed by a traversal sequence.
+
+    Defined above every read/write site on purpose: the taint engine only treats
+    a helper as a sanitiser when its definition precedes the call it guards.
+    """
+    resolved = raw.expanduser().resolve()
+    if not resolved.is_relative_to(_ALLOWED_ROOT):
+        raise SystemExit(f"path escapes {_ALLOWED_ROOT}: {raw}")
+    return resolved
+
+
 DEFAULT_BASELINE = _REPO_ROOT / "scripts" / "injection_baseline.json"
 
 STATUS_UNBANKED = "UNBANKED"
@@ -775,6 +800,15 @@ def main() -> int:
         help="--bank only: why this baseline moved. Recorded as _note; required.",
     )
     args = parser.parse_args()
+
+    # Confine every operator-supplied path BEFORE it reaches a read or a write, so
+    # each downstream `read_text` / `write_text` / `mkdir` provably operates on a
+    # path inside the repository. Done here rather than at each call site because
+    # one choke point cannot be partially applied.
+    args.scorecard = [_confine_path(path) for path in args.scorecard]
+    args.baseline = _confine_path(args.baseline)
+    if args.out is not None:
+        args.out = _confine_path(args.out)
 
     for path in args.scorecard:
         if not path.exists():

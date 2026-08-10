@@ -716,13 +716,21 @@ def _wrap(text: str, width: int) -> list[str]:
 # =============================================================================
 
 
-def bank(boards: dict[str, Board], baseline_path: Path, note: str) -> int:
+def bank(boards: dict[str, Board], note: str) -> int:
     """Write the first (or a later) baseline. Refuses an untrustworthy scorecard.
 
     A baseline banked from a scorecard that failed a trust check would enshrine
     fiction as the thing every future run is measured against, so banking runs
     the same trust checks the gate does and refuses on any of them.
+
+    Writes ``DEFAULT_BASELINE`` directly rather than taking the destination as a
+    parameter. There is only ever one baseline, so the parameter was redundant —
+    and a module-level function's parameter is an entry point a taint analyser
+    must assume an attacker controls, which kept pythonsecurity:S2083 open on the
+    write below even after every CLI path argument had been removed. No parameter,
+    no entry point, no flow.
     """
+    baseline_path = DEFAULT_BASELINE
     missing_ladders = [ladder for ladder in REQUIRED_LADDERS if ladder not in boards]
     if missing_ladders:
         print(f"refusing to bank: no scorecard for {', '.join(missing_ladders)}")
@@ -838,7 +846,7 @@ def main() -> int:
         if not args.note.strip():
             print("--bank requires --note explaining why the baseline moved", file=sys.stderr)
             return 1
-        return bank(boards, baseline_path, args.note.strip())
+        return bank(boards, args.note.strip())
 
     if args.summary:
         markdown = render_summary(boards, baseline)

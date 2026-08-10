@@ -333,9 +333,14 @@ two scorecards, and bank them:
 ```bash
 uv run python scripts/injection_ratchet.py --bank \
   --note 'First measured campaign: <what the numbers were and why they are trustworthy>' \
-  --scorecard nightly-injection/scorecard-legacy.json \
-  --scorecard nightly-injection/scorecard-full.json
+  --ladder legacy --ladder full
 ```
+
+`--ladder` takes a ladder NAME, not a path. The scorecards are read from fixed
+locations under `nightly-injection/` (see `_SCORECARD_PATHS`), so put the
+downloaded artefacts there. The script deliberately accepts no arbitrary paths:
+operator-supplied path arguments were a genuine traversal surface and are gone
+rather than sanitised — see the note above `_SCORECARD_PATHS`.
 
 `--note` is mandatory: a baseline that moved for a reason nobody wrote down is
 indistinguishable from one someone widened to clear a red gate. `--bank` refuses

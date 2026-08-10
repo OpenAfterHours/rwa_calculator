@@ -65,30 +65,39 @@ if str(_REPO_ROOT) not in sys.path:
 
 from scripts.defect_catalogue import CATALOGUE  # noqa: E402
 
-#: Every path this script reads or writes must resolve inside the repository.
-#: The nightly workflow only ever passes repo-relative paths
-#: (`nightly-injection/scorecard-*.json`, `nightly-injection/summary*.md`, and the
-#: default baseline); the `$GITHUB_STEP_SUMMARY` append is done by `cat` in the
-#: workflow shell, never by this script, so nothing legitimate needs to escape.
-_ALLOWED_ROOT = _REPO_ROOT
+#: Where the nightly workflow puts the scorecards it downloads, and where the
+#: rendered markdown goes.
+_ARTIFACT_DIR = _REPO_ROOT / "nightly-injection"
 
+#: THE COMPLETE SET OF PATHS THIS SCRIPT MAY READ OR WRITE. The CLI selects among
+#: them by ladder NAME; no operator-supplied string is ever used to CONSTRUCT a
+#: path. That is deliberate and it is a security property, not a style choice:
+#:
+#: an earlier revision took `--scorecard` / `--baseline` / `--out` as free
+#: `argparse` paths and fed them to `read_text` / `write_text` / `mkdir`. A
+#: traversal sequence in any of them would have escaped the repository, and
+#: SonarCloud rightly flagged all three flows (pythonsecurity:S2083 BLOCKER plus
+#: four S8707). Adding a resolve-then-contain guard fixed the runtime behaviour
+#: but left the flows flagged, and the second attempt at a guard ADDED a finding.
+#:
+#: So the source is removed instead of sanitised: a dict lookup returns a
+#: CONSTANT `Path`, and the operator's input only chooses which constant. There
+#: is no user-controlled data in any path, so there is nothing to sanitise and
+#: nothing to get wrong later. The workflow only ever used these fixed locations
+#: anyway, so no capability is lost.
+LADDERS: tuple[str, ...] = ("legacy", "full")
 
-def _confine_path(raw: Path) -> Path:
-    """Resolve a CLI-supplied path and reject anything outside ``_ALLOWED_ROOT``.
+_SCORECARD_PATHS: dict[str, Path] = {
+    "legacy": _ARTIFACT_DIR / "scorecard-legacy.json",
+    "full": _ARTIFACT_DIR / "scorecard-full.json",
+}
 
-    Same guard as ``scripts/coverage_report.py`` and ``scripts/parity_gate.py``:
-    ``--scorecard``, ``--baseline`` and ``--out`` are operator-supplied, and
-    resolving FIRST collapses ``..`` segments so the containment check cannot be
-    bypassed by a traversal sequence.
-
-    Defined above every read/write site on purpose: the taint engine only treats
-    a helper as a sanitiser when its definition precedes the call it guards.
-    """
-    resolved = raw.expanduser().resolve()
-    if not resolved.is_relative_to(_ALLOWED_ROOT):
-        raise SystemExit(f"path escapes {_ALLOWED_ROOT}: {raw}")
-    return resolved
-
+#: One per single-ladder render, plus the combined board when both are given.
+_SUMMARY_PATHS: dict[str, Path] = {
+    "legacy": _ARTIFACT_DIR / "summary-legacy.md",
+    "full": _ARTIFACT_DIR / "summary-full.md",
+    "combined": _ARTIFACT_DIR / "summary.md",
+}
 
 DEFAULT_BASELINE = _REPO_ROOT / "scripts" / "injection_baseline.json"
 
@@ -111,8 +120,7 @@ REQUIRED_LADDERS = ("legacy", "full")
 BANK_COMMAND = (
     "uv run python scripts/injection_ratchet.py --bank "
     "--note '<why this baseline moved>' "
-    "--scorecard nightly-injection/scorecard-legacy.json "
-    "--scorecard nightly-injection/scorecard-full.json"
+    "--ladder legacy --ladder full"
 )
 
 
@@ -785,15 +793,20 @@ def main() -> int:
     mode.add_argument("--summary", action="store_true", help="render markdown; NOT a gate")
     mode.add_argument("--bank", action="store_true", help="write the baseline from the scorecards")
     parser.add_argument(
-        "--scorecard",
+        "--ladder",
         action="append",
-        type=Path,
+        choices=LADDERS,
         required=True,
-        metavar="PATH",
-        help="a defect_injection.py scorecard JSON; repeat once per ladder",
+        help=(
+            "which ladder's scorecard to read, from the fixed artifact locations; "
+            "repeat once per ladder. Takes a NAME, not a path — see _SCORECARD_PATHS"
+        ),
     )
-    parser.add_argument("--baseline", type=Path, default=DEFAULT_BASELINE)
-    parser.add_argument("--out", type=Path, default=None, help="--summary only: markdown output")
+    parser.add_argument(
+        "--write-summary",
+        action="store_true",
+        help="--summary only: also write the markdown to its standard artifact path",
+    )
     parser.add_argument(
         "--note",
         default="",
@@ -801,22 +814,14 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    # Confine every operator-supplied path BEFORE it reaches a read or a write, so
-    # each downstream `read_text` / `write_text` / `mkdir` provably operates on a
-    # path inside the repository. One choke point, because a containment check
-    # cannot be partially applied.
-    #
-    # The confined values are bound to LOCALS and only the locals are used below.
-    # Writing them back onto `args` instead would be equivalent at runtime but is
-    # NOT equivalent to a taint analyser: assigning through an attribute of the
-    # argparse Namespace leaves `args.baseline` looking like the raw CLI source at
-    # every later use, so the sanitiser goes unrecognised and the finding stays
-    # open. Measured — the first attempt at this fix did exactly that and
-    # pythonsecurity:S2083 survived it. Keep the dataflow
-    # `tainted -> _confine_path -> local -> sink` visible and unbroken.
-    scorecard_paths = [_confine_path(path) for path in args.scorecard]
-    baseline_path = _confine_path(args.baseline)
-    out_path = _confine_path(args.out) if args.out is not None else None
+    # Every path below is a CONSTANT selected by name — see _SCORECARD_PATHS. The
+    # operator chooses which ladder, never where on the filesystem, so no
+    # user-controlled data reaches `read_text` / `write_text` / `mkdir` at all.
+    # `dict.fromkeys` de-duplicates a repeated `--ladder` while preserving order.
+    ladders = list(dict.fromkeys(args.ladder))
+    scorecard_paths = [_SCORECARD_PATHS[name] for name in ladders]
+    baseline_path = DEFAULT_BASELINE
+    out_path = _SUMMARY_PATHS["combined"] if len(ladders) > 1 else _SUMMARY_PATHS[ladders[0]]
 
     for path in scorecard_paths:
         if not path.exists():
@@ -837,7 +842,7 @@ def main() -> int:
 
     if args.summary:
         markdown = render_summary(boards, baseline)
-        if out_path is not None:
+        if args.write_summary:
             out_path.parent.mkdir(parents=True, exist_ok=True)
             out_path.write_text(markdown, encoding="utf-8")
             print(f"wrote {out_path}")

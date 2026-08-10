@@ -125,8 +125,7 @@ jobs:
       - name: Render this ladder's board
         run: |
           uv run python scripts/injection_ratchet.py --summary \
-            --scorecard "nightly-injection/scorecard-${{ matrix.ladder }}.json" \
-            --out "nightly-injection/summary-${{ matrix.ladder }}.md"
+            --ladder "${{ matrix.ladder }}" --write-summary
           cat "nightly-injection/summary-${{ matrix.ladder }}.md" >> "$GITHUB_STEP_SUMMARY"
 
       # `if-no-files-found: error`, as the benchmarks job does. An absent
@@ -173,9 +172,7 @@ jobs:
       - name: Render the combined before/after board
         run: |
           uv run python scripts/injection_ratchet.py --summary \
-            --scorecard nightly-injection/scorecard-legacy.json \
-            --scorecard nightly-injection/scorecard-full.json \
-            --out nightly-injection/summary.md
+            --ladder legacy --ladder full --write-summary
           cat nightly-injection/summary.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the combined board
@@ -200,5 +197,4 @@ jobs:
       - name: Detection-rate ratchet
         run: |
           uv run python scripts/injection_ratchet.py --check \
-            --scorecard nightly-injection/scorecard-legacy.json \
-            --scorecard nightly-injection/scorecard-full.json
+            --ladder legacy --ladder full

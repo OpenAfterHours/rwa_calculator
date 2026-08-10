@@ -1,9 +1,9 @@
 {
-  "_comment": "Detection-rate baseline for the defect-injection campaign (scripts/injection_ratchet.py --check, run nightly by .github/workflows/nightly-injection.yml). Two-way ratchet on three ABSOLUTE id sets per ladder: detected_ids may not LOSE a member, escaped_ids may not GAIN one, unreachable_ids may not GAIN one. The headline detection rate is deliberately NOT gated: it is detected/(detected+escaped) with UNREACHABLE excluded from both halves, so its denominator moves with its numerator and a mutant drifting onto a dead path makes absolute detection FALL while the rate RISES (.claude/LESSONS.md B8 — ratchet the accumulator, never a ratio of it). unreachable_ids is ratcheted for exactly that reason. Never edit this file by hand and never widen a set to clear a red gate: --bank rewrites it from measured scorecards and refuses to bank one that failed a trust check.",
+  "_comment": "Detection-rate baseline for the defect-injection campaign (scripts/injection_ratchet.py --check, run nightly by .github/workflows/nightly-injection.yml). Two-way ratchet on three ABSOLUTE id sets per ladder: detected_ids may not LOSE a member, escaped_ids may not GAIN one, unreachable_ids may not GAIN one. The headline detection rate is deliberately NOT gated: it is detected/(detected+escaped) with UNREACHABLE excluded from both halves, so its denominator moves with its numerator and a mutant drifting onto a dead path makes absolute detection FALL while the rate RISES (.claude/LESSONS.md B8 \u2014 ratchet the accumulator, never a ratio of it). unreachable_ids is ratcheted for exactly that reason. Never edit this file by hand and never widen a set to clear a red gate: --bank rewrites it from measured scorecards and refuses to bank one that failed a trust check.",
   "status": "UNBANKED",
-  "unbanked_reason": "The campaign has never been run end to end, so no detection rate exists. Nobody can currently say whether the estate's rate is 40% or 90% — the harness was built to answer that and has not yet been able to. This file is committed in its un-banked state on purpose: --check reads status UNBANKED and exits NON-ZERO with the banking command, so the un-measured state is loud rather than silently green. An unrecognised status is also treated as un-banked, so a typo cannot read as banked.",
+  "unbanked_reason": "The campaign has never been run end to end, so no detection rate exists. Nobody can currently say whether the estate's rate is 40% or 90% \u2014 the harness was built to answer that and has not yet been able to. This file is committed in its un-banked state on purpose: --check reads status UNBANKED and exits NON-ZERO with the banking command, so the un-measured state is loud rather than silently green. An unrecognised status is also treated as un-banked, so a typo cannot read as banked.",
   "known_defect_floor": 0.9,
-  "bank_command": "uv run python scripts/injection_ratchet.py --bank --note '<why this baseline moved>' --scorecard nightly-injection/scorecard-legacy.json --scorecard nightly-injection/scorecard-full.json",
+  "bank_command": "uv run python scripts/injection_ratchet.py --bank --note '<why this baseline moved>' --ladder legacy --ladder full",
   "blockers": [
     {
       "task": "0.1a",
@@ -13,12 +13,12 @@
     {
       "task": "runner interpreter override",
       "summary": "The harness hardcoded `uv run` for every gate. Where uv cannot spawn, every gate returns non-zero, every mutant scores DETECTED, and the campaign publishes a fabricated ~100% detection rate. DEFECT_INJECTION_PYTHON plus a spawn pre-flight that aborts rather than scoring is landing in scripts/defect_injection.py.",
-      "state": "Landing. The nightly runs on a runner that HAS uv, so it does not depend on the override — but a locally measured baseline does."
+      "state": "Landing. The nightly runs on a runner that HAS uv, so it does not depend on the override \u2014 but a locally measured baseline does."
     },
     {
       "task": "0.1",
       "summary": "The campaign mutates src/, one file at a time, and refuses to start if any catalogue target is dirty in git. It therefore cannot run while any agent is editing src/, and its failures would be misattributed if it did.",
-      "state": "Open — the first bankable run needs a quiet tree, which is why the first run is a manual workflow_dispatch rather than a nightly."
+      "state": "Open \u2014 the first bankable run needs a quiet tree, which is why the first run is a manual workflow_dispatch rather than a nightly."
     }
   ],
   "provenance": null,

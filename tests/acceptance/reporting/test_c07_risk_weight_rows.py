@@ -211,7 +211,10 @@ def test_risk_weight_row_satisfies_its_own_annex_ii_identity(
     exposure_value, rwea = cells.get("0200"), cells.get("0220")
 
     # Assert
-    assert exposure_value is not None and rwea is not None, (
+    assert exposure_value is not None, (
+        f"{regime_key}/{sheet_key} row {row_ref}: cannot check the identity on a NULL row"
+    )
+    assert rwea is not None, (
         f"{regime_key}/{sheet_key} row {row_ref}: cannot check the identity on a NULL row"
     )
     assert abs(rwea - exposure_value * expected_rw) < _MONEY_TOLERANCE, (
@@ -253,7 +256,10 @@ def test_risk_weight_row_identity_is_non_trivial(
         f"{exposure_ref} was re-pointed at a 100% weight, where c0200 == c0220 by "
         "arithmetic and this rung stops discriminating a column swap"
     )
-    assert exposure_value is not None and rwea is not None, (
+    assert exposure_value is not None, (
+        f"{regime_key}/{sheet_key} row {row_ref}: NULL row cannot be non-trivial"
+    )
+    assert rwea is not None, (
         f"{regime_key}/{sheet_key} row {row_ref}: NULL row cannot be non-trivial"
     )
     assert abs(rwea - exposure_value) > _MONEY_TOLERANCE, (

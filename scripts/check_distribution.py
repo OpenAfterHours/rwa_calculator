@@ -67,39 +67,45 @@ METADATA_VERSION_RE = re.compile(r"^Metadata-Version:\s*(?P<version>\S+)\s*$", r
 
 
 def main() -> int:
-    """Gate the built distributions against the pinned publisher."""
-    parser = argparse.ArgumentParser(
+    """Gate the built distributions against the pinned publisher.
+
+    Takes no path arguments **on purpose**. An operator-supplied string must never
+    be used to construct a path here: the two locations this gate reads are fixed
+    properties of the repository, so accepting them from the CLI would add an
+    arbitrary-file-read surface and buy nothing. Callers that need other paths —
+    the contract tests, and any local reproduction — import `check_distributions`
+    and pass them directly.
+
+    This repository has already established that the resolve-then-contain
+    alternative does not work: two successive attempts at a containment guard left
+    the taint finding in place (see commit a5d34c0d), and removing the source is
+    what actually closed it.
+    """
+    argparse.ArgumentParser(
         description=(
             "Fail when a built distribution declares core metadata that the pinned "
-            "pypa/gh-action-pypi-publish release cannot accept."
+            "pypa/gh-action-pypi-publish release cannot accept. Checks dist/ against "
+            ".github/workflows/publish.yml; takes no arguments."
         )
-    )
-    parser.add_argument(
-        "--dist-dir",
-        type=Path,
-        default=DEFAULT_DIST_DIR,
-        help="directory holding the built wheel/sdist (default: dist/)",
-    )
-    parser.add_argument(
-        "--workflow",
-        type=Path,
-        default=WORKFLOW_PATH,
-        help="publish workflow to read the action pin from",
-    )
-    args = parser.parse_args()
+    ).parse_args()
 
+    return check_distributions(DEFAULT_DIST_DIR, WORKFLOW_PATH)
+
+
+def check_distributions(dist_dir: Path, workflow: Path) -> int:
+    """Return 0 when every built distribution is publishable, 1 otherwise."""
     try:
-        action_version = read_pinned_action_version(args.workflow)
+        action_version = read_pinned_action_version(workflow)
     except ValueError as exc:
         sys.stderr.write(f"{exc}\n")
         return 1
 
     ceiling = metadata_ceiling_for(action_version)
 
-    distributions = sorted([*args.dist_dir.glob("*.whl"), *args.dist_dir.glob("*.tar.gz")])
+    distributions = sorted([*dist_dir.glob("*.whl"), *dist_dir.glob("*.tar.gz")])
     if not distributions:
         sys.stderr.write(
-            f"No distributions found in {args.dist_dir}. Run `uv build` first — a gate "
+            f"No distributions found in {dist_dir}. Run `uv build` first — a gate "
             "with nothing to check must not report success.\n"
         )
         return 1

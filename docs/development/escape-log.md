@@ -743,8 +743,10 @@ gate that shipped.
   covers the checker and asserts both call sites still exist — this project has
   shipped an inert ratchet before, and a script nothing calls reports success
   forever. An empty `dist/` is a failure, not a pass.
-- **Verified red**: the shipped gate, run against the real v0.3.25 artifacts with
-  the pre-fix pin taken from `451e97db`:
+- **Verified red**: the shipped gate, via
+  `check_distributions(dist_dir, workflow)` — the gate exposes no path-typed CLI
+  argument, so a reproduction calls the function, exactly as the contract tests
+  do — against the real v0.3.25 artifacts with the pre-fix pin from `451e97db`:
 
   ```
   Built distributions declare core metadata newer than the pinned publisher accepts.
@@ -757,6 +759,42 @@ gate that shipped.
   the pin are the genuine article, so this reproduces the escape rather than
   modelling it. The disarm case was checked too: replacing the `deploy.py` call
   site fails `test_gate_is_actually_invoked`.
+- **Note — the gate's own first version failed the quality gate**: it took
+  `--dist-dir` / `--workflow` as `type=Path` CLI arguments, which SonarCloud
+  flagged as `pythonsecurity:S8707` (MAJOR), taking `new_security_rating` to C
+  against a required A. That is the third instance of this rule here, after
+  `injection_ratchet.py` and `coverage_report.py`'s `bank()`. The remedy is
+  already settled and is **not** a containment guard: commit `a5d34c0d` records
+  two successive attempts at resolve-then-contain that left the finding in place.
+  Both path arguments were therefore removed rather than sanitised, and
+  `test_gate_exposes_no_path_typed_cli_argument` now asserts that no `type=Path`
+  argument returns.
+
+  Three instances of one rule, each fixed the same way, is a lesson that has
+  proven it cannot survive as prose, so it was **graduated to `arch_check.py`
+  check 19**: no `type=Path` argparse argument anywhere in `scripts/`. Verified
+  red by restoring this script's own pre-fix body from `d4fdcee6` — the exact
+  code SonarCloud rejected — which the check names argument by argument:
+
+  ```
+  scripts/check_distribution.py: add_argument(--dist-dir) uses type=Path...
+  scripts/check_distribution.py: add_argument(--workflow) uses type=Path...
+  arch_check exit=1
+  ```
+
+  Exit 0 once restored. **Running it for the first time found nine further
+  instances that no one had counted** — `coverage_report.py --out`,
+  `defect_injection.py --out`, five in `impact_report.py`, two in
+  `parity_gate.py`. They ship as a **shrink-only** `CLI_PATH_ARG_ALLOWLIST`
+  rather than being fixed here, because draining them means touching four
+  scripts and their workflow call sites; filed as task #36. Two things are worth
+  recording about that number. It is more than double the instances anyone knew
+  about, which is the usual result of converting prose into a check. And
+  `coverage_report.py` is on the list *despite* commit `89bf0323` having already
+  fixed this rule in that same file — the earlier pass removed `bank()`'s
+  `baseline_path` and left `--out` untouched, which is precisely what
+  per-instance fixing looks like from the outside: a file that has been "fixed"
+  and still carries the defect.
 - **Lesson**: *pinning one side of a compatibility relation makes the other side
   a moving target, and the skew is nobody's regression.* Neither component was
   wrong; both were doing their job. The general form — when you freeze one of two

@@ -56,6 +56,19 @@ jobs:
       - name: Build package
         run: uv build
 
+      # Two independent checks on the built distribution, before anything is
+      # uploaded. `twine check` catches a malformed distribution; it does NOT
+      # catch a distribution that is merely newer than the pinned publisher,
+      # because the twine resolved here is current while the publisher's is
+      # frozen. check_distribution.py reads both versions together and is the
+      # one that catches the skew.
+      - name: Check distribution renders (twine)
+        run: uvx twine check dist/*
+
+      # Stdlib-only on purpose, so it needs no resolved environment to run.
+      - name: Check distribution is publishable by the pinned uploader
+        run: python scripts/check_distribution.py
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:

@@ -440,6 +440,9 @@
   "rwa_calc.engine.sa.risk_weights::_b31_append_retail_branches": [
     "PS1/26, paragraph 123"
   ],
+  "rwa_calc.engine.sa.risk_weights::_crr_append_institution_maturity_branches": [
+    "CRR Art. 121"
+  ],
   "rwa_calc.engine.sa.risk_weights::_crr_append_real_estate_branches": [
     "CRR Art. 124"
   ],
@@ -486,6 +489,9 @@
   ],
   "rwa_calc.engine.sa.rw_adjustments::apply_third_party_deposit_rw_mapping": [
     "CRR Art. 232"
+  ],
+  "rwa_calc.engine.sa.sovereign_derived::crr_art_121_4_trade_finance_expr": [
+    "CRR Art. 121"
   ],
   "rwa_calc.engine.securitisation.allocator::SecuritisationAllocator.allocate": [
     "CRR Art. 109",

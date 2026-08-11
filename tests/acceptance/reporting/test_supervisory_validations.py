@@ -7,16 +7,19 @@ Pipeline position:
         -> known-breaks + known-uncovered baseline
 
 Why this is not a plain "no failures" assertion: the estate currently breaks a
-known set of published rules, and leaves a known set of templates unchecked.
-Asserting zero of either would fail permanently and be switched off; asserting
-nothing would let a new defect land unnoticed. So the gate is a RATCHET over a
-committed liability register, applied to BOTH populations:
+known set of published rules, leaves a known set of templates unchecked, and
+executes a known set of rules that assert nothing. Asserting zero of any of
+those would fail permanently and be switched off; asserting nothing would let a
+new defect land unnoticed. So the gate is a RATCHET over a committed liability
+register, applied to ALL THREE populations:
 
   (a) no broken rule outside the baseline           — the regression gate;
   (b) no baseline rule that no longer breaks        — a fix must shrink it;
   (c) no uncovered template outside the baseline    — a new blind spot fails;
   (d) no baseline template that is now covered      — closing one must shrink it;
-  (e) every entry carries a written reason          — a register, not a hash.
+  (e) every entry carries a written reason          — a register, not a hash;
+  (f) no rule falls to vacuous outside the baseline — a PASS -> VACUOUS fails;
+  (g) no baseline vacuous rule that now asserts     — activation must shrink it.
 
 An Error-severity break rejects the entire return at submission, so every
 ``ERROR`` line in the register is a blocking filing defect.
@@ -28,6 +31,38 @@ break set is only evidence of progress if coverage held — so coverage is
 ratcheted too, and the per-run summary keeps NOT_EVALUATED separate from PASS
 rather than letting unevaluable rules flatter a headline figure.
 
+Why (f)/(g) exist — the third way this gate used to fail open:
+    A rule whose every operand is null or exactly zero is scored ``VACUOUS``:
+    it reached a verdict, the verdict held, and it asserted NOTHING (see
+    ``reporting/validations/evaluate.py::_Context.observe`` and
+    ``checker.py::_roll_up``). Vacuity is 21%–70% of executed rules depending on
+    the run — 23 of 109 on ``crr/irb-classes`` at the low end, 219 of 415 on
+    ``b31/rich``, 123 of 177 on ``b31/off-bs`` at the high end. Union it across
+    the sixteen runs and 218 rules — 143 of them Error-severity — reach a verdict
+    and NEVER reach a real one anywhere.
+
+    Legs (a)–(e) are all blind to it. A defect that empties a column silently
+    converts ``PASS`` -> ``VACUOUS``: the template is still emitted, so (c)/(d)
+    do not move; the break set does not grow, so (a)/(b) do not move; and the
+    ``VACUOUS`` count in ``summary`` was documented as informational and
+    asserted only to the extent that the four status counts add up. Every leg
+    stayed green while the estate stopped being checked.
+
+    This is measured history, not a hypothetical. ``.claude/LESSONS.md`` B5
+    records a recurrence dated **2026-08-08** (batch 20260808-1624) where
+    C 08.01 r0253 read ``0.00`` in all six golden portfolios: the mandatory
+    Tier 2 gate ran fully green under a simulated fix because the cell it was
+    meant to defend was dead. Closing it activated FIVE previously-``VACUOUS``
+    rules to ``PASS``, ``boe_b0752_27`` — the r0253 tie-out itself — among them.
+    That is the discharge this leg exists to force, and the ``boe_b0752_*`` /
+    ``boe_b0814_*`` siblings still in ``known_vacuous_rules`` are the rest of
+    the same family, still asserting nothing on other columns.
+
+    So the ``VACUOUS`` counts in ``summary`` are descriptive, but vacuity itself
+    is NOT informational any more: it is ratcheted per rule, both ways, exactly
+    like a break. An entry is a LIABILITY — a published rule the supervisor
+    will run and we currently satisfy by arithmetic rather than by evidence.
+
 Why the key is ``(regime, rule_id)`` and not the failing coordinate:
     Coordinates are recorded on each entry for triage, but they are NOT the key.
     ``RuleOutcome.failures`` is capped at ``MAX_RECORDED_FAILURES``, and a
@@ -37,6 +72,57 @@ Why the key is ``(regime, rule_id)`` and not the failing coordinate:
     regime prefix is load-bearing in its own right: 85 rule ids appear in BOTH
     published extracts (``v09779_m`` was a live case, failing under each), so a
     key on ``rule_id`` alone silently drops half.
+
+    ``known_vacuous_rules`` uses THE SAME key, for both of those reasons: a
+    vacuous rule has no failing coordinate to key on at all, and the 85 shared
+    ids would collide across regimes just the same. Sharing the key also makes
+    the two populations disjoint by construction, since a rule that FAILs
+    anywhere has reached a real verdict and is therefore not vacuity-only.
+
+    What legs (f)/(g) do NOT catch. Read this before treating a green (f) as
+    evidence the estate is still being checked — an earlier draft of this
+    paragraph overclaimed twice and a reviewer measured both claims false.
+
+    FIRST, the union. Membership is the union over the sixteen runs: a rule is
+    vacuity-only when NO run gets a real verdict out of it. A change that empties
+    a column on ONE portfolio while another still exercises the same rule leaves
+    this population unmoved, and 221 rules (130 of them ERROR) currently hold a
+    real verdict on exactly one run, so that is a wide surface. It cuts both ways
+    on leg (g): a listed rule only leaves the population when the change reaches
+    EVERY run where it was vacuous. Measured instance — ``crr/v3332_i`` is
+    vacuous on both ``rich`` and ``crm-substitution``, so darkening it on ``rich``
+    keeps it in the register and (g) stays green.
+
+    SECOND, and this is the real hole: these legs are scoped to the ``VACUOUS``
+    status. ``PASS -> NOT_EVALUATED`` escapes all six legs of this gate. Dropping
+    one emitted row (``C 02.00`` r0160) from ``crr/rich`` moves two ERROR rules
+    out of ``PASS`` into ``NOT_EVALUATED`` — one of them ``v3335_i``, which passed
+    on ``rich`` alone, so afterwards it has no verdict anywhere in the matrix —
+    and every leg here stays green with ``templates_uncovered`` unmoved, because a
+    darkened rule is not a break, not a vacuity, and does not uncover its
+    template. The worked example is ``v0207_m``: an ERROR rule on the C 02.00
+    hierarchy that PASSes on six portfolios today and is VACUOUS on the other two,
+    and which BOTH of that reviewer's mutations darken. It is a handful of dropped
+    rows from silently joining ``v0204_m`` / ``v0205_m`` / ``v0210_m`` /
+    ``v0211_m`` — four live ERROR rules that are already evaluated NOWHERE in the
+    matrix, and which no leg here objects to.
+
+    The mitigation, and its limits. ``scripts/coverage_report.py --check``
+    ratchets ``never_evaluated_rules`` (a MAX, banked at 785) and
+    ``union_binding_rules_{crr,b31}`` (a MIN, 257/289), and by those definitions
+    the row-drop moves both. But (i) that is inference from the metric
+    definitions, not a measured ``--check`` under the mutation; (ii) both are
+    COUNTS, so one rule going dark while another activates nets to zero; and
+    (iii) it is a DIFFERENT gate from this one, and this file is the mandatory
+    Tier 2 register. So the ``NOT_EVALUATED`` half is mitigated, not closed, and
+    it is owed work — not a property of legs (f)/(g).
+
+    Where the single-portfolio case actually goes, stated per portfolio rather
+    than waved at ``test_reporting_*_golden.py``: only FIVE goldens exist — rich,
+    ccr, irb-classes, off-bs, sa-classes. ``crm-substitution``, ``re-split`` and
+    ``art199`` have NO golden, only focused acceptance tests pinning the columns
+    each fixture was built for: strong on those columns, silent elsewhere. Golden
+    coverage for those three is owed work too.
 
 Cost, and why every run is load-bearing:
     This file is the most expensive test in the suite: eight portfolios x two
@@ -91,8 +177,10 @@ A rule that cannot fail is close to no coverage at all:
 
 Baseline format:
     ``tests/expected_outputs/reporting/validation_known_breaks.json`` — a JSON
-    object with ``summary`` (per-run outcome counts, informational),
-    ``known_broken_rules`` and ``known_uncovered_templates``.
+    object with ``notes`` (how to read the register), ``summary`` (per-run
+    outcome counts; descriptive, and the only part of the file nothing asserts
+    entry-by-entry), ``known_broken_rules``, ``known_uncovered_templates`` and
+    ``known_vacuous_rules``.
 
 Regenerating the baseline:
     Set ``REGEN_VALIDATION_BASELINE=1`` and run this file. Hand-written
@@ -103,6 +191,9 @@ Regenerating the baseline:
     not established, the honest reason is the greppable ``unattributed - needs
     investigation``, not a guess. Never bulk-regen to make a red gate green: a
     new break is a new filing defect until someone has said otherwise in writing.
+    The same applies to a new ``known_vacuous_rules`` entry: a rule that has
+    stopped asserting anything is a check we have LOST, so it is banked only with
+    a written account of what emptied it.
 
     CHECK FOR STALE REASONS after every regeneration. Preserving curation is
     right up until the thing a reason CITES gets fixed, and then it rots
@@ -185,14 +276,78 @@ MAX_RECORDED_COORDINATES = 5
 RULE_KEY_FIELDS = ("regime", "rule_id")
 TEMPLATE_KEY_FIELDS = ("regime", "portfolio", "template")
 
+#: Sample cells recorded per vacuous rule. A vacuous rule has NO failing
+#: coordinate — that is the whole point of it — so the tables it addresses and
+#: the count of coordinates it held over vacuously are the only triage handles
+#: the evaluator can give, and they are recorded instead.
+MAX_RECORDED_TABLES = 5
+
 #: Header written into the register on every regeneration, so the file explains
 #: how to read itself to someone who never saw this module. Emitted from here
 #: rather than hand-added to the JSON, which a regeneration would discard.
 REGISTER_NOTES: dict[str, str] = {
     "what_this_is": (
-        "Known supervisory validation breaks and coverage holes, ratcheted by "
+        "Known supervisory validation breaks, coverage holes and VACUOUS rules, ratcheted by "
         "tests/acceptance/reporting/test_supervisory_validations.py. An entry is a LIABILITY, "
         "not a waiver: an ERROR-severity break rejects the entire return at submission."
+    ),
+    "what_a_vacuity_entry_MEANS": (
+        "known_vacuous_rules lists rules that REACH a verdict on at least one registered run and "
+        "reach it only VACUOUSLY - every operand was null or exactly zero, so the comparison held "
+        "at 0 = 0 and asserted nothing about our figures. It is not a break and not a coverage "
+        "hole; it is a check we are not getting. Membership is the union over portfolios: a rule "
+        "PASSing or FAILing anywhere is NOT here, which also makes this list disjoint from "
+        "known_broken_rules. It is ratcheted BOTH ways, exactly like a break - a rule that falls "
+        "to vacuous outside this list fails the gate (the PASS -> VACUOUS regression, which moves "
+        "neither the break set nor template coverage and was invisible before), and a listed rule "
+        "that stops being vacuous on every run must be REMOVED from the list."
+    ),
+    "what_the_vacuity_ratchet_does_NOT_catch": (
+        "Two limits, both measured, both stated because a green leg is otherwise read as more "
+        "than it is. (1) UNION: a change that empties a column on one portfolio while another "
+        "still gets a real verdict out of the same rule moves nothing here, and 221 rules (130 "
+        "ERROR) currently hold a real verdict on exactly ONE run. Same masking on the removal "
+        "leg: crr/v3332_i is vacuous on both rich and crm-substitution, so darkening it on rich "
+        "leaves the entry standing. (2) STATUS SCOPE: these legs see VACUOUS only, so "
+        "PASS -> NOT_EVALUATED escapes every leg of this gate - dropping one emitted row (C 02.00 "
+        "r0160) from crr/rich darkens two ERROR rules, one of them (v3335_i) passing on rich "
+        "alone, and the whole gate stays green. scripts/coverage_report.py --check mitigates that "
+        "by ratcheting never_evaluated_rules (max 785) and union_binding_rules (min 257/289), but "
+        "those are counts in a different gate, so one rule going dark nets against another "
+        "activating. The NOT_EVALUATED half is owed work, not a property of this register."
+    ),
+    "how_to_discharge_a_vacuity_entry": (
+        "Make one cell the rule addresses carry a real figure on a registered portfolio, then "
+        "DELETE the entry - the gate will fail until you do, which is the design. The worked "
+        "example is the 2026-08-08 B5 recurrence (.claude/LESSONS.md): C 08.01 r0253 read 0.00 in "
+        "all six goldens, so Tier 2 was structurally incapable of seeing a change to it. Closing "
+        "it needed a TWO-LEG fixture - a live cell that SURVIVES the change plus one that MOVES, "
+        "because a single moving row leaves the cell at 0.00 afterwards - and activated five "
+        "previously-VACUOUS rules to PASS, boe_b0752_27 (the r0253 tie-out) among them. Do NOT "
+        "discharge an entry by deleting the rule, narrowing a portfolio, or making the cell "
+        "structurally absent: absence is NOT_EVALUATED, which is worse than vacuity, not better - "
+        "and per what_the_vacuity_ratchet_does_NOT_catch, that route may not even redden a leg, so "
+        "nothing here will stop you doing it."
+    ),
+    "reading_a_vacuity_reason": (
+        "The mechanism sentence names WHICH limb the measured evidence supports. 'emitted but "
+        "unreported (null)' means the cells exist in the layout and carry no figure, so the "
+        "rule's treat-missing-as-zero policy coalesces them to 0.0 - the LESSONS B1/B5 dead-cell "
+        "signature, and the limb most likely to be hiding a defect. 'emitted and exactly 0.00' "
+        "means the cells ARE populated and the figure is genuinely zero - usually a portfolio "
+        "artefact (no exposure of the kind the column measures) but equally consistent with a "
+        "column nothing ever writes to. Neither limb settles the root cause, which is why most "
+        "entries are prefixed 'unattributed - needs investigation'. The exception is the "
+        "'structural' prefix: see the next note."
+    ),
+    "structural_vacuity_of_prohibition_rules": (
+        "A rule of the form '{ref} = empty' asks whether a cell was REPORTED, and holds precisely "
+        "by our reporting nothing there. reporting/validations/evaluate.py::_evaluate_emptiness "
+        "returns VACUOUS for the holding case, so PASS is UNREACHABLE for this family and vacuity "
+        "is the passing verdict, not a lost check. Those entries are prefixed 'structural' and "
+        "need no investigation. Their only other outcome is FAIL (we reported a figure the "
+        "publisher forbids), which lands in known_broken_rules - so removing them from here on "
+        "activation is coherent, not a loophole."
     ),
     "how_to_read_a_reason": (
         "Each entry names the DEFECT, not the symptom. A reason beginning 'unattributed - "
@@ -518,12 +673,43 @@ class RuleFact(NamedTuple):
         return f"left = {left} vs right = {right}"
 
 
+class VacuityFact(NamedTuple):
+    """What the current run says about one rule that only ever held vacuously.
+
+    There is no ``lhs``/``rhs`` and no failing coordinate to record: the rule
+    held, at ``0 = 0``, on every coordinate it reached. ``tables`` and
+    ``vacuous_coordinates`` are what triage has to work with — which templates to
+    go and look at, and how many cells said nothing.
+    """
+
+    severity: str
+    label: str
+    expression: str
+    tables: tuple[str, ...]
+    vacuous_coordinates: int
+    portfolios: tuple[str, ...]
+
+    def figures(self) -> str:
+        """The scale of the silence, formatted for a failure message."""
+        return (
+            f"held vacuously on {self.vacuous_coordinates} coordinate(s) "
+            f"across {len(set(self.portfolios))} portfolio(s)"
+        )
+
+
 class GateRun(NamedTuple):
-    """Everything the six runs produced."""
+    """Everything the sixteen runs produced.
+
+    ``summary`` is per-run outcome counts, kept descriptive: nothing asserts an
+    individual count, only that the four statuses are all reported and account
+    for the enforced population. Vacuity used to live ONLY there, which is why it
+    was invisible — the ratcheted population is ``vacuous``, at rule granularity.
+    """
 
     broken: dict[RuleKey, RuleFact]
     uncovered: dict[TemplateKey, int]
     summary: dict[str, dict[str, int]]
+    vacuous: dict[RuleKey, VacuityFact]
 
 
 # ---------------------------------------------------------------------------
@@ -543,10 +729,19 @@ def _run_gate() -> GateRun:
 
     ``summary`` keeps PASS, FAIL, VACUOUS and NOT_EVALUATED apart. Conflating the
     last two with PASS is how a coverage hole hides.
+
+    ``vacuous`` is the union too, and is the set of rules that reached a verdict
+    ONLY vacuously — vacuous on at least one run and never PASS or FAIL on any.
+    A rule vacuous here and passing there is still being checked somewhere, so it
+    is not a lost check; a rule that only ever holds at ``0 = 0`` is. That is why
+    ``real_verdict`` is accumulated across every run before the filter is applied,
+    rather than deciding membership run by run.
     """
     broken: dict[RuleKey, RuleFact] = {}
     uncovered: dict[TemplateKey, int] = {}
     summary: dict[str, dict[str, int]] = {}
+    vacuous: dict[RuleKey, VacuityFact] = {}
+    real_verdict: set[RuleKey] = set()
     for regime, framework, portfolio, build_bundle, build_config, build_prior in RUNS:
         result = PipelineOrchestrator().run_with_data(build_bundle(), build_config())
         prior = (
@@ -572,8 +767,30 @@ def _run_gate() -> GateRun:
         for template in report.templates_uncovered:
             uncovered[TemplateKey(regime, portfolio, template)] = report.rules_executed
 
+        for outcome in report.by_status(STATUS_PASS):
+            real_verdict.add(RuleKey(regime, outcome.rule_id))
+
+        for outcome in report.by_status(STATUS_VACUOUS):
+            key = RuleKey(regime, outcome.rule_id)
+            held = vacuous.get(key)
+            if held is not None:
+                vacuous[key] = held._replace(
+                    portfolios=(*held.portfolios, portfolio),
+                    vacuous_coordinates=max(held.vacuous_coordinates, outcome.vacuous),
+                )
+                continue
+            vacuous[key] = VacuityFact(
+                severity=outcome.severity,
+                label=outcome.label or "",
+                expression=outcome.expression or "",
+                tables=outcome.tables[:MAX_RECORDED_TABLES],
+                vacuous_coordinates=outcome.vacuous,
+                portfolios=(portfolio,),
+            )
+
         for outcome in report.by_status(STATUS_FAIL):
             key = RuleKey(regime, outcome.rule_id)
+            real_verdict.add(key)
             seen = broken.get(key)
             if seen is not None:
                 broken[key] = seen._replace(
@@ -592,12 +809,17 @@ def _run_gate() -> GateRun:
                 lhs=first.lhs,
                 rhs=first.rhs,
             )
-    return GateRun(broken, uncovered, summary)
+    return GateRun(
+        broken,
+        uncovered,
+        summary,
+        {key: fact for key, fact in vacuous.items() if key not in real_verdict},
+    )
 
 
 @pytest.fixture(scope="module")
 def gate_run() -> GateRun:
-    """The six runs, executed once for this file.
+    """The sixteen runs, executed once for this file.
 
     ``--dist=loadfile`` pins this file to one worker, so the pipeline runs happen
     once per session rather than once per test.
@@ -610,10 +832,23 @@ def gate_run() -> GateRun:
 # ---------------------------------------------------------------------------
 
 
-def _read_baseline() -> tuple[dict[RuleKey, str], dict[TemplateKey, str]]:
-    """Load the committed register as two ``{key: reason}`` maps."""
+class Baseline(NamedTuple):
+    """The committed register, as three ``{key: reason}`` maps.
+
+    Named rather than a bare tuple because there are three populations now and a
+    positional unpack (``_, baseline = _read_baseline()``) silently reads the
+    wrong one the moment a fourth is added.
+    """
+
+    rules: dict[RuleKey, str]
+    templates: dict[TemplateKey, str]
+    vacuous: dict[RuleKey, str]
+
+
+def _read_baseline() -> Baseline:
+    """Load the committed register as three ``{key: reason}`` maps."""
     if not BASELINE_PATH.exists():
-        return {}, {}
+        return Baseline({}, {}, {})
     payload = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
     rules = {
         RuleKey(*(entry[field] for field in RULE_KEY_FIELDS)): entry["reason"]
@@ -623,7 +858,11 @@ def _read_baseline() -> tuple[dict[RuleKey, str], dict[TemplateKey, str]]:
         TemplateKey(*(entry[field] for field in TEMPLATE_KEY_FIELDS)): entry["reason"]
         for entry in payload.get("known_uncovered_templates", [])
     }
-    return rules, templates
+    vacuous = {
+        RuleKey(*(entry[field] for field in RULE_KEY_FIELDS)): entry["reason"]
+        for entry in payload.get("known_vacuous_rules", [])
+    }
+    return Baseline(rules, templates, vacuous)
 
 
 def _write_baseline(run: GateRun) -> None:
@@ -632,7 +871,7 @@ def _write_baseline(run: GateRun) -> None:
     Only the reason is curated. Severity, coordinates, portfolios and the summary
     are facts about the current estate and are always refreshed.
     """
-    existing_rules, existing_templates = _read_baseline()
+    existing_rules, existing_templates, existing_vacuous = _read_baseline()
     payload = {
         "notes": REGISTER_NOTES,
         "summary": run.summary,
@@ -659,9 +898,58 @@ def _write_baseline(run: GateRun) -> None:
             }
             for key, executed in sorted(run.uncovered.items())
         ],
+        "known_vacuous_rules": [
+            {
+                "regime": key.regime,
+                "rule_id": key.rule_id,
+                "severity": fact.severity,
+                "reason": existing_vacuous.get(key, UNCLASSIFIED),
+                "portfolios": sorted(set(fact.portfolios)),
+                "vacuous_coordinates": fact.vacuous_coordinates,
+                "tables": list(fact.tables),
+                "expression": fact.expression,
+            }
+            for key, fact in sorted(run.vacuous.items())
+        ],
     }
     BASELINE_PATH.parent.mkdir(parents=True, exist_ok=True)
     BASELINE_PATH.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# The vacuity ratchet, as two named predicates
+# ---------------------------------------------------------------------------
+# Extracted rather than inlined like legs (a)-(d), for one reason: a gate nobody
+# has watched fail is not a gate, and watching THIS one fail through the tests
+# costs sixteen pipeline runs plus a fixture change. Named functions over plain
+# dicts can be driven with a synthetic measured-vs-baseline pair in seconds, so
+# both directions are demonstrable on demand instead of argued from the code.
+
+
+def _rules_newly_vacuous(
+    measured: dict[RuleKey, VacuityFact], baseline: dict[RuleKey, str]
+) -> list[RuleKey]:
+    """Rules that now hold only vacuously and the register does not admit to."""
+    return sorted(key for key in measured if key not in baseline)
+
+
+def _rules_no_longer_vacuous(
+    measured: dict[RuleKey, VacuityFact], baseline: dict[RuleKey, str]
+) -> list[RuleKey]:
+    """Register entries whose rule has started reaching a real verdict again."""
+    return sorted(key for key in baseline if key not in measured)
+
+
+def _describe_vacuity(keys: list[RuleKey], facts: dict[RuleKey, VacuityFact]) -> str:
+    """Format vacuity findings for an assertion message."""
+    return "\n".join(
+        f"  {key.describe()}  [{facts[key].severity}] {facts[key].figures()}\n"
+        f"      rule: {facts[key].expression}\n"
+        f"      on:   {', '.join(facts[key].tables)} "
+        f"(portfolios: {', '.join(sorted(set(facts[key].portfolios)))})\n"
+        f"      {facts[key].label}"
+        for key in keys
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -686,7 +974,7 @@ def test_no_supervisory_validation_break_outside_the_baseline(gate_run: GateRun)
         "REGEN_VALIDATION_BASELINE=1 uv run pytest "
         "tests/acceptance/reporting/test_supervisory_validations.py"
     )
-    baseline, _ = _read_baseline()
+    baseline = _read_baseline().rules
 
     # Act
     new_breaks = sorted(key for key in gate_run.broken if key not in baseline)
@@ -721,7 +1009,7 @@ def test_no_baseline_break_has_been_fixed_without_being_removed(gate_run: GateRu
         pytest.skip("REGEN_VALIDATION_BASELINE=1 - baseline rewritten by the companion test")
 
     # Arrange
-    baseline, _ = _read_baseline()
+    baseline = _read_baseline().rules
 
     # Act
     stale = sorted(key for key in baseline if key not in gate_run.broken)
@@ -750,7 +1038,7 @@ def test_no_template_goes_unchecked_outside_the_baseline(gate_run: GateRun) -> N
         pytest.skip("REGEN_VALIDATION_BASELINE=1 - baseline rewritten by the companion test")
 
     # Arrange
-    _, baseline = _read_baseline()
+    baseline = _read_baseline().templates
 
     # Act
     new_holes = sorted(key for key in gate_run.uncovered if key not in baseline)
@@ -777,7 +1065,7 @@ def test_no_baseline_coverage_hole_has_been_closed_without_being_removed(gate_ru
         pytest.skip("REGEN_VALIDATION_BASELINE=1 - baseline rewritten by the companion test")
 
     # Arrange
-    _, baseline = _read_baseline()
+    baseline = _read_baseline().templates
 
     # Act
     closed = sorted(key for key in baseline if key not in gate_run.uncovered)
@@ -797,6 +1085,9 @@ def test_every_baseline_entry_carries_a_written_reason() -> None:
     records that the mechanism is visible but the defect is not established. What
     is not acceptable is the capture placeholder, which records nothing.
 
+    All THREE populations are checked. A vacuity entry without a reason is the
+    worst of the three to leave lying around: it looks like a passing rule.
+
     Arrange: the committed register.
     Act:     find entries still carrying the capture placeholder.
     Assert:  there are none.
@@ -805,12 +1096,15 @@ def test_every_baseline_entry_carries_a_written_reason() -> None:
         pytest.skip("REGEN_VALIDATION_BASELINE=1 - reasons are written by hand after capture")
 
     # Arrange
-    rules, templates = _read_baseline()
+    rules, templates, vacuous = _read_baseline()
 
     # Act
     untriaged = sorted(key.describe() for key, reason in rules.items() if reason == UNCLASSIFIED)
     untriaged += sorted(
         key.describe() for key, reason in templates.items() if reason == UNCLASSIFIED
+    )
+    untriaged += sorted(
+        f"{key.describe()} (vacuous)" for key, reason in vacuous.items() if reason == UNCLASSIFIED
     )
 
     # Assert
@@ -821,6 +1115,92 @@ def test_every_baseline_entry_carries_a_written_reason() -> None:
     )
 
 
+def test_no_rule_falls_to_vacuous_outside_the_baseline(gate_run: GateRun) -> None:
+    """A rule that stops asserting anything fails the gate — leg (f).
+
+    This is the PASS -> VACUOUS regression no other leg can see: the template is
+    still emitted (so coverage is unmoved), the rule still holds (so the break set
+    is unmoved), and before this assertion existed the only trace was a count in
+    ``summary`` that nothing compared against anything.
+
+    Arrange: the committed register plus the rules the current estate only ever
+             holds vacuously.
+    Act:     find vacuity-only rules the register does not admit to.
+    Assert:  there are none.
+    """
+    if REGEN:
+        pytest.skip("REGEN_VALIDATION_BASELINE=1 - baseline rewritten by the companion test")
+
+    # Arrange
+    baseline = _read_baseline().vacuous
+
+    # Act
+    fallen = _rules_newly_vacuous(gate_run.vacuous, baseline)
+
+    # Assert
+    blocking = [key for key in fallen if gate_run.vacuous[key].severity == "ERROR"]
+    assert not fallen, (
+        f"{len(fallen)} published rule(s) now hold ONLY VACUOUSLY, {len(blocking)} of them "
+        "Error-severity. Every operand was null or exactly zero, so the rule asserts nothing "
+        "about our figures while still reporting a green outcome:\n"
+        f"{_describe_vacuity(fallen, gate_run.vacuous)}\n"
+        "TWO provenances reach this state and the gate cannot tell them apart - it holds no "
+        "prior status - so establish which before acting:\n"
+        "  PASS -> VACUOUS is a REGRESSION. Something emptied cells this rule was checking. "
+        "This is exactly how a defect that empties a column passes this gate (LESSONS B5, "
+        "recurrence 2026-08-08). Find what emptied them; do not bank it.\n"
+        "  NOT_EVALUATED -> VACUOUS is an IMPROVEMENT. A cell that was structurally absent is "
+        "now emitted (as null or zero), so a rule from the never-evaluated pool has started "
+        "reaching a verdict. Bank it: add the entry with a written reason saying so.\n"
+        f"Either way the entry belongs in {BASELINE_PATH.name} under known_vacuous_rules only "
+        "once the vacuity is accepted in writing."
+    )
+
+
+def test_no_baseline_vacuous_rule_asserts_again_without_being_removed(gate_run: GateRun) -> None:
+    """A rule that starts asserting something must shrink the register — leg (g).
+
+    The mirror of leg (f), and the leg that makes progress visible: when a fixture
+    finally puts a real figure in a dead cell, the rule reaches PASS or FAIL and
+    its entry becomes a lie. The gate fails until the entry is deleted, exactly as
+    a fixed break must be removed from ``known_broken_rules``.
+
+    Read the failure before banking it: leaving this population is not always
+    progress. A rule also leaves by becoming NOT_EVALUATED on every run where it
+    was vacuous — a cell that stopped being emitted, a portfolio dropped from
+    ``RUNS`` — and that estate is WORSE, not better. PASS or FAIL is the
+    discharge; absence is a regression wearing the same shirt.
+
+    Do not read the converse into that, though. This leg does NOT catch a rule
+    going dark: it fires only when the rule leaves the population ENTIRELY, which
+    takes a change reaching every run where it was vacuous. A rule darkened on one
+    run and still vacuous on another stays listed and this leg stays green —
+    measured on ``crr/v3332_i`` (vacuous on ``rich`` and ``crm-substitution``).
+    See "What legs (f)/(g) do NOT catch" in the module docstring.
+
+    Arrange: the committed register plus the current vacuity population.
+    Act:     find register entries that now reach a real verdict.
+    Assert:  there are none.
+    """
+    if REGEN:
+        pytest.skip("REGEN_VALIDATION_BASELINE=1 - baseline rewritten by the companion test")
+
+    # Arrange
+    baseline = _read_baseline().vacuous
+
+    # Act
+    activated = _rules_no_longer_vacuous(gate_run.vacuous, baseline)
+
+    # Assert
+    detail = "\n".join(f"  {key.describe()}\n      was: {baseline[key]}" for key in activated)
+    assert not activated, (
+        f"{len(activated)} baseline vacuous rule(s) left the vacuity population. If they now PASS "
+        "or FAIL they are being CHECKED again - bank it and remove the entry from "
+        f"{BASELINE_PATH.name}. If they went NOT_EVALUATED instead, the cell or the run went away "
+        f"and the estate got WORSE - fix that instead of deleting the entry:\n{detail}"
+    )
+
+
 def test_the_summary_keeps_unevaluable_rules_apart_from_passes(gate_run: GateRun) -> None:
     """A rule that cannot be evaluated is not a rule that passes.
 
@@ -828,7 +1208,14 @@ def test_the_summary_keeps_unevaluable_rules_apart_from_passes(gate_run: GateRun
     recorded separately and no headline figure can be flattered by rules that
     never ran.
 
-    Arrange: the six runs.
+    This asserts the SHAPE of the summary, not its figures — the counts move with
+    every fixture change. It is deliberately NOT the vacuity gate: keeping the
+    ``VACUOUS`` column in the summary was all this file used to do about vacuity,
+    and four counts adding up to ``rules_enforced`` is satisfied just as neatly
+    after a rule falls out of ``PASS`` into ``VACUOUS`` as before. Legs (f)/(g)
+    ratchet the rules themselves.
+
+    Arrange: the sixteen runs.
     Act:     read the per-run summary.
     Assert:  all four outcome statuses are reported for every run, and together
              they account for exactly the enforced population.

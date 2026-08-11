@@ -18,6 +18,20 @@ that mattered changed a gate.
 Read `.claude/LESSONS.md` first — this defect may already be a known trap
 that was never graduated into a check, which is itself the finding.
 
+## The closing rule
+
+**A defect found in output is closed by its escape-log entry, not by its fix
+commit.** The entry closes it only when all three of these are filled:
+
+1. an **escape class** from the eight in Step 3;
+2. a **named gate change** — a file path, or a Tier 1 plan bullet ID if deferred;
+3. **verified red** — recorded evidence the new gate was observed failing
+   *before* the fix, quoting the command and the failure line.
+
+Any of the three missing means the defect is still open. Do not report it as
+closed, and do not tell the operator the postmortem is done — say which of the
+three is missing and what it would take. See Step 7's output contract.
+
 ## Step 1 — establish the defect
 
 Do not take the report at face value; it may be a misreading of correct
@@ -96,6 +110,13 @@ Pick exactly one. The category determines the fix.
    → *Fix: a `.claude/LESSONS.md` entry, with the reasoning for why it cannot
    be a check. Use this category sparingly and argue for it.*
 
+8. **`caught-and-parked`** — a gate *did* fire. The finding was recorded (a
+   strict xfail, a `KNOWN_DISAGREEMENTS` entry, a plan bullet) and the record
+   became its resting place, so the wrong number shipped anyway. Detection is
+   not the problem; disposition is.
+   → *Fix: ratchet the register the finding sits in (its size may not grow, and
+   an entry needs an owning bullet), not a new detector.*
+
 ## Step 4 — fix the gate
 
 This is the step people skip. Do it before or alongside the code fix.
@@ -119,9 +140,26 @@ If the gate change is too large for this pass, file it as a **Tier 1** bullet
 in `IMPLEMENTATION_PLAN.md` with `Ref:` pointing at this escape-log entry. Do
 not close the postmortem with the gate unfixed and unfiled.
 
-**Verify the gate actually catches it**: revert the code fix in a detached
-worktree (`git worktree add --detach HEAD`), run the new gate, and confirm it
-goes red. A gate you have not seen fail is not a gate.
+### Step 4b — see the gate go red (required, not advice)
+
+A gate nobody has seen fail is not a gate; it is a gate-shaped assertion that
+happens to be true. Take the first route that works and **record the command
+and the failure line verbatim** — a paraphrase is not evidence:
+
+1. **Revert the code fix** in a detached worktree (`git worktree add --detach
+   HEAD`) and run the new gate.
+2. **Perturb the input instead**, where the fix is not revertible in isolation:
+   empty the column, drop the fixture row, edit the baseline by hand. Restore
+   afterwards and say so.
+3. **Inject the mutant**: add the defect to `scripts/defect_catalogue.py` and
+   run `scripts/defect_injection.py --mutants <id>`, which reports the tier that
+   caught it. This is the strongest route — it leaves the check behind.
+
+If none of the three can be made to work, the gate is not demonstrated. Either
+keep working, or classify the escape `ungateable` and argue it. "Expected to
+catch it" and "the test looks right" are not verification, and a gate whose red
+you could not produce goes into the entry as `Verified red: NOT VERIFIED`,
+which leaves the defect open.
 
 ## Step 5 — write the escape record
 
@@ -134,12 +172,17 @@ header explaining the file's purpose). One entry:
 - **Defect**: <what was produced vs what should have been; sign and magnitude>
 - **Rule**: <article, quoted phrase, source>
 - **Origin**: <commit / batch id / "pre-harness">
-- **Escape class**: `<one of the seven categories>`
+- **Escape class**: `<one of the eight categories>`
 - **Why every gate missed it**: <the specific mechanism — one paragraph>
 - **Gate change**: <what now catches it, with the file path> | <or: plan bullet ID>
-- **Verified red**: <how you confirmed the new gate fails without the fix>
+- **Verified red**: <the command, and the failure line it emitted, without the fix>
 - **Lesson**: <graduated to a check | added to LESSONS.md as <section> | none needed>
 ```
+
+Escape class, gate change and verified red are **not optional fields**. An
+entry that leaves one blank, or fills it with "n/a", is not an entry — it is the
+shrug this file exists to prevent. `not-a-defect` entries (Step 1) carry the
+reasoning in place of the last three fields, and nothing else may.
 
 ## Step 6 — update the lessons working set
 
@@ -157,19 +200,29 @@ graduate or delete a stale one in the same pass and say which.
 
 ## Step 7 — report
 
-Report to the operator, in this order:
+**Output contract.** You may not conclude without all three of the closing
+rule's items. Open the report with them, on three lines, before anything else:
+
+```
+Escape class: <one of the eight>
+Gate change:  <file path | Tier 1 bullet ID>
+Verified red: <command> -> <failure line>   (or: NOT VERIFIED — defect stays open)
+```
+
+Then, in this order:
 
 1. The defect, its sign, and its magnitude.
-2. The escape class and the one-sentence reason every gate missed it.
-3. The gate change, and the evidence it goes red without the fix.
-4. Whether the code fix is included here or deferred.
-5. Anything you found while digging that is a **separate** defect — file
+2. The one-sentence mechanism by which every gate missed it.
+3. Whether the code fix is included here or deferred.
+4. Anything you found while digging that is a **separate** defect — file
    each as a plan bullet; do not fix it in this pass.
 
 ## Constraints
 
 - **The gate change is mandatory; the code fix is optional.** If you can only
   do one in this pass, do the gate and file the code fix.
+- **The escape-log entry is the closing artifact.** A fix commit with no entry
+  leaves the defect open, however green the tree is.
 - Never regenerate goldens or the validation baseline to make a gate green.
   A ratchet failing because you fixed something is the design working —
   remove the register entry deliberately, with its written reason.

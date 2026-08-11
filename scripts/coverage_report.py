@@ -10,17 +10,24 @@ published rulebook binds anywhere at all.
 
 This script answers that. It runs the same portfolio x regime matrix the gate
 runs -- imported from ``RUNS``, never re-declared, so it cannot silently shrink
--- and measures four things:
+-- and measures five things:
 
 ``union_binding_rules_crr`` / ``union_binding_rules_b31``
     Distinct rules reaching PASS or FAIL in at least one run. VACUOUS is
     excluded: a rule whose every operand was null or zero asserted nothing.
     This is the honest headline the per-run summary cannot produce.
+``cells_live``
+    Template cells carrying a value in at least one run, as an ABSOLUTE count.
+    The cell-coverage floor: it falls if and only if the estate stopped
+    reporting a figure it used to report.
 ``template_cell_liveness``
-    Fraction of declared template cells carrying a value in at least one run.
+    The same thing as a fraction of declared cells. Useful reading, **not** a
+    floor: its denominator moves with its numerator, so it can improve while
+    coverage is destroyed.
 ``dead_cells``
     Cells never non-null in any run. Either the portfolio matrix is deficient
-    or the cell is broken; both are work items, so both are listed.
+    or the cell is broken; both are work items, so both are listed. Also not a
+    floor in disguise — it is ``declared - live``.
 ``never_evaluated_rules``
     Rules NOT_EVALUATED on every run, with the reason. Ranked by severity --
     an ERROR-severity rule that never runs anywhere is the worst case in the
@@ -37,13 +44,63 @@ whether the numbers above mean anything:
   fails on a fresh checkout).
 
 Run:
-    uv run python scripts/coverage_report.py
+    uv run python scripts/coverage_report.py            # measure and print
+    uv run python scripts/coverage_report.py --check     # measure and GATE
 
 Output:
     scripts/coverage_metrics.json (override with --out), plus a human summary.
 
-This script computes and prints. It does not gate: wiring the ratchets into
-``arch_metrics.json`` is deliberately somebody else's commit.
+How this gates
+--------------
+``--check`` ratchets six metrics against ``scripts/coverage_baseline.json``
+and exits non-zero on a regression: the two ``union_binding_rules_*`` counts,
+``cells_live`` and ``template_cell_liveness_bp`` may not FALL, ``dead_cells`` and
+``never_evaluated_rules`` may not RISE.
+
+Of those, ``cells_live`` is the one that makes destroying cell coverage fail. The
+ratio and the dead-cell count are **sometimes anti-signal** — both improve when
+declared cells are dropped faster than live ones, and deleting a single run has been
+measured doing exactly that. See the note on ``_RATCHET_MIN``. Two gates invoke it:
+
+- the ``coverage-ratchet`` job in ``.github/workflows/ci.yml``, which runs the
+  script directly so the exit code is the gate's own; and
+- ``tests/contracts/test_coverage_ratchet.py``, which mirrors it as a ``slow``
+  test and adds three always-on structural tests over the baseline itself —
+  including one asserting the CI job still invokes ``--check``, because for its
+  whole earlier life this ratchet was implemented and called by nothing.
+
+Deliberately NOT in ``scripts/arch_metrics.json``: that ratchet runs on every
+commit via the pre-commit hook, and measuring these costs a full-matrix pipeline
+run. **Measured on the reference dev box over the 16-run ``RUNS``, fixtures already
+on disk: 117-169s across five runs** (117.1, 118.1, 124.7, 136.2, 169.0), and slower
+still on a cold first run. An earlier "~46s warm" figure in this file predated the
+matrix growing to 16 and understated it by more than half. A gate that adds two
+minutes to every commit is a gate somebody switches off.
+
+One property to know before reading a red: the cell metrics are **not comparable
+across a change to** ``RUNS``. Registering a portfolio declares its templates'
+cells, most of which no other portfolio fills, so ``dead_cells`` rises and
+liveness falls on exactly the change ``.claude/LESSONS.md`` B5 asks for. When the
+matrix grows, re-measure and bank the new numbers with the reason — do not chase
+the old ones back.
+
+That property is why the baseline carries a ``provenance`` block naming the run
+count and the ORDERED ``(regime, portfolio)`` matrix it was measured over, and why
+``--check`` compares it FIRST and refuses to compute any delta across a mismatch.
+Without it a matrix change arrives as a mystery regression: the four runs the
+real-estate carrier batch added were measured as ``dead_cells 52817 -> 55553`` and
+``liveness 1298 -> 1285`` on a tree whose coverage had strictly improved — and the
+cheapest way to clear that red is to delete the portfolio that caused it. The
+ordered list, not just the count, because swapping one portfolio for another
+leaves ``len(RUNS)`` unchanged.
+
+The two ``LESSONS`` graduation checks below also gate ``--check``'s exit code. They
+did not until ``EXCLUDED_PORTFOLIOS`` landed: the portfolio check reported a
+permanent FALSE POSITIVE against
+``tests/fixtures/reporting_funded_protection_portfolio.py``, which is withheld from
+``RUNS`` deliberately, and a gate with a known false red teaches the next reader to
+ignore a red. The allowlist came first, the binding second — deliberately in that
+order.
 """
 
 from __future__ import annotations
@@ -107,6 +164,33 @@ _REGISTRATION_ALLOWLIST: dict[str, str] = {
     ),
 }
 
+#: Reporting portfolio bundle-builders deliberately NOT referenced in ``RUNS``,
+#: keyed exactly as ``check_portfolios_registered`` reports them
+#: (``<module>.py::<builder>``) so the allowlist and the finding cannot drift into
+#: different spellings. An entry needs a written reason; an entry with no reason is
+#: not an entry.
+#:
+#: This mirrors ``scripts/check_template_cell_coverage.py::EXCLUDED_PORTFOLIOS``,
+#: which has carried the same exclusion since that census was built. Without an
+#: allowlist here the B5 graduation check below reported a permanent FALSE
+#: POSITIVE — which is the reason its result went unread, and is why the allowlist
+#: had to land BEFORE the check was bound to the exit code. A gate with a known
+#: false red teaches the next reader to ignore a red.
+EXCLUDED_PORTFOLIOS: dict[str, str] = {
+    "reporting_funded_protection_portfolio.py::build_reporting_fcsm_bundle": (
+        "WITHHELD from RUNS deliberately, not an oversight. Registering it needs a config "
+        "electing the Art. 222 financial-collateral SIMPLE Method, which is not a parameter "
+        "of _sa_config; registered against that factory (it defaults to comprehensive) the "
+        "fixture would sit in the gate with the one feature it exists to exercise silenced "
+        "— C 07.00 col 0070 reads 0.00 under comprehensive and non-zero under SIMPLE on the "
+        "identical bundle. Registered CORRECTLY it exposes two ERROR-severity supervisory "
+        "breaks (boe_b0471, v0308_m) that PRE-DATE the carrier-conservation fix, so the "
+        "registration is filed as a Tier 1 item together with the residual Art. 222 defect "
+        "rather than banked here. Full reasoning: the DELIBERATELY NOT REGISTERED comment "
+        "in tests/acceptance/reporting/test_supervisory_validations.py."
+    ),
+}
+
 #: How many dead cells and never-evaluated rules to print. The full lists always
 #: go to the JSON -- truncation is a courtesy to the terminal, never to the
 #: record.
@@ -136,8 +220,15 @@ class Observation:
     """Everything the matrix produced, accumulated across runs.
 
     Accumulating sets rather than keeping the frames is what makes this fit in
-    memory: eighteen pipeline runs (twelve, plus a prior-period run for each of
-    the six IRB-permission ones) never coexist.
+    memory: twenty-four pipeline runs never coexist — ``len(RUNS)`` is 16, of which
+    exactly 8 carry a ``build_prior_config`` and so drive a second, prior-period
+    run each.
+
+    Counted from ``RUNS`` rather than written from memory, because this docstring
+    said "eighteen (twelve, plus ... six)" until 2026-08-09: numbers that were right
+    for the pre-RE-carrier matrix and then quietly weren't. That is the same
+    staleness the baseline's ``provenance`` field exists to make impossible, one
+    screen below it.
     """
 
     def __init__(self) -> None:
@@ -301,7 +392,7 @@ def _row_refs(frame: pl.DataFrame) -> list[str]:
 
 
 def summarise(observation: Observation) -> dict[str, Any]:
-    """Turn the accumulated facts into the four metrics plus their evidence."""
+    """Turn the accumulated facts into the ratcheted metrics plus their evidence."""
     regimes = sorted(observation.rules_enforced)
 
     binding: dict[str, int] = {}
@@ -339,11 +430,22 @@ def summarise(observation: Observation) -> dict[str, Any]:
         # Ratchet: may not decrease.
         "union_binding_rules_crr": binding.get("crr", 0),
         "union_binding_rules_b31": binding.get("b31", 0),
-        # Ratchet: may not decrease. Emitted as a float and as an integer
-        # basis-point mirror, because arch_metrics.json values are integers.
+        # Ratchet: may not decrease. THE cell-coverage floor, and the only one of
+        # the three cell numbers that behaves like a floor — see the note on
+        # _RATCHET_MIN. An absolute count of cells some run puts a value in: it can
+        # only fall if the estate really stopped reporting a figure it used to
+        # report, whatever happens to the denominator.
+        "cells_live": live,
+        # Ratchet: may not decrease — but read the note on _RATCHET_MIN before
+        # trusting it. A RATIO whose denominator shrinks with its numerator, so it
+        # can IMPROVE while coverage is destroyed. Kept because it is the plan's
+        # published headline and a useful reading, not because it is a floor.
+        # Emitted as a float and as an integer basis-point mirror, because
+        # arch_metrics.json values are integers.
         "template_cell_liveness": round(liveness, 6),
         "template_cell_liveness_bp": int(round(liveness * 10_000)),
-        # Ratchet: may not increase.
+        # Ratchet: may not increase. Also not a floor in disguise: this is
+        # declared - live, so dropping declared cells lowers it.
         "dead_cells": len(dead),
         # Ratchet: may not increase.
         "never_evaluated_rules": sum(len(entries) for entries in never.values()),
@@ -398,6 +500,12 @@ def check_portfolios_registered() -> dict[str, Any]:
     columns it would have populated NOT_EVALUATED, which is indistinguishable
     from a clean estate. The C 07.00 CCF block hid four defects behind exactly
     this for the template's whole life.
+
+    ``EXCLUDED_PORTFOLIOS`` carries the deliberate omissions, each with its
+    reason. A STALE entry — one naming a builder that is now registered, or one
+    that no longer exists — fails the check rather than being ignored: an
+    allowlist that outlives its reason is a hole in the gate that reads as a pass,
+    and this check exists precisely to stop a hole reading as a pass.
     """
     registered = {run.build_bundle.__name__ for run in RUNS}
     declared: dict[str, list[str]] = {}
@@ -406,19 +514,29 @@ def check_portfolios_registered() -> dict[str, Any]:
         if builders:
             declared[path.name] = builders
 
-    missing = sorted(
+    unregistered = sorted(
         f"{module}::{builder}"
         for module, builders in declared.items()
         for builder in builders
         if builder not in registered
     )
+    missing = [entry for entry in unregistered if entry not in EXCLUDED_PORTFOLIOS]
+    stale = sorted(set(EXCLUDED_PORTFOLIOS) - set(unregistered))
     return {
         "name": "every reporting portfolio fixture is referenced in RUNS",
         "portfolio_modules": len(declared),
         "bundle_builders": sum(len(builders) for builders in declared.values()),
         "registered_in_runs": len(registered),
         "unregistered": missing,
-        "passed": not missing,
+        # Same key and same entry shape as check_builders_registered's allowlist,
+        # so one reader and one printer serve both checks.
+        "allowlisted": [
+            {"module": entry, "reason": EXCLUDED_PORTFOLIOS[entry]}
+            for entry in unregistered
+            if entry in EXCLUDED_PORTFOLIOS
+        ],
+        "stale_allowlist": stale,
+        "passed": not missing and not stale,
     }
 
 
@@ -518,15 +636,10 @@ def print_summary(payload: dict[str, Any]) -> None:
     _print_dead_cells(payload["dead_cell_list"], payload["dead_cells_by_template"])
     _print_checks(payload["checks"])
 
-    print("\nMetric names for arch_metrics.json:")
-    for name in (
-        "union_binding_rules_crr",
-        "union_binding_rules_b31",
-        "template_cell_liveness_bp",
-        "dead_cells",
-        "never_evaluated_rules",
-    ):
-        print(f"  {name:<32} {metrics[name]}")
+    print("\nRatcheted metrics:")
+    for name in (*_RATCHET_MIN, *_RATCHET_MAX):
+        direction = "may not fall" if name in _RATCHET_MIN else "may not rise"
+        print(f"  {name:<32} {metrics[name]:>8}   {direction}")
 
 
 def _print_binding(metrics: dict[str, Any]) -> None:
@@ -582,6 +695,12 @@ def _print_checks(checks: dict[str, Any]) -> None:
         print(f"  [{status}] {check['name']}")
         for entry in check["unregistered"]:
             print(f"           {entry if isinstance(entry, str) else entry['module']}")
+        # An allowlist entry that no longer applies is its own failure: it would
+        # keep excusing a portfolio that has since been registered or renamed.
+        for entry in check.get("stale_allowlist", ()):
+            print(f"           stale allowlist entry, delete it: {entry}")
+        for entry in check.get("allowlisted", ()):
+            print(f"           (allowlisted) {entry['module']}")
 
 
 def _display(path: Path) -> str:
@@ -607,20 +726,160 @@ def _confine_path(raw: Path) -> Path:
 
 BASELINE_PATH = _REPO_ROOT / "scripts" / "coverage_baseline.json"
 
-# Coverage must ratchet the RIGHT WAY on each metric. Binding rules and cell
-# liveness may not fall; dead cells and never-evaluated rules may not rise.
+# Coverage must ratchet the RIGHT WAY on each metric. Binding rules, LIVE CELLS
+# and cell liveness may not fall; dead cells and never-evaluated rules may not rise.
+#
+# `cells_live` is the cell-coverage floor, and it is here because the other two cell
+# numbers are not floors at all — they are sometimes ANTI-signal:
+#
+#   - `template_cell_liveness_bp` is a RATIO whose denominator shrinks with its
+#     numerator, and `dead_cells` is `declared - live`. So dropping N declared cells
+#     of which K are live IMPROVES both whenever K/N is at or below the current
+#     liveness (~0.1285 today).
+#   - Measured over all 16 leave-one-out deletions of the current matrix, not
+#     theorised. On 4 of 16, BOTH cell metrics moved the passing way while live cells
+#     were destroyed: b31/rich (-689 live, bp 1285->1374, dead 55553->47123),
+#     crr/sa-classes (-441), b31/sa-classes (-367, bp ->1458), b31/re-split (-141).
+#     On 6 more exactly one of the two passed. Only 4 of the 16 were caught by both.
+#   - `cells_live` fell on every deletion that actually cost live cells — 14 of 16 —
+#     and never rose on a loss. The two exceptions, crr/art199 and b31/art199, cost
+#     ZERO live cells: neither contributes a uniquely-live cell, so there was nothing
+#     for a cell metric to catch. (Cells only; this probe did not measure whether
+#     those two runs are load-bearing for RULE binding, which they may well be.)
+#   - It is an absolute count, so a shrinking denominator cannot flatter it.
+#
+# The ratio is retained (it is the plan's published headline and reads well next to
+# the absolute counts) but it is NOT what makes destroying coverage fail.
 #
 # This deliberately does NOT live in arch_check.py's ratchet, which runs on
-# every commit via the pre-commit hook: measuring these costs a ~46s full-matrix
-# pipeline run, and a gate that adds 46s to every commit is a gate somebody
-# switches off. Run `--check` in CI instead.
-_RATCHET_MIN = ("union_binding_rules_crr", "union_binding_rules_b31", "template_cell_liveness_bp")
+# every commit via the pre-commit hook: measuring these costs a full-matrix
+# pipeline run of ~120-170s (see the module docstring for the measurements), and a
+# gate that adds two minutes to every commit is a gate somebody switches off. Run
+# `--check` in CI instead.
+_RATCHET_MIN = (
+    "union_binding_rules_crr",
+    "union_binding_rules_b31",
+    "cells_live",
+    "template_cell_liveness_bp",
+)
 _RATCHET_MAX = ("dead_cells", "never_evaluated_rules")
+
+#: The baseline's self-describing header. A constant so the committed file and this
+#: script cannot drift apart, as in ``check_template_cell_coverage.py``.
+BASELINE_COMMENT = (
+    "Coverage ratchet baseline (scripts/coverage_report.py --check). union_binding_*, "
+    "cells_live and template_cell_liveness_bp may not DECREASE; dead_cells and "
+    "never_evaluated_rules may not INCREASE. Update only after a deliberate, recorded "
+    "improvement — never to clear a red gate. READ THIS BEFORE TRUSTING A GREEN: "
+    "cells_live is the cell-coverage floor. template_cell_liveness_bp is a RATIO whose "
+    "denominator shrinks with its numerator and dead_cells is declared-minus-live, so both "
+    "can IMPROVE while coverage is destroyed — measured, deleting the b31/rich run loses "
+    "689 live cells while moving liveness 1285->1374bp and dead 55553->47123. Only "
+    "cells_live and the binding-rule counts fail on that. Separately, every metric is a "
+    "UNION over the portfolio x regime matrix recorded in provenance, so growing RUNS makes "
+    "dead_cells RISE and template_cell_liveness_bp FALL by declaring cells no portfolio "
+    "fills yet; on a matrix change --check reports the comparison as INVALID rather than as "
+    "a regression, and the right response is to re-measure and bank the new matrix with the "
+    "reason in _note — never to drop a portfolio so the old numbers fit again."
+)
+
+#: Written into a re-banked baseline that carries no hand-written reason. ``_note``
+#: is PRESERVED across ``--update-baseline`` precisely so the reason survives a
+#: re-measurement; this placeholder is what an unexplained bank looks like.
+UNEXPLAINED_NOTE = "unexplained — say why this baseline was re-banked"
+
+#: Printed when the baseline's matrix does not match the live ``RUNS``.
+#:
+#: Deliberately NOT the "coverage went backwards, put it back" wording used for a
+#: real regression. On a GROWN matrix the two cell metrics legitimately worsen,
+#: because registering a portfolio DECLARES its templates' cells and most of them
+#: no other portfolio fills. Telling a reader to put those numbers back invites
+#: deleting a portfolio from ``RUNS`` to clear the red — destroying real coverage to
+#: satisfy a stale number, which is ``.claude/LESSONS.md`` B5 exactly inverted. So
+#: this text says the comparison is INVALID, says in terms that it is not a
+#: regression, and names the only correct action.
+_MATRIX_MOVED = """
+These metrics are a UNION over the matrix, so numbers measured over two different
+matrices are not comparable: nothing above says coverage got worse. Registering a
+portfolio DECLARES its templates' cells, most of which no other portfolio fills,
+so dead_cells RISES and template_cell_liveness_bp FALLS on exactly the change
+.claude/LESSONS.md B5 asks for.
+
+Do NOT drop a portfolio from RUNS to make the banked numbers fit again, and do not
+chase the cell metrics back to their banked values — either would destroy real
+coverage to satisfy a stale number. Re-measure and bank the new matrix, saying why
+in the baseline's _note and in the commit message:
+  uv run python scripts/coverage_report.py --update-baseline"""
 
 
 def _ratchet_values(payload: dict[str, Any]) -> dict[str, int]:
     metrics = payload["metrics"]
     return {name: int(metrics[name]) for name in (*_RATCHET_MIN, *_RATCHET_MAX)}
+
+
+def provenance() -> dict[str, Any]:
+    """The portfolio x regime matrix the metrics were measured over.
+
+    Banked beside the numbers because a union metric is only meaningful next to
+    the matrix that produced it, and because a matrix change otherwise arrives as
+    a mystery regression — which is how the four runs the real-estate carrier
+    batch added read as a coverage loss.
+
+    The ORDERED portfolio list is recorded, not merely the count: exchanging one
+    portfolio for another leaves ``len(RUNS)`` unchanged, so a count alone cannot
+    detect a swap. Same shape and same reasoning as
+    ``check_template_cell_coverage.py``'s ``provenance``.
+    """
+    return {
+        "runs": len(RUNS),
+        "portfolios": [{"regime": run.regime, "portfolio": run.portfolio} for run in RUNS],
+    }
+
+
+def _provenance_mismatch(baseline: dict[str, Any]) -> list[str] | None:
+    """How the baseline's matrix differs from the live one, or ``None`` if it does not."""
+    live = provenance()
+    banked = baseline.get("provenance")
+    if not isinstance(banked, dict):
+        return [
+            "  baseline: NO provenance recorded — it predates this field, so the matrix",
+            "            it was measured over is unknown and cannot be compared",
+            f"  now:      {live['runs']} runs",
+        ]
+
+    banked_pairs = [
+        (entry.get("regime"), entry.get("portfolio")) for entry in banked.get("portfolios", ())
+    ]
+    live_pairs = [(entry["regime"], entry["portfolio"]) for entry in live["portfolios"]]
+    if banked.get("runs") == live["runs"] and banked_pairs == live_pairs:
+        return None
+
+    lines = [f"  baseline: {banked.get('runs')} runs", f"  now:      {live['runs']} runs"]
+    dropped = sorted(set(banked_pairs) - set(live_pairs))
+    added = sorted(set(live_pairs) - set(banked_pairs))
+    if dropped:
+        lines.append("  in the baseline only: " + ", ".join(f"{r}/{p}" for r, p in dropped))
+    if added:
+        lines.append("  in the live matrix only: " + ", ".join(f"{r}/{p}" for r, p in added))
+    if banked_pairs == live_pairs:
+        # The banked list agrees with the live matrix and only the banked COUNT
+        # disagrees, so the baseline's two provenance fields contradict each other:
+        # it was hand-edited rather than measured.
+        lines.append(
+            "  the recorded portfolio LIST matches the live matrix but the recorded run "
+            "COUNT does not, so the baseline's own provenance is self-contradictory — it "
+            "was hand-edited rather than measured"
+        )
+    elif not dropped and not added:
+        # Order alone. The union is order-independent, so say so rather than
+        # implying the numbers are wrong — but still refuse, because an ordered
+        # comparison is what stops a real swap hiding behind an unchanged count.
+        lines.append(
+            "  the same portfolios in a DIFFERENT ORDER: the union metrics are themselves "
+            "order-independent, but the recorded matrix must match the live one so that a "
+            "genuine swap cannot hide behind an unchanged count"
+        )
+    return lines
 
 
 def _ratchet_deltas(
@@ -645,18 +904,24 @@ def _ratchet_deltas(
 
 
 def _write_baseline(payload: dict[str, Any], *, partial: bool) -> int:
+    """Bank the metrics together with the matrix that produced them.
+
+    ``_note`` — why THIS baseline was banked — is carried over from the committed
+    file rather than regenerated: a re-measurement must not silently erase the
+    record of why the previous numbers were accepted. It is the operator's line to
+    edit, and the reminder below says so on every write.
+    """
     if partial:
         print("\nREFUSING to write a baseline from a partial matrix (--limit).")
         return 1
+    note = _existing_note()
+    matrix = provenance()
     BASELINE_PATH.write_text(
         json.dumps(
             {
-                "_comment": (
-                    "Coverage ratchet baseline (scripts/coverage_report.py --check). "
-                    "union_binding_* and template_cell_liveness_bp may not DECREASE; "
-                    "dead_cells and never_evaluated_rules may not INCREASE. Update only "
-                    "after a deliberate, recorded improvement — never to clear a red gate."
-                ),
+                "_comment": BASELINE_COMMENT,
+                "_note": note,
+                "provenance": matrix,
                 **_ratchet_values(payload),
             },
             indent=2,
@@ -664,8 +929,22 @@ def _write_baseline(payload: dict[str, Any], *, partial: bool) -> int:
         + "\n",
         encoding="utf-8",
     )
-    print(f"\nWrote baseline {BASELINE_PATH.relative_to(_REPO_ROOT)}")
+    print(f"\nWrote baseline {BASELINE_PATH.relative_to(_REPO_ROOT)} over {matrix['runs']} runs")
+    print(f"  _note: {note}")
+    print("  _note is PRESERVED, not regenerated — update it to say why THIS bank happened.")
     return 0
+
+
+def _existing_note() -> str:
+    """The hand-written ``_note`` from the committed baseline, or the placeholder."""
+    if not BASELINE_PATH.exists():
+        return UNEXPLAINED_NOTE
+    try:
+        banked = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return UNEXPLAINED_NOTE
+    note = banked.get("_note")
+    return note if isinstance(note, str) and note.strip() else UNEXPLAINED_NOTE
 
 
 def _check_baseline(payload: dict[str, Any], *, partial: bool) -> int:
@@ -678,6 +957,22 @@ def _check_baseline(payload: dict[str, Any], *, partial: bool) -> int:
         return 1
 
     baseline = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
+
+    # Provenance FIRST, before any delta is computed. A delta against a different
+    # matrix is not a delta at all, and PRINTING one is the harm: it names a metric
+    # as regressed when it is not, and the cheapest way to make that red go away is
+    # to delete the portfolio that caused it.
+    mismatch = _provenance_mismatch(baseline)
+    if mismatch is not None:
+        print("\nCoverage ratchet")
+        print("  [INVALID] the baseline was measured over a DIFFERENT portfolio x regime")
+        print("            matrix, so no comparison was attempted and NO metric is claimed")
+        print("            to have regressed.")
+        for line in mismatch:
+            print(line)
+        print(_MATRIX_MOVED)
+        return 1
+
     regressions, improvements = _ratchet_deltas(baseline, _ratchet_values(payload))
 
     print("\nCoverage ratchet")
@@ -696,6 +991,37 @@ def _check_baseline(payload: dict[str, Any], *, partial: bool) -> int:
     return 0
 
 
+def _check_graduations(payload: dict[str, Any]) -> int:
+    """Fail ``--check`` when either ``LESSONS`` graduation check is failing.
+
+    Bound to the exit code only once ``EXCLUDED_PORTFOLIOS`` existed. Before that
+    the portfolio check reported a permanent false positive, and binding a known
+    false red teaches the next reader to ignore a red — which is how BOTH checks'
+    results went unread for this script's whole life while the exit code watched
+    only the ratcheted metrics.
+    """
+    failing = [check for check in payload["checks"].values() if not check["passed"]]
+    if not failing:
+        return 0
+
+    print("\nLESSONS graduation checks FAILED")
+    for check in failing:
+        print(f"  [FAIL] {check['name']}")
+        for entry in check["unregistered"]:
+            print(f"         {entry if isinstance(entry, str) else entry['module']}")
+        for entry in check.get("stale_allowlist", ()):
+            print(f"         stale allowlist entry, delete it: {entry}")
+    print(
+        "\nA reporting portfolio missing from RUNS makes every rule over the columns it "
+        "would\nhave populated NOT_EVALUATED, which reads exactly like a clean estate "
+        "(.claude/LESSONS.md\nB5); a parquet-writing builder missing from generate_all.py "
+        "works locally and fails on\na fresh checkout. Register it — or, if the omission is "
+        "deliberate, add a reasoned entry\nto EXCLUDED_PORTFOLIOS / _REGISTRATION_ALLOWLIST "
+        "in this script."
+    )
+    return 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help="JSON output path")
@@ -710,7 +1036,8 @@ def main() -> int:
         "--check",
         action="store_true",
         help="ratchet the measured metrics against scripts/coverage_baseline.json "
-        "and exit non-zero on a regression (CI, not pre-commit — this takes ~46s)",
+        "and exit non-zero on a regression (CI, not pre-commit — measured 117-169s "
+        "over the 16-run matrix with fixtures already on disk)",
     )
     parser.add_argument(
         "--update-baseline",
@@ -742,7 +1069,11 @@ def main() -> int:
     if args.update_baseline:
         return _write_baseline(payload, partial=bool(args.limit))
     if args.check:
-        return _check_baseline(payload, partial=bool(args.limit))
+        # Both run before the exit code is decided: a reader facing a red is owed
+        # every failure this measurement found, not just the first one.
+        ratchet = _check_baseline(payload, partial=bool(args.limit))
+        graduations = _check_graduations(payload)
+        return max(ratchet, graduations)
     return 0
 
 

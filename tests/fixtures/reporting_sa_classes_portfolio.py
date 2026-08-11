@@ -34,9 +34,59 @@ the pairs exist to exercise both limbs of a class whose treatment forks:
     LN_INTL_ORG      | international_org| Art. 118 listed org          |   0% |   0%
     LN_COVERED_BOND  | covered_bond     | Art. 129(4) by issuer CQS    |  10% |  10%
     LN_CORP_ANCHOR   | corporate        | Art. 122(1) — the anchor     | 100% |  75%
+    LN_COVBOND_RW20  | covered_bond     | Art. 129(4) CQS 2            |  20% |  20%
+    LN_MDB_RW20      | mdb              | Art. 117(1) CQS 1            |  20% |  20%
+    LN_PSE_RW150     | pse_institution  | Art. 116(2) CQS 6            | 150% | 150%
+    LN_CORP_RW150    | corporate        | Art. 122(1) CQS 5            | 150% | 150%
 
     -> C 07.00 / OF 07.00 sheets  rgla | pse | mdb | international_organisation
                                   covered_bond | corporate
+
+The second axis: the "Breakdown by Risk Weights" ROWS, not just the sheets
+-------------------------------------------------------------------------
+The four ``*_RW20`` / ``*_RW150`` rows are the row (y) axis, where the eight
+rows above are the sheet (z) axis. C 07.00 rows 0140-0280 break each sheet down
+by the exposure's own risk weight, and Annex II writes a per-row identity over
+them — ``{c0220} = {c0200} x`` the weight the row's LABEL names. That identity
+is only a test if the row carries a figure, so a dark row's rule is VACUOUS: it
+"holds" while asserting nothing. Measured before these four rows existed, the
+CRR sheets lit exactly four of the fifteen rungs — 0140 (0%), 0170 (10%),
+0200 (50%), 0230 (100%) — so the published rules over 20% and 150% had no
+coordinate to run at on any sheet this portfolio emits.
+
+Each new row is chosen so its sheet gains a rung it did not have, which is what
+turns the sheet's own ``r0010 = sum(risk-weight rows)`` footing from a tautology
+into an addition:
+
+    sheet         | rungs before      | rungs after
+    --------------|-------------------|--------------------------
+    covered_bond  | 0170              | 0170 + 0180
+    mdb           | 0140, 0200        | 0140 + 0180 + 0200
+    pse           | 0200              | 0200 + 0240
+    corporate     | 0230 (CRR)        | 0230 + 0240
+                  | 0220 (B3.1)       | 0220 + 0240
+
+``LN_CORP_RW150`` carries a second job that is easy to miss. The 100% anchor
+makes ``c0200`` and ``c0220`` numerically EQUAL on row 0230 (9,000,000 both), so
+on the corporate sheet a defect that swapped, duplicated or aliased those two
+columns produced identical output and was invisible. At 150% the two columns
+diverge (2,000,000 exposure against 3,000,000 RWEA) and the swap becomes a
+failure. The 150% rows are also the only ones in this portfolio where
+``c0220 > c0200``; every pre-existing row has RWEA at or below exposure value,
+so a path that assumed that ordering was never exercised.
+
+Weights are regime-INVARIANT on all four new rows, which is deliberate:
+``LN_MDB_RATED`` is meant to be the only row whose weight moves between CRR and
+Basel 3.1 (``test_the_mdb_risk_weight_is_the_one_that_moves_between_regimes``
+pins exactly that), so a new row that also moved would dilute the one
+cross-regime signal this portfolio carries. Each pairing was read back off the
+resolved pack rather than assumed:
+``COVERED_BOND_RISK_WEIGHTS[2] == B31_COVERED_BOND_RISK_WEIGHTS[2] == 20%``;
+MDB CQS 1 is 20% by the Art. 120 institution table under CRR and 20% by the
+PS1/26 MDB schedule (Table 2B) under Basel 3.1; the PSE own-rating ladder is
+shared between the regimes (both resolve through ``_create_pse_df``), CQS 6 =
+150%; and ``CORPORATE_RISK_WEIGHTS[5] == B31_CORPORATE_RISK_WEIGHTS[5] == 150%``
+even though the two ladders diverge at CQS 3 (100% vs 75%).
 
 ``LN_MDB_RATED`` is the load-bearing regime-divergent row: CRR Art. 117(1) sends
 an unlisted MDB to the Art. 120 institution table (CQS 2 -> 50%), while PS1/26
@@ -71,6 +121,25 @@ Deliberately OUT of scope:
 - Off-balance-sheet items and CRM — ``reporting_offbs_portfolio.py`` owns the
   CCF-bucket axis and the rich portfolio owns the CRM columns. Every row here is
   drawn and unmitigated so a mis-weighted class is visible in one cell.
+- The risk-weight rungs no quasi-sovereign class can reach. These stay dark
+  after the four rows above, and each is a property of the RULES, not a missing
+  fixture row — recorded here so the next reader does not re-derive it:
+  * r0150 (2%) / r0160 (4%) — Art. 306(1) QCCP trade exposures. A CCR-only
+    weight; ``reporting_ccr_portfolio.py`` owns that axis.
+  * r0190 (35%) — Art. 125 residential mortgage. Keyed on the security, not the
+    obligor class, so it belongs to the immovable-property sheet.
+  * r0210 (70%) — no Standardised ladder in either regime contains 70%. It is a
+    slotting weight (Art. 153(5) "strong"), and slotting reports on C 08.x, not
+    C 07.00. Genuinely unreachable through this template.
+  * r0220 (75%) under CRR — the Art. 123 retail weight. No quasi-sovereign class
+    has a 75% rung under CRR; the row IS lit under Basel 3.1, where the
+    Art. 122 corporate ladder puts CQS 3 at 75% (``LN_CORP_ANCHOR``).
+  * r0250 (250%) / r0260 (370%) / r0270 (1250%) — deferred tax assets,
+    Art. 155(4) IRB private equity, and securitisation/deduction respectively.
+    None is an Art. 112(1) obligor-class weight.
+  * r0280 ("Other risk weights") — the catch-all for a weight matching no
+    published band. It SHOULD stay dark; lighting it would mean the engine
+    produced an unpublishable weight.
 
 References:
 - CRR Art. 115 (RGLA), 116 (PSE), 117 (MDB), 118 (international organisations),
@@ -104,6 +173,13 @@ CP_INTL_ORG: str = "SAC-CP-INTL-ORG"  # Art. 118 org       -> international_orga
 CP_COVERED_BOND: str = "SAC-CP-COVBOND"  # covered bond    -> covered_bond
 CP_CORP_ANCHOR: str = "SAC-CP-CORP"  # corporate anchor    -> corporate
 
+# Risk-weight-row obligors. Named for the C 07.00 rung they light rather than for
+# their class, because that is the only reason they are in the portfolio.
+CP_COVBOND_RW20: str = "SAC-CP-COVBOND-RW20"  # covered bond CQS 2 -> r0180
+CP_MDB_RW20: str = "SAC-CP-MDB-RW20"  # MDB CQS 1               -> r0180
+CP_PSE_RW150: str = "SAC-CP-PSE-RW150"  # PSE CQS 6             -> r0240
+CP_CORP_RW150: str = "SAC-CP-CORP-RW150"  # corporate CQS 5     -> r0240
+
 LN_RGLA_UK: str = "SAC-LN-RGLA-UK"
 LN_RGLA_FOREIGN: str = "SAC-LN-RGLA-FGN"
 LN_PSE: str = "SAC-LN-PSE"
@@ -112,6 +188,10 @@ LN_MDB_NAMED: str = "SAC-LN-MDB-NAMED"
 LN_INTL_ORG: str = "SAC-LN-INTL-ORG"
 LN_COVERED_BOND: str = "SAC-LN-COVBOND"
 LN_CORP_ANCHOR: str = "SAC-LN-CORP"
+LN_COVBOND_RW20: str = "SAC-LN-COVBOND-RW20"
+LN_MDB_RW20: str = "SAC-LN-MDB-RW20"
+LN_PSE_RW150: str = "SAC-LN-PSE-RW150"
+LN_CORP_RW150: str = "SAC-LN-CORP-RW150"
 
 #: Drawn amounts, in GBP. Distinct per row so a mis-classified exposure is
 #: identifiable from a single C 07.00 cell value without a reverse lookup.
@@ -123,6 +203,13 @@ DRAWN_MDB_NAMED: float = 4_500_000.0
 DRAWN_INTL_ORG: float = 1_500_000.0
 DRAWN_COVERED_BOND: float = 6_000_000.0
 DRAWN_CORP_ANCHOR: float = 9_000_000.0
+#: The risk-weight rows. Each amount is distinct from every other in the
+#: portfolio AND chosen so ``drawn x rw`` is distinct too, so neither the
+#: exposure-value column nor the RWEA column can be confused with another row's.
+DRAWN_COVBOND_RW20: float = 7_000_000.0  # x 20%  -> 1,400,000 RWEA
+DRAWN_MDB_RW20: float = 5_000_000.0  # x 20%      -> 1,000,000 RWEA
+DRAWN_PSE_RW150: float = 1_000_000.0  # x 150%    -> 1,500,000 RWEA
+DRAWN_CORP_RW150: float = 2_000_000.0  # x 150%   -> 3,000,000 RWEA
 
 _VALUE_DATE: date = date(2020, 1, 1)
 _MATURITY: date = date(2031, 12, 31)  # > both reporting dates (CRR 2025, B31 2027)
@@ -140,6 +227,22 @@ SA_CLASS_EXPECTED_SHEET: dict[str, str] = {
     LN_INTL_ORG: "international_organisation",
     LN_COVERED_BOND: "covered_bond",
     LN_CORP_ANCHOR: "corporate",
+    LN_COVBOND_RW20: "covered_bond",
+    LN_MDB_RW20: "mdb",
+    LN_PSE_RW150: "pse",
+    LN_CORP_RW150: "corporate",
+}
+
+#: Every exposure that exists to light a C 07.00 "Breakdown by Risk Weights" row
+#: -> (CRR row ref, Basel 3.1 row ref). The two regimes share the 20% and 150%
+#: refs; they diverge only where Basel 3.1 inserts a sub-band, which none of
+#: these weights does. Consumed by the row-liveness test — if a row goes dark the
+#: Annex II ``c0220 = c0200 x RW`` identity over it silently reverts to VACUOUS.
+SA_CLASS_EXPECTED_RW_ROW: dict[str, tuple[str, str]] = {
+    LN_COVBOND_RW20: ("0180", "0180"),
+    LN_MDB_RW20: ("0180", "0180"),
+    LN_PSE_RW150: ("0240", "0240"),
+    LN_CORP_RW150: ("0240", "0240"),
 }
 
 #: Risk weight each row must resolve to, per regime. ``LN_MDB_RATED`` is the one
@@ -153,6 +256,12 @@ SA_CLASS_EXPECTED_RW: dict[str, tuple[float, float]] = {
     LN_MDB_NAMED: (0.0, 0.0),
     LN_INTL_ORG: (0.0, 0.0),
     LN_COVERED_BOND: (0.1, 0.1),
+    # The risk-weight rows. Regime-invariant by design — see the module docstring
+    # on why ``LN_MDB_RATED`` must stay the only row that moves.
+    LN_COVBOND_RW20: (0.2, 0.2),
+    LN_MDB_RW20: (0.2, 0.2),
+    LN_PSE_RW150: (1.5, 1.5),
+    LN_CORP_RW150: (1.5, 1.5),
 }
 
 
@@ -224,6 +333,29 @@ def _counterparties() -> pl.DataFrame:
             # and the C 02.00 footing stays a plain EAD x RW product.
             "annual_revenue": 400_000_000.0,
         },
+        # --- Risk-weight-row obligors (the C 07.00 y-axis) ---
+        # Same entity_type as the sheet's existing obligor in every case: these
+        # rows are about the WEIGHT, so anything else about them is held constant.
+        {
+            "counterparty_reference": CP_COVBOND_RW20,
+            "entity_type": "covered_bond",
+            "country_code": "GB",
+        },
+        {"counterparty_reference": CP_MDB_RW20, "entity_type": "mdb", "country_code": "GB"},
+        {
+            "counterparty_reference": CP_PSE_RW150,
+            "entity_type": "pse_institution",
+            "country_code": "GB",
+        },
+        {
+            "counterparty_reference": CP_CORP_RW150,
+            "entity_type": "corporate",
+            "country_code": "GB",
+            # Above the SME ceiling for the same reason as the anchor — the SME
+            # supporting factor would scale RWEA and break the row's own
+            # ``c0220 = c0200 x 150%`` identity, which is the point of the row.
+            "annual_revenue": 400_000_000.0,
+        },
     ]
     return pl.DataFrame(rows, schema_overrides=dtypes_of(COUNTERPARTY_SCHEMA))
 
@@ -250,6 +382,20 @@ def _ratings() -> pl.DataFrame:
         _external(CP_COVERED_BOND, cqs=1),
         # Art. 122(1): CQS 3 corporate -> 100% (CRR). The anchor.
         _external(CP_CORP_ANCHOR, cqs=3),
+        # --- Risk-weight-row ratings (the C 07.00 y-axis) ---
+        # Art. 129(4): covered bond CQS 2 -> 20%, both regimes. Row 0180.
+        _external(CP_COVBOND_RW20, cqs=2),
+        # Art. 117(1): MDB CQS 1 -> 20% by the institution table (CRR) and 20%
+        # by the PS1/26 MDB schedule (Table 2B). Row 0180. Note this is the one
+        # rung at which those two ladders agree — they part company at CQS 2,
+        # which is what ``LN_MDB_RATED`` exists to pin.
+        _external(CP_MDB_RW20, cqs=1),
+        # Art. 116(2): PSE CQS 6 -> 150%. The PSE own-rating ladder is shared
+        # between the regimes. Row 0240.
+        _external(CP_PSE_RW150, cqs=6),
+        # Art. 122(1): corporate CQS 5 -> 150%, both regimes (the corporate
+        # ladders diverge at CQS 3, not CQS 5). Row 0240.
+        _external(CP_CORP_RW150, cqs=5),
     ]
     return pl.DataFrame(rows, schema_overrides=dtypes_of(RATINGS_SCHEMA))
 
@@ -272,6 +418,11 @@ def _loans() -> pl.DataFrame:
         _loan(LN_INTL_ORG, CP_INTL_ORG, DRAWN_INTL_ORG),
         _loan(LN_COVERED_BOND, CP_COVERED_BOND, DRAWN_COVERED_BOND),
         _loan(LN_CORP_ANCHOR, CP_CORP_ANCHOR, DRAWN_CORP_ANCHOR),
+        # --- Risk-weight rows (the C 07.00 y-axis) ---
+        _loan(LN_COVBOND_RW20, CP_COVBOND_RW20, DRAWN_COVBOND_RW20),
+        _loan(LN_MDB_RW20, CP_MDB_RW20, DRAWN_MDB_RW20),
+        _loan(LN_PSE_RW150, CP_PSE_RW150, DRAWN_PSE_RW150),
+        _loan(LN_CORP_RW150, CP_CORP_RW150, DRAWN_CORP_RW150),
     ]
     return pl.DataFrame(rows, schema_overrides=dtypes_of(LOAN_SCHEMA))
 

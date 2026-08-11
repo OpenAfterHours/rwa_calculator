@@ -1,10 +1,10 @@
 {"row_ref":"0010","row_name":"Central governments or central banks","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
 {"row_ref":"0020","row_name":"Regional governments or local authorities","0010":6500000.0,"0020":0.0,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":6500000.0,"0090":1750000.0}
-{"row_ref":"0030","row_name":"Public sector entities","0010":2500000.0,"0020":0.0,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":2500000.0,"0090":1250000.0}
-{"row_ref":"0040","row_name":"Multilateral development banks","0010":8500000.0,"0020":0.0,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":8500000.0,"0090":1200000.0}
+{"row_ref":"0030","row_name":"Public sector entities","0010":3500000.0,"0020":0.0,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":3500000.0,"0090":2750000.0}
+{"row_ref":"0040","row_name":"Multilateral development banks","0010":13500000.0,"0020":0.0,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":13500000.0,"0090":2200000.0}
 {"row_ref":"0050","row_name":"International organisations","0010":1500000.0,"0020":0.0,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":1500000.0,"0090":0.0}
 {"row_ref":"0060","row_name":"Institutions","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
-{"row_ref":"0070","row_name":"Corporates","0010":9000000.0,"0020":0.0,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":9000000.0,"0090":6750000.0}
+{"row_ref":"0070","row_name":"Corporates","0010":11000000.0,"0020":0.0,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":11000000.0,"0090":9750000.0}
 {"row_ref":"0075","row_name":"  of which: SME","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
 {"row_ref":"0071","row_name":"  of which: specialised lending - object finance","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
 {"row_ref":"0072","row_name":"  of which: specialised lending - commodities finance","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
@@ -19,11 +19,11 @@
 {"row_ref":"0094","row_name":"  of which: land acquisition, development and construction","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
 {"row_ref":"0100","row_name":"Exposures in default","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
 {"row_ref":"0110","row_name":"Exposures associated with particularly high risk","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
-{"row_ref":"0120","row_name":"Eligible covered bonds","0010":6000000.0,"0020":0.0,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":6000000.0,"0090":600000.0}
+{"row_ref":"0120","row_name":"Eligible covered bonds","0010":13000000.0,"0020":0.0,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":13000000.0,"0090":2000000.0}
 {"row_ref":"0140","row_name":"Collective investment undertakings (CIU)","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
 {"row_ref":"0141","row_name":"  Look-through approach","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
 {"row_ref":"0142","row_name":"  Mandate-based approach","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
 {"row_ref":"0143","row_name":"  Fall-back approach","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
 {"row_ref":"0150","row_name":"Subordinated debt, equity and other own funds instruments","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
 {"row_ref":"0160","row_name":"Other items","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
-{"row_ref":"0170","row_name":"Total exposures","0010":34000000.0,"0020":0.0,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":34000000.0,"0090":11550000.0}
+{"row_ref":"0170","row_name":"Total exposures","0010":49000000.0,"0020":0.0,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":49000000.0,"0090":18450000.0}

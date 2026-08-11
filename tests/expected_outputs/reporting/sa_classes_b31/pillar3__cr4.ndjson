@@ -1,10 +1,10 @@
 {"row_ref":"1","row_name":"Central governments or central banks","a":0.0,"b":0.0,"c":0.0,"d":0.0,"e":0.0,"f":null}
 {"row_ref":"2","row_name":"Regional governments or local authorities","a":6500000.0,"b":0.0,"c":6500000.0,"d":0.0,"e":1750000.0,"f":0.2692307692307692}
-{"row_ref":"3","row_name":"Public sector entities","a":2500000.0,"b":0.0,"c":2500000.0,"d":0.0,"e":1250000.0,"f":0.5}
-{"row_ref":"4","row_name":"Multilateral development banks","a":8500000.0,"b":0.0,"c":8500000.0,"d":0.0,"e":1200000.0,"f":0.1411764705882353}
+{"row_ref":"3","row_name":"Public sector entities","a":3500000.0,"b":0.0,"c":3500000.0,"d":0.0,"e":2750000.0,"f":0.7857142857142857}
+{"row_ref":"4","row_name":"Multilateral development banks","a":13500000.0,"b":0.0,"c":13500000.0,"d":0.0,"e":2200000.0,"f":0.16296296296296298}
 {"row_ref":"5","row_name":"International organisations","a":1500000.0,"b":0.0,"c":1500000.0,"d":0.0,"e":0.0,"f":0.0}
 {"row_ref":"6","row_name":"Institutions","a":0.0,"b":0.0,"c":0.0,"d":0.0,"e":0.0,"f":null}
-{"row_ref":"7","row_name":"Corporates","a":9000000.0,"b":0.0,"c":9000000.0,"d":0.0,"e":6750000.0,"f":0.75}
+{"row_ref":"7","row_name":"Corporates","a":11000000.0,"b":0.0,"c":11000000.0,"d":0.0,"e":9750000.0,"f":0.8863636363636364}
 {"row_ref":"7a","row_name":"  Of which: specialised lending","a":0.0,"b":0.0,"c":0.0,"d":0.0,"e":0.0,"f":null}
 {"row_ref":"8","row_name":"Retail","a":0.0,"b":0.0,"c":0.0,"d":0.0,"e":0.0,"f":null}
 {"row_ref":"9","row_name":"Secured by mortgages on immovable property","a":0.0,"b":0.0,"c":0.0,"d":0.0,"e":0.0,"f":null}
@@ -15,9 +15,9 @@
 {"row_ref":"9e","row_name":"  Land acquisition, development and construction","a":null,"b":null,"c":null,"d":null,"e":null,"f":null}
 {"row_ref":"10","row_name":"Exposures in default","a":0.0,"b":0.0,"c":0.0,"d":0.0,"e":0.0,"f":null}
 {"row_ref":"11","row_name":"Items associated with particularly high risk","a":null,"b":null,"c":null,"d":null,"e":null,"f":null}
-{"row_ref":"12","row_name":"Covered bonds","a":6000000.0,"b":0.0,"c":6000000.0,"d":0.0,"e":600000.0,"f":0.1}
+{"row_ref":"12","row_name":"Covered bonds","a":13000000.0,"b":0.0,"c":13000000.0,"d":0.0,"e":2000000.0,"f":0.15384615384615385}
 {"row_ref":"13","row_name":"Short-term claims on institutions and corporates","a":null,"b":null,"c":null,"d":null,"e":null,"f":null}
 {"row_ref":"14","row_name":"Collective investment undertakings","a":null,"b":null,"c":null,"d":null,"e":null,"f":null}
 {"row_ref":"15","row_name":"Equity","a":0.0,"b":0.0,"c":0.0,"d":0.0,"e":0.0,"f":null}
 {"row_ref":"16","row_name":"Other items","a":0.0,"b":0.0,"c":0.0,"d":0.0,"e":0.0,"f":null}
-{"row_ref":"17","row_name":"Total","a":34000000.0,"b":0.0,"c":34000000.0,"d":0.0,"e":11550000.0,"f":0.3397058823529412}
+{"row_ref":"17","row_name":"Total","a":49000000.0,"b":0.0,"c":49000000.0,"d":0.0,"e":18450000.0,"f":0.376530612244898}

@@ -65,23 +65,15 @@ TOLERANCE = PAYLOAD["tolerance_relative"]
 # intermediate diverges, so it is triageable rather than merely red.
 #
 # Remove an entry only when the engine changes, never when the oracle does.
-_ART_121_TABLE_5 = (
-    "CRR Art. 121(1) Table 5 is not applied to the institution exposure class. "
-    "An unrated institution incorporated in a jurisdiction whose central "
-    "government carries a CQS should be weighted off that CQS "
-    "(1 -> 20%, 2 -> 50%, 3/4/5 -> 100%, 6 -> 150%); the engine returns a flat "
-    "100% for every sovereign CQS. Differing intermediate: risk_weight. The "
-    "sovereign-derived ladder itself is correct and is used for the RGLA and "
-    "PSE classes (and, via the MDB branch, from the very table named "
-    "INSTITUTION_RISK_WEIGHTS_SOVEREIGN_DERIVED) -- it is only the INSTITUTION "
-    "branch that never reads cp_sovereign_cqs. "
-    "DIRECTION IS NOT UNIFORM across the ladder: CQS 1 and 2 are OVERSTATED "
-    "(conservative), CQS 3/4/5 agree only because the flat fallback coincides "
-    "with Table 5 there, and CQS 6 is UNDERSTATED at 100% against a required "
-    "150% -- an anti-conservative limb and a capital shortfall. Art. 121(2) "
-    "(null sovereign CQS -> 100%) is correct."
-)
-
+#
+# DISCHARGED 2026-08-09 (P1.316) — the Art. 121(1) Table 5 family. ORC-105
+# (CQS 1), ORC-020 (CQS 2) and ORC-109 (CQS 6, the capital-shortfall limb) were
+# `xfail(strict=True)` here against a flat-100% engine. The CRR institution
+# branch now reads `cp_sovereign_cqs` through Table 5, so all six steps agree
+# and all six run as ordinary passing cases alongside ORC-021 (Art. 121(2)).
+# The shared `_ART_121_TABLE_5` reason string had exactly these three consumers
+# and was deleted with them. Do not re-add without an engine change that
+# re-breaks them; the six-step family plus ORC-021 is the regression guard.
 _ART_154_4A_B_SCOPE = (
     "PS1/26 Art. 154(4A)(b) confines the 10% RWEA floor to (i) NON-DEFAULTED, "
     "(ii) RETAIL exposures secured by RESIDENTIAL immovable property, (iii) in "
@@ -99,15 +91,39 @@ _ART_154_4A_B_SCOPE = (
     "domain and does not depend on which cases were sampled."
 )
 
+_ART_197_FCSM_ELIGIBILITY = (
+    "The Art. 197 collateral-eligibility gate is not applied on the Art. 222 "
+    "Financial Collateral Simple Method path. engine/crm/processor.py runs "
+    "compute_fcsm_columns at Step 3.8, BEFORE apply_haircuts at Step 4 -- and "
+    "apply_haircuts is the only place the engine overrides the firm-supplied "
+    "is_eligible_financial_collateral flag for an Art. 197-ineligible pledge "
+    "(haircuts.py _bond_ineligible / _equity_listing_ineligible / _cln_ineligible). "
+    "simple_method.py::_prepare_eligible_collateral filters on the raw input "
+    "attestation alone, so the Simple Method recognises collateral the "
+    "Comprehensive Method rejects, at the collateral's own SA risk weight floored "
+    "at 20%. Differing intermediate: fcsm_collateral_value (engine recognises the "
+    "pledge, oracle recognises 0.00), which drives risk_weight and rwa. ead_final "
+    "agrees -- Art. 222 correctly does not reduce EAD. "
+    "DIRECTION IS UNIFORMLY ANTI-CONSERVATIVE OR NEUTRAL, never conservative: the "
+    "blend is share*collateral_RW + (1-share)*obligor_RW and every affected "
+    "instrument carries <= the obligor's 150%. ORC-274, ORC-276 and ORC-277 are "
+    "equally ungated but PASS, because a CQS 6 security carries the obligor's own "
+    "150% -- they are pinned to fix the value, not to catch the defect, and must "
+    "not be marked xfail. The Comprehensive-Method control ORC-282 passes, which "
+    "localises the defect to the one method. Not reachable by the estate's only "
+    "FCSM golden portfolio (reporting_funded_protection_portfolio.py), whose two "
+    "pledges are both CQS 1. A fix is NOT a step reorder: Step 3.8 must precede "
+    "the Comprehensive computation, which is still needed for IRB LGD, so the "
+    "Art. 197 gate has to be factored out of apply_haircuts and applied to the "
+    "FCSM input as well."
+)
+
 KNOWN_DISAGREEMENTS: dict[str, str] = {
-    "ORC-105": f"{_ART_121_TABLE_5} Here: CQS 1, oracle 20%, engine 100% (overstated).",
-    "ORC-020": f"{_ART_121_TABLE_5} Here: CQS 2, oracle 50%, engine 100% (overstated).",
-    "ORC-109": (
-        f"{_ART_121_TABLE_5} Here: CQS 6, oracle 150%, engine 100% -- "
-        "UNDERSTATED by a third. This is the capital-shortfall limb and the "
-        "reason the family is pinned across its whole domain rather than at "
-        "the two steps that were looked at first."
-    ),
+    # ORC-105 (CQS 1), ORC-020 (CQS 2) and ORC-109 (CQS 6) were the Art. 121(1)
+    # Table 5 entries until P1.316 wired the ladder. They now AGREE with the
+    # oracle and run as ordinary passing cases -- see the note above the reason
+    # strings. Same mechanism as ORC-140/141 below: these marks are
+    # xfail(strict=True), so leaving them would turn the fix into an XPASS.
     # ORC-140 (limb (i), defaulted) and ORC-141 (limb (ii), commercial real
     # estate) were entries here until P1.319 narrowed the gate. They now AGREE
     # with the oracle and must run as ordinary passing cases -- these marks are
@@ -122,6 +138,45 @@ KNOWN_DISAGREEMENTS: dict[str, str] = {
         "there is guarantor_country_code, for the guarantee substitution path), "
         "so no input could switch it off. Oracle floor adjustment 0.00, engine "
         "373,345.27."
+    ),
+    "ORC-257": (
+        f"{_ART_197_FCSM_ELIGIBILITY} Here: Art. 197(1)(b), CQS 5 sovereign at "
+        "30% cover. Oracle 1,500,000, engine 1,350,000 -- UNDERSTATED 10.0%."
+    ),
+    "ORC-258": (
+        f"{_ART_197_FCSM_ELIGIBILITY} Here: Art. 197(1)(d), CQS 4 corporate at "
+        "30% cover. Oracle 1,500,000, engine 1,350,000 -- UNDERSTATED 10.0%."
+    ),
+    "ORC-275": (
+        f"{_ART_197_FCSM_ELIGIBILITY} Here: Art. 197(1)(b), UNRATED sovereign -- "
+        "the limb is conditioned on having an ECAI assessment. Oracle 1,500,000, "
+        "engine 1,350,000 -- UNDERSTATED 10.0%."
+    ),
+    "ORC-278": (
+        f"{_ART_197_FCSM_ELIGIBILITY} Here: Art. 197(1)(d), UNRATED corporate. "
+        "Oracle 1,500,000, engine 1,350,000 -- UNDERSTATED 10.0%."
+    ),
+    "ORC-279": (
+        f"{_ART_197_FCSM_ELIGIBILITY} Here: Art. 197(1)(f) equity. Art. 198(1)(a) "
+        "extends eligibility to non-main-index LISTED equity only 'where an "
+        "institution uses the Financial Collateral Comprehensive Method', so "
+        "listing does not rescue it under Art. 222. ORC-224 is the same instrument, "
+        "correctly eligible at a 25% haircut under the Comprehensive Method. "
+        "Oracle 1,500,000, engine 1,350,000 -- UNDERSTATED 10.0%."
+    ),
+    "ORC-280": (
+        f"{_ART_197_FCSM_ELIGIBILITY} Here: the MAGNITUDE case -- CQS 5 sovereign "
+        "at FULL cover. Oracle 1,500,000, engine 1,000,000 -- UNDERSTATED 33.3%, "
+        "the whole exposure moving from the obligor's 150% to the security's own "
+        "Art. 114(2) 100%."
+    ),
+    "ORC-281": (
+        f"{_ART_197_FCSM_ELIGIBILITY} Here: Art. 218 -- only a credit linked note "
+        "issued by the LENDING institution is cash collateral; an unrated "
+        "third-party note also fails Art. 197(1)(d). The engine raises CRM019 on "
+        "this row and then recognises it anyway. ORC-282 is the passing "
+        "Comprehensive-Method control. Oracle 1,500,000, engine 1,350,000 -- "
+        "UNDERSTATED 10.0%."
     ),
 }
 

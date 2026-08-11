@@ -469,7 +469,7 @@ that tells you what to build next.
 ## References
 
 - `.claude/LESSONS.md` — B1–B6 (silent failure), C1–C6 (test validity), E1–E4
-- `docs/development/escape-log.md` — the seven escape classes and their gates
+- `docs/development/escape-log.md` — the eight escape classes and their gates
 - `tests/oracle/` — the existing independent oracle and its hash-lock design
 - `tests/acceptance/reporting/test_supervisory_validations.py` — the two-way
   ratchet and the fail-open analysis

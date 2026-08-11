@@ -231,6 +231,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `hypothesis` to the dev dependencies (portfolio search and shrinking).
 
 ### Fixed
+- **PyPI publishing works again: the release action was too old to accept the
+  metadata the build now emits.** `pypa/gh-action-pypi-publish` was pinned at
+  v1.14.0, whose bundled Twine rejects core packaging metadata 2.5 —
+  `InvalidDistribution: '2.5' is not a valid metadata version` — and `uv build`
+  resolves its build backend fresh, so the wheel started declaring
+  `Metadata-Version: 2.5` without anything in this repository changing. v0.3.24
+  published on 5 August and v0.3.25 did not. Bumped to v1.14.2, which carries
+  Twine 7 precisely to accept 2.5. The failure surfaced only at upload, after
+  the version bump, tag and GitHub Release already existed — nothing in the
+  local release flow builds and validates a distribution the way PyPI does.
 - **The release script now regenerates every version-stamped generated artifact.**
   `docs/data-model/regulatory-tables.md`, `docs/development/confidence-matrix.md`
   and `tests/contracts/data/confidence_snapshot.json` each embed the package

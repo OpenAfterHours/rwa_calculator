@@ -231,7 +231,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `hypothesis` to the dev dependencies (portfolio search and shrinking).
 
 ### Fixed
-- **Six regular expressions with quadratic runtime were made linear.** They failed
+- **The release script now regenerates every version-stamped generated artifact.**
+  `docs/data-model/regulatory-tables.md`, `docs/development/confidence-matrix.md`
+  and `tests/contracts/data/confidence_snapshot.json` each embed the package
+  version, so bumping it is by itself enough to make all three stale and turn
+  their freshness contract tests red. `scripts/deploy.py` regenerated only the
+  citation matrix and the dependency graph, and it runs the test suite *before*
+  the bump — so the suite could not observe the staleness the bump was about to
+  create, and the first thing to see it was CI on the release commit. The two
+  generators now run in `build_release`, and the three targets are staged for the
+  release commit alongside `tests/contracts/data/citation_snapshot.json`, which
+  the citation-matrix regeneration had likewise been writing but never staging.
   in two distinct ways. Four paired an unbounded whitespace run against a
   neighbour that could *also* match whitespace (`\s*` beside a dot-matches-all
   `.*?`, or beside a negated class), so on input that failed to match the engine

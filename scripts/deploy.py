@@ -55,7 +55,13 @@ GIT_STAGE_FILES = [
     *VERSION_FILES.keys(),
     "docs/appendix/changelog.md",
     "docs/development/citation-matrix.md",
+    "tests/contracts/data/citation_snapshot.json",
     "docs/development/module-dependencies.md",
+    # Version-stamped: these embed `Package version` / `package_version`, so a
+    # bump alone makes them stale and their freshness contract tests fail.
+    "docs/data-model/regulatory-tables.md",
+    "docs/development/confidence-matrix.md",
+    "tests/contracts/data/confidence_snapshot.json",
     "uv.lock",
 ]
 
@@ -298,6 +304,21 @@ def build_release(new_version: str) -> bool:
     if not run_command(
         ["uv", "run", "python", "scripts/generate_dependency_graph.py"],
         "Regenerating dependency graph",
+    ):
+        return False
+
+    # Both embed the package version in their output, so the bump above has just
+    # made them stale. Regenerating here is what keeps their freshness contract
+    # tests green — the suite runs before the bump, so it cannot catch this.
+    if not run_command(
+        ["uv", "run", "python", "scripts/generate_regulatory_tables.py"],
+        "Regenerating regulatory tables",
+    ):
+        return False
+
+    if not run_command(
+        ["uv", "run", "python", "scripts/generate_confidence_matrix.py"],
+        "Regenerating confidence matrix",
     ):
         return False
 

@@ -8328,7 +8328,7 @@
     "b31": "9a883964d8479e764742c880f826cf10d1b96809ea500e9c763764f26b7a4220",
     "crr": "ce2b4dbd2b2f7daf84c02c99b88af650214c458adcb7d4123da87c3eb80635e0"
   },
-  "package_version": "0.3.24",
+  "package_version": "0.3.25",
   "scoring_rule": {
     "GAP": "not implemented \u2014 cited only by the oracle and/or a test, no source reference",
     "HIGH": "citable anchor (code or pack) and an oracle case",

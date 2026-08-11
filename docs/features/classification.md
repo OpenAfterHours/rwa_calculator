@@ -4,7 +4,7 @@ This document provides comprehensive documentation of the exposure classificatio
 
 ## Overview
 
-The classifier (`src/rwa_calc/engine/stages/classify/`, with a back-compat shim at `engine/classifier.py`) is responsible for:
+The classifier (`src/rwa_calc/engine/stages/classify/`) is responsible for:
 
 1. Mapping counterparty entity types to regulatory exposure classes
 2. Determining the calculation approach (SA, F-IRB, A-IRB, Slotting)

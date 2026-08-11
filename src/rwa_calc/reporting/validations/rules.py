@@ -112,10 +112,14 @@ _BOE_SCOPE_KEY = re.compile(r"\b([a-z]+)\s*:\s*([^,}]*)")
 
 #: EBA prerequisites read as ``"C 07.00.a and C 07.00.b"`` — a conjunction of
 #: table codes that must be reported for the rule to run at all.
-#: The leading run is possessive: "and" cannot itself be whitespace, so giving
-#: characters back from that run can never make the literal match, and letting the
-#: engine retry every length of it is quadratic on a long run of spaces.
-_PREREQUISITE_SPLIT = re.compile(r"\s++and\s+", re.IGNORECASE)
+#: Single `\s` on each side, not `\s+`: an unbounded run at the head of an
+#: UNANCHORED pattern makes the search re-enter the same run of spaces at every
+#: offset — quadratic in its length, and a cost paid ACROSS start positions that
+#: neither a possessive quantifier nor a lookbehind removes. Any surrounding
+#: whitespace this leaves on a token is removed by the caller's ``strip``, so the
+#: split is unchanged: verified identical over all 1,011 committed EBA rules
+#: (539 of which carry a conjunction).
+_PREREQUISITE_SPLIT = re.compile(r"\sand\s", re.IGNORECASE)
 
 
 # =============================================================================

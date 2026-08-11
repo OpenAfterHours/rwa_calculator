@@ -113,7 +113,7 @@ def create_test_loader(fixture_path: str | Path | None = None) -> ParquetLoader:
 
 ## Hierarchy Resolver
 
-### Module: `rwa_calc.engine.hierarchy`
+### Module: `rwa_calc.engine.stages.hierarchy`
 
 Resolves counterparty and facility hierarchies for rating inheritance,
 lending group aggregation, facility-to-exposure traversal, and facility
@@ -156,7 +156,7 @@ class HierarchyResolver:
 
 ## Classifier
 
-### Module: `rwa_calc.engine.classifier`
+### Module: `rwa_calc.engine.stages.classify`
 
 Determines exposure class, assigns calculation approach, checks SME/retail
 thresholds, identifies defaults, and splits by approach.
@@ -983,7 +983,7 @@ schedule = schedule_runner.run(data, PermissionMode.IRB)
 
 ## FX Converter
 
-### Module: `rwa_calc.engine.fx_converter`
+### Module: `rwa_calc.engine.stages.fx`
 
 Currency conversion from original currencies to the configured reporting
 currency. Preserves original values in audit trail columns.
@@ -1053,7 +1053,7 @@ def create_fx_converter() -> FXConverter:
 **Usage Example:**
 
 ```python
-from rwa_calc.engine.fx_converter import create_fx_converter
+from rwa_calc.engine.stages.fx.converter import create_fx_converter
 
 converter = create_fx_converter()
 

@@ -51,7 +51,8 @@ LINE_ALLOWLIST: dict[str, frozenset[int]] = {
     # `.over("counterparty_reference")` calls operate on a frame with no
     # null-keyed rows. See the comment block above the per_agency_latest
     # filter in engine/stages/hierarchy/ratings.py. (Re-keyed from
-    # engine/hierarchy.py:450/451 by the Phase 4 Slice 2 package split.)
+    # the pre-split engine/hierarchy.py:450/451 by the Phase 4 Slice 2
+    # package split; that module no longer exists.)
     "src/rwa_calc/engine/stages/hierarchy/ratings.py": frozenset({126, 127}),
 }
 

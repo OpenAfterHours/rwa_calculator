@@ -62,16 +62,25 @@ Checks machine-verifiable invariants from CLAUDE.md:
     the stage module (single module or package ``__init__``) binds a
     top-level ``run``. Stage packages without a registry slot are pinned
     in ``STAGE_PACKAGES_WITHOUT_RUN`` (shrink-only).
+17. No ``config.is_crr`` / ``config.is_basel_3_1`` branching in engine/** —
+    regime-dependent behaviour reads a cited rulepack ``Feature`` instead,
+    so the divergence is stated once, in the pack, with a citation.
+18. No pure re-export shells under engine/ — a module with no defs whose
+    body is only imports (plus docstring / ``__future__`` / ``__all__`` /
+    the module logger). When an implementation moves into a stage package,
+    the old path is deleted and its importers repointed, never kept as a
+    thin alias. Allowlist ``REEXPORT_SHELL_ALLOWLIST`` is empty by design.
 
 Checks 5, 6, 7 enforce the data/engine separation. Check 8 enforces the
 observability contract (see docs/specifications/observability.md). Check 9
 keeps the watchfire citation matrix honest. Check 10 prevents drift in the
 module-docstring citation contract (see docs/development/citation-tracking.md).
 Checks 11 and 12 are migration-plan Phase 0 guards, check 13 a Phase 2
-guard, and checks 14-16 the Phase 4 uniform-stage-model guards (see
-docs/plans/target-architecture-migration.md). Rare intentional exceptions
-are listed in the ALLOWLIST dicts below; adding a new entry there should be
-a deliberate, reviewed decision.
+guard, and checks 14-16 and 18 the Phase 4 uniform-stage-model guards (see
+docs/plans/target-architecture-migration.md) — check 18 closes out the
+migration by banning the back-compat shells the earlier slices left behind.
+Rare intentional exceptions are listed in the ALLOWLIST dicts below; adding
+a new entry there should be a deliberate, reviewed decision.
 
 Usage:
     python scripts/arch_check.py [path] [--update-baseline]
@@ -421,6 +430,16 @@ STAGE_PACKAGES_WITHOUT_RUN: set[str] = {
     # the unify -> enrich seam.
     "fx",
 }
+
+# Modules under engine/ permitted to be pure re-export shells (check 18). A
+# shell is a module with no defs whose only statements are imports plus a
+# module logger — the shape left behind when an implementation moves to a stage
+# package and the old path is kept "for back-compat". Four such shells
+# (classifier / hierarchy / re_splitter / fx_converter) were deleted after they
+# were found masking a vacuous test: a guard that read `module.__file__` was
+# scanning the empty shell instead of the real implementation. Empty by design
+# — a new entry needs a justification comment.
+REEXPORT_SHELL_ALLOWLIST: set[str] = set()
 
 # Known legacy inversions, allowlisted until the migration phase that retires
 # them lands (docs/plans/target-architecture-migration.md). New entries
@@ -1588,6 +1607,87 @@ def check_stage_anatomy(path: Path) -> list[str]:
     return violations
 
 
+def check_no_reexport_shells(path: Path) -> list[str]:
+    """No pure re-export shells under engine/ — delete the module, move the imports.
+
+    When an implementation moves into a stage package it is tempting to leave
+    the old module behind as a thin alias so existing imports keep working. The
+    result is a file that reads like a stage but holds nothing: two names for
+    one thing, and a docstring that describes code living elsewhere.
+
+    The concrete harm is not stylistic. ``engine/hierarchy.py`` survived as such
+    a shell, and a regression guard that scanned ``hierarchy_module.__file__``
+    for a forbidden marker silently began scanning the 28-line shell instead of
+    the implementation — passing unconditionally. A shell also absorbs the
+    module-logger requirement (check 8) with a logger that can never emit.
+
+    A module is a shell when it declares no function or class, imports at least
+    one name, and every other top-level statement is the module docstring, a
+    ``__future__`` import, ``__all__``, or the module logger. Modules that also
+    define constants (e.g. ``engine/registry.py``) are not shells.
+    """
+    violations: list[str] = []
+    for py_file in _iter_engine_files(path):
+        rel = py_file.relative_to(path).as_posix()
+        if rel in REEXPORT_SHELL_ALLOWLIST:
+            continue
+        try:
+            tree = ast.parse(py_file.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, SyntaxError):
+            continue
+        if not _is_reexport_shell(tree):
+            continue
+        violations.append(
+            f"{rel}: pure re-export shell (no defs, only imports). Delete it and "
+            f"import from the real module; add to REEXPORT_SHELL_ALLOWLIST only "
+            f"with a justification."
+        )
+    return violations
+
+
+def _is_reexport_shell(tree: ast.Module) -> bool:
+    """True when a module's body is imports and nothing of substance."""
+    imports = 0
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
+            return False
+        if isinstance(node, ast.Import | ast.ImportFrom):
+            if not (isinstance(node, ast.ImportFrom) and node.module == "__future__"):
+                imports += 1
+            continue
+        if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
+            continue  # module docstring
+        if _is_module_logger(node) or _is_dunder_all(node):
+            continue
+        return False  # a real module-level statement — not a shell
+    return imports > 0
+
+
+def _is_module_logger(node: ast.stmt) -> bool:
+    """True for ``logger = logging.getLogger(__name__)``."""
+    if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+        return False
+    target = node.targets[0]
+    if not isinstance(target, ast.Name) or target.id != "logger":
+        return False
+    call = node.value
+    return (
+        isinstance(call, ast.Call)
+        and isinstance(call.func, ast.Attribute)
+        and call.func.attr == "getLogger"
+    )
+
+
+def _is_dunder_all(node: ast.stmt) -> bool:
+    """True for an ``__all__ = [...]`` assignment."""
+    return (
+        isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "__all__"
+    )
+
+
 def check_watchfire_citations() -> tuple[list[str], list[str]]:
     """Run `watchfire check` via its Python API.
 
@@ -1779,6 +1879,10 @@ def main() -> int:
         (
             "Stage anatomy: registry fns are engine/stages/<stage>.run",
             check_stage_anatomy,
+        ),
+        (
+            "No pure re-export shells in engine/ (delete the module, move the imports)",
+            check_no_reexport_shells,
         ),
     ]
 

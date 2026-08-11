@@ -39,7 +39,6 @@
       "pack_entries": [],
       "source_files": [
         "contracts/edges.py",
-        "engine/hierarchy.py",
         "engine/stages/classify/attributes.py",
         "engine/stages/classify/audit.py",
         "engine/stages/classify/subtypes.py",
@@ -414,7 +413,6 @@
         "data/schemas.py",
         "domain/enums.py",
         "engine/aggregator/aggregator.py",
-        "engine/classifier.py",
         "engine/entity_class_maps.py",
         "engine/sa/__init__.py",
         "engine/sa/calculator.py",
@@ -1219,7 +1217,6 @@
         "data/schemas.py",
         "domain/enums.py",
         "engine/pipeline.py",
-        "engine/re_splitter.py",
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/risk_weights.py",
         "engine/stages/re_split/__init__.py",
@@ -1789,7 +1786,6 @@
       "source_files": [
         "data/schemas.py",
         "engine/ccf.py",
-        "engine/classifier.py",
         "engine/entity_class_maps.py",
         "engine/kernels/allocation.py",
         "engine/slotting/__init__.py",
@@ -3477,7 +3473,6 @@
         "data/schemas.py",
         "engine/crm/haircut_tables.py",
         "engine/crm/haircuts.py",
-        "engine/fx_converter.py",
         "engine/sft/__init__.py",
         "engine/sft/fccm.py",
         "engine/stages/fx/__init__.py",
@@ -6447,7 +6442,6 @@
       "source_files": [
         "contracts/protocols.py",
         "domain/enums.py",
-        "engine/re_splitter.py",
         "engine/sa/b31_risk_weight_tables.py",
         "engine/stages/re_split/carriers.py",
         "engine/stages/re_split/flagging.py",

@@ -25,7 +25,7 @@ from rwa_calc.contracts.bundles import (
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.contracts.errors import ERROR_DUPLICATE_KEY
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
-from rwa_calc.engine.hierarchy import HierarchyResolver
+from rwa_calc.engine.stages.hierarchy import HierarchyResolver
 from tests.fixtures.raw_bundle import make_raw_bundle, seal_raw_table
 from tests.fixtures.resolved_bundle import make_counterparty_lookup
 

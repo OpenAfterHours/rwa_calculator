@@ -38,13 +38,13 @@ from rwa_calc.data.schemas import (
     RATINGS_SCHEMA,
 )
 from rwa_calc.domain.enums import PermissionMode
-from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.crm.processor import CRMProcessor
 from rwa_calc.engine.equity.calculator import EquityCalculator
-from rwa_calc.engine.hierarchy import HierarchyResolver
 from rwa_calc.engine.irb.calculator import IRBCalculator
 from rwa_calc.engine.sa.calculator import SACalculator
 from rwa_calc.engine.slotting.calculator import SlottingCalculator
+from rwa_calc.engine.stages.classify import ExposureClassifier
+from rwa_calc.engine.stages.hierarchy import HierarchyResolver
 from rwa_calc.observability.logging_setup import _NAMESPACE
 from tests.fixtures.raw_bundle import make_raw_bundle
 

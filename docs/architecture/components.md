@@ -16,8 +16,11 @@ This document provides detailed documentation of each component in the RWA calcu
 | **Equity Calculator** | `engine/equity/calculator.py` | Equity RWA |
 | **Aggregator** | `engine/aggregator/aggregator.py` | Combine results |
 
-`engine/hierarchy.py` and `engine/classifier.py` survive only as ~24-28 line
-back-compat import shims re-exporting from the stage packages above.
+Each stage package is the single home of its component — there is no
+top-level alias module. Import `HierarchyResolver` from
+`engine/stages/hierarchy/`, `ExposureClassifier` from `engine/stages/classify/`,
+`RealEstateSplitter` from `engine/stages/re_split/` and `FXConverter` from
+`engine/stages/fx/`.
 
 ## Calculator / Domain Transforms
 

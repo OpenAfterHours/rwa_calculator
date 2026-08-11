@@ -290,8 +290,8 @@ class TestComponentBenchmarks100K:
         dataset_100k: dict[str, pl.LazyFrame],
     ):
         """Benchmark exposure classifier at 100K scale."""
-        from rwa_calc.engine.classifier import ExposureClassifier
-        from rwa_calc.engine.hierarchy import HierarchyResolver
+        from rwa_calc.engine.stages.classify import ExposureClassifier
+        from rwa_calc.engine.stages.hierarchy import HierarchyResolver
 
         raw_data = create_raw_data_bundle(dataset_100k)
         config = CalculationConfig.crr(BENCHMARK_REPORTING_DATE)
@@ -317,10 +317,10 @@ class TestComponentBenchmarks100K:
         dataset_100k: dict[str, pl.LazyFrame],
     ):
         """Benchmark SA calculator at 100K scale."""
-        from rwa_calc.engine.classifier import ExposureClassifier
         from rwa_calc.engine.crm.processor import CRMProcessor
-        from rwa_calc.engine.hierarchy import HierarchyResolver
         from rwa_calc.engine.sa.calculator import SACalculator
+        from rwa_calc.engine.stages.classify import ExposureClassifier
+        from rwa_calc.engine.stages.hierarchy import HierarchyResolver
 
         raw_data = create_raw_data_bundle(dataset_100k)
         config = CalculationConfig.crr(BENCHMARK_REPORTING_DATE)

@@ -24,10 +24,10 @@ import pytest
 from rwa_calc.contracts.bundles import CRMAdjustedBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.aggregator import OutputAggregator
-from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.crm.processor import CRMProcessor
 from rwa_calc.engine.equity.calculator import EquityCalculator
-from rwa_calc.engine.hierarchy import HierarchyResolver
+from rwa_calc.engine.stages.classify import ExposureClassifier
+from rwa_calc.engine.stages.hierarchy import HierarchyResolver
 from tests.fixtures.contract_columns import (
     pad_irb_branch,
     pad_sa_branch,

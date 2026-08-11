@@ -24,20 +24,6 @@ from rwa_calc.observability.logging_setup import _NAMESPACE
 
 from .conftest import make_counterparty, make_loan, make_raw_data_bundle
 
-_NAMESPACE_LOGGER_NAMES: tuple[str, ...] = (
-    "rwa_calc.engine.pipeline",
-    "rwa_calc.engine.loader",
-    "rwa_calc.engine.hierarchy",
-    "rwa_calc.engine.classifier",
-    "rwa_calc.engine.crm.processor",
-    "rwa_calc.engine.re_splitter",
-    "rwa_calc.engine.sa.calculator",
-    "rwa_calc.engine.irb.calculator",
-    "rwa_calc.engine.slotting.calculator",
-    "rwa_calc.engine.equity.calculator",
-    "rwa_calc.engine.aggregator.aggregator",
-)
-
 
 @pytest.fixture
 def minimal_bundle():

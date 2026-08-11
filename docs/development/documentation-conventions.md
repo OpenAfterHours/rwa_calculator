@@ -56,7 +56,7 @@ Path is relative to repository root. See [pymdownx.snippets docs](https://facele
 Use `mkdocstrings` to generate documentation from docstrings:
 
 ```markdown
-::: rwa_calc.engine.classifier.ExposureClassifier
+::: rwa_calc.engine.stages.classify.ExposureClassifier
     options:
       show_root_heading: true
       members:

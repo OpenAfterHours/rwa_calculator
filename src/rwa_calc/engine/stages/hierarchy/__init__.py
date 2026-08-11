@@ -15,7 +15,7 @@ Layout:
 - ``enrich``           — unified-frame decoration (QRRE, ratings, RE, LTV,
   lending group)
 
-``rwa_calc.engine.hierarchy`` remains as a thin back-compat shim re-exporting
+This package is the only home of the hierarchy stage; import
 ``HierarchyResolver`` and ``_FACILITY_QRRE_COUPLED_COLUMNS`` from here.
 
 References:

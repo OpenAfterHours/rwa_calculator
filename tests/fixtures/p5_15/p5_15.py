@@ -2,7 +2,7 @@
 Generate P5.15 fixtures: Art. 123A(1)(b)(ii) 0.2% retail portfolio granularity sub-condition.
 
 Pipeline position:
-    fixture-builder output -> test-writer -> engine-implementer (engine/classifier.py
+    fixture-builder output -> test-writer -> engine-implementer (engine/stages/classify/
     _build_qualifies_as_retail_expr)
 
 Key responsibilities:
@@ -65,7 +65,7 @@ References:
     - PRA PS1/26 Art. 122 Table 6: unrated corporate SA RW = 100%
     - PRA PS1/26 Art. 123(3)(b): regulatory retail SA RW = 75%
     - BCBS CRE20.66: granularity criterion source
-    - src/rwa_calc/engine/classifier.py L2044-2098: _build_qualifies_as_retail_expr
+    - engine/stages/classify/: _build_qualifies_as_retail_expr
     - src/rwa_calc/data/tables/b31_risk_weights.py: B31_RETAIL_GRANULARITY_LIMIT = Decimal("0.002")
 
 Usage:

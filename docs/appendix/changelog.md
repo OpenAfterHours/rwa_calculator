@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- (Next release changes will go here)
+
+### Changed
+- (Next release changes will go here)
+
+---
+
+## [0.3.25] - 2026-08-11
+
+### Added
 - **The correctness estate now gates instead of merely measuring.** The
   independent validation layers merged on 2026-08-08 could all report a blind
   spot and none of them could fail a build over one. Six changes close that:
@@ -85,6 +95,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ERROR rule that would catch it ships in this repo and is never evaluated), and a
   defect in a gate that had not yet shipped, which carries no class because all
   eight presume a defect that reached production.
+- **The regulatory skills no longer state regulatory values.**
+  `scripts/generate_regulatory_tables.py` now renders pack values into
+  `<!-- BEGIN/END GENERATED -->` regions inside the `basel31` and `crr` skill
+  reference files (33 fragments across 17 files), and the new
+  `scripts/check_skill_values.py` fails any percentage written into skill
+  *prose* outside those regions, with a justified `ALLOWANCES` list for genuine
+  exceptions (verbatim article quotations, published EBA rule expressions).
+  Both are gated by `tests/contracts/test_docs_freshness.py`. Skill prose now
+  carries only what the pack cannot — precedence, scope, mechanics, PRA-vs-BCBS
+  divergences and traps — and names pack entries instead of quoting values.
+  A `what-changed.md` fragment renders the CRR↔B3.1 divergence table by
+  *comparing the resolved packs*, so it maintains itself. The generator hard-
+  fails (exit 2) on a fragment id with no marker, a marker no fragment fills, or
+  an entry name in neither pack — so a pack rename cannot silently empty a skill.
+- **Per-article confidence matrix.** `scripts/generate_confidence_matrix.py`
+  joins five evidence layers per regulatory article (`@cites` snapshot, cited
+  pack entries, oracle records, a heuristic test scan, a source-name scan) into
+  [docs/development/confidence-matrix.md](../development/confidence-matrix.md)
+  plus a machine-readable snapshot, tiered HIGH / MEDIUM / LOW / UNCITED / GAP.
+  GAP (32 articles) is the actionable coverage-hole list; the SA-CCR cluster is
+  correctly shown as implemented-but-uncitable (watchfire index gap), not as
+  missing. Freshness-gated by `tests/contracts/test_confidence_matrix_freshness.py`.
+- **Differential shadow fuzzing.** `tests/oracle/derivations/branch_sa.py`
+  turns the shadow calculator into a callable stdlib-only SA branch oracle, and
+  `tests/properties/test_differential_shadow.py` fuzzes the engine against it:
+  a 49-case deterministic matrix exhaustive over entity × CQS × framework plus
+  a hypothesis fuzz on top. No engine/shadow disagreement found on any in-scope
+  input under either regime; excluded branches are enumerated, never silent.
+- **Cross-regime delta regression.** `tests/properties/test_regime_deltas.py`
+  runs one all-SA portfolio under both CRR and Basel 3.1 and asserts a curated,
+  cited delta map: 8 no-change legs (exact RW equality), 4 changed legs with
+  exact values both sides (corporate CQS3 100%→75%, institution CQS2 50%→30%,
+  SME rated/unrated via the Art. 501 supporting-factor removal), and a
+  bookkeeping identity tying each regime's total RWA to the sum of per-leg
+  deltas. Every value re-derived from the source PDFs in adversarial review.
+- **Docs dead-link ratchet.** `scripts/check_doc_links.py` counts broken
+  relative links and dead intra-page anchors across `docs/` (76 at baseline,
+  banked in `scripts/docs_link_baseline.json`) and two-way ratchets the count
+  in the contract suite: a new dead link fails, a fixed one must be banked.
+  Burn-down tracked as P4.56/P1.309.
+- **Independent validation system.** Six components addressing the fact that the
+  estate's ~10,500 tests almost all compare against *recorded engine output*, so
+  they detect change rather than wrongness. Plan:
+  [Independent Validation System](../plans/independent-validation-system.md).
+  - `tests/properties/` — 185 regulation-derived properties (conservation,
+    structural invariants, monotonicity, homogeneity, output-floor identities,
+    template row-axis coverage). Finds wrongness without anyone deriving an
+    expected value. 157s.
+  - `tests/oracle/` — the independent shadow calculator grown from **3 to 132**
+    exposures, stdlib-only and self-enforced by
+    `test_derivations_never_import_rwa_calc`. The only component that can catch a
+    wrong *constant*.
+  - `tests/conformance/` — an externally-authored classification decision table
+    (710 combinations, 602 in scope, 2,396 assertions; an unmapped combination is
+    a hard failure) and independent OV1 cell re-derivation from Annex II text.
+  - `scripts/impact_report.py` — change-impact reporting over 128,127 template
+    cells at four grains, with appeared/disappeared cells reported loudly and an
+    allowlist requiring a written reason.
+  - `scripts/coverage_report.py` + `coverage_baseline.json` — estate-wide
+    published-rule and template-cell coverage, ratcheted.
+  - `scripts/defect_injection.py` — defect-injection scorecard: 22 mutants, a
+    data-driven gate ladder, and reachability as a first-class verdict.
 
 ### Security
 - **An unrecognised report-template or run identifier is no longer written into
@@ -139,9 +211,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `-n 0`, `-v`); a single-file run is much faster serially — 13.4s → 2.3s for
   `tests/unit/test_ccf.py`, since below roughly a dozen files the worker
   startup costs more than the tests.
+- **One work queue.** `DOCS_IMPLEMENTATION_PLAN.md` is retired: its open items
+  merged into `IMPLEMENTATION_PLAN.md` (Tier 5 is now the docs queue that
+  `/next-docs` drains; migrated items keep their D-codes), and the misfiled
+  code items it had accumulated moved into the code tiers. One list, one audit
+  cadence, no cross-file bookkeeping.
+- **`docs/data-model/regulatory-tables.md` is now generated.** Rendered from
+  the resolved rulepacks by `scripts/generate_regulatory_tables.py` (all ~250
+  cited entries, CRR and Basel 3.1 side by side, citations included) and
+  freshness-gated by `tests/contracts/test_docs_freshness.py` — the page can no
+  longer drift from the packs. Never hand-edit it.
+- `.claude/LESSONS.md` is now **tracked in git**. It never was, so it existed only in
+  the main checkout and was absent from every git worktree — meaning every agent
+  dispatched into a worktree was told to read it and got "file does not exist".
+- Corrected `LESSONS.md` A2: sub-agents *can* read the regulatory PDFs. The
+  limitation is the `Read` tool (no `pdftoppm`), not the agent — pymupdf via Bash
+  works, and the entry was routing agents to transcriptions it elsewhere records as
+  wrong.
+- Added `hypothesis` to the dev dependencies (portfolio search and shrinking).
 
 ### Fixed
-- **Six regular expressions with quadratic runtime were made linear.** They failed
+- **The release script now regenerates every version-stamped generated artifact.**
+  `docs/data-model/regulatory-tables.md`, `docs/development/confidence-matrix.md`
+  and `tests/contracts/data/confidence_snapshot.json` each embed the package
+  version, so bumping it is by itself enough to make all three stale and turn
+  their freshness contract tests red. `scripts/deploy.py` regenerated only the
+  citation matrix and the dependency graph, and it runs the test suite *before*
+  the bump — so the suite could not observe the staleness the bump was about to
+  create, and the first thing to see it was CI on the release commit. The two
+  generators now run in `build_release`, and the three targets are staged for the
+  release commit alongside `tests/contracts/data/citation_snapshot.json`, which
+  the citation-matrix regeneration had likewise been writing but never staging.
   in two distinct ways. Four paired an unbounded whitespace run against a
   neighbour that could *also* match whitespace (`\s*` beside a dot-matches-all
   `.*?`, or beside a negated class), so on input that failed to match the engine
@@ -205,45 +305,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   because the classifier's property-collateral test spans both property types.
   That is conservative, strictly narrower than the previous behaviour, and
   tracked separately.
-
-### Added
-- **The regulatory skills no longer state regulatory values.**
-  `scripts/generate_regulatory_tables.py` now renders pack values into
-  `<!-- BEGIN/END GENERATED -->` regions inside the `basel31` and `crr` skill
-  reference files (33 fragments across 17 files), and the new
-  `scripts/check_skill_values.py` fails any percentage written into skill
-  *prose* outside those regions, with a justified `ALLOWANCES` list for genuine
-  exceptions (verbatim article quotations, published EBA rule expressions).
-  Both are gated by `tests/contracts/test_docs_freshness.py`. Skill prose now
-  carries only what the pack cannot — precedence, scope, mechanics, PRA-vs-BCBS
-  divergences and traps — and names pack entries instead of quoting values.
-  A `what-changed.md` fragment renders the CRR↔B3.1 divergence table by
-  *comparing the resolved packs*, so it maintains itself. The generator hard-
-  fails (exit 2) on a fragment id with no marker, a marker no fragment fills, or
-  an entry name in neither pack — so a pack rename cannot silently empty a skill.
-- **Per-article confidence matrix.** `scripts/generate_confidence_matrix.py`
-  joins five evidence layers per regulatory article (`@cites` snapshot, cited
-  pack entries, oracle records, a heuristic test scan, a source-name scan) into
-  [docs/development/confidence-matrix.md](../development/confidence-matrix.md)
-  plus a machine-readable snapshot, tiered HIGH / MEDIUM / LOW / UNCITED / GAP.
-  GAP (32 articles) is the actionable coverage-hole list; the SA-CCR cluster is
-  correctly shown as implemented-but-uncitable (watchfire index gap), not as
-  missing. Freshness-gated by `tests/contracts/test_confidence_matrix_freshness.py`.
-- **Differential shadow fuzzing.** `tests/oracle/derivations/branch_sa.py`
-  turns the shadow calculator into a callable stdlib-only SA branch oracle, and
-  `tests/properties/test_differential_shadow.py` fuzzes the engine against it:
-  a 49-case deterministic matrix exhaustive over entity × CQS × framework plus
-  a hypothesis fuzz on top. No engine/shadow disagreement found on any in-scope
-  input under either regime; excluded branches are enumerated, never silent.
-- **Cross-regime delta regression.** `tests/properties/test_regime_deltas.py`
-  runs one all-SA portfolio under both CRR and Basel 3.1 and asserts a curated,
-  cited delta map: 8 no-change legs (exact RW equality), 4 changed legs with
-  exact values both sides (corporate CQS3 100%→75%, institution CQS2 50%→30%,
-  SME rated/unrated via the Art. 501 supporting-factor removal), and a
-  bookkeeping identity tying each regime's total RWA to the sum of per-leg
-  deltas. Every value re-derived from the source PDFs in adversarial review.
-
-### Fixed
 - **Two wrong values in the `basel31` skill, both now impossible to reintroduce.**
   Corporate CQS5 under Basel 3.1 was stated as 100% in three places
   (`references/sa-risk-weights.md` and twice in `references/what-changed.md`)
@@ -263,6 +324,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   C 07.00 col 0200 origin-basis defect in the present tense; rewritten
   past-tense with the resolution in both the JSON register and the test's
   `REGISTER_NOTES`.
+- Nothing yet — the findings below are **recorded as strict xfails, not fixed**,
+  because each moves published template numbers and needs its own preserve-or-fix
+  decision.
 
 ### Removed
 - **The four back-compat shells left by the Phase 4 stage migration are
@@ -295,52 +359,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   module with no defs whose body is only imports plus a docstring, `__future__`,
   `__all__` or the module logger. `REEXPORT_SHELL_ALLOWLIST` is empty by design.
 
-### Changed
-- **One work queue.** `DOCS_IMPLEMENTATION_PLAN.md` is retired: its open items
-  merged into `IMPLEMENTATION_PLAN.md` (Tier 5 is now the docs queue that
-  `/next-docs` drains; migrated items keep their D-codes), and the misfiled
-  code items it had accumulated moved into the code tiers. One list, one audit
-  cadence, no cross-file bookkeeping.
-- **`docs/data-model/regulatory-tables.md` is now generated.** Rendered from
-  the resolved rulepacks by `scripts/generate_regulatory_tables.py` (all ~250
-  cited entries, CRR and Basel 3.1 side by side, citations included) and
-  freshness-gated by `tests/contracts/test_docs_freshness.py` — the page can no
-  longer drift from the packs. Never hand-edit it.
-
-### Added
-- **Docs dead-link ratchet.** `scripts/check_doc_links.py` counts broken
-  relative links and dead intra-page anchors across `docs/` (76 at baseline,
-  banked in `scripts/docs_link_baseline.json`) and two-way ratchets the count
-  in the contract suite: a new dead link fails, a fixed one must be banked.
-  Burn-down tracked as P4.56/P1.309.
-- **Independent validation system.** Six components addressing the fact that the
-  estate's ~10,500 tests almost all compare against *recorded engine output*, so
-  they detect change rather than wrongness. Plan:
-  [Independent Validation System](../plans/independent-validation-system.md).
-  - `tests/properties/` — 185 regulation-derived properties (conservation,
-    structural invariants, monotonicity, homogeneity, output-floor identities,
-    template row-axis coverage). Finds wrongness without anyone deriving an
-    expected value. 157s.
-  - `tests/oracle/` — the independent shadow calculator grown from **3 to 132**
-    exposures, stdlib-only and self-enforced by
-    `test_derivations_never_import_rwa_calc`. The only component that can catch a
-    wrong *constant*.
-  - `tests/conformance/` — an externally-authored classification decision table
-    (710 combinations, 602 in scope, 2,396 assertions; an unmapped combination is
-    a hard failure) and independent OV1 cell re-derivation from Annex II text.
-  - `scripts/impact_report.py` — change-impact reporting over 128,127 template
-    cells at four grains, with appeared/disappeared cells reported loudly and an
-    allowlist requiring a written reason.
-  - `scripts/coverage_report.py` + `coverage_baseline.json` — estate-wide
-    published-rule and template-cell coverage, ratcheted.
-  - `scripts/defect_injection.py` — defect-injection scorecard: 22 mutants, a
-    data-driven gate ladder, and reachability as a first-class verdict.
-
-### Fixed
-- Nothing yet — the findings below are **recorded as strict xfails, not fixed**,
-  because each moves published template numbers and needs its own preserve-or-fix
-  decision.
-
 ### Known issues (found by the new validation layers, all recorded as strict xfails)
 - **A Basel 3.1 equity leg is calculated and then dropped.** `risk_weight` resolves
   to 2.5 (PS1/26 Art. 133) and `rwa_pre_factor`, `rwa_post_factor` and `rwa_final`
@@ -364,16 +382,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Five classification defects (B31 large-corporate F-IRB aliases; QRRE
   per-individual double-count; `sync_irb_exposure_class` overwriting the Art. 147(3)
   class so MDBs, international organisations and covered bonds cannot reach IRB).
-
-### Changed
-- `.claude/LESSONS.md` is now **tracked in git**. It never was, so it existed only in
-  the main checkout and was absent from every git worktree — meaning every agent
-  dispatched into a worktree was told to read it and got "file does not exist".
-- Corrected `LESSONS.md` A2: sub-agents *can* read the regulatory PDFs. The
-  limitation is the `Read` tool (no `pdftoppm`), not the agent — pymupdf via Bash
-  works, and the entry was routing agents to transcriptions it elsewhere records as
-  wrong.
-- Added `hypothesis` to the dev dependencies (portfolio search and shrinking).
 
 ---
 

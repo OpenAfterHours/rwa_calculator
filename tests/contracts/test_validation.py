@@ -265,10 +265,17 @@ class TestValidateBundleValues:
         assert errors == []
 
     def test_multiple_table_errors(self):
-        """Errors from multiple tables should all be collected."""
+        """Errors from multiple tables should all be collected.
+
+        Both toy frames carry a resolvable ``counterparty_reference``. Without
+        one the facility row asserts no obligor at all, which the referential
+        gate reports as a third error — true, but not what this test counts.
+        """
         bundle = self._make_bundle(
-            counterparties=pl.LazyFrame({"entity_type": ["BAD"]}),
-            facilities=pl.LazyFrame({"seniority": ["WRONG"]}),
+            counterparties=pl.LazyFrame(
+                {"counterparty_reference": ["CP1"], "entity_type": ["BAD"]}
+            ),
+            facilities=pl.LazyFrame({"counterparty_reference": ["CP1"], "seniority": ["WRONG"]}),
         )
 
         errors = validate_bundle_values(bundle)
@@ -338,9 +345,20 @@ class TestValidateBundleValues:
         assert "INVALID" in errors[0].message
 
     def test_valid_risk_type_accepted(self):
-        """Valid risk_type values should return no errors."""
+        """Valid risk_type values should return no errors.
+
+        Every facility row names an obligor that exists — a bundle whose
+        facilities have no counterparty is not a no-errors bundle, whatever
+        its risk_type values say.
+        """
         bundle = self._make_bundle(
-            facilities=pl.LazyFrame({"risk_type": ["FR", "FRC", "MR", "OC", "MLR", "LR"]}),
+            counterparties=pl.LazyFrame({"counterparty_reference": ["CP1"]}),
+            facilities=pl.LazyFrame(
+                {
+                    "counterparty_reference": ["CP1"] * 6,
+                    "risk_type": ["FR", "FRC", "MR", "OC", "MLR", "LR"],
+                }
+            ),
         )
 
         errors = validate_bundle_values(bundle)
@@ -350,7 +368,10 @@ class TestValidateBundleValues:
     def test_invalid_risk_type_detected(self):
         """Invalid risk_type should produce error."""
         bundle = self._make_bundle(
-            facilities=pl.LazyFrame({"risk_type": ["FR", "BAD_TYPE"]}),
+            counterparties=pl.LazyFrame({"counterparty_reference": ["CP1"]}),
+            facilities=pl.LazyFrame(
+                {"counterparty_reference": ["CP1"] * 2, "risk_type": ["FR", "BAD_TYPE"]}
+            ),
         )
 
         errors = validate_bundle_values(bundle)
@@ -595,8 +616,15 @@ class TestNumericInputDomainGate:
         assert "3 additional row(s) omitted" in summary[0].message
 
     def test_clean_bundle_raises_nothing(self):
-        """In-domain values on every validated column produce no errors."""
+        """In-domain values on every validated column produce no errors.
+
+        "Clean" now has to mean referentially clean too: C1 exists, and the
+        loan and facility name it. The earlier form declared a rating for a
+        counterparty that was not in the bundle and gave its exposures no
+        obligor at all, so it was asserting that a broken bundle is silent.
+        """
         bundle = self._bundle(
+            counterparties=pl.LazyFrame({"counterparty_reference": ["C1"]}),
             ratings=pl.LazyFrame(
                 {
                     "rating_reference": ["R1"],
@@ -604,9 +632,21 @@ class TestNumericInputDomainGate:
                     "pd": [0.02],
                 }
             ),
-            loans=pl.LazyFrame({"loan_reference": ["L1"], "lgd": [0.45], "drawn_amount": [1000.0]}),
+            loans=pl.LazyFrame(
+                {
+                    "loan_reference": ["L1"],
+                    "counterparty_reference": ["C1"],
+                    "lgd": [0.45],
+                    "drawn_amount": [1000.0],
+                }
+            ),
             facilities=pl.LazyFrame(
-                {"facility_reference": ["F1"], "limit": [5000.0], "ccf_modelled": [0.75]}
+                {
+                    "facility_reference": ["F1"],
+                    "counterparty_reference": ["C1"],
+                    "limit": [5000.0],
+                    "ccf_modelled": [0.75],
+                }
             ),
         )
 

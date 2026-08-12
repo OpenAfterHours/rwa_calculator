@@ -545,6 +545,8 @@ CONTRACTS_GUARD_SURFACE: frozenset[str] = frozenset(
         "validation.py::validate_bundle_values",
         "validation.py::validate_collateral_links",
         "validation.py::validate_column_values",
+        "validation.py::validate_duplicate_keys",
+        "validation.py::validate_referential_integrity",
     }
 )
 

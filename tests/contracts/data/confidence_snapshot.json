@@ -1648,6 +1648,7 @@
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
+        "data/schemas.py",
         "engine/stages/hierarchy/enrich.py",
         "engine/stages/hierarchy/ratings.py"
       ],
@@ -5796,6 +5797,7 @@
       "pack_entries": [],
       "source_files": [
         "contracts/edges.py",
+        "data/schemas.py",
         "engine/aggregator/aggregator.py",
         "reporting/validations/scope.py"
       ],
@@ -6222,12 +6224,14 @@
     {
       "article": "122B",
       "code_functions": [],
-      "confidence": "GAP",
+      "confidence": "UNCITED",
       "framework": "PS1/26",
-      "layer_count": 1,
+      "layer_count": 2,
       "oracle_cases": [],
       "pack_entries": [],
-      "source_files": [],
+      "source_files": [
+        "data/schemas.py"
+      ],
       "test_files": [
         "tests/acceptance/basel31/test_p2_44_sa_sl_inferred_rating_disapplied.py",
         "tests/fixtures/p2_44/p2_44.py"
@@ -6902,6 +6906,20 @@
     },
     {
       "article": "136",
+      "code_functions": [],
+      "confidence": "UNCITED",
+      "framework": "PS1/26",
+      "layer_count": 1,
+      "oracle_cases": [],
+      "pack_entries": [],
+      "source_files": [
+        "data/schemas.py"
+      ],
+      "test_files": [],
+      "watchfire_index_gap": false
+    },
+    {
+      "article": "138",
       "code_functions": [],
       "confidence": "UNCITED",
       "framework": "PS1/26",

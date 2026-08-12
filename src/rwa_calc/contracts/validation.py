@@ -52,7 +52,9 @@ from rwa_calc.contracts.errors import (
     ERROR_INVALID_VALUE,
     ERROR_LGD_OUT_OF_RANGE,
     ERROR_MATURITY_INVALID,
+    ERROR_MISSING_FIELD,
     ERROR_NEGATIVE_AMOUNT,
+    ERROR_ORPHAN_REFERENCE,
     ERROR_PD_OUT_OF_RANGE,
     ERROR_RW_ABOVE_CAP,
     ERROR_RW_NEGATIVE,
@@ -61,14 +63,17 @@ from rwa_calc.contracts.errors import (
     CalculationError,
     ErrorCategory,
     ErrorSeverity,
+    absent_reference_error,
+    duplicate_input_key_error,
     negative_amount_without_netting_warning,
     non_finite_raw_input_error,
+    orphan_reference_error,
 )
 from rwa_calc.domain.branch_reasons import BRANCH_REASON_VOCABULARIES, UNKNOWN_FALLBACK
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import AggregatedResultBundle, RawDataBundle
-    from rwa_calc.data.column_spec import ColumnDomain
+    from rwa_calc.data.column_spec import ColumnDomain, ForeignKey
 
 # Regulatory reference for collateral link validation (CRM)
 COLLATERAL_LINK_CRM_REFERENCE = "CRR Art. 193/194"
@@ -474,6 +479,11 @@ def validate_bundle_values(
     # Cross-table referential integrity for the M:N collateral-links table.
     all_errors.extend(validate_collateral_links(bundle))
 
+    # Declared foreign keys (DQ005 / DQ001) and natural-key uniqueness (DQ004).
+    # Both are cross-row / cross-table facts, so they follow the per-table pass.
+    all_errors.extend(validate_referential_integrity(bundle))
+    all_errors.extend(validate_duplicate_keys(bundle))
+
     return all_errors
 
 
@@ -763,6 +773,276 @@ def _collateral_link_valid_beneficiaries(bundle: RawDataBundle) -> pl.LazyFrame:
             schema={"beneficiary_reference": pl.String, "_bt": pl.String},
         )
     return pl.concat(frames, how="vertical_relaxed").unique()
+
+
+# =============================================================================
+# DECLARED REFERENTIAL INTEGRITY
+# =============================================================================
+#
+# The cross-table half of the input gate. ``_validate_declared_domains`` above
+# asks whether a value is admissible on its own; this asks whether it RESOLVES.
+#
+# Why reporting and not rejecting. Every counterparty-attribute join in the
+# hierarchy stage is ``how="left"`` and has to stay that way: an inner join
+# would drop the exposure, and an exposure that has left the portfolio is worse
+# than one priced off a fallback — its capital is simply gone and no total says
+# so. So the row survives, takes the fallback treatment its declaration names,
+# and this gate is what makes the substitution visible. Nothing here changes a
+# number; it changes what the run says about the number.
+#
+# Why the input gate and not the join. The information is richer here. At the
+# join the miss is a null obligor attribute, indistinguishable from an obligor
+# row that exists and simply has no rating — and the reference that was
+# supplied, which is what an operator needs to repair the feed, has already
+# been consumed. The gate also runs on BOTH pipeline entries (the file loader
+# and ``run_with_data``), where a detector inside a stage would additionally
+# have to survive every future re-ordering of the fold.
+
+#: Kind labels for the two referential findings, carried through the single
+#: collect below rather than evaluated as two separate queries.
+_KIND_ORPHAN = "orphan"
+_KIND_ABSENT = "absent"
+
+
+def validate_referential_integrity(
+    bundle: RawDataBundle,
+    sample_cap: int = 5,
+) -> list[CalculationError]:
+    """Flag input rows whose DECLARED foreign key is broken or never supplied.
+
+    The generic reader of ``data/schemas.py``'s ``TABLE_FOREIGN_KEYS``. For
+    every declared link whose child column and parent key are both present, an
+    anti-join finds the values that resolve to nothing (``DQ005``) and a null
+    filter finds the rows that assert no link at all (``DQ001``). Both are
+    expressed lazily and unioned, so the whole registry costs ONE ``.collect()``
+    however many links are declared.
+
+    The two findings are deliberately not merged. They reach the same engine
+    fallback, but they are repaired in different files — an orphan needs the
+    PARENT feed extended or corrected, an absent reference needs this row's
+    column populated — and downstream they are indistinguishable, so the
+    distinction has to be drawn here or not at all. See
+    :func:`~rwa_calc.contracts.errors.absent_reference_error`.
+
+    Follows the sampling contract of :func:`_collect_domain_violations` exactly:
+    up to ``sample_cap`` row-named errors per (table, column, kind), then one
+    summary carrying the truthful omitted count. A broken parent feed makes
+    EVERY child row an orphan, and one error per row would bury the finding it
+    is reporting.
+
+    A link whose parent frame is absent from the bundle is skipped rather than
+    reported as wholly orphaned: "no counterparties table was supplied" is a
+    statement about the load, which the loader already makes, and re-reporting
+    it once per exposure row would be the loudest possible way to say it.
+
+    Args:
+        bundle: RawDataBundle to validate.
+        sample_cap: Maximum row-named errors per (table, column, kind).
+
+    Returns:
+        List of CalculationError objects (empty when every link resolves).
+    """
+    from rwa_calc.data.schemas import TABLE_FOREIGN_KEYS, TABLE_KEY_COLUMNS
+
+    frames = bundle_frames(bundle)
+    plans: list[pl.LazyFrame] = []
+    declarations: dict[tuple[str, str], ForeignKey] = {}
+
+    for table, foreign_keys in TABLE_FOREIGN_KEYS.items():
+        child = frames.get(table)
+        if child is None:
+            continue
+        child_columns = set(child.collect_schema().names())
+        key_column = TABLE_KEY_COLUMNS.get(table)
+        if key_column not in child_columns:
+            key_column = None
+        for foreign_key in foreign_keys:
+            parent = frames.get(foreign_key.parent_table)
+            if foreign_key.column not in child_columns or parent is None:
+                continue
+            if foreign_key.parent_column not in set(parent.collect_schema().names()):
+                continue
+            declarations[table, foreign_key.column] = foreign_key
+            plans.extend(_referential_plans(child, key_column, parent, table, foreign_key))
+
+    if not plans:
+        return []
+
+    found = pl.concat(plans, how="vertical").collect()
+    if found.height == 0:
+        return []
+
+    groups = found.sort(["_table", "_column", "_kind", "_reference"]).partition_by(
+        ["_table", "_column", "_kind"], as_dict=True, maintain_order=True
+    )
+    errors: list[CalculationError] = []
+    for (table, column, kind), rows in groups.items():
+        errors.extend(
+            _referential_errors(
+                declaration=declarations[table, column],
+                table=table,
+                kind=kind,
+                rows=rows,
+                sample_cap=sample_cap,
+            )
+        )
+    return errors
+
+
+def validate_duplicate_keys(bundle: RawDataBundle) -> list[CalculationError]:
+    """Flag input tables whose natural key names more than one row (``DQ004``).
+
+    Reads ``data/schemas.py``'s ``TABLE_UNIQUE_KEYS`` — the tables where a
+    repeated key is silent data loss rather than a visible fan-out. One
+    ``.collect()`` for the whole registry.
+
+    **Uncapped, one error per duplicated key**, breaking with the ``sample_cap``
+    contract the rest of this module follows. The reason is that the two other
+    gates sample a property of a COLUMN — "this column held 900 out-of-domain
+    values" locates the repair whichever 5 rows are named — whereas a duplicate
+    key is a property of a ROW, and a sampled duplicate leaves every un-sampled
+    row exactly as unaccounted-for as it was before this gate existed. The
+    population is bounded by the number of DISTINCT duplicated keys, which is
+    zero on well-formed input and equals the corruption on broken input, so the
+    cost scales with the fault rather than with the portfolio.
+
+    Args:
+        bundle: RawDataBundle to validate.
+
+    Returns:
+        List of CalculationError objects (empty when every key is unique).
+    """
+    from rwa_calc.data.schemas import TABLE_UNIQUE_KEYS
+
+    frames = bundle_frames(bundle)
+    plans: list[pl.LazyFrame] = []
+    for table, key_column in TABLE_UNIQUE_KEYS.items():
+        lf = frames.get(table)
+        if lf is None or key_column not in set(lf.collect_schema().names()):
+            continue
+        plans.append(
+            lf.select(pl.col(key_column).cast(pl.String).alias("_value"))
+            .drop_nulls()
+            .group_by("_value")
+            .len("_count")
+            .filter(pl.col("_count") > 1)
+            .with_columns(
+                pl.lit(table).alias("_table"),
+                pl.lit(key_column).alias("_column"),
+            )
+        )
+
+    if not plans:
+        return []
+
+    duplicated = pl.concat(plans, how="vertical").collect()
+    return [
+        duplicate_input_key_error(
+            table=row["_table"],
+            column=row["_column"],
+            value=row["_value"],
+            count=int(row["_count"]),
+            names_a_counterparty=row["_table"] == "counterparties",
+        )
+        for row in duplicated.sort(["_table", "_value"]).iter_rows(named=True)
+    ]
+
+
+def _referential_plans(
+    child: pl.LazyFrame,
+    key_column: str | None,
+    parent: pl.LazyFrame,
+    table: str,
+    foreign_key: ForeignKey,
+) -> list[pl.LazyFrame]:
+    """The orphan and absent-reference plans for one declared link.
+
+    Both carry their own ``(_table, _column, _kind)`` labels so the caller can
+    union every declared link into a single frame and pay for one collect.
+    ``key_column`` may be None for a table with no single-column identity; the
+    per-row errors then carry no ``exposure_reference`` rather than the link
+    being skipped.
+    """
+    reference = (
+        pl.col(key_column).cast(pl.String)
+        if key_column is not None
+        else pl.lit(None, dtype=pl.String)
+    )
+    pairs = child.select(
+        reference.alias("_reference"),
+        pl.col(foreign_key.column).cast(pl.String).alias("_value"),
+    )
+    parent_keys = (
+        parent.select(pl.col(foreign_key.parent_column).cast(pl.String).alias("_value"))
+        .drop_nulls()
+        .unique()
+    )
+    labels = (pl.lit(table).alias("_table"), pl.lit(foreign_key.column).alias("_column"))
+    orphans = (
+        pairs.filter(pl.col("_value").is_not_null())
+        .join(parent_keys, on="_value", how="anti")
+        .with_columns(*labels, pl.lit(_KIND_ORPHAN).alias("_kind"))
+    )
+    absent = pairs.filter(pl.col("_value").is_null()).with_columns(
+        *labels, pl.lit(_KIND_ABSENT).alias("_kind")
+    )
+    return [orphans, absent]
+
+
+def _referential_errors(
+    *,
+    declaration: ForeignKey,
+    table: str,
+    kind: str,
+    rows: pl.DataFrame,
+    sample_cap: int,
+) -> list[CalculationError]:
+    """Turn one (table, column, kind) group of offending rows into errors."""
+    names_counterparty = declaration.parent_table == "counterparties"
+    sampled = rows.head(sample_cap)
+    errors: list[CalculationError] = [
+        orphan_reference_error(
+            table=table,
+            column=declaration.column,
+            parent_table=declaration.parent_table,
+            value=row["_value"],
+            reference=row["_reference"],
+            counterparty_reference=row["_value"] if names_counterparty else None,
+            reason=declaration.reason,
+        )
+        if kind == _KIND_ORPHAN
+        else absent_reference_error(
+            table=table,
+            column=declaration.column,
+            parent_table=declaration.parent_table,
+            reference=row["_reference"],
+            reason=declaration.reason,
+        )
+        for row in sampled.iter_rows(named=True)
+    ]
+
+    omitted = rows.height - sampled.height
+    if omitted:
+        detail = (
+            f"resolve to no row in '{declaration.parent_table}'"
+            if kind == _KIND_ORPHAN
+            else f"assert no link to '{declaration.parent_table}'"
+        )
+        errors.append(
+            CalculationError(
+                code=ERROR_ORPHAN_REFERENCE if kind == _KIND_ORPHAN else ERROR_MISSING_FIELD,
+                message=(
+                    f"[{table}] '{declaration.column}': {omitted} additional row(s) "
+                    f"that {detail} omitted beyond sample_cap={sample_cap}"
+                ),
+                severity=ErrorSeverity.ERROR,
+                category=ErrorCategory.DATA_QUALITY,
+                regulatory_reference=declaration.reason,
+                field_name=declaration.column,
+                expected_value=f"a {declaration.parent_table} reference",
+            )
+        )
+    return errors
 
 
 def _validate_short_term_rating_scope(lf: pl.LazyFrame) -> list[CalculationError]:

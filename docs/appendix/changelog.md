@@ -208,6 +208,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   frame; measured at 100k counterparties / 373,568 result rows it costs **5 ms
   against a 7.6 s run (0.07%)**, and the input gate **93 ms (1.2%)**.
 
+- **`DQ005` and `DQ004` have producers — referential integrity is now enforced,
+  not merely declared.** `ERROR_ORPHAN_REFERENCE` had been declared in
+  `contracts/errors.py` and emitted **nowhere** under `src/`, which reads as
+  enforcement to every reviewer and every grep while enforcing nothing.
+  Two new declaration-driven gates close it, both wired into
+  `validate_bundle_values` so they run on **both** pipeline entries:
+
+  - `validation.py::validate_referential_integrity` reads
+    `data/schemas.py::TABLE_FOREIGN_KEYS` — a new `ForeignKey` declaration
+    alongside `NumericDomain` / `EnumDomain`, covering the obligor links on
+    `loans`, `contingents`, `facilities`, `ratings` and `specialised_lending`.
+    A value that resolves to no parent row is **`DQ005`**; a **null** reference
+    is **`DQ001`** (`absent_reference_error`). The two are deliberately
+    different codes: they reach the same engine fallback, but an orphan is
+    repaired in the PARENT feed and a null in THIS row, and downstream both are
+    simply a null attribute — so the distinction exists at the gate or nowhere.
+    Sampled per the module's `sample_cap` contract (5 row-named errors per
+    table/column, then one summary carrying the omitted count).
+  - `validation.py::validate_duplicate_keys` reads
+    `data/schemas.py::TABLE_UNIQUE_KEYS` (`loans`, `contingents`, `facilities`,
+    `counterparties`) and emits one **`DQ004`** per duplicated key — **uncapped**,
+    unlike every other gate in the module. A domain violation is a property of a
+    COLUMN, where any 5 named rows locate the repair; a duplicate key is a
+    property of a ROW, and a sampled duplicate leaves the un-sampled rows exactly
+    as unaccounted-for as before. Severity is ERROR here against WARNING for the
+    existing `org_mappings` producer, because there the resolver de-duplicates a
+    mapping and loses no exposure, whereas here the model-permission de-dupe
+    collapses duplicate exposure rows (their capital leaves the portfolio total)
+    and a duplicated obligor multiplies every exposure joined to it.
+
+  **No number moves and no row is dropped.** The counterparty joins stay
+  `how="left"`: an exposure that has left the portfolio is worse than one priced
+  off a fallback, because its capital is gone and no total says so. What changed
+  is that the substitution is now named. Measured on CRR, one GBP 1,000,000
+  senior loan whose `counterparty_reference` points nowhere: `rwa_final` is
+  GBP 1,000,000 against a correct GBP 1,500,000 for a CQS 6 corporate (Art. 122,
+  150%) — a **33.3% understatement** — previously with an empty error list. At
+  CQS 1 the same fallback is a **5x overstatement**, so the defect was not
+  conservative in either direction.
+
+  Cost of the two new materialisations, measured where every reference resolves
+  and every key is unique (so both checks pay their full scan and emit nothing):
+  **1.06%** of a full pipeline run at 100k loans / 10k counterparties
+  (30.5 ms → 49.9 ms of a 1.82 s run) and **0.63%** at 1M loans
+  (70.9 ms → 162.0 ms of a 14.4 s run). Both sit in the input gate, which already
+  collects per table; no collect was added to a lazy stage.
+
+  Closes the two open findings in `tests/robustness/test_referential_integrity.py`
+  — the four failing tests went green with **no edit to any of them**. See
+  `docs/development/escape-log.md` (2026-08-12).
+
 ### Removed
 - **Five schema-shape validators, deleted rather than wired.**
   `validate_schema`, `validate_schema_to_errors`, `validate_required_columns`,

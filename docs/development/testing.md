@@ -564,19 +564,20 @@ found" for the wrong reason.
 
 ### A red run is the deliverable
 
-The suite found three silent-wrong-number defects while it was being written, and
-is expected red on the two that are still open:
+The suite found three silent-wrong-number defects while it was being written.
+All three are now closed, and every one of them closed by turning its
+already-written test green rather than by editing the test:
 
 | Finding | State |
 |---|---|
-| `DQ005 ERROR_ORPHAN_REFERENCE` is declared and emitted nowhere — an orphan or null `counterparty_reference` classifies to `other` at 100%, a **33.3% understatement** on a CQS 6 corporate, silently | **open** (4 failing tests) |
-| Duplicate input rows collapse on the model-permission dedupe with no error — a file delivered twice loses every duplicate | **open** (same 4) |
+| `DQ005 ERROR_ORPHAN_REFERENCE` is declared and emitted nowhere — an orphan or null `counterparty_reference` classifies to `other` at 100%, a **33.3% understatement** on a CQS 6 corporate, silently | **closed** by `validation.py::validate_referential_integrity`, reading the `TABLE_FOREIGN_KEYS` declarations. Orphan → `DQ005`; a null reference → `DQ001`, deliberately a different code because the two are repaired in different files |
+| Duplicate input rows collapse on the model-permission dedupe with no error — a file delivered twice loses every duplicate | **closed** by `validation.py::validate_duplicate_keys` reading `TABLE_UNIQUE_KEYS`, one uncapped `DQ004` per duplicated key. The engine still collapses them; what changed is that the run now names every reference it collapsed |
 | `conform_lenient` cast with `strict=False`, so an unreadable numeric became null and a £1m exposure reported £0.00 of capital, silently | **closed** by `DQ014 ERROR_UNREADABLE_INPUT_DTYPE`; the eight tests in `test_cast_failures.py` were written red and went green under the fix with no edit |
 
-A green run means the remaining two were fixed — not that the search found
-nothing. Do not narrow the suite to make it pass, and do not `xfail` a finding
-without a plan bullet that owns it (`.claude/LESSONS.md` B7). All three are
-recorded in [the escape log](escape-log.md) under 2026-08-12.
+A green run means the findings were fixed — not that the search found nothing.
+Do not narrow the suite to make it pass, and do not `xfail` a finding without a
+plan bullet that owns it (`.claude/LESSONS.md` B7). All three are recorded in
+[the escape log](escape-log.md) under 2026-08-12.
 
 ## Test Markers
 

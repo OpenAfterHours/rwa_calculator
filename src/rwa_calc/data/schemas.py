@@ -161,7 +161,7 @@ from __future__ import annotations
 
 import polars as pl
 
-from rwa_calc.data.column_spec import ColumnSpec, NumericDomain
+from rwa_calc.data.column_spec import ColumnSpec, ForeignKey, NumericDomain
 
 # =============================================================================
 # SHARED INPUT DOMAINS
@@ -2741,6 +2741,135 @@ TABLE_KEY_COLUMNS: dict[str, str] = {
     "ccr.ccr_collateral": "ccr_collateral_reference",
     "sft.trades": "trade_id",
     "sft.collateral": "sft_collateral_reference",
+}
+
+#: Input tables whose natural key must identify AT MOST ONE input row, and the
+#: column that key lives in. Read by
+#: ``contracts/validation.py::validate_duplicate_keys``.
+#:
+#: Deliberately NOT derived from :data:`TABLE_KEY_COLUMNS`, which answers a
+#: different question — *which column NAMES the offending row in an error* —
+#: and includes columns that are legitimately repeated: ``fx_rates`` is keyed
+#: there on ``currency_from`` (one row per currency PAIR) and
+#: ``specialised_lending`` on ``counterparty_reference``. Uniqueness is a
+#: separate claim about each table and is stated separately.
+#:
+#: The four listed are the tables where a repeat is silent data loss rather
+#: than a fan-out an operator would notice:
+#:
+#: - ``loans`` / ``contingents`` / ``facilities`` — the exposure tables. The
+#:   model-permission join de-duplicates on ``exposure_reference``
+#:   (``engine/stages/classify/permissions.py``) to stop a fan-out when several
+#:   permissions match, and in doing so collapses genuine duplicate INPUT rows:
+#:   three input loan rows produce two output rows, and the missing row's
+#:   capital simply leaves the portfolio total.
+#: - ``counterparties`` — the opposite direction. A repeated obligor MULTIPLIES
+#:   every exposure that joins to it (``attach_counterparty_rating`` is a plain
+#:   left join), double-counting capital. This is the exposure-table analogue of
+#:   the ``org_mappings`` duplicate-child fan-out that ``DQ004`` already reports
+#:   from ``engine/stages/hierarchy/graph.py``.
+TABLE_UNIQUE_KEYS: dict[str, str] = {
+    "loans": "loan_reference",
+    "contingents": "contingent_reference",
+    "facilities": "facility_reference",
+    "counterparties": "counterparty_reference",
+}
+
+#: Declared referential links, keyed by the REFERENCING table. Read generically
+#: by ``contracts/validation.py::validate_referential_integrity``.
+#:
+#: Scope is the OBLIGOR links — the ones whose failure silently re-prices the
+#: exposure. Every counterparty-attribute join in the hierarchy stage is
+#: ``how="left"`` and must stay that way (dropping the row would lose its
+#: capital outright), so an unresolvable obligor produces a fully populated
+#: result row carrying the fallback treatment named in each ``reason`` below.
+#:
+#: The polymorphic ``beneficiary_type`` / ``beneficiary_reference`` pairs on
+#: ``collateral`` / ``guarantees`` / ``provisions`` are DELIBERATELY absent:
+#: their valid universe depends on a second column and spans four parent
+#: tables, which is a different resolution and already has a purpose-built
+#: implementation for the M:N table
+#: (``validation.py::validate_collateral_links``, CRM009/CRM010/CRM011). They
+#: are owned by ``IMPLEMENTATION_PLAN.md`` P5.52 rather than approximated here.
+TABLE_FOREIGN_KEYS: dict[str, tuple[ForeignKey, ...]] = {
+    "loans": (
+        ForeignKey(
+            column="counterparty_reference",
+            parent_table="counterparties",
+            parent_column="counterparty_reference",
+            reason=(
+                "CRR Art. 112 / PS1/26 Art. 112 — the SA exposure class, and "
+                "therefore the risk weight, is a property of the OBLIGOR, not of "
+                "the exposure. A loan whose counterparty_reference resolves to no "
+                "counterparty row keeps every obligor attribute null, classifies "
+                "to 'other' and takes the 100% fallback weight. Measured on CRR, "
+                "one GBP 1,000,000 senior loan: a CQS 6 corporate is Art. 122 "
+                "150% = GBP 1,500,000 and the fallback returns GBP 1,000,000, a "
+                "33.3% understatement; a CQS 1 corporate is 20% = GBP 200,000 and "
+                "the same fallback returns GBP 1,000,000, a 5x overstatement. The "
+                "defect is not conservative in either direction — which face it "
+                "lands on depends on the obligor nobody could find."
+            ),
+        ),
+    ),
+    "contingents": (
+        ForeignKey(
+            column="counterparty_reference",
+            parent_table="counterparties",
+            parent_column="counterparty_reference",
+            reason=(
+                "CRR Art. 111(1) / Art. 112 — an off-balance-sheet item takes its "
+                "CCF from its own nature and its risk weight from the obligor, so "
+                "an unresolvable counterparty re-prices it exactly as it re-prices "
+                "a loan (see the loans declaration for the measured figures)."
+            ),
+        ),
+    ),
+    "facilities": (
+        ForeignKey(
+            column="counterparty_reference",
+            parent_table="counterparties",
+            parent_column="counterparty_reference",
+            reason=(
+                "CRR Art. 111(1) — a committed facility's undrawn headroom is a "
+                "synthesised exposure in its own right (``facility_undrawn``), "
+                "carrying the parent facility's obligor. An unresolvable "
+                "counterparty on the facility therefore re-prices the undrawn leg "
+                "and, through the counterparty-level collateral and lending-group "
+                "windows, the facility's drawn loans as well."
+            ),
+        ),
+    ),
+    "ratings": (
+        ForeignKey(
+            column="counterparty_reference",
+            parent_table="counterparties",
+            parent_column="counterparty_reference",
+            reason=(
+                "CRR Art. 138 / PS1/26 Art. 138 — an ECAI assessment is used only "
+                "for the obligor it was issued on. A rating row naming a "
+                "counterparty that does not exist is inherited by nobody: the "
+                "rating simply does not apply, and the obligor it was meant for "
+                "stays UNRATED at the 100% Art. 122(2) fallback while the run "
+                "reports a fully populated ratings table."
+            ),
+        ),
+    ),
+    "specialised_lending": (
+        ForeignKey(
+            column="counterparty_reference",
+            parent_table="counterparties",
+            parent_column="counterparty_reference",
+            reason=(
+                "CRR Art. 153(5) / PS1/26 Art. 122B — a specialised-lending row "
+                "is what routes an exposure to the slotting tables. One naming a "
+                "counterparty that does not exist routes nothing: the exposures "
+                "it was meant to slot stay on their ordinary corporate treatment, "
+                "which for an unrated obligor is materially lighter than the "
+                "Art. 153(5) supervisory categories."
+            ),
+        ),
+    ),
 }
 
 

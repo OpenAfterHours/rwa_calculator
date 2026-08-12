@@ -1159,16 +1159,63 @@ gate that shipped.
   unreadable needs the feed RE-SENT where a missing column needs it EXTENDED, and
   `test_an_uncastable_value_is_not_reported_as_a_missing_column` pins the
   distinction.
-- **Defects (1) and (3) are still open, and named rather than parked.** Neither is
-  `xfail`-ed — an `xfail` naming no owning bullet is the review finding, not the
-  gate (`.claude/LESSONS.md` B7), and this change does not own
-  `IMPLEMENTATION_PLAN.md`. Both stay red in `tests/robustness/`, which is where a
-  search suite's findings belong. The recommended fixes, for whoever files the
-  bullets: emit DQ005 from the counterparty-enrichment join by counting left-join
-  misses on `counterparty_reference` — null and unmatched are the same finding and
-  should carry the same code; and emit DQ004 for duplicate exposure references at
-  the INPUT gate, where the duplicate is still visible, rather than at the
-  model-permission dedupe that consumes it.
+- **Defects (1) and (3) are now CLOSED as well, and by the same route: the four
+  remaining tests were turned green by the fix, with no edit to any of them.**
+  DQ005 has a producer, DQ004 has an exposure-table producer, and both are read
+  off DECLARATIONS in `data/schemas.py` rather than hand-written per column —
+  `TABLE_FOREIGN_KEYS` (a new `ForeignKey` declaration alongside `NumericDomain`
+  / `EnumDomain`) and `TABLE_UNIQUE_KEYS`, both consumed by
+  `contracts/validation.py::validate_referential_integrity` and
+  `::validate_duplicate_keys`. Three decisions in that fix are worth recording
+  because each was a fork where the obvious move was wrong:
+
+  **The join stays `how="left"`.** The recommendation above ("emit DQ005 from
+  the counterparty-enrichment join by counting left-join misses") was followed in
+  substance and not in location. The detection sits at the INPUT gate, which runs
+  on both pipeline entries, because the information is strictly richer there: at
+  the join the miss is a null obligor attribute, indistinguishable from an
+  obligor row that exists and has no rating, and the reference that was supplied
+  — the one thing an operator needs to repair the feed — has already been
+  consumed. Nothing in the fix drops a row: an exposure that has left the
+  portfolio is worse than one priced off a fallback, because its capital is gone
+  and no total says so.
+
+  **Null and orphan carry DIFFERENT codes**, against this entry's own
+  recommendation that they "should carry the same code". They reach the same
+  engine fallback, which is exactly why the distinction has to be drawn at the
+  gate or not at all — downstream both are a null attribute and the information
+  is gone. But they are repaired in different files: an orphan needs the PARENT
+  feed extended or corrected (DQ005), a null needs THIS row's column populated
+  (DQ001, `absent_reference_error`, category `DATA_QUALITY` to keep it apart from
+  the seal's missing-COLUMN DQ001 under `SCHEMA_VALIDATION`). One code would have
+  sent an operator looking in the wrong file.
+
+  **DQ004 is uncapped here, breaking the module's own `sample_cap` contract**,
+  and deliberately. The domain gates sample a property of a COLUMN — naming any 5
+  of 900 out-of-domain rows locates the repair — whereas a duplicate key is a
+  property of a ROW, and a sampled duplicate leaves every un-sampled row exactly
+  as unaccounted-for as it was before the gate existed. That is also precisely
+  what `tests/robustness/harness.py` encodes by refusing to let clause (c) excuse
+  a `collapsed` row. The population is bounded by the number of DISTINCT
+  duplicated keys: zero on well-formed input, equal to the corruption on broken
+  input.
+
+  Cost of the two new materialisations, measured on a synthetic portfolio where
+  every reference resolves and every key is unique (so both checks pay their full
+  scan and emit nothing): **1.06%** of a full pipeline run at 100k loans / 10k
+  counterparties, **0.63%** at 1M loans. Both live in the input gate, which
+  already collects per table; no collect was added to a lazy stage.
+
+  Two fixture repairs were needed and neither loosened an assertion.
+  `tests/unit/test_loader.py::test_scrub_and_validate_returns_empty_for_valid_data`
+  passed `pl.LazyFrame()` for loans and facilities — a zero-COLUMN frame is not a
+  zero-ROW one, and the seal's literals broadcast it to a **single phantom
+  all-null row**, so the "valid data" bundle contained an exposure with no
+  obligor. It now declares a key column and is genuinely empty.
+  `tests/contracts/test_validation.py::test_clean_bundle_raises_nothing` declared
+  a rating for a counterparty absent from the bundle and gave its loan and
+  facility no obligor at all; it now names an obligor that exists. Both were
+  asserting that a broken bundle is silent.
 - **Lesson**: **a declared error code with no producer is negative coverage.** It
   reads as enforcement to every reviewer, to every grep and to every import-graph
   tool, while enforcing nothing — the same shape as the 402 lines of unreachable

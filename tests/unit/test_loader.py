@@ -18,6 +18,7 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.contracts.errors import ErrorCategory
 from rwa_calc.data.schemas import COUNTERPARTY_SCHEMA
 from rwa_calc.engine.loader import (
     CSVLoader,
@@ -1069,12 +1070,23 @@ class TestBundleValidation:
         assert any("INVALID_TYPE" in e.message for e in errors)
 
     def test_scrub_and_validate_returns_empty_for_valid_data(self) -> None:
-        """_scrub_and_validate returns no errors when all values are valid."""
+        """_scrub_and_validate returns no errors when all values are valid.
+
+        The exposure tables are declared with an explicit key column rather
+        than as a bare ``pl.LazyFrame()``. A zero-COLUMN frame is not a
+        zero-ROW one: the seal adds every declared column as a literal, and
+        Polars broadcasts a literal over a 0x0 frame to a single row — so
+        ``pl.LazyFrame()`` here produced a phantom all-null loan and facility.
+        Those rows have no obligor, which the referential-integrity gate now
+        reports as DQ001, correctly. Naming a column keeps the frames genuinely
+        empty and keeps this test about VALID data rather than about a fixture
+        artefact.
+        """
         from rwa_calc.engine.loader import _scrub_and_validate
 
         bundle = make_raw_bundle(
-            facilities=pl.LazyFrame(),
-            loans=pl.LazyFrame(),
+            facilities=pl.LazyFrame(schema={"facility_reference": pl.String}),
+            loans=pl.LazyFrame(schema={"loan_reference": pl.String}),
             counterparties=pl.LazyFrame({"entity_type": ["sovereign", "corporate"]}),
             facility_mappings=pl.LazyFrame(),
             lending_mappings=pl.LazyFrame(),
@@ -1161,6 +1173,16 @@ class TestLoaderEdgeSeal:
         assert bundle.loans.collect_schema().names() == list(LOAN_SCHEMA)
 
     def test_missing_required_column_emits_dq001_with_typed_null(self, sealed_dir: Path) -> None:
+        """The seal reports the missing COLUMN exactly once and types the null.
+
+        Filtered on ``ErrorCategory.SCHEMA_VALIDATION``, which is the seal's
+        own form of DQ001, because the referential-integrity gate publishes a
+        second DQ001 for the same column under ``DATA_QUALITY``: after the seal
+        an absent column and an all-null one are indistinguishable, so the row
+        that now carries no obligor is a true and separate finding. The two are
+        different granularities of the same fault — one names the column, one
+        names the rows — and this test is about the first.
+        """
         # Drop the required counterparty_reference from loans.
         pl.DataFrame({"loan_reference": ["L1"], "drawn_amount": [10.0]}).write_parquet(
             sealed_dir / "exposures" / "loans.parquet"
@@ -1171,7 +1193,9 @@ class TestLoaderEdgeSeal:
         dq001 = [
             e
             for e in bundle.errors
-            if e.code == "DQ001" and e.field_name == "counterparty_reference"
+            if e.code == "DQ001"
+            and e.field_name == "counterparty_reference"
+            and e.category == ErrorCategory.SCHEMA_VALIDATION
         ]
         assert len(dq001) == 1
         assert bundle.loans.collect()["counterparty_reference"].to_list() == [None]

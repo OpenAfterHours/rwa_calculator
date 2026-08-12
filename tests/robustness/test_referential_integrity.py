@@ -5,12 +5,23 @@ Pipeline position:
     corpus portfolio -> broken key / flipped sign -> full pipeline
         -> triage invariant
 
-Two live gaps this module was built to demonstrate
---------------------------------------------------
+Two gaps this module was built to demonstrate — both since CLOSED
+-----------------------------------------------------------------
 
-**DQ005 ``ERROR_ORPHAN_REFERENCE`` is declared and emitted nowhere.** It appears
-in ``contracts/errors.py`` and in the ``contracts/__init__.py`` re-export, and in
-no other file under ``src/``. The counterparty enrichment join is ``how="left"``
+**Both defects below were live when this file was written and are fixed in the
+same change-set that landed it** (``contracts/validation.py::
+validate_referential_integrity`` and ``::validate_duplicate_keys``, wired into
+``validate_bundle_values`` so they reach BOTH pipeline entries). The measured
+figures are kept verbatim because they are the red-before-the-fix evidence, and
+because a test whose docstring no longer says what it is defending tends to be
+weakened by the next person who reads it. **Every assertion here still runs, and
+each one fails if its gate is removed** — that is what makes this a regression
+guard rather than a historical note.
+
+**DQ005 ``ERROR_ORPHAN_REFERENCE`` was declared and emitted nowhere.** It
+appeared in ``contracts/errors.py`` and in the ``contracts/__init__.py``
+re-export, and in no other file under ``src/``. The counterparty enrichment join
+is ``how="left"``
 (``engine/stages/hierarchy/enrich.py``), so a loan whose ``counterparty_reference``
 matches no counterparty survives with null obligor attributes, classifies to
 ``other``, and takes the 100% fallback risk weight.
@@ -33,18 +44,21 @@ the defect is not conservative in either direction; it is a coin flip whose face
 depends on the obligor's true class. A null ``counterparty_reference`` reaches the
 identical fallback.
 
-**Duplicate keys collapse silently.** ``engine/stages/classify/permissions.py``
+**Duplicate keys collapsed silently.** ``engine/stages/classify/permissions.py``
 de-duplicates on ``exposure_reference`` after the model-permission join — correct
 for its own purpose, which is to stop a fan-out when several permissions match —
 but it also collapses genuine duplicate INPUT rows. Three input loan rows produce
 two output rows and no error. That is clause (e) in the harness docstring, and it
 is why :func:`triage` counts input ROWS rather than input references.
 
-Both are reported to the operator; neither is xfailed and neither is worked
-around. A generator that avoided them would be tuned to report success.
+Both are now reported to the operator — DQ005 for a reference that points
+nowhere, DQ001 for one never asserted (different repairs: the parent feed versus
+this row), DQ004 for a duplicated input key. Neither was xfailed and neither was
+worked around. A generator that avoided them would be tuned to report success.
 
 References:
 - docs/plans/test-space-correctness-proposal.md — Phase 2, generator 5
+- docs/development/escape-log.md — 2026-08-12, and its closure section
 - CRR Art. 122: corporate SA risk weights by CQS (the measured table above)
 - .claude/LESSONS.md B4 (absence is this project's dominant escape class)
 """

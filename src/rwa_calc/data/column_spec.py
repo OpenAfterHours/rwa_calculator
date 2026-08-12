@@ -181,6 +181,46 @@ class EnumDomain:
 type ColumnDomain = NumericDomain | EnumDomain
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ForeignKey:
+    """A referential link from one input column to another table's natural key.
+
+    The cross-table sibling of :class:`NumericDomain` / :class:`EnumDomain`.
+    Those two bound the values a column may hold on its own; this one states
+    that a value must RESOLVE — that the row it names exists. Read generically
+    by ``contracts/validation.py::validate_referential_integrity``, which emits
+    ``DQ005`` for a reference that resolves to nothing and ``DQ001`` for one
+    that was never supplied.
+
+    ``reason`` is mandatory for the same reason it is mandatory on the two
+    domain types, and it carries a specific burden here: it must say what the
+    engine SUBSTITUTES when the link breaks. Every counterparty-attribute join
+    in the hierarchy stage is ``how="left"`` and correctly so — dropping the
+    exposure would lose its capital outright — so a broken link does not
+    degrade to null-and-obvious, it degrades to a fallback classification that
+    produces a plausible number. A declaration that does not say which number
+    cannot be reviewed.
+
+    Attributes:
+        column: The referencing column on the declaring table.
+        parent_table: ``TABLE_SCHEMAS`` key of the referenced table.
+        parent_column: The referenced column — the parent's natural key.
+        reason: Citation plus the substituted treatment. Mandatory.
+    """
+
+    column: str
+    parent_table: str
+    parent_column: str
+    reason: str
+
+    def __post_init__(self) -> None:
+        if not self.reason.strip():
+            raise ValueError(
+                "ForeignKey.reason is mandatory — state the citation and what the "
+                "engine substitutes when the link breaks"
+            )
+
+
 def _trim(value: float | None) -> str:
     """Render a bound without a trailing ``.0`` on whole numbers."""
     if value is None:  # pragma: no cover — callers guard on None first

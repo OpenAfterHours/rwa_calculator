@@ -622,6 +622,139 @@ def negative_amount_without_netting_warning(
     )
 
 
+def orphan_reference_error(
+    *,
+    table: str,
+    column: str,
+    parent_table: str,
+    value: str,
+    reference: str | None,
+    counterparty_reference: str | None,
+    reason: str,
+) -> CalculationError:
+    """Create a DQ005 error for a foreign key that resolves to no parent row.
+
+    The reference IS supplied and points nowhere: the feed's parent table is
+    short a row, or the value is a typo. That is a different repair from an
+    absent reference (:func:`absent_reference_error`, DQ001) — this one needs
+    the PARENT feed re-sent or extended, that one needs the child column
+    populated — so the two carry different codes rather than one code with two
+    messages.
+
+    The row is never dropped. Every counterparty-attribute join in the
+    hierarchy stage is ``how="left"`` deliberately (dropping the exposure would
+    remove its capital from the portfolio outright, which is worse than
+    mis-pricing it), so the row survives carrying whatever fallback treatment
+    ``reason`` names. This error is what makes that substitution visible.
+
+    Severity is ERROR, matching the declared-domain gate: the row does not
+    degrade to a null anyone would notice, it publishes a plausible and wrong
+    number.
+    """
+    return CalculationError(
+        code=ERROR_ORPHAN_REFERENCE,
+        message=(
+            f"[{table}] '{column}' = '{value}' resolves to no row in '{parent_table}'. {reason}"
+        ),
+        severity=ErrorSeverity.ERROR,
+        category=ErrorCategory.DATA_QUALITY,
+        exposure_reference=reference,
+        counterparty_reference=counterparty_reference,
+        regulatory_reference=reason,
+        field_name=column,
+        expected_value=f"a {parent_table} reference that exists",
+        actual_value=value,
+    )
+
+
+def absent_reference_error(
+    *,
+    table: str,
+    column: str,
+    parent_table: str,
+    reference: str | None,
+    reason: str,
+) -> CalculationError:
+    """Create a DQ001 error for a declared foreign key that was never supplied.
+
+    Deliberately NOT DQ005. An orphan is a BROKEN link — a value that points at
+    a row somebody expected to exist — and its repair is to the parent feed. A
+    null is a MISSING FIELD: no link was ever asserted, and its repair is to
+    this row. Reporting both under one code would tell an operator to go
+    looking in the wrong file, and would make the two indistinguishable in the
+    audit trail even though they arrive from different upstream faults (a
+    partial parent extract versus an unpopulated column).
+
+    They reach the same engine fallback, which is why the distinction has to be
+    made HERE: downstream, both are simply a null obligor attribute and the
+    information about which one it was is gone.
+    """
+    return CalculationError(
+        code=ERROR_MISSING_FIELD,
+        message=(
+            f"[{table}] '{column}' is null, so this row asserts no link to "
+            f"'{parent_table}' at all. {reason}"
+        ),
+        severity=ErrorSeverity.ERROR,
+        category=ErrorCategory.DATA_QUALITY,
+        exposure_reference=reference,
+        regulatory_reference=reason,
+        field_name=column,
+        expected_value=f"a {parent_table} reference",
+    )
+
+
+def duplicate_input_key_error(
+    *,
+    table: str,
+    column: str,
+    value: str,
+    count: int,
+    names_a_counterparty: bool,
+) -> CalculationError:
+    """Create a DQ004 error for an input table's natural key appearing twice.
+
+    One per DUPLICATED KEY rather than one per table, and uncapped, because a
+    count alone is not actionable: an operator repairs a feed by finding the
+    rows, and the population is bounded by the number of distinct duplicated
+    keys — which is zero on well-formed input. This is the one place in the
+    input gate where the estate's ``sample_cap`` sampling contract does not
+    apply, and the reason is that a sampled duplicate leaves the un-sampled
+    rows exactly as unaccounted-for as they were before the gate existed.
+
+    Severity is ERROR, unlike the ``org_mappings`` DQ004 raised by
+    ``engine/stages/hierarchy/graph.py``, which is a WARNING. The two are not
+    inconsistent: there, the resolver de-duplicates a MAPPING table
+    deterministically and no exposure is lost, so the operator is told about a
+    tidy-up. Here the key names an exposure or an obligor — the model-permission
+    join collapses duplicate exposure rows and the counterparty join multiplies
+    them — so the portfolio total is wrong in one direction or the other and the
+    reference has stopped identifying a row at all.
+
+    ``names_a_counterparty`` routes the offending value to the right reference
+    field. Both fields are read by consumers that triage by row, and putting a
+    counterparty reference in ``exposure_reference`` would make the error
+    unjoinable to the obligor it is actually about.
+    """
+    return CalculationError(
+        code=ERROR_DUPLICATE_KEY,
+        message=(
+            f"[{table}] {count} input rows share '{column}' = '{value}'. The key "
+            "no longer identifies a row: downstream de-duplication keeps one "
+            "exposure row per reference (so the others' capital leaves the "
+            "portfolio total), and a duplicated obligor multiplies every exposure "
+            "that joins to it. Neither outcome is recoverable from the output."
+        ),
+        severity=ErrorSeverity.ERROR,
+        category=ErrorCategory.DATA_QUALITY,
+        exposure_reference=None if names_a_counterparty else value,
+        counterparty_reference=value if names_a_counterparty else None,
+        field_name=column,
+        expected_value="one row per key",
+        actual_value=str(count),
+    )
+
+
 def non_finite_raw_input_error(
     *, table: str, column: str, count: int, references: list[str] | None = None
 ) -> CalculationError:

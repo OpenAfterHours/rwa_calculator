@@ -224,7 +224,7 @@ Basel 3.1 expected outputs are generated via the Marimo workbook orchestrator at
 
 ### `loop.sh` — Iterative Claude agent development loop
 
-Runs Claude Code in headless mode, reading a prompt file (`PROMPT_build.md` or `PROMPT_plan.md`), executing the instructions, pushing changes, and repeating for a configurable number of iterations. Useful for hands-off agent-driven development sessions.
+Runs Claude Code in headless mode, reading a prompt file from `prompts/` (`prompts/build.md` or `prompts/plan.md`), executing the instructions, pushing changes, and repeating for a configurable number of iterations. Useful for hands-off agent-driven development sessions.
 
 ```bash
 # Build mode, 2 iterations (default)

@@ -39,7 +39,7 @@ Invoke the `plan-curator` agent. Prompt:
 >    front-matter stamp is older than ~2 months are staleness
 >    candidates to check first.
 > 2. **Scan for new findings**:
->    - PDF-to-docs mapping per `PROMPT_docs_plan.md`
+>    - PDF-to-docs mapping per `prompts/docs_plan.md`
 >      (`ps126app1.pdf`, `crr.pdf`, comparison PDF, COREP/Pillar 3
 >      instruction PDFs).
 >    - Code-docs alignment — risk weights, formulas, article

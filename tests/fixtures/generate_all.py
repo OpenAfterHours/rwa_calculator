@@ -663,6 +663,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p842_nonqccp_b5,
         ),
         (
+            "P1.342 (Art. 306 QCCP trade exposure vs the Art. 121(6) FX sovereign floor — FR/USD)",
+            "ccr",
+            _generate_p1342_qccp_fx_floor,
+        ),
+        (
             "P8.44 (CCR-D1/D2/D3 Simplified SA-CCR + OEM fall-through regression guards)",
             "ccr",
             _generate_ccr_d1_d3,
@@ -3917,6 +3922,51 @@ def _generate_p842_nonqccp_b5(output_dir: Path) -> list[tuple[str, int]]:
         for mod in (
             "ccr.p842_nonqccp_b5_builder",
             CCR_GOLDEN_A1_MODULE,
+            CCR_TRADE_BUILDER_MODULE,
+            CCR_NETTING_SET_BUILDER_MODULE,
+            CCR_MARGIN_BUILDER_MODULE,
+        ):
+            sys.modules.pop(mod, None)
+
+
+def _generate_p1342_qccp_fx_floor(output_dir: Path) -> list[tuple[str, int]]:
+    """
+    Validate the P1.342 FR/USD QCCP book (Python-only builder — no persistent parquet output).
+
+    P1.342 pins that a QCCP trade exposure keeps its Art. 306 2% / 4% weight when
+    the Art. 121(6) FX sovereign floor arms over it. The floor's scope is
+    "unrated institution, foreign currency", and a QCCP classifies as an
+    institution — so an unrated QCCP facing a foreign-currency netting set sits
+    inside the floor's predicate and gets its 2% overwritten by the Art. 114(1)
+    unrated-sovereign 100%.
+
+    The FR/USD pair is load-bearing: a GB/USD or US/GBP counterparty leaves
+    ``is_eu_domestic`` NULL, ``~NULL`` is NULL, and the floor never arms — the
+    fixture would look green while proving nothing (`.claude/LESSONS.md` B5).
+    ``save_p1342_fixtures`` asserts the country, the currency, the QCCP flags and
+    the absence of ratings, so a drift in a shared builder default disarms the
+    generator rather than the scenario.
+    """
+    fixtures_root = str(output_dir.parent)
+    sys.path.insert(0, fixtures_root)
+    try:
+        from ccr.p1342_qccp_fx_floor_builder import (  # noqa: PLC0415
+            _PYTHON_ONLY_NO_PARQUET,
+            save_p1342_fixtures,
+        )
+
+        if _PYTHON_ONLY_NO_PARQUET != PYTHON_ONLY_NO_PARQUET:
+            raise AssertionError(
+                "P1.342: the builder's report sentinel has drifted from "
+                f"PYTHON_ONLY_NO_PARQUET ({_PYTHON_ONLY_NO_PARQUET!r} != "
+                f"{PYTHON_ONLY_NO_PARQUET!r})"
+            )
+        return save_p1342_fixtures()
+    finally:
+        sys.path.remove(fixtures_root)
+        for mod in (
+            "ccr.p1342_qccp_fx_floor_builder",
+            "ccr.qccp_builder",
             CCR_TRADE_BUILDER_MODULE,
             CCR_NETTING_SET_BUILDER_MODULE,
             CCR_MARGIN_BUILDER_MODULE,

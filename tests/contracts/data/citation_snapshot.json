@@ -493,6 +493,10 @@
   "rwa_calc.engine.sa.sovereign_derived::crr_art_121_4_trade_finance_expr": [
     "CRR Art. 121"
   ],
+  "rwa_calc.engine.sa.sovereign_floor::apply_sovereign_floor_for_institutions": [
+    "CRR Art. 121",
+    "PS1/26, paragraph 121"
+  ],
   "rwa_calc.engine.securitisation.allocator::SecuritisationAllocator.allocate": [
     "CRR Art. 109",
     "CRR Art. 244",

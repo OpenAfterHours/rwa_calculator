@@ -320,6 +320,7 @@ Error codes are prefixed by domain and numbered sequentially:
 | `SF001` | `ERROR_SME_MISSING_COUNTERPARTY_REF` | Supporting Factors | SME supporting-factor application requires a `counterparty_reference` and none was supplied |
 | `CFG001` | `ERROR_INVALID_CONFIG` | Configuration | Invalid configuration parameter |
 | `CFG002` | `ERROR_MISSING_PERMISSION` | Configuration | Required IRB permission not granted |
+| `BR001` | `ERROR_UNKNOWN_BRANCH_FALLBACK` | Branch Reason | **WARNING.** A row whose `*_branch_reason` column reads `UNKNOWN_FALLBACK`: the branch it was priced on could not be justified, either because the deciding predicate evaluated to **null** (Polars sends both `False` and `null` to `otherwise`, so the row took a fallback the engine never chose) or because a value was substituted for input that was simply absent. WARNING rather than ERROR deliberately — such a row is *unjustified*, not provably wrong, and an ERROR would redden every run touching a known-open defect until someone switched the gate off. Emitted at the pipeline exit by `contracts/validation.py::validate_branch_reasons`, which folds into the collect `validate_aggregated_bundle` already pays for. The population is ratcheted by `scripts/check_branch_census.py` |
 
 #### Error Factory Functions
 

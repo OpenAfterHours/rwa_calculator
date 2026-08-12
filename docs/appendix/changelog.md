@@ -8,6 +8,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Branch reasons and a run-level branch census — `otherwise` no longer means
+  two different things (Phase 3).** In Polars, `pl.when(p).then(a).otherwise(b)`
+  yields `b` when `p` is `False` **and** when `p` is null, and the output carries
+  no trace of which happened. Every rule in this engine whose predicate touches a
+  nullable column therefore had a silent third state, in which a row was priced on
+  a branch nobody chose. The two high-stakes paths now emit the reason beside the
+  value:
+
+  - `sa_risk_weight_branch_reason` (`engine/sa/sovereign_floor.py`, extracted from
+    `risk_weights.py`) names which limb of the PS1/26 Art. 121(6) sovereign floor
+    decided the row — including `domestic_currency` ("the rule does not apply")
+    and `UNKNOWN_FALLBACK` ("the domesticity test could not be evaluated"), which
+    were previously the same observable outcome.
+  - `irb_lgd_branch_reason` (`engine/irb/transforms.py::apply_firb_lgd`) names the
+    LGD's source. Its `UNKNOWN_FALLBACK` is the `fill_null(default_lgd)` limb: an
+    IRB row with no own estimate, no modelled LGD and no purchased-receivables
+    subtype was silently priced on the senior-unsecured supervisory rate.
+
+  Both are built by one primitive, `engine/branch_reason.py::decide`, which
+  derives the value chain and the reason chain from the **same** predicate
+  objects so they cannot drift, and which raises rather than accumulates if a
+  vocabulary cannot say `UNKNOWN_FALLBACK`. Each call site's value chain is
+  provably identical to the one it replaced — the instrument moves no capital;
+  all 30 existing sovereign-floor tests and the reporting goldens are unchanged.
+
+  The reason columns are `pl.Enum`, not `String`, and that is load-bearing rather
+  than an optimisation: the Enum carries its category list in the *dtype*, so the
+  census can report a limb **no row reached**, which a String column is
+  structurally incapable of doing. Measured cost at 60,000 rows: 296 → 298
+  columns, +127,500 bytes (**+0.13%** of the result frame, ~1.06 bytes per row per
+  column, 6.2× cheaper than the same columns as `String`), and +0.17s wall
+  (1.672s → 1.837s best of three, **+9.9%**) — the time, not the space, is the
+  real cost, and it is the price of evaluating each predicate a second time for
+  its nullity test.
+
+- **`BR001` — a row on `UNKNOWN_FALLBACK` never stands alone.**
+  `contracts/validation.py::validate_branch_reasons` runs at the pipeline exit and
+  names every unjustified row, folding into the collect
+  `validate_aggregated_bundle` already pays for rather than adding a
+  materialisation. Severity is `WARNING` deliberately: such a row is
+  *unjustified*, not provably wrong, and an ERROR would have reddened every run
+  touching a known-open defect until someone switched the gate off.
+
+- **A two-way branch-census ratchet** — `scripts/check_branch_census.py` +
+  `scripts/branch_census_baseline.json`, gated per-PR by the new `branch-census`
+  CI job and driven in-suite by `tests/contracts/test_branch_census_ratchet.py`.
+  It runs the same 14-portfolio × 2-regime matrix as
+  `check_template_cell_coverage.py` (imported, never re-declared) in ~45s and
+  keys two registers on `<column>::<reason>` through the shared set-diff in
+  `scripts/tolerated_findings.py`. They ratchet in **opposite** directions:
+  `reached` is a coverage population, so a removal is a hard failure; `dead` is a
+  tolerated-findings population, so an addition is a hard failure and banking one
+  is a hand edit that must carry a written reason and an `OWNER:` bullet. Neither
+  is a count or a ratio (`.claude/LESSONS.md` B8). A limb newly taking
+  `UNKNOWN_FALLBACK` rows is reported as a **loss**, not as an improvement.
+
+  Its first run is already a finding: **the Art. 121(6) sovereign floor never
+  binds anywhere in the estate.** `floor_bound` and `floor_not_binding` are both
+  dead across all 28 runs — the rule's applicable population is empty — while two
+  rows reach it and land on `UNKNOWN_FALLBACK`. The 30 existing unit tests all
+  supply `cp_local_currency` explicitly, which is exactly the path production rows
+  do not take.
+
 - **`DQ014` — a column that could not be READ is no longer indistinguishable
   from one that was never SUPPLIED.** The loader seal casts every declared
   column whose dtype does not match with `strict=False`, so Polars turns a

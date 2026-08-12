@@ -40,7 +40,7 @@ Package version `0.3.25`. Resolved packs:
 | Instrument | HIGH | MEDIUM | LOW | UNCITED | GAP | Total |
 |---|---|---|---|---|---|---|
 | CRR (Capital Requirements Regulation) | 34 | 56 | 11 | 38 | 14 | 153 |
-| PS1/26 (PRA Policy Statement) | 23 | 28 | 7 | 30 | 17 | 105 |
+| PS1/26 (PRA Policy Statement) | 24 | 28 | 7 | 29 | 17 | 105 |
 
 ## CRR (Capital Requirements Regulation)
 
@@ -69,7 +69,7 @@ Package version `0.3.25`. Resolved packs:
 | 118 | 3 | 2 | 2 | 1 | 7 | HIGH |
 | 119 | 1 | 0 | 1 | 0 | 0 | LOW |
 | 120 | 1 | 2 | 13 | 6 | 94 | HIGH |
-| 121 | 3 | 2 | 6 | 9 | 16 | HIGH |
+| 121 | 4 | 2 | 7 | 9 | 16 | HIGH |
 | 122 | 3 | 4 | 5 | 11 | 66 | HIGH |
 | 123 | 4 | 7 | 13 | 2 | 25 | HIGH |
 | 124 | 1 | 2 | 7 | 2 | 10 | HIGH |
@@ -92,7 +92,7 @@ Package version `0.3.25`. Resolved packs:
 | 140 | 3 | 0 | 4 | 0 | 5 | MEDIUM |
 | 141 | 1 | 0 | 1 | 0 | 0 | LOW |
 | 142 | 1 | 0 | 4 | 0 | 5 | MEDIUM |
-| 143 | 1 | 0 | 6 | 0 | 8 | MEDIUM |
+| 143 | 1 | 0 | 7 | 0 | 8 | MEDIUM |
 | 147 | 5 | 5 | 20 | 0 | 22 | MEDIUM |
 | 148 | 2 | 0 | 8 | 0 | 5 | MEDIUM |
 | 150 | 1 | 0 | 4 | 0 | 5 | MEDIUM |
@@ -213,14 +213,14 @@ Package version `0.3.25`. Resolved packs:
 | 111 | 2 | 2 | 9 | 0 | 12 | MEDIUM |
 | 112 | 0 | 0 | 3 | 0 | 2 | UNCITED |
 | 113 | 0 | 2 | 1 | 0 | 0 | LOW |
-| 114 | 3 | 1 | 9 | 2 | 18 | HIGH |
+| 114 | 3 | 1 | 10 | 2 | 18 | HIGH |
 | 115 | 2 | 0 | 3 | 3 | 5 | HIGH |
 | 116 | 2 | 0 | 3 | 2 | 8 | HIGH |
 | 117 | 2 | 0 | 4 | 2 | 8 | HIGH |
 | 118 | 0 | 0 | 1 | 1 | 5 | UNCITED |
 | 120 | 0 | 6 | 13 | 2 | 35 | HIGH |
 | 120A | 0 | 0 | 4 | 0 | 3 | UNCITED |
-| 121 | 0 | 0 | 4 | 4 | 12 | UNCITED |
+| 121 | 1 | 0 | 5 | 4 | 12 | HIGH |
 | 122 | 2 | 7 | 7 | 5 | 41 | HIGH |
 | 122A | 0 | 1 | 3 | 0 | 3 | MEDIUM |
 | 122B | 0 | 0 | 0 | 0 | 2 | GAP |
@@ -319,7 +319,6 @@ These articles are named in `src/rwa_calc/` production source but carry no `@cit
 | Article | Src | Oracle | Tests | Watchfire gap | Anchored as |
 |---|---|---|---|---|---|
 | CRR 228 | 1 | 25 | 2 | — | — |
-| PS1/26 121 | 4 | 4 | 12 | — | CRR Art. 121 |
 | PS1/26 118 | 1 | 1 | 5 | — | CRR Art. 118 |
 | PS1/26 134 | 1 | 1 | 2 | — | CRR Art. 134 |
 | CRR 275 | 8 | 0 | 45 | yes | — |

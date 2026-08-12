@@ -1,0 +1,40 @@
+{
+  "_comment": "Branch census ratchet (scripts/check_branch_census.py --check). Ids are <column>::<reason>. `reached` is a COVERAGE population: REMOVALS ARE A HARD FAILURE and --update-baseline refuses to make one, because a limb the estate stops exercising is coverage going backwards. `dead` is a TOLERATED-FINDINGS population: ADDITIONS ARE A HARD FAILURE and must be hand-edited into this file, because a declared limb no row reaches is either dead code or an untested path. docs/plans/test-space-correctness-proposal.md Phase 3.",
+  "runs": 28,
+  "reached_count": 6,
+  "reached": [
+    "irb_lgd_branch_reason::own_estimate",
+    "irb_lgd_branch_reason::supervisory_firb",
+    "sa_risk_weight_branch_reason::UNKNOWN_FALLBACK",
+    "sa_risk_weight_branch_reason::domestic_currency",
+    "sa_risk_weight_branch_reason::not_institution",
+    "sa_risk_weight_branch_reason::rated"
+  ],
+  "dead_count": 6,
+  "dead": [
+    {
+      "id": "irb_lgd_branch_reason::UNKNOWN_FALLBACK",
+      "reason": "DESIRED STATE, not a coverage gap. No row in the estate reaches the IRB LGD selector with no own estimate, no modelled LGD and no purchased-receivables subtype \u2014 i.e. no IRB row is priced on a supervisory default standing in for absent data. Banked here so that this limb becoming LIVE fails the gate: rows newly landing on UNKNOWN_FALLBACK are a loss of justification, and the census is the only thing that would notice. OWNER: P1.341"
+    },
+    {
+      "id": "irb_lgd_branch_reason::ccr_modelled",
+      "reason": "NO_FIXTURE. The P1.215 A-IRB CCR/SFT carrier (ccr_modelled_lgd) is populated by no portfolio in the 28-run matrix: the CCR fixture's netting sets are SA-treated, so no synthetic CCR row reaches the IRB LGD selector at all. OWNER: P1.341"
+    },
+    {
+      "id": "irb_lgd_branch_reason::supervisory_subtype",
+      "reason": "NO_FIXTURE. purchased_receivables_subtype is null in every fixture, so the Art. 161(1)(e)/(f)/(g) dispatch is unexercised end to end. Unit tests cover it directly (tests/unit/irb), but nothing proves it survives the pipeline. OWNER: P1.341"
+    },
+    {
+      "id": "sa_risk_weight_branch_reason::floor_bound",
+      "reason": "NO_FIXTURE, and the headline Phase 3 finding. The Art. 121(6) sovereign floor NEVER BINDS anywhere in the 28-run estate: no portfolio pairs an unrated institution with a determinate foreign-currency test. The two rows that reach the rule at all land on UNKNOWN_FALLBACK instead. Unit coverage exists (tests/unit/test_sovereign_floor_institutions.py, 30 tests) but every one of them supplies cp_local_currency explicitly, which is precisely the path production rows do not take. OWNER: P1.333"
+    },
+    {
+      "id": "sa_risk_weight_branch_reason::floor_not_binding",
+      "reason": "NO_FIXTURE. Same population as floor_bound: the floor's applicable set is empty across the estate, so neither the binding nor the non-binding outcome is reachable. Becomes live the moment floor_bound does. OWNER: P1.333"
+    },
+    {
+      "id": "sa_risk_weight_branch_reason::trade_exempt",
+      "reason": "NO_FIXTURE. is_short_term_trade_lc is null or false in every portfolio, so the Art. 121(6)(b) / CRE20.22 fn13 self-liquidating trade carve-out is never taken through the pipeline. Unit-tested directly in tests/unit/test_sovereign_floor_institutions.py::TestTradeExemption. OWNER: P1.341"
+    }
+  ]
+}

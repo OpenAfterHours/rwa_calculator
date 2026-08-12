@@ -57,12 +57,14 @@ from rwa_calc.contracts.errors import (
     ERROR_RW_ABOVE_CAP,
     ERROR_RW_NEGATIVE,
     ERROR_RWA_NEGATIVE,
+    ERROR_UNKNOWN_BRANCH_FALLBACK,
     CalculationError,
     ErrorCategory,
     ErrorSeverity,
     negative_amount_without_netting_warning,
     non_finite_raw_input_error,
 )
+from rwa_calc.domain.branch_reasons import BRANCH_REASON_VOCABULARIES, UNKNOWN_FALLBACK
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import AggregatedResultBundle, RawDataBundle
@@ -1077,6 +1079,102 @@ def validate_aggregated_bundle(
                     severity=ErrorSeverity.ERROR,
                     category=category,
                     regulatory_reference=regulatory_reference,
+                    field_name=column,
+                )
+            )
+
+    return errors
+
+
+def validate_branch_reasons(
+    bundle: AggregatedResultBundle,
+    sample_cap: int = 5,
+) -> list[CalculationError]:
+    """Raise BR001 for every row whose branch reason reads ``UNKNOWN_FALLBACK``.
+
+    This is the enforcement half of
+    ``docs/plans/test-space-correctness-proposal.md`` Phase 3. Emitting a
+    ``*_branch_reason`` column beside the value only *records* that the engine
+    could not justify a row's treatment; it takes an error to make the record
+    reach anyone. The invariant — **no row lands on ``UNKNOWN_FALLBACK``
+    without an accompanying error** — is therefore established here at the
+    pipeline exit rather than asserted in a test, so it holds on customer data
+    and not merely on ours.
+
+    Runs at the exit rather than inside each producing stage on purpose: the
+    exit already materialises the results frame for
+    :func:`validate_aggregated_bundle`, so the scan is folded into a collect
+    that is already paid for. Instrumenting inside a lazy stage would have cost
+    one extra materialisation per instrumented path.
+
+    Severity is WARNING, deliberately. An ``UNKNOWN_FALLBACK`` row is not
+    provably wrong — the fallback value may well be the right answer — it is
+    *unjustified*, which is a different claim. ERROR here would have made the
+    two known-open defects this instrument was built to expose (P1.333, and
+    the A-IRB rows carrying no LGD from any source) fail every run that touches
+    them, and a gate that reddens on a pre-existing defect gets switched off
+    rather than fixed. The census (``scripts/check_branch_census.py``) is what
+    ratchets the population; this error is what names the rows.
+
+    Follows :func:`validate_aggregated_bundle`'s sampling contract exactly: up
+    to ``sample_cap`` row-named errors per column, then one summary carrying
+    the omitted count. ``tests/robustness/harness.py`` clause (c) already
+    depends on that shape, so a new code that named every row would change the
+    triage arithmetic of a suite that has nothing to do with this one.
+
+    Args:
+        bundle: AggregatedResultBundle to inspect.
+        sample_cap: Maximum per-row errors emitted per column (default 5).
+
+    Returns:
+        List of CalculationError objects (empty when no row is unjustified).
+    """
+    results_lf = bundle.results
+    schema_names = set(results_lf.collect_schema().names())
+    if "exposure_reference" not in schema_names:
+        return []
+
+    errors: list[CalculationError] = []
+    for column in BRANCH_REASON_VOCABULARIES:
+        if column not in schema_names:
+            continue
+        offending = (
+            results_lf.filter(pl.col(column).cast(pl.String) == UNKNOWN_FALLBACK)
+            .select("exposure_reference")
+            .collect()
+        )
+        total = offending.height
+        if total == 0:
+            continue
+
+        message = (
+            f"{column} is {UNKNOWN_FALLBACK}: the deciding predicate could not be "
+            "evaluated, or a value was substituted for absent input, so this row's "
+            "treatment is unjustified rather than merely defaulted"
+        )
+        errors.extend(
+            CalculationError(
+                code=ERROR_UNKNOWN_BRANCH_FALLBACK,
+                message=message,
+                severity=ErrorSeverity.WARNING,
+                category=ErrorCategory.DATA_QUALITY,
+                exposure_reference=row["exposure_reference"],
+                field_name=column,
+                actual_value=UNKNOWN_FALLBACK,
+            )
+            for row in offending.head(sample_cap).iter_rows(named=True)
+        )
+
+        if total > sample_cap:
+            errors.append(
+                CalculationError(
+                    code=ERROR_UNKNOWN_BRANCH_FALLBACK,
+                    message=(
+                        f"{message}: {total - sample_cap} additional row(s) omitted "
+                        f"beyond sample_cap={sample_cap}"
+                    ),
+                    severity=ErrorSeverity.WARNING,
+                    category=ErrorCategory.DATA_QUALITY,
                     field_name=column,
                 )
             )

@@ -47,7 +47,9 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
+from rwa_calc.domain.branch_reasons import IRB_LGD_BRANCH_REASON, IrbLgdReason
 from rwa_calc.domain.enums import ApproachType, RiskType
+from rwa_calc.engine.branch_reason import BranchCase, decide
 from rwa_calc.engine.irb.adjustments import (
     apply_defaulted_treatment as _apply_defaulted_treatment,
 )
@@ -225,25 +227,46 @@ def apply_firb_lgd(
         pr_subtype.is_not_null() & pl.col("lgd").is_null() & pl.col("ccr_modelled_lgd").is_null()
     )
 
-    lf = lf.with_columns(
-        [
-            # FIRB rows with a cleared LGD take the supervisory value (the FIRB
-            # branch is checked first, so ``firb_clear_expr`` wins and the
-            # coalesce never applies to them). A-IRB rows keep their own LGD;
-            # a synthetic CCR/SFT A-IRB row carries it on ``ccr_modelled_lgd``
-            # (P1.215) rather than the lending ``lgd``, so coalesce those before
-            # the supervisory default-fill (CRR Art. 143 own-estimate LGD).
-            pl.when(
-                ((pl.col("approach") == ApproachType.FIRB.value) & pl.col("lgd").is_null())
-                | supervisory_subtype_applies
-            )
-            .then(firb_lgd_expr)
-            .otherwise(
-                pl.coalesce([pl.col("lgd"), pl.col("ccr_modelled_lgd")]).fill_null(default_lgd)
-            )
-            .alias("lgd"),
-        ]
+    # FIRB rows with a cleared LGD take the supervisory value (the FIRB
+    # branch is checked first, so ``firb_clear_expr`` wins and the
+    # coalesce never applies to them). A-IRB rows keep their own LGD;
+    # a synthetic CCR/SFT A-IRB row carries it on ``ccr_modelled_lgd``
+    # (P1.215) rather than the lending ``lgd``, so coalesce those before
+    # the supervisory default-fill (CRR Art. 143 own-estimate LGD).
+    #
+    # Instrumented (Phase 3). VALUE EQUIVALENCE: the incumbent expression is
+    # ``when(A | B).then(firb).otherwise(C)``. The two supervisory cases below
+    # are exactly B then A — a partition of the same union, both yielding
+    # ``firb`` — and the remaining cases plus ``otherwise`` all yield the same
+    # ``C``. So no row changes value; the cases only record WHICH source
+    # supplied it. See ``engine/branch_reason.py``.
+    #
+    # The last case is the point. ``C`` ends in ``fill_null(default_lgd)``, so a
+    # row with no own estimate, no modelled LGD and no subtype is priced on the
+    # senior-unsecured supervisory rate — a plausible number standing in for
+    # absent data, with no signal. That row now lands on UNKNOWN_FALLBACK and
+    # the pipeline exit raises BR001 against it.
+    own_lgd_expr = pl.coalesce([pl.col("lgd"), pl.col("ccr_modelled_lgd")])
+    unsourced_lgd_expr = own_lgd_expr.fill_null(default_lgd)
+    is_firb_cleared = (pl.col("approach") == ApproachType.FIRB.value) & pl.col("lgd").is_null()
+    lgd_value, lgd_reason = decide(
+        (
+            BranchCase(
+                IrbLgdReason.SUPERVISORY_SUBTYPE, supervisory_subtype_applies, firb_lgd_expr
+            ),
+            BranchCase(IrbLgdReason.SUPERVISORY_FIRB, is_firb_cleared, firb_lgd_expr),
+            BranchCase(IrbLgdReason.OWN_ESTIMATE, pl.col("lgd").is_not_null(), unsourced_lgd_expr),
+            BranchCase(
+                IrbLgdReason.CCR_MODELLED,
+                pl.col("ccr_modelled_lgd").is_not_null(),
+                unsourced_lgd_expr,
+            ),
+        ),
+        otherwise=unsourced_lgd_expr,
+        otherwise_reason=IrbLgdReason.UNKNOWN_FALLBACK,
+        vocabulary=IrbLgdReason,
     )
+    lf = lf.with_columns(lgd_value.alias("lgd"), lgd_reason.alias(IRB_LGD_BRANCH_REASON))
 
     # For lgd_input, use lgd_post_crm (from CRM processor).
     # This ensures collateral-adjusted LGD is used for F-IRB risk weight calculation.

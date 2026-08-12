@@ -938,7 +938,8 @@
       "code_functions": [
         "rwa_calc.engine.sa.guarantor_rw::build_institution_guarantor_rw_expr",
         "rwa_calc.engine.sa.risk_weights::_crr_append_institution_maturity_branches",
-        "rwa_calc.engine.sa.sovereign_derived::crr_art_121_4_trade_finance_expr"
+        "rwa_calc.engine.sa.sovereign_derived::crr_art_121_4_trade_finance_expr",
+        "rwa_calc.engine.sa.sovereign_floor::apply_sovereign_floor_for_institutions"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -963,6 +964,7 @@
         "engine/sa/guarantor_rw.py",
         "engine/sa/risk_weights.py",
         "engine/sa/sovereign_derived.py",
+        "engine/sa/sovereign_floor.py",
         "engine/stages/_ccr_shared.py",
         "rulebook/packs/crr.py"
       ],
@@ -1753,6 +1755,7 @@
       "source_files": [
         "contracts/edges.py",
         "data/schemas.py",
+        "domain/branch_reasons.py",
         "engine/irb/transforms.py",
         "engine/stages/_ccr_shared.py",
         "engine/stages/classify/permissions.py",
@@ -5843,6 +5846,7 @@
         "engine/sa/guarantor_rw.py",
         "engine/sa/rgla.py",
         "engine/sa/risk_weights.py",
+        "engine/sa/sovereign_floor.py",
         "rulebook/packs/b31.py",
         "rulebook/packs/common.py",
         "rulebook/packs/crr.py"
@@ -6078,10 +6082,12 @@
     },
     {
       "article": "121",
-      "code_functions": [],
-      "confidence": "UNCITED",
+      "code_functions": [
+        "rwa_calc.engine.sa.sovereign_floor::apply_sovereign_floor_for_institutions"
+      ],
+      "confidence": "HIGH",
       "framework": "PS1/26",
-      "layer_count": 3,
+      "layer_count": 4,
       "oracle_cases": [
         "ORC-052",
         "ORC-053",
@@ -6091,8 +6097,9 @@
       "pack_entries": [],
       "source_files": [
         "contracts/edges.py",
+        "domain/branch_reasons.py",
         "engine/sa/guarantor_rw.py",
-        "engine/sa/risk_weights.py",
+        "engine/sa/sovereign_floor.py",
         "engine/stages/hierarchy/enrich.py"
       ],
       "test_files": [

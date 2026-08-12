@@ -39,6 +39,8 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from rwa_calc.domain.branch_reasons import BRANCH_REASON_VOCABULARIES, reason_dtype
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
@@ -1414,9 +1416,40 @@ RE_SPLIT_EXIT_CCR_EDGE: EdgeContract = EdgeContract(
 # share the bulk of their shape).
 
 
+def _branch_reason_columns() -> dict[str, EdgeColumn]:
+    """The Phase 3 ``*_branch_reason`` columns, typed from their vocabularies.
+
+    Built from ``BRANCH_REASON_VOCABULARIES`` rather than written out, so the
+    declared category list has exactly one home: adding a vocabulary member
+    changes the dtype here and in the producer at once, and the two cannot
+    disagree.
+
+    Every one is CONDITIONAL on its producer having run — an SA row carries no
+    IRB LGD reason and vice versa — so all are optional and injected as typed
+    nulls at edges the producing stage did not reach. A null therefore means
+    "this decision was not taken for this row", which is distinct from
+    ``UNKNOWN_FALLBACK`` ("it was taken and the answer is not known") and from
+    a named limb. The census relies on that three-way distinction.
+    """
+    return {
+        column: EdgeColumn(
+            dtype=reason_dtype(vocabulary),
+            required=False,
+            null_meaning=(
+                f"the decision {column} describes was not taken for this row "
+                "(the producing branch did not run) — NOT the same as "
+                "UNKNOWN_FALLBACK, which means it was taken and the deciding "
+                "predicate could not be evaluated"
+            ),
+        )
+        for column, vocabulary in BRANCH_REASON_VOCABULARIES.items()
+    }
+
+
 def _calc_output_common_columns() -> dict[str, EdgeColumn]:
     """Columns shared by all three branch exits AND the aggregator exit."""
     return {
+        **_branch_reason_columns(),
         "ancestor_facilities": EdgeColumn(dtype=pl.List(pl.String)),
         "approach": EdgeColumn(dtype=pl.String),
         "approach_applied": EdgeColumn(dtype=pl.String),

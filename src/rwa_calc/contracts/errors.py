@@ -306,6 +306,15 @@ ERROR_RW_NEGATIVE = "OUT002"
 ERROR_RWA_NEGATIVE = "OUT003"
 ERROR_EAD_NULL = "OUT004"
 
+# Branch-reason code (validate_branch_reasons). A row whose *_branch_reason
+# column reads UNKNOWN_FALLBACK was priced on a branch the engine could not
+# justify: either the deciding predicate evaluated to null and pl.when silently
+# took `otherwise`, or a value was substituted for input that was simply absent.
+# The number such a row carries is plausible and unearned, which is precisely
+# the failure docs/plans/test-space-correctness-proposal.md exists to close —
+# so the reason column never stands alone, and this code is what accompanies it.
+ERROR_UNKNOWN_BRANCH_FALLBACK = "BR001"
+
 # Aggregator non-finite output code. A single NaN/inf in a per-row RWA/EAD/RW
 # column propagates through Polars ``.sum()`` (NaN is not skipped like null) and
 # blanks the portfolio totals and the by-class/by-approach charts. The aggregator

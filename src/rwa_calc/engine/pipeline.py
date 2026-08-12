@@ -55,6 +55,7 @@ from rwa_calc.contracts.context import PipelineContext
 from rwa_calc.contracts.validation import (
     scrub_non_finite_values,
     validate_aggregated_bundle,
+    validate_branch_reasons,
     validate_bundle_values,
 )
 from rwa_calc.domain.enums import PermissionMode
@@ -527,7 +528,7 @@ def _run_output_bounds_gate(result: AggregatedResultBundle) -> list[CalculationE
     numbers are already computed and the caller still needs them.
     """
     try:
-        return validate_aggregated_bundle(result)
+        return validate_aggregated_bundle(result) + validate_branch_reasons(result)
     except Exception as e:
         logger.warning("Output-bounds validation failed: %s", e)
         return []

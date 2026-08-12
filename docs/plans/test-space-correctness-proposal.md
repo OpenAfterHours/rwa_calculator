@@ -199,6 +199,57 @@ Run it nightly rather than in the dev loop; it is a search, not a regression che
 
 *2–3 weeks, incremental. Sequence after Phase 2.*
 
+> **Done for two of the four paths, 2026-08-12.** SA risk weight
+> (`sa_risk_weight_branch_reason`) and IRB LGD (`irb_lgd_branch_reason`) are
+> instrumented; **CRM substitution and guarantor lookup are NOT started**, and
+> that is a deliberate stop rather than an oversight — see below. Resolved
+> differently from how it is written:
+>
+> - **The reason column is a `pl.Enum`, and that is load-bearing, not an
+>   optimisation.** "A branch reached by zero rows is a finding" is
+>   unimplementable over a `String` column: it carries the values that occurred
+>   and is silent about the ones that did not. An `Enum` carries its categories
+>   in the *dtype*, so the census reads the declared population off the schema
+>   and the reached population off the data. It is also 6.2x cheaper.
+> - **One `decide()` primitive, not four hand-written reason chains.** Value and
+>   reason are built from the SAME predicate objects
+>   (`engine/branch_reason.py`), so they cannot drift — the B3 trap, in a shape
+>   that would have been invisible.
+> - **Two paths, not four.** Instrumenting the guarantor chain
+>   (`sa/guarantor_rw.py`, 11 branches, consumed by BOTH the SA and IRB
+>   substitution paths) needs a provable value-equivalence argument per branch
+>   per regime; CRM substitution lives in `crm/guarantees.py`, which sits on the
+>   `max_engine_module_loc` ratchet with **one line** of headroom and cannot be
+>   touched without an extraction first. Half-instrumenting either would have
+>   produced exactly the "reads as coverage" artefact this proposal exists to
+>   close, so the `GuarantorRwReason` vocabulary that had been drafted was
+>   **deleted** rather than shipped without a producer — the same call Phase 0
+>   made about its five unfirable validators.
+> - **BR001 is a WARNING, not an ERROR.** An `UNKNOWN_FALLBACK` row is
+>   *unjustified*, not provably wrong. ERROR would have reddened every run
+>   touching the two known-open defects the instrument was built to expose, and
+>   a gate that reddens on a pre-existing defect gets switched off rather than
+>   fixed. The census ratchets the population; the error names the rows.
+>
+> **What the first census found**, over 14 portfolios x 2 regimes:
+>
+> - **The Art. 121(6) sovereign floor never binds anywhere in the estate.**
+>   `floor_bound` and `floor_not_binding` are both dead across all 28 runs. The
+>   30 existing unit tests all supply `cp_local_currency` explicitly, which is
+>   precisely the path production rows do not take.
+> - **P1.333's prescribed one-line fix is unsafe, and the census measured it.**
+>   The only two rows in the estate that reach the rule are a QCCP netting set;
+>   applying `fill_null(False)` moves it from RW 2% to 100% (RWA 109,933.82 ->
+>   5,496,700) against the Art. 306 pin. Its null also does not come from the
+>   non-EU `replace_strict` path the bullet blames — the row is GB/GBP, and the
+>   null enters through `denomination_currency_expr` reading a null
+>   `original_currency`. Filed as **P1.342**, to sequence before P1.333.
+>
+> Cost, measured at 60,000 rows: 296 -> 298 columns, **+0.13%** of frame bytes
+> (~1.06 bytes/row/column), **+9.9%** wall (1.672s -> 1.837s). The time, not the
+> space, is the real cost — each predicate is evaluated a second time for its
+> nullity test.
+
 `otherwise` is doing double duty: "the rule does not apply" and "I do not know".
 Separating them is what turns a silent fallback into a finding.
 

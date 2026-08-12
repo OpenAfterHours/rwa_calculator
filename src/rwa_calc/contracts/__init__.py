@@ -116,6 +116,7 @@ from rwa_calc.contracts.protocols import (
 # Validation utilities
 from rwa_calc.contracts.validation import (
     validate_aggregated_bundle,
+    validate_branch_reasons,
     validate_bundle_values,
 )
 from rwa_calc.domain.enums import PermissionMode
@@ -208,5 +209,6 @@ __all__ = [
     "SlottingCalculatorProtocol",
     # Validation
     "validate_aggregated_bundle",
+    "validate_branch_reasons",
     "validate_bundle_values",
 ]

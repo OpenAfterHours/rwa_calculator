@@ -857,10 +857,8 @@ def validate_referential_integrity(
         if key_column not in child_columns:
             key_column = None
         for foreign_key in foreign_keys:
-            parent = frames.get(foreign_key.parent_table)
-            if foreign_key.column not in child_columns or parent is None:
-                continue
-            if foreign_key.parent_column not in set(parent.collect_schema().names()):
+            parent = _checkable_parent(frames, child_columns, foreign_key)
+            if parent is None:
                 continue
             declarations[table, foreign_key.column] = foreign_key
             plans.extend(_referential_plans(child, key_column, parent, table, foreign_key))
@@ -946,6 +944,28 @@ def validate_duplicate_keys(bundle: RawDataBundle) -> list[CalculationError]:
         )
         for row in duplicated.sort(["_table", "_value"]).iter_rows(named=True)
     ]
+
+
+def _checkable_parent(
+    frames: dict[str, pl.LazyFrame],
+    child_columns: set[str],
+    foreign_key: ForeignKey,
+) -> pl.LazyFrame | None:
+    """The parent frame a declared link can actually be checked against.
+
+    None means "not checkable on this bundle", which is a SKIP rather than a
+    finding, for the reason the public docstring gives: an absent parent table
+    is a statement about the load that the loader already makes, and turning it
+    into one orphan error per child row would be the loudest possible way to
+    repeat it. The same holds for the columns — a link whose child or parent
+    column was never supplied has nothing to resolve.
+    """
+    parent = frames.get(foreign_key.parent_table)
+    if parent is None or foreign_key.column not in child_columns:
+        return None
+    if foreign_key.parent_column not in set(parent.collect_schema().names()):
+        return None
+    return parent
 
 
 def _referential_plans(

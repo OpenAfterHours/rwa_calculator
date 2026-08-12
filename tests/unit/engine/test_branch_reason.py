@@ -142,11 +142,16 @@ class TestVocabularyContract:
         class Incomplete(StrEnum):
             ONLY = "only"
 
-        # Act / Assert
+        cases = (BranchCase(Incomplete.ONLY, pl.lit(True), pl.lit(1.0)),)
+        otherwise = pl.lit(0.0)
+
+        # Act / Assert — decide() is the only call inside the raises block, so a
+        # ValueError from building the arguments cannot be mistaken for the one
+        # under test.
         with pytest.raises(ValueError, match="declares no UNKNOWN_FALLBACK"):
             decide(
-                (BranchCase(Incomplete.ONLY, pl.lit(True), pl.lit(1.0)),),
-                otherwise=pl.lit(0.0),
+                cases,
+                otherwise=otherwise,
                 otherwise_reason=Incomplete.ONLY,
                 vocabulary=Incomplete,
             )
@@ -157,11 +162,15 @@ class TestVocabularyContract:
         Arrange: a case naming a member of a DIFFERENT vocabulary.
         Act/Assert: decide() raises ValueError rather than emitting null.
         """
-        # Arrange / Act / Assert
+        # Arrange
+        cases = (BranchCase(IrbLgdReason.OWN_ESTIMATE, pl.lit(True), pl.lit(1.0)),)
+        otherwise = pl.lit(0.0)
+
+        # Act / Assert
         with pytest.raises(ValueError, match="not members of SovereignFloorReason"):
             decide(
-                (BranchCase(IrbLgdReason.OWN_ESTIMATE, pl.lit(True), pl.lit(1.0)),),
-                otherwise=pl.lit(0.0),
+                cases,
+                otherwise=otherwise,
                 otherwise_reason=SovereignFloorReason.RATED,
                 vocabulary=SovereignFloorReason,
             )
@@ -172,10 +181,14 @@ class TestVocabularyContract:
         Arrange: no cases.
         Act/Assert: decide() raises ValueError.
         """
+        # Arrange
+        otherwise = pl.lit(0.0)
+
+        # Act / Assert
         with pytest.raises(ValueError, match="at least one case"):
             decide(
                 (),
-                otherwise=pl.lit(0.0),
+                otherwise=otherwise,
                 otherwise_reason=SovereignFloorReason.RATED,
                 vocabulary=SovereignFloorReason,
             )

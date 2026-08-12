@@ -96,6 +96,7 @@ from tolerated_findings import diff  # noqa: E402
 from rwa_calc.domain.branch_reasons import (  # noqa: E402
     BRANCH_REASON_VOCABULARIES,
     UNKNOWN_FALLBACK,
+    declared_reasons,
 )
 from rwa_calc.engine.pipeline import PipelineOrchestrator  # noqa: E402
 
@@ -144,9 +145,9 @@ def census(limit: int | None = None) -> Census:
     """
     specs = run_specs()[:limit] if limit else run_specs()
     declared = {
-        f"{column}::{member.value}"
+        f"{column}::{reason}"
         for column, vocabulary in BRANCH_REASON_VOCABULARIES.items()
-        for member in vocabulary
+        for reason in declared_reasons(vocabulary)
     }
     reached: set[str] = set()
     counts: dict[str, int] = dict.fromkeys(declared, 0)
@@ -154,38 +155,12 @@ def census(limit: int | None = None) -> Census:
 
     for index, spec in enumerate(specs, start=1):
         sys.stderr.write(f"  [{index}/{len(specs)}] {spec.describe()} ...\n")
-        try:
-            frame = _results(spec)
-        except Exception as exc:  # noqa: BLE001 — a broken run must not be absorbed
-            sys.stderr.write(
-                f"\nFAILED: {spec.describe()} raised {type(exc).__name__}: {exc}\n"
-                "A run that produces no rows makes every limb it feeds look dead, "
-                "so this is a hard error rather than a skip.\n"
-            )
-            raise SystemExit(1) from exc
-
-        for column in BRANCH_REASON_VOCABULARIES:
-            if column not in frame.columns:
-                continue
-            series = frame[column]
-            totals[column] += int(series.is_not_null().sum())
-            for row in series.value_counts().iter_rows(named=True):
-                reason = row[column]
-                if reason is None:
-                    continue
-                key = f"{column}::{reason}"
-                counts[key] = counts.get(key, 0) + row["count"]
-                if row["count"]:
-                    reached.add(key)
+        frame = _results_or_exit(spec)
+        _accumulate(frame, reached=reached, counts=counts, totals=totals)
         del frame
         gc.collect()
 
-    if limit is None and len(specs) != EXPECTED_RUNS:
-        sys.stderr.write(
-            f"\nFAILED: matrix ran {len(specs)} of {EXPECTED_RUNS} expected runs.\n"
-            "A short matrix records every limb its missing portfolios feed as dead.\n"
-        )
-        raise SystemExit(1)
+    _require_full_matrix(specs, limit)
 
     return Census(frozenset(declared), frozenset(reached), counts, totals, len(specs))
 
@@ -231,16 +206,78 @@ def _results(spec: RunSpec) -> pl.DataFrame:
     return outcome.results.select(present).collect() if present else pl.DataFrame()
 
 
+def _results_or_exit(spec: RunSpec) -> pl.DataFrame:
+    """One run's frame, or a hard exit.
+
+    A run that raises is not a skip: it produces no rows, so every limb only
+    that portfolio feeds is recorded dead, and the census reports a LOSS of
+    coverage that never happened.
+    """
+    try:
+        return _results(spec)
+    except Exception as exc:  # noqa: BLE001 — a broken run must not be absorbed
+        sys.stderr.write(
+            f"\nFAILED: {spec.describe()} raised {type(exc).__name__}: {exc}\n"
+            "A run that produces no rows makes every limb it feeds look dead, "
+            "so this is a hard error rather than a skip.\n"
+        )
+        raise SystemExit(1) from exc
+
+
+def _accumulate(
+    frame: pl.DataFrame,
+    *,
+    reached: set[str],
+    counts: dict[str, int],
+    totals: dict[str, int],
+) -> None:
+    """Fold one run's reason columns into the accumulators, in place.
+
+    A column absent from the frame is not a finding — most portfolios do not
+    reach most instrumented stages — so it contributes nothing rather than
+    zeroing anything. Only a non-null reason on at least one row marks a limb
+    reached, which is what makes ``declared - reached`` the dead set.
+    """
+    for column in BRANCH_REASON_VOCABULARIES:
+        if column not in frame.columns:
+            continue
+        series = frame[column]
+        totals[column] += int(series.is_not_null().sum())
+        for row in series.value_counts().iter_rows(named=True):
+            reason = row[column]
+            if reason is None:
+                continue
+            key = f"{column}::{reason}"
+            counts[key] = counts.get(key, 0) + row["count"]
+            if row["count"]:
+                reached.add(key)
+
+
+def _require_full_matrix(specs: list[RunSpec], limit: int | None) -> None:
+    """Refuse to report a census taken over a short matrix.
+
+    Same argument as ``_results_or_exit``, one level up: a missing portfolio
+    silently converts its limbs into findings. ``--limit`` is the explicit
+    opt-out, and it is why this cannot simply compare lengths unconditionally.
+    """
+    if limit is None and len(specs) != EXPECTED_RUNS:
+        sys.stderr.write(
+            f"\nFAILED: matrix ran {len(specs)} of {EXPECTED_RUNS} expected runs.\n"
+            "A short matrix records every limb its missing portfolios feed as dead.\n"
+        )
+        raise SystemExit(1)
+
+
 def _report(result: Census) -> None:
     for column, vocabulary in BRANCH_REASON_VOCABULARIES.items():
         total = result.totals.get(column, 0)
         sys.stdout.write(f"\n{column}  ({total:,} rows carry a reason)\n")
-        for member in vocabulary:
-            key = f"{column}::{member.value}"
+        for reason in declared_reasons(vocabulary):
+            key = f"{column}::{reason}"
             count = result.counts.get(key, 0)
             share = f"{count / total:>7.2%}" if total else "      -"
             flag = "" if count else "   <-- DEAD: no row in the estate reaches this limb"
-            sys.stdout.write(f"  {member.value:<28} {count:>10,}  {share}{flag}\n")
+            sys.stdout.write(f"  {reason:<28} {count:>10,}  {share}{flag}\n")
     sys.stderr.write(
         f"\n{result.runs} runs | {len(result.reached)} of {len(result.declared)} "
         f"declared limbs reached | {len(result.dead)} dead\n"

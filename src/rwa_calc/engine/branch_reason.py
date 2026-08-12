@@ -78,7 +78,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from rwa_calc.domain.branch_reasons import UNKNOWN_FALLBACK, reason_dtype
+from rwa_calc.domain.branch_reasons import UNKNOWN_FALLBACK, declared_reasons, reason_dtype
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -137,7 +137,7 @@ def decide(
     if not cases:
         raise ValueError("decide() needs at least one case")
 
-    declared = {member.value for member in vocabulary}
+    declared = set(declared_reasons(vocabulary))
     if UNKNOWN_FALLBACK not in declared:
         raise ValueError(
             f"{vocabulary.__name__} declares no {UNKNOWN_FALLBACK} member — every "

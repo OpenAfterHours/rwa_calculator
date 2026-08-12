@@ -45,7 +45,8 @@ CENSUS_PATH = REPO_ROOT / "scripts" / "validator_reachability.py"
 def _load_arch_check() -> ModuleType:
     """Load scripts/arch_check.py as a module without polluting sys.path."""
     spec = importlib.util.spec_from_file_location("_arch_check", ARCH_CHECK_PATH)
-    assert spec is not None and spec.loader is not None, f"cannot load {ARCH_CHECK_PATH}"
+    assert spec is not None, f"cannot load {ARCH_CHECK_PATH}"
+    assert spec.loader is not None, f"no loader for {ARCH_CHECK_PATH}"
     module = importlib.util.module_from_spec(spec)
     sys.modules["_arch_check"] = module
     spec.loader.exec_module(module)
@@ -176,7 +177,8 @@ def test_the_reachability_analysis_has_one_implementation() -> None:
         if arch_check.is_measured_guard(module, name) and name not in reachable
     }
     census = importlib.util.spec_from_file_location("_validator_reachability", CENSUS_PATH)
-    assert census is not None and census.loader is not None
+    assert census is not None, f"cannot load {CENSUS_PATH}"
+    assert census.loader is not None, f"no loader for {CENSUS_PATH}"
     census_module = importlib.util.module_from_spec(census)
     sys.modules["_validator_reachability"] = census_module
     census.loader.exec_module(census_module)

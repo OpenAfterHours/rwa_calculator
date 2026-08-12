@@ -150,6 +150,24 @@ BRANCH_REASON_VOCABULARIES: dict[str, type[StrEnum]] = {
 }
 
 
+def declared_reasons(vocabulary: type[StrEnum]) -> list[str]:
+    """The reason strings a vocabulary declares, in declaration order.
+
+    The single derivation of "what this vocabulary declares". Both callers
+    need it — ``reason_dtype`` to build the category list, ``decide`` to reject
+    a reason that is not a member — and two copies of the same comprehension is
+    the drift this module's own docstring argues against.
+
+    Read off ``__members__`` rather than by iterating the class. The two are
+    equivalent for values (an alias contributes the value it aliases, which
+    ``dict.fromkeys`` collapses back to one category), but a bare
+    ``for member in vocabulary`` reads to a static analyser as iteration over a
+    class object — SonarCloud ``python:S5864`` flags exactly that, and the
+    ``EnumType.__iter__`` that makes it work is invisible to it.
+    """
+    return list(dict.fromkeys(member.value for member in vocabulary.__members__.values()))
+
+
 def reason_dtype(vocabulary: type[StrEnum]) -> pl.Enum:
     """The ``pl.Enum`` dtype for a vocabulary, in declaration order.
 
@@ -160,4 +178,4 @@ def reason_dtype(vocabulary: type[StrEnum]) -> pl.Enum:
     than usual, since the census reads its *declared* population straight off
     this dtype.
     """
-    return pl.Enum([member.value for member in vocabulary])
+    return pl.Enum(declared_reasons(vocabulary))

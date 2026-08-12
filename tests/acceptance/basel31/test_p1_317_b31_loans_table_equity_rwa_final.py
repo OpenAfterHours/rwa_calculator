@@ -44,7 +44,7 @@ Headline fail-first assertion:
     makes ``rwa_final`` non-null by routing equity through the wrong arm and
     picking up a different weight, which an ``is not None`` assertion would pass.
 
-Hand calculation (steady state, so no transitional schedule is in play):
+Hand calculation:
     Basel 3.1, reporting_date 2030-06-30:
         equity    EAD 1,500,000 x RW 2.50 = RWA 3,750,000   (currently None)
         corporate EAD 4,000,000 x RW 0.75 = RWA 3,000,000   (correct today)
@@ -86,10 +86,17 @@ from tests.fixtures.raw_bundle import make_raw_bundle
 # Scenario constants
 # ---------------------------------------------------------------------------
 
-#: Steady state under both regimes: the PRA Rules 4.2/4.3 equity transitional
-#: schedule has completed (its last step is 2030-01-01) and the output-floor
-#: phase-in is irrelevant here because nothing routes IRB. A 2030 date therefore
-#: makes 250% unambiguously the Art. 133(3) steady-state weight.
+#: The reporting date is INERT for this scenario, and saying so matters more
+#: than the date itself. Measured at 2027-01-01, 2027-06-30, 2028-06-30,
+#: 2029-06-30, 2030-06-30 and 2035-06-30 the leg returns rw 2.50 /
+#: rwa_final 3,750,000.00 at every one. Two independent reasons: the PRA Rules
+#: 4.2/4.3 equity transitional schedule is consumed only by
+#: ``engine/equity/calculator.py`` — the DEDICATED equity_exposures path, which
+#: this main-table leg never reaches — and even there it is an upward floor
+#: (``pl.max_horizontal(risk_weight, transitional_rw)``), so it can never take a
+#: Basel 3.1 weight BELOW 250%. Do not infer from this date that main-table
+#: equity honours the transitional schedule: it does not, which is precisely
+#: what the SA005 warning this run emits is telling the user.
 _B31_REPORTING_DATE = date(2030, 6, 30)
 _CRR_REPORTING_DATE = date(2025, 12, 31)
 

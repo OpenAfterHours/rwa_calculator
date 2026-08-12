@@ -947,7 +947,7 @@ def validate_duplicate_keys(bundle: RawDataBundle) -> list[CalculationError]:
 
 
 def _checkable_parent(
-    frames: dict[str, pl.LazyFrame],
+    frames: dict[str, pl.LazyFrame | None],
     child_columns: set[str],
     foreign_key: ForeignKey,
 ) -> pl.LazyFrame | None:

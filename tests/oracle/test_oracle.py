@@ -66,6 +66,23 @@ TOLERANCE = PAYLOAD["tolerance_relative"]
 #
 # Remove an entry only when the engine changes, never when the oracle does.
 #
+# THIS REGISTER IS RATCHETED, AND THE RATCHET IS SHRINK-ONLY (P5.41).
+# `scripts/check_parked_registers.py --check` — driven on every dev-loop run by
+# `tests/contracts/test_parked_register_ratchet.py` — enforces two things the
+# `xfail(strict=True)` marks below cannot:
+#   * no entry outside `scripts/parked_registers_baseline.json`. `strict=True`
+#     already fails when an entry starts AGREEING, so a silent fix is
+#     impossible; nothing constrained GROWTH, and the register went 4 -> 11 in
+#     one batch with eight capital understatements in it
+#     (`docs/development/escape-log.md` 2026-08-09 entry 4). Adding an entry now
+#     means hand-editing the baseline, because --update-baseline refuses to.
+#   * every entry names its owning plan bullet with an `OWNER: P<tier>.<n>`
+#     token in its reason text (`.claude/LESSONS.md` B7). A parked disagreement
+#     is a decision to ship a number this suite has independent evidence is
+#     wrong; the bullet is who is going to stop shipping it. Removing an entry
+#     is free and always will be — that is the outcome this register exists to
+#     provoke.
+#
 # DISCHARGED 2026-08-09 (P1.316) — the Art. 121(1) Table 5 family. ORC-105
 # (CQS 1), ORC-020 (CQS 2) and ORC-109 (CQS 6, the capital-shortfall limb) were
 # `xfail(strict=True)` here against a flat-100% engine. The CRR institution
@@ -92,6 +109,7 @@ _ART_154_4A_B_SCOPE = (
 )
 
 _ART_197_FCSM_ELIGIBILITY = (
+    "OWNER: P1.330. "
     "The Art. 197 collateral-eligibility gate is not applied on the Art. 222 "
     "Financial Collateral Simple Method path. engine/crm/processor.py runs "
     "compute_fcsm_columns at Step 3.8, BEFORE apply_haircuts at Step 4 -- and "
@@ -131,7 +149,7 @@ KNOWN_DISAGREEMENTS: dict[str, str] = {
     # a hard failure. Do not re-add them without an engine change that re-breaks
     # them.
     "ORC-142": (
-        f"{_ART_154_4A_B_SCOPE} Here: limb (iii). The floor is applied to "
+        f"OWNER: P1.337. {_ART_154_4A_B_SCOPE} Here: limb (iii). The floor is applied to "
         "residential property outside the UK. Note this limb is not merely "
         "mis-gated but UNREPRESENTABLE: no module under engine/irb/ reads any "
         "obligor or property country column at all (the only country carrier "

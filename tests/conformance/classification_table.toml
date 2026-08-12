@@ -732,6 +732,22 @@ Approach.
 # Each is attached as a strict xfail so that FIXING the engine turns the suite
 # red and forces the entry to be removed deliberately. Never widen one of these
 # to silence a new failure.
+#
+# THIS REGISTER IS RATCHETED, AND THE RATCHET IS SHRINK-ONLY (P5.41).
+# `scripts/check_parked_registers.py --check` — driven on every dev-loop run by
+# `tests/contracts/test_parked_register_ratchet.py` — adds the direction the
+# strict xfail is blind to. The mark fails when an entry starts AGREEING, so a
+# silent fix is impossible; nothing constrained GROWTH. So:
+#   * no entry outside `scripts/parked_registers_baseline.json`. --update-baseline
+#     prunes and refreshes but REFUSES to add, so banking a new parked
+#     disagreement means hand-editing that file — a deliberate, reviewable act.
+#   * every `detail` opens with `OWNER: P<tier>.<n>`, naming the
+#     IMPLEMENTATION_PLAN.md bullet that owns the fix (`.claude/LESSONS.md` B7).
+#     The token is interpolated into the xfail reason by
+#     `test_classification_conformance.py::test_known_disagreement`, so the
+#     owner appears on the failure a reader actually sees.
+#   * removing an entry is free, and always will be — that is the outcome this
+#     register exists to provoke.
 # ===========================================================================
 
 [[known_disagreement]]
@@ -742,6 +758,7 @@ expected = "retail_qrre"
 observed = "retail_other"
 citation = "CRR Art. 154(4)(c); PS1/26 Art. 147(5A)(c)"
 detail = """
+OWNER: P1.320.
 The per-individual QRRE aggregate is computed as the SUM of `facility_limit`
 over the obligor's candidate rows. A revolving facility with any undrawn
 headroom is split by the hierarchy stage into a drawn child and a synthetic
@@ -766,6 +783,7 @@ expected = "retail_qrre"
 observed = "retail_other"
 citation = "CRR Art. 154(4)(c); PS1/26 Art. 147(5A)(c)"
 detail = """
+OWNER: P1.320.
 The same defect as D1, on the carrier that actually decides the treatment: the
 routing `exposure_class` the IRB correlation, the COREP C 08.xx sheet split and
 the Pillar 3 CR6 row axis all read. D1 records the reported IRB class; this
@@ -782,6 +800,7 @@ expected = "foundation_irb"
 observed = "advanced_irb"
 citation = "PS1/26 Art. 147(4C)(b)(ii), Art. 147A(1)(e)(ii)"
 detail = """
+OWNER: P1.321.
 The Art. 147(4C)(b)(ii) large-corporate test is gated on the literal string
 `cp_entity_type == "corporate"`, so the other entity types that map to the
 corporate exposure class — `company` and `specialised_lending` — escape it. A
@@ -802,6 +821,7 @@ expected = "central_govt_central_bank"
 observed = "mdb / international_organisation"
 citation = "CRR Art. 147(3)(b), Art. 147(3)(c), Art. 117(2), Art. 118; PS1/26 Art. 147(3)(f)-(g)"
 detail = """
+OWNER: P1.303.
 The entity-type map derives the correct Art. 147(3) IRB class
 (central_govt_central_bank) for named MDBs and international organisations, and
 `sync_irb_exposure_class` then OVERWRITES it with the Standardised class. Only
@@ -822,6 +842,7 @@ expected = "central_govt_central_bank"
 observed = "institution"
 citation = "PS1/26 Art. 147(3)(c), (d), (e), (f)"
 detail = """
+OWNER: P1.303.
 PS1/26 Art. 147(3) assigns regional governments, local authorities, public
 sector entities and MDBs to the Art. 147(2)(a) central-government class
 unconditionally; the CRR-era Art. 147(4)(a)-(c) "treated as institutions"
@@ -842,6 +863,7 @@ expected = "corporate"
 observed = "covered_bond / high_risk / other"
 citation = "CRR Art. 147(2), Art. 147(7); PS1/26 Art. 147(2), Art. 147(4A)"
 detail = """
+OWNER: P1.322.
 `covered_bond` and `high_risk` are Standardised-Approach classes (CRR
 Art. 112(1)(l) and (k)) with no counterpart in either Art. 147(2) enumeration,
 yet they are emitted as `exposure_class_irb` values. The residual limb — CRR
@@ -861,6 +883,7 @@ expected = "foundation_irb (PD only) / advanced_irb (PD and own LGD)"
 observed = "standardised"
 citation = "CRR Art. 147(3)(b)-(c), Art. 117(2), Art. 118; CRR Art. 143(1), Art. 151(1)"
 detail = """
+OWNER: P1.303.
 The measurable consequence of D3. CRR Art. 147(3)(b)-(c) place Art. 117(2)
 multilateral development banks and 0%-risk-weighted international organisations
 in the Art. 147(2)(a) central-government exposure class. Model permissions are
@@ -881,6 +904,7 @@ expected = "foundation_irb (PD only) / advanced_irb (PD and own LGD)"
 observed = "standardised"
 citation = "CRR Art. 147(2), Art. 147(7); PS1/26 Art. 147(2), Art. 147(4A); CRR Art. 143(1)"
 detail = """
+OWNER: P1.322.
 The measurable consequence of D5 for covered bonds, in BOTH regimes. Whichever
 Art. 147(2) class a covered bond belongs to — (b) institutions where the issuer
 is a credit institution, or the corporate residual under Art. 147(7) /

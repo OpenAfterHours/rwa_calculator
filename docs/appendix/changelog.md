@@ -8,6 +8,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **The registers of parked findings are ratcheted, and every entry names the
+  plan bullet that owns it.** A *parked finding* is one a gate made and the
+  estate then agreed to tolerate. There were sixteen of them across two
+  registers — 8 in `tests/oracle/test_oracle.py::KNOWN_DISAGREEMENTS`, of which
+  **seven understate capital** (six FCSM cases at 10.0%, `ORC-280` at 33.3%),
+  and 8 more in `tests/conformance/classification_table.toml` — with **no size
+  gate at all** and **0 of 16** naming an owner. `xfail(strict=True)` fails when
+  an entry starts *agreeing*, so a silent fix was impossible; nothing
+  constrained growth, and the population went 4 → 11 in a single batch with
+  every gate green.
+
+  `scripts/check_parked_registers.py --check` now gates both, driven in-suite by
+  `tests/contracts/test_parked_register_ratchet.py` so it cannot rot unwired.
+  Additions are **shrink-only** — `--update-baseline` prunes departed ids and
+  refreshes owners but refuses to add one, so parking a new known-wrong number
+  is a hand edit to `scripts/parked_registers_baseline.json` that appears in
+  review. Removals stay free, because a gate that reddens on a fix teaches
+  people to stop fixing.
+
+  One mechanism serves all four of the project's tolerated-findings registers:
+  `scripts/tolerated_findings.py` holds the set-diff and the `OWNER: P<n>.<n>`
+  grammar, and the measured supervisory register
+  (`test_supervisory_validations.py`) routes its seven legs through the same
+  `diff` while keeping its own runner. The declared registers are shrink-only;
+  the measured one stays two-way, because a fixture change legitimately moves
+  it. See [the escape log](../development/escape-log.md) — this closes the
+  2026-08-09 `caught-and-parked` entry, which had recorded its own gate change
+  as `NOT VERIFIED` and therefore still open.
 - **`arch_check` check 20 — a guard in the contracts layer must be reachable
   from production.** Every public function in `contracts/validation.py` (the
   input contract, guard-shaped in whole) and every guard-**named** public

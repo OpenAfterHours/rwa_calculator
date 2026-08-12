@@ -199,11 +199,33 @@ Fuzzing finds *classes* of defect; only real portfolios find *shapes*.
   was found by someone holding real data.
 - Make repro-first standing policy on user reports: reproduce the customer's actual input
   shape before concluding the engine is correct.
-- **Drain the parked registers.** There are 11 entries in `KNOWN_DISAGREEMENTS`, 8 of
-  them understating capital, plus roughly 25 open defect items. The `caught-and-parked`
-  escape class already names this failure mode: a gate fired, the finding was recorded,
-  and the wrong number shipped anyway. Ratchet the size of every tolerated-findings
-  register so it can only shrink.
+- **Drain the parked registers.** Measured on `fix/input-domain-correctness`, 2026-08-12:
+  **8** entries in `KNOWN_DISAGREEMENTS`, **7 of them understating capital** — six FCSM
+  cases at 10.0% each and `ORC-280` at 33.3% — plus `ORC-142`, which runs the other way
+  (the engine applies a 373,345.27 mortgage-floor adjustment where the oracle applies
+  0.00, so it is conservative, and its limb is *unrepresentable* rather than mis-gated).
+  A further **8** sit in `tests/conformance/classification_table.toml` as
+  `[[known_disagreement]]` D1–D7 including D1b, plus roughly 25 open defect items.
+
+  An earlier draft of this bullet said "11 entries, 8 of them understating capital". Both
+  figures were wrong by the time anyone read them, and that is the argument for the fix
+  rather than a footnote to it: 11 was the count at the moment `docs/development/escape-log.md`'s
+  2026-08-09 entry 4 was corrected, three of which (the Art. 121(1) Table 5 family — `ORC-105`,
+  `ORC-020`, `ORC-109`) were discharged hours later by P1.316. **A register whose size lives in
+  prose is stale the moment the register moves.**
+
+  The `caught-and-parked` escape class already names the failure mode: a gate fired, the
+  finding was recorded, and the wrong number shipped anyway. Ratchet the size of every
+  tolerated-findings register so it can only shrink.
+
+  **Done (P5.41, 2026-08-12)** for the two registers that had no ratchet at all. One shared
+  mechanism — `scripts/tolerated_findings.py` — now backs all four: the two declared
+  registers above are gated shrink-only by `scripts/check_parked_registers.py --check`
+  (run in-suite by `tests/contracts/test_parked_register_ratchet.py`), and the measured
+  supervisory register (`known_broken_rules` / `known_uncovered_templates` /
+  `known_vacuous_rules`) routes its seven legs through the same set-diff. Every one of the
+  16 declared entries now names the plan bullet that owns it. Draining them is still owed,
+  and is the point — the ratchet only stops the population growing while that happens.
 
 ## Sequencing
 

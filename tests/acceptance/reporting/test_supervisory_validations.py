@@ -24,6 +24,22 @@ register, applied to ALL THREE populations:
 An Error-severity break rejects the entire return at submission, so every
 ``ERROR`` line in the register is a blocking filing defect.
 
+All seven legs share ONE set-diff (P5.41):
+    The arithmetic behind "new" and "gone" is ``scripts/tolerated_findings.py``
+    ``::diff``, extracted from this file so that this register and the two
+    DECLARED ones — ``tests/oracle/test_oracle.py::KNOWN_DISAGREEMENTS`` and
+    ``tests/conformance/classification_table.toml``'s ``[[known_disagreement]]``
+    — cannot drift apart on what a movement means. Four registers of the same
+    shape were four places to get the direction wrong.
+
+    The mechanism is shared; the POLICY is not, and the difference is
+    deliberate. This register stays TWO-WAY: its membership is measured over
+    sixteen pipeline runs, so a fixture change legitimately grows it and
+    ``REGEN_VALIDATION_BASELINE=1`` may bank that. The declared registers are
+    SHRINK-ONLY, with no bulk affordance that adds an entry at all, because an
+    entry there is a decision to ship a figure an independent derivation has
+    shown is wrong. Each caller states which it is.
+
 Why (c)/(d) matter as much as (a)/(b): ``check_supervisory_validations`` FAILS
 OPEN. On a bundle it cannot read, every rule is NOT_EVALUATED, so there are no
 breaks and the result is indistinguishable from a clean estate. A shrinking
@@ -216,12 +232,13 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
 
 import pytest
+from scripts.tolerated_findings import diff
 from tests.acceptance.reporting.test_reporting_golden import _b31_config, _crr_config
 from tests.fixtures.reporting_ccr_portfolio import build_reporting_ccr_bundle
 from tests.fixtures.reporting_crm_substitution_portfolio import (
@@ -924,23 +941,35 @@ def _write_baseline(run: GateRun) -> None:
 # costs sixteen pipeline runs plus a fixture change. Named functions over plain
 # dicts can be driven with a synthetic measured-vs-baseline pair in seconds, so
 # both directions are demonstrable on demand instead of argued from the code.
+#
+# All seven legs now route their set arithmetic through ONE mechanism —
+# `scripts/tolerated_findings.py::diff`, extracted under P5.41 so this register
+# and the two declared ones (`KNOWN_DISAGREEMENTS`,
+# `classification_table.toml`'s `[[known_disagreement]]`) cannot drift apart on
+# what "new" and "gone" mean. `diff` is deliberately direction-NEUTRAL: it
+# reports both sides and each caller decides which is a failure. This register
+# stays two-way — an increase may be banked with REGEN_VALIDATION_BASELINE=1,
+# because its membership is MEASURED over sixteen pipeline runs and a fixture
+# change legitimately moves it. The declared registers are shrink-only, because
+# an entry there is a decision to ship a number the oracle has independently
+# shown is wrong. Same arithmetic, different policy, stated in each caller.
 
 
 def _rules_newly_vacuous(
     measured: dict[RuleKey, VacuityFact], baseline: dict[RuleKey, str]
-) -> list[RuleKey]:
+) -> tuple[RuleKey, ...]:
     """Rules that now hold only vacuously and the register does not admit to."""
-    return sorted(key for key in measured if key not in baseline)
+    return diff(measured, baseline).added
 
 
 def _rules_no_longer_vacuous(
     measured: dict[RuleKey, VacuityFact], baseline: dict[RuleKey, str]
-) -> list[RuleKey]:
+) -> tuple[RuleKey, ...]:
     """Register entries whose rule has started reaching a real verdict again."""
-    return sorted(key for key in baseline if key not in measured)
+    return diff(measured, baseline).removed
 
 
-def _describe_vacuity(keys: list[RuleKey], facts: dict[RuleKey, VacuityFact]) -> str:
+def _describe_vacuity(keys: Sequence[RuleKey], facts: dict[RuleKey, VacuityFact]) -> str:
     """Format vacuity findings for an assertion message."""
     return "\n".join(
         f"  {key.describe()}  [{facts[key].severity}] {facts[key].figures()}\n"
@@ -977,7 +1006,7 @@ def test_no_supervisory_validation_break_outside_the_baseline(gate_run: GateRun)
     baseline = _read_baseline().rules
 
     # Act
-    new_breaks = sorted(key for key in gate_run.broken if key not in baseline)
+    new_breaks = diff(gate_run.broken, baseline).added
 
     # Assert
     blocking = [key for key in new_breaks if gate_run.broken[key].severity == "ERROR"]
@@ -1012,7 +1041,7 @@ def test_no_baseline_break_has_been_fixed_without_being_removed(gate_run: GateRu
     baseline = _read_baseline().rules
 
     # Act
-    stale = sorted(key for key in baseline if key not in gate_run.broken)
+    stale = diff(gate_run.broken, baseline).removed
 
     # Assert
     detail = "\n".join(f"  {key.describe()}\n      was: {baseline[key]}" for key in stale)
@@ -1041,7 +1070,7 @@ def test_no_template_goes_unchecked_outside_the_baseline(gate_run: GateRun) -> N
     baseline = _read_baseline().templates
 
     # Act
-    new_holes = sorted(key for key in gate_run.uncovered if key not in baseline)
+    new_holes = diff(gate_run.uncovered, baseline).added
 
     # Assert
     detail = "\n".join(
@@ -1068,7 +1097,7 @@ def test_no_baseline_coverage_hole_has_been_closed_without_being_removed(gate_ru
     baseline = _read_baseline().templates
 
     # Act
-    closed = sorted(key for key in baseline if key not in gate_run.uncovered)
+    closed = diff(gate_run.uncovered, baseline).removed
 
     # Assert
     detail = "\n".join(f"  {key.describe()}\n      was: {baseline[key]}" for key in closed)

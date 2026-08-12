@@ -802,3 +802,192 @@ gate that shipped.
   phases (declare the input domain as data, fuzz the pathology axis, make absence
   loud) are what stop the next silent-plausible-number defect; check 20 only
   guarantees that a guard we have already written is running.
+
+## 2026-08-12 — The registers of tolerated findings had no size gate and named no owner, and the count everyone quoted was wrong in both directions
+
+- **Defect**: This file's 2026-08-09 entry 4 recorded eleven wrong numbers parked
+  as accepted disagreements and named its own gate change — a ratchet plus an
+  owning bullet per entry — then closed its **Verified red** field with
+  *"**NOT VERIFIED** for the disposition ratchet, which does not exist yet. By
+  this file's closing rule the escape therefore remains open."* It stayed open for
+  three days. This entry is that closure, and it is filed as its own entry rather
+  than an edit because the interval produced two findings of its own.
+
+  **First: the population was never counted again.** Measured on
+  `fix/input-domain-correctness`, 2026-08-12 — `KNOWN_DISAGREEMENTS` holds **8**
+  entries, **7** of them understating capital: six FCSM cases at 10.0% and
+  `ORC-280` at 33.3%. The eighth, `ORC-142`, runs the *other* way (engine applies
+  a 373,345.27 mortgage-floor adjustment where the oracle applies 0.00) and its
+  limb is *unrepresentable* rather than mis-gated. So "11 entries, 8 understating"
+  — the figure in `docs/plans/test-space-correctness-proposal.md`, in
+  `IMPLEMENTATION_PLAN.md` P5.41, and in this file's own entry 4 heading — was
+  wrong on **both** numbers by the time anyone acted on it. Three of the eleven
+  (the Art. 121(1) Table 5 family) were discharged by P1.316 hours after entry 4
+  was written. Entry 4 predicted this in terms: *"a register whose size is recorded
+  in prose is stale the moment the register moves, which is exactly why the fix is
+  a ratchet and not a sentence."* Its own heading is now the worked example.
+
+  **Second: not one of sixteen entries named an owner.** Across both declared
+  registers — 8 in `KNOWN_DISAGREEMENTS`, 8 in `tests/conformance/classification_table.toml`
+  (D1–D7 *including D1b*, which is why the parallel register is 8 and not the 7
+  everything referring to it says) — **0/16** reason strings named the plan bullet
+  responsible for the fix, against `.claude/LESSONS.md` B7's explicit instruction
+  to put one there. All sixteen owning bullets already existed in
+  `IMPLEMENTATION_PLAN.md`; nothing linked an entry to one, so a register of
+  sixteen shipped-wrong numbers had zero accountable owners while every bullet
+  that would have fixed them sat filed and unreferenced.
+- **Rule**: Not a regulatory escape in itself. The regulatory content at risk is
+  what the sixteen entries park: CRR Art. 197(1)(b)/(d)/(f), Art. 198(1)(a),
+  Art. 218, Art. 222, Art. 114(2); PS1/26 Art. 154(4A)(b); CRR Art. 154(4)(c) /
+  PS1/26 Art. 147(5A)(c); PS1/26 Art. 147(4C)(b)(ii); CRR Art. 147(2)/(3)/(7).
+- **Origin**: `tests/oracle/test_oracle.py::KNOWN_DISAGREEMENTS` and
+  `tests/conformance/classification_table.toml`. Both were built correctly —
+  `tests/oracle/README.md` is emphatic that when the engine and the oracle
+  disagree you adjust neither — and both were built without a size gate.
+- **Escape class**: `caught-and-parked`. Confirmed against the definition at the
+  top of this file rather than assumed: *"a gate fired, and the record of the
+  finding became its resting place"*, fix *"ratchet the finding register; give
+  every parked entry an owning bullet"*. Both limbs match exactly, and the
+  prescribed fix is the fix that landed. Worth noting that the class's *own*
+  justification — "the shape recurs across at least four parallel registers here"
+  — is what made the shared mechanism below the right answer rather than four
+  bespoke ratchets.
+- **Why every gate missed it**: `xfail(strict=True)` is a real gate in exactly one
+  direction. It fails when an entry starts **agreeing**, so a silent fix is
+  impossible and requirement (b) has always been enforced at the only place that
+  can enforce it. Nothing anywhere constrained **growth**, and nothing read the
+  reason strings at all — they are prose attached to a marker, and prose is not
+  parsed. The population could therefore rise without limit while every gate
+  including the two mandatory Tier 2 ones stayed green, which is precisely what
+  4 → 11 in one batch looked like from the outside: a green suite.
+- **Gate change**: in this change-set, from P5.41. **ONE mechanism, two runners.**
+  - `scripts/tolerated_findings.py` — the shared primitive: a direction-neutral
+    generic set-diff (`diff`) and the owner grammar (`owner_of` / `unowned`).
+    Extracted from the supervisory register rather than written fresh.
+  - `scripts/check_parked_registers.py --check` — the gate over the two
+    **declared** registers, against `scripts/parked_registers_baseline.json`.
+  - `tests/contracts/test_parked_register_ratchet.py` — 13 tests. Three run the
+    real gate over the real registers, including one that shells the CLI; ten
+    drive the mechanism synthetically so both directions are demonstrable in
+    milliseconds.
+  - `tests/acceptance/reporting/test_supervisory_validations.py` — all seven legs
+    now route their set arithmetic through the same `diff`. Semantics-preserving:
+    8 passed, unchanged.
+
+  **Script *and* pytest, for a stated reason.** The four registers split on what it
+  costs to compute current membership. The supervisory three are **measured** — a
+  union over sixteen pipeline runs, and only pytest owns the fixtures that produce
+  them — so that ratchet stays where the data is. The two declared ones are a dict
+  literal and a TOML array; reading them is a few milliseconds, so they get a
+  script, which buys the explicit `--update-baseline` verb that makes *banking* a
+  separate reviewable act from *checking*.
+
+  **Deliberately in-suite rather than a CI job.** This file's 2026-08-09 entry 1
+  records a CI-only invocation guard defeated **six** ways while staying green. A
+  millisecond census belongs where nobody has to remember to run it.
+
+  **Stronger than the bullet asked: additions are shrink-only, not two-way.**
+  `--update-baseline` prunes departed ids and refreshes owners and **refuses to
+  add**, so banking a new parked finding means hand-editing the baseline — a diff
+  in a file whose whole purpose is to be reviewed. Every other ratchet in this repo
+  can be satisfied by re-banking a worse number; this one cannot, because what it
+  counts is figures an independent derivation has shown are wrong.
+  **Removals stay free**, and the docstrings say why: a gate that reddens on a fix
+  teaches people to stop fixing, and `strict=True` already forces the entry's
+  removal in the same change. The residual hole is stated in
+  `scripts/tolerated_findings.py` rather than hidden — while a baseline id is
+  stale it is slack in the addition gate — and closing it would mean gating
+  removals.
+
+  **Requirement (c) landed as ownership, not as a grandfathered exception set.**
+  All 16 entries carry an `OWNER: P<n>.<n>` token; every owning bullet already
+  existed and no new bullet was filed. `ORC-142` → **P1.337**;
+  `ORC-257/258/275/278/279/280/281` → **P1.330**; `D1`/`D1b` → **P1.320**; `D2` →
+  **P1.321**; `D3`/`D4`/`D6` → **P1.303**; `D5`/`D7` → **P1.322**. The grammar is
+  an explicit token and not a bare `P\d+\.\d+` scan, which was tried and rejected
+  on measurement: `_ART_154_4A_B_SCOPE` already reads "Since P1.319,
+  engine/irb/adjustments.py gates on the first two and not the third" — a
+  *historical* reference to the bullet that narrowed the gate, not an owner for
+  what remains. A bare regex would have passed the one entry whose ownership was
+  hardest to establish and failed the seven whose owner was obvious; it would have
+  measured prose style, not accountability. That case is pinned by
+  `test_a_historical_bullet_reference_is_not_an_owner`.
+- **Verified red**: six, and the first two are the ones this entry's class
+  demands. All were produced against the **real** registers — four by writing the
+  perturbation to disk and restoring it in a `finally`, so nothing was faked
+  in-process.
+
+  (1) A ninth disagreement added to `tests/oracle/test_oracle.py`, driven through
+  the suite (`2 failed, 11 passed`):
+
+  ```
+  NEW PARKED FINDING (tests/oracle/test_oracle.py::KNOWN_DISAGREEMENTS): 1 entry/entries outside the committed baseline:
+      ORC-999  (owner: P1.330)
+    This register may only SHRINK. Every entry is a number we have independent evidence is WRONG and are shipping anyway, so growing the population is a decision, not a side effect.
+    FIX THE DEFECT. If the finding is genuinely accepted, hand-edit parked_registers_baseline.json to add the id with its owning bullet — --update-baseline will not do it for you.
+  ```
+
+  (2) The owner token stripped from `_ART_197_FCSM_ELIGIBILITY` — requirement (c),
+  firing on all seven consumers of the shared reason (`3 failed, 10 passed`):
+
+  ```
+  NO OWNING BULLET (tests/oracle/test_oracle.py::KNOWN_DISAGREEMENTS): 7 entry/entries name no plan bullet:
+      ORC-257
+      ORC-258
+      ORC-275
+      ORC-278
+      ORC-279
+      ORC-280
+      ORC-281
+    An entry with no owner is the review finding, not the xfail (.claude/LESSONS.md B7). Add `OWNER: P<tier>.<n>` to the entry's reason text, naming the IMPLEMENTATION_PLAN.md bullet that owns the fix — and file that bullet in the same change if it does not exist yet.
+  ```
+
+  (3) and (4) are the same two against the *other* register, proving the mechanism
+  is shared and not a single-register special case — a ninth
+  `[[known_disagreement]]` appended to `classification_table.toml` gives
+  `NEW PARKED FINDING … D8-synthetic-ninth (owner: P1.303)`, and stripping D2's
+  token gives `NO OWNING BULLET … D2-large-corporate-test-keys-on-one-entity-type-string`.
+  Both exit 1.
+
+  (5) The whole gate before the fix, on the untouched tree, which is the state the
+  estate was actually in — two `NO OWNING BULLET` blocks, `8 entry/entries` each,
+  naming all sixteen ids, exit 1.
+
+  (6) The shrink-only claim attacked directly, since a refusal that is only
+  documented is not a refusal. `--update-baseline` asked to bank the ninth entry:
+
+  ```
+  baseline banked at 16 parked finding(s)
+
+  REFUSED to bank 1 NEW entry/entries:
+    oracle_known_disagreements: ORC-999
+  Additions are shrink-only. Fix the defect, or hand-edit parked_registers_baseline.json so the decision to ship a known-wrong number appears in the diff.
+  ```
+
+  with the baseline file **byte-identical afterwards** — checked, not assumed.
+
+  **What this gate does NOT do, and it is the thing a reader will assume.** It
+  constrains the *size* of the register. It does not shrink it, and it says nothing
+  about whether any of the sixteen parked numbers is right. Seven capital
+  understatements are still shipping today; P1.330 and P1.337 own them. This is a
+  ratchet, so it fails on **movement** — the sixteen entries already there move it
+  not at all, and a reader who takes a green gate as evidence the estate is clean
+  has read it exactly backwards. Draining is Phase 4's actual objective; this only
+  stops the queue growing while that happens.
+- **Lesson**: `.claude/LESSONS.md` **B7 is now graduable, and the graduation is
+  filed rather than performed here** — following entry 4's own precedent, since
+  this file does not own `.claude/LESSONS.md` and two other agents were editing
+  the tree concurrently. Both of B7's limbs are executable for both declared
+  registers: membership (`--check` on the baseline) and ownership (the `OWNER:`
+  token), so its Detect line — *"a register entry naming no bullet is the thing to
+  catch in review"* — is no longer a thing to catch in review. What should survive
+  the trim is the judgment B7 carries and no check can: that registering the
+  disagreement is the *right* first move, and that the failure is treating the
+  registration as the end of it. Keep B8 ("ratchet the accumulator, not a ratio")
+  as prose in full: this mechanism
+  *applies* it — the accumulator is the id set, so a register that grows by one and
+  shrinks by one is detected as movement — but B8's own worked example is about
+  choosing the right metric, which no check can express. What also does not
+  graduate, and belongs here rather than in a lesson: **the count in the bullet was
+  wrong, in a bullet whose entire subject was that counts in prose go stale.** The
+  ratchet fixes the register; nothing fixes a figure typed into a sentence.

@@ -508,7 +508,7 @@ def _new_input_domain_errors(data: RawDataBundle) -> list[CalculationError]:
     calls is ``scrub_non_finite_values``, which can only remove them.
 
     Never raises: a validator defect must not stop a run, exactly as in
-    ``engine/loader.py::_run_bundle_validation``.
+    ``engine/loader.py::_scrub_and_validate``.
     """
     try:
         errors = validate_bundle_values(data)

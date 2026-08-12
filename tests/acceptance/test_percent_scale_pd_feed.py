@@ -31,7 +31,7 @@ error names it. Exactly one of "trust this figure" and "this figure is flagged"
 must be true of every row, and today neither is.
 
 Pipeline position:
-    parquet feed -> ParquetLoader (``_run_bundle_validation`` ->
+    parquet feed -> ParquetLoader (``_scrub_and_validate`` ->
     ``validate_bundle_values``) -> PipelineOrchestrator.run -> AggregatedResultBundle
 
 References:

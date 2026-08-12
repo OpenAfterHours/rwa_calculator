@@ -1054,7 +1054,7 @@ class TestBundleValidation:
 
     def test_invalid_categorical_values_produce_errors(self) -> None:
         """Loader validation should catch invalid categorical column values."""
-        from rwa_calc.engine.loader import _run_bundle_validation
+        from rwa_calc.engine.loader import _scrub_and_validate
 
         bundle = make_raw_bundle(
             facilities=pl.LazyFrame(),
@@ -1064,13 +1064,13 @@ class TestBundleValidation:
             lending_mappings=pl.LazyFrame(),
         )
 
-        errors = _run_bundle_validation(bundle)
+        _scrubbed, errors = _scrub_and_validate(bundle)
         assert len(errors) >= 1
         assert any("INVALID_TYPE" in e.message for e in errors)
 
-    def test_run_bundle_validation_returns_empty_for_valid_data(self) -> None:
-        """_run_bundle_validation returns empty list when all values are valid."""
-        from rwa_calc.engine.loader import _run_bundle_validation
+    def test_scrub_and_validate_returns_empty_for_valid_data(self) -> None:
+        """_scrub_and_validate returns no errors when all values are valid."""
+        from rwa_calc.engine.loader import _scrub_and_validate
 
         bundle = make_raw_bundle(
             facilities=pl.LazyFrame(),
@@ -1080,7 +1080,7 @@ class TestBundleValidation:
             lending_mappings=pl.LazyFrame(),
         )
 
-        errors = _run_bundle_validation(bundle)
+        _scrubbed, errors = _scrub_and_validate(bundle)
         assert errors == []
 
     def test_errors_field_default_is_empty_list(self) -> None:

@@ -106,6 +106,34 @@ wrong?* That axis is where our users are, and it is empty.
 
 *1–2 days. Highest return in the codebase — the code is written and tested.*
 
+> **Done, 2026-08-12** (commit `6216ba41`). Census: 10 of 14 unreachable → 0 of 9.
+> Three things resolved differently from how they are written below, each
+> deliberately:
+>
+> - **"Wire or delete" resolved as a deletion of FIVE validators, not the two
+>   named.** `validate_schema`, `validate_required_columns` and
+>   `validate_schema_to_errors` went too. `RawDataBundle.__post_init__` raises
+>   via `require_brand` on any unsealed frame, and `conform_lenient`
+>   (`contracts/edges.py`) injects missing required columns as typed nulls
+>   (DQ001), casts every mismatched dtype with `strict=False` and strips
+>   extras — so a schema-shape check downstream of that seal is *structurally
+>   incapable of firing*. They were unfirable, not merely unwired. `DQ003`
+>   (`ERROR_TYPE_MISMATCH`) is now a reserved code with no producer.
+> - **The gate was wired at the pipeline entry as well as the loader.**
+>   `validate_bundle_values` was reachable only from `engine/loader.py`, so the
+>   in-memory `run_with_data` entry had no input gate at all. The loader path
+>   de-duplicates on an exact set difference over the frozen error dataclass.
+> - **PD's domain is `[0, 1]`, closed at zero — not the `(0, 1]` written under
+>   Phase 1 below.** CRR Art. 160(1) does not reach central governments or
+>   central banks and the CRR pack carries `pd_floors["sovereign"] = 0`, so a
+>   half-open domain would reject every sovereign IRB exposure priced at zero
+>   and generate false errors on valid customer data.
+>
+> The predicted fixture churn **did not materialise**: a scan of all 504
+> `tests/fixtures/**/*.parquet` for out-of-domain PD/LGD/CCF and negative
+> amounts flagged zero file-columns, so the ERROR-severity gate carries no
+> latent fixture debt. Escape-log entry: 2026-08-12, class `gate-not-run`.
+
 - Wire the four numeric-range validators into `validate_bundle_values`.
 - Wire `validate_aggregated_bundle` at the pipeline exit, so output bounds are checked on
   every run.

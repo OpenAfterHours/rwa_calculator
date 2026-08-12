@@ -287,10 +287,11 @@ Error codes are prefixed by domain and numbered sequentially:
 |------|----------|--------|-------------|
 | `DQ001` | `ERROR_MISSING_FIELD` | Data Quality | Required field is missing or null |
 | `DQ002` | `ERROR_INVALID_VALUE` | Data Quality | Invalid value for a field |
-| `DQ003` | `ERROR_TYPE_MISMATCH` | Data Quality | Column type does not match schema |
+| `DQ003` | `ERROR_TYPE_MISMATCH` | Data Quality | **Reserved — no producer.** Its sole emitter was `validate_schema_to_errors`, deleted when the loader edge seal made a downstream schema-shape check unfirable: `conform_lenient` casts every declared column to its declared dtype (`strict=False`), so a mismatch cannot reach a consumer. Kept reserved rather than recycled so old audit records stay readable |
 | `DQ004` | `ERROR_DUPLICATE_KEY` | Data Quality | Duplicate key in reference data |
 | `DQ005` | `ERROR_ORPHAN_REFERENCE` | Data Quality | Foreign key reference has no match |
 | `DQ006` | `ERROR_INVALID_COLUMN_VALUE` | Data Quality | Column value not in allowed set |
+| `DQ012` | `ERROR_NEGATIVE_AMOUNT` | Data Quality | Amount column negative where a negative cannot be a netting convention. Distinct from `DQ010`, which warns on a negative that *is* legitimately a netting position |
 | `HIE001` | `ERROR_CIRCULAR_HIERARCHY` | Hierarchy | Circular reference in hierarchy |
 | `HIE002` | `ERROR_MISSING_PARENT` | Hierarchy | Parent counterparty not found |
 | `HIE003` | `ERROR_HIERARCHY_DEPTH` | Hierarchy | Hierarchy exceeds maximum depth |
@@ -304,12 +305,13 @@ Error codes are prefixed by domain and numbered sequentially:
 | `CRM003` | `ERROR_CURRENCY_MISMATCH` | CRM | Collateral currency ≠ exposure currency |
 | `CRM004` | `ERROR_COLLATERAL_OVERALLOCATION` | CRM | Collateral allocated exceeds available amount |
 | `CRM005` | `ERROR_INVALID_GUARANTEE` | CRM | Guarantee does not meet eligibility criteria |
-| `IRB001` | `ERROR_PD_OUT_OF_RANGE` | IRB | PD value outside valid range (0, 1] |
-| `IRB002` | `ERROR_LGD_OUT_OF_RANGE` | IRB | LGD value outside valid range [0, 1] |
+| `IRB001` | `ERROR_PD_OUT_OF_RANGE` | IRB | PD value outside valid range **[0, 1]**. The lower bound is **closed**: CRR Art. 160(1) does not reach central governments or central banks, and the CRR pack carries `pd_floors["sovereign"] = 0`, so PD = 0 is admissible sovereign input and a half-open `(0, 1]` domain would reject every sovereign IRB exposure |
+| `IRB002` | `ERROR_LGD_OUT_OF_RANGE` | IRB | LGD value outside valid range **[0, 1.25]**. 1.0 is not a hard ceiling — own-estimate downturn LGD can exceed 100% where workout costs exceed the exposure |
 | `IRB003` | `ERROR_MATURITY_INVALID` | IRB | Effective maturity outside [1, 5] range |
 | `IRB004` | `ERROR_MISSING_PD` | IRB | No PD value available for IRB exposure |
 | `IRB005` | `ERROR_MISSING_LGD` | IRB | No LGD value available for A-IRB exposure |
 | `IRB006` | `ERROR_MISSING_EXPECTED_LOSS` | IRB | Expected-loss value missing on an IRB exposure where EL is required |
+| `IRB008` | `ERROR_CCF_OUT_OF_RANGE` | IRB | Own-estimate CCF outside `[0, 1.5]`. Retail A-IRB additional drawdown can exceed 100%, so 1.0 is not the ceiling; null is valid (the field is optional) |
 | `SA001` | `ERROR_INVALID_CQS` | SA | CQS value not in valid range |
 | `SA002` | `ERROR_MISSING_RISK_WEIGHT` | SA | Cannot determine risk weight |
 | `SA003` | `ERROR_INVALID_LTV` | SA | LTV ratio invalid for property class |

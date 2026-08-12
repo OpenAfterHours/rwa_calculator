@@ -187,6 +187,50 @@ def test_the_reachability_analysis_has_one_implementation() -> None:
     )
 
 
+def test_the_pinned_guard_surface_is_populated_and_current() -> None:
+    """The anti-defusal pin must not itself be defusable.
+
+    ``CONTRACTS_GUARD_SURFACE`` is what stops check 20 being satisfied by
+    *removing* the guard rather than wiring it. Without this test the pin is a
+    plain module constant: emptying it to ``frozenset()`` and privatising a
+    guard in the same edit leaves ``arch_check`` reporting "all checks passed",
+    so the limb the escape log and the changelog both call load-bearing would
+    be stronger in prose than in code. That is the shape of the four
+    back-compat shells that silently disarmed the ``module.__file__``
+    regression guard — the precedent the pin's own comment cites as its
+    motivation.
+
+    Two properties, and deliberately not a third. The pin must be **non-empty**
+    and every pinned name must **still be a measured public guard**. It is a
+    FLOOR, not a census: a newly added guard needs no entry, so this does not
+    assert the converse and adding a guard stays a one-line change.
+    """
+    arch_check = _load_arch_check()
+    pinned = arch_check.CONTRACTS_GUARD_SURFACE
+    assert pinned, (
+        "CONTRACTS_GUARD_SURFACE is empty. It is the limb that stops check 20 being "
+        "satisfied by deleting or privatising the guard it measures; emptied, the "
+        "check passes on a tree with no guards left at all. Repin the current "
+        "surface, or — if the population genuinely moved — say so in the same commit."
+    )
+
+    measured = {
+        f"{module.name}::{name}"
+        for module, (functions, _entry, _reachable) in arch_check.measure_guard_reachability(
+            SRC_ROOT
+        ).items()
+        for name in functions
+        if arch_check.is_measured_guard(module, name)
+    }
+    stale = sorted(pinned - measured)
+    assert not stale, (
+        "CONTRACTS_GUARD_SURFACE pins names that are no longer public module-level "
+        "guards in contracts/. check_guard_reachability reports these as violations; "
+        "this test names them here so the pin cannot be quietly drained instead:\n"
+        + "\n".join(f"  {name}" for name in stale)
+    )
+
+
 def test_every_contracts_guard_is_reachable_from_production() -> None:
     """Check 20 itself: no guard in contracts/ is dead code shaped like a guard."""
     arch_check = _load_arch_check()

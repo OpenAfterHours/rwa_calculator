@@ -509,9 +509,14 @@ def test_an_sa_equity_leg_reaches_a_c0700_sheet(templates, ledgers) -> None:
     Arrange: the CRR ledger and the generated C 07.00 sheets.
     Act: find the legs whose applied approach is ``equity`` with non-zero RWEA,
     then look for a C 07.00 sheet keyed on their reporting class.
-    Assert: one exists. Scoped to CRR because under Basel 3.1 the same leg's
-    ``rwa_final`` is null (the defect the next test records), which would conflate
-    the two findings.
+    Assert: one exists. Scoped to CRR to keep this finding — that no C 07.00
+    sheet is emitted for the equity class — separate from the regime-divergent
+    weighting of the same leg (CRR Art. 133(2) 100% vs PS1/26 Art. 133(3) 250%).
+    The scoping is deliberate, not a workaround: the leg's Basel 3.1
+    ``rwa_final`` was null until P1.317, and the CRR-only filter was originally
+    chosen to avoid conflating that defect with this one. P1.317 is fixed and
+    both regimes now carry the RWEA, so widening this to Basel 3.1 is available
+    and would add C 07.00 coverage for the B31 equity leg.
     """
     equity = ledgers["CRR"].filter(
         (pl.col("reporting_approach") == "equity") & (pl.col("rwa_final").fill_null(0.0) != 0.0)
@@ -530,23 +535,6 @@ def test_an_sa_equity_leg_reaches_a_c0700_sheet(templates, ledgers) -> None:
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "A Basel 3.1 equity leg is CALCULATED and then dropped. Measured on the portfolio "
-        "below: LN011, EAD 1,500,000, reporting_rw 2.5 (the PS1/26 Art. 133 250% equity risk "
-        "weight), sa_rwa 3,750,000 — and rwa_final NULL. The same leg under CRR carries "
-        "rwa_final 1,500,000 at 100%. Because rwa_final is the carrier every credit-risk "
-        "template and OV1 row sums, 3,750,000 of RWEA and 300,000 of own funds requirement "
-        "(CRR Art. 92(1)) leave the Basel 3.1 submission with no error, no null cell and no "
-        "failing published rule — the row simply is not there. The engine is believed wrong: "
-        "a leg whose risk weight the engine has resolved must reach rwa_final, and null is "
-        "not a defensible response to an input shape it otherwise processed. Caveat recorded "
-        "honestly: the canonical input for an equity holding is the dedicated "
-        "equity_exposures table, and this leg reaches the equity approach from the loans "
-        "table, so the population may be narrower than every equity holding."
-    ),
-)
 def test_every_equity_leg_carries_its_rwea_to_rwa_final(ledgers) -> None:
     """An equity leg the engine risk-weighted reaches the carrier the templates sum.
 

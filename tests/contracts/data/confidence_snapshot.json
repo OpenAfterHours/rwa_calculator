@@ -182,6 +182,7 @@
         "analysis/transition.py",
         "contracts/validation.py",
         "data/schemas.py",
+        "engine/branch_split.py",
         "engine/ccr/default_fund.py",
         "engine/ccr/failed_trades.py",
         "engine/orchestrator.py",
@@ -195,6 +196,7 @@
         "ui/views/comparison.py"
       ],
       "test_files": [
+        "tests/acceptance/basel31/test_p1_317_b31_loans_table_equity_rwa_final.py",
         "tests/acceptance/ccr/test_ccr_b2_b4_default_fund.py",
         "tests/acceptance/ccr/test_ccr_c1_c3_failed_trades.py",
         "tests/acceptance/ccr/test_ccr_p852_reporting_rollups.py",
@@ -1028,6 +1030,7 @@
         "tests/acceptance/basel31/test_p1_107_fcsm_b31_corporate_cqs3.py",
         "tests/acceptance/basel31/test_p1_10_art_213_ucp_eligibility.py",
         "tests/acceptance/basel31/test_p1_110_art_122_corporate_cqs3_guarantee_substitution.py",
+        "tests/acceptance/basel31/test_p1_317_b31_loans_table_equity_rwa_final.py",
         "tests/acceptance/ccr/test_ccr_e1_e5_default_risk_routing.py",
         "tests/acceptance/crr/test_art_222_fcsm_unified_pipeline.py",
         "tests/acceptance/crr/test_p1_101_art_226_1_non_daily_revaluation.py",
@@ -1514,8 +1517,10 @@
         "rulebook/packs/crr.py"
       ],
       "test_files": [
+        "tests/acceptance/basel31/test_p1_317_b31_loans_table_equity_rwa_final.py",
         "tests/acceptance/basel31/test_scenario_b31_l_equity.py",
         "tests/acceptance/crr/test_scenario_crr_j_equity.py",
+        "tests/conformance/test_cell_rederivation.py",
         "tests/integration/test_branch_error_accumulation.py",
         "tests/oracle/derivations/sa_b31.py",
         "tests/oracle/derivations/sa_crr.py",
@@ -1975,6 +1980,7 @@
         "contracts/errors.py",
         "contracts/validation.py",
         "data/schemas.py",
+        "engine/branch_split.py",
         "engine/crm/guarantees.py",
         "engine/fx_rate_sync.py",
         "engine/irb/__init__.py",
@@ -5098,6 +5104,7 @@
         "reporting/pillar3/generator.py"
       ],
       "test_files": [
+        "tests/fixtures/ccr/p1342_qccp_fx_floor_builder.py",
         "tests/unit/reporting/corep/test_c07_ccr.py",
         "tests/unit/test_pillar3_ccr.py"
       ],
@@ -5157,6 +5164,7 @@
         "tests/acceptance/ccr/test_ccr_b1_b5_ccp.py",
         "tests/acceptance/ccr/test_ccr_ccp_orchestrator_pin.py",
         "tests/acceptance/ccr/test_ccr_p852_reporting_rollups.py",
+        "tests/fixtures/ccr/p1342_qccp_fx_floor_builder.py",
         "tests/fixtures/ccr/p839_ccp_builder.py",
         "tests/fixtures/ccr/p842_nonqccp_b5_builder.py",
         "tests/fixtures/ccr/qccp_builder.py",
@@ -5677,6 +5685,7 @@
         "engine/aggregator/_schemas.py",
         "engine/aggregator/_summaries.py",
         "engine/aggregator/aggregator.py",
+        "engine/branch_split.py",
         "engine/ccr/failed_trades.py",
         "engine/stages/calc.py",
         "reporting/corep/__init__.py",
@@ -5858,6 +5867,7 @@
         "tests/acceptance/basel31/test_p1_93_art_222_4_fcsm_sft_carveout.py",
         "tests/acceptance/basel31/test_p2_47_art137_meip_b31.py",
         "tests/acceptance/crr/test_p1_222_rgla_uk_gbp_flat_20.py",
+        "tests/fixtures/ccr/p1342_qccp_fx_floor_builder.py",
         "tests/fixtures/p1_10/p1_10.py",
         "tests/fixtures/p1_222/p1_222.py",
         "tests/fixtures/p1_229/p1_229.py",
@@ -6108,6 +6118,7 @@
         "tests/acceptance/basel31/test_p1_122b_b31_unrated_scra_b_institution_guarantor_irb_sa_fallback.py",
         "tests/acceptance/basel31/test_p1_128_art_121_4_scra_short_term_trade_finance.py",
         "tests/acceptance/basel31/test_p1_95_b31_unrated_inst_guarantor_scra.py",
+        "tests/fixtures/ccr/p1342_qccp_fx_floor_builder.py",
         "tests/fixtures/p1_122b/p1_122b.py",
         "tests/fixtures/p1_128/p1_128.py",
         "tests/fixtures/p1_95/p1_95.py",
@@ -6167,6 +6178,7 @@
         "tests/acceptance/basel31/test_p1_270_art_194_own_issue_collateral.py",
         "tests/acceptance/basel31/test_p1_271_art_198_non_main_index_equity.py",
         "tests/acceptance/basel31/test_p1_274_art_218_credit_linked_note.py",
+        "tests/acceptance/basel31/test_p1_317_b31_loans_table_equity_rwa_final.py",
         "tests/acceptance/basel31/test_p1_94f_currency_mismatch_scope_residential_re.py",
         "tests/acceptance/basel31/test_p1_95_b31_unrated_inst_guarantor_scra.py",
         "tests/acceptance/basel31/test_p2_18_art_226_1_b31_secured_lending_fx.py",
@@ -6870,6 +6882,7 @@
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_182_b31_l24_pe_unlisted_under_5y.py",
+        "tests/acceptance/basel31/test_p1_317_b31_loans_table_equity_rwa_final.py",
         "tests/acceptance/basel31/test_p2_15_equity_transitional_optout.py",
         "tests/acceptance/basel31/test_p2_19_unlisted_young_equity_higher_risk.py",
         "tests/acceptance/basel31/test_scenario_b31_l_equity.py",

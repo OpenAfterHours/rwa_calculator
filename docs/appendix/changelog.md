@@ -319,6 +319,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   file — the previous pass removed one argument and left another, which is what
   per-instance fixing looks like from the outside.
 
+### Fixed
+- **P1.317 — a Basel 3.1 equity leg was risk-weighted and then dropped, taking
+  its RWEA out of every template.** An equity-class exposure booked on the
+  **loans** (or contingents) table resolved a `risk_weight` of 2.50 — the
+  PS1/26 Art. 133(3) 250% equity weight — and an `sa_rwa` of EAD × 2.50, and
+  then carried `rwa_final` **NULL**. Because `rwa_final` is the carrier every
+  COREP / Pillar 3 credit-risk row and every OV1 line sums, the exposure left
+  the submission with no error, no null cell and no failing published rule: the
+  row was simply not there. On the measured portfolio that was 3,750,000 of
+  RWEA and 300,000 of own-funds requirement (CRR Art. 92(1)).
+
+  Cause was a mismatch between two row selections that had to agree and did
+  not. `engine/stages/calc.py` splits the portfolio onto the SA branch with
+  `~is_irb & ~is_slotting`, which admits `equity` alongside `standardised`; but
+  `engine/sa/calculator.py::calculate_unified` gated its `rwa_pre_factor`
+  product on the narrower `approach == 'standardised'`, so equity rows reached
+  the branch, were weighted, and then fell through its `.otherwise(...)` arm.
+  Under the Basel 3.1 output-floor path that branch performs no arithmetic of
+  its own — it only aliases `rwa_post_factor -> rwa_final` — so a row excluded
+  from the product had nowhere to put a weight the engine had already resolved.
+  The gate now tests SA-**branch** membership rather than the SA label.
+
+  CRR was never affected, and the asymmetry is itself informative: the CRR pack
+  disables `output_floor`, so CRR takes `calculate_branch`, which computes RWA
+  unconditionally. A leg identical in every other respect published correctly
+  under one regime and vanished under the other.
+
+  Direction is RWA-**increasing**. Equity is not floor-eligible, so U-TREA and
+  S-TREA are unchanged and the output floor cannot absorb the increase.
+  Population is narrower than "every equity holding": a leg arriving through
+  the dedicated `equity_exposures` table was already correct in both regimes.
+  Pinned by `tests/acceptance/basel31/test_p1_317_b31_loans_table_equity_rwa_final.py`
+  (8 tests — the B31 value, a whole-frame no-null-`rwa_final` sweep, an
+  approach-placement guard so the row cannot be "fixed" by reclassifying it out
+  of equity, and CRR controls). The `xfail(strict=True)` on
+  `tests/conformance/test_cell_rederivation.py::test_every_equity_leg_carries_its_rwea_to_rwa_final`
+  is discharged and removed in the same change.
+
 ### Changed
 - Both escapes are written up in `docs/development/escape-log.md`, each with an
   escape class, a named gate change and a red observed against the genuine

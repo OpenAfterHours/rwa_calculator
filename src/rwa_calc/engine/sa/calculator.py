@@ -41,6 +41,7 @@ from rwa_calc.contracts.errors import (
     ErrorSeverity,
 )
 from rwa_calc.domain.enums import ApproachType
+from rwa_calc.engine.branch_split import is_sa_branch_approach
 from rwa_calc.engine.sa.factors_output import apply_supporting_factors, calculate_rwa
 from rwa_calc.engine.sa.risk_weights import apply_risk_weights
 from rwa_calc.engine.sa.rw_adjustments import (
@@ -88,8 +89,9 @@ class SACalculator:
         Apply SA risk weights to SA rows on a unified frame.
 
         Operates on the full unified frame (SA + IRB + slotting rows together).
-        Only modifies the RWA column for rows where approach == 'standardised';
-        the risk-weight pipeline itself runs unconditionally so that all rows
+        Only modifies the RWA column for the rows ``engine/stages/calc.py``
+        routes onto the SA branch — approach 'standardised' or 'equity'; the
+        risk-weight pipeline itself runs unconditionally so that all rows
         carry an SA-equivalent RW used by the IRB output floor.
 
         Args:
@@ -103,7 +105,17 @@ class SACalculator:
         """
         resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
 
-        is_sa = pl.col("approach") == ApproachType.SA.value
+        # Gate on SA-bound membership, not on the SA label alone: equity-class
+        # rows from the main exposure tables are weighted from the SA tables
+        # too, and ``engine/stages/calc.py`` routes them onto the SA branch.
+        # Under the output-floor path that branch does no arithmetic of its
+        # own — it only aliases ``rwa_post_factor -> rwa_final`` — so a row
+        # skipped by the product below reaches the submission with a null
+        # RWEA (P1.317). The predicate comes from ``engine/branch_split.py``,
+        # the single home shared with the ``filter`` in ``stages/calc.py``, so
+        # the population this computes for and the population routed here
+        # cannot disagree by construction.
+        is_sa_branch = is_sa_branch_approach()
 
         if errors is not None:
             self._warn_equity_in_main_table(exposures, errors)
@@ -134,11 +146,11 @@ class SACalculator:
                 (pl.col(ead_col) * pl.col("risk_weight")).alias("sa_rwa"),
             )
 
-        # Pre-factor RWA — SA rows only. Non-SA rows keep their existing
-        # rwa_pre_factor (or null if absent).
+        # Pre-factor RWA — SA-branch rows only. IRB / slotting rows keep
+        # their existing rwa_pre_factor (or null if absent).
         exposures = exposures.with_columns(
             [
-                pl.when(is_sa)
+                pl.when(is_sa_branch)
                 .then(pl.col(ead_col) * pl.col("risk_weight"))
                 .otherwise(
                     pl.col("rwa_pre_factor")

@@ -189,11 +189,11 @@ Orchestration lives in slash commands, not in agents. Each `loop.sh` mode maps t
 
 | `loop.sh` mode | Prompt file | Default command | Strict-serial alternative |
 |---|---|---|---|
-| `loop.sh` (build) | `PROMPT_build.md` | `/next-items 3` | `/next-scenario` |
-| `loop.sh ccr` | `PROMPT_ccr.md` | `/next-items 3 ccr` | `/implement-scenario <P8.x>` |
-| `loop.sh plan` | `PROMPT_plan.md` | `/refresh-plan` | — |
-| `loop.sh docs_build` | `PROMPT_docs_build.md` | `/next-docs 3` | `/next-doc` |
-| `loop.sh docs_plan` | `PROMPT_docs_plan.md` | `/refresh-docs-plan` (audits Tier 5 of the single plan) | — |
+| `loop.sh` (build) | `prompts/build.md` | `/next-items 3` | `/next-scenario` |
+| `loop.sh ccr` | `prompts/ccr.md` | `/next-items 3 ccr` | `/implement-scenario <P8.x>` |
+| `loop.sh plan` | `prompts/plan.md` | `/refresh-plan` | — |
+| `loop.sh docs_build` | `prompts/docs_build.md` | `/next-docs 3` | `/next-doc` |
+| `loop.sh docs_plan` | `prompts/docs_plan.md` | `/refresh-docs-plan` (audits Tier 5 of the single plan) | — |
 
 The batch commands pick N non-conflicting items and run the validation gate (or `uv run zensical build`) **once at the end** — not per agent. `/next-items` provisions one git worktree per item on `batch/<batch-id>/<P-code>` and drives the **five-wave** pipeline (`premise-auditor` → `scenario-architect` → `fixture-builder` → `test-writer` → `engine-implementer`) as an event-driven supervisor: agents are dispatched in the background (`run_in_background: true`), a `reviewer` gates every wave (`pass | revise | drop`) with a `skeptic` alongside it on the design and implementation waves, one revision retry per wave per item is allowed, and the orchestrator persists batch state to `.claude/state/next-items-<batch-id>.json` so it can survive context compactions and operator interjections across multiple turns.
 

@@ -8,41 +8,44 @@
 #   ./loop.sh ccr          # CCR-only build (Tier 8), 2 iterations (default)
 #   ./loop.sh ccr 10       # CCR-only build, max 10 iterations
 
+# Prompt files live in prompts/ — one per loop mode
+PROMPT_DIR="$(dirname "$0")/prompts"
+
 # Parse arguments
 if [[ "$1" = "plan" ]]; then
     # Plan mode
     MODE="plan"
-    PROMPT_FILE="PROMPT_plan.md"
+    PROMPT_FILE="$PROMPT_DIR/plan.md"
     MAX_ITERATIONS=${2:-2}
 elif [[ "$1" = "docs_plan" ]]; then
     # Doc Plan mode
     MODE="plan"
-    PROMPT_FILE="PROMPT_docs_plan.md"
+    PROMPT_FILE="$PROMPT_DIR/docs_plan.md"
     MAX_ITERATIONS=${2:-2}
 elif [[ "$1" = "docs_build" ]]; then
     # Doc build mode
     MODE="build"
-    PROMPT_FILE="PROMPT_docs_build.md"
+    PROMPT_FILE="$PROMPT_DIR/docs_build.md"
     MAX_ITERATIONS=${2:-2}
 elif [[ "$1" = "ccr" ]]; then
     # CCR build mode — drains Tier 8 (Counterparty Credit Risk) only
     MODE="build"
-    PROMPT_FILE="PROMPT_ccr.md"
+    PROMPT_FILE="$PROMPT_DIR/ccr.md"
     MAX_ITERATIONS=${2:-2}
 elif [[ "$1" = "build_next" ]]; then
     # build mode
     MODE="build"
-    PROMPT_FILE="PROMPT_build_next"
+    PROMPT_FILE="$PROMPT_DIR/build_next.md"
     MAX_ITERATIONS=${2:-2}
 elif [[ "$1" =~ ^[0-9]+$ ]]; then
     # Build mode with max iterations
     MODE="build"
-    PROMPT_FILE="PROMPT_build.md"
+    PROMPT_FILE="$PROMPT_DIR/build.md"
     MAX_ITERATIONS=$1
 else
     # Build mode, default 2 iterations
     MODE="build"
-    PROMPT_FILE="PROMPT_build.md"
+    PROMPT_FILE="$PROMPT_DIR/build.md"
     MAX_ITERATIONS=2
 fi
 

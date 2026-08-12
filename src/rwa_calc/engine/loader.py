@@ -54,6 +54,7 @@ from rwa_calc.contracts.errors import (
     CalculationError,
     missing_required_column_error,
     optional_file_load_error,
+    unreadable_input_dtype_error,
 )
 from rwa_calc.contracts.protocols import LoaderProtocol
 from rwa_calc.data.column_spec import (
@@ -204,9 +205,14 @@ def _seal_table(
 
     Lenient by design — the loader is the data-quality boundary: missing
     required columns become typed nulls plus one DQ001 error each, dtype
-    mismatches are cast with invalid values nulled, undeclared columns
-    are stripped, Boolean defaults filled, and the frame is branded for
+    mismatches are cast with invalid values nulled plus one DQ014 error
+    per column whose cast can destroy a value, undeclared columns are
+    stripped, Boolean defaults filled, and the frame is branded for
     bundle ``__post_init__`` validation.
+
+    The two codes report DIFFERENT findings and are deliberately not
+    merged: DQ001 says a column was ABSENT (extend the feed), DQ014 says
+    a present column may be UNREADABLE (re-type and re-send it).
     """
     edge = RAW_TABLE_EDGES[field_name]
     if not enforce_schemas:
@@ -214,9 +220,18 @@ def _seal_table(
         # without conforming so bundle construction still works. The brand
         # on this path is attested, not verified.
         return brand(lf, edge.name)
-    sealed, missing = seal_lenient(lf, edge)
+    sealed, missing, lossy = seal_lenient(lf, edge)
     errors.extend(
         missing_required_column_error(table=field_name, column=column) for column in missing
+    )
+    errors.extend(
+        unreadable_input_dtype_error(
+            table=field_name,
+            column=finding.column,
+            supplied=str(finding.supplied),
+            declared=str(finding.declared),
+        )
+        for finding in lossy
     )
     return sealed
 
@@ -616,13 +631,24 @@ def _seal_sft_table(
     fix at the heart of the SFT/FCCM separation: SFT inputs get the same
     brand + undeclared-column-strip + lenient missing-column accounting as
     the 18 traditional tables — NOT the ``enforce_schema`` bypass the CCR
-    leaf frames use.
+    leaf frames use. Both seal findings are accumulated exactly as
+    ``_seal_table`` accumulates them (DQ001 absent column / DQ014
+    unreadable dtype).
     """
     if not enforce_schemas:
         return brand(lf, edge.name)
-    sealed, missing = seal_lenient(lf, edge)
+    sealed, missing, lossy = seal_lenient(lf, edge)
     errors.extend(
         missing_required_column_error(table=field_name, column=column) for column in missing
+    )
+    errors.extend(
+        unreadable_input_dtype_error(
+            table=field_name,
+            column=finding.column,
+            supplied=str(finding.supplied),
+            declared=str(finding.declared),
+        )
+        for finding in lossy
     )
     return sealed
 

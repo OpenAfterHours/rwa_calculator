@@ -111,8 +111,8 @@ def _sft_bundle() -> RawSFTBundle:
             "netting_set_id": ["NS1", "NS3"],
         }
     )
-    sealed_trades, _ = seal_lenient(trades.lazy(), SFT_TABLE_EDGES["sft_trades"])
-    sealed_collateral, _ = seal_lenient(collateral.lazy(), SFT_TABLE_EDGES["sft_collateral"])
+    sealed_trades, *_ = seal_lenient(trades.lazy(), SFT_TABLE_EDGES["sft_trades"])
+    sealed_collateral, *_ = seal_lenient(collateral.lazy(), SFT_TABLE_EDGES["sft_collateral"])
     return RawSFTBundle(
         trades=SftTradeBundle(sft_trades=sealed_trades),
         collateral=SftCollateralBundle(sft_collateral=sealed_collateral),

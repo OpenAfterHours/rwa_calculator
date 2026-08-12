@@ -190,7 +190,7 @@ CCR_SFT_IRB_A0_6_EXPECTED_M: float = 0.8  # 162(2)(f) floor inert
 
 def _seal_sft_trades(df: pl.DataFrame) -> pl.LazyFrame:
     """Seal an SFT trade frame exactly as the loader does (leniently)."""
-    sealed, _missing = seal_lenient(df.lazy(), SFT_TABLE_EDGES["sft_trades"])
+    sealed, _missing, _lossy = seal_lenient(df.lazy(), SFT_TABLE_EDGES["sft_trades"])
     return sealed
 
 

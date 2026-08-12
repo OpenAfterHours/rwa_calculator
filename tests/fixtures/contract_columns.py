@@ -141,7 +141,7 @@ def _pad_calc_branch(frame: pl.LazyFrame | pl.DataFrame, branch: str) -> pl.Lazy
     ``equity_bundle=None`` need the column to come from the branch inputs.
     """
     lf = frame.lazy() if isinstance(frame, pl.DataFrame) else frame
-    sealed, _missing = seal_lenient(lf, CALC_BRANCH_EDGES[branch])
+    sealed, _missing, _lossy = seal_lenient(lf, CALC_BRANCH_EDGES[branch])
     return sealed.with_columns(pl.lit(None, dtype=pl.String).alias("equity_type"))
 
 

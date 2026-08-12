@@ -30,6 +30,7 @@ import polars as pl
 
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.edges import RAW_TABLE_EDGES, seal_lenient
+from rwa_calc.contracts.errors import CalculationError, unreadable_input_dtype_error
 
 _REQUIRED_TABLES = ("facilities", "loans", "counterparties", "facility_mappings")
 
@@ -37,15 +38,35 @@ _REQUIRED_TABLES = ("facilities", "loans", "counterparties", "facility_mappings"
 def seal_raw_table(
     frame: pl.LazyFrame | pl.DataFrame,
     field_name: str,
+    errors: list[CalculationError] | None = None,
 ) -> pl.LazyFrame:
     """Seal one raw-table frame exactly as the loader does (leniently).
 
     Missing declared columns become typed nulls / defaults rather than
     errors — tests intentionally under-specify tables, mirroring sparse
-    production files.
+    production files, so DQ001 is deliberately NOT raised here.
+
+    A column supplied in a dtype the cast can destroy is a different
+    matter and IS reported into ``errors`` when a list is passed, exactly
+    as ``engine/loader.py::_seal_table`` reports it (DQ014). Under-
+    specifying a table is a test convenience; handing the seal a String
+    where a Float64 is declared is the production pathology — a value
+    that could not be read becoming an indistinguishable null — and a
+    bundle builder that swallowed it would make every test built on it
+    blind to the defect (``tests/robustness/test_cast_failures.py``).
     """
     lf = frame.lazy() if isinstance(frame, pl.DataFrame) else frame
-    sealed, _missing = seal_lenient(lf, RAW_TABLE_EDGES[field_name])
+    sealed, _missing, lossy = seal_lenient(lf, RAW_TABLE_EDGES[field_name])
+    if errors is not None:
+        errors.extend(
+            unreadable_input_dtype_error(
+                table=field_name,
+                column=finding.column,
+                supplied=str(finding.supplied),
+                declared=str(finding.declared),
+            )
+            for finding in lossy
+        )
     return sealed
 
 
@@ -60,8 +81,11 @@ def make_raw_bundle(
 
     Same keyword surface as ``RawDataBundle``; every frame field is sealed
     against its loader edge contract before construction, and required
-    tables left unspecified default to empty sealed frames. ``ccr`` and
-    ``errors`` pass through untouched.
+    tables left unspecified default to empty sealed frames. ``ccr`` passes
+    through untouched; any ``errors`` passed in are PRESERVED and the
+    seal's own DQ014 findings are appended to them, so a bundle built here
+    carries the same load-boundary error list a production load would
+    (see :func:`seal_raw_table`).
     """
     frames: dict[str, pl.LazyFrame | pl.DataFrame | None] = {
         "facilities": facilities,
@@ -73,6 +97,8 @@ def make_raw_bundle(
         if field_name not in frames:
             frames[field_name] = kwargs.pop(field_name, None)
 
+    errors: list[CalculationError] = list(kwargs.pop("errors", []))
+
     sealed: dict[str, Any] = {}
     for field_name, frame in frames.items():
         if frame is None:
@@ -82,7 +108,7 @@ def make_raw_bundle(
                 else None
             )
         else:
-            sealed[field_name] = seal_raw_table(frame, field_name)
+            sealed[field_name] = seal_raw_table(frame, field_name, errors)
 
-    # kwargs now carries only the non-frame fields (ccr, errors).
-    return RawDataBundle(**sealed, **kwargs)
+    # kwargs now carries only the non-frame fields (ccr).
+    return RawDataBundle(**sealed, errors=errors, **kwargs)

@@ -108,13 +108,13 @@ SFT_DL_A12_EXPOSURE_REFERENCE: str = f"ccr__{SFT_DL_A12_NETTING_SET_ID}"
 
 def _seal_sft_trades(df: pl.DataFrame) -> pl.LazyFrame:
     """Seal an SFT trade frame exactly as the loader does (leniently)."""
-    sealed, _missing = seal_lenient(df.lazy(), SFT_TABLE_EDGES["sft_trades"])
+    sealed, _missing, _lossy = seal_lenient(df.lazy(), SFT_TABLE_EDGES["sft_trades"])
     return sealed
 
 
 def _seal_sft_collateral(df: pl.DataFrame) -> pl.LazyFrame:
     """Seal an SFT collateral frame exactly as the loader does (leniently)."""
-    sealed, _missing = seal_lenient(df.lazy(), SFT_TABLE_EDGES["sft_collateral"])
+    sealed, _missing, _lossy = seal_lenient(df.lazy(), SFT_TABLE_EDGES["sft_collateral"])
     return sealed
 
 

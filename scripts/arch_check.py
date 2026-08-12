@@ -522,18 +522,29 @@ GUARD_REACHABILITY_ALLOWLIST: dict[str, str] = {}
 # anywhere under src/ or tests/, so this is a completed removal rather than a
 # half-migration. The estate is now shipping no declared-schema-drift check at
 # all; if that is to come back it comes back as a wired guard.
+# REMOVED 2026-08-12 (Phase 1 of the same proposal): ``validate_pd_range``,
+# ``validate_lgd_range``, ``validate_ccf_modelled`` and
+# ``validate_non_negative_amounts``. Unlike the five above these were REACHABLE
+# — Phase 0 wired them — so this is a supersession, not the removal of dead
+# code. Each was a one-column interval predicate with its bound baked into a
+# default argument; all four are now expressed as ``NumericDomain``
+# declarations on the columns themselves (``data/schemas.py``) and read
+# generically by ``validation.py::_validate_declared_domains``. Keeping them
+# alive as delegates of the generic reader would have re-created the
+# per-column hard-coding Phase 1 exists to remove, so they went rather than
+# becoming decoration. What replaced them is strictly wider: 75 declared
+# domains across 20 tables against the previous four columns, open/closed
+# bounds those default arguments could not express, and its own two-way
+# ratchet (``scripts/check_input_domains.py``) so the population cannot
+# quietly shrink.
 CONTRACTS_GUARD_SURFACE: frozenset[str] = frozenset(
     {
         "edges.py::require_brand",
         "validation.py::scrub_non_finite_values",
         "validation.py::validate_aggregated_bundle",
         "validation.py::validate_bundle_values",
-        "validation.py::validate_ccf_modelled",
         "validation.py::validate_collateral_links",
         "validation.py::validate_column_values",
-        "validation.py::validate_lgd_range",
-        "validation.py::validate_non_negative_amounts",
-        "validation.py::validate_pd_range",
     }
 )
 

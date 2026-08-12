@@ -50,6 +50,7 @@ from rwa_calc.contracts.edges import (
     EdgeColumn,
     EdgeContract,
     EdgeContractViolation,
+    LossyCast,
     edge_columns_from_specs,
     seal,
     sealed_edge_of,
@@ -65,6 +66,7 @@ from rwa_calc.contracts.errors import (
     ERROR_DUPLICATE_KEY,
     ERROR_HIERARCHY_DEPTH,
     ERROR_INELIGIBLE_COLLATERAL,
+    ERROR_INPUT_OUT_OF_DOMAIN,
     ERROR_INVALID_CONFIG,
     ERROR_INVALID_CQS,
     ERROR_INVALID_GUARANTEE,
@@ -85,6 +87,7 @@ from rwa_calc.contracts.errors import (
     ERROR_PD_OUT_OF_RANGE,
     ERROR_TYPE_MISMATCH,
     ERROR_UNKNOWN_EXPOSURE_CLASS,
+    ERROR_UNREADABLE_INPUT_DTYPE,
     CalculationError,
     business_rule_error,
     crm_warning,
@@ -114,10 +117,6 @@ from rwa_calc.contracts.protocols import (
 from rwa_calc.contracts.validation import (
     validate_aggregated_bundle,
     validate_bundle_values,
-    validate_ccf_modelled,
-    validate_lgd_range,
-    validate_non_negative_amounts,
-    validate_pd_range,
 )
 from rwa_calc.domain.enums import PermissionMode
 
@@ -145,6 +144,7 @@ __all__ = [
     "ERROR_DUPLICATE_KEY",
     "ERROR_HIERARCHY_DEPTH",
     "ERROR_INELIGIBLE_COLLATERAL",
+    "ERROR_INPUT_OUT_OF_DOMAIN",
     "ERROR_INVALID_CONFIG",
     "ERROR_INVALID_CQS",
     "ERROR_INVALID_GUARANTEE",
@@ -165,10 +165,12 @@ __all__ = [
     "ERROR_PD_OUT_OF_RANGE",
     "ERROR_TYPE_MISMATCH",
     "ERROR_UNKNOWN_EXPOSURE_CLASS",
+    "ERROR_UNREADABLE_INPUT_DTYPE",
     # Edge contracts (migration Phase 3)
     "EdgeColumn",
     "EdgeContract",
     "EdgeContractViolation",
+    "LossyCast",
     "edge_columns_from_specs",
     "seal",
     "sealed_edge_of",
@@ -207,8 +209,4 @@ __all__ = [
     # Validation
     "validate_aggregated_bundle",
     "validate_bundle_values",
-    "validate_ccf_modelled",
-    "validate_lgd_range",
-    "validate_non_negative_amounts",
-    "validate_pd_range",
 ]

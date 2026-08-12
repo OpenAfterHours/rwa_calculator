@@ -88,6 +88,11 @@ class CalculationError:
 # Data quality error codes
 ERROR_MISSING_FIELD = "DQ001"
 ERROR_INVALID_VALUE = "DQ002"
+# RESERVED — no producer. Its sole emitter (``validate_schema_to_errors``) was
+# deleted as unfirable: it ran DOWNSTREAM of the loader edge seal, where every
+# declared column has already been cast to its declared dtype. Kept reserved
+# rather than recycled so old audit records stay readable; the same finding
+# taken UPSTREAM of that cast, where it does fire, is DQ014.
 ERROR_TYPE_MISMATCH = "DQ003"
 ERROR_DUPLICATE_KEY = "DQ004"
 ERROR_ORPHAN_REFERENCE = "DQ005"
@@ -119,6 +124,25 @@ ERROR_NON_FINITE_RAW_INPUT = "DQ011"
 # exposure or capital relief out of nothing. Emitted by the input-domain gate
 # (contracts/validation.py::_validate_numeric_ranges).
 ERROR_NEGATIVE_AMOUNT = "DQ012"
+# Input value outside the domain declared for its column
+# (``data/schemas.py`` ``ColumnSpec.domain``). The GENERIC code emitted by the
+# declaration-driven input-domain gate for any column that does not pin an
+# older, more specific code — a CQS outside 1-6, an FX rate <= 0, an LTV below
+# zero, a risk-weight override above the 1250% cap. New declarations need no
+# new code: only columns whose code the estate already publishes are pinned
+# (contracts/validation.py::_DOMAIN_REPORTING).
+ERROR_INPUT_OUT_OF_DOMAIN = "DQ013"
+# Input column supplied in a dtype whose cast to the declared dtype can destroy
+# values — a String amount, a float into a declared integer band. The loader
+# seal casts non-strictly (``contracts/edges.py::conform_lenient``), so an
+# unparseable value becomes null, and the input-domain gate's rule is correctly
+# that null is never a domain violation: without this code a value that could
+# not be READ is indistinguishable from one never SUPPLIED and from a genuine
+# zero. Measured: a GBP 1m drawn_amount arriving as "1,000,000.00" published
+# rwa_final = 0.00 with an empty error list. This is the UPSTREAM form of the
+# check DQ003 lost — see DQ003 above for why it is a new code and not a revival.
+# Emitted by the loader edge seal (``engine/loader.py::_seal_table``).
+ERROR_UNREADABLE_INPUT_DTYPE = "DQ014"
 
 # Hierarchy error codes
 ERROR_CIRCULAR_HIERARCHY = "HIE001"
@@ -669,6 +693,44 @@ def missing_required_column_error(*, table: str, column: str) -> CalculationErro
         ),
         field_name=column,
         actual_value=table,
+    )
+
+
+def unreadable_input_dtype_error(
+    *, table: str, column: str, supplied: str, declared: str
+) -> CalculationError:
+    """Create a DQ014 error for an input column supplied in a destructive dtype.
+
+    Emitted by the loader's edge seal (``engine/loader.py::_seal_table``),
+    one per (table, column), from the ``LossyCast`` findings that
+    ``EdgeContract.conform_lenient`` returns. The seal casts a mismatched
+    column with ``strict=False``, so any value Polars cannot convert
+    becomes null — and null is legitimately "not supplied" everywhere
+    downstream. A GBP 1,000,000 ``drawn_amount`` arriving as the string
+    ``"1,000,000.00"`` therefore published ``ead_final = rwa_final =
+    0.00``, a 100% understatement of that exposure's capital, on a row
+    that looks populated and with nothing in the error list.
+
+    ERROR rather than WARNING deliberately: the measured consequence is a
+    silent understatement of regulatory capital, and the remedy is a
+    re-typed feed, not a judgement call. The finding is the dtype drift
+    itself — no value is inspected, because the seal runs on every table
+    of every run and must not materialise anything — so the message says
+    what CAN have happened, not how many values did.
+    """
+    return CalculationError(
+        code=ERROR_UNREADABLE_INPUT_DTYPE,
+        severity=ErrorSeverity.ERROR,
+        category=ErrorCategory.SCHEMA_VALIDATION,
+        message=(
+            f"Input column '{table}.{column}' arrived as {supplied} where {declared} "
+            f"is declared; the loader seal casts it non-strictly, so any value that "
+            f"could not be converted became null — indistinguishable from a value "
+            f"that was never supplied (a nulled amount publishes as 0.00 capital, "
+            f"not as an error). Re-send '{column}' typed as {declared}."
+        ),
+        field_name=column,
+        actual_value=supplied,
     )
 
 

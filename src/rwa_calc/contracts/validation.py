@@ -10,10 +10,12 @@ Pipeline position:
     pipeline exit.
 
 Key responsibilities:
+- Declared input domains — ``_validate_declared_domains`` reads every
+  ``ColumnSpec.domain`` in ``data/schemas.py`` (numeric intervals AND
+  categorical value sets) and emits one row-named error per offending value
 - Categorical input domains — ``validate_bundle_values`` /
-  ``validate_column_values`` against ``COLUMN_VALUE_CONSTRAINTS``
-- Numeric input domains — PD, LGD, own-estimate CCF and the non-negative
-  amount columns, via the four range validators below
+  ``validate_column_values`` against ``COLUMN_VALUE_CONSTRAINTS``, which is
+  itself derived from the same declarations
 - Non-finite (NaN / +-inf) input scrubbing
 - Collateral-link referential integrity
 - Regulatory output bounds on the aggregated results frame
@@ -29,7 +31,7 @@ References:
 - CRR Art. 160/163: PD; Art. 161/164: LGD; Art. 166(8)/(10): own-estimate CCF
 - CRR Art. 111 (SA) / Art. 166 (IRB): exposure value
 - CRR Art. 92(3); CRE31.5: the 1250% risk-weight cap
-- docs/plans/test-space-correctness-proposal.md (Phase 0)
+- docs/plans/test-space-correctness-proposal.md (Phases 0 and 1)
 """
 
 from __future__ import annotations
@@ -45,6 +47,7 @@ from rwa_calc.contracts.errors import (
     ERROR_COLLATERAL_LINK_UNKNOWN_BENEFICIARY,
     ERROR_COLLATERAL_LINK_UNKNOWN_COLLATERAL,
     ERROR_EAD_NULL,
+    ERROR_INPUT_OUT_OF_DOMAIN,
     ERROR_INVALID_COLUMN_VALUE,
     ERROR_INVALID_VALUE,
     ERROR_LGD_OUT_OF_RANGE,
@@ -63,389 +66,223 @@ from rwa_calc.contracts.errors import (
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import AggregatedResultBundle, RawDataBundle
+    from rwa_calc.data.column_spec import ColumnDomain
 
 # Regulatory reference for collateral link validation (CRM)
 COLLATERAL_LINK_CRM_REFERENCE = "CRR Art. 193/194"
 
 
 # =============================================================================
-# BUSINESS RULE VALIDATORS
+# DECLARED INPUT-DOMAIN GATE
 # =============================================================================
-
-
-def validate_non_negative_amounts(
-    lf: pl.LazyFrame,
-    amount_columns: list[str],
-    context: str = "",
-) -> pl.LazyFrame:
-    """
-    Add validation expressions for non-negative amount columns.
-
-    Returns a LazyFrame with validation flag columns added.
-    Does NOT collect/materialize.
-
-    Args:
-        lf: LazyFrame to validate
-        amount_columns: List of columns that should be non-negative
-        context: Context for naming validation columns
-
-    Returns:
-        LazyFrame with _valid_{col} columns added
-    """
-    exprs = []
-    schema_names = lf.collect_schema().names()
-    for col in amount_columns:
-        if col in schema_names:
-            valid_col = f"_valid_{col}"
-            exprs.append((pl.col(col) >= 0).alias(valid_col))
-
-    if exprs:
-        return lf.with_columns(exprs)
-    return lf
-
-
-def validate_pd_range(
-    lf: pl.LazyFrame,
-    pd_column: str = "pd",
-    min_pd: float = 0.0,
-    max_pd: float = 1.0,
-) -> pl.LazyFrame:
-    """
-    Add validation expression for PD range [0, 1].
-
-    Args:
-        lf: LazyFrame to validate
-        pd_column: Name of PD column
-        min_pd: Minimum valid PD (default 0)
-        max_pd: Maximum valid PD (default 1)
-
-    Returns:
-        LazyFrame with _valid_pd column added
-    """
-    if pd_column in lf.collect_schema().names():
-        return lf.with_columns(
-            ((pl.col(pd_column) >= min_pd) & (pl.col(pd_column) <= max_pd)).alias("_valid_pd")
-        )
-    return lf
-
-
-def validate_lgd_range(
-    lf: pl.LazyFrame,
-    lgd_column: str = "lgd",
-    min_lgd: float = 0.0,
-    max_lgd: float = 1.25,  # Can exceed 1.0 in some cases
-) -> pl.LazyFrame:
-    """
-    Add validation expression for LGD range.
-
-    Args:
-        lf: LazyFrame to validate
-        lgd_column: Name of LGD column
-        min_lgd: Minimum valid LGD (default 0)
-        max_lgd: Maximum valid LGD (default 1.25)
-
-    Returns:
-        LazyFrame with _valid_lgd column added
-    """
-    if lgd_column in lf.collect_schema().names():
-        return lf.with_columns(
-            ((pl.col(lgd_column) >= min_lgd) & (pl.col(lgd_column) <= max_lgd)).alias("_valid_lgd")
-        )
-    return lf
-
-
-# =============================================================================
-# CCF VALIDATORS
-# =============================================================================
-
-
-def validate_ccf_modelled(
-    lf: pl.LazyFrame,
-    column: str = "ccf_modelled",
-    min_ccf: float = 0.0,
-    max_ccf: float = 1.5,
-) -> pl.LazyFrame:
-    """
-    Add validation expression for ccf_modelled range.
-
-    Validates that ccf_modelled is in range [0.0, 1.5] when present.
-    Null values are considered valid (the field is optional).
-
-    Note: Retail IRB CCFs can exceed 100% due to additional drawdown
-    behaviour (borrowers may draw more than committed amounts during
-    stress). A cap of 150% is applied as a reasonable upper bound.
-
-    Args:
-        lf: LazyFrame to validate
-        column: Name of ccf_modelled column
-        min_ccf: Minimum valid CCF (default 0.0)
-        max_ccf: Maximum valid CCF (default 1.5, allowing for Retail IRB)
-
-    Returns:
-        LazyFrame with _valid_ccf_modelled column added
-    """
-    if column not in lf.collect_schema().names():
-        return lf
-
-    return lf.with_columns(
-        pl.when(pl.col(column).is_null())
-        .then(pl.lit(True))  # Null is valid (optional field)
-        .otherwise((pl.col(column) >= min_ccf) & (pl.col(column) <= max_ccf))
-        .alias("_valid_ccf_modelled")
-    )
-
-
-# =============================================================================
-# NUMERIC INPUT-DOMAIN GATE
-# =============================================================================
-
-# Scratch prefix for the per-column flag each range validator contributes. The
-# four validators name their own flag (``_valid_pd``, ``_valid_lgd``, ...), and
-# ``validate_lgd_range`` names it ``_valid_lgd`` whichever LGD column it was
-# pointed at — so each flag is renamed to a per-column name immediately after
-# the validator adds it, and no two can collide on one frame.
-_RANGE_FLAG_PREFIX = "_valid_range_"
-
-# Natural key per raw input table: the column whose value names the offending
-# row. Populated onto ``CalculationError.exposure_reference`` so a domain
-# violation can always be traced to one row (the Phase 2 triage invariant).
-_TABLE_KEY_COLUMNS: dict[str, str] = {
-    "facilities": "facility_reference",
-    "loans": "loan_reference",
-    "contingents": "contingent_reference",
-    "collateral": "collateral_reference",
-    "collateral_links": "collateral_reference",
-    "guarantees": "guarantee_reference",
-    "provisions": "provision_reference",
-    "ratings": "rating_reference",
-    "equity_exposures": "exposure_reference",
-}
-
-# Amount columns whose regulatory domain excludes negatives, per table.
 #
-# Deliberately EXCLUDED, each for a stated reason — a false positive here would
-# flag legitimate data:
-# - ``loans.drawn_amount`` / ``loans.interest``: negative IS the on-balance-sheet
-#   netting convention (CRR Art. 195/219). The unreferenced case is already the
-#   DQ010 warning from ``_validate_negative_amounts_without_netting``.
-# - ``equity_exposures.position_value``: declared SIGNED (+long / -short) for the
-#   Art. 133 net-long calculation (``data/schemas.py``).
-# - ``counterparties.annual_revenue`` / ``total_assets``: size measures, not
-#   exposure amounts; a negative is an accounting fact, not a domain violation.
-_NON_NEGATIVE_AMOUNT_COLUMNS: dict[str, tuple[str, ...]] = {
-    "facilities": ("limit",),
-    "contingents": ("nominal_amount",),
-    "collateral": ("market_value", "nominal_value"),
-    "collateral_links": ("max_pledge_amount",),
-    "guarantees": ("amount_covered",),
-    "provisions": ("amount",),
-    "equity_exposures": ("carrying_value", "fair_value"),
+# Phase 1 of docs/plans/test-space-correctness-proposal.md. Phase 0 shipped
+# this gate as a collector over FOUR hand-written range validators
+# (``validate_pd_range``, ``validate_lgd_range``, ``validate_ccf_modelled``,
+# ``validate_non_negative_amounts``), so a column got validation only when
+# somebody remembered to add a branch for it. Those four are gone: the domain
+# now lives on the column declaration (``data/schemas.py``
+# ``ColumnSpec.domain``) and this reads every declaration generically. Their
+# pins were removed from ``CONTRACTS_GUARD_SURFACE`` in the same change, which
+# is the documented path for deliberately retiring a guard.
+#
+# What the declaration does NOT carry is the error TAXONOMY. Which code and
+# severity an out-of-domain value publishes is a contracts-layer concern (and
+# ``data/`` may not import ``contracts/`` — arch_check check 12), so the
+# legacy pins live here.
+
+#: Columns whose out-of-domain error code the estate already publishes, and
+#: which therefore may not change. A NEW declared domain needs no entry — it
+#: reports as ``DQ013`` / ERROR. This is an error-taxonomy compatibility table,
+#: NOT a second home for the domains themselves.
+_DOMAIN_REPORTING: dict[str, tuple[str, ErrorSeverity]] = {
+    "pd": (ERROR_PD_OUT_OF_RANGE, ErrorSeverity.ERROR),
+    "lgd": (ERROR_LGD_OUT_OF_RANGE, ErrorSeverity.ERROR),
+    "lgd_unsecured": (ERROR_LGD_OUT_OF_RANGE, ErrorSeverity.ERROR),
+    "ccr_modelled_lgd": (ERROR_LGD_OUT_OF_RANGE, ErrorSeverity.ERROR),
+    "wwr_lgd_override": (ERROR_LGD_OUT_OF_RANGE, ErrorSeverity.ERROR),
+    "ccf_modelled": (ERROR_CCF_OUT_OF_RANGE, ErrorSeverity.ERROR),
+    # WARNING, not ERROR, and deliberately so: the engine CLIPS effective
+    # maturity to [1/365, 5.0] downstream, so an out-of-range value still
+    # produces a calculable row. Severity is the estate's existing IRB003
+    # contract (tests/unit/test_effective_maturity.py) and changing it is a
+    # separate decision from declaring the domain.
+    "effective_maturity": (ERROR_MATURITY_INVALID, ErrorSeverity.WARNING),
 }
 
-_PD_REFERENCE = "CRR Art. 160/163; PS1/26 Art. 160(1)/163(1)"
-_LGD_REFERENCE = "CRR Art. 161/164; PS1/26 Art. 161(5)/164(4)"
-_CCF_REFERENCE = "CRR Art. 166(8)/(10)"
-_AMOUNT_REFERENCE = "CRR Art. 111 (SA); Art. 166 (IRB)"
+#: Monetary columns Phase 0 already published under DQ012. Grouped rather than
+#: listed one-per-entry above because they share one domain
+#: (``_NON_NEGATIVE_AMOUNT_DOMAIN``) and one code.
+_NEGATIVE_AMOUNT_COLUMNS: frozenset[str] = frozenset(
+    {
+        "limit",
+        "nominal_amount",
+        "market_value",
+        "nominal_value",
+        "max_pledge_amount",
+        "amount_covered",
+        "amount",
+        "carrying_value",
+        "fair_value",
+    }
+)
 
 
 @dataclass(frozen=True)
 class _DomainSpec:
-    """One (column, domain) pair to report on, and how to report it."""
+    """One declared (column, domain) pair to report on, and how to report it."""
 
     column: str
-    flag: str
+    domain: ColumnDomain
     code: str
-    expected: str
-    regulatory_reference: str
+    severity: ErrorSeverity
 
 
-def _validate_numeric_ranges(
+def _validate_declared_domains(
     lf: pl.LazyFrame,
     table_name: str,
     sample_cap: int = 5,
 ) -> list[CalculationError]:
-    """Flag numeric input values outside their regulatory domain.
+    """Flag input values outside the domain their column DECLARES.
 
-    The error-emitting collector over the four range validators
-    (:func:`validate_pd_range`, :func:`validate_lgd_range`,
-    :func:`validate_ccf_modelled`, :func:`validate_non_negative_amounts`).
-    Each adds a boolean flag column; this pipes the table through every
-    validator whose column is present, then turns the flags into row-named
-    ``CalculationError``s in ONE ``.collect()`` per table.
+    The generic reader of ``ColumnSpec.domain``. For every column the table's
+    schema declares a domain for and the frame actually carries, this builds
+    the domain's own violation predicate and turns the results into row-named
+    ``CalculationError``s in ONE ``.collect()`` per table — whatever the
+    number of validated columns.
 
-    Severity is ERROR, not WARNING: an out-of-domain PD/LGD/CCF/amount does
-    not degrade — it produces a plausible, wrong capital number in silence.
-    A feed expressing PD in percent rather than as a fraction (``1.5`` for
-    1.5%) understates a GBP 1m senior corporate F-IRB exposure's RWA by
-    99.95% with no other signal.
+    Severity is ERROR unless ``_DOMAIN_REPORTING`` pins otherwise: an
+    out-of-domain PD, LGD, CQS or amount does not degrade, it produces a
+    plausible and wrong capital number in silence. A feed expressing PD in
+    percent rather than as a fraction (``1.5`` for 1.5%) understates a
+    GBP 1m senior corporate F-IRB exposure's RWA by 99.95% with no other
+    signal; a CQS of 0, 7 or 99 silently takes the unrated 100% branch.
 
-    Domains, and why each bound is where it is:
+    The bounds themselves, and the justification for each, live on the
+    declarations in ``data/schemas.py`` — deliberately not restated here,
+    because a bound with two homes is a bound that drifts.
 
-    - **PD in [0, 1]** — closed at zero. The upper bound is the definition of
-      a probability and catches the percent-vs-fraction feed error. The lower
-      bound is CLOSED because PD = 0 is an admissible regulatory input: CRR
-      Art. 160(1) floors the PD of "an exposure to a corporate or an
-      institution" at 0.03% and has no central-government / central-bank limb,
-      which is why the CRR rulepack carries ``pd_floors["sovereign"] = 0``. A
-      half-open (0, 1] domain would reject every sovereign IRB exposure priced
-      at zero. Basel 3.1 does floor sovereigns (0.05%), but a floor applied
-      downstream is not the same statement as an invalid input, and this gate
-      is regime-invariant — the loader validates before any regime pack is
-      resolved.
-    - **LGD in [0, 1.25]** — ``validate_lgd_range``'s own documented domain.
-      Own-estimate downturn LGD can exceed 100% where workout costs exceed the
-      exposure, so 1.0 is not a hard ceiling; 1.25 bounds it.
-    - **CCF in [0, 1.5]** — ``validate_ccf_modelled``'s documented domain
-      (retail A-IRB additional drawdown can exceed 100%). Null is valid.
-    - **Amounts >= 0** — per ``_NON_NEGATIVE_AMOUNT_COLUMNS``, which names the
-      columns where a negative cannot be a netting convention.
-
-    Null is never a domain violation on any of these — a missing PD/LGD is
-    IRB004/IRB005's business, and a missing amount is the loader's.
+    Null is never a domain violation: a MISSING PD/LGD is IRB004/IRB005's
+    business and a missing amount is the loader's.
 
     Args:
         lf: The table's LazyFrame.
-        table_name: RawDataBundle field name, used for the natural key,
-            the amount-column set, and the message prefix.
+        table_name: ``TABLE_SCHEMAS`` key — resolves the declaring schema,
+            the natural key, and the message prefix.
         sample_cap: Maximum per-row errors emitted per column (default 5);
-            a single summary error carries the omitted count.
+            a single summary error carries the truthful omitted count.
 
     Returns:
         List of CalculationError objects (empty when every value is in domain).
     """
-    schema_names = set(lf.collect_schema().names())
-    key_column = _TABLE_KEY_COLUMNS.get(table_name)
-    if key_column is None or key_column not in schema_names:
+    from rwa_calc.data.schemas import TABLE_KEY_COLUMNS, TABLE_SCHEMAS
+
+    schema = TABLE_SCHEMAS.get(table_name)
+    if schema is None:
         return []
 
-    flagged = lf
+    present = set(lf.collect_schema().names())
     specs: list[_DomainSpec] = []
-
-    if "pd" in schema_names:
-        flagged = _rename_flag(validate_pd_range(flagged), "_valid_pd", "pd")
-        specs.append(_domain_spec("pd", ERROR_PD_OUT_OF_RANGE, "[0, 1]", _PD_REFERENCE))
-
-    for lgd_column in ("lgd", "lgd_unsecured"):
-        if lgd_column in schema_names:
-            flagged = _rename_flag(
-                validate_lgd_range(flagged, lgd_column=lgd_column), "_valid_lgd", lgd_column
-            )
-            specs.append(
-                _domain_spec(lgd_column, ERROR_LGD_OUT_OF_RANGE, "[0, 1.25]", _LGD_REFERENCE)
-            )
-
-    if "ccf_modelled" in schema_names:
-        flagged = _rename_flag(
-            validate_ccf_modelled(flagged), "_valid_ccf_modelled", "ccf_modelled"
-        )
-        specs.append(
-            _domain_spec("ccf_modelled", ERROR_CCF_OUT_OF_RANGE, "[0, 1.5]", _CCF_REFERENCE)
-        )
-
-    amount_columns = [
-        column
-        for column in _NON_NEGATIVE_AMOUNT_COLUMNS.get(table_name, ())
-        if column in schema_names
-    ]
-    if amount_columns:
-        flagged = validate_non_negative_amounts(flagged, amount_columns, context=table_name)
-        for column in amount_columns:
-            flagged = _rename_flag(flagged, f"_valid_{column}", column)
-            specs.append(_domain_spec(column, ERROR_NEGATIVE_AMOUNT, ">= 0", _AMOUNT_REFERENCE))
-
+    for column, spec in schema.items():
+        if spec.domain is None or column not in present:
+            continue
+        code, severity = _reporting_for(column)
+        specs.append(_DomainSpec(column=column, domain=spec.domain, code=code, severity=severity))
     if not specs:
         return []
-    return _collect_domain_violations(flagged, key_column, specs, table_name, sample_cap)
+
+    key_column = TABLE_KEY_COLUMNS.get(table_name)
+    if key_column not in present:
+        key_column = None
+    return _collect_domain_violations(lf, key_column, specs, table_name, sample_cap)
 
 
-def _domain_spec(column: str, code: str, expected: str, reference: str) -> _DomainSpec:
-    """Build the reporting spec for one validated column."""
-    return _DomainSpec(
-        column=column,
-        flag=f"{_RANGE_FLAG_PREFIX}{column}",
-        code=code,
-        expected=expected,
-        regulatory_reference=reference,
-    )
-
-
-def _rename_flag(lf: pl.LazyFrame, produced: str, column: str) -> pl.LazyFrame:
-    """Give a range validator's freshly-added flag its per-column scratch name."""
-    return lf.rename({produced: f"{_RANGE_FLAG_PREFIX}{column}"})
+def _reporting_for(column: str) -> tuple[str, ErrorSeverity]:
+    """The error code and severity a domain violation on ``column`` publishes."""
+    if column in _NEGATIVE_AMOUNT_COLUMNS:
+        return ERROR_NEGATIVE_AMOUNT, ErrorSeverity.ERROR
+    return _DOMAIN_REPORTING.get(column, (ERROR_INPUT_OUT_OF_DOMAIN, ErrorSeverity.ERROR))
 
 
 def _collect_domain_violations(
-    flagged: pl.LazyFrame,
-    key_column: str,
+    lf: pl.LazyFrame,
+    key_column: str | None,
     specs: list[_DomainSpec],
     table_name: str,
     sample_cap: int,
 ) -> list[CalculationError]:
-    """Turn the flag columns into row-named errors in one ``.collect()``.
+    """Turn every declared domain's violation predicate into errors in one collect.
 
     Per spec the aggregation carries three length-1 outputs — the violation
     count, up to ``sample_cap`` offending keys, and their values — so the
-    whole table (however many columns were validated) costs one collect.
-    A null flag means the underlying value was null, which is never a domain
-    violation, so it is filled True before negation (``~`` on an all-null
-    column also raises).
+    whole table costs one collect however many columns were validated.
+
+    ``key_column`` may be None for a table with no single-column identity; the
+    per-row errors then carry no ``exposure_reference`` rather than the table
+    being skipped. Skipping was Phase 0's behaviour and it silently excluded
+    every table absent from the key registry — including ``counterparties``,
+    which owns the CQS columns.
     """
     exprs: list[pl.Expr] = []
     for spec in specs:
-        invalid = ~pl.col(spec.flag).fill_null(value=True)
-        exprs.append(invalid.sum().alias(f"n_{spec.flag}"))
+        invalid = spec.domain.violation_expr(spec.column)
+        exprs.append(invalid.sum().alias(f"n_{spec.column}"))
+        if key_column is not None:
+            exprs.append(
+                pl.col(key_column)
+                .cast(pl.String)
+                .filter(invalid)
+                .head(sample_cap)
+                .implode()
+                .alias(f"k_{spec.column}")
+            )
         exprs.append(
-            pl.col(key_column)
-            .cast(pl.String)
-            .filter(invalid)
-            .head(sample_cap)
-            .implode()
-            .alias(f"k_{spec.flag}")
-        )
-        exprs.append(
-            pl.col(spec.column).filter(invalid).head(sample_cap).implode().alias(f"v_{spec.flag}")
+            pl.col(spec.column).filter(invalid).head(sample_cap).implode().alias(f"v_{spec.column}")
         )
 
-    row = flagged.select(exprs).collect().row(0, named=True)
+    row = lf.select(exprs).collect().row(0, named=True)
 
     errors: list[CalculationError] = []
     for spec in specs:
-        total = int(row[f"n_{spec.flag}"] or 0)
+        total = int(row[f"n_{spec.column}"] or 0)
         if total == 0:
             continue
-        keys = list(row[f"k_{spec.flag}"] or [])
-        values = list(row[f"v_{spec.flag}"] or [])
-        message = (
-            f"[{table_name}] '{spec.column}' outside its regulatory domain "
-            f"{spec.expected} — {total} row(s)"
+        values = list(row[f"v_{spec.column}"] or [])
+        keys: list[str | None] = (
+            list(row[f"k_{spec.column}"] or []) if key_column is not None else [None] * len(values)
         )
-        for reference, value in zip(keys, values, strict=False):
-            errors.append(
-                CalculationError(
-                    code=spec.code,
-                    message=f"{message} (value={value})",
-                    severity=ErrorSeverity.ERROR,
-                    category=ErrorCategory.DATA_QUALITY,
-                    exposure_reference=reference,
-                    regulatory_reference=spec.regulatory_reference,
-                    field_name=spec.column,
-                    expected_value=spec.expected,
-                    actual_value=str(value),
-                )
+        expected = spec.domain.describe()
+        message = (
+            f"[{table_name}] '{spec.column}' outside its declared domain "
+            f"{expected} — {total} row(s)"
+        )
+        errors.extend(
+            CalculationError(
+                code=spec.code,
+                message=f"{message} (value={value})",
+                severity=spec.severity,
+                category=ErrorCategory.DATA_QUALITY,
+                exposure_reference=reference,
+                regulatory_reference=spec.domain.reason,
+                field_name=spec.column,
+                expected_value=expected,
+                actual_value=str(value),
             )
-        if total > len(keys):
+            for reference, value in zip(keys, values, strict=False)
+        )
+        if total > len(values):
             errors.append(
                 CalculationError(
                     code=spec.code,
                     message=(
-                        f"{message}: {total - len(keys)} additional row(s) omitted "
+                        f"{message}: {total - len(values)} additional row(s) omitted "
                         f"beyond sample_cap={sample_cap}"
                     ),
-                    severity=ErrorSeverity.ERROR,
+                    severity=spec.severity,
                     category=ErrorCategory.DATA_QUALITY,
-                    regulatory_reference=spec.regulatory_reference,
+                    regulatory_reference=spec.domain.reason,
                     field_name=spec.column,
-                    expected_value=spec.expected,
+                    expected_value=expected,
                 )
             )
     return errors
@@ -518,6 +355,55 @@ def validate_column_values(
     return errors
 
 
+def bundle_frames(bundle: RawDataBundle) -> dict[str, pl.LazyFrame | None]:
+    """Every input frame the domain gate visits, keyed by ``TABLE_SCHEMAS`` name.
+
+    Hoisted out of :func:`validate_bundle_values` so it is a fact a checker can
+    read rather than a literal buried in a loop:
+    ``scripts/check_input_domains.py`` asserts that every schema carrying a
+    declared domain appears here. A domain nobody validates is guard-shaped
+    code that reads as coverage — the same failure ``arch_check`` check 20
+    stops on the function side, one level down at the declaration.
+
+    The nested CCR / SFT leaves are reached through their composite bundles
+    (``RawDataBundle.ccr`` / ``.sft``), which are None for firms with no
+    derivative or SFT book.
+    """
+    frames: dict[str, pl.LazyFrame | None] = {
+        "facilities": bundle.facilities,
+        "loans": bundle.loans,
+        "contingents": bundle.contingents,
+        "counterparties": bundle.counterparties,
+        "collateral": bundle.collateral,
+        "collateral_links": bundle.collateral_links,
+        "guarantees": bundle.guarantees,
+        "provisions": bundle.provisions,
+        "ratings": bundle.ratings,
+        "specialised_lending": bundle.specialised_lending,
+        "equity_exposures": bundle.equity_exposures,
+        "ciu_holdings": bundle.ciu_holdings,
+        "fx_rates": bundle.fx_rates,
+        "facility_mappings": bundle.facility_mappings,
+        "model_permissions": bundle.model_permissions,
+        "securitisation_allocations": bundle.securitisation_allocations,
+        "cva_counterparties": bundle.cva_counterparties,
+        "cva_hedges": bundle.cva_hedges,
+    }
+    if bundle.ccr is not None:
+        frames["ccr.trades"] = bundle.ccr.trades.trades
+        frames["ccr.netting_sets"] = bundle.ccr.netting_sets.netting_sets
+        frames["ccr.margin_agreements"] = bundle.ccr.margin_agreements.margin_agreements
+        frames["ccr.ccr_collateral"] = bundle.ccr.ccr_collateral.ccr_collateral
+        if bundle.ccr.failed_trades is not None:
+            frames["ccr.failed_trades"] = bundle.ccr.failed_trades.failed_trades
+        frames["ccr.default_fund_contributions"] = bundle.ccr.default_fund_contributions
+    if bundle.sft is not None:
+        frames["sft.trades"] = bundle.sft.trades.sft_trades
+        if bundle.sft.collateral is not None:
+            frames["sft.collateral"] = bundle.sft.collateral.sft_collateral
+    return frames
+
+
 def validate_bundle_values(
     bundle: RawDataBundle,
     constraints: dict[str, dict[str, set[str]]] | None = None,
@@ -525,16 +411,16 @@ def validate_bundle_values(
     """
     Validate the input domain of every column in a RawDataBundle.
 
-    The whole-bundle input gate. Iterates over all tables in the bundle and,
-    per table, checks:
+    The whole-bundle input gate. Iterates over every table in the bundle
+    (:func:`bundle_frames`) and, per table, checks:
 
+    - **Declared domains** — every ``ColumnSpec.domain`` the table's schema
+      declares and the frame carries (:func:`_validate_declared_domains`),
+      one ``.collect()`` per table, with the offending row named.
     - **Categorical domains** against the constraints registry (DQ006), all
       columns batched into a single ``.collect()``.
-    - **Numeric domains** — PD, LGD, own-estimate CCF and the non-negative
-      amount columns (:func:`_validate_numeric_ranges`), likewise one
-      ``.collect()`` per table, with the offending row named.
-    - **Exposure-table rules** — effective-maturity range (IRB003) and
-      unreferenced negative on-balance amounts (DQ010).
+    - **Exposure-table rules** — unreferenced negative on-balance amounts
+      (DQ010).
     - **Ratings** — the short-term rating scope contract (DQ002).
 
     Then, cross-table, the collateral-link referential integrity checks.
@@ -557,25 +443,9 @@ def validate_bundle_values(
 
         constraints = COLUMN_VALUE_CONSTRAINTS
 
-    frame_mapping: dict[str, pl.LazyFrame | None] = {
-        "facilities": bundle.facilities,
-        "loans": bundle.loans,
-        "contingents": bundle.contingents,
-        "counterparties": bundle.counterparties,
-        "collateral": bundle.collateral,
-        "collateral_links": bundle.collateral_links,
-        "guarantees": bundle.guarantees,
-        "provisions": bundle.provisions,
-        "ratings": bundle.ratings,
-        "specialised_lending": bundle.specialised_lending,
-        "equity_exposures": bundle.equity_exposures,
-        "facility_mappings": bundle.facility_mappings,
-        "model_permissions": bundle.model_permissions,
-    }
-
     all_errors: list[CalculationError] = []
 
-    for table_name, lf in frame_mapping.items():
+    for table_name, lf in bundle_frames(bundle).items():
         if lf is None:
             continue
         table_constraints = constraints.get(table_name, {})
@@ -583,15 +453,14 @@ def validate_bundle_values(
             errors = _validate_table_columns_batched(lf, table_constraints, table_name)
             all_errors.extend(errors)
 
-        # Numeric input domains (PD / LGD / own-estimate CCF / amounts). One
-        # collect per table; a no-op for tables carrying none of those columns.
-        all_errors.extend(_validate_numeric_ranges(lf, table_name))
+        # Declared input domains. One collect per table; a no-op for a table
+        # whose schema declares none.
+        all_errors.extend(_validate_declared_domains(lf, table_name))
 
-        # Art. 162(3) override is restricted to exposure tables — the 1-day to
-        # 5-year range mirrors the regulatory cap; out-of-range values are clipped
-        # downstream but flagged here so firms see the mismatch.
+        # A negative on-balance amount is the Art. 195/219 netting convention,
+        # so it is NOT a declared-domain violation — only an UNREFERENCED one
+        # is, and that needs a second column to decide.
         if table_name in {"facilities", "loans", "contingents"}:
-            all_errors.extend(_validate_effective_maturity_range(lf, table_name))
             all_errors.extend(_validate_negative_amounts_without_netting(lf, table_name))
 
         # PRA PS1/26 Art. 120(2B) / Art. 122(3): short-term rating rows must
@@ -892,45 +761,6 @@ def _collateral_link_valid_beneficiaries(bundle: RawDataBundle) -> pl.LazyFrame:
             schema={"beneficiary_reference": pl.String, "_bt": pl.String},
         )
     return pl.concat(frames, how="vertical_relaxed").unique()
-
-
-def _validate_effective_maturity_range(
-    lf: pl.LazyFrame,
-    context: str,
-) -> list[CalculationError]:
-    """Flag effective_maturity values outside (0, 5.0] for an exposure table."""
-    schema_names = lf.collect_schema().names()
-    if "effective_maturity" not in schema_names:
-        return []
-
-    bad = (
-        lf.filter(pl.col("effective_maturity").is_not_null())
-        .filter((pl.col("effective_maturity") <= 0.0) | (pl.col("effective_maturity") > 5.0))
-        .select(
-            pl.len().alias("n"),
-            pl.col("effective_maturity").min().alias("min_val"),
-            pl.col("effective_maturity").max().alias("max_val"),
-        )
-        .collect()
-    )
-    if bad.height == 0 or bad["n"][0] == 0:
-        return []
-
-    row = bad.row(0, named=True)
-    return [
-        CalculationError(
-            code=ERROR_MATURITY_INVALID,
-            message=(
-                f"[{context}] effective_maturity has {row['n']} value(s) outside the "
-                f"regulatory range (0, 5.0] years (observed min={row['min_val']}, "
-                f"max={row['max_val']}). Values will be clipped to [1/365, 5.0]."
-            ),
-            severity=ErrorSeverity.WARNING,
-            category=ErrorCategory.DATA_QUALITY,
-            field_name="effective_maturity",
-            expected_value="(0, 5.0]",
-        )
-    ]
 
 
 def _validate_short_term_rating_scope(lf: pl.LazyFrame) -> list[CalculationError]:

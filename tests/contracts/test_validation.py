@@ -1,158 +1,127 @@
 """Tests for the input-domain validation functions.
 
-Covers the four numeric range validators, the categorical column-value
-validators, and the whole-bundle input gate that drives both.
+Covers the declared-domain predicates (``ColumnSpec.domain``), the categorical
+column-value validators, and the whole-bundle input gate that drives both.
+
+Phase 1 of docs/plans/test-space-correctness-proposal.md replaced the four
+hand-written range validators (``validate_pd_range``, ``validate_lgd_range``,
+``validate_ccf_modelled``, ``validate_non_negative_amounts``) with declarations
+read generically. The behavioural coverage they carried lives in
+``TestDeclaredDomains`` below, asserted against the DECLARATIONS in
+``data/schemas.py`` rather than against default arguments — so a test cannot
+pass while the shipped bound differs from the one under test.
 """
 
 from __future__ import annotations
 
 import polars as pl
+import pytest
 from tests.fixtures.raw_bundle import make_raw_bundle
 
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.validation import (
     validate_bundle_values,
-    validate_ccf_modelled,
     validate_column_values,
-    validate_lgd_range,
-    validate_non_negative_amounts,
-    validate_pd_range,
+)
+from rwa_calc.data.schemas import (
+    CONTINGENTS_SCHEMA,
+    FACILITY_SCHEMA,
+    FX_RATES_SCHEMA,
+    RATINGS_SCHEMA,
 )
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
 
 
-class TestValidateNonNegativeAmounts:
-    """Tests for validate_non_negative_amounts function."""
-
-    def test_adds_validation_columns(self):
-        """Should add _valid_ columns for amount fields."""
-        lf = pl.LazyFrame(
-            {
-                "amount1": [100.0, -50.0, 0.0],
-                "amount2": [200.0, 300.0, -100.0],
-            }
-        )
-
-        result = validate_non_negative_amounts(lf, ["amount1", "amount2"])
-        df = result.collect()
-
-        assert "_valid_amount1" in df.columns
-        assert "_valid_amount2" in df.columns
-        assert df["_valid_amount1"].to_list() == [True, False, True]
-        assert df["_valid_amount2"].to_list() == [True, True, False]
-
-    def test_ignores_missing_columns(self):
-        """Should ignore columns not in LazyFrame."""
-        lf = pl.LazyFrame({"amount1": [100.0, 200.0]})
-
-        result = validate_non_negative_amounts(lf, ["amount1", "missing"])
-        df = result.collect()
-
-        assert "_valid_amount1" in df.columns
-        assert "_valid_missing" not in df.columns
+def _domain(schema: dict, column: str):
+    """The declared domain for a column, failing loudly when it is absent."""
+    spec = schema[column]
+    assert spec.domain is not None, f"{column} must declare a domain"
+    return spec.domain
 
 
-class TestValidatePDRange:
-    """Tests for validate_pd_range function."""
+class TestDeclaredDomains:
+    """The shipped declarations admit exactly the values the regulation does."""
 
-    def test_valid_pd_values(self):
-        """Valid PD values should pass validation."""
-        lf = pl.LazyFrame({"pd": [0.0, 0.01, 0.5, 1.0]})
+    @staticmethod
+    def _violations(domain, column: str, values: list) -> list[bool]:
+        lf = pl.LazyFrame({column: values})
+        return lf.select(domain.violation_expr(column)).collect().to_series().to_list()
 
-        result = validate_pd_range(lf)
-        df = result.collect()
+    def test_pd_admits_zero_and_one_and_rejects_percent_scale(self):
+        """PD is CLOSED at zero (CRR has no sovereign floor) and capped at 1."""
+        domain = _domain(RATINGS_SCHEMA, "pd")
 
-        assert all(df["_valid_pd"].to_list())
+        assert self._violations(domain, "pd", [0.0, 0.0003, 0.5, 1.0]) == [False] * 4
+        assert self._violations(domain, "pd", [-0.01, 1.5, 100.0]) == [True] * 3
 
-    def test_invalid_pd_values(self):
-        """Invalid PD values should fail validation."""
-        lf = pl.LazyFrame({"pd": [-0.01, 0.5, 1.01]})
+    def test_lgd_admits_downturn_above_one(self):
+        """Own-estimate downturn LGD can exceed 100%; 1.25 is the ceiling."""
+        domain = _domain(FACILITY_SCHEMA, "lgd")
 
-        result = validate_pd_range(lf)
-        df = result.collect()
+        assert self._violations(domain, "lgd", [0.0, 0.45, 1.0, 1.25]) == [False] * 4
+        assert self._violations(domain, "lgd", [-0.1, 1.5, 45.0]) == [True] * 3
 
-        assert df["_valid_pd"].to_list() == [False, True, False]
+    def test_ccf_admits_retail_additional_drawdown(self):
+        """Retail A-IRB CCF can exceed 100%; 1.5 is the ceiling."""
+        domain = _domain(FACILITY_SCHEMA, "ccf_modelled")
 
-    def test_custom_pd_range(self):
-        """Should respect custom min/max values."""
-        lf = pl.LazyFrame({"pd": [0.0003, 0.01, 0.5]})
+        assert self._violations(domain, "ccf_modelled", [0.0, 0.75, 1.25, 1.5]) == [False] * 4
+        assert self._violations(domain, "ccf_modelled", [-0.1, 1.6, 2.0]) == [True] * 3
 
-        result = validate_pd_range(lf, min_pd=0.0003)
-        df = result.collect()
+    def test_null_is_never_a_domain_violation(self):
+        """A MISSING value is a different finding from an out-of-range one."""
+        for schema, column in (
+            (RATINGS_SCHEMA, "pd"),
+            (FACILITY_SCHEMA, "lgd"),
+            (FACILITY_SCHEMA, "ccf_modelled"),
+            (FACILITY_SCHEMA, "limit"),
+        ):
+            domain = _domain(schema, column)
+            assert self._violations(domain, column, [None, None]) == [False, False]
 
-        assert all(df["_valid_pd"].to_list())
+    def test_amount_domain_rejects_negatives_only(self):
+        """Zero is a legitimate amount; a negative manufactures exposure."""
+        domain = _domain(FACILITY_SCHEMA, "limit")
 
+        assert self._violations(domain, "limit", [0.0, 100.0]) == [False, False]
+        assert self._violations(domain, "limit", [-0.01, -50.0]) == [True, True]
 
-class TestValidateLGDRange:
-    """Tests for validate_lgd_range function."""
+    def test_cqs_domain_is_one_to_six(self):
+        """CQS 0 / 7 / 99 / -1 all silently took a wrong branch before Phase 1."""
+        domain = _domain(RATINGS_SCHEMA, "cqs")
 
-    def test_valid_lgd_values(self):
-        """Valid LGD values should pass validation."""
-        lf = pl.LazyFrame({"lgd": [0.0, 0.45, 1.0]})
+        assert self._violations(domain, "cqs", [1, 2, 3, 4, 5, 6]) == [False] * 6
+        assert self._violations(domain, "cqs", [0, 7, 99, -1]) == [True] * 4
 
-        result = validate_lgd_range(lf)
-        df = result.collect()
+    def test_effective_maturity_is_open_at_zero(self):
+        """A zero-year maturity is not a maturity — the lower bound is OPEN."""
+        domain = _domain(CONTINGENTS_SCHEMA, "effective_maturity")
 
-        assert all(df["_valid_lgd"].to_list())
+        assert self._violations(domain, "effective_maturity", [0.25, 1.0, 5.0]) == [False] * 3
+        assert self._violations(domain, "effective_maturity", [0.0, -3.0, 5.01]) == [True] * 3
 
-    def test_lgd_can_exceed_one(self):
-        """LGD can exceed 1.0 in some cases (downturn LGD)."""
-        lf = pl.LazyFrame({"lgd": [0.45, 1.1, 1.25]})
+    def test_fx_rate_is_open_at_zero(self):
+        """A zero rate silently zeroes every converted amount."""
+        domain = _domain(FX_RATES_SCHEMA, "rate")
 
-        result = validate_lgd_range(lf, max_lgd=1.25)
-        df = result.collect()
+        assert self._violations(domain, "rate", [0.0001, 1.0, 1500.0]) == [False] * 3
+        assert self._violations(domain, "rate", [0.0, -1.2]) == [True, True]
 
-        assert all(df["_valid_lgd"].to_list())
+    @pytest.mark.parametrize(
+        ("schema", "column"),
+        [
+            (RATINGS_SCHEMA, "pd"),
+            (RATINGS_SCHEMA, "cqs"),
+            (FACILITY_SCHEMA, "lgd"),
+            (FACILITY_SCHEMA, "limit"),
+            (FX_RATES_SCHEMA, "rate"),
+        ],
+    )
+    def test_every_domain_states_its_basis(self, schema: dict, column: str) -> None:
+        """A bound with no stated reason is how a WRONG bound survives review."""
+        reason = _domain(schema, column).reason
 
-    def test_invalid_lgd_values(self):
-        """Invalid LGD values should fail validation."""
-        lf = pl.LazyFrame({"lgd": [-0.1, 0.45, 1.5]})
-
-        result = validate_lgd_range(lf, max_lgd=1.25)
-        df = result.collect()
-
-        assert df["_valid_lgd"].to_list() == [False, True, False]
-
-
-class TestValidateCCFModelled:
-    """Tests for validate_ccf_modelled function."""
-
-    def test_valid_range(self):
-        """Valid CCF values (0.0 to 1.5) should pass. Retail IRB can exceed 100%."""
-        lf = pl.LazyFrame({"ccf_modelled": [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5]})
-
-        result = validate_ccf_modelled(lf)
-        df = result.collect()
-
-        assert all(df["_valid_ccf_modelled"].to_list())
-
-    def test_null_is_valid(self):
-        """Null values should be valid (optional field)."""
-        lf = pl.LazyFrame({"ccf_modelled": [0.5, None, 0.75, None]})
-
-        result = validate_ccf_modelled(lf)
-        df = result.collect()
-
-        assert all(df["_valid_ccf_modelled"].to_list())
-
-    def test_out_of_range_fails(self):
-        """Values outside [0.0, 1.5] should fail."""
-        lf = pl.LazyFrame({"ccf_modelled": [-0.1, 0.5, 1.25, 1.6, 2.0]})
-
-        result = validate_ccf_modelled(lf)
-        df = result.collect()
-
-        # -0.1 fails (below 0), 0.5 passes, 1.25 passes (Retail IRB can exceed 100%), 1.6 and 2.0 fail (above 150%)
-        assert df["_valid_ccf_modelled"].to_list() == [False, True, True, False, False]
-
-    def test_missing_column(self):
-        """Should return original LazyFrame if column missing."""
-        lf = pl.LazyFrame({"other_column": [1.0, 2.0, 3.0]})
-
-        result = validate_ccf_modelled(lf)
-        df = result.collect()
-
-        assert "_valid_ccf_modelled" not in df.columns
+        assert len(reason) > 40, f"{column}: reason is too thin to review: {reason!r}"
 
 
 class TestValidateColumnValues:

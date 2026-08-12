@@ -80,7 +80,7 @@ def _build_bundle(
         "mpor_days_override": mpor_days_override,
     }
     trades_df = pl.DataFrame([trade_row], schema=dtypes_of(SFT_TRADE_SCHEMA))
-    sealed_trades, _ = seal_lenient(trades_df.lazy(), SFT_TABLE_EDGES["sft_trades"])
+    sealed_trades, *_ = seal_lenient(trades_df.lazy(), SFT_TABLE_EDGES["sft_trades"])
 
     coll_row = {
         "sft_collateral_reference": "COLL_SFT_HC",
@@ -92,7 +92,7 @@ def _build_bundle(
         "residual_maturity_years": 0.5,
     }
     coll_df = pl.DataFrame([coll_row], schema=dtypes_of(SFT_COLLATERAL_SCHEMA))
-    sealed_coll, _ = seal_lenient(coll_df.lazy(), SFT_TABLE_EDGES["sft_collateral"])
+    sealed_coll, *_ = seal_lenient(coll_df.lazy(), SFT_TABLE_EDGES["sft_collateral"])
 
     return RawSFTBundle(
         trades=SftTradeBundle(sft_trades=sealed_trades),

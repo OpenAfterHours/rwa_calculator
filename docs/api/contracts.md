@@ -285,12 +285,14 @@ Error codes are prefixed by domain and numbered sequentially:
 
 | Code | Constant | Domain | Description |
 |------|----------|--------|-------------|
-| `DQ001` | `ERROR_MISSING_FIELD` | Data Quality | Required field is missing or null |
+| `DQ001` | `ERROR_MISSING_FIELD` | Data Quality | Required field is missing or null. Two producers at two granularities: the loader seal names the **column** (`missing_required_column_error`, category `SCHEMA_VALIDATION`) when a required column is absent from the input file; the referential-integrity gate names the **row** (`absent_reference_error`, category `DATA_QUALITY`) when a declared foreign key is null, so the row asserts no link to its parent table at all. Both can fire on one feed — after the seal an absent column and an all-null one are indistinguishable — and the categories are what tell them apart. Distinct from `DQ005`: a null reference is repaired in **this** row, an orphan in the **parent** feed |
 | `DQ002` | `ERROR_INVALID_VALUE` | Data Quality | Invalid value for a field |
-| `DQ003` | `ERROR_TYPE_MISMATCH` | Data Quality | Column type does not match schema |
-| `DQ004` | `ERROR_DUPLICATE_KEY` | Data Quality | Duplicate key in reference data |
-| `DQ005` | `ERROR_ORPHAN_REFERENCE` | Data Quality | Foreign key reference has no match |
+| `DQ003` | `ERROR_TYPE_MISMATCH` | Data Quality | **Reserved — no producer.** Its sole emitter was `validate_schema_to_errors`, deleted when the loader edge seal made a downstream schema-shape check unfirable: `conform_lenient` casts every declared column to its declared dtype (`strict=False`), so a mismatch cannot reach a consumer. Kept reserved rather than recycled so old audit records stay readable. The same finding taken **upstream** of that cast, where it does fire on real feeds, is `DQ014` |
+| `DQ004` | `ERROR_DUPLICATE_KEY` | Data Quality | A natural key names more than one input row. Two producers: `engine/stages/hierarchy/graph.py` for a duplicated `org_mappings` child (WARNING — the resolver de-duplicates the mapping deterministically and no exposure is lost), and `validation.py::validate_duplicate_keys` for the tables in `TABLE_UNIQUE_KEYS` (ERROR — a duplicated `loan_reference` / `contingent_reference` / `facility_reference` is collapsed by the model-permission de-dupe, so the extra row's capital leaves the portfolio total, and a duplicated `counterparty_reference` multiplies every exposure that joins to it). **Uncapped, one error per duplicated key**: unlike the domain gates this names a row, not a column, so a sampled duplicate would leave the un-sampled rows exactly as unaccounted-for as before |
+| `DQ005` | `ERROR_ORPHAN_REFERENCE` | Data Quality | A declared foreign key (`data/schemas.py::TABLE_FOREIGN_KEYS`) holds a value that resolves to no row in its parent table. The row is **never dropped** — every counterparty-attribute join in the hierarchy stage is `how="left"` deliberately, because an exposure that has left the portfolio is worse than one priced off a fallback — so it survives carrying the substituted treatment named in the declaration's `reason`. Measured on CRR, one GBP 1m senior loan: a CQS 6 corporate is Art. 122 150% and the orphan fallback returns 100%, a 33.3% understatement; at CQS 1 the same fallback is a 5x overstatement, so the defect is not conservative in either direction. Sampled per the `sample_cap` contract (5 row-named errors per table/column, then one summary carrying the omitted count). Emitted by `validation.py::validate_referential_integrity` |
 | `DQ006` | `ERROR_INVALID_COLUMN_VALUE` | Data Quality | Column value not in allowed set |
+| `DQ012` | `ERROR_NEGATIVE_AMOUNT` | Data Quality | Amount column negative where a negative cannot be a netting convention. Distinct from `DQ010`, which warns on a negative that *is* legitimately a netting position |
+| `DQ014` | `ERROR_UNREADABLE_INPUT_DTYPE` | Data Quality | Input column supplied in a dtype whose cast to the declared dtype can destroy values — a String amount (`"1,000,000.00"`, `£1000000`, `n/a`), a float into a declared integer, a numeric into a declared String key. The loader seal casts non-strictly, so an unparseable value becomes null, and null is legitimately "not supplied" everywhere downstream: without this code a value that could not be **read** is indistinguishable from one never **supplied** and from a genuine zero (measured: a GBP 1m `drawn_amount` published `rwa_final = 0.00` with an empty error list). A writer's own type choice — any integer into any integer/float, an all-null column, `Float32`→`Float64`, `Date`→`Datetime` — is **not** reported. Emitted by `EdgeContract.conform_lenient` via `engine/loader.py::_seal_table`. Distinct from `DQ001`: absent column → extend the feed; unreadable column → re-type and re-send it |
 | `HIE001` | `ERROR_CIRCULAR_HIERARCHY` | Hierarchy | Circular reference in hierarchy |
 | `HIE002` | `ERROR_MISSING_PARENT` | Hierarchy | Parent counterparty not found |
 | `HIE003` | `ERROR_HIERARCHY_DEPTH` | Hierarchy | Hierarchy exceeds maximum depth |
@@ -304,12 +306,13 @@ Error codes are prefixed by domain and numbered sequentially:
 | `CRM003` | `ERROR_CURRENCY_MISMATCH` | CRM | Collateral currency ≠ exposure currency |
 | `CRM004` | `ERROR_COLLATERAL_OVERALLOCATION` | CRM | Collateral allocated exceeds available amount |
 | `CRM005` | `ERROR_INVALID_GUARANTEE` | CRM | Guarantee does not meet eligibility criteria |
-| `IRB001` | `ERROR_PD_OUT_OF_RANGE` | IRB | PD value outside valid range (0, 1] |
-| `IRB002` | `ERROR_LGD_OUT_OF_RANGE` | IRB | LGD value outside valid range [0, 1] |
+| `IRB001` | `ERROR_PD_OUT_OF_RANGE` | IRB | PD value outside valid range **[0, 1]**. The lower bound is **closed**: CRR Art. 160(1) does not reach central governments or central banks, and the CRR pack carries `pd_floors["sovereign"] = 0`, so PD = 0 is admissible sovereign input and a half-open `(0, 1]` domain would reject every sovereign IRB exposure |
+| `IRB002` | `ERROR_LGD_OUT_OF_RANGE` | IRB | LGD value outside valid range **[0, 1.25]**. 1.0 is not a hard ceiling — own-estimate downturn LGD can exceed 100% where workout costs exceed the exposure |
 | `IRB003` | `ERROR_MATURITY_INVALID` | IRB | Effective maturity outside [1, 5] range |
 | `IRB004` | `ERROR_MISSING_PD` | IRB | No PD value available for IRB exposure |
 | `IRB005` | `ERROR_MISSING_LGD` | IRB | No LGD value available for A-IRB exposure |
 | `IRB006` | `ERROR_MISSING_EXPECTED_LOSS` | IRB | Expected-loss value missing on an IRB exposure where EL is required |
+| `IRB008` | `ERROR_CCF_OUT_OF_RANGE` | IRB | Own-estimate CCF outside `[0, 1.5]`. Retail A-IRB additional drawdown can exceed 100%, so 1.0 is not the ceiling; null is valid (the field is optional) |
 | `SA001` | `ERROR_INVALID_CQS` | SA | CQS value not in valid range |
 | `SA002` | `ERROR_MISSING_RISK_WEIGHT` | SA | Cannot determine risk weight |
 | `SA003` | `ERROR_INVALID_LTV` | SA | LTV ratio invalid for property class |
@@ -317,6 +320,7 @@ Error codes are prefixed by domain and numbered sequentially:
 | `SF001` | `ERROR_SME_MISSING_COUNTERPARTY_REF` | Supporting Factors | SME supporting-factor application requires a `counterparty_reference` and none was supplied |
 | `CFG001` | `ERROR_INVALID_CONFIG` | Configuration | Invalid configuration parameter |
 | `CFG002` | `ERROR_MISSING_PERMISSION` | Configuration | Required IRB permission not granted |
+| `BR001` | `ERROR_UNKNOWN_BRANCH_FALLBACK` | Branch Reason | **WARNING.** A row whose `*_branch_reason` column reads `UNKNOWN_FALLBACK`: the branch it was priced on could not be justified, either because the deciding predicate evaluated to **null** (Polars sends both `False` and `null` to `otherwise`, so the row took a fallback the engine never chose) or because a value was substituted for input that was simply absent. WARNING rather than ERROR deliberately — such a row is *unjustified*, not provably wrong, and an ERROR would redden every run touching a known-open defect until someone switched the gate off. Emitted at the pipeline exit by `contracts/validation.py::validate_branch_reasons`, which folds into the collect `validate_aggregated_bundle` already pays for. The population is ratcheted by `scripts/check_branch_census.py` |
 
 #### Error Factory Functions
 

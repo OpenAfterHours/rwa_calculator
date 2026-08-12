@@ -801,3 +801,598 @@ gate that shipped.
   things that must agree, something has to assert they still agree — is the part
   worth carrying, and it applies to every pinned tool in this repo, not just the
   uploader.
+
+## 2026-08-12 — The input contract was written, unit-tested, and connected to nothing
+
+- **Defect**: 10 of the 14 public validators in `src/rwa_calc/contracts/validation.py`
+  — **402 lines**, every one of them carrying green unit tests — could not be
+  reached from any production path under `src/`. `validate_pd_range`,
+  `validate_lgd_range`, `validate_ccf_modelled`, `validate_non_negative_amounts`,
+  `validate_schema`, `validate_schema_to_errors`, `validate_required_columns`,
+  `validate_raw_data_bundle`, `validate_resolved_hierarchy_bundle`, and
+  `validate_aggregated_bundle` — the last of which is the **output**-bounds guard
+  (RW > 1250%, RW < 0, RWA < 0, null EAD) that would have run on every result the
+  engine has ever produced. 48 unit tests pass over that code in 2.7 seconds,
+  testing logic that never runs on customer data.
+
+  The consequence is measured, not inferred. On CRR, £1m senior corporate, F-IRB:
+  a risk feed sending `PD = 1.5` to mean "1.5%" returns RWA **£603.67** against a
+  correct £1,119,286.69 — an understatement of **99.9461%**, a £1,118,683 capital
+  shortfall on every £1m of exposure, with no exception, no null and no
+  `CalculationError`. `LGD = -0.2` returns £0.00. `Maturity = -3` years returns
+  £776,750.85. `CQS = 0`, `7` or `99` on a corporate returns RW 100%, which moves
+  capital in **both** directions — 100% against a true 20% at CQS 1, and 100%
+  against 150% at CQS 6 on an institution. Every one of those is a number a
+  reviewer would accept.
+- **Rule**: Not a single regulatory article — the exposure is the input domain of
+  every article the engine implements. The output-bounds limb is the closest to a
+  named rule: RW is capped at 1250% (CRR Art. 92 / PS1/26), and
+  `validate_aggregated_bundle` is the only thing in the estate that would have
+  said so.
+- **Origin**: `src/rwa_calc/contracts/validation.py`. The escape is old and was
+  **already documented**: `docs/plans/engine-defensiveness-boundary-hardening.md`,
+  written 2026-05-29, states in its root-cause line that "the
+  `contracts/validation.py` bundle validators were never wired into
+  `pipeline.py`." That sentence was still true 2.5 months later, which is the part
+  of this entry worth reading twice — the finding did not escape detection, it
+  escaped *conversion into a gate*.
+- **Escape class**: `gate-not-run`. The catching gate is not missing; this
+  repository ships it, with tests. It is never invoked on customer data. That is
+  the class's definition exactly, and it is why `no-gate-exists` would prescribe
+  the wrong fix — nothing needed inventing, only wiring. It is the **fourth**
+  entry in this file to carry that class, and the fifth measured instance of the
+  habit the log itself names: *build the measurement and stop before wiring it.*
+- **Why every gate missed it**: no gate looks at reachability. Every existing
+  guard in the estate answers "is this output right?", and an unreachable
+  validator produces no output to be wrong. Worse, it produces the *opposite* of a
+  signal: 48 passing unit tests over 402 lines of validation logic read, to any
+  reviewer and to every coverage instrument, as an input contract that is
+  enforced. Coverage tooling counts those lines as covered, because they are —
+  by tests, not by the pipeline.
+
+  Note the asymmetry with the four earlier `gate-not-run` entries. Those were
+  instruments nobody had run *yet*; this one had been run, its finding recorded in
+  a plan document, and the plan document then sat. A written root-cause line is not
+  a gate. Prose has now failed at this five times.
+- **Gate change**: `scripts/arch_check.py` **check 20 —
+  `check_guard_reachability`**, registered in `main()` so
+  `python scripts/arch_check.py` runs it on every commit via the pre-commit hook.
+  Every public function in `contracts/validation.py` (the input contract, which is
+  guard-shaped in whole) and every guard-**named** public function elsewhere under
+  `contracts/` (`validate_` / `check_` / `assert_` / `require_` / `ensure_`) must
+  be transitively reachable from production code under `src/`. Scoped by shape
+  rather than by path so a future `contracts/checks.py` is covered on the day it
+  is written; deliberately not extended to the layer's `create_empty_*` factories
+  and `*_error` constructors, 10 of which are unreachable today and would have
+  given the check a ten-entry allowlist on arrival.
+
+  Three properties are load-bearing, each aimed at a way this file records gates
+  going soft:
+
+  - `GUARD_REACHABILITY_ALLOWLIST` is **empty by design**. Seeding it with the ten
+    known-unreachable validators would have made the check vacuous on arrival —
+    the `caught-and-parked` shape, where a gate fires, the finding is filed, and
+    the wrong behaviour ships anyway. Stale entries are themselves violations, so
+    the list can only be drained.
+  - `CONTRACTS_GUARD_SURFACE` **pins the population**, because reachability alone
+    is satisfiable by removing the thing it measures: rename `validate_pd_range`
+    to `_validate_pd_range` and it leaves the measured set; delete it and the
+    violation leaves with it. This repo has shipped that shape before — four
+    back-compat shells silently disarmed a regression guard that read
+    `module.__file__` (check 18). Deleting a guard stays legitimate; it just has
+    to be deliberate, so the pin is removed in the same change and a reviewer sees
+    which guard went away. **It fired for real during this batch** (see below).
+  - `tests/contracts/test_guard_reachability_gate.py::test_every_arch_check_check_is_registered`
+    generalises the wiring assertion past check 20: **no** `check_*` function in
+    `arch_check.py` may exist without `main()` invoking it. An unregistered check
+    is this escape class committed inside the gate itself.
+
+  The analysis has exactly one implementation. `scripts/validator_reachability.py`
+  — the census this grew out of, and the reproduce command in the proposal — now
+  reads `measure_guard_reachability` from `arch_check` instead of keeping its own
+  copy, and `test_the_reachability_analysis_has_one_implementation` asserts both
+  that it does and that the two agree on the population. The dependency points
+  diagnostic → gate and never the other way, so the gate keeps working if the
+  diagnostic is renamed or deleted.
+- **Verified red**: two, and the second was not planned.
+
+  **(1) The escape itself**, check 20 run against the committed pre-wiring tree
+  (`git archive aa2182bd src`, so the measurement is of the state that shipped
+  rather than of a scratch mutation):
+
+  ```
+  [FAIL] Contracts guards are reachable from production (wire it, or delete it)
+    contracts/validation.py:1140: validate_aggregated_bundle -- guard unreachable from production
+    contracts/validation.py:403: validate_ccf_modelled -- guard unreachable from production
+    contracts/validation.py:373: validate_lgd_range -- guard unreachable from production
+    contracts/validation.py:317: validate_non_negative_amounts -- guard unreachable from production
+    contracts/validation.py:348: validate_pd_range -- guard unreachable from production
+    contracts/validation.py:236: validate_raw_data_bundle -- guard unreachable from production
+    contracts/validation.py:151: validate_required_columns -- guard unreachable from production
+    contracts/validation.py:277: validate_resolved_hierarchy_bundle -- guard unreachable from production
+    contracts/validation.py:64: validate_schema -- guard unreachable from production
+    contracts/validation.py:176: validate_schema_to_errors -- guard unreachable from production
+
+  Total: 10 violation(s)
+  ```
+
+  Ten violations, zero allowlist entries, and the same ten the proposal's census
+  named — an AST-based reference analysis independently reproducing the seed
+  script's regex-based answer.
+
+  **(2) The population pin, firing unprompted.** While the wiring work was landing
+  in parallel, five of the ten validators were **deleted** rather than wired
+  (`validate_schema`, `validate_schema_to_errors`, `validate_required_columns`,
+  `validate_raw_data_bundle`, `validate_resolved_hierarchy_bundle`). The
+  reachability limb went green as they disappeared — exactly the defusal the pin
+  exists for — and the pin caught all five:
+
+  ```
+  contracts: validation.py::validate_schema -- pinned in CONTRACTS_GUARD_SURFACE but no
+  longer a public module-level function there. Check 20 may not be satisfied by deleting,
+  privatising or relocating the guard it measures; if the removal is deliberate, delete
+  the pin in the same commit so a reviewer sees it
+  ```
+
+  This is the strongest evidence in the entry, because it was not a constructed
+  probe: the check's anti-defusal limb fired on real concurrent work within an
+  hour of being written, on a removal nobody had announced. Two of those five
+  deletions are prescribed by the proposal; the other three are a wider call, and
+  the pin is what turned them into a decision somebody has to state. Before the
+  pins were dropped the removal was verified complete — definitions and their
+  private helpers gone, and **no reference to any of the five surviving anywhere
+  under `src/` or `tests/`** — so what the change-set records is a finished
+  deletion, not a half-migration. The consequence worth stating plainly: the
+  estate now ships **no declared-vs-actual schema-drift check at all**.
+
+  **(3) Six adversarial perturbations**, run against a throwaway copy of `src/`
+  so the real tree was never mutated (a killed injection run leaving a live
+  mutation in `src/` has cost this project hours before). Control: 0 violations.
+  Privatising `validate_pd_range` to `_validate_pd_range` → 1 (the pin, not the
+  reachability limb, which goes *quiet* — that is the defusal). Deleting
+  `validate_lgd_range` outright → 1. A new `contracts/checks.py::validate_nothing`
+  that nothing calls → 1, which is the scope-by-shape decision earning its keep:
+  the check covers a module it has never seen, so hard-coding `validation.py`
+  would have let that through. Deleting `contracts/validation.py` entirely → 9.
+  And the negative control that matters, since a gate that fires on everything
+  is not a gate: a new *non-guard* public function in the same unreachable
+  position (`create_empty_thing`) → **0 violations**, confirming the scope
+  boundary is the one documented rather than an accident.
+- **Lesson**: this is the fifth instance of the estate's dominant meta-pattern and
+  the second time it has been "fixed" by writing it down. `.claude/LESSONS.md`
+  carries the graduation rule for exactly this case — a lesson that reaches
+  production twice cannot survive as prose — so the entry belongs in the
+  Graduation ledger rather than the working set. Check 20 is the same move check
+  14 made on Polars namespaces: it removes the *category*, not the instances.
+  What remains prose, because no check can express it: the proposal's other three
+  phases (declare the input domain as data, fuzz the pathology axis, make absence
+  loud) are what stop the next silent-plausible-number defect; check 20 only
+  guarantees that a guard we have already written is running.
+
+## 2026-08-12 — The registers of tolerated findings had no size gate and named no owner, and the count everyone quoted was wrong in both directions
+
+- **Defect**: This file's 2026-08-09 entry 4 recorded eleven wrong numbers parked
+  as accepted disagreements and named its own gate change — a ratchet plus an
+  owning bullet per entry — then closed its **Verified red** field with
+  *"**NOT VERIFIED** for the disposition ratchet, which does not exist yet. By
+  this file's closing rule the escape therefore remains open."* It stayed open for
+  three days. This entry is that closure, and it is filed as its own entry rather
+  than an edit because the interval produced two findings of its own.
+
+  **First: the population was never counted again.** Measured on
+  `fix/input-domain-correctness`, 2026-08-12 — `KNOWN_DISAGREEMENTS` holds **8**
+  entries, **7** of them understating capital: six FCSM cases at 10.0% and
+  `ORC-280` at 33.3%. The eighth, `ORC-142`, runs the *other* way (engine applies
+  a 373,345.27 mortgage-floor adjustment where the oracle applies 0.00) and its
+  limb is *unrepresentable* rather than mis-gated. So "11 entries, 8 understating"
+  — the figure in `docs/plans/test-space-correctness-proposal.md`, in
+  `IMPLEMENTATION_PLAN.md` P5.41, and in this file's own entry 4 heading — was
+  wrong on **both** numbers by the time anyone acted on it. Three of the eleven
+  (the Art. 121(1) Table 5 family) were discharged by P1.316 hours after entry 4
+  was written. Entry 4 predicted this in terms: *"a register whose size is recorded
+  in prose is stale the moment the register moves, which is exactly why the fix is
+  a ratchet and not a sentence."* Its own heading is now the worked example.
+
+  **Second: not one of sixteen entries named an owner.** Across both declared
+  registers — 8 in `KNOWN_DISAGREEMENTS`, 8 in `tests/conformance/classification_table.toml`
+  (D1–D7 *including D1b*, which is why the parallel register is 8 and not the 7
+  everything referring to it says) — **0/16** reason strings named the plan bullet
+  responsible for the fix, against `.claude/LESSONS.md` B7's explicit instruction
+  to put one there. All sixteen owning bullets already existed in
+  `IMPLEMENTATION_PLAN.md`; nothing linked an entry to one, so a register of
+  sixteen shipped-wrong numbers had zero accountable owners while every bullet
+  that would have fixed them sat filed and unreferenced.
+- **Rule**: Not a regulatory escape in itself. The regulatory content at risk is
+  what the sixteen entries park: CRR Art. 197(1)(b)/(d)/(f), Art. 198(1)(a),
+  Art. 218, Art. 222, Art. 114(2); PS1/26 Art. 154(4A)(b); CRR Art. 154(4)(c) /
+  PS1/26 Art. 147(5A)(c); PS1/26 Art. 147(4C)(b)(ii); CRR Art. 147(2)/(3)/(7).
+- **Origin**: `tests/oracle/test_oracle.py::KNOWN_DISAGREEMENTS` and
+  `tests/conformance/classification_table.toml`. Both were built correctly —
+  `tests/oracle/README.md` is emphatic that when the engine and the oracle
+  disagree you adjust neither — and both were built without a size gate.
+- **Escape class**: `caught-and-parked`. Confirmed against the definition at the
+  top of this file rather than assumed: *"a gate fired, and the record of the
+  finding became its resting place"*, fix *"ratchet the finding register; give
+  every parked entry an owning bullet"*. Both limbs match exactly, and the
+  prescribed fix is the fix that landed. Worth noting that the class's *own*
+  justification — "the shape recurs across at least four parallel registers here"
+  — is what made the shared mechanism below the right answer rather than four
+  bespoke ratchets.
+- **Why every gate missed it**: `xfail(strict=True)` is a real gate in exactly one
+  direction. It fails when an entry starts **agreeing**, so a silent fix is
+  impossible and requirement (b) has always been enforced at the only place that
+  can enforce it. Nothing anywhere constrained **growth**, and nothing read the
+  reason strings at all — they are prose attached to a marker, and prose is not
+  parsed. The population could therefore rise without limit while every gate
+  including the two mandatory Tier 2 ones stayed green, which is precisely what
+  4 → 11 in one batch looked like from the outside: a green suite.
+- **Gate change**: in this change-set, from P5.41. **ONE mechanism, two runners.**
+  - `scripts/tolerated_findings.py` — the shared primitive: a direction-neutral
+    generic set-diff (`diff`) and the owner grammar (`owner_of` / `unowned`).
+    Extracted from the supervisory register rather than written fresh.
+  - `scripts/check_parked_registers.py --check` — the gate over the two
+    **declared** registers, against `scripts/parked_registers_baseline.json`.
+  - `tests/contracts/test_parked_register_ratchet.py` — 13 tests. Three run the
+    real gate over the real registers, including one that shells the CLI; ten
+    drive the mechanism synthetically so both directions are demonstrable in
+    milliseconds.
+  - `tests/acceptance/reporting/test_supervisory_validations.py` — all seven legs
+    now route their set arithmetic through the same `diff`. Semantics-preserving:
+    8 passed, unchanged.
+
+  **Script *and* pytest, for a stated reason.** The four registers split on what it
+  costs to compute current membership. The supervisory three are **measured** — a
+  union over sixteen pipeline runs, and only pytest owns the fixtures that produce
+  them — so that ratchet stays where the data is. The two declared ones are a dict
+  literal and a TOML array; reading them is a few milliseconds, so they get a
+  script, which buys the explicit `--update-baseline` verb that makes *banking* a
+  separate reviewable act from *checking*.
+
+  **Deliberately in-suite rather than a CI job.** This file's 2026-08-09 entry 1
+  records a CI-only invocation guard defeated **six** ways while staying green. A
+  millisecond census belongs where nobody has to remember to run it.
+
+  **Stronger than the bullet asked: additions are shrink-only, not two-way.**
+  `--update-baseline` prunes departed ids and refreshes owners and **refuses to
+  add**, so banking a new parked finding means hand-editing the baseline — a diff
+  in a file whose whole purpose is to be reviewed. Every other ratchet in this repo
+  can be satisfied by re-banking a worse number; this one cannot, because what it
+  counts is figures an independent derivation has shown are wrong.
+  **Removals stay free**, and the docstrings say why: a gate that reddens on a fix
+  teaches people to stop fixing, and `strict=True` already forces the entry's
+  removal in the same change. The residual hole is stated in
+  `scripts/tolerated_findings.py` rather than hidden — while a baseline id is
+  stale it is slack in the addition gate — and closing it would mean gating
+  removals.
+
+  **Requirement (c) landed as ownership, not as a grandfathered exception set.**
+  All 16 entries carry an `OWNER: P<n>.<n>` token; every owning bullet already
+  existed and no new bullet was filed. `ORC-142` → **P1.337**;
+  `ORC-257/258/275/278/279/280/281` → **P1.330**; `D1`/`D1b` → **P1.320**; `D2` →
+  **P1.321**; `D3`/`D4`/`D6` → **P1.303**; `D5`/`D7` → **P1.322**. The grammar is
+  an explicit token and not a bare `P\d+\.\d+` scan, which was tried and rejected
+  on measurement: `_ART_154_4A_B_SCOPE` already reads "Since P1.319,
+  engine/irb/adjustments.py gates on the first two and not the third" — a
+  *historical* reference to the bullet that narrowed the gate, not an owner for
+  what remains. A bare regex would have passed the one entry whose ownership was
+  hardest to establish and failed the seven whose owner was obvious; it would have
+  measured prose style, not accountability. That case is pinned by
+  `test_a_historical_bullet_reference_is_not_an_owner`.
+- **Verified red**: six, and the first two are the ones this entry's class
+  demands. All were produced against the **real** registers — four by writing the
+  perturbation to disk and restoring it in a `finally`, so nothing was faked
+  in-process.
+
+  (1) A ninth disagreement added to `tests/oracle/test_oracle.py`, driven through
+  the suite (`2 failed, 11 passed`):
+
+  ```
+  NEW PARKED FINDING (tests/oracle/test_oracle.py::KNOWN_DISAGREEMENTS): 1 entry/entries outside the committed baseline:
+      ORC-999  (owner: P1.330)
+    This register may only SHRINK. Every entry is a number we have independent evidence is WRONG and are shipping anyway, so growing the population is a decision, not a side effect.
+    FIX THE DEFECT. If the finding is genuinely accepted, hand-edit parked_registers_baseline.json to add the id with its owning bullet — --update-baseline will not do it for you.
+  ```
+
+  (2) The owner token stripped from `_ART_197_FCSM_ELIGIBILITY` — requirement (c),
+  firing on all seven consumers of the shared reason (`3 failed, 10 passed`):
+
+  ```
+  NO OWNING BULLET (tests/oracle/test_oracle.py::KNOWN_DISAGREEMENTS): 7 entry/entries name no plan bullet:
+      ORC-257
+      ORC-258
+      ORC-275
+      ORC-278
+      ORC-279
+      ORC-280
+      ORC-281
+    An entry with no owner is the review finding, not the xfail (.claude/LESSONS.md B7). Add `OWNER: P<tier>.<n>` to the entry's reason text, naming the IMPLEMENTATION_PLAN.md bullet that owns the fix — and file that bullet in the same change if it does not exist yet.
+  ```
+
+  (3) and (4) are the same two against the *other* register, proving the mechanism
+  is shared and not a single-register special case — a ninth
+  `[[known_disagreement]]` appended to `classification_table.toml` gives
+  `NEW PARKED FINDING … D8-synthetic-ninth (owner: P1.303)`, and stripping D2's
+  token gives `NO OWNING BULLET … D2-large-corporate-test-keys-on-one-entity-type-string`.
+  Both exit 1.
+
+  (5) The whole gate before the fix, on the untouched tree, which is the state the
+  estate was actually in — two `NO OWNING BULLET` blocks, `8 entry/entries` each,
+  naming all sixteen ids, exit 1.
+
+  (6) The shrink-only claim attacked directly, since a refusal that is only
+  documented is not a refusal. `--update-baseline` asked to bank the ninth entry:
+
+  ```
+  baseline banked at 16 parked finding(s)
+
+  REFUSED to bank 1 NEW entry/entries:
+    oracle_known_disagreements: ORC-999
+  Additions are shrink-only. Fix the defect, or hand-edit parked_registers_baseline.json so the decision to ship a known-wrong number appears in the diff.
+  ```
+
+  with the baseline file **byte-identical afterwards** — checked, not assumed.
+
+  **What this gate does NOT do, and it is the thing a reader will assume.** It
+  constrains the *size* of the register. It does not shrink it, and it says nothing
+  about whether any of the sixteen parked numbers is right. Seven capital
+  understatements are still shipping today; P1.330 and P1.337 own them. This is a
+  ratchet, so it fails on **movement** — the sixteen entries already there move it
+  not at all, and a reader who takes a green gate as evidence the estate is clean
+  has read it exactly backwards. Draining is Phase 4's actual objective; this only
+  stops the queue growing while that happens.
+- **Lesson**: `.claude/LESSONS.md` **B7 is now graduable, and the graduation is
+  filed rather than performed here** — following entry 4's own precedent, since
+  this file does not own `.claude/LESSONS.md` and two other agents were editing
+  the tree concurrently. Both of B7's limbs are executable for both declared
+  registers: membership (`--check` on the baseline) and ownership (the `OWNER:`
+  token), so its Detect line — *"a register entry naming no bullet is the thing to
+  catch in review"* — is no longer a thing to catch in review. What should survive
+  the trim is the judgment B7 carries and no check can: that registering the
+  disagreement is the *right* first move, and that the failure is treating the
+  registration as the end of it. Keep B8 ("ratchet the accumulator, not a ratio")
+  as prose in full: this mechanism
+  *applies* it — the accumulator is the id set, so a register that grows by one and
+  shrinks by one is detected as movement — but B8's own worked example is about
+  choosing the right metric, which no check can express. What also does not
+  graduate, and belongs here rather than in a lesson: **the count in the bullet was
+  wrong, in a bullet whose entire subject was that counts in prose go stale.** The
+  ratchet fixes the register; nothing fixes a figure typed into a sentence.
+
+## 2026-08-12 — Three input pathologies produce a plausible number and no signal, and the codes that would report two of them are declared with no producer
+
+- **Defect**: three distinct silent-wrong-number paths, all found in the first
+  hours of the `tests/robustness/` suite existing. Each returns a populated
+  results row a reviewer would accept.
+
+  **(1) An orphan or null `counterparty_reference`.** Every counterparty-attribute
+  join in the hierarchy stage is `how="left"` — the obligor rating/CQS lift at
+  `engine/stages/hierarchy/enrich.py:131-135`, the entity-type gate lookup at
+  `:253`, and the graph joins at `graph.py:388-420` — so a loan whose obligor
+  cannot be found survives with null obligor attributes, classifies to `other`,
+  and takes the 100% fallback risk weight. Measured on CRR, one GBP
+  1,000,000 senior loan: a CQS 6 corporate is CRR Art. 122 **150%** = GBP
+  1,500,000; pointed at a reference that does not exist it returns GBP
+  **1,000,000**, a **33.3% understatement** on a one-character typo. The direction
+  reverses with the obligor's true class — a CQS 1 corporate is 20% = GBP 200,000
+  and orphaning it returns GBP 1,000,000, a **5x overstatement** — so the defect
+  is not conservative in either direction. A *null* `counterparty_reference`
+  reaches the identical fallback, which matters because that is the more common
+  feed shape (an outer join upstream, or a column never populated).
+  `ERROR_ORPHAN_REFERENCE` (**DQ005**) is declared in `contracts/errors.py:93` and
+  re-exported from `contracts/__init__.py`, and appears nowhere else under `src/`.
+
+  **(2) An unreadable numeric is indistinguishable from an absent one.**
+  **FIXED while this entry was being written** — see the closing section below;
+  the measurement here is the pre-fix state, and is what the new gate was verified
+  red against. `EdgeContract.conform_lenient` (`contracts/edges.py:198-251`) cast every
+  mismatched declared column with `strict=False`, so Polars turns a value it
+  cannot parse into a **null**, `missing` comes back empty, and no data-quality
+  error is emitted. Composed with the input contract's own (correct) rule that
+  null is never a domain violation, the result is a hole. Measured: the same GBP
+  1,000,000 loan whose `drawn_amount` arrives as the string `"1,000,000.00"` — a
+  plain CSV export with a thousands separator — reports `ead_final = 0.00` and
+  `rwa_final = 0.00` against a correct GBP 200,000, with no error. Seven ordinary
+  export artefacts do this (`£1000000`, `1 000 000`, `(1000000)`, `n/a`, the empty
+  string, a truncated `1.0e`). `CSVLoader` reads with `pl.scan_csv`, which infers
+  such a column as `String`, so this was the shipped CSV path and not a contrived
+  bundle.
+
+  **(3) A duplicated input row vanishes.**
+  `engine/stages/classify/permissions.py:261` de-duplicates on
+  `exposure_reference` after the model-permission join — correct for its own
+  purpose, which is to stop a fan-out when several permissions match — and in
+  doing so collapses genuine duplicate INPUT rows. Three input loan rows produce
+  two output rows and no error; a whole file delivered twice loses every duplicate
+  silently. `ERROR_DUPLICATE_KEY` (**DQ004**) exists but is emitted only for the
+  org-hierarchy multi-parent case (`engine/stages/hierarchy/graph.py:474`), never
+  for an exposure table.
+- **Rule**: no single article. As with the 2026-08-12 input-contract entry above,
+  the exposure is the input domain of every article the engine implements. The
+  closest named rules are the ones the fallback silently substitutes for: CRR
+  Art. 122 (corporate SA risk weights by CQS) for (1), and CRR Art. 111 (exposure
+  value) for (2), where a GBP 1m exposure is reported at GBP 0.
+- **Origin**: (1) `engine/stages/hierarchy/enrich.py`; (2)
+  `contracts/edges.py::conform_lenient`; (3)
+  `engine/stages/classify/permissions.py`.
+- **Escape class**: `no-gate-exists` for all three, and the word *exists* is doing
+  precise work in (1) and (3). An error **code** is declared for each; no producer
+  is. That is a recognisable relative of the four `gate-not-run` entries above —
+  the estate's habit of building the instrument and stopping before wiring it —
+  but it is not the same class and would not take the same fix. A constant with no
+  producer is not a gate that failed to run; there is nothing to move earlier. It
+  has to be written. What it shares with `gate-not-run` is the *appearance* of
+  coverage: `ERROR_ORPHAN_REFERENCE` in an `__all__` reads, to a reviewer and to
+  every grep, as referential integrity that is enforced.
+- **Why every gate missed it**: the whole estate is organised on one axis — **by
+  regulatory rule**, *does Art. 123 work?* — and every generator in it starts from
+  a **valid** portfolio. `tests/properties/strategies.py` bounds PD to
+  `[0.0003, 0.20]` and amounts to at least GBP 10k with every field populated, and
+  its docstring says so plainly. The oracle, the conformance table, the goldens
+  and the supervisory register all consume well-formed fixtures. Nothing in 1,081
+  test files asked what happens when the data is **wrong**, so a wrong answer to
+  that question could not be observed.
+
+  Two structural specifics are worth recording beyond that general point. First,
+  `tests/acceptance/stress/test_stress_pipeline.py::TestRowCountPreservation` is
+  the *only* place in the estate that states a count identity between input and
+  output rows, and it counts a clean portfolio — so (3), which is exactly a
+  row-count defect, was outside its reach by construction. Second, (2) is
+  **pinned** at unit level: `tests/contracts/test_edge_contracts.py:368-380`
+  (`test_dtype_mismatch_cast_not_raised`) asserts that an uncastable value becomes
+  null with `missing == []`. That test is
+  correct about `conform_lenient`'s contract and says nothing about the
+  end-to-end consequence, which is a GBP 1m exposure reporting zero capital. A
+  test can pin a mechanism faithfully and leave its consequence unexamined.
+- **Gate change**: **`tests/robustness/`** — a new suite driving the FULL pipeline
+  (not `calculate_branch`) over deliberately broken inputs, asserting a triage
+  invariant rather than a hand-derived number so it scales to as many generated
+  shapes as the runner will pay for. Six generators: unit-scale errors on every
+  ratio column, out-of-domain numerics read off the Phase 1 `ColumnSpec.domain`
+  declarations, one nulled optional field at a time, unknown enum strings with
+  case and whitespace variants, sign flips / duplicate keys / orphan foreign keys,
+  and structural extremes up to 1M rows. `tests/robustness/harness.py` owns the
+  invariant; `.github/workflows/nightly-robustness.yml` runs it nightly under CRR
+  and Basel 3.1 as separate matrix legs, and both `pyproject.toml`'s `addopts` and
+  ci.yml's `test` job exclude the `robustness` marker so it never enters the dev
+  loop.
+
+  The invariant has **four** clauses, not the two the proposal drafted, and the
+  two additions are what make it usable rather than what soften it. Clause (c)
+  accepts a table/column-level aggregate error, because `_collect_domain_violations`
+  names at most `sample_cap=5` rows per column and summarises the rest, and DQ001
+  / DQ010 name no row at all — without it the suite reports false failures on
+  *correct* behaviour, which is how a suite gets switched off. Clause (d) — the row
+  produced no output row and no error mentions it — is the failure, and is what
+  catches (1) and (3). A fifth outcome, `collapsed`, counts input **rows** as well
+  as references, because a duplicate reference IS present in the output and is
+  therefore invisible to any per-reference identity.
+
+  The join back to the input row is on **`source_exposure_reference`**, never
+  `exposure_reference`: the RE splitter, guarantee substitution and the
+  facility-undrawn leg all make the latter non-unique per input row, and joining
+  on it would report every correct split as a vanished row.
+
+  **Not gated per-PR, deliberately.** This is a search, not a regression check;
+  its output is a list of shapes to triage. It is also **red on arrival** on
+  exactly the three defects above, which is the deliverable rather than a fault in
+  the workflow — a green run would mean they were fixed, not that the search found
+  nothing.
+- **Verified red** — each defect against its own new test, before any fix, on the
+  quiet tree:
+
+  ```
+  .venv/bin/python -m pytest tests/robustness/ -m robustness -o addopts= -q
+
+  E  AssertionError: an exposure whose counterparty_reference 'CP_DOES_NOT_EXIST'
+     matches no counterparty produced GBP 1,000,000.00 against a correct GBP
+     1,500,000.00 — a 33.3% understatement — and the run raised NO error at all.
+     DQ005 ERROR_ORPHAN_REFERENCE is declared in contracts/errors.py and emitted
+     nowhere in src/.
+
+  E  AssertionError: an exposure with no counterparty_reference at all produced
+     GBP 1,000,000.00 and no error names it
+
+  E  AssertionError: 1 input row(s) unaccounted for (3 input rows -> 2 output rows)
+       injections: ['loans.loan_reference (duplicated row)']
+       accumulated error codes: ['<no errors at all>']
+         [collapsed] loans:LN000 — 2 input rows share this reference and collapsed
+                     to 1 output row(s); no error says so
+
+  E  AssertionError: drawn_amount='1,000,000.00' could not be cast, was silently
+     nulled, and produced a zero-capital exposure with no error
+  ```
+
+  All four assertions state what **ought** to be true and none pins the wrong
+  number, so a fix turns each one green rather than requiring the test to be
+  rewritten (`.claude/LESSONS.md` C1) — which is not merely a claim about the
+  tests but a measured fact about one of them, since the fourth went green under
+  DQ014 without being touched. The measured control values are asserted
+  *first* in each test, so a failure is unambiguously about the missing signal and
+  not about the risk weights having moved underneath the test.
+- **Defect (2) is CLOSED, by the gate rather than around it.** The eight
+  `test_cast_failures.py` tests were written red against the measurement above and
+  handed to the concurrent Phase 1 work as an acceptance check. **DQ014
+  `ERROR_UNREADABLE_INPUT_DTYPE`** now reports a column supplied in a dtype whose
+  cast is destructive: `seal_lenient` returns `LossyCast` findings alongside
+  `missing`, the loader turns them into one error per (table, column)
+  (`engine/loader.py:223-234`), and `tests/fixtures/raw_bundle.py` routes them into
+  the bundle's error list so an in-memory bundle carries the same load-boundary
+  errors a production load would. All eight tests flipped green with **no edit to
+  any of them**, which is the strongest available form of this evidence: the gate
+  was written first, observed red, and turned green by the fix rather than by being
+  rewritten. Deliberately NOT routed through DQ003 `ERROR_TYPE_MISMATCH`, which
+  Phase 0 retired as unfirable, nor through DQ001 — a value that is present and
+  unreadable needs the feed RE-SENT where a missing column needs it EXTENDED, and
+  `test_an_uncastable_value_is_not_reported_as_a_missing_column` pins the
+  distinction.
+- **Defects (1) and (3) are now CLOSED as well, and by the same route: the four
+  remaining tests were turned green by the fix, with no edit to any of them.**
+  DQ005 has a producer, DQ004 has an exposure-table producer, and both are read
+  off DECLARATIONS in `data/schemas.py` rather than hand-written per column —
+  `TABLE_FOREIGN_KEYS` (a new `ForeignKey` declaration alongside `NumericDomain`
+  / `EnumDomain`) and `TABLE_UNIQUE_KEYS`, both consumed by
+  `contracts/validation.py::validate_referential_integrity` and
+  `::validate_duplicate_keys`. Three decisions in that fix are worth recording
+  because each was a fork where the obvious move was wrong:
+
+  **The join stays `how="left"`.** The recommendation above ("emit DQ005 from
+  the counterparty-enrichment join by counting left-join misses") was followed in
+  substance and not in location. The detection sits at the INPUT gate, which runs
+  on both pipeline entries, because the information is strictly richer there: at
+  the join the miss is a null obligor attribute, indistinguishable from an
+  obligor row that exists and has no rating, and the reference that was supplied
+  — the one thing an operator needs to repair the feed — has already been
+  consumed. Nothing in the fix drops a row: an exposure that has left the
+  portfolio is worse than one priced off a fallback, because its capital is gone
+  and no total says so.
+
+  **Null and orphan carry DIFFERENT codes**, against this entry's own
+  recommendation that they "should carry the same code". They reach the same
+  engine fallback, which is exactly why the distinction has to be drawn at the
+  gate or not at all — downstream both are a null attribute and the information
+  is gone. But they are repaired in different files: an orphan needs the PARENT
+  feed extended or corrected (DQ005), a null needs THIS row's column populated
+  (DQ001, `absent_reference_error`, category `DATA_QUALITY` to keep it apart from
+  the seal's missing-COLUMN DQ001 under `SCHEMA_VALIDATION`). One code would have
+  sent an operator looking in the wrong file.
+
+  **DQ004 is uncapped here, breaking the module's own `sample_cap` contract**,
+  and deliberately. The domain gates sample a property of a COLUMN — naming any 5
+  of 900 out-of-domain rows locates the repair — whereas a duplicate key is a
+  property of a ROW, and a sampled duplicate leaves every un-sampled row exactly
+  as unaccounted-for as it was before the gate existed. That is also precisely
+  what `tests/robustness/harness.py` encodes by refusing to let clause (c) excuse
+  a `collapsed` row. The population is bounded by the number of DISTINCT
+  duplicated keys: zero on well-formed input, equal to the corruption on broken
+  input.
+
+  Cost of the two new materialisations, measured on a synthetic portfolio where
+  every reference resolves and every key is unique (so both checks pay their full
+  scan and emit nothing): **1.06%** of a full pipeline run at 100k loans / 10k
+  counterparties, **0.63%** at 1M loans. Both live in the input gate, which
+  already collects per table; no collect was added to a lazy stage.
+
+  Two fixture repairs were needed and neither loosened an assertion.
+  `tests/unit/test_loader.py::test_scrub_and_validate_returns_empty_for_valid_data`
+  passed `pl.LazyFrame()` for loans and facilities — a zero-COLUMN frame is not a
+  zero-ROW one, and the seal's literals broadcast it to a **single phantom
+  all-null row**, so the "valid data" bundle contained an exposure with no
+  obligor. It now declares a key column and is genuinely empty.
+  `tests/contracts/test_validation.py::test_clean_bundle_raises_nothing` declared
+  a rating for a counterparty absent from the bundle and gave its loan and
+  facility no obligor at all; it now names an obligor that exists. Both were
+  asserting that a broken bundle is silent.
+- **Lesson**: **a declared error code with no producer is negative coverage.** It
+  reads as enforcement to every reviewer, to every grep and to every import-graph
+  tool, while enforcing nothing — the same shape as the 402 lines of unreachable
+  validators in the entry above, one level further out. Check 20
+  (`check_guard_reachability`) closed the unreachable-*validator* case; the
+  unreachable-*code* case is its exact analogue and is mechanically checkable in
+  the same way: every `ERROR_*` constant in `contracts/errors.py` should either
+  have a producer under `src/` or be explicitly listed as reserved, as Phase 0 did
+  for DQ003. Two of the three defects in this entry sat behind a declared code;
+  the third had no code at all until DQ014 was written for it, so the check would
+  have flagged exactly the two that were flaggable.
+  That is the graduation candidate this entry files; it is not performed here
+  because `scripts/arch_check.py` was being edited by another agent in the same
+  tree and check 20's own entry records the same reason for the same restraint.

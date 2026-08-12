@@ -52,7 +52,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from rwa_calc.contracts.context import PipelineContext
-from rwa_calc.contracts.validation import scrub_non_finite_values
+from rwa_calc.contracts.validation import (
+    scrub_non_finite_values,
+    validate_aggregated_bundle,
+    validate_branch_reasons,
+    validate_bundle_values,
+)
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.fx_rate_sync import extract_eur_gbp_rate
 from rwa_calc.engine.materialise import (
@@ -85,6 +90,7 @@ if TYPE_CHECKING:
 
     from rwa_calc.contracts.bundles import AggregatedResultBundle, RawDataBundle
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.contracts.errors import CalculationError
     from rwa_calc.contracts.protocols import (
         ClassifierProtocol,
         CRMProcessorProtocol,
@@ -268,6 +274,21 @@ class PipelineOrchestrator:
                     len(data.errors) - pre_scrub_error_count,
                 )
 
+            # Input-domain gate: categorical AND numeric (PD/LGD/CCF/amounts)
+            # column domains, plus collateral-link referential integrity. Runs
+            # here so the in-memory run_with_data entry is covered — the file
+            # loader also calls validate_bundle_values at load, so its errors
+            # are already on the bundle and _new_input_domain_errors keeps only
+            # what is not there yet. Appended to the BUNDLE (not the result) so
+            # they flow through the existing loader-error merge below.
+            domain_errors = _new_input_domain_errors(data)
+            if domain_errors:
+                logger.warning(
+                    "input-domain gate raised %d error(s) not already on the bundle",
+                    len(domain_errors),
+                )
+                data = replace(data, errors=list(data.errors) + domain_errors)
+
             # Keep eur_gbp_rate in step with the loaded fx_rates table so the IRB
             # SME correlation and the pack-derived regulatory thresholds (EUR
             # bases × eur_gbp_rate, engine/thresholds.py) use the same rate as FX
@@ -369,6 +390,16 @@ class PipelineOrchestrator:
                 all_errors = list(result.errors) + extra_errors
                 result = replace(result, errors=all_errors)
 
+            # Output-bounds gate (OUT001-004): risk_weight above the 1250% cap
+            # or negative, negative rwa_final, null ead_final. Runs on every
+            # run, at the exit, so a bound violation is reported rather than
+            # published. The results frame is already materialised (the
+            # aggregator seals it through materialise_sealed_edge), so this
+            # re-reads an in-memory frame rather than re-executing the plan.
+            bound_errors = _run_output_bounds_gate(result)
+            if bound_errors:
+                result = replace(result, errors=list(result.errors) + bound_errors)
+
             total_ms = round((time.perf_counter() - run_start) * 1000.0, 2)
             logger.info(
                 "pipeline run finished in %.1f ms (%d errors)",
@@ -457,6 +488,50 @@ def create_test_pipeline() -> PipelineOrchestrator:
     from rwa_calc.engine.loader import create_test_loader
 
     return PipelineOrchestrator(loader=create_test_loader())
+
+
+# =============================================================================
+# Input-domain / output-bounds gate helpers
+# =============================================================================
+
+
+def _new_input_domain_errors(data: RawDataBundle) -> list[CalculationError]:
+    """Input-domain errors for ``data`` that are not already on the bundle.
+
+    ``validate_bundle_values`` is idempotent over a bundle, so running it at
+    the pipeline entry covers the in-memory ``run_with_data`` path without
+    double-reporting on the file path: the loader already ran the same
+    function over the same frames, so every error it produced is present on
+    ``data.errors`` and is filtered out here. (``CalculationError`` is a
+    frozen dataclass, hence hashable, so the set difference is exact.) On the
+    loader path the only survivors are therefore errors the loader could NOT
+    have produced — none today, since the sole transformation between the two
+    calls is ``scrub_non_finite_values``, which can only remove them.
+
+    Never raises: a validator defect must not stop a run, exactly as in
+    ``engine/loader.py::_scrub_and_validate``.
+    """
+    try:
+        errors = validate_bundle_values(data)
+    except Exception as e:
+        logger.warning("Input-domain validation failed: %s", e)
+        return []
+
+    already_reported = set(data.errors)
+    return [error for error in errors if error not in already_reported]
+
+
+def _run_output_bounds_gate(result: AggregatedResultBundle) -> list[CalculationError]:
+    """Regulatory output bounds on the aggregated results frame.
+
+    Never raises: a bound-check defect must not sink a completed run — the
+    numbers are already computed and the caller still needs them.
+    """
+    try:
+        return validate_aggregated_bundle(result) + validate_branch_reasons(result)
+    except Exception as e:
+        logger.warning("Output-bounds validation failed: %s", e)
+        return []
 
 
 # =============================================================================

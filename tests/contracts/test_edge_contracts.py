@@ -41,6 +41,7 @@ from rwa_calc.contracts.edges import (
     EdgeColumn,
     EdgeContract,
     EdgeContractViolation,
+    LossyCast,
     reseal_with,
     seal,
     seal_lenient,
@@ -358,44 +359,76 @@ class TestConformLenient:
         contract = _contract()
         lf = _conformant_frame().drop("ead")
 
-        out, missing = contract.conform_lenient(lf)
+        out, missing, lossy = contract.conform_lenient(lf)
         collected = out.collect()
 
         assert missing == ["ead"]
+        assert lossy == []
         assert collected["ead"].to_list() == [None, None]
         assert collected.schema["ead"] == pl.Float64
 
-    def test_dtype_mismatch_cast_not_raised(self):
+    def test_dtype_mismatch_cast_not_raised_but_reported(self):
         contract = _contract()
         lf = _conformant_frame().with_columns(
             pl.Series("ead", ["100.5", "not-a-number"], dtype=pl.String)
         )
 
-        out, missing = contract.conform_lenient(lf)
+        out, missing, lossy = contract.conform_lenient(lf)
         collected = out.collect()
 
-        assert missing == []
+        assert missing == [], "a present-but-unreadable column is not a MISSING one"
         # strict=False cast: invalid values become null, never an exception.
         assert collected["ead"].to_list() == [100.5, None]
         assert collected.schema["ead"] == pl.Float64
+        # ...and the null the cast manufactured is REPORTED, or it is
+        # indistinguishable from a value that was never supplied (DQ014).
+        assert lossy == [LossyCast(column="ead", supplied=pl.String, declared=pl.Float64)]
+
+    @pytest.mark.parametrize(
+        ("supplied", "declared"),
+        [
+            (pl.Int64, pl.Float64),  # whole-pound amount from a parquet writer
+            (pl.Int64, pl.Int8),  # a CQS written wide; Int8 IS the domain
+            (pl.Null, pl.Float64),  # unpopulated optional column
+        ],
+    )
+    def test_writer_type_choice_is_not_reported(self, supplied, declared):
+        """A clean feed must produce NO lossy-cast finding.
+
+        A signal that fires on every run is not a signal — measured across
+        the suite, these three shapes account for 79 of the 80 distinct
+        dtype mismatches the estate's seals see.
+        """
+        contract = EdgeContract(
+            name="widening_edge",
+            columns={"amount": EdgeColumn(dtype=declared)},
+        )
+        lf = pl.LazyFrame({"amount": [1, 2]}, schema={"amount": supplied})
+
+        _out, missing, lossy = contract.conform_lenient(lf)
+
+        assert missing == []
+        assert lossy == []
 
     def test_absent_optional_injected_with_default_not_reported(self):
         contract = _contract()
         lf = _conformant_frame().drop("is_defaulted")
 
-        out, missing = contract.conform_lenient(lf)
+        out, missing, lossy = contract.conform_lenient(lf)
 
         assert missing == []
+        assert lossy == []
         assert out.collect()["is_defaulted"].to_list() == [False, False]
 
     def test_scratch_stripped_and_contract_order(self):
         contract = _contract()
         lf = _conformant_frame().with_columns(pl.lit(1).alias("_scratch"))
 
-        out, missing = contract.conform_lenient(lf)
+        out, missing, lossy = contract.conform_lenient(lf)
         collected = out.collect()
 
         assert missing == []
+        assert lossy == []
         assert collected.columns == [
             "exposure_reference",
             "ead",
@@ -409,17 +442,18 @@ class TestConformLenient:
         contract = _contract()
         lf = _conformant_frame().with_columns(pl.lit(None).alias("is_defaulted"))
 
-        out, _ = contract.conform_lenient(lf)
+        out, _missing, _lossy = contract.conform_lenient(lf)
 
         assert out.collect()["is_defaulted"].to_list() == [False, False]
 
     def test_seal_lenient_brands_and_reports(self):
         contract = _contract()
 
-        out, missing = seal_lenient(_conformant_frame().drop("ead"), contract)
+        out, missing, lossy = seal_lenient(_conformant_frame().drop("ead"), contract)
 
         assert sealed_edge_of(out) == "test_edge"
         assert missing == ["ead"]
+        assert lossy == []
 
 
 class TestRawTableEdges:
@@ -506,7 +540,9 @@ class TestConditionalColumns:
             self._edge().conform(lf)
 
     def test_lenient_does_not_inject_conditional(self):
-        out, missing = self._edge().conform_lenient(pl.LazyFrame({"exposure_reference": ["E1"]}))
+        out, missing, _lossy = self._edge().conform_lenient(
+            pl.LazyFrame({"exposure_reference": ["E1"]})
+        )
 
         assert missing == []
         assert "guarantor_pd" not in out.collect().columns

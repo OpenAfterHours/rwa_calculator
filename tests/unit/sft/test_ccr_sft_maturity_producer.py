@@ -70,7 +70,7 @@ def _build_bundle(
         "qualifies_mna_intermediate_floor": qualifies_mna_intermediate_floor,
     }
     trades_df = pl.DataFrame([trade_row], schema=dtypes_of(SFT_TRADE_SCHEMA))
-    sealed_trades, _ = seal_lenient(trades_df.lazy(), SFT_TABLE_EDGES["sft_trades"])
+    sealed_trades, *_ = seal_lenient(trades_df.lazy(), SFT_TABLE_EDGES["sft_trades"])
     return RawSFTBundle(trades=SftTradeBundle(sft_trades=sealed_trades))
 
 
@@ -120,7 +120,7 @@ def test_empty_sft_book_does_not_raise() -> None:
     frame that still carries the carrier column.
     """
     empty_trades = pl.DataFrame([], schema=dtypes_of(SFT_TRADE_SCHEMA))
-    sealed, _ = seal_lenient(empty_trades.lazy(), SFT_TABLE_EDGES["sft_trades"])
+    sealed, *_ = seal_lenient(empty_trades.lazy(), SFT_TABLE_EDGES["sft_trades"])
     bundle = RawSFTBundle(trades=SftTradeBundle(sft_trades=sealed))
 
     rows = sft_bundle_to_exposures(bundle, _REPORTING_DATE, rulepack=_CRR_PACK).collect()

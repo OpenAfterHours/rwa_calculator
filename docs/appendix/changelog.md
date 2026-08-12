@@ -8,6 +8,274 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Branch reasons and a run-level branch census — `otherwise` no longer means
+  two different things (Phase 3).** In Polars, `pl.when(p).then(a).otherwise(b)`
+  yields `b` when `p` is `False` **and** when `p` is null, and the output carries
+  no trace of which happened. Every rule in this engine whose predicate touches a
+  nullable column therefore had a silent third state, in which a row was priced on
+  a branch nobody chose. The two high-stakes paths now emit the reason beside the
+  value:
+
+  - `sa_risk_weight_branch_reason` (`engine/sa/sovereign_floor.py`, extracted from
+    `risk_weights.py`) names which limb of the PS1/26 Art. 121(6) sovereign floor
+    decided the row — including `domestic_currency` ("the rule does not apply")
+    and `UNKNOWN_FALLBACK` ("the domesticity test could not be evaluated"), which
+    were previously the same observable outcome.
+  - `irb_lgd_branch_reason` (`engine/irb/transforms.py::apply_firb_lgd`) names the
+    LGD's source. Its `UNKNOWN_FALLBACK` is the `fill_null(default_lgd)` limb: an
+    IRB row with no own estimate, no modelled LGD and no purchased-receivables
+    subtype was silently priced on the senior-unsecured supervisory rate.
+
+  Both are built by one primitive, `engine/branch_reason.py::decide`, which
+  derives the value chain and the reason chain from the **same** predicate
+  objects so they cannot drift, and which raises rather than accumulates if a
+  vocabulary cannot say `UNKNOWN_FALLBACK`. Each call site's value chain is
+  provably identical to the one it replaced — the instrument moves no capital;
+  all 30 existing sovereign-floor tests and the reporting goldens are unchanged.
+
+  The reason columns are `pl.Enum`, not `String`, and that is load-bearing rather
+  than an optimisation: the Enum carries its category list in the *dtype*, so the
+  census can report a limb **no row reached**, which a String column is
+  structurally incapable of doing. Measured cost at 60,000 rows: 296 → 298
+  columns, +127,500 bytes (**+0.13%** of the result frame, ~1.06 bytes per row per
+  column, 6.2× cheaper than the same columns as `String`), and +0.17s wall
+  (1.672s → 1.837s best of three, **+9.9%**) — the time, not the space, is the
+  real cost, and it is the price of evaluating each predicate a second time for
+  its nullity test.
+
+- **`BR001` — a row on `UNKNOWN_FALLBACK` never stands alone.**
+  `contracts/validation.py::validate_branch_reasons` runs at the pipeline exit and
+  names every unjustified row, folding into the collect
+  `validate_aggregated_bundle` already pays for rather than adding a
+  materialisation. Severity is `WARNING` deliberately: such a row is
+  *unjustified*, not provably wrong, and an ERROR would have reddened every run
+  touching a known-open defect until someone switched the gate off.
+
+- **A two-way branch-census ratchet** — `scripts/check_branch_census.py` +
+  `scripts/branch_census_baseline.json`, gated per-PR by the new `branch-census`
+  CI job and driven in-suite by `tests/contracts/test_branch_census_ratchet.py`.
+  It runs the same 14-portfolio × 2-regime matrix as
+  `check_template_cell_coverage.py` (imported, never re-declared) in ~45s and
+  keys two registers on `<column>::<reason>` through the shared set-diff in
+  `scripts/tolerated_findings.py`. They ratchet in **opposite** directions:
+  `reached` is a coverage population, so a removal is a hard failure; `dead` is a
+  tolerated-findings population, so an addition is a hard failure and banking one
+  is a hand edit that must carry a written reason and an `OWNER:` bullet. Neither
+  is a count or a ratio (`.claude/LESSONS.md` B8). A limb newly taking
+  `UNKNOWN_FALLBACK` rows is reported as a **loss**, not as an improvement.
+
+  Its first run is already a finding: **the Art. 121(6) sovereign floor never
+  binds anywhere in the estate.** `floor_bound` and `floor_not_binding` are both
+  dead across all 28 runs — the rule's applicable population is empty — while two
+  rows reach it and land on `UNKNOWN_FALLBACK`. The 30 existing unit tests all
+  supply `cp_local_currency` explicitly, which is exactly the path production rows
+  do not take.
+
+- **`DQ014` — a column that could not be READ is no longer indistinguishable
+  from one that was never SUPPLIED.** The loader seal casts every declared
+  column whose dtype does not match with `strict=False`, so Polars turns a
+  value it cannot parse into a null and reports nothing; the input contract's
+  own rule is — correctly — that a null is never a domain violation. The two
+  rules composed into a hole with no floor: a GBP 1,000,000 exposure whose
+  `drawn_amount` arrived as the string `"1,000,000.00"` (a plain CSV export
+  with a thousands separator, which `scan_csv` infers as `String`) published
+  `ead_final = rwa_final = 0.00` against a correct GBP 200,000 — a **100%
+  understatement of that exposure's capital, on a populated-looking row, with
+  an empty `errors` list**. It reproduced on every ordinary way a feed writes a
+  number: `£1000000`, `1 000 000`, `(1000000)`, `n/a`, `""`, `1.0e`.
+
+  `EdgeContract.conform_lenient` now returns those columns as `LossyCast`
+  findings alongside the missing-column names it already returned, and
+  `engine/loader.py::_seal_table` maps each to one `DQ014`
+  (`ERROR_UNREADABLE_INPUT_DTYPE`, severity `error`) naming the table, the
+  column, the dtype supplied and the dtype declared. `DQ001` and `DQ014` stay
+  distinct because their remedies are: an absent column has to be **added** to
+  the feed, an unreadable one has to be **re-typed** and re-sent.
+
+  The check is schema-only — `collect_schema()` is already called by the same
+  method, so there is no materialisation, no row scan and no per-table cost —
+  and it reports only mismatches whose cast can change a value. A writer's own
+  type choice (any integer into any integer or float, an all-null column,
+  `Float32`→`Float64`, `Date`→`Datetime`) is not reported: measured over the
+  full suite, 79 of the 80 distinct dtype mismatches this estate's seals see
+  are of exactly those shapes, and the 80th is the `String`→`Float64` that
+  `tests/contracts/test_edge_contracts.py` injects deliberately. A signal that
+  fires on every clean feed is not a signal.
+
+  Note the shape of this, because the argument that deleted the old check will
+  be re-derived: declared-vs-actual dtype drift is what `validate_schema_to_errors`
+  checked before Phase 0 deleted it as "structurally incapable of firing"
+  (`DQ003`, kept reserved). That deletion was **correct** — it ran *downstream*
+  of the cast, where the mismatch has already been normalised away. The same
+  check *upstream* of the cast fires on real customer data.
+- **The registers of parked findings are ratcheted, and every entry names the
+  plan bullet that owns it.** A *parked finding* is one a gate made and the
+  estate then agreed to tolerate. There were sixteen of them across two
+  registers — 8 in `tests/oracle/test_oracle.py::KNOWN_DISAGREEMENTS`, of which
+  **seven understate capital** (six FCSM cases at 10.0%, `ORC-280` at 33.3%),
+  and 8 more in `tests/conformance/classification_table.toml` — with **no size
+  gate at all** and **0 of 16** naming an owner. `xfail(strict=True)` fails when
+  an entry starts *agreeing*, so a silent fix was impossible; nothing
+  constrained growth, and the population went 4 → 11 in a single batch with
+  every gate green.
+
+  `scripts/check_parked_registers.py --check` now gates both, driven in-suite by
+  `tests/contracts/test_parked_register_ratchet.py` so it cannot rot unwired.
+  Additions are **shrink-only** — `--update-baseline` prunes departed ids and
+  refreshes owners but refuses to add one, so parking a new known-wrong number
+  is a hand edit to `scripts/parked_registers_baseline.json` that appears in
+  review. Removals stay free, because a gate that reddens on a fix teaches
+  people to stop fixing.
+
+  One mechanism serves all four of the project's tolerated-findings registers:
+  `scripts/tolerated_findings.py` holds the set-diff and the `OWNER: P<n>.<n>`
+  grammar, and the measured supervisory register
+  (`test_supervisory_validations.py`) routes its seven legs through the same
+  `diff` while keeping its own runner. The declared registers are shrink-only;
+  the measured one stays two-way, because a fixture change legitimately moves
+  it. See [the escape log](../development/escape-log.md) — this closes the
+  2026-08-09 `caught-and-parked` entry, which had recorded its own gate change
+  as `NOT VERIFIED` and therefore still open.
+- **`arch_check` check 20 — a guard in the contracts layer must be reachable
+  from production.** Every public function in `contracts/validation.py` (the
+  input contract, guard-shaped in whole) and every guard-**named** public
+  function elsewhere under `contracts/` (`validate_` / `check_` / `assert_` /
+  `require_` / `ensure_`) must be transitively reachable from production code
+  under `src/`. The escape it closes was measured at 10 of the 14 public
+  validators — **402 lines, all carrying green unit tests, none of them ever
+  running on customer data**, including `validate_aggregated_bundle`, the
+  output-bounds guard for RW > 1250%, negative RW, negative RWA and null EAD. It
+  is scoped by guard *shape* rather than by module path, so a future
+  `contracts/checks.py` is covered from the day it is written.
+
+  Two properties make it hard to defuse. `GUARD_REACHABILITY_ALLOWLIST` is empty
+  by design and stale entries are themselves violations, so it can only be
+  drained. `CONTRACTS_GUARD_SURFACE` pins the measured population, because
+  reachability alone is satisfiable by *removing* the guard rather than wiring
+  it — renaming `validate_pd_range` to `_validate_pd_range` would otherwise
+  clear the violation along with the check. Deleting a guard stays legitimate; it
+  just has to be deliberate, so the pin comes out in the same change and a
+  reviewer sees which guard went away. That limb fired for real on the wiring
+  work landing alongside this check, catching five validators removed rather than
+  wired.
+
+  `scripts/validator_reachability.py` is now the human-readable census over the
+  same measurement rather than a second copy of the analysis — it reads
+  `measure_guard_reachability` from `arch_check`, and the dependency points
+  diagnostic → gate so the gate keeps working if the census script is renamed or
+  deleted. Both halves are asserted by
+  `tests/contracts/test_guard_reachability_gate.py`, which also generalises the
+  wiring assertion past check 20: **no** `check_*` function in `arch_check.py`
+  may exist without `main()` invoking it, since an unregistered check is the
+  same escape class committed inside the gate itself. Recorded in
+  [the escape log](../development/escape-log.md) as the fifth instance of the
+  estate's dominant meta-pattern — build the instrument, stop before wiring it —
+  and the second time it had been "fixed" by writing it down.
+- **Out-of-domain numeric inputs are now rejected instead of silently priced.**
+  `validate_bundle_values()` gained a numeric input-domain gate driving the four
+  range validators that had never run on customer data — PD `[0, 1]`
+  (`IRB001`), LGD and `lgd_unsecured` `[0, 1.25]` (`IRB002`), own-estimate
+  `ccf_modelled` `[0, 1.5]` (`IRB008`, new), and the amount columns whose domain
+  excludes negatives (`DQ012`, new: facility `limit`, contingent
+  `nominal_amount`, collateral `market_value` / `nominal_value`,
+  `max_pledge_amount`, guarantee `amount_covered`, provision `amount`, equity
+  `carrying_value` / `fair_value`).
+
+  These are `ERROR`s, not warnings, because the failure mode is a plausible wrong
+  number rather than a degraded one: a feed expressing PD in percent (`1.5`
+  meaning 1.5%) understated a GBP 1m senior corporate F-IRB exposure's RWA by
+  **99.95%** with no signal of any kind. Each error names the offending row via
+  `exposure_reference`, sampled at five rows per column plus an omitted-count
+  summary, and costs one `.collect()` per table.
+
+  Three columns are deliberately **out** of the non-negative set, each because a
+  negative there is legitimate: `drawn_amount` / `interest` (the CRR Art. 195/219
+  on-balance-sheet netting convention, already covered by `DQ010`) and
+  `position_value` (declared signed, +long / -short, for the Art. 133 net long).
+  The PD domain is closed at zero on the same principle — CRR Art. 160(1) reaches
+  corporates and institutions only, so the rulepack carries
+  `pd_floors["sovereign"] = 0` and a sovereign IRB exposure priced at PD 0 is
+  valid input, not a violation.
+- **Both pipeline entries gate the input domain, and the exit gates the output.**
+  `validate_bundle_values()` previously ran only inside the file loader, so a
+  caller passing an in-memory bundle to `PipelineOrchestrator.run_with_data`
+  received no input validation at all. It now also runs at the pipeline entry
+  beside `scrub_non_finite_values`, de-duplicated against the errors already on
+  the bundle so the file path reports exactly once.
+  `validate_aggregated_bundle()` — the output-bounds guard for risk weight above
+  the 1250% cap, negative risk weight, negative RWA and null EAD — runs at the
+  pipeline exit on every run. It reads the already-materialised aggregator-exit
+  frame; measured at 100k counterparties / 373,568 result rows it costs **5 ms
+  against a 7.6 s run (0.07%)**, and the input gate **93 ms (1.2%)**.
+
+- **`DQ005` and `DQ004` have producers — referential integrity is now enforced,
+  not merely declared.** `ERROR_ORPHAN_REFERENCE` had been declared in
+  `contracts/errors.py` and emitted **nowhere** under `src/`, which reads as
+  enforcement to every reviewer and every grep while enforcing nothing.
+  Two new declaration-driven gates close it, both wired into
+  `validate_bundle_values` so they run on **both** pipeline entries:
+
+  - `validation.py::validate_referential_integrity` reads
+    `data/schemas.py::TABLE_FOREIGN_KEYS` — a new `ForeignKey` declaration
+    alongside `NumericDomain` / `EnumDomain`, covering the obligor links on
+    `loans`, `contingents`, `facilities`, `ratings` and `specialised_lending`.
+    A value that resolves to no parent row is **`DQ005`**; a **null** reference
+    is **`DQ001`** (`absent_reference_error`). The two are deliberately
+    different codes: they reach the same engine fallback, but an orphan is
+    repaired in the PARENT feed and a null in THIS row, and downstream both are
+    simply a null attribute — so the distinction exists at the gate or nowhere.
+    Sampled per the module's `sample_cap` contract (5 row-named errors per
+    table/column, then one summary carrying the omitted count).
+  - `validation.py::validate_duplicate_keys` reads
+    `data/schemas.py::TABLE_UNIQUE_KEYS` (`loans`, `contingents`, `facilities`,
+    `counterparties`) and emits one **`DQ004`** per duplicated key — **uncapped**,
+    unlike every other gate in the module. A domain violation is a property of a
+    COLUMN, where any 5 named rows locate the repair; a duplicate key is a
+    property of a ROW, and a sampled duplicate leaves the un-sampled rows exactly
+    as unaccounted-for as before. Severity is ERROR here against WARNING for the
+    existing `org_mappings` producer, because there the resolver de-duplicates a
+    mapping and loses no exposure, whereas here the model-permission de-dupe
+    collapses duplicate exposure rows (their capital leaves the portfolio total)
+    and a duplicated obligor multiplies every exposure joined to it.
+
+  **No number moves and no row is dropped.** The counterparty joins stay
+  `how="left"`: an exposure that has left the portfolio is worse than one priced
+  off a fallback, because its capital is gone and no total says so. What changed
+  is that the substitution is now named. Measured on CRR, one GBP 1,000,000
+  senior loan whose `counterparty_reference` points nowhere: `rwa_final` is
+  GBP 1,000,000 against a correct GBP 1,500,000 for a CQS 6 corporate (Art. 122,
+  150%) — a **33.3% understatement** — previously with an empty error list. At
+  CQS 1 the same fallback is a **5x overstatement**, so the defect was not
+  conservative in either direction.
+
+  Cost of the two new materialisations, measured where every reference resolves
+  and every key is unique (so both checks pay their full scan and emit nothing):
+  **1.06%** of a full pipeline run at 100k loans / 10k counterparties
+  (30.5 ms → 49.9 ms of a 1.82 s run) and **0.63%** at 1M loans
+  (70.9 ms → 162.0 ms of a 14.4 s run). Both sit in the input gate, which already
+  collects per table; no collect was added to a lazy stage.
+
+  Closes the two open findings in `tests/robustness/test_referential_integrity.py`
+  — the four failing tests went green with **no edit to any of them**. See
+  `docs/development/escape-log.md` (2026-08-12).
+
+### Removed
+- **Five schema-shape validators, deleted rather than wired.**
+  `validate_schema`, `validate_schema_to_errors`, `validate_required_columns`,
+  `validate_raw_data_bundle` and `validate_resolved_hierarchy_bundle` are gone,
+  along with their `contracts` re-exports. They were structurally incapable of
+  firing: every `RawDataBundle` frame carries a loader edge brand, and the seal
+  that grants it already injects missing required columns (reported as `DQ001`
+  by the loader) and casts declared columns to their declared dtype — so on any
+  constructible bundle both of their limbs are dead. Measured directly: a bundle
+  built with a missing required column *and* a wrong-dtype column yields zero
+  errors from `validate_raw_data_bundle`. Wiring them would have added a check
+  that always passes; the honest outcome is to delete them and keep the seal.
+
+  Stage-to-stage column contracts are unaffected — those are enforced strictly by
+  the producer seal, which raises `EdgeContractViolation` rather than
+  accumulating an error, because a stage omitting its own declared output column
+  is a programming error.
 - **The release now gates the artifact it is about to publish, not just the
   source tree it was built from.** v0.3.25 was tagged, released and announced
   before anything discovered that its wheel could not be uploaded: `uv build`

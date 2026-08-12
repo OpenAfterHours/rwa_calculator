@@ -88,6 +88,11 @@ class CalculationError:
 # Data quality error codes
 ERROR_MISSING_FIELD = "DQ001"
 ERROR_INVALID_VALUE = "DQ002"
+# RESERVED — no producer. Its sole emitter (``validate_schema_to_errors``) was
+# deleted as unfirable: it ran DOWNSTREAM of the loader edge seal, where every
+# declared column has already been cast to its declared dtype. Kept reserved
+# rather than recycled so old audit records stay readable; the same finding
+# taken UPSTREAM of that cast, where it does fire, is DQ014.
 ERROR_TYPE_MISMATCH = "DQ003"
 ERROR_DUPLICATE_KEY = "DQ004"
 ERROR_ORPHAN_REFERENCE = "DQ005"
@@ -111,6 +116,33 @@ ERROR_NEGATIVE_AMOUNT_WITHOUT_NETTING = "DQ010"
 # which downstream semantics handle), poisoning rwa_final on the affected rows
 # and — through the Basel 3.1 portfolio output floor — the whole portfolio.
 ERROR_NON_FINITE_RAW_INPUT = "DQ011"
+# Negative value in an amount column whose regulatory domain excludes negatives
+# (a facility limit, a contingent nominal, a collateral value, a guarantee
+# cover, a provision amount). Distinct from DQ010: drawn_amount / interest MAY
+# legitimately be negative under the on-balance-sheet netting convention
+# (CRR Art. 195/219), these columns may not — a negative here manufactures
+# exposure or capital relief out of nothing. Emitted by the input-domain gate
+# (contracts/validation.py::_validate_numeric_ranges).
+ERROR_NEGATIVE_AMOUNT = "DQ012"
+# Input value outside the domain declared for its column
+# (``data/schemas.py`` ``ColumnSpec.domain``). The GENERIC code emitted by the
+# declaration-driven input-domain gate for any column that does not pin an
+# older, more specific code — a CQS outside 1-6, an FX rate <= 0, an LTV below
+# zero, a risk-weight override above the 1250% cap. New declarations need no
+# new code: only columns whose code the estate already publishes are pinned
+# (contracts/validation.py::_DOMAIN_REPORTING).
+ERROR_INPUT_OUT_OF_DOMAIN = "DQ013"
+# Input column supplied in a dtype whose cast to the declared dtype can destroy
+# values — a String amount, a float into a declared integer band. The loader
+# seal casts non-strictly (``contracts/edges.py::conform_lenient``), so an
+# unparseable value becomes null, and the input-domain gate's rule is correctly
+# that null is never a domain violation: without this code a value that could
+# not be READ is indistinguishable from one never SUPPLIED and from a genuine
+# zero. Measured: a GBP 1m drawn_amount arriving as "1,000,000.00" published
+# rwa_final = 0.00 with an empty error list. This is the UPSTREAM form of the
+# check DQ003 lost — see DQ003 above for why it is a new code and not a revival.
+# Emitted by the loader edge seal (``engine/loader.py::_seal_table``).
+ERROR_UNREADABLE_INPUT_DTYPE = "DQ014"
 
 # Hierarchy error codes
 ERROR_CIRCULAR_HIERARCHY = "HIE001"
@@ -232,6 +264,12 @@ ERROR_MISSING_EXPECTED_LOSS = "IRB006"
 # below the residential 10% / commercial 15% floor. Monitoring WARNING only —
 # never an RWA/LGD adjustment.
 ERROR_RETAIL_RE_PORTFOLIO_LGD_FLOOR = "IRB007"
+# Own-estimate conversion factor (``ccf_modelled``) outside its input domain
+# [0, 1.5]. The A-IRB own-estimate CCF of CRR Art. 166(8)/(10): a value above
+# 1.5 is beyond even the retail additional-drawdown allowance, and a negative
+# one would reduce the exposure value. Emitted by the input-domain gate
+# (contracts/validation.py::_validate_numeric_ranges), never floored silently.
+ERROR_CCF_OUT_OF_RANGE = "IRB008"
 
 # SA error codes
 ERROR_INVALID_CQS = "SA001"
@@ -267,6 +305,15 @@ ERROR_RW_ABOVE_CAP = "OUT001"
 ERROR_RW_NEGATIVE = "OUT002"
 ERROR_RWA_NEGATIVE = "OUT003"
 ERROR_EAD_NULL = "OUT004"
+
+# Branch-reason code (validate_branch_reasons). A row whose *_branch_reason
+# column reads UNKNOWN_FALLBACK was priced on a branch the engine could not
+# justify: either the deciding predicate evaluated to null and pl.when silently
+# took `otherwise`, or a value was substituted for input that was simply absent.
+# The number such a row carries is plausible and unearned, which is precisely
+# the failure docs/plans/test-space-correctness-proposal.md exists to close —
+# so the reason column never stands alone, and this code is what accompanies it.
+ERROR_UNKNOWN_BRANCH_FALLBACK = "BR001"
 
 # Aggregator non-finite output code. A single NaN/inf in a per-row RWA/EAD/RW
 # column propagates through Polars ``.sum()`` (NaN is not skipped like null) and
@@ -575,6 +622,139 @@ def negative_amount_without_netting_warning(
     )
 
 
+def orphan_reference_error(
+    *,
+    table: str,
+    column: str,
+    parent_table: str,
+    value: str,
+    reference: str | None,
+    counterparty_reference: str | None,
+    reason: str,
+) -> CalculationError:
+    """Create a DQ005 error for a foreign key that resolves to no parent row.
+
+    The reference IS supplied and points nowhere: the feed's parent table is
+    short a row, or the value is a typo. That is a different repair from an
+    absent reference (:func:`absent_reference_error`, DQ001) — this one needs
+    the PARENT feed re-sent or extended, that one needs the child column
+    populated — so the two carry different codes rather than one code with two
+    messages.
+
+    The row is never dropped. Every counterparty-attribute join in the
+    hierarchy stage is ``how="left"`` deliberately (dropping the exposure would
+    remove its capital from the portfolio outright, which is worse than
+    mis-pricing it), so the row survives carrying whatever fallback treatment
+    ``reason`` names. This error is what makes that substitution visible.
+
+    Severity is ERROR, matching the declared-domain gate: the row does not
+    degrade to a null anyone would notice, it publishes a plausible and wrong
+    number.
+    """
+    return CalculationError(
+        code=ERROR_ORPHAN_REFERENCE,
+        message=(
+            f"[{table}] '{column}' = '{value}' resolves to no row in '{parent_table}'. {reason}"
+        ),
+        severity=ErrorSeverity.ERROR,
+        category=ErrorCategory.DATA_QUALITY,
+        exposure_reference=reference,
+        counterparty_reference=counterparty_reference,
+        regulatory_reference=reason,
+        field_name=column,
+        expected_value=f"a {parent_table} reference that exists",
+        actual_value=value,
+    )
+
+
+def absent_reference_error(
+    *,
+    table: str,
+    column: str,
+    parent_table: str,
+    reference: str | None,
+    reason: str,
+) -> CalculationError:
+    """Create a DQ001 error for a declared foreign key that was never supplied.
+
+    Deliberately NOT DQ005. An orphan is a BROKEN link — a value that points at
+    a row somebody expected to exist — and its repair is to the parent feed. A
+    null is a MISSING FIELD: no link was ever asserted, and its repair is to
+    this row. Reporting both under one code would tell an operator to go
+    looking in the wrong file, and would make the two indistinguishable in the
+    audit trail even though they arrive from different upstream faults (a
+    partial parent extract versus an unpopulated column).
+
+    They reach the same engine fallback, which is why the distinction has to be
+    made HERE: downstream, both are simply a null obligor attribute and the
+    information about which one it was is gone.
+    """
+    return CalculationError(
+        code=ERROR_MISSING_FIELD,
+        message=(
+            f"[{table}] '{column}' is null, so this row asserts no link to "
+            f"'{parent_table}' at all. {reason}"
+        ),
+        severity=ErrorSeverity.ERROR,
+        category=ErrorCategory.DATA_QUALITY,
+        exposure_reference=reference,
+        regulatory_reference=reason,
+        field_name=column,
+        expected_value=f"a {parent_table} reference",
+    )
+
+
+def duplicate_input_key_error(
+    *,
+    table: str,
+    column: str,
+    value: str,
+    count: int,
+    names_a_counterparty: bool,
+) -> CalculationError:
+    """Create a DQ004 error for an input table's natural key appearing twice.
+
+    One per DUPLICATED KEY rather than one per table, and uncapped, because a
+    count alone is not actionable: an operator repairs a feed by finding the
+    rows, and the population is bounded by the number of distinct duplicated
+    keys — which is zero on well-formed input. This is the one place in the
+    input gate where the estate's ``sample_cap`` sampling contract does not
+    apply, and the reason is that a sampled duplicate leaves the un-sampled
+    rows exactly as unaccounted-for as they were before the gate existed.
+
+    Severity is ERROR, unlike the ``org_mappings`` DQ004 raised by
+    ``engine/stages/hierarchy/graph.py``, which is a WARNING. The two are not
+    inconsistent: there, the resolver de-duplicates a MAPPING table
+    deterministically and no exposure is lost, so the operator is told about a
+    tidy-up. Here the key names an exposure or an obligor — the model-permission
+    join collapses duplicate exposure rows and the counterparty join multiplies
+    them — so the portfolio total is wrong in one direction or the other and the
+    reference has stopped identifying a row at all.
+
+    ``names_a_counterparty`` routes the offending value to the right reference
+    field. Both fields are read by consumers that triage by row, and putting a
+    counterparty reference in ``exposure_reference`` would make the error
+    unjoinable to the obligor it is actually about.
+    """
+    return CalculationError(
+        code=ERROR_DUPLICATE_KEY,
+        message=(
+            f"[{table}] {count} input rows share '{column}' = '{value}'. The key "
+            "no longer identifies a row: downstream de-duplication keeps one "
+            "exposure row per reference (so the others' capital leaves the "
+            "portfolio total), and a duplicated obligor multiplies every exposure "
+            "that joins to it. Neither outcome is recoverable from the output."
+        ),
+        severity=ErrorSeverity.ERROR,
+        category=ErrorCategory.DATA_QUALITY,
+        exposure_reference=None if names_a_counterparty else value,
+        counterparty_reference=value if names_a_counterparty else None,
+        field_name=column,
+        expected_value="one row per key",
+        actual_value=str(count),
+    )
+
+
 def non_finite_raw_input_error(
     *, table: str, column: str, count: int, references: list[str] | None = None
 ) -> CalculationError:
@@ -655,6 +835,44 @@ def missing_required_column_error(*, table: str, column: str) -> CalculationErro
         ),
         field_name=column,
         actual_value=table,
+    )
+
+
+def unreadable_input_dtype_error(
+    *, table: str, column: str, supplied: str, declared: str
+) -> CalculationError:
+    """Create a DQ014 error for an input column supplied in a destructive dtype.
+
+    Emitted by the loader's edge seal (``engine/loader.py::_seal_table``),
+    one per (table, column), from the ``LossyCast`` findings that
+    ``EdgeContract.conform_lenient`` returns. The seal casts a mismatched
+    column with ``strict=False``, so any value Polars cannot convert
+    becomes null — and null is legitimately "not supplied" everywhere
+    downstream. A GBP 1,000,000 ``drawn_amount`` arriving as the string
+    ``"1,000,000.00"`` therefore published ``ead_final = rwa_final =
+    0.00``, a 100% understatement of that exposure's capital, on a row
+    that looks populated and with nothing in the error list.
+
+    ERROR rather than WARNING deliberately: the measured consequence is a
+    silent understatement of regulatory capital, and the remedy is a
+    re-typed feed, not a judgement call. The finding is the dtype drift
+    itself — no value is inspected, because the seal runs on every table
+    of every run and must not materialise anything — so the message says
+    what CAN have happened, not how many values did.
+    """
+    return CalculationError(
+        code=ERROR_UNREADABLE_INPUT_DTYPE,
+        severity=ErrorSeverity.ERROR,
+        category=ErrorCategory.SCHEMA_VALIDATION,
+        message=(
+            f"Input column '{table}.{column}' arrived as {supplied} where {declared} "
+            f"is declared; the loader seal casts it non-strictly, so any value that "
+            f"could not be converted became null — indistinguishable from a value "
+            f"that was never supplied (a nulled amount publishes as 0.00 capital, "
+            f"not as an error). Re-send '{column}' typed as {declared}."
+        ),
+        field_name=column,
+        actual_value=supplied,
     )
 
 

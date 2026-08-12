@@ -373,28 +373,22 @@ See [`engine/aggregator/aggregator.py`](https://github.com/OpenAfterHours/rwa_ca
 
 ### Schema Validation
 
+Schema shape is sealed at the loader boundary rather than checked by a standalone
+validator. `seal_lenient` conforms each raw table to its `EdgeContract`: a missing required
+column is injected as a typed null and reported by name, and a declared column whose dtype
+differs is cast with `strict=False`.
+
 ```python
-def validate_schema(
-    df: pl.LazyFrame,
-    expected_schema: dict[str, pl.DataType]
-) -> list[ValidationError]:
-    """Validate DataFrame against expected schema."""
-    errors = []
+from rwa_calc.contracts.edges import RAW_TABLE_EDGES, seal_lenient
+from rwa_calc.contracts.errors import missing_required_column_error
 
-    for column, expected_type in expected_schema.items():
-        if column not in df.columns:
-            errors.append(ValidationError(
-                field=column,
-                message=f"Missing required column: {column}"
-            ))
-        elif df.schema[column] != expected_type:
-            errors.append(ValidationError(
-                field=column,
-                message=f"Type mismatch: expected {expected_type}, got {df.schema[column]}"
-            ))
-
-    return errors
+sealed, missing = seal_lenient(facilities_lf, RAW_TABLE_EDGES["facilities"])
+errors = [missing_required_column_error(table="facilities", column=c) for c in missing]
 ```
+
+Downstream, each stage seals its own output the same way but strictly — a producer that
+omits a declared column raises `EdgeContractViolation`, because that is a programming
+error, not a data-quality one.
 
 ### Business Rule Validation
 

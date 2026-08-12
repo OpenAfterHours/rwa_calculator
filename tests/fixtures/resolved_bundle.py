@@ -54,7 +54,7 @@ def seal_hierarchy_exit(frame: pl.LazyFrame | pl.DataFrame) -> pl.LazyFrame:
     classifier's input is always the full 80-column contract shape).
     """
     lf = frame.lazy() if isinstance(frame, pl.DataFrame) else frame
-    sealed, _missing = seal_lenient(lf, HIERARCHY_EXIT_EDGE)
+    sealed, _missing, _lossy = seal_lenient(lf, HIERARCHY_EXIT_EDGE)
     return sealed
 
 
@@ -106,7 +106,7 @@ def make_counterparty_lookup(
             frames[field_name] = edge.empty_frame()
         else:
             lf = frame.lazy() if isinstance(frame, pl.DataFrame) else frame
-            sealed, _missing = seal_lenient(lf, edge)
+            sealed, _missing, _lossy = seal_lenient(lf, edge)
             frames[field_name] = sealed
     return CounterpartyLookup(**frames)
 
@@ -118,7 +118,7 @@ def seal_classifier_exit(frame: pl.LazyFrame | pl.DataFrame) -> pl.LazyFrame:
     CRM stage's input is always the full contract shape).
     """
     lf = frame.lazy() if isinstance(frame, pl.DataFrame) else frame
-    sealed, _missing = seal_lenient(lf, CLASSIFIER_EXIT_EDGE)
+    sealed, _missing, _lossy = seal_lenient(lf, CLASSIFIER_EXIT_EDGE)
     return sealed
 
 
@@ -148,7 +148,7 @@ def seal_crm_exit(frame: pl.LazyFrame | pl.DataFrame) -> pl.LazyFrame:
     calculators' branch split input is always the full contract shape).
     """
     lf = frame.lazy() if isinstance(frame, pl.DataFrame) else frame
-    sealed, _missing = seal_lenient(lf, CRM_EXIT_EDGE)
+    sealed, _missing, _lossy = seal_lenient(lf, CRM_EXIT_EDGE)
     return sealed
 
 
@@ -179,7 +179,7 @@ def seal_aggregator_exit(frame: pl.LazyFrame | pl.DataFrame) -> pl.LazyFrame:
     receives from ``OutputAggregator.aggregate``.
     """
     lf = frame.lazy() if isinstance(frame, pl.DataFrame) else frame
-    sealed, _missing = seal_lenient(lf, AGGREGATOR_EXIT_EDGE)
+    sealed, _missing, _lossy = seal_lenient(lf, AGGREGATOR_EXIT_EDGE)
     return sealed
 
 
@@ -205,17 +205,24 @@ def make_aggregated_bundle(
 def _seal_summary_frame(frame: pl.LazyFrame | pl.DataFrame, edge: EdgeContract) -> pl.LazyFrame:
     """Seal one aggregator summary / floor frame against ``edge``.
 
-    Uses the lenient seal but asserts NOTHING was null-completed: an
-    under-populated hand-rolled test frame (missing a required column) must fail
-    loudly here rather than be silently filled with typed nulls — the repo's
-    known masking trap. Populate the real producer columns instead of weakening
-    this assert.
+    Uses the lenient seal but asserts NOTHING was null-completed OR silently
+    nulled: an under-populated hand-rolled test frame (missing a required
+    column) and one supplied in a dtype the cast can destroy (a String amount)
+    must both fail loudly here rather than be silently filled with / reduced to
+    typed nulls — the repo's known masking trap. Populate the real producer
+    columns, with the producer's dtypes, instead of weakening these asserts.
     """
     lf = frame.lazy() if isinstance(frame, pl.DataFrame) else frame
-    sealed, missing = seal_lenient(lf, edge)
+    sealed, missing, lossy = seal_lenient(lf, edge)
     assert not missing, (
         f"{edge.name}: hand-rolled summary frame is missing required column(s) "
         f"{missing} — populate them (the aggregator producer always emits them); "
         "do not rely on the lenient seal null-completing them"
+    )
+    assert not lossy, (
+        f"{edge.name}: hand-rolled summary frame supplies "
+        f"{[(f.column, str(f.supplied), str(f.declared)) for f in lossy]} — the "
+        "lenient seal casts non-strictly, so any value it cannot convert becomes "
+        "null and the assertion downstream reads a null it did not intend"
     )
     return sealed

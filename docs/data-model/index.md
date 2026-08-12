@@ -75,17 +75,23 @@ Lookup tables for risk weights and parameters:
 
 ### Validation
 
+Schema *shape* is enforced by the loader edge seal, not by a validator you call: a
+missing required column becomes a typed null plus a `DQ001` error, and declared columns
+are cast to their declared dtype. What you call explicitly is the input-*domain* gate.
+
 ```python
-from rwa_calc.data.schemas import COUNTERPARTY_SCHEMA
-from rwa_calc.contracts.validation import validate_schema
+from rwa_calc.contracts.validation import validate_bundle_values
 
-# Validate data against schema
-errors = validate_schema(counterparty_df, COUNTERPARTY_SCHEMA)
+# Categorical and numeric column domains across the whole raw bundle
+errors = validate_bundle_values(bundle)
 
-if errors:
-    for error in errors:
-        print(f"Validation error: {error}")
+for error in errors:
+    print(f"{error.code} {error.field_name}: {error.message}")
 ```
+
+Both pipeline entries run this already — the file loader attaches its errors to the
+returned `RawDataBundle`, and `PipelineOrchestrator.run_with_data` runs it for in-memory
+bundles. Call it directly only when validating a bundle outside a run.
 
 ### Type Checking
 

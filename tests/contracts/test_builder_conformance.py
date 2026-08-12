@@ -51,6 +51,11 @@ _EXEMPT_FILES = {
     "tests/unit/contracts/test_pipeline_context.py",
     # This file: the token tuple below would count itself.
     "tests/contracts/test_builder_conformance.py",
+    # Drops ONE table to None on a bundle whose every other frame is already
+    # sealed and unchanged. Routing that through make_raw_bundle would re-seal
+    # every frame to alter one field — the builder is for CONSTRUCTING a bundle,
+    # and this is a field-level clone of one that already exists.
+    "tests/robustness/test_structural_extremes.py",
 }
 
 

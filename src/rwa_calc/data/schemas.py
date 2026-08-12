@@ -161,7 +161,314 @@ from __future__ import annotations
 
 import polars as pl
 
-from rwa_calc.data.column_spec import ColumnSpec
+from rwa_calc.data.column_spec import ColumnSpec, ForeignKey, NumericDomain
+
+# =============================================================================
+# SHARED INPUT DOMAINS
+# =============================================================================
+#
+# Phase 1 of docs/plans/test-space-correctness-proposal.md. Each constant is
+# the input domain of one regulatory QUANTITY, attached to every column that
+# carries that quantity, so the bound and its justification have exactly one
+# home. ``contracts/validation.py`` reads these declarations generically — a
+# new column gets validation by being declared, not by someone remembering to
+# add a branch — and ``scripts/check_input_domains.py`` ratchets the declared
+# population so a domain cannot silently go away.
+#
+# EVERY constant states its basis, because a wrong bound is worse than no
+# bound: it emits false errors on valid customer data and trains people to
+# ignore the error channel. Where the basis is an engineering ceiling rather
+# than a regulatory cap, it says so instead of implying a citation.
+#
+# Nulls are never a domain violation — a MISSING PD is IRB004's business, not
+# this gate's.
+
+_CQS_DOMAIN = NumericDomain(
+    reason=(
+        "CRR Art. 136(1)-(2) / PS1/26 Art. 136 — the ECAI mapping assigns each "
+        "eligible external assessment to one of SIX credit quality steps, and "
+        "every CQS-keyed table in both regimes is indexed 1-6 (Art. 114(2) "
+        "Table 1 sovereign, Art. 120(1) Table 3 institution, Art. 122(1) "
+        "Table 6 corporate, Art. 224(1) Table 1 haircuts). An out-of-domain "
+        "CQS does NOT degrade to a null: engine/sa/risk_weights.py reads "
+        "cqs <= 0 as UNRATED (100% on a corporate against a true 20% at CQS 1 "
+        "— a 5x overstatement) and lets cqs > 6 fall through the banded chain "
+        "to the bottom limb (100% against 150% at CQS 6 on an institution — an "
+        "understatement). Both directions ship a plausible wrong number."
+    ),
+    lower=1,
+    upper=6,
+)
+
+_PD_DOMAIN = NumericDomain(
+    reason=(
+        "CRR Art. 4(1)(54) defines PD as a probability, so [0, 1]; Art. 160 / "
+        "163 and PS1/26 Art. 160(1) / 163(1) govern its use. The upper bound "
+        "catches the highest-probability real feed defect — a risk feed "
+        "expressing PD in PERCENT rather than as a fraction (1.5 meaning "
+        "1.5%), measured at a 99.95% RWA understatement on a GBP 1m senior "
+        "corporate F-IRB exposure. The lower bound is CLOSED because PD = 0 is "
+        "an admissible regulatory input: Art. 160(1) floors corporates and "
+        "institutions at 0.03% and has no central-government / central-bank "
+        "limb, which is why the CRR rulepack carries pd_floors['sovereign'] = "
+        "0. A half-open (0, 1] would reject every sovereign IRB exposure "
+        "priced at zero. Basel 3.1 does floor sovereigns at 0.05%, but a floor "
+        "applied downstream is not the same statement as an invalid input, and "
+        "this gate is regime-invariant — it runs before any pack is resolved."
+    ),
+    lower=0.0,
+    upper=1.0,
+)
+
+_LGD_DOMAIN = NumericDomain(
+    reason=(
+        "CRR Art. 161 / 164 and PS1/26 Art. 161(5) / 164(4) — LGD is the ratio "
+        "of loss to exposure at default. 1.0 is NOT a hard ceiling: own-"
+        "estimate downturn LGD can exceed 100% where workout costs exceed the "
+        "exposure. The 1.25 upper bound is therefore an ENGINEERING ceiling, "
+        "not a regulatory cap; it is the bound the Phase 0 gate already "
+        "shipped, and it still catches the percent-scale feed error (45 for "
+        "45%). A negative LGD is unambiguously invalid — measured returning "
+        "RWA 0.00 in silence."
+    ),
+    lower=0.0,
+    upper=1.25,
+)
+
+_BEEL_DOMAIN = NumericDomain(
+    reason=(
+        "CRR Art. 181(1)(h) / Art. 159 — BEEL is the best estimate of expected "
+        "loss for a defaulted exposure, expressed on the same basis as LGD (a "
+        "fraction of EAD: engine/irb/adjustments.py computes EL = BEEL x EAD "
+        "and K = max(0, LGD - BEEL)). Shares LGD's bounds and rationale: the "
+        "1.25 ceiling is an engineering bound, not a regulatory cap."
+    ),
+    lower=0.0,
+    upper=1.25,
+)
+
+_CCF_DOMAIN = NumericDomain(
+    reason=(
+        "CRR Art. 166(8) / (10) — own-estimate conversion factor. Retail A-IRB "
+        "CCFs can exceed 100% because borrowers draw beyond committed amounts "
+        "under stress, so 1.0 is not the ceiling; 1.5 is the engineering bound "
+        "the Phase 0 gate already shipped. A negative CCF would manufacture "
+        "negative off-balance-sheet exposure."
+    ),
+    lower=0.0,
+    upper=1.5,
+)
+
+_EFFECTIVE_MATURITY_DOMAIN = NumericDomain(
+    reason=(
+        "CRR Art. 162(1)-(3) / PS1/26 Art. 162 — the explicit M override in "
+        "years. Capped at the Art. 162(1) five-year maximum and OPEN at zero: "
+        "a zero-year maturity is not a maturity, and the engine clips the "
+        "column to [1/365, 5.0] downstream, so an out-of-range value is "
+        "silently absorbed rather than rejected (a maturity of -3 was measured "
+        "returning a plausible RWA with no signal). Reported as a WARNING "
+        "under the pre-existing IRB003 code precisely because the clip makes "
+        "the row calculable — see contracts/validation.py::_DOMAIN_REPORTING."
+    ),
+    lower=0.0,
+    upper=5.0,
+    lower_closed=False,
+)
+
+_EL_RATE_DOMAIN = NumericDomain(
+    reason=(
+        "CRR Art. 160(2) / 160(6) and PS1/26 equivalents — the firm's expected-"
+        "loss estimate for a purchased receivables pool, declared in "
+        "LOAN_SCHEMA as a decimal RATE of the exposure value (0.0225 = 2.25%), "
+        "matching the IRB identity EL = PD x LGD. It is a probability-scaled "
+        "rate, hence [0, 1]. The engine already treats a zero or negative "
+        "value as 'no estimate supplied'; the bound makes that silent "
+        "fall-back visible in the error channel instead."
+    ),
+    lower=0.0,
+    upper=1.0,
+)
+
+_NON_NEGATIVE_AMOUNT_DOMAIN = NumericDomain(
+    reason=(
+        "CRR Art. 111 (SA exposure value) / Art. 166 (IRB exposure value) — a "
+        "monetary amount whose regulatory domain excludes negatives: a "
+        "facility limit, a contingent nominal, a collateral value, a guarantee "
+        "cover, a provision, an equity carrying / fair value. A negative here "
+        "manufactures exposure or capital relief out of nothing. Deliberately "
+        "NOT declared on loans.drawn_amount / loans.interest, where a negative "
+        "IS the on-balance-sheet netting convention (Art. 195/219, reported "
+        "separately as DQ010), nor on equity_exposures.position_value, which "
+        "is declared SIGNED for the Art. 133 net-long calculation, nor on "
+        "counterparties.annual_revenue / total_assets, which are size measures "
+        "where a negative is an accounting fact rather than a domain error."
+    ),
+    lower=0.0,
+)
+
+_MATURITY_YEARS_DOMAIN = NumericDomain(
+    reason=(
+        "A duration in years cannot be negative. Consumed by the Art. 224(1) "
+        "Table 1 maturity bands (collateral / exposure-security residual "
+        "maturity), the Art. 237(2)(a) one-year unfunded-protection "
+        "eligibility test (guarantee original maturity), the Annex I / "
+        "Art. 111(1) original-maturity CCF split, and the PS1/26 CVA Part 4 "
+        "M_NS / M_h terms. NO upper bound is declared: a 30-year mortgage, a "
+        "perpetual, or a long-dated swap are all legitimate, and inventing a "
+        "ceiling would reject valid data."
+    ),
+    lower=0.0,
+)
+
+_LTV_DOMAIN = NumericDomain(
+    reason=(
+        "CRR Art. 125 / 126 and PS1/26 Art. 124C-124K — loan-to-value as a "
+        "fraction. NO upper bound: the Basel 3.1 LTV band tables run past 100% "
+        "and negative equity puts real exposures there, so a ceiling would "
+        "reject valid data. A negative LTV is impossible — value and loan are "
+        "both non-negative."
+    ),
+    lower=0.0,
+)
+
+_RISK_WEIGHT_DOMAIN = NumericDomain(
+    reason=(
+        "A firm-supplied risk weight expressed as a FRACTION (0.20 = 20%) — "
+        "the Art. 232(3) insurer RW, the Art. 197(1)(h) securitisation "
+        "position RW, the Art. 132(4) / 132A CIU mandate RW, the Art. 79 / "
+        "PS1/26 Art. 122(4) due-diligence override. Bounded above by the "
+        "1250% capital-equivalent cap (CRR Art. 92(3); CRE31.5), which is the "
+        "same bound the aggregated-output gate applies to OUT001. A percent-"
+        "scale feed (20 for 20%) lands far outside it."
+    ),
+    lower=0.0,
+    upper=12.5,
+)
+
+_HEDGE_COVERAGE_DOMAIN = NumericDomain(
+    reason=(
+        "PRA PS1/26 Art. 123B(2) — the proportion of the exposure hedged "
+        "against the currency mismatch, declared in LOAN_SCHEMA as 0.0-1.0. At "
+        ">= 0.90 the 1.5x currency-mismatch multiplier is suppressed, so a "
+        "percent-scale value (90 for 90%) would suppress it unconditionally."
+    ),
+    lower=0.0,
+    upper=1.0,
+)
+
+_COVER_FRACTION_DOMAIN = NumericDomain(
+    reason=(
+        "CRR Art. 235 / Art. 236 proportional cover — the fraction of the "
+        "exposure a guarantee covers. engine/crm/guarantees.py multiplies it "
+        "by the CRM basis, so a percent-scale value (50 for 50%) would claim "
+        "50x the exposure as protected."
+    ),
+    lower=0.0,
+    upper=1.0,
+)
+
+_PLEDGE_FRACTION_DOMAIN = NumericDomain(
+    reason=(
+        "CRR Art. 207 — the fraction of the beneficiary's EAD this collateral "
+        "item is pledged against. engine/crm/processor.py resolves it as "
+        "pledge_percentage x beneficiary EAD, so a percent-scale value would "
+        "inflate the recognised collateral 100-fold."
+    ),
+    lower=0.0,
+    upper=1.0,
+)
+
+_ALLOCATION_FRACTION_DOMAIN = NumericDomain(
+    reason=(
+        "CRR Art. 244-246 significant risk transfer — the fraction of an "
+        "exposure transferred to a securitisation pool. The schema's own "
+        "contract states each row must be in (0, 1]: a zero-allocation row is "
+        "a no-op that should not have been supplied, and the allocated portion "
+        "is CARVED OUT of standard credit-risk RWA, so an over-unity value "
+        "removes more exposure than exists."
+    ),
+    lower=0.0,
+    upper=1.0,
+    lower_closed=False,
+)
+
+_HAIRCUT_DOMAIN = NumericDomain(
+    reason=(
+        "CRR Art. 224 — a supervisory volatility haircut applied as "
+        "value x (1 - H). The published Table 1 haircuts top out well below "
+        "100%; a value above 1.0 would give the collateral NEGATIVE value, and "
+        "a negative haircut would inflate it above market value."
+    ),
+    lower=0.0,
+    upper=1.0,
+)
+
+_CDO_TRANCHE_POINT_DOMAIN = NumericDomain(
+    reason=(
+        "CRR Art. 279a(3) / CRE52.43 — the attachment (A) and detachment (D) "
+        "points of a CDO tranche, which the article states as 0 <= A < D <= 1. "
+        "They enter the supervisory-delta closed form 15 / ((1 + 14A)(1 + "
+        "14D)), where a negative point drives the denominator towards zero and "
+        "the delta towards infinity."
+    ),
+    lower=0.0,
+    upper=1.0,
+)
+
+_RENTAL_COVER_DOMAIN = NumericDomain(
+    reason=(
+        "CRR Art. 126(2)(d) — rental income divided by interest payments; the "
+        "preferential 50% CRE risk weight requires >= 1.5. A ratio of two "
+        "non-negative cash flows cannot itself be negative. NO upper bound: a "
+        "very well-covered property legitimately reports a large ratio."
+    ),
+    lower=0.0,
+)
+
+_ECA_SCORE_DOMAIN = NumericDomain(
+    reason=(
+        "CRR Art. 137(1)-(2) Table 9 — the nominated export credit agency's "
+        "minimum export insurance premium score, which the table defines over "
+        "exactly 0-7. Used as a DIRECT sovereign risk-weight input with no "
+        "intermediate CQS step, so an out-of-range score silently takes the "
+        "engine's null / out-of-range fallback."
+    ),
+    lower=0,
+    upper=7,
+)
+
+_PROPERTY_COUNT_DOMAIN = NumericDomain(
+    reason=(
+        "PRA PS1/26 Art. 124E(1)(b) — the count of residential properties "
+        "securing the borrower's total residential RE exposure. A count cannot "
+        "be negative. NO upper bound: exceeding the three-property limit is a "
+        "legitimate value that re-routes the exposure to Art. 124G, not an "
+        "invalid one."
+    ),
+    lower=0,
+)
+
+_BUSINESS_AGE_DOMAIN = NumericDomain(
+    reason=(
+        "PRA PS1/26 Art. 133(4) / Glossary — years the underlying business has "
+        "existed, tested against a 5.0-year threshold for the PE/VC 400% "
+        "higher-risk weight. An age cannot be negative; there is no upper "
+        "bound on how long a business may have existed."
+    ),
+    lower=0.0,
+)
+
+_FX_RATE_DOMAIN = NumericDomain(
+    reason=(
+        "An exchange rate is strictly positive by construction, hence OPEN at "
+        "zero. A zero rate silently zeroes every amount converted through it "
+        "and a negative rate flips its sign — neither raises anything today, "
+        "and both propagate to every downstream EAD and RWA in the reporting "
+        "currency."
+    ),
+    lower=0.0,
+    lower_closed=False,
+)
 
 FACILITY_SCHEMA: dict[str, ColumnSpec] = {
     "facility_reference": ColumnSpec(pl.String),
@@ -176,18 +483,20 @@ FACILITY_SCHEMA: dict[str, ColumnSpec] = {
     # Nullable; when absent the engine falls back to (maturity_date - value_date),
     # else the conservative 50% MR default. Mirrors the nullable
     # original_maturity_years on GUARANTEE_SCHEMA / COLLATERAL_SCHEMA.
-    "original_maturity_years": ColumnSpec(pl.Float64, required=False),
+    "original_maturity_years": ColumnSpec(
+        pl.Float64, required=False, domain=_MATURITY_YEARS_DOMAIN
+    ),
     "currency": ColumnSpec(pl.String, required=False),
     # CRR Art. 114(4)/(7) via Art. 235(3): funding currency of any undrawn
     # exposure this facility generates. See LOAN_SCHEMA.funding_currency for the
     # full null-PERMISSIVE semantics (falls back to the denomination currency).
     "funding_currency": ColumnSpec(pl.String, required=False),
-    "limit": ColumnSpec(pl.Float64, required=False),
+    "limit": ColumnSpec(pl.Float64, required=False, domain=_NON_NEGATIVE_AMOUNT_DOMAIN),
     "committed": ColumnSpec(pl.Boolean, default=True, required=False),
-    "lgd": ColumnSpec(pl.Float64, required=False),
-    "lgd_unsecured": ColumnSpec(pl.Float64, required=False),
+    "lgd": ColumnSpec(pl.Float64, required=False, domain=_LGD_DOMAIN),
+    "lgd_unsecured": ColumnSpec(pl.Float64, required=False, domain=_LGD_DOMAIN),
     "has_sufficient_collateral_data": ColumnSpec(pl.Boolean, default=False, required=False),
-    "beel": ColumnSpec(pl.Float64, required=False),
+    "beel": ColumnSpec(pl.Float64, required=False, domain=_BEEL_DOMAIN),
     "is_revolving": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_qrre_transactor": ColumnSpec(pl.Boolean, default=False, required=False),
     # PRA PS1/26 Art. 147(5A)(b) / CRR Art. 154(4)(b): a qualifying revolving
@@ -210,7 +519,7 @@ FACILITY_SCHEMA: dict[str, ColumnSpec] = {
     # engine resolves the abstract Annex I risk_type bucket from this product via
     # ANNEX1_PRODUCT_RISK_TYPE. Explicit ``risk_type`` always wins.
     "obs_product": ColumnSpec(pl.String, required=False),
-    "ccf_modelled": ColumnSpec(pl.Float64, required=False),
+    "ccf_modelled": ColumnSpec(pl.Float64, required=False, domain=_CCF_DOMAIN),
     "ead_modelled": ColumnSpec(pl.Float64, required=False),
     "is_short_term_trade_lc": ColumnSpec(pl.Boolean, default=False, required=False),
     # CRR Art. 166(8)(d) vs Art. 166(10): True for credit lines / NIFs / RUFs
@@ -255,7 +564,7 @@ FACILITY_SCHEMA: dict[str, ColumnSpec] = {
     # Art. 162(3) / PS1/26: explicit numeric M override (years). When populated it
     # supersedes the maturity_date-derived M and bypasses the 1-year floor —
     # firm-owned judgement for short-term carve-outs.
-    "effective_maturity": ColumnSpec(pl.Float64, required=False),
+    "effective_maturity": ColumnSpec(pl.Float64, required=False, domain=_EFFECTIVE_MATURITY_DOMAIN),
     # PRA PS1/26 Art. 161(1)(e)/(f)/(g): purchased-receivables F-IRB LGD routing.
     # Null for non-purchased-receivables exposures (default). When set, takes
     # precedence over the seniority-based LGD selector:
@@ -274,14 +583,14 @@ FACILITY_SCHEMA: dict[str, ColumnSpec] = {
     # Null (the default) means "no estimate supplied": the exposure keeps whatever
     # PD it already has and, absent one, stays on the Standardised Approach. A zero
     # or negative value is treated the same way — it must never become PD 0%.
-    "el_estimate": ColumnSpec(pl.Float64, required=False),
+    "el_estimate": ColumnSpec(pl.Float64, required=False, domain=_EL_RATE_DOMAIN),
     # CRR Art. 160(6) first sentence / PS1/26 Art. 160(6): the institution's EL
     # estimate for DILUTION risk of a purchased corporate receivables pool, again a
     # decimal rate. Read only on the "dilution_risk" subtype, where PD = this value
     # directly (no LGD division). Deliberately separate from ``el_estimate``: the
     # default-risk and dilution-risk EL estimates are distinct regulatory inputs and
     # one must never stand in for the other.
-    "el_dilution_estimate": ColumnSpec(pl.Float64, required=False),
+    "el_dilution_estimate": ColumnSpec(pl.Float64, required=False, domain=_EL_RATE_DOMAIN),
     # CRR Art. 6 / 11-18 (individual / consolidated / sub-consolidated levels of
     # application): non-null tags this exposure as an intragroup claim on the
     # named reporting entity (an ``entity_reference`` in REPORTING_ENTITY_SCHEMA).
@@ -344,10 +653,10 @@ LOAN_SCHEMA: dict[str, ColumnSpec] = {
     # docs/data-model/input-schemas.md (Loan schema, "Lease exposures").
     "drawn_amount": ColumnSpec(pl.Float64, default=0.0, required=False),
     "interest": ColumnSpec(pl.Float64, default=0.0, required=False),
-    "lgd": ColumnSpec(pl.Float64, required=False),
-    "lgd_unsecured": ColumnSpec(pl.Float64, required=False),
+    "lgd": ColumnSpec(pl.Float64, required=False, domain=_LGD_DOMAIN),
+    "lgd_unsecured": ColumnSpec(pl.Float64, required=False, domain=_LGD_DOMAIN),
     "has_sufficient_collateral_data": ColumnSpec(pl.Boolean, default=False, required=False),
-    "beel": ColumnSpec(pl.Float64, required=False),
+    "beel": ColumnSpec(pl.Float64, required=False, domain=_BEEL_DOMAIN),
     "seniority": ColumnSpec(pl.String, default="senior", required=False),
     "is_payroll_loan": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_buy_to_let": ColumnSpec(pl.Boolean, default=False, required=False),
@@ -359,7 +668,7 @@ LOAN_SCHEMA: dict[str, ColumnSpec] = {
     "is_under_construction": ColumnSpec(pl.Boolean, default=False, required=False),
     "has_one_day_maturity_floor": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_sft": ColumnSpec(pl.Boolean, default=False, required=False),
-    "effective_maturity": ColumnSpec(pl.Float64, required=False),
+    "effective_maturity": ColumnSpec(pl.Float64, required=False, domain=_EFFECTIVE_MATURITY_DOMAIN),
     # CRR Art. 195/219 on-balance-sheet netting. A non-null reference is the sole
     # signal that the exposure participates in a netting agreement: a deposit
     # (negative drawn amount) and the loans it offsets net iff they carry the SAME
@@ -367,7 +676,7 @@ LOAN_SCHEMA: dict[str, ColumnSpec] = {
     # facility hierarchy or counterparty — reflecting the legal right of set-off.
     "netting_agreement_reference": ColumnSpec(pl.String, required=False),
     "due_diligence_performed": ColumnSpec(pl.Boolean, default=False, required=False),
-    "due_diligence_override_rw": ColumnSpec(pl.Float64, required=False),
+    "due_diligence_override_rw": ColumnSpec(pl.Float64, required=False, domain=_RISK_WEIGHT_DOMAIN),
     # PRA PS1/26 Art. 123B(2) / CRE20.93: loan-level hedge flag that suppresses
     # the 1.5x retail/RE currency-mismatch multiplier when True. Defaults to
     # False (unhedged — multiplier fires under FX mismatch).
@@ -376,7 +685,9 @@ LOAN_SCHEMA: dict[str, ColumnSpec] = {
     # the loan is treated as fully hedged and the 1.5x currency-mismatch
     # multiplier is suppressed even if ``is_hedged`` is False. Defaults to 0.0
     # (no hedge coverage — multiplier fires under FX mismatch unless is_hedged).
-    "hedge_coverage_ratio": ColumnSpec(pl.Float64, default=0.0, required=False),
+    "hedge_coverage_ratio": ColumnSpec(
+        pl.Float64, default=0.0, required=False, domain=_HEDGE_COVERAGE_DOMAIN
+    ),
     # PRA PS1/26 Art. 161(1)(e)/(f)/(g): purchased-receivables F-IRB LGD routing.
     # Null for non-purchased-receivables exposures (default). When set, takes
     # precedence over the seniority-based LGD selector:
@@ -395,14 +706,14 @@ LOAN_SCHEMA: dict[str, ColumnSpec] = {
     # Null (the default) means "no estimate supplied": the exposure keeps whatever
     # PD it already has and, absent one, stays on the Standardised Approach. A zero
     # or negative value is treated the same way — it must never become PD 0%.
-    "el_estimate": ColumnSpec(pl.Float64, required=False),
+    "el_estimate": ColumnSpec(pl.Float64, required=False, domain=_EL_RATE_DOMAIN),
     # CRR Art. 160(6) first sentence / PS1/26 Art. 160(6): the institution's EL
     # estimate for DILUTION risk of a purchased corporate receivables pool, again a
     # decimal rate. Read only on the "dilution_risk" subtype, where PD = this value
     # directly (no LGD division). Deliberately separate from ``el_estimate``: the
     # default-risk and dilution-risk EL estimates are distinct regulatory inputs and
     # one must never stand in for the other.
-    "el_dilution_estimate": ColumnSpec(pl.Float64, required=False),
+    "el_dilution_estimate": ColumnSpec(pl.Float64, required=False, domain=_EL_RATE_DOMAIN),
     # CRR Art. 159(1) Pool B components (c)/(d): additional value adjustments
     # (AVAs per Art. 34/105) and other own funds reductions associated with the
     # exposure. Enter the per-exposure Pool B exactly once at the IRB EL
@@ -417,8 +728,10 @@ LOAN_SCHEMA: dict[str, ColumnSpec] = {
     # side). Null/cash/standard loan exposures derive HE = 0. The same Art. 224
     # Table 1 used for HC governs HE — keyed off these three fields.
     "exposure_collateral_type": ColumnSpec(pl.String, required=False),
-    "exposure_security_cqs": ColumnSpec(pl.Int8, required=False),
-    "exposure_security_residual_maturity_years": ColumnSpec(pl.Float64, required=False),
+    "exposure_security_cqs": ColumnSpec(pl.Int8, required=False, domain=_CQS_DOMAIN),
+    "exposure_security_residual_maturity_years": ColumnSpec(
+        pl.Float64, required=False, domain=_MATURITY_YEARS_DOMAIN
+    ),
     # CRR Art. 124-126 / PRA PS1/26 Art. 124C-124K: loan-level real-estate
     # inputs for exposures whose LTV / property data live on the loan row
     # rather than a separate collateral row (e.g. CRE Art. 126(2)(d)
@@ -426,7 +739,7 @@ LOAN_SCHEMA: dict[str, ColumnSpec] = {
     # the unified exposure frame; without them the SA real-estate branch
     # cannot route the exposure. Null (never 0.0 / "") when unreported —
     # absence of data must not fabricate an LTV or a property type.
-    "ltv": ColumnSpec(pl.Float64, required=False),
+    "ltv": ColumnSpec(pl.Float64, required=False, domain=_LTV_DOMAIN),
     "property_type": ColumnSpec(pl.String, required=False),
     # CRR Art. 126(2): the preferential 50% CRE risk weight requires
     # demonstrated income cover (rental income >= 1.5x interest payments).
@@ -462,17 +775,21 @@ CONTINGENTS_SCHEMA: dict[str, ColumnSpec] = {
     "maturity_date": ColumnSpec(pl.Date, required=False),
     # CRR Art. 111(1) / Annex I items 2(b),3(b): OC original maturity (years).
     # Mirrored from FACILITY_SCHEMA; see the FACILITY_SCHEMA notes for full detail.
-    "original_maturity_years": ColumnSpec(pl.Float64, required=False),
+    "original_maturity_years": ColumnSpec(
+        pl.Float64, required=False, domain=_MATURITY_YEARS_DOMAIN
+    ),
     "currency": ColumnSpec(pl.String, required=False),
     # CRR Art. 114(4)/(7) via Art. 235(3): funding currency of this contingent
     # exposure. See LOAN_SCHEMA.funding_currency for the full null-PERMISSIVE
     # semantics (falls back to the denomination currency).
     "funding_currency": ColumnSpec(pl.String, required=False),
-    "nominal_amount": ColumnSpec(pl.Float64, default=0.0, required=False),
-    "lgd": ColumnSpec(pl.Float64, required=False),
-    "lgd_unsecured": ColumnSpec(pl.Float64, required=False),
+    "nominal_amount": ColumnSpec(
+        pl.Float64, default=0.0, required=False, domain=_NON_NEGATIVE_AMOUNT_DOMAIN
+    ),
+    "lgd": ColumnSpec(pl.Float64, required=False, domain=_LGD_DOMAIN),
+    "lgd_unsecured": ColumnSpec(pl.Float64, required=False, domain=_LGD_DOMAIN),
     "has_sufficient_collateral_data": ColumnSpec(pl.Boolean, default=False, required=False),
-    "beel": ColumnSpec(pl.Float64, required=False),
+    "beel": ColumnSpec(pl.Float64, required=False, domain=_BEEL_DOMAIN),
     "seniority": ColumnSpec(pl.String, default="senior", required=False),
     "risk_type": ColumnSpec(pl.String, required=False),
     "underlying_risk_type": ColumnSpec(pl.String, required=False),
@@ -481,7 +798,7 @@ CONTINGENTS_SCHEMA: dict[str, ColumnSpec] = {
     # engine resolves the Annex I risk_type bucket from this product via
     # ANNEX1_PRODUCT_RISK_TYPE. Explicit ``risk_type`` always wins.
     "obs_product": ColumnSpec(pl.String, required=False),
-    "ccf_modelled": ColumnSpec(pl.Float64, required=False),
+    "ccf_modelled": ColumnSpec(pl.Float64, required=False, domain=_CCF_DOMAIN),
     "ead_modelled": ColumnSpec(pl.Float64, required=False),
     "is_short_term_trade_lc": ColumnSpec(pl.Boolean, default=False, required=False),
     # CRR Art. 166(8)(d) vs Art. 166(10): contingent rows are issued OBS items by
@@ -509,10 +826,10 @@ CONTINGENTS_SCHEMA: dict[str, ColumnSpec] = {
     "has_income_cover": ColumnSpec(pl.Boolean, default=False, required=False),
     "has_one_day_maturity_floor": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_sft": ColumnSpec(pl.Boolean, default=False, required=False),
-    "effective_maturity": ColumnSpec(pl.Float64, required=False),
+    "effective_maturity": ColumnSpec(pl.Float64, required=False, domain=_EFFECTIVE_MATURITY_DOMAIN),
     "bs_type": ColumnSpec(pl.String, default="OFB", required=False),
     "due_diligence_performed": ColumnSpec(pl.Boolean, default=False, required=False),
-    "due_diligence_override_rw": ColumnSpec(pl.Float64, required=False),
+    "due_diligence_override_rw": ColumnSpec(pl.Float64, required=False, domain=_RISK_WEIGHT_DOMAIN),
     # PRA PS1/26 Art. 161(1)(e)/(f)/(g): purchased-receivables F-IRB LGD routing.
     # Null for non-purchased-receivables exposures (default). When set, takes
     # precedence over the seniority-based LGD selector:
@@ -531,21 +848,23 @@ CONTINGENTS_SCHEMA: dict[str, ColumnSpec] = {
     # Null (the default) means "no estimate supplied": the exposure keeps whatever
     # PD it already has and, absent one, stays on the Standardised Approach. A zero
     # or negative value is treated the same way — it must never become PD 0%.
-    "el_estimate": ColumnSpec(pl.Float64, required=False),
+    "el_estimate": ColumnSpec(pl.Float64, required=False, domain=_EL_RATE_DOMAIN),
     # CRR Art. 160(6) first sentence / PS1/26 Art. 160(6): the institution's EL
     # estimate for DILUTION risk of a purchased corporate receivables pool, again a
     # decimal rate. Read only on the "dilution_risk" subtype, where PD = this value
     # directly (no LGD division). Deliberately separate from ``el_estimate``: the
     # default-risk and dilution-risk EL estimates are distinct regulatory inputs and
     # one must never stand in for the other.
-    "el_dilution_estimate": ColumnSpec(pl.Float64, required=False),
+    "el_dilution_estimate": ColumnSpec(pl.Float64, required=False, domain=_EL_RATE_DOMAIN),
     # CRR Art. 223(5) FCCM exposure volatility haircut (HE) inputs — see
     # LOAN_SCHEMA for full notes. Mirrored on contingents for symmetry with
     # the loans schema; populated only when the contingent exposure is itself
     # a debt security under an SFT.
     "exposure_collateral_type": ColumnSpec(pl.String, required=False),
-    "exposure_security_cqs": ColumnSpec(pl.Int8, required=False),
-    "exposure_security_residual_maturity_years": ColumnSpec(pl.Float64, required=False),
+    "exposure_security_cqs": ColumnSpec(pl.Int8, required=False, domain=_CQS_DOMAIN),
+    "exposure_security_residual_maturity_years": ColumnSpec(
+        pl.Float64, required=False, domain=_MATURITY_YEARS_DOMAIN
+    ),
     # CRR Art. 6 / 11-18 (individual / consolidated / sub-consolidated levels of
     # application): non-null tags this exposure as an intragroup claim on the
     # named reporting entity (an ``entity_reference`` in REPORTING_ENTITY_SCHEMA).
@@ -612,16 +931,18 @@ COUNTERPARTY_SCHEMA: dict[str, ColumnSpec] = {
     # this count exceeds the three-property limit, the owner-occupied preferential
     # treatment is disapplied and the exposure routes to the income-producing
     # residential track (Art. 124G). Null = unknown (no income-producing re-route).
-    "qualifying_property_count": ColumnSpec(pl.Int32, required=False),
+    "qualifying_property_count": ColumnSpec(
+        pl.Int32, required=False, domain=_PROPERTY_COUNT_DOMAIN
+    ),
     "is_social_housing": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_financial_sector_entity": ColumnSpec(pl.Boolean, default=False, required=False),
     "scra_grade": ColumnSpec(pl.String, required=False),
     "is_investment_grade": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_ccp_client_cleared": ColumnSpec(pl.Boolean, required=False),
     "borrower_income_currency": ColumnSpec(pl.String, required=False),
-    "sovereign_cqs": ColumnSpec(pl.Int32, required=False),
+    "sovereign_cqs": ColumnSpec(pl.Int32, required=False, domain=_CQS_DOMAIN),
     "local_currency": ColumnSpec(pl.String, required=False),
-    "institution_cqs": ColumnSpec(pl.Int8, required=False),
+    "institution_cqs": ColumnSpec(pl.Int8, required=False, domain=_CQS_DOMAIN),
     # CRR Art. 116(5): True where the Treasury has determined by regulations
     # that this counterparty's third-country jurisdiction "applies supervisory
     # and regulatory arrangements at least equivalent to those applied in the
@@ -644,7 +965,7 @@ COUNTERPARTY_SCHEMA: dict[str, ColumnSpec] = {
     # CRR Art. 137(1)-(2) Table 9: nominated ECA's minimum export insurance
     # premium (MEIP) score 0-7 used as a direct sovereign risk-weight input
     # when no ECAI rating is available. Null when ECA path is not used.
-    "eca_score": ColumnSpec(pl.Int8, required=False),
+    "eca_score": ColumnSpec(pl.Int8, required=False, domain=_ECA_SCORE_DOMAIN),
     # CRR Art. 227(3) / PRA PS1/26 Art. 227(3): True when the counterparty is
     # enumerated as a core market participant (sovereigns/CBs eligible for 0%
     # RW under Art. 114, supervised institutions and investment firms, certain
@@ -672,15 +993,19 @@ COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     "collateral_type": ColumnSpec(pl.String),
     "currency": ColumnSpec(pl.String, required=False),
     "maturity_date": ColumnSpec(pl.Date, required=False),
-    "market_value": ColumnSpec(pl.Float64, required=False),
-    "nominal_value": ColumnSpec(pl.Float64, required=False),
-    "pledge_percentage": ColumnSpec(pl.Float64, required=False),
+    "market_value": ColumnSpec(pl.Float64, required=False, domain=_NON_NEGATIVE_AMOUNT_DOMAIN),
+    "nominal_value": ColumnSpec(pl.Float64, required=False, domain=_NON_NEGATIVE_AMOUNT_DOMAIN),
+    "pledge_percentage": ColumnSpec(pl.Float64, required=False, domain=_PLEDGE_FRACTION_DOMAIN),
     "beneficiary_type": ColumnSpec(pl.String),
     "beneficiary_reference": ColumnSpec(pl.String),
-    "issuer_cqs": ColumnSpec(pl.Int8, required=False),
+    "issuer_cqs": ColumnSpec(pl.Int8, required=False, domain=_CQS_DOMAIN),
     "issuer_type": ColumnSpec(pl.String, required=False),
-    "residual_maturity_years": ColumnSpec(pl.Float64, required=False),
-    "original_maturity_years": ColumnSpec(pl.Float64, required=False),
+    "residual_maturity_years": ColumnSpec(
+        pl.Float64, required=False, domain=_MATURITY_YEARS_DOMAIN
+    ),
+    "original_maturity_years": ColumnSpec(
+        pl.Float64, required=False, domain=_MATURITY_YEARS_DOMAIN
+    ),
     "is_eligible_financial_collateral": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_eligible_irb_collateral": ColumnSpec(pl.Boolean, default=False, required=False),
     # CRR Art. 199(7) with Art. 211 / PRA PS1/26 Art. 199(7) with Art. 211 (P1.273):
@@ -719,7 +1044,9 @@ COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     #     confirmed, so the position is treated as ineligible (absence of data
     #     must not fabricate eligibility). Only consulted for securitisation rows.
     "is_resecuritisation": ColumnSpec(pl.Boolean, default=False, required=False),
-    "securitisation_position_risk_weight": ColumnSpec(pl.Float64, required=False),
+    "securitisation_position_risk_weight": ColumnSpec(
+        pl.Float64, required=False, domain=_RISK_WEIGHT_DOMAIN
+    ),
     # PRA PS1/26 Art. 191A(2)(d)-(f): two-layer protection look-through.
     # Optional reference to the counterparty that posted the collateral (e.g.
     # the guarantor for guarantee-anchored collateral). When the engine
@@ -793,18 +1120,18 @@ COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     "valuation_date": ColumnSpec(pl.Date, required=False),
     "valuation_type": ColumnSpec(pl.String, required=False),
     "property_type": ColumnSpec(pl.String, required=False),
-    "property_ltv": ColumnSpec(pl.Float64, required=False),
+    "property_ltv": ColumnSpec(pl.Float64, required=False, domain=_LTV_DOMAIN),
     "is_income_producing": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_adc": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_presold": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_qualifying_re": ColumnSpec(pl.Boolean, required=False),
-    "prior_charge_ltv": ColumnSpec(pl.Float64, default=0.0, required=False),
+    "prior_charge_ltv": ColumnSpec(pl.Float64, default=0.0, required=False, domain=_LTV_DOMAIN),
     # CRR Art. 126(2)(d): rental income / interest payments ratio (>= 1.5
     # required to qualify CRE for the 50% preferential RW). Optional; if
     # absent, CRE collateral is conservatively treated as failing the test
     # under CRR and the loan-splitter leaves the exposure in its original
     # corporate / retail class. Not used under Basel 3.1.
-    "rental_to_interest_ratio": ColumnSpec(pl.Float64, required=False),
+    "rental_to_interest_ratio": ColumnSpec(pl.Float64, required=False, domain=_RENTAL_COVER_DOMAIN),
     "liquidation_period_days": ColumnSpec(pl.Int32, required=False),
     # CRR Art. 226(1) / PRA PS1/26 Art. 226(1): non-daily mark-to-market or
     # non-daily-remargining adjustment. When N_R > 1 the supervisory haircut
@@ -813,7 +1140,7 @@ COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     # with no scaling applied.
     "revaluation_frequency_days": ColumnSpec(pl.Int32, required=False),
     "qualifies_for_zero_haircut": ColumnSpec(pl.Boolean, default=False, required=False),
-    "insurer_risk_weight": ColumnSpec(pl.Float64, required=False),
+    "insurer_risk_weight": ColumnSpec(pl.Float64, required=False, domain=_RISK_WEIGHT_DOMAIN),
     "credit_event_reduction": ColumnSpec(pl.Float64, default=0.0, required=False),
 }
 
@@ -843,7 +1170,7 @@ COLLATERAL_LINK_SCHEMA: dict[str, ColumnSpec] = {
     "beneficiary_reference": ColumnSpec(pl.String),
     # Optional per-link sub-limit (e.g. a legal cap on how much of this item may
     # protect this beneficiary). Null = bounded only by the item's finite value.
-    "max_pledge_amount": ColumnSpec(pl.Float64, required=False),
+    "max_pledge_amount": ColumnSpec(pl.Float64, required=False, domain=_NON_NEGATIVE_AMOUNT_DOMAIN),
     # Optional manual fill order (lower = filled first). Null = engine ranks by
     # pre-CRM RWA density (greedy most-beneficial allocation).
     "priority": ColumnSpec(pl.Int32, required=False),
@@ -855,8 +1182,8 @@ GUARANTEE_SCHEMA: dict[str, ColumnSpec] = {
     "guarantor": ColumnSpec(pl.String),
     "currency": ColumnSpec(pl.String, required=False),
     "maturity_date": ColumnSpec(pl.Date, required=False),
-    "amount_covered": ColumnSpec(pl.Float64, required=False),
-    "percentage_covered": ColumnSpec(pl.Float64, required=False),
+    "amount_covered": ColumnSpec(pl.Float64, required=False, domain=_NON_NEGATIVE_AMOUNT_DOMAIN),
+    "percentage_covered": ColumnSpec(pl.Float64, required=False, domain=_COVER_FRACTION_DOMAIN),
     "beneficiary_type": ColumnSpec(pl.String),
     "beneficiary_reference": ColumnSpec(pl.String),
     "protection_type": ColumnSpec(pl.String, default="guarantee", required=False),
@@ -865,7 +1192,9 @@ GUARANTEE_SCHEMA: dict[str, ColumnSpec] = {
     # A guarantee with original_maturity_years < 1.0 is ineligible. Null is
     # treated permissively (defaulted to >= 1y) — mirrors the collateral
     # original_maturity_years fallback in engine/crm/haircuts.py.
-    "original_maturity_years": ColumnSpec(pl.Float64, required=False),
+    "original_maturity_years": ColumnSpec(
+        pl.Float64, required=False, domain=_MATURITY_YEARS_DOMAIN
+    ),
     # CRR / PS1-26 Art. 213(1)(c)(i): unfunded credit protection eligibility.
     # A guarantee the protection provider can unilaterally CANCEL is ineligible
     # under both regimes; one whose terms the provider can unilaterally CHANGE
@@ -918,7 +1247,9 @@ PROVISION_SCHEMA: dict[str, ColumnSpec] = {
     "provision_type": ColumnSpec(pl.String, required=False),
     "ifrs9_stage": ColumnSpec(pl.Int8, required=False),
     "currency": ColumnSpec(pl.String, required=False),
-    "amount": ColumnSpec(pl.Float64, default=0.0, required=False),
+    "amount": ColumnSpec(
+        pl.Float64, default=0.0, required=False, domain=_NON_NEGATIVE_AMOUNT_DOMAIN
+    ),
     "as_of_date": ColumnSpec(pl.Date, required=False),
     "beneficiary_type": ColumnSpec(pl.String),
     "beneficiary_reference": ColumnSpec(pl.String),
@@ -930,8 +1261,8 @@ RATINGS_SCHEMA: dict[str, ColumnSpec] = {
     "rating_type": ColumnSpec(pl.String),
     "rating_agency": ColumnSpec(pl.String, required=False),
     "rating_value": ColumnSpec(pl.String, required=False),
-    "cqs": ColumnSpec(pl.Int8, required=False),
-    "pd": ColumnSpec(pl.Float64, required=False),
+    "cqs": ColumnSpec(pl.Int8, required=False, domain=_CQS_DOMAIN),
+    "pd": ColumnSpec(pl.Float64, required=False, domain=_PD_DOMAIN),
     "rating_date": ColumnSpec(pl.Date, required=False),
     "is_solicited": ColumnSpec(pl.Boolean, default=True, required=False),
     "model_id": ColumnSpec(pl.String, required=False),
@@ -977,14 +1308,14 @@ EQUITY_EXPOSURE_SCHEMA: dict[str, ColumnSpec] = {
     "counterparty_reference": ColumnSpec(pl.String),
     "equity_type": ColumnSpec(pl.String, default="other", required=False),
     "currency": ColumnSpec(pl.String, required=False),
-    "carrying_value": ColumnSpec(pl.Float64, required=False),
-    "fair_value": ColumnSpec(pl.Float64, required=False),
+    "carrying_value": ColumnSpec(pl.Float64, required=False, domain=_NON_NEGATIVE_AMOUNT_DOMAIN),
+    "fair_value": ColumnSpec(pl.Float64, required=False, domain=_NON_NEGATIVE_AMOUNT_DOMAIN),
     "is_speculative": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_exchange_traded": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_government_supported": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_significant_investment": ColumnSpec(pl.Boolean, default=False, required=False),
     "ciu_approach": ColumnSpec(pl.String, required=False),
-    "ciu_mandate_rw": ColumnSpec(pl.Float64, required=False),
+    "ciu_mandate_rw": ColumnSpec(pl.Float64, required=False, domain=_RISK_WEIGHT_DOMAIN),
     "ciu_third_party_calc": ColumnSpec(pl.Boolean, default=False, required=False),
     # Art. 132(4) final sub-paragraph: "By way of derogation ... where the
     # institution has unrestricted access to the detailed calculations carried
@@ -998,7 +1329,7 @@ EQUITY_EXPOSURE_SCHEMA: dict[str, ColumnSpec] = {
     # Used by Basel 3.1 PE/VC higher-risk test (PRA PS1/26 Glossary p.5,
     # Art. 133(4)): unlisted PE with business_age_years < 5.0 (or null,
     # treated conservatively) routes to 400%; >= 5.0 routes to standard 250%.
-    "business_age_years": ColumnSpec(pl.Float64, required=False),
+    "business_age_years": ColumnSpec(pl.Float64, required=False, domain=_BUSINESS_AGE_DOMAIN),
     # CRR Art. 155(3): True -> institution has sufficient Art. 178 default-
     # definition data, so the 1.5x PD/LGD scaling does NOT apply. False/null ->
     # the 1.5x scaling applies. Skipping the scaling is the preferential
@@ -1037,7 +1368,7 @@ CIU_HOLDINGS_SCHEMA: dict[str, ColumnSpec] = {
     "fund_reference": ColumnSpec(pl.String),
     "holding_reference": ColumnSpec(pl.String),
     "exposure_class": ColumnSpec(pl.String),
-    "cqs": ColumnSpec(pl.Int8, required=False),
+    "cqs": ColumnSpec(pl.Int8, required=False, domain=_CQS_DOMAIN),
     "holding_value": ColumnSpec(pl.Float64, required=False),
 }
 
@@ -1049,7 +1380,7 @@ CIU_HOLDINGS_SCHEMA: dict[str, ColumnSpec] = {
 FX_RATES_SCHEMA: dict[str, ColumnSpec] = {
     "currency_from": ColumnSpec(pl.String),
     "currency_to": ColumnSpec(pl.String),
-    "rate": ColumnSpec(pl.Float64),
+    "rate": ColumnSpec(pl.Float64, domain=_FX_RATE_DOMAIN),
 }
 
 
@@ -1245,7 +1576,7 @@ SECURITISATION_ALLOCATION_SCHEMA: dict[str, ColumnSpec] = {
     "pool_reference": ColumnSpec(pl.String),
     # Fraction of the exposure transferred to this pool. Each row must be in
     # ``(0, 1]``; per-exposure sums must be in ``[0, 1]``.
-    "allocation_pct": ColumnSpec(pl.Float64),
+    "allocation_pct": ColumnSpec(pl.Float64, domain=_ALLOCATION_FRACTION_DOMAIN),
     # CRR Art. 244 (traditional) vs Art. 245 (synthetic). Carried for future
     # use by the securitisation RWA framework — not consumed in phase 1.
     "transfer_type": ColumnSpec(pl.String, default="traditional", required=False),
@@ -1314,8 +1645,8 @@ TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # cdo_detachment: detachment point D of a CDO tranche (0 ≤ A < D ≤ 1); null if not CDO.
     "option_type": ColumnSpec(pl.String, required=False),
     "option_underlying_price": ColumnSpec(pl.Float64, required=False),
-    "cdo_attachment": ColumnSpec(pl.Float64, required=False),
-    "cdo_detachment": ColumnSpec(pl.Float64, required=False),
+    "cdo_attachment": ColumnSpec(pl.Float64, required=False, domain=_CDO_TRANCHE_POINT_DOMAIN),
+    "cdo_detachment": ColumnSpec(pl.Float64, required=False, domain=_CDO_TRANCHE_POINT_DOMAIN),
     "payment_leg_index_id": ColumnSpec(pl.String, required=False),
     # CRR Art. 307: True when the trade is client-cleared through a clearing
     # member to a QCCP — routes the trade exposure to the 4% RW branch (vs.
@@ -1414,7 +1745,7 @@ TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # sibling on SFT_TRADE_SCHEMA). Null (the common case) => no modelled LGD =>
     # the row routes to SA / FIRB, bit-identical to today.
     # (CRR Art. 143 / Art. 169-171: own-estimate LGD under A-IRB.)
-    "ccr_modelled_lgd": ColumnSpec(pl.Float64, required=False),
+    "ccr_modelled_lgd": ColumnSpec(pl.Float64, required=False, domain=_LGD_DOMAIN),
 }
 
 #: Netting-set-level input for SA-CCR. One row per netting set keyed by
@@ -1462,7 +1793,7 @@ NETTING_SET_SCHEMA: dict[str, ColumnSpec] = {
     # CRR Art. 291(5)(c): LGD override applied by the WWR gate to synthetic
     # single-trade netting sets carved out for specific WWR. Null on regular
     # netting sets; set to 1.0 by the gate on the synthetic NS row.
-    "wwr_lgd_override": ColumnSpec(pl.Float64, default=None, required=False),
+    "wwr_lgd_override": ColumnSpec(pl.Float64, default=None, required=False, domain=_LGD_DOMAIN),
     # Booking-unit code, joined to BOOK_ENTITY_MAPPING_SCHEMA by the scope
     # resolver to attribute the netting set to a reporting entity (CRR Art. 6 /
     # 11-18). Mirrors the facility/loan/contingent book_code (default "",
@@ -1516,10 +1847,12 @@ CCR_COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     "is_segregated": ColumnSpec(pl.Boolean, default=False, required=False),
     # Optional nullable (5).
     "currency": ColumnSpec(pl.String, required=False),
-    "issuer_cqs": ColumnSpec(pl.Int8, required=False),
+    "issuer_cqs": ColumnSpec(pl.Int8, required=False, domain=_CQS_DOMAIN),
     "issuer_type": ColumnSpec(pl.String, required=False),
-    "residual_maturity_years": ColumnSpec(pl.Float64, required=False),
-    "haircut_override": ColumnSpec(pl.Float64, required=False),
+    "residual_maturity_years": ColumnSpec(
+        pl.Float64, required=False, domain=_MATURITY_YEARS_DOMAIN
+    ),
+    "haircut_override": ColumnSpec(pl.Float64, required=False, domain=_HAIRCUT_DOMAIN),
 }
 
 
@@ -1572,8 +1905,10 @@ SFT_TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # Art. 224 Table 1 supervisory-haircut lookup. Null when the exposure side is
     # cash / a standard loan (HE = 0; engine treats null as no haircut).
     "exposure_collateral_type": ColumnSpec(pl.String, required=False),
-    "exposure_security_cqs": ColumnSpec(pl.Int8, required=False),
-    "exposure_security_residual_maturity_years": ColumnSpec(pl.Float64, required=False),
+    "exposure_security_cqs": ColumnSpec(pl.Int8, required=False, domain=_CQS_DOMAIN),
+    "exposure_security_residual_maturity_years": ColumnSpec(
+        pl.Float64, required=False, domain=_MATURITY_YEARS_DOMAIN
+    ),
     # Optional margining inputs (5) — SFT/FCCM separation Phase 0b. These make a
     # margined SFT under a qualifying Art. 285(2)-(4) margin agreement
     # REPRESENTABLE. NO engine math reads them yet (carry-only this phase): an
@@ -1644,7 +1979,7 @@ SFT_TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # LGD selection (engine/irb/transforms.py). Null (the common case) => no
     # modelled LGD => the row falls to SA / FIRB, bit-identical to today.
     # (CRR Art. 143 / Art. 169-171: own-estimate LGD under A-IRB.)
-    "ccr_modelled_lgd": ColumnSpec(pl.Float64, required=False),
+    "ccr_modelled_lgd": ColumnSpec(pl.Float64, required=False, domain=_LGD_DOMAIN),
     # Booking-unit code, joined to BOOK_ENTITY_MAPPING_SCHEMA by the scope
     # resolver to attribute the SFT to a reporting entity (CRR Art. 6 / 11-18).
     # Mirrors the facility/loan/contingent book_code (default "", nullable).
@@ -1673,8 +2008,10 @@ SFT_COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     # same-currency shortcut (Art. 224 Table 4: HFX = 0 when collateral and
     # exposure currencies match).
     "currency": ColumnSpec(pl.String, required=False),
-    "issuer_cqs": ColumnSpec(pl.Int8, required=False),
-    "residual_maturity_years": ColumnSpec(pl.Float64, required=False),
+    "issuer_cqs": ColumnSpec(pl.Int8, required=False, domain=_CQS_DOMAIN),
+    "residual_maturity_years": ColumnSpec(
+        pl.Float64, required=False, domain=_MATURITY_YEARS_DOMAIN
+    ),
 }
 
 #: Valid values for the CCR/SFT trade discriminator ``transaction_type``
@@ -1814,7 +2151,7 @@ CVA_COUNTERPARTY_SCHEMA: dict[str, ColumnSpec] = {
     "counterparty_reference": ColumnSpec(pl.String),
     "cva_rw_sector": ColumnSpec(pl.String),
     "cva_rw_rating_band": ColumnSpec(pl.String),
-    "cva_effective_maturity_years": ColumnSpec(pl.Float64),
+    "cva_effective_maturity_years": ColumnSpec(pl.Float64, domain=_MATURITY_YEARS_DOMAIN),
     "cva_in_scope": ColumnSpec(pl.Boolean, default=True, required=False),
 }
 
@@ -1840,7 +2177,7 @@ CVA_HEDGE_SCHEMA: dict[str, ColumnSpec] = {
     "cva_hedge_correlation_band": ColumnSpec(pl.String, required=False),
     "cva_hedge_rw_sector": ColumnSpec(pl.String),
     "cva_hedge_rw_rating_band": ColumnSpec(pl.String),
-    "cva_hedge_residual_maturity_years": ColumnSpec(pl.Float64),
+    "cva_hedge_residual_maturity_years": ColumnSpec(pl.Float64, domain=_MATURITY_YEARS_DOMAIN),
     "cva_hedge_notional": ColumnSpec(pl.Float64),
     "cva_hedge_eligible": ColumnSpec(pl.Boolean, default=True, required=False),
 }
@@ -2329,6 +2666,212 @@ VALID_TRANSFER_TYPES = {"traditional", "synthetic"}
 
 # Native source table per exposure_reference on securitisation_allocations.
 VALID_SECURITISATION_EXPOSURE_TYPES = {"loan", "contingent", "facility"}
+
+# =============================================================================
+# TABLE REGISTRY
+# =============================================================================
+#
+# Maps the RawDataBundle frame name a validator sees to the ColumnSpec schema
+# that declares it. The input-domain gate (contracts/validation.py) resolves a
+# table's declared domains through this map, and
+# ``scripts/check_input_domains.py`` uses it to prove that every schema
+# carrying a declared domain is actually REACHED by the gate — a declaration
+# nothing reads is guard-shaped code that reads as coverage, which is the
+# failure arch_check check 20 exists to stop on the function side.
+#
+# Nested CCR / SFT tables are named with their bundle path (``ccr.trades``)
+# because ``RawDataBundle.ccr`` / ``.sft`` are composites, not frames.
+TABLE_SCHEMAS: dict[str, dict[str, ColumnSpec]] = {
+    "facilities": FACILITY_SCHEMA,
+    "loans": LOAN_SCHEMA,
+    "contingents": CONTINGENTS_SCHEMA,
+    "counterparties": COUNTERPARTY_SCHEMA,
+    "collateral": COLLATERAL_SCHEMA,
+    "collateral_links": COLLATERAL_LINK_SCHEMA,
+    "guarantees": GUARANTEE_SCHEMA,
+    "provisions": PROVISION_SCHEMA,
+    "ratings": RATINGS_SCHEMA,
+    "specialised_lending": SPECIALISED_LENDING_SCHEMA,
+    "equity_exposures": EQUITY_EXPOSURE_SCHEMA,
+    "ciu_holdings": CIU_HOLDINGS_SCHEMA,
+    "fx_rates": FX_RATES_SCHEMA,
+    "facility_mappings": FACILITY_MAPPING_SCHEMA,
+    "org_mappings": ORG_MAPPING_SCHEMA,
+    "lending_mappings": LENDING_MAPPING_SCHEMA,
+    "model_permissions": MODEL_PERMISSIONS_SCHEMA,
+    "securitisation_allocations": SECURITISATION_ALLOCATION_SCHEMA,
+    "reporting_entities": REPORTING_ENTITY_SCHEMA,
+    "book_entity_mappings": BOOK_ENTITY_MAPPING_SCHEMA,
+    "cva_counterparties": CVA_COUNTERPARTY_SCHEMA,
+    "cva_hedges": CVA_HEDGE_SCHEMA,
+    "ccr.trades": TRADE_SCHEMA,
+    "ccr.netting_sets": NETTING_SET_SCHEMA,
+    "ccr.margin_agreements": MARGIN_AGREEMENT_SCHEMA,
+    "ccr.ccr_collateral": CCR_COLLATERAL_SCHEMA,
+    "ccr.failed_trades": FAILED_TRADE_SCHEMA,
+    "ccr.default_fund_contributions": DF_CONTRIBUTION_SCHEMA,
+    "sft.trades": SFT_TRADE_SCHEMA,
+    "sft.collateral": SFT_COLLATERAL_SCHEMA,
+}
+
+#: Natural key per table — the column whose value NAMES the offending row in a
+#: domain-violation error. Absent for tables with no single-column identity
+#: (the mapping tables); the gate then reports one aggregate error per column
+#: rather than skipping the table.
+TABLE_KEY_COLUMNS: dict[str, str] = {
+    "facilities": "facility_reference",
+    "loans": "loan_reference",
+    "contingents": "contingent_reference",
+    "counterparties": "counterparty_reference",
+    "collateral": "collateral_reference",
+    "collateral_links": "collateral_reference",
+    "guarantees": "guarantee_reference",
+    "provisions": "provision_reference",
+    "ratings": "rating_reference",
+    "specialised_lending": "counterparty_reference",
+    "equity_exposures": "exposure_reference",
+    "ciu_holdings": "holding_reference",
+    "fx_rates": "currency_from",
+    "securitisation_allocations": "exposure_reference",
+    "cva_counterparties": "counterparty_reference",
+    "cva_hedges": "cva_hedge_reference",
+    "ccr.trades": "trade_id",
+    "ccr.netting_sets": "netting_set_id",
+    "ccr.margin_agreements": "margin_agreement_id",
+    "ccr.ccr_collateral": "ccr_collateral_reference",
+    "sft.trades": "trade_id",
+    "sft.collateral": "sft_collateral_reference",
+}
+
+#: Input tables whose natural key must identify AT MOST ONE input row, and the
+#: column that key lives in. Read by
+#: ``contracts/validation.py::validate_duplicate_keys``.
+#:
+#: Deliberately NOT derived from :data:`TABLE_KEY_COLUMNS`, which answers a
+#: different question — *which column NAMES the offending row in an error* —
+#: and includes columns that are legitimately repeated: ``fx_rates`` is keyed
+#: there on ``currency_from`` (one row per currency PAIR) and
+#: ``specialised_lending`` on ``counterparty_reference``. Uniqueness is a
+#: separate claim about each table and is stated separately.
+#:
+#: The four listed are the tables where a repeat is silent data loss rather
+#: than a fan-out an operator would notice:
+#:
+#: - ``loans`` / ``contingents`` / ``facilities`` — the exposure tables. The
+#:   model-permission join de-duplicates on ``exposure_reference``
+#:   (``engine/stages/classify/permissions.py``) to stop a fan-out when several
+#:   permissions match, and in doing so collapses genuine duplicate INPUT rows:
+#:   three input loan rows produce two output rows, and the missing row's
+#:   capital simply leaves the portfolio total.
+#: - ``counterparties`` — the opposite direction. A repeated obligor MULTIPLIES
+#:   every exposure that joins to it (``attach_counterparty_rating`` is a plain
+#:   left join), double-counting capital. This is the exposure-table analogue of
+#:   the ``org_mappings`` duplicate-child fan-out that ``DQ004`` already reports
+#:   from ``engine/stages/hierarchy/graph.py``.
+TABLE_UNIQUE_KEYS: dict[str, str] = {
+    "loans": "loan_reference",
+    "contingents": "contingent_reference",
+    "facilities": "facility_reference",
+    "counterparties": "counterparty_reference",
+}
+
+#: Declared referential links, keyed by the REFERENCING table. Read generically
+#: by ``contracts/validation.py::validate_referential_integrity``.
+#:
+#: Scope is the OBLIGOR links — the ones whose failure silently re-prices the
+#: exposure. Every counterparty-attribute join in the hierarchy stage is
+#: ``how="left"`` and must stay that way (dropping the row would lose its
+#: capital outright), so an unresolvable obligor produces a fully populated
+#: result row carrying the fallback treatment named in each ``reason`` below.
+#:
+#: The polymorphic ``beneficiary_type`` / ``beneficiary_reference`` pairs on
+#: ``collateral`` / ``guarantees`` / ``provisions`` are DELIBERATELY absent:
+#: their valid universe depends on a second column and spans four parent
+#: tables, which is a different resolution and already has a purpose-built
+#: implementation for the M:N table
+#: (``validation.py::validate_collateral_links``, CRM009/CRM010/CRM011). They
+#: are owned by ``IMPLEMENTATION_PLAN.md`` P5.52 rather than approximated here.
+TABLE_FOREIGN_KEYS: dict[str, tuple[ForeignKey, ...]] = {
+    "loans": (
+        ForeignKey(
+            column="counterparty_reference",
+            parent_table="counterparties",
+            parent_column="counterparty_reference",
+            reason=(
+                "CRR Art. 112 / PS1/26 Art. 112 — the SA exposure class, and "
+                "therefore the risk weight, is a property of the OBLIGOR, not of "
+                "the exposure. A loan whose counterparty_reference resolves to no "
+                "counterparty row keeps every obligor attribute null, classifies "
+                "to 'other' and takes the 100% fallback weight. Measured on CRR, "
+                "one GBP 1,000,000 senior loan: a CQS 6 corporate is Art. 122 "
+                "150% = GBP 1,500,000 and the fallback returns GBP 1,000,000, a "
+                "33.3% understatement; a CQS 1 corporate is 20% = GBP 200,000 and "
+                "the same fallback returns GBP 1,000,000, a 5x overstatement. The "
+                "defect is not conservative in either direction — which face it "
+                "lands on depends on the obligor nobody could find."
+            ),
+        ),
+    ),
+    "contingents": (
+        ForeignKey(
+            column="counterparty_reference",
+            parent_table="counterparties",
+            parent_column="counterparty_reference",
+            reason=(
+                "CRR Art. 111(1) / Art. 112 — an off-balance-sheet item takes its "
+                "CCF from its own nature and its risk weight from the obligor, so "
+                "an unresolvable counterparty re-prices it exactly as it re-prices "
+                "a loan (see the loans declaration for the measured figures)."
+            ),
+        ),
+    ),
+    "facilities": (
+        ForeignKey(
+            column="counterparty_reference",
+            parent_table="counterparties",
+            parent_column="counterparty_reference",
+            reason=(
+                "CRR Art. 111(1) — a committed facility's undrawn headroom is a "
+                "synthesised exposure in its own right (``facility_undrawn``), "
+                "carrying the parent facility's obligor. An unresolvable "
+                "counterparty on the facility therefore re-prices the undrawn leg "
+                "and, through the counterparty-level collateral and lending-group "
+                "windows, the facility's drawn loans as well."
+            ),
+        ),
+    ),
+    "ratings": (
+        ForeignKey(
+            column="counterparty_reference",
+            parent_table="counterparties",
+            parent_column="counterparty_reference",
+            reason=(
+                "CRR Art. 138 / PS1/26 Art. 138 — an ECAI assessment is used only "
+                "for the obligor it was issued on. A rating row naming a "
+                "counterparty that does not exist is inherited by nobody: the "
+                "rating simply does not apply, and the obligor it was meant for "
+                "stays UNRATED at the 100% Art. 122(2) fallback while the run "
+                "reports a fully populated ratings table."
+            ),
+        ),
+    ),
+    "specialised_lending": (
+        ForeignKey(
+            column="counterparty_reference",
+            parent_table="counterparties",
+            parent_column="counterparty_reference",
+            reason=(
+                "CRR Art. 153(5) / PS1/26 Art. 122B — a specialised-lending row "
+                "is what routes an exposure to the slotting tables. One naming a "
+                "counterparty that does not exist routes nothing: the exposures "
+                "it was meant to slot stay on their ordinary corporate treatment, "
+                "which for an unrated obligor is materially lighter than the "
+                "Art. 153(5) supervisory categories."
+            ),
+        ),
+    ),
+}
+
 
 # Registry: maps table_name -> {column_name -> valid_values_set}
 # Used by validate_bundle_values() for input validation.

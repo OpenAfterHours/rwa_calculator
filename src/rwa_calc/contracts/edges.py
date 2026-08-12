@@ -39,6 +39,8 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from rwa_calc.domain.branch_reasons import BRANCH_REASON_VOCABULARIES, reason_dtype
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
@@ -65,6 +67,31 @@ class EdgeContractViolation(Exception):
     never a data-quality condition — so it raises instead of accumulating
     a ``CalculationError``.
     """
+
+
+@dataclass(frozen=True, slots=True)
+class LossyCast:
+    """A declared column supplied in a dtype whose cast can destroy values.
+
+    The reporting channel's counterpart to ``EdgeContractViolation``: at the
+    INPUT boundary a dtype mismatch is a data-quality finding, not a
+    programming error, so ``conform_lenient`` returns these instead of
+    raising. The loader maps each one to a ``CalculationError`` (DQ014).
+
+    Carries the two dtypes rather than just the column name because the
+    remedy is dtype-specific — the feed must re-send ``column`` typed as
+    ``declared`` — and because the pair is the whole evidence: no value was
+    inspected (see ``EdgeContract.conform_lenient``).
+
+    Attributes:
+        column: The declared column as named on the edge.
+        supplied: The dtype the external data actually arrived in.
+        declared: The dtype this edge declares, which the seal casts to.
+    """
+
+    column: str
+    supplied: PolarsDataType
+    declared: PolarsDataType
 
 
 @dataclass(frozen=True, slots=True)
@@ -195,7 +222,7 @@ class EdgeContract:
         ]
         return lf.select(emitted)
 
-    def conform_lenient(self, lf: pl.LazyFrame) -> tuple[pl.LazyFrame, list[str]]:
+    def conform_lenient(self, lf: pl.LazyFrame) -> tuple[pl.LazyFrame, list[str], list[LossyCast]]:
         """Input-boundary variant of ``conform`` — external data never raises.
 
         The loader boundary accumulates data-quality errors instead of
@@ -206,6 +233,59 @@ class EdgeContract:
         null — never an exception), then applies the same default
         injection, Boolean-only null fill, scratch strip, and canonical
         order as ``conform``.
+
+        Returns ``(frame, missing_required, lossy)``. The two reported
+        lists are DIFFERENT findings with different remedies and must not
+        be conflated: a missing column has to be ADDED to the feed, an
+        unreadable one has to be RE-TYPED and re-sent.
+
+        Why the lossy cast is reported at all
+        -------------------------------------
+        ``strict=False`` turns a value it cannot convert into null, and
+        the input-domain gate's rule is — correctly — that null is never a
+        domain violation. So without this signal a value that could not be
+        READ is indistinguishable from one that was never SUPPLIED, and
+        both are indistinguishable from a legitimate zero. Measured: a GBP
+        1,000,000 exposure whose ``drawn_amount`` arrives as the string
+        ``"1,000,000.00"`` (an ordinary CSV export with a thousands
+        separator) publishes ``ead_final = rwa_final = 0.00`` against a
+        correct GBP 200,000, with an empty error list — a 100% capital
+        understatement on a populated-looking row
+        (``tests/robustness/test_cast_failures.py``).
+
+        Note the irony, because someone will otherwise re-derive the
+        deletion argument and remove this: declared-vs-actual dtype drift
+        is exactly what ``validate_schema_to_errors`` checked before Phase
+        0 deleted it as "structurally incapable of firing" (``git show
+        6216ba41``, DQ003 kept reserved). That deletion was CORRECT — it
+        ran DOWNSTREAM of this cast, where the mismatch had already been
+        normalised away. The same check UPSTREAM of the cast fires on real
+        customer data, which is why the code is DQ014 and not DQ003.
+
+        What counts as lossy, and why not everything
+        --------------------------------------------
+        Only a mismatch whose cast can CHANGE a value is reported
+        (``_is_value_preserving``): a String into a declared numeric /
+        temporal / Boolean, a float into a declared integer or String,
+        anything into a nested dtype. A writer's own type choice — any
+        integer into any integer or float, an all-``Null`` column into
+        anything, Float32 -> Float64, Date -> Datetime — is normal on
+        clean feeds and is NOT reported, because a signal that fires on
+        every run is not a signal. Measured over the full suite before
+        this change: 80 distinct (edge, column, supplied, declared)
+        mismatches occur, 79 of them of exactly those benign shapes, and
+        the single reported one is the String -> Float64 that
+        ``tests/contracts/test_edge_contracts.py`` injects deliberately.
+
+        This is a SCHEMA-only test: ``present[col] != col.dtype`` is known
+        from ``collect_schema()``, which ``conform`` already calls. No
+        materialisation, no row scan, no ``collect()`` — this runs on every
+        table of every run, so it must stay free. The consequence is that
+        the finding is the DTYPE DRIFT, not a count of destroyed values:
+        counting ``value.is_not_null() & cast.is_null()`` would need every
+        input table materialised at the loader boundary. A String amount
+        column is a feed defect whether or not today's rows happen to
+        parse, and it carries the same remedy either way.
         """
         schema = lf.collect_schema()
         present = dict(schema)
@@ -224,13 +304,23 @@ class EdgeContract:
         if additions:
             lf = lf.with_columns(additions)
 
-        casts = [
-            pl.col(col_name).cast(col.dtype, strict=False)
+        mismatched = [
+            (col_name, present[col_name], col.dtype)
             for col_name, col in self.columns.items()
             if col_name in present and present[col_name] != col.dtype
         ]
-        if casts:
-            lf = lf.with_columns(casts)
+        if mismatched:
+            lf = lf.with_columns(
+                [
+                    pl.col(col_name).cast(declared, strict=False)
+                    for col_name, _, declared in mismatched
+                ]
+            )
+        lossy = [
+            LossyCast(column=col_name, supplied=supplied, declared=declared)
+            for col_name, supplied, declared in mismatched
+            if not _is_value_preserving(supplied, declared)
+        ]
 
         # Boolean fills strictly AFTER the cast pass — an inferred pl.Null
         # column must be Boolean before fill_null can coerce its literal
@@ -248,7 +338,7 @@ class EdgeContract:
             for col_name, col in self.columns.items()
             if col.required or col.inject or col_name in present
         ]
-        return lf.select(emitted), missing_required
+        return lf.select(emitted), missing_required, lossy
 
     def empty_frame(self) -> pl.LazyFrame:
         """A zero-row, schema-complete, sealed frame for this edge."""
@@ -315,15 +405,19 @@ def reseal_with(
     return seal(mutated, edge)
 
 
-def seal_lenient(lf: pl.LazyFrame, edge: EdgeContract) -> tuple[pl.LazyFrame, list[str]]:
-    """Leniently conform ``lf`` to ``edge``, brand it, report missing columns.
+def seal_lenient(
+    lf: pl.LazyFrame, edge: EdgeContract
+) -> tuple[pl.LazyFrame, list[str], list[LossyCast]]:
+    """Leniently conform ``lf`` to ``edge``, brand it, report both findings.
 
     The loader-boundary seal: missing required columns are injected as
-    typed nulls and returned by name so the caller can accumulate
-    data-quality errors instead of raising.
+    typed nulls and returned by name, and columns supplied in a dtype the
+    cast can destroy are returned as :class:`LossyCast`, so the caller can
+    accumulate data-quality errors instead of raising (DQ001 / DQ014 —
+    ``engine/loader.py::_seal_table``).
     """
-    conformed, missing = edge.conform_lenient(lf)
-    return brand(conformed, edge.name), missing
+    conformed, missing, lossy = edge.conform_lenient(lf)
+    return brand(conformed, edge.name), missing, lossy
 
 
 def brand[FrameT: (pl.LazyFrame, pl.DataFrame)](lf: FrameT, edge_name: str) -> FrameT:
@@ -406,6 +500,51 @@ def edge_columns_from_specs(
         )
         for col_name, spec in schema.items()
     }
+
+
+def _is_value_preserving(supplied: PolarsDataType, declared: PolarsDataType) -> bool:
+    """Is a ``supplied`` -> ``declared`` cast one a clean feed legitimately needs?
+
+    The rule behind the lossy-cast finding
+    (:meth:`EdgeContract.conform_lenient`). True means the mismatch is a
+    writer's type choice rather than a corrupted column, so it is NOT
+    reported:
+
+    - an all-``Null`` column (an unpopulated optional input, or a Polars
+      literal null) — there are no values to lose;
+    - an integer into any integer or float. A whole-pound amount written
+      as Int64 into a declared Float64, a CQS written as Int64 into a
+      declared Int8: measured across this estate's suite, integer -> integer
+      mismatches occur on 150+ seals and every one is benign, because the
+      declared width IS the column's regulatory domain (CQS is Int8
+      because CQS is 1-6);
+    - Float32 -> Float64, and Date -> Datetime.
+
+    Everything else is reported: a String into a declared numeric /
+    temporal / Boolean (the cast NULLS every value it cannot parse — the
+    defect this exists for), a float into a declared integer (the
+    fractional part is discarded), a numeric into a declared String (a
+    Float64 key renders as ``"123.0"`` and silently joins to nothing), and
+    anything into a nested List/Struct. Unrecognised combinations fall
+    through to False — an unknown mismatch is reported rather than waved
+    through, because under-reporting is the failure mode being fixed.
+
+    The residual hole, stated rather than hidden: an integer that does not
+    FIT its declared width (an Int64 12345 into an Int8 ``cqs``) is nulled
+    by this cast and passes unreported. That is a value-level fact and no
+    schema-only check can see it; the input-domain gate that owns value
+    domains cannot see it either, because it reads the frame AFTER this
+    cast, where the offending value is already null. Closing it needs a
+    row-level probe at the seal, which is not free and is not this
+    function's job.
+    """
+    if supplied == pl.Null:
+        return True
+    if supplied.is_integer() and (declared.is_integer() or declared.is_float()):
+        return True
+    if supplied == pl.Float32 and declared == pl.Float64:
+        return True
+    return supplied == pl.Date and declared == pl.Datetime
 
 
 # ---------------------------------------------------------------------------
@@ -1277,9 +1416,40 @@ RE_SPLIT_EXIT_CCR_EDGE: EdgeContract = EdgeContract(
 # share the bulk of their shape).
 
 
+def _branch_reason_columns() -> dict[str, EdgeColumn]:
+    """The Phase 3 ``*_branch_reason`` columns, typed from their vocabularies.
+
+    Built from ``BRANCH_REASON_VOCABULARIES`` rather than written out, so the
+    declared category list has exactly one home: adding a vocabulary member
+    changes the dtype here and in the producer at once, and the two cannot
+    disagree.
+
+    Every one is CONDITIONAL on its producer having run — an SA row carries no
+    IRB LGD reason and vice versa — so all are optional and injected as typed
+    nulls at edges the producing stage did not reach. A null therefore means
+    "this decision was not taken for this row", which is distinct from
+    ``UNKNOWN_FALLBACK`` ("it was taken and the answer is not known") and from
+    a named limb. The census relies on that three-way distinction.
+    """
+    return {
+        column: EdgeColumn(
+            dtype=reason_dtype(vocabulary),
+            required=False,
+            null_meaning=(
+                f"the decision {column} describes was not taken for this row "
+                "(the producing branch did not run) — NOT the same as "
+                "UNKNOWN_FALLBACK, which means it was taken and the deciding "
+                "predicate could not be evaluated"
+            ),
+        )
+        for column, vocabulary in BRANCH_REASON_VOCABULARIES.items()
+    }
+
+
 def _calc_output_common_columns() -> dict[str, EdgeColumn]:
     """Columns shared by all three branch exits AND the aggregator exit."""
     return {
+        **_branch_reason_columns(),
         "ancestor_facilities": EdgeColumn(dtype=pl.List(pl.String)),
         "approach": EdgeColumn(dtype=pl.String),
         "approach_applied": EdgeColumn(dtype=pl.String),

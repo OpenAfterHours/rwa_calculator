@@ -13,7 +13,7 @@ Submodules:
 - config: CalculationConfig and related configuration classes
 - errors: CalculationError and error-code constants for error handling
 - protocols: Protocol definitions for component interfaces
-- validation: Schema validation utilities
+- validation: Input-domain and output-bound validation utilities
 """
 
 # Configuration contracts
@@ -50,6 +50,7 @@ from rwa_calc.contracts.edges import (
     EdgeColumn,
     EdgeContract,
     EdgeContractViolation,
+    LossyCast,
     edge_columns_from_specs,
     seal,
     sealed_edge_of,
@@ -58,12 +59,14 @@ from rwa_calc.contracts.edges import (
 # Error handling contracts
 from rwa_calc.contracts.errors import (
     ERROR_APPROACH_NOT_PERMITTED,
+    ERROR_CCF_OUT_OF_RANGE,
     ERROR_CIRCULAR_HIERARCHY,
     ERROR_COLLATERAL_OVERALLOCATION,
     ERROR_CURRENCY_MISMATCH,
     ERROR_DUPLICATE_KEY,
     ERROR_HIERARCHY_DEPTH,
     ERROR_INELIGIBLE_COLLATERAL,
+    ERROR_INPUT_OUT_OF_DOMAIN,
     ERROR_INVALID_CONFIG,
     ERROR_INVALID_CQS,
     ERROR_INVALID_GUARANTEE,
@@ -79,10 +82,12 @@ from rwa_calc.contracts.errors import (
     ERROR_MISSING_PERMISSION,
     ERROR_MISSING_RATING,
     ERROR_MISSING_RISK_WEIGHT,
+    ERROR_NEGATIVE_AMOUNT,
     ERROR_ORPHAN_REFERENCE,
     ERROR_PD_OUT_OF_RANGE,
     ERROR_TYPE_MISMATCH,
     ERROR_UNKNOWN_EXPOSURE_CLASS,
+    ERROR_UNREADABLE_INPUT_DTYPE,
     CalculationError,
     business_rule_error,
     crm_warning,
@@ -110,15 +115,9 @@ from rwa_calc.contracts.protocols import (
 
 # Validation utilities
 from rwa_calc.contracts.validation import (
-    validate_ccf_modelled,
-    validate_lgd_range,
-    validate_non_negative_amounts,
-    validate_pd_range,
-    validate_raw_data_bundle,
-    validate_required_columns,
-    validate_resolved_hierarchy_bundle,
-    validate_schema,
-    validate_schema_to_errors,
+    validate_aggregated_bundle,
+    validate_branch_reasons,
+    validate_bundle_values,
 )
 from rwa_calc.domain.enums import PermissionMode
 
@@ -139,12 +138,14 @@ __all__ = [
     "missing_field_error",
     # Error codes
     "ERROR_APPROACH_NOT_PERMITTED",
+    "ERROR_CCF_OUT_OF_RANGE",
     "ERROR_CIRCULAR_HIERARCHY",
     "ERROR_COLLATERAL_OVERALLOCATION",
     "ERROR_CURRENCY_MISMATCH",
     "ERROR_DUPLICATE_KEY",
     "ERROR_HIERARCHY_DEPTH",
     "ERROR_INELIGIBLE_COLLATERAL",
+    "ERROR_INPUT_OUT_OF_DOMAIN",
     "ERROR_INVALID_CONFIG",
     "ERROR_INVALID_CQS",
     "ERROR_INVALID_GUARANTEE",
@@ -160,14 +161,17 @@ __all__ = [
     "ERROR_MISSING_PERMISSION",
     "ERROR_MISSING_RATING",
     "ERROR_MISSING_RISK_WEIGHT",
+    "ERROR_NEGATIVE_AMOUNT",
     "ERROR_ORPHAN_REFERENCE",
     "ERROR_PD_OUT_OF_RANGE",
     "ERROR_TYPE_MISMATCH",
     "ERROR_UNKNOWN_EXPOSURE_CLASS",
+    "ERROR_UNREADABLE_INPUT_DTYPE",
     # Edge contracts (migration Phase 3)
     "EdgeColumn",
     "EdgeContract",
     "EdgeContractViolation",
+    "LossyCast",
     "edge_columns_from_specs",
     "seal",
     "sealed_edge_of",
@@ -204,13 +208,7 @@ __all__ = [
     "SACalculatorProtocol",
     "SlottingCalculatorProtocol",
     # Validation
-    "validate_ccf_modelled",
-    "validate_lgd_range",
-    "validate_non_negative_amounts",
-    "validate_pd_range",
-    "validate_raw_data_bundle",
-    "validate_required_columns",
-    "validate_resolved_hierarchy_bundle",
-    "validate_schema",
-    "validate_schema_to_errors",
+    "validate_aggregated_bundle",
+    "validate_branch_reasons",
+    "validate_bundle_values",
 ]

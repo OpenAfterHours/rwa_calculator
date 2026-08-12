@@ -102,8 +102,14 @@ jobs:
       # RAM-constrained dev box. The runner has a different core-to-RAM ratio, so
       # it keeps sizing the fleet from its own core count; the Polars thread cap
       # in tests/conftest.py still applies and is a win here too.
+      #
+      # `not robustness` for the same reason pyproject's addopts excludes it: the
+      # marker filter here is an EXCLUSION list, so tests/robustness/ WOULD run
+      # per-PR without this. It is a search over pathological inputs, it takes
+      # tens of minutes at the `thorough` budget, and its verdict is not a
+      # per-commit signal — nightly-robustness.yml owns it.
       - name: Run tests
-        run: uv run pytest tests/ --benchmark-disable -m 'not slow and not benchmark' -n auto
+        run: uv run pytest tests/ --benchmark-disable -m 'not slow and not benchmark and not robustness' -n auto
 
   benchmarks:
     name: Benchmarks
@@ -188,6 +194,33 @@ jobs:
       # project's pytest markers.
       - name: Template cell-coverage ratchet
         run: uv run python scripts/check_template_cell_coverage.py --check
+
+  branch-census:
+    name: Branch Census
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Generate test fixtures
+        run: uv run python tests/fixtures/generate_all.py
+
+      # Two-way ratchet on which regulatory limb each row actually takes, across
+      # 14 portfolios x 2 regimes (~45s). A limb the estate stops reaching is a
+      # coverage regression; a newly declared limb no row reaches is dead code
+      # or an untested path. Both are findings.
+      #
+      # Same reasoning as `template-coverage` above: the ratchet test is marked
+      # `slow`, so the dev loop and the `test` job both skip it and this job is
+      # the ONLY place it executes. Invoked as the script so the exit code is
+      # the gate's own.
+      - name: Branch census ratchet
+        run: uv run python scripts/check_branch_census.py --check
 
   coverage-ratchet:
     name: Reporting Coverage Ratchet

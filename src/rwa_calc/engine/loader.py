@@ -54,6 +54,7 @@ from rwa_calc.contracts.errors import (
     CalculationError,
     missing_required_column_error,
     optional_file_load_error,
+    unreadable_input_dtype_error,
 )
 from rwa_calc.contracts.protocols import LoaderProtocol
 from rwa_calc.data.column_spec import (
@@ -204,9 +205,14 @@ def _seal_table(
 
     Lenient by design — the loader is the data-quality boundary: missing
     required columns become typed nulls plus one DQ001 error each, dtype
-    mismatches are cast with invalid values nulled, undeclared columns
-    are stripped, Boolean defaults filled, and the frame is branded for
+    mismatches are cast with invalid values nulled plus one DQ014 error
+    per column whose cast can destroy a value, undeclared columns are
+    stripped, Boolean defaults filled, and the frame is branded for
     bundle ``__post_init__`` validation.
+
+    The two codes report DIFFERENT findings and are deliberately not
+    merged: DQ001 says a column was ABSENT (extend the feed), DQ014 says
+    a present column may be UNREADABLE (re-type and re-send it).
     """
     edge = RAW_TABLE_EDGES[field_name]
     if not enforce_schemas:
@@ -214,9 +220,18 @@ def _seal_table(
         # without conforming so bundle construction still works. The brand
         # on this path is attested, not verified.
         return brand(lf, edge.name)
-    sealed, missing = seal_lenient(lf, edge)
+    sealed, missing, lossy = seal_lenient(lf, edge)
     errors.extend(
         missing_required_column_error(table=field_name, column=column) for column in missing
+    )
+    errors.extend(
+        unreadable_input_dtype_error(
+            table=field_name,
+            column=finding.column,
+            supplied=str(finding.supplied),
+            declared=str(finding.declared),
+        )
+        for finding in lossy
     )
     return sealed
 
@@ -616,13 +631,24 @@ def _seal_sft_table(
     fix at the heart of the SFT/FCCM separation: SFT inputs get the same
     brand + undeclared-column-strip + lenient missing-column accounting as
     the 18 traditional tables — NOT the ``enforce_schema`` bypass the CCR
-    leaf frames use.
+    leaf frames use. Both seal findings are accumulated exactly as
+    ``_seal_table`` accumulates them (DQ001 absent column / DQ014
+    unreadable dtype).
     """
     if not enforce_schemas:
         return brand(lf, edge.name)
-    sealed, missing = seal_lenient(lf, edge)
+    sealed, missing, lossy = seal_lenient(lf, edge)
     errors.extend(
         missing_required_column_error(table=field_name, column=column) for column in missing
+    )
+    errors.extend(
+        unreadable_input_dtype_error(
+            table=field_name,
+            column=finding.column,
+            supplied=str(finding.supplied),
+            declared=str(finding.declared),
+        )
+        for finding in lossy
     )
     return sealed
 
@@ -720,19 +746,27 @@ def _build_raw_sft_bundle(
     )
 
 
-def _run_bundle_validation(bundle: RawDataBundle) -> list[CalculationError]:
-    """Validate categorical column values in a loaded bundle.
+def _scrub_and_validate(bundle: RawDataBundle) -> tuple[RawDataBundle, list[CalculationError]]:
+    """Null non-finite inputs, then validate column domains on the result.
 
-    Wraps ``validate_bundle_values`` with exception handling so that
-    validation failures never prevent the bundle from being returned.
+    Returns the scrubbed bundle (carrying any DQ011 errors the scrub
+    raised) and the domain errors validated against it. The order is
+    load-bearing — see the call site in ``_build_bundle`` for why.
+
+    Wraps both in exception handling so a validator defect never prevents
+    the bundle from being returned: input validation is non-blocking.
     """
     try:
-        from rwa_calc.contracts.validation import validate_bundle_values
+        from rwa_calc.contracts.validation import (
+            scrub_non_finite_values,
+            validate_bundle_values,
+        )
 
-        return validate_bundle_values(bundle)
+        scrubbed = scrub_non_finite_values(bundle)
+        return scrubbed, validate_bundle_values(scrubbed)
     except Exception as e:
         logger.warning("Bundle value validation failed: %s", e)
-        return []
+        return bundle, []
 
 
 def _build_bundle(
@@ -801,8 +835,24 @@ def _build_bundle(
         ccr=ccr_bundle,
         sft=sft_bundle,
     )
-    validation_errors = _run_bundle_validation(bundle)
-    combined = load_errors + validation_errors
+    # Scrub BEFORE validating, not after. Two reasons, both measured:
+    #
+    # 1. NaN is not a domain violation, it is a non-finite input. Polars
+    #    evaluates ``NaN >= 0`` as True, so a NaN PD fails only the upper
+    #    bound and the domain gate reports it as IRB001 "outside [0, 1]"
+    #    when DQ011 is the truthful code. Scrubbing first nulls it, and
+    #    null is never a domain violation.
+    # 2. ``engine/pipeline.py`` runs the same gate again at the pipeline
+    #    entry so the in-memory ``run_with_data`` path is covered, and
+    #    de-duplicates against the errors already on the bundle. That
+    #    de-dup is only sound if both passes see the SAME data. Validating
+    #    pre-scrub here made them disagree: the domain errors carry an
+    #    aggregate row count in their message, so scrubbing a row changed
+    #    every surviving error's identity rather than removing it, and the
+    #    set difference matched nothing — reporting one row twice with two
+    #    contradictory counts.
+    bundle, validation_errors = _scrub_and_validate(bundle)
+    combined = load_errors + list(bundle.errors) + validation_errors
     return replace(bundle, errors=combined) if combined else bundle
 
 

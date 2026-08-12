@@ -10,6 +10,9 @@ The project includes several scripts for setup, deployment, test data generation
 | `scripts/extract_validation_rules.py` | Re-extract the committed validation-rule JSON from those workbooks | After refreshing the workbooks |
 | `scripts/deploy.py` | Version bump + PyPI publish | Cutting a release |
 | `scripts/generate_dependency_graph.py` | Regenerate the module dependency graph docs page | After structural refactors |
+| `scripts/arch_check.py` | The numbered architectural invariants — the project's main structural gate | Every commit (pre-commit hook) and in CI |
+| `scripts/validator_reachability.py` | Census of which contracts-layer guards production can actually reach | When draining an `arch_check` check 20 failure |
+| `scripts/check_parked_registers.py` | Shrink-only ratchet over the declared registers of parked findings | Runs in-suite on every pytest run; by hand when adding or draining a known disagreement |
 | `tests/fixtures/generate_all.py` | Regenerate test fixture parquet files | After modifying fixture definitions |
 | `workbooks/crr_expected_outputs/generate_outputs.py` | Generate CRR acceptance test golden files | After adding/changing CRR scenarios |
 | `loop.sh` | Iterative Claude agent development loop | Hands-off agent-driven development |
@@ -127,6 +130,65 @@ uv run python scripts/generate_dependency_graph.py
 uv run curfew show --mermaid                       # full module graph to stdout
 uv run curfew report rwa_calc.engine.stages.classify  # one module's deps + dependents
 ```
+
+---
+
+## Architecture & Correctness Gates
+
+### `scripts/arch_check.py` — The numbered architectural invariants
+
+The project's structural gate. It runs on every commit through the pre-commit hook and again in CI, and each numbered check is a lesson that graduated out of `.claude/LESSONS.md` into something that fails automatically.
+
+```bash
+# Run every check against src/rwa_calc/ (the default target)
+uv run python scripts/arch_check.py
+
+# Scope to a subpath; whole-package checks skip themselves
+uv run python scripts/arch_check.py src/rwa_calc/engine
+
+# Bank an improvement in the architecture-debt ratchet (check 11)
+uv run python scripts/arch_check.py --update-baseline
+```
+
+**The canonical list of checks is the module docstring in `scripts/arch_check.py` itself**, and it is deliberately not restated here — a numbered list copied into prose drifts from the code, which is the failure this project graduated the skill-value generator to stop. Read the docstring; each check names its own allowlist constant and the justification an entry there must carry.
+
+Exit codes are `0` (all checks pass) and `1` (violations found). Soft warnings — currently the watchfire `unresolved` bucket and pack citations outside the bundled index — print under `[WARN]` and do not fail the run.
+
+### `scripts/validator_reachability.py` — Contracts guard reachability census
+
+The human-readable face of **check 20**. Check 20 fails the build when a guard in the `contracts/` layer is unreachable from production code; this script prints the same measurement as a census, so a developer draining the list sees the shape of the problem instead of a pass/fail.
+
+```bash
+uv run python scripts/validator_reachability.py
+```
+
+For each module under `contracts/` it reports the production entry points, the reachable guards, and the unreachable ones with their line counts. There are exactly two correct responses to a name in the unreachable list: wire it into a production path, or delete it. A validator that no production path invokes is not a guard — it is documentation with a green test attached, and the estate has shipped 402 lines of exactly that (see [the escape log](escape-log.md)).
+
+The analysis has one implementation, in `arch_check.py`; this script reads it from there. The dependency points diagnostic → gate and never the other way, so the gate keeps working if this script is renamed or deleted. `tests/contracts/test_guard_reachability_gate.py` asserts both halves.
+
+### `scripts/check_parked_registers.py` — The parked-findings ratchet
+
+A *parked finding* is one a gate made and the estate then agreed to tolerate: a strict xfail against the oracle, a recorded classification disagreement, a published supervisory rule we knowingly break. `docs/development/escape-log.md`'s `caught-and-parked` escape class exists for what they share — a gate fires, the finding is recorded, and the wrong number ships anyway.
+
+This script gates the two registers whose membership is **declared**:
+
+- `tests/oracle/test_oracle.py::KNOWN_DISAGREEMENTS`
+- `tests/conformance/classification_table.toml`'s `[[known_disagreement]]`
+
+```bash
+# Census — every entry and the plan bullet that owns it
+uv run python scripts/check_parked_registers.py
+
+# The gate (exit 1 on a failure)
+uv run python scripts/check_parked_registers.py --check
+
+# Prune ids that have left the register and refresh owners. Will NOT add.
+uv run python scripts/check_parked_registers.py --update-baseline
+```
+
+Two conditions fail it. **An entry outside `scripts/parked_registers_baseline.json`** — the id set may only shrink, and `--update-baseline` deliberately refuses to bank an addition, so parking a new known-wrong number means hand-editing the baseline where a reviewer sees it. **An entry naming no owning plan bullet** — every reason string must carry an `OWNER: P<tier>.<n>` token pointing at the `IMPLEMENTATION_PLAN.md` item responsible for the fix (`.claude/LESSONS.md` B7). Removing an entry is free: that is the outcome the register exists to provoke, and `xfail(strict=True)` already fails the suite when a parked disagreement starts agreeing.
+
+The set arithmetic and the owner grammar live in `scripts/tolerated_findings.py`, shared with the **measured** register in `tests/acceptance/reporting/test_supervisory_validations.py` — that one keeps its own runner, because its membership is a union over sixteen pipeline runs, but both use the same `diff`. `tests/contracts/test_parked_register_ratchet.py` runs this gate on every pytest run, so it cannot rot unwired.
 
 ---
 

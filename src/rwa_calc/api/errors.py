@@ -30,6 +30,7 @@ ERROR_MESSAGE_OVERRIDES: dict[str, str] = {
     "DQ003": "Field has incorrect data type",
     "DQ004": "Duplicate key found in data",
     "DQ005": "Reference points to non-existent record",
+    "DQ013": "Field value is outside the range the regulation permits",
     "HIE001": "Circular reference detected in hierarchy",
     "HIE002": "Parent record not found in hierarchy",
     "HIE003": "Hierarchy exceeds maximum depth",

@@ -464,6 +464,42 @@ and the error predates the drafting.
 - Prefer a set diff to arithmetic on totals. Net +7 live / -7 dead is equally
   consistent with 8 gained and 1 lost; diff the id sets.
 
+### C9. On a user report, reproduce the customer's input SHAPE before concluding the engine is correct
+
+**Trap.** A user reports a wrong number. You build a test case from the
+description, it produces the right answer, and you close the report as "engine
+is correct — check your data".
+
+**Why.** The estate's effective input domain is *the union of the shapes our
+fixtures happen to have*, and every fixture starts from a valid portfolio built
+by someone who knew the schema. A customer's shape differs in ways the
+description never mentions: nested facilities, partial collateral links, an
+absent optional file, an unusual entity mix, a column present but null
+throughout, a reference that points nowhere. Reconstructing from prose
+reproduces *your* mental model of their data, which is the thing under
+suspicion. Two measured instances of the class this closes: the input contract
+was unreachable from production for months while 48 green unit tests covered it
+(2026-08-12 escape-log entry), and an uncastable value is still silently nulled
+at the loader seal with no error raised at all — so "the pipeline reported
+nothing" is not evidence the input was clean.
+
+**Detect.** Standing policy on any user report: get the actual input, or a
+structurally faithful anonymisation of it, and run it through
+`PipelineOrchestrator` end to end **before** forming a view. Then:
+
+- Read `result.errors` first, not the numbers. An empty error list on a report
+  of a wrong number is itself suspicious given the above.
+- Check the row survived: join input rows to output on
+  `source_exposure_reference`, not `exposure_reference` (the RE-splitter turns
+  one parent into `_sec`/`_res` children). A vanished row is neither a result
+  nor an error.
+- Check for silent nulling: compare the raw file's values against the sealed
+  frame's. `conform_lenient` casts with `strict=False`, so a type-mismatched
+  value becomes null and reports nothing.
+- If the shape turns out to be one no fixture has, that is a
+  `path-never-exercised` escape — register the portfolio in `RUNS`, do not just
+  fix the number.
+
 ---
 
 ## D. Blast radius
@@ -664,6 +700,9 @@ the move here and delete the prose entry above.
 | 2026-08-08 | A design can reach the right expression by an argument that is false, and a reviewer that fails it on the reasoning alone destroys correct work (P1.316 r2: two false narrative claims, correct prescription) | **Attack 10** in `.claude/agents/skeptic.md` — state which of prescription and justification is broken. `revise` is for a wrong prescription, or reasoning whose falsity would change what a later wave *does*. |
 | 2026-08-08 | **B5 recurrence** — a registered portfolio can still leave the *cell* dead, so Tier 2 passes green over a change it cannot see (C 08.01 r0253 was `0.00` in all six goldens) | Pointed at **P5.21**'s `dead_cells` / `never_evaluated_rules` ratchet, which `scripts/coverage_report.py` already computes and gates on neither. B5's prose now carries the two-leg fixture pattern as the interim manual form. |
 | 2026-08-09 | **B5 PARTIALLY GRADUATED, and recurred a THIRD time in a new form** | **Graduated:** `scripts/check_template_cell_coverage.py` + `scripts/template_cell_coverage_baseline.json` + `tests/contracts/test_template_cell_coverage.py` two-way ratchet the **(template, column)** live/dead sets over 28 portfolio×regime runs, 339 pairs / 210 live / 129 dead, each dead column classified `ENGINE_CANNOT_PRODUCE` (53) or `NO_FIXTURE` with a reason verified against generator source — reason codes deliberately exceed P5.21's spec, because a classified dead column is reviewable where a counted one is only tracked. Gated per-PR by the `template-coverage` job in `.github/workflows/ci.yml` (~5 min, invoking `--check` directly so the exit code is the gate's own). The census **fails loudly** — a raising portfolio, a silently-degraded one, and a short matrix are each a hard exit, all three demonstrated. **THIRD FORM FOUND:** the `fcsm` fixture was registered in `RUNS` against `_sa_config`, which defaults to `comprehensive`, while the portfolio exists to exercise the Art. 222 SIMPLE Method — so it sat inside the gate with its own feature silenced (col 0070 reads 0.00 vs non-zero on the identical bundle; the census showed 30→28 runs left 210/129 unchanged, i.e. it contributed no liveness). So B5 is now: "unregistered" → "registered, dead cell" → **"registered, WRONG CONFIG, dead cell"**. Registration is necessary; so is a live column; neither is sufficient if the config silences the feature. **STILL OPEN, narrowed to three:** (i) the **cell**-granular case (the C 08.01 r0253 shape); (ii) the **row**-granular case, which this ratchet is also blind to (C 08.04's single column is live while six of nine movement rows never carry a figure); (iii) `never_evaluated_rules`, the supervisory-register half. |
+
+| 2026-08-12 | **The estate's dominant meta-pattern — build the instrument, stop before wiring it.** Fifth measured instance, three prior escape-log entries already classed `gate-not-run` for it: 10 of the 14 public validators in `contracts/validation.py` (402 lines, all carrying green unit tests) were unreachable from any production path, so a feed sending PD = 1.5 to mean "1.5%" returned an RWA understated by 99.95% silently | **`arch_check` check 20** (`scripts/arch_check.py::check_guard_reachability`) — every public function in `contracts/validation.py`, and every guard-*named* public function elsewhere under `contracts/`, must be transitively reachable from `src/`. Scoped by guard shape rather than module path, so a future `contracts/checks.py` is covered from the day it is written. `GUARD_REACHABILITY_ALLOWLIST` is empty by design and stale entries are themselves violations, so it can only be drained. `CONTRACTS_GUARD_SURFACE` pins the population so the check cannot be satisfied by *deleting* the guard it measures — and that pin is itself asserted by `tests/contracts/test_guard_reachability_gate.py`, because as first shipped it was an unasserted constant that one edit could empty. |
+| 2026-08-12 | **A register of tolerated findings is a resting place, not a record.** 16 parked findings across two registers with no size gate at all and 0 of 16 naming an owner; 7 of the 8 oracle entries understate capital. `xfail(strict=True)` catches an entry that starts *agreeing*, so a silent fix was impossible — but nothing whatever constrained growth, and the population went 4 → 11 in one batch with every gate green | **`scripts/tolerated_findings.py`** — ONE shared set-diff + `OWNER: P<n>.<n>` grammar backing all four registers, gated by `scripts/check_parked_registers.py --check` against `scripts/parked_registers_baseline.json` and driven in-suite by `tests/contracts/test_parked_register_ratchet.py`. Additions are **shrink-only**: `--update-baseline` prunes and refreshes owners but refuses to add, so parking a new known-wrong number is a hand edit that appears in review. Removals stay free — a gate that reddens on a fix teaches people to stop fixing. Closes P5.41. |
 
 Candidates currently identified but not yet graduated (file as plan bullets):
 

@@ -11,7 +11,7 @@ Verifies that:
 import polars as pl
 
 from rwa_calc.contracts.bundles import RawDataBundle
-from rwa_calc.engine.loader import _run_bundle_validation
+from rwa_calc.engine.loader import _scrub_and_validate
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.raw_bundle import make_raw_bundle
 
@@ -106,10 +106,12 @@ def _make_minimal_bundle(**overrides) -> RawDataBundle:
     defaults = _bundle_defaults()
     defaults.update(overrides)
     bundle = make_raw_bundle(**defaults)
-    # Run loader-level validation to match real loader behaviour
-    errors = _run_bundle_validation(bundle)
-    if errors:
-        return make_raw_bundle(**defaults, errors=errors)
+    # Scrub then validate, matching real loader behaviour (see
+    # engine/loader.py::_scrub_and_validate — the order is load-bearing).
+    scrubbed, errors = _scrub_and_validate(bundle)
+    combined = list(scrubbed.errors) + errors
+    if combined:
+        return make_raw_bundle(**defaults, errors=combined)
     return bundle
 
 
@@ -279,10 +281,16 @@ class TestPipelineEntryGates:
         """A bundle that already carries the loader's errors must not report twice."""
         defaults = {**_bundle_defaults(), "ratings": self._bad_pd_ratings()}
         unvalidated = make_raw_bundle(**defaults)
-        loader_errors = _run_bundle_validation(unvalidated)
+        _scrubbed, loader_errors = _scrub_and_validate(unvalidated)
         assert [e for e in loader_errors if e.code == "IRB001"], (
             "the loader gate must produce the error this test de-duplicates"
         )
+        # NOTE: this fixture carries no non-finite value, so the scrub between
+        # the loader's pass and the pipeline's is the identity and the two
+        # trivially agree. That makes this test structurally incapable of
+        # catching the de-dup defect fixed in c1bae907 — see
+        # tests/unit/test_scrub_before_validate_ordering.py, which drives the
+        # NaN-plus-out-of-domain case the exact-set-difference de-dup breaks on.
         bundle = make_raw_bundle(**defaults, errors=loader_errors)
 
         result = PipelineOrchestrator().run_with_data(bundle, _make_config())

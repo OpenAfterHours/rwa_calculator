@@ -39,6 +39,7 @@
       "pack_entries": [],
       "source_files": [
         "contracts/edges.py",
+        "data/schemas.py",
         "engine/stages/classify/attributes.py",
         "engine/stages/classify/audit.py",
         "engine/stages/classify/subtypes.py",
@@ -180,6 +181,7 @@
         "analysis/comparison.py",
         "analysis/transition.py",
         "contracts/validation.py",
+        "data/schemas.py",
         "engine/ccr/default_fund.py",
         "engine/ccr/failed_trades.py",
         "engine/orchestrator.py",
@@ -204,7 +206,8 @@
         "tests/fixtures/ccr/p843_failed_trade_builder.py",
         "tests/fixtures/ccr/p849_default_fund_builder.py",
         "tests/properties/test_conservation.py",
-        "tests/properties/test_structural_invariants.py"
+        "tests/properties/test_structural_invariants.py",
+        "tests/robustness/harness.py"
       ],
       "watchfire_index_gap": false
     },
@@ -1078,6 +1081,8 @@
         "tests/oracle/derivations/sa_b31.py",
         "tests/oracle/derivations/sa_crr.py",
         "tests/properties/test_regime_deltas.py",
+        "tests/robustness/test_cast_failures.py",
+        "tests/robustness/test_referential_integrity.py",
         "tests/unit/crm/test_simple_method.py",
         "tests/unit/crr/test_crr_tables.py",
         "tests/unit/crr/test_p1_255_art_122_2_unrated_corporate_sovereign_floor.py",
@@ -1214,6 +1219,7 @@
       "source_files": [
         "contracts/errors.py",
         "contracts/protocols.py",
+        "data/column_spec.py",
         "data/schemas.py",
         "domain/enums.py",
         "engine/pipeline.py",
@@ -1586,6 +1592,7 @@
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
+        "data/schemas.py",
         "engine/sa/central_bank.py",
         "engine/stages/hierarchy/enrich.py",
         "engine/stages/hierarchy/ratings.py"
@@ -2262,6 +2269,7 @@
       "source_files": [
         "contracts/edges.py",
         "contracts/validation.py",
+        "data/column_spec.py",
         "data/schemas.py",
         "engine/irb/formulas.py",
         "engine/stages/classify/classifier.py",
@@ -2278,6 +2286,7 @@
         "tests/fixtures/p2_36/p2_36.py",
         "tests/fixtures/reporting_irb_classes_portfolio.py",
         "tests/oracle/derivations/irb.py",
+        "tests/robustness/test_unit_scale.py",
         "tests/unit/classifier/test_p1_276_crr_non_named_mdb_irb_class.py",
         "tests/unit/classifier/test_p1_278_top_down_pd.py",
         "tests/unit/config/test_p2_36_sovereign_institution_pd_floors.py",
@@ -2285,7 +2294,8 @@
         "tests/unit/irb/test_irb_formulas.py",
         "tests/unit/irb/test_p1_277_art_160_1_cgcb_pd_floor.py",
         "tests/unit/rulebook/test_floor_pack_parity.py",
-        "tests/unit/test_basel31_engine.py"
+        "tests/unit/test_basel31_engine.py",
+        "tests/unit/test_scrub_before_validate_ordering.py"
       ],
       "watchfire_index_gap": false
     },
@@ -2311,7 +2321,6 @@
       ],
       "source_files": [
         "contracts/edges.py",
-        "contracts/validation.py",
         "data/schemas.py",
         "engine/aggregator/aggregator.py",
         "engine/crm/collateral.py",
@@ -2566,7 +2575,6 @@
       ],
       "source_files": [
         "contracts/errors.py",
-        "contracts/validation.py",
         "data/schemas.py",
         "domain/enums.py",
         "engine/ccf.py",
@@ -2823,6 +2831,7 @@
         "tests/fixtures/exposures/loans.py",
         "tests/fixtures/r1_negative_gross/r1_negative_gross.py",
         "tests/properties/test_source_conservation.py",
+        "tests/robustness/test_referential_integrity.py",
         "tests/unit/crm/test_collateral_submodules.py",
         "tests/unit/test_hierarchy.py",
         "tests/unit/test_r1_negative_amount_dq.py"
@@ -3015,12 +3024,14 @@
     {
       "article": "207",
       "code_functions": [],
-      "confidence": "GAP",
+      "confidence": "UNCITED",
       "framework": "CRR",
-      "layer_count": 1,
+      "layer_count": 2,
       "oracle_cases": [],
       "pack_entries": [],
-      "source_files": [],
+      "source_files": [
+        "data/schemas.py"
+      ],
       "test_files": [
         "tests/acceptance/crr/test_p1_124_art_237_2a_guarantee_ineligibility.py",
         "tests/acceptance/crr/test_p1_96_art_197_covered_bond_eligibility.py",
@@ -3878,6 +3889,7 @@
       "source_files": [
         "analysis/reconciliation.py",
         "contracts/edges.py",
+        "data/schemas.py",
         "engine/aggregator/_summaries.py",
         "engine/aggregator/aggregator.py",
         "engine/crm/guarantees.py",
@@ -6125,6 +6137,7 @@
         "sa_revised_risk_weight_tables@b31"
       ],
       "source_files": [
+        "data/schemas.py",
         "engine/aggregator/_floor.py",
         "engine/crm/simple_method.py",
         "engine/sa/b31_risk_weight_tables.py",
@@ -6394,16 +6407,19 @@
       "code_functions": [],
       "confidence": "UNCITED",
       "framework": "PS1/26",
-      "layer_count": 1,
+      "layer_count": 2,
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
         "contracts/edges.py",
+        "data/column_spec.py",
         "data/schemas.py",
         "engine/irb/formulas.py",
         "engine/stages/re_split/__init__.py"
       ],
-      "test_files": [],
+      "test_files": [
+        "tests/robustness/strategies.py"
+      ],
       "watchfire_index_gap": false
     },
     {
@@ -6835,6 +6851,7 @@
         "equity_sa_risk_weights@b31"
       ],
       "source_files": [
+        "data/schemas.py",
         "engine/equity/calculator.py",
         "engine/sa/calculator.py",
         "engine/sa/risk_weights.py",
@@ -6874,6 +6891,20 @@
         "tests/oracle/derivations/sa_b31.py",
         "tests/unit/test_other_items_risk_weights.py"
       ],
+      "watchfire_index_gap": false
+    },
+    {
+      "article": "136",
+      "code_functions": [],
+      "confidence": "UNCITED",
+      "framework": "PS1/26",
+      "layer_count": 1,
+      "oracle_cases": [],
+      "pack_entries": [],
+      "source_files": [
+        "data/schemas.py"
+      ],
+      "test_files": [],
       "watchfire_index_gap": false
     },
     {
@@ -7258,7 +7289,6 @@
       ],
       "source_files": [
         "contracts/edges.py",
-        "contracts/validation.py",
         "data/schemas.py",
         "engine/stages/classify/subtypes.py",
         "rulebook/packs/b31.py"
@@ -7304,7 +7334,6 @@
         "lgd_floors@b31"
       ],
       "source_files": [
-        "contracts/validation.py",
         "data/schemas.py",
         "engine/irb/formulas.py",
         "engine/irb/transforms.py",

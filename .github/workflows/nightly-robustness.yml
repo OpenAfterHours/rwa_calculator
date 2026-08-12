@@ -1,0 +1,151 @@
+name: Nightly Robustness Fuzz
+
+# Searches the INPUT-PATHOLOGY axis of the test estate: what happens when a
+# customer's data is wrong, rather than whether Art. 123 works when it is right.
+# `tests/robustness/` drives the full pipeline over deliberately broken inputs —
+# unit-scale errors, out-of-domain numerics, nulled optional fields, unknown enum
+# strings, orphan foreign keys, duplicate keys, sign flips and structural
+# extremes — and asserts a triage invariant rather than a hand-derived number, so
+# it scales to as many generated shapes as the runner will pay for. See
+# docs/plans/test-space-correctness-proposal.md Phase 2 and tests/robustness/harness.py.
+#
+# WHY IT IS NOT IN ci.yml: this is a SEARCH, not a regression check. Its result
+# is a list of shapes that broke, which is a thing to read and triage, not a
+# merge gate — and at the `thorough` Hypothesis budget it costs tens of minutes.
+# Both the dev-loop `addopts` in pyproject.toml and ci.yml's `test` job carry
+# `not robustness` for that reason; the marker filter in both is an EXCLUSION
+# list, so removing either line silently puts this suite back in the dev loop.
+#
+# EXPECTED TO BE RED ON ARRIVAL, and that is the deliverable rather than a
+# defect in this workflow. The suite found three real silent-wrong-number defects
+# while it was being written. One is already fixed; two are open and fail a named
+# test here.
+#
+# OPEN — 4 failing tests, both in test_referential_integrity.py:
+#   * DQ005 ERROR_ORPHAN_REFERENCE is declared and emitted nowhere, so a loan
+#     whose counterparty_reference matches no counterparty (or is null)
+#     classifies to `other` at 100% — a 33.3% UNDERSTATEMENT on a CQS 6
+#     corporate, silently.
+#   * duplicate input rows collapse on the model-permission dedupe with no error;
+#     a file delivered twice loses every duplicate.
+#
+# CLOSED — conform_lenient cast with strict=False, so an unreadable numeric
+# became null and a GBP 1m exposure reported GBP 0.00 of capital, silently. Fixed
+# by DQ014 ERROR_UNREADABLE_INPUT_DTYPE; the eight tests in test_cast_failures.py
+# were written red against the pre-fix behaviour and went green under the fix
+# with no edit. Recorded in docs/development/escape-log.md, 2026-08-12.
+#
+# A green run here means the remaining two were fixed, not that the search found
+# nothing. Do not "fix" this workflow by narrowing the suite.
+
+on:
+  # 03:41 UTC daily — after nightly-injection's 02:17 campaign has claimed its
+  # runners, and on an odd minute for the reason that file records: GitHub queues
+  # scheduled workflows in bulk on the hour and on-the-hour crons are the most
+  # delayed of all.
+  #
+  # `schedule` fires ONLY on the repository's default branch. This file lives on
+  # `fix/input-domain-correctness` and WILL NOT RUN until it merges to `master` —
+  # the same silent-no-op shape as a `master`-only push trigger. Until then, use
+  # the manual dispatch below, or run it locally:
+  #
+  #     RWA_ROBUSTNESS_PROFILE=thorough \
+  #       uv run pytest tests/robustness/ -m 'robustness and not slow' -o addopts= -n auto
+  #
+  # GitHub also disables scheduled workflows after 60 days with no repository
+  # activity, and mails the owner. Re-enable from the Actions tab.
+  schedule:
+    - cron: '41 3 * * *'
+
+  # The trigger that matters until this reaches `master`. `profile` is exposed
+  # because the ONE knob worth turning by hand is how hard to search: `dev` for a
+  # quick confirmation that the suite still collects and runs, `thorough` for the
+  # real sweep.
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Hypothesis profile (dev = 10 examples, thorough = 250)'
+        required: false
+        default: thorough
+        type: choice
+        options: [dev, thorough]
+
+# Never cancel an in-flight sweep, and queue a manual dispatch behind a running
+# nightly rather than killing it. Same choice as nightly-injection.yml and for
+# the same reason: the run is expensive and nothing is waiting on its verdict to
+# merge. This is the OPPOSITE of ci.yml, correctly.
+concurrency:
+  group: nightly-robustness
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: Fuzz (${{ matrix.regime }})
+    runs-on: ubuntu-latest
+    # Well inside the 6-hour hosted-runner ceiling, which would otherwise cancel
+    # the job opaquely.
+    #
+    # MEASURED: the `dev` profile (10 Hypothesis examples per property) is
+    # 3m14s for the whole non-slow suite at `-n 6` on the reference dev box —
+    # 340 tests, each running a full pipeline. `thorough` raises the example
+    # budget 25x on the ~10 generated properties while leaving the ~300
+    # parametrised tests unchanged, so the ceiling here is an ESTIMATE and has
+    # not been run end to end on a hosted runner. If a leg hits it, shard by test
+    # file across more matrix legs rather than raising it.
+    timeout-minutes: 120
+    strategy:
+      # Both regimes run to completion even if one fails. A pathology that is
+      # caught under CRR and silent under Basel 3.1 is precisely the finding
+      # `.claude/LESSONS.md` C7 is about, and losing one leg to the other's
+      # failure would throw that away.
+      fail-fast: false
+      matrix:
+        regime: [CRR, B31]
+    env:
+      RWA_ROBUSTNESS_PROFILE: ${{ inputs.profile || 'thorough' }}
+      RWA_ROBUSTNESS_REGIME: ${{ matrix.regime }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Generate test fixtures
+        run: uv run python tests/fixtures/generate_all.py
+
+      # `-o addopts=` clears the dev-loop default, which both excludes this
+      # marker and pins `-n 8` for a RAM-constrained box. `-n auto` sizes the
+      # fleet from the runner; the Polars thread cap in tests/conftest.py applies.
+      #
+      # `and not slow` has to be written explicitly, and this is exactly the trap
+      # `-o addopts=` sets: clearing addopts clears its `not slow` too, so a bare
+      # `-m robustness` would pull in the 1M-row case (~333k obligors x 3 loans)
+      # on every nightly leg. Run that one deliberately, not by accident:
+      # `pytest tests/robustness/ -m 'robustness and slow' -o addopts=`.
+      #
+      # `--junitxml` so a red leg is readable per-test in the run summary without
+      # scrolling the log.
+      - name: Run the robustness sweep
+        run: |
+          mkdir -p nightly-robustness
+          uv run pytest tests/robustness/ -m 'robustness and not slow' -o addopts= \
+            -n auto --tb=short -rf \
+            --junitxml="nightly-robustness/results-${{ matrix.regime }}.xml"
+
+      # `if: always()` and `if-no-files-found: error`: the report has to survive
+      # the failure it is reporting on, and an absent report must fail the job
+      # rather than read as a clean run — absence is this project's dominant
+      # escape class (.claude/LESSONS.md B4).
+      - name: Upload the results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: robustness-results-${{ matrix.regime }}
+          path: nightly-robustness/results-${{ matrix.regime }}.xml
+          if-no-files-found: error

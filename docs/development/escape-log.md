@@ -991,3 +991,195 @@ gate that shipped.
   graduate, and belongs here rather than in a lesson: **the count in the bullet was
   wrong, in a bullet whose entire subject was that counts in prose go stale.** The
   ratchet fixes the register; nothing fixes a figure typed into a sentence.
+
+## 2026-08-12 — Three input pathologies produce a plausible number and no signal, and the codes that would report two of them are declared with no producer
+
+- **Defect**: three distinct silent-wrong-number paths, all found in the first
+  hours of the `tests/robustness/` suite existing. Each returns a populated
+  results row a reviewer would accept.
+
+  **(1) An orphan or null `counterparty_reference`.** Every counterparty-attribute
+  join in the hierarchy stage is `how="left"` — the obligor rating/CQS lift at
+  `engine/stages/hierarchy/enrich.py:131-135`, the entity-type gate lookup at
+  `:253`, and the graph joins at `graph.py:388-420` — so a loan whose obligor
+  cannot be found survives with null obligor attributes, classifies to `other`,
+  and takes the 100% fallback risk weight. Measured on CRR, one GBP
+  1,000,000 senior loan: a CQS 6 corporate is CRR Art. 122 **150%** = GBP
+  1,500,000; pointed at a reference that does not exist it returns GBP
+  **1,000,000**, a **33.3% understatement** on a one-character typo. The direction
+  reverses with the obligor's true class — a CQS 1 corporate is 20% = GBP 200,000
+  and orphaning it returns GBP 1,000,000, a **5x overstatement** — so the defect
+  is not conservative in either direction. A *null* `counterparty_reference`
+  reaches the identical fallback, which matters because that is the more common
+  feed shape (an outer join upstream, or a column never populated).
+  `ERROR_ORPHAN_REFERENCE` (**DQ005**) is declared in `contracts/errors.py:93` and
+  re-exported from `contracts/__init__.py`, and appears nowhere else under `src/`.
+
+  **(2) An unreadable numeric is indistinguishable from an absent one.**
+  **FIXED while this entry was being written** — see the closing section below;
+  the measurement here is the pre-fix state, and is what the new gate was verified
+  red against. `EdgeContract.conform_lenient` (`contracts/edges.py:198-251`) cast every
+  mismatched declared column with `strict=False`, so Polars turns a value it
+  cannot parse into a **null**, `missing` comes back empty, and no data-quality
+  error is emitted. Composed with the input contract's own (correct) rule that
+  null is never a domain violation, the result is a hole. Measured: the same GBP
+  1,000,000 loan whose `drawn_amount` arrives as the string `"1,000,000.00"` — a
+  plain CSV export with a thousands separator — reports `ead_final = 0.00` and
+  `rwa_final = 0.00` against a correct GBP 200,000, with no error. Seven ordinary
+  export artefacts do this (`£1000000`, `1 000 000`, `(1000000)`, `n/a`, the empty
+  string, a truncated `1.0e`). `CSVLoader` reads with `pl.scan_csv`, which infers
+  such a column as `String`, so this was the shipped CSV path and not a contrived
+  bundle.
+
+  **(3) A duplicated input row vanishes.**
+  `engine/stages/classify/permissions.py:261` de-duplicates on
+  `exposure_reference` after the model-permission join — correct for its own
+  purpose, which is to stop a fan-out when several permissions match — and in
+  doing so collapses genuine duplicate INPUT rows. Three input loan rows produce
+  two output rows and no error; a whole file delivered twice loses every duplicate
+  silently. `ERROR_DUPLICATE_KEY` (**DQ004**) exists but is emitted only for the
+  org-hierarchy multi-parent case (`engine/stages/hierarchy/graph.py:474`), never
+  for an exposure table.
+- **Rule**: no single article. As with the 2026-08-12 input-contract entry above,
+  the exposure is the input domain of every article the engine implements. The
+  closest named rules are the ones the fallback silently substitutes for: CRR
+  Art. 122 (corporate SA risk weights by CQS) for (1), and CRR Art. 111 (exposure
+  value) for (2), where a GBP 1m exposure is reported at GBP 0.
+- **Origin**: (1) `engine/stages/hierarchy/enrich.py`; (2)
+  `contracts/edges.py::conform_lenient`; (3)
+  `engine/stages/classify/permissions.py`.
+- **Escape class**: `no-gate-exists` for all three, and the word *exists* is doing
+  precise work in (1) and (3). An error **code** is declared for each; no producer
+  is. That is a recognisable relative of the four `gate-not-run` entries above —
+  the estate's habit of building the instrument and stopping before wiring it —
+  but it is not the same class and would not take the same fix. A constant with no
+  producer is not a gate that failed to run; there is nothing to move earlier. It
+  has to be written. What it shares with `gate-not-run` is the *appearance* of
+  coverage: `ERROR_ORPHAN_REFERENCE` in an `__all__` reads, to a reviewer and to
+  every grep, as referential integrity that is enforced.
+- **Why every gate missed it**: the whole estate is organised on one axis — **by
+  regulatory rule**, *does Art. 123 work?* — and every generator in it starts from
+  a **valid** portfolio. `tests/properties/strategies.py` bounds PD to
+  `[0.0003, 0.20]` and amounts to at least GBP 10k with every field populated, and
+  its docstring says so plainly. The oracle, the conformance table, the goldens
+  and the supervisory register all consume well-formed fixtures. Nothing in 1,081
+  test files asked what happens when the data is **wrong**, so a wrong answer to
+  that question could not be observed.
+
+  Two structural specifics are worth recording beyond that general point. First,
+  `tests/acceptance/stress/test_stress_pipeline.py::TestRowCountPreservation` is
+  the *only* place in the estate that states a count identity between input and
+  output rows, and it counts a clean portfolio — so (3), which is exactly a
+  row-count defect, was outside its reach by construction. Second, (2) is
+  **pinned** at unit level: `tests/contracts/test_edge_contracts.py:368-380`
+  (`test_dtype_mismatch_cast_not_raised`) asserts that an uncastable value becomes
+  null with `missing == []`. That test is
+  correct about `conform_lenient`'s contract and says nothing about the
+  end-to-end consequence, which is a GBP 1m exposure reporting zero capital. A
+  test can pin a mechanism faithfully and leave its consequence unexamined.
+- **Gate change**: **`tests/robustness/`** — a new suite driving the FULL pipeline
+  (not `calculate_branch`) over deliberately broken inputs, asserting a triage
+  invariant rather than a hand-derived number so it scales to as many generated
+  shapes as the runner will pay for. Six generators: unit-scale errors on every
+  ratio column, out-of-domain numerics read off the Phase 1 `ColumnSpec.domain`
+  declarations, one nulled optional field at a time, unknown enum strings with
+  case and whitespace variants, sign flips / duplicate keys / orphan foreign keys,
+  and structural extremes up to 1M rows. `tests/robustness/harness.py` owns the
+  invariant; `.github/workflows/nightly-robustness.yml` runs it nightly under CRR
+  and Basel 3.1 as separate matrix legs, and both `pyproject.toml`'s `addopts` and
+  ci.yml's `test` job exclude the `robustness` marker so it never enters the dev
+  loop.
+
+  The invariant has **four** clauses, not the two the proposal drafted, and the
+  two additions are what make it usable rather than what soften it. Clause (c)
+  accepts a table/column-level aggregate error, because `_collect_domain_violations`
+  names at most `sample_cap=5` rows per column and summarises the rest, and DQ001
+  / DQ010 name no row at all — without it the suite reports false failures on
+  *correct* behaviour, which is how a suite gets switched off. Clause (d) — the row
+  produced no output row and no error mentions it — is the failure, and is what
+  catches (1) and (3). A fifth outcome, `collapsed`, counts input **rows** as well
+  as references, because a duplicate reference IS present in the output and is
+  therefore invisible to any per-reference identity.
+
+  The join back to the input row is on **`source_exposure_reference`**, never
+  `exposure_reference`: the RE splitter, guarantee substitution and the
+  facility-undrawn leg all make the latter non-unique per input row, and joining
+  on it would report every correct split as a vanished row.
+
+  **Not gated per-PR, deliberately.** This is a search, not a regression check;
+  its output is a list of shapes to triage. It is also **red on arrival** on
+  exactly the three defects above, which is the deliverable rather than a fault in
+  the workflow — a green run would mean they were fixed, not that the search found
+  nothing.
+- **Verified red** — each defect against its own new test, before any fix, on the
+  quiet tree:
+
+  ```
+  .venv/bin/python -m pytest tests/robustness/ -m robustness -o addopts= -q
+
+  E  AssertionError: an exposure whose counterparty_reference 'CP_DOES_NOT_EXIST'
+     matches no counterparty produced GBP 1,000,000.00 against a correct GBP
+     1,500,000.00 — a 33.3% understatement — and the run raised NO error at all.
+     DQ005 ERROR_ORPHAN_REFERENCE is declared in contracts/errors.py and emitted
+     nowhere in src/.
+
+  E  AssertionError: an exposure with no counterparty_reference at all produced
+     GBP 1,000,000.00 and no error names it
+
+  E  AssertionError: 1 input row(s) unaccounted for (3 input rows -> 2 output rows)
+       injections: ['loans.loan_reference (duplicated row)']
+       accumulated error codes: ['<no errors at all>']
+         [collapsed] loans:LN000 — 2 input rows share this reference and collapsed
+                     to 1 output row(s); no error says so
+
+  E  AssertionError: drawn_amount='1,000,000.00' could not be cast, was silently
+     nulled, and produced a zero-capital exposure with no error
+  ```
+
+  All four assertions state what **ought** to be true and none pins the wrong
+  number, so a fix turns each one green rather than requiring the test to be
+  rewritten (`.claude/LESSONS.md` C1) — which is not merely a claim about the
+  tests but a measured fact about one of them, since the fourth went green under
+  DQ014 without being touched. The measured control values are asserted
+  *first* in each test, so a failure is unambiguously about the missing signal and
+  not about the risk weights having moved underneath the test.
+- **Defect (2) is CLOSED, by the gate rather than around it.** The eight
+  `test_cast_failures.py` tests were written red against the measurement above and
+  handed to the concurrent Phase 1 work as an acceptance check. **DQ014
+  `ERROR_UNREADABLE_INPUT_DTYPE`** now reports a column supplied in a dtype whose
+  cast is destructive: `seal_lenient` returns `LossyCast` findings alongside
+  `missing`, the loader turns them into one error per (table, column)
+  (`engine/loader.py:223-234`), and `tests/fixtures/raw_bundle.py` routes them into
+  the bundle's error list so an in-memory bundle carries the same load-boundary
+  errors a production load would. All eight tests flipped green with **no edit to
+  any of them**, which is the strongest available form of this evidence: the gate
+  was written first, observed red, and turned green by the fix rather than by being
+  rewritten. Deliberately NOT routed through DQ003 `ERROR_TYPE_MISMATCH`, which
+  Phase 0 retired as unfirable, nor through DQ001 — a value that is present and
+  unreadable needs the feed RE-SENT where a missing column needs it EXTENDED, and
+  `test_an_uncastable_value_is_not_reported_as_a_missing_column` pins the
+  distinction.
+- **Defects (1) and (3) are still open, and named rather than parked.** Neither is
+  `xfail`-ed — an `xfail` naming no owning bullet is the review finding, not the
+  gate (`.claude/LESSONS.md` B7), and this change does not own
+  `IMPLEMENTATION_PLAN.md`. Both stay red in `tests/robustness/`, which is where a
+  search suite's findings belong. The recommended fixes, for whoever files the
+  bullets: emit DQ005 from the counterparty-enrichment join by counting left-join
+  misses on `counterparty_reference` — null and unmatched are the same finding and
+  should carry the same code; and emit DQ004 for duplicate exposure references at
+  the INPUT gate, where the duplicate is still visible, rather than at the
+  model-permission dedupe that consumes it.
+- **Lesson**: **a declared error code with no producer is negative coverage.** It
+  reads as enforcement to every reviewer, to every grep and to every import-graph
+  tool, while enforcing nothing — the same shape as the 402 lines of unreachable
+  validators in the entry above, one level further out. Check 20
+  (`check_guard_reachability`) closed the unreachable-*validator* case; the
+  unreachable-*code* case is its exact analogue and is mechanically checkable in
+  the same way: every `ERROR_*` constant in `contracts/errors.py` should either
+  have a producer under `src/` or be explicitly listed as reserved, as Phase 0 did
+  for DQ003. Two of the three defects in this entry sat behind a declared code;
+  the third had no code at all until DQ014 was written for it, so the check would
+  have flagged exactly the two that were flaggable.
+  That is the graduation candidate this entry files; it is not performed here
+  because `scripts/arch_check.py` was being edited by another agent in the same
+  tree and check 20's own entry records the same reason for the same restraint.

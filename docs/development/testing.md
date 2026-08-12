@@ -471,19 +471,136 @@ def test_calculation_accumulates_errors():
     assert any("Invalid PD" in e.message for e in result.errors)
 ```
 
+## The robustness suite (`tests/robustness/`)
+
+Every other suite in this estate is organised on one axis — **by regulatory
+rule**: *does Art. 123 work?* Every generator in them starts from a valid
+portfolio. `tests/robustness/` is the second axis — **by input pathology**:
+*what happens when the customer's data is wrong?*
+
+### Running it
+
+One command, and it is the same one the nightly runs:
+
+```bash
+# The whole suite, dev budget (~10 Hypothesis examples per property, ~3 minutes)
+uv run pytest tests/robustness/ -m 'robustness and not slow' -o addopts= -n 6
+
+# The real sweep — 250 examples per property, which is what the nightly runs
+RWA_ROBUSTNESS_PROFILE=thorough \
+  uv run pytest tests/robustness/ -m 'robustness and not slow' -o addopts= -n auto
+
+# Under Basel 3.1 instead of CRR (the nightly runs both as separate matrix legs)
+RWA_ROBUSTNESS_REGIME=B31 \
+  uv run pytest tests/robustness/ -m 'robustness and not slow' -o addopts= -n 6
+
+# The 1M-row case, on its own — ~333k obligors x 3 loans, minutes and gigabytes
+uv run pytest tests/robustness/ -m 'robustness and slow' -o addopts=
+```
+
+Two things about that command line are load-bearing:
+
+- `-o addopts=` is required. The dev-loop default in `pyproject.toml` carries
+  `-m '... and not robustness'`, so without clearing it pytest deselects the whole
+  suite and reports a cheerful zero.
+- `and not slow` must then be written back explicitly, because clearing `addopts`
+  also cleared its `not slow`. A bare `-m robustness` pulls in the 1M-row case.
+
+### Why it is not in the dev loop
+
+It is a **search**, not a regression check. Its output is a list of input shapes
+that broke, which is something to read and triage — not a merge gate. Both
+`pyproject.toml`'s `addopts` and the `test` job in `.github/workflows/ci.yml`
+exclude the `robustness` marker; the marker filter in both is an *exclusion*
+list, so deleting either line silently puts a tens-of-minutes search back into
+every developer's `pytest tests/`.
+
+`.github/workflows/nightly-robustness.yml` owns it: 03:41 UTC daily, CRR and
+Basel 3.1 as separate matrix legs, plus a `workflow_dispatch` with a profile
+choice. Note that GitHub fires `schedule` **only on the default branch**, so the
+workflow does nothing until it reaches `master` — use the manual dispatch or the
+local command until then.
+
+### The invariant it asserts
+
+There is no hand-derived expected value anywhere in the suite, which is what
+lets it scale to as many generated shapes as you care to pay for. Instead every
+test asserts that **every input exposure row is accounted for**, which holds
+when at least one of these does:
+
+| | Outcome | Meaning |
+|---|---|---|
+| (a) | Sound result | An output row joins back to it via `source_exposure_reference`, carrying a non-null, finite, in-bounds `ead_final` / `risk_weight` / `rwa_final`. |
+| (b) | Named error | A `CalculationError` names the row — by its input reference, by an output reference derived from it, or by its counterparty. |
+| (c) | Aggregate error | An error with `exposure_reference=None` whose (table, column) matches an injected field. The input gate samples at most five row-named errors per column and summarises the rest, and `DQ001` / `DQ010` name no row at all — without this clause the suite reports false failures on correct behaviour. |
+| (d) | **Nothing** | The failure. The row produced no output and no error mentions it: filtered out, lost in a join, or collapsed by a `group_by`, with its capital missing from the portfolio total and no signal. |
+
+A fifth outcome, `collapsed`, is reported separately: duplicate input rows
+sharing one reference are invisible to a per-reference identity, so the harness
+counts input **rows** as well as references.
+
+The join is on `source_exposure_reference`, never `exposure_reference` — the
+real-estate splitter, guarantee substitution and facility-undrawn legs all make
+the latter non-unique per input row, and joining on it would report every
+correct split as a vanished row.
+
+### The generators
+
+| # | Generator | Module |
+|---|---|---|
+| 1 | Unit-scale errors (×100 and ÷100 on every ratio column) | `test_unit_scale.py` |
+| 2 | Out-of-domain numerics, driven off the `ColumnSpec.domain` declarations | `test_out_of_domain.py` |
+| 3 | Null each optional field in turn | `test_null_and_enum.py` |
+| 4 | Unknown enum strings, including case and whitespace variants | `test_null_and_enum.py` |
+| 5 | Sign flips, duplicate keys, orphan foreign keys | `test_referential_integrity.py` |
+| 6 | Structural extremes — empty tables, one row, absent tables, 1M rows | `test_structural_extremes.py` |
+| — | The seal's silent cast failure | `test_cast_failures.py` |
+
+Generator 2 reads `NumericDomain` off the column declarations rather than
+restating any bound, so a newly-declared column is fuzzed by being declared. The
+declaration readers **raise** when a canary column loses its domain: a generator
+that quietly fuzzes fewer columns than it did yesterday reports "no defects
+found" for the wrong reason.
+
+### A red run is the deliverable
+
+The suite found three silent-wrong-number defects while it was being written, and
+is expected red on the two that are still open:
+
+| Finding | State |
+|---|---|
+| `DQ005 ERROR_ORPHAN_REFERENCE` is declared and emitted nowhere — an orphan or null `counterparty_reference` classifies to `other` at 100%, a **33.3% understatement** on a CQS 6 corporate, silently | **open** (4 failing tests) |
+| Duplicate input rows collapse on the model-permission dedupe with no error — a file delivered twice loses every duplicate | **open** (same 4) |
+| `conform_lenient` cast with `strict=False`, so an unreadable numeric became null and a £1m exposure reported £0.00 of capital, silently | **closed** by `DQ014 ERROR_UNREADABLE_INPUT_DTYPE`; the eight tests in `test_cast_failures.py` were written red and went green under the fix with no edit |
+
+A green run means the remaining two were fixed — not that the search found
+nothing. Do not narrow the suite to make it pass, and do not `xfail` a finding
+without a plan bullet that owns it (`.claude/LESSONS.md` B7). All three are
+recorded in [the escape log](escape-log.md) under 2026-08-12.
+
 ## Test Markers
 
-Markers are configured in `pyproject.toml`:
+Markers are configured in `pyproject.toml`. The `-m` filter in `addopts` is an
+**exclusion list**, so a newly registered marker runs in the dev loop unless it
+is named there:
 
 ```toml
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-v --tb=short --benchmark-disable -m 'not slow'"
+addopts = "--tb=short --strict-markers --benchmark-disable -m 'not slow and not stress and not scale_1m and not benchmark and not robustness' -n 8 --dist=loadfile"
 markers = [
-    "benchmark: mark test as a benchmark (deselect with --benchmark-skip)",
-    "slow: mark test as slow (10M+ scale, may take several minutes)",
+    "benchmark: mark test as a benchmark (excluded from the default dev loop; run via -m benchmark)",
+    "robustness: input-pathology fuzzing over the full pipeline (nightly, not the dev loop)",
+    "slow: mark test as slow (1M scale, may take several minutes)",
+    "stress: mark test as a correctness-at-scale validation (10K+ rows, opt-in)",
+    "scale_10k: benchmark at 10K counterparty scale",
+    "scale_100k: benchmark at 100K counterparty scale",
+    "scale_1m: benchmark at 1M counterparty scale (opt-in via -m scale_1m)",
 ]
 ```
+
+`--strict-markers` is on, so an unregistered marker is a hard collection error
+rather than a silently ignored one.
 
 Usage:
 ```python

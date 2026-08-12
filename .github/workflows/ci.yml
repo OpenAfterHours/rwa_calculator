@@ -102,8 +102,14 @@ jobs:
       # RAM-constrained dev box. The runner has a different core-to-RAM ratio, so
       # it keeps sizing the fleet from its own core count; the Polars thread cap
       # in tests/conftest.py still applies and is a win here too.
+      #
+      # `not robustness` for the same reason pyproject's addopts excludes it: the
+      # marker filter here is an EXCLUSION list, so tests/robustness/ WOULD run
+      # per-PR without this. It is a search over pathological inputs, it takes
+      # tens of minutes at the `thorough` budget, and its verdict is not a
+      # per-commit signal — nightly-robustness.yml owns it.
       - name: Run tests
-        run: uv run pytest tests/ --benchmark-disable -m 'not slow and not benchmark' -n auto
+        run: uv run pytest tests/ --benchmark-disable -m 'not slow and not benchmark and not robustness' -n auto
 
   benchmarks:
     name: Benchmarks

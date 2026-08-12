@@ -8,6 +8,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`DQ014` — a column that could not be READ is no longer indistinguishable
+  from one that was never SUPPLIED.** The loader seal casts every declared
+  column whose dtype does not match with `strict=False`, so Polars turns a
+  value it cannot parse into a null and reports nothing; the input contract's
+  own rule is — correctly — that a null is never a domain violation. The two
+  rules composed into a hole with no floor: a GBP 1,000,000 exposure whose
+  `drawn_amount` arrived as the string `"1,000,000.00"` (a plain CSV export
+  with a thousands separator, which `scan_csv` infers as `String`) published
+  `ead_final = rwa_final = 0.00` against a correct GBP 200,000 — a **100%
+  understatement of that exposure's capital, on a populated-looking row, with
+  an empty `errors` list**. It reproduced on every ordinary way a feed writes a
+  number: `£1000000`, `1 000 000`, `(1000000)`, `n/a`, `""`, `1.0e`.
+
+  `EdgeContract.conform_lenient` now returns those columns as `LossyCast`
+  findings alongside the missing-column names it already returned, and
+  `engine/loader.py::_seal_table` maps each to one `DQ014`
+  (`ERROR_UNREADABLE_INPUT_DTYPE`, severity `error`) naming the table, the
+  column, the dtype supplied and the dtype declared. `DQ001` and `DQ014` stay
+  distinct because their remedies are: an absent column has to be **added** to
+  the feed, an unreadable one has to be **re-typed** and re-sent.
+
+  The check is schema-only — `collect_schema()` is already called by the same
+  method, so there is no materialisation, no row scan and no per-table cost —
+  and it reports only mismatches whose cast can change a value. A writer's own
+  type choice (any integer into any integer or float, an all-null column,
+  `Float32`→`Float64`, `Date`→`Datetime`) is not reported: measured over the
+  full suite, 79 of the 80 distinct dtype mismatches this estate's seals see
+  are of exactly those shapes, and the 80th is the `String`→`Float64` that
+  `tests/contracts/test_edge_contracts.py` injects deliberately. A signal that
+  fires on every clean feed is not a signal.
+
+  Note the shape of this, because the argument that deleted the old check will
+  be re-derived: declared-vs-actual dtype drift is what `validate_schema_to_errors`
+  checked before Phase 0 deleted it as "structurally incapable of firing"
+  (`DQ003`, kept reserved). That deletion was **correct** — it ran *downstream*
+  of the cast, where the mismatch has already been normalised away. The same
+  check *upstream* of the cast fires on real customer data.
 - **The registers of parked findings are ratcheted, and every entry names the
   plan bullet that owns it.** A *parked finding* is one a gate made and the
   estate then agreed to tolerate. There were sixteen of them across two

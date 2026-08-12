@@ -328,6 +328,16 @@ def build_release(new_version: str) -> bool:
     if not run_command(["uv", "build"], "Building package"):
         return False
 
+    # The build backend floats and the publisher is pinned, so a fresh build can
+    # outrun the uploader with nothing in this repo having changed. Check that
+    # here, while a bad build is still a local failure rather than a failed
+    # publish against an already-tagged, already-announced release.
+    if not run_command(
+        ["uv", "run", "python", "scripts/check_distribution.py"],
+        "Checking distribution metadata",
+    ):
+        return False
+
     dist_dir = PROJECT_ROOT / "dist"
     if dist_dir.exists():
         print("\nBuilt packages:")

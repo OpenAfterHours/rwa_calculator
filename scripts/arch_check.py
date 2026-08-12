@@ -70,9 +70,14 @@ Checks machine-verifiable invariants from CLAUDE.md:
     the module logger). When an implementation moves into a stage package,
     the old path is deleted and its importers repointed, never kept as a
     thin alias. Allowlist ``REEXPORT_SHELL_ALLOWLIST`` is empty by design.
-19. (reserved — the ``type=Path`` argparse ban landing from
-    ``fix/distribution-gate-and-escapes``. The number is held rather than
-    reused so two branches do not both define a "check 19".)
+19. No ``type=Path`` argparse argument in scripts/ — an operator-supplied
+    string must never be used to construct a path, because SonarCloud's
+    ``pythonsecurity:S8707`` taint analysis treats argv as attacker-
+    controlled and the resulting arbitrary-file-read finding fails the
+    ``new_security_rating`` quality gate. Select a fixed ``Path`` from a
+    literal via ``choices=``, or read the standard location directly, and
+    let callers needing another location import the function. Allowlist
+    ``CLI_PATH_ARG_ALLOWLIST`` is empty by design.
 20. Guard reachability in the contracts layer: every public function in
     ``contracts/validation.py`` (the input contract, guard-shaped in whole)
     and every guard-NAMED public function elsewhere under ``contracts/``
@@ -454,6 +459,28 @@ STAGE_PACKAGES_WITHOUT_RUN: set[str] = {
 # scanning the empty shell instead of the real implementation. Empty by design
 # — a new entry needs a justification comment.
 REEXPORT_SHELL_ALLOWLIST: set[str] = set()
+
+# Check 19 — pre-existing `type=Path` CLI arguments in scripts/, as a SHRINK-ONLY
+# baseline. Entries may be removed, never added: a new one is a new
+# pythonsecurity:S8707 sink and a failing security quality gate.
+#
+# These nine predate the check. They are debt, not exemptions — each is a script
+# that will read whatever file its caller names. Three sibling instances have
+# already been closed by removing the argument rather than guarding it
+# (injection_ratchet.py, coverage_report.py's bank(), check_distribution.py), and
+# commit a5d34c0d records why the guard route does not work: a resolve-then-contain
+# helper was written twice, was correct both times, and the taint engine reported
+# the finding regardless — once relocating it, once multiplying it 5 -> 6.
+#
+# Draining this list means, per script, either selecting a constant Path from a
+# literal mapping via `choices=`, or reading the fixed location and letting
+# callers that need another one import the function.
+CLI_PATH_ARG_ALLOWLIST: dict[str, set[str]] = {
+    "coverage_report.py": {"--out"},
+    "defect_injection.py": {"--out"},
+    "impact_report.py": {"--out", "--baseline", "--current", "--json", "--markdown"},
+    "parity_gate.py": {"--out", "--baseline"},
+}
 
 # ---------------------------------------------------------------------------
 # Check 20 — guard reachability in the contracts layer (Phase 0 of
@@ -1754,6 +1781,84 @@ def check_no_reexport_shells(path: Path) -> list[str]:
     return violations
 
 
+def check_no_cli_path_arguments(path: Path) -> list[str]:
+    """No ``type=Path`` argparse argument in scripts/ — remove the source, don't guard it.
+
+    SonarCloud's ``pythonsecurity:S8707`` treats ``argv`` as attacker-controlled,
+    so any command-line string used to construct a path is an arbitrary-file-read
+    sink. It is a MAJOR vulnerability, which takes ``new_security_rating`` to C
+    against a required A and **fails the quality gate** — the finding cannot be
+    excluded under Automatic Analysis (see ``.sonarcloud.properties``).
+
+    This check exists because the lesson did not survive as prose. Three separate
+    scripts shipped the same construct and each was fixed the same way:
+    ``injection_ratchet.py``, ``coverage_report.py``'s ``bank()``, and
+    ``check_distribution.py``. Commit ``a5d34c0d`` is the important record — a
+    resolve-then-contain guard was written twice, was *correct* both times
+    (``--scorecard /etc/passwd`` was genuinely rejected), and the taint engine
+    reported the finding anyway, once moving it and once multiplying it. So the
+    remedy is structural: do not accept the path.
+
+    Two patterns satisfy this. Select a constant ``Path`` from a literal mapping
+    via ``choices=`` (``--ladder {legacy,full}``), or read the fixed location
+    directly and let callers needing another one import the function and pass it.
+    Both leave nothing for a later edit to get subtly wrong.
+
+    Scans ``scripts/`` regardless of the target path, since that is where this
+    project's CLI surface lives.
+    """
+    del path  # this check is scoped to scripts/, not the analysed target
+    scripts_dir = Path(__file__).resolve().parent
+    violations: list[str] = []
+
+    for py_file in sorted(scripts_dir.glob("*.py")):
+        allowed = CLI_PATH_ARG_ALLOWLIST.get(py_file.name, set())
+        try:
+            tree = ast.parse(py_file.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, SyntaxError):
+            continue
+        for node in ast.walk(tree):
+            if not _is_add_argument_call(node):
+                continue
+            flag = _add_argument_flag(node)
+            if flag in allowed:
+                continue
+            for keyword in node.keywords:
+                if keyword.arg == "type" and _names_path(keyword.value):
+                    violations.append(
+                        f"scripts/{py_file.name}: add_argument({flag}) uses type=Path. "
+                        f"An operator-supplied string must not construct a path "
+                        f"(pythonsecurity:S8707 — fails the security quality gate). "
+                        f"Use choices= over a literal Path mapping, or read the fixed "
+                        f"location and let callers import the function."
+                    )
+    return violations
+
+
+def _is_add_argument_call(node: ast.AST) -> bool:
+    """True for a ``....add_argument(...)`` call."""
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "add_argument"
+    )
+
+
+def _add_argument_flag(node: ast.Call) -> str:
+    """Return the argument's flag string for the message, or '?' when absent."""
+    for arg in node.args:
+        if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+            return arg.value
+    return "?"
+
+
+def _names_path(node: ast.expr) -> bool:
+    """True for ``Path`` or ``pathlib.Path`` used as an argparse ``type=``."""
+    if isinstance(node, ast.Name):
+        return node.id == "Path"
+    return isinstance(node, ast.Attribute) and node.attr == "Path"
+
+
 def _is_reexport_shell(tree: ast.Module) -> bool:
     """True when a module's body is imports and nothing of substance."""
     imports = 0
@@ -2222,6 +2327,10 @@ def main() -> int:
         (
             "No pure re-export shells in engine/ (delete the module, move the imports)",
             check_no_reexport_shells,
+        ),
+        (
+            "No type=Path CLI arguments in scripts/ (pythonsecurity:S8707)",
+            check_no_cli_path_arguments,
         ),
         (
             "Contracts guards are reachable from production (wire it, or delete it)",

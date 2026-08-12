@@ -235,7 +235,7 @@ fix-commit-closes-it convention produces.
 
 A lesson that reaches production **twice** has proven it cannot survive as
 prose — graduate it to an executable check, or file the graduation as a Tier 1
-plan item. `scripts/arch_check.py`'s 18 numbered checks and the supervisory
+plan item. `scripts/arch_check.py`'s 20 numbered checks and the supervisory
 validation register are what graduated lessons look like.
 
 The clearest worked example is the **skill-value graduation (2026-08-08)**. The

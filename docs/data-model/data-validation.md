@@ -8,181 +8,39 @@ validation functions, and how to troubleshoot data issues.
 
 ## Overview
 
-The RWA calculator validates input data at multiple stages:
+The RWA calculator validates input data at three points:
 
-1. **Load-time validation** — Schema checks when data is loaded
-2. **Pipeline boundary validation** — Checks at each processing stage
-3. **Business rule validation** — Domain-specific constraints (PD/LGD ranges, risk type codes)
-4. **Column value validation** — Categorical values against allowed sets
+1. **Load-time schema seal** — every raw table is conformed to its loader edge contract
+   (`contracts/edges.py`, `RAW_TABLE_EDGES`). Missing required columns become typed nulls
+   plus a `DQ001` error; declared columns are cast to their declared dtype. This is what
+   makes the bundle's *shape* trustworthy, so nothing downstream re-checks it.
+2. **Input-domain gate** — categorical and numeric column domains, run by
+   `validate_bundle_values()` at both pipeline entries (the file loader, and
+   `PipelineOrchestrator.run_with_data` for in-memory bundles).
+3. **Output-bounds gate** — `validate_aggregated_bundle()` at the pipeline exit, checking
+   the regulatory bounds on the aggregated results frame.
 
-Validation is performed **without materialising data** where possible, using Polars LazyFrame
-schema inspection for efficiency. Only column value validation requires `.collect()`.
+Validation never raises: every issue becomes a `CalculationError` on the result bundle.
 
----
-
-## Schema Validation Functions
-
-### `validate_schema()`
-
-Validates a LazyFrame's schema against an expected schema dictionary without materialising data.
-
-```python
-from rwa_calc.contracts.validation import validate_schema
-from rwa_calc.data.schemas import FACILITY_SCHEMA
-import polars as pl
-
-facilities = pl.scan_parquet("data/exposures/facilities.parquet")
-
-errors = validate_schema(
-    lf=facilities,
-    expected_schema=FACILITY_SCHEMA,
-    context="facilities",
-    strict=False  # Set True to flag unexpected extra columns
-)
-
-if errors:
-    for error in errors:
-        print(f"  - {error}")
-```
-
-**Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `lf` | `pl.LazyFrame` | LazyFrame to validate |
-| `expected_schema` | `dict[str, pl.DataType]` | Expected column names and types |
-| `context` | `str` | Label for error messages (e.g., `"facilities"`) |
-| `strict` | `bool` | If `True`, flags unexpected extra columns |
-
-**Returns:** `list[str]` — plain string error messages (empty if valid).
-
-### `validate_required_columns()`
-
-Checks that specific columns are present (without type checking).
-
-```python
-from rwa_calc.contracts.validation import validate_required_columns
-
-missing = validate_required_columns(
-    lf=counterparties,
-    required_columns=["counterparty_reference", "entity_type", "country_code"],
-    context="counterparties"
-)
-```
-
-**Returns:** `list[str]` — missing-column error messages.
-
-### `validate_schema_to_errors()`
-
-Same logic as `validate_schema()` but returns structured `CalculationError` objects for
-integration with the pipeline error accumulation pattern.
-
-```python
-from rwa_calc.contracts.validation import validate_schema_to_errors
-from rwa_calc.data.schemas import LOAN_SCHEMA
-
-errors = validate_schema_to_errors(
-    lf=loans,
-    expected_schema=LOAN_SCHEMA,
-    context="loans"
-)
-
-for error in errors:
-    print(f"Code: {error.code}, Field: {error.field_name}")
-    print(f"Expected: {error.expected_value}, Actual: {error.actual_value}")
-```
-
-**Returns:** `list[CalculationError]` — with category `SCHEMA_VALIDATION`, severity `ERROR`.
-
----
-
-## Bundle Validation Functions
-
-These functions validate entire pipeline bundles at stage boundaries, checking that
-expected columns exist after each transformation.
-
-### `validate_raw_data_bundle()`
-
-Validates all LazyFrames in a `RawDataBundle` against expected schemas.
-
-```python
-from rwa_calc.contracts.validation import validate_raw_data_bundle
-
-errors = validate_raw_data_bundle(bundle, schemas)
-```
-
-Validates up to 11 named frames: `facilities`, `loans`, `contingents`, `counterparties`,
-`collateral`, `guarantees`, `provisions`, `ratings`, `facility_mappings`, `org_mappings`,
-`lending_mappings`.
-
-**Returns:** `list[CalculationError]`
-
-### `validate_resolved_hierarchy_bundle()`
-
-Validates that hierarchy columns exist in a `ResolvedHierarchyBundle.exposures` LazyFrame.
-
-```python
-from rwa_calc.contracts.validation import validate_resolved_hierarchy_bundle
-
-hierarchy_columns = [
-    "counterparty_has_parent", "parent_counterparty_reference",
-    "ultimate_parent_reference", "counterparty_hierarchy_depth",
-    "rating_inherited", "rating_source_counterparty",
-]
-
-errors = validate_resolved_hierarchy_bundle(bundle, hierarchy_columns)
-```
-
-**Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `bundle` | `ResolvedHierarchyBundle` | Bundle to validate |
-| `expected_columns` | `list[str]` | Hierarchy columns to check for |
-
-**Returns:** `list[CalculationError]`
-
-### `validate_classified_bundle()`
-
-Validates classification columns across `all_exposures`, `sa_exposures`, and
-`irb_exposures` in a `ClassifiedExposuresBundle`.
-
-```python
-from rwa_calc.contracts.validation import validate_classified_bundle
-
-classification_columns = [
-    "exposure_class", "approach_applied", "cqs", "pd", "is_sme",
-]
-
-errors = validate_classified_bundle(bundle, classification_columns)
-```
-
-**Returns:** `list[CalculationError]`
-
-### `validate_crm_adjusted_bundle()`
-
-Validates CRM-related columns across `exposures`, `sa_exposures`, and `irb_exposures`
-in a `CRMAdjustedBundle`.
-
-```python
-from rwa_calc.contracts.validation import validate_crm_adjusted_bundle
-
-crm_columns = [
-    "ccf_applied", "gross_ead", "final_ead",
-    "collateral_adjusted_value", "ead_after_collateral",
-]
-
-errors = validate_crm_adjusted_bundle(bundle, crm_columns)
-```
-
-**Returns:** `list[CalculationError]`
+!!! note "Schema-shape validators were removed"
+    `validate_schema()`, `validate_schema_to_errors()`, `validate_required_columns()`,
+    `validate_raw_data_bundle()` and `validate_resolved_hierarchy_bundle()` were deleted in
+    Phase 0 of the test-space correctness plan. They ran *after* the edge seal, which
+    already injects missing columns and casts dtypes, so neither of their limbs could fire —
+    they were guard-shaped dead code with green unit tests. Use the loader's `DQ001` errors
+    for missing required columns; a producer stage breaking its own output contract raises
+    `EdgeContractViolation` instead.
 
 ---
 
 ## Business Rule Validators
 
-These functions add boolean validation flag columns to LazyFrames without materialising data.
-The flag columns follow the naming convention `_valid_{column_name}`.
+These four functions add boolean validation flag columns to LazyFrames without
+materialising data; the flag columns follow the naming convention `_valid_{column_name}`.
+They are driven on the bundle path by `_validate_numeric_ranges()`, the private collector
+inside `validate_bundle_values()` that turns those flags into row-named `CalculationError`s
+(one `.collect()` per table, capped at five sampled rows per column plus an omitted-count
+summary). Call them directly when you want the flags rather than the errors.
 
 ### `validate_non_negative_amounts()`
 
@@ -203,7 +61,10 @@ validated = validate_non_negative_amounts(
 
 ### `validate_pd_range()`
 
-Validates that PD values are in [0, 1].
+Validates that PD values are in [0, 1]. The lower bound is **closed**: CRR Art. 160(1)
+floors the PD of "an exposure to a corporate or an institution" and has no
+central-government / central-bank limb, so the CRR rulepack carries
+`pd_floors["sovereign"] = 0` and a PD of exactly 0 is an admissible sovereign IRB input.
 
 ```python
 from rwa_calc.contracts.validation import validate_pd_range
@@ -322,17 +183,13 @@ multiple columns per table in a single `.collect()` call.
 
 ---
 
-## Type Compatibility
+## Type Handling
 
-The validator allows some type flexibility:
-
-| Expected Type | Allowed Actual Types |
-|---------------|---------------------|
-| `Int64` | `Int8`, `Int16`, `Int32`, `Int64` |
-| `Float64` | `Float32`, `Float64` |
-| `String` | `Utf8`, `String` |
-
-This means if your file has `Int32` but the schema expects `Int64`, validation will pass.
+Dtypes are not compared — they are **coerced**. The loader edge seal casts every declared
+column to its declared dtype with `strict=False`, so an `Int32` column where the schema
+declares `Int64` is simply cast. A value that cannot be cast (a `"1.5%"` string in a
+`Float64` column) becomes null, which currently carries no error of its own; treat the
+source feed's dtypes as part of the input contract.
 
 ---
 
@@ -341,9 +198,16 @@ This means if your file has `Int32` but the schema expects `Int64`, validation w
 The pipeline validates data at stage boundaries:
 
 ```
-Load → [validate_raw_data_bundle] → Hierarchy → [validate_resolved_hierarchy_bundle]
-     → Classify → [validate_classified_bundle] → CRM → [validate_crm_adjusted_bundle] → ...
+Load → [seal_lenient: DQ001 + dtype cast] → [scrub_non_finite_values: DQ011]
+     → [validate_bundle_values: DQ006/DQ010/DQ012/IRB001/IRB002/IRB003/IRB008/CRM009-011]
+     → Hierarchy → Classify → CRM → Calculators → Aggregate
+     → [validate_aggregated_bundle: OUT001-004]
 ```
+
+Stage-to-stage column contracts are enforced by the producer seal
+(`contracts/edges.py`), not by bundle validators: a stage that fails to emit a declared
+column raises `EdgeContractViolation` at its own exit, which is a programming error rather
+than a data-quality one.
 
 If validation fails, the pipeline:
 

@@ -1,12 +1,10 @@
-"""Tests for schema validation functions.
+"""Tests for the input-domain validation functions.
 
-Tests the validation utilities for checking LazyFrame schemas
-against expected definitions.
+Covers the four numeric range validators, the categorical column-value
+validators, and the whole-bundle input gate that drives both.
 """
 
 from __future__ import annotations
-
-from typing import TYPE_CHECKING
 
 import polars as pl
 from tests.fixtures.raw_bundle import make_raw_bundle
@@ -19,202 +17,8 @@ from rwa_calc.contracts.validation import (
     validate_lgd_range,
     validate_non_negative_amounts,
     validate_pd_range,
-    validate_required_columns,
-    validate_schema,
-    validate_schema_to_errors,
 )
-from rwa_calc.domain.enums import ErrorCategory
-
-if TYPE_CHECKING:
-    from polars._typing import PolarsDataType
-
-
-class TestValidateSchema:
-    """Tests for validate_schema function."""
-
-    def test_valid_schema_returns_empty(self):
-        """Valid schema should return empty error list."""
-        lf = pl.LazyFrame(
-            {
-                "col1": [1, 2, 3],
-                "col2": ["a", "b", "c"],
-            }
-        )
-        expected: dict[str, PolarsDataType] = {
-            "col1": pl.Int64,
-            "col2": pl.String,
-        }
-
-        errors = validate_schema(lf, expected)
-
-        assert errors == []
-
-    def test_missing_column_detected(self):
-        """Missing column should be reported."""
-        lf = pl.LazyFrame({"col1": [1, 2, 3]})
-        expected: dict[str, PolarsDataType] = {
-            "col1": pl.Int64,
-            "col2": pl.String,  # Missing
-        }
-
-        errors = validate_schema(lf, expected, context="test")
-
-        assert len(errors) == 1
-        assert "col2" in errors[0]
-        assert "Missing" in errors[0]
-        assert "[test]" in errors[0]
-
-    def test_type_mismatch_detected(self):
-        """Type mismatch should be reported."""
-        lf = pl.LazyFrame({"col1": ["a", "b", "c"]})  # String, not Int64
-        expected: dict[str, PolarsDataType] = {"col1": pl.Int64}
-
-        errors = validate_schema(lf, expected)
-
-        assert len(errors) == 1
-        assert "col1" in errors[0]
-        assert "mismatch" in errors[0].lower()
-
-    def test_compatible_int_types_allowed(self):
-        """Compatible integer types should not cause errors."""
-        lf = pl.LazyFrame({"col1": pl.Series([1, 2, 3], dtype=pl.Int32)})
-        expected: dict[str, PolarsDataType] = {"col1": pl.Int64}
-
-        errors = validate_schema(lf, expected)
-
-        assert errors == []
-
-    def test_compatible_float_types_allowed(self):
-        """Compatible float types should not cause errors."""
-        lf = pl.LazyFrame({"col1": pl.Series([1.0, 2.0], dtype=pl.Float32)})
-        expected: dict[str, PolarsDataType] = {"col1": pl.Float64}
-
-        errors = validate_schema(lf, expected)
-
-        assert errors == []
-
-    def test_strict_mode_flags_extra_columns(self):
-        """Strict mode should flag unexpected columns."""
-        lf = pl.LazyFrame(
-            {
-                "col1": [1, 2, 3],
-                "col2": ["a", "b", "c"],
-                "extra": [True, False, True],
-            }
-        )
-        expected: dict[str, PolarsDataType] = {
-            "col1": pl.Int64,
-            "col2": pl.String,
-        }
-
-        errors = validate_schema(lf, expected, strict=True)
-
-        assert len(errors) == 1
-        assert "extra" in errors[0]
-        assert "Unexpected" in errors[0]
-
-    def test_multiple_errors_reported(self):
-        """Multiple issues should all be reported."""
-        lf = pl.LazyFrame({"col1": ["a", "b"]})  # Wrong type
-        expected: dict[str, PolarsDataType] = {
-            "col1": pl.Int64,  # Type mismatch
-            "col2": pl.String,  # Missing
-            "col3": pl.Float64,  # Missing
-        }
-
-        errors = validate_schema(lf, expected)
-
-        assert len(errors) == 3
-
-
-class TestValidateRequiredColumns:
-    """Tests for validate_required_columns function."""
-
-    def test_all_required_present(self):
-        """All required columns present should return empty list."""
-        lf = pl.LazyFrame({"col1": [1], "col2": [2], "col3": [3]})
-        required = ["col1", "col2"]
-
-        errors = validate_required_columns(lf, required)
-
-        assert errors == []
-
-    def test_missing_required_reported(self):
-        """Missing required columns should be reported."""
-        lf = pl.LazyFrame({"col1": [1]})
-        required = ["col1", "col2", "col3"]
-
-        errors = validate_required_columns(lf, required, context="test")
-
-        assert len(errors) == 2
-        assert any("col2" in e for e in errors)
-        assert any("col3" in e for e in errors)
-
-
-class TestValidateSchemaToErrors:
-    """Tests for validate_schema_to_errors function."""
-
-    def test_returns_calculation_errors(self):
-        """Should return CalculationError objects."""
-        lf = pl.LazyFrame({"col1": [1]})
-        expected: dict[str, PolarsDataType] = {
-            "col1": pl.Int64,
-            "col2": pl.String,  # Missing
-        }
-
-        errors = validate_schema_to_errors(lf, expected, context="test")
-
-        assert len(errors) == 1
-        assert errors[0].category == ErrorCategory.SCHEMA_VALIDATION
-        assert errors[0].field_name == "col2"
-
-    def test_type_mismatch_error(self):
-        """Type mismatch should create CalculationError."""
-        lf = pl.LazyFrame({"col1": ["string"]})
-        expected: dict[str, PolarsDataType] = {"col1": pl.Int64}
-
-        errors = validate_schema_to_errors(lf, expected)
-
-        assert len(errors) == 1
-        assert "Int64" in str(errors[0].expected_value)
-        assert "String" in str(errors[0].actual_value)
-
-    def test_optional_columns_not_reported_as_missing(self):
-        """Optional columns absent from data should not produce errors."""
-        lf = pl.LazyFrame({"model_id": ["M1"], "exposure_class": ["corporate"]})
-        expected: dict[str, PolarsDataType] = {
-            "model_id": pl.String,
-            "exposure_class": pl.String,
-            "country_codes": pl.String,
-        }
-
-        errors = validate_schema_to_errors(
-            lf,
-            expected,
-            context="test",
-            optional_columns={"country_codes"},
-        )
-
-        assert len(errors) == 0
-
-    def test_required_columns_still_reported_with_optional_set(self):
-        """Missing required columns should still produce errors even when optional set is given."""
-        lf = pl.LazyFrame({"model_id": ["M1"]})
-        expected: dict[str, PolarsDataType] = {
-            "model_id": pl.String,
-            "exposure_class": pl.String,
-            "country_codes": pl.String,
-        }
-
-        errors = validate_schema_to_errors(
-            lf,
-            expected,
-            context="test",
-            optional_columns={"country_codes"},
-        )
-
-        assert len(errors) == 1
-        assert errors[0].field_name == "exposure_class"
+from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
 
 
 class TestValidateNonNegativeAmounts:
@@ -638,3 +442,203 @@ class TestValidateBundleValues:
         fields = {e.field_name for e in errors}
         assert any("equity_type" in f for f in fields if f)
         assert any("ciu_approach" in f for f in fields if f)
+
+
+class TestNumericInputDomainGate:
+    """The numeric input-domain gate wired into validate_bundle_values.
+
+    The four range validators only add boolean flag columns; these tests
+    cover the collector that turns those flags into row-named
+    CalculationErrors on the whole-bundle path.
+    """
+
+    def _bundle(self, **overrides) -> RawDataBundle:
+        return make_raw_bundle(**overrides)
+
+    def _domain_errors(self, bundle: RawDataBundle, code: str) -> list:
+        return [e for e in validate_bundle_values(bundle) if e.code == code]
+
+    def test_pd_above_one_is_an_error_naming_the_row(self):
+        """A percent-scaled PD feed (1.5 meaning 1.5%) is rejected, not floored."""
+        bundle = self._bundle(
+            ratings=pl.LazyFrame(
+                {
+                    "rating_reference": ["R-BAD", "R-OK"],
+                    "counterparty_reference": ["C1", "C2"],
+                    "pd": [1.5, 0.02],
+                }
+            ),
+        )
+
+        errors = self._domain_errors(bundle, "IRB001")
+
+        assert len(errors) == 1
+        assert errors[0].exposure_reference == "R-BAD"
+        assert errors[0].severity == ErrorSeverity.ERROR
+        assert errors[0].field_name == "pd"
+        assert errors[0].actual_value == "1.5"
+
+    def test_negative_pd_is_an_error(self):
+        """A negative PD is rejected rather than silently floored."""
+        bundle = self._bundle(
+            ratings=pl.LazyFrame(
+                {
+                    "rating_reference": ["R-NEG"],
+                    "counterparty_reference": ["C1"],
+                    "pd": [-0.01],
+                }
+            ),
+        )
+
+        errors = self._domain_errors(bundle, "IRB001")
+
+        assert len(errors) == 1
+        assert errors[0].exposure_reference == "R-NEG"
+
+    def test_pd_zero_is_in_domain(self):
+        """PD = 0 is admissible: CRR Art. 160(1) has no CGCB limb (pack sovereign floor = 0)."""
+        bundle = self._bundle(
+            ratings=pl.LazyFrame(
+                {
+                    "rating_reference": ["R-SOV"],
+                    "counterparty_reference": ["C1"],
+                    "pd": [0.0],
+                }
+            ),
+        )
+
+        assert self._domain_errors(bundle, "IRB001") == []
+
+    def test_null_pd_is_not_a_domain_violation(self):
+        """A missing PD is IRB004's business, not the domain gate's."""
+        bundle = self._bundle(
+            ratings=pl.LazyFrame(
+                {
+                    "rating_reference": ["R1"],
+                    "counterparty_reference": ["C1"],
+                    "pd": pl.Series([None], dtype=pl.Float64),
+                }
+            ),
+        )
+
+        assert self._domain_errors(bundle, "IRB001") == []
+
+    def test_lgd_out_of_domain_on_both_lgd_columns(self):
+        """lgd and lgd_unsecured are each validated, with distinct flags."""
+        bundle = self._bundle(
+            loans=pl.LazyFrame(
+                {
+                    "loan_reference": ["L1"],
+                    "lgd": [1.8],
+                    "lgd_unsecured": [-0.2],
+                }
+            ),
+        )
+
+        errors = self._domain_errors(bundle, "IRB002")
+
+        assert {e.field_name for e in errors} == {"lgd", "lgd_unsecured"}
+        assert all(e.exposure_reference == "L1" for e in errors)
+
+    def test_ccf_modelled_out_of_domain(self):
+        """ccf_modelled above 150% is rejected; null is valid."""
+        bundle = self._bundle(
+            facilities=pl.LazyFrame(
+                {
+                    "facility_reference": ["F-BAD", "F-NULL"],
+                    "ccf_modelled": [2.0, None],
+                }
+            ),
+        )
+
+        errors = self._domain_errors(bundle, "IRB008")
+
+        assert len(errors) == 1
+        assert errors[0].exposure_reference == "F-BAD"
+
+    def test_negative_amount_columns_flagged(self):
+        """A negative collateral market value manufactures relief from nothing."""
+        bundle = self._bundle(
+            collateral=pl.LazyFrame(
+                {
+                    "collateral_reference": ["X1"],
+                    "collateral_type": ["cash"],
+                    "market_value": [-5.0],
+                }
+            ),
+        )
+
+        errors = self._domain_errors(bundle, "DQ012")
+
+        assert len(errors) == 1
+        assert errors[0].exposure_reference == "X1"
+        assert errors[0].field_name == "market_value"
+
+    def test_negative_drawn_amount_is_not_a_domain_violation(self):
+        """drawn_amount may be negative — the Art. 195/219 netting convention (DQ010 only)."""
+        bundle = self._bundle(
+            loans=pl.LazyFrame(
+                {
+                    "loan_reference": ["L1"],
+                    "drawn_amount": [-100.0],
+                    "netting_agreement_reference": ["N1"],
+                }
+            ),
+        )
+
+        errors = validate_bundle_values(bundle)
+
+        assert [e for e in errors if e.code == "DQ012"] == []
+        assert [e for e in errors if e.code == "DQ010"] == []
+
+    def test_signed_position_value_is_not_a_domain_violation(self):
+        """position_value is declared signed (+long / -short) for the Art. 133 net long."""
+        bundle = self._bundle(
+            equity_exposures=pl.LazyFrame(
+                {
+                    "exposure_reference": ["EQ-SHORT"],
+                    "counterparty_reference": ["C1"],
+                    "position_value": [-400_000.0],
+                }
+            ),
+        )
+
+        assert self._domain_errors(bundle, "DQ012") == []
+
+    def test_violations_are_sample_capped_with_a_summary(self):
+        """More than five bad rows yield five named errors plus one omitted-count summary."""
+        bundle = self._bundle(
+            ratings=pl.LazyFrame(
+                {
+                    "rating_reference": [f"R{i}" for i in range(8)],
+                    "counterparty_reference": ["C1"] * 8,
+                    "pd": [1.5] * 8,
+                }
+            ),
+        )
+
+        errors = self._domain_errors(bundle, "IRB001")
+
+        named = [e for e in errors if e.exposure_reference is not None]
+        summary = [e for e in errors if e.exposure_reference is None]
+        assert len(named) == 5
+        assert len(summary) == 1
+        assert "3 additional row(s) omitted" in summary[0].message
+
+    def test_clean_bundle_raises_nothing(self):
+        """In-domain values on every validated column produce no errors."""
+        bundle = self._bundle(
+            ratings=pl.LazyFrame(
+                {
+                    "rating_reference": ["R1"],
+                    "counterparty_reference": ["C1"],
+                    "pd": [0.02],
+                }
+            ),
+            loans=pl.LazyFrame({"loan_reference": ["L1"], "lgd": [0.45], "drawn_amount": [1000.0]}),
+            facilities=pl.LazyFrame(
+                {"facility_reference": ["F1"], "limit": [5000.0], "ccf_modelled": [0.75]}
+            ),
+        )
+
+        assert validate_bundle_values(bundle) == []

@@ -70,6 +70,19 @@ Checks machine-verifiable invariants from CLAUDE.md:
     the module logger). When an implementation moves into a stage package,
     the old path is deleted and its importers repointed, never kept as a
     thin alias. Allowlist ``REEXPORT_SHELL_ALLOWLIST`` is empty by design.
+19. (reserved — the ``type=Path`` argparse ban landing from
+    ``fix/distribution-gate-and-escapes``. The number is held rather than
+    reused so two branches do not both define a "check 19".)
+20. Guard reachability in the contracts layer: every public function in
+    ``contracts/validation.py`` (the input contract, guard-shaped in whole)
+    and every guard-NAMED public function elsewhere under ``contracts/``
+    (``validate_`` / ``check_`` / ``assert_`` / ``require_`` / ``ensure_``)
+    must be transitively reachable from production code under ``src/``. A
+    written, unit-tested guard that no production path invokes is not a
+    guard — it reads as coverage while customer data flows past it.
+    Allowlist ``GUARD_REACHABILITY_ALLOWLIST`` is empty by design, and
+    ``CONTRACTS_GUARD_SURFACE`` pins the population so the check cannot be
+    satisfied by deleting or privatising the guard it measures.
 
 Checks 5, 6, 7 enforce the data/engine separation. Check 8 enforces the
 observability contract (see docs/specifications/observability.md). Check 9
@@ -79,6 +92,7 @@ Checks 11 and 12 are migration-plan Phase 0 guards, check 13 a Phase 2
 guard, and checks 14-16 and 18 the Phase 4 uniform-stage-model guards (see
 docs/plans/target-architecture-migration.md) — check 18 closes out the
 migration by banning the back-compat shells the earlier slices left behind.
+Check 20 is Phase 0 of docs/plans/test-space-correctness-proposal.md.
 Rare intentional exceptions are listed in the ALLOWLIST dicts below; adding
 a new entry there should be a deliberate, reviewed decision.
 
@@ -440,6 +454,88 @@ STAGE_PACKAGES_WITHOUT_RUN: set[str] = {
 # scanning the empty shell instead of the real implementation. Empty by design
 # — a new entry needs a justification comment.
 REEXPORT_SHELL_ALLOWLIST: set[str] = set()
+
+# ---------------------------------------------------------------------------
+# Check 20 — guard reachability in the contracts layer (Phase 0 of
+# docs/plans/test-space-correctness-proposal.md)
+# ---------------------------------------------------------------------------
+
+_CONTRACTS_SUBPACKAGE = "contracts"
+
+# ``contracts/validation.py`` IS the input contract, so every public function
+# in it is guard-shaped by construction and is measured in whole. Elsewhere in
+# the layer the population is scoped by NAME shape rather than by path: the
+# failure mode check 20 closes is "we wrote a guard and never wired it", which
+# a future ``contracts/checks.py`` would reproduce exactly, so hard-coding the
+# module would let the next instance straight through.
+#
+# What is deliberately NOT measured is the rest of the layer's public surface —
+# the ``create_empty_*`` bundle factories, the ``*_error`` / ``*_warning``
+# constructors, ``edge_columns_from_specs``. Ten of those are unreachable today,
+# so covering them would give this check a ten-entry allowlist on the day it
+# ships, and a gate born allowlisted teaches people to allowlist. They are also
+# a different category: a dead constructor is untidy, whereas a dead guard reads
+# as coverage. Widening to them is a decision about whether they are public API,
+# and it should be taken on its own terms.
+_INPUT_CONTRACT_MODULE = "validation.py"
+GUARD_NAME_PREFIXES = ("validate_", "check_", "assert_", "require_", "ensure_")
+
+# Guards that are DELIBERATELY unreachable from production, keyed
+# ``<module>.py::<function>`` with the reason. **Empty by design.**
+#
+# Seeding it with the validators that are unreachable today would make the
+# check vacuous on arrival — the ``caught-and-parked`` escape class in
+# docs/development/escape-log.md, where a gate fires, the finding is filed, and
+# the wrong behaviour ships anyway. There are exactly two correct responses to
+# an unreachable guard: wire it into a production path, or delete it. An entry
+# here has to argue that a guard which never runs is nonetheless right to keep,
+# which is a hard argument to make honestly. Stale entries are themselves
+# violations, so the list can only be drained.
+GUARD_REACHABILITY_ALLOWLIST: dict[str, str] = {}
+
+# The pinned guard population of the contracts layer.
+#
+# Reachability on its own is satisfiable by REMOVING the thing it measures:
+# rename ``validate_pd_range`` to ``_validate_pd_range`` and it leaves the
+# population; delete it and the violation leaves with it. This project has
+# shipped that shape before — four back-compat shells silently disarmed a
+# regression guard that read ``module.__file__`` (check 18) — so the population
+# is pinned rather than inferred.
+#
+# The pin is a FLOOR, not a census: a NEW guard needs no entry (check 20 already
+# covers it while it exists), but a pinned name that stops being a public
+# module-level function in its module is a violation. Deleting a guard is a
+# legitimate outcome — docs/plans/test-space-correctness-proposal.md prescribes
+# exactly that for ``validate_raw_data_bundle`` and
+# ``validate_resolved_hierarchy_bundle`` — it just has to be deliberate, so the
+# pin is deleted in the same commit and a reviewer sees which guard went away.
+#
+# REMOVED 2026-08-12, in the same change-set that added this check, and recorded
+# here because that is the whole point of the pin. Five of the ten unreachable
+# validators were DELETED rather than wired, so the reachability limb went green
+# as they disappeared and the pin is the only thing that noticed:
+# ``validate_schema``, ``validate_schema_to_errors``, ``validate_required_columns``
+# (declared-vs-actual schema drift and missing-required-column guards) and
+# ``validate_raw_data_bundle``, ``validate_resolved_hierarchy_bundle`` (the two
+# the proposal named). Verified before dropping the pins: the definitions and
+# their private helpers are gone, and no reference to any of the five survives
+# anywhere under src/ or tests/, so this is a completed removal rather than a
+# half-migration. The estate is now shipping no declared-schema-drift check at
+# all; if that is to come back it comes back as a wired guard.
+CONTRACTS_GUARD_SURFACE: frozenset[str] = frozenset(
+    {
+        "edges.py::require_brand",
+        "validation.py::scrub_non_finite_values",
+        "validation.py::validate_aggregated_bundle",
+        "validation.py::validate_bundle_values",
+        "validation.py::validate_ccf_modelled",
+        "validation.py::validate_collateral_links",
+        "validation.py::validate_column_values",
+        "validation.py::validate_lgd_range",
+        "validation.py::validate_non_negative_amounts",
+        "validation.py::validate_pd_range",
+    }
+)
 
 # Known legacy inversions, allowlisted until the migration phase that retires
 # them lands (docs/plans/target-architecture-migration.md). New entries
@@ -1688,6 +1784,236 @@ def _is_dunder_all(node: ast.stmt) -> bool:
     )
 
 
+# ---------------------------------------------------------------------------
+# Check 20 — guard reachability in the contracts layer (correctness proposal
+# Phase 0)
+# ---------------------------------------------------------------------------
+
+# Per contracts module: (module-level functions, production entry points,
+# names reachable from those entry points).
+GuardReachability = tuple[dict[str, ast.stmt], set[str], set[str]]
+
+
+def _contracts_root(path: Path) -> Path:
+    """The contracts layer under the target package root."""
+    return path / _CONTRACTS_SUBPACKAGE
+
+
+def _module_level_functions(tree: ast.Module) -> dict[str, ast.stmt]:
+    """Map name -> node for every module-level ``def`` / ``async def``."""
+    return {
+        node.name: node
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+
+
+def _referenced_names(tree: ast.AST, names: frozenset[str]) -> set[str]:
+    """Names from ``names`` appearing as a CODE reference anywhere in ``tree``.
+
+    AST-based rather than a regex over the text, because the two differ in
+    exactly the cases that decide this check. A name written in a docstring, a
+    comment or an ``__all__`` string list is not a reference — describing a
+    validator is not calling it, and re-exporting it is not either. Covers the
+    bare form (``validate_pd_range(...)``, ``@require_brand``: an ``ast.Name``
+    load) and the qualified form (``validation.validate_pd_range(...)``: an
+    ``ast.Attribute``), while ``from ... import validate_pd_range`` produces an
+    ``ast.alias`` and correctly does not count.
+    """
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load) and node.id in names:
+            found.add(node.id)
+        elif isinstance(node, ast.Attribute) and node.attr in names:
+            found.add(node.attr)
+    return found
+
+
+def _reachable_from(entry: set[str], calls: dict[str, set[str]]) -> set[str]:
+    """Transitive closure of the intra-module call graph from the entry set."""
+    reached: set[str] = set()
+    stack = list(entry)
+    while stack:
+        current = stack.pop()
+        if current in reached:
+            continue
+        reached.add(current)
+        stack.extend(calls.get(current, ()))
+    return reached
+
+
+def _parse_package(path: Path) -> dict[Path, ast.Module]:
+    """Parse every module under the package root once; skip unparseable files."""
+    trees: dict[Path, ast.Module] = {}
+    for py_file in sorted(path.rglob("*.py")):
+        try:
+            trees[py_file] = ast.parse(py_file.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, SyntaxError):
+            continue
+    return trees
+
+
+def measure_guard_reachability(path: Path) -> dict[Path, GuardReachability]:
+    """Measure contracts-layer reachability under the package root.
+
+    Returns one entry per non-``__init__`` module under ``contracts/`` holding
+    ``(functions, entry_points, reachable)``:
+
+    - ``functions`` — every module-level function, name -> AST node;
+    - ``entry_points`` — those referenced in code by some OTHER module under
+      the package root;
+    - ``reachable`` — the transitive closure over intra-module calls from
+      those entry points.
+
+    This is the single implementation of the analysis. The census script
+    ``scripts/validator_reachability.py`` reads it from here rather than
+    keeping its own copy, and the dependency points diagnostic -> gate and
+    never the other way: the gate runs in CI and under the contract tests, and
+    must keep working if the census script is renamed, broken or deleted.
+
+    **Known bound, in the safe direction.** The closure is taken per module, so
+    a guard called only from a dead function in a DIFFERENT module counts as
+    reachable. That under-reports violations and never invents one; a
+    whole-package call graph is the upgrade if the layer ever grows one.
+    """
+    trees = _parse_package(path)
+    contracts_root = _contracts_root(path)
+    modules = [
+        module
+        for module in trees
+        if module.is_relative_to(contracts_root) and module.name != "__init__.py"
+    ]
+    functions_by_module = {module: _module_level_functions(trees[module]) for module in modules}
+    all_names = frozenset(name for functions in functions_by_module.values() for name in functions)
+    if not all_names:
+        return {}
+
+    referenced_by: dict[str, set[Path]] = {}
+    for py_file, tree in trees.items():
+        for name in _referenced_names(tree, all_names):
+            referenced_by.setdefault(name, set()).add(py_file)
+
+    results: dict[Path, GuardReachability] = {}
+    for module, functions in functions_by_module.items():
+        if not functions:
+            continue
+        names = frozenset(functions)
+        calls = {name: _referenced_names(node, names) for name, node in functions.items()}
+        entry = {name for name in names if referenced_by.get(name, set()) - {module}}
+        results[module] = (functions, entry, _reachable_from(entry, calls))
+    return results
+
+
+def is_measured_guard(module: Path, name: str) -> bool:
+    """True for a public function check 20 measures.
+
+    The input-contract module is measured in whole; everywhere else in the
+    layer the guard shape is the name (``GUARD_NAME_PREFIXES``). Public
+    because ``scripts/validator_reachability.py`` reports on the same
+    population and must not re-derive it.
+    """
+    if name.startswith("_"):
+        return False
+    if module.name == _INPUT_CONTRACT_MODULE:
+        return True
+    return name.startswith(GUARD_NAME_PREFIXES)
+
+
+def check_guard_reachability(path: Path) -> list[str]:
+    """Every guard in ``contracts/`` is reachable from production code in src/.
+
+    This project's dominant failure mode, named in its own escape log, is to
+    build the instrument and stop before wiring it — three escape-log entries
+    are classed ``gate-not-run`` for exactly that. The input contract is the
+    fifth measured instance: 10 of the 14 public validators in
+    ``contracts/validation.py`` (402 lines, every one carrying green unit
+    tests) could not be reached from any production path, so a feed sending
+    PD = 1.5 to mean "1.5%" returned an RWA understated by 99.9%, silently, on
+    every run. Green unit tests over unreachable code read as coverage.
+
+    A guard is reachable when some other module under the package root
+    references it in code, or when a reachable sibling in the same module
+    calls it. Re-export does not count: a name listed in
+    ``contracts/__init__.py`` or in ``__all__`` is exported, not invoked.
+
+    Two responses to a violation are correct — wire it into a production path,
+    or delete it. ``GUARD_REACHABILITY_ALLOWLIST`` is for the case where an
+    unreachable guard is genuinely right to keep, and is empty by design; a
+    stale entry (no longer public, or reachable again) is itself a violation,
+    so the list can only be drained.
+
+    Deleting a guard would satisfy the reachability rule too, which is the
+    shape of gate this repo has been fooled by before. ``CONTRACTS_GUARD_
+    SURFACE`` closes that: a pinned name that stops being a public
+    module-level function fails the check whether it was deleted, privatised,
+    or moved to another module — and losing the whole file fails it as well.
+    """
+    contracts_root = _contracts_root(path)
+    if not contracts_root.is_dir():
+        return []  # not the package root (e.g. a subpath run) — skip
+    measured = measure_guard_reachability(path)
+    if not measured:
+        return [
+            f"  {contracts_root}: no contracts module holds a module-level function -- "
+            "the input contract is mandatory (check 20); if it moved, repoint "
+            "_CONTRACTS_SUBPACKAGE / _INPUT_CONTRACT_MODULE in arch_check.py"
+        ]
+
+    violations: list[str] = []
+    live: set[str] = set()
+    reachable_keys: set[str] = set()
+    for module, (functions, _entry, reachable) in sorted(measured.items()):
+        for name, node in sorted(functions.items()):
+            if not is_measured_guard(module, name):
+                continue
+            key = f"{module.name}::{name}"
+            live.add(key)
+            if name in reachable:
+                reachable_keys.add(key)
+                continue
+            if key in GUARD_REACHABILITY_ALLOWLIST:
+                continue
+            violations.append(
+                f"  {module}:{node.lineno}: {name} -- guard unreachable from production "
+                "(nothing else under src/ calls it, directly or transitively). Wire it "
+                "into a production path or delete it; a guard nothing runs still reads "
+                "as coverage"
+            )
+    violations.extend(_guard_surface_violations(contracts_root, live, reachable_keys))
+    return violations
+
+
+def _guard_surface_violations(
+    contracts_root: Path, live: set[str], reachable: set[str]
+) -> list[str]:
+    """Pin the measured population, and keep the allowlist drainable.
+
+    Three ways check 20 could otherwise be defused without anyone deciding to:
+    delete or privatise a pinned guard (the population shrinks and the
+    violation goes with it), or leave an allowlist entry behind after the
+    guard it excused has been wired or removed.
+    """
+    violations: list[str] = []
+    for key in sorted(CONTRACTS_GUARD_SURFACE - live):
+        violations.append(
+            f"  {contracts_root}: {key} -- pinned in CONTRACTS_GUARD_SURFACE but no longer "
+            "a public module-level function there. Check 20 may not be satisfied by "
+            "deleting, privatising or relocating the guard it measures; if the removal is "
+            "deliberate, delete the pin in the same commit so a reviewer sees it"
+        )
+    for key in sorted(set(GUARD_REACHABILITY_ALLOWLIST) - live):
+        violations.append(
+            f"  {contracts_root}: stale GUARD_REACHABILITY_ALLOWLIST entry {key!r} -- no "
+            "such public guard; delete the entry"
+        )
+    for key in sorted(set(GUARD_REACHABILITY_ALLOWLIST) & reachable):
+        violations.append(
+            f"  {contracts_root}: stale GUARD_REACHABILITY_ALLOWLIST entry {key!r} -- it is "
+            "now reachable from production; delete the entry (the list only shrinks)"
+        )
+    return violations
+
+
 def check_watchfire_citations() -> tuple[list[str], list[str]]:
     """Run `watchfire check` via its Python API.
 
@@ -1883,6 +2209,10 @@ def main() -> int:
         (
             "No pure re-export shells in engine/ (delete the module, move the imports)",
             check_no_reexport_shells,
+        ),
+        (
+            "Contracts guards are reachable from production (wire it, or delete it)",
+            check_guard_reachability,
         ),
     ]
 

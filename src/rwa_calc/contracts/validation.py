@@ -1,312 +1,71 @@
 """
-Schema validation functions for RWA calculator.
+Input-domain and output-bound validation for the RWA calculator.
 
-Provides utilities for validating LazyFrame schemas against
-expected definitions without materializing data. This enables
-early detection of schema mismatches at pipeline boundaries.
+Pipeline position:
+    Both pipeline entries and the pipeline exit. ``scrub_non_finite_values``
+    and ``validate_bundle_values`` gate the raw input bundle (the file loader
+    calls the latter at load; ``engine/pipeline.py::run_with_data`` calls both
+    so the in-memory entry path is covered identically);
+    ``validate_aggregated_bundle`` gates the aggregated results frame at the
+    pipeline exit.
 
-Key functions:
-- validate_schema: Check LazyFrame schema against expected types
-- validate_required_columns: Check for required columns
-- validate_bundle_schemas: Validate all frames in a bundle
+Key responsibilities:
+- Categorical input domains — ``validate_bundle_values`` /
+  ``validate_column_values`` against ``COLUMN_VALUE_CONSTRAINTS``
+- Numeric input domains — PD, LGD, own-estimate CCF and the non-negative
+  amount columns, via the four range validators below
+- Non-finite (NaN / +-inf) input scrubbing
+- Collateral-link referential integrity
+- Regulatory output bounds on the aggregated results frame
+
+Schema shape is NOT validated here. Every ``RawDataBundle`` frame carries a
+loader edge brand (``contracts/edges.py``, ``contracts.bundles``
+``SEALED_FRAME_FIELDS``), and the seal that grants the brand already injects
+missing required columns (reported as DQ001 by the loader) and casts declared
+columns to their declared dtype. A schema-shape check downstream of that seal
+is structurally incapable of firing.
+
+References:
+- CRR Art. 160/163: PD; Art. 161/164: LGD; Art. 166(8)/(10): own-estimate CCF
+- CRR Art. 111 (SA) / Art. 166 (IRB): exposure value
+- CRR Art. 92(3); CRE31.5: the 1250% risk-weight cap
+- docs/plans/test-space-correctness-proposal.md (Phase 0)
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import polars as pl
 
 from rwa_calc.contracts.errors import (
+    ERROR_CCF_OUT_OF_RANGE,
     ERROR_COLLATERAL_LINK_DUPLICATE,
     ERROR_COLLATERAL_LINK_UNKNOWN_BENEFICIARY,
     ERROR_COLLATERAL_LINK_UNKNOWN_COLLATERAL,
     ERROR_EAD_NULL,
     ERROR_INVALID_COLUMN_VALUE,
     ERROR_INVALID_VALUE,
+    ERROR_LGD_OUT_OF_RANGE,
     ERROR_MATURITY_INVALID,
-    ERROR_MISSING_FIELD,
+    ERROR_NEGATIVE_AMOUNT,
+    ERROR_PD_OUT_OF_RANGE,
     ERROR_RW_ABOVE_CAP,
     ERROR_RW_NEGATIVE,
     ERROR_RWA_NEGATIVE,
-    ERROR_TYPE_MISMATCH,
     CalculationError,
     ErrorCategory,
     ErrorSeverity,
     negative_amount_without_netting_warning,
     non_finite_raw_input_error,
 )
-from rwa_calc.data.column_spec import ColumnSpec
 
 if TYPE_CHECKING:
-    from polars._typing import PolarsDataType
-
-    from rwa_calc.contracts.bundles import (
-        AggregatedResultBundle,
-        RawDataBundle,
-        ResolvedHierarchyBundle,
-    )
+    from rwa_calc.contracts.bundles import AggregatedResultBundle, RawDataBundle
 
 # Regulatory reference for collateral link validation (CRM)
 COLLATERAL_LINK_CRM_REFERENCE = "CRR Art. 193/194"
-
-
-def _as_dtype(entry: PolarsDataType | ColumnSpec) -> PolarsDataType:
-    """Unwrap a schema entry to its dtype — accepts either a raw Polars dtype or a ColumnSpec."""
-    return entry.dtype if isinstance(entry, ColumnSpec) else entry
-
-
-def _is_required(entry: PolarsDataType | ColumnSpec) -> bool:
-    """True if a schema entry represents a required column (raw dtypes are treated as required)."""
-    return entry.required if isinstance(entry, ColumnSpec) else True
-
-
-def validate_schema(
-    lf: pl.LazyFrame,
-    expected_schema: dict[str, PolarsDataType] | dict[str, ColumnSpec],
-    context: str = "",
-    strict: bool = False,
-) -> list[str]:
-    """
-    Validate LazyFrame schema against expected schema.
-
-    Checks that all expected columns exist with correct types.
-    Does NOT materialize the LazyFrame.
-
-    Args:
-        lf: LazyFrame to validate
-        expected_schema: Dict mapping column names to expected Polars types
-        context: Context string for error messages (e.g., "facilities")
-        strict: If True, also flag extra columns not in expected schema
-
-    Returns:
-        List of validation error messages (empty if valid)
-
-    Example:
-        >>> errors = validate_schema(
-        ...     facilities_lf,
-        ...     FACILITY_SCHEMA,
-        ...     context="facilities"
-        ... )
-        >>> if errors:
-        ...     print("\\n".join(errors))
-    """
-    errors: list[str] = []
-    actual_schema = lf.collect_schema()
-    context_prefix = f"[{context}] " if context else ""
-
-    # Check for missing columns
-    for col_name, entry in expected_schema.items():
-        expected_type = _as_dtype(entry)
-        if col_name not in actual_schema:
-            if not _is_required(entry):
-                continue
-            errors.append(
-                f"{context_prefix}Missing column: '{col_name}' (expected type: {expected_type})"
-            )
-        else:
-            actual_type = actual_schema[col_name]
-            if not _types_compatible(actual_type, expected_type):
-                errors.append(
-                    f"{context_prefix}Type mismatch for '{col_name}': "
-                    f"expected {expected_type}, got {actual_type}"
-                )
-
-    # Check for unexpected columns (if strict mode)
-    if strict:
-        extra_columns = set(actual_schema.names()) - set(expected_schema.keys())
-        for col_name in extra_columns:
-            errors.append(
-                f"{context_prefix}Unexpected column: '{col_name}' (type: {actual_schema[col_name]})"
-            )
-
-    return errors
-
-
-def _types_compatible(actual: pl.DataType, expected: PolarsDataType) -> bool:
-    """
-    Check if actual type is compatible with expected type.
-
-    Allows some flexibility for compatible types (e.g., Int32 -> Int64).
-    """
-    # Exact match
-    if actual == expected:
-        return True
-
-    # Allow integer type promotions
-    int_types = {pl.Int8, pl.Int16, pl.Int32, pl.Int64}
-    if actual in int_types and expected in int_types:
-        return True
-
-    # Allow float type promotions
-    float_types = {pl.Float32, pl.Float64}
-    if actual in float_types and expected in float_types:
-        return True
-
-    # Allow Utf8/String compatibility
-    string_types = {pl.Utf8, pl.String}
-    return actual in string_types and expected in string_types
-
-
-def validate_required_columns(
-    lf: pl.LazyFrame,
-    required_columns: list[str],
-    context: str = "",
-) -> list[str]:
-    """
-    Validate that required columns are present in LazyFrame.
-
-    Does not check types, only presence.
-
-    Args:
-        lf: LazyFrame to validate
-        required_columns: List of column names that must be present
-        context: Context string for error messages
-
-    Returns:
-        List of missing column names (empty if all present)
-    """
-    actual_columns = set(lf.collect_schema().names())
-    missing = [col for col in required_columns if col not in actual_columns]
-
-    context_prefix = f"[{context}] " if context else ""
-    return [f"{context_prefix}Missing required column: '{col}'" for col in missing]
-
-
-def validate_schema_to_errors(
-    lf: pl.LazyFrame,
-    expected_schema: dict[str, PolarsDataType] | dict[str, ColumnSpec],
-    context: str = "",
-    optional_columns: set[str] | None = None,
-) -> list[CalculationError]:
-    """
-    Validate schema and return CalculationError objects.
-
-    Same as validate_schema but returns structured errors.
-
-    Args:
-        lf: LazyFrame to validate
-        expected_schema: Dict mapping column names to expected Polars types
-            or to ColumnSpec entries. Raw dtypes are treated as required.
-        context: Context string for error messages
-        optional_columns: Extra column names that may be absent without error
-            (merged with any ``required=False`` markers on ColumnSpec entries).
-
-    Returns:
-        List of CalculationError objects for any schema issues
-    """
-    errors: list[CalculationError] = []
-    actual_schema = lf.collect_schema()
-
-    for col_name, entry in expected_schema.items():
-        expected_type = _as_dtype(entry)
-        if col_name not in actual_schema:
-            if optional_columns and col_name in optional_columns:
-                continue
-            if not _is_required(entry):
-                continue
-            errors.append(
-                CalculationError(
-                    code=ERROR_MISSING_FIELD,
-                    message=f"Missing column '{col_name}' in {context}",
-                    severity=ErrorSeverity.ERROR,
-                    category=ErrorCategory.SCHEMA_VALIDATION,
-                    field_name=col_name,
-                    expected_value=str(expected_type),
-                )
-            )
-        else:
-            actual_type = actual_schema[col_name]
-            if not _types_compatible(actual_type, expected_type):
-                errors.append(
-                    CalculationError(
-                        code=ERROR_TYPE_MISMATCH,
-                        message=f"Type mismatch for '{col_name}' in {context}",
-                        severity=ErrorSeverity.ERROR,
-                        category=ErrorCategory.SCHEMA_VALIDATION,
-                        field_name=col_name,
-                        expected_value=str(expected_type),
-                        actual_value=str(actual_type),
-                    )
-                )
-
-    return errors
-
-
-def validate_raw_data_bundle(
-    bundle: RawDataBundle,
-    schemas: dict[str, dict[str, PolarsDataType] | dict[str, ColumnSpec]],
-) -> list[CalculationError]:
-    """
-    Validate all LazyFrames in a RawDataBundle against expected schemas.
-
-    Args:
-        bundle: RawDataBundle to validate
-        schemas: Dict mapping bundle attribute names to expected schemas
-
-    Returns:
-        List of CalculationError objects for any schema issues
-    """
-    all_errors: list[CalculationError] = []
-
-    frame_mapping = {
-        "facilities": bundle.facilities,
-        "loans": bundle.loans,
-        "contingents": bundle.contingents,
-        "counterparties": bundle.counterparties,
-        "collateral": bundle.collateral,
-        "guarantees": bundle.guarantees,
-        "provisions": bundle.provisions,
-        "ratings": bundle.ratings,
-        "facility_mappings": bundle.facility_mappings,
-        "org_mappings": bundle.org_mappings,
-        "lending_mappings": bundle.lending_mappings,
-        "model_permissions": bundle.model_permissions,
-    }
-
-    # Optional-column semantics now live on ColumnSpec entries (required=False);
-    # no separate optional_columns_registry is needed.
-    for name, lf in frame_mapping.items():
-        if name in schemas and lf is not None:
-            errors = validate_schema_to_errors(lf, schemas[name], context=name)
-            all_errors.extend(errors)
-
-    return all_errors
-
-
-def validate_resolved_hierarchy_bundle(
-    bundle: ResolvedHierarchyBundle,
-    expected_columns: list[str],
-) -> list[CalculationError]:
-    """
-    Validate ResolvedHierarchyBundle has expected hierarchy columns.
-
-    Args:
-        bundle: ResolvedHierarchyBundle to validate
-        expected_columns: List of column names expected in exposures frame
-
-    Returns:
-        List of CalculationError objects for any issues
-    """
-    errors: list[CalculationError] = []
-
-    # Check exposures frame has hierarchy columns
-    missing = validate_required_columns(
-        bundle.exposures,
-        expected_columns,
-        context="resolved_exposures",
-    )
-    for msg in missing:
-        errors.append(
-            CalculationError(
-                code=ERROR_MISSING_FIELD,
-                message=msg,
-                severity=ErrorSeverity.ERROR,
-                category=ErrorCategory.SCHEMA_VALIDATION,
-            )
-        )
-
-    return errors
 
 
 # =============================================================================
@@ -437,6 +196,262 @@ def validate_ccf_modelled(
 
 
 # =============================================================================
+# NUMERIC INPUT-DOMAIN GATE
+# =============================================================================
+
+# Scratch prefix for the per-column flag each range validator contributes. The
+# four validators name their own flag (``_valid_pd``, ``_valid_lgd``, ...), and
+# ``validate_lgd_range`` names it ``_valid_lgd`` whichever LGD column it was
+# pointed at — so each flag is renamed to a per-column name immediately after
+# the validator adds it, and no two can collide on one frame.
+_RANGE_FLAG_PREFIX = "_valid_range_"
+
+# Natural key per raw input table: the column whose value names the offending
+# row. Populated onto ``CalculationError.exposure_reference`` so a domain
+# violation can always be traced to one row (the Phase 2 triage invariant).
+_TABLE_KEY_COLUMNS: dict[str, str] = {
+    "facilities": "facility_reference",
+    "loans": "loan_reference",
+    "contingents": "contingent_reference",
+    "collateral": "collateral_reference",
+    "collateral_links": "collateral_reference",
+    "guarantees": "guarantee_reference",
+    "provisions": "provision_reference",
+    "ratings": "rating_reference",
+    "equity_exposures": "exposure_reference",
+}
+
+# Amount columns whose regulatory domain excludes negatives, per table.
+#
+# Deliberately EXCLUDED, each for a stated reason — a false positive here would
+# flag legitimate data:
+# - ``loans.drawn_amount`` / ``loans.interest``: negative IS the on-balance-sheet
+#   netting convention (CRR Art. 195/219). The unreferenced case is already the
+#   DQ010 warning from ``_validate_negative_amounts_without_netting``.
+# - ``equity_exposures.position_value``: declared SIGNED (+long / -short) for the
+#   Art. 133 net-long calculation (``data/schemas.py``).
+# - ``counterparties.annual_revenue`` / ``total_assets``: size measures, not
+#   exposure amounts; a negative is an accounting fact, not a domain violation.
+_NON_NEGATIVE_AMOUNT_COLUMNS: dict[str, tuple[str, ...]] = {
+    "facilities": ("limit",),
+    "contingents": ("nominal_amount",),
+    "collateral": ("market_value", "nominal_value"),
+    "collateral_links": ("max_pledge_amount",),
+    "guarantees": ("amount_covered",),
+    "provisions": ("amount",),
+    "equity_exposures": ("carrying_value", "fair_value"),
+}
+
+_PD_REFERENCE = "CRR Art. 160/163; PS1/26 Art. 160(1)/163(1)"
+_LGD_REFERENCE = "CRR Art. 161/164; PS1/26 Art. 161(5)/164(4)"
+_CCF_REFERENCE = "CRR Art. 166(8)/(10)"
+_AMOUNT_REFERENCE = "CRR Art. 111 (SA); Art. 166 (IRB)"
+
+
+@dataclass(frozen=True)
+class _DomainSpec:
+    """One (column, domain) pair to report on, and how to report it."""
+
+    column: str
+    flag: str
+    code: str
+    expected: str
+    regulatory_reference: str
+
+
+def _validate_numeric_ranges(
+    lf: pl.LazyFrame,
+    table_name: str,
+    sample_cap: int = 5,
+) -> list[CalculationError]:
+    """Flag numeric input values outside their regulatory domain.
+
+    The error-emitting collector over the four range validators
+    (:func:`validate_pd_range`, :func:`validate_lgd_range`,
+    :func:`validate_ccf_modelled`, :func:`validate_non_negative_amounts`).
+    Each adds a boolean flag column; this pipes the table through every
+    validator whose column is present, then turns the flags into row-named
+    ``CalculationError``s in ONE ``.collect()`` per table.
+
+    Severity is ERROR, not WARNING: an out-of-domain PD/LGD/CCF/amount does
+    not degrade — it produces a plausible, wrong capital number in silence.
+    A feed expressing PD in percent rather than as a fraction (``1.5`` for
+    1.5%) understates a GBP 1m senior corporate F-IRB exposure's RWA by
+    99.95% with no other signal.
+
+    Domains, and why each bound is where it is:
+
+    - **PD in [0, 1]** — closed at zero. The upper bound is the definition of
+      a probability and catches the percent-vs-fraction feed error. The lower
+      bound is CLOSED because PD = 0 is an admissible regulatory input: CRR
+      Art. 160(1) floors the PD of "an exposure to a corporate or an
+      institution" at 0.03% and has no central-government / central-bank limb,
+      which is why the CRR rulepack carries ``pd_floors["sovereign"] = 0``. A
+      half-open (0, 1] domain would reject every sovereign IRB exposure priced
+      at zero. Basel 3.1 does floor sovereigns (0.05%), but a floor applied
+      downstream is not the same statement as an invalid input, and this gate
+      is regime-invariant — the loader validates before any regime pack is
+      resolved.
+    - **LGD in [0, 1.25]** — ``validate_lgd_range``'s own documented domain.
+      Own-estimate downturn LGD can exceed 100% where workout costs exceed the
+      exposure, so 1.0 is not a hard ceiling; 1.25 bounds it.
+    - **CCF in [0, 1.5]** — ``validate_ccf_modelled``'s documented domain
+      (retail A-IRB additional drawdown can exceed 100%). Null is valid.
+    - **Amounts >= 0** — per ``_NON_NEGATIVE_AMOUNT_COLUMNS``, which names the
+      columns where a negative cannot be a netting convention.
+
+    Null is never a domain violation on any of these — a missing PD/LGD is
+    IRB004/IRB005's business, and a missing amount is the loader's.
+
+    Args:
+        lf: The table's LazyFrame.
+        table_name: RawDataBundle field name, used for the natural key,
+            the amount-column set, and the message prefix.
+        sample_cap: Maximum per-row errors emitted per column (default 5);
+            a single summary error carries the omitted count.
+
+    Returns:
+        List of CalculationError objects (empty when every value is in domain).
+    """
+    schema_names = set(lf.collect_schema().names())
+    key_column = _TABLE_KEY_COLUMNS.get(table_name)
+    if key_column is None or key_column not in schema_names:
+        return []
+
+    flagged = lf
+    specs: list[_DomainSpec] = []
+
+    if "pd" in schema_names:
+        flagged = _rename_flag(validate_pd_range(flagged), "_valid_pd", "pd")
+        specs.append(_domain_spec("pd", ERROR_PD_OUT_OF_RANGE, "[0, 1]", _PD_REFERENCE))
+
+    for lgd_column in ("lgd", "lgd_unsecured"):
+        if lgd_column in schema_names:
+            flagged = _rename_flag(
+                validate_lgd_range(flagged, lgd_column=lgd_column), "_valid_lgd", lgd_column
+            )
+            specs.append(
+                _domain_spec(lgd_column, ERROR_LGD_OUT_OF_RANGE, "[0, 1.25]", _LGD_REFERENCE)
+            )
+
+    if "ccf_modelled" in schema_names:
+        flagged = _rename_flag(
+            validate_ccf_modelled(flagged), "_valid_ccf_modelled", "ccf_modelled"
+        )
+        specs.append(
+            _domain_spec("ccf_modelled", ERROR_CCF_OUT_OF_RANGE, "[0, 1.5]", _CCF_REFERENCE)
+        )
+
+    amount_columns = [
+        column
+        for column in _NON_NEGATIVE_AMOUNT_COLUMNS.get(table_name, ())
+        if column in schema_names
+    ]
+    if amount_columns:
+        flagged = validate_non_negative_amounts(flagged, amount_columns, context=table_name)
+        for column in amount_columns:
+            flagged = _rename_flag(flagged, f"_valid_{column}", column)
+            specs.append(_domain_spec(column, ERROR_NEGATIVE_AMOUNT, ">= 0", _AMOUNT_REFERENCE))
+
+    if not specs:
+        return []
+    return _collect_domain_violations(flagged, key_column, specs, table_name, sample_cap)
+
+
+def _domain_spec(column: str, code: str, expected: str, reference: str) -> _DomainSpec:
+    """Build the reporting spec for one validated column."""
+    return _DomainSpec(
+        column=column,
+        flag=f"{_RANGE_FLAG_PREFIX}{column}",
+        code=code,
+        expected=expected,
+        regulatory_reference=reference,
+    )
+
+
+def _rename_flag(lf: pl.LazyFrame, produced: str, column: str) -> pl.LazyFrame:
+    """Give a range validator's freshly-added flag its per-column scratch name."""
+    return lf.rename({produced: f"{_RANGE_FLAG_PREFIX}{column}"})
+
+
+def _collect_domain_violations(
+    flagged: pl.LazyFrame,
+    key_column: str,
+    specs: list[_DomainSpec],
+    table_name: str,
+    sample_cap: int,
+) -> list[CalculationError]:
+    """Turn the flag columns into row-named errors in one ``.collect()``.
+
+    Per spec the aggregation carries three length-1 outputs — the violation
+    count, up to ``sample_cap`` offending keys, and their values — so the
+    whole table (however many columns were validated) costs one collect.
+    A null flag means the underlying value was null, which is never a domain
+    violation, so it is filled True before negation (``~`` on an all-null
+    column also raises).
+    """
+    exprs: list[pl.Expr] = []
+    for spec in specs:
+        invalid = ~pl.col(spec.flag).fill_null(value=True)
+        exprs.append(invalid.sum().alias(f"n_{spec.flag}"))
+        exprs.append(
+            pl.col(key_column)
+            .cast(pl.String)
+            .filter(invalid)
+            .head(sample_cap)
+            .implode()
+            .alias(f"k_{spec.flag}")
+        )
+        exprs.append(
+            pl.col(spec.column).filter(invalid).head(sample_cap).implode().alias(f"v_{spec.flag}")
+        )
+
+    row = flagged.select(exprs).collect().row(0, named=True)
+
+    errors: list[CalculationError] = []
+    for spec in specs:
+        total = int(row[f"n_{spec.flag}"] or 0)
+        if total == 0:
+            continue
+        keys = list(row[f"k_{spec.flag}"] or [])
+        values = list(row[f"v_{spec.flag}"] or [])
+        message = (
+            f"[{table_name}] '{spec.column}' outside its regulatory domain "
+            f"{spec.expected} — {total} row(s)"
+        )
+        for reference, value in zip(keys, values, strict=False):
+            errors.append(
+                CalculationError(
+                    code=spec.code,
+                    message=f"{message} (value={value})",
+                    severity=ErrorSeverity.ERROR,
+                    category=ErrorCategory.DATA_QUALITY,
+                    exposure_reference=reference,
+                    regulatory_reference=spec.regulatory_reference,
+                    field_name=spec.column,
+                    expected_value=spec.expected,
+                    actual_value=str(value),
+                )
+            )
+        if total > len(keys):
+            errors.append(
+                CalculationError(
+                    code=spec.code,
+                    message=(
+                        f"{message}: {total - len(keys)} additional row(s) omitted "
+                        f"beyond sample_cap={sample_cap}"
+                    ),
+                    severity=ErrorSeverity.ERROR,
+                    category=ErrorCategory.DATA_QUALITY,
+                    regulatory_reference=spec.regulatory_reference,
+                    field_name=spec.column,
+                    expected_value=spec.expected,
+                )
+            )
+    return errors
+
+
+# =============================================================================
 # COLUMN VALUE VALIDATORS
 # =============================================================================
 
@@ -508,11 +523,27 @@ def validate_bundle_values(
     constraints: dict[str, dict[str, set[str]]] | None = None,
 ) -> list[CalculationError]:
     """
-    Validate all categorical column values in a RawDataBundle.
+    Validate the input domain of every column in a RawDataBundle.
 
-    Iterates over all tables in the bundle and checks column values
-    against the constraints registry. Batches all column checks per table
-    into a single .collect() call for performance.
+    The whole-bundle input gate. Iterates over all tables in the bundle and,
+    per table, checks:
+
+    - **Categorical domains** against the constraints registry (DQ006), all
+      columns batched into a single ``.collect()``.
+    - **Numeric domains** — PD, LGD, own-estimate CCF and the non-negative
+      amount columns (:func:`_validate_numeric_ranges`), likewise one
+      ``.collect()`` per table, with the offending row named.
+    - **Exposure-table rules** — effective-maturity range (IRB003) and
+      unreferenced negative on-balance amounts (DQ010).
+    - **Ratings** — the short-term rating scope contract (DQ002).
+
+    Then, cross-table, the collateral-link referential integrity checks.
+
+    Called from both pipeline entries: ``engine/loader.py::_build_bundle``
+    for the file path (so the returned bundle carries its own errors) and
+    ``engine/pipeline.py::run_with_data`` for the in-memory path, which
+    de-duplicates against the errors already on the bundle so the file path
+    never double-reports.
 
     Args:
         bundle: RawDataBundle to validate
@@ -551,6 +582,10 @@ def validate_bundle_values(
         if table_constraints:
             errors = _validate_table_columns_batched(lf, table_constraints, table_name)
             all_errors.extend(errors)
+
+        # Numeric input domains (PD / LGD / own-estimate CCF / amounts). One
+        # collect per table; a no-op for tables carrying none of those columns.
+        all_errors.extend(_validate_numeric_ranges(lf, table_name))
 
         # Art. 162(3) override is restricted to exposure tables — the 1-day to
         # 5-year range mirrors the regulatory cap; out-of-range values are clipped

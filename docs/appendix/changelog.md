@@ -8,7 +8,95 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- (Next release changes will go here)
+- **`arch_check` check 20 — a guard in the contracts layer must be reachable
+  from production.** Every public function in `contracts/validation.py` (the
+  input contract, guard-shaped in whole) and every guard-**named** public
+  function elsewhere under `contracts/` (`validate_` / `check_` / `assert_` /
+  `require_` / `ensure_`) must be transitively reachable from production code
+  under `src/`. The escape it closes was measured at 10 of the 14 public
+  validators — **402 lines, all carrying green unit tests, none of them ever
+  running on customer data**, including `validate_aggregated_bundle`, the
+  output-bounds guard for RW > 1250%, negative RW, negative RWA and null EAD. It
+  is scoped by guard *shape* rather than by module path, so a future
+  `contracts/checks.py` is covered from the day it is written.
+
+  Two properties make it hard to defuse. `GUARD_REACHABILITY_ALLOWLIST` is empty
+  by design and stale entries are themselves violations, so it can only be
+  drained. `CONTRACTS_GUARD_SURFACE` pins the measured population, because
+  reachability alone is satisfiable by *removing* the guard rather than wiring
+  it — renaming `validate_pd_range` to `_validate_pd_range` would otherwise
+  clear the violation along with the check. Deleting a guard stays legitimate; it
+  just has to be deliberate, so the pin comes out in the same change and a
+  reviewer sees which guard went away. That limb fired for real on the wiring
+  work landing alongside this check, catching five validators removed rather than
+  wired.
+
+  `scripts/validator_reachability.py` is now the human-readable census over the
+  same measurement rather than a second copy of the analysis — it reads
+  `measure_guard_reachability` from `arch_check`, and the dependency points
+  diagnostic → gate so the gate keeps working if the census script is renamed or
+  deleted. Both halves are asserted by
+  `tests/contracts/test_guard_reachability_gate.py`, which also generalises the
+  wiring assertion past check 20: **no** `check_*` function in `arch_check.py`
+  may exist without `main()` invoking it, since an unregistered check is the
+  same escape class committed inside the gate itself. Recorded in
+  [the escape log](../development/escape-log.md) as the fifth instance of the
+  estate's dominant meta-pattern — build the instrument, stop before wiring it —
+  and the second time it had been "fixed" by writing it down.
+- **Out-of-domain numeric inputs are now rejected instead of silently priced.**
+  `validate_bundle_values()` gained a numeric input-domain gate driving the four
+  range validators that had never run on customer data — PD `[0, 1]`
+  (`IRB001`), LGD and `lgd_unsecured` `[0, 1.25]` (`IRB002`), own-estimate
+  `ccf_modelled` `[0, 1.5]` (`IRB008`, new), and the amount columns whose domain
+  excludes negatives (`DQ012`, new: facility `limit`, contingent
+  `nominal_amount`, collateral `market_value` / `nominal_value`,
+  `max_pledge_amount`, guarantee `amount_covered`, provision `amount`, equity
+  `carrying_value` / `fair_value`).
+
+  These are `ERROR`s, not warnings, because the failure mode is a plausible wrong
+  number rather than a degraded one: a feed expressing PD in percent (`1.5`
+  meaning 1.5%) understated a GBP 1m senior corporate F-IRB exposure's RWA by
+  **99.95%** with no signal of any kind. Each error names the offending row via
+  `exposure_reference`, sampled at five rows per column plus an omitted-count
+  summary, and costs one `.collect()` per table.
+
+  Three columns are deliberately **out** of the non-negative set, each because a
+  negative there is legitimate: `drawn_amount` / `interest` (the CRR Art. 195/219
+  on-balance-sheet netting convention, already covered by `DQ010`) and
+  `position_value` (declared signed, +long / -short, for the Art. 133 net long).
+  The PD domain is closed at zero on the same principle — CRR Art. 160(1) reaches
+  corporates and institutions only, so the rulepack carries
+  `pd_floors["sovereign"] = 0` and a sovereign IRB exposure priced at PD 0 is
+  valid input, not a violation.
+- **Both pipeline entries gate the input domain, and the exit gates the output.**
+  `validate_bundle_values()` previously ran only inside the file loader, so a
+  caller passing an in-memory bundle to `PipelineOrchestrator.run_with_data`
+  received no input validation at all. It now also runs at the pipeline entry
+  beside `scrub_non_finite_values`, de-duplicated against the errors already on
+  the bundle so the file path reports exactly once.
+  `validate_aggregated_bundle()` — the output-bounds guard for risk weight above
+  the 1250% cap, negative risk weight, negative RWA and null EAD — runs at the
+  pipeline exit on every run. It reads the already-materialised aggregator-exit
+  frame; measured at 100k counterparties / 373,568 result rows it costs **5 ms
+  against a 7.6 s run (0.07%)**, and the input gate **93 ms (1.2%)**.
+
+### Removed
+- **Five schema-shape validators, deleted rather than wired.**
+  `validate_schema`, `validate_schema_to_errors`, `validate_required_columns`,
+  `validate_raw_data_bundle` and `validate_resolved_hierarchy_bundle` are gone,
+  along with their `contracts` re-exports. They were structurally incapable of
+  firing: every `RawDataBundle` frame carries a loader edge brand, and the seal
+  that grants it already injects missing required columns (reported as `DQ001`
+  by the loader) and casts declared columns to their declared dtype — so on any
+  constructible bundle both of their limbs are dead. Measured directly: a bundle
+  built with a missing required column *and* a wrong-dtype column yields zero
+  errors from `validate_raw_data_bundle`. Wiring them would have added a check
+  that always passes; the honest outcome is to delete them and keep the seal.
+
+  Stage-to-stage column contracts are unaffected — those are enforced strictly by
+  the producer seal, which raises `EdgeContractViolation` rather than
+  accumulating an error, because a stage omitting its own declared output column
+  is a programming error.
 
 ### Changed
 - (Next release changes will go here)

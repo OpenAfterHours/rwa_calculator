@@ -111,6 +111,14 @@ ERROR_NEGATIVE_AMOUNT_WITHOUT_NETTING = "DQ010"
 # which downstream semantics handle), poisoning rwa_final on the affected rows
 # and — through the Basel 3.1 portfolio output floor — the whole portfolio.
 ERROR_NON_FINITE_RAW_INPUT = "DQ011"
+# Negative value in an amount column whose regulatory domain excludes negatives
+# (a facility limit, a contingent nominal, a collateral value, a guarantee
+# cover, a provision amount). Distinct from DQ010: drawn_amount / interest MAY
+# legitimately be negative under the on-balance-sheet netting convention
+# (CRR Art. 195/219), these columns may not — a negative here manufactures
+# exposure or capital relief out of nothing. Emitted by the input-domain gate
+# (contracts/validation.py::_validate_numeric_ranges).
+ERROR_NEGATIVE_AMOUNT = "DQ012"
 
 # Hierarchy error codes
 ERROR_CIRCULAR_HIERARCHY = "HIE001"
@@ -232,6 +240,12 @@ ERROR_MISSING_EXPECTED_LOSS = "IRB006"
 # below the residential 10% / commercial 15% floor. Monitoring WARNING only —
 # never an RWA/LGD adjustment.
 ERROR_RETAIL_RE_PORTFOLIO_LGD_FLOOR = "IRB007"
+# Own-estimate conversion factor (``ccf_modelled``) outside its input domain
+# [0, 1.5]. The A-IRB own-estimate CCF of CRR Art. 166(8)/(10): a value above
+# 1.5 is beyond even the retail additional-drawdown allowance, and a negative
+# one would reduce the exposure value. Emitted by the input-domain gate
+# (contracts/validation.py::_validate_numeric_ranges), never floored silently.
+ERROR_CCF_OUT_OF_RANGE = "IRB008"
 
 # SA error codes
 ERROR_INVALID_CQS = "SA001"

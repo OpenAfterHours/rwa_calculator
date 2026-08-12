@@ -635,3 +635,170 @@ gate that shipped.
   not its complement* — is offered to the operator as a `.claude/LESSONS.md`
   entry, since a ratio-shaped ratchet reads as a floor to every reviewer who does
   not do the algebra.
+
+## 2026-08-12 — The input contract was written, unit-tested, and connected to nothing
+
+- **Defect**: 10 of the 14 public validators in `src/rwa_calc/contracts/validation.py`
+  — **402 lines**, every one of them carrying green unit tests — could not be
+  reached from any production path under `src/`. `validate_pd_range`,
+  `validate_lgd_range`, `validate_ccf_modelled`, `validate_non_negative_amounts`,
+  `validate_schema`, `validate_schema_to_errors`, `validate_required_columns`,
+  `validate_raw_data_bundle`, `validate_resolved_hierarchy_bundle`, and
+  `validate_aggregated_bundle` — the last of which is the **output**-bounds guard
+  (RW > 1250%, RW < 0, RWA < 0, null EAD) that would have run on every result the
+  engine has ever produced. 48 unit tests pass over that code in 2.7 seconds,
+  testing logic that never runs on customer data.
+
+  The consequence is measured, not inferred. On CRR, £1m senior corporate, F-IRB:
+  a risk feed sending `PD = 1.5` to mean "1.5%" returns RWA **£603.67** against a
+  correct £1,119,286.69 — an understatement of **99.9461%**, a £1,118,683 capital
+  shortfall on every £1m of exposure, with no exception, no null and no
+  `CalculationError`. `LGD = -0.2` returns £0.00. `Maturity = -3` years returns
+  £776,750.85. `CQS = 0`, `7` or `99` on a corporate returns RW 100%, which moves
+  capital in **both** directions — 100% against a true 20% at CQS 1, and 100%
+  against 150% at CQS 6 on an institution. Every one of those is a number a
+  reviewer would accept.
+- **Rule**: Not a single regulatory article — the exposure is the input domain of
+  every article the engine implements. The output-bounds limb is the closest to a
+  named rule: RW is capped at 1250% (CRR Art. 92 / PS1/26), and
+  `validate_aggregated_bundle` is the only thing in the estate that would have
+  said so.
+- **Origin**: `src/rwa_calc/contracts/validation.py`. The escape is old and was
+  **already documented**: `docs/plans/engine-defensiveness-boundary-hardening.md`,
+  written 2026-05-29, states in its root-cause line that "the
+  `contracts/validation.py` bundle validators were never wired into
+  `pipeline.py`." That sentence was still true 2.5 months later, which is the part
+  of this entry worth reading twice — the finding did not escape detection, it
+  escaped *conversion into a gate*.
+- **Escape class**: `gate-not-run`. The catching gate is not missing; this
+  repository ships it, with tests. It is never invoked on customer data. That is
+  the class's definition exactly, and it is why `no-gate-exists` would prescribe
+  the wrong fix — nothing needed inventing, only wiring. It is the **fourth**
+  entry in this file to carry that class, and the fifth measured instance of the
+  habit the log itself names: *build the measurement and stop before wiring it.*
+- **Why every gate missed it**: no gate looks at reachability. Every existing
+  guard in the estate answers "is this output right?", and an unreachable
+  validator produces no output to be wrong. Worse, it produces the *opposite* of a
+  signal: 48 passing unit tests over 402 lines of validation logic read, to any
+  reviewer and to every coverage instrument, as an input contract that is
+  enforced. Coverage tooling counts those lines as covered, because they are —
+  by tests, not by the pipeline.
+
+  Note the asymmetry with the four earlier `gate-not-run` entries. Those were
+  instruments nobody had run *yet*; this one had been run, its finding recorded in
+  a plan document, and the plan document then sat. A written root-cause line is not
+  a gate. Prose has now failed at this five times.
+- **Gate change**: `scripts/arch_check.py` **check 20 —
+  `check_guard_reachability`**, registered in `main()` so
+  `python scripts/arch_check.py` runs it on every commit via the pre-commit hook.
+  Every public function in `contracts/validation.py` (the input contract, which is
+  guard-shaped in whole) and every guard-**named** public function elsewhere under
+  `contracts/` (`validate_` / `check_` / `assert_` / `require_` / `ensure_`) must
+  be transitively reachable from production code under `src/`. Scoped by shape
+  rather than by path so a future `contracts/checks.py` is covered on the day it
+  is written; deliberately not extended to the layer's `create_empty_*` factories
+  and `*_error` constructors, 10 of which are unreachable today and would have
+  given the check a ten-entry allowlist on arrival.
+
+  Three properties are load-bearing, each aimed at a way this file records gates
+  going soft:
+
+  - `GUARD_REACHABILITY_ALLOWLIST` is **empty by design**. Seeding it with the ten
+    known-unreachable validators would have made the check vacuous on arrival —
+    the `caught-and-parked` shape, where a gate fires, the finding is filed, and
+    the wrong behaviour ships anyway. Stale entries are themselves violations, so
+    the list can only be drained.
+  - `CONTRACTS_GUARD_SURFACE` **pins the population**, because reachability alone
+    is satisfiable by removing the thing it measures: rename `validate_pd_range`
+    to `_validate_pd_range` and it leaves the measured set; delete it and the
+    violation leaves with it. This repo has shipped that shape before — four
+    back-compat shells silently disarmed a regression guard that read
+    `module.__file__` (check 18). Deleting a guard stays legitimate; it just has
+    to be deliberate, so the pin is removed in the same change and a reviewer sees
+    which guard went away. **It fired for real during this batch** (see below).
+  - `tests/contracts/test_guard_reachability_gate.py::test_every_arch_check_check_is_registered`
+    generalises the wiring assertion past check 20: **no** `check_*` function in
+    `arch_check.py` may exist without `main()` invoking it. An unregistered check
+    is this escape class committed inside the gate itself.
+
+  The analysis has exactly one implementation. `scripts/validator_reachability.py`
+  — the census this grew out of, and the reproduce command in the proposal — now
+  reads `measure_guard_reachability` from `arch_check` instead of keeping its own
+  copy, and `test_the_reachability_analysis_has_one_implementation` asserts both
+  that it does and that the two agree on the population. The dependency points
+  diagnostic → gate and never the other way, so the gate keeps working if the
+  diagnostic is renamed or deleted.
+- **Verified red**: two, and the second was not planned.
+
+  **(1) The escape itself**, check 20 run against the committed pre-wiring tree
+  (`git archive aa2182bd src`, so the measurement is of the state that shipped
+  rather than of a scratch mutation):
+
+  ```
+  [FAIL] Contracts guards are reachable from production (wire it, or delete it)
+    contracts/validation.py:1140: validate_aggregated_bundle -- guard unreachable from production
+    contracts/validation.py:403: validate_ccf_modelled -- guard unreachable from production
+    contracts/validation.py:373: validate_lgd_range -- guard unreachable from production
+    contracts/validation.py:317: validate_non_negative_amounts -- guard unreachable from production
+    contracts/validation.py:348: validate_pd_range -- guard unreachable from production
+    contracts/validation.py:236: validate_raw_data_bundle -- guard unreachable from production
+    contracts/validation.py:151: validate_required_columns -- guard unreachable from production
+    contracts/validation.py:277: validate_resolved_hierarchy_bundle -- guard unreachable from production
+    contracts/validation.py:64: validate_schema -- guard unreachable from production
+    contracts/validation.py:176: validate_schema_to_errors -- guard unreachable from production
+
+  Total: 10 violation(s)
+  ```
+
+  Ten violations, zero allowlist entries, and the same ten the proposal's census
+  named — an AST-based reference analysis independently reproducing the seed
+  script's regex-based answer.
+
+  **(2) The population pin, firing unprompted.** While the wiring work was landing
+  in parallel, five of the ten validators were **deleted** rather than wired
+  (`validate_schema`, `validate_schema_to_errors`, `validate_required_columns`,
+  `validate_raw_data_bundle`, `validate_resolved_hierarchy_bundle`). The
+  reachability limb went green as they disappeared — exactly the defusal the pin
+  exists for — and the pin caught all five:
+
+  ```
+  contracts: validation.py::validate_schema -- pinned in CONTRACTS_GUARD_SURFACE but no
+  longer a public module-level function there. Check 20 may not be satisfied by deleting,
+  privatising or relocating the guard it measures; if the removal is deliberate, delete
+  the pin in the same commit so a reviewer sees it
+  ```
+
+  This is the strongest evidence in the entry, because it was not a constructed
+  probe: the check's anti-defusal limb fired on real concurrent work within an
+  hour of being written, on a removal nobody had announced. Two of those five
+  deletions are prescribed by the proposal; the other three are a wider call, and
+  the pin is what turned them into a decision somebody has to state. Before the
+  pins were dropped the removal was verified complete — definitions and their
+  private helpers gone, and **no reference to any of the five surviving anywhere
+  under `src/` or `tests/`** — so what the change-set records is a finished
+  deletion, not a half-migration. The consequence worth stating plainly: the
+  estate now ships **no declared-vs-actual schema-drift check at all**.
+
+  **(3) Six adversarial perturbations**, run against a throwaway copy of `src/`
+  so the real tree was never mutated (a killed injection run leaving a live
+  mutation in `src/` has cost this project hours before). Control: 0 violations.
+  Privatising `validate_pd_range` to `_validate_pd_range` → 1 (the pin, not the
+  reachability limb, which goes *quiet* — that is the defusal). Deleting
+  `validate_lgd_range` outright → 1. A new `contracts/checks.py::validate_nothing`
+  that nothing calls → 1, which is the scope-by-shape decision earning its keep:
+  the check covers a module it has never seen, so hard-coding `validation.py`
+  would have let that through. Deleting `contracts/validation.py` entirely → 9.
+  And the negative control that matters, since a gate that fires on everything
+  is not a gate: a new *non-guard* public function in the same unreachable
+  position (`create_empty_thing`) → **0 violations**, confirming the scope
+  boundary is the one documented rather than an accident.
+- **Lesson**: this is the fifth instance of the estate's dominant meta-pattern and
+  the second time it has been "fixed" by writing it down. `.claude/LESSONS.md`
+  carries the graduation rule for exactly this case — a lesson that reaches
+  production twice cannot survive as prose — so the entry belongs in the
+  Graduation ledger rather than the working set. Check 20 is the same move check
+  14 made on Polars namespaces: it removes the *category*, not the instances.
+  What remains prose, because no check can express it: the proposal's other three
+  phases (declare the input domain as data, fuzz the pathology axis, make absence
+  loud) are what stop the next silent-plausible-number defect; check 20 only
+  guarantees that a guard we have already written is running.

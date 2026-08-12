@@ -245,25 +245,21 @@ total still counts it. No rule objects, because rules only check rows that exist
 row builder and assert `0.00`. Do **not** verify by reading the row list — the
 missing pair is by definition not in it.
 
-### B7. A strict xfail is a decision to ship the wrong number
+### B7. A parked finding with no owner has only aged, not been handled
 
-**Trap.** Registering an oracle or property disagreement as `xfail(strict=True)`
-and treating the item as handled.
+**Trap.** *Graduated 2026-08-12 — see the ledger. Only the ungated residual
+survives here.* Registering an oracle or conformance disagreement is the right
+immediate move and is now mechanically constrained: the population can only
+shrink, and every entry must carry an `OWNER: P<n>.<n>` token.
 
-**Why.** Registering it is the *right* immediate move — `tests/oracle/README.md` is
-emphatic that when the engine and the oracle disagree you adjust neither, and the
-mark is a real gate in one direction: it fails if the number starts agreeing, so a
-silent fix is impossible. What the mark does not carry is an owner. Nothing limits
-how many entries a register holds, how long one may sit there, or who is
-responsible for it, so the correct first move becomes a resting place. Four
-disagreements have sat in `KNOWN_DISAGREEMENTS` since 2026-08-08, including
-`ORC-109`, a CRR Art. 121(1) Table 5 limb that under-states capital by a third at
-CQS 6. The suite is green and the wrong number ships. Escape class
-`caught-and-parked`, `docs/development/escape-log.md` 2026-08-09.
+**Why the residual still needs a human.** No check gates **how long** an entry
+may sit. Shrink-only stops the register growing and the owner token stops it
+being anonymous, but an owned entry that no one works is indistinguishable from
+one being worked. Seven of the eight oracle entries understate capital.
 
-**Detect.** Register the disagreement, then put an owning plan bullet in its reason
-string and file that bullet in the same change. A register entry naming no bullet
-is the thing to catch in review — not the xfail.
+**Detect.** When you touch a register entry for any reason, check its owning
+bullet is still open and still describes the disagreement. An `OWNER:` pointing
+at a closed or drifted bullet is the review finding.
 
 ### B8. Ratchet the quantity you care about, not a ratio of it nor its complement
 

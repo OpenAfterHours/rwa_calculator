@@ -320,6 +320,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per-instance fixing looks like from the outside.
 
 ### Fixed
+- **P1.332 — the CRR UK OV1 of-which block did not partition row 1: every equity
+  leg was counted twice.** `reporting/pillar3/ov1.py`'s `_APPROACH_REFS` keyed on
+  the approach **label**, admitting `"equity"` into both row 2 ("of which: the
+  standardised approach") and row UK 4a ("of which: equities under the simple
+  risk weighted approach"). Verified verbatim against the Annex II instructions:
+  UK 4a is Art. 155(2) simple-risk-weighted equity — an **IRB Chapter 3**
+  treatment — while row 2 is SA Chapter 2, and rows 3 and 5 each carry an
+  explicit "excluding the RWEAs disclosed in row 4 … and in row UK 4a"
+  carve-out. That exclusion only makes sense if the of-which rows are mutually
+  exclusive, so the block is a **partition**, not an itemisation.
+
+  The rows now key on the equity **method**, and the correction runs in **both**
+  directions — this is the part the original plan bullet had backwards:
+  - `equity_method == "irb_simple"` → UK 4a only, **removed from row 2**
+  - `equity_method == "sa"`, or the column absent/null → row 2 only, **removed
+    from UK 4a**
+
+  On the rich CRR book the leg is `irb_simple` (listed, 290%), so row 2 drops
+  19,128,450.00 → 16,228,450.00 (own funds 1,530,276.00 → 1,298,276.00) and UK
+  4a keeps its 2,900,000.00. On a book whose equity arrives from the loans table
+  with no sealed method — genuinely Art. 133 SA — the opposite applies: row 2
+  keeps its figure and UK 4a drops to 0.00. Row 1 is unchanged in both cases;
+  this is a disclosure re-split with no capital effect. Row 2 also now agrees
+  with C 02.00 r0060, which it previously contradicted by exactly the equity leg.
+
+  CRR-only: PS1/26 emits no UK 4a row and Art. 147A stamps every equity leg
+  `sa`, so the Basel 3.1 partition was already exact (measured delta 0.00).
+
+  The membership test is derived in `_prepare` rather than declared as a
+  `RowPredicate` `equals`, deliberately: `RowPredicate` returns `pl.lit(False)`
+  for the **whole row** when any column it names is absent, so declaring
+  `equity_method` there would have zeroed row 2 on every portfolio without an
+  `equity_exposures` leg. Pinned by
+  `tests/acceptance/reporting/test_p1_332_ov1_equity_partition.py`, whose
+  assertions cover both the cell that moves and the cell that survives — the
+  partition identity alone cannot tell the two candidate fixes apart.
+
 - **P1.342 — a QCCP trade exposure was one null away from a 50× overstatement.**
   PS1/26 Art. 121(6)'s sovereign floor for unrated institutions had no
   carve-out for QCCP **trade** exposures, which CRR Art. 306 pins at 2%

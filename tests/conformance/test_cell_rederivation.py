@@ -346,42 +346,6 @@ def test_the_grade_and_slotting_rows_do_not_double_count(templates) -> None:
 _OV1_OF_WHICH: tuple[str, ...] = ("2", "3", "4", "UK4a", "5")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "OV1 double-counts an SA equity leg: it is summed into row 2 AND into row UK 4a. "
-        "Measured on the portfolio below — CRR row 1 a = 30,098,477.21 against an of-which sum "
-        "(rows 2 + 3 + 4 + UK 4a + 5) of 31,598,477.21, over by exactly UK 4a's 1,500,000.00. "
-        "The same defect is already BANKED in the shipped golden "
-        "tests/expected_outputs/reporting/crr/pillar3__ov1.ndjson, where row 1 a = "
-        "145,511,467.29 against an of-which sum of 148,411,467.29, over by that portfolio's "
-        "UK 4a of 2,900,000.00. Root cause: src/rwa_calc/reporting/pillar3/ov1.py's "
-        "_APPROACH_REFS maps '2' -> ('standardised', 'equity') and 'UK4a' -> ('equity',), so "
-        "UK 4a is keyed on the approach LABEL. The published instruction keys it on the "
-        "treatment: UK 4a is 'equities under the simple risk weighted approach' per CRR "
-        "Art. 155(2), an IRB method, while rows 2/3/5 each read 'excluding the RWEAs disclosed "
-        "in row 4 ... and in row UK 4a' — so the of-which block is meant to partition row 1. "
-        "This leg is Art. 133 SA equity, so it belongs in row 2 and NOT in UK 4a, which makes "
-        "row 2's own 9,850,000.00 correct and UK 4a's repetition the defect. Note for whoever "
-        "fixes it: `equity_method` IS absent from the aggregator exit on this portfolio (the "
-        "only equity column the sealed ledger carries is `equity_type`, and it is null on the "
-        "leg) — but that does NOT mean a new carrier has to be plumbed first. C 02.00 already "
-        "solves this with the same absent column, by treating an unsealed method as SA: "
-        "reporting/corep/c02.py keys IRB equity on `_EQUITY_IRB_METHODS = ('irb_simple', "
-        "'pd_lgd')` through an `.is_in(...).fill_null(...)` mask, so a null method never matches "
-        "and the leg reports as SA. Measured on this portfolio, that gets it right — C 02.00 "
-        "r0210 Equity = 1,500,000.00 (SA) and r0420 Equity IRB = 0.00. Copying the same "
-        "absent-tolerant rule into UK 4a — an unsealed `equity_method` means SA, therefore not "
-        "UK 4a — fixes this today with no new plumbing. An earlier version of this reason said "
-        "the column had to be plumbed through first; that was wrong, and it was wrong in the "
-        "direction that parks a defect. Basel 3.1 is blind to all of this twice over: the B31 "
-        "template emits no UK 4a "
-        "row at all, and the B31 equity leg's rwa_final is null anyway (the "
-        "test_every_equity_leg_carries_its_rwea_to_rwa_final defect), so B31 partitions at "
-        "0.00 for two wrong reasons. That is the .claude/LESSONS.md C7 shape — a regime that "
-        "cannot see the defect is not evidence the defect is absent."
-    ),
-)
 def test_the_of_which_rows_partition_the_credit_risk_total(templates) -> None:
     """OV1 row 1 equals the sum of its "of which" approach rows.
 

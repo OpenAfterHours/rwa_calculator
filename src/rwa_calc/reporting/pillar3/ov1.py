@@ -23,7 +23,11 @@ Cell semantics (golden-gated):
   the post-substitution retarget is the plan's F-decision family),
   conjoined with the same non-CCR cut — they are "of which" rows of row 1
   and inherit its exclusion. These cells report 0.0 for an absent approach
-  (per-cell zero override on the Pillar 3 null template).
+  (per-cell zero override on the Pillar 3 null template). Rows 2 and UK 4a
+  are additionally split on the sealed ``equity_method`` (the module-owned
+  ``ov1_is_equity_simple`` flag below) — the ``equity`` approach label
+  belongs to BOTH of them, so keying on it alone counted every equity leg
+  twice and the block did not partition row 1.
 - The CCR block (6 / 7 / 8 / UK8a / 9), keyed on the module-owned derived
   Booleans below:
     * 6 (Chapter 6) is a POPULATION — ``risk_type`` in the CCR set — and
@@ -114,6 +118,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 from watchfire import cites
 
+from rwa_calc.domain.enums import EquityApproach
 from rwa_calc.reporting.cellspec import (
     CellSpec,
     FirstNonNull,
@@ -157,6 +162,23 @@ _APPROACH_REFS: dict[str, tuple[str, ...]] = {
     "5": ("advanced_irb",),
 }
 
+# The equity split rows 2 and UK 4a make, on top of the approach labels above:
+# the ``equity`` label belongs to BOTH, so it cannot discriminate between them.
+# UK 4a is "equities under the simple risk weighted approach in accordance with
+# Article 155(2) CRR" — IRB Chapter 3 — while row 2 is the Art. 133 SA block
+# (Chapter 2); rows 3 and 5 each carry an explicit "excluding the RWEAs disclosed
+# ... in row UK 4a" carve-out, so the of-which rows are mutually exclusive and
+# foot to row 1. Keyed on the sealed ``equity_method`` (the derived
+# ``ov1_is_equity_simple`` flag), the value C 02.00 r0420 and CR10's equity sheet
+# already key on, so those two remain independent opinions rather than echoes.
+#
+# Art. 155(3) PD/LGD equity is deliberately NOT admitted to UK 4a — contrast
+# c02.py's ``_EQUITY_IRB_METHODS = ("irb_simple", "pd_lgd")``, correct there
+# because row 0420 is "Equity IRB" (155(2) AND (3)), wrong here because a PD/LGD
+# leg is not simple risk-weighted. It falls to row 2 rather than out of the block,
+# which keeps the partition total whole; no fixture seals one today.
+_EQUITY_SIMPLE_MEMBERSHIP: dict[str, bool] = {"2": False, "UK4a": True}
+
 # Basel 3.1 equity sub-approach memo rows: origin equity legs narrowed by a
 # presence-tolerant discriminator column == value (F6-stripped today).
 _EQUITY_SUBAPPROACH_REFS: dict[str, tuple[str, str]] = {
@@ -197,6 +219,7 @@ _IS_CCR: str = "ov1_is_ccr"
 _IS_SA_CCR: str = "ov1_is_sa_ccr"
 _IS_CCP: str = "ov1_is_ccp"
 _IS_OTHER_CCR: str = "ov1_is_other_ccr"
+_IS_EQUITY_SIMPLE: str = "ov1_is_equity_simple"
 
 # The CCR block's populated rows -> the derived flag each one selects. Row 8
 # (IMM, Section 6) is absent on purpose: it binds NO CellSpec and stays null.
@@ -254,10 +277,14 @@ def _row_a_cell(ref: str) -> CellSpec | None:
         return CellSpec(SideContext("of_adj"))
     if ref in _APPROACH_REFS:
         # An "of which" of row 1 inherits row 1's CCR exclusion. POST-substitution
-        # approach — see the module docstring and _APPROACH_REFS.
+        # approach — see the module docstring and _APPROACH_REFS. Rows 2 and UK 4a
+        # take the extra equity-method term that makes them disjoint.
+        equals = _NON_CCR.equals
+        if ref in _EQUITY_SIMPLE_MEMBERSHIP:
+            equals = (*equals, (_IS_EQUITY_SIMPLE, _EQUITY_SIMPLE_MEMBERSHIP[ref]))
         return CellSpec(
             Sum("rwa_final"),
-            predicate=RowPredicate(approaches=_APPROACH_REFS[ref], equals=_NON_CCR.equals),
+            predicate=RowPredicate(approaches=_APPROACH_REFS[ref], equals=equals),
             empty_cell="zero",
         )
     return None
@@ -302,11 +329,12 @@ def ov1_plans(
     """Build the single OV1 execution plan (the lineage seam).
 
     OV1 has no sheet axis, so the one plan keys under the single-frame
-    canonical key. The plan's frame is the full sealed ledger carrying the four
-    derived CCR discriminator columns (``ov1_is_ccr`` and its three-way
-    partition) the CCR-block cell predicates key off. NO output-floor summary is
-    threaded — the current-period / no-side view — so the resolver REFUSES row
-    27's OF-ADJ (a ``SideContext(of_adj)`` whose ``side_value`` is None here),
+    canonical key. The plan's frame is the full sealed ledger carrying the five
+    derived discriminator columns (``ov1_is_ccr`` and its three-way partition,
+    plus ``ov1_is_equity_simple``) the cell predicates key off. NO output-floor
+    summary is threaded — the current-period / no-side view — so the resolver
+    REFUSES row 27's OF-ADJ (a ``SideContext(of_adj)`` whose ``side_value`` is
+    None here),
     rather than serving a null the summary-generated report would contradict.
     Preserves the imperative generator's error contract: a missing ``rwa_final``
     column records the OV1 error and yields no plan. There is no post-execute
@@ -375,12 +403,13 @@ def generate_ov1(
 
 
 def _prepare(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:
-    """Derive the four CCR discriminator columns the cell predicates key off.
+    """Derive the discriminator columns the cell predicates key off.
 
-    All four are ALWAYS derived — a missing source column yields a literal
+    All FIVE are ALWAYS derived — a missing source column yields a literal
     False, never an absent column. That matters: an absent column makes a
     tolerant ``equals`` term match NOTHING, which would drop the whole book out
-    of row 1 rather than route it to the non-CCR side.
+    of row 1 rather than route it to the non-CCR side, and would likewise zero
+    rows 2 and UK 4a on every equity-free portfolio.
 
     Rows 7 / UK8a / 9 PARTITION row 6, so they are cut mutually exclusively:
 
@@ -398,6 +427,17 @@ def _prepare(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:
       9's scope (Art. 301(1)(b)) and so lands in UK8a, as does a default-fund
       contribution (Art. 307-309, also inside Section 9) — both by the plain
       ``cp_entity_type == "ccp"`` cut above, with no special-casing.
+
+    The fifth flag partitions the two equity-bearing of-which rows: an
+    ``equity``-approach leg the equity calculator sealed ``irb_simple`` is
+    Art. 155(2) simple risk-weighted equity (UK 4a); an ``sa`` method, a null
+    method and an ABSENT ``equity_method`` column all mean Art. 133 SA equity
+    (row 2) — an unsealed method is not evidence of IRB treatment, which is the
+    reading c02.py already takes through ``.is_in(...).fill_null(False)``. It
+    reads the same POST-substitution approach column the ``approaches`` term
+    compiles against (``cellspec._compile``'s ladder), so a leg substituted off
+    the equity approach leaves BOTH rows by the same test and lands in its
+    provider's row, rather than falling out of the partition.
     """
     is_ccr = (
         pl.col("risk_type").is_in(_CCR_RISK_TYPES).fill_null(value=False)
@@ -416,9 +456,19 @@ def _prepare(results: pl.LazyFrame, cols: set[str]) -> pl.LazyFrame:
     )
     is_sa_ccr = is_derivative & ~faces_ccp
     is_ccp = is_ccr & faces_ccp
+    approach_col = (
+        "reporting_approach" if "reporting_approach" in cols else "reporting_approach_origin"
+    )
+    is_equity_simple = (
+        (pl.col(approach_col).fill_null("") == "equity")
+        & (pl.col("equity_method").fill_null("") == EquityApproach.IRB_SIMPLE.value)
+        if "equity_method" in cols and approach_col in cols
+        else pl.lit(value=False)
+    )
     return results.with_columns(
         is_ccr.alias(_IS_CCR),
         is_sa_ccr.alias(_IS_SA_CCR),
         is_ccp.alias(_IS_CCP),
         (is_ccr & ~is_sa_ccr & ~is_ccp).alias(_IS_OTHER_CCR),
+        is_equity_simple.alias(_IS_EQUITY_SIMPLE),
     )

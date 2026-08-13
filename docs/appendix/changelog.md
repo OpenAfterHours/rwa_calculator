@@ -320,6 +320,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per-instance fixing looks like from the outside.
 
 ### Fixed
+- **P1.330 — the Art. 197 collateral-eligibility gate was not applied on the
+  Art. 222 Financial Collateral Simple Method path.** `crm/simple_method.py`
+  filtered on the firm-supplied `is_eligible_financial_collateral` attestation
+  alone, while `apply_haircuts` — the only place the engine overrode that
+  attestation — runs later, at Step 4. So the Simple Method recognised
+  collateral the Comprehensive Method rejects, at the collateral's own SA risk
+  weight floored at 20%.
+
+  The regulation is stricter than the defect report assumed. Art. 197's heading
+  is *"Eligibility of collateral under **all approaches and methods**"*, while
+  Art. 198's is *"**Additional** eligibility … under the Financial Collateral
+  **Comprehensive** Method"* and its body reads *"in addition to the collateral
+  established in Article 197, **where an institution uses** the Financial
+  Collateral Comprehensive Method"*. Art. 222 then operates only on *"eligible
+  financial collateral"*.
+
+  The predicates now live in one place, `engine/crm/eligibility.py`, read by
+  both methods — with the equity limb **parametrised by method**, which is the
+  load-bearing detail. Under the Simple Method the gate is Art. 197(1)(f)
+  **alone** (`is_equity & ~is_main_index`); the Comprehensive Method adds
+  Art. 198(1)(a)'s listed-on-a-recognised-exchange limb. Reusing the existing
+  `non_main_index_equity_ineligible_expr` — which is the Art. 197 ∪ Art. 198
+  union — would have left non-main-index *listed* equity eligible under
+  Art. 222 and one of the seven target oracles still failing.
+
+  Seven oracle disagreements discharged and removed from `KNOWN_DISAGREEMENTS`:
+  ORC-280 (the magnitude case — a CQS 5 sovereign at full cover, RWA
+  1,000,000 → 1,500,000, a 33.3% understatement) and ORC-257 / 258 / 275 / 278 /
+  279 / 281 at 1,350,000 → 1,500,000 each. ORC-274 / 276 / 277 remain passing
+  and untouched: they are equally ungated but neutral, because a CQS 6 security
+  carries the obligor's own 150%. `ead_final` is unchanged throughout —
+  Art. 222 substitutes risk weights, it does not reduce EAD.
+
+  **Direction is not one-way, contrary to the original report.** The blend is
+  `share × collateral_RW + (1 − share) × obligor_RW`, so gating an ineligible
+  pledge out moves the row toward the obligor's own weight — upward where the
+  obligor is riskier than the pledge, and *downward* where it is safer. At an
+  obligor RW of 20% the same gate moves a row 100% → 20%. The belief that the
+  effect was uniformly anti-conservative came from the oracle family itself:
+  `tests/oracle/derivations/crm_sa.py` blends against a single module constant
+  `OBLIGOR_RW = 1.50`, the maximum SA corporate weight, so it is structurally
+  incapable of exhibiting the other sign.
+
+  No registered portfolio moves — the estate's only FCSM golden book pledges
+  CQS 1 collateral throughout, which is Art. 197-eligible, so the gate cannot
+  bite there. The extraction also improved three ratchets
+  (`engine_fill_null_sites` 472 → 469, `engine_presence_guard_sites` 358 → 355,
+  `cites_decorators` 336 → 340).
+
 - **P1.332 — the CRR UK OV1 of-which block did not partition row 1: every equity
   leg was counted twice.** `reporting/pillar3/ov1.py`'s `_APPROACH_REFS` keyed on
   the approach **label**, admitting `"equity"` into both row 2 ("of which: the

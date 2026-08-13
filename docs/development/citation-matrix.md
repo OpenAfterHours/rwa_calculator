@@ -12,7 +12,7 @@ Regenerate after annotation changes:
 uv run python scripts/generate_citation_matrix.py
 ```
 
-Last generated: 2026-08-12.
+Last generated: 2026-08-13.
 
 ## CRR (Capital Requirements Regulation)
 
@@ -260,7 +260,7 @@ Last generated: 2026-08-12.
 
 ??? quote "`apply_sovereign_floor_for_institutions` — src/rwa_calc/engine/sa/sovereign_floor.py:49"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/sovereign_floor.py:49:178"
+    --8<-- "src/rwa_calc/engine/sa/sovereign_floor.py:49:232"
     ```
 
 
@@ -908,17 +908,32 @@ Last generated: 2026-08-12.
 
 ### CRR Art. 197 — Eligibility of collateral under all approaches and methods
 
-??? quote "`non_main_index_equity_ineligible_expr` — src/rwa_calc/engine/crm/haircuts.py:67"
+??? quote "`financial_collateral_ineligible_expr` — src/rwa_calc/engine/crm/eligibility.py:53"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/haircuts.py:67:99"
+    --8<-- "src/rwa_calc/engine/crm/eligibility.py:53:73"
+    ```
+
+??? quote "`debt_security_ineligible_expr` — src/rwa_calc/engine/crm/eligibility.py:76"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/eligibility.py:76:126"
+    ```
+
+??? quote "`equity_ineligible_expr` — src/rwa_calc/engine/crm/eligibility.py:129"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/eligibility.py:129:165"
+    ```
+
+??? quote "`_prepare_eligible_collateral` — src/rwa_calc/engine/crm/simple_method.py:452"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/simple_method.py:452:496"
     ```
 
 
 ### CRR Art. 198 — Additional eligibility of collateral under the Financial Collateral Comprehensive Method
 
-??? quote "`non_main_index_equity_ineligible_expr` — src/rwa_calc/engine/crm/haircuts.py:68"
+??? quote "`equity_ineligible_expr` — src/rwa_calc/engine/crm/eligibility.py:130"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/haircuts.py:67:99"
+    --8<-- "src/rwa_calc/engine/crm/eligibility.py:129:165"
     ```
 
 
@@ -935,6 +950,14 @@ Last generated: 2026-08-12.
 ??? quote "`_assign_guarantor_approach` — src/rwa_calc/engine/crm/guarantees.py:417"
     ```python
     --8<-- "src/rwa_calc/engine/crm/guarantees.py:417:514"
+    ```
+
+
+### CRR Art. 207 — Requirements for financial collateral
+
+??? quote "`debt_security_ineligible_expr` — src/rwa_calc/engine/crm/eligibility.py:77"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/eligibility.py:76:126"
     ```
 
 
@@ -974,9 +997,9 @@ Last generated: 2026-08-12.
 
 ### CRR Art. 218 — Credit linked notes
 
-??? quote "`credit_linked_note_ineligible_expr` — src/rwa_calc/engine/crm/haircuts.py:102"
+??? quote "`credit_linked_note_ineligible_expr` — src/rwa_calc/engine/crm/eligibility.py:168"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/haircuts.py:102:130"
+    --8<-- "src/rwa_calc/engine/crm/eligibility.py:168:196"
     ```
 
 
@@ -998,9 +1021,9 @@ Last generated: 2026-08-12.
 
 ### CRR Art. 222 — Financial Collateral Simple Method
 
-??? quote "`compute_fcsm_columns` — src/rwa_calc/engine/crm/simple_method.py:271"
+??? quote "`compute_fcsm_columns` — src/rwa_calc/engine/crm/simple_method.py:272"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/simple_method.py:271:373"
+    --8<-- "src/rwa_calc/engine/crm/simple_method.py:272:374"
     ```
 
 ??? quote "`apply_fcsm_rw_substitution` — src/rwa_calc/engine/sa/rw_adjustments.py:73"
@@ -1044,9 +1067,9 @@ Last generated: 2026-08-12.
     --8<-- "src/rwa_calc/engine/crm/haircut_tables.py:353:385"
     ```
 
-??? quote "`apply_haircuts` — src/rwa_calc/engine/crm/haircuts.py:190"
+??? quote "`apply_haircuts` — src/rwa_calc/engine/crm/haircuts.py:124"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/haircuts.py:190:395"
+    --8<-- "src/rwa_calc/engine/crm/haircuts.py:124:329"
     ```
 
 ??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:111"
@@ -1193,9 +1216,9 @@ Last generated: 2026-08-12.
     --8<-- "src/rwa_calc/engine/crm/guarantees.py:1509:1701"
     ```
 
-??? quote "`apply_maturity_mismatch` — src/rwa_calc/engine/crm/haircuts.py:814"
+??? quote "`apply_maturity_mismatch` — src/rwa_calc/engine/crm/haircuts.py:674"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/haircuts.py:814:919"
+    --8<-- "src/rwa_calc/engine/crm/haircuts.py:674:779"
     ```
 
 
@@ -1206,9 +1229,9 @@ Last generated: 2026-08-12.
     --8<-- "src/rwa_calc/engine/crm/collateral.py:166:425"
     ```
 
-??? quote "`apply_maturity_mismatch` — src/rwa_calc/engine/crm/haircuts.py:815"
+??? quote "`apply_maturity_mismatch` — src/rwa_calc/engine/crm/haircuts.py:675"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/haircuts.py:814:919"
+    --8<-- "src/rwa_calc/engine/crm/haircuts.py:674:779"
     ```
 
 
@@ -1475,7 +1498,7 @@ Last generated: 2026-08-12.
 
 ??? quote "`apply_sovereign_floor_for_institutions` — src/rwa_calc/engine/sa/sovereign_floor.py:50"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/sovereign_floor.py:49:178"
+    --8<-- "src/rwa_calc/engine/sa/sovereign_floor.py:49:232"
     ```
 
 

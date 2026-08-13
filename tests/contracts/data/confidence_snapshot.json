@@ -2854,7 +2854,10 @@
     {
       "article": "197",
       "code_functions": [
-        "rwa_calc.engine.crm.haircuts::non_main_index_equity_ineligible_expr"
+        "rwa_calc.engine.crm.eligibility::debt_security_ineligible_expr",
+        "rwa_calc.engine.crm.eligibility::equity_ineligible_expr",
+        "rwa_calc.engine.crm.eligibility::financial_collateral_ineligible_expr",
+        "rwa_calc.engine.crm.simple_method::_prepare_eligible_collateral"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -2885,8 +2888,10 @@
         "contracts/edges.py",
         "data/schemas.py",
         "domain/enums.py",
+        "engine/crm/eligibility.py",
         "engine/crm/haircut_tables.py",
-        "engine/crm/haircuts.py"
+        "engine/crm/haircuts.py",
+        "engine/crm/simple_method.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_186_art_224_2_fx_haircut_secured_lending_default.py",
@@ -2914,7 +2919,7 @@
     {
       "article": "198",
       "code_functions": [
-        "rwa_calc.engine.crm.haircuts::non_main_index_equity_ineligible_expr"
+        "rwa_calc.engine.crm.eligibility::equity_ineligible_expr"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -2926,7 +2931,7 @@
       "pack_entries": [],
       "source_files": [
         "data/schemas.py",
-        "engine/crm/haircuts.py"
+        "engine/crm/eligibility.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_271_art_198_non_main_index_equity.py",
@@ -3036,14 +3041,17 @@
     },
     {
       "article": "207",
-      "code_functions": [],
-      "confidence": "UNCITED",
+      "code_functions": [
+        "rwa_calc.engine.crm.eligibility::debt_security_ineligible_expr"
+      ],
+      "confidence": "MEDIUM",
       "framework": "CRR",
-      "layer_count": 2,
+      "layer_count": 3,
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
-        "data/schemas.py"
+        "data/schemas.py",
+        "engine/crm/eligibility.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_124_art_237_2a_guarantee_ineligibility.py",
@@ -3183,7 +3191,7 @@
     {
       "article": "218",
       "code_functions": [
-        "rwa_calc.engine.crm.haircuts::credit_linked_note_ineligible_expr"
+        "rwa_calc.engine.crm.eligibility::credit_linked_note_ineligible_expr"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -3195,7 +3203,7 @@
       "pack_entries": [],
       "source_files": [
         "data/schemas.py",
-        "engine/crm/haircuts.py"
+        "engine/crm/eligibility.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_274_art_218_credit_linked_note.py",

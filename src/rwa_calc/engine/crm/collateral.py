@@ -38,7 +38,11 @@ from rwa_calc.contracts.errors import (
 )
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.schemas import DIRECT_BENEFICIARY_TYPES, NON_ELIGIBLE_RE_TYPES
-from rwa_calc.domain.enums import AIRBCollateralMethod, ApproachType
+from rwa_calc.domain.enums import AIRBCollateralMethod, ApproachType, CRMCollateralMethod
+from rwa_calc.engine.crm.eligibility import (
+    credit_linked_note_ineligible_expr,
+    equity_ineligible_expr,
+)
 from rwa_calc.engine.crm.expressions import (
     CRM_ALLOC_COLUMNS,
     WATERFALL_ORDER,
@@ -51,11 +55,7 @@ from rwa_calc.engine.crm.expressions import (
     subordinated_unsecured_lgd,
     supervisory_lgd_values,
 )
-from rwa_calc.engine.crm.haircuts import (
-    HaircutCalculator,
-    credit_linked_note_ineligible_expr,
-    non_main_index_equity_ineligible_expr,
-)
+from rwa_calc.engine.crm.haircuts import HaircutCalculator
 from rwa_calc.observability.audit_cache import sink_audit
 from rwa_calc.rulebook import RulepackV0
 from rwa_calc.rulebook.compile import lookup_float_map
@@ -780,7 +780,7 @@ def _record_non_main_index_equity_ineligible(
     predicate keeps the warning from drifting from the zeroed number.
     """
     names = collateral.collect_schema().names()
-    gate = non_main_index_equity_ineligible_expr(names)
+    gate = equity_ineligible_expr(names, method=CRMCollateralMethod.COMPREHENSIVE)
     count_df = collateral.select(gate.cast(pl.UInt32).sum().alias("gated")).collect()
     count = int(count_df.item() or 0) if count_df.height > 0 else 0
     if count <= 0:

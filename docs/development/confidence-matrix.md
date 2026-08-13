@@ -39,7 +39,7 @@ Package version `0.3.25`. Resolved packs:
 
 | Instrument | HIGH | MEDIUM | LOW | UNCITED | GAP | Total |
 |---|---|---|---|---|---|---|
-| CRR (Capital Requirements Regulation) | 34 | 56 | 11 | 38 | 14 | 153 |
+| CRR (Capital Requirements Regulation) | 34 | 57 | 11 | 37 | 14 | 153 |
 | PS1/26 (PRA Policy Statement) | 24 | 28 | 7 | 31 | 16 | 106 |
 
 ## CRR (Capital Requirements Regulation)
@@ -120,13 +120,13 @@ Package version `0.3.25`. Resolved packs:
 | 193 | 1 | 0 | 11 | 1 | 6 | HIGH |
 | 194 | 2 | 0 | 1 | 0 | 4 | MEDIUM |
 | 195 | 1 | 0 | 7 | 0 | 12 | MEDIUM |
-| 197 | 1 | 0 | 5 | 19 | 19 | HIGH |
+| 197 | 4 | 0 | 7 | 19 | 19 | HIGH |
 | 198 | 1 | 0 | 2 | 2 | 2 | HIGH |
 | 199 | 1 | 0 | 2 | 0 | 15 | MEDIUM |
 | 200 | 0 | 0 | 4 | 0 | 3 | UNCITED |
 | 201 | 1 | 0 | 2 | 9 | 4 | HIGH |
 | 203 | 0 | 0 | 0 | 0 | 1 | GAP |
-| 207 | 0 | 0 | 1 | 0 | 7 | UNCITED |
+| 207 | 1 | 0 | 2 | 0 | 7 | MEDIUM |
 | 211 | 1 | 0 | 1 | 0 | 3 | MEDIUM |
 | 212 | 0 | 0 | 2 | 0 | 0 | UNCITED |
 | 213 | 2 | 1 | 6 | 0 | 15 | MEDIUM |
@@ -330,7 +330,6 @@ These articles are named in `src/rwa_calc/` production source but carry no `@cit
 | CRR 62 | 5 | 0 | 10 | — | — |
 | CRR 159 | 8 | 0 | 10 | — | — |
 | CRR 280c | 2 | 0 | 9 | — | — |
-| CRR 207 | 1 | 0 | 7 | — | — |
 | PS1/26 236 | 1 | 0 | 7 | — | — |
 | CRR 6 | 8 | 0 | 6 | — | — |
 | CRR 280b | 1 | 0 | 6 | — | — |

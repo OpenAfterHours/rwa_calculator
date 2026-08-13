@@ -27,7 +27,8 @@ from typing import TYPE_CHECKING
 import polars as pl
 from watchfire import cites
 
-from rwa_calc.domain.enums import CQS, ApproachType
+from rwa_calc.domain.enums import CQS, ApproachType, CRMCollateralMethod
+from rwa_calc.engine.crm.eligibility import financial_collateral_ineligible_expr
 from rwa_calc.engine.sa.b31_risk_weight_tables import B31_CORPORATE_RISK_WEIGHTS
 from rwa_calc.engine.sa.crr_risk_weight_tables import (
     CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
@@ -448,13 +449,39 @@ def _resolve_sft_column(schema_names: list[str]) -> str | None:
     return None
 
 
+@cites("CRR Art. 197")
 def _prepare_eligible_collateral(
     collateral: pl.LazyFrame, is_b31: bool, equity_rw: float
 ) -> pl.LazyFrame:
-    """Filter to eligible FC, normalise zero-haircut flag, derive per-item RW."""
-    eligible = collateral.filter(pl.col("is_eligible_financial_collateral").fill_null(False))
+    """Filter to eligible FC, normalise zero-haircut flag, derive per-item RW.
 
-    eligible_schema_names = eligible.collect_schema().names()
+    Art. 197 is headed "Eligibility of collateral under ALL approaches and
+    methods", and Art. 222(2) recognises only "the market value of eligible
+    collateral" — so the firm-supplied ``is_eligible_financial_collateral``
+    attestation is not on its own sufficient here. It is ANDed with the shared
+    Art. 197 gate (``engine/crm/eligibility.py``), the same predicate the
+    Comprehensive Method applies at the haircut stage, so the two methods cannot
+    recognise different collateral.
+
+    The equity limb is the one legitimate divergence: Art. 198(1)(a)'s extension
+    to non-main-index listed equity is expressly confined to a firm using the
+    Comprehensive Method, so the Simple Method reads Art. 197(1)(f) alone
+    (main-index membership required).
+
+    The gate is applied to the FCSM input frame only — the shared
+    ``is_eligible_financial_collateral`` column is left untouched, because the
+    Comprehensive path (which still runs for IRB LGD) reads it as its own
+    eligibility signal and, on frames without ``is_main_index``, as the
+    equity-haircut main-index proxy.
+    """
+    eligible_schema_names = collateral.collect_schema().names()
+    art_197_ineligible = financial_collateral_ineligible_expr(
+        eligible_schema_names, method=CRMCollateralMethod.SIMPLE
+    )
+    eligible = collateral.filter(
+        pl.col("is_eligible_financial_collateral").fill_null(False) & art_197_ineligible.not_()
+    )
+
     if "qualifies_for_zero_haircut" not in eligible_schema_names:
         eligible = eligible.with_columns(
             pl.lit(False).alias("qualifies_for_zero_haircut"),

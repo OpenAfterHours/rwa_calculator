@@ -320,6 +320,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per-instance fixing looks like from the outside.
 
 ### Fixed
+- **P1.325 (supersedes P1.336) — the Art. 154(4A) post-model-adjustment and
+  mortgage-floor ordering was inverted.** Art. 154(4A)'s chapeau requires an
+  institution to *"increase the total risk-weighted exposure amounts calculated
+  under paragraphs 1, 3 and 4 … to reflect"* three things, which makes (a), (b)
+  and (c) **additive increases to one common pre-floor base** rather than a
+  pipeline. Limb (b) is a *test* — *"any amount needed to ensure that
+  risk-weighted exposure amounts … are greater than or equal to 10% of the
+  exposure value … **(following application of any post model adjustments
+  calculated under point (b) of Article 146(3))**"* — and that parenthetical is
+  what places limb (a) inside the comparison.
+
+  The engine applied the floor **first** and then multiplied the post-floor
+  RWEA by both scalars, so the floor increase was itself scaled by the PMAs.
+  Correcting it releases capital where the floor binds: on a 1,000,000 mortgage
+  at a 6% modelled weight with a 10% floor, `pma_rwa_scalar` 0.10 and
+  `unrecognised_exposure_scalar` 0.05, total RWEA moves **115,000 → 103,000**
+  (−10.4%), and the floor now binds at exactly its 10%-of-exposure-value
+  minimum instead of overshooting it.
+
+  **Limb (c) is deliberately kept outside the floor test.** Both plan bullets
+  treated `unrecognised_exposure_scalar` as a post-model adjustment, but
+  Art. 154(4A)(c) is *"any unrecognised exposure adjustment calculated under
+  **Article 166D(6)**"* — a different provision from the Art. 146(3)(b) PMAs
+  the (b) parenthetical admits. It is a sibling increase on the same base,
+  added outside the comparison.
+
+  Dormant in production: all four scalars default to `Decimal("0.0")` with
+  `enabled=False`, and nothing outside the test helper sets one, so no golden
+  or registered portfolio can observe this. The engine docstring and four unit
+  tests — including a class named `TestPMASequencing` whose methods asserted
+  "uses post floor rwa" — all stated the inverted order **and attributed it to
+  the article**; each is corrected here.
+
 - **P1.289 — the leased-asset residual weight divided by a fractional year
   count instead of whole years.** Art. 134(7), verbatim and word-for-word
   identical in both regimes: *"the risk-weighted exposure amounts shall be

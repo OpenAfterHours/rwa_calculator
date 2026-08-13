@@ -191,11 +191,24 @@ class TestPostModelAdjustmentsBasel31:
         assert result["rwa"][0] == pytest.approx(1020.0)
 
     def test_all_adjustments_combined(self) -> None:
-        """All three RWEA adjustments stack per Art. 154(4A) sequencing.
+        """All three RWEA adjustments are additive increases to one common base.
 
-        Why: Art. 154(4A)(b) mortgage floor is applied first to establish
-        the post-floor RWEA base. Art. 154(4A)(a) PMA scalars then multiply
-        the post-floor RWEA, capturing the floor increase in their base.
+        Why: Art. 154(4A)'s chapeau — "An institution shall increase the total
+        risk-weighted exposure amounts calculated under paragraphs 1, 3 and 4
+        ... to reflect: (a) ... (b) ... (c) ..." — makes the three limbs
+        additive to that single pre-floor base, not a pipeline. Limb (b) is a
+        TEST ("any amount needed to ensure that risk-weighted exposure amounts
+        ... are greater than or equal to 10% of the exposure value") evaluated
+        "following application of any post model adjustments calculated under
+        point (b) of Article 146(3)" — which is limb (a), and only limb (a).
+        Limb (c) is "calculated under Article 166D(6)", a different provision,
+        so it stays outside the comparison.
+
+        Inverted by P1.325. This test previously asserted the floor first with
+        both scalars multiplying the post-floor base, and attributed that
+        ordering to the article — the same misattribution the engine docstring
+        carried. Its expected values were internally consistent with the code
+        rather than with Art. 154(4A), which is why nothing objected.
         """
         config, pack = _b31_config(
             pma_rwa_scalar=Decimal("0.05"),
@@ -209,15 +222,25 @@ class TestPostModelAdjustmentsBasel31:
             ead_final=2000.0,
         )
         result = lf.pipe(apply_post_model_adjustments, config, pack=pack).collect()
-        # Step 1: Mortgage floor: (0.20 - 0.10) * 2000 = 200
-        assert result["mortgage_rw_floor_adjustment"][0] == pytest.approx(200.0)
-        # Post-floor RWA = 200 + 200 = 400
-        # Step 2: General PMA: 400 * 0.05 = 20 (applied to post-floor RWEA)
-        assert result["post_model_adjustment_rwa"][0] == pytest.approx(20.0)
-        # Step 2: Unrecognised: 400 * 0.02 = 8 (applied to post-floor RWEA)
-        assert result["unrecognised_exposure_adjustment"][0] == pytest.approx(8.0)
-        # Total: 200 + 200 + 20 + 8 = 428
-        assert result["rwa"][0] == pytest.approx(428.0)
+        # Base (paragraphs 1/3/4) = 200.
+        # (a) general PMA on the base:            200 * 0.05 = 10
+        assert result["post_model_adjustment_rwa"][0] == pytest.approx(10.0)
+        # (c) unrecognised exposure on the base:  200 * 0.02 = 4
+        #     NOT in the (b) comparison — Art. 166D(6), not Art. 146(3)(b).
+        assert result["unrecognised_exposure_adjustment"][0] == pytest.approx(4.0)
+        # (b) floor tested after (a): 0.20 * 2000 = 400 required,
+        #     base + (a) = 210 present, so the shortfall is 190.
+        assert result["mortgage_rw_floor_adjustment"][0] == pytest.approx(190.0)
+        # Total: 200 + 10 + 190 + 4 = 404 (was 428 under the inverted order).
+        assert result["rwa"][0] == pytest.approx(404.0)
+        # The floor is a floor: the post-adjustment RWEA less limb (c), which
+        # sits outside the test, must be exactly the 10%-of-exposure-value
+        # minimum. Stated as an identity so it survives a change to the
+        # scalars — a per-component check alone would not catch the floor
+        # being satisfied at the wrong level.
+        assert result["rwa"][0] - result["unrecognised_exposure_adjustment"][0] == pytest.approx(
+            0.20 * 2000.0
+        )
 
     def test_el_adjustment(self) -> None:
         """EL adjustment adds scalar × base_el to expected loss."""
@@ -323,19 +346,28 @@ class TestPostModelAdjustmentConfig:
 
 
 class TestPMASequencing:
-    """Art. 153(5A)/154(4A): PMA scalars must use post-mortgage-floor RWEA.
+    """Art. 154(4A): the three limbs are additive increases to one base.
 
-    Why: PRA Art. 154(4A)(b) mortgage RW floor is applied first, then
-    Art. 154(4A)(a) general PMAs are applied to the resulting RWEA.
-    Applying PMA to pre-floor RWEA would understate capital for exposures
-    that hit the mortgage floor.
+    Why: the chapeau increases "the total risk-weighted exposure amounts
+    calculated under paragraphs 1, 3 and 4", so (a), (b) and (c) all measure
+    against that single pre-floor base. Limb (b) is a test evaluated
+    "following application of any post model adjustments calculated under
+    point (b) of Article 146(3)" — limb (a), and only limb (a); limb (c) is
+    Art. 166D(6) and stays outside it.
+
+    Corrected by P1.325. This class previously asserted the reverse — floor
+    first, both scalars on the post-floor base — and gave the article as its
+    reason. Every method name and expected value was internally consistent
+    with the code and inconsistent with Art. 154(4A).
     """
 
-    def test_pma_uses_post_floor_rwa_not_pre_floor(self) -> None:
-        """PMA scalar multiplies post-mortgage-floor RWEA, not pre-floor.
+    def test_pma_multiplies_the_pre_floor_base(self) -> None:
+        """Limb (a) multiplies the paragraph-1/3/4 base, not the floored RWEA.
 
-        Model RW=5% (RWA=100), mortgage floor=10%, PMA=10%.
-        Pre-floor PMA would be 10, post-floor PMA should be 20.
+        Model RW=5% (RWA=100), mortgage floor=10%, PMA=10%, EAD=2000.
+        (a) = 100 x 0.10 = 10. The floor then requires 0.10 x 2000 = 200
+        against a post-(a) figure of 110, so (b) = 90 and the total is 200 —
+        the floor binding exactly, which is what a floor should do.
         """
         config, pack = _b31_config(
             pma_rwa_scalar=Decimal("0.10"),
@@ -348,16 +380,22 @@ class TestPMASequencing:
             ead_final=2000.0,
         )
         result = lf.pipe(apply_post_model_adjustments, config, pack=pack).collect()
-        # Mortgage floor: (0.10 - 0.05) * 2000 = 100
-        assert result["mortgage_rw_floor_adjustment"][0] == pytest.approx(100.0)
-        # Post-floor RWA = 100 + 100 = 200
-        # PMA: 200 * 0.10 = 20 (NOT 100 * 0.10 = 10)
-        assert result["post_model_adjustment_rwa"][0] == pytest.approx(20.0)
-        # Total: 100 + 100 + 20 = 220
-        assert result["rwa"][0] == pytest.approx(220.0)
+        # (a) on the base: 100 * 0.10 = 10
+        assert result["post_model_adjustment_rwa"][0] == pytest.approx(10.0)
+        # (b) tested after (a): 0.10 * 2000 = 200 required, 110 present -> 90
+        assert result["mortgage_rw_floor_adjustment"][0] == pytest.approx(90.0)
+        # Total: 100 + 10 + 90 = 200 — the floor binds exactly.
+        assert result["rwa"][0] == pytest.approx(200.0)
+        assert result["rwa"][0] == pytest.approx(0.10 * 2000.0)
 
-    def test_unrecognised_uses_post_floor_rwa(self) -> None:
-        """Unrecognised exposure scalar also uses post-floor RWEA."""
+    def test_unrecognised_sits_outside_the_floor_test(self) -> None:
+        """Limb (c) multiplies the base and is added outside the (b) comparison.
+
+        Art. 154(4A)(c) is "any unrecognised exposure adjustment calculated
+        under Article 166D(6)". The (b) parenthetical admits only
+        Art. 146(3)(b) adjustments, so (c) neither feeds the floor test nor is
+        capped by it: the floor brings RWEA to 200 and (c) adds 5 on top.
+        """
         config, pack = _b31_config(
             mortgage_rw_floor=Decimal("0.10"),
             unrecognised_exposure_scalar=Decimal("0.05"),
@@ -369,11 +407,12 @@ class TestPMASequencing:
             ead_final=2000.0,
         )
         result = lf.pipe(apply_post_model_adjustments, config, pack=pack).collect()
-        # Post-floor RWA = 100 + 100 = 200
-        # Unrecognised: 200 * 0.05 = 10 (NOT 100 * 0.05 = 5)
-        assert result["unrecognised_exposure_adjustment"][0] == pytest.approx(10.0)
-        # Total: 100 + 100 + 10 = 210
-        assert result["rwa"][0] == pytest.approx(210.0)
+        # (c) on the base: 100 * 0.05 = 5
+        assert result["unrecognised_exposure_adjustment"][0] == pytest.approx(5.0)
+        # (b) with no limb (a) configured: 200 required, 100 present -> 100
+        assert result["mortgage_rw_floor_adjustment"][0] == pytest.approx(100.0)
+        # Total: 100 + 100 + 5 = 205, i.e. the floor plus (c) on top of it.
+        assert result["rwa"][0] == pytest.approx(205.0)
 
     def test_non_binding_floor_pma_uses_base_rwa(self) -> None:
         """When floor is non-binding, PMA uses original base RWA (no floor increase)."""
@@ -435,11 +474,15 @@ class TestPMASequencing:
             }
         )
         result = lf.pipe(apply_post_model_adjustments, config, pack=pack).collect()
-        # Mortgage row: floor adjustment=100, post-floor RWA=200, PMA=20
-        assert result["mortgage_rw_floor_adjustment"][0] == pytest.approx(100.0)
-        assert result["post_model_adjustment_rwa"][0] == pytest.approx(20.0)
-        assert result["rwa"][0] == pytest.approx(220.0)
-        # Corporate row: no floor, PMA=1000*0.10=100
+        # Mortgage row: (a) = 100 * 0.10 = 10 on the base; (b) then needs
+        # 0.10 * 2000 = 200 against a post-(a) 110, so 90; total 200.
+        assert result["post_model_adjustment_rwa"][0] == pytest.approx(10.0)
+        assert result["mortgage_rw_floor_adjustment"][0] == pytest.approx(90.0)
+        assert result["rwa"][0] == pytest.approx(200.0)
+        # Corporate row: no floor limb, so (a) alone: 1000 * 0.10 = 100.
+        # The load-bearing half of this test — limb (a) is computed on each
+        # row's own base, and the corporate row must be untouched by the
+        # mortgage row's floor.
         assert result["mortgage_rw_floor_adjustment"][1] == pytest.approx(0.0)
         assert result["post_model_adjustment_rwa"][1] == pytest.approx(100.0)
         assert result["rwa"][1] == pytest.approx(1100.0)

@@ -1666,6 +1666,7 @@
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
+        "contracts/errors.py",
         "data/schemas.py",
         "engine/stages/hierarchy/enrich.py",
         "engine/stages/hierarchy/ratings.py"

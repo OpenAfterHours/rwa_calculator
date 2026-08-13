@@ -34,7 +34,10 @@ from typing import TYPE_CHECKING
 import polars as pl
 from watchfire import cites
 
-from rwa_calc.contracts.errors import misscoped_short_term_rating_warning
+from rwa_calc.contracts.errors import (
+    misscoped_short_term_rating_warning,
+    unsolicited_rating_not_filtered_warning,
+)
 from rwa_calc.engine.entity_class_maps import ENTITY_TYPES_BY_SA_CLASS
 from rwa_calc.engine.kernels.allocation import (
     NO_DEFAULT,
@@ -194,6 +197,8 @@ def apply_short_term_rating_override(
     Always returns ``exposures`` augmented with a ``has_short_term_ecai``
     boolean column (False when no override matched).
     """
+    _record_unsolicited_ratings(ratings, errors)
+
     st_ratings = _prepare_short_term_lookup(ratings)
     if st_ratings is None:
         return exposures.with_columns(pl.lit(False).alias("has_short_term_ecai"))
@@ -301,6 +306,45 @@ def apply_short_term_rating_override(
     if has_gate:
         scratch.append("_st_gate_entity_type")
     return exposures.drop(scratch)
+
+
+def _record_unsolicited_ratings(
+    ratings: pl.LazyFrame | None,
+    errors: list[CalculationError] | None,
+) -> None:
+    """Append one DQ015 warning per run if any assessment is flagged unsolicited.
+
+    CRR / PS1-26 Art. 138 permits an unsolicited assessment only where the
+    competent authority has confirmed the ECAI's unsolicited assessments do not
+    differ in quality from its solicited ones. That confirmation is per-ECAI and
+    supervisor-granted — not derivable from the rating row and carried by no
+    input — so the engine cannot decide eligibility and does not filter.
+
+    Surfacing it is what makes ``is_solicited`` a read column rather than a
+    declared-and-ignored one (P1.291). One warning per run rather than per row:
+    the condition is a portfolio-level governance fact about which ECAI
+    permissions the firm holds, not a defect in any individual rating.
+
+    A single cheap aggregate — ``is_solicited`` is nullable with a ``True``
+    default, so only an explicit ``False`` counts and a portfolio that never
+    populates the column costs one count over an empty filter.
+    """
+    if errors is None or ratings is None:
+        return
+
+    # No presence guard: ``is_solicited`` is declared on RATINGS_SCHEMA with a
+    # ``True`` default, so the loader supplies it on every production frame, and
+    # ``select`` below would raise loudly rather than silently skip if that ever
+    # stopped being true. Keeping the defensive surface flat is the deliberate
+    # trade (arch_check ``engine_presence_guard_sites``).
+    unsolicited = int(
+        ratings.filter(pl.col("is_solicited").eq_missing(other=False))
+        .select(pl.len())
+        .collect()
+        .item()
+    )
+    if unsolicited:
+        errors.append(unsolicited_rating_not_filtered_warning(n=unsolicited))
 
 
 def _record_misscoped_st_ratings(

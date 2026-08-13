@@ -103,6 +103,16 @@ ERROR_BEEL_ON_NON_DEFAULTED_EXPOSURE = "DQ008"
 # (CRR/PS1-26 Art. 140(1) / CRE21.16 — short-term assessments are confined to
 # institution / corporate obligors). The mis-scoped override is ignored for RW.
 ERROR_MISSCOPED_SHORT_TERM_RATING = "DQ009"
+# An unsolicited ECAI credit assessment supplied on a rating row. CRR / PS1-26
+# Art. 138 chapeau: an institution "shall use solicited credit assessments.
+# However it may use unsolicited credit assessments if the competent authority
+# has confirmed that unsolicited credit assessments of an ECAI do not differ in
+# quality from solicited credit assessments of this ECAI." The permission is
+# per-ECAI and granted by the supervisor, so it is NOT derivable from the
+# rating row: the engine cannot decide eligibility and therefore does not
+# filter. The warning records that the flag was supplied and is not acted on,
+# so the condition is visible rather than silent (P1.291).
+ERROR_UNSOLICITED_RATING_NOT_FILTERED = "DQ015"
 # Negative on-balance amount (drawn_amount / interest) carrying no
 # netting_agreement_reference. A negative balance is the on-balance-sheet
 # netting convention (CRR Art. 195/219) — it may offset ONLY the loans that
@@ -590,6 +600,47 @@ def misscoped_short_term_rating_warning(
         category=ErrorCategory.DATA_QUALITY,
         exposure_reference=exposure_reference,
         regulatory_reference="CRR Art. 140(1)",
+    )
+
+
+def unsolicited_rating_not_filtered_warning(*, n: int) -> CalculationError:
+    """Create a DQ015 warning for unsolicited ECAI assessments used unfiltered.
+
+    CRR / PS1-26 Art. 138 chapeau: an institution "shall use solicited credit
+    assessments. However it may use unsolicited credit assessments if the
+    competent authority has confirmed that unsolicited credit assessments of an
+    ECAI do not differ in quality from solicited credit assessments of this
+    ECAI."
+
+    The engine deliberately does NOT filter on ``is_solicited``, and the reason
+    is that the article's permission is **per-ECAI and supervisor-granted**: it
+    is not a property of the rating row, and no input carries it. Suppressing
+    every unsolicited assessment would deny ratings a firm is entitled to use
+    wherever that confirmation exists — wrong in the denying direction, and on
+    a flag whose default is ``True`` it would also change nothing for the
+    firms that never populate it.
+
+    So the honest treatment is to surface the condition rather than act on it.
+    This warning is what makes ``is_solicited`` a *read* column instead of a
+    declared-and-ignored one: a firm that marks an assessment unsolicited is
+    told, once per run, that the engine has used it and that the Art. 138
+    confirmation is the firm's to hold. One warning per run, not per row —
+    the condition is a portfolio-level governance fact, not a row defect.
+    """
+    return CalculationError(
+        code=ERROR_UNSOLICITED_RATING_NOT_FILTERED,
+        message=(
+            f"{n} ECAI credit assessment(s) are flagged unsolicited "
+            "(is_solicited=False) and have been used unfiltered. Art. 138 permits "
+            "unsolicited assessments only where the competent authority has "
+            "confirmed they do not differ in quality from that ECAI's solicited "
+            "assessments; the engine cannot verify that confirmation from the "
+            "input, so it does not suppress them. Confirm the permission is held "
+            "for each ECAI concerned, or omit the assessment."
+        ),
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.DATA_QUALITY,
+        regulatory_reference="CRR Art. 138",
     )
 
 

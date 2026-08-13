@@ -96,6 +96,17 @@ class SovereignFloorReason(StrEnum):
     TRADE_EXEMPT = "trade_exempt"
     """Art. 121(6)(b) / CRE20.22 fn13: self-liquidating trade item, original maturity <= 1y."""
 
+    QCCP_TRADE_EXPOSURE = "qccp_trade_exposure"
+    """CRR Art. 306 lex specialis: a QCCP TRADE exposure keeps its 2%/4% pin.
+
+    Distinct from ``TRADE_EXEMPT``, which is the Art. 121(6)(b) goods-movement
+    exemption. Art. 107(2) sends only trade exposures and default fund
+    contributions to Chapter 6 Section 9; "all other types of exposures to a
+    qualifying CCP" stay ordinary institution exposures and remain inside the
+    floor, so this limb is gated on the CCR trade ``risk_type`` as well as on
+    the counterparty being a QCCP.
+    """
+
     DOMESTIC_CURRENCY = "domestic_currency"
     """Exposure IS in the institution's domestic currency — the floor's trigger is absent."""
 

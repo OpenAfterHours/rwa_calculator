@@ -320,6 +320,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per-instance fixing looks like from the outside.
 
 ### Fixed
+- **P1.342 — a QCCP trade exposure was one null away from a 50× overstatement.**
+  PS1/26 Art. 121(6)'s sovereign floor for unrated institutions had no
+  carve-out for QCCP **trade** exposures, which CRR Art. 306 pins at 2%
+  (clearing member's own) / 4% (client-cleared) as lex specialis. The floor did
+  not in fact fire on those rows — but only by accident. `original_currency` is
+  stamped by the FX converter, and the synthetic CCR / SFT netting-set rows are
+  minted *after* that stage, so they carried it NULL; the domesticity test
+  evaluated to null, and `pl.when(null)` takes the `otherwise` branch. The rows
+  were right for a reason nobody chose, and the census recorded both of them on
+  `UNKNOWN_FALLBACK` — "the rule could not be evaluated" — rather than on any
+  deliberate limb.
+
+  That made the accident load-bearing: removing the nullity without adding the
+  carve-out takes the proprietary leg from `risk_weight` 0.02 to 1.00 and the
+  client-cleared leg from 0.04 to 1.00. Measured, on the fixture built for this
+  item: 109,933.82 → 5,496,691.10 of RWEA under CRR. The sibling item P1.333
+  proposes exactly that nullity fix, which is why this one is sequenced first.
+
+  Two changes, both required:
+  - **The Art. 306 carve-out**, first in the floor's branch chain because it is
+    lex specialis. Its predicate carries a **trade-exposure** term
+    (`risk_type` in `{CCR_DERIVATIVE, CCR_SFT}`) as well as a QCCP one, and
+    that is the whole of its difference from the pin's own predicate in
+    `risk_weights.py`. CRR Art. 107(2) sends only trade exposures and default
+    fund contributions to the Chapter 6 Section 9 regime; "all other types of
+    exposures to a qualifying CCP" are treated as exposures to an institution,
+    so an **ordinary loan to a QCCP stays inside Art. 121(6)**. Copying the
+    pin's predicate would have exempted that loan too.
+  - **`original_currency` set alongside `currency` at the producers**
+    (`engine/ccr/pipeline_adapter.py`, `engine/sft/fccm.py`). Those rows never
+    pass the FX converter, so `currency` *is* the denomination there. The
+    shared `denomination_currency_expr` was deliberately **not** touched: it
+    has five other consumers and loosening it is RWA-*reducing*, able to grant
+    the Art. 114(4)/(7) 0% CGCB weight and the Art. 115(5) 20% to any row with
+    a null `original_currency`.
+
+  Number-neutral on every row in the estate — the carve-out's value leg is the
+  incumbent `risk_weight` — but the two QCCP rows now land on a named
+  `qccp_trade_exposure` limb instead of `UNKNOWN_FALLBACK`, which is the point:
+  the 2% is now a decision the engine makes rather than one it falls into.
+  `scripts/branch_census_baseline.json` records that move by hand, including
+  `UNKNOWN_FALLBACK` becoming dead — `--update-baseline` refuses to remove a
+  `reached` entry by design, and banking it silently is what the ratchet exists
+  to prevent.
+
 - **P1.317 — a Basel 3.1 equity leg was risk-weighted and then dropped, taking
   its RWEA out of every template.** An equity-class exposure booked on the
   **loans** (or contingents) table resolved a `risk_weight` of 2.50 — the

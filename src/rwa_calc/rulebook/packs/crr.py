@@ -758,7 +758,7 @@ ENTRIES: dict[str, RuleEntry] = {
         citation=Citation("CRR", "123", "single aggregate-exposure retail threshold check"),
     ),
     # CRR regulatory monetary thresholds: the EUR source amounts (CRR Art. 123/123A/
-    # 501/4(1)(146)) converted to GBP at the run's EUR/GBP rate. The pack holds the
+    # 501/142(1)(4)) converted to GBP at the run's EUR/GBP rate. The pack holds the
     # FX-INVARIANT EUR bases; the engine applies × eur_gbp_rate (a market input that
     # stays on config/RunConfig, NOT a regulatory value) at the read site via
     # engine/thresholds.py::regulatory_threshold. The `regulatory_thresholds_fx_derived`

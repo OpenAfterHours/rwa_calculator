@@ -464,11 +464,12 @@
     "PS1/26, paragraph 127",
     "CRR Art. 127"
   ],
-  "rwa_calc.engine.sa.risk_weights::_eca_meip_rw_expr": [
-    "CRR Art. 137"
-  ],
   "rwa_calc.engine.sa.risk_weights::_is_b31_subordinated_debt": [
     "PS1/26, paragraph 133"
+  ],
+  "rwa_calc.engine.sa.risk_weights::_leased_residual_rw_expr": [
+    "CRR Art. 137",
+    "CRR Art. 134"
   ],
   "rwa_calc.engine.sa.risk_weights::_prepare_risk_weight_lookup": [
     "PS1/26, paragraph 139",

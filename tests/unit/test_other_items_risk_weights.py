@@ -183,7 +183,17 @@ class TestCRROtherItemsRiskWeights:
         assert result["risk_weight"] == pytest.approx(1.0)
 
     def test_residual_lease_two_point_five_years(self, sa_calculator, crr_config):
-        """CRR Art. 134(7): Residual lease value, t=2.5 years → 1/2.5 = 40% RW."""
+        """CRR Art. 134(7): t=2.5 years rounds to 2 whole years → 1/2 = 50% RW.
+
+        Inverted by P1.289. This asserted 1/2.5 = 40%, i.e. it codified the
+        fractional divisor as the rule. Art. 134(7) says ``t`` is "the greater
+        of 1 and the **nearest number of whole years** of the lease remaining",
+        so 2.5 resolves to a whole-year count, not to 2.5.
+
+        2.5 is the tie case: neither 2 nor 3 is nearest, and the article does
+        not say which to take. It is resolved toward the higher risk weight,
+        so t=2 and RW=50% rather than t=3 and RW=33.3%.
+        """
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
@@ -192,7 +202,50 @@ class TestCRROtherItemsRiskWeights:
             entity_type="other_residual_lease",
             residual_maturity_years=2.5,
         )
-        assert result["risk_weight"] == pytest.approx(0.40)
+        assert result["risk_weight"] == pytest.approx(0.50)
+
+    @pytest.mark.parametrize(
+        ("years_remaining", "expected_rw"),
+        [
+            (1.49, 1.0),  # rounds to 1 — the worst case, 32.9pp understated before
+            (1.6, 0.50),  # rounds to 2
+            (2.4, 0.50),  # rounds down to 2
+            (2.6, 1.0 / 3.0),  # rounds up to 3 — the over-statement direction
+            (4.7, 0.20),  # rounds to 5
+        ],
+    )
+    def test_p1_289_residual_lease_divides_by_whole_years(
+        self, sa_calculator, crr_config, years_remaining, expected_rw
+    ):
+        """Art. 134(7) divides by whole years, so the weight is a step function.
+
+        Arrange: a leased-asset residual with a fractional number of years left.
+        Act: risk-weight it under CRR.
+        Assert: ``1/t`` with ``t`` the nearest whole year, floored at 1.
+
+        Before P1.289 the engine divided by the raw fraction, which errs in
+        **both** directions — 1.49 years returned 0.671 against a required 1.00
+        (a 32.9pp understatement) while 2.6 returned 0.385 against 0.333. The
+        cases below straddle three rounding boundaries so a fix that truncates,
+        or that always rounds up, fails on at least one of them: truncation
+        breaks 1.6 and 2.6, always-up breaks 1.49 and 2.4.
+
+        PS1/26 Art. 134(7) is word-for-word identical and carries a note that
+        it corresponds to CRR Art. 134, so no regime split applies — unlike
+        Art. 120, where the two frameworks genuinely differ on maturity basis.
+        """
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="other",
+            config=crr_config,
+            entity_type="other_residual_lease",
+            residual_maturity_years=years_remaining,
+        )
+        assert result["risk_weight"] == pytest.approx(expected_rw), (
+            f"P1.289: {years_remaining} years remaining must divide by the nearest "
+            f"whole year, not the fraction. Got {result['risk_weight']}."
+        )
 
     def test_residual_lease_sub_one_year_floors_to_one(self, sa_calculator, crr_config):
         """CRR Art. 134(7): Residual lease t < 1 year floors to 1 → 100% RW."""

@@ -83,7 +83,7 @@ Package version `0.3.25`. Resolved packs:
 | 132A | 0 | 0 | 0 | 0 | 2 | GAP |
 | 132B | 0 | 0 | 0 | 0 | 1 | GAP |
 | 133 | 2 | 3 | 5 | 2 | 13 | HIGH |
-| 134 | 2 | 10 | 3 | 2 | 3 | HIGH |
+| 134 | 3 | 10 | 3 | 2 | 3 | HIGH |
 | 135 | 1 | 0 | 3 | 0 | 0 | LOW |
 | 136 | 1 | 0 | 4 | 0 | 0 | LOW |
 | 137 | 3 | 2 | 5 | 0 | 9 | MEDIUM |
@@ -246,7 +246,7 @@ Package version `0.3.25`. Resolved packs:
 | 132A | 0 | 0 | 0 | 0 | 1 | GAP |
 | 132a | 0 | 0 | 0 | 0 | 3 | GAP |
 | 133 | 2 | 4 | 5 | 1 | 14 | HIGH |
-| 134 | 0 | 0 | 1 | 1 | 2 | UNCITED |
+| 134 | 0 | 0 | 2 | 1 | 2 | UNCITED |
 | 136 | 0 | 0 | 1 | 0 | 0 | UNCITED |
 | 138 | 0 | 0 | 1 | 0 | 0 | UNCITED |
 | 139 | 1 | 1 | 6 | 0 | 3 | MEDIUM |
@@ -321,7 +321,7 @@ These articles are named in `src/rwa_calc/` production source but carry no `@cit
 |---|---|---|---|---|---|
 | CRR 228 | 1 | 25 | 2 | — | — |
 | PS1/26 118 | 1 | 1 | 5 | — | CRR Art. 118 |
-| PS1/26 134 | 1 | 1 | 2 | — | CRR Art. 134 |
+| PS1/26 134 | 2 | 1 | 2 | — | CRR Art. 134 |
 | CRR 275 | 8 | 0 | 45 | yes | — |
 | CRR 272 | 11 | 0 | 27 | — | — |
 | CRR 295 | 3 | 0 | 18 | — | — |

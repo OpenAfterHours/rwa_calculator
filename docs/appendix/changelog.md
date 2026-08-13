@@ -320,6 +320,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per-instance fixing looks like from the outside.
 
 ### Fixed
+- **P1.289 — the leased-asset residual weight divided by a fractional year
+  count instead of whole years.** Art. 134(7), verbatim and word-for-word
+  identical in both regimes: *"the risk-weighted exposure amounts shall be
+  calculated as follows: `1/t * 100% * residual value`, where t is the greater
+  of 1 and the **nearest number of whole years** of the lease remaining."* The
+  engine divided by the raw fraction.
+
+  The error runs in **both** directions, and the larger side is the
+  understatement: a lease with 1.49 years remaining returned a 0.671 weight
+  against a required 1.00 — **32.9pp understated** — while 2.6 years returned
+  0.385 against 0.333. The weight is properly a step function, and dividing by
+  the fraction smooths away the steps.
+
+  Ties round **down**: 2.5 years resolves to `t=2` and a 50% weight rather than
+  `t=3` and 33.3%. At exactly one half neither whole year is "nearest" and the
+  article does not say which to take, so the tie is resolved toward the higher
+  risk weight. The expression uses `ceil(t - 0.5)` rather than a rounding
+  routine, because banker's rounding would send 2.5 to 2 but 3.5 to 4 —
+  conservative on one and not the other.
+
+  The remaining-term basis and the floor at 1 were already correct. Both
+  regime arms now share one expression: PS1/26 Art. 134(7) carries an explicit
+  note that it corresponds to CRR Art. 134, so unlike Art. 120 — where the two
+  frameworks genuinely differ on maturity basis — there is no divergence to
+  preserve here.
+
 - **P1.293 — a retail transactor that fails the regulatory-retail test took
   45% instead of 100%, a 55pp understatement.** PS1/26 Art. 123(3) prices a
   retail exposure on **two** properties, not one: *"(a) **regulatory retail

@@ -1547,7 +1547,8 @@
       "article": "134",
       "code_functions": [
         "rwa_calc.engine.sa.risk_weights::_apply_b31_risk_weight_overrides",
-        "rwa_calc.engine.sa.risk_weights::_apply_crr_risk_weight_overrides"
+        "rwa_calc.engine.sa.risk_weights::_apply_crr_risk_weight_overrides",
+        "rwa_calc.engine.sa.risk_weights::_leased_residual_rw_expr"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -1622,7 +1623,7 @@
       "code_functions": [
         "rwa_calc.engine.sa.risk_weights::_apply_b31_risk_weight_overrides",
         "rwa_calc.engine.sa.risk_weights::_apply_crr_risk_weight_overrides",
-        "rwa_calc.engine.sa.risk_weights::_eca_meip_rw_expr"
+        "rwa_calc.engine.sa.risk_weights::_leased_residual_rw_expr"
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
@@ -6937,6 +6938,7 @@
       ],
       "pack_entries": [],
       "source_files": [
+        "engine/sa/risk_weights.py",
         "rulebook/packs/common.py"
       ],
       "test_files": [

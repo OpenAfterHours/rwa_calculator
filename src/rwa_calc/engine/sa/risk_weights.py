@@ -451,6 +451,43 @@ def _apply_obligor_st_contamination_override(exposures: pl.LazyFrame) -> pl.Lazy
 
 
 @cites("CRR Art. 137")
+@cites("CRR Art. 134")
+def _leased_residual_rw_expr() -> pl.Expr:
+    """Art. 134(7): ``1/t`` where ``t`` is whole years, not a fraction.
+
+    Verbatim, and identical in both regimes — CRR Art. 134(7) (``crr.pdf``
+    PAGE_INDEX 131) and PS1/26 Art. 134(7) (``ps126app1.pdf`` PAGE_INDEX 68,
+    which carries the note "This rule corresponds to Article 134 of CRR as it
+    applied immediately before revocation by the Treasury"):
+
+        "the risk-weighted exposure amounts shall be calculated as follows:
+        1/t * 100 % * residual value, where t is the greater of 1 and the
+        **nearest number of whole years** of the lease remaining."
+
+    Three things the sentence fixes, all implemented here:
+
+    - ``t`` counts years **remaining**, not the original lease term, so the
+      column is ``residual_maturity_years``.
+    - ``t`` is the **nearest whole** number of years. Dividing by the raw
+      fraction is a both-direction misstatement: a lease with 1.49 years left
+      returns 0.671 against a required 1.00 (a 32.9pp **understatement**, the
+      worst case), while 2.6 years returns 0.385 against 0.333 (a 5.1pp
+      over-statement).
+    - ``t`` is floored at 1, so a lease inside its final year still takes 100%.
+
+    Ties are rounded **down**, i.e. 2.5 years resolves to t=2 and a 50% weight
+    rather than t=3 and 33.3%. At exactly one half neither whole year is
+    "nearest" and the article does not say which to take, so the tie is
+    resolved toward the higher risk weight. ``ceil(t - 0.5)`` expresses that
+    directly and avoids depending on the tie behaviour of a rounding routine —
+    banker's rounding would send 2.5 to 2 but 3.5 to 4, which is conservative
+    on one and not the other.
+    """
+    years = pl.col("residual_maturity_years").fill_null(1.0)
+    whole_years = (years - 0.5).ceil().clip(lower_bound=1.0)
+    return pl.lit(1.0) / whole_years
+
+
 def _eca_meip_rw_expr() -> pl.Expr:
     """Build Polars expression mapping ``cp_eca_score`` (0-7) to sovereign RW.
 
@@ -1237,7 +1274,7 @@ def _apply_b31_risk_weight_overrides(
         )
         .then(pl.lit(_SA_SHARED_RW["other_collection"]))
         .when((uc == "OTHER") & (pl.col("cp_entity_type").fill_null("") == "other_residual_lease"))
-        .then(pl.lit(1.0) / pl.col("residual_maturity_years").fill_null(1.0).clip(lower_bound=1.0))
+        .then(_leased_residual_rw_expr())
         .when(uc == "OTHER")
         .then(pl.lit(_SA_SHARED_RW["other_default"]))
         # Equity (Art. 133(3)): 250% — full equity treatment (CIU,
@@ -1434,7 +1471,7 @@ def _apply_crr_risk_weight_overrides(
         )
         .then(pl.lit(_SA_SHARED_RW["other_collection"]))
         .when((uc == "OTHER") & (pl.col("cp_entity_type").fill_null("") == "other_residual_lease"))
-        .then(pl.lit(1.0) / pl.col("residual_maturity_years").fill_null(1.0).clip(lower_bound=1.0))
+        .then(_leased_residual_rw_expr())
         .when(uc == "OTHER")
         .then(pl.lit(_SA_SHARED_RW["other_default"]))
         # Equity (Art. 133(2)): flat 100%.

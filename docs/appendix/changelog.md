@@ -320,6 +320,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per-instance fixing looks like from the outside.
 
 ### Fixed
+- **P1.294 — the whole-loan residential-mortgage excess took a flat 75%
+  regardless of who the borrower was.** CRR Art. 124(1), first sub-paragraph,
+  second sentence: *"The part of the exposure that exceeds the mortgage value
+  of the immovable property shall be assigned the risk weight applicable to the
+  unsecured exposures of the counterparty involved."* That is an open referral
+  to the obligor's own class ladder. The engine blended the portion above the
+  Art. 125(2)(d) 80% limit at a fixed parameter with **no obligor input at
+  all** — neither `qualifies_as_retail`, nor `cqs`, nor `cp_is_natural_person`
+  — so every borrower received the same blended weight. Measured at LTV 1.00,
+  the engine returned 0.4300 for all eight obligor shapes tested.
+
+  The excess now resolves through the counterparty's own unsecured weight
+  (`engine/sa/re_residual_rw.py`). At LTV 1.00: a natural person meeting
+  Art. 123 keeps **0.4300** — the case that was already correct — while a
+  natural person failing it takes 0.4800, and a corporate takes its Art. 122
+  ladder weight: **0.3200** at CQS 1, 0.3800 at CQS 2, 0.4800 at CQS 3-4,
+  **0.5800** at CQS 5-6.
+
+  **Direction is two-way**, which the item was not filed as: the excess moves
+  down for a CQS 1-2 corporate and up for a lower-rated one or a non-qualifying
+  individual. A row carrying no obligor information now falls to the
+  conservative 100% limb rather than the old flat 75%.
+
+  Scope is the **whole-loan** path only. The real-estate splitter already
+  implemented Art. 124(1) correctly on its residual leg — it keeps the original
+  counterparty class so the standard corporate/retail path applies — and
+  `re_split/flagging.py` excludes pre-classified mortgage rows from the
+  splitter, which is what kept the whole-loan blend live and wrong. Neither
+  neighbouring implementation was safe to copy: the commercial blend three
+  lines above resolves through the corporate ladder unconditionally (right for
+  CRE, wrong for RRE), and the Basel 3.1 arm's Art. 124L table carries an 85%
+  other-SME band and a social-housing floor that are PS1/26-only.
+
 - **P1.330 — the Art. 197 collateral-eligibility gate was not applied on the
   Art. 222 Financial Collateral Simple Method path.** `crm/simple_method.py`
   filtered on the firm-supplied `is_eligible_financial_collateral` attestation

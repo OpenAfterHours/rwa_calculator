@@ -1402,13 +1402,26 @@ class TestCRRRegression:
         sa_calculator: SACalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """CRR residential mortgage LTV 100% → split treatment (unchanged)."""
+        """CRR residential mortgage LTV 100% → split treatment (unchanged).
+
+        The obligor is stated explicitly. Before P1.294 the excess above the
+        Art. 125(2)(d) 80% limit took a flat 75% whatever the counterparty was,
+        so this row asserted 43% while passing no obligor information at all —
+        i.e. it pinned the obligor-INVARIANCE that was the defect, by omission.
+        Art. 124(1) sends the excess to "the risk weight applicable to the
+        unsecured exposures of the counterparty involved", so a flagless row now
+        correctly falls to the conservative 100% limb (48%). Naming the obligor
+        keeps this test asserting the thing it means — the 80/20 LTV split — at
+        a value that is now a deliberate answer rather than an accident.
+        """
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
             exposure_class="residential_mortgage",
             ltv=Decimal("1.00"),
             config=crr_config,
+            cp_is_natural_person=True,
+            qualifies_as_retail=True,
         )
 
         expected_rw = 0.80 * 0.35 + 0.20 * 0.75  # 43%

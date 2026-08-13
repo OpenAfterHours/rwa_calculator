@@ -537,7 +537,10 @@ class TestResidentialMortgageRiskWeights:
         crr_config: CalculationConfig,
     ) -> None:
         """LTV > 80% should get split treatment."""
-        # At 100% LTV: 80% at 35%, 20% at 75%
+        # At 100% LTV: 80% at 35%, 20% at the obligor's Art. 124(1) unsecured RW.
+        # The obligor is stated explicitly (natural person meeting Art. 123), so
+        # the excess resolves to Art. 123's 75% rather than to whichever limb a
+        # flagless row happens to fall into.
         # Weighted: (0.80 × 0.35) + (0.20 × 0.75) = 0.28 + 0.15 = 0.43
         result = calculate_single_sa_exposure(
             sa_calculator,
@@ -545,6 +548,8 @@ class TestResidentialMortgageRiskWeights:
             exposure_class="residential_mortgage",
             ltv=Decimal("1.00"),
             config=crr_config,
+            cp_is_natural_person=True,
+            qualifies_as_retail=True,
         )
 
         expected_rw = 0.80 * 0.35 + 0.20 * 0.75

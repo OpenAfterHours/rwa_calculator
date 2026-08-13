@@ -1025,6 +1025,7 @@
         "engine/irb/guarantee.py",
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/guarantor_rw.py",
+        "engine/sa/re_residual_rw.py",
         "engine/sa/risk_weights.py",
         "rulebook/packs/crr.py"
       ],
@@ -1052,6 +1053,7 @@
         "tests/acceptance/crr/test_p1_270_art_194_own_issue_collateral.py",
         "tests/acceptance/crr/test_p1_271_art_198_non_main_index_equity.py",
         "tests/acceptance/crr/test_p1_274_art_218_credit_linked_note.py",
+        "tests/acceptance/crr/test_p1_294_art_124_1_unsecured_counterparty_rw.py",
         "tests/acceptance/crr/test_p1_30e_art_234_partial_protection_tranching.py",
         "tests/acceptance/crr/test_p1_96_art_197_covered_bond_eligibility.py",
         "tests/acceptance/crr/test_p2_46_ppu_provenance_corep.py",
@@ -1129,6 +1131,7 @@
         "engine/aggregator/aggregator.py",
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/guarantor_rw.py",
+        "engine/sa/re_residual_rw.py",
         "engine/sa/risk_weights.py",
         "engine/stages/classify/attributes.py",
         "engine/stages/hierarchy/enrich.py",
@@ -1139,6 +1142,7 @@
         "rulebook/packs/crr.py"
       ],
       "test_files": [
+        "tests/acceptance/crr/test_p1_294_art_124_1_unsecured_counterparty_rw.py",
         "tests/acceptance/crr/test_p2_17_crr_payroll_loan_35pct_rw.py",
         "tests/acceptance/crr/test_scenario_crr_a_sa.py",
         "tests/conformance/portfolios.py",
@@ -1186,6 +1190,7 @@
       "source_files": [
         "contracts/edges.py",
         "data/schemas.py",
+        "engine/sa/re_residual_rw.py",
         "engine/sa/risk_weights.py",
         "engine/stages/re_split/__init__.py",
         "engine/stages/re_split/carriers.py",
@@ -1194,6 +1199,7 @@
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_181_art_126_cre_proportion_split.py",
+        "tests/acceptance/crr/test_p1_294_art_124_1_unsecured_counterparty_rw.py",
         "tests/acceptance/reporting/test_re_split_template_coverage.py",
         "tests/fixtures/p1_181/p1_181.py",
         "tests/fixtures/reporting_re_split_portfolio.py",
@@ -1231,6 +1237,7 @@
         "domain/enums.py",
         "engine/pipeline.py",
         "engine/sa/crr_risk_weight_tables.py",
+        "engine/sa/re_residual_rw.py",
         "engine/sa/risk_weights.py",
         "engine/stages/re_split/__init__.py",
         "engine/stages/re_split/carriers.py",
@@ -1242,6 +1249,7 @@
         "rulebook/packs/crr.py"
       ],
       "test_files": [
+        "tests/acceptance/crr/test_p1_294_art_124_1_unsecured_counterparty_rw.py",
         "tests/acceptance/crr/test_scenario_crr_a_sa.py",
         "tests/acceptance/reporting/test_re_split_template_coverage.py",
         "tests/contracts/test_collapse_additivity.py",
@@ -6693,11 +6701,13 @@
         "b31_rre_residual_rw_social_housing_floor@b31"
       ],
       "source_files": [
+        "engine/sa/re_residual_rw.py",
         "engine/stages/re_split/carriers.py",
         "engine/stages/re_split/splitter.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_142_three_property_income_dependent.py",
+        "tests/acceptance/crr/test_p1_294_art_124_1_unsecured_counterparty_rw.py",
         "tests/acceptance/reporting/test_re_split_template_coverage.py",
         "tests/fixtures/p1_142/p1_142.py",
         "tests/fixtures/reporting_re_split_portfolio.py",

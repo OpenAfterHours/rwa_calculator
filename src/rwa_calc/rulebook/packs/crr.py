@@ -1196,6 +1196,15 @@ ENTRIES: dict[str, RuleEntry] = {
             "rw_low_ltv": Decimal("0.35"),
             "rw_high_ltv": Decimal("0.75"),
         },
+        # ``rw_high_ltv`` is NOT an Art. 125 weight — Art. 125 states no weight
+        # for the excess at all. It is Art. 124(1)'s referral ("the risk weight
+        # applicable to the unsecured exposures of the counterparty involved")
+        # resolved at Art. 123's regulatory-retail 75%, retained here as the
+        # retail limb of the P1.294 obligor ladder in
+        # ``engine/sa/re_residual_rw.py``. Kept as a source comment rather than
+        # in the ``Citation`` description because that description renders into
+        # ``docs/data-model/regulatory-tables.md`` and the generated skill
+        # fragments, where a sentence of commentary does not belong.
         citation=Citation("CRR", "125", "residential mortgage LTV<=80% 35% / excess 75%"),
     ),
     "commercial_re_params": FormulaParams(

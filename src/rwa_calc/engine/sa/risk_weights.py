@@ -118,6 +118,7 @@ from rwa_calc.engine.sa.jurisdiction import (
     pse_jurisdiction_not_permitted_expr,
     pse_short_term_eligible_expr,
 )
+from rwa_calc.engine.sa.re_residual_rw import crr_art_124_1_unsecured_cp_rw_expr
 from rwa_calc.engine.sa.rgla import is_rgla_sovereign_expr, rgla_sovereign_rw_expr
 from rwa_calc.engine.sa.sovereign_derived import (
     cqs_table_lookup_expr,
@@ -251,10 +252,12 @@ _ECA_MEIP_RW = lookup_float_map(_CRR_PACK.lookup("eca_meip_risk_weights"))
 # CRR-specific scalars (Art. 112-134).
 _SA_CRR_RW: dict[str, float] = {
     "high_risk": scalar_value(_CRR_PACK.scalar_param("high_risk_rw")),
-    # Residential mortgage loan-splitting (Art. 125)
+    # Residential mortgage loan-splitting (Art. 125). ``rw_high_ltv`` is NOT
+    # read here: the weight on the above-threshold part is Art. 124(1)'s
+    # referral to the counterparty (see engine/sa/re_residual_rw.py), which
+    # resolves to that 75% only for an Art. 123 retail obligor.
     "resi_ltv_threshold": float(RESIDENTIAL_MORTGAGE_PARAMS["ltv_threshold"]),
     "resi_rw_low": float(RESIDENTIAL_MORTGAGE_PARAMS["rw_low_ltv"]),
-    "resi_rw_high": float(RESIDENTIAL_MORTGAGE_PARAMS["rw_high_ltv"]),
     # Commercial RE (Art. 126)
     "cre_ltv_threshold": float(COMMERCIAL_RE_PARAMS["ltv_threshold"]),
     "cre_rw_low": float(COMMERCIAL_RE_PARAMS["rw_low_ltv"]),
@@ -734,6 +737,12 @@ def _crr_append_real_estate_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThe
         CORPORATE_RISK_WEIGHTS,
         pl.lit(float(CORPORATE_RISK_WEIGHTS[CQS.UNRATED])),
     )
+    # CRR Art. 124(1) again, on the Art. 125 RRE blend: the part above the
+    # Art. 125(2)(d) 80% limit takes the counterparty's unsecured RW. Unlike
+    # the CRE residual above it resolves the obligor's OWN ladder (Art. 123
+    # retail ahead of Art. 122 corporate) — an RRE obligor is usually a natural
+    # person, so the unconditional corporate lookup is wrong here.
+    resi_residual_rw = crr_art_124_1_unsecured_cp_rw_expr()
     return (
         # Commercial RE must precede residential — see is_commercial_re_class.
         # CRR Art. 126: LTV + income cover.
@@ -752,9 +761,7 @@ def _crr_append_real_estate_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThe
             .then(pl.lit(_SA_CRR_RW["resi_rw_low"]))
             .otherwise(
                 _SA_CRR_RW["resi_rw_low"] * _SA_CRR_RW["resi_ltv_threshold"] / ltv_safe
-                + _SA_CRR_RW["resi_rw_high"]
-                * (ltv_safe - _SA_CRR_RW["resi_ltv_threshold"])
-                / ltv_safe
+                + resi_residual_rw * (ltv_safe - _SA_CRR_RW["resi_ltv_threshold"]) / ltv_safe
             )
         )
     )

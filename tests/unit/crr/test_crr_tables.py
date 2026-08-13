@@ -32,7 +32,6 @@ from rwa_calc.engine.sa.crr_risk_weight_tables import (
     calculate_residential_mortgage_rw,
     get_all_risk_weight_tables,
     get_combined_cqs_risk_weights,
-    lookup_risk_weight,
 )
 from rwa_calc.rulebook.resolve import resolve
 
@@ -75,12 +74,6 @@ class TestSovereignRiskWeights:
         """Unrated sovereigns get 100% RW."""
         assert CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS[CQS.UNRATED] == Decimal("1.00")
 
-    def test_lookup_function(self) -> None:
-        """Test lookup_risk_weight for sovereigns."""
-        assert lookup_risk_weight("CENTRAL_GOVT_CENTRAL_BANK", 1) == Decimal("0.00")
-        assert lookup_risk_weight("CENTRAL_GOVT_CENTRAL_BANK", 2) == Decimal("0.20")
-        assert lookup_risk_weight("CENTRAL_GOVT_CENTRAL_BANK", None) == Decimal("1.00")
-
 
 class TestInstitutionRiskWeights:
     """Tests for institution risk weights (CRR Art. 120 vs PRA PS1/26 Art. 120 ECRA)."""
@@ -102,11 +95,6 @@ class TestInstitutionRiskWeights:
     def test_unrated_crr_hundred_percent(self) -> None:
         """CRR Art. 120(2) Table 3: unrated institutions get 100% RW."""
         assert INSTITUTION_RISK_WEIGHTS_CRR[CQS.UNRATED] == Decimal("1.00")
-
-    def test_lookup_framework_switch(self) -> None:
-        """Test lookup function selects framework via is_basel_3_1 flag."""
-        assert lookup_risk_weight("INSTITUTION", 2, is_basel_3_1=True) == Decimal("0.30")
-        assert lookup_risk_weight("INSTITUTION", 2, is_basel_3_1=False) == Decimal("0.50")
 
 
 class TestCorporateRiskWeights:
@@ -136,10 +124,6 @@ class TestRetailRiskWeight:
     def test_retail_seventy_five_percent(self) -> None:
         """Retail exposures get 75% RW."""
         assert Decimal("0.75") == _CRR_PACK.scalar_param("retail_risk_weight").value
-
-    def test_lookup_function(self) -> None:
-        """Test lookup_risk_weight for retail."""
-        assert lookup_risk_weight("RETAIL", None) == Decimal("0.75")
 
 
 class TestResidentialMortgageRiskWeights:

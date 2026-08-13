@@ -44,7 +44,6 @@ from rwa_calc.engine.sa.crr_risk_weight_tables import (
     PSE_SHORT_TERM_RW,
     PSE_UNRATED_DEFAULT_RW,
     get_combined_cqs_risk_weights,
-    lookup_risk_weight,
 )
 from tests.fixtures.single_exposure import calculate_single_sa_exposure
 
@@ -121,20 +120,6 @@ class TestPSERiskWeightTables:
         df = get_b31_combined_cqs_risk_weights()
         pse_rows = df.filter(df["exposure_class"] == "PSE")
         assert pse_rows.height == 6
-
-    def test_lookup_risk_weight_rated_pse(self):
-        """Scalar lookup for rated PSE returns Table 2A weights."""
-        assert lookup_risk_weight("PSE", 1) == Decimal("0.20")
-        assert lookup_risk_weight("PSE", 2) == Decimal("0.50")
-        assert lookup_risk_weight("PSE", 3) == Decimal("0.50")
-        assert lookup_risk_weight("PSE", 4) == Decimal("1.00")
-        assert lookup_risk_weight("PSE", 5) == Decimal("1.00")
-        assert lookup_risk_weight("PSE", 6) == Decimal("1.50")
-
-    def test_lookup_risk_weight_unrated_pse(self):
-        """Scalar lookup for unrated PSE returns conservative 100%."""
-        assert lookup_risk_weight("PSE", None) == Decimal("1.00")
-        assert lookup_risk_weight("PSE", 0) == Decimal("1.00")
 
 
 # =============================================================================

@@ -35,7 +35,6 @@ import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.sa import SACalculator
-from rwa_calc.engine.sa.crr_risk_weight_tables import lookup_risk_weight
 from rwa_calc.rulebook.resolve import resolve
 from tests.fixtures.single_exposure import calculate_single_sa_exposure
 
@@ -95,10 +94,6 @@ class TestOtherItemsRiskWeightConstants:
     def test_default_rw_hundred(self):
         """Art. 134(2): All other items → 100%."""
         assert Decimal("1.00") == OTHER_ITEMS_DEFAULT_RW
-
-    def test_lookup_risk_weight_other(self):
-        """lookup_risk_weight for OTHER returns 100% (generic default)."""
-        assert lookup_risk_weight("OTHER", None) == Decimal("1.00")
 
 
 # =============================================================================

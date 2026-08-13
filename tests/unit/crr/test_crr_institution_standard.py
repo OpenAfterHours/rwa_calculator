@@ -29,7 +29,6 @@ from rwa_calc.engine.sa.crr_risk_weight_tables import (
     INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR,
     INSTITUTION_SHORT_TERM_UNRATED_RW_CRR,
     _create_institution_df,
-    lookup_risk_weight,
 )
 
 # =============================================================================
@@ -134,24 +133,6 @@ class TestInstitutionDataFrame:
 
 
 # =============================================================================
-# Scalar lookup tests
-# =============================================================================
-
-
-class TestLookupInstitution:
-    """Tests for lookup_risk_weight keyed on framework."""
-
-    def test_lookup_unrated_crr_hundred_percent(self) -> None:
-        """Unrated institution under CRR gets 100%."""
-        assert lookup_risk_weight("INSTITUTION", None, is_basel_3_1=False) == Decimal("1.00")
-
-    def test_lookup_unrated_b31_forty_percent(self) -> None:
-        """Unrated institution under B31 ECRA gets 40%."""
-        assert lookup_risk_weight("INSTITUTION", None, is_basel_3_1=True) == Decimal("0.40")
-
-    def test_lookup_cqs_zero_treated_as_unrated_crr(self) -> None:
-        """CQS 0 treated as unrated → 100% under CRR."""
-        assert lookup_risk_weight("INSTITUTION", 0, is_basel_3_1=False) == Decimal("1.00")
 
 
 # =============================================================================

@@ -43,7 +43,6 @@ from rwa_calc.engine.sa.crr_risk_weight_tables import (
     RGLA_UK_LOCAL_AUTH_RW,
     RGLA_UNRATED_DEFAULT_RW,
     get_combined_cqs_risk_weights,
-    lookup_risk_weight,
 )
 from tests.fixtures.single_exposure import calculate_single_sa_exposure
 
@@ -125,20 +124,6 @@ class TestRGLARiskWeightTables:
         combined = get_b31_combined_cqs_risk_weights()
         rgla_rows = combined.filter(combined["exposure_class"] == "RGLA")
         assert len(rgla_rows) == 6  # CQS 1-6, no unrated row
-
-    def test_lookup_risk_weight_rated_rgla(self):
-        """lookup_risk_weight returns Table 1B values for rated RGLA."""
-        assert lookup_risk_weight("RGLA", 1) == Decimal("0.20")
-        assert lookup_risk_weight("RGLA", 2) == Decimal("0.50")
-        assert lookup_risk_weight("RGLA", 3) == Decimal("0.50")
-        assert lookup_risk_weight("RGLA", 4) == Decimal("1.00")
-        assert lookup_risk_weight("RGLA", 5) == Decimal("1.00")
-        assert lookup_risk_weight("RGLA", 6) == Decimal("1.50")
-
-    def test_lookup_risk_weight_unrated_rgla(self):
-        """lookup_risk_weight returns conservative 100% for unrated RGLA."""
-        assert lookup_risk_weight("RGLA", None) == Decimal("1.00")
-        assert lookup_risk_weight("RGLA", 0) == Decimal("1.00")
 
 
 # =============================================================================

@@ -394,6 +394,7 @@
         "tests/unit/rulebook/test_provisions_features.py",
         "tests/unit/test_ccf.py",
         "tests/unit/test_corep_annex1_row_discrimination.py",
+        "tests/unit/test_p1_265_lower_of_ccf_is_b31_only.py",
         "tests/unit/test_r1_negative_amount_dq.py"
       ],
       "watchfire_index_gap": false
@@ -5816,7 +5817,8 @@
         "tests/properties/test_source_conservation.py",
         "tests/unit/reporting/corep/test_c07_ccf_buckets.py",
         "tests/unit/rulebook/test_provisions_features.py",
-        "tests/unit/test_ccf.py"
+        "tests/unit/test_ccf.py",
+        "tests/unit/test_p1_265_lower_of_ccf_is_b31_only.py"
       ],
       "watchfire_index_gap": false
     },

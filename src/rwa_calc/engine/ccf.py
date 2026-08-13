@@ -509,29 +509,41 @@ class CCFCalculator:
             exposures = self._apply_uk_residential_mortgage_ccf(exposures)
             exposures = self._apply_purchased_receivable_ccf(exposures)
 
-        # Art. 111(1)(c): commitment-to-issue lower-of rule.
-        # When underlying_risk_type is specified, cap CCFs at the underlying item's CCF.
-        # "the lower of (i) the CCF applicable to the underlying OBS item and
-        #  (ii) the CCF applicable to the commitment type"
-        has_underlying = pl.col("underlying_risk_type").fill_null("").str.len_chars() > 0
-        underlying_sa = sa_ccf_expression("underlying_risk_type", is_basel_3_1=is_b31)
-        exposures = exposures.with_columns(
-            pl.when(has_underlying)
-            .then(pl.min_horizontal(pl.col("_sa_ccf_from_risk_type"), underlying_sa))
-            .otherwise(pl.col("_sa_ccf_from_risk_type"))
-            .alias("_sa_ccf_from_risk_type"),
-            pl.when(has_underlying)
-            .then(
-                pl.min_horizontal(
-                    pl.col("_firb_ccf_from_risk_type"),
-                    sa_ccf_expression("underlying_risk_type", is_basel_3_1=True)
-                    if is_b31
-                    else _firb_ccf_for_col("underlying_risk_type"),
-                )
+        # PS1/26 Art. 111(1)(c): commitment-to-issue lower-of rule — "the lower
+        # of (i) the CCF applicable to the underlying OBS item and (ii) the CCF
+        # applicable to the commitment type".
+        #
+        # BASEL 3.1 ONLY. CRR Art. 111(1) has no such provision: it lists the
+        # four percentages and nothing else — "(a) 100 % if it is a full-risk
+        # item; (b) 50 % ... medium-risk; (c) 20 % ... medium/low-risk; (d) 0 %
+        # ... low-risk", followed by "The off-balance sheet items ... shall be
+        # assigned to risk categories as indicated in Annex I" and the Art. 223
+        # volatility-adjustment sentence. Applying the cap under CRR let a
+        # commitment to issue a low-risk item drop a full-risk commitment from
+        # 100% straight to 0% on the strength of a rule that regime does not
+        # contain (P1.265).
+        #
+        # ⚠ The reference is a genuine trap: PS1/26 Art. 111(1)(c) IS the
+        # lower-of rule, while CRR Art. 111(1)(c) is "20 % if it is a
+        # medium/low-risk item". Same address, unrelated provisions — do not
+        # read a CRR citation of 111(1)(c) as authority for this cap.
+        #
+        # Gated on the ``firb_uses_sa_ccf`` pack Feature (the same carrier the
+        # Table A1 overrides above use) rather than on a config regime flag,
+        # per arch_check check 17.
+        if is_b31:
+            has_underlying = pl.col("underlying_risk_type").fill_null("").str.len_chars() > 0
+            underlying_sa = sa_ccf_expression("underlying_risk_type", is_basel_3_1=True)
+            exposures = exposures.with_columns(
+                pl.when(has_underlying)
+                .then(pl.min_horizontal(pl.col("_sa_ccf_from_risk_type"), underlying_sa))
+                .otherwise(pl.col("_sa_ccf_from_risk_type"))
+                .alias("_sa_ccf_from_risk_type"),
+                pl.when(has_underlying)
+                .then(pl.min_horizontal(pl.col("_firb_ccf_from_risk_type"), underlying_sa))
+                .otherwise(pl.col("_firb_ccf_from_risk_type"))
+                .alias("_firb_ccf_from_risk_type"),
             )
-            .otherwise(pl.col("_firb_ccf_from_risk_type"))
-            .alias("_firb_ccf_from_risk_type"),
-        )
 
         # A-IRB CCF: use modelled value, with Basel 3.1 restrictions
         ccf_modelled_expr = pl.col("ccf_modelled").cast(pl.Float64, strict=False)

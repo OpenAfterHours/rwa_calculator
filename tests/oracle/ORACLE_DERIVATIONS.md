@@ -782,6 +782,33 @@ pension assignment weight.
 **Regulation:** Art. 123(4) — 35%.
 **Arithmetic:** `RW = 0.35`; `RWA = 350,000.00`.
 
+## ORC-283 — SA transactor that is NOT regulatory retail (PS1/26)
+
+**Inputs:** EAD £1,000,000; natural person; `is_qrre_transactor = True`; the
+Art. 123A conditions are **not** met.
+**Regulation:** Art. 123(3)(c) — 100%.
+
+Art. 123(3)(a) assigns 45% to "**regulatory retail exposures that are**
+transactor exposures". Qualification under Art. 123A and the transactor
+property are **both** required; the transactor property alone does not earn the
+rate. Art. 123(3)(c) then sweeps up "all other retail exposures that do not
+qualify as regulatory retail exposures" at 100%.
+
+This is the fourth corner of the (`qualifies_as_retail` × `is_qrre_transactor`)
+square. ORC-061 covers (True, False) → 75%, ORC-062 (True, True) → 45%, ORC-063
+(False, False) → 100%; **(False, True) was the only combination the estate did
+not carry**, on either side of the engine. The engine returned 45% here — a
+55pp understatement — because its transactor branch was ordered ahead of the
+non-regulatory-retail branch, making the 100% limb unreachable for any
+transactor row (P1.293).
+
+Note the rule keys on Art. 123A qualification, **not** on the QRRE exposure
+class: QRRE is an IRB construct (Art. 147(5A)) and Art. 123 does not mention
+it, so this oracle is stated for a `retail_qrre` row deliberately — the same
+answer is owed to `retail_other` and `retail_sme`.
+
+**Arithmetic:** `RW = 1.00`; `RWA = 1,000,000.00`.
+
 ### Real estate (Art. 124F–124L)
 
 Art. 124F(1): a regulatory residential real estate exposure **not** materially

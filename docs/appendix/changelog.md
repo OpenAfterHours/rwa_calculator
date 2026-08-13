@@ -320,6 +320,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per-instance fixing looks like from the outside.
 
 ### Fixed
+- **P1.293 — a retail transactor that fails the regulatory-retail test took
+  45% instead of 100%, a 55pp understatement.** PS1/26 Art. 123(3) prices a
+  retail exposure on **two** properties, not one: *"(a) **regulatory retail
+  exposures that are transactor exposures** shall be assigned a risk weight of
+  45%; (b) regulatory retail exposures that are not transactor exposures …
+  75%; and (c) **all other retail exposures that do not qualify as regulatory
+  retail exposures shall be assigned a risk weight of 100%**."* Art. 123A
+  qualification gates the 45% and the 75% alike, and only qualification
+  separates them from the 100%.
+
+  The engine ordered the transactor branch **ahead** of the
+  non-regulatory-retail branch, so the 100% limb was unreachable for any row
+  carrying `is_qrre_transactor` — it took 45% whether or not it qualified.
+  Measured across `RETAIL_QRRE`, `RETAIL_OTHER` and `RETAIL_SME`: 0.45 where
+  1.00 is due. Real-estate rows were never affected; the RE branches are
+  appended ahead of the retail block and first match wins, which is exactly
+  Art. 123(2) *"Retail exposures shall exclude real estate exposures"*.
+
+  **The gate is `qualifies_as_retail`, deliberately not
+  `exposure_class == RETAIL_QRRE`.** Art. 123 contains no QRRE concept — QRRE
+  is an IRB construct (Art. 147(5A)) — and gating on the class would have been
+  wrong in both directions: it would leave `RETAIL_OTHER`/`RETAIL_SME` rows at
+  the wrong 45%, and it would push to 75% every partially-drawn credit card
+  that P1.320 misclassifies into `RETAIL_OTHER`, whose 45% is correct precisely
+  because those rows **do** qualify as regulatory retail. Both limbs are pinned.
+
+  The estate had walked around this cell on both sides — one test set
+  `qualifies_as_retail=False` with the transactor flag **off**, another set the
+  flag **on** with qualification **true**, and the oracle carried three of the
+  four combinations. The missing fourth corner is now registered as **ORC-283**.
+  Three further tests asserted the transactor rate while passing no
+  qualification at all; each now names it, so they assert a deliberate value
+  rather than relying on the bypass that was the defect.
+
 - **P1.294 — the whole-loan residential-mortgage excess took a flat 75%
   regardless of who the borrower was.** CRR Art. 124(1), first sub-paragraph,
   second sentence: *"The part of the exposure that exceeds the mortgage value

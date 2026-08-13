@@ -401,6 +401,20 @@ def retail() -> list[dict[str, Any]]:
             {**_NATURAL_PERSON, "qualifies_as_retail": False, "is_qrre_transactor": False},
         ),
         _sa(
+            "ORC-283",
+            "retail_qrre",
+            "PS1/26 Art. 123(3)(c): a TRANSACTOR that does not qualify as a "
+            "regulatory retail exposure -> 100% RW. Art. 123(3)(a) reserves the "
+            "45% for 'regulatory retail exposures that ARE transactor exposures', "
+            "so the transactor property alone does not earn it; (c) sweeps up "
+            "'all other retail exposures that do not qualify'. This is the fourth "
+            "corner of the (qualifies x transactor) square and was the only one "
+            "the estate did not carry -- the engine returned 45% here until "
+            "P1.293, a 55pp understatement",
+            RETAIL_OTHER_RW,
+            {**_NATURAL_PERSON, "qualifies_as_retail": False, "is_qrre_transactor": True},
+        ),
+        _sa(
             "ORC-064",
             "retail_other",
             "PS1/26 Art. 123(4): pension / salary assignment loan meeting points (a)-(d) -> 35% RW",

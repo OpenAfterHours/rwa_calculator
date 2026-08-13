@@ -224,7 +224,7 @@ Package version `0.3.25`. Resolved packs:
 | 122 | 2 | 7 | 7 | 5 | 42 | HIGH |
 | 122A | 0 | 1 | 3 | 0 | 3 | MEDIUM |
 | 122B | 0 | 0 | 1 | 0 | 2 | UNCITED |
-| 123 | 1 | 4 | 3 | 4 | 15 | HIGH |
+| 123 | 1 | 4 | 3 | 5 | 15 | HIGH |
 | 123A | 1 | 1 | 5 | 0 | 12 | MEDIUM |
 | 123B | 1 | 5 | 9 | 0 | 12 | MEDIUM |
 | 124 | 2 | 1 | 9 | 0 | 8 | MEDIUM |

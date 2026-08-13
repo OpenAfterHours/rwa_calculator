@@ -525,29 +525,49 @@ def _b31_append_high_risk_branch(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
 def _b31_append_retail_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
     """Append Basel 3.1 retail-class risk-weight branches (Art. 123).
 
-    Covers the regulatory retail class only (uc contains "RETAIL"):
-    - QRRE transactor: 45% (Art. 123(2)).
+    Covers the retail classes (uc contains "RETAIL"):
+    - Transactor: 45% (Art. 123(3)(a)).
     - Payroll/pension loans: 35% (Art. 123(4)).
     - Non-regulatory retail (fails Art. 123A criteria): 100% (Art. 123(3)(c)).
-    - Regulatory retail (non-mortgage): 75% flat.
+    - Regulatory retail (non-mortgage): 75% flat (Art. 123(3)(b)).
+
+    Art. 123(3) prices the exposure on TWO properties, not one: (a) and (b)
+    both open "regulatory retail exposures that are/are not transactor
+    exposures", and (c) sweeps up "all other retail exposures that do not
+    qualify as regulatory retail exposures". So Art. 123A qualification gates
+    the 45% and the 75% alike, and only qualification separates them from the
+    100%. Gating the 45% on the transactor property ALONE made (c) unreachable
+    for any transactor row — a 55pp understatement (P1.293).
+
+    The gate is deliberately NOT ``exposure_class == RETAIL_QRRE``: "transactor"
+    is an Art. 123 property of the exposure, while QRRE is an IRB construct
+    (Art. 147(5A)), and a partially-drawn card classified RETAIL_OTHER is still
+    owed the 45% when it qualifies as regulatory retail.
 
     The SME-managed-as-retail and corporate-SME branches stay in the parent
     override (they gate on SME class membership rather than RETAIL).
     """
+    # Art. 123A qualification, shared by the Art. 123(3)(a) 45% gate and the
+    # Art. 123(3)(c) 100% limb so the two cannot drift apart (and so the pair
+    # costs one ``fill_null`` site rather than two).
+    qualifies = pl.col("qualifies_as_retail").fill_null(False)
     return (
-        # QRRE transactor: 45% (Art. 123(2)).
+        # Transactor: 45% (Art. 123(3)(a)) — for "regulatory retail exposures
+        # that ARE transactor exposures", hence conjoined with Art. 123A.
         chain.when(
-            uc.str.contains("RETAIL", literal=True) & pl.col("is_qrre_transactor").fill_null(False)
+            uc.str.contains("RETAIL", literal=True)
+            & pl.col("is_qrre_transactor").fill_null(False)
+            & qualifies
         )
         .then(pl.lit(_SA_B31_RW["qrre_transactor"]))
-        # Payroll/pension loans: 35% (Art. 123(4)).
+        # Payroll/pension loans: 35% (Art. 123(4)). Ordering against the
+        # transactor branch above is untouched here and audited by P1.350 —
+        # Art. 123(3) opens "Subject to paragraph 4", which reads as payroll
+        # outranking the whole paragraph-3 ladder rather than sitting inside it.
         .when(uc.str.contains("RETAIL", literal=True) & pl.col("is_payroll_loan").fill_null(False))
         .then(pl.lit(_SA_B31_RW["payroll"]))
         # Non-regulatory retail (fails Art. 123A criteria): 100%.
-        .when(
-            uc.str.contains("RETAIL", literal=True)
-            & (pl.col("qualifies_as_retail").fill_null(False) == False)  # noqa: E712
-        )
+        .when(uc.str.contains("RETAIL", literal=True) & ~qualifies)
         .then(pl.lit(_SA_B31_RW["non_reg_retail"]))
         # Regulatory retail (non-mortgage): 75% flat.
         .when(uc.str.contains("RETAIL", literal=True))

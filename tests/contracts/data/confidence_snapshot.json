@@ -182,6 +182,7 @@
         "analysis/transition.py",
         "contracts/validation.py",
         "data/schemas.py",
+        "engine/branch_split.py",
         "engine/ccr/default_fund.py",
         "engine/ccr/failed_trades.py",
         "engine/orchestrator.py",
@@ -195,6 +196,7 @@
         "ui/views/comparison.py"
       ],
       "test_files": [
+        "tests/acceptance/basel31/test_p1_317_b31_loans_table_equity_rwa_final.py",
         "tests/acceptance/ccr/test_ccr_b2_b4_default_fund.py",
         "tests/acceptance/ccr/test_ccr_c1_c3_failed_trades.py",
         "tests/acceptance/ccr/test_ccr_p852_reporting_rollups.py",
@@ -244,6 +246,7 @@
         "engine/pipeline.py",
         "engine/registry.py",
         "engine/sa/cqs_lift.py",
+        "engine/sa/sovereign_floor.py",
         "reporting/lineage.py",
         "reporting/pillar3/ccr.py"
       ],
@@ -251,6 +254,7 @@
         "tests/acceptance/ccr/test_ccr_b1_b5_ccp.py",
         "tests/acceptance/ccr/test_ccr_ccp_orchestrator_pin.py",
         "tests/acceptance/ccr/test_ccr_p852_reporting_rollups.py",
+        "tests/acceptance/ccr/test_p1_342_qccp_art_121_6_carve_out.py",
         "tests/fixtures/ccr/p839_ccp_builder.py",
         "tests/fixtures/ccr/p842_nonqccp_b5_builder.py",
         "tests/fixtures/ccr/qccp_builder.py",
@@ -390,6 +394,7 @@
         "tests/unit/rulebook/test_provisions_features.py",
         "tests/unit/test_ccf.py",
         "tests/unit/test_corep_annex1_row_discrimination.py",
+        "tests/unit/test_p1_265_lower_of_ccf_is_b31_only.py",
         "tests/unit/test_r1_negative_amount_dq.py"
       ],
       "watchfire_index_gap": false
@@ -463,6 +468,7 @@
         "tests/unit/test_exposure_class_applied.py",
         "tests/unit/test_high_risk_items.py",
         "tests/unit/test_other_items_risk_weights.py",
+        "tests/unit/test_p1_311_entity_class_maps_regime.py",
         "tests/unit/test_sa_sl_classification.py"
       ],
       "watchfire_index_gap": false
@@ -1021,6 +1027,7 @@
         "engine/irb/guarantee.py",
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/guarantor_rw.py",
+        "engine/sa/re_residual_rw.py",
         "engine/sa/risk_weights.py",
         "rulebook/packs/crr.py"
       ],
@@ -1028,6 +1035,7 @@
         "tests/acceptance/basel31/test_p1_107_fcsm_b31_corporate_cqs3.py",
         "tests/acceptance/basel31/test_p1_10_art_213_ucp_eligibility.py",
         "tests/acceptance/basel31/test_p1_110_art_122_corporate_cqs3_guarantee_substitution.py",
+        "tests/acceptance/basel31/test_p1_317_b31_loans_table_equity_rwa_final.py",
         "tests/acceptance/ccr/test_ccr_e1_e5_default_risk_routing.py",
         "tests/acceptance/crr/test_art_222_fcsm_unified_pipeline.py",
         "tests/acceptance/crr/test_p1_101_art_226_1_non_daily_revaluation.py",
@@ -1047,6 +1055,7 @@
         "tests/acceptance/crr/test_p1_270_art_194_own_issue_collateral.py",
         "tests/acceptance/crr/test_p1_271_art_198_non_main_index_equity.py",
         "tests/acceptance/crr/test_p1_274_art_218_credit_linked_note.py",
+        "tests/acceptance/crr/test_p1_294_art_124_1_unsecured_counterparty_rw.py",
         "tests/acceptance/crr/test_p1_30e_art_234_partial_protection_tranching.py",
         "tests/acceptance/crr/test_p1_96_art_197_covered_bond_eligibility.py",
         "tests/acceptance/crr/test_p2_46_ppu_provenance_corep.py",
@@ -1124,6 +1133,7 @@
         "engine/aggregator/aggregator.py",
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/guarantor_rw.py",
+        "engine/sa/re_residual_rw.py",
         "engine/sa/risk_weights.py",
         "engine/stages/classify/attributes.py",
         "engine/stages/hierarchy/enrich.py",
@@ -1134,6 +1144,7 @@
         "rulebook/packs/crr.py"
       ],
       "test_files": [
+        "tests/acceptance/crr/test_p1_294_art_124_1_unsecured_counterparty_rw.py",
         "tests/acceptance/crr/test_p2_17_crr_payroll_loan_35pct_rw.py",
         "tests/acceptance/crr/test_scenario_crr_a_sa.py",
         "tests/conformance/portfolios.py",
@@ -1181,6 +1192,7 @@
       "source_files": [
         "contracts/edges.py",
         "data/schemas.py",
+        "engine/sa/re_residual_rw.py",
         "engine/sa/risk_weights.py",
         "engine/stages/re_split/__init__.py",
         "engine/stages/re_split/carriers.py",
@@ -1189,6 +1201,7 @@
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_181_art_126_cre_proportion_split.py",
+        "tests/acceptance/crr/test_p1_294_art_124_1_unsecured_counterparty_rw.py",
         "tests/acceptance/reporting/test_re_split_template_coverage.py",
         "tests/fixtures/p1_181/p1_181.py",
         "tests/fixtures/reporting_re_split_portfolio.py",
@@ -1226,6 +1239,7 @@
         "domain/enums.py",
         "engine/pipeline.py",
         "engine/sa/crr_risk_weight_tables.py",
+        "engine/sa/re_residual_rw.py",
         "engine/sa/risk_weights.py",
         "engine/stages/re_split/__init__.py",
         "engine/stages/re_split/carriers.py",
@@ -1237,6 +1251,7 @@
         "rulebook/packs/crr.py"
       ],
       "test_files": [
+        "tests/acceptance/crr/test_p1_294_art_124_1_unsecured_counterparty_rw.py",
         "tests/acceptance/crr/test_scenario_crr_a_sa.py",
         "tests/acceptance/reporting/test_re_split_template_coverage.py",
         "tests/contracts/test_collapse_additivity.py",
@@ -1514,8 +1529,10 @@
         "rulebook/packs/crr.py"
       ],
       "test_files": [
+        "tests/acceptance/basel31/test_p1_317_b31_loans_table_equity_rwa_final.py",
         "tests/acceptance/basel31/test_scenario_b31_l_equity.py",
         "tests/acceptance/crr/test_scenario_crr_j_equity.py",
+        "tests/conformance/test_cell_rederivation.py",
         "tests/integration/test_branch_error_accumulation.py",
         "tests/oracle/derivations/sa_b31.py",
         "tests/oracle/derivations/sa_crr.py",
@@ -1532,7 +1549,8 @@
       "article": "134",
       "code_functions": [
         "rwa_calc.engine.sa.risk_weights::_apply_b31_risk_weight_overrides",
-        "rwa_calc.engine.sa.risk_weights::_apply_crr_risk_weight_overrides"
+        "rwa_calc.engine.sa.risk_weights::_apply_crr_risk_weight_overrides",
+        "rwa_calc.engine.sa.risk_weights::_leased_residual_rw_expr"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -1607,7 +1625,7 @@
       "code_functions": [
         "rwa_calc.engine.sa.risk_weights::_apply_b31_risk_weight_overrides",
         "rwa_calc.engine.sa.risk_weights::_apply_crr_risk_weight_overrides",
-        "rwa_calc.engine.sa.risk_weights::_eca_meip_rw_expr"
+        "rwa_calc.engine.sa.risk_weights::_leased_residual_rw_expr"
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
@@ -1648,6 +1666,7 @@
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
+        "contracts/errors.py",
         "data/schemas.py",
         "engine/stages/hierarchy/enrich.py",
         "engine/stages/hierarchy/ratings.py"
@@ -1975,6 +1994,7 @@
         "contracts/errors.py",
         "contracts/validation.py",
         "data/schemas.py",
+        "engine/branch_split.py",
         "engine/crm/guarantees.py",
         "engine/fx_rate_sync.py",
         "engine/irb/__init__.py",
@@ -2161,6 +2181,7 @@
         "tests/acceptance/crr/test_p1_247_art_158_7_equity_simple_el.py",
         "tests/acceptance/crr/test_p2_38_art_155_2_short_position_netting.py",
         "tests/acceptance/crr/test_scenario_crr_j_equity.py",
+        "tests/acceptance/reporting/test_p1_332_ov1_equity_partition.py",
         "tests/contracts/test_r6_equity_method_edge.py",
         "tests/fixtures/generate_all.py",
         "tests/fixtures/p1_139/p1_139.py",
@@ -2845,7 +2866,10 @@
     {
       "article": "197",
       "code_functions": [
-        "rwa_calc.engine.crm.haircuts::non_main_index_equity_ineligible_expr"
+        "rwa_calc.engine.crm.eligibility::debt_security_ineligible_expr",
+        "rwa_calc.engine.crm.eligibility::equity_ineligible_expr",
+        "rwa_calc.engine.crm.eligibility::financial_collateral_ineligible_expr",
+        "rwa_calc.engine.crm.simple_method::_prepare_eligible_collateral"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -2876,8 +2900,10 @@
         "contracts/edges.py",
         "data/schemas.py",
         "domain/enums.py",
+        "engine/crm/eligibility.py",
         "engine/crm/haircut_tables.py",
-        "engine/crm/haircuts.py"
+        "engine/crm/haircuts.py",
+        "engine/crm/simple_method.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_186_art_224_2_fx_haircut_secured_lending_default.py",
@@ -2905,7 +2931,7 @@
     {
       "article": "198",
       "code_functions": [
-        "rwa_calc.engine.crm.haircuts::non_main_index_equity_ineligible_expr"
+        "rwa_calc.engine.crm.eligibility::equity_ineligible_expr"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -2917,7 +2943,7 @@
       "pack_entries": [],
       "source_files": [
         "data/schemas.py",
-        "engine/crm/haircuts.py"
+        "engine/crm/eligibility.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_271_art_198_non_main_index_equity.py",
@@ -3027,14 +3053,17 @@
     },
     {
       "article": "207",
-      "code_functions": [],
-      "confidence": "UNCITED",
+      "code_functions": [
+        "rwa_calc.engine.crm.eligibility::debt_security_ineligible_expr"
+      ],
+      "confidence": "MEDIUM",
       "framework": "CRR",
-      "layer_count": 2,
+      "layer_count": 3,
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
-        "data/schemas.py"
+        "data/schemas.py",
+        "engine/crm/eligibility.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_124_art_237_2a_guarantee_ineligibility.py",
@@ -3174,7 +3203,7 @@
     {
       "article": "218",
       "code_functions": [
-        "rwa_calc.engine.crm.haircuts::credit_linked_note_ineligible_expr"
+        "rwa_calc.engine.crm.eligibility::credit_linked_note_ineligible_expr"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -3186,7 +3215,7 @@
       "pack_entries": [],
       "source_files": [
         "data/schemas.py",
-        "engine/crm/haircuts.py"
+        "engine/crm/eligibility.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_274_art_218_credit_linked_note.py",
@@ -5098,6 +5127,7 @@
         "reporting/pillar3/generator.py"
       ],
       "test_files": [
+        "tests/fixtures/ccr/p1342_qccp_fx_floor_builder.py",
         "tests/unit/reporting/corep/test_c07_ccr.py",
         "tests/unit/test_pillar3_ccr.py"
       ],
@@ -5139,6 +5169,7 @@
       "source_files": [
         "contracts/bundles.py",
         "data/schemas.py",
+        "domain/branch_reasons.py",
         "engine/aggregator/aggregator.py",
         "engine/ccr/ccp.py",
         "engine/ccr/pipeline_adapter.py",
@@ -5146,6 +5177,7 @@
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/guarantor_rw.py",
         "engine/sa/risk_weights.py",
+        "engine/sa/sovereign_floor.py",
         "reporting/corep/c34.py",
         "reporting/corep/templates.py",
         "reporting/lineage.py",
@@ -5157,6 +5189,8 @@
         "tests/acceptance/ccr/test_ccr_b1_b5_ccp.py",
         "tests/acceptance/ccr/test_ccr_ccp_orchestrator_pin.py",
         "tests/acceptance/ccr/test_ccr_p852_reporting_rollups.py",
+        "tests/acceptance/ccr/test_p1_342_qccp_art_121_6_carve_out.py",
+        "tests/fixtures/ccr/p1342_qccp_fx_floor_builder.py",
         "tests/fixtures/ccr/p839_ccp_builder.py",
         "tests/fixtures/ccr/p842_nonqccp_b5_builder.py",
         "tests/fixtures/ccr/qccp_builder.py",
@@ -5677,6 +5711,7 @@
         "engine/aggregator/_schemas.py",
         "engine/aggregator/_summaries.py",
         "engine/aggregator/aggregator.py",
+        "engine/branch_split.py",
         "engine/ccr/failed_trades.py",
         "engine/stages/calc.py",
         "reporting/corep/__init__.py",
@@ -5783,7 +5818,8 @@
         "tests/properties/test_source_conservation.py",
         "tests/unit/reporting/corep/test_c07_ccf_buckets.py",
         "tests/unit/rulebook/test_provisions_features.py",
-        "tests/unit/test_ccf.py"
+        "tests/unit/test_ccf.py",
+        "tests/unit/test_p1_265_lower_of_ccf_is_b31_only.py"
       ],
       "watchfire_index_gap": false
     },
@@ -5857,7 +5893,9 @@
         "tests/acceptance/basel31/test_p1_264_art_140_1_st_class_gate.py",
         "tests/acceptance/basel31/test_p1_93_art_222_4_fcsm_sft_carveout.py",
         "tests/acceptance/basel31/test_p2_47_art137_meip_b31.py",
+        "tests/acceptance/ccr/test_p1_342_qccp_art_121_6_carve_out.py",
         "tests/acceptance/crr/test_p1_222_rgla_uk_gbp_flat_20.py",
+        "tests/fixtures/ccr/p1342_qccp_fx_floor_builder.py",
         "tests/fixtures/p1_10/p1_10.py",
         "tests/fixtures/p1_222/p1_222.py",
         "tests/fixtures/p1_229/p1_229.py",
@@ -6034,6 +6072,7 @@
         "tests/acceptance/basel31/test_scenario_b31_p1106_fcsm_inst_cqs2.py",
         "tests/acceptance/ccr/test_ccr_e1_e5_default_risk_routing.py",
         "tests/acceptance/ccr/test_ccr_floor1_output_floor.py",
+        "tests/acceptance/ccr/test_p1_342_qccp_art_121_6_carve_out.py",
         "tests/acceptance/stress/conftest.py",
         "tests/benchmarks/data_generators.py",
         "tests/contracts/test_short_term_rating_override.py",
@@ -6108,6 +6147,8 @@
         "tests/acceptance/basel31/test_p1_122b_b31_unrated_scra_b_institution_guarantor_irb_sa_fallback.py",
         "tests/acceptance/basel31/test_p1_128_art_121_4_scra_short_term_trade_finance.py",
         "tests/acceptance/basel31/test_p1_95_b31_unrated_inst_guarantor_scra.py",
+        "tests/acceptance/ccr/test_p1_342_qccp_art_121_6_carve_out.py",
+        "tests/fixtures/ccr/p1342_qccp_fx_floor_builder.py",
         "tests/fixtures/p1_122b/p1_122b.py",
         "tests/fixtures/p1_128/p1_128.py",
         "tests/fixtures/p1_95/p1_95.py",
@@ -6167,6 +6208,7 @@
         "tests/acceptance/basel31/test_p1_270_art_194_own_issue_collateral.py",
         "tests/acceptance/basel31/test_p1_271_art_198_non_main_index_equity.py",
         "tests/acceptance/basel31/test_p1_274_art_218_credit_linked_note.py",
+        "tests/acceptance/basel31/test_p1_317_b31_loans_table_equity_rwa_final.py",
         "tests/acceptance/basel31/test_p1_94f_currency_mismatch_scope_residential_re.py",
         "tests/acceptance/basel31/test_p1_95_b31_unrated_inst_guarantor_scra.py",
         "tests/acceptance/basel31/test_p2_18_art_226_1_b31_secured_lending_fx.py",
@@ -6250,7 +6292,8 @@
         "ORC-061",
         "ORC-062",
         "ORC-063",
-        "ORC-064"
+        "ORC-064",
+        "ORC-283"
       ],
       "pack_entries": [
         "b31_retail_granularity_limit@b31",
@@ -6664,11 +6707,13 @@
         "b31_rre_residual_rw_social_housing_floor@b31"
       ],
       "source_files": [
+        "engine/sa/re_residual_rw.py",
         "engine/stages/re_split/carriers.py",
         "engine/stages/re_split/splitter.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_142_three_property_income_dependent.py",
+        "tests/acceptance/crr/test_p1_294_art_124_1_unsecured_counterparty_rw.py",
         "tests/acceptance/reporting/test_re_split_template_coverage.py",
         "tests/fixtures/p1_142/p1_142.py",
         "tests/fixtures/reporting_re_split_portfolio.py",
@@ -6870,6 +6915,7 @@
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_182_b31_l24_pe_unlisted_under_5y.py",
+        "tests/acceptance/basel31/test_p1_317_b31_loans_table_equity_rwa_final.py",
         "tests/acceptance/basel31/test_p2_15_equity_transitional_optout.py",
         "tests/acceptance/basel31/test_p2_19_unlisted_young_equity_higher_risk.py",
         "tests/acceptance/basel31/test_scenario_b31_l_equity.py",
@@ -6896,6 +6942,7 @@
       ],
       "pack_entries": [],
       "source_files": [
+        "engine/sa/risk_weights.py",
         "rulebook/packs/common.py"
       ],
       "test_files": [
@@ -7047,6 +7094,7 @@
         "tests/unit/classifier/test_p1_245_group_revenue_rollup.py",
         "tests/unit/classifier/test_p1_276_crr_non_named_mdb_irb_class.py",
         "tests/unit/rulebook/test_thresholds_features.py",
+        "tests/unit/test_p1_311_entity_class_maps_regime.py",
         "tests/unit/test_p6_26_qrre_coupling_constant.py"
       ],
       "watchfire_index_gap": false
@@ -7086,6 +7134,7 @@
         "tests/acceptance/basel31/test_p2_41_exposure_subclass_corep.py",
         "tests/acceptance/basel31/test_scenario_b31_l_equity.py",
         "tests/acceptance/basel31/test_scenario_b31_m_model_permissions.py",
+        "tests/acceptance/reporting/test_p1_332_ov1_equity_partition.py",
         "tests/acceptance/reporting/test_reporting_irb_classes_golden.py",
         "tests/conformance/portfolios.py",
         "tests/conformance/test_cell_rederivation.py",

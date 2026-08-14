@@ -758,7 +758,7 @@ ENTRIES: dict[str, RuleEntry] = {
         citation=Citation("CRR", "123", "single aggregate-exposure retail threshold check"),
     ),
     # CRR regulatory monetary thresholds: the EUR source amounts (CRR Art. 123/123A/
-    # 501/4(1)(146)) converted to GBP at the run's EUR/GBP rate. The pack holds the
+    # 501/142(1)(4)) converted to GBP at the run's EUR/GBP rate. The pack holds the
     # FX-INVARIANT EUR bases; the engine applies × eur_gbp_rate (a market input that
     # stays on config/RunConfig, NOT a regulatory value) at the read site via
     # engine/thresholds.py::regulatory_threshold. The `regulatory_thresholds_fx_derived`
@@ -1196,6 +1196,15 @@ ENTRIES: dict[str, RuleEntry] = {
             "rw_low_ltv": Decimal("0.35"),
             "rw_high_ltv": Decimal("0.75"),
         },
+        # ``rw_high_ltv`` is NOT an Art. 125 weight — Art. 125 states no weight
+        # for the excess at all. It is Art. 124(1)'s referral ("the risk weight
+        # applicable to the unsecured exposures of the counterparty involved")
+        # resolved at Art. 123's regulatory-retail 75%, retained here as the
+        # retail limb of the P1.294 obligor ladder in
+        # ``engine/sa/re_residual_rw.py``. Kept as a source comment rather than
+        # in the ``Citation`` description because that description renders into
+        # ``docs/data-model/regulatory-tables.md`` and the generated skill
+        # fragments, where a sentence of commentary does not belong.
         citation=Citation("CRR", "125", "residential mortgage LTV<=80% 35% / excess 75%"),
     ),
     "commercial_re_params": FormulaParams(

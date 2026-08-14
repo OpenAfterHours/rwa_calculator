@@ -119,6 +119,20 @@
     "CRR Art. 223",
     "CRR Art. 238"
   ],
+  "rwa_calc.engine.crm.eligibility::credit_linked_note_ineligible_expr": [
+    "CRR Art. 218"
+  ],
+  "rwa_calc.engine.crm.eligibility::debt_security_ineligible_expr": [
+    "CRR Art. 197",
+    "CRR Art. 207"
+  ],
+  "rwa_calc.engine.crm.eligibility::equity_ineligible_expr": [
+    "CRR Art. 197",
+    "CRR Art. 198"
+  ],
+  "rwa_calc.engine.crm.eligibility::financial_collateral_ineligible_expr": [
+    "CRR Art. 197"
+  ],
   "rwa_calc.engine.crm.expressions::lgd_star_exposure_basis_expr": [
     "CRR Art. 223(4)",
     "PS1/26 Art. 230(1)"
@@ -165,13 +179,6 @@
     "CRR Art. 237",
     "CRR Art. 238"
   ],
-  "rwa_calc.engine.crm.haircuts::credit_linked_note_ineligible_expr": [
-    "CRR Art. 218"
-  ],
-  "rwa_calc.engine.crm.haircuts::non_main_index_equity_ineligible_expr": [
-    "CRR Art. 197",
-    "CRR Art. 198"
-  ],
   "rwa_calc.engine.crm.life_insurance::compute_life_insurance_columns": [
     "CRR Art. 232(3)",
     "CRR Art. 233(3)"
@@ -192,6 +199,9 @@
   ],
   "rwa_calc.engine.crm.provisions::resolve_provisions": [
     "CRR Art. 111"
+  ],
+  "rwa_calc.engine.crm.simple_method::_prepare_eligible_collateral": [
+    "CRR Art. 197"
   ],
   "rwa_calc.engine.crm.simple_method::compute_fcsm_columns": [
     "CRR Art. 222"
@@ -454,11 +464,12 @@
     "PS1/26, paragraph 127",
     "CRR Art. 127"
   ],
-  "rwa_calc.engine.sa.risk_weights::_eca_meip_rw_expr": [
-    "CRR Art. 137"
-  ],
   "rwa_calc.engine.sa.risk_weights::_is_b31_subordinated_debt": [
     "PS1/26, paragraph 133"
+  ],
+  "rwa_calc.engine.sa.risk_weights::_leased_residual_rw_expr": [
+    "CRR Art. 137",
+    "CRR Art. 134"
   ],
   "rwa_calc.engine.sa.risk_weights::_prepare_risk_weight_lookup": [
     "PS1/26, paragraph 139",

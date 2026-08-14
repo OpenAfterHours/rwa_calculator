@@ -450,6 +450,15 @@ def ccr_rows_to_exposures(
             pl.lit(reporting_date).alias("value_date"),
             pl.col("_trade_max_maturity").alias("maturity_date"),
             pl.col("_trade_currency").alias("currency"),
+            # Denomination currency, stamped here rather than inherited. The FX
+            # converter is what normally sets ``original_currency``, and it runs
+            # before this stage — so a synthetic netting-set row unioned onto the
+            # lending frame picks the column up as a NULL fill. Every consumer of
+            # ``denomination_currency_expr`` (Art. 114(4)/(7), Art. 115(5), the
+            # Art. 121(6) FX floor) then reads null and its whole test goes
+            # indeterminate. These rows never pass the converter, so the trade
+            # currency IS the denomination.
+            pl.col("_trade_currency").alias("original_currency"),
             pl.col("ead_ccr").alias("drawn_amount"),
             pl.lit(0.0).alias("interest"),
             pl.lit(0.0).alias("undrawn_amount"),

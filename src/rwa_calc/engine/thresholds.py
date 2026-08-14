@@ -18,7 +18,11 @@ Feature is False, so the rate is ignored).
 Pipeline position: read by the classifier, IRB and supporting-factor stages.
 
 References:
-- CRR Art. 123 / 123A / 501 / 501a / 4(1)(146): EUR monetary thresholds.
+- CRR Art. 123 / 123A / 501 / 501a / 142(1)(4): EUR monetary thresholds.
+  (Art. 142(1)(4) is the large financial sector entity total-assets test. It is
+  NOT Art. 4(1)(146), the large-institution G-SII/O-SII definition, which both
+  this docstring and the CRR pack comment previously named — no threshold in
+  this block derives from that article. D3.58.)
 - PRA PS1/26 Art. 147(5A) / 147A(1)(d) / 153(4): native GBP thresholds.
 """
 

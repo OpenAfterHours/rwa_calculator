@@ -977,7 +977,19 @@ class TestB31QRRETransactor:
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """QRRE transactor exposure should get 45% RW under Basel 3.1."""
+        """QRRE transactor exposure should get 45% RW under Basel 3.1.
+
+        ``qualifies_as_retail`` is stated explicitly. PS1/26 Art. 123(3)(a)
+        reserves the 45% for "regulatory retail exposures that ARE transactor
+        exposures", so qualification under Art. 123A is half the gate. Before
+        P1.293 the transactor branch was ordered ahead of the
+        non-regulatory-retail branch and this row asserted 45% while omitting
+        the column entirely — i.e. it relied on the very bypass that was the
+        defect. With the column absent it now correctly resolves to the
+        Art. 123(3)(c) 100%, since an unknown qualification must not receive a
+        preferential weight (the 2026-06-12 null-handling decision pinned by
+        ``test_null_qualifies_as_retail_is_non_qualifying``).
+        """
         exposures = pl.DataFrame(
             {
                 "exposure_reference": ["QRRE_T001"],
@@ -987,6 +999,7 @@ class TestB31QRRETransactor:
                 "is_sme": [False],
                 "is_infrastructure": [False],
                 "is_qrre_transactor": [True],
+                "qualifies_as_retail": [True],
             }
         ).lazy()
 
@@ -1120,6 +1133,115 @@ class TestB31NonRegulatoryRetail:
         df = result.collect()
 
         assert df["risk_weight"][0] == pytest.approx(0.45)
+
+    @pytest.mark.parametrize(
+        "exposure_class",
+        ["RETAIL_QRRE", "RETAIL_OTHER", "RETAIL_SME"],
+    )
+    def test_p1_293_non_regulatory_transactor_gets_100pct_not_45pct(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+        exposure_class: str,
+    ) -> None:
+        """A transactor that FAILS Art. 123A takes 100%, not the 45% transactor rate.
+
+        Arrange: a retail exposure carrying ``is_qrre_transactor=True`` while
+        ``qualifies_as_retail=False``.
+        Act: run the Basel 3.1 SA branch.
+        Assert: risk weight 1.00 per PS1/26 Art. 123(3)(c).
+
+        PS1/26 Art. 123(3) reads "(a) **regulatory retail exposures that are
+        transactor exposures** shall be assigned a risk weight of 45% … (c) all
+        other retail exposures that do not qualify as regulatory retail
+        exposures shall be assigned a risk weight of 100%". The 45% is gated on
+        Art. 123A qualification AND the transactor property, not on the
+        transactor property alone. The engine ordered the transactor branch
+        ahead of the non-regulatory-retail branch, so the 100% limb was
+        unreachable for any transactor row — a 55pp understatement (P1.293).
+
+        This is the one cell of the (class × transactor × qualifies) grid the
+        estate did not cover, and it was uncovered on both sides:
+        ``test_non_regulatory_qrre_gets_100pct`` sets ``qualifies_as_retail``
+        False but ``is_qrre_transactor`` **False**, the single value that dodges
+        the defect, and ``test_qrre_transactor_qualifying_still_gets_45pct``
+        sets the transactor flag but leaves qualification **True**. Both pass
+        before and after the fix. Parametrised across three classes because
+        nothing in the article scopes the rule to the QRRE class — gating on
+        ``exposure_class == RETAIL_QRRE`` would leave ``RETAIL_OTHER`` and
+        ``RETAIL_SME`` wrong, and would separately over-state the
+        partially-drawn cards P1.320 misclassifies into ``RETAIL_OTHER``, whose
+        45% is correct because they DO qualify as regulatory retail.
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["P1293_001"],
+                "ead_final": [100000.0],
+                "exposure_class": [exposure_class],
+                "cqs": [None],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "is_qrre_transactor": [True],
+                "qualifies_as_retail": [False],
+            }
+        ).lazy()
+
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
+
+        assert df["risk_weight"][0] == pytest.approx(1.0), (
+            f"P1.293: {exposure_class} with is_qrre_transactor=True and "
+            f"qualifies_as_retail=False must take the Art. 123(3)(c) 100%, not the "
+            f"Art. 123(3)(a) 45% — that rate is reserved for exposures that ARE "
+            f"regulatory retail. Got {df['risk_weight'][0]}."
+        )
+        assert df["rwa_final"][0] == pytest.approx(100000.0), (
+            "P1.293: the corrected weight must reach the carrier the templates sum, "
+            f"not stop at risk_weight. Got {df['rwa_final'][0]}."
+        )
+
+    def test_p1_293_qualifying_transactor_keeps_45pct_in_every_retail_class(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """A QUALIFYING transactor keeps 45% whatever retail class it carries.
+
+        Arrange: three retail classes, all ``qualifies_as_retail=True`` and
+        ``is_qrre_transactor=True``.
+        Act: run the Basel 3.1 SA branch.
+        Assert: 0.45 on every one.
+
+        The survives-the-change half of the pair (``.claude/LESSONS.md`` B5).
+        ``RETAIL_OTHER`` is the load-bearing row: P1.320 records that
+        partially-drawn credit cards are misclassified into it rather than
+        ``RETAIL_QRRE``, and their 45% is CORRECT under Art. 123(3)(a) because
+        the article keys on regulatory-retail qualification rather than on the
+        IRB-derived QRRE class. A fix that gated the 45% on
+        ``exposure_class == RETAIL_QRRE`` would move them to 75% — a 30pp
+        over-statement on essentially every partially-drawn card — and this
+        assertion is what catches it.
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["P1293_Q1", "P1293_Q2", "P1293_Q3"],
+                "ead_final": [100000.0, 100000.0, 100000.0],
+                "exposure_class": ["RETAIL_QRRE", "RETAIL_OTHER", "RETAIL_SME"],
+                "cqs": [None, None, None],
+                "is_sme": [False, False, True],
+                "is_infrastructure": [False, False, False],
+                "is_qrre_transactor": [True, True, True],
+                "qualifies_as_retail": [True, True, True],
+            }
+        ).lazy()
+
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect().sort("exposure_reference")
+
+        assert df["risk_weight"].to_list() == pytest.approx([0.45, 0.45, 0.45]), (
+            "P1.293 control: a transactor that DOES qualify as regulatory retail keeps "
+            f"the Art. 123(3)(a) 45% in every retail class. Got {df['risk_weight'].to_list()}."
+        )
 
     def test_null_qualifies_as_retail_is_non_qualifying(
         self,
@@ -1402,13 +1524,26 @@ class TestCRRRegression:
         sa_calculator: SACalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """CRR residential mortgage LTV 100% → split treatment (unchanged)."""
+        """CRR residential mortgage LTV 100% → split treatment (unchanged).
+
+        The obligor is stated explicitly. Before P1.294 the excess above the
+        Art. 125(2)(d) 80% limit took a flat 75% whatever the counterparty was,
+        so this row asserted 43% while passing no obligor information at all —
+        i.e. it pinned the obligor-INVARIANCE that was the defect, by omission.
+        Art. 124(1) sends the excess to "the risk weight applicable to the
+        unsecured exposures of the counterparty involved", so a flagless row now
+        correctly falls to the conservative 100% limb (48%). Naming the obligor
+        keeps this test asserting the thing it means — the 80/20 LTV split — at
+        a value that is now a deliberate answer rather than an accident.
+        """
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
             exposure_class="residential_mortgage",
             ltv=Decimal("1.00"),
             config=crr_config,
+            cp_is_natural_person=True,
+            qualifies_as_retail=True,
         )
 
         expected_rw = 0.80 * 0.35 + 0.20 * 0.75  # 43%

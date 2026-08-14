@@ -139,13 +139,33 @@ def apply_post_model_adjustments(
     2. General PMA: scalar add-on to post-floor RWEA (supervisory requirement)
     3. Unrecognised exposure: scalar for model coverage gaps
 
-    Adjustment sequencing per Art. 154(4A):
-        (b) Mortgage RW floor applied first — establishes post-floor RWEA base
-        (a) General PMA and unrecognised scalars applied to post-floor RWEA
+    Adjustment sequencing per Art. 154(4A). The chapeau — "An institution shall
+    increase the total risk-weighted exposure amounts calculated under
+    paragraphs 1, 3 and 4 ... to reflect" — makes (a), (b) and (c) three
+    ADDITIVE increases to one common base, not a pipeline:
 
-    This ordering matters: PMA scalars must capture the mortgage floor
-    increase in their base, otherwise capital is understated for
-    exposures that hit the floor.
+        (a) general PMA               = base x pma_rwa_scalar
+        (b) mortgage floor shortfall  = max(0, floor_rw x EAD - (base + (a)))
+        (c) unrecognised exposure     = base x unrecognised_exposure_scalar
+        RWEA = base + (a) + (b) + (c)
+
+    Limb (b) is a TEST, not a value in a chain: "any amount needed to ensure
+    that risk-weighted exposure amounts ... are greater than or equal to 10% of
+    the exposure value ... (following application of any post model adjustments
+    calculated under point (b) of Article 146(3))". That parenthetical is what
+    puts limb (a) inside the comparison.
+
+    Limb (c) is deliberately OUTSIDE the comparison: the parenthetical names
+    only Art. 146(3)(b) adjustments, and (c) is "calculated under Article
+    166D(6)" — a different provision.
+
+    An earlier revision of this docstring asserted the opposite ordering — floor
+    first, then both scalars on the post-floor base — and attributed it to
+    Art. 154(4A). It is recorded here because it read as settled: the stated
+    justification ("PMA scalars must capture the mortgage floor increase in
+    their base, otherwise capital is understated") is a conservatism argument,
+    not a reading of the text, and the text says the reverse. Correcting it
+    RELEASES capital where the floor binds. P1.325.
 
     EL adjustment mirrors the general PMA scalar, floored at zero
     per Art. 158(6A) — PMAs cannot decrease expected loss.
@@ -216,16 +236,35 @@ def apply_post_model_adjustments(
         pl.col("exposure_class").cast(pl.String) == ExposureClass.RETAIL_MORTGAGE.value
     ) & (pl.col("is_defaulted").eq_missing(True).not_())
 
+    # Art. 154(4A) makes (a), (b) and (c) three ADDITIVE increases to one common
+    # base — "the total risk-weighted exposure amounts calculated under
+    # paragraphs 1, 3 and 4" — not a pipeline in which each feeds the next. So
+    # (a) and (c) both multiply the PRE-floor modelled RWEA.
+    #
+    # (b) is a TEST rather than a value: "any amount needed to ensure that
+    # risk-weighted exposure amounts ... are greater than or equal to 10% of the
+    # exposure value ... (following application of any post model adjustments
+    # calculated under point (b) of Article 146(3))". The parenthetical fixes
+    # the figure the >= comparison is made against: the base plus limb (a).
+    #
+    # ⚠ Limb (c) is NOT in that comparison. The parenthetical names only
+    # Art. 146(3)(b) post model adjustments, which is limb (a);
+    # ``unrecognised_exposure_scalar`` is limb (c), "calculated under
+    # Article 166D(6)" — a different provision. It is a sibling increase on the
+    # same base and must stay outside the floor test (P1.325).
+    general_pma_expr = pl.col("rwa") * pma_rwa_scalar
+    unrecognised_expr = pl.col("rwa") * unrecognised_scalar
+
     rw_col = "risk_weight" if "risk_weight" in cols else None
     if rw_col and mortgage_rw_floor > 0:
-        # Floor adjustment: excess of floor RW over modelled RW, converted to RWEA
-        floor_rw_increase = pl.max_horizontal(
-            pl.lit(0.0),
-            pl.lit(mortgage_rw_floor) - pl.col(rw_col),
-        )
+        # The shortfall is measured in RWEA space against base + (a). Expressed
+        # as (floor_rw - modelled_rw) x EAD this would be the pre-(a) shortfall,
+        # which is what the inverted ordering computed.
+        floor_rwea = pl.lit(mortgage_rw_floor) * pl.col("ead_final")
+        post_pma_rwea = pl.col("rwa") + general_pma_expr
         mortgage_adj_expr = (
             pl.when(is_mortgage)
-            .then(floor_rw_increase * pl.col("ead_final"))
+            .then(pl.max_horizontal(pl.lit(0.0), floor_rwea - post_pma_rwea))
             .otherwise(pl.lit(0.0))
         )
     else:
@@ -234,36 +273,29 @@ def apply_post_model_adjustments(
     # EL column detection
     el_col = "expected_loss" if "expected_loss" in cols else None
 
-    # Step 1: Record pre-adjustment values and apply mortgage floor
-    # Art. 154(4A)(b) mortgage floor is applied FIRST to establish the post-floor RWEA base
+    # Compute all three Art. 154(4A) increases against the SAME paragraph-1/3/4
+    # base, in one pass, before any of them is added. The floor expression above
+    # already folds limb (a) into its own comparison; nothing here may mutate
+    # ``rwa`` before all three are evaluated, or the base drifts under them.
     lf = lf.with_columns(
         [
             pl.col("rwa").alias("rwa_pre_adjustments"),
+            general_pma_expr.alias("post_model_adjustment_rwa"),
+            unrecognised_expr.alias("unrecognised_exposure_adjustment"),
             mortgage_adj_expr.alias("mortgage_rw_floor_adjustment"),
         ]
     )
 
-    # Apply mortgage floor to RWA — creates the post-floor RWEA base
-    lf = lf.with_columns((pl.col("rwa") + pl.col("mortgage_rw_floor_adjustment")).alias("rwa"))
-
-    # Step 2: Apply PMA and unrecognised scalars to POST-FLOOR RWEA
-    # Art. 154(4A)(a) / Art. 153(5A): scalars multiply the RWEA that already includes
-    # the mortgage floor increase, so the floor portion is also captured in the PMA base.
-    general_pma_expr = pl.col("rwa") * pma_rwa_scalar
-    unrecognised_expr = pl.col("rwa") * unrecognised_scalar
-
-    lf = lf.with_columns(
-        [
-            general_pma_expr.alias("post_model_adjustment_rwa"),
-            unrecognised_expr.alias("unrecognised_exposure_adjustment"),
-        ]
-    )
-
-    # Apply PMA and unrecognised adjustments to RWA
+    # Add all three Art. 154(4A) increases to the base. The chapeau — "An
+    # institution shall increase the total risk-weighted exposure amounts
+    # calculated under paragraphs 1, 3 and 4 ... to reflect: (a) ... (b) ...
+    # (c) ..." — makes them additive to that one base, so this is a sum and not
+    # a chain.
     lf = lf.with_columns(
         (
             pl.col("rwa")
             + pl.col("post_model_adjustment_rwa")
+            + pl.col("mortgage_rw_floor_adjustment")
             + pl.col("unrecognised_exposure_adjustment")
         ).alias("rwa")
     )

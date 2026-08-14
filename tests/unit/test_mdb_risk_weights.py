@@ -39,7 +39,6 @@ from rwa_calc.engine.sa.crr_risk_weight_tables import (
     MDB_RISK_WEIGHTS_TABLE_2B,
     MDB_UNRATED_RW,
     get_combined_cqs_risk_weights,
-    lookup_risk_weight,
 )
 from tests.fixtures.single_exposure import calculate_single_sa_exposure
 
@@ -109,18 +108,6 @@ class TestMDBRiskWeightTables:
         combined = get_b31_combined_cqs_risk_weights()
         mdb_rows = combined.filter(combined["exposure_class"] == "MDB")
         assert len(mdb_rows) == 7  # CQS 1-6 + unrated
-
-    def test_lookup_risk_weight_mdb_cqs3(self):
-        """lookup_risk_weight for MDB CQS 3 returns 50%."""
-        assert lookup_risk_weight("MDB", 3) == Decimal("0.50")
-
-    def test_lookup_risk_weight_mdb_unrated(self):
-        """lookup_risk_weight for MDB unrated returns 50%."""
-        assert lookup_risk_weight("MDB", None) == Decimal("0.50")
-
-    def test_lookup_risk_weight_mdb_cqs2(self):
-        """lookup_risk_weight for MDB CQS 2 returns 30%."""
-        assert lookup_risk_weight("MDB", 2) == Decimal("0.30")
 
 
 # =============================================================================

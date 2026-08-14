@@ -3497,7 +3497,15 @@ class TestCommitmentToIssueLowerOf:
     def test_crr_sa_commitment_mr_to_issue_lr_uses_lr_ccf(
         self, ccf_calculator: CCFCalculator, crr_config: CalculationConfig
     ) -> None:
-        """CRR: MR commitment (50%) to issue LR item (0%) → min(50%,0%) = 0%."""
+        """CRR: MR commitment keeps its own 50% — CRR has no lower-of rule.
+
+        Inverted by P1.265. This asserted 0.0, i.e. it codified the Basel 3.1
+        Art. 111(1)(c) lower-of cap as applying under CRR. CRR Art. 111(1)
+        gives only the four percentages and the Annex I category assignment;
+        the lower-of provision is PS1/26's alone. Note the citation trap: CRR
+        Art. 111(1)(c) is "20 % if it is a medium/low-risk item", an unrelated
+        provision at the same address.
+        """
         exposures = pl.DataFrame(
             {
                 "exposure_reference": ["CRR_MR_LR"],
@@ -3509,7 +3517,7 @@ class TestCommitmentToIssueLowerOf:
         ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
-        assert result["ccf"][0] == pytest.approx(0.0)
+        assert result["ccf"][0] == pytest.approx(0.5)
 
     def test_crr_sa_commitment_oc_to_issue_fr_uses_oc_ccf(
         self, ccf_calculator: CCFCalculator, crr_config: CalculationConfig
@@ -3551,7 +3559,17 @@ class TestCommitmentToIssueLowerOf:
     def test_firb_crr_commitment_mr_to_issue_lr_uses_lr(
         self, ccf_calculator: CCFCalculator, crr_config: CalculationConfig
     ) -> None:
-        """CRR F-IRB: MR (75%) to issue LR (0%) → min(75%,0%) = 0%."""
+        """CRR F-IRB: MR commitment keeps its own 75% — no lower-of under CRR.
+
+        Inverted by P1.265, same reason as the SA sibling above: CRR Art. 111(1)
+        has no commitment-to-issue lower-of rule, so naming a low-risk
+        underlying must not reduce the commitment.
+
+        Note the value is the F-IRB ladder's 75%, NOT the SA 50%. Under CRR the
+        F-IRB CCFs are their own (Art. 166) — it is PS1/26 Art. 166C(1) that
+        defines the F-IRB CCF as the Art. 111 SA CCF, which is why the two
+        carriers agree under Basel 3.1 and diverge here.
+        """
         exposures = pl.DataFrame(
             {
                 "exposure_reference": ["FIRB_CRR_MR_LR"],
@@ -3564,7 +3582,7 @@ class TestCommitmentToIssueLowerOf:
         ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
-        assert result["ccf"][0] == pytest.approx(0.0)
+        assert result["ccf"][0] == pytest.approx(0.75)
 
     # --- A-IRB tests ---
 

@@ -52,8 +52,8 @@ from watchfire import cites
 from rwa_calc.data.schemas import NATURAL_PERSON_ENTITY_TYPES
 from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.engine.entity_class_maps import (
-    ENTITY_TYPE_TO_IRB_CLASS,
-    ENTITY_TYPE_TO_SA_CLASS,
+    entity_type_to_irb_class,
+    entity_type_to_sa_class,
 )
 from rwa_calc.engine.thresholds import regulatory_threshold
 from rwa_calc.engine.utils import partition_by_nullable
@@ -351,13 +351,21 @@ def derive_independent_flags(
     # - _sa_class: entity type → SA class mapping (used 3× below)
     # - _irb_class: entity type → IRB class mapping
     # - _pt_upper: product_type uppercased (used in is_mortgage, infrastructure)
+    # Bind the entity-class maps for THIS run's regime rather than the module
+    # default. Both maps live in the common pack and are currently identical
+    # under CRR and Basel 3.1, so this changes no number today — but it is what
+    # makes a regime-divergent override in ``packs/b31.py`` take effect instead
+    # of being silently ignored, which is the trap P1.276 and P1.286 each died
+    # on (P1.311).
+    sa_class_map = entity_type_to_sa_class(pack)
+    irb_class_map = entity_type_to_irb_class(pack)
     exposures = exposures.with_columns(
         [
             pl.col("cp_entity_type")
-            .replace_strict(ENTITY_TYPE_TO_SA_CLASS, default=ExposureClass.OTHER.value)
+            .replace_strict(sa_class_map, default=ExposureClass.OTHER.value)
             .alias("_sa_class"),
             pl.col("cp_entity_type")
-            .replace_strict(ENTITY_TYPE_TO_IRB_CLASS, default=ExposureClass.OTHER.value)
+            .replace_strict(irb_class_map, default=ExposureClass.OTHER.value)
             .alias("_irb_class"),
             pl.col("product_type").str.to_uppercase().alias("_pt_upper"),
         ]

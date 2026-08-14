@@ -557,6 +557,12 @@ def _build_sft_exposure_rows(
         pl.lit(reporting_date).alias("value_date"),
         pl.col("_trade_max_maturity").alias("maturity_date"),
         pl.col("_trade_currency").alias("currency"),
+        # Denomination currency — see the twin in ``engine/ccr/pipeline_adapter``.
+        # The FX converter runs ahead of this stage, so an unstamped synthetic row
+        # inherits ``original_currency`` as a null and every
+        # ``denomination_currency_expr`` consumer goes indeterminate on it. These
+        # rows never pass the converter, so the trade currency IS the denomination.
+        pl.col("_trade_currency").alias("original_currency"),
         pl.col("ead_ccr").alias("drawn_amount"),
         pl.lit(0.0).alias("interest"),
         pl.lit(0.0).alias("undrawn_amount"),

@@ -33,8 +33,13 @@ import polars as pl
 
 from rwa_calc.contracts.edges import CALC_BRANCH_EDGES
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
-from rwa_calc.domain.enums import ApproachType, RiskType
+from rwa_calc.domain.enums import RiskType
 from rwa_calc.engine.aggregator._schemas import SA_CCR_APPROACH
+from rwa_calc.engine.branch_split import (
+    is_irb_approach,
+    is_sa_branch_approach,
+    is_slotting_approach,
+)
 from rwa_calc.engine.materialise import materialise_sealed_branches
 from rwa_calc.engine.orchestrator import (
     BRANCH_ERRORS,
@@ -97,15 +102,14 @@ def run(
             exposures, run_config, errors=branch_errors, pack=rulepack.pack
         )
 
-    # Split once by approach
-    is_irb = (pl.col("approach") == ApproachType.FIRB.value) | (
-        pl.col("approach") == ApproachType.AIRB.value
-    )
-    is_slotting = pl.col("approach") == ApproachType.SLOTTING.value
-
-    sa_branch = exposures.filter(~is_irb & ~is_slotting)
-    irb_branch = exposures.filter(is_irb)
-    slotting_branch = exposures.filter(is_slotting)
+    # Split once by approach. The three predicates come from
+    # ``engine/branch_split.py`` so that ``calculate_unified`` — which decides
+    # which rows it computes ``rwa_pre_factor`` for, and which is the only
+    # arithmetic the SA branch gets under the output floor — selects the same
+    # population this filter routes here (P1.317).
+    sa_branch = exposures.filter(is_sa_branch_approach())
+    irb_branch = exposures.filter(is_irb_approach())
+    slotting_branch = exposures.filter(is_slotting_approach())
 
     # Process each branch (all still lazy)
     if rulepack.pack.feature("output_floor"):

@@ -22,7 +22,6 @@ References:
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -32,12 +31,13 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
-from rwa_calc.data.schemas import (
-    CREDIT_LINKED_NOTE_COLLATERAL_TYPES,
-    EQUITY_COLLATERAL_TYPES,
-    NON_FINANCIAL_COLLATERAL_TYPES,
-    REAL_ESTATE_COLLATERAL_TYPES,
-    RECEIVABLE_COLLATERAL_TYPES,
+from rwa_calc.data.schemas import NON_FINANCIAL_COLLATERAL_TYPES
+from rwa_calc.domain.enums import CRMCollateralMethod
+from rwa_calc.engine.crm.eligibility import (
+    credit_linked_note_ineligible_expr,
+    debt_security_ineligible_expr,
+    equity_ineligible_expr,
+    normalise_collateral_type_expr,
 )
 from rwa_calc.engine.crm.haircut_tables import (
     calculate_adjusted_collateral_value,
@@ -62,72 +62,6 @@ _PACK = resolve("crr", date(2026, 1, 1))
 _ZERO_HAIRCUT_MAX_SOVEREIGN_CQS = _PACK.int_param("zero_haircut_max_sovereign_cqs").value
 _LIQUIDATION_PERIOD_REPO = _PACK.int_param("liquidation_period_repo").value
 _LIQUIDATION_PERIOD_SECURED_LENDING = _PACK.int_param("liquidation_period_secured_lending").value
-
-
-@cites("CRR Art. 197")
-@cites("CRR Art. 198")
-def non_main_index_equity_ineligible_expr(schema_names: Iterable[str]) -> pl.Expr:
-    """Art. 197(1)(f)/198(1)(a): non-main-index, non-listed equity is ineligible.
-
-    Equities/convertible bonds are eligible financial collateral under all CRM
-    methods only when included in a MAIN index (CRR/PS1-26 Art. 197(1)(f)). A
-    non-main-index equity is eligible only where it is LISTED on a recognised
-    exchange (Art. 198(1)(a)), and then only under the comprehensive method this
-    calculator uses by default. An equity collateral row that is neither attested
-    main-index nor attested listed is therefore ineligible funded protection.
-
-    Null / absent ``is_main_index`` and ``is_listed`` resolve conservatively to
-    False (unknown membership / listing must not fabricate eligibility). When
-    neither signal column is present the expression is a no-op (``False``): that
-    is the legacy backward-compatibility path where ``is_eligible_financial_
-    collateral`` remains the eligibility proxy — production always carries both
-    columns via ``COLLATERAL_SCHEMA``.
-
-    Shared by the haircut-stage value gate (``HaircutCalculator``) and the CRM018
-    warning emission (``engine/crm/collateral.py``) so the predicate has a single
-    definition. It reads the raw ``collateral_type`` (equivalent to the normalised
-    ``_lookup_type == "equity"``).
-    """
-    names = set(schema_names)
-    if "is_main_index" not in names and "is_listed" not in names:
-        return pl.lit(False)
-    is_equity = pl.col("collateral_type").str.to_lowercase().is_in(EQUITY_COLLATERAL_TYPES)
-    is_main_index = (
-        pl.col("is_main_index").fill_null(False) if "is_main_index" in names else pl.lit(False)
-    )
-    is_listed = pl.col("is_listed").fill_null(False) if "is_listed" in names else pl.lit(False)
-    return is_equity & is_main_index.not_() & is_listed.not_()
-
-
-@cites("CRR Art. 218")
-def credit_linked_note_ineligible_expr(schema_names: Iterable[str]) -> pl.Expr:
-    """Art. 218: a credit-linked note is cash collateral only if own-issued.
-
-    A credit-linked note earns cash-collateral treatment (0% haircut, full
-    EAD/LGD* offset) under CRR/PS1-26 Art. 218 only when it is ISSUED BY THE
-    LENDING INSTITUTION itself — the note's cash proceeds fund the protection. A
-    CLN issued by a THIRD PARTY is not within Art. 218: its value is materially
-    correlated with the reference entity (typically the obligor — Art. 194(4)
-    wrong-way risk), so it is ineligible funded protection.
-
-    A ``credit_linked_note`` collateral row that is not attested own-issued
-    (``is_own_issued_cln`` False or null) is therefore ineligible. Null / absent
-    resolves conservatively to False (absence of attestation must not fabricate
-    cash treatment). When the ``is_own_issued_cln`` column is not present the
-    expression is a no-op (``False``): the legacy backward-compatibility path
-    where every CLN retained cash treatment — production always carries the
-    column via ``COLLATERAL_SCHEMA``.
-
-    Shared by the haircut-stage value gate (``HaircutCalculator.apply_haircuts``)
-    and the CRM019 warning emission (``engine/crm/collateral.py``) so the
-    predicate has a single definition. It reads the raw ``collateral_type``.
-    """
-    names = set(schema_names)
-    if "is_own_issued_cln" not in names:
-        return pl.lit(False)
-    is_cln = pl.col("collateral_type").str.to_lowercase().is_in(CREDIT_LINKED_NOTE_COLLATERAL_TYPES)
-    is_own_issued = pl.col("is_own_issued_cln").fill_null(False)
-    return is_cln & is_own_issued.not_()
 
 
 @dataclass
@@ -625,7 +559,7 @@ class HaircutCalculator:
             )
 
         collateral = collateral.with_columns(
-            [self._normalize_collateral_type_expr().alias("_lookup_type")]
+            [normalise_collateral_type_expr().alias("_lookup_type")]
         ).with_columns(
             [
                 pl.when(bond_types)
@@ -667,47 +601,14 @@ class HaircutCalculator:
             suffix="_ht",
         )
 
-        # Bond eligibility check per CRR Art. 197
-        # Govt bonds: CQS 1-4 eligible (Art. 197(1)(b)), CQS 5-6/unrated ineligible
-        # Corp/institution bonds: CQS 1-3 eligible (Art. 197(1)(d)), CQS 4-6/unrated ineligible
-        is_govt = pl.col("_lookup_type") == "govt_bond"
-        is_corp = pl.col("_lookup_type") == "corp_bond"
-        cqs_val = pl.col("issuer_cqs")
-        _ineligible_bond = (is_govt & ((cqs_val >= 5) | cqs_val.is_null())) | (
-            is_corp & ((cqs_val >= 4) | cqs_val.is_null())
-        )
-
-        # P1.96 — CRR Art. 197 / Art. 207(2): covered bonds are NOT in the
-        # Art. 197(1) closed list of eligible financial collateral. They become
-        # eligible only under Art. 207(2) for repo / SFT / capital-markets-driven
-        # / secured-lending transactions. On non-SFT paths the collateral must
-        # be flagged ineligible so the existing _bond_ineligible machinery
-        # zeros value_after_haircut and overrides is_eligible_financial_collateral.
-        is_raw_covered_bond = pl.col("collateral_type").str.to_lowercase() == "covered_bond"
-        if "exposure_is_sft" in schema.names():
-            sft_flag = pl.col("exposure_is_sft").fill_null(False)
-        else:
-            sft_flag = pl.lit(False)
-        _ineligible_covered_bond_non_sft = is_raw_covered_bond & ~sft_flag
-        _ineligible_bond = _ineligible_bond | _ineligible_covered_bond_non_sft
-
-        # CRR / PS1-26 Art. 197(1)(h): a securitisation position is eligible
-        # financial collateral only if it is NOT a resecuritisation AND its own
-        # risk weight is <= 100%. A resecuritisation, a missing / >100% RW, or a
-        # CQS outside 1-3 (no Art. 224 Table 1 securitisation haircut exists) is
-        # ineligible — routed through the same _bond_ineligible machinery that
-        # zeros value_after_haircut and overrides is_eligible_financial_collateral.
-        # Null RW is CONSERVATIVE (cannot confirm <=100% => ineligible).
-        _is_securitisation = pl.col("_lookup_type") == "securitisation"
-        _sec_rw = pl.col("securitisation_position_risk_weight")
-        _ineligible_securitisation = _is_securitisation & (
-            pl.col("is_resecuritisation").fill_null(False)
-            | _sec_rw.is_null()
-            | (_sec_rw > 1.0)
-            | cqs_val.is_null()
-            | (cqs_val >= 4)
-        )
-        _ineligible_bond = _ineligible_bond | _ineligible_securitisation
+        # Debt-security eligibility per CRR Art. 197(1)(b)/(d)/(h) and Art. 207(2)
+        # (CQS gate, covered bonds outside a repo, resecuritisation / >100%-RW
+        # securitisation positions). The predicate lives in engine/crm/eligibility.py
+        # so the Art. 222 Simple Method reads the SAME definition — Art. 197 binds
+        # "under all approaches and methods". A gated row is routed through the
+        # _bond_ineligible machinery below, which zeros value_after_haircut and
+        # overrides is_eligible_financial_collateral.
+        _ineligible_bond = debt_security_ineligible_expr(schema.names())
 
         # Art. 227(2)(a): eligible for zero haircut if cash/deposit or CQS ≤ 1 sovereign bond
         _zero_type_eligible = pl.col("_lookup_type").is_in(["cash"]) | (
@@ -729,7 +630,9 @@ class HaircutCalculator:
         # haircut (a valuation parameter, left intact above): apply_haircuts zeros
         # value_after_haircut and clears is_eligible_financial_collateral for a
         # gated row, but its collateral_haircut keeps the looked-up band value.
-        _equity_listing_ineligible = non_main_index_equity_ineligible_expr(schema.names())
+        _equity_listing_ineligible = equity_ineligible_expr(
+            schema.names(), method=CRMCollateralMethod.COMPREHENSIVE
+        )
 
         # P1.274 — CRR/PS1-26 Art. 218: a credit-linked note is cash collateral
         # only when issued by the lending institution itself. A CLN not attested
@@ -767,49 +670,6 @@ class HaircutCalculator:
         )
 
         return collateral
-
-    @staticmethod
-    def _normalize_collateral_type_expr() -> pl.Expr:
-        """Map collateral_type aliases to canonical types for haircut table lookup."""
-        ct = pl.col("collateral_type").str.to_lowercase()
-        return (
-            pl.when(ct.is_in(["cash", "deposit", "credit_linked_note"]))
-            .then(pl.lit("cash"))
-            .when(ct == "gold")
-            .then(pl.lit("gold"))
-            .when(ct == "life_insurance")
-            .then(pl.lit("life_insurance"))
-            .when(
-                ct.is_in(["govt_bond", "sovereign_bond", "government_bond", "gilt"])
-                | ((ct == "bond") & (pl.col("issuer_type").str.to_lowercase() == "sovereign"))
-            )
-            .then(pl.lit("govt_bond"))
-            # CRR / PS1-26 Art. 197(1)(h): securitisation positions are a distinct
-            # eligible-collateral class with the Art. 224 Table 1 securitisation
-            # haircut (2x corporate). Keyed on collateral_type/issuer_type; the
-            # RW<=100% + non-resecuritisation eligibility gate is applied below.
-            .when(
-                (ct == "securitisation")
-                | ((ct == "bond") & (pl.col("issuer_type").str.to_lowercase() == "securitisation"))
-            )
-            .then(pl.lit("securitisation"))
-            .when(ct.is_in(["corp_bond", "corporate_bond", "covered_bond"]))
-            .then(pl.lit("corp_bond"))
-            .when(
-                (ct == "bond")
-                & pl.col("issuer_type")
-                .str.to_lowercase()
-                .is_in(["corporate", "pse", "institution"])
-            )
-            .then(pl.lit("corp_bond"))
-            .when(ct.is_in(["equity", "shares", "stock"]))
-            .then(pl.lit("equity"))
-            .when(ct.is_in(RECEIVABLE_COLLATERAL_TYPES))
-            .then(pl.lit("receivables"))
-            .when(ct.is_in(REAL_ESTATE_COLLATERAL_TYPES))
-            .then(pl.lit("real_estate"))
-            .otherwise(pl.lit("other_physical"))
-        )
 
     @cites("CRR Art. 237")
     @cites("CRR Art. 238")

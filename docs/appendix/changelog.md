@@ -319,6 +319,301 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   file — the previous pass removed one argument and left another, which is what
   per-instance fixing looks like from the outside.
 
+### Fixed
+- **P1.325 (supersedes P1.336) — the Art. 154(4A) post-model-adjustment and
+  mortgage-floor ordering was inverted.** Art. 154(4A)'s chapeau requires an
+  institution to *"increase the total risk-weighted exposure amounts calculated
+  under paragraphs 1, 3 and 4 … to reflect"* three things, which makes (a), (b)
+  and (c) **additive increases to one common pre-floor base** rather than a
+  pipeline. Limb (b) is a *test* — *"any amount needed to ensure that
+  risk-weighted exposure amounts … are greater than or equal to 10% of the
+  exposure value … **(following application of any post model adjustments
+  calculated under point (b) of Article 146(3))**"* — and that parenthetical is
+  what places limb (a) inside the comparison.
+
+  The engine applied the floor **first** and then multiplied the post-floor
+  RWEA by both scalars, so the floor increase was itself scaled by the PMAs.
+  Correcting it releases capital where the floor binds: on a 1,000,000 mortgage
+  at a 6% modelled weight with a 10% floor, `pma_rwa_scalar` 0.10 and
+  `unrecognised_exposure_scalar` 0.05, total RWEA moves **115,000 → 103,000**
+  (−10.4%), and the floor now binds at exactly its 10%-of-exposure-value
+  minimum instead of overshooting it.
+
+  **Limb (c) is deliberately kept outside the floor test.** Both plan bullets
+  treated `unrecognised_exposure_scalar` as a post-model adjustment, but
+  Art. 154(4A)(c) is *"any unrecognised exposure adjustment calculated under
+  **Article 166D(6)**"* — a different provision from the Art. 146(3)(b) PMAs
+  the (b) parenthetical admits. It is a sibling increase on the same base,
+  added outside the comparison.
+
+  Dormant in production: all four scalars default to `Decimal("0.0")` with
+  `enabled=False`, and nothing outside the test helper sets one, so no golden
+  or registered portfolio can observe this. The engine docstring and four unit
+  tests — including a class named `TestPMASequencing` whose methods asserted
+  "uses post floor rwa" — all stated the inverted order **and attributed it to
+  the article**; each is corrected here.
+
+- **P1.289 — the leased-asset residual weight divided by a fractional year
+  count instead of whole years.** Art. 134(7), verbatim and word-for-word
+  identical in both regimes: *"the risk-weighted exposure amounts shall be
+  calculated as follows: `1/t * 100% * residual value`, where t is the greater
+  of 1 and the **nearest number of whole years** of the lease remaining."* The
+  engine divided by the raw fraction.
+
+  The error runs in **both** directions, and the larger side is the
+  understatement: a lease with 1.49 years remaining returned a 0.671 weight
+  against a required 1.00 — **32.9pp understated** — while 2.6 years returned
+  0.385 against 0.333. The weight is properly a step function, and dividing by
+  the fraction smooths away the steps.
+
+  Ties round **down**: 2.5 years resolves to `t=2` and a 50% weight rather than
+  `t=3` and 33.3%. At exactly one half neither whole year is "nearest" and the
+  article does not say which to take, so the tie is resolved toward the higher
+  risk weight. The expression uses `ceil(t - 0.5)` rather than a rounding
+  routine, because banker's rounding would send 2.5 to 2 but 3.5 to 4 —
+  conservative on one and not the other.
+
+  The remaining-term basis and the floor at 1 were already correct. Both
+  regime arms now share one expression: PS1/26 Art. 134(7) carries an explicit
+  note that it corresponds to CRR Art. 134, so unlike Art. 120 — where the two
+  frameworks genuinely differ on maturity basis — there is no divergence to
+  preserve here.
+
+- **P1.293 — a retail transactor that fails the regulatory-retail test took
+  45% instead of 100%, a 55pp understatement.** PS1/26 Art. 123(3) prices a
+  retail exposure on **two** properties, not one: *"(a) **regulatory retail
+  exposures that are transactor exposures** shall be assigned a risk weight of
+  45%; (b) regulatory retail exposures that are not transactor exposures …
+  75%; and (c) **all other retail exposures that do not qualify as regulatory
+  retail exposures shall be assigned a risk weight of 100%**."* Art. 123A
+  qualification gates the 45% and the 75% alike, and only qualification
+  separates them from the 100%.
+
+  The engine ordered the transactor branch **ahead** of the
+  non-regulatory-retail branch, so the 100% limb was unreachable for any row
+  carrying `is_qrre_transactor` — it took 45% whether or not it qualified.
+  Measured across `RETAIL_QRRE`, `RETAIL_OTHER` and `RETAIL_SME`: 0.45 where
+  1.00 is due. Real-estate rows were never affected; the RE branches are
+  appended ahead of the retail block and first match wins, which is exactly
+  Art. 123(2) *"Retail exposures shall exclude real estate exposures"*.
+
+  **The gate is `qualifies_as_retail`, deliberately not
+  `exposure_class == RETAIL_QRRE`.** Art. 123 contains no QRRE concept — QRRE
+  is an IRB construct (Art. 147(5A)) — and gating on the class would have been
+  wrong in both directions: it would leave `RETAIL_OTHER`/`RETAIL_SME` rows at
+  the wrong 45%, and it would push to 75% every partially-drawn credit card
+  that P1.320 misclassifies into `RETAIL_OTHER`, whose 45% is correct precisely
+  because those rows **do** qualify as regulatory retail. Both limbs are pinned.
+
+  The estate had walked around this cell on both sides — one test set
+  `qualifies_as_retail=False` with the transactor flag **off**, another set the
+  flag **on** with qualification **true**, and the oracle carried three of the
+  four combinations. The missing fourth corner is now registered as **ORC-283**.
+  Three further tests asserted the transactor rate while passing no
+  qualification at all; each now names it, so they assert a deliberate value
+  rather than relying on the bypass that was the defect.
+
+- **P1.294 — the whole-loan residential-mortgage excess took a flat 75%
+  regardless of who the borrower was.** CRR Art. 124(1), first sub-paragraph,
+  second sentence: *"The part of the exposure that exceeds the mortgage value
+  of the immovable property shall be assigned the risk weight applicable to the
+  unsecured exposures of the counterparty involved."* That is an open referral
+  to the obligor's own class ladder. The engine blended the portion above the
+  Art. 125(2)(d) 80% limit at a fixed parameter with **no obligor input at
+  all** — neither `qualifies_as_retail`, nor `cqs`, nor `cp_is_natural_person`
+  — so every borrower received the same blended weight. Measured at LTV 1.00,
+  the engine returned 0.4300 for all eight obligor shapes tested.
+
+  The excess now resolves through the counterparty's own unsecured weight
+  (`engine/sa/re_residual_rw.py`). At LTV 1.00: a natural person meeting
+  Art. 123 keeps **0.4300** — the case that was already correct — while a
+  natural person failing it takes 0.4800, and a corporate takes its Art. 122
+  ladder weight: **0.3200** at CQS 1, 0.3800 at CQS 2, 0.4800 at CQS 3-4,
+  **0.5800** at CQS 5-6.
+
+  **Direction is two-way**, which the item was not filed as: the excess moves
+  down for a CQS 1-2 corporate and up for a lower-rated one or a non-qualifying
+  individual. A row carrying no obligor information now falls to the
+  conservative 100% limb rather than the old flat 75%.
+
+  Scope is the **whole-loan** path only. The real-estate splitter already
+  implemented Art. 124(1) correctly on its residual leg — it keeps the original
+  counterparty class so the standard corporate/retail path applies — and
+  `re_split/flagging.py` excludes pre-classified mortgage rows from the
+  splitter, which is what kept the whole-loan blend live and wrong. Neither
+  neighbouring implementation was safe to copy: the commercial blend three
+  lines above resolves through the corporate ladder unconditionally (right for
+  CRE, wrong for RRE), and the Basel 3.1 arm's Art. 124L table carries an 85%
+  other-SME band and a social-housing floor that are PS1/26-only.
+
+- **P1.330 — the Art. 197 collateral-eligibility gate was not applied on the
+  Art. 222 Financial Collateral Simple Method path.** `crm/simple_method.py`
+  filtered on the firm-supplied `is_eligible_financial_collateral` attestation
+  alone, while `apply_haircuts` — the only place the engine overrode that
+  attestation — runs later, at Step 4. So the Simple Method recognised
+  collateral the Comprehensive Method rejects, at the collateral's own SA risk
+  weight floored at 20%.
+
+  The regulation is stricter than the defect report assumed. Art. 197's heading
+  is *"Eligibility of collateral under **all approaches and methods**"*, while
+  Art. 198's is *"**Additional** eligibility … under the Financial Collateral
+  **Comprehensive** Method"* and its body reads *"in addition to the collateral
+  established in Article 197, **where an institution uses** the Financial
+  Collateral Comprehensive Method"*. Art. 222 then operates only on *"eligible
+  financial collateral"*.
+
+  The predicates now live in one place, `engine/crm/eligibility.py`, read by
+  both methods — with the equity limb **parametrised by method**, which is the
+  load-bearing detail. Under the Simple Method the gate is Art. 197(1)(f)
+  **alone** (`is_equity & ~is_main_index`); the Comprehensive Method adds
+  Art. 198(1)(a)'s listed-on-a-recognised-exchange limb. Reusing the existing
+  `non_main_index_equity_ineligible_expr` — which is the Art. 197 ∪ Art. 198
+  union — would have left non-main-index *listed* equity eligible under
+  Art. 222 and one of the seven target oracles still failing.
+
+  Seven oracle disagreements discharged and removed from `KNOWN_DISAGREEMENTS`:
+  ORC-280 (the magnitude case — a CQS 5 sovereign at full cover, RWA
+  1,000,000 → 1,500,000, a 33.3% understatement) and ORC-257 / 258 / 275 / 278 /
+  279 / 281 at 1,350,000 → 1,500,000 each. ORC-274 / 276 / 277 remain passing
+  and untouched: they are equally ungated but neutral, because a CQS 6 security
+  carries the obligor's own 150%. `ead_final` is unchanged throughout —
+  Art. 222 substitutes risk weights, it does not reduce EAD.
+
+  **Direction is not one-way, contrary to the original report.** The blend is
+  `share × collateral_RW + (1 − share) × obligor_RW`, so gating an ineligible
+  pledge out moves the row toward the obligor's own weight — upward where the
+  obligor is riskier than the pledge, and *downward* where it is safer. At an
+  obligor RW of 20% the same gate moves a row 100% → 20%. The belief that the
+  effect was uniformly anti-conservative came from the oracle family itself:
+  `tests/oracle/derivations/crm_sa.py` blends against a single module constant
+  `OBLIGOR_RW = 1.50`, the maximum SA corporate weight, so it is structurally
+  incapable of exhibiting the other sign.
+
+  No registered portfolio moves — the estate's only FCSM golden book pledges
+  CQS 1 collateral throughout, which is Art. 197-eligible, so the gate cannot
+  bite there. The extraction also improved three ratchets
+  (`engine_fill_null_sites` 472 → 469, `engine_presence_guard_sites` 358 → 355,
+  `cites_decorators` 336 → 340).
+
+- **P1.332 — the CRR UK OV1 of-which block did not partition row 1: every equity
+  leg was counted twice.** `reporting/pillar3/ov1.py`'s `_APPROACH_REFS` keyed on
+  the approach **label**, admitting `"equity"` into both row 2 ("of which: the
+  standardised approach") and row UK 4a ("of which: equities under the simple
+  risk weighted approach"). Verified verbatim against the Annex II instructions:
+  UK 4a is Art. 155(2) simple-risk-weighted equity — an **IRB Chapter 3**
+  treatment — while row 2 is SA Chapter 2, and rows 3 and 5 each carry an
+  explicit "excluding the RWEAs disclosed in row 4 … and in row UK 4a"
+  carve-out. That exclusion only makes sense if the of-which rows are mutually
+  exclusive, so the block is a **partition**, not an itemisation.
+
+  The rows now key on the equity **method**, and the correction runs in **both**
+  directions — this is the part the original plan bullet had backwards:
+  - `equity_method == "irb_simple"` → UK 4a only, **removed from row 2**
+  - `equity_method == "sa"`, or the column absent/null → row 2 only, **removed
+    from UK 4a**
+
+  On the rich CRR book the leg is `irb_simple` (listed, 290%), so row 2 drops
+  19,128,450.00 → 16,228,450.00 (own funds 1,530,276.00 → 1,298,276.00) and UK
+  4a keeps its 2,900,000.00. On a book whose equity arrives from the loans table
+  with no sealed method — genuinely Art. 133 SA — the opposite applies: row 2
+  keeps its figure and UK 4a drops to 0.00. Row 1 is unchanged in both cases;
+  this is a disclosure re-split with no capital effect. Row 2 also now agrees
+  with C 02.00 r0060, which it previously contradicted by exactly the equity leg.
+
+  CRR-only: PS1/26 emits no UK 4a row and Art. 147A stamps every equity leg
+  `sa`, so the Basel 3.1 partition was already exact (measured delta 0.00).
+
+  The membership test is derived in `_prepare` rather than declared as a
+  `RowPredicate` `equals`, deliberately: `RowPredicate` returns `pl.lit(False)`
+  for the **whole row** when any column it names is absent, so declaring
+  `equity_method` there would have zeroed row 2 on every portfolio without an
+  `equity_exposures` leg. Pinned by
+  `tests/acceptance/reporting/test_p1_332_ov1_equity_partition.py`, whose
+  assertions cover both the cell that moves and the cell that survives — the
+  partition identity alone cannot tell the two candidate fixes apart.
+
+- **P1.342 — a QCCP trade exposure was one null away from a 50× overstatement.**
+  PS1/26 Art. 121(6)'s sovereign floor for unrated institutions had no
+  carve-out for QCCP **trade** exposures, which CRR Art. 306 pins at 2%
+  (clearing member's own) / 4% (client-cleared) as lex specialis. The floor did
+  not in fact fire on those rows — but only by accident. `original_currency` is
+  stamped by the FX converter, and the synthetic CCR / SFT netting-set rows are
+  minted *after* that stage, so they carried it NULL; the domesticity test
+  evaluated to null, and `pl.when(null)` takes the `otherwise` branch. The rows
+  were right for a reason nobody chose, and the census recorded both of them on
+  `UNKNOWN_FALLBACK` — "the rule could not be evaluated" — rather than on any
+  deliberate limb.
+
+  That made the accident load-bearing: removing the nullity without adding the
+  carve-out takes the proprietary leg from `risk_weight` 0.02 to 1.00 and the
+  client-cleared leg from 0.04 to 1.00. Measured, on the fixture built for this
+  item: 109,933.82 → 5,496,691.10 of RWEA under CRR. The sibling item P1.333
+  proposes exactly that nullity fix, which is why this one is sequenced first.
+
+  Two changes, both required:
+  - **The Art. 306 carve-out**, first in the floor's branch chain because it is
+    lex specialis. Its predicate carries a **trade-exposure** term
+    (`risk_type` in `{CCR_DERIVATIVE, CCR_SFT}`) as well as a QCCP one, and
+    that is the whole of its difference from the pin's own predicate in
+    `risk_weights.py`. CRR Art. 107(2) sends only trade exposures and default
+    fund contributions to the Chapter 6 Section 9 regime; "all other types of
+    exposures to a qualifying CCP" are treated as exposures to an institution,
+    so an **ordinary loan to a QCCP stays inside Art. 121(6)**. Copying the
+    pin's predicate would have exempted that loan too.
+  - **`original_currency` set alongside `currency` at the producers**
+    (`engine/ccr/pipeline_adapter.py`, `engine/sft/fccm.py`). Those rows never
+    pass the FX converter, so `currency` *is* the denomination there. The
+    shared `denomination_currency_expr` was deliberately **not** touched: it
+    has five other consumers and loosening it is RWA-*reducing*, able to grant
+    the Art. 114(4)/(7) 0% CGCB weight and the Art. 115(5) 20% to any row with
+    a null `original_currency`.
+
+  Number-neutral on every row in the estate — the carve-out's value leg is the
+  incumbent `risk_weight` — but the two QCCP rows now land on a named
+  `qccp_trade_exposure` limb instead of `UNKNOWN_FALLBACK`, which is the point:
+  the 2% is now a decision the engine makes rather than one it falls into.
+  `scripts/branch_census_baseline.json` records that move by hand, including
+  `UNKNOWN_FALLBACK` becoming dead — `--update-baseline` refuses to remove a
+  `reached` entry by design, and banking it silently is what the ratchet exists
+  to prevent.
+
+- **P1.317 — a Basel 3.1 equity leg was risk-weighted and then dropped, taking
+  its RWEA out of every template.** An equity-class exposure booked on the
+  **loans** (or contingents) table resolved a `risk_weight` of 2.50 — the
+  PS1/26 Art. 133(3) 250% equity weight — and an `sa_rwa` of EAD × 2.50, and
+  then carried `rwa_final` **NULL**. Because `rwa_final` is the carrier every
+  COREP / Pillar 3 credit-risk row and every OV1 line sums, the exposure left
+  the submission with no error, no null cell and no failing published rule: the
+  row was simply not there. On the measured portfolio that was 3,750,000 of
+  RWEA and 300,000 of own-funds requirement (CRR Art. 92(1)).
+
+  Cause was a mismatch between two row selections that had to agree and did
+  not. `engine/stages/calc.py` splits the portfolio onto the SA branch with
+  `~is_irb & ~is_slotting`, which admits `equity` alongside `standardised`; but
+  `engine/sa/calculator.py::calculate_unified` gated its `rwa_pre_factor`
+  product on the narrower `approach == 'standardised'`, so equity rows reached
+  the branch, were weighted, and then fell through its `.otherwise(...)` arm.
+  Under the Basel 3.1 output-floor path that branch performs no arithmetic of
+  its own — it only aliases `rwa_post_factor -> rwa_final` — so a row excluded
+  from the product had nowhere to put a weight the engine had already resolved.
+  The gate now tests SA-**branch** membership rather than the SA label.
+
+  CRR was never affected, and the asymmetry is itself informative: the CRR pack
+  disables `output_floor`, so CRR takes `calculate_branch`, which computes RWA
+  unconditionally. A leg identical in every other respect published correctly
+  under one regime and vanished under the other.
+
+  Direction is RWA-**increasing**. Equity is not floor-eligible, so U-TREA and
+  S-TREA are unchanged and the output floor cannot absorb the increase.
+  Population is narrower than "every equity holding": a leg arriving through
+  the dedicated `equity_exposures` table was already correct in both regimes.
+  Pinned by `tests/acceptance/basel31/test_p1_317_b31_loans_table_equity_rwa_final.py`
+  (8 tests — the B31 value, a whole-frame no-null-`rwa_final` sweep, an
+  approach-placement guard so the row cannot be "fixed" by reclassifying it out
+  of equity, and CRR controls). The `xfail(strict=True)` on
+  `tests/conformance/test_cell_rederivation.py::test_every_equity_leg_carries_its_rwea_to_rwa_final`
+  is discharged and removed in the same change.
+
 ### Changed
 - Both escapes are written up in `docs/development/escape-log.md`, each with an
   escape class, a named gate change and a red observed against the genuine

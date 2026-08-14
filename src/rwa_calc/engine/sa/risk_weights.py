@@ -118,6 +118,7 @@ from rwa_calc.engine.sa.jurisdiction import (
     pse_jurisdiction_not_permitted_expr,
     pse_short_term_eligible_expr,
 )
+from rwa_calc.engine.sa.re_residual_rw import crr_art_124_1_unsecured_cp_rw_expr
 from rwa_calc.engine.sa.rgla import is_rgla_sovereign_expr, rgla_sovereign_rw_expr
 from rwa_calc.engine.sa.sovereign_derived import (
     cqs_table_lookup_expr,
@@ -251,10 +252,12 @@ _ECA_MEIP_RW = lookup_float_map(_CRR_PACK.lookup("eca_meip_risk_weights"))
 # CRR-specific scalars (Art. 112-134).
 _SA_CRR_RW: dict[str, float] = {
     "high_risk": scalar_value(_CRR_PACK.scalar_param("high_risk_rw")),
-    # Residential mortgage loan-splitting (Art. 125)
+    # Residential mortgage loan-splitting (Art. 125). ``rw_high_ltv`` is NOT
+    # read here: the weight on the above-threshold part is Art. 124(1)'s
+    # referral to the counterparty (see engine/sa/re_residual_rw.py), which
+    # resolves to that 75% only for an Art. 123 retail obligor.
     "resi_ltv_threshold": float(RESIDENTIAL_MORTGAGE_PARAMS["ltv_threshold"]),
     "resi_rw_low": float(RESIDENTIAL_MORTGAGE_PARAMS["rw_low_ltv"]),
-    "resi_rw_high": float(RESIDENTIAL_MORTGAGE_PARAMS["rw_high_ltv"]),
     # Commercial RE (Art. 126)
     "cre_ltv_threshold": float(COMMERCIAL_RE_PARAMS["ltv_threshold"]),
     "cre_rw_low": float(COMMERCIAL_RE_PARAMS["rw_low_ltv"]),
@@ -448,6 +451,43 @@ def _apply_obligor_st_contamination_override(exposures: pl.LazyFrame) -> pl.Lazy
 
 
 @cites("CRR Art. 137")
+@cites("CRR Art. 134")
+def _leased_residual_rw_expr() -> pl.Expr:
+    """Art. 134(7): ``1/t`` where ``t`` is whole years, not a fraction.
+
+    Verbatim, and identical in both regimes — CRR Art. 134(7) (``crr.pdf``
+    PAGE_INDEX 131) and PS1/26 Art. 134(7) (``ps126app1.pdf`` PAGE_INDEX 68,
+    which carries the note "This rule corresponds to Article 134 of CRR as it
+    applied immediately before revocation by the Treasury"):
+
+        "the risk-weighted exposure amounts shall be calculated as follows:
+        1/t * 100 % * residual value, where t is the greater of 1 and the
+        **nearest number of whole years** of the lease remaining."
+
+    Three things the sentence fixes, all implemented here:
+
+    - ``t`` counts years **remaining**, not the original lease term, so the
+      column is ``residual_maturity_years``.
+    - ``t`` is the **nearest whole** number of years. Dividing by the raw
+      fraction is a both-direction misstatement: a lease with 1.49 years left
+      returns 0.671 against a required 1.00 (a 32.9pp **understatement**, the
+      worst case), while 2.6 years returns 0.385 against 0.333 (a 5.1pp
+      over-statement).
+    - ``t`` is floored at 1, so a lease inside its final year still takes 100%.
+
+    Ties are rounded **down**, i.e. 2.5 years resolves to t=2 and a 50% weight
+    rather than t=3 and 33.3%. At exactly one half neither whole year is
+    "nearest" and the article does not say which to take, so the tie is
+    resolved toward the higher risk weight. ``ceil(t - 0.5)`` expresses that
+    directly and avoids depending on the tie behaviour of a rounding routine —
+    banker's rounding would send 2.5 to 2 but 3.5 to 4, which is conservative
+    on one and not the other.
+    """
+    years = pl.col("residual_maturity_years").fill_null(1.0)
+    whole_years = (years - 0.5).ceil().clip(lower_bound=1.0)
+    return pl.lit(1.0) / whole_years
+
+
 def _eca_meip_rw_expr() -> pl.Expr:
     """Build Polars expression mapping ``cp_eca_score`` (0-7) to sovereign RW.
 
@@ -522,29 +562,49 @@ def _b31_append_high_risk_branch(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
 def _b31_append_retail_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
     """Append Basel 3.1 retail-class risk-weight branches (Art. 123).
 
-    Covers the regulatory retail class only (uc contains "RETAIL"):
-    - QRRE transactor: 45% (Art. 123(2)).
+    Covers the retail classes (uc contains "RETAIL"):
+    - Transactor: 45% (Art. 123(3)(a)).
     - Payroll/pension loans: 35% (Art. 123(4)).
     - Non-regulatory retail (fails Art. 123A criteria): 100% (Art. 123(3)(c)).
-    - Regulatory retail (non-mortgage): 75% flat.
+    - Regulatory retail (non-mortgage): 75% flat (Art. 123(3)(b)).
+
+    Art. 123(3) prices the exposure on TWO properties, not one: (a) and (b)
+    both open "regulatory retail exposures that are/are not transactor
+    exposures", and (c) sweeps up "all other retail exposures that do not
+    qualify as regulatory retail exposures". So Art. 123A qualification gates
+    the 45% and the 75% alike, and only qualification separates them from the
+    100%. Gating the 45% on the transactor property ALONE made (c) unreachable
+    for any transactor row — a 55pp understatement (P1.293).
+
+    The gate is deliberately NOT ``exposure_class == RETAIL_QRRE``: "transactor"
+    is an Art. 123 property of the exposure, while QRRE is an IRB construct
+    (Art. 147(5A)), and a partially-drawn card classified RETAIL_OTHER is still
+    owed the 45% when it qualifies as regulatory retail.
 
     The SME-managed-as-retail and corporate-SME branches stay in the parent
     override (they gate on SME class membership rather than RETAIL).
     """
+    # Art. 123A qualification, shared by the Art. 123(3)(a) 45% gate and the
+    # Art. 123(3)(c) 100% limb so the two cannot drift apart (and so the pair
+    # costs one ``fill_null`` site rather than two).
+    qualifies = pl.col("qualifies_as_retail").fill_null(False)
     return (
-        # QRRE transactor: 45% (Art. 123(2)).
+        # Transactor: 45% (Art. 123(3)(a)) — for "regulatory retail exposures
+        # that ARE transactor exposures", hence conjoined with Art. 123A.
         chain.when(
-            uc.str.contains("RETAIL", literal=True) & pl.col("is_qrre_transactor").fill_null(False)
+            uc.str.contains("RETAIL", literal=True)
+            & pl.col("is_qrre_transactor").fill_null(False)
+            & qualifies
         )
         .then(pl.lit(_SA_B31_RW["qrre_transactor"]))
-        # Payroll/pension loans: 35% (Art. 123(4)).
+        # Payroll/pension loans: 35% (Art. 123(4)). Ordering against the
+        # transactor branch above is untouched here and audited by P1.350 —
+        # Art. 123(3) opens "Subject to paragraph 4", which reads as payroll
+        # outranking the whole paragraph-3 ladder rather than sitting inside it.
         .when(uc.str.contains("RETAIL", literal=True) & pl.col("is_payroll_loan").fill_null(False))
         .then(pl.lit(_SA_B31_RW["payroll"]))
         # Non-regulatory retail (fails Art. 123A criteria): 100%.
-        .when(
-            uc.str.contains("RETAIL", literal=True)
-            & (pl.col("qualifies_as_retail").fill_null(False) == False)  # noqa: E712
-        )
+        .when(uc.str.contains("RETAIL", literal=True) & ~qualifies)
         .then(pl.lit(_SA_B31_RW["non_reg_retail"]))
         # Regulatory retail (non-mortgage): 75% flat.
         .when(uc.str.contains("RETAIL", literal=True))
@@ -734,6 +794,12 @@ def _crr_append_real_estate_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThe
         CORPORATE_RISK_WEIGHTS,
         pl.lit(float(CORPORATE_RISK_WEIGHTS[CQS.UNRATED])),
     )
+    # CRR Art. 124(1) again, on the Art. 125 RRE blend: the part above the
+    # Art. 125(2)(d) 80% limit takes the counterparty's unsecured RW. Unlike
+    # the CRE residual above it resolves the obligor's OWN ladder (Art. 123
+    # retail ahead of Art. 122 corporate) — an RRE obligor is usually a natural
+    # person, so the unconditional corporate lookup is wrong here.
+    resi_residual_rw = crr_art_124_1_unsecured_cp_rw_expr()
     return (
         # Commercial RE must precede residential — see is_commercial_re_class.
         # CRR Art. 126: LTV + income cover.
@@ -752,9 +818,7 @@ def _crr_append_real_estate_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThe
             .then(pl.lit(_SA_CRR_RW["resi_rw_low"]))
             .otherwise(
                 _SA_CRR_RW["resi_rw_low"] * _SA_CRR_RW["resi_ltv_threshold"] / ltv_safe
-                + _SA_CRR_RW["resi_rw_high"]
-                * (ltv_safe - _SA_CRR_RW["resi_ltv_threshold"])
-                / ltv_safe
+                + resi_residual_rw * (ltv_safe - _SA_CRR_RW["resi_ltv_threshold"]) / ltv_safe
             )
         )
     )
@@ -1210,7 +1274,7 @@ def _apply_b31_risk_weight_overrides(
         )
         .then(pl.lit(_SA_SHARED_RW["other_collection"]))
         .when((uc == "OTHER") & (pl.col("cp_entity_type").fill_null("") == "other_residual_lease"))
-        .then(pl.lit(1.0) / pl.col("residual_maturity_years").fill_null(1.0).clip(lower_bound=1.0))
+        .then(_leased_residual_rw_expr())
         .when(uc == "OTHER")
         .then(pl.lit(_SA_SHARED_RW["other_default"]))
         # Equity (Art. 133(3)): 250% — full equity treatment (CIU,
@@ -1407,7 +1471,7 @@ def _apply_crr_risk_weight_overrides(
         )
         .then(pl.lit(_SA_SHARED_RW["other_collection"]))
         .when((uc == "OTHER") & (pl.col("cp_entity_type").fill_null("") == "other_residual_lease"))
-        .then(pl.lit(1.0) / pl.col("residual_maturity_years").fill_null(1.0).clip(lower_bound=1.0))
+        .then(_leased_residual_rw_expr())
         .when(uc == "OTHER")
         .then(pl.lit(_SA_SHARED_RW["other_default"]))
         # Equity (Art. 133(2)): flat 100%.

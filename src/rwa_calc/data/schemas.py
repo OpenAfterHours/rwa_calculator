@@ -2588,6 +2588,20 @@ RISK_TYPE_SYNONYMS: dict[str, str] = {
     "low_risk": "LR",
 }
 
+# The domain actually ACCEPTED on the ``risk_type`` / ``underlying_risk_type``
+# input columns: the canonical codes plus every documented synonym above.
+#
+# This is the constraint set, deliberately wider than ``VALID_RISK_TYPES_INPUT``
+# (which stays the canonical output vocabulary). ``validate_column_values``
+# lower-cases both sides, so a short code like ``"fr"`` was already accepted —
+# but the long forms were not, and a preparer writing the documented
+# ``"full_risk"`` got a DQ006 while the CCF builders resolved it correctly to
+# 100%. An error that fires on input the engine handles perfectly is worse than
+# no error at all: DQ006 is the same code that carries the genuinely
+# unrecognised case, so a false positive on documented spellings trains readers
+# to ignore the true ones (P1.354).
+VALID_RISK_TYPES_ACCEPTED = VALID_RISK_TYPES_INPUT | set(RISK_TYPE_SYNONYMS)
+
 # CRR Annex I paras 1-4 / Art. 111(1): canonical normalised OBS *product* keys
 # accepted on the ``obs_product`` column. Each maps (via ANNEX1_PRODUCT_RISK_TYPE
 # in data/tables/ccf.py) to an abstract Annex I risk_type bucket. Distinct from
@@ -2878,8 +2892,8 @@ TABLE_FOREIGN_KEYS: dict[str, tuple[ForeignKey, ...]] = {
 COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     "facilities": {
         "seniority": VALID_SENIORITY,
-        "risk_type": VALID_RISK_TYPES_INPUT,
-        "underlying_risk_type": VALID_RISK_TYPES_INPUT,
+        "risk_type": VALID_RISK_TYPES_ACCEPTED,
+        "underlying_risk_type": VALID_RISK_TYPES_ACCEPTED,
         "obs_product": VALID_OBS_PRODUCTS,
         "purchased_receivables_subtype": VALID_PURCHASED_RECEIVABLES_SUBTYPES,
     },
@@ -2891,8 +2905,8 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     "contingents": {
         "seniority": VALID_SENIORITY,
         "bs_type": VALID_BS_TYPES,
-        "risk_type": VALID_RISK_TYPES_INPUT,
-        "underlying_risk_type": VALID_RISK_TYPES_INPUT,
+        "risk_type": VALID_RISK_TYPES_ACCEPTED,
+        "underlying_risk_type": VALID_RISK_TYPES_ACCEPTED,
         "obs_product": VALID_OBS_PRODUCTS,
         "purchased_receivables_subtype": VALID_PURCHASED_RECEIVABLES_SUBTYPES,
         "exposure_collateral_type": VALID_COLLATERAL_TYPES,

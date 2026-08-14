@@ -624,6 +624,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the two cannot disagree about what "stale" means. A target that genuinely needs
   a write and cannot take one still fails, which is the correct outcome.
 
+- **The source distribution shipped the entire working tree, including shell and
+  git config.** `pyproject.toml` declared a wheel target but **no sdist target at
+  all**, so hatchling fell back to "everything the root `.gitignore` does not
+  exclude". `tmp/` is ignored only by a nested `tmp/.gitignore` holding a bare
+  `*`, which hatchling never reads. The 0.3.26 sdist came to **208 MB** and
+  contained `.bashrc`, `.zshrc`, `.profile`, `.gitconfig`, `.claude/`, `.cache`,
+  `.hypothesis`, two 26 MB `ruff` binaries out of a uv cache, and whole repo
+  clones from past `/next-items` worktrees. It was never published: the build
+  aborted because that uv cache holds a venv whose `bin/python` is an absolute
+  symlink, and an sdist may not carry one. The crash was the only thing standing
+  between a working tree and PyPI.
+
+  There is now an explicit `[tool.hatch.build.targets.sdist]` allowlist, and every
+  pattern is **root-anchored**. That anchoring is the load-bearing part: these are
+  gitignore-style patterns, so an unanchored `src` matches a directory of that
+  name at any depth, and the worktree clones under `tmp/worktrees/` and
+  `.claude/worktrees/` each carry their own `src/`, `tests/` and `docs/`. A first
+  attempt without leading slashes still shipped 59 MB of them. Result: 6.2 MB
+  sdist, 1.5 MB wheel, ten top-level entries. An allowlist rather than a blocklist
+  because a blocklist needs a new row for every scratch directory anyone adds
+  next, and the failure mode of forgetting one is publishing it.
+
 ### Changed
 - Both escapes are written up in `docs/development/escape-log.md`, each with an
   escape class, a named gate change and a red observed against the genuine

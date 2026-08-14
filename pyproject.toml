@@ -1,6 +1,6 @@
 [project]
 name = "rwa-calc"
-version = "0.3.25"
+version = "0.3.26"
 description = "Basel 3.1 Credit Risk RWA Calculator compliant with PRA PS1/26"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -79,6 +79,30 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/rwa_calc"]
+
+# Allowlist, not a blocklist. Hatchling honours the ROOT .gitignore only, so a
+# nested ignore (tmp/.gitignore is a bare `*`) never reaches it: with no sdist
+# target declared at all, `uv build` swallowed the whole working tree — 208 MB
+# carrying a uv cache whose venv holds absolute symlinks (which fails the build
+# outright) and, worse, shell and git config that must never be published. A
+# blocklist would have to grow a row for every new scratch directory; this only
+# ever ships what is named here.
+[tool.hatch.build.targets.sdist]
+# Every pattern is root-anchored with a leading slash. These are gitignore-style
+# patterns, so a bare `src` matches a directory of that name at ANY depth — and
+# `tmp/worktrees/*/` and `.claude/worktrees/*/` hold whole repo clones from past
+# /next-items batches, each with its own src/, tests/ and docs/. Unanchored
+# patterns pull all of them back in.
+include = [
+    "/src",
+    "/tests",
+    "/scripts",
+    "/docs",
+    "/README.md",
+    "/LICENSE",
+    "/pyproject.toml",
+    "/uv.lock",
+]
 
 [tool.ruff]
 target-version = "py313"

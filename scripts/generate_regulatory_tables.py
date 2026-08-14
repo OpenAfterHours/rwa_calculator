@@ -653,11 +653,7 @@ def main() -> int:
     targets = render_targets()
 
     if args.check:
-        stale = [
-            path
-            for path, content in sorted(targets.items())
-            if (path.read_text(encoding="utf-8") if path.exists() else "") != content
-        ]
+        stale = [path for path, content in sorted(targets.items()) if _is_stale(path, content)]
         if stale:
             listing = "\n".join(f"  - {p.relative_to(REPO_ROOT).as_posix()}" for p in stale)
             sys.stderr.write(
@@ -669,15 +665,26 @@ def main() -> int:
             return 1
         return 0
 
-    for path, content in sorted(targets.items()):
-        path.write_text(content, encoding="utf-8")
-    sys.stderr.write(f"wrote {len(targets)} target(s)\n")
+    # Write only what actually differs. A target that already holds the rendered
+    # text needs no write, and issuing one anyway makes the run fail on any
+    # target that is merely read-only — the release bumps a version stamp the
+    # page carries and the skill fragments do not, so the common case is a
+    # single stale page among a dozen fresh fragments.
+    written = [path for path, content in sorted(targets.items()) if _is_stale(path, content)]
+    for path in written:
+        path.write_text(targets[path], encoding="utf-8")
+    sys.stderr.write(f"wrote {len(written)} of {len(targets)} target(s)\n")
     return 0
 
 
 # ---------------------------------------------------------------------------
 # Private helpers — skill fragments
 # ---------------------------------------------------------------------------
+
+
+def _is_stale(path: Path, content: str) -> bool:
+    """True when `path` does not already hold exactly `content`."""
+    return (path.read_text(encoding="utf-8") if path.exists() else "") != content
 
 
 def _fragments_by_path() -> dict[Path, list[Fragment]]:

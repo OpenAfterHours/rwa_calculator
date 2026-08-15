@@ -2396,6 +2396,7 @@
         "tests/acceptance/crr/test_p1_249_art_162_1_firb_fixed_maturity.py",
         "tests/acceptance/crr/test_p1_273_art_211_lease_collateral.py",
         "tests/acceptance/crr/test_p1_278_art_160_2_top_down_pd.py",
+        "tests/acceptance/crr/test_p1_351_retail_supervisory_subtype.py",
         "tests/acceptance/crr/test_scenario_crr_b_firb.py",
         "tests/acceptance/test_percent_scale_pd_feed.py",
         "tests/contracts/test_collateral_type_dispatch.py",
@@ -2580,6 +2581,7 @@
       "test_files": [
         "tests/acceptance/basel31/test_p1_183_art_164_portfolio_lgd_floor.py",
         "tests/acceptance/crr/test_p1_183_art_164_portfolio_lgd_floor.py",
+        "tests/acceptance/crr/test_p1_351_retail_supervisory_subtype.py",
         "tests/fixtures/generate_all.py",
         "tests/fixtures/p1_183/__init__.py",
         "tests/fixtures/p1_183/p1_183.py",
@@ -7482,6 +7484,7 @@
         "tests/acceptance/basel31/test_p1_273_art_211_lease_collateral.py",
         "tests/acceptance/basel31/test_p2_43_psm_lgd_source_switch.py",
         "tests/acceptance/crr/test_p1_278_art_160_2_top_down_pd.py",
+        "tests/acceptance/crr/test_p1_351_retail_supervisory_subtype.py",
         "tests/fixtures/p1_130/p1_130.py",
         "tests/fixtures/p1_151/p1_151.py",
         "tests/fixtures/p1_157/p1_157.py",

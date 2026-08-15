@@ -1081,7 +1081,19 @@ ENTRIES: dict[str, RuleEntry] = {
             CQS.UNRATED: Decimal("0.50"),
         },
         key="cqs",
-        citation=Citation("CRR", "117", "(1) Table 2B non-named MDB RW by CQS"),
+        # PS1/26, not CRR. UK CRR Art. 117 has no table at all (verified verbatim,
+        # crr.pdf PAGE_INDEX 115): para 1 says a non-named MDB "shall be treated
+        # in the same manner as exposures to institutions", para 2 lists the
+        # named 0% MDBs. Table 2B is PS1/26 Art. 117(1)(a).
+        #
+        # The ENTRY nonetheless stays in this CRR pack, deliberately. It is read
+        # at MODULE IMPORT off the CRR pack by engine/sa/guarantor_rw.py and
+        # engine/sa/crr_risk_weight_tables.py, so moving it to packs/b31.py is
+        # import-time fatal (measured: KeyError "rulepack 'crr@2026-01-01' has no
+        # entry 'mdb_risk_weights_table_2b'"). Under CRR the table is unreachable
+        # anyway — the Art. 117(1) institution-routing fix sends non-named MDBs
+        # through the institution ladder — so only the citation was ever wrong.
+        citation=Citation("PS1/26", "117", "(1)(a) Table 2B non-named MDB RW by CQS"),
         default=Decimal("0.50"),
     ),
     # Institution RW tables (CRR Art. 120 Table 3 ECRA / Art. 120(2) Table 4

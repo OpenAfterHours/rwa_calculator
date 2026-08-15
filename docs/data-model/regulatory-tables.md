@@ -6,8 +6,8 @@ Every cited regulatory value in the rulepack packs `src/rwa_calc/rulebook/packs/
 
 Package version `0.3.26`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — 203 entries, content hash `e0d9bc1d5aa1621e`
-- **Basel 3.1** (`b31` @ 2027-01-01) — 235 entries, content hash `f4c8c5f2ac796cb7`
+- **CRR** (`crr` @ 2026-01-01) — 203 entries, content hash `5d5c57b888cb3249`
+- **Basel 3.1** (`b31` @ 2027-01-01) — 235 entries, content hash `a0784d121c08ecf1`
 
 ## Regime features
 
@@ -144,7 +144,7 @@ Decimal-valued parameters (`ScalarParam`). Risk weights and factors are decimal 
 | `irb_maturity_floor_repo_sft_years` | `0.01369863013698630136986301370` | `0.01369863013698630136986301370` | CRR Art. 162(2) |
 | `irb_scaling_factor` | `1.06` | `1.0` | CRR Art. 153(1) / PS1/26, paragraph 153 |
 | `mdb_named_zero_rw` | `0.00` | `0.00` | CRR Art. 117 |
-| `mdb_unrated_rw` | `0.50` | `0.50` | CRR Art. 117 |
+| `mdb_unrated_rw` | `0.50` | `0.50` | PS1/26, paragraph 117 |
 | `mf_margined_scalar` | `1.5` | `1.5` | CRR Art. 279c |
 | `mf_unmargined_cap_years` | `1.0` | `1.0` | CRR Art. 279c |
 | `mf_unmargined_denom_years` | `1.0` | `1.0` | CRR Art. 279c |
@@ -689,8 +689,8 @@ Key column: `cqs`; default `0.20`
 
 ### `mdb_risk_weights_table_2b`
 
-**CRR** — CRR Art. 117
- *((1) Table 2B non-named MDB RW by CQS)*
+**CRR** — PS1/26, paragraph 117
+ *((1)(a) Table 2B non-named MDB RW by CQS)*
 
 Key column: `cqs`; default `0.50`
 

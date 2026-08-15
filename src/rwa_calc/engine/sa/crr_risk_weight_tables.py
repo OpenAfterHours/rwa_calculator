@@ -314,6 +314,9 @@ def _create_rgla_df() -> pl.DataFrame:
 # through INSTITUTION_RISK_WEIGHTS_CRR (rated) or
 # INSTITUTION_RISK_WEIGHTS_SOVEREIGN_DERIVED / Art. 121 fallback (unrated) — this
 # table is unreachable under CRR after the Art. 117(1) institution-routing fix.
+# Table 2B is a PS1/26 Art. 117(1)(a) table: UK CRR Art. 117 has no table at all
+# (P1.310). The pack entry stays in the CRR pack only because this module reads
+# it at import time; see the note on the entry in rulebook/packs/crr.py.
 #
 # Differs from institution table: CQS 2 = 30% (vs CRR 50%), unrated = 50% (not 40%).
 MDB_RISK_WEIGHTS_TABLE_2B: dict[CQS, Decimal] = _cqs_rw_from_pack("mdb_risk_weights_table_2b")

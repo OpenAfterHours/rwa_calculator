@@ -536,10 +536,19 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("0.00"),
         citation=Citation("CRR", "117", "(2) named MDB 0%"),
     ),
+    # The unrated row of PS1/26 Art. 117(1)(a) Table 2B. Cited to PS1/26, not
+    # CRR: UK CRR Art. 117 carries no table (para 1 treats a non-named MDB "in
+    # the same manner as exposures to institutions"; para 2 lists the named 0%
+    # MDBs). Kept in the COMMON pack rather than b31 because
+    # engine/sa/guarantor_rw.py reads it off the CRR pack at module import, so a
+    # b31-only home is import-time fatal — the same constraint recorded on
+    # ``mdb_risk_weights_table_2b`` in packs/crr.py. Under CRR the value is
+    # unreachable (Art. 117(1) routes non-named MDBs through the institution
+    # ladder), so a shared home costs nothing in behaviour.
     "mdb_unrated_rw": ScalarParam(
         name="mdb_unrated_rw",
         value=Decimal("0.50"),
-        citation=Citation("CRR", "117", "(1) Table 2B unrated MDB 50%"),
+        citation=Citation("PS1/26", "117", "(1)(a) Table 2B unrated MDB 50%"),
     ),
     "io_zero_rw": ScalarParam(
         name="io_zero_rw",

@@ -722,10 +722,7 @@
       ],
       "pack_entries": [
         "mdb_named_zero_rw@b31",
-        "mdb_named_zero_rw@crr",
-        "mdb_risk_weights_table_2b@crr",
-        "mdb_unrated_rw@b31",
-        "mdb_unrated_rw@crr"
+        "mdb_named_zero_rw@crr"
       ],
       "source_files": [
         "data/schemas.py",
@@ -734,7 +731,9 @@
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/guarantor_rw.py",
         "engine/sa/risk_weights.py",
-        "engine/sa/sovereign_derived.py"
+        "engine/sa/sovereign_derived.py",
+        "rulebook/packs/common.py",
+        "rulebook/packs/crr.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_154_b31_art_118_international_organisation_class.py",
@@ -978,6 +977,7 @@
       "test_files": [
         "tests/acceptance/basel31/test_p1_122b_b31_unrated_scra_b_institution_guarantor_irb_sa_fallback.py",
         "tests/acceptance/ccr/test_ccr_alpha_carveout.py",
+        "tests/acceptance/ccr/test_p1_342_qccp_art_121_6_carve_out.py",
         "tests/acceptance/crr/test_p1_121_art_121_3_unrated_inst_short_term.py",
         "tests/acceptance/crr/test_p1_184_art_117_mdb_institution_routing.py",
         "tests/contracts/test_branch_reason_contract.py",
@@ -5990,17 +5990,23 @@
       ],
       "confidence": "HIGH",
       "framework": "PS1/26",
-      "layer_count": 4,
+      "layer_count": 5,
       "oracle_cases": [
         "ORC-047",
         "ORC-048"
       ],
-      "pack_entries": [],
+      "pack_entries": [
+        "mdb_risk_weights_table_2b@crr",
+        "mdb_unrated_rw@b31",
+        "mdb_unrated_rw@crr"
+      ],
       "source_files": [
         "engine/sa/cqs_lift.py",
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/guarantor_rw.py",
-        "engine/sa/risk_weights.py"
+        "engine/sa/risk_weights.py",
+        "rulebook/packs/common.py",
+        "rulebook/packs/crr.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_154_b31_art_118_international_organisation_class.py",
@@ -8458,8 +8464,8 @@
     }
   ],
   "pack_content_hashes": {
-    "b31": "f4c8c5f2ac796cb7823e3770ec96af276a9fe086e02111aea49b2cd1ea27f1d4",
-    "crr": "e0d9bc1d5aa1621e57337dbfdd76022078aa899399e7b1cd0170f052d8bbd809"
+    "b31": "a0784d121c08ecf162937f9f5cd6b4614b2169e40abf23dcd9819c3d1b554502",
+    "crr": "5d5c57b888cb32499f4189fc6e44f2b27d7cad2a3979fbaf343764c9fbdc0f12"
   },
   "package_version": "0.3.26",
   "scoring_rule": {

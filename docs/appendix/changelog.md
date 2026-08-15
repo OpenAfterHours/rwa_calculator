@@ -41,6 +41,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   1(k) to the full-risk limb. Number-neutral across the estate: no golden moved,
   and no registered run holds a row with both an unresolved `risk_type` and a
   non-zero nominal.
+- **MDB Table 2B is cited to PS1/26, not CRR (P1.310).** `mdb_risk_weights_table_2b`
+  and `mdb_unrated_rw` both cited CRR Art. 117, which carries **no table** —
+  para 1 treats a non-named MDB "in the same manner as exposures to
+  institutions" and para 2 lists the named 0% MDBs. Table 2B is PS1/26
+  Art. 117(1)(a). Number-neutral: only the citations move. Both entries stay
+  where they are, which is now recorded at the entries — they are read off the
+  **CRR** pack at module import by `engine/sa/guarantor_rw.py` and
+  `engine/sa/crr_risk_weight_tables.py`, so a Basel-3.1-only home is
+  import-time fatal.
 - **The Art. 121(6) sovereign risk-weight floor is now Basel 3.1 only (P1.334).**
   The engine applied it under both regimes. **UK CRR Art. 121 has four
   paragraphs** — (1) Table 5 keyed on the central government's credit quality

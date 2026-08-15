@@ -725,6 +725,10 @@ def _expand_mof_facility_undrawn(
                 pl.col("sub_drawn_loans").fill_null(0.0)
                 + pl.col("sub_drawn_contingents").fill_null(0.0)
             ),
+            # No ``commitment_col``: this is a projected sub-facility frame
+            # carrying only the ``_sub_*`` columns, and naming the flag would
+            # put it in the expression's footprint. The CCF here is a headroom
+            # WEIGHTING basis, not a capital number.
             sub_sa_ccf=sa_ccf_expression(risk_type_col="_sub_risk_type", is_basel_3_1=is_basel_3_1),
         )
         .with_columns(

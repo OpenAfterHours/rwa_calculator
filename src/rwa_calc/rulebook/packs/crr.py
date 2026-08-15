@@ -393,7 +393,12 @@ ENTRIES: dict[str, RuleEntry] = {
         citation=Citation(
             "CRR", "111", "SA CCFs (Annex I): FR/FRC 100%, MR/OC 50%, MLR 20%, LR 0%"
         ),
-        default=Decimal("0.50"),
+        # No table default. It was never read (engine/ccf.py compiles this via
+        # lookup_float_map, which takes ``entries`` only), and the 0.50 it
+        # carried restated the retired ``sa_ccf_default`` — a regime-invariant
+        # residual that P1.267 refuted. The residual is Annex I item 1(k) under
+        # CRR and Table A1 Row 3/5 under B31; it lives in
+        # engine/ccf.py::_sa_ccf_residual, not in a shared table fallback.
     ),
     # CRR Art. 166(10) F-IRB residual fallback for issued OBS items not in scope
     # of Art. 166(8). Selected by the engine when is_obs_commitment=False.

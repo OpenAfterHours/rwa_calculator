@@ -32,8 +32,8 @@ Articles are grouped by the citing instrument and keyed by *base* article (`122`
 
 Package version `0.3.26`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — content hash `d1b34f4c86d63896`
-- **Basel 3.1** (`b31` @ 2027-01-01) — content hash `2788bbc22f6f6f38`
+- **CRR** (`crr` @ 2026-01-01) — content hash `65a569c144cf4925`
+- **Basel 3.1** (`b31` @ 2027-01-01) — content hash `2a0721246708a300`
 
 ## Summary
 
@@ -59,7 +59,7 @@ Package version `0.3.26`. Resolved packs:
 | 107 | 1 | 0 | 11 | 0 | 9 | MEDIUM |
 | 109 | 1 | 0 | 5 | 0 | 1 | MEDIUM |
 | 110 | 0 | 1 | 4 | 0 | 6 | MEDIUM |
-| 111 | 6 | 10 | 20 | 0 | 36 | MEDIUM |
+| 111 | 6 | 8 | 20 | 0 | 37 | MEDIUM |
 | 112 | 4 | 3 | 18 | 0 | 33 | MEDIUM |
 | 113 | 2 | 2 | 11 | 0 | 10 | MEDIUM |
 | 114 | 8 | 6 | 14 | 14 | 27 | HIGH |
@@ -210,7 +210,7 @@ Package version `0.3.26`. Resolved packs:
 | 62 | 0 | 0 | 1 | 0 | 0 | UNCITED |
 | 92 | 2 | 4 | 20 | 0 | 31 | MEDIUM |
 | 110A | 1 | 1 | 3 | 0 | 3 | MEDIUM |
-| 111 | 2 | 2 | 9 | 0 | 13 | MEDIUM |
+| 111 | 2 | 2 | 11 | 0 | 14 | MEDIUM |
 | 112 | 0 | 0 | 4 | 0 | 2 | UNCITED |
 | 113 | 0 | 2 | 1 | 0 | 0 | LOW |
 | 114 | 3 | 1 | 10 | 2 | 20 | HIGH |

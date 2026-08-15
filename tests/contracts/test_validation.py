@@ -646,6 +646,10 @@ class TestNumericInputDomainGate:
                     "counterparty_reference": ["C1"],
                     "limit": [5000.0],
                     "ccf_modelled": [0.75],
+                    # "Clean" also means the 4,000 of undrawn commitment names a
+                    # risk category. Without one the row silently takes the CCF
+                    # residual, which DQ016 now reports (P1.267).
+                    "risk_type": ["OC"],
                 }
             ),
         )

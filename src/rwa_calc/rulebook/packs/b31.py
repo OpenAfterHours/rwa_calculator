@@ -364,7 +364,9 @@ ENTRIES: dict[str, RuleEntry] = {
         },
         key="risk_type",
         citation=Citation("PS1/26", "111", "Table A1 SA CCFs (OC 40% Row 5, LR/UCC 10% Row 6)"),
-        default=Decimal("0.50"),
+        # No table default — see the CRR pack's ``sa_ccf`` note. Under B31 the
+        # residual splits between Table A1 Row 5 (commitment) and Row 3 (issued
+        # item), which one shared fallback cannot express (P1.267).
     ),
     # PRA PS1/26 Art. 274(2A) transitional alpha add-on phase fractions keyed by
     # reporting year (Basel 3.1 only). Years absent from the table (2030+) resolve

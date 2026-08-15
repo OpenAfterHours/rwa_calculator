@@ -43,7 +43,7 @@ records the Basel 3.1 tightening of what counts as unconditionally cancellable.
 **CRR** — CRR Art. 111
  *(SA CCFs (Annex I): FR/FRC 100%, MR/OC 50%, MLR 20%, LR 0%)*
 
-Key column: `risk_type`; default `0.50`
+Key column: `risk_type`
 
 | Key | Value |
 |---|---|
@@ -58,7 +58,7 @@ Key column: `risk_type`; default `0.50`
 **Basel 3.1** — PS1/26, paragraph 111
  *(Table A1 SA CCFs (OC 40% Row 5, LR/UCC 10% Row 6))*
 
-Key column: `risk_type`; default `0.50`
+Key column: `risk_type`
 
 | Key | Value |
 |---|---|
@@ -72,7 +72,6 @@ Key column: `risk_type`; default `0.50`
 
 | Name | CRR | Basel 3.1 | Citation |
 |---|---|---|---|
-| `sa_ccf_default` | `0.50` | `0.50` | CRR Art. 111 |
 | `sa_revised_ccf_table` | off | on | CRR Art. 111 / PS1/26, paragraph 111 |
 
 ### `obs_product_to_risk_type`

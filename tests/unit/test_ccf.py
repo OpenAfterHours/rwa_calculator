@@ -1432,15 +1432,21 @@ class TestSACCFExpression:
         )
         assert df["ccf"].to_list() == pytest.approx([1.0, 1.0, 1.0, 1.0])
 
-    def test_null_defaults_to_mr(self) -> None:
-        """Null risk_type should default to MR (50%)."""
-        df = pl.DataFrame({"risk_type": [None]}).select(sa_ccf_expression().alias("ccf"))
-        assert df["ccf"][0] == pytest.approx(0.5)
+    def test_null_takes_the_crr_full_risk_residual(self) -> None:
+        """Null risk_type takes CRR Annex I 1(k) full risk (100%), not MR.
 
-    def test_unknown_defaults_to_mr(self) -> None:
-        """Unknown risk_type should default to MR (50%)."""
+        Was ``test_null_defaults_to_mr``, asserting 50%. Items 2(b)(iv),
+        3(b)(ii) and 4(c) each require the item to have been "communicated to"
+        the competent authority, so 1(k) is the only residual an unclassifiable
+        item can lawfully take (P1.267).
+        """
+        df = pl.DataFrame({"risk_type": [None]}).select(sa_ccf_expression().alias("ccf"))
+        assert df["ccf"][0] == pytest.approx(1.0)
+
+    def test_unknown_takes_the_crr_full_risk_residual(self) -> None:
+        """Unknown risk_type takes CRR Annex I 1(k) full risk (100%), not MR."""
         df = pl.DataFrame({"risk_type": ["UNKNOWN"]}).select(sa_ccf_expression().alias("ccf"))
-        assert df["ccf"][0] == pytest.approx(0.5)
+        assert df["ccf"][0] == pytest.approx(1.0)
 
     def test_custom_column_name(self) -> None:
         """Custom risk_type column name should work."""

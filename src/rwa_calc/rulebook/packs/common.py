@@ -143,16 +143,18 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("2.5"),
         citation=Citation("CRR", "153(5)", "specialised-lending <2.5y short-maturity split"),
     ),
-    # SA / F-IRB CCF fallbacks that do not vary by regime. The conservative
-    # MR-equivalent default (50%) catches unrecognised risk_type values under
-    # both CRR Art. 111 and PRA PS1/26 Table A1; the OC short-maturity override
-    # (20%) maps "other commitments" to MLR when remaining maturity <= 1 year
-    # (CRR Art. 111, retained under Basel 3.1). Consumed in engine/ccf.py.
-    "sa_ccf_default": ScalarParam(
-        name="sa_ccf_default",
-        value=Decimal("0.50"),
-        citation=Citation("CRR", "111", "MR-equivalent fallback for unrecognised risk_type"),
-    ),
+    # SA / F-IRB CCF overrides that do not vary by regime: the OC short-maturity
+    # override (20%) maps "other commitments" to MLR when original maturity
+    # <= 1 year (CRR Art. 111, retained under Basel 3.1). Consumed in
+    # engine/ccf.py.
+    #
+    # NOTE: there is deliberately no ``sa_ccf_default`` here (P1.267). It stated
+    # a 50% MR-equivalent residual for unrecognised risk_type values under BOTH
+    # regimes, and the two texts do not agree: CRR Annex I 1(k) is the only
+    # residual available without supervisory notification (100%), while PS1/26
+    # Table A1 splits its unconditional residuals between Row 3 issued items
+    # (50%) and Row 5 commitments (40%). The residual now lives in
+    # ``engine/ccf.py::_sa_ccf_residual``, keyed off the regime's own table.
     "oc_short_maturity_ccf": ScalarParam(
         name="oc_short_maturity_ccf",
         value=Decimal("0.20"),

@@ -8,10 +8,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- (Next release changes will go here)
+- **`DQ016` — an off-balance-sheet amount with no risk category is now
+  reported.** `risk_type` is an optional input column, and the `DQ006`
+  categorical-domain test filters `is_not_null()` before it runs, so a **null**
+  `risk_type` on a row carrying a real undrawn limit or contingent nominal was
+  schema-valid, raised nothing, and silently took the CCF residual. That is
+  well-formed input producing a capital number the preparer never chose. One
+  aggregate warning per table now names it. `DQ006` still covers the
+  non-null-but-unrecognised string, so the two codes partition the space.
 
 ### Changed
-- (Next release changes will go here)
+- **The SA CCF residual is regime-divergent, and the shared `sa_ccf_default`
+  pack entry is retired (P1.267).** A `risk_type` the Annex I / Table A1 ladder
+  does not name took one 50% fallback under both regimes. The two texts do not
+  agree, and harmonising them was wrong under PS1/26 in two places in opposite
+  directions:
+  - **CRR** Annex I gives all four categories an "other items" residual, but only
+    item 1(k) — "other items also carrying **full risk**" — is unconditional.
+    Items 2(b)(iv), 3(b)(ii) and 4(c) each require the item to have been "**as
+    communicated to** the competent authority", and an item the engine could not
+    classify has by definition not been notified. The CRR residual is therefore
+    **100%**, not 50% — a 50pp understatement, RWA-increasing to fix.
+  - **PS1/26** Table A1 has three residual limbs, none conditional on
+    notification. An unclassifiable **issued** item takes Row 3's 50% — which the
+    engine already produced, and which is right by the text rather than by
+    fallback — while an unclassifiable **commitment** takes Row 5's **40%**,
+    where the engine overstated by 10pp. That correction is **RWA-reducing** and
+    feeds the Basel 3.1 output floor.
+
+  The same argument applies to the CRR F-IRB residual (`Art. 166(10)`), which
+  also read the shared scalar and now routes an uncategorised item through item
+  1(k) to the full-risk limb. Number-neutral across the estate: no golden moved,
+  and no registered run holds a row with both an unresolved `risk_type` and a
+  non-zero nominal.
+- **`fcsm_equity_collateral_rw` moved from the common pack into the regime packs
+  (P1.296).** Art. 222(3) gives the collateralised portion "the risk weight that
+  they would assign under Chapter 2 … where the lending institution had a direct
+  exposure to the collateral instrument" — a **derived** weight, not a prescribed
+  one — so it follows the regime's own equity weight: CRR Art. 133(2) **100%**,
+  PS1/26 Art. 133 **250%**. Pinned at 100% for both regimes, it understated the
+  blended FCSM risk weight under Basel 3.1 wherever main-index equity is pledged.
+  Art. 222(1), previously cited for the 100%, is the *usage restriction* on
+  electing the Simple Method and prescribes no weight at all.
 
 ---
 

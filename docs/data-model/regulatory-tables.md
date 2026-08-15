@@ -6,8 +6,8 @@ Every cited regulatory value in the rulepack packs `src/rwa_calc/rulebook/packs/
 
 Package version `0.3.26`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — 203 entries, content hash `d1b34f4c86d63896`
-- **Basel 3.1** (`b31` @ 2027-01-01) — 235 entries, content hash `2788bbc22f6f6f38`
+- **CRR** (`crr` @ 2026-01-01) — 202 entries, content hash `65a569c144cf4925`
+- **Basel 3.1** (`b31` @ 2027-01-01) — 234 entries, content hash `2a0721246708a300`
 
 ## Regime features
 
@@ -174,7 +174,6 @@ Decimal-valued parameters (`ScalarParam`). Risk weights and factors are decimal 
 | `rgla_uk_devolved_rw` | `0.00` | `0.00` | CRR Art. 115 |
 | `rgla_uk_local_auth_rw` | `0.20` | `0.20` | CRR Art. 115 |
 | `rgla_unrated_default_rw` | `1.00` | `1.00` | CRR Art. 115 |
-| `sa_ccf_default` | `0.50` | `0.50` | CRR Art. 111 |
 | `sa_ccr_alpha` | `1.4` | `1.4` | CRR Art. 274(2) |
 | `sa_ccr_alpha_carve_out` | `1.0` | `1.0` | CRR Art. 274(2) |
 | `sa_ccr_cdo_tranche_coefficient` | `14` | `14` | CRR Art. 279a |
@@ -803,7 +802,7 @@ Key column: `cqs`; default `1.00`
 **CRR** — CRR Art. 111
  *(SA CCFs (Annex I): FR/FRC 100%, MR/OC 50%, MLR 20%, LR 0%)*
 
-Key column: `risk_type`; default `0.50`
+Key column: `risk_type`
 
 | Key | Value |
 |---|---|
@@ -818,7 +817,7 @@ Key column: `risk_type`; default `0.50`
 **Basel 3.1** — PS1/26, paragraph 111
  *(Table A1 SA CCFs (OC 40% Row 5, LR/UCC 10% Row 6))*
 
-Key column: `risk_type`; default `0.50`
+Key column: `risk_type`
 
 | Key | Value |
 |---|---|

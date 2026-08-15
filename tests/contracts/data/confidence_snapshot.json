@@ -333,8 +333,6 @@
         "oc_short_maturity_threshold_days@b31",
         "oc_short_maturity_threshold_days@crr",
         "sa_ccf@crr",
-        "sa_ccf_default@b31",
-        "sa_ccf_default@crr",
         "sa_revised_ccf_table@crr"
       ],
       "source_files": [
@@ -395,6 +393,7 @@
         "tests/unit/test_ccf.py",
         "tests/unit/test_corep_annex1_row_discrimination.py",
         "tests/unit/test_p1_265_lower_of_ccf_is_b31_only.py",
+        "tests/unit/test_p1_267_sa_ccf_residual.py",
         "tests/unit/test_r1_negative_amount_dq.py"
       ],
       "watchfire_index_gap": false
@@ -5799,6 +5798,8 @@
         "sa_revised_ccf_table@b31"
       ],
       "source_files": [
+        "contracts/errors.py",
+        "contracts/validation.py",
         "data/schemas.py",
         "domain/enums.py",
         "engine/ccf.py",
@@ -5822,7 +5823,8 @@
         "tests/unit/reporting/corep/test_c07_ccf_buckets.py",
         "tests/unit/rulebook/test_provisions_features.py",
         "tests/unit/test_ccf.py",
-        "tests/unit/test_p1_265_lower_of_ccf_is_b31_only.py"
+        "tests/unit/test_p1_265_lower_of_ccf_is_b31_only.py",
+        "tests/unit/test_p1_267_sa_ccf_residual.py"
       ],
       "watchfire_index_gap": false
     },
@@ -8446,8 +8448,8 @@
     }
   ],
   "pack_content_hashes": {
-    "b31": "2788bbc22f6f6f3834f73aea5eaa744e2dc023bdce19e5b9e8e1d70b98b6432e",
-    "crr": "d1b34f4c86d638960615dade8438bd57cd9b695435224929215b79a02a046d9c"
+    "b31": "2a0721246708a3009472004e1de0174eb30f633f2b676eab8238c2ff5e587c68",
+    "crr": "65a569c144cf492524295c08a0586ec19009a837ec0a94d1dbc6587ca0d849bf"
   },
   "package_version": "0.3.26",
   "scoring_rule": {

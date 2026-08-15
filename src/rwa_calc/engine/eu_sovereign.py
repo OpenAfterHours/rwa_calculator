@@ -129,13 +129,53 @@ def build_domestic_cgcb_guarantor_expr(
     is_uk_domestic = (pl.col(country_col).fill_null("") == "GB") & (currency_expr == "GBP")
     is_eu_domestic = build_eu_domestic_currency_expr(country_col, currency_expr)
     denominated_domestic = is_uk_domestic | is_eu_domestic
-    if funding_currency_col is None:
-        return denominated_domestic
     funding_expr = (
         pl.col(funding_currency_col)
         if isinstance(funding_currency_col, str)
         else funding_currency_col
     )
+    return with_funding_limb(denominated_domestic, currency_expr, funding_expr)
+
+
+@cites("CRR Art. 114")
+@cites("CRR Art. 115")
+def with_funding_limb(
+    denominated_domestic: pl.Expr,
+    currency_expr: pl.Expr,
+    funding_expr: pl.Expr | None,
+) -> pl.Expr:
+    """
+    AND the "and funded in" limb onto a denomination-only domestic-currency flag.
+
+    CRR Art. 114(4)/(7) and Art. 115(5) — and their PS1/26 counterparts
+    Art. 114(4), 115(2) and 115(5) — each require the exposure to be
+    "denominated **and funded**" in the relevant domestic currency. The caller
+    supplies the denomination limb already evaluated (UK/GBP, EU-domestic, or
+    the composite of both); this helper adds the funding limb. Because the
+    denomination limb has already established *denomination == the relevant
+    domestic currency*, equality of the funding currency with the denomination
+    is exactly "funded in the domestic currency", uniformly across both limbs.
+
+    Null-PERMISSIVE by construction: pass a funding expression built by
+    :func:`funding_currency_expr`, whose ``fill_null`` makes an unreported
+    funding currency reuse the denomination. ``Expr.eq`` is null-propagating, so
+    a raw column comparison here would silently invert the convention to strict.
+
+    Args:
+        denominated_domestic: Boolean expression for the denomination limb.
+        currency_expr: The exposure's denomination (pre-FX) currency expression
+            — pass ``denomination_currency_expr(...)``, never ``pl.col("currency")``,
+            which the FX converter overwrites with the reporting currency.
+        funding_expr: The exposure's funding-currency expression, or None when
+            the frame carries no currency source at all, in which case the
+            denomination limb is returned unchanged.
+
+    Returns:
+        Boolean Polars expression: the denomination limb ANDed with
+        ``funding == denomination`` when a funding source exists.
+    """
+    if funding_expr is None:
+        return denominated_domestic
     return denominated_domestic & funding_expr.eq(currency_expr)
 
 

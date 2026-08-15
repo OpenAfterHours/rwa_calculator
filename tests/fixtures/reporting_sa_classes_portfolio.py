@@ -410,7 +410,15 @@ def _loans() -> pl.DataFrame:
     conversion or a substitution.
     """
     rows: list[dict] = [
-        _loan(LN_RGLA_UK, CP_RGLA_UK, DRAWN_RGLA_UK),
+        # P1.314: GBP-denominated AND GBP-funded is the SURVIVOR shape for the
+        # Art. 115(2) devolved-administration route (rgla_sovereign ->
+        # Art. 114 0%) — under the permissive null convention, an explicit
+        # funding_currency equal to the denomination must move NOTHING. Proves
+        # the carrier reaches this reporting estate without moving a golden
+        # cell. See .claude/state/outputs/P1.314-scenario.md §7 (orchestrator
+        # decision: survivor-only; the mover sibling is deferred to a new
+        # Tier 2 bullet).
+        {**_loan(LN_RGLA_UK, CP_RGLA_UK, DRAWN_RGLA_UK), "funding_currency": "GBP"},
         _loan(LN_RGLA_FOREIGN, CP_RGLA_FOREIGN, DRAWN_RGLA_FOREIGN),
         _loan(LN_PSE, CP_PSE, DRAWN_PSE),
         _loan(LN_MDB_RATED, CP_MDB_RATED, DRAWN_MDB_RATED),

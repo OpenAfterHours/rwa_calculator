@@ -53,6 +53,8 @@ from rwa_calc.domain.enums import CQS, EquityType
 from rwa_calc.engine.eu_sovereign import (
     build_eu_domestic_currency_expr,
     denomination_currency_expr,
+    funding_currency_expr,
+    with_funding_limb,
 )
 from rwa_calc.engine.sa.b31_risk_weight_tables import (
     B31_CORPORATE_INVESTMENT_GRADE_RW,
@@ -360,18 +362,22 @@ def apply_risk_weights(
     the framework override helpers apply them in the sequence prescribed
     by the regulation.
     """
-    exposures, uc, is_domestic_currency, is_uk_domestic = _prepare_risk_weight_lookup(
-        lf, config, pack=pack
-    )
+    (
+        exposures,
+        uc,
+        is_domestic_currency,
+        is_domestic_currency_funded,
+        is_uk_domestic_funded,
+    ) = _prepare_risk_weight_lookup(lf, config, pack=pack)
 
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     if resolved_pack.feature("sa_revised_risk_weight_overrides"):
         exposures = _apply_b31_risk_weight_overrides(
-            exposures, uc, is_domestic_currency, is_uk_domestic, config
+            exposures, uc, is_domestic_currency_funded, is_uk_domestic_funded, config
         )
     else:
         exposures = _apply_crr_risk_weight_overrides(
-            exposures, uc, is_domestic_currency, is_uk_domestic
+            exposures, uc, is_domestic_currency_funded, is_uk_domestic_funded
         )
 
     # Art. 140(2) obligor ST contamination (regime-invariant, post-ladder).
@@ -382,6 +388,9 @@ def apply_risk_weights(
     # Art. 121(6) (CRR) / CRE20.22 (Basel 3.1): Sovereign RW floor for
     # FX-denominated unrated institution exposures. Exception:
     # self-liquidating trade items with original maturity <= 1yr.
+    # Takes the DENOMINATION-ONLY flag deliberately: PS1/26 Art. 121(6)(a) reads
+    # "is not in the local currency", with no "and funded" limb — passing the
+    # funded variant here would arm the floor on domestic-currency rows.
     exposures = apply_sovereign_floor_for_institutions(exposures, is_domestic_currency)
 
     # Art. 127 defaulted risk weight (secured/unsecured split). Runs after
@@ -948,6 +957,7 @@ def _crr_append_corporate_maturity_branches(chain: _RWChain, uc: pl.Expr) -> Cha
 # ---------------------------------------------------------------------------
 
 
+@cites("CRR Art. 115")
 @cites("PS1/26, paragraph 139")
 @cites("PS1/26, paragraph 122")
 def _prepare_risk_weight_lookup(
@@ -955,17 +965,21 @@ def _prepare_risk_weight_lookup(
     config: CalculationConfig,
     *,
     pack: ResolvedRulepack | None = None,
-) -> tuple[pl.LazyFrame, pl.Expr, pl.Expr, pl.Expr]:
+) -> tuple[pl.LazyFrame, pl.Expr, pl.Expr, pl.Expr, pl.Expr]:
     """Ensure required columns, classify for join, and attach CQS risk weights.
 
     Returns the exposures frame (with ``_lookup_class`` / ``_lookup_cqs`` /
     ``_upper_class`` / ``risk_weight`` columns added), the uppercase class
-    expression reused by override chains, the composite domestic-currency flag
-    (UK or EU domestic currency) used for the Art. 114(4)/(7) CGCB zero-weight
-    treatment and the Art. 121(6) sovereign floor, and the UK-only
-    domestic-currency flag (``GB`` counterparty denominated in ``GBP``) that
-    scopes the Art. 115(5) flat-20% RGLA branch — UK RGLAs funded in sterling
-    only; EU-domestic RGLAs fall through to the Art. 115(1) rating tables.
+    expression reused by override chains, and three domestic-currency flags:
+
+    - ``is_domestic_currency`` — UK or EU, **denomination only**, for the
+      Art. 121(6) sovereign floor, whose text carries no funding limb.
+    - ``is_domestic_currency_funded`` — the same composite with the
+      Art. 114(4)/(7) "and funded in" limb, for the CGCB zero-weight branch.
+    - ``is_uk_domestic_funded`` — UK-only (``GB`` counterparty denominated in
+      ``GBP``) with the funding limb, scoping the Art. 115(5) flat-20% RGLA
+      branch and the Art. 115(2) devolved-administration routing. EU-domestic
+      RGLAs fall through to the Art. 115(1) rating tables.
     """
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
 
@@ -1005,6 +1019,15 @@ def _prepare_risk_weight_lookup(
     is_uk_domestic = (pl.col("cp_country_code") == "GB") & (ccy_expr == "GBP")
     is_eu_domestic = build_eu_domestic_currency_expr("cp_country_code", ccy_expr)
     is_domestic_currency = is_uk_domestic | is_eu_domestic
+
+    # Art. 114(4)/(7) and Art. 115(5) all read "denominated AND FUNDED in" the
+    # domestic currency, so the risk-weight branches take the funded variants.
+    # Derived, never mutated in place: the UNFUNDED ``is_domestic_currency``
+    # still feeds Art. 121(6) below, whose text ("is not in the local currency")
+    # carries no funding limb.
+    funding_expr = funding_currency_expr(schema.names())
+    is_domestic_currency_funded = with_funding_limb(is_domestic_currency, ccy_expr, funding_expr)
+    is_uk_domestic_funded = with_funding_limb(is_uk_domestic, ccy_expr, funding_expr)
 
     # Cache uppercase-class once and map detailed classes onto CQS-lookup
     # classes. Sentinel -1 for null CQS so the left join matches.
@@ -1074,7 +1097,13 @@ def _prepare_risk_weight_lookup(
         suffix="_rw",
     )
 
-    return exposures, pl.col("_upper_class"), is_domestic_currency, is_uk_domestic
+    return (
+        exposures,
+        pl.col("_upper_class"),
+        is_domestic_currency,
+        is_domestic_currency_funded,
+        is_uk_domestic_funded,
+    )
 
 
 @cites("CRR Art. 134")
@@ -1082,15 +1111,16 @@ def _prepare_risk_weight_lookup(
 def _apply_b31_risk_weight_overrides(
     exposures: pl.LazyFrame,
     uc: pl.Expr,
-    is_domestic_currency: pl.Expr,
-    is_uk_domestic: pl.Expr,
+    is_domestic_currency_funded: pl.Expr,
+    is_uk_domestic_funded: pl.Expr,
     config: CalculationConfig,
 ) -> pl.LazyFrame:
     """Apply Basel 3.1 class-specific risk-weight overrides (CRE20, PRA PS1/26).
 
-    ``is_domestic_currency`` (UK or EU domestic currency) scopes the
-    Art. 114(4)/(7) CGCB 0% branch; ``is_uk_domestic`` (GB counterparty in
-    GBP) scopes the narrower Art. 115(5) flat-20% RGLA branch.
+    ``is_domestic_currency_funded`` (UK or EU domestic currency, denominated
+    and funded) scopes the Art. 114(4)/(7) CGCB 0% branch;
+    ``is_uk_domestic_funded`` (GB counterparty denominated and funded in GBP)
+    scopes the narrower Art. 115(5) flat-20% RGLA branch.
     """
     # Save the CQS-based risk weight before overrides — needed for the
     # Basel 3.1 general CRE min(60%, counterparty_rw) logic (CRE20.85).
@@ -1115,7 +1145,7 @@ def _apply_b31_risk_weight_overrides(
         .then(pl.lit(_OWN_FUNDS_TO_RWA_FACTOR))
         .when(is_ecb_expr())  # Art. 114(3): ECB 0%, unconditional, both regimes
         .then(ecb_rw_expr())
-        .when(uc.str.contains("CENTRAL_GOVT", literal=True) & is_domestic_currency)
+        .when(uc.str.contains("CENTRAL_GOVT", literal=True) & is_domestic_currency_funded)
         .then(pl.lit(0.0))
         # Art. 137(1)-(2) Table 9: nominated ECA / MEIP score → direct sovereign
         # RW when no ECAI rating is present. Takes precedence over the Art. 114
@@ -1166,14 +1196,17 @@ def _apply_b31_risk_weight_overrides(
         # Art. 115(2)/(4) — RGLAs treated as their central government are
         # priced on the Art. 114 ladder, not pinned to 0%; see engine/sa/rgla.py.
         .when(is_rgla_sovereign_expr(uc))
-        .then(rgla_sovereign_rw_expr(is_uk_domestic))
+        .then(rgla_sovereign_rw_expr(is_uk_domestic_funded))
         # RGLA domestic currency -> 20% (Art. 115(5)). Scoped to the UK/GBP
         # limb only: Art. 115(5) restricts the flat 20% to UK RGLAs
-        # denominated (and funded) in sterling. EU-domestic-currency RGLAs
-        # fall through to the Art. 115(1) rating tables below (own rating,
-        # then sovereign-derived) — the composite is_domestic_currency flag
-        # is deliberately NOT reused here.
-        .when((uc == "RGLA") & is_uk_domestic)
+        # denominated and funded in sterling. EU-domestic-currency RGLAs fall
+        # through to the Art. 115(1) rating tables below (own rating, then
+        # sovereign-derived) — the composite is_domestic_currency_funded flag
+        # is deliberately NOT reused here, and neither is its sibling
+        # ``build_domestic_cgcb_guarantor_expr``, which returns that composite
+        # because Art. 235(3) guarantor relief genuinely spans both limbs
+        # where Art. 115(5) does not.
+        .when((uc == "RGLA") & is_uk_domestic_funded)
         .then(pl.lit(_SA_SHARED_RW["rgla_domestic"]))
         # RGLA unrated non-domestic: sovereign-derived (Art. 115(1)(a)
         # Table 1A). Maps cp_sovereign_cqs -> RW; falls back to 100% when
@@ -1292,14 +1325,15 @@ def _apply_b31_risk_weight_overrides(
 def _apply_crr_risk_weight_overrides(
     exposures: pl.LazyFrame,
     uc: pl.Expr,
-    is_domestic_currency: pl.Expr,
-    is_uk_domestic: pl.Expr,
+    is_domestic_currency_funded: pl.Expr,
+    is_uk_domestic_funded: pl.Expr,
 ) -> pl.LazyFrame:
     """Apply CRR class-specific risk-weight overrides (Art. 112-134).
 
-    ``is_domestic_currency`` (UK or EU domestic currency) scopes the
-    Art. 114(4)/(7) CGCB 0% branch; ``is_uk_domestic`` (GB counterparty in
-    GBP) scopes the narrower Art. 115(5) flat-20% RGLA branch.
+    ``is_domestic_currency_funded`` (UK or EU domestic currency, denominated
+    and funded) scopes the Art. 114(4)/(7) CGCB 0% branch;
+    ``is_uk_domestic_funded`` (GB counterparty denominated and funded in GBP)
+    scopes the narrower Art. 115(5) flat-20% RGLA branch.
     """
     chain = (
         pl.when(pl.col("risk_type") == _SETTLEMENT_FAILED_TRADE_RISK_TYPE)  # P8.43 failed trade
@@ -1311,7 +1345,7 @@ def _apply_crr_risk_weight_overrides(
         .when(is_ecb_expr())  # Art. 114(3): ECB 0%, ahead of 114(4)/(7)
         .then(ecb_rw_expr())
         # Art. 114(4)/(7): Domestic CGCB -> 0% RW (overrides all CQS).
-        .when(uc.str.contains("CENTRAL_GOVT", literal=True) & is_domestic_currency)
+        .when(uc.str.contains("CENTRAL_GOVT", literal=True) & is_domestic_currency_funded)
         .then(pl.lit(0.0))
         # Art. 137(1)-(2) Table 9: nominated ECA / MEIP score → direct sovereign
         # RW when no ECAI rating is present. Takes precedence over the Art. 114
@@ -1396,14 +1430,17 @@ def _apply_crr_risk_weight_overrides(
         # Art. 115(2)/(4) — RGLAs treated as their central government are
         # priced on the Art. 114 ladder, not pinned to 0%; see engine/sa/rgla.py.
         .when(is_rgla_sovereign_expr(uc))
-        .then(rgla_sovereign_rw_expr(is_uk_domestic))
+        .then(rgla_sovereign_rw_expr(is_uk_domestic_funded))
         # RGLA domestic currency -> 20% (Art. 115(5)). Scoped to the UK/GBP
         # limb only: Art. 115(5) restricts the flat 20% to UK RGLAs
-        # denominated (and funded) in sterling. EU-domestic-currency RGLAs
-        # fall through to the Art. 115(1) rating tables below (own rating,
-        # then sovereign-derived) — the composite is_domestic_currency flag
-        # is deliberately NOT reused here.
-        .when((uc == "RGLA") & is_uk_domestic)
+        # denominated and funded in sterling. EU-domestic-currency RGLAs fall
+        # through to the Art. 115(1) rating tables below (own rating, then
+        # sovereign-derived) — the composite is_domestic_currency_funded flag
+        # is deliberately NOT reused here, and neither is its sibling
+        # ``build_domestic_cgcb_guarantor_expr``, which returns that composite
+        # because Art. 235(3) guarantor relief genuinely spans both limbs
+        # where Art. 115(5) does not.
+        .when((uc == "RGLA") & is_uk_domestic_funded)
         .then(pl.lit(_SA_SHARED_RW["rgla_domestic"]))
         # RGLA unrated non-domestic: sovereign-derived (Art. 115(1)(a)
         # Table 1A). Maps cp_sovereign_cqs -> RW; falls back to 100% when

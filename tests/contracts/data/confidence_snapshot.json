@@ -1526,6 +1526,8 @@
         "engine/equity/calculator.py",
         "engine/sa/calculator.py",
         "engine/stages/equity.py",
+        "rulebook/packs/b31.py",
+        "rulebook/packs/common.py",
         "rulebook/packs/crr.py"
       ],
       "test_files": [
@@ -1536,6 +1538,7 @@
         "tests/integration/test_branch_error_accumulation.py",
         "tests/oracle/derivations/sa_b31.py",
         "tests/oracle/derivations/sa_crr.py",
+        "tests/unit/crm/test_p1_296_fcsm_equity_collateral_rw.py",
         "tests/unit/crr/test_crr_equity.py",
         "tests/unit/rulebook/test_equity_features.py",
         "tests/unit/test_b31_equity_weights.py",
@@ -3333,7 +3336,6 @@
         "ORC-280"
       ],
       "pack_entries": [
-        "fcsm_equity_collateral_rw@b31",
         "fcsm_equity_collateral_rw@crr",
         "fcsm_rw_floor@b31",
         "fcsm_rw_floor@crr",
@@ -3362,6 +3364,7 @@
         "tests/fixtures/reporting_funded_protection_portfolio.py",
         "tests/oracle/derivations/crm_sa.py",
         "tests/properties/portfolios.py",
+        "tests/unit/crm/test_p1_296_fcsm_equity_collateral_rw.py",
         "tests/unit/crm/test_simple_method.py"
       ],
       "watchfire_index_gap": false
@@ -6908,10 +6911,12 @@
       ],
       "source_files": [
         "data/schemas.py",
+        "engine/crm/simple_method.py",
         "engine/equity/calculator.py",
         "engine/sa/calculator.py",
         "engine/sa/risk_weights.py",
-        "rulebook/packs/b31.py"
+        "rulebook/packs/b31.py",
+        "rulebook/packs/common.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_182_b31_l24_pe_unlisted_under_5y.py",
@@ -6924,6 +6929,7 @@
         "tests/fixtures/p2_19/p2_19.py",
         "tests/oracle/derivations/sa_b31.py",
         "tests/properties/test_regime_deltas.py",
+        "tests/unit/crm/test_p1_296_fcsm_equity_collateral_rw.py",
         "tests/unit/rulebook/test_equity_features.py",
         "tests/unit/test_b31_equity_weights.py",
         "tests/unit/test_equity_routing.py",
@@ -7943,11 +7949,13 @@
     {
       "article": "222",
       "code_functions": [],
-      "confidence": "UNCITED",
+      "confidence": "MEDIUM",
       "framework": "PS1/26",
-      "layer_count": 2,
+      "layer_count": 3,
       "oracle_cases": [],
-      "pack_entries": [],
+      "pack_entries": [
+        "fcsm_equity_collateral_rw@b31"
+      ],
       "source_files": [
         "engine/crm/look_through.py",
         "engine/crm/simple_method.py",
@@ -8438,8 +8446,8 @@
     }
   ],
   "pack_content_hashes": {
-    "b31": "9a883964d8479e764742c880f826cf10d1b96809ea500e9c763764f26b7a4220",
-    "crr": "ce2b4dbd2b2f7daf84c02c99b88af650214c458adcb7d4123da87c3eb80635e0"
+    "b31": "2788bbc22f6f6f3834f73aea5eaa744e2dc023bdce19e5b9e8e1d70b98b6432e",
+    "crr": "d1b34f4c86d638960615dade8438bd57cd9b695435224929215b79a02a046d9c"
   },
   "package_version": "0.3.26",
   "scoring_rule": {

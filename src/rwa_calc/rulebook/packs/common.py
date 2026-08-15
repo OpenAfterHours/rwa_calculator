@@ -98,11 +98,11 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("0.10"),
         citation=Citation("CRR", "222(4)(b)", "SFT zero-haircut non-CMP 10% floor"),
     ),
-    "fcsm_equity_collateral_rw": ScalarParam(
-        name="fcsm_equity_collateral_rw",
-        value=Decimal("1.00"),
-        citation=Citation("CRR", "222(1)", "equity held as FCSM collateral risk-weighted at 100%"),
-    ),
+    # NOTE: ``fcsm_equity_collateral_rw`` is deliberately NOT here. Art. 222(3)
+    # derives the collateralised portion's weight from what Chapter 2 would give
+    # a direct exposure to the collateral instrument, and Chapter 2's equity
+    # weight is regime-divergent (CRR Art. 133(2) 100%; PS1/26 Art. 133 250%),
+    # so the scalar lives in packs/crr.py and packs/b31.py.
     # F-IRB overcollateralisation divisors and minimum collateralisation
     # thresholds (CRR Art. 230 Table 5 / CRE32.9-12). The values are
     # regime-INVARIANT; whether CRR applies them is carried by the regime

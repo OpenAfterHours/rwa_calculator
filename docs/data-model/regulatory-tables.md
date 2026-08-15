@@ -6,8 +6,8 @@ Every cited regulatory value in the rulepack packs `src/rwa_calc/rulebook/packs/
 
 Package version `0.3.26`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — 203 entries, content hash `ce2b4dbd2b2f7daf`
-- **Basel 3.1** (`b31` @ 2027-01-01) — 235 entries, content hash `9a883964d8479e76`
+- **CRR** (`crr` @ 2026-01-01) — 203 entries, content hash `d1b34f4c86d63896`
+- **Basel 3.1** (`b31` @ 2027-01-01) — 235 entries, content hash `2788bbc22f6f6f38`
 
 ## Regime features
 
@@ -124,7 +124,7 @@ Decimal-valued parameters (`ScalarParam`). Risk weights and factors are decimal 
 | `failed_trade_dvp_mult_46_plus` | `1.00` | `1.00` | CRR Art. 378 |
 | `failed_trade_dvp_mult_5_15` | `0.08` | `0.08` | CRR Art. 378 |
 | `failed_trade_non_dvp_col4_rw_multiplier` | `12.50` | `12.50` | CRR Art. 379 |
-| `fcsm_equity_collateral_rw` | `1.00` | `1.00` | CRR Art. 222(1) |
+| `fcsm_equity_collateral_rw` | `1.00` | `2.50` | CRR Art. 222(3) / PS1/26, paragraph 222 |
 | `fcsm_rw_floor` | `0.20` | `0.20` | CRR Art. 222(1) |
 | `fcsm_sft_cmp_floor` | `0.00` | `0.00` | CRR Art. 222(4)(a) |
 | `fcsm_sft_non_cmp_floor` | `0.10` | `0.10` | CRR Art. 222(4)(b) |

@@ -226,7 +226,7 @@ Input column: `insurer_risk_weight` (band applies when input <= bound)
 | Name | CRR | Basel 3.1 | Citation |
 |---|---|---|---|
 | `fcsm_rw_floor` | `0.20` | `0.20` | CRR Art. 222(1) |
-| `fcsm_equity_collateral_rw` | `1.00` | `1.00` | CRR Art. 222(1) |
+| `fcsm_equity_collateral_rw` | `1.00` | `2.50` | CRR Art. 222(3) / PS1/26, paragraph 222 |
 | `fcsm_sovereign_bond_discount` | `0.20` | `0.20` | CRR Art. 222(4)(b) |
 | `fcsm_sft_cmp_floor` | `0.00` | `0.00` | CRR Art. 222(4)(a) |
 | `fcsm_sft_non_cmp_floor` | `0.10` | `0.10` | CRR Art. 222(4)(b) |

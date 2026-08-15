@@ -73,18 +73,21 @@ class _FcsmFloors:
 
 
 def _derive_collateral_rw_expr(is_basel_3_1: bool = False, *, equity_rw: float = 1.0) -> pl.Expr:
-    """Derive the SA risk weight for financial collateral per Art. 222(1).
+    """Derive the SA risk weight for financial collateral per Art. 222(3).
 
-    "The risk weight prescribed under Chapter 2 of Title II for the type
-    of collateral" — i.e., the SA risk weight that would apply if the
-    collateral were itself an exposure.
+    "The risk weight that they would assign under Chapter 2 of Title II ...
+    where the lending institution had a direct exposure to the collateral
+    instrument" — i.e., the SA risk weight that would apply if the collateral
+    were itself an exposure. Every weight below is therefore derived from a
+    Chapter 2 table, and diverges by regime wherever that table does.
 
     Args:
         is_basel_3_1: Whether Basel 3.1 tables apply (affects institution CQS 2
             ECRA divergence and corporate CQS 5).
         equity_rw: SA risk weight for equity held as FCSM collateral
-            (``fcsm_equity_collateral_rw``, common pack). Defaults to 1.0 (100%)
-            for direct callers; production supplies the resolved pack value.
+            (``fcsm_equity_collateral_rw``, regime packs — CRR 1.0, B31 2.5).
+            Defaults to 1.0 (100%) for direct callers; production supplies the
+            resolved pack value.
 
     Returns:
         Polars expression producing the collateral's own risk weight (float).
@@ -148,11 +151,18 @@ def _derive_collateral_rw_expr(is_basel_3_1: bool = False, *, equity_rw: float =
         .otherwise(float(inst_table[CQS.UNRATED]))
     )
 
-    # Equity → FCSM Art. 222(1) prescribes 100% under both frameworks (collateral
-    # is treated by financial-instrument character, not equity-exposure character
-    # — so B31 Art. 133(3)'s 250% does NOT apply when equity is FCSM collateral).
-    # Value comes from the rulepack (``fcsm_equity_collateral_rw``, common pack);
-    # the module constant is only the default for direct callers.
+    # Equity → Art. 222(3): the collateralised portion takes "the risk weight
+    # that they would assign under Chapter 2 ... where the lending institution
+    # had a direct exposure to the collateral instrument". The weight is DERIVED
+    # from Chapter 2, not prescribed by Art. 222 — Art. 222(1) is the usage
+    # restriction on electing the method and fixes no weight. So equity-exposure
+    # character is exactly what governs, and the two regimes diverge: CRR
+    # Art. 133(2) 100%, PS1/26 Art. 133 250%. Value comes from the rulepack
+    # (``fcsm_equity_collateral_rw``, regime packs); the keyword default is only
+    # for direct callers.
+    #
+    # The membership test is wider than the Art. 197(1)(f) eligibility gate that
+    # runs upstream (P1.330), so only main-index equity actually reaches here.
     is_equity = ctype.is_in(["equity", "equity_main_index", "equity_other"])
 
     # Corporate bonds → Art. 122 Table 5 (CRR) / Table 6 (B31). B31 diverges at

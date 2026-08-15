@@ -836,6 +836,21 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=False,
         citation=Citation("CRR", "274", "no SA-CCR transitional alpha add-on under CRR"),
     ),
+    # FCSM equity collateral (Art. 222(3)). The collateralised portion takes "the
+    # risk weight that they would assign under Chapter 2 ... where the lending
+    # institution had a direct exposure to the collateral instrument" — a DERIVED
+    # weight, not a prescribed one, so it follows the regime's Chapter 2 equity
+    # weight. Under CRR that is Art. 133(2)'s 100%. Art. 222(1) is the usage
+    # restriction on electing the method and prescribes no weight at all.
+    # Kept in step with ``equity_sa_risk_weights`` by
+    # tests/unit/crm/test_p1_296_fcsm_equity_collateral_rw.py.
+    "fcsm_equity_collateral_rw": ScalarParam(
+        name="fcsm_equity_collateral_rw",
+        value=Decimal("1.00"),
+        citation=Citation(
+            "CRR", "222(3)", "Chapter 2 weight for a direct equity holding (Art. 133(2), 100%)"
+        ),
+    ),
     # F-IRB collateral step-functions apply under CRR (Art. 230 Table 5): the
     # overcollateralisation divisor and the 30% C*/C** minimum threshold. Basel
     # 3.1 removes both (see packs/b31.py); the divisor/threshold values

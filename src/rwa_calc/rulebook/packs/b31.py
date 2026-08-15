@@ -777,6 +777,23 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("0.10"),
         citation=Citation("PS1/26", "154", "(4A) 10% mortgage RW floor (residential IRB)"),
     ),
+    # FCSM equity collateral (Art. 222(3)). The weight is DERIVED from what
+    # Chapter 2 would assign a direct exposure to the collateral instrument, so
+    # under Basel 3.1 it follows PS1/26 Art. 133's 250% listed-equity weight
+    # rather than CRR Art. 133(2)'s 100%. Overrides the CRR scalar of the same
+    # name. The PRA Rules 4.2/4.3 transitional does NOT apply here: that is a
+    # firm-specific grandfathering for firms coming off IRB equity permission,
+    # not a Chapter 2 weight. Tied to ``equity_sa_risk_weights`` by
+    # tests/unit/crm/test_p1_296_fcsm_equity_collateral_rw.py.
+    "fcsm_equity_collateral_rw": ScalarParam(
+        name="fcsm_equity_collateral_rw",
+        value=Decimal("2.50"),
+        citation=Citation(
+            "PS1/26",
+            "222",
+            "Art. 222(3) Chapter 2 weight for a direct equity holding (Art. 133, 250%)",
+        ),
+    ),
     # Basel 3.1 replaces the CRR Art. 230 F-IRB collateral step-functions with
     # the continuous LGD* formula (PS1/26 Art. 230(1)): no overcollateralisation
     # divisor and no minimum collateralisation threshold. Overrides the CRR

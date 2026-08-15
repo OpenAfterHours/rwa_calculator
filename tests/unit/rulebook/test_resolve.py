@@ -39,13 +39,15 @@ def test_common_pack_entry_visible_in_regime() -> None:
 def test_fcsm_floors_resolve_from_common_pack() -> None:
     # Arrange
     pack = resolve("crr", date(2026, 1, 1))
-    # Act / Assert — the five Art. 222 FCSM scalars pinned to their canonical
-    # values (the former data/tables/crr_simple_method constants, now deleted).
+    # Act / Assert — the four regime-invariant Art. 222 FCSM scalars pinned to
+    # their canonical values (the former data/tables/crr_simple_method
+    # constants, now deleted). The fifth, ``fcsm_equity_collateral_rw``, is
+    # regime-DIVERGENT and lives in the regime packs — see
+    # tests/unit/crm/test_p1_296_fcsm_equity_collateral_rw.py (P1.296).
     assert pack.scalar("fcsm_rw_floor") == Decimal("0.20")
     assert pack.scalar("fcsm_sovereign_bond_discount") == Decimal("0.20")
     assert pack.scalar("fcsm_sft_cmp_floor") == Decimal("0.00")
     assert pack.scalar("fcsm_sft_non_cmp_floor") == Decimal("0.10")
-    assert pack.scalar("fcsm_equity_collateral_rw") == Decimal("1.00")
 
 
 def test_fcsm_floors_regime_invariant() -> None:

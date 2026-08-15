@@ -60,6 +60,7 @@ Basel 3.1 cell means the entry is not a simple scalar under that regime.
 | `equity_irb_approaches_available` | on | off | CRR Art. 155 / PS1/26, paragraph 133 |
 | `equity_revised_sa_risk_weights` | off | on | CRR Art. 133 / PS1/26, paragraph 133 |
 | `equity_transitional` | off | on | CRR Art. 133 / PS1/26, paragraph 4.1 |
+| `fcsm_equity_collateral_rw` | `1.00` | `2.50` | CRR Art. 222(3) / PS1/26, paragraph 222 |
 | `firb_fixed_supervisory_maturity` | on | off | CRR Art. 162(1) / PS1/26, paragraph 162 |
 | `firb_fse_senior_lgd_split` | off | on | CRR Art. 161(1)(a) / PS1/26, paragraph 161 |
 | `firb_min_collateralisation_threshold_applies` | on | off | CRR Art. 230 / PS1/26, paragraph 230 |

@@ -32,15 +32,15 @@ Articles are grouped by the citing instrument and keyed by *base* article (`122`
 
 Package version `0.3.26`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — content hash `ce2b4dbd2b2f7daf`
-- **Basel 3.1** (`b31` @ 2027-01-01) — content hash `9a883964d8479e76`
+- **CRR** (`crr` @ 2026-01-01) — content hash `d1b34f4c86d63896`
+- **Basel 3.1** (`b31` @ 2027-01-01) — content hash `2788bbc22f6f6f38`
 
 ## Summary
 
 | Instrument | HIGH | MEDIUM | LOW | UNCITED | GAP | Total |
 |---|---|---|---|---|---|---|
 | CRR (Capital Requirements Regulation) | 34 | 57 | 11 | 37 | 14 | 153 |
-| PS1/26 (PRA Policy Statement) | 24 | 28 | 7 | 31 | 16 | 106 |
+| PS1/26 (PRA Policy Statement) | 24 | 29 | 7 | 30 | 16 | 106 |
 
 ## CRR (Capital Requirements Regulation)
 
@@ -82,7 +82,7 @@ Package version `0.3.26`. Resolved packs:
 | 132 | 0 | 0 | 1 | 0 | 3 | UNCITED |
 | 132A | 0 | 0 | 0 | 0 | 2 | GAP |
 | 132B | 0 | 0 | 0 | 0 | 1 | GAP |
-| 133 | 2 | 3 | 5 | 2 | 13 | HIGH |
+| 133 | 2 | 3 | 7 | 2 | 14 | HIGH |
 | 134 | 3 | 10 | 3 | 2 | 3 | HIGH |
 | 135 | 1 | 0 | 3 | 0 | 0 | LOW |
 | 136 | 1 | 0 | 4 | 0 | 0 | LOW |
@@ -137,7 +137,7 @@ Package version `0.3.26`. Resolved packs:
 | 219 | 1 | 0 | 3 | 0 | 4 | MEDIUM |
 | 220 | 1 | 0 | 8 | 0 | 11 | MEDIUM |
 | 221 | 0 | 0 | 2 | 0 | 1 | UNCITED |
-| 222 | 2 | 10 | 5 | 22 | 11 | HIGH |
+| 222 | 2 | 9 | 5 | 22 | 12 | HIGH |
 | 223 | 4 | 0 | 17 | 30 | 29 | HIGH |
 | 224 | 4 | 10 | 11 | 33 | 44 | HIGH |
 | 226 | 2 | 0 | 4 | 0 | 19 | MEDIUM |
@@ -245,7 +245,7 @@ Package version `0.3.26`. Resolved packs:
 | 132 | 3 | 0 | 2 | 0 | 2 | MEDIUM |
 | 132A | 0 | 0 | 0 | 0 | 1 | GAP |
 | 132a | 0 | 0 | 0 | 0 | 3 | GAP |
-| 133 | 2 | 4 | 5 | 1 | 14 | HIGH |
+| 133 | 2 | 4 | 7 | 1 | 15 | HIGH |
 | 134 | 0 | 0 | 2 | 1 | 2 | UNCITED |
 | 136 | 0 | 0 | 1 | 0 | 0 | UNCITED |
 | 138 | 0 | 0 | 1 | 0 | 0 | UNCITED |
@@ -286,7 +286,7 @@ Package version `0.3.26`. Resolved packs:
 | 218 | 0 | 0 | 1 | 0 | 1 | UNCITED |
 | 219 | 0 | 0 | 0 | 0 | 1 | GAP |
 | 220 | 0 | 0 | 0 | 0 | 2 | GAP |
-| 222 | 0 | 0 | 4 | 0 | 5 | UNCITED |
+| 222 | 0 | 1 | 4 | 0 | 5 | MEDIUM |
 | 223 | 0 | 0 | 4 | 0 | 2 | UNCITED |
 | 224 | 0 | 2 | 3 | 0 | 11 | MEDIUM |
 | 226 | 0 | 0 | 1 | 0 | 2 | UNCITED |
@@ -333,7 +333,6 @@ These articles are named in `src/rwa_calc/` production source but carry no `@cit
 | PS1/26 236 | 1 | 0 | 7 | — | — |
 | CRR 6 | 8 | 0 | 6 | — | — |
 | CRR 280b | 1 | 0 | 6 | — | — |
-| PS1/26 222 | 4 | 0 | 5 | — | CRR Art. 222 |
 | CRR 4 | 10 | 0 | 4 | — | PS1/26 para. 4 |
 | PS1/26 239 | 1 | 0 | 4 | — | — |
 | CRR 34 | 3 | 0 | 3 | — | — |

@@ -442,6 +442,7 @@ def _write_baseline(measured: Census, elapsed: float, *, partial: bool) -> int:
         },
         "counts": _counts(measured),
         "caveats": list(measured.warnings),
+        "caveat_identities": sorted({_caveat_identity(w) for w in measured.warnings}),
         "dead_columns": [
             {
                 "id": key.describe(),
@@ -462,6 +463,33 @@ def _write_baseline(measured: Census, elapsed: float, *, partial: bool) -> int:
     return 0
 
 
+#: A template ref (``C 02.00``) has the same shape as a 2dp amount, so the
+#: alternation matches it FIRST and hands it back unchanged. Without that, the
+#: normaliser eats the template name and every template's identities collide.
+_CAVEAT_AMOUNT_RE = re.compile(r"C \d{2}\.\d{2}|[-+]?\d[\d,]*\.\d{2}")
+
+
+def _caveat_identity(warning: str) -> str:
+    """Strip the money out of a captured warning, keeping WHICH identity failed.
+
+    The raw caveat strings embed amounts at 2dp, and the baseline's own
+    ``_comment`` records that those figures flap between otherwise identical
+    runs. Ratcheting the raw strings would therefore redden on float dust while
+    telling us nothing. What is worth ratcheting is the IDENTITY — which run,
+    which template, which total row against which detail rows — because that set
+    only changes when a stranding appears, moves, or is silenced.
+
+    Ratcheting the identity rather than a count is deliberate (.claude/LESSONS.md
+    B8): a *count* of warnings IMPROVES when a warning limb goes silent, which is
+    exactly the failure P1.318's row re-key will cause on the Basel 3.1 side. A
+    two-way set flags a vanished identity as loudly as a new one.
+    """
+    return _CAVEAT_AMOUNT_RE.sub(
+        lambda m: m.group(0) if m.group(0).startswith("C ") else "<amount>",
+        warning,
+    ).strip()
+
+
 def _check_baseline(measured: Census, *, partial: bool) -> int:
     """Two-way ratchet the measured census against the committed baseline."""
     if partial:
@@ -480,6 +508,8 @@ def _check_baseline(measured: Census, *, partial: bool) -> int:
     payload = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
     was_live = set(payload.get("live_columns", []))
     was_dead = {entry["id"] for entry in payload.get("dead_columns", [])}
+    was_caveats = set(payload.get("caveat_identities", []))
+    now_caveats = {_caveat_identity(w) for w in measured.warnings}
     now_live = {key.describe() for key in measured.live}
     now_dead = {key.describe() for key in measured.dead}
 
@@ -504,6 +534,27 @@ def _check_baseline(measured: Census, *, partial: bool) -> int:
             f"\nIMPROVED: {len(improved)} newly live, {len(appeared)} new, "
             f"{len(vanished)} gone vs the baseline. Bank it (and give every new dead "
             "column a reason code):\n"
+            "  uv run python scripts/check_template_cell_coverage.py --update-baseline\n"
+        )
+        return 1
+    new_caveats = sorted(now_caveats - was_caveats)
+    gone_caveats = sorted(was_caveats - now_caveats)
+    if new_caveats:
+        _write_lines("REGRESSION: unbanked reconciliation caveat(s)", new_caveats)
+        sys.stderr.write(
+            f"\nREGRESSION: {len(new_caveats)} caveat identity/identities the baseline does "
+            "not carry. A C 02.00 caveat is RWEA the published Annex II axis requires to be "
+            "broken out and this repo does not break out (see P1.318) — it is a defect, not "
+            "an artefact, so there is no legitimate tolerance. Fix it or bank it deliberately.\n"
+        )
+        return 1
+    if gone_caveats:
+        _write_lines("IMPROVED: reconciliation caveat(s) no longer raised", gone_caveats)
+        sys.stderr.write(
+            f"\nIMPROVED: {len(gone_caveats)} caveat identity/identities gone. Confirm the "
+            "stranding was FIXED and not merely SILENCED — a row re-key that leaves the "
+            "warner unable to find its total row produces the same green (.claude/LESSONS.md "
+            "B8). Then bank it:\n"
             "  uv run python scripts/check_template_cell_coverage.py --update-baseline\n"
         )
         return 1

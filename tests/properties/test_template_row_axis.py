@@ -275,11 +275,13 @@ def test_c02_airb_sovereign_reaches_its_class_row():
         "appears in no breakdown row. The pair is legitimate under CRR Art. 147 — a firm may hold "
         "IRB permission for sovereign exposures — so this is a MISSING ROW rather than the "
         "mis-keying the sibling findings describe. "
-        "CONFIDENCE CAVEAT: whether the PUBLISHED COREP layout also omits the row is UNVERIFIED. "
-        "reporting/corep/templates.py is a hand-maintained Python list and nobody here can read "
-        "docs/assets/*.pdf (no pdftoppm — LESSONS.md A2), so 'the published template has no such "
-        "row' is an assumption, not a finding. If the published layout HAS the row, this is our "
-        "defect and the fix is additive. Check the layout before deciding either way."
+        "CAVEAT RESOLVED 2026-08-15 (P1.327), AGAINST US: the published layout DOES have the "
+        "row. Extracted with pymupdf from docs/assets/crr-annex-ii-reporting-instructins.pdf "
+        "PAGE_INDEX 29-30 — F-IRB row 0260 is '1.1.2.1.01 Central governments and central "
+        "banks' and A-IRB row 0320 is its own-estimates twin. So this IS our defect and the "
+        "fix is additive, owned by P1.318. The earlier 'nobody here can read docs/assets/*.pdf' "
+        "reasoning was itself the misreading LESSONS.md A2 was amended to kill: pymupdf works, "
+        "and reconstructing an article from memory is what A2 actually bans."
     ),
 )
 def test_c02_firb_sovereign_reaches_a_class_row():

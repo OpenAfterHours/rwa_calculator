@@ -151,6 +151,23 @@ def test_coverage_baseline_is_internally_coherent_and_still_addresses_real_colum
         (entry["source"], entry["portfolio"], entry["regime"]) for entry in provenance["portfolios"]
     ], f"the portfolio x regime matrix moved since the baseline was banked:\n{REGENERATE}"
 
+    # Assert — every banked caveat identity is normalised, and names a real run.
+    # The identities are the C 02.00 reconciliation stranding the census ratchets
+    # two ways (P1.327). They are checked here, in the FAST test, because a
+    # malformed or orphaned identity would otherwise only surface in the slow
+    # ratchet, where it reads as a portfolio change rather than a broken record.
+    known_runs = {f"{e['source']}/{e['portfolio']}/{e['regime']}" for e in provenance["portfolios"]}
+    for identity in payload["caveat_identities"]:
+        assert "<amount>" in identity, (
+            f"caveat identity is not normalised, so float dust will redden the ratchet: "
+            f"{identity!r}\n{REGENERATE}"
+        )
+        run_ref = identity.split(":", 1)[0]
+        assert run_ref in known_runs, (
+            f"caveat identity names {run_ref!r}, which is not in the census matrix. An "
+            f"orphaned identity can never clear, so the ratchet is stuck red:\n{REGENERATE}"
+        )
+
 
 @pytest.mark.slow
 def test_template_cell_coverage_matches_the_baseline() -> None:

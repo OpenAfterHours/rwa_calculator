@@ -269,10 +269,20 @@ Development Bank of Latin America.
     documented approximation as for unrated PSE / RGLA guarantors).
 
     Remaining cosmetic gap: the module *name* still implies a CRR home for a PS1/26
-    table, and the entity-level SA-RW **preview** used to rank facility-share
-    counterparties (`build_entity_rw_expr`) still prices non-named MDBs from Table 2B
-    under both regimes — a deliberate, documented preview approximation (it is
-    non-binding: the selected counterparty is then priced by the full pipeline).
+    table.
+
+    The entity-level SA-RW **preview** used to rank facility-share counterparties
+    (`build_entity_rw_expr`) now branches the same way — Table 2B on the Basel 3.1
+    arm, the Art. 117(1) institution treatment on the CRR arm (P1.307). Earlier
+    revisions of this page called the preview's use of Table 2B under both regimes a
+    non-binding approximation. **That was wrong: the preview *is* binding on
+    ownership.** `_derive_facility_share_counterparty` sorts on it descending and
+    takes `.first()`, and the winner becomes the share's `counterparty_reference` —
+    so the preview decides which obligor owns the whole undrawn EAD and therefore how
+    it is priced. It must be regime-correct. The same change added the Art. 114(3)
+    ECB carve-out, which is regime-invariant: without it an unrated ECB previewed at
+    100%, won the share against every ordinary obligor, and the undrawn was then
+    priced at 0%.
 
 !!! info "Basel 3.1 Change"
     PRA PS1/26 Art. 117(1) introduces a **dedicated MDB risk weight table (Table 2B)**,

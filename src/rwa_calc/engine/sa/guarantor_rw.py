@@ -26,7 +26,7 @@ Key responsibilities:
 
 References:
 - CRR Art. 114: central govt / central bank risk weights (incl. 114(4)/(7)
-  domestic-currency 0%)
+  domestic-currency 0% and the unconditional, regime-invariant 114(3) ECB 0%)
 - CRR Art. 115: RGLA risk weights (115(1)(b) Table 1B own-rating)
 - CRR Art. 116: PSE risk weights (116(2) Table 2A own-rating)
 - CRR Art. 117: MDB risk weights — 117(1) non-named MDBs take the institution
@@ -57,6 +57,7 @@ from watchfire import cites
 
 from rwa_calc.domain.enums import CQS, ExposureClass
 from rwa_calc.engine.entity_class_maps import ENTITY_TYPES_BY_SA_CLASS
+from rwa_calc.engine.sa.central_bank import _ECB_ENTITY_TYPE
 from rwa_calc.rulebook.compile import scalar_value
 from rwa_calc.rulebook.resolve import resolve
 
@@ -112,6 +113,10 @@ _B31_CORPORATE_RW = cast(
 )
 
 # Invariant SA risk-weight scalars (Decimal, float()-ed inline by the builders).
+# ``ecb_zero_rw`` is a common-pack scalar present under both regimes and
+# deliberately NOT Feature-gated (Art. 114(3) is identically worded in CRR and
+# PS1/26), so binding it from the CRR pack carries the Basel 3.1 value too.
+_ECB_ZERO_RW: Decimal = _CRR_PACK.scalar_param("ecb_zero_rw").value
 _IO_ZERO_RW: Decimal = _CRR_PACK.scalar_param("io_zero_rw").value
 _MDB_NAMED_ZERO_RW: Decimal = _CRR_PACK.scalar_param("mdb_named_zero_rw").value
 _MDB_UNRATED_RW: Decimal = _CRR_PACK.scalar_param("mdb_unrated_rw").value
@@ -332,19 +337,23 @@ def build_entity_rw_expr(
     Compiled by the hierarchy facility-share selection
     (``engine/stages/hierarchy/facility_undrawn.py::
     _derive_facility_share_counterparty``) to rank candidate counterparties
-    by SA-equivalent risk weight. The preview is non-binding: the chosen
-    counterparty still flows through the full classifier and SA/IRB pipeline
-    downstream. Keeping the preview SA-only avoids a circular dependency with
-    the classifier's IRB approach gating.
+    by SA-equivalent risk weight. The preview never appears in output, but it
+    is BINDING on ownership: the argmax of this expression becomes the share
+    facility's ``counterparty_reference``, so it decides which obligor owns
+    the whole undrawn EAD and therefore how that EAD is priced. It must be
+    regime-correct (P1.307). Keeping the preview SA-only avoids a circular
+    dependency with the classifier's IRB approach gating.
 
     Routes the lowercased ``entity_type`` through the SA exposure-class
     buckets (``ENTITY_TYPES_BY_SA_CLASS``) and maps CQS -> RW via the same
     table branches as :func:`build_guarantor_rw_expr`:
 
+        ECB (Art. 114(3)) -> 0%, both regimes
         sovereign (CGCB CQS Table 1, Art. 114)
         International Organisation (Art. 118) -> 0%
         Named MDB (Art. 117(2)) -> 0%
-        MDB Table 2B (Art. 117(1))
+        Non-named MDB (Art. 117(1)) — PS1/26 Table 2B under Basel 3.1,
+            institution treatment under CRR
         Institution (Art. 120 Table 3 / PS1/26 ECRA via
             ``build_institution_guarantor_rw_expr``)
         PSE (Art. 116(2) Table 2A, GB/other approximation for unrated)
@@ -375,9 +384,12 @@ def build_entity_rw_expr(
         cqs_col: Name of the integer CQS column; null / out-of-range values
             fall to each table's unrated default.
         is_basel_3_1: Select the PS1/26 institution ECRA table when True,
-            CRR Art. 120 Table 3 when False. The remaining preview branches are
-            framework-identical: the corporate branch by name (see note above), and
-            the MDB / CGCB / IO / PSE / RGLA branches because their pack tables carry
+            CRR Art. 120 Table 3 when False; and, for non-named MDBs, PS1/26
+            Table 2B when True against the Art. 117(1) institution treatment
+            when False (CRR has no MDB table). The remaining preview branches
+            are framework-identical: the corporate branch by name (see note
+            above), the ECB 0% because Art. 114(3) is regime-invariant, and the
+            CGCB / IO / PSE / RGLA branches because their pack tables carry
             identical values in both regimes.
         country_code_col: Optional name of the country-code column driving
             the unrated PSE / RGLA GB-vs-other approximation. ``None`` falls
@@ -403,8 +415,16 @@ def build_entity_rw_expr(
     unrated_pse_rgla = _pse_rgla_unrated_fallback_expr(country_code_col)
 
     return (
+        # ECB (Art. 114(3)): 0% unconditional — carved out ahead of the CGCB
+        # Table 1 bucket exactly as ``mdb_named`` is carved out ahead of the MDB
+        # branch below. Regime-INVARIANT: CRR and PS1/26 Art. 114(3) are
+        # identically worded, so ``ecb_zero_rw`` lives in the common pack with no
+        # Feature gate. Keyed on the exact ``central_bank_ecb`` entity_type — a
+        # plain ``central_bank`` keeps Table 1.
+        pl.when(et == _ECB_ENTITY_TYPE)
+        .then(pl.lit(float(_ECB_ZERO_RW)))
         # CGCB (Art. 114 Table 1 — sovereign weights).
-        pl.when(et.is_in(sovereign_types))
+        .when(et.is_in(sovereign_types))
         .then(
             _cqs_table_lookup_expr(
                 cqs_col,
@@ -418,9 +438,23 @@ def build_entity_rw_expr(
         # Named MDB (Art. 117(2)): 0% unconditional — carved out ahead of Table 2B.
         .when(et == "mdb_named")
         .then(pl.lit(float(_MDB_NAMED_ZERO_RW)))
-        # Rated / unrated non-named MDB — Table 2B (CRR Art. 117(1) / PS1/26 Art. 117(1)(a)-(b)).
+        # Rated / unrated non-named MDB — framework-divergent, mirroring the
+        # guarantor branch above and the direct CRR MDB path in
+        # ``sa/risk_weights.py::_apply_crr_risk_weight_overrides`` (P1.253):
+        #   PS1/26 Art. 117(1)(a)/(b): the dedicated Basel 3.1 MDB Table 2B.
+        #   CRR Art. 117(1): non-named MDBs "shall be treated in the same manner
+        #     as exposures to institutions" — CRR has no MDB table.
+        # Difference from the guarantor sibling at the ``gec == "mdb"`` branch
+        # above: that one threads ``short_term_flag_col`` into its INSTITUTION
+        # branch but deliberately not into its MDB one (Art. 117(1) disapplies
+        # the Art. 119(2)/120(2)/121(3) short-term preferential). The preview has
+        # no short-term column at all, so this call takes two arguments.
         .when(et.is_in(mdb_types))
-        .then(_cqs_table_lookup_expr(cqs_col, _MDB_RW, float(_MDB_UNRATED_RW)))
+        .then(
+            _cqs_table_lookup_expr(cqs_col, _MDB_RW, float(_MDB_UNRATED_RW))
+            if is_basel_3_1
+            else build_institution_guarantor_rw_expr(cqs_col, is_basel_3_1=False)
+        )
         # Institution — Art. 120 Table 3 / PS1/26 ECRA via the shared builder
         # so the pack remains the single source of truth.
         .when(et.is_in(institution_types))

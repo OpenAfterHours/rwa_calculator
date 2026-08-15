@@ -6892,6 +6892,428 @@ class TestMOFAndFacilityShare:
 
 
 # =============================================================================
+# P1.307 — the entity-RW preview decides facility-share OWNERSHIP
+# =============================================================================
+#
+# ``_derive_facility_share_counterparty`` sorts candidates on the preview
+# expression descending and takes ``.first()`` inside a ``group_by().agg()``.
+# The preview column is dropped by the agg, but its ORDERING is the entire
+# mechanism by which the winner is chosen — and the winner becomes
+# ``share_counterparty_reference``, coalesced onto the synthetic undrawn row's
+# ``counterparty_reference``. So a preview that mis-ranks an obligor hands the
+# whole undrawn EAD to the wrong one, and it is then classified and priced as
+# that obligor.
+#
+# Two limbs (see tests/unit/test_entity_rw_preview.py for the article text):
+#   A. CRR Art. 117(1) — a non-named MDB takes the INSTITUTION treatment under
+#      CRR (unrated 100%, CQS 2 50%), not PS1/26 Table 2B (50% / 30%).
+#      CRR ARM ONLY.
+#   B. Art. 114(3) — the ECB is 0% in BOTH regimes; it currently previews at
+#      the generic CGCB Table 1 weight (unrated 100%).
+
+_P1_307_LIMIT: float = 1_000_000.0
+_P1_307_DRAWN: float = 50_000.0
+
+
+def _p1_307_share_undrawn(
+    resolver: HierarchyResolver,
+    members: list[tuple[str, str, int | None]],
+    facility_reference: str,
+    *,
+    config: CalculationConfig,
+) -> pl.DataFrame:
+    """Build a one-facility share with the given members and return its undrawn row.
+
+    ``members`` is ``(counterparty_reference, entity_type, cqs | None)``. Every
+    member gets one drawn loan under the same facility, so all of them are
+    distinct share members and the ``_member_count > 1`` filter is satisfied —
+    a share whose only interesting member is the entity under test would be
+    dropped outright and the test would pass for the wrong reason.
+    """
+    refs = [ref for ref, _et, _cqs in members]
+    counterparties = pl.DataFrame(
+        {
+            "counterparty_reference": refs,
+            "counterparty_name": refs,
+            "entity_type": [et for _ref, et, _cqs in members],
+            "country_code": ["GB"] * len(members),
+            "default_status": [False] * len(members),
+        }
+    ).lazy()
+    org_mappings = pl.DataFrame(
+        schema={
+            "parent_counterparty_reference": pl.String,
+            "child_counterparty_reference": pl.String,
+        }
+    ).lazy()
+    rated = [(ref, cqs) for ref, _et, cqs in members if cqs is not None]
+    ratings = pl.DataFrame(
+        {
+            "rating_reference": [f"R_{ref}" for ref, _cqs in rated],
+            "counterparty_reference": [ref for ref, _cqs in rated],
+            "rating_type": ["external"] * len(rated),
+            "rating_agency": ["MOODYS"] * len(rated),
+            "rating_value": ["X"] * len(rated),
+            "cqs": [cqs for _ref, cqs in rated],
+            "pd": [None] * len(rated),
+            "rating_date": [date(2024, 6, 1)] * len(rated),
+            "is_solicited": [True] * len(rated),
+        },
+        schema={
+            "rating_reference": pl.String,
+            "counterparty_reference": pl.String,
+            "rating_type": pl.String,
+            "rating_agency": pl.String,
+            "rating_value": pl.String,
+            "cqs": pl.Int8,
+            "pd": pl.Float64,
+            "rating_date": pl.Date,
+            "is_solicited": pl.Boolean,
+        },
+    ).lazy()
+
+    facilities = pl.DataFrame(
+        {
+            "facility_reference": [facility_reference],
+            "product_type": ["RCF"],
+            "book_code": ["CORP"],
+            # The facility's own counterparty is the first member; the share
+            # override must be able to move ownership off it.
+            "counterparty_reference": [refs[0]],
+            "value_date": [date(2024, 1, 1)],
+            "maturity_date": [date(2027, 1, 1)],
+            "currency": ["GBP"],
+            "limit": [_P1_307_LIMIT],
+            "lgd": [0.45],
+            "seniority": ["senior"],
+            "risk_type": ["MR"],
+        }
+    ).lazy()
+    loans = pl.DataFrame(
+        {
+            "loan_reference": [f"L_{ref}" for ref in refs],
+            "product_type": ["TERM_LOAN"] * len(refs),
+            "book_code": ["CORP"] * len(refs),
+            "counterparty_reference": refs,
+            "value_date": [date(2024, 1, 1)] * len(refs),
+            "maturity_date": [date(2027, 1, 1)] * len(refs),
+            "currency": ["GBP"] * len(refs),
+            "drawn_amount": [_P1_307_DRAWN] * len(refs),
+            "lgd": [0.45] * len(refs),
+            "seniority": ["senior"] * len(refs),
+        }
+    ).lazy()
+    facility_mappings = pl.DataFrame(
+        {
+            "parent_facility_reference": [facility_reference] * len(refs),
+            "child_reference": [f"L_{ref}" for ref in refs],
+            "child_type": ["loan"] * len(refs),
+        }
+    ).lazy()
+
+    counterparty_lookup, _ = _cp_lookup(resolver, counterparties, org_mappings, ratings)
+    root_lookup = _root_lookup(resolver, facility_mappings)
+    undrawn = _calc_undrawn(
+        resolver,
+        facilities,
+        loans,
+        None,
+        facility_mappings,
+        root_lookup,
+        counterparty_lookup=counterparty_lookup,
+        config=config,
+    ).collect()
+    return undrawn.filter(pl.col("exposure_reference") == f"{facility_reference}_UNDRAWN")
+
+
+def _assert_p1_307_share_winner(
+    row: pl.DataFrame, expected_reference: str, member_count: int
+) -> None:
+    """Presence + non-null + conservation checks shared by every P1.307 case."""
+    # The synthetic undrawn row must be EMITTED at all — a dropped share (e.g.
+    # by the _member_count > 1 filter) is the failure mode that silently makes
+    # every ownership assertion below vacuous.
+    assert len(row) == 1
+    assert row["counterparty_reference"][0] is not None
+    assert row["counterparty_reference"][0] == expected_reference
+    # The share override changes WHO owns the undrawn headroom, never HOW MUCH.
+    assert row["nominal_amount"][0] == pytest.approx(_P1_307_LIMIT - member_count * _P1_307_DRAWN)
+
+
+class TestP1307FacilityShareEntityPreview:
+    """P1.307 — the preview's ranking decides which obligor owns the undrawn EAD."""
+
+    # --- limb A: non-named MDB, unrated. CRR only. --------------------------
+
+    def test_p1_307_share_allocates_to_unrated_mdb_over_retail_under_crr(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """
+        An unrated non-named MDB outranks a retail obligor under CRR.
+
+        Arrange: a two-member share — ``A_MDB`` (unrated ``mdb``) and
+                 ``R_RETAIL`` (``retail``, Art. 123 flat 75%).
+        Act:     resolve the facility undrawn row on the CRR arm.
+        Assert:  ``A_MDB`` owns it.
+
+        Retail's 75% sits cleanly between Table 2B's unrated 50% and the CRR
+        institution unrated 100%, so the flip is unambiguous and does not ride
+        on any tie-break. Pre-fix this row is owned by ``R_RETAIL``.
+        """
+        # Arrange / Act
+        row = _p1_307_share_undrawn(
+            resolver,
+            [("A_MDB", "mdb", None), ("R_RETAIL", "retail", None)],
+            "FS_MDB_UNRATED",
+            config=CalculationConfig.crr(reporting_date=date(2024, 12, 31)),
+        )
+
+        # Assert — Art. 117(1): 100% institution treatment beats retail 75%.
+        _assert_p1_307_share_winner(row, "A_MDB", member_count=2)
+        assert row["original_counterparty_reference"][0] == "A_MDB"
+
+    def test_p1_307_share_keeps_retail_over_unrated_mdb_under_basel_3_1(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """
+        The same share is UNCHANGED under Basel 3.1 — limb A is CRR-only.
+
+        Arrange: the identical two-member share.
+        Act:     resolve on the Basel 3.1 arm.
+        Assert:  ``R_RETAIL`` still owns it.
+
+        Green before and after. PS1/26 Art. 117(1)(a)/(b) keeps Table 2B, so
+        an unrated MDB previews 50% and retail's 75% still wins.
+
+        Mutation it detects — MEASURED, not assumed: limb A applied in both
+        regimes using the **CRR** institution table (i.e. the ``is_basel_3_1``
+        branch dropped altogether). That takes the B31 MDB preview to 100% and
+        this row to ``A_MDB``. It does **not** detect limb A applied in both
+        regimes with each regime's OWN institution table, because B31 ECRA
+        unrated (40%) is BELOW Table 2B's 50% and so cannot change the
+        ordering against retail; the sibling
+        ``…_keeps_the_mdb_over_an_unrated_institution_under_basel_3_1``
+        below exists precisely to cover that second variant.
+        """
+        # Arrange / Act
+        row = _p1_307_share_undrawn(
+            resolver,
+            [("A_MDB", "mdb", None), ("R_RETAIL", "retail", None)],
+            "FS_MDB_UNRATED_B31",
+            config=CalculationConfig.basel_3_1(reporting_date=date(2027, 12, 31)),
+        )
+
+        # Assert — Table 2B unrated 50% < retail 75%.
+        _assert_p1_307_share_winner(row, "R_RETAIL", member_count=2)
+
+    def test_p1_307_share_keeps_the_mdb_over_an_unrated_institution_under_basel_3_1(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """
+        An unrated MDB still outranks an unrated institution under Basel 3.1.
+
+        Arrange: ``M_MDB`` (unrated ``mdb`` — Table 2B 50%) and ``A_INST``
+                 (unrated ``institution`` — PS1/26 ECRA unrated 40%).
+        Act:     resolve on the Basel 3.1 arm.
+        Assert:  ``M_MDB`` owns the undrawn row.
+
+        Green before and after, and it is the ONLY selection-level test that
+        detects the second scope mutation: limb A applied in both regimes with
+        each regime's own institution table. That drops the B31 MDB preview
+        from 50% to the ECRA 40%, tying ``A_INST``; both members are unrated,
+        so the sort falls through to ``counterparty_reference`` ascending and
+        ``A_INST`` takes the row. 40% and 50% are the only two B31 preview
+        values in play, so a magnitude-based discriminator does not exist —
+        no candidate previews strictly between them.
+        """
+        # Arrange / Act
+        row = _p1_307_share_undrawn(
+            resolver,
+            [("A_INST", "institution", None), ("M_MDB", "mdb", None)],
+            "FS_MDB_VS_INST_B31",
+            config=CalculationConfig.basel_3_1(reporting_date=date(2027, 12, 31)),
+        )
+
+        # Assert — PS1/26 Table 2B unrated 50% > ECRA unrated 40%.
+        _assert_p1_307_share_winner(row, "M_MDB", member_count=2)
+
+    # --- limb A: non-named MDB, CQS 2. CRR only. ----------------------------
+
+    def test_p1_307_share_allocates_to_cqs2_mdb_over_cqs2_corporate_under_crr(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """
+        A CQS-2 non-named MDB reaches parity with a CQS-2 corporate under CRR.
+
+        Arrange: ``A_MDB2`` (``mdb``, CQS 2) and ``Z_CORP`` (``corporate``,
+                 CQS 2 — Art. 122 Table 5 50%).
+        Act:     resolve on the CRR arm.
+        Assert:  ``A_MDB2`` owns the undrawn row.
+
+        ⚠ This case rides on a TIE-BREAK and is deliberately not the only
+        limb-A evidence. No CRR preview value lies strictly between Table 2B's
+        30% and the institution table's 50%, so no candidate can separate the
+        two states by magnitude alone. Post-fix both members preview 50% and
+        both carry CQS 2, so the sort falls through to ``counterparty_reference``
+        ascending — hence the ``A_``/``Z_`` names. Pre-fix ``Z_CORP`` wins on
+        magnitude (50% vs 30%). The unambiguous limb-A evidence is the unrated
+        case above.
+        """
+        # Arrange / Act
+        row = _p1_307_share_undrawn(
+            resolver,
+            [("A_MDB2", "mdb", 2), ("Z_CORP", "corporate", 2)],
+            "FS_MDB_CQS2",
+            config=CalculationConfig.crr(reporting_date=date(2024, 12, 31)),
+        )
+
+        # Assert — Art. 117(1): institution CQS 2 50% ties Table 5 CQS 2 50%.
+        _assert_p1_307_share_winner(row, "A_MDB2", member_count=2)
+
+    def test_p1_307_share_keeps_cqs2_corporate_over_cqs2_mdb_under_basel_3_1(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """
+        The CQS-2 share is UNCHANGED under Basel 3.1 — limb A is CRR-only.
+
+        Green before and after: Table 2B CQS 2 is 30%, below the corporate 50%,
+        so ``Z_CORP`` keeps ownership.
+
+        Mutation it detects — MEASURED: limb A applied in both regimes with the
+        **CRR** institution table (CQS 2 -> 50%, tying ``Z_CORP`` and losing the
+        reference tie-break). It cannot detect the regime-appropriate variant:
+        PS1/26 ECRA CQS 2 and Table 2B CQS 2 are BOTH 30%, so at this CQS there
+        is no difference to see.
+        """
+        # Arrange / Act
+        row = _p1_307_share_undrawn(
+            resolver,
+            [("A_MDB2", "mdb", 2), ("Z_CORP", "corporate", 2)],
+            "FS_MDB_CQS2_B31",
+            config=CalculationConfig.basel_3_1(reporting_date=date(2027, 12, 31)),
+        )
+
+        # Assert — Table 2B CQS 2 30% < corporate 50%.
+        _assert_p1_307_share_winner(row, "Z_CORP", member_count=2)
+
+    # --- limb B: the ECB. Both regimes. -------------------------------------
+
+    @pytest.mark.parametrize(
+        "config",
+        [
+            CalculationConfig.crr(reporting_date=date(2024, 12, 31)),
+            CalculationConfig.basel_3_1(reporting_date=date(2027, 12, 31)),
+        ],
+        ids=["crr", "b31"],
+    )
+    def test_p1_307_share_moves_undrawn_off_the_ecb(
+        self,
+        resolver: HierarchyResolver,
+        config: CalculationConfig,
+    ) -> None:
+        """
+        The ECB never wins a share — Art. 114(3) makes it 0%, in both regimes.
+
+        Arrange: ``E_ECB`` (unrated ``central_bank_ecb``) and ``C_CORP1``
+                 (``corporate``, CQS 1 — Art. 122 Table 5 20%).
+        Act:     resolve on each regime's arm.
+        Assert:  ``C_CORP1`` owns the undrawn row.
+
+        Pre-fix the ECB previews at the generic CGCB unrated 100% and takes
+        the whole undrawn EAD — which is then priced at the ECB's TRUE 0%.
+        Run ``-k crr`` and ``-k b31`` separately: one red across the
+        parametrisation proves one regime, not two.
+        """
+        # Arrange / Act
+        row = _p1_307_share_undrawn(
+            resolver,
+            [("E_ECB", "central_bank_ecb", None), ("C_CORP1", "corporate", 1)],
+            "FS_ECB",
+            config=config,
+        )
+
+        # Assert — Art. 114(3): the ECB previews 0%, below corporate CQS 1 20%.
+        _assert_p1_307_share_winner(row, "C_CORP1", member_count=2)
+        assert row["original_counterparty_reference"][0] == "E_ECB"
+
+    # --- both limbs at once: the half-fix discriminator ---------------------
+
+    def test_p1_307_share_needs_both_limbs_to_pick_the_mdb_under_crr(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """
+        A three-member share whose winner is reachable ONLY when both limbs land.
+
+        Arrange: ``A_ECB`` (unrated ``central_bank_ecb``), ``M_MDB`` (unrated
+                 ``mdb``) and ``R_RET2`` (``retail``).
+        Act:     resolve on the CRR arm.
+        Assert:  ``M_MDB`` owns the undrawn row.
+
+        Measured winner in all four implementation states:
+            neither limb   -> ``A_ECB``  (ECB 100% > retail 75% > MDB 50%)
+            limb A only    -> ``A_ECB``  (ECB and MDB tie at 100%; both
+                                          unrated, so the reference tie-break
+                                          picks ``A_ECB``)
+            limb B only    -> ``R_RET2`` (ECB 0%, MDB 50%, retail 75%)
+            both limbs     -> ``M_MDB``  (MDB 100% > retail 75% > ECB 0%)
+        So a half-fix is distinguishable from a whole one here, which a
+        one-limb-per-test suite cannot show.
+        """
+        # Arrange / Act
+        row = _p1_307_share_undrawn(
+            resolver,
+            [
+                ("A_ECB", "central_bank_ecb", None),
+                ("M_MDB", "mdb", None),
+                ("R_RET2", "retail", None),
+            ],
+            "FS_BOTH_LIMBS",
+            config=CalculationConfig.crr(reporting_date=date(2024, 12, 31)),
+        )
+
+        # Assert — only Art. 117(1) AND Art. 114(3) together give ``M_MDB``.
+        _assert_p1_307_share_winner(row, "M_MDB", member_count=3)
+
+    def test_p1_307_share_with_ecb_and_mdb_picks_retail_under_basel_3_1(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """
+        The same three-member share under Basel 3.1 stops at ``R_RET2``.
+
+        Limb B applies (the ECB drops to 0%) but limb A does not (Table 2B
+        keeps the MDB at 50%), so retail's 75% is the top of the book. This
+        pins limb A's CRR-only scope on the combined portfolio.
+
+        Mutation it detects — MEASURED: limb A applied in both regimes with the
+        **CRR** institution table hands this row to ``M_MDB`` (100% > 75%). The
+        regime-appropriate variant (ECRA 40%) leaves ``R_RET2`` on top and is
+        invisible here — see
+        ``…_keeps_the_mdb_over_an_unrated_institution_under_basel_3_1``.
+        """
+        # Arrange / Act
+        row = _p1_307_share_undrawn(
+            resolver,
+            [
+                ("A_ECB", "central_bank_ecb", None),
+                ("M_MDB", "mdb", None),
+                ("R_RET2", "retail", None),
+            ],
+            "FS_BOTH_LIMBS_B31",
+            config=CalculationConfig.basel_3_1(reporting_date=date(2027, 12, 31)),
+        )
+
+        # Assert — limb B only: retail 75% > Table 2B 50% > ECB 0%.
+        _assert_p1_307_share_winner(row, "R_RET2", member_count=3)
+
+
+# =============================================================================
 # Org Mappings Duplicate Child Tests (P2.24)
 # =============================================================================
 

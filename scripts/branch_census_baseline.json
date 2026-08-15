@@ -1,24 +1,21 @@
 {
   "_comment": "Branch census ratchet (scripts/check_branch_census.py --check). Ids are <column>::<reason>. `reached` is a COVERAGE population: REMOVALS ARE A HARD FAILURE and --update-baseline refuses to make one, because a limb the estate stops exercising is coverage going backwards. `dead` is a TOLERATED-FINDINGS population: ADDITIONS ARE A HARD FAILURE and must be hand-edited into this file, because a declared limb no row reaches is either dead code or an untested path. docs/plans/test-space-correctness-proposal.md Phase 3.",
   "runs": 28,
-  "reached_count": 6,
+  "reached_count": 7,
   "reached": [
     "irb_lgd_branch_reason::own_estimate",
     "irb_lgd_branch_reason::supervisory_firb",
     "sa_risk_weight_branch_reason::domestic_currency",
     "sa_risk_weight_branch_reason::not_institution",
     "sa_risk_weight_branch_reason::qccp_trade_exposure",
-    "sa_risk_weight_branch_reason::rated"
+    "sa_risk_weight_branch_reason::rated",
+    "sa_risk_weight_branch_reason::regime_not_applicable"
   ],
   "dead_count": 7,
   "dead": [
     {
-      "id": "sa_risk_weight_branch_reason::UNKNOWN_FALLBACK",
-      "reason": "DESIRED STATE, not a coverage gap, and the ONLY entry in this file that moved OUT of `reached` by hand. Banked deliberately by P1.342 (2026-08-13) rather than by --update-baseline, which refuses the removal by design. The two rows that formerly took this limb are the ccr__NS_CCR_QCCP legs, and they took it because `original_currency` was null on rows minted after the FX converter, so the whole Art. 121(6) domesticity test was Kleene-null and no limb could be chosen. P1.342 fixed that at the producers (engine/ccr/pipeline_adapter.py, engine/sft/fccm.py) and added the Art. 306 carve-out, so both rows now land on the DELIBERATE qccp_trade_exposure limb instead. The limb going quiet is therefore the fix, not coverage loss: no SA row is priced on a domesticity test the engine could not evaluate. Banked in the same shape as its irb_lgd sibling so that this limb becoming LIVE AGAIN fails the gate — a row newly landing on UNKNOWN_FALLBACK is a loss of justification, and this census is the only thing that would notice. OWNER: P1.333, which must keep it dead when it fills the remaining is_eu_domestic null."
-    },
-    {
       "id": "irb_lgd_branch_reason::UNKNOWN_FALLBACK",
-      "reason": "DESIRED STATE, not a coverage gap. No row in the estate reaches the IRB LGD selector with no own estimate, no modelled LGD and no purchased-receivables subtype \u2014 i.e. no IRB row is priced on a supervisory default standing in for absent data. Banked here so that this limb becoming LIVE fails the gate: rows newly landing on UNKNOWN_FALLBACK are a loss of justification, and the census is the only thing that would notice. OWNER: P1.341"
+      "reason": "DESIRED STATE, not a coverage gap. No row in the estate reaches the IRB LGD selector with no own estimate, no modelled LGD and no purchased-receivables subtype — i.e. no IRB row is priced on a supervisory default standing in for absent data. Banked here so that this limb becoming LIVE fails the gate: rows newly landing on UNKNOWN_FALLBACK are a loss of justification, and the census is the only thing that would notice. OWNER: P1.341"
     },
     {
       "id": "irb_lgd_branch_reason::ccr_modelled",
@@ -29,12 +26,16 @@
       "reason": "NO_FIXTURE. purchased_receivables_subtype is null in every fixture, so the Art. 161(1)(e)/(f)/(g) dispatch is unexercised end to end. Unit tests cover it directly (tests/unit/irb), but nothing proves it survives the pipeline. OWNER: P1.341"
     },
     {
+      "id": "sa_risk_weight_branch_reason::UNKNOWN_FALLBACK",
+      "reason": "DESIRED STATE, not a coverage gap, and the ONLY entry in this file that moved OUT of `reached` by hand. Banked deliberately by P1.342 (2026-08-13) rather than by --update-baseline, which refuses the removal by design. The two rows that formerly took this limb are the ccr__NS_CCR_QCCP legs, and they took it because `original_currency` was null on rows minted after the FX converter, so the whole Art. 121(6) domesticity test was Kleene-null and no limb could be chosen. P1.342 fixed that at the producers (engine/ccr/pipeline_adapter.py, engine/sft/fccm.py) and added the Art. 306 carve-out, so both rows now land on the DELIBERATE qccp_trade_exposure limb instead. The limb going quiet is therefore the fix, not coverage loss: no SA row is priced on a domesticity test the engine could not evaluate. Banked in the same shape as its irb_lgd sibling so that this limb becoming LIVE AGAIN fails the gate — a row newly landing on UNKNOWN_FALLBACK is a loss of justification, and this census is the only thing that would notice. OWNER: P1.333, which must keep it dead when it fills the remaining is_eu_domestic null."
+    },
+    {
       "id": "sa_risk_weight_branch_reason::floor_bound",
-      "reason": "NO_FIXTURE, and the headline Phase 3 finding. The Art. 121(6) sovereign floor NEVER BINDS anywhere in the 28-run estate: no portfolio pairs an unrated institution with a determinate foreign-currency test. The two rows that reach the rule at all land on UNKNOWN_FALLBACK instead. Unit coverage exists (tests/unit/test_sovereign_floor_institutions.py, 30 tests) but every one of them supplies cp_local_currency explicitly, which is precisely the path production rows do not take. OWNER: P1.333"
+      "reason": "NO_FIXTURE, and the headline Phase 3 finding. The Art. 121(6) sovereign floor NEVER BINDS anywhere in the 28-run estate: no portfolio pairs an unrated institution with a determinate foreign-currency test. The two rows that reach the rule at all land on UNKNOWN_FALLBACK instead. Unit coverage exists (tests/unit/test_sovereign_floor_institutions.py, 30 tests) but every one of them supplies cp_local_currency explicitly, which is precisely the path production rows do not take. OWNER: P1.333 UPDATED by P1.334 (2026-08-15): the rule is now gated on the cited pack Feature sa_unrated_institution_sovereign_floor_applies, so the 14 CRR runs abstain on the regime_not_applicable limb and are no longer candidates for this one at all. The limb's reachable population is the 14 Basel 3.1 runs only, and the NO_FIXTURE finding stands for them unchanged."
     },
     {
       "id": "sa_risk_weight_branch_reason::floor_not_binding",
-      "reason": "NO_FIXTURE. Same population as floor_bound: the floor's applicable set is empty across the estate, so neither the binding nor the non-binding outcome is reachable. Becomes live the moment floor_bound does. OWNER: P1.333"
+      "reason": "NO_FIXTURE. Same population as floor_bound: the floor's applicable set is empty across the estate, so neither the binding nor the non-binding outcome is reachable. Becomes live the moment floor_bound does. OWNER: P1.333 UPDATED by P1.334 (2026-08-15): the rule is now gated on the cited pack Feature sa_unrated_institution_sovereign_floor_applies, so the 14 CRR runs abstain on the regime_not_applicable limb and are no longer candidates for this one at all. The limb's reachable population is the 14 Basel 3.1 runs only, and the NO_FIXTURE finding stands for them unchanged."
     },
     {
       "id": "sa_risk_weight_branch_reason::trade_exempt",

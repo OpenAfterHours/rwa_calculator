@@ -796,6 +796,19 @@ ENTRIES: dict[str, RuleEntry] = {
             "Art. 222(3) Chapter 2 weight for a direct equity holding (Art. 133, 250%)",
         ),
     ),
+    # PS1/26 Art. 121(6): "Notwithstanding paragraphs 2 to 5, the risk weight
+    # assigned to an exposure to an institution for which a credit assessment by
+    # a nominated ECAI is not available may not be less than the risk weight
+    # applicable to exposures to the central government of the jurisdiction where
+    # the institution is incorporated as set out in Article 114(1) and (2)" —
+    # where the exposure is not in the local currency and is not a
+    # self-liquidating trade item under one year. Overrides the CRR Feature of
+    # the same name; CRR has no such paragraph (see packs/crr.py).
+    "sa_unrated_institution_sovereign_floor_applies": Feature(
+        name="sa_unrated_institution_sovereign_floor_applies",
+        enabled=True,
+        citation=Citation("PS1/26", "121", "(6) sovereign RW floor for FX unrated institutions"),
+    ),
     # Basel 3.1 replaces the CRR Art. 230 F-IRB collateral step-functions with
     # the continuous LGD* formula (PS1/26 Art. 230(1)): no overcollateralisation
     # divisor and no minimum collateralisation threshold. Overrides the CRR

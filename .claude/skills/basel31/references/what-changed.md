@@ -89,6 +89,7 @@ Basel 3.1 cell means the entry is not a simple scalar under that regime.
 | `sa_revised_risk_weight_overrides` | off | on | CRR Art. 112 / PS1/26, paragraph 122 |
 | `sa_revised_risk_weight_tables` | off | on | CRR Art. 122 / PS1/26, paragraph 122 |
 | `sa_sl_inferred_rating_disapplied` | off | on | CRR Art. 139 / PS1/26, paragraph 139 |
+| `sa_unrated_institution_sovereign_floor_applies` | off | on | CRR Art. 121 / PS1/26, paragraph 121 |
 | `slotting_revised_tables` | off | on | CRR Art. 153(5) / PS1/26, paragraph 153 |
 | `supporting_factors` | on | off | CRR Art. 501 / PS1/26, paragraph 501 |
 | `ucp_unilateral_change_ineligible` | off | on | CRR Art. 213 / PS1/26, paragraph 213 |

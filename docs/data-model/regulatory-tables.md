@@ -6,8 +6,8 @@ Every cited regulatory value in the rulepack packs `src/rwa_calc/rulebook/packs/
 
 Package version `0.3.26`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — 202 entries, content hash `65a569c144cf4925`
-- **Basel 3.1** (`b31` @ 2027-01-01) — 234 entries, content hash `2a0721246708a300`
+- **CRR** (`crr` @ 2026-01-01) — 203 entries, content hash `e0d9bc1d5aa1621e`
+- **Basel 3.1** (`b31` @ 2027-01-01) — 235 entries, content hash `f4c8c5f2ac796cb7`
 
 ## Regime features
 
@@ -59,6 +59,7 @@ On/off behaviour switches (`Feature`).
 | `sa_revised_risk_weight_overrides` | off | on | CRR Art. 112 / PS1/26, paragraph 122 |
 | `sa_revised_risk_weight_tables` | off | on | CRR Art. 122 / PS1/26, paragraph 122 |
 | `sa_sl_inferred_rating_disapplied` | off | on | CRR Art. 139 / PS1/26, paragraph 139 |
+| `sa_unrated_institution_sovereign_floor_applies` | off | on | CRR Art. 121 / PS1/26, paragraph 121 |
 | `slotting_guarantee_substitution` | on | on | CRR Art. 235 / PS1/26, paragraph 235 |
 | `slotting_revised_tables` | off | on | CRR Art. 153(5) / PS1/26, paragraph 153 |
 | `supporting_factors` | on | off | CRR Art. 501 / PS1/26, paragraph 501 |

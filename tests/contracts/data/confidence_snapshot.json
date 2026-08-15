@@ -962,9 +962,11 @@
       ],
       "pack_entries": [
         "institution_rw_sovereign_derived@crr",
-        "institution_short_term_unrated_rw_crr@crr"
+        "institution_short_term_unrated_rw_crr@crr",
+        "sa_unrated_institution_sovereign_floor_applies@crr"
       ],
       "source_files": [
+        "domain/branch_reasons.py",
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/guarantor_rw.py",
         "engine/sa/risk_weights.py",
@@ -978,6 +980,7 @@
         "tests/acceptance/ccr/test_ccr_alpha_carveout.py",
         "tests/acceptance/crr/test_p1_121_art_121_3_unrated_inst_short_term.py",
         "tests/acceptance/crr/test_p1_184_art_117_mdb_institution_routing.py",
+        "tests/contracts/test_branch_reason_contract.py",
         "tests/fixtures/generate_all.py",
         "tests/fixtures/p1_121/__init__.py",
         "tests/fixtures/p1_121/p1_121.py",
@@ -989,6 +992,7 @@
         "tests/unit/crr/test_crr_institution_standard.py",
         "tests/unit/crr/test_p1_316_art_121_1_table_5_unrated_institution.py",
         "tests/unit/test_b31_sa_risk_weights.py",
+        "tests/unit/test_p1_334_sovereign_floor_is_b31_only.py",
         "tests/unit/test_sovereign_floor_institutions.py"
       ],
       "watchfire_index_gap": false
@@ -6133,20 +6137,24 @@
       ],
       "confidence": "HIGH",
       "framework": "PS1/26",
-      "layer_count": 4,
+      "layer_count": 5,
       "oracle_cases": [
         "ORC-052",
         "ORC-053",
         "ORC-054",
         "ORC-055"
       ],
-      "pack_entries": [],
+      "pack_entries": [
+        "sa_unrated_institution_sovereign_floor_applies@b31"
+      ],
       "source_files": [
         "contracts/edges.py",
         "domain/branch_reasons.py",
         "engine/sa/guarantor_rw.py",
+        "engine/sa/risk_weights.py",
         "engine/sa/sovereign_floor.py",
-        "engine/stages/hierarchy/enrich.py"
+        "engine/stages/hierarchy/enrich.py",
+        "rulebook/packs/b31.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_122b_b31_unrated_scra_b_institution_guarantor_irb_sa_fallback.py",
@@ -6160,8 +6168,10 @@
         "tests/oracle/derivations/branch_sa.py",
         "tests/oracle/derivations/sa_b31.py",
         "tests/properties/test_regime_deltas.py",
+        "tests/unit/crr/test_crr_institution_standard.py",
         "tests/unit/test_p1_185_scra_grade_b_docstring.py",
         "tests/unit/test_p1_254_art_121_6_unrated_sovereign_floor.py",
+        "tests/unit/test_p1_334_sovereign_floor_is_b31_only.py",
         "tests/unit/test_sovereign_floor_institutions.py"
       ],
       "watchfire_index_gap": false
@@ -8448,8 +8458,8 @@
     }
   ],
   "pack_content_hashes": {
-    "b31": "2a0721246708a3009472004e1de0174eb30f633f2b676eab8238c2ff5e587c68",
-    "crr": "65a569c144cf492524295c08a0586ec19009a837ec0a94d1dbc6587ca0d849bf"
+    "b31": "f4c8c5f2ac796cb7823e3770ec96af276a9fe086e02111aea49b2cd1ea27f1d4",
+    "crr": "e0d9bc1d5aa1621e57337dbfdd76022078aa899399e7b1cd0170f052d8bbd809"
   },
   "package_version": "0.3.26",
   "scoring_rule": {

@@ -856,6 +856,21 @@ ENTRIES: dict[str, RuleEntry] = {
             "CRR", "222(3)", "Chapter 2 weight for a direct equity holding (Art. 133(2), 100%)"
         ),
     ),
+    # The unrated-institution sovereign RW floor does NOT exist under CRR.
+    # Verified verbatim (crr.pdf PAGE_INDEX 119): UK CRR Art. 121 runs
+    # (1) Table 5, (2) unrated-sovereign 100%, (3) <=3-month 20%, (4) trade
+    # finance — then Art. 122. There is no (5) or (6). The floor is PS1/26
+    # Art. 121(6) ("Notwithstanding paragraphs 2 to 5"), which modifies the
+    # SCRA Grade A/B/C ladder that CRR does not have. CRR addresses the same
+    # concern structurally instead: Art. 121(1) already DERIVES the weight from
+    # the credit quality step of the institution's central government, so a
+    # further floor on the sovereign weight has nothing to bite on.
+    # Gates engine/sa/sovereign_floor.py (arch_check check 17).
+    "sa_unrated_institution_sovereign_floor_applies": Feature(
+        name="sa_unrated_institution_sovereign_floor_applies",
+        enabled=False,
+        citation=Citation("CRR", "121", "four paragraphs; no sovereign floor limb"),
+    ),
     # F-IRB collateral step-functions apply under CRR (Art. 230 Table 5): the
     # overcollateralisation divisor and the 30% C*/C** minimum threshold. Basel
     # 3.1 removes both (see packs/b31.py); the divisor/threshold values

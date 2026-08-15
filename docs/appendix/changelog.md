@@ -41,6 +41,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   1(k) to the full-risk limb. Number-neutral across the estate: no golden moved,
   and no registered run holds a row with both an unresolved `risk_type` and a
   non-zero nominal.
+- **The Art. 121(6) sovereign risk-weight floor is now Basel 3.1 only (P1.334).**
+  The engine applied it under both regimes. **UK CRR Art. 121 has four
+  paragraphs** — (1) Table 5 keyed on the central government's credit quality
+  step, (2) unrated sovereign 100%, (3) three months or less 20%, (4) trade
+  finance — and then Article 122. There is no (5) or (6). PS1/26 Art. 121(6)
+  opens "Notwithstanding paragraphs 2 to 5", modifying an SCRA Grade A/B/C
+  ladder CRR does not have; CRR meets the same concern structurally, because
+  Art. 121(1) already *derives* an unrated institution's weight from its
+  sovereign's credit quality step, leaving a sovereign floor nothing to bite
+  on. Gated on the new cited pack Feature
+  `sa_unrated_institution_sovereign_floor_applies`. Under CRR the rule now
+  abstains on a named `regime_not_applicable` branch reason rather than being
+  skipped silently, so the branch census can still see it. Direction:
+  **RWA-reducing** on the affected population — a three-month exposure to an
+  unrated institution in a CQS-6 jurisdiction was lifted from Art. 121(3)'s 20%
+  to 150%.
 - **`fcsm_equity_collateral_rw` moved from the common pack into the regime packs
   (P1.296).** Art. 222(3) gives the collateralised portion "the risk weight that
   they would assign under Chapter 2 … where the lending institution had a direct

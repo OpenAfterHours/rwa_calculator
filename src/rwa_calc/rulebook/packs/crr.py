@@ -264,7 +264,12 @@ ENTRIES: dict[str, RuleEntry] = {
     "sa_revised_risk_weight_tables": Feature(
         name="sa_revised_risk_weight_tables",
         enabled=False,
-        citation=Citation("CRR", "122", "original SA risk-weight tables (Art. 112-134)"),
+        citation=Citation(
+            "CRR",
+            "122",
+            "original SA risk-weight tables (Art. 112-134); ALSO gates the Art. 117(1) "
+            "MDB schedule — CRR routes non-named MDBs to institution treatment",
+        ),
     ),
     # SA risk-weight override LADDER dispatch (distinct from the base-table
     # Feature above): selects the whole when/then override sequence applied on
@@ -1053,6 +1058,22 @@ ENTRIES: dict[str, RuleEntry] = {
         citation=Citation("CRR", "115", "(1)(b) Table 1B RGLA own-rating RW"),
         default=Decimal("1.00"),
     ),
+    # ⚠ CITATION FROZEN, and the pack home is deliberate (P1.310). Table 2B is a
+    # PS1/26 construct — CRR Art. 117(1) has no table and instead routes non-named
+    # MDBs to institution treatment (verbatim, crr.pdf p.idx 115) — so both "move
+    # it to packs/b31.py" and "re-cite it to PS1/26" look like tidy-ups. Neither is
+    # buildable:
+    #   * MOVE: engine/sa/guarantor_rw.py:82 and engine/sa/crr_risk_weight_tables.py:319
+    #     bind this off the CRR pack at MODULE IMPORT, so the move raises
+    #     KeyError("rulepack 'crr@…' has no entry 'mdb_risk_weights_table_2b'") and
+    #     the engine will not import. Measured.
+    #   * RE-CITE: this is a LookupTable, a structured shape whose citation NOTE
+    #     renders as its own line into a read-only .claude/skills/ region — so even
+    #     a note-only edit restages a file that cannot be written here. (Simple
+    #     shapes render only "framework, paragraph N", which is why the sibling
+    #     ScalarParam mdb_unrated_rw COULD take a note edit and this cannot.)
+    # Which schedule applies is selected by the sa_revised_risk_weight_tables
+    # Feature — see engine/sa/guarantor_rw.py:227-260, framework-divergent since P1.253.
     "mdb_risk_weights_table_2b": LookupTable(
         name="mdb_risk_weights_table_2b",
         entries={

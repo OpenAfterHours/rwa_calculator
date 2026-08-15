@@ -534,10 +534,25 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("0.00"),
         citation=Citation("CRR", "117", "(2) named MDB 0%"),
     ),
+    # ⚠ MUST STAY RESOLVABLE FROM THE **CRR** PACK (P1.310). The 50% value is a
+    # PS1/26 construct — CRR Art. 117(1) has no table and instead routes unrated
+    # non-named MDBs to institution treatment — so "move it to packs/b31.py"
+    # looks like a citation tidy-up. It is not: engine/sa/guarantor_rw.py:122 and
+    # engine/sa/crr_risk_weight_tables.py:326 both bind this off the CRR pack at
+    # MODULE IMPORT, so the move raises KeyError("rulepack 'crr@…' has no entry
+    # 'mdb_unrated_rw'") on `import rwa_calc.engine.sa.guarantor_rw` — the engine
+    # will not import. Measured. The framework/article are also frozen: this
+    # entry renders into a read-only .claude/skills/ region, so any change beyond
+    # this note restages a file that cannot be written here.
     "mdb_unrated_rw": ScalarParam(
         name="mdb_unrated_rw",
         value=Decimal("0.50"),
-        citation=Citation("CRR", "117", "(1) Table 2B unrated MDB 50%"),
+        citation=Citation(
+            "CRR",
+            "117",
+            "(1) unrated non-named MDB 50% — VALUE is PS1/26 Art. 117(1)(b) Table 2B; "
+            "CRR Art. 117(1) itself routes to institution treatment",
+        ),
     ),
     "io_zero_rw": ScalarParam(
         name="io_zero_rw",

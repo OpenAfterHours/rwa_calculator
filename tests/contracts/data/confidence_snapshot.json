@@ -748,7 +748,9 @@
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/guarantor_rw.py",
         "engine/sa/risk_weights.py",
-        "engine/sa/sovereign_derived.py"
+        "engine/sa/sovereign_derived.py",
+        "rulebook/packs/common.py",
+        "rulebook/packs/crr.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_154_b31_art_118_international_organisation_class.py",
@@ -6024,7 +6026,8 @@
         "engine/sa/cqs_lift.py",
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/guarantor_rw.py",
-        "engine/sa/risk_weights.py"
+        "engine/sa/risk_weights.py",
+        "rulebook/packs/common.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_154_b31_art_118_international_organisation_class.py",

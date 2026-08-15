@@ -245,7 +245,12 @@ ENTRIES: dict[str, RuleEntry] = {
     "sa_revised_risk_weight_tables": Feature(
         name="sa_revised_risk_weight_tables",
         enabled=True,
-        citation=Citation("PS1/26", "122", "(2) Basel 3.1 revised SA risk-weight tables"),
+        citation=Citation(
+            "PS1/26",
+            "122",
+            "(2) Basel 3.1 revised SA risk-weight tables; ALSO gates the Art. 117(1)(a)/(b) "
+            "MDB schedule — PS1/26 assigns Table 2B where CRR routes to institutions",
+        ),
     ),
     # Basel 3.1 revised SA risk-weight override ladder (PRA PS1/26): the PS1/26
     # institution ECRA/SCRA branches, revised covered-bond/real-estate handling,

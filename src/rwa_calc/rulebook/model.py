@@ -32,7 +32,7 @@ References:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -250,15 +250,35 @@ class DecisionTable[V = Decimal]:
 
 @dataclass(frozen=True)
 class FormulaParams:
-    """A named bundle of cited Decimal parameters for one formula."""
+    """A named bundle of cited Decimal parameters for one formula.
+
+    ``citation`` is the bundle's provenance. Where individual keys derive from a
+    DIFFERENT article, ``key_citations`` overrides it per key — the retail keys
+    of ``pd_floors`` come from CRR Art. 163(1) / PS1/26 Art. 163(1) while the
+    bundle is cited to Art. 160(1), which governs corporates and institutions
+    only (P1.302).
+
+    Why an override map rather than splitting the bundle into two entries: an
+    entry name and its citation are both rendered into generated regions of
+    ``.claude/skills/**`` by ``scripts/generate_regulatory_tables.py``, and those
+    files are read-only in some environments — so a split cannot be made
+    freshness-green there, while this is render-neutral by construction. It is
+    also content-hash-neutral (``resolve.py::_value_repr`` serialises only
+    ``params``), so adding it moves no resolved value.
+    """
 
     name: str
     params: Mapping[str, Decimal]
     citation: Citation
+    key_citations: Mapping[str, Citation] = field(default_factory=dict)
 
     def get(self, key: str) -> Decimal:
         """Return the cited Decimal parameter ``key`` (raises ``KeyError`` if absent)."""
         return self.params[key]
+
+    def citation_for(self, key: str) -> Citation:
+        """Return the article that governs ``key``, falling back to the bundle's."""
+        return self.key_citations.get(key, self.citation)
 
 
 @dataclass(frozen=True)

@@ -195,6 +195,23 @@ ENTRIES: dict[str, RuleEntry] = {
             "160",
             "(1) differentiated IRB PD floors (Art. 160(1) wholesale / 163(1) retail)",
         ),
+        # The four retail keys derive from Art. 163(1), not Art. 160(1) (P1.302).
+        # Under PS1/26 the two articles give DIFFERENT numbers as well as different
+        # provenance — 163(1) sets 0.1% for QRRE non-transactor and UK RRE against
+        # 0.05% for other retail — so the bundle citation was doubly wrong here.
+        key_citations={
+            key: Citation(
+                "PS1/26",
+                "163",
+                "(1) differentiated retail IRB PD floors",
+            )
+            for key in (
+                "retail_mortgage",
+                "retail_other",
+                "retail_qrre_transactor",
+                "retail_qrre_revolver",
+            )
+        },
     ),
     # A-IRB LGD floors (PRA PS1/26 Art. 161(5) corporate / Art. 164(4) retail).
     # Overrides the CRR all-zero bundle; gated on by the airb_lgd_floor Feature.

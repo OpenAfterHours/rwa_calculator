@@ -2518,13 +2518,19 @@
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
-      "layer_count": 3,
+      "layer_count": 4,
       "oracle_cases": [],
-      "pack_entries": [],
+      "pack_entries": [
+        "pd_floors.retail_mortgage@crr",
+        "pd_floors.retail_other@crr",
+        "pd_floors.retail_qrre_revolver@crr",
+        "pd_floors.retail_qrre_transactor@crr"
+      ],
       "source_files": [
         "engine/irb/calculator.py",
         "engine/irb/formulas.py",
-        "engine/irb/transforms.py"
+        "engine/irb/transforms.py",
+        "rulebook/model.py"
       ],
       "test_files": [
         "tests/acceptance/ccr/test_ccr_irb1_routing.py",
@@ -7541,15 +7547,21 @@
       ],
       "confidence": "HIGH",
       "framework": "PS1/26",
-      "layer_count": 4,
+      "layer_count": 5,
       "oracle_cases": [
         "ORC-101",
         "ORC-102"
       ],
-      "pack_entries": [],
+      "pack_entries": [
+        "pd_floors.retail_mortgage@b31",
+        "pd_floors.retail_other@b31",
+        "pd_floors.retail_qrre_revolver@b31",
+        "pd_floors.retail_qrre_transactor@b31"
+      ],
       "source_files": [
         "engine/irb/formulas.py",
-        "engine/irb/transforms.py"
+        "engine/irb/transforms.py",
+        "rulebook/model.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_151_art_161_purchased_receivables_lgd.py",

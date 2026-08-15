@@ -185,9 +185,10 @@ ENTRIES: dict[str, RuleEntry] = {
     # Retail is floored at the same 0.03% by a SEPARATE article, Art. 163(1) ("The
     # PD of an exposure shall be at least 0,03 %", retail sub-section). Basel 3.1
     # differentiates all of these (packs/b31.py). Consumed by
-    # engine/irb/formulas.py::_pd_floor_expression via compile.formula_float_map —
-    # note the values are deliberately NON-uniform, which is what keeps that
-    # builder's all-equal scalar shortcut from collapsing the class ladder.
+    # engine/irb/formulas.py::_pd_floor_expression via compile.formula_float_map.
+    # (The values ARE all-equal under CRR; the "all-equal scalar shortcut" this
+    # comment used to warn about was deleted by P1.277 — formulas.py:191-205 is
+    # now an unconditional ladder, so uniformity is no longer load-bearing.)
     "pd_floors": FormulaParams(
         name="pd_floors",
         params={
@@ -207,6 +208,24 @@ ENTRIES: dict[str, RuleEntry] = {
             "0.03% IRB PD floor for corporates and institutions only "
             "(retail floored separately by Art. 163(1); no CGCB floor)",
         ),
+        # The four retail keys derive from Art. 163(1), not Art. 160(1) (P1.302).
+        # Same numeric floor under CRR, different article — so this is provenance,
+        # not a value change. ``sovereign`` is deliberately NOT overridden: its
+        # Decimal("0") derives from Art. 160(1) NOT reaching central governments,
+        # so 160(1) is its correct provenance.
+        key_citations={
+            key: Citation(
+                "CRR",
+                "163(1)",
+                "0.03% IRB PD floor for retail exposures",
+            )
+            for key in (
+                "retail_mortgage",
+                "retail_other",
+                "retail_qrre_transactor",
+                "retail_qrre_revolver",
+            )
+        },
     ),
     # A-IRB LGD floors: all zero under CRR (no A-IRB LGD floor — see airb_lgd_floor
     # Feature). Basel 3.1 sets the Art. 161(5)/164(4) floors (packs/b31.py). Keyed

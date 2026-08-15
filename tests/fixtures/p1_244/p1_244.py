@@ -77,6 +77,11 @@ EXP_NOT_CANCELLABLE: str = FAC_NOT_CANCELLABLE + "_UNDRAWN"
 FAC_DRAWN_SECURED: str = "P1244_FAC_DRAWN_SECURED"
 FAC_DRAWN_CONTROL: str = "P1244_FAC_DRAWN_CONTROL"
 
+#: Facility identity behind the direct classify_exposure_subtypes frame (P1.320
+#: R3 repair) — distinct from every other facility reference in this module so
+#: the QRRE per-individual aggregate dedupe key never pools it with another row.
+FAC_SUBTYPES: str = "P1244_FAC_SUBTYPES"
+
 #: Drawn-leg loan references — a loan's exposure_reference == its loan_reference.
 LOAN_DRAWN_SECURED: str = "P1244_LOAN_DRAWN_SECURED"
 LOAN_DRAWN_CONTROL: str = "P1244_LOAN_DRAWN_CONTROL"
@@ -362,6 +367,7 @@ _SUBTYPES_SCHEMA: dict[str, PolarsDataType] = {
     "risk_type": pl.String,
     "undrawn_amount": pl.Float64,
     "facility_limit": pl.Float64,
+    "parent_facility_reference": pl.String,
     "is_mortgage": pl.Boolean,
     "is_adc": pl.Boolean,
     "is_hvcre": pl.Boolean,
@@ -387,6 +393,12 @@ def make_subtypes_frame(
     individuals gate, which is driven by the two counterparty arguments. A
     fully-drawn row (undrawn_amount=0) satisfies the cancellability limb
     trivially, isolating the individuals gate.
+
+    ``parent_facility_reference`` is a required ``HIERARCHY_EXIT_EDGE`` column
+    (P1.320 R3): this transform is called directly on a hand-built frame, with
+    no bundle seal to backfill it, so it must be present in both the row and
+    ``_SUBTYPES_SCHEMA`` or the QRRE per-individual aggregate dedupe raises
+    ``ColumnNotFoundError``.
     """
     return pl.LazyFrame(
         {
@@ -400,6 +412,7 @@ def make_subtypes_frame(
             "risk_type": ["FR"],
             "undrawn_amount": [0.0],
             "facility_limit": [FACILITY_LIMIT],
+            "parent_facility_reference": [FAC_SUBTYPES],
             "is_mortgage": [False],
             "is_adc": [False],
             "is_hvcre": [False],

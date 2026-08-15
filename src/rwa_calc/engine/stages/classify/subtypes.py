@@ -167,10 +167,12 @@ def classify_exposure_subtypes(
     # exposure to any single individual across the QRRE sub-portfolio at the
     # limit (EUR 100k / GBP 90k), not each facility individually. Aggregate
     # ``facility_limit`` (the committed/nominal basis) per
-    # ``counterparty_reference`` before comparing. The driver columns
-    # (``is_revolving`` / ``facility_limit`` / ``is_secured`` / ``risk_type`` /
-    # ``undrawn_amount``) are hierarchy_exit contract columns — always present,
-    # null-gated by value.
+    # ``counterparty_reference`` before comparing, counting each committed
+    # facility ONCE rather than once per hierarchy leg — see
+    # ``qrre_obligor_aggregate_limit_expr``. The driver columns
+    # (``is_revolving`` / ``facility_limit`` / ``parent_facility_reference`` /
+    # ``is_secured`` / ``risk_type`` / ``undrawn_amount``) are hierarchy_exit
+    # contract columns — always present, null-gated by value.
     #
     # The QRRE sub-portfolio is the qualifying revolving retail population.
     # Only those rows contribute to the per-individual aggregate; non-QRRE
@@ -185,14 +187,8 @@ def classify_exposure_subtypes(
     )
     facility_limit = pl.col("facility_limit").fill_null(float("inf"))
     candidate_limit = pl.when(is_qrre_candidate).then(facility_limit).otherwise(pl.lit(0.0))
-    # Guard the nullable ``counterparty_reference`` partition: a null key
-    # would otherwise pool all unmapped rows into a single bucket (see
-    # ``partition_by_nullable`` / ``NULLABLE_PARTITION_KEYS``). Null-keyed
-    # rows fall back to their own per-row candidate limit.
-    obligor_aggregate_limit = partition_by_nullable(
-        candidate_limit.sum().over("counterparty_reference"),
-        "counterparty_reference",
-        candidate_limit,
+    obligor_aggregate_limit = qrre_obligor_aggregate_limit_expr(
+        is_qrre_candidate, facility_limit, candidate_limit
     )
     is_qrre = is_qrre_candidate & (obligor_aggregate_limit <= qrre_max_limit)
 
@@ -305,6 +301,80 @@ def qrre_undrawn_cancellable_expr() -> pl.Expr:
         .is_in(["lr", "low_risk"])
     )
     return ~has_undrawn_commitment | is_uncond_cancellable
+
+
+@cites("CRR Art. 154(4)")
+@cites("PS1/26, paragraph 147")
+def qrre_obligor_aggregate_limit_expr(
+    is_qrre_candidate: pl.Expr,
+    facility_limit: pl.Expr,
+    candidate_limit: pl.Expr,
+) -> pl.Expr:
+    """Return the Art. 147(5A)(c) / Art. 154(4)(c) per-individual aggregate limit.
+
+    The limb caps the *aggregate* nominal exposure to any single individual
+    across the QRRE sub-portfolio, not each facility individually. The nominal
+    basis is the committed ``facility_limit``, and each committed facility
+    contributes it **once**.
+
+    The hierarchy stage emits one row per *leg* of a facility — each drawn
+    loan, each contingent, the synthetic ``_UNDRAWN`` headroom row, each MOF
+    waterfall / ``_RESIDUAL`` sub-row — and every leg inherits the parent's
+    full ``facility_limit``. Summing the legs therefore multiplies the
+    obligor's aggregate by the leg count and demotes qualifying revolving
+    retail out of QRRE. Deduplicating on ``parent_facility_reference`` — the
+    exact functional determinant of ``facility_limit``, since a leg receives
+    its limit either from the facilities left-join on that key or, for
+    ``_UNDRAWN`` rows, from the facility that key coalesces to — counts each
+    supplied limit exactly once and changes nothing else.
+
+    ⚠ The intra-facility ordinal is a ``cum_sum`` of the CANDIDATE MASK, not a
+    row count. This is the difference from the sibling obligor-deduplication in
+    ``attributes.py`` (Art. 123A(1)(b)(ii) granularity), which divides by
+    ``pl.len().over(...)``: candidacy genuinely differs across legs of one
+    facility (a MOF root with two committed subs of differing ``risk_type``
+    emits one cancellable and one non-cancellable waterfall leg), and a line
+    count would divide a facility's limit by legs that never contributed to it
+    — halving the aggregate and wrongly admitting the obligor to QRRE.
+
+    Null-key handling, both guarded by ``partition_by_nullable``:
+
+    - Null ``parent_facility_reference`` — no dedupe; the row contributes its
+      own ``facility_limit``, today's behaviour. Polars would otherwise pool
+      every null-parent row of the obligor into one partition and count only
+      the largest, under-stating the aggregate (RWA-reducing).
+    - Null ``counterparty_reference`` — the row falls back to its own
+      ``candidate_limit`` and never sees the pooled null partition, unchanged.
+    """
+    # One contribution per (obligor, facility): the first candidate leg of the
+    # group carries the group's limit, every later leg carries zero.
+    deduped_limit = (
+        pl.when(is_qrre_candidate)
+        .then(
+            partition_by_nullable(
+                pl.when(
+                    is_qrre_candidate.cast(pl.UInt32)
+                    .cum_sum()
+                    .over(["counterparty_reference", "parent_facility_reference"])
+                    == 1
+                )
+                .then(
+                    candidate_limit.max().over(
+                        ["counterparty_reference", "parent_facility_reference"]
+                    )
+                )
+                .otherwise(pl.lit(0.0)),
+                "parent_facility_reference",
+                facility_limit,
+            )
+        )
+        .otherwise(pl.lit(0.0))
+    )
+    return partition_by_nullable(
+        deduped_limit.sum().over("counterparty_reference"),
+        "counterparty_reference",
+        candidate_limit,
+    )
 
 
 # =========================================================================

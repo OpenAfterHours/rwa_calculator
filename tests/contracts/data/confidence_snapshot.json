@@ -520,6 +520,7 @@
         "rwa_calc.engine.eu_sovereign::build_domestic_cgcb_guarantor_expr",
         "rwa_calc.engine.eu_sovereign::build_eu_domestic_currency_expr",
         "rwa_calc.engine.eu_sovereign::funding_currency_expr",
+        "rwa_calc.engine.eu_sovereign::with_funding_limb",
         "rwa_calc.engine.sa.central_bank::ecb_rw_expr",
         "rwa_calc.engine.sa.central_bank::is_ecb_expr",
         "rwa_calc.engine.sa.guarantor_rw::build_entity_rw_expr",
@@ -571,12 +572,14 @@
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_10_art_213_ucp_eligibility.py",
+        "tests/acceptance/basel31/test_p1_314_art_114_7_funded_currency.py",
         "tests/acceptance/ccr/test_ccr_e1_e5_default_risk_routing.py",
         "tests/acceptance/comparison/test_scenario_m31_comparison.py",
         "tests/acceptance/crr/test_p1_100_art_137_eca_meip_sovereign.py",
         "tests/acceptance/crr/test_p1_10_art_213_ucp_eligibility.py",
         "tests/acceptance/crr/test_p1_222_rgla_uk_gbp_flat_20.py",
         "tests/acceptance/crr/test_p1_264_art_140_1_st_class_gate.py",
+        "tests/acceptance/crr/test_p1_314_art_114_7_funded_currency.py",
         "tests/acceptance/crr/test_scenario_crr_a_sa.py",
         "tests/acceptance/stress/test_stress_pipeline.py",
         "tests/contracts/test_crr_art114_citation_paragraph.py",
@@ -587,7 +590,9 @@
         "tests/fixtures/p1_222/p1_222.py",
         "tests/fixtures/p1_229/p1_229.py",
         "tests/fixtures/p1_264/p1_264.py",
+        "tests/fixtures/p1_314/p1_314.py",
         "tests/fixtures/reporting_crm_substitution_portfolio.py",
+        "tests/fixtures/single_exposure.py",
         "tests/oracle/derivations/branch_sa.py",
         "tests/oracle/derivations/sa_crr.py",
         "tests/properties/test_regime_deltas.py",
@@ -596,18 +601,21 @@
         "tests/unit/rulebook/test_sa_risk_weight_features.py",
         "tests/unit/test_classifier.py",
         "tests/unit/test_guarantor_exposure_class_rw.py",
-        "tests/unit/test_p1_281_art_114_ecb_and_central_bank_cqs.py"
+        "tests/unit/test_p1_281_art_114_ecb_and_central_bank_cqs.py",
+        "tests/unit/test_p1_314_art_114_115_funded_currency.py"
       ],
       "watchfire_index_gap": false
     },
     {
       "article": "115",
       "code_functions": [
+        "rwa_calc.engine.eu_sovereign::with_funding_limb",
         "rwa_calc.engine.sa.crr_risk_weight_tables::_create_rgla_df",
         "rwa_calc.engine.sa.guarantor_rw::build_entity_rw_expr",
         "rwa_calc.engine.sa.guarantor_rw::build_guarantor_rw_expr",
         "rwa_calc.engine.sa.rgla::is_rgla_sovereign_expr",
-        "rwa_calc.engine.sa.rgla::rgla_sovereign_rw_expr"
+        "rwa_calc.engine.sa.rgla::rgla_sovereign_rw_expr",
+        "rwa_calc.engine.sa.risk_weights::_prepare_risk_weight_lookup"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -632,9 +640,11 @@
       "source_files": [
         "data/schemas.py",
         "domain/enums.py",
+        "engine/eu_sovereign.py",
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/guarantor_rw.py",
         "engine/sa/rgla.py",
+        "engine/sa/risk_weights.py",
         "engine/sa/sovereign_derived.py"
       ],
       "test_files": [
@@ -646,6 +656,7 @@
         "tests/fixtures/reporting_sa_classes_portfolio.py",
         "tests/oracle/derivations/sa_crr.py",
         "tests/unit/test_entity_rw_preview.py",
+        "tests/unit/test_p1_314_art_114_115_funded_currency.py",
         "tests/unit/test_rgla_risk_weights.py"
       ],
       "watchfire_index_gap": false
@@ -2094,6 +2105,7 @@
       "code_functions": [
         "rwa_calc.engine.irb.formulas::apply_irb_formulas",
         "rwa_calc.engine.stages.classify.subtypes::classify_exposure_subtypes",
+        "rwa_calc.engine.stages.classify.subtypes::qrre_obligor_aggregate_limit_expr",
         "rwa_calc.engine.stages.classify.subtypes::qrre_undrawn_cancellable_expr",
         "rwa_calc.engine.stages.classify.subtypes::qrre_unsecured_expr"
       ],
@@ -2120,17 +2132,20 @@
         "tests/acceptance/basel31/test_p1_244_qrre_gates.py",
         "tests/acceptance/crr/test_scenario_crr_c_airb.py",
         "tests/acceptance/crr/test_scenario_crr_i_defaulted.py",
+        "tests/acceptance/test_p1_320_qrre_leg_multiplication_pipeline.py",
         "tests/conformance/portfolios.py",
         "tests/conformance/test_classification_conformance.py",
         "tests/fixtures/generate_all.py",
         "tests/fixtures/p1_157/p1_157.py",
         "tests/fixtures/p1_191/p1_191.py",
         "tests/fixtures/p1_244/p1_244.py",
+        "tests/fixtures/p1_320/p1_320.py",
         "tests/fixtures/reporting_irb_classes_portfolio.py",
         "tests/oracle/derivations/formulas.py",
         "tests/oracle/derivations/irb.py",
         "tests/unit/classifier/test_p1_191_qrre_aggregate_nominal.py",
         "tests/unit/classifier/test_p1_244_qrre_gates.py",
+        "tests/unit/classifier/test_p1_320_qrre_leg_multiplication.py",
         "tests/unit/crr/test_irb_defaulted.py",
         "tests/unit/test_p6_26_qrre_coupling_constant.py"
       ],
@@ -5891,6 +5906,7 @@
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_264_art_140_1_st_class_gate.py",
+        "tests/acceptance/basel31/test_p1_314_art_114_7_funded_currency.py",
         "tests/acceptance/basel31/test_p1_93_art_222_4_fcsm_sft_carveout.py",
         "tests/acceptance/basel31/test_p2_47_art137_meip_b31.py",
         "tests/acceptance/ccr/test_p1_342_qccp_art_121_6_carve_out.py",
@@ -5900,6 +5916,7 @@
         "tests/fixtures/p1_222/p1_222.py",
         "tests/fixtures/p1_229/p1_229.py",
         "tests/fixtures/p1_264/p1_264.py",
+        "tests/fixtures/p1_314/p1_314.py",
         "tests/fixtures/p1_93/p1_93.py",
         "tests/fixtures/p2_47/p2_47.py",
         "tests/oracle/derivations/branch_sa.py",
@@ -5909,6 +5926,7 @@
         "tests/unit/rulebook/test_sa_risk_weight_features.py",
         "tests/unit/test_p1_254_art_121_6_unrated_sovereign_floor.py",
         "tests/unit/test_p1_281_art_114_ecb_and_central_bank_cqs.py",
+        "tests/unit/test_p1_314_art_114_115_funded_currency.py",
         "tests/unit/test_rgla_risk_weights.py"
       ],
       "watchfire_index_gap": false
@@ -5938,6 +5956,7 @@
         "tests/fixtures/p1_222/p1_222.py",
         "tests/fixtures/reporting_sa_classes_portfolio.py",
         "tests/oracle/derivations/sa_b31.py",
+        "tests/unit/test_p1_314_art_114_115_funded_currency.py",
         "tests/unit/test_rgla_risk_weights.py"
       ],
       "watchfire_index_gap": false
@@ -6140,6 +6159,7 @@
         "contracts/edges.py",
         "domain/branch_reasons.py",
         "engine/sa/guarantor_rw.py",
+        "engine/sa/risk_weights.py",
         "engine/sa/sovereign_floor.py",
         "engine/stages/hierarchy/enrich.py"
       ],
@@ -6157,6 +6177,7 @@
         "tests/properties/test_regime_deltas.py",
         "tests/unit/test_p1_185_scra_grade_b_docstring.py",
         "tests/unit/test_p1_254_art_121_6_unrated_sovereign_floor.py",
+        "tests/unit/test_p1_314_art_114_115_funded_currency.py",
         "tests/unit/test_sovereign_floor_institutions.py"
       ],
       "watchfire_index_gap": false
@@ -7039,6 +7060,7 @@
         "rwa_calc.engine.stages.classify.attributes::natural_person_expr",
         "rwa_calc.engine.stages.classify.attributes::with_group_annual_revenue",
         "rwa_calc.engine.stages.classify.subtypes::classify_exposure_subtypes",
+        "rwa_calc.engine.stages.classify.subtypes::qrre_obligor_aggregate_limit_expr",
         "rwa_calc.engine.stages.classify.subtypes::qrre_undrawn_cancellable_expr",
         "rwa_calc.engine.stages.classify.subtypes::qrre_unsecured_expr",
         "rwa_calc.engine.stages.classify.subtypes::sync_irb_exposure_class",
@@ -7080,6 +7102,7 @@
         "tests/acceptance/basel31/test_p1_244_qrre_gates.py",
         "tests/acceptance/basel31/test_p1_245_group_revenue_rollup.py",
         "tests/acceptance/reporting/test_reporting_irb_classes_golden.py",
+        "tests/acceptance/test_p1_320_qrre_leg_multiplication_pipeline.py",
         "tests/conformance/portfolios.py",
         "tests/conformance/test_classification_conformance.py",
         "tests/fixtures/p1_191/p1_191.py",
@@ -7087,12 +7110,14 @@
         "tests/fixtures/p1_243/p1_243.py",
         "tests/fixtures/p1_244/p1_244.py",
         "tests/fixtures/p1_245/p1_245.py",
+        "tests/fixtures/p1_320/p1_320.py",
         "tests/fixtures/reporting_irb_classes_portfolio.py",
         "tests/unit/classifier/test_p1_191_qrre_aggregate_nominal.py",
         "tests/unit/classifier/test_p1_243_natural_person_irb_retail_cap.py",
         "tests/unit/classifier/test_p1_244_qrre_gates.py",
         "tests/unit/classifier/test_p1_245_group_revenue_rollup.py",
         "tests/unit/classifier/test_p1_276_crr_non_named_mdb_irb_class.py",
+        "tests/unit/classifier/test_p1_320_qrre_leg_multiplication.py",
         "tests/unit/rulebook/test_thresholds_features.py",
         "tests/unit/test_p1_311_entity_class_maps_regime.py",
         "tests/unit/test_p6_26_qrre_coupling_constant.py"
@@ -7289,6 +7314,7 @@
       ],
       "test_files": [
         "tests/acceptance/reporting/test_reporting_irb_classes_golden.py",
+        "tests/acceptance/test_p1_320_qrre_leg_multiplication_pipeline.py",
         "tests/fixtures/reporting_irb_classes_portfolio.py",
         "tests/oracle/derivations/formulas.py",
         "tests/oracle/derivations/irb.py",

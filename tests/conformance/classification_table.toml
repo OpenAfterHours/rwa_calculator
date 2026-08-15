@@ -751,48 +751,6 @@ Approach.
 # ===========================================================================
 
 [[known_disagreement]]
-id = "D1-qrre-aggregate-double-counts-a-split-facility"
-field = "exposure_class_irb"
-when = { entity_type = ["individual", "retail", "natural_person"], flavour = "revolving_qrre_headroom" }
-expected = "retail_qrre"
-observed = "retail_other"
-citation = "CRR Art. 154(4)(c); PS1/26 Art. 147(5A)(c)"
-detail = """
-OWNER: P1.320.
-The per-individual QRRE aggregate is computed as the SUM of `facility_limit`
-over the obligor's candidate rows. A revolving facility with any undrawn
-headroom is split by the hierarchy stage into a drawn child and a synthetic
-`_UNDRAWN` leg, and BOTH legs carry the parent's `facility_limit`, so one
-GBP 70,000 card is measured at GBP 140,000. Art. 154(4)(c) / Art. 147(5A)(c)
-measure "the largest aggregate nominal exposure to a single individual" — a
-property of the obligor's facilities, not of how the engine splits them into
-legs. Measured here: the same obligor with the same GBP 70,000 facility is
-retail_qrre when drawn to the limit and retail_other with GBP 20,000 of
-headroom. Consequence: essentially every partially-drawn credit card is denied
-the Art. 154(4) QRRE correlation and disappears from the COREP C 08.xx and
-Pillar 3 CR6 QRRE rows. The fully-drawn shape is the only one the existing
-reporting fixture builds, which is why it has never surfaced
-(.claude/LESSONS.md B5).
-"""
-
-[[known_disagreement]]
-id = "D1b-qrre-double-count-reaches-the-routing-carrier"
-field = "exposure_class"
-when = { entity_type = ["individual", "retail", "natural_person"], flavour = "revolving_qrre_headroom" }
-expected = "retail_qrre"
-observed = "retail_other"
-citation = "CRR Art. 154(4)(c); PS1/26 Art. 147(5A)(c)"
-detail = """
-OWNER: P1.320.
-The same defect as D1, on the carrier that actually decides the treatment: the
-routing `exposure_class` the IRB correlation, the COREP C 08.xx sheet split and
-the Pillar 3 CR6 row axis all read. D1 records the reported IRB class; this
-records that the partially-drawn card is also CALCULATED as other retail, so the
-Art. 154(1) retail correlation curve is used where Art. 154(4)'s flat 0.04
-belongs. Both entries stand or fall together and must be removed together.
-"""
-
-[[known_disagreement]]
 id = "D2-large-corporate-test-keys-on-one-entity-type-string"
 field = "approach"
 when = { regime = "B31", entity_type = ["company", "specialised_lending"], size_band = ["large", "none"], irb_inputs = "pd_lgd", flavour = ["plain", "mortgage", "revolving_qrre", "revolving_qrre_headroom", "defaulted"] }

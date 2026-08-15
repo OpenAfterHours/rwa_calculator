@@ -2,8 +2,6 @@
   "_comment": "Parked-findings ratchet (scripts/check_parked_registers.py --check). Each entry is a finding a gate MADE and the estate agreed to tolerate, so the id set may only SHRINK: --update-baseline prunes and refreshes owners but refuses to add, and banking a new parked finding means hand-editing this file so the decision appears in review. See IMPLEMENTATION_PLAN.md P5.41 and docs/development/escape-log.md 2026-08-09 entry 4.",
   "registers": {
     "classification_known_disagreements": {
-      "D1-qrre-aggregate-double-counts-a-split-facility": "P1.320",
-      "D1b-qrre-double-count-reaches-the-routing-carrier": "P1.320",
       "D2-large-corporate-test-keys-on-one-entity-type-string": "P1.321",
       "D3-irb-class-overwritten-by-the-sa-class": "P1.303",
       "D4-b31-quasi-sovereign-irb-class-still-institution": "P1.303",

@@ -129,7 +129,7 @@ Last generated: 2026-08-15.
 
 ??? quote "`rgla_sovereign_rw_expr` — src/rwa_calc/engine/sa/rgla.py:97"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/rgla.py:96:127"
+    --8<-- "src/rwa_calc/engine/sa/rgla.py:96:130"
     ```
 
 
@@ -162,7 +162,7 @@ Last generated: 2026-08-15.
 
 ??? quote "`rgla_sovereign_rw_expr` — src/rwa_calc/engine/sa/rgla.py:96"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/rgla.py:96:127"
+    --8<-- "src/rwa_calc/engine/sa/rgla.py:96:130"
     ```
 
 ??? quote "`_prepare_risk_weight_lookup` — src/rwa_calc/engine/sa/risk_weights.py:960"
@@ -519,7 +519,7 @@ Last generated: 2026-08-15.
 
 ??? quote "`classify_exposure_subtypes` — src/rwa_calc/engine/stages/classify/subtypes.py:65"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:64:256"
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:64:252"
     ```
 
 
@@ -573,14 +573,14 @@ Last generated: 2026-08-15.
     --8<-- "src/rwa_calc/engine/stages/classify/classifier.py:106:195"
     ```
 
-??? quote "`sync_irb_exposure_class` — src/rwa_calc/engine/stages/classify/subtypes.py:479"
+??? quote "`sync_irb_exposure_class` — src/rwa_calc/engine/stages/classify/subtypes.py:549"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:479:549"
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:549:619"
     ```
 
-??? quote "`sync_irb_exposure_class` — src/rwa_calc/engine/stages/classify/subtypes.py:480"
+??? quote "`sync_irb_exposure_class` — src/rwa_calc/engine/stages/classify/subtypes.py:550"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:479:549"
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:549:619"
     ```
 
 
@@ -703,7 +703,7 @@ Last generated: 2026-08-15.
 
 ??? quote "`classify_exposure_subtypes` — src/rwa_calc/engine/stages/classify/subtypes.py:64"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:64:256"
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:64:252"
     ```
 
 
@@ -716,17 +716,22 @@ Last generated: 2026-08-15.
 
 ??? quote "`classify_exposure_subtypes` — src/rwa_calc/engine/stages/classify/subtypes.py:66"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:64:256"
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:64:252"
     ```
 
-??? quote "`qrre_unsecured_expr` — src/rwa_calc/engine/stages/classify/subtypes.py:264"
+??? quote "`qrre_unsecured_expr` — src/rwa_calc/engine/stages/classify/subtypes.py:260"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:264:279"
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:260:275"
     ```
 
-??? quote "`qrre_undrawn_cancellable_expr` — src/rwa_calc/engine/stages/classify/subtypes.py:282"
+??? quote "`qrre_undrawn_cancellable_expr` — src/rwa_calc/engine/stages/classify/subtypes.py:278"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:282:307"
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:278:303"
+    ```
+
+??? quote "`qrre_obligor_aggregate_limit_expr` — src/rwa_calc/engine/stages/classify/subtypes.py:306"
+    ```python
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:306:377"
     ```
 
 
@@ -770,14 +775,14 @@ Last generated: 2026-08-15.
     --8<-- "src/rwa_calc/engine/irb/formulas.py:110:205"
     ```
 
-??? quote "`derive_purchased_receivables_pd` — src/rwa_calc/engine/stages/classify/subtypes.py:315"
+??? quote "`derive_purchased_receivables_pd` — src/rwa_calc/engine/stages/classify/subtypes.py:385"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:315:410"
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:385:480"
     ```
 
-??? quote "`derive_purchased_receivables_pd` — src/rwa_calc/engine/stages/classify/subtypes.py:316"
+??? quote "`derive_purchased_receivables_pd` — src/rwa_calc/engine/stages/classify/subtypes.py:386"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:315:410"
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:385:480"
     ```
 
 
@@ -1484,7 +1489,7 @@ Last generated: 2026-08-15.
 
 ??? quote "`rgla_sovereign_rw_expr` — src/rwa_calc/engine/sa/rgla.py:98"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/rgla.py:96:127"
+    --8<-- "src/rwa_calc/engine/sa/rgla.py:96:130"
     ```
 
 
@@ -1699,22 +1704,27 @@ Last generated: 2026-08-15.
 
 ??? quote "`classify_exposure_subtypes` — src/rwa_calc/engine/stages/classify/subtypes.py:68"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:64:256"
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:64:252"
     ```
 
-??? quote "`qrre_unsecured_expr` — src/rwa_calc/engine/stages/classify/subtypes.py:265"
+??? quote "`qrre_unsecured_expr` — src/rwa_calc/engine/stages/classify/subtypes.py:261"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:264:279"
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:260:275"
     ```
 
-??? quote "`qrre_undrawn_cancellable_expr` — src/rwa_calc/engine/stages/classify/subtypes.py:283"
+??? quote "`qrre_undrawn_cancellable_expr` — src/rwa_calc/engine/stages/classify/subtypes.py:279"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:282:307"
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:278:303"
     ```
 
-??? quote "`sync_irb_exposure_class` — src/rwa_calc/engine/stages/classify/subtypes.py:481"
+??? quote "`qrre_obligor_aggregate_limit_expr` — src/rwa_calc/engine/stages/classify/subtypes.py:307"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:479:549"
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:306:377"
+    ```
+
+??? quote "`sync_irb_exposure_class` — src/rwa_calc/engine/stages/classify/subtypes.py:551"
+    ```python
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:549:619"
     ```
 
 
@@ -1728,9 +1738,9 @@ Last generated: 2026-08-15.
 
 ### PS1/26, paragraph 147A.1 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`derive_exposure_subclass` — src/rwa_calc/engine/stages/classify/subtypes.py:552"
+??? quote "`derive_exposure_subclass` — src/rwa_calc/engine/stages/classify/subtypes.py:622"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:552:606"
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:622:676"
     ```
 
 
@@ -1738,15 +1748,15 @@ Last generated: 2026-08-15.
 
 ??? quote "`classify_exposure_subtypes` — src/rwa_calc/engine/stages/classify/subtypes.py:67"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:64:256"
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:64:252"
     ```
 
 
 ### PS1/26, paragraph 160 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`derive_purchased_receivables_pd` — src/rwa_calc/engine/stages/classify/subtypes.py:317"
+??? quote "`derive_purchased_receivables_pd` — src/rwa_calc/engine/stages/classify/subtypes.py:387"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:315:410"
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:385:480"
     ```
 
 

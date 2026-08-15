@@ -597,6 +597,10 @@
     "CRR Art. 160(6)",
     "PS1/26, paragraph 160"
   ],
+  "rwa_calc.engine.stages.classify.subtypes::qrre_obligor_aggregate_limit_expr": [
+    "CRR Art. 154(4)",
+    "PS1/26, paragraph 147"
+  ],
   "rwa_calc.engine.stages.classify.subtypes::qrre_undrawn_cancellable_expr": [
     "CRR Art. 154(4)",
     "PS1/26, paragraph 147"

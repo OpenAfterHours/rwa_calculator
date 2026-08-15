@@ -1936,19 +1936,6 @@ C09_01_SA_CLASS_MAP: dict[str, str] = {
     "specialised_lending": "corporate",
 }
 
-# Mapping from pipeline exposure_class values to C 09.02 row filter keys.
-C09_02_IRB_CLASS_MAP: dict[str, str] = {
-    "central_govt_central_bank": "central_govt_central_bank",
-    "institution": "institution",
-    "corporate": "corporate",
-    "corporate_sme": "corporate",
-    "specialised_lending": "corporate",
-    "retail_mortgage": "retail",
-    "retail_qrre": "retail",
-    "retail_other": "retail",
-    "equity": "equity",
-}
-
 
 # =============================================================================
 # HELPER FUNCTIONS

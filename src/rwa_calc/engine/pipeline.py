@@ -390,8 +390,9 @@ class PipelineOrchestrator:
                 all_errors = list(result.errors) + extra_errors
                 result = replace(result, errors=all_errors)
 
-            # Output-bounds gate (OUT001-004): risk_weight above the 1250% cap
-            # or negative, negative rwa_final, null ead_final. Runs on every
+            # Output-bounds gate (OUT001-005): risk_weight above the 1250% cap
+            # or negative, negative rwa_final, null ead_final, null
+            # rwa_final. Runs on every
             # run, at the exit, so a bound violation is reported rather than
             # published. The results frame is already materialised (the
             # aggregator seals it through materialise_sealed_edge), so this

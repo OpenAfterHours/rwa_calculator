@@ -59,6 +59,7 @@ from rwa_calc.contracts.errors import (
     ERROR_RW_ABOVE_CAP,
     ERROR_RW_NEGATIVE,
     ERROR_RWA_NEGATIVE,
+    ERROR_RWA_NULL,
     ERROR_UNKNOWN_BRANCH_FALLBACK,
     CalculationError,
     ErrorCategory,
@@ -1301,6 +1302,13 @@ _AGG_BOUND_SPECS: tuple[
         None,
         "ead_final is null",
     ),
+    (
+        "rwa_final",
+        ERROR_RWA_NULL,
+        ErrorCategory.DATA_QUALITY,
+        None,
+        "rwa_final is null",
+    ),
 )
 
 
@@ -1311,12 +1319,15 @@ def validate_aggregated_bundle(
     """
     Validate regulatory output bounds on AggregatedResultBundle.results.
 
-    Checks four bound violations per the architect's spec:
+    Checks five bound violations per the architect's spec:
 
     - OUT001: ``risk_weight > 12.5`` (1250% cap; CRR Art. 92(3); CRE31.5)
     - OUT002: ``risk_weight < 0``    (CRR Art. 153; CRE31)
     - OUT003: ``rwa_final < -1e-9``  (float64 round-off tolerance; CRR Art. 92(3))
     - OUT004: ``ead_final`` is null   (data quality)
+    - OUT005: ``rwa_final`` is null   (data quality; P1.345 — the twin of OUT004
+      on the capital carrier. P1.317 published a populated ``ead_final`` and a
+      null ``rwa_final``, and nothing production-side noticed.)
 
     For each bound, up to ``sample_cap`` per-row errors are emitted with
     ``exposure_reference`` populated. If the violation count exceeds the
@@ -1490,6 +1501,6 @@ def _bound_predicate(column: str, code: str) -> pl.Expr:
         return pl.col(column).is_not_null() & (pl.col(column) < 0.0)
     if code == ERROR_RWA_NEGATIVE:
         return pl.col(column).is_not_null() & (pl.col(column) < -1e-9)
-    if code == ERROR_EAD_NULL:
+    if code in (ERROR_EAD_NULL, ERROR_RWA_NULL):
         return pl.col(column).is_null()
     raise ValueError(f"Unknown bound code: {code}")

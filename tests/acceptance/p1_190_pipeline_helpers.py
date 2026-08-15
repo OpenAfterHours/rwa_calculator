@@ -49,7 +49,36 @@ def find_loan_rows(results: AggregatedResultBundle, loan_ref: str) -> list[dict]
             continue
         df = lf.filter(pl.col("exposure_reference").str.contains(loan_ref)).collect()
         rows.extend(df.to_dicts())
+    _assert_no_null_capital(rows, loan_ref)
     return rows
+
+
+def _assert_no_null_capital(rows: list[dict], loan_ref: str) -> None:
+    """Redden here, once, rather than in each caller's guarded sum (P1.345).
+
+    Every ``_rwa``-style helper in the acceptance estate filters
+    ``if r.get("rwa_final") is not None`` before summing. On the one-row
+    populations these scenarios build, a null collapses the sum to ``0`` and an
+    absolute equality assertion still reddens — but a one-sided inequality
+    against a constant (``assert _rwa(...) < GROSS_RWA``) is satisfied by
+    ``0 < anything`` and passes. P1.317 shipped exactly that null.
+
+    Asserting at this choke point covers all 29 importers and every future one,
+    and gives a NAMED failure. Dropping the callers' guards instead would raise
+    ``TypeError: unsupported operand type(s) for +: 'int' and 'NoneType'`` — a
+    strictly worse diagnostic. Production carries the class-agnostic twin of
+    this check as OUT005 (``contracts/validation.py``).
+
+    Guarded on column presence: ``slotting_results`` need not carry
+    ``rwa_final``.
+    """
+    offenders = [
+        r.get("exposure_reference") for r in rows if "rwa_final" in r and r.get("rwa_final") is None
+    ]
+    assert not offenders, (
+        f"rwa_final is null on {len(offenders)} row(s) for {loan_ref!r}: "
+        f"{offenders}. A guarded sum would silently read these as 0.0."
+    )
 
 
 def first(rows: list[dict], field: str) -> Any:

@@ -315,6 +315,11 @@ ERROR_RW_ABOVE_CAP = "OUT001"
 ERROR_RW_NEGATIVE = "OUT002"
 ERROR_RWA_NEGATIVE = "OUT003"
 ERROR_EAD_NULL = "OUT004"
+# P1.345 / P1.317: the twin of OUT004 on the capital carrier. P1.317 published a
+# populated ead_final, a risk_weight of 2.5 and a NULL rwa_final — the bounds
+# gate was one spec short, so nothing production-side noticed. The test-side
+# guard shipped with P1.317 is equity-scoped; this one is class-agnostic.
+ERROR_RWA_NULL = "OUT005"
 
 # Branch-reason code (validate_branch_reasons). A row whose *_branch_reason
 # column reads UNKNOWN_FALLBACK was priced on a branch the engine could not

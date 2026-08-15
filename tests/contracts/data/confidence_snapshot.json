@@ -1873,6 +1873,7 @@
         "tests/unit/test_b31_approach_restrictions.py",
         "tests/unit/test_classifier_qrre_warnings.py",
         "tests/unit/test_corporate_to_retail_reclassification.py",
+        "tests/unit/test_other_items_risk_weights.py",
         "tests/unit/test_sa_sl_classification.py"
       ],
       "watchfire_index_gap": false
@@ -7136,6 +7137,7 @@
         "tests/unit/classifier/test_p1_276_crr_non_named_mdb_irb_class.py",
         "tests/unit/classifier/test_p1_320_qrre_leg_multiplication.py",
         "tests/unit/rulebook/test_thresholds_features.py",
+        "tests/unit/test_other_items_risk_weights.py",
         "tests/unit/test_p1_311_entity_class_maps_regime.py",
         "tests/unit/test_p6_26_qrre_coupling_constant.py"
       ],
@@ -7304,7 +7306,8 @@
         "tests/unit/rulebook/test_subconfig_gate_features.py",
         "tests/unit/test_b31_slotting_tables.py",
         "tests/unit/test_basel31_engine.py",
-        "tests/unit/test_corep_c08_06.py"
+        "tests/unit/test_corep_c08_06.py",
+        "tests/unit/test_other_items_risk_weights.py"
       ],
       "watchfire_index_gap": false
     },

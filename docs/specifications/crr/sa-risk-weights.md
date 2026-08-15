@@ -1419,9 +1419,65 @@ Rated specialised lending exposures use the corporate CQS table (Art. 122A(3)).
 | Gold bullion (held in own vaults or allocated) | 0% | Art. 134(4) |
 | Items in course of collection | 20% | Art. 134(3) |
 | Repo-style transactions — RW of underlying asset | Asset RW | Art. 134(5) |
-| Nth-to-default basket credit derivatives | Per Art. 266-270 | Art. 134(6) |
+| Nth-to-default basket credit derivatives (protection **sold**) | **NOT IMPLEMENTED** — see below | Art. 134(6) |
 | Tangible assets (premises, equipment) | 100% | Art. 134(1) |
 | Prepaid expenses, accrued income | 100% | Art. 134(2) |
+
+!!! warning "Scope exclusion — Art. 134(6) / Art. 153(8) nth-to-default baskets"
+    **Sold** nth-to-default basket protection is **not implemented**, under either
+    regime and under either approach. A firm that writes this protection cannot
+    capitalise it here.
+
+    The earlier entry in the table above read *"Per Art. 266-270"*. That was
+    wrong: Art. 134(6) contains **no** cross-reference to the securitisation
+    articles — it prescribes the aggregation in-line. Verbatim (PS1/26
+    Art. 134(6), `ps126app1.pdf` PAGE_INDEX 67-68, word-for-word CRR Art. 134(6)
+    at `crr.pdf` PAGE_INDEX 131 bar "will"→"shall"):
+
+    > "Where an institution provides credit protection for a number of exposures
+    > subject to the condition that the nth default among the exposures shall
+    > trigger payment and that this credit event shall terminate the contract,
+    > the risk weights of the exposures included in the basket shall be
+    > aggregated, excluding n-1 exposures, up to a maximum of 1,250% and
+    > multiplied by the nominal amount of the protection provided by the credit
+    > derivative to obtain the risk-weighted exposure amount."
+
+    The provision **survives** under Basel 3.1 — PS1/26 Article 134 closes with
+    `[Note: This rule corresponds to Article 134 of CRR as it applied immediately
+    before revocation by the Treasury]`, not `[Note: Provision left blank]`. So
+    this is a gap in both regimes, not a CRR-only legacy.
+
+    **Three articles govern it, not one.** An exclusion naming only Art. 134(6)
+    leaves an IRB firm silently uncovered:
+
+    - **SA — Art. 134(6)**: aggregate the basket's risk weights excluding *n-1*
+      exposures, cap 1,250%, × the protection nominal.
+    - **IRB — CRR Art. 153(8)**: the same aggregation with a different cap —
+      *"the sum of the expected loss amount multiplied by 12,5 and the
+      risk-weighted exposure amount shall not exceed the nominal amount of the
+      protection … multiplied by 12,5."* **PS1/26 Art. 153(8) adds a limb CRR
+      does not have**: *"(c) A 1,250% risk weight shall apply to positions in a
+      basket for which an institution cannot determine the risk weight under the
+      IRB Approach."*
+    - **Classification — CRR Art. 147(10) / PS1/26 Art. 147(9)**: the sold-
+      protection exposure takes the basket members' exposure class, corporates
+      where the basket is mixed.
+
+    **Why there is no data-quality error for this.** No input field can express
+    sold nth-to-default protection: `GUARANTEE_SCHEMA` models protection
+    *received* only (no direction flag, no basket linkage, no *n*), and the
+    CCR estate's sold-index-CDS (`asset_class="credit" & ~is_long & is_index`)
+    and CDO-tranche (`cdo_attachment`/`cdo_detachment`) columns are different
+    products that Art. 134(6) does not govern. A validation error would
+    therefore either never fire, or fire on the wrong population.
+
+    **Direction: anti-conservative.** A first-to-default basket of five unrated
+    corporates on 10m nominal is 500% × 10m = **50m** RWEA under Art. 134(6),
+    against 10m if a preparer contrives a generic row (which takes the 100%
+    Art. 134(2) branch) or 0 if the position is simply omitted. Implementing it
+    is RWA-increasing and needs a basket-membership table, the IRB sibling with
+    its own EL×12.5 cap, and the classification limb — a schema-enablement
+    programme, not a risk-weight edit.
 | Residual value of leased assets | 1/t × 100% (t = remaining lease years, min 1) | Art. 134(7) |
 | All other | 100% | Art. 134(2) |
 

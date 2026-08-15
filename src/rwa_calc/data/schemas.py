@@ -917,6 +917,19 @@ COUNTERPARTY_SCHEMA: dict[str, ColumnSpec] = {
     #     - "other_items_in_collection" → SA: OTHER, 20% RW (Art. 134(3))
     #     - "other_tangible"          → SA: OTHER, 100% RW (Art. 134(1)/(2))
     #     - "other_residual_lease"    → SA: OTHER, 1/t × 100% RW (Art. 134(7))
+    #   NOT REPRESENTABLE, and deliberately so — no entity_type expresses these,
+    #   and no other field does either, so there is no data-quality error to
+    #   raise (a guard here would fire on the wrong population). Recorded rather
+    #   than left silent, because the omission is what made the gap invisible:
+    #     - Art. 134(5) repo-style transactions (RW of the underlying asset)
+    #     - Art. 134(6) SOLD nth-to-default basket protection. GUARANTEE_SCHEMA
+    #       models protection RECEIVED only — no direction flag, no basket
+    #       linkage, no n — and the CCR sold-index-CDS / CDO-tranche columns are
+    #       different products the article does not govern. The IRB sibling
+    #       (CRR/PS1/26 Art. 153(8)) and the classification limb (CRR Art.
+    #       147(10) / PS1/26 Art. 147(9)) are equally unimplemented. Anti-
+    #       conservative; implementing it needs a basket-membership table.
+    #       Scope exclusion: docs/specifications/crr/sa-risk-weights.md.
     "entity_type": ColumnSpec(pl.String),
     "country_code": ColumnSpec(pl.String, required=False),
     "annual_revenue": ColumnSpec(pl.Float64, required=False),

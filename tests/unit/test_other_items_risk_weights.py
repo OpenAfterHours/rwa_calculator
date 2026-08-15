@@ -21,6 +21,16 @@ Other Items treatment is identical under CRR and PRA PS1/26 Basel 3.1:
     - Residual value of leased assets: 1/t × 100% where t ≥ 1 (Art. 134(7))
     - All other: 100% (Art. 134(2))
 
+NOT COVERED HERE, and not implemented anywhere — stated explicitly because the
+earlier silence is what made the gap invisible (this docstring enumerated
+(1),(2),(3),(4),(7) and simply omitted the rest):
+    - Art. 134(5) repo-style transactions — risk weight of the underlying asset
+    - Art. 134(6) sold nth-to-default basket protection. No input field can
+      express it, so there is no data-quality error either. See the scope
+      exclusion in docs/specifications/crr/sa-risk-weights.md, which also names
+      the IRB sibling (CRR/PS1/26 Art. 153(8)) and the classification limb
+      (CRR Art. 147(10) / PS1/26 Art. 147(9)).
+
 References:
     - CRR Art. 134 / PRA PS1/26 Art. 134: Other items risk weights
     - CRR Art. 112(q): Other items exposure class

@@ -19,6 +19,8 @@ docs/assets/*.PDF
 docs/assets/*.zip
 
 .claude/state/
+# /next-items and ad-hoc git worktree checkouts (tmp/worktrees is covered by tmp/.gitignore)
+.claude/worktrees/
 # impact_report.py snapshot output (scripts/impact_report.py capture)
 .impact/
 

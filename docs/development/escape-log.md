@@ -1396,3 +1396,77 @@ gate that shipped.
   That is the graduation candidate this entry files; it is not performed here
   because `scripts/arch_check.py` was being edited by another agent in the same
   tree and check 20's own entry records the same reason for the same restraint.
+
+## 2026-08-16 — The S2083 fix declared the right constant, and the gate confirmed the sentence rather than the property
+
+- **Defect**: `pythonsecurity:S2083` (BLOCKER, arbitrary-file-write) stayed open
+  on `scripts/generate_regulatory_tables.py`'s `path.write_text(...)` after
+  commit `2b1be086` was written specifically to close it. That commit was right
+  about the remedy and incomplete in applying it: it introduced `TARGET_PATHS`
+  (built from module constants alone) and removed `targets.items()` as the
+  write-loop iterator, but still collected the stale paths into a runtime list
+  and walked **that** at the sink. Every element of the list came from the
+  constant; taint provenance does not survive append-then-iterate, so the path
+  arriving at `write_text` was unconstrained again and the finding never moved.
+- **Rule**: Not a regulatory escape. No RWA number is affected — the script is
+  developer/CI codegen whose only input is a boolean `--check` flag.
+- **Origin**: `scripts/generate_regulatory_tables.py::main`, commit `2b1be086`
+  (2026-08-16), which is itself the second attempt at this finding after
+  `a5d34c0d`'s two resolve-then-contain guards.
+- **Escape class**: `test-shared-the-assumption`. Two contract tests shipped
+  with the incomplete fix and both passed against it. The load-bearing one,
+  `test_generator_write_paths_do_not_come_from_the_rendered_mapping`, asserted
+  `"in TARGET_PATHS:" in source` — and that substring was satisfied by the
+  **read** loop, which had always iterated the constant. The test was written
+  from the same sentence as the fix ("declare a constant and iterate it")
+  rather than from the property that matters ("the path *at the sink* is bound
+  from the constant"), so it could not distinguish the fixed shape from the
+  broken one. Per the class table the remedy is to re-anchor to a source of
+  truth: here, the syntax tree at the sink rather than a substring of the
+  author's own prose.
+- **Why every gate missed it**: the evidence was already inside the flagged
+  function and no gate was positioned to read it. `path.read_text(...)` at the
+  same nesting level was **never flagged**, while `path.write_text(...)` one
+  container removed was — identical sink family, sole difference the provenance
+  of `path`. Nothing compared the two. The freshness tests measure output bytes
+  and were green throughout (the refactor is behaviour-neutral); `ruff` and
+  `arch_check` have no taint model; check 19 covers `type=Path` argparse
+  arguments, a different shape of the same rule family. Only SonarCloud could
+  see it, and SonarCloud runs after merge on `master`.
+- **Gate change**: `tests/contracts/test_docs_freshness.py::test_generator_write_path_is_bound_directly_from_the_constant`.
+  It parses the generator, finds every `<name>.write_text(...)` call, walks to
+  the enclosing `for` that binds the receiver, and asserts that loop's iterator
+  is literally `TARGET_PATHS`. A substring gate cannot express that; an AST walk
+  states it exactly. The older prose gate was additionally re-anchored to
+  `ast.unparse(...)` output after it fired on the *fix's own comment* explaining
+  why the mapping must not be iterated — a gate that turns red on the
+  documentation of a correct fix teaches authors to stop writing the
+  documentation, which is the opposite of what this file exists for.
+- **Verified red**: run against the real pre-fix generator restored from
+  `6456d808` (`git show HEAD:scripts/generate_regulatory_tables.py`):
+
+  ```
+  FAILED tests/contracts/test_docs_freshness.py::test_generator_write_path_is_bound_directly_from_the_constant
+  AssertionError: `path` at the write sink is bound from ['stale'], not directly
+  from TARGET_PATHS. A path that has passed through any runtime container arrives
+  at the sink unconstrained — provenance does not survive append-then-iterate —
+  and pythonsecurity:S2083 reopens.
+  ```
+
+  Green against the shipped generator (`6 passed`), with `--check` exit 0, a
+  stale-target run still reporting `wrote 1 of 17 target(s)` and exit 1, and the
+  page restored byte-identically. The red comes from the actual defective
+  commit, not a reconstruction.
+- **Lesson**: *a structural gate must assert the structure at the sink, not the
+  presence of the remedy somewhere in the file.* `"in TARGET_PATHS:" in source`
+  is a test that the author did the thing they said they did; it is satisfied by
+  any occurrence anywhere, including one that predates the fix. This is the
+  third distinct S2083-family instance in `scripts/` after `injection_ratchet.py`
+  and `check_distribution.py`, and the second on this single write. The
+  graduation candidate is an `arch_check` check generalising the new test
+  repo-wide — every `write_text`/`read_text`/`mkdir` sink in `scripts/` must bind
+  its path from a module constant or a directly-iterated constant — which would
+  have caught this instance and both predecessors. It is filed rather than
+  performed here because it needs a survey of existing sinks to avoid landing
+  with a baseline of tolerated exceptions, which is the failure mode
+  `caught-and-parked` exists to name.

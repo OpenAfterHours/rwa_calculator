@@ -87,6 +87,18 @@ class SovereignFloorReason(StrEnum):
     to someone who instruments the expression by hand.
     """
 
+    REGIME_NOT_APPLICABLE = "regime_not_applicable"
+    """The regime in force has no such provision — UK CRR Art. 121 has four paragraphs.
+
+    Verified verbatim against ``docs/assets/crr.pdf``: UK CRR Art. 121 runs
+    (1) Table 5, (2) unrated-sovereign 100%, (3) <=3-month 20%, (4) trade
+    finance — then Art. 122. There is no (5) or (6). The floor is a PS1/26
+    provision, and CRR reaches the same concern differently: Art. 121(1)
+    already DERIVES the unrated institution's weight from its sovereign's CQS,
+    so a further floor on the sovereign weight is not a rule CRR omits, it is a
+    rule CRR has no room for (P1.334).
+    """
+
     NOT_INSTITUTION = "not_institution"
     """Exposure is not to an institution — Art. 121(6) is out of scope."""
 

@@ -417,7 +417,12 @@ ENTRIES: dict[str, RuleEntry] = {
         citation=Citation(
             "CRR", "111", "SA CCFs (Annex I): FR/FRC 100%, MR/OC 50%, MLR 20%, LR 0%"
         ),
-        default=Decimal("0.50"),
+        # No table default. It was never read (engine/ccf.py compiles this via
+        # lookup_float_map, which takes ``entries`` only), and the 0.50 it
+        # carried restated the retired ``sa_ccf_default`` — a regime-invariant
+        # residual that P1.267 refuted. The residual is Annex I item 1(k) under
+        # CRR and Table A1 Row 3/5 under B31; it lives in
+        # engine/ccf.py::_sa_ccf_residual, not in a shared table fallback.
     ),
     # CRR Art. 166(10) F-IRB residual fallback for issued OBS items not in scope
     # of Art. 166(8). Selected by the engine when is_obs_commitment=False.
@@ -860,6 +865,36 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=False,
         citation=Citation("CRR", "274", "no SA-CCR transitional alpha add-on under CRR"),
     ),
+    # FCSM equity collateral (Art. 222(3)). The collateralised portion takes "the
+    # risk weight that they would assign under Chapter 2 ... where the lending
+    # institution had a direct exposure to the collateral instrument" — a DERIVED
+    # weight, not a prescribed one, so it follows the regime's Chapter 2 equity
+    # weight. Under CRR that is Art. 133(2)'s 100%. Art. 222(1) is the usage
+    # restriction on electing the method and prescribes no weight at all.
+    # Kept in step with ``equity_sa_risk_weights`` by
+    # tests/unit/crm/test_p1_296_fcsm_equity_collateral_rw.py.
+    "fcsm_equity_collateral_rw": ScalarParam(
+        name="fcsm_equity_collateral_rw",
+        value=Decimal("1.00"),
+        citation=Citation(
+            "CRR", "222(3)", "Chapter 2 weight for a direct equity holding (Art. 133(2), 100%)"
+        ),
+    ),
+    # The unrated-institution sovereign RW floor does NOT exist under CRR.
+    # Verified verbatim (crr.pdf PAGE_INDEX 119): UK CRR Art. 121 runs
+    # (1) Table 5, (2) unrated-sovereign 100%, (3) <=3-month 20%, (4) trade
+    # finance — then Art. 122. There is no (5) or (6). The floor is PS1/26
+    # Art. 121(6) ("Notwithstanding paragraphs 2 to 5"), which modifies the
+    # SCRA Grade A/B/C ladder that CRR does not have. CRR addresses the same
+    # concern structurally instead: Art. 121(1) already DERIVES the weight from
+    # the credit quality step of the institution's central government, so a
+    # further floor on the sovereign weight has nothing to bite on.
+    # Gates engine/sa/sovereign_floor.py (arch_check check 17).
+    "sa_unrated_institution_sovereign_floor_applies": Feature(
+        name="sa_unrated_institution_sovereign_floor_applies",
+        enabled=False,
+        citation=Citation("CRR", "121", "four paragraphs; no sovereign floor limb"),
+    ),
     # F-IRB collateral step-functions apply under CRR (Art. 230 Table 5): the
     # overcollateralisation divisor and the 30% C*/C** minimum threshold. Basel
     # 3.1 removes both (see packs/b31.py); the divisor/threshold values
@@ -1086,7 +1121,19 @@ ENTRIES: dict[str, RuleEntry] = {
             CQS.UNRATED: Decimal("0.50"),
         },
         key="cqs",
-        citation=Citation("CRR", "117", "(1) Table 2B non-named MDB RW by CQS"),
+        # PS1/26, not CRR. UK CRR Art. 117 has no table at all (verified verbatim,
+        # crr.pdf PAGE_INDEX 115): para 1 says a non-named MDB "shall be treated
+        # in the same manner as exposures to institutions", para 2 lists the
+        # named 0% MDBs. Table 2B is PS1/26 Art. 117(1)(a).
+        #
+        # The ENTRY nonetheless stays in this CRR pack, deliberately. It is read
+        # at MODULE IMPORT off the CRR pack by engine/sa/guarantor_rw.py and
+        # engine/sa/crr_risk_weight_tables.py, so moving it to packs/b31.py is
+        # import-time fatal (measured: KeyError "rulepack 'crr@2026-01-01' has no
+        # entry 'mdb_risk_weights_table_2b'"). Under CRR the table is unreachable
+        # anyway — the Art. 117(1) institution-routing fix sends non-named MDBs
+        # through the institution ladder — so only the citation was ever wrong.
+        citation=Citation("PS1/26", "117", "(1)(a) Table 2B non-named MDB RW by CQS"),
         default=Decimal("0.50"),
     ),
     # Institution RW tables (CRR Art. 120 Table 3 ECRA / Art. 120(2) Table 4

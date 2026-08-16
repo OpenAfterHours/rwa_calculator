@@ -248,8 +248,7 @@ ENTRIES: dict[str, RuleEntry] = {
         citation=Citation(
             "PS1/26",
             "122",
-            "(2) Basel 3.1 revised SA risk-weight tables; ALSO gates the Art. 117(1)(a)/(b) "
-            "MDB schedule — PS1/26 assigns Table 2B where CRR routes to institutions",
+            "(2) revised SA risk-weight tables; also gates the Art. 117(1)(a)/(b) MDB schedule",
         ),
     ),
     # Basel 3.1 revised SA risk-weight override ladder (PRA PS1/26): the PS1/26
@@ -386,7 +385,9 @@ ENTRIES: dict[str, RuleEntry] = {
         },
         key="risk_type",
         citation=Citation("PS1/26", "111", "Table A1 SA CCFs (OC 40% Row 5, LR/UCC 10% Row 6)"),
-        default=Decimal("0.50"),
+        # No table default — see the CRR pack's ``sa_ccf`` note. Under B31 the
+        # residual splits between Table A1 Row 5 (commitment) and Row 3 (issued
+        # item), which one shared fallback cannot express (P1.267).
     ),
     # PRA PS1/26 Art. 274(2A) transitional alpha add-on phase fractions keyed by
     # reporting year (Basel 3.1 only). Years absent from the table (2030+) resolve
@@ -798,6 +799,36 @@ ENTRIES: dict[str, RuleEntry] = {
         name="mortgage_rw_floor",
         value=Decimal("0.10"),
         citation=Citation("PS1/26", "154", "(4A) 10% mortgage RW floor (residential IRB)"),
+    ),
+    # FCSM equity collateral (Art. 222(3)). The weight is DERIVED from what
+    # Chapter 2 would assign a direct exposure to the collateral instrument, so
+    # under Basel 3.1 it follows PS1/26 Art. 133's 250% listed-equity weight
+    # rather than CRR Art. 133(2)'s 100%. Overrides the CRR scalar of the same
+    # name. The PRA Rules 4.2/4.3 transitional does NOT apply here: that is a
+    # firm-specific grandfathering for firms coming off IRB equity permission,
+    # not a Chapter 2 weight. Tied to ``equity_sa_risk_weights`` by
+    # tests/unit/crm/test_p1_296_fcsm_equity_collateral_rw.py.
+    "fcsm_equity_collateral_rw": ScalarParam(
+        name="fcsm_equity_collateral_rw",
+        value=Decimal("2.50"),
+        citation=Citation(
+            "PS1/26",
+            "222",
+            "Art. 222(3) Chapter 2 weight for a direct equity holding (Art. 133, 250%)",
+        ),
+    ),
+    # PS1/26 Art. 121(6): "Notwithstanding paragraphs 2 to 5, the risk weight
+    # assigned to an exposure to an institution for which a credit assessment by
+    # a nominated ECAI is not available may not be less than the risk weight
+    # applicable to exposures to the central government of the jurisdiction where
+    # the institution is incorporated as set out in Article 114(1) and (2)" —
+    # where the exposure is not in the local currency and is not a
+    # self-liquidating trade item under one year. Overrides the CRR Feature of
+    # the same name; CRR has no such paragraph (see packs/crr.py).
+    "sa_unrated_institution_sovereign_floor_applies": Feature(
+        name="sa_unrated_institution_sovereign_floor_applies",
+        enabled=True,
+        citation=Citation("PS1/26", "121", "(6) sovereign RW floor for FX unrated institutions"),
     ),
     # Basel 3.1 replaces the CRR Art. 230 F-IRB collateral step-functions with
     # the continuous LGD* formula (PS1/26 Art. 230(1)): no overcollateralisation

@@ -657,8 +657,21 @@ class TestP1314Art1216SovereignFloorMustNotAcquireFundingLimb:
         sovereign — the leak would be unobservable. At an ORIGINAL maturity of
         0.1y the base is 20%, below the CQS 3 CGCB floor of 50%.
 
-        Correct: 0.20 with reason ``domestic_currency``.
+        Correct: 0.20.
         Leaked: 0.50 with reason ``floor_bound``.
+
+        ⚠ THE REASON CHANGED UNDER P1.334 (master, 2026-08-15), and the change is
+        strictly better than this test was. P1.334 established that UK CRR
+        Art. 121 has only four paragraphs — there is no (6) — and gated the floor
+        on a cited pack Feature, so under CRR it now short-circuits on the REGIME
+        and never evaluates the domestic-currency question at all. The reason is
+        therefore ``regime_not_applicable``, not ``domestic_currency``.
+
+        The VALUE assertion is unchanged and still 0.20, so this leg still catches
+        a leaked funding flag by magnitude. But the leak it was written to guard
+        is now structurally impossible on this side: the floor cannot arm under
+        CRR whatever flag it receives. Leg I (Basel 3.1) is where that guard still
+        does real work — P1.334 removed the CRR exposure rather than fixing it.
         """
         # Arrange / Act
         result = calculate_single_sa_exposure(
@@ -686,8 +699,14 @@ class TestP1314Art1216SovereignFloorMustNotAcquireFundingLimb:
             "the CQS 3 sovereign floor armed.",
         )
         # ... and explanation.
-        assert result["sa_risk_weight_branch_reason"] == SovereignFloorReason.DOMESTIC_CURRENCY, (
-            f"P1.314 leg K: the floor should name this row "
-            f"'{SovereignFloorReason.DOMESTIC_CURRENCY.value}'. Got "
-            f"'{result['sa_risk_weight_branch_reason']}'."
+        assert (
+            result["sa_risk_weight_branch_reason"] == SovereignFloorReason.REGIME_NOT_APPLICABLE
+        ), (
+            f"P1.314 leg K: under CRR the Art. 121(6) floor does not apply at all "
+            f"(P1.334 — UK CRR Art. 121 has four paragraphs and no floor limb), so "
+            f"the row should be named "
+            f"'{SovereignFloorReason.REGIME_NOT_APPLICABLE.value}'. Got "
+            f"'{result['sa_risk_weight_branch_reason']}'. A 'domestic_currency' here "
+            f"would mean the regime gate was removed; a 'floor_bound' would mean it "
+            f"was removed AND the funding flag leaked."
         )

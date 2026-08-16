@@ -69,6 +69,7 @@ from rwa_calc.contracts.errors import (
     negative_amount_without_netting_warning,
     non_finite_raw_input_error,
     orphan_reference_error,
+    unresolved_obs_risk_type_warning,
 )
 from rwa_calc.domain.branch_reasons import BRANCH_REASON_VOCABULARIES, UNKNOWN_FALLBACK
 
@@ -78,6 +79,14 @@ if TYPE_CHECKING:
 
 # Regulatory reference for collateral link validation (CRM)
 COLLATERAL_LINK_CRM_REFERENCE = "CRR Art. 193/194"
+
+#: Below this magnitude an amount counts as zero. Not a regulatory value — the
+#: currency-unit scale of these columns puts any real balance many orders above
+#: it. Kept identical to ``engine/ccf.py``'s ``_nominal_is_zero`` threshold so
+#: the DQ016 gate and the CCF rule it reports on cannot disagree about which
+#: rows carry an amount; duplicated rather than imported because check 12 bars
+#: ``contracts/`` from importing ``engine/``.
+_ZERO_AMOUNT_TOLERANCE = 1e-10
 
 
 # =============================================================================
@@ -470,6 +479,13 @@ def validate_bundle_values(
         # is, and that needs a second column to decide.
         if table_name in {"facilities", "loans", "contingents"}:
             all_errors.extend(_validate_negative_amounts_without_netting(lf, table_name))
+
+        # CRR Art. 111 Annex I / PS1/26 Table A1: an OBS amount with neither a
+        # risk_type nor an obs_product is priced on the regime's residual limb
+        # with no signal of any kind today — DQ006 filters nulls out before its
+        # domain test (P1.267).
+        if table_name in {"facilities", "contingents"}:
+            all_errors.extend(_validate_unresolved_obs_risk_type(lf, table_name))
 
         # PRA PS1/26 Art. 120(2B) / Art. 122(3): short-term rating rows must
         # carry a scope (which exposure they attach to). Flag rows that violate
@@ -1177,6 +1193,67 @@ def _validate_negative_amounts_without_netting(
         for c in amount_cols
         if counts[c]
     ]
+
+
+def _validate_unresolved_obs_risk_type(
+    lf: pl.LazyFrame,
+    context: str,
+) -> list[CalculationError]:
+    """Flag OBS rows carrying an amount but no resolvable Annex I risk category.
+
+    ``risk_type`` is optional and the DQ006 domain test filters
+    ``is_not_null()`` before it runs, so a NULL ``risk_type`` is schema-valid,
+    raises nothing and silently takes the CCF residual limb. That is
+    well-formed input producing a capital number the preparer never chose —
+    CRR Annex I item 1(k)'s 100%, or PS1/26 Table A1 Row 5's 40% / Row 3's 50%.
+
+    ``obs_product`` is the second route to a category
+    (``engine/ccf.py::build_product_to_risk_type_expr``), so a row is only
+    unresolved when BOTH are absent. The test is *absence*, not
+    unmappability: every member of ``VALID_OBS_PRODUCTS`` maps to a bucket in
+    the ``obs_product_to_risk_type`` pack CategoryMap, so a NON-null
+    ``obs_product`` either resolves or already draws a DQ006 for failing its
+    declared domain. Reading the CategoryMap here would need
+    ``contracts/`` -> ``rwa_calc.rulebook``, which check 12 forbids; the
+    equivalence is pinned instead by
+    ``tests/unit/test_p1_267_sa_ccf_residual.py``.
+
+    The check is confined to rows with a non-zero off-balance amount: at zero
+    the CCF term vanishes (``_nominal_is_zero`` forces 0.0) and the category
+    cannot affect capital, which is why on-balance rows — nominal 0,
+    ``risk_type`` null by nature — raise nothing.
+
+    References:
+    - CRR Art. 111, Annex I item 1(k)
+    - PRA PS1/26 Art. 111, Table A1 Rows 3 and 5
+    """
+    schema_names = lf.collect_schema().names()
+    if "risk_type" not in schema_names:
+        return []
+
+    amount_column = next((c for c in ("nominal_amount", "limit") if c in schema_names), None)
+    if amount_column is None:
+        return []
+
+    unresolved = pl.col("risk_type").is_null()
+    if "obs_product" in schema_names:
+        product = pl.col("obs_product").cast(pl.Utf8, strict=False).fill_null("")
+        unresolved = unresolved & (product.str.strip_chars() == "")
+
+    # Mirrors ``engine/ccf.py``'s ``_nominal_is_zero`` predicate rather than
+    # testing ``!= 0.0``: that is the expression which decides whether the CCF
+    # can affect capital at all, so the gate and the rule agree on what "no
+    # amount" means. Float equality would also disagree with itself on a value
+    # that survived an FX conversion.
+    has_amount = (
+        pl.col(amount_column).cast(pl.Float64, strict=False).fill_null(0.0).abs()
+        >= _ZERO_AMOUNT_TOLERANCE
+    )
+
+    n = lf.select((unresolved & has_amount).sum().alias("n")).collect().item()
+    if not n:
+        return []
+    return [unresolved_obs_risk_type_warning(context=context, amount_column=amount_column, n=n)]
 
 
 def _validate_table_columns_batched(

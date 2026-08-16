@@ -22,9 +22,10 @@ go). The rule is a self-contained article with one entry point, so the seam is
 natural rather than forced.
 
 References:
-- PRA PS1/26 Art. 121(6) — the floor (UK CRR Art. 121 has four paragraphs and
-  no (5) or (6); the engine applies the provision under both regimes, which
-  IMPLEMENTATION_PLAN.md P1.334 records as owed work, not as this module's)
+- PRA PS1/26 Art. 121(6) — the floor. UK CRR Art. 121 has four paragraphs and
+  no (5) or (6), so the rule is Basel 3.1 only; the regime decision reads the
+  cited pack Feature ``sa_unrated_institution_sovereign_floor_applies``
+  (P1.334, closed).
 - PRA PS1/26 Art. 114(1)-(2) — the floor's value source
 - CRE20.22 + footnote 13 — Basel 3.1 SCRA sovereign floor and its trade carve-out
 - docs/plans/test-space-correctness-proposal.md — Phase 3
@@ -37,7 +38,11 @@ import logging
 import polars as pl
 from watchfire import cites
 
-from rwa_calc.domain.branch_reasons import SA_RISK_WEIGHT_BRANCH_REASON, SovereignFloorReason
+from rwa_calc.domain.branch_reasons import (
+    SA_RISK_WEIGHT_BRANCH_REASON,
+    SovereignFloorReason,
+    reason_dtype,
+)
 from rwa_calc.domain.enums import CQS, RiskType
 from rwa_calc.engine.branch_reason import BranchCase, decide
 from rwa_calc.engine.sa.crr_risk_weight_tables import CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS
@@ -51,13 +56,26 @@ logger = logging.getLogger(__name__)
 def apply_sovereign_floor_for_institutions(
     exposures: pl.LazyFrame,
     is_domestic_currency_expr: pl.Expr,
+    *,
+    applies: bool,
 ) -> pl.LazyFrame:
     """Apply sovereign RW floor for FX unrated institution exposures.
 
-    Art. 121(6) (CRR) / CRE20.22 (Basel 3.1): The risk weight for an
-    unrated institution exposure not denominated in the institution's
-    domestic currency cannot be lower than the sovereign risk weight of
-    the institution's jurisdiction.
+    PS1/26 Art. 121(6) / CRE20.22: The risk weight for an unrated institution
+    exposure not denominated in the institution's domestic currency cannot be
+    lower than the sovereign risk weight of the institution's jurisdiction.
+
+    **The provision is Basel 3.1 only.** UK CRR Art. 121 has FOUR paragraphs —
+    (1) Table 5, (2) unrated-sovereign 100%, (3) <=3-month 20%, (4) trade
+    finance — and no (5) or (6) (verified verbatim, ``docs/assets/crr.pdf``
+    PAGE_INDEX 119). PS1/26 Art. 121(6) opens "Notwithstanding paragraphs 2 to
+    5", modifying an SCRA Grade A/B/C ladder CRR does not have; CRR instead
+    handles the same concern structurally, since Art. 121(1) already derives
+    the unrated institution's weight from its central government's credit
+    quality step. ``applies`` carries the regime decision from the cited pack
+    Feature ``sa_unrated_institution_sovereign_floor_applies`` (arch_check
+    check 17); when it is False every row is named
+    ``REGIME_NOT_APPLICABLE`` and no risk weight is touched (P1.334).
 
     Exception: Self-liquidating trade-related contingent items arising
     from the movement of goods with original maturity ≤ 1 year are not
@@ -103,6 +121,17 @@ def apply_sovereign_floor_for_institutions(
     - CRR Art. 107(2) — only trade exposures and default fund contributions
       reach the Chapter 6 Section 9 regime
     """
+    if not applies:
+        # No value leg at all — every ``risk_weight`` passes through untouched.
+        # The reason column is still emitted so the census can see that the rule
+        # abstained for a regime reason rather than silently not running.
+        return exposures.with_columns(
+            pl.lit(
+                SovereignFloorReason.REGIME_NOT_APPLICABLE.value,
+                dtype=reason_dtype(SovereignFloorReason),
+            ).alias(SA_RISK_WEIGHT_BRANCH_REASON)
+        )
+
     _uc = pl.col("_upper_class")
 
     # Art. 114(1) residual for a central government with no ECAI assessment —

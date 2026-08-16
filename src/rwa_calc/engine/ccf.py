@@ -60,6 +60,7 @@ Usage:
 
 from __future__ import annotations
 
+from collections.abc import Hashable, Mapping
 from datetime import date
 from typing import TYPE_CHECKING
 
@@ -85,7 +86,6 @@ _B31_PACK = resolve("b31", date(2027, 1, 1))
 _SA_CCF_CRR_MAP = lookup_float_map(_CRR_PACK.lookup("sa_ccf"))
 _SA_CCF_B31_MAP = lookup_float_map(_B31_PACK.lookup("sa_ccf"))
 _FIRB_OBS_FALLBACK_MAP = lookup_float_map(_CRR_PACK.lookup("firb_obs_fallback_ccf"))
-_SA_CCF_DEFAULT = scalar_value(_CRR_PACK.scalar_param("sa_ccf_default"))
 _FIRB_TRADE_LC_CCF = scalar_value(_CRR_PACK.scalar_param("firb_trade_lc_ccf"))
 _FIRB_CREDIT_LINE_CCF = scalar_value(_CRR_PACK.scalar_param("firb_credit_line_ccf"))
 _OC_SHORT_MATURITY_CCF = scalar_value(_CRR_PACK.scalar_param("oc_short_maturity_ccf"))
@@ -178,13 +178,54 @@ def on_balance_ead() -> pl.Expr:
 def sa_ccf_expression(
     risk_type_col: str = "risk_type",
     is_basel_3_1: bool = False,
+    *,
+    commitment_col: str | None = None,
 ) -> pl.Expr:
     """Polars expression mapping risk_type to SA CCFs.
 
     CRR Art. 111 (Annex I categories) when ``is_basel_3_1`` is False, PRA
     PS1/26 Table A1 when True. The CCF values come from the rulepack
-    (``sa_ccf`` lookup); unrecognised risk_type falls back to the
-    MR-equivalent ``sa_ccf_default`` (50%).
+    (``sa_ccf`` lookup).
+
+    **The residual limb is regime-divergent** (P1.267). An unrecognised or
+    absent ``risk_type`` does NOT take a shared 50% fallback — the two regimes
+    write their residuals as different provisions with different values:
+
+    - **CRR Annex I item 1(k)** — "other items also carrying full risk" — is
+      the only residual available unconditionally. Items 2(b)(iv), 3(b)(ii)
+      and 4(c) each read "other items also carrying ... risk **and as
+      communicated to** [the competent authority]". An item the engine cannot
+      classify has by definition not been notified, so it cannot lawfully sit
+      in the 50% bucket. The residual is 100% as a matter of the text, not of
+      prudence.
+    - **PS1/26 Table A1** has three residual limbs and none carries a
+      notification condition. Row 3 ("other issued off-balance sheet items
+      that do **not** have the character of credit substitutes") is 50%; Row 5
+      ("any other commitment not subject to a conversion factor of 10%, 50% or
+      100%") is 40%. So the B31 residual splits on ``is_obs_commitment``, and
+      an unclassifiable *issued* item at 50% is RIGHT BY THE TEXT rather than
+      a fallback.
+
+    This is the Art. 120 trap — two regimes, genuinely different texts, one
+    shared implementation — and harmonising the two arms would be wrong under
+    PS1/26 in two places, in opposite directions.
+
+    Args:
+        risk_type_col: Name of the risk_type column.
+        is_basel_3_1: Whether PS1/26 Table A1 applies (else CRR Annex I).
+        commitment_col: Boolean column separating Table A1 Row 5 (commitment)
+            from Row 3 (issued item). Ignored under CRR — item 1(k) has no
+            commitment/issued split.
+
+            Defaults to ``None``, which selects Row 3 outright and references
+            no column. That default is deliberate and load-bearing: naming a
+            column here puts it in the EXPRESSION'S FOOTPRINT, and several
+            callers apply this expression to projected frames that carry
+            ``risk_type`` and nothing else (the sub-facility undrawn
+            allocation, the provisions weighting basis). Defaulting to the
+            column raised ``ColumnNotFoundError`` in both. Callers that hold
+            the flag and are computing a capital number — i.e. ``_compute_ccf``
+            — opt in explicitly.
     """
     table = _SA_CCF_B31_MAP if is_basel_3_1 else _SA_CCF_CRR_MAP
     canonical = _normalize_risk_type(risk_type_col)
@@ -205,7 +246,35 @@ def sa_ccf_expression(
         .then(pl.lit(table["MLR"]))
         .when(canonical == "LR")
         .then(pl.lit(table["LR"]))
-        .otherwise(pl.lit(_SA_CCF_DEFAULT))
+        .otherwise(_sa_ccf_residual(table, is_basel_3_1, commitment_col))
+    )
+
+
+def _sa_ccf_residual(
+    table: Mapping[Hashable, float], is_basel_3_1: bool, commitment_col: str | None
+) -> pl.Expr:
+    """Residual CCF for a risk_type the Annex I / Table A1 ladder does not name.
+
+    See :func:`sa_ccf_expression` for the textual argument. Deliberately not a
+    shared "default": the retired ``sa_ccf_default`` pack scalar encoded the
+    residual as regime-invariant, which is what P1.267 refuted.
+    """
+    if not is_basel_3_1:
+        # CRR Annex I item 1(k) — the only residual with no notification condition.
+        return pl.lit(table["FR"])
+    if commitment_col is None:
+        return pl.lit(table["MR_ISSUED"])
+    # PS1/26 Table A1 Row 5 (commitment, 40%) vs Row 3 (issued, 50%). A null
+    # flag leaves the row undecidable between the two, and ``pl.when(null)``
+    # takes the ``otherwise`` branch — so it lands on the HIGHER Row 3 limb
+    # with no ``fill_null`` needed. Deliberately unlike _firb_ccf_for_col's
+    # fill_null(True): there True selects the correct Art. 166(8) ladder for a
+    # facility's undrawn limb, here it would pick the lower of two values on no
+    # evidence.
+    return (
+        pl.when(pl.col(commitment_col))
+        .then(pl.lit(table["OC"]))
+        .otherwise(pl.lit(table["MR_ISSUED"]))
     )
 
 
@@ -254,8 +323,13 @@ def _firb_ccf_for_col(risk_type_col: str = "risk_type") -> pl.Expr:
         # Art. 166(10)(c): MLR issued items -> 20%
         .when(is_mlr)
         .then(pl.lit(_FIRB_OBS_FALLBACK_MAP["MLR"]))
-        # Conservative MR-equivalent fallback for unrecognised risk_type values
-        .otherwise(pl.lit(_SA_CCF_DEFAULT))
+        # Art. 166(10)(a): an unrecognised risk_type has no Annex I category, so
+        # it takes item 1(k) ("other items also carrying full risk") — the only
+        # residual with no supervisory-notification condition — and 1(k) routes
+        # to the full-risk limb of Art. 166(10). Was the shared 50%
+        # ``sa_ccf_default``, which asserted a medium-risk category the item
+        # could not have been notified into (P1.267).
+        .otherwise(pl.lit(_FIRB_OBS_FALLBACK_MAP["FR"]))
     )
 
 
@@ -474,7 +548,7 @@ class CCFCalculator:
         if is_b31:
             # Basel 3.1 Art. 166C: F-IRB uses SA CCFs (PRA PS1/26 Art. 111 Table A1)
             # FR=100%, MR=50%, MLR=20%, LR(UCC)=10%
-            firb_ccf = sa_ccf_expression(is_basel_3_1=True)
+            firb_ccf = sa_ccf_expression(is_basel_3_1=True, commitment_col="is_obs_commitment")
         else:
             # CRR F-IRB: Art. 166(8)(d) -> 75% for credit lines / NIFs / RUFs
             # (is_obs_commitment=True); Art. 166(10) -> 100/50/20/0% fallback for
@@ -482,7 +556,9 @@ class CCFCalculator:
             firb_ccf = _firb_ccf_for_col("risk_type")
 
         exposures = exposures.with_columns(
-            sa_ccf_expression(is_basel_3_1=is_b31).alias("_sa_ccf_from_risk_type"),
+            sa_ccf_expression(is_basel_3_1=is_b31, commitment_col="is_obs_commitment").alias(
+                "_sa_ccf_from_risk_type"
+            ),
             firb_ccf.alias("_firb_ccf_from_risk_type"),
             (pl.col("nominal_amount").cast(pl.Float64, strict=False).abs() < 1e-10).alias(
                 "_nominal_is_zero"
@@ -533,6 +609,9 @@ class CCFCalculator:
         # per arch_check check 17.
         if is_b31:
             has_underlying = pl.col("underlying_risk_type").fill_null("").str.len_chars() > 0
+            # No ``commitment_col``: the underlying is the item to BE ISSUED, so
+            # its residual is Table A1 Row 3 by construction. ``is_obs_commitment``
+            # describes the OUTER commitment and would be the wrong flag here.
             underlying_sa = sa_ccf_expression("underlying_risk_type", is_basel_3_1=True)
             exposures = exposures.with_columns(
                 pl.when(has_underlying)

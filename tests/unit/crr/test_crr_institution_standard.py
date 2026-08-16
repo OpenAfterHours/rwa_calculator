@@ -438,12 +438,25 @@ class TestCRRShortTermInstitutionSACalculator:
         )
         assert result["risk_weight"] == pytest.approx(0.20)
 
-    def test_unrated_short_term_sovereign_floor_still_applies_in_fx(
+    def test_unrated_short_term_keeps_20pct_in_fx_no_sovereign_floor(
         self,
         sa_calculator: SACalculator,
         crr_config_eur: CalculationConfig,
     ) -> None:
-        """Art. 121(6) sovereign floor lifts 20% to 150% when sovereign is CQS 6 in FX."""
+        """CRR Art. 121(3) 20% survives FX — there is no CRR sovereign floor.
+
+        Was ``test_unrated_short_term_sovereign_floor_still_applies_in_fx``,
+        asserting 150%. UK CRR Art. 121 has four paragraphs and no floor limb
+        (P1.334); the 150% came from applying PS1/26 Art. 121(6) under CRR.
+        Art. 121(3) says a <=3-month exposure to an unrated institution "shall
+        be assigned" 20%, full stop.
+
+        This is the one shape that DISCRIMINATES: 20% against a CQS-6 sovereign
+        at 150%, so the assertion moves if the floor ever runs again. The
+        sibling cases in ``TestCRRHasNoSovereignFloor`` cannot — CRR Table 5
+        already prices off the sovereign CQS, so its value and the floor's
+        coincide.
+        """
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
@@ -457,7 +470,7 @@ class TestCRRShortTermInstitutionSACalculator:
             sovereign_cqs=6,
             config=crr_config_eur,
         )
-        assert result["risk_weight"] == pytest.approx(1.50)
+        assert result["risk_weight"] == pytest.approx(0.20)
 
     def test_b31_rated_short_term_cqs4_is_50pct(
         self,

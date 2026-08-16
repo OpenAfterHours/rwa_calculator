@@ -107,6 +107,14 @@ class TestUnknownFallbackNeverStandsAlone:
         121(6) floor's ``pl.when`` silently takes ``otherwise``. Before Phase 3
         that row carried a confident risk weight and NO signal of any kind.
 
+        **Runs under Basel 3.1, not CRR (changed by P1.334).** UK CRR Art. 121
+        has four paragraphs and no floor limb, so the rule is now gated to B31
+        and a CRR row abstains on ``REGIME_NOT_APPLICABLE`` — which would empty
+        this assertion and trip its own warning. That is the instrument
+        correctly following the rule to the only regime that has it, not the
+        P1.333 defect being fixed: P1.333 remains open and is a Basel 3.1
+        shortfall, which is exactly where this shape now sits.
+
         Arrange: a one-exposure portfolio in exactly that shape.
         Act:     run the full pipeline.
         Assert:  the row reads UNKNOWN_FALLBACK and a BR001 names it.
@@ -119,7 +127,7 @@ class TestUnknownFallbackNeverStandsAlone:
         )
 
         # Act
-        result = PipelineOrchestrator().run_with_data(build_bundle(portfolio), config_for("CRR"))
+        result = PipelineOrchestrator().run_with_data(build_bundle(portfolio), config_for("B31"))
         frame = result.results.select(
             "exposure_reference", "sa_risk_weight_branch_reason"
         ).collect()

@@ -385,13 +385,23 @@ def apply_risk_weights(
     # overwrite keeps provision-based defaulted RWs; reordering flips them to 150%.
     exposures = _apply_obligor_st_contamination_override(exposures)
 
-    # Art. 121(6) (CRR) / CRE20.22 (Basel 3.1): Sovereign RW floor for
-    # FX-denominated unrated institution exposures. Exception:
-    # self-liquidating trade items with original maturity <= 1yr.
-    # Takes the DENOMINATION-ONLY flag deliberately: PS1/26 Art. 121(6)(a) reads
-    # "is not in the local currency", with no "and funded" limb — passing the
-    # funded variant here would arm the floor on domestic-currency rows.
-    exposures = apply_sovereign_floor_for_institutions(exposures, is_domestic_currency)
+    # PS1/26 Art. 121(6) / CRE20.22: Sovereign RW floor for FX-denominated
+    # unrated institution exposures. Exception: self-liquidating trade items
+    # with original maturity <= 1yr. Basel 3.1 ONLY — UK CRR Art. 121 has four
+    # paragraphs and no floor limb, so the regime decision reads a cited pack
+    # Feature rather than applying the provision unconditionally (P1.334).
+    #
+    # Takes the DENOMINATION-ONLY flag deliberately (P1.314): PS1/26
+    # Art. 121(6)(a) reads "is not in the local currency", with no "and funded"
+    # limb — passing the funded variant here would arm the floor on
+    # domestic-currency rows, a measured 3.75x overstatement on an unrated
+    # SCRA-A institution. The funded variants go to the Art. 114/115 branches
+    # only; see `with_funding_limb` in engine/eu_sovereign.py.
+    exposures = apply_sovereign_floor_for_institutions(
+        exposures,
+        is_domestic_currency,
+        applies=resolved_pack.feature("sa_unrated_institution_sovereign_floor_applies"),
+    )
 
     # Art. 127 defaulted risk weight (secured/unsecured split). Runs after
     # the base RW when-chain so defaulted exposures have their non-defaulted

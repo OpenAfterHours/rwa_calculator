@@ -192,11 +192,19 @@ def _resolve_provisions_multi_level(
     # Post-CCF EAD-equivalent pro-rata basis: nominal is weighted by its SA
     # CCF (derived inline from risk_type, since the CCF stage has not yet
     # run). On-balance rows have nominal=0 so the CCF term vanishes;
-    # unknown/null risk_type falls through to sa_ccf_expression's
-    # conservative full-risk default rather than crashing. Frames without a
-    # risk_type column fall back to a CCF of 1.0 (bare nominal).
+    # unknown/null risk_type falls through to sa_ccf_expression's residual
+    # limb rather than crashing. Frames without a risk_type column fall back
+    # to a CCF of 1.0 (bare nominal).
+    #
+    # ``commitment_col=None`` because this frame is a provision-WEIGHTING basis
+    # assembled before the CCF stage and is not guaranteed to carry
+    # ``is_obs_commitment``; it selects the Table A1 Row 3 (issued, 50%) limb,
+    # the higher of the two B31 residuals. A weighting denominator, not a
+    # capital number.
     ccf_expr = (
-        sa_ccf_expression("risk_type", is_basel_3_1=is_basel_3_1) if has_risk_type else pl.lit(1.0)
+        sa_ccf_expression("risk_type", is_basel_3_1=is_basel_3_1, commitment_col=None)
+        if has_risk_type
+        else pl.lit(1.0)
     )
     weight_expr = (
         pl.col("drawn_amount").clip(lower_bound=0.0)

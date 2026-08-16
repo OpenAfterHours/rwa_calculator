@@ -256,6 +256,10 @@
     "CRR Art. 114",
     "CRR Art. 235"
   ],
+  "rwa_calc.engine.eu_sovereign::with_funding_limb": [
+    "CRR Art. 114",
+    "CRR Art. 115"
+  ],
   "rwa_calc.engine.irb.formulas::_capital_k_expr_from_params": [
     "CRR Art. 153(1)"
   ],
@@ -472,6 +476,7 @@
     "CRR Art. 134"
   ],
   "rwa_calc.engine.sa.risk_weights::_prepare_risk_weight_lookup": [
+    "CRR Art. 115",
     "PS1/26, paragraph 139",
     "PS1/26, paragraph 122"
   ],
@@ -591,6 +596,10 @@
     "CRR Art. 160(2)",
     "CRR Art. 160(6)",
     "PS1/26, paragraph 160"
+  ],
+  "rwa_calc.engine.stages.classify.subtypes::qrre_obligor_aggregate_limit_expr": [
+    "CRR Art. 154(4)",
+    "PS1/26, paragraph 147"
   ],
   "rwa_calc.engine.stages.classify.subtypes::qrre_undrawn_cancellable_expr": [
     "CRR Art. 154(4)",

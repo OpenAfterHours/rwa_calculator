@@ -187,6 +187,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p1151,
         ),
         (
+            "P1.351 (CRR Art. 161(1)(e)/(f)/(g) F-IRB retail purchased receivables LGD guard)",
+            "p1_351",
+            _generate_p1351,
+        ),
+        (
             "P1.184 (CRR Art. 117(1) MDB non-named institution routing)",
             "p1_184",
             _generate_p1184,
@@ -1346,6 +1351,19 @@ def _generate_p1151(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_151", None)
+
+
+def _generate_p1351(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.351 fixtures (CRR F-IRB retail purchased receivables LGD guard)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_351 import save_p1351_fixtures
+
+        saved = save_p1351_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_351", None)
 
 
 def _generate_p1184(output_dir: Path) -> list[tuple[str, int]]:

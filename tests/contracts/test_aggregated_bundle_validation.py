@@ -7,6 +7,7 @@ The function raises four categories of bound violations:
 - OUT002: risk_weight < 0     (CRR Art. 153; CRE31)
 - OUT003: rwa_final < -1e-9   (CRR Art. 92(3))
 - OUT004: ead_final is null   (data quality)
+- OUT005: rwa_final is null   (data quality; P1.345)
 
 References:
 - CRR Art. 92(3): minimum capital requirement
@@ -85,6 +86,72 @@ def _make_bundle(results: pl.LazyFrame) -> AggregatedResultBundle:
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
+
+class TestOut005NullRwaFinal:
+    """OUT005 — the twin of OUT004 on the capital carrier (P1.345 / P1.317).
+
+    P1.317 published a row with a POPULATED ``ead_final``, a ``risk_weight`` of
+    2.5 and a NULL ``rwa_final``. Every existing bound passed it: OUT001-003 all
+    guard on ``is_not_null()`` first, and OUT004 watches the wrong column. The
+    bounds gate was one spec short, and the guard that shipped with P1.317 is
+    equity-scoped, so any other exposure class could repeat it silently.
+
+    These tests pin the gap itself, not the equity instance.
+    """
+
+    def test_out005_fires_on_the_p1_317_shape(self):
+        """Populated ead_final + null rwa_final is caught, and by OUT005 alone."""
+        results = pl.LazyFrame(
+            {
+                "exposure_reference": ["E001"],
+                "risk_weight": [2.5],
+                "rwa_final": [None],
+                "ead_final": [10_000_000.0],
+            },
+            schema_overrides={"rwa_final": pl.Float64},
+        )
+
+        errors = validate_aggregated_bundle(_make_bundle(results))
+
+        codes = sorted({e.code for e in errors})
+        assert codes == ["OUT005"], (
+            f"expected OUT005 alone on the P1.317 shape, got {codes}. "
+            "OUT004 firing here would mean it is watching the wrong column; "
+            "nothing firing means the bounds gate is still one spec short."
+        )
+        assert errors[0].exposure_reference == "E001"
+
+    def test_out005_is_silent_on_a_populated_rwa(self):
+        """The control: a clean row must not trip the new bound."""
+        results = pl.LazyFrame(
+            {
+                "exposure_reference": ["E001"],
+                "risk_weight": [0.75],
+                "rwa_final": [7_500_000.0],
+                "ead_final": [10_000_000.0],
+            }
+        )
+
+        errors = validate_aggregated_bundle(_make_bundle(results))
+
+        assert [e.code for e in errors] == []
+
+    def test_out005_and_out004_are_independent(self):
+        """Both nulls on one row raise both codes — neither masks the other."""
+        results = pl.LazyFrame(
+            {
+                "exposure_reference": ["E001"],
+                "risk_weight": [0.75],
+                "rwa_final": [None],
+                "ead_final": [None],
+            },
+            schema_overrides={"rwa_final": pl.Float64, "ead_final": pl.Float64},
+        )
+
+        errors = validate_aggregated_bundle(_make_bundle(results))
+
+        assert sorted({e.code for e in errors}) == ["OUT004", "OUT005"]
 
 
 class TestValidateAggregatedBundle:

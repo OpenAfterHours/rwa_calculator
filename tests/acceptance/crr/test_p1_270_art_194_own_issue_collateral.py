@@ -55,7 +55,7 @@ class TestP1270CrrOwnIssue:
     def test_third_party_bond_reduces_rwa(self) -> None:
         """Control: a third-party bond reduces RWA below the £10m gross value."""
         result = _run("crr_third_party")
-        assert _rwa(result, SCENARIOS["crr_third_party"].loan_ref) < GROSS_RWA
+        assert 0 < _rwa(result, SCENARIOS["crr_third_party"].loan_ref) < GROSS_RWA
         assert _crm015(result) == []
 
     def test_own_issue_bond_no_benefit(self) -> None:

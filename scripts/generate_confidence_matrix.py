@@ -289,6 +289,15 @@ def _pack_evidence() -> dict[tuple[str, str], set[str]]:
             citation = entry.citation
             key = (citation.framework, _base_article(citation.article))
             out.setdefault(key, set()).add(f"{name}@{regime}")
+            # Per-KEY provenance, where individual parameters of a bundle derive
+            # from a different article than the bundle (P1.302). Without this the
+            # matrix credits every parameter to the bundle's citation, so an
+            # article that governs only some keys — CRR/PS1/26 Art. 163(1), which
+            # floors retail where Art. 160(1) floors corporates and institutions —
+            # shows NO pack evidence at all and reads as unimplemented.
+            for param_key, param_citation in getattr(entry, "key_citations", {}).items():
+                sub = (param_citation.framework, _base_article(param_citation.article))
+                out.setdefault(sub, set()).add(f"{name}.{param_key}@{regime}")
     return out
 
 

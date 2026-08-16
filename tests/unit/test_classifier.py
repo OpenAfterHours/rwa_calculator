@@ -1779,6 +1779,130 @@ class TestApproachAssignment:
         # Assert — B31 mandatory SA-only restriction must be preserved.
         assert df["approach"][0] == ApproachType.SA.value
 
+    def test_p1_314_b31_eu_domestic_sovereign_funded_in_usd_still_routes_to_sa(
+        self,
+        classifier: ExposureClassifier,
+    ) -> None:
+        """P1.314 boundary guard — a funding currency does not move Art. 147A routing.
+
+        Green on BOTH sides of P1.314, deliberately. P1.314 added the
+        "denominated **and funded**" limb of CRR Art. 114(4)/(7) and Art.
+        115(5)/(2) to the SA *risk-weight* chain
+        (``engine/sa/risk_weights.py``). ``_build_approach_expr``'s
+        ``is_eu_domestic_sovereign`` predicate
+        (``engine/stages/classify/approach.py``) carries the same
+        denomination-only Art. 114(4)/(7) shape and deliberately did NOT get
+        the limb: it is an approach-**routing** gate justified by PS1/26
+        Art. 147A(1)(a), and Art. 147A says nothing about funding currency.
+
+        **What this test can and cannot prove — measured, not assumed.** It is
+        NOT a leak detector for that over-application, and no test on this
+        shape can be. ``is_eu_domestic_sovereign`` is **redundant in both
+        regimes** on the production classifier path:
+
+        - CRR — the predicate is ANDed with the
+          ``approach_restrictions_b31_applicable`` pack Feature, which is
+          False, so the branch is dead. Forcing
+          ``build_eu_domestic_currency_expr`` to ``pl.lit(True)`` leaves the
+          CRR twin at ``advanced_irb``.
+        - Basel 3.1 — ``b31_sa_only`` (Art. 147A(1)(a), keyed on
+          ``cp_entity_type in B31_SOVEREIGN_LIKE_ENTITY_TYPES``) forces SA
+          independently, and a sweep of all 13 entity types through
+          ``ExposureClassifier.classify`` shows the only ones reaching
+          ``exposure_class == central_govt_central_bank`` are ``sovereign`` /
+          ``central_bank`` / ``central_bank_ecb`` — all three in that set.
+          Forcing the predicate to ``pl.lit(False)`` produces output identical
+          to shipped for every entity type.
+
+        So wrapping the predicate in ``eu_sovereign.with_funding_limb(...)``
+        changes no reachable approach: measured shipped vs over-applied, this
+        row is ``standardised`` either way. Do not re-file "approach.py needs
+        a funding-limb leak detector" — the branch it would guard is already
+        subsumed. If ``b31_sa_only`` is ever narrowed, that subsumption ends
+        and this test becomes discriminating; until then it is a plain
+        regression guard on the boundary, plus a presence check that
+        ``funding_currency`` survives the hierarchy_exit seal into the
+        classifier frame.
+
+        References:
+            PRA PS1/26 Art. 147A(1)(a) + Art. 147(3) — sovereign SA-only mandatory.
+            .claude/state/outputs/P1.314-scenario.md §5.2 and the ADDENDUM's
+            "deliberate non-target" note on ``approach.py``.
+        """
+        # Arrange — the Scenario B row, plus the one column that discriminates.
+        b31_irb_config = CalculationConfig.basel_3_1(
+            reporting_date=date(2027, 1, 1),
+            permission_mode=PermissionMode.IRB,
+        )
+
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["SOV_DE"],
+                "counterparty_name": ["Federal Republic of Germany"],
+                "entity_type": ["sovereign"],
+                "country_code": ["DE"],
+                "annual_revenue": [None],
+                "total_assets": [None],
+                "default_status": [False],
+                "sector_code": ["GOVT"],
+                "apply_fi_scalar": [False],
+                "is_managed_as_retail": [False],
+            }
+        ).lazy()
+
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "exposure_type": ["loan"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["GOVT"],
+                "counterparty_reference": ["SOV_DE"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["EUR"],
+                # The discriminating column: EUR-denominated but USD-FUNDED, so
+                # the funding limb would be FALSE if it were ever applied here.
+                "funding_currency": ["USD"],
+                "drawn_amount": [5000000.0],
+                "undrawn_amount": [0.0],
+                "nominal_amount": [0.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "exposure_has_parent": [False],
+                "root_facility_reference": [None],
+                "facility_hierarchy_depth": [1],
+                "counterparty_has_parent": [False],
+                "parent_counterparty_reference": [None],
+                "ultimate_parent_reference": [None],
+                "counterparty_hierarchy_depth": [1],
+                "lending_group_reference": [None],
+                "lending_group_total_exposure": [0.0],
+                "internal_pd": [0.001],
+                "model_id": [_TEST_MODEL_ID],
+            }
+        ).lazy()
+
+        bundle = create_resolved_bundle(
+            exposures, counterparties, model_permissions=_full_model_permissions()
+        )
+
+        # Act
+        result = ExposureClassifier().classify(bundle, b31_irb_config)
+        df = result.all_exposures.collect()
+
+        # Assert — the funding currency is irrelevant to Art. 147A routing.
+        assert df["funding_currency"][0] == "USD", (
+            "P1.314: the discriminating column was dropped at the hierarchy_exit "
+            "seal, so this test cannot see the over-application it exists to catch."
+        )
+        assert df["approach"][0] == ApproachType.SA.value, (
+            f"P1.314: a USD-funded EUR sovereign must still be SA-only under "
+            f"PS1/26 Art. 147A(1)(a). Got {df['approach'][0]!r}; "
+            f"{ApproachType.AIRB.value!r} would mean the mandatory-SA restriction "
+            f"was escaped into IRB (RWA-reducing) — check both b31_sa_only and "
+            f"the is_eu_domestic_sovereign branch in approach.py."
+        )
+
     def test_eu_sovereign_foreign_currency_not_forced_to_sa(
         self,
         classifier: ExposureClassifier,

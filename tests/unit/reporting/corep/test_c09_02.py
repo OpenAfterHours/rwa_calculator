@@ -165,13 +165,6 @@ class TestC0902TemplateDefinitions:
 
         assert CRR_C09_02_ROWS[-1].ref == "0150"
 
-    def test_irb_class_map(self) -> None:
-        from rwa_calc.reporting.corep.templates import C09_02_IRB_CLASS_MAP
-
-        assert C09_02_IRB_CLASS_MAP["corporate"] == "corporate"
-        assert C09_02_IRB_CLASS_MAP["retail_mortgage"] == "retail"
-        assert C09_02_IRB_CLASS_MAP["institution"] == "institution"
-
 
 class TestC0902Generation:
     """Test C 09.02 / OF 09.02 generation from pipeline data."""

@@ -9,7 +9,7 @@ pack). These pins assert the pack-authored floor values directly — the canonic
 regulatory values — so any drift fails here before it can move an RWA number.
 
 References:
-- CRR Art. 160(1): uniform 0.03% IRB PD floor.
+- CRR Art. 160(1) (corporates/institutions) + Art. 163(1) (retail): 0.03% IRB PD floor.
 - PRA PS1/26 Art. 160(1)/163(1): differentiated Basel 3.1 PD floors.
 - PRA PS1/26 Art. 161(5)/164(4): Basel 3.1 A-IRB LGD floors.
 """

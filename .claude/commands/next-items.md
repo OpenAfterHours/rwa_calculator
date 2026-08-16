@@ -523,6 +523,23 @@ C1.8 — "Direction and blast radius" section states whether the change
 C1.9 — Consistency with Wave 0: if `premise_verdict` was `rescoped`,
        the proposal designs the auditor's Corrected premise, not the
        original bullet. Designing the superseded bullet is a `revise`.
+C1.10 — SIBLING DIVERGENCE. If the proposed expression has an in-repo
+       sibling solving a similar problem, the proposal NAMES it by
+       file:line and states how its own shape DIFFERS. Copying a
+       sibling that is right for its own rule and wrong for this one
+       is the most common way a design passes every leg and still
+       ships a defect. Fired three times in batch 20260815-1 alone.
+C1.11 — EVERY NAMED GUARD MUST BE SHOWN TO FAIL. Any test the proposal
+       calls a "leak detector", "must stay green", or a guard against
+       a specific wrong implementation is accompanied by the mutation
+       it detects, and by evidence (or an explicit instruction to the
+       test wave to obtain evidence) that it FAILS under that
+       mutation. A test green in both states guards nothing, and
+       labelling it a detector is worse than having none because it
+       stops anyone looking. In batch 20260815-1 a design named two
+       existing tests as leak detectors for a non-target; both passed
+       under the correct code AND the wrong code, and the branch they
+       "guarded" turned out to be dead in both regimes.
 ```
 
 #### Wave 2 — fixture-builder report
@@ -705,9 +722,28 @@ preamble verbatim, with the two paths substituted:
 > `UV_PROJECT_ENVIRONMENT=<absolute main .venv path>` — prepend it
 > to any `uv run` command, e.g.
 > `UV_PROJECT_ENVIRONMENT=<...> uv run pytest <...>`.
+>
+> ⚠ **`PYTHONPATH=.` SILENTLY MEASURES THE MAIN TREE — use
+> `PYTHONPATH=.:src`.** The shared venv's `_editable_impl_rwa_calc.pth`
+> puts the **main** checkout's `/src` on `sys.path`, so `PYTHONPATH=.`
+> makes only `tests` importable and `import rwa_calc` still resolves to
+> the main checkout. You would then report numbers for code you did not
+> change. **Verify before measuring, do not assume:**
+> `PYTHONPATH=.:src <venv>/bin/python -c "import rwa_calc.engine.sa.risk_weights as m; print(m.__file__)"`
+> must print a path under the worktree. Useful side effect: running the
+> same target with `PYTHONPATH=.` gives the **pre-fix** behaviour and
+> with `PYTHONPATH=.:src` the **post-fix** behaviour, on one machine.
 
 For `main_tree`-stream items (single-stream / hard-excluded), omit
 the preamble.
+
+**Committing inside a worktree.** The pre-commit gate shells to
+`uv run`, which — with no `UV_PROJECT_ENVIRONMENT` set — creates a
+fresh empty `.venv` **inside the worktree** and then fails with
+`No module named 'watchfire'` / `Failed to spawn: ruff`. Either export
+`UV_PROJECT_ENVIRONMENT=<absolute main .venv path>` for the commit, or
+commit from the main tree with `git -C <worktree>`. Delete any stray
+worktree `.venv` afterwards.
 
 ### Engine-implementer scoping clause (wave 4)
 

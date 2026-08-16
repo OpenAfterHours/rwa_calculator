@@ -72,8 +72,20 @@ def calculate_single_sa_exposure(
     institution_cqs: int | None = None,
     is_hedged: bool = False,
     is_equivalent_jurisdiction: bool | None = None,
+    funding_currency: str | None = None,
+    funding_currency_null: bool = False,
 ) -> dict:
-    """Calculate SA RWA for a single exposure via calculate_branch."""
+    """Calculate SA RWA for a single exposure via calculate_branch.
+
+    ``funding_currency`` / ``funding_currency_null`` (P1.314, CRR Art. 114(4)/
+    (7)/115(5) via Art. 235(3)): "column absent" and "column present and null"
+    are DIFFERENT code paths in ``eu_sovereign.funding_currency_expr`` — the
+    former falls back to the denomination currency without ever naming the
+    column, the latter names it and ``fill_null``s row-by-row. Both defaults
+    are off, which leaves the frame with no ``funding_currency`` column at all
+    — the column-absent path every existing caller of this helper takes today,
+    unchanged.
+    """
     data: dict = {
         "exposure_reference": ["SINGLE"],
         "ead_final": [float(ead)],
@@ -127,7 +139,17 @@ def calculate_single_sa_exposure(
     if collateral_other_physical_value is not None:
         data["collateral_other_physical_value"] = [float(collateral_other_physical_value)]
 
-    df = pl.DataFrame(data).lazy()
+    schema_overrides: dict[str, pl.PolarsDataType] = {}
+    if funding_currency is not None:
+        data["funding_currency"] = [funding_currency]
+    elif funding_currency_null:
+        # Column PRESENT and null — distinct from column ABSENT (the default).
+        # Force String rather than Null so the frame matches the edge dtype
+        # (contracts/edges.py: EdgeColumn(dtype=pl.String, ...)).
+        data["funding_currency"] = [None]
+        schema_overrides["funding_currency"] = pl.String
+
+    df = pl.DataFrame(data, schema_overrides=schema_overrides).lazy()
 
     result = calculator.calculate_branch(df, config).collect().to_dicts()[0]
     # Alias rwa_post_factor as rwa for consistency with other calculators

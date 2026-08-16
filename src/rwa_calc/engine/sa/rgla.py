@@ -96,14 +96,17 @@ def is_rgla_sovereign_expr(upper_class: pl.Expr) -> pl.Expr:
 @cites("CRR Art. 115")
 @cites("CRR Art. 114")
 @cites("PS1/26, paragraph 115")
-def rgla_sovereign_rw_expr(is_uk_domestic: pl.Expr) -> pl.Expr:
+def rgla_sovereign_rw_expr(is_uk_domestic_funded: pl.Expr) -> pl.Expr:
     """Price an Art. 115(2)/(4) RGLA on the Art. 114 central-government ladder.
 
     Order matters and mirrors Art. 114 itself:
 
-    1. ``is_uk_domestic`` (GB counterparty, sterling) keeps 0% — that is
-       Art. 114(4) reached through Art. 115(2), and it is why the GB/sterling
-       base case is untouched by P1.282.
+    1. ``is_uk_domestic_funded`` (GB counterparty, sterling-denominated AND
+       sterling-funded) keeps 0% — that is Art. 114(4) reached through
+       Art. 115(2), and it is why the GB/sterling base case is untouched by
+       P1.282. The funding limb is P1.314: Art. 114(4) reads "denominated
+       **and funded** in sterling", so a sterling-denominated but
+       foreign-funded devolved exposure drops to the ladder below.
     2. Otherwise the Art. 114(2) Table 1 ladder on the counterparty's sovereign
        CQS. This is the limb the old code was missing: a non-sterling devolved
        exposure follows the UK's own assessment, so it stops being 0% the moment
@@ -124,4 +127,4 @@ def rgla_sovereign_rw_expr(is_uk_domestic: pl.Expr) -> pl.Expr:
         ladder = ladder.when(pl.col("cp_sovereign_cqs") == int(cqs_val)).then(
             pl.lit(float(CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS[cqs_val]))
         )
-    return pl.when(is_uk_domestic).then(devolved_rw).otherwise(ladder.otherwise(devolved_rw))
+    return pl.when(is_uk_domestic_funded).then(devolved_rw).otherwise(ladder.otherwise(devolved_rw))

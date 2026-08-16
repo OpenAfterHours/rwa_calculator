@@ -8,10 +8,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- (Next release changes will go here)
+- **`DQ016` — an off-balance-sheet amount with no risk category is now
+  reported.** `risk_type` is an optional input column, and the `DQ006`
+  categorical-domain test filters `is_not_null()` before it runs, so a **null**
+  `risk_type` on a row carrying a real undrawn limit or contingent nominal was
+  schema-valid, raised nothing, and silently took the CCF residual. That is
+  well-formed input producing a capital number the preparer never chose. One
+  aggregate warning per table now names it. `DQ006` still covers the
+  non-null-but-unrecognised string, so the two codes partition the space.
 
 ### Changed
-- (Next release changes will go here)
+- **The SA CCF residual is regime-divergent, and the shared `sa_ccf_default`
+  pack entry is retired (P1.267).** A `risk_type` the Annex I / Table A1 ladder
+  does not name took one 50% fallback under both regimes. The two texts do not
+  agree, and harmonising them was wrong under PS1/26 in two places in opposite
+  directions:
+  - **CRR** Annex I gives all four categories an "other items" residual, but only
+    item 1(k) — "other items also carrying **full risk**" — is unconditional.
+    Items 2(b)(iv), 3(b)(ii) and 4(c) each require the item to have been "**as
+    communicated to** the competent authority", and an item the engine could not
+    classify has by definition not been notified. The CRR residual is therefore
+    **100%**, not 50% — a 50pp understatement, RWA-increasing to fix.
+  - **PS1/26** Table A1 has three residual limbs, none conditional on
+    notification. An unclassifiable **issued** item takes Row 3's 50% — which the
+    engine already produced, and which is right by the text rather than by
+    fallback — while an unclassifiable **commitment** takes Row 5's **40%**,
+    where the engine overstated by 10pp. That correction is **RWA-reducing** and
+    feeds the Basel 3.1 output floor.
+
+  The same argument applies to the CRR F-IRB residual (`Art. 166(10)`), which
+  also read the shared scalar and now routes an uncategorised item through item
+  1(k) to the full-risk limb. Number-neutral across the estate: no golden moved,
+  and no registered run holds a row with both an unresolved `risk_type` and a
+  non-zero nominal.
+- **MDB Table 2B is cited to PS1/26, not CRR (P1.310).** `mdb_risk_weights_table_2b`
+  and `mdb_unrated_rw` both cited CRR Art. 117, which carries **no table** —
+  para 1 treats a non-named MDB "in the same manner as exposures to
+  institutions" and para 2 lists the named 0% MDBs. Table 2B is PS1/26
+  Art. 117(1)(a). Number-neutral: only the citations move. Both entries stay
+  where they are, which is now recorded at the entries — they are read off the
+  **CRR** pack at module import by `engine/sa/guarantor_rw.py` and
+  `engine/sa/crr_risk_weight_tables.py`, so a Basel-3.1-only home is
+  import-time fatal.
+- **The Art. 121(6) sovereign risk-weight floor is now Basel 3.1 only (P1.334).**
+  The engine applied it under both regimes. **UK CRR Art. 121 has four
+  paragraphs** — (1) Table 5 keyed on the central government's credit quality
+  step, (2) unrated sovereign 100%, (3) three months or less 20%, (4) trade
+  finance — and then Article 122. There is no (5) or (6). PS1/26 Art. 121(6)
+  opens "Notwithstanding paragraphs 2 to 5", modifying an SCRA Grade A/B/C
+  ladder CRR does not have; CRR meets the same concern structurally, because
+  Art. 121(1) already *derives* an unrated institution's weight from its
+  sovereign's credit quality step, leaving a sovereign floor nothing to bite
+  on. Gated on the new cited pack Feature
+  `sa_unrated_institution_sovereign_floor_applies`. Under CRR the rule now
+  abstains on a named `regime_not_applicable` branch reason rather than being
+  skipped silently, so the branch census can still see it. Direction:
+  **RWA-reducing** on the affected population — a three-month exposure to an
+  unrated institution in a CQS-6 jurisdiction was lifted from Art. 121(3)'s 20%
+  to 150%.
+- **`fcsm_equity_collateral_rw` moved from the common pack into the regime packs
+  (P1.296).** Art. 222(3) gives the collateralised portion "the risk weight that
+  they would assign under Chapter 2 … where the lending institution had a direct
+  exposure to the collateral instrument" — a **derived** weight, not a prescribed
+  one — so it follows the regime's own equity weight: CRR Art. 133(2) **100%**,
+  PS1/26 Art. 133 **250%**. Pinned at 100% for both regimes, it understated the
+  blended FCSM risk weight under Basel 3.1 wherever main-index equity is pledged.
+  Art. 222(1), previously cited for the 100%, is the *usage restriction* on
+  electing the Simple Method and prescribes no weight at all.
 
 ---
 

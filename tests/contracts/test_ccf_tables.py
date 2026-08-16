@@ -39,7 +39,6 @@ SA_CCF_B31 = _B31.lookup("sa_ccf").entries
 FIRB_OBS_FALLBACK = _CRR.lookup("firb_obs_fallback_ccf").entries
 FIRB_TRADE_LC_CCF = _CRR.scalar_param("firb_trade_lc_ccf").value
 FIRB_CREDIT_LINE_CCF = _CRR.scalar_param("firb_credit_line_ccf").value
-SA_CCF_DEFAULT = _CRR.scalar_param("sa_ccf_default").value
 OC_SHORT_MATURITY_CCF = _CRR.scalar_param("oc_short_maturity_ccf").value
 OC_SHORT_MATURITY_THRESHOLD_DAYS = _CRR.int_param("oc_short_maturity_threshold_days").value
 
@@ -100,9 +99,17 @@ def test_firb_bespoke_ccfs_match_art_166_8() -> None:
     assert Decimal("0.75") == FIRB_CREDIT_LINE_CCF
 
 
-def test_sa_ccf_default_is_mr_equivalent() -> None:
-    """Unrecognised risk_type falls back to MR-equivalent 50% (conservative)."""
-    assert Decimal("0.50") == SA_CCF_DEFAULT
+def test_no_shared_sa_ccf_residual_entry_exists() -> None:
+    """The regime-invariant ``sa_ccf_default`` must stay retired (P1.267).
+
+    It stated one 50% residual for both regimes. CRR Annex I item 1(k) is the
+    only residual available without supervisory notification (100%), while
+    PS1/26 Table A1 splits its unconditional residuals between Row 3 issued
+    items (50%) and Row 5 commitments (40%). A shared entry cannot express
+    that, so the residual lives in ``engine/ccf.py::_sa_ccf_residual``.
+    """
+    assert "sa_ccf_default" not in _CRR.entries
+    assert "sa_ccf_default" not in _B31.entries
 
 
 def test_oc_short_maturity_override_matches_art_111() -> None:
@@ -135,7 +142,6 @@ def _distinctive_ccf_values() -> set[float]:
         {
             FIRB_TRADE_LC_CCF,
             FIRB_CREDIT_LINE_CCF,
-            SA_CCF_DEFAULT,
             OC_SHORT_MATURITY_CCF,
         }
     )

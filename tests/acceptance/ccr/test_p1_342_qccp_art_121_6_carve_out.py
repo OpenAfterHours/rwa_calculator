@@ -711,12 +711,26 @@ class TestP1342FloorIsNeitherOverAppliedNorOverExempted:
             f"P1.342/{regime}/{P1342_EXPOSURE_INST}: expected rwa_final="
             f"{expected_rwa:,.6f}, got {actual_rwa:,.6f}."
         )
-        assert reason == SovereignFloorReason.FLOOR_NOT_BINDING.value, (
+        # P1.334 gated Art. 121(6) to Basel 3.1 — UK CRR Art. 121 has four
+        # paragraphs and no floor limb — so under CRR this row is now named
+        # REGIME_NOT_APPLICABLE. The NUMBER is unchanged either way (both limbs
+        # pass the incumbent weight through), which is exactly why the reason
+        # pin is the load-bearing half of this test and is kept per regime
+        # rather than relaxed to "any non-carve-out reason".
+        expected_reason = (
+            SovereignFloorReason.REGIME_NOT_APPLICABLE
+            if regime == "crr"
+            else SovereignFloorReason.FLOOR_NOT_BINDING
+        )
+        assert reason == expected_reason.value, (
             f"P1.342/{regime}/{P1342_EXPOSURE_INST}: expected "
-            f"{SovereignFloorReason.FLOOR_NOT_BINDING.value!r}, got {reason!r}. "
-            "This row must stay INSIDE Art. 121(6): the floor arms, resolves to the "
-            "Art. 114(1) unrated-sovereign residual, and does not exceed the row's own "
-            f"weight ({expected_rw}). "
+            f"{expected_reason.value!r}, got {reason!r}. "
+            "Under B31 this row must stay INSIDE Art. 121(6): the floor arms, resolves "
+            "to the Art. 114(1) unrated-sovereign residual, and does not exceed the "
+            f"row's own weight ({expected_rw}). Under CRR the provision does not exist "
+            "(P1.334), so the rule must abstain by REGIME, not by any scope limb — "
+            f"{SovereignFloorReason.FLOOR_NOT_BINDING.value!r} under CRR would mean the "
+            "floor is still running. "
             f"{SovereignFloorReason.DOMESTIC_CURRENCY.value!r} would mean a USD exposure "
             "to an FR counterparty was read as domestic; a carve-out reason would mean "
             "the exemption leaked past the QCCP trade-exposure gate; "

@@ -333,8 +333,6 @@
         "oc_short_maturity_threshold_days@b31",
         "oc_short_maturity_threshold_days@crr",
         "sa_ccf@crr",
-        "sa_ccf_default@b31",
-        "sa_ccf_default@crr",
         "sa_revised_ccf_table@crr"
       ],
       "source_files": [
@@ -395,6 +393,7 @@
         "tests/unit/test_ccf.py",
         "tests/unit/test_corep_annex1_row_discrimination.py",
         "tests/unit/test_p1_265_lower_of_ccf_is_b31_only.py",
+        "tests/unit/test_p1_267_sa_ccf_residual.py",
         "tests/unit/test_r1_negative_amount_dq.py"
       ],
       "watchfire_index_gap": false
@@ -723,10 +722,7 @@
       ],
       "pack_entries": [
         "mdb_named_zero_rw@b31",
-        "mdb_named_zero_rw@crr",
-        "mdb_risk_weights_table_2b@crr",
-        "mdb_unrated_rw@b31",
-        "mdb_unrated_rw@crr"
+        "mdb_named_zero_rw@crr"
       ],
       "source_files": [
         "data/schemas.py",
@@ -735,7 +731,9 @@
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/guarantor_rw.py",
         "engine/sa/risk_weights.py",
-        "engine/sa/sovereign_derived.py"
+        "engine/sa/sovereign_derived.py",
+        "rulebook/packs/common.py",
+        "rulebook/packs/crr.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_154_b31_art_118_international_organisation_class.py",
@@ -963,9 +961,11 @@
       ],
       "pack_entries": [
         "institution_rw_sovereign_derived@crr",
-        "institution_short_term_unrated_rw_crr@crr"
+        "institution_short_term_unrated_rw_crr@crr",
+        "sa_unrated_institution_sovereign_floor_applies@crr"
       ],
       "source_files": [
+        "domain/branch_reasons.py",
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/guarantor_rw.py",
         "engine/sa/risk_weights.py",
@@ -977,8 +977,10 @@
       "test_files": [
         "tests/acceptance/basel31/test_p1_122b_b31_unrated_scra_b_institution_guarantor_irb_sa_fallback.py",
         "tests/acceptance/ccr/test_ccr_alpha_carveout.py",
+        "tests/acceptance/ccr/test_p1_342_qccp_art_121_6_carve_out.py",
         "tests/acceptance/crr/test_p1_121_art_121_3_unrated_inst_short_term.py",
         "tests/acceptance/crr/test_p1_184_art_117_mdb_institution_routing.py",
+        "tests/contracts/test_branch_reason_contract.py",
         "tests/fixtures/generate_all.py",
         "tests/fixtures/p1_121/__init__.py",
         "tests/fixtures/p1_121/p1_121.py",
@@ -990,6 +992,7 @@
         "tests/unit/crr/test_crr_institution_standard.py",
         "tests/unit/crr/test_p1_316_art_121_1_table_5_unrated_institution.py",
         "tests/unit/test_b31_sa_risk_weights.py",
+        "tests/unit/test_p1_334_sovereign_floor_is_b31_only.py",
         "tests/unit/test_sovereign_floor_institutions.py"
       ],
       "watchfire_index_gap": false
@@ -1526,6 +1529,8 @@
         "engine/equity/calculator.py",
         "engine/sa/calculator.py",
         "engine/stages/equity.py",
+        "rulebook/packs/b31.py",
+        "rulebook/packs/common.py",
         "rulebook/packs/crr.py"
       ],
       "test_files": [
@@ -1536,6 +1541,7 @@
         "tests/integration/test_branch_error_accumulation.py",
         "tests/oracle/derivations/sa_b31.py",
         "tests/oracle/derivations/sa_crr.py",
+        "tests/unit/crm/test_p1_296_fcsm_equity_collateral_rw.py",
         "tests/unit/crr/test_crr_equity.py",
         "tests/unit/rulebook/test_equity_features.py",
         "tests/unit/test_b31_equity_weights.py",
@@ -3333,7 +3339,6 @@
         "ORC-280"
       ],
       "pack_entries": [
-        "fcsm_equity_collateral_rw@b31",
         "fcsm_equity_collateral_rw@crr",
         "fcsm_rw_floor@b31",
         "fcsm_rw_floor@crr",
@@ -3362,6 +3367,7 @@
         "tests/fixtures/reporting_funded_protection_portfolio.py",
         "tests/oracle/derivations/crm_sa.py",
         "tests/properties/portfolios.py",
+        "tests/unit/crm/test_p1_296_fcsm_equity_collateral_rw.py",
         "tests/unit/crm/test_simple_method.py"
       ],
       "watchfire_index_gap": false
@@ -5796,6 +5802,8 @@
         "sa_revised_ccf_table@b31"
       ],
       "source_files": [
+        "contracts/errors.py",
+        "contracts/validation.py",
         "data/schemas.py",
         "domain/enums.py",
         "engine/ccf.py",
@@ -5819,7 +5827,8 @@
         "tests/unit/reporting/corep/test_c07_ccf_buckets.py",
         "tests/unit/rulebook/test_provisions_features.py",
         "tests/unit/test_ccf.py",
-        "tests/unit/test_p1_265_lower_of_ccf_is_b31_only.py"
+        "tests/unit/test_p1_265_lower_of_ccf_is_b31_only.py",
+        "tests/unit/test_p1_267_sa_ccf_residual.py"
       ],
       "watchfire_index_gap": false
     },
@@ -5981,17 +5990,23 @@
       ],
       "confidence": "HIGH",
       "framework": "PS1/26",
-      "layer_count": 4,
+      "layer_count": 5,
       "oracle_cases": [
         "ORC-047",
         "ORC-048"
       ],
-      "pack_entries": [],
+      "pack_entries": [
+        "mdb_risk_weights_table_2b@crr",
+        "mdb_unrated_rw@b31",
+        "mdb_unrated_rw@crr"
+      ],
       "source_files": [
         "engine/sa/cqs_lift.py",
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/guarantor_rw.py",
-        "engine/sa/risk_weights.py"
+        "engine/sa/risk_weights.py",
+        "rulebook/packs/common.py",
+        "rulebook/packs/crr.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_154_b31_art_118_international_organisation_class.py",
@@ -6128,20 +6143,24 @@
       ],
       "confidence": "HIGH",
       "framework": "PS1/26",
-      "layer_count": 4,
+      "layer_count": 5,
       "oracle_cases": [
         "ORC-052",
         "ORC-053",
         "ORC-054",
         "ORC-055"
       ],
-      "pack_entries": [],
+      "pack_entries": [
+        "sa_unrated_institution_sovereign_floor_applies@b31"
+      ],
       "source_files": [
         "contracts/edges.py",
         "domain/branch_reasons.py",
         "engine/sa/guarantor_rw.py",
+        "engine/sa/risk_weights.py",
         "engine/sa/sovereign_floor.py",
-        "engine/stages/hierarchy/enrich.py"
+        "engine/stages/hierarchy/enrich.py",
+        "rulebook/packs/b31.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_122b_b31_unrated_scra_b_institution_guarantor_irb_sa_fallback.py",
@@ -6155,8 +6174,10 @@
         "tests/oracle/derivations/branch_sa.py",
         "tests/oracle/derivations/sa_b31.py",
         "tests/properties/test_regime_deltas.py",
+        "tests/unit/crr/test_crr_institution_standard.py",
         "tests/unit/test_p1_185_scra_grade_b_docstring.py",
         "tests/unit/test_p1_254_art_121_6_unrated_sovereign_floor.py",
+        "tests/unit/test_p1_334_sovereign_floor_is_b31_only.py",
         "tests/unit/test_sovereign_floor_institutions.py"
       ],
       "watchfire_index_gap": false
@@ -6908,10 +6929,12 @@
       ],
       "source_files": [
         "data/schemas.py",
+        "engine/crm/simple_method.py",
         "engine/equity/calculator.py",
         "engine/sa/calculator.py",
         "engine/sa/risk_weights.py",
-        "rulebook/packs/b31.py"
+        "rulebook/packs/b31.py",
+        "rulebook/packs/common.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_182_b31_l24_pe_unlisted_under_5y.py",
@@ -6924,6 +6947,7 @@
         "tests/fixtures/p2_19/p2_19.py",
         "tests/oracle/derivations/sa_b31.py",
         "tests/properties/test_regime_deltas.py",
+        "tests/unit/crm/test_p1_296_fcsm_equity_collateral_rw.py",
         "tests/unit/rulebook/test_equity_features.py",
         "tests/unit/test_b31_equity_weights.py",
         "tests/unit/test_equity_routing.py",
@@ -7943,11 +7967,13 @@
     {
       "article": "222",
       "code_functions": [],
-      "confidence": "UNCITED",
+      "confidence": "MEDIUM",
       "framework": "PS1/26",
-      "layer_count": 2,
+      "layer_count": 3,
       "oracle_cases": [],
-      "pack_entries": [],
+      "pack_entries": [
+        "fcsm_equity_collateral_rw@b31"
+      ],
       "source_files": [
         "engine/crm/look_through.py",
         "engine/crm/simple_method.py",
@@ -8438,8 +8464,8 @@
     }
   ],
   "pack_content_hashes": {
-    "b31": "9a883964d8479e764742c880f826cf10d1b96809ea500e9c763764f26b7a4220",
-    "crr": "ce2b4dbd2b2f7daf84c02c99b88af650214c458adcb7d4123da87c3eb80635e0"
+    "b31": "a0784d121c08ecf162937f9f5cd6b4614b2169e40abf23dcd9819c3d1b554502",
+    "crr": "5d5c57b888cb32499f4189fc6e44f2b27d7cad2a3979fbaf343764c9fbdc0f12"
   },
   "package_version": "0.3.26",
   "scoring_rule": {

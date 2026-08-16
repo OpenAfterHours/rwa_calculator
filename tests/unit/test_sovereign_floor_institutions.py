@@ -425,13 +425,31 @@ class TestBackwardCompatibility:
 # =========================================================================
 
 
-class TestCRRSovereignFloor:
-    """CRR Art. 121(6) sovereign floor for unrated FX institution exposures."""
+class TestCRRHasNoSovereignFloor:
+    """CRR has no Art. 121(6): the weight already derives from the sovereign.
 
-    def test_crr_sovereign_floor_binds(
+    Was ``TestCRRSovereignFloor``, whose four cases claimed to exercise a CRR
+    sovereign floor. UK CRR Art. 121 has FOUR paragraphs — (1) Table 5 keyed on
+    the central government's credit quality step, (2) unrated-sovereign 100%,
+    (3) <=3-month 20%, (4) trade finance — and no (5) or (6). The floor is
+    PS1/26 Art. 121(6) and is now gated to Basel 3.1 (P1.334).
+
+    **None of the assertions below can detect the rule either way**, and that is
+    recorded rather than hidden: CRR Art. 121(1) already prices an unrated
+    institution off its sovereign's CQS, so Table 5's value and the floor's
+    value coincide by construction. Ask of each one "what would this assert if
+    the floor never ran at all" and the answer is "the same". They are retained
+    as ladder controls, not as coverage of the floor.
+
+    The discriminating CRR case — a <=3-month exposure at 20% against a CQS-6
+    sovereign at 150% — lives in
+    ``tests/unit/crr/test_crr_institution_standard.py``.
+    """
+
+    def test_crr_unrated_institution_takes_table_5_not_a_floor(
         self, sa_calculator: SACalculator, crr_config: CalculationConfig
     ) -> None:
-        """CRR unrated institution = 40%, sovereign CQS 4 = 100% → floor binds."""
+        """Art. 121(1) Table 5: sovereign CQS 4 → 100%, reached without any floor."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
@@ -444,10 +462,10 @@ class TestCRRSovereignFloor:
         )
         assert result["risk_weight"] == pytest.approx(1.0)
 
-    def test_crr_rated_institution_no_floor(
+    def test_crr_rated_institution_takes_its_own_ecai_weight(
         self, sa_calculator: SACalculator, crr_config: CalculationConfig
     ) -> None:
-        """CRR rated institution (CQS 3 = 50%) → no sovereign floor."""
+        """CRR rated institution takes Art. 120 Table 3 (CQS 3 = 50%)."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
@@ -461,10 +479,10 @@ class TestCRRSovereignFloor:
         )
         assert result["risk_weight"] == pytest.approx(0.50)
 
-    def test_crr_domestic_no_floor(
+    def test_crr_domestic_currency_unrated_is_100pct(
         self, sa_calculator: SACalculator, crr_config: CalculationConfig
     ) -> None:
-        """CRR domestic currency → no floor."""
+        """A GB unrated institution in GBP takes 100%; nothing floors it."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
@@ -478,10 +496,10 @@ class TestCRRSovereignFloor:
         # CRR unrated = 100% (Art. 120(2) Table 3) — domestic, no floor
         assert result["risk_weight"] == pytest.approx(1.00)
 
-    def test_crr_null_sovereign_cqs_no_floor(
+    def test_crr_null_sovereign_cqs_is_100pct(
         self, sa_calculator: SACalculator, crr_config: CalculationConfig
     ) -> None:
-        """CRR null sovereign CQS → no floor, backward compatible."""
+        """Art. 121(2): an unrated institution in an unrated jurisdiction → 100%."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),

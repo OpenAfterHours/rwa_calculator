@@ -320,7 +320,6 @@ FRAGMENTS: tuple[Fragment, ...] = (
         "ccf-values",
         _names(
             "sa_ccf",
-            "sa_ccf_default",
             "sa_revised_ccf_table",
             "obs_product_to_risk_type",
             "oc_short_maturity_ccf",
@@ -507,7 +506,6 @@ FRAGMENTS: tuple[Fragment, ...] = (
         "crr-ccf-values",
         _names(
             "sa_ccf",
-            "sa_ccf_default",
             "obs_product_to_risk_type",
             "oc_short_maturity_ccf",
             "oc_short_maturity_threshold_days",

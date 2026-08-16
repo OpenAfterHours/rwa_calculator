@@ -300,8 +300,8 @@ Key column: `cqs`; default `1.00`
 
 ### `mdb_risk_weights_table_2b`
 
-**CRR** — CRR Art. 117
- *((1) Table 2B non-named MDB RW by CQS)*
+**CRR** — PS1/26, paragraph 117
+ *((1)(a) Table 2B non-named MDB RW by CQS)*
 
 Key column: `cqs`; default `0.50`
 
@@ -318,7 +318,7 @@ Key column: `cqs`; default `0.50`
 | Name | CRR | Basel 3.1 | Citation |
 |---|---|---|---|
 | `mdb_named_zero_rw` | `0.00` | `0.00` | CRR Art. 117 |
-| `mdb_unrated_rw` | `0.50` | `0.50` | CRR Art. 117 |
+| `mdb_unrated_rw` | `0.50` | `0.50` | PS1/26, paragraph 117 |
 <!-- END GENERATED: crr-sa-public-sector -->
 
 ## Retail, Real Estate, Equity and Other Items (Art. 123-134)

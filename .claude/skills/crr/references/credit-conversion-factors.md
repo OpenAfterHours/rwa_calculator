@@ -13,8 +13,13 @@ CRR runs **two separate CCF schedules**, and the F-IRB one is generally *more* p
 than SA for the middle categories — the opposite of the intuition that IRB is always the
 lighter approach:
 
-- **SA (Art. 111)** — `sa_ccf`, keyed by risk category, with `sa_ccf_default` as the
-  fallback.
+- **SA (Art. 111)** — `sa_ccf`, keyed by risk category. A risk category the ladder does
+  not name falls to **Annex I item 1(k)**, "other items also carrying full risk". That is
+  the only residual with no supervisory-notification condition: items 2(b)(iv), 3(b)(ii)
+  and 4(c) each read "and as communicated to the competent authority", and an item the
+  engine could not classify has by definition not been notified. There is deliberately no
+  shared `sa_ccf_default` entry — PS1/26 Table A1 writes its residuals differently, so
+  the two regimes must not share one (see `basel31/references/credit-conversion-factors.md`).
 - **F-IRB (Art. 166(8)-(9))** — `firb_credit_line_ccf` for general commitments, with
   `firb_trade_lc_ccf` as the Art. 166(9) exception for short-term trade letters of credit
   covering goods movements, and `firb_obs_fallback_ccf` for anything unmapped.
@@ -36,7 +41,7 @@ disagrees with the engine.
 **CRR** — CRR Art. 111
  *(SA CCFs (Annex I): FR/FRC 100%, MR/OC 50%, MLR 20%, LR 0%)*
 
-Key column: `risk_type`; default `0.50`
+Key column: `risk_type`
 
 | Key | Value |
 |---|---|
@@ -51,7 +56,7 @@ Key column: `risk_type`; default `0.50`
 **Basel 3.1** — PS1/26, paragraph 111
  *(Table A1 SA CCFs (OC 40% Row 5, LR/UCC 10% Row 6))*
 
-Key column: `risk_type`; default `0.50`
+Key column: `risk_type`
 
 | Key | Value |
 |---|---|
@@ -62,10 +67,6 @@ Key column: `risk_type`; default `0.50`
 | `OC` | `0.40` |
 | `MLR` | `0.20` |
 | `LR` | `0.10` |
-
-| Name | CRR | Basel 3.1 | Citation |
-|---|---|---|---|
-| `sa_ccf_default` | `0.50` | `0.50` | CRR Art. 111 |
 
 ### `obs_product_to_risk_type`
 

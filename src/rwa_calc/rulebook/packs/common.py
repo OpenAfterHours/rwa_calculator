@@ -98,11 +98,11 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("0.10"),
         citation=Citation("CRR", "222(4)(b)", "SFT zero-haircut non-CMP 10% floor"),
     ),
-    "fcsm_equity_collateral_rw": ScalarParam(
-        name="fcsm_equity_collateral_rw",
-        value=Decimal("1.00"),
-        citation=Citation("CRR", "222(1)", "equity held as FCSM collateral risk-weighted at 100%"),
-    ),
+    # NOTE: ``fcsm_equity_collateral_rw`` is deliberately NOT here. Art. 222(3)
+    # derives the collateralised portion's weight from what Chapter 2 would give
+    # a direct exposure to the collateral instrument, and Chapter 2's equity
+    # weight is regime-divergent (CRR Art. 133(2) 100%; PS1/26 Art. 133 250%),
+    # so the scalar lives in packs/crr.py and packs/b31.py.
     # F-IRB overcollateralisation divisors and minimum collateralisation
     # thresholds (CRR Art. 230 Table 5 / CRE32.9-12). The values are
     # regime-INVARIANT; whether CRR applies them is carried by the regime
@@ -143,16 +143,18 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("2.5"),
         citation=Citation("CRR", "153(5)", "specialised-lending <2.5y short-maturity split"),
     ),
-    # SA / F-IRB CCF fallbacks that do not vary by regime. The conservative
-    # MR-equivalent default (50%) catches unrecognised risk_type values under
-    # both CRR Art. 111 and PRA PS1/26 Table A1; the OC short-maturity override
-    # (20%) maps "other commitments" to MLR when remaining maturity <= 1 year
-    # (CRR Art. 111, retained under Basel 3.1). Consumed in engine/ccf.py.
-    "sa_ccf_default": ScalarParam(
-        name="sa_ccf_default",
-        value=Decimal("0.50"),
-        citation=Citation("CRR", "111", "MR-equivalent fallback for unrecognised risk_type"),
-    ),
+    # SA / F-IRB CCF overrides that do not vary by regime: the OC short-maturity
+    # override (20%) maps "other commitments" to MLR when original maturity
+    # <= 1 year (CRR Art. 111, retained under Basel 3.1). Consumed in
+    # engine/ccf.py.
+    #
+    # NOTE: there is deliberately no ``sa_ccf_default`` here (P1.267). It stated
+    # a 50% MR-equivalent residual for unrecognised risk_type values under BOTH
+    # regimes, and the two texts do not agree: CRR Annex I 1(k) is the only
+    # residual available without supervisory notification (100%), while PS1/26
+    # Table A1 splits its unconditional residuals between Row 3 issued items
+    # (50%) and Row 5 commitments (40%). The residual now lives in
+    # ``engine/ccf.py::_sa_ccf_residual``, keyed off the regime's own table.
     "oc_short_maturity_ccf": ScalarParam(
         name="oc_short_maturity_ccf",
         value=Decimal("0.20"),
@@ -534,10 +536,19 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("0.00"),
         citation=Citation("CRR", "117", "(2) named MDB 0%"),
     ),
+    # The unrated row of PS1/26 Art. 117(1)(a) Table 2B. Cited to PS1/26, not
+    # CRR: UK CRR Art. 117 carries no table (para 1 treats a non-named MDB "in
+    # the same manner as exposures to institutions"; para 2 lists the named 0%
+    # MDBs). Kept in the COMMON pack rather than b31 because
+    # engine/sa/guarantor_rw.py reads it off the CRR pack at module import, so a
+    # b31-only home is import-time fatal — the same constraint recorded on
+    # ``mdb_risk_weights_table_2b`` in packs/crr.py. Under CRR the value is
+    # unreachable (Art. 117(1) routes non-named MDBs through the institution
+    # ladder), so a shared home costs nothing in behaviour.
     "mdb_unrated_rw": ScalarParam(
         name="mdb_unrated_rw",
         value=Decimal("0.50"),
-        citation=Citation("CRR", "117", "(1) Table 2B unrated MDB 50%"),
+        citation=Citation("PS1/26", "117", "(1)(a) Table 2B unrated MDB 50%"),
     ),
     "io_zero_rw": ScalarParam(
         name="io_zero_rw",

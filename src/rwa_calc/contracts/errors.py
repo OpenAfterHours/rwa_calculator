@@ -153,6 +153,15 @@ ERROR_INPUT_OUT_OF_DOMAIN = "DQ013"
 # check DQ003 lost — see DQ003 above for why it is a new code and not a revival.
 # Emitted by the loader edge seal (``engine/loader.py::_seal_table``).
 ERROR_UNREADABLE_INPUT_DTYPE = "DQ014"
+# Off-balance-sheet row carrying an amount but no resolvable Annex I / Table A1
+# risk category: ``risk_type`` is null AND ``obs_product`` maps to nothing. Such
+# a row is schema-VALID — ``risk_type`` is optional and DQ006's domain test
+# filters ``is_not_null()`` before it runs — so today it takes the CCF residual
+# limb silently. That is well-formed input producing an unreviewed capital
+# number, not malformed input: the residual is CRR Annex I 1(k)'s 100% or PS1/26
+# Table A1 Row 3/5's 50%/40%, none of which the preparer chose. Distinct from
+# DQ006, which fires only when a NON-null string fails the domain (P1.267).
+ERROR_UNRESOLVED_OBS_RISK_TYPE = "DQ016"
 
 # Hierarchy error codes
 ERROR_CIRCULAR_HIERARCHY = "HIE001"
@@ -670,6 +679,41 @@ def negative_amount_without_netting_warning(
         ),
         field_name=column,
         regulatory_reference="CRR Art. 111; Art. 166",
+    )
+
+
+def unresolved_obs_risk_type_warning(
+    *, context: str, amount_column: str, n: int
+) -> CalculationError:
+    """Create a DQ016 warning for an OBS amount with no resolvable risk category.
+
+    ``risk_type`` is null and ``obs_product`` maps to no Annex I / Table A1
+    bucket, yet the row carries a non-zero off-balance-sheet amount. Nothing
+    else reports this: ``risk_type`` is an optional column, so no DQ001 fires,
+    and the DQ006 categorical-domain test filters ``is_not_null()`` before it
+    runs, so a null never reaches it. The row is retained and priced on the
+    residual limb of ``engine/ccf.py::_sa_ccf_residual`` — CRR Annex I item
+    1(k)'s 100%, or PS1/26 Table A1 Row 5's 40% (commitment) / Row 3's 50%
+    (issued item). Every one of those is the regime's catch-all rather than a
+    category the preparer selected, which is what this warning makes visible.
+
+    References:
+    - CRR Art. 111, Annex I item 1(k) (full-risk residual)
+    - PRA PS1/26 Art. 111, Table A1 Rows 3 and 5 (issued / commitment residuals)
+    """
+    return CalculationError(
+        code=ERROR_UNRESOLVED_OBS_RISK_TYPE,
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.DATA_QUALITY,
+        message=(
+            f"[{context}] {n} row(s) carry a non-zero '{amount_column}' but no "
+            "resolvable off-balance-sheet risk category: 'risk_type' is null and "
+            "'obs_product' maps to no Annex I / Table A1 bucket. The CCF residual "
+            "applies (CRR Annex I 1(k) 100%; PS1/26 Table A1 Row 5 40% / Row 3 "
+            "50%) — supply 'risk_type' or 'obs_product' to select a category."
+        ),
+        field_name="risk_type",
+        regulatory_reference="CRR Art. 111 Annex I 1(k); PS1/26 Art. 111 Table A1 Rows 3, 5",
     )
 
 

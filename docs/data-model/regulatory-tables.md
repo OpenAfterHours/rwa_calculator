@@ -6,8 +6,8 @@ Every cited regulatory value in the rulepack packs `src/rwa_calc/rulebook/packs/
 
 Package version `0.3.26`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — 203 entries, content hash `ce2b4dbd2b2f7daf`
-- **Basel 3.1** (`b31` @ 2027-01-01) — 235 entries, content hash `9a883964d8479e76`
+- **CRR** (`crr` @ 2026-01-01) — 203 entries, content hash `5d5c57b888cb3249`
+- **Basel 3.1** (`b31` @ 2027-01-01) — 235 entries, content hash `a0784d121c08ecf1`
 
 ## Regime features
 
@@ -59,6 +59,7 @@ On/off behaviour switches (`Feature`).
 | `sa_revised_risk_weight_overrides` | off | on | CRR Art. 112 / PS1/26, paragraph 122 |
 | `sa_revised_risk_weight_tables` | off | on | CRR Art. 122 / PS1/26, paragraph 122 |
 | `sa_sl_inferred_rating_disapplied` | off | on | CRR Art. 139 / PS1/26, paragraph 139 |
+| `sa_unrated_institution_sovereign_floor_applies` | off | on | CRR Art. 121 / PS1/26, paragraph 121 |
 | `slotting_guarantee_substitution` | on | on | CRR Art. 235 / PS1/26, paragraph 235 |
 | `slotting_revised_tables` | off | on | CRR Art. 153(5) / PS1/26, paragraph 153 |
 | `supporting_factors` | on | off | CRR Art. 501 / PS1/26, paragraph 501 |
@@ -124,7 +125,7 @@ Decimal-valued parameters (`ScalarParam`). Risk weights and factors are decimal 
 | `failed_trade_dvp_mult_46_plus` | `1.00` | `1.00` | CRR Art. 378 |
 | `failed_trade_dvp_mult_5_15` | `0.08` | `0.08` | CRR Art. 378 |
 | `failed_trade_non_dvp_col4_rw_multiplier` | `12.50` | `12.50` | CRR Art. 379 |
-| `fcsm_equity_collateral_rw` | `1.00` | `1.00` | CRR Art. 222(1) |
+| `fcsm_equity_collateral_rw` | `1.00` | `2.50` | CRR Art. 222(3) / PS1/26, paragraph 222 |
 | `fcsm_rw_floor` | `0.20` | `0.20` | CRR Art. 222(1) |
 | `fcsm_sft_cmp_floor` | `0.00` | `0.00` | CRR Art. 222(4)(a) |
 | `fcsm_sft_non_cmp_floor` | `0.10` | `0.10` | CRR Art. 222(4)(b) |
@@ -143,7 +144,7 @@ Decimal-valued parameters (`ScalarParam`). Risk weights and factors are decimal 
 | `irb_maturity_floor_repo_sft_years` | `0.01369863013698630136986301370` | `0.01369863013698630136986301370` | CRR Art. 162(2) |
 | `irb_scaling_factor` | `1.06` | `1.0` | CRR Art. 153(1) / PS1/26, paragraph 153 |
 | `mdb_named_zero_rw` | `0.00` | `0.00` | CRR Art. 117 |
-| `mdb_unrated_rw` | `0.50` | `0.50` | CRR Art. 117 |
+| `mdb_unrated_rw` | `0.50` | `0.50` | PS1/26, paragraph 117 |
 | `mf_margined_scalar` | `1.5` | `1.5` | CRR Art. 279c |
 | `mf_unmargined_cap_years` | `1.0` | `1.0` | CRR Art. 279c |
 | `mf_unmargined_denom_years` | `1.0` | `1.0` | CRR Art. 279c |
@@ -174,7 +175,6 @@ Decimal-valued parameters (`ScalarParam`). Risk weights and factors are decimal 
 | `rgla_uk_devolved_rw` | `0.00` | `0.00` | CRR Art. 115 |
 | `rgla_uk_local_auth_rw` | `0.20` | `0.20` | CRR Art. 115 |
 | `rgla_unrated_default_rw` | `1.00` | `1.00` | CRR Art. 115 |
-| `sa_ccf_default` | `0.50` | `0.50` | CRR Art. 111 |
 | `sa_ccr_alpha` | `1.4` | `1.4` | CRR Art. 274(2) |
 | `sa_ccr_alpha_carve_out` | `1.0` | `1.0` | CRR Art. 274(2) |
 | `sa_ccr_cdo_tranche_coefficient` | `14` | `14` | CRR Art. 279a |
@@ -689,8 +689,8 @@ Key column: `cqs`; default `0.20`
 
 ### `mdb_risk_weights_table_2b`
 
-**CRR** — CRR Art. 117
- *((1) Table 2B non-named MDB RW by CQS)*
+**CRR** — PS1/26, paragraph 117
+ *((1)(a) Table 2B non-named MDB RW by CQS)*
 
 Key column: `cqs`; default `0.50`
 
@@ -803,7 +803,7 @@ Key column: `cqs`; default `1.00`
 **CRR** — CRR Art. 111
  *(SA CCFs (Annex I): FR/FRC 100%, MR/OC 50%, MLR 20%, LR 0%)*
 
-Key column: `risk_type`; default `0.50`
+Key column: `risk_type`
 
 | Key | Value |
 |---|---|
@@ -818,7 +818,7 @@ Key column: `risk_type`; default `0.50`
 **Basel 3.1** — PS1/26, paragraph 111
  *(Table A1 SA CCFs (OC 40% Row 5, LR/UCC 10% Row 6))*
 
-Key column: `risk_type`; default `0.50`
+Key column: `risk_type`
 
 | Key | Value |
 |---|---|

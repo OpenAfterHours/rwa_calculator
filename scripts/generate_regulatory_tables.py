@@ -608,6 +608,29 @@ FRAGMENTS: tuple[Fragment, ...] = (
     ),
 )
 
+#: THE COMPLETE SET OF PATHS THIS SCRIPT MAY READ OR WRITE, in a stable order.
+#: Built from module constants only — ``OUTPUT_PATH`` and the ``FRAGMENTS``
+#: spec — so nothing that has passed through a file, a parsed document or a
+#: function parameter takes part in constructing one.
+#:
+#: That provenance is the point, and it is a security property rather than a
+#: style choice. ``main()`` used to take its write targets out of the keys of
+#: ``render_targets()``, whose *values* are spliced from text read off disk. A
+#: taint analyser models a mapping as a single container, so the file-derived
+#: values marked the whole mapping and the paths came back out of it
+#: attacker-controlled: ``path.write_text(...)`` read as an arbitrary-file-write
+#: sink (``pythonsecurity:S2083``). Iterating this tuple separates the two —
+#: the content still comes from the mapping, the path never does.
+#:
+#: Same remedy as ``injection_ratchet.py`` and ``check_distribution.py``: remove
+#: the flow rather than guard it. Commit ``a5d34c0d`` records two
+#: resolve-then-contain guards that were correct at runtime and left the finding
+#: standing anyway, one of them multiplying it.
+TARGET_PATHS: tuple[Path, ...] = (
+    OUTPUT_PATH,
+    *sorted({fragment.path for fragment in FRAGMENTS}, key=lambda p: p.as_posix()),
+)
+
 
 def render() -> str:
     """Render the whole page from freshly resolved packs."""
@@ -650,8 +673,16 @@ def main() -> int:
     _validate_fragment_spec()
     targets = render_targets()
 
+    # Both branches need the same answer, so settle it once. The path comes from
+    # TARGET_PATHS and the content from `targets` — never both from the mapping;
+    # see TARGET_PATHS for why that separation is load-bearing.
+    stale: list[Path] = []
+    for path in TARGET_PATHS:
+        committed = path.read_text(encoding="utf-8") if path.exists() else ""
+        if committed != targets[path]:
+            stale.append(path)
+
     if args.check:
-        stale = [path for path, content in sorted(targets.items()) if _is_stale(path, content)]
         if stale:
             listing = "\n".join(f"  - {p.relative_to(REPO_ROOT).as_posix()}" for p in stale)
             sys.stderr.write(
@@ -668,21 +699,15 @@ def main() -> int:
     # target that is merely read-only — the release bumps a version stamp the
     # page carries and the skill fragments do not, so the common case is a
     # single stale page among a dozen fresh fragments.
-    written = [path for path, content in sorted(targets.items()) if _is_stale(path, content)]
-    for path in written:
+    for path in stale:
         path.write_text(targets[path], encoding="utf-8")
-    sys.stderr.write(f"wrote {len(written)} of {len(targets)} target(s)\n")
+    sys.stderr.write(f"wrote {len(stale)} of {len(TARGET_PATHS)} target(s)\n")
     return 0
 
 
 # ---------------------------------------------------------------------------
 # Private helpers — skill fragments
 # ---------------------------------------------------------------------------
-
-
-def _is_stale(path: Path, content: str) -> bool:
-    """True when `path` does not already hold exactly `content`."""
-    return (path.read_text(encoding="utf-8") if path.exists() else "") != content
 
 
 def _fragments_by_path() -> dict[Path, list[Fragment]]:

@@ -76,6 +76,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Art. 222(1), previously cited for the 100%, is the *usage restriction* on
   electing the Simple Method and prescribes no weight at all.
 
+### Fixed
+- **`scripts/generate_regulatory_tables.py` no longer takes its write paths out
+  of the mapping it renders** — SonarCloud flagged `path.write_text(...)` as an
+  arbitrary-file-write sink (`pythonsecurity:S2083`, "do not construct the path
+  from user-controlled data"). `render_targets()` splices its *values* from text
+  read off disk, and a taint analyser models a mapping as a single container, so
+  the file-derived content marked the whole mapping and the paths came back out
+  of `targets.items()` attacker-controlled. The write set is now the module
+  constant `TARGET_PATHS`, built from `OUTPUT_PATH` and the `FRAGMENTS` spec
+  alone: the content still comes from the mapping, the path never does. Same
+  remedy as `injection_ratchet.py` and `check_distribution.py` — remove the flow
+  rather than guard it, since commit `a5d34c0d` records two resolve-then-contain
+  guards that were correct at runtime and left the finding standing anyway. The
+  now-unused `_is_stale` helper is deleted and the staleness comparison inlined,
+  so no path reaches `read_text` through a function parameter either. Behaviour
+  is unchanged (`--check` exit 0, `wrote 0 of 17 target(s)`); the only visible
+  difference is that the page now sorts ahead of the skill fragments in the
+  stale listing. Two gates added in `tests/contracts/test_docs_freshness.py`:
+  one fails if `TARGET_PATHS` drifts from what `render_targets()` produces (a
+  missing entry silently stops writing a fragment; a stale one raises `KeyError`
+  mid-run), the other fails if the write path is taken from the mapping again.
+
 ---
 
 ## [0.3.26] - 2026-08-14

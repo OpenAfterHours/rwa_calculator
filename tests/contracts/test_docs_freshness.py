@@ -21,10 +21,16 @@ lying about the code:
   ``scripts/docs_link_baseline.json`` by ``scripts/check_doc_links.py``: a new
   dead link is a regression, and a fixed one must be banked so it cannot
   silently regress back.
+- The generator writes only the targets it declares, and takes those paths from
+  a module constant rather than from the mapping it renders. That is the same
+  taint-source removal as ``check_distribution.py``'s missing ``type=Path``
+  argument, one indirection further out.
 
 References:
 - IMPLEMENTATION_PLAN.md P4.56 (link burn-down), P1.309 (anchor sweep)
 - CLAUDE.md "The learning loop" — prose that fails twice earns an executable check
+- docs/development/escape-log.md — 2026-08-11 note on `pythonsecurity:S8707`,
+  and commit a5d34c0d on why guarding a taint flow does not clear it
 """
 
 from __future__ import annotations
@@ -34,6 +40,13 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+GENERATOR = REPO_ROOT / "scripts" / "generate_regulatory_tables.py"
+
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+
+# Imported rather than driven through the CLI: the two gates below are about the
+# generator's *write set*, which the CLI only ever reports a count of.
+from generate_regulatory_tables import TARGET_PATHS, render_targets  # noqa: E402
 
 
 def _run_script(script: str, *args: str) -> subprocess.CompletedProcess[str]:
@@ -85,4 +98,57 @@ def test_docs_dead_link_count_matches_baseline() -> None:
         "regression (fix the new dead link); a lower count must be banked:\n"
         "  uv run python scripts/check_doc_links.py --update-baseline\n"
         f"{result.stdout[-2000:]}\n{result.stderr}"
+    )
+
+
+def test_generator_declares_every_target_it_renders() -> None:
+    """`TARGET_PATHS` is the generator's write set, so it must not drift.
+
+    The write loop iterates the constant and looks the content up in the render,
+    which is what keeps a file-derived value out of the path. The cost of that
+    separation is that the two can disagree, and both directions are silent
+    failures worth naming: a `FRAGMENTS` entry whose path is missing from
+    `TARGET_PATHS` stops being written at all — the skill region simply goes
+    stale — while a stale `TARGET_PATHS` entry raises `KeyError` mid-run, after
+    earlier targets have already been written.
+    """
+    # Arrange / Act
+    rendered = set(render_targets())
+
+    # Assert
+    assert rendered == set(TARGET_PATHS), (
+        "scripts/generate_regulatory_tables.py renders a different set of targets "
+        "than TARGET_PATHS declares. Only the declared paths are ever written:\n"
+        f"  rendered but not declared: {sorted(p.name for p in rendered - set(TARGET_PATHS))}\n"
+        f"  declared but not rendered: {sorted(p.name for p in set(TARGET_PATHS) - rendered)}"
+    )
+    assert len(TARGET_PATHS) == len(set(TARGET_PATHS)), (
+        "TARGET_PATHS repeats a path, so one target would be written twice."
+    )
+
+
+def test_generator_write_paths_do_not_come_from_the_rendered_mapping() -> None:
+    """The taint source stays removed — the write path must not be a render key.
+
+    `render_targets()` splices its values out of text read off disk, and a taint
+    analyser models a mapping as one container: taking the write path out of that
+    mapping's keys made `path.write_text(...)` an arbitrary-file-write sink
+    (`pythonsecurity:S2083`, which fails the security quality gate). Commit
+    a5d34c0d records that guarding such a flow does not clear it — two correct
+    resolve-then-contain guards left the finding standing, one multiplying it —
+    so the remedy is structural and this asserts the structure, not the guard.
+    """
+    # Arrange / Act
+    source = GENERATOR.read_text(encoding="utf-8")
+
+    # Assert
+    assert "targets.items()" not in source, (
+        "scripts/generate_regulatory_tables.py iterates the rendered mapping "
+        "again. Take the path from TARGET_PATHS and the content from the mapping "
+        "— a path that has been inside the mapping is attacker-controlled as far "
+        "as the taint engine is concerned (pythonsecurity:S2083)."
+    )
+    assert "in TARGET_PATHS:" in source, (
+        "Nothing iterates TARGET_PATHS any more. The constant is only a security "
+        "property while it is the thing the write loop walks."
     )

@@ -347,6 +347,36 @@ def test_a_zero_limit_raises_no_dq016() -> None:
     assert not [e for e in errors if e.code == ERROR_UNRESOLVED_OBS_RISK_TYPE]
 
 
+def test_the_zero_amount_tolerance_matches_the_ccf_rule_it_reports_on() -> None:
+    """DQ016 and the CCF residual must agree on which rows carry an amount.
+
+    ``contracts/validation.py::_ZERO_AMOUNT_TOLERANCE`` is a hand-copy of the
+    threshold in ``engine/ccf.py``'s ``_nominal_is_zero`` predicate, duplicated
+    because check 12 bars ``contracts/`` from importing ``engine/``. If the two
+    drift, the gate reports rows the rule treats as zero (noise) or stays quiet
+    on rows the rule prices on the residual (the gap DQ016 exists to close).
+    Read out of the engine source rather than re-typed, so this compares the
+    two definitions rather than restating one of them.
+    """
+    # Arrange
+    import inspect
+    import re
+
+    from rwa_calc.contracts.validation import _ZERO_AMOUNT_TOLERANCE
+    from rwa_calc.engine import ccf
+
+    source = inspect.getsource(ccf)
+
+    # Act — the epsilon in the `_nominal_is_zero` expression
+    match = re.search(
+        r"\.abs\(\)\s*<\s*([0-9.e-]+)\s*\)\.alias\(\s*\n?\s*\"_nominal_is_zero\"", source
+    )
+
+    # Assert
+    assert match, "could not locate the _nominal_is_zero threshold in engine/ccf.py"
+    assert float(match.group(1)) == _ZERO_AMOUNT_TOLERANCE
+
+
 def test_every_valid_obs_product_resolves_to_a_risk_category() -> None:
     """Pins the equivalence DQ016's absence-test relies on.
 

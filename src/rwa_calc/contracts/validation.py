@@ -79,6 +79,14 @@ if TYPE_CHECKING:
 # Regulatory reference for collateral link validation (CRM)
 COLLATERAL_LINK_CRM_REFERENCE = "CRR Art. 193/194"
 
+#: Below this magnitude an amount counts as zero. Not a regulatory value — the
+#: currency-unit scale of these columns puts any real balance many orders above
+#: it. Kept identical to ``engine/ccf.py``'s ``_nominal_is_zero`` threshold so
+#: the DQ016 gate and the CCF rule it reports on cannot disagree about which
+#: rows carry an amount; duplicated rather than imported because check 12 bars
+#: ``contracts/`` from importing ``engine/``.
+_ZERO_AMOUNT_TOLERANCE = 1e-10
+
 
 # =============================================================================
 # DECLARED INPUT-DOMAIN GATE
@@ -1231,11 +1239,17 @@ def _validate_unresolved_obs_risk_type(
         product = pl.col("obs_product").cast(pl.Utf8, strict=False).fill_null("")
         unresolved = unresolved & (product.str.strip_chars() == "")
 
-    n = (
-        lf.select((unresolved & (pl.col(amount_column).fill_null(0.0) != 0.0)).sum().alias("n"))
-        .collect()
-        .item()
+    # Mirrors ``engine/ccf.py``'s ``_nominal_is_zero`` predicate rather than
+    # testing ``!= 0.0``: that is the expression which decides whether the CCF
+    # can affect capital at all, so the gate and the rule agree on what "no
+    # amount" means. Float equality would also disagree with itself on a value
+    # that survived an FX conversion.
+    has_amount = (
+        pl.col(amount_column).cast(pl.Float64, strict=False).fill_null(0.0).abs()
+        >= _ZERO_AMOUNT_TOLERANCE
     )
+
+    n = lf.select((unresolved & has_amount).sum().alias("n")).collect().item()
     if not n:
         return []
     return [unresolved_obs_risk_type_warning(context=context, amount_column=amount_column, n=n)]

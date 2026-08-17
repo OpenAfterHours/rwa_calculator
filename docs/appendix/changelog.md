@@ -77,6 +77,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   electing the Simple Method and prescribes no weight at all.
 
 ### Fixed
+- **Non-financial collateral the Art. 199 eligibility gate rejects is no longer
+  published in COREP C 08.01/02 cols 0190/0200/0210, and no longer buys an
+  eligible pledge the Art. 230 30% threshold (D9).** The P1.235 Art. 199(2)/(5)/(6)
+  Foundation-Collateral-Method gate zeroed `effectively_secured` — the Art. 231
+  waterfall feed — but stopped there, leaving the `_adj_re` / `_adj_rec` /
+  `_adj_oth` carriers on the ungated `adjusted_value`. Two consequences, both
+  reachable by any portfolio that simply does not populate
+  `is_eligible_irb_collateral` (loader default `False`):
+  - **Disclosure.** An unattested property pledge was zeroed for LGD yet reported
+    in full: `reporting_crm_lgd_real_estate` (col 0190) carried the collateral
+    while the F-IRB LGD sat at the supervisory unsecured value. Both instruction
+    sets scope the Foundation limb of these columns *by article*, not merely by
+    valuation basis — CRR Annex II col 0190 (p.102): *"values shall be determined
+    in accordance with paragraphs 2, 3 and 4 of Article 199 CRR and shall be
+    reported in this column"* (col 0200 paragraphs 6 and 8; col 0210 Art. 199(5));
+    PS1/26 Annex II col 0190 (p.109): *"collateral in accordance with Article
+    199(2)"* — under a block heading reading "CRM TECHNIQUES **TAKEN INTO ACCOUNT
+    IN LGD ESTIMATES**".
+  - **Capital, anti-conservative.** `collateral_re_value` /
+    `collateral_other_physical_value` are the `C` in the CRR Art. 230
+    minimum-collateralisation (C\*) test, so an *ineligible* pledge lifted an
+    *eligible* one over the 30% threshold it failed alone. Worked case (£1m senior
+    corporate-SME F-IRB, CRR): eligible £200k alone → C/E 20% → C\* fails → LGD
+    0.45; adding an **unattested** £500k row → C read £700k → C\* passed → LGD
+    **0.435714**, off £142,857 of secured amount the unattested row contributed
+    nothing to. Both now read 0.45.
+
+  The **AIRB market-value carriers are deliberately untouched** — both regimes
+  condition that limb on Art. 169A(1)/169B (PS1/26) and Art. 181(1)(e)-(f) (CRR),
+  the firm's institution-level recognition election, not the FCM attestation — so
+  the A-IRB retail-mortgage goldens are number-neutral, as are the financial/cash
+  carriers (col 0180's gate is Art. 197's own `is_eligible_financial_collateral`).
+  Recorded as RD-9 / D9 in `docs/plans/irb-collateral-corep-reporting.md`. Also
+  removes the dead `_rn` / `_raw_nf_a` collateral metric, which was aggregated,
+  multi-level-blended and dropped without a single reader. Ref: CRR Art. 199(2)/(5)/(6),
+  Art. 230; CRR Annex II p.102; PS1/26 Annex II p.109.
 - **`scripts/generate_regulatory_tables.py` no longer takes its write paths out
   of the mapping it renders** — SonarCloud flagged `path.write_text(...)` as an
   arbitrary-file-write sink (`pythonsecurity:S2083`, "do not construct the path

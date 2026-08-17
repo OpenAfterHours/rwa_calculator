@@ -144,7 +144,7 @@ Package version `0.3.26`. Resolved packs:
 | 227 | 0 | 2 | 3 | 0 | 1 | MEDIUM |
 | 228 | 0 | 0 | 1 | 25 | 2 | UNCITED |
 | 229 | 0 | 0 | 1 | 0 | 1 | UNCITED |
-| 230 | 2 | 6 | 15 | 0 | 25 | MEDIUM |
+| 230 | 2 | 6 | 15 | 0 | 26 | MEDIUM |
 | 231 | 1 | 0 | 1 | 0 | 0 | LOW |
 | 232 | 5 | 2 | 6 | 0 | 2 | MEDIUM |
 | 233 | 1 | 2 | 5 | 1 | 14 | HIGH |

@@ -3798,6 +3798,7 @@
         "tests/unit/crm/test_collateral_sequential_fill.py",
         "tests/unit/crm/test_crm_basel31.py",
         "tests/unit/crm/test_guarantee_collateral_split.py",
+        "tests/unit/crm/test_p1_235_firb_fcm_eligibility_gate.py",
         "tests/unit/crm/test_p1_273_lease_collateral.py",
         "tests/unit/data/test_collateral_link_schema.py",
         "tests/unit/data/test_p1_190_b31_re_haircut_pin.py",

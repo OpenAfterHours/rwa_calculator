@@ -576,12 +576,21 @@ def _collateral() -> pl.DataFrame:
     Every property is valued at ``drawn / 0.60`` so all three rows share one LTV
     and the modelled risk-weight difference between them is attributable to the
     own-estimate LGD alone.
+
+    ``is_eligible_irb_collateral=True`` attests the Art. 199(2) conditions these
+    qualifying 60%-LTV residential properties meet. It was omitted while nothing on
+    the A-IRB path read it; since RD-9 the flag also gates the Foundation-basis
+    ``collateral_re_value``, which Pillar 3 CR7-A col d still binds on both approach
+    limbs (defect D2), so leaving it unset published col c/d as 0.00 on the
+    ``advanced_irb`` sheet. Number-neutral: the goldens are unchanged by attesting
+    it, because the A-IRB own-estimate LGD does not read this collateral.
     """
     return pl.DataFrame(
         [
             {
                 "collateral_reference": "IRC-COLL-RRE",
                 "collateral_type": "real_estate",
+                "is_eligible_irb_collateral": True,
                 "property_type": "residential",
                 # 300k loan / 500k value -> 60% LTV.
                 "market_value": 500_000.0,
@@ -592,6 +601,7 @@ def _collateral() -> pl.DataFrame:
             {
                 "collateral_reference": "IRC-COLL-RRE-FLOOR",
                 "collateral_type": "real_estate",
+                "is_eligible_irb_collateral": True,
                 "property_type": "residential",
                 # 250k loan / 416,666.67 value -> 60% LTV.
                 "market_value": 416_666.67,
@@ -602,6 +612,7 @@ def _collateral() -> pl.DataFrame:
             {
                 "collateral_reference": "IRC-COLL-RRE-DEF",
                 "collateral_type": "real_estate",
+                "is_eligible_irb_collateral": True,
                 "property_type": "residential",
                 # 200k loan / 333,333.33 value -> 60% LTV.
                 "market_value": 333_333.33,

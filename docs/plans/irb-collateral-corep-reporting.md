@@ -133,6 +133,7 @@ Quoted verbatim from the primary sources in `docs/assets/`:
 | **D6** | Cols 0170/0171/0172/0173 are hardcoded `_const(0.0)` (`reporting/corep/c08.py:832-835`) with no method condition. 9 ERROR + 2 WARNING published rules (`boe_b0750`, `boe_b0375/6/7`, `boe_b0752_15/16/17`, `boe_b0814_13`, `v09751_m`, `v09752_m`) pass vacuously. | See RD-3. |
 | **D8** | **Pillar 3 CR7-A collateral ratios are uncapped and exceed 100%.** `reporting/pillar3/cr7a.py:111-112` binds `Ratio(source, "reporting_ead", scale=100.0)` with no cap, but PS1/26 Annex XXII and the CRR Pillar 3 IRB instructions both require the numerator "capped at the individual exposure value" on every collateral column (b/c/d/e/f) and both limbs. The committed golden `irb_classes_crr/pillar3__cr7a__advanced_irb.ndjson` publishes **col d = 166.67%** (500,000 / 300,000) — a live breach. The B3.1 golden reads 100.0% only by the coincidence of 60% LTV × 40% haircut, not because any cap was applied. | See RD-2. |
 | **D7** | `collateral_market_value` / `collateral_adjusted_value` are filtered by `is_eligible_financial_collateral` (`engine/crm/collateral.py:986-990, 1117-1118`), whose loader default is `False`. They are therefore 0.0 on every property-collateralised row while their names promise a total. Documentation/naming defect only — the SA FCCM consumers are correct. | Record; do not change behaviour. |
+| **D9** | **The P1.235 Art. 199(2)/(5)/(6) eligibility gate stops at `effectively_secured` and never reaches the `_adj_*` carriers.** So an unattested property pledge is *zeroed for LGD* but *published in full* in C 08.01/02 col 0190 and Pillar 3 CR7-A — the reported symptom: `reporting_crm_lgd_real_estate` populated while the F-IRB LGD stays at the supervisory unsecured 0.45. Same shape on 0200 (Art. 199(6)) and 0210 (Art. 199(5) receivables). It is also a **capital** defect: the ungated `collateral_re_value` is the C in the Art. 230 C\* test, so an ineligible pledge buys an eligible one the 30% threshold. `is_eligible_irb_collateral` has loader default `False` (`data/schemas.py:1023`), so **every portfolio that does not populate the flag is in this state**. | Probe (CRR, £1m senior corporate-SME F-IRB, £1.5m RE): unattested → `lgd_post_crm` 0.45, `collateral_re_value` 1,500,000, one CRM014. Mixed probe: eligible £200k alone → 0.45; + unattested £500k → 0.435714. See RD-9. |
 
 - **RD-7 — the Art. 231 waterfall allocations are NOT split across guarantee legs,
   and D3 carries no capital effect.** An earlier draft asserted that the pre-fix
@@ -185,6 +186,39 @@ Quoted verbatim from the primary sources in `docs/assets/`:
   LGD-Modelling route cannot arise at all —
   `airb_lgd_collateral_method_applicable` is a Basel-3.1-only pack Feature — so the
   CRR limb keeps today's behaviour unchanged.
+- **RD-9 — the Foundation limb of cols 0190/0200/0210 is scoped by Art. 199, so the
+  Art. 199(2)/(5)/(6) eligibility gate must reach the `_adj_*` carriers.** RD-4 made
+  the *pool* gate a disclosure/effect split; it did **not** licence disclosing
+  collateral that is regulatorily unrecognisable. Both instruction sets scope the
+  Foundation limb's population by article, not merely by valuation basis:
+
+  - CRR Annex II col 0190 (`crr-annex-ii-reporting-instructins.pdf` p.102), verbatim:
+    *"Where own estimates of LGD are not used, values shall be determined in
+    accordance with paragraphs 2, 3 and 4 of Article 199 CRR and shall be reported in
+    this column."* Col 0200 reads *"paragraphs 6 and 8 of Article 199"*, col 0210
+    *"Articles 199(5) and 229(2)"*.
+  - PS1/26 Annex II col 0190 (`ps1-26-annex-ii-reporting-instructions.pdf` p.109),
+    verbatim: *"Where exposures are subject to the Foundation Collateral Method …
+    collateral in accordance with Article 199(2) of the Credit Risk Mitigation (CRR)
+    Part … Firms shall report the adjusted value of collateral Ci …"*
+  - The block heading is *"CREDIT RISK MITIGATION TECHNIQUES **TAKEN INTO ACCOUNT IN
+    LGD ESTIMATES**"*. Collateral the P1.235 gate zeroes is taken into account in no
+    LGD estimate.
+
+  The **AIRB limb stays ungated** — both regimes condition it on Art. 169A(1)/169B
+  (PS1/26) and Art. 181(1)(e)-(f) (CRR), the firm's institution-level election, not
+  the FCM attestation — so the `_mv_*` carriers are untouched and RD-5 stands. The
+  financial/cash carriers are likewise untouched: col 0180's eligibility is Art. 197's
+  own `is_eligible_financial_collateral` gate (D7).
+
+  **This one moves capital, conservatively, and that is the second half of the
+  defect.** `collateral_re_value` / `collateral_other_physical_value` are the C in the
+  CRR Art. 230 minimum-collateralisation (C\*) test, so on the ungated carriers an
+  *ineligible* pledge lifted an *eligible* one over the 30% threshold it failed alone.
+  Measured on a £1m senior corporate-SME F-IRB exposure under CRR: eligible £200k
+  alone → C/E 20% → C\* fails → LGD 0.45; adding an **unattested** £500k row → C
+  reads £700k → C\* passes → LGD **0.435714** off £142,857 of secured amount that the
+  unattested row contributed nothing to. Post-fix both read 0.45.
 
 ## Verified stage order (settles the D3 capital question)
 

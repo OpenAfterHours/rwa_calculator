@@ -187,6 +187,10 @@
     "CRR Art. 230",
     "CRR Art. 231"
   ],
+  "rwa_calc.engine.crm.min_collateralisation::record_below_min_collateralisation": [
+    "CRR Art. 230",
+    "PS1/26 Art. 230"
+  ],
   "rwa_calc.engine.crm.ofcp_routing::route_other_funded_protection": [
     "CRR Art. 232",
     "PS1/26, paragraph 169A"

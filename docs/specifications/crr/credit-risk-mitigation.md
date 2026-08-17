@@ -460,6 +460,25 @@ Art. 230 specifies conditions for collateral eligibility:
 - The collateral value must be sufficient to justify the LGDS applied
 - Specific conditions apply per collateral type (e.g., real estate valuation requirements per Art. 229)
 
+!!! warning "`CRM022` — below C\* is treated as fully unsecured, and now says so"
+    Where `C/E` falls below the 30% C\* threshold, the whole collateral category
+    leaves the Art. 231 waterfall and LGD reverts to LGDU — the exposure is treated
+    as **fully unsecured**, not partially secured. The `collateral_*_value` carrier
+    still reports the pledge (COREP C 08.01/02 cols 0190/0200 report the Art. 199
+    adjusted `C_i`, which the threshold does not scope), so the run legitimately
+    shows a populated collateral column beside an unsecured LGD.
+
+    That pairing used to be reachable with no diagnostic at all. `CRM022`
+    (`engine/crm/min_collateralisation.py`) now emits one rolled-up warning per
+    collateral category naming the count, the C\* percentage and up to five affected
+    exposures. It is **F-IRB only** (C\* gates the Foundation LGD\* formula), needs a
+    **positive Art. 199-eligible `C_i`** (an unattested pledge is `CRM014`'s cause,
+    not this one), and is a **no-op under Basel 3.1**, which removes C\*/C\*\*
+    entirely per PS1/26 Art. 230(1).
+
+    The C\* condition itself has a single home,
+    `below_min_collateralisation_expr`, read by both the zeroing and the warning.
+
 ## Maturity Mismatch (CRR Art. 237-239)
 
 CRR Section 5 of Chapter 4 covers maturity mismatches across **both funded

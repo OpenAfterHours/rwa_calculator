@@ -8,6 +8,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`CRM022` — collateral dropped by the Art. 230 minimum-collateralisation
+  threshold is no longer dropped in silence.** CRR Art. 230(2) Table 5 sets a
+  minimum required collateralisation level **C\*** of 30% of the exposure for
+  real-estate and other-physical collateral; below it the exposure is treated as
+  **fully unsecured** — the whole category leaves the Art. 231 sequential-fill
+  waterfall and LGD reverts to LGDU (45% senior corporate, Art. 161(1)(a)). That
+  is correct capital, and it was the one collateral outcome the engine reached in
+  complete silence: the preparer saw a populated COREP C 08.01/02 col 0190, an LGD
+  at the supervisory unsecured value, and nothing joining the two. One rolled-up
+  warning per collateral category (the `CRM018` idiom — a book of small-property
+  SME lending trips this on thousands of rows at once) now names the count, the
+  C\* percentage and up to five affected exposure references. Three scope
+  conditions, each excluding a distinct false positive: **F-IRB only** (C\* gates
+  the Foundation LGD\* formula; an A-IRB row keeps its own estimate either way),
+  **positive C<sub>i</sub>** (what makes the outcome a drop rather than an absence
+  of collateral), and **Art. 199-gated C<sub>i</sub>** (an unattested pledge is
+  already zeroed, so `CRM014` owns that cause and one drop cannot report as two).
+  **No-op under Basel 3.1** — PS1/26 Art. 230(1) removes C\*/C\*\* entirely, which
+  the `firb_min_collateralisation_threshold_applies` pack Feature records, and the
+  same Feature gates the warning. Placement is load-bearing and measured: the gate
+  reads the post-join `collateral_re_value` / `collateral_other_physical_value`
+  carriers, so collecting them at the threshold site inside
+  `_apply_collateral_unified` re-executed the whole collateral plan (**+1.1s per
+  200k exposures, ~45% of the CRM stage**, and paid even on an all-SA book where
+  the warning cannot fire); emitting from `CRMProcessor` after the `crm_exit`
+  materialisation instead makes it a projection over in-memory data at no
+  measurable cost — the same reasoning that already places the
+  `collateral_allocation` / `crm_audit` projections after that edge. The C\*
+  arithmetic now has a single home, `engine/crm/min_collateralisation.py::
+  below_min_collateralisation_expr`, read by both the zeroing and the diagnostic so
+  the warning cannot come to describe a different population than the one dropped;
+  the module is kept out of `collateral.py` following `collateral_type_check.py`,
+  which sits at the same engine module-size ceiling. `engine_eager_collect_sites`
+  is ratcheted 50 → 51: a new diagnostic recorder needs one collect, as every
+  existing recorder does, and this one is over an already-materialised frame.
+  Pinned by `tests/unit/crm/test_art_230_min_collateralisation_warning.py` (fires
+  for real estate and other physical; names the exposure, the category and the
+  threshold; agrees with the LGD it explains; silent above C\*, silent under Basel
+  3.1, silent for unattested collateral, silent for A-IRB). Ref: CRR Art. 230(2)
+  Table 5; Art. 231; Art. 223(4); Art. 161(1)(a); PS1/26 Art. 230(1).
 - **`DQ016` — an off-balance-sheet amount with no risk category is now
   reported.** `risk_type` is an optional input column, and the `DQ006`
   categorical-domain test filters `is_not_null()` before it runs, so a **null**

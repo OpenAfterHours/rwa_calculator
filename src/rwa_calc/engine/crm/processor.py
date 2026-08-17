@@ -67,6 +67,7 @@ from rwa_calc.engine.crm.haircuts import HaircutCalculator
 from rwa_calc.engine.crm.life_insurance import compute_life_insurance_columns
 from rwa_calc.engine.crm.link_allocation import RANK_METRIC_COLUMN, CollateralLinkAllocator
 from rwa_calc.engine.crm.look_through import apply_funded_only_look_through
+from rwa_calc.engine.crm.min_collateralisation import record_below_min_collateralisation
 from rwa_calc.engine.crm.ofcp_routing import route_other_funded_protection
 from rwa_calc.engine.crm.simple_method import compute_fcsm_columns, undo_sa_ead_reduction
 from rwa_calc.engine.crm.third_party_deposit import (
@@ -706,6 +707,16 @@ class CRMProcessor:
         # projections below derive from `exposures`, so they read in-memory
         # data instead of re-executing the guarantee plan.
         exposures = materialise_edge(exposures, config, "crm_exit")
+
+        # CRR Art. 230(2) Table 5 C*: diagnose the collateral the minimum-
+        # collateralisation threshold dropped. Emitted here, on the materialised frame,
+        # rather than at the threshold site inside ``_apply_collateral_unified`` — the
+        # gate reads post-join C_i carriers, so collecting them there re-executed the
+        # collateral plan (+45% of this stage, measured, and paid even on an all-SA
+        # book). Same placement rationale as the audit projections below. No-op under
+        # Basel 3.1, which removes C*/C**.
+        if collateral_applied:
+            record_below_min_collateralisation(exposures, config, errors, pack=pack)
 
         collateral_allocation = (
             self._build_collateral_allocation(exposures) if collateral_applied else None

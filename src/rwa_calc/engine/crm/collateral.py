@@ -56,6 +56,10 @@ from rwa_calc.engine.crm.expressions import (
     supervisory_lgd_values,
 )
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
+from rwa_calc.engine.crm.min_collateralisation import (
+    MIN_COLLATERALISATION_CATEGORIES,
+    below_min_collateralisation_expr,
+)
 from rwa_calc.observability.audit_cache import sink_audit
 from rwa_calc.rulebook import RulepackV0
 from rwa_calc.rulebook.compile import lookup_float_map
@@ -1358,28 +1362,24 @@ def _apply_collateral_unified(
     # formula and removes the C* / C** thresholds entirely — under Basel 3.1
     # any positive eligible non-financial collateral is recognised at LGDS.
     if resolved_pack.feature("firb_min_collateralisation_threshold_applies"):
+        # CRM022 diagnoses the drop, from ``CRMProcessor`` after the crm_exit
+        # materialisation — see ``min_collateralisation.py`` for why not here.
         _min_thresholds = lookup_float_map(resolved_pack.lookup("min_collateralisation_thresholds"))
-        _type_threshold: dict[str, tuple[float, str]] = {
-            "re": (_min_thresholds["real_estate"], "collateral_re_value"),
-            "op": (
-                _min_thresholds["other_physical"],
-                "collateral_other_physical_value",
-            ),
-        }
         nf_threshold_exprs = []
         for suffix in _wf_suffixes:
-            if suffix not in _type_threshold:
+            if suffix not in MIN_COLLATERALISATION_CATEGORIES:
                 continue  # No threshold for fin/cb/rec
-            threshold, raw_col = _type_threshold[suffix]
+            threshold_key, raw_col, _label = MIN_COLLATERALISATION_CATEGORIES[suffix]
+            threshold = _min_thresholds[threshold_key]
             if threshold <= 0:
                 continue
             col_name = f"_eff_{suffix}_a"
             # Art. 230 minimum-collateralisation threshold uses E with CCF=100%
             # per Art. 223(4) — the threshold is a fraction of the pre-CCF basis.
             nf_threshold_exprs.append(
-                pl.when(pl.col(raw_col) >= threshold * pl.col("ead_for_crm"))
-                .then(pl.col(col_name))
-                .otherwise(pl.lit(0.0))
+                pl.when(below_min_collateralisation_expr(raw_col, threshold))
+                .then(pl.lit(0.0))
+                .otherwise(pl.col(col_name))
                 .alias(col_name)
             )
         if nf_threshold_exprs:

@@ -2380,6 +2380,7 @@
         "engine/crm/collateral.py",
         "engine/crm/expressions.py",
         "engine/crm/guarantees.py",
+        "engine/crm/min_collateralisation.py",
         "engine/irb/__init__.py",
         "engine/irb/calculator.py",
         "engine/irb/formulas.py",
@@ -2420,6 +2421,7 @@
         "tests/fixtures/reporting_crm_substitution_portfolio.py",
         "tests/oracle/derivations/irb.py",
         "tests/unit/classifier/test_p1_278_top_down_pd.py",
+        "tests/unit/crm/test_art_230_min_collateralisation_warning.py",
         "tests/unit/crm/test_collateral_submodules.py",
         "tests/unit/crm/test_crm_basel31.py",
         "tests/unit/crm/test_guarantor_rating_type.py",
@@ -3461,6 +3463,7 @@
         "engine/crm/expressions.py",
         "engine/crm/haircut_tables.py",
         "engine/crm/haircuts.py",
+        "engine/crm/min_collateralisation.py",
         "engine/crm/processor.py",
         "engine/irb/formulas.py",
         "engine/kernels/allocation.py",
@@ -3745,7 +3748,8 @@
       "article": "230",
       "code_functions": [
         "rwa_calc.engine.crm.collateral::apply_collateral",
-        "rwa_calc.engine.crm.link_allocation::CollateralLinkAllocator.allocate_links"
+        "rwa_calc.engine.crm.link_allocation::CollateralLinkAllocator.allocate_links",
+        "rwa_calc.engine.crm.min_collateralisation::record_below_min_collateralisation"
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
@@ -3764,11 +3768,13 @@
         "contracts/bundles.py",
         "contracts/config.py",
         "contracts/edges.py",
+        "contracts/errors.py",
         "data/schemas.py",
         "engine/crm/collateral.py",
         "engine/crm/collateral_type_check.py",
         "engine/crm/expressions.py",
         "engine/crm/link_allocation.py",
+        "engine/crm/min_collateralisation.py",
         "engine/crm/processor.py",
         "engine/kernels/allocation.py",
         "engine/stages/hierarchy/graph.py",
@@ -3792,6 +3798,7 @@
         "tests/integration/test_collateral_links_pipeline.py",
         "tests/integration/test_nested_facility_collateral.py",
         "tests/unit/config/test_data_sources_collateral_links.py",
+        "tests/unit/crm/test_art_230_min_collateralisation_warning.py",
         "tests/unit/crm/test_collateral_fx_mismatch.py",
         "tests/unit/crm/test_collateral_link_allocation.py",
         "tests/unit/crm/test_collateral_pool_gating.py",
@@ -3811,15 +3818,18 @@
       "code_functions": [
         "rwa_calc.engine.crm.link_allocation::CollateralLinkAllocator.allocate_links"
       ],
-      "confidence": "LOW",
+      "confidence": "MEDIUM",
       "framework": "CRR",
-      "layer_count": 2,
+      "layer_count": 3,
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
-        "engine/crm/link_allocation.py"
+        "engine/crm/link_allocation.py",
+        "engine/crm/min_collateralisation.py"
       ],
-      "test_files": [],
+      "test_files": [
+        "tests/unit/crm/test_art_230_min_collateralisation_warning.py"
+      ],
       "watchfire_index_gap": false
     },
     {
@@ -8154,7 +8164,8 @@
       "code_functions": [
         "rwa_calc.engine.crm.collateral::apply_collateral",
         "rwa_calc.engine.crm.expressions::lgd_star_exposure_basis_expr",
-        "rwa_calc.engine.crm.expressions::overcollateralisation_ratio_expr"
+        "rwa_calc.engine.crm.expressions::overcollateralisation_ratio_expr",
+        "rwa_calc.engine.crm.min_collateralisation::record_below_min_collateralisation"
       ],
       "confidence": "MEDIUM",
       "framework": "PS1/26",
@@ -8165,10 +8176,12 @@
         "firb_overcollateralisation_divisor_applies@b31"
       ],
       "source_files": [
+        "contracts/errors.py",
         "engine/crm/collateral.py",
         "engine/crm/collateral_type_check.py",
         "engine/crm/expressions.py",
         "engine/crm/haircuts.py",
+        "engine/crm/min_collateralisation.py",
         "engine/crm/processor.py",
         "engine/irb/formulas.py",
         "rulebook/packs/b31.py",
@@ -8187,6 +8200,7 @@
         "tests/contracts/test_edge_contracts.py",
         "tests/fixtures/p1_190/p1_190.py",
         "tests/unit/crm/test_art169_lgd_modelling.py",
+        "tests/unit/crm/test_art_230_min_collateralisation_warning.py",
         "tests/unit/crm/test_collateral_fx_mismatch.py",
         "tests/unit/crm/test_collateral_sequential_fill.py",
         "tests/unit/crm/test_crm_basel31.py",

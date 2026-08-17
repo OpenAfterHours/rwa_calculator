@@ -316,3 +316,183 @@ class TestReceivablesMaturityCap:
         warnings = _crm014_errors(result)
         assert len(warnings) == 1
         assert "exceeds 1 year" in warnings[0].message
+
+
+# =============================================================================
+# Tests: the gate reaches the Foundation-limb C_i carriers (RD-9 / D9)
+# =============================================================================
+
+
+def _re_value(result: CRMAdjustedBundle) -> float:
+    collected = result.exposures.collect()
+    row = collected.filter(pl.col("exposure_reference") == "EXP1")
+    return row["collateral_re_value"][0]
+
+
+class TestGateReachesTheReportedCarrier:
+    """RD-9: the Art. 199 gate zeroes the reported ``C_i``, not only the LGD feed.
+
+    CRR Annex II col 0190 (p.102) scopes the Foundation limb to "values ... in
+    accordance with paragraphs 2, 3 and 4 of Article 199"; PS1/26 Annex II col 0190
+    (p.109) to "collateral in accordance with Article 199(2)". Before the fix an
+    unattested pledge was zeroed for LGD but published in full, so COREP C 08.01/02
+    col 0190 and Pillar 3 CR7-A col d disclosed collateral the engine itself had
+    already refused to recognise.
+    """
+
+    def test_unattested_re_collateral_is_not_reported(
+        self, processor: CRMProcessor, firb_crr_config: CalculationConfig
+    ) -> None:
+        """The col 0190 / CR7-A col d carrier is zero when Art. 199(2) is not attested."""
+        bundle = _create_bundle(
+            "real_estate", is_eligible_irb_collateral=False, original_maturity_years=15.0
+        )
+
+        result = _run_crm(processor, firb_crr_config, bundle)
+
+        assert _re_value(result) == pytest.approx(0.0, abs=1e-6)
+
+    def test_attested_re_collateral_is_still_reported(
+        self, processor: CRMProcessor, firb_crr_config: CalculationConfig
+    ) -> None:
+        """The gate is the only thing that zeroes it — attested collateral reports in full."""
+        bundle = _create_bundle(
+            "real_estate", is_eligible_irb_collateral=True, original_maturity_years=15.0
+        )
+
+        result = _run_crm(processor, firb_crr_config, bundle)
+
+        assert _re_value(result) == pytest.approx(10_000_000.0, abs=1e-6)
+
+    def test_report_and_lgd_never_disagree(
+        self, processor: CRMProcessor, firb_crr_config: CalculationConfig
+    ) -> None:
+        """A reported C_i with no LGD benefit is the defect's signature; pin it shut."""
+        bundle = _create_bundle(
+            "real_estate", is_eligible_irb_collateral=False, original_maturity_years=15.0
+        )
+
+        result = _run_crm(processor, firb_crr_config, bundle)
+
+        reverted_to_unsecured = _lgd_post_crm(result) == pytest.approx(CRR_LGDU_SENIOR, abs=1e-6)
+        assert reverted_to_unsecured
+        assert _re_value(result) == pytest.approx(0.0, abs=1e-6)
+
+
+class TestIneligibleCollateralCannotBuyTheArt230Threshold:
+    """The C in the CRR Art. 230 C* test must be Art. 199-eligible collateral.
+
+    ``collateral_re_value`` is the C the 30% minimum-collateralisation test reads, so
+    on the ungated carrier an ineligible pledge lifted an eligible one over a
+    threshold it failed alone — an anti-conservative LGD.
+    """
+
+    @staticmethod
+    def _two_row_bundle(*, second_attested: bool) -> ClassifiedExposuresBundle:
+        """£1m F-IRB exposure, an attested £200k RE pledge and a £500k second pledge."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EXP1"],
+                "counterparty_reference": ["CP1"],
+                "parent_facility_reference": [None],
+                "exposure_class": [ExposureClass.CORPORATE_SME.value],
+                "approach": [ApproachType.FIRB.value],
+                "drawn_amount": [1_000_000.0],
+                "ead_gross": [1_000_000.0],
+                "lgd": [None],
+                "pd": [0.02],
+                "maturity_date": [date(2029, 12, 31)],
+                "currency": ["GBP"],
+                "seniority": ["senior"],
+                "exposure_type": ["loan"],
+                "nominal_amount": [0.0],
+                "interest": [0.0],
+                "undrawn_amount": [0.0],
+                "risk_type": [None],
+                "ccf_modelled": [None],
+                "is_short_term_trade_lc": [False],
+                "product_type": ["TERM_LOAN"],
+                "value_date": [date(2024, 1, 1)],
+                "book_code": ["BOOK1"],
+                "is_sft": [False],
+            }
+        ).lazy()
+        exposures = exposures.with_columns(pl.col("parent_facility_reference").cast(pl.String))
+        exposures = with_ancestor_facilities(exposures)
+
+        values = [200_000.0, 500_000.0]
+        collateral = normalise_collateral(
+            pl.DataFrame(
+                {
+                    "collateral_reference": ["COLL1", "COLL2"],
+                    "collateral_type": ["real_estate"] * 2,
+                    "currency": ["GBP"] * 2,
+                    "market_value": values,
+                    "value_after_maturity_adj": values,
+                    "beneficiary_type": ["loan"] * 2,
+                    "beneficiary_reference": ["EXP1"] * 2,
+                    "maturity_date": [date(2035, 12, 31)] * 2,
+                    "issuer_type": [""] * 2,
+                    "issuer_cqs": [1] * 2,
+                    "is_main_index": [False] * 2,
+                    "is_eligible_financial_collateral": [False] * 2,
+                    "is_eligible_irb_collateral": [True, second_attested],
+                    "residual_maturity_years": [10.0] * 2,
+                    "original_maturity_years": [15.0] * 2,
+                    "liquidation_period_days": [10] * 2,
+                }
+            ).lazy()
+        )
+
+        return make_classified_bundle(
+            all_exposures=exposures,
+            equity_exposures=None,
+            collateral=collateral,
+            guarantees=None,
+            provisions=None,
+            counterparty_lookup=create_empty_counterparty_lookup(),
+            classification_audit=None,
+            classification_errors=[],
+        )
+
+    def test_eligible_pledge_alone_fails_the_threshold(
+        self, processor: CRMProcessor, firb_crr_config: CalculationConfig
+    ) -> None:
+        """The control: £200k on £1m is C/E = 20% < C* = 30%, so LGD is unsecured."""
+        bundle = self._two_row_bundle(second_attested=False)
+        # Strip the second pledge entirely to isolate the £200k row's own outcome.
+        stripped = bundle.collateral.filter(pl.col("collateral_reference") == "COLL1")
+        bundle = make_classified_bundle(
+            all_exposures=bundle.all_exposures,
+            equity_exposures=None,
+            collateral=stripped,
+            guarantees=None,
+            provisions=None,
+            counterparty_lookup=create_empty_counterparty_lookup(),
+            classification_audit=None,
+            classification_errors=[],
+        )
+
+        result = _run_crm(processor, firb_crr_config, bundle)
+
+        assert _lgd_post_crm(result) == pytest.approx(CRR_LGDU_SENIOR, abs=1e-6)
+
+    def test_ineligible_second_pledge_does_not_unlock_the_threshold(
+        self, processor: CRMProcessor, firb_crr_config: CalculationConfig
+    ) -> None:
+        """An unattested £500k must not lift the attested £200k over C*."""
+        bundle = self._two_row_bundle(second_attested=False)
+
+        result = _run_crm(processor, firb_crr_config, bundle)
+
+        assert _lgd_post_crm(result) == pytest.approx(CRR_LGDU_SENIOR, abs=1e-6)
+
+    def test_eligible_second_pledge_does_unlock_the_threshold(
+        self, processor: CRMProcessor, firb_crr_config: CalculationConfig
+    ) -> None:
+        """Anti-degenerate twin: attesting the £500k is what legitimately clears C*."""
+        bundle = self._two_row_bundle(second_attested=True)
+
+        result = _run_crm(processor, firb_crr_config, bundle)
+
+        assert _lgd_post_crm(result) < CRR_LGDU_SENIOR

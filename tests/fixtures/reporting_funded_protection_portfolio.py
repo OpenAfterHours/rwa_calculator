@@ -439,11 +439,19 @@ def _a199_collateral() -> pl.DataFrame:
             property_type="commercial",
             property_ltv=A199_DRAWN / A199_COLLATERAL_RE,
         ),
+        # Art. 199(5) recognises a receivable only where its ORIGINAL maturity is
+        # one year or less, and the engine's gate zeroes an over-long one on both
+        # the LGD feed and (since RD-9) the col 0210 / CR7-A col e carrier. A
+        # 15-year receivable is therefore not Art. 199(5) collateral at all, and
+        # asserting a value for it is asserting the defect: pin the limb at the
+        # article's inclusive boundary instead.
         _irb_collateral(
             "RFP-COL-A199-RECV",
             A199_LN_RECV,
             "receivables",
             A199_COLLATERAL_RECV,
+            residual_maturity_years=1.0,
+            original_maturity_years=1.0,
         ),
         _irb_collateral(
             "RFP-COL-A199-PHYS",
@@ -463,6 +471,8 @@ def _irb_collateral(
     *,
     property_type: str | None = None,
     property_ltv: float | None = None,
+    residual_maturity_years: float = 10.0,
+    original_maturity_years: float = 15.0,
 ) -> dict:
     """One Art. 199 non-financial pledge on one loan."""
     row = {
@@ -473,8 +483,8 @@ def _irb_collateral(
         "nominal_value": market_value,
         "beneficiary_type": "loan",
         "beneficiary_reference": loan_ref,
-        "residual_maturity_years": 10.0,
-        "original_maturity_years": 15.0,
+        "residual_maturity_years": residual_maturity_years,
+        "original_maturity_years": original_maturity_years,
         "is_eligible_financial_collateral": False,
         # Load-bearing: the Art. 199 recognition gate zeroes a non-financial
         # pledge that does not attest this, and does it silently.

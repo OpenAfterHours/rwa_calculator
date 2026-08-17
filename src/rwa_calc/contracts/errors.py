@@ -270,6 +270,19 @@ ERROR_LIFE_INSURANCE_CURRENCY_UNKNOWN = "CRM020"
 # NOT warn: absence is the project's null-permissive convention, not an asserted
 # defect.
 ERROR_UNRECOGNISED_COLLATERAL_TYPE = "CRM021"
+# Below the Art. 230 minimum collateralisation level (CRR Art. 230(2) Table 5): the
+# C* row sets a minimum required collateralisation of 30% of the exposure for real
+# estate and other physical collateral, and below it the exposure is treated as
+# FULLY UNSECURED — the whole category is dropped from the Art. 231 waterfall and
+# LGD reverts to LGDU. That is correct capital, but it was applied with no
+# diagnostic, leaving a preparer with a populated collateral column, an LGD at the
+# supervisory unsecured value, and nothing joining the two. One rolled-up warning
+# per collateral category names the count, the C/E ratio band and up to five
+# exposure references. CRR-only: PS1/26 Art. 230(1) removes C*/C** entirely, so
+# this is gated on the firb_min_collateralisation_threshold_applies pack Feature.
+# It does NOT restate an Art. 199 drop — an unattested pledge is already zeroed
+# before C* is evaluated, and CRM014 owns that cause.
+ERROR_BELOW_MIN_COLLATERALISATION = "CRM022"
 
 # IRB error codes
 ERROR_PD_OUT_OF_RANGE = "IRB001"

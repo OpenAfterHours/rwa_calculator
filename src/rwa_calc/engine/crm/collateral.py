@@ -56,6 +56,10 @@ from rwa_calc.engine.crm.expressions import (
     supervisory_lgd_values,
 )
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
+from rwa_calc.engine.crm.min_collateralisation import (
+    MIN_COLLATERALISATION_CATEGORIES,
+    below_min_collateralisation_expr,
+)
 from rwa_calc.observability.audit_cache import sink_audit
 from rwa_calc.rulebook import RulepackV0
 from rwa_calc.rulebook.compile import lookup_float_map
@@ -1072,11 +1076,15 @@ def _apply_collateral_unified(
         _receivables_too_long = pl.lit(False)
     if errors is not None:
         _record_ineligible_irb_collateral(annotated, _not_attested, _receivables_too_long, errors)
+    # The gate zeroes the Foundation-limb ``C_i`` carriers (``_adj_re``/``_rec``/
+    # ``_oth``) as well as this waterfall feed: both their consumers are keyed on
+    # Art. 199 eligibility — COREP cols 0190/0200/0210 and the Art. 230 C* test below,
+    # whose C must be recognisable collateral. AIRB market-value carriers stay UNGATED.
+    # RD-4/RD-5/RD-9, docs/plans/irb-collateral-corep-reporting.md.
+    _art199_zeroed = pl.when(_not_attested | _receivables_too_long).then(pl.lit(0.0))
     annotated = annotated.with_columns(
-        pl.when(_not_attested | _receivables_too_long)
-        .then(pl.lit(0.0))
-        .otherwise(pl.col("effectively_secured"))
-        .alias("effectively_secured")
+        _art199_zeroed.otherwise(pl.col("effectively_secured")).alias("effectively_secured"),
+        _art199_zeroed.otherwise(pl.col("adjusted_value")).alias("_adjusted_value_art199"),
     )
 
     # --- Single group_by: EAD + LGD aggregates in one pass, split by AIRB pool ---
@@ -1090,7 +1098,6 @@ def _apply_collateral_unified(
         pl.col("value_after_maturity_adj"),
         pl.col("value_after_haircut"),
     )
-    is_fin = pl.col("is_financial_collateral_type")
     cat = pl.col("_coll_category")
     is_flagged = pl.col("_is_airb_model_collateral")
     is_unflagged = ~is_flagged
@@ -1141,12 +1148,12 @@ def _apply_collateral_unified(
         .agg(
             _split_aggs("_cv", val_expr, is_eligible)
             + _split_aggs("_mv", pl.col("market_value"), is_eligible)
-            + _split_aggs("_rn", pl.col("adjusted_value"), ~is_fin)
             + _split_aggs("_adj_fin", pl.col("adjusted_value"), cat == "financial")
             + _split_aggs("_adj_cash", pl.col("adjusted_value"), cat == "cash")
-            + _split_aggs("_adj_re", pl.col("adjusted_value"), cat == "real_estate")
-            + _split_aggs("_adj_rec", pl.col("adjusted_value"), cat == "receivables")
-            + _split_aggs("_adj_oth", pl.col("adjusted_value"), cat == "other_physical")
+            # Non-financial: the Art. 199-gated adjusted value (see the gate above).
+            + _split_aggs("_adj_re", pl.col("_adjusted_value_art199"), cat == "real_estate")
+            + _split_aggs("_adj_rec", pl.col("_adjusted_value_art199"), cat == "receivables")
+            + _split_aggs("_adj_oth", pl.col("_adjusted_value_art199"), cat == "other_physical")
             + market_value_aggs
             + waterfall_aggs
         )
@@ -1161,7 +1168,6 @@ def _apply_collateral_unified(
         [
             "_cv",
             "_mv",
-            "_rn",
             "_adj_fin",
             "_adj_cash",
             "_adj_re",
@@ -1322,7 +1328,6 @@ def _apply_collateral_unified(
         _sum6("_adj_re").alias("collateral_re_value"),
         _sum6("_adj_rec").alias("collateral_receivables_value"),
         _sum6("_adj_oth").alias("collateral_other_physical_value"),
-        _sum6("_rn").alias("_raw_nf_a"),
     ]
     # RD-5 / PS1/26 Art. 169A(1)-(2): recognition of collateral in LGD estimates is
     # an institution-level ELECTION, so the AIRB market-value limb of Annex II cols
@@ -1357,28 +1362,24 @@ def _apply_collateral_unified(
     # formula and removes the C* / C** thresholds entirely — under Basel 3.1
     # any positive eligible non-financial collateral is recognised at LGDS.
     if resolved_pack.feature("firb_min_collateralisation_threshold_applies"):
+        # CRM022 diagnoses the drop, from ``CRMProcessor`` after the crm_exit
+        # materialisation — see ``min_collateralisation.py`` for why not here.
         _min_thresholds = lookup_float_map(resolved_pack.lookup("min_collateralisation_thresholds"))
-        _type_threshold: dict[str, tuple[float, str]] = {
-            "re": (_min_thresholds["real_estate"], "collateral_re_value"),
-            "op": (
-                _min_thresholds["other_physical"],
-                "collateral_other_physical_value",
-            ),
-        }
         nf_threshold_exprs = []
         for suffix in _wf_suffixes:
-            if suffix not in _type_threshold:
+            if suffix not in MIN_COLLATERALISATION_CATEGORIES:
                 continue  # No threshold for fin/cb/rec
-            threshold, raw_col = _type_threshold[suffix]
+            threshold_key, raw_col, _label = MIN_COLLATERALISATION_CATEGORIES[suffix]
+            threshold = _min_thresholds[threshold_key]
             if threshold <= 0:
                 continue
             col_name = f"_eff_{suffix}_a"
             # Art. 230 minimum-collateralisation threshold uses E with CCF=100%
             # per Art. 223(4) — the threshold is a fraction of the pre-CCF basis.
             nf_threshold_exprs.append(
-                pl.when(pl.col(raw_col) >= threshold * pl.col("ead_for_crm"))
-                .then(pl.col(col_name))
-                .otherwise(pl.lit(0.0))
+                pl.when(below_min_collateralisation_expr(raw_col, threshold))
+                .then(pl.lit(0.0))
+                .otherwise(pl.col(col_name))
                 .alias(col_name)
             )
         if nf_threshold_exprs:
@@ -1452,7 +1453,6 @@ def _apply_collateral_unified(
             "_cw_a",
             "_airb_match",
             "_is_airb_pool",
-            "_raw_nf_a",
         ]
         + [f"_eff_{s}_a" for s in _wf_suffixes]
     )

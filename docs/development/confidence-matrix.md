@@ -39,7 +39,7 @@ Package version `0.3.26`. Resolved packs:
 
 | Instrument | HIGH | MEDIUM | LOW | UNCITED | GAP | Total |
 |---|---|---|---|---|---|---|
-| CRR (Capital Requirements Regulation) | 34 | 57 | 11 | 37 | 14 | 153 |
+| CRR (Capital Requirements Regulation) | 34 | 58 | 10 | 37 | 14 | 153 |
 | PS1/26 (PRA Policy Statement) | 24 | 29 | 7 | 30 | 16 | 106 |
 
 ## CRR (Capital Requirements Regulation)
@@ -103,7 +103,7 @@ Package version `0.3.26`. Resolved packs:
 | 158 | 0 | 4 | 11 | 0 | 16 | MEDIUM |
 | 159 | 0 | 0 | 8 | 0 | 10 | UNCITED |
 | 160 | 2 | 1 | 10 | 1 | 17 | HIGH |
-| 161 | 4 | 2 | 15 | 3 | 40 | HIGH |
+| 161 | 4 | 2 | 16 | 3 | 41 | HIGH |
 | 162 | 5 | 16 | 15 | 2 | 33 | HIGH |
 | 163 | 2 | 4 | 4 | 0 | 8 | MEDIUM |
 | 164 | 3 | 5 | 7 | 0 | 10 | MEDIUM |
@@ -138,14 +138,14 @@ Package version `0.3.26`. Resolved packs:
 | 220 | 1 | 0 | 8 | 0 | 11 | MEDIUM |
 | 221 | 0 | 0 | 2 | 0 | 1 | UNCITED |
 | 222 | 2 | 9 | 5 | 22 | 12 | HIGH |
-| 223 | 4 | 0 | 17 | 30 | 29 | HIGH |
+| 223 | 4 | 0 | 18 | 30 | 29 | HIGH |
 | 224 | 4 | 10 | 11 | 33 | 44 | HIGH |
 | 226 | 2 | 0 | 4 | 0 | 19 | MEDIUM |
 | 227 | 0 | 2 | 3 | 0 | 1 | MEDIUM |
 | 228 | 0 | 0 | 1 | 25 | 2 | UNCITED |
 | 229 | 0 | 0 | 1 | 0 | 1 | UNCITED |
-| 230 | 2 | 6 | 15 | 0 | 25 | MEDIUM |
-| 231 | 1 | 0 | 1 | 0 | 0 | LOW |
+| 230 | 3 | 6 | 17 | 0 | 27 | MEDIUM |
+| 231 | 1 | 0 | 2 | 0 | 1 | MEDIUM |
 | 232 | 5 | 2 | 6 | 0 | 2 | MEDIUM |
 | 233 | 1 | 2 | 5 | 1 | 14 | HIGH |
 | 233A | 0 | 0 | 0 | 0 | 3 | GAP |
@@ -292,7 +292,7 @@ Package version `0.3.26`. Resolved packs:
 | 226 | 0 | 0 | 1 | 0 | 2 | UNCITED |
 | 227 | 0 | 0 | 1 | 0 | 3 | UNCITED |
 | 228 | 0 | 0 | 1 | 0 | 0 | UNCITED |
-| 230 | 3 | 2 | 8 | 0 | 18 | MEDIUM |
+| 230 | 4 | 2 | 10 | 0 | 19 | MEDIUM |
 | 231 | 0 | 0 | 0 | 0 | 1 | GAP |
 | 232 | 0 | 0 | 1 | 0 | 1 | UNCITED |
 | 233 | 0 | 0 | 1 | 0 | 3 | UNCITED |

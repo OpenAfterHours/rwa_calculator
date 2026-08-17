@@ -98,34 +98,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   missing entry silently stops writing a fragment; a stale one raises `KeyError`
   mid-run), the other fails if the write path is taken from the mapping again.
 
-  **That fix was incomplete and `S2083` stayed open; a second round closes it.**
-  Declaring `TARGET_PATHS` was necessary but not sufficient: `main()` still
-  collected the stale paths into a runtime list and walked *that* at the write.
-  Every element came from the constant, but taint provenance does not survive
-  append-then-iterate, so the path reaching `write_text` was unconstrained
-  again. The tell sat inside the same function — `path.read_text(...)`, binding
-  its path directly off the constant, was never flagged, while `write_text` one
-  container removed was. `main()` now iterates `TARGET_PATHS` directly at the
-  write and tests staleness inline, so the sink's path comes from nowhere but
-  the constant; `--check` builds a list of relative *names* instead, since a
-  display string cannot be a sink. The `--check` and write branches each carry
-  their own copy of the one-line comparison deliberately — factoring it into a
-  helper would reintroduce the flow through a function parameter, which is
-  itself an entry point (`injection_ratchet.py`, commit `a5d34c0d`). Behaviour
-  is again unchanged: `--check` exit 0 when fresh and exit 1 when stale,
-  `wrote 0 of 17 target(s)` on a clean tree and `wrote 1 of 17` after a
-  deliberate edit, restored byte-identically.
+  **Correction — that change did not clear `S2083`, and neither did a second
+  attempt at it.** Both were designed from the rule's title, which points at the
+  path; the flow SonarCloud actually reports points at the content, and was
+  identical before and after each fix:
 
-  The gate is graduated with it. `"in TARGET_PATHS:" in source` passed against
-  the broken shape, because the *read* loop had always satisfied that substring
-  — the assertion confirmed the author's sentence rather than the property at
-  the sink. The new
-  `test_generator_write_path_is_bound_directly_from_the_constant` parses the
-  generator, finds every `write_text` call, and asserts the enclosing `for`
-  binds its receiver from `TARGET_PATHS` itself. The older prose gate now scans
-  `ast.unparse(...)` output rather than raw source, after it fired on the fix's
-  own comment explaining why the mapping must not be iterated. Recorded in
-  `docs/development/escape-log.md` as `test-shared-the-assumption`.
+  ```
+  source: path.read_text(...) in _splice   → the file CONTENT
+  sink:   path.write_text(desired, ...)     → "malicious value used as argument"
+  ```
+
+  `_splice` must read the target to preserve the hand-written prose outside the
+  `GENERATED` markers, and the script must write the result back, so file-derived
+  content reaching the write is the feature rather than a defect. Writing that
+  content to a compile-time-constant path is not path injection, and the finding
+  is resolved as **Accepted** in the SonarCloud platform — the only mechanism
+  available, since taint findings cannot be suppressed from
+  `sonar-project.properties` under Automatic Analysis.
+
+  `TARGET_PATHS` and its two gates are kept, re-described as what they actually
+  are: a write-set-drift guard, so a bug in the render cannot invent a target.
+  The misdirecting claim is deleted at source — the `S6549 / S2083` note in
+  `sonar-project.properties` no longer says `scripts/` findings are "always
+  structural", records this flow verbatim, and carries the `gh api` command that
+  retrieves any taint flow from the code-scanning SARIF without SonarCloud
+  access. `.claude/LESSONS.md` gains the trap in Trap/Why/Detect form, and
+  `docs/development/escape-log.md` carries the escape as `wrong-premise`.
 
 ---
 

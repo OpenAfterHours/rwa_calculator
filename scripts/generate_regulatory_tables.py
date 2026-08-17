@@ -626,17 +626,6 @@ FRAGMENTS: tuple[Fragment, ...] = (
 #: the flow rather than guard it. Commit ``a5d34c0d`` records two
 #: resolve-then-contain guards that were correct at runtime and left the finding
 #: standing anyway, one of them multiplying it.
-#:
-#: **Declaring the constant is necessary but not sufficient** — the finding
-#: survived a first fix that added this tuple and stopped iterating
-#: ``targets.items()``. That fix still collected the stale paths into a list and
-#: walked *it* at the write, and taint provenance does not survive
-#: append-then-iterate: every element came from this tuple, but the analyser
-#: cannot see that, so the element reaching ``write_text`` was unconstrained
-#: again. The tell was in the same function — ``read_text`` bound its path
-#: directly off this tuple and was never flagged, while ``write_text`` one
-#: container removed was. The constant only buys anything while it is *directly*
-#: the iterator of the loop containing the sink.
 TARGET_PATHS: tuple[Path, ...] = (
     OUTPUT_PATH,
     *sorted({fragment.path for fragment in FRAGMENTS}, key=lambda p: p.as_posix()),
@@ -684,17 +673,18 @@ def main() -> int:
     _validate_fragment_spec()
     targets = render_targets()
 
+    # Both branches need the same answer, so settle it once. The path comes from
+    # TARGET_PATHS and the content from `targets` — never both from the mapping;
+    # see TARGET_PATHS for why that separation is load-bearing.
+    stale: list[Path] = []
+    for path in TARGET_PATHS:
+        committed = path.read_text(encoding="utf-8") if path.exists() else ""
+        if committed != targets[path]:
+            stale.append(path)
+
     if args.check:
-        # Relative *names*, not paths. The listing is display text, and a Path
-        # that has been through a runtime container is precisely what must never
-        # reach a sink — see the write loop below.
-        stale = [
-            path.relative_to(REPO_ROOT).as_posix()
-            for path in TARGET_PATHS
-            if (path.read_text(encoding="utf-8") if path.exists() else "") != targets[path]
-        ]
         if stale:
-            listing = "\n".join(f"  - {name}" for name in stale)
+            listing = "\n".join(f"  - {p.relative_to(REPO_ROOT).as_posix()}" for p in stale)
             sys.stderr.write(
                 "These generated targets no longer match the resolved rulepacks:\n"
                 f"{listing}\n"
@@ -709,26 +699,9 @@ def main() -> int:
     # target that is merely read-only — the release bumps a version stamp the
     # page carries and the skill fragments do not, so the common case is a
     # single stale page among a dozen fresh fragments.
-    #
-    # `path` is bound by this loop straight off TARGET_PATHS, and the staleness
-    # test is inlined rather than shared with --check above. Both are load-
-    # bearing, and this is the *second* S2083 round on this write — see
-    # TARGET_PATHS. Collecting the stale paths first and iterating that list at
-    # the sink reopens the finding even though every element came from the
-    # constant: the analyser cannot carry provenance through append-then-
-    # iterate, so the element arrives unconstrained. Nor can the shared test be
-    # a helper taking the path as a parameter — a module-level function's
-    # parameter is itself an entry point (injection_ratchet.py, commit
-    # a5d34c0d). Duplicating one comparison is the price of the path at the sink
-    # coming from nowhere but the constant.
-    written = 0
-    for path in TARGET_PATHS:
-        desired = targets[path]
-        if (path.read_text(encoding="utf-8") if path.exists() else "") == desired:
-            continue
-        path.write_text(desired, encoding="utf-8")
-        written += 1
-    sys.stderr.write(f"wrote {written} of {len(TARGET_PATHS)} target(s)\n")
+    for path in stale:
+        path.write_text(targets[path], encoding="utf-8")
+    sys.stderr.write(f"wrote {len(stale)} of {len(TARGET_PATHS)} target(s)\n")
     return 0
 
 

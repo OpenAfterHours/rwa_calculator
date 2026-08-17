@@ -22,23 +22,23 @@ lying about the code:
   dead link is a regression, and a fixed one must be banked so it cannot
   silently regress back.
 - The generator writes only the targets it declares, and takes those paths from
-  a module constant rather than from the mapping it renders. That is the same
-  taint-source removal as ``check_distribution.py``'s missing ``type=Path``
-  argument, one indirection further out.
+  a module constant rather than from the mapping it renders. This is a
+  write-set-drift guard, **not** the fix for a taint finding — see the note on
+  the last gate below before reusing that reasoning anywhere.
 
 References:
 - IMPLEMENTATION_PLAN.md P4.56 (link burn-down), P1.309 (anchor sweep)
 - CLAUDE.md "The learning loop" — prose that fails twice earns an executable check
-- docs/development/escape-log.md — 2026-08-11 note on `pythonsecurity:S8707`,
-  and commit a5d34c0d on why guarding a taint flow does not clear it
+- docs/development/escape-log.md — 2026-08-11 note on `pythonsecurity:S8707`;
+  commit a5d34c0d on why guarding a taint flow does not clear it; and the
+  2026-08-17 entry on why the two `S2083` fixes to the generator missed the
+  reported flow entirely
 """
 
 from __future__ import annotations
 
-import ast
 import subprocess
 import sys
-from collections.abc import Iterator
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -130,103 +130,34 @@ def test_generator_declares_every_target_it_renders() -> None:
 
 
 def test_generator_write_paths_do_not_come_from_the_rendered_mapping() -> None:
-    """The taint source stays removed — the write path must not be a render key.
+    """The write set stays declared — the write path must not be a render key.
 
-    `render_targets()` splices its values out of text read off disk, and a taint
-    analyser models a mapping as one container: taking the write path out of that
-    mapping's keys made `path.write_text(...)` an arbitrary-file-write sink
-    (`pythonsecurity:S2083`, which fails the security quality gate). Commit
-    a5d34c0d records that guarding such a flow does not clear it — two correct
-    resolve-then-contain guards left the finding standing, one multiplying it —
-    so the remedy is structural and this asserts the structure, not the guard.
+    Taking the write path from `TARGET_PATHS` rather than from `render_targets()`
+    keys means the generator can only ever write files it declares at import
+    time, which is worth keeping on its own terms: a bug in the render cannot
+    invent a target.
 
-    Scans the *unparsed* tree rather than the raw file. A substring gate over raw
-    source cannot tell code from commentary, and this one duly fired on the
-    generator's own comment explaining why the mapping must not be iterated —
-    a gate that a correct fix's documentation turns red teaches authors to stop
-    writing the documentation. `ast.unparse` drops comments, so what is asserted
-    here is what the interpreter would actually run.
+    **This is not a taint fix, whatever the commit that added it says.** It was
+    introduced to clear `pythonsecurity:S2083` and did not, twice over. The
+    reported flow never mentioned the path — it runs from `_splice`'s
+    `read_text` (the file *content*) to the `write_text` *data* argument, so no
+    path restructuring could move it, and the finding is accepted in the
+    SonarCloud platform instead. Do not cite this gate as evidence that a taint
+    finding was closed; fetch the `codeFlows` and read the source. See
+    docs/development/escape-log.md (2026-08-17) and the `S6549 / S2083` note in
+    sonar-project.properties for the retrieval command.
     """
     # Arrange / Act
-    source = ast.unparse(ast.parse(GENERATOR.read_text(encoding="utf-8")))
+    source = GENERATOR.read_text(encoding="utf-8")
 
     # Assert
     assert "targets.items()" not in source, (
         "scripts/generate_regulatory_tables.py iterates the rendered mapping "
-        "again. Take the path from TARGET_PATHS and the content from the mapping "
-        "— a path that has been inside the mapping is attacker-controlled as far "
-        "as the taint engine is concerned (pythonsecurity:S2083)."
+        "again. Take the path from TARGET_PATHS and the content from the mapping, "
+        "so the write set stays fixed at import time and the render cannot invent "
+        "a target."
     )
     assert "in TARGET_PATHS:" in source, (
-        "Nothing iterates TARGET_PATHS any more. The constant is only a security "
-        "property while it is the thing the write loop walks."
+        "Nothing iterates TARGET_PATHS any more. The constant is only a write-set "
+        "guarantee while it is the thing the write loop walks."
     )
-
-
-def test_generator_write_path_is_bound_directly_from_the_constant() -> None:
-    """Every `write_text` sits in a `for ... in TARGET_PATHS:` loop, not one removed.
-
-    Graduated after `pythonsecurity:S2083` survived a first structural fix. That
-    fix declared `TARGET_PATHS` and stopped iterating `targets.items()` — and the
-    prose gate above passed, because the *read* loop walked the constant while
-    the write still walked a list of stale paths collected at runtime. Taint
-    provenance does not survive append-then-iterate: every element came from the
-    constant, but the analyser cannot see that, so the path arriving at the sink
-    was unconstrained again and the finding stayed open. The tell was that
-    `read_text`, binding its path directly off the constant, was never flagged.
-
-    A substring assertion cannot tell those two shapes apart, which is why this
-    walks the syntax tree and pins the binding at the sink itself.
-    """
-    # Arrange
-    tree = ast.parse(GENERATOR.read_text(encoding="utf-8"))
-    parents = {child: parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)}
-
-    # Act
-    sinks = [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr == "write_text"
-        and isinstance(node.func.value, ast.Name)
-    ]
-
-    # Assert
-    assert sinks, (
-        "No `<name>.write_text(...)` call found in the generator. Either it stopped "
-        "writing, or the sink moved to a shape this gate no longer inspects."
-    )
-    for sink in sinks:
-        receiver = sink.func.value.id  # type: ignore[union-attr]
-        binding_loops = [
-            node
-            for node in _ancestors(sink, parents)
-            if isinstance(node, ast.For)
-            and isinstance(node.target, ast.Name)
-            and node.target.id == receiver
-        ]
-        assert binding_loops, (
-            f"`{receiver}.write_text(...)` is not inside a `for {receiver} in ...:` "
-            "loop, so the path reaching the sink has no provenance this gate can "
-            "confirm (pythonsecurity:S2083)."
-        )
-        assert all(
-            isinstance(loop.iter, ast.Name) and loop.iter.id == "TARGET_PATHS"
-            for loop in binding_loops
-        ), (
-            f"`{receiver}` at the write sink is bound from "
-            f"{[ast.unparse(loop.iter) for loop in binding_loops]}, not directly from "
-            "TARGET_PATHS. A path that has passed through any runtime container "
-            "arrives at the sink unconstrained — provenance does not survive "
-            "append-then-iterate — and pythonsecurity:S2083 reopens. See the "
-            "TARGET_PATHS comment in the generator."
-        )
-
-
-def _ancestors(node: ast.AST, parents: dict[ast.AST, ast.AST]) -> Iterator[ast.AST]:
-    """Walk from `node` up to the module root, nearest enclosing node first."""
-    current = parents.get(node)
-    while current is not None:
-        yield current
-        current = parents.get(current)

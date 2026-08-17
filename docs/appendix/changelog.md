@@ -98,6 +98,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   missing entry silently stops writing a fragment; a stale one raises `KeyError`
   mid-run), the other fails if the write path is taken from the mapping again.
 
+  **Correction — that change did not clear `S2083`, and neither did a second
+  attempt at it.** Both were designed from the rule's title, which points at the
+  path; the flow SonarCloud actually reports points at the content, and was
+  identical before and after each fix:
+
+  ```
+  source: path.read_text(...) in _splice   → the file CONTENT
+  sink:   path.write_text(desired, ...)     → "malicious value used as argument"
+  ```
+
+  `_splice` must read the target to preserve the hand-written prose outside the
+  `GENERATED` markers, and the script must write the result back, so file-derived
+  content reaching the write is the feature rather than a defect. Writing that
+  content to a compile-time-constant path is not path injection, and the finding
+  is resolved as **Accepted** in the SonarCloud platform — the only mechanism
+  available, since taint findings cannot be suppressed from
+  `sonar-project.properties` under Automatic Analysis.
+
+  `TARGET_PATHS` and its two gates are kept, re-described as what they actually
+  are: a write-set-drift guard, so a bug in the render cannot invent a target.
+  The misdirecting claim is deleted at source — the `S6549 / S2083` note in
+  `sonar-project.properties` no longer says `scripts/` findings are "always
+  structural", records this flow verbatim, and carries the `gh api` command that
+  retrieves any taint flow from the code-scanning SARIF without SonarCloud
+  access. `.claude/LESSONS.md` gains the trap in Trap/Why/Detect form, and
+  `docs/development/escape-log.md` carries the escape as `wrong-premise`.
+
 ---
 
 ## [0.3.26] - 2026-08-14

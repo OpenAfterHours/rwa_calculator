@@ -642,6 +642,25 @@ and run the checker from the venv binary rather than `uv run`.
   `generate_all.py`** or it works locally and fails on a fresh checkout.
 - **New `@cites` need a citation-matrix snapshot regen *before* the suite** —
   `scripts/generate_citation_matrix.py`.
+- **A SonarQube taint finding is a flow, not a line — fetch it before fixing.**
+  The rule title names the sink family and says nothing about the source, and a
+  sink can be reported for a tainted **argument** rather than a tainted path,
+  which inverts the remedy. `pythonsecurity:S2083` on
+  `generate_regulatory_tables.py` cost **two** failed fixes (`2b1be086` and its
+  successor) designed from the title: both restructured the write *path*, while
+  the reported flow was `_splice`'s `read_text` content reaching `write_text`'s
+  *data* argument. Beware the plausible tell — an unflagged `read_text` beside a
+  flagged `write_text` on the same loop variable looks like proof that provenance
+  is the variable; it only means the read takes no tainted argument. **Detect:**
+  SonarCloud uploads SARIF to GitHub code scanning, so the flow needs no
+  SonarCloud credentials (which the sandbox cannot reach anyway):
+  ```
+  gh api "repos/OpenAfterHours/rwa_calculator/code-scanning/analyses?tool_name=SonarCloud&ref=refs/heads/master" --jq '.[0].id'
+  gh api "repos/OpenAfterHours/rwa_calculator/code-scanning/analyses/<id>" -H "Accept: application/sarif+json"
+  ```
+  Read `.runs[].results[].codeFlows[].threadFlows[].locations[]` (each carries a
+  `Source:`/`Sink:` message). Swap `ref=` for `pr=<n>` on a PR. Mint the token
+  with `git credential fill` — see the `gh` auth note in memory.
 - **The ruff `--fix` PostToolUse hook strips a momentarily-unused import**
   between edits (and unquotes `Literal["x"]`). Add imports after the usage
   exists.

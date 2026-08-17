@@ -22,15 +22,17 @@ lying about the code:
   dead link is a regression, and a fixed one must be banked so it cannot
   silently regress back.
 - The generator writes only the targets it declares, and takes those paths from
-  a module constant rather than from the mapping it renders. That is the same
-  taint-source removal as ``check_distribution.py``'s missing ``type=Path``
-  argument, one indirection further out.
+  a module constant rather than from the mapping it renders. This is a
+  write-set-drift guard, **not** the fix for a taint finding — see the note on
+  the last gate below before reusing that reasoning anywhere.
 
 References:
 - IMPLEMENTATION_PLAN.md P4.56 (link burn-down), P1.309 (anchor sweep)
 - CLAUDE.md "The learning loop" — prose that fails twice earns an executable check
-- docs/development/escape-log.md — 2026-08-11 note on `pythonsecurity:S8707`,
-  and commit a5d34c0d on why guarding a taint flow does not clear it
+- docs/development/escape-log.md — 2026-08-11 note on `pythonsecurity:S8707`;
+  commit a5d34c0d on why guarding a taint flow does not clear it; and the
+  2026-08-17 entry on why the two `S2083` fixes to the generator missed the
+  reported flow entirely
 """
 
 from __future__ import annotations
@@ -128,15 +130,22 @@ def test_generator_declares_every_target_it_renders() -> None:
 
 
 def test_generator_write_paths_do_not_come_from_the_rendered_mapping() -> None:
-    """The taint source stays removed — the write path must not be a render key.
+    """The write set stays declared — the write path must not be a render key.
 
-    `render_targets()` splices its values out of text read off disk, and a taint
-    analyser models a mapping as one container: taking the write path out of that
-    mapping's keys made `path.write_text(...)` an arbitrary-file-write sink
-    (`pythonsecurity:S2083`, which fails the security quality gate). Commit
-    a5d34c0d records that guarding such a flow does not clear it — two correct
-    resolve-then-contain guards left the finding standing, one multiplying it —
-    so the remedy is structural and this asserts the structure, not the guard.
+    Taking the write path from `TARGET_PATHS` rather than from `render_targets()`
+    keys means the generator can only ever write files it declares at import
+    time, which is worth keeping on its own terms: a bug in the render cannot
+    invent a target.
+
+    **This is not a taint fix, whatever the commit that added it says.** It was
+    introduced to clear `pythonsecurity:S2083` and did not, twice over. The
+    reported flow never mentioned the path — it runs from `_splice`'s
+    `read_text` (the file *content*) to the `write_text` *data* argument, so no
+    path restructuring could move it, and the finding is accepted in the
+    SonarCloud platform instead. Do not cite this gate as evidence that a taint
+    finding was closed; fetch the `codeFlows` and read the source. See
+    docs/development/escape-log.md (2026-08-17) and the `S6549 / S2083` note in
+    sonar-project.properties for the retrieval command.
     """
     # Arrange / Act
     source = GENERATOR.read_text(encoding="utf-8")
@@ -144,11 +153,11 @@ def test_generator_write_paths_do_not_come_from_the_rendered_mapping() -> None:
     # Assert
     assert "targets.items()" not in source, (
         "scripts/generate_regulatory_tables.py iterates the rendered mapping "
-        "again. Take the path from TARGET_PATHS and the content from the mapping "
-        "— a path that has been inside the mapping is attacker-controlled as far "
-        "as the taint engine is concerned (pythonsecurity:S2083)."
+        "again. Take the path from TARGET_PATHS and the content from the mapping, "
+        "so the write set stays fixed at import time and the render cannot invent "
+        "a target."
     )
     assert "in TARGET_PATHS:" in source, (
-        "Nothing iterates TARGET_PATHS any more. The constant is only a security "
-        "property while it is the thing the write loop walks."
+        "Nothing iterates TARGET_PATHS any more. The constant is only a write-set "
+        "guarantee while it is the thing the write loop walks."
     )

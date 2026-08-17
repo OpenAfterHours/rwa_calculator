@@ -1396,3 +1396,96 @@ gate that shipped.
   That is the graduation candidate this entry files; it is not performed here
   because `scripts/arch_check.py` was being edited by another agent in the same
   tree and check 20's own entry records the same reason for the same restraint.
+
+## 2026-08-17 — Two fixes for one taint finding, neither of which touched the flow the tool reported
+
+- **Defect**: `pythonsecurity:S2083` (BLOCKER) on
+  `scripts/generate_regulatory_tables.py` survived two fixes written to close
+  it. Commit `2b1be086` introduced `TARGET_PATHS` and removed `targets.items()`
+  as the write-loop iterator; its successor went further and bound the loop
+  variable directly off the constant at the sink, duplicating a comparison to do
+  so. Neither moved the finding, because the flow SonarCloud actually reports is
+  not about the path. It is two steps, identical on both versions (line numbers
+  from `master` / the PR head):
+
+  ```
+  source  line 821 / 848: path.read_text(...) in _splice   → the file CONTENT
+  sink    line 703 / 729: path.write_text(desired, ...)     → "a malicious value
+                                                              can be used as argument"
+  ```
+
+  `_splice` reads the target to preserve the hand-written prose outside the
+  `GENERATED` markers; that content becomes `targets[path]`, then `desired`,
+  then the write's data argument. The taint is the content. Writing
+  file-derived content to a compile-time-constant path is not path injection,
+  so there was never a structural fix to find — the flow is the feature.
+- **Rule**: Not a regulatory escape. No RWA number is affected; the script is
+  developer/CI codegen whose only external input is a boolean `--check` flag.
+- **Origin**: the diagnosis, not the code. `sonar-project.properties` asserted
+  that "`scripts/` findings are always structural" and cited this very file as
+  the worked example, so both fixes started from a premise the tool's own
+  evidence contradicts.
+- **Escape class**: `wrong-premise`. The premise ("the write path is taken from
+  a mapping whose values were read off disk, therefore S2083") was wrong and was
+  faithfully implemented twice, which is exactly what the class describes. Note
+  that `test-shared-the-assumption` also fits the *symptom* —
+  `test_generator_write_paths_do_not_come_from_the_rendered_mapping` passed
+  against an unfixed finding, because it encoded the same wrong sentence — but
+  it prescribes re-anchoring the test, and re-anchoring a test to a false
+  mechanism produces a better-engineered wrong gate. The first attempt at this
+  entry made that mistake: it classed the escape `test-shared-the-assumption`
+  and shipped an AST gate asserting the write path is bound from the constant,
+  a property that is real, cheap, and irrelevant to what was flagged. The class
+  has to name the wrong belief, not the instrument that agreed with it.
+- **Why every gate missed it**: only SonarCloud can see this flow, and nothing
+  in the loop ever read what it said. The finding arrives as a rule name plus
+  one line number, and both fixes were designed from that — the rule's title
+  ("I/O function calls should not be vulnerable to path injection") points at
+  the path, and the flow points at the content. The full source → sink was
+  available the whole time and never fetched: SonarCloud uploads SARIF to GitHub
+  code scanning, so `codeFlows` is two `gh api` calls away and needs no
+  SonarCloud credentials. Local gates cannot substitute — `ruff` and
+  `arch_check` have no taint model, and the freshness tests measure output bytes
+  and were green throughout, correctly, since both refactors were
+  behaviour-neutral.
+- **Gate change**: the misdirecting premise is deleted at its source. The
+  `S6549 / S2083` note in `sonar-project.properties` no longer claims
+  `scripts/` findings are always structural; it records this flow verbatim, and
+  carries the `gh api` incantation that retrieves any flow from the SARIF
+  without SonarCloud access. `.claude/LESSONS.md` gains the trap in
+  Trap/Why/Detect form, `Detect` being that command. The finding itself is
+  resolved as **Accepted** in the SonarCloud platform (issue
+  `AaAMt-IEKije7nS9AwhB`), which is the only mechanism available: taint findings
+  cannot be suppressed from the properties file under Automatic Analysis, as the
+  same note already recorded.
+
+  This is prose-tier and that is a real weakness, so the stronger form is filed
+  rather than hand-waved: `scripts/sonar_flow.py`, a helper that takes an alert
+  number or rule key and prints the source → sink chain, would make the
+  retrieval a command nobody can skip rather than a paragraph they must
+  remember. It is not built here because the fix for a wrong premise is to
+  delete the premise, and shipping a new script alongside it would put a second
+  unreviewed thing in the same change-set.
+- **Verified red**: the retrieval run against the *pre-fix* commit
+  (`6456d808`, master) returns the true flow, contradicting the premise that
+  shipped in both fixes:
+
+  ```
+  RULE: pythonsecurity:S2083 in scripts/generate_regulatory_tables.py
+    step 1: line 821  Source: a user can craft an HTTP request with malicious content
+    step 2: line 703  Sink: this invocation is not safe; a malicious value can be
+                            used as argument
+  ```
+
+  Line 821 on `master` is `for line in path.read_text(encoding="utf-8")` inside
+  `_splice` — the content read, not a path expression. Two minutes of this
+  against the original finding would have prevented both fixes; that is the
+  sense in which the gate is observed red.
+- **Lesson**: *a taint finding is a flow, not a line.* The rule name tells you
+  the sink family and nothing about the source, and a sink can be reported for a
+  tainted **argument** rather than a tainted path — which inverts the whole
+  remedy. The tell here was misread twice as evidence: `read_text` sitting
+  unflagged beside a flagged `write_text` looks like proof that provenance is
+  the variable, when it only means the read takes no tainted argument. Fetch the
+  `codeFlows` first; every fix designed from the rule title alone in this repo
+  has failed.

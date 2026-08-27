@@ -11,7 +11,8 @@
     "caution_on_arithmetic_coincidence": "Do not read an arithmetic coincidence as evidence of a mechanism. boe_b0752_22/24 were once attributed to a class-level figure being 'broadcast' onto every PD-grade row, on the evidence that the grade sum was exactly 7x the total across 7 grades. That is equally consistent with a genuine per-grade average whose inputs coincide - which is what it was. The decisive evidence was float dust (1672.9999999999995 on one row of seven): a broadcast constant would be bit-identical.",
     "caution_on_plan_doc_definitions": "A plan document naming a column as the DEFINITION of a basis is not evidence the column implements it. Worked example: docs/plans/phase7-declarative-reporting.md's F3 decision (the Pillar 3 CR4/CR5 tranche) cites 'C 07.00 col 0200 basis' as what 'post-substitution' MEANS - it assumed col 0200 already carried that basis, not that it should. That assumption was false at the time and broke v0308_m/boe_b0471/v8726_m/boe_b0556: C 07.00's own col 0200 summed EAD over the ORIGIN population (the F4 build never extended substitution-awareness to it), while CR4/CR5 (reporting/pillar3/cr4.py, cr5.py) keyed the post-substitution `reporting_class` they cite the same definition for - so two parts of the estate that cite one shared basis were inconsistent. RESOLVED: C 07.00 col 0200/0220 (and the C 08.01 / C 09.02 cousins) were rebound to the post-substitution population, col 0200 now reads Sum(ead_col) over that basis, and the four rules were removed from this register. Retained as the lesson: verify a definition is IMPLEMENTED before citing it as evidence a related gap is a deliberate decision rather than a build shortfall.",
     "pattern_boe_summation_templates": "The BoE summation rules do not distinguish ADDITIVE columns from AVERAGED ones. 'r0070 = sum(grade rows)' is applied across all ~36 columns of OF 08.01/08.02, including exposure-weighted averages, where it cannot hold unless there is exactly one grade row. Same shape as boe_b0779 on c0050 and v09782_m/v09783_m on C 08.06's risk-weight column. Recognise it before re-deriving it a fourth time.",
-    "pattern_empty_subrow_vs_negated_column": "An inequality between an 'of which' sub-row and its parent inverts when the parent is a genuinely negative Annex II Sec.1.3 '(-)' deduction column and the sub-row's own subset is empty: our empty-subset convention renders the sub-row ALL-NULL, the evaluator coalesces that null to 0.0 for the comparison, and 0 <= a negative number reads false however correct that negative figure is. Same shape as the zero-exposure ratio family (boe_b0778/v09782_m and boe_b0779's 'no emptiness guard' \u2014 see the caution on unattributed entries above before assuming the parent's negative figure is itself the bug, as it genuinely was in the boe_b0378 worked example there)."
+    "pattern_empty_subrow_vs_negated_column": "An inequality between an 'of which' sub-row and its parent inverts when the parent is a genuinely negative Annex II Sec.1.3 '(-)' deduction column and the sub-row's own subset is empty: our empty-subset convention renders the sub-row ALL-NULL, the evaluator coalesces that null to 0.0 for the comparison, and 0 <= a negative number reads false however correct that negative figure is. Same shape as the zero-exposure ratio family (boe_b0778/v09782_m and boe_b0779's 'no emptiness guard' \u2014 see the caution on unattributed entries above before assuming the parent's negative figure is itself the bug, as it genuinely was in the boe_b0378 worked example there).",
+    "pattern_non_additive_columns_in_summation_rules": "The BoE summation rules are COLUMN-AGNOSTIC: 'total row = sum(breakdown rows)' is applied across every column of the table, including columns that are not additive across those rows. This is the same family as notes.pattern_boe_summation_templates but a STRICTER form, because it cannot be satisfied by any portfolio rather than only by a single-row one. Two column kinds are affected on OF 08.01: c0300 = Count(counterparty_reference, distinct=True) and c0250 = WeightedAvg(irb_maturity_m, weight=ead). A DISTINCT COUNT counts an obligor once on the total row and once in EACH breakdown row it appears in, so the row sum exceeds the total whenever one obligor holds legs on both balance-sheet sides. Measured on reporting/irb-shapes/b31, C 08.01 corporate: c0300 total = 3 distinct obligors, on-BS row = 3, off-BS row = 1 -> row sum 4 vs total 3. c0250 total = 1673.0, on-BS = 1673.0, off-BS = 1673.0 -> row sum 3346 vs total 1673. Our figures are correct on their own definitions in both cases. This surfaced only when the irb-shapes portfolio arrived because it is the FIRST portfolio in the estate where a single obligor spans both the on- and off-balance-sheet rows, which is inherent to covering IRB off-balance-sheet exposure at all."
   },
   "summary": {
     "crr/rich": {
@@ -500,6 +501,18 @@
         "C 07.00.a[defaulted][c0060]"
       ],
       "expression": "{r0015} = empty"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0744",
+      "severity": "ERROR",
+      "reason": "known limitation of the published rule, not a defect in our output (notes.pattern_non_additive_columns_in_summation_rules): {t: OF08.01.01.01, r: 0010} = sum({t: OF08.01.01.01, r: 0020; 0030; 0040; 0050; 0060}) is applied across ALL columns of the table, two of which are not additive across the on-BS / off-BS / CCR breakdown rows. Failing cells: OF08.01.01.01[corporate][c0300] and [specialised_lending][c0300], a DISTINCT obligor count, and [corporate][c0250], an exposure-weighted average maturity. Measured on C 08.01 corporate: c0300 total row = 3 distinct obligors, on-BS row = 3, off-BS row = 1, so the row sum is 4 against a distinct total of 3 - arithmetically unsatisfiable whenever ONE obligor holds both an on- and an off-balance-sheet leg, which IRS-CP-CORP (3 legs) and IRS-CP-SL (2 legs) both do. c0250 total = 1673.0 with on-BS and off-BS each also 1673.0, summing to 3346: an average, not a total. Our per-cell figures are correct. NOTE this is ERROR-severity, so it would reject a submission - it is banked as a rule limitation on the evidence above and is a one-line revert if that reading is rejected on review."
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0346",
+      "severity": "WARNING",
+      "reason": "known limitation of the published rule, not a defect in our output: {t: OF09.02.01.01, c: 0090} >= {t: OF09.02.01.01, c: 0100} asserts that the exposure-weighted average LGD over the WHOLE population (c0090, bound to _wavg_or_null(lgd, ead, pred) in reporting/corep/c09.py:1000) is never below the same average over the DEFAULTED subset (c0100, the def_pred twin at :1001). That is not a regulatory identity - a book whose defaulted exposures carry above-average LGDs violates it legitimately, which is the common real case. Measured 0.4299 vs 0.4500 on OF09.02.01.01[TOTAL][r0150] and [GB][r0150]: the defaulted subset is the single A-IRB retail leg at the LGD_RETAIL own estimate of exactly 0.45, while the overall average is pulled below it by the F-IRB corporate legs on the Art. 161 supervisory LGD of 0.40. Both figures are correct on their own definitions and the two columns are bound the right way round."
     }
   ],
   "known_uncovered_templates": [
@@ -595,42 +608,6 @@
     },
     {
       "regime": "b31",
-      "rule_id": "boe_b0307",
-      "severity": "WARNING",
-      "reason": "unattributed - needs investigation: an OF 08.01 / 08.02 credit-risk-mitigation relation (the c0170-c0173 funded-protection block, the off-balance-sheet rows, or a blanket sign bound over the whole table); the operands split: 13 EMITTED AND EXACTLY 0.00 against 13 EMITTED BUT UNREPORTED (null, coalesced to 0.0 by this rule's treat-missing-as-zero policy), so the comparison holds at 0 = 0. Measured: OF08.01.01.01[corporate] r0030 c0090 = null, OF08.01.01.02[corporate] r0010 c0100 = exact_zero, OF08.01.01.01[institution] r0030 c0090 = null.",
-      "portfolios": [
-        "art199",
-        "crm-substitution",
-        "irb-classes",
-        "rich"
-      ],
-      "vacuous_coordinates": 4,
-      "tables": [
-        "OF08.01.01.01",
-        "OF08.01.01.02"
-      ],
-      "expression": "{t: OF08.01.01.01, r: 0030, c: 0090} = {t: OF08.01.01.02, r: 0010, c: 0100}"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0308",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: an OF 08.01 / 08.02 credit-risk-mitigation relation (the c0170-c0173 funded-protection block, the off-balance-sheet rows, or a blanket sign bound over the whole table); the operands split: 13 EMITTED AND EXACTLY 0.00 against 13 EMITTED BUT UNREPORTED (null, coalesced to 0.0 by this rule's treat-missing-as-zero policy), so the comparison holds at 0 = 0. Measured: OF08.01.01.01[corporate] r0030 c0110 = null, OF08.01.01.02[corporate] r0010 c0120 = exact_zero, OF08.01.01.01[institution] r0030 c0110 = null.",
-      "portfolios": [
-        "art199",
-        "crm-substitution",
-        "irb-classes",
-        "rich"
-      ],
-      "vacuous_coordinates": 4,
-      "tables": [
-        "OF08.01.01.01",
-        "OF08.01.01.02"
-      ],
-      "expression": "{t: OF08.01.01.01, r: 0030, c: 0110} = {t: OF08.01.01.02, r: 0010, c: 0120}"
-    },
-    {
-      "regime": "b31",
       "rule_id": "boe_b0311",
       "severity": "WARNING",
       "reason": "unattributed - needs investigation: an OF 08.06 specialised-lending (slotting) sign or footing rule; the columns ARE populated and read exactly 0.00 on the only two portfolios that emit the template; vacuity is driven by cells that are EMITTED AND EXACTLY 0.00 - 8 measured, so the bound holds against a genuinely zero figure rather than against nothing. Measured: OF08.06.01.01[project_finance] r0015 c0031 = exact_zero, OF08.06.01.01[project_finance] r0015 c0100 = exact_zero, OF08.06.01.01[project_finance] r0025 c0031 = exact_zero.",
@@ -643,40 +620,6 @@
         "OF08.06.01.01"
       ],
       "expression": "{t: OF08.06.01.01} <= 0"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0314_3",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: an OF 08.01 / 08.02 credit-risk-mitigation relation (the c0170-c0173 funded-protection block, the off-balance-sheet rows, or a blanket sign bound over the whole table); vacuity is driven by cells that are EMITTED AND EXACTLY 0.00 - 124 measured, so the bound holds against a genuinely zero figure rather than against nothing (84 further operand cell(s) are null, which under this rule's do-not-run-on-missing policy makes their coordinate NOT_EVALUATED rather than vacuous, so they are not what makes it hold). Measured: OF08.01.01.01[corporate] r0010 c0030 = exact_zero, OF08.01.01.01[corporate] r0010 c0140 = exact_zero, OF08.01.01.01[corporate] r0010 c0240 = exact_zero.",
-      "portfolios": [
-        "art199",
-        "crm-substitution",
-        "irb-classes",
-        "rich"
-      ],
-      "vacuous_coordinates": 40,
-      "tables": [
-        "OF08.01.01.01"
-      ],
-      "expression": "{t: OF08.01.01.01} >= 0"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0315_2",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: an OF 08.01 / 08.02 credit-risk-mitigation relation (the c0170-c0173 funded-protection block, the off-balance-sheet rows, or a blanket sign bound over the whole table); vacuity is driven by cells that are EMITTED AND EXACTLY 0.00 - 66 measured, so the bound holds against a genuinely zero figure rather than against nothing (142 further operand cell(s) are null, which under this rule's do-not-run-on-missing policy makes their coordinate NOT_EVALUATED rather than vacuous, so they are not what makes it hold). Measured: OF08.01.01.02[corporate] r0010 c0100 = exact_zero, OF08.01.01.02[corporate] r0010 c0120 = exact_zero, OF08.01.01.02[corporate] r0070 c0100 = exact_zero.",
-      "portfolios": [
-        "art199",
-        "crm-substitution",
-        "irb-classes",
-        "rich"
-      ],
-      "vacuous_coordinates": 22,
-      "tables": [
-        "OF08.01.01.02"
-      ],
-      "expression": "{t: OF08.01.01.02} >= 0"
     },
     {
       "regime": "b31",
@@ -862,74 +805,6 @@
         "OF08.01.01.02"
       ],
       "expression": "{t: OF08.01.01.02, r: 0200, c: 0130} <= {t: OF08.01.01.01, r: 0200, c: 0110}"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0375",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: an OF 08.01 / 08.02 credit-risk-mitigation relation (the c0170-c0173 funded-protection block, the off-balance-sheet rows, or a blanket sign bound over the whole table); the operands split: 88 EMITTED AND EXACTLY 0.00 against 354 EMITTED BUT UNREPORTED (null, coalesced to 0.0 by this rule's treat-missing-as-zero policy), so the comparison holds at 0 = 0. Measured: OF08.01.01.01[corporate] r0010 c0171 = exact_zero, OF08.01.01.01[corporate] r0010 c0170 = exact_zero, OF08.01.01.01[corporate] r0017 c0171 = null.",
-      "portfolios": [
-        "art199",
-        "crm-substitution",
-        "irb-classes",
-        "rich"
-      ],
-      "vacuous_coordinates": 68,
-      "tables": [
-        "OF08.01.01.01"
-      ],
-      "expression": "{t: OF08.01.01.01, c: 0171} <= {t: OF08.01.01.01, c: 0170}"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0376",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: an OF 08.01 / 08.02 credit-risk-mitigation relation (the c0170-c0173 funded-protection block, the off-balance-sheet rows, or a blanket sign bound over the whole table); the operands split: 88 EMITTED AND EXACTLY 0.00 against 354 EMITTED BUT UNREPORTED (null, coalesced to 0.0 by this rule's treat-missing-as-zero policy), so the comparison holds at 0 = 0. Measured: OF08.01.01.01[corporate] r0010 c0172 = exact_zero, OF08.01.01.01[corporate] r0010 c0170 = exact_zero, OF08.01.01.01[corporate] r0017 c0172 = null.",
-      "portfolios": [
-        "art199",
-        "crm-substitution",
-        "irb-classes",
-        "rich"
-      ],
-      "vacuous_coordinates": 68,
-      "tables": [
-        "OF08.01.01.01"
-      ],
-      "expression": "{t: OF08.01.01.01, c: 0172} <= {t: OF08.01.01.01, c: 0170}"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0377",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: an OF 08.01 / 08.02 credit-risk-mitigation relation (the c0170-c0173 funded-protection block, the off-balance-sheet rows, or a blanket sign bound over the whole table); the operands split: 88 EMITTED AND EXACTLY 0.00 against 354 EMITTED BUT UNREPORTED (null, coalesced to 0.0 by this rule's treat-missing-as-zero policy), so the comparison holds at 0 = 0. Measured: OF08.01.01.01[corporate] r0010 c0173 = exact_zero, OF08.01.01.01[corporate] r0010 c0170 = exact_zero, OF08.01.01.01[corporate] r0017 c0173 = null.",
-      "portfolios": [
-        "art199",
-        "crm-substitution",
-        "irb-classes",
-        "rich"
-      ],
-      "vacuous_coordinates": 68,
-      "tables": [
-        "OF08.01.01.01"
-      ],
-      "expression": "{t: OF08.01.01.01, c: 0173} <= {t: OF08.01.01.01, c: 0170}"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0382",
-      "severity": "WARNING",
-      "reason": "unattributed - needs investigation: an OF 08.01 / 08.02 credit-risk-mitigation relation (the c0170-c0173 funded-protection block, the off-balance-sheet rows, or a blanket sign bound over the whole table); vacuity is driven by cells that are EMITTED AND EXACTLY 0.00 - 31 measured, so the bound holds against a genuinely zero figure rather than against nothing (34 further operand cell(s) are null, which under this rule's do-not-run-on-missing policy makes their coordinate NOT_EVALUATED rather than vacuous, so they are not what makes it hold). Measured: OF08.01.01.01[corporate] r0010 c0240 = exact_zero, OF08.01.01.01[corporate] r0017 c0240 = null, OF08.01.01.01[corporate] r0070 c0240 = exact_zero.",
-      "portfolios": [
-        "art199",
-        "crm-substitution",
-        "irb-classes",
-        "rich"
-      ],
-      "vacuous_coordinates": 10,
-      "tables": [
-        "OF08.01.01.01"
-      ],
-      "expression": "{t: OF08.01.01.01} <= 1"
     },
     {
       "regime": "b31",
@@ -2136,58 +2011,6 @@
     },
     {
       "regime": "b31",
-      "rule_id": "boe_b0746_1",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: an OF 08.01 / 08.02 credit-risk-mitigation relation (the c0170-c0173 funded-protection block, the off-balance-sheet rows, or a blanket sign bound over the whole table); every operand is EMITTED BUT UNREPORTED (null) - 312 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF08.01.01.01[corporate] r0030 c0090 = null, OF08.01.01.01[corporate] r0030 c0020 = null, OF08.01.01.01[corporate] r0030 c0070 = null.",
-      "portfolios": [
-        "art199",
-        "crm-substitution",
-        "irb-classes",
-        "rich"
-      ],
-      "vacuous_coordinates": 24,
-      "tables": [
-        "OF08.01.01.01"
-      ],
-      "expression": "{t: OF08.01.01.01, c: 0090} = sum({t: OF08.01.01.01, c: 0020; 0070; 0080})"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0750",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: an OF 08.01 / 08.02 credit-risk-mitigation relation (the c0170-c0173 funded-protection block, the off-balance-sheet rows, or a blanket sign bound over the whole table); the operands split: 184 EMITTED AND EXACTLY 0.00 against 804 EMITTED BUT UNREPORTED (null, coalesced to 0.0 by this rule's treat-missing-as-zero policy), so the comparison holds at 0 = 0. Measured: OF08.01.01.01[corporate] r0010 c0170 = exact_zero, OF08.01.01.01[corporate] r0010 c0171 = exact_zero, OF08.01.01.01[corporate] r0010 c0172 = exact_zero.",
-      "portfolios": [
-        "art199",
-        "crm-substitution",
-        "irb-classes",
-        "rich"
-      ],
-      "vacuous_coordinates": 76,
-      "tables": [
-        "OF08.01.01.01"
-      ],
-      "expression": "{t: OF08.01.01.01, c: 0170} = sum({t: OF08.01.01.01, c: 0171; 0172; 0173})"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0752_11",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: a member of the OF 08.01 r0070 = sum(OF 08.02 obligor-grade rows) tie-out family, which restates one identity once per shared column (LESSONS C6: ~56 members across boe_b0752_1..36 and boe_b0814_01..21 - enumerate this family by prefix, never by the members someone quoted). This member's column still reads 0.00 on BOTH sides. THE worked precedent for discharging it is the 2026-08-08 B5 recurrence: giving C 08.01 r0253 a live figure activated five of these siblings to PASS, boe_b0752_27 (the r0253 tie-out itself) among them, which is why that rule id is absent from this register; the operands split: 38 EMITTED AND EXACTLY 0.00 against 2 EMITTED BUT UNREPORTED (null, coalesced to 0.0 by this rule's treat-missing-as-zero policy), so the comparison holds at 0 = 0. Measured: OF08.01.01.01[corporate] r0070 c0140 = exact_zero, OF08.02.01.01[corporate] r0.75% - 2.50% c0140 = exact_zero, OF08.01.01.01[institution] r0070 c0140 = exact_zero.",
-      "portfolios": [
-        "art199",
-        "crm-substitution",
-        "irb-classes",
-        "rich"
-      ],
-      "vacuous_coordinates": 4,
-      "tables": [
-        "OF08.01.01.01",
-        "OF08.02.01.01"
-      ],
-      "expression": "{t: OF08.01.01.01, r: 0070, c: 0140} = sum({t: OF08.02.01.01, c: 0140})"
-    },
-    {
-      "regime": "b31",
       "rule_id": "boe_b0752_12",
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: a member of the OF 08.01 r0070 = sum(OF 08.02 obligor-grade rows) tie-out family, which restates one identity once per shared column (LESSONS C6: ~56 members across boe_b0752_1..36 and boe_b0814_01..21 - enumerate this family by prefix, never by the members someone quoted). This member's column still reads 0.00 on BOTH sides. THE worked precedent for discharging it is the 2026-08-08 B5 recurrence: giving C 08.01 r0253 a live figure activated five of these siblings to PASS, boe_b0752_27 (the r0253 tie-out itself) among them, which is why that rule id is absent from this register; the operands split: 38 EMITTED AND EXACTLY 0.00 against 2 EMITTED BUT UNREPORTED (null, coalesced to 0.0 by this rule's treat-missing-as-zero policy), so the comparison holds at 0 = 0. Measured: OF08.01.01.01[corporate] r0070 c0150 = exact_zero, OF08.02.01.01[corporate] r0.75% - 2.50% c0150 = exact_zero, OF08.01.01.01[institution] r0070 c0150 = exact_zero.",
@@ -2242,24 +2065,6 @@
     },
     {
       "regime": "b31",
-      "rule_id": "boe_b0752_16",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: a member of the OF 08.01 r0070 = sum(OF 08.02 obligor-grade rows) tie-out family, which restates one identity once per shared column (LESSONS C6: ~56 members across boe_b0752_1..36 and boe_b0814_01..21 - enumerate this family by prefix, never by the members someone quoted). This member's column still reads 0.00 on BOTH sides. THE worked precedent for discharging it is the 2026-08-08 B5 recurrence: giving C 08.01 r0253 a live figure activated five of these siblings to PASS, boe_b0752_27 (the r0253 tie-out itself) among them, which is why that rule id is absent from this register; the operands split: 38 EMITTED AND EXACTLY 0.00 against 2 EMITTED BUT UNREPORTED (null, coalesced to 0.0 by this rule's treat-missing-as-zero policy), so the comparison holds at 0 = 0. Measured: OF08.01.01.01[corporate] r0070 c0172 = exact_zero, OF08.02.01.01[corporate] r0.75% - 2.50% c0172 = exact_zero, OF08.01.01.01[institution] r0070 c0172 = exact_zero.",
-      "portfolios": [
-        "art199",
-        "crm-substitution",
-        "irb-classes",
-        "rich"
-      ],
-      "vacuous_coordinates": 4,
-      "tables": [
-        "OF08.01.01.01",
-        "OF08.02.01.01"
-      ],
-      "expression": "{t: OF08.01.01.01, r: 0070, c: 0172} = sum({t: OF08.02.01.01, c: 0172})"
-    },
-    {
-      "regime": "b31",
       "rule_id": "boe_b0752_17",
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: a member of the OF 08.01 r0070 = sum(OF 08.02 obligor-grade rows) tie-out family, which restates one identity once per shared column (LESSONS C6: ~56 members across boe_b0752_1..36 and boe_b0814_01..21 - enumerate this family by prefix, never by the members someone quoted). This member's column still reads 0.00 on BOTH sides. THE worked precedent for discharging it is the 2026-08-08 B5 recurrence: giving C 08.01 r0253 a live figure activated five of these siblings to PASS, boe_b0752_27 (the r0253 tie-out itself) among them, which is why that rule id is absent from this register; the operands split: 38 EMITTED AND EXACTLY 0.00 against 2 EMITTED BUT UNREPORTED (null, coalesced to 0.0 by this rule's treat-missing-as-zero policy), so the comparison holds at 0 = 0. Measured: OF08.01.01.01[corporate] r0070 c0173 = exact_zero, OF08.02.01.01[corporate] r0.75% - 2.50% c0173 = exact_zero, OF08.01.01.01[institution] r0070 c0173 = exact_zero.",
@@ -2275,42 +2080,6 @@
         "OF08.02.01.01"
       ],
       "expression": "{t: OF08.01.01.01, r: 0070, c: 0173} = sum({t: OF08.02.01.01, c: 0173})"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0752_18",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: a member of the OF 08.01 r0070 = sum(OF 08.02 obligor-grade rows) tie-out family, which restates one identity once per shared column (LESSONS C6: ~56 members across boe_b0752_1..36 and boe_b0814_01..21 - enumerate this family by prefix, never by the members someone quoted). This member's column still reads 0.00 on BOTH sides. THE worked precedent for discharging it is the 2026-08-08 B5 recurrence: giving C 08.01 r0253 a live figure activated five of these siblings to PASS, boe_b0752_27 (the r0253 tie-out itself) among them, which is why that rule id is absent from this register; the operands split: 38 EMITTED AND EXACTLY 0.00 against 2 EMITTED BUT UNREPORTED (null, coalesced to 0.0 by this rule's treat-missing-as-zero policy), so the comparison holds at 0 = 0. Measured: OF08.01.01.01[corporate] r0070 c0180 = exact_zero, OF08.02.01.01[corporate] r0.75% - 2.50% c0180 = exact_zero, OF08.01.01.01[institution] r0070 c0180 = exact_zero.",
-      "portfolios": [
-        "art199",
-        "crm-substitution",
-        "irb-classes",
-        "rich"
-      ],
-      "vacuous_coordinates": 4,
-      "tables": [
-        "OF08.01.01.01",
-        "OF08.02.01.01"
-      ],
-      "expression": "{t: OF08.01.01.01, r: 0070, c: 0180} = sum({t: OF08.02.01.01, c: 0180})"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0752_23",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: a member of the OF 08.01 r0070 = sum(OF 08.02 obligor-grade rows) tie-out family, which restates one identity once per shared column (LESSONS C6: ~56 members across boe_b0752_1..36 and boe_b0814_01..21 - enumerate this family by prefix, never by the members someone quoted). This member's column still reads 0.00 on BOTH sides. THE worked precedent for discharging it is the 2026-08-08 B5 recurrence: giving C 08.01 r0253 a live figure activated five of these siblings to PASS, boe_b0752_27 (the r0253 tie-out itself) among them, which is why that rule id is absent from this register; the operands split: 38 EMITTED AND EXACTLY 0.00 against 2 EMITTED BUT UNREPORTED (null, coalesced to 0.0 by this rule's treat-missing-as-zero policy), so the comparison holds at 0 = 0. Measured: OF08.01.01.01[corporate] r0070 c0240 = exact_zero, OF08.02.01.01[corporate] r0.75% - 2.50% c0240 = exact_zero, OF08.01.01.01[institution] r0070 c0240 = exact_zero.",
-      "portfolios": [
-        "art199",
-        "crm-substitution",
-        "irb-classes",
-        "rich"
-      ],
-      "vacuous_coordinates": 4,
-      "tables": [
-        "OF08.01.01.01",
-        "OF08.02.01.01"
-      ],
-      "expression": "{t: OF08.01.01.01, r: 0070, c: 0240} = sum({t: OF08.02.01.01, c: 0240})"
     },
     {
       "regime": "b31",
@@ -2347,60 +2116,6 @@
         "OF08.02.01.01"
       ],
       "expression": "{t: OF08.01.01.01, r: 0070, c: 0254} = sum({t: OF08.02.01.01, c: 0254})"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0752_3",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: a member of the OF 08.01 r0070 = sum(OF 08.02 obligor-grade rows) tie-out family, which restates one identity once per shared column (LESSONS C6: ~56 members across boe_b0752_1..36 and boe_b0814_01..21 - enumerate this family by prefix, never by the members someone quoted). This member's column still reads 0.00 on BOTH sides. THE worked precedent for discharging it is the 2026-08-08 B5 recurrence: giving C 08.01 r0253 a live figure activated five of these siblings to PASS, boe_b0752_27 (the r0253 tie-out itself) among them, which is why that rule id is absent from this register; the operands split: 38 EMITTED AND EXACTLY 0.00 against 2 EMITTED BUT UNREPORTED (null, coalesced to 0.0 by this rule's treat-missing-as-zero policy), so the comparison holds at 0 = 0. Measured: OF08.01.01.01[corporate] r0070 c0030 = exact_zero, OF08.02.01.01[corporate] r0.75% - 2.50% c0030 = exact_zero, OF08.01.01.01[institution] r0070 c0030 = exact_zero.",
-      "portfolios": [
-        "art199",
-        "crm-substitution",
-        "irb-classes",
-        "rich"
-      ],
-      "vacuous_coordinates": 4,
-      "tables": [
-        "OF08.01.01.01",
-        "OF08.02.01.01"
-      ],
-      "expression": "{t: OF08.01.01.01, r: 0070, c: 0030} = sum({t: OF08.02.01.01, c: 0030})"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0752_30",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: a member of the OF 08.01 r0070 = sum(OF 08.02 obligor-grade rows) tie-out family, which restates one identity once per shared column (LESSONS C6: ~56 members across boe_b0752_1..36 and boe_b0814_01..21 - enumerate this family by prefix, never by the members someone quoted). This member's column still reads 0.00 on BOTH sides. THE worked precedent for discharging it is the 2026-08-08 B5 recurrence: giving C 08.01 r0253 a live figure activated five of these siblings to PASS, boe_b0752_27 (the r0253 tie-out itself) among them, which is why that rule id is absent from this register; the operands split: 38 EMITTED AND EXACTLY 0.00 against 2 EMITTED BUT UNREPORTED (null, coalesced to 0.0 by this rule's treat-missing-as-zero policy), so the comparison holds at 0 = 0. Measured: OF08.01.01.01[corporate] r0070 c0265 = exact_zero, OF08.02.01.01[corporate] r0.75% - 2.50% c0265 = exact_zero, OF08.01.01.01[institution] r0070 c0265 = exact_zero.",
-      "portfolios": [
-        "art199",
-        "crm-substitution",
-        "irb-classes",
-        "rich"
-      ],
-      "vacuous_coordinates": 4,
-      "tables": [
-        "OF08.01.01.01",
-        "OF08.02.01.01"
-      ],
-      "expression": "{t: OF08.01.01.01, r: 0070, c: 0265} = sum({t: OF08.02.01.01, c: 0265})"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0752_31",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: a member of the OF 08.01 r0070 = sum(OF 08.02 obligor-grade rows) tie-out family, which restates one identity once per shared column (LESSONS C6: ~56 members across boe_b0752_1..36 and boe_b0814_01..21 - enumerate this family by prefix, never by the members someone quoted). This member's column still reads 0.00 on BOTH sides. THE worked precedent for discharging it is the 2026-08-08 B5 recurrence: giving C 08.01 r0253 a live figure activated five of these siblings to PASS, boe_b0752_27 (the r0253 tie-out itself) among them, which is why that rule id is absent from this register; the operands split: 38 EMITTED AND EXACTLY 0.00 against 2 EMITTED BUT UNREPORTED (null, coalesced to 0.0 by this rule's treat-missing-as-zero policy), so the comparison holds at 0 = 0. Measured: OF08.01.01.01[corporate] r0070 c0270 = exact_zero, OF08.02.01.01[corporate] r0.75% - 2.50% c0270 = exact_zero, OF08.01.01.01[institution] r0070 c0270 = exact_zero.",
-      "portfolios": [
-        "art199",
-        "crm-substitution",
-        "irb-classes",
-        "rich"
-      ],
-      "vacuous_coordinates": 4,
-      "tables": [
-        "OF08.01.01.01",
-        "OF08.02.01.01"
-      ],
-      "expression": "{t: OF08.01.01.01, r: 0070, c: 0270} = sum({t: OF08.02.01.01, c: 0270})"
     },
     {
       "regime": "b31",
@@ -2458,42 +2173,6 @@
     },
     {
       "regime": "b31",
-      "rule_id": "boe_b0757",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: a member of the OF 08.01 r0070 = sum(OF 08.02 obligor-grade rows) tie-out family, which restates one identity once per shared column (LESSONS C6: ~56 members across boe_b0752_1..36 and boe_b0814_01..21 - enumerate this family by prefix, never by the members someone quoted). This member's column still reads 0.00 on BOTH sides. THE worked precedent for discharging it is the 2026-08-08 B5 recurrence: giving C 08.01 r0253 a live figure activated five of these siblings to PASS, boe_b0752_27 (the r0253 tie-out itself) among them, which is why that rule id is absent from this register; the operands split: 92 EMITTED AND EXACTLY 0.00 against 2 EMITTED BUT UNREPORTED (null, coalesced to 0.0 by this rule's treat-missing-as-zero policy), so the comparison holds at 0 = 0. Measured: OF08.01.01.01[corporate] r0070 c0240 = exact_zero, OF08.02.01.01[corporate] r0.75% - 2.50% c0140 = exact_zero, OF08.02.01.01[corporate] r0.75% - 2.50% c0240 = exact_zero.",
-      "portfolios": [
-        "art199",
-        "crm-substitution",
-        "irb-classes",
-        "rich"
-      ],
-      "vacuous_coordinates": 4,
-      "tables": [
-        "OF08.01.01.01",
-        "OF08.02.01.01"
-      ],
-      "expression": "{t: OF08.01.01.01, r: 0070, c: 0240} * sum({t: OF08.02.01.01, c: 0140}) = sum({t: OF08.02.01.01, c: 0240}) * sum({t: OF08.02.01.01, c: 0140})"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0814_02",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: a member of the OF 08.01 r0070 = sum(OF 08.02 obligor-grade rows) tie-out family, which restates one identity once per shared column (LESSONS C6: ~56 members across boe_b0752_1..36 and boe_b0814_01..21 - enumerate this family by prefix, never by the members someone quoted). This member's column still reads 0.00 on BOTH sides. THE worked precedent for discharging it is the 2026-08-08 B5 recurrence: giving C 08.01 r0253 a live figure activated five of these siblings to PASS, boe_b0752_27 (the r0253 tie-out itself) among them, which is why that rule id is absent from this register; the operands split: 38 EMITTED AND EXACTLY 0.00 against 2 EMITTED BUT UNREPORTED (null, coalesced to 0.0 by this rule's treat-missing-as-zero policy), so the comparison holds at 0 = 0. Measured: OF08.01.01.01[corporate] r0070 c0030 = exact_zero, OF08.02.01.01[corporate] r0.75% - 2.50% c0030 = exact_zero, OF08.01.01.01[institution] r0070 c0030 = exact_zero.",
-      "portfolios": [
-        "art199",
-        "crm-substitution",
-        "irb-classes",
-        "rich"
-      ],
-      "vacuous_coordinates": 4,
-      "tables": [
-        "OF08.01.01.01",
-        "OF08.02.01.01"
-      ],
-      "expression": "{t: OF08.01.01.01, r: 0070, c: 0030} = sum({t: OF08.02.01.01, c: 0030})"
-    },
-    {
-      "regime": "b31",
       "rule_id": "boe_b0814_05",
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: a member of the OF 08.01 r0070 = sum(OF 08.02 obligor-grade rows) tie-out family, which restates one identity once per shared column (LESSONS C6: ~56 members across boe_b0752_1..36 and boe_b0814_01..21 - enumerate this family by prefix, never by the members someone quoted). This member's column still reads 0.00 on BOTH sides. THE worked precedent for discharging it is the 2026-08-08 B5 recurrence: giving C 08.01 r0253 a live figure activated five of these siblings to PASS, boe_b0752_27 (the r0253 tie-out itself) among them, which is why that rule id is absent from this register; the operands split: 38 EMITTED AND EXACTLY 0.00 against 2 EMITTED BUT UNREPORTED (null, coalesced to 0.0 by this rule's treat-missing-as-zero policy), so the comparison holds at 0 = 0. Measured: OF08.01.01.01[corporate] r0070 c0060 = exact_zero, OF08.02.01.01[corporate] r0.75% - 2.50% c0060 = exact_zero, OF08.01.01.01[institution] r0070 c0060 = exact_zero.",
@@ -2509,24 +2188,6 @@
         "OF08.02.01.01"
       ],
       "expression": "{t: OF08.01.01.01, r: 0070, c: 0060} = sum({t: OF08.02.01.01, c: 0060})"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0814_10",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: a member of the OF 08.01 r0070 = sum(OF 08.02 obligor-grade rows) tie-out family, which restates one identity once per shared column (LESSONS C6: ~56 members across boe_b0752_1..36 and boe_b0814_01..21 - enumerate this family by prefix, never by the members someone quoted). This member's column still reads 0.00 on BOTH sides. THE worked precedent for discharging it is the 2026-08-08 B5 recurrence: giving C 08.01 r0253 a live figure activated five of these siblings to PASS, boe_b0752_27 (the r0253 tie-out itself) among them, which is why that rule id is absent from this register; the operands split: 38 EMITTED AND EXACTLY 0.00 against 2 EMITTED BUT UNREPORTED (null, coalesced to 0.0 by this rule's treat-missing-as-zero policy), so the comparison holds at 0 = 0. Measured: OF08.01.01.01[corporate] r0070 c0140 = exact_zero, OF08.02.01.01[corporate] r0.75% - 2.50% c0140 = exact_zero, OF08.01.01.01[institution] r0070 c0140 = exact_zero.",
-      "portfolios": [
-        "art199",
-        "crm-substitution",
-        "irb-classes",
-        "rich"
-      ],
-      "vacuous_coordinates": 4,
-      "tables": [
-        "OF08.01.01.01",
-        "OF08.02.01.01"
-      ],
-      "expression": "{t: OF08.01.01.01, r: 0070, c: 0140} = sum({t: OF08.02.01.01, c: 0140})"
     },
     {
       "regime": "b31",
@@ -2563,60 +2224,6 @@
         "OF08.02.01.01"
       ],
       "expression": "{t: OF08.01.01.01, r: 0070, c: 0160} = sum({t: OF08.02.01.01, c: 0160})"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0814_13",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: a member of the OF 08.01 r0070 = sum(OF 08.02 obligor-grade rows) tie-out family, which restates one identity once per shared column (LESSONS C6: ~56 members across boe_b0752_1..36 and boe_b0814_01..21 - enumerate this family by prefix, never by the members someone quoted). This member's column still reads 0.00 on BOTH sides. THE worked precedent for discharging it is the 2026-08-08 B5 recurrence: giving C 08.01 r0253 a live figure activated five of these siblings to PASS, boe_b0752_27 (the r0253 tie-out itself) among them, which is why that rule id is absent from this register; the operands split: 38 EMITTED AND EXACTLY 0.00 against 2 EMITTED BUT UNREPORTED (null, coalesced to 0.0 by this rule's treat-missing-as-zero policy), so the comparison holds at 0 = 0. Measured: OF08.01.01.01[corporate] r0070 c0170 = exact_zero, OF08.02.01.01[corporate] r0.75% - 2.50% c0170 = exact_zero, OF08.01.01.01[institution] r0070 c0170 = exact_zero.",
-      "portfolios": [
-        "art199",
-        "crm-substitution",
-        "irb-classes",
-        "rich"
-      ],
-      "vacuous_coordinates": 4,
-      "tables": [
-        "OF08.01.01.01",
-        "OF08.02.01.01"
-      ],
-      "expression": "{t: OF08.01.01.01, r: 0070, c: 0170} = sum({t: OF08.02.01.01, c: 0170})"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0814_14",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: a member of the OF 08.01 r0070 = sum(OF 08.02 obligor-grade rows) tie-out family, which restates one identity once per shared column (LESSONS C6: ~56 members across boe_b0752_1..36 and boe_b0814_01..21 - enumerate this family by prefix, never by the members someone quoted). This member's column still reads 0.00 on BOTH sides. THE worked precedent for discharging it is the 2026-08-08 B5 recurrence: giving C 08.01 r0253 a live figure activated five of these siblings to PASS, boe_b0752_27 (the r0253 tie-out itself) among them, which is why that rule id is absent from this register; the operands split: 38 EMITTED AND EXACTLY 0.00 against 2 EMITTED BUT UNREPORTED (null, coalesced to 0.0 by this rule's treat-missing-as-zero policy), so the comparison holds at 0 = 0. Measured: OF08.01.01.01[corporate] r0070 c0180 = exact_zero, OF08.02.01.01[corporate] r0.75% - 2.50% c0180 = exact_zero, OF08.01.01.01[institution] r0070 c0180 = exact_zero.",
-      "portfolios": [
-        "art199",
-        "crm-substitution",
-        "irb-classes",
-        "rich"
-      ],
-      "vacuous_coordinates": 4,
-      "tables": [
-        "OF08.01.01.01",
-        "OF08.02.01.01"
-      ],
-      "expression": "{t: OF08.01.01.01, r: 0070, c: 0180} = sum({t: OF08.02.01.01, c: 0180})"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0814_19",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: a member of the OF 08.01 r0070 = sum(OF 08.02 obligor-grade rows) tie-out family, which restates one identity once per shared column (LESSONS C6: ~56 members across boe_b0752_1..36 and boe_b0814_01..21 - enumerate this family by prefix, never by the members someone quoted). This member's column still reads 0.00 on BOTH sides. THE worked precedent for discharging it is the 2026-08-08 B5 recurrence: giving C 08.01 r0253 a live figure activated five of these siblings to PASS, boe_b0752_27 (the r0253 tie-out itself) among them, which is why that rule id is absent from this register; the operands split: 38 EMITTED AND EXACTLY 0.00 against 2 EMITTED BUT UNREPORTED (null, coalesced to 0.0 by this rule's treat-missing-as-zero policy), so the comparison holds at 0 = 0. Measured: OF08.01.01.01[corporate] r0070 c0270 = exact_zero, OF08.02.01.01[corporate] r0.75% - 2.50% c0270 = exact_zero, OF08.01.01.01[institution] r0070 c0270 = exact_zero.",
-      "portfolios": [
-        "art199",
-        "crm-substitution",
-        "irb-classes",
-        "rich"
-      ],
-      "vacuous_coordinates": 4,
-      "tables": [
-        "OF08.01.01.01",
-        "OF08.02.01.01"
-      ],
-      "expression": "{t: OF08.01.01.01, r: 0070, c: 0270} = sum({t: OF08.02.01.01, c: 0270})"
     },
     {
       "regime": "b31",
@@ -3783,23 +3390,6 @@
     },
     {
       "regime": "crr",
-      "rule_id": "v09750_m",
-      "severity": "WARNING",
-      "reason": "unattributed - needs investigation: a C 08.01 of-which inequality on the r0015/r0016/r0080 sub-rows, unpopulated against a parent that reads exactly 0.00; the operands split: 28 EMITTED AND EXACTLY 0.00 against 56 EMITTED BUT UNREPORTED (null, coalesced to 0.0 by this rule's treat-missing-as-zero policy), so the comparison holds at 0 = 0. Measured: C 08.01.b[corporate] r0010 c0100 = exact_zero, C 08.01.b[corporate] r0016 c0100 = null, C 08.01.b[corporate] r0010 c0120 = exact_zero.",
-      "portfolios": [
-        "art199",
-        "crm-substitution",
-        "irb-classes",
-        "rich"
-      ],
-      "vacuous_coordinates": 15,
-      "tables": [
-        "C 08.01.b"
-      ],
-      "expression": "{r0010} >= +{r0016}"
-    },
-    {
-      "regime": "crr",
       "rule_id": "v09770_m",
       "severity": "WARNING",
       "reason": "unattributed - needs investigation: a ratio bound (a coverage / conversion column must not exceed 1) over a column reading exactly 0.00; the operands split: 112 EMITTED AND EXACTLY 0.00 against 24 EMITTED BUT UNREPORTED (null, coalesced to 0.0 by this rule's treat-missing-as-zero policy), so the comparison holds at 0 = 0. Measured: C 08.07[__single__] r0010 c0040 = exact_zero, C 08.07[__single__] r0020 c0040 = exact_zero, C 08.07[__single__] r0030 c0040 = exact_zero.",
@@ -3960,40 +3550,6 @@
     },
     {
       "regime": "crr",
-      "rule_id": "v3715_s",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: a blanket sign bound over a whole table ({T} <= 0 / >= 0), which the publisher writes over the value-adjustment and provision columns; vacuity is driven by cells that are EMITTED AND EXACTLY 0.00 - 104 measured, so the bound holds against a genuinely zero figure rather than against nothing (120 further operand cell(s) are null, which under this rule's do-not-run-on-missing policy makes their coordinate NOT_EVALUATED rather than vacuous, so they are not what makes it hold). Measured: C 08.01.a[corporate] r0010 c0030 = exact_zero, C 08.01.a[corporate] r0010 c0140 = exact_zero, C 08.01.a[corporate] r0010 c0240 = exact_zero.",
-      "portfolios": [
-        "art199",
-        "crm-substitution",
-        "irb-classes",
-        "rich"
-      ],
-      "vacuous_coordinates": 40,
-      "tables": [
-        "C 08.01.a"
-      ],
-      "expression": "{C 08.01.a} >= 0"
-    },
-    {
-      "regime": "crr",
-      "rule_id": "v3716_s",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: a blanket sign bound over a whole table ({T} <= 0 / >= 0), which the publisher writes over the value-adjustment and provision columns; vacuity is driven by cells that are EMITTED AND EXACTLY 0.00 - 56 measured, so the bound holds against a genuinely zero figure rather than against nothing (140 further operand cell(s) are null, which under this rule's do-not-run-on-missing policy makes their coordinate NOT_EVALUATED rather than vacuous, so they are not what makes it hold). Measured: C 08.01.b[corporate] r0010 c0100 = exact_zero, C 08.01.b[corporate] r0010 c0120 = exact_zero, C 08.01.b[corporate] r0015 c0100 = null.",
-      "portfolios": [
-        "art199",
-        "crm-substitution",
-        "irb-classes",
-        "rich"
-      ],
-      "vacuous_coordinates": 20,
-      "tables": [
-        "C 08.01.b"
-      ],
-      "expression": "{C 08.01.b} >= 0"
-    },
-    {
-      "regime": "crr",
       "rule_id": "v4238_i",
       "severity": "ERROR",
       "reason": "unattributed - needs investigation: a C 02.00 <-> C 07.00.a RWEA tie-out on one exposure-class sheet, where both sides read exactly 0.00 (note LESSONS B6: an (approach, class) pair with no row is invisible to every published rule, and this run logs exactly that condition on C 02.00 r0300); vacuity is driven by cells that are EMITTED AND EXACTLY 0.00 - 2 measured, so the bound holds against a genuinely zero figure rather than against nothing. Measured: C 02.00[__single__] r0110 c0010 = exact_zero, C 07.00.a[international_organisation] r0010 c0220 = exact_zero.",
@@ -4063,57 +3619,6 @@
         "C 07.00.a"
       ],
       "expression": "{r0260, c0215} = {r0260, c0200} * 3.7"
-    },
-    {
-      "regime": "crr",
-      "rule_id": "v4822_m",
-      "severity": "WARNING",
-      "reason": "unattributed - needs investigation: a ratio bound (a coverage / conversion column must not exceed 1) over a column reading exactly 0.00; the operands split: 26 EMITTED AND EXACTLY 0.00 against 16 EMITTED BUT UNREPORTED (null, coalesced to 0.0 by this rule's treat-missing-as-zero policy), so the comparison holds at 0 = 0. Measured: C 08.01.a[corporate] r0010 c0240 = exact_zero, C 08.01.a[corporate] r0015 c0240 = null, C 08.01.a[corporate] r0070 c0240 = exact_zero.",
-      "portfolios": [
-        "art199",
-        "crm-substitution",
-        "irb-classes",
-        "rich"
-      ],
-      "vacuous_coordinates": 15,
-      "tables": [
-        "C 08.01.a"
-      ],
-      "expression": "{c0240} <= 1"
-    },
-    {
-      "regime": "crr",
-      "rule_id": "v4823_m",
-      "severity": "WARNING",
-      "reason": "unattributed - needs investigation: a ratio bound (a coverage / conversion column must not exceed 1) over a column reading exactly 0.00; every operand is EMITTED AND EXACTLY 0.00 - 21 cell(s) measured - so the comparison holds at 0 = 0 with populated cells; usually a portfolio artefact (no exposure of the kind the column measures) but equally consistent with a column nothing ever writes a non-zero figure to. Measured: C 08.02[corporate] r0.75% - 2.50% c0240 = exact_zero, C 08.02[corporate] r0.50% - 0.75% c0240 = exact_zero, C 08.02[corporate] rUnassigned c0240 = exact_zero.",
-      "portfolios": [
-        "art199",
-        "crm-substitution",
-        "irb-classes",
-        "rich"
-      ],
-      "vacuous_coordinates": 11,
-      "tables": [
-        "C 08.02"
-      ],
-      "expression": "{c0240} <= 1"
-    },
-    {
-      "regime": "crr",
-      "rule_id": "v5741_h",
-      "severity": "ERROR",
-      "reason": "unattributed - needs investigation: a C 08.01 of-which inequality on the r0015/r0016/r0080 sub-rows, unpopulated against a parent that reads exactly 0.00; the operands split: 28 EMITTED AND EXACTLY 0.00 against 56 EMITTED BUT UNREPORTED (null, coalesced to 0.0 by this rule's treat-missing-as-zero policy), so the comparison holds at 0 = 0. Measured: C 08.01.b[corporate] r0010 c0100 = exact_zero, C 08.01.b[corporate] r0015 c0100 = null, C 08.01.b[corporate] r0010 c0120 = exact_zero.",
-      "portfolios": [
-        "art199",
-        "crm-substitution",
-        "irb-classes",
-        "rich"
-      ],
-      "vacuous_coordinates": 15,
-      "tables": [
-        "C 08.01.b"
-      ],
-      "expression": "{r0010} >= +{r0015}"
     },
     {
       "regime": "crr",

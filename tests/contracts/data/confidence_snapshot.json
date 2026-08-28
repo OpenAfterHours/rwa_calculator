@@ -2060,6 +2060,7 @@
         "tests/acceptance/crr/test_scenario_crr_e_slotting.py",
         "tests/acceptance/crr/test_scenario_crr_i_defaulted.py",
         "tests/acceptance/reporting/test_cms1_ccr.py",
+        "tests/acceptance/reporting/test_irb_shapes_template_coverage.py",
         "tests/acceptance/reporting/test_of02_output_floor.py",
         "tests/acceptance/stress/test_stress_pipeline.py",
         "tests/acceptance/test_percent_scale_pd_feed.py",
@@ -2076,6 +2077,7 @@
         "tests/fixtures/p1_165/p1_165.py",
         "tests/fixtures/p1_197/p1_197.py",
         "tests/fixtures/reporting_crm_substitution_portfolio.py",
+        "tests/fixtures/reporting_irb_shapes_portfolio.py",
         "tests/fixtures/reporting_portfolio.py",
         "tests/fixtures/sme_assets_fallback/sme_assets_fallback.py",
         "tests/oracle/derivations/formulas.py",
@@ -2652,6 +2654,7 @@
       "test_files": [
         "tests/acceptance/crr/test_p1_118_art_162_3_short_term_trade_finance_m_derivation.py",
         "tests/acceptance/crr/test_p1_197_crr_slotting_obs_ead_firb_ccf.py",
+        "tests/acceptance/reporting/test_irb_shapes_template_coverage.py",
         "tests/contracts/test_ccf_tables.py",
         "tests/contracts/test_edge_contracts.py",
         "tests/fixtures/exposures/contingents.py",
@@ -2661,6 +2664,7 @@
         "tests/fixtures/p1_197/p1_197.py",
         "tests/fixtures/p2_30/p2_30.py",
         "tests/fixtures/p2_32/p2_32.py",
+        "tests/fixtures/reporting_irb_shapes_portfolio.py",
         "tests/properties/test_source_conservation.py",
         "tests/unit/reporting/corep/test_c07_gross_side_carriers.py",
         "tests/unit/reporting/corep/test_c08_01.py",
@@ -2735,6 +2739,7 @@
         "tests/benchmarks/data_generators.py",
         "tests/fixtures/p1_127/p1_127.py",
         "tests/fixtures/reporting_irb_classes_portfolio.py",
+        "tests/fixtures/reporting_irb_shapes_portfolio.py",
         "tests/unit/test_classifier.py",
         "tests/unit/test_irb_post_model_adjustments.py"
       ],
@@ -3042,7 +3047,9 @@
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_239_art_232_third_party_deposit.py",
+        "tests/acceptance/reporting/test_irb_shapes_template_coverage.py",
         "tests/fixtures/p1_239/p1_239.py",
+        "tests/fixtures/reporting_irb_shapes_portfolio.py",
         "tests/unit/crm/test_p1_239_third_party_deposit.py"
       ],
       "watchfire_index_gap": false
@@ -7333,6 +7340,7 @@
         "tests/fixtures/p1_159/p1_159.py",
         "tests/fixtures/p1_98/p1_98.py",
         "tests/fixtures/reporting_crm_substitution_portfolio.py",
+        "tests/fixtures/reporting_irb_shapes_portfolio.py",
         "tests/oracle/derivations/formulas.py",
         "tests/oracle/derivations/irb.py",
         "tests/oracle/derivations/specialised.py",
@@ -7374,9 +7382,11 @@
         "rulebook/packs/b31.py"
       ],
       "test_files": [
+        "tests/acceptance/reporting/test_irb_shapes_template_coverage.py",
         "tests/acceptance/reporting/test_reporting_irb_classes_golden.py",
         "tests/acceptance/test_p1_320_qrre_leg_multiplication_pipeline.py",
         "tests/fixtures/reporting_irb_classes_portfolio.py",
+        "tests/fixtures/reporting_irb_shapes_portfolio.py",
         "tests/oracle/derivations/formulas.py",
         "tests/oracle/derivations/irb.py",
         "tests/oracle/test_oracle.py",
@@ -7751,6 +7761,7 @@
         "rulebook/packs/crr.py"
       ],
       "test_files": [
+        "tests/acceptance/reporting/test_irb_shapes_template_coverage.py",
         "tests/unit/crm/test_art169_lgd_modelling.py",
         "tests/unit/crm/test_collateral_pool_gating.py",
         "tests/unit/rulebook/test_collateral_lgd_features.py"

@@ -83,6 +83,16 @@
         "regime": "b31"
       },
       {
+        "source": "reporting",
+        "portfolio": "irb-shapes",
+        "regime": "crr"
+      },
+      {
+        "source": "reporting",
+        "portfolio": "irb-shapes",
+        "regime": "b31"
+      },
+      {
         "source": "corpus",
         "portfolio": "sa_broad",
         "regime": "crr"
@@ -147,26 +157,26 @@
       "BASEL_3_1",
       "CRR"
     ],
-    "runs": 28,
-    "prior_period_runs": 8,
+    "runs": 30,
+    "prior_period_runs": 10,
     "config_source": "each portfolio runs under its OWN canonical config - RUNS in tests/acceptance/reporting/test_supervisory_validations.py for the reporting fixtures, tests/properties/portfolios.py::config_for for the corpus. One uniform config would strand six portfolios in the missing-model_permissions SA fallback and record their IRB columns dead.",
     "excludes": {
       "tests/fixtures/reporting_funded_protection_portfolio.py": "WITHHELD from RUNS deliberately, not an oversight. Registering it needs a config electing the Art. 222 SIMPLE Method (_fcsm_config); registered against _sa_config, which defaults to comprehensive, the fixture sits in the gate with its own feature silenced - C 07.00 col 0070 reads 0.00 under comprehensive and non-zero under SIMPLE on the identical bundle, and dropping its two runs left this census at 210 live / 129 dead unchanged, so it contributed no liveness. Registered CORRECTLY it exposes two ERROR-severity supervisory breaks (boe_b0471, v0308_m) that predate the carrier fix, so the registration is filed as a Tier 1 item with the Art. 222 defect rather than banked here. Its canonical config lives in tests/acceptance/reporting/test_funded_protection_coverage.py. Registering it should move the Simple Method (C 07.00 col 0070) and Art. 199 (C 08.01/02 cols 0200/0210, CR7-A cols e/f) columns off NO_FIXTURE."
     },
-    "seconds": 224.7
+    "seconds": 127.3
   },
   "counts": {
     "template_column_pairs": 339,
-    "live": 210,
-    "dead": 129,
+    "live": 239,
+    "dead": 100,
     "emitted_pairs": 329,
     "never_emitted_pairs": 10,
     "non_numeric_columns_excluded": 4,
-    "frames": 694,
-    "numeric_cells": 231379,
-    "non_null_cells": 41590,
-    "non_zero_cells": 11380,
-    "cell_fill_pct": 4.92
+    "frames": 754,
+    "numeric_cells": 241078,
+    "non_null_cells": 45436,
+    "non_zero_cells": 12727,
+    "cell_fill_pct": 5.28
   },
   "caveats": [
     "reporting/rich/crr: C 02.00: row 0300 (13622029.83) exceeds its class breakdown 0310+0330+0340+0370 (15245.72) by 13606784.12 \u2014 an (approach, class) pair with no row in the layout; the RWEA is counted in the approach total but absent from the of-which rows",
@@ -242,27 +252,9 @@
       "status": "always_zero"
     },
     {
-      "id": "corep/c08_01/0030",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Of which: large financial sector entities (original exposure) - the LFSE sub-split over cp_apply_fi_scalar; no portfolio carries an LFSE obligor.",
-      "status": "always_zero"
-    },
-    {
       "id": "corep/c08_01/0035",
       "reason_code": "NO_FIXTURE",
       "reason": "(-) Adjustment due to on-balance sheet netting (B31) - binds on_bs_netting_amount (CRR Art. 219), a declared input no IRB fixture sets.",
-      "status": "always_zero"
-    },
-    {
-      "id": "corep/c08_01/0060",
-      "reason_code": "NO_FIXTURE",
-      "reason": "(-) Other funded credit protection (substitution) - bound to the protection carriers; no IRB fixture substitutes other funded protection.",
-      "status": "always_zero"
-    },
-    {
-      "id": "corep/c08_01/0100",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Of which: off balance sheet (post-CRM, pre-CCF) - filled by the off-BS post-pass; no IRB obligor in the estate has an off-balance-sheet leg.",
       "status": "always_zero"
     },
     {
@@ -284,21 +276,9 @@
       "status": "always_zero"
     },
     {
-      "id": "corep/c08_01/0120",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Of which: off balance sheet (exposure value) - Sum(ead_final) over off-BS IRB legs; the estate has none.",
-      "status": "always_zero"
-    },
-    {
       "id": "corep/c08_01/0130",
       "reason_code": "ENGINE_CANNOT_PRODUCE",
       "reason": "Of which: arising from CCR - bound to the recorded constant None; CCR provenance is not attributed on the IRB templates.",
-      "status": "always_zero"
-    },
-    {
-      "id": "corep/c08_01/0140",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Of which: large financial sector entities (exposure value) - LFSE sub-split, no LFSE obligor in the estate.",
       "status": "always_zero"
     },
     {
@@ -314,21 +294,9 @@
       "status": "always_zero"
     },
     {
-      "id": "corep/c08_01/0170",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Other funded credit protection in LGD - SafeSum over the OFCP-in-LGD carriers; no IRB fixture pledges other funded protection.",
-      "status": "always_zero"
-    },
-    {
       "id": "corep/c08_01/0171",
       "reason_code": "NO_FIXTURE",
       "reason": "Cash on deposit in LGD - binds reporting_ofcp_lgd_cash_deposit; no IRB fixture pledges third-party cash on deposit.",
-      "status": "always_zero"
-    },
-    {
-      "id": "corep/c08_01/0172",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Life insurance policies in LGD - binds reporting_ofcp_lgd_life_insurance; no IRB fixture pledges a life policy.",
       "status": "always_zero"
     },
     {
@@ -341,12 +309,6 @@
       "id": "corep/c08_01/0220",
       "reason_code": "NO_FIXTURE",
       "reason": "Subject to double default treatment - binds double_default_unfunded_protection, a declared input; no fixture elects double default.",
-      "status": "always_zero"
-    },
-    {
-      "id": "corep/c08_01/0240",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Exposure-weighted LGD for large financial sector entities - LFSE sub-split, no LFSE obligor in the estate.",
       "status": "always_zero"
     },
     {
@@ -368,18 +330,6 @@
       "status": "always_zero"
     },
     {
-      "id": "corep/c08_01/0265",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Of which: defaulted RWEA (B31) - Sum over the defaulted IRB subset; no portfolio in the estate defaults an IRB obligor.",
-      "status": "always_zero"
-    },
-    {
-      "id": "corep/c08_01/0270",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Of which: large financial sector entities (RWEA) - LFSE sub-split, no LFSE obligor in the estate.",
-      "status": "always_zero"
-    },
-    {
       "id": "corep/c08_01/0281",
       "reason_code": "NO_FIXTURE",
       "reason": "Adjustment to EL due to post-model adjustments (B31) - binds post_model_adjustment_el, a declared input no fixture supplies.",
@@ -392,27 +342,9 @@
       "status": "always_zero"
     },
     {
-      "id": "corep/c08_02/0030",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Of which: large financial sector entities (original exposure) - the LFSE sub-split over cp_apply_fi_scalar; no portfolio carries an LFSE obligor.",
-      "status": "always_zero"
-    },
-    {
       "id": "corep/c08_02/0035",
       "reason_code": "NO_FIXTURE",
       "reason": "(-) Adjustment due to on-balance sheet netting (B31) - binds on_bs_netting_amount (CRR Art. 219), a declared input no IRB fixture sets.",
-      "status": "always_zero"
-    },
-    {
-      "id": "corep/c08_02/0060",
-      "reason_code": "NO_FIXTURE",
-      "reason": "(-) Other funded credit protection (substitution) - bound to the protection carriers; no IRB fixture substitutes other funded protection.",
-      "status": "always_zero"
-    },
-    {
-      "id": "corep/c08_02/0100",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Of which: off balance sheet (post-CRM, pre-CCF) - filled by the off-BS post-pass; no IRB obligor in the estate has an off-balance-sheet leg.",
       "status": "always_zero"
     },
     {
@@ -434,21 +366,9 @@
       "status": "always_zero"
     },
     {
-      "id": "corep/c08_02/0120",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Of which: off balance sheet (exposure value) - Sum(ead_final) over off-BS IRB legs; the estate has none.",
-      "status": "always_zero"
-    },
-    {
       "id": "corep/c08_02/0130",
       "reason_code": "ENGINE_CANNOT_PRODUCE",
       "reason": "Of which: arising from CCR - bound to the recorded constant None; CCR provenance is not attributed on the IRB templates.",
-      "status": "always_zero"
-    },
-    {
-      "id": "corep/c08_02/0140",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Of which: large financial sector entities (exposure value) - LFSE sub-split, no LFSE obligor in the estate.",
       "status": "always_zero"
     },
     {
@@ -464,21 +384,9 @@
       "status": "always_zero"
     },
     {
-      "id": "corep/c08_02/0170",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Other funded credit protection in LGD - SafeSum over the OFCP-in-LGD carriers; no IRB fixture pledges other funded protection.",
-      "status": "always_zero"
-    },
-    {
       "id": "corep/c08_02/0171",
       "reason_code": "NO_FIXTURE",
       "reason": "Cash on deposit in LGD - binds reporting_ofcp_lgd_cash_deposit; no IRB fixture pledges third-party cash on deposit.",
-      "status": "always_zero"
-    },
-    {
-      "id": "corep/c08_02/0172",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Life insurance policies in LGD - binds reporting_ofcp_lgd_life_insurance; no IRB fixture pledges a life policy.",
       "status": "always_zero"
     },
     {
@@ -491,12 +399,6 @@
       "id": "corep/c08_02/0220",
       "reason_code": "NO_FIXTURE",
       "reason": "Subject to double default treatment - binds double_default_unfunded_protection, a declared input; no fixture elects double default.",
-      "status": "always_zero"
-    },
-    {
-      "id": "corep/c08_02/0240",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Exposure-weighted LGD for large financial sector entities - LFSE sub-split, no LFSE obligor in the estate.",
       "status": "always_zero"
     },
     {
@@ -518,18 +420,6 @@
       "status": "always_zero"
     },
     {
-      "id": "corep/c08_02/0265",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Of which: defaulted RWEA (B31) - Sum over the defaulted IRB subset; no portfolio in the estate defaults an IRB obligor.",
-      "status": "always_zero"
-    },
-    {
-      "id": "corep/c08_02/0270",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Of which: large financial sector entities (RWEA) - LFSE sub-split, no LFSE obligor in the estate.",
-      "status": "always_zero"
-    },
-    {
       "id": "corep/c08_02/0281",
       "reason_code": "NO_FIXTURE",
       "reason": "Adjustment to EL due to post-model adjustments (B31) - binds post_model_adjustment_el, a declared input no fixture supplies.",
@@ -542,39 +432,15 @@
       "status": "always_zero"
     },
     {
-      "id": "corep/c08_03/0020",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Original exposure pre-conversion, off-balance sheet - the estate has no IRB off-balance-sheet leg.",
-      "status": "always_zero"
-    },
-    {
-      "id": "corep/c08_03/0030",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Average CCF (%) - weighted over the off-BS IRB legs the estate does not have.",
-      "status": "always_zero"
-    },
-    {
       "id": "corep/c08_03/0110",
       "reason_code": "NO_FIXTURE",
       "reason": "Value adjustments and provisions - binds the scra_provision_amount / gcra_provision_amount pair, names the sealed aggregator exit never carries (C 07.00 records the same and falls back to provision_deducted). Suspected LESSONS B1 carrier-name defect; recorded as ours until a provisioned fixture proves otherwise.",
       "status": "always_zero"
     },
     {
-      "id": "corep/c08_06/0030",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Of which: off-balance sheet items (original exposure) - no slotting obligor in the estate has an off-BS leg.",
-      "status": "always_zero"
-    },
-    {
       "id": "corep/c08_06/0031",
       "reason_code": "ENGINE_CANNOT_PRODUCE",
       "reason": "(-) Change in exposure due to FCCM (B31) - bound to the recorded constant None; no FCCM-under-slotting carrier is sealed.",
-      "status": "always_zero"
-    },
-    {
-      "id": "corep/c08_06/0050",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Of which: off-balance sheet items (exposure value) - the off-BS slotting leg the estate does not have.",
       "status": "always_zero"
     },
     {
@@ -728,12 +594,6 @@
       "status": "always_zero"
     },
     {
-      "id": "corep/c09_02/0120",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Of which: defaulted (RWEA) on the IRB geographical sheet - no portfolio in the estate defaults an IRB obligor.",
-      "status": "always_zero"
-    },
-    {
       "id": "corep/c09_02/0122",
       "reason_code": "NO_FIXTURE",
       "reason": "(-) Infrastructure supporting factor adjustment - no fixture flags an infrastructure exposure.",
@@ -750,12 +610,6 @@
       "reason_code": "NO_FIXTURE",
       "reason": "RWEAs (BA-CVA) - the Pillar 3 twin of C 34.04, presence-gated on cva_rwa and never emitted; no fixture supplies CVA counterparties under Basel 3.1.",
       "status": "never_emitted"
-    },
-    {
-      "id": "p3/cr10/b",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Off-BS exposures - binds reporting_gross_off_bs; no slotting or equity obligor in the estate has an off-balance-sheet leg.",
-      "status": "always_zero"
     },
     {
       "id": "p3/cr5/aa",
@@ -836,18 +690,6 @@
       "status": "always_zero"
     },
     {
-      "id": "p3/cr6/c",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Off-BS exposures pre-CCF - binds reporting_gross_off_bs over the IRB population; the estate has no IRB off-BS leg.",
-      "status": "always_zero"
-    },
-    {
-      "id": "p3/cr6/d",
-      "reason_code": "NO_FIXTURE",
-      "reason": "Exposure-weighted average CCF - weighted over the same absent IRB off-BS legs.",
-      "status": "always_zero"
-    },
-    {
       "id": "p3/cr6/m",
       "reason_code": "NO_FIXTURE",
       "reason": "Value adjustments and provisions - binds the scra_provision_amount / gcra_provision_amount pair, names the sealed aggregator exit never carries (C 07.00 records the same and falls back to provision_deducted). Suspected LESSONS B1 carrier-name defect; recorded as ours until a provisioned fixture proves otherwise.",
@@ -857,12 +699,6 @@
       "id": "p3/cr6a/e",
       "reason_code": "NO_FIXTURE",
       "reason": "% subject to roll-out plan - the CR6-A twin of C 08.07 col 0040; needs the optional is_under_irb_rollout input no fixture sets.",
-      "status": "always_zero"
-    },
-    {
-      "id": "p3/cr7a/b",
-      "reason_code": "NO_FIXTURE",
-      "reason": "FCP: financial collateral (%) - binds cr7a_capped_collateral_financial_value over EAD, and collateral_financial_value is zero on every run in the estate, including the A-IRB legs that pledge cash. A fixture pledging eligible financial collateral to an IRB obligor should light it; if it cannot, the binding is the defect.",
       "status": "always_zero"
     },
     {
@@ -987,25 +823,35 @@
     "corep/c07_00/0220",
     "corep/c08_01/0010",
     "corep/c08_01/0020",
+    "corep/c08_01/0030",
     "corep/c08_01/0040",
     "corep/c08_01/0050",
+    "corep/c08_01/0060",
     "corep/c08_01/0070",
     "corep/c08_01/0080",
     "corep/c08_01/0090",
+    "corep/c08_01/0100",
     "corep/c08_01/0104",
     "corep/c08_01/0110",
+    "corep/c08_01/0120",
     "corep/c08_01/0125",
+    "corep/c08_01/0140",
+    "corep/c08_01/0170",
+    "corep/c08_01/0172",
     "corep/c08_01/0180",
     "corep/c08_01/0190",
     "corep/c08_01/0200",
     "corep/c08_01/0210",
     "corep/c08_01/0230",
+    "corep/c08_01/0240",
     "corep/c08_01/0250",
     "corep/c08_01/0251",
     "corep/c08_01/0253",
     "corep/c08_01/0255",
     "corep/c08_01/0256",
     "corep/c08_01/0260",
+    "corep/c08_01/0265",
+    "corep/c08_01/0270",
     "corep/c08_01/0275",
     "corep/c08_01/0276",
     "corep/c08_01/0280",
@@ -1014,25 +860,35 @@
     "corep/c08_01/0310",
     "corep/c08_02/0010",
     "corep/c08_02/0020",
+    "corep/c08_02/0030",
     "corep/c08_02/0040",
     "corep/c08_02/0050",
+    "corep/c08_02/0060",
     "corep/c08_02/0070",
     "corep/c08_02/0080",
     "corep/c08_02/0090",
+    "corep/c08_02/0100",
     "corep/c08_02/0104",
     "corep/c08_02/0110",
+    "corep/c08_02/0120",
     "corep/c08_02/0125",
+    "corep/c08_02/0140",
+    "corep/c08_02/0170",
+    "corep/c08_02/0172",
     "corep/c08_02/0180",
     "corep/c08_02/0190",
     "corep/c08_02/0200",
     "corep/c08_02/0210",
     "corep/c08_02/0230",
+    "corep/c08_02/0240",
     "corep/c08_02/0250",
     "corep/c08_02/0251",
     "corep/c08_02/0253",
     "corep/c08_02/0255",
     "corep/c08_02/0256",
     "corep/c08_02/0260",
+    "corep/c08_02/0265",
+    "corep/c08_02/0270",
     "corep/c08_02/0275",
     "corep/c08_02/0276",
     "corep/c08_02/0280",
@@ -1040,6 +896,8 @@
     "corep/c08_02/0300",
     "corep/c08_02/0310",
     "corep/c08_03/0010",
+    "corep/c08_03/0020",
+    "corep/c08_03/0030",
     "corep/c08_03/0040",
     "corep/c08_03/0050",
     "corep/c08_03/0060",
@@ -1055,7 +913,9 @@
     "corep/c08_05/0050",
     "corep/c08_06/0010",
     "corep/c08_06/0020",
+    "corep/c08_06/0030",
     "corep/c08_06/0040",
+    "corep/c08_06/0050",
     "corep/c08_06/0070",
     "corep/c08_06/0080",
     "corep/c08_06/0090",
@@ -1080,6 +940,7 @@
     "corep/c09_02/0105",
     "corep/c09_02/0107",
     "corep/c09_02/0110",
+    "corep/c09_02/0120",
     "corep/c09_02/0121",
     "corep/c09_02/0125",
     "corep/c09_02/0130",
@@ -1109,6 +970,7 @@
     "p3/cms2/c",
     "p3/cms2/d",
     "p3/cr10/a",
+    "p3/cr10/b",
     "p3/cr10/c",
     "p3/cr10/d",
     "p3/cr10/e",
@@ -1142,6 +1004,8 @@
     "p3/cr5/s",
     "p3/cr5/x",
     "p3/cr6/b",
+    "p3/cr6/c",
+    "p3/cr6/d",
     "p3/cr6/e",
     "p3/cr6/f",
     "p3/cr6/g",
@@ -1157,6 +1021,7 @@
     "p3/cr7/a",
     "p3/cr7/b",
     "p3/cr7a/a",
+    "p3/cr7a/b",
     "p3/cr7a/c",
     "p3/cr7a/d",
     "p3/cr7a/e",

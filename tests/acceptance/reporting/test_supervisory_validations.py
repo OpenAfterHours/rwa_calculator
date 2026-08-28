@@ -248,6 +248,7 @@ from tests.fixtures.reporting_funded_protection_portfolio import (
     build_reporting_art199_bundle,
 )
 from tests.fixtures.reporting_irb_classes_portfolio import build_reporting_irb_classes_bundle
+from tests.fixtures.reporting_irb_shapes_portfolio import build_reporting_irb_shapes_bundle
 from tests.fixtures.reporting_offbs_portfolio import build_reporting_offbs_bundle
 from tests.fixtures.reporting_portfolio import build_reporting_bundle
 from tests.fixtures.reporting_re_split_portfolio import build_reporting_re_split_bundle
@@ -637,6 +638,36 @@ RUNS: tuple[GateInput, ...] = (
         "BASEL_3_1",
         "art199",
         build_reporting_art199_bundle,
+        lambda: _irb_config("BASEL_3_1"),
+        lambda: _prior_config("BASEL_3_1"),
+    ),
+    # IRB exposure SHAPES — the off-balance-sheet, large-financial-sector-entity,
+    # defaulted-RWEA and Art. 200(1)(b) protection axes. IRB-permissioned with a
+    # prior frame, like the other IRB runs.
+    #
+    # It is registered here for the reason LESSONS B5 states without
+    # qualification, and the four clusters it reaches were dead for four DIFFERENT
+    # reasons, only three of which were "no fixture":
+    #   - no IRB obligor in the estate had an off-balance-sheet leg at all;
+    #   - no obligor anywhere set ``apply_fi_scalar``;
+    #   - no slotting obligor had an off-BS leg;
+    #   - and the defaulted-RWEA cells were dead DESPITE a defaulted IRB obligor
+    #     existing, because that row's RWEA is exactly 0.00 by construction. See
+    #     the portfolio docstring — the baseline's stated reason for those three
+    #     columns is wrong and this run is what corrects it.
+    GateInput(
+        "crr",
+        "CRR",
+        "irb-shapes",
+        build_reporting_irb_shapes_bundle,
+        lambda: _irb_config("CRR"),
+        lambda: _prior_config("CRR"),
+    ),
+    GateInput(
+        "b31",
+        "BASEL_3_1",
+        "irb-shapes",
+        build_reporting_irb_shapes_bundle,
         lambda: _irb_config("BASEL_3_1"),
         lambda: _prior_config("BASEL_3_1"),
     ),

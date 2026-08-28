@@ -97,7 +97,7 @@ Package version `0.3.26`. Resolved packs:
 | 148 | 2 | 0 | 8 | 0 | 5 | MEDIUM |
 | 150 | 1 | 0 | 4 | 0 | 5 | MEDIUM |
 | 151 | 1 | 0 | 2 | 0 | 4 | MEDIUM |
-| 153 | 13 | 11 | 29 | 14 | 67 | HIGH |
+| 153 | 13 | 11 | 29 | 14 | 69 | HIGH |
 | 154 | 5 | 0 | 6 | 4 | 21 | HIGH |
 | 155 | 7 | 4 | 10 | 3 | 21 | HIGH |
 | 158 | 0 | 4 | 11 | 0 | 16 | MEDIUM |
@@ -108,11 +108,11 @@ Package version `0.3.26`. Resolved packs:
 | 163 | 2 | 4 | 4 | 0 | 8 | MEDIUM |
 | 164 | 3 | 5 | 7 | 0 | 10 | MEDIUM |
 | 165 | 1 | 3 | 2 | 0 | 2 | MEDIUM |
-| 166 | 2 | 5 | 7 | 0 | 17 | MEDIUM |
+| 166 | 2 | 5 | 7 | 0 | 19 | MEDIUM |
 | 169 | 0 | 0 | 0 | 0 | 2 | GAP |
 | 169A | 0 | 0 | 1 | 0 | 1 | UNCITED |
 | 171 | 0 | 0 | 1 | 0 | 0 | UNCITED |
-| 178 | 1 | 0 | 3 | 0 | 6 | MEDIUM |
+| 178 | 1 | 0 | 3 | 0 | 7 | MEDIUM |
 | 180 | 0 | 0 | 1 | 0 | 0 | UNCITED |
 | 181 | 0 | 1 | 5 | 0 | 3 | MEDIUM |
 | 191A | 0 | 0 | 2 | 0 | 3 | UNCITED |
@@ -123,7 +123,7 @@ Package version `0.3.26`. Resolved packs:
 | 197 | 4 | 0 | 7 | 19 | 19 | HIGH |
 | 198 | 1 | 0 | 2 | 2 | 2 | HIGH |
 | 199 | 1 | 0 | 2 | 0 | 15 | MEDIUM |
-| 200 | 0 | 0 | 4 | 0 | 3 | UNCITED |
+| 200 | 0 | 0 | 4 | 0 | 5 | UNCITED |
 | 201 | 1 | 0 | 2 | 9 | 4 | HIGH |
 | 203 | 0 | 0 | 0 | 0 | 1 | GAP |
 | 207 | 1 | 0 | 2 | 0 | 7 | MEDIUM |
@@ -255,8 +255,8 @@ Package version `0.3.26`. Resolved packs:
 | 147A | 2 | 2 | 15 | 0 | 26 | MEDIUM |
 | 147B | 0 | 0 | 2 | 0 | 1 | UNCITED |
 | 150 | 0 | 0 | 0 | 0 | 1 | GAP |
-| 153 | 1 | 9 | 13 | 10 | 26 | HIGH |
-| 154 | 0 | 2 | 1 | 6 | 7 | HIGH |
+| 153 | 1 | 9 | 13 | 10 | 27 | HIGH |
+| 154 | 0 | 2 | 1 | 6 | 9 | HIGH |
 | 155 | 0 | 0 | 0 | 0 | 3 | GAP |
 | 158 | 0 | 3 | 0 | 0 | 3 | MEDIUM |
 | 159 | 0 | 0 | 0 | 0 | 1 | GAP |
@@ -269,7 +269,7 @@ Package version `0.3.26`. Resolved packs:
 | 166C | 0 | 1 | 0 | 0 | 3 | MEDIUM |
 | 166D | 0 | 3 | 2 | 0 | 2 | MEDIUM |
 | 166E | 0 | 0 | 4 | 0 | 2 | UNCITED |
-| 169A | 1 | 1 | 5 | 0 | 3 | MEDIUM |
+| 169A | 1 | 1 | 5 | 0 | 4 | MEDIUM |
 | 169B | 0 | 0 | 0 | 0 | 1 | GAP |
 | 180 | 0 | 0 | 0 | 0 | 2 | GAP |
 | 181 | 0 | 0 | 4 | 0 | 2 | UNCITED |
@@ -333,6 +333,7 @@ These articles are named in `src/rwa_calc/` production source but carry no `@cit
 | PS1/26 236 | 1 | 0 | 7 | — | — |
 | CRR 6 | 8 | 0 | 6 | — | — |
 | CRR 280b | 1 | 0 | 6 | — | — |
+| CRR 200 | 4 | 0 | 5 | — | — |
 | CRR 4 | 10 | 0 | 4 | — | PS1/26 para. 4 |
 | PS1/26 239 | 1 | 0 | 4 | — | — |
 | CRR 34 | 3 | 0 | 3 | — | — |
@@ -340,7 +341,6 @@ These articles are named in `src/rwa_calc/` production source but carry no `@cit
 | CRR 132 | 1 | 0 | 3 | — | PS1/26 para. 132 |
 | CRR 191A | 2 | 0 | 3 | — | — |
 | PS1/26 191A | 4 | 0 | 3 | — | — |
-| CRR 200 | 4 | 0 | 3 | — | — |
 | PS1/26 227 | 1 | 0 | 3 | — | CRR Art. 227 |
 | PS1/26 233 | 1 | 0 | 3 | — | CRR Art. 233 |
 | CRR 273a | 1 | 0 | 3 | — | — |

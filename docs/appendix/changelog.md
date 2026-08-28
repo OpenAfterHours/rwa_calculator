@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- (Next release changes will go here)
+
+### Changed
+- (Next release changes will go here)
+
+---
+
+## [0.3.27] - 2026-08-28
+
+### Added
 - **`CRM022` — collateral dropped by the Art. 230 minimum-collateralisation
   threshold is no longer dropped in silence.** CRR Art. 230(2) Table 5 sets a
   minimum required collateralisation level **C\*** of 30% of the exposure for

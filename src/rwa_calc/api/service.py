@@ -33,12 +33,6 @@ from rwa_calc.api.validation import DataPathValidator
 
 logger = logging.getLogger(__name__)
 
-#: Non-blocking reconciliation warning: the legacy extract could not be projected
-#: into the sealed reporting-ledger vocabulary, so the firm's side of a return
-#: cannot be generated from it. Extends the ``REC00n`` series that
-#: ``contracts.errors`` owns (REC001-REC007) and is declared here because the
-#: projection is retained by this API seam, not by the reconciliation engine.
-ERROR_RECON_LEDGER_UNAVAILABLE = "REC008"
 
 # =============================================================================
 # CreditRiskCalc
@@ -313,7 +307,10 @@ class CreditRiskCalc:
             project_legacy_ledger,
         )
         from rwa_calc.api.errors import convert_to_api_error
-        from rwa_calc.contracts.errors import reconciliation_warning
+        from rwa_calc.contracts.errors import (
+            ERROR_RECON_LEDGER_UNAVAILABLE,
+            reconciliation_warning,
+        )
 
         try:
             source, coverage = project_legacy_ledger(legacy, mapping, framework=self.framework)

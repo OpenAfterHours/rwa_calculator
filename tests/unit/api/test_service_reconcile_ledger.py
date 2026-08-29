@@ -33,8 +33,9 @@ from rwa_calc.analysis.legacy_ledger import LEDGER_TEMPLATE_IDS, LEDGER_VOCABULA
 from rwa_calc.analysis.recon_registry import ComponentMapping, LegacyColumnMapping
 from rwa_calc.api.models import CalculationResponse, ReconciliationResponse
 from rwa_calc.api.reconciliation import ReconciliationSettings
-from rwa_calc.api.service import ERROR_RECON_LEDGER_UNAVAILABLE, CreditRiskCalc
+from rwa_calc.api.service import CreditRiskCalc
 from rwa_calc.contracts.bundles import create_empty_reconciliation_bundle
+from rwa_calc.contracts.errors import ERROR_RECON_LEDGER_UNAVAILABLE
 
 if TYPE_CHECKING:
     from collections.abc import Iterable

@@ -961,23 +961,38 @@ def test_migration_puts_one_sided_legs_in_the_absent_bucket(framework: str) -> N
 
 
 @pytest.mark.parametrize("framework", FRAMEWORKS)
-def test_migration_never_places_a_leg_on_a_strict_parent_row(framework: str) -> None:
-    """A row that CONTAINS another row's legs is never a placement.
+def test_a_leg_under_a_strict_parent_resolves_to_its_leaf_row(framework: str) -> None:
+    """Excluding strict parents is what lets a leg RESOLVE to a row at all.
 
-    Re-pointed from a NULL-limb claim that measured inert. This test used to
-    assert that a NULL ``is_parent_row`` is also excluded, and cited the
-    ``fill_null(value=True)`` direction as the guard. Flipping ONLY that fill to
-    ``False`` — with the single-leaf rule left alone — changes no membership
-    group and reddens no test: ``_parent_flags`` emits ``None`` only for a row
-    whose leg set another row holds exactly, so a NULL-flagged leg has either
-    zero candidate leaves or at least two, and routes to ``UNDECIDABLE_ROW``
-    either way. A test whose named property cannot fail is worse than no test,
-    because it stops anyone looking.
+    Twice re-pointed, and both dead ends are worth recording because each looked
+    like the obvious property:
 
-    What IS load-bearing is the ``True`` exclusion, asserted here: ignore the
-    flag entirely and 18 of 59 membership groups change. The NULL half's real
-    consequence — the leg is bucketed, never dropped — is
-    ``test_a_leg_with_no_decidable_leaf_row_is_bucketed_not_dropped``.
+    - "a NULL ``is_parent_row`` is never a leaf", citing ``fill_null(True)`` as
+      the guard. Flipping ONLY that fill changes no membership group and reddens
+      no test — ``_parent_flags`` emits ``None`` only for a row whose leg set
+      another row holds exactly, so a NULL leg has zero or two-plus candidate
+      leaves and routes to ``UNDECIDABLE_ROW`` either way.
+    - "a strict parent row is never a placement". Also unfalsifiable: drop the
+      parent filter entirely and legs land in ``UNDECIDABLE_ROW``, not on the
+      parent, so the parent still never appears as a label.
+
+    The property that DOES fail is this one. ``BASE_A1`` sits in parent row 0010
+    and leaf row 0030; the parent exclusion is what leaves exactly one candidate,
+    so it resolves to 0030. Without it the leg has two candidates and the matrix
+    cannot place it at all — asserting PLACEMENT rather than absence is the whole
+    point.
+
+    Under the flag-ignored mutation (drop the ``is_parent_row`` filter, keep the
+    single-leaf rule) seven parametrisations redden, and these are all of them —
+    each name measured, not assumed:
+
+    - ``test_a_leg_under_a_strict_parent_resolves_to_its_leaf_row`` (this one)
+    - ``test_a_leg_with_no_decidable_leaf_row_is_bucketed_not_dropped``
+    - ``test_migration_diagonal_is_agreement_and_off_diagonal_is_the_moved_money``
+    - ``test_every_result_carries_the_placement_attribution_caveat``
+
+    Note what is NOT in that list: ``parent_rows.isdisjoint(placed)`` below. It
+    holds in both states, so it is a reader's aid and never the detector.
     """
     # Arrange
     recon = _combined(framework)
@@ -986,16 +1001,23 @@ def test_migration_never_places_a_leg_on_a_strict_parent_row(framework: str) -> 
         (pl.col("template_id") == "c08_03")
         & (pl.col("sheet") == CORPORATE)
         & (pl.col("predicate_key") == predicate_key)
+        & (pl.col("exposure_reference") == "BASE_A1")
     )
-    parent_rows = set(legs.filter(pl.col("is_parent_row").fill_null(value=False))["row_ref"])
+    parents = set(legs.filter(pl.col("is_parent_row").fill_null(value=False))["row_ref"])
+    leaf_row = _leaf_row_of(recon, ours=True, reference="BASE_A1")
 
     # Act
     matrix = row_migration(recon, "c08_03", CORPORATE, predicate_key, money_column="ead_final")
+    placed = matrix.filter(pl.col("our_row_ref") == leaf_row)
 
-    # Assert — strict parents really occur here, and none is a placement.
-    assert parent_rows, "no strict parent rows on this sheet — the guard is vacuous"
-    assert parent_rows.isdisjoint(set(matrix["our_row_ref"].to_list()))
-    assert parent_rows.isdisjoint(set(matrix["their_row_ref"].to_list()))
+    # Assert — the leg really is under a strict parent, and still resolves.
+    assert parents, "BASE_A1 sits under no strict parent — the guard is vacuous"
+    assert leaf_row not in parents
+    assert placed.height > 0
+    assert placed["movement_basis"].to_list() != [UNDECIDABLE_ROW]
+    # A consequence of the single-leaf rule, not the detector: a parent row is
+    # never a label. Kept for the reader, not relied on as a guard.
+    assert parents.isdisjoint(set(matrix["our_row_ref"].to_list()))
 
 
 @pytest.mark.parametrize("framework", FRAMEWORKS)

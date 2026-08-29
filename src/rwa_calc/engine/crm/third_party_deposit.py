@@ -129,11 +129,11 @@ def compute_third_party_deposit_columns(
     )
 
     # ``present`` is the CRM processor's column set for the Art. 200(1) block,
-    # resolved before the block ran — collect_schema() is O(plan nodes) and this
-    # sits deep in the CRM chain (~42 ms per run on the 10k benchmark). It is
-    # measurably STALE here (short by the 2 ``life_ins_*`` columns the previous
-    # sub-step wrote) and sound only because neither is among the four names
-    # tested below. Omitted, the schema is resolved here exactly as before.
+    # resolved before the block ran — collect_schema() is O(plan NODES) and this
+    # sits deep in the CRM chain. It is measurably STALE here (short by the 2
+    # ``life_ins_*`` columns the previous sub-step wrote) and sound only because
+    # neither is among the four names tested below: safe by ASSERTION, see
+    # ``data.column_spec.ensure_columns``. Omitted, the schema is resolved as before.
     exp_names = list(present) if present is not None else exposures.collect_schema().names()
     exp_ref = "exposure_reference" if "exposure_reference" in exp_names else "loan_reference"
     ead_col = "ead_gross" if "ead_gross" in exp_names else "ead"

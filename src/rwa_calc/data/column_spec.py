@@ -298,8 +298,8 @@ def ensure_columns(
     recomputed. Under-specification is detectable only by comparing against the
     frame, so no cheaper complete guard exists; the fast path — a supplied set
     that leaves nothing to inject, which is the whole point of passing one —
-    stays walk-free. Measured cost of the guard: one extra resolution per 10k
-    run, 0.2 ms.
+    stays walk-free. Measured cost of the guard across the whole pipeline: ONE
+    extra resolution per run, on the shallowest of the threaded frames.
 
     Safe by construction vs safe by assertion
     -----------------------------------------

@@ -119,14 +119,14 @@ def route_other_funded_protection(
 
     ``present`` is the CRM processor's column set for the Art. 200(1) block,
     forwarded to ``ensure_columns`` so this step does not walk the CRM plan a
-    second time for one membership test (~51 ms per run on the 10k benchmark).
-    It was resolved before the block ran and is measurably STALE here (short by
-    the 4 ``life_ins_*`` / ``third_party_deposit_*`` columns the two preceding
-    sub-steps wrote), which is sound only because none of them is the single
-    name tested — safe by ASSERTION, not construction. ``ensure_columns``
-    re-derives from the frame before it would inject anything, so an omission
-    cannot silently null a live column here. Omitted, the schema is resolved
-    exactly as before.
+    second time for one membership test. It was resolved before the block ran
+    and is measurably STALE here (short by the 4 ``life_ins_*`` /
+    ``third_party_deposit_*`` columns the two preceding sub-steps wrote), which
+    is sound only because none of them is the single name tested — safe by
+    ASSERTION, not construction. ``ensure_columns`` re-derives from the frame
+    before it would inject anything, so an omission cannot silently null a live
+    column here; see its docstring for why that direction is the dangerous one.
+    Omitted, the schema is resolved exactly as before.
     """
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     # The route exists only where the firm both CAN and DID elect LGD Modelling.

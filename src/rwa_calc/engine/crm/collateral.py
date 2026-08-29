@@ -937,8 +937,8 @@ def _apply_collateral_unified(
 
     # Under Basel 3.1, FSE senior unsecured LGDU = 45% (Art. 161(1)(a));
     # non-FSE = 40% (Art. 161(1)(aa)). Under CRR, all = 45%.
-    # ONE resolution serves the whole function (collect_schema is O(plan nodes);
-    # ~41 ms/10k run). It is STALE by the later uses — the joins below add scratch
+    # ONE resolution serves the whole function (collect_schema is O(plan NODES), a
+    # fixed per-run tax). It is STALE by the later uses — the joins below add scratch
     # — yet exact for the three names tested (lgd_unsecured is written only at the
     # very end, the other two never). Safe by ASSERTION: a fourth name must re-resolve.
     exposure_schema = exposures.collect_schema()

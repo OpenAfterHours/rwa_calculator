@@ -144,9 +144,8 @@ def apply_guarantees(
     )
 
     exposures = _apply_guarantee_splits(guarantees, exposures)
-    # ``join_cols`` is the guarantor join's resolved set, threaded on so neither step
-    # below re-walks this plan. STALE by exactly the 3 guarantor_* ratings columns,
-    # none tested: safe by ASSERTION — see ``data.column_spec.ensure_columns``.
+    # ``join_cols`` is STALE by 3 untested guarantor_* cols — safe by ASSERTION, not
+    # by construction; see ``data.column_spec.ensure_columns``.
     exposures, join_cols = _join_guarantor_counterparty(exposures, counterparty_lookup)
     exposures = _join_guarantor_ratings(exposures, rating_inheritance)
 
@@ -1703,9 +1702,7 @@ def _apply_maturity_mismatch_to_guarantees(
 def _drop_columns_if_present(lf: pl.LazyFrame, cols: list[str]) -> pl.LazyFrame:
     """Drop columns, ignoring absent ones (Polars ``strict=False``, no schema walk).
 
-    Always DERIVES now (the hand-filtered version returned ``lf`` itself when
-    nothing matched), so an edge brand no longer survives a no-op drop. No call
-    site here reaches ``require_brand``, and the residual is loud not silent: one
-    that did would raise ``EdgeContractViolation`` at bundle construction.
+    Always derives, so an edge brand no longer survives a no-op drop. No call site here
+    needs one; a future one gets ``EdgeContractViolation`` at bundle build, not a number.
     """
     return lf.drop(cols, strict=False)

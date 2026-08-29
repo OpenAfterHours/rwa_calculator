@@ -667,9 +667,9 @@ class CRMProcessor:
             exposures = undo_sa_ead_reduction(exposures)
 
         # ONE schema resolution for the whole Art. 200(1) block (steps 4/4c/4d
-        # below). ``collect_schema()`` is O(plan nodes), not O(rows), so each of
-        # the three sub-steps resolving the deep CRM plan for itself cost ~129 ms
-        # per run on the 10k benchmark.
+        # below). ``collect_schema()`` is O(plan NODES), not O(rows), so the three
+        # sub-steps each resolving the deep CRM plan for themselves was a fixed
+        # per-run tax no book size dilutes.
         #
         # This set is resolved ONCE HERE and therefore goes STALE as the block
         # runs — measured on the 10k book: exact for life insurance (the first

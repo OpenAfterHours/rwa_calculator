@@ -133,13 +133,14 @@ def compute_life_insurance_columns(
         config: Calculation configuration.
         errors: Optional error accumulator for CRM020 unknown-currency warnings.
         present: Column names for ``exposures``, resolved by the CRM processor
-            once for the whole Art. 200(1) block rather than an O(plan-nodes)
-            walk per sub-step (~36 ms per run on the 10k benchmark). It need
-            only be exact for the names tested below — the reference and EAD
-            carriers, ``parent_facility_reference`` / ``counterparty_reference``
-            and the denomination-currency pair. This is the block's FIRST
-            consumer, so the set is in fact exact here (measured). Omitted, the
-            schema is resolved here exactly as before.
+            once for the whole Art. 200(1) block rather than an O(plan-NODES)
+            walk per sub-step. It need only be exact for the names tested below
+            — the reference and EAD carriers, ``parent_facility_reference`` /
+            ``counterparty_reference`` and the denomination-currency pair. This
+            is the block's FIRST consumer, so the set is measurably exact here,
+            unlike its two siblings (see ``data.column_spec.ensure_columns`` on
+            safe-by-construction vs safe-by-assertion). Omitted, the schema is
+            resolved here exactly as before.
 
     Returns:
         Exposure frame with life_ins_collateral_value and life_ins_secured_rw columns.

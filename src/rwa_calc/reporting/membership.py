@@ -167,6 +167,22 @@ def cell_membership(
     direction. Because the row axes OVERLAP, no filter reconstructs a group's
     total by summing rows; read the group's own de-duplicated legs for that.
 
+    Two consequences a caller WILL hit, and neither is a defect:
+
+    - **``~is_parent_row`` is legitimately EMPTY on some sheets.** Where every
+      row of a group is co-extensive with another (the C 08.01 TOTAL /
+      on-balance-sheet / obligor-grades trio on a sheet with no
+      off-balance-sheet or slotting leg), every row is ``True`` or ``None`` and
+      no row is a decidable leaf. Measured on the test portfolio, four of ten
+      sheets sum to 0.00 that way. An empty leaf filter means "the data cannot
+      rank these rows", never "this sheet is empty".
+    - **Never sum across ``predicate_key``.** The groups are BASES, not parts:
+      a substituted leg is counted once on the obligor's basis and again on the
+      protection provider's, so a per-sheet sum over all groups over-counts —
+      measured at 3.00x (C 07.00 retail_other) and 1.86x (C 08.01 corporate).
+      Pick the group serving the column you are explaining, via
+      ``CellMembership.columns``.
+
     ``template_ids`` defaults to ``MEMBERSHIP_TEMPLATE_IDS``. An id that is not
     instrumented (absent from ``LINEAGE_PLANS``) is skipped with a WARNING —
     never resolved to a guessed row set. A run that produces nothing yields

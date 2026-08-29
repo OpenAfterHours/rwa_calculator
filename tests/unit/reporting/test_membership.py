@@ -412,16 +412,29 @@ def test_every_summable_cell_ties_out_to_its_own_group(template_id: str, framewo
 def test_every_summable_cell_ties_out_without_the_gross_carriers(
     template_id: str, framework: str
 ) -> None:
-    """The same census on the frame shape where the two build paths can diverge.
+    """The census on the frame shape where the two build paths can diverge.
 
     Only the generator entry applies ``ensure_gross_side_carriers``; the lineage
-    path does not. NOT A DETECTOR for that ensure step, and deliberately not
-    labelled one: deleting the call from ``cell_membership`` leaves this green,
-    because these templates' row axes key ``exposure_type`` / ``bs_type`` / PD /
-    class and never a gross carrier. What it pins is the characterisation. The
-    divergence the ensure step forecloses is real but lives one layer up — on
-    this frame the lineage-path and production generators disagree on 141 (CRR)
-    / 151 (Basel 3.1) cells.
+    path does not. **This IS the detector for that call.** Replacing it with the
+    identity in ``cell_membership`` fails this test on ``c07_00`` under both
+    frameworks: ``census.unmapped`` grows to 528 entries (CRR) and 1,220 (Basel
+    3.1), first ``central_govt_central_bank/0010/0160``.
+
+    Note WHICH limb fires, because it is not the obvious one.
+    ``census.mismatches`` stays EMPTY — the tie-out is untouched, since these
+    templates' row axes key ``exposure_type`` / ``bs_type`` / PD / class and
+    never a gross carrier. What breaks is **mapping completeness**: C 07.00's
+    CCF-bucket cells are bound as ``Sum(reporting_gross_off_bs)`` only when that
+    carrier is present and fall back to a ``Formula`` constant otherwise, so
+    without the ensure the module classifies them as not row-backed and they
+    join no group — while this census, which ensures the frame itself, still
+    expects every row-backed cell to be served. ``assert census.unmapped == []``
+    is therefore the load-bearing assertion here, not the tie-out.
+
+    Separately, and still true: the divergence the ensure call forecloses at the
+    GENERATOR level is larger and lives one layer up — on this frame the
+    lineage-path and production generators disagree on 141 (CRR) / 151 (Basel
+    3.1) cells, which no test in this module can reach.
     """
     # Arrange
     ledger = _ledger(stripped=True)
@@ -610,6 +623,46 @@ def test_a_leg_lands_in_at_most_one_non_parent_row_per_group(
     # Assert
     assert per_leg.height > 0
     assert per_leg["len"].max() == 1
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_summing_across_predicate_groups_is_not_the_sheet_total(framework: str) -> None:
+    """Pins BOTH documented consumer traps, so neither can be "corrected" away.
+
+    ``test_non_parent_rows_never_exceed_their_group_total`` is one-sided: a
+    group that lost every leg satisfies ``0.00 <= total`` and sits inside a
+    green suite. This guard bounds the other side by asserting that each shape
+    still OCCURS.
+
+    - Cross-group sheet sums over-count, because the groups are bases and a
+      substituted leg is on both: 3.00x on C 07.00 retail_other, 1.86x on
+      C 08.01 corporate (and 0.82x on C 07.00 corporate, where only some rows
+      are decidable). If this stops happening, someone has made
+      ``predicate_key`` a partition, which it is not.
+    - Some sheets have no decidable leaf at all and sum to 0.00 — four of ten
+      here. If this stops happening, someone has turned the tri-state's ``None``
+      back into ``False`` and reopened the 3x double-count.
+    - A single-group template has nothing to sum across, so C 08.03 is exact.
+    """
+    # Arrange
+    legs = cell_membership(_FrameSource(_ledger(), framework)).legs
+
+    # Act — the naive per-sheet aggregation a reader would reach for.
+    shapes: dict[tuple[str, str], tuple[float, float]] = {}
+    for (template_id, sheet), group in legs.group_by(["template_id", "sheet"]):
+        naive = group.filter(~pl.col("is_parent_row"))["ead_final"].sum() or 0.0
+        total = group.unique(subset=["exposure_reference"])["ead_final"].sum() or 0.0
+        shapes[(template_id, sheet)] = (float(naive), float(total))
+
+    # Assert — both shapes occur, and the single-group template is exact.
+    assert shapes
+    over = {key for key, (naive, total) in shapes.items() if naive > total + 1e-6}
+    leafless = {key for key, (naive, total) in shapes.items() if naive == 0.0 < total}
+    assert over, "cross-group summing no longer over-counts -- is predicate_key a partition now?"
+    assert leafless, "no sheet is leaf-less -- has None collapsed back to False?"
+    for (template_id, sheet), (naive, total) in shapes.items():
+        if template_id == "c08_03":
+            assert naive == pytest.approx(total), sheet
 
 
 @pytest.mark.parametrize("framework", FRAMEWORKS)

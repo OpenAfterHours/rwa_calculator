@@ -1,8 +1,60 @@
 # Return reconciliation — sense-checking a template against the firm's current return
 
-**Status:** Proposed 2026-08-29 · **Owner:** reporting + analysis + UI surfaces ·
-**Depends on:** the sealed reporting ledger (Phase 7) and the cell-lineage
-instrumentation (`docs/plans/report-cell-lineage.md`)
+**Status:** **IMPLEMENTED 2026-08-29** (Phases 1-6; Phases 7-8 remain optional and
+undone) · **Owner:** reporting + analysis + UI surfaces · **Depends on:** the
+sealed reporting ledger (Phase 7) and the cell-lineage instrumentation
+(`docs/plans/report-cell-lineage.md`)
+
+Templates in scope: `c07_00`, `c08_01`, `c08_03` under both frameworks — OF 07.00
+/ OF 08.01 / OF 08.03 proved to be the *same* ids and the *same* generator
+functions branched internally on `framework`, so the six requested templates are
+three implementations. Modules: `analysis/legacy_ledger.py`,
+`reporting/membership.py`, `analysis/return_recon.py`, `ui/views/return_recon.py`,
+route `GET /reconciliation/{recon_id}/templates`.
+
+## As built — where reality diverged from this plan
+
+Five things this document got wrong or under-specified. Each was found by
+measurement, and each is recorded because the plan reads plausibly without them.
+
+1. **A template row does not have one population.** The plan assumed all
+   `rows`-kind cells on a row share a predicate. True only for C 08.03. On
+   C 07.00 and C 08.01 it is false on *every* row (the F3 two-basis split plus
+   per-column narrowings): a C 08.01 row's origin-basis predicate serves 19
+   columns and its post-basis predicate others. A single population per row was
+   wrong on 27/90 cells (CRR) and 47/110 (B3.1), by exactly the substituted legs.
+   Membership is therefore keyed on `predicate_key`, and every consumer addresses
+   a cell's population through `CellMembership.columns`.
+
+2. **`is_parent_row` cannot be a two-state flag.** Rows holding *identical* leg
+   sets are indistinguishable from the data, and reporting `False` there made
+   leaves-only sums run 3.00x over true. It is a nullable tri-state, and **no
+   flag makes "sum the leaves" reconstruct a total** — read the group's
+   de-duplicated legs. Nor can the sheet be aggregated: `~is_parent_row` is
+   legitimately EMPTY on a co-extensive sheet (0.00 against real money on four of
+   ten sheets in the fixture).
+
+3. **An unmapped carrier does not always degrade to null.**
+   `ensure_gross_side_carriers` injects an *all-null* column, and `col_sum` totals
+   that to `0.0` — a false zero, not a null. Worse, an unguarded decomposition
+   attributes it to **`measurement`**, which *reconciles*, so it reads as a
+   credible engine discrepancy rather than a gap. `LedgerCoverage` must therefore
+   be passed to arm the refusal; a `None` default silently disarms it.
+
+4. **A requirement of the form `sealed OR (a AND b)` must be expressible.** The
+   first cut modelled cell requirements as a conjunction of OR-groups, which
+   cannot state that. `drawn` and `interest` are ADDENDS, so mapping one alone
+   satisfied the group and published a confident 0.0 — and drove C 07.00 col 0110
+   *negative*. Now DNF. The leave-one-out sweep written to catch it found four
+   further under-reports nobody had enumerated, including that an absent input to
+   a Formula cell reads as ZERO in the waterfall rather than null.
+
+5. **Reachability and population are different questions.** Conflating them
+   reproduces the recorded `sheet_not_emitted` trap: an all-SA book was reported
+   "C 08.01 unreachable" with nothing named to fix — while keying refusal on
+   population instead would have hidden *"your return is missing your entire IRB
+   book"* (44 cells, 18 with a non-zero delta). Reachable is a statement about the
+   MAPPING; populated is about the BOOK.
 
 **Decisions taken 2026-08-29** (they close the three questions this plan opened):
 

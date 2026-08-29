@@ -80,6 +80,7 @@ from rwa_calc.reporting.kernel import (
 from rwa_calc.reporting.kernel import (
     column_name_map,
     ensure_gross_side_carriers,
+    materialise_results,
     write_metadata_sheet,
     write_template_sheet,
 )
@@ -267,7 +268,17 @@ class COREPGenerator:
         # direct/synthetic frame gets the same mirror derivation so every
         # on/off-BS gross cell (C 07/C 08) can read them unconditionally.
         results = ensure_gross_side_carriers(results, cols)
+        # Read the source once. Every ``generate_*`` below collects its own
+        # population, so against a ``scan_parquet`` handle each would otherwise
+        # re-read the parquet and re-derive the carriers just added above.
+        results = materialise_results(results)
         cols = _available_columns(results)
+        # ``previous_period_results`` is deliberately left LAZY. Only C 08.04
+        # reads it, and on a portfolio with no IRB rows ``generate_c08_04``
+        # returns before touching it at all — so projection pushdown into the
+        # prior parquet beats a full collect, which would cost ~85 ms and a
+        # resident copy for a template that is often never emitted. Measured:
+        # lazy 26.8 ms vs materialised 100.1 ms.
 
         # SA templates (C 07.00)
         # Both CCR populations — FCCM SFTs and SA-CCR derivative netting sets —

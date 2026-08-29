@@ -48,6 +48,7 @@ from rwa_calc.reporting.kernel import (
 from rwa_calc.reporting.kernel import (
     column_name_map,
     ensure_gross_side_carriers,
+    materialise_results,
     write_metadata_sheet,
     write_template_sheet,
 )
@@ -192,11 +193,19 @@ class Pillar3Generator:
         # direct/synthetic frame gets the same mirror derivation so every
         # on/off-BS gross cell (CR4/CR5/CR6/CR10) can read them unconditionally.
         results = ensure_gross_side_carriers(results, cols)
+        # Read the source once. Every ``_generate_*`` below collects its own
+        # population, so against a ``scan_parquet`` handle each would otherwise
+        # re-read the parquet and re-derive the carriers just added above.
+        results = materialise_results(results)
         cols = _available_columns(results)
         errors: list[str] = []
 
         irb_data = irb_non_slotting_population(results, cols)
 
+        # ``previous_period_results`` is deliberately left LAZY: only CR8 reads
+        # it, so projection pushdown into the prior parquet beats a full
+        # collect (measured: lazy 15.8 ms vs materialised 86.6 ms). The current
+        # frame above is the opposite case — ~30 populations read it.
         prior_irb_data: pl.LazyFrame | None = None
         if previous_period_results is not None:
             prior_cols = _available_columns(previous_period_results)

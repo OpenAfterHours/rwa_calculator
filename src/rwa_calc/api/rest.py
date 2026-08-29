@@ -823,11 +823,23 @@ def get_template_bundles(run_id: str, *, prior_run_id: str | None = None) -> Tem
         return cached
 
     from rwa_calc.reporting.corep.generator import COREPGenerator
+    from rwa_calc.reporting.kernel import materialise_results
     from rwa_calc.reporting.pillar3.generator import Pillar3Generator
 
+    # Resolve the prior run BEFORE reading anything: an unknown or mismatched
+    # prior_run_id raises 404/422, and paying for a full parquet read on the way
+    # to rejecting the request would be work thrown away. The prior frame stays
+    # LAZY — only C 08.04 and CR8 read it, so pushdown beats a collect there
+    # (see the note in ``reporting/corep/generator.py``).
     previous_period_results = None
     if prior_run_id is not None:
         previous_period_results = _require_prior_run(prior_run_id, response).scan_results()
+
+    # The CURRENT frame is the opposite case: ~30 template populations read it,
+    # so it is read once for the whole filing. Both generators materialise their
+    # source anyway; handing them the same in-memory frame makes the second
+    # generator's own call a no-op instead of a re-read.
+    results = materialise_results(response.scan_results())
 
     # Both ids are route-parameter strings; neither is ever interpolated raw.
     # run_id is echoed back as the REGISTRY's own key (_registered_run_key —
@@ -839,9 +851,13 @@ def get_template_bundles(run_id: str, *, prior_run_id: str | None = None) -> Tem
         prior_run_id is not None,
     )
     bundles = TemplateBundles(
-        corep=COREPGenerator().generate(response, previous_period_results=previous_period_results),
+        corep=COREPGenerator().generate_from_lazyframe(
+            results,
+            framework=response.framework,
+            previous_period_results=previous_period_results,
+        ),
         pillar3=Pillar3Generator().generate_from_lazyframe(
-            response.scan_results(),
+            results,
             framework=response.framework,
             output_floor_summary=response.output_floor_summary,
             previous_period_results=previous_period_results,

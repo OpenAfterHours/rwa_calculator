@@ -5,9 +5,15 @@ Pipeline position:
     Called by PipelineOrchestrator at every stage exit, and by CRMProcessor at
     the two sanctioned intra-stage checkpoints (``crm_post_ead`` and
     ``crm_pre_guarantee_unified`` — both benchmark-justified; see
-    docs/architecture/pipeline-collect-barriers.md).
+    docs/architecture/pipeline-collect-barriers.md). ``materialise_frame`` is
+    additionally called from ABOVE the engine, by the COREP and Pillar 3
+    generators (via ``reporting/kernel/columns.py::materialise_results``),
+    reading a finished results parquet.
 
 Key responsibilities:
+- ``materialise_frame``: collect a plan once, in memory, with no config and no
+  EdgeEvent — it never touches ``_capture``, so it records nothing wherever it
+  is called from
 - ``materialise_edge``: eager-collect a stage's output plan once at its exit
 - ``materialise_branches``: collect the calculator branches to DataFrames
 - ``EdgeEvent`` capture: the per-run materialisation map (label, rows, bytes,
@@ -156,6 +162,42 @@ def plan_node_count(lf: pl.LazyFrame) -> int:
     """
     rendered = lf.explain(optimized=False)
     return sum(1 for line in rendered.splitlines() if line.strip())
+
+
+def materialise_frame(lf: pl.LazyFrame) -> pl.LazyFrame:
+    """Materialise a plan once, in memory, outside the stage-edge machinery.
+
+    ``materialise_edge`` below is the *stage-boundary* form: it needs a
+    ``CalculationConfig`` to make the spill decision, and it reads ``_capture``
+    to record an ``EdgeEvent`` into the run's materialisation map. Callers that
+    have no config and no stage edge — the reporting generators, reading a
+    finished results parquet — still need the in-memory half: collect the
+    source once so that many downstream population collects read memory instead
+    of re-executing the source plan each time.
+
+    **This function never reads or writes ``_capture``.** That, and not where it
+    happens to be called from, is why it contributes nothing to the
+    materialisation map: it records nothing even with a capture explicitly open.
+    ``_capture`` is a ``ContextVar``, so its scope is DYNAMIC — anything running
+    between ``begin_edge_capture`` and ``end_edge_capture`` can see it,
+    regardless of which module imports which. Do not "restore" observability
+    here by adding capture plumbing because a call turned out to sit inside a
+    run; the absence is the design, and it is unconditional.
+
+    Number-neutral: the returned frame carries the same schema, dtypes, values
+    and row order as *lf*. Re-materialising an already-eager frame is near-free
+    (0.099-0.129 ms, 0.0 MB RSS — Polars hands back the existing buffers rather
+    than copying them) against 69-84 ms for the parquet scan it replaces.
+
+    **Not a free win — only use it where MANY consumers read the frame.** It
+    materialises the whole frame, so it defeats projection and predicate
+    pushdown; against a handful of consumers a plain lazy handle measured 3-5x
+    faster. Peak RSS was NOT measurably affected at 373,928 rows (+115 MB, well
+    inside run-to-run noise), so do not budget memory from a per-byte
+    multiplier. See ``reporting/kernel/columns.py::materialise_results`` for the
+    worked split and the full measurement record.
+    """
+    return lf.collect().lazy()
 
 
 def materialise_edge(

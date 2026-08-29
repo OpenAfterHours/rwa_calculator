@@ -455,15 +455,22 @@ class ResultExporter:
             (Error) breaks, the warnings, and the not-evaluated set with reasons.
         """
         from rwa_calc.reporting.corep.generator import COREPGenerator
+        from rwa_calc.reporting.kernel import materialise_results
         from rwa_calc.reporting.pillar3.generator import Pillar3Generator
 
-        corep = COREPGenerator().generate(
-            response,
+        # One read of the CURRENT results parquet for both bundles — ~30
+        # template populations read it. ``previous_period_results`` stays lazy:
+        # only C 08.04 and CR8 read it, so pushdown beats a collect there. See
+        # the same split in ``api/rest.py::get_template_bundles``.
+        results = materialise_results(response.scan_results())
+        corep = COREPGenerator().generate_from_lazyframe(
+            results,
+            framework=response.framework,
             output_floor_config=output_floor_config,
             previous_period_results=previous_period_results,
         )
         pillar3 = Pillar3Generator().generate_from_lazyframe(
-            response.scan_results(),
+            results,
             framework=response.framework,
             output_floor_summary=output_floor_summary,
             previous_period_results=previous_period_results,

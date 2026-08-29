@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import polars as pl
 
+from rwa_calc.engine.materialise import materialise_frame
+
 #: exposure_type values inside the on/off-balance-sheet credit-risk gross scope
 #: (CRR Art. 111 SA / Art. 166 IRB). CCR / settlement legs sit outside it.
 _CREDIT_BS_TYPES: tuple[str, ...] = ("loan", "contingent", "facility_undrawn")
@@ -29,6 +31,64 @@ _CREDIT_BS_TYPES: tuple[str, ...] = ("loan", "contingent", "facility_undrawn")
 def available_columns(lf: pl.LazyFrame) -> set[str]:
     """Get the set of column names in a LazyFrame without collecting."""
     return set(lf.collect_schema().names())
+
+
+def materialise_results(lf: pl.LazyFrame) -> pl.LazyFrame:
+    """Read the results frame once, returning an in-memory LazyFrame over it.
+
+    The generators issue ~30 ``.collect()`` calls between them — one per
+    template population — and each one re-executes the whole source plan. When
+    that source is the production ``pl.scan_parquet`` handle
+    (``ResultsSource.scan_results``), those are ~30 re-reads of the results
+    parquet plus ~30 re-runs of the overlapping filter work. Collecting once at
+    the generator boundary turns every one of them into an in-memory scan.
+
+    Number-neutral by construction: an in-memory ``LazyFrame`` carries the same
+    schema, dtypes and values as the scan it replaces, so every template asks
+    the same questions of the same data and gets the same answers.
+
+    Idempotent in cost, not just in value: a full materialise of the results
+    parquet costs 69-84 ms, while re-materialising an already-eager frame costs
+    0.099-0.129 ms. So a caller that has already materialised — ``api/rest.py``
+    shares one collect between the COREP and Pillar 3 generators — pays
+    essentially nothing for the generator's own call.
+
+    What it is worth, at the two scales measured. These are different
+    denominators, not a trend — quote the one that matches what you are timing:
+
+    - **Generator time, 37,443 rows, live IRB populations:** SA 1.35x, IRB
+      1.44x (interleaved A/B).
+    - **Whole reporting pass, 373,928 rows, SA-only portfolio:** 15,633 ->
+      6,802 ms, **2.3x — an upper bound, never quote it bare.** That book has
+      no ``model_permissions``, so ~20 IRB templates each pay a full source
+      scan and then aggregate an EMPTY population. That maximises the
+      scan-to-work ratio, and the scan is exactly what this function removes.
+      The 2.3x is portfolio SHAPE, not scale; a book with live IRB populations
+      does more work per template and shows a smaller ratio.
+    - **Whole ``validate_submission``, 37,443 rows:** 1.17x — it adds ~808
+      rules of evaluation that this function does not touch.
+
+    Small-n on a loaded box: same-state wall times varied 6.2-13.8 s and peak
+    RSS 97-764 MB across six reps, so single-rep figures carry a wide band.
+
+    Two costs to weigh before reusing this anywhere else:
+
+    - It defeats projection pushdown, so it PAYS only where many consumers read
+      the frame. It is applied to the current results frame (~30 template
+      populations) and deliberately NOT to ``previous_period_results``, which
+      only C 08.04 and CR8 read — there the full collect measured 3-5x slower
+      than leaving the scan lazy.
+    - **Memory: no measurable cost at 100k.** Peak RSS 4,168 MB before vs
+      4,283 MB after — +115 MB, inside the noise, since the two arms differed
+      by ~1 GB in pre-reporting RSS from GC timing alone. Headroom on the
+      7.8 GB reference box: 3.63 GB vs 3.52 GB. At 37k the delta measured
+      +122-184 MB on a 71.5 MB frame; treat that as a **measured observation
+      that does NOT scale**, not a per-byte multiplier. Extrapolating it
+      linearly to 100k predicts +1.2-1.8 GB, which the direct measurement
+      above refutes by an order of magnitude — that extrapolation was made
+      twice here and was wrong both times.
+    """
+    return materialise_frame(lf)
 
 
 def pick(cols: set[str], *candidates: str) -> str | None:

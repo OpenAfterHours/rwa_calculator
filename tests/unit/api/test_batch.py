@@ -21,9 +21,11 @@ these tests pin:
   pool, asserting the worker pids differ from this process's. Without that
   check the test would pass just as happily if the parallel path had silently
   degraded to serial, which is the one thing it exists to rule out.
-- **The worker Polars cap** — asserted inside a real worker, against an
-  uncapped control, with the session-wide ``POLARS_MAX_THREADS`` cleared from
-  this process first so the child cannot inherit the answer.
+- **The worker Polars cap** — asserted inside a real worker against an uncapped
+  control measured in the same session, with the cap chosen so that the control's
+  value cannot satisfy it. Deliberately independent of this process's
+  environment and of the multiprocessing start method; see
+  ``TestWorkerPolarsCap`` for the CI failure that taught us why.
 - **Both sides of the run index** — a successful run is written, a failed one
   and an undispatched one are not.
 - **max_workers bounding** — against a monkeypatched ``os.cpu_count`` so the
@@ -658,51 +660,65 @@ class TestHardWorkerExit:
 
 @pytest.mark.skipif(
     (os.cpu_count() or 1) < 2,
-    reason="a single-core box cannot distinguish a capped worker from an uncapped one",
+    reason=(
+        "when the uncapped worker already reports 1 (an inherited cap) the test has to "
+        "cap UP to 2, which needs a second core to be available"
+    ),
 )
 class TestWorkerPolarsCap:
-    """The cap is applied in the worker, and this process is never touched.
+    """The cap lands in the worker, and this process's environment is untouched.
 
-    ``tests/conftest.py`` sets ``POLARS_MAX_THREADS=1`` for the whole session, so
-    a child would inherit the cap even with no initializer at all — which would
-    make this test green in both states. Both cases therefore clear the variable
-    from THIS process first, and the uncapped control asserts a thread pool the
-    size of the box. That control is the discriminator; without it the test
-    proves nothing.
+    **The hazard, and why the obvious defence does not work.** The session
+    already has ``POLARS_MAX_THREADS=1`` set by ``tests/conftest.py``, and a
+    worker can INHERIT that value with no initializer at all — so an absolute
+    assertion ("the worker reports 1") passes whether or not the code under test
+    does anything. The first version of these tests neutralised that by clearing
+    the variable from THIS process. That is not sufficient, and CI proved it: on
+    Python 3.14 the default start method on Linux is ``forkserver``, and the
+    forkserver is a separate long-lived process that captured the environment at
+    the session's FIRST pool creation. Its children are forked from it, so they
+    inherit what it captured and ``monkeypatch.delenv`` in the parent cannot
+    reach them. Windows uses ``spawn``, which hands each child the parent's
+    *current* environ — which is why the same tests passed locally and failed on
+    CI, and why the capped assertion was passing there for the wrong reason.
+
+    **So nothing below reads the parent's environment.** The test CALIBRATES
+    instead: it measures what an uncapped worker actually reports on this
+    platform, picks a cap that value cannot already be, and asserts the capped
+    worker reports the cap. Correct under fork, forkserver and spawn alike, and
+    incapable of passing by inheritance.
     """
 
-    @staticmethod
-    def _unset_in_parent(monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv(worker_bootstrap.POLARS_THREADS_ENV_VAR, raising=False)
+    def test_the_initializer_caps_the_worker_before_polars_is_imported(self) -> None:
+        """A capped worker reports the cap; an uncapped one in the same session does not.
 
-    def test_the_initializer_caps_the_worker_before_polars_is_imported(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """A real spawned worker reports one Polars thread, not the core count.
+        ``pl.thread_pool_size`` is the load-bearing assertion. It is fixed when
+        Polars is first imported in the child, which happens when the work item
+        is unpickled — strictly after ``_process_worker`` has run the
+        initializer. The environment variable is corroboration, not proof: the
+        thread count is what the engine actually gets.
 
-        Both work items are stdlib/Polars module-level callables, pickled by
-        reference — so the only thing this asserts about is the initializer.
-        ``pl.thread_pool_size`` is the load-bearing one: it is fixed when Polars
-        is first imported in the child, which happens when the work item is
-        unpickled, i.e. strictly after ``_process_worker`` runs the initializer.
+        Both work items are stdlib / Polars module-level callables pickled by
+        reference, so nothing about this test module crosses into the worker and
+        the only variable is the initializer.
         """
-        self._unset_in_parent(monkeypatch)
-
-        with batch._make_executor(1, 1) as executor:
-            assert (
-                executor.submit(os.getenv, worker_bootstrap.POLARS_THREADS_ENV_VAR).result() == "1"
-            )
-            assert executor.submit(pl.thread_pool_size).result() == 1
-
-    def test_an_uncapped_worker_sizes_to_the_box(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """The control: without the initializer the child takes every core."""
-        self._unset_in_parent(monkeypatch)
-
         with batch._make_executor(1, None) as executor:
-            assert (
-                executor.submit(os.getenv, worker_bootstrap.POLARS_THREADS_ENV_VAR).result() is None
-            )
-            assert executor.submit(pl.thread_pool_size).result() == os.cpu_count()
+            uncapped = executor.submit(pl.thread_pool_size).result()
+
+        # Any value the uncapped worker cannot already be, so the assertion
+        # below cannot be satisfied by inheritance. Capping DOWN is always
+        # honoured, so prefer it; the only time we must cap UP is when the
+        # uncapped worker is already at 1, which is the inherited-environment
+        # case the class skipif reserves a second core for.
+        cap = 2 if uncapped == 1 else 1
+
+        with batch._make_executor(1, cap) as executor:
+            capped = executor.submit(pl.thread_pool_size).result()
+            reported = executor.submit(os.getenv, worker_bootstrap.POLARS_THREADS_ENV_VAR).result()
+
+        assert capped == cap
+        assert capped != uncapped
+        assert reported == str(cap)
 
     def test_this_process_environment_is_never_mutated(
         self, monkeypatch: pytest.MonkeyPatch
@@ -713,8 +729,11 @@ class TestWorkerPolarsCap:
         pool's lifetime, so two batches running concurrently on the UI's
         ``ThreadPoolExecutor`` could steal each other's value and leave a worker
         uncapped with no log and no symptom. Nothing in this process may change.
+
+        This one legitimately reads the parent's environment, because the parent
+        is precisely what it is asserting about.
         """
-        self._unset_in_parent(monkeypatch)
+        monkeypatch.delenv(worker_bootstrap.POLARS_THREADS_ENV_VAR, raising=False)
 
         with batch._make_executor(1, 1) as executor:
             executor.submit(os.getenv, "PATH").result()

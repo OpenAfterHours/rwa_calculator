@@ -1,9 +1,142 @@
 # Architecture review — structure, efficiency, parallelism (2026-08-29)
 
-> **Status:** proposal. Nothing here is implemented. Every number below was
-> measured on this tree at `dbc2932a` (v0.3.27); the reproduction commands are
-> in [§6](#6-how-to-reproduce-every-number). No item is filed as a P-code yet —
-> `IMPLEMENTATION_PLAN.md` is `plan-curator`'s file, and §7 lists what to file.
+> **Status: EXECUTED 2026-08-29.** All seven items are closed — see
+> [§0 Outcome](#0-outcome-what-was-actually-built) for what landed, which
+> figures below turned out to be wrong, and what the batch found that this
+> proposal did not anticipate.
+>
+> **The body of this document is left as written**, at `dbc2932a` (v0.3.27),
+> including the numbers §0 corrects. It is the record of what was proposed and
+> why; §2 in particular quotes the pre-move `CLAUDE.md` text verbatim as the
+> thing item S1 reverses, so editing it would delete the argument for the change
+> inside the record of the change.
+
+---
+
+## 0. Outcome — what was actually built
+
+Seven items, ten commits, ~12,400 tests green. Each item ran
+implementer → conformance reviewer → adversarial skeptic, with the worse of the
+two verdicts deciding. **Five of seven items came back `revise` at least once**,
+and in four of those the finding was invisible to a fully green suite.
+
+| item | outcome | commit |
+|---|---|---|
+| **E4** — declared-vs-read column width | **closed by measurement, no code** | — |
+| **P1** — batch scoped runs over a process pool | built | `9e572c30` |
+| **E1** — one-pass cellspec executor | built | `8cb6d5e9` |
+| **S2** — `StageComponents` | **froze it, and recorded why** | `d9766235` |
+| **E2** — read the results frame once per filing | built | `3b2113dd`, `d46697c8` |
+| **E3** — thread resolved schemas | built | `672f7594`, `ac359584` |
+| **S1** — hoist domains out of `engine/stages/` | built | `90182122` |
+| ratchet banking | — | `5ba85bb8`, `5c3a9435` |
+
+### 0.1 Figures in this document that are wrong
+
+Stated plainly, because they are quoted above and someone will read them:
+
+- **§3.1's 7.8× for E1 is too high.** It came from two separate processes on a
+  box that drifts ~2× between them. Measured in-process, alternating both
+  algorithms: **6.8–6.9×** on C 07.00. Collect and filter counts were exact
+  (14,642 → 18, 5,427 → 0).
+- **§3.1 implies a single speedup; it is scale-dependent.** ~6.8× at C 07.00's
+  shape (604 distinct predicates, ~2.2 cells each) rising to 15.7× at 50k rows.
+- **§3.2's E2 win is portfolio-shaped, not scale-shaped.** Measured: **up to
+  2.3× at 100k on an SA-only book, ~1.4× at 37k with live IRB**. The 2.3× is an
+  upper bound — ~20 IRB templates each pay a full source scan then aggregate an
+  *empty* population, maximising exactly the scan-to-work ratio E2 removes.
+- **§3.3's E3 saving cannot be stated as one number.** Regime moves the count;
+  row count and permission mode do not. **B3.1 206 → 193, CRR 207 → 195.** The
+  `207 → 192` in commit `672f7594`'s message splices the CRR baseline onto a
+  pre-guard B3.1 figure and overstates the saving twice over.
+- **§3.4 was answered and the answer was "do nothing".** 334 of 342 columns at
+  `aggregator_exit` are consumed downstream; 8 ride through unread. ~2% — not a
+  lever.
+- **A memory projection made during the batch, not in this document, was wrong
+  by an order of magnitude** and is recorded here so it is not re-derived:
+  extrapolating E2's +122–184 MB at 37k linearly gave 1.2–1.8 GB at 100k. The
+  measured 100k delta is **+115 MB, inside the noise** — the shared frame
+  displaces allocations the ~30 separate scans were making anyway.
+
+### 0.2 What a green suite did not catch
+
+Four findings that ~12,400 passing tests, `arch_check`, `ruff` and `ty` were all
+green through:
+
+1. **S1 broke the docs build.** Three `mkdocstrings` directives addressed deleted
+   modules; `.github/workflows/docs.yml` runs `zensical build --clean` on every
+   push to `master` touching `src/rwa_calc/**`. It would have broken CI on merge.
+2. **52,102 characters had silently vanished from published pages.**
+   `zensical.toml` sets `check_paths = false`, so a missing `--8<--` include
+   emits nothing and raises nothing — and the build still exits 0. Now gated by
+   `tests/contracts/test_doc_snippet_includes.py` (322 directives, asserts the
+   content resolves, vacuity floor 150).
+3. **E1 deleted an explicit `data.height == 0` guard** and relied on Polars
+   returning null from `.drop_nulls().first()`. Correct — but no test in the
+   repository reached it, and it is live via OV1's unpredicated `FirstNonNull`
+   on an empty portfolio. Six branch tests added.
+4. **`ensure_columns(present=)` fails silently and destructively** when
+   under-specified: `with_columns` on an existing alias *replaces*, so an
+   omission overwrites a live column with a typed null, and at the
+   `ofcp_routing` site that null meets `.fill_null(True)` and flips every A-IRB
+   leg onto the LGD-Modelling route. No current caller was vulnerable; it was a
+   loaded gun. Guarded, at one extra resolution per run.
+
+### 0.3 To file separately — found during the batch, out of scope for it
+
+- **Tier 1: no production path passes `output_floor_summary` to
+  `COREPGenerator`.** All seven supplying call sites reach a Pillar 3 generator
+  or a formatter; two COREP export entry points do not even declare the
+  parameter. C 02.00 / OF 02.00 rows 0035 and 0036 therefore publish **`0.0`,
+  not null** (deliberate `else` branch at `c02.py:920-922`), across cols
+  0010/0020/0030 — six cells. Row 0034's activation flag *is* populated
+  correctly from `rwa_pre_floor`, so a Basel 3.1 filing with a binding floor
+  states "floor activated = 1, floor percentage = 0%, OF-ADJ = 0" —
+  self-contradictory on the face of a mandatory own-funds template. Same root
+  cause leaves `output_floor_config` unsupplied, so the Art. 92(2A) gate always
+  resolves "applicable" and OF 02.01 can never be suppressed. Pre-existing:
+  `701bdf68e`, 2026-07-19, an ancestor of `master`.
+- **The benchmark harness routes everything to SA.**
+  `create_raw_data_bundle` supplies no `model_permissions`, so
+  `PermissionMode.IRB` logs its warning and every IRB template runs on an empty
+  population. This distorted three separate measurements in this batch. The
+  check that would have caught it every time: read `approach_applied` off the
+  result frame rather than trusting `permission_mode`. Wants a fixture.
+- **The Art. 200(1) routing carriers are never exercised with a non-zero
+  value.** `ofcp_lgd_cash_deposit`, `ofcp_lgd_life_insurance` and
+  `ofcp_substitution_amount` read `0.00` on every registered portfolio, because
+  none has both A-IRB rows and non-zero other-funded protection.
+- **`COLLECT_ALLOWLIST` matches on basename**, so a new
+  `reporting/kernel/materialise.py` would be silently exempt from check 3's
+  `.collect().lazy()` ban. Latent, independent of this batch.
+- **Doc paths are ungated.** A `check_doc_paths.py` prototype exists; 4 paths
+  named in live docs do not resolve on disk, all pre-existing.
+
+### 0.4 Lessons this batch paid for
+
+- **A path rewrite is scoped by what references the path, not by ownership.**
+  S1's sweep script excluded `docs/` because it sat outside the stated remit —
+  and that exclusion was the entire blast radius of the two worst findings.
+- **A mechanical sweep can turn stale-but-honest documentation into
+  confidently-wrong documentation.** `stage.py` moved the *opposite* way to its
+  package, so the first rewrite pointed at a file existing nowhere; refreshing
+  two tree diagrams' arrows made long-deleted shims look freshly accurate. Close
+  such a class **by existence** — every path named in live docs must resolve —
+  not by re-grepping.
+- **Extrapolating one measurement is not measuring.** Both figures this batch
+  got badly wrong (E2's memory, E1's speedup) came from scaling a single
+  observation instead of taking the second one.
+- **A ratchet bump wants the state it measures to be final.** `5ba85bb8` banked
+  mid-pass on a number a later commit in the same item made obsolete;
+  `5c3a9435` undoes it.
+- **A right conclusion resting on a wrong argument survives review and gets
+  reused.** Two instances: `materialise_frame`'s absence from the
+  materialisation map was justified by import direction (`_capture` is a
+  `ContextVar` — dynamically scoped; the true reason is that it never touches
+  `_capture` at all), and a guard docstring claimed to prevent "drift" that had
+  never occurred (the layout it guards against was a deliberate prior decision).
+
+---
 
 Three questions were asked:
 

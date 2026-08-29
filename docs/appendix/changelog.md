@@ -8,10 +8,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- (Next release changes will go here)
+- **`api/batch.py` — run N scoped calculations concurrently.** A group
+  submission plus its solo entities is N independent pipeline runs, and there
+  was no batch driver: `api/rest.py` takes one `reporting_entity` per request.
+  A single run captures almost none of the machine (measured: a data-parallel
+  Polars control gets 4.9x from 16 threads, the pipeline 1.16x at 10k rows and
+  1.01x at 374k), so N runs over a `ProcessPoolExecutor` scale nearly linearly.
+  Results come back in input order with per-scope failure isolation, including
+  under a hard worker exit; a serial path (`max_workers=1` or
+  `RWA_BATCH_SERIAL=1`) shares the same worker function so the two cannot
+  diverge. Reuses `api/run_index.py`, so a repeated scope dedups for free.
+- **`tests/contracts/test_doc_snippet_includes.py`** — gates that every
+  `--8<--` include in the docs resolves to real content. `zensical.toml` sets
+  `check_paths = false`, so a missing include previously emitted nothing,
+  raised nothing, and still exited 0.
 
 ### Changed
-- (Next release changes will go here)
+- **Reporting generation is roughly 3x faster, with no output change.**
+  Generating the returns used to cost 4.5x the calculation itself (COREP
+  12,694 ms against a 2,820 ms pipeline at 10k scale); it is now cheaper than
+  it. Two changes, both number-neutral and gated on the reporting goldens and
+  the supervisory validation register without regeneration:
+  - `reporting/cellspec.py` evaluates a whole template sheet in **one** masked
+    aggregation pass instead of materialising a filtered frame copy per
+    predicate and evaluating each cell separately. C 07.00's nine sheets:
+    8,332 -> 1,217 ms, `collect()` calls 14,642 -> 18, `DataFrame.filter`
+    5,427 -> 0. Verified by differential over all 41 production specs --
+    ~1.6M binding evaluations, 0 mismatches.
+  - The results frame is materialised **once** per filing rather than
+    re-scanned by each of ~30 template functions. Up to 2.3x at 100k on an
+    SA-only book, ~1.4x at 37k with live IRB populations. The prior-period
+    frame is deliberately NOT materialised -- only two templates read it, so
+    pushdown beats a full collect there.
+- **The pipeline no longer re-derives schemas the edge contracts already
+  declare.** `LazyFrame.collect_schema()` is O(plan nodes), not O(rows) -- a
+  fixed ~670 ms per run that hurts small books, the interactive UI and the test
+  suite, and vanishes on large ones. Basel 3.1 206 -> 193 calls per run,
+  CRR 207 -> 195. `rwa_final` byte-identical.
+- **`engine/stages/` is now the wiring layer and only that.** It held a thin
+  adapter for 7 of 11 registry stages and the *entire domain* for the other 4,
+  so a reader could not tell which was which without opening the files.
+  `hierarchy`, `classify`, `re_split`, `scope` and `fx` are now peer packages
+  under `engine/`, each stage's existing `stage.py` becomes a flat
+  `engine/stages/<name>.py`, and `engine/registry.py` reads as a literal table
+  of contents for the directory. Import `HierarchyResolver` from
+  `engine.hierarchy`, not `engine.stages.hierarchy`. **This reverses an earlier
+  deliberate choice** -- see `docs/plans/architecture-review-2026-08-29.md` §2.
+- `ensure_columns(..., present=)` now re-derives from the frame whenever it
+  would inject, so an under-specified `present` can no longer overwrite a live
+  column with a typed null.
 
 ---
 

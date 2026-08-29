@@ -118,11 +118,23 @@ green through:
   S1's sweep script excluded `docs/` because it sat outside the stated remit —
   and that exclusion was the entire blast radius of the two worst findings.
 - **A mechanical sweep can turn stale-but-honest documentation into
-  confidently-wrong documentation.** `stage.py` moved the *opposite* way to its
-  package, so the first rewrite pointed at a file existing nowhere; refreshing
-  two tree diagrams' arrows made long-deleted shims look freshly accurate. Close
-  such a class **by existence** — every path named in live docs must resolve —
-  not by re-grepping.
+  confidently-wrong documentation.** Two instances, and the second is the
+  instructive one. First: `stage.py` moved the *opposite* way to its package, so
+  the rewrite pointed at a file existing nowhere — the original text was at
+  least historically true. Second, and less obvious: the sweep refreshed the
+  arrow targets on two tree-diagram lines that described files **already
+  deleted** (back-compat shims banned by check 18), so documentation of things
+  that no longer exist came out reading as freshly maintained. The failure was
+  not the sweep touching the wrong file; it was the sweep touching the *right*
+  file and making a false statement look current. "Re-read every changed line"
+  only catches that if the reader thinks to ask whether the line should exist at
+  all. Close such a class **by existence** — every path named in live docs must
+  resolve on disk — not by re-grepping.
+  Two caveats for anyone writing the next sweep: the 12-file exclusion above
+  must be carried forward, or it overwrites the record of a change with the
+  change; and promoting `check_doc_paths.py` to a gate requires distinguishing
+  genuinely broken paths from deliberately illustrative ones, or it reds on the
+  "Adding a Custom Calculator" guide's fictional examples.
 - **Extrapolating one measurement is not measuring.** Both figures this batch
   got badly wrong (E2's memory, E1's speedup) came from scaling a single
   observation instead of taking the second one.

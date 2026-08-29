@@ -27,11 +27,11 @@ A stage edge is the single sanctioned materialisation point at a stage's exit:
 exposures = materialise_edge(new_exposures, config, "hierarchy_exit")
 ```
 
-`materialise_edge` (`engine/materialise.py:192`):
+`materialise_edge` (`engine/materialise.py:203`):
 
 1. collects the incoming plan — in-memory by default (`lf.collect()` then a cheap
    `.lazy()` wrap), or sunk to parquet and scanned back when spill mode is on;
-2. records an `EdgeEvent` (`engine/materialise.py:80`) into the run-scoped capture:
+2. records an `EdgeEvent` (`engine/materialise.py:81`) into the run-scoped capture:
    `label`, `rows`, `columns`, `estimated_bytes`, `wall_ms`, `spilled`, and optionally
    `plan_nodes`;
 3. returns a lazy handle backed by in-memory data (or a parquet scan in spill mode), so
@@ -48,7 +48,7 @@ one `EdgeEvent` per branch; the calc stage invokes it through the sealing wrappe
   that is `materialise_edge`'s job. **Above** the engine — a caller with no
   `CalculationConfig` and no stage edge, such as the reporting generators reading a
   finished results parquet — the sanctioned form is `materialise_frame`
-  (`engine/materialise.py:166`): the in-memory half only, no spill decision and no
+  (`engine/materialise.py:167`): the in-memory half only, no spill decision and no
   `EdgeEvent`. Both live in `materialise.py`, which is the check's sole allowlist
   entry; neither the pattern nor a new allowlist entry belongs anywhere else.
   `materialise_frame` is **not** a free win and is not the default: it materialises the
@@ -164,13 +164,13 @@ One execution semantics, two storage strategies:
 - **`spill_dir: Path | None`** (`contracts/config.py:984`) — directory for temp parquet
   files; `None` uses the system temp directory.
 - **No silent fallback:** a sink failure raises `SpillError`
-  (`engine/materialise.py:70`). The only reason to enable spill mode is a memory
+  (`engine/materialise.py:71`). The only reason to enable spill mode is a memory
   ceiling, so silently substituting an in-memory collect would convert an explicit
   operator choice into an OOM at the worst moment. Fix the sink failure or disable
   `spill_edges`. (The previous architecture's silent in-memory fallback is gone.)
 - **Deprecated alias:** `collect_engine="streaming"` is the legacy spelling of
   `spill_edges=True` — accepted with a once-per-run `WARNING` for one release
-  (`_spill_requested`, `engine/materialise.py:346`; `contracts/config.py:974-979`).
+  (`_spill_requested`, `engine/materialise.py:357`; `contracts/config.py:974-979`).
   New code must use `spill_edges`.
 - **Cleanup:** spill files are registered in the run-scoped capture and deleted by
   `end_edge_capture` in the `finally` block of the facade's `run_with_data`
@@ -235,7 +235,7 @@ pipeline:
    pinned per-edge ceiling (`_EDGE_NODE_CEILINGS`), so residual intra-stage depth growth
    is a failing test instead of a Polars SIGSEGV.
 
-The metric is `plan_node_count()` (`engine/materialise.py:153`): non-blank lines of
+The metric is `plan_node_count()` (`engine/materialise.py:154`): non-blank lines of
 `lf.explain(optimized=False)` — a *consistent proxy* for native plan-tree size, not an
 exact node census.
 
@@ -296,7 +296,7 @@ fail-loud, and every **stage-edge** collect is observable through the materialis
 map. `materialise_frame` sits deliberately outside that map, and the reason is that it
 **never reads or writes `_capture`** — not that its callers sit outside a capture scope.
 It records nothing even with a capture explicitly open. `_capture` is a `ContextVar`
-(`engine/materialise.py:116`), so its scope is **dynamic, not lexical**: anything running
+(`engine/materialise.py:117`), so its scope is **dynamic, not lexical**: anything running
 between `begin_edge_capture` and `end_edge_capture` can see it, whoever imports whom.
 Check 12's `engine/ → reporting/` ban constrains the static call graph, not the dynamic
 one, and does not imply reporting never runs inside a capture. The map covers stage

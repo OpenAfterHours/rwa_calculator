@@ -22,18 +22,22 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 from unittest.mock import patch
 
 import polars as pl
 import pytest
 from tests.fixtures.api_validation.build_mandatory_only import write_mandatory_minimum
 
-from rwa_calc.analysis.legacy_ledger import LEDGER_TEMPLATE_IDS
+from rwa_calc.analysis.legacy_ledger import LEDGER_TEMPLATE_IDS, LEDGER_VOCABULARY
 from rwa_calc.analysis.recon_registry import ComponentMapping, LegacyColumnMapping
 from rwa_calc.api.models import CalculationResponse, ReconciliationResponse
 from rwa_calc.api.reconciliation import ReconciliationSettings
 from rwa_calc.api.service import ERROR_RECON_LEDGER_UNAVAILABLE, CreditRiskCalc
 from rwa_calc.contracts.bundles import create_empty_reconciliation_bundle
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 # The projection target, patched by name so the service's call-time import
 # resolves to the patched object.
@@ -298,26 +302,76 @@ class TestProjectionStaysLazy:
         assert isinstance(source.scan_results(), pl.LazyFrame)
         assert all(frame is not source.ledger for frame in collected)
 
-    def test_the_projection_adds_no_collects_at_all(
+    def test_the_projection_adds_exactly_one_bounded_label_measurement_pass(
         self, our_calc: CreditRiskCalc, legacy_file: Path, prior: CalculationResponse
     ) -> None:
-        # Arrange: the same settings run with and without the projection. Any
-        # frame DERIVED from the projection and collected would show up here.
-        settings = _settings(legacy_file, _RICH)
-        calls: list[int] = []
-        real_collect = pl.LazyFrame.collect
+        """The projection materialises ONE bounded pass, and only that one.
 
-        def spy(self: pl.LazyFrame, *args: object, **kwargs: object) -> pl.DataFrame:
-            calls.append(1)
+        This test used to be named "adds no collects at all" and asserted an
+        inequality over ``pl.LazyFrame.collect`` alone. Both were wrong once the
+        projection began measuring label vocabularies: the measurement uses
+        ``pl.collect_all``, which that spy cannot see, so the test stayed green
+        while asserting the opposite of the truth. A guard blind to the mechanism
+        in use is worse than no guard, because the next reader trusts it.
+
+        WHAT THE PASS IS, AND WHY IT IS UNAVOIDABLE. ``project_legacy_ledger``
+        reports the legacy labels that match no engine vocabulary — an unmapped
+        exposure class produces bogus sheets, an unmapped approach empties every
+        template — and reachability accounts for them. Whether a value matches a
+        vocabulary is a question about DATA; no amount of column-name reasoning
+        answers it. So the projection runs one ``pl.collect_all`` over one
+        ``group_by`` per vocabulary column the mapping SUPPLIES — never over the
+        ones it does not, which is why this fixture's two-label mapping measures
+        two plans and not the four ``LEDGER_VOCABULARY`` knows about.
+
+        WHAT IT IS NOT. The firm's extract is NOT materialised. Each plan selects
+        a single String column, so projection pushdown reads four columns and no
+        others, and the projected ledger itself stays a ``LazyFrame`` — asserted
+        by ``test_the_projected_ledger_is_never_collected`` above.
+
+        The bound is two-sided and exact, so this reddens if a future change adds
+        a second materialisation AND if one removes the label measurement. The
+        plan count is anchored to ``len(LEDGER_VOCABULARY)`` rather than a
+        literal, so adding a fifth vocabulary column is not a spurious failure.
+        """
+        # Arrange: the same settings run with and without the projection, spying
+        # BOTH materialisation entry points — the eager one and the batched one.
+        settings = _settings(legacy_file, _RICH)
+        eager: list[int] = []
+        batched: list[int] = []
+        real_collect = pl.LazyFrame.collect
+        real_collect_all = pl.collect_all
+
+        def spy_collect(self: pl.LazyFrame, *args: object, **kwargs: object) -> pl.DataFrame:
+            eager.append(1)
             return real_collect(self, *args, **kwargs)  # type: ignore[arg-type]
 
-        # Act
-        with patch.object(pl.LazyFrame, "collect", spy):
-            our_calc.reconcile(settings, calculation=prior)
-            with_projection = len(calls)
-            calls.clear()
-            _without_projection(our_calc, settings, prior)
-            without_projection = len(calls)
+        def spy_collect_all(frames: object, *args: object, **kwargs: object) -> list[pl.DataFrame]:
+            plans = list(cast("Iterable[pl.LazyFrame]", frames))
+            batched.append(len(plans))
+            return real_collect_all(plans, *args, **kwargs)  # type: ignore[arg-type]
 
-        # Assert
-        assert with_projection == without_projection
+        # Act
+        with (
+            patch.object(pl.LazyFrame, "collect", spy_collect),
+            patch.object(pl, "collect_all", spy_collect_all),
+        ):
+            response = our_calc.reconcile(settings, calculation=prior)
+            with_eager, with_batched = len(eager), sorted(batched)
+            eager.clear()
+            batched.clear()
+            _without_projection(our_calc, settings, prior)
+            without_eager, without_batched = len(eager), sorted(batched)
+
+        # Assert: no eager collect added at all...
+        assert with_eager == without_eager
+        # ...and exactly one batched pass, of one plan per SUPPLIED vocabulary
+        # column. Derived from the projected schema rather than written as a
+        # literal, so it stays true if the mapping or the vocabulary grows, while
+        # still pinning which columns this fixture actually reaches.
+        source = response.legacy_ledger
+        assert source is not None
+        projected = set(source.scan_results().collect_schema().names())
+        measured = sorted(column for column in LEDGER_VOCABULARY if column in projected)
+        assert measured == ["reporting_approach_origin", "reporting_class_origin"]
+        assert with_batched == sorted([*without_batched, len(measured)])

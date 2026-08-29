@@ -38,7 +38,7 @@ import polars as pl
 from rwa_calc.reporting.kernel import col_sum, safe_sum_or_none
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable, Iterable, Mapping
 
     from rwa_calc.reporting.metadata import ReportingContext
 
@@ -172,6 +172,13 @@ type ValueBinding = (
     | SideContext
     | PriorPeriod
     | Formula
+)
+
+# Every binding EXCEPT the intra-row ``Formula`` escape (which pass 2 of the
+# executor resolves over already-computed cells, not over a frame): what
+# ``_evaluate`` and the batched pass resolve against the sheet frame.
+type _EvaluableBinding = (
+    Sum | SafeSum | Mean | WeightedAvg | Ratio | Count | FirstNonNull | SideContext | PriorPeriod
 )
 
 
@@ -392,31 +399,45 @@ def execute(
     empty_default: float | None = 0.0 if spec.empty_cell == "zero" else None
     empty_as_none = spec.empty_cell == "null"
 
-    # Pass 1: every non-formula cell, keyed (row_ref, col_ref). The
-    # grouped-aggregation kernel (Phase 7 S8-CR6 recorded follow-up):
-    # cells share their row's few predicates, so subsets are built once per
-    # DISTINCT predicate — and all predicate masks compile in ONE select
-    # (an eager expression-filter carries ~7ms of plan overhead; a
-    # boolean-mask filter is ~10x cheaper). Same subsets, same _evaluate —
-    # number-neutral by construction.
-    subsets = _predicate_subsets(spec, data, prior_df)
+    # Pass 1: every non-formula cell, keyed (row_ref, col_ref). The whole
+    # sheet evaluates in ONE aggregation pass over the UNFILTERED frame —
+    # each distinct predicate becomes one boolean mask column and each cell
+    # one filtered aggregation expression (``_evaluate_batched``), instead of
+    # a physical subset copy per predicate and a collect per cell. Same masks,
+    # same aggregations as ``_evaluate`` — number-neutral by construction (the
+    # binding-by-binding derivation is the comment block above
+    # ``_cell_aggregation``).
     computed: dict[tuple[str, str], float | None] = {}
     formulas: list[tuple[str, str, Formula]] = []
+    jobs: list[_CellJob] = []
     for row_def in spec.rows:
         for col_ref in spec.column_refs:
             cell = spec.cells.get((row_def.ref, col_ref))
             if cell is None:
                 computed[(row_def.ref, col_ref)] = empty_default
                 continue
-            if isinstance(cell.binding, Formula):
-                formulas.append((row_def.ref, col_ref, cell.binding))
+            binding = cell.binding
+            if isinstance(binding, Formula):
+                formulas.append((row_def.ref, col_ref, binding))
                 continue
-            cell_data, cell_prior = subsets[cell.predicate]
             cell_empty_as_none = (
                 empty_as_none if cell.empty_cell is None else cell.empty_cell == "null"
             )
-            computed[(row_def.ref, col_ref)] = _evaluate(
-                cell.binding, cell_data, cell_prior, ctx, empty_as_none=cell_empty_as_none
+            jobs.append(((row_def.ref, col_ref), cell, binding, cell_empty_as_none))
+    batched, deferred = _evaluate_batched(jobs, data)
+    computed.update(batched)
+
+    # Pass 1b: the out-of-frame bindings (SideContext / PriorPeriod read the
+    # context and the prior frame, not the sheet frame) keep the per-cell
+    # ``_evaluate`` path — with subsets built ONLY for the predicates THEIR
+    # cells use. Building them for the whole spec is exactly the per-predicate
+    # frame copying pass 1 exists to avoid.
+    if deferred:
+        subsets = _predicate_subsets(spec, data, prior_df, [job[1] for job in deferred])
+        for key, cell, binding, cell_empty_as_none in deferred:
+            cell_data, cell_prior = subsets[cell.predicate]
+            computed[key] = _evaluate(
+                binding, cell_data, cell_prior, ctx, empty_as_none=cell_empty_as_none
             )
 
     # Pass 2: formulas, over the computed cells (own-row column ref first,
@@ -519,6 +540,7 @@ def _predicate_subsets(
     spec: TemplateSpec,
     data: pl.DataFrame,
     prior_df: pl.DataFrame | None,
+    cells: Iterable[CellSpec] | None = None,
 ) -> dict[RowPredicate | None, tuple[pl.DataFrame, pl.DataFrame | None]]:
     """Build the (data, prior) subset per DISTINCT cell predicate.
 
@@ -527,12 +549,17 @@ def _predicate_subsets(
     absent on the prior frame still matches nothing there) and evaluate in
     ONE ``select`` per frame; subsets are then boolean-mask filters. A
     constraint-free predicate shares the whole frame.
+
+    ``cells`` restricts the family to some of the spec's cells; the executor
+    passes only the cells it could not batch, because materialising a subset
+    per predicate in the WHOLE spec is the cost the batched pass exists to
+    avoid. None = every cell in the spec.
     """
     subsets: dict[RowPredicate | None, tuple[pl.DataFrame, pl.DataFrame | None]] = {
         None: (data, prior_df)
     }
     preds: list[RowPredicate] = []
-    for cell in spec.cells.values():
+    for cell in spec.cells.values() if cells is None else cells:
         if isinstance(cell.binding, Formula) or cell.predicate is None:
             continue
         if cell.predicate not in subsets:
@@ -570,16 +597,242 @@ def _conj(expr: pl.Expr | None, term: pl.Expr) -> pl.Expr:
     return term if expr is None else expr & term
 
 
+# =============================================================================
+# Pass 1 — the batched (one select per sheet) evaluator
+# =============================================================================
+
+# One cell of work: its (row_ref, col_ref) key, its spec, its binding already
+# narrowed away from ``Formula`` (pass 2 owns those), and the resolved
+# per-cell empty-cell policy (template policy unless the cell overrides it).
+type _CellJob = tuple[tuple[str, str], CellSpec, _EvaluableBinding, bool]
+# Reads one cell's value back off the single one-row aggregation result.
+type _Combiner = Callable[[Mapping[str, object]], float | None]
+
+
+def _evaluate_batched(
+    jobs: list[_CellJob], data: pl.DataFrame
+) -> tuple[dict[tuple[str, str], float | None], list[_CellJob]]:
+    """Evaluate every IN-FRAME cell binding of a sheet in ONE ``select``.
+
+    Each distinct cell predicate compiles to one boolean mask column (all of
+    them in a single ``with_columns``), and each cell becomes one or more
+    aggregation expressions filtered by its mask over the UNFILTERED frame.
+    A sheet therefore costs one mask pass and one aggregation pass, rather
+    than a physical subset copy per distinct predicate plus a
+    plan-optimise-collect round trip per cell.
+
+    Returns ``(computed, deferred)`` — ``deferred`` being the cells whose
+    binding is not an in-frame aggregation (``SideContext`` / ``PriorPeriod``,
+    which read the context and the prior frame), left to the caller's
+    per-cell ``_evaluate`` path.
+    """
+    cols = set(data.columns)
+    masks: dict[RowPredicate | None, str | None] = {}
+    mask_exprs: list[pl.Expr] = []
+    counts: dict[str | None, str] = {}
+    aggs: list[pl.Expr] = []
+    combiners: list[tuple[tuple[str, str], _Combiner]] = []
+    computed: dict[tuple[str, str], float | None] = {}
+    deferred: list[_CellJob] = []
+
+    for key, cell, binding, cell_empty_as_none in jobs:
+        if isinstance(binding, SideContext | PriorPeriod):
+            deferred.append((key, cell, binding, cell_empty_as_none))
+            continue
+        if cell.predicate not in masks:
+            # Same _compile as _predicate_subsets: strict sealed-column terms,
+            # tolerant equals/between compiled against THIS frame's columns.
+            expr = None if cell.predicate is None else cell.predicate._compile(cols)  # noqa: SLF001 - same-module kernel
+            if expr is None:
+                masks[cell.predicate] = None  # constraint-free: no filter at all
+            else:
+                name = f"__cellspec_m{len(mask_exprs)}"
+                mask_exprs.append(expr.alias(name))
+                masks[cell.predicate] = name
+        combine = _cell_aggregation(
+            binding,
+            masks[cell.predicate],
+            cols,
+            f"__cellspec_v{len(combiners)}",
+            aggs,
+            counts,
+            empty_as_none=cell_empty_as_none,
+        )
+        if combine is None:
+            deferred.append((key, cell, binding, cell_empty_as_none))
+            continue
+        combiners.append((key, combine))
+
+    if not aggs:
+        # Every cell resolved to a constant (absent columns) or deferred.
+        row: Mapping[str, object] = {}
+    else:
+        masked = data.with_columns(mask_exprs) if mask_exprs else data
+        row = masked.select(aggs).row(0, named=True)
+    for key, combine in combiners:
+        computed[key] = combine(row)
+    return computed, deferred
+
+
+# The binding -> expression mapping, derived line-by-line against ``_evaluate``
+# (which sees a physically filtered subset where this sees mask + unfiltered
+# frame; ``n`` below is the mask's row count, i.e. the old ``data.height``).
+# ``ean`` is the resolved per-cell ``empty_as_none``; ``empty`` is
+# ``None if ean else 0.0``.
+#
+# | binding             | absent column        | n == 0            | otherwise            |
+# |---------------------|----------------------|-------------------|----------------------|
+# | Sum                 | None (col_sum's own  | None if ean       | sum(fill_null(0))    |
+# |                     | absent-col contract, | else 0.0          |                      |
+# |                     | NOT the empty policy)|                   |                      |
+# | SafeSum             | `empty` when NO col  | 0.0 (sum of the   | sum over the PRESENT |
+# |                     | is present           | present cols)     | cols, in spec order  |
+# | Mean                | `empty`              | `empty` (mean of  | mean(col) * scale    |
+# |                     |                      | nothing is null)  | (nulls skipped)      |
+# | WeightedAvg         | `empty` (either col) | `empty` (weight   | sum(col*w)/sum(w)    |
+# |                     |                      | sum is 0.0)       | * scale; `empty` on  |
+# |                     |                      |                   | an exactly-0 weight  |
+# | Ratio               | `empty` — col_sum    | `empty` (the      | num/den * scale;     |
+# |                     | returns None, which  | denominator sums  | `empty` on an        |
+# |                     | _evaluate's guard    | to 0.0)           | exactly-0 den        |
+# |                     | turns into `empty`   |                   |                      |
+# | Count(distinct)     | `empty`              | 0.0               | n_unique (nulls      |
+# |                     |                      |                   | count as one value)  |
+# | Count               | n/a                  | 0.0               | float(n)             |
+# | FirstNonNull        | None (never the      | None              | first non-null, or   |
+# |                     | empty policy)        |                   | None if all null     |
+# | SideContext         | deferred to _evaluate — reads the ReportingContext      |
+# | PriorPeriod         | deferred to _evaluate — reads the prior-period subset   |
+#
+# Note the three kinds that do NOT take the empty-cell policy on an empty
+# subset: SafeSum (0.0 once any named column is present), Count (0.0), and
+# FirstNonNull (None). Sum and Ratio differ from each other on an ABSENT
+# column — Sum is unconditionally None there, Ratio takes `empty`.
+def _cell_aggregation(  # noqa: PLR0911 - one return per binding kind, mirroring _evaluate
+    binding: ValueBinding,
+    mask: str | None,
+    cols: set[str],
+    alias: str,
+    aggs: list[pl.Expr],
+    counts: dict[str | None, str],
+    *,
+    empty_as_none: bool,
+) -> _Combiner | None:
+    """Append ``binding``'s aggregation expressions to ``aggs`` and return the
+    combiner reading its cell value back. None = not an in-frame aggregation.
+    """
+
+    def over_mask(expr: pl.Expr) -> pl.Expr:
+        return expr if mask is None else expr.filter(pl.col(mask))
+
+    empty: float | None = None if empty_as_none else 0.0
+
+    if isinstance(binding, Sum):
+        if binding.col not in cols:
+            return lambda _row: None
+        aggs.append(over_mask(pl.col(binding.col).fill_null(0.0)).sum().alias(alias))
+        if not empty_as_none:
+            return lambda row: _zeroed(row[alias])
+        n_alias = _count_alias(mask, counts, aggs)
+        return lambda row: None if _as_int(row[n_alias]) == 0 else _zeroed(row[alias])
+
+    if isinstance(binding, SafeSum):
+        names: list[str] = []
+        for i, col in enumerate(binding.cols):
+            if col in cols:
+                names.append(f"{alias}s{i}")
+                aggs.append(over_mask(pl.col(col).fill_null(0.0)).sum().alias(names[-1]))
+        if not names:
+            return lambda _row: empty
+        return lambda row: float(sum(_zeroed(row[name]) for name in names))
+
+    if isinstance(binding, Mean):
+        if binding.col not in cols:
+            return lambda _row: empty
+        aggs.append(over_mask(pl.col(binding.col)).mean().alias(alias))
+
+        def mean(row: Mapping[str, object]) -> float | None:
+            value = _as_float(row[alias])
+            return empty if value is None else value * binding.scale
+
+        return mean
+
+    if isinstance(binding, WeightedAvg):
+        if binding.col not in cols or binding.weight not in cols:
+            return lambda _row: empty
+        weight = pl.col(binding.weight).fill_null(0.0)
+        aggs.append(over_mask(pl.col(binding.col).fill_null(0.0) * weight).sum().alias(f"{alias}n"))
+        aggs.append(over_mask(weight).sum().alias(f"{alias}d"))
+
+        def weighted_avg(row: Mapping[str, object]) -> float | None:
+            total = _as_float(row[f"{alias}d"])
+            if not total:  # exact zero — an all-zero weight vector has no average
+                return empty
+            return _zeroed(row[f"{alias}n"]) / total * binding.scale
+
+        return weighted_avg
+
+    if isinstance(binding, Ratio):
+        if binding.numerator not in cols or binding.denominator not in cols:
+            return lambda _row: empty
+        aggs.append(over_mask(pl.col(binding.numerator).fill_null(0.0)).sum().alias(f"{alias}n"))
+        aggs.append(over_mask(pl.col(binding.denominator).fill_null(0.0)).sum().alias(f"{alias}d"))
+
+        def ratio(row: Mapping[str, object]) -> float | None:
+            den = _as_float(row[f"{alias}d"])
+            if not den:  # exact zero — ratio undefined (and the empty-subset case)
+                return empty
+            return _zeroed(row[f"{alias}n"]) / den * binding.scale
+
+        return ratio
+
+    if isinstance(binding, Count):
+        if not binding.distinct:
+            n_alias = _count_alias(mask, counts, aggs)
+            return lambda row: float(_as_int(row[n_alias]))
+        if binding.col not in cols:
+            return lambda _row: empty
+        aggs.append(over_mask(pl.col(binding.col)).n_unique().alias(alias))
+        return lambda row: float(_as_int(row[alias]))
+
+    if isinstance(binding, FirstNonNull):
+        if binding.col not in cols:
+            return lambda _row: None
+        aggs.append(over_mask(pl.col(binding.col)).drop_nulls().first().alias(alias))
+        return lambda row: _as_float(row[alias])
+
+    return None
+
+
+def _count_alias(mask: str | None, counts: dict[str | None, str], aggs: list[pl.Expr]) -> str:
+    """The row count behind ``mask`` — the batched form of ``data.height`` on
+    the old physical subset. One per DISTINCT mask, shared by every cell that
+    needs it. A null mask value counts as False, exactly as ``filter`` drops
+    it."""
+    alias = counts.get(mask)
+    if alias is None:
+        alias = f"__cellspec_n{len(counts)}"
+        counts[mask] = alias
+        aggs.append((pl.len() if mask is None else pl.col(mask).sum()).alias(alias))
+    return alias
+
+
+def _as_float(value: object) -> float | None:
+    return None if value is None else float(cast("float", value))
+
+
+def _zeroed(value: object) -> float:
+    """A summed aggregation, with the null of an empty/absent frame as 0.0 —
+    the ``float(series.fill_null(0.0).sum())`` the per-cell path returns."""
+    return 0.0 if value is None else float(cast("float", value))
+
+
+def _as_int(value: object) -> int:
+    return 0 if value is None else int(cast("int", value))
+
+
 def _evaluate(
-    binding: Sum
-    | SafeSum
-    | Mean
-    | WeightedAvg
-    | Ratio
-    | Count
-    | FirstNonNull
-    | SideContext
-    | PriorPeriod,
+    binding: _EvaluableBinding,
     data: pl.DataFrame,
     prior: pl.DataFrame | None,
     ctx: ReportingContext | None,

@@ -15,6 +15,7 @@ The project follows a **phased, test-first approach** prioritising CRR (Basel 3.
 - [**UI Output Folder**](ui-output-folder.md) - Let a UI user write calculation outputs to a chosen local folder (server-side write, run-stamped subfolder, network guard); phased TDD plan
 - [**Return Reconciliation**](return-reconciliation.md) - Proposed: compare a generated template (e.g. C 08.03) against the firm's current return cell by cell, and decompose each delta into population / row placement / sheet placement / measurement
 - [**Independent Validation System**](independent-validation-system.md) - Why a green suite keeps shipping template defects, and the six-component plan (impact report, property suite, shadow calculator, cell re-derivation, coverage ratchets, defect-injection scorecard) to fix it
+- [**Architecture Review — structure, efficiency, parallelism (2026-08-29)**](architecture-review-2026-08-29.md) - Measured review of `engine/stages/` layout, reporting-vs-calculation cost, and thread scaling; a sequenced proposal (proposal only, nothing implemented)
 
 ## Development Philosophy
 

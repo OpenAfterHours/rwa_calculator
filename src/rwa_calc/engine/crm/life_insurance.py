@@ -42,6 +42,8 @@ from rwa_calc.rulebook.compile import scalar_value
 from rwa_calc.rulebook.resolve import resolve
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
+
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.contracts.errors import CalculationError
 
@@ -97,6 +99,7 @@ def compute_life_insurance_columns(
     config: CalculationConfig,
     *,
     errors: list[CalculationError] | None = None,
+    present: Collection[str] | None = None,
 ) -> pl.LazyFrame:
     """Compute life insurance CRM columns on the exposure frame.
 
@@ -129,6 +132,14 @@ def compute_life_insurance_columns(
         collateral: Collateral frame (may be None if no collateral).
         config: Calculation configuration.
         errors: Optional error accumulator for CRM020 unknown-currency warnings.
+        present: Column names for ``exposures``, resolved by the CRM processor
+            once for the whole Art. 200(1) block rather than an O(plan-nodes)
+            walk per sub-step (~36 ms per run on the 10k benchmark). It need
+            only be exact for the names tested below — the reference and EAD
+            carriers, ``parent_facility_reference`` / ``counterparty_reference``
+            and the denomination-currency pair. This is the block's FIRST
+            consumer, so the set is in fact exact here (measured). Omitted, the
+            schema is resolved here exactly as before.
 
     Returns:
         Exposure frame with life_ins_collateral_value and life_ins_secured_rw columns.
@@ -187,8 +198,7 @@ def compute_life_insurance_columns(
             (pl.col("market_value") * pl.col("_li_item_rw")).sum().alias("_li_mvrw"),
         )
 
-    exp_schema = exposures.collect_schema()
-    exp_names = exp_schema.names()
+    exp_names = list(present) if present is not None else exposures.collect_schema().names()
     exp_ref_col = "exposure_reference" if "exposure_reference" in exp_names else "loan_reference"
     ead_col = "ead_gross" if "ead_gross" in exp_names else "ead"
     ead = pl.col(ead_col).fill_null(0.0)

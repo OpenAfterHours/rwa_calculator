@@ -47,6 +47,8 @@ from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.sa.guarantor_rw import build_institution_guarantor_rw_expr
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
+
     from rwa_calc.contracts.errors import CalculationError
 
 logger = logging.getLogger(__name__)
@@ -86,6 +88,7 @@ def compute_third_party_deposit_columns(
     *,
     is_basel_3_1: bool,
     errors: list[CalculationError] | None = None,
+    present: Collection[str] | None = None,
 ) -> pl.LazyFrame:
     """Set SA third-party-deposit CRM columns on the exposure frame.
 
@@ -125,7 +128,13 @@ def compute_third_party_deposit_columns(
         (~pl.col("_tpd_is_inst")).any().alias("_tpd_has_non_inst"),
     )
 
-    exp_names = exposures.collect_schema().names()
+    # ``present`` is the CRM processor's column set for the Art. 200(1) block,
+    # resolved before the block ran — collect_schema() is O(plan nodes) and this
+    # sits deep in the CRM chain (~42 ms per run on the 10k benchmark). It is
+    # measurably STALE here (short by the 2 ``life_ins_*`` columns the previous
+    # sub-step wrote) and sound only because neither is among the four names
+    # tested below. Omitted, the schema is resolved here exactly as before.
+    exp_names = list(present) if present is not None else exposures.collect_schema().names()
     exp_ref = "exposure_reference" if "exposure_reference" in exp_names else "loan_reference"
     ead_col = "ead_gross" if "ead_gross" in exp_names else "ead"
 

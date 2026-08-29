@@ -87,6 +87,8 @@ from rwa_calc.observability.audit_cache import sink_audit
 from rwa_calc.rulebook import RulepackV0
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
+
     from rwa_calc.contracts.bundles import CounterpartyLookup
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.contracts.errors import CalculationError
@@ -664,13 +666,36 @@ class CRMProcessor:
         if use_simple_method:
             exposures = undo_sa_ead_reduction(exposures)
 
+        # ONE schema resolution for the whole Art. 200(1) block (steps 4/4c/4d
+        # below). ``collect_schema()`` is O(plan nodes), not O(rows), so each of
+        # the three sub-steps resolving the deep CRM plan for itself cost ~129 ms
+        # per run on the 10k benchmark.
+        #
+        # This set is resolved ONCE HERE and therefore goes STALE as the block
+        # runs — measured on the 10k book: exact for life insurance (the first
+        # consumer), then short by the 2 ``life_ins_*`` columns at the deposit
+        # step and by 4 (``life_ins_*`` + ``third_party_deposit_*``) at the
+        # routing step. It is sound only because each sub-step writes just its
+        # OWN carriers and none of the three tests for a name another writes:
+        # safe by ASSERTION about this block's contents, NOT by construction.
+        # A sub-step that starts testing for a name written earlier in the block
+        # must resolve the schema again at that point rather than reuse this.
+        ofcp_block_columns = exposures.collect_schema().names()
+
         # Pre-compute life insurance method columns (Art. 232) for SA RW mapping
-        exposures = self._apply_life_insurance_step(exposures, collateral, config, errors)
+        exposures = self._apply_life_insurance_step(
+            exposures, collateral, config, errors, present=ofcp_block_columns
+        )
 
         # Step 4c: Art. 200(a)/232(2) third-party-deposit SA RW substitution columns
         # (holder institution RW on the covered part) + F-IRB deferral warning.
         exposures = self._apply_third_party_deposit_step(
-            exposures, third_party_deposits, config, errors, pack=pack
+            exposures,
+            third_party_deposits,
+            config,
+            errors,
+            pack=pack,
+            present=ofcp_block_columns,
         )
 
         # Step 4d: split the Art. 200(1) amounts both preceding steps produced
@@ -679,7 +704,9 @@ class CRMProcessor:
         # two mutually exclusive per leg and the choice turns on the run-level
         # election, which never reaches the COREP generator — so it is decided
         # here, once, and emitted as exclusive-by-construction carriers (RD-8).
-        exposures = route_other_funded_protection(exposures, config, pack=pack)
+        exposures = route_other_funded_protection(
+            exposures, config, pack=pack, present=ofcp_block_columns
+        )
 
         # The second sanctioned INTRA-STAGE checkpoint (with crm_post_ead).
         # Empirically irreducible on Polars 1.37: the guarantee module's
@@ -1085,6 +1112,8 @@ class CRMProcessor:
         collateral: pl.LazyFrame | None,
         config: CalculationConfig,
         errors: list[CalculationError],
+        *,
+        present: Collection[str] | None = None,
     ) -> pl.LazyFrame:
         """Pre-compute life insurance method columns (Art. 232(3) with Art. 233(3)).
 
@@ -1097,7 +1126,9 @@ class CRMProcessor:
         """
         if has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
             assert collateral is not None
-            return compute_life_insurance_columns(exposures, collateral, config, errors=errors)
+            return compute_life_insurance_columns(
+                exposures, collateral, config, errors=errors, present=present
+            )
         from rwa_calc.engine.crm.life_insurance import _add_default_life_ins_columns
 
         return _add_default_life_ins_columns(exposures)
@@ -1110,6 +1141,7 @@ class CRMProcessor:
         errors: list[CalculationError],
         *,
         pack: ResolvedRulepack | None = None,
+        present: Collection[str] | None = None,
     ) -> pl.LazyFrame:
         """Pre-compute Art. 200(a)/232(2) third-party-deposit SA RW columns.
 
@@ -1122,7 +1154,11 @@ class CRMProcessor:
         resolved = pack if pack is not None else RulepackV0.from_config(config).pack
         is_b31 = bool(resolved.feature("sa_revised_risk_weight_tables"))
         return compute_third_party_deposit_columns(
-            exposures, third_party_deposits, is_basel_3_1=is_b31, errors=errors
+            exposures,
+            third_party_deposits,
+            is_basel_3_1=is_b31,
+            errors=errors,
+            present=present,
         )
 
     def _apply_guarantees_step(

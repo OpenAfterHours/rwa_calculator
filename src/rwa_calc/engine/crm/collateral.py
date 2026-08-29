@@ -937,10 +937,13 @@ def _apply_collateral_unified(
 
     # Under Basel 3.1, FSE senior unsecured LGDU = 45% (Art. 161(1)(a));
     # non-FSE = 40% (Art. 161(1)(aa)). Under CRR, all = 45%.
+    # ONE resolution serves the whole function (collect_schema is O(plan nodes);
+    # ~41 ms/10k run). It is STALE by the later uses — the joins below add scratch
+    # — yet exact for the three names tested (lgd_unsecured is written only at the
+    # very end, the other two never). Safe by ASSERTION: a fourth name must re-resolve.
     exposure_schema = exposures.collect_schema()
-    _has_fse_col = (
-        fse_senior_lgd_split and "cp_is_financial_sector_entity" in exposure_schema.names()
-    )
+    entry_schema_names = set(exposure_schema.names())
+    _has_fse_col = fse_senior_lgd_split and "cp_is_financial_sector_entity" in entry_schema_names
     if _has_fse_col:
         lgd_unsecured_fse = lgd_values["unsecured_fse"]
 
@@ -1477,9 +1480,8 @@ def _apply_collateral_unified(
     #   (1) Foundation election: firm opts for FCM instead of LGD Modelling
     #   (2) Art. 169B fallback: insufficient data → FCM formula with own LGDU
     # Under CRR, AIRB is free-form — own LGD always kept unchanged.
-    exposure_schema = exposures.collect_schema()
-    _has_lgd_unsecured_col = "lgd_unsecured" in exposure_schema.names()
-    schema_names = set(exposure_schema.names())
+    _has_lgd_unsecured_col = "lgd_unsecured" in entry_schema_names
+    schema_names = entry_schema_names
 
     airb_method = config.airb_collateral_method
     is_airb = pl.col("approach") == ApproachType.AIRB.value
@@ -1528,8 +1530,7 @@ def _apply_collateral_unified(
     # implementation (which netted collateral against post-CCF ead_gross).
     # FIRB / Slotting / AIRB keep ead_gross because under those approaches
     # collateral modifies LGD (via lgd_post_crm), not EAD.
-    schema_for_he = exposures.collect_schema().names()
-    _has_he_col = "exposure_volatility_haircut" in schema_for_he
+    _has_he_col = "exposure_volatility_haircut" in entry_schema_names
     # E' = ead_for_crm × (1 + HE), shared with the A-IRB LGD input floor blend.
     e_for_lgd_star = lgd_star_exposure_basis_expr(has_volatility_haircut=_has_he_col)
     exposures = exposures.with_columns(

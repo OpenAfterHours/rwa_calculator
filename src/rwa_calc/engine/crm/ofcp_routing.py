@@ -67,6 +67,8 @@ from rwa_calc.engine.crm.collateral import airb_lgd_preserved_expr
 from rwa_calc.rulebook import RulepackV0
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
+
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.rulebook.resolve import ResolvedRulepack
 
@@ -80,6 +82,7 @@ def route_other_funded_protection(
     config: CalculationConfig,
     *,
     pack: ResolvedRulepack | None = None,
+    present: Collection[str] | None = None,
 ) -> pl.LazyFrame:
     """Split the Art. 200(1) amounts between the substitution and LGD blocks.
 
@@ -113,6 +116,17 @@ def route_other_funded_protection(
     Both source columns are producer-sealed non-null — each sub-step emits
     either a computed value or an explicit ``0.0`` default — so no null fill is
     needed or performed here.
+
+    ``present`` is the CRM processor's column set for the Art. 200(1) block,
+    forwarded to ``ensure_columns`` so this step does not walk the CRM plan a
+    second time for one membership test (~51 ms per run on the 10k benchmark).
+    It was resolved before the block ran and is measurably STALE here (short by
+    the 4 ``life_ins_*`` / ``third_party_deposit_*`` columns the two preceding
+    sub-steps wrote), which is sound only because none of them is the single
+    name tested — safe by ASSERTION, not construction. ``ensure_columns``
+    re-derives from the frame before it would inject anything, so an omission
+    cannot silently null a live column here. Omitted, the schema is resolved
+    exactly as before.
     """
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     # The route exists only where the firm both CAN and DID elect LGD Modelling.
@@ -150,6 +164,7 @@ def route_other_funded_protection(
     exposures = ensure_columns(
         exposures,
         {"has_sufficient_collateral_data": ColumnSpec(pl.Boolean, required=False)},
+        present=present,
     )
     on_lgd_route = airb_lgd_preserved_expr(
         config, {"has_sufficient_collateral_data"}, pack=resolved_pack

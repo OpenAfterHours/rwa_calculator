@@ -99,7 +99,7 @@ def propagate_facility_qrre_columns(
     # facility_undrawn rows that already carry the flag from their source
     # facility) and only fills nulls from the counterparty-level OR.
     if facilities is not None:
-        exposures = _broadcast_trade_lc_flag(exposures, facilities)
+        exposures = _broadcast_trade_lc_flag(exposures, facilities, qrre_schema)
 
     return exposures
 
@@ -1093,12 +1093,28 @@ def _apply_qrre_defaults(exposures: pl.LazyFrame, qrre_schema: set[str]) -> pl.L
 def _broadcast_trade_lc_flag(
     exposures: pl.LazyFrame,
     facilities: pl.LazyFrame,
+    exp_schema: set[str],
 ) -> pl.LazyFrame:
     """OR-aggregate ``is_short_term_trade_lc`` per counterparty and broadcast.
 
     Coalesces with any explicit per-row value already on the exposures frame
     (e.g. synthetic facility_undrawn rows carrying the flag from their source
     facility) and only fills nulls from the counterparty-level OR.
+
+    ``exp_schema`` is the caller's column set, resolved EARLIER in the chain
+    instead of here: ``collect_schema()`` is O(plan nodes) and this sits on the
+    deep unify plan (~21 ms per run on the 10k benchmark).
+
+    It is deliberately not the frame's current column set, and the gap is
+    measured rather than assumed — on the 10k book it is stale in BOTH
+    directions: it still lists the five ``_fac_*`` scratch aliases that were
+    dropped, and lacks the ``_cp_trade_lc`` the join below has just added. It
+    is authoritative for the one name tested here, ``is_short_term_trade_lc``,
+    because nothing in between adds or drops it. That makes this site safe by
+    ASSERTION about the intervening steps — unlike the sibling
+    ``_apply_qrre_defaults(exposures, qrre_schema)`` idiom, whose set is
+    resolved at the point it is consumed and is safe by construction. Test any
+    further name here and you must resolve the schema again.
     """
     cp_trade_lc = facilities.group_by("counterparty_reference").agg(
         pl.col("is_short_term_trade_lc").any().alias("_cp_trade_lc")
@@ -1108,7 +1124,7 @@ def _broadcast_trade_lc_flag(
         on="counterparty_reference",
         how="left",
     )
-    if "is_short_term_trade_lc" in exposures.collect_schema().names():
+    if "is_short_term_trade_lc" in exp_schema:
         exposures = exposures.with_columns(
             pl.coalesce(
                 pl.col("is_short_term_trade_lc"),

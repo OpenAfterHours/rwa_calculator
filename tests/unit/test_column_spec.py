@@ -122,6 +122,68 @@ class TestEnsureColumns:
 
 
 # =============================================================================
+# ensure_columns(present=) — the caller-supplied column set
+# =============================================================================
+
+
+class TestEnsureColumnsPresent:
+    """``present=`` lets a caller skip a plan walk it has already paid for.
+
+    The hazard it introduces is silent: ``with_columns`` on an alias that
+    already exists REPLACES the column rather than duplicating it or raising,
+    so a ``present`` that under-specifies overwrites live data with a typed
+    null. On the ``ofcp_routing`` site that null meets
+    ``airb_lgd_preserved_expr``'s ``.fill_null(True)`` and flips every A-IRB
+    leg onto the LGD-Modelling route with no error anywhere.
+    """
+
+    def test_present_that_omits_a_live_column_does_not_null_it(self) -> None:
+        # Arrange — `present` under-specifies: it omits a column the frame HAS.
+        lf = pl.LazyFrame({"ref": ["a", "b"], "has_flag": [False, False]})
+        schema = {"has_flag": ColumnSpec(pl.Boolean, default=None, required=False)}
+
+        result = ensure_columns(lf, schema, present=["ref"]).collect()
+
+        # Unguarded, this is [None, None] — the live column overwritten.
+        assert result["has_flag"].to_list() == [False, False]
+
+    def test_present_that_names_an_absent_column_still_skips_the_injection(self) -> None:
+        # The overstating direction stays as it was: the injection is skipped
+        # and surfaces later as a ColumnNotFound. Loud, so not guarded.
+        lf = pl.LazyFrame({"ref": ["a"]})
+        schema = {"has_flag": ColumnSpec(pl.Boolean, default=None, required=False)}
+
+        result = ensure_columns(lf, schema, present=["ref", "has_flag"]).collect()
+
+        assert result.columns == ["ref"]
+
+    def test_present_is_a_noop_when_it_matches_the_frame(self) -> None:
+        lf = pl.LazyFrame({"ref": ["a"], "has_flag": [True]})
+        schema = {"has_flag": ColumnSpec(pl.Boolean, default=None, required=False)}
+
+        result = ensure_columns(lf, schema, present=["ref", "has_flag"]).collect()
+
+        assert result["has_flag"].to_list() == [True]
+
+    def test_present_injects_in_schema_order_not_set_order(self) -> None:
+        # The guard recomputes `missing` from the frame. Expressing that as a
+        # set difference would make injection order follow set iteration, which
+        # varies with the process hash seed -- non-deterministic column order,
+        # and intermittently red structure-exact goldens.
+        lf = pl.LazyFrame({"ref": ["a"], "keep": [1]})
+        schema = {
+            "b": ColumnSpec(pl.String, default="", required=False),
+            "c": ColumnSpec(pl.Boolean, default=True, required=False),
+            "d": ColumnSpec(pl.Float64, default=0.0, required=False),
+        }
+
+        without = ensure_columns(lf, schema).collect()
+        with_present = ensure_columns(lf, schema, present=["ref"]).collect()
+
+        assert with_present.columns == without.columns
+
+
+# =============================================================================
 # dtypes_of — projection compatible with Polars constructors
 # =============================================================================
 

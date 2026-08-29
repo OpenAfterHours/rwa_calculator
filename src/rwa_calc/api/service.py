@@ -15,6 +15,7 @@ CreditRiskCalc is the single entry point for RWA calculations:
 from __future__ import annotations
 
 import dataclasses
+import logging
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -29,6 +30,15 @@ from rwa_calc.api.models import (
 )
 from rwa_calc.api.results_cache import ResultsCache
 from rwa_calc.api.validation import DataPathValidator
+
+logger = logging.getLogger(__name__)
+
+#: Non-blocking reconciliation warning: the legacy extract could not be projected
+#: into the sealed reporting-ledger vocabulary, so the firm's side of a return
+#: cannot be generated from it. Extends the ``REC00n`` series that
+#: ``contracts.errors`` owns (REC001-REC007) and is declared here because the
+#: projection is retained by this API seam, not by the reconciliation engine.
+ERROR_RECON_LEDGER_UNAVAILABLE = "REC008"
 
 # =============================================================================
 # CreditRiskCalc
@@ -209,7 +219,11 @@ class CreditRiskCalc:
 
         Returns:
             ReconciliationResponse with per-component buckets, summaries, a break
-            worklist, and a totals tie-out.
+            worklist, a totals tie-out, and — when the mapping reaches at least
+            one scoped template — the legacy extract projected into the sealed
+            reporting-ledger vocabulary (``legacy_ledger`` /
+            ``legacy_ledger_coverage``), so the firm's side of a return can be
+            generated from it afterwards.
         """
         from rwa_calc.analysis.reconciliation import ReconciliationRunner
         from rwa_calc.api.models import ReconciliationResponse
@@ -245,13 +259,113 @@ class CreditRiskCalc:
         our_results = calc_response.scan_results()
         legacy_results = LegacyOutputLoader(settings).load()
 
+        # Project the loaded extract BEFORE the runner consumes it into a join —
+        # the runner keeps no copy, so this is the only place the mapped legacy
+        # frame is still in scope.
+        ledger, coverage, ledger_warning = self._project_legacy_ledger(
+            legacy_results, settings.mapping
+        )
+
         bundle = ReconciliationRunner().reconcile(our_results, legacy_results, settings.mapping)
-        return ReconciliationResponse.from_bundle(
+        response = ReconciliationResponse.from_bundle(
             bundle,
             legacy_file=settings.legacy_file,
             framework=self.framework,
             reporting_date=self.reporting_date,
             calculation=calc_response,
+            legacy_ledger=ledger,
+            legacy_ledger_coverage=coverage,
+        )
+        if ledger_warning is None:
+            return response
+        return dataclasses.replace(response, errors=[*response.errors, ledger_warning])
+
+    def _project_legacy_ledger(
+        self, legacy: pl.LazyFrame, mapping: LegacyColumnMapping
+    ) -> tuple[LegacyLedgerSource | None, LedgerCoverage | None, APIError | None]:
+        """Project the loaded legacy extract into the sealed reporting-ledger names.
+
+        Runs once per reconciliation over the frame the runner is about to join,
+        so the firm's side of a COREP template can be generated from the same
+        extract afterwards (``docs/plans/return-reconciliation.md`` Phase 2).
+
+        Stays LAZY. The projection renames and types — it is never collected
+        here, and no template is generated: the reconciliation path is already
+        heavy and that work belongs to the caller, later.
+
+        Degrades without touching the reconciliation. A projection that raises,
+        or a mapping too thin to reach ANY scoped template, yields
+        ``(None, None, warning)``: the firm still gets its exposure-grain
+        reconciliation and the warning says what is missing. Nothing here raises
+        for a data condition.
+
+        Args:
+            legacy: The loaded extract (``LegacyOutputLoader.load()``).
+            mapping: The same mapping the loader was given.
+
+        Returns:
+            The projected source, its coverage, and a non-blocking REC008
+            warning when there is no usable projection (``None`` otherwise).
+        """
+        from rwa_calc.analysis.legacy_ledger import (
+            LEDGER_TEMPLATE_IDS,
+            TEMPLATE_REQUIRED_COLUMNS,
+            project_legacy_ledger,
+        )
+        from rwa_calc.api.errors import convert_to_api_error
+        from rwa_calc.contracts.errors import reconciliation_warning
+
+        try:
+            source, coverage = project_legacy_ledger(legacy, mapping, framework=self.framework)
+        except Exception as exc:
+            logger.warning("legacy ledger projection failed: %s", exc)
+            return (
+                None,
+                None,
+                convert_to_api_error(
+                    reconciliation_warning(
+                        ERROR_RECON_LEDGER_UNAVAILABLE,
+                        f"legacy reporting-ledger projection failed ({exc}); the "
+                        "exposure-grain reconciliation is unaffected, but no return "
+                        "template can be generated from this extract",
+                        actual_value=str(exc),
+                    )
+                ),
+            )
+
+        if coverage.reachable_templates:
+            return source, coverage, None
+
+        # No template is reachable, which is a different failure from a sparse
+        # one: the coverage would describe a projection nothing can consume, so
+        # it is dropped and the columns that would unlock a template are named
+        # on the warning instead.
+        unlocking = sorted(
+            name
+            for template_id in LEDGER_TEMPLATE_IDS
+            for group in TEMPLATE_REQUIRED_COLUMNS[template_id]
+            if not set(group) & coverage.supplied
+            for name in group
+        )
+        logger.info(
+            "legacy ledger projection reached none of the %d scoped templates; "
+            "map one of %s to unlock one",
+            len(LEDGER_TEMPLATE_IDS),
+            unlocking,
+        )
+        return (
+            None,
+            None,
+            convert_to_api_error(
+                reconciliation_warning(
+                    ERROR_RECON_LEDGER_UNAVAILABLE,
+                    "legacy reporting-ledger projection reached none of "
+                    f"{list(LEDGER_TEMPLATE_IDS)}: the mapping supplies no "
+                    f"{', '.join(unlocking)}. The exposure-grain reconciliation is "
+                    "unaffected; no return template can be generated from this extract",
+                    actual_value=", ".join(unlocking),
+                )
+            ),
         )
 
     def _stamp_scope(self, response: CalculationResponse) -> CalculationResponse:
@@ -325,7 +439,11 @@ class CreditRiskCalc:
 
 
 if TYPE_CHECKING:
-    from rwa_calc.api.models import ReconciliationResponse
+    import polars as pl
+
+    from rwa_calc.analysis.legacy_ledger import LedgerCoverage, LegacyLedgerSource
+    from rwa_calc.analysis.recon_registry import LegacyColumnMapping
+    from rwa_calc.api.models import APIError, ReconciliationResponse
     from rwa_calc.api.reconciliation import ReconciliationSettings
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.contracts.protocols import LoaderProtocol

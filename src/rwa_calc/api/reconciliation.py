@@ -15,6 +15,16 @@ Provides the analyst-facing entry points that surround the pure
 The loader maps only the columns present in the file; any mapped component whose
 column is absent is left out and surfaced as a non-fatal REC001 warning by the
 runner (single authority), so reconciliation degrades gracefully.
+
+The TOML grammar carries a second, optional table family alongside
+``[components.*]``: ``[carriers.*]``, declaring the legacy columns that hold a
+NAME or a FLAG rather than a reconcilable amount (obligor reference, exposure
+type, default status, protection type). They are raw pass-throughs: loaded onto
+the same ``legacy_<name>`` convention, ignored by the reconciliation engine
+(there is no delta to bucket), and consumed by the reporting-ledger projection
+(``analysis.legacy_ledger``), which needs them because this loader's closing
+``.select`` drops every column the mapping does not declare. A config written
+before they existed omits the table and behaves exactly as before.
 """
 
 from __future__ import annotations
@@ -30,6 +40,7 @@ import polars as pl
 
 from rwa_calc.analysis.recon_registry import (
     RECONCILABLE_COMPONENTS_BY_NAME,
+    CarrierMapping,
     ComponentMapping,
     LegacyColumnMapping,
 )
@@ -116,6 +127,12 @@ def dump_reconciliation_config(settings: ReconciliationSettings) -> str:
             lines.append(f"tol_kind = {_toml_str(cm.tol_kind)}")
         if cm.tol is not None:
             lines.append(f"tol = {cm.tol!r}")
+    for name, carrier in settings.mapping.carriers.items():
+        lines.append("")
+        lines.append(f"[carriers.{name}]")
+        lines.append(f"legacy_column = {_toml_str(carrier.legacy_column)}")
+        if carrier.value_map:
+            lines.append(f"value_map = {_toml_inline_table(carrier.value_map)}")
     return "\n".join(lines) + "\n"
 
 
@@ -165,6 +182,20 @@ class LegacyOutputLoader:
                 logger.debug("legacy column %r for component %r absent", cm.legacy_column, name)
                 continue
             exprs.append(_component_expr(actual, name, cm))
+        # Carriers travel on the SAME ``legacy_<name>`` convention as the
+        # components, cast to String and otherwise untouched: the loader is
+        # mechanical (it does not apply a component's ``value_map`` either), and
+        # the ledger projection owns the canonicalisation. A Boolean source
+        # column casts to "true"/"false", which the projection's flag parser
+        # accepts.
+        for name, carrier_mapping in mapping.carriers.items():
+            actual = norm_to_actual.get(_normalise_name(carrier_mapping.legacy_column))
+            if actual is None:
+                logger.debug(
+                    "legacy column %r for carrier %r absent", carrier_mapping.legacy_column, name
+                )
+                continue
+            exprs.append(pl.col(actual).cast(pl.String).alias(f"legacy_{name}"))
 
         if not exprs:
             return pl.LazyFrame()
@@ -193,6 +224,7 @@ def _settings_from_raw(raw: dict[str, Any], base_dir: Path) -> ReconciliationSet
         legacy_keys=tuple(raw.get("legacy_keys", ())),
         our_keys=tuple(raw.get("our_keys", ("exposure_reference",))),
         components=_parse_components(raw.get("components", {})),
+        carriers=_parse_carriers(raw.get("carriers", {})),
     )
     return ReconciliationSettings(
         legacy_file=legacy_file,
@@ -220,6 +252,27 @@ def _parse_components(raw: dict[str, Any]) -> dict[str, ComponentMapping]:
             tol=(float(spec["tol"]) if "tol" in spec else None),
         )
     return components
+
+
+def _parse_carriers(raw: dict[str, Any]) -> dict[str, CarrierMapping]:
+    """Build CarrierMapping objects from the TOML ``[carriers.*]`` tables.
+
+    Absent from a config written before the reporting-ledger projection existed,
+    in which case ``raw`` is ``{}`` and the mapping carries no identities — the
+    reconciliation behaves exactly as it did.
+    """
+    carriers: dict[str, CarrierMapping] = {}
+    for name, spec in raw.items():
+        if not isinstance(spec, dict):
+            raise ValueError(f"carrier '{name}' must be a table, got {type(spec).__name__}")
+        legacy_column = spec.get("legacy_column")
+        if not legacy_column:
+            raise ValueError(f"carrier '{name}' must set 'legacy_column'")
+        carriers[name] = CarrierMapping(
+            legacy_column=legacy_column,
+            value_map=dict(spec.get("value_map", {})),
+        )
+    return carriers
 
 
 def _component_expr(actual: str, name: str, cm: ComponentMapping) -> pl.Expr:

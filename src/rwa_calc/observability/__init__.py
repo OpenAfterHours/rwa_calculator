@@ -10,6 +10,7 @@ Key responsibilities:
 - Per-run correlation IDs exposed as a contextvar
 - Stage-timing context manager emitting structured entry/exit records
 - Text and JSON formatters for human-readable and audit-friendly output
+- `loggable` — render an untrusted value safe to put in a log record (CWE-117)
 - Opt-in audit-cache writer (`sink_audit` / `prune_audit_cache`)
 
 References:
@@ -30,6 +31,7 @@ from rwa_calc.observability.context import (
 )
 from rwa_calc.observability.formatters import JsonFormatter, TextFormatter
 from rwa_calc.observability.logging_setup import configure_logging, get_logger
+from rwa_calc.observability.safe_values import loggable
 
 __all__ = [
     "JsonFormatter",
@@ -40,6 +42,7 @@ __all__ = [
     "configure_logging",
     "current_run_id",
     "get_logger",
+    "loggable",
     "new_run_id",
     "prune_audit_cache",
     "sink_audit",

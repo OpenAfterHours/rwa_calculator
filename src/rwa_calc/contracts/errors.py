@@ -382,6 +382,13 @@ ERROR_RECON_NON_FINITE_VALUE = "REC006"
 # methodology vocabulary (STD / FIRB / AIRB / SLOTTING / EQUITY), so the by-method
 # allocation would split the two sides on keys that can never meet.
 ERROR_RECON_METHOD_UNRESOLVED = "REC007"
+# The legacy extract could not be projected into the sealed reporting-ledger
+# vocabulary, so the firm's side of a return cannot be generated from it. The
+# reconciliation itself is unaffected — the exposure-grain comparison still runs
+# and every summary is identical; only the template comparison is unavailable.
+# The message names the ledger columns the mapping does not supply, so the
+# remedy is actionable rather than a bare failure.
+ERROR_RECON_LEDGER_UNAVAILABLE = "REC008"
 
 # Cross-template reporting tie-out codes (reporting.tieouts). Non-fatal:
 # a break means two independently-generated templates (C 02.00 / C 07.00 /

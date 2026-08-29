@@ -2831,6 +2831,7 @@
       ],
       "pack_entries": [],
       "source_files": [
+        "analysis/legacy_ledger.py",
         "contracts/bundles.py",
         "contracts/edges.py",
         "contracts/validation.py",

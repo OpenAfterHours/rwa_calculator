@@ -104,13 +104,13 @@ fires none itself.
 
 | Label | Location | When it fires | What it bounds |
 |---|---|---|---|
-| `hierarchy_exit` | `engine/stages/hierarchy/stage.py` (`run`, via `materialise_sealed_edge`) | Every run, after the securitisation lookup is attached | The hierarchy unify/enrich plan (measured ≈1,586 nodes at 10k) crossing to the CCR stage / Classifier |
+| `hierarchy_exit` | `engine/stages/hierarchy.py` (`run`, via `materialise_sealed_edge`) | Every run, after the securitisation lookup is attached | The hierarchy unify/enrich plan (measured ≈1,586 nodes at 10k) crossing to the CCR stage / Classifier |
 | `ccr_exit` | `engine/stages/ccr.py` (`run`) | Only when `data.ccr` is present (the stage fn no-ops otherwise) | The `diagonal_relaxed` concat of synthetic SA-CCR exposure rows onto the hierarchy output |
-| `classifier_exit` | `engine/stages/classify/classifier.py` (producer-side, in `classify`) | Every run | The classification flag/subtype/approach chain; the diagnostic emits below it read in-memory data, and CRM receives an eager-backed frame |
+| `classifier_exit` | `engine/classify/classifier.py` (producer-side, in `classify`) | Every run | The classification flag/subtype/approach chain; the diagnostic emits below it read in-memory data, and CRM receives an eager-backed frame |
 | `crm_post_ead` | `engine/crm/processor.py` (`_run_ead_pipeline`) | Every run | **First sanctioned intra-stage checkpoint** — the provisions → CCF → init-EAD chain; the collateral step builds several small lookups from this frame, and without the checkpoint each lookup collect re-executes that chain (A/B-measured 35–52% full-pipeline cost; see next section) |
 | `crm_pre_guarantee_unified` | `engine/crm/processor.py` (`get_crm_unified_bundle`) | Only when valid guarantee inputs **and** a counterparty lookup are present | **Second sanctioned intra-stage checkpoint** — the collateral plan, before the guarantee module's 3-path concat (see next section) |
 | `crm_exit` | `engine/crm/processor.py` (producer-side) | Every run | The full CRM plan (guarantees + `_finalize_ead` + audit columns); the collateral-allocation / CRM-audit projections below it read in-memory data instead of re-executing the guarantee plan |
-| `re_split_exit` | `engine/stages/re_split/stage.py` (`run`) | Every run (the splitter itself is a no-op when no rows carry `re_split_mode`) | The RE loan-splitter output before the calculators fork the plan three ways — this edge replaces the old `pipeline_pre_branch` barrier one stage later |
+| `re_split_exit` | `engine/stages/re_split.py` (`run`) | Every run (the splitter itself is a no-op when no rows carry `re_split_mode`) | The RE loan-splitter output before the calculators fork the plan three ways — this edge replaces the old `pipeline_pre_branch` barrier one stage later |
 | `sa_branch` / `irb_branch` / `slotting_branch` | `engine/stages/calc.py` via `materialise_sealed_branches` | Every run | The three per-approach calculator chains; cpu mode collects all three in one `pl.collect_all` (CSE computes the shared upstream once), spill mode sinks each branch sequentially |
 
 **Removed at Phase 1:** the `classifier_output`, `crm_post_ead_fanout`,
@@ -266,8 +266,8 @@ and their census is ratcheted by arch_check check 11:
 
 | Location | What | Why |
 |---|---|---|
-| `engine/stages/hierarchy/graph.py` | Graph-edge collects (ultimate parent / facility root / facility ancestor closure) | Iterative graph walk (cycle detection, depth tracking) that Polars expressions can't express; unique org/facility edges, typically <1,000 rows |
-| `engine/stages/hierarchy/ratings.py` | Best internal/external rating lookups (`pl.collect_all`) | Small per-counterparty frames referenced by multiple downstream joins |
+| `engine/hierarchy/graph.py` | Graph-edge collects (ultimate parent / facility root / facility ancestor closure) | Iterative graph walk (cycle detection, depth tracking) that Polars expressions can't express; unique org/facility edges, typically <1,000 rows |
+| `engine/hierarchy/ratings.py` | Best internal/external rating lookups (`pl.collect_all`) | Small per-counterparty frames referenced by multiple downstream joins |
 | `engine/crm/collateral.py:363` | 3 collateral lookup collects (`pl.collect_all`) | Each lookup feeds multiple downstream joins; without materialisation the `group_by`/`select` re-evaluates at each reference |
 | `engine/crm/processor.py:982` | Guarantee + counterparty + rating-inheritance lookups (`pl.collect_all`) | Prevents parquet re-scans; small frames |
 | `contracts/validation.py`, `engine/utils.py` (`has_rows`), `sa/calculator.py` (`_warn_equity_in_main_table`), `irb/formulas.py` (scalar wrapper) | Validation / diagnostics / scalar helpers | Off the hot path or `.head(1)`-sized |

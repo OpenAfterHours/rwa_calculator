@@ -65,7 +65,7 @@ from rwa_calc.engine.pipeline import PipelineOrchestrator
 
 _FIXTURES_DIR = Path(__file__).parent.parent.parent / "fixtures" / "p1_218"
 
-# The facility-undrawn hierarchy stage (engine/stages/hierarchy/facility_undrawn.py)
+# The facility-undrawn hierarchy stage (engine/hierarchy/facility_undrawn.py)
 # synthesises one exposure per undrawn facility with exposure_reference =
 # "<facility_reference>_UNDRAWN"; the CRM guarantee split then re-parents its
 # sub-rows under that synthetic reference (not the raw facility_reference).

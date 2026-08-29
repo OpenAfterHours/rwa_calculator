@@ -5,7 +5,7 @@ not once per exposure leg (CRR Art. 154(4)(c) / PS1/26 Art. 147(5A)(c)).
 Pipeline position:
     fixture-builder output -> test-writer -> engine-implementer
     (RawDataBundle -> HierarchyResolver -> ExposureClassifier, exercising
-    ``engine/stages/classify/subtypes.py``'s obligor-aggregate expression)
+    ``engine/classify/subtypes.py``'s obligor-aggregate expression)
 
 Key responsibilities:
 - Provide ONE ``build_p1_320_raw_bundle`` that carries every classification
@@ -17,7 +17,7 @@ Key responsibilities:
   for that facility (drawn loan / synthetic ``_UNDRAWN`` headroom / MOF
   waterfall sub-row / MOF residual row).
 
-Defect site: ``src/rwa_calc/engine/stages/classify/subtypes.py:186-197``.
+Defect site: ``src/rwa_calc/engine/classify/subtypes.py:186-197``.
 The aggregate today sums ``facility_limit`` over every QRRE-CANDIDATE LEG,
 so a facility split into N legs is counted N times.
 
@@ -143,14 +143,14 @@ Field mapping (design doc Sec. 2.4, both regimes):
 
 References:
 - CRR Art. 154(4)(c) / PS1/26 Art. 147(5A)(c): QRRE per-individual aggregate.
-- ``src/rwa_calc/engine/stages/hierarchy/facility_undrawn.py``: MOF waterfall
+- ``src/rwa_calc/engine/hierarchy/facility_undrawn.py``: MOF waterfall
   expansion -- ``facility_limit`` on every waterfall/residual row is the
   ROOT's own ``limit`` field, never the sub's (``:561``); ``risk_type`` is
   ``coalesce(mof_risk_type, risk_type)`` so a waterfall row takes its OWN
   sub's risk_type (``:512-515``); ``is_secured``/``is_revolving``/
   ``is_qrre_transactor`` are the PARENT's (ROOT's) own values, not per-sub
   (``:554-560``).
-- ``src/rwa_calc/engine/stages/hierarchy/unify.py``: ``parent_facility_reference
+- ``src/rwa_calc/engine/hierarchy/unify.py``: ``parent_facility_reference
   = coalesce(mapped_parent_facility, source_facility_reference)``; a
   facility_undrawn row's ``source_facility_reference`` is the row's own
   ``facility_reference`` (the ROOT for MOF waterfall/residual rows).

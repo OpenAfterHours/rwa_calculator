@@ -98,6 +98,74 @@
   "rwa_calc.engine.ccr.wwr::apply_wwr_gate": [
     "CRR Art. 291"
   ],
+  "rwa_calc.engine.classify.approach::_align_irb_exposure_class": [
+    "CRR Art. 147",
+    "CRR Art. 147(5)",
+    "PS1/26, paragraph 147"
+  ],
+  "rwa_calc.engine.classify.attributes::_build_has_income_cover_expr": [
+    "PS1/26, paragraph 124E"
+  ],
+  "rwa_calc.engine.classify.attributes::_build_is_defaulted_expr": [
+    "CRR Art. 178",
+    "CRR Art. 153"
+  ],
+  "rwa_calc.engine.classify.attributes::_build_qualifies_as_retail_expr": [
+    "CRR Art. 123",
+    "PS1/26, paragraph 123A"
+  ],
+  "rwa_calc.engine.classify.attributes::derive_independent_flags": [
+    "CRR Art. 147",
+    "PS1/26, paragraph 147"
+  ],
+  "rwa_calc.engine.classify.attributes::natural_person_expr": [
+    "CRR Art. 147(5)",
+    "PS1/26, paragraph 147"
+  ],
+  "rwa_calc.engine.classify.attributes::with_group_annual_revenue": [
+    "PS1/26, paragraph 147"
+  ],
+  "rwa_calc.engine.classify.classifier::ExposureClassifier.classify": [
+    "CRR Art. 112",
+    "CRR Art. 147"
+  ],
+  "rwa_calc.engine.classify.permissions::resolve_model_permissions": [
+    "CRR Art. 143",
+    "CRR Art. 148",
+    "CRR Art. 150"
+  ],
+  "rwa_calc.engine.classify.subtypes::classify_exposure_subtypes": [
+    "CRR Art. 153(2)",
+    "CRR Art. 142(1)(4)",
+    "CRR Art. 154(4)",
+    "PS1/26, paragraph 153",
+    "PS1/26, paragraph 147"
+  ],
+  "rwa_calc.engine.classify.subtypes::derive_exposure_subclass": [
+    "PS1/26, paragraph 147A.1"
+  ],
+  "rwa_calc.engine.classify.subtypes::derive_purchased_receivables_pd": [
+    "CRR Art. 160(2)",
+    "CRR Art. 160(6)",
+    "PS1/26, paragraph 160"
+  ],
+  "rwa_calc.engine.classify.subtypes::qrre_obligor_aggregate_limit_expr": [
+    "CRR Art. 154(4)",
+    "PS1/26, paragraph 147"
+  ],
+  "rwa_calc.engine.classify.subtypes::qrre_undrawn_cancellable_expr": [
+    "CRR Art. 154(4)",
+    "PS1/26, paragraph 147"
+  ],
+  "rwa_calc.engine.classify.subtypes::qrre_unsecured_expr": [
+    "CRR Art. 154(4)",
+    "PS1/26, paragraph 147"
+  ],
+  "rwa_calc.engine.classify.subtypes::sync_irb_exposure_class": [
+    "CRR Art. 147(5)",
+    "CRR Art. 147(4)",
+    "PS1/26, paragraph 147"
+  ],
   "rwa_calc.engine.crm.collateral::_apply_collateral_unified": [
     "CRR Art. 199",
     "CRR Art. 211",
@@ -264,6 +332,23 @@
     "CRR Art. 114",
     "CRR Art. 115"
   ],
+  "rwa_calc.engine.hierarchy.enrich::_apply_obligor_short_term_spillover": [
+    "CRR Art. 131"
+  ],
+  "rwa_calc.engine.hierarchy.enrich::_apply_obligor_st_contamination_flags": [
+    "CRR Art. 140",
+    "PS1/26, paragraph 140"
+  ],
+  "rwa_calc.engine.hierarchy.enrich::apply_short_term_rating_override": [
+    "CRR Art. 131",
+    "CRR Art. 140"
+  ],
+  "rwa_calc.engine.hierarchy.enrich::attach_counterparty_rating": [
+    "CRR Art. 135",
+    "CRR Art. 136",
+    "CRR Art. 138",
+    "CRR Art. 139"
+  ],
   "rwa_calc.engine.irb.formulas::_capital_k_expr_from_params": [
     "CRR Art. 153(1)"
   ],
@@ -343,6 +428,14 @@
   ],
   "rwa_calc.engine.irb.transforms::prepare_columns": [
     "CRR Art. 162(1)"
+  ],
+  "rwa_calc.engine.re_split.flagging::_re_split_per_component_eligibility": [
+    "PS1/26, paragraph 124.4"
+  ],
+  "rwa_calc.engine.re_split.splitter::RealEstateSplitter.split": [
+    "CRR Art. 125",
+    "CRR Art. 126",
+    "PS1/26, paragraph 124F"
   ],
   "rwa_calc.engine.sa.b31_risk_weight_tables::_create_b31_covered_bond_df": [
     "PS1/26, paragraph 129"
@@ -549,99 +642,6 @@
   ],
   "rwa_calc.engine.slotting.transforms::zero_covered_expected_loss": [
     "PS1/26, paragraph 235"
-  ],
-  "rwa_calc.engine.stages.classify.approach::_align_irb_exposure_class": [
-    "CRR Art. 147",
-    "CRR Art. 147(5)",
-    "PS1/26, paragraph 147"
-  ],
-  "rwa_calc.engine.stages.classify.attributes::_build_has_income_cover_expr": [
-    "PS1/26, paragraph 124E"
-  ],
-  "rwa_calc.engine.stages.classify.attributes::_build_is_defaulted_expr": [
-    "CRR Art. 178",
-    "CRR Art. 153"
-  ],
-  "rwa_calc.engine.stages.classify.attributes::_build_qualifies_as_retail_expr": [
-    "CRR Art. 123",
-    "PS1/26, paragraph 123A"
-  ],
-  "rwa_calc.engine.stages.classify.attributes::derive_independent_flags": [
-    "CRR Art. 147",
-    "PS1/26, paragraph 147"
-  ],
-  "rwa_calc.engine.stages.classify.attributes::natural_person_expr": [
-    "CRR Art. 147(5)",
-    "PS1/26, paragraph 147"
-  ],
-  "rwa_calc.engine.stages.classify.attributes::with_group_annual_revenue": [
-    "PS1/26, paragraph 147"
-  ],
-  "rwa_calc.engine.stages.classify.classifier::ExposureClassifier.classify": [
-    "CRR Art. 112",
-    "CRR Art. 147"
-  ],
-  "rwa_calc.engine.stages.classify.permissions::resolve_model_permissions": [
-    "CRR Art. 143",
-    "CRR Art. 148",
-    "CRR Art. 150"
-  ],
-  "rwa_calc.engine.stages.classify.subtypes::classify_exposure_subtypes": [
-    "CRR Art. 153(2)",
-    "CRR Art. 142(1)(4)",
-    "CRR Art. 154(4)",
-    "PS1/26, paragraph 153",
-    "PS1/26, paragraph 147"
-  ],
-  "rwa_calc.engine.stages.classify.subtypes::derive_exposure_subclass": [
-    "PS1/26, paragraph 147A.1"
-  ],
-  "rwa_calc.engine.stages.classify.subtypes::derive_purchased_receivables_pd": [
-    "CRR Art. 160(2)",
-    "CRR Art. 160(6)",
-    "PS1/26, paragraph 160"
-  ],
-  "rwa_calc.engine.stages.classify.subtypes::qrre_obligor_aggregate_limit_expr": [
-    "CRR Art. 154(4)",
-    "PS1/26, paragraph 147"
-  ],
-  "rwa_calc.engine.stages.classify.subtypes::qrre_undrawn_cancellable_expr": [
-    "CRR Art. 154(4)",
-    "PS1/26, paragraph 147"
-  ],
-  "rwa_calc.engine.stages.classify.subtypes::qrre_unsecured_expr": [
-    "CRR Art. 154(4)",
-    "PS1/26, paragraph 147"
-  ],
-  "rwa_calc.engine.stages.classify.subtypes::sync_irb_exposure_class": [
-    "CRR Art. 147(5)",
-    "CRR Art. 147(4)",
-    "PS1/26, paragraph 147"
-  ],
-  "rwa_calc.engine.stages.hierarchy.enrich::_apply_obligor_short_term_spillover": [
-    "CRR Art. 131"
-  ],
-  "rwa_calc.engine.stages.hierarchy.enrich::_apply_obligor_st_contamination_flags": [
-    "CRR Art. 140",
-    "PS1/26, paragraph 140"
-  ],
-  "rwa_calc.engine.stages.hierarchy.enrich::apply_short_term_rating_override": [
-    "CRR Art. 131",
-    "CRR Art. 140"
-  ],
-  "rwa_calc.engine.stages.hierarchy.enrich::attach_counterparty_rating": [
-    "CRR Art. 135",
-    "CRR Art. 136",
-    "CRR Art. 138",
-    "CRR Art. 139"
-  ],
-  "rwa_calc.engine.stages.re_split.flagging::_re_split_per_component_eligibility": [
-    "PS1/26, paragraph 124.4"
-  ],
-  "rwa_calc.engine.stages.re_split.splitter::RealEstateSplitter.split": [
-    "CRR Art. 125",
-    "CRR Art. 126",
-    "PS1/26, paragraph 124F"
   ],
   "rwa_calc.engine.supporting_factors::SupportingFactorCalculator.apply_factors": [
     "CRR Art. 501"

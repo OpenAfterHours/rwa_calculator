@@ -30,7 +30,7 @@ import pytest
 
 from rwa_calc.contracts.config import CalculationConfig, PermissionMode
 from rwa_calc.domain.enums import ApproachType
-from rwa_calc.engine.stages.classify import ExposureClassifier
+from rwa_calc.engine.classify import ExposureClassifier
 from tests.fixtures.p1_245.p1_245 import (
     BIG_GROUP_REVENUE,
     CP_PARENT_BIG,

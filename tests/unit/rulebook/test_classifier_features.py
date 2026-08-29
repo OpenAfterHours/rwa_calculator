@@ -6,7 +6,7 @@ Phase 5 S8 moved the classifier stage's regime branches off
 and overridable elections those branches read stay in ``config`` → S11):
 
 - ``approach_restrictions_b31_applicable`` (S8a) gates the Basel 3.1 Art. 147A(1)
-  IRB-approach restriction family in ``engine/stages/classify/{approach,audit}.py``
+  IRB-approach restriction family in ``engine/classify/{approach,audit}.py``
   (FSE/large-corp/institution no A-IRB, sovereign-like + equity SA-only,
   IPRE/HVCRE slotting-only, plus the CLS008 large-corp conservatism warning).
 - ``b31_high_risk_class_applicable`` (S8b) gates the Art. 128 150% high-risk class

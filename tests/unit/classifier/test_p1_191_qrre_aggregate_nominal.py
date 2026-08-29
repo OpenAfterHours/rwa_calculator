@@ -16,7 +16,7 @@ References:
 - CRR Art. 154(4)(c): QRRE; aggregate exposure to a single obligor ≤ EUR 100,000
 - PRA PS1/26 Art. 147(5A)(c): QRRE sub-portfolio; largest per-individual aggregate
   nominal ≤ GBP 90,000
-- engine/stages/classify/: _combine_classifications is_qrre per-row defect
+- engine/classify/: _combine_classifications is_qrre per-row defect
 - tests/fixtures/p1_191/p1_191.py: fixture builder constants (limits, refs)
 - tests/unit/test_classifier_qrre_warnings.py: analogous CLS004 pattern
 """
@@ -32,8 +32,8 @@ import pytest
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ExposureClass
-from rwa_calc.engine.stages.classify import ExposureClassifier
-from rwa_calc.engine.stages.hierarchy import HierarchyResolver
+from rwa_calc.engine.classify import ExposureClassifier
+from rwa_calc.engine.hierarchy import HierarchyResolver
 
 # =============================================================================
 # Constants imported from the fixture builder (single source of truth)

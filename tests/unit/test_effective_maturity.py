@@ -250,7 +250,7 @@ class TestSchemaAndPropagation:
 
     def test_effective_maturity_on_exposures_frame_schema(self) -> None:
         """The column is declared in the internal exposures frame schema."""
-        from rwa_calc.engine.stages.hierarchy.unify import unify_exposures
+        from rwa_calc.engine.hierarchy.unify import unify_exposures
 
         source = unify_exposures.__code__.co_consts
         # Flatten nested code constants looking for the string literal

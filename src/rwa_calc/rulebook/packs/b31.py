@@ -572,7 +572,7 @@ ENTRIES: dict[str, RuleEntry] = {
     ),
     # Basel 3.1 Art. 147A(1) IRB-approach restrictions: FSE/large-corp/institution
     # no A-IRB, sovereign-like + equity SA-only, IPRE/HVCRE slotting-only.
-    # Overrides the CRR Feature; gates engine/stages/classify/{approach,audit}.py.
+    # Overrides the CRR Feature; gates engine/classify/{approach,audit}.py.
     "approach_restrictions_b31_applicable": Feature(
         name="approach_restrictions_b31_applicable",
         enabled=True,
@@ -613,7 +613,7 @@ ENTRIES: dict[str, RuleEntry] = {
     ),
     # Basel 3.1 Art. 123A two-path retail qualification — see packs/crr.py. Gates the
     # B31 SME-auto-qualify + threshold/granularity limbs in
-    # engine/stages/classify/attributes.py::_build_qualifies_as_retail_expr.
+    # engine/classify/attributes.py::_build_qualifies_as_retail_expr.
     "retail_art_123a_two_path_applicable": Feature(
         name="retail_art_123a_two_path_applicable",
         enabled=True,

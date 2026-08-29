@@ -335,7 +335,7 @@ def _build_cp_sft_irb_counterparty() -> pl.LazyFrame:
         "entity_type": CCR_SFT_IRB_CP_ENTITY_TYPE,
         "country_code": CCR_SFT_IRB_CP_COUNTRY_CODE,
         # MUST be present and below the GBP 440m large-corporate threshold
-        # (Art. 147A(1)(d)): engine/stages/classify/approach.py's is_large_corp
+        # (Art. 147A(1)(d)): engine/classify/approach.py's is_large_corp
         # treats a counterparty with BOTH annual_revenue and total_assets null
         # as large (conservative ``.otherwise(pl.lit(True))`` default), and a
         # B31 large corporate is A-IRB-blocked. That would silently route A0-5b

@@ -30,6 +30,7 @@ import polars as pl
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import PermissionMode
+from rwa_calc.engine.classify import ExposureClassifier
 from rwa_calc.engine.crm import collateral as collateral_mod
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
 from rwa_calc.engine.crm.processor import (
@@ -39,11 +40,10 @@ from rwa_calc.engine.crm.processor import (
     _join_netting_amounts,
     _resolve_pledge_from_joined,
 )
+from rwa_calc.engine.hierarchy import HierarchyResolver
 from rwa_calc.engine.irb.calculator import IRBCalculator
 from rwa_calc.engine.sa.calculator import SACalculator
 from rwa_calc.engine.slotting.calculator import SlottingCalculator
-from rwa_calc.engine.stages.classify import ExposureClassifier
-from rwa_calc.engine.stages.hierarchy import HierarchyResolver
 from rwa_calc.engine.utils import has_required_columns
 
 if TYPE_CHECKING:

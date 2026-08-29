@@ -37,7 +37,7 @@ from rwa_calc.contracts.errors import ERROR_RETAIL_POOL_MGMT_MISSING
 from rwa_calc.domain.enums import (
     ExposureClass,
 )
-from rwa_calc.engine.stages.classify import ExposureClassifier
+from rwa_calc.engine.classify import ExposureClassifier
 from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolved_bundle
 
 # =============================================================================

@@ -4,7 +4,7 @@ Unit pins — entity-level SA-RW preview expression (``build_entity_rw_expr``).
 Pipeline position:
     engine/sa/guarantor_rw.py::build_entity_rw_expr — compiled by the
     hierarchy facility-share selection
-    (engine/stages/hierarchy/facility_undrawn.py::
+    (engine/hierarchy/facility_undrawn.py::
     _derive_facility_share_counterparty) to rank candidate counterparties
     by SA-equivalent risk weight.
 

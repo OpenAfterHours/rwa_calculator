@@ -3,7 +3,7 @@ Large-financial-sector-entity (LFSE) 1.25x correlation-multiplier fixtures.
 
 Pipeline position:
     fixture-builder output -> test-writer -> engine-implementer
-    (engine/stages/classify/subtypes.py, engine/stages/classify/audit.py)
+    (engine/classify/subtypes.py, engine/classify/audit.py)
 
 Key responsibilities:
 - Provide ``ResolvedHierarchyBundle`` builders that exercise the mandatory,

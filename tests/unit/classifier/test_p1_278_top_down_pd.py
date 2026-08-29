@@ -20,7 +20,7 @@ denominator is the subtype's supervisory LGD (CRR 45% senior; PS1/26 40% senior)
 already the pack table this engine reads for the LGD side of the same articles.
 
 The gap: nothing derived a PD, and the classifier's IRB gate is
-``internal_pd.is_not_null()`` (engine/stages/classify/approach.py:110), so a
+``internal_pd.is_not_null()`` (engine/classify/approach.py:110), so a
 receivables pool with no obligor PD fell to the Standardised Approach entirely.
 
 Regime scope: BOTH. PS1/26 Art. 160(2)(a)-(c) and 160(6) carry the CRR text over
@@ -46,8 +46,8 @@ import pytest
 
 from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
 from rwa_calc.domain.enums import ApproachType, ExposureClass
+from rwa_calc.engine.classify import ExposureClassifier
 from rwa_calc.engine.irb.transforms import apply_firb_lgd, classify_approach
-from rwa_calc.engine.stages.classify import ExposureClassifier
 from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolved_bundle
 

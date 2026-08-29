@@ -72,7 +72,7 @@ Regulatory references:
     - BCBS CRE20.88: revolving-instalment base equivalent.
     - src/rwa_calc/data/schemas.py: FACILITY_SCHEMA (is_revolving:137),
       LOAN_SCHEMA (is_hedged:228, hedge_coverage_ratio:233).
-    - engine/stages/hierarchy/: QRRE field propagation.
+    - engine/hierarchy/: QRRE field propagation.
     - engine/sa/namespace.py: apply_currency_mismatch_multiplier:1959-2036 (site
       to extend with the revolving-instalment branch).
     - tests/fixtures/p1_94b/p1_94b.py: sibling — hedge_coverage_ratio gate.

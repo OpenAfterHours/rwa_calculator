@@ -23,7 +23,7 @@ from rwa_calc.contracts.bundles import (
 )
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, ExposureClass, PermissionMode
-from rwa_calc.engine.stages.classify import ExposureClassifier
+from rwa_calc.engine.classify import ExposureClassifier
 from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolved_bundle
 
 _TEST_MODEL_ID = "TEST_MODEL"

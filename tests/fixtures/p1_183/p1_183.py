@@ -200,10 +200,10 @@ class _Loan:
     P1.183 A-IRB retail-mortgage loan.
 
     product_type="RESIDENTIAL_MORTGAGE" sets is_mortgage=True in the classifier
-    (engine/stages/classify/attributes.py:_build_is_mortgage_expr — matches on
+    (engine/classify/attributes.py:_build_is_mortgage_expr — matches on
     "MORTGAGE" in the uppercased product_type), and combined with the borrower's
     entity_type="individual" this routes unconditionally to
-    exposure_class="retail_mortgage" (engine/stages/classify/subtypes.py —
+    exposure_class="retail_mortgage" (engine/classify/subtypes.py —
     "Retail mortgage — stays RETAIL_MORTGAGE regardless of threshold").
     property_type="residential" is set explicitly even though it is not read by
     the classifier today, since the future portfolio-LGD-floor helper splits its

@@ -20,7 +20,7 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.engine.stages.hierarchy import HierarchyResolver
+from rwa_calc.engine.hierarchy import HierarchyResolver
 
 # ---------------------------------------------------------------------------
 # Engine-config fixtures (copied verbatim from tests/unit/test_materialise.py

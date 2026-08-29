@@ -181,16 +181,16 @@ Step 5: Add lending group totals to exposures
 
 ### Counterparty Hierarchy
 
-The hierarchy resolution uses iterative Polars LazyFrame joins for performance. See [`engine/stages/hierarchy/graph.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/hierarchy/graph.py) (`_build_ultimate_parent_lazy` and the facility-root traversal) for the full implementation.
+The hierarchy resolution uses iterative Polars LazyFrame joins for performance. See [`engine/hierarchy/graph.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/hierarchy/graph.py) (`_build_ultimate_parent_lazy` and the facility-root traversal) for the full implementation.
 
-::: rwa_calc.engine.stages.hierarchy.graph.build_ultimate_parent_lazy
+::: rwa_calc.engine.hierarchy.graph.build_ultimate_parent_lazy
     options:
       show_root_heading: false
       show_source: false
 
 ### Rating Inheritance
 
-Ratings are inherited from parent entities when not directly available. See [`engine/stages/hierarchy/ratings.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/hierarchy/ratings.py) (`build_rating_inheritance_lazy`).
+Ratings are inherited from parent entities when not directly available. See [`engine/hierarchy/ratings.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/hierarchy/ratings.py) (`build_rating_inheritance_lazy`).
 
 The inheritance priority is:
 1. Entity's own rating
@@ -199,7 +199,7 @@ The inheritance priority is:
 
 ### Facility Hierarchy
 
-Facilities can form multi-level hierarchies (e.g., master facility → sub-facilities). The resolver traverses these using the same iterative join pattern as counterparty hierarchies. See [`engine/stages/hierarchy/graph.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/hierarchy/graph.py) (`build_facility_root_lookup`) and [`facility_undrawn.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/hierarchy/facility_undrawn.py).
+Facilities can form multi-level hierarchies (e.g., master facility → sub-facilities). The resolver traverses these using the same iterative join pattern as counterparty hierarchies. See [`engine/hierarchy/graph.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/hierarchy/graph.py) (`build_facility_root_lookup`) and [`facility_undrawn.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/hierarchy/facility_undrawn.py).
 
 Key behaviour:
 - Facility-to-facility edges identified from `facility_mappings` where `child_type = "facility"`
@@ -227,9 +227,9 @@ Assign exposure classes and determine calculation approach.
 
 ### Classification Logic
 
-The classifier assigns exposure classes and calculation approaches. See [`engine/stages/classify/classifier.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/classify/classifier.py) for the core classification logic (with `attributes.py`, `subtypes.py`, `permissions.py`, `approach.py`, `audit.py`).
+The classifier assigns exposure classes and calculation approaches. See [`engine/classify/classifier.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/classify/classifier.py) for the core classification logic (with `attributes.py`, `subtypes.py`, `permissions.py`, `approach.py`, `audit.py`).
 
-::: rwa_calc.engine.stages.classify.classifier.ExposureClassifier
+::: rwa_calc.engine.classify.classifier.ExposureClassifier
     options:
       show_root_heading: true
       members:
@@ -262,7 +262,7 @@ Exposures without a `model_id` receive all permission flags as `False` and fall 
 !!! info "Art. 147A Hard Constraints Override Model Permissions"
     Regulatory restrictions always take priority over model permissions. For example, institutions are limited to F-IRB (Art. 147A(1)(c)) even if a model has A-IRB approval, and equity exposures are SA-only (Art. 147A(1)(a)) regardless of any model permission. See the [Model Permissions Specification](../specifications/basel31/model-permissions.md) for the full restriction table and precedence rules.
 
-See [`engine/stages/classify/approach.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/classify/approach.py) for `assign_approach` (Art. 147A hard constraints) and [`permissions.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/classify/permissions.py) for `resolve_model_permissions`.
+See [`engine/classify/approach.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/classify/approach.py) for `assign_approach` (Art. 147A hard constraints) and [`permissions.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/classify/permissions.py) for `resolve_model_permissions`.
 
 ## Stage 4: CRM Processing
 

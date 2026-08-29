@@ -28,10 +28,10 @@ from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.contracts.errors import ERROR_MODEL_PERMISSION_UNMATCHED
 from rwa_calc.data.schemas import RATINGS_SCHEMA
 from rwa_calc.domain.enums import ApproachType
+from rwa_calc.engine.classify import ExposureClassifier
 from rwa_calc.engine.crm.processor import CRMProcessor
+from rwa_calc.engine.hierarchy import HierarchyResolver
 from rwa_calc.engine.pipeline import PipelineOrchestrator
-from rwa_calc.engine.stages.classify import ExposureClassifier
-from rwa_calc.engine.stages.hierarchy import HierarchyResolver
 from tests.fixtures.raw_bundle import seal_raw_table
 
 from .conftest import (

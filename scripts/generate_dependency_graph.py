@@ -58,7 +58,7 @@ uv run python scripts/generate_dependency_graph.py
 Inspect a single module's dependencies and dependents directly:
 
 ```bash
-uv run curfew report rwa_calc.engine.stages.classify
+uv run curfew report rwa_calc.engine.classify
 ```
 
 Last generated: {generated_on}.

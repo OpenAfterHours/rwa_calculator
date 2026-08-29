@@ -63,12 +63,12 @@ class ExposureClass(StrEnum):
     RESIDENTIAL_MORTGAGE = "residential_mortgage"
     """Residential mortgage exposures emitted by the SA real-estate loan-splitter
     for non-retail counterparties (CRR Art. 125, PRA PS1/26 Art. 124F).
-    Set by ``engine/stages/re_split/`` on the secured child row of a
+    Set by ``engine/re_split/`` on the secured child row of a
     property-collateralised SA exposure whose original class was non-RE."""
 
     COMMERCIAL_MORTGAGE = "commercial_mortgage"
     """Commercial mortgage exposures emitted by the SA real-estate loan-splitter
-    (CRR Art. 126, PRA PS1/26 Art. 124H). Set by ``engine/stages/re_split/``
+    (CRR Art. 126, PRA PS1/26 Art. 124H). Set by ``engine/re_split/``
     on the secured child row (split mode) or whole-loan reclassified row
     (Art. 124H(3) corporate path)."""
 

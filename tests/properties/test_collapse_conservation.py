@@ -19,7 +19,7 @@ is independent of the code under test is the amount that went IN — the
 ``ExposureSpec`` literal (`.claude/LESSONS.md` B3).
 
 Recorded finding, measured 2026-08-08: ``interest`` is allocated pro-rata
-(``engine/stages/re_split/carriers.py::_PRORATA_CARRIERS``) but is absent from
+(``engine/re_split/carriers.py::_PRORATA_CARRIERS``) but is absent from
 ``data/schemas.py::ADDITIVE_OUTPUT_FIELDS``, so ``engine/aggregator/_collapse.py``
 takes ``.first()`` for it. On a 40,000 interest parent split 769,230.77 /
 230,769.23 by EAD share, the legs correctly carry 30,769.23 + 9,230.77 and the

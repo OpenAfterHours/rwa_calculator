@@ -82,7 +82,7 @@ def pse_jurisdiction_not_permitted_expr() -> pl.Expr:
     """
     # ``is_not_null() &`` on both limbs: a null country code cannot prove
     # UK-ness (the convention used by the model-permission geography filter in
-    # engine/stages/classify/permissions.py) and a null flag is not an
+    # engine/classify/permissions.py) and a null flag is not an
     # assertion. See the module docstring for why nulls must not stay Kleene.
     #
     # The ``cast`` calls are load-bearing, not cosmetic: a frame whose column is

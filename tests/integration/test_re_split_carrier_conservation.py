@@ -1,7 +1,7 @@
 """
 Integration tests: extensive carriers are CONSERVED across real-estate split legs.
 
-The RE loan-splitter (``engine/stages/re_split/splitter.py``) emits two or three
+The RE loan-splitter (``engine/re_split/splitter.py``) emits two or three
 physical rows per flagged parent. It runs AFTER ``crm_processor``
 (``engine/registry.py``), so every per-exposure money carrier the CRM stage
 wrote is already on the parent row when the split happens. Any extensive

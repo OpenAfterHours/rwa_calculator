@@ -34,12 +34,12 @@ from rwa_calc.domain.enums import (
     ExposureClass,
     PermissionMode,
 )
+from rwa_calc.engine.classify import ExposureClassifier
 from rwa_calc.engine.entity_class_maps import (
     ENTITY_TYPE_TO_IRB_CLASS,
     ENTITY_TYPE_TO_SA_CLASS,
 )
 from rwa_calc.engine.sa.calculator import SACalculator
-from rwa_calc.engine.stages.classify import ExposureClassifier
 from tests.fixtures.recon_ledger import LedgerShimCorepGenerator
 from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolved_bundle
 

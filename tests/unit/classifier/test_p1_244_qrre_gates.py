@@ -31,9 +31,9 @@ import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ExposureClass
-from rwa_calc.engine.stages.classify import ExposureClassifier
-from rwa_calc.engine.stages.classify.subtypes import classify_exposure_subtypes
-from rwa_calc.engine.stages.hierarchy import HierarchyResolver
+from rwa_calc.engine.classify import ExposureClassifier
+from rwa_calc.engine.classify.subtypes import classify_exposure_subtypes
+from rwa_calc.engine.hierarchy import HierarchyResolver
 from tests.fixtures.p1_244.p1_244 import (
     EXP_CONTROL,
     EXP_NOT_CANCELLABLE,

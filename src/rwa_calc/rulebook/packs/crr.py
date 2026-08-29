@@ -356,7 +356,7 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("0.00"),
         citation=Citation("CRR", "113", "(6) 0% RW for core-UK-group intragroup exposures"),
     ),
-    # SA RE loan-split regime gates (engine/stages/re_split/flagging.py, run inside
+    # SA RE loan-split regime gates (engine/re_split/flagging.py, run inside
     # the classifier stage). CRR Art. 125/126 vs PS1/26 Art. 124F/124H. Each gates one
     # regulatory limb of the split decision; the split LTV/RW parameter VALUES live in
     # data/tables/re_split_parameters.py (the splitter call-site migration is S9g).
@@ -375,7 +375,7 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=False,
         citation=Citation("CRR", "126", "no Art. 124H(3) whole-loan CRE path; all eligible split"),
     ),
-    # RE loan-split parameter set selection (splitter, engine/stages/re_split/
+    # RE loan-split parameter set selection (splitter, engine/re_split/
     # splitter.py): CRR Art. 125/126 LTV caps / RW (RRE 80%/35%, CRE 50%/50%,
     # rental-coverage flag) vs PS1/26 Art. 124F/124H (RRE 55%/20%, CRE 55%/60%,
     # prior-charge reduction). The VALUES live in data/tables/re_split_parameters.py;
@@ -387,7 +387,7 @@ ENTRIES: dict[str, RuleEntry] = {
     ),
     # SA RE loan-split secured-LTV caps — the preferential-RW LTV ceiling per
     # property type. CRR Art. 125 RRE 80% / Art. 126 CRE 50%. Consumed by
-    # engine/stages/re_split/params.py via compile.scalar_value; b31.py overrides
+    # engine/re_split/params.py via compile.scalar_value; b31.py overrides
     # both with the PS1/26 Art. 124F/124H 55% values.
     "re_split_rre_secured_ltv_cap": ScalarParam(
         name="re_split_rre_secured_ltv_cap",
@@ -739,7 +739,7 @@ ENTRIES: dict[str, RuleEntry] = {
     # FSE/large-corp/institution, forces sovereign-like + equity to SA, and routes
     # IPRE/HVCRE to slotting (PRA PS1/26 Art. 147A(1)) — none of which exist under
     # CRR. The Feature gates the whole Art. 147A restriction family in
-    # engine/stages/classify/{approach,audit}.py; the FX-derived thresholds those
+    # engine/classify/{approach,audit}.py; the FX-derived thresholds those
     # branches read (sme_balance_sheet, large_corporate_revenue) stay config.
     "approach_restrictions_b31_applicable": Feature(
         name="approach_restrictions_b31_applicable",
@@ -760,7 +760,7 @@ ENTRIES: dict[str, RuleEntry] = {
     # development banks which are not assigned a 0 % risk weight under Article 117"
     # in the INSTITUTIONS class. PS1/26 Art. 147(3)(f) drops that split (all MDBs
     # are quasi-sovereign there), so the reroute is CRR-only. Gates the
-    # non-named-MDB IRB-class step in engine/stages/classify/attributes.py
+    # non-named-MDB IRB-class step in engine/classify/attributes.py
     # (entity_type_to_irb_class itself stays the framework-invariant base map).
     "crr_non_named_mdb_institution_irb_class": Feature(
         name="crr_non_named_mdb_institution_irb_class",
@@ -778,7 +778,7 @@ ENTRIES: dict[str, RuleEntry] = {
     ),
     # Basel 3.1 Art. 123A two-path retail qualification (SME auto-qualify + the
     # threshold/granularity limbs); CRR uses the single aggregate-exposure threshold
-    # check only. Gates engine/stages/classify/attributes.py::_build_qualifies_as_retail_expr.
+    # check only. Gates engine/classify/attributes.py::_build_qualifies_as_retail_expr.
     # The retail-exposure THRESHOLD it compares against is FX-derived and stays config
     # (RegulatoryThresholds → S11c); the enforce_retail_granularity election stays config.
     "retail_art_123a_two_path_applicable": Feature(

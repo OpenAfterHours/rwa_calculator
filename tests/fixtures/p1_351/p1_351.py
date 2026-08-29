@@ -36,7 +36,7 @@ Key responsibilities:
 Route constraints (measured by the Wave 0 premise audit — CRR ONLY):
     No B31 route to a retail row with a null LGD could be constructed: Art.
     147A blocks retail F-IRB under Basel 3.1, the A-IRB gate at
-    ``engine/stages/classify/permissions.py:340`` requires ``has_modelled_lgd``
+    ``engine/classify/permissions.py:340`` requires ``has_modelled_lgd``
     (which a null-LGD row cannot satisfy), and the two remaining B31 retail
     limbs are mutually exclusive with an IRB route. This fixture is CRR-only;
     treat B31 as not demonstrated reachable for this scenario.
@@ -48,7 +48,7 @@ Two traps a naive retail-F-IRB fixture falls into (both avoided here):
       fixture uses ``approach="foundation_irb"``.
     - Setting ``is_managed_as_retail=True`` on the counterparty routes the row
       through ``_build_approach_expr``'s branch 1 (managed-as-retail without
-      LGD -> SA, ``engine/stages/classify/approach.py:285-289``) BEFORE it
+      LGD -> SA, ``engine/classify/approach.py:285-289``) BEFORE it
       ever reaches the F-IRB branch, because this scenario's LGD is null by
       construction. This fixture leaves ``is_managed_as_retail`` False (the
       loader-seal default via ``apply_boolean_column_defaults`` — CRR's

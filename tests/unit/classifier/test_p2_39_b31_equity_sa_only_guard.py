@@ -30,8 +30,8 @@ CRR control assertion:
 
 References:
     - Basel 3.1 CRE60 / PRA PS1/26 Art. 155: equity SA-only from 1 Jan 2027
-    - engine/stages/classify/: _apply_b31_approach_restrictions()
-    - engine/stages/classify/: _build_approach_expr()
+    - engine/classify/: _apply_b31_approach_restrictions()
+    - engine/classify/: _build_approach_expr()
     - tests/fixtures/p2_39/p2_39.py: fixture builders and scenario constants
 """
 
@@ -45,7 +45,7 @@ import pytest
 from rwa_calc.contracts.bundles import ClassifiedExposuresBundle
 from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
 from rwa_calc.domain.enums import ApproachType, ExposureClass
-from rwa_calc.engine.stages.classify import ExposureClassifier
+from rwa_calc.engine.classify import ExposureClassifier
 from tests.fixtures.p2_39.p2_39 import (
     EQUITY_EXPOSURE_REF,
     EXPECTED_APPROACH,

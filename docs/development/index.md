@@ -116,14 +116,18 @@ src/rwa_calc/
     ├── pipeline.py  # Run-lifecycle facade over the registry/orchestrator fold
     ├── registry.py  # Literal StageSpec list (ordered stages)
     ├── orchestrator.py # run_stages fold (threads PipelineContext)
-    ├── stages/      # One run(ctx, rulepack, run_config) adapter per stage
-    │   ├── hierarchy/  # Hierarchy resolution (impl)
-    │   ├── classify/   # Classification (impl)
+    ├── stages/      # Wiring layer ONLY — one run(ctx, rulepack, run_config)
+    │   │            #   adapter per registry stage, no domains
+    │   ├── hierarchy.py # Hierarchy stage adapter
+    │   ├── classify.py  # Classification stage adapter
     │   ├── crm.py      # CRM adapter
     │   └── calc.py     # SA/IRB/Slotting calculators adapter
     ├── loader.py    # Data loading
-    ├── hierarchy.py # Back-compat shim -> stages/hierarchy/
-    ├── classifier.py # Back-compat shim -> stages/classify/
+    ├── hierarchy/   # Hierarchy resolution (domain)
+    ├── classify/    # Classification (domain)
+    ├── re_split/    # Real-estate loan splitting (domain)
+    ├── scope/       # Multi-entity reporting scope (domain)
+    ├── fx/          # FX conversion kernel (not a registry stage)
     ├── ccf.py       # Credit conversion factors
     ├── aggregator/  # Aggregation (package)
     ├── crm/         # Credit risk mitigation

@@ -32,8 +32,8 @@ import pytest
 
 from rwa_calc.contracts.bundles import ResolvedHierarchyBundle
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.engine.classify import ExposureClassifier
 from rwa_calc.engine.irb.formulas import calculate_correlation
-from rwa_calc.engine.stages.classify import ExposureClassifier
 from tests.fixtures.lfse_fi_scalar.lfse_fi_scalar import (
     make_large_fse_bundle,
     make_mid_fse_bundle,

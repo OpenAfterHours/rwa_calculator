@@ -27,7 +27,7 @@ Post-fix assertion:
 References:
     - CRR Art. 143 (IRB permission scope)
     - CRR Art. 150(1) (PPU carve-out — SA wins over IRB on conflict)
-    - engine/stages/classify/ (_resolve_model_permissions)
+    - engine/classify/ (_resolve_model_permissions)
     - tests/fixtures/p1_145/p1_145.py (fixture builders)
 """
 
@@ -46,7 +46,7 @@ from rwa_calc.contracts.bundles import (
 )
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, PermissionMode
-from rwa_calc.engine.stages.classify import ExposureClassifier
+from rwa_calc.engine.classify import ExposureClassifier
 from tests.fixtures.p1_145.p1_145 import (
     EXPOSURE_REF,
     INTERNAL_PD,

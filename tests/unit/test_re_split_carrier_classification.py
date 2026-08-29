@@ -2,7 +2,7 @@
 Membership contract for the RE loan-splitter's carrier classification.
 
 Pipeline position:
-    CRMProcessor -> RealEstateSplitter (engine/stages/re_split/carriers.py)
+    CRMProcessor -> RealEstateSplitter (engine/re_split/carriers.py)
 
 Why this file exists — and why it is a MEMBERSHIP test rather than a
 behavioural one:
@@ -36,7 +36,7 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.edges import RE_SPLIT_EXIT_CCR_EDGE, RE_SPLIT_EXIT_EDGE
-from rwa_calc.engine.stages.re_split.carriers import (
+from rwa_calc.engine.re_split.carriers import (
     _COMMERCIAL_ONLY_CARRIERS,
     _PRORATA_CARRIERS,
     _RE_COLLATERAL_CARRIERS,

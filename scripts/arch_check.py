@@ -180,7 +180,7 @@ VALIDATION_ENUM_ALLOWLIST: dict[str, set[str]] = {
     # coupling explicit and is pinned by
     # tests/unit/test_p6_26_qrre_coupling_constant.py. Moving it to
     # data/schemas.py would split the rule from the code that enforces it.
-    "engine/stages/hierarchy/__init__.py": {"_FACILITY_QRRE_COUPLED_COLUMNS"},
+    "engine/hierarchy/__init__.py": {"_FACILITY_QRRE_COUPLED_COLUMNS"},
     # Per-row money columns the securitisation residual multiplier scales.
     # These are engine-internal column names (the calculators' own output
     # columns), not input-domain validation enums. Pinned to the aggregator
@@ -195,7 +195,7 @@ VALIDATION_ENUM_ALLOWLIST: dict[str, set[str]] = {
     # / Pillar 3 CR4 — naming the allocated sets once is what stops the
     # classification drifting away from the code that applies it, and moving
     # them to data/schemas.py would split the rule from its enforcement.
-    "engine/stages/re_split/carriers.py": {
+    "engine/re_split/carriers.py": {
         "_PRORATA_CARRIERS",
         "_RE_COLLATERAL_CARRIERS",
         "_RESIDENTIAL_ONLY_CARRIERS",
@@ -217,9 +217,7 @@ REGIME_BOOL_ALLOWLIST: dict[str, str] = {
     # resolved rulepack and reads its Features. Retired when the pack becomes a
     # mandatory argument on these entry points.
     "engine/crm/haircuts.py": "no-pack bootstrap fallback (pack-mandatory pending)",
-    "engine/stages/hierarchy/facility_undrawn.py": (
-        "no-pack bootstrap fallback (pack-mandatory pending)"
-    ),
+    "engine/hierarchy/facility_undrawn.py": ("no-pack bootstrap fallback (pack-mandatory pending)"),
 }
 
 _REGIME_BOOL_ATTRS = frozenset({"is_crr", "is_basel_3_1"})
@@ -277,7 +275,7 @@ LOGGER_REQUIRED_EXEMPT: set[str] = {
     "engine/crm/simple_method.py",
     # Pure parameter module: derives the RE-split secured-LTV cap records from
     # the rulepack. No pipeline-stage telemetry (the stage is stage.py).
-    "engine/stages/re_split/params.py",
+    "engine/re_split/params.py",
     # Pure expression-builder module: compiles the guarantor / entity SA-RW
     # when/then chains from the rulepack. No pipeline-stage telemetry.
     "engine/sa/guarantor_rw.py",
@@ -443,12 +441,15 @@ _STAGES_IMPORT_PACKAGE = "rwa_calc.engine.stages"
 # top-level ``run`` because they are not (yet) registry stages. Shrink-only:
 # an entry is deleted when its package gains a registry slot, and a stale
 # entry (package gone, or now exposing ``run``) is itself a violation.
-STAGE_PACKAGES_WITHOUT_RUN: set[str] = {
-    # FX code seam landed in Phase 4 Slice 4; registry promotion deferred —
-    # convert_resolved_frames is invoked from stages/hierarchy/resolver.py at
-    # the unify -> enrich seam.
-    "fx",
-}
+#
+# Empty by design since the S1 move made engine/stages/ the wiring layer and
+# only the wiring layer: every module there is one registry stage's ``run``
+# adapter, and the domains they drive are peer packages under engine/. The one
+# entry this ever held was ``fx``, which was pinned precisely because it is not
+# a stage — it has no ``run`` and no registry slot — and it now lives at
+# engine/fx/ with the other domains. A new entry means a domain has reappeared
+# inside the wiring folder; that needs a justification comment, not a pin.
+STAGE_PACKAGES_WITHOUT_RUN: set[str] = set()
 
 # Modules under engine/ permitted to be pure re-export shells (check 18). A
 # shell is a module with no defs whose only statements are imports plus a
@@ -1683,7 +1684,26 @@ def _stage_spec_fn_violations(
 
 
 def _stage_package_run_violations(stages_root: Path) -> list[str]:
-    """Every stage package exposes ``run`` unless pinned (shrink-only allowlist)."""
+    """Every stage package exposes ``run`` unless pinned (shrink-only allowlist).
+
+    Since the S1 move there are no packages under engine/stages/ at all — it
+    holds one flat ``run`` adapter module per registry stage — so the glob
+    below finds nothing and this returns empty. That emptiness is the
+    invariant, not an accident: the branch is retained because it is the one
+    executable statement of "engine/stages/ is the wiring layer and only the
+    wiring layer", and it fires the moment a package REAPPEARS here without a
+    ``run``.
+
+    It guards a reversal, not an accident. The packages S1 moved out were put
+    under ``stages/`` deliberately — Phase 4 made each stage package the single
+    home of its component, and CLAUDE.md instructed importing
+    ``HierarchyResolver`` from ``engine.stages.hierarchy``. That convention was
+    followed correctly; this review reversed it, for the reasons in
+    docs/plans/architecture-review-2026-08-29.md §2. So the risk this check
+    covers is not carelessness but the opposite: someone following the earlier,
+    still widely-documented rule and recreating the layout on purpose. Do not
+    weaken it on the grounds that the mistake looks implausible.
+    """
     violations: list[str] = []
     for pkg_init in sorted(stages_root.glob("*/__init__.py")):
         pkg_name = pkg_init.parent.name

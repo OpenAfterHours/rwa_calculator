@@ -5,7 +5,7 @@ Pipeline position:
     Consumed by the SA risk-weight + guarantee-substitution paths
     (``sa/risk_weights.py``, ``sa/rw_adjustments.py``), the IRB guarantee path
     (``irb/guarantee.py``), the CRM guarantee path (``crm/guarantees.py``) and
-    the approach classifier (``stages/classify/approach.py``) to identify EU
+    the approach classifier (``engine/classify/approach.py``) to identify EU
     domestic-currency central-government / central-bank exposures eligible for
     the Art. 114(4)/(7) 0% risk weight.
 
@@ -183,7 +183,7 @@ def denomination_currency_expr(schema_names: list[str] | set[str]) -> pl.Expr:
     """
     Return the expression for an exposure's denomination (pre-FX) currency.
 
-    The pipeline's FX converter (``engine/stages/fx/``) overwrites
+    The pipeline's FX converter (``engine/fx/``) overwrites
     ``currency`` with the reporting currency and stores the original
     denomination in ``original_currency``. Every check that compares the
     exposure's currency against a regulatory domestic currency (CRR Art. 114(4)

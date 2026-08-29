@@ -40,14 +40,14 @@
       "source_files": [
         "contracts/edges.py",
         "data/schemas.py",
-        "engine/stages/classify/attributes.py",
-        "engine/stages/classify/audit.py",
-        "engine/stages/classify/subtypes.py",
-        "engine/stages/hierarchy/__init__.py",
-        "engine/stages/hierarchy/enrich.py",
-        "engine/stages/hierarchy/graph.py",
-        "engine/stages/hierarchy/resolver.py",
-        "engine/stages/hierarchy/stage.py"
+        "engine/classify/attributes.py",
+        "engine/classify/audit.py",
+        "engine/classify/subtypes.py",
+        "engine/hierarchy/__init__.py",
+        "engine/hierarchy/enrich.py",
+        "engine/hierarchy/graph.py",
+        "engine/hierarchy/resolver.py",
+        "engine/stages/hierarchy.py"
       ],
       "test_files": [
         "tests/fixtures/p1_126/p1_126.py",
@@ -72,7 +72,7 @@
         "data/schemas.py",
         "domain/enums.py",
         "engine/loader.py",
-        "engine/stages/scope/resolver.py",
+        "engine/scope/resolver.py",
         "ui/views/hierarchy.py"
       ],
       "test_files": [
@@ -80,8 +80,8 @@
         "tests/contracts/test_sft_schemas_contract.py",
         "tests/fixtures/multi_entity/multi_entity.py",
         "tests/unit/data/test_scope_schemas.py",
-        "tests/unit/engine/stages/scope/test_scope_ccr_sft.py",
-        "tests/unit/engine/stages/scope/test_scope_membership.py"
+        "tests/unit/engine/scope/test_scope_ccr_sft.py",
+        "tests/unit/engine/scope/test_scope_membership.py"
       ],
       "watchfire_index_gap": false
     },
@@ -403,8 +403,8 @@
       "code_functions": [
         "rwa_calc.engine.aggregator.aggregator::_add_exposure_class_applied",
         "rwa_calc.engine.aggregator.aggregator::_add_reporting_projection",
-        "rwa_calc.engine.sa.risk_weights::apply_risk_weights",
-        "rwa_calc.engine.stages.classify.classifier::ExposureClassifier.classify"
+        "rwa_calc.engine.classify.classifier::ExposureClassifier.classify",
+        "rwa_calc.engine.sa.risk_weights::apply_risk_weights"
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
@@ -420,15 +420,15 @@
         "data/schemas.py",
         "domain/enums.py",
         "engine/aggregator/aggregator.py",
+        "engine/classify/__init__.py",
+        "engine/classify/attributes.py",
+        "engine/classify/classifier.py",
         "engine/entity_class_maps.py",
         "engine/sa/__init__.py",
         "engine/sa/calculator.py",
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/risk_weights.py",
-        "engine/stages/classify/__init__.py",
-        "engine/stages/classify/attributes.py",
-        "engine/stages/classify/classifier.py",
-        "engine/stages/classify/stage.py",
+        "engine/stages/classify.py",
         "reporting/corep/c09.py",
         "reporting/corep/templates.py",
         "reporting/validations/scope.py",
@@ -489,13 +489,13 @@
       "source_files": [
         "contracts/edges.py",
         "data/schemas.py",
+        "engine/hierarchy/facility_undrawn.py",
+        "engine/hierarchy/unify.py",
         "engine/sa/calculator.py",
         "engine/sa/factors_output.py",
         "engine/sa/rw_adjustments.py",
-        "engine/stages/hierarchy/facility_undrawn.py",
-        "engine/stages/hierarchy/unify.py",
-        "engine/stages/scope/resolver.py",
-        "engine/stages/scope/stage.py",
+        "engine/scope/resolver.py",
+        "engine/stages/scope.py",
         "rulebook/packs/b31.py",
         "rulebook/packs/crr.py"
       ],
@@ -508,7 +508,7 @@
         "tests/properties/test_homogeneity.py",
         "tests/properties/test_structural_invariants.py",
         "tests/unit/data/test_scope_schemas.py",
-        "tests/unit/engine/stages/scope/test_scope_cug_eligibility.py",
+        "tests/unit/engine/scope/test_scope_cug_eligibility.py",
         "tests/unit/test_intragroup_zero_rw.py"
       ],
       "watchfire_index_gap": false
@@ -556,16 +556,16 @@
       "source_files": [
         "contracts/edges.py",
         "data/schemas.py",
+        "engine/classify/approach.py",
         "engine/eu_sovereign.py",
+        "engine/hierarchy/facility_undrawn.py",
+        "engine/hierarchy/unify.py",
         "engine/irb/guarantee.py",
         "engine/sa/central_bank.py",
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/guarantor_rw.py",
         "engine/sa/rgla.py",
         "engine/sa/risk_weights.py",
-        "engine/stages/classify/approach.py",
-        "engine/stages/hierarchy/facility_undrawn.py",
-        "engine/stages/hierarchy/unify.py",
         "rulebook/packs/common.py",
         "rulebook/packs/crr.py"
       ],
@@ -698,11 +698,11 @@
       "source_files": [
         "contracts/edges.py",
         "data/schemas.py",
+        "engine/classify/attributes.py",
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/guarantor_rw.py",
         "engine/sa/jurisdiction.py",
-        "engine/sa/sovereign_derived.py",
-        "engine/stages/classify/attributes.py"
+        "engine/sa/sovereign_derived.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_112_pse_sovereign_derived_rw.py",
@@ -1127,9 +1127,9 @@
       "article": "123",
       "code_functions": [
         "rwa_calc.engine.aggregator.aggregator::_add_exposure_class_applied",
+        "rwa_calc.engine.classify.attributes::_build_qualifies_as_retail_expr",
         "rwa_calc.engine.sa.guarantor_rw::build_entity_rw_expr",
-        "rwa_calc.engine.sa.risk_weights::_crr_append_retail_branches",
-        "rwa_calc.engine.stages.classify.attributes::_build_qualifies_as_retail_expr"
+        "rwa_calc.engine.sa.risk_weights::_crr_append_retail_branches"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -1151,13 +1151,13 @@
         "contracts/edges.py",
         "data/schemas.py",
         "engine/aggregator/aggregator.py",
+        "engine/classify/attributes.py",
+        "engine/hierarchy/enrich.py",
+        "engine/re_split/carriers.py",
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/guarantor_rw.py",
         "engine/sa/re_residual_rw.py",
         "engine/sa/risk_weights.py",
-        "engine/stages/classify/attributes.py",
-        "engine/stages/hierarchy/enrich.py",
-        "engine/stages/re_split/carriers.py",
         "engine/supporting_factors.py",
         "engine/thresholds.py",
         "rulebook/packs/common.py",
@@ -1212,12 +1212,12 @@
       "source_files": [
         "contracts/edges.py",
         "data/schemas.py",
+        "engine/re_split/__init__.py",
+        "engine/re_split/carriers.py",
+        "engine/re_split/flagging.py",
+        "engine/re_split/splitter.py",
         "engine/sa/re_residual_rw.py",
-        "engine/sa/risk_weights.py",
-        "engine/stages/re_split/__init__.py",
-        "engine/stages/re_split/carriers.py",
-        "engine/stages/re_split/flagging.py",
-        "engine/stages/re_split/splitter.py"
+        "engine/sa/risk_weights.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_181_art_126_cre_proportion_split.py",
@@ -1237,7 +1237,7 @@
     {
       "article": "125",
       "code_functions": [
-        "rwa_calc.engine.stages.re_split.splitter::RealEstateSplitter.split"
+        "rwa_calc.engine.re_split.splitter::RealEstateSplitter.split"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -1258,15 +1258,15 @@
         "data/schemas.py",
         "domain/enums.py",
         "engine/pipeline.py",
+        "engine/re_split/__init__.py",
+        "engine/re_split/carriers.py",
+        "engine/re_split/flagging.py",
+        "engine/re_split/params.py",
+        "engine/re_split/splitter.py",
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/re_residual_rw.py",
         "engine/sa/risk_weights.py",
-        "engine/stages/re_split/__init__.py",
-        "engine/stages/re_split/carriers.py",
-        "engine/stages/re_split/flagging.py",
-        "engine/stages/re_split/params.py",
-        "engine/stages/re_split/splitter.py",
-        "engine/stages/re_split/stage.py",
+        "engine/stages/re_split.py",
         "rulebook/packs/b31.py",
         "rulebook/packs/crr.py"
       ],
@@ -1299,7 +1299,7 @@
       "article": "126",
       "code_functions": [
         "rwa_calc.engine.aggregator.aggregator::_add_exposure_class_applied",
-        "rwa_calc.engine.stages.re_split.splitter::RealEstateSplitter.split"
+        "rwa_calc.engine.re_split.splitter::RealEstateSplitter.split"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -1319,13 +1319,13 @@
         "data/schemas.py",
         "domain/enums.py",
         "engine/aggregator/aggregator.py",
+        "engine/hierarchy/enrich.py",
+        "engine/re_split/carriers.py",
+        "engine/re_split/flagging.py",
+        "engine/re_split/params.py",
+        "engine/re_split/splitter.py",
         "engine/sa/crr_risk_weight_tables.py",
-        "engine/sa/risk_weights.py",
-        "engine/stages/hierarchy/enrich.py",
-        "engine/stages/re_split/carriers.py",
-        "engine/stages/re_split/flagging.py",
-        "engine/stages/re_split/params.py",
-        "engine/stages/re_split/splitter.py"
+        "engine/sa/risk_weights.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_181_art_126_cre_proportion_split.py",
@@ -1393,11 +1393,11 @@
         "high_risk_rw@crr"
       ],
       "source_files": [
+        "engine/classify/attributes.py",
         "engine/entity_class_maps.py",
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/guarantor_rw.py",
         "engine/sa/risk_weights.py",
-        "engine/stages/classify/attributes.py",
         "rulebook/packs/common.py",
         "rulebook/packs/crr.py"
       ],
@@ -1446,8 +1446,8 @@
     {
       "article": "131",
       "code_functions": [
-        "rwa_calc.engine.stages.hierarchy.enrich::_apply_obligor_short_term_spillover",
-        "rwa_calc.engine.stages.hierarchy.enrich::apply_short_term_rating_override"
+        "rwa_calc.engine.hierarchy.enrich::_apply_obligor_short_term_spillover",
+        "rwa_calc.engine.hierarchy.enrich::apply_short_term_rating_override"
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
@@ -1457,10 +1457,10 @@
         "crr_short_term_ecai_risk_weights@crr"
       ],
       "source_files": [
+        "engine/hierarchy/enrich.py",
+        "engine/hierarchy/resolver.py",
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/risk_weights.py",
-        "engine/stages/hierarchy/enrich.py",
-        "engine/stages/hierarchy/resolver.py",
         "rulebook/packs/crr.py"
       ],
       "test_files": [
@@ -1609,7 +1609,7 @@
     {
       "article": "135",
       "code_functions": [
-        "rwa_calc.engine.stages.hierarchy.enrich::attach_counterparty_rating"
+        "rwa_calc.engine.hierarchy.enrich::attach_counterparty_rating"
       ],
       "confidence": "LOW",
       "framework": "CRR",
@@ -1617,9 +1617,9 @@
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
-        "engine/stages/hierarchy/enrich.py",
-        "engine/stages/hierarchy/ratings.py",
-        "engine/stages/hierarchy/resolver.py"
+        "engine/hierarchy/enrich.py",
+        "engine/hierarchy/ratings.py",
+        "engine/hierarchy/resolver.py"
       ],
       "test_files": [],
       "watchfire_index_gap": false
@@ -1627,7 +1627,7 @@
     {
       "article": "136",
       "code_functions": [
-        "rwa_calc.engine.stages.hierarchy.enrich::attach_counterparty_rating"
+        "rwa_calc.engine.hierarchy.enrich::attach_counterparty_rating"
       ],
       "confidence": "LOW",
       "framework": "CRR",
@@ -1636,9 +1636,9 @@
       "pack_entries": [],
       "source_files": [
         "data/schemas.py",
-        "engine/sa/central_bank.py",
-        "engine/stages/hierarchy/enrich.py",
-        "engine/stages/hierarchy/ratings.py"
+        "engine/hierarchy/enrich.py",
+        "engine/hierarchy/ratings.py",
+        "engine/sa/central_bank.py"
       ],
       "test_files": [],
       "watchfire_index_gap": false
@@ -1681,7 +1681,7 @@
     {
       "article": "138",
       "code_functions": [
-        "rwa_calc.engine.stages.hierarchy.enrich::attach_counterparty_rating"
+        "rwa_calc.engine.hierarchy.enrich::attach_counterparty_rating"
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
@@ -1691,8 +1691,8 @@
       "source_files": [
         "contracts/errors.py",
         "data/schemas.py",
-        "engine/stages/hierarchy/enrich.py",
-        "engine/stages/hierarchy/ratings.py"
+        "engine/hierarchy/enrich.py",
+        "engine/hierarchy/ratings.py"
       ],
       "test_files": [
         "tests/unit/test_hierarchy.py"
@@ -1702,7 +1702,7 @@
     {
       "article": "139",
       "code_functions": [
-        "rwa_calc.engine.stages.hierarchy.enrich::attach_counterparty_rating"
+        "rwa_calc.engine.hierarchy.enrich::attach_counterparty_rating"
       ],
       "confidence": "LOW",
       "framework": "CRR",
@@ -1712,7 +1712,7 @@
         "sa_sl_inferred_rating_disapplied@crr"
       ],
       "source_files": [
-        "engine/stages/hierarchy/enrich.py"
+        "engine/hierarchy/enrich.py"
       ],
       "test_files": [],
       "watchfire_index_gap": false
@@ -1720,9 +1720,9 @@
     {
       "article": "140",
       "code_functions": [
-        "rwa_calc.engine.sa.risk_weights::_apply_obligor_st_contamination_override",
-        "rwa_calc.engine.stages.hierarchy.enrich::_apply_obligor_st_contamination_flags",
-        "rwa_calc.engine.stages.hierarchy.enrich::apply_short_term_rating_override"
+        "rwa_calc.engine.hierarchy.enrich::_apply_obligor_st_contamination_flags",
+        "rwa_calc.engine.hierarchy.enrich::apply_short_term_rating_override",
+        "rwa_calc.engine.sa.risk_weights::_apply_obligor_st_contamination_override"
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
@@ -1732,8 +1732,8 @@
       "source_files": [
         "contracts/edges.py",
         "contracts/errors.py",
-        "engine/sa/risk_weights.py",
-        "engine/stages/hierarchy/enrich.py"
+        "engine/hierarchy/enrich.py",
+        "engine/sa/risk_weights.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_225_art_140_2_obligor_st_contamination.py",
@@ -1763,7 +1763,7 @@
     {
       "article": "142",
       "code_functions": [
-        "rwa_calc.engine.stages.classify.subtypes::classify_exposure_subtypes"
+        "rwa_calc.engine.classify.subtypes::classify_exposure_subtypes"
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
@@ -1771,8 +1771,8 @@
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
-        "engine/stages/classify/audit.py",
-        "engine/stages/classify/subtypes.py",
+        "engine/classify/audit.py",
+        "engine/classify/subtypes.py",
         "reporting/corep/c08.py",
         "reporting/corep/generator.py"
       ],
@@ -1788,7 +1788,7 @@
     {
       "article": "143",
       "code_functions": [
-        "rwa_calc.engine.stages.classify.permissions::resolve_model_permissions"
+        "rwa_calc.engine.classify.permissions::resolve_model_permissions"
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
@@ -1799,9 +1799,9 @@
         "contracts/edges.py",
         "data/schemas.py",
         "domain/branch_reasons.py",
+        "engine/classify/permissions.py",
         "engine/irb/transforms.py",
         "engine/stages/_ccr_shared.py",
-        "engine/stages/classify/permissions.py",
         "reporting/corep/c08_07.py"
       ],
       "test_files": [
@@ -1819,11 +1819,11 @@
     {
       "article": "147",
       "code_functions": [
-        "rwa_calc.engine.stages.classify.approach::_align_irb_exposure_class",
-        "rwa_calc.engine.stages.classify.attributes::derive_independent_flags",
-        "rwa_calc.engine.stages.classify.attributes::natural_person_expr",
-        "rwa_calc.engine.stages.classify.classifier::ExposureClassifier.classify",
-        "rwa_calc.engine.stages.classify.subtypes::sync_irb_exposure_class"
+        "rwa_calc.engine.classify.approach::_align_irb_exposure_class",
+        "rwa_calc.engine.classify.attributes::derive_independent_flags",
+        "rwa_calc.engine.classify.attributes::natural_person_expr",
+        "rwa_calc.engine.classify.classifier::ExposureClassifier.classify",
+        "rwa_calc.engine.classify.subtypes::sync_irb_exposure_class"
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
@@ -1839,19 +1839,19 @@
       "source_files": [
         "data/schemas.py",
         "engine/ccf.py",
+        "engine/classify/__init__.py",
+        "engine/classify/approach.py",
+        "engine/classify/attributes.py",
+        "engine/classify/classifier.py",
+        "engine/classify/permissions.py",
+        "engine/classify/subtypes.py",
         "engine/entity_class_maps.py",
+        "engine/hierarchy/enrich.py",
+        "engine/hierarchy/facility_undrawn.py",
         "engine/kernels/allocation.py",
         "engine/slotting/__init__.py",
         "engine/slotting/calculator.py",
-        "engine/stages/classify/__init__.py",
-        "engine/stages/classify/approach.py",
-        "engine/stages/classify/attributes.py",
-        "engine/stages/classify/classifier.py",
-        "engine/stages/classify/permissions.py",
-        "engine/stages/classify/stage.py",
-        "engine/stages/classify/subtypes.py",
-        "engine/stages/hierarchy/enrich.py",
-        "engine/stages/hierarchy/facility_undrawn.py",
+        "engine/stages/classify.py",
         "reporting/corep/templates.py",
         "reporting/tieouts.py",
         "reporting/validations/scope.py",
@@ -1888,7 +1888,7 @@
     {
       "article": "148",
       "code_functions": [
-        "rwa_calc.engine.stages.classify.permissions::resolve_model_permissions",
+        "rwa_calc.engine.classify.permissions::resolve_model_permissions",
         "rwa_calc.reporting.corep.c08_07::generate_c08_07"
       ],
       "confidence": "MEDIUM",
@@ -1900,9 +1900,9 @@
         "contracts/edges.py",
         "data/schemas.py",
         "domain/enums.py",
-        "engine/stages/classify/permissions.py",
-        "engine/stages/hierarchy/facility_undrawn.py",
-        "engine/stages/hierarchy/unify.py",
+        "engine/classify/permissions.py",
+        "engine/hierarchy/facility_undrawn.py",
+        "engine/hierarchy/unify.py",
         "reporting/corep/c08_07.py",
         "reporting/corep/templates.py"
       ],
@@ -1918,7 +1918,7 @@
     {
       "article": "150",
       "code_functions": [
-        "rwa_calc.engine.stages.classify.permissions::resolve_model_permissions"
+        "rwa_calc.engine.classify.permissions::resolve_model_permissions"
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
@@ -1928,8 +1928,8 @@
       "source_files": [
         "data/schemas.py",
         "domain/enums.py",
-        "engine/stages/classify/approach.py",
-        "engine/stages/classify/permissions.py"
+        "engine/classify/approach.py",
+        "engine/classify/permissions.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_p2_46_ppu_provenance_corep.py",
@@ -1965,6 +1965,8 @@
     {
       "article": "153",
       "code_functions": [
+        "rwa_calc.engine.classify.attributes::_build_is_defaulted_expr",
+        "rwa_calc.engine.classify.subtypes::classify_exposure_subtypes",
         "rwa_calc.engine.irb.formulas::_capital_k_expr_from_params",
         "rwa_calc.engine.irb.formulas::_correlation_expr_from_pd",
         "rwa_calc.engine.irb.formulas::_double_default_multiplier_expr",
@@ -1975,9 +1977,7 @@
         "rwa_calc.engine.irb.transforms::calculate_correlation",
         "rwa_calc.engine.irb.transforms::calculate_k",
         "rwa_calc.engine.slotting.calculator::SlottingCalculator.calculate_branch",
-        "rwa_calc.engine.slotting.transforms::apply_slotting_weights",
-        "rwa_calc.engine.stages.classify.attributes::_build_is_defaulted_expr",
-        "rwa_calc.engine.stages.classify.subtypes::classify_exposure_subtypes"
+        "rwa_calc.engine.slotting.transforms::apply_slotting_weights"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -2019,6 +2019,10 @@
         "contracts/validation.py",
         "data/schemas.py",
         "engine/branch_split.py",
+        "engine/classify/approach.py",
+        "engine/classify/attributes.py",
+        "engine/classify/permissions.py",
+        "engine/classify/subtypes.py",
         "engine/crm/guarantees.py",
         "engine/fx_rate_sync.py",
         "engine/irb/__init__.py",
@@ -2030,10 +2034,6 @@
         "engine/slotting/__init__.py",
         "engine/slotting/calculator.py",
         "engine/slotting/transforms.py",
-        "engine/stages/classify/approach.py",
-        "engine/stages/classify/attributes.py",
-        "engine/stages/classify/permissions.py",
-        "engine/stages/classify/subtypes.py",
         "reporting/corep/of02.py",
         "reporting/corep/templates.py",
         "reporting/pillar3/cms1.py",
@@ -2118,11 +2118,11 @@
     {
       "article": "154",
       "code_functions": [
-        "rwa_calc.engine.irb.formulas::apply_irb_formulas",
-        "rwa_calc.engine.stages.classify.subtypes::classify_exposure_subtypes",
-        "rwa_calc.engine.stages.classify.subtypes::qrre_obligor_aggregate_limit_expr",
-        "rwa_calc.engine.stages.classify.subtypes::qrre_undrawn_cancellable_expr",
-        "rwa_calc.engine.stages.classify.subtypes::qrre_unsecured_expr"
+        "rwa_calc.engine.classify.subtypes::classify_exposure_subtypes",
+        "rwa_calc.engine.classify.subtypes::qrre_obligor_aggregate_limit_expr",
+        "rwa_calc.engine.classify.subtypes::qrre_undrawn_cancellable_expr",
+        "rwa_calc.engine.classify.subtypes::qrre_unsecured_expr",
+        "rwa_calc.engine.irb.formulas::apply_irb_formulas"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -2137,10 +2137,10 @@
       "source_files": [
         "contracts/edges.py",
         "data/schemas.py",
-        "engine/irb/formulas.py",
-        "engine/stages/classify/audit.py",
-        "engine/stages/classify/subtypes.py",
-        "engine/stages/hierarchy/__init__.py"
+        "engine/classify/audit.py",
+        "engine/classify/subtypes.py",
+        "engine/hierarchy/__init__.py",
+        "engine/irb/formulas.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_157_psm_no_better_than_direct.py",
@@ -2248,11 +2248,11 @@
         "contracts/errors.py",
         "engine/aggregator/_el_summary.py",
         "engine/aggregator/aggregator.py",
+        "engine/classify/attributes.py",
+        "engine/classify/audit.py",
         "engine/irb/adjustments.py",
         "engine/slotting/calculator.py",
         "engine/slotting/transforms.py",
-        "engine/stages/classify/attributes.py",
-        "engine/stages/classify/audit.py",
         "rulebook/packs/crr.py"
       ],
       "test_files": [
@@ -2288,10 +2288,10 @@
         "contracts/edges.py",
         "data/schemas.py",
         "engine/aggregator/_el_summary.py",
+        "engine/hierarchy/unify.py",
         "engine/irb/adjustments.py",
         "engine/slotting/calculator.py",
-        "engine/slotting/transforms.py",
-        "engine/stages/hierarchy/unify.py"
+        "engine/slotting/transforms.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_scenario_b31_g_provisions.py",
@@ -2310,8 +2310,8 @@
     {
       "article": "160",
       "code_functions": [
-        "rwa_calc.engine.irb.formulas::_pd_floor_expression",
-        "rwa_calc.engine.stages.classify.subtypes::derive_purchased_receivables_pd"
+        "rwa_calc.engine.classify.subtypes::derive_purchased_receivables_pd",
+        "rwa_calc.engine.irb.formulas::_pd_floor_expression"
       ],
       "confidence": "HIGH",
       "framework": "CRR",
@@ -2327,11 +2327,11 @@
         "contracts/validation.py",
         "data/column_spec.py",
         "data/schemas.py",
+        "engine/classify/classifier.py",
+        "engine/classify/subtypes.py",
+        "engine/hierarchy/unify.py",
         "engine/irb/formulas.py",
-        "engine/stages/classify/classifier.py",
-        "engine/stages/classify/subtypes.py",
-        "engine/stages/hierarchy/unify.py",
-        "engine/stages/re_split/carriers.py",
+        "engine/re_split/carriers.py",
         "rulebook/packs/crr.py"
       ],
       "test_files": [
@@ -2379,6 +2379,7 @@
         "contracts/edges.py",
         "data/schemas.py",
         "engine/aggregator/aggregator.py",
+        "engine/classify/subtypes.py",
         "engine/crm/collateral.py",
         "engine/crm/expressions.py",
         "engine/crm/guarantees.py",
@@ -2389,7 +2390,6 @@
         "engine/irb/guarantee.py",
         "engine/irb/transforms.py",
         "engine/sa/rw_adjustments.py",
-        "engine/stages/classify/subtypes.py",
         "reporting/corep/crm_substitution.py",
         "rulebook/packs/crr.py"
       ],
@@ -2477,14 +2477,14 @@
         "contracts/config.py",
         "contracts/edges.py",
         "data/schemas.py",
+        "engine/classify/attributes.py",
+        "engine/classify/permissions.py",
         "engine/irb/__init__.py",
         "engine/irb/calculator.py",
         "engine/irb/formulas.py",
         "engine/irb/transforms.py",
         "engine/sa/sovereign_derived.py",
         "engine/sft/fccm.py",
-        "engine/stages/classify/attributes.py",
-        "engine/stages/classify/permissions.py",
         "rulebook/packs/b31.py",
         "rulebook/packs/common.py",
         "rulebook/packs/crr.py"
@@ -2647,8 +2647,8 @@
         "data/schemas.py",
         "domain/enums.py",
         "engine/ccf.py",
-        "engine/stages/hierarchy/facility_undrawn.py",
-        "engine/stages/hierarchy/unify.py",
+        "engine/hierarchy/facility_undrawn.py",
+        "engine/hierarchy/unify.py",
         "rulebook/packs/crr.py"
       ],
       "test_files": [
@@ -2714,7 +2714,7 @@
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
-        "engine/stages/hierarchy/ratings.py"
+        "engine/hierarchy/ratings.py"
       ],
       "test_files": [],
       "watchfire_index_gap": false
@@ -2722,7 +2722,7 @@
     {
       "article": "178",
       "code_functions": [
-        "rwa_calc.engine.stages.classify.attributes::_build_is_defaulted_expr"
+        "rwa_calc.engine.classify.attributes::_build_is_defaulted_expr"
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
@@ -2732,7 +2732,7 @@
       "source_files": [
         "contracts/edges.py",
         "data/schemas.py",
-        "engine/stages/classify/attributes.py"
+        "engine/classify/attributes.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_beel_does_not_trigger_default.py",
@@ -2892,7 +2892,7 @@
         "data/schemas.py",
         "engine/crm/collateral.py",
         "engine/crm/processor.py",
-        "engine/stages/hierarchy/facility_undrawn.py",
+        "engine/hierarchy/facility_undrawn.py",
         "reporting/kernel/columns.py"
       ],
       "test_files": [
@@ -3044,7 +3044,7 @@
         "contracts/edges.py",
         "engine/crm/ofcp_routing.py",
         "engine/crm/third_party_deposit.py",
-        "engine/stages/re_split/carriers.py"
+        "engine/re_split/carriers.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_239_art_232_third_party_deposit.py",
@@ -3473,11 +3473,11 @@
         "engine/crm/haircuts.py",
         "engine/crm/min_collateralisation.py",
         "engine/crm/processor.py",
+        "engine/hierarchy/unify.py",
         "engine/irb/formulas.py",
         "engine/kernels/allocation.py",
         "engine/sft/__init__.py",
         "engine/sft/fccm.py",
-        "engine/stages/hierarchy/unify.py",
         "engine/stages/sft.py"
       ],
       "test_files": [
@@ -3576,11 +3576,11 @@
         "data/schemas.py",
         "engine/crm/haircut_tables.py",
         "engine/crm/haircuts.py",
+        "engine/fx/__init__.py",
+        "engine/fx/conversion.py",
+        "engine/fx/converter.py",
         "engine/sft/__init__.py",
         "engine/sft/fccm.py",
-        "engine/stages/fx/__init__.py",
-        "engine/stages/fx/conversion.py",
-        "engine/stages/fx/converter.py",
         "rulebook/packs/common.py",
         "rulebook/packs/crr.py"
       ],
@@ -3784,9 +3784,9 @@
         "engine/crm/link_allocation.py",
         "engine/crm/min_collateralisation.py",
         "engine/crm/processor.py",
+        "engine/hierarchy/graph.py",
+        "engine/hierarchy/unify.py",
         "engine/kernels/allocation.py",
-        "engine/stages/hierarchy/graph.py",
-        "engine/stages/hierarchy/unify.py",
         "rulebook/packs/b31.py",
         "rulebook/packs/common.py"
       ],
@@ -4262,8 +4262,8 @@
         "engine/ccr/pipeline_adapter.py",
         "engine/ccr/sa_ccr.py",
         "engine/ccr/wwr.py",
+        "engine/classify/attributes.py",
         "engine/stages/ccr.py",
-        "engine/stages/classify/attributes.py",
         "reporting/corep/c07.py"
       ],
       "test_files": [
@@ -5165,8 +5165,8 @@
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
-        "engine/stages/classify/approach.py",
-        "engine/stages/classify/attributes.py"
+        "engine/classify/approach.py",
+        "engine/classify/attributes.py"
       ],
       "test_files": [
         "tests/unit/test_classifier.py"
@@ -5574,15 +5574,15 @@
         "data/schemas.py",
         "engine/aggregator/_supporting_factors.py",
         "engine/aggregator/aggregator.py",
+        "engine/classify/attributes.py",
+        "engine/classify/classifier.py",
         "engine/irb/calculator.py",
+        "engine/re_split/carriers.py",
         "engine/sa/__init__.py",
         "engine/sa/calculator.py",
         "engine/sa/factors_output.py",
         "engine/slotting/calculator.py",
         "engine/stages/calc.py",
-        "engine/stages/classify/attributes.py",
-        "engine/stages/classify/classifier.py",
-        "engine/stages/re_split/carriers.py",
         "engine/supporting_factors.py",
         "rulebook/packs/b31.py",
         "rulebook/packs/crr.py"
@@ -5860,8 +5860,8 @@
         "data/schemas.py",
         "domain/enums.py",
         "engine/ccf.py",
-        "engine/stages/hierarchy/facility_undrawn.py",
-        "engine/stages/hierarchy/unify.py",
+        "engine/hierarchy/facility_undrawn.py",
+        "engine/hierarchy/unify.py",
         "reporting/corep/c07.py",
         "reporting/pillar3/irb_scope.py",
         "reporting/pillar3/sa_scope.py",
@@ -6126,15 +6126,15 @@
         "contracts/validation.py",
         "data/schemas.py",
         "domain/enums.py",
+        "engine/hierarchy/enrich.py",
+        "engine/hierarchy/ratings.py",
+        "engine/hierarchy/resolver.py",
         "engine/sa/b31_risk_weight_tables.py",
         "engine/sa/covered_bond.py",
         "engine/sa/crr_risk_weight_tables.py",
         "engine/sa/guarantor_rw.py",
         "engine/sa/risk_weights.py",
         "engine/sa/rw_adjustments.py",
-        "engine/stages/hierarchy/enrich.py",
-        "engine/stages/hierarchy/ratings.py",
-        "engine/stages/hierarchy/resolver.py",
         "rulebook/packs/b31.py"
       ],
       "test_files": [
@@ -6218,10 +6218,10 @@
       "source_files": [
         "contracts/edges.py",
         "domain/branch_reasons.py",
+        "engine/hierarchy/enrich.py",
         "engine/sa/guarantor_rw.py",
         "engine/sa/risk_weights.py",
         "engine/sa/sovereign_floor.py",
-        "engine/stages/hierarchy/enrich.py",
         "rulebook/packs/b31.py"
       ],
       "test_files": [
@@ -6413,7 +6413,7 @@
     {
       "article": "123A",
       "code_functions": [
-        "rwa_calc.engine.stages.classify.attributes::_build_qualifies_as_retail_expr"
+        "rwa_calc.engine.classify.attributes::_build_qualifies_as_retail_expr"
       ],
       "confidence": "MEDIUM",
       "framework": "PS1/26",
@@ -6427,7 +6427,7 @@
         "contracts/edges.py",
         "data/schemas.py",
         "engine/aggregator/aggregator.py",
-        "engine/stages/classify/attributes.py"
+        "engine/classify/attributes.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p5_15_art_123a_granularity.py",
@@ -6463,10 +6463,10 @@
       ],
       "source_files": [
         "data/schemas.py",
+        "engine/re_split/carriers.py",
         "engine/sa/b31_risk_weight_tables.py",
         "engine/sa/risk_weights.py",
         "engine/sa/rw_adjustments.py",
-        "engine/stages/re_split/carriers.py",
         "reporting/corep/c02.py",
         "reporting/corep/templates.py",
         "rulebook/packs/b31.py",
@@ -6491,8 +6491,8 @@
     {
       "article": "124",
       "code_functions": [
-        "rwa_calc.engine.sa.risk_weights::_b31_append_real_estate_branches",
-        "rwa_calc.engine.stages.re_split.flagging::_re_split_per_component_eligibility"
+        "rwa_calc.engine.re_split.flagging::_re_split_per_component_eligibility",
+        "rwa_calc.engine.sa.risk_weights::_b31_append_real_estate_branches"
       ],
       "confidence": "MEDIUM",
       "framework": "PS1/26",
@@ -6503,14 +6503,14 @@
       ],
       "source_files": [
         "data/schemas.py",
-        "engine/sa/risk_weights.py",
-        "engine/stages/classify/attributes.py",
-        "engine/stages/classify/subtypes.py",
-        "engine/stages/hierarchy/enrich.py",
-        "engine/stages/hierarchy/facility_undrawn.py",
-        "engine/stages/hierarchy/unify.py",
-        "engine/stages/re_split/flagging.py",
-        "engine/stages/re_split/splitter.py"
+        "engine/classify/attributes.py",
+        "engine/classify/subtypes.py",
+        "engine/hierarchy/enrich.py",
+        "engine/hierarchy/facility_undrawn.py",
+        "engine/hierarchy/unify.py",
+        "engine/re_split/flagging.py",
+        "engine/re_split/splitter.py",
+        "engine/sa/risk_weights.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_140_adc_classification_derivation.py",
@@ -6554,7 +6554,7 @@
         "data/column_spec.py",
         "data/schemas.py",
         "engine/irb/formulas.py",
-        "engine/stages/re_split/__init__.py"
+        "engine/re_split/__init__.py"
       ],
       "test_files": [
         "tests/robustness/strategies.py"
@@ -6564,7 +6564,7 @@
     {
       "article": "124E",
       "code_functions": [
-        "rwa_calc.engine.stages.classify.attributes::_build_has_income_cover_expr"
+        "rwa_calc.engine.classify.attributes::_build_has_income_cover_expr"
       ],
       "confidence": "MEDIUM",
       "framework": "PS1/26",
@@ -6576,7 +6576,7 @@
       ],
       "source_files": [
         "data/schemas.py",
-        "engine/stages/classify/attributes.py"
+        "engine/classify/attributes.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_142_three_property_income_dependent.py",
@@ -6587,7 +6587,7 @@
     {
       "article": "124F",
       "code_functions": [
-        "rwa_calc.engine.stages.re_split.splitter::RealEstateSplitter.split"
+        "rwa_calc.engine.re_split.splitter::RealEstateSplitter.split"
       ],
       "confidence": "HIGH",
       "framework": "PS1/26",
@@ -6605,12 +6605,12 @@
       "source_files": [
         "contracts/protocols.py",
         "domain/enums.py",
+        "engine/re_split/carriers.py",
+        "engine/re_split/flagging.py",
+        "engine/re_split/params.py",
+        "engine/re_split/splitter.py",
         "engine/sa/b31_risk_weight_tables.py",
-        "engine/stages/re_split/carriers.py",
-        "engine/stages/re_split/flagging.py",
-        "engine/stages/re_split/params.py",
-        "engine/stages/re_split/splitter.py",
-        "engine/stages/re_split/stage.py",
+        "engine/stages/re_split.py",
         "rulebook/packs/b31.py",
         "rulebook/packs/crr.py"
       ],
@@ -6688,11 +6688,11 @@
       ],
       "source_files": [
         "domain/enums.py",
-        "engine/sa/b31_risk_weight_tables.py",
-        "engine/stages/re_split/carriers.py",
-        "engine/stages/re_split/flagging.py",
-        "engine/stages/re_split/params.py",
-        "engine/stages/re_split/splitter.py"
+        "engine/re_split/carriers.py",
+        "engine/re_split/flagging.py",
+        "engine/re_split/params.py",
+        "engine/re_split/splitter.py",
+        "engine/sa/b31_risk_weight_tables.py"
       ],
       "test_files": [
         "tests/acceptance/reporting/test_re_split_template_coverage.py",
@@ -6792,9 +6792,9 @@
         "b31_rre_residual_rw_social_housing_floor@b31"
       ],
       "source_files": [
-        "engine/sa/re_residual_rw.py",
-        "engine/stages/re_split/carriers.py",
-        "engine/stages/re_split/splitter.py"
+        "engine/re_split/carriers.py",
+        "engine/re_split/splitter.py",
+        "engine/sa/re_residual_rw.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_142_three_property_income_dependent.py",
@@ -6872,8 +6872,8 @@
         "b31_high_risk_class_applicable@b31"
       ],
       "source_files": [
+        "engine/classify/attributes.py",
         "engine/sa/risk_weights.py",
-        "engine/stages/classify/attributes.py",
         "rulebook/packs/b31.py",
         "rulebook/packs/common.py"
       ],
@@ -7082,8 +7082,8 @@
       "source_files": [
         "contracts/edges.py",
         "data/schemas.py",
+        "engine/hierarchy/enrich.py",
         "engine/sa/risk_weights.py",
-        "engine/stages/hierarchy/enrich.py",
         "rulebook/packs/b31.py",
         "rulebook/packs/crr.py"
       ],
@@ -7097,8 +7097,8 @@
     {
       "article": "140",
       "code_functions": [
-        "rwa_calc.engine.sa.risk_weights::_apply_obligor_st_contamination_override",
-        "rwa_calc.engine.stages.hierarchy.enrich::_apply_obligor_st_contamination_flags"
+        "rwa_calc.engine.hierarchy.enrich::_apply_obligor_st_contamination_flags",
+        "rwa_calc.engine.sa.risk_weights::_apply_obligor_st_contamination_override"
       ],
       "confidence": "MEDIUM",
       "framework": "PS1/26",
@@ -7107,8 +7107,8 @@
       "pack_entries": [],
       "source_files": [
         "contracts/errors.py",
-        "engine/sa/risk_weights.py",
-        "engine/stages/hierarchy/enrich.py"
+        "engine/hierarchy/enrich.py",
+        "engine/sa/risk_weights.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_225_art_140_2_obligor_st_contamination.py",
@@ -7122,15 +7122,15 @@
     {
       "article": "147",
       "code_functions": [
-        "rwa_calc.engine.stages.classify.approach::_align_irb_exposure_class",
-        "rwa_calc.engine.stages.classify.attributes::derive_independent_flags",
-        "rwa_calc.engine.stages.classify.attributes::natural_person_expr",
-        "rwa_calc.engine.stages.classify.attributes::with_group_annual_revenue",
-        "rwa_calc.engine.stages.classify.subtypes::classify_exposure_subtypes",
-        "rwa_calc.engine.stages.classify.subtypes::qrre_obligor_aggregate_limit_expr",
-        "rwa_calc.engine.stages.classify.subtypes::qrre_undrawn_cancellable_expr",
-        "rwa_calc.engine.stages.classify.subtypes::qrre_unsecured_expr",
-        "rwa_calc.engine.stages.classify.subtypes::sync_irb_exposure_class",
+        "rwa_calc.engine.classify.approach::_align_irb_exposure_class",
+        "rwa_calc.engine.classify.attributes::derive_independent_flags",
+        "rwa_calc.engine.classify.attributes::natural_person_expr",
+        "rwa_calc.engine.classify.attributes::with_group_annual_revenue",
+        "rwa_calc.engine.classify.subtypes::classify_exposure_subtypes",
+        "rwa_calc.engine.classify.subtypes::qrre_obligor_aggregate_limit_expr",
+        "rwa_calc.engine.classify.subtypes::qrre_undrawn_cancellable_expr",
+        "rwa_calc.engine.classify.subtypes::qrre_unsecured_expr",
+        "rwa_calc.engine.classify.subtypes::sync_irb_exposure_class",
         "rwa_calc.reporting.pillar3.cr9::generate_cr9",
         "rwa_calc.reporting.pillar3.cr9::generate_cr9_1",
         "rwa_calc.reporting.pillar3.generator::Pillar3Generator._generate_all_cr9",
@@ -7149,13 +7149,13 @@
       "source_files": [
         "contracts/edges.py",
         "data/schemas.py",
-        "engine/stages/classify/approach.py",
-        "engine/stages/classify/attributes.py",
-        "engine/stages/classify/audit.py",
-        "engine/stages/classify/subtypes.py",
-        "engine/stages/hierarchy/__init__.py",
-        "engine/stages/hierarchy/enrich.py",
-        "engine/stages/hierarchy/facility_undrawn.py",
+        "engine/classify/approach.py",
+        "engine/classify/attributes.py",
+        "engine/classify/audit.py",
+        "engine/classify/subtypes.py",
+        "engine/hierarchy/__init__.py",
+        "engine/hierarchy/enrich.py",
+        "engine/hierarchy/facility_undrawn.py",
         "engine/thresholds.py",
         "reporting/pillar3/cr9.py",
         "reporting/pillar3/generator.py",
@@ -7195,8 +7195,8 @@
     {
       "article": "147A",
       "code_functions": [
-        "rwa_calc.engine.securitisation.allocator::SecuritisationAllocator.allocate",
-        "rwa_calc.engine.stages.classify.subtypes::derive_exposure_subclass"
+        "rwa_calc.engine.classify.subtypes::derive_exposure_subclass",
+        "rwa_calc.engine.securitisation.allocator::SecuritisationAllocator.allocate"
       ],
       "confidence": "MEDIUM",
       "framework": "PS1/26",
@@ -7214,10 +7214,10 @@
         "data/schemas.py",
         "domain/enums.py",
         "engine/aggregator/_securitisation.py",
+        "engine/classify/approach.py",
+        "engine/classify/audit.py",
+        "engine/classify/subtypes.py",
         "engine/securitisation/allocator.py",
-        "engine/stages/classify/approach.py",
-        "engine/stages/classify/audit.py",
-        "engine/stages/classify/subtypes.py",
         "reporting/corep/c02.py",
         "reporting/corep/crm_substitution.py",
         "rulebook/packs/common.py",
@@ -7287,7 +7287,7 @@
     {
       "article": "153",
       "code_functions": [
-        "rwa_calc.engine.stages.classify.subtypes::classify_exposure_subtypes"
+        "rwa_calc.engine.classify.subtypes::classify_exposure_subtypes"
       ],
       "confidence": "HIGH",
       "framework": "PS1/26",
@@ -7319,11 +7319,11 @@
         "contracts/config.py",
         "contracts/edges.py",
         "data/schemas.py",
+        "engine/classify/subtypes.py",
         "engine/irb/adjustments.py",
         "engine/irb/formulas.py",
         "engine/slotting/calculator.py",
         "engine/slotting/transforms.py",
-        "engine/stages/classify/subtypes.py",
         "reporting/corep/templates.py",
         "reporting/pillar3/templates.py",
         "rulebook/packs/b31.py",
@@ -7448,7 +7448,7 @@
     {
       "article": "160",
       "code_functions": [
-        "rwa_calc.engine.stages.classify.subtypes::derive_purchased_receivables_pd"
+        "rwa_calc.engine.classify.subtypes::derive_purchased_receivables_pd"
       ],
       "confidence": "HIGH",
       "framework": "PS1/26",
@@ -7462,7 +7462,7 @@
       "source_files": [
         "contracts/edges.py",
         "data/schemas.py",
-        "engine/stages/classify/subtypes.py",
+        "engine/classify/subtypes.py",
         "rulebook/packs/b31.py"
       ],
       "test_files": [
@@ -7507,10 +7507,10 @@
       ],
       "source_files": [
         "data/schemas.py",
+        "engine/classify/subtypes.py",
+        "engine/hierarchy/unify.py",
         "engine/irb/formulas.py",
         "engine/irb/transforms.py",
-        "engine/stages/classify/subtypes.py",
-        "engine/stages/hierarchy/unify.py",
         "rulebook/packs/b31.py"
       ],
       "test_files": [
@@ -7576,9 +7576,9 @@
       "source_files": [
         "contracts/config.py",
         "data/schemas.py",
+        "engine/hierarchy/facility_undrawn.py",
         "engine/irb/transforms.py",
         "engine/sft/fccm.py",
-        "engine/stages/hierarchy/facility_undrawn.py",
         "rulebook/packs/b31.py",
         "rulebook/packs/common.py"
       ],
@@ -7733,8 +7733,8 @@
       "source_files": [
         "data/schemas.py",
         "engine/ccf.py",
-        "engine/stages/hierarchy/facility_undrawn.py",
-        "engine/stages/hierarchy/unify.py"
+        "engine/hierarchy/facility_undrawn.py",
+        "engine/hierarchy/unify.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p2_32_purchased_receivable_ccf.py",
@@ -7809,8 +7809,8 @@
       "source_files": [
         "contracts/edges.py",
         "contracts/errors.py",
-        "engine/stages/classify/attributes.py",
-        "engine/stages/classify/audit.py"
+        "engine/classify/attributes.py",
+        "engine/classify/audit.py"
       ],
       "test_files": [
         "tests/acceptance/crr/test_beel_does_not_trigger_default.py",
@@ -7863,7 +7863,7 @@
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
-        "engine/stages/hierarchy/facility_undrawn.py"
+        "engine/hierarchy/facility_undrawn.py"
       ],
       "test_files": [
         "tests/acceptance/basel31/test_p1_238_art_195_same_counterparty_netting.py",

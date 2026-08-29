@@ -29,8 +29,8 @@ _STANDARD_SCOPE: list[tuple[str, Path]] = [
     ("engine/sa/risk_weights.py", _ROOT / "engine" / "sa" / "risk_weights.py"),
     ("engine/sa/rw_adjustments.py", _ROOT / "engine" / "sa" / "rw_adjustments.py"),
     (
-        "engine/stages/classify/approach.py",
-        _ROOT / "engine" / "stages" / "classify" / "approach.py",
+        "engine/classify/approach.py",
+        _ROOT / "engine" / "classify" / "approach.py",
     ),
     ("engine/irb/guarantee.py", _ROOT / "engine" / "irb" / "guarantee.py"),
 ]

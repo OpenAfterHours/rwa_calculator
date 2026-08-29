@@ -26,7 +26,7 @@ from tests.acceptance.stress.conftest import (  # noqa: E402
 )
 from tests.fixtures.raw_bundle import make_raw_bundle  # noqa: E402
 
-from rwa_calc.engine.stages.hierarchy import HierarchyResolver  # noqa: E402
+from rwa_calc.engine.hierarchy import HierarchyResolver  # noqa: E402
 
 
 def _rich_bundle():

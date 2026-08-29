@@ -20,7 +20,7 @@ Key assertion:
 
     Pre-fix (current engine bug):
         ``data/schemas.py`` ``B31_SOVEREIGN_LIKE_ENTITY_TYPES`` (the SA-only
-        backstop keyed by ``engine/stages/classify/approach.py``
+        backstop keyed by ``engine/classify/approach.py``
         ``_apply_b31_approach_restrictions``) deliberately excludes
         ``pse_institution`` / ``rgla_institution``, so an institution F-IRB
         model permission is wrongly honoured for this PSE and it routes to
@@ -46,7 +46,7 @@ References:
       supervisory LGD) — F-IRB parameters for the "before" state only.
     - src/rwa_calc/data/schemas.py: B31_SOVEREIGN_LIKE_ENTITY_TYPES (bug
       site: excludes rgla_institution / pse_institution).
-    - src/rwa_calc/engine/stages/classify/approach.py:
+    - src/rwa_calc/engine/classify/approach.py:
       _apply_b31_approach_restrictions (b31_sa_only must fire for these
       entity types under the approach_restrictions_b31_applicable Feature).
     - src/rwa_calc/rulebook/packs/crr.py: pse_risk_weights_sovereign_derived
@@ -223,7 +223,7 @@ class TestP1220PseInstitutionSaOnly:
             f"Pre-fix, the engine honours the institution F-IRB model permission "
             f"because B31_SOVEREIGN_LIKE_ENTITY_TYPES (data/schemas.py) excludes "
             f"pse_institution — fix _apply_b31_approach_restrictions "
-            f"(engine/stages/classify/approach.py) to force SA for this entity type."
+            f"(engine/classify/approach.py) to force SA for this entity type."
         )
 
     # ------------------------------------------------------------------

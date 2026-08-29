@@ -3,7 +3,7 @@ Generate P1.223 fixtures: obligor-level short-term ECAI spillover (Art. 120(3)(c
 
 Pipeline position:
     fixture-builder output -> test-writer -> engine-implementer
-    (engine/stages/hierarchy/enrich.py: ``apply_short_term_rating_override``;
+    (engine/hierarchy/enrich.py: ``apply_short_term_rating_override``;
     engine/sa/risk_weights.py: B31 ``_b31_append_institution_maturity_branches`` /
     CRR ``_crr_append_institution_maturity_branches``)
 
@@ -38,7 +38,7 @@ Scenario rationale (the bug):
     unrated short-term claims — not just the specifically-rated exposure.
 
     The current engine (``apply_short_term_rating_override``,
-    ``engine/stages/hierarchy/enrich.py:160-240``) applies the short-term
+    ``engine/hierarchy/enrich.py:160-240``) applies the short-term
     override strictly per-exposure, scoped by ``(scope_type, scope_id)``.
     LN-A (the FAC-A-scoped rating target) correctly receives the Table 4A
     ECAI risk weight. But LN-B — the OTHER short-term claim on the SAME
@@ -113,7 +113,7 @@ References:
     - CRR Art. 120(3)(c) + Art. 120(2) Table 4 + Art. 131 Table 7
       (crr.pdf p.118).
     - BCBS CRE20.19.
-    - src/rwa_calc/engine/stages/hierarchy/enrich.py:160-240
+    - src/rwa_calc/engine/hierarchy/enrich.py:160-240
       (``apply_short_term_rating_override`` — per-exposure scoping; the
       obligor-level spillover fix belongs here or in a follow-on stage).
     - src/rwa_calc/engine/sa/risk_weights.py:634-702

@@ -141,7 +141,7 @@ References:
     - src/rwa_calc/engine/crm/guarantees.py:356-393 (_join_guarantor_ratings
       -- guarantor_cqs / guarantor_internal_pd provenance), :396-449
       (_assign_guarantor_approach -- the SA-fallback branch this item gates).
-    - src/rwa_calc/engine/stages/hierarchy/ratings.py:88-101 (internal_pd
+    - src/rwa_calc/engine/hierarchy/ratings.py:88-101 (internal_pd
       promotion -- no model_id/permission dependency).
     - tests/fixtures/p1_183/p1_183.py: model_permission builder pattern
       reused for MOD_CORP_P227.

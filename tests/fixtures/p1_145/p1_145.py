@@ -33,7 +33,7 @@ Post-fix assertion:
 References:
     - CRR Art. 143 (IRB permission scope)
     - CRR Art. 150(1) (PPU carve-out — SA wins over IRB on conflict)
-    - engine/stages/classify/ (_resolve_model_permissions)
+    - engine/classify/ (_resolve_model_permissions)
     - src/rwa_calc/data/schemas.py:515-522 (MODEL_PERMISSIONS_SCHEMA)
     - src/rwa_calc/domain/enums.py:109-124 (ApproachType)
 

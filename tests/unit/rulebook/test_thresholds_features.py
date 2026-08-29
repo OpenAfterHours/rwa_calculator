@@ -103,7 +103,7 @@ def test_sme_size_threshold_is_fx_rate_driven_end_to_end() -> None:
     import polars as pl
 
     from rwa_calc.contracts.config import CalculationConfig
-    from rwa_calc.engine.stages.classify.attributes import is_sme_by_size_expr
+    from rwa_calc.engine.classify.attributes import is_sme_by_size_expr
 
     frame = pl.LazyFrame({"sme_size_metric_gbp": [48_000_000.0], "sme_size_source": ["turnover"]})
     cfg_low = CalculationConfig.crr(

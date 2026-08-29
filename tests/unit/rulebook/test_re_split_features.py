@@ -2,7 +2,7 @@
 Pin for the S9f SA RE loan-split regime Features.
 
 Phase 5 S9f moved the three RE loan-split decision gates in
-engine/stages/re_split/flagging.py (run inside the classifier stage) off
+engine/re_split/flagging.py (run inside the classifier stage) off
 ``config.is_basel_3_1`` and onto cited pack Features, threaded from
 classifier.py into ``flag_property_reclassification_candidates`` and its two
 expression-block helpers. The helpers keep their ``config`` param for the
@@ -20,7 +20,7 @@ fallback resolve; only the regime reads move to the pack:
   eligible exposures.
 
 S9g additionally moved the splitter's RE-split parameter-set selection
-(engine/stages/re_split/splitter.py) onto the pack, threading it through the
+(engine/re_split/splitter.py) onto the pack, threading it through the
 ``RealEstateSplitterProtocol.split`` signature and the re_split stage adapter:
 
 - ``sa_re_split_revised_parameters`` — selects the Basel 3.1 Art. 124F/124H

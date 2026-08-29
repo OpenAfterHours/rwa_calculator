@@ -29,8 +29,10 @@ from rwa_calc.contracts.bundles import (
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.contracts.errors import CalculationError
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity, PermissionMode
+from rwa_calc.engine.classify import ExposureClassifier
 from rwa_calc.engine.crm.processor import CRMProcessor
 from rwa_calc.engine.equity.calculator import EquityCalculator
+from rwa_calc.engine.hierarchy import HierarchyResolver
 from rwa_calc.engine.orchestrator import (
     CLASSIFIED,
     CRM_ADJUSTED,
@@ -48,8 +50,6 @@ from rwa_calc.engine.pipeline import (
 from rwa_calc.engine.stages import classify as classify_stage
 from rwa_calc.engine.stages import crm as crm_stage
 from rwa_calc.engine.stages import hierarchy as hierarchy_stage
-from rwa_calc.engine.stages.classify import ExposureClassifier
-from rwa_calc.engine.stages.hierarchy import HierarchyResolver
 from rwa_calc.rulebook import RulepackV0
 from tests.fixtures.context import make_context
 from tests.fixtures.raw_bundle import make_raw_bundle

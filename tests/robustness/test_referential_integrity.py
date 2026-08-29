@@ -22,7 +22,7 @@ guard rather than a historical note.
 appeared in ``contracts/errors.py`` and in the ``contracts/__init__.py``
 re-export, and in no other file under ``src/``. The counterparty enrichment join
 is ``how="left"``
-(``engine/stages/hierarchy/enrich.py``), so a loan whose ``counterparty_reference``
+(``engine/hierarchy/enrich.py``), so a loan whose ``counterparty_reference``
 matches no counterparty survives with null obligor attributes, classifies to
 ``other``, and takes the 100% fallback risk weight.
 
@@ -44,7 +44,7 @@ the defect is not conservative in either direction; it is a coin flip whose face
 depends on the obligor's true class. A null ``counterparty_reference`` reaches the
 identical fallback.
 
-**Duplicate keys collapsed silently.** ``engine/stages/classify/permissions.py``
+**Duplicate keys collapsed silently.** ``engine/classify/permissions.py``
 de-duplicates on ``exposure_reference`` after the model-permission join — correct
 for its own purpose, which is to stop a fan-out when several permissions match —
 but it also collapses genuine duplicate INPUT rows. Three input loan rows produce

@@ -3,7 +3,7 @@ P1.311 — a regime-divergent entity-class override must actually take effect.
 
 Pipeline position:
     rulebook.resolve -> engine/entity_class_maps -> Classifier
-    (``stages/classify/attributes.py::derive_independent_flags``)
+    (``engine/classify/attributes.py::derive_independent_flags``)
 
 What this pins:
     ``engine/entity_class_maps`` used to resolve ``entity_type_to_sa_class`` /

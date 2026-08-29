@@ -4,7 +4,7 @@ rating contamination.
 
 Pipeline position:
     fixture-builder output -> test-writer -> engine-implementer
-    (engine/stages/hierarchy/enrich.py: ``apply_short_term_rating_override``
+    (engine/hierarchy/enrich.py: ``apply_short_term_rating_override``
     obligor-level spillover; engine/sa/risk_weights.py: SA branches that must
     force 150% / floor 100% on contaminated obligors' unrated unsecured rows)
 
@@ -50,7 +50,7 @@ Scenario rows (six loans across four obligors):
     (2027-01-01 -> 2030-01-01), mirroring p1_223's LN-C.
 
 Defect under test (pre-fix):
-    ``apply_short_term_rating_override`` (engine/stages/hierarchy/enrich.py:
+    ``apply_short_term_rating_override`` (engine/hierarchy/enrich.py:
     160-240) applies the short-term ECAI override strictly per-exposure — it
     has no obligor-level aggregation step at all (grep for 150%-contamination
     / unrated-floor logic returns nothing beyond the ``@cites`` decorator).

@@ -52,7 +52,7 @@ The classifier assigns exposure classes based on:
 4. **Performance status** - Default indicators
 
 ```python
-from rwa_calc.engine.stages.classify import ExposureClassifier
+from rwa_calc.engine.classify import ExposureClassifier
 
 classifier = ExposureClassifier()
 

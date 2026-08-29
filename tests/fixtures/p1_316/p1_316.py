@@ -67,7 +67,7 @@ a rate row rewrites ``currency`` in the converter and silently re-arms the floor
 
 Each leg gets its OWN counterparty. That is required, not tidiness:
 ``sovereign_cqs`` is a counterparty column, and ``_broadcast_trade_lc_flag``
-(engine/stages/hierarchy/enrich.py) OR-aggregates ``is_short_term_trade_lc``
+(engine/hierarchy/enrich.py) OR-aggregates ``is_short_term_trade_lc``
 per counterparty and broadcasts it, so sharing a counterparty between
 LN-TRADE5Y and LN-SOV1 would spread the trade flag onto the moving leg.
 

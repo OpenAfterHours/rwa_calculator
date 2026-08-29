@@ -843,7 +843,7 @@ def duplicate_input_key_error(
     rows exactly as unaccounted-for as they were before the gate existed.
 
     Severity is ERROR, unlike the ``org_mappings`` DQ004 raised by
-    ``engine/stages/hierarchy/graph.py``, which is a WARNING. The two are not
+    ``engine/hierarchy/graph.py``, which is a WARNING. The two are not
     inconsistent: there, the resolver de-duplicates a MAPPING table
     deterministically and no exposure is lost, so the operator is told about a
     tidy-up. Here the key names an exposure or an obligor — the model-permission

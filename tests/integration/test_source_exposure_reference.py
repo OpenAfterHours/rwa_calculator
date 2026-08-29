@@ -17,7 +17,7 @@ sub-rows strip their suffix back to the parent exposure reference.
 
 References:
 - src/rwa_calc/contracts/edges.py — _hierarchy_resolved_columns / _calc_output_common_columns
-- src/rwa_calc/engine/stages/hierarchy/unify.py, facility_undrawn.py
+- src/rwa_calc/engine/hierarchy/unify.py, facility_undrawn.py
 - src/rwa_calc/data/schemas.py — RECON_PARENT_KEY_COLUMNS
 """
 

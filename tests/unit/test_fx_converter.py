@@ -11,7 +11,7 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.engine.stages.fx.converter import FXConverter, create_fx_converter
+from rwa_calc.engine.fx.converter import FXConverter, create_fx_converter
 
 # =============================================================================
 # FIXTURES

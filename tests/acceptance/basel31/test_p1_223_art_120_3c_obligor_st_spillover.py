@@ -12,7 +12,7 @@ unrated short-term claims -- not just the specifically-rated exposure.
 
 The engine currently applies the short-term rating override strictly
 per-exposure (``apply_short_term_rating_override``,
-``engine/stages/hierarchy/enrich.py:160-240``, scoped by
+``engine/hierarchy/enrich.py:160-240``, scoped by
 ``(scope_type, scope_id)``). LN-A (rated) correctly gets 100%. LN-B (same
 obligor, unrated, also short-term) incorrectly keeps the general
 preferential 20% instead of spilling over to 100%. LN-C is a long-term claim
@@ -44,7 +44,7 @@ References:
     PRA PS1/26 Art. 120(2) Table 4: general preferential short-term.
     PRA PS1/26 Art. 120(2B) Table 4A: short-term ECAI assessment.
     CRR Art. 120(3)(c) + Art. 120(2) Table 4 + Art. 131 Table 7.
-    src/rwa_calc/engine/stages/hierarchy/enrich.py:160-240
+    src/rwa_calc/engine/hierarchy/enrich.py:160-240
         (apply_short_term_rating_override -- per-exposure scoping; fix target).
     src/rwa_calc/engine/sa/risk_weights.py:634-702, :818-867
         (institution maturity branches, B31 / CRR).

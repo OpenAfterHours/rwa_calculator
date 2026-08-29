@@ -305,15 +305,15 @@ def build_components(
     rebuild still isolates frameworks for any component that does cache state.
     """
     from rwa_calc.engine.aggregator import OutputAggregator
+    from rwa_calc.engine.classify import ExposureClassifier
     from rwa_calc.engine.crm.processor import CRMProcessor
     from rwa_calc.engine.equity.calculator import EquityCalculator
+    from rwa_calc.engine.hierarchy import HierarchyResolver
     from rwa_calc.engine.irb.calculator import IRBCalculator
+    from rwa_calc.engine.re_split import RealEstateSplitter
     from rwa_calc.engine.sa.calculator import SACalculator
     from rwa_calc.engine.securitisation.allocator import SecuritisationAllocator
     from rwa_calc.engine.slotting.calculator import SlottingCalculator
-    from rwa_calc.engine.stages.classify import ExposureClassifier
-    from rwa_calc.engine.stages.hierarchy import HierarchyResolver
-    from rwa_calc.engine.stages.re_split import RealEstateSplitter
 
     return StageComponents(
         securitisation_allocator=securitisation_allocator or SecuritisationAllocator(),

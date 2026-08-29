@@ -7,7 +7,7 @@ Our results frame splits a single loan into multiple rows:
 - guarantee splits carry ``parent_exposure_reference`` and a suffixed
   ``exposure_reference`` (``__G_<guarantor>`` / ``__REM`` / ``__REM_FL`` /
   ``__REM_SEN``) — see engine/crm/guarantees.py;
-- real-estate splits carry ``split_parent_id`` — see engine/stages/re_split/.
+- real-estate splits carry ``split_parent_id`` — see engine/re_split/.
 
 A legacy calculator typically reports one row per loan, so before reconciling we
 collapse our sub-rows back to a single grain. ``aggregate_to_key_grain`` does this

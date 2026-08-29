@@ -282,7 +282,7 @@ _CORPORATE_FAMILY: tuple[str, ...] = ("corporate", "corporate_sme")
 
 # B31 real-estate reporting classes (Art. 124A-124L: under Basel 3.1 real
 # estate is a standalone SA exposure class). The SA loan-splitter
-# (engine/stages/re_split) reclassifies property-secured non-RE exposures into
+# (engine/re_split) reclassifies property-secured non-RE exposures into
 # residential_mortgage / commercial_mortgage secured legs; retail residential RE
 # keeps the retail_mortgage class. These are the reporting_class_origin /
 # exposure_class values that key OF 09.01 "Real estate exposures" row 0090.

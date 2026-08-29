@@ -15,7 +15,7 @@ Retail exposures must meet ALL of the following criteria:
 
 !!! info "Conceptual Logic"
     The following illustrates the retail classification decision logic. For the actual implementation,
-    see [`stages/classify/subtypes.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/classify/subtypes.py#L196-L254)
+    see [`classify/subtypes.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/classify/subtypes.py#L196-L254)
     (`reclassify_corporate_to_retail`).
 
 ```python
@@ -28,9 +28,9 @@ def is_retail(exposure, counterparty, lending_group_adjusted_exposure):
     )
 ```
 
-??? example "Actual Implementation (stages/classify/subtypes.py)"
+??? example "Actual Implementation (engine/classify/subtypes.py)"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:196:254"
+    --8<-- "src/rwa_calc/engine/classify/subtypes.py:196:254"
     ```
 
 ## Retail Sub-Classes
@@ -251,7 +251,7 @@ This exclusion applies because:
 
 !!! info "Conceptual Logic"
     The following illustrates the residential property exclusion logic. For the actual implementation,
-    see [`stages/hierarchy/enrich.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/hierarchy/enrich.py#L243-L351)
+    see [`hierarchy/enrich.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/hierarchy/enrich.py#L243-L351)
     (`enrich_with_property_coverage`).
 
 ```python
@@ -274,11 +274,11 @@ def calculate_adjusted_exposure(exposures, residential_collateral):
     return exposures
 ```
 
-??? example "Actual Implementation (stages/hierarchy/enrich.py)"
+??? example "Actual Implementation (engine/hierarchy/enrich.py)"
     The real implementation uses Polars LazyFrames for efficient processing:
 
     ```python
-    --8<-- "src/rwa_calc/engine/stages/hierarchy/enrich.py:243:351"
+    --8<-- "src/rwa_calc/engine/hierarchy/enrich.py:243:351"
     ```
 
 **Lending Group Threshold Check:**

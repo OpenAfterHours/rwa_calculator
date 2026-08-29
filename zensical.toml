@@ -155,6 +155,7 @@ nav = [
     { "Implementation Plan" = "plans/implementation-plan.md" },
     { "Target Architecture & Migration" = "plans/target-architecture-migration.md" },
     { "Declarative Reporting (Phase 7)" = "plans/phase7-declarative-reporting.md" },
+    { "Return Reconciliation (proposed)" = "plans/return-reconciliation.md" },
     { "Boundary Hardening (Phase 3)" = "plans/engine-defensiveness-boundary-hardening.md" },
     { "Single-Lazy-Plan Refactor (superseded)" = "plans/single-lazy-plan-refactor.md" },
   ]},

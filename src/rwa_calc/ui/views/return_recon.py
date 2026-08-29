@@ -185,6 +185,13 @@ CELL_LEGS_LIMIT = 25
 DEFAULT_MATERIALITY_ABSOLUTE = 1_000.0
 DEFAULT_MATERIALITY_PERCENT = 0.1
 
+#: Below this a delta is float dust, not a difference. Two sums that agree to
+#: this margin agreed exactly and the residue is the order of arithmetic —
+#: the same convention, and the same magnitude, as the reconciliation engine's
+#: own exact-match epsilon. An exact ``== 0.0`` would also make the zero-base
+#: branch below reachable for a delta that is only nominally non-zero.
+_ZERO_DELTA = 1e-9
+
 #: The honest limits of this path, shown on the page rather than in a docstring
 #: nobody reads. Every one of them changes how a number should be read.
 COMPARE_LIMITS: tuple[str, ...] = (
@@ -229,7 +236,7 @@ class Materiality:
 
     def is_material(self, delta: float | None, ours: float | None, theirs: float | None) -> bool:
         """Whether one cell's delta clears both floors."""
-        if delta is None or delta == 0.0:
+        if delta is None or abs(delta) < _ZERO_DELTA:
             return False
         if abs(delta) < self.absolute:
             return False

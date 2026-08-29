@@ -860,6 +860,26 @@ def test_a_zero_or_absent_delta_is_never_material() -> None:
     assert not threshold.is_material(None, 100.0, None)
 
 
+def test_float_dust_is_not_a_difference() -> None:
+    """Two sums that agree to the arithmetic's own residue agreed exactly.
+
+    Both floors are zero here, so nothing else can exclude the value: an exact
+    ``== 0.0`` test would let a delta of 1e-12 through, and — because the base
+    is then compared against zero — report it as 100% of the cell. The
+    reconciliation engine settles the same question with the same epsilon.
+    """
+    threshold = rr.Materiality(absolute=0.0, percent=0.0)
+
+    # Arrange / Act / Assert — dust on both the ordinary and the zero-base path.
+    assert not threshold.is_material(1e-12, 100.0, 100.0)
+    assert not threshold.is_material(-1e-12, 100.0, 100.0)
+    assert not threshold.is_material(1e-12, 0.0, 0.0)
+
+    # A delta genuinely above the dust floor still reports, so the guard has not
+    # simply swallowed the small-delta case.
+    assert threshold.is_material(1e-6, 100.0, 100.0)
+
+
 def test_a_delta_against_a_zero_base_clears_the_relative_floor() -> None:
     # Assert — it is 100% of the cell; only the absolute floor can exclude it.
     threshold = rr.Materiality(absolute=1_000.0, percent=50.0)

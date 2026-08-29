@@ -246,9 +246,25 @@ def append_stage_errors(ctx: PipelineContext, *errors: CalculationError) -> Pipe
 class StageComponents:
     """The class-shaped stage implementations the adapters invoke.
 
-    Adapter-era scaffolding: as each stage converts to the uniform
-    function-module anatomy its slot here is deleted; the dataclass goes
-    with the last class-shaped stage.
+    Originally adapter-era scaffolding, on the plan that each stage would
+    convert to the uniform function-module anatomy and delete its slot, and
+    the dataclass would go with the last class-shaped stage.
+
+    FROZEN 2026-08-29, deliberately, and the reason is not "not got round to
+    it". This dataclass is also the **test injection seam**: ``build_components``
+    takes a per-component override for every slot, and that is how
+    ``tests/fixtures/context.py::…`` seeds a ``PipelineContext`` with a mocked
+    stage, and how ``tests/unit/test_pipeline.py`` pins the override mechanism
+    itself. Deleting the dataclass does not simplify the engine — it moves the
+    seam somewhere else and rewrites every test that mocks a stage, for no
+    change in behaviour.
+
+    So the ten slots are not debt awaiting demolition; they are the injection
+    points, and a slot leaves only when its stage stops being mockable in its
+    own right. Anyone shrinking this needs a replacement seam FIRST.
+
+    See docs/plans/architecture-review-2026-08-29.md item S2, which measured
+    the alternative and recorded this as the deliberate outcome.
     """
 
     securitisation_allocator: SecuritisationAllocatorProtocol

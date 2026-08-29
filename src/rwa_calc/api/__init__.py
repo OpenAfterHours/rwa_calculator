@@ -28,6 +28,13 @@ from rwa_calc.analysis.recon_registry import (
     ComponentMapping,
     LegacyColumnMapping,
 )
+from rwa_calc.api.batch import (
+    BatchRequest,
+    BatchResult,
+    ScopeResult,
+    ScopeSpec,
+    run_batch,
+)
 from rwa_calc.api.export import (
     ExportResult,
     ResultExporter,
@@ -72,6 +79,12 @@ from rwa_calc.api.validation import (
 __all__ = [
     # Service
     "CreditRiskCalc",
+    # Batch driver (N independent scoped runs over a process pool)
+    "run_batch",
+    "BatchRequest",
+    "BatchResult",
+    "ScopeSpec",
+    "ScopeResult",
     # Utilities
     "get_supported_frameworks",
     "get_default_config",

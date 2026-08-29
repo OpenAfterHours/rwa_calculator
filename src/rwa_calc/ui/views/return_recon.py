@@ -78,6 +78,7 @@ from rwa_calc.analysis.return_recon import (
     diff_cells,
     row_migration,
 )
+from rwa_calc.observability import loggable
 from rwa_calc.reporting import catalog
 from rwa_calc.reporting.corep.generator import COREPTemplateBundle
 from rwa_calc.ui.views.report_templates import format_value
@@ -593,15 +594,20 @@ def template_page(  # noqa: PLR0913 - the page's full address is its signature
             money_column=money_column,
         )
 
-    chosen_sheet = (
-        sheet if sheet in selected.sheets else (selected.sheets[0] if selected.sheets else None)
+    # Take the element FROM the template's own sheet list rather than the string the
+    # request supplied. The two compare equal, so the behaviour and the fallback are
+    # unchanged — but only one of them has a provenance a reader can trust, and a
+    # value that never came from the request cannot forge anything downstream.
+    chosen_sheet = next(
+        (known for known in selected.sheets if known == sheet),
+        selected.sheets[0] if selected.sheets else None,
     )
     compare = sheet_compare(
         recon, selected.id, chosen_sheet, coverage=coverage, materiality=materiality
     )
     groups = migration_groups(recon, selected.id, chosen_sheet)
     group_key = _select_group(groups, predicate_key, recon, selected.id, chosen_sheet, col_ref)
-    price = money_column if money_column in MIGRATION_MONEY_COLUMNS else "rwa_final"
+    price = next((known for known in MIGRATION_MONEY_COLUMNS if known == money_column), "rwa_final")
     matrix = (
         migration_matrix(recon, selected.id, chosen_sheet, group_key, money_column=price)
         if group_key
@@ -677,7 +683,7 @@ def build_comparison(  # noqa: PLR0913 - two sides, each with its own coverage
             "return-recon compare %s: the legacy side has NO coverage record — every "
             "column its mapping cannot populate will read as a measured figure, and an "
             "injected all-null column sums to 0.00",
-            recon_id,
+            loggable(recon_id),
         )
     recon = build_recon(
         ours,
@@ -1360,15 +1366,19 @@ def _select_group(  # noqa: PLR0913 - the sheet's address plus the two selectors
     default matrix the one most of the sheet reads, rather than an arbitrary
     narrowing (a defaulted-only or off-balance-sheet-only population).
     """
-    keys = {group.predicate_key for group in groups}
-    if predicate_key in keys:
-        return predicate_key
+    for group in groups:
+        if group.predicate_key == predicate_key:
+            return group.predicate_key
     if col_ref:
         for group in groups:
             if col_ref in group.columns:
                 return group.predicate_key
     if not groups:
-        logger.info("return-recon compare: no membership groups for %s/%s", template_id, sheet)
+        logger.info(
+            "return-recon compare: no membership groups for %s/%s",
+            loggable(template_id),
+            loggable(sheet),
+        )
         return ""
     return max(groups, key=lambda group: (len(group.columns), group.predicate_key)).predicate_key
 

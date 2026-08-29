@@ -163,6 +163,7 @@ from typing import TYPE_CHECKING, Literal
 import polars as pl
 
 from rwa_calc.analysis.legacy_ledger import LegacyLedgerSource
+from rwa_calc.observability import loggable
 from rwa_calc.reporting.cellspec import subset_rows
 from rwa_calc.reporting.corep.generator import COREPGenerator
 from rwa_calc.reporting.kernel import available_columns, ensure_gross_side_carriers
@@ -719,9 +720,9 @@ def row_migration(
         logger.info(
             "row_migration: no membership at all for %s/%s/%s — the group holds no legs on "
             "either side (this is an EMPTY group, not a zero)",
-            template_id,
-            sheet,
-            predicate_key,
+            loggable(template_id),
+            loggable(sheet),
+            loggable(predicate_key),
         )
         return pl.DataFrame(schema=ROW_MIGRATION_SCHEMA)
 
@@ -1285,7 +1286,9 @@ def _warn_placement(
     priced: pl.DataFrame, template_id: str, sheet: str | None, predicate_key: str, label: str
 ) -> None:
     """Say out loud what a silent filter would have swallowed."""
-    where = f"{template_id}/{sheet}/{predicate_key} ({label})"
+    # Sanitised once here: this string is the subject of all three warnings below,
+    # and every part of it can reach us from a request query string.
+    where = loggable(f"{template_id}/{sheet}/{predicate_key} ({label})")
     unplaced = int((priced["_leaves"].list.len() == 0).sum())
     if unplaced:
         logger.warning(

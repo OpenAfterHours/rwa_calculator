@@ -1,0 +1,358 @@
+{% extends "base.html" %}
+{% from "_recon_table.html" import fmt %}
+{% block title %}Return templates — RWA Calculator{% endblock %}
+{% block container_mod %}container--wide{% endblock %}
+
+{# Per-state inline styling. app.css has `is-null` (dimmed) already; the other
+   two states are new to this page and must still LOOK different, because a grid
+   that renders "not emitted", "no population" and "cannot be computed" the same
+   way has thrown the finding away. #}
+{% set STATE_STYLE = {
+  "is-figure": "",
+  "is-null": "opacity:.55",
+  "is-unavailable": "color:var(--oah-orange-bright);font-style:italic",
+  "is-absent": "opacity:.3"
+} %}
+
+{% macro side(figure) -%}
+<span class="{{ figure.css }}" style="{{ STATE_STYLE.get(figure.css, '') }}" title="{{ figure.title }}">{{ figure.display }}</span>
+{%- endmacro %}
+
+{% block content %}
+<p class="muted"><a href="{{ base_url }}">← Back to the reconciliation report</a></p>
+<h1>Return templates <span class="muted mono">· {{ page.framework }}</span></h1>
+<p class="muted">A return template is just another segment axis on this reconciliation: your
+extract is projected into our reporting ledger and run through the <em>same</em> generators as
+our own results, so both sides of a template come out of one engine. Pick a template and a
+sheet, then click a cell to see why it differs.</p>
+
+{% if page.warnings %}
+<div class="callout warn">{% for w in page.warnings %}<div>{{ w }}</div>{% endfor %}</div>
+{% endif %}
+
+{% if not page.available %}
+<div class="callout info">
+  <p><strong>No template comparison for this reconciliation.</strong></p>
+  <p>{{ page.unavailable_reason }}</p>
+  {% if page.remedies %}
+  <p>What to map:</p>
+  <ul>{% for line in page.remedies %}<li class="mono">{{ line }}</li>{% endfor %}</ul>
+  {% endif %}
+</div>
+{% else %}
+
+<form class="grid-toolbar" method="get" action="{{ page_url }}">
+  <div class="field">
+    <label for="template">Template</label>
+    <select id="template" name="template" onchange="this.form.sheet.value=''; this.form.submit()">
+      {% for option in page.templates %}
+      <option value="{{ option.id }}"{% if page.selected and option.id == page.selected.id %} selected{% endif %}>{{ option.label }}{% if option.state == "unreachable" %} (not mapped){% elif option.state == "unpopulated" %} (no such exposures){% endif %}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label for="sheet">Exposure class</label>
+    <select id="sheet" name="sheet" onchange="this.form.submit()">
+      {% for key in page.selected.sheets %}
+      <option value="{{ key }}"{% if key == page.sheet %} selected{% endif %}>{{ key }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label for="group">Population</label>
+    <select id="group" name="group" onchange="this.form.submit()">
+      {% for group in page.groups %}
+      <option value="{{ group.predicate_key }}"{% if page.matrix and group.predicate_key == page.matrix.predicate_key %} selected{% endif %}>{{ group.predicate_key }} — cols {{ group.columns | join(", ") }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label for="money">Matrix priced on</label>
+    <select id="money" name="money">
+      {% for name in page.money_columns %}<option value="{{ name }}"{% if name == page.money_column %} selected{% endif %}>{{ name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label for="materiality_abs">Material ≥ (abs)</label>
+    <input id="materiality_abs" name="materiality_abs" type="number" min="0" step="1" value="{{ page.materiality.absolute }}">
+  </div>
+  <div class="field">
+    <label for="materiality_pct">and ≥ (% of cell)</label>
+    <input id="materiality_pct" name="materiality_pct" type="number" min="0" step="0.01" value="{{ page.materiality.percent }}">
+  </div>
+  <button class="btn btn-ghost" type="submit">Apply</button>
+</form>
+
+{% if page.selected and page.selected.state == "unreachable" %}
+<div class="callout error" data-template-state="unreachable">
+  <p><strong>Your mapping cannot produce this template at all.</strong></p>
+  <p>{{ page.selected.blocked_reason }}</p>
+</div>
+{% elif page.selected and page.selected.state == "unpopulated" %}
+<div class="callout info" data-template-state="unpopulated">
+  <p><strong>Nothing to fix here.</strong> {{ page.selected.population_note }}</p>
+</div>
+{% endif %}
+
+{% if page.remedies %}
+<div class="callout warn">
+  <p><strong>Your mapping cannot populate everything on this template.</strong> Those cells are
+  shown as <span class="mono">n/a</span>, never as a legacy zero — a confident zero there would
+  be the largest difference on the sheet, and its explanation would read as
+  <em>measurement</em>: same loans, different number.</p>
+  <ul>{% for line in page.remedies %}<li class="mono">{{ line }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<div class="callout info">
+  <p><strong>How to read this page.</strong> A blank is never a zero, and the three kinds of
+  blank are not each other:
+  <span class="mono">—</span> emitted with no population (genuinely no money);
+  <span class="mono">·</span> not emitted at all (the row or column is missing on that side);
+  <span class="mono">n/a</span> cannot be computed from that side's sources. A reported
+  <span class="mono">0</span> is a measured zero and looks different from all three.</p>
+  <ul>{% for limit in page.limits %}<li>{{ limit }}</li>{% endfor %}</ul>
+</div>
+
+{% if page.compare %}
+<div class="panel panel--grid">
+  <div class="grid-head">
+    <h3>{{ page.compare.template_label }}{% if page.compare.sheet %} <span class="muted mono">· {{ page.compare.sheet }}</span>{% endif %}
+      <span class="muted">· {{ page.compare.cell_count }} cells · {{ page.compare.material_count }} material · {{ page.compare.unmeasurable_count }} not measurable</span></h3>
+  </div>
+  <div class="grid-wrap">
+    <table class="data grid">
+      <thead>
+        <tr class="refs refs--only">
+          <th class="rowhead-ref" scope="col">Row</th>
+          <th class="rowhead-name" scope="col">Name</th>
+          {% for col in page.compare.columns %}<th title="{{ col.name }}" scope="col">{{ col.ref }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in page.compare.rows %}
+        <tr>
+          <td class="mono rowhead-ref">{{ row.row_ref }}</td>
+          <td class="rowhead-name" title="{{ row.row_name }}">{{ row.row_name }}</td>
+          {% for cell in row.cells %}
+          <td class="num" style="{% if cell.heat %}background: rgba(255, 145, 0, {{ "%.3f"|format(cell.heat * 0.42) }});{% endif %}"
+              title="ours {{ cell.ours.display or cell.ours.title }} · theirs {{ cell.theirs.display or cell.theirs.title }} · {{ cell.status_label }}{% if cell.note %} · {{ cell.note }}{% endif %}">
+            <a class="cell-link" href="{{ page_url }}?{{ query_base }}&amp;row={{ row.row_ref|urlencode }}&amp;col={{ cell.col_ref|urlencode }}">{{ side(cell.ours) }} / {{ side(cell.theirs) }}<br><span class="mono">{{ cell.delta_display }}</span></a>
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<h2>Worst cells — largest material differences first</h2>
+{% if page.compare.worst %}
+<p class="muted">Material means the difference clears <strong>both</strong> floors set above
+({{ "{:,.0f}".format(page.materiality.absolute) }} absolute and {{ page.materiality.percent }}% of
+the cell). {{ page.compare.material_count }} cell(s) qualify; the largest
+{{ page.compare.worst | length }} are shown.</p>
+<div class="table-wrap">
+  <table class="data">
+    <thead><tr><th>row</th><th>name</th><th>col</th><th>column</th><th>ours</th><th>theirs</th><th>Δ</th><th>where</th></tr></thead>
+    <tbody>
+      {% for cell in page.compare.worst %}
+      <tr>
+        <td class="mono"><a href="{{ page_url }}?{{ query_base }}&amp;row={{ cell.row_ref|urlencode }}&amp;col={{ cell.col_ref|urlencode }}">{{ cell.row_ref }}</a></td>
+        <td>{{ cell.row_name }}</td>
+        <td class="mono">{{ cell.col_ref }}</td>
+        <td>{{ cell.col_name }}</td>
+        <td class="num">{{ side(cell.ours) }}</td>
+        <td class="num">{{ side(cell.theirs) }}</td>
+        <td class="num mono">{{ cell.delta_display }}</td>
+        <td>{{ cell.status_label }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="callout info">No cell on this sheet clears the materiality floors.</div>
+{% endif %}
+
+{% if page.compare.unmeasurable %}
+<h2>Not measurable — {{ page.compare.unmeasurable_count }} cell(s)</h2>
+<p class="muted">These cells have <strong>no difference at all</strong>, because one side cannot
+compute them. They are listed separately rather than ranked at the bottom of the list above:
+they have no number to sort on, and dropping them is how an unmapped carrier passes for a
+tie-out.</p>
+<div class="table-wrap">
+  <table class="data">
+    <thead><tr><th>row</th><th>col</th><th>column</th><th>ours</th><th>theirs</th><th>what to do</th></tr></thead>
+    <tbody>
+      {% for cell in page.compare.unmeasurable %}
+      <tr>
+        <td class="mono"><a href="{{ page_url }}?{{ query_base }}&amp;row={{ cell.row_ref|urlencode }}&amp;col={{ cell.col_ref|urlencode }}">{{ cell.row_ref }}</a></td>
+        <td class="mono">{{ cell.col_ref }}</td>
+        <td>{{ cell.col_name }}</td>
+        <td class="num">{{ side(cell.ours) }}</td>
+        <td class="num">{{ side(cell.theirs) }}</td>
+        <td>{{ cell.note }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% else %}
+<div class="callout info">Neither side emitted this sheet.</div>
+{% endif %}
+
+{% if page.explanation %}
+{% set ex = page.explanation %}
+<h2>Cell {{ ex.row_ref }} / {{ ex.col_ref }} — {{ ex.col_name }}</h2>
+<div class="panel">
+  <p class="muted">{{ ex.row_name }} · cell kind <span class="mono">{{ ex.kind }}</span>{% if ex.metric %} · metric <span class="mono">{{ ex.metric }}</span>{% endif %}{% if ex.predicate_key %} · population <span class="mono">{{ ex.predicate_key }}</span>{% endif %}.</p>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-num">{{ ex.ours.display or ex.ours.title }}</div><div class="stat-lbl">ours</div></div>
+    <div class="stat"><div class="stat-num">{{ ex.theirs.display or ex.theirs.title }}</div><div class="stat-lbl">theirs</div></div>
+    <div class="stat"><div class="stat-num">{{ ex.delta_display }}</div><div class="stat-lbl">Δ</div></div>
+  </div>
+  <p class="muted">{{ ex.parent_note }}</p>
+
+  {% if ex.refused %}
+  {# Four refusals, four next actions. A coverage refusal is a MAPPING gap and
+     not a difference at all; the other three are statements about the cell. #}
+  <div class="callout {% if ex.refusal_kind == 'coverage' %}error{% else %}warn{% endif %}"
+       data-refusal="{{ ex.refusal_kind }}">
+    {% if ex.refusal_kind == "coverage" %}
+    <p><strong>Not mapped — this is not a difference.</strong></p>
+    <p>{{ ex.refusal_headline }}</p>
+    {% if ex.remedy %}<p class="mono">{{ ex.remedy }}</p>{% endif %}
+    <p class="muted">Left unguarded, this cell would print a legacy <span class="mono">0</span>
+    and the split below would attribute your whole figure to <em>measurement</em> — "same loans,
+    different number". It is not that: their engine was never asked this question.</p>
+    {% elif ex.refusal_kind == "non_additive" %}
+    <p><strong>No four-way split for this column — it is an average, not a total.</strong></p>
+    <p>{{ ex.refusal_headline }}</p>
+    {% elif ex.refusal_kind == "not_row_backed" %}
+    <p><strong>This cell has no exposure population.</strong></p>
+    <p>{{ ex.refusal_headline }}</p>
+    {% else %}
+    <p><strong>Not instrumented.</strong></p>
+    <p>{{ ex.refusal_headline }}</p>
+    {% endif %}
+    <p class="muted mono">{{ ex.refusal }}</p>
+  </div>
+  {% else %}
+  <h3>Why it differs</h3>
+  <div class="table-wrap">
+    <table class="data">
+      <thead><tr><th>cause</th><th>amount</th><th>exposures</th><th>share of explained</th></tr></thead>
+      <tbody>
+        {% for step in ex.steps %}
+        <tr>
+          <td>{{ step.label }}</td>
+          <td class="num mono">{{ step.display }}</td>
+          <td class="num">{{ "{:,}".format(step.keys) }}</td>
+          <td class="num">{{ "{:.1%}".format(step.share) }}</td>
+        </tr>
+        {% endfor %}
+        <tr><td><strong>reported Δ</strong></td><td class="num mono"><strong>{{ ex.delta_display }}</strong></td><td></td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+  {% if not ex.reconciles %}
+  <div class="callout error">The four causes do <strong>not</strong> add up to the reported
+  difference — {{ ex.residual_display }} is unexplained. Read the split as incomplete: a
+  post-execute pass can overwrite a cell after the population was aggregated.</div>
+  {% endif %}
+  {% endif %}
+
+  <p class="muted">{{ ex.attribution }}</p>
+
+  {% if ex.our_legs or ex.their_legs %}
+  <h3>Exposures behind this cell</h3>
+  <p class="muted">The legs of the one population this cell reads
+  (<span class="mono">{{ ex.predicate_key }}</span>) — not the row's, which carries several.
+  Ours {{ "{:,}".format(ex.our_leg_count) }}, theirs {{ "{:,}".format(ex.their_leg_count) }};
+  the largest are listed. A key opens the single-loan forensic, which is where the
+  per-component driver chain already lives.</p>
+  <div class="table-wrap">
+    <table class="data">
+      <thead><tr><th>side</th><th>exposure</th><th>EAD</th><th>RWEA</th></tr></thead>
+      <tbody>
+        {% for leg in ex.our_legs + ex.their_legs %}
+        <tr>
+          <td>{{ leg.side }}</td>
+          <td class="mono"><a href="{{ loan_url_base }}?key={{ (leg.source_exposure_reference or leg.exposure_reference)|urlencode }}">{{ leg.exposure_reference }}</a></td>
+          <td class="num">{{ fmt(leg.ead) }}</td>
+          <td class="num">{{ fmt(leg.rwa) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  <p><a class="btn btn-ghost" href="{{ explorer_url }}?exposure_class={{ (page.sheet or '')|urlencode }}&amp;status=all">Open the per-key explorer for {{ page.sheet }}</a>
+  <span class="muted">— the explorer filters on exposure class, not on a template cell, so this
+  is the sheet's population and not only this cell's.</span></p>
+</div>
+{% endif %}
+
+{% if page.matrix %}
+{% set m = page.matrix %}
+<h2>Row migration — our row down, their row across</h2>
+<p class="muted">Population <span class="mono">{{ m.predicate_key }}</span>{% if m.columns %} (serves columns {{ m.columns | join(", ") }}){% endif %},
+priced on <span class="mono">{{ m.money_column }}</span>. The diagonal is agreement; every
+off-diagonal cell is money that landed on a different row. Each leg appears in exactly one
+cell of this matrix.</p>
+<div class="callout warn"><strong>Read this as value-driven.</strong> {{ m.attribution }}</div>
+{% if not m.axis_is_partition %}
+<div class="callout warn">Some legs reach <strong>no single provable leaf row</strong> on this
+axis — their rows are parents, or are indistinguishable from one another. Their money is kept
+in the <span class="mono">{{ page.undecidable_row_ref }}</span> bucket rather than dropped: an
+empty leaf filter is not a zero.</div>
+{% endif %}
+<div class="grid-wrap">
+  <table class="data grid">
+    <thead>
+      <tr class="refs refs--only">
+        <th class="rowhead-ref" scope="col">ours ↓</th>
+        <th class="rowhead-name" scope="col">theirs →</th>
+        {% for ref in m.their_rows %}<th scope="col">{{ ref }}</th>{% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in m.cells %}
+      <tr>
+        <td class="mono rowhead-ref">{{ m.our_rows[loop.index0] }}</td>
+        <td class="rowhead-name"></td>
+        {% for cell in row %}
+        <td class="num{% if cell is none %} is-null{% endif %}"
+            style="{% if cell is none %}opacity:.3{% elif cell.heat %}background: rgba(255, 145, 0, {{ "%.3f"|format(cell.heat * 0.42) }});{% endif %}"
+            title="{% if cell %}{{ cell.basis_label }} · {{ cell.legs }} exposure(s){% else %}no leg moved between these rows{% endif %}">{% if cell %}{{ cell.display }}{% else %}·{% endif %}</td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="table-wrap">
+  <table class="data">
+    <thead><tr><th>movement</th><th>{{ m.money_column }}</th></tr></thead>
+    <tbody>
+      <tr><td>same row on both sides</td><td class="num">{{ fmt(m.totals.agreed) }}</td></tr>
+      <tr><td>moved row (their value differs)</td><td class="num">{{ fmt(m.totals.moved) }}</td></tr>
+      <tr><td>in this population on our side only</td><td class="num">{{ fmt(m.totals.ours_only) }}</td></tr>
+      <tr><td>in this population on their side only</td><td class="num">{{ fmt(m.totals.theirs_only) }}</td></tr>
+      <tr><td>held, no provable leaf row</td><td class="num">{{ fmt(m.totals.undecidable) }}</td></tr>
+    </tbody>
+  </table>
+</div>
+<p class="muted">These five classes partition the population: each leg is counted once, in one
+class. They are <em>not</em> a sum over template rows — rows on this axis overlap, so adding
+them up would double-count every leg reported under both a band and its parent.</p>
+{% elif page.compare %}
+<div class="callout info">This sheet has no membership groups, so no migration matrix can be
+drawn for it. That is "not instrumented", not "nothing moved".</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

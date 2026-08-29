@@ -96,6 +96,7 @@ from rwa_calc.ui.views import hierarchy as hierarchy_view
 from rwa_calc.ui.views import lineage as lineage_view
 from rwa_calc.ui.views import reconciliation as reconciliation_view
 from rwa_calc.ui.views import report_templates as report_templates_view
+from rwa_calc.ui.views import return_recon as return_recon_view
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable, Mapping, Sequence
@@ -834,6 +835,47 @@ def _register_pages(app: FastAPI) -> None:
             name="recon_explorer.html",
             context=_nav(
                 _reconciliation_explorer(recon_id, response, filters, result_page, decisions, fps)
+            ),
+        )
+
+    @app.get("/reconciliation/{recon_id}/templates", response_class=HTMLResponse)
+    def reconciliation_templates(  # noqa: PLR0913 - the cell's address is the query
+        request: Request,
+        recon_id: str,
+        template: str = "",
+        sheet: str = "",
+        group: str = "",
+        money: str = "rwa_final",
+        row: str = "",
+        col: str = "",
+        materiality_abs: float = return_recon_view.DEFAULT_MATERIALITY_ABSOLUTE,
+        materiality_pct: float = return_recon_view.DEFAULT_MATERIALITY_PERCENT,
+    ) -> HTMLResponse:
+        # A template is another segment axis on this reconciliation, so it lives
+        # under the recon id and drills into the same per-loan forensic. Every
+        # selector is a query param with a fallback, so a hand-edited URL renders
+        # the default view rather than 404ing on an unknown template or sheet.
+        response = get_reconciliation(recon_id)
+        if response is None or not response.success:
+            return _not_found(request, _RECON_NOT_FOUND_MESSAGE)
+        return templates.TemplateResponse(
+            request=request,
+            name="recon_templates.html",
+            context=_nav(
+                _reconciliation_templates(
+                    recon_id,
+                    response,
+                    template_id=template,
+                    sheet=sheet,
+                    predicate_key=group,
+                    money_column=money,
+                    row_ref=row,
+                    col_ref=col,
+                    materiality=return_recon_view.Materiality(
+                        absolute=max(0.0, materiality_abs),
+                        percent=max(0.0, materiality_pct),
+                    ),
+                )
             ),
         )
 
@@ -1824,6 +1866,88 @@ def _reconciliation_loan(
         "signoff_error": None,
         "report_url": f"/reconciliation/{recon_id}",
         "explorer_url": f"/reconciliation/{recon_id}/rows",
+    }
+
+
+def _reconciliation_templates(  # noqa: PLR0913 - the cell's address is the signature
+    recon_id: str,
+    response: ReconciliationResponse,
+    *,
+    template_id: str = "",
+    sheet: str = "",
+    predicate_key: str = "",
+    money_column: str = "rwa_final",
+    row_ref: str = "",
+    col_ref: str = "",
+    materiality: return_recon_view.Materiality = return_recon_view.DEFAULT_MATERIALITY,
+) -> dict:
+    """Build the template-compare context for one registered reconciliation.
+
+    Both sides' template bundles are generated ONCE per ``recon_id`` and
+    memoised (``build_comparison``) — a screen full of cells must not cost a
+    generation per cell.
+
+    BOTH coverage records are threaded, and ``theirs_coverage`` is the one that
+    matters: without it every column the firm's mapping cannot populate reads as
+    a MEASURED figure rather than as unavailable, because the generator really
+    does print one (an injected all-null column sums to 0.00). The waterfall
+    then reconciles and attributes the money to ``measurement`` — "same loans,
+    different number" — which is the most misleading thing this page could say.
+    They arrive together on ``ComparisonInputs`` so this call site cannot drop
+    one by forgetting to look it up.
+
+    A reconciliation with no projected legacy ledger degrades to an explanation
+    with the remedy on it: there is no second side to compare a return against,
+    which is a mapping gap the analyst can close, not an error.
+    """
+    inputs = return_recon_view.comparison_inputs(response)
+    warnings = [f"[{e.code}] {e.message}" for e in response.errors]
+    recon = (
+        return_recon_view.build_comparison(
+            recon_id,
+            inputs.ours,
+            inputs.theirs,
+            ours_coverage=inputs.ours_coverage,
+            theirs_coverage=inputs.theirs_coverage,
+        )
+        if inputs.ours is not None and inputs.theirs is not None
+        else None
+    )
+    page = return_recon_view.template_page(
+        recon,
+        recon_id=recon_id,
+        framework=response.framework or "",
+        coverage=inputs.theirs_coverage,
+        unavailable_reason=inputs.reason,
+        warnings=warnings,
+        template_id=template_id or None,
+        sheet=sheet or None,
+        row_ref=row_ref,
+        col_ref=col_ref,
+        predicate_key=predicate_key,
+        money_column=money_column,
+        materiality=materiality,
+    )
+    # The selector state, minus the selected cell — the grid's cell links append
+    # their own row/col, so a click keeps the template, sheet, population,
+    # pricing and materiality the analyst chose.
+    selectors = {
+        "template": page.selected.id if page.selected else "",
+        "sheet": page.sheet or "",
+        "group": page.matrix.predicate_key if page.matrix else "",
+        "money": page.money_column,
+        "materiality_abs": page.materiality.absolute,
+        "materiality_pct": page.materiality.percent,
+    }
+    base_url = f"/reconciliation/{recon_id}"
+    return {
+        "page": page,
+        "recon_id": recon_id,
+        "base_url": base_url,
+        "page_url": f"{base_url}/templates",
+        "explorer_url": f"{base_url}/rows",
+        "loan_url_base": f"{base_url}/loan",
+        "query_base": urlencode({k: v for k, v in selectors.items() if v != ""}),
     }
 
 

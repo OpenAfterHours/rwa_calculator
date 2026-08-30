@@ -343,13 +343,29 @@ def test_a_panel_with_no_comparison_degrades_with_the_reason() -> None:
 
 @lru_cache(maxsize=2)
 def _recon_split() -> ReturnRecon:
-    """A real-estate split: two child legs under one parent reference.
+    """A GUARANTEE split: two legs of one exposure under one parent reference.
 
     THE DOMINANT PRODUCTION SHAPE, and the one the panel would miss if it matched
     membership on ``exposure_reference`` alone. Under the default mapping the
     reconciliation collapses sub-rows back to the parent, so the loan page's key
     is ``M1`` while every membership leg carries ``M1_res`` / ``M1_cre``. Only
-    ``source_exposure_reference`` joins the two.
+    ``source_exposure_reference`` joins the two — written at hierarchy-unify time
+    and left alone by the Art. 235 split, which rewrites ``exposure_reference``
+    only.
+
+    IT MODELS A GUARANTEE SPLIT AND NOT A REAL-ESTATE ONE, and the distinction is
+    load-bearing for what the test below asserts. Both splits produce the same
+    ``source_exposure_reference`` shape, but an RE split leaves both legs with the
+    SAME obligor and therefore the same PD, so they would land in one band and
+    yield one leaf — under which reading the two different PDs here look like a
+    fixture artefact nobody should assert on. Under substitution the two legs are
+    weighted against different obligors, so different PDs are the ordinary case
+    and the two-band placement below is the real shape rather than an accident.
+
+    One caveat, carried because it was reasoned rather than run: that a
+    substituted pair carries two DIFFERENT PDs is inferred from the rule, not
+    measured end-to-end through the engine. The membership shape it produces is
+    measured, and that is what these assertions rest on.
     """
     legs = [
         _leg("FILLER_LOW", pd=PD_B, rwa=300_000.0),
@@ -370,6 +386,22 @@ def test_a_split_exposure_is_placed_by_its_parent_reference() -> None:
     group = _group(panel)
     assert {r.row_ref for r in group.rows} >= {"0020", ROW_LEAF_LOW}
     assert all(r.side == rv.PLACEMENT_BOTH for r in group.rows)
+
+    # ... and the SINGLE-LEAF rule holds on the shape this fixture happens to
+    # produce. The two legs land in different bands, so ``0020`` and ``0030`` are
+    # BOTH provable leaves in one predicate group — exactly the input
+    # ``_placement_leaf`` guards, and nothing asserted it until now.
+    #
+    # Taking the first of several would be worse than picking a consistent wrong
+    # row: each side derives its leaf from dict insertion order over
+    # ``.unique().iter_rows()``, and Polars does not guarantee row order, so the
+    # two sides could differ BY CHANCE and render "Moved row: 0030 -> 0020" for
+    # an exposure whose sides are identical. A fabricated band move is the worst
+    # thing this panel can say.
+    assert {r.row_ref for r in group.rows if r.our_parent is False} == {"0020", ROW_LEAF_LOW}
+    assert group.our_placement == ""
+    assert group.our_placement_name == rv.UNDECIDED_DISPLAY
+    assert not group.moved
 
 
 def test_a_key_that_reaches_no_instrumented_row_is_not_an_unavailable_panel() -> None:
@@ -1130,12 +1162,17 @@ def _recon_two_cuts() -> ReturnRecon:
     each side too, neither row contains the other and both are provable leaves —
     and the ordinary on-balance-sheet graded loan sits in both.
 
-    This is the shape whose existence was denied in an earlier round of this
-    work, on the strength of C 08.03's PD scale, where a leg really does fall in
-    exactly one band. The generalisation to a non-tree axis was wrong: measured
-    here, exposure ``A`` has leaves ``['0020', '0070']``. Nothing about the
-    portfolio is contrived — an IRB book with graded and slotting exposures,
-    drawn and undrawn.
+    A SECOND, STRUCTURALLY DIFFERENT ROUTE to the same guard, kept alongside the
+    ``_recon_split`` assertions rather than instead of them. There, two leaves
+    arise from two PD BANDS of one hierarchical axis; here they arise from two
+    independent CUTS of the book, which is the case that shows the axis is not a
+    tree at all. Measured: exposure ``A`` has leaves ``['0020', '0070']``.
+
+    It also records a correction. The existence of any two-leaf shape was denied
+    in an earlier round of this work, on the strength of C 08.03's PD scale,
+    where a leg really does fall in exactly one band. Generalising that to an
+    axis which is not a tree was wrong, and nothing about this portfolio is
+    contrived — an IRB book with graded and slotting exposures, drawn and undrawn.
     """
     off_bs: dict[str, object] = {
         "drawn_amount": 0.0,
@@ -1187,3 +1224,41 @@ def test_reached_but_unrankable_is_not_the_same_blank_as_not_reached() -> None:
     assert unrankable.our_placement_name == rv.UNDECIDED_DISPLAY
     assert unreached.their_placement_name == rv.NOT_REACHED_DISPLAY
     assert rv.UNDECIDED_DISPLAY != rv.NOT_REACHED_DISPLAY
+
+
+def test_an_indeterminate_key_is_not_reported_as_reaching_nothing() -> None:
+    # Arrange / Act — a multi-segment key with no key columns to read it by. The
+    # separator could be structure or data and there is no way to tell.
+    panel = rv.placement_panel(_recon(), "MOVER||FILLER_TOP")
+
+    # Assert — undecidable, said as such. Matching the whole string finds
+    # nothing, which would otherwise render as "reached no instrumented row": a
+    # different and false claim, and the same wrong-label-on-a-blank this module
+    # exists to prevent.
+    assert not panel.available
+    assert panel.reason == rv.PLACEMENT_KEY_UNREADABLE
+    assert panel.groups == ()
+
+
+@pytest.mark.parametrize("foreign", ["FILLER_TOP", "AGREE", "FILLER_HIGH"])
+@pytest.mark.parametrize("subject", ["MOVER", "ONLY_OURS"])
+def test_a_foreign_segment_changes_nothing_about_this_exposure(subject: str, foreign: str) -> None:
+    # Arrange — the production shape: the route passes the key columns from
+    # ``resolve_recon_key`` alongside the full composite key.
+    control = _group(rv.placement_panel(_recon(), subject))
+    composite = _group(
+        rv.placement_panel(
+            _recon(),
+            f"{subject}{rv._KEY_SEP}{foreign}",
+            key_columns=("exposure_reference", "counterparty_reference"),
+        )
+    )
+
+    # Assert — byte-identical. Measured before the fix on ``MOVER||FILLER_TOP``:
+    # moved True -> False and our_placement '0030' -> '' (a true finding
+    # DESTROYED); and on ``ONLY_OURS||FILLER_TOP``: their_placement '' -> '0090'
+    # (a placement FABRICATED for a leg their ledger does not hold).
+    assert composite.rows == control.rows
+    assert composite.our_placement == control.our_placement
+    assert composite.their_placement == control.their_placement
+    assert composite.moved == control.moved

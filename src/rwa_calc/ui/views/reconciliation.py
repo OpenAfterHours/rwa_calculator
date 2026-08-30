@@ -276,6 +276,16 @@ PLACEMENT_NO_KEY = "No reconciliation key was supplied, so there is nothing to p
 # class, say). Nothing in it links a reconciled row to a membership leg, and
 # matching on a non-identity segment is what leaked another exposure's
 # placements onto the page — see ``_identity_tokens``.
+# A key that carries the separator with no key columns supplied to read it by.
+# Whether the separator is structure (a composite key) or data (a reference that
+# contains it) is undecidable without them, and guessing either way is one of the
+# two defects this module has already shipped.
+PLACEMENT_KEY_UNREADABLE = (
+    "This exposure's placement cannot be shown: the reconciliation key contains "
+    "the composite-key separator and the mapping's key columns were not supplied, "
+    "so which part of it identifies the exposure is undecidable."
+)
+
 PLACEMENT_NO_IDENTITY_KEY = (
     "This reconciliation's join key names no exposure reference, so its rows "
     "cannot be matched to the legs a return template reports. Add "
@@ -985,13 +995,25 @@ def placement_panel(
         return PlacementPanel(
             key=recon_key, available=False, reason=reason or PLACEMENT_NO_COMPARISON, groups=()
         )
+    if not recon_key:
+        return PlacementPanel(key=recon_key, available=False, reason=PLACEMENT_NO_KEY, groups=())
+    # A multi-segment key with no key columns to read it by is INDETERMINATE, and
+    # must say so. Matching the whole string finds nothing, which would otherwise
+    # render as "this exposure reached no instrumented row" — a different and
+    # false claim, and the same wrong-label-on-a-blank the rest of this module
+    # exists to prevent. The route always supplies the columns, so this is the
+    # direct-caller path.
+    if _KEY_SEP in recon_key and not key_columns:
+        return PlacementPanel(
+            key=recon_key, available=False, reason=PLACEMENT_KEY_UNREADABLE, groups=()
+        )
     tokens = sorted(_identity_tokens(recon_key, key_columns))
     if not tokens:
-        # Two ways to get here and they are different answers: no key at all, or
-        # a composite key that names no exposure identity column, in which case
-        # nothing links its rows to a leg and saying so beats matching widely.
-        blocked = PLACEMENT_NO_KEY if not recon_key else PLACEMENT_NO_IDENTITY_KEY
-        return PlacementPanel(key=recon_key, available=False, reason=blocked, groups=())
+        # The key columns are known and none of them is an exposure identity, so
+        # nothing links its rows to a leg. Saying so beats matching widely.
+        return PlacementPanel(
+            key=recon_key, available=False, reason=PLACEMENT_NO_IDENTITY_KEY, groups=()
+        )
 
     ours = _placement_membership(recon.ours, tokens)
     theirs = _placement_membership(recon.theirs, tokens)

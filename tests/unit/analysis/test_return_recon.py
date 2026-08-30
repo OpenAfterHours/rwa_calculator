@@ -2296,6 +2296,23 @@ def test_the_cap_states_what_it_hides(framework: str) -> None:
     The shown rows' delta, the total and the count not shown are all published,
     so a caller can say "the 25 shown carry X of the Y difference; N more carry
     Z" instead of implying the page is the whole population.
+
+    THE DEFAULT CAP CANNOT TEST THE MONEY CLAIM, AND THE SECOND HALF EXISTS FOR
+    THAT. ``CELL_PAIRS_LIMIT`` is 25 against a 38-key probe whose seven drivers
+    all rank above every agreeing key, so the hidden tail is EMPTY and
+    ``shown_delta`` is indistinguishable from ``total_delta``. Measured over
+    this whole file: 7,021 ``cell_pairs`` calls, ``shown_delta != total_delta``
+    on ZERO of them. A mutation forcing ``shown_delta = total_delta`` scored
+    132 passed, exit 0 — completely silent
+    (``tests/mutations/mutate_cap_claims_it_showed_everything.py``).
+
+    So the cap is tightened until the tail carries money. At ``limit=3`` the
+    page's true sentence is "the 3 shown carry 35,000.00; 35 more carry
+    28,000.00"; under that mutation it reads "the 3 shown carry 63,000.00 of
+    the 63,000.00 difference; 35 more carry 0.00" — 44% of the difference
+    silently attributed to rows the analyst can see. On a real book a non-zero
+    hidden tail is the ORDINARY case: ``measurement`` holds thousands of keys
+    and the drivers do not all fit in the top 25.
     """
     # Arrange
     recon = _probe(framework)
@@ -2317,6 +2334,29 @@ def test_the_cap_states_what_it_hides(framework: str) -> None:
     # Every driver is shown, so the hidden remainder carries none of the money.
     assert table.shown_delta == pytest.approx(_PROBE_DELTA)
     assert table.hidden_delta == pytest.approx(0.0)
+
+    # Act — the same cell under a cap that actually bites.
+    tight = cell_pairs(recon, "c08_03", CORPORATE, row_ref, RWEA_COL, limit=3)
+
+    # Assert the adequacy of THAT, first and on its own: it is the limb that
+    # keeps this test from going vacuous again if the probe or the default
+    # limit changes, and every assertion below is worthless without it.
+    assert tight.hidden_delta != 0.0, (
+        "the cap hides no money, so this test cannot tell shown_delta from total_delta"
+    )
+
+    # Assert — the three rows shown are exactly the three non-measurement
+    # drivers (30,000 + 20,000 - 15,000), so the tail is the measurement term
+    # itself rather than a number that happens to match it.
+    assert [pair.term for pair in tight.pairs] == [
+        "row_placement",
+        "population_ours_only",
+        "population_theirs_only",
+    ]
+    assert tight.shown_delta == pytest.approx(35_000.0)
+    assert tight.hidden_delta == pytest.approx(_PROBE_MEASUREMENT_DELTA)
+    assert tight.shown_delta + tight.hidden_delta == pytest.approx(tight.total_delta)
+    assert tight.total_delta == pytest.approx(_PROBE_DELTA)
 
 
 @pytest.mark.parametrize("framework", FRAMEWORKS)

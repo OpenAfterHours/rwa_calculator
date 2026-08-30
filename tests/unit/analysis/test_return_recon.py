@@ -44,11 +44,13 @@ from rwa_calc.analysis.return_recon import (
     CELL_DIFF_SCHEMA,
     CELL_PAIRS_LIMIT,
     KEY_COLUMNS,
+    MOVEMENT_BASES,
     PLACEMENT_ATTRIBUTION,
     RECON_TEMPLATE_IDS,
     TERM_NAMES,
     UNDECIDABLE_ROW,
     CellDecomposition,
+    CellTerm,
     ReturnRecon,
     SideView,
     build_recon,
@@ -56,6 +58,7 @@ from rwa_calc.analysis.return_recon import (
     cell_pairs,
     decompose_cell,
     diff_cells,
+    migration_legs,
     row_migration,
 )
 from rwa_calc.reporting.membership import MEMBERSHIP_TEMPLATE_IDS
@@ -1179,13 +1182,10 @@ def test_every_result_carries_the_placement_attribution_caveat() -> None:
     assert result.attribution == PLACEMENT_ATTRIBUTION
     assert refused.attribution == PLACEMENT_ATTRIBUTION
     assert "RULE-driven" in PLACEMENT_ATTRIBUTION
-    assert set(matrix["movement_basis"].to_list()) <= {
-        "agreed",
-        "value_driven",
-        "ours_only",
-        "theirs_only",
-        "undecidable",
-    }
+    # Anchored on the module's own published vocabulary rather than on a list
+    # typed here: a hand-written set has to be edited every time a basis is
+    # added, and the edit that forgets is exactly the one nobody notices.
+    assert set(matrix["movement_basis"].to_list()) <= set(MOVEMENT_BASES)
     assert "value_driven" in matrix["movement_basis"].to_list()
 
 
@@ -2252,6 +2252,20 @@ def test_the_pair_table_ranks_the_drivers_a_size_ranked_table_buries(framework: 
     difference lives in the small loans. The size-ranked ordering is reproduced
     here and asserted to bury every driver, so the test cannot pass by the
     defect having been redefined.
+
+    THE SECOND HALF PINS THE TIE-BREAK, WHICH DECIDES MOST OF THE PAGE. Only 7
+    of the 38 keys have a delta at all; the other 31 tie at ``0.00``, so
+    ``|delta|`` alone fixes 7 rows and the KEY fixes the remaining 18. Deleting
+    the tie-break leaves Python's stable sort to preserve ``_classify``'s order,
+    which is polars ``group_by`` order — implementation-defined and NOT stable
+    across processes. Measured on this cell: 17 of the 25 rendered rows move,
+    7 exposures appear that the correct ordering never shows (including
+    ``SPLIT_FILL_A1``), and two separate processes produced two DIFFERENT wrong
+    pages. Meanwhile ``shown_delta`` stays 63,000.00 and ``hidden_keys`` stays
+    13 — every published figure ties out either way, which is exactly why
+    nothing looked wrong and why no assertion caught it
+    (``tests/mutations/mutate_rank_without_the_tie_break.py``: 132 passed,
+    exit 0).
     """
     # Arrange
     recon = _probe(framework)
@@ -2287,6 +2301,21 @@ def test_the_pair_table_ranks_the_drivers_a_size_ranked_table_buries(framework: 
     assert table.refusal is None
     assert [pair.key for pair in table.pairs[: len(_PROBE_DRIVERS)]] == list(_PROBE_DRIVERS)
     assert drivers <= {pair.key for pair in table.pairs}
+
+    # Act — the tied remainder, ranked by the KEY and by nothing else.
+    full = cell_pairs(recon, "c08_03", CORPORATE, row_ref, RWEA_COL, limit=None)
+    all_tied = sorted(pair.key for pair in full.pairs if pair.delta == 0.0)
+    tied_shown = [pair.key for pair in table.pairs if pair.delta == 0.0]
+
+    # Assert the adequacy of that, first: a page with no ties, or a cap that
+    # does not bite on them, cannot tell the tie-break from its absence.
+    assert len(tied_shown) > 1, "no ties on the page — the tie-break is not exercised"
+    assert len(all_tied) > len(tied_shown), "the cap does not bite on the ties — vacuous"
+
+    # Assert — the tied rows shown are the LEADING SLICE of the sorted tied
+    # keys. Derived from the uncapped table's own keys and sorted independently,
+    # so this is not a restatement of ``_rank``.
+    assert tied_shown == all_tied[: len(tied_shown)]
 
 
 @pytest.mark.parametrize("framework", FRAMEWORKS)
@@ -2866,4 +2895,467 @@ def test_the_pairs_read_the_one_group_serving_the_cell(framework: str) -> None:
         f"{narrow_col} lists {sorted(narrow_keys)}, which is not a strict subset "
         f"of {wide_col}'s {len(wide_keys)} keys — the table aggregated across "
         "predicate groups"
+    )
+
+
+# =============================================================================
+# The migration matrix's LABEL on an absent counterpart
+# =============================================================================
+
+#: A leg only OUR side holds, planted in the split exposure's own PD band so it
+#: lands in the same matrix cell as the two split legs. The collision is the
+#: point: one cell, two findings, and no single label true of both.
+_SPLIT_ONLY_OURS = _Leg("SPLIT_ONLY_OURS", pd=SPLIT_PD, ead=300_000.0, rwa=30_000.0)
+
+#: The same guarantee, crossing SHEETS. The guarantor is an institution, so our
+#: guarantee leg is reported under the INSTITUTION class while the remainder and
+#: their whole loan stay corporate. Nothing on the institution sheet can see the
+#: base exposure at all, which is what makes the presence test's scope
+#: measurable rather than a matter of taste.
+_XSHEET_G_LEG = _Leg(
+    "L2__G_INST",
+    source="L2",
+    exposure_class="institution",
+    pd=SPLIT_PD,
+    ead=700_000.0,
+    rwa=70_000.0,
+)
+_XSHEET_REM_LEG = _Leg("L2__REM", source="L2", pd=SPLIT_PD, ead=300_000.0, rwa=30_000.0)
+_XSHEET_WHOLE = _Leg("L2", pd=SPLIT_PD, ead=1_000_000.0, rwa=100_000.0)
+
+#: The two absent buckets, by the side that HOLDS the legs. Named because every
+#: assertion below is about which of the three labels one of these carries.
+_ABSENT_BASES = ("ours_only", "theirs_only")
+
+
+def _group_key_of(recon: ReturnRecon, template_id: str, sheet: str, col_ref: str) -> str:
+    """The predicate group serving one column of one sheet, from either side.
+
+    ``_c08_03_predicate_key`` reads OUR side of the corporate sheet only; the
+    cross-sheet fixture below needs a sheet their side does not reach at all,
+    which is precisely the case that helper cannot express.
+    """
+    for side in (recon.ours, recon.theirs):
+        served = side.membership.columns.filter(
+            (pl.col("template_id") == template_id)
+            & (pl.col("sheet") == sheet)
+            & (pl.col("col_ref") == col_ref)
+        )
+        if served.height:
+            return str(served["predicate_key"][0])
+    raise AssertionError(f"{template_id}/{sheet}/{col_ref} is row-backed on neither side")
+
+
+def _template_keys(recon: ReturnRecon, *, ours: bool, template_id: str = "c08_03") -> set[str]:
+    """One side's comparison keys across the WHOLE template, derived here.
+
+    Anchored on the membership legs rather than on ``_side_keys``, which is the
+    function under test's own helper: a test sharing the implementation's reader
+    would agree with it whatever either did.
+    """
+    side = recon.ours if ours else recon.theirs
+    legs = side.membership.legs.filter(pl.col("template_id") == template_id)
+    references = legs["exposure_reference"].to_list()
+    bases = legs["source_exposure_reference"].to_list()
+    return {
+        str(base if base is not None else reference)
+        for reference, base in zip(references, bases, strict=True)
+        if (base if base is not None else reference) is not None
+    }
+
+
+def _absent_cell(matrix: pl.DataFrame, *, ours: bool) -> dict[str, object]:
+    """The one matrix cell whose counterpart side is ``ABSENT_ROW``."""
+    column = "their_row_ref" if ours else "our_row_ref"
+    cells = matrix.filter(pl.col(column) == ABSENT_ROW)
+    assert cells.height == 1, f"expected one absent cell on the {column} axis, got {cells.height}"
+    return next(cells.iter_rows(named=True))
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_a_split_exposures_absent_legs_are_a_decomposition_not_a_scope_finding(
+    framework: str,
+) -> None:
+    """``ours_only`` said "their extract has no such exposure". It was false.
+
+    Our sealed ledger splits one guaranteed loan into ``L1__G_BANK`` and
+    ``L1__REM``; their projected extract holds the same loan whole under ``L1``.
+    The matrix's grain is the LEG — deliberately, because a guarantee leg landing
+    under the guarantor's class and band is what substitution MEANS for the
+    return — so neither of our legs has a counterpart at that grain, and neither
+    does their whole leg. Every one of them therefore lands in ``ABSENT_ROW``.
+
+    Measured on this fixture before the labels existed: 100,000 of our money and
+    100,000 of theirs under ``ours_only`` / ``theirs_only`` (1,000,000 each on
+    ``ead_final``), against two books that agree to the penny. The same shape on
+    a three-substitution review portfolio put 210,000 and 270,000 there.
+
+    THE FALSEHOOD IS THE LABEL AND NOT THE PLACEMENT, so nothing about the money
+    changes here — asserted, because a fix that moved it would satisfy the label
+    assertions while breaking the conservation invariant two tests above.
+    """
+    # Arrange
+    recon = _split_recon([_SPLIT_G_LEG, _SPLIT_REM_LEG], [_WHOLE_LOAN], framework)
+    predicate_key = _c08_03_predicate_key(recon)
+    our_legs = recon.ours.membership.legs.filter(
+        (pl.col("template_id") == "c08_03")
+        & (pl.col("sheet") == CORPORATE)
+        & (pl.col("predicate_key") == predicate_key)
+    ).unique(subset=["exposure_reference"])
+
+    # Assert the premise. Without a real split in the group the labels cannot
+    # differ from the old ones and this test would pass on the pre-fix code.
+    bases = our_legs["source_exposure_reference"].to_list()
+    assert bases.count(_WHOLE_LOAN.reference) == 2, (
+        f"the group holds no split exposure ({bases}) - every leg would be its own "
+        "base and the old labels would already be correct"
+    )
+    assert _WHOLE_LOAN.reference in _template_keys(recon, ours=False), (
+        "their side does not hold the base exposure anywhere on this template, so "
+        "the absent legs really ARE a scope finding and the new label is not owed"
+    )
+
+    # Act
+    matrix = row_migration(recon, "c08_03", CORPORATE, predicate_key, money_column="rwa_final")
+    ours_side = _absent_cell(matrix, ours=True)
+    theirs_side = _absent_cell(matrix, ours=False)
+
+    # Assert — both absent buckets are decomposition findings, and NO money is
+    # left under a scope label anywhere on the matrix.
+    assert ours_side["movement_basis"] == "same_base_ours"
+    assert theirs_side["movement_basis"] == "same_base_theirs"
+    assert matrix.filter(pl.col("movement_basis").is_in(_ABSENT_BASES)).height == 0
+
+    # Assert — and the money sat exactly where it sat before.
+    assert ours_side["legs"] == 2
+    assert ours_side["money_ours"] == pytest.approx(_SPLIT_G_LEG.rwa + _SPLIT_REM_LEG.rwa)
+    assert ours_side["money_theirs"] is None
+    assert theirs_side["money_theirs"] == pytest.approx(_WHOLE_LOAN.rwa)
+    assert theirs_side["money_ours"] is None
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_the_base_presence_test_spans_the_template_not_the_group(framework: str) -> None:
+    """A guarantee leg lands on the GUARANTOR's sheet, so scoping decides this.
+
+    ``L2`` is guaranteed by an institution, so our guarantee leg is reported
+    under the institution class and the remainder under the obligor's. Their
+    extract holds the whole loan under ``corporate``. On the INSTITUTION sheet
+    their side therefore holds nothing whatever — not the base, not a sibling
+    leg, not a single row — and a group-scoped or sheet-scoped presence test
+    reports the guarantee leg as ``ours_only``: "their extract has no such
+    exposure", about a loan their extract holds in full one sheet over.
+
+    Only a TEMPLATE-scoped test sees it, which is why ``_same_base`` reuses
+    ``_side_keys`` with ``sheet=None`` rather than inventing a third convention.
+    The assertion below is the discriminator: their institution-sheet membership
+    is asserted EMPTY, and the label is asserted to be a decomposition anyway.
+    """
+    # Arrange
+    recon = _split_recon([_XSHEET_G_LEG, _XSHEET_REM_LEG], [_XSHEET_WHOLE], framework)
+    sheet = _XSHEET_G_LEG.exposure_class
+    predicate_key = _group_key_of(recon, "c08_03", sheet, "0090")
+    their_sheet_legs = recon.theirs.membership.legs.filter(
+        (pl.col("template_id") == "c08_03") & (pl.col("sheet") == sheet)
+    )
+
+    # Assert the premise — the two scopes must actually disagree here.
+    assert their_sheet_legs.height == 0, (
+        "their side holds legs on the institution sheet, so a sheet-scoped test "
+        "could have found the base too and this fixture discriminates nothing"
+    )
+    assert _XSHEET_WHOLE.reference in _template_keys(recon, ours=False)
+
+    # Act
+    matrix = row_migration(recon, "c08_03", sheet, predicate_key, money_column="rwa_final")
+
+    # Assert — the cross-sheet guarantee leg is a decomposition finding.
+    cell = _absent_cell(matrix, ours=True)
+    assert cell["movement_basis"] == "same_base_ours"
+    assert cell["money_ours"] == pytest.approx(_XSHEET_G_LEG.rwa)
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_a_cell_holding_a_split_leg_and_a_one_sided_leg_is_labelled_as_both(
+    framework: str,
+) -> None:
+    """One matrix cell, two findings — and no single label is true of both.
+
+    The two absent buckets are per-CELL, so a split leg and a genuinely one-sided
+    leg that share a row share a label. Calling that cell ``same_base_ours``
+    would deny a real scope gap; calling it ``ours_only`` would restate the very
+    falsehood this change removes. It is reported as ``mixed_base_ours``, and the
+    drill-down is what splits it.
+
+    NOT A HYPOTHETICAL. The pre-existing ``_combined`` portfolio already produces
+    one: ``CLASS_MOVER`` (their side puts it on the institution sheet) and
+    ``ONLY_OURS`` (their side does not hold it at all) share cell
+    ``(0030, absent)`` at 900,000 and 500,000 of ``ead_final``. This fixture is
+    the isolated form of that cell.
+    """
+    # Arrange
+    recon = _split_recon([_SPLIT_G_LEG, _SPLIT_REM_LEG, _SPLIT_ONLY_OURS], [_WHOLE_LOAN], framework)
+    predicate_key = _c08_03_predicate_key(recon)
+
+    # Act
+    matrix = row_migration(recon, "c08_03", CORPORATE, predicate_key, money_column="rwa_final")
+    cell = _absent_cell(matrix, ours=True)
+    legs = migration_legs(
+        recon,
+        "c08_03",
+        CORPORATE,
+        predicate_key,
+        str(cell["our_row_ref"]),
+        ABSENT_ROW,
+        money_column="rwa_final",
+    )
+    same_base = {leg.key for leg in legs if leg.same_base}
+    scope = {leg.key for leg in legs if not leg.same_base}
+
+    # Assert the premise — the cell must really hold BOTH kinds, or the label
+    # under test is unreachable and this asserts nothing.
+    assert same_base == {_SPLIT_G_LEG.reference, _SPLIT_REM_LEG.reference}
+    assert scope == {_SPLIT_ONLY_OURS.reference}
+
+    # Assert — the cell says so, and the money is still all three legs'.
+    assert cell["movement_basis"] == "mixed_base_ours"
+    assert cell["legs"] == 3
+    assert cell["money_ours"] == pytest.approx(
+        _SPLIT_G_LEG.rwa + _SPLIT_REM_LEG.rwa + _SPLIT_ONLY_OURS.rwa
+    )
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_the_matrix_counts_and_the_drill_list_are_one_computation(framework: str) -> None:
+    """Every cell of the matrix, against the legs listed under it.
+
+    The matrix's counts and the drill-down are derived from ONE frame
+    (``_migration_pairs``), so a cell reporting three exposures and a list
+    showing two is not a state this API can reach. Asserted as a census over the
+    whole matrix rather than on one cell, because the failure mode is a grain
+    difference and a grain difference shows up on the cells nobody picked.
+
+    This is the same defect a separately-derived listing already produced on this
+    page: a cell reporting 221,000 rendered 50 rows that agreed to the penny.
+    """
+    # Arrange
+    recon = _combined(framework)
+    predicate_key = _c08_03_predicate_key(recon)
+    matrix = row_migration(recon, "c08_03", CORPORATE, predicate_key, money_column="ead_final")
+
+    # Assert the premise — a matrix of singleton cells could not show a grain
+    # difference, and one with no absent bucket could not show a label one.
+    assert matrix.height > 1
+    assert (matrix["legs"] > 1).any(), "every cell holds one leg — the counts cannot disagree"
+    assert (matrix["their_row_ref"] == ABSENT_ROW).any()
+
+    # Act / Assert — cell by cell.
+    for record in matrix.iter_rows(named=True):
+        legs = migration_legs(
+            recon,
+            "c08_03",
+            CORPORATE,
+            predicate_key,
+            str(record["our_row_ref"]),
+            str(record["their_row_ref"]),
+            money_column="ead_final",
+        )
+        where = f"{record['our_row_ref']}/{record['their_row_ref']}"
+        assert len(legs) == record["legs"], where
+        assert sum(leg.money_ours or 0.0 for leg in legs) == pytest.approx(
+            record["money_ours"] or 0.0
+        ), where
+        assert sum(leg.money_theirs or 0.0 for leg in legs) == pytest.approx(
+            record["money_theirs"] or 0.0
+        ), where
+        # ... and the cell's label is the aggregate of the legs' own flag.
+        if record["movement_basis"] in {"same_base_ours", "same_base_theirs"}:
+            assert all(leg.same_base for leg in legs), where
+        if record["movement_basis"] in _ABSENT_BASES:
+            assert not any(leg.same_base for leg in legs), where
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_the_drill_list_ranks_on_money_and_names_the_exposure_behind_each_leg(
+    framework: str,
+) -> None:
+    """A split cell's legs are listed separately, each naming its base exposure.
+
+    The matrix places legs, so the list under it must too — collapsing the two
+    legs here would put the drill-down at a different grain from the count above
+    it. ``base_key`` is what makes the relationship readable without inferring
+    it from a naming convention: both legs of ``L1`` say ``L1``.
+    """
+    # Arrange
+    recon = _split_recon([_SPLIT_G_LEG, _SPLIT_REM_LEG], [_WHOLE_LOAN], framework)
+    predicate_key = _c08_03_predicate_key(recon)
+    matrix = row_migration(recon, "c08_03", CORPORATE, predicate_key, money_column="ead_final")
+    cell = _absent_cell(matrix, ours=True)
+
+    # Assert the premise — the two legs must be priced DIFFERENTLY, or the
+    # ranking below holds whatever order the function returns.
+    assert _SPLIT_G_LEG.ead > _SPLIT_REM_LEG.ead
+
+    # Act
+    legs = migration_legs(
+        recon,
+        "c08_03",
+        CORPORATE,
+        predicate_key,
+        str(cell["our_row_ref"]),
+        ABSENT_ROW,
+        money_column="ead_final",
+    )
+
+    # Assert — two legs, biggest first, both pointing at the one exposure.
+    assert [leg.key for leg in legs] == [_SPLIT_G_LEG.reference, _SPLIT_REM_LEG.reference]
+    assert [leg.base_key for leg in legs] == [_WHOLE_LOAN.reference] * 2
+    assert [leg.money_ours for leg in legs] == [
+        pytest.approx(_SPLIT_G_LEG.ead),
+        pytest.approx(_SPLIT_REM_LEG.ead),
+    ]
+    # Their side holds no leg under either KEY, which is not the same claim as
+    # holding no money — never a zero.
+    assert [leg.money_theirs for leg in legs] == [None, None]
+    assert [leg.money for leg in legs] == [
+        pytest.approx(_SPLIT_G_LEG.ead),
+        pytest.approx(_SPLIT_REM_LEG.ead),
+    ]
+
+
+def test_a_matrix_pair_no_leg_occupies_lists_nothing() -> None:
+    """An empty cell of a cross-tabulation is empty, not a refusal.
+
+    Most of a migration matrix is empty by construction — it is our whole row
+    axis against theirs — and the page renders no cell there either. Asserted
+    against a pair both of whose rows are REAL, so the empty answer cannot be
+    coming from an unknown row ref.
+    """
+    # Arrange
+    recon = _combined("CRR")
+    predicate_key = _c08_03_predicate_key(recon)
+    matrix = row_migration(recon, "c08_03", CORPORATE, predicate_key, money_column="ead_final")
+    occupied = set(zip(matrix["our_row_ref"], matrix["their_row_ref"], strict=True))
+    empty = next(
+        (ours, theirs)
+        for ours in matrix["our_row_ref"].unique().sort()
+        for theirs in matrix["their_row_ref"].unique().sort()
+        if (ours, theirs) not in occupied
+    )
+
+    # Act / Assert
+    assert migration_legs(recon, "c08_03", CORPORATE, predicate_key, *empty) == ()
+
+
+def test_migration_legs_refuses_a_money_column_membership_does_not_carry() -> None:
+    """The same guard ``row_migration`` has, because it is the same frame.
+
+    A drill-down that accepted a column the matrix refuses would answer a
+    question the page above it could not have asked.
+    """
+    # Arrange
+    recon = _combined("CRR")
+    predicate_key = _c08_03_predicate_key(recon)
+
+    # Act / Assert
+    with pytest.raises(ValueError, match="money_column"):
+        migration_legs(
+            recon, "c08_03", CORPORATE, predicate_key, "0030", "0030", money_column="pd_floored"
+        )
+
+
+# =============================================================================
+# The term's own key counts have to be coherent
+# =============================================================================
+
+
+@pytest.mark.parametrize(
+    ("keys", "differing_keys", "why"),
+    [
+        (3, 5, "more keys differ than the term holds"),
+        (3, -1, "a negative count of differing keys"),
+        (0, 1, "a key differs in a term with no keys at all"),
+        (-1, 0, "a negative population"),
+    ],
+)
+def test_a_cell_term_refuses_a_key_count_that_describes_no_population(
+    keys: int, differing_keys: int, why: str
+) -> None:
+    """Requiring ``differing_keys`` forces a caller to STATE a number, not a
+    coherent one.
+
+    Omission became a ``TypeError`` when the field was made required; a term
+    claiming 5 of its 3 keys differ still constructed silently. The three
+    incoherent shapes are one bound apart — more differing than held, a
+    negative count, and a negative population, the last raising for any
+    ``differing_keys`` because no value satisfies ``0 <= d <= keys`` when
+    ``keys`` is negative.
+
+    A ``ValueError``, not an accumulated ``CalculationError``: this is a
+    programming error in a constructor, not a data-quality finding about a
+    portfolio.
+    """
+    # Act
+    with pytest.raises(ValueError) as caught:
+        CellTerm(name="measurement", amount=0.0, keys=keys, differing_keys=differing_keys)
+
+    # Assert — the message NAMES the offending values. "invalid CellTerm" is
+    # not diagnosable from a traceback; the two numbers are.
+    message = str(caught.value)
+    assert f"differing_keys={differing_keys}" in message, (message, why)
+    assert f"keys={keys}" in message, (message, why)
+    assert "measurement" in message, message
+
+
+@pytest.mark.parametrize(
+    ("keys", "differing_keys"),
+    [(0, 0), (1, 0), (1, 1), (3, 0), (3, 3), (35, 4)],
+)
+def test_a_cell_term_accepts_every_coherent_key_count(keys: int, differing_keys: int) -> None:
+    """The other half, without which the guard could reject everything.
+
+    Both boundaries are included — ``differing_keys == 0`` and
+    ``differing_keys == keys`` are the ordinary shapes, not edge cases: the
+    former is a term where both sides agree about every key, the latter one
+    where none do. ``(35, 4)`` is the probe cell's own measurement term.
+    """
+    # Act
+    term = CellTerm(name="measurement", amount=0.0, keys=keys, differing_keys=differing_keys)
+
+    # Assert
+    assert (term.keys, term.differing_keys) == (keys, differing_keys)
+
+
+def test_every_term_the_engine_builds_satisfies_the_constructor_bound() -> None:
+    """The bound is a property of ``_terms``, not only of hand-built doubles.
+
+    A validator that only ever sees test data is a validator nobody has run.
+    This walks the terms of every additive cell the probe portfolio publishes
+    and asserts the invariant independently of the constructor, so the two
+    cannot both be wrong in the same direction.
+    """
+    # Arrange
+    recon = _probe("CRR")
+    row_ref = _probe_row(recon)
+    diff = cell_diff(recon.ours.source, recon.theirs.source, "c08_03")
+    checked = 0
+
+    # Act / Assert
+    for row in diff.iter_rows(named=True):
+        result = decompose_cell(recon, "c08_03", row["sheet"], row["row_ref"], row["col_ref"])
+        for term in result.terms:
+            checked += 1
+            assert 0 <= term.differing_keys <= term.keys, (
+                f"{row['sheet']}/{row['row_ref']}/{row['col_ref']} {term.name}: "
+                f"differing_keys={term.differing_keys} keys={term.keys}"
+            )
+
+    # Assert the census is not vacuous, and that it reached the probe cell,
+    # whose measurement term is the one with a real gap between the counts.
+    assert checked > 0, "no term was examined at all"
+    probe = decompose_cell(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
+    measurement = next(term for term in probe.terms if term.name == "measurement")
+    assert measurement.differing_keys < measurement.keys, (
+        "the probe's measurement term has no agreeing keys, so this census "
+        "never saw the two counts differ"
     )

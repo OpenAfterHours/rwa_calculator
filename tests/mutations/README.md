@@ -76,6 +76,7 @@ than carried forward from an earlier one.
 |---|---|---|---|
 | `mutate_terms_amount_drifts_from_its_pairs` | half of `measurement`'s amount moved into `row_placement` AFTER `_terms` ran — the total, the counts and the pairs all untouched | 22 / 110 | **all six census parametrisations, on the SUM assertion itself** (`test_return_recon.py:2560`, obtained 700,000 against a claimed 1,600,000), the term filter, and 12 pre-existing term-amount tests |
 | `mutate_pairs_rank_by_money` | `_rank` ordered on the side's own money, as the old leg listing was | 8 / 124 | every ordering-dependent test: the driver ranking, both cap tests, the placement test (the mover is off the page) |
+| `mutate_rank_without_the_tie_break` | `_rank` ordered on `\|delta\|` alone — the `pair.key` component of the sort key deleted | 2 / 130 | the tied-slice half of the ranking test only — **and it scored 132 passed / exit 0 before that half existed** |
 | `mutate_pairs_silent_cap` | `CellPairs.hidden_keys` forced to `0` | 6 / 126 | the two cap tests and the uncapped/capped comparison only |
 | `mutate_cap_claims_it_showed_everything` | `CellPairs.shown_delta` forced to `total_delta`, so `hidden_delta` reads `0.00` however much money the cap left off | 2 / 130 | the tightened half of the cap test, on its ADEQUACY limb — **and it scored 132 passed / exit 0 before that half existed** |
 | `mutate_terms_differing_is_population` | `CellTerm.differing_keys` restated as `keys` | 8 / 124 | the `differing_keys` test and all six census parametrisations |
@@ -87,7 +88,7 @@ than carried forward from an earlier one.
 | `mutate_placements_carriers_scoped_to_sheet` | the class / approach / role carriers scoped to the cell's sheet | 2 / 130 | the sheet-placement test only |
 | `mutate_placements_ignore_the_base_reference` | `_placements` keyed on the leg, out of lockstep with `_key_money` | 2 / 130 | the split-exposure placement test only |
 
-Seven of these are worth understanding, and the first one most.
+Eight of these are worth understanding, and the first one most.
 
 - **`mutate_terms_amount_drifts_from_its_pairs` is the detector for the
   invariant the whole feature rests on**, and it also measures what the
@@ -127,6 +128,29 @@ Seven of these are worth understanding, and the first one most.
   written to stop the fixture going vacuous turns out to be the detector for
   the cap going silent, because "nothing is hidden" is exactly what both look
   like.
+- **`mutate_rank_without_the_tie_break` is a GAP rather than a vacuity, and the
+  distinction changes how you close it.** The fixture already distinguished
+  right from wrong — on the probe cell only 7 of 38 keys carry a delta, so
+  `|delta|` fixes 7 rows and the KEY fixes the other 18 — and nothing asserted
+  on it. No new fixture was needed, only an assertion, which is the cheaper and
+  higher-confidence half of these two findings.
+
+  What makes it worth a plugin rather than a note: **the wrong answer is not
+  even deterministic.** Python's sort is stable, so without the tie-break the
+  residual order is `_classify`'s, which is polars `group_by` order —
+  implementation-defined and thread-scheduling dependent. Two separate
+  processes over the identical cell produced two different pages (one showing
+  `SPLIT_FILL_A1`, which the correct ordering never renders; the other showing
+  `PROBE_AGREE_28`, `_27`, `_23`, …), 17 of 25 rows moved, and 6–7 exposures
+  swapped in or out each time. Meanwhile `shown_delta` stayed 63,000.00 and
+  `hidden_keys` stayed 13 in **both** states: every published figure ties out,
+  so nothing looks wrong. An analyst refreshing one cell sees an inventory that
+  moved under them. Non-determinism that renders a plausible page is the
+  hardest kind to notice and the easiest to dismiss — assert on the ORDER, not
+  only on the totals.
+
+  The closing assertion is anchored on the uncapped table's own tied keys,
+  sorted independently, so it is not a restatement of `_rank`.
 - **`mutate_cap_claims_it_showed_everything` is the same lesson again, and it
   found a VACUOUS test rather than an undetected one.** The code was right; the
   suite simply had no input that could distinguish `shown_delta` from
@@ -229,7 +253,7 @@ Five of these are worth understanding.
 
 ## Writing another
 
-Two rules, both learned the expensive way in the batch that produced these:
+Four rules, all learned the expensive way in the batch that produced these:
 
 1. **Change one thing, and do not copy the function you are mutating.**
    `mutate_collapse_group_legs` runs the *original* `_group_legs` over a side
@@ -248,3 +272,15 @@ Two rules, both learned the expensive way in the batch that produced these:
    than `setattr` on a module — a loader, a wrapper, a class attribute — count
    the applications and fail the session at zero. The check is four lines and it
    turns "I checked" into something the summary line says.
+4. **A green suite and a red linter on the same tree is a TIMING signal, not a
+   contradiction.** The fifth shape of rule 2's mechanism 3, and the first that
+   presents as two gates disagreeing rather than as a false red. Measured while
+   these were being written: `pytest tests/unit/analysis` returned 220 passed
+   and the very next command, `ruff check src tests`, returned `F821 Undefined
+   name` in the module those tests exercise — because a teammate's in-flight
+   edit landed between the two, and **an undefined name at module scope does not
+   break the import, only the call.** Both gates were right about the tree they
+   each saw. Before concluding either is wrong, check whether the undefined
+   symbol sits on a path the tests reach, and check `git status` for a file you
+   do not own. Then report it rather than reverting or finishing it — never
+   `git add -A`, never complete another agent's half-written file.

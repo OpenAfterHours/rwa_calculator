@@ -1489,3 +1489,258 @@ gate that shipped.
   the variable, when it only means the read takes no tainted argument. Fetch the
   `codeFlows` first; every fix designed from the rule title alone in this repo
   has failed.
+
+## 2026-08-30 — The two reconciliation surfaces disagreed about what an exposure is, and 135 tests could not express the disagreement
+
+- **Defect**: This estate has two reconciliation surfaces, and they answered *"is
+  this the same exposure?"* differently. The exposure-grain component
+  reconciliation has always collapsed a split exposure's legs onto the base
+  reference — `ReconciliationRunner` calls `aggregate_to_key_grain`
+  (`analysis/reconciliation.py:178`), which runs `_coalesce_to_parent`
+  (`analysis/_collapse.py:73-75`). The cell-grain template waterfall in
+  `analysis/return_recon.py` did not. **The grain inconsistency is the defect and
+  the wrong number below is its symptom**, and that ordering is what makes the
+  collapse the *right* answer rather than merely an effective one: "is this the
+  same exposure" is a base-grain question, and the waterfall was asking it of
+  legs.
+
+  The symptom. Our sealed ledger splits one exposure into several legs — a
+  guarantee into `L1__G_BANK` / `L1__REM`, a mixed property into `M1_rre` /
+  `M1_cre`, a facility into an `_UNDRAWN` row — each stamped with the pre-split
+  reference, while a projected legacy extract carries the whole loan under that
+  original reference and no base reference at all. Keyed on `exposure_reference`
+  the two sides shared no key, so **a cell where both engines agree to the penny
+  reported the whole loan as missing from BOTH sides at once**. The four-way
+  additivity contract could not catch it, because two equal and opposite
+  population terms sum to the same `0.00` as no terms at all:
+  `CellDecomposition.reconciles` stayed true throughout.
+
+  **What the fix did, stated narrowly, because the tempting sentence is wrong.**
+  It did not surface a finding that was hidden. The delta was always the cell's
+  delta and `reconciles` was always true. What was wrong is the **attribution**:
+  on the measured differing portfolio the signed terms explained a 5,400
+  difference as **+6,918,900 ours-only against −6,913,500 theirs-only** — two
+  large, equal and opposite *scope* terms netting to the right number for the
+  wrong reason, sending an analyst hunting 6.9m of missing scope when the finding
+  is 1,800 of expected-loss difference per cell. The claim that survives someone
+  checking it is the narrow one: **the fix deleted a fabricated scope finding
+  that never existed, and re-attributed a real finding from scope to valuation.
+  It hid nothing.** No cell's delta changes anywhere.
+
+  **And it traded no detection away — measured, not argued.** The obvious worry
+  is that collapsing the key blinds the waterfall to a genuinely *dropped* split
+  leg. Three cases were measured on C 08.03 corporate row 0080 col 0090 under
+  both frameworks, ours = the guaranteed leg (60k) only against theirs = the
+  whole loan (100k): (A) an agreeing split, where nothing is wrong; (B) a leg
+  moved to another row; (C) a leg genuinely dropped, which is a real scope
+  failure. After the fix B and C are byte-identical at the cell (`measurement`
+  −40,000, one key, `reconciles` true). **Under the old keying B and C were also
+  byte-identical — and case A raised the same alarm**, `population_ours_only`
+  100,000 against `population_theirs_only` −100,000. The old population term
+  fired on every split exposure in the book whether or not anything was lost, so
+  it had *zero* discriminating power for a dropped leg: it did not detect case C,
+  it drowned it. Discriminating power went from one signal across three cases to
+  two — silent on A, breaking on B and C. The closing argument: the only book in
+  which the old alarm carried information is one with no split exposures at all,
+  and in that book case C cannot arise, because there is no split leg to drop.
+
+  Case C is caught elsewhere and already shipping — post-collapse the base exists
+  on both sides, so it lands in the component reconciliation's `break` as a
+  40,000 value break on a *named* exposure. What separates "moved" from "dropped"
+  in the waterfall is sheet-wide non-conservation of the terms, and nothing
+  presents that to an analyst as such; that residual is pre-existing, is not
+  introduced here, and is filed rather than closed.
+
+  Not a corner case: **21 of 128 bases in the fixture estate hold more than one
+  leg, carrying 13.9% of RWA.**
+- **Rule**: Not a regulatory escape. No RWA figure and no published cell moves.
+  What was wrong is the *explanation* attached to a difference between two
+  returns — which is the evidence a migrating firm uses to decide whether its
+  parallel run ties out, and which of the two engines to go and look at.
+- **Origin**: `src/rwa_calc/analysis/return_recon.py`, shipped in v0.3.28
+  (2026-08-29) with the four-way waterfall. The defect is as old as the feature.
+- **Escape class**: `path-never-exercised`. The gate ran — **135 tests** across
+  `tests/unit/analysis/test_return_recon.py` and
+  `tests/unit/ui/test_views_return_recon.py`, exercising this exact code — and no
+  fixture reached the defect, because **every leg in both suites set
+  `source_exposure_reference == exposure_reference`**. A split leg could not be
+  *expressed* in the fixture vocabulary, so no assertion about one could be
+  written, right or wrong. The class's prescribed fix is "build the portfolio,
+  register it", and that is what landed.
+- **Why every gate missed it**: three independent reasons, and only the first is
+  the escape class.
+
+  The fixtures could not express the input. Every leg carried its own reference
+  as its base reference, which is the one shape in which the buggy key and the
+  correct key agree.
+
+  The output contract was satisfied by the wrong answer. `reconciles` scores the
+  four terms against the *reported* delta, and it is exact — but it is a
+  statement about a **sum**, and the defect's signature is two equal and opposite
+  terms. Every additivity assertion in the suite passed on the defective output,
+  correctly. An identity that a defect satisfies is not a weak identity; it is an
+  identity about the wrong quantity.
+
+  The one hazard adjacent to this fix **announced itself at runtime for the
+  feature's whole life and nothing asserted on it**: `row_migration` logs a
+  WARNING saying *"the first is used and the matrix may be wrong"*. That is the
+  `_group_legs` collapse hazard, and it was carried in prose, and in a log line,
+  and in no test. A log line is not a gate.
+- **Gate change**: four, all in this change-set.
+
+  1. **Split-leg portfolios, built and asserted** —
+     `tests/unit/analysis/test_return_recon.py` and
+     `tests/unit/ui/test_views_return_recon.py`, **135 → 163 tests** (`c898d950`).
+     Split exposures on the IRB C 08.03 path *and* on the standardised C 07.00
+     path (`test_a_standardised_re_split_pairs_against_the_legacy_whole_loan` and
+     three siblings — the real-estate and facility splits, which are the commonest
+     split shapes in a migration book and which no earlier fixture reached, plus
+     the first split-leg coverage of `sheet_placement`); both `KEY_COLUMNS`
+     settings (`test_both_key_column_settings_name_the_same_grain`); the
+     plan-frame presence contract
+     (`test_every_recon_template_plan_frame_carries_the_base_reference`); and
+     `test_the_migration_matrix_conserves_a_split_exposures_money`, a conservation
+     detector for the `_group_legs` hazard, which previously had none.
+  2. **The mutation evidence made durable** — `tests/mutations/` (`909e69cb`):
+     five isolating pytest plugins that each change exactly one thing in
+     production code and restore it in a `finally`, plus a README carrying the
+     measured red set of each. They lived in a job scratch directory and would
+     have vanished with the session; this file's discipline closes a defect on
+     evidence a gate was observed red, so that evidence has to outlive the run
+     that produced it.
+  3. **Fixture adequacy asserted inside the test** — both assertions open
+     `test_the_migration_matrix_conserves_a_split_exposures_money`, and are
+     greppable by their messages rather than by position (line numbers as at
+     `c898d950`, where `git show` will still find them once the file moves):
+     `bases.count(...) == 2` at `test_return_recon.py:1528` — *"the group holds
+     no split exposure — collapsing the key would be a no-op and this test would
+     prove nothing"* — and `_SPLIT_G_LEG.ead != _SPLIT_REM_LEG.ead` at `:1532` —
+     *"equal legs make `.first()` undetectable"*. The pre-existing `_combined`
+     fixture **fails the first of those**, which is precisely why its sibling
+     test was vacuous for the life of the feature. This is the batch's real
+     graduation: a test that states the property its own fixture must have cannot
+     silently become a no-op.
+  4. **The drill-through's own suite** —
+     `tests/unit/ui/test_views_recon_placement.py` (`513937ef`, `d1538f0b`),
+     348 → 355 tests, with six further isolating mutations each reddening exactly
+     its own detector.
+
+  **What these fixtures do not cover, said here rather than left to be
+  discovered.** The decomposable-cell census taken over the projected legacy
+  mapping yields **1,820 decomposable cells on C 07.00 and none at all on
+  C 08.01 or C 08.03** — the mapping is too thin to make either template
+  decomposable on that run. So any sentence of the form "measured across all
+  three templates" is false of the census: it is a C 07.00 measurement. The new
+  fixtures do reach C 08.01 and C 08.03, by construction (5,400 of expected-loss
+  difference on C 08.01, 843,600 of row placement on C 08.03) — which is a
+  different and narrower kind of evidence, hand-built cells rather than a census.
+- **Verified red**: the pre-fix keying, restored as an isolating mutation —
+  `mutate_prefix_key` swaps `_comparison_key` back to `pl.col(key_column)` and
+  restores it in a `finally`, so nothing on disk is modified while it runs. It
+  ships, and it reproduces against the finished 163-test baseline at `c898d950`:
+
+  ```
+  PYTHONPATH=tests/mutations uv run pytest \
+    tests/unit/analysis/test_return_recon.py tests/unit/ui/test_views_return_recon.py \
+    -q -p mutate_prefix_key
+  22 failed, 141 passed
+
+  population_ours_only 100000.0 where 0.0 expected
+  measurement 0.0 where -30000.0 / -40000.0 expected
+  ```
+
+  Those 22 are every split test plus both `key_column` guards, and they *are* the
+  measurement of the gate gap: on the pre-fix tree the same code produced no
+  failures at all, because no fixture could express a split leg. The four sibling
+  probes, from the same committed table — `mutate_drop_base_ref` 24 red,
+  `mutate_no_third_rung` 4, `mutate_no_presence_filter` 2,
+  `mutate_collapse_group_legs` 2.
+
+  An earlier red was taken during implementation, against a mid-tree at 145 tests
+  that was never committed. It is deliberately **not quoted here**: nobody can
+  ever check it, and a figure no one can check does not belong in this field.
+
+  **The last two are the ones this entry turns on, because before their guards
+  existed both mutations were completely silent.**
+
+  - `mutate_no_presence_filter` removes the presence filter from `_key_rungs`.
+    That filter is on the **hot production path** — the projected legacy plan
+    frame has no `source_exposure_reference` column at all — so removing it
+    raises `ColumnNotFoundError` on every real reconciliation, and the suite was
+    blind to it because every fixture pinned the column into `schema_overrides`
+    as a typed null. Null and absent are different code paths, and both occur on
+    the same side at once.
+  - `mutate_collapse_group_legs` is the "tidy up the two inconsistent key
+    expressions" change the module now forbids in prose. `_group_legs` prices
+    with `.first()`, so collapsing distinct split legs onto one base key keeps
+    one leg's money and discards the other's: **40,000 of `rwa_final` and 400,000
+    of `ead_final`** against the conservation invariant `row_migration`'s own
+    docstring states. Reproduced on **two portfolios with different totals but
+    identical losses to the penny**, which is what shows the loss is one specific
+    leg rather than something proportional to portfolio size.
+
+  **Two caveats belong in this field rather than in a footnote.** First,
+  `c898d950`'s commit message lists **six** mutations and gives the pre-fix keying
+  as 20 red; the committed README lists **five** plugins and gives 22. Two of the
+  six — a reversed coalesce, and a break of the `_key_money` / `_side_keys`
+  lockstep — were not preserved as plugins, so they are not reproducible and
+  should not be quoted. Where the two disagree, the README is the durable artifact
+  and its figures are the ones to cite. Second, the discrepancy was **not**
+  re-measured for this entry: `analysis/return_recon.py` was under concurrent edit
+  in the same worktree while it was written, and running a mutation probe against
+  a mid-edit file is one of the four false-green mechanisms recorded below
+  (`.claude/LESSONS.md` C12).
+
+  **What a later reader can reproduce, and what they can only read — because this
+  entry had to be made self-contained before it could close anything.** Every
+  field that closes the defect is reproducible **from the repository alone**: the
+  escape class (check out `358e4ce2`; the two pre-fix suites hold 135 tests in
+  which every leg sets `source_exposure_reference == exposure_reference`), the
+  four gate changes (all committed files, with the two adequacy assertions pinned
+  to `c898d950`), and the verified red (five plugins that ship, a baseline that is
+  a commit, the invocation printed above). Nothing in that set needs anything
+  outside git.
+
+  The supporting measurements — the three-case A/B/C refutation, the
+  +6,918,900 / −6,913,500 attribution terms and the 5,400 they concealed, the
+  843,600 of row placement, the 1,820-cell C 07.00 census, and the two-portfolio
+  reproduction of the 40,000 / 400,000 — are **stated in full in this entry's own
+  prose above, and that is deliberate.** Their working record was batch state
+  under `.claude/state/`, which `.gitignore` excludes wholesale, and the archive
+  path that convention names sits *inside* the ignored directory, so none of it
+  reaches the repository and all of it dies with the worktree. They are therefore
+  recorded findings rather than figures anyone can re-derive, and this entry is
+  their only durable home. Do not add a citation pointing at batch state to
+  "support" them; there will be nothing on the other end.
+- **The same escape, one level out, in the code this batch wrote.** The
+  drill-through built on top of this fix (`513937ef`) shipped with five defects
+  its author found by reviewing its own new code, each reproduced before being
+  fixed, and **all 340 existing tests passed against two of them** — which is the
+  finding, not the fix. A composite reconciliation key was token-matched segment
+  by segment, so a segment coinciding with another exposure's reference merged
+  that exposure's rows in, fabricating a row the loan never reached *and*
+  destroying a real band move by adding a second provable leaf. A `||` inside a
+  legitimate reference under a single-column mapping resolved half a reference to
+  a whole loan, silently. A scheme-relative `Referer` (`//evil.example/...`)
+  skipped the same-origin test entirely — an empty scheme made the guard skip
+  itself — and a malformed one raised and 500'd the page. The tri-state
+  parent-row flag was flattened at the render boundary, so a row `False` on ours
+  and `None` on theirs claimed "provably contains and duplicates no other row"
+  for both sides. And the single-leaf rule was unasserted: C 08.01 rows 0020 and
+  0070 are different *cuts* of one book rather than a tree, so an exposure can
+  reach two provable leaves — under the mutation each side picks its leaf from
+  unguaranteed Polars row order, the two can differ **by chance**, and the panel
+  renders a fabricated band move on a byte-identical exposure. A sixth followed
+  in `d1538f0b`: a key that cannot be *read* was rendering as "this exposure
+  reached no instrumented row", which is a different and false claim. Four of the
+  six are one shape — two distinct facts collapsing into one blank — which is the
+  shape of the defect this whole batch exists to fix.
+- **Lesson**: four entries added to `.claude/LESSONS.md` — **B9** (a log line is
+  not a gate, and neither is an alarm that always fires), **C10** (careless about
+  scope, not about facts), **C11** (a fixture is a claim: assert its adequacy and
+  check its label against its cause) and **C12** (four ways a green mutation probe
+  lies) — plus a fold into **B1** for the null-versus-absent mirror image. C11 and
+  C12 are the two closest to graduating: C11 already has an executable form in a
+  single test, and C12's second, third and fourth mechanisms are all mechanically
+  checkable from a shared plugin base in `tests/mutations/`. Both are filed in the
+  ledger's candidates list.

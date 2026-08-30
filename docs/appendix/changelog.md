@@ -42,6 +42,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (HTTP 300) rather than guessing at one of them, and an unresolvable one names
   the run's actual join key columns instead of a blanket 404.
 
+### Fixed
+- **The return-template waterfall now keys on the exposure, not on the leg.** Our
+  sealed ledger splits one exposure into several legs — a guarantee into
+  `L1__G_BANK` / `L1__REM`, a mixed property into `M1_rre` / `M1_cre`, a facility
+  into an `_UNDRAWN` row — each stamped with the pre-split reference, while a
+  projected legacy extract carries the whole loan under that original reference
+  and no base reference at all. Keyed on `exposure_reference` the two sides
+  shared no key, so **a cell where both engines agree to the penny reported the
+  whole loan as missing from each side at once** — and the four-way additivity
+  contract could not see it, because two equal and opposite population terms sum
+  to the same `0.00` as no terms at all, leaving `reconciles` true. **No cell's
+  delta changes anywhere; what changes is the explanation offered for it.** On a
+  measured differing portfolio the terms read `+6,918,900` ours-only against
+  `−6,913,500` theirs-only, sending an analyst after 6.9m of missing scope when
+  the finding is 1,800 of expected-loss difference per cell; the same cell now
+  reports it as row placement and measurement. An agreeing split loan drains
+  4,209,000 / 4,209,000 of fabricated population to zero. This is not a corner
+  case: 21 of 128 bases in the fixture estate hold more than one leg, carrying
+  13.9% of RWA. The migration matrix is deliberately **not** collapsed — it asks
+  a leg-grain question ("where did the money land?") and prices with `.first()`,
+  so collapsing it would keep one leg's money and discard the other's, measured
+  at 40,000 of `rwa_final` and 400,000 of `ead_final`.
+- **The "where this exposure lands" panel no longer reports an unreadable key as
+  an empty placement.** A key carrying the composite separator, with no key
+  columns supplied to read it by, is indeterminate — whether the separator is
+  structure or data cannot be decided without them. It now says which question
+  cannot be answered instead of rendering "this exposure reached no instrumented
+  row", which is a different and false claim.
+
 ---
 
 ## [0.3.29] - 2026-08-30

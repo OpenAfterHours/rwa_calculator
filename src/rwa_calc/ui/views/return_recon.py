@@ -707,6 +707,34 @@ def build_comparison(  # noqa: PLR0913 - two sides, each with its own coverage
     return recon
 
 
+def cached_comparison(recon_id: str) -> ReturnRecon | None:
+    """The memoised comparison for *recon_id*, or ``None``. NEVER builds one.
+
+    The read-only half of ``build_comparison``, for a caller that wants to
+    *display* a comparison that already exists but must not pay for one that
+    does not. The loan forensic's placement panel is that caller: generating
+    both sides costs ~1.1 s at 10,000 exposures and ~4.9 s at 100,000 — growing
+    linearly, so ~40 s at the 1M scale this project benchmarks — against a 20 ms
+    page, and it is reached cold from a bookmarked URL or an explorer drill, not
+    only from the compare page. It shows an offer to build instead.
+
+    **A getter, deliberately, rather than an ``is_cached`` predicate.** A
+    predicate makes the caller write "check, then ``build_comparison``", and
+    those are two lookups with a gap: this memo evicts at ``_CACHE_LIMIT``
+    entries, and sync FastAPI endpoints run on a threadpool, so a concurrent
+    request can evict between them and the caller silently pays the build it
+    checked in order to avoid. Returning the object closes that gap — one
+    lookup, and what you tested is what you hold.
+
+    What it still does not promise: the entry may be evicted the moment after
+    this returns. That costs nothing but a rebuild on the next request, because
+    the returned ``ReturnRecon`` is a live object the caller already holds — an
+    evicted comparison is not a stale one. There is no reading of it that yields
+    a WRONG panel, only a later one.
+    """
+    return _CACHE.get(recon_id)
+
+
 def clear_comparison_cache() -> None:
     """Drop every memoised comparison (test hook; also frees the frames)."""
     _CACHE.clear()

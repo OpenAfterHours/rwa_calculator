@@ -8,10 +8,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- (Next release changes will go here)
+- **"Where this exposure lands" on the loan forensic.** The per-loan page said
+  nothing about WHICH return-template row the exposure reported in, so the
+  placement half of "why did this contract move band?" stayed manual. It now
+  lists every `(template, sheet, row)` the key reached — **ours beside theirs**,
+  with row NAMES, so a move reads as `0.10 to <0.15` → `1.75 to <2.5`. A row
+  only one side reaches is labelled as such and never left blank; a side that
+  reached no row and a side that reached rows but no rankable one are two
+  different statements and stay different; `is_parent_row` keeps its tri-state,
+  so a parent row is never presented as a leaf. The panel **reads** the memoised
+  return-template comparison and never builds one: arriving from a template cell
+  is free (30–52 ms with the panel populated, measured from 1k to 100k
+  exposures), and a cold arrival offers the one-click build rather than
+  performing it. Building on demand was measured at 1.1 s for 10,000 exposures
+  and 4.9 s for 100,000 against a 20 ms page, growing linearly — so the gate is
+  what stops a 20 ms drill-down becoming a page that hangs on the largest books.
+  It degrades with the typed `comparison_inputs` reason when no comparison can
+  be built at all.
+- **A breadcrumb back to the cell.** `/reconciliation/{id}/loan` accepts
+  `?return_to=`, guarded by the existing `_safe_return_to` open-redirect check
+  and reused for the sign-off form's own `return_to`. Absent the parameter, a
+  same-origin `Referer` is honoured through the same guard, so a click from a
+  template cell returns to that exact cell.
 
 ### Changed
-- (Next release changes will go here)
+- **A composite-key reconciliation no longer dead-ends on the loan drill.** The
+  return-template page links a leg through on its exposure reference alone,
+  while the loan route looks up `_recon_key` — a `||`-joined concatenation of
+  the mapping's `our_keys`. They coincide only on the default single-column key;
+  under any composite mapping the link 404'd with "No reconciliation row matches
+  that key", which reads as "this loan does not exist". The key is now resolved
+  server-side by segment match, an ambiguous reference offers its candidates
+  (HTTP 300) rather than guessing at one of them, and an unresolvable one names
+  the run's actual join key columns instead of a blanket 404.
 
 ---
 

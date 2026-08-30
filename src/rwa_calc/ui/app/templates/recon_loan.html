@@ -3,8 +3,34 @@
 {% block title %}Loan forensic — RWA Calculator{% endblock %}
 
 {% block content %}
-<p class="muted"><a href="{{ report_url }}">← Back to the report</a> ·
+{# The breadcrumb leads with where the analyst CAME FROM (a template cell, when
+   they arrived from one) — the report root and the explorer are always-available
+   fallbacks, not the trail back. #}
+<p class="muted">
+{% if return_to and return_to != explorer_url %}<a href="{{ return_to }}">← Back to the cell you came from</a> ·
+{% endif %}<a href="{{ report_url }}">the report</a> ·
 <a href="{{ explorer_url }}">per-key explorer</a></p>
+
+{% if not detail %}
+{# The key resolved to no single reconciled row. Never a bare 404: the loan very
+   probably exists and was addressed by ONE of the join key's columns. #}
+<h1>That key does not address one reconciled row</h1>
+<p class="mono">{{ resolution.requested }}</p>
+<div class="callout warn">{{ resolution.reason }}</div>
+{% if resolution.key_columns %}
+<p class="muted">This reconciliation's join key is
+<span class="mono">{{ resolution.key_columns|join(" + ") }}</span>.</p>
+{% endif %}
+{% if resolution.candidates %}
+<h2>Did you mean</h2>
+<ul>
+  {% for candidate in resolution.candidates %}
+  <li><a class="mono" href="{{ loan_url_base }}?key={{ candidate|urlencode }}{% if return_to %}&amp;return_to={{ return_to|urlencode }}{% endif %}">{{ candidate }}</a></li>
+  {% endfor %}
+</ul>
+{% endif %}
+<p><a class="btn btn-ghost" href="{{ explorer_url }}">Open the per-key explorer</a></p>
+{% else %}
 <h1>Loan forensic</h1>
 <p class="mono">{{ detail.recon_key }}</p>
 
@@ -56,6 +82,71 @@ our-side drivers explaining how we reached the value above; a driver tagged
 {{ render_table(detail.breaks) }}
 {% endif %}
 
+{% if placement %}
+<h2>Where this exposure lands</h2>
+{% if not placement.available %}
+<div class="callout info">{{ placement.reason }}</div>
+{# The one click that resolves the common case. The compare page generates both
+   sides once and memoises them, so coming back fills this panel in; where the
+   comparison cannot be built at all, that page repeats the same reason with the
+   mapping remedy beside it, so the link is never a dead end. #}
+<p><a class="btn btn-ghost" href="{{ templates_url }}">Open the return-template comparison</a></p>
+{% elif not placement.groups %}
+<div class="callout info">This exposure reached no row of any instrumented return
+template. That is not the same as reporting nothing — only C 07.00, C 08.01 and
+C 08.03 carry cell membership, so an exposure outside them has no addressable
+placement here.</div>
+{% else %}
+<p class="muted">Which template row this exposure reported in, <strong>ours beside
+theirs</strong>. A row only one side reaches is a placement difference, and says so —
+it is never left blank. Rows are grouped by the population that backs them: a
+template row does not have one population, so the same row can appear under more
+than one group.</p>
+{% for group in placement.groups %}
+<h3>{{ group.template_label }}{% if group.sheet %} · {{ group.sheet }}{% endif %}
+<span class="muted">— population {{ group.predicate_key }}{% if group.columns %},
+serving columns {{ group.columns|join(", ") }}{% endif %}</span></h3>
+{% if group.moved %}
+<div class="callout warn">Moved row: <span class="mono">{{ group.our_placement }}</span>
+{{ group.our_placement_name }} (ours) → <span class="mono">{{ group.their_placement }}</span>
+{{ group.their_placement_name }} (theirs).</div>
+{% else %}
+<p class="muted">Placement — ours: <strong>{{ group.our_placement_name }}</strong>
+{%- if group.our_placement %} (<span class="mono">{{ group.our_placement }}</span>){% endif %};
+theirs: <strong>{{ group.their_placement_name }}</strong>
+{%- if group.their_placement %} (<span class="mono">{{ group.their_placement }}</span>){% endif %}.</p>
+{% endif %}
+<div class="table-wrap">
+  <table class="data">
+    {# The hierarchy claim is PER SIDE. One collapsed column taking ours and
+       falling back to theirs rendered a row that is a provable leaf for us and
+       indistinguishable for them as a flat "leaf", with a note asserting it of
+       both. That is the tri-state surviving every dataclass and dying at the
+       last step, so the two states are columns, never one. #}
+    <thead><tr><th>row</th><th>row name</th><th>ours</th><th>theirs</th>
+      <th>hierarchy (ours)</th><th>hierarchy (theirs)</th></tr></thead>
+    <tbody>
+      {% for row in group.rows %}
+      <tr title="{{ row.parent_note }}">
+        <td class="mono">{{ row.row_ref }}</td>
+        <td>{{ row.row_name or "—" }}</td>
+        {# A side that did not reach the row is DIMMED, never emptied — the word
+           is the finding. ``muted`` is app.css's own class; the ``is-*`` state
+           names used on the compare grid are inline-styled there, not CSS
+           rules, so borrowing them here would style nothing. #}
+        <td{% if not row.in_ours %} class="muted"{% endif %}>{{ row.our_display }}</td>
+        <td{% if not row.in_theirs %} class="muted"{% endif %}>{{ row.their_display }}</td>
+        <td{% if not row.in_ours %} class="muted"{% endif %}>{{ row.our_parent_state }}</td>
+        <td{% if not row.in_theirs %} class="muted"{% endif %}>{{ row.their_parent_state }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endfor %}
+{% endif %}
+{% endif %}
+
 <h2>Sign-off</h2>
 <p class="muted">Record whether this exposure's difference is acceptable. Accepting or
 rejecting takes it off the Open worklist; reopen it to put it back.</p>
@@ -86,4 +177,5 @@ rejecting takes it off the Open worklist; reopen it to put it back.</p>
     {% if decision %}<button class="btn btn-ghost" type="submit" name="status" value="open">Reopen</button>{% endif %}
   </div>
 </form>
+{% endif %}
 {% endblock %}

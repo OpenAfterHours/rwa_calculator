@@ -23,12 +23,13 @@ import json
 import logging
 import math
 import os
+import posixpath
 import uuid
 import webbrowser
 from datetime import date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import unquote, urlencode, urlsplit
 
 import polars as pl
 import uvicorn
@@ -183,6 +184,25 @@ _RESULTS_TEMPLATE = "results.html"
 # Shown when a reconciliation id is unknown (expired from the in-memory registry
 # or never existed) — reused by the report, explorer and single-loan routes.
 _RECON_NOT_FOUND_MESSAGE = "That reconciliation has expired or does not exist."
+
+# Shown on the loan forensic when the return-template comparison could be built
+# in principle but raised. Says which panel is missing and which are not, so a
+# degraded panel is never read as a degraded forensic.
+_PLACEMENT_BUILD_FAILED = (
+    "The return-template comparison could not be generated for this "
+    "reconciliation, so where this exposure landed on the firm's side cannot be "
+    "shown. The driver chain and sign-off below are unaffected."
+)
+
+# Shown when the comparison COULD be built but has not been. Deliberately an
+# offer rather than a wait: generating both sides costs ~1s at 10k exposures and
+# ~5s at 100k, growing linearly, against a 20ms page. See ``_loan_placement``.
+_PLACEMENT_NOT_BUILT = (
+    "The return-template comparison for this reconciliation has not been "
+    "generated yet, so where this exposure landed cannot be shown. Open the "
+    "return-template comparison below — it generates both sides once, and this "
+    "panel fills in when you come back."
+)
 
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
@@ -880,16 +900,32 @@ def _register_pages(app: FastAPI) -> None:
         )
 
     @app.get("/reconciliation/{recon_id}/loan", response_class=HTMLResponse)
-    def reconciliation_loan(request: Request, recon_id: str, key: str = "") -> HTMLResponse:
+    def reconciliation_loan(
+        request: Request, recon_id: str, key: str = "", return_to: str = ""
+    ) -> HTMLResponse:
         response = get_reconciliation(recon_id)
         if response is None or not response.success:
             return _not_found(request, _RECON_NOT_FOUND_MESSAGE)
         # ``key`` defaults to "" so an omitted ?key= reaches the handler and gets
-        # the styled 404 below (loan_detail returns None for an empty/unknown key)
-        # rather than FastAPI's raw 422 for a missing required query param.
-        detail = reconciliation_view.loan_detail(response, key) if key else None
+        # the styled explanation below rather than FastAPI's raw 422 for a
+        # missing required query param.
+        #
+        # The inbound key is RESOLVED rather than looked up: the template-compare
+        # page links a leg through on its exposure reference alone, while this
+        # view keys on ``_recon_key`` — a ``||``-joined concatenation of the
+        # mapping's ``our_keys``. Under any composite mapping the two differ, and
+        # the old direct lookup 404'd with "No reconciliation row matches that
+        # key", which reads as "this loan does not exist". It does.
+        destination = _loan_return_to(request, recon_id, return_to)
+        resolved = reconciliation_view.resolve_recon_key(response, key)
+        detail = (
+            reconciliation_view.loan_detail(response, resolved.recon_key)
+            if resolved.recon_key
+            else None
+        )
         if detail is None:
-            return _not_found(request, "No reconciliation row matches that key.")
+            return _unresolved_loan(request, recon_id, resolved, destination)
+        key = resolved.recon_key
         decision = _recon_decisions(recon_id).get(key)
         # Only a row that is STILL a material difference (not exact / within-tolerance)
         # can be stale — a break fixed at source is resolved, not "changed, re-review".
@@ -904,10 +940,12 @@ def _register_pages(app: FastAPI) -> None:
                 decision, reconciliation_view.recon_fingerprint(response, key)
             )
         )
+        context = _reconciliation_loan(recon_id, response, detail, decision, stale=stale)
+        context["return_to"] = destination
+        context["signoff_return_to"] = destination
+        context["placement"] = _loan_placement(recon_id, response, resolved)
         return templates.TemplateResponse(
-            request=request,
-            name="recon_loan.html",
-            context=_nav(_reconciliation_loan(recon_id, response, detail, decision, stale=stale)),
+            request=request, name="recon_loan.html", context=_nav(context)
         )
 
     @app.post(
@@ -1845,7 +1883,7 @@ def _reconciliation_explorer(
 def _reconciliation_loan(
     recon_id: str,
     response: ReconciliationResponse,
-    detail: dict,
+    detail: dict | None,
     decision: Decision | None = None,
     *,
     stale: bool = False,
@@ -1854,7 +1892,14 @@ def _reconciliation_loan(
 
     ``stale`` is True when an existing decision no longer matches the row's current
     difference (it moved since sign-off) — the template warns and asks for re-review.
+
+    ``detail`` is ``None`` on the UNRESOLVED page, where the key could not be
+    matched to one reconciled row; the template then renders the explanation and
+    the candidates instead of the driver chain. ``return_to`` / ``placement``
+    default to the explorer and to no panel, so the sign-off error re-render (the
+    other caller) keeps working untouched.
     """
+    explorer = f"/reconciliation/{recon_id}/rows"
     return {
         "recon_id": recon_id,
         "framework": response.framework,
@@ -1862,11 +1907,185 @@ def _reconciliation_loan(
         "decision": decision,
         "signoff_stale": stale,
         "signoff_post_url": f"/reconciliation/{recon_id}/signoff",
-        "signoff_return_to": f"/reconciliation/{recon_id}/rows",
+        "signoff_return_to": explorer,
         "signoff_error": None,
         "report_url": f"/reconciliation/{recon_id}",
-        "explorer_url": f"/reconciliation/{recon_id}/rows",
+        "explorer_url": explorer,
+        "templates_url": f"/reconciliation/{recon_id}/templates",
+        "return_to": explorer,
+        "resolution": None,
+        "placement": None,
     }
+
+
+def _loan_placement(
+    recon_id: str,
+    response: ReconciliationResponse,
+    resolved: reconciliation_view.KeyResolution,
+) -> reconciliation_view.PlacementPanel:
+    """The "where this exposure lands" panel, off the MEMOISED comparison.
+
+    **This panel NEVER builds a comparison; it only reads one already memoised.**
+    Arriving from a template cell is therefore free — the comparison the grid
+    built is still held — and a cold arrival costs nothing at all, at any
+    portfolio size.
+
+    That is a deliberate reversal of the obvious design, and the reversal is
+    driven by the whole-PAGE measurement rather than by ``build_recon`` in
+    isolation. ``build_recon`` on an in-memory frame reads 372 ms at 10 legs and
+    785 ms at 10,000, which looks like a rounding error. The page, which scans
+    the results parquet the way production does, does not:
+
+    ======  =========  =========  ==========
+    legs    cold page  warm page  panel cost
+    ======  =========  =========  ==========
+     1,000      969 ms      23 ms     946 ms
+    10,000    1,154 ms      18 ms   1,135 ms
+    50,000    2,541 ms      22 ms   2,520 ms
+    100,000   4,860 ms      24 ms   4,836 ms
+    ======  =========  =========  ==========
+
+    A 20 ms page became a 4.9 s page, growing linearly — and this project
+    benchmarks to 1M exposures (the ``scale_1m`` marker), where the same slope is
+    ~40 s. A build-on-demand panel is a page that hangs on exactly the books
+    whose placement questions are most worth asking. Gating on the memo is
+    bounded at every size, needs no threshold to tune, and SELF-HEALS: the
+    "unavailable" panel links to the compare page, opening it builds the
+    comparison, and coming back renders the panel populated.
+
+    Three degraded paths, and none is a 500 or a silent blank:
+
+    - No comparison is memoised. The panel says so and offers the one click that
+      builds it. This is the common cold arrival.
+    - The comparison CANNOT be built at all (no legacy ledger, no calculation, a
+      framework mismatch). ``comparison_inputs`` already returns the typed reason
+      with its remedy, and that reason is what the panel shows — checked FIRST,
+      so a reconciliation with no second side gets the actionable mapping remedy
+      rather than a link to a page that would only repeat it.
+    - Reading the memoised comparison RAISES. It should not, but the loan
+      forensic is not the page on which to find out with a 500, and the rest of
+      it (the driver chain, the sign-off) is still correct and still useful.
+    """
+    recon_key = resolved.recon_key
+    inputs = return_recon_view.comparison_inputs(response)
+    if inputs.ours is None or inputs.theirs is None:
+        return reconciliation_view.placement_panel(None, recon_key, reason=inputs.reason)
+    # ``cached_comparison`` is the read-only half of ``build_comparison``: one
+    # lookup that yields the object or nothing, so there is no "check, then
+    # build" gap for the memo's own eviction to fall through.
+    recon = return_recon_view.cached_comparison(recon_id)
+    if recon is None:
+        return reconciliation_view.placement_panel(None, recon_key, reason=_PLACEMENT_NOT_BUILT)
+    try:
+        return reconciliation_view.placement_panel(
+            recon, recon_key, key_columns=resolved.key_columns
+        )
+    except Exception:
+        logger.exception("loan placement panel: reading the comparison for %s failed", recon_id)
+        return reconciliation_view.placement_panel(None, recon_key, reason=_PLACEMENT_BUILD_FAILED)
+
+
+def _loan_return_to(request: Request, recon_id: str, return_to: str) -> str:
+    """Where the loan page's breadcrumb and sign-off go back to.
+
+    An explicit ``?return_to=`` wins — the same field the sign-off form already
+    posts, so there is one mechanism and not two. Absent one, the browser's
+    SAME-ORIGIN ``Referer`` is put through the same ``_safe_return_to`` guard, so
+    a click from a template cell returns to that exact cell even though the link
+    itself carries no parameter (``recon_templates.html`` builds it as
+    ``{{ loan_url_base }}?key=…`` with no room for a second query param).
+    Anything that is not a relative ``/reconciliation/`` path falls back to the
+    explorer, which is where this page pointed before.
+    """
+    fallback = f"/reconciliation/{recon_id}/rows"
+    if return_to:
+        return _safe_return_to(return_to, fallback)
+    return _safe_return_to(_same_origin_path(request, request.headers.get("referer", "")), fallback)
+
+
+def _same_origin_path(request: Request, url: str) -> str:
+    """``/path?query`` of *url* when it is same-origin with *request*, else ``""``.
+
+    A cross-origin referrer is DROPPED rather than reduced to its path: the point
+    of honouring one is "you came from this cell of this app", and a foreign site
+    linking at us says nothing about that. So is one that will not parse — see
+    the ``ValueError`` branch, which is the difference between a fallback and a
+    500 on an attacker-influenceable header.
+
+    The origin test reads ``scheme OR netloc``, and the ``netloc`` half is the
+    load-bearing one. Gating on ``scheme`` alone let a SCHEME-RELATIVE referrer
+    (``//evil.example/reconciliation/x``) skip the test entirely — empty scheme —
+    and be reduced to ``/reconciliation/x``, which is exactly what this docstring
+    said could not happen. Measured, then fixed. The consequence was bounded (the
+    result is a relative path on our own origin, so never an off-site link and
+    never a ``javascript:`` URL — ``_safe_return_to`` rejects anything without a
+    leading ``/reconciliation/``), and it granted no capability the explicit
+    ``?return_to=`` does not already grant. It is fixed anyway: a guard that does
+    not do what its own docstring claims is the more expensive defect.
+    """
+    if not url:
+        return ""
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        # A ``Referer`` that will not parse is, by definition, not same-origin,
+        # so the fallback is the correct answer and not a workaround. Without
+        # this the page 500s on an attacker-influenceable header: ``urlsplit``
+        # raises ``ValueError: Invalid IPv6 URL`` for any unbalanced bracket in
+        # the authority (``http://[::1``, ``http://]/x``, ``//[``, and six more
+        # measured spellings), which is a denial of service on the loan forensic
+        # reachable by anyone who can get a user to follow a link. Note the
+        # catch is ``ValueError`` and not ``Exception``: ``UnicodeError`` (the
+        # IDNA failure mode) subclasses it, so both are covered without
+        # swallowing a programming error.
+        logger.debug("loan breadcrumb: Referer could not be parsed, using the fallback")
+        return ""
+    base = urlsplit(str(request.base_url))
+    if (parts.scheme or parts.netloc) and (parts.scheme, parts.netloc) != (
+        base.scheme,
+        base.netloc,
+    ):
+        return ""
+    return f"{parts.path}?{parts.query}" if parts.query else parts.path
+
+
+def _unresolved_loan(
+    request: Request,
+    recon_id: str,
+    resolved: reconciliation_view.KeyResolution,
+    destination: str,
+) -> HTMLResponse:
+    """The loan page for a key that resolved to no single reconciled row.
+
+    Two outcomes, two status codes, because they are two different answers:
+    ``300 Multiple Choices`` when the reference addresses SEVERAL reconciled rows
+    (the page lists them and the analyst picks), and ``404`` when it addresses
+    none. Both carry the reason naming the run's actual join key — the thing the
+    old blanket "No reconciliation row matches that key." never said.
+    """
+    context = {
+        "recon_id": recon_id,
+        "framework": None,
+        "detail": None,
+        "decision": None,
+        "signoff_stale": False,
+        "signoff_error": None,
+        "signoff_post_url": f"/reconciliation/{recon_id}/signoff",
+        "signoff_return_to": destination,
+        "report_url": f"/reconciliation/{recon_id}",
+        "explorer_url": f"/reconciliation/{recon_id}/rows",
+        "templates_url": f"/reconciliation/{recon_id}/templates",
+        "return_to": destination,
+        "loan_url_base": f"/reconciliation/{recon_id}/loan",
+        "resolution": resolved,
+        "placement": None,
+    }
+    return templates.TemplateResponse(
+        request=request,
+        name="recon_loan.html",
+        context=_nav(context),
+        status_code=300 if resolved.candidates else 404,
+    )
 
 
 def _reconciliation_templates(  # noqa: PLR0913 - the cell's address is the signature
@@ -2001,8 +2220,42 @@ def _safe_return_to(return_to: str, fallback: str) -> str:
     Guards the post-sign-off redirect against open-redirect: an absolute URL
     (``http://…``) or a protocol-relative ``//host`` never starts with
     ``/reconciliation/``, so it falls back to the explorer.
+
+    The prefix test alone was WEAKER THAN THIS DOCSTRING, which claimed to
+    constrain the target to the reconciliation subtree: ``/reconciliation/../..
+    /evil`` passes it and every browser then resolves it to ``/evil``. Never an
+    off-site link — it stays on our origin, so the worst case is a breadcrumb
+    pointing at another page of our own app, which is no capability a user
+    typing the URL lacks. Tightened anyway, because "the guard is weaker than
+    its docstring" is the defect class, not the blast radius.
+
+    So the target is also NORMALISED BEFORE the prefix is re-tested, and the
+    normalisation runs on a decoded, forward-slashed copy — browsers resolve
+    ``%2e%2e`` as a dot segment and (per WHATWG, for special schemes) treat
+    ``\\`` as ``/``, so testing the raw string would leave both spellings open.
+    Only the copy is normalised; the value returned is the caller's own string,
+    so nothing is silently rewritten. No legitimate producer is affected: every
+    one is ``/reconciliation/{id}``, ``…/rows`` or ``…/templates?…``, none of
+    which carries a dot segment.
+
+    TWO NEAR-MISSES THAT ARE DELIBERATELY KEPT, recorded because each is easy to
+    "fix" wrongly later:
+
+    - ``/reconciliation/%252e%252e/x`` is ACCEPTED and should be. A browser
+      decodes it once, to the literal characters ``%2e%2e`` — not to a dot
+      segment — so it addresses a path with a strange name inside the subtree.
+      Decoding twice here to "catch" it would reject a legal target.
+    - ``/reconciliation/\\evil.example/x`` is ACCEPTED and should be. Folding the
+      backslash yields ``/reconciliation//evil.example/x``, whose leading
+      ``/reconciliation`` makes the rest a PATH, not an authority — the
+      ``//host`` hazard needs the ``//`` at the very start of the reference.
     """
-    return return_to if return_to.startswith("/reconciliation/") else fallback
+    if not return_to.startswith("/reconciliation/"):
+        return fallback
+    probe = unquote(urlsplit(return_to).path).replace("\\", "/")
+    if not posixpath.normpath(probe).startswith("/reconciliation/"):
+        return fallback
+    return return_to
 
 
 def _signoff_done(

@@ -52,6 +52,34 @@ comparison if broken, and each has been measured in this codebase:
    another. Measured consequences of getting this wrong: 3.00x and 1.86x
    over-counts, and 0.00 against real money on four of ten sheets. A NULL
    parent flag is reported as "indistinguishable", never as a leaf.
+5. **The exposures behind a cell are PAIRED, and ranked on what they
+   contribute.** One row per comparison key - the exposure, not the leg - with
+   both sides on it, ordered by ``|delta|``. Measured on a probe portfolio of
+   30 agreeing loans and 7 drivers: two per-side listings ordered on
+   ``|rwa_final|`` and capped at 25 each rendered 50 rows against a GBP 221,000
+   difference, every one a loan that agreed to the penny, with every driver
+   below the cap. Ranking on size answers "which is the biggest loan here",
+   which is not the question the page is on.
+6. **A side that holds no leg for an exposure says so.** That is a FIFTH kind
+   of blank - the sheet is emitted, the column is populatable, the row is
+   there, and this one contract is simply not in it - so it gets its own state
+   in ``PAIR_STATE_DISPLAY`` rather than being folded into one of the four
+   above. An empty cell there reads as agreement and ``0.00`` as a nil holding.
+7. **The cap states what it hid.** ``CellPairTable.note`` carries the shown
+   rows' money against the whole scope's and the count left off. A silent cap
+   on a regulatory comparison is a silent zero by another name, and a refused
+   or empty table carries its REASON for the same reason: ``rows == ()`` must
+   never be readable as "no contract drives this difference".
+8. **One cell's waterfall is not a scope check, and the page says so.**
+   ``SheetConservation`` sums one column across the sheet's provable LEAF rows
+   (parents, indistinguishable rows and rows with no addressable population are
+   excluded and counted, because this axis overlaps and adding it up would
+   double-count). A sheet that nets to zero holds the same money on both sides,
+   so every difference in that column is a re-arrangement of one population. A
+   sheet that does not net rules OUT a moved row — a move contributes to two
+   cells of the same sheet with opposite signs — and says nothing on its own
+   about which of the two remaining causes it is. Neither fact is derivable from
+   a single cell's four-way split, which is a statement about that cell alone.
 
 References:
 - Regulation (EU) 2021/451, Annex II: C 07.00, C 08.01, C 08.03
@@ -69,11 +97,14 @@ import polars as pl
 
 from rwa_calc.analysis.return_recon import (
     ABSENT_ROW,
+    CELL_PAIRS_LIMIT,
     MIGRATION_MONEY_COLUMNS,
     PLACEMENT_ATTRIBUTION,
     RECON_TEMPLATE_IDS,
+    TERM_NAMES,
     UNDECIDABLE_ROW,
     build_recon,
+    cell_pairs,
     decompose_cell,
     diff_cells,
     row_migration,
@@ -87,7 +118,15 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
     from rwa_calc.analysis.legacy_ledger import LedgerCoverage
-    from rwa_calc.analysis.return_recon import CellDecomposition, ReturnRecon, SideView
+    from rwa_calc.analysis.return_recon import (
+        CellDecomposition,
+        CellPair,
+        CellPairs,
+        LegPlacement,
+        ReturnRecon,
+        SideView,
+        TermName,
+    )
     from rwa_calc.api.models import ReconciliationResponse
     from rwa_calc.reporting.metadata import ResultsSource
 
@@ -105,6 +144,26 @@ STATE_DISPLAY: dict[str, tuple[str, str, str]] = {
     "empty": ("—", "is-null", "emitted with no population — nothing to report here"),
     "unavailable": ("n/a", "is-unavailable", "cannot be computed from this side's sources"),
     "absent": ("·", "is-absent", "not emitted on this side — the row or column is missing"),
+}
+
+#: The pair table's fifth state: this side holds no leg for THIS exposure in
+#: this cell. It is not any of the four above - the sheet was emitted, the
+#: column is populatable and the row is present; one contract is missing from
+#: it - so it renders as a word rather than as a glyph another state could be
+#: mistaken for. A blank here reads as agreement and ``0.00`` as a nil holding.
+NOT_HELD_STATE = "not_held"
+
+#: The per-side vocabulary of the PAIR table: the four ``CellState`` renderings
+#: verbatim, plus ``NOT_HELD_STATE``. Built FROM ``STATE_DISPLAY`` rather than
+#: beside it, so the four cell states cannot come to mean one thing in the grid
+#: and another two panels down.
+PAIR_STATE_DISPLAY: dict[str, tuple[str, str, str]] = {
+    **STATE_DISPLAY,
+    NOT_HELD_STATE: (
+        "not held",
+        "is-unheld",
+        "this side holds no leg for this exposure in this cell - not a nil value",
+    ),
 }
 
 #: The delta glyph for a cell nobody can measure. NEVER ``0`` and never ``0.00``.
@@ -173,10 +232,34 @@ TEMPLATE_CODES: dict[str, dict[str, str]] = {
     "c08_03": {"CRR": "C 08.03", "BASEL_3_1": "OF 08.03"},
 }
 
-#: How many worst cells / unmeasurable cells / legs a page lists.
+#: How many worst cells / unmeasurable cells a page lists. The pair table's own
+#: cap is ``return_recon.CELL_PAIRS_LIMIT``, imported rather than restated: the
+#: cap and the ``hidden_keys`` arithmetic that reports what it hid must be
+#: computed against ONE number, and a second copy here would be free to drift
+#: from it - a cap that hides more than it admits to is the failure this table
+#: exists to close.
 WORST_CELLS_LIMIT = 25
 UNMEASURABLE_LIMIT = 25
-CELL_LEGS_LIMIT = 25
+
+#: What a placement carrier says when the side holds nothing to say it with.
+#: Never blank: a blank beside a populated side reads as "the same as ours".
+NO_PLACEMENT = "holds no leg for this exposure anywhere in the template"
+
+#: The label for a pair table showing every cause rather than one of them. Named
+#: rather than left blank so the cap note reads the same either way, and so an
+#: unrecognised filter that fell back to the whole table SAYS it did.
+EVERY_CAUSE = "every cause"
+
+#: A comparison key that resolved to null on every rung of the ladder. Such legs
+#: share one bucket and can pair only with each other, so the row is shown and
+#: labelled but NOT linked: a loan link on an empty key dead-ends on a page that
+#: looks exactly like a missing loan.
+UNIDENTIFIED_KEY = "unidentified exposure"
+
+#: Relative slack on the sheet-conservation sum, applied to the summed
+#: magnitude. Mirrors ``analysis.return_recon``'s own additivity tolerance:
+#: eighteen rows of nine-figure money do not agree to 1e-9 absolute.
+_CONSERVATION_RELATIVE = 1e-9
 
 #: Default materiality. A firm's return is rounded to GBP 000s, so an absolute
 #: floor removes rounding noise; the relative floor removes float dust on a
@@ -389,26 +472,144 @@ class MigrationMatrix:
 
 @dataclass(frozen=True)
 class WaterfallStep:
-    """One signed cause of a cell delta."""
+    """One signed cause of a cell delta, and the exposures under it.
+
+    ``keys`` is the term's POPULATION and ``drivers`` the subset whose own delta
+    is not zero. They are different questions and the gap is not cosmetic:
+    ``measurement`` holds every key BOTH sides report, agreeing ones included,
+    so a cell of 35 shared exposures behind a difference driven by 4 reads 35 in
+    one column and 4 in the other. Showing only the first invites "35 exposures
+    are wrong"; showing only the second loses the term's scope.
+
+    ``selected`` is whether the pair table below is currently filtered to this
+    cause. It is the join between the two halves of the panel.
+    """
 
     name: str
     label: str
     amount: float
     display: str
     keys: int
+    drivers: int
     share: float
+    selected: bool = False
 
 
 @dataclass(frozen=True)
-class CellLeg:
-    """One exposure leg behind a cell, in the group that cell actually reads."""
+class PairRow:
+    """One EXPOSURE behind a cell delta, with both sides on the same row.
+
+    Replaces two independently-ranked per-side leg listings, which could not
+    show that a row on one list and a row on the other were the same contract.
+
+    ``ours`` and ``theirs`` are ``SideFigure``s over ``PAIR_STATE_DISPLAY``, so
+    a side that holds no leg for this exposure renders as an explicit fifth
+    state - never blank (which reads as agreement) and never ``0.00`` (which
+    reads as a nil holding). ``delta`` is the SIGNED contribution published by
+    ``analysis.return_recon.CellPair``, not a subtraction of the two fields: a
+    one-sided key contributes its whole money with that side's sign.
+
+    ``identified`` is false for a key that resolved to null on every rung of the
+    comparison ladder. Those keys share one bucket and can pair only with each
+    other, so the row is shown and labelled but NOT linked - a loan link built
+    on an empty key dead-ends on a page that looks like a missing loan.
+    """
 
     key: str
-    exposure_reference: str
-    source_exposure_reference: str
-    ead: float | None
-    rwa: float | None
-    side: str
+    key_display: str
+    identified: bool
+    term: str
+    term_label: str
+    ours: SideFigure
+    theirs: SideFigure
+    delta: float
+    delta_display: str
+    placement: str
+
+
+@dataclass(frozen=True)
+class CellPairTable:
+    """The exposures behind one cell, ranked - or the reason there are none.
+
+    ``note`` is load-bearing and is never empty. When rows were capped it states
+    what the cap hid ("the 25 shown carry X of the Y difference; N more carry
+    Z"); when there are no rows at all it says WHY, so an empty table can never
+    be read as "no contract drives this difference". A silent cap on a
+    regulatory comparison is a silent zero by another name.
+
+    ``refused`` mirrors the cell's own refusal verbatim from
+    ``analysis.return_recon.CellPairs.refusal``, which is the string
+    ``decompose_cell`` produced rather than a re-derivation - so the waterfall's
+    refusal and this table's can never say different things.
+    """
+
+    term: str
+    term_label: str
+    rows: tuple[PairRow, ...]
+    shown_delta: float
+    shown_display: str
+    total_delta: float
+    total_display: str
+    hidden_keys: int
+    hidden_delta: float
+    hidden_display: str
+    keys: int
+    limit: int | None
+    refused: bool
+    refusal: str
+    note: str
+
+    @property
+    def filtered(self) -> bool:
+        """Whether one cause is selected rather than the whole cell."""
+        return bool(self.term)
+
+
+@dataclass(frozen=True)
+class SheetConservation:
+    """Whether one column nets to zero across the WHOLE sheet.
+
+    A single cell's four-way split is a statement about that cell. It cannot say
+    whether the sheet holds the same money on both sides, and the two findings
+    demand different work: a sheet that NETS has one population arranged
+    differently, so every cell difference in the column is a re-arrangement and
+    the migration matrix is where to look.
+
+    What a NON-netting sheet proves, exactly and no more: a leg that moved row
+    cannot produce it, because a move contributes to two cells of the same sheet
+    with opposite signs and cancels. It does NOT prove a scope gap on its own —
+    measured on the probe portfolio, a leaf total of +11,000 was 3,000 of money
+    one side did not hold and 8,000 of money both sides held and valued
+    differently. Which of the two it is comes from the per-cell split, not from
+    here; this line's job is to rule the move OUT.
+
+    Summed over PROVABLE LEAF rows only. This row axis is hierarchical - a PD
+    band row is contained in its parent's - so summing every row double-counts
+    every leg reported under both. ``excluded_rows`` counts what was left out
+    (a parent, a row indistinguishable from another, or a row with no
+    addressable population) and is published rather than dropped, because
+    "excluded" must never be readable as "none".
+
+    ``decidable`` is false when a leaf row in this column is not measurable on
+    one side, or when there is no provable leaf row at all. A total built over
+    part of a column is not a statement about the column, and reporting one as
+    if it were is how a mapping gap passes for a tie-out.
+
+    Not built at all for a NON-ADDITIVE column — an average, a mean, a ratio, a
+    count. A sheet total is a sum, and a sum down a column of averages is a
+    number with no referent. See ``sheet_conservation``.
+    """
+
+    col_ref: str
+    col_name: str
+    delta: float | None
+    display: str
+    conserves: bool
+    decidable: bool
+    leaf_rows: int
+    excluded_rows: int
+    unmeasurable_rows: int
+    note: str
 
 
 @dataclass(frozen=True)
@@ -436,6 +637,12 @@ class CellExplanation:
     ``refusal_kind`` and ``refusal`` can never contradict one another; ``remedy``
     is carried independently, so a coverage-blocked weighted average still names
     what to map.
+
+    ``pairs`` is the drill-down and ``conservation`` the panel's one statement
+    about the SHEET. Both are always present - a refused cell gets a pair table
+    carrying the refusal rather than no table at all, because a page that simply
+    omits the section leaves "no contract drives this difference" as the only
+    available reading.
     """
 
     template_id: str
@@ -462,10 +669,8 @@ class CellExplanation:
     reconciles: bool
     residual: float | None
     residual_display: str
-    our_legs: tuple[CellLeg, ...]
-    their_legs: tuple[CellLeg, ...]
-    our_leg_count: int
-    their_leg_count: int
+    pairs: CellPairTable
+    conservation: SheetConservation | None
     attribution: str = PLACEMENT_ATTRIBUTION
 
 
@@ -547,6 +752,7 @@ def template_page(  # noqa: PLR0913 - the page's full address is its signature
     sheet: str | None = None,
     row_ref: str = "",
     col_ref: str = "",
+    term: str = "",
     predicate_key: str = "",
     money_column: str = "rwa_final",
     materiality: Materiality = DEFAULT_MATERIALITY,
@@ -562,6 +768,12 @@ def template_page(  # noqa: PLR0913 - the page's full address is its signature
     exist, so the page is reachable without knowing what a run produced. An
     unknown id or sheet falls back the same way rather than raising: what a run
     produced is data, not a contract.
+
+    ``term`` narrows the cell's pair table to one waterfall cause, which is what
+    a click on a waterfall row does. An unrecognised one falls back to the whole
+    table the same way, and the page states which filter it is showing - a wider
+    table silently standing in for a narrower one is the only way this fallback
+    could mislead.
     """
     if recon is None:
         return TemplateComparePage(
@@ -621,7 +833,9 @@ def template_page(  # noqa: PLR0913 - the page's full address is its signature
         else None
     )
     explanation = (
-        explain_cell(recon, selected.id, chosen_sheet, row_ref, col_ref, coverage=coverage)
+        explain_cell(
+            recon, selected.id, chosen_sheet, row_ref, col_ref, coverage=coverage, term=term
+        )
         if row_ref and col_ref
         else None
     )
@@ -1024,7 +1238,8 @@ def explain_cell(  # noqa: PLR0913 - the cell's full address plus its coverage
     col_ref: str,
     *,
     coverage: LedgerCoverage | None = None,
-    limit: int = CELL_LEGS_LIMIT,
+    term: str = "",
+    limit: int | None = CELL_PAIRS_LIMIT,
 ) -> CellExplanation:
     """One cell's four-way waterfall, or the refusal that replaces it.
 
@@ -1040,6 +1255,18 @@ def explain_cell(  # noqa: PLR0913 - the cell's full address plus its coverage
     A cell that decomposes but does NOT reconcile keeps its steps and carries
     ``reconciles=False`` with the residual: the terms explain part of the
     reported delta and the page must say which part.
+
+    ``term`` narrows the PAIR TABLE to one of the waterfall's causes - the join
+    between the two halves of the panel - and is echoed on every step as
+    ``selected``. It never narrows the waterfall itself: the steps are the whole
+    cell's, so a filtered table is always read against the full split.
+
+    The pair table and the waterfall come out of ONE pass in
+    ``analysis.return_recon`` (``_decompose``), so a cause's amount and the rows
+    beneath it cannot disagree. ``conservation`` is the panel's one statement
+    about the sheet rather than the cell, and it is computed for every cell
+    including a refused one: a cell nobody can decompose sits on a sheet whose
+    population is still a question worth answering.
     """
     decomposition = decompose_cell(recon, template_id, sheet, row_ref, col_ref)
     names = _row_names(recon, template_id, sheet)
@@ -1047,12 +1274,8 @@ def explain_cell(  # noqa: PLR0913 - the cell's full address plus its coverage
     remedy = _remedies(coverage, template_id).get(col_ref, "")
     predicate_key = _cell_predicate_key(recon, template_id, sheet, row_ref, col_ref)
     parent = _parent_flag(recon, template_id, sheet, row_ref, predicate_key)
-    our_legs, our_total = _cell_legs(
-        recon.ours, recon, template_id, sheet, row_ref, predicate_key, "ours", limit
-    )
-    their_legs, their_total = _cell_legs(
-        recon.theirs, recon, template_id, sheet, row_ref, predicate_key, "theirs", limit
-    )
+    selected = _selected_term(term)
+    pairs = _pair_table(recon, template_id, sheet, row_ref, col_ref, term=selected, limit=limit)
     kind = _refusal_kind(decomposition)
     unavailable = "unavailable" in (decomposition.ours_state, decomposition.theirs_state)
     return CellExplanation(
@@ -1073,7 +1296,7 @@ def explain_cell(  # noqa: PLR0913 - the cell's full address plus its coverage
         delta_display=_delta_display(
             decomposition.delta, decomposition.ours_state, decomposition.theirs_state
         ),
-        steps=_steps(decomposition),
+        steps=_steps(decomposition, selected),
         refused=not decomposition.decomposable,
         refusal=decomposition.refusal or "",
         refusal_kind=kind,
@@ -1085,10 +1308,84 @@ def explain_cell(  # noqa: PLR0913 - the cell's full address plus its coverage
         reconciles=decomposition.reconciles,
         residual=decomposition.residual,
         residual_display=_signed(decomposition.residual),
-        our_legs=our_legs,
-        their_legs=their_legs,
-        our_leg_count=our_total,
-        their_leg_count=their_total,
+        pairs=pairs,
+        conservation=sheet_conservation(recon, template_id, sheet, decomposition),
+    )
+
+
+def sheet_conservation(
+    recon: ReturnRecon, template_id: str, sheet: str | None, cell: CellDecomposition
+) -> SheetConservation | None:
+    """Whether one column nets to zero across the whole sheet's LEAF rows.
+
+    Takes the CELL rather than a bare column ref so the column and the
+    additivity test cannot come apart: a sheet total is a SUM, and summing a
+    weighted average, a mean, a ratio or a count down a column of rows produces
+    exactly the fabricated number ``decompose_cell`` refuses to produce for the
+    same reason. Measured before this guard existed: C 08.03 col 0050, an
+    exposure-weighted average PD, reported "the sheet total is +0.0000" and
+    "column 0050 NETS across this sheet".
+
+    ``None`` therefore means one of two things, and both are honest refusals
+    rather than verdicts: the column is not an additive money column, or neither
+    side publishes it on this sheet. Neither is "it nets".
+
+    Summed over provable leaves only, because this row axis is hierarchical: a
+    PD band row is contained in its parent's, so a sum over every row
+    double-counts every leg reported under both. Rows excluded for that reason
+    (or for having no addressable population at all) are COUNTED into
+    ``excluded_rows``, and a leaf that either side cannot measure makes the
+    whole column ``decidable=False`` rather than being quietly summed as zero -
+    a total over part of a column is not a statement about the column.
+
+    See ``SheetConservation`` for why the page needs this at all: one cell's
+    four-way split says nothing about whether the sheet holds the same money on
+    both sides, and the two findings send an analyst to different places.
+    """
+    if cell.kind != "rows" or cell.metric != "sum":
+        return None
+    col_ref = cell.col_ref
+    frame = diff_cells(recon, template_id, sheet).filter(pl.col("col_ref") == col_ref)
+    if not frame.height:
+        return None
+    total = 0.0
+    magnitude = 0.0
+    leaves = excluded = unmeasurable = 0
+    for record in frame.iter_rows(named=True):
+        row_ref = str(record["row_ref"])
+        group = _cell_predicate_key(recon, template_id, sheet, row_ref, col_ref)
+        if _parent_flag(recon, template_id, sheet, row_ref, group) is not False:
+            excluded += 1
+            continue
+        leaves += 1
+        delta = _leaf_delta(record)
+        if delta is None:
+            unmeasurable += 1
+            continue
+        total += delta
+        magnitude += abs(delta)
+    decidable = leaves > 0 and unmeasurable == 0
+    conserves = decidable and abs(total) <= max(_ZERO_DELTA, magnitude * _CONSERVATION_RELATIVE)
+    heads = _column_heads(recon, template_id, sheet, (col_ref,))
+    return SheetConservation(
+        col_ref=col_ref,
+        col_name=heads[0].name if heads else col_ref,
+        delta=total if decidable else None,
+        display=_signed(total) if decidable else UNMEASURABLE_DISPLAY,
+        conserves=conserves,
+        decidable=decidable,
+        leaf_rows=leaves,
+        excluded_rows=excluded,
+        unmeasurable_rows=unmeasurable,
+        note=_conservation_note(
+            col_ref=col_ref,
+            delta=total,
+            decidable=decidable,
+            conserves=conserves,
+            leaves=leaves,
+            excluded=excluded,
+            unmeasurable=unmeasurable,
+        ),
     )
 
 
@@ -1199,8 +1496,16 @@ def _delta_display(delta: float | None, ours_state: str, theirs_state: str) -> s
     return _signed(delta)
 
 
-def _steps(decomposition: CellDecomposition) -> tuple[WaterfallStep, ...]:
-    """The waterfall's steps — EMPTY for a refused cell, by construction."""
+def _steps(
+    decomposition: CellDecomposition, selected: TermName | None
+) -> tuple[WaterfallStep, ...]:
+    """The waterfall's steps — EMPTY for a refused cell, by construction.
+
+    ``selected`` marks the step the pair table is currently filtered to. It does
+    NOT filter the steps: a narrowed table read against a narrowed waterfall
+    would lose the one thing that makes the number legible, which is the size of
+    this cause against the other four.
+    """
     if not decomposition.decomposable:
         return ()
     total = sum(abs(term.amount) for term in decomposition.terms)
@@ -1211,7 +1516,9 @@ def _steps(decomposition: CellDecomposition) -> tuple[WaterfallStep, ...]:
             amount=term.amount,
             display=_signed(term.amount),
             keys=term.keys,
+            drivers=term.differing_keys,
             share=(abs(term.amount) / total) if total else 0.0,
+            selected=term.name == selected,
         )
         for term in decomposition.terms
     )
@@ -1303,42 +1610,221 @@ def _parent_note(parent: bool | None) -> str:
     return "This row provably contains and duplicates no other row in its group."
 
 
-def _cell_legs(  # noqa: PLR0913 - the group's full address plus its side and cap
-    side: SideView,
+def _selected_term(term: str) -> TermName | None:
+    """The requested waterfall filter, or ``None`` for every cause.
+
+    An unrecognised term falls back to the WHOLE table rather than raising.
+    ``cell_pairs`` rejects one with a ``ValueError`` — correctly, because
+    filtering to an empty table is a silent zero — but a hand-edited URL must
+    render the default view rather than 500, exactly as an unknown template or
+    sheet does. The fallback is logged, and the page names the filter it is
+    showing, so a wider table cannot pass for the narrower one it replaced.
+    """
+    if not term:
+        return None
+    match = next((name for name in TERM_NAMES if name == term), None)
+    if match is None:
+        logger.info("return-recon compare: unknown waterfall cause requested — showing all")
+    return match
+
+
+def _pair_table(  # noqa: PLR0913 - the cell's full address plus the filter and cap
     recon: ReturnRecon,
     template_id: str,
     sheet: str | None,
     row_ref: str,
-    predicate_key: str,
-    label: str,
-    limit: int,
-) -> tuple[tuple[CellLeg, ...], int]:
-    """The legs of the ONE group a cell reads, largest first, capped.
+    col_ref: str,
+    *,
+    term: TermName | None,
+    limit: int | None,
+) -> CellPairTable:
+    """One row per EXPOSURE behind a cell, ranked on what each contributes.
 
-    Scoped to a single ``(row_ref, predicate_key)`` group, which is the only
-    grain at which membership legs may be read without double-counting: within
-    one group each leg appears exactly once, whereas across groups a substituted
-    leg is counted on both bases.
+    Everything here — the pairing, the ranking, the cap arithmetic and the
+    refusal — comes from ``analysis.return_recon.cell_pairs``, which derives it
+    from the same classified record set the waterfall aggregates. This function
+    renders; it does not re-derive, because a second reader of membership is how
+    the waterfall and the listing beneath it came to disagree in the first place.
     """
-    if not predicate_key:
-        return (), 0
-    frame = _membership_rows(side, template_id, sheet, row_ref, predicate_key)
-    total = frame.height
-    if not total:
-        return (), 0
-    ordered = frame.sort(pl.col("rwa_final").abs(), descending=True, nulls_last=True).head(limit)
-    legs = tuple(
-        CellLeg(
-            key=str(record.get(recon.key_column) or ""),
-            exposure_reference=str(record.get("exposure_reference") or ""),
-            source_exposure_reference=str(record.get("source_exposure_reference") or ""),
-            ead=_as_float(record.get("ead_final")),
-            rwa=_as_float(record.get("rwa_final")),
-            side=label,
-        )
-        for record in ordered.iter_rows(named=True)
+    table = cell_pairs(recon, template_id, sheet, row_ref, col_ref, limit=limit, term=term)
+    label = TERM_LABELS.get(term or "", EVERY_CAUSE) if term else EVERY_CAUSE
+    return CellPairTable(
+        term=term or "",
+        term_label=label,
+        rows=tuple(_pair_row(pair) for pair in table.pairs),
+        shown_delta=table.shown_delta,
+        shown_display=_signed(table.shown_delta),
+        total_delta=table.total_delta,
+        total_display=_signed(table.total_delta),
+        hidden_keys=table.hidden_keys,
+        hidden_delta=table.hidden_delta,
+        hidden_display=_signed(table.hidden_delta),
+        keys=table.keys,
+        limit=limit,
+        refused=table.refusal is not None,
+        refusal=table.refusal or "",
+        note=_pair_note(table, label),
     )
-    return legs, total
+
+
+def _pair_row(pair: CellPair) -> PairRow:
+    """One pair rendered — with an absent side kept visibly absent."""
+    identified = bool(pair.key)
+    return PairRow(
+        key=pair.key or "",
+        key_display=pair.key if identified and pair.key else UNIDENTIFIED_KEY,
+        identified=identified,
+        term=pair.term,
+        term_label=TERM_LABELS.get(pair.term, pair.term),
+        ours=_pair_side(pair.ours),
+        theirs=_pair_side(pair.theirs),
+        delta=pair.delta,
+        delta_display=_signed(pair.delta),
+        placement=_placement_note(pair.ours_placement, pair.theirs_placement),
+    )
+
+
+def _pair_side(value: float | None) -> SideFigure:
+    """One side of a pair. ``None`` is NOT HELD — never blank, never ``0.00``."""
+    state = "figure" if value is not None else NOT_HELD_STATE
+    glyph, css, title = PAIR_STATE_DISPLAY[state]
+    if value is None:
+        return SideFigure(value=None, state=state, display=glyph, css=css, title=title)
+    return SideFigure(value=value, state=state, display=_figure(value), css=css, title=title)
+
+
+def _pair_note(table: CellPairs, label: str) -> str:
+    """What the table shows and what it does not. NEVER empty.
+
+    The four cases are four different statements and the page must not render
+    them alike: a refusal (there is no population to pair), an empty population
+    (there is one and this cause holds none of it), a complete table, and a
+    capped one. The last is the reason this exists — an unstated cap on a
+    regulatory comparison hides money exactly as a silent zero does.
+    """
+    if table.refusal is not None:
+        return (
+            "No exposures are paired for this cell, and that is a REFUSAL rather than "
+            f"an empty population: {table.refusal}"
+        )
+    if not table.pairs:
+        return (
+            f"No exposure falls under {label} for this cell. That is an empty population "
+            "rather than an unanswered question — the cell's other causes still hold "
+            "theirs, and the waterfall above prices them."
+        )
+    shown = len(table.pairs)
+    if not table.hidden_keys:
+        return (
+            f"All {shown:,} exposure(s) under {label} are shown, and together they carry "
+            f"{_signed(table.shown_delta)} — the whole of this cause's "
+            f"{_signed(table.total_delta)}."
+        )
+    return (
+        f"The {shown:,} shown carry {_signed(table.shown_delta)} of the "
+        f"{_signed(table.total_delta)} under {label}; {table.hidden_keys:,} further "
+        f"exposure(s) carry {_signed(table.hidden_delta)} and are not on this page."
+    )
+
+
+def _leaf_delta(record: Mapping[str, object]) -> float | None:
+    """One leaf cell's contribution to the sheet total, or ``None`` for none.
+
+    A separate function with one caller on purpose. "This cell cannot be
+    measured, so the column's total is not a statement about the column" is the
+    decision that stands between a partial sum and a confident one, and a
+    partial sum reads exactly like a complete one — so the decision has to be
+    isolatable, not a condition buried in a loop.
+
+    Both limbs are needed and neither implies the other: an ``unmeasurable``
+    status is the coverage guard's verdict, and a NULL delta is what
+    ``cell_diff`` publishes for it. Never a zero: filling one here is the
+    banned Float null-fill, and it would turn "nobody can say" into "they agree".
+    """
+    if str(record["status"]) == "unmeasurable":
+        return None
+    return _as_float(record["delta"])
+
+
+def _placement_note(ours: LegPlacement, theirs: LegPlacement) -> str:
+    """Where each side put this exposure, as one line."""
+    return f"ours — {_placement_side(ours)}; theirs — {_placement_side(theirs)}"
+
+
+def _placement_side(placement: LegPlacement) -> str:
+    """One side's placement, with each MISSING carrier naming what is missing.
+
+    ``row_refs`` is scoped to the cell's own sheet while the other three are
+    template-wide (``LegPlacement``), so "no row on this sheet" beside a present
+    class is not a contradiction — it is precisely the shape of a leg they put
+    on another sheet. Each empty carrier is spelt out rather than dropped: a
+    blank beside a populated side reads as "the same as ours".
+    """
+    if not (
+        placement.row_refs
+        or placement.class_origins
+        or placement.approach_origins
+        or placement.leg_roles
+    ):
+        return NO_PLACEMENT
+    return " · ".join(
+        (
+            f"rows {', '.join(placement.row_refs)}"
+            if placement.row_refs
+            else "no row on this sheet",
+            f"class {', '.join(placement.class_origins)}"
+            if placement.class_origins
+            else "no class carrier",
+            f"approach {', '.join(placement.approach_origins)}"
+            if placement.approach_origins
+            else "no approach carrier",
+            f"role {', '.join(placement.leg_roles)}" if placement.leg_roles else "no leg role",
+        )
+    )
+
+
+def _conservation_note(  # noqa: PLR0913 - the verdict plus every count behind it
+    *,
+    col_ref: str,
+    delta: float,
+    decidable: bool,
+    conserves: bool,
+    leaves: int,
+    excluded: int,
+    unmeasurable: int,
+) -> str:
+    """The sheet verdict in words, with the scope of the sum always stated."""
+    scope = (
+        f" Summed over {leaves:,} provable leaf row(s); {excluded:,} row(s) excluded as a "
+        "parent, as indistinguishable from another row, or as having no addressable "
+        "population — this axis overlaps, so adding every row would double-count."
+    )
+    if not leaves:
+        return (
+            f"Column {col_ref} has no provable leaf row on this sheet, so no sheet total "
+            f"can be stated for it at all.{scope}"
+        )
+    if not decidable:
+        return (
+            f"Column {col_ref} cannot be netted across this sheet: {unmeasurable:,} of its "
+            "leaf rows are not measurable on one side, so any total would cover part of "
+            f"the column and read as if it covered all of it.{scope}"
+        )
+    if conserves:
+        return (
+            f"Column {col_ref} NETS across this sheet: the two sides' leaf-row totals are "
+            "equal, so nothing entered or left on balance and every difference you find "
+            "cell by cell is a re-arrangement of one population. It is a statement about "
+            "the TOTAL — exactly offsetting differences would net too — so read it as "
+            f"'no net gap' rather than as 'no differences'.{scope}"
+        )
+    return (
+        f"Column {col_ref} does NOT net across this sheet: the two sides' leaf-row totals "
+        f"differ by {_signed(delta)}. A leg that merely moved row cannot produce that — a "
+        "move nets out across the sheet — so this is money one side does not hold at all, "
+        "money the two sides value differently, or both. The per-cell split above is what "
+        f"tells those two apart.{scope}"
+    )
 
 
 def _membership_rows(

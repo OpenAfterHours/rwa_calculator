@@ -868,6 +868,7 @@ def _register_pages(app: FastAPI) -> None:
         money: str = "rwa_final",
         row: str = "",
         col: str = "",
+        term: str = "",
         materiality_abs: float = return_recon_view.DEFAULT_MATERIALITY_ABSOLUTE,
         materiality_pct: float = return_recon_view.DEFAULT_MATERIALITY_PERCENT,
     ) -> HTMLResponse:
@@ -891,6 +892,7 @@ def _register_pages(app: FastAPI) -> None:
                     money_column=money,
                     row_ref=row,
                     col_ref=col,
+                    term=term,
                     materiality=return_recon_view.Materiality(
                         absolute=max(0.0, materiality_abs),
                         percent=max(0.0, materiality_pct),
@@ -1989,11 +1991,16 @@ def _loan_return_to(request: Request, recon_id: str, return_to: str) -> str:
     """Where the loan page's breadcrumb and sign-off go back to.
 
     An explicit ``?return_to=`` wins — the same field the sign-off form already
-    posts, so there is one mechanism and not two. Absent one, the browser's
-    SAME-ORIGIN ``Referer`` is put through the same ``_safe_return_to`` guard, so
-    a click from a template cell returns to that exact cell even though the link
-    itself carries no parameter (``recon_templates.html`` builds it as
-    ``{{ loan_url_base }}?key=…`` with no room for a second query param).
+    posts, so there is one mechanism and not two. It is what
+    ``recon_templates.html``'s pair table now sends: that link carries the cell's
+    own address, so the breadcrumb back to it is exact rather than inferred.
+
+    The ``Referer`` fallback is kept and is NOT redundant. It is what makes the
+    breadcrumb work from every OTHER entry point — the explorer's rows, the
+    sign-off worklist, a hand-typed link — none of which appends the
+    parameter, and a same-origin header is put through ``_same_origin_path``
+    before it reaches the same ``_safe_return_to`` guard. The explicit parameter
+    is an added signal, not a replacement for a guard.
     Anything that is not a relative ``/reconciliation/`` path falls back to the
     explorer, which is where this page pointed before.
     """
@@ -2098,6 +2105,7 @@ def _reconciliation_templates(  # noqa: PLR0913 - the cell's address is the sign
     money_column: str = "rwa_final",
     row_ref: str = "",
     col_ref: str = "",
+    term: str = "",
     materiality: return_recon_view.Materiality = return_recon_view.DEFAULT_MATERIALITY,
 ) -> dict:
     """Build the template-compare context for one registered reconciliation.
@@ -2143,13 +2151,18 @@ def _reconciliation_templates(  # noqa: PLR0913 - the cell's address is the sign
         sheet=sheet or None,
         row_ref=row_ref,
         col_ref=col_ref,
+        term=term,
         predicate_key=predicate_key,
         money_column=money_column,
         materiality=materiality,
     )
     # The selector state, minus the selected cell — the grid's cell links append
     # their own row/col, so a click keeps the template, sheet, population,
-    # pricing and materiality the analyst chose.
+    # pricing and materiality the analyst chose. ``term`` is deliberately NOT
+    # here: it filters ONE cell's pair table, so carrying it onto the next cell
+    # clicked would silently narrow a table the analyst never asked to narrow.
+    # The waterfall rows append it themselves, and the loan breadcrumb built
+    # from this base returns to the unfiltered cell, which is a superset.
     selectors = {
         "template": page.selected.id if page.selected else "",
         "sheet": page.sheet or "",

@@ -3,15 +3,18 @@
 {% block title %}Return templates — RWA Calculator{% endblock %}
 {% block container_mod %}container--wide{% endblock %}
 
-{# Per-state inline styling. app.css has `is-null` (dimmed) already; the other
-   two states are new to this page and must still LOOK different, because a grid
-   that renders "not emitted", "no population" and "cannot be computed" the same
-   way has thrown the finding away. #}
+{# Per-state inline styling. app.css has `is-null` (dimmed) already; the others
+   are new to this page and must still LOOK different, because a grid that
+   renders "not emitted", "no population" and "cannot be computed" the same way
+   has thrown the finding away. `is-unheld` is the pair table's fifth state --
+   "this side holds no leg for THIS exposure in this cell" -- which is none of
+   the four above and must not be styled like any of them. #}
 {% set STATE_STYLE = {
   "is-figure": "",
   "is-null": "opacity:.55",
   "is-unavailable": "color:var(--oah-orange-bright);font-style:italic",
-  "is-absent": "opacity:.3"
+  "is-absent": "opacity:.3",
+  "is-unheld": "color:var(--oah-slate-400);font-style:italic"
 } %}
 
 {% macro side(figure) -%}
@@ -105,12 +108,14 @@ sheet, then click a cell to see why it differs.</p>
 {% endif %}
 
 <div class="callout info">
-  <p><strong>How to read this page.</strong> A blank is never a zero, and the three kinds of
+  <p><strong>How to read this page.</strong> A blank is never a zero, and the kinds of
   blank are not each other:
   <span class="mono">—</span> emitted with no population (genuinely no money);
   <span class="mono">·</span> not emitted at all (the row or column is missing on that side);
-  <span class="mono">n/a</span> cannot be computed from that side's sources. A reported
-  <span class="mono">0</span> is a measured zero and looks different from all three.</p>
+  <span class="mono">n/a</span> cannot be computed from that side's sources;
+  <span class="mono">not held</span>, in the exposure table under a cell, that side holds no leg
+  for <em>that one exposure</em> here — the row and the column are both present. A reported
+  <span class="mono">0</span> is a measured zero and looks different from all four.</p>
   <ul>{% for limit in page.limits %}<li>{{ limit }}</li>{% endfor %}</ul>
 </div>
 
@@ -242,19 +247,25 @@ tie-out.</p>
   </div>
   {% else %}
   <h3>Why it differs</h3>
+  <p class="muted">Click a cause to narrow the exposures below to it.
+  <em>exposures</em> is that cause's whole population and <em>of which differ</em> only those
+  whose own figures disagree: <span class="mono">measurement</span> holds every exposure both
+  sides report, agreeing ones included, so the two columns are meant to diverge there.
+  {% if ex.pairs.filtered %}<a href="{{ page_url }}?{{ query_base }}&amp;row={{ ex.row_ref|urlencode }}&amp;col={{ ex.col_ref|urlencode }}">Show every cause again.</a>{% endif %}</p>
   <div class="table-wrap">
-    <table class="data">
-      <thead><tr><th>cause</th><th>amount</th><th>exposures</th><th>share of explained</th></tr></thead>
+    <table class="data" data-table="waterfall">
+      <thead><tr><th>cause</th><th>amount</th><th>exposures</th><th>of which differ</th><th>share of explained</th></tr></thead>
       <tbody>
         {% for step in ex.steps %}
-        <tr>
-          <td>{{ step.label }}</td>
+        <tr data-term="{{ step.name }}"{% if step.selected %} data-selected="true"{% endif %}>
+          <td><a href="{{ page_url }}?{{ query_base }}&amp;row={{ ex.row_ref|urlencode }}&amp;col={{ ex.col_ref|urlencode }}&amp;term={{ step.name|urlencode }}">{{ step.label }}</a></td>
           <td class="num mono">{{ step.display }}</td>
           <td class="num">{{ "{:,}".format(step.keys) }}</td>
+          <td class="num">{{ "{:,}".format(step.drivers) }}</td>
           <td class="num">{{ "{:.1%}".format(step.share) }}</td>
         </tr>
         {% endfor %}
-        <tr><td><strong>reported Δ</strong></td><td class="num mono"><strong>{{ ex.delta_display }}</strong></td><td></td><td></td></tr>
+        <tr><td><strong>reported Δ</strong></td><td class="num mono"><strong>{{ ex.delta_display }}</strong></td><td colspan="3"></td></tr>
       </tbody>
     </table>
   </div>
@@ -267,23 +278,45 @@ tie-out.</p>
 
   <p class="muted">{{ ex.attribution }}</p>
 
-  {% if ex.our_legs or ex.their_legs %}
+  {% if ex.conservation %}
+  {% set con = ex.conservation %}
+  <div class="callout {% if not con.decidable %}warn{% elif con.conserves %}info{% else %}error{% endif %}"
+       data-conservation="{% if not con.decidable %}undecidable{% elif con.conserves %}conserves{% else %}breaks{% endif %}">
+    <p><strong>The split above explains one cell, and is not a scope check.</strong> Whether this
+    <em>sheet</em> holds the same money on both sides is a separate question, and it is the one
+    that rules a moved row in or out: a move contributes to two cells of this sheet with
+    opposite signs, so it cancels here and a leg that is simply not on the other side does not.
+    For column <span class="mono">{{ con.col_ref }}</span> ({{ con.col_name }}) the sheet total
+    is <span class="mono" data-conservation-delta="true">{{ con.display }}</span>.</p>
+    <p>{{ con.note }}</p>
+  </div>
+  {% endif %}
+
   <h3>Exposures behind this cell</h3>
-  <p class="muted">The legs of the one population this cell reads
-  (<span class="mono">{{ ex.predicate_key }}</span>) — not the row's, which carries several.
-  Ours {{ "{:,}".format(ex.our_leg_count) }}, theirs {{ "{:,}".format(ex.their_leg_count) }};
-  the largest are listed. A key opens the single-loan forensic, which is where the
-  per-component driver chain already lives.</p>
+  {# The note is rendered in BOTH branches and the description in only one: an
+     empty table must still carry its reason, but a paragraph promising a
+     ranking and a loan link is a description of a table that is not there. #}
+  {% if ex.pairs.rows %}
+  <p class="muted">One row per <strong>exposure</strong> — not per leg, and not two unrelated
+  lists — with both sides on it, ranked by what each contributes. Ranking on size answers a
+  different question: measured on a probe portfolio, two per-side listings ordered on RWEA and
+  capped at 25 each rendered 50 rows of exact agreement while every driver of the difference sat
+  below the cap. Showing <strong>{{ ex.pairs.term_label }}</strong>; a key opens the
+  single-loan forensic and returns you to this cell.</p>
+  {% endif %}
+  <p class="muted" data-pairs="note">{{ ex.pairs.note }}</p>
+  {% if ex.pairs.rows %}
   <div class="table-wrap">
-    <table class="data">
-      <thead><tr><th>side</th><th>exposure</th><th>EAD</th><th>RWEA</th></tr></thead>
+    <table class="data" data-table="cell-pairs">
+      <thead><tr><th>exposure</th><th>cause</th><th>ours</th><th>theirs</th><th>Δ</th></tr></thead>
       <tbody>
-        {% for leg in ex.our_legs + ex.their_legs %}
-        <tr>
-          <td>{{ leg.side }}</td>
-          <td class="mono"><a href="{{ loan_url_base }}?key={{ (leg.source_exposure_reference or leg.exposure_reference)|urlencode }}">{{ leg.exposure_reference }}</a></td>
-          <td class="num">{{ fmt(leg.ead) }}</td>
-          <td class="num">{{ fmt(leg.rwa) }}</td>
+        {% for row in ex.pairs.rows %}
+        <tr title="{{ row.placement }}">
+          <td class="mono">{% if row.identified %}<a href="{{ loan_url_base }}?key={{ row.key|urlencode }}&amp;return_to={{ (page_url ~ '?' ~ query_base ~ '&row=' ~ ex.row_ref ~ '&col=' ~ ex.col_ref)|urlencode }}">{{ row.key_display }}</a>{% else %}<span class="is-absent" style="{{ STATE_STYLE.get('is-absent', '') }}" title="this leg's identity is null on every rung of the comparison key, so there is no loan to open">{{ row.key_display }}</span>{% endif %}</td>
+          <td>{{ row.term_label }}</td>
+          <td class="num">{{ side(row.ours) }}</td>
+          <td class="num">{{ side(row.theirs) }}</td>
+          <td class="num mono">{{ row.delta_display }}</td>
         </tr>
         {% endfor %}
       </tbody>

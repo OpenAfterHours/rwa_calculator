@@ -77,6 +77,7 @@ than carried forward from an earlier one.
 | `mutate_terms_amount_drifts_from_its_pairs` | half of `measurement`'s amount moved into `row_placement` AFTER `_terms` ran — the total, the counts and the pairs all untouched | 22 / 110 | **all six census parametrisations, on the SUM assertion itself** (`test_return_recon.py:2560`, obtained 700,000 against a claimed 1,600,000), the term filter, and 12 pre-existing term-amount tests |
 | `mutate_pairs_rank_by_money` | `_rank` ordered on the side's own money, as the old leg listing was | 8 / 124 | every ordering-dependent test: the driver ranking, both cap tests, the placement test (the mover is off the page) |
 | `mutate_pairs_silent_cap` | `CellPairs.hidden_keys` forced to `0` | 6 / 126 | the two cap tests and the uncapped/capped comparison only |
+| `mutate_cap_claims_it_showed_everything` | `CellPairs.shown_delta` forced to `total_delta`, so `hidden_delta` reads `0.00` however much money the cap left off | 2 / 130 | the tightened half of the cap test, on its ADEQUACY limb — **and it scored 132 passed / exit 0 before that half existed** |
 | `mutate_terms_differing_is_population` | `CellTerm.differing_keys` restated as `keys` | 8 / 124 | the `differing_keys` test and all six census parametrisations |
 | `mutate_pairs_drop_refusal` | a refused cell's table loses its `refusal` string | 13 / 119 | all five refusal tests plus the census's refusal mirror |
 | `mutate_terms_skip_agreeing_keys` | `_terms` fed only the non-zero pairs, so every `keys` count collapses to the drivers | 22 / 110 | the census, the term filter, the `differing_keys` test — **and eight PRE-EXISTING split-exposure tests**, which already assert an agreeing pair is COUNTED (`keys["measurement"] == 1`) |
@@ -86,7 +87,7 @@ than carried forward from an earlier one.
 | `mutate_placements_carriers_scoped_to_sheet` | the class / approach / role carriers scoped to the cell's sheet | 2 / 130 | the sheet-placement test only |
 | `mutate_placements_ignore_the_base_reference` | `_placements` keyed on the leg, out of lockstep with `_key_money` | 2 / 130 | the split-exposure placement test only |
 
-Six of these are worth understanding, and the first one most.
+Seven of these are worth understanding, and the first one most.
 
 - **`mutate_terms_amount_drifts_from_its_pairs` is the detector for the
   invariant the whole feature rests on**, and it also measures what the
@@ -126,6 +127,27 @@ Six of these are worth understanding, and the first one most.
   written to stop the fixture going vacuous turns out to be the detector for
   the cap going silent, because "nothing is hidden" is exactly what both look
   like.
+- **`mutate_cap_claims_it_showed_everything` is the same lesson again, and it
+  found a VACUOUS test rather than an undetected one.** The code was right; the
+  suite simply had no input that could distinguish `shown_delta` from
+  `total_delta`. A spy over the unmutated `cell_pairs` across the whole file
+  recorded **7,021 calls, `shown_delta != total_delta` on ZERO of them**, and
+  all four assertion sites pinned `hidden_delta` to `0.0` — because
+  `CELL_PAIRS_LIMIT = 25` on a 38-key probe puts all seven drivers on the page
+  and leaves the tail empty. The mutation therefore scored 132 passed, exit 0.
+
+  The cure is to tighten the cap until the tail carries money (`limit=3`:
+  shown 35,000, hidden 28,000, measured identical under both frameworks), and
+  the limb that closes it is again an **adequacy** assertion — `assert
+  tight.hidden_delta != 0.0` — which is the one that goes red under the
+  mutation. That is twice in one item that the anti-vacuity guard turned out to
+  be the real detector, so treat "assert the fixture can distinguish the two
+  states" as a first-class assertion here, not as scaffolding.
+
+  Note what the DEFAULT cap still cannot tell you, and why both halves stay:
+  the first half pins the ordinary case (every driver shown, tail genuinely
+  empty), the second the case a real book always reaches, where `measurement`
+  holds thousands of keys and the drivers do not all fit in the top 25.
 - **`mutate_pairs_drop_refusal` does NOT prove that a refused cell would
   otherwise be paired.** The refusal and the empty `()` come from one return in
   `_decompose`, so no mutation of `cell_pairs` alone can put pairs behind a
@@ -141,6 +163,70 @@ Six of these are worth understanding, and the first one most.
   that first found it. A mutation whose red set is confined to the new tests
   would have meant the two had drifted apart.
 
+## The rendered pair-table set
+
+Written for the 2026-08-30 render half — the page that replaced two
+independently-ranked per-side leg listings with one paired table, and added the
+sheet-level conservation line beneath the waterfall. Baseline for
+`tests/unit/ui/test_views_return_recon.py` is **88 passed**; every row was
+re-measured against that baseline after the last test was added, with `-n 0`.
+
+The defect being closed, measured on the pre-change page (`269bca8e`) with the
+same probe portfolio these tests use: a cell reporting a **221,000** difference
+rendered **50 rows**, of which **50 were loans that agree to the penny** and
+**0 of the 7 drivers** appeared at all. The 50 rows were 25 exposures listed
+twice, once per side, because each side was read and capped independently.
+
+| plugin | what it changes | red / green | reddens |
+|---|---|---|---|
+| `mutate_pair_absent_side_is_a_zero` | `_pair_side` renders a NULL side as a figure — the banned Float null-fill, at the rendering boundary rather than in the model | 1 / 87 | the not-held test only (`'0' == 'not held'`) |
+| `mutate_pair_note_says_nothing` | `_pair_note` returns `""` — the cap stops admitting to itself | 3 / 85 | the cap test **and both empty-table tests**, which is the point: one function carries "what the cap hid" AND "why there is no table" |
+| `mutate_cause_filter_is_ignored` | `_selected_term` always resolves to every cause, so a waterfall click widens instead of narrowing | 1 / 87 | the cause-filter test only (the returned causes go from `{row placement}` to all of them) |
+| `mutate_sheet_total_sums_every_row` | `_parent_flag` forced to `False`, so the sheet total includes the parent bands | 5 / 83 | both conservation parametrisations (**22,000 against 11,000 — exactly doubled**), both double-count parametrisations, and the rendered figure |
+| `mutate_sheet_total_zero_fills_unmeasurable` | `_leaf_delta` counts an unmeasurable leaf as `0.0` | 1 / 87 | the undecidable test only — the column comes back `decidable`, netting to `0`, over a column their mapping cannot populate at all |
+| `mutate_sheet_total_sums_an_average` | `sheet_conservation` handed a decomposition whose `metric` reads `"sum"`, so it nets a NON-ADDITIVE column | 3 / 85 | both non-additive parametrisations and the refused-cell render |
+| `mutate_loan_link_drops_return_to` | the loan link loses its `return_to`, by rewriting the TEMPLATE in memory | 1 / 87 | the breadcrumb test only (`KeyError: 'return_to'`) |
+
+Five of these are worth understanding.
+
+- **`mutate_loan_link_drops_return_to` came back a FALSE GREEN first, by
+  README mechanism 2 — the mutation never applied.** The loader wrapper
+  delegated everything but `get_source` through `__getattr__`, so Jinja's
+  `Environment.get_template` resolved `load` to the *inner* loader's bound
+  method, which calls the inner `get_source` and never reached the rewrite. 85
+  green, and it looked like evidence that nothing asserts the breadcrumb. The
+  fix is structural on both sides: the wrapper subclasses `BaseLoader` so
+  `load` dispatches back to the override, and the plugin **counts its own
+  rewrites and fails the session at zero** — demonstrated by running it against
+  `test_grid_styles.py`, which renders nothing and now exits 1 with
+  `NOT APPLIED` rather than passing.
+- **It is also the only template-level mutation here**, because markup has no
+  module attribute to patch. It rewrites the source *in memory* through the
+  loader and touches nothing on disk. That is not fastidiousness: this tree is
+  shared with other agents, and a mutation left on disk is measured by all of
+  them without their knowing (LESSONS G, `defect_injection.py`).
+- **`mutate_sheet_total_sums_every_row` does NOT redden
+  `test_the_explanation_reports_the_parent_flag_as_measured`, and that green is
+  a coincidence rather than a gap.** The mutation forces every flag to `False`
+  and that test asserts `row_is_parent is False` on a row which really is a
+  leaf, so mutant and original agree there. Do not cite the green either way.
+- **`mutate_sheet_total_sums_an_average` is the one whose defect actually
+  shipped into a render.** The first version of this panel computed the sheet
+  total for every column, so C 08.03 col 0050 — an exposure-weighted average PD
+  — printed "the sheet total is +0.0000" and "Column 0050 NETS across this
+  sheet". It was found by rendering the panel and READING it, not by a test; the
+  guard, the tests and this plugin all exist because a sum down a column of
+  averages has no referent and reads exactly like one that does. Note what this
+  says about the gate: every assertion in the file was green while the page said
+  a meaningless thing in confident language.
+- **The conservation pair is asymmetric on purpose.** Under
+  `mutate_sheet_total_sums_every_row` the *moved-row* half of
+  `test_a_moved_row_nets_across_the_sheet_and_a_one_sided_exposure_does_not`
+  stays green — a parent row's delta nets exactly as its children's do, so
+  double-counting a portfolio whose only difference is a move still totals
+  zero. Only the one-sided half moves. A conservation test built on the netting
+  case alone would have been silent on the double-count entirely.
+
 ## Writing another
 
 Two rules, both learned the expensive way in the batch that produced these:
@@ -155,3 +241,10 @@ Two rules, both learned the expensive way in the batch that produced these:
    `x or None` on an object with no `__bool__`, which changes nothing; and one
    run hit a file another agent was mid-edit on. A green probe is a claim that
    needs its own evidence.
+3. **Make the plugin prove it applied, and fail closed when it did not.** Rule
+   2 is a habit and habits are not gates: `mutate_loan_link_drops_return_to`
+   went green on a mutation that never ran, and only a deliberate re-read of
+   Jinja's `BaseLoader.load` found it. Where the patch is anything more indirect
+   than `setattr` on a module — a loader, a wrapper, a class attribute — count
+   the applications and fail the session at zero. The check is four lines and it
+   turns "I checked" into something the summary line says.

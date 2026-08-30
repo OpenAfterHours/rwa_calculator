@@ -20,6 +20,16 @@ asserted against a source of truth that cannot drift with the view:
   classes are asserted to equal the fixture's own per-leg totals — ours and
   theirs, as equalities, under both frameworks.
 - **Materiality is one threshold, set once.** Both floors must be cleared.
+- **The exposures behind a cell are PAIRED and ranked on contribution.**
+  Asserted on the RENDERED page, positionally, against a probe portfolio built
+  so that a size ranking cannot show a single driver — a per-side listing capped
+  at 25 a side put 50 agreeing loans on the page and every driver below the cap.
+  A side holding no leg for an exposure is asserted to render an explicit fifth
+  state, and the cap is asserted to state what it hid.
+- **The waterfall is not a scope check, and the page says so.** The sheet-level
+  conservation line is asserted to NET on a portfolio whose only difference is a
+  moved row and to BREAK on one holding a genuinely one-sided exposure, with the
+  overlapping parent rows excluded from the sum.
 
 References:
 - Regulation (EU) 2021/451, Annex II: C 08.03 (and OF 08.03 under PS1/26)
@@ -28,30 +38,42 @@ References:
 
 from __future__ import annotations
 
-from dataclasses import replace
+import re
+from dataclasses import fields, replace
 from functools import lru_cache
+from html import unescape
+from pathlib import Path
 from typing import TYPE_CHECKING, get_args
+from urllib.parse import parse_qs, urlsplit
 
 import polars as pl
 import pytest
+from fastapi.testclient import TestClient
+from starlette.requests import Request
 from tests.fixtures.recon_ledger import with_reporting_ledger
 
 from rwa_calc.analysis.legacy_ledger import LedgerCoverage
 from rwa_calc.analysis.return_recon import (
     ABSENT_ROW,
+    CELL_PAIRS_LIMIT,
+    MIGRATION_MONEY_COLUMNS,
+    MOVEMENT_BASES,
     PLACEMENT_ATTRIBUTION,
     TERM_NAMES,
     UNDECIDABLE_ROW,
     CellState,
     build_recon,
     decompose_cell,
+    diff_cells,
 )
+from rwa_calc.api.rest import register_reconciliation_with_id
+from rwa_calc.ui.app import main as ui_main
 from rwa_calc.ui.views import return_recon as rr
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from rwa_calc.analysis.return_recon import ReturnRecon
+    from rwa_calc.analysis.return_recon import CellDecomposition, ReturnRecon
 
 FRAMEWORKS = ("CRR", "BASEL_3_1")
 TEMPLATE = "c08_03"
@@ -113,20 +135,30 @@ class _FrameSource:
         return self._frame
 
 
-def _leg(
+def _leg(  # noqa: PLR0913 - one leg's raw shape, every field defaulted
     reference: str,
     *,
     pd: float,
     rwa: float,
     ead: float | None = None,
     exposure_class: str = SHEET,
+    source: str | None = None,
+    supplies_source_ref: bool = True,
 ) -> dict[str, object]:
-    """One IRB leg in the raw shape the sealed ledger is derived from."""
+    """One IRB leg in the raw shape the sealed ledger is derived from.
+
+    ``source`` names the PRE-SPLIT base exposure a leg belongs to; ``None``
+    means the leg is unsplit and is its own base, which is every other fixture
+    here. ``supplies_source_ref=False`` mirrors the projected legacy side, which
+    supplies no ``source_exposure_reference`` at all — it is neither a component
+    nor a carrier in ``recon_registry``, so it arrives as a typed NULL.
+    """
     exposure = ead if ead is not None else rwa * 3.0
+    base = source or reference
     return {
         "exposure_reference": reference,
-        "source_exposure_reference": reference,
-        "counterparty_reference": f"CP_{reference}",
+        "source_exposure_reference": base if supplies_source_ref else None,
+        "counterparty_reference": f"CP_{base}",
         "exposure_class": exposure_class,
         "exposure_class_applied": exposure_class,
         "exposure_class_post_crm": exposure_class,
@@ -163,6 +195,10 @@ def _source(legs: list[dict[str, object]], framework: str) -> _FrameSource:
             "lgd_floored": pl.Float64,
             "irb_maturity_m": pl.Float64,
             "sa_cqs": pl.Int8,
+            # Pinned so a side whose legs ALL omit the base reference still
+            # carries the column as a typed NULL String, exactly as the sealed
+            # membership schema declares it.
+            "source_exposure_reference": pl.String,
         },
     )
     return _FrameSource(with_reporting_ledger(frame), framework)
@@ -674,12 +710,726 @@ def test_a_refused_decomposition_carries_no_step_whatever_its_amounts() -> None:
         ours_state="figure",
         theirs_state="figure",
         delta=-1.0,
-        terms=(CellTerm(name="measurement", amount=-1.0, keys=1),),
+        terms=(CellTerm(name="measurement", amount=-1.0, keys=1, differing_keys=1),),
         reconciles=True,
         residual=0.0,
         refusal="non-additive metric",
     )
-    assert rr._steps(refused) == ()
+    # Asserted under a SELECTED cause too: the filter must not resurrect steps
+    # on a cell whose split does not apply.
+    assert rr._steps(refused, None) == ()
+    assert rr._steps(refused, "measurement") == ()
+
+
+# =============================================================================
+# Rule 4b — a split exposure is ONE exposure, through THIS view's entry point
+# =============================================================================
+
+#: C 08.03's RWEA column, ``Sum(rwa_col)`` — a plain additive money cell.
+RWEA_COL = "0090"
+#: Our two legs of one guaranteed loan, and their whole loan. Split 60/40 so
+#: neither leg alone can be mistaken for the whole.
+SPLIT_G_RWA, SPLIT_REM_RWA = 60_000.0, 40_000.0
+
+
+def _split_legs() -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    """The split fixture's two sides. The base legs occupy every band except
+    ``PD_HIGH_A``, so the split exposure lands in a leaf row of its own."""
+    bands = (("A0", PD_LOW, RWA_A0), ("A1", PD_MID, RWA_A1), ("B1", PD_HIGH_B, RWA_B1))
+    ours = [
+        *(_leg(ref, pd=pd, rwa=rwa) for ref, pd, rwa in bands),
+        _leg("L1__G_BANK", source="L1", pd=PD_HIGH_A, rwa=SPLIT_G_RWA, ead=600_000.0),
+        _leg("L1__REM", source="L1", pd=PD_HIGH_A, rwa=SPLIT_REM_RWA, ead=400_000.0),
+    ]
+    legacy = [
+        *(_leg(ref, pd=pd, rwa=rwa, supplies_source_ref=False) for ref, pd, rwa in bands),
+        _leg(
+            "L1",
+            pd=PD_HIGH_A,
+            rwa=SPLIT_G_RWA + SPLIT_REM_RWA,
+            ead=1_000_000.0,
+            supplies_source_ref=False,
+        ),
+    ]
+    return ours, legacy
+
+
+def _split_recon(framework: str) -> ReturnRecon:
+    """One guaranteed loan, split on our side and whole on theirs.
+
+    Built through ``build_comparison`` — the production entry point, which never
+    passes a ``key_column`` — rather than through ``build_recon`` directly, so a
+    fix that only works when the caller opts into a different join key does not
+    satisfy this.
+    """
+    ours, legacy = _split_legs()
+    return rr.build_comparison(
+        f"split-{framework}", _source(ours, framework), _source(legacy, framework)
+    )
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_the_view_pairs_a_split_exposure_against_the_legacy_whole_loan(framework: str) -> None:
+    """The page must not tell an analyst that an agreeing loan is missing twice.
+
+    Our sealed ledger holds a guaranteed loan as two legs under one base
+    reference; their extract holds it whole under the original one. Keyed on
+    ``exposure_reference`` alone the two never meet, so a cell where both sides
+    agree to the penny renders GBP 100,000 leaving our population and GBP
+    100,000 arriving in theirs — and the waterfall still reconciles, because the
+    two terms net.
+
+    Asserted through ``build_comparison`` because that is where production
+    enters, and on the rendered ``steps`` because that is what the analyst
+    reads. The pair table is asserted to collapse our two legs into ONE row
+    carrying both sides' money: the page's unit is the exposure, and a table
+    that still showed two of our legs against one of theirs would put the
+    reader straight back into the arithmetic the keying fix removed.
+    """
+    # Arrange
+    recon = _split_recon(framework)
+    row_ref = _row_of(recon, "L1", ours=False)
+
+    # Act
+    explanation = rr.explain_cell(recon, TEMPLATE, SHEET, row_ref, RWEA_COL)
+    steps = {step.name: step for step in explanation.steps}
+
+    # Assert — the cell is decomposed, both sides carry a figure, and they agree.
+    assert not explanation.refused, explanation.refusal
+    assert explanation.ours.value == pytest.approx(SPLIT_G_RWA + SPLIT_REM_RWA)
+    assert explanation.theirs.value == pytest.approx(SPLIT_G_RWA + SPLIT_REM_RWA)
+    assert explanation.delta == pytest.approx(0.0)
+
+    # Assert — and the page reports that agreement as agreement.
+    assert steps["population_ours_only"].amount == 0.0
+    assert steps["population_ours_only"].keys == 0
+    assert steps["population_theirs_only"].amount == 0.0
+    assert steps["population_theirs_only"].keys == 0
+    assert steps["measurement"].keys == 1
+    assert explanation.reconciles
+
+    # Assert — ONE row for the exposure, carrying both sides' money and a
+    # linkable key. Two rows here (or one with a blank side) would say the whole
+    # loan is missing from one side, which is the finding the keying fix closed.
+    rows = [row for row in explanation.pairs.rows if row.key == "L1"]
+    assert len(rows) == 1, [row.key for row in explanation.pairs.rows]
+    assert rows[0].ours.value == pytest.approx(SPLIT_G_RWA + SPLIT_REM_RWA)
+    assert rows[0].theirs.value == pytest.approx(SPLIT_G_RWA + SPLIT_REM_RWA)
+    assert rows[0].identified
+    # Our side is two legs and theirs one, and the row says so rather than
+    # hiding the split: the roles are read off the membership carriers.
+    assert "role" in rows[0].placement
+
+
+# =============================================================================
+# Rule 4c — the exposures behind a cell are PAIRED, and ranked on contribution
+# =============================================================================
+
+#: The probe portfolio the ranking rule was measured on. Thirty loans that agree
+#: to the penny at GBP 1,000,000 each, and seven exposures that drive the
+#: difference: four small value breaks, one exposure on each side only, and one
+#: band mover. EVERY driver is smaller than EVERY agreeing loan, which is the
+#: whole point — ranked on size, not one of them reaches a 25-row page, and the
+#: per-side listing this replaced rendered 50 rows of exact agreement.
+PROBE_AGREE_RWA = 1_000_000.0
+PROBE_AGREE_COUNT = 30
+PROBE_BREAK_OURS, PROBE_BREAK_THEIRS = 12_000.0, 10_000.0
+PROBE_BREAK_COUNT = 4
+PROBE_ONLY_OURS = 15_000.0
+PROBE_ONLY_THEIRS = 12_000.0
+PROBE_MOVER = 210_000.0
+PROBE_DELTA = (
+    PROBE_BREAK_COUNT * (PROBE_BREAK_OURS - PROBE_BREAK_THEIRS)
+    + PROBE_ONLY_OURS
+    - PROBE_ONLY_THEIRS
+    + PROBE_MOVER
+)
+#: What survives once the mover's two cells cancel across the sheet: the mover
+#: contributes +210,000 to the row it left and -210,000 to the row it arrived
+#: in, so the sheet residual is the money that is genuinely one-sided plus the
+#: value breaks. It is NOT zero, which is what makes the "does not net" branch
+#: of the conservation line testable at all.
+PROBE_SHEET_RESIDUAL = PROBE_DELTA - PROBE_MOVER
+#: In |delta| order, ties broken on the key — the order the page must produce.
+PROBE_DRIVERS: tuple[str, ...] = (
+    "MOVER",
+    "ONLY_OURS",
+    "ONLY_THEIRS",
+    *(f"BRK{index}" for index in range(PROBE_BREAK_COUNT)),
+)
+
+#: Positional column indices of the rendered pair table. Named because the point
+#: of these tests is that a value lands in the cell that MEANS it: a test that
+#: asserts a word appears somewhere on the page passes while the template puts
+#: it in the wrong column, which has already happened in this batch.
+COL_EXPOSURE, COL_CAUSE, COL_OURS, COL_THEIRS, COL_DELTA = range(5)
+
+#: The same, for the migration matrix's drill-down: leg, the exposure it was
+#: split from, each side's money, and what the other side did with it.
+COL_MOVER_LEG, COL_MOVER_EXPOSURE, COL_MOVER_OURS, COL_MOVER_THEIRS, COL_MOVER_WHERE = range(5)
+
+_TEMPLATE_HTML = (
+    Path(rr.__file__).resolve().parents[1] / "app" / "templates" / "recon_templates.html"
+)
+
+
+def _probe_legs(framework: str) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    """The probe portfolio's two sides.
+
+    The base legs are included so every PD band has two populated children —
+    without them the parent band is INDISTINGUISHABLE from a leaf, comes back
+    with a NULL ``is_parent_row``, and the cell has no provable leaf row to
+    address at all (measured: ``_row_of`` finds zero rows).
+    """
+    ours = [
+        *_base_legs(),
+        *(
+            _leg(f"P{index:02d}", pd=PD_MID, rwa=PROBE_AGREE_RWA)
+            for index in range(PROBE_AGREE_COUNT)
+        ),
+    ]
+    theirs = list(ours)
+    for index in range(PROBE_BREAK_COUNT):
+        ours.append(_leg(f"BRK{index}", pd=PD_MID, rwa=PROBE_BREAK_OURS))
+        theirs.append(_leg(f"BRK{index}", pd=PD_MID, rwa=PROBE_BREAK_THEIRS))
+    ours.append(_leg("ONLY_OURS", pd=PD_MID, rwa=PROBE_ONLY_OURS))
+    theirs.append(_leg("ONLY_THEIRS", pd=PD_MID, rwa=PROBE_ONLY_THEIRS))
+    ours.append(_leg("MOVER", pd=PD_MID, rwa=PROBE_MOVER))
+    theirs.append(_leg("MOVER", pd=PD_HIGH_B, rwa=PROBE_MOVER))
+    return ours, theirs
+
+
+@lru_cache(maxsize=8)
+def _probe(framework: str = "CRR") -> ReturnRecon:
+    ours, theirs = _probe_legs(framework)
+    return build_recon(_source(ours, framework), _source(theirs, framework))
+
+
+def _probe_row(framework: str = "CRR") -> str:
+    """The leaf row the whole probe population sits in on OUR side."""
+    return _row_of(_probe(framework), "MOVER", ours=True)
+
+
+def _probe_cell(framework: str = "CRR") -> CellDecomposition:
+    """The probe's RWEA cell — an additive money cell, which is the precondition
+    ``sheet_conservation`` takes the decomposition in order to check."""
+    return decompose_cell(_probe(framework), TEMPLATE, SHEET, _probe_row(framework), RWEA_COL)
+
+
+class _ProbeResponse:
+    """The fields the templates ROUTE reads off a ``ReconciliationResponse``."""
+
+    def __init__(self, ours: object, theirs: object, coverage: object = None) -> None:
+        self.success = True
+        self.errors: tuple[object, ...] = ()
+        self.framework = getattr(ours, "framework", "CRR")
+        self.calculation = ours
+        self.legacy_ledger = theirs
+        self.legacy_ledger_coverage = coverage
+
+
+@pytest.fixture
+def client() -> TestClient:
+    return TestClient(ui_main.create_app(), base_url="http://localhost")
+
+
+def _register_probe(recon_id: str, framework: str = "CRR") -> None:
+    ours, theirs = _probe_legs(framework)
+    register_reconciliation_with_id(
+        recon_id,
+        _ProbeResponse(_source(ours, framework), _source(theirs, framework)),  # type: ignore[arg-type]
+    )
+
+
+def _cell_page(client: TestClient, recon_id: str, *, row: str, col: str, **extra: str) -> str:
+    """The rendered template-compare page for one cell, through the ROUTE.
+
+    Through the route rather than through a hand-built Jinja context, because a
+    context assembled in the test could only ever agree with itself: the keys
+    ``recon_templates.html`` reads are ``main.py``'s to supply, and a link built
+    from a key this test invented would render and mean nothing.
+    """
+    params = {"template": TEMPLATE, "sheet": SHEET, "row": row, "col": col, **extra}
+    response = client.get(f"/reconciliation/{recon_id}/templates", params=params)
+    assert response.status_code == 200, response.text[:400]
+    return response.text
+
+
+_CELL_RE = re.compile(r"<td[^>]*>(.*?)</td>", re.DOTALL)
+_ROW_RE = re.compile(r"<tr[^>]*>(.*?)</tr>", re.DOTALL)
+
+
+def _cell_text(fragment: str) -> str:
+    """One ``<td>``'s visible text: tags stripped, entities decoded, collapsed."""
+    return " ".join(unescape(re.sub(r"<[^>]+>", " ", fragment)).split())
+
+
+def _table_rows(html: str, name: str) -> list[list[str]]:
+    """Every ``<td>`` of one identified table, row by row and column by column.
+
+    Positional by construction, which is the whole reason these tests read the
+    rendered page rather than the view object: asserting a word appears
+    somewhere on a page is not asserting it appears in the cell that means it.
+    """
+    match = re.search(rf'<table[^>]*data-table="{name}"[^>]*>(.*?)</table>', html, re.DOTALL)
+    assert match is not None, f"the page renders no table marked data-table={name!r}"
+    return [
+        [_cell_text(cell) for cell in _CELL_RE.findall(row)]
+        for row in _ROW_RE.findall(match.group(1))
+        if _CELL_RE.search(row)
+    ]
+
+
+def _pairs_note(html: str) -> str:
+    """The line that says what the pair table is showing and what it is not."""
+    match = re.search(r'<p class="muted" data-pairs="note">(.*?)</p>', html, re.DOTALL)
+    assert match is not None, "the pair table publishes no note"
+    return _cell_text(match.group(1))
+
+
+def _term_link(html: str, term: str) -> str:
+    """The href the waterfall's row for *term* links to."""
+    match = re.search(rf'<tr data-term="{term}"[^>]*>\s*<td><a href="([^"]+)"', html)
+    assert match is not None, f"the waterfall renders no linked row for {term!r}"
+    return unescape(match.group(1))
+
+
+def _exposure_link(html: str, reference: str) -> str:
+    """The loan href the pair table builds for one exposure."""
+    match = re.search(rf'<a href="([^"]*key={reference}[^"]*)"', html)
+    assert match is not None, f"the pair table links no exposure named {reference!r}"
+    return unescape(match.group(1))
+
+
+def test_the_pair_table_puts_every_driver_of_the_difference_on_the_page(
+    client: TestClient,
+) -> None:
+    """The measured failure this replaces: 50 rows, every one an agreeing loan.
+
+    The old panel read each side's membership independently, sorted each on
+    ``|rwa_final|`` and capped each at 25, so on a cell whose difference lives in
+    the small loans it rendered two full pages of exact agreement and not one of
+    the exposures driving the number. Asserted on the RENDERED page, by column
+    position, because the value has to land in the cell that means it.
+    """
+    # Arrange — fixture adequacy FIRST. A probe that could not hide its drivers
+    # under a size ranking would make this test pass under the old code too.
+    assert PROBE_AGREE_COUNT > CELL_PAIRS_LIMIT > len(PROBE_DRIVERS), (
+        "the probe must hold more agreeing loans than the page has rows, and "
+        "more rows than it has drivers — otherwise a size-ranked page would "
+        "show the drivers anyway and this test would prove nothing"
+    )
+    largest_driver = max(PROBE_MOVER, PROBE_ONLY_OURS, PROBE_ONLY_THEIRS, PROBE_BREAK_OURS)
+    assert largest_driver < PROBE_AGREE_RWA, (
+        "every driver must be SMALLER than every agreeing loan; a driver that "
+        "is also the largest loan on the sheet is found by any ranking"
+    )
+    _register_probe("probe-rank")
+
+    # Act
+    body = _cell_page(client, "probe-rank", row=_probe_row(), col=RWEA_COL)
+    rows = _table_rows(body, "cell-pairs")
+
+    # Assert — the page is full, and the drivers are the TOP of it, in order.
+    assert len(rows) == CELL_PAIRS_LIMIT
+    assert [row[COL_EXPOSURE] for row in rows][: len(PROBE_DRIVERS)] == list(PROBE_DRIVERS)
+
+    # Assert — positionally, on the cells that carry the numbers.
+    mover = rows[0]
+    assert mover[COL_CAUSE] == rr.TERM_LABELS["row_placement"]
+    assert mover[COL_OURS] == "210,000"
+    assert mover[COL_DELTA] == "+210,000"
+    breaks = [row for row in rows if row[COL_EXPOSURE].startswith("BRK")]
+    assert len(breaks) == PROBE_BREAK_COUNT
+    for row in breaks:
+        assert row[COL_CAUSE] == rr.TERM_LABELS["measurement"]
+        assert row[COL_OURS] == "12,000"
+        assert row[COL_THEIRS] == "10,000"
+        assert row[COL_DELTA] == "+2,000"
+
+
+def test_a_side_that_holds_no_leg_says_so_rather_than_rendering_a_blank(
+    client: TestClient,
+) -> None:
+    """A one-sided exposure is the case a blank cell silently turns into a tie."""
+    # Arrange
+    _register_probe("probe-blank")
+    glyph, _css, _title = rr.PAIR_STATE_DISPLAY[rr.NOT_HELD_STATE]
+
+    # Act
+    rows = _table_rows(
+        _cell_page(client, "probe-blank", row=_probe_row(), col=RWEA_COL), "cell-pairs"
+    )
+    ours_only = next(row for row in rows if row[COL_EXPOSURE] == "ONLY_OURS")
+    theirs_only = next(row for row in rows if row[COL_EXPOSURE] == "ONLY_THEIRS")
+
+    # Assert — the absent side is explicit, on the side that is absent, and is
+    # neither empty (which reads as agreement) nor a zero (a nil holding).
+    assert ours_only[COL_THEIRS] == glyph
+    assert ours_only[COL_OURS] == "15,000"
+    assert theirs_only[COL_OURS] == glyph
+    assert theirs_only[COL_THEIRS] == "12,000"
+    for row in (ours_only, theirs_only):
+        assert glyph not in {"", "0", "0.0", "0.00"}
+        assert row[COL_DELTA] not in {"", "0"}
+
+
+def test_the_pair_vocabulary_extends_the_cell_states_rather_than_replacing_them() -> None:
+    # Assert — every ``CellState`` keeps its EXACT rendering, and the fifth
+    # state is an addition. A parallel vocabulary is how one blank comes to mean
+    # two things two panels apart on the same page.
+    assert set(rr.PAIR_STATE_DISPLAY) == set(rr.STATE_DISPLAY) | {rr.NOT_HELD_STATE}
+    for state, rendering in rr.STATE_DISPLAY.items():
+        assert rr.PAIR_STATE_DISPLAY[state] == rendering
+    glyphs = [glyph for glyph, _css, _title in rr.PAIR_STATE_DISPLAY.values()]
+    classes = [css for _glyph, css, _title in rr.PAIR_STATE_DISPLAY.values()]
+    assert len(set(glyphs)) == len(glyphs)
+    assert len(set(classes)) == len(classes)
+
+
+def test_every_pair_state_looks_different_in_the_template() -> None:
+    """A vocabulary the stylesheet renders alike is one blank, not five."""
+    # Arrange — read the template's own map rather than restating it.
+    block = re.search(
+        r"\{% set STATE_STYLE = \{(.*?)\} %\}",
+        _TEMPLATE_HTML.read_text(encoding="utf-8"),
+        re.DOTALL,
+    )
+    assert block is not None, "recon_templates.html declares no STATE_STYLE map"
+    styles = dict(re.findall(r'"([\w-]+)":\s*"([^"]*)"', block.group(1)))
+
+    # Assert — every state the view can emit has a style, and the four non-figure
+    # states are pairwise distinct.
+    classes = {css for _glyph, css, _title in rr.PAIR_STATE_DISPLAY.values()}
+    assert classes <= set(styles), classes - set(styles)
+    rendered = [styles[css] for css in sorted(classes) if css != "is-figure"]
+    assert len(set(rendered)) == len(rendered)
+
+
+def test_clicking_a_cause_narrows_the_table_to_that_cause(client: TestClient) -> None:
+    """The join between the two halves of the panel, followed for real."""
+    # Arrange
+    _register_probe("probe-filter")
+    body = _cell_page(client, "probe-filter", row=_probe_row(), col=RWEA_COL)
+    assert len({row[COL_CAUSE] for row in _table_rows(body, "cell-pairs")}) > 1, (
+        "the unfiltered table shows one cause only, so narrowing it to one "
+        "cause could not be told from not narrowing it"
+    )
+
+    # Act — follow the waterfall row's own link rather than building one.
+    filtered = client.get(_term_link(body, "row_placement"))
+
+    # Assert — the table is that cause and only that cause, and the waterfall
+    # says which row is selected.
+    assert filtered.status_code == 200
+    rows = _table_rows(filtered.text, "cell-pairs")
+    assert {row[COL_CAUSE] for row in rows} == {rr.TERM_LABELS["row_placement"]}
+    assert [row[COL_EXPOSURE] for row in rows] == ["MOVER"]
+    assert re.search(r'<tr data-term="row_placement" data-selected="true"', filtered.text)
+    # ... and the split above it is still the WHOLE cell's, so the narrowed
+    # table is read against the full picture rather than replacing it.
+    assert len(_table_rows(filtered.text, "waterfall")) == len(TERM_NAMES) + 1
+
+
+def test_an_unknown_cause_falls_back_to_every_cause_rather_than_failing(
+    client: TestClient,
+) -> None:
+    """A hand-edited URL renders the default view, and SAYS that it did.
+
+    ``cell_pairs`` raises on an unknown term — correctly, since filtering to an
+    empty table is a silent zero — so the view has to absorb it. The fallback is
+    only safe because the page names the filter it is showing: a wider table
+    standing in silently for a narrower one is the failure mode here.
+    """
+    # Arrange
+    _register_probe("probe-unknown-term")
+
+    # Act
+    body = _cell_page(
+        client, "probe-unknown-term", row=_probe_row(), col=RWEA_COL, term="not_a_cause"
+    )
+
+    # Assert
+    rows = _table_rows(body, "cell-pairs")
+    assert len({row[COL_CAUSE] for row in rows}) > 1
+    assert rr.EVERY_CAUSE in body
+    assert "not_a_cause" not in body
+
+
+def test_the_cap_states_what_it_hid(client: TestClient) -> None:
+    """A silent cap on a regulatory comparison is a silent zero by another name."""
+    # Arrange
+    recon = _probe()
+    row_ref = _probe_row()
+    table = rr.explain_cell(recon, TEMPLATE, SHEET, row_ref, RWEA_COL).pairs
+    assert table.hidden_keys > 0, (
+        "the cap is not engaged on this fixture, so the note would be about "
+        "nothing and this test would prove nothing"
+    )
+
+    # Assert — the arithmetic ties, and the whole scope is reported, not the page.
+    assert table.keys == len(table.rows) + table.hidden_keys
+    assert table.total_delta == pytest.approx(PROBE_DELTA)
+    assert table.hidden_delta == pytest.approx(table.total_delta - table.shown_delta)
+
+    # Assert — uncapped, the same total comes out of a table that hides nothing.
+    whole = rr.explain_cell(recon, TEMPLATE, SHEET, row_ref, RWEA_COL, limit=None).pairs
+    assert whole.hidden_keys == 0
+    assert len(whole.rows) == table.keys
+    assert whole.total_delta == pytest.approx(table.total_delta)
+
+    # Assert — and the PAGE says all four numbers.
+    _register_probe("probe-cap")
+    note = _pairs_note(_cell_page(client, "probe-cap", row=row_ref, col=RWEA_COL))
+    assert f"{len(table.rows):,}" in note
+    assert f"{table.hidden_keys:,}" in note
+    assert rr._signed(table.shown_delta) in note
+    assert rr._signed(table.total_delta) in note
+
+
+def test_a_refused_cell_renders_no_pair_table_and_still_carries_its_reason(
+    client: TestClient,
+) -> None:
+    """``pairs == ()`` must never read as "no contract drives this difference"."""
+    # Arrange — column 0050 is a weighted average, which is not decomposable.
+    _register_probe("probe-refused")
+
+    # Act
+    body = _cell_page(client, "probe-refused", row=_probe_row(), col="0050")
+
+    # Assert — no table at all, and a note that says REFUSAL rather than empty.
+    assert 'data-table="cell-pairs"' not in body
+    note = _pairs_note(body)
+    assert "REFUSAL" in note
+    assert "empty population" in note
+
+
+def test_a_coverage_unavailable_cell_renders_no_pair_table(client: TestClient) -> None:
+    """The false-zero cell: pairing it would show our loans against their 0.00.
+
+    Their mapping cannot populate this column at all, so a table of "theirs: not
+    held" rows against it would invite an analyst to reconcile a column their
+    engine was never asked about.
+    """
+    # Arrange — the thin projection plus the coverage record that names it.
+    legs = _base_legs()
+    register_reconciliation_with_id(
+        "probe-coverage",
+        _ProbeResponse(_source(legs, "CRR"), _thin_ledger(legs), _thin_coverage()),  # type: ignore[arg-type]
+    )
+    row_ref = _row_of(
+        rr.build_comparison(
+            "probe-coverage-row",
+            _source(legs, "CRR"),
+            _thin_ledger(legs),
+            theirs_coverage=_thin_coverage(),
+        ),
+        "A1",
+        ours=True,
+    )
+
+    # Act
+    body = _cell_page(client, "probe-coverage", row=row_ref, col=GROSS_COL)
+
+    # Assert — refused, no table, and the reason travels with the empty table.
+    assert 'data-refusal="coverage"' in body
+    assert 'data-table="cell-pairs"' not in body
+    assert "REFUSAL" in _pairs_note(body)
+
+
+def test_the_loan_link_returns_to_the_cell_it_came_from(client: TestClient) -> None:
+    """The breadcrumb is an explicit signal, and it survives the origin guard."""
+    # Arrange
+    _register_probe("probe-return")
+    row_ref = _probe_row()
+
+    # Act
+    body = _cell_page(client, "probe-return", row=row_ref, col=RWEA_COL)
+    href = _exposure_link(body, "MOVER")
+    query = parse_qs(urlsplit(href).query)
+
+    # Assert — the link carries the cell, not just the key.
+    assert query["key"] == ["MOVER"]
+    target = query["return_to"][0]
+    assert urlsplit(target).path == "/reconciliation/probe-return/templates"
+    back = parse_qs(urlsplit(target).query)
+    assert back["row"] == [row_ref]
+    assert back["col"] == [RWEA_COL]
+    assert back["template"] == [TEMPLATE]
+
+    # Assert — and the guard the loan route puts it through ACCEPTS it. A link
+    # the template builds and the guard then discards is worse than no link:
+    # the page would look wired up and silently fall back to the explorer.
+    assert ui_main._safe_return_to(target, "/reconciliation/probe-return/rows") == target
+
+
+def test_the_referer_breadcrumb_still_works_without_an_explicit_return_to() -> None:
+    """The explicit parameter is an ADDED signal, not a replacement for a guard.
+
+    Every OTHER entry point to the loan forensic — the explorer's rows, the
+    sign-off worklist, a hand-typed link — appends no ``return_to``, and the
+    same-origin ``Referer`` is what carries their breadcrumb. This item is the
+    one that could plausibly have deleted that as redundant, so it is asserted
+    here rather than left to the file that owns the loan route.
+    """
+    # Arrange — a same-origin referrer naming a template cell.
+    cell = "/reconciliation/r1/templates?template=c08_03&row=0030&col=0090"
+    scope = {
+        "type": "http",
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "http",
+        "path": "/reconciliation/r1/loan",
+        "raw_path": b"/reconciliation/r1/loan",
+        "query_string": b"key=L1",
+        "root_path": "",
+        "server": ("localhost", 80),
+        "headers": [(b"host", b"localhost"), (b"referer", f"http://localhost{cell}".encode())],
+    }
+
+    # Act / Assert — no explicit parameter, and the cell still comes back.
+    assert ui_main._loan_return_to(Request(scope), "r1", "") == cell
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_a_moved_row_nets_across_the_sheet_and_a_one_sided_exposure_does_not(
+    framework: str,
+) -> None:
+    """The sheet line, on the two cases it exists to tell apart.
+
+    Parametrised over both frameworks because the row axis itself differs — CRR
+    bands C 08.03 in 17 rows and Basel 3.1 in 18 — so a leaf-scoped sum that
+    happened to work on one scale is not evidence about the other.
+    """
+    # Arrange — a portfolio whose ONLY difference is a leg in a different band.
+    ours = [*_base_legs(), _leg("MOVER", pd=PD_MID, rwa=RWA_MOVER)]
+    theirs = [*_base_legs(), _leg("MOVER", pd=PD_HIGH_B, rwa=RWA_MOVER)]
+    moved = build_recon(_source(ours, framework), _source(theirs, framework))
+    row_ref = _row_of(moved, "MOVER", ours=True)
+
+    # Adequacy — the CELL must differ, or "the sheet nets" is trivially true of
+    # a portfolio in which nothing differs anywhere.
+    cell = decompose_cell(moved, TEMPLATE, SHEET, row_ref, RWEA_COL)
+    assert cell.delta == pytest.approx(RWA_MOVER)
+
+    # Act
+    conservation = rr.sheet_conservation(moved, TEMPLATE, SHEET, cell)
+
+    # Assert — a move nets: it lands in two cells of one sheet with opposite signs.
+    assert conservation is not None
+    assert conservation.decidable
+    assert conservation.conserves
+    assert conservation.delta == pytest.approx(0.0)
+    assert conservation.leaf_rows >= 2
+
+    # Assert — and a genuinely one-sided population does not net, by exactly the
+    # money that is one-sided plus the values the two sides disagree about.
+    probe = rr.sheet_conservation(_probe(framework), TEMPLATE, SHEET, _probe_cell(framework))
+    assert probe is not None
+    assert probe.decidable
+    assert not probe.conserves
+    assert probe.delta == pytest.approx(PROBE_SHEET_RESIDUAL)
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_the_sheet_total_excludes_the_rows_that_would_double_count(framework: str) -> None:
+    """This row axis overlaps; summing every emitted row double-counts."""
+    # Act
+    conservation = rr.sheet_conservation(_probe(framework), TEMPLATE, SHEET, _probe_cell(framework))
+    assert conservation is not None
+
+    # Adequacy — a sheet with nothing to exclude cannot exercise the guard.
+    assert conservation.excluded_rows > 0, (
+        "no parent or indistinguishable row was excluded on this fixture, so "
+        "the double-count guard is not engaged and this test proves nothing"
+    )
+
+    # Assert — the naive sum over EVERY emitted row is a different number, so
+    # the exclusion is doing work rather than being decorative.
+    naive = diff_cells(_probe(framework), TEMPLATE, SHEET).filter(pl.col("col_ref") == RWEA_COL)
+    assert float(naive.get_column("delta").sum()) != pytest.approx(conservation.delta)
+    assert conservation.leaf_rows + conservation.excluded_rows == naive.height
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_a_non_additive_column_gets_no_sheet_total_at_all(framework: str) -> None:
+    """A sheet total is a SUM, and a sum down a column of averages has no referent.
+
+    Found by rendering the panel and reading it: column 0050 is an
+    exposure-weighted average PD, and the page reported "the sheet total is
+    +0.0000" and "column 0050 NETS across this sheet" — the same fabricated
+    number ``decompose_cell`` refuses to produce for the same reason, wearing a
+    total's clothes instead of a waterfall's.
+    """
+    # Arrange
+    recon = _probe(framework)
+    row_ref = _probe_row(framework)
+    average = decompose_cell(recon, TEMPLATE, SHEET, row_ref, "0050")
+
+    # Adequacy — 0050 must really be the non-additive case, not merely absent.
+    assert average.metric == "weighted_avg", average.metric
+    assert average.kind == "rows"
+
+    # Assert — refused outright, and the refusal reaches the explanation.
+    assert rr.sheet_conservation(recon, TEMPLATE, SHEET, average) is None
+    assert rr.explain_cell(recon, TEMPLATE, SHEET, row_ref, "0050").conservation is None
+    # ... while the additive column beside it still gets one, so "None" is a
+    # statement about the metric rather than about this sheet.
+    assert rr.explain_cell(recon, TEMPLATE, SHEET, row_ref, RWEA_COL).conservation is not None
+
+
+def test_a_refused_cell_renders_no_sheet_total_it_cannot_state(client: TestClient) -> None:
+    # Arrange
+    _register_probe("probe-noscope")
+
+    # Act — the weighted-average column, refused.
+    body = _cell_page(client, "probe-noscope", row=_probe_row(), col="0050")
+
+    # Assert — no verdict block at all, rather than a netting one.
+    assert "data-conservation=" not in body
+    assert "sheet total" not in body
+
+
+def test_the_page_states_that_the_waterfall_is_not_a_scope_check(client: TestClient) -> None:
+    # Arrange
+    _register_probe("probe-scope")
+
+    # Act
+    body = _cell_page(client, "probe-scope", row=_probe_row(), col=RWEA_COL)
+
+    # Assert — the verdict is marked, the figure is rendered, and the sentence
+    # that stops the waterfall being read as a scope check is on the page.
+    assert 'data-conservation="breaks"' in body
+    assert "not a scope check" in body
+    match = re.search(r'data-conservation-delta="true">([^<]*)<', body)
+    assert match is not None
+    assert _cell_text(match.group(1)) == rr._signed(PROBE_SHEET_RESIDUAL)
+
+
+def test_an_unmeasurable_column_is_not_netted_to_a_confident_total() -> None:
+    """A total over PART of a column reads exactly like a total over all of it."""
+    # Arrange — the thin projection: this column is unpopulatable on their side.
+    legs = _base_legs()
+    recon = rr.build_comparison(
+        "probe-undecidable",
+        _source(legs, "CRR"),
+        _thin_ledger(legs),
+        theirs_coverage=_thin_coverage(),
+    )
+
+    # Act
+    row_ref = _row_of(recon, "A1", ours=True)
+    conservation = rr.sheet_conservation(
+        recon, TEMPLATE, SHEET, decompose_cell(recon, TEMPLATE, SHEET, row_ref, GROSS_COL)
+    )
+
+    # Assert — no verdict, no figure, and the count of what blocked it.
+    assert conservation is not None
+    assert not conservation.decidable
+    assert not conservation.conserves
+    assert conservation.delta is None
+    assert conservation.display == rr.UNMEASURABLE_DISPLAY
+    assert conservation.unmeasurable_rows > 0
 
 
 # =============================================================================
@@ -828,14 +1578,14 @@ def test_a_cell_reads_the_one_group_that_serves_it(framework: str) -> None:
     explanation = rr.explain_cell(recon, TEMPLATE, SHEET, row_ref, "0090")
 
     # Assert — the population is addressed through the column mapping, and the
-    # legs listed are that group's, not the row's several.
+    # exposures paired beneath it are that group's, not the row's several.
     assert explanation.predicate_key
     served = rr._group_columns(recon.ours, TEMPLATE, SHEET).filter(
         (pl.col("row_ref") == row_ref) & (pl.col("col_ref") == "0090")
     )
     assert served.height >= 1
     assert str(served["predicate_key"][0]) == explanation.predicate_key
-    assert {leg.exposure_reference for leg in explanation.our_legs} >= {"MOVER"}
+    assert {row.key for row in explanation.pairs.rows} >= {"MOVER"}
 
 
 # =============================================================================
@@ -1096,3 +1846,404 @@ def test_comparison_inputs_carries_the_legacy_coverage_alongside_the_source() ->
     # The field exists so an our-side projection would be guarded, not so it can
     # be hardcoded away at the call site.
     assert inputs.ours_coverage is None
+
+
+# =============================================================================
+# The migration matrix's labels, and the drill-down under it
+# =============================================================================
+
+#: A leg only OUR side holds, in the split exposure's own PD band, so it lands in
+#: the same matrix cell as the two split legs. One cell, two findings.
+SPLIT_ONLY_OURS_RWA = 30_000.0
+
+
+def _split_probe(recon_id: str, framework: str = "CRR", *, mixed: bool = False) -> ReturnRecon:
+    """Register the split fixture against the ROUTE, and return its comparison.
+
+    ``mixed`` adds a leg their extract does not hold at all, in the split
+    exposure's band — so the one absent cell carries a decomposition finding and
+    a scope finding at once, which is the case a single label cannot describe.
+
+    The comparison is built here and MEMOISED under ``recon_id``, which is the
+    same entry the route reads — so the object a test computes its expectations
+    from is the object the page rendered, not a look-alike built beside it.
+    """
+    ours, legacy = _split_legs()
+    if mixed:
+        ours = [*ours, _leg("SPLIT_ONLY_OURS", pd=PD_HIGH_A, rwa=SPLIT_ONLY_OURS_RWA)]
+    register_reconciliation_with_id(
+        recon_id,
+        _ProbeResponse(_source(ours, framework), _source(legacy, framework)),  # type: ignore[arg-type]
+    )
+    return rr.build_comparison(recon_id, _source(ours, framework), _source(legacy, framework))
+
+
+def _migration_page(client: TestClient, recon_id: str, **extra: str) -> str:
+    """The rendered template-compare page, through the ROUTE, with no cell open.
+
+    Through the route for the same reason ``_cell_page`` is: the context keys
+    ``recon_templates.html`` reads are ``main.py``'s to supply, and a link built
+    from a key invented here would render and mean nothing.
+    """
+    params = {"template": TEMPLATE, "sheet": SHEET, **extra}
+    response = client.get(f"/reconciliation/{recon_id}/templates", params=params)
+    assert response.status_code == 200, response.text[:400]
+    return response.text
+
+
+def _matrix_of(recon: ReturnRecon, money_column: str = "rwa_final") -> rr.MigrationMatrix:
+    """The one migration matrix the C 08.03 corporate sheet has."""
+    groups = rr.migration_groups(recon, TEMPLATE, SHEET)
+    matrix = rr.migration_matrix(
+        recon, TEMPLATE, SHEET, groups[0].predicate_key, money_column=money_column
+    )
+    assert matrix is not None
+    return matrix
+
+
+def _matrix_links(html: str) -> dict[tuple[str, str], str]:
+    """``(moved_from, moved_to) -> href`` for every linked matrix cell."""
+    match = re.search(r'<table[^>]*data-table="row-migration"[^>]*>(.*?)</table>', html, re.DOTALL)
+    assert match is not None, "the page renders no matrix marked data-table=row-migration"
+    links: dict[tuple[str, str], str] = {}
+    for href in re.findall(r'<a class="cell-link" href="([^"]+)"', match.group(1)):
+        query = parse_qs(urlsplit(unescape(href)).query)
+        links[(query["moved_from"][0], query["moved_to"][0])] = unescape(href)
+    return links
+
+
+def test_every_movement_basis_has_its_own_rendering() -> None:
+    """A basis with no label renders as its own raw string, and nobody notices.
+
+    Anchored on ``return_recon.MOVEMENT_BASES`` — the module's own published
+    vocabulary — rather than on a list typed here, which would agree with a
+    stale label map by construction. The labels are also asserted PAIRWISE
+    DISTINCT: three of the nine describe the same axis bucket from different
+    causes, and rendering two of them identically throws the distinction away
+    exactly as the pre-change single label did.
+    """
+    # Assert
+    assert set(rr.BASIS_LABELS) == set(MOVEMENT_BASES)
+    assert len(set(rr.BASIS_LABELS.values())) == len(rr.BASIS_LABELS)
+    # The two sentinel axis buckets are named too — a bare ref beside named rows
+    # reads as a defect, and "absent" alone reads as "the exposure is missing".
+    assert set(rr.SENTINEL_ROW_NAMES) == {ABSENT_ROW, UNDECIDABLE_ROW}
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_a_split_exposure_leaves_the_scope_totals_empty(framework: str) -> None:
+    """The headline: ``ours_only`` / ``theirs_only`` now mean only what they say.
+
+    Both books hold this loan and agree on it to the penny; we report it as two
+    legs and their extract as one. Before the labels existed the matrix put
+    100,000 of our money and 100,000 of theirs under the two scope classes —
+    "not on their template at all", about a loan on their template.
+
+    Asserted as EQUALITIES on all four classes, not as a bound: an implementation
+    that emptied the scope totals by dropping the legs would satisfy a
+    ``== 0.0`` on its own, so the money is asserted to be somewhere.
+    """
+    # Arrange
+    recon = _split_recon(framework)
+    matrix = _matrix_of(recon)
+    whole = SPLIT_G_RWA + SPLIT_REM_RWA
+
+    # Assert the premise — the fixture must actually hold a split, or the two
+    # classes under test are unreachable and this proves nothing.
+    assert any(cell.basis.startswith("same_base") for row in matrix.cells for cell in row if cell)
+
+    # Assert — the money moved class, not place.
+    assert matrix.totals.same_base_ours == pytest.approx(whole)
+    assert matrix.totals.same_base_theirs == pytest.approx(whole)
+    assert matrix.totals.ours_only == pytest.approx(0.0)
+    assert matrix.totals.theirs_only == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_the_movement_classes_still_partition_the_matrix_money(framework: str) -> None:
+    """Nine classes now, and every one of them still has a home in the totals.
+
+    The failure this catches is a new basis with no total field: its money would
+    simply not appear in the table beneath the matrix, and the table would still
+    foot to itself. Asserted as an equality against the CELLS' own money, with
+    the field set anchored on the dataclass so a field added without a class (or
+    a class without a field) breaks it.
+    """
+    # Arrange
+    recon = _recon(framework)
+    matrix = _matrix_of(recon)
+    cells = [cell for row in matrix.cells for cell in row if cell is not None]
+    ours_classes = ("agreed", "moved", "same_base_ours", "mixed_base_ours", "ours_only")
+    theirs_classes = ("same_base_theirs", "mixed_base_theirs", "theirs_only")
+
+    # Assert the premise — the totals record must hold these nine and no others.
+    assert {field.name for field in fields(rr.MigrationTotals)} == {
+        *ours_classes,
+        *theirs_classes,
+        "undecidable",
+    }
+
+    # Assert — no class of money is unaccounted for on either side.
+    assert sum(
+        getattr(matrix.totals, name) for name in (*ours_classes, "undecidable")
+    ) == pytest.approx(sum(cell.money_ours or 0.0 for cell in cells))
+    assert sum(getattr(matrix.totals, name) for name in theirs_classes) == pytest.approx(
+        sum(cell.money_theirs or 0.0 for cell in cells if cell.money_ours is None)
+    )
+
+
+@pytest.mark.parametrize("money_column", MIGRATION_MONEY_COLUMNS)
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_the_drill_down_reads_the_matrix_it_is_drawn_under(
+    framework: str, money_column: str
+) -> None:
+    """Counts and list from one computation — asserted cell by cell.
+
+    ``migration_movers`` takes the MATRIX rather than the group and the price,
+    so the panel cannot describe a different population or a different money
+    column from the one on screen. This asserts the consequence: every cell's
+    leg count and both its money figures are reproduced by the list under it.
+
+    Parametrised over BOTH published prices, because the money column is one of
+    the two things reading the matrix removes: a panel that resolved its own
+    price would default to ``rwa_final`` and pass every ``rwa_final`` assertion
+    while rendering the wrong figures under an ``ead_final`` matrix.
+    """
+    # Arrange
+    recon = _recon(framework)
+    matrix = _matrix_of(recon, money_column)
+    cells = [cell for row in matrix.cells for cell in row if cell is not None]
+    assert matrix.money_column == money_column
+
+    # Assert the premise — a matrix of singleton cells could not show a grain
+    # difference at all.
+    assert any(cell.legs > 1 for cell in cells)
+
+    # Act / Assert
+    for cell in cells:
+        movers = rr.migration_movers(
+            recon, TEMPLATE, SHEET, matrix, cell.our_row_ref, cell.their_row_ref, limit=None
+        )
+        where = f"{cell.our_row_ref}/{cell.their_row_ref}"
+        assert movers.total == cell.legs, where
+        assert movers.basis == cell.basis, where
+        assert movers.money_column == money_column, where
+        assert sum(row.ours.value or 0.0 for row in movers.rows) == pytest.approx(
+            cell.money_ours or 0.0
+        ), where
+        assert sum(row.theirs.value or 0.0 for row in movers.rows) == pytest.approx(
+            cell.money_theirs or 0.0
+        ), where
+
+
+def test_the_movers_panel_names_both_rows_and_carries_the_attribution() -> None:
+    """The band boundary crossed, for free — and the caveat that must ride with it.
+
+    The two row NAMES are the finding: "0.75 to <1.75" against the bucket their
+    side did not place the leg in. Rendering refs alone would leave the analyst
+    to look the bands up, which is the work this panel exists to remove.
+
+    ``PLACEMENT_ATTRIBUTION`` is asserted VERBATIM beside the list for the same
+    reason the matrix carries it: both sides are banded by our own generators
+    from each side's own value, so a move here is value-driven by construction
+    and says nothing about their banding RULE.
+    """
+    # Arrange
+    recon = _split_recon("CRR")
+    matrix = _matrix_of(recon)
+    names = rr._row_names(recon, TEMPLATE, SHEET)
+    our_row = _row_of(recon, "L1__G_BANK", ours=True)
+
+    # Assert the premise — the row must have a NAME distinct from its ref, or
+    # "names not refs" is not a testable claim on this fixture.
+    assert names.get(our_row) and names[our_row] != our_row
+
+    # Act
+    movers = rr.migration_movers(recon, TEMPLATE, SHEET, matrix, our_row, ABSENT_ROW)
+
+    # Assert
+    assert movers.our_row_name == names[our_row]
+    assert movers.their_row_name == rr.SENTINEL_ROW_NAMES[ABSENT_ROW]
+    assert movers.basis == "same_base_ours"
+    assert movers.attribution == PLACEMENT_ATTRIBUTION
+
+
+def test_a_matrix_pair_no_leg_occupies_renders_its_reason() -> None:
+    """An empty drill-down is "not a cell", never "nothing moved".
+
+    Most of a cross-tabulation is empty by construction. A blank panel with no
+    note reads as a finding — the analyst clicked something and was shown
+    nothing — so the note is asserted non-empty and asserted to say which of the
+    three cases this is.
+    """
+    # Arrange
+    recon = _recon("CRR")
+    matrix = _matrix_of(recon)
+    occupied = {
+        (cell.our_row_ref, cell.their_row_ref)
+        for row in matrix.cells
+        for cell in row
+        if cell is not None
+    }
+    empty = next(
+        (ours, theirs)
+        for ours in matrix.our_rows
+        for theirs in matrix.their_rows
+        if (ours, theirs) not in occupied
+    )
+
+    # Act
+    movers = rr.migration_movers(recon, TEMPLATE, SHEET, matrix, *empty)
+
+    # Assert
+    assert movers.rows == ()
+    assert movers.total == 0
+    assert "not a cell" in movers.note
+    assert movers.basis == "", "a pair with no cell has no movement class to report"
+
+
+def test_the_movers_cap_states_what_it_hid() -> None:
+    """A silent cap on a regulatory comparison is a silent zero by another name.
+
+    Tightened to one row so the tail actually carries a leg — the ADEQUACY limb
+    is the detector here, exactly as it was for the pair table's cap: "nothing
+    is hidden" and "the cap lies about what it hid" look identical without it.
+    """
+    # Arrange
+    recon = _split_recon("CRR")
+    matrix = _matrix_of(recon)
+    our_row = _row_of(recon, "L1__G_BANK", ours=True)
+
+    # Act
+    capped = rr.migration_movers(recon, TEMPLATE, SHEET, matrix, our_row, ABSENT_ROW, limit=1)
+    whole = rr.migration_movers(recon, TEMPLATE, SHEET, matrix, our_row, ABSENT_ROW, limit=None)
+
+    # Assert the premise — the cap must actually engage.
+    assert capped.hidden > 0, "the cap is not engaged and this test proves nothing"
+
+    # Assert — the cap admits to itself, and the total is the WHOLE cell.
+    assert capped.shown == 1
+    assert capped.total == whole.total == 2
+    assert f"{capped.total:,}" in capped.note
+    assert "not on this page" in capped.note
+    assert "All" in whole.note and whole.hidden == 0
+
+
+def test_every_priced_matrix_cell_links_to_the_exposures_behind_it(client: TestClient) -> None:
+    """The plan's headline feature: the matrix cells are clickable.
+
+    Asserted on the RENDERED page and POSITIONALLY — every cell the matrix
+    prices carries a link naming ITS OWN pair, and the empty cells carry none. A
+    link that named the wrong pair would render perfectly and drill into another
+    cell's exposures.
+    """
+    # Arrange
+    recon = _split_probe("mig-links")
+    html = _migration_page(client, "mig-links")
+    matrix = _matrix_of(recon)
+    priced = {
+        (cell.our_row_ref, cell.their_row_ref)
+        for row in matrix.cells
+        for cell in row
+        if cell is not None
+    }
+
+    # Act
+    links = _matrix_links(html)
+
+    # Assert the premise — an all-empty matrix would make this vacuous.
+    assert len(priced) > 1
+
+    # Assert — one link per priced cell, naming that cell, and none anywhere else.
+    assert set(links) == priced
+    for (moved_from, moved_to), href in links.items():
+        query = parse_qs(urlsplit(href).query)
+        assert query["moved_from"] == [moved_from]
+        assert query["moved_to"] == [moved_to]
+        # ... and the selectors that decide WHICH matrix are carried with it.
+        assert query["template"] == [TEMPLATE]
+        assert query["sheet"] == [SHEET]
+        assert query["group"] == [matrix.predicate_key]
+        assert query["money"] == [matrix.money_column]
+
+
+def test_clicking_a_matrix_cell_lists_its_legs_with_both_rows_named(client: TestClient) -> None:
+    """Following the link renders the movers, positionally, on the real page.
+
+    The columns are asserted by INDEX rather than by "the word appears
+    somewhere": a value in the wrong column renders and reads plausibly, which
+    has already happened on this page in this batch.
+    """
+    # Arrange
+    recon = _split_probe("mig-drill")
+    our_row = _row_of(recon, "L1__G_BANK", ours=True)
+    names = rr._row_names(recon, TEMPLATE, SHEET)
+
+    # Act
+    html = _migration_page(client, "mig-drill", moved_from=our_row, moved_to=ABSENT_ROW)
+    rows = _table_rows(html, "migration-movers")
+    text = unescape(html)
+
+    # Assert — one row per leg, biggest first, each naming the exposure it came
+    # from and what the other side did with it.
+    assert [row[COL_MOVER_LEG].split(" ")[0] for row in rows] == ["L1__G_BANK", "L1__REM"]
+    assert [row[COL_MOVER_EXPOSURE] for row in rows] == ["L1", "L1"]
+    assert [row[COL_MOVER_OURS] for row in rows] == ["60,000", "40,000"]
+    assert {row[COL_MOVER_THEIRS] for row in rows} == {"not held"}
+    assert all("holds L1 elsewhere" in row[COL_MOVER_WHERE] for row in rows)
+    # ... and the two row names are on the page, which is the boundary crossed.
+    # Read off the UNESCAPED page: a band name carries a "<".
+    assert names[our_row] in text
+    assert rr.SENTINEL_ROW_NAMES[ABSENT_ROW] in text
+    assert PLACEMENT_ATTRIBUTION in text
+
+
+def test_a_mixed_cell_says_which_of_its_legs_are_which(client: TestClient) -> None:
+    """One cell, two findings — and the list is the only thing that can split it.
+
+    ``mixed_base_ours`` is honest about the cell and deliberately uninformative
+    about the legs, so the panel has to carry the difference row by row. A page
+    that rendered the same sentence against all three legs would be back to the
+    single label the cell already refuses to give.
+    """
+    # Arrange
+    recon = _split_probe("mig-mixed", mixed=True)
+    matrix = _matrix_of(recon)
+    our_row = _row_of(recon, "L1__G_BANK", ours=True)
+    cell = next(
+        cell
+        for row in matrix.cells
+        for cell in row
+        if cell is not None and (cell.our_row_ref, cell.their_row_ref) == (our_row, ABSENT_ROW)
+    )
+
+    # Assert the premise — the cell must really be mixed.
+    assert cell.basis == "mixed_base_ours"
+    assert cell.legs == 3
+
+    # Act
+    html = _migration_page(client, "mig-mixed", moved_from=our_row, moved_to=ABSENT_ROW)
+    rows = _table_rows(html, "migration-movers")
+    where = {row[COL_MOVER_LEG].split(" ")[0]: row[COL_MOVER_WHERE] for row in rows}
+
+    # Assert — two legs of one exposure their side holds, one they do not.
+    assert "holds L1 elsewhere" in where["L1__G_BANK"]
+    assert "holds L1 elsewhere" in where["L1__REM"]
+    assert "does not hold this exposure anywhere" in where["SPLIT_ONLY_OURS"]
+
+
+def test_an_unclicked_matrix_renders_no_movers_panel(client: TestClient) -> None:
+    """The panel is a drill-down, so it appears only when a cell was clicked.
+
+    Its absence is what makes clicking meaningful — a table always on screen
+    would be describing a pair nobody chose.
+    """
+    # Arrange
+    _split_probe("mig-quiet")
+
+    # Act
+    html = _migration_page(client, "mig-quiet")
+
+    # Assert
+    assert 'data-table="row-migration"' in html, "the matrix itself must still render"
+    assert 'data-movers="note"' not in html

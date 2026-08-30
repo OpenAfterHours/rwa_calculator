@@ -14,6 +14,10 @@ Key responsibilities:
 - Project the very wide ``component_reconciliation`` frame down to a readable set
   of columns for on-screen display; the full forensic detail (explain / input
   drivers, relative deltas) stays available via the CSV export.
+- Answer the loan forensic's two remaining trail-breakers: WHICH template rows a
+  key reached on each side (``placement_panel``), and WHICH ``_recon_key`` an
+  inbound link built from an exposure reference alone means
+  (``resolve_recon_key``).
 
 Bucket label constants are imported from the engine (its single source) so the
 UI and the engine summaries never drift.
@@ -21,10 +25,12 @@ UI and the engine summaries never drift.
 References:
 - Canonical components: data/schemas.RECONCILABLE_COMPONENTS
 - Config grammar: api/reconciliation.load_reconciliation_config
+- Placement grain: reporting/membership.MEMBERSHIP_SCHEMA
 """
 
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, SupportsFloat, cast
@@ -33,20 +39,26 @@ import polars as pl
 
 from rwa_calc.analysis.recon_registry import RECONCILABLE_COMPONENTS_BY_NAME
 from rwa_calc.analysis.reconciliation import (
+    _KEY_SEP,  # the ONE definition of the composite-key separator; never re-spelled here
     BUCKET_BREAK,
     BUCKET_EXACT,
     BUCKET_MISSING_LEFT,
     BUCKET_MISSING_RIGHT,
     BUCKET_WITHIN,
 )
+from rwa_calc.analysis.return_recon import KEY_COLUMNS
 from rwa_calc.ui.views import method_split
 from rwa_calc.ui.views.method_split import METHOD_ORDER  # presentation order of the sections
+from rwa_calc.ui.views.return_recon import TEMPLATE_CODES
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
 
+    from rwa_calc.analysis.return_recon import ReturnRecon, SideView
     from rwa_calc.api.models import ReconciliationResponse
     from rwa_calc.ui.app.recon_signoff import Decision
+
+logger = logging.getLogger(__name__)
 
 # The default mapping shown in the page's TOML editor. Kept as the single source
 # the page route, the REST default and the tests all reference. ``legacy_file``
@@ -197,6 +209,123 @@ _CHAIN_ORDER: tuple[str, ...] = (
     "rwa",
 )
 
+# =============================================================================
+# "Where this exposure lands" — the placement panel's vocabulary
+# =============================================================================
+
+# Which side(s) of the comparison reached a template row. THREE answers, three
+# strings. A row only one side reaches is the finding the panel exists to
+# surface, so it never renders as the blank that reads like agreement.
+PLACEMENT_BOTH = "both"
+PLACEMENT_OURS_ONLY = "ours only"
+PLACEMENT_THEIRS_ONLY = "theirs only"
+
+# What a side prints for a row it did / did not reach. ``NOT_REACHED_DISPLAY`` is
+# a word, never an empty cell and never a zero — this codebase's standing rule is
+# that a blank is never a zero and the kinds of blank are not each other.
+REACHED_DISPLAY = "reached"
+NOT_REACHED_DISPLAY = "not reached"
+
+# A side that reached rows but none that can be ranked. Distinct from
+# ``NOT_REACHED_DISPLAY``: "we hold this leg but no single row is its place" and
+# "we do not hold this leg here" are different statements about the same blank.
+UNDECIDED_DISPLAY = "no single leaf row"
+
+# ``is_parent_row`` is TRI-STATE (reporting/membership.py::_parent_flags) and is
+# kept tri-state here: ``None`` means another row holds exactly the same legs, so
+# containment cannot decide — which is neither a parent nor a leaf.
+PARENT_ROW = "parent"
+LEAF_ROW = "leaf"
+PARENT_INDISTINGUISHABLE = "indistinguishable"
+
+# The FOURTH hierarchy state, and it is not one of the flag's three: this side
+# does not hold the exposure in this row at all, so it makes no containment
+# claim about it. Without it, "not reached" would render as
+# ``PARENT_INDISTINGUISHABLE`` — the flag is ``None`` in both cases, and they are
+# not the same statement.
+HIERARCHY_NOT_REACHED = NOT_REACHED_DISPLAY
+
+# What each state means to anyone tempted to add rows up.
+_PARENT_NOTES: dict[str, str] = {
+    PARENT_ROW: (
+        "A PARENT row: its legs contain another row's in this group, so it "
+        "double-counts against its children. Never add it to them."
+    ),
+    LEAF_ROW: "Provably contains and duplicates no other row in this group.",
+    PARENT_INDISTINGUISHABLE: (
+        "Whether this row is a parent is INDISTINGUISHABLE from the data — "
+        "another row holds exactly the same legs. Treat it as 'may double "
+        "count', never as a leaf."
+    ),
+    HIERARCHY_NOT_REACHED: (
+        "This side does not hold the exposure in this row, so it makes no "
+        "containment claim about it either way."
+    ),
+}
+
+# The panel's own degraded reasons. A comparison that cannot be built is a
+# different answer from an exposure that reached no instrumented row, and only
+# the first is an "unavailable" panel.
+PLACEMENT_NO_COMPARISON = (
+    "No return-template comparison is available for this reconciliation, so "
+    "where this exposure landed on the firm's side cannot be shown."
+)
+PLACEMENT_NO_KEY = "No reconciliation key was supplied, so there is nothing to place."
+
+# A composite key that names no exposure identity column at all (counterparty +
+# class, say). Nothing in it links a reconciled row to a membership leg, and
+# matching on a non-identity segment is what leaked another exposure's
+# placements onto the page — see ``_identity_tokens``.
+# A key that carries the separator with no key columns supplied to read it by.
+# Whether the separator is structure (a composite key) or data (a reference that
+# contains it) is undecidable without them, and guessing either way is one of the
+# two defects this module has already shipped.
+PLACEMENT_KEY_UNREADABLE = (
+    "This exposure's placement cannot be shown: the reconciliation key contains "
+    "the composite-key separator and the mapping's key columns were not supplied, "
+    "so which part of it identifies the exposure is undecidable."
+)
+
+PLACEMENT_NO_IDENTITY_KEY = (
+    "This reconciliation's join key names no exposure reference, so its rows "
+    "cannot be matched to the legs a return template reports. Add "
+    "exposure_reference (or source_exposure_reference) to the mapping's "
+    "our_keys to enable this panel."
+)
+
+# A reconciliation that produced no keyed frame at all (it failed, or the mapping
+# named no comparable component). Distinct from "this key is not in the frame".
+_NO_KEYED_FRAME = (
+    "This reconciliation produced no per-key frame, so no exposure can be looked "
+    "up in it. Re-run it with the join keys and at least one component mapped."
+)
+
+# How many rows of the per-key frame are read to recover the mapping's key
+# columns. The concatenation is identical on every row, so a head is enough;
+# several rows are read only so a column that coincides with a segment on ONE row
+# cannot be mistaken for the key column.
+_KEY_COLUMN_SAMPLE = 50
+
+# Column namespaces the reconcile join DERIVES. Only the raw columns carried
+# verbatim beside ``_recon_key`` can be the mapping's key columns, so the derived
+# ones are excluded before any segment is matched back to a name.
+_DERIVED_PREFIXES: tuple[str, ...] = (
+    "our_",
+    "legacy_",
+    "abs_delta_",
+    "rel_delta_",
+    "signoff_",
+    "_",
+)
+_DERIVED_COLUMNS: frozenset[str] = frozenset(
+    {"row_bucket", "worst_component", "gross_exposure", "is_immaterial", "method"}
+)
+
+# The placeholder for a key position no carried column reproduces (a categorical
+# key the join normalised before concatenating). Named, never guessed at.
+_UNKNOWN_KEY_COLUMN = "?"
+
+
 # Human labels for the chain steps; anything unmapped falls back to the component
 # name with underscores spaced.
 _STEP_LABELS: dict[str, str] = {
@@ -259,6 +388,130 @@ class ForensicPage:
     offset: int
     sort: str | None
     descending: bool
+
+
+@dataclass(frozen=True, slots=True)
+class PlacementRow:
+    """One template row this exposure reached, ours beside theirs.
+
+    ``in_ours`` / ``in_theirs`` are INDEPENDENT facts and both are rendered:
+    ``our_display`` and ``their_display`` are always a word, so a row only one
+    side reaches reads as a finding rather than as a half-empty line that looks
+    like agreement.
+
+    ``our_parent`` / ``their_parent`` carry ``is_parent_row`` unchanged, tri-state
+    and all — ``None`` is "another row holds exactly the same legs", which is not
+    ``False``.
+
+    **The hierarchy state is rendered PER SIDE, and that is a correctness
+    requirement, not a layout choice.** A single collapsed state taking ours and
+    falling back to theirs shipped here and was caught in review: on a row that
+    is ``False`` on our side and ``None`` on theirs — measured, and reachable
+    whenever our side has two populated children under a parent and theirs has
+    one — it rendered ``leaf`` with the note "Provably contains and duplicates no
+    other row in this group". That note is a claim about BOTH sides and it is
+    false for theirs. The tri-state was preserved perfectly in the fields above
+    and then flattened one step before the analyst saw it, which is where the
+    whole point of keeping it tri-state was lost.
+
+    ``*_parent_state`` therefore has FOUR values, not three: the flag's own
+    ``parent`` / ``leaf`` / ``indistinguishable``, plus ``HIERARCHY_NOT_REACHED``
+    for a side that does not hold the exposure in this row and so makes no
+    containment claim at all. Collapsing that fourth into ``indistinguishable``
+    would be the same defect one level down — the flag is ``None`` in both cases
+    and they are not the same statement.
+    """
+
+    row_ref: str
+    row_name: str
+    in_ours: bool
+    in_theirs: bool
+    our_parent: bool | None
+    their_parent: bool | None
+    side: str
+    our_display: str
+    their_display: str
+    our_parent_state: str
+    their_parent_state: str
+    parent_note: str
+
+
+@dataclass(frozen=True, slots=True)
+class PlacementGroup:
+    """Where one exposure landed in ONE template sheet's population group.
+
+    The grain is the membership grain — ``(template_id, sheet, predicate_key)`` —
+    and not the sheet, because a template row does not have one population: the
+    origin-basis and post-substitution groups on a row hold different legs, and
+    a panel that merged them would show a leg twice as though it had moved.
+
+    ``our_placement`` / ``their_placement`` are the single provably-LEAF row on
+    each side (``is_parent_row is False``), which is the same rule
+    ``analysis.return_recon._group_legs`` places a leg by. ``""`` means the side
+    has no single leaf — either it reached no row here, or every row holding the
+    leg is a parent or indistinguishable — and the ``*_name`` field says which of
+    those two it was. ``moved`` is only ever True when BOTH sides decided.
+    """
+
+    template_id: str
+    template_label: str
+    sheet: str
+    predicate_key: str
+    columns: tuple[str, ...]
+    rows: tuple[PlacementRow, ...]
+    our_placement: str
+    our_placement_name: str
+    their_placement: str
+    their_placement_name: str
+    moved: bool
+
+
+@dataclass(frozen=True, slots=True)
+class PlacementPanel:
+    """The loan forensic's reverse lookup: which return rows this key reached.
+
+    ``available`` false is the DEGRADED panel — there is no second side to place
+    the exposure against — and ``reason`` says why, so the analyst gets the
+    mapping remedy rather than a blank. An ``available`` panel with no ``groups``
+    is a DIFFERENT answer: the comparison exists and this exposure reached no
+    instrumented template row. Collapsing the two would report a missing legacy
+    ledger as "this loan is in no return".
+
+    **This panel carries NO money column, anywhere, and that is a structural
+    property worth keeping.** The standing hazard on membership data is summing
+    across ``predicate_key`` — the groups are BASES, not parts, so a substituted
+    leg is counted on both and a per-sheet sum over-counts (measured at 3.00x on
+    C 07.00 ``retail_other`` and 1.86x on C 08.01 ``corporate``). A panel that
+    quotes no EAD and no RWEA cannot express that sum at all, so the defect is
+    unreachable here rather than merely avoided. Adding a money column would
+    re-open it and would need the per-group scoping rules in
+    ``ui.views.return_recon`` to come with it.
+    """
+
+    key: str
+    available: bool
+    reason: str
+    groups: tuple[PlacementGroup, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class KeyResolution:
+    """What an inbound ``?key=`` means, against the run's real join key.
+
+    ``recon_key`` is the resolved ``_recon_key`` (``""`` when it could not be
+    resolved); ``candidates`` are the reconciled keys a partial reference matched
+    when more than one did, so the page can offer a choice rather than guess.
+    ``key_columns`` names the mapping's ``our_keys`` — recovered from the frame,
+    with ``"?"`` for any position no carried column reproduces — so the
+    explanation says what the join key actually is.
+    """
+
+    requested: str
+    recon_key: str
+    matched_exactly: bool
+    candidates: tuple[str, ...]
+    key_columns: tuple[str, ...]
+    reason: str
 
 
 def headline_stats(response: ReconciliationResponse) -> list[dict]:
@@ -639,6 +892,145 @@ def loan_detail(response: ReconciliationResponse, recon_key: str) -> dict | None
     }
 
 
+def resolve_recon_key(response: ReconciliationResponse, key: str) -> KeyResolution:
+    """Resolve an inbound ``?key=`` to the run's real ``_recon_key``.
+
+    The return-template page links a leg through on its exposure reference alone
+    (``source_exposure_reference or exposure_reference``), while this module
+    looks up ``_recon_key`` — which ``analysis.reconciliation._key_expr`` builds
+    as a ``_KEY_SEP``-joined concatenation of the mapping's ``our_keys``. On the
+    default single-column key the two coincide; under ANY composite mapping they
+    do not, and the link dead-ends on a 404 that reads as "this loan does not
+    exist". It exists; the link simply addressed it by one of its key columns.
+
+    Resolution is two steps and it never guesses:
+
+    1. An exact ``_recon_key`` — the default mapping's case, unchanged.
+    2. A key whose ``_KEY_SEP`` segments contain *key* — the composite case.
+
+    Exactly one match resolves. SEVERAL is a genuine ambiguity (one reference
+    reconciled once per class, say) and comes back as ``candidates`` for the page
+    to offer — picking the first would answer with a different loan. NONE comes
+    back with a reason naming the join key's columns, which is the actionable
+    form of the old blanket "No reconciliation row matches that key."
+    """
+
+    def unresolved(reason: str, columns: tuple[str, ...] = ()) -> KeyResolution:
+        return KeyResolution(
+            key, "", matched_exactly=False, candidates=(), key_columns=columns, reason=reason
+        )
+
+    df = response.collect_component_reconciliation()
+    if "_recon_key" not in df.columns:
+        return unresolved(_NO_KEYED_FRAME)
+    if not key:
+        return unresolved(PLACEMENT_NO_KEY)
+
+    columns = _key_columns(df)
+    keys = pl.col("_recon_key").cast(pl.String)
+    if df.filter(keys == key).height:
+        return KeyResolution(
+            key, key, matched_exactly=True, candidates=(), key_columns=columns, reason=""
+        )
+
+    candidates = _key_candidates(df, key, columns)
+    if len(candidates) == 1:
+        logger.info("recon key %r resolved to its composite key by segment match", key)
+        return KeyResolution(
+            key, candidates[0], matched_exactly=False, candidates=(), key_columns=columns, reason=""
+        )
+    named = " + ".join(columns) if columns else "an unnamed key"
+    if candidates:
+        return KeyResolution(
+            key,
+            "",
+            matched_exactly=False,
+            candidates=candidates,
+            key_columns=columns,
+            reason=(
+                f"This reconciliation joins on {named}, so {key!r} on its own addresses "
+                f"{len(candidates)} reconciled rows rather than one. Pick the one you meant."
+            ),
+        )
+    # The composite hint belongs only on a composite key. On a single-column
+    # mapping the reference simply is not in the run, and telling the analyst to
+    # look at a composite key would send them to a mapping that does not exist.
+    hint = (
+        " — a link built from the exposure reference alone cannot address a composite key."
+        if len(columns) > 1
+        else "."
+    )
+    return unresolved(
+        f"No reconciliation row matches {key!r}. This run joins on {named}{hint}", columns
+    )
+
+
+def placement_panel(
+    recon: ReturnRecon | None,
+    recon_key: str,
+    *,
+    key_columns: Sequence[str] = (),
+    reason: str = "",
+) -> PlacementPanel:
+    """Which return-template rows this exposure reached, ours beside theirs.
+
+    The reverse of the template-compare page: that page starts at a cell and
+    drills to the exposures behind it, this one starts at an exposure and says
+    where it landed. Without it the placement half of "why did this contract move
+    band?" stays manual.
+
+    *recon* is the memoised comparison (``ui.views.return_recon.build_comparison``)
+    or ``None`` on the degraded path, where *reason* — the typed reason
+    ``comparison_inputs`` already returns — is shown instead. Nothing is generated
+    here: this reads the membership frames the comparison already holds.
+
+    The exposure is matched on the identity columns membership carries
+    (``exposure_reference`` / ``source_exposure_reference``) against the segments
+    of *recon_key*, because the reconciliation key and the leg reference are the
+    same string only under the default mapping — a composite key carries the
+    reference as one segment, and a real-estate or guarantee sub-row carries the
+    collapsed parent as its ``source_exposure_reference``.
+    """
+    if recon is None:
+        return PlacementPanel(
+            key=recon_key, available=False, reason=reason or PLACEMENT_NO_COMPARISON, groups=()
+        )
+    if not recon_key:
+        return PlacementPanel(key=recon_key, available=False, reason=PLACEMENT_NO_KEY, groups=())
+    # A multi-segment key with no key columns to read it by is INDETERMINATE, and
+    # must say so. Matching the whole string finds nothing, which would otherwise
+    # render as "this exposure reached no instrumented row" — a different and
+    # false claim, and the same wrong-label-on-a-blank the rest of this module
+    # exists to prevent. The route always supplies the columns, so this is the
+    # direct-caller path.
+    if _KEY_SEP in recon_key and not key_columns:
+        return PlacementPanel(
+            key=recon_key, available=False, reason=PLACEMENT_KEY_UNREADABLE, groups=()
+        )
+    tokens = sorted(_identity_tokens(recon_key, key_columns))
+    if not tokens:
+        # The key columns are known and none of them is an exposure identity, so
+        # nothing links its rows to a leg. Saying so beats matching widely.
+        return PlacementPanel(
+            key=recon_key, available=False, reason=PLACEMENT_NO_IDENTITY_KEY, groups=()
+        )
+
+    ours = _placement_membership(recon.ours, tokens)
+    theirs = _placement_membership(recon.theirs, tokens)
+    addresses = sorted(set(ours) | set(theirs), key=lambda a: (a[0], a[1] or "", a[2]))
+    if not addresses:
+        logger.info("placement panel: no membership reaches key %r", recon_key)
+    return PlacementPanel(
+        key=recon_key,
+        available=True,
+        reason="",
+        groups=tuple(
+            _placement_group(recon, address, ours.get(address, {}), theirs.get(address, {}))
+            for address in addresses
+        ),
+    )
+
+
 def annotate_signoff(
     df: pl.DataFrame,
     decisions: Mapping[str, Decision],
@@ -808,6 +1200,356 @@ def _readable_recon_columns(df: pl.DataFrame) -> list[str]:
         if extra in present and extra not in cols:
             cols.append(extra)
     return cols or present
+
+
+def _identity_tokens(recon_key: str, key_columns: Sequence[str] = ()) -> set[str]:
+    """The exposure identities a ``_recon_key`` carries — and ONLY those.
+
+    ``_key_expr`` concatenates the mapping's ``our_keys`` with ``_KEY_SEP``, so a
+    composite key holds an exposure reference alongside whatever else it keys on.
+    This returns the segments that came from an IDENTITY key column, positionally
+    matched against *key_columns*, and nothing else.
+
+    **Taking every segment leaked another exposure's placements onto the page,
+    in both directions.** Measured on a ``(counterparty_reference,
+    exposure_reference)`` mapping where a second exposure was referenced by the
+    counterparty's own reference — an overdraft booked at counterparty level,
+    an ordinary shape. Loan ``X`` of counterparty ``CP`` keys as ``CP||X``, whose
+    segments are ``{CP, X}``, so the decoy's membership merged in and the panel
+    (a) grew a row ``X`` never reached and (b) LOST a real band move: the decoy
+    added a second provably-leaf row, ``_placement_leaf`` saw two leaves, and
+    ``moved`` fell from True to False. A confident, plausible, wrong answer on a
+    regulatory forensic — the failure class this batch exists to catch.
+
+    Note what the fix is NOT. The sibling identity rule at
+    ``analysis.return_recon._comparison_key`` resolves ONE identity per leg, and
+    copying its column list would not have helped: the column set was never the
+    problem (the two-column OR in ``_placement_membership`` is load-bearing for
+    split legs, whose ``_recon_key`` is the collapsed parent). The TOKEN SET was
+    too wide. The grain is what moved.
+
+    With no *key_columns* the whole key is the single token, unsplit — the safe
+    reading, and the right one for the single-column default: a key that is its
+    own identity can only ever match its own exposure. Empty segments are
+    dropped, since a null key column concatenates as ``""`` and would otherwise
+    match every leg with a null reference.
+    """
+    if len(key_columns) <= 1:
+        return {recon_key} if recon_key else set()
+    return {
+        segment
+        for segment, column in zip(recon_key.split(_KEY_SEP), key_columns, strict=False)
+        if segment and column in KEY_COLUMNS
+    }
+
+
+def _key_candidates(df: pl.DataFrame, key: str, key_columns: Sequence[str]) -> tuple[str, ...]:
+    """Every ``_recon_key`` whose key columns include *key* as one of its values.
+
+    A SEGMENT match, and deliberately only that. An identity-column fallback was
+    written here first and removed as dead: the only shape it could serve — a
+    composite key keyed on ``source_exposure_reference`` — already puts that
+    reference in a segment, and a composite keyed on ``exposure_reference``
+    carries the sub-row reference in both the segment and the column, so the
+    fallback never resolved anything the segment match did not. A link whose
+    reference reaches neither (the collapsed parent of a split, under a composite
+    key) is reported with the reason above rather than resolved by a prefix
+    guess: ``M1`` prefixes ``M10`` as readily as ``M1_rre``.
+
+    Stays vectorised — the per-key frame is the widest in the run and this is on
+    a page render.
+
+    A SINGLE-COLUMN key yields nothing here, and must: its whole value is its
+    only segment, so the exact match in ``resolve_recon_key`` has already had its
+    chance, and splitting a reference that merely contains ``||`` would resolve a
+    fragment of it to the whole loan. Measured on ``L1||A``, where both ``L1``
+    and ``A`` came back as that loan.
+    """
+    if len(key_columns) <= 1:
+        return ()
+    matched = df.filter(pl.col("_recon_key").cast(pl.String).str.split(_KEY_SEP).list.contains(key))
+    if not matched.height:
+        return ()
+    return tuple(
+        str(value)
+        for value in matched.get_column("_recon_key").unique().sort().to_list()
+        if value is not None
+    )
+
+
+def _key_columns(df: pl.DataFrame) -> tuple[str, ...]:
+    """The mapping's ``our_keys``, recovered from the per-key frame itself.
+
+    ``ReconciliationResponse`` does not carry the mapping, but the reconcile does
+    carry each key column VERBATIM beside ``_recon_key``
+    (``analysis.reconciliation.ReconciliationRunner._prepare_our_side``), so each
+    segment can be matched back to the column that reproduces it across a sample
+    of rows. Only the raw carried columns are candidates — every ``our_`` /
+    ``legacy_`` / delta / bucket column is derived by the join and could coincide
+    with a segment by accident.
+
+    A position no column reproduces (a categorical key the join casefolded before
+    concatenating) is named ``_UNKNOWN_KEY_COLUMN`` rather than guessed at: a
+    wrong column name in the explanation sends the analyst to fix the wrong side
+    of the mapping.
+
+    ``_is_carried_column`` is DEFENCE IN DEPTH, not a load-bearing guard, and is
+    recorded as such so nobody later mistakes it for one in either direction:
+    ``_prepare_our_side`` selects the verbatim key columns immediately after
+    ``_recon_key`` and before anything derived, so column order alone already
+    reaches the same answer. Removing the filter reddens no test — measured. It
+    stays because the intent ("only a carried column can BE a key column") should
+    not depend on a select order two modules away.
+    """
+    if "_recon_key" not in df.columns or df.height == 0:
+        return ()
+    sample = df.head(_KEY_COLUMN_SAMPLE)
+    keys = [str(value or "") for value in sample.get_column("_recon_key").cast(pl.String).to_list()]
+    candidates = {
+        name: [
+            "" if value is None else str(value)
+            for value in sample.get_column(name).cast(pl.String, strict=False).to_list()
+        ]
+        for name in sample.columns
+        if _is_carried_column(name)
+    }
+
+    # A SINGLE-COLUMN key reproduces ``_recon_key`` WHOLE, and that is tested
+    # first so the separator is never read out of data. ``_KEY_SEP`` is two
+    # characters a firm may legitimately put in an exposure reference, and
+    # splitting on it regardless was measured to do two wrong things at once on
+    # a single-column mapping keyed on ``L1||A``: it reported the join key as
+    # ``? + ?`` (no column reproduces "L1" or "A", because the column holds the
+    # whole string), and it resolved BOTH ``L1`` and ``A`` — half a reference,
+    # and a fragment of one — to the whole loan, silently and with no reason
+    # given. Under a single-column mapping there is nothing to split on: the
+    # separator is data, not structure.
+    whole = next((name for name, values in candidates.items() if values == keys), None)
+    if whole is not None:
+        return (whole,)
+
+    segments = [key.split(_KEY_SEP) for key in keys]
+    width = max((len(parts) for parts in segments), default=0)
+    names: list[str] = []
+    for position in range(width):
+        wanted = [parts[position] if position < len(parts) else "" for parts in segments]
+        names.append(
+            next(
+                (name for name, values in candidates.items() if values == wanted),
+                _UNKNOWN_KEY_COLUMN,
+            )
+        )
+    return tuple(names)
+
+
+def _is_carried_column(name: str) -> bool:
+    """Whether *name* is a raw column the reconcile carried, not one it derived."""
+    return (
+        name != "_recon_key"
+        and name not in _DERIVED_COLUMNS
+        and not name.endswith("_bucket")
+        and not name.startswith(_DERIVED_PREFIXES)
+    )
+
+
+def _placement_membership(
+    side: SideView, tokens: list[str]
+) -> dict[tuple[str, str | None, str], dict[str, bool | None]]:
+    """One side's ``{(template, sheet, group): {row_ref: is_parent_row}}`` for a key.
+
+    Deduplicated on the whole address because a split exposure contributes
+    several legs under one ``source_exposure_reference``, and they land in the
+    same rows — the panel places the EXPOSURE, not each leg. ``is_parent_row`` is
+    a property of ``(row, predicate_key)``, so the dedup cannot drop a state.
+    """
+    legs = side.membership.legs
+    if legs.height == 0:
+        return {}
+    matched = (
+        legs.filter(
+            pl.col("exposure_reference").is_in(tokens)
+            | pl.col("source_exposure_reference").is_in(tokens)
+        )
+        .select("template_id", "sheet", "row_ref", "predicate_key", "is_parent_row")
+        .unique()
+    )
+    out: dict[tuple[str, str | None, str], dict[str, bool | None]] = {}
+    for record in matched.iter_rows(named=True):
+        sheet = record["sheet"]
+        address = (
+            str(record["template_id"]),
+            None if sheet is None else str(sheet),
+            str(record["predicate_key"]),
+        )
+        out.setdefault(address, {})[str(record["row_ref"])] = record["is_parent_row"]
+    return out
+
+
+def _placement_group(
+    recon: ReturnRecon,
+    address: tuple[str, str | None, str],
+    ours: dict[str, bool | None],
+    theirs: dict[str, bool | None],
+) -> PlacementGroup:
+    """One ``(template, sheet, predicate group)``, ours beside theirs."""
+    template_id, sheet, predicate_key = address
+    names = _placement_row_names(recon, template_id, sheet)
+    our_leaf = _placement_leaf(ours)
+    their_leaf = _placement_leaf(theirs)
+    return PlacementGroup(
+        template_id=template_id,
+        template_label=TEMPLATE_CODES.get(template_id, {}).get(recon.framework, "") or template_id,
+        sheet=sheet or "",
+        predicate_key=predicate_key,
+        columns=_placement_columns(recon, template_id, sheet, predicate_key),
+        rows=tuple(
+            _placement_row(row_ref, names.get(row_ref, ""), ours, theirs)
+            for row_ref in sorted(set(ours) | set(theirs))
+        ),
+        our_placement=our_leaf,
+        our_placement_name=_placement_name(our_leaf, names, reached=bool(ours)),
+        their_placement=their_leaf,
+        their_placement_name=_placement_name(their_leaf, names, reached=bool(theirs)),
+        moved=bool(our_leaf and their_leaf and our_leaf != their_leaf),
+    )
+
+
+def _placement_row(
+    row_ref: str, row_name: str, ours: dict[str, bool | None], theirs: dict[str, bool | None]
+) -> PlacementRow:
+    """One row of a placement group, with BOTH sides stated explicitly."""
+    in_ours = row_ref in ours
+    in_theirs = row_ref in theirs
+    if in_ours and in_theirs:
+        side = PLACEMENT_BOTH
+    elif in_ours:
+        side = PLACEMENT_OURS_ONLY
+    else:
+        side = PLACEMENT_THEIRS_ONLY
+    our_state = _parent_state(ours.get(row_ref), reached=in_ours)
+    their_state = _parent_state(theirs.get(row_ref), reached=in_theirs)
+    return PlacementRow(
+        row_ref=row_ref,
+        row_name=row_name,
+        in_ours=in_ours,
+        in_theirs=in_theirs,
+        our_parent=ours.get(row_ref),
+        their_parent=theirs.get(row_ref),
+        side=side,
+        our_display=REACHED_DISPLAY if in_ours else NOT_REACHED_DISPLAY,
+        their_display=REACHED_DISPLAY if in_theirs else NOT_REACHED_DISPLAY,
+        our_parent_state=our_state,
+        their_parent_state=their_state,
+        parent_note=_parent_note(our_state, their_state),
+    )
+
+
+def _placement_leaf(flags: dict[str, bool | None]) -> str:
+    """The one row a side placed the exposure on, or ``""`` when none decides.
+
+    The single-leaf rule ``analysis.return_recon._group_legs`` places legs by: a
+    row counts only where ``is_parent_row`` is provably ``False``, and only a
+    SINGLE such row is a placement. ``True`` (a strict parent) and ``None``
+    (indistinguishable from another row) are both non-leaves — reporting either
+    as the exposure's band would state a containment the data does not support.
+    """
+    leaves = [row_ref for row_ref, parent in flags.items() if parent is False]
+    return leaves[0] if len(leaves) == 1 else ""
+
+
+def _placement_name(row_ref: str, names: dict[str, str], *, reached: bool) -> str:
+    """The placement's row name, or the RIGHT kind of blank when there is none.
+
+    Three outcomes, three strings: the band's name, "we do not hold this leg in
+    this group", and "we hold it but no single row is its place". The last two
+    are different findings and are never rendered alike.
+    """
+    if row_ref:
+        return names.get(row_ref, row_ref)
+    return UNDECIDED_DISPLAY if reached else NOT_REACHED_DISPLAY
+
+
+def _parent_state(flag: bool | None, *, reached: bool) -> str:
+    """One side's hierarchy claim about one row — FOUR states, four labels.
+
+    ``reached`` is checked first and is not a special case of the flag: a side
+    that does not hold the exposure in this row carries ``None`` for exactly the
+    same reason a genuinely undecidable row does, and reading the two alike
+    would report "we cannot tell whether this is a parent" where the truth is
+    "we are not in this row".
+    """
+    if not reached:
+        return HIERARCHY_NOT_REACHED
+    if flag is True:
+        return PARENT_ROW
+    if flag is False:
+        return LEAF_ROW
+    return PARENT_INDISTINGUISHABLE
+
+
+def _parent_note(our_state: str, their_state: str) -> str:
+    """The hierarchy note, ATTRIBUTED whenever the two sides do not agree.
+
+    An unattributed note is a claim about both sides. Where they diverge — our
+    side a provable leaf, theirs indistinguishable — there is no single true
+    sentence, so the note names each side rather than picking one.
+    """
+    if our_state == their_state:
+        return _PARENT_NOTES[our_state]
+    return f"Ours — {_PARENT_NOTES[our_state]} Theirs — {_PARENT_NOTES[their_state]}"
+
+
+def _placement_row_names(recon: ReturnRecon, template_id: str, sheet: str | None) -> dict[str, str]:
+    """``row_ref -> row_name`` off the generated frames, ours winning.
+
+    Read from the frames rather than a row-name table for the same reason the
+    template-compare page does: a row emitted on one side only still needs a
+    label, and the CRR and Basel 3.1 row axes differ, so any literal list would
+    pin one framework.
+    """
+    names: dict[str, str] = {}
+    for side in (recon.theirs, recon.ours):
+        frames = side.frames.get(template_id, {})
+        if sheet is not None:
+            frame = frames.get(sheet)
+        else:
+            frame = next(iter(frames.values())) if len(frames) == 1 else None
+        if frame is None or not {"row_ref", "row_name"} <= set(frame.columns):
+            continue
+        for record in frame.select("row_ref", "row_name").iter_rows(named=True):
+            ref = record["row_ref"]
+            if ref is not None:
+                names[str(ref)] = str(record["row_name"] or "")
+    return names
+
+
+def _placement_columns(
+    recon: ReturnRecon, template_id: str, sheet: str | None, predicate_key: str
+) -> tuple[str, ...]:
+    """The published columns this predicate group serves, both sides merged.
+
+    A group is only addressable back to a CELL through this mapping — the row
+    alone is not enough, because several groups sit on one row.
+
+    THE MERGE IS DELIBERATE AND IS NOT THE COLLAPSE ``PlacementRow`` FORBIDS.
+    ``describe_cell`` binds a cell against each side's own sealed columns, so the
+    two sides can differ, and this lists a column either binds. That is right
+    because the field answers "which cells does this population back" — a
+    navigation aid — and a cell one side cannot bind is still a cell the other
+    reports. It states nothing per-side, so there is no per-side claim to get
+    wrong; the hierarchy state did state one, which is why that one is split.
+    """
+    refs: list[str] = []
+    for side in (recon.ours, recon.theirs):
+        frame = side.membership.columns.filter(
+            (pl.col("template_id") == template_id)
+            & (pl.col("sheet").is_null() if sheet is None else pl.col("sheet") == sheet)
+            & (pl.col("predicate_key") == predicate_key)
+        )
+        for value in frame.get_column("col_ref").to_list():
+            if value is not None and str(value) not in refs:
+                refs.append(str(value))
+    return tuple(refs)
 
 
 def _decisions_frame(

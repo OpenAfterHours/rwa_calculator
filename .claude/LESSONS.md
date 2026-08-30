@@ -162,6 +162,19 @@ via `pick()`), and log a WARNING when it resolves to nothing *and there is data
 it should have described*. Gate the warning on "is there anything to report?"
 so it stays quiet on legitimately empty frames.
 
+**And the mirror image: NULL and ABSENT are different code paths, and both
+occur on the same side at once.** A presence guard that *is* correct can still
+be untested, because your fixtures always take one of its branches. Measured on
+`return_recon._key_rungs` (2026-08-30): the membership legs carry
+`source_exposure_reference` as a typed **null** (`MEMBERSHIP_SCHEMA`), while the
+projected legacy plan frame **lacks the column outright** — the projection emits
+only the join key, the mapped components and the mapped carriers. Deleting the
+presence filter raises `ColumnNotFoundError` on every real reconciliation, and
+the whole suite stayed green, because every fixture pinned the column into
+`schema_overrides` as a typed null and `_Leg.row` always writes it. **A fixture
+that pins a column into `schema_overrides` cannot reproduce an absent-column
+production path**; build one frame that genuinely omits the column.
+
 ### B2. The same failure in mapping form: an unmatched dict key zero-fills
 
 **Trap.** A class→row map keyed on strings that are not enum members. Unmatched
@@ -279,6 +292,32 @@ reported an improvement while real coverage fell.
 that cannot fall unless coverage genuinely falls. Keep the ratio as a *reported*
 figure, and never write "may not fall" next to a ratio in a comment: every
 reviewer who does not do the algebra will read it as a floor.
+
+### B9. A log line is not a gate — and neither is an alarm that always fires
+
+**Trap.** A hazard that the code *knows about* and reports at runtime, with
+nothing asserting on it. Or an alarm that does fire, on everything, so its firing
+carries no information.
+
+**Why.** Both measured on `analysis/return_recon.py` (2026-08-30). The
+`_group_legs` collapse hazard self-announced for the feature's whole life —
+`row_migration` logs a WARNING reading *"the first is used and the matrix may be
+wrong"* — and no test asserted the conservation identity the warning is about;
+collapsing that key silently discards 40,000 of `rwa_final`. Separately, the
+waterfall's `population_ours_only` / `population_theirs_only` terms fired on
+**every** split exposure in the book — a guarantee, an RE split, a facility —
+and produced **identical output** for (a) nothing wrong, (b) a leg moved to
+another row, and (c) a leg genuinely lost. A saturated alarm is worse than a
+silent one because it looks like coverage: the analyst who learns the scope
+alarm always fires stops reading it, which disarms the one term that would have
+pointed at scope on the day it fired legitimately.
+
+**Detect.** For a logged hazard: the log line names the invariant — write the
+assertion it implies, on a fixture that can violate it. For an alarm: **run it on
+the case where nothing is wrong**, and on the case it exists to catch, and check
+the two outputs differ. If they do not, the alarm has no discriminating power
+however loud it is. This is the production-alarm form of the rule that a test
+green in both states guards nothing (`/next-items` C1.11).
 
 ---
 
@@ -496,6 +535,102 @@ structurally faithful anonymisation of it, and run it through
   `path-never-exercised` escape — register the portfolio in `RUNS`, do not just
   fix the number.
 
+### C10. Careless about scope, not about facts
+
+**Trap.** You verify a mechanism on **one** path and then write a sentence that
+quantifies over **all** paths. Every individual fact in it is true. The sentence
+is false, and because each fact checks out, re-reading it does not find the
+error.
+
+**Why.** Six instances in a single batch (2026-08-30), named by the agent that
+committed four of them into one function's docstrings. *"The seal guarantees the
+column"* — true of our frame, written about both sides, when the legacy plan
+frame has no such column at all. *"The false branch is reachable only from a
+hand-built `ResultsSource`"* — it is the branch **every real reconciliation**
+takes. *"`dict.fromkeys` is what collapses the settings"* — a real effect
+attributed to the nearest line rather than the one doing the work. Plus a
+security guard's docstring claiming a scheme-relative URL could not reach it (it
+could) and that it returns `""` for a non-same-origin input (it raises on a
+malformed one).
+
+**Detect.** Any docstring or design sentence containing an implicit **always**,
+**only**, **never**, **both sides** or **every** is the thing to re-check, and
+two questions clear it — *"which call site did I measure this on, and is there a
+second one?"* and *"which line did I actually vary?"*. Three of the four
+instances above fall to the first, the fourth to the second. This is C8's
+neighbour: C8 is about the claim you attach to a measurement, C10 is about the
+population you attach it to.
+
+### C11. A fixture is a claim — assert its adequacy, and check its label against its cause
+
+**Trap.** Two halves of trusting a fixture's description. (a) A test passes
+because its fixture cannot express the condition under test, so it has been
+vacuous since the day it was written. (b) A fixture whose docstring is right
+about the *shape* and wrong about the *cause*, which hides the branch it actually
+reaches.
+
+**Why.** Both measured on `return_recon` (2026-08-30). For (a), the conservation
+test for the `_group_legs` hazard is only meaningful if the group holds a split
+exposure **and** the two legs carry different money — the pre-existing
+`_combined` fixture fails the first of those, which is exactly why its sibling
+test proved nothing for the life of the feature. For (b), `_recon_split` is documented
+as a **real-estate** split, but RE legs share the obligor and therefore the PD,
+so they would land in one band; the differing PDs it actually gives them are
+natural only for a **guarantee** split. Read as "an RE split", two different
+bands look like a fixture artefact nobody would assert on; read as "a two-leg
+substitution", it is the ordinary case. The mislabelling is plausibly what left
+the single-leaf rule unasserted.
+
+**Detect.** Make the adequacy an assertion at the top of the test, with the
+reason in the message — the shipped form is
+
+```python
+assert bases.count(_WHOLE_LOAN.reference) == 2, (
+    "the group holds no split exposure - collapsing the key would "
+    "be a no-op and this test would prove nothing"
+)
+assert _SPLIT_G_LEG.ead != _SPLIT_REM_LEG.ead, "equal legs make .first() undetectable"
+```
+
+and when you reuse someone else's fixture, derive its cause from the columns it
+sets rather than from its docstring.
+
+### C12. A green mutation probe is a claim that needs its own evidence — four ways one lies
+
+**Trap.** You mutate production code, the suite stays green, and you conclude the
+property is untested. Four distinct mechanisms produce that green, **the cheap
+check that clears each one is different**, and doing the wrong check leaves you
+confident. All four occurred in one batch (2026-08-30).
+
+**Why / Detect** — one per mechanism, because they do not share a remedy:
+
+1. **The output was mis-read.** The run was right, the reading was wrong — a
+   harness parsed `FAILED` line prefixes while pytest was emitting ANSI colour,
+   and reported 0 red for ten probes. *Check:* grep the **summary line** for
+   `failed`, never the colour or the prefixes.
+2. **The mutation never applied.** The harness thought it patched and did not
+   (`x or None` on an object defining no `__bool__` returns `x`). *Check:* have
+   the harness **print that it applied**, and assert the patched attribute is not
+   the original object.
+3. **The wrong code was measured.** The mutation landed in a file the interpreter
+   never loaded — a mid-edit file in a shared tree, or `PYTHONPATH=.` in a
+   worktree resolving `rwa_calc` to the main checkout. *Check:*
+   `print(module.__file__)`, check mtimes, re-run on a quiet tree.
+4. **The mutation is vacuous.** Everything worked and the mutated branch is
+   unreachable from any fixture — one probe mutated empty-segment filtering while
+   every key in the corpus was a bare single token with no separator, so mutant
+   and original returned the same object on every call the suite makes. *Check:*
+   **diff the mutant's output against the original's on the inputs the suite
+   actually passes.** This is the one that separates *undetected* from
+   *unreachable*, and no amount of staring at the diff will do it.
+
+Red probes have their own failure mode — a mutation that reddens for the wrong
+reason — recorded in the graduation ledger's 2026-08-29 row. Together the rule
+is: **a probe owes you a demonstrated behaviour change before its colour means
+anything, and the demonstration must be on a fixture the suite already runs, not
+one you invent to make the point.** `tests/mutations/README.md` carries the
+working plugins and the two rules for writing another.
+
 ---
 
 ## D. Blast radius
@@ -516,29 +651,26 @@ review and output-floor regression evidence.
 **Detect.** Grep for consumers, then ask *separately* whether the output-floor
 path reaches them. Treat "no IRB code reads X" as almost always wrong.
 
-### D2. Deleting a short-circuit changes the expression's column footprint
+### D2. Measure blast radius with the suite — not with grep, and not with the subdirectory you edited
 
-**Trap.** Removing a short-circuit and testing only the subdirectory you edited.
+*Merged 2026-08-30 from two entries with one remedy (old D2 + D3). Both traps
+kept; nothing dropped.*
 
-**Why.** P1.277 made `is_qrre_transactor` newly dereferenced, breaking 6 tests
-in files no agent thought to run. Per-subdirectory verification structurally
-cannot see this.
+**Trap.** Two different errors, one instrument. (a) Estimating how many fixtures
+a new eligibility gate will zero out by **grepping** for the field. (b) Removing
+a short-circuit and testing only the **subdirectory** you edited.
 
-**Detect.** Run the **full** `tests/unit` after any change to a conditional
-expression's structure.
+**Why.** For (a), the Art. 199 gate zeroed non-financial collateral in every
+fixture lacking `is_eligible_irb_collateral=True` — 4 files, 38 tests, none of
+them obvious from grep. For (b), P1.277 made `is_qrre_transactor` newly
+dereferenced and broke 6 tests in files no agent thought to run: **deleting a
+short-circuit changes the expression's column footprint**, and per-subdirectory
+verification structurally cannot see that.
 
-### D3. Measure blast radius with the suite, not with grep
+**Detect.** Run the **full** `tests/unit` — before reporting a gate's scope, and
+after any change to a conditional expression's structure.
 
-**Trap.** Estimating how many fixtures a new eligibility gate will zero out by
-grepping for the field.
-
-**Why.** The Art. 199 gate zeroed non-financial collateral in every fixture
-lacking `is_eligible_irb_collateral=True` — 4 files, 38 tests, none obvious
-from grep.
-
-**Detect.** Run the full unit suite before reporting a gate's scope.
-
-### D4. An edge-contract dtype violation reddens the whole acceptance suite
+### D3. An edge-contract dtype violation reddens the whole acceptance suite
 
 **Trap.** Misattributing a wall of acceptance failures to another agent.
 
@@ -725,6 +857,66 @@ the move here and delete the prose entry above.
 
 Candidates currently identified but not yet graduated (file as plan bullets):
 
+> **The file is over the ~30 cap** — **35** numbered entries as of 2026-08-30,
+> which by this file's own rule means the retro is failing to graduate things.
+>
+> A deletion pass on the stated criterion (*an entry earns its place only while
+> it is still prose*) found **nothing to delete**: every entry whose executable
+> form has landed was already trimmed to its ungated residual by an earlier retro
+> — A4 keeps only the lookup order, B7 keeps only the missing expiry gate, and
+> B5 is explicitly protected because neither ratchet can express its two-leg
+> fixture pattern. Two of the standing candidates below were re-checked against
+> the tree on 2026-08-30 and **neither has been built**: no contract test asserts
+> any class/row map's key set against `ExposureClass` (B2), and nothing under
+> `scripts/` or `tests/contracts/` gates fixture-builder registration
+> (`generate_all`) — `test_ccr_fixture_builders.py` only names the script in an
+> error message. So the overage is owed graduation work, not owed pruning, and
+> the only reduction available without loss was merging old D2 and D3, which
+> shared one remedy.
+>
+> **Draining the four *numbered* candidates below — C12, C11, B2, D1 — takes the
+> file to 31.** C12 and C11 are the two added that day with an executable form
+> already in hand, so start there. The other two candidates do not move the count:
+> the `generate_all` rule would retire a bullet in section G, which is unnumbered,
+> and B5's prose stays whatever happens to its ratchet.
+
+- **C12** → a shared plugin base in `tests/mutations/`, so mechanisms 1–4 are
+  structural rather than remembered. Prose has already failed at this once: the
+  README's rule 2 was written from three false greens, and a fourth followed.
+  Concretely, one `mutation.py` module next to the plugins exposing a single
+  `apply(target, attr, replacement)` used from every plugin's `autouse` fixture,
+  which does four things the plugin author currently has to remember:
+
+  1. **Proves it patched.** Resolve `target` from `sys.modules` *after* import,
+     capture `original = getattr(target, attr)`, and assert
+     `getattr(target, attr) is not original` after `setattr`. Closes mechanism 2
+     — the `x or None` no-op could not survive it, because the replacement would
+     be the original object.
+  2. **Proves it patched the code under test.** Assert
+     `Path(target.__file__).is_relative_to(Path.cwd())`, and print it. Closes
+     mechanism 3, including the `PYTHONPATH=.`-in-a-worktree form, which is
+     already its own ledger row (2026-08-15) and recurred here anyway.
+  3. **Proves the mutation is not vacuous.** Wrap both callables and record every
+     `(args, original_result, mutant_result)` the session actually makes; at
+     session teardown, fail if the two agreed on **every** call. Closes mechanism
+     4, which is the only one that separates *undetected* from *unreachable* —
+     and note it needs no new fixtures, because it observes the calls the suite
+     already makes.
+  4. **Reports its own colour.** Emit the plugin name, the applied-patch proof,
+     the call count and the divergence count in a `pytest_terminal_summary` hook,
+     so the evidence is read off pytest's summary rather than off a scraped
+     transcript. Closes mechanism 1.
+
+  Sizing and placement: it is ~60 lines and pure pytest, it belongs beside the
+  plugins rather than under `tests/unit/`, and the five committed plugins are its
+  first callers — porting them is the acceptance test, since each must keep the
+  exact red set the README records. The base must be **fail-closed**: a plugin
+  that cannot prove (1) or (2) errors the session rather than running green.
+- **C11** → the adequacy assertion has a shipped form
+  (`test_return_recon.py:1528`) but nothing requires one. The mechanical half is
+  a reviewer criterion in `/next-items` Step 4d: a test whose fixture could make
+  it a no-op must assert the property that stops it being one, in the same way
+  C1.11 requires a named detector to come with the mutation it detects.
 - **B2** → a contract test asserting every class/row map's key set is a subset
   of `{m.value for m in ExposureClass}`, across all templates at once.
 - **B5** → an `arch_check` rule (or contract test) asserting every reporting

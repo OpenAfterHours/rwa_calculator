@@ -8,7 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- (Next release changes will go here)
+- **The return-template comparison is now reachable from the UI.**
+  `GET /reconciliation/{recon_id}/templates` — the two-sided COREP / Pillar III
+  grid that projects your legacy extract into our reporting ledger and runs
+  both sides through the *same* generators — shipped with **no inbound link
+  from anywhere in the app**: the word "template" appeared nowhere on the
+  reconciliation report, the explorer, the loan forensic or the top nav, so the
+  only way in was to read the `recon_id` out of the address bar and type the
+  path. The report page now closes with a fourth section, *"4 · Return
+  templates — does the submission tie out?"*, carrying a **Compare return
+  templates →** button (`templates_url` on the report context). The link is
+  rendered unconditionally: whether any template is *reachable* depends on the
+  legacy mapping, and the templates page is the surface that names the columns
+  to map when it is not (`page.unavailable_reason` / `page.remedies`) — hiding
+  the link on an unmapped reconciliation would hide that answer too. Covered by
+  `tests/integration/test_ui_reconciliation.py::test_reconciliation_overview_links_to_the_return_templates_comparison`,
+  which asserts both halves that were missing — the link renders, and it
+  resolves to a 200.
 
 ### Changed
 - (Next release changes will go here)

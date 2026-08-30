@@ -2,7 +2,7 @@
 once, and the invariants the classification fix must NOT disturb.
 
 CRR Art. 154(4)(c) / PS1/26 Art. 147(5A)(c) cap the aggregate nominal exposure
-to a single individual. ``engine/stages/classify/subtypes.py`` sums
+to a single individual. ``engine/classify/subtypes.py`` sums
 ``facility_limit`` over every qualifying exposure LEG, so a facility split into a
 drawn loan plus a synthetic ``_UNDRAWN`` headroom row contributes its limit
 twice. The unit sibling

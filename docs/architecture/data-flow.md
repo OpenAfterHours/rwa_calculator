@@ -202,7 +202,7 @@ counterparties = (
 **Input:** `RawDataBundle`
 **Output:** `ResolvedHierarchyBundle`
 
-See the [`engine/stages/hierarchy/`](https://github.com/OpenAfterHours/rwa_calculator/tree/master/src/rwa_calc/engine/stages/hierarchy) package (`resolver.py`, `graph.py`, `ratings.py`, …) for implementation.
+See the [`engine/hierarchy/`](https://github.com/OpenAfterHours/rwa_calculator/tree/master/src/rwa_calc/engine/hierarchy) package (`resolver.py`, `graph.py`, `ratings.py`, …) for implementation.
 
 Transformations:
 - Resolve parent-child relationships
@@ -223,14 +223,14 @@ resolved = (
 )
 ```
 
-See [`engine/stages/hierarchy/resolver.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/hierarchy/resolver.py) for the `HierarchyResolver` recipe and its delegators (`graph.py`, `ratings.py`, `facility_undrawn.py`, `unify.py`, `enrich.py`).
+See [`engine/hierarchy/resolver.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/hierarchy/resolver.py) for the `HierarchyResolver` recipe and its delegators (`graph.py`, `ratings.py`, `facility_undrawn.py`, `unify.py`, `enrich.py`).
 
 ### Stage 3: Classification
 
 **Input:** `ResolvedHierarchyBundle`
 **Output:** `ClassifiedExposuresBundle`
 
-See the [`engine/stages/classify/`](https://github.com/OpenAfterHours/rwa_calculator/tree/master/src/rwa_calc/engine/stages/classify) package (`classifier.py`, `attributes.py`, `subtypes.py`, `permissions.py`, `approach.py`, `audit.py`) for implementation.
+See the [`engine/classify/`](https://github.com/OpenAfterHours/rwa_calculator/tree/master/src/rwa_calc/engine/classify) package (`classifier.py`, `attributes.py`, `subtypes.py`, `permissions.py`, `approach.py`, `audit.py`) for implementation.
 
 Transformations:
 - Assign exposure class
@@ -252,7 +252,7 @@ classified = (
 )
 ```
 
-See [`engine/stages/classify/classifier.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/classify/classifier.py) for the `ExposureClassifier` recipe (with `attributes.py`, `subtypes.py`, `permissions.py`, `approach.py`, `audit.py`).
+See [`engine/classify/classifier.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/classify/classifier.py) for the `ExposureClassifier` recipe (with `attributes.py`, `subtypes.py`, `permissions.py`, `approach.py`, `audit.py`).
 
 ### Stage 4: CRM Processing
 

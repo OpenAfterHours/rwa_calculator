@@ -16,11 +16,16 @@ Modules:
     pipeline: Run-lifecycle facade (run_id, edge capture, audit persistence)
 
 Subpackages:
-    stages: The stage packages the fold runs — where the stage implementations
-        actually live. Each holds its own stage recipe plus the uniform
-        ``run(ctx, rulepack, run_config)`` adapter: stages.hierarchy
-        (HierarchyResolver), stages.classify (ExposureClassifier),
-        stages.re_split (RealEstateSplitter), stages.fx (FXConverter), ...
+    stages: The wiring layer, and only the wiring layer — one module per
+        registry stage, each exposing the uniform
+        ``run(ctx, rulepack, run_config)`` adapter and nothing else. The
+        domains those adapters drive are the sibling packages below.
+    hierarchy: Counterparty/facility resolution (HierarchyResolver)
+    classify: Exposure classification (ExposureClassifier)
+    re_split: Real-estate loan splitting (RealEstateSplitter)
+    scope: Multi-entity reporting scope resolution
+    fx: FX conversion kernel (FXConverter) — not a registry stage; called
+        from inside the hierarchy resolver
     crm: Credit Risk Mitigation processing
     sa: Standardised Approach calculator
     irb: IRB approach calculator
@@ -34,9 +39,9 @@ Subpackages:
     cva: Credit valuation adjustment
 """
 
+from .hierarchy import HierarchyResolver
 from .loader import CSVLoader, ParquetLoader
 from .pipeline import PipelineOrchestrator, create_pipeline, create_test_pipeline
-from .stages.hierarchy import HierarchyResolver
 
 __all__ = [
     "ParquetLoader",

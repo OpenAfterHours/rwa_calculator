@@ -444,7 +444,7 @@ References:
   per-country split, keyed on ``cp_country_code`` for every column (S7's gap;
   see ``CROSS_BORDER_GUARANTEE_DESIGN`` above). ``cp_country_code`` is joined
   onto every exposure row by its OWN ``counterparty_reference``
-  (``engine/stages/classify/attributes.py::add_counterparty_attributes``),
+  (``engine/classify/attributes.py::add_counterparty_attributes``),
   which the CRM splitter never reassigns on the ``__G_`` leg — the raw input
   the immediate-obligor basis needs is already correct today.
   ``guarantor_country_code`` — the raw input the ultimate-obligor basis will

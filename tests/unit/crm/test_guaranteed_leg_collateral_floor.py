@@ -42,7 +42,7 @@ REAL-ESTATE pledge on this fixture's corporate/A-IRB exposure gets silently
 reclassified to ``"commercial_mortgage"`` by the classifier's
 ``is_mortgage`` rule (``property_collateral_value > 0`` forces
 ``is_mortgage=True`` REGARDLESS of the borrower's entity_type --
-``engine/stages/classify/attributes.py:625-639``), and
+``engine/classify/attributes.py:625-639``), and
 ``"commercial_mortgage"`` is an SA-re-splitter-only class that NEVER reaches
 an IRB row (``engine/irb/formulas.py``'s own docstring at :387-390
 confirms: "residential_mortgage / commercial_mortgage ... Unreachable

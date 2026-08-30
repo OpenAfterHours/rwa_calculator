@@ -128,7 +128,7 @@ uv run python scripts/generate_dependency_graph.py
 
 # Inspect the graph directly without writing docs
 uv run curfew show --mermaid                       # full module graph to stdout
-uv run curfew report rwa_calc.engine.stages.classify  # one module's deps + dependents
+uv run curfew report rwa_calc.engine.classify  # one module's deps + dependents
 ```
 
 ---

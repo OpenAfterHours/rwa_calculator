@@ -24,7 +24,7 @@ from rwa_calc.contracts.bundles import (
 )
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, ExposureClass, PermissionMode
-from rwa_calc.engine.stages.classify import ExposureClassifier
+from rwa_calc.engine.classify import ExposureClassifier
 from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolved_bundle
 
 if TYPE_CHECKING:
@@ -1790,7 +1790,7 @@ class TestApproachAssignment:
         115(5)/(2) to the SA *risk-weight* chain
         (``engine/sa/risk_weights.py``). ``_build_approach_expr``'s
         ``is_eu_domestic_sovereign`` predicate
-        (``engine/stages/classify/approach.py``) carries the same
+        (``engine/classify/approach.py``) carries the same
         denomination-only Art. 114(4)/(7) shape and deliberately did NOT get
         the limb: it is an approach-**routing** gate justified by PS1/26
         Art. 147A(1)(a), and Art. 147A says nothing about funding currency.

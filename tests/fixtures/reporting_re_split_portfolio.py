@@ -17,9 +17,9 @@ report on the split legs is *caused by* the absence of coverage.
 ``reporting_portfolio.py``'s docstring claims its RRE/CRE collateral drives the
 loan-split. It does not, and the mechanism is worth writing down because it is
 silent: the splitter's candidate gate is set by
-``engine/stages/re_split/flagging.py``, which reads
+``engine/re_split/flagging.py``, which reads
 ``residential_collateral_value_uncapped`` / ``commercial_collateral_value_uncapped``
-— derived in ``engine/stages/hierarchy/enrich.py::enrich_with_property_coverage``
+— derived in ``engine/hierarchy/enrich.py::enrich_with_property_coverage``
 from collateral rows whose ``collateral_type`` is literally ``"real_estate"``
 AND whose ``property_type`` says which limb they are. Without the property
 attestation columns the classifier leaves ``re_split_mode`` NULL, the splitter
@@ -171,7 +171,7 @@ LN_CRE_CORP: str = "RESP-LN-CRE-CORP"  # B3.1 Art. 124H(3) whole loan
 LN_MIXED: str = "RESP-LN-MIXED"  # RRE + CRE on one exposure
 
 #: Suffixes the splitter appends to ``exposure_reference`` per leg
-#: (``engine/stages/re_split/splitter.py::_secured_columns`` / ``_residual_columns``).
+#: (``engine/re_split/splitter.py::_secured_columns`` / ``_residual_columns``).
 SECURED_SUFFIX: str = "_sec"
 RESIDUAL_SUFFIX: str = "_res"
 MIXED_RRE_SUFFIX: str = "_rre"

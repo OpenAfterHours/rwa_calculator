@@ -144,7 +144,9 @@ def apply_guarantees(
     )
 
     exposures = _apply_guarantee_splits(guarantees, exposures)
-    exposures = _join_guarantor_counterparty(exposures, counterparty_lookup)
+    # ``join_cols`` is STALE by 3 untested guarantor_* cols — safe by ASSERTION, not
+    # by construction; see ``data.column_spec.ensure_columns``.
+    exposures, join_cols = _join_guarantor_counterparty(exposures, counterparty_lookup)
     exposures = _join_guarantor_ratings(exposures, rating_inheritance)
 
     exposures = exposures.with_columns(
@@ -160,11 +162,11 @@ def apply_guarantees(
         .alias("guarantor_exposure_class"),
     )
 
-    exposures = _assign_guarantor_approach(exposures, config, errors=errors)
+    exposures = _assign_guarantor_approach(exposures, config, errors=errors, present=join_cols)
 
     # Cross-approach CCF substitution (CRR Art. 111 / COREP C07)
     # When IRB exposure guaranteed by SA counterparty, use SA CCFs for guaranteed portion
-    exposures = _apply_cross_approach_ccf(exposures)
+    exposures = _apply_cross_approach_ccf(exposures, present=join_cols)
 
     # Add post-CRM composite attributes for regulatory reporting. For the
     # guaranteed portion, the post-CRM counterparty is the guarantor.
@@ -334,8 +336,8 @@ def _record_ucp_ineligibility(
 
 def _join_guarantor_counterparty(
     exposures: pl.LazyFrame, counterparty_lookup: pl.LazyFrame
-) -> pl.LazyFrame:
-    """Join guarantor entity type / country / CCP / SCRA from counterparty data."""
+) -> tuple[pl.LazyFrame, list[str]]:
+    """Join guarantor entity/country/CCP/SCRA; also returns the joined column names."""
     cp_names = counterparty_lookup.collect_schema().names()
     cp_select_cols = [
         pl.col("counterparty_reference"),
@@ -364,14 +366,9 @@ def _join_guarantor_counterparty(
         "guarantor_is_ccp_client_cleared": pl.Boolean,
         "guarantor_scra_grade": pl.String,
     }
-    missing_guarantor_cols = [
-        pl.lit(None).cast(dtype).alias(name)
-        for name, dtype in fillers.items()
-        if name not in post_join_names
-    ]
-    if missing_guarantor_cols:
-        exposures = exposures.with_columns(missing_guarantor_cols)
-    return exposures
+    missing = [n for n in fillers if n not in post_join_names]
+    exprs = [pl.lit(None).cast(fillers[n]).alias(n) for n in missing]
+    return (exposures.with_columns(exprs) if exprs else exposures), [*post_join_names, *missing]
 
 
 def _join_guarantor_ratings(
@@ -421,6 +418,7 @@ def _assign_guarantor_approach(
     config: CalculationConfig,
     *,
     errors: list[CalculationError] | None = None,
+    present: list[str] | None = None,
 ) -> pl.LazyFrame:
     """
     Determine guarantor approach (IRB / SA) and rating provenance.
@@ -455,7 +453,7 @@ def _assign_guarantor_approach(
     }
 
     irb_beneficiary_approaches = [ApproachType.FIRB.value, ApproachType.AIRB.value]
-    schema_names = exposures.collect_schema().names()
+    schema_names = list(present) if present is not None else exposures.collect_schema().names()
     beneficiary_is_irb = (
         pl.col("approach").fill_null("").is_in(irb_beneficiary_approaches)
         if "approach" in schema_names
@@ -1031,7 +1029,7 @@ def _retained_tranche_rows(
 
 
 def _apply_cross_approach_ccf(
-    exposures: pl.LazyFrame,
+    exposures: pl.LazyFrame, *, present: list[str] | None = None
 ) -> pl.LazyFrame:
     """
     Apply cross-approach CCF substitution for guaranteed exposures.
@@ -1043,9 +1041,9 @@ def _apply_cross_approach_ccf(
     Returns:
         Exposures with CCF-adjusted guaranteed/unguaranteed portions
     """
-    schema = exposures.collect_schema()
-    has_interest = "interest" in schema.names()
-    has_risk_type = "risk_type" in schema.names()
+    names = list(present) if present is not None else exposures.collect_schema().names()
+    has_interest = "interest" in names
+    has_risk_type = "risk_type" in names
 
     if not has_risk_type:
         return exposures
@@ -1078,7 +1076,7 @@ def _apply_cross_approach_ccf(
 
     # Recalculate EAD with split CCFs when cross-approach substitution applies
     # Use provision-adjusted on-balance and nominal when available
-    has_provision_cols = "provision_on_drawn" in schema.names()
+    has_provision_cols = "provision_on_drawn" in names
 
     if has_provision_cols and has_interest:
         on_bal = (drawn_for_ead() - pl.col("provision_on_drawn")).clip(
@@ -1094,7 +1092,7 @@ def _apply_cross_approach_ccf(
     # Use nominal_after_provision if available, else nominal_amount
     nominal_col = (
         pl.col("nominal_after_provision")
-        if "nominal_after_provision" in schema.names()
+        if "nominal_after_provision" in names
         else pl.col("nominal_amount")
     )
     ratio = pl.col("guarantee_ratio")
@@ -1702,7 +1700,9 @@ def _apply_maturity_mismatch_to_guarantees(
 
 
 def _drop_columns_if_present(lf: pl.LazyFrame, cols: list[str]) -> pl.LazyFrame:
-    """Drop columns from LazyFrame, ignoring those not present."""
-    schema = lf.collect_schema()
-    to_drop = [c for c in cols if c in schema.names()]
-    return lf.drop(to_drop) if to_drop else lf
+    """Drop columns, ignoring absent ones (Polars ``strict=False``, no schema walk).
+
+    Always derives, so an edge brand no longer survives a no-op drop. No call site here
+    needs one; a future one gets ``EdgeContractViolation`` at bundle build, not a number.
+    """
+    return lf.drop(cols, strict=False)

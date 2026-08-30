@@ -5,7 +5,7 @@ CRR Art. 154(4)(c) / PS1/26 Art. 147(5A)(c) cap the *aggregate nominal exposure*
 to a single individual. The hierarchy stage emits one row per LEG of a facility
 (each drawn loan, the synthetic ``_UNDRAWN`` headroom row, each MOF waterfall /
 ``_RESIDUAL`` sub-row) and every leg inherits the parent's full
-``facility_limit``. ``engine/stages/classify/subtypes.py`` sums that limit over
+``facility_limit``. ``engine/classify/subtypes.py`` sums that limit over
 every qualifying leg, so a facility split into N legs contributes N x its limit
 and the obligor is spuriously pushed out of QRRE.
 
@@ -49,7 +49,7 @@ sentence as the code and validates nothing.
 
 References:
 - CRR Art. 154(4)(a)-(c) / PRA PS1/26 Art. 147(5A)(a)-(c): QRRE assignment.
-- ``src/rwa_calc/engine/stages/classify/subtypes.py``: the obligor-aggregate
+- ``src/rwa_calc/engine/classify/subtypes.py``: the obligor-aggregate
   expression under test.
 - ``tests/fixtures/p1_320/p1_320.py``: the fixture and its full leg inventory.
 - ``tests/unit/classifier/test_p1_191_qrre_aggregate_nominal.py``: the sibling
@@ -66,9 +66,9 @@ import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ExposureClass
-from rwa_calc.engine.stages.classify import ExposureClassifier
-from rwa_calc.engine.stages.classify.subtypes import classify_exposure_subtypes
-from rwa_calc.engine.stages.hierarchy import HierarchyResolver
+from rwa_calc.engine.classify import ExposureClassifier
+from rwa_calc.engine.classify.subtypes import classify_exposure_subtypes
+from rwa_calc.engine.hierarchy import HierarchyResolver
 from rwa_calc.engine.thresholds import regulatory_threshold
 from rwa_calc.rulebook import RulepackV0
 from tests.fixtures.p1_244.p1_244 import make_subtypes_frame
@@ -372,7 +372,7 @@ class TestLegVIMixedCandidateGroup:
     ⚠ THIS LEG EXISTS TO REDDEN THE WRONG FIX, NOT THE OLD BEHAVIOUR. The repo's
     own nearest sibling solves the identical problem — count each obligor once
     over rows that repeat it, on the same nullable key — by DIVIDING BY THE GROUP
-    LINE COUNT: ``engine/stages/classify/attributes.py:711-716`` writes
+    LINE COUNT: ``engine/classify/attributes.py:711-716`` writes
     ``partition_by_nullable(pl.len().over("counterparty_reference"), ...)`` for
     the Art. 123A(1)(b)(ii) granularity denominator. An implementer who copies
     that shape here writes ``(candidate_limit / pl.len().over(group)).sum()``,

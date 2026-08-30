@@ -3,8 +3,8 @@ P1.245 — group-consolidation revenue roll-up (PS1/26 Art. 147(4C)(b)(ii) w/ 14
 
 Pipeline position:
     fixture-builder output -> test-writer -> engine-implementer
-    (engine/stages/classify/attributes.py::with_group_annual_revenue +
-     engine/stages/classify/approach.py large-corp F-IRB gate)
+    (engine/classify/attributes.py::with_group_annual_revenue +
+     engine/classify/approach.py large-corp F-IRB gate)
 
 Key responsibilities:
 - Provide a classify-level ``ResolvedHierarchyBundle`` builder

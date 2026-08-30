@@ -3,7 +3,7 @@ P1.244 — QRRE assignment gates (CRR Art. 154(4)(a)-(b) / PS1/26 Art. 147(5A)(a
 
 Pipeline position:
     fixture-builder output -> test-writer -> engine-implementer
-    (engine/stages/classify/subtypes.py + engine/stages/hierarchy plumbing)
+    (engine/classify/subtypes.py + engine/hierarchy plumbing)
 
 Key responsibilities:
 - Provide in-memory ``RawDataBundle`` builders (HierarchyResolver ->

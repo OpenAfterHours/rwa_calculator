@@ -68,7 +68,7 @@ References:
     - CRR Art. 122: corporate long-term risk weights (contrastive, pre-fix fallback).
     - src/rwa_calc/data/schemas.py: RATINGS_SCHEMA ``is_short_term``/``scope_type``/``scope_id``;
       VALID_RATING_SCOPE_TYPES = {"facility", "loan", "contingent"}.
-    - src/rwa_calc/engine/stages/hierarchy/enrich.py: apply_short_term_rating_override
+    - src/rwa_calc/engine/hierarchy/enrich.py: apply_short_term_rating_override
       (``scope_type='loan'`` matches the loan exposure with the same ``exposure_reference``).
     - tests/fixtures/p1_105/p1_105.py, tests/fixtures/p1_103/p1_103.py: B31 analogues
       (Table 4A / Table 6A) — not reusable for CRR (2027 dates, basel_3_1() config,

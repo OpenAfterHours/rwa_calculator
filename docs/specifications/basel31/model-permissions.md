@@ -185,7 +185,7 @@ The classifier applies restrictions in the following order:
 
 !!! note "Implementation"
     Art. 147A routing is implemented in the classify stage package
-    `src/rwa_calc/engine/stages/classify/` (specifically `approach.py` / `permissions.py`).
+    `src/rwa_calc/engine/classify/` (specifically `approach.py` / `permissions.py`).
     Model permissions are loaded from the `model_permissions` data source and resolved
     at the exposure level. Invalid `model_id` values fall back to SA silently.
 

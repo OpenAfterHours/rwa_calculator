@@ -27,11 +27,11 @@ A stage edge is the single sanctioned materialisation point at a stage's exit:
 exposures = materialise_edge(new_exposures, config, "hierarchy_exit")
 ```
 
-`materialise_edge` (`engine/materialise.py:161`):
+`materialise_edge` (`engine/materialise.py:203`):
 
 1. collects the incoming plan — in-memory by default (`lf.collect()` then a cheap
    `.lazy()` wrap), or sunk to parquet and scanned back when spill mode is on;
-2. records an `EdgeEvent` (`engine/materialise.py:75`) into the run-scoped capture:
+2. records an `EdgeEvent` (`engine/materialise.py:81`) into the run-scoped capture:
    `label`, `rows`, `columns`, `estimated_bytes`, `wall_ms`, `spilled`, and optionally
    `plan_nodes`;
 3. returns a lazy handle backed by in-memory data (or a parquet scan in spill mode), so
@@ -44,8 +44,21 @@ one `EdgeEvent` per branch; the calc stage invokes it through the sealing wrappe
 
 **Rules** (enforced by `scripts/arch_check.py`):
 
-- Never call `.collect().lazy()` directly — that is `materialise_edge`'s job
-  (arch_check check 3).
+- Never call `.collect().lazy()` directly (arch_check check 3). Inside the pipeline
+  that is `materialise_edge`'s job. **Above** the engine — a caller with no
+  `CalculationConfig` and no stage edge, such as the reporting generators reading a
+  finished results parquet — the sanctioned form is `materialise_frame`
+  (`engine/materialise.py:167`): the in-memory half only, no spill decision and no
+  `EdgeEvent`. Both live in `materialise.py`, which is the check's sole allowlist
+  entry; neither the pattern nor a new allowlist entry belongs anywhere else.
+  `materialise_frame` is **not** a free win and is not the default: it materialises the
+  whole frame, so it defeats projection pushdown and pays only where MANY consumers read
+  it. The reporting split is the worked example — applied to the current results frame
+  (~30 template populations), deliberately not to the prior-period frame (2 consumers),
+  where a plain lazy handle measured 3–5× faster. Peak RSS was not measurably affected at
+  373,928 rows (+115 MB, inside noise); budget from a measurement, not from a per-byte
+  multiplier. Numbers and their caveats live in
+  `reporting/kernel/columns.py::materialise_results`.
 - Never call `pl.collect_all()` for pipeline branches — use `materialise_branches`.
 - Never pass `engine=` to any collect call — execution mode is config-driven
   (arch_check check 4).
@@ -91,13 +104,13 @@ fires none itself.
 
 | Label | Location | When it fires | What it bounds |
 |---|---|---|---|
-| `hierarchy_exit` | `engine/stages/hierarchy/stage.py` (`run`, via `materialise_sealed_edge`) | Every run, after the securitisation lookup is attached | The hierarchy unify/enrich plan (measured ≈1,586 nodes at 10k) crossing to the CCR stage / Classifier |
+| `hierarchy_exit` | `engine/stages/hierarchy.py` (`run`, via `materialise_sealed_edge`) | Every run, after the securitisation lookup is attached | The hierarchy unify/enrich plan (measured ≈1,586 nodes at 10k) crossing to the CCR stage / Classifier |
 | `ccr_exit` | `engine/stages/ccr.py` (`run`) | Only when `data.ccr` is present (the stage fn no-ops otherwise) | The `diagonal_relaxed` concat of synthetic SA-CCR exposure rows onto the hierarchy output |
-| `classifier_exit` | `engine/stages/classify/classifier.py` (producer-side, in `classify`) | Every run | The classification flag/subtype/approach chain; the diagnostic emits below it read in-memory data, and CRM receives an eager-backed frame |
+| `classifier_exit` | `engine/classify/classifier.py` (producer-side, in `classify`) | Every run | The classification flag/subtype/approach chain; the diagnostic emits below it read in-memory data, and CRM receives an eager-backed frame |
 | `crm_post_ead` | `engine/crm/processor.py` (`_run_ead_pipeline`) | Every run | **First sanctioned intra-stage checkpoint** — the provisions → CCF → init-EAD chain; the collateral step builds several small lookups from this frame, and without the checkpoint each lookup collect re-executes that chain (A/B-measured 35–52% full-pipeline cost; see next section) |
 | `crm_pre_guarantee_unified` | `engine/crm/processor.py` (`get_crm_unified_bundle`) | Only when valid guarantee inputs **and** a counterparty lookup are present | **Second sanctioned intra-stage checkpoint** — the collateral plan, before the guarantee module's 3-path concat (see next section) |
 | `crm_exit` | `engine/crm/processor.py` (producer-side) | Every run | The full CRM plan (guarantees + `_finalize_ead` + audit columns); the collateral-allocation / CRM-audit projections below it read in-memory data instead of re-executing the guarantee plan |
-| `re_split_exit` | `engine/stages/re_split/stage.py` (`run`) | Every run (the splitter itself is a no-op when no rows carry `re_split_mode`) | The RE loan-splitter output before the calculators fork the plan three ways — this edge replaces the old `pipeline_pre_branch` barrier one stage later |
+| `re_split_exit` | `engine/stages/re_split.py` (`run`) | Every run (the splitter itself is a no-op when no rows carry `re_split_mode`) | The RE loan-splitter output before the calculators fork the plan three ways — this edge replaces the old `pipeline_pre_branch` barrier one stage later |
 | `sa_branch` / `irb_branch` / `slotting_branch` | `engine/stages/calc.py` via `materialise_sealed_branches` | Every run | The three per-approach calculator chains; cpu mode collects all three in one `pl.collect_all` (CSE computes the shared upstream once), spill mode sinks each branch sequentially |
 
 **Removed at Phase 1:** the `classifier_output`, `crm_post_ead_fanout`,
@@ -151,18 +164,29 @@ One execution semantics, two storage strategies:
 - **`spill_dir: Path | None`** (`contracts/config.py:984`) — directory for temp parquet
   files; `None` uses the system temp directory.
 - **No silent fallback:** a sink failure raises `SpillError`
-  (`engine/materialise.py:65`). The only reason to enable spill mode is a memory
+  (`engine/materialise.py:71`). The only reason to enable spill mode is a memory
   ceiling, so silently substituting an in-memory collect would convert an explicit
   operator choice into an OOM at the worst moment. Fix the sink failure or disable
   `spill_edges`. (The previous architecture's silent in-memory fallback is gone.)
 - **Deprecated alias:** `collect_engine="streaming"` is the legacy spelling of
   `spill_edges=True` — accepted with a once-per-run `WARNING` for one release
-  (`_spill_requested`, `engine/materialise.py:315`; `contracts/config.py:974-979`).
+  (`_spill_requested`, `engine/materialise.py:357`; `contracts/config.py:974-979`).
   New code must use `spill_edges`.
 - **Cleanup:** spill files are registered in the run-scoped capture and deleted by
   `end_edge_capture` in the `finally` block of the facade's `run_with_data`
   (`engine/pipeline.py`). The old module-global spill registry and `atexit` hook were
   removed — spill-file lifetime is now exactly the run's lifetime.
+- **Spill stops at the pipeline — reporting is not covered.** `spill_edges` governs the
+  eight stage edges and the branch fork; it has never reached the reporting read. Under
+  `spill_edges=True` all eight edges spill, the aggregator exit is absent from the map,
+  and `results` lands as an in-memory `DF` regardless — so `materialise_frame`'s collect
+  in the reporting generators violates no `SpillError` contract, before or after E2.
+  **But an operator who sets the flag for a memory ceiling gets no protection at
+  reporting time**, and E2 raised what they are unprotected from: the read went from ~30
+  pushed-down scans (peak ≈ the largest single population) to one full collect (peak ≈
+  the whole frame). This is a limit of the spill design's scope, not a defect introduced
+  by E2. Extending spill above the engine would mean threading a config into a layer
+  that is deliberately config-blind — cost it before assuming it is wanted.
 
 ---
 
@@ -211,7 +235,7 @@ pipeline:
    pinned per-edge ceiling (`_EDGE_NODE_CEILINGS`), so residual intra-stage depth growth
    is a failing test instead of a Polars SIGSEGV.
 
-The metric is `plan_node_count()` (`engine/materialise.py:148`): non-blank lines of
+The metric is `plan_node_count()` (`engine/materialise.py:154`): non-blank lines of
 `lf.explain(optimized=False)` — a *consistent proxy* for native plan-tree size, not an
 exact node census.
 
@@ -242,8 +266,8 @@ and their census is ratcheted by arch_check check 11:
 
 | Location | What | Why |
 |---|---|---|
-| `engine/stages/hierarchy/graph.py` | Graph-edge collects (ultimate parent / facility root / facility ancestor closure) | Iterative graph walk (cycle detection, depth tracking) that Polars expressions can't express; unique org/facility edges, typically <1,000 rows |
-| `engine/stages/hierarchy/ratings.py` | Best internal/external rating lookups (`pl.collect_all`) | Small per-counterparty frames referenced by multiple downstream joins |
+| `engine/hierarchy/graph.py` | Graph-edge collects (ultimate parent / facility root / facility ancestor closure) | Iterative graph walk (cycle detection, depth tracking) that Polars expressions can't express; unique org/facility edges, typically <1,000 rows |
+| `engine/hierarchy/ratings.py` | Best internal/external rating lookups (`pl.collect_all`) | Small per-counterparty frames referenced by multiple downstream joins |
 | `engine/crm/collateral.py:363` | 3 collateral lookup collects (`pl.collect_all`) | Each lookup feeds multiple downstream joins; without materialisation the `group_by`/`select` re-evaluates at each reference |
 | `engine/crm/processor.py:982` | Guarantee + counterparty + rating-inheritance lookups (`pl.collect_all`) | Prevents parquet re-scans; small frames |
 | `contracts/validation.py`, `engine/utils.py` (`has_rows`), `sa/calculator.py` (`_warn_equity_in_main_table`), `irb/formulas.py` (scalar wrapper) | Validation / diagnostics / scalar helpers | Off the hot path or `.head(1)`-sized |
@@ -268,4 +292,14 @@ superseded) proved the full-lazy ideal unreachable on Polars 1.37 and identified
 [Target Architecture & Migration plan](../plans/target-architecture-migration.md) replaced
 the barriers with the formal stage edges on this page: every stage exit materialises, the
 inventory is contract-tested, depth is budgeted per edge, spill is explicit and
-fail-loud, and every collect is observable through the materialisation map.
+fail-loud, and every **stage-edge** collect is observable through the materialisation
+map. `materialise_frame` sits deliberately outside that map, and the reason is that it
+**never reads or writes `_capture`** — not that its callers sit outside a capture scope.
+It records nothing even with a capture explicitly open. `_capture` is a `ContextVar`
+(`engine/materialise.py:117`), so its scope is **dynamic, not lexical**: anything running
+between `begin_edge_capture` and `end_edge_capture` can see it, whoever imports whom.
+Check 12's `engine/ → reporting/` ban constrains the static call graph, not the dynamic
+one, and does not imply reporting never runs inside a capture. The map covers stage
+edges, not every collect in the process — so if a `materialise_frame` call turns out to
+sit inside a run, nothing is broken and no capture plumbing should be added to "restore"
+observability.

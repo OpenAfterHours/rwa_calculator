@@ -32,7 +32,7 @@ import pytest
 from rwa_calc.contracts.bundles import ResolvedHierarchyBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, ExposureClass
-from rwa_calc.engine.stages.classify import ExposureClassifier
+from rwa_calc.engine.classify import ExposureClassifier
 from tests.fixtures.resolved_bundle import seal_hierarchy_exit
 from tests.fixtures.sme_assets_fallback.sme_assets_fallback import (
     LOAN_REF,

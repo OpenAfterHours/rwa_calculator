@@ -72,7 +72,7 @@ in the LGD in accordance with Chapter 4.
     `el_dilution_estimate` (dilution risk), both **decimal rates** of the exposure value
     (0.0225 = 2.25%), matching the identity `EL = PD × LGD`; neither is a monetary amount, and
     one never substitutes for the other. The derivation runs in the classify stage
-    (`engine/stages/classify/subtypes.py::derive_purchased_receivables_pd`) because the IRB
+    (`engine/classify/subtypes.py::derive_purchased_receivables_pd`) because the IRB
     approach gate is `internal_pd.is_not_null()` — before this, a pool with no obligor PD fell
     to the Standardised Approach entirely.
 
@@ -100,7 +100,7 @@ in the LGD in accordance with Chapter 4.
 !!! warning "The subtype LGD binds on A-IRB too — not only Foundation"
     The derived PD is what opens the IRB gate, and on the **org-wide** permission path
     `airb_expr` requires only `has_internal_rating` — it carries no modelled-LGD limb
-    (`engine/stages/classify/permissions.py::_build_orgwide_permission_exprs`), unlike the
+    (`engine/classify/permissions.py::_build_orgwide_permission_exprs`), unlike the
     model-permission path which does require `has_modelled_lgd`. A top-down pool with no LGD
     of any kind therefore can and does land on **A-IRB**. Do not reason that a null `lgd`
     forces the row to Foundation "where the supervisory LGD is applied" — that holds only
@@ -314,7 +314,7 @@ A **1.25x** multiplier applied to the **asset correlation coefficient** (R) for 
 
 The multiplier is a **mandatory** treatment ("shall multiply … by 1.25"), so
 `requires_fi_scalar` is **derived** in the classification stage
-(`engine/stages/classify/subtypes.py::classify_exposure_subtypes`), not driven
+(`engine/classify/subtypes.py::classify_exposure_subtypes`), not driven
 solely by the user flag:
 
 ```

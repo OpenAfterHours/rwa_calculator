@@ -32,7 +32,7 @@ Scope (what this change does and does not touch):
       ``exposure_class_applied`` and every COREP / Pillar 3 class row are
       untouched (they read the SA-side class, never ``exposure_class_irb``).
     - The behavioural consequence is IRB model-permission matching, which keys on
-      ``exposure_class_irb`` (``stages/classify/permissions.py``): under CRR a
+      ``exposure_class_irb`` (``engine/classify/permissions.py``): under CRR a
       non-named MDB now needs an INSTITUTION-class IRB permission, not a
       central-government one. That is the Art. 147(4)(c) outcome.
     - Capital is unmoved by the class itself: the IRB correlation parameters are
@@ -42,7 +42,7 @@ Scope (what this change does and does not touch):
 References:
     - CRR Art. 147(3)(b), 147(4)(c); PRA PS1/26 Art. 147(3)(f)
     - CRR Art. 117(2): the named 0%-risk-weight MDB list
-    - src/rwa_calc/engine/stages/classify/attributes.py::derive_independent_flags
+    - src/rwa_calc/engine/classify/attributes.py::derive_independent_flags
     - src/rwa_calc/rulebook/packs/{crr,b31}.py:
       ``crr_non_named_mdb_institution_irb_class``
 """
@@ -56,8 +56,8 @@ import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, ExposureClass
+from rwa_calc.engine.classify import ExposureClassifier
 from rwa_calc.engine.irb.formulas import get_correlation_params
-from rwa_calc.engine.stages.classify import ExposureClassifier
 from rwa_calc.rulebook import RulepackV0
 from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolved_bundle
 

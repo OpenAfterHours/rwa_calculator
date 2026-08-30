@@ -2,7 +2,7 @@
 Generate P1.154-B31 fixtures: Basel 3.1 Art. 118 IO discriminator vs Art. 117(1)(a) Table 2B MDB.
 
 Pipeline position:
-    fixture-builder output -> test-writer -> engine-implementer (engine/stages/classify/,
+    fixture-builder output -> test-writer -> engine-implementer (engine/classify/,
     data/tables/crr_risk_weights.py)
 
 Key responsibilities:

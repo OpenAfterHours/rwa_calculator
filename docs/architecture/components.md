@@ -7,8 +7,8 @@ This document provides detailed documentation of each component in the RWA calcu
 | Component | Module | Purpose |
 |-----------|--------|---------|
 | **Loader** | `engine/loader.py` | Load data from files |
-| **Hierarchy Resolver** | `engine/stages/hierarchy/` (package) | Resolve hierarchies |
-| **Classifier** | `engine/stages/classify/` (package) | Classify exposures |
+| **Hierarchy Resolver** | `engine/hierarchy/` (package) | Resolve hierarchies |
+| **Classifier** | `engine/classify/` (package) | Classify exposures |
 | **CRM Processor** | `engine/crm/processor.py` | Apply CRM |
 | **SA Calculator** | `engine/sa/calculator.py` | Standardised RWA |
 | **IRB Calculator** | `engine/irb/calculator.py` | IRB RWA |
@@ -18,9 +18,9 @@ This document provides detailed documentation of each component in the RWA calcu
 
 Each stage package is the single home of its component — there is no
 top-level alias module. Import `HierarchyResolver` from
-`engine/stages/hierarchy/`, `ExposureClassifier` from `engine/stages/classify/`,
-`RealEstateSplitter` from `engine/stages/re_split/` and `FXConverter` from
-`engine/stages/fx/`.
+`engine/hierarchy/`, `ExposureClassifier` from `engine/classify/`,
+`RealEstateSplitter` from `engine/re_split/` and `FXConverter` from
+`engine/fx/`.
 
 ## Calculator / Domain Transforms
 

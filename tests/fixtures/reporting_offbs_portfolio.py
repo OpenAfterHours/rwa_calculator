@@ -46,7 +46,7 @@ maturity_date span ~12 years so the CRR arm resolves unambiguously to item 2(b).
 ``FAC_UCC`` carries ``committed=True`` deliberately. An unconditionally
 cancellable line is modelled here by ``risk_type="LR"``, NOT by
 ``committed=False``: a ``committed=False`` facility emits no synthetic undrawn
-exposure at all (``engine/stages/hierarchy/facility_undrawn.py`` filters it out),
+exposure at all (``engine/hierarchy/facility_undrawn.py`` filters it out),
 so it could never reach a C 07.00 CCF bucket. The LR route is also the one that
 shows the headline Basel 3.1 change — UCC moves from 0% to 10%, i.e. from a
 zero-EAD row to a real one, in the same column.

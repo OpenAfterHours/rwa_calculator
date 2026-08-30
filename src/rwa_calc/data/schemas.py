@@ -1454,7 +1454,7 @@ REPORTING_ENTITY_SCHEMA: dict[str, ColumnSpec] = {
     # CRR Art. 113(6) core-UK-group permission perimeter. On an individual-basis
     # run the scope resolver assigns the 0% intragroup risk weight when both the
     # reporting entity and the tagged intragroup entity carry core_uk_group=True
-    # (see engine/stages/scope/resolver.py). Conservative default False (outside
+    # (see engine/scope/resolver.py). Conservative default False (outside
     # the permission perimeter).
     "core_uk_group": ColumnSpec(pl.Boolean, default=False, required=False),
 }
@@ -2786,7 +2786,7 @@ TABLE_KEY_COLUMNS: dict[str, str] = {
 #:
 #: - ``loans`` / ``contingents`` / ``facilities`` — the exposure tables. The
 #:   model-permission join de-duplicates on ``exposure_reference``
-#:   (``engine/stages/classify/permissions.py``) to stop a fan-out when several
+#:   (``engine/classify/permissions.py``) to stop a fan-out when several
 #:   permissions match, and in doing so collapses genuine duplicate INPUT rows:
 #:   three input loan rows produce two output rows, and the missing row's
 #:   capital simply leaves the portfolio total.
@@ -2794,7 +2794,7 @@ TABLE_KEY_COLUMNS: dict[str, str] = {
 #:   every exposure that joins to it (``attach_counterparty_rating`` is a plain
 #:   left join), double-counting capital. This is the exposure-table analogue of
 #:   the ``org_mappings`` duplicate-child fan-out that ``DQ004`` already reports
-#:   from ``engine/stages/hierarchy/graph.py``.
+#:   from ``engine/hierarchy/graph.py``.
 TABLE_UNIQUE_KEYS: dict[str, str] = {
     "loans": "loan_reference",
     "contingents": "contingent_reference",
@@ -3808,7 +3808,7 @@ ADDITIVE_OUTPUT_FIELDS: frozenset[str] = frozenset(
         "provision_on_nominal",
         "expected_loss",
         # Both are pro-rata allocated across real-estate split legs by
-        # ``engine/stages/re_split/carriers.py::_PRORATA_CARRIERS``, so the collapse
+        # ``engine/re_split/carriers.py::_PRORATA_CARRIERS``, so the collapse
         # MUST sum them; ``_collapse.py`` takes ``.first()`` for every non-member,
         # which returns one leg's share instead of the parent total.
         # ``collateral_adjusted_value`` is additionally a reconciliation component

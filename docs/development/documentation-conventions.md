@@ -21,12 +21,12 @@ Always include links to actual implementation when showing conceptual code:
 ```markdown
 !!! info "Conceptual Logic"
     The following illustrates the logic. For the actual implementation,
-    see [`classify/classifier.py:87-150`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/classify/classifier.py#L87-L150).
+    see [`classify/classifier.py:87-150`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/classify/classifier.py#L87-L150).
 ```
 
 **Format for GitHub links:**
 ```
-https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/classify/classifier.py#L87-L150
+https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/classify/classifier.py#L87-L150
 ```
 
 ### 2. Embedded Code Snippets
@@ -48,7 +48,7 @@ Path is relative to repository root. See [pymdownx.snippets docs](https://facele
 
 ??? example "See retail.md for working example"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/classifier.py:87:110"
+    --8<-- "src/rwa_calc/engine/classify/classifier.py:87:110"
     ```
 
 ### 3. Auto-generated API Documentation
@@ -56,7 +56,7 @@ Path is relative to repository root. See [pymdownx.snippets docs](https://facele
 Use `mkdocstrings` to generate documentation from docstrings:
 
 ```markdown
-::: rwa_calc.engine.stages.classify.ExposureClassifier
+::: rwa_calc.engine.classify.ExposureClassifier
     options:
       show_root_heading: true
       members:
@@ -87,7 +87,7 @@ Use collapsible sections to show lengthy actual code without cluttering the page
 
 ??? example "See this working example from hierarchy/resolver.py"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/hierarchy/resolver.py:66:100"
+    --8<-- "src/rwa_calc/engine/hierarchy/resolver.py:66:100"
     ```
 
 ### 6. Cross-Reference Convention

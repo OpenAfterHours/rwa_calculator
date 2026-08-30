@@ -76,7 +76,7 @@ from tests.fixtures.reporting_re_split_portfolio import (
 
 from rwa_calc.contracts.config import CalculationConfig, PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
-from rwa_calc.engine.stages.re_split.params import re_split_parameters
+from rwa_calc.engine.re_split.params import re_split_parameters
 from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBundle
 from rwa_calc.reporting.pillar3.generator import Pillar3Generator, Pillar3TemplateBundle
 from rwa_calc.reporting.pillar3.templates import B31_CR5_COLUMNS

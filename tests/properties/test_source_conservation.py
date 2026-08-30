@@ -18,7 +18,7 @@ wrong (`.claude/LESSONS.md` B3 — "if your test and your code were written from
 the same sentence, the test proves nothing").
 
 WHY THIS FILE EXISTS — the loan-splitter carrier-duplication defect:
-    ``engine/stages/re_split/splitter.py`` runs AFTER the CRM stage and fans one
+    ``engine/re_split/splitter.py`` runs AFTER the CRM stage and fans one
     real-estate exposure into a secured leg plus a residual leg. Its leg builders
     override roughly ten columns and INHERIT thirty-four numeric columns whole,
     ``drawn_amount`` and the collateral valuation columns among them. EAD is

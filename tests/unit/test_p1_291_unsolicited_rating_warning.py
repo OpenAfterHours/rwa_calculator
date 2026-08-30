@@ -41,7 +41,7 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.errors import CalculationError, ErrorSeverity
-from rwa_calc.engine.stages.hierarchy.enrich import apply_short_term_rating_override
+from rwa_calc.engine.hierarchy.enrich import apply_short_term_rating_override
 
 _DQ_UNSOLICITED = "DQ015"
 

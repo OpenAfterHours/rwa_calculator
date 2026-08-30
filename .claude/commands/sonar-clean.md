@@ -59,7 +59,7 @@ candidate item with this shape:
 
 ```json
 {
-  "file": "src/rwa_calc/engine/stages/hierarchy/resolver.py",
+  "file": "src/rwa_calc/engine/hierarchy/resolver.py",
   "slug": "engine-stages-hierarchy-resolver",
   "issues": [
     {"key": "AZ...", "rule": "python:S3776", "severity": "CRITICAL",
@@ -158,7 +158,7 @@ complete JSON document — do not patch line by line.
   "items": [
     {
       "slug": "engine-stages-hierarchy-resolver",
-      "file": "src/rwa_calc/engine/stages/hierarchy/resolver.py",
+      "file": "src/rwa_calc/engine/hierarchy/resolver.py",
       "issue_count": 6,
       "critical_count": 4,
       "issues": [ {"key":"...", "rule":"...", "severity":"...",

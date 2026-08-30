@@ -1086,12 +1086,12 @@ A naïve LTV-band reading ("90% LTV → 75%") would assign 75% to the whole
     regardless of whether the borrower is an individual, SME, corporate, or
     institution. In the calculator the eligibility routes are:
 
-    - **`RETAIL_MORTGAGE`** — assigned by `engine/stages/classify/` when the
+    - **`RETAIL_MORTGAGE`** — assigned by `engine/classify/` when the
       exposure is `is_mortgage=True` and the counterparty is an individual
       (or already classified as `RETAIL_OTHER`). This bucket consumes the
       Art. 125 split directly in the SA calculator.
     - **`RESIDENTIAL_MORTGAGE`** — assigned by the SA real-estate
-      loan-splitter stage (`engine/stages/re_split/`, registered as
+      loan-splitter stage (`engine/re_split/`, registered as
       `re_splitter` in `engine/registry.py`) for residential-property-
       collateralised SA exposures whose `exposure_class` is **not** already
       RE-typed (e.g. `CORPORATE`, `INSTITUTION`). The split applies the
@@ -1607,7 +1607,7 @@ table.
 
 ## Real Estate Loan-Splitter (CRR Art. 125/126, PRA PS1/26 Art. 124F/H)
 
-The RE-split pipeline stage (`engine/stages/re_split/`, registered as
+The RE-split pipeline stage (`engine/re_split/`, registered as
 `re_splitter` in `engine/registry.py`, between the CRM and calculators stages)
 physically partitions property-collateralised SA-bound
 exposures whose `exposure_class` is **not** already RE-typed. The secured row

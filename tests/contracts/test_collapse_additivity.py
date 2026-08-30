@@ -8,7 +8,7 @@ Pipeline position:
 
 What this proves:
 The splitter and the collapse helper hold two halves of one contract, in two
-modules that do not import each other. ``engine/stages/re_split/carriers.py``
+modules that do not import each other. ``engine/re_split/carriers.py``
 decides which columns are EXTENSIVE — money that must be divided pro-rata across
 the legs. ``data/schemas.py::ADDITIVE_OUTPUT_FIELDS`` decides which columns are
 SUMMED when ``_collapse.py`` folds those legs back to one row per parent;
@@ -43,7 +43,7 @@ from __future__ import annotations
 
 from rwa_calc.analysis.recon_registry import RECONCILABLE_COMPONENTS
 from rwa_calc.data.schemas import ADDITIVE_OUTPUT_FIELDS
-from rwa_calc.engine.stages.re_split import carriers as re_split_carriers
+from rwa_calc.engine.re_split import carriers as re_split_carriers
 
 #: Every column the reconciliation engine READS off the collapsed frame. Read off
 #: the registry rather than hand-listed: a hand-written copy would drift out of
@@ -113,7 +113,7 @@ def test_allocated_reconciliation_components_are_additive() -> None:
     # Assert
     assert offenders == [], (
         f"{offenders} are allocated pro-rata across real-estate split legs "
-        f"(engine/stages/re_split/carriers.py::_PRORATA_CARRIERS) and are compared by the "
+        f"(engine/re_split/carriers.py::_PRORATA_CARRIERS) and are compared by the "
         f"reconciliation engine (analysis/recon_registry.py), but are absent from "
         f"ADDITIVE_OUTPUT_FIELDS (data/schemas.py). engine/aggregator/_collapse.py takes "
         f".first() for every non-additive column, so on a split parent each of these "
@@ -189,7 +189,7 @@ def test_the_latent_non_additive_count_is_unchanged() -> None:
 def _all_allocated_carriers() -> frozenset[str]:
     """Every column any of the splitter's carrier tuples allocates across legs.
 
-    Discovered by scanning ``engine/stages/re_split/carriers`` for module-level
+    Discovered by scanning ``engine/re_split/carriers`` for module-level
     names ending in ``CARRIERS`` rather than importing a fixed list, for one
     reason: the allocation sets GREW mid-batch (``_PRORATA_CARRIERS`` 33 -> 57,
     plus ``_COMMERCIAL_ONLY_CARRIERS`` appearing entirely), and a hand-listed
@@ -206,7 +206,7 @@ def _all_allocated_carriers() -> frozenset[str]:
         if name.endswith("CARRIERS") and isinstance(value, tuple)
     ]
     assert tuples, (
-        "no *CARRIERS tuple found in engine/stages/re_split/carriers — the module was "
+        "no *CARRIERS tuple found in engine/re_split/carriers — the module was "
         "renamed or restructured, and every assertion in this file is now vacuous"
     )
     return frozenset(column for group in tuples for column in group)

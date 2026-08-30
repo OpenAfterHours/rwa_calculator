@@ -320,6 +320,12 @@ def prepare_columns(
     # no fill_null — so the check-11 baseline is untouched. A typed null leaves
     # the carrier rung inert (is_not_null() False) and lending rows untouched
     # (risk_type null → eq_missing("CCR_SFT") False).
+    # One resolution feeds both the injection and the expression build. Unlike
+    # the CRM sites that thread a set ACROSS steps, this one is exact by
+    # construction: it is resolved and consumed inside this function, and the
+    # three optional columns are present after ``ensure_columns`` either way,
+    # so the union below is the frame's real column set, not an assertion.
+    names = set(lf.collect_schema().names())
     lf = ensure_columns(
         lf,
         {
@@ -327,8 +333,9 @@ def prepare_columns(
             "risk_type": ColumnSpec(pl.String, default=None, required=False),
             "ccr_effective_maturity": ColumnSpec(pl.Float64, default=None, required=False),
         },
+        present=names,
     )
-    names = set(lf.collect_schema().names())
+    names |= {"approach", "risk_type", "ccr_effective_maturity"}
     exprs = _prepare_columns_exprs(config, names, pack=resolved_pack)
     if exprs:
         return lf.with_columns(exprs)

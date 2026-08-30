@@ -6,7 +6,7 @@ Pipeline position:
     (``engine/irb/guarantee.py::_compute_guarantor_rw_sa``) and the SA
     branch (``engine/sa/rw_adjustments.py::_build_guarantor_rw_expr``) — and
     by the hierarchy facility-share selection
-    (``engine/stages/hierarchy/facility_undrawn.py`` via
+    (``engine/hierarchy/facility_undrawn.py`` via
     ``build_entity_rw_expr``). This module is the single source for "what SA
     risk weight does this guarantor / entity attract?".
 
@@ -335,7 +335,7 @@ def build_entity_rw_expr(
     """Build the entity-level SA risk-weight preview expression.
 
     Compiled by the hierarchy facility-share selection
-    (``engine/stages/hierarchy/facility_undrawn.py::
+    (``engine/hierarchy/facility_undrawn.py::
     _derive_facility_share_counterparty``) to rank candidate counterparties
     by SA-equivalent risk weight. The preview never appears in output, but it
     is BINDING on ownership: the argmax of this expression becomes the share

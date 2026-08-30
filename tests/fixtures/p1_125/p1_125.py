@@ -35,7 +35,7 @@ Scenario constants:
 
 References:
     - PRA PS1/26 Art. 147A(1)(e): FSE restriction to F-IRB (Basel 3.1 only)
-    - engine/stages/classify/ line ~427: FSE column propagation guard
+    - engine/classify/ line ~427: FSE column propagation guard
     - tests/unit/test_art123a_retail_criteria.py: analogous CLS005 pattern
 """
 

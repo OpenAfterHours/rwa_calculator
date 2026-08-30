@@ -102,8 +102,8 @@ disqualifier — the worktree merge surfaces conflicts cleanly):
 
 1. Distinct top-level under `src/rwa_calc/engine/` (e.g. `engine/sa/`,
    `engine/irb/`, `engine/crm/`, `engine/slotting/`, `engine/equity/`,
-   `engine/stages/re_split/`, `engine/stages/hierarchy/`,
-   `engine/stages/classify/`).
+   `engine/re_split/`, `engine/hierarchy/`,
+   `engine/classify/`).
 2. Distinct file in `src/rwa_calc/rulebook/packs/`, or a distinct
    pack-binding shim (`engine/sa/{crr,b31}_risk_weight_tables.py`,
    `engine/crm/haircut_tables.py`). The `data/tables/` package no

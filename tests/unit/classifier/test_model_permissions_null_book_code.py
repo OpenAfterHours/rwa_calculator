@@ -17,7 +17,7 @@ Post-fix assertion:
     permission_valid=True, model_firb_permitted=True, and approach="foundation_irb".
 
 References:
-    - engine/stages/classify/ (defect site)
+    - engine/classify/ (defect site)
     - CRR Art. 143: use of IRB models (scope conditions)
     - tests/unit/test_classifier.py: TestModelPermissions (pattern reference)
 """
@@ -36,7 +36,7 @@ from rwa_calc.contracts.bundles import (
 )
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, ExposureClass, PermissionMode
-from rwa_calc.engine.stages.classify import ExposureClassifier
+from rwa_calc.engine.classify import ExposureClassifier
 from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolved_bundle
 
 if TYPE_CHECKING:

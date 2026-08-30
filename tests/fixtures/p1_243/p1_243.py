@@ -3,7 +3,7 @@ P1.243 — IRB retail monetary cap is an SME-limb-only condition (Art. 147(5)(a)
 
 Pipeline position:
     fixture-builder output -> test-writer -> engine-implementer
-    (engine/stages/classify/{attributes,subtypes,approach}.py)
+    (engine/classify/{attributes,subtypes,approach}.py)
 
 Key responsibilities:
 - Provide in-memory ``ResolvedHierarchyBundle`` builders that exercise the split

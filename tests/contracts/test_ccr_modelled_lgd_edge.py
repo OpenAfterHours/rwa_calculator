@@ -11,7 +11,7 @@ surface the engine-implementer wires next:
 - It is declared on the CCR-flavoured exit edges (``CCR_EXIT_EDGE``,
   ``CLASSIFIER_EXIT_CCR_EDGE``, ``CRM_EXIT_CCR_EDGE``,
   ``RE_SPLIT_EXIT_CCR_EDGE``) so it survives through to the classifier's
-  ``has_modelled_lgd`` AIRB gate (engine/stages/classify/permissions.py:340).
+  ``has_modelled_lgd`` AIRB gate (engine/classify/permissions.py:340).
 - It is ABSENT from ``HIERARCHY_EXIT_EDGE`` — a hierarchy-base column would be
   silently filtered out of the CCR-flavoured exits by the
   ``c not in HIERARCHY_EXIT_EDGE.columns`` comprehension (the placement trap
@@ -19,7 +19,7 @@ surface the engine-implementer wires next:
 
 References:
 - CRR Art. 143 / Art. 169-171: own-estimate LGD under A-IRB.
-- engine/stages/classify/permissions.py:340 — the AIRB gate this carrier feeds.
+- engine/classify/permissions.py:340 — the AIRB gate this carrier feeds.
 - tests/fixtures/ccr/golden_ccr_sft_irb_maturity.py — the fixture that
   already carries ``ccr_modelled_lgd`` on the SFT trade row (currently
   dropped at the loader-boundary seal, since neither schema declares it yet).

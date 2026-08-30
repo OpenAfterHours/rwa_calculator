@@ -677,7 +677,7 @@ class TestLendingGroupAggregation:
 
     The implementation aggregates drawn over `lending_group_reference` first
     and falls back to `counterparty_reference` when no lending group is
-    mapped — mirroring the retail aggregation pattern in engine/stages/hierarchy/.
+    mapped — mirroring the retail aggregation pattern in engine/hierarchy/.
     """
 
     def test_aggregates_drawn_across_lending_group(
@@ -945,7 +945,7 @@ class TestResidentialCollateralNettedFromEStar:
 
     The carve-out in Art. 501 ("excluding claims or contingent claims secured
     on residential property collateral") is implemented per-row, mirroring
-    the retail-threshold logic in ``engine/stages/hierarchy/`` (Art. 123(c)):
+    the retail-threshold logic in ``engine/hierarchy/`` (Art. 123(c)):
 
         contribution_to_E* = max(0, drawn - residential_collateral_value)
 

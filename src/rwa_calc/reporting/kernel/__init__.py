@@ -39,6 +39,7 @@ from rwa_calc.reporting.kernel.columns import (
     ensure_gross_side_carriers,
     gross_carrier,
     gross_carriers,
+    materialise_results,
     pick,
 )
 from rwa_calc.reporting.kernel.excel import (
@@ -68,6 +69,7 @@ __all__ = [
     "filter_on_bs",
     "gross_carrier",
     "gross_carriers",
+    "materialise_results",
     "null_row",
     "pick",
     "population_flags",

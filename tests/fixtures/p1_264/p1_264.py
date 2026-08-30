@@ -4,7 +4,7 @@ obligor-class gate.
 
 Pipeline position:
     fixture-builder output -> test-writer -> engine-implementer
-    (engine/stages/hierarchy/enrich.py: ``apply_short_term_rating_override`` —
+    (engine/hierarchy/enrich.py: ``apply_short_term_rating_override`` —
     class-gate the override to institution/corporate obligors only, per
     Art. 140(1); optionally a new DQ error, e.g. DQ-RT-ST3, for out-of-class
     short-term rating rows)
@@ -56,7 +56,7 @@ Key responsibilities:
   text is identical in both regimes.
 
 Defect under test (pre-fix):
-    ``apply_short_term_rating_override`` (engine/stages/hierarchy/enrich.py:
+    ``apply_short_term_rating_override`` (engine/hierarchy/enrich.py:
     229-240) overwrites ``cqs`` for ANY scope-matched exposure regardless of
     the underlying counterparty's exposure class. A short-term rating
     mis-scoped onto a sovereign loan (RTG_P264_S1) still replaces that row's
@@ -71,7 +71,7 @@ Defect under test (pre-fix):
 
     CP_P264_SOV2 / LN_P264_S2A / LN_P264_S2B probe the P1.225 interaction
     (already landed): ``_apply_obligor_st_contamination_flags``
-    (engine/stages/hierarchy/enrich.py:882-926) has no class gate either --
+    (engine/hierarchy/enrich.py:882-926) has no class gate either --
     it reads only ``has_short_term_ecai`` / ``_st_assessment_cqs``, both
     already corrupted by the S2A mis-scope. Unlike CP_P264_SOV (single
     exposure, nothing to spill onto), CP_P264_SOV2 carries a SECOND, unrated,

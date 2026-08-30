@@ -30,7 +30,7 @@ that bypass the pipeline. The Art. 501 residential carve-out
 ("excluding claims or contingent claims secured on residential property
 collateral") is applied per row by subtracting ``residential_collateral_value``
 (capped at drawn) from each row's contribution to E*, mirroring the
-retail-threshold treatment in ``engine/stages/hierarchy/`` (CRR Art. 123(c)).
+retail-threshold treatment in ``engine/hierarchy/`` (CRR Art. 123(c)).
 Buy-to-let rows additionally receive ``factor=1.0`` (BTL is not eligible
 for the SF); a typical BTL row's RRE coverage equals its drawn balance so
 its E* contribution lands at 0 by virtue of the netting. The resulting
@@ -219,7 +219,7 @@ class SupportingFactorCalculator:
         carve-out is applied per row by subtracting
         ``residential_collateral_value`` (capped at drawn) from each row's
         contribution to E*, mirroring the retail-threshold logic in
-        ``engine/stages/hierarchy/`` (Art. 123(c)). BTL rows receive factor=1.0
+        ``engine/hierarchy/`` (Art. 123(c)). BTL rows receive factor=1.0
         via a separate eligibility gate. The resulting blended factor is
         applied to each SME row's full RWA.
 
@@ -329,7 +329,7 @@ class SupportingFactorCalculator:
             # secured on residential property collateral". Implemented as
             # per-row netting of residential_collateral_value (capped at
             # drawn so the contribution never goes negative), mirroring
-            # the retail-threshold logic in engine/stages/hierarchy/
+            # the retail-threshold logic in engine/hierarchy/
             # (Art. 123(c)). Defaulted exposures stay in E* (Art. 501
             # explicitly includes "any exposure in default").
             if has_res_coll:

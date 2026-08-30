@@ -89,7 +89,7 @@ def crr_art_124_1_unsecured_cp_rw_expr() -> pl.Expr:
       either band would invent a rule.
 
     ``qualifies_as_retail`` carries only the Art. 123(c) threshold limb under
-    CRR (see ``stages/classify/attributes.py::_build_qualifies_as_retail_expr``)
+    CRR (see ``engine/classify/attributes.py::_build_qualifies_as_retail_expr``)
     — it is derived for the retail *class* population and is True for any row
     under EUR 1m, including a corporate one — so the Art. 123(a) entity test is
     conjoined here explicitly. Nulls are left to Kleene logic rather than being

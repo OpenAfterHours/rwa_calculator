@@ -10,7 +10,7 @@ All three must PASS — the P6.26 refactor has landed, so these are standing
 regression guards.
 
 The constant and the two coupled sites moved into the
-``rwa_calc.engine.stages.hierarchy`` stage package (migration Phase 4 Slice 2):
+``rwa_calc.engine.hierarchy`` stage package (migration Phase 4 Slice 2):
 the constant lives in the package ``__init__``, Site A in ``facility_undrawn``
 and Site B in ``enrich``. Test 2 therefore scans the whole stage package rather
 than a single module — while it pointed at the old ``engine/hierarchy.py``
@@ -25,9 +25,9 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-import rwa_calc.engine.stages.hierarchy as hierarchy_module
+import rwa_calc.engine.hierarchy as hierarchy_module
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.engine.stages.hierarchy import HierarchyResolver
+from rwa_calc.engine.hierarchy import HierarchyResolver
 from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
@@ -54,7 +54,7 @@ def test_facility_qrre_coupled_columns_constant_exists() -> None:
     # Act / Assert — test fails here until the constant is added
     assert hasattr(hierarchy_module, "_FACILITY_QRRE_COUPLED_COLUMNS"), (
         "missing module-level constant _FACILITY_QRRE_COUPLED_COLUMNS in "
-        "rwa_calc.engine.stages.hierarchy; add it as part of the P6.26 refactor"
+        "rwa_calc.engine.hierarchy; add it as part of the P6.26 refactor"
     )
     assert expected == hierarchy_module._FACILITY_QRRE_COUPLED_COLUMNS, (
         f"_FACILITY_QRRE_COUPLED_COLUMNS = {hierarchy_module._FACILITY_QRRE_COUPLED_COLUMNS!r} "

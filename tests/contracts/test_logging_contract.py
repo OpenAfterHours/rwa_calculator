@@ -17,10 +17,10 @@ import pytest
 
 STAGE_MODULES: tuple[str, ...] = (
     "rwa_calc.engine.loader",
-    "rwa_calc.engine.stages.hierarchy.resolver",
-    "rwa_calc.engine.stages.classify.classifier",
+    "rwa_calc.engine.hierarchy.resolver",
+    "rwa_calc.engine.classify.classifier",
     "rwa_calc.engine.crm.processor",
-    "rwa_calc.engine.stages.re_split.splitter",
+    "rwa_calc.engine.re_split.splitter",
     "rwa_calc.engine.sa.calculator",
     "rwa_calc.engine.irb.calculator",
     "rwa_calc.engine.slotting.calculator",

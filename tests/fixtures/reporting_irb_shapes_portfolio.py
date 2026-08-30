@@ -465,7 +465,7 @@ def _facilities() -> pl.DataFrame:
     """Two COMMITMENTS, each emitting one synthetic ``<facility>_UNDRAWN`` leg.
 
     Both are ``committed=True``: an uncommitted facility emits no undrawn
-    exposure at all (``engine/stages/hierarchy/facility_undrawn.py`` filters it
+    exposure at all (``engine/hierarchy/facility_undrawn.py`` filters it
     out), so it could never reach a conversion-factor column.
 
     ``FAC_CORP_OC`` is the load-bearing one. ``LN_CORP_ONB`` maps to it, so its

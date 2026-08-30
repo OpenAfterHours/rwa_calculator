@@ -149,15 +149,18 @@ src/rwa_calc/
     ├── registry.py        # Literal ordered StageSpec list
     ├── orchestrator.py    # run_stages — the fold over the registry
     ├── loader.py          # Data loading
-    ├── hierarchy.py       # Back-compat shim → stages/hierarchy/
-    ├── classifier.py      # Back-compat shim → stages/classify/
     ├── ccf.py             # Credit conversion factors
-    ├── fx_converter.py    # FX conversion
-    ├── stages/            # Per-stage run(ctx, rulepack, run_config) adapters
-    │   ├── hierarchy/     # Hierarchy resolution (package)
-    │   ├── classify/      # Exposure classification (package)
+    ├── stages/            # Wiring layer ONLY — one run(ctx, rulepack,
+    │   │                  #   run_config) adapter per registry stage
+    │   ├── hierarchy.py   # Hierarchy stage adapter
+    │   ├── classify.py    # Classification stage adapter
     │   ├── crm.py         # CRM stage adapter
     │   └── calc.py        # Calculator stage adapter
+    ├── hierarchy/         # Hierarchy resolution (domain)
+    ├── classify/          # Exposure classification (domain)
+    ├── re_split/          # Real-estate loan splitting (domain)
+    ├── scope/             # Multi-entity reporting scope (domain)
+    ├── fx/                # FX conversion kernel (not a registry stage)
     ├── aggregator/        # Result aggregation (package)
     ├── crm/               # Credit risk mitigation
     ├── sa/                # Standardised approach

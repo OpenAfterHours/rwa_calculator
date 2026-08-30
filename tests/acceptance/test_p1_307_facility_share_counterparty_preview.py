@@ -8,7 +8,7 @@ Pipeline position:
 Why this test exists at the pipeline level rather than only as a unit pin:
     ``engine/sa/guarantor_rw.py::build_entity_rw_expr`` computes a preview risk
     weight whose ONLY consumer is
-    ``engine/stages/hierarchy/facility_undrawn.py::
+    ``engine/hierarchy/facility_undrawn.py::
     _derive_facility_share_counterparty``. That helper sorts candidates on the
     preview descending and takes ``.first()`` inside a ``group_by().agg()`` —
     the agg drops the column but consumes its ordering, and the winner becomes

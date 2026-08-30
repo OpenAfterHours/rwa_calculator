@@ -5,7 +5,7 @@ Generate P1.220 fixtures: institution-typed PSE stays SA-only under Basel 3.1
 Pipeline position:
     fixture-builder output -> test-writer -> engine-implementer
     (data/schemas.py B31_SOVEREIGN_LIKE_ENTITY_TYPES / a sibling
-    B31_QUASI_SOVEREIGN_SA_ONLY list, engine/stages/classify/approach.py
+    B31_QUASI_SOVEREIGN_SA_ONLY list, engine/classify/approach.py
     _apply_b31_approach_restrictions)
 
 Key responsibilities:
@@ -28,7 +28,7 @@ Key responsibilities:
 The bug (capital understatement):
     entity_type="pse_institution" maps to SA class PSE / IRB class
     INSTITUTION (packs/common.py). Under B31 the approach-restriction step
-    (engine/stages/classify/approach.py) only blocks A-IRB for the
+    (engine/classify/approach.py) only blocks A-IRB for the
     institution class and keeps F-IRB open; the SA-only backstop keys on
     B31_SOVEREIGN_LIKE_ENTITY_TYPES, which excludes pse_institution /
     rgla_institution. With an institution F-IRB model permission attached,
@@ -94,7 +94,7 @@ References:
     - src/rwa_calc/data/schemas.py:1526-1548 — RGLA_PSE_ENTITY_TYPES,
       B31_SOVEREIGN_LIKE_ENTITY_TYPES (the bug site: excludes
       rgla_institution / pse_institution).
-    - src/rwa_calc/engine/stages/classify/approach.py:204-226 —
+    - src/rwa_calc/engine/classify/approach.py:204-226 —
       _apply_b31_approach_restrictions (b31_sa_only must fire for these
       entity types under the approach_restrictions_b31_applicable Feature).
     - src/rwa_calc/rulebook/packs/crr.py:812-825 —

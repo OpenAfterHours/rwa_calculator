@@ -1,0 +1,410 @@
+"""
+Approach assignment for the classification stage.
+
+Pipeline position:
+    HierarchyResolver -> ExposureClassifier (engine/classify) -> CRMProcessor
+    Sub-module of the classify stage package; consumed by ``classifier``
+    after permission resolution (``permissions``). Final classification
+    step before the stage-exit materialise + seal.
+
+Key responsibilities:
+- ``assign_approach``: the four-step recipe — permission expressions
+  (via ``permissions.build_permission_exprs``), Basel 3.1 Art. 147A
+  restrictions, the 10-branch ``pl.when`` decision ladder, and the
+  post-decision FIRB LGD clearing + rgla/pse exposure-class re-alignment.
+
+References:
+- CRR Art. 147-153: IRB approach assignment
+- CRR Art. 114(4)/(7): EU domestic sovereign SA routing (B31 approach gate)
+- CRR Art. 150(1): PPU election (CRR path keeps IRB routing available)
+- PRA PS1/26 Art. 147A(1)(a)-(e): B31 approach restrictions
+  (sovereign-like SA-only, institution no-AIRB, FSE / large-corp no-AIRB,
+  IPRE / HVCRE slotting-only)
+- CRR Art. 300-311 / CRE54.14-15: CCP trade exposures → SA
+- Art. 155 / CRE60: equity SA-only under Basel 3.1
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import TYPE_CHECKING
+
+import polars as pl
+from watchfire import cites
+
+from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
+from rwa_calc.data.schemas import (
+    B31_SOVEREIGN_LIKE_ENTITY_TYPES,
+    RGLA_PSE_ENTITY_TYPES,
+)
+from rwa_calc.domain.enums import (
+    ApproachType,
+    ExposureClass,
+    SpecialisedLendingType,
+)
+from rwa_calc.engine.classify.attributes import natural_person_expr
+from rwa_calc.engine.classify.permissions import build_permission_exprs
+from rwa_calc.engine.eu_sovereign import (
+    build_eu_domestic_currency_expr,
+    denomination_currency_expr,
+)
+from rwa_calc.engine.thresholds import regulatory_threshold
+from rwa_calc.rulebook import RulepackV0
+
+if TYPE_CHECKING:
+    from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
+
+logger = logging.getLogger(__name__)
+
+
+# SL types restricted to slotting-only under B31 Art. 147A(1)(c)
+_B31_SLOTTING_ONLY_SL_TYPES = {
+    SpecialisedLendingType.IPRE.value,
+    SpecialisedLendingType.HVCRE.value,
+}
+
+
+# =========================================================================
+# Approach assignment (1 .with_columns)
+# =========================================================================
+
+
+def assign_approach(
+    exposures: pl.LazyFrame,
+    config: CalculationConfig,
+    schema_names: set[str],
+    *,
+    has_model_permissions: bool = False,
+    pack: ResolvedRulepack | None = None,
+) -> pl.LazyFrame:
+    """
+    Determine calculation approach and finalize classification.
+
+    Reads as a recipe of four named steps:
+      1. Build permission expressions (model-level / org-wide / IRB-mode).
+      2. Apply Basel 3.1 Art. 147A approach restrictions (FSE, large corp,
+         institution AIRB block, sovereign-like SA-only).
+      3. Compose the ``pl.when`` decision ladder for ``approach``.
+      4. Apply post-decision LGD clearing and rgla/pse exposure_class
+         re-alignment.
+
+    Sets: approach, lgd (cleared for FIRB), exposure_class (re-aligned
+    for IRB-routed rgla_* / pse_*).
+    """
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+
+    # Guarantee the P1.215 A-IRB routing carrier exists as a typed null so the
+    # ``has_modelled_lgd`` gate never errors on lending-only frames (the carrier
+    # is a CCR_EXIT_EDGE-only column, absent on the hierarchy base). ensure_columns
+    # uses pl.lit().cast() — no fill_null — so the check-11 baseline is untouched;
+    # a typed null leaves the OR-arm inert on lending rows. Mirrors the
+    # ccr_effective_maturity handling in engine/irb/transforms.py::prepare_columns.
+    exposures = ensure_columns(
+        exposures,
+        {"ccr_modelled_lgd": ColumnSpec(pl.Float64, default=None, required=False)},
+    )
+
+    # IRB requires an internal rating (PD from the firm's IRB model).
+    # Counterparties with only external ratings fall through to SA.
+    has_internal_rating = pl.col("internal_pd").is_not_null()
+    # A synthetic CCR/SFT row carries its A-IRB own-estimate LGD on the dedicated
+    # ``ccr_modelled_lgd`` carrier (P1.215), not the lending ``lgd`` column, so the
+    # AIRB gate accepts EITHER source.
+    has_modelled_lgd = pl.col("lgd").is_not_null() | pl.col("ccr_modelled_lgd").is_not_null()
+
+    # Step 1: permission expressions
+    airb_expr, firb_expr, firb_clear_expr, sl_airb, sl_slotting = build_permission_exprs(
+        config,
+        has_internal_rating=has_internal_rating,
+        has_modelled_lgd=has_modelled_lgd,
+        has_model_permissions=has_model_permissions,
+    )
+
+    # Step 2: B3.1 Art. 147A restrictions (no-op under CRR)
+    airb_expr, firb_expr, firb_clear_expr = _apply_b31_approach_restrictions(
+        airb_expr,
+        firb_expr,
+        firb_clear_expr,
+        config,
+        pack=resolved_pack,
+    )
+
+    # Step 3: approach decision ladder
+    approach_expr = _build_approach_expr(
+        schema_names=schema_names,
+        config=config,
+        airb_expr=airb_expr,
+        firb_expr=firb_expr,
+        sl_airb=sl_airb,
+        sl_slotting=sl_slotting,
+        has_internal_rating=has_internal_rating,
+        has_modelled_lgd=has_modelled_lgd,
+        pack=resolved_pack,
+    )
+
+    # FIRB LGD clearing — clear LGD when FIRB approach is chosen (FIRB uses
+    # regulatory supervisory LGD). Must NOT clear for reclassified retail.
+    lgd_expr = (
+        pl.when(firb_clear_expr & ~pl.col("reclassified_to_retail"))
+        .then(pl.lit(None).cast(pl.Float64))
+        .otherwise(pl.col("lgd"))
+        .alias("lgd")
+    )
+
+    # Step 4: align exposure_class for IRB-routed rgla_* / pse_*
+    return _align_irb_exposure_class(exposures.with_columns([approach_expr, lgd_expr]))
+
+
+def _apply_b31_approach_restrictions(
+    airb_expr: pl.Expr,
+    firb_expr: pl.Expr,
+    firb_clear_expr: pl.Expr,
+    config: CalculationConfig,
+    *,
+    pack: ResolvedRulepack | None = None,
+) -> tuple[pl.Expr, pl.Expr, pl.Expr]:
+    """Apply Basel 3.1 Art. 147A approach restrictions.
+
+    Returns the inputs unchanged when the
+    ``approach_restrictions_b31_applicable`` Feature is off (CRR).
+    Under Basel 3.1, removes A-IRB eligibility for FSE / large-corporate /
+    institution exposures (Art. 147A(1)(b)/(d)/(e)) and removes both A-IRB
+    and F-IRB for sovereign-like entity types (Art. 147A(1)(a)). Also
+    widens ``firb_clear_expr`` to include rows whose A-IRB was blocked but
+    which still receive F-IRB.
+
+    These supplement the permissions-level restrictions in
+    ``full_irb_b31()`` with data-dependent checks that cannot be encoded
+    in the permission map.
+    """
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    if not resolved_pack.feature("approach_restrictions_b31_applicable"):
+        return airb_expr, firb_expr, firb_clear_expr
+
+    # Art. 147A(1)(d)/(e): FSE → no A-IRB (null = not flagged as FSE)
+    is_fse = (
+        (pl.col("cp_is_financial_sector_entity") == True)  # noqa: E712
+        .fill_null(False)
+    )
+    # Art. 147(4C)(b)(ii) w/ Art. 147A(1)(e): the large-corporate F-IRB
+    # restriction applies ONLY to counterparties of entity_type ==
+    # "corporate". Non-corporate entity types are governed by their own
+    # Art. 147A sub-clauses and must never trip this branch. The revenue
+    # test reads ``cp_group_annual_revenue`` — the counterparty's own
+    # turnover rolled up its ultimate-parent chain (attributes.
+    # with_group_annual_revenue) — because Art. 147(4C)(b)(ii) prescribes
+    # revenue "taken at the highest level of consolidation", so a small
+    # subsidiary of a large group is F-IRB-only. Within the corporate slice:
+    #   - When the group revenue is non-null, compare to the large-corp
+    #     threshold (GBP 440m).
+    #   - When group revenue is null but total_assets indicates the
+    #     counterparty is SME-sized (assets < EUR 43m per Commission
+    #     Rec 2003/361/EC Art. 2), it is definitively not large.
+    #   - Otherwise (both fields null, or null revenue with assets that
+    #     don't resolve the question) treat conservatively as large;
+    #     CLS008 is emitted to flag the missing data.
+    balance_sheet_threshold = float(
+        regulatory_threshold(resolved_pack, "sme_balance_sheet_threshold", config.eur_gbp_rate)
+    )
+    is_corporate_cp = pl.col("cp_entity_type").fill_null("") == "corporate"
+    is_large_corp = is_corporate_cp & (
+        pl.when(pl.col("cp_group_annual_revenue").is_not_null())
+        .then(
+            pl.col("cp_group_annual_revenue")
+            > float(
+                regulatory_threshold(
+                    resolved_pack, "large_corporate_revenue_threshold", config.eur_gbp_rate
+                )
+            )
+        )
+        .when(pl.col("cp_total_assets").is_not_null())
+        .then(pl.col("cp_total_assets") >= balance_sheet_threshold)
+        .otherwise(pl.lit(True))
+    )
+    # Art. 147A(1)(b): genuine institution exposures → F-IRB only (no
+    # A-IRB). Keys on exposure_class_irb. NOTE: institution-typed RGLAs /
+    # PSEs (rgla_institution / pse_institution) share exposure_class_irb ==
+    # INSTITUTION, but are additionally caught by ``b31_sa_only`` below and
+    # forced to SA per Art. 147(3)(c)-(e); this branch only governs their
+    # A-IRB block, which the SA-only restriction then subsumes.
+    b31_institution_no_airb = pl.col("exposure_class_irb") == ExposureClass.INSTITUTION.value
+    b31_airb_blocked = is_fse | is_large_corp | b31_institution_no_airb
+
+    # Art. 147A(1)(a) read with Art. 147(3)(c)-(e): central governments,
+    # central banks and the quasi-sovereign entity types (regional govts,
+    # local authorities, PSEs) → SA only. Points (c)-(e) are assigned to
+    # the quasi-sovereign class UNCONDITIONALLY — the "0% SA RW" qualifier
+    # binds only the Art. 147(3)(g) international-organisations limb — so
+    # the institution-typed rgla_institution / pse_institution are in scope
+    # (this supersedes the CRR-era Art. 147(4)(b) "treated as institutions"
+    # routing). See ``B31_SOVEREIGN_LIKE_ENTITY_TYPES`` for the full list.
+    b31_sa_only = pl.col("cp_entity_type").is_in(list(B31_SOVEREIGN_LIKE_ENTITY_TYPES))
+
+    # Art. 155 / CRE60 / PRA PS1/26: equity exposures are SA-only under
+    # Basel 3.1 (IRB equity approaches withdrawn from 1 Jan 2027). Block
+    # both A-IRB and F-IRB so the decision ladder falls through to the
+    # equity branch in ``_build_approach_expr``.
+    b31_equity_sa_only = pl.col("exposure_class_irb") == ExposureClass.EQUITY.value
+    b31_sa_only_combined = b31_sa_only | b31_equity_sa_only
+
+    new_airb = airb_expr & ~b31_airb_blocked & ~b31_sa_only_combined
+    new_firb_clear = firb_clear_expr | (firb_expr & b31_airb_blocked)
+    new_firb = firb_expr & ~b31_sa_only_combined
+    return new_airb, new_firb, new_firb_clear
+
+
+def _build_approach_expr(
+    *,
+    schema_names: set[str],
+    config: CalculationConfig,
+    airb_expr: pl.Expr,
+    firb_expr: pl.Expr,
+    sl_airb: pl.Expr,
+    sl_slotting: pl.Expr,
+    has_internal_rating: pl.Expr,
+    has_modelled_lgd: pl.Expr,
+    pack: ResolvedRulepack | None = None,
+) -> pl.Expr:
+    """Compose the ``pl.when`` decision ladder for ``approach``.
+
+    Branch order (top wins):
+    1. Managed-as-retail without LGD → SA
+    2. Art. 114(4) EU domestic sovereign → SA (forced 0% RW)
+    3. CCP trade exposures → SA (CRE54.14-15)
+    4. Basel 3.1 Art. 147A(1)(c) IPRE/HVCRE → slotting
+    5. SL A-IRB (PD + modelled LGD required, CRR Art. 153(1)-(4))
+    6. SL slotting fallback (no internal rating required)
+    7. A-IRB (model or org-wide, with B3.1 FSE/large-corp restriction applied)
+    8. F-IRB (model or org-wide)
+    9. Equity → EQUITY approach
+    10. Otherwise → SA
+    """
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+
+    managed_as_retail_without_lgd = (
+        (pl.col("cp_is_managed_as_retail") == True)  # noqa: E712
+        & (pl.col("qualifies_as_retail") == True)  # noqa: E712
+        & (pl.col("lgd").is_null())
+    )
+
+    # Art. 114(4)/(7): EU domestic sovereign → SA. Use original
+    # (pre-FX) denomination — `currency` is overwritten by the FX
+    # converter with the reporting currency, which would otherwise
+    # reject legitimate Art. 114(4) treatment for any non-base-currency
+    # exposure. Gated to Basel 3.1: under CRR, Art. 114(4) sets only the
+    # SA *risk weight*, not the *approach* — Art. 150(1) PPU is an
+    # election ("may apply"), so a firm holding CGCB IRB permission must
+    # be allowed to route to IRB. Under B31 (PS1/26 Art. 147A(1)(a)),
+    # sovereign-like exposures are SA-only as a mandatory restriction,
+    # also backstopped by the `b31_sa_only` IRB-blocker.
+    is_eu_domestic_sovereign = (
+        pl.lit(resolved_pack.feature("approach_restrictions_b31_applicable"))
+        & (pl.col("exposure_class") == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value)
+        & build_eu_domestic_currency_expr(
+            "cp_country_code", denomination_currency_expr(schema_names)
+        )
+    )
+
+    # Art. 147A(1)(c): IPRE/HVCRE → slotting only (overrides model perms)
+    b31_ipre_hvcre_forced_slotting = pl.lit(False)
+    if resolved_pack.feature("approach_restrictions_b31_applicable"):
+        b31_ipre_hvcre_forced_slotting = (
+            pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value
+        ) & pl.col("sl_type").is_in(list(_B31_SLOTTING_ONLY_SL_TYPES))
+
+    # CCP exposures must always use SA (CRR Art. 300-311, CRE54)
+    is_ccp = pl.col("cp_entity_type") == "ccp"
+
+    is_sl = pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value
+
+    return (
+        pl.when(managed_as_retail_without_lgd)
+        .then(pl.lit(ApproachType.SA.value))
+        .when(is_eu_domestic_sovereign)
+        .then(pl.lit(ApproachType.SA.value))
+        .when(is_ccp)
+        .then(pl.lit(ApproachType.SA.value))
+        .when(b31_ipre_hvcre_forced_slotting)
+        .then(pl.lit(ApproachType.SLOTTING.value))
+        # SL A-IRB takes precedence over slotting (non-IPRE/HVCRE under B31).
+        # Requires both PD and modelled LGD — without LGD, fall through to
+        # slotting (CRR Art. 153(1)-(4) vs Art. 153(5)).
+        .when(is_sl & sl_airb & has_internal_rating & has_modelled_lgd)
+        .then(pl.lit(ApproachType.AIRB.value))
+        # SL slotting fallback (slotting does not require internal rating)
+        .when(is_sl & sl_slotting)
+        .then(pl.lit(ApproachType.SLOTTING.value))
+        .when(airb_expr)
+        .then(pl.lit(ApproachType.AIRB.value))
+        .when(firb_expr)
+        .then(pl.lit(ApproachType.FIRB.value))
+        # Equity exposure class → EQUITY approach (routes to SA equity RW
+        # logic; full equity treatment requires the dedicated
+        # equity_exposures table).
+        .when(pl.col("exposure_class") == ExposureClass.EQUITY.value)
+        .then(pl.lit(ApproachType.EQUITY.value))
+        .otherwise(pl.lit(ApproachType.SA.value))
+        .alias("approach")
+    )
+
+
+@cites("CRR Art. 147")
+@cites("CRR Art. 147(5)")
+@cites("PS1/26, paragraph 147")
+def _align_irb_exposure_class(exposures: pl.LazyFrame) -> pl.LazyFrame:
+    """Align exposure_class with exposure_class_irb for IRB-routed rows.
+
+    The IRB calculator reads ``exposure_class`` (not ``exposure_class_irb``)
+    for correlation / LGD / floor selection, so any IRB-routed row whose IRB
+    class legitimately differs from its SA class must have ``exposure_class``
+    rewritten to the IRB value. Three entity populations diverge after
+    ``sync_irb_exposure_class``; the first two are aligned here, the third is
+    deliberately not:
+
+    - rgla_* / pse_* rows, whose SA labels RGLA / PSE differ from the IRB
+      CGCB / INSTITUTION class (CRR Art. 147(3)/147(4)(b)).
+    - natural persons expelled from retail to CORPORATE by the SA
+      regulatory-retail monetary cap / granularity limb but kept in the IRB
+      retail class (CRR Art. 147(5)(a)(i) / PS1/26 Art. 147(5)(a)(i) — the cap
+      conditions the SME limb only). ``sync_irb_exposure_class`` restores
+      their ``exposure_class_irb`` to RETAIL_OTHER; this step propagates it to
+      ``exposure_class`` so the retail IRB formula applies.
+
+    - CRR non-named ``mdb`` rows, whose IRB class is INSTITUTION (Art.
+      147(4)(c)) while their SA class stays MDB — the ``preserve_derived_irb_class``
+      limb of ``sync_irb_exposure_class``, gated on the
+      ``crr_non_named_mdb_institution_irb_class`` pack Feature (P1.276).
+      **This population is intentionally NOT aligned.** Under CRR every IRB
+      formula parameter is identical across MDB / INSTITUTION / CGCB — the
+      correlation tuple is the same (``CORRELATION_PARAMS``; MDB falls through
+      to CORPORATE), the FI 1.25x scalar reads ``requires_fi_scalar`` rather
+      than the class, the F-IRB supervisory LGD keys on
+      ``(collateral_type, seniority, is_fse)``, and ``_pd_floor_expression``
+      selects on ``exposure_class`` (so an MDB takes the corporate floor arm
+      either way). Alignment would therefore be a parameter no-op that
+      needlessly moved the reported exposure class. If institution-specific IRB
+      treatment is ever introduced, this omission stops being a no-op and this
+      row population must be added to ``needs_alignment``.
+
+    The first two are gated on the ``exposure_class_irb != exposure_class``
+    difference (a no-op for every other IRB-routed row, where the two are
+    already equal), so QRRE / mortgage / SME subtyping is never reverted. Note
+    the gate is the ``is_rgla_pse | natural_person_diverged`` predicate below,
+    NOT the generic inequality — which is what keeps the MDB divergence
+    unpropagated.
+    """
+    is_rgla_pse = pl.col("cp_entity_type").is_in(list(RGLA_PSE_ENTITY_TYPES))
+    natural_person_diverged = natural_person_expr() & (
+        pl.col("exposure_class_irb") != pl.col("exposure_class")
+    )
+    needs_alignment = is_rgla_pse | natural_person_diverged
+    return exposures.with_columns(
+        pl.when(
+            pl.col("approach").is_in([ApproachType.FIRB.value, ApproachType.AIRB.value])
+            & needs_alignment
+        )
+        .then(pl.col("exposure_class_irb"))
+        .otherwise(pl.col("exposure_class"))
+        .alias("exposure_class")
+    )

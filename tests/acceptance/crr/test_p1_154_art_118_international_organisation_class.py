@@ -50,7 +50,7 @@ References:
     - CRR Art. 118: named international organisations → 0% SA risk weight
     - CRR Art. 117(1): non-named MDB treated as institution → Table 2B CQS lookup
     - src/rwa_calc/domain/enums.py: ExposureClass (new INTERNATIONAL_ORGANISATION member)
-    - engine/stages/classify/: ENTITY_TYPE_TO_SA_CLASS mapping
+    - engine/classify/: ENTITY_TYPE_TO_SA_CLASS mapping
     - tests/fixtures/p1_154/p1_154.py: scenario constants and parquet builders
 """
 

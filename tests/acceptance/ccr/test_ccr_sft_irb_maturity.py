@@ -85,7 +85,7 @@ _IRB_APPROACHES: set[str] = {"foundation_irb", "advanced_irb"}
 #
 # The classifier's model-permission AIRB branch requires
 # ``has_modelled_lgd = pl.col("lgd").is_not_null()``
-# (engine/stages/classify/permissions.py:340); the FCCM SFT producer previously
+# (engine/classify/permissions.py:340); the FCCM SFT producer previously
 # emitted no modelled LGD on the synthetic ``ccr__<NS>`` row, so AIRB routing
 # was unreachable end-to-end (the row fell to ``standardised`` or, with a
 # FIRB permission also present, to ``foundation_irb`` — never ``advanced_irb``).

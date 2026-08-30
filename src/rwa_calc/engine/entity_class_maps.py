@@ -4,7 +4,7 @@ Entity-type -> exposure-class maps, rebound from the rulepack at module load.
 Pipeline position:
     Consumed across the engine wherever an ``entity_type`` input string must
     resolve to its Standardised / IRB exposure class — the classifier
-    (``stages/classify/attributes.py``), the SA / IRB / CRM guarantee branches
+    (``engine/classify/attributes.py``), the SA / IRB / CRM guarantee branches
     (``crm/guarantees.py``, ``irb/guarantee.py``, ``sa/rw_adjustments.py``), and
     the entity-level SA RW preview (``sa/guarantor_rw.py``).
 

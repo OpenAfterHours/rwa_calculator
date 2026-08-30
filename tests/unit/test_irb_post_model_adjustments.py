@@ -281,7 +281,7 @@ class TestPostModelAdjustmentsBasel31:
         (d)(ii) — whose engine carrier is ``ExposureClass.RETAIL_MORTGAGE``.
         ``residential_mortgage`` is the SA real-estate loan-splitter's
         non-retail RRE child (``domain/enums.py``), is SA-bound by
-        ``engine/stages/re_split/splitter.py`` and is not an Art. 147(5B)
+        ``engine/re_split/splitter.py`` and is not an Art. 147(5B)
         subclass at all. It must NOT receive the IRB post-model floor.
         """
         config, pack = _b31_config(mortgage_rw_floor=Decimal("0.15"))

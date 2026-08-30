@@ -20,7 +20,7 @@ from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.contracts.errors import ERROR_HIERARCHY_DEPTH
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
-from rwa_calc.engine.stages.hierarchy import HierarchyResolver
+from rwa_calc.engine.hierarchy import HierarchyResolver
 from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------

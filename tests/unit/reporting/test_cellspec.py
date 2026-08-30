@@ -23,6 +23,7 @@ import pytest
 from rwa_calc.reporting.cellspec import (
     CellSpec,
     Count,
+    FirstNonNull,
     Formula,
     Mean,
     PriorPeriod,
@@ -114,6 +115,110 @@ class TestBindings:
         assert df.row(0, named=True)["b"] == pytest.approx((0.5 + 0.2 + 1.0) / 3)
         assert df.row(1, named=True)["a"] == pytest.approx(390.0 / 600.0 * 100.0)
         assert df.row(1, named=True)["b"] == 2.0
+
+    def test_mean_absent_column_takes_the_empty_policy(self) -> None:
+        """A ``Mean`` over a column the frame does not carry is tolerant, and
+        takes the template's empty-cell policy.
+
+        BOTH directions are asserted on purpose: the likely wrong
+        implementation is the unconditional ``None`` that ``Sum`` returns for
+        an absent column (``col_sum``'s own contract, deliberately different
+        here), and that wrong version still satisfies the null half.
+        """
+        cells = {("1", "a"): CellSpec(Mean("no_such_column"))}
+        assert execute(_spec(cells, empty_cell="null"), _ledger()).row(0, named=True)["a"] is None
+        assert execute(_spec(cells, empty_cell="zero"), _ledger()).row(0, named=True)["a"] == 0.0
+
+    def test_mean_empty_subset_takes_the_empty_policy(self) -> None:
+        """The mean of nothing is null in Polars; which way that turns is the
+        whole question, so both the COREP zero and the Pillar 3 null
+        directions are pinned."""
+        cells = {
+            ("1", "a"): CellSpec(
+                Mean("reporting_rw"), predicate=RowPredicate(classes=("no_such_class",))
+            )
+        }
+        assert execute(_spec(cells, empty_cell="zero"), _ledger()).row(0, named=True)["a"] == 0.0
+        assert execute(_spec(cells, empty_cell="null"), _ledger()).row(0, named=True)["a"] is None
+
+    def test_first_non_null_over_an_empty_subset_is_null_never_zero(self) -> None:
+        """``FirstNonNull`` reports a blank cell on an empty subset under BOTH
+        policies — it is the one binding that never takes the empty-cell
+        policy.
+
+        Reachable in production: the OV1 output-floor multiplier row binds an
+        UNPREDICATED ``FirstNonNull`` over the whole ledger, so an empty
+        portfolio lands here. ``0.0`` on that row is a materially different
+        disclosure from a blank, so the zero-policy leg is asserted too — and
+        with ``is None``, because ``0.0`` is falsy.
+        """
+        predicated = {
+            ("1", "a"): CellSpec(
+                FirstNonNull("reporting_rw"), predicate=RowPredicate(classes=("no_such_class",))
+            )
+        }
+        for policy in ("zero", "null"):
+            row = execute(_spec(predicated, empty_cell=policy), _ledger()).row(0, named=True)
+            assert row["a"] is None
+        # The OV1 shape itself: no predicate at all, over an empty portfolio.
+        unpredicated = {("1", "a"): CellSpec(FirstNonNull("reporting_rw"))}
+        empty_ledger = _ledger().head(0)
+        for policy in ("zero", "null"):
+            row = execute(_spec(unpredicated, empty_cell=policy), empty_ledger).row(0, named=True)
+            assert row["a"] is None
+
+    def test_ratio_absent_column_takes_the_empty_policy(self) -> None:
+        """An absent numerator OR denominator takes the empty-cell policy.
+
+        The COREP zero leg is the one with no production consumer — ``Ratio``
+        is bound only by CR6 and CR7-A, both Pillar 3 — so it is asserted
+        first and explicitly. It is also the branch most likely to be
+        "simplified" into the ``Sum`` branch's unconditional ``None``: the
+        underlying ``col_sum`` DOES return None for an absent column, but
+        ``Ratio``'s guard then converts that into the policy, and a cell
+        published as blank instead of 0.0 is a different disclosure.
+        """
+        for binding in (
+            Ratio("no_such_column", "reporting_ead"),
+            Ratio("rwa_final", "no_such_col"),
+        ):
+            cells = {("1", "a"): CellSpec(binding)}
+            assert (
+                execute(_spec(cells, empty_cell="zero"), _ledger()).row(0, named=True)["a"] == 0.0
+            )
+            assert (
+                execute(_spec(cells, empty_cell="null"), _ledger()).row(0, named=True)["a"] is None
+            )
+
+    def test_ratio_empty_subset_takes_the_empty_policy(self) -> None:
+        """An undefined ratio — no rows, or a denominator summing to exactly
+        zero — takes the empty-cell policy. Both arrive at the same guard, so
+        both are pinned, and the untested COREP zero direction first."""
+        ledger = _ledger().with_columns(pl.lit(0.0).alias("zero_amount"))
+        empty_subset = CellSpec(
+            Ratio("rwa_final", "reporting_ead"), predicate=RowPredicate(classes=("no_such_class",))
+        )
+        zero_denominator = CellSpec(Ratio("rwa_final", "zero_amount"))
+        for cell in (empty_subset, zero_denominator):
+            cells = {("1", "a"): cell}
+            assert execute(_spec(cells, empty_cell="zero"), ledger).row(0, named=True)["a"] == 0.0
+            assert execute(_spec(cells, empty_cell="null"), ledger).row(0, named=True)["a"] is None
+
+    def test_weighted_avg_absent_column_takes_the_empty_policy(self) -> None:
+        """A missing value column or a missing WEIGHT column takes the
+        empty-cell policy — the sibling of the ``Ratio`` branch above, and
+        the same untested zero direction."""
+        for binding in (
+            WeightedAvg("no_such_column", weight="reporting_ead"),
+            WeightedAvg("reporting_rw", weight="no_such_weight"),
+        ):
+            cells = {("1", "a"): CellSpec(binding)}
+            assert (
+                execute(_spec(cells, empty_cell="zero"), _ledger()).row(0, named=True)["a"] == 0.0
+            )
+            assert (
+                execute(_spec(cells, empty_cell="null"), _ledger()).row(0, named=True)["a"] is None
+            )
 
 
 class TestPredicates:

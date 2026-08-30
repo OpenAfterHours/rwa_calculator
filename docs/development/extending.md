@@ -26,12 +26,12 @@ class ExposureClass(str, Enum):
 
 ### Step 2: Add Classification Logic
 
-Classification logic lives in the `engine/stages/classify/` package, which is
+Classification logic lives in the `engine/classify/` package, which is
 its only home. Add the class-determination rule in the relevant module,
 e.g. `attributes.py` / `subtypes.py`:
 
 ```python
-# src/rwa_calc/engine/stages/classify/subtypes.py
+# src/rwa_calc/engine/classify/subtypes.py
 
 def _determine_exposure_class(
     counterparty_type: str,

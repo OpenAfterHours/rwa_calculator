@@ -17,10 +17,9 @@ new numbers are correct** on your own book.
 
 The acceptance suite gives statistical confidence on ~500 hand-derived regulatory scenarios.
 It cannot give absolute confidence on a real portfolio of millions of exposures with
-attribute combinations no test enumerates. As the project's own
-[migration note](../blog/2026-08-04-what-i-got-wrong-whats-next.md) puts it, production
-deployment requires *"a parallel-run discipline against an existing system, signed-off
-reconciliation thresholds, and a rollback plan."*
+attribute combinations no test enumerates. Production deployment therefore requires a
+parallel-run discipline against an existing system, signed-off reconciliation thresholds,
+and a rollback plan.
 
 Parallel-run reconciliation operationalises exactly that discipline:
 

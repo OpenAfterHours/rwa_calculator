@@ -46,6 +46,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `tests/unit/ui/test_tokens_drift.py`. UI presentation only — no calculation
   impact.
 
+### Removed
+- **The blog has been removed from the documentation site.** `docs/blog/` and
+  its twelve posts plus the series index are deleted, the `Blog` nav section is
+  dropped from `zensical.toml`, and the `Blog` link is removed from the
+  homepage header (`docs/overrides/main.html`). Two prose cross-references into
+  the series were retired with it: the "Blog — The Output Floor and Why Basel
+  3.1 Bites" bullet in `docs/api/configuration.md` (the two specification links
+  beside it already carried the Art. 122(7)-(8) detail), and the quoted
+  migration note in `docs/reconciliation/index.md`, whose parallel-run point is
+  now stated directly rather than attributed to a removed page. Both links were
+  already broken — they named post filenames that no longer existed — so the
+  docs dead-link ratchet (`scripts/docs_link_baseline.json`) drops from 76 to
+  the newly banked count. Earlier changelog entries that describe the blog are
+  left intact as a dated record. Docs only — no calculation, reporting, or API
+  impact.
+
 ---
 
 ## [0.3.29] - 2026-08-30

@@ -19,7 +19,8 @@ Key responsibilities:
   of each one's contribution rather than by the size of the loan, and say what
   the cap left off (``cell_pairs``).
 - Cross-tabulate one predicate group's legs by our row against their row, so a
-  banding difference is priced rather than merely noticed (``row_migration``).
+  banding difference is priced rather than merely noticed (``row_migration``),
+  and list the legs behind any one cell of that matrix (``migration_legs``).
 
 BOTH SIDES ARE THE SAME ENGINE. ``LegacyLedgerSource`` satisfies the same
 two-member ``ResultsSource`` protocol as our own results, so each side's
@@ -304,8 +305,9 @@ ROW_MIGRATION_SCHEMA: dict[str, pl.DataType] = {
 
 #: The axis bucket for a leg the other side does not hold in THIS group. It
 #: therefore mixes a leg missing from their template with one that moved sheet;
-#: ``decompose_cell`` is what separates those two. Cannot collide with a COREP
-#: row ref, which is always four digits.
+#: ``movement_basis`` is what separates those two on the matrix itself (the
+#: ``same_base_*`` labels below), and ``decompose_cell`` on the waterfall.
+#: Cannot collide with a COREP row ref, which is always four digits.
 ABSENT_ROW = "absent"
 
 #: The axis bucket for a leg this side DOES hold but cannot place on a single
@@ -314,6 +316,22 @@ ABSENT_ROW = "absent"
 #: stays in the matrix — dropping it is the measured "total loss" failure, where
 #: a ``~is_parent_row`` filter reports 0.00 against a sheet holding millions.
 UNDECIDABLE_ROW = "undecidable"
+
+#: Every value ``movement_basis`` takes. Published so a consumer's label map is
+#: anchored on this module instead of on a hand-written list that can silently
+#: miss one — an unlabelled basis renders as its own raw string, which is the
+#: quietest way for a new class of finding to reach a screen unexplained.
+MOVEMENT_BASES: tuple[str, ...] = (
+    "agreed",
+    "value_driven",
+    "same_base_ours",
+    "same_base_theirs",
+    "mixed_base_ours",
+    "mixed_base_theirs",
+    "ours_only",
+    "theirs_only",
+    "undecidable",
+)
 
 #: The honesty line every result carries. See the module docstring.
 PLACEMENT_ATTRIBUTION = (
@@ -344,6 +362,12 @@ _BASE_KEY_COLUMN = "source_exposure_reference"
 #: — it is what makes the two ``KEY_COLUMNS`` settings one grain instead of two.
 #: See ``_comparison_key``.
 _FALLBACK_KEY_COLUMN = "exposure_reference"
+
+#: The migration matrix's own name for a leg's base exposure — ``_comparison_key``
+#: carried ALONGSIDE the leg key rather than instead of it. It prices nothing and
+#: places nothing; it is read in exactly one place (``_same_base``) to decide
+#: whether an absent counterpart is a scope finding or a decomposition one.
+_BASE_COLUMN = "base_key"
 
 #: How many ranked pairs ``cell_pairs`` returns unless a caller says otherwise.
 #: Matches the leg listing the compare page has always shown, so the change is
@@ -405,6 +429,27 @@ class CellTerm:
     amount: float
     keys: int
     differing_keys: int
+
+    def __post_init__(self) -> None:
+        """Reject a key count that cannot describe any population.
+
+        Making ``differing_keys`` required forces a caller to STATE a number,
+        not a coherent one — omission raises, inconsistency did not. The single
+        bound covers all three incoherent shapes at once: more keys differing
+        than the term holds, a negative count, and a negative population (no
+        value of ``differing_keys`` satisfies ``0 <= d <= keys`` when ``keys``
+        is negative, so that raises whatever is passed).
+
+        A ``ValueError`` rather than an accumulated ``CalculationError``: this
+        is a programming error in a constructor, not a data-quality finding
+        about a portfolio.
+        """
+        if not 0 <= self.differing_keys <= self.keys:
+            raise ValueError(
+                f"CellTerm {self.name!r}: differing_keys={self.differing_keys} and "
+                f"keys={self.keys} — a term cannot hold fewer keys than differ, and "
+                "neither count can be negative"
+            )
 
 
 @dataclass(frozen=True)
@@ -540,6 +585,47 @@ class CellPairs:
     def keys(self) -> int:
         """Every key in scope, shown or not."""
         return len(self.pairs) + self.hidden_keys
+
+
+@dataclass(frozen=True)
+class MigratedLeg:
+    """One LEG behind one ``(our row, their row)`` cell of the migration matrix.
+
+    The drill-down the matrix's counts are computed from, not a second read of
+    membership: ``row_migration`` and ``migration_legs`` both aggregate the one
+    frame ``_migration_pairs`` builds, so a cell saying "3 exposures, 210,000"
+    and a list under it showing two rows is not a state this API can reach. Same
+    principle as ``CellTerm``/``CellPair``.
+
+    The unit is the LEG and not the exposure, unlike ``CellPair``. That is the
+    matrix's grain — a split exposure's guarantee leg and its remainder leg are
+    placed separately, on the rows they really landed on — and collapsing it here
+    would put the drill-down at a different grain from the counts above it.
+    ``base_key`` carries the exposure the leg was split from, so the two grains
+    are both readable and neither is inferred.
+
+    ``money_ours`` / ``money_theirs`` are ``None`` for a side holding no leg
+    under this key in this group — never ``0.0``, which would read as a nil
+    holding rather than as an absence.
+
+    ``same_base`` is TRUE only for a leg whose counterpart is absent from this
+    group while the other side holds its ``base_key`` somewhere else on this
+    TEMPLATE. It is the per-leg fact ``movement_basis`` aggregates, published so
+    a mixed cell can be read leg by leg rather than only as a label.
+    """
+
+    key: str | None
+    base_key: str | None
+    our_row_ref: str
+    their_row_ref: str
+    money_ours: float | None
+    money_theirs: float | None
+    same_base: bool
+
+    @property
+    def money(self) -> float | None:
+        """The leg's price, from whichever side holds it. Ours wins a tie."""
+        return self.money_ours if self.money_ours is not None else self.money_theirs
 
 
 @dataclass(frozen=True)
@@ -861,6 +947,32 @@ def row_migration(
     banding rule does. Legs the other side does not hold in this group land in
     the ``ABSENT_ROW`` bucket on the relevant axis.
 
+    AN ABSENT COUNTERPART IS NOT AUTOMATICALLY A SCOPE FINDING, AND THIS IS THE
+    ONE PLACE THAT SEPARATES THE TWO. The matrix's grain is the LEG, and our
+    sealed ledger reports one exposure as several legs (``L1__G_BANK`` /
+    ``L1__REM``) where a projected legacy extract reports it whole under ``L1``.
+    Those legs therefore have no counterpart AT LEG GRAIN however completely the
+    two books agree, so labelling every ``ABSENT_ROW`` leg ``ours_only`` /
+    ``theirs_only`` — "their extract has no such exposure" — was false for every
+    one of them: measured at 210,000 of our money and 270,000 of theirs on a
+    three-substitution portfolio, and at 100,000 on each side of the split
+    fixture here. ``_movement_basis`` therefore consults the leg's BASE exposure
+    (``_BASE_COLUMN``, carried alongside and used for nothing else) and reports
+    ``same_base_ours`` / ``same_base_theirs`` where the other side holds that
+    base elsewhere on this template, ``mixed_base_*`` where one matrix cell holds
+    both kinds, and ``ours_only`` / ``theirs_only`` only where the exposure is
+    genuinely absent from the other side's whole template.
+
+    THE FIX IS TO THE LABEL AND NOT TO THE PLACEMENT, deliberately. Collapsing
+    the matrix onto the base key was measured and rejected: ``_group_legs``
+    prices with ``.first()``, so a naive collapse loses 70,000, and a
+    conserving two-stage collapse pushes 81% of the split-leg money into
+    ``UNDECIDABLE_ROW`` and reports a diagonal cell as ``agreed`` while
+    understating it. A guarantee leg landing under the guarantor's class and
+    band IS what substitution means for the return — correct output. So no money
+    moves here, the conservation invariant below is untouched, and ``.first()``
+    keeps doing the job it is actually for.
+
     THE AXIS IS BUILT FROM DISTINCT LEGS, NOT FROM A ROW SUM, and that is a
     correctness requirement rather than an implementation note. Summing the rows
     a ``~is_parent_row`` filter leaves behind fails in two silent, measured ways:
@@ -893,43 +1005,27 @@ def row_migration(
     Raises:
         ValueError: If ``money_column`` is not a carrier membership publishes.
     """
-    if money_column not in MIGRATION_MONEY_COLUMNS:
-        raise ValueError(
-            f"money_column must be one of {MIGRATION_MONEY_COLUMNS}, got {money_column!r}"
-        )
-    key = recon.key_column
-    ours = _group_legs(recon.ours, key, template_id, sheet, predicate_key, money_column, "ours")
-    theirs = _group_legs(
-        recon.theirs, key, template_id, sheet, predicate_key, money_column, "theirs"
-    )
-    if ours.height == 0 and theirs.height == 0:
-        logger.info(
-            "row_migration: no membership at all for %s/%s/%s — the group holds no legs on "
-            "either side (this is an EMPTY group, not a zero)",
-            loggable(template_id),
-            loggable(sheet),
-            loggable(predicate_key),
-        )
+    pairs = _migration_pairs(recon, template_id, sheet, predicate_key, money_column)
+    if pairs.height == 0:
         return pl.DataFrame(schema=ROW_MIGRATION_SCHEMA)
 
     partition = not (
-        (ours["row_ref"] == UNDECIDABLE_ROW).any() or (theirs["row_ref"] == UNDECIDABLE_ROW).any()
+        (pairs["our_row_ref"] == UNDECIDABLE_ROW).any()
+        or (pairs["their_row_ref"] == UNDECIDABLE_ROW).any()
     )
-    joined = ours.join(theirs, on=key, how="full", coalesce=True, suffix="_theirs")
     return (
-        joined.with_columns(
-            # An explicit bucket, not a false zero: the sentinel says "this side
-            # does not hold the leg in this group" and is read as such below.
-            pl.col("row_ref").fill_null(ABSENT_ROW).alias("our_row_ref"),
-            pl.col("row_ref_theirs").fill_null(ABSENT_ROW).alias("their_row_ref"),
-        )
-        .group_by("our_row_ref", "their_row_ref")
+        pairs.group_by("our_row_ref", "their_row_ref")
         .agg(
             pl.len().cast(pl.UInt32()).alias("legs"),
             pl.col(money_column).sum().alias("money_ours"),
             pl.col(f"{money_column}_theirs").sum().alias("money_theirs"),
             pl.col(money_column).is_null().all().alias("_no_ours"),
             pl.col(f"{money_column}_theirs").is_null().all().alias("_no_theirs"),
+            # The per-leg base test, aggregated BOTH ways. A cell can hold a
+            # split leg and a genuinely one-sided leg at once, and one label for
+            # the two would be false for whichever half it did not describe.
+            pl.col("same_base").all().alias("_all_same_base"),
+            pl.col("same_base").any().alias("_any_same_base"),
         )
         .with_columns(
             # ``sum`` returns 0.0 for an all-null group, which would render an
@@ -954,6 +1050,73 @@ def row_migration(
         .select(*ROW_MIGRATION_SCHEMA)
         .sort("our_row_ref", "their_row_ref")
     )
+
+
+def migration_legs(  # noqa: PLR0913 - the group's full address plus the pair and the price
+    recon: ReturnRecon,
+    template_id: str,
+    sheet: str | None,
+    predicate_key: str,
+    our_row_ref: str,
+    their_row_ref: str,
+    *,
+    money_column: str = "rwa_final",
+) -> tuple[MigratedLeg, ...]:
+    """The LEGS behind one ``(our row, their row)`` cell of the migration matrix.
+
+    What a click on a matrix cell needs: the exposures that moved between those
+    two rows, each with the money each side gave it. Read together with the two
+    rows' NAMES — which the caller already has, because they are the matrix's
+    own axis labels — a row-placement move states the band boundary crossed
+    without this function having to carry a PD at all.
+
+    DERIVED FROM THE SAME FRAME THE MATRIX COUNTS, not from a second read of
+    membership. ``row_migration`` aggregates ``_migration_pairs``; this filters
+    it. The two therefore cannot disagree about how many legs a cell holds or
+    what they are worth — the failure mode a separately-derived listing has
+    already produced on this page, where a cell reporting 221,000 rendered 50
+    rows that agreed to the penny.
+
+    RANKED ON THE LEG'S OWN MONEY, ties broken on the key. Unlike ``cell_pairs``
+    there is no signed contribution to rank on: every leg in one cell shares one
+    movement, so the question is which legs carry it, and that is size. The key
+    tie-break makes the order total, so reloading the same cell reads the same.
+
+    Returns an EMPTY tuple for a pair no leg occupies — which is most of the
+    matrix, since it is a cross-tabulation — and for a group with no membership
+    at all. Both are genuinely empty rather than refusals; the matrix renders no
+    cell there either.
+
+    Raises:
+        ValueError: If ``money_column`` is not a carrier membership publishes.
+    """
+    pairs = _migration_pairs(recon, template_id, sheet, predicate_key, money_column)
+    if pairs.height == 0:
+        return ()
+    scoped = pairs.filter(
+        (pl.col("our_row_ref") == our_row_ref) & (pl.col("their_row_ref") == their_row_ref)
+    )
+    legs = [
+        MigratedLeg(
+            key=record["key"],
+            base_key=record[_BASE_COLUMN],
+            our_row_ref=str(record["our_row_ref"]),
+            their_row_ref=str(record["their_row_ref"]),
+            money_ours=record[money_column],
+            money_theirs=record[f"{money_column}_theirs"],
+            same_base=bool(record["same_base"]),
+        )
+        for record in scoped.select(
+            pl.col("key"),
+            pl.coalesce(_BASE_COLUMN, f"{_BASE_COLUMN}_theirs").alias(_BASE_COLUMN),
+            pl.col("our_row_ref"),
+            pl.col("their_row_ref"),
+            pl.col(money_column),
+            pl.col(f"{money_column}_theirs"),
+            pl.col("same_base"),
+        ).iter_rows(named=True)
+    ]
+    return tuple(sorted(legs, key=lambda leg: (-abs(leg.money or 0.0), leg.key or "")))
 
 
 # =============================================================================
@@ -1652,12 +1815,17 @@ def _comparison_key(columns: Iterable[str], key_column: str) -> pl.Expr:
     must agree about the key or the pair table would decorate a key nothing
     holds.
 
-    ``_group_legs`` deliberately does NOT use this, and must not be changed to:
-    it prices each key with ``.first()`` (a leg legitimately appears on several
-    ROWS of one group), so collapsing two different legs onto one base key there
-    would keep one leg's money and silently discard the other's, against the
-    distinct-leg total the migration matrix's own docstring states as an
-    invariant. Measured on the split fixture, BOTH published money columns lose
+    ``_group_legs`` DOES evaluate this expression, and deliberately does NOT
+    GROUP ON IT — a distinction worth stating precisely, because the two look
+    alike in a diff. It carries the value alongside the leg key as
+    ``_BASE_COLUMN``, where ``_same_base`` reads it to tell a decomposition
+    difference from a scope one; the group key stays the LEG. Grouping on it
+    instead is the change this paragraph forbids: ``_group_legs`` prices each key
+    with ``.first()`` (a leg legitimately appears on several ROWS of one group),
+    so collapsing two different legs onto one base key there would keep one leg's
+    money and silently discard the other's, against the distinct-leg total the
+    migration matrix's own docstring states as an invariant. Measured on the
+    split fixture, BOTH published money columns lose
     the same leg: ``rwa_final`` 100,000 -> 60,000 and ``ead_final`` 1,000,000 ->
     600,000, i.e. 40,000 and 400,000 discarded. Re-derived independently on the
     substitution portfolio, where the totals are larger (1,470,000 and
@@ -1892,6 +2060,117 @@ def _placement_of(placements: dict[str, LegPlacement], key: str | None) -> LegPl
 # =============================================================================
 
 
+def _migration_pairs(
+    recon: ReturnRecon,
+    template_id: str,
+    sheet: str | None,
+    predicate_key: str,
+    money_column: str,
+) -> pl.DataFrame:
+    """One row per DISTINCT LEG of one predicate group, both sides joined.
+
+    THE ONE COMPUTATION BEHIND BOTH THE MATRIX AND ITS DRILL-DOWN.
+    ``row_migration`` aggregates this frame into ``(our row, their row)`` cells;
+    ``migration_legs`` filters it to one of those cells. Neither re-reads
+    membership, so a cell's count and the list under it cannot disagree — the
+    same reason ``_classify`` feeds both ``_terms`` and ``cell_pairs``.
+
+    Columns, all named rather than positional: ``key`` (the leg's own
+    reconciliation key), ``_BASE_COLUMN`` and its ``_theirs`` twin (the exposure
+    the leg was split from), ``our_row_ref`` / ``their_row_ref`` (the placement,
+    with ``ABSENT_ROW`` for a side holding no leg under this key in this group),
+    the money column and its ``_theirs`` twin, and ``same_base``.
+
+    An EMPTY frame means the group holds no legs on either side — an empty
+    group, which is not a zero, and which is logged once here rather than in
+    each caller.
+    """
+    if money_column not in MIGRATION_MONEY_COLUMNS:
+        raise ValueError(
+            f"money_column must be one of {MIGRATION_MONEY_COLUMNS}, got {money_column!r}"
+        )
+    key = recon.key_column
+    ours = _group_legs(recon.ours, key, template_id, sheet, predicate_key, money_column, "ours")
+    theirs = _group_legs(
+        recon.theirs, key, template_id, sheet, predicate_key, money_column, "theirs"
+    )
+    if ours.height == 0 and theirs.height == 0:
+        logger.info(
+            "row_migration: no membership at all for %s/%s/%s — the group holds no legs on "
+            "either side (this is an EMPTY group, not a zero)",
+            loggable(template_id),
+            loggable(sheet),
+            loggable(predicate_key),
+        )
+        return pl.DataFrame()
+
+    joined = ours.join(theirs, on=key, how="full", coalesce=True, suffix="_theirs")
+    return (
+        joined.rename({key: "key"})
+        .with_columns(
+            # An explicit bucket, not a false zero: the sentinel says "this side
+            # does not hold the leg in this group" and is read as such below.
+            pl.col("row_ref").fill_null(ABSENT_ROW).alias("our_row_ref"),
+            pl.col("row_ref_theirs").fill_null(ABSENT_ROW).alias("their_row_ref"),
+        )
+        .with_columns(_same_base(recon, template_id).alias("same_base"))
+    )
+
+
+def _same_base(recon: ReturnRecon, template_id: str) -> pl.Expr:
+    """Per leg: does the OTHER side hold this exposure elsewhere on the template?
+
+    TRUE only for a leg whose counterpart is absent from THIS group while the
+    other side holds its base exposure somewhere on this template — which makes
+    the absence a difference of DECOMPOSITION or of placement, not of scope.
+    FALSE for a leg both sides hold in this group (the question does not arise)
+    and for one the other side does not hold at all (which is scope, and is what
+    ``ours_only`` / ``theirs_only`` are left to mean).
+
+    TEMPLATE-SCOPED, NOT GROUP-SCOPED, and the difference is measurable rather
+    than stylistic: a guarantee leg routinely lands on a different SHEET from
+    the exposure it was split off — the guarantor's class, not the obligor's —
+    so a group-scoped or sheet-scoped test misses the canonical case outright.
+    ``_side_keys`` with ``sheet=None`` is the template-wide set, and reusing it
+    is deliberate: the population comparison, the pair table and this test then
+    share one definition of "their side holds this exposure" rather than three.
+
+    NOT ONLY THE SPLIT CASE, which is worth saying because the name invites the
+    narrower reading. Anything that puts the same exposure on the other side of
+    the template but outside THIS group satisfies it — an exposure whose class
+    differs between the two books, or one their engine substituted onto a
+    different basis. All of them share the finding this label exists to make:
+    the exposure is on their side, so the absence here is not a scope gap.
+    """
+    absent_theirs = pl.col(_BASE_COLUMN).is_in(_key_series(recon.theirs, recon, template_id))
+    absent_ours = pl.col(f"{_BASE_COLUMN}_theirs").is_in(
+        _key_series(recon.ours, recon, template_id)
+    )
+    return (
+        pl.when(pl.col("their_row_ref") == ABSENT_ROW)
+        .then(absent_theirs)
+        .when(pl.col("our_row_ref") == ABSENT_ROW)
+        .then(absent_ours)
+        .otherwise(pl.lit(value=False))
+        # A leg whose identity is null on every rung of the ladder cannot be
+        # found on the other side, so it keeps the scope label. Filling a
+        # BOOLEAN towards "not found" invents no figure.
+        .fill_null(value=False)
+    )
+
+
+def _key_series(side: SideView, recon: ReturnRecon, template_id: str) -> pl.Series:
+    """One side's template-wide comparison keys, as a series ``is_in`` can read.
+
+    ``implode`` is required rather than cosmetic: ``is_in`` against a bare series
+    of the same dtype is ambiguous (element-wise against a list column, or
+    membership of the whole set) and deprecated in polars 1.42. The imploded
+    one-row series is unambiguously the SET.
+    """
+    keys = _side_keys(side, recon.key_column, template_id, None)
+    return pl.Series("keys", sorted(keys), dtype=pl.String()).implode()
+
+
 def _group_legs(  # noqa: PLR0913 - the group's full address plus the key, price and side
     side: SideView,
     key_column: str,
@@ -1912,6 +2191,12 @@ def _group_legs(  # noqa: PLR0913 - the group's full address plus the key, price
       parent or an indistinguishable NULL — or several, so no one row is its
       place. Both cases are WARNED about; neither drops the leg, because a leg
       whose row cannot be decided is not a leg that carries no money.
+
+    THE BASE EXPOSURE RIDES ALONG AND KEYS NOTHING. ``_BASE_COLUMN`` is
+    ``_comparison_key`` evaluated per leg and carried as a column, so
+    ``_same_base`` can ask whether the other side holds this exposure elsewhere
+    on the template. It is not the group key and must not become one — see
+    ``_comparison_key`` for the measured loss that change causes.
 
     WHAT ACTUALLY GUARDS THIS IS THE SINGLE-LEAF RULE, NOT THE FILL DIRECTION —
     recorded because the opposite is the natural assumption and this docstring
@@ -1935,18 +2220,28 @@ def _group_legs(  # noqa: PLR0913 - the group's full address plus the key, price
     legs = legs.filter(pl.col("sheet").is_null() if sheet is None else pl.col("sheet") == sheet)
     legs = legs.filter(pl.col("predicate_key") == predicate_key).select(
         pl.col(key_column).cast(pl.String()).alias(key_column),
+        _comparison_key(legs.columns, key_column).alias(_BASE_COLUMN),
         pl.col("row_ref"),
         pl.col(money_column),
         pl.col("is_parent_row"),
     )
     if legs.height == 0:
         return pl.DataFrame(
-            schema={key_column: pl.String(), "row_ref": pl.String(), money_column: pl.Float64()}
+            schema={
+                key_column: pl.String(),
+                _BASE_COLUMN: pl.String(),
+                "row_ref": pl.String(),
+                money_column: pl.Float64(),
+            }
         )
 
     priced = legs.group_by(key_column).agg(
         pl.col(money_column).first().alias(money_column),
         pl.col(money_column).n_unique().alias("_prices"),
+        # An IDENTITY, not a price: every membership row of one leg carries the
+        # same base reference, so ``.first()`` here cannot discard anything the
+        # way it can for money. Read only by ``_same_base``.
+        pl.col(_BASE_COLUMN).first().alias(_BASE_COLUMN),
         pl.col("row_ref")
         .filter(pl.col("is_parent_row").fill_null(value=True).not_())
         .unique()
@@ -1955,6 +2250,7 @@ def _group_legs(  # noqa: PLR0913 - the group's full address plus the key, price
     _warn_placement(priced, template_id, sheet, predicate_key, label)
     return priced.select(
         pl.col(key_column),
+        pl.col(_BASE_COLUMN),
         pl.when(pl.col("_leaves").list.len() == 1)
         .then(pl.col("_leaves").list.first())
         .otherwise(pl.lit(UNDECIDABLE_ROW))
@@ -2000,12 +2296,33 @@ def _warn_placement(
 
 
 def _movement_basis() -> pl.Expr:
-    """The per-row honesty label. Off-diagonal is VALUE-driven by construction."""
+    """The per-cell honesty label. Off-diagonal is VALUE-driven by construction.
+
+    THE ABSENT BUCKETS ARE NOT ONE FINDING, WHICH IS WHY THEY GET THREE LABELS
+    EACH. ``ours_only`` claims "their extract has no such exposure", and that was
+    false for every split leg on the sheet, because our sealed ledger reports one
+    exposure as several legs and the matrix's grain is the leg. So the label
+    reads the aggregated ``same_base`` flag (``_same_base``) rather than the
+    ``ABSENT_ROW`` sentinel alone:
+
+    - ``same_base_*``  — EVERY leg in this cell has its exposure on the other
+      side, elsewhere on this template. A decomposition or placement difference.
+    - ``mixed_base_*`` — SOME do and some do not. One cell, two findings; the
+      drill-down (``migration_legs``) is what splits it, and no single label for
+      the cell could be true of both halves.
+    - ``ours_only`` / ``theirs_only`` — NONE do. Now, and only now, a scope
+      finding. That is the point of the change: these two used to mix real scope
+      with split artefacts, so neither could be trusted on its own.
+
+    The ABSENT tests still come FIRST, ahead of ``UNDECIDABLE_ROW``. A leg the
+    other side does not hold in this group is a statement about the OTHER side,
+    and it stands whether or not our own placement resolved to a single leaf.
+    """
     return (
         pl.when(pl.col("their_row_ref") == ABSENT_ROW)
-        .then(pl.lit("ours_only"))
+        .then(_absent_basis("ours"))
         .when(pl.col("our_row_ref") == ABSENT_ROW)
-        .then(pl.lit("theirs_only"))
+        .then(_absent_basis("theirs"))
         .when(
             (pl.col("our_row_ref") == UNDECIDABLE_ROW)
             | (pl.col("their_row_ref") == UNDECIDABLE_ROW)
@@ -2014,6 +2331,23 @@ def _movement_basis() -> pl.Expr:
         .when(pl.col("our_row_ref") == pl.col("their_row_ref"))
         .then(pl.lit("agreed"))
         .otherwise(pl.lit("value_driven"))
+    )
+
+
+def _absent_basis(side: str) -> pl.Expr:
+    """One absent bucket's three-way label, from the aggregated base test.
+
+    ``side`` is the side that HOLDS the legs — ``"ours"`` for the ``(row,
+    ABSENT_ROW)`` cells, ``"theirs"`` for ``(ABSENT_ROW, row)``. One function
+    for both so the two halves cannot drift apart, and so an isolating mutation
+    can replace the whole labelling rule and nothing else.
+    """
+    return (
+        pl.when(pl.col("_all_same_base"))
+        .then(pl.lit(f"same_base_{side}"))
+        .when(pl.col("_any_same_base"))
+        .then(pl.lit(f"mixed_base_{side}"))
+        .otherwise(pl.lit(f"{side}_only"))
     )
 
 

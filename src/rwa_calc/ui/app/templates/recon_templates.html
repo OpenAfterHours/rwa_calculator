@@ -335,7 +335,8 @@ tie-out.</p>
 <p class="muted">Population <span class="mono">{{ m.predicate_key }}</span>{% if m.columns %} (serves columns {{ m.columns | join(", ") }}){% endif %},
 priced on <span class="mono">{{ m.money_column }}</span>. The diagonal is agreement; every
 off-diagonal cell is money that landed on a different row. Each leg appears in exactly one
-cell of this matrix.</p>
+cell of this matrix. <strong>Click a cell</strong> to list the exposures behind it, with both
+rows named — those two names are the band boundary crossed.</p>
 <div class="callout warn"><strong>Read this as value-driven.</strong> {{ m.attribution }}</div>
 {% if not m.axis_is_partition %}
 <div class="callout warn">Some legs reach <strong>no single provable leaf row</strong> on this
@@ -344,7 +345,7 @@ in the <span class="mono">{{ page.undecidable_row_ref }}</span> bucket rather th
 empty leaf filter is not a zero.</div>
 {% endif %}
 <div class="grid-wrap">
-  <table class="data grid">
+  <table class="data grid" data-table="row-migration">
     <thead>
       <tr class="refs refs--only">
         <th class="rowhead-ref" scope="col">ours ↓</th>
@@ -360,7 +361,7 @@ empty leaf filter is not a zero.</div>
         {% for cell in row %}
         <td class="num{% if cell is none %} is-null{% endif %}"
             style="{% if cell is none %}opacity:.3{% elif cell.heat %}background: rgba(255, 145, 0, {{ "%.3f"|format(cell.heat * 0.42) }});{% endif %}"
-            title="{% if cell %}{{ cell.basis_label }} · {{ cell.legs }} exposure(s){% else %}no leg moved between these rows{% endif %}">{% if cell %}{{ cell.display }}{% else %}·{% endif %}</td>
+            title="{% if cell %}{{ cell.basis_label }} · {{ cell.legs }} exposure(s){% else %}no leg moved between these rows{% endif %}">{% if cell %}<a class="cell-link" href="{{ page_url }}?{{ query_base }}&amp;moved_from={{ cell.our_row_ref|urlencode }}&amp;moved_to={{ cell.their_row_ref|urlencode }}">{{ cell.display }}</a>{% else %}·{% endif %}</td>
         {% endfor %}
       </tr>
       {% endfor %}
@@ -368,20 +369,60 @@ empty leaf filter is not a zero.</div>
   </table>
 </div>
 <div class="table-wrap">
-  <table class="data">
+  <table class="data" data-table="migration-totals">
     <thead><tr><th>movement</th><th>{{ m.money_column }}</th></tr></thead>
     <tbody>
       <tr><td>same row on both sides</td><td class="num">{{ fmt(m.totals.agreed) }}</td></tr>
       <tr><td>moved row (their value differs)</td><td class="num">{{ fmt(m.totals.moved) }}</td></tr>
-      <tr><td>in this population on our side only</td><td class="num">{{ fmt(m.totals.ours_only) }}</td></tr>
-      <tr><td>in this population on their side only</td><td class="num">{{ fmt(m.totals.theirs_only) }}</td></tr>
+      <tr><td>we split it, or filed it elsewhere on this template</td><td class="num">{{ fmt(m.totals.same_base_ours) }}</td></tr>
+      <tr><td>they filed it whole, or elsewhere on this template</td><td class="num">{{ fmt(m.totals.same_base_theirs) }}</td></tr>
+      <tr><td>mixed — our legs, some elsewhere on their template and some nowhere</td><td class="num">{{ fmt(m.totals.mixed_base_ours) }}</td></tr>
+      <tr><td>mixed — their legs, some elsewhere on our template and some nowhere</td><td class="num">{{ fmt(m.totals.mixed_base_theirs) }}</td></tr>
+      <tr><td>not on their template at all</td><td class="num">{{ fmt(m.totals.ours_only) }}</td></tr>
+      <tr><td>not on our template at all</td><td class="num">{{ fmt(m.totals.theirs_only) }}</td></tr>
       <tr><td>held, no provable leaf row</td><td class="num">{{ fmt(m.totals.undecidable) }}</td></tr>
     </tbody>
   </table>
 </div>
-<p class="muted">These five classes partition the population: each leg is counted once, in one
+<p class="muted">These nine classes partition the population: each leg is counted once, in one
 class. They are <em>not</em> a sum over template rows — rows on this axis overlap, so adding
 them up would double-count every leg reported under both a band and its parent.</p>
+<div class="callout info"><strong>The last three are the ones to read carefully.</strong> This
+matrix places <em>legs</em>, and we report one guaranteed loan as several — a guarantee leg
+under the guarantor's class and a remainder under the obligor's — where an extract holds it
+whole. Those legs have no counterpart <em>at leg grain</em> however completely the two books
+agree, so they used to be reported as "not on their template at all". The two
+<span class="mono">split / filed elsewhere</span> rows now carry them, which is what makes the
+two <span class="mono">not on … at all</span> rows a scope finding worth acting on.</div>
+
+{% if page.movers %}
+{% set mv = page.movers %}
+<h3>Exposures behind {{ mv.our_row_ref }} → {{ mv.their_row_ref }}</h3>
+<p class="muted">Ours <strong>{{ mv.our_row_name }}</strong> ({{ mv.our_row_ref }}) against theirs
+<strong>{{ mv.their_row_name }}</strong> ({{ mv.their_row_ref }}), priced on
+<span class="mono">{{ mv.money_column }}</span>{% if mv.basis_label %} — {{ mv.basis_label }}{% endif %}.
+Those two names <em>are</em> the boundary crossed.</p>
+<p class="muted" data-movers="note">{{ mv.note }}</p>
+{% if mv.rows %}
+<div class="table-wrap">
+  <table class="data" data-table="migration-movers">
+    <thead><tr><th>leg</th><th>exposure</th><th>ours</th><th>theirs</th><th>on the other side</th></tr></thead>
+    <tbody>
+      {% for row in mv.rows %}
+      <tr>
+        <td class="mono">{{ row.key_display }}{% if row.split %} <span class="muted">(one leg of several)</span>{% endif %}</td>
+        <td class="mono">{% if row.identified %}<a href="{{ loan_url_base }}?key={{ row.base_key|urlencode }}&amp;return_to={{ (page_url ~ '?' ~ query_base ~ '&moved_from=' ~ mv.our_row_ref ~ '&moved_to=' ~ mv.their_row_ref)|urlencode }}">{{ row.base_key }}</a>{% else %}<span class="is-absent" style="{{ STATE_STYLE.get('is-absent', '') }}" title="this leg's identity is null on every rung of the comparison key, so there is no loan to open">{{ row.key_display }}</span>{% endif %}</td>
+        <td class="num">{{ side(row.ours) }}</td>
+        <td class="num">{{ side(row.theirs) }}</td>
+        <td>{{ row.same_base_note }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+<div class="callout warn"><strong>Read this as value-driven.</strong> {{ mv.attribution }}</div>
+{% endif %}
 {% elif page.compare %}
 <div class="callout info">This sheet has no membership groups, so no migration matrix can be
 drawn for it. That is "not instrumented", not "nothing moved".</div>

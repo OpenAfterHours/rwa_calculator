@@ -87,6 +87,7 @@ than carried forward from an earlier one.
 | `mutate_placements_rows_span_the_template` | `row_refs` not scoped to the cell's sheet | 2 / 130 | the sheet-placement test only |
 | `mutate_placements_carriers_scoped_to_sheet` | the class / approach / role carriers scoped to the cell's sheet | 2 / 130 | the sheet-placement test only |
 | `mutate_placements_ignore_the_base_reference` | `_placements` keyed on the leg, out of lockstep with `_key_money` | 2 / 130 | the split-exposure placement test only |
+| `mutate_cell_term_stops_validating` | `CellTerm.__post_init__` replaced by a no-op, so `differing_keys > keys` constructs again | **unmeasured — red-pending** | the four incoherent-count cases, once the constructor bound lands; it FAILS CLOSED until then |
 
 Eight of these are worth understanding, and the first one most.
 
@@ -251,9 +252,92 @@ Five of these are worth understanding.
   zero. Only the one-sided half moves. A conservation test built on the netting
   case alone would have been silent on the double-count entirely.
 
+
+## The migration-matrix label + drill-down set
+
+Written for the 2026-08-30 slice that (a) stopped the matrix calling a split
+exposure's legs a scope finding and (b) made its cells clickable. Measured on
+`tests/unit/analysis/test_return_recon.py` + `tests/unit/ui/test_views_return_recon.py`
+together, whose baseline on the tree these were written on is **255 passed, 4
+failed** (259 collected) — the four being
+`test_a_cell_term_refuses_a_key_count_that_describes_no_population`,
+a teammate's in-flight guard whose production half had not landed. **Every red
+set below is quoted NET of those four**, and each was confirmed unchanged by the
+mutations (they fail identically with no plugin loaded).
+
+The defect being closed, measured on the split fixture before the labels
+existed: 100,000 of `rwa_final` on our side and 100,000 on theirs sat under
+`ours_only` / `theirs_only` — "their extract has no such exposure" — about a
+loan both books hold and agree on to the penny. 1,000,000 each on `ead_final`;
+210,000 / 270,000 on the three-substitution review portfolio.
+
+| plugin | what it changes | red / green | reddens |
+|---|---|---|---|
+| `mutate_absent_is_always_scope` | `_absent_basis` returns `f"{side}_only"` unconditionally — the pre-change label, exactly | 12 / 247 | every label test in both files (6 parametrisations), the totals test, the movers panel's basis, the mixed-cell render, **and the analysis census's label-consistency limb** |
+| `mutate_same_base_is_group_scoped` | `_side_keys` redirected to the matrix's own SHEET while `_migration_pairs` runs | 2 / 257 | `test_the_base_presence_test_spans_the_template_not_the_group` only, both frameworks |
+| `mutate_a_mixed_cell_reads_as_scope` | the `any` limb deleted from `_absent_basis`, so a two-answer cell reports the scope class | 5 / 254 | both mixed-cell tests and the analysis census |
+| `mutate_drill_list_drops_a_leg` | `_migration_pairs` returns a frame one row short **to `migration_legs` only**, discriminated by caller | 6 / 253 | both censuses — the analysis one and all four parametrisations of the view's `test_the_drill_down_reads_the_matrix_it_is_drawn_under` |
+| `mutate_movers_note_says_nothing` | `_movers_note` returns `""` — the drill-down's cap stops admitting to itself | 2 / 257 | the cap test and the empty-pair test |
+| `mutate_mover_row_hides_which_kind_it_is` | `_same_base_note` returns `""` — the per-leg verdict column goes blank | 2 / 257 | the rendered drill test and the mixed-cell test |
+| `mutate_matrix_cells_are_not_clickable` | the matrix cell's `<a class="cell-link">` cut out, by rewriting the TEMPLATE in memory | 1 / 258 | the link test only (`set()` against five priced pairs) |
+
+Six of these are worth understanding.
+
+- **`mutate_absent_is_always_scope` leaves every conservation guard GREEN, and
+  that is the evidence the fix was to the LABEL and not to the placement.**
+  `test_migration_money_equals_the_groups_distinct_leg_total`,
+  `test_the_migration_matrix_conserves_a_split_exposures_money` and
+  `test_the_matrix_conserves_money_on_both_sides` all pass under it, because no
+  money moves in either state. A mutation that had reddened them would have made
+  those three the detectors and told you nothing about the label. The corollary
+  matters more: a *fix* that reddened them — collapsing the matrix onto the base
+  key — was measured and rejected for exactly that reason.
+- **`test_migration_puts_one_sided_legs_in_the_absent_bucket` stays green under
+  it too, and that is the discriminator, not a gap.** That leg's base is
+  genuinely absent from their side, so `ours_only` is the correct label in BOTH
+  states. It staying green is what shows the change narrowed the scope class
+  rather than emptying it.
+- **`mutate_same_base_is_group_scoped` reddens exactly one test, which is the
+  point of writing that test at all.** Scoping the base question to the sheet
+  reads perfectly plausibly — "is their leg in this part of the return?" — and
+  is wrong for the canonical case: a guarantee leg is reported under the
+  GUARANTOR's exposure class, so it sits on a different sheet from the loan it
+  was split off. Every other label test is insensitive to the scope because
+  their bases are on the same sheet, so without the cross-sheet fixture this
+  mutation would have been completely silent.
+- **`mutate_drill_list_drops_a_leg` discriminates by CALLER rather than patching
+  `migration_legs`, and the first form of it was a false green by README
+  mechanism 2.** `ui/views/return_recon` does `from ... import migration_legs`
+  and so does the analysis test module, so `setattr` on the analysis module
+  reaches neither of their own bindings: patching the module attribute plus the
+  view's left the analysis census running the ORIGINAL function and passing.
+  Moving the mutation to a module-global lookup *inside* the function body
+  (`_migration_pairs`) reaches every caller, and the analysis census went red.
+  Note also what it cannot show: mutate the SHARED frame and both aggregations
+  move together and everything stays green — which is the structural guarantee
+  working, not a gap. It proves the assertions exist, not that the sharing does.
+  The view-side census is parametrised over BOTH published prices for a separate
+  reason of the same shape: `migration_movers` takes the matrix rather than the
+  group and the money column, and a panel that resolved its own price would
+  default to `rwa_final` and pass every `rwa_final` assertion while rendering
+  the wrong figures under an `ead_final` matrix.
+- **`mutate_movers_note_says_nothing` is the same lesson the pair table already
+  paid for.** One function carries "what the cap hid" AND "why there is no
+  table", and the panel looks complete in both states. The cap test's detector
+  is again an ADEQUACY assertion (`assert capped.hidden > 0`, with `limit=1` so
+  the tail carries a leg) — "nothing is hidden" and "the cap lies about what it
+  hid" are indistinguishable without it.
+- **`mutate_mover_row_hides_which_kind_it_is` is what makes `mixed_base_*`
+  honest rather than merely cautious.** A mixed cell says "both" on purpose; the
+  per-leg column is the only thing that says WHICH. Under the mutation the
+  label, every figure, every count and every link stay right and three
+  identical-looking rows sit under a label that says they are not the same. Its
+  vacuity guard counts calls where the ORIGINAL had something to say, because
+  the note is blank by design on a diagonal cell — a run of diagonal cells only
+  would agree on every call.
 ## Writing another
 
-Four rules, all learned the expensive way in the batch that produced these:
+Five rules, all learned the expensive way in the batch that produced these:
 
 1. **Change one thing, and do not copy the function you are mutating.**
    `mutate_collapse_group_legs` runs the *original* `_group_legs` over a side
@@ -272,7 +356,18 @@ Four rules, all learned the expensive way in the batch that produced these:
    than `setattr` on a module — a loader, a wrapper, a class attribute — count
    the applications and fail the session at zero. The check is four lines and it
    turns "I checked" into something the summary line says.
-4. **A green suite and a red linter on the same tree is a TIMING signal, not a
+4. **`@dataclass` binds `__post_init__` at DECORATION time, so you cannot add
+   one to a frozen dataclass from a plugin — only remove one.** Measured while
+   writing `mutate_cell_term_stops_validating`: the generated `__init__` calls
+   `self.__post_init__()` only if the attribute existed when the decorator ran
+   (`'__post_init__' in Cls.__init__.__code__.co_names` is `False` otherwise),
+   so a plugin that ATTACHES a validator is silently inert and its run is a
+   false negative about the code, not evidence about the guard. Replacing an
+   existing one with a no-op does apply, which is why the mutation direction
+   works and the preview direction does not. To prove a not-yet-landed
+   constructor guard, use `git worktree add --detach HEAD` or an equivalent
+   standalone class — never an attach-from-a-plugin probe, and do not cite one.
+5. **A green suite and a red linter on the same tree is a TIMING signal, not a
    contradiction.** The fifth shape of rule 2's mechanism 3, and the first that
    presents as two gates disagreeing rather than as a false red. Measured while
    these were being written: `pytest tests/unit/analysis` returned 220 passed

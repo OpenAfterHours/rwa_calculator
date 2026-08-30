@@ -869,6 +869,8 @@ def _register_pages(app: FastAPI) -> None:
         row: str = "",
         col: str = "",
         term: str = "",
+        moved_from: str = "",
+        moved_to: str = "",
         materiality_abs: float = return_recon_view.DEFAULT_MATERIALITY_ABSOLUTE,
         materiality_pct: float = return_recon_view.DEFAULT_MATERIALITY_PERCENT,
     ) -> HTMLResponse:
@@ -893,6 +895,8 @@ def _register_pages(app: FastAPI) -> None:
                     row_ref=row,
                     col_ref=col,
                     term=term,
+                    moved_from=moved_from,
+                    moved_to=moved_to,
                     materiality=return_recon_view.Materiality(
                         absolute=max(0.0, materiality_abs),
                         percent=max(0.0, materiality_pct),
@@ -2106,6 +2110,8 @@ def _reconciliation_templates(  # noqa: PLR0913 - the cell's address is the sign
     row_ref: str = "",
     col_ref: str = "",
     term: str = "",
+    moved_from: str = "",
+    moved_to: str = "",
     materiality: return_recon_view.Materiality = return_recon_view.DEFAULT_MATERIALITY,
 ) -> dict:
     """Build the template-compare context for one registered reconciliation.
@@ -2154,6 +2160,8 @@ def _reconciliation_templates(  # noqa: PLR0913 - the cell's address is the sign
         term=term,
         predicate_key=predicate_key,
         money_column=money_column,
+        moved_from=moved_from,
+        moved_to=moved_to,
         materiality=materiality,
     )
     # The selector state, minus the selected cell — the grid's cell links append
@@ -2163,6 +2171,10 @@ def _reconciliation_templates(  # noqa: PLR0913 - the cell's address is the sign
     # clicked would silently narrow a table the analyst never asked to narrow.
     # The waterfall rows append it themselves, and the loan breadcrumb built
     # from this base returns to the unfiltered cell, which is a superset.
+    # ``moved_from`` / ``moved_to`` are out for the same reason and one more:
+    # they address a cell of the MIGRATION matrix, so carrying them onto a
+    # different population or a different price would list the legs of a pair
+    # that matrix no longer has. The matrix cells append them themselves.
     selectors = {
         "template": page.selected.id if page.selected else "",
         "sheet": page.sheet or "",

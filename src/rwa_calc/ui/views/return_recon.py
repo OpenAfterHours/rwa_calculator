@@ -107,6 +107,7 @@ from rwa_calc.analysis.return_recon import (
     cell_pairs,
     decompose_cell,
     diff_cells,
+    migration_legs,
     row_migration,
 )
 from rwa_calc.observability import loggable
@@ -123,6 +124,7 @@ if TYPE_CHECKING:
         CellPair,
         CellPairs,
         LegPlacement,
+        MigratedLeg,
         ReturnRecon,
         SideView,
         TermName,
@@ -213,13 +215,41 @@ REFUSAL_HEADLINES: dict[str, str] = {
     "unbound": "This template or cell is not instrumented, so it has no addressable population.",
 }
 
-#: Migration-matrix cell classes, and what each one means to a reader.
+#: Migration-matrix cell classes, and what each one means to a reader. Asserted
+#: against ``return_recon.MOVEMENT_BASES`` rather than kept in step by hand: an
+#: unlabelled basis renders as its own raw string, which is the quietest way for
+#: a new class of finding to reach a screen unexplained.
+#:
+#: The three ABSENT-bucket classes per side are the point of the vocabulary. The
+#: scope wording ("their extract has no such exposure") was applied to every
+#: split leg on the sheet, because our ledger reports one exposure as several
+#: legs and the matrix's grain is the leg. It now says that only where it is
+#: true, which is what makes it worth reading.
 BASIS_LABELS: dict[str, str] = {
     "agreed": "same row on both sides",
     "value_driven": "moved row — their value differs from ours",
-    "ours_only": "we hold this leg in this group, they do not",
-    "theirs_only": "they hold this leg in this group, we do not",
+    "same_base_ours": "we report this exposure as several legs, or on another sheet — their "
+    "extract holds it elsewhere on this template, not nowhere",
+    "same_base_theirs": "their extract holds this exposure whole, or on another sheet — we "
+    "hold it elsewhere on this template, not nowhere",
+    "mixed_base_ours": "BOTH: some of these legs sit elsewhere on their template, some are "
+    "genuinely not on their side at all — the list below splits them",
+    "mixed_base_theirs": "BOTH: some of these legs sit elsewhere on our template, some are "
+    "genuinely not on our side at all — the list below splits them",
+    "ours_only": "we hold this exposure and their extract does not hold it anywhere on this "
+    "template",
+    "theirs_only": "their extract holds this exposure and we do not hold it anywhere on this "
+    "template",
     "undecidable": "held, but no single provable leaf row — money kept, not placed",
+}
+
+#: What the matrix's two sentinel axis buckets are CALLED on the page. A ref with
+#: no name beside eighteen that have one reads as a rendering defect, and the
+#: bare word "absent" reads as "the exposure is missing" — which is exactly the
+#: reading the ``same_base_*`` classes exist to stop.
+SENTINEL_ROW_NAMES: dict[str, str] = {
+    ABSENT_ROW: "no leg under this key in this population",
+    UNDECIDABLE_ROW: "held, but no single provable leaf row",
 }
 
 #: The template's regulatory code under each framework. The three scoped
@@ -240,6 +270,11 @@ TEMPLATE_CODES: dict[str, dict[str, str]] = {
 #: exists to close.
 WORST_CELLS_LIMIT = 25
 UNMEASURABLE_LIMIT = 25
+
+#: How many legs one matrix cell's drill-down lists. Same magnitude as the pair
+#: table's cap and reported the same way — what a cap hid is stated, never
+#: implied, because a silent cap on a regulatory comparison is a silent zero.
+MIGRATION_MOVERS_LIMIT = 25
 
 #: What a placement carrier says when the side holds nothing to say it with.
 #: Never blank: a blank beside a populated side reads as "the same as ours".
@@ -440,10 +475,23 @@ class MigrationCell:
 
 @dataclass(frozen=True)
 class MigrationTotals:
-    """The matrix's money by movement class. Each leg falls in exactly one."""
+    """The matrix's money by movement class. Each leg falls in exactly one.
+
+    NINE classes, not five, and the four added ones carry money that used to be
+    reported as scope. ``ours_only`` / ``theirs_only`` now hold only exposures
+    the other side does not hold ANYWHERE on the template; an exposure we report
+    as several legs, or that the two books put on different sheets, is a
+    ``same_base_*`` (or ``mixed_base_*``) figure instead. Measured on the split
+    fixture: 100,000 of ``rwa_final`` moved out of each scope class, against two
+    books agreeing to the penny.
+    """
 
     agreed: float
     moved: float
+    same_base_ours: float
+    same_base_theirs: float
+    mixed_base_ours: float
+    mixed_base_theirs: float
     ours_only: float
     theirs_only: float
     undecidable: float
@@ -467,6 +515,73 @@ class MigrationMatrix:
     cells: tuple[tuple[MigrationCell | None, ...], ...]
     totals: MigrationTotals
     axis_is_partition: bool
+    attribution: str = PLACEMENT_ATTRIBUTION
+
+
+@dataclass(frozen=True)
+class MigrationMover:
+    """One LEG behind one matrix cell, with both sides on the same row.
+
+    The unit is the leg, matching the matrix above it. ``base_key`` is the
+    exposure the leg was split from, so a split is visible as such rather than
+    inferred from a naming convention, and ``split`` is true where the two
+    differ.
+
+    ``ours`` / ``theirs`` are ``SideFigure``s over ``PAIR_STATE_DISPLAY``, so a
+    side holding no leg under this key renders the explicit NOT-HELD state —
+    never blank (which reads as agreement) and never ``0.00`` (a nil holding).
+
+    ``same_base`` is the per-leg fact the cell's own label aggregates, and it is
+    published per row because a ``mixed_base_*`` cell holds both kinds at once:
+    the label says "both", and this column is what says WHICH.
+    """
+
+    key: str
+    key_display: str
+    identified: bool
+    base_key: str
+    split: bool
+    ours: SideFigure
+    theirs: SideFigure
+    same_base: bool
+    same_base_note: str
+
+
+@dataclass(frozen=True)
+class MigrationMovers:
+    """The legs behind one ``(our row, their row)`` cell, named and priced.
+
+    THE ROW NAMES ARE THE FINDING. "0.15 to <0.25" against "0.25 to <0.50" IS
+    the band boundary crossed, read straight off the matrix's own axis labels —
+    so this panel states what moved and where to without quoting a PD at all.
+    That is not modesty: ``reporting/membership.py::_LEG_COLUMNS`` publishes two
+    identity columns, three placement carriers and two money columns and no PD,
+    so quoting one would mean widening ``MEMBERSHIP_SCHEMA``.
+
+    ``note`` is never empty and states which of three cases the table is: a cap
+    that hid rows, a complete list, or a pair no leg occupies. An empty table
+    that does not say why can be read as "nothing moved here", which for a
+    hand-edited URL naming the wrong pair would be false.
+
+    ``attribution`` is ``return_recon.PLACEMENT_ATTRIBUTION`` verbatim and must
+    be rendered beside the list, for exactly the reason the matrix carries it:
+    both sides are banded by our generators from each side's own value, so a
+    move is VALUE-driven by construction and this list is not evidence about
+    their banding RULE.
+    """
+
+    our_row_ref: str
+    our_row_name: str
+    their_row_ref: str
+    their_row_name: str
+    basis: str
+    basis_label: str
+    money_column: str
+    rows: tuple[MigrationMover, ...]
+    shown: int
+    total: int
+    hidden: int
+    note: str
     attribution: str = PLACEMENT_ATTRIBUTION
 
 
@@ -734,6 +849,7 @@ class TemplateComparePage:
     matrix: MigrationMatrix | None
     money_column: str
     money_columns: tuple[str, ...] = MIGRATION_MONEY_COLUMNS
+    movers: MigrationMovers | None = None
     explanation: CellExplanation | None = None
     limits: tuple[str, ...] = COMPARE_LIMITS
     absent_row_ref: str = ABSENT_ROW
@@ -755,6 +871,8 @@ def template_page(  # noqa: PLR0913 - the page's full address is its signature
     term: str = "",
     predicate_key: str = "",
     money_column: str = "rwa_final",
+    moved_from: str = "",
+    moved_to: str = "",
     materiality: Materiality = DEFAULT_MATERIALITY,
 ) -> TemplateComparePage:
     """Build the whole template-compare page for one reconciliation.
@@ -774,6 +892,12 @@ def template_page(  # noqa: PLR0913 - the page's full address is its signature
     table the same way, and the page states which filter it is showing - a wider
     table silently standing in for a narrower one is the only way this fallback
     could mislead.
+
+    ``moved_from`` / ``moved_to`` are one cell of the migration matrix, which is
+    what a click on that matrix sends. BOTH are required — a half-named pair is
+    not a cell — and an unknown pair renders the empty panel WITH its reason
+    rather than nothing at all, so a hand-edited URL cannot look like a matrix
+    cell nobody's exposures reached.
     """
     if recon is None:
         return TemplateComparePage(
@@ -832,6 +956,11 @@ def template_page(  # noqa: PLR0913 - the page's full address is its signature
         if group_key
         else None
     )
+    movers = (
+        migration_movers(recon, selected.id, chosen_sheet, matrix, moved_from, moved_to)
+        if matrix is not None and moved_from and moved_to
+        else None
+    )
     explanation = (
         explain_cell(
             recon, selected.id, chosen_sheet, row_ref, col_ref, coverage=coverage, term=term
@@ -854,6 +983,7 @@ def template_page(  # noqa: PLR0913 - the page's full address is its signature
         groups=groups,
         matrix=matrix,
         money_column=price,
+        movers=movers,
         explanation=explanation,
     )
 
@@ -1225,6 +1355,77 @@ def migration_matrix(
     )
 
 
+def migration_movers(  # noqa: PLR0913 - the sheet's address plus the matrix and the pair
+    recon: ReturnRecon,
+    template_id: str,
+    sheet: str | None,
+    matrix: MigrationMatrix,
+    our_row_ref: str,
+    their_row_ref: str,
+    *,
+    limit: int | None = MIGRATION_MOVERS_LIMIT,
+) -> MigrationMovers:
+    """The exposures behind ONE cell of the migration matrix, named.
+
+    The panel the matrix was built for and never got: a cell reporting money
+    that moved between two rows says WHICH exposures moved, and the two rows'
+    own names say what boundary they crossed.
+
+    Everything here comes from ``analysis.return_recon.migration_legs``, which
+    filters the very frame ``row_migration`` aggregates into the matrix. This
+    function renders; it does not re-derive. A separately-derived listing is how
+    the pair table beneath a cell came to show 50 rows of exact agreement behind
+    a 221,000 difference, and the matrix would be free to make the same mistake.
+
+    THE MATRIX IS TAKEN AS AN ARGUMENT rather than the group and the price. It
+    is on screen already, so passing it costs nothing — and it removes the two
+    ways this panel could describe a different question from the one above it: a
+    predicate group it was not drawn for, and a money column it was not priced
+    on. The movement class is read off the matrix's own cell for the same reason
+    (a second derivation of a label is a second chance to disagree with it).
+
+    Built for ANY pair the caller names, including one no leg occupies: the note
+    carries the reason, so an empty table is never readable as "nothing moved
+    between these rows" when the truth is "that is not a cell".
+    """
+    legs = migration_legs(
+        recon,
+        template_id,
+        sheet,
+        matrix.predicate_key,
+        our_row_ref,
+        their_row_ref,
+        money_column=matrix.money_column,
+    )
+    shown = legs if limit is None else legs[:limit]
+    names = _row_names(recon, template_id, sheet)
+    cell = next(
+        (
+            found
+            for row in matrix.cells
+            for found in row
+            if found is not None
+            and found.our_row_ref == our_row_ref
+            and found.their_row_ref == their_row_ref
+        ),
+        None,
+    )
+    return MigrationMovers(
+        our_row_ref=our_row_ref,
+        our_row_name=_row_label(names, our_row_ref),
+        their_row_ref=their_row_ref,
+        their_row_name=_row_label(names, their_row_ref),
+        basis=cell.basis if cell else "",
+        basis_label=cell.basis_label if cell else "",
+        money_column=matrix.money_column,
+        rows=tuple(_mover_row(leg) for leg in shown),
+        shown=len(shown),
+        total=len(legs),
+        hidden=len(legs) - len(shown),
+        note=_movers_note(len(shown), len(legs) - len(shown)),
+    )
+
+
 # =============================================================================
 # The waterfall
 # =============================================================================
@@ -1555,10 +1756,80 @@ def _migration_totals(frame: pl.DataFrame) -> MigrationTotals:
     return MigrationTotals(
         agreed=total("agreed", "money_ours"),
         moved=total("value_driven", "money_ours"),
+        same_base_ours=total("same_base_ours", "money_ours"),
+        same_base_theirs=total("same_base_theirs", "money_theirs"),
+        mixed_base_ours=total("mixed_base_ours", "money_ours"),
+        mixed_base_theirs=total("mixed_base_theirs", "money_theirs"),
         ours_only=total("ours_only", "money_ours"),
         theirs_only=total("theirs_only", "money_theirs"),
         undecidable=total("undecidable", "money_ours"),
     )
+
+
+def _mover_row(leg: MigratedLeg) -> MigrationMover:
+    """One leg of a matrix cell rendered — an absent side kept visibly absent."""
+    identified = bool(leg.key)
+    base = leg.base_key or ""
+    return MigrationMover(
+        key=leg.key or "",
+        key_display=leg.key if identified and leg.key else UNIDENTIFIED_KEY,
+        identified=identified,
+        base_key=base,
+        split=bool(base) and base != leg.key,
+        ours=_pair_side(leg.money_ours),
+        theirs=_pair_side(leg.money_theirs),
+        same_base=leg.same_base,
+        same_base_note=_same_base_note(leg),
+    )
+
+
+def _same_base_note(leg: MigratedLeg) -> str:
+    """What this ONE leg's base test found — the question a mixed cell raises.
+
+    Blank where the question does not arise (both sides hold the leg in this
+    group), and otherwise one of the two answers spelt out. Never blank on an
+    absent leg: a blank in that column beside a populated one reads as "the same
+    as the row above", which is the one thing it must not say in a mixed cell.
+    """
+    if ABSENT_ROW not in (leg.our_row_ref, leg.their_row_ref):
+        return ""
+    if leg.same_base:
+        return f"the other side holds {leg.base_key} elsewhere on this template"
+    return "the other side does not hold this exposure anywhere on this template"
+
+
+def _movers_note(shown: int, hidden: int) -> str:
+    """What the list shows and what it does not. NEVER empty.
+
+    Three different statements and the page must not render them alike: a pair
+    no leg occupies (most of a cross-tabulation), a complete list, and a capped
+    one. The last is why this exists — an unstated cap hides exposures exactly
+    as a silent zero hides money.
+    """
+    if not shown and not hidden:
+        return (
+            "No leg sits in this cell of the matrix. Most of a cross-tabulation is "
+            "empty — this is our whole row axis against theirs — so this is 'not a "
+            "cell', not 'nothing moved'."
+        )
+    if not hidden:
+        return f"All {shown:,} leg(s) in this cell are shown."
+    return (
+        f"{shown:,} of {shown + hidden:,} leg(s) in this cell are shown, ranked on their "
+        f"own money; {hidden:,} more are not on this page."
+    )
+
+
+def _row_label(names: Mapping[str, str], row_ref: str) -> str:
+    """A row's name for the movers panel, sentinels included.
+
+    The two sentinel buckets have no template row and therefore no name, and a
+    ref rendered bare beside eighteen named ones reads as a defect. Falls back to
+    the ref itself for a row neither side emitted a name for.
+    """
+    if row_ref in SENTINEL_ROW_NAMES:
+        return SENTINEL_ROW_NAMES[row_ref]
+    return names.get(row_ref, row_ref)
 
 
 def _cell_predicate_key(

@@ -113,20 +113,30 @@ class _FrameSource:
         return self._frame
 
 
-def _leg(
+def _leg(  # noqa: PLR0913 - one leg's raw shape, every field defaulted
     reference: str,
     *,
     pd: float,
     rwa: float,
     ead: float | None = None,
     exposure_class: str = SHEET,
+    source: str | None = None,
+    supplies_source_ref: bool = True,
 ) -> dict[str, object]:
-    """One IRB leg in the raw shape the sealed ledger is derived from."""
+    """One IRB leg in the raw shape the sealed ledger is derived from.
+
+    ``source`` names the PRE-SPLIT base exposure a leg belongs to; ``None``
+    means the leg is unsplit and is its own base, which is every other fixture
+    here. ``supplies_source_ref=False`` mirrors the projected legacy side, which
+    supplies no ``source_exposure_reference`` at all — it is neither a component
+    nor a carrier in ``recon_registry``, so it arrives as a typed NULL.
+    """
     exposure = ead if ead is not None else rwa * 3.0
+    base = source or reference
     return {
         "exposure_reference": reference,
-        "source_exposure_reference": reference,
-        "counterparty_reference": f"CP_{reference}",
+        "source_exposure_reference": base if supplies_source_ref else None,
+        "counterparty_reference": f"CP_{base}",
         "exposure_class": exposure_class,
         "exposure_class_applied": exposure_class,
         "exposure_class_post_crm": exposure_class,
@@ -163,6 +173,10 @@ def _source(legs: list[dict[str, object]], framework: str) -> _FrameSource:
             "lgd_floored": pl.Float64,
             "irb_maturity_m": pl.Float64,
             "sa_cqs": pl.Int8,
+            # Pinned so a side whose legs ALL omit the base reference still
+            # carries the column as a typed NULL String, exactly as the sealed
+            # membership schema declares it.
+            "source_exposure_reference": pl.String,
         },
     )
     return _FrameSource(with_reporting_ledger(frame), framework)
@@ -680,6 +694,94 @@ def test_a_refused_decomposition_carries_no_step_whatever_its_amounts() -> None:
         refusal="non-additive metric",
     )
     assert rr._steps(refused) == ()
+
+
+# =============================================================================
+# Rule 4b — a split exposure is ONE exposure, through THIS view's entry point
+# =============================================================================
+
+#: C 08.03's RWEA column, ``Sum(rwa_col)`` — a plain additive money cell.
+RWEA_COL = "0090"
+#: Our two legs of one guaranteed loan, and their whole loan. Split 60/40 so
+#: neither leg alone can be mistaken for the whole.
+SPLIT_G_RWA, SPLIT_REM_RWA = 60_000.0, 40_000.0
+
+
+def _split_recon(framework: str) -> ReturnRecon:
+    """One guaranteed loan, split on our side and whole on theirs.
+
+    Built through ``build_comparison`` — the production entry point, which never
+    passes a ``key_column`` — rather than through ``build_recon`` directly, so a
+    fix that only works when the caller opts into a different join key does not
+    satisfy this. The base legs occupy every band except ``PD_HIGH_A``, so the
+    split exposure lands in a leaf row of its own.
+    """
+    bands = (("A0", PD_LOW, RWA_A0), ("A1", PD_MID, RWA_A1), ("B1", PD_HIGH_B, RWA_B1))
+    ours = [
+        *(_leg(ref, pd=pd, rwa=rwa) for ref, pd, rwa in bands),
+        _leg("L1__G_BANK", source="L1", pd=PD_HIGH_A, rwa=SPLIT_G_RWA, ead=600_000.0),
+        _leg("L1__REM", source="L1", pd=PD_HIGH_A, rwa=SPLIT_REM_RWA, ead=400_000.0),
+    ]
+    legacy = [
+        *(_leg(ref, pd=pd, rwa=rwa, supplies_source_ref=False) for ref, pd, rwa in bands),
+        _leg(
+            "L1",
+            pd=PD_HIGH_A,
+            rwa=SPLIT_G_RWA + SPLIT_REM_RWA,
+            ead=1_000_000.0,
+            supplies_source_ref=False,
+        ),
+    ]
+    return rr.build_comparison(
+        f"split-{framework}", _source(ours, framework), _source(legacy, framework)
+    )
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_the_view_pairs_a_split_exposure_against_the_legacy_whole_loan(framework: str) -> None:
+    """The page must not tell an analyst that an agreeing loan is missing twice.
+
+    Our sealed ledger holds a guaranteed loan as two legs under one base
+    reference; their extract holds it whole under the original one. Keyed on
+    ``exposure_reference`` alone the two never meet, so a cell where both sides
+    agree to the penny renders GBP 100,000 leaving our population and GBP
+    100,000 arriving in theirs — and the waterfall still reconciles, because the
+    two terms net.
+
+    Asserted through ``build_comparison`` because that is where production
+    enters, and on the rendered ``steps`` because that is what the analyst
+    reads. ``CellLeg.key`` is asserted non-empty for every leg on both sides: it
+    is rendered from ``recon.key_column``, so a fix that keys on a name
+    membership does not carry would blank the page's own evidence rather than
+    fail.
+    """
+    # Arrange
+    recon = _split_recon(framework)
+    row_ref = _row_of(recon, "L1", ours=False)
+
+    # Act
+    explanation = rr.explain_cell(recon, TEMPLATE, SHEET, row_ref, RWEA_COL)
+    steps = {step.name: step for step in explanation.steps}
+
+    # Assert — the cell is decomposed, both sides carry a figure, and they agree.
+    assert not explanation.refused, explanation.refusal
+    assert explanation.ours.value == pytest.approx(SPLIT_G_RWA + SPLIT_REM_RWA)
+    assert explanation.theirs.value == pytest.approx(SPLIT_G_RWA + SPLIT_REM_RWA)
+    assert explanation.delta == pytest.approx(0.0)
+
+    # Assert — and the page reports that agreement as agreement.
+    assert steps["population_ours_only"].amount == 0.0
+    assert steps["population_ours_only"].keys == 0
+    assert steps["population_theirs_only"].amount == 0.0
+    assert steps["population_theirs_only"].keys == 0
+    assert steps["measurement"].keys == 1
+    assert explanation.reconciles
+
+    # Assert — both our legs are still LISTED, each with a usable key: pairing
+    # them is a reconciliation question, not a reason to hide one of them.
+    assert explanation.our_leg_count == 2
+    assert explanation.their_leg_count == 1
+    assert all(leg.key for leg in (*explanation.our_legs, *explanation.their_legs))
 
 
 # =============================================================================

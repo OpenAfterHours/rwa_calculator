@@ -35,6 +35,18 @@ population produced measured errors of GBP 540,000, GBP 1,800,000 and GBP
 ``CellMembership.columns`` on ``(template_id, sheet, row_ref, col_ref)`` and only
 then through ``CellMembership.legs``.
 
+AND EVERY POPULATION IS KEYED ON THE EXPOSURE, NOT ON THE LEG. Our sealed ledger
+splits one exposure into several legs — a guarantee into ``L1__G_BANK`` /
+``L1__REM``, a mixed property into ``M1_rre`` / ``M1_cre``, a facility into an
+``_UNDRAWN`` row — each stamped with the pre-split reference, while a projected
+legacy extract carries the whole loan under that original reference and no base
+reference at all. So the comparison key is ``coalesce(source_exposure_reference,
+key_column)`` (``_comparison_key``), which yields the exposure on both sides
+without branching on which side it is. Keyed on the leg instead, a cell where
+both engines agree to the penny reports the whole loan as missing from each
+side at once — and the four-way identity CANNOT catch it, because two equal and
+opposite population terms sum to the same 0.00 as no terms at all.
+
 THE IDENTITY, AND WHY IT IS EXACT. For an additive money cell with metric column
 group ``m``, let ``P_ours`` / ``P_theirs`` be the two sides' populations of that
 exact cell and ``A_ours`` / ``A_theirs`` everything the same template holds on
@@ -287,8 +299,19 @@ MIGRATION_MONEY_COLUMNS: tuple[str, ...] = ("ead_final", "rwa_final")
 
 #: The identity columns membership carries; either is a valid reconciliation
 #: join key. ``exposure_reference`` is the default the recon grammar already
-#: uses (``recon_registry.LegacyColumnMapping.our_keys``).
+#: uses (``recon_registry.LegacyColumnMapping.our_keys``). Whichever is named,
+#: the population comparison COLLAPSES it onto the pre-split base reference and
+#: the two settings resolve to the SAME key — see ``_comparison_key``.
 KEY_COLUMNS: tuple[str, ...] = ("exposure_reference", "source_exposure_reference")
+
+#: The pre-split base reference our splitters stamp onto every leg they emit,
+#: and the first rung of the comparison key's coalesce.
+_BASE_KEY_COLUMN = "source_exposure_reference"
+
+#: The final rung, named explicitly rather than left implicit in ``key_column``
+#: — it is what makes the two ``KEY_COLUMNS`` settings one grain instead of two.
+#: See ``_comparison_key``.
+_FALLBACK_KEY_COLUMN = "exposure_reference"
 
 #: Absolute floor of the additivity tolerance, widened by the cell's own
 #: magnitude so a GBP 400m cell is not held to a GBP 0.000001 residual.
@@ -429,7 +452,12 @@ def build_recon(  # noqa: PLR0913 - two sides, each with its own coverage record
             any ``ResultsSource`` here.
         template_ids: Defaults to ``RECON_TEMPLATE_IDS``. An id outside
             ``LINEAGE_PLANS`` is skipped with a WARNING, never guessed at.
-        key_column: The reconciliation join key. One of ``KEY_COLUMNS``.
+        key_column: The reconciliation join key. One of ``KEY_COLUMNS``. The
+            POPULATION comparison collapses it onto the pre-split base
+            reference either way (``_comparison_key``), so both settings name
+            the same grain — one exposure, however many legs our ledger splits
+            it into. It is read literally by the migration matrix and by the
+            leg listing the view renders.
         ours_coverage: What our mapping could not supply. Normally ``None`` —
             our own results come off the sealed pipeline, not a mapping.
         theirs_coverage: The second return value of ``project_legacy_ledger``.
@@ -807,14 +835,23 @@ def _build_side(  # noqa: PLR0913 - the source plus its scope, key, coverage and
             logger.warning("return_recon: %s plan (%s) reported %s", template_id, side, error)
         frames[template_id] = getattr(bundle, template_id, {}) or {}
 
-    null_keys = membership.legs.filter(pl.col(key_column).is_null()).height
+    # Counted on the RESOLVED key, not on ``key_column`` alone. A null
+    # ``source_exposure_reference`` is the ordinary shape of a projected legacy
+    # side and reconciles perfectly well by falling through to
+    # ``exposure_reference`` (``_comparison_key``); warning about it would be a
+    # false alarm on every legacy run. What cannot be reconciled is a leg with
+    # NO usable identity on any rung of the ladder.
+    resolved = _comparison_key(membership.legs.columns, key_column)
+    null_keys = membership.legs.filter(resolved.is_null()).height
     if null_keys:
         logger.warning(
-            "return_recon: %s side has %d membership rows with a null %s — those legs "
-            "cannot be reconciled and will read as one unmatched key",
+            "return_recon: %s side has %d membership rows whose reconciliation key resolves "
+            "to NULL on every rung (neither %s nor %s is populated) — those legs share one "
+            "null key, so they can pair only with each other",
             side,
             null_keys,
-            key_column,
+            _BASE_KEY_COLUMN,
+            _FALLBACK_KEY_COLUMN,
         )
     if coverage is None:
         logger.debug("return_recon: %s side supplied no coverage record", side)
@@ -1118,25 +1155,207 @@ def _key_money(
     *,
     negate: bool,
 ) -> dict[str, float]:
-    """``key -> money`` over one predicate group, summed the executor's way.
+    """``comparison key -> money`` over one predicate group, the executor's way.
+
+    Keyed on ``_comparison_key``, so the several legs one split exposure holds
+    in this group are SUMMED into one key rather than compared as separate
+    exposures. Summed, not picked: picking one leg would misprice the pair, and
+    leaving the other behind would put its money into a population term.
 
     ``pl.col(c).sum()`` treats a null within a present column as zero and an
     all-null group as ``0.0``, which is exactly ``kernel/sums.py``'s documented
     behaviour — so no ``fill_null`` is needed and none is used. A metric column
     the plan frame does not carry is skipped, mirroring ``SafeSum``.
     """
-    if subset is None or subset.height == 0 or key_column not in subset.columns:
+    if subset is None or subset.height == 0 or not _key_rungs(subset.columns, key_column):
         return {}
     present = [col for col in metric_columns if col in subset.columns]
     if not present:
         return {}
-    agg = subset.group_by(key_column).agg(pl.col(col).sum().alias(col) for col in present)
+    key = _comparison_key(subset.columns, key_column)
+    agg = subset.group_by(key).agg(pl.col(col).sum().alias(col) for col in present)
     sign = -1.0 if negate else 1.0
     totals = agg.select(
-        pl.col(key_column).cast(pl.String()).alias("key"),
+        pl.col("key"),
         (pl.sum_horizontal(present) * sign).alias("value"),
     )
     return dict(zip(totals["key"].to_list(), totals["value"].to_list(), strict=True))
+
+
+def _comparison_key(columns: Iterable[str], key_column: str) -> pl.Expr:
+    """The key the two sides' populations are compared on, as ``key``.
+
+    ``coalesce(source_exposure_reference, key_column, exposure_reference)`` — the
+    PRE-SPLIT base reference where the frame supplies one, the leg's own
+    reference otherwise. One expression, no per-side branching, no dependence on
+    WHICH ``key_column`` was named, and correct on both sides for the same reason
+    ``engine/aggregator/_collapse.py::_coalesce_to_parent`` is:
+
+    - OUR sealed ledger splits one exposure into several legs — ``L1__G_BANK`` /
+      ``L1__REM`` for a guarantee (``engine/crm/guarantees.py``), ``M1_rre`` /
+      ``M1_cre`` or ``M1_sec`` / ``M1_res`` for real estate
+      (``engine/re_split/splitter.py``), ``FAC1_UNDRAWN`` for facility headroom
+      (``engine/hierarchy/facility_undrawn.py``) — each stamped with the
+      pre-split reference, so the legs collapse back onto the one exposure they
+      came from.
+    - THEIR projected side supplies no base reference at all — it is neither a
+      ``ReconcilableComponent`` nor a ``LedgerCarrier`` in ``recon_registry``, so
+      ``legacy_ledger._projection_exprs`` never emits it and
+      ``project_legacy_ledger``'s ``legacy.select(exprs)`` cannot carry it.
+      Either way it falls through to the whole loan's own reference, which is the
+      very reference our legs were split from — but it reaches the two call sites
+      in TWO DIFFERENT SHAPES, and those are two different code paths, not a
+      detail of one:
+
+      * ``_key_money`` reads the PLAN frame, where the column is **absent
+        outright**. Measured on a real ``LegacyOutputLoader`` ->
+        ``project_legacy_ledger`` run, the projected ledger is
+        ``exposure_reference``, the two ``reporting_*_origin`` labels and seven
+        money / parameter carriers. Nothing else.
+      * ``_side_keys`` reads ``membership.legs``, where it is **present and
+        typed NULL** — ``MEMBERSHIP_SCHEMA`` declares it, and
+        ``reporting/membership.py:88-90`` materialises a carrier the plan frame
+        lacks as a typed null rather than dropping the column.
+
+      A legacy result parquet written before ``source_exposure_reference``
+      existed reaches the same fallback by the null path
+      (``data/schemas.py::RECON_PARENT_KEY_COLUMNS``); its two older parent links
+      are not consulted here, because ``MEMBERSHIP_SCHEMA`` publishes these two
+      identity columns and no others.
+
+    Keying on the base reference ALONE would instead drop every leg of the
+    legacy side and turn every cell into two equal and opposite population
+    terms — a larger defect than the one this fixes.
+
+    A ONE-RUNG LADDER WHERE THE AGGREGATOR HAS THREE, AND NOT A FREE CHOICE.
+    ``_coalesce_to_parent`` coalesces all of ``RECON_PARENT_KEY_COLUMNS``
+    (``data/schemas.py:3853``) — ``source_exposure_reference``, then
+    ``parent_exposure_reference``, then ``split_parent_id`` — before falling
+    back to ``exposure_reference``; this reads the first and the fallback only.
+    The two forms are NUMBER-IDENTICAL on any live sealed frame, because per the
+    comment above that tuple the middle two rungs exist solely as defensive
+    fallbacks for result parquets written BEFORE ``source_exposure_reference``
+    existed, so the first rung always wins wherever it is populated. The short
+    ladder is also the ONLY form available at one of the two call sites:
+    ``_side_keys`` reads ``side.membership.legs``, and ``_LEG_COLUMNS``
+    (``reporting/membership.py:91-99``) carries these two identity columns and
+    neither older rung — reaching them would mean widening
+    ``MEMBERSHIP_SCHEMA``, which is a design change and not a fix.
+
+    THE CONDITION THAT WOULD MAKE THE LADDER DIFFERENCE LIVE, recorded because
+    it is unreachable today and the next reader should not have to re-derive it:
+    a reconciliation pointed at an ARCHIVED pre-migration result parquet, where
+    the base reference is a typed null and only the older parent links carry the
+    parent. Our side is a live ``ResultsSource`` over a sealed frame, and even
+    the run-index reuse path caches parquets written by current code, so nothing
+    reaches it now.
+
+    THE ``name in present`` FILTER IS ON THE HOT PRODUCTION PATH — IT IS NOT A
+    FIXTURE-ONLY FALLBACK, WHICH IS WHAT AN EARLIER VERSION OF THIS DOCSTRING
+    CLAIMED. Instrumenting a real orchestrator run against a real
+    ``project_legacy_ledger`` records ``[('_key_money', False), ('_key_money',
+    True), ('_side_keys', True)]`` — the legacy side takes the
+    no-base-column path on EVERY reconciliation, because its plan frame is the
+    projection above. What the filter buys is not tidiness: naming a column the
+    frame lacks makes ``pl.coalesce`` raise ``ColumnNotFoundError`` at collect
+    (verified on polars 1.42.1), so deleting it as dead defensive code turns
+    every real reconciliation into an exception while the unit suite — whose
+    fixtures pin the column as a typed null, so it is always PRESENT there —
+    stays green. That combination is why the claim is worth stating: the
+    fixtures cannot reproduce the shape the filter exists for.
+
+    THE SEALED-EDGE GUARANTEE COVERS OUR SIDE ONLY, which is why the filter is
+    never needed there. ``source_exposure_reference`` is declared in
+    ``contracts/edges.py::_calc_output_common_columns`` (``edges.py:1690``),
+    takes the ``required=True`` default (``edges.py:132``), and
+    ``AGGREGATOR_EXIT_EDGE`` splats that block (``edges.py:1859-1862``), so
+    ``conform`` RAISES if the aggregator ever stops emitting it. The legacy plan
+    frame never crossed that seal and carries no such guarantee.
+
+    BOTH ``KEY_COLUMNS`` SETTINGS RESOLVE TO THE SAME KEY, AND THE THIRD RUNG IS
+    WHAT MAKES THAT TRUE RATHER THAN NEARLY TRUE. ``exposure_reference`` is named
+    explicitly as the final rung, not left implicit in ``key_column``, so
+    ``exposure_reference`` gives ``coalesce(src, expref, expref)`` and
+    ``source_exposure_reference`` gives ``coalesce(src, src, expref)`` — the same
+    expression either way. Without that rung the non-default setting collapsed to
+    ``coalesce(src, src)``, which is ALL-NULL on a projected legacy side, so every
+    one of their legs shared one null key, matched nothing, and the cell reported
+    the whole loan missing from BOTH sides with ``delta == 0`` and ``reconciles ==
+    True`` — measured at +100,000 / −100,000 on ``c08_03/corporate/0090``, i.e.
+    the exact defect this function exists to close, re-entering through a public
+    parameter. A validating ``raise`` was rejected as the remedy: a null key is
+    data-dependent, and this project accumulates data-quality problems rather
+    than raising on them, so the ladder makes the parameter safe BY CONSTRUCTION
+    instead of by rejection.
+
+    The equivalence is scoped to a frame carrying ``exposure_reference``, and
+    every frame reaching here does: ``MEMBERSHIP_SCHEMA`` declares it on the
+    membership legs; the aggregator-exit edge (below) requires it on OUR plan
+    frame; and the legacy plan frame supplies it as the mapped join key
+    (``recon_registry.LegacyColumnMapping.our_keys``) without which there is no
+    reconciliation to run at all. Three different guarantees, deliberately named
+    separately — the edge does NOT cover the legacy side. ``_key_money``'s early
+    return
+    shares ``_key_rungs`` with this expression rather than testing ``key_column``
+    alone, so the guard and the key can never disagree about whether the frame
+    can be keyed: an early ``{}`` means NO rung is present, never "the named
+    column is absent but another rung would have worked". That distinction is
+    load-bearing, because ``_cell_money`` reads ``{}`` as an EMPTY POPULATION —
+    a silent one is worse than a wrong one.
+
+    ``key_column`` still selects literally elsewhere: the migration matrix
+    (``_group_legs``) and the view's leg listing both read the named column
+    as-is. It is only the POPULATION comparison that collapses.
+
+    ``_group_legs`` deliberately does NOT use this, and must not be changed to:
+    it prices each key with ``.first()`` (a leg legitimately appears on several
+    ROWS of one group), so collapsing two different legs onto one base key there
+    would keep one leg's money and silently discard the other's, against the
+    distinct-leg total the migration matrix's own docstring states as an
+    invariant. Measured on the split fixture, BOTH published money columns lose
+    the same leg: ``rwa_final`` 100,000 -> 60,000 and ``ead_final`` 1,000,000 ->
+    600,000, i.e. 40,000 and 400,000 discarded. Re-derived independently on the
+    substitution portfolio, where the totals are larger (1,470,000 and
+    4,900,000) but the losses are the SAME 40,000 and 400,000 — which is the
+    tell that what goes missing is one leg, not a portfolio artefact. The
+    matrix's key grain is a separate decision.
+    """
+    ladder = _key_rungs(columns, key_column)
+    if not ladder:
+        return pl.col(key_column).cast(pl.String()).alias("key")
+    return pl.coalesce(ladder).cast(pl.String()).alias("key")
+
+
+def _key_rungs(columns: Iterable[str], key_column: str) -> list[str]:
+    """The identity columns available to the comparison key, in coalesce order.
+
+    Shared by ``_comparison_key`` and ``_key_money``'s early return so the two
+    cannot disagree about whether a frame can be keyed at all.
+
+    ``dict.fromkeys`` de-duplicates so the ladder reads as the two or three
+    DISTINCT columns it is, rather than repeating ``key_column`` under the
+    non-default setting. It is PRESENTATIONAL: ``pl.coalesce`` tolerates a
+    repeated name and returns the same key either way — measured, ``['src',
+    'expref']`` and ``['src', 'src', 'expref']`` both yield ``['A', 'B']`` over
+    ``src = ['A', None]`` / ``expref = ['A__G', 'B']``, and removing the
+    de-duplication reddens nothing.
+
+    WHAT MAKES THE TWO ``KEY_COLUMNS`` SETTINGS NAME THE SAME GRAIN IS THE THIRD
+    RUNG — ``_FALLBACK_KEY_COLUMN`` named explicitly rather than left implicit in
+    ``key_column`` — without which the non-default setting degenerates to
+    ``coalesce(src, src)``, all-null on a projected legacy side. That rung is
+    held up by ``test_both_key_column_settings_name_the_same_grain`` and
+    ``test_a_side_that_omits_the_base_reference_still_pairs_on_its_own``, which
+    go red when it is removed. Stated as two named tests because an inert line
+    and a load-bearing one look identical in the source, and saying which test
+    dies without each is the only durable way to tell them apart.
+    """
+    present = set(columns)
+    return [
+        name
+        for name in dict.fromkeys((_BASE_KEY_COLUMN, key_column, _FALLBACK_KEY_COLUMN))
+        if name in present
+    ]
 
 
 def _terms(  # noqa: PLR0913 - the four classification sets are the whole signature
@@ -1191,9 +1410,13 @@ def _terms(  # noqa: PLR0913 - the four classification sets are the whole signat
 def _side_keys(
     side: SideView, key_column: str, template_id: str, sheet: str | None
 ) -> frozenset[str]:
-    """Every reconciliation key one side's membership holds, template- or
+    """Every comparison key one side's membership holds, template- or
     sheet-wide. ``sheet=None`` means the WHOLE template, which is the set a
-    population difference is measured against."""
+    population difference is measured against.
+
+    Keyed on ``_comparison_key``, in LOCKSTEP with ``_key_money``: ``_terms``
+    tests one function's keys against the other's sets, so collapsing one and
+    not the other would compare across two key namespaces and match nothing."""
     memo_key = (template_id, sheet)
     cached = side.keys.get(memo_key)
     if cached is not None:
@@ -1201,7 +1424,8 @@ def _side_keys(
     legs = side.membership.legs.filter(pl.col("template_id") == template_id)
     if sheet is not None:
         legs = legs.filter(pl.col("sheet") == sheet)
-    keys = frozenset(legs[key_column].drop_nulls().cast(pl.String()).to_list())
+    resolved = legs.select(_comparison_key(legs.columns, key_column))
+    keys = frozenset(resolved["key"].drop_nulls().to_list())
     side.keys[memo_key] = keys
     return keys
 

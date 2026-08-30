@@ -37,11 +37,14 @@ import polars as pl
 import pytest
 from tests.fixtures.recon_ledger import with_reporting_ledger
 
+from rwa_calc.analysis import return_recon as recon_module
 from rwa_calc.analysis.legacy_ledger import LegacyLedgerSource, ledger_coverage
 from rwa_calc.analysis.return_recon import (
     ABSENT_ROW,
     CELL_DIFF_SCHEMA,
+    KEY_COLUMNS,
     PLACEMENT_ATTRIBUTION,
+    RECON_TEMPLATE_IDS,
     TERM_NAMES,
     UNDECIDABLE_ROW,
     CellDecomposition,
@@ -55,6 +58,10 @@ from rwa_calc.analysis.return_recon import (
 from rwa_calc.reporting.membership import MEMBERSHIP_TEMPLATE_IDS
 
 FRAMEWORKS = ("CRR", "BASEL_3_1")
+
+#: The identity rung a frame with no base reference falls back to. Read off the
+#: module rather than typed, so the fixtures cannot drift from the ladder.
+_FALLBACK_IDENTITY = recon_module._FALLBACK_KEY_COLUMN
 
 # The corporate IRB sheet is where every cause is planted, so the isolation
 # tests all address one cell family on it.
@@ -97,13 +104,28 @@ class _Leg:
     lgd: float = 0.45
     undrawn: float = 0.0
     cqs: int = 0
+    #: The PRE-SPLIT base exposure this leg belongs to. ``None`` means the leg
+    #: is unsplit and is therefore its own base — the shape every other fixture
+    #: in this file has. A guarantee split (``engine/hierarchy/unify.py``), a
+    #: real-estate split or a facility-undrawn split emits several legs under
+    #: one base, and that is the case nothing here could express before.
+    source: str | None = None
+    #: ``False`` mirrors the PROJECTED LEGACY SIDE, which supplies no
+    #: ``source_exposure_reference`` at all: it is neither a component nor a
+    #: carrier in ``recon_registry``, so ``legacy_ledger._projection_exprs``
+    #: never emits it and it arrives as a typed NULL through
+    #: ``MEMBERSHIP_SCHEMA``. Modelled rather than assumed away, because a fix
+    #: that keyed on the base reference ALONE would pass a fixture that
+    #: populated it on both sides and drop every legacy leg in production.
+    supplies_source_ref: bool = True
 
     def row(self) -> dict[str, object]:
         drawn = self.ead if self.exposure_type == "loan" else 0.0
+        base = self.source or self.reference
         return {
             "exposure_reference": self.reference,
-            "source_exposure_reference": self.reference,
-            "counterparty_reference": f"CP_{self.reference}",
+            "source_exposure_reference": base if self.supplies_source_ref else None,
+            "counterparty_reference": f"CP_{base}",
             "exposure_class": self.exposure_class,
             "exposure_class_applied": self.exposure_class,
             "exposure_class_post_crm": self.exposure_class,
@@ -241,6 +263,10 @@ def _ledger(legs: list[_Leg]) -> pl.LazyFrame:
             "lgd_floored": pl.Float64,
             "irb_maturity_m": pl.Float64,
             "sa_cqs": pl.Int8,
+            # Pinned so a side whose legs ALL omit the base reference still
+            # carries the column as a typed NULL String, exactly as the sealed
+            # membership schema declares it, rather than as pl.Null.
+            "source_exposure_reference": pl.String,
         },
     )
     return with_reporting_ledger(raw)
@@ -350,6 +376,16 @@ def _leaf_row_of(recon: ReturnRecon, *, ours: bool, reference: str) -> str:
 
 def _terms(result: CellDecomposition) -> dict[str, float]:
     return {term.name: term.amount for term in result.terms}
+
+
+def _term_keys(result: CellDecomposition) -> dict[str, int]:
+    """How many reconciliation keys each term counted.
+
+    Separate from the amounts because a term at ``0.00`` says two different
+    things depending on this: no keys at all means the bucket is empty, one key
+    means two sides paired on it and agreed.
+    """
+    return {term.name: term.keys for term in result.terms}
 
 
 @dataclass(frozen=True)
@@ -1159,3 +1195,912 @@ def _c08_03_predicate_key(recon: ReturnRecon) -> str:
     )
     assert served.height > 0, "C 08.03 column 0040 is not row-backed on the corporate sheet"
     return str(served["predicate_key"][0])
+
+
+# =============================================================================
+# A split exposure against the legacy whole loan
+# =============================================================================
+
+#: C 08.03's RWEA column — ``Sum(rwa_col)``, the plainest additive money cell on
+#: the sheet, so its figures are the leg amounts and nothing else.
+RWEA_COL = "0090"
+
+#: The PD band the split exposure is planted in. ``_split_base`` deliberately
+#: leaves it empty, so the cell under test holds that exposure ALONE and its
+#: reported figure can be read straight off the legs.
+SPLIT_PD = 0.0100
+
+#: One guaranteed loan as OUR sealed ledger holds it: a guarantee leg and a
+#: remainder leg, each carrying the pre-split reference on
+#: ``source_exposure_reference`` (``engine/hierarchy/unify.py``). Split 60/40 so
+#: that neither leg alone can be mistaken for the whole.
+_SPLIT_G_LEG = _Leg("L1__G_BANK", source="L1", pd=SPLIT_PD, ead=600_000.0, rwa=60_000.0)
+_SPLIT_REM_LEG = _Leg("L1__REM", source="L1", pd=SPLIT_PD, ead=400_000.0, rwa=40_000.0)
+
+#: The SAME loan as their extract holds it — one whole leg under the original
+#: reference, worth exactly what our two legs are worth together.
+_WHOLE_LOAN = _Leg("L1", pd=SPLIT_PD, ead=1_000_000.0, rwa=100_000.0)
+
+
+def _split_base() -> list[_Leg]:
+    """Agreeing legs whose bands make the split exposure's row a decidable leaf.
+
+    ``is_parent_row`` is MEASURED, so a parent band with a single populated
+    child is indistinguishable from a leaf and comes back NULL. Parent 0010 gets
+    two populated children and parent 0070 gets one filler — which leaves 0070's
+    OTHER child row for the split exposure, so that row holds the exposure under
+    test and nothing else.
+    """
+    return [
+        _Leg("SPLIT_FILL_A0", pd=0.0005, ead=900_000.0, rwa=270_000.0),
+        _Leg("SPLIT_FILL_A1", pd=PD_BAND_A, ead=1_000_000.0, rwa=300_000.0),
+        _Leg("SPLIT_FILL_B1", pd=PD_BAND_B, ead=2_000_000.0, rwa=800_000.0),
+    ]
+
+
+def _legacy(legs: list[_Leg]) -> list[_Leg]:
+    """Their side with no base reference on any leg — the PRESENT-BUT-NULL form.
+
+    That is the shape ``_side_keys`` sees in production, because
+    ``MEMBERSHIP_SCHEMA`` always gives the membership legs the column and fills
+    it with a typed null. It is NOT the shape ``_key_money`` sees: the plan
+    frame is the projection's own columns and the base reference is absent from
+    it outright. Use ``_legacy_frame`` for that half — the two are different
+    branches of ``_key_rungs`` and both run on every real reconciliation.
+    """
+    return [replace(leg, supplies_source_ref=False) for leg in legs]
+
+
+def _legacy_frame(legs: list[_Leg]) -> pl.LazyFrame:
+    """Their side's FRAME as ``project_legacy_ledger`` really emits it: the base
+    reference column is ABSENT, not null.
+
+    ``_ledger`` pins ``source_exposure_reference`` into ``schema_overrides``, so
+    every other fixture here supplies the column even when its value is null.
+    A projection never does: ``_projection_exprs`` emits the join key, the
+    mapped components and the mapped carriers, and the base reference is none of
+    the three. Measured on a real ``project_legacy_ledger``, its ledger columns
+    are the join key, the two sealed origin columns and the mapped money — no
+    base reference anywhere.
+    """
+    return _ledger(legs).drop(recon_module._BASE_KEY_COLUMN, strict=False)
+
+
+def _split_recon(
+    ours: list[_Leg],
+    theirs: list[_Leg],
+    framework: str,
+    *,
+    key_column: str = "exposure_reference",
+    theirs_supplies_base_ref: bool = False,
+) -> ReturnRecon:
+    """Both sides over the shared agreeing base, at the DEFAULT join key.
+
+    ``key_column`` defaults to the setting production runs on —
+    ``ui/views/return_recon.py::build_comparison`` never passes one — and is
+    overridable only so the two members of ``KEY_COLUMNS`` can be compared.
+
+    ``theirs_supplies_base_ref`` defaults to the shape a real projection emits
+    (no base reference at all). Set it True to isolate the effect of
+    ``key_column`` from the effect of that absence: they are different causes,
+    and the equivalence test asserts over BOTH values precisely because the
+    answer must not depend on either.
+    """
+    base = _split_base()
+    their_legs = [*base, *theirs]
+    our_source, their_source = _sources(
+        [*base, *ours],
+        their_legs if theirs_supplies_base_ref else _legacy(their_legs),
+        framework,
+    )
+    return build_recon(our_source, their_source, key_column=key_column)
+
+
+def _population_offenders(
+    recon: ReturnRecon, template_id: str = "c08_03", sheet: str | None = CORPORATE
+) -> list[str]:
+    """Every cell of one template (or one sheet of it) reporting a population term."""
+    diff = cell_diff(recon.ours.source, recon.theirs.source, template_id, sheet=sheet)
+    offenders: list[str] = []
+    for row in diff.iter_rows(named=True):
+        result = decompose_cell(recon, template_id, row["sheet"], row["row_ref"], row["col_ref"])
+        if not result.decomposable:
+            continue
+        terms = _terms(result)
+        ours_only = terms["population_ours_only"]
+        theirs_only = terms["population_theirs_only"]
+        if ours_only or theirs_only:
+            offenders.append(
+                f"{row['sheet']}/{row['row_ref']}/{row['col_ref']} "
+                f"ours_only={ours_only:,.2f} theirs_only={theirs_only:,.2f}"
+            )
+    return offenders
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_a_split_exposure_pairs_against_the_legacy_whole_loan(framework: str) -> None:
+    """Two legs of one loan are ONE exposure and must pair with their whole loan.
+
+    Our sealed ledger splits a guaranteed loan into ``L1__G_BANK`` and
+    ``L1__REM``, each carrying the pre-split reference on
+    ``source_exposure_reference``. Their extract carries the original loan under
+    ``L1`` and supplies no base reference at all, because
+    ``source_exposure_reference`` is neither a component nor a carrier in
+    ``recon_registry`` — the projection never emits it and it arrives as a typed
+    NULL.
+
+    Keyed on ``exposure_reference`` alone the two sides therefore share NO key,
+    and a cell where both engines agree TO THE PENNY reports GBP 100,000 of
+    exposures missing from each side. The additivity contract cannot see it: the
+    four buckets partition each side's population, so two equal and opposite
+    population terms sum to the same 0.00 as no terms at all and
+    ``reconciles`` stays true. This assertion is the only thing on the path
+    that can distinguish them, so it is stated on the terms and NOT on the
+    residual.
+    """
+    # Arrange
+    recon = _split_recon([_SPLIT_G_LEG, _SPLIT_REM_LEG], [_WHOLE_LOAN], framework)
+    row_ref = _leaf_row_of(recon, ours=False, reference=_WHOLE_LOAN.reference)
+    assert row_ref == _leaf_row_of(recon, ours=True, reference=_SPLIT_G_LEG.reference)
+    assert row_ref == _leaf_row_of(recon, ours=True, reference=_SPLIT_REM_LEG.reference)
+
+    # Act
+    result = decompose_cell(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
+    terms = _terms(result)
+    keys = _term_keys(result)
+
+    # Assert — the sheet is emitted on both sides and the cell carries a real
+    # figure on each: a null and a legitimate zero are different claims.
+    assert CORPORATE in recon.ours.frames["c08_03"]
+    assert CORPORATE in recon.theirs.frames["c08_03"]
+    assert result.decomposable, result.refusal
+    assert (result.ours_state, result.theirs_state) == ("figure", "figure")
+    assert result.ours == pytest.approx(_SPLIT_G_LEG.rwa + _SPLIT_REM_LEG.rwa)
+    assert result.theirs == pytest.approx(_WHOLE_LOAN.rwa)
+    assert result.delta == pytest.approx(0.0)
+
+    # Assert — the agreement is REPORTED as agreement: nothing missing on
+    # either side, and the one exposure paired on a single shared key.
+    assert terms["population_ours_only"] == 0.0
+    assert terms["population_theirs_only"] == 0.0
+    assert keys["population_ours_only"] == 0
+    assert keys["population_theirs_only"] == 0
+    assert keys["measurement"] == 1
+    assert result.reconciles
+
+    # Assert — and it does not leak anywhere else: on a portfolio the two sides
+    # agree about exactly, NO cell of the sheet may report a population at all.
+    assert _population_offenders(recon) == []
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_a_split_exposures_legs_are_summed_not_picked(framework: str) -> None:
+    """When the money genuinely differs, the whole difference is MEASUREMENT.
+
+    The same split loan, worth 60,000 + 40,000 on our side against 130,000 on
+    theirs. Pairing the legs is not enough — the pair has to be priced as the
+    SUM of our legs: picking either one alone would report -70,000 or -90,000,
+    and collapsing one leg while leaving the other behind would put money back
+    into a population term. Only -30,000 with both population terms empty is
+    consistent with summing.
+    """
+    # Arrange
+    recon = _split_recon(
+        [_SPLIT_G_LEG, _SPLIT_REM_LEG], [replace(_WHOLE_LOAN, rwa=130_000.0)], framework
+    )
+    row_ref = _leaf_row_of(recon, ours=False, reference=_WHOLE_LOAN.reference)
+
+    # Act
+    result = decompose_cell(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
+    terms = _terms(result)
+    keys = _term_keys(result)
+
+    # Assert
+    assert result.decomposable, result.refusal
+    assert result.delta == pytest.approx(-30_000.0)
+    assert terms["measurement"] == pytest.approx(-30_000.0)
+    assert keys["measurement"] == 1
+    assert terms["population_ours_only"] == 0.0
+    assert terms["population_theirs_only"] == 0.0
+    assert keys["population_ours_only"] == 0
+    assert keys["population_theirs_only"] == 0
+    assert result.reconciles
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_split_legs_in_different_rows_are_not_merged_across_them(framework: str) -> None:
+    """Pairing collapses legs WITHIN a group, never across rows.
+
+    A two-leg substitution can send the two halves of one exposure to different
+    rows — here the guarantee leg keeps the borrower's band while the remainder
+    leg moves. If the pairing merged them, our 60,000 row would price the whole
+    100,000 and the cell's four terms would stop summing to its reported delta,
+    so ``reconciles`` is asserted alongside the amounts rather than left to the
+    additivity census on another portfolio.
+
+    The exposure is then correctly BOTH things at once: a measurement
+    difference in the row both sides use, and a row placement in the row only we
+    use. The two net to zero across the sheet — the loan's money is neither
+    created nor destroyed by being split.
+    """
+    # Arrange
+    ours = [
+        replace(_SPLIT_G_LEG, reference="L2__G_BANK", source="L2"),
+        replace(_SPLIT_REM_LEG, reference="L2__REM", source="L2", pd=PD_BAND_B),
+    ]
+    recon = _split_recon(ours, [replace(_WHOLE_LOAN, reference="L2")], framework)
+    shared_row = _leaf_row_of(recon, ours=False, reference="L2")
+    our_other_row = _leaf_row_of(recon, ours=True, reference="L2__REM")
+    assert shared_row == _leaf_row_of(recon, ours=True, reference="L2__G_BANK")
+    assert our_other_row != shared_row, "both legs are in one row — the fixture is vacuous"
+
+    # Act
+    shared = decompose_cell(recon, "c08_03", CORPORATE, shared_row, RWEA_COL)
+    other = decompose_cell(recon, "c08_03", CORPORATE, our_other_row, RWEA_COL)
+
+    # Assert — the row both sides use prices OUR LEG ONLY against their whole
+    # loan; the merged reading would have made this term 0.00 and broken the
+    # identity against the reported -40,000.
+    assert shared.ours == pytest.approx(_SPLIT_G_LEG.rwa)
+    assert _terms(shared)["measurement"] == pytest.approx(_SPLIT_G_LEG.rwa - _WHOLE_LOAN.rwa)
+    assert _terms(shared)["row_placement"] == 0.0
+    assert _terms(shared)["population_ours_only"] == 0.0
+    assert _terms(shared)["population_theirs_only"] == 0.0
+    assert shared.reconciles
+
+    # Assert — the row only we use is a PLACEMENT, not a population: the leg is
+    # elsewhere on their sheet, which is a different finding from absent.
+    assert _terms(other)["row_placement"] == pytest.approx(_SPLIT_REM_LEG.rwa)
+    assert _terms(other)["population_ours_only"] == 0.0
+    assert _terms(other)["population_theirs_only"] == 0.0
+    assert other.reconciles
+
+    # Assert — and the two together conserve the exposure.
+    assert sum(_terms(shared).values()) + sum(_terms(other).values()) == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_an_unsplit_exposure_still_pairs_on_its_own_reference(framework: str) -> None:
+    """The ordinary case, and the reason the base reference cannot be the key.
+
+    This one is green today and must STAY green. It is what rules out keying on
+    ``source_exposure_reference`` alone: their side has none — the projection
+    supplies no such column — so that reading would drop every legacy leg and
+    turn every cell on the sheet into two equal and opposite population terms,
+    trading the defect under test for a larger one.
+    """
+    # Arrange — one whole loan on each side, ours 100,000 against theirs 130,000.
+    unsplit = _Leg("U1", pd=SPLIT_PD, ead=1_000_000.0, rwa=100_000.0)
+    recon = _split_recon([unsplit], [replace(unsplit, rwa=130_000.0)], framework)
+    row_ref = _leaf_row_of(recon, ours=True, reference="U1")
+
+    # Act
+    result = decompose_cell(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
+    terms = _terms(result)
+
+    # Assert
+    assert result.decomposable, result.refusal
+    assert terms["measurement"] == pytest.approx(-30_000.0)
+    assert _term_keys(result)["measurement"] == 1
+    assert terms["population_ours_only"] == 0.0
+    assert terms["population_theirs_only"] == 0.0
+    assert result.reconciles
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_the_migration_matrix_conserves_a_split_exposures_money(framework: str) -> None:
+    """The conservation invariant, on a portfolio that actually HAS split legs.
+
+    ``test_migration_money_equals_the_groups_distinct_leg_total`` states this
+    same equality and CANNOT detect the hazard it exists for. It runs on
+    ``_combined``, where every leg is its own base — ``_base_legs`` and all five
+    cause legs leave ``source`` unset — so collapsing the matrix's key there is a
+    no-op and the assertion holds either way. Measured: keying ``_group_legs`` on
+    the base reference reddens NOTHING across either suite. The fixture was the
+    gap, not the test.
+
+    The hazard is specific and one-directional. ``_group_legs`` prices each key
+    with ``pl.col(money_column).first()``, because one leg legitimately appears
+    on several ROWS of a group and summing would count it once per row. Collapse
+    two DISTINCT legs onto one base key and ``.first()`` keeps one leg's money
+    and silently discards the other's: the matrix still balances internally,
+    still renders, and is short by the discarded leg. Only an equality against a
+    figure derived WITHOUT the key can see it — which is what
+    ``_distinct_leg_total`` is, anchored on ``exposure_reference`` and never
+    reading ``recon.key_column``.
+
+    Stated as an equality on EACH side; a one-sided ``<=`` is satisfied by total
+    loss.
+    """
+    # Arrange
+    recon = _split_recon([_SPLIT_G_LEG, _SPLIT_REM_LEG], [_WHOLE_LOAN], framework)
+    predicate_key = _c08_03_predicate_key(recon)
+    our_legs = recon.ours.membership.legs.filter(
+        (pl.col("template_id") == "c08_03")
+        & (pl.col("sheet") == CORPORATE)
+        & (pl.col("predicate_key") == predicate_key)
+    ).unique(subset=["exposure_reference"])
+
+    # Assert the premise, because its ABSENCE is what made the sibling vacuous:
+    # the group must hold two distinct legs of one base exposure, priced
+    # differently, so that keeping either one alone is detectable.
+    bases = our_legs["source_exposure_reference"].to_list()
+    assert bases.count(_WHOLE_LOAN.reference) == 2, (
+        f"the group holds no split exposure ({bases}) — collapsing the key would "
+        "be a no-op and this test would prove nothing"
+    )
+    assert _SPLIT_G_LEG.ead != _SPLIT_REM_LEG.ead, "equal legs make .first() undetectable"
+
+    # Act
+    matrix = row_migration(recon, "c08_03", CORPORATE, predicate_key, money_column="ead_final")
+
+    # Assert — the matrix's money is the group's distinct-leg total, each side.
+    for ours in (True, False):
+        column = "money_ours" if ours else "money_theirs"
+        expected = _distinct_leg_total(recon, ours=ours, predicate_key=predicate_key)
+        assert expected > 0.0, "the group holds no money — the check is vacuous"
+        assert matrix[column].sum() == pytest.approx(expected), column
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_a_side_whose_frame_omits_the_base_reference_can_still_be_keyed(framework: str) -> None:
+    """A projected legacy frame does not CARRY the base-reference column at all.
+
+    Null and absent are different claims, and only one of them is what a
+    projection produces. ``MEMBERSHIP_SCHEMA`` gives the membership legs a typed
+    NULL, so ``_side_keys`` never notices; but the PLAN frame is the projection's
+    own columns, and ``source_exposure_reference`` is simply not among them —
+    ``_projection_exprs`` emits the join key, the mapped components and the
+    mapped carriers, and that column is none of the three.
+
+    So the ladder must be narrowed to the columns a frame actually has. Without
+    that filter ``_key_money``'s ``group_by`` raises ``ColumnNotFoundError`` on
+    every legacy comparison — measured, and it is a RAISE rather than a silent
+    degradation, so the whole cell comparison dies rather than reporting a wrong
+    number.
+
+    Nothing else in this file reaches the absent case: ``_Leg.row`` always writes
+    the column and ``_ledger`` pins its dtype, so every other fixture supplies it
+    even when the value is null. **Both shapes are live on the same side at
+    once** — instrumenting a real reconciliation records the column PRESENT at
+    ``_side_keys`` and ABSENT at ``_key_money``, per legacy-side call — so this
+    is not an exotic variant but the ordinary production configuration, and it
+    is also where the split exposure has to pair for the batch's own fix to
+    reach production at all.
+    """
+    # Arrange — their frame WITHOUT the column, as a real projection is.
+    base = _split_base()
+    their_legs = _legacy([*base, _WHOLE_LOAN])
+    our_source, _ = _sources([*base, _SPLIT_G_LEG, _SPLIT_REM_LEG], their_legs, framework)
+    their_source = _FrameSource(_legacy_frame(their_legs), framework)
+
+    # Assert the premise: absent from the frame, present-but-null on membership.
+    their_columns = their_source.scan_results().collect_schema().names()
+    assert recon_module._BASE_KEY_COLUMN not in their_columns
+    assert _FALLBACK_IDENTITY in their_columns, "their frame carries no identity at all"
+    recon = build_recon(our_source, their_source)
+    their_membership = recon.theirs.membership.legs
+    assert recon_module._BASE_KEY_COLUMN in their_membership.columns
+    assert their_membership[recon_module._BASE_KEY_COLUMN].null_count() == their_membership.height
+
+    # Act — this is the call that raises when the ladder is not filtered.
+    row_ref = _leaf_row_of(recon, ours=False, reference=_WHOLE_LOAN.reference)
+    result = decompose_cell(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
+
+    # Assert — the comparison completes, and the split exposure still pairs on
+    # the rung their frame does carry.
+    assert result.decomposable, result.refusal
+    assert _terms(result)["population_ours_only"] == 0.0
+    assert _terms(result)["population_theirs_only"] == 0.0
+    assert _term_keys(result)["measurement"] == 1
+    assert result.reconciles
+
+
+# =============================================================================
+# The same, on the STANDARDISED template
+# =============================================================================
+#
+# C 07.00 excludes IRB legs entirely, so every test above is silent about it:
+# the split fixtures are all ``foundation_irb``, and the before/after census of
+# the fix measured 0.00 on every term of ``c07_00`` under both frameworks —
+# vacuous, not clean. That is the same escape class as the defect itself, one
+# level down: the gate ran and no exposure reached the code. These tests put a
+# STANDARDISED split exposure on the sheet so it is measured there too.
+
+#: C 07.00's post-substitution RWEA — ``Sum(rwa_col)``, an additive money cell.
+#: The post basis is the one a split exposure's money actually lands on.
+C07_RWEA_COL = "0220"
+
+#: A neutral third sheet, so neither split scenario is measured on a
+#: single-sheet portfolio.
+_SA_FILL_INST = _Leg(
+    "SA_FILL_INST",
+    exposure_class="institution",
+    approach="standardised",
+    pd=None,
+    cqs=2,
+    ead=800_000.0,
+    rwa=160_000.0,
+)
+
+#: A corporate leg both sides hold, present only so BOTH sides emit the
+#: corporate sheet in the real-estate scenario — where the residual leg is the
+#: only corporate exposure we hold and they hold none at all. Without it the
+#: half of that exposure we report on the corporate sheet would be measured
+#: against an unemitted sheet, which is a different finding.
+_SA_FILL_CORP = _Leg(
+    "SA_FILL_CORP", approach="standardised", pd=None, cqs=3, ead=1_500_000.0, rwa=1_500_000.0
+)
+
+#: The canonical SA split, in its SINGLE-COMPONENT form — one property, so the
+#: splitter emits a ``_sec`` leg and a ``_res`` leg (``re_split/splitter.py``
+#: :713 and :757). The MIXED form suffixes ``_rre`` / ``_cre`` instead (:712)
+#: and emits a pair of secured legs; it is a different scenario and these names
+#: would be wrong for it. ``splitter.py`` reclassifies the secured portion to
+#: ``RESIDENTIAL_MORTGAGE`` and leaves the residual on the counterparty's own
+#: class, so ONE exposure legitimately lands on TWO C 07.00 sheets. Their
+#: extract reports the whole loan on the mortgage sheet at the blended weight;
+#: the legs are worth exactly what it is worth.
+_RE_SECURED = _Leg(
+    "M1_sec",
+    source="M1",
+    exposure_class="residential_mortgage",
+    approach="standardised",
+    pd=None,
+    cqs=3,
+    ead=600_000.0,
+    rwa=210_000.0,
+)
+_RE_RESIDUAL = _Leg(
+    "M1_res", source="M1", approach="standardised", pd=None, cqs=3, ead=400_000.0, rwa=400_000.0
+)
+_RE_WHOLE = _Leg(
+    "M1",
+    exposure_class="residential_mortgage",
+    approach="standardised",
+    pd=None,
+    cqs=3,
+    ead=1_000_000.0,
+    rwa=610_000.0,
+)
+
+#: A facility split (``engine/hierarchy/facility_undrawn.py``): same obligor,
+#: same class, same risk weight, so both legs share the mortgage-free corporate
+#: sheet AND its 100% band row. This is the shape that gives C 07.00 the
+#: single-cell claim the real-estate split cannot.
+_FAC_DRAWN = _Leg("FAC1", approach="standardised", pd=None, cqs=3, ead=700_000.0, rwa=700_000.0)
+_FAC_UNDRAWN = _Leg(
+    "FAC1_UNDRAWN",
+    source="FAC1",
+    approach="standardised",
+    exposure_type="facility_undrawn",
+    pd=None,
+    cqs=3,
+    undrawn=600_000.0,
+    ead=300_000.0,
+    rwa=300_000.0,
+)
+_FAC_WHOLE = _Leg("FAC1", approach="standardised", pd=None, cqs=3, ead=1_000_000.0, rwa=1_000_000.0)
+
+
+def _sa_recon(ours: list[_Leg], theirs: list[_Leg], framework: str) -> ReturnRecon:
+    """Both sides of a STANDARDISED portfolio, at the default join key."""
+    our_source, their_source = _sources(
+        [_SA_FILL_INST, *ours], _legacy([_SA_FILL_INST, *theirs]), framework
+    )
+    return build_recon(our_source, their_source)
+
+
+def _c07_populations(
+    recon: ReturnRecon, sheet: str, col_ref: str, *, ours: bool
+) -> dict[str, frozenset[str]]:
+    """``row_ref -> the leg references one side's population for that cell holds``.
+
+    Addressed through ``CellMembership.columns``, never by row: a C 07.00 row
+    carries several populations at once — the origin basis, the
+    post-substitution basis, the CCF buckets — and only the column says which
+    one a given cell reads.
+    """
+    side = recon.ours if ours else recon.theirs
+    served = side.membership.columns.filter(
+        (pl.col("template_id") == "c07_00")
+        & (pl.col("sheet") == sheet)
+        & (pl.col("col_ref") == col_ref)
+    )
+    assert served.height > 0, f"C 07.00 {sheet} col {col_ref} is not row-backed"
+    legs = side.membership.legs.filter(
+        (pl.col("template_id") == "c07_00") & (pl.col("sheet") == sheet)
+    )
+    populations: dict[str, frozenset[str]] = {}
+    for row_ref, predicate_key in served.select("row_ref", "predicate_key").unique().iter_rows():
+        group = legs.filter(
+            (pl.col("row_ref") == row_ref) & (pl.col("predicate_key") == predicate_key)
+        )
+        populations[row_ref] = frozenset(group["exposure_reference"].to_list())
+    return populations
+
+
+def _c07_whole_sheet_rows(recon: ReturnRecon, sheet: str, col_ref: str) -> list[str]:
+    """The rows on which BOTH sides report their whole population of a sheet.
+
+    Derived, never a literal: C 07.00's row axis is 33 groups under CRR and 61
+    under Basel 3.1, and a hard-coded ref would pin one of them. A row holding
+    everything both sides hold is where two portfolios that agree in total must
+    agree in the cell — the Total row and, when every leg shares a weight, its
+    risk-weight band too. Returned as a list and asserted on all of them, so the
+    claim is not quietly narrowed to whichever row happened to be first.
+    """
+    ours = _c07_populations(recon, sheet, col_ref, ours=True)
+    theirs = _c07_populations(recon, sheet, col_ref, ours=False)
+    all_ours = frozenset().union(*ours.values()) if ours else frozenset()
+    all_theirs = frozenset().union(*theirs.values()) if theirs else frozenset()
+    assert all_ours, f"we report nothing on {sheet} — the scenario is vacuous"
+    assert all_theirs, f"they report nothing on {sheet} — the scenario is vacuous"
+    return sorted(
+        row_ref
+        for row_ref, members in ours.items()
+        if members == all_ours and theirs.get(row_ref) == all_theirs
+    )
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_a_standardised_re_split_pairs_against_the_legacy_whole_loan(framework: str) -> None:
+    """The canonical SA split, on the SA template — and it spans two sheets.
+
+    Modelled on the SINGLE-COMPONENT case (``_sec`` + ``_res``), not the mixed
+    RRE+CRE one (``_rre`` + ``_cre``) — see ``_RE_SECURED``.
+    ``engine/re_split/splitter.py`` reclassifies the secured portion to
+    ``RESIDENTIAL_MORTGAGE`` and leaves the residual on the counterparty's own
+    class, so one exposure lands on the mortgage sheet AND the corporate sheet.
+    Their extract reports it whole, on one sheet, under the original reference.
+
+    So the honest answer here is NOT "wholly in measurement" — half the money is
+    on a sheet they do not use it on, which is a placement, and asserting
+    otherwise would be asserting the wrong thing. What must be true is that
+    NEITHER half reports a population: the exposure is on both returns, and
+    saying it is missing from each is the wrong number this closes. The two
+    halves must then net to zero, because our legs are worth exactly what their
+    whole loan is worth.
+    """
+    # Arrange — the fixture's own premise, stated before it is relied on.
+    assert _RE_SECURED.rwa + _RE_RESIDUAL.rwa == pytest.approx(_RE_WHOLE.rwa)
+    recon = _sa_recon(
+        [_SA_FILL_CORP, _RE_SECURED, _RE_RESIDUAL], [_SA_FILL_CORP, _RE_WHOLE], framework
+    )
+    mortgage_rows = _c07_whole_sheet_rows(recon, "residential_mortgage", C07_RWEA_COL)
+    corporate_rows = _c07_whole_sheet_rows(recon, CORPORATE, C07_RWEA_COL)
+    assert mortgage_rows and corporate_rows
+
+    # Assert — both sheets are EMITTED on both sides. A split exposure measured
+    # against a sheet one side never emits is a different finding.
+    assert {"residential_mortgage", CORPORATE} <= set(recon.ours.frames["c07_00"])
+    assert {"residential_mortgage", CORPORATE} <= set(recon.theirs.frames["c07_00"])
+
+    for row_ref in mortgage_rows:
+        # Act — the half they report the whole loan on.
+        secured = decompose_cell(recon, "c07_00", "residential_mortgage", row_ref, C07_RWEA_COL)
+        terms = _terms(secured)
+
+        # Assert — a figure on each side, paired on one key, nothing missing.
+        assert secured.decomposable, secured.refusal
+        assert (secured.ours_state, secured.theirs_state) == ("figure", "figure")
+        assert secured.ours == pytest.approx(_RE_SECURED.rwa)
+        assert secured.theirs == pytest.approx(_RE_WHOLE.rwa)
+        assert terms["population_ours_only"] == 0.0
+        assert terms["population_theirs_only"] == 0.0
+        assert _term_keys(secured)["measurement"] == 1
+        assert secured.reconciles
+
+    for row_ref in corporate_rows:
+        # Act — the half only we report there.
+        residual = decompose_cell(recon, "c07_00", CORPORATE, row_ref, C07_RWEA_COL)
+        terms = _terms(residual)
+
+        # Assert — a PLACEMENT, priced at the residual leg, not a population.
+        assert residual.decomposable, residual.refusal
+        assert (residual.ours_state, residual.theirs_state) == ("figure", "figure")
+        assert terms["sheet_placement"] == pytest.approx(_RE_RESIDUAL.rwa)
+        assert terms["population_ours_only"] == 0.0
+        assert terms["population_theirs_only"] == 0.0
+        assert residual.reconciles
+
+    # Assert — the two halves net to zero, and no cell of the template anywhere
+    # reports a population.
+    left = _terms(
+        decompose_cell(recon, "c07_00", "residential_mortgage", mortgage_rows[0], C07_RWEA_COL)
+    )
+    right = _terms(decompose_cell(recon, "c07_00", CORPORATE, corporate_rows[0], C07_RWEA_COL))
+    assert sum(left.values()) + sum(right.values()) == pytest.approx(0.0)
+    assert _population_offenders(recon, "c07_00", None) == []
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_a_standardised_split_sharing_one_c07_cell_reports_agreement(framework: str) -> None:
+    """A facility split keeps both legs in ONE cell — so agreement is provable.
+
+    Same obligor, same class, same risk weight: the drawn half and the undrawn
+    half share the corporate sheet and its 100% band, which is the shape the
+    real-estate split cannot give C 07.00. Their extract holds the facility
+    whole and for the same money, so every term must be zero and the pairing
+    must be VISIBLE — one key in ``measurement``, not an empty bucket, which is
+    what distinguishes "paired and agreed" from "never compared".
+    """
+    # Arrange
+    assert _FAC_DRAWN.rwa + _FAC_UNDRAWN.rwa == pytest.approx(_FAC_WHOLE.rwa)
+    recon = _sa_recon([_FAC_DRAWN, _FAC_UNDRAWN], [_FAC_WHOLE], framework)
+    shared_rows = _c07_whole_sheet_rows(recon, CORPORATE, C07_RWEA_COL)
+    assert shared_rows, "no C 07.00 row holds both legs — the single-cell claim is untestable"
+
+    # Assert — the sheet is emitted on both sides and every shared cell agrees.
+    assert CORPORATE in recon.ours.frames["c07_00"]
+    assert CORPORATE in recon.theirs.frames["c07_00"]
+    for row_ref in shared_rows:
+        # Act
+        result = decompose_cell(recon, "c07_00", CORPORATE, row_ref, C07_RWEA_COL)
+        terms = _terms(result)
+
+        # Assert
+        assert result.decomposable, result.refusal
+        assert (result.ours_state, result.theirs_state) == ("figure", "figure")
+        assert result.ours == pytest.approx(_FAC_DRAWN.rwa + _FAC_UNDRAWN.rwa)
+        assert result.theirs == pytest.approx(_FAC_WHOLE.rwa)
+        assert result.delta == pytest.approx(0.0)
+        assert terms["population_ours_only"] == 0.0
+        assert terms["population_theirs_only"] == 0.0
+        assert _term_keys(result)["population_ours_only"] == 0
+        assert _term_keys(result)["population_theirs_only"] == 0
+        assert _term_keys(result)["measurement"] == 1
+        assert result.reconciles
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_a_standardised_split_with_differing_money_is_wholly_measurement(framework: str) -> None:
+    """The same cell when the two sides genuinely disagree: -300,000, one key.
+
+    Their facility is worth 1,300,000 against our two legs' 1,000,000. Summing
+    the legs is the only reading that gives -300,000: picking the drawn half
+    alone gives -600,000, the undrawn half -1,000,000, and leaving either behind
+    puts its money back into a population term.
+    """
+    # Arrange
+    theirs = replace(_FAC_WHOLE, ead=1_300_000.0, rwa=1_300_000.0)
+    recon = _sa_recon([_FAC_DRAWN, _FAC_UNDRAWN], [theirs], framework)
+    shared_rows = _c07_whole_sheet_rows(recon, CORPORATE, C07_RWEA_COL)
+    assert shared_rows
+
+    for row_ref in shared_rows:
+        # Act
+        result = decompose_cell(recon, "c07_00", CORPORATE, row_ref, C07_RWEA_COL)
+        terms = _terms(result)
+
+        # Assert
+        assert result.decomposable, result.refusal
+        assert (result.ours_state, result.theirs_state) == ("figure", "figure")
+        assert terms["measurement"] == pytest.approx(_FAC_DRAWN.rwa + _FAC_UNDRAWN.rwa - theirs.rwa)
+        assert _term_keys(result)["measurement"] == 1
+        assert terms["population_ours_only"] == 0.0
+        assert terms["population_theirs_only"] == 0.0
+        assert result.reconciles
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_a_standardised_splits_halves_are_not_merged_across_the_bs_rows(framework: str) -> None:
+    """C 07.00 splits the facility across its on/off-balance-sheet rows.
+
+    The drawn half is an on-balance-sheet exposure and the undrawn half an
+    off-balance-sheet one, so those two rows hold one leg each while their
+    extract reports the whole facility on the on-balance-sheet row. Pairing must
+    not pull the undrawn half onto the on-balance-sheet row: if it did, that
+    cell's population would price 1,000,000 against a reported 700,000 and the
+    four terms would stop summing to the reported delta.
+    """
+    # Arrange
+    recon = _sa_recon([_FAC_DRAWN, _FAC_UNDRAWN], [_FAC_WHOLE], framework)
+    ours = _c07_populations(recon, CORPORATE, C07_RWEA_COL, ours=True)
+    on_bs = sorted(row for row, members in ours.items() if members == frozenset({"FAC1"}))
+    off_bs = sorted(row for row, members in ours.items() if members == frozenset({"FAC1_UNDRAWN"}))
+    assert on_bs and off_bs, "the facility's halves share every row — the fixture is vacuous"
+    assert not set(on_bs) & set(off_bs)
+
+    # Act
+    drawn = decompose_cell(recon, "c07_00", CORPORATE, on_bs[0], C07_RWEA_COL)
+    undrawn = decompose_cell(recon, "c07_00", CORPORATE, off_bs[0], C07_RWEA_COL)
+
+    # Assert — the on-BS row prices OUR DRAWN LEG ONLY against their whole
+    # facility; a merged reading would have made this term 0.00 and broken the
+    # identity against the reported delta.
+    assert drawn.ours == pytest.approx(_FAC_DRAWN.rwa)
+    assert _terms(drawn)["measurement"] == pytest.approx(_FAC_DRAWN.rwa - _FAC_WHOLE.rwa)
+    assert _terms(drawn)["population_ours_only"] == 0.0
+    assert _terms(drawn)["population_theirs_only"] == 0.0
+    assert drawn.reconciles
+
+    # Assert — the off-BS row is a row PLACEMENT, not an exposure they lack.
+    assert _terms(undrawn)["row_placement"] == pytest.approx(_FAC_UNDRAWN.rwa)
+    assert _terms(undrawn)["population_ours_only"] == 0.0
+    assert _terms(undrawn)["population_theirs_only"] == 0.0
+    assert undrawn.reconciles
+
+    # Assert — and the two rows conserve the facility.
+    assert sum(_terms(drawn).values()) + sum(_terms(undrawn).values()) == pytest.approx(0.0)
+
+
+# =============================================================================
+# The two things the comparison key rests on
+# =============================================================================
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_every_recon_template_plan_frame_carries_the_base_reference(framework: str) -> None:
+    """``_comparison_key``'s presence guard must never take its ``else`` branch.
+
+    The guard reads ``source_exposure_reference`` where the frame supplies one
+    and falls back to the leg's own reference where it does not. That fallback
+    is right for a legacy side that never carried the column — and silently
+    WRONG for one of our own plan frames, because a plan builder that projected
+    the column away would degrade ``_key_money`` and ``_side_keys`` together, at
+    both call sites at once, restoring exactly the two equal-and-opposite
+    population terms this slice removed. ``reconciles`` is structurally
+    incapable of seeing that: the four buckets partition each side's population,
+    so +100,000 and -100,000 sum to the same 0.00 as no terms at all.
+
+    Nothing else would fail. The split tests address C 08.03 and C 07.00, so a
+    FOURTH template added to ``RECON_TEMPLATE_IDS`` with a projecting plan
+    builder would be a no-op the whole suite reports as green — absence, not
+    wrongness.
+
+    Iterated over ``RECON_TEMPLATE_IDS`` itself rather than a copy of today's
+    three ids: a hand-written list stops covering the template it was written
+    for the moment the constant grows, which is the only case this guards.
+
+    **OUR SIDE ONLY, AND THAT IS THE POINT OF THE TEST.** Asserting this of the
+    legacy side would pin a property production does not have: a projected
+    ledger's plan frame legitimately has NO base-reference column at all —
+    ``_projection_exprs`` emits the join key, the mapped components and the
+    mapped carriers, and the base reference is none of the three. Measured on a
+    real projection, the column-absent branch of ``_key_rungs`` is taken on
+    every legacy-side ``_key_money`` call of every reconciliation. That absence
+    is legal and handled; see
+    ``test_a_side_whose_frame_omits_the_base_reference_can_still_be_keyed``.
+    What is NOT legal is OUR side losing it, because ours is the side whose legs
+    are split and therefore the side with something to collapse.
+    """
+    # Arrange — a portfolio reaching every template: the base legs carry both
+    # IRB and standardised exposures, and the split legs make the column
+    # load-bearing rather than merely present.
+    legs = [*_base_legs(), _SPLIT_G_LEG, _SPLIT_REM_LEG]
+    our_source, their_source = _sources(legs, legs, framework)
+    recon = build_recon(our_source, their_source)
+
+    # Act / Assert — every sheet plan of every scoped template, our side.
+    checked = 0
+    for template_id in RECON_TEMPLATE_IDS:
+        plans = recon.ours.plans.get(template_id, {})
+        assert plans, f"{template_id} produced no sheet plan — vacuous"
+        for sheet, plan in plans.items():
+            assert recon_module._BASE_KEY_COLUMN in plan.frame.columns, (
+                f"{template_id}/{sheet} projects away "
+                f"{recon_module._BASE_KEY_COLUMN}: the comparison key would silently "
+                "degrade to the leg reference"
+            )
+            checked += 1
+    assert checked >= len(RECON_TEMPLATE_IDS)
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_both_key_column_settings_name_the_same_grain(framework: str) -> None:
+    """``key_column`` is a validated public parameter, and both members agree.
+
+    ``build_recon`` raises on anything outside ``KEY_COLUMNS``, so the two
+    members are the whole documented surface — and the claim that they name one
+    grain rested on nothing executable. It holds because the comparison key is a
+    LADDER ending in the leg's own reference: under ``source_exposure_reference``
+    the first two rungs are the same column, and where that column is null the
+    last rung still supplies the very reference our legs were split from.
+
+    **Asserted on the PRODUCTION SHAPE — their side omitting the column — which
+    is exactly where the equivalence used to be false.** Keyed on the base
+    reference, a projected legacy side's legs all shared one null key, matched
+    nothing, and the cell reported the whole exposure as missing from each side
+    at once: +100,000 and -100,000, netting to a delta of 0.00 that
+    ``reconciles`` waved through. That was this batch's own defect, reachable
+    through a documented public parameter. Restricting this test to a fixture
+    that populates the column on both sides would assert the equivalence exactly
+    where it was never in doubt.
+
+    Both shapes are covered anyway, so neither the setting nor the presence of
+    the column may change the answer.
+    """
+    # Arrange
+    assert len(KEY_COLUMNS) > 1, "one setting cannot disagree with itself"
+    results: dict[tuple[str, bool], CellDecomposition] = {}
+    for key_column in KEY_COLUMNS:
+        for supplied in (False, True):
+            recon = _split_recon(
+                [_SPLIT_G_LEG, _SPLIT_REM_LEG],
+                [_WHOLE_LOAN],
+                framework,
+                key_column=key_column,
+                theirs_supplies_base_ref=supplied,
+            )
+            row_ref = _leaf_row_of(recon, ours=False, reference=_WHOLE_LOAN.reference)
+            results[key_column, supplied] = decompose_cell(
+                recon, "c08_03", CORPORATE, row_ref, RWEA_COL
+            )
+
+    # Assert — every combination pairs the split exposure on one key, reports no
+    # population, and prices the cell identically.
+    for case, result in results.items():
+        assert result.decomposable, (case, result.refusal)
+        assert _terms(result)["population_ours_only"] == 0.0, case
+        assert _terms(result)["population_theirs_only"] == 0.0, case
+        assert _term_keys(result)["measurement"] == 1, case
+        assert result.reconciles, case
+    deltas = {result.delta for result in results.values()}
+    assert len(deltas) == 1, deltas
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_a_side_that_omits_the_base_reference_still_pairs_on_its_own(
+    framework: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A leg carrying no base reference IS its own base — the ladder's last rung.
+
+    ``legacy_ledger._projection_exprs`` emits no ``source_exposure_reference``,
+    so on a projected side every leg's base reference is a typed NULL. The
+    comparison key's final rung is the leg's own ``exposure_reference``, which is
+    precisely the reference our legs were split FROM, so the two sides meet
+    without their extract carrying anything it does not have.
+
+    **Keyed on ``source_exposure_reference`` deliberately: that is the ONLY
+    setting under which the last rung is observable.** Under the default the
+    second rung is already ``exposure_reference``, so the sides pair whether a
+    third rung exists or not, and a test on the default alone could not tell the
+    two implementations apart. The premise is asserted rather than assumed —
+    their legs really do carry a null base reference throughout, so nothing but
+    the last rung can be doing the pairing.
+
+    AND IT IS NOT WARNED ABOUT. ``_build_side`` counts unreconcilable legs on the
+    RESOLVED key, so a null base reference — the ordinary shape of every
+    projected legacy side — is silent, and the warning is kept for a leg with no
+    usable identity on any rung. Counting on ``key_column`` alone instead would
+    fire that warning on every legacy run under this setting, which is the kind
+    of false alarm that teaches people to stop reading warnings. The SILENCE is
+    asserted here because it is the property that would regress.
+    """
+    # Arrange — the production shape, keyed where only the last rung can help.
+    with caplog.at_level(logging.WARNING, logger="rwa_calc.analysis.return_recon"):
+        recon = _split_recon(
+            [_SPLIT_G_LEG, _SPLIT_REM_LEG],
+            [_WHOLE_LOAN],
+            framework,
+            key_column="source_exposure_reference",
+        )
+    their_legs = recon.theirs.membership.legs.filter(
+        (pl.col("template_id") == "c08_03") & (pl.col("sheet") == CORPORATE)
+    )
+
+    # Assert the premise: their side offers the first two rungs nothing at all.
+    assert their_legs.height > 0, "their side reports no corporate leg — vacuous"
+    assert their_legs["source_exposure_reference"].null_count() == their_legs.height
+    assert _WHOLE_LOAN.reference in set(their_legs["exposure_reference"].to_list())
+
+    # Assert — and building that side raised no unreconcilable-leg warning.
+    # Stated here, beside the build it describes, so it fails on its own rather
+    # than behind the pairing assertions below.
+    assert [
+        record.getMessage()
+        for record in caplog.records
+        if "resolves" in record.getMessage() and "NULL" in record.getMessage()
+    ] == []
+
+    # Act
+    row_ref = _leaf_row_of(recon, ours=False, reference=_WHOLE_LOAN.reference)
+    result = decompose_cell(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
+
+    # Assert — paired on one key, and nothing reported missing from either side.
+    assert result.decomposable, result.refusal
+    assert _terms(result)["population_ours_only"] == 0.0
+    assert _terms(result)["population_theirs_only"] == 0.0
+    assert _term_keys(result)["measurement"] == 1
+    assert result.reconciles

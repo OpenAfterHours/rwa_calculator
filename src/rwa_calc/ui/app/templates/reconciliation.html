@@ -212,6 +212,16 @@ decisions.</div>
   <a class="btn btn-primary" href="{{ result.explorer_url }}{% if result.hide_immaterial %}?hide_immaterial=1{% endif %}">Explore open differences →</a>
 </p>
 
+<h2>4 · Return templates — does the submission tie out?</h2>
+<p class="muted">The same reconciliation, segmented by regulatory return instead of by loan:
+your extract is projected into our reporting ledger and run through the <em>same</em>
+generators as our own results, so both sides of a COREP / Pillar III cell come out of one
+engine. Click a cell to see why it differs. If a template cannot be produced from your
+mapping, that page names the columns to map.</p>
+<p>
+  <a class="btn btn-primary" href="{{ result.templates_url }}">Compare return templates →</a>
+</p>
+
 {% endif %}
 {% endif %}
 {% endblock %}

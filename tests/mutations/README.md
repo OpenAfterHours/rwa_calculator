@@ -258,12 +258,17 @@ Five of these are worth understanding.
 Written for the 2026-08-30 slice that (a) stopped the matrix calling a split
 exposure's legs a scope finding and (b) made its cells clickable. Measured on
 `tests/unit/analysis/test_return_recon.py` + `tests/unit/ui/test_views_return_recon.py`
-together, whose baseline on the tree these were written on is **255 passed, 4
-failed** (259 collected) — the four being
-`test_a_cell_term_refuses_a_key_count_that_describes_no_population`,
-a teammate's in-flight guard whose production half had not landed. **Every red
-set below is quoted NET of those four**, and each was confirmed unchanged by the
-mutations (they fail identically with no plugin loaded).
+together, whose baseline is **259 passed**.
+
+Every row below was measured while that baseline still read 255 passed / 4
+failed — `test_a_cell_term_refuses_a_key_count_that_describes_no_population`,
+a teammate's in-flight `CellTerm` guard whose production half had not landed
+yet — so the red sets are quoted NET of those four, which is what makes them
+correct against the clean baseline now that the guard has landed. Confirmed at
+the time: those four fail identically with no plugin loaded, and none of these
+mutations touches `CellTerm`. **A red set measured against a red baseline needs
+that subtraction stated, or the next reader re-measures and finds four extra
+failures they cannot attribute.**
 
 The defect being closed, measured on the split fixture before the labels
 existed: 100,000 of `rwa_final` on our side and 100,000 on theirs sat under

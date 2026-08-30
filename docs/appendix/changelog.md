@@ -11,7 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - (Next release changes will go here)
 
 ### Changed
-- (Next release changes will go here)
+- **The landing-page polar bear now rests on its hind legs between laps instead
+  of setting off again immediately.** The desktop lifecycle looped on a bare
+  `% CYCLE`, so the walk restarted the instant the RISE finished — a run every
+  13.5s, which reads as a treadmill rather than an occasional flourish. The
+  loop clock is now mapped through `lifecycleTime()`: the **first** lap plays
+  exactly as before (the bear still sets off ~4s after load, so the opening
+  beat is untouched), and every lap after it is preceded by `REST = 18s` parked
+  in the standing pose — a lap every 31.5s, with a 21s continuous stand. The
+  hold sits at lifecycle `t = 0`, where the gallop frequency is already 0, so
+  the legs stop with it and the pose is continuous across the boundary (no
+  jump on either side of the wrap). `REST` is the single tuning knob: raise it
+  to make the run rarer. Mobile is untouched — the one-shot `INTRO_T0`/
+  `INTRO_END` intro and its `bear-tow-in` CSS contract never used `CYCLE` —
+  and so is `prefers-reduced-motion` (still one static standing pose). Applied
+  to `docs/assets/javascripts/bear-constellation.js` and its vendored twin
+  `src/rwa_calc/ui/app/static/bear-constellation.js`, kept byte-identical by
+  `tests/unit/ui/test_tokens_drift.py`. UI presentation only — no calculation
+  impact.
 
 ---
 

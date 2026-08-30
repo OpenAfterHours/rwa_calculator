@@ -74,6 +74,7 @@ than carried forward from an earlier one.
 
 | plugin | what it changes | red / green | reddens |
 |---|---|---|---|
+| `mutate_terms_amount_drifts_from_its_pairs` | half of `measurement`'s amount moved into `row_placement` AFTER `_terms` ran — the total, the counts and the pairs all untouched | 22 / 110 | **all six census parametrisations, on the SUM assertion itself** (`test_return_recon.py:2560`, obtained 700,000 against a claimed 1,600,000), the term filter, and 12 pre-existing term-amount tests |
 | `mutate_pairs_rank_by_money` | `_rank` ordered on the side's own money, as the old leg listing was | 8 / 124 | every ordering-dependent test: the driver ranking, both cap tests, the placement test (the mover is off the page) |
 | `mutate_pairs_silent_cap` | `CellPairs.hidden_keys` forced to `0` | 6 / 126 | the two cap tests and the uncapped/capped comparison only |
 | `mutate_terms_differing_is_population` | `CellTerm.differing_keys` restated as `keys` | 8 / 124 | the `differing_keys` test and all six census parametrisations |
@@ -85,8 +86,28 @@ than carried forward from an earlier one.
 | `mutate_placements_carriers_scoped_to_sheet` | the class / approach / role carriers scoped to the cell's sheet | 2 / 130 | the sheet-placement test only |
 | `mutate_placements_ignore_the_base_reference` | `_placements` keyed on the leg, out of lockstep with `_key_money` | 2 / 130 | the split-exposure placement test only |
 
-Five of these are worth understanding.
+Six of these are worth understanding, and the first one most.
 
+- **`mutate_terms_amount_drifts_from_its_pairs` is the detector for the
+  invariant the whole feature rests on**, and it also measures what the
+  PRE-EXISTING gate could not have caught. It moves money between two terms and
+  preserves the total, so `explained` still equals the reported delta and
+  `reconciles` stays TRUE — and
+  `test_four_terms_sum_to_the_cell_delta_on_every_additive_cell` **passes 6 / 6
+  under it**, verified by running that test alone against the mutation. The
+  four-way identity is a statement about the SUM of the terms; a term that is
+  wrong by exactly what another term is wrong by leaves that sum untouched.
+  Only `test_every_terms_pairs_sum_to_that_term_on_every_additive_cell` sees
+  it, and it sees it in all six parametrisations.
+
+  That was worth proving rather than asserting. The red was traced to the
+  assertion line before being believed — `assert sum(pair.delta for pair in
+  pairs) == pytest.approx(term.amount)`, obtained 700,000 against a claimed
+  1,600,000 on `c08_03/corporate/0010/0010` — because the three assertions in
+  that loop share one failure message, so "the census went red" alone would not
+  have told anyone WHICH contract failed. Note also what stays green and
+  should: `test_the_capped_term_filter_reports_the_keys_it_left_off` asserts
+  `total_delta`, which is computed from the pairs and is therefore still right.
 - **The last four each redden exactly one test and nothing else**, which is the
   point: before those tests existed, all four mutations were completely silent.
   Three of them produce an *empty* placement or an empty row list, and an empty

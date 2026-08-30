@@ -17,7 +17,7 @@ Inspect a single module's dependencies and dependents directly:
 uv run curfew report rwa_calc.engine.classify
 ```
 
-Last generated: 2026-08-29.
+Last generated: 2026-08-30.
 
 
 ## Package overview

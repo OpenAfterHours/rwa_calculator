@@ -14,7 +14,7 @@ Basic usage:
     >>> result = pipeline.run(config)
 """
 
-__version__ = "0.3.28"
+__version__ = "0.3.29"
 __author__ = "OpenAfterHours"
 __license__ = "Apache-2.0"
 

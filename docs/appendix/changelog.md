@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- (Next release changes will go here)
+
+### Changed
+- (Next release changes will go here)
+
+---
+
+## [0.3.29] - 2026-08-30
+
+### Added
 - **`api/batch.py` — run N scoped calculations concurrently.** A group
   submission plus its solo entities is N independent pipeline runs, and there
   was no batch driver: `api/rest.py` takes one `reporting_entity` per request.

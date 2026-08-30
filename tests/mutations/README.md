@@ -68,22 +68,24 @@ mutations were completely silent:
 
 Written for the 2026-08-30 `cell_pairs` slice — the drill-down that names WHICH
 contracts drive a cell difference. Baseline for
-`tests/unit/analysis/test_return_recon.py` is **130 passed**; each row is the
-measured red set against that baseline.
+`tests/unit/analysis/test_return_recon.py` is **132 passed**; every row below
+was re-measured against that baseline after the last test was added, rather
+than carried forward from an earlier one.
 
 | plugin | what it changes | red / green | reddens |
 |---|---|---|---|
-| `mutate_pairs_rank_by_money` | `_rank` ordered on the side's own money, as the old leg listing was | 8 / 122 | every ordering-dependent test: the driver ranking, both cap tests, the placement test (the mover is off the page) |
-| `mutate_pairs_silent_cap` | `CellPairs.hidden_keys` forced to `0` | 6 / 124 | the two cap tests and the uncapped/capped comparison only |
-| `mutate_terms_differing_is_population` | `CellTerm.differing_keys` restated as `keys` | 8 / 122 | the `differing_keys` test and all six census parametrisations |
-| `mutate_pairs_drop_refusal` | a refused cell's table loses its `refusal` string | 13 / 117 | all five refusal tests plus the census's refusal mirror |
-| `mutate_terms_skip_agreeing_keys` | `_terms` fed only the non-zero pairs, so every `keys` count collapses to the drivers | 22 / 108 | the census, the term filter, the `differing_keys` test — **and eight PRE-EXISTING split-exposure tests**, which already assert an agreeing pair is COUNTED (`keys["measurement"] == 1`) |
-| `mutate_pairs_fill_absent_side_zero` | `_KeyPair`'s absent side filled `0.0` instead of NULL | 2 / 128 | the signed-money test only |
-| `mutate_placements_rows_span_the_template` | `row_refs` not scoped to the cell's sheet | 2 / 128 | the sheet-placement test only |
-| `mutate_placements_carriers_scoped_to_sheet` | the class / approach / role carriers scoped to the cell's sheet | 2 / 128 | the sheet-placement test only |
-| `mutate_placements_ignore_the_base_reference` | `_placements` keyed on the leg, out of lockstep with `_key_money` | 2 / 128 | the split-exposure placement test only |
+| `mutate_pairs_rank_by_money` | `_rank` ordered on the side's own money, as the old leg listing was | 8 / 124 | every ordering-dependent test: the driver ranking, both cap tests, the placement test (the mover is off the page) |
+| `mutate_pairs_silent_cap` | `CellPairs.hidden_keys` forced to `0` | 6 / 126 | the two cap tests and the uncapped/capped comparison only |
+| `mutate_terms_differing_is_population` | `CellTerm.differing_keys` restated as `keys` | 8 / 124 | the `differing_keys` test and all six census parametrisations |
+| `mutate_pairs_drop_refusal` | a refused cell's table loses its `refusal` string | 13 / 119 | all five refusal tests plus the census's refusal mirror |
+| `mutate_terms_skip_agreeing_keys` | `_terms` fed only the non-zero pairs, so every `keys` count collapses to the drivers | 22 / 110 | the census, the term filter, the `differing_keys` test — **and eight PRE-EXISTING split-exposure tests**, which already assert an agreeing pair is COUNTED (`keys["measurement"] == 1`) |
+| `mutate_cell_reads_its_row_not_its_group` | `_predicate_key` resolved for the ROW's first column instead of the cell's | 6 / 126 | the group-scoping test **and four pre-existing `decompose_cell` tests** — `_cell_money` is shared, so the waterfall over-counts with the drill-down |
+| `mutate_pairs_fill_absent_side_zero` | `_KeyPair`'s absent side filled `0.0` instead of NULL | 2 / 130 | the signed-money test only |
+| `mutate_placements_rows_span_the_template` | `row_refs` not scoped to the cell's sheet | 2 / 130 | the sheet-placement test only |
+| `mutate_placements_carriers_scoped_to_sheet` | the class / approach / role carriers scoped to the cell's sheet | 2 / 130 | the sheet-placement test only |
+| `mutate_placements_ignore_the_base_reference` | `_placements` keyed on the leg, out of lockstep with `_key_money` | 2 / 130 | the split-exposure placement test only |
 
-Four of these are worth understanding.
+Five of these are worth understanding.
 
 - **The last four each redden exactly one test and nothing else**, which is the
   point: before those tests existed, all four mutations were completely silent.
@@ -110,6 +112,13 @@ Four of these are worth understanding.
   having: the empty table CARRIES its reason, so `pairs == ()` can never be read
   as "no contract drives this difference". Stated on the plugin itself too, so
   nobody cites it for more than it shows.
+- **`mutate_cell_reads_its_row_not_its_group` reddens four tests it was not
+  written for, and that is correct attribution rather than spill.** The pair
+  table and the waterfall resolve one population through `_cell_money`, so
+  "a row has one population" over-counts both at once — measured here at 13 keys
+  against 2 on C 08.01 row 0010, and at 3.00x / 1.86x on the review portfolio
+  that first found it. A mutation whose red set is confined to the new tests
+  would have meant the two had drifted apart.
 
 ## Writing another
 

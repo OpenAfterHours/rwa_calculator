@@ -64,6 +64,53 @@ mutations were completely silent:
   used and the matrix may be wrong"* — and nothing asserted on it. **A log line
   is not a gate.**
 
+## The per-key pair table set
+
+Written for the 2026-08-30 `cell_pairs` slice — the drill-down that names WHICH
+contracts drive a cell difference. Baseline for
+`tests/unit/analysis/test_return_recon.py` is **130 passed**; each row is the
+measured red set against that baseline.
+
+| plugin | what it changes | red / green | reddens |
+|---|---|---|---|
+| `mutate_pairs_rank_by_money` | `_rank` ordered on the side's own money, as the old leg listing was | 8 / 122 | every ordering-dependent test: the driver ranking, both cap tests, the placement test (the mover is off the page) |
+| `mutate_pairs_silent_cap` | `CellPairs.hidden_keys` forced to `0` | 6 / 124 | the two cap tests and the uncapped/capped comparison only |
+| `mutate_terms_differing_is_population` | `CellTerm.differing_keys` restated as `keys` | 8 / 122 | the `differing_keys` test and all six census parametrisations |
+| `mutate_pairs_drop_refusal` | a refused cell's table loses its `refusal` string | 13 / 117 | all five refusal tests plus the census's refusal mirror |
+| `mutate_terms_skip_agreeing_keys` | `_terms` fed only the non-zero pairs, so every `keys` count collapses to the drivers | 22 / 108 | the census, the term filter, the `differing_keys` test — **and eight PRE-EXISTING split-exposure tests**, which already assert an agreeing pair is COUNTED (`keys["measurement"] == 1`) |
+| `mutate_pairs_fill_absent_side_zero` | `_KeyPair`'s absent side filled `0.0` instead of NULL | 2 / 128 | the signed-money test only |
+| `mutate_placements_rows_span_the_template` | `row_refs` not scoped to the cell's sheet | 2 / 128 | the sheet-placement test only |
+| `mutate_placements_carriers_scoped_to_sheet` | the class / approach / role carriers scoped to the cell's sheet | 2 / 128 | the sheet-placement test only |
+| `mutate_placements_ignore_the_base_reference` | `_placements` keyed on the leg, out of lockstep with `_key_money` | 2 / 128 | the split-exposure placement test only |
+
+Four of these are worth understanding.
+
+- **The last four each redden exactly one test and nothing else**, which is the
+  point: before those tests existed, all four mutations were completely silent.
+  Three of them produce an *empty* placement or an empty row list, and an empty
+  placement is ALSO the honest shape of a population term — so the wrong answer
+  is indistinguishable from a right one without an assertion that says which
+  cell it is looking at.
+- **`mutate_placements_rows_span_the_template` and
+  `mutate_placements_carriers_scoped_to_sheet` are opposites, and both are
+  wrong.** The two scopes are deliberately different: `row_refs` is scoped to
+  the cell's sheet (empty means "they did not put it on this sheet", which IS
+  the sheet-placement finding), while the carriers are template-wide (the class
+  they moved it TO lives on the sheet it moved to). Scoping both the same way —
+  in either direction — reads plausibly and blanks one of the two facts.
+- **`mutate_pairs_silent_cap` is caught by an ADEQUACY assertion**, not by an
+  outcome one: `assert table.hidden_keys > 0, "the cap is not engaged"`. A guard
+  written to stop the fixture going vacuous turns out to be the detector for
+  the cap going silent, because "nothing is hidden" is exactly what both look
+  like.
+- **`mutate_pairs_drop_refusal` does NOT prove that a refused cell would
+  otherwise be paired.** The refusal and the empty `()` come from one return in
+  `_decompose`, so no mutation of `cell_pairs` alone can put pairs behind a
+  refusal without reimplementing it. What it proves is narrower and still worth
+  having: the empty table CARRIES its reason, so `pairs == ()` can never be read
+  as "no contract drives this difference". Stated on the plugin itself too, so
+  nobody cites it for more than it shows.
+
 ## Writing another
 
 Two rules, both learned the expensive way in the batch that produced these:

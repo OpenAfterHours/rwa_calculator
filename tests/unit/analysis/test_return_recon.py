@@ -42,6 +42,7 @@ from rwa_calc.analysis.legacy_ledger import LegacyLedgerSource, ledger_coverage
 from rwa_calc.analysis.return_recon import (
     ABSENT_ROW,
     CELL_DIFF_SCHEMA,
+    CELL_PAIRS_LIMIT,
     KEY_COLUMNS,
     PLACEMENT_ATTRIBUTION,
     RECON_TEMPLATE_IDS,
@@ -49,8 +50,10 @@ from rwa_calc.analysis.return_recon import (
     UNDECIDABLE_ROW,
     CellDecomposition,
     ReturnRecon,
+    SideView,
     build_recon,
     cell_diff,
+    cell_pairs,
     decompose_cell,
     diff_cells,
     row_migration,
@@ -2104,3 +2107,723 @@ def test_a_side_that_omits_the_base_reference_still_pairs_on_its_own(
     assert _terms(result)["population_theirs_only"] == 0.0
     assert _term_keys(result)["measurement"] == 1
     assert result.reconciles
+
+
+# =============================================================================
+# The per-key pair table
+# =============================================================================
+
+#: The probe portfolio's agreeing backbone. Every one of these is worth far more
+#: than every driver below, and that is the whole point: a table ranked on SIZE
+#: shows nothing but agreement, so the analyst who asks "which contracts?" is
+#: handed a page of loans that tie to the penny.
+_PROBE_AGREEING_LEGS = 30
+_PROBE_AGREEING_RWA = 1_000_000.0
+
+#: The four value breaks — the SAME exposure on both sides, priced differently.
+#: ``(reference, our RWEA, their RWEA)``. The deltas (12k / 8k / 5k / 3k) are
+#: distinct from each other and from every other driver's, so the ranked order
+#: is fully determined and can be asserted as a LIST rather than as a set.
+_PROBE_BREAKS: tuple[tuple[str, float, float], ...] = (
+    ("PROBE_BREAK_1", 40_000.0, 28_000.0),
+    ("PROBE_BREAK_2", 35_000.0, 27_000.0),
+    ("PROBE_BREAK_3", 30_000.0, 25_000.0),
+    ("PROBE_BREAK_4", 25_000.0, 22_000.0),
+)
+
+#: One exposure each side holds and the other does not, and one that moves PD
+#: band between the sides. All three are small, like the breaks.
+_PROBE_OURS_ONLY = _Leg("PROBE_OURS_ONLY", pd=PD_BAND_A, ead=60_000.0, rwa=20_000.0)
+_PROBE_THEIRS_ONLY = _Leg("PROBE_THEIRS_ONLY", pd=PD_BAND_A, ead=45_000.0, rwa=15_000.0)
+_PROBE_MOVER = _Leg("PROBE_MOVER", pd=PD_BAND_A, ead=90_000.0, rwa=30_000.0)
+
+#: Every exposure the cell's difference actually lives in, in the order
+#: ``|delta|`` puts them: 30k row placement, 20k ours-only, 15k theirs-only,
+#: then the four breaks. Their signed deltas sum to the cell delta and nothing
+#: else contributes.
+_PROBE_DRIVERS: tuple[str, ...] = (
+    "PROBE_MOVER",
+    "PROBE_OURS_ONLY",
+    "PROBE_THEIRS_ONLY",
+    "PROBE_BREAK_1",
+    "PROBE_BREAK_2",
+    "PROBE_BREAK_3",
+    "PROBE_BREAK_4",
+)
+
+#: The probe cell's delta: 30,000 + 20,000 - 15,000 + 12,000 + 8,000 + 5,000
+#: + 3,000. Written out so a fixture edit that changes it fails loudly here
+#: rather than silently weakening every assertion below.
+_PROBE_DELTA = 63_000.0
+
+#: The measurement term's own share of it — the four breaks and nothing else.
+_PROBE_MEASUREMENT_DELTA = 28_000.0
+
+
+def _probe_legs(*, ours: bool) -> list[_Leg]:
+    """One side of the probe portfolio: 30 agreeing loans and 7 drivers."""
+    agreeing = [
+        _Leg(f"PROBE_AGREE_{index:02d}", pd=PD_BAND_A, ead=3_000_000.0, rwa=_PROBE_AGREEING_RWA)
+        for index in range(_PROBE_AGREEING_LEGS)
+    ]
+    breaks = [
+        _Leg(ref, pd=PD_BAND_A, ead=200_000.0, rwa=our_rwa if ours else their_rwa)
+        for ref, our_rwa, their_rwa in _PROBE_BREAKS
+    ]
+    one_sided = _PROBE_OURS_ONLY if ours else _PROBE_THEIRS_ONLY
+    mover = _PROBE_MOVER if ours else replace(_PROBE_MOVER, pd=PD_BAND_B)
+    return [*_split_base(), *agreeing, *breaks, one_sided, mover]
+
+
+@lru_cache(maxsize=8)
+def _probe(framework: str) -> ReturnRecon:
+    """The portfolio the size-ranked leg table was measured to be useless on.
+
+    30 agreeing loans, 4 small value breaks, one exposure each side only and one
+    band mover, all in ONE C 08.03 PD band so they share a single cell. Cached,
+    so nothing may mutate what it returns.
+    """
+    our_source, their_source = _sources(_probe_legs(ours=True), _probe_legs(ours=False), framework)
+    return build_recon(our_source, their_source)
+
+
+def _probe_row(recon: ReturnRecon) -> str:
+    """The C 08.03 corporate leaf row every probe driver shares on OUR side."""
+    return _leaf_row_of(recon, ours=True, reference="PROBE_AGREE_00")
+
+
+def _group_of(  # noqa: PLR0913 - the cell's full address plus the recon
+    recon: ReturnRecon, template_id: str, sheet: str | None, row_ref: str, col_ref: str
+) -> str:
+    """The ONE membership group serving a cell, addressed by its full identity.
+
+    ``_c08_03_predicate_key`` resolves a column across every row; this resolves
+    the exact ``(row_ref, col_ref)`` cell, which is the grain a leg listing has
+    to be scoped to.
+    """
+    served = recon.ours.membership.columns.filter(
+        (pl.col("template_id") == template_id)
+        & (pl.col("sheet") == sheet)
+        & (pl.col("row_ref") == row_ref)
+        & (pl.col("col_ref") == col_ref)
+    )
+    assert served.height > 0, f"{template_id}/{sheet}/{row_ref}/{col_ref} is not row-backed"
+    return str(served["predicate_key"][0])
+
+
+def _size_ranked_keys(  # noqa: PLR0913 - one side plus the group's full address
+    side: SideView, template_id: str, sheet: str | None, row_ref: str, group: str, limit: int
+) -> set[str]:
+    """The table the compare page used to render: one side's legs, largest first.
+
+    A local restatement of the ordering in
+    ``ui/views/return_recon.py::_cell_legs`` — ``sort(|rwa_final|, descending)``
+    then ``head(limit)``. Written out here rather than imported from the view so
+    the defect being pinned is visible in the test that pins it, and so this
+    file does not depend on a module another work item owns.
+    """
+    ordered = (
+        _probe_group_legs(side, template_id, sheet, row_ref, group)
+        .sort(pl.col("rwa_final").abs(), descending=True, nulls_last=True)
+        .head(limit)
+    )
+    return set(ordered["exposure_reference"].to_list())
+
+
+def _probe_group_legs(
+    side: SideView, template_id: str, sheet: str | None, row_ref: str, group: str
+) -> pl.DataFrame:
+    """One membership group's legs on one side, at the cell's own grain."""
+    return side.membership.legs.filter(
+        (pl.col("template_id") == template_id)
+        & (pl.col("sheet") == sheet)
+        & (pl.col("row_ref") == row_ref)
+        & (pl.col("predicate_key") == group)
+    )
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_the_pair_table_ranks_the_drivers_a_size_ranked_table_buries(framework: str) -> None:
+    """The user-visible defect: ranked on SIZE, not one driver is on the page.
+
+    Measured on this portfolio before the change: the compare page's leg table
+    rendered 25 of our legs and 25 of theirs, every one of them a loan that
+    agrees to the penny, because the ordering is ``|rwa_final|`` and the
+    difference lives in the small loans. The size-ranked ordering is reproduced
+    here and asserted to bury every driver, so the test cannot pass by the
+    defect having been redefined.
+    """
+    # Arrange
+    recon = _probe(framework)
+    row_ref = _probe_row(recon)
+    group = _group_of(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
+    drivers = set(_PROBE_DRIVERS)
+
+    # Assert the fixture's adequacy — BOTH halves, because either one failing
+    # would leave the ranking assertion below true for the wrong reason.
+    for side, label in ((recon.ours, "ours"), (recon.theirs, "theirs")):
+        held = set(
+            _probe_group_legs(side, "c08_03", CORPORATE, row_ref, group)[
+                "exposure_reference"
+            ].to_list()
+        )
+        present = held & drivers
+        assert present, f"the {label} side of the cell holds no driver at all — vacuous"
+        assert len(held - drivers) > len(present), (
+            f"the {label} side holds {len(held - drivers)} agreeing legs against "
+            f"{len(present)} drivers; unless the agreeing legs OUTNUMBER the drivers "
+            "the cap cannot hide anything and this test would prove nothing"
+        )
+        buried = _size_ranked_keys(side, "c08_03", CORPORATE, row_ref, group, CELL_PAIRS_LIMIT)
+        assert not (buried & drivers), (
+            f"the size-ranked table already shows {sorted(buried & drivers)} on the "
+            f"{label} side, so it never had the defect this test pins"
+        )
+
+    # Act
+    table = cell_pairs(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
+
+    # Assert — every driver is on the page, ranked, ahead of every agreeing key.
+    assert table.refusal is None
+    assert [pair.key for pair in table.pairs[: len(_PROBE_DRIVERS)]] == list(_PROBE_DRIVERS)
+    assert drivers <= {pair.key for pair in table.pairs}
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_the_cap_states_what_it_hides(framework: str) -> None:
+    """A silent cap on a regulatory comparison is a silent zero by another name.
+
+    The shown rows' delta, the total and the count not shown are all published,
+    so a caller can say "the 25 shown carry X of the Y difference; N more carry
+    Z" instead of implying the page is the whole population.
+    """
+    # Arrange
+    recon = _probe(framework)
+    row_ref = _probe_row(recon)
+
+    # Act
+    table = cell_pairs(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
+    decomposition = decompose_cell(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
+
+    # Assert the fixture's adequacy: an uncapped table would exercise nothing.
+    assert table.hidden_keys > 0, "the cap is not engaged — the test would prove nothing"
+    assert len(table.pairs) == CELL_PAIRS_LIMIT
+
+    # Assert — the arithmetic of the cap, and the delta it is a cap on.
+    assert table.keys == len(table.pairs) + table.hidden_keys
+    assert table.shown_delta + table.hidden_delta == pytest.approx(table.total_delta)
+    assert table.total_delta == pytest.approx(_PROBE_DELTA)
+    assert table.total_delta == pytest.approx(decomposition.delta)
+    # Every driver is shown, so the hidden remainder carries none of the money.
+    assert table.shown_delta == pytest.approx(_PROBE_DELTA)
+    assert table.hidden_delta == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_an_uncapped_table_hides_nothing(framework: str) -> None:
+    """``limit=None`` is the census form: every key, nothing hidden."""
+    # Arrange
+    recon = _probe(framework)
+    row_ref = _probe_row(recon)
+
+    # Act
+    capped = cell_pairs(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
+    uncapped = cell_pairs(recon, "c08_03", CORPORATE, row_ref, RWEA_COL, limit=None)
+
+    # Assert
+    assert uncapped.hidden_keys == 0
+    assert uncapped.hidden_delta == pytest.approx(0.0)
+    assert len(uncapped.pairs) == uncapped.keys == capped.keys
+    assert len(uncapped.pairs) > len(capped.pairs), "the cap changed nothing — vacuous"
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_each_pair_carries_both_sides_placement_carriers(framework: str) -> None:
+    """A pair says where EACH side put the exposure, and what each side calls it.
+
+    Read off ``CellMembership.legs``, which carries all four
+    (``reporting/membership.py::_LEG_COLUMNS``) as typed nulls when the plan
+    frame lacks them — so an unsupplied carrier is an empty tuple, never a
+    blank string and never a zero.
+
+    ``row_refs`` is every row of THIS cell's sheet the side placed the key in,
+    parents included: the C 08.03 PD scale is hierarchical, so a leg is
+    legitimately in its band row and its parent band's row at once. It is not a
+    leaf resolution — ``row_migration`` is what resolves a single placement row.
+    """
+    # Arrange
+    recon = _probe(framework)
+    row_ref = _probe_row(recon)
+
+    # Act
+    table = cell_pairs(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
+    by_key = {pair.key: pair for pair in table.pairs}
+
+    # Assert — the mover is on our row and on a DIFFERENT row of their sheet.
+    mover = by_key["PROBE_MOVER"]
+    assert mover.term == "row_placement"
+    assert row_ref in mover.ours_placement.row_refs
+    assert mover.theirs_placement.row_refs, "their side places the mover nowhere — vacuous"
+    assert row_ref not in mover.theirs_placement.row_refs
+
+    # Assert — a one-sided exposure has an EMPTY placement on the side that does
+    # not hold it, on every carrier, rather than a fabricated blank.
+    theirs_only = by_key["PROBE_THEIRS_ONLY"]
+    assert theirs_only.term == "population_theirs_only"
+    assert theirs_only.ours_placement.row_refs == ()
+    assert theirs_only.ours_placement.class_origins == ()
+    assert theirs_only.ours_placement.approach_origins == ()
+    assert theirs_only.ours_placement.leg_roles == ()
+    assert theirs_only.theirs_placement.row_refs
+
+    # Assert — the carriers themselves, on a pair both sides hold.
+    both = by_key["PROBE_BREAK_1"]
+    assert both.ours_placement.class_origins == (CORPORATE,)
+    assert both.theirs_placement.class_origins == (CORPORATE,)
+    assert both.ours_placement.approach_origins == ("foundation_irb",)
+    assert both.ours_placement.leg_roles == ("whole",)
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_a_pairs_money_is_signed_so_the_deltas_sum_to_the_cell(framework: str) -> None:
+    """Each side's money, and the SIGNED contribution, per exposure.
+
+    A side that does not hold the key in this cell carries ``None``, never
+    ``0.0``: an unheld exposure and one held at zero are different claims and
+    filling the null would make them look alike.
+    """
+    # Arrange
+    recon = _probe(framework)
+    row_ref = _probe_row(recon)
+
+    # Act
+    table = cell_pairs(recon, "c08_03", CORPORATE, row_ref, RWEA_COL, limit=None)
+    by_key = {pair.key: pair for pair in table.pairs}
+
+    # Assert — a measurement pair carries both sides' money and their difference.
+    ref, our_rwa, their_rwa = _PROBE_BREAKS[0]
+    assert by_key[ref].ours == pytest.approx(our_rwa)
+    assert by_key[ref].theirs == pytest.approx(their_rwa)
+    assert by_key[ref].delta == pytest.approx(our_rwa - their_rwa)
+
+    # Assert — a one-sided pair carries a NULL on the side that has nothing.
+    assert by_key["PROBE_OURS_ONLY"].theirs is None
+    assert by_key["PROBE_OURS_ONLY"].ours == pytest.approx(_PROBE_OURS_ONLY.rwa)
+    assert by_key["PROBE_OURS_ONLY"].delta == pytest.approx(_PROBE_OURS_ONLY.rwa)
+    assert by_key["PROBE_THEIRS_ONLY"].ours is None
+    assert by_key["PROBE_THEIRS_ONLY"].delta == pytest.approx(-_PROBE_THEIRS_ONLY.rwa)
+
+    # Assert — and a leg the other side placed elsewhere is null HERE, because
+    # this cell is not where they put it.
+    assert by_key["PROBE_MOVER"].theirs is None
+    assert by_key["PROBE_MOVER"].delta == pytest.approx(_PROBE_MOVER.rwa)
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_differing_keys_counts_the_keys_that_differ_not_the_population(framework: str) -> None:
+    """``keys`` is the term's population; ``differing_keys`` is its drivers.
+
+    Measured on this cell under both frameworks: ``measurement`` holds 35 keys
+    and 4 of them differ, so a page reading ``keys`` says "35 exposures" about a
+    difference driven by four — an 8.75x overstatement of the term an analyst is
+    most likely to chase.
+
+    The other four terms are equal on THIS cell because every one of their keys
+    carries money. That is a property of the fixture, not of the terms: a key
+    whose money is itself zero would count in ``keys`` and not in
+    ``differing_keys`` in any term.
+    """
+    # Arrange
+    recon = _probe(framework)
+    row_ref = _probe_row(recon)
+
+    # Act
+    decomposition = decompose_cell(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
+    table = cell_pairs(recon, "c08_03", CORPORATE, row_ref, RWEA_COL, limit=None)
+    terms = {term.name: term for term in decomposition.terms}
+
+    # Assert the fixture's adequacy: without agreeing keys inside the
+    # measurement term the two counts cannot differ and the test is vacuous.
+    measurement = terms["measurement"]
+    assert measurement.keys > measurement.differing_keys, (
+        f"measurement holds {measurement.keys} keys of which "
+        f"{measurement.differing_keys} differ; unless it contains AGREEING keys "
+        "this test cannot tell the two counts apart"
+    )
+    assert measurement.keys >= _PROBE_AGREEING_LEGS
+
+    # Assert — the count is the drivers, and it is what the pairs say it is.
+    assert measurement.differing_keys == len(_PROBE_BREAKS)
+    assert measurement.keys == sum(1 for pair in table.pairs if pair.term == "measurement")
+    assert measurement.differing_keys == sum(
+        1 for pair in table.pairs if pair.term == "measurement" and pair.delta != 0.0
+    )
+    for name in ("population_ours_only", "population_theirs_only", "row_placement"):
+        assert terms[name].keys == terms[name].differing_keys == 1, name
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_the_term_filter_selects_exactly_that_terms_keys(framework: str) -> None:
+    """``term=`` is what links a waterfall row to the exposures behind it."""
+    # Arrange
+    recon = _probe(framework)
+    row_ref = _probe_row(recon)
+    decomposition = decompose_cell(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
+    live = [term for term in decomposition.terms if term.keys]
+
+    # Assert the fixture's adequacy: one live term proves nothing about a filter.
+    assert len(live) >= 4, f"only {len(live)} terms are live on this cell"
+
+    for term in decomposition.terms:
+        # Act
+        table = cell_pairs(
+            recon, "c08_03", CORPORATE, row_ref, RWEA_COL, limit=None, term=term.name
+        )
+
+        # Assert — that term's keys, that term's money, and nothing else.
+        assert {pair.term for pair in table.pairs} <= {term.name}, term.name
+        assert len(table.pairs) == term.keys, term.name
+        assert table.total_delta == term.amount, term.name
+        assert table.hidden_keys == 0, term.name
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_the_capped_term_filter_reports_the_keys_it_left_off(framework: str) -> None:
+    """The measurement term is the one a cap actually bites on."""
+    # Arrange
+    recon = _probe(framework)
+    row_ref = _probe_row(recon)
+    decomposition = decompose_cell(recon, "c08_03", CORPORATE, row_ref, RWEA_COL)
+    measurement = next(term for term in decomposition.terms if term.name == "measurement")
+
+    # Act
+    table = cell_pairs(recon, "c08_03", CORPORATE, row_ref, RWEA_COL, term="measurement")
+
+    # Assert
+    assert measurement.keys > CELL_PAIRS_LIMIT, "the cap is not engaged — vacuous"
+    assert len(table.pairs) == CELL_PAIRS_LIMIT
+    assert table.hidden_keys == measurement.keys - CELL_PAIRS_LIMIT
+    assert table.total_delta == pytest.approx(_PROBE_MEASUREMENT_DELTA)
+    # All four breaks rank above every agreeing key, so the hidden tail is free
+    # of money and the page can say so.
+    assert table.shown_delta == pytest.approx(_PROBE_MEASUREMENT_DELTA)
+    assert table.hidden_delta == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+@pytest.mark.parametrize("template_id", MEMBERSHIP_TEMPLATE_IDS)
+def test_every_terms_pairs_sum_to_that_term_on_every_additive_cell(
+    template_id: str, framework: str
+) -> None:
+    """The contract that makes the drill-down trustworthy, on the whole census.
+
+    A drill-down that does not sum to the waterfall it explains is worse than
+    none. Asserted on EVERY published cell of all three scoped templates under
+    both frameworks, over the portfolio where all five causes are live — not on
+    a sample — and the census counts its own non-vacuous denominator so a
+    narrowed scope cannot hide behind a good ratio.
+
+    The pair sums are compared to within float reassociation: the pairs are
+    ranked by ``|delta|`` and the terms accumulate in classification order, so
+    the same addends arrive in a different order and IEEE addition is not
+    associative. The tolerance is far below any difference an analyst could see.
+    """
+    # Arrange
+    recon = _combined(framework)
+    diff = cell_diff(recon.ours.source, recon.theirs.source, template_id)
+    checked = 0
+    refused = 0
+    live: set[str] = set()
+
+    for row in diff.iter_rows(named=True):
+        # Act
+        decomposition = decompose_cell(
+            recon, template_id, row["sheet"], row["row_ref"], row["col_ref"]
+        )
+        table = cell_pairs(
+            recon, template_id, row["sheet"], row["row_ref"], row["col_ref"], limit=None
+        )
+        where = f"{row['sheet']}/{row['row_ref']}/{row['col_ref']}"
+
+        # Assert — a refused cell yields NO pairs, and the SAME refusal.
+        if not decomposition.decomposable:
+            refused += 1
+            assert table.pairs == (), where
+            assert table.refusal == decomposition.refusal, where
+            continue
+
+        checked += 1
+        assert table.refusal is None, where
+        assert table.total_delta == pytest.approx(decomposition.explained), where
+        for term in decomposition.terms:
+            pairs = [pair for pair in table.pairs if pair.term == term.name]
+            assert sum(pair.delta for pair in pairs) == pytest.approx(
+                term.amount, rel=1e-12, abs=1e-9
+            ), f"{where} {term.name}"
+            assert len(pairs) == term.keys, f"{where} {term.name}"
+            assert sum(1 for pair in pairs if pair.delta != 0.0) == term.differing_keys, (
+                f"{where} {term.name}"
+            )
+            if pairs:
+                live.add(term.name)
+
+    # Assert — the census is not vacuous, and every term was actually exercised.
+    assert checked > 0, "no decomposable cell at all"
+    assert refused > 0, "no refused cell at all — the refusal mirror is untested here"
+    assert live == set(TERM_NAMES), f"terms never populated: {set(TERM_NAMES) - live}"
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+@pytest.mark.parametrize("col_ref", ["0030", "0050"])
+def test_a_non_additive_cell_yields_no_pairs(col_ref: str, framework: str) -> None:
+    """A weighted average has no additive population, so it has no pair table.
+
+    Rendering one would put rows of "theirs 0.00" under a number the identity
+    does not apply to.
+    """
+    # Arrange
+    recon = _combined(framework)
+    row_ref = _leaf_row_of(recon, ours=True, reference="BASE_A1")
+
+    # Act
+    decomposition = decompose_cell(recon, "c08_03", CORPORATE, row_ref, col_ref)
+    table = cell_pairs(recon, "c08_03", CORPORATE, row_ref, col_ref)
+
+    # Assert
+    assert not decomposition.decomposable
+    assert table.pairs == ()
+    assert table.refusal == decomposition.refusal
+    assert "non-additive" in (table.refusal or "")
+    assert table.total_delta == 0.0
+    assert table.hidden_keys == 0
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_a_coverage_unavailable_cell_yields_no_pairs(framework: str) -> None:
+    """The false zero must not come back as a table of "theirs 0.00" rows.
+
+    Their side prints a confident ``0.00`` off an injected all-null column for
+    the very keys we hold, so a pair table built without this guard would list
+    every one of our exposures against a zero their mapping cannot populate —
+    the exact false zero this module exists to prevent, restated one row per
+    contract.
+    """
+    # Arrange
+    our_source, their_source, coverage = _unmapped_gross(framework)
+    recon = build_recon(our_source, their_source, theirs_coverage=coverage)
+    row_ref = _leaf_row_of(recon, ours=True, reference="BASE_A1")
+
+    # Act
+    decomposition = decompose_cell(recon, "c08_03", CORPORATE, row_ref, "0010")
+    table = cell_pairs(recon, "c08_03", CORPORATE, row_ref, "0010")
+
+    # Assert the premise: without the guard this cell prints a zero, not a blank.
+    assert "0010" in coverage.unavailable_refs("c08_03")
+    assert decomposition.theirs_state == "unavailable"
+    assert not decomposition.decomposable
+
+    # Assert — no pairs, and the refusal is the decomposition's own words.
+    assert table.pairs == ()
+    assert table.refusal == decomposition.refusal
+    assert "cannot populate" in (table.refusal or "")
+
+
+def test_an_unbound_cell_yields_no_pairs() -> None:
+    """A cell on no template on either side is refused, not paired."""
+    # Arrange
+    recon = _combined("CRR")
+
+    # Act
+    decomposition = decompose_cell(recon, "c08_03", CORPORATE, "9999", "0040")
+    table = cell_pairs(recon, "c08_03", CORPORATE, "9999", "0040")
+
+    # Assert
+    assert not decomposition.decomposable
+    assert table.pairs == ()
+    assert table.refusal == decomposition.refusal
+
+
+def test_cell_pairs_refuses_a_term_that_is_not_a_term() -> None:
+    """An unknown term would filter to an empty table — a silent zero."""
+    # Arrange
+    recon = _combined("CRR")
+    row_ref = _leaf_row_of(recon, ours=True, reference="BASE_A1")
+
+    # Act / Assert
+    with pytest.raises(ValueError, match="term must be one of"):
+        cell_pairs(recon, "c08_03", CORPORATE, row_ref, "0040", term="measuremnt")  # type: ignore[arg-type]
+
+
+def test_cell_pairs_refuses_a_negative_limit() -> None:
+    """A negative limit slices from the END, which would hide the drivers."""
+    # Arrange
+    recon = _combined("CRR")
+    row_ref = _leaf_row_of(recon, ours=True, reference="BASE_A1")
+
+    # Act / Assert
+    with pytest.raises(ValueError, match="limit must not be negative"):
+        cell_pairs(recon, "c08_03", CORPORATE, row_ref, "0040", limit=-1)
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_a_sheet_placement_pair_names_the_class_the_other_side_moved_it_to(
+    framework: str,
+) -> None:
+    """The two placement scopes are DIFFERENT, and each one is load-bearing.
+
+    ``row_refs`` is scoped to the cell's own sheet, so a key the other side put
+    on a different sheet reports an EMPTY row list — which is precisely what a
+    ``sheet_placement`` finding is. The other three carriers are template-wide,
+    so the same pair still names the class they moved it TO; scoping those to
+    the sheet would blank the one fact the analyst needs.
+
+    Measured on the single-cause fixture: our corporate leg against their
+    institution one, ``their_rows=()`` with
+    ``their_class=('institution',)``.
+    """
+    # Arrange
+    recon = _single_cause("sheet_placement", framework)
+    row_ref = _leaf_row_of(recon, ours=True, reference="CLASS_MOVER")
+
+    # Act
+    table = cell_pairs(recon, "c08_03", CORPORATE, row_ref, RWEA_COL, limit=None)
+    pair = next(item for item in table.pairs if item.key == "CLASS_MOVER")
+
+    # Assert the fixture's adequacy: identical classes on the two sides would
+    # make the template-wide assertion below true under either scoping.
+    assert pair.term == "sheet_placement"
+    assert pair.ours_placement.class_origins != pair.theirs_placement.class_origins, (
+        "both sides class the mover the same way, so this test could not tell "
+        "a template-wide carrier from a sheet-scoped one"
+    )
+
+    # Assert — sheet-scoped rows, template-wide carriers.
+    assert row_ref in pair.ours_placement.row_refs
+    assert pair.theirs_placement.row_refs == ()
+    assert pair.ours_placement.class_origins == (CORPORATE,)
+    assert pair.theirs_placement.class_origins == ("institution",)
+    assert pair.theirs_placement.approach_origins == ("foundation_irb",)
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_a_split_exposures_pair_is_placed_on_the_key_it_paired_on(framework: str) -> None:
+    """The placements are keyed on the COMPARISON key, not on the leg reference.
+
+    Our sealed ledger holds this loan as ``L1__G_BANK`` and ``L1__REM``; the
+    pair's key is the pre-split ``L1``. A placement lookup keyed on
+    ``exposure_reference`` would therefore find nothing for it and every pair of
+    every split exposure would render a blank placement — a silent one, because
+    an empty placement is also the legitimate shape of a population term.
+    """
+    # Arrange
+    recon = _split_recon([_SPLIT_G_LEG, _SPLIT_REM_LEG], [_WHOLE_LOAN], framework)
+    row_ref = _leaf_row_of(recon, ours=False, reference=_WHOLE_LOAN.reference)
+    our_legs = recon.ours.membership.legs.filter(
+        (pl.col("template_id") == "c08_03") & (pl.col("sheet") == CORPORATE)
+    )
+    references = set(our_legs["exposure_reference"].to_list())
+
+    # Assert the fixture's adequacy: our side must carry the base reference ONLY
+    # as ``source_exposure_reference``, or the two keyings coincide here.
+    assert {_SPLIT_G_LEG.reference, _SPLIT_REM_LEG.reference} <= references
+    assert _WHOLE_LOAN.reference not in references, (
+        f"our side carries {_WHOLE_LOAN.reference} as a leg reference, so a "
+        "literal keying would find it too and this test would prove nothing"
+    )
+
+    # Act
+    table = cell_pairs(recon, "c08_03", CORPORATE, row_ref, RWEA_COL, limit=None)
+    pair = next(item for item in table.pairs if item.key == _WHOLE_LOAN.reference)
+
+    # Assert — both sides place the pair, on the key they paired on.
+    assert row_ref in pair.ours_placement.row_refs
+    assert row_ref in pair.theirs_placement.row_refs
+    assert pair.ours_placement.class_origins == (CORPORATE,)
+
+
+def _row_group_members(
+    side: SideView, template_id: str, sheet: str | None, row_ref: str
+) -> dict[str, frozenset[str]]:
+    """``predicate_key -> the legs it holds`` for every group on one row."""
+    legs = side.membership.legs.filter(
+        (pl.col("template_id") == template_id)
+        & (pl.col("sheet") == sheet)
+        & (pl.col("row_ref") == row_ref)
+    )
+    return {
+        key: frozenset(legs.filter(pl.col("predicate_key") == key)["exposure_reference"].to_list())
+        for key in legs["predicate_key"].unique().to_list()
+    }
+
+
+def _first_decomposable_col(  # noqa: PLR0913 - the group's full address plus the recon
+    recon: ReturnRecon, template_id: str, sheet: str | None, row_ref: str, group: str
+) -> str:
+    """The first column of one group that carries a four-way split at all."""
+    served = (
+        recon.ours.membership.columns.filter(
+            (pl.col("template_id") == template_id)
+            & (pl.col("sheet") == sheet)
+            & (pl.col("row_ref") == row_ref)
+            & (pl.col("predicate_key") == group)
+        )["col_ref"]
+        .unique()
+        .sort()
+        .to_list()
+    )
+    for col_ref in served:
+        if decompose_cell(recon, template_id, sheet, row_ref, col_ref).decomposable:
+            return col_ref
+    raise AssertionError(f"group {group} of {template_id}/{sheet}/{row_ref} has no additive cell")
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_the_pairs_read_the_one_group_serving_the_cell(framework: str) -> None:
+    """A ROW does not have one population, and the pair table must not act as if.
+
+    C 08.01 row 0010 carries several predicate groups: the origin-basis columns
+    read the whole book, while the off-balance-sheet column reads one narrow
+    group. Listing the row's legs instead of the CELL's would report every
+    exposure of the row against a column that describes two of them — measured
+    here at 13 keys against 2, a 6.5x over-count on this fixture, and at 3.00x
+    (C 07.00 ``retail_other``) and 1.86x (C 08.01 ``corporate``) on the review
+    portfolio that first found it.
+
+    The group refs differ between the frameworks, so they are resolved from the
+    membership rather than typed.
+    """
+    # Arrange
+    recon = _combined(framework)
+    row_ref = "0010"
+    ours = _row_group_members(recon.ours, "c08_01", CORPORATE, row_ref)
+    theirs = _row_group_members(recon.theirs, "c08_01", CORPORATE, row_ref)
+    narrow = min(ours, key=lambda key: len(ours[key]))
+    wide = max(ours, key=lambda key: len(ours[key]))
+
+    # Assert the fixture's adequacy: one population on the row would make the
+    # narrow and wide cells identical and this test would prove nothing.
+    assert len(ours[narrow]) < len(ours[wide]), (
+        f"every group of the row holds the same {len(ours[narrow])} legs, so a "
+        "cell reading its row rather than its group would look correct here"
+    )
+
+    # Act
+    narrow_col = _first_decomposable_col(recon, "c08_01", CORPORATE, row_ref, narrow)
+    wide_col = _first_decomposable_col(recon, "c08_01", CORPORATE, row_ref, wide)
+    narrow_keys = {
+        pair.key
+        for pair in cell_pairs(recon, "c08_01", CORPORATE, row_ref, narrow_col, limit=None).pairs
+    }
+    wide_keys = {
+        pair.key
+        for pair in cell_pairs(recon, "c08_01", CORPORATE, row_ref, wide_col, limit=None).pairs
+    }
+
+    # Assert — the narrow cell lists its OWN group's exposures and no others.
+    assert narrow_keys, f"the {narrow_col} cell lists no exposure at all"
+    assert narrow_keys <= (ours[narrow] | theirs[narrow])
+    assert narrow_keys < wide_keys, (
+        f"{narrow_col} lists {sorted(narrow_keys)}, which is not a strict subset "
+        f"of {wide_col}'s {len(wide_keys)} keys — the table aggregated across "
+        "predicate groups"
+    )

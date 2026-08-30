@@ -15,6 +15,9 @@ Key responsibilities:
   the plan names — population, row placement, sheet placement, measurement —
   which sum EXACTLY to that delta, and refuse the cell outright rather than
   present a plausible waterfall when they do not (``decompose_cell``).
+- Rank the EXPOSURES behind that delta, one row per comparison key, by the size
+  of each one's contribution rather than by the size of the loan, and say what
+  the cap left off (``cell_pairs``).
 - Cross-tabulate one predicate group's legs by our row against their row, so a
   banding difference is priced rather than merely noticed (``row_migration``).
 
@@ -65,6 +68,35 @@ pass can overwrite a cell after the executor runs. That is the whole reason
 ``CellDecomposition.reconciles`` exists and is scored against the REPORTED
 delta: a waterfall that does not add up to the number on the screen is a wrong
 answer, and this module says so instead of rendering it.
+
+THE TERMS ARE DERIVED FROM A PER-KEY TABLE, NOT COMPUTED BESIDE ONE. The
+ordered partition above runs ONCE, in ``_classify``, and yields one classified
+record per comparison key — the key, each side's money, the signed delta, the
+term. ``_terms`` aggregates that record set and ``cell_pairs`` ranks it, so the
+drill-down and the waterfall it drills into cannot disagree BY CONSTRUCTION
+rather than by test. The refusal travels the same way: ``cell_pairs`` returns
+the very string ``decompose_cell`` produced rather than re-deriving it, so a
+cell refused as unavailable, non-additive or unbound can never come back as a
+table of "theirs 0.00" rows against a column the other side's mapping cannot
+populate.
+
+RANKED ON |DELTA|, NOT ON SIZE — AND THE CAP SAYS WHAT IT HID. Measured on a
+probe portfolio of 30 agreeing loans, 4 small value breaks, one exposure each
+side only and one band mover, a leg listing ordered on ``|rwa_final|`` rendered
+50 rows of which EVERY one agreed to the penny, because the difference lived in
+the small loans. So the pair table is ordered by each key's signed
+contribution, ``term=`` narrows it to one cause so a waterfall row can link to
+its exposures, and ``CellPairs`` publishes the shown rows' delta, the whole
+delta and the count not shown. A silent cap on a regulatory comparison is a
+silent zero by another name.
+
+A TERM'S POPULATION AND ITS DRIVERS ARE COUNTED SEPARATELY. ``CellTerm.keys``
+is every key the term holds; ``differing_keys`` only those whose delta is not
+exactly zero. The two diverge on ``measurement``, which by construction holds
+every key BOTH sides report — 35 keys on the probe cell above, behind a
+difference driven by 4. On the other four terms a key contributes its whole
+money to the term, so the counts differ there only where a leg's own money is
+zero.
 
 ROW PLACEMENT HERE IS VALUE-DRIVEN BY CONSTRUCTION — READ NOTHING ELSE INTO IT.
 Both sides are banded by OUR generators, from each side's own PD. So a leg
@@ -313,6 +345,24 @@ _BASE_KEY_COLUMN = "source_exposure_reference"
 #: See ``_comparison_key``.
 _FALLBACK_KEY_COLUMN = "exposure_reference"
 
+#: How many ranked pairs ``cell_pairs`` returns unless a caller says otherwise.
+#: Matches the leg listing the compare page has always shown, so the change is
+#: the ORDERING and the honesty about the remainder, not the page's length.
+CELL_PAIRS_LIMIT = 25
+
+#: The per-leg carriers a pair reports for each side, read off
+#: ``CellMembership.legs``. Every one is declared in
+#: ``reporting/membership.py::_LEG_COLUMNS`` and materialised by ``_project``
+#: as a typed NULL where the plan frame lacks it, so the columns are present on
+#: any membership frame — those two are the only constructors of a
+#: ``CellMembership``, the other building an empty frame from
+#: ``MEMBERSHIP_SCHEMA``, which declares them too.
+_PLACEMENT_COLUMNS: tuple[str, ...] = (
+    "reporting_class_origin",
+    "reporting_approach_origin",
+    "reporting_leg_role",
+)
+
 #: Absolute floor of the additivity tolerance, widened by the cell's own
 #: magnitude so a GBP 400m cell is not held to a GBP 0.000001 residual.
 _ABS_TOLERANCE = 1e-6
@@ -335,11 +385,26 @@ class CellTerm:
     ``amount`` is signed so the terms sum to the delta directly: a population
     the other side holds and we do not enters NEGATIVE, exactly as it reduces
     our figure relative to theirs.
+
+    ``keys`` is the term's POPULATION and ``differing_keys`` its DRIVERS — the
+    keys whose delta is not exactly zero. They are different questions and the
+    gap between them is not a rounding detail: ``measurement`` holds every key
+    both sides report, agreeing ones included, so on a cell of 35 shared keys
+    with 4 real breaks ``keys`` reads 35. Both are published because copy
+    already depends on the population ("this term covers 35 exposures") while
+    the useful figure for an analyst chasing the difference is the other one.
+
+    On the other four terms a key contributes its whole money to the term, so
+    the two counts differ there only where a leg's own money is zero.
+    ``differing_keys`` tests the delta against exact zero rather than a
+    tolerance: claiming two sides AGREE about an exposure is a claim their
+    figures are equal.
     """
 
     name: TermName
     amount: float
     keys: int
+    differing_keys: int
 
 
 @dataclass(frozen=True)
@@ -384,6 +449,100 @@ class CellDecomposition:
 
 
 @dataclass(frozen=True)
+class LegPlacement:
+    """Where ONE side put a comparison key, and what that side calls it.
+
+    Every field is the SORTED DISTINCT non-null values the side's membership
+    holds for that key, because a key is an exposure and an exposure can be
+    several legs: a guarantee split carries a ``reporting_leg_role`` per leg,
+    and the C 08.03 PD scale is hierarchical, so a leg sits in its own band row
+    and its parent band's row at once. Tuples rather than a joined string, so
+    nothing has to invent a separator or parse one back out.
+
+    An EMPTY tuple means the side's membership supplies no value — either it
+    holds no leg for this key anywhere in the template (the ordinary shape of a
+    population term) or the carrier itself is null on every leg it does hold.
+    Never a blank string and never a zero; those would read as measurements.
+
+    ``row_refs`` is scoped to the CELL'S OWN SHEET and the other three are
+    template-wide. That asymmetry is deliberate: an empty ``row_refs`` says
+    "not on this sheet", which is exactly what a ``sheet_placement`` key is,
+    while the class the other side moved it TO lives on the sheet it moved to
+    and would be lost by the same scoping. It is not a leaf resolution either —
+    parents are included as the legs really are; ``row_migration`` is what
+    resolves a key to a single placement row.
+    """
+
+    row_refs: tuple[str, ...] = ()
+    class_origins: tuple[str, ...] = ()
+    approach_origins: tuple[str, ...] = ()
+    leg_roles: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class CellPair:
+    """One comparison key's contribution to a cell delta, on both sides.
+
+    ``delta`` is the SIGNED contribution, not ``ours - theirs`` read off the two
+    money fields: a key only one side reports contributes its whole money with
+    that side's sign, and its other side is ``None`` rather than ``0.0``,
+    because "we do not hold this exposure in this cell" and "we hold it at nil"
+    are different claims. Summing ``delta`` over the pairs of a term gives that
+    term's ``amount`` exactly — they are the same addends.
+
+    ``key`` is the comparison key (``_comparison_key``), which is the EXPOSURE
+    and not the leg. It is ``None`` for a leg whose identity resolved to null on
+    every rung of the ladder — the shape ``_build_side`` warns about, where such
+    legs share one key and can pair only with each other.
+    """
+
+    key: str | None
+    ours: float | None
+    theirs: float | None
+    delta: float
+    term: TermName
+    ours_placement: LegPlacement
+    theirs_placement: LegPlacement
+
+
+@dataclass(frozen=True)
+class CellPairs:
+    """One cell's exposures, ranked by contribution — or the refusal instead.
+
+    ``pairs`` is what a page may show; ``total_delta`` is what the whole scope
+    carries and ``hidden_keys`` how many rows were left off. All three are
+    published together so a caller can say "the 25 shown carry X of the Y
+    difference; N more carry Z" rather than presenting the page as the whole
+    population.
+
+    A REFUSED cell carries no pairs and the refusal ``decompose_cell`` gave,
+    verbatim. ``term`` echoes the filter that was applied, or ``None`` for the
+    whole cell.
+    """
+
+    template_id: str
+    sheet: str | None
+    row_ref: str
+    col_ref: str
+    term: TermName | None
+    pairs: tuple[CellPair, ...]
+    shown_delta: float
+    total_delta: float
+    hidden_keys: int
+    refusal: str | None
+
+    @property
+    def hidden_delta(self) -> float:
+        """The delta carried by the keys the cap left off."""
+        return self.total_delta - self.shown_delta
+
+    @property
+    def keys(self) -> int:
+        """Every key in scope, shown or not."""
+        return len(self.pairs) + self.hidden_keys
+
+
+@dataclass(frozen=True)
 class SideView:
     """One side's generated templates, plans and membership, built ONCE.
 
@@ -409,6 +568,7 @@ class SideView:
         default_factory=dict
     )
     keys: dict[tuple[str, str | None], frozenset[str]] = field(default_factory=dict)
+    placements: dict[tuple[str, str | None], dict[str, LegPlacement]] = field(default_factory=dict)
     unpopulatable: dict[str, dict[str, str]] = field(default_factory=dict)
     records: dict[tuple[str, str], dict[str, dict[str, float | None]]] = field(default_factory=dict)
     queries: dict[tuple[str, str, str, str], CellQuery | None] = field(default_factory=dict)
@@ -590,98 +750,96 @@ def decompose_cell(
     delta. ``reconciles`` is ``False`` — with the shortfall in ``residual`` —
     whenever they do not sum to it, which is the case a post-execute pass
     creates by overwriting a cell after the executor ran.
+
+    The terms are an AGGREGATE of the per-key table ``cell_pairs`` publishes,
+    computed by one shared pass (``_decompose``), so the waterfall and the
+    drill-down beneath it cannot disagree.
     """
-    provider = _provider(template_id)
-    if provider is None:
-        return _refused(
-            template_id,
-            sheet,
-            row_ref,
-            col_ref,
-            "unbound",
-            None,
-            f"{template_id} is "
-            "not instrumented: it has no membership and so no addressable populations",
-        )
-    sheet_key = _sheet_key(recon, template_id, sheet)
-    if sheet_key is None:
-        return _refused(
-            template_id, sheet, row_ref, col_ref, "unbound", None, "sheet is on neither side"
-        )
-    query = _query(recon.ours, provider, template_id, sheet_key, sheet, row_ref, col_ref) or _query(
-        recon.theirs, provider, template_id, sheet_key, sheet, row_ref, col_ref
-    )
-    if query is None:
-        return _refused(
-            template_id,
-            sheet,
-            row_ref,
-            col_ref,
-            "unbound",
-            None,
-            "cell is not on this template on either side",
-        )
+    decomposition, _pairs = _decompose(recon, template_id, sheet, row_ref, col_ref)
+    return decomposition
 
-    ours, ours_state = _side_cell(
-        recon.ours, provider, template_id, sheet_key, sheet, row_ref, col_ref
-    )
-    theirs, theirs_state = _side_cell(
-        recon.theirs, provider, template_id, sheet_key, sheet, row_ref, col_ref
-    )
-    refusal = _refusal_reason(query, ours_state, theirs_state)
-    if refusal is not None and "unavailable on" in refusal:
-        side = recon.ours if ours_state == "unavailable" else recon.theirs
-        cause = _coverage_refusal(side, template_id, col_ref)
-        if cause is not None:
-            refusal = f"{refusal.split(':', 1)[0]}: {cause}"
-    if refusal is not None:
-        return _refused(
-            template_id,
-            sheet,
-            row_ref,
-            col_ref,
-            query.kind,
-            query.metric,
-            refusal,
-            ours=ours,
-            theirs=theirs,
-            ours_state=ours_state,
-            theirs_state=theirs_state,
-        )
 
-    our_money = _cell_money(
-        recon.ours, recon.key_column, template_id, sheet_key, row_ref, col_ref, query
+def cell_pairs(  # noqa: PLR0913 - the cell's full address plus the cap and the filter
+    recon: ReturnRecon,
+    template_id: str,
+    sheet: str | None,
+    row_ref: str,
+    col_ref: str,
+    *,
+    limit: int | None = CELL_PAIRS_LIMIT,
+    term: TermName | None = None,
+) -> CellPairs:
+    """The exposures behind one cell's delta, ranked by what each contributes.
+
+    One row per comparison key — the EXPOSURE, not the leg — carrying each
+    side's money for this cell, the signed contribution, the term the key falls
+    in and each side's placement carriers (``LegPlacement``).
+
+    RANKED ON ``|delta|``, NOT ON MONEY. The drivers of a difference are
+    routinely the small loans, and a size-ranked listing showed 50 rows of
+    exact agreement on the portfolio this was measured on — see the module
+    docstring. Ties break on the key, so the order is total and stable.
+
+    ``term`` narrows the table to one cause, which is how a waterfall row links
+    to its own exposures; it must be one of ``TERM_NAMES``. ``limit`` caps the
+    ROWS RETURNED, not the arithmetic: ``total_delta`` is the whole scope's
+    delta, ``shown_delta`` the visible rows' and ``hidden_keys`` the count left
+    off, so a caller can state what the page is not showing. ``limit=None``
+    returns everything.
+
+    A REFUSED cell yields NO pairs and carries ``decompose_cell``'s own refusal
+    string — the same object, not a re-derivation, so the two can never
+    contradict. That covers the non-additive metrics, the non-row-backed cells,
+    the uninstrumented templates and — the case this matters most for — a cell
+    either side's ``LedgerCoverage`` names as unpopulatable, where pairing
+    would render our real exposures against a confident ``0.00`` their mapping
+    never produced.
+
+    Raises:
+        ValueError: If ``term`` is not a term name (it would filter to an empty
+            table, which is a silent zero), or ``limit`` is negative (it would
+            slice from the END and drop precisely the ranked drivers).
+    """
+    if term is not None and term not in TERM_NAMES:
+        raise ValueError(f"term must be one of {TERM_NAMES}, got {term!r}")
+    if limit is not None and limit < 0:
+        raise ValueError(f"limit must not be negative, got {limit!r}")
+    decomposition, classified = _decompose(recon, template_id, sheet, row_ref, col_ref)
+    address = (template_id, sheet, row_ref, col_ref, term)
+    if decomposition.refusal is not None:
+        return _no_pairs(*address, decomposition.refusal)
+
+    # Summed in CLASSIFICATION order, before the ranking below reorders the very
+    # same addends: that is what makes ``total_delta`` equal to the term's own
+    # ``amount`` bit for bit rather than to within reassociation.
+    scoped = tuple(pair for pair in classified if term is None or pair.term == term)
+    total = sum((pair.delta for pair in scoped), 0.0)
+    ranked = _rank(scoped)
+    shown = ranked if limit is None else ranked[:limit]
+    ours = _placements(recon.ours, recon.key_column, template_id, sheet)
+    theirs = _placements(recon.theirs, recon.key_column, template_id, sheet)
+    pairs = tuple(
+        CellPair(
+            key=pair.key,
+            ours=pair.ours,
+            theirs=pair.theirs,
+            delta=pair.delta,
+            term=pair.term,
+            ours_placement=_placement_of(ours, pair.key),
+            theirs_placement=_placement_of(theirs, pair.key),
+        )
+        for pair in shown
     )
-    their_money = _cell_money(
-        recon.theirs, recon.key_column, template_id, sheet_key, row_ref, col_ref, query
-    )
-    key = recon.key_column
-    terms = _terms(
-        our_money,
-        their_money,
-        their_all=_side_keys(recon.theirs, key, template_id, None),
-        their_sheet=_side_keys(recon.theirs, key, template_id, sheet),
-        our_all=_side_keys(recon.ours, key, template_id, None),
-        our_sheet=_side_keys(recon.ours, key, template_id, sheet),
-    )
-    delta = (ours or 0.0) - (theirs or 0.0)
-    residual = delta - sum(term.amount for term in terms)
-    scale = max(abs(delta), sum(abs(term.amount) for term in terms))
-    return CellDecomposition(
+    return CellPairs(
         template_id=template_id,
         sheet=sheet,
         row_ref=row_ref,
         col_ref=col_ref,
-        kind=query.kind,
-        metric=query.metric,
-        ours=ours,
-        theirs=theirs,
-        ours_state=ours_state,
-        theirs_state=theirs_state,
-        delta=delta,
-        terms=terms,
-        reconciles=abs(residual) <= max(_ABS_TOLERANCE, _REL_TOLERANCE * scale),
-        residual=residual,
+        term=term,
+        pairs=pairs,
+        shown_delta=sum((pair.delta for pair in pairs), 0.0),
+        total_delta=total,
+        hidden_keys=len(scoped) - len(pairs),
         refusal=None,
     )
 
@@ -1092,6 +1250,190 @@ def _status(ours: CellState, theirs: CellState) -> DiffStatus:
 # =============================================================================
 
 
+@dataclass(frozen=True)
+class _KeyPair:
+    """One comparison key's classified contribution, before it is ranked.
+
+    The single source of truth behind both ``CellTerm`` and ``CellPair``: the
+    terms are an aggregate of these records and the pair table is these records
+    decorated with placements, so neither can hold a key or an amount the other
+    does not.
+    """
+
+    key: str | None
+    ours: float | None
+    theirs: float | None
+    delta: float
+    term: TermName
+
+
+#: The placement of a key the side's membership does not hold at all.
+_NO_PLACEMENT = LegPlacement()
+
+
+def _decompose(
+    recon: ReturnRecon,
+    template_id: str,
+    sheet: str | None,
+    row_ref: str,
+    col_ref: str,
+) -> tuple[CellDecomposition, tuple[_KeyPair, ...]]:
+    """One cell, decomposed once: the waterfall AND the per-key table under it.
+
+    Both public entry points come through here, so a refusal is one decision
+    rather than two that could drift, and the terms are literally an aggregate
+    of the pairs. See ``decompose_cell`` for what each refusal means.
+    """
+    provider = _provider(template_id)
+    if provider is None:
+        return (
+            _refused(
+                template_id,
+                sheet,
+                row_ref,
+                col_ref,
+                "unbound",
+                None,
+                f"{template_id} is "
+                "not instrumented: it has no membership and so no addressable populations",
+            ),
+            (),
+        )
+    sheet_key = _sheet_key(recon, template_id, sheet)
+    if sheet_key is None:
+        return (
+            _refused(
+                template_id, sheet, row_ref, col_ref, "unbound", None, "sheet is on neither side"
+            ),
+            (),
+        )
+    query = _query(recon.ours, provider, template_id, sheet_key, sheet, row_ref, col_ref) or _query(
+        recon.theirs, provider, template_id, sheet_key, sheet, row_ref, col_ref
+    )
+    if query is None:
+        return (
+            _refused(
+                template_id,
+                sheet,
+                row_ref,
+                col_ref,
+                "unbound",
+                None,
+                "cell is not on this template on either side",
+            ),
+            (),
+        )
+
+    ours, ours_state = _side_cell(
+        recon.ours, provider, template_id, sheet_key, sheet, row_ref, col_ref
+    )
+    theirs, theirs_state = _side_cell(
+        recon.theirs, provider, template_id, sheet_key, sheet, row_ref, col_ref
+    )
+    refusal = _refusal_reason(query, ours_state, theirs_state)
+    if refusal is not None and "unavailable on" in refusal:
+        side = recon.ours if ours_state == "unavailable" else recon.theirs
+        cause = _coverage_refusal(side, template_id, col_ref)
+        if cause is not None:
+            refusal = f"{refusal.split(':', 1)[0]}: {cause}"
+    if refusal is not None:
+        return (
+            _refused(
+                template_id,
+                sheet,
+                row_ref,
+                col_ref,
+                query.kind,
+                query.metric,
+                refusal,
+                ours=ours,
+                theirs=theirs,
+                ours_state=ours_state,
+                theirs_state=theirs_state,
+            ),
+            (),
+        )
+
+    our_money = _cell_money(
+        recon.ours, recon.key_column, template_id, sheet_key, row_ref, col_ref, query
+    )
+    their_money = _cell_money(
+        recon.theirs, recon.key_column, template_id, sheet_key, row_ref, col_ref, query
+    )
+    key = recon.key_column
+    pairs = _classify(
+        our_money,
+        their_money,
+        their_all=_side_keys(recon.theirs, key, template_id, None),
+        their_sheet=_side_keys(recon.theirs, key, template_id, sheet),
+        our_all=_side_keys(recon.ours, key, template_id, None),
+        our_sheet=_side_keys(recon.ours, key, template_id, sheet),
+    )
+    terms = _terms(pairs)
+    delta = (ours or 0.0) - (theirs or 0.0)
+    residual = delta - sum(term.amount for term in terms)
+    scale = max(abs(delta), sum(abs(term.amount) for term in terms))
+    return (
+        CellDecomposition(
+            template_id=template_id,
+            sheet=sheet,
+            row_ref=row_ref,
+            col_ref=col_ref,
+            kind=query.kind,
+            metric=query.metric,
+            ours=ours,
+            theirs=theirs,
+            ours_state=ours_state,
+            theirs_state=theirs_state,
+            delta=delta,
+            terms=terms,
+            reconciles=abs(residual) <= max(_ABS_TOLERANCE, _REL_TOLERANCE * scale),
+            residual=residual,
+            refusal=None,
+        ),
+        pairs,
+    )
+
+
+def _rank(pairs: Iterable[_KeyPair]) -> list[_KeyPair]:
+    """The published order: biggest CONTRIBUTION first, ties broken on the key.
+
+    ``|delta|`` and NOT either side's money. The drivers of a cell difference
+    are routinely its smallest exposures — see the module docstring for the
+    portfolio where a money-ranked listing showed 50 rows of exact agreement.
+    The key tie-break makes the order total, so a page reloading the same cell
+    reads the same, and a null key (``_build_side`` warns about those) sorts as
+    the empty string rather than raising.
+
+    One expression in one function so an isolating mutation can replace the
+    ORDERING and nothing else — see ``tests/mutations/``.
+    """
+    return sorted(pairs, key=lambda pair: (-abs(pair.delta), pair.key or ""))
+
+
+def _no_pairs(  # noqa: PLR0913 - a refusal still reports the cell's full identity
+    template_id: str,
+    sheet: str | None,
+    row_ref: str,
+    col_ref: str,
+    term: TermName | None,
+    refusal: str,
+) -> CellPairs:
+    """A cell with no addressable exposures, saying why on the result itself."""
+    return CellPairs(
+        template_id=template_id,
+        sheet=sheet,
+        row_ref=row_ref,
+        col_ref=col_ref,
+        term=term,
+        pairs=(),
+        shown_delta=0.0,
+        total_delta=0.0,
+        hidden_keys=0,
+        refusal=refusal,
+    )
+
+
 def _refusal_reason(query: CellQuery, ours: CellState, theirs: CellState) -> str | None:
     """Why this cell carries no four-way split, or ``None`` if it does."""
     if query.kind != "rows":
@@ -1305,7 +1647,10 @@ def _comparison_key(columns: Iterable[str], key_column: str) -> pl.Expr:
 
     ``key_column`` still selects literally elsewhere: the migration matrix
     (``_group_legs``) and the view's leg listing both read the named column
-    as-is. It is only the POPULATION comparison that collapses.
+    as-is. What collapses is the POPULATION comparison and the per-key table
+    derived from it — ``_key_money``, ``_side_keys`` and ``_placements``, which
+    must agree about the key or the pair table would decorate a key nothing
+    holds.
 
     ``_group_legs`` deliberately does NOT use this, and must not be changed to:
     it prices each key with ``.first()`` (a leg legitimately appears on several
@@ -1358,7 +1703,7 @@ def _key_rungs(columns: Iterable[str], key_column: str) -> list[str]:
     ]
 
 
-def _terms(  # noqa: PLR0913 - the four classification sets are the whole signature
+def _classify(  # noqa: PLR0913 - the four classification sets are the whole signature
     ours: dict[str, float],
     theirs: dict[str, float],
     *,
@@ -1366,28 +1711,43 @@ def _terms(  # noqa: PLR0913 - the four classification sets are the whole signat
     their_sheet: frozenset[str],
     our_all: frozenset[str],
     our_sheet: frozenset[str],
-) -> tuple[CellTerm, ...]:
-    """The four causes, as five signed terms that sum to the population delta.
+) -> tuple[_KeyPair, ...]:
+    """Every comparison key of the cell, in exactly one of the five buckets.
 
-    Each side's population is partitioned by the SAME ordered test, so no key is
-    counted twice and none is dropped — which is what makes the identity exact
-    rather than approximate. See the module docstring.
+    THE ONE ORDERED PARTITION. Each side's population is walked by the SAME
+    ordered test, so no key is counted twice and none is dropped — which is
+    what makes the identity exact rather than approximate. The terms are then
+    an aggregate of this (``_terms``) and the drill-down is this ranked
+    (``cell_pairs``); computing either one alongside the other rather than out
+    of it is what lets a waterfall and its own drill-down disagree.
+
+    ``delta`` is the key's SIGNED contribution: our money net of theirs where
+    both hold it, our money where only we do, MINUS theirs where only they do.
+    The side that does not hold the key in this cell carries ``None``, never
+    ``0.0`` — an unheld exposure is not an exposure held at nil.
     """
-    amounts = dict.fromkeys(TERM_NAMES, 0.0)
-    keys: dict[TermName, set[str]] = {name: set() for name in TERM_NAMES}
+    pairs: list[_KeyPair] = []
 
     for key, value in ours.items():
-        name: TermName
         if key in theirs:
-            name, value = "measurement", value - theirs[key]
-        elif key in their_sheet:
-            name = "row_placement"
-        elif key in their_all:
-            name = "sheet_placement"
-        else:
-            name = "population_ours_only"
-        amounts[name] += value
-        keys[name].add(key)
+            pairs.append(
+                _KeyPair(
+                    key=key,
+                    ours=value,
+                    theirs=theirs[key],
+                    delta=value - theirs[key],
+                    term="measurement",
+                )
+            )
+            continue
+        name: TermName = (
+            "row_placement"
+            if key in their_sheet
+            else "sheet_placement"
+            if key in their_all
+            else "population_ours_only"
+        )
+        pairs.append(_KeyPair(key=key, ours=value, theirs=None, delta=value, term=name))
 
     for key, value in theirs.items():
         if key in ours:
@@ -1399,11 +1759,35 @@ def _terms(  # noqa: PLR0913 - the four classification sets are the whole signat
             if key in our_all
             else "population_theirs_only"
         )
-        amounts[name] -= value
-        keys[name].add(key)
+        pairs.append(_KeyPair(key=key, ours=None, theirs=value, delta=-value, term=name))
+
+    return tuple(pairs)
+
+
+def _terms(pairs: Iterable[_KeyPair]) -> tuple[CellTerm, ...]:
+    """The five signed terms, aggregated from the classified keys.
+
+    Accumulated in the order ``_classify`` produced, which is what makes a
+    term's ``amount`` equal to the sum of its pairs' deltas bit for bit rather
+    than to within float reassociation.
+    """
+    amounts = dict.fromkeys(TERM_NAMES, 0.0)
+    keys = dict.fromkeys(TERM_NAMES, 0)
+    differing = dict.fromkeys(TERM_NAMES, 0)
+
+    for pair in pairs:
+        amounts[pair.term] += pair.delta
+        keys[pair.term] += 1
+        differing[pair.term] += int(pair.delta != 0.0)
 
     return tuple(
-        CellTerm(name=name, amount=amounts[name], keys=len(keys[name])) for name in TERM_NAMES
+        CellTerm(
+            name=name,
+            amount=amounts[name],
+            keys=keys[name],
+            differing_keys=differing[name],
+        )
+        for name in TERM_NAMES
     )
 
 
@@ -1428,6 +1812,79 @@ def _side_keys(
     keys = frozenset(resolved["key"].drop_nulls().to_list())
     side.keys[memo_key] = keys
     return keys
+
+
+def _placements(
+    side: SideView, key_column: str, template_id: str, sheet: str | None
+) -> dict[str, LegPlacement]:
+    """``comparison key -> LegPlacement`` for one side of one template.
+
+    Keyed on ``_comparison_key``, in lockstep with ``_key_money`` and
+    ``_side_keys`` — a pair's key comes from those, so a different grain here
+    would decorate every pair with an empty placement and say nothing.
+
+    THE FOUR CARRIERS ARE ALWAYS COLUMNS, WHATEVER THE PLAN FRAME SUPPLIED.
+    ``reporting/membership.py::_project`` materialises each ``_LEG_COLUMNS``
+    entry the frame lacks as a typed NULL, and the only other constructor of a
+    ``CellMembership`` builds an empty frame from ``MEMBERSHIP_SCHEMA``, which
+    declares them too — so no presence guard is needed and none is used. A
+    carrier the side genuinely has no value for comes back as an EMPTY tuple,
+    which is a different claim from a blank.
+
+    ``row_ref`` is nulled OUTSIDE the cell's own sheet rather than the leg being
+    dropped, so a key their side placed on another sheet still reports the class
+    and approach it landed under there — which is the whole content of a
+    ``sheet_placement`` finding — while its ``row_refs`` stays empty, saying
+    "not on this sheet". Both halves are held up by
+    ``test_a_sheet_placement_pair_names_the_class_the_other_side_moved_it_to``,
+    which goes red under either scoping applied to the other half; the two
+    mutations are in ``tests/mutations/``.
+
+    ``sheet=None`` scopes nothing, spanning the whole template exactly as
+    ``_side_keys`` does with the same argument — the convention a single-frame
+    template's membership uses, where every row carries a null sheet.
+
+    Memoised per ``(template_id, sheet)``: a drill-down asks this of one cell,
+    and a page walking a waterfall asks it once per term.
+    """
+    memo_key = (template_id, sheet)
+    cached = side.placements.get(memo_key)
+    if cached is not None:
+        return cached
+    legs = side.membership.legs.filter(pl.col("template_id") == template_id)
+    on_sheet = (
+        pl.col("row_ref")
+        if sheet is None
+        else pl.when(pl.col("sheet") == sheet)
+        .then(pl.col("row_ref"))
+        .otherwise(pl.lit(None, dtype=pl.String()))
+    )
+    carriers = ("row_ref", *_PLACEMENT_COLUMNS)
+    resolved = legs.select(
+        _comparison_key(legs.columns, key_column),
+        on_sheet.alias("row_ref"),
+        *(pl.col(name) for name in _PLACEMENT_COLUMNS),
+    ).group_by("key")
+    grouped = resolved.agg(
+        *(pl.col(name).drop_nulls().unique().sort().alias(name) for name in carriers)
+    )
+    out = {
+        str(record["key"]): LegPlacement(
+            row_refs=tuple(record["row_ref"]),
+            class_origins=tuple(record["reporting_class_origin"]),
+            approach_origins=tuple(record["reporting_approach_origin"]),
+            leg_roles=tuple(record["reporting_leg_role"]),
+        )
+        for record in grouped.iter_rows(named=True)
+        if record["key"] is not None
+    }
+    side.placements[memo_key] = out
+    return out
+
+
+def _placement_of(placements: dict[str, LegPlacement], key: str | None) -> LegPlacement:
+    """One key's placement on one side, or the empty one if it holds no leg."""
+    return _NO_PLACEMENT if key is None else placements.get(key, _NO_PLACEMENT)
 
 
 # =============================================================================

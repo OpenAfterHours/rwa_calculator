@@ -688,7 +688,7 @@ def test_a_refused_decomposition_carries_no_step_whatever_its_amounts() -> None:
         ours_state="figure",
         theirs_state="figure",
         delta=-1.0,
-        terms=(CellTerm(name="measurement", amount=-1.0, keys=1),),
+        terms=(CellTerm(name="measurement", amount=-1.0, keys=1, differing_keys=1),),
         reconciles=True,
         residual=0.0,
         refusal="non-additive metric",

@@ -471,7 +471,6 @@ and worked examples, see:
 
 - [Basel 3.1 SA Risk Weights — Corporate Sub-Categories (Art. 122(4)–(11))](../specifications/basel31/sa-risk-weights.md#corporate-sub-categories-art-122411)
 - [Basel 3.1 SA Risk Weights — Output-Floor Election for Unrated Corporates (Art. 122(7)–(8))](../specifications/basel31/sa-risk-weights.md#output-floor-election-for-unrated-corporates-art-12278)
-- [Blog — The Output Floor and Why Basel 3.1 Bites](../blog/2026-06-23-the-output-floor-and-why-basel-31-bites.md#the-art-1228-election)
 
 ### `crm_collateral_method`
 

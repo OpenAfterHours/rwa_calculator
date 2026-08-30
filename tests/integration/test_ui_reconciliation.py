@@ -320,6 +320,25 @@ def test_reconciliation_overview_offers_explorer_and_worklist(
     assert f"/reconciliation/{job_id}/rows" in report.text
 
 
+def test_reconciliation_overview_links_to_the_return_templates_comparison(
+    client: TestClient, recon_dir: str
+) -> None:
+    """The report page must offer a way *into* the return-template comparison.
+
+    ``/reconciliation/{id}/templates`` renders the two-sided template grid, but
+    it shipped with no inbound link from anywhere in the UI — reachable only by
+    typing the URL. Assert both halves: the link is rendered, and it resolves.
+    """
+    job_id = _dispatch_and_wait(client, _form_data(recon_dir))
+
+    report = client.get(f"/reconciliation/{job_id}")
+
+    assert report.status_code == 200
+    assert f"/reconciliation/{job_id}/templates" in report.text
+    assert "return templates" in report.text.lower()
+    assert client.get(f"/reconciliation/{job_id}/templates").status_code == 200
+
+
 def test_reconciliation_explorer_filters_paginates_and_links_loans(
     client: TestClient, recon_dir: str
 ) -> None:

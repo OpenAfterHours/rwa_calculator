@@ -11,6 +11,9 @@
      3. RUN     — gallops left→right, exits the right edge
      4. WALK-IN — re-enters from the left, crosses back
      5. RISE    — stands again
+   The first lap runs straight through; every lap after it is preceded by a
+   REST-second standing hold, so the bear is mostly still on its hind legs and
+   the run stays an occasional event rather than a treadmill.
 
    On small screens (<= HIDE_BELOW px) the loop would put the centred
    bear behind the full-width hero text, so instead a one-shot intro
@@ -72,7 +75,12 @@
   // viewBox is 160×90 (16:9) with slice — bear never distorts.
   var VB_W = 160, VB_H = 90;
   var SCALE = 1.2;
-  var CYCLE = 13.5;                 // seconds per full loop
+  var CYCLE = 13.5;                 // seconds per lap (stand→crouch→run→walk-in→rise)
+  // Extra standing hold inserted BETWEEN laps. The opening stand keeps the
+  // lifecycle's own 3s so the page still greets you with a bear that sets off
+  // promptly; after that first lap the bear lingers upright for REST seconds
+  // before each new one. Raise this to make the run rarer, lower it for busier.
+  var REST = 18;                    // seconds — so a lap every CYCLE + REST (31.5s)
   // Two rest anchors: the bear STANDS at the clear right spot, but its
   // on-all-fours rest stops earlier (the quad pose reaches ~31u forward vs
   // ~11u standing) so the head never clips the right edge before it rears up.
@@ -101,6 +109,15 @@
   function lerp(a, b, t) { return a + (b - a) * t; }
   function ease(t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+  // Wall-clock seconds since start → lifecycle clock (0..CYCLE). The first lap
+  // plays unchanged; afterwards the bear parks at t = 0 (the standing pose, and
+  // freq 0 so the gallop phase stops too) for REST seconds before each new lap.
+  function lifecycleTime(elapsed) {
+    if (elapsed < CYCLE) { return elapsed; }
+    var u = (elapsed - CYCLE) % (CYCLE + REST);
+    return u < REST ? 0 : u - REST;
+  }
 
   // Returns { pts, cx, cy, labelO } for time t and gallop phase. `a` is the
   // anchors object { standX, quadX, offRX, offLX, scale }: desktop passes the
@@ -303,7 +320,7 @@
     var loopTick = function (now) {
       if (t0 == null) { t0 = now; last = now; }
       var dt = Math.min(0.05, (now - last) / 1000); last = now;
-      var t = ((now - t0) / 1000) % CYCLE;
+      var t = lifecycleTime((now - t0) / 1000);
       var freq = 0;
       if (t >= 3 && t < 4) { freq = 0.7; }
       else if (t >= 4 && t < 6.5) { freq = 1.9; }

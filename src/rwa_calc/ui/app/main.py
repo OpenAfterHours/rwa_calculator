@@ -1804,6 +1804,11 @@ def _reconciliation_result(
         "explorer_url": f"{base_url}/rows",
         "loan_url_base": f"{base_url}/loan",
         "clear_all_url": f"{base_url}/signoff/clear-all",
+        # Linked unconditionally: whether a template is *reachable* depends on
+        # the mapping, and the templates page itself names what to map when it
+        # is not (see `page.unavailable_reason` / `page.remedies`). Hiding the
+        # link on an unmapped reconciliation would hide that answer too.
+        "templates_url": f"{base_url}/templates",
         "export_csv_url": f"/api/reconcile/export/csv?recon_id={recon_id}",
         "export_excel_url": f"/api/reconcile/export/excel?recon_id={recon_id}",
     }

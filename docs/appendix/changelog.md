@@ -70,6 +70,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   structure or data cannot be decided without them. It now says which question
   cannot be answered instead of rendering "this exposure reached no instrumented
   row", which is a different and false claim.
+- **The return-template comparison is now reachable from the UI.**
+  `GET /reconciliation/{recon_id}/templates` — the two-sided COREP / Pillar III
+  grid that projects your legacy extract into our reporting ledger and runs
+  both sides through the *same* generators — shipped with **no inbound link
+  from anywhere in the app**: the word "template" appeared nowhere on the
+  reconciliation report, the explorer, the loan forensic or the top nav, so the
+  only way in was to read the `recon_id` out of the address bar and type the
+  path. The report page now closes with a fourth section, *"4 · Return
+  templates — does the submission tie out?"*, carrying a **Compare return
+  templates →** button (`templates_url` on the report context). The link is
+  rendered unconditionally: whether any template is *reachable* depends on the
+  legacy mapping, and the templates page is the surface that names the columns
+  to map when it is not (`page.unavailable_reason` / `page.remedies`) — hiding
+  the link on an unmapped reconciliation would hide that answer too. Covered by
+  `tests/integration/test_ui_reconciliation.py::test_reconciliation_overview_links_to_the_return_templates_comparison`,
+  which asserts both halves that were missing — the link renders, and it
+  resolves to a 200.
+
+### Changed
+- **The landing-page polar bear now rests on its hind legs between laps instead
+  of setting off again immediately.** The desktop lifecycle looped on a bare
+  `% CYCLE`, so the walk restarted the instant the RISE finished — a run every
+  13.5s, which reads as a treadmill rather than an occasional flourish. The
+  loop clock is now mapped through `lifecycleTime()`: the **first** lap plays
+  exactly as before (the bear still sets off ~4s after load, so the opening
+  beat is untouched), and every lap after it is preceded by `REST = 18s` parked
+  in the standing pose — a lap every 31.5s, with a 21s continuous stand. The
+  hold sits at lifecycle `t = 0`, where the gallop frequency is already 0, so
+  the legs stop with it and the pose is continuous across the boundary (no
+  jump on either side of the wrap). `REST` is the single tuning knob: raise it
+  to make the run rarer. Mobile is untouched — the one-shot `INTRO_T0`/
+  `INTRO_END` intro and its `bear-tow-in` CSS contract never used `CYCLE` —
+  and so is `prefers-reduced-motion` (still one static standing pose). Applied
+  to `docs/assets/javascripts/bear-constellation.js` and its vendored twin
+  `src/rwa_calc/ui/app/static/bear-constellation.js`, kept byte-identical by
+  `tests/unit/ui/test_tokens_drift.py`. UI presentation only — no calculation
+  impact.
+
+### Removed
+- **The blog has been removed from the documentation site.** `docs/blog/` and
+  its twelve posts plus the series index are deleted, the `Blog` nav section is
+  dropped from `zensical.toml`, and the `Blog` link is removed from the
+  homepage header (`docs/overrides/main.html`). Two prose cross-references into
+  the series were retired with it: the "Blog — The Output Floor and Why Basel
+  3.1 Bites" bullet in `docs/api/configuration.md` (the two specification links
+  beside it already carried the Art. 122(7)-(8) detail), and the quoted
+  migration note in `docs/reconciliation/index.md`, whose parallel-run point is
+  now stated directly rather than attributed to a removed page. Both links were
+  already broken — they named post filenames that no longer existed — so the
+  docs dead-link ratchet (`scripts/docs_link_baseline.json`) drops from 76 to
+  the newly banked count. Earlier changelog entries that describe the blog are
+  left intact as a dated record. Docs only — no calculation, reporting, or API
+  impact.
 
 ---
 

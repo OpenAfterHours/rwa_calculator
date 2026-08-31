@@ -23,3 +23,21 @@ repos:
         language: system
         pass_filenames: false
         types: [python]
+
+      # Agent-context sync gates. Claude Code reads CLAUDE.md and .claude/skills/;
+      # Codex CLI reads AGENTS.md and .agents/skills/ and cannot see either of the
+      # former. Both targets are generated, so these fail the commit that would
+      # let the two agents' knowledge drift apart again.
+      - id: sync-agent-skills
+        name: .agents/skills mirrors .claude/skills
+        entry: uv run python scripts/sync_agent_skills.py --check
+        language: system
+        pass_filenames: false
+        files: ^(\.claude/skills/|\.agents/skills/|scripts/sync_agent_skills\.py$)
+
+      - id: sync-agent-instructions
+        name: AGENTS.md is a fresh render of CLAUDE.md
+        entry: uv run python scripts/sync_agent_instructions.py --check
+        language: system
+        pass_filenames: false
+        files: ^(CLAUDE\.md|AGENTS\.md|\.agents/codex-appendix\.md|scripts/sync_agent_instructions\.py)$

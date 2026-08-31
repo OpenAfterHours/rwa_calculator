@@ -472,7 +472,13 @@ LEDGER_CARRIERS: tuple[LedgerCarrier, ...] = (
     # C 08.06 / OF 08.06 sheet and row placement. These are labels/flags, not
     # reconcilable amounts: without them the generator either emits a generic
     # sheet or silently assigns every exposure to the long-maturity rows. The
-    # coverage layer therefore treats the first three as blocking discriminators.
+    # coverage layer therefore treats the three below as REQUIRED blocking
+    # discriminators (``TEMPLATE_REQUIRED_COLUMNS["c08_06"]``). ``is_hvcre`` is
+    # the fourth member of ``_SLOTTING_PLACEMENT_MAPPINGS`` in legacy_ledger.py
+    # and so blocks too, but only ONCE MAPPED: it is optional, and it is derived
+    # from ``sl_type`` when absent, so the block can only fire on an explicit
+    # mapping that leaves nulls on IPRE/HVCRE rows — where a blank flag would
+    # silently hide HVCRE exposure on the IPRE sheet.
     LedgerCarrier("sl_type", "string", "sl_type"),
     LedgerCarrier("slotting_category", "string", "slotting_category"),
     LedgerCarrier("is_short_maturity", "boolean", "is_short_maturity"),

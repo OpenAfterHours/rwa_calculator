@@ -251,6 +251,15 @@ def apply_guarantee_substitution(
         # IRB-guarantor covered share receives the same scalar; an SA-guarantor
         # share contributes no EL and therefore no PMA. Double-default treatment
         # is excluded because it deliberately retains the full obligor EL.
+        # NOTE THE ASYMMETRY WITH THE RWA REBASE ABOVE, which SCALES the carriers
+        # ``apply_post_model_adjustments`` wrote and is therefore inert wherever
+        # that stage wrote zeros. This one RECOMPUTES from the config election,
+        # so it does not inherit that stage's ``post_model_adjustments`` pack-
+        # feature gate. Safe today only because the gate is off exactly where the
+        # election is zero: ``CalculationConfig.crr()`` takes no PMA argument and
+        # always builds ``PostModelAdjustmentConfig.crr()``. A CRR config carrying
+        # a non-zero ``pma_el_scalar`` (reachable only by direct construction)
+        # would resurrect here a PMA the adjustments stage suppressed.
         el_substituted = substituted & ~pl.col("_is_dd_applied")
         el_pma_scalar = float(config.post_model_adjustments.pma_el_scalar)
         post_crm_el_pma = pl.max_horizontal(pl.lit(0.0), pl.col("expected_loss") * el_pma_scalar)

@@ -1385,6 +1385,15 @@ def _label_facts(
         and _APPROACH_COLUMN in supplied
         and (column != "is_hvcre" or "sl_type" in supplied)
     ]
+    # THESE NULL COUNTS ARE SCOPED TO THE SLOTTING BOOK; THE VOCABULARY COUNTS
+    # ABOVE ARE NOT. ``value_plans`` measures every mapped label column over the
+    # WHOLE ledger, so an out-of-vocabulary ``sl_type`` / ``slotting_category``
+    # token sitting on a NON-slotting row still lands in ``unmapped`` and, via
+    # ``_SLOTTING_PLACEMENT_MAPPINGS`` in ``_vocabulary_permits``, still blocks
+    # C 08.06 — even though no slotting row is affected. Conservative in the
+    # right direction (it reports a mapping the analyst can fix rather than a
+    # silently wrong sheet), but it can over-report on an extract that reuses
+    # one source column across approaches.
     null_plans: list[pl.LazyFrame] = []
     for column in slotting_discriminators:
         relevant = pl.col(_APPROACH_COLUMN) == ApproachType.SLOTTING.value

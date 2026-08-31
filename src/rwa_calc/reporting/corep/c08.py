@@ -53,16 +53,26 @@ Cell semantics (recorded decisions, this slice):
   surrounding exposure-value and RWEA columns do take it into account.
   THE PARAMETER AVERAGES STAY ON THE ORIGIN BASIS AND THAT IS DELIBERATE (cols
   0010 PD, 0230/0240 LGD and 0250 maturity, plus provisions 0290). Annex II
-  weights those averages BY col 0110, which is an argument to move them; against
-  it, the sealed ledger carries the OBLIGOR's
-  ``pd_floored`` / ``lgd_floored`` / ``irb_maturity_m`` on every leg and NEVER
-  the guarantor's (``engine/irb/guarantee.py`` swaps and restores inside a local
-  window; under CRR the guarantor is SA-risk-weight-substituted and has no IRB
-  parameters at all), so a post-basis average would publish the obligor's PD and
-  LGD on the guarantor's sheet — the exact misattribution R12's surviving
-  reasoning forbids for the grade axis. Sealing the guarantor's parameters per leg
-  is the enhancement that would allow the move. Cost, on the record: a
-  fully-outflowed sheet reports a real LGD and maturity against ``0110 = 0``.
+  weights those averages BY col 0110, which is an argument to move them.
+  THE ARGUMENT AGAINST NO LONGER HOLDS FOR PD AND LGD, AND THAT IS RECORDED HERE
+  RATHER THAN ACTED ON. It used to be that the sealed ledger carried the OBLIGOR's
+  parameters on every leg and NEVER the guarantor's, so a post-basis average would
+  publish the obligor's PD and LGD on the guarantor's sheet — the misattribution
+  R12's surviving reasoning forbids for the grade axis — and sealing the
+  guarantor's parameters per leg was named here as the enhancement that would
+  allow the move. THAT ENHANCEMENT NOW EXISTS: ``reporting_pd_post_crm`` /
+  ``reporting_lgd_post_crm`` are sealed per leg by
+  ``engine/irb/guarantee.py::apply_guarantee_substitution`` and carried on the
+  REPORTING_SURFACE, and C 08.03 cols 0050/0070 already consume them. C 08.01
+  cols 0010/0230/0240 were NOT moved with them, and that is a separate decision
+  rather than an oversight: it is a number-changing change to a template whose
+  dependents are the ``boe_b0752`` / ``boe_b0814`` families, which reach every
+  column C 08.01 moves (measured — see the C 08.02 bullet below).
+  MATURITY IS THE ONE THAT HAS NOT CHANGED: ``irb_maturity_m`` has no post-CRM
+  twin, because substitution does not substitute M, so col 0250 and C 08.03
+  col 0080 both carry the OBLIGOR's maturity on whichever sheet the leg lands.
+  Cost, on the record: a fully-outflowed sheet reports a real LGD and maturity
+  against ``0110 = 0``.
   Expected-loss cols 0280-0282 are different: the engine seals their post-CRM
   amounts after guarantee substitution, so they follow the POST population and
   tie to C 08.03 col 0100 (``boe_b0739`` / ``v09777_m``). EBA Q&A 2017_3509
@@ -93,6 +103,18 @@ Cell semantics (recorded decisions, this slice):
   latter because it is calculated after applying CRM and follows the resultant
   obligor (EBA Q&A 2023_6718). The seam is the ``both_bases`` opt-in on
   ``_irb_population``; C 08.04/05 retain its origin-only default.
+  COL 0060 IS A DELIBERATE DEPARTURE FROM THAT Q&A'S COLUMN LIST AND MUST NOT BE
+  "FIXED" INTO THE POST GROUP. The Q&A enumerates 0040, 0050, 0060, 0070 and 0080
+  as resultant-obligor columns; every one of them moved here EXCEPT 0060, which
+  counts OBLIGORS and is reported against the PRE-CRM counterparty — the obligor
+  the exposure was originated against, which is what makes the count reconcile
+  to cols 0010/0020 on the same sheet. Note also that moving the predicate alone
+  would not implement the Q&A's reading: ``counterparty_reference`` on a covered
+  ``__G_`` leg is still the BORROWER (``engine/crm/guarantees.py`` splits the
+  exposure but does not rewrite the counterparty), so a post-basis count would
+  count the borrower on the guarantor's sheet. The guarantor identity does exist
+  on the frame as ``post_crm_counterparty_guaranteed`` if that reading is ever
+  adopted; it is not sealed onto the REPORTING_SURFACE today.
 - SURFACED BY THIS CHANGE AND NOT FIXED HERE (measured on the CRM-substitution
   portfolio, both regimes): the dependents that tie to the moved columns and are
   still keyed on the origin class — C 09.02's geographical cols 0105/0110
@@ -1887,9 +1909,15 @@ def _c08_06_empty_refs(
 ) -> frozenset[str]:
     """Non-Total rows with an EMPTY subset on this SL-type sheet.
 
-    These rows are hard zero-filled by ``_c08_06_sheet`` (every cell 0.0 except
-    col 0070 = the row definition's FIXED display risk weight), so their col 0070
-    is a display artefact, not a measured weighted average. The per-sheet spec
+    These rows are zero-filled by ``_c08_06_sheet``, and col 0070 carries the row
+    definition's FIXED display risk weight, so their col 0070 is a display
+    artefact, not a measured weighted average. HOW MUCH of the row is zeroed is
+    ``c08_06_empty_row_override``'s decision, not this one's: a row empty on BOTH
+    bases is zeroed whole, while a row empty only on the POST basis — a fully
+    substituted-out category — keeps its ORIGIN cells (0010 gross, 0030 off-BS
+    gross, 0090 EL, 0100 provisions) and zeroes only the post-basis block. Both
+    cases still take the fixed display weight, which is why col 0070 is unbound
+    in the spec for either. The per-sheet spec
     therefore leaves that cell UNBOUND (its value comes from the reported frame's
     zero-fill pass), so lineage reports it as the template's empty policy rather
     than a WeightedAvg with no legs whose value would contradict the screen. Uses
@@ -2113,7 +2141,9 @@ def _c08_06_sheet(
 ) -> pl.DataFrame:
     """Execute one SL-type sheet and apply the retired value-dependent
     branches: the zero-fill policy for empty non-Total rows (fixed display
-    RW in 0070), the >0 clamp on 0040, the first-non-null risk weight when
+    RW in 0070, and — where the row is empty on the POST basis only — the
+    ORIGIN cells left standing, ``c08_06_empty_row_override``), the >0 clamp
+    on 0040, the first-non-null risk weight when
     the subset carries zero total EAD, and the SCRA/GCRA -> provision_held
     provisions ladder. Col 0030 (off-BS gross) now sums the sealed
     ``reporting_gross_off_bs`` carrier over the whole row in the spec — the

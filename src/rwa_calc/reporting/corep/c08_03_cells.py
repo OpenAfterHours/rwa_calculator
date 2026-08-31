@@ -55,6 +55,11 @@ def build_c08_03_cells(  # noqa: PLR0913 - the complete C 08.03 column surface
             predicate=post_member,
             empty_cell="null",
         )
+        # The obligor COUNT is reported against the PRE-CRM counterparty and is
+        # the one column of EBA Q&A 2023_6718's list (0040, 0050, 0060, 0070,
+        # 0080) that deliberately does NOT move to the post basis. Recorded
+        # decision — see the C 08.03 bullet in ``corep/c08.py``'s module
+        # docstring before changing this predicate.
         cells[(ref, "0060")] = (
             CellSpec(Count("counterparty_reference", distinct=True), predicate=origin_member)
             if "counterparty_reference" in cols

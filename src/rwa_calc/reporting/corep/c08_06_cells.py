@@ -17,7 +17,22 @@ _POST_BASIS_REFS: tuple[str, ...] = ("0020", "0040", "0050", "0070", "0080")
 def c08_06_sl_type_sheet(
     data: pl.DataFrame, sl_key: str, cols: set[str], framework: str
 ) -> pl.DataFrame:
-    """Route one SL type, keeping Basel 3.1 IPRE and HVCRE disjoint."""
+    """Route one SL type, keeping Basel 3.1 IPRE and HVCRE disjoint.
+
+    CRR is unchanged: its IPRE sheet ABSORBS HVCRE (there is no separate HVCRE
+    sheet), so both ``sl_type`` values land there.
+
+    THE B31 PARTITION IS A NUMBER-CHANGING FIX, not a refactor. The retired
+    routing sent the HVCRE sheet ``(sl_type == "hvcre") | is_hvcre`` while the
+    IPRE sheet took every ``sl_type == "ipre"`` row unconditionally, so an IPRE
+    row carrying the flag — the canonical shape, since HVCRE is a REFINEMENT of
+    IPRE rather than a sibling ``sl_type`` — was reported on BOTH sheets and its
+    exposure double-counted across the template. It also let the flag drag a
+    project/object/commodities-finance row onto the HVCRE sheet, which the flag
+    does not mean. The two limbs below now partition IPRE on the flag, so
+    ``ipre + hvcre`` sums to the IPRE book exactly once
+    (``tests/unit/test_corep_c08_06.py::TestC0806B31Features``).
+    """
     has_hvcre = "is_hvcre" in cols
     if sl_key == "ipre" and framework != "BASEL_3_1" and has_hvcre:
         return data.filter(pl.col("sl_type").is_in(["ipre", "hvcre"]))

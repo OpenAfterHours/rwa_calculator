@@ -98,6 +98,8 @@ def apply_guarantee_substitution(
 
     has_expected_loss = "expected_loss" in cols
     has_guarantor_pd = "guarantor_pd" in cols
+    origin_pd_col = next(name for name in ("pd_floored", "pd") if name in cols)
+    origin_lgd_col = next(name for name in ("lgd_floored", "lgd", "lgd_input") if name in cols)
     # PD substitution applies whenever the guarantor has an internal PD.
     # Per-row routing (IRB-derived RW vs SA-derived RW) is decided inside
     # _apply_parameter_substitution by guarantor_approach, which is itself
@@ -124,7 +126,13 @@ def apply_guarantee_substitution(
 
     # --- Basel 3.1 parameter substitution for IRB guarantors (CRE22.70-85) ---
     lf = _apply_parameter_substitution(
-        lf, cols, config, use_parameter_substitution, pack=resolved_pack
+        lf,
+        cols,
+        config,
+        use_parameter_substitution,
+        origin_pd_col,
+        origin_lgd_col,
+        pack=resolved_pack,
     )
 
     # --- Double default treatment (CRR Art. 153(3), 202-203) ---
@@ -237,12 +245,63 @@ def apply_guarantee_substitution(
         lf = _adjust_expected_loss(
             lf, config, ead_col, use_parameter_substitution, pack=resolved_pack
         )
+        # ``apply_post_model_adjustments`` also ran before substitution. Rebase
+        # its EL disclosure carriers on the effective EL just calculated. The
+        # configured general PMA is a firm-level fraction of base EL, so an
+        # IRB-guarantor covered share receives the same scalar; an SA-guarantor
+        # share contributes no EL and therefore no PMA. Double-default treatment
+        # is excluded because it deliberately retains the full obligor EL.
+        # NOTE THE ASYMMETRY WITH THE RWA REBASE ABOVE, which SCALES the carriers
+        # ``apply_post_model_adjustments`` wrote and is therefore inert wherever
+        # that stage wrote zeros. This one RECOMPUTES from the config election,
+        # so it does not inherit that stage's ``post_model_adjustments`` pack-
+        # feature gate. Safe today only because the gate is off exactly where the
+        # election is zero: ``CalculationConfig.crr()`` takes no PMA argument and
+        # always builds ``PostModelAdjustmentConfig.crr()``. A CRR config carrying
+        # a non-zero ``pma_el_scalar`` (reachable only by direct construction)
+        # would resurrect here a PMA the adjustments stage suppressed.
+        el_substituted = substituted & ~pl.col("_is_dd_applied")
+        el_pma_scalar = float(config.post_model_adjustments.pma_el_scalar)
+        post_crm_el_pma = pl.max_horizontal(pl.lit(0.0), pl.col("expected_loss") * el_pma_scalar)
+        rebased_el_disclosure = {
+            "el_pre_adjustment": pl.col("expected_loss"),
+            "post_model_adjustment_el": post_crm_el_pma,
+            "el_after_adjustment": pl.col("expected_loss") + post_crm_el_pma,
+        }
+        lf = lf.with_columns(
+            pl.when(el_substituted).then(expr).otherwise(pl.col(name)).alias(name)
+            for name, expr in rebased_el_disclosure.items()
+            if name in cols
+        )
+
+    # Seal the effective post-CRM parameters used by each IRB leg.  The
+    # C 08.03 fixed-PD row remains keyed on the original obligor PD, but cols
+    # 0050/0070 are exposure-weighted post-CRM measures and therefore need the
+    # guarantor parameters on a beneficial PSM-covered leg.  Declined guarantees,
+    # retained legs and double-default treatment keep the obligor parameters.
+    parameter_substituted = substituted & pl.col("_is_pd_substitution") & ~pl.col("_is_dd_applied")
+    lf = lf.with_columns(
+        pl.when(parameter_substituted)
+        .then(pl.col("_reporting_pd_post_crm_candidate"))
+        .otherwise(pl.col(origin_pd_col))
+        .alias("reporting_pd_post_crm"),
+        pl.when(parameter_substituted)
+        .then(pl.col("_reporting_lgd_post_crm_candidate"))
+        .otherwise(pl.col(origin_lgd_col))
+        .alias("reporting_lgd_post_crm"),
+    )
 
     # Track guarantee status and method for reporting
     lf = _add_guarantee_status_columns(lf)
 
     # Drop internal tracking columns
-    lf = lf.drop("_is_pd_substitution", "_is_dd_applied", "guarantor_rw_sa")
+    lf = lf.drop(
+        "_is_pd_substitution",
+        "_is_dd_applied",
+        "guarantor_rw_sa",
+        "_reporting_pd_post_crm_candidate",
+        "_reporting_lgd_post_crm_candidate",
+    )
 
     return lf
 
@@ -366,6 +425,8 @@ def _apply_parameter_substitution(
     cols: list[str],
     config: CalculationConfig,
     use_parameter_substitution: bool,
+    origin_pd_col: str,
+    origin_lgd_col: str,
     *,
     pack: ResolvedRulepack,
 ) -> pl.LazyFrame:
@@ -393,6 +454,8 @@ def _apply_parameter_substitution(
             [
                 pl.col("guarantor_rw_sa").alias("guarantor_rw"),
                 pl.lit(False).alias("_is_pd_substitution"),
+                pl.col(origin_pd_col).alias("_reporting_pd_post_crm_candidate"),
+                pl.col(origin_lgd_col).alias("_reporting_lgd_post_crm_candidate"),
             ]
         )
 
@@ -468,6 +531,24 @@ def _apply_parameter_substitution(
             .then(pl.col("guarantor_rw_post_nbd"))
             .otherwise(pl.col("guarantor_rw_sa"))
             .alias("guarantor_rw"),
+            # Preserve the exact risk parameters used by parameter substitution.
+            # The obligor PD remains the C 08.03 row key, but its post-CRM
+            # weighted-average columns must use the parameters applied to each
+            # covered leg.  These candidates are gated by the final beneficial /
+            # double-default decision in the caller before becoming reporting
+            # carriers.
+            pl.when(is_irb_guarantor)
+            .then(guarantor_pd_floored)
+            .otherwise(pl.col(origin_pd_col))
+            .alias("_reporting_pd_post_crm_candidate"),
+            pl.when(is_irb_guarantor)
+            .then(
+                pl.when(pl.col("guarantor_rw_irb") >= pl.col("rw_direct"))
+                .then(psm_lgd_expr)
+                .otherwise(guarantor_supervisory_lgd_expr)
+            )
+            .otherwise(pl.col(origin_lgd_col))
+            .alias("_reporting_lgd_post_crm_candidate"),
             # Track which method is being used per-row
             pl.when((pl.col("guaranteed_portion").fill_null(0) > 0) & is_irb_guarantor)
             .then(pl.lit(True))
@@ -810,7 +891,8 @@ def _adjust_expected_loss(
         )
         guarantor_pd_floored = pl.max_horizontal(pl.col("guarantor_pd"), pd_floor_expr)
 
-        _is_irb_non_dd = pl.col("_is_pd_substitution") & ~pl.col("_is_dd_applied")
+        _is_dd_applied = pl.col("_is_dd_applied")
+        _is_irb_non_dd = pl.col("_is_pd_substitution") & ~_is_dd_applied
 
         # Mirror the per-row F-IRB LGD selection used in _apply_parameter_substitution
         # so EL is computed against the same supervisory LGD as RW. Both columns
@@ -839,7 +921,13 @@ def _adjust_expected_loss(
 
         return lf.with_columns(
             [
-                pl.when(_base_el & _is_irb_non_dd)
+                # DD changes K, not EL. Check it before the SA-guarantor limb:
+                # an SA-routed guarantor can still qualify for DD when it has an
+                # internal PD, and must retain the full obligor EL rather than
+                # zeroing the covered share as ordinary SA substitution does.
+                pl.when(_base_el & _is_dd_applied)
+                .then(pl.col("expected_loss_irb_original"))
+                .when(_base_el & _is_irb_non_dd)
                 .then(
                     _el_unguaranteed
                     + guarantor_pd_floored * guarantor_lgd_el * pl.col("guaranteed_portion")

@@ -1819,6 +1819,12 @@ IRB_BRANCH_EDGE: EdgeContract = EdgeContract(
         ),
         "expected_loss_irb_original": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         "guarantee_method_used": EdgeColumn(dtype=pl.String, required=False, inject=False),
+        "reporting_pd_post_crm": EdgeColumn(
+            dtype=pl.Float64, required=False, inject=False, citation="CRR Art. 161/236"
+        ),
+        "reporting_lgd_post_crm": EdgeColumn(
+            dtype=pl.Float64, required=False, inject=False, citation="CRR Art. 161/236"
+        ),
         "guarantor_is_financial_sector_entity": EdgeColumn(
             dtype=pl.Boolean, required=False, inject=False
         ),
@@ -1918,6 +1924,18 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
         ),
         "reporting_rw": EdgeColumn(dtype=pl.Float64),
         "reporting_subclass": EdgeColumn(dtype=pl.String),
+        # Effective IRB risk parameters after beneficial parameter
+        # substitution. C 08.03 keeps the obligor PD for its fixed row axis,
+        # while cols 0050/0070 weight these post-CRM carriers by post-CRM EAD.
+        # Conditional because a run with no guarantee sub-step never creates
+        # the candidates; reporting consumers fall back to pd_floored /
+        # lgd_floored on that shape.
+        "reporting_pd_post_crm": EdgeColumn(
+            dtype=pl.Float64, required=False, inject=False, citation="CRR Art. 161/236"
+        ),
+        "reporting_lgd_post_crm": EdgeColumn(
+            dtype=pl.Float64, required=False, inject=False, citation="CRR Art. 161/236"
+        ),
         # Floored gross-exposure carriers: the raw drawn/interest/nominal/
         # undrawn amounts clipped at 0 (CRR Art. 111 SA / Art. 166 IRB), so a
         # negative on-balance netting deposit never makes a gross-exposure
@@ -2184,6 +2202,8 @@ REPORTING_SURFACE: frozenset[str] = frozenset(
         "reporting_on_balance_sheet",
         "reporting_rw",
         "reporting_subclass",
+        "reporting_pd_post_crm",
+        "reporting_lgd_post_crm",
         # The additive per-leg Art. 235/236 substitution relief (Phase 7 F8).
         "guarantee_rwa_benefit",
         # Headline measures every template rolls up (post-floor final RWA, EAD,

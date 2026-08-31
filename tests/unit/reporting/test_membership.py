@@ -7,7 +7,7 @@ two sides of a return with it:
 - **Every summable cell ties out.** Not a sample: for EVERY (row, column) pair
   carrying a row-backed ``Sum``/``SafeSum`` binding, summing the membership
   group that serves that column reproduces the figure production reported —
-  all three templates, both frameworks. A row does NOT have one population, so
+  all four templates, both frameworks. A row does NOT have one population, so
   a per-row membership would tie out only for whichever group it happened to
   select (measured: 80% of C 08.01's summable cells).
 - **It is not vacuous.** The portfolio carries a guarantee that moves a leg to
@@ -208,6 +208,81 @@ def _irb_legs() -> list[dict[str, object]]:
     return legs
 
 
+def _slotting_legs() -> list[dict[str, object]]:
+    """Slotting legs spanning real sheet, category and maturity predicates."""
+    return [
+        _leg(
+            "SL_PF_STRONG_SHORT",
+            "specialised_lending",
+            "slotting",
+            "loan",
+            1_000_000.0,
+            500_000.0,
+            sl_type="project_finance",
+            slotting_category="strong",
+            is_short_maturity=True,
+        ),
+        _leg(
+            "SL_PF_GOOD_LONG",
+            "specialised_lending",
+            "slotting",
+            "facility_undrawn",
+            2_000_000.0,
+            1_800_000.0,
+            undrawn=4_000_000.0,
+            ccf=0.5,
+            sl_type="project_finance",
+            slotting_category="good",
+            is_short_maturity=False,
+        ),
+        _leg(
+            "SL_PF_SAT_SHORT",
+            "specialised_lending",
+            "slotting",
+            "loan",
+            700_000.0,
+            805_000.0,
+            sl_type="project_finance",
+            slotting_category="satisfactory",
+            is_short_maturity=True,
+        ),
+        _leg(
+            "SL_PF_WEAK_LONG",
+            "specialised_lending",
+            "slotting",
+            "loan",
+            400_000.0,
+            1_000_000.0,
+            sl_type="project_finance",
+            slotting_category="weak",
+            is_short_maturity=False,
+        ),
+        _leg(
+            "SL_IPRE_SAT_SHORT",
+            "specialised_lending",
+            "slotting",
+            "loan",
+            500_000.0,
+            575_000.0,
+            sl_type="ipre",
+            slotting_category="satisfactory",
+            is_short_maturity=True,
+        ),
+        _leg(
+            "SL_HVCRE_WEAK_LONG",
+            "specialised_lending",
+            "slotting",
+            "loan",
+            300_000.0,
+            750_000.0,
+            sl_type="hvcre",
+            slotting_category="weak",
+            is_short_maturity=False,
+            is_hvcre=True,
+        ),
+    ]
+
+
 def _leg(  # noqa: PLR0913 - one exposure row of the synthetic portfolio
     reference: str,
     exposure_class: str,
@@ -224,6 +299,10 @@ def _leg(  # noqa: PLR0913 - one exposure row of the synthetic portfolio
     pd: float | None = None,
     lgd: float = 0.45,
     defaulted: bool = False,
+    sl_type: str | None = None,
+    slotting_category: str | None = None,
+    is_short_maturity: bool | None = None,
+    is_hvcre: bool = False,
 ) -> dict[str, object]:
     """One exposure row, in the raw shape the sealed ledger is derived from."""
     drawn = ead if exposure_type == "loan" else 0.0
@@ -255,6 +334,10 @@ def _leg(  # noqa: PLR0913 - one exposure row of the synthetic portfolio
         "sa_cqs": cqs,
         "is_defaulted": defaulted,
         "reporting_leg_role": "whole",
+        "sl_type": sl_type,
+        "slotting_category": slotting_category,
+        "is_short_maturity": is_short_maturity,
+        "is_hvcre": is_hvcre,
     }
 
 
@@ -266,7 +349,7 @@ def _ledger(*, stripped: bool = False) -> pl.LazyFrame:
     drops the sealed per-side gross carriers, keeping their raw sources — the
     shape where the generator and lineage paths can diverge.
     """
-    rows = _sa_legs() + _irb_legs()
+    rows = _sa_legs() + _irb_legs() + _slotting_legs()
     raw = pl.LazyFrame(
         rows,
         schema_overrides={
@@ -275,6 +358,7 @@ def _ledger(*, stripped: bool = False) -> pl.LazyFrame:
             "lgd_floored": pl.Float64,
             "irb_maturity_m": pl.Float64,
             "sa_cqs": pl.Int8,
+            "is_short_maturity": pl.Boolean,
         },
     )
     ledger = with_reporting_ledger(raw)
@@ -453,9 +537,10 @@ def test_every_summable_cell_ties_out_without_the_gross_carriers(
 def test_a_row_carries_one_group_per_distinct_predicate(framework: str) -> None:
     """The measured fact the grain exists for: a row is not one population.
 
-    C 08.03 is uniform (one group), but C 07.00 and C 08.01 split every row
-    across the recorded two-basis boundary and its per-column narrowings. A
-    single-population grain reproduced 80% of C 08.01's summable cells.
+    C 08.03 now splits each row into its explicit origin/post column matrix;
+    C 07.00 and C 08.01 split every row across the recorded two-basis boundary
+    and its per-column narrowings. A single-population grain reproduced 80% of
+    C 08.01's summable cells.
     """
     # Arrange / Act
     membership = cell_membership(_FrameSource(_ledger(), framework))
@@ -463,14 +548,26 @@ def test_a_row_carries_one_group_per_distinct_predicate(framework: str) -> None:
         pl.col("predicate_key").n_unique().alias("groups")
     )
 
-    # Assert — C 08.03 uniform; the two-basis templates never are.
-    uniform = groups.filter(pl.col("template_id") == "c08_03")
-    assert uniform.height > 0
-    assert uniform["groups"].max() == 1
+    # Assert — all three two-basis templates carry distinct row populations.
+    c0803 = groups.filter(pl.col("template_id") == "c08_03")
+    assert c0803.height > 0
+    assert c0803["groups"].min() == 2
+    assert c0803["groups"].max() == 2
     for template_id in ("c07_00", "c08_01"):
         split = groups.filter(pl.col("template_id") == template_id)
         assert split.height > 0
         assert split["groups"].min() > 1, template_id
+
+    c0803_columns = membership.columns.filter(pl.col("template_id") == "c08_03")
+    expected = {
+        "0010": {"0010", "0020", "0030", "0060", "0110"},
+        "0040": {"0040", "0050", "0070", "0080", "0090", "0100"},
+    }
+    for predicate_key, col_refs in expected.items():
+        mapped = set(
+            c0803_columns.filter(pl.col("predicate_key") == predicate_key)["col_ref"].to_list()
+        )
+        assert mapped == col_refs
 
 
 @pytest.mark.parametrize("framework", FRAMEWORKS)
@@ -488,6 +585,7 @@ def test_the_two_basis_groups_hold_different_populations(framework: str) -> None
     for template_id, reference, rwea in (
         ("c07_00", "SA_CORP_GTD", SUBSTITUTED_SA_RWEA),
         ("c08_01", "IRB_CORP_GTD", SUBSTITUTED_IRB_RWEA),
+        ("c08_03", "IRB_CORP_GTD", SUBSTITUTED_IRB_RWEA),
     ):
         crossed = membership.legs.filter(
             (pl.col("template_id") == template_id) & (pl.col("exposure_reference") == reference)
@@ -501,6 +599,23 @@ def test_the_two_basis_groups_hold_different_populations(framework: str) -> None
             for sheet in ("corporate", "institution")
         }
         assert by_sheet["corporate"].isdisjoint(by_sheet["institution"]), template_id
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_c08_03_expected_loss_drilldown_follows_the_post_crm_sheet(framework: str) -> None:
+    """Column 0100 exposes the guaranteed leg under the resultant obligor."""
+    membership = cell_membership(_FrameSource(_ledger(), framework), ["c08_03"])
+    keys = ["template_id", "sheet", "row_ref", "predicate_key"]
+    behind_el = membership.columns.filter(pl.col("col_ref") == "0100").join(
+        membership.legs,
+        on=keys,
+        how="inner",
+    )
+
+    guaranteed = behind_el.filter(pl.col("exposure_reference") == "IRB_CORP_GTD")
+    assert guaranteed.height > 0
+    assert set(guaranteed["sheet"].to_list()) == {"institution"}
+    assert set(guaranteed["predicate_key"].to_list()) == {"0040"}
 
 
 @pytest.mark.parametrize("framework", FRAMEWORKS)
@@ -530,18 +645,23 @@ def test_c08_03_empirical_parents_reproduce_the_published_parent_refs(framework:
     membership = cell_membership(_FrameSource(_ledger(), framework), ["c08_03"])
     legs = membership.legs
 
-    # Assert — per sheet, since only the emitted rows can be derived. Every
-    # sheet must contribute a REAL parent: an equality that holds because both
-    # sides are empty is not evidence, and one sheet used to pass that way.
+    # Assert — hierarchy is inferred independently inside each basis group.
+    # A populated parent with only one populated child is empirically
+    # indistinguishable from that child and therefore remains null, so strict
+    # parents are a subset of the published refs. Every sheet must still
+    # contribute at least one REAL strict parent across its groups.
     sheets = sorted(legs["sheet"].unique().to_list())
     assert sheets
     for sheet in sheets:
         rows = legs.filter(pl.col("sheet") == sheet)
-        emitted = set(rows["row_ref"].unique().to_list())
-        derived = set(rows.filter(pl.col("is_parent_row"))["row_ref"].unique().to_list())
-        expected = C08_03_PD_PARENT_REFS & emitted
-        assert expected, f"{sheet} emits no parent band -- the comparison would be vacuous"
-        assert derived == expected, sheet
+        sheet_derived: set[str] = set()
+        for (predicate_key,), group in rows.group_by("predicate_key"):
+            emitted = set(group["row_ref"].unique().to_list())
+            derived = set(group.filter(pl.col("is_parent_row"))["row_ref"].unique().to_list())
+            expected = C08_03_PD_PARENT_REFS & emitted
+            assert derived <= expected, f"{sheet}/{predicate_key}"
+            sheet_derived |= derived
+        assert sheet_derived, f"{sheet} has no empirically strict parent in either basis"
 
 
 @pytest.mark.parametrize("framework", FRAMEWORKS)
@@ -554,15 +674,24 @@ def test_c08_03_parent_rows_equal_the_union_of_their_children(framework: str) ->
 
     # Act / Assert — a parent's legs are exactly its children's legs, and its
     # money is exactly their money (the published parent = sum of sub-bands).
-    for sheet, row_ref in {
-        (record["sheet"], record["row_ref"]) for record in parents.iter_rows(named=True)
+    for sheet, predicate_key, row_ref in {
+        (record["sheet"], record["predicate_key"], record["row_ref"])
+        for record in parents.iter_rows(named=True)
     }:
-        band = parents.filter((pl.col("sheet") == sheet) & (pl.col("row_ref") == row_ref))
+        band = parents.filter(
+            (pl.col("sheet") == sheet)
+            & (pl.col("predicate_key") == predicate_key)
+            & (pl.col("row_ref") == row_ref)
+        )
         band_legs = set(band["exposure_reference"].to_list())
         children = leaves.filter(
-            (pl.col("sheet") == sheet) & pl.col("exposure_reference").is_in(list(band_legs))
+            (pl.col("sheet") == sheet)
+            & (pl.col("predicate_key") == predicate_key)
+            & pl.col("exposure_reference").is_in(list(band_legs))
         )
-        assert set(children["exposure_reference"].to_list()) == band_legs, f"{sheet}/{row_ref}"
+        assert set(children["exposure_reference"].to_list()) == band_legs, (
+            f"{sheet}/{predicate_key}/{row_ref}"
+        )
         assert children["rwa_final"].sum() == pytest.approx(band["rwa_final"].sum())
 
 
@@ -642,7 +771,8 @@ def test_summing_across_predicate_groups_is_not_the_sheet_total(framework: str) 
     - Some sheets have no decidable leaf at all and sum to 0.00 — four of ten
       here. If this stops happening, someone has turned the tri-state's ``None``
       back into ``False`` and reopened the 3x double-count.
-    - A single-group template has nothing to sum across, so C 08.03 is exact.
+    - C 08.03 now demonstrates the same trap: summing its origin and post
+      groups together double-counts legs that remain on the same sheet.
     """
     # Arrange
     legs = cell_membership(_FrameSource(_ledger(), framework)).legs
@@ -654,15 +784,17 @@ def test_summing_across_predicate_groups_is_not_the_sheet_total(framework: str) 
         total = group.unique(subset=["exposure_reference"])["ead_final"].sum() or 0.0
         shapes[(template_id, sheet)] = (float(naive), float(total))
 
-    # Assert — both shapes occur, and the single-group template is exact.
+    # Assert — both shapes occur, including an over-count on C 08.03 now that
+    # its origin and post populations are represented separately.
     assert shapes
     over = {key for key, (naive, total) in shapes.items() if naive > total + 1e-6}
     leafless = {key for key, (naive, total) in shapes.items() if naive == 0.0 < total}
     assert over, "cross-group summing no longer over-counts -- is predicate_key a partition now?"
     assert leafless, "no sheet is leaf-less -- has None collapsed back to False?"
-    for (template_id, sheet), (naive, total) in shapes.items():
-        if template_id == "c08_03":
-            assert naive == pytest.approx(total), sheet
+    assert any(
+        template_id == "c08_03" and naive > total + 1e-6
+        for (template_id, _sheet), (naive, total) in shapes.items()
+    )
 
 
 @pytest.mark.parametrize("framework", FRAMEWORKS)

@@ -30,7 +30,11 @@ import pytest
 from tests.fixtures.api_validation.build_mandatory_only import write_mandatory_minimum
 
 from rwa_calc.analysis.legacy_ledger import LEDGER_TEMPLATE_IDS, LEDGER_VOCABULARY
-from rwa_calc.analysis.recon_registry import ComponentMapping, LegacyColumnMapping
+from rwa_calc.analysis.recon_registry import (
+    CarrierMapping,
+    ComponentMapping,
+    LegacyColumnMapping,
+)
 from rwa_calc.api.models import CalculationResponse, ReconciliationResponse
 from rwa_calc.api.reconciliation import ReconciliationSettings
 from rwa_calc.api.service import CreditRiskCalc
@@ -44,14 +48,20 @@ if TYPE_CHECKING:
 # resolves to the patched object.
 _PROJECT = "rwa_calc.analysis.legacy_ledger.project_legacy_ledger"
 
-# Enough to reach every scoped template: the three sheet/population/money
-# columns each plan builder resolves, plus the PD that C 08.03 bands on.
+# Enough components to reach the exposure-class templates, including the PD that
+# C 08.03 bands on. C 08.06's sheet/row carriers are declared separately below.
 _RICH: dict[str, ComponentMapping] = {
     "exposure_class": ComponentMapping("CLASS"),
     "approach": ComponentMapping("METHOD"),
     "ead": ComponentMapping("EAD"),
     "rwa": ComponentMapping("RWA"),
     "pd": ComponentMapping("PD", unit="decimal"),
+}
+
+_RICH_CARRIERS: dict[str, CarrierMapping] = {
+    "sl_type": CarrierMapping("SL_TYPE"),
+    "slotting_category": CarrierMapping("SLOTTING_CATEGORY"),
+    "is_short_maturity": CarrierMapping("IS_SHORT_MATURITY"),
 }
 
 # The same, minus the PD: C 07.00 and C 08.01 stay reachable, C 08.03 does not.
@@ -99,12 +109,23 @@ def legacy_file(prior: CalculationResponse, tmp_path: Path) -> Path:
             "EAD": [float(results["ead_final"][0])],
             "RWA": [float(results["rwa_final"][0])],
             "PD": [0.01],
+            # The book is SA-only, so these placement fields are legitimately
+            # null. Declaring their columns makes the rich MAPPING capable of
+            # projecting a future slotting population without pretending this
+            # particular book contains one.
+            "SL_TYPE": [None],
+            "SLOTTING_CATEGORY": [None],
+            "IS_SHORT_MATURITY": [None],
         }
     ).write_csv(legacy)
     return legacy
 
 
-def _settings(legacy: Path, components: dict[str, ComponentMapping]) -> ReconciliationSettings:
+def _settings(
+    legacy: Path,
+    components: dict[str, ComponentMapping],
+    carriers: dict[str, CarrierMapping] | None = None,
+) -> ReconciliationSettings:
     return ReconciliationSettings(
         legacy_file=legacy.resolve(),
         legacy_format="csv",
@@ -112,6 +133,7 @@ def _settings(legacy: Path, components: dict[str, ComponentMapping]) -> Reconcil
             legacy_keys=("loan_id",),
             our_keys=("exposure_reference",),
             components=components,
+            carriers=carriers or {},
         ),
     )
 
@@ -134,7 +156,7 @@ class TestProjectionIsRetained:
         self, our_calc: CreditRiskCalc, legacy_file: Path, prior: CalculationResponse
     ) -> None:
         # Arrange
-        settings = _settings(legacy_file, _RICH)
+        settings = _settings(legacy_file, _RICH, _RICH_CARRIERS)
 
         # Act
         response = our_calc.reconcile(settings, calculation=prior)
@@ -152,13 +174,19 @@ class TestProjectionIsRetained:
             "rwa_final",
             "pd_floored",
             "pd",
+            "sl_type",
+            "slotting_category",
+            "is_short_maturity",
+            "is_hvcre",
         }
 
     def test_rich_mapping_reaches_every_scoped_template(
         self, our_calc: CreditRiskCalc, legacy_file: Path, prior: CalculationResponse
     ) -> None:
         # Arrange / Act
-        response = our_calc.reconcile(_settings(legacy_file, _RICH), calculation=prior)
+        response = our_calc.reconcile(
+            _settings(legacy_file, _RICH, _RICH_CARRIERS), calculation=prior
+        )
 
         # Assert
         coverage = response.legacy_ledger_coverage
@@ -243,7 +271,7 @@ class TestProjectionFailureDoesNotBreakReconciliation:
         self, our_calc: CreditRiskCalc, legacy_file: Path, prior: CalculationResponse
     ) -> None:
         # Arrange
-        settings = _settings(legacy_file, _RICH)
+        settings = _settings(legacy_file, _RICH, _RICH_CARRIERS)
         healthy = our_calc.reconcile(settings, calculation=prior)
 
         # Act
@@ -267,7 +295,7 @@ class TestProjectionFailureDoesNotBreakReconciliation:
         self, our_calc: CreditRiskCalc, legacy_file: Path, prior: CalculationResponse
     ) -> None:
         # Arrange
-        settings = _settings(legacy_file, _RICH)
+        settings = _settings(legacy_file, _RICH, _RICH_CARRIERS)
         healthy = our_calc.reconcile(settings, calculation=prior)
 
         # Act
@@ -295,7 +323,9 @@ class TestProjectionStaysLazy:
 
         # Act
         with patch.object(pl.LazyFrame, "collect", spy):
-            response = our_calc.reconcile(_settings(legacy_file, _RICH), calculation=prior)
+            response = our_calc.reconcile(
+                _settings(legacy_file, _RICH, _RICH_CARRIERS), calculation=prior
+            )
 
         # Assert
         source = response.legacy_ledger
@@ -321,13 +351,13 @@ class TestProjectionStaysLazy:
         template — and reachability accounts for them. Whether a value matches a
         vocabulary is a question about DATA; no amount of column-name reasoning
         answers it. So the projection runs one ``pl.collect_all`` over one
-        ``group_by`` per vocabulary column the mapping SUPPLIES — never over the
-        ones it does not, which is why this fixture's two-label mapping measures
-        two plans and not the four ``LEDGER_VOCABULARY`` knows about.
+        ``group_by`` per vocabulary column the mapping SUPPLIES, plus one null
+        check for each supplied slotting placement discriminator. It never
+        measures a column the mapping cannot project.
 
         WHAT IT IS NOT. The firm's extract is NOT materialised. Each plan selects
-        a single String column, so projection pushdown reads four columns and no
-        others, and the projected ledger itself stays a ``LazyFrame`` — asserted
+        a single column, so projection pushdown remains bounded, and the
+        projected ledger itself stays a ``LazyFrame`` — asserted
         by ``test_the_projected_ledger_is_never_collected`` above.
 
         The bound is two-sided and exact, so this reddens if a future change adds
@@ -337,7 +367,7 @@ class TestProjectionStaysLazy:
         """
         # Arrange: the same settings run with and without the projection, spying
         # BOTH materialisation entry points — the eager one and the batched one.
-        settings = _settings(legacy_file, _RICH)
+        settings = _settings(legacy_file, _RICH, _RICH_CARRIERS)
         eager: list[int] = []
         batched: list[int] = []
         real_collect = pl.LazyFrame.collect
@@ -366,13 +396,24 @@ class TestProjectionStaysLazy:
 
         # Assert: no eager collect added at all...
         assert with_eager == without_eager
-        # ...and exactly one batched pass, of one plan per SUPPLIED vocabulary
-        # column. Derived from the projected schema rather than written as a
-        # literal, so it stays true if the mapping or the vocabulary grows, while
-        # still pinning which columns this fixture actually reaches.
+        # ...and exactly one batched pass: one plan per supplied vocabulary
+        # column plus all four supplied slotting null checks (including the
+        # derived is_hvcre carrier). Derive the count from the projected schema
+        # while pinning the exact columns this rich fixture reaches.
         source = response.legacy_ledger
         assert source is not None
         projected = set(source.scan_results().collect_schema().names())
         measured = sorted(column for column in LEDGER_VOCABULARY if column in projected)
-        assert measured == ["reporting_approach_origin", "reporting_class_origin"]
-        assert with_batched == sorted([*without_batched, len(measured)])
+        assert measured == [
+            "reporting_approach_origin",
+            "reporting_class_origin",
+            "sl_type",
+            "slotting_category",
+        ]
+        placement_checks = {
+            "sl_type",
+            "slotting_category",
+            "is_short_maturity",
+            "is_hvcre",
+        } & projected
+        assert with_batched == sorted([*without_batched, len(measured) + len(placement_checks)])

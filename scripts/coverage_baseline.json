@@ -80,8 +80,8 @@
   },
   "union_binding_rules_crr": 263,
   "union_binding_rules_b31": 312,
-  "cells_live": 8680,
-  "template_cell_liveness_bp": 1358,
-  "dead_cells": 55215,
+  "cells_live": 8728,
+  "template_cell_liveness_bp": 1365,
+  "dead_cells": 55233,
   "never_evaluated_rules": 785
 }

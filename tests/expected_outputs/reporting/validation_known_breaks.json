@@ -76,9 +76,9 @@
       "templates_covered": 5
     },
     "crr/sa-classes": {
-      "PASS": 63,
+      "PASS": 65,
       "FAIL": 1,
-      "VACUOUS": 80,
+      "VACUOUS": 78,
       "NOT_EVALUATED": 597,
       "rules_enforced": 741,
       "rules_executed": 144,
@@ -86,9 +86,9 @@
       "templates_covered": 4
     },
     "b31/sa-classes": {
-      "PASS": 62,
+      "PASS": 64,
       "FAIL": 3,
-      "VACUOUS": 124,
+      "VACUOUS": 122,
       "NOT_EVALUATED": 619,
       "rules_enforced": 808,
       "rules_executed": 189,
@@ -126,8 +126,8 @@
       "templates_covered": 11
     },
     "b31/crm-substitution": {
-      "PASS": 175,
-      "FAIL": 11,
+      "PASS": 173,
+      "FAIL": 13,
       "VACUOUS": 171,
       "NOT_EVALUATED": 451,
       "rules_enforced": 808,
@@ -174,9 +174,44 @@
       "rules_executed": 176,
       "templates_emitted": 9,
       "templates_covered": 9
+    },
+    "crr/irb-shapes": {
+      "PASS": 88,
+      "FAIL": 3,
+      "VACUOUS": 12,
+      "NOT_EVALUATED": 638,
+      "rules_enforced": 741,
+      "rules_executed": 103,
+      "templates_emitted": 9,
+      "templates_covered": 9
+    },
+    "b31/irb-shapes": {
+      "PASS": 128,
+      "FAIL": 8,
+      "VACUOUS": 53,
+      "NOT_EVALUATED": 619,
+      "rules_enforced": 808,
+      "rules_executed": 189,
+      "templates_emitted": 10,
+      "templates_covered": 10
     }
   },
   "known_broken_rules": [
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0346",
+      "severity": "WARNING",
+      "reason": "known limitation of the published rule, not a defect in our output: {t: OF09.02.01.01, c: 0090} >= {t: OF09.02.01.01, c: 0100} asserts that the exposure-weighted average LGD over the WHOLE population (c0090, bound to _wavg_or_null(lgd, ead, pred) in reporting/corep/c09.py:1000) is never below the same average over the DEFAULTED subset (c0100, the def_pred twin at :1001). That is not a regulatory identity - a book whose defaulted exposures carry above-average LGDs violates it legitimately, which is the common real case. Measured 0.4299 vs 0.4500 on OF09.02.01.01[TOTAL][r0150] and [GB][r0150]: the defaulted subset is the single A-IRB retail leg at the LGD_RETAIL own estimate of exactly 0.45, while the overall average is pulled below it by the F-IRB corporate legs on the Art. 161 supervisory LGD of 0.40. Both figures are correct on their own definitions and the two columns are bound the right way round.",
+      "portfolios": [
+        "irb-shapes"
+      ],
+      "failing_coordinates": 2,
+      "coordinates": [
+        "OF09.02.01.01[TOTAL][r0150]",
+        "OF09.02.01.01[GB][r0150]"
+      ],
+      "expression": "{t: OF09.02.01.01, c: 0090} >= {t: OF09.02.01.01, c: 0100}"
+    },
     {
       "regime": "b31",
       "rule_id": "boe_b0378",
@@ -210,6 +245,39 @@
         "OF08.01.01.01[corporate][c0070]"
       ],
       "expression": "{t: OF08.01.01.01, r: 0200} <= {t: OF08.01.01.01, r: 0190}"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0380",
+      "severity": "ERROR",
+      "reason": "known limitation of the published rule, not a defect in our output: EBA Q&A 2017_3509 states that C 08.01/C 08.02 c0280 must reflect eligible CRM with substitution effects and explicitly says the c0020-versus-c0280 interdependency does not exist when substitution reassigns an exposure to another class. On this fixture, c0020 correctly remains on the original obligor sheet while post-CRM c0280 moves to the resultant obligor sheet, where c0020 is zero; the published inequality therefore rejects the reporting treatment the Q&A requires.",
+      "portfolios": [
+        "crm-substitution"
+      ],
+      "failing_coordinates": 5,
+      "coordinates": [
+        "OF08.01.01.01[institution][r0190]",
+        "OF08.01.01.01[retail_other][r0010]",
+        "OF08.01.01.01[retail_other][r0020]",
+        "OF08.01.01.01[retail_other][r0070]",
+        "OF08.01.01.01[retail_other][r0190]"
+      ],
+      "expression": "abs({t: OF08.01.01.01, c: 0280}) <= abs({t: OF08.01.01.01, c: 0020})"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0395",
+      "severity": "ERROR",
+      "reason": "known limitation of the published rule, not a defect in our output: EBA Q&A 2017_3509 states that C 08.01/C 08.02 c0280 must reflect eligible CRM with substitution effects and explicitly says the c0020-versus-c0280 interdependency does not exist when substitution reassigns an exposure to another class. On this fixture, c0020 correctly remains on the original obligor sheet while post-CRM c0280 moves to the resultant obligor sheet, where c0020 is zero; the published inequality therefore rejects the reporting treatment the Q&A requires.",
+      "portfolios": [
+        "crm-substitution"
+      ],
+      "failing_coordinates": 2,
+      "coordinates": [
+        "OF08.02.01.01[institution][rUnassigned]",
+        "OF08.02.01.01[retail_other][rUnassigned]"
+      ],
+      "expression": "{t: OF08.02.01.01, c: 0280} <= {t: OF08.02.01.01, c: 0020}"
     },
     {
       "regime": "b31",
@@ -290,12 +358,29 @@
     },
     {
       "regime": "b31",
+      "rule_id": "boe_b0744",
+      "severity": "ERROR",
+      "reason": "known limitation of the published rule, not a defect in our output (notes.pattern_non_additive_columns_in_summation_rules): {t: OF08.01.01.01, r: 0010} = sum({t: OF08.01.01.01, r: 0020; 0030; 0040; 0050; 0060}) is applied across ALL columns of the table, two of which are not additive across the on-BS / off-BS / CCR breakdown rows. Failing cells: OF08.01.01.01[corporate][c0300] and [specialised_lending][c0300], a DISTINCT obligor count, and [corporate][c0250], an exposure-weighted average maturity. Measured on C 08.01 corporate: c0300 total row = 3 distinct obligors, on-BS row = 3, off-BS row = 1, so the row sum is 4 against a distinct total of 3 - arithmetically unsatisfiable whenever ONE obligor holds both an on- and an off-balance-sheet leg, which IRS-CP-CORP (3 legs) and IRS-CP-SL (2 legs) both do. c0250 total = 1673.0 with on-BS and off-BS each also 1673.0, summing to 3346: an average, not a total. Our per-cell figures are correct. NOTE this is ERROR-severity, so it would reject a submission - it is banked as a rule limitation on the evidence above and is a one-line revert if that reading is rejected on review.",
+      "portfolios": [
+        "irb-shapes"
+      ],
+      "failing_coordinates": 3,
+      "coordinates": [
+        "OF08.01.01.01[specialised_lending][c0300]",
+        "OF08.01.01.01[corporate][c0250]",
+        "OF08.01.01.01[corporate][c0300]"
+      ],
+      "expression": "{t: OF08.01.01.01, r: 0010} = sum({t: OF08.01.01.01, r: 0020; 0030; 0040; 0050; 0060})"
+    },
+    {
+      "regime": "b31",
       "rule_id": "boe_b0752_22",
       "severity": "ERROR",
       "reason": "limit of the published rule, not of our output: c0230 and c0250 are exposure-weighted AVERAGES, and summing an average down the 7 PD-grade rows cannot equal the class-level average unless there is exactly one grade row (0.4 against 2.8; 1,673 against 11,711). Our per-grade values are correctly computed, not broadcast: c0110 differs on every grade row, and c0250 carries float dust on one of the seven (1672.9999999999995), which a broadcast constant could not. They coincide only because every corporate leg in this fixture shares the same supervisory F-IRB LGD and maturity. See notes.pattern_boe_summation_templates",
       "portfolios": [
         "crm-substitution",
-        "irb-classes"
+        "irb-classes",
+        "irb-shapes"
       ],
       "failing_coordinates": 1,
       "coordinates": [
@@ -310,7 +395,8 @@
       "reason": "limit of the published rule, not of our output: c0230 and c0250 are exposure-weighted AVERAGES, and summing an average down the 7 PD-grade rows cannot equal the class-level average unless there is exactly one grade row (0.4 against 2.8; 1,673 against 11,711). Our per-grade values are correctly computed, not broadcast: c0110 differs on every grade row, and c0250 carries float dust on one of the seven (1672.9999999999995), which a broadcast constant could not. They coincide only because every corporate leg in this fixture shares the same supervisory F-IRB LGD and maturity. See notes.pattern_boe_summation_templates",
       "portfolios": [
         "crm-substitution",
-        "irb-classes"
+        "irb-classes",
+        "irb-shapes"
       ],
       "failing_coordinates": 1,
       "coordinates": [
@@ -325,7 +411,8 @@
       "reason": "limit of the published rule, not of our output: the exposure-weighted RESTATEMENT of boe_b0752_22 / boe_b0752_24, and it fails for exactly the same reason. The weighting factor is identical on both sides - b0756 multiplies both by (sum(c0110) - sum(c0140)), b0758 both by sum(c0110) - so it cancels and the rule reduces to the same 'class average = sum of grade averages' assertion. Verified arithmetically: b0756's 20,440,000 vs 143,080,000 is 0.4 vs 2.8 scaled by 51,100,000, and b0758's 85,490,300,000 vs 598,432,100,000 is 1,673 vs 11,711 scaled by the same. NB the rule LOOKS like it intends the correct paired identity - each grade's average times that grade's own exposure - but as published it multiplies two separate sums, which the simplified expression cannot express as a per-grade pairing. Either reading leaves it unsatisfiable against a correct return. See notes.pattern_boe_summation_templates",
       "portfolios": [
         "crm-substitution",
-        "irb-classes"
+        "irb-classes",
+        "irb-shapes"
       ],
       "failing_coordinates": 1,
       "coordinates": [
@@ -340,7 +427,8 @@
       "reason": "limit of the published rule, not of our output: the exposure-weighted RESTATEMENT of boe_b0752_22 / boe_b0752_24, and it fails for exactly the same reason. The weighting factor is identical on both sides - b0756 multiplies both by (sum(c0110) - sum(c0140)), b0758 both by sum(c0110) - so it cancels and the rule reduces to the same 'class average = sum of grade averages' assertion. Verified arithmetically: b0756's 20,440,000 vs 143,080,000 is 0.4 vs 2.8 scaled by 51,100,000, and b0758's 85,490,300,000 vs 598,432,100,000 is 1,673 vs 11,711 scaled by the same. NB the rule LOOKS like it intends the correct paired identity - each grade's average times that grade's own exposure - but as published it multiplies two separate sums, which the simplified expression cannot express as a per-grade pairing. Either reading leaves it unsatisfiable against a correct return. See notes.pattern_boe_summation_templates",
       "portfolios": [
         "crm-substitution",
-        "irb-classes"
+        "irb-classes",
+        "irb-shapes"
       ],
       "failing_coordinates": 1,
       "coordinates": [
@@ -358,6 +446,7 @@
         "ccr",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "off-bs",
         "re-split",
         "rich",
@@ -379,6 +468,7 @@
       "portfolios": [
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "rich"
       ],
       "failing_coordinates": 1,
@@ -436,6 +526,7 @@
       "reason": "unattributed - needs investigation: C 08.06 total rows 0110/0120 do not foot their slotting-category rows. The rule is columns_scope '(All)', so the publisher asserts the identity on c0070 'Risk weight' too, where our total row carries an exposure-weighted average rather than a sum of the category risk weights. Not established whether our total is wrong or the identity is impractical on a parameter column",
       "portfolios": [
         "crm-substitution",
+        "irb-shapes",
         "rich"
       ],
       "failing_coordinates": 1,
@@ -451,6 +542,7 @@
       "reason": "unattributed - needs investigation: C 08.06 total rows 0110/0120 do not foot their slotting-category rows. The rule is columns_scope '(All)', so the publisher asserts the identity on c0070 'Risk weight' too, where our total row carries an exposure-weighted average rather than a sum of the category risk weights. Not established whether our total is wrong or the identity is impractical on a parameter column",
       "portfolios": [
         "crm-substitution",
+        "irb-shapes",
         "rich"
       ],
       "failing_coordinates": 1,
@@ -469,6 +561,7 @@
         "ccr",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "off-bs",
         "re-split",
         "rich",
@@ -501,18 +594,6 @@
         "C 07.00.a[defaulted][c0060]"
       ],
       "expression": "{r0015} = empty"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0744",
-      "severity": "ERROR",
-      "reason": "known limitation of the published rule, not a defect in our output (notes.pattern_non_additive_columns_in_summation_rules): {t: OF08.01.01.01, r: 0010} = sum({t: OF08.01.01.01, r: 0020; 0030; 0040; 0050; 0060}) is applied across ALL columns of the table, two of which are not additive across the on-BS / off-BS / CCR breakdown rows. Failing cells: OF08.01.01.01[corporate][c0300] and [specialised_lending][c0300], a DISTINCT obligor count, and [corporate][c0250], an exposure-weighted average maturity. Measured on C 08.01 corporate: c0300 total row = 3 distinct obligors, on-BS row = 3, off-BS row = 1, so the row sum is 4 against a distinct total of 3 - arithmetically unsatisfiable whenever ONE obligor holds both an on- and an off-balance-sheet leg, which IRS-CP-CORP (3 legs) and IRS-CP-SL (2 legs) both do. c0250 total = 1673.0 with on-BS and off-BS each also 1673.0, summing to 3346: an average, not a total. Our per-cell figures are correct. NOTE this is ERROR-severity, so it would reject a submission - it is banked as a rule limitation on the evidence above and is a one-line revert if that reading is rejected on review."
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0346",
-      "severity": "WARNING",
-      "reason": "known limitation of the published rule, not a defect in our output: {t: OF09.02.01.01, c: 0090} >= {t: OF09.02.01.01, c: 0100} asserts that the exposure-weighted average LGD over the WHOLE population (c0090, bound to _wavg_or_null(lgd, ead, pred) in reporting/corep/c09.py:1000) is never below the same average over the DEFAULTED subset (c0100, the def_pred twin at :1001). That is not a regulatory identity - a book whose defaulted exposures carry above-average LGDs violates it legitimately, which is the common real case. Measured 0.4299 vs 0.4500 on OF09.02.01.01[TOTAL][r0150] and [GB][r0150]: the defaulted subset is the single A-IRB retail leg at the LGD_RETAIL own estimate of exactly 0.45, while the overall average is pulled below it by the F-IRB corporate legs on the Art. 161 supervisory LGD of 0.40. Both figures are correct on their own definitions and the two columns are bound the right way round."
     }
   ],
   "known_uncovered_templates": [
@@ -613,6 +694,7 @@
       "reason": "unattributed - needs investigation: an OF 08.06 specialised-lending (slotting) sign or footing rule; the columns ARE populated and read exactly 0.00 on the only two portfolios that emit the template; vacuity is driven by cells that are EMITTED AND EXACTLY 0.00 - 8 measured, so the bound holds against a genuinely zero figure rather than against nothing. Measured: OF08.06.01.01[project_finance] r0015 c0031 = exact_zero, OF08.06.01.01[project_finance] r0015 c0100 = exact_zero, OF08.06.01.01[project_finance] r0025 c0031 = exact_zero.",
       "portfolios": [
         "crm-substitution",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 4,
@@ -628,6 +710,7 @@
       "reason": "unattributed - needs investigation: an OF 08.06 specialised-lending (slotting) sign or footing rule; the columns ARE populated and read exactly 0.00 on the only two portfolios that emit the template; vacuity is driven by cells that are EMITTED AND EXACTLY 0.00 - 32 measured, so the bound holds against a genuinely zero figure rather than against nothing. Measured: OF08.06.01.01[project_finance] r0015 c0010 = exact_zero, OF08.06.01.01[project_finance] r0015 c0020 = exact_zero, OF08.06.01.01[project_finance] r0015 c0030 = exact_zero.",
       "portfolios": [
         "crm-substitution",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 16,
@@ -643,6 +726,7 @@
       "reason": "unattributed - needs investigation: an OF 08.06 specialised-lending (slotting) sign or footing rule; the columns ARE populated and read exactly 0.00 on the only two portfolios that emit the template; every operand is EMITTED AND EXACTLY 0.00 - 8 cell(s) measured - so the comparison holds at 0 = 0 with populated cells; usually a portfolio artefact (no exposure of the kind the column measures) but equally consistent with a column nothing ever writes a non-zero figure to. Measured: OF08.06.01.01[project_finance] r0015 c0020 = exact_zero, OF08.06.01.01[project_finance] r0015 c0030 = exact_zero, OF08.06.01.01[project_finance] r0025 c0020 = exact_zero.",
       "portfolios": [
         "crm-substitution",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 2,
@@ -658,6 +742,7 @@
       "reason": "unattributed - needs investigation: an OF 08.06 specialised-lending (slotting) sign or footing rule; the columns ARE populated and read exactly 0.00 on the only two portfolios that emit the template; every operand is EMITTED AND EXACTLY 0.00 - 8 cell(s) measured - so the comparison holds at 0 = 0 with populated cells; usually a portfolio artefact (no exposure of the kind the column measures) but equally consistent with a column nothing ever writes a non-zero figure to. Measured: OF08.06.01.01[project_finance] r0015 c0040 = exact_zero, OF08.06.01.01[project_finance] r0015 c0050 = exact_zero, OF08.06.01.01[project_finance] r0025 c0040 = exact_zero.",
       "portfolios": [
         "crm-substitution",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 2,
@@ -673,6 +758,7 @@
       "reason": "unattributed - needs investigation: an OF 08.06 specialised-lending (slotting) sign or footing rule; the columns ARE populated and read exactly 0.00 on the only two portfolios that emit the template; every operand is EMITTED AND EXACTLY 0.00 - 8 cell(s) measured - so the comparison holds at 0 = 0 with populated cells; usually a portfolio artefact (no exposure of the kind the column measures) but equally consistent with a column nothing ever writes a non-zero figure to. Measured: OF08.06.01.01[project_finance] r0015 c0040 = exact_zero, OF08.06.01.01[project_finance] r0015 c0060 = exact_zero, OF08.06.01.01[project_finance] r0025 c0040 = exact_zero.",
       "portfolios": [
         "crm-substitution",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 2,
@@ -690,6 +776,7 @@
         "art199",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 168,
@@ -707,6 +794,7 @@
         "art199",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 4,
@@ -725,6 +813,7 @@
         "art199",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 4,
@@ -743,6 +832,7 @@
         "art199",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 4,
@@ -761,6 +851,7 @@
         "art199",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 4,
@@ -779,6 +870,7 @@
         "art199",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 4,
@@ -797,6 +889,7 @@
         "art199",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 4,
@@ -1872,6 +1965,7 @@
         "ccr",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "off-bs",
         "re-split",
         "rich",
@@ -1895,6 +1989,7 @@
         "ccr",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "off-bs",
         "re-split",
         "rich",
@@ -1918,6 +2013,7 @@
         "ccr",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "off-bs",
         "re-split",
         "rich",
@@ -1941,6 +2037,7 @@
         "ccr",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "off-bs",
         "re-split",
         "rich",
@@ -2018,6 +2115,7 @@
         "art199",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 4,
@@ -2036,6 +2134,7 @@
         "art199",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 4,
@@ -2054,6 +2153,7 @@
         "art199",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 4,
@@ -2072,6 +2172,7 @@
         "art199",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 4,
@@ -2090,6 +2191,7 @@
         "art199",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 4,
@@ -2108,6 +2210,7 @@
         "art199",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 4,
@@ -2126,6 +2229,7 @@
         "art199",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 4,
@@ -2144,6 +2248,7 @@
         "art199",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 4,
@@ -2162,6 +2267,7 @@
         "art199",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 4,
@@ -2180,6 +2286,7 @@
         "art199",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 4,
@@ -2198,6 +2305,7 @@
         "art199",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 4,
@@ -2216,6 +2324,7 @@
         "art199",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 4,
@@ -2234,6 +2343,7 @@
         "art199",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 4,
@@ -3018,6 +3128,7 @@
       "reason": "unattributed - needs investigation: an OF 08.06 specialised-lending (slotting) sign or footing rule; the columns ARE populated and read exactly 0.00 on the only two portfolios that emit the template; every operand is EMITTED AND EXACTLY 0.00 - 12 cell(s) measured - so the comparison holds at 0 = 0 with populated cells; usually a portfolio artefact (no exposure of the kind the column measures) but equally consistent with a column nothing ever writes a non-zero figure to. Measured: OF08.06.01.01[project_finance] r0015 c0040 = exact_zero, OF08.06.01.01[project_finance] r0015 c0020 = exact_zero, OF08.06.01.01[project_finance] r0015 c0031 = exact_zero.",
       "portfolios": [
         "crm-substitution",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 2,
@@ -3033,6 +3144,7 @@
       "reason": "unattributed - needs investigation: an OF 08.06 specialised-lending (slotting) sign or footing rule; the columns ARE populated and read exactly 0.00 on the only two portfolios that emit the template; vacuity is driven by cells that are EMITTED AND EXACTLY 0.00 - 4 measured, so the bound holds against a genuinely zero figure rather than against nothing. Measured: OF08.06.01.01[project_finance] r0015 c0031 = exact_zero, OF08.06.01.01[project_finance] r0025 c0031 = exact_zero.",
       "portfolios": [
         "crm-substitution",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 2,
@@ -3398,6 +3510,7 @@
         "ccr",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "off-bs",
         "re-split",
         "rich",
@@ -3437,6 +3550,7 @@
         "art199",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 22,
@@ -3452,6 +3566,7 @@
       "reason": "unattributed - needs investigation: a blanket sign bound over a whole table ({T} <= 0 / >= 0), which the publisher writes over the value-adjustment and provision columns; vacuity is driven by cells that are EMITTED AND EXACTLY 0.00 - 24 measured, so the bound holds against a genuinely zero figure rather than against nothing. Measured: C 08.06[project_finance] r0010 c0100 = exact_zero, C 08.06[project_finance] r0020 c0100 = exact_zero, C 08.06[project_finance] r0030 c0100 = exact_zero.",
       "portfolios": [
         "crm-substitution",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 12,
@@ -3469,6 +3584,7 @@
         "art199",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 30,
@@ -3540,6 +3656,7 @@
         "art199",
         "crm-substitution",
         "irb-classes",
+        "irb-shapes",
         "rich"
       ],
       "vacuous_coordinates": 15,

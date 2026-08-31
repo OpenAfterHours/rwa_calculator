@@ -82,8 +82,8 @@ comparison if broken, and each has been measured in this codebase:
    a single cell's four-way split, which is a statement about that cell alone.
 
 References:
-- Regulation (EU) 2021/451, Annex II: C 07.00, C 08.01, C 08.03
-- PRA PS1/26 Annex I/II: OF 07.00, OF 08.01, OF 08.03
+- Regulation (EU) 2021/451, Annex II: C 07.00, C 08.01, C 08.03, C 08.06
+- PRA PS1/26 Annex I/II: OF 07.00, OF 08.01, OF 08.03, OF 08.06
 - docs/plans/return-reconciliation.md, Phase 3 (the template view)
 """
 
@@ -190,7 +190,7 @@ TERM_LABELS: dict[str, str] = {
     "population_ours_only": "population — in ours only",
     "population_theirs_only": "population — in theirs only",
     "row_placement": "row placement — moved band",
-    "sheet_placement": "sheet placement — moved class",
+    "sheet_placement": "sheet placement — moved sheet",
     "measurement": "measurement — same row, different value",
 }
 
@@ -260,6 +260,7 @@ TEMPLATE_CODES: dict[str, dict[str, str]] = {
     "c07_00": {"CRR": "C 07.00", "BASEL_3_1": "OF 07.00"},
     "c08_01": {"CRR": "C 08.01", "BASEL_3_1": "OF 08.01"},
     "c08_03": {"CRR": "C 08.03", "BASEL_3_1": "OF 08.03"},
+    "c08_06": {"CRR": "C 08.06", "BASEL_3_1": "OF 08.06"},
 }
 
 #: How many worst cells / unmeasurable cells a page lists. The pair table's own
@@ -2025,7 +2026,7 @@ def _placement_note(ours: LegPlacement, theirs: LegPlacement) -> str:
 def _placement_side(placement: LegPlacement) -> str:
     """One side's placement, with each MISSING carrier naming what is missing.
 
-    ``row_refs`` is scoped to the cell's own sheet while the other three are
+    ``row_refs`` is scoped to the cell's own sheet while the other four are
     template-wide (``LegPlacement``), so "no row on this sheet" beside a present
     class is not a contradiction — it is precisely the shape of a leg they put
     on another sheet. Each empty carrier is spelt out rather than dropped: a
@@ -2033,6 +2034,7 @@ def _placement_side(placement: LegPlacement) -> str:
     """
     if not (
         placement.row_refs
+        or placement.sheets
         or placement.class_origins
         or placement.approach_origins
         or placement.leg_roles
@@ -2043,6 +2045,7 @@ def _placement_side(placement: LegPlacement) -> str:
             f"rows {', '.join(placement.row_refs)}"
             if placement.row_refs
             else "no row on this sheet",
+            f"sheet {', '.join(placement.sheets)}" if placement.sheets else "no sheet carrier",
             f"class {', '.join(placement.class_origins)}"
             if placement.class_origins
             else "no class carrier",
@@ -2265,6 +2268,7 @@ def _bundle(
         c08_01=frames if template_id == "c08_01" else empty,
         c08_02=empty,
         c08_03=frames if template_id == "c08_03" else empty,
+        c08_06=frames if template_id == "c08_06" else empty,
         framework=recon.framework,
     )
 

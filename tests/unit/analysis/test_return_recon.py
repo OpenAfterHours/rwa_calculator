@@ -5,7 +5,7 @@ Pins the properties the four-way waterfall has to have before an analyst may
 read it as an explanation of a cell:
 
 - **The four terms sum to the cell delta.** Not on a sample: on EVERY additive
-  money cell of all three scoped templates under both frameworks, over a
+  money cell of all four scoped templates under both frameworks, over a
   portfolio built so that all four causes are live at once. The census counts
   its own denominator and every refusal reason, so a narrowed scope cannot hide
   behind a good ratio.
@@ -23,7 +23,7 @@ read it as an explanation of a cell:
   treated as a leaf.
 
 References:
-- Regulation (EU) 2021/451, Annex II: C 07.00, C 08.01, C 08.03
+- Regulation (EU) 2021/451, Annex II: C 07.00, C 08.01, C 08.03, C 08.06
 - docs/plans/return-reconciliation.md (Phase 4 — the four-way waterfall)
 """
 
@@ -124,6 +124,10 @@ class _Leg:
     #: that keyed on the base reference ALONE would pass a fixture that
     #: populated it on both sides and drop every legacy leg in production.
     supplies_source_ref: bool = True
+    sl_type: str | None = None
+    slotting_category: str | None = None
+    is_short_maturity: bool | None = None
+    is_hvcre: bool = False
 
     def row(self) -> dict[str, object]:
         drawn = self.ead if self.exposure_type == "loan" else 0.0
@@ -156,6 +160,10 @@ class _Leg:
             "sa_cqs": self.cqs,
             "is_defaulted": False,
             "reporting_leg_role": "whole",
+            "sl_type": self.sl_type,
+            "slotting_category": self.slotting_category,
+            "is_short_maturity": self.is_short_maturity,
+            "is_hvcre": self.is_hvcre,
         }
 
 
@@ -219,7 +227,42 @@ def _base_legs() -> list[_Leg]:
             pd=None,
             cqs=2,
         ),
+        _slotting_leg("BASE_SL_STRONG_SHORT", category="strong", short=True),
+        _slotting_leg("BASE_SL_GOOD_SHORT", category="good", short=True, rwa=700_000.0),
+        _slotting_leg("BASE_SL_STRONG_LONG", category="strong", short=False, rwa=700_000.0),
+        _slotting_leg("BASE_SL_GOOD_LONG", category="good", short=False, rwa=900_000.0),
+        _slotting_leg(
+            "BASE_SL_OBJECT",
+            category="satisfactory",
+            short=False,
+            sl_type="object_finance",
+            ead=800_000.0,
+            rwa=920_000.0,
+        ),
     ]
+
+
+def _slotting_leg(
+    reference: str,
+    *,
+    category: str,
+    short: bool,
+    sl_type: str = "project_finance",
+    ead: float = 1_000_000.0,
+    rwa: float = 500_000.0,
+) -> _Leg:
+    """One specialised-lending slotting leg in the shape C08.06 consumes."""
+    return _Leg(
+        reference,
+        exposure_class="specialised_lending",
+        approach="slotting",
+        ead=ead,
+        rwa=rwa,
+        pd=None,
+        sl_type=sl_type,
+        slotting_category=category,
+        is_short_maturity=short,
+    )
 
 
 # The five single-cause legs. Each is added to, removed from, or mutated
@@ -258,6 +301,18 @@ _SA_MEASURED = _Leg(
     "SA_MEASURED", approach="standardised", pd=None, ead=1_700_000.0, rwa=1_700_000.0, cqs=3
 )
 
+# The same five causes on C 08.06's slotting-specific axes. Category and
+# maturity each get their own mover so both halves of the row key are proven;
+# ``sl_type`` is the sheet axis and must be attributed as sheet placement.
+_SL_ONLY_OURS = _slotting_leg("SL_ONLY_OURS", category="satisfactory", short=True)
+_SL_ONLY_THEIRS = _slotting_leg("SL_ONLY_THEIRS", category="weak", short=False)
+_SL_CATEGORY_MOVER = _slotting_leg("SL_CATEGORY_MOVER", category="satisfactory", short=True)
+_SL_MATURITY_MOVER = _slotting_leg("SL_MATURITY_MOVER", category="weak", short=True)
+_SL_SHEET_MOVER = _slotting_leg("SL_SHEET_MOVER", category="default", short=False)
+_SL_MEASURED = _slotting_leg(
+    "SL_MEASURED", category="satisfactory", short=False, ead=1_200_000.0, rwa=1_380_000.0
+)
+
 
 def _ledger(legs: list[_Leg]) -> pl.LazyFrame:
     """The sealed reporting ledger for a list of legs."""
@@ -273,6 +328,7 @@ def _ledger(legs: list[_Leg]) -> pl.LazyFrame:
             # carries the column as a typed NULL String, exactly as the sealed
             # membership schema declares it, rather than as pl.Null.
             "source_exposure_reference": pl.String,
+            "is_short_maturity": pl.Boolean,
         },
     )
     return with_reporting_ledger(raw)
@@ -316,6 +372,11 @@ def _uncached_combined(framework: str) -> ReturnRecon:
         _SA_RW_MOVER,
         _SA_CLASS_MOVER,
         _SA_MEASURED,
+        _SL_ONLY_OURS,
+        _SL_CATEGORY_MOVER,
+        _SL_MATURITY_MOVER,
+        _SL_SHEET_MOVER,
+        _SL_MEASURED,
     ]
     theirs = [
         *_base_legs(),
@@ -328,6 +389,11 @@ def _uncached_combined(framework: str) -> ReturnRecon:
         replace(_SA_RW_MOVER, rwa=1_000_000.0),
         replace(_SA_CLASS_MOVER, exposure_class="institution"),
         replace(_SA_MEASURED, ead=1_400_000.0, rwa=1_400_000.0),
+        _SL_ONLY_THEIRS,
+        replace(_SL_CATEGORY_MOVER, slotting_category="weak"),
+        replace(_SL_MATURITY_MOVER, is_short_maturity=False),
+        replace(_SL_SHEET_MOVER, sl_type="object_finance"),
+        replace(_SL_MEASURED, ead=1_000_000.0, rwa=1_150_000.0),
     ]
     our_source, their_source = _sources(ours, theirs, framework)
     return build_recon(our_source, their_source)
@@ -358,26 +424,88 @@ def _single_cause(cause: str, framework: str) -> ReturnRecon:
     return build_recon(our_source, their_source)
 
 
+def _slotting_single_cause(cause: str, framework: str) -> ReturnRecon:
+    """A C08.06 pair differing on exactly one slotting-specific dimension."""
+    base = _base_legs()
+    ours = [*base]
+    theirs = [*base]
+    if cause == "population_ours_only":
+        ours.append(_SL_ONLY_OURS)
+    elif cause == "population_theirs_only":
+        theirs.append(_SL_ONLY_THEIRS)
+    elif cause == "category":
+        ours.append(_SL_CATEGORY_MOVER)
+        theirs.append(replace(_SL_CATEGORY_MOVER, slotting_category="weak"))
+    elif cause == "maturity":
+        ours.append(_SL_MATURITY_MOVER)
+        theirs.append(replace(_SL_MATURITY_MOVER, is_short_maturity=False))
+    elif cause == "sl_type":
+        ours.append(_SL_SHEET_MOVER)
+        theirs.append(replace(_SL_SHEET_MOVER, sl_type="object_finance"))
+    elif cause == "measurement":
+        ours.append(_SL_MEASURED)
+        theirs.append(replace(_SL_MEASURED, ead=1_000_000.0, rwa=1_150_000.0))
+    else:  # pragma: no cover - a typo in a parametrisation, not a data case
+        raise AssertionError(f"unknown slotting cause {cause!r}")
+    our_source, their_source = _sources(ours, theirs, framework)
+    return build_recon(our_source, their_source)
+
+
 # =============================================================================
 # Helpers
 # =============================================================================
 
 
-def _leaf_row_of(recon: ReturnRecon, *, ours: bool, reference: str) -> str:
+def _leaf_row_of(
+    recon: ReturnRecon,
+    *,
+    ours: bool,
+    reference: str,
+    col_ref: str = "0040",
+) -> str:
     """The C 08.03 corporate leaf row one leg landed in, on the named side.
 
     Read off the membership rather than hard-coded: the CRR and Basel 3.1 row
     axes differ (18 rows against 17), so a literal ref would pin one framework.
     """
     side = recon.ours if ours else recon.theirs
+    served = side.membership.columns.filter(
+        (pl.col("template_id") == "c08_03")
+        & (pl.col("sheet") == CORPORATE)
+        & (pl.col("col_ref") == col_ref)
+    )["predicate_key"].unique()
+    assert len(served) == 1, (
+        f"C 08.03/{CORPORATE}/{col_ref} has {len(served)} predicate groups, expected 1"
+    )
+    predicate_key = str(served[0])
     rows = side.membership.legs.filter(
         (pl.col("template_id") == "c08_03")
         & (pl.col("sheet") == CORPORATE)
+        & (pl.col("predicate_key") == predicate_key)
         & (pl.col("exposure_reference") == reference)
         & (pl.col("is_parent_row").eq(other=False))
     )
     assert rows.height == 1, f"{reference} is in {rows.height} leaf rows, expected 1"
     return rows["row_ref"][0]
+
+
+def _slotting_row_of(
+    recon: ReturnRecon,
+    *,
+    ours: bool,
+    reference: str,
+    sheet: str = "project_finance",
+) -> str:
+    """The C08.06 category/maturity leaf row one leg occupies."""
+    side = recon.ours if ours else recon.theirs
+    rows = side.membership.legs.filter(
+        (pl.col("template_id") == "c08_06")
+        & (pl.col("sheet") == sheet)
+        & (pl.col("exposure_reference") == reference)
+        & (pl.col("is_parent_row").eq(other=False))
+    )["row_ref"].unique()
+    assert len(rows) == 1, f"{reference} is in {len(rows)} slotting leaf rows, expected 1"
+    return str(rows[0])
 
 
 def _terms(result: CellDecomposition) -> dict[str, float]:
@@ -544,6 +672,62 @@ def test_row_placement_prices_the_band_move_at_its_own_ead(framework: str) -> No
     assert _terms(right)["row_placement"] == pytest.approx(-_BAND_MOVER.ead)
 
 
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+@pytest.mark.parametrize(
+    ("cause", "reference", "ours", "term", "expected"),
+    [
+        ("population_ours_only", "SL_ONLY_OURS", True, "population_ours_only", 1_000_000.0),
+        (
+            "population_theirs_only",
+            "SL_ONLY_THEIRS",
+            False,
+            "population_theirs_only",
+            -1_000_000.0,
+        ),
+        ("category", "SL_CATEGORY_MOVER", True, "row_placement", 1_000_000.0),
+        ("maturity", "SL_MATURITY_MOVER", True, "row_placement", 1_000_000.0),
+        ("sl_type", "SL_SHEET_MOVER", True, "sheet_placement", 1_000_000.0),
+        ("measurement", "SL_MEASURED", True, "measurement", 200_000.0),
+    ],
+)
+def test_c08_06_each_slotting_difference_reaches_its_own_attribution_term(
+    cause: str,
+    reference: str,
+    ours: bool,
+    term: str,
+    expected: float,
+    framework: str,
+) -> None:
+    """Population, SL type, category, maturity and measurement are all live."""
+    recon = _slotting_single_cause(cause, framework)
+    row_ref = _slotting_row_of(recon, ours=ours, reference=reference)
+
+    result = decompose_cell(recon, "c08_06", "project_finance", row_ref, "0040")
+    terms = _terms(result)
+
+    assert result.decomposable, result.refusal
+    assert result.reconciles
+    assert terms[term] == pytest.approx(expected)
+    assert [name for name, amount in terms.items() if amount != 0.0] == [term]
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_c08_06_weighted_risk_weight_is_refused_as_non_additive(framework: str) -> None:
+    recon = _combined(framework)
+    row_ref = _slotting_row_of(
+        recon,
+        ours=True,
+        reference="BASE_SL_STRONG_SHORT",
+    )
+
+    result = decompose_cell(recon, "c08_06", "project_finance", row_ref, "0070")
+
+    assert not result.decomposable
+    assert result.kind == "rows"
+    assert result.metric == "weighted_avg"
+    assert "non-additive" in (result.refusal or "")
+
+
 # =============================================================================
 # Refusals
 # =============================================================================
@@ -555,7 +739,7 @@ def test_non_additive_cells_are_refused_not_decomposed(col_ref: str, framework: 
     """C 08.03's averaged columns carry no four-way split — and say so."""
     # Arrange
     recon = _combined(framework)
-    row_ref = _leaf_row_of(recon, ours=True, reference="BASE_A1")
+    row_ref = _leaf_row_of(recon, ours=True, reference="BASE_A1", col_ref=col_ref)
 
     # Act
     result = decompose_cell(recon, "c08_03", CORPORATE, row_ref, col_ref)
@@ -726,7 +910,7 @@ def test_a_cell_whose_metric_source_one_side_lacks_is_refused(framework: str) ->
     our_source, _ = _sources(base, base, framework)
     their_source = _FrameSource(_ledger(base).drop("expected_loss"), framework)
     recon = build_recon(our_source, their_source)
-    row_ref = _leaf_row_of(recon, ours=True, reference="BASE_A1")
+    row_ref = _leaf_row_of(recon, ours=True, reference="BASE_A1", col_ref="0100")
 
     # Act
     result = decompose_cell(recon, "c08_03", CORPORATE, row_ref, "0100")
@@ -838,7 +1022,7 @@ def test_an_unpopulatable_cell_is_refused_not_attributed_to_measurement(framewor
     # Arrange
     our_source, their_source, coverage = _unmapped_gross(framework)
     unguarded = build_recon(our_source, their_source)
-    row_ref = _leaf_row_of(unguarded, ours=True, reference="BASE_A1")
+    row_ref = _leaf_row_of(unguarded, ours=True, reference="BASE_A1", col_ref="0010")
     our_gross = unguarded.ours.frames["c08_03"][CORPORATE].filter(pl.col("row_ref") == row_ref)[
         "0010"
     ][0]
@@ -2440,6 +2624,7 @@ def test_each_pair_carries_both_sides_placement_carriers(framework: str) -> None
     theirs_only = by_key["PROBE_THEIRS_ONLY"]
     assert theirs_only.term == "population_theirs_only"
     assert theirs_only.ours_placement.row_refs == ()
+    assert theirs_only.ours_placement.sheets == ()
     assert theirs_only.ours_placement.class_origins == ()
     assert theirs_only.ours_placement.approach_origins == ()
     assert theirs_only.ours_placement.leg_roles == ()
@@ -2652,7 +2837,7 @@ def test_a_non_additive_cell_yields_no_pairs(col_ref: str, framework: str) -> No
     """
     # Arrange
     recon = _combined(framework)
-    row_ref = _leaf_row_of(recon, ours=True, reference="BASE_A1")
+    row_ref = _leaf_row_of(recon, ours=True, reference="BASE_A1", col_ref=col_ref)
 
     # Act
     decomposition = decompose_cell(recon, "c08_03", CORPORATE, row_ref, col_ref)
@@ -2680,7 +2865,7 @@ def test_a_coverage_unavailable_cell_yields_no_pairs(framework: str) -> None:
     # Arrange
     our_source, their_source, coverage = _unmapped_gross(framework)
     recon = build_recon(our_source, their_source, theirs_coverage=coverage)
-    row_ref = _leaf_row_of(recon, ours=True, reference="BASE_A1")
+    row_ref = _leaf_row_of(recon, ours=True, reference="BASE_A1", col_ref="0010")
 
     # Act
     decomposition = decompose_cell(recon, "c08_03", CORPORATE, row_ref, "0010")
@@ -2772,6 +2957,73 @@ def test_a_sheet_placement_pair_names_the_class_the_other_side_moved_it_to(
     assert pair.ours_placement.class_origins == (CORPORATE,)
     assert pair.theirs_placement.class_origins == ("institution",)
     assert pair.theirs_placement.approach_origins == ("foundation_irb",)
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_a_c08_06_sheet_placement_pair_names_the_sl_type_it_moved_to(
+    framework: str,
+) -> None:
+    """C08.06 sheets are SL types, so class alone cannot name the destination."""
+    recon = _slotting_single_cause("sl_type", framework)
+    row_ref = _slotting_row_of(recon, ours=True, reference="SL_SHEET_MOVER")
+
+    table = cell_pairs(
+        recon,
+        "c08_06",
+        "project_finance",
+        row_ref,
+        "0040",
+        limit=None,
+    )
+    pair = next(item for item in table.pairs if item.key == "SL_SHEET_MOVER")
+
+    assert pair.term == "sheet_placement"
+    assert row_ref in pair.ours_placement.row_refs
+    assert pair.theirs_placement.row_refs == ()
+    assert pair.ours_placement.class_origins == ("specialised_lending",)
+    assert pair.theirs_placement.class_origins == ("specialised_lending",)
+    assert pair.ours_placement.sheets == ("project_finance",)
+    assert pair.theirs_placement.sheets == ("object_finance",)
+
+
+@pytest.mark.parametrize(
+    ("framework", "sl_type", "expected_sheet"),
+    [
+        ("BASEL_3_1", "ipre", "hvcre"),
+        ("CRR", "hvcre", "ipre"),
+    ],
+)
+def test_c08_06_placement_names_the_routed_sheet_not_the_raw_sl_type(
+    framework: str,
+    sl_type: str,
+    expected_sheet: str,
+) -> None:
+    """Framework-specific HVCRE routing can make raw type and sheet differ."""
+    leg = replace(
+        _slotting_leg(
+            "SL_ROUTED",
+            category="strong",
+            short=False,
+            sl_type=sl_type,
+        ),
+        is_hvcre=True,
+    )
+    our_source, their_source = _sources([leg], [leg], framework)
+    recon = build_recon(our_source, their_source)
+    rows = recon.ours.membership.legs.filter(
+        (pl.col("template_id") == "c08_06")
+        & (pl.col("sheet") == expected_sheet)
+        & (pl.col("exposure_reference") == "SL_ROUTED")
+        & ~pl.col("row_ref").is_in(["0110", "0120"])
+    )["row_ref"].unique()
+    assert len(rows) == 1
+    row_ref = str(rows[0])
+
+    table = cell_pairs(recon, "c08_06", expected_sheet, row_ref, "0040", limit=None)
+    pair = next(item for item in table.pairs if item.key == "SL_ROUTED")
+
+    assert pair.ours_placement.sheets == (expected_sheet,)
+    assert pair.theirs_placement.sheets == (expected_sheet,)
 
 
 @pytest.mark.parametrize("framework", FRAMEWORKS)

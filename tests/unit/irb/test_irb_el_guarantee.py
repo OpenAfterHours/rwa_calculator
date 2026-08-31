@@ -11,16 +11,20 @@ portion per CRR Art. 161(3): EL = PD_guarantor × LGD_senior × guaranteed_porti
 """
 
 from datetime import date
+from decimal import Decimal
 
 import polars as pl
 import pytest
 from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
+from tests.fixtures.recon_ledger import LedgerShimCorepGenerator
 
-from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.contracts.config import CalculationConfig, PostModelAdjustmentConfig
+from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.irb.transforms import (
     apply_all_formulas,
     apply_firb_lgd,
     apply_guarantee_substitution,
+    apply_post_model_adjustments,
     prepare_columns,
     select_expected_loss,
 )
@@ -30,6 +34,25 @@ from rwa_calc.engine.irb.transforms import (
 def crr_config() -> CalculationConfig:
     """Create CRR configuration for tests."""
     return CalculationConfig.crr(reporting_date=date(2024, 12, 31))
+
+
+@pytest.fixture
+def b31_config() -> CalculationConfig:
+    """Create Basel 3.1 configuration for EL disclosure tests."""
+    return CalculationConfig.basel_3_1(
+        reporting_date=date(2027, 1, 1),
+        post_model_adjustments=PostModelAdjustmentConfig.basel_3_1(pma_el_scalar=Decimal("0.10")),
+    )
+
+
+@pytest.fixture
+def crr_dd_config() -> CalculationConfig:
+    """Create CRR configuration with A-IRB double default enabled."""
+    return CalculationConfig.crr(
+        reporting_date=date(2024, 12, 31),
+        permission_mode=PermissionMode.IRB,
+        enable_double_default=True,
+    )
 
 
 class TestELGuaranteeAdjustment:
@@ -231,6 +254,96 @@ class TestELGuaranteeAdjustment:
         # Total EL = 1,800 + 540 = 2,340
         assert result["expected_loss_irb_original"][0] == pytest.approx(4_500.0)
         assert result["expected_loss"][0] == pytest.approx(2_340.0)
+
+    def test_partial_irb_guarantee_rebases_el_disclosure_carriers(
+        self, b31_config: CalculationConfig
+    ) -> None:
+        """The PMA-to-guarantee chain reports all EL carriers post CRM."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "pd": [0.01],
+                "lgd": [0.45],
+                "ead_final": [1_000_000.0],
+                "maturity": [2.5],
+                "exposure_class": ["corporate"],
+                "exposure_class_applied": ["corporate"],
+                "approach_applied": ["foundation_irb"],
+                "rwa": [1_000_000.0],
+                "risk_weight": [1.00],
+                "expected_loss": [4_500.0],
+                "is_defaulted": [False],
+                "guaranteed_portion": [600_000.0],
+                "unguaranteed_portion": [400_000.0],
+                "guarantor_entity_type": ["institution"],
+                "guarantor_cqs": [1],
+                "guarantor_approach": ["irb"],
+                "guarantor_pd": [0.002],
+            }
+        )
+
+        calculated = lf.pipe(apply_post_model_adjustments, b31_config).pipe(
+            apply_guarantee_substitution, b31_config
+        )
+        row = calculated.collect().row(0, named=True)
+
+        # Retained EL: 4,500 * 40% = 1,800. Covered EL: 0.2% * 40% * 600k = 480.
+        assert row["expected_loss"] == pytest.approx(2_280.0)
+        assert row["el_pre_adjustment"] == pytest.approx(2_280.0)
+        assert row["post_model_adjustment_el"] == pytest.approx(228.0)
+        assert row["el_after_adjustment"] == pytest.approx(2_508.0)
+
+        bundle = LedgerShimCorepGenerator().generate_from_lazyframe(
+            calculated, framework="BASEL_3_1"
+        )
+        total = bundle.c08_01["corporate"].filter(pl.col("row_ref") == "0010")
+        assert total["0280"][0] == pytest.approx(2_280.0)
+        assert total["0281"][0] == pytest.approx(228.0)
+        assert total["0282"][0] == pytest.approx(2_508.0)
+        assert total["0282"][0] == pytest.approx(total["0280"][0] + total["0281"][0])
+
+    def test_sa_guarantor_double_default_preserves_el_disclosure_carriers(
+        self, crr_dd_config: CalculationConfig
+    ) -> None:
+        """DD retains full obligor EL before the ordinary SA-substitution limb."""
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP_DD"],
+                "pd": [0.02],
+                "pd_floored": [0.02],
+                "lgd": [0.45],
+                "lgd_floored": [0.45],
+                "ead_final": [1_000_000.0],
+                "maturity": [2.5],
+                "exposure_class": ["corporate"],
+                "rwa": [1_000_000.0],
+                "risk_weight": [1.00],
+                "expected_loss": [9_000.0],
+                "el_pre_adjustment": [9_000.0],
+                "post_model_adjustment_el": [900.0],
+                "el_after_adjustment": [9_900.0],
+                "guaranteed_portion": [1_000_000.0],
+                "unguaranteed_portion": [0.0],
+                "guarantor_entity_type": ["bank"],
+                "guarantor_exposure_class": ["institution"],
+                "guarantor_cqs": [2],
+                "guarantor_approach": ["sa"],
+                "guarantor_pd": [0.0005],
+                "is_airb": [True],
+                "turnover_m": [None],
+                "requires_fi_scalar": [False],
+            }
+        )
+
+        row = lf.pipe(apply_guarantee_substitution, crr_dd_config).collect().row(0, named=True)
+
+        assert row["is_double_default_eligible"] is True
+        assert row["guarantee_status"] == "DOUBLE_DEFAULT"
+        assert row["expected_loss_irb_original"] == pytest.approx(9_000.0)
+        assert row["expected_loss"] == pytest.approx(9_000.0)
+        assert row["el_pre_adjustment"] == pytest.approx(9_000.0)
+        assert row["post_model_adjustment_el"] == pytest.approx(900.0)
+        assert row["el_after_adjustment"] == pytest.approx(9_900.0)
 
     @staticmethod
     def _sub_floor_guarantor_frame(guarantor_entity_type: str) -> pl.LazyFrame:

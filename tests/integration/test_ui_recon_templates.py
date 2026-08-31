@@ -83,6 +83,22 @@ _LEGACY_ROWS: dict[str, list[object]] = {
 
 _OUR_PDS = [0.0003, 0.0012, 0.0012, 0.0100, 0.0200, 0.0012]
 
+_SLOTTING_ROWS: dict[str, list[object]] = {
+    "Loan Ref": ["SL_SS", "SL_GS", "SL_SL", "SL_GL", "SL_OBJ", "SL_MOVER"],
+    "Obligor Ref": ["CP_SL_SS", "CP_SL_GS", "CP_SL_SL", "CP_SL_GL", "CP_SL_OBJ", "CP_SL_MOVER"],
+    "Asset Class": ["SL"] * 6,
+    "Approach": ["SLOTTING"] * 6,
+    "Product": ["TERM LOAN"] * 6,
+    "SL Type": ["PF", "PF", "PF", "PF", "OBJ", "OBJ"],
+    "Slot Category": ["STRONG", "GOOD", "STRONG", "GOOD", "SAT", "DEFAULT"],
+    "Maturity Yrs": [1.0, 1.0, 3.0, 3.0, 3.0, 3.0],
+    "EAD 000": [1_000.0, 900.0, 800.0, 700.0, 600.0, 500.0],
+    "Drawn 000": [1_000.0, 900.0, 800.0, 700.0, 600.0, 500.0],
+    "RWA 000": [500.0, 630.0, 560.0, 630.0, 690.0, 0.0],
+    "RW Pct": [50.0, 70.0, 70.0, 90.0, 115.0, 0.0],
+    "CCF Pct": [100.0] * 6,
+}
+
 
 @pytest.fixture(autouse=True)
 def _isolated_state_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -192,6 +208,143 @@ def _mapping(*, thin: bool = False) -> LegacyColumnMapping:
     )
 
 
+def _slotting_mapping() -> LegacyColumnMapping:
+    return LegacyColumnMapping(
+        legacy_keys=("Loan Ref",),
+        our_keys=("exposure_reference",),
+        components={
+            "exposure_class": ComponentMapping(
+                "Asset Class", value_map={"SL": "specialised_lending"}
+            ),
+            "approach": ComponentMapping("Approach", value_map={"SLOTTING": "slotting"}),
+            "ead": ComponentMapping("EAD 000", scale=1_000.0),
+            "rwa": ComponentMapping("RWA 000", scale=1_000.0),
+            "risk_weight": ComponentMapping("RW Pct", unit="percent"),
+            "drawn": ComponentMapping("Drawn 000", scale=1_000.0),
+            "ccf": ComponentMapping("CCF Pct", unit="percent"),
+        },
+        carriers={
+            "obligor": CarrierMapping("Obligor Ref"),
+            "exposure_type": CarrierMapping("Product", value_map={"TERM LOAN": "loan"}),
+            "sl_type": CarrierMapping(
+                "SL Type", value_map={"PF": "project_finance", "OBJ": "object_finance"}
+            ),
+            "slotting_category": CarrierMapping(
+                "Slot Category",
+                value_map={
+                    "STRONG": "strong",
+                    "GOOD": "good",
+                    "SAT": "satisfactory",
+                    "DEFAULT": "default",
+                },
+            ),
+            "remaining_maturity_years": CarrierMapping("Maturity Yrs"),
+        },
+    )
+
+
+def _slotting_results() -> pl.LazyFrame:
+    """Our valid slotting ledger; MOVER remains on PF while legacy files it on OF."""
+    rows = []
+    our_types = ["project_finance"] * 4 + ["object_finance", "project_finance"]
+    categories = ["strong", "good", "strong", "good", "satisfactory", "default"]
+    for index, reference in enumerate(_SLOTTING_ROWS["Loan Ref"]):
+        ead = float(_SLOTTING_ROWS["EAD 000"][index]) * 1_000.0  # type: ignore[arg-type]
+        rwa = float(_SLOTTING_ROWS["RWA 000"][index]) * 1_000.0  # type: ignore[arg-type]
+        rows.append(
+            {
+                "exposure_reference": str(reference),
+                "source_exposure_reference": str(reference),
+                "counterparty_reference": f"CP_{reference}",
+                "exposure_class": "specialised_lending",
+                "exposure_class_applied": "specialised_lending",
+                "exposure_class_post_crm": "specialised_lending",
+                "approach_applied": "slotting",
+                "approach_post_crm": "slotting",
+                "exposure_type": "loan",
+                "drawn_amount": ead,
+                "undrawn_amount": 0.0,
+                "nominal_amount": 0.0,
+                "interest": 0.0,
+                "ead_final": ead,
+                "rwa_final": rwa,
+                "risk_weight": rwa / ead,
+                "ccf": 1.0,
+                "pd": None,
+                "pd_floored": None,
+                "lgd_floored": None,
+                "irb_maturity_m": float(_SLOTTING_ROWS["Maturity Yrs"][index]),
+                "expected_loss": 0.0,
+                "scra_provision_amount": 0.0,
+                "gcra_provision_amount": 0.0,
+                "sa_cqs": 0,
+                "is_defaulted": categories[index] == "default",
+                "reporting_leg_role": "whole",
+                "sl_type": our_types[index],
+                "slotting_category": categories[index],
+                "is_short_maturity": float(_SLOTTING_ROWS["Maturity Yrs"][index]) < 2.5,
+                "is_hvcre": False,
+            }
+        )
+    return with_reporting_ledger(
+        pl.LazyFrame(
+            rows,
+            schema_overrides={
+                "pd": pl.Float64,
+                "pd_floored": pl.Float64,
+                "lgd_floored": pl.Float64,
+                "sa_cqs": pl.Int8,
+            },
+        )
+    )
+
+
+def _slotting_response(tmp_path: Path, *, invalid_sl_type: bool = False) -> ReconciliationResponse:
+    legacy_rows = {name: list(values) for name, values in _SLOTTING_ROWS.items()}
+    if invalid_sl_type:
+        legacy_rows["SL Type"] = ["UNKNOWN"] * len(legacy_rows["SL Type"])
+    legacy_path = tmp_path / "slotting_legacy.parquet"
+    pl.DataFrame(legacy_rows).write_parquet(legacy_path)
+    mapping = _slotting_mapping()
+    legacy = LegacyOutputLoader(
+        ReconciliationSettings(legacy_file=legacy_path, mapping=mapping, legacy_format="parquet")
+    ).load()
+    results_path = tmp_path / "slotting_results.parquet"
+    results = _slotting_results()
+    results.collect().write_parquet(results_path)
+    calculation = CalculationResponse(
+        success=True,
+        framework=FRAMEWORK,
+        reporting_date=date(2025, 1, 1),
+        summary=SummaryStatistics(
+            total_ead=Decimal("4500000"),
+            total_rwa=Decimal("3010000"),
+            exposure_count=6,
+            average_risk_weight=Decimal("0.67"),
+        ),
+        results_path=results_path,
+    )
+    bundle = ReconciliationRunner().reconcile(results, legacy, mapping)
+    ledger, coverage = project_legacy_ledger(legacy, mapping, framework=FRAMEWORK)
+    return ReconciliationResponse.from_bundle(
+        bundle,
+        legacy_file=legacy_path,
+        framework=FRAMEWORK,
+        reporting_date=date(2025, 1, 1),
+        calculation=calculation,
+        legacy_ledger=ledger,
+        legacy_ledger_coverage=coverage,
+    )
+
+
+def _register_slotting(tmp_path: Path, recon_id: str, *, invalid_sl_type: bool = False) -> str:
+    register_reconciliation_with_id(
+        recon_id,
+        _slotting_response(tmp_path, invalid_sl_type=invalid_sl_type),
+    )
+    return recon_id
+
+
 def _calculation(tmp_path: Path) -> CalculationResponse:
     """Our side, cached to a parquet exactly as a real run leaves it."""
     results_path = tmp_path / "last_results.parquet"
@@ -271,6 +424,87 @@ def test_the_page_offers_a_route_back_and_a_cell_drill(client: TestClient, tmp_p
     assert resp.status_code == 200
     assert f'href="/reconciliation/{recon_id}"' in resp.text
     assert f"/reconciliation/{recon_id}/templates?" in resp.text
+
+
+def test_c08_06_picker_sheet_selector_and_cell_drill_use_slotting_axes(
+    client: TestClient, tmp_path: Path
+) -> None:
+    recon_id = _register_slotting(tmp_path, "tpl-slotting")
+    page = client.get(
+        f"/reconciliation/{recon_id}/templates",
+        params={"template": "c08_06", "sheet": "project_finance"},
+    )
+
+    assert page.status_code == 200
+    assert "C 08.06" in page.text
+    assert "SL type" in page.text
+    assert "project_finance" in page.text
+    assert "object_finance" in page.text
+    assert 'class="data grid"' in page.text
+
+    recon = rr._CACHE[recon_id]
+    row_ref = _slotting_leaf_row(recon, "SL_MOVER", "project_finance")
+    drill = client.get(
+        f"/reconciliation/{recon_id}/templates",
+        params={
+            "template": "c08_06",
+            "sheet": "project_finance",
+            "row": row_ref,
+            "col": "0040",
+        },
+    )
+
+    assert drill.status_code == 200
+    assert "Why it differs" in drill.text
+    assert "sheet placement" in drill.text
+    assert "sheet project_finance" in drill.text
+    assert "sheet object_finance" in drill.text
+
+
+def test_c08_06_weighted_risk_weight_cell_renders_the_non_additive_refusal(
+    client: TestClient, tmp_path: Path
+) -> None:
+    recon_id = _register_slotting(tmp_path, "tpl-slotting-rw")
+    client.get(f"/reconciliation/{recon_id}/templates", params={"template": "c08_06"})
+    row_ref = _slotting_leaf_row(rr._CACHE[recon_id], "SL_SS", "project_finance")
+
+    response = client.get(
+        f"/reconciliation/{recon_id}/templates",
+        params={
+            "template": "c08_06",
+            "sheet": "project_finance",
+            "row": row_ref,
+            "col": "0070",
+        },
+    )
+
+    assert response.status_code == 200
+    assert 'data-refusal="non_additive"' in response.text
+    assert "it is an average, not a total" in response.text
+    assert "Why it differs" not in response.text
+
+
+def test_slotting_population_with_only_unmapped_sl_types_stays_visible_as_blocked(
+    client: TestClient, tmp_path: Path
+) -> None:
+    recon_id = _register_slotting(tmp_path, "tpl-slotting-invalid", invalid_sl_type=True)
+    response = client.get(
+        f"/reconciliation/{recon_id}/templates",
+        params={"template": "c08_06"},
+    )
+
+    assert response.status_code == 200
+    recon = rr._CACHE[recon_id]
+    coverage = recon.theirs.coverage
+    assert coverage is not None
+    assert "c08_06" in (coverage.populated_templates or ())
+    assert "c08_06" not in coverage.reachable_templates
+    assert coverage.unmapped_labels["sl_type"] == ("UNKNOWN (6 rows)",)
+    assert 'value="c08_06"' in response.text
+    assert "C 08.06" in response.text
+    assert "(not mapped)" in response.text
+    assert 'data-template-state="unreachable"' in response.text
+    assert "sl_type" in response.text
 
 
 def test_the_migration_matrix_is_drawn_with_its_attribution(
@@ -548,14 +782,38 @@ def test_an_unknown_template_or_sheet_falls_back_rather_than_404ing(
 # =============================================================================
 
 
-def _leaf_row(recon: object, reference: str) -> str:
+def _leaf_row(recon: object, reference: str, col_ref: str = "0040") -> str:
     """The C 08.03 leaf row a leg landed in on our side, off the membership."""
-    legs = recon.ours.membership.legs  # type: ignore[attr-defined]
+    membership = recon.ours.membership  # type: ignore[attr-defined]
+    served = membership.columns.filter(
+        (pl.col("template_id") == "c08_03")
+        & (pl.col("sheet") == SHEET)
+        & (pl.col("col_ref") == col_ref)
+    )["predicate_key"].unique()
+    assert len(served) == 1, (
+        f"C 08.03/{SHEET}/{col_ref} has {len(served)} predicate groups, expected 1"
+    )
+    predicate_key = str(served[0])
+    legs = membership.legs
     rows = legs.filter(
         (pl.col("template_id") == "c08_03")
         & (pl.col("sheet") == SHEET)
+        & (pl.col("predicate_key") == predicate_key)
         & (pl.col("exposure_reference") == reference)
         & (pl.col("is_parent_row").eq(other=False))
     )
     assert rows.height == 1, f"{reference} is in {rows.height} leaf rows, expected 1"
     return str(rows["row_ref"][0])
+
+
+def _slotting_leaf_row(recon: object, reference: str, sheet: str) -> str:
+    """The C08.06 category/maturity leaf a leg occupies on one SL-type sheet."""
+    legs = recon.ours.membership.legs  # type: ignore[attr-defined]
+    rows = legs.filter(
+        (pl.col("template_id") == "c08_06")
+        & (pl.col("sheet") == sheet)
+        & (pl.col("exposure_reference") == reference)
+        & (pl.col("is_parent_row").eq(other=False))
+    )["row_ref"].unique()
+    assert len(rows) == 1, f"{reference} is in {len(rows)} slotting leaf rows, expected 1"
+    return str(rows[0])

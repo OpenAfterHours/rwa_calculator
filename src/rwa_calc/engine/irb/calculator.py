@@ -116,8 +116,10 @@ class IRBCalculator:
             .pipe(prepare_columns, config, pack=resolved_pack)
             .pipe(apply_all_formulas, config, pack=resolved_pack)
             .pipe(apply_post_model_adjustments, config, pack=resolved_pack)
-            .pipe(compute_el_shortfall_excess, errors=sf_errors)
             .pipe(apply_guarantee_substitution, config, pack=resolved_pack)
+            # Guarantee substitution changes expected_loss. Compute the Art. 159
+            # audit carriers from that final EL, not the pre-CRM borrower EL.
+            .pipe(compute_el_shortfall_excess, errors=sf_errors)
         )
         exposures = self._apply_supporting_factors(
             exposures, config, errors=sf_errors, pack=resolved_pack

@@ -10,14 +10,14 @@ Pipeline position:
 
 Cell semantics (recorded decisions, this slice):
 
-- All five dicts key the sealed ``reporting_class_origin`` (== raw
+- The pre-CRM surfaces key the sealed ``reporting_class_origin`` (== raw
   ``exposure_class`` for IRB rows — the obligor basis, number-neutral
   convergence; no applied-class ladder and NO specialised-lending merge,
-  unlike C 07.00). The population is the origin IRB book keyed on
-  ``reporting_approach_origin`` (F-IRB / A-IRB / slotting); C 08.02/03/04/05
-  exclude slotting per template. C 08.07 alone keeps the RAW class key
-  (Art. 147 origination taxonomy over the FULL population).
-- C 08.01 ALONE IS TWO POPULATIONS PER SHEET — the recorded two-basis decision,
+  unlike C 07.00). C 08.01/02 and C 08.03's post-CRM value block additionally
+  key the sealed post-substitution class/approach. C 08.02/03/04/05 exclude
+  slotting per template. C 08.07 alone keeps the RAW class key (Art. 147
+  origination taxonomy over the FULL population).
+- C 08.01 IS TWO POPULATIONS PER SHEET — the recorded two-basis decision,
   C 07.00's (``corep/c07.py``) on the IRB surface. A sheet's cells split by
   BASIS, the flags derived by ``kernel/bases.py``:
     * ORIGIN basis (``c08_basis_origin``) — the obligor's own book. Cols
@@ -52,18 +52,33 @@ Cell semantics (recorded decisions, this slice):
   exposures to the **original obligor**"), which only means something if the
   surrounding exposure-value and RWEA columns do take it into account.
   THE PARAMETER AVERAGES STAY ON THE ORIGIN BASIS AND THAT IS DELIBERATE (cols
-  0010 PD, 0230/0240 LGD, 0250 maturity, plus the EL memos 0280-0282 and
-  provisions 0290). Annex II weights those averages BY col 0110, which is an
-  argument to move them; against it, the sealed ledger carries the OBLIGOR's
-  ``pd_floored`` / ``lgd_floored`` / ``irb_maturity_m`` on every leg and NEVER
-  the guarantor's (``engine/irb/guarantee.py`` swaps and restores inside a local
-  window; under CRR the guarantor is SA-risk-weight-substituted and has no IRB
-  parameters at all), so a post-basis average would publish the obligor's PD and
-  LGD on the guarantor's sheet — the exact misattribution R12's surviving
-  reasoning forbids for the grade axis. Sealing the guarantor's parameters per leg
-  is the enhancement that would allow the move. Cost, on the record: a
-  fully-outflowed sheet reports a real LGD and maturity against ``0110 = 0``.
-- C 08.02 MOVES WITH C 08.01, MEASURED, and the seam is only C 08.03-06. The
+  0010 PD, 0230/0240 LGD and 0250 maturity, plus provisions 0290). Annex II
+  weights those averages BY col 0110, which is an argument to move them.
+  THE ARGUMENT AGAINST NO LONGER HOLDS FOR PD AND LGD, AND THAT IS RECORDED HERE
+  RATHER THAN ACTED ON. It used to be that the sealed ledger carried the OBLIGOR's
+  parameters on every leg and NEVER the guarantor's, so a post-basis average would
+  publish the obligor's PD and LGD on the guarantor's sheet — the misattribution
+  R12's surviving reasoning forbids for the grade axis — and sealing the
+  guarantor's parameters per leg was named here as the enhancement that would
+  allow the move. THAT ENHANCEMENT NOW EXISTS: ``reporting_pd_post_crm`` /
+  ``reporting_lgd_post_crm`` are sealed per leg by
+  ``engine/irb/guarantee.py::apply_guarantee_substitution`` and carried on the
+  REPORTING_SURFACE, and C 08.03 cols 0050/0070 already consume them. C 08.01
+  cols 0010/0230/0240 were NOT moved with them, and that is a separate decision
+  rather than an oversight: it is a number-changing change to a template whose
+  dependents are the ``boe_b0752`` / ``boe_b0814`` families, which reach every
+  column C 08.01 moves (measured — see the C 08.02 bullet below).
+  MATURITY IS THE ONE THAT HAS NOT CHANGED: ``irb_maturity_m`` has no post-CRM
+  twin, because substitution does not substitute M, so col 0250 and C 08.03
+  col 0080 both carry the OBLIGOR's maturity on whichever sheet the leg lands.
+  Cost, on the record: a fully-outflowed sheet reports a real LGD and maturity
+  against ``0110 = 0``.
+  Expected-loss cols 0280-0282 are different: the engine seals their post-CRM
+  amounts after guarantee substitution, so they follow the POST population and
+  tie to C 08.03 col 0100 (``boe_b0739`` / ``v09777_m``). EBA Q&A 2017_3509
+  confirms that substitution can reassign c0280 to another exposure class and
+  that the published c0020-versus-c0280 inequality does not hold in that case.
+- C 08.02 MOVES WITH C 08.01, MEASURED. The
   premise this was first built to — that ``{OF08.01 r0070} = sum({OF08.02})`` is
   stated over cols 0080/0090 alone (``boe_b0752_8`` / ``_9``, ``boe_b0814_07`` /
   ``_08``) — is FALSE: those are two members of a family stated once per SHARED
@@ -81,9 +96,25 @@ Cell semantics (recorded decisions, this slice):
   exposure value and RWEA may not assert a grade in this sheet's scale either,
   and the row already meaning "an exposure whose grade we do not carry" is where
   the col 0080 scalar and the legs that make it up both belong.
-- C 08.03-06 STAY SINGLE-BASIS. The seam is the ``both_bases`` default on
-  ``_irb_population`` / the ``basis`` default on ``_value_cells``, so widening
-  C 08.01/02 did not silently widen the four templates sharing the population.
+- C 08.03 HAS AN EXPLICIT TWO-BASIS COLUMN MATRIX. The origin PD scale remains
+  the row axis on both limbs: cols 0010/0020/0030/0060/0110 read the
+  obligor/origin population, while cols 0040/0050/0070/0080/0090/0100 read the
+  post-substitution population and sheet class. Expected loss belongs to the
+  latter because it is calculated after applying CRM and follows the resultant
+  obligor (EBA Q&A 2023_6718). The seam is the ``both_bases`` opt-in on
+  ``_irb_population``; C 08.04/05 retain its origin-only default.
+  COL 0060 IS A DELIBERATE DEPARTURE FROM THAT Q&A'S COLUMN LIST AND MUST NOT BE
+  "FIXED" INTO THE POST GROUP. The Q&A enumerates 0040, 0050, 0060, 0070 and 0080
+  as resultant-obligor columns; every one of them moved here EXCEPT 0060, which
+  counts OBLIGORS and is reported against the PRE-CRM counterparty — the obligor
+  the exposure was originated against, which is what makes the count reconcile
+  to cols 0010/0020 on the same sheet. Note also that moving the predicate alone
+  would not implement the Q&A's reading: ``counterparty_reference`` on a covered
+  ``__G_`` leg is still the BORROWER (``engine/crm/guarantees.py`` splits the
+  exposure but does not rewrite the counterparty), so a post-basis count would
+  count the borrower on the guarantor's sheet. The guarantor identity does exist
+  on the frame as ``post_crm_counterparty_guaranteed`` if that reading is ever
+  adopted; it is not sealed onto the REPORTING_SURFACE today.
 - SURFACED BY THIS CHANGE AND NOT FIXED HERE (measured on the CRM-substitution
   portfolio, both regimes): the dependents that tie to the moved columns and are
   still keyed on the origin class — C 09.02's geographical cols 0105/0110
@@ -343,6 +374,11 @@ from rwa_calc.reporting.cellspec import (
     execute,
     subset_rows,
 )
+from rwa_calc.reporting.corep.c08_03_cells import build_c08_03_cells
+from rwa_calc.reporting.corep.c08_06_cells import (
+    c08_06_empty_row_override,
+    c08_06_sl_type_sheet,
+)
 from rwa_calc.reporting.corep.crm_substitution import (
     C08_01_NETTING_EXEMPT_ROWS,
     IRB_BLOCK_COL,
@@ -357,7 +393,6 @@ from rwa_calc.reporting.corep.crm_substitution import (
 from rwa_calc.reporting.corep.pd_scale import banded_rows
 from rwa_calc.reporting.corep.postpass import (
     c08_06_apply_overrides,
-    c08_06_zero_row,
     c08_after_all_crm,
     c08_off_bs_pre_ccf,
     negate_deduction_cols,
@@ -408,12 +443,12 @@ _NEGATIVE_COLS: frozenset[str] = frozenset(
 )
 
 _IRB_APPROACHES: tuple[str, ...] = ("foundation_irb", "advanced_irb", "slotting")
-
 # The C 08.01 two-basis discriminators (see the module docstring). The mechanism
 # — derived boolean columns rather than ``RowPredicate`` fields, and why that is
 # the only shape the post basis can DEGRADE in — lives in
-# ``reporting/kernel/bases.py``, shared with C 07.00. C 08.02-06 stay
-# single-basis: they read ``_irb_population``'s origin-only default.
+# ``reporting/kernel/bases.py``, shared with C 07.00. C 08.01-03 opt into the
+# two-basis population; C 08.04/05 keep ``_irb_population``'s origin-only
+# default.
 _BASIS: TwoBasis = TwoBasis("c08")
 
 # Which ``ReportingContext`` inflow component each C 08.01 row's col 0080 takes.
@@ -527,8 +562,8 @@ def _irb_population(
     """The IRB book (retired _filter_by_irb_approach): F-IRB/A-IRB/slotting.
 
     ``both_bases`` selects WHICH IRB book. The default is the ORIGIN-approach one
-    — the obligor's own book, which is what C 08.02/03/04/05/06 read. C 08.01
-    takes the UNION of it and the POST-substitution book, tagged with
+    — the obligor's own book, which is what C 08.04/05 read. C 08.01/02/03
+    take the UNION of it and the POST-substitution book, tagged with
     ``c08_pop_origin`` / ``c08_pop_post`` so each cell reads its own basis (see
     the module docstring). A leg with no substitution is in both, which is why
     the split is number-neutral on a book that never substitutes.
@@ -721,7 +756,7 @@ def _value_cells(  # noqa: C901, PLR0915 - the full C 08.01/02 column surface
     post_terms: _Terms | None = None,
 ) -> dict[str, CellSpec]:
     # The two-basis split (module docstring). ``basis=None`` is the single-basis
-    # surface C 08.03-06 keep: both term tuples collapse to the caller's own, so
+    # surface a caller may keep: both term tuples collapse to the caller's own, so
     # every predicate is byte-identical to the pre-split one. Every basis-split
     # predicate carries a flag, INCLUDING the Total row's (whose ``terms`` are
     # empty) — an unflagged predicate would silently sum both populations.
@@ -885,12 +920,12 @@ def _value_cells(  # noqa: C901, PLR0915 - the full C 08.01/02 column surface
         ),
         "0280": CellSpec(
             Sum("c08_el_pre" if "el_pre_adjustment" in cols else "expected_loss"),
-            predicate=member,
+            predicate=post_member,
         ),
-        "0281": CellSpec(Sum("post_model_adjustment_el"), predicate=member),
+        "0281": CellSpec(Sum("post_model_adjustment_el"), predicate=post_member),
         "0282": CellSpec(
             Sum("c08_el_after" if "el_after_adjustment" in cols else "el_after_adjustment"),
-            predicate=member,
+            predicate=post_member,
         ),
         "0290": CellSpec(
             SafeSum(("scra_provision_amount", "gcra_provision_amount")), predicate=member
@@ -1412,58 +1447,6 @@ def _pd_alloc_col(cols: set[str], framework: str) -> str | None:
     return pick(cols, "pd_floored", "pd")
 
 
-def _c08_03_cells(  # noqa: PLR0913 - the full C 08.03 sparse-PD-range column surface
-    band_rows: list[tuple[str, str, str]],
-    cols: set[str],
-    ead_col: str,
-    rwa_col: str,
-    pd_report_col: str,
-    lgd_col: str | None,
-) -> dict[tuple[str, str], CellSpec]:
-    """The C 08.03 per-band cell surface (one PD range = one row).
-
-    Shared by ``c08_03_plans`` (the lineage spec) and ``generate_c08_03`` (the
-    reported frame). Cols 0010/0020 sum the sealed per-side gross carriers
-    (``reporting_gross_on_bs`` / ``reporting_gross_off_bs``) over the whole band
-    — the carriers are row-level and null outside their side, so a band with no
-    off-BS rows sums 0.0 naturally, which is why the retired on/off whole-bucket
-    fallback is gone. Col 0030 weights the average CCF by the off-BS gross."""
-    cells: dict[tuple[str, str], CellSpec] = {}
-    for ref, label, term_col in band_rows:
-        terms: _Terms = ((term_col, label),)
-        member = RowPredicate(equals=terms)
-        cells[(ref, "0010")] = CellSpec(Sum("reporting_gross_on_bs"), predicate=member)
-        cells[(ref, "0020")] = CellSpec(Sum("reporting_gross_off_bs"), predicate=member)
-        cells[(ref, "0030")] = CellSpec(
-            WeightedAvg("ccf", weight="reporting_gross_off_bs"),
-            predicate=member,
-            empty_cell="null",
-        )
-        cells[(ref, "0040")] = CellSpec(Sum(ead_col), predicate=member)
-        cells[(ref, "0050")] = CellSpec(
-            WeightedAvg(pd_report_col, weight=ead_col), predicate=member, empty_cell="null"
-        )
-        cells[(ref, "0060")] = (
-            CellSpec(Count("counterparty_reference", distinct=True), predicate=member)
-            if "counterparty_reference" in cols
-            else CellSpec(Count("exposure_reference"), predicate=member)
-        )
-        cells[(ref, "0070")] = (
-            CellSpec(WeightedAvg(lgd_col, weight=ead_col), predicate=member, empty_cell="null")
-            if lgd_col is not None
-            else CellSpec(Formula(refs=(), fn=_const(None)))
-        )
-        cells[(ref, "0080")] = CellSpec(
-            WeightedAvg("irb_maturity_m", weight=ead_col), predicate=member, empty_cell="null"
-        )
-        cells[(ref, "0090")] = CellSpec(Sum(rwa_col), predicate=member)
-        cells[(ref, "0100")] = CellSpec(Sum("expected_loss"), predicate=member)
-        cells[(ref, "0110")] = CellSpec(
-            SafeSum(("scra_provision_amount", "gcra_provision_amount")), predicate=member
-        )
-    return cells
-
-
 def c08_03_plans(
     results: pl.LazyFrame,
     cols: set[str],
@@ -1476,9 +1459,15 @@ def c08_03_plans(
     regulatory PD scale (plus an optional 9999 Unassigned) derived per class by
     ``pd_scale.banded_rows`` (the c08_02 data-driven pattern), keyed on the derived
     ``c08_pd_range`` / ``c08_pd_parent`` label carried in ``row_terms``. The scale
-    is hierarchical, so parent bands overlap and sum their sub-bands. Keys on the sealed ``reporting_class_origin`` over the IRB
-    NON-slotting book, preserving ``generate_c08_03``'s error contract. C 08.03
-    carries no "(-)"-labelled deduction column, so ``negative_cols`` is empty. The
+    is hierarchical, so parent bands overlap and sum their sub-bands. Gross and
+    other pre-CRM columns key on the sealed ``reporting_class_origin`` over the
+    IRB NON-slotting book. Post-CRM exposure-value, RWEA and expected-loss
+    columns key on ``reporting_class`` and the post-substitution IRB population.
+    The sheet axis is the union of both class bases, so a beneficial IRB-to-IRB
+    guarantee can create a guarantor-class sheet with no native exposure. A
+    covered IRB leg treated as standardised leaves this template and is reported
+    in C 07.00.
+    C 08.03 carries no "(-)"-labelled deduction column, so ``negative_cols`` is empty. The
     provisions ladder (col 0110) is the one post-execute pass, on the REPORTED
     frame (``generate_c08_03``), which the drill-down reads a cell's value from.
     Cols 0010/0020 sum the sealed per-side gross carriers directly (no on/off
@@ -1491,23 +1480,34 @@ def c08_03_plans(
         errors.append("C08.03: Missing required columns (exposure_class/ead/rwa)")
         return {}
     alloc_pd_col = _pd_alloc_col(cols, framework)
-    report_pd_col = pick(cols, "pd_floored", "pd")
+    report_pd_col = pick(cols, "reporting_pd_post_crm", "pd_floored", "pd")
     if alloc_pd_col is None:
         errors.append("C08.03: No PD column available — skipping PD range breakdown")
         return {}
-    irb_df = _non_slotting(results, cols).collect()
+    irb_df = _non_slotting(results, cols, both_bases=True).collect()
     if len(irb_df) == 0:
         return {}
+    irb_df = irb_df.with_columns(class_keys(_BASIS, set(irb_df.columns), ec_col))
     data_cols = set(irb_df.columns)
     irb_df = _prepare(irb_df, data_cols)
     column_refs = tuple(col.ref for col in get_c08_03_columns(framework))
-    lgd_col = pick(data_cols, "lgd_floored", "lgd_input")
+    lgd_col = pick(data_cols, "reporting_lgd_post_crm", "lgd_floored", "lgd_input")
     pd_report_col = report_pd_col or alloc_pd_col
     plans: dict[str, SheetPlan] = {}
-    for ec in irb_df[ec_col].drop_nulls().unique().sort().to_list():
-        class_df = irb_df.filter(pl.col(ec_col) == ec)
+    for ec in sorted(sheet_axis(_BASIS, irb_df)):
+        class_df = sheet_frame(_BASIS, irb_df, ec)
         band_rows, banded = banded_rows(class_df, alloc_pd_col, framework)
-        cells = _c08_03_cells(band_rows, data_cols, ead_col, rwa_col, pd_report_col, lgd_col)
+        cells = build_c08_03_cells(
+            band_rows,
+            data_cols,
+            ead_col,
+            rwa_col,
+            pd_report_col,
+            lgd_col,
+            ec,
+            _BASIS.basis_origin,
+            _BASIS.basis_post,
+        )
         rows = tuple(_Row(ref, label) for ref, label, _col in band_rows)
         plans[ec] = SheetPlan(
             spec=TemplateSpec(
@@ -1544,9 +1544,9 @@ def generate_c08_03(
             continue
         banded = plan.frame
         data_cols = set(banded.columns)
-        row_preds: dict[str, RowPredicate | None] = {
-            ref: RowPredicate(equals=terms) for ref, terms in plan.row_terms.items() if terms
-        }
+        row_preds: dict[str, RowPredicate | None] = _origin_preds(
+            {ref: RowPredicate(equals=terms) for ref, terms in plan.row_terms.items() if terms}
+        )
         frame = execute(plan.spec, banded)
         frame = provisions_postfix(frame, banded, row_preds, data_cols, ref="0110")
         result[ec] = frame
@@ -1909,9 +1909,15 @@ def _c08_06_empty_refs(
 ) -> frozenset[str]:
     """Non-Total rows with an EMPTY subset on this SL-type sheet.
 
-    These rows are hard zero-filled by ``_c08_06_sheet`` (every cell 0.0 except
-    col 0070 = the row definition's FIXED display risk weight), so their col 0070
-    is a display artefact, not a measured weighted average. The per-sheet spec
+    These rows are zero-filled by ``_c08_06_sheet``, and col 0070 carries the row
+    definition's FIXED display risk weight, so their col 0070 is a display
+    artefact, not a measured weighted average. HOW MUCH of the row is zeroed is
+    ``c08_06_empty_row_override``'s decision, not this one's: a row empty on BOTH
+    bases is zeroed whole, while a row empty only on the POST basis — a fully
+    substituted-out category — keeps its ORIGIN cells (0010 gross, 0030 off-BS
+    gross, 0090 EL, 0100 provisions) and zeroes only the post-basis block. Both
+    cases still take the fixed display weight, which is why col 0070 is unbound
+    in the spec for either. The per-sheet spec
     therefore leaves that cell UNBOUND (its value comes from the reported frame's
     zero-fill pass), so lineage reports it as the template's empty policy rather
     than a WeightedAvg with no legs whose value would contradict the screen. Uses
@@ -1931,7 +1937,7 @@ def _c08_06_sheets(data: pl.DataFrame, cols: set[str], framework: str) -> dict[s
         return {"specialised_lending": data}
     sheets: dict[str, pl.DataFrame] = {}
     for sl_key in get_c08_06_sl_types(framework):
-        type_df = _c08_06_sl_type_sheet(data, sl_key, cols, framework)
+        type_df = c08_06_sl_type_sheet(data, sl_key, cols, framework)
         if type_df.height > 0:
             sheets[sl_key] = type_df
     return sheets
@@ -2037,19 +2043,6 @@ def _c08_06_prepare(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
     )
 
 
-def _c08_06_sl_type_sheet(
-    data: pl.DataFrame, sl_key: str, cols: set[str], framework: str
-) -> pl.DataFrame:
-    """The retired HVCRE routing: CRR's IPRE sheet absorbs HVCRE (only when
-    ``is_hvcre`` exists); B31's HVCRE sheet admits ``is_hvcre`` flags too."""
-    has_hvcre = "is_hvcre" in cols
-    if sl_key == "ipre" and framework != "BASEL_3_1" and has_hvcre:
-        return data.filter(pl.col("sl_type").is_in(["ipre", "hvcre"]))
-    if sl_key == "hvcre" and framework == "BASEL_3_1" and has_hvcre:
-        return data.filter((pl.col("sl_type") == "hvcre") | pl.col("is_hvcre"))
-    return data.filter(pl.col("sl_type") == sl_key)
-
-
 def _c08_06_row_pred(label: str, is_short: bool | None, *, has_maturity: bool) -> RowPredicate:
     """One category x maturity row subset. The retired asymmetric fallback
     is preserved: with no maturity column the SHORT band is empty while the
@@ -2148,7 +2141,9 @@ def _c08_06_sheet(
 ) -> pl.DataFrame:
     """Execute one SL-type sheet and apply the retired value-dependent
     branches: the zero-fill policy for empty non-Total rows (fixed display
-    RW in 0070), the >0 clamp on 0040, the first-non-null risk weight when
+    RW in 0070, and — where the row is empty on the POST basis only — the
+    ORIGIN cells left standing, ``c08_06_empty_row_override``), the >0 clamp
+    on 0040, the first-non-null risk weight when
     the subset carries zero total EAD, and the SCRA/GCRA -> provision_held
     provisions ladder. Col 0030 (off-BS gross) now sums the sealed
     ``reporting_gross_off_bs`` carrier over the whole row in the spec — the
@@ -2164,10 +2159,15 @@ def _c08_06_sheet(
     # one. Their docstrings say they use the same test, which is exactly what
     # makes moving one silently dangerous.
     row_subsets = subset_rows(type_df, {ref: _c08_06_post(p) for ref, p in row_preds.items()})
+    origin_subsets = subset_rows(type_df, row_preds)
     for row_ref, label, _is_short, rw_display in row_defs:
         subset = row_subsets[row_ref]
         if subset.height == 0 and label != "Total":
-            overrides[row_ref] = c08_06_zero_row(spec.column_refs, rw_display)
+            overrides[row_ref] = c08_06_empty_row_override(
+                spec.column_refs,
+                rw_display,
+                origin_populated=origin_subsets[row_ref].height > 0,
+            )
             continue
         fixes: dict[str, float | None] = {}
         ead_sum = float(subset[ead_col].fill_null(0.0).sum())

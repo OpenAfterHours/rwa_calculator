@@ -334,13 +334,18 @@ class TestC0803Generation:
         assert "specialised_lending" not in bundle.c08_03
 
     def test_partial_guarantee_keeps_gross_on_origin_and_moves_post_crm_values(self) -> None:
-        """An 80% IRB-to-IRB guarantee moves EAD/RWEA, not pre-CRM gross."""
+        """An 80% IRB-to-IRB guarantee moves EAD/RWEA, not pre-CRM gross.
+
+        The obligor PD 0.50% bands on row 0060 and the guarantor PD 0.20% on row
+        0040, so the covered leg reports its post-CRM block two bands up the
+        scale from the gross it came from.
+        """
         bundle = LedgerShimCorepGenerator().generate_from_lazyframe(
             _partially_guaranteed_retail_loan()
         )
 
         retained = bundle.c08_03["retail_other"].filter(pl.col("row_ref") == "0060")
-        covered = bundle.c08_03["institution"].filter(pl.col("row_ref") == "0060")
+        covered = bundle.c08_03["institution"].filter(pl.col("row_ref") == "0040")
 
         assert retained["0010"][0] == pytest.approx(100.0)
         assert retained["0040"][0] == pytest.approx(20.0)
@@ -352,6 +357,20 @@ class TestC0803Generation:
         assert covered["0070"][0] == pytest.approx(0.40)
         assert covered["0090"][0] == pytest.approx(16.0)
 
+    def test_arrived_leg_asserts_no_band_it_did_not_populate(self) -> None:
+        """The destination sheet carries the guarantor band and no other.
+
+        On the origin-only row axis an arrived leg dragged its BORROWER band
+        onto the guarantor sheet, emitting row 0060 there with an all-zero
+        pre-CRM half. A band is only ever asserted about the PD that produced
+        the numbers reported against it.
+        """
+        bundle = LedgerShimCorepGenerator().generate_from_lazyframe(
+            _partially_guaranteed_retail_loan()
+        )
+
+        assert bundle.c08_03["institution"]["row_ref"].to_list() == ["0040"]
+
     def test_partial_guarantee_moves_el_but_keeps_count_and_provisions_on_origin(self) -> None:
         """EL follows the resultant obligor; count and provisions stay pre-CRM."""
         bundle = LedgerShimCorepGenerator().generate_from_lazyframe(
@@ -359,7 +378,7 @@ class TestC0803Generation:
         )
 
         retained = bundle.c08_03["retail_other"].filter(pl.col("row_ref") == "0060")
-        covered = bundle.c08_03["institution"].filter(pl.col("row_ref") == "0060")
+        covered = bundle.c08_03["institution"].filter(pl.col("row_ref") == "0040")
 
         assert retained["0060"][0] == pytest.approx(1.0)
         assert retained["0100"][0] == pytest.approx(0.045)
@@ -407,21 +426,66 @@ class TestC0803Generation:
         assert retained["0090"][0] == pytest.approx(10.0)
         assert retained["0100"][0] == pytest.approx(0.045)
 
-    def test_same_class_substitution_keeps_the_whole_post_crm_value_on_origin_sheet(self) -> None:
-        """A same-class guarantor changes no sheet even though its leg is substituted."""
+    def test_same_class_substitution_still_moves_the_pd_band(self) -> None:
+        """A guarantee that changes only the PD is visible in the PD breakdown.
+
+        The guarantor sits in the obligor OWN class, so no sheet changes and the
+        row axis is the only place the benefit can show. The covered 80 leaves
+        the obligor 0.50% band for the guarantor 0.20% band, carrying its
+        exposure value, LGD, RWEA and EL with it; the 100 of gross, the obligor
+        count and the provisions stay behind on row 0060.
+
+        This is the case the published row instruction ("without considering any
+        substitution effects due to CRM") would collapse into a single row: the
+        whole 100 would report against 0.50% at a blended 0.26% PD and the
+        guarantee would move no band at all. See ``corep/c08.py`` C 08.03 bullet
+        for why that reading is deliberately not followed.
+        """
         results = _partially_guaranteed_retail_loan().with_columns(
             pl.lit("retail_other").alias("reporting_class")
         )
         bundle = LedgerShimCorepGenerator().generate_from_lazyframe(results)
+        sheet = bundle.c08_03["retail_other"]
+        origin = sheet.filter(pl.col("row_ref") == "0060")
+        moved = sheet.filter(pl.col("row_ref") == "0040")
 
-        retail = bundle.c08_03["retail_other"].filter(pl.col("row_ref") == "0060")
         assert set(bundle.c08_03) == {"retail_other"}
-        assert retail["0010"][0] == pytest.approx(100.0)
-        assert retail["0040"][0] == pytest.approx(100.0)
-        assert retail["0050"][0] == pytest.approx(0.0026)
-        assert retail["0070"][0] == pytest.approx(0.41)
-        assert retail["0090"][0] == pytest.approx(26.0)
-        assert retail["0100"][0] == pytest.approx(0.109)
+        assert sheet["row_ref"].to_list() == ["0040", "0060"]
+        assert origin["0010"][0] == pytest.approx(100.0)
+        assert origin["0040"][0] == pytest.approx(20.0)
+        assert origin["0050"][0] == pytest.approx(0.005)
+        assert origin["0060"][0] == pytest.approx(1.0)
+        assert origin["0090"][0] == pytest.approx(10.0)
+        assert moved["0010"][0] == pytest.approx(0.0)
+        assert moved["0040"][0] == pytest.approx(80.0)
+        assert moved["0050"][0] == pytest.approx(0.002)
+        assert moved["0070"][0] == pytest.approx(0.40)
+        assert moved["0090"][0] == pytest.approx(16.0)
+        # Splitting the rows redistributes the sheet, it does not change it:
+        # every post-CRM total still foots to the single-row figure.
+        assert sheet["0040"].sum() == pytest.approx(100.0)
+        assert sheet["0090"].sum() == pytest.approx(26.0)
+        assert sheet["0100"].sum() == pytest.approx(0.109)
+
+    def test_every_reported_band_contains_its_own_average_pd(self) -> None:
+        """col 0050 always falls inside the row own PD range.
+
+        The property the post-CRM row axis buys, and the one the origin-only
+        axis broke: a row labelled "0.50 to <0.75" reporting an average PD of
+        0.26% is the visible symptom of banding a substituted leg on a PD that
+        did not risk-weight it.
+        """
+        from rwa_calc.reporting.corep.templates import get_c08_03_pd_ranges
+
+        results = _partially_guaranteed_retail_loan().with_columns(
+            pl.lit("retail_other").alias("reporting_class")
+        )
+        bundle = LedgerShimCorepGenerator().generate_from_lazyframe(results)
+        bands = {ref: (lo, hi) for lo, hi, ref, _label in get_c08_03_pd_ranges("CRR")}
+
+        for row in bundle.c08_03["retail_other"].iter_rows(named=True):
+            lower, upper = bands[row["row_ref"]]
+            assert lower <= row["0050"] < upper, row["row_ref"]
 
 
 class TestC0803PDRangeAssignment:

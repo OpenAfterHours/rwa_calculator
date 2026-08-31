@@ -66,7 +66,7 @@ sovereign sheet itself is CRR-only and worth emitting.
 
 ``LN_CORP_FLOOR`` (grade G01) carries the SAME 0.02% PD as ``LN_SOV_A`` and is
 still load-bearing, because it pins the ALLOCATION BASIS:
-``c08.py::_pd_alloc_col`` allocates C 08.03 / C 08.05 on ``pd_floored`` under CRR
+``pd_scale.pd_band_col`` allocates C 08.03 / C 08.05 on ``pd_floored`` under CRR
 and on the unfloored ``pd`` under Basel 3.1. Under Basel 3.1 the 0.05% corporate
 PD input floor falls exactly on the 0015 / 0025 boundary, so G01 lands in 0015
 (``0.00 to <0.05``) on the pre-floor basis and would land in 0025 on the

@@ -1822,6 +1822,9 @@ IRB_BRANCH_EDGE: EdgeContract = EdgeContract(
         "reporting_pd_post_crm": EdgeColumn(
             dtype=pl.Float64, required=False, inject=False, citation="CRR Art. 161/236"
         ),
+        "reporting_pd_post_crm_pre_floor": EdgeColumn(
+            dtype=pl.Float64, required=False, inject=False, citation="CRR Art. 161/236"
+        ),
         "reporting_lgd_post_crm": EdgeColumn(
             dtype=pl.Float64, required=False, inject=False, citation="CRR Art. 161/236"
         ),
@@ -1925,12 +1928,18 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
         "reporting_rw": EdgeColumn(dtype=pl.Float64),
         "reporting_subclass": EdgeColumn(dtype=pl.String),
         # Effective IRB risk parameters after beneficial parameter
-        # substitution. C 08.03 keeps the obligor PD for its fixed row axis,
-        # while cols 0050/0070 weight these post-CRM carriers by post-CRM EAD.
-        # Conditional because a run with no guarantee sub-step never creates
-        # the candidates; reporting consumers fall back to pd_floored /
-        # lgd_floored on that shape.
+        # substitution. C 08.03's post-CRM block reads them for BOTH its values
+        # (cols 0050/0070, weighted by post-CRM EAD) and the PD-range ROW that
+        # block reports in - ``_pre_floor`` is the same PD before the
+        # Art. 160(1)/163(1) input floor, the basis OF 08.03's row axis is
+        # stated on. Conditional because a run with no guarantee sub-step never
+        # creates the candidates; reporting consumers fall back to pd_floored /
+        # pd / lgd_floored on that shape, which is what makes the post-CRM
+        # banding degrade to the obligor banding.
         "reporting_pd_post_crm": EdgeColumn(
+            dtype=pl.Float64, required=False, inject=False, citation="CRR Art. 161/236"
+        ),
+        "reporting_pd_post_crm_pre_floor": EdgeColumn(
             dtype=pl.Float64, required=False, inject=False, citation="CRR Art. 161/236"
         ),
         "reporting_lgd_post_crm": EdgeColumn(
@@ -2203,6 +2212,7 @@ REPORTING_SURFACE: frozenset[str] = frozenset(
         "reporting_rw",
         "reporting_subclass",
         "reporting_pd_post_crm",
+        "reporting_pd_post_crm_pre_floor",
         "reporting_lgd_post_crm",
         # The additive per-leg Art. 235/236 substitution relief (Phase 7 F8).
         "guarantee_rwa_benefit",

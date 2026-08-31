@@ -96,13 +96,16 @@ Cell semantics (recorded decisions, this slice):
   exposure value and RWEA may not assert a grade in this sheet's scale either,
   and the row already meaning "an exposure whose grade we do not carry" is where
   the col 0080 scalar and the legs that make it up both belong.
-- C 08.03 HAS AN EXPLICIT TWO-BASIS COLUMN MATRIX. The origin PD scale remains
-  the row axis on both limbs: cols 0010/0020/0030/0060/0110 read the
-  obligor/origin population, while cols 0040/0050/0070/0080/0090/0100 read the
-  post-substitution population and sheet class. Expected loss belongs to the
-  latter because it is calculated after applying CRM and follows the resultant
-  obligor (EBA Q&A 2023_6718). The seam is the ``both_bases`` opt-in on
-  ``_irb_population``; C 08.04/05 retain its origin-only default.
+- C 08.03 HAS AN EXPLICIT TWO-BASIS COLUMN MATRIX REACHING BOTH THE SHEET AND
+  THE ROW AXIS. Cols 0010/0020/0030/0060/0110 read the obligor/origin
+  population; cols 0040/0050/0070/0080/0090/0100 read the post-substitution
+  population, sheet class AND PD band (EBA Q&A 2023_6718 for the expected-loss
+  limb). The seam is the ``both_bases`` opt-in on ``_irb_population`` plus
+  ``pd_scale.banded_rows_by_basis``; C 08.04/05 keep the origin-only default and
+  the single-basis ``banded_rows``. THE ROW AXIS DELIBERATELY DEPARTS FROM THE
+  PUBLISHED ROW INSTRUCTION AND MUST NOT BE "FIXED" BACK — the election, the
+  verbatim clause it overrules and the measured before/after are recorded in
+  ``corep/c08_03_cells.py``.
   COL 0060 IS A DELIBERATE DEPARTURE FROM THAT Q&A'S COLUMN LIST AND MUST NOT BE
   "FIXED" INTO THE POST GROUP. The Q&A enumerates 0040, 0050, 0060, 0070 and 0080
   as resultant-obligor columns; every one of them moved here EXCEPT 0060, which
@@ -390,7 +393,12 @@ from rwa_calc.reporting.corep.crm_substitution import (
     irb_protection_exprs,
     waterfall_refs,
 )
-from rwa_calc.reporting.corep.pd_scale import banded_rows
+from rwa_calc.reporting.corep.pd_scale import (
+    banded_rows,
+    banded_rows_by_basis,
+    pd_band_col,
+    pd_band_col_post,
+)
 from rwa_calc.reporting.corep.postpass import (
     c08_06_apply_overrides,
     c08_after_all_crm,
@@ -1441,12 +1449,6 @@ def _c08_02_post_key(keyed: pl.DataFrame) -> pl.DataFrame:
 # =============================================================================
 
 
-def _pd_alloc_col(cols: set[str], framework: str) -> str | None:
-    if framework == "BASEL_3_1":
-        return pick(cols, "pd", "pd_floored")
-    return pick(cols, "pd_floored", "pd")
-
-
 def c08_03_plans(
     results: pl.LazyFrame,
     cols: set[str],
@@ -1457,16 +1459,16 @@ def c08_03_plans(
 
     Each class sheet has its OWN spec — rows are the populated bands of the fixed
     regulatory PD scale (plus an optional 9999 Unassigned) derived per class by
-    ``pd_scale.banded_rows`` (the c08_02 data-driven pattern), keyed on the derived
-    ``c08_pd_range`` / ``c08_pd_parent`` label carried in ``row_terms``. The scale
-    is hierarchical, so parent bands overlap and sum their sub-bands. Gross and
-    other pre-CRM columns key on the sealed ``reporting_class_origin`` over the
-    IRB NON-slotting book. Post-CRM exposure-value, RWEA and expected-loss
-    columns key on ``reporting_class`` and the post-substitution IRB population.
-    The sheet axis is the union of both class bases, so a beneficial IRB-to-IRB
-    guarantee can create a guarantor-class sheet with no native exposure. A
-    covered IRB leg treated as standardised leaves this template and is reported
-    in C 07.00.
+    ``pd_scale.banded_rows_by_basis`` (the c08_02 data-driven pattern), keyed on the
+    derived ``c08_pd_range`` / ``c08_pd_parent`` label and their ``_post`` twins.
+    The scale is hierarchical, so parent bands overlap and sum their sub-bands.
+    Pre-CRM columns key the sealed ``reporting_class_origin`` and the obligor's
+    own PD band over the IRB NON-slotting book; post-CRM columns key
+    ``reporting_class``, the post-substitution population and the band of the PD
+    that risk-weighted the leg (``corep/c08_03_cells.py``). BOTH axes are the
+    union of the two bases, so a guarantee can create a guarantor-class sheet
+    with no native exposure AND move a band without moving a sheet. A covered IRB
+    leg treated as standardised leaves this template for C 07.00.
     C 08.03 carries no "(-)"-labelled deduction column, so ``negative_cols`` is empty. The
     provisions ladder (col 0110) is the one post-execute pass, on the REPORTED
     frame (``generate_c08_03``), which the drill-down reads a cell's value from.
@@ -1479,11 +1481,12 @@ def c08_03_plans(
     if ec_col is None or ead_col is None or rwa_col is None:
         errors.append("C08.03: Missing required columns (exposure_class/ead/rwa)")
         return {}
-    alloc_pd_col = _pd_alloc_col(cols, framework)
+    alloc_pd_col = pd_band_col(cols, framework)
     report_pd_col = pick(cols, "reporting_pd_post_crm", "pd_floored", "pd")
     if alloc_pd_col is None:
         errors.append("C08.03: No PD column available — skipping PD range breakdown")
         return {}
+    post_alloc_pd_col = pd_band_col_post(cols, framework) or alloc_pd_col
     irb_df = _non_slotting(results, cols, both_bases=True).collect()
     if len(irb_df) == 0:
         return {}
@@ -1496,7 +1499,14 @@ def c08_03_plans(
     plans: dict[str, SheetPlan] = {}
     for ec in sorted(sheet_axis(_BASIS, irb_df)):
         class_df = sheet_frame(_BASIS, irb_df, ec)
-        band_rows, banded = banded_rows(class_df, alloc_pd_col, framework)
+        band_rows, banded = banded_rows_by_basis(
+            class_df,
+            alloc_pd_col,
+            post_alloc_pd_col,
+            framework,
+            origin_flag=_BASIS.basis_origin,
+            post_flag=_BASIS.basis_post,
+        )
         cells = build_c08_03_cells(
             band_rows,
             data_cols,
@@ -1508,7 +1518,7 @@ def c08_03_plans(
             _BASIS.basis_origin,
             _BASIS.basis_post,
         )
-        rows = tuple(_Row(ref, label) for ref, label, _col in band_rows)
+        rows = tuple(_Row(ref, label) for ref, label, _origin, _post in band_rows)
         plans[ec] = SheetPlan(
             spec=TemplateSpec(
                 name="c08_03", rows=rows, column_refs=column_refs, cells=cells, empty_cell="zero"
@@ -1516,7 +1526,9 @@ def c08_03_plans(
             frame=banded,
             ctx=ReportingContext(),
             negative_cols=frozenset(),
-            row_terms={ref: ((col, label),) for ref, label, col in band_rows},
+            # The ORIGIN terms: ``row_terms``'s only C 08.03 consumer is the col
+            # 0110 provisions post-pass, which is an origin-basis column.
+            row_terms={ref: ((origin, label),) for ref, label, origin, _post in band_rows},
         )
     return plans
 
@@ -1535,7 +1547,7 @@ def generate_c08_03(
     reads a cell's value from. Cols 0010/0020 (the sealed per-side gross
     carriers) need no post-pass. Each row's predicate is rebuilt from the plan's
     ``row_terms`` (a ``c08_pd_range`` leaf label, or ``c08_pd_parent`` for a
-    parent band)."""
+    parent band) — the ORIGIN pair, because col 0110 is an origin-basis column."""
     column_refs = tuple(col.ref for col in get_c08_03_columns(framework))
     result: dict[str, pl.DataFrame] = {}
     for ec, plan in c08_03_plans(results, cols, framework, errors).items():
@@ -1610,7 +1622,7 @@ def c08_05_plans(
 ) -> dict[str, SheetPlan]:
     """Build the per-class C 08.05 execution plans for lineage (sparse PD rows).
 
-    Shares ``pd_scale.banded_rows`` / ``_pd_alloc_col`` with C 08.03; each class sheet has
+    Shares ``pd_scale.banded_rows`` / ``pd_scale.pd_band_col`` with C 08.03; each class sheet has
     its OWN sparse-PD-range spec, keyed on the sealed ``reporting_class_origin``
     over the IRB NON-slotting book (preserving ``generate_c08_05``'s error
     contract). Execute-only (R13 deleted the rate postfix), so ``generate_c08_05``
@@ -1620,7 +1632,7 @@ def c08_05_plans(
     if ec_col is None:
         errors.append("C08.05: Missing required column (exposure_class)")
         return {}
-    alloc_pd_col = _pd_alloc_col(cols, framework)
+    alloc_pd_col = pd_band_col(cols, framework)
     report_pd_col = pick(cols, "pd_floored", "pd")
     if alloc_pd_col is None:
         errors.append("C08.05: No PD column available — skipping PD backtesting")

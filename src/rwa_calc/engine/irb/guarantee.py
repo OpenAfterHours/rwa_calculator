@@ -100,6 +100,12 @@ def apply_guarantee_substitution(
     has_guarantor_pd = "guarantor_pd" in cols
     origin_pd_col = next(name for name in ("pd_floored", "pd") if name in cols)
     origin_lgd_col = next(name for name in ("lgd_floored", "lgd", "lgd_input") if name in cols)
+    # The PRE-INPUT-FLOOR twin of ``origin_pd_col``. OF 08.03's row axis is
+    # "PD RANGE (PRE-INPUT FLOOR)" (PS1/26 Annex II §3.3.5.2), so the post-CRM
+    # banding needs an unfloored post-CRM PD or an unguaranteed Basel 3.1 book
+    # would band on the floored value and move rows at the 0.05% split that
+    # regime adds. Preference is the mirror image of ``origin_pd_col``'s.
+    origin_pd_pre_floor_col = next(name for name in ("pd", "pd_floored") if name in cols)
     # PD substitution applies whenever the guarantor has an internal PD.
     # Per-row routing (IRB-derived RW vs SA-derived RW) is decided inside
     # _apply_parameter_substitution by guarantor_approach, which is itself
@@ -132,6 +138,7 @@ def apply_guarantee_substitution(
         use_parameter_substitution,
         origin_pd_col,
         origin_lgd_col,
+        origin_pd_pre_floor_col,
         pack=resolved_pack,
     )
 
@@ -274,17 +281,25 @@ def apply_guarantee_substitution(
             if name in cols
         )
 
-    # Seal the effective post-CRM parameters used by each IRB leg.  The
-    # C 08.03 fixed-PD row remains keyed on the original obligor PD, but cols
-    # 0050/0070 are exposure-weighted post-CRM measures and therefore need the
-    # guarantor parameters on a beneficial PSM-covered leg.  Declined guarantees,
-    # retained legs and double-default treatment keep the obligor parameters.
+    # Seal the effective post-CRM parameters used by each IRB leg.  C 08.03's
+    # post-CRM column block reports both the VALUES (cols 0050/0070) and the PD
+    # RANGE ROW they sit in off these carriers, so a beneficial PSM-covered leg
+    # needs the guarantor's parameters here.  Declined guarantees, retained legs
+    # and double-default treatment keep the obligor parameters, which is what
+    # makes the post-CRM banding degrade to the obligor banding on a book that
+    # never substitutes.  ``reporting_pd_post_crm_pre_floor`` is the same value
+    # BEFORE the Art. 160(1)/163(1) input floor — the basis OF 08.03's row axis
+    # is stated on.
     parameter_substituted = substituted & pl.col("_is_pd_substitution") & ~pl.col("_is_dd_applied")
     lf = lf.with_columns(
         pl.when(parameter_substituted)
         .then(pl.col("_reporting_pd_post_crm_candidate"))
         .otherwise(pl.col(origin_pd_col))
         .alias("reporting_pd_post_crm"),
+        pl.when(parameter_substituted)
+        .then(pl.col("_reporting_pd_post_crm_pre_floor_candidate"))
+        .otherwise(pl.col(origin_pd_pre_floor_col))
+        .alias("reporting_pd_post_crm_pre_floor"),
         pl.when(parameter_substituted)
         .then(pl.col("_reporting_lgd_post_crm_candidate"))
         .otherwise(pl.col(origin_lgd_col))
@@ -300,6 +315,7 @@ def apply_guarantee_substitution(
         "_is_dd_applied",
         "guarantor_rw_sa",
         "_reporting_pd_post_crm_candidate",
+        "_reporting_pd_post_crm_pre_floor_candidate",
         "_reporting_lgd_post_crm_candidate",
     )
 
@@ -427,6 +443,7 @@ def _apply_parameter_substitution(
     use_parameter_substitution: bool,
     origin_pd_col: str,
     origin_lgd_col: str,
+    origin_pd_pre_floor_col: str,
     *,
     pack: ResolvedRulepack,
 ) -> pl.LazyFrame:
@@ -455,6 +472,7 @@ def _apply_parameter_substitution(
                 pl.col("guarantor_rw_sa").alias("guarantor_rw"),
                 pl.lit(False).alias("_is_pd_substitution"),
                 pl.col(origin_pd_col).alias("_reporting_pd_post_crm_candidate"),
+                pl.col(origin_pd_pre_floor_col).alias("_reporting_pd_post_crm_pre_floor_candidate"),
                 pl.col(origin_lgd_col).alias("_reporting_lgd_post_crm_candidate"),
             ]
         )
@@ -532,15 +550,22 @@ def _apply_parameter_substitution(
             .otherwise(pl.col("guarantor_rw_sa"))
             .alias("guarantor_rw"),
             # Preserve the exact risk parameters used by parameter substitution.
-            # The obligor PD remains the C 08.03 row key, but its post-CRM
-            # weighted-average columns must use the parameters applied to each
-            # covered leg.  These candidates are gated by the final beneficial /
-            # double-default decision in the caller before becoming reporting
-            # carriers.
+            # C 08.03's post-CRM column block reads them for both its values and
+            # its PD-range row, so they must be the parameters actually applied
+            # to each covered leg.  These candidates are gated by the final
+            # beneficial / double-default decision in the caller before becoming
+            # reporting carriers.
             pl.when(is_irb_guarantor)
             .then(guarantor_pd_floored)
             .otherwise(pl.col(origin_pd_col))
             .alias("_reporting_pd_post_crm_candidate"),
+            # The same substituted PD BEFORE the Art. 163(1) floor
+            # ``guarantor_pd_floored`` applies — OF 08.03 bands its rows on the
+            # pre-input-floor PD, so the post-CRM banding needs the raw estimate.
+            pl.when(is_irb_guarantor)
+            .then(pl.col("guarantor_pd"))
+            .otherwise(pl.col(origin_pd_pre_floor_col))
+            .alias("_reporting_pd_post_crm_pre_floor_candidate"),
             pl.when(is_irb_guarantor)
             .then(
                 pl.when(pl.col("guarantor_rw_irb") >= pl.col("rw_direct"))

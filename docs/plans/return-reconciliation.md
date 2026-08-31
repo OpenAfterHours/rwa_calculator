@@ -105,7 +105,7 @@ and written down in prose the analyst never sees. For C 08.03 alone,
 that:
 
 - Row allocation uses `pd_floored` under CRR but the **pre-input-floor** `pd`
-  under Basel 3.1 (`corep/c08.py::_pd_alloc_col`), while column 0050 **always**
+  under Basel 3.1 (`corep/pd_scale.py::pd_band_col`), while column 0050 **always**
   reports the post-floor PD. A legacy engine that bands on post-floor PD moves
   every floored obligor a band — with no change in any number the analyst can see
   on the face of the return.

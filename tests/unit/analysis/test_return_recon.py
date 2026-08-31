@@ -456,16 +456,32 @@ def _slotting_single_cause(cause: str, framework: str) -> ReturnRecon:
 # =============================================================================
 
 
-def _leaf_row_of(recon: ReturnRecon, *, ours: bool, reference: str) -> str:
+def _leaf_row_of(
+    recon: ReturnRecon,
+    *,
+    ours: bool,
+    reference: str,
+    col_ref: str = "0040",
+) -> str:
     """The C 08.03 corporate leaf row one leg landed in, on the named side.
 
     Read off the membership rather than hard-coded: the CRR and Basel 3.1 row
     axes differ (18 rows against 17), so a literal ref would pin one framework.
     """
     side = recon.ours if ours else recon.theirs
+    served = side.membership.columns.filter(
+        (pl.col("template_id") == "c08_03")
+        & (pl.col("sheet") == CORPORATE)
+        & (pl.col("col_ref") == col_ref)
+    )["predicate_key"].unique()
+    assert len(served) == 1, (
+        f"C 08.03/{CORPORATE}/{col_ref} has {len(served)} predicate groups, expected 1"
+    )
+    predicate_key = str(served[0])
     rows = side.membership.legs.filter(
         (pl.col("template_id") == "c08_03")
         & (pl.col("sheet") == CORPORATE)
+        & (pl.col("predicate_key") == predicate_key)
         & (pl.col("exposure_reference") == reference)
         & (pl.col("is_parent_row").eq(other=False))
     )
@@ -723,7 +739,7 @@ def test_non_additive_cells_are_refused_not_decomposed(col_ref: str, framework: 
     """C 08.03's averaged columns carry no four-way split — and say so."""
     # Arrange
     recon = _combined(framework)
-    row_ref = _leaf_row_of(recon, ours=True, reference="BASE_A1")
+    row_ref = _leaf_row_of(recon, ours=True, reference="BASE_A1", col_ref=col_ref)
 
     # Act
     result = decompose_cell(recon, "c08_03", CORPORATE, row_ref, col_ref)
@@ -894,7 +910,7 @@ def test_a_cell_whose_metric_source_one_side_lacks_is_refused(framework: str) ->
     our_source, _ = _sources(base, base, framework)
     their_source = _FrameSource(_ledger(base).drop("expected_loss"), framework)
     recon = build_recon(our_source, their_source)
-    row_ref = _leaf_row_of(recon, ours=True, reference="BASE_A1")
+    row_ref = _leaf_row_of(recon, ours=True, reference="BASE_A1", col_ref="0100")
 
     # Act
     result = decompose_cell(recon, "c08_03", CORPORATE, row_ref, "0100")
@@ -1006,7 +1022,7 @@ def test_an_unpopulatable_cell_is_refused_not_attributed_to_measurement(framewor
     # Arrange
     our_source, their_source, coverage = _unmapped_gross(framework)
     unguarded = build_recon(our_source, their_source)
-    row_ref = _leaf_row_of(unguarded, ours=True, reference="BASE_A1")
+    row_ref = _leaf_row_of(unguarded, ours=True, reference="BASE_A1", col_ref="0010")
     our_gross = unguarded.ours.frames["c08_03"][CORPORATE].filter(pl.col("row_ref") == row_ref)[
         "0010"
     ][0]
@@ -2821,7 +2837,7 @@ def test_a_non_additive_cell_yields_no_pairs(col_ref: str, framework: str) -> No
     """
     # Arrange
     recon = _combined(framework)
-    row_ref = _leaf_row_of(recon, ours=True, reference="BASE_A1")
+    row_ref = _leaf_row_of(recon, ours=True, reference="BASE_A1", col_ref=col_ref)
 
     # Act
     decomposition = decompose_cell(recon, "c08_03", CORPORATE, row_ref, col_ref)
@@ -2849,7 +2865,7 @@ def test_a_coverage_unavailable_cell_yields_no_pairs(framework: str) -> None:
     # Arrange
     our_source, their_source, coverage = _unmapped_gross(framework)
     recon = build_recon(our_source, their_source, theirs_coverage=coverage)
-    row_ref = _leaf_row_of(recon, ours=True, reference="BASE_A1")
+    row_ref = _leaf_row_of(recon, ours=True, reference="BASE_A1", col_ref="0010")
 
     # Act
     decomposition = decompose_cell(recon, "c08_03", CORPORATE, row_ref, "0010")

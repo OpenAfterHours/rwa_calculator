@@ -342,16 +342,32 @@ def _cells(compare: rr.SheetCompare) -> list[rr.CompareCell]:
     return [cell for row in compare.rows for cell in row.cells]
 
 
-def _row_of(recon: ReturnRecon, reference: str, *, ours: bool) -> str:
+def _row_of(
+    recon: ReturnRecon,
+    reference: str,
+    *,
+    ours: bool,
+    col_ref: str = "0040",
+) -> str:
     """The C 08.03 leaf row one leg landed in, read off the membership.
 
     Never a literal: CRR's row axis is 17 rows and Basel 3.1's is 18, so a
     hard-coded ref would silently pin one framework.
     """
     side = recon.ours if ours else recon.theirs
+    served = side.membership.columns.filter(
+        (pl.col("template_id") == TEMPLATE)
+        & (pl.col("sheet") == SHEET)
+        & (pl.col("col_ref") == col_ref)
+    )["predicate_key"].unique()
+    assert len(served) == 1, (
+        f"{TEMPLATE}/{SHEET}/{col_ref} has {len(served)} predicate groups, expected 1"
+    )
+    predicate_key = str(served[0])
     rows = side.membership.legs.filter(
         (pl.col("template_id") == TEMPLATE)
         & (pl.col("sheet") == SHEET)
+        & (pl.col("predicate_key") == predicate_key)
         & (pl.col("exposure_reference") == reference)
         & (pl.col("is_parent_row").eq(other=False))
     )
@@ -1226,6 +1242,7 @@ def test_a_coverage_unavailable_cell_renders_no_pair_table(client: TestClient) -
         ),
         "A1",
         ours=True,
+        col_ref=GROSS_COL,
     )
 
     # Act
@@ -1418,7 +1435,7 @@ def test_an_unmeasurable_column_is_not_netted_to_a_confident_total() -> None:
     )
 
     # Act
-    row_ref = _row_of(recon, "A1", ours=True)
+    row_ref = _row_of(recon, "A1", ours=True, col_ref=GROSS_COL)
     conservation = rr.sheet_conservation(
         recon, TEMPLATE, SHEET, decompose_cell(recon, TEMPLATE, SHEET, row_ref, GROSS_COL)
     )
@@ -1444,8 +1461,9 @@ def test_the_matrix_diagonal_is_agreement_and_the_off_diagonal_is_the_mover(
     # Arrange
     recon = _recon(framework)
     groups = rr.migration_groups(recon, TEMPLATE, SHEET)
-    assert len(groups) == 1, "C 08.03 rows carry one predicate group"
-    matrix = rr.migration_matrix(recon, TEMPLATE, SHEET, groups[0].predicate_key)
+    post_groups = [group for group in groups if RWEA_COL in group.columns]
+    assert len(post_groups) == 1, "C 08.03 RWEA must be served by one predicate group"
+    matrix = rr.migration_matrix(recon, TEMPLATE, SHEET, post_groups[0].predicate_key)
     assert matrix is not None
     our_row = _row_of(recon, "MOVER", ours=True)
     their_row = _row_of(recon, "MOVER", ours=False)

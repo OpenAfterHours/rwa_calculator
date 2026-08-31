@@ -10,14 +10,14 @@ Pipeline position:
 
 Cell semantics (recorded decisions, this slice):
 
-- All five dicts key the sealed ``reporting_class_origin`` (== raw
+- The pre-CRM surfaces key the sealed ``reporting_class_origin`` (== raw
   ``exposure_class`` for IRB rows — the obligor basis, number-neutral
   convergence; no applied-class ladder and NO specialised-lending merge,
-  unlike C 07.00). The population is the origin IRB book keyed on
-  ``reporting_approach_origin`` (F-IRB / A-IRB / slotting); C 08.02/03/04/05
-  exclude slotting per template. C 08.07 alone keeps the RAW class key
-  (Art. 147 origination taxonomy over the FULL population).
-- C 08.01 ALONE IS TWO POPULATIONS PER SHEET — the recorded two-basis decision,
+  unlike C 07.00). C 08.01/02 and C 08.03's post-CRM value block additionally
+  key the sealed post-substitution class/approach. C 08.02/03/04/05 exclude
+  slotting per template. C 08.07 alone keeps the RAW class key (Art. 147
+  origination taxonomy over the FULL population).
+- C 08.01 IS TWO POPULATIONS PER SHEET — the recorded two-basis decision,
   C 07.00's (``corep/c07.py``) on the IRB surface. A sheet's cells split by
   BASIS, the flags derived by ``kernel/bases.py``:
     * ORIGIN basis (``c08_basis_origin``) — the obligor's own book. Cols
@@ -63,7 +63,7 @@ Cell semantics (recorded decisions, this slice):
   reasoning forbids for the grade axis. Sealing the guarantor's parameters per leg
   is the enhancement that would allow the move. Cost, on the record: a
   fully-outflowed sheet reports a real LGD and maturity against ``0110 = 0``.
-- C 08.02 MOVES WITH C 08.01, MEASURED, and the seam is only C 08.03-06. The
+- C 08.02 MOVES WITH C 08.01, MEASURED. The
   premise this was first built to — that ``{OF08.01 r0070} = sum({OF08.02})`` is
   stated over cols 0080/0090 alone (``boe_b0752_8`` / ``_9``, ``boe_b0814_07`` /
   ``_08``) — is FALSE: those are two members of a family stated once per SHARED
@@ -81,9 +81,11 @@ Cell semantics (recorded decisions, this slice):
   exposure value and RWEA may not assert a grade in this sheet's scale either,
   and the row already meaning "an exposure whose grade we do not carry" is where
   the col 0080 scalar and the legs that make it up both belong.
-- C 08.03-06 STAY SINGLE-BASIS. The seam is the ``both_bases`` default on
-  ``_irb_population`` / the ``basis`` default on ``_value_cells``, so widening
-  C 08.01/02 did not silently widen the four templates sharing the population.
+- C 08.03 HAS AN EXPLICIT TWO-BASIS COLUMN MATRIX. The origin PD scale remains
+  the row axis on both limbs: cols 0010/0020/0030/0060/0100/0110 read the
+  obligor/origin population, while cols 0040/0050/0070/0080/0090 read the
+  post-substitution population and sheet class. The seam is the ``both_bases``
+  opt-in on ``_irb_population``; C 08.04/05 retain its origin-only default.
 - SURFACED BY THIS CHANGE AND NOT FIXED HERE (measured on the CRM-substitution
   portfolio, both regimes): the dependents that tie to the moved columns and are
   still keyed on the origin class — C 09.02's geographical cols 0105/0110
@@ -343,6 +345,7 @@ from rwa_calc.reporting.cellspec import (
     execute,
     subset_rows,
 )
+from rwa_calc.reporting.corep.c08_03_cells import build_c08_03_cells
 from rwa_calc.reporting.corep.c08_06_cells import (
     c08_06_empty_row_override,
     c08_06_sl_type_sheet,
@@ -411,12 +414,12 @@ _NEGATIVE_COLS: frozenset[str] = frozenset(
 )
 
 _IRB_APPROACHES: tuple[str, ...] = ("foundation_irb", "advanced_irb", "slotting")
-
 # The C 08.01 two-basis discriminators (see the module docstring). The mechanism
 # — derived boolean columns rather than ``RowPredicate`` fields, and why that is
 # the only shape the post basis can DEGRADE in — lives in
-# ``reporting/kernel/bases.py``, shared with C 07.00. C 08.02-06 stay
-# single-basis: they read ``_irb_population``'s origin-only default.
+# ``reporting/kernel/bases.py``, shared with C 07.00. C 08.01-03 opt into the
+# two-basis population; C 08.04/05 keep ``_irb_population``'s origin-only
+# default.
 _BASIS: TwoBasis = TwoBasis("c08")
 
 # Which ``ReportingContext`` inflow component each C 08.01 row's col 0080 takes.
@@ -530,8 +533,8 @@ def _irb_population(
     """The IRB book (retired _filter_by_irb_approach): F-IRB/A-IRB/slotting.
 
     ``both_bases`` selects WHICH IRB book. The default is the ORIGIN-approach one
-    — the obligor's own book, which is what C 08.02/03/04/05/06 read. C 08.01
-    takes the UNION of it and the POST-substitution book, tagged with
+    — the obligor's own book, which is what C 08.04/05 read. C 08.01/02/03
+    take the UNION of it and the POST-substitution book, tagged with
     ``c08_pop_origin`` / ``c08_pop_post`` so each cell reads its own basis (see
     the module docstring). A leg with no substitution is in both, which is why
     the split is number-neutral on a book that never substitutes.
@@ -724,7 +727,7 @@ def _value_cells(  # noqa: C901, PLR0915 - the full C 08.01/02 column surface
     post_terms: _Terms | None = None,
 ) -> dict[str, CellSpec]:
     # The two-basis split (module docstring). ``basis=None`` is the single-basis
-    # surface C 08.03-06 keep: both term tuples collapse to the caller's own, so
+    # surface a caller may keep: both term tuples collapse to the caller's own, so
     # every predicate is byte-identical to the pre-split one. Every basis-split
     # predicate carries a flag, INCLUDING the Total row's (whose ``terms`` are
     # empty) — an unflagged predicate would silently sum both populations.
@@ -1415,58 +1418,6 @@ def _pd_alloc_col(cols: set[str], framework: str) -> str | None:
     return pick(cols, "pd_floored", "pd")
 
 
-def _c08_03_cells(  # noqa: PLR0913 - the full C 08.03 sparse-PD-range column surface
-    band_rows: list[tuple[str, str, str]],
-    cols: set[str],
-    ead_col: str,
-    rwa_col: str,
-    pd_report_col: str,
-    lgd_col: str | None,
-) -> dict[tuple[str, str], CellSpec]:
-    """The C 08.03 per-band cell surface (one PD range = one row).
-
-    Shared by ``c08_03_plans`` (the lineage spec) and ``generate_c08_03`` (the
-    reported frame). Cols 0010/0020 sum the sealed per-side gross carriers
-    (``reporting_gross_on_bs`` / ``reporting_gross_off_bs``) over the whole band
-    — the carriers are row-level and null outside their side, so a band with no
-    off-BS rows sums 0.0 naturally, which is why the retired on/off whole-bucket
-    fallback is gone. Col 0030 weights the average CCF by the off-BS gross."""
-    cells: dict[tuple[str, str], CellSpec] = {}
-    for ref, label, term_col in band_rows:
-        terms: _Terms = ((term_col, label),)
-        member = RowPredicate(equals=terms)
-        cells[(ref, "0010")] = CellSpec(Sum("reporting_gross_on_bs"), predicate=member)
-        cells[(ref, "0020")] = CellSpec(Sum("reporting_gross_off_bs"), predicate=member)
-        cells[(ref, "0030")] = CellSpec(
-            WeightedAvg("ccf", weight="reporting_gross_off_bs"),
-            predicate=member,
-            empty_cell="null",
-        )
-        cells[(ref, "0040")] = CellSpec(Sum(ead_col), predicate=member)
-        cells[(ref, "0050")] = CellSpec(
-            WeightedAvg(pd_report_col, weight=ead_col), predicate=member, empty_cell="null"
-        )
-        cells[(ref, "0060")] = (
-            CellSpec(Count("counterparty_reference", distinct=True), predicate=member)
-            if "counterparty_reference" in cols
-            else CellSpec(Count("exposure_reference"), predicate=member)
-        )
-        cells[(ref, "0070")] = (
-            CellSpec(WeightedAvg(lgd_col, weight=ead_col), predicate=member, empty_cell="null")
-            if lgd_col is not None
-            else CellSpec(Formula(refs=(), fn=_const(None)))
-        )
-        cells[(ref, "0080")] = CellSpec(
-            WeightedAvg("irb_maturity_m", weight=ead_col), predicate=member, empty_cell="null"
-        )
-        cells[(ref, "0090")] = CellSpec(Sum(rwa_col), predicate=member)
-        cells[(ref, "0100")] = CellSpec(Sum("expected_loss"), predicate=member)
-        cells[(ref, "0110")] = CellSpec(
-            SafeSum(("scra_provision_amount", "gcra_provision_amount")), predicate=member
-        )
-    return cells
-
-
 def c08_03_plans(
     results: pl.LazyFrame,
     cols: set[str],
@@ -1479,9 +1430,14 @@ def c08_03_plans(
     regulatory PD scale (plus an optional 9999 Unassigned) derived per class by
     ``pd_scale.banded_rows`` (the c08_02 data-driven pattern), keyed on the derived
     ``c08_pd_range`` / ``c08_pd_parent`` label carried in ``row_terms``. The scale
-    is hierarchical, so parent bands overlap and sum their sub-bands. Keys on the sealed ``reporting_class_origin`` over the IRB
-    NON-slotting book, preserving ``generate_c08_03``'s error contract. C 08.03
-    carries no "(-)"-labelled deduction column, so ``negative_cols`` is empty. The
+    is hierarchical, so parent bands overlap and sum their sub-bands. Gross and
+    other pre-CRM columns key on the sealed ``reporting_class_origin`` over the
+    IRB NON-slotting book. Post-CRM exposure-value and RWEA columns key on
+    ``reporting_class`` and the post-substitution IRB population. The sheet axis
+    is the union of both class bases, so a beneficial IRB-to-IRB guarantee can
+    create a guarantor-class sheet with no native exposure. A covered IRB leg
+    treated as standardised leaves this template and is reported in C 07.00.
+    C 08.03 carries no "(-)"-labelled deduction column, so ``negative_cols`` is empty. The
     provisions ladder (col 0110) is the one post-execute pass, on the REPORTED
     frame (``generate_c08_03``), which the drill-down reads a cell's value from.
     Cols 0010/0020 sum the sealed per-side gross carriers directly (no on/off
@@ -1494,23 +1450,34 @@ def c08_03_plans(
         errors.append("C08.03: Missing required columns (exposure_class/ead/rwa)")
         return {}
     alloc_pd_col = _pd_alloc_col(cols, framework)
-    report_pd_col = pick(cols, "pd_floored", "pd")
+    report_pd_col = pick(cols, "reporting_pd_post_crm", "pd_floored", "pd")
     if alloc_pd_col is None:
         errors.append("C08.03: No PD column available — skipping PD range breakdown")
         return {}
-    irb_df = _non_slotting(results, cols).collect()
+    irb_df = _non_slotting(results, cols, both_bases=True).collect()
     if len(irb_df) == 0:
         return {}
+    irb_df = irb_df.with_columns(class_keys(_BASIS, set(irb_df.columns), ec_col))
     data_cols = set(irb_df.columns)
     irb_df = _prepare(irb_df, data_cols)
     column_refs = tuple(col.ref for col in get_c08_03_columns(framework))
-    lgd_col = pick(data_cols, "lgd_floored", "lgd_input")
+    lgd_col = pick(data_cols, "reporting_lgd_post_crm", "lgd_floored", "lgd_input")
     pd_report_col = report_pd_col or alloc_pd_col
     plans: dict[str, SheetPlan] = {}
-    for ec in irb_df[ec_col].drop_nulls().unique().sort().to_list():
-        class_df = irb_df.filter(pl.col(ec_col) == ec)
+    for ec in sorted(sheet_axis(_BASIS, irb_df)):
+        class_df = sheet_frame(_BASIS, irb_df, ec)
         band_rows, banded = banded_rows(class_df, alloc_pd_col, framework)
-        cells = _c08_03_cells(band_rows, data_cols, ead_col, rwa_col, pd_report_col, lgd_col)
+        cells = build_c08_03_cells(
+            band_rows,
+            data_cols,
+            ead_col,
+            rwa_col,
+            pd_report_col,
+            lgd_col,
+            ec,
+            _BASIS.basis_origin,
+            _BASIS.basis_post,
+        )
         rows = tuple(_Row(ref, label) for ref, label, _col in band_rows)
         plans[ec] = SheetPlan(
             spec=TemplateSpec(
@@ -1547,9 +1514,9 @@ def generate_c08_03(
             continue
         banded = plan.frame
         data_cols = set(banded.columns)
-        row_preds: dict[str, RowPredicate | None] = {
-            ref: RowPredicate(equals=terms) for ref, terms in plan.row_terms.items() if terms
-        }
+        row_preds: dict[str, RowPredicate | None] = _origin_preds(
+            {ref: RowPredicate(equals=terms) for ref, terms in plan.row_terms.items() if terms}
+        )
         frame = execute(plan.spec, banded)
         frame = provisions_postfix(frame, banded, row_preds, data_cols, ref="0110")
         result[ec] = frame

@@ -96,6 +96,40 @@ def _irb_multi_class_pd_range() -> pl.LazyFrame:
     )
 
 
+def _partially_guaranteed_retail_loan() -> pl.LazyFrame:
+    """One retail IRB loan split into an 80% substituted and 20% retained leg."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["LOAN1__G_GUARANTOR", "LOAN1__REM"],
+            "counterparty_reference": ["BORROWER", "BORROWER"],
+            "approach_applied": ["foundation_irb", "foundation_irb"],
+            "exposure_class": ["retail_other", "retail_other"],
+            "exposure_class_applied": ["retail_other", "retail_other"],
+            "reporting_class_origin": ["retail_other", "retail_other"],
+            "reporting_class": ["institution", "retail_other"],
+            "reporting_approach_origin": ["foundation_irb", "foundation_irb"],
+            "reporting_approach": ["foundation_irb", "foundation_irb"],
+            "exposure_type": ["loan", "loan"],
+            "drawn_amount": [80.0, 20.0],
+            "interest": [0.0, 0.0],
+            "nominal_amount": [0.0, 0.0],
+            "undrawn_amount": [0.0, 0.0],
+            "ead_final": [80.0, 20.0],
+            "rwa_final": [16.0, 10.0],
+            "pd_floored": [0.005, 0.005],
+            "pd": [0.005, 0.005],
+            "reporting_pd_post_crm": [0.002, 0.005],
+            "lgd_floored": [0.45, 0.45],
+            "reporting_lgd_post_crm": [0.40, 0.45],
+            "irb_maturity_m": [2.5, 2.5],
+            "expected_loss": [0.18, 0.045],
+            "scra_provision_amount": [0.8, 0.2],
+            "gcra_provision_amount": [0.0, 0.0],
+            "ccf": [0.0, 0.0],
+        }
+    )
+
+
 class TestC0803TemplateDefinitions:
     """Tests for C 08.03 / OF 08.03 template structure definitions."""
 
@@ -283,6 +317,77 @@ class TestC0803Generation:
         # Only corporate should appear (slotting excluded)
         assert "corporate" in bundle.c08_03
         assert "specialised_lending" not in bundle.c08_03
+
+    def test_partial_guarantee_keeps_gross_on_origin_and_moves_post_crm_values(self) -> None:
+        """An 80% IRB-to-IRB guarantee moves EAD/RWEA, not pre-CRM gross."""
+        bundle = LedgerShimCorepGenerator().generate_from_lazyframe(
+            _partially_guaranteed_retail_loan()
+        )
+
+        retained = bundle.c08_03["retail_other"].filter(pl.col("row_ref") == "0060")
+        covered = bundle.c08_03["institution"].filter(pl.col("row_ref") == "0060")
+
+        assert retained["0010"][0] == pytest.approx(100.0)
+        assert retained["0040"][0] == pytest.approx(20.0)
+        assert retained["0080"][0] is None
+        assert retained["0090"][0] == pytest.approx(10.0)
+        assert covered["0010"][0] == pytest.approx(0.0)
+        assert covered["0040"][0] == pytest.approx(80.0)
+        assert covered["0050"][0] == pytest.approx(0.002)
+        assert covered["0070"][0] == pytest.approx(0.40)
+        assert covered["0090"][0] == pytest.approx(16.0)
+
+    def test_partial_guarantee_keeps_origin_only_columns_off_destination_sheet(self) -> None:
+        """Count, EL and provisions follow the obligor along with pre-CRM gross."""
+        bundle = LedgerShimCorepGenerator().generate_from_lazyframe(
+            _partially_guaranteed_retail_loan()
+        )
+
+        retained = bundle.c08_03["retail_other"].filter(pl.col("row_ref") == "0060")
+        covered = bundle.c08_03["institution"].filter(pl.col("row_ref") == "0060")
+
+        assert retained["0060"][0] == pytest.approx(1.0)
+        assert retained["0100"][0] == pytest.approx(0.225)
+        assert retained["0110"][0] == pytest.approx(1.0)
+        assert covered["0060"][0] == pytest.approx(0.0)
+        assert covered["0100"][0] == pytest.approx(0.0)
+        assert covered["0110"][0] == pytest.approx(0.0)
+
+    def test_irb_to_sa_covered_leg_leaves_c0803(self) -> None:
+        """A covered leg treated under SA is reported in C07, not C08.03."""
+        guaranteed = pl.col("exposure_reference").str.contains("__G_")
+        results = _partially_guaranteed_retail_loan().with_columns(
+            pl.when(guaranteed)
+            .then(pl.lit("central_govt_central_bank"))
+            .otherwise(pl.col("reporting_class"))
+            .alias("reporting_class"),
+            pl.when(guaranteed)
+            .then(pl.lit("standardised"))
+            .otherwise(pl.col("reporting_approach"))
+            .alias("reporting_approach"),
+        )
+        bundle = LedgerShimCorepGenerator().generate_from_lazyframe(results)
+
+        retained = bundle.c08_03["retail_other"].filter(pl.col("row_ref") == "0060")
+        assert "central_govt_central_bank" not in bundle.c08_03
+        assert retained["0010"][0] == pytest.approx(100.0)
+        assert retained["0040"][0] == pytest.approx(20.0)
+        assert retained["0090"][0] == pytest.approx(10.0)
+
+    def test_same_class_substitution_keeps_the_whole_post_crm_value_on_origin_sheet(self) -> None:
+        """A same-class guarantor changes no sheet even though its leg is substituted."""
+        results = _partially_guaranteed_retail_loan().with_columns(
+            pl.lit("retail_other").alias("reporting_class")
+        )
+        bundle = LedgerShimCorepGenerator().generate_from_lazyframe(results)
+
+        retail = bundle.c08_03["retail_other"].filter(pl.col("row_ref") == "0060")
+        assert set(bundle.c08_03) == {"retail_other"}
+        assert retail["0010"][0] == pytest.approx(100.0)
+        assert retail["0040"][0] == pytest.approx(100.0)
+        assert retail["0050"][0] == pytest.approx(0.0026)
+        assert retail["0070"][0] == pytest.approx(0.41)
+        assert retail["0090"][0] == pytest.approx(26.0)
 
 
 class TestC0803PDRangeAssignment:

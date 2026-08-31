@@ -56,6 +56,7 @@ from tests.fixtures.reporting_crm_substitution_portfolio import (
 from rwa_calc.contracts.config import CalculationConfig, PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBundle
+from rwa_calc.reporting.corep.templates import C08_03_PD_PARENT_REFS
 
 _REGIMES: dict[str, str] = {"crr": "CRR", "b31": "BASEL_3_1"}
 _ORIGIN_SHEETS: dict[str, dict[str, tuple[str, str]]] = {
@@ -232,6 +233,58 @@ class TestCrossTemplateConservation:
         ) + sum(_total_row(frame)["0110"][0] for frame in corep.c07_00.values())
 
         assert total_after_substitution == pytest.approx(total_gross)
+
+
+class TestC0803PostCrmBasis:
+    """C 08.03 keeps gross on the obligor but moves EAD/RWEA to IRB guarantors."""
+
+    @pytest.mark.parametrize("regime_key", list(_REGIMES))
+    def test_leaf_pd_ranges_reconcile_to_c0801_by_post_crm_class(self, regime_key: str) -> None:
+        """C 08.03 post-CRM measures equal C 08.01's non-slotting row per sheet."""
+        _results, corep = _run(regime_key)
+
+        assert set(corep.c08_03) == {"corporate", "institution", "retail_other"}
+        for exposure_class, c08_03 in corep.c08_03.items():
+            leaves = c08_03.filter(~pl.col("row_ref").is_in(list(C08_03_PD_PARENT_REFS)))
+            c08_01 = corep.c08_01[exposure_class].filter(pl.col("row_ref") == "0070")
+
+            assert leaves["0040"].sum() == pytest.approx(c08_01["0110"][0])
+            assert leaves["0090"].sum() == pytest.approx(c08_01["0260"][0])
+
+    @pytest.mark.parametrize("regime_key", list(_REGIMES))
+    def test_destination_only_retail_sheet_has_post_values_but_no_origin_gross(
+        self, regime_key: str
+    ) -> None:
+        """S2's 3.3m covered leg creates a retail guarantor sheet, not retail gross."""
+        _results, corep = _run(regime_key)
+        leaves = corep.c08_03["retail_other"].filter(
+            ~pl.col("row_ref").is_in(list(C08_03_PD_PARENT_REFS))
+        )
+
+        assert leaves["0010"].sum() + leaves["0020"].sum() == pytest.approx(0.0)
+        assert leaves["0040"].sum() == pytest.approx(3_300_000.0)
+
+    @pytest.mark.parametrize("regime_key", list(_REGIMES))
+    def test_destination_pd_uses_guarantor_parameter_in_origin_obligor_band(
+        self, regime_key: str
+    ) -> None:
+        """The row stays on borrower PD, while col0050 reports effective guarantor PD."""
+        _results, corep = _run(regime_key)
+
+        s1_band = corep.c08_03["institution"].filter(pl.col("row_ref") == "0060")
+        s2_band = corep.c08_03["retail_other"].filter(pl.col("row_ref") == "0060")
+        assert s1_band["0040"][0] == pytest.approx(2_000_000.0)
+        assert s1_band["0050"][0] == pytest.approx(0.003)
+        assert s2_band["0040"][0] == pytest.approx(3_300_000.0)
+        assert s2_band["0050"][0] == pytest.approx(0.020)
+
+    @pytest.mark.parametrize("regime_key", list(_REGIMES))
+    def test_retail_maturity_is_not_reported(self, regime_key: str) -> None:
+        """Annex II excludes maturity from every retail exposure-class sheet."""
+        _results, corep = _run(regime_key)
+        assert corep.c08_03["retail_other"]["0080"].null_count() == len(
+            corep.c08_03["retail_other"]
+        )
 
 
 class TestFixtureIntegrity:

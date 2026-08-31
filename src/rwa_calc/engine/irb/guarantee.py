@@ -98,6 +98,8 @@ def apply_guarantee_substitution(
 
     has_expected_loss = "expected_loss" in cols
     has_guarantor_pd = "guarantor_pd" in cols
+    origin_pd_col = next(name for name in ("pd_floored", "pd") if name in cols)
+    origin_lgd_col = next(name for name in ("lgd_floored", "lgd", "lgd_input") if name in cols)
     # PD substitution applies whenever the guarantor has an internal PD.
     # Per-row routing (IRB-derived RW vs SA-derived RW) is decided inside
     # _apply_parameter_substitution by guarantor_approach, which is itself
@@ -124,7 +126,13 @@ def apply_guarantee_substitution(
 
     # --- Basel 3.1 parameter substitution for IRB guarantors (CRE22.70-85) ---
     lf = _apply_parameter_substitution(
-        lf, cols, config, use_parameter_substitution, pack=resolved_pack
+        lf,
+        cols,
+        config,
+        use_parameter_substitution,
+        origin_pd_col,
+        origin_lgd_col,
+        pack=resolved_pack,
     )
 
     # --- Double default treatment (CRR Art. 153(3), 202-203) ---
@@ -238,11 +246,34 @@ def apply_guarantee_substitution(
             lf, config, ead_col, use_parameter_substitution, pack=resolved_pack
         )
 
+    # Seal the effective post-CRM parameters used by each IRB leg.  The
+    # C 08.03 fixed-PD row remains keyed on the original obligor PD, but cols
+    # 0050/0070 are exposure-weighted post-CRM measures and therefore need the
+    # guarantor parameters on a beneficial PSM-covered leg.  Declined guarantees,
+    # retained legs and double-default treatment keep the obligor parameters.
+    parameter_substituted = substituted & pl.col("_is_pd_substitution") & ~pl.col("_is_dd_applied")
+    lf = lf.with_columns(
+        pl.when(parameter_substituted)
+        .then(pl.col("_reporting_pd_post_crm_candidate"))
+        .otherwise(pl.col(origin_pd_col))
+        .alias("reporting_pd_post_crm"),
+        pl.when(parameter_substituted)
+        .then(pl.col("_reporting_lgd_post_crm_candidate"))
+        .otherwise(pl.col(origin_lgd_col))
+        .alias("reporting_lgd_post_crm"),
+    )
+
     # Track guarantee status and method for reporting
     lf = _add_guarantee_status_columns(lf)
 
     # Drop internal tracking columns
-    lf = lf.drop("_is_pd_substitution", "_is_dd_applied", "guarantor_rw_sa")
+    lf = lf.drop(
+        "_is_pd_substitution",
+        "_is_dd_applied",
+        "guarantor_rw_sa",
+        "_reporting_pd_post_crm_candidate",
+        "_reporting_lgd_post_crm_candidate",
+    )
 
     return lf
 
@@ -366,6 +397,8 @@ def _apply_parameter_substitution(
     cols: list[str],
     config: CalculationConfig,
     use_parameter_substitution: bool,
+    origin_pd_col: str,
+    origin_lgd_col: str,
     *,
     pack: ResolvedRulepack,
 ) -> pl.LazyFrame:
@@ -393,6 +426,8 @@ def _apply_parameter_substitution(
             [
                 pl.col("guarantor_rw_sa").alias("guarantor_rw"),
                 pl.lit(False).alias("_is_pd_substitution"),
+                pl.col(origin_pd_col).alias("_reporting_pd_post_crm_candidate"),
+                pl.col(origin_lgd_col).alias("_reporting_lgd_post_crm_candidate"),
             ]
         )
 
@@ -468,6 +503,24 @@ def _apply_parameter_substitution(
             .then(pl.col("guarantor_rw_post_nbd"))
             .otherwise(pl.col("guarantor_rw_sa"))
             .alias("guarantor_rw"),
+            # Preserve the exact risk parameters used by parameter substitution.
+            # The obligor PD remains the C 08.03 row key, but its post-CRM
+            # weighted-average columns must use the parameters applied to each
+            # covered leg.  These candidates are gated by the final beneficial /
+            # double-default decision in the caller before becoming reporting
+            # carriers.
+            pl.when(is_irb_guarantor)
+            .then(guarantor_pd_floored)
+            .otherwise(pl.col(origin_pd_col))
+            .alias("_reporting_pd_post_crm_candidate"),
+            pl.when(is_irb_guarantor)
+            .then(
+                pl.when(pl.col("guarantor_rw_irb") >= pl.col("rw_direct"))
+                .then(psm_lgd_expr)
+                .otherwise(guarantor_supervisory_lgd_expr)
+            )
+            .otherwise(pl.col(origin_lgd_col))
+            .alias("_reporting_lgd_post_crm_candidate"),
             # Track which method is being used per-row
             pl.when((pl.col("guaranteed_portion").fill_null(0) > 0) & is_irb_guarantor)
             .then(pl.lit(True))

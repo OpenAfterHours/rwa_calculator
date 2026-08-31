@@ -270,6 +270,11 @@ class TestP243PSMLGDSourceSwitch:
             f"(PD=0.005 × LGD=0.40 × EAD=1,000,000). Got {actual_el:,.2f}."
         )
 
+        # C 08.03 cols 0050/0070 consume the exact post-CRM parameters, not
+        # the borrower values restored after the PSM calculation window.
+        assert row["reporting_pd_post_crm"] == pytest.approx(PD_GUARANTOR)
+        assert row["reporting_lgd_post_crm"] == pytest.approx(0.40)
+
     def test_psm_option_i_uses_borrower_unprotected_lgd(self) -> None:
         """
         P2.43-2: psm_lgd_source="option_i" uses the borrower's own (unprotected) LGD.
@@ -336,6 +341,9 @@ class TestP243PSMLGDSourceSwitch:
             f"P2.43-2: expected_loss should be {EXPECTED_EL_OPTION_I:,.0f} "
             f"(PD=0.005 × LGD=0.75 × EAD=1,000,000). Got {actual_el:,.2f}."
         )
+
+        assert row["reporting_pd_post_crm"] == pytest.approx(PD_GUARANTOR)
+        assert row["reporting_lgd_post_crm"] == pytest.approx(0.75)
 
         # Anti-regression: option_i must produce materially higher RWA than option_ii
         assert actual_rwa > 1_000_000, (

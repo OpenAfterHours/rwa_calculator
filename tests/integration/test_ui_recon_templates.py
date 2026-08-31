@@ -782,12 +782,23 @@ def test_an_unknown_template_or_sheet_falls_back_rather_than_404ing(
 # =============================================================================
 
 
-def _leaf_row(recon: object, reference: str) -> str:
+def _leaf_row(recon: object, reference: str, col_ref: str = "0040") -> str:
     """The C 08.03 leaf row a leg landed in on our side, off the membership."""
-    legs = recon.ours.membership.legs  # type: ignore[attr-defined]
+    membership = recon.ours.membership  # type: ignore[attr-defined]
+    served = membership.columns.filter(
+        (pl.col("template_id") == "c08_03")
+        & (pl.col("sheet") == SHEET)
+        & (pl.col("col_ref") == col_ref)
+    )["predicate_key"].unique()
+    assert len(served) == 1, (
+        f"C 08.03/{SHEET}/{col_ref} has {len(served)} predicate groups, expected 1"
+    )
+    predicate_key = str(served[0])
+    legs = membership.legs
     rows = legs.filter(
         (pl.col("template_id") == "c08_03")
         & (pl.col("sheet") == SHEET)
+        & (pl.col("predicate_key") == predicate_key)
         & (pl.col("exposure_reference") == reference)
         & (pl.col("is_parent_row").eq(other=False))
     )

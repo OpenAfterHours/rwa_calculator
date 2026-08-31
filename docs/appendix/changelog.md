@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - (Next release changes will go here)
 
 ### Changed
+- (Next release changes will go here)
+
+---
+
+## [0.3.32] - 2026-08-31
+
+### Added
+- **`reporting_pd_post_crm_pre_floor` sealed per IRB leg.** The pre-input-floor
+  twin of `reporting_pd_post_crm`, carried on the reporting surface. OF 08.03's
+  row axis is stated "PD RANGE (PRE-INPUT FLOOR)", so banding the post-CRM limb
+  on the floored carrier would have shifted an *unguaranteed* Basel 3.1 book
+  across the 0.05% split that regime adds — the post-CRM banding has to degrade
+  exactly onto the obligor banding wherever nothing substitutes, and this is
+  what makes it do so.
+
+### Changed
 - **C 08.03 / OF 08.03 — the post-CRM column block now bands on the post-CRM
   PD.** The previous release moved cols 0040-0100 to the post-substitution
   population and sheet class, but left every row keyed on the obligor's own PD.
@@ -46,15 +62,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   An arrived leg no longer drags an all-zero row onto its destination sheet
   either: each basis is counted only over the legs actually on it, so the
   guarantor's sheet emits the guarantor's band and no other.
-
-### Added
-- **`reporting_pd_post_crm_pre_floor` sealed per IRB leg.** The pre-input-floor
-  twin of `reporting_pd_post_crm`, carried on the reporting surface. OF 08.03's
-  row axis is stated "PD RANGE (PRE-INPUT FLOOR)", so banding the post-CRM limb
-  on the floored carrier would have shifted an *unguaranteed* Basel 3.1 book
-  across the 0.05% split that regime adds — the post-CRM banding has to degrade
-  exactly onto the obligor banding wherever nothing substitutes, and this is
-  what makes it do so.
 
 ---
 

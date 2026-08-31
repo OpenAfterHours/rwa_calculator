@@ -281,9 +281,9 @@ Last generated: 2026-08-31.
 
 ### CRR Art. 122 — Exposures to corporates
 
-??? quote "`_compute_guarantor_rw_sa` — src/rwa_calc/engine/irb/guarantee.py:314"
+??? quote "`_compute_guarantor_rw_sa` — src/rwa_calc/engine/irb/guarantee.py:330"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/guarantee.py:314:420"
+    --8<-- "src/rwa_calc/engine/irb/guarantee.py:330:436"
     ```
 
 ??? quote "`build_entity_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:326"
@@ -800,7 +800,7 @@ Last generated: 2026-08-31.
 
 ??? quote "`apply_guarantee_substitution` — src/rwa_calc/engine/irb/guarantee.py:55"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/guarantee.py:55:306"
+    --8<-- "src/rwa_calc/engine/irb/guarantee.py:55:322"
     ```
 
 ??? quote "`apply_firb_lgd` — src/rwa_calc/engine/irb/transforms.py:129"
@@ -1218,9 +1218,9 @@ Last generated: 2026-08-31.
     --8<-- "src/rwa_calc/engine/eu_sovereign.py:209:244"
     ```
 
-??? quote "`_compute_guarantor_rw_sa` — src/rwa_calc/engine/irb/guarantee.py:315"
+??? quote "`_compute_guarantor_rw_sa` — src/rwa_calc/engine/irb/guarantee.py:331"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/guarantee.py:314:420"
+    --8<-- "src/rwa_calc/engine/irb/guarantee.py:330:436"
     ```
 
 ??? quote "`build_guarantor_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:140"

@@ -58,6 +58,25 @@ Key topics: SA risk weights (CRE20-22), IRB approach (CRE30-36), Credit risk mit
 - **Marimo** — interactive workbooks. Docs: https://docs.marimo.io/api/
 - **Zensical** — project documentation site
 
+## Validation Gate
+
+Run these after implementing, before handing work back. The **static** gates below mirror `.pre-commit-config.yaml` and the `lint` / `typecheck` jobs in `.github/workflows/ci.yml`, so green here is green there. The **test** line does not — it is weaker than CI, and its own bullet says how.
+
+- **Architecture**: `uv run python scripts/arch_check.py` — the 20 numbered invariants, plus `watchfire check` as its final step.
+- **Lint**: `uv run ruff check src tests scripts`. Fix with `uv run ruff check --fix src tests scripts`.
+- **Format**: `uv run ruff format --check src tests scripts`. Fix with `uv run ruff format src tests scripts`.
+- **Types**: `uv run ty check src/rwa_calc/`. `ty` dispatches on a subcommand — a bare `uv run ty src/` is not a valid invocation.
+- **Generated agent context**: `uv run python scripts/sync_agent_instructions.py --check` and `uv run python scripts/sync_agent_skills.py --check`. Both are pre-commit hooks (`sync-agent-instructions`, `sync-agent-skills`); drop `--check` to regenerate.
+- **Tests**: `uv run pytest tests/` — the dev-loop default, and the one line here that is **weaker than CI**. Its marker filter also deselects `stress` and `scale_1m`, which CI's test job runs, so a green local run leaves the stress suite unrun; top up before a PR with `uv run pytest tests/ -m stress`. See Testing Standards below for the full filter. Benchmarks are already off via `--benchmark-disable` in the `pyproject.toml` `addopts`; do not add `--benchmark-skip`.
+- **One file, stop at first failure**: `uv run pytest tests/unit/test_<name>.py -x`
+- **One suite**: `uv run pytest tests/acceptance/`
+
+### Fixtures
+
+- The parquet files under `tests/fixtures/` are **git-ignored build artifacts** (root `.gitignore`, `*.parquet`). A fresh clone has none of them, and the acceptance suite needs them.
+- Regenerate with `uv run python tests/fixtures/generate_all.py` — after cloning, and after any change to a builder. CI runs it as its own step before pytest.
+- Never edit a `.parquet` directly: edit the sibling `.py` builder and regenerate. A new fixture parquet that is not registered in `generate_all.py` is simply never produced on a fresh clone, and the test that reads it fails only there.
+
 ## Module Structure
 
 Every module must read top-down like a narrative. Order:
@@ -148,7 +167,7 @@ tests/
 - **One assert per concept**: Each test verifies a single logical assertion (multiple `assert` is fine if testing one concept)
 - **Fixtures**: Use `@pytest.fixture` for shared setup. Test data builders live in `tests/fixtures/`
 - **Markers**: `@pytest.mark.benchmark` for perf tests, `@pytest.mark.slow` for 10M+ scale tests, `@pytest.mark.stress` for the 10K-row correctness-at-scale suite (`tests/acceptance/stress/`)
-- **Run tests**: `uv run pytest tests/` runs the dev-loop default — `-m 'not slow and not stress and not scale_1m and not benchmark'` with `--strict-markers`, distributed across workers via `pytest-xdist` (`-n auto --dist=loadfile`). To exercise the stress suite locally use `uv run pytest tests/ -m stress`; CI runs `-m 'not slow and not benchmark'` (stress included) plus a dedicated `benchmarks` job that uploads `benchmark-results.json` as the stored baseline artifact.
+- **Run tests**: `uv run pytest tests/` runs the dev-loop default — `-m 'not slow and not stress and not scale_1m and not benchmark and not robustness'` with `--strict-markers`, distributed across workers via `pytest-xdist` (`-n auto --dist=loadfile`). To exercise the stress suite locally use `uv run pytest tests/ -m stress`; CI runs `-m 'not slow and not benchmark and not robustness'` (stress included) plus a dedicated `benchmarks` job that uploads `benchmark-results.json` as the stored baseline artifact. `robustness` is a nightly input-pathology search (`.github/workflows/nightly-robustness.yml`), not a per-commit signal.
 - **xdist worker count**: `loadfile` pins each test file to one worker, so session-scoped pipeline fixtures (`pipeline_results`, `crr_sa_result_10k_df`, …) are built per worker, not per test. Polars threads inside each worker — if `-n auto` oversubscribes cores, cap with `-n 4` or `PYTEST_XDIST_WORKER_COUNT=4`.
 
 ## Error Handling
@@ -174,6 +193,8 @@ Rules for new code:
 - **Configuration**: `log_level` and `log_format` (`"text"` | `"json"`) are fields on `CalculationConfig` and may be passed through `CreditRiskCalc(log_format="json")`.
 
 Reference stage skeleton and format details — see `docs/specifications/observability.md`.
+
+<!-- CLAUDE-ONLY:START -->
 
 ## Agents and Slash Commands
 
@@ -205,6 +226,8 @@ The end-of-batch gate runs in **tiers**, and **Tier 2 is mandatory**: `tests/ora
 
 Plus `/implement-scenario <ID>` for ad-hoc one-off work on a specific P-code or scenario ID, and `/postmortem <commit|PR|description>` when a defect reaches production.
 
+<!-- CLAUDE-ONLY:END -->
+
 ## The learning loop
 
 Gates catch what they were built to catch. The harness only improves if every
@@ -212,21 +235,33 @@ escape and every wasted batch turns into a new gate — so three artifacts are
 load-bearing:
 
 - **`.claude/LESSONS.md`** — the working set of traps this project has already
-  paid for, in `Trap` / `Why` / `Detect` form. **Every agent reads it before
-  starting work**, and its system prompt says so. It is capped at ~30 entries
-  and is explicitly *not* an archive: an entry earns its place only while it is
-  still prose.
-- **`/next-items` Step 7.5 (retro)** — runs before cleanup, while the batch's
-  evidence still exists. It separates one-off slips from repeatable patterns and
-  **graduates** each pattern into the strongest available form: an `arch_check`
-  check → a ratchet → fixture coverage in `RUNS` → a reviewer criterion →
-  prose, in that order of preference. Prose is the fallback, not the default.
-  Completed batch state is archived to `.claude/state/archive/`, never deleted.
-- **`/postmortem` + `docs/development/escape-log.md`** — for defects that reach
+  paid for, in `Trap` / `Why` / `Detect` form. **Read it in full before you
+  start work.** Despite the `.claude/` path it is repo knowledge, not Claude
+  Code configuration, and it is the only file that will warn you about a trap
+  before you fall into it. It is capped at ~30 entries and is explicitly *not*
+  an archive: an entry earns its place only while it is still prose.
+- **The batch retro** — runs before cleanup, while the batch's evidence still
+  exists. It separates one-off slips from repeatable patterns and **graduates**
+  each pattern into the strongest available form: an `arch_check` check → a
+  ratchet → fixture coverage in `RUNS` → a review criterion → prose, in that
+  order of preference. Prose is the fallback, not the default.
+- **The escape log — `docs/development/escape-log.md`** — for defects that reach
   production. The deliverable is not the code fix but the answer to *which gate
   should have caught this, and why didn't it* — classified into one of eight
   escape classes, each of which prescribes its own gate change. The gate change
   is mandatory; the code fix may be deferred.
+
+<!-- CLAUDE-ONLY:START -->
+
+The retro is Step 7.5 of `/next-items`, and completed batch state is archived to
+`.claude/state/archive/`, never deleted. A graduated pattern may also land as a
+`reviewer` criterion. The escape log is written by
+`/postmortem <commit|PR|description>`. Role agents are additionally told to read
+`.claude/LESSONS.md` by their own system prompts — nothing tells a non-Claude
+agent that, which is why the bullet above states it outright rather than
+describing who else has been told.
+
+<!-- CLAUDE-ONLY:END -->
 
 **The closing rule: a defect found in output is closed by its escape-log entry,
 not by its fix commit.** `docs/development/escape-log.md` is the ticket-closing
@@ -252,13 +287,20 @@ values are now generated into the skills from the pack, and prose that states a
 value fails the build. Note the shape — the fix was not "be more careful with
 the skills" but "make the skills structurally incapable of holding a value".
 
-Agents never commit or push — commits land in the slash-command orchestrator only. The call graph is uniformly one level deep (orchestrator → role-agent or reviewer); sub-agents do not spawn other sub-agents. Claude Code does not propagate the project's `.claude/agents/` registry into sub-sessions, so a nested Agent call from a sub-agent cannot dispatch project role-agents — keep all dispatch in the slash-command orchestrator. The single root plan file (`IMPLEMENTATION_PLAN.md`) is the source of truth for outstanding work — Tier 5 is the docs queue drained by `/next-docs`, every other tier belongs to `/next-items`; `docs/plans/implementation-plan.md` is published narrative on the Zensical site.
+<!-- CLAUDE-ONLY:START -->
+
+Agents never commit or push — commits land in the slash-command orchestrator only. The call graph is uniformly one level deep (orchestrator → role-agent or reviewer); sub-agents do not spawn other sub-agents. Claude Code does not propagate the project's `.claude/agents/` registry into sub-sessions, so a nested Agent call from a sub-agent cannot dispatch project role-agents — keep all dispatch in the slash-command orchestrator. Tier 5 of the plan is drained by `/next-docs`; every other tier belongs to `/next-items`.
+
+<!-- CLAUDE-ONLY:END -->
+
+The single root plan file (`IMPLEMENTATION_PLAN.md`) is the source of truth for outstanding work — Tier 5 is the docs queue, every other tier is the code and test backlog; `docs/plans/implementation-plan.md` is published narrative on the Zensical site.
 
 ## Documentation
 
 - **Zensical site**: Source in `docs/`, config in `zensical.toml`. Run locally: `uv run zensical serve`
-- **Generated pages — never hand-edit**: `docs/data-model/regulatory-tables.md` is rendered from the resolved rulepacks by `scripts/generate_regulatory_tables.py` (freshness gated by `tests/contracts/test_docs_freshness.py` — regenerate after any pack change); `docs/development/citation-matrix.md` by `scripts/generate_citation_matrix.py`; `docs/development/confidence-matrix.md` + `tests/contracts/data/confidence_snapshot.json` by `scripts/generate_confidence_matrix.py` (its evidence layers include a **text scan of the test tree**, so merely naming an article in a test docstring makes it stale).
-- **The skills state no regulatory values**: the same `generate_regulatory_tables.py` fills `<!-- BEGIN/END GENERATED: id -->` regions inside `.claude/skills/{basel31,crr}/**/*.md` from the pack, and `scripts/check_skill_values.py` fails any percentage written into skill *prose* outside those regions (justified exceptions go in its `ALLOWANCES` list). Skill prose carries judgment — precedence, scope, mechanics, PRA-vs-BCBS divergence, traps — and names pack entries instead of quoting their values. To add a value to a skill, add the entry to `FRAGMENTS` in the generator and regenerate; never type the number.
+- **Generated pages — never hand-edit**: `docs/data-model/regulatory-tables.md` is rendered from the resolved rulepacks by `scripts/generate_regulatory_tables.py` (freshness gated by `tests/contracts/test_docs_freshness.py` — regenerate after any pack change); `docs/development/citation-matrix.md` by `scripts/generate_citation_matrix.py`; `docs/development/confidence-matrix.md` + `tests/contracts/data/confidence_snapshot.json` by `scripts/generate_confidence_matrix.py` (its evidence layers include a **text scan of the test tree**, so merely naming an article in a test docstring makes it stale); the repo-root `AGENTS.md` by `scripts/sync_agent_instructions.py` (freshness gated by `tests/contracts/test_agent_instructions_freshness.py`); `.agents/skills/**` by `scripts/sync_agent_skills.py` (a byte-identical mirror of `.claude/skills/**`, gated by `tests/contracts/test_agent_skills_mirror.py`).
+- **`AGENTS.md` is the generated twin of `CLAUDE.md`**: OpenAI Codex CLI injects the repo-root `AGENTS.md` and never reads `CLAUDE.md`; Claude Code reads `CLAUDE.md` and never reads `AGENTS.md`. `AGENTS.md` was a hand-written subset until it drifted into telling Codex to write domain logic as a Polars namespace that `arch_check` check 14 rejects outright, so it is now generated: `AGENTS.md` = `CLAUDE.md` with every `CLAUDE-ONLY` fenced block stripped, plus `.agents/codex-appendix.md`. To hide a section from Codex, wrap it in `<!-- CLAUDE-ONLY:START -->` / `<!-- CLAUDE-ONLY:END -->` markers on their own lines (an unbalanced fence is a hard error, never a silent pass-through). Codex-only content must **not** go in `CLAUDE.md` — Claude Code reads it literally, so an HTML comment hides nothing from it — it goes in the appendix. Regenerate with `uv run python scripts/sync_agent_instructions.py`.
+- **The skills state no regulatory values**: the same `generate_regulatory_tables.py` fills `<!-- BEGIN/END GENERATED: id -->` regions inside `.claude/skills/{basel31,crr}/**/*.md` from the pack, and `scripts/check_skill_values.py` fails any percentage written into skill *prose* outside those regions (justified exceptions go in its `ALLOWANCES` list). Skill prose carries judgment — precedence, scope, mechanics, PRA-vs-BCBS divergence, traps — and names pack entries instead of quoting their values. To add a value to a skill, add the entry to `FRAGMENTS` in the generator and regenerate; never type the number. **Then run `uv run python scripts/sync_agent_skills.py`**: `generate_regulatory_tables.py` writes into `.claude/skills/` and does not re-run the mirror, so until you do, the `.agents/skills/` copy that Codex reads still carries the old value — the exact drift the graduation was built to make impossible.
 - **Dead-link ratchet**: `scripts/check_doc_links.py --check` two-way ratchets the docs dead-link count against `scripts/docs_link_baseline.json` (same contract test). Fixing links requires banking the lower count with `--update-baseline`.
 - **Specifications**: Single source of truth is `docs/specifications/`. Do not create a separate `specs/` directory.
 - **Docstrings**: All public classes and functions must have docstrings following the module docstring pattern (purpose, responsibilities, references)

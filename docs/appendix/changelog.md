@@ -15,6 +15,125 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.31] - 2026-08-31
+
+### Added
+- **C 08.06 / OF 08.06 — specialised lending joins the return-template
+  comparison.** The two-sided reconciliation covered C 07.00, C 08.01 and
+  C 08.03; the supervisory-slotting book had no template surface at all, so a
+  firm using slotting could tie out none of it. C 08.06 is now a fourth
+  comparable template end to end — projection, coverage, generator, UI. The
+  legacy-ledger projection gains `sl_type`, `slotting_category` and
+  `is_short_maturity` carriers, the sheet selector reads **SL type** rather
+  than "Exposure class" on that template, and the coverage layer treats those
+  three as **blocking** discriminators. That last part is the point: the
+  generator can technically run without them — emitting one generic sheet, or
+  assigning every exposure to the long-maturity rows — and either result
+  fabricates placement differences that read to an analyst as a data problem.
+  The template is now declared unreachable, naming the actionable
+  `[carriers.*]` mappings to fix, rather than produced wrong. The check is
+  data-aware as well as column-aware: null or invalid placement values inside
+  the slotting book block the template even when the columns exist.
+- **Two optional carriers that derive their own discriminator.**
+  `remaining_maturity_years` — a new `numeric` carrier kind — derives
+  `is_short_maturity` as `< 2.5` when no direct maturity band is mapped; the
+  regulatory boundary is strict, so exactly 2.5 years is long. `is_hvcre` is
+  derived from a canonical `sl_type == "hvcre"` when the extract carries no
+  explicit flag. A directly mapped carrier always wins in both cases, so a
+  firm's own classification is preserved rather than overwritten by the
+  derivation.
+- **The placement panel names the sheet, not just the row.** `LegPlacement`
+  carries a fifth carrier, `sheets`, so a leg the two sides put on *different
+  sheets* is reported as that, instead of as a bare "no row on this sheet". A
+  missing sheet carrier is spelt out rather than dropped, keeping the existing
+  rule that an empty carrier is a statement and never a blank.
+
+### Changed
+- **Basel 3.1 IPRE and HVCRE are now disjoint submissions.** The classifier's
+  canonical B3.1 shape may carry HVCRE as `sl_type == "ipre"` plus the
+  dedicated flag. The retired routing admitted such a row to the HVCRE sheet
+  *and* left it in IPRE, counting it on both. The IPRE limb now excludes
+  flagged rows and the HVCRE limb owns them. CRR is unchanged — it has no
+  separate HVCRE sheet and deliberately folds the flag into IPRE.
+- **An empty C 08.06 row is no longer zero-filled across every column.** A
+  category can be empty on the post-substitution basis *alone* — a fully
+  guaranteed slotting exposure whose covered leg is treated as standardised is
+  the worked case. Whole-row zero-fill erased real gross exposure, expected
+  loss and provisions that Annex II defines on the origin basis. Only the
+  post-basis block (0020/0040/0050/0070/0080) is zeroed now; the origin cells
+  keep their values.
+- **Reporting coverage baseline banked.** Across the unchanged 18-run matrix,
+  live cells rise from 8,680 to 8,728 and template cell liveness from 1,358bp
+  to 1,365bp, while declared-but-dead cells rise from 55,215 to 55,233 —
+  C 08.06 declares a new sparse surface, and C 08.03 correctly leaves retail
+  maturity null. The validation register also gains per-portfolio summaries for
+  `crr/irb-shapes` and `b31/irb-shapes`, which now emit C 08.06.
+
+### Fixed
+- **C 08.03 reported its post-CRM columns against the borrower.** Every column
+  on the template read the origin population, so a beneficial guarantee's
+  exposure value, PD, LGD and RWEA stayed on the borrower's sheet after the
+  capital treatment had moved to the protection provider. C 08.03 now carries
+  an explicit two-basis column matrix: cols 0010/0020/0030/0060/0110 keep the
+  obligor/origin population, while 0040 (exposure value), 0050 (PD), 0070
+  (LGD), 0080 (maturity), 0090 (RWEA) and 0100 (EL) read the post-substitution
+  population and sheet class, per EBA Q&A 2023_6718. Two things deliberately do
+  **not** move. The **row axis stays on the origin PD scale on both limbs** —
+  the grade a leg is filed under is the obligor's. And the obligor count in col
+  0060 is the one column of the Q&A's list held on the pre-CRM counterparty:
+  `counterparty_reference` on a covered leg is still the borrower, so moving
+  that predicate alone would count the borrower on the guarantor's sheet. The
+  sheet axis is the union of both class bases, so a beneficial IRB-to-IRB
+  guarantee can raise a guarantor-class sheet with no native exposure; a
+  covered IRB leg treated as standardised leaves this template altogether and
+  reports in C 07.00.
+- **The effective post-CRM IRB parameters are now sealed per leg.** Reporting
+  had no way to state the parameters a covered leg was actually weighted with:
+  `engine/irb/guarantee.py` swapped and restored them inside a local window, so
+  the sealed ledger carried the obligor's `pd_floored` / `lgd_floored` on every
+  leg and never the guarantor's — which is precisely why the C 08.03 columns
+  above could not be moved before. Two new conditional carriers,
+  `reporting_pd_post_crm` and `reporting_lgd_post_crm` (CRR Art. 161/236),
+  record the parameters applied. Declined guarantees, retained legs and
+  double-default legs keep the obligor's. They are conditional because a run
+  with no guarantee sub-step never creates the candidates; consumers fall back
+  to `pd_floored` / `lgd_floored` on that shape.
+- **Retail C 08.03 rows published an average maturity that does not exist.**
+  The IRB retail risk-weight formula has no maturity adjustment, so col 0080
+  was reporting an exposure-weighted average of a parameter that never enters
+  the calculation. It is null now on `retail_mortgage`, `retail_qrre` and
+  `retail_other`. Six reporting goldens move, every one of them col 0080
+  becoming null; no other cell changes.
+- **C 08 expected loss was reported before credit risk mitigation.** Three
+  faults compounded here. (1) `compute_el_shortfall_excess` ran *before*
+  `apply_guarantee_substitution` in the IRB calculator, so the Art. 159
+  shortfall/excess carriers were computed from the pre-CRM borrower EL rather
+  than the final one; the two pipe steps are now the other way round. (2) The
+  EL disclosure carriers `el_pre_adjustment` / `post_model_adjustment_el` /
+  `el_after_adjustment` kept their pre-substitution values, because
+  `apply_post_model_adjustments` had also already run. They are rebased on the
+  effective EL, with the configured general PMA re-applied as the same
+  firm-level fraction of base EL — an SA-guarantor covered share contributes no
+  EL and therefore no PMA. (3) C 08.01/02 cols 0280-0282 and C 08.03 col 0100
+  read the origin predicate, filing the covered leg's EL against the borrower.
+  EL is calculated after applying CRM and follows the resultant obligor, so
+  those cells now read the post-substitution population and tie to C 08.03 col
+  0100 (`boe_b0739` / `v09777_m`). Consequently two published BoE rules
+  (`boe_b0380`, `boe_b0395`) now fail on the CRM-substitution portfolio and are
+  recorded as **limits of the published rule, not defects in the output**: EBA
+  Q&A 2017_3509 states that c0280 must reflect substitution effects and that
+  the c0020-versus-c0280 interdependency does not hold when substitution
+  reassigns an exposure to another class, which is exactly the shape this
+  change produces.
+- **Double default retained the wrong expected loss.** `_adjust_expected_loss`
+  tested the SA-guarantor limb before the double-default one, so an SA-routed
+  guarantor that qualified for double default — which it can, holding an
+  internal PD — had its covered share's EL zeroed as ordinary SA substitution
+  does. Double default changes K, not EL: the full obligor EL is retained now,
+  and the DD check runs first.
+
+---
+
 ## [0.3.30] - 2026-08-30
 
 ### Added

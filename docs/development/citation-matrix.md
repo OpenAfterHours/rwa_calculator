@@ -12,7 +12,7 @@ Regenerate after annotation changes:
 uv run python scripts/generate_citation_matrix.py
 ```
 
-Last generated: 2026-08-30.
+Last generated: 2026-08-31.
 
 ## CRR (Capital Requirements Regulation)
 
@@ -281,9 +281,9 @@ Last generated: 2026-08-30.
 
 ### CRR Art. 122 — Exposures to corporates
 
-??? quote "`_compute_guarantor_rw_sa` — src/rwa_calc/engine/irb/guarantee.py:255"
+??? quote "`_compute_guarantor_rw_sa` — src/rwa_calc/engine/irb/guarantee.py:314"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/guarantee.py:255:361"
+    --8<-- "src/rwa_calc/engine/irb/guarantee.py:314:420"
     ```
 
 ??? quote "`build_entity_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:326"
@@ -800,7 +800,7 @@ Last generated: 2026-08-30.
 
 ??? quote "`apply_guarantee_substitution` — src/rwa_calc/engine/irb/guarantee.py:55"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/guarantee.py:55:247"
+    --8<-- "src/rwa_calc/engine/irb/guarantee.py:55:306"
     ```
 
 ??? quote "`apply_firb_lgd` — src/rwa_calc/engine/irb/transforms.py:129"
@@ -1218,9 +1218,9 @@ Last generated: 2026-08-30.
     --8<-- "src/rwa_calc/engine/eu_sovereign.py:209:244"
     ```
 
-??? quote "`_compute_guarantor_rw_sa` — src/rwa_calc/engine/irb/guarantee.py:256"
+??? quote "`_compute_guarantor_rw_sa` — src/rwa_calc/engine/irb/guarantee.py:315"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/guarantee.py:255:361"
+    --8<-- "src/rwa_calc/engine/irb/guarantee.py:314:420"
     ```
 
 ??? quote "`build_guarantor_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:140"

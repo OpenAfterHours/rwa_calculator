@@ -54,7 +54,9 @@ sheet, then click a cell to see why it differs.</p>
     </select>
   </div>
   <div class="field">
-    <label for="sheet">Exposure class</label>
+    <label for="sheet">
+      {% if page.selected and page.selected.id == "c08_06" %}SL type{% else %}Exposure class{% endif %}
+    </label>
     <select id="sheet" name="sheet" onchange="this.form.submit()">
       {% for key in page.selected.sheets %}
       <option value="{{ key }}"{% if key == page.sheet %} selected{% endif %}>{{ key }}</option>

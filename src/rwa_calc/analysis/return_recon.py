@@ -382,6 +382,7 @@ CELL_PAIRS_LIMIT = 25
 #: ``CellMembership``, the other building an empty frame from
 #: ``MEMBERSHIP_SCHEMA``, which declares them too.
 _PLACEMENT_COLUMNS: tuple[str, ...] = (
+    "sheet",
     "reporting_class_origin",
     "reporting_approach_origin",
     "reporting_leg_role",
@@ -509,7 +510,7 @@ class LegPlacement:
     population term) or the carrier itself is null on every leg it does hold.
     Never a blank string and never a zero; those would read as measurements.
 
-    ``row_refs`` is scoped to the CELL'S OWN SHEET and the other three are
+    ``row_refs`` is scoped to the CELL'S OWN SHEET and the other four are
     template-wide. That asymmetry is deliberate: an empty ``row_refs`` says
     "not on this sheet", which is exactly what a ``sheet_placement`` key is,
     while the class the other side moved it TO lives on the sheet it moved to
@@ -519,6 +520,7 @@ class LegPlacement:
     """
 
     row_refs: tuple[str, ...] = ()
+    sheets: tuple[str, ...] = ()
     class_origins: tuple[str, ...] = ()
     approach_origins: tuple[str, ...] = ()
     leg_roles: tuple[str, ...] = ()
@@ -1991,7 +1993,7 @@ def _placements(
     ``_side_keys`` — a pair's key comes from those, so a different grain here
     would decorate every pair with an empty placement and say nothing.
 
-    THE FOUR CARRIERS ARE ALWAYS COLUMNS, WHATEVER THE PLAN FRAME SUPPLIED.
+    THE FIVE CARRIERS ARE ALWAYS COLUMNS, WHATEVER THE PLAN FRAME SUPPLIED.
     ``reporting/membership.py::_project`` materialises each ``_LEG_COLUMNS``
     entry the frame lacks as a typed NULL, and the only other constructor of a
     ``CellMembership`` builds an empty frame from ``MEMBERSHIP_SCHEMA``, which
@@ -2039,6 +2041,7 @@ def _placements(
     out = {
         str(record["key"]): LegPlacement(
             row_refs=tuple(record["row_ref"]),
+            sheets=tuple(record["sheet"]),
             class_origins=tuple(record["reporting_class_origin"]),
             approach_origins=tuple(record["reporting_approach_origin"]),
             leg_roles=tuple(record["reporting_leg_role"]),

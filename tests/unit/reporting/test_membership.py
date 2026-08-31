@@ -7,7 +7,7 @@ two sides of a return with it:
 - **Every summable cell ties out.** Not a sample: for EVERY (row, column) pair
   carrying a row-backed ``Sum``/``SafeSum`` binding, summing the membership
   group that serves that column reproduces the figure production reported —
-  all three templates, both frameworks. A row does NOT have one population, so
+  all four templates, both frameworks. A row does NOT have one population, so
   a per-row membership would tie out only for whichever group it happened to
   select (measured: 80% of C 08.01's summable cells).
 - **It is not vacuous.** The portfolio carries a guarantee that moves a leg to
@@ -208,6 +208,81 @@ def _irb_legs() -> list[dict[str, object]]:
     return legs
 
 
+def _slotting_legs() -> list[dict[str, object]]:
+    """Slotting legs spanning real sheet, category and maturity predicates."""
+    return [
+        _leg(
+            "SL_PF_STRONG_SHORT",
+            "specialised_lending",
+            "slotting",
+            "loan",
+            1_000_000.0,
+            500_000.0,
+            sl_type="project_finance",
+            slotting_category="strong",
+            is_short_maturity=True,
+        ),
+        _leg(
+            "SL_PF_GOOD_LONG",
+            "specialised_lending",
+            "slotting",
+            "facility_undrawn",
+            2_000_000.0,
+            1_800_000.0,
+            undrawn=4_000_000.0,
+            ccf=0.5,
+            sl_type="project_finance",
+            slotting_category="good",
+            is_short_maturity=False,
+        ),
+        _leg(
+            "SL_PF_SAT_SHORT",
+            "specialised_lending",
+            "slotting",
+            "loan",
+            700_000.0,
+            805_000.0,
+            sl_type="project_finance",
+            slotting_category="satisfactory",
+            is_short_maturity=True,
+        ),
+        _leg(
+            "SL_PF_WEAK_LONG",
+            "specialised_lending",
+            "slotting",
+            "loan",
+            400_000.0,
+            1_000_000.0,
+            sl_type="project_finance",
+            slotting_category="weak",
+            is_short_maturity=False,
+        ),
+        _leg(
+            "SL_IPRE_SAT_SHORT",
+            "specialised_lending",
+            "slotting",
+            "loan",
+            500_000.0,
+            575_000.0,
+            sl_type="ipre",
+            slotting_category="satisfactory",
+            is_short_maturity=True,
+        ),
+        _leg(
+            "SL_HVCRE_WEAK_LONG",
+            "specialised_lending",
+            "slotting",
+            "loan",
+            300_000.0,
+            750_000.0,
+            sl_type="hvcre",
+            slotting_category="weak",
+            is_short_maturity=False,
+            is_hvcre=True,
+        ),
+    ]
+
+
 def _leg(  # noqa: PLR0913 - one exposure row of the synthetic portfolio
     reference: str,
     exposure_class: str,
@@ -224,6 +299,10 @@ def _leg(  # noqa: PLR0913 - one exposure row of the synthetic portfolio
     pd: float | None = None,
     lgd: float = 0.45,
     defaulted: bool = False,
+    sl_type: str | None = None,
+    slotting_category: str | None = None,
+    is_short_maturity: bool | None = None,
+    is_hvcre: bool = False,
 ) -> dict[str, object]:
     """One exposure row, in the raw shape the sealed ledger is derived from."""
     drawn = ead if exposure_type == "loan" else 0.0
@@ -255,6 +334,10 @@ def _leg(  # noqa: PLR0913 - one exposure row of the synthetic portfolio
         "sa_cqs": cqs,
         "is_defaulted": defaulted,
         "reporting_leg_role": "whole",
+        "sl_type": sl_type,
+        "slotting_category": slotting_category,
+        "is_short_maturity": is_short_maturity,
+        "is_hvcre": is_hvcre,
     }
 
 
@@ -266,7 +349,7 @@ def _ledger(*, stripped: bool = False) -> pl.LazyFrame:
     drops the sealed per-side gross carriers, keeping their raw sources — the
     shape where the generator and lineage paths can diverge.
     """
-    rows = _sa_legs() + _irb_legs()
+    rows = _sa_legs() + _irb_legs() + _slotting_legs()
     raw = pl.LazyFrame(
         rows,
         schema_overrides={
@@ -275,6 +358,7 @@ def _ledger(*, stripped: bool = False) -> pl.LazyFrame:
             "lgd_floored": pl.Float64,
             "irb_maturity_m": pl.Float64,
             "sa_cqs": pl.Int8,
+            "is_short_maturity": pl.Boolean,
         },
     )
     ledger = with_reporting_ledger(raw)

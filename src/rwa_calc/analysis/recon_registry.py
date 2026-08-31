@@ -442,7 +442,7 @@ class LedgerCarrier:
     """
 
     name: str
-    kind: Literal["string", "boolean"]
+    kind: Literal["string", "boolean", "numeric"]
     ledger_column: str
 
 
@@ -469,6 +469,21 @@ LEDGER_CARRIERS: tuple[LedgerCarrier, ...] = (
     # C 08.01 cols 0040/0050. Absent, ``_protection_exprs`` puts every covered
     # part in the guarantee column and reports a hard 0.0 for credit derivatives.
     LedgerCarrier("protection_type", "string", "protection_type"),
+    # C 08.06 / OF 08.06 sheet and row placement. These are labels/flags, not
+    # reconcilable amounts: without them the generator either emits a generic
+    # sheet or silently assigns every exposure to the long-maturity rows. The
+    # coverage layer therefore treats the first three as blocking discriminators.
+    LedgerCarrier("sl_type", "string", "sl_type"),
+    LedgerCarrier("slotting_category", "string", "slotting_category"),
+    LedgerCarrier("is_short_maturity", "boolean", "is_short_maturity"),
+    # Optional alternative to a direct maturity band. The projection derives
+    # ``is_short_maturity = remaining_maturity_years < 2.5`` from it only when
+    # no direct band carrier is mapped (the exact boundary is long maturity).
+    LedgerCarrier("remaining_maturity_years", "numeric", "remaining_maturity_years"),
+    # Optional explicit HVCRE flag. The ledger projection derives this from a
+    # canonical ``sl_type == \"hvcre\"`` when it is absent; an explicit mapping
+    # wins, allowing a firm's distinct classification flag to be preserved.
+    LedgerCarrier("is_hvcre", "boolean", "is_hvcre"),
 )
 
 # Index by canonical name for O(1) lookup by config validators / the projection.

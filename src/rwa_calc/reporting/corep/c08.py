@@ -2045,8 +2045,18 @@ def _c08_06_sl_type_sheet(
     has_hvcre = "is_hvcre" in cols
     if sl_key == "ipre" and framework != "BASEL_3_1" and has_hvcre:
         return data.filter(pl.col("sl_type").is_in(["ipre", "hvcre"]))
+    if sl_key == "ipre" and framework == "BASEL_3_1" and has_hvcre:
+        # The classifier's canonical B31 shape may carry HVCRE as
+        # ``sl_type == "ipre"`` plus the dedicated flag. Keep the two B31
+        # submissions disjoint: the HVCRE limb below owns every flagged row.
+        return data.filter(
+            (pl.col("sl_type") == "ipre") & pl.col("is_hvcre").fill_null(False).not_()
+        )
     if sl_key == "hvcre" and framework == "BASEL_3_1" and has_hvcre:
-        return data.filter((pl.col("sl_type") == "hvcre") | pl.col("is_hvcre"))
+        return data.filter(
+            (pl.col("sl_type") == "hvcre")
+            | ((pl.col("sl_type") == "ipre") & pl.col("is_hvcre").fill_null(False))
+        )
     return data.filter(pl.col("sl_type") == sl_key)
 
 
@@ -2164,10 +2174,24 @@ def _c08_06_sheet(
     # one. Their docstrings say they use the same test, which is exactly what
     # makes moving one silently dangerous.
     row_subsets = subset_rows(type_df, {ref: _c08_06_post(p) for ref, p in row_preds.items()})
+    origin_subsets = subset_rows(type_df, row_preds)
     for row_ref, label, _is_short, rw_display in row_defs:
         subset = row_subsets[row_ref]
         if subset.height == 0 and label != "Total":
-            overrides[row_ref] = c08_06_zero_row(spec.column_refs, rw_display)
+            zeroes = c08_06_zero_row(spec.column_refs, rw_display)
+            if origin_subsets[row_ref].height > 0:
+                # A category can be empty only on the POST-substitution basis:
+                # for example, a fully guaranteed slotting exposure whose
+                # covered leg is treated as standardised. Preserve the cells
+                # Annex II defines on the ORIGIN basis (0010/0030/0090/0100)
+                # and zero only the post-basis block. Whole-row zero-fill would
+                # erase real gross exposure, expected loss and provisions.
+                zeroes = {
+                    ref: zeroes[ref]
+                    for ref in ("0020", "0040", "0050", "0070", "0080")
+                    if ref in zeroes
+                }
+            overrides[row_ref] = zeroes
             continue
         fixes: dict[str, float | None] = {}
         ead_sum = float(subset[ead_col].fill_null(0.0).sum())

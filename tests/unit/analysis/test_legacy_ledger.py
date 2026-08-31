@@ -39,7 +39,11 @@ from rwa_calc.api.reconciliation import (
     loads_reconciliation_config,
 )
 from rwa_calc.contracts.edges import AGGREGATOR_EXIT_EDGE
-from rwa_calc.data.schemas import VALID_PROTECTION_TYPES
+from rwa_calc.data.schemas import (
+    VALID_PROTECTION_TYPES,
+    VALID_SL_TYPES,
+    VALID_SLOTTING_CATEGORIES,
+)
 from rwa_calc.domain.enums import ApproachType, ExposureClass
 from rwa_calc.reporting.corep.generator import COREPGenerator
 from rwa_calc.reporting.kernel.columns import _CREDIT_BS_TYPES
@@ -50,7 +54,7 @@ if TYPE_CHECKING:
     from rwa_calc.reporting.metadata import ResultsSource
 
 FRAMEWORKS = ("CRR", "BASEL_3_1")
-TEMPLATES = ("c07_00", "c08_01", "c08_03")
+TEMPLATES = ("c07_00", "c08_01", "c08_03", "c08_06")
 
 # =============================================================================
 # The reference portfolio
@@ -78,6 +82,10 @@ _COMMON_SCHEMA: dict[str, pl.DataType] = {
     "exposure_type": pl.String(),
     "is_defaulted": pl.Boolean(),
     "protection_type": pl.String(),
+    "sl_type": pl.String(),
+    "slotting_category": pl.String(),
+    "is_short_maturity": pl.Boolean(),
+    "is_hvcre": pl.Boolean(),
     "ccf": pl.Float64(),
     "ead_final": pl.Float64(),
     "risk_weight": pl.Float64(),
@@ -108,16 +116,30 @@ _DERIVED_SCHEMA: dict[str, pl.DataType] = {
 }
 
 _COMMON_ROWS: dict[str, list[object]] = {
-    "exposure_reference": ["SA1", "SA2", "IRB1", "IRB2", "IRB3", "SA3", "SA4"],
+    "exposure_reference": [
+        "SA1",
+        "SA2",
+        "IRB1",
+        "IRB2",
+        "IRB3",
+        "SA3",
+        "SA4",
+        "SL1",
+        "SL2",
+        "SL3",
+    ],
     # IRB1/IRB2 differ only by CASE, which is what makes the C 08.01 col 0300
     # distinct-obligor count sensitive to a casefold of the carrier.
-    "counterparty_reference": ["O1", "O1", "O2", "o2", "O4", "O5", "O6"],
+    "counterparty_reference": ["O1", "O1", "O2", "o2", "O4", "O5", "O6", "O7", "O8", "O9"],
     "reporting_class_origin": [
         "corporate",
         "retail_other",
         "corporate",
         "corporate",
         "institution",
+        "corporate",
+        "corporate",
+        "corporate",
         "corporate",
         "corporate",
     ],
@@ -129,6 +151,9 @@ _COMMON_ROWS: dict[str, list[object]] = {
         "foundation_irb",
         "standardised",
         "standardised",
+        "slotting",
+        "slotting",
+        "slotting",
     ],
     "exposure_type": [
         "loan",
@@ -138,10 +163,50 @@ _COMMON_ROWS: dict[str, list[object]] = {
         "loan",
         "loan",
         "loan",
+        "loan",
+        "facility_undrawn",
+        "loan",
     ],
-    "is_defaulted": [False, False, False, True, False, False, False],
-    "protection_type": [None, None, "guarantee", None, None, "guarantee", "credit_derivative"],
-    "ccf": [0.0, 0.5, 0.0, 0.2, 0.0, 0.0, 0.0],
+    "is_defaulted": [False, False, False, True, False, False, False, False, False, False],
+    "protection_type": [
+        None,
+        None,
+        "guarantee",
+        None,
+        None,
+        "guarantee",
+        "credit_derivative",
+        None,
+        None,
+        None,
+    ],
+    "sl_type": [
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        "project_finance",
+        "object_finance",
+        "hvcre",
+    ],
+    "slotting_category": [
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        "strong",
+        "good",
+        "satisfactory",
+    ],
+    "is_short_maturity": [None, None, None, None, None, None, None, True, False, False],
+    "is_hvcre": [None, None, None, None, None, None, None, False, False, True],
+    "ccf": [0.0, 0.5, 0.0, 0.2, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0],
     "ead_final": [
         1_000_000.0,
         250_000.0,
@@ -150,8 +215,11 @@ _COMMON_ROWS: dict[str, list[object]] = {
         2_500_000.0,
         2_000_000.0,
         1_500_000.0,
+        1_000_000.0,
+        400_000.0,
+        2_000_000.0,
     ],
-    "risk_weight": [1.0, 0.75, 0.6, 1.5, 0.2, 1.0, 1.0],
+    "risk_weight": [1.0, 0.75, 0.6, 1.5, 0.2, 1.0, 1.0, 0.5, 0.9, 1.15],
     "rwa_final": [
         1_000_000.0,
         187_500.0,
@@ -160,6 +228,9 @@ _COMMON_ROWS: dict[str, list[object]] = {
         500_000.0,
         2_000_000.0,
         1_500_000.0,
+        500_000.0,
+        360_000.0,
+        2_300_000.0,
     ],
     "rwa_pre_factor": [
         1_000_000.0,
@@ -169,19 +240,55 @@ _COMMON_ROWS: dict[str, list[object]] = {
         500_000.0,
         2_000_000.0,
         1_500_000.0,
+        500_000.0,
+        360_000.0,
+        2_300_000.0,
     ],
-    "pd": [None, None, 0.0035, 1.0, 0.0003, None, None],
-    "pd_floored": [None, None, 0.0035, 1.0, 0.0003, None, None],
-    "lgd_floored": [None, None, 0.45, 0.45, 0.45, None, None],
-    "irb_maturity_m": [None, None, 2.5, 2.5, 1.0, None, None],
-    "expected_loss": [None, None, 6_300.0, 72_000.0, 1_125.0, None, None],
-    "provision_deducted": [1_500.0, 0.0, 3_000.0, 50_000.0, 0.0, 0.0, 0.0],
-    "provision_allocated": [1_500.0, 0.0, 3_000.0, 50_000.0, 0.0, 0.0, 0.0],
-    "collateral_adjusted_value": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-    "guaranteed_portion": [0.0, 0.0, 500_000.0, 0.0, 0.0, 400_000.0, 300_000.0],
-    "guarantee_rwa_benefit": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-    "supporting_factor": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
-    "external_cqs": [3.0, 4.0, None, None, 2.0, 3.0, 3.0],
+    "pd": [None, None, 0.0035, 1.0, 0.0003, None, None, None, None, None],
+    "pd_floored": [None, None, 0.0035, 1.0, 0.0003, None, None, None, None, None],
+    "lgd_floored": [None, None, 0.45, 0.45, 0.45, None, None, None, None, None],
+    "irb_maturity_m": [None, None, 2.5, 2.5, 1.0, None, None, None, None, None],
+    "expected_loss": [
+        None,
+        None,
+        6_300.0,
+        72_000.0,
+        1_125.0,
+        None,
+        None,
+        4_000.0,
+        3_200.0,
+        24_000.0,
+    ],
+    "provision_deducted": [
+        1_500.0,
+        0.0,
+        3_000.0,
+        50_000.0,
+        0.0,
+        0.0,
+        0.0,
+        2_000.0,
+        1_600.0,
+        12_000.0,
+    ],
+    "provision_allocated": [
+        1_500.0,
+        0.0,
+        3_000.0,
+        50_000.0,
+        0.0,
+        0.0,
+        0.0,
+        2_000.0,
+        1_600.0,
+        12_000.0,
+    ],
+    "collateral_adjusted_value": [0.0] * 10,
+    "guaranteed_portion": [0.0, 0.0, 500_000.0, 0.0, 0.0, 400_000.0, 300_000.0, 0.0, 0.0, 0.0],
+    "guarantee_rwa_benefit": [0.0] * 10,
+    "supporting_factor": [1.0] * 10,
+    "external_cqs": [3.0, 4.0, None, None, 2.0, 3.0, 3.0, None, None, None],
 }
 _RAW_ROWS: dict[str, list[object]] = {
     "drawn_amount": [
@@ -192,10 +299,13 @@ _RAW_ROWS: dict[str, list[object]] = {
         2_500_000.0,
         2_000_000.0,
         1_500_000.0,
+        1_000_000.0,
+        0.0,
+        2_000_000.0,
     ],
-    "interest": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-    "undrawn_amount": [0.0, 500_000.0, 0.0, 800_000.0, 0.0, 0.0, 0.0],
-    "nominal_amount": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    "interest": [0.0] * 10,
+    "undrawn_amount": [0.0, 500_000.0, 0.0, 800_000.0, 0.0, 0.0, 0.0, 0.0, 800_000.0, 0.0],
+    "nominal_amount": [0.0] * 10,
 }
 # What ensure_gross_side_carriers derives from _RAW_ROWS given the exposure types
 # above: a loan's off-side is a true 0.0, a facility_undrawn's is its undrawn.
@@ -208,16 +318,30 @@ _DERIVED_ROWS: dict[str, list[object]] = {
         2_500_000.0,
         2_000_000.0,
         1_500_000.0,
+        1_000_000.0,
+        0.0,
+        2_000_000.0,
     ],
-    "reporting_gross_off_bs": [0.0, 500_000.0, 0.0, 800_000.0, 0.0, 0.0, 0.0],
+    "reporting_gross_off_bs": [0.0, 500_000.0, 0.0, 800_000.0, 0.0, 0.0, 0.0, 0.0, 800_000.0, 0.0],
 }
 
 # The same portfolio as the firm's own extract: their column names, their units.
 _LEGACY_ROWS: dict[str, list[object]] = {
-    "Loan Ref": ["SA1", "SA2", "IRB1", "IRB2", "IRB3", "SA3", "SA4"],
-    "Obligor Ref": ["O1", "O1", "O2", "o2", "O4", "O5", "O6"],
-    "Asset Class": ["CORP", "RETAIL", "CORP", "CORP", "INST", "CORP", "CORP"],
-    "Approach": ["SA", "SA", "AIRB", "AIRB", "FIRB", "SA", "SA"],
+    "Loan Ref": ["SA1", "SA2", "IRB1", "IRB2", "IRB3", "SA3", "SA4", "SL1", "SL2", "SL3"],
+    "Obligor Ref": ["O1", "O1", "O2", "o2", "O4", "O5", "O6", "O7", "O8", "O9"],
+    "Asset Class": [
+        "CORP",
+        "RETAIL",
+        "CORP",
+        "CORP",
+        "INST",
+        "CORP",
+        "CORP",
+        "CORP",
+        "CORP",
+        "CORP",
+    ],
+    "Approach": ["SA", "SA", "AIRB", "AIRB", "FIRB", "SA", "SA", "SLOT", "SLOT", "SLOT"],
     "Product": [
         "TERM LOAN",
         "RCF",
@@ -226,34 +350,69 @@ _LEGACY_ROWS: dict[str, list[object]] = {
         "TERM LOAN",
         "TERM LOAN",
         "TERM LOAN",
+        "TERM LOAN",
+        "RCF",
+        "TERM LOAN",
     ],
-    "Default Flag": ["N", "N", "N", "Y", "N", "N", "N"],
-    "Protection": [None, None, "GTEE", None, None, "GTEE", "CDS"],
-    "Drawn 000": [1_000.0, 0.0, 4_000.0, 0.0, 2_500.0, 2_000.0, 1_500.0],
-    "Accrued 000": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-    "Undrawn 000": [0.0, 500.0, 0.0, 800.0, 0.0, 0.0, 0.0],
-    "Nominal 000": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-    "Gross On BS 000": [1_000.0, 0.0, 4_000.0, 0.0, 2_500.0, 2_000.0, 1_500.0],
-    "Gross Off BS 000": [0.0, 500.0, 0.0, 800.0, 0.0, 0.0, 0.0],
-    "CCF Pct": [0.0, 50.0, 0.0, 20.0, 0.0, 0.0, 0.0],
-    "EAD 000": [1_000.0, 250.0, 4_000.0, 160.0, 2_500.0, 2_000.0, 1_500.0],
-    "RW Pct": [100.0, 75.0, 60.0, 150.0, 20.0, 100.0, 100.0],
-    "RWA 000": [1_000.0, 187.5, 2_400.0, 240.0, 500.0, 2_000.0, 1_500.0],
-    "RWA Pre SF 000": [1_000.0, 250.0, 2_400.0, 240.0, 500.0, 2_000.0, 1_500.0],
-    "PD Pct": [None, None, 0.35, 100.0, 0.03, None, None],
-    "LGD Pct": [None, None, 45.0, 45.0, 45.0, None, None],
-    "Maturity Yrs": [None, None, 2.5, 2.5, 1.0, None, None],
-    "EL 000": [None, None, 6.3, 72.0, 1.125, None, None],
-    "Provisions": [1_500.0, 0.0, 3_000.0, 50_000.0, 0.0, 0.0, 0.0],
-    "Collateral": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-    "Guaranteed 000": [0.0, 0.0, 500.0, 0.0, 0.0, 400.0, 300.0],
-    "Guarantee Benefit": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-    "Supporting Factor": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
-    "CQS": [3.0, 4.0, None, None, 2.0, 3.0, 3.0],
+    "Default Flag": ["N", "N", "N", "Y", "N", "N", "N", "N", "N", "N"],
+    "Protection": [None, None, "GTEE", None, None, "GTEE", "CDS", None, None, None],
+    "SL Type": [None, None, None, None, None, None, None, "PF", "OF", "HVCRE"],
+    "Slot Category": [None, None, None, None, None, None, None, "CAT1", "CAT2", "CAT3"],
+    "Maturity Band": [None, None, None, None, None, None, None, "SHORT", "LONG", "LONG"],
+    "Remaining Maturity": [None, None, None, None, None, None, None, 2.49, 2.5, 4.0],
+    "HVCRE Flag": [None, None, None, None, None, None, None, "N", "N", "Y"],
+    "Drawn 000": [1_000.0, 0.0, 4_000.0, 0.0, 2_500.0, 2_000.0, 1_500.0, 1_000.0, 0.0, 2_000.0],
+    "Accrued 000": [0.0] * 10,
+    "Undrawn 000": [0.0, 500.0, 0.0, 800.0, 0.0, 0.0, 0.0, 0.0, 800.0, 0.0],
+    "Nominal 000": [0.0] * 10,
+    "Gross On BS 000": [
+        1_000.0,
+        0.0,
+        4_000.0,
+        0.0,
+        2_500.0,
+        2_000.0,
+        1_500.0,
+        1_000.0,
+        0.0,
+        2_000.0,
+    ],
+    "Gross Off BS 000": [0.0, 500.0, 0.0, 800.0, 0.0, 0.0, 0.0, 0.0, 800.0, 0.0],
+    "CCF Pct": [0.0, 50.0, 0.0, 20.0, 0.0, 0.0, 0.0, 0.0, 50.0, 0.0],
+    "EAD 000": [1_000.0, 250.0, 4_000.0, 160.0, 2_500.0, 2_000.0, 1_500.0, 1_000.0, 400.0, 2_000.0],
+    "RW Pct": [100.0, 75.0, 60.0, 150.0, 20.0, 100.0, 100.0, 50.0, 90.0, 115.0],
+    "RWA 000": [1_000.0, 187.5, 2_400.0, 240.0, 500.0, 2_000.0, 1_500.0, 500.0, 360.0, 2_300.0],
+    "RWA Pre SF 000": [
+        1_000.0,
+        250.0,
+        2_400.0,
+        240.0,
+        500.0,
+        2_000.0,
+        1_500.0,
+        500.0,
+        360.0,
+        2_300.0,
+    ],
+    "PD Pct": [None, None, 0.35, 100.0, 0.03, None, None, None, None, None],
+    "LGD Pct": [None, None, 45.0, 45.0, 45.0, None, None, None, None, None],
+    "Maturity Yrs": [None, None, 2.5, 2.5, 1.0, None, None, None, None, None],
+    "EL 000": [None, None, 6.3, 72.0, 1.125, None, None, 4.0, 3.2, 24.0],
+    "Provisions": [1_500.0, 0.0, 3_000.0, 50_000.0, 0.0, 0.0, 0.0, 2_000.0, 1_600.0, 12_000.0],
+    "Collateral": [0.0] * 10,
+    "Guaranteed 000": [0.0, 0.0, 500.0, 0.0, 0.0, 400.0, 300.0, 0.0, 0.0, 0.0],
+    "Guarantee Benefit": [0.0] * 10,
+    "Supporting Factor": [1.0] * 10,
+    "CQS": [3.0, 4.0, None, None, 2.0, 3.0, 3.0, None, None, None],
 }
 
 _CLASS_MAP = {"CORP": "corporate", "RETAIL": "retail_other", "INST": "institution"}
-_APPROACH_MAP = {"SA": "standardised", "AIRB": "advanced_irb", "FIRB": "foundation_irb"}
+_APPROACH_MAP = {
+    "SA": "standardised",
+    "AIRB": "advanced_irb",
+    "FIRB": "foundation_irb",
+    "SLOT": "slotting",
+}
 
 # Everything except the two gross routes, which the fixtures below add.
 _BASE_COMPONENTS: dict[str, ComponentMapping] = {
@@ -295,6 +454,18 @@ _CARRIERS: dict[str, CarrierMapping] = {
     "protection_type": CarrierMapping(
         "Protection", value_map={"GTEE": "guarantee", "CDS": "credit_derivative"}
     ),
+    "sl_type": CarrierMapping(
+        "SL Type",
+        value_map={"PF": "project_finance", "OF": "object_finance", "HVCRE": "hvcre"},
+    ),
+    "slotting_category": CarrierMapping(
+        "Slot Category",
+        value_map={"CAT1": "strong", "CAT2": "good", "CAT3": "satisfactory"},
+    ),
+    "is_short_maturity": CarrierMapping(
+        "Maturity Band", value_map={"SHORT": "true", "LONG": "false"}
+    ),
+    "is_hvcre": CarrierMapping("HVCRE Flag", value_map={"Y": "true", "N": "false"}),
 }
 
 _ROUTES = {
@@ -402,6 +573,99 @@ def test_identity_projection_generates_cell_identical_templates(
     assert _cell(corporate, "0010", "0050") == pytest.approx(-400_000.0)
     assert _cell(corporate, "0010", "0060") == pytest.approx(-300_000.0)
     assert _cell(corporate, "0010", "0090") == pytest.approx(-700_000.0)
+    # C 08.06 identity is non-vacuous across multiple sheets, categories and
+    # both maturity bands. CRR folds HVCRE into IPRE; Basel 3.1 separates it.
+    expected_sheets = (
+        {"project_finance", "object_finance", "hvcre"}
+        if framework == "BASEL_3_1"
+        else {"project_finance", "object_finance", "ipre"}
+    )
+    assert set(theirs.c08_06) == expected_sheets
+    assert _cell(theirs.c08_06["project_finance"], "0010", "0040") == pytest.approx(1_000_000.0)
+    assert _cell(theirs.c08_06["object_finance"], "0040", "0040") == pytest.approx(400_000.0)
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_hvcre_flag_is_derived_from_sl_type_when_not_mapped(tmp_path: Path, framework: str) -> None:
+    """The optional HVCRE flag is derived without changing either regime's sheets."""
+    carriers = {name: spec for name, spec in _CARRIERS.items() if name != "is_hvcre"}
+    legacy, mapping = _load(tmp_path, _components_for("raw"), carriers)
+
+    source, coverage = project_legacy_ledger(legacy, mapping, framework=framework)
+    projected = source.scan_results().collect()
+    ours = COREPGenerator().generate_from_lazyframe(_reference_frame("raw"), framework=framework)
+
+    assert projected["is_hvcre"].to_list()[-3:] == [False, False, True]
+    assert "is_hvcre" in coverage.supplied
+    _assert_same_templates(ours, COREPGenerator().generate(source))
+
+
+def test_explicit_hvcre_flag_wins_over_sl_type_derivation(tmp_path: Path) -> None:
+    """A firm's explicit classification flag is authoritative when both routes exist."""
+    rows = dict(_LEGACY_ROWS)
+    rows["SL Type"] = [None, None, None, None, None, None, None, "PF", "OF", "IPRE"]
+    carriers = dict(_CARRIERS)
+    carriers["sl_type"] = CarrierMapping(
+        "SL Type",
+        value_map={
+            "PF": "project_finance",
+            "OF": "object_finance",
+            "IPRE": "ipre",
+        },
+    )
+    legacy, mapping = _load(tmp_path, _components_for("raw"), carriers, rows)
+
+    source, _coverage = project_legacy_ledger(legacy, mapping, framework="BASEL_3_1")
+    projected = source.scan_results().collect()
+
+    assert projected["sl_type"][-1] == "ipre"
+    assert projected["is_hvcre"][-1]
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_numeric_maturity_derives_band_with_exact_boundary_long(
+    tmp_path: Path, framework: str
+) -> None:
+    """Numeric maturity is the optional route; <2.5 is short and 2.5 is long."""
+    carriers = {name: spec for name, spec in _CARRIERS.items() if name != "is_short_maturity"}
+    carriers["remaining_maturity_years"] = CarrierMapping("Remaining Maturity")
+    legacy, mapping = _load(tmp_path, _components_for("raw"), carriers)
+
+    source, coverage = project_legacy_ledger(legacy, mapping, framework=framework)
+    projected = source.scan_results().collect()
+
+    assert projected["remaining_maturity_years"].to_list()[-3:] == [2.49, 2.5, 4.0]
+    assert projected["is_short_maturity"].to_list()[-3:] == [True, False, False]
+    assert "c08_06" in coverage.reachable_templates
+    assert _cell(
+        COREPGenerator().generate(source).c08_06["object_finance"], "0040", "0040"
+    ) == pytest.approx(400_000.0)
+
+
+def test_direct_maturity_band_wins_over_numeric_derivation(tmp_path: Path) -> None:
+    """Mapping both routes cannot overwrite a firm's explicit maturity band."""
+    rows = dict(_LEGACY_ROWS)
+    rows["Remaining Maturity"] = [
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        "4.0",
+        "1.0",
+        "1.0",
+    ]
+    carriers = dict(_CARRIERS)
+    carriers["remaining_maturity_years"] = CarrierMapping("Remaining Maturity")
+    legacy, mapping = _load(tmp_path, _components_for("raw"), carriers, rows)
+
+    source, coverage = project_legacy_ledger(legacy, mapping, framework="CRR")
+    projected = source.scan_results().collect()
+
+    assert projected["is_short_maturity"].to_list()[-3:] == [True, False, False]
+    assert "c08_06" in coverage.reachable_templates
 
 
 @pytest.mark.parametrize("framework", FRAMEWORKS)
@@ -445,7 +709,7 @@ def test_projection_satisfies_the_results_source_protocol(tmp_path: Path) -> Non
 
     assert isinstance(source, LegacyLedgerSource)
     assert accepts(source) == "CRR"
-    assert source.scan_results().collect().height == 7
+    assert source.scan_results().collect().height == 10
 
 
 # =============================================================================
@@ -590,8 +854,8 @@ def test_a_leg_written_to_both_provision_names_is_counted_once(tmp_path: Path) -
     readers. C 07.00 filters ``reporting_approach_origin == "standardised"`` and
     C 08.01/C 08.03 filter the IRB set; a leg has exactly one origin approach, so
     the two populations are disjoint. Measured here rather than argued: the
-    corporate sheets split 54,500 of provisions into 1,500 (the SA leg, C 07.00
-    col 0030) and 53,000 (the two IRB legs, C 08.01 col 0290) with nothing
+    corporate sheets split 70,100 of provisions into 1,500 (the SA leg, C 07.00
+    col 0030) and 68,600 (the formula-IRB and slotting legs, C 08.01 col 0290) with nothing
     counted twice and nothing lost. Both columns carry the Annex II §1.3 "(-)"
     sign, hence the negatives.
     """
@@ -606,8 +870,8 @@ def test_a_leg_written_to_both_provision_names_is_counted_once(tmp_path: Path) -
     sa_provisions = _cell(bundle.c07_00["corporate"], "0010", "0030")
     irb_provisions = _cell(bundle.c08_01["corporate"], "0010", "0290")
     assert sa_provisions == pytest.approx(-1_500.0)
-    assert irb_provisions == pytest.approx(-53_000.0)
-    assert -(sa_provisions + irb_provisions) == pytest.approx(54_500.0)
+    assert irb_provisions == pytest.approx(-68_600.0)
+    assert -(sa_provisions + irb_provisions) == pytest.approx(70_100.0)
 
 
 def test_risk_type_is_not_projectable_so_the_populations_cannot_overlap() -> None:
@@ -662,6 +926,9 @@ def test_categorical_component_labels_are_canonicalised_by_the_projection(
         "institution",
         "corporate",
         "corporate",
+        "corporate",
+        "corporate",
+        "corporate",
     ]
     assert projected["reporting_approach_origin"].to_list() == [
         "standardised",
@@ -671,6 +938,9 @@ def test_categorical_component_labels_are_canonicalised_by_the_projection(
         "foundation_irb",
         "standardised",
         "standardised",
+        "slotting",
+        "slotting",
+        "slotting",
     ]
     # ...and the canonical labels are what the sheet axes actually key on.
     assert set(sheets.c07_00) == {"corporate", "retail_other"}
@@ -695,6 +965,9 @@ def test_categorical_component_label_is_casefolded_without_a_value_map(
         "Institution",
         "CORPORATE",
         "corporate ",
+        "CORPORATE",
+        "corporate",
+        "corporate ",
     ]
     components = dict(_components_for("raw"))
     components["exposure_class"] = ComponentMapping("Asset Class")
@@ -710,6 +983,9 @@ def test_categorical_component_label_is_casefolded_without_a_value_map(
         "corporate",
         "corporate",
         "institution",
+        "corporate",
+        "corporate",
+        "corporate",
         "corporate",
         "corporate",
     ]
@@ -732,6 +1008,8 @@ def test_the_vocabularies_are_anchored_to_their_sources_of_truth() -> None:
         member.value for member in ApproachType
     }
     assert LEDGER_VOCABULARY["protection_type"].values == set(VALID_PROTECTION_TYPES)
+    assert LEDGER_VOCABULARY["sl_type"].values == set(VALID_SL_TYPES)
+    assert LEDGER_VOCABULARY["slotting_category"].values == set(VALID_SLOTTING_CATEGORIES)
     # The exposure-type set is the kernel's credit-risk gross scope plus the
     # legacy "facility" alias every balance-sheet discriminator still recognises.
     assert LEDGER_VOCABULARY["exposure_type"].values == {*_CREDIT_BS_TYPES, "facility"}
@@ -749,7 +1027,18 @@ def test_unmapped_class_label_is_reported_with_its_row_count(tmp_path: Path) -> 
     """
     # Arrange — "SOVEREIGN" has no value_map entry and is not an ExposureClass
     rows = dict(_LEGACY_ROWS)
-    rows["Asset Class"] = ["SOVEREIGN", "RETAIL", "CORP", "CORP", "INST", "SOVEREIGN", "CORP"]
+    rows["Asset Class"] = [
+        "SOVEREIGN",
+        "RETAIL",
+        "CORP",
+        "CORP",
+        "INST",
+        "SOVEREIGN",
+        "CORP",
+        "CORP",
+        "CORP",
+        "CORP",
+    ]
     legacy, mapping = _load(tmp_path, _components_for("raw"), _CARRIERS, rows)
 
     # Act
@@ -775,7 +1064,7 @@ def test_unmapped_approach_label_makes_every_template_unreachable(tmp_path: Path
     """
     # Arrange — the firm writes "IRB", with no value_map to translate it
     rows = dict(_LEGACY_ROWS)
-    rows["Approach"] = ["IRB"] * 7
+    rows["Approach"] = ["IRB"] * 10
     components = dict(_components_for("raw"))
     components["approach"] = ComponentMapping("Approach")
     legacy, mapping = _load(tmp_path, components, _CARRIERS, rows)
@@ -786,7 +1075,7 @@ def test_unmapped_approach_label_makes_every_template_unreachable(tmp_path: Path
 
     # Assert — coverage says unreachable...
     assert coverage.reachable_templates == frozenset()
-    assert coverage.unmapped_labels["approach"] == ("irb (7 rows)",)
+    assert coverage.unmapped_labels["approach"] == ("irb (10 rows)",)
     assert coverage.present_approaches == frozenset({"irb"})
     # ...naming the offending value rather than a column, because the column IS
     # there — nothing is missing, the values are simply not the ones needed.
@@ -797,6 +1086,7 @@ def test_unmapped_approach_label_makes_every_template_unreachable(tmp_path: Path
     assert bundle.c07_00 == {}
     assert bundle.c08_01 == {}
     assert bundle.c08_03 == {}
+    assert bundle.c08_06 == {}
 
 
 def test_an_all_sa_book_leaves_the_irb_templates_reachable_but_unpopulated(
@@ -814,7 +1104,7 @@ def test_an_all_sa_book_leaves_the_irb_templates_reachable_but_unpopulated(
     """
     # Arrange — every leg standardised, every label valid
     rows = dict(_LEGACY_ROWS)
-    rows["Approach"] = ["SA"] * 7
+    rows["Approach"] = ["SA"] * 10
     legacy, mapping = _load(tmp_path, _components_for("raw"), _CARRIERS, rows)
 
     # Act
@@ -832,6 +1122,7 @@ def test_an_all_sa_book_leaves_the_irb_templates_reachable_but_unpopulated(
     assert bundle.c07_00
     assert bundle.c08_01 == {}
     assert bundle.c08_03 == {}
+    assert bundle.c08_06 == {}
 
 
 def test_unmapped_approach_is_unreachable_where_an_absent_population_is_not(
@@ -846,7 +1137,7 @@ def test_unmapped_approach_is_unreachable_where_an_absent_population_is_not(
     """
     # Arrange — one leg's approach is unrecognised, the rest are standardised
     rows = dict(_LEGACY_ROWS)
-    rows["Approach"] = ["SA", "SA", "IRB-A", "SA", "SA", "SA", "SA"]
+    rows["Approach"] = ["SA", "SA", "IRB-A", "SA", "SA", "SA", "SA", "SA", "SA", "SA"]
     components = dict(_components_for("raw"))
     components["approach"] = ComponentMapping("Approach", value_map={"SA": "standardised"})
     legacy, mapping = _load(tmp_path, components, _CARRIERS, rows)
@@ -1010,7 +1301,7 @@ def test_mapped_pd_bands_correctly_across_a_band_boundary(
     """
     # Arrange — IRB3 (the only institution leg) carries the boundary PD
     rows = dict(_LEGACY_ROWS)
-    rows["PD Pct"] = [None, None, 0.35, 100.0, pd_pct, None, None]
+    rows["PD Pct"] = [None, None, 0.35, 100.0, pd_pct, None, None, None, None, None]
     legacy, mapping = _load(tmp_path, _components_for("raw"), _CARRIERS, rows)
 
     # Act
@@ -1046,6 +1337,105 @@ def test_mapped_pd_reaches_both_ledger_pd_columns(tmp_path: Path) -> None:
 # =============================================================================
 # Coverage and reachability
 # =============================================================================
+
+
+@pytest.mark.parametrize(
+    ("dropped", "blocking"),
+    [
+        ("sl_type", "sl_type"),
+        ("slotting_category", "slotting_category"),
+        ("is_short_maturity", "is_short_maturity"),
+    ],
+)
+def test_missing_slotting_placement_mapping_blocks_c08_06(
+    tmp_path: Path, dropped: str, blocking: str
+) -> None:
+    """Generator fallbacks are not comparable sheet/row placement evidence."""
+    carriers = {name: spec for name, spec in _CARRIERS.items() if name != dropped}
+    legacy, mapping = _load(tmp_path, _components_for("raw"), carriers)
+
+    _source, coverage = project_legacy_ledger(legacy, mapping, framework="CRR")
+
+    assert "c08_06" not in coverage.reachable_templates
+    assert blocking in coverage.blocking_columns("c08_06")
+    if dropped in {"slotting_category", "is_short_maturity"}:
+        assert coverage.row_axis_deleted("c08_06")
+        assert coverage.unavailable_rows("c08_06", "CRR")
+
+
+@pytest.mark.parametrize(
+    ("carrier", "legacy_column", "bad_value", "mapping_name"),
+    [
+        ("sl_type", "SL Type", "NOT_A_TYPE", "sl_type"),
+        ("slotting_category", "Slot Category", "CAT9", "slotting_category"),
+        ("is_short_maturity", "Maturity Band", "UNKNOWN", "is_short_maturity"),
+    ],
+)
+def test_invalid_slotting_placement_value_blocks_c08_06(
+    tmp_path: Path,
+    carrier: str,
+    legacy_column: str,
+    bad_value: str,
+    mapping_name: str,
+) -> None:
+    """A present discriminator with invalid data cannot let rows vanish silently."""
+    rows = dict(_LEGACY_ROWS)
+    values = list(rows[legacy_column])
+    values[7] = bad_value
+    rows[legacy_column] = values
+    legacy, mapping = _load(tmp_path, _components_for("raw"), _CARRIERS, rows)
+
+    _source, coverage = project_legacy_ledger(legacy, mapping, framework="CRR")
+
+    assert carrier in _CARRIERS
+    assert "c08_06" not in coverage.reachable_templates
+    assert mapping_name in coverage.unmapped_labels
+    assert coverage.blocking_columns("c08_06") == ()
+
+
+def test_invalid_explicit_hvcre_flag_blocks_ipre_routing(tmp_path: Path) -> None:
+    """A mapped but unparsable IPRE/HVCRE flag cannot silently mean ordinary IPRE."""
+    rows = dict(_LEGACY_ROWS)
+    values = list(rows["HVCRE Flag"])
+    values[9] = "UNKNOWN"
+    rows["HVCRE Flag"] = values
+    legacy, mapping = _load(tmp_path, _components_for("raw"), _CARRIERS, rows)
+
+    source, coverage = project_legacy_ledger(legacy, mapping, framework="BASEL_3_1")
+
+    assert source.scan_results().collect()["is_hvcre"][9] is None
+    assert "c08_06" not in coverage.reachable_templates
+    assert coverage.unmapped_labels["is_hvcre"] == ("<null or invalid> (1 rows)",)
+    assert coverage.blocking_columns("c08_06") == ()
+
+
+@pytest.mark.parametrize("bad_maturity", [None, "not-a-number"])
+def test_null_or_invalid_numeric_maturity_blocks_c08_06(
+    tmp_path: Path, bad_maturity: str | None
+) -> None:
+    """A failed numeric derivation stays null and makes maturity placement unsafe."""
+    rows = dict(_LEGACY_ROWS)
+    rows["Remaining Maturity"] = [
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        bad_maturity,
+        "2.5",
+        "4.0",
+    ]
+    carriers = {name: spec for name, spec in _CARRIERS.items() if name != "is_short_maturity"}
+    carriers["remaining_maturity_years"] = CarrierMapping("Remaining Maturity")
+    legacy, mapping = _load(tmp_path, _components_for("raw"), carriers, rows)
+
+    source, coverage = project_legacy_ledger(legacy, mapping, framework="CRR")
+
+    assert source.scan_results().collect()["is_short_maturity"][7] is None
+    assert "c08_06" not in coverage.reachable_templates
+    assert coverage.unmapped_labels["is_short_maturity"] == ("<null or invalid> (1 rows)",)
 
 
 def test_missing_gross_route_reports_c08_03_gross_columns_unavailable(
@@ -1112,7 +1502,7 @@ def test_missing_pd_deletes_c08_03_entirely_and_is_reported_as_such(tmp_path: Pa
     assert coverage.blocking_columns("c08_03") == ("pd", "pd_floored")
     assert "c08_03" not in coverage.reachable_templates
     # ...while the two static-row-axis templates still generate.
-    assert coverage.reachable_templates == {"c07_00", "c08_01"}
+    assert coverage.reachable_templates == {"c07_00", "c08_01", "c08_06"}
     assert bundle.c07_00
     assert bundle.c08_01
     assert not coverage.row_axis_deleted("c07_00")
@@ -1175,16 +1565,16 @@ def test_carrier_values_are_written_verbatim_not_casefolded(tmp_path: Path) -> N
 
     # Assert — two distinct obligors on the corporate IRB sheet, not one
     assert projected["counterparty_reference"].to_list()[2:4] == ["O2", "o2"]
-    assert _cell(corporate, "0010", "0300") == pytest.approx(2.0)
+    assert _cell(corporate, "0010", "0300") == pytest.approx(5.0)
     assert projected["exposure_type"].to_list()[:2] == ["loan", "facility_undrawn"]
-    assert projected["protection_type"].to_list()[5:] == ["guarantee", "credit_derivative"]
+    assert projected["protection_type"].to_list()[5:7] == ["guarantee", "credit_derivative"]
 
 
 def test_unrecognised_flag_token_is_null_not_false(tmp_path: Path) -> None:
     """An unknown default flag stays unknown — "we do not know" is not "not defaulted"."""
     # Arrange
     rows = dict(_LEGACY_ROWS)
-    rows["Default Flag"] = ["N", "N", "N", "UNKNOWN", "N", "N", "N"]
+    rows["Default Flag"] = ["N", "N", "N", "UNKNOWN", "N", "N", "N", "N", "N", "N"]
     carriers = dict(_CARRIERS)
     carriers["defaulted"] = CarrierMapping("Default Flag", value_map={"Y": "true"})
     legacy, mapping = _load(tmp_path, _components_for("raw"), carriers, rows)
@@ -1193,7 +1583,7 @@ def test_unrecognised_flag_token_is_null_not_false(tmp_path: Path) -> None:
     source, _coverage = project_legacy_ledger(legacy, mapping, framework="CRR")
 
     # Assert
-    assert source.scan_results().collect()["is_defaulted"].to_list() == [
+    assert source.scan_results().collect()["is_defaulted"].to_list()[:7] == [
         False,
         False,
         False,
@@ -1270,12 +1660,16 @@ def test_config_without_carriers_still_projects(tmp_path: Path) -> None:
 def test_carriers_round_trip_through_the_toml_grammar(tmp_path: Path) -> None:
     """``dump`` -> ``loads`` preserves a carrier table, value map included."""
     # Arrange
+    carriers = {
+        **_CARRIERS,
+        "remaining_maturity_years": CarrierMapping("Remaining Maturity"),
+    }
     settings = ReconciliationSettings(
         legacy_file=tmp_path / "legacy.parquet",
         mapping=LegacyColumnMapping(
             legacy_keys=("Loan Ref",),
             components={"rwa": ComponentMapping("RWA 000", scale=1_000.0)},
-            carriers=dict(_CARRIERS),
+            carriers=carriers,
         ),
         legacy_format="parquet",
     )
@@ -1284,4 +1678,4 @@ def test_carriers_round_trip_through_the_toml_grammar(tmp_path: Path) -> None:
     reloaded = loads_reconciliation_config(dump_reconciliation_config(settings), base_dir=tmp_path)
 
     # Assert
-    assert reloaded.mapping.carriers == _CARRIERS
+    assert reloaded.mapping.carriers == carriers

@@ -44,7 +44,7 @@ limits": their side is aggregated OUR way (our weighting, our distinct-count
 rule, our sign convention), which is the right default because it holds the
 reporting rules constant so a difference means a DATA difference.
 
-THE PROJECTION CALCULATES NOTHING. It renames and types. It does not derive a
+THE PROJECTION CALCULATES NO AMOUNTS. It renames and types. It does not derive a
 CCF from a commitment, a floor from a PD, or a risk weight from an RWA. Where a
 DERIVATION is wanted it is production's own that runs, on the production frame,
 not a copy here — see the gross-exposure decision below. Where the mapping
@@ -116,7 +116,7 @@ is the generator's contract, not something this module can fix, so those cells
 are reported through ``LedgerCoverage``.
 
 THE PROVISIONS DECISION — the mapped provisions land on ``provision_deducted``
-AND ``provision_allocated``, never on SCRA/GCRA. All three provisions cells in
+AND ``provision_allocated``, never on SCRA/GCRA. All four provisions cells in
 scope read a ladder that checks ``scra_provision_amount`` / ``gcra_provision_amount``
 first and falls through to a sealed carrier: ``provision_deducted`` for C 07.00
 col 0030 (``c07.py::_prepare``) and ``provision_allocated`` for the C 08.01 col
@@ -167,7 +167,7 @@ key unchanged, and the damage is asymmetric: an unmapped CLASS produces bogus
 sheets, while an unmapped APPROACH empties the population of every template —
 because ``population_flags`` admits by an ``is_in`` over the approach values, and
 a label outside it matches nothing. A firm whose extract says ``"IRB"`` would have
-been told all three templates were reachable and handed a blank return.
+been told all four templates were reachable and handed a blank return.
 
 So the projection MEASURES the projected label columns against
 ``LEDGER_VOCABULARY`` (built from ``ExposureClass`` / ``ApproachType`` / the
@@ -199,8 +199,8 @@ different footing from ours):
 
 References:
 - docs/plans/return-reconciliation.md, Phase 2 (the legacy ledger projection)
-- Reg (EU) 2021/451 Annex II: C 07.00, C 08.01, C 08.03
-- PRA PS1/26 Annex I/II: OF 07.00, OF 08.01, OF 08.03
+- Reg (EU) 2021/451 Annex II: C 07.00, C 08.01, C 08.03, C 08.06
+- PRA PS1/26 Annex I/II: OF 07.00, OF 08.01, OF 08.03, OF 08.06
 """
 
 from __future__ import annotations
@@ -215,11 +215,17 @@ from rwa_calc.analysis.recon_registry import (
     LEDGER_CARRIERS_BY_NAME,
     RECONCILABLE_COMPONENTS_BY_NAME,
 )
-from rwa_calc.data.schemas import VALID_PROTECTION_TYPES
+from rwa_calc.data.schemas import (
+    VALID_PROTECTION_TYPES,
+    VALID_SL_TYPES,
+    VALID_SLOTTING_CATEGORIES,
+)
 from rwa_calc.domain.enums import ApproachType, ExposureClass
 from rwa_calc.reporting.corep.templates import (
     get_c07_columns,
     get_c08_03_columns,
+    get_c08_06_columns,
+    get_c08_06_rows,
     get_c08_columns,
     get_sa_row_sections,
 )
@@ -244,7 +250,7 @@ FRAMEWORKS: tuple[str, ...] = ("CRR", "BASEL_3_1")
 #: sealed ledger it can run over this one — but the COVERAGE report is only as
 #: honest as the enumeration behind it, so it is stated per template rather than
 #: inferred.
-LEDGER_TEMPLATE_IDS: tuple[str, ...] = ("c07_00", "c08_01", "c08_03")
+LEDGER_TEMPLATE_IDS: tuple[str, ...] = ("c07_00", "c08_01", "c08_03", "c08_06")
 
 #: A cell requirement, in DISJUNCTIVE NORMAL FORM: a tuple of ALTERNATIVES, each
 #: a set of columns ALL of which are needed. The cell is populatable when any one
@@ -327,6 +333,12 @@ _APPROACH_COLUMN: str = "reporting_approach_origin"
 #: reports it under.
 _APPROACH_MAPPING: str = "approach"
 
+# C 08.06 sheet/row mappings whose invalid DATA makes the template unsafe even
+# when the columns exist. These names are the actionable TOML carrier keys.
+_SLOTTING_PLACEMENT_MAPPINGS: frozenset[str] = frozenset(
+    {"sl_type", "slotting_category", "is_short_maturity", "is_hvcre"}
+)
+
 #: Ledger column -> the vocabulary its values must fall inside. Only the columns
 #: whose values DECIDE something appear: a sheet key, a population, a row axis, a
 #: column split. ``counterparty_reference`` is deliberately absent — an obligor
@@ -340,6 +352,10 @@ LEDGER_VOCABULARY: Mapping[str, LedgerVocabulary] = {
     ),
     "exposure_type": LedgerVocabulary("exposure_type", _CREDIT_EXPOSURE_TYPES),
     "protection_type": LedgerVocabulary("protection_type", frozenset(VALID_PROTECTION_TYPES)),
+    "sl_type": LedgerVocabulary("sl_type", frozenset(VALID_SL_TYPES)),
+    "slotting_category": LedgerVocabulary(
+        "slotting_category", frozenset(VALID_SLOTTING_CATEGORIES)
+    ),
 }
 
 #: The ``reporting_approach_origin`` values each scoped template's POPULATION
@@ -361,6 +377,8 @@ TEMPLATE_POPULATION_LABELS: Mapping[str, frozenset[str]] = {
     ),
     # _non_slotting: the IRB book with slotting filtered out.
     "c08_03": frozenset({ApproachType.FIRB.value, ApproachType.AIRB.value}),
+    # c08_06_plans: the specialised-lending slotting book only.
+    "c08_06": frozenset({ApproachType.SLOTTING.value}),
 }
 
 # Flag tokens for a ``kind="boolean"`` carrier. Anything else is NULL, never
@@ -537,6 +555,22 @@ _SHEET_AND_MONEY: CellRequirement = _both(
     _needs("reporting_class_origin", "reporting_approach_origin", "ead_final"), _RWA
 )
 
+# C 08.06 is keyed by specialised-lending TYPE rather than exposure class. The
+# generator can technically degrade without ``sl_type`` (one generic sheet) or
+# ``is_short_maturity`` (everything assigned long), but either result fabricates
+# placement differences in a reconciliation. Require the real sheet and row
+# discriminators before declaring the template comparable.
+_SLOTTING_SHEET_ROWS_AND_MONEY: CellRequirement = _both(
+    _needs(
+        "reporting_approach_origin",
+        "ead_final",
+        "sl_type",
+        "slotting_category",
+        "is_short_maturity",
+    ),
+    _RWA,
+)
+
 TEMPLATE_REQUIRED_COLUMNS: Mapping[str, CellRequirement] = {
     # c07_plans / c08_01_plans / c08_03_plans each pick() these three and append
     # an error when one is absent; population_flags() keys the approach column
@@ -546,6 +580,7 @@ TEMPLATE_REQUIRED_COLUMNS: Mapping[str, CellRequirement] = {
     # C 08.03 additionally needs a PD: _pd_alloc_col() returning None records
     # "No PD column available — skipping PD range breakdown" and emits no sheets.
     "c08_03": _both(_SHEET_AND_MONEY, _PD),
+    "c08_06": _SLOTTING_SHEET_ROWS_AND_MONEY,
 }
 
 #: Columns whose absence deletes a template's ROW AXIS — a categorically louder
@@ -559,6 +594,7 @@ TEMPLATE_REQUIRED_COLUMNS: Mapping[str, CellRequirement] = {
 #: this template at all", never render a template-wide zero delta.
 LEDGER_ROW_AXIS_FATAL: Mapping[str, CellRequirement] = {
     "c08_03": _PD,
+    "c08_06": _needs("slotting_category", "is_short_maturity"),
 }
 
 
@@ -600,6 +636,11 @@ def _sa_band_rows(framework: str) -> tuple[str, ...]:
     """C 07.00's risk-weight band rows — section 2 of its regime-shaped axis."""
     sections = get_sa_row_sections(framework)
     return tuple(row.ref for row in sections[_SA_BAND_SECTION].rows)
+
+
+def _slotting_rows(framework: str) -> tuple[str, ...]:
+    """C 08.06's framework-shaped category x maturity row axis."""
+    return tuple(row_ref for row_ref, _label, _is_short, _rw in get_c08_06_rows(framework))
 
 
 #: Section index of C 07.00's risk-weight band rows, mirroring the dispatch in
@@ -688,6 +729,14 @@ LEDGER_ROW_AXIS: Mapping[str, tuple[RowAxisRequirement, ...]] = {
         # DATA-driven — so the refs cannot be enumerated here. Losing the PD
         # deletes the whole axis, which LEDGER_ROW_AXIS_FATAL reports instead.
         RowAxisRequirement((), _PD, "PD-band rows"),
+    ),
+    "c08_06": (
+        RowAxisRequirement(
+            (),
+            _needs("slotting_category", "is_short_maturity"),
+            "slotting category and maturity rows",
+            rows_for=_slotting_rows,
+        ),
     ),
 }
 
@@ -821,10 +870,28 @@ _C08_03_CELLS: Mapping[str, CellRequirement] = {
     "0110": _PROVISIONS_C08,
 }
 
+# C 08.06: the bindings in ``corep.c08::_c08_06_spec``. Its predicates use the
+# blocking sheet/row discriminators above; these requirements enumerate only the
+# measure-specific inputs each published column reads.
+_C08_06_CELLS: Mapping[str, CellRequirement] = {
+    "0010": _both(_ON_BS_GROSS, _OFF_BS_GROSS),
+    "0020": _both(_ON_BS_GROSS, _OFF_BS_GROSS),
+    "0030": _OFF_BS_GROSS,
+    "0031": (),  # Basel 3.1 structural null
+    "0040": _needs("ead_final"),
+    "0050": _both(_needs("ead_final"), _BS_SIDE),
+    "0060": (),  # structural null
+    "0070": _both(_needs("risk_weight"), _needs("ead_final")),
+    "0080": _RWA,
+    "0090": _needs("expected_loss"),
+    "0100": _PROVISIONS_C08,
+}
+
 TEMPLATE_CELL_REQUIREMENTS: Mapping[str, Mapping[str, CellRequirement]] = {
     "c07_00": _C07_00_CELLS,
     "c08_01": _C08_01_CELLS,
     "c08_03": _C08_03_CELLS,
+    "c08_06": _C08_06_CELLS,
 }
 
 #: Column ref -> the refs its value is DERIVED from: the ``Formula`` cells and the
@@ -852,6 +919,7 @@ TEMPLATE_FORMULA_INPUTS: Mapping[str, Mapping[str, tuple[str, ...]]] = {
         "0104": ("0090", "0101", "0102"),
     },
     "c08_03": {},
+    "c08_06": {},
 }
 
 # The published column axis per template, so the coverage report walks the
@@ -860,6 +928,7 @@ _TEMPLATE_COLUMN_AXIS: Mapping[str, Callable[[str], tuple[str, ...]]] = {
     "c07_00": lambda framework: tuple(col.ref for col in get_c07_columns(framework)),
     "c08_01": lambda framework: tuple(col.ref for col in get_c08_columns(framework)),
     "c08_03": lambda framework: tuple(col.ref for col in get_c08_03_columns(framework)),
+    "c08_06": lambda framework: tuple(col.ref for col in get_c08_06_columns(framework)),
 }
 
 
@@ -1187,6 +1256,8 @@ def _vocabulary_permits(
     recognised, one of them might have been the missing population, and that is a
     mapping defect the analyst can fix.
     """
+    if template_id == "c08_06" and _SLOTTING_PLACEMENT_MAPPINGS & unmapped_labels.keys():
+        return False
     if present_approaches is None:
         return True
     if present_approaches & TEMPLATE_POPULATION_LABELS[template_id]:
@@ -1252,6 +1323,16 @@ def _warn_unreachable(coverage: LedgerCoverage) -> None:
                 ", ".join(blocking),
             )
             continue
+        placement = sorted(_SLOTTING_PLACEMENT_MAPPINGS & coverage.unmapped_labels.keys())
+        if template_id == "c08_06" and placement:
+            logger.warning(
+                "legacy ledger projection: %s cannot be produced safely — invalid or null "
+                "slotting placement values in %s. Fix those [carriers.*] mappings or source "
+                "values; otherwise sheets or category/maturity rows can silently disappear",
+                template_id,
+                ", ".join(placement),
+            )
+            continue
         logger.warning(
             "legacy ledger projection: %s cannot be produced — every required column is "
             "present, but no row carries an approach its population admits and some "
@@ -1293,12 +1374,30 @@ def _label_facts(
     columns = [column for column in LEDGER_VOCABULARY if column in supplied]
     if not columns:
         return {}, frozenset()
-    counts = pl.collect_all(
-        [
-            ledger.select(pl.col(column).alias("value")).drop_nulls().group_by("value").len()
-            for column in columns
-        ]
-    )
+    value_plans = [
+        ledger.select(pl.col(column).alias("value")).drop_nulls().group_by("value").len()
+        for column in columns
+    ]
+    slotting_discriminators = [
+        column
+        for column in ("sl_type", "slotting_category", "is_short_maturity", "is_hvcre")
+        if column in supplied
+        and _APPROACH_COLUMN in supplied
+        and (column != "is_hvcre" or "sl_type" in supplied)
+    ]
+    null_plans: list[pl.LazyFrame] = []
+    for column in slotting_discriminators:
+        relevant = pl.col(_APPROACH_COLUMN) == ApproachType.SLOTTING.value
+        if column == "is_hvcre":
+            # The optional flag only refines IPRE/HVCRE routing. A blank flag on
+            # project/object/commodities finance cannot change its sheet, while
+            # a bad explicit token on IPRE could silently hide HVCRE exposure.
+            relevant &= pl.col("sl_type").is_in(["ipre", "hvcre"])
+        null_plans.append(
+            ledger.filter(relevant).select(pl.col(column).is_null().sum().alias("null_count"))
+        )
+    frames = pl.collect_all([*value_plans, *null_plans])
+    counts = frames[: len(value_plans)]
     unmapped: dict[str, tuple[str, ...]] = {}
     present_approaches: frozenset[str] = frozenset()
     for column, frame in zip(columns, counts, strict=True):
@@ -1312,6 +1411,17 @@ def _label_facts(
         outside.sort(key=lambda row: (-row[1], row[0]))
         unmapped[vocabulary.mapping_name] = tuple(
             f"{value} ({count} rows)" for value, count in outside
+        )
+    for column, frame in zip(slotting_discriminators, frames[len(value_plans) :], strict=True):
+        null_count = int(frame["null_count"][0])
+        if null_count == 0:
+            continue
+        mapping_name = (
+            LEDGER_VOCABULARY[column].mapping_name if column in LEDGER_VOCABULARY else column
+        )
+        unmapped[mapping_name] = (
+            *unmapped.get(mapping_name, ()),
+            f"<null or invalid> ({null_count} rows)",
         )
     return unmapped, present_approaches
 
@@ -1363,6 +1473,32 @@ def _projection_exprs(
             carrier.ledger_column,
             source,
         )
+
+    # HVCRE is a distinct C 08.06 sheet under Basel 3.1 and folds into IPRE
+    # under CRR. A canonical sl_type contains enough information to derive the
+    # flag when the extract does not carry one. An explicit mapping has already
+    # supplied the target above and therefore wins.
+    sl_mapping = mapping.carriers.get("sl_type")
+    sl_source = "legacy_sl_type"
+    if sl_mapping is not None and sl_source in cols and "is_hvcre" not in supplied:
+        sl_carrier = LEDGER_CARRIERS_BY_NAME["sl_type"]
+        canonical_sl_type = _carrier_value(sl_source, sl_carrier, sl_mapping)
+        emit((canonical_sl_type == "hvcre").alias("is_hvcre"), "is_hvcre", sl_source)
+
+    # A numeric maturity is an optional alternative to the direct band flag.
+    # Direct mapping wins; otherwise the regulatory boundary is strict: <2.5
+    # years is short, exactly 2.5 is long. Invalid numeric tokens cast to null
+    # and the data-aware coverage check below blocks the template.
+    maturity_mapping = mapping.carriers.get("remaining_maturity_years")
+    maturity_source = "legacy_remaining_maturity_years"
+    if (
+        maturity_mapping is not None
+        and maturity_source in cols
+        and "is_short_maturity" not in supplied
+    ):
+        maturity_carrier = LEDGER_CARRIERS_BY_NAME["remaining_maturity_years"]
+        maturity = _carrier_value(maturity_source, maturity_carrier, maturity_mapping)
+        emit((maturity < 2.5).alias("is_short_maturity"), "is_short_maturity", maturity_source)
     return exprs, supplied
 
 
@@ -1413,6 +1549,8 @@ def _carrier_value(source: str, carrier: LedgerCarrier, carrier_mapping: Carrier
     silently rather than loudly.
     """
     label = _carrier_label(pl.col(source), carrier_mapping.value_map)
+    if carrier.kind == "numeric":
+        return label.cast(pl.Float64, strict=False).alias(carrier.ledger_column)
     if carrier.kind != "boolean":
         return label.alias(carrier.ledger_column)
     token = label.str.to_lowercase()

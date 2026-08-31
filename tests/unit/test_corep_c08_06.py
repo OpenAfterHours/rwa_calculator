@@ -149,6 +149,43 @@ def _b31_slotting_with_hvcre() -> pl.LazyFrame:
     )
 
 
+def _b31_slotting_with_flagged_ipre() -> pl.LazyFrame:
+    """Canonical B31 shape: HVCRE remains ``ipre`` and is identified by its flag."""
+    return _b31_slotting_with_hvcre().with_columns(
+        pl.when(pl.col("is_hvcre"))
+        .then(pl.lit("ipre"))
+        .otherwise(pl.col("sl_type"))
+        .alias("sl_type")
+    )
+
+
+def _fully_substituted_slotting_result() -> pl.LazyFrame:
+    """One origin-slotting leg whose post-CRM treatment is standardised."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["SL_SUB"],
+            "counterparty_reference": ["CP_SUB"],
+            "exposure_class": ["specialised_lending"],
+            "approach_applied": ["slotting"],
+            "approach_post_crm": ["standardised"],
+            "sl_type": ["project_finance"],
+            "slotting_category": ["strong"],
+            "is_hvcre": [False],
+            "is_short_maturity": [True],
+            "exposure_type": ["loan"],
+            "risk_weight": [0.50],
+            "ead_final": [80.0],
+            "rwa_final": [40.0],
+            "drawn_amount": [90.0],
+            "interest": [10.0],
+            "nominal_amount": [0.0],
+            "undrawn_amount": [0.0],
+            "expected_loss": [6.0],
+            "provision_held": [7.0],
+        }
+    )
+
+
 def _sa_only_results() -> pl.LazyFrame:
     """SA-only results with no slotting exposures."""
     return pl.LazyFrame(
@@ -504,6 +541,27 @@ class TestC0806ColumnValues:
         # PF: 500K (short) + 1.8M (long) = 2.3M
         assert total_short + total_long == pytest.approx(2_300_000, rel=1e-4)
 
+    @pytest.mark.parametrize("framework", ["CRR", "BASEL_3_1"])
+    def test_totals_tie_to_c08_01_slotting_row(self, framework):
+        """C08.06's post-basis totals reconcile to C08.01 row 0080."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_slotting_results(), framework=framework)
+        c08_01_total = bundle.c08_01["specialised_lending"].filter(
+            pl.col("row_ref") == "0080"
+        )
+
+        def c08_06_total(column_ref: str) -> float:
+            return sum(
+                sheet.filter(pl.col("row_ref").is_in(["0110", "0120"]))[
+                    column_ref
+                ].sum()
+                for sheet in bundle.c08_06.values()
+            )
+
+        assert c08_06_total("0020") == pytest.approx(c08_01_total["0090"][0])
+        assert c08_06_total("0040") == pytest.approx(c08_01_total["0110"][0])
+        assert c08_06_total("0080") == pytest.approx(c08_01_total["0260"][0])
+
 
 # =============================================================================
 # GROSS-SIDE-CARRIER TESTS (R-gross-side-carriers)
@@ -611,6 +669,36 @@ class TestC0806B31Features:
         total_long = ipre.filter(pl.col("row_ref") == "0120")
         # Only IPRE exposure (2M), not HVCRE (1M)
         assert total_long["0040"][0] == pytest.approx(2_000_000, rel=1e-4)
+
+    def test_b31_flagged_ipre_is_reported_once_on_hvcre_sheet(self):
+        """The canonical IPRE+flag representation must partition, never duplicate."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _b31_slotting_with_flagged_ipre(), framework="BASEL_3_1"
+        )
+
+        ipre_total = bundle.c08_06["ipre"].filter(pl.col("row_ref") == "0120")["0040"][0]
+        hvcre_total = bundle.c08_06["hvcre"].filter(pl.col("row_ref") == "0120")["0040"][0]
+
+        assert ipre_total == pytest.approx(2_000_000, rel=1e-4)
+        assert hvcre_total == pytest.approx(1_000_000, rel=1e-4)
+        assert ipre_total + hvcre_total == pytest.approx(3_000_000, rel=1e-4)
+
+    def test_b31_hvcre_flag_does_not_move_another_sl_type(self):
+        """The HVCRE flag refines IPRE; it must not override PF/OF/CF sheets."""
+        results = _slotting_results().with_columns(
+            pl.when(pl.col("exposure_reference") == "SL001")
+            .then(pl.lit(value=True))
+            .otherwise(pl.col("is_hvcre"))
+            .alias("is_hvcre")
+        )
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(results, framework="BASEL_3_1")
+
+        assert "hvcre" not in bundle.c08_06
+        pf = bundle.c08_06["project_finance"]
+        pf_total = pf.filter(pl.col("row_ref").is_in(["0110", "0120"]))["0040"].sum()
+        assert pf_total == pytest.approx(3_000_000, rel=1e-4)
 
     def test_b31_substantially_stronger_rows_present(self):
         gen = LedgerShimCorepGenerator()
@@ -812,3 +900,19 @@ class TestC0806EdgeCases:
         assert pf_total_ead == pytest.approx(3_000_000, rel=1e-4)
         assert ipre_total_ead == pytest.approx(900_000, rel=1e-4)
         assert of_total_ead == pytest.approx(1_500_000, rel=1e-4)
+
+    def test_fully_substituted_row_preserves_origin_basis_cells(self):
+        """Empty post basis must not erase gross exposure, EL, or provisions."""
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_fully_substituted_slotting_result())
+        row = bundle.c08_06["project_finance"].filter(pl.col("row_ref") == "0010")
+
+        assert row["0010"][0] == pytest.approx(100.0)
+        assert row["0030"][0] == pytest.approx(0.0)
+        assert row["0090"][0] == pytest.approx(6.0)
+        assert row["0100"][0] == pytest.approx(7.0)
+        assert row["0020"][0] == pytest.approx(0.0)
+        assert row["0040"][0] == pytest.approx(0.0)
+        assert row["0050"][0] == pytest.approx(0.0)
+        assert row["0070"][0] == pytest.approx(0.50)
+        assert row["0080"][0] == pytest.approx(0.0)

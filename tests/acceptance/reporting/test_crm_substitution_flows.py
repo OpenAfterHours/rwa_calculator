@@ -59,7 +59,10 @@ from tests.fixtures.reporting_crm_substitution_portfolio import (
 from rwa_calc.contracts.config import CalculationConfig, PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBundle
-from rwa_calc.reporting.corep.templates import C08_03_PD_PARENT_REFS
+from rwa_calc.reporting.corep.templates import (
+    C08_03_PD_PARENT_REFS,
+    get_c08_03_pd_ranges,
+)
 
 _REGIMES: dict[str, str] = {"crr": "CRR", "b31": "BASEL_3_1"}
 _ORIGIN_SHEETS: dict[str, dict[str, tuple[str, str]]] = {
@@ -300,18 +303,69 @@ class TestC0803PostCrmBasis:
         )
 
     @pytest.mark.parametrize("regime_key", list(_REGIMES))
-    def test_destination_pd_uses_guarantor_parameter_in_origin_obligor_band(
+    def test_destination_band_follows_the_guarantor_pd_not_the_borrower(
         self, regime_key: str
     ) -> None:
-        """The row stays on borrower PD, while col0050 reports effective guarantor PD."""
+        """An arrived leg bands on the PD that risk-weighted it.
+
+        S1 (borrower PD 0.50%, guarantor PD 0.30%) lands on the institution
+        sheet row 0050, sharing it with GTOR_S1's own 4,000,000 loan at the same
+        0.30% — the two are the same risk and the template now says so. S2
+        (borrower PD 0.60%, guarantor PD 2.00%) lands on retail_other row 0090,
+        five bands DOWN the scale: the row axis follows the substituted PD in
+        both directions, not only where the guarantee helps.
+        """
         _results, corep = _run(regime_key)
 
-        s1_band = corep.c08_03["institution"].filter(pl.col("row_ref") == "0060")
-        s2_band = corep.c08_03["retail_other"].filter(pl.col("row_ref") == "0060")
-        assert s1_band["0040"][0] == pytest.approx(2_000_000.0)
+        s1_band = corep.c08_03["institution"].filter(pl.col("row_ref") == "0050")
+        s2_band = corep.c08_03["retail_other"].filter(pl.col("row_ref") == "0090")
+        assert s1_band["0040"][0] == pytest.approx(6_000_000.0)
         assert s1_band["0050"][0] == pytest.approx(0.003)
         assert s2_band["0040"][0] == pytest.approx(3_300_000.0)
         assert s2_band["0050"][0] == pytest.approx(0.020)
+
+    @pytest.mark.parametrize("regime_key", list(_REGIMES))
+    def test_same_class_substitution_moves_a_band_without_moving_a_sheet(
+        self, regime_key: str
+    ) -> None:
+        """S5's guarantor is in its obligor's OWN class, so only the band moves.
+
+        The 5,400,000 covered part leaves the obligor's 0.90% band (row 0080)
+        for the guarantor's 0.45% band (row 0050) on the same corporate sheet,
+        while all 27,000,000 of pre-CRM gross stays on row 0080. On the
+        origin-only row axis this substitution was invisible: one row, one
+        blended PD, and a 0.69% average reported against a "0.75 to <1.75" band.
+        """
+        _results, corep = _run(regime_key)
+        corporate = corep.c08_03["corporate"]
+        moved = corporate.filter(pl.col("row_ref") == "0050")
+        origin = corporate.filter(pl.col("row_ref") == "0080")
+
+        assert moved["0010"][0] == pytest.approx(0.0)
+        assert moved["0040"][0] == pytest.approx(5_400_000.0)
+        assert moved["0050"][0] == pytest.approx(0.0045)
+        assert origin["0010"][0] == pytest.approx(27_000_000.0)
+        assert origin["0050"][0] == pytest.approx(0.0080759, rel=1e-4)
+
+    @pytest.mark.parametrize("regime_key", list(_REGIMES))
+    def test_every_band_contains_its_own_exposure_weighted_pd(self, regime_key: str) -> None:
+        """The invariant the post-CRM row axis exists to hold, over every sheet.
+
+        A reported average PD outside its own row's range means the row was
+        keyed on a PD that did not produce the numbers beside it. Before this
+        change three of the portfolio's bands breached it — institution 0060 at
+        0.30%, retail_other 0060 at 2.00% and corporate 0080 at 0.69%.
+        """
+        _results, corep = _run(regime_key)
+        framework = _REGIMES[regime_key]
+        bands = {ref: (lo, hi) for lo, hi, ref, _label in get_c08_03_pd_ranges(framework)}
+
+        for exposure_class, sheet in corep.c08_03.items():
+            for row in sheet.iter_rows(named=True):
+                if row["0050"] is None:
+                    continue
+                lower, upper = bands[row["row_ref"]]
+                assert lower <= row["0050"] < upper, (exposure_class, row["row_ref"])
 
     @pytest.mark.parametrize("regime_key", list(_REGIMES))
     def test_retail_maturity_is_not_reported(self, regime_key: str) -> None:

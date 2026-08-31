@@ -11,7 +11,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - (Next release changes will go here)
 
 ### Changed
-- (Next release changes will go here)
+- **C 08.03 / OF 08.03 — the post-CRM column block now bands on the post-CRM
+  PD.** The previous release moved cols 0040-0100 to the post-substitution
+  population and sheet class, but left every row keyed on the obligor's own PD.
+  That split the template against itself: a covered leg that had already moved
+  to the guarantor's *sheet* still asserted the *borrower's* PD band there, and
+  a guarantee that improved the PD without changing the exposure class moved
+  nothing at all — the benefit vanished into a blended average inside the
+  obligor's original band. Both axes now travel together, so a band is only
+  ever asserted about the PD that produced the numbers reported against it.
+
+  Measured on the CRM-substitution portfolio under CRR, three bands previously
+  reported an exposure-weighted average PD outside their own range —
+  `institution` row 0060 ("0.50 to <0.75") at 0.30%, `retail_other` row 0060 at
+  2.00%, and `corporate` row 0080 ("0.75 to <1.75") at 0.69%. All three now
+  report inside their band, and the fixture's same-class substitution (0.90%
+  obligor, 0.45% guarantor, both corporate) moves 5,400,000 of exposure value,
+  RWEA and EL from row 0080 to row 0050 while all 27,000,000 of pre-CRM gross
+  stays put. Sheet totals are unchanged — this redistributes rows, it does not
+  create or destroy any amount.
+
+  **This deliberately overrules the published row instruction, which says the
+  opposite in as many words** — Reg (EU) 2021/451 Annex II and PS1/26 Annex II
+  §3.3.5.2 both band "without considering any substitution effects due to CRM".
+  Read literally that clause holds the whole template on the obligor basis,
+  which is neither what this template does nor what C 07.00 / C 08.01 / C 08.02
+  do. The election, the verbatim clause and the before/after numbers are
+  recorded in `reporting/corep/c08_03_cells.py`; **do not "fix" the row axis
+  back**. C 08.02 does not move with it and cannot — its axis is the obligor
+  grade string and the ledger carries no guarantor grade, so an arrived leg
+  stays on that template's "Unassigned" row. C 08.04/05 keep the origin-only
+  single-basis axis.
+
+  An arrived leg no longer drags an all-zero row onto its destination sheet
+  either: each basis is counted only over the legs actually on it, so the
+  guarantor's sheet emits the guarantor's band and no other.
+
+### Added
+- **`reporting_pd_post_crm_pre_floor` sealed per IRB leg.** The pre-input-floor
+  twin of `reporting_pd_post_crm`, carried on the reporting surface. OF 08.03's
+  row axis is stated "PD RANGE (PRE-INPUT FLOOR)", so banding the post-CRM limb
+  on the floored carrier would have shifted an *unguaranteed* Basel 3.1 book
+  across the 0.05% split that regime adds — the post-CRM banding has to degrade
+  exactly onto the obligor banding wherever nothing substitutes, and this is
+  what makes it do so.
 
 ---
 

@@ -343,6 +343,10 @@ from rwa_calc.reporting.cellspec import (
     execute,
     subset_rows,
 )
+from rwa_calc.reporting.corep.c08_06_cells import (
+    c08_06_empty_row_override,
+    c08_06_sl_type_sheet,
+)
 from rwa_calc.reporting.corep.crm_substitution import (
     C08_01_NETTING_EXEMPT_ROWS,
     IRB_BLOCK_COL,
@@ -357,7 +361,6 @@ from rwa_calc.reporting.corep.crm_substitution import (
 from rwa_calc.reporting.corep.pd_scale import banded_rows
 from rwa_calc.reporting.corep.postpass import (
     c08_06_apply_overrides,
-    c08_06_zero_row,
     c08_after_all_crm,
     c08_off_bs_pre_ccf,
     negate_deduction_cols,
@@ -1931,7 +1934,7 @@ def _c08_06_sheets(data: pl.DataFrame, cols: set[str], framework: str) -> dict[s
         return {"specialised_lending": data}
     sheets: dict[str, pl.DataFrame] = {}
     for sl_key in get_c08_06_sl_types(framework):
-        type_df = _c08_06_sl_type_sheet(data, sl_key, cols, framework)
+        type_df = c08_06_sl_type_sheet(data, sl_key, cols, framework)
         if type_df.height > 0:
             sheets[sl_key] = type_df
     return sheets
@@ -2035,29 +2038,6 @@ def _c08_06_prepare(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
         off_bs.alias("c0806_off_bs"),
         pl.lit(value=False).alias("c0806_never"),
     )
-
-
-def _c08_06_sl_type_sheet(
-    data: pl.DataFrame, sl_key: str, cols: set[str], framework: str
-) -> pl.DataFrame:
-    """The retired HVCRE routing: CRR's IPRE sheet absorbs HVCRE (only when
-    ``is_hvcre`` exists); B31's HVCRE sheet admits ``is_hvcre`` flags too."""
-    has_hvcre = "is_hvcre" in cols
-    if sl_key == "ipre" and framework != "BASEL_3_1" and has_hvcre:
-        return data.filter(pl.col("sl_type").is_in(["ipre", "hvcre"]))
-    if sl_key == "ipre" and framework == "BASEL_3_1" and has_hvcre:
-        # The classifier's canonical B31 shape may carry HVCRE as
-        # ``sl_type == "ipre"`` plus the dedicated flag. Keep the two B31
-        # submissions disjoint: the HVCRE limb below owns every flagged row.
-        return data.filter(
-            (pl.col("sl_type") == "ipre") & pl.col("is_hvcre").fill_null(False).not_()
-        )
-    if sl_key == "hvcre" and framework == "BASEL_3_1" and has_hvcre:
-        return data.filter(
-            (pl.col("sl_type") == "hvcre")
-            | ((pl.col("sl_type") == "ipre") & pl.col("is_hvcre").fill_null(False))
-        )
-    return data.filter(pl.col("sl_type") == sl_key)
 
 
 def _c08_06_row_pred(label: str, is_short: bool | None, *, has_maturity: bool) -> RowPredicate:
@@ -2178,20 +2158,11 @@ def _c08_06_sheet(
     for row_ref, label, _is_short, rw_display in row_defs:
         subset = row_subsets[row_ref]
         if subset.height == 0 and label != "Total":
-            zeroes = c08_06_zero_row(spec.column_refs, rw_display)
-            if origin_subsets[row_ref].height > 0:
-                # A category can be empty only on the POST-substitution basis:
-                # for example, a fully guaranteed slotting exposure whose
-                # covered leg is treated as standardised. Preserve the cells
-                # Annex II defines on the ORIGIN basis (0010/0030/0090/0100)
-                # and zero only the post-basis block. Whole-row zero-fill would
-                # erase real gross exposure, expected loss and provisions.
-                zeroes = {
-                    ref: zeroes[ref]
-                    for ref in ("0020", "0040", "0050", "0070", "0080")
-                    if ref in zeroes
-                }
-            overrides[row_ref] = zeroes
+            overrides[row_ref] = c08_06_empty_row_override(
+                spec.column_refs,
+                rw_display,
+                origin_populated=origin_subsets[row_ref].height > 0,
+            )
             continue
         fixes: dict[str, float | None] = {}
         ead_sum = float(subset[ead_col].fill_null(0.0).sum())

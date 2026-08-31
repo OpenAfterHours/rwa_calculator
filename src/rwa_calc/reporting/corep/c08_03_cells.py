@@ -79,7 +79,11 @@ def build_c08_03_cells(  # noqa: PLR0913 - the complete C 08.03 column surface
             )
         )
         cells[(ref, "0090")] = CellSpec(Sum(rwa_col), predicate=post_member)
-        cells[(ref, "0100")] = CellSpec(Sum("expected_loss"), predicate=origin_member)
+        # Expected loss is calculated after CRM substitution and therefore
+        # follows the resultant obligor, alongside EAD and RWEA.  Keeping it on
+        # the origin predicate reports the covered leg against the borrower
+        # instead of the protection provider (EBA Q&A 2023_6718).
+        cells[(ref, "0100")] = CellSpec(Sum("expected_loss"), predicate=post_member)
         cells[(ref, "0110")] = CellSpec(
             SafeSum(("scra_provision_amount", "gcra_provision_amount")),
             predicate=origin_member,

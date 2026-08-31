@@ -27,11 +27,10 @@ Three properties are load-bearing, and none is assumed:
 
 1. **A ROW DOES NOT HAVE ONE POPULATION, and this module does not pretend it
    does.** Measured over the four templates in ``MEMBERSHIP_TEMPLATE_IDS``,
-   both frameworks: on C 08.03 every row-backed cell of a row shares one
-   predicate, but on C 07.00 and C 08.01 EVERY row carries several — the
-   recorded two-basis split (origin-basis columns read the obligor's own book,
-   post-substitution columns read the guarantor's) plus the per-column
-   narrowings (defaulted, off-balance-sheet, CCF bucket, rated). Collapsing a
+   both frameworks: C 08.03 has an explicit origin/post-CRM split, while
+   C 07.00 and C 08.01 carry that split plus per-column narrowings (defaulted,
+   off-balance-sheet, CCF bucket, rated). Origin-basis columns read the obligor's
+   own book; post-substitution columns read the resultant obligor's. Collapsing a
    row to a single population reproduced only 80% of C 08.01's summable cells;
    the rest were wrong by exactly the substituted legs. So the grain carries
    ``predicate_key`` — one group per DISTINCT predicate on the row, keyed by the

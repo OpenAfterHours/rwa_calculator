@@ -52,9 +52,9 @@ Cell semantics (recorded decisions, this slice):
   exposures to the **original obligor**"), which only means something if the
   surrounding exposure-value and RWEA columns do take it into account.
   THE PARAMETER AVERAGES STAY ON THE ORIGIN BASIS AND THAT IS DELIBERATE (cols
-  0010 PD, 0230/0240 LGD, 0250 maturity, plus the EL memos 0280-0282 and
-  provisions 0290). Annex II weights those averages BY col 0110, which is an
-  argument to move them; against it, the sealed ledger carries the OBLIGOR's
+  0010 PD, 0230/0240 LGD and 0250 maturity, plus provisions 0290). Annex II
+  weights those averages BY col 0110, which is an argument to move them; against
+  it, the sealed ledger carries the OBLIGOR's
   ``pd_floored`` / ``lgd_floored`` / ``irb_maturity_m`` on every leg and NEVER
   the guarantor's (``engine/irb/guarantee.py`` swaps and restores inside a local
   window; under CRR the guarantor is SA-risk-weight-substituted and has no IRB
@@ -63,6 +63,11 @@ Cell semantics (recorded decisions, this slice):
   reasoning forbids for the grade axis. Sealing the guarantor's parameters per leg
   is the enhancement that would allow the move. Cost, on the record: a
   fully-outflowed sheet reports a real LGD and maturity against ``0110 = 0``.
+  Expected-loss cols 0280-0282 are different: the engine seals their post-CRM
+  amounts after guarantee substitution, so they follow the POST population and
+  tie to C 08.03 col 0100 (``boe_b0739`` / ``v09777_m``). EBA Q&A 2017_3509
+  confirms that substitution can reassign c0280 to another exposure class and
+  that the published c0020-versus-c0280 inequality does not hold in that case.
 - C 08.02 MOVES WITH C 08.01, MEASURED. The
   premise this was first built to — that ``{OF08.01 r0070} = sum({OF08.02})`` is
   stated over cols 0080/0090 alone (``boe_b0752_8`` / ``_9``, ``boe_b0814_07`` /
@@ -82,10 +87,12 @@ Cell semantics (recorded decisions, this slice):
   and the row already meaning "an exposure whose grade we do not carry" is where
   the col 0080 scalar and the legs that make it up both belong.
 - C 08.03 HAS AN EXPLICIT TWO-BASIS COLUMN MATRIX. The origin PD scale remains
-  the row axis on both limbs: cols 0010/0020/0030/0060/0100/0110 read the
-  obligor/origin population, while cols 0040/0050/0070/0080/0090 read the
-  post-substitution population and sheet class. The seam is the ``both_bases``
-  opt-in on ``_irb_population``; C 08.04/05 retain its origin-only default.
+  the row axis on both limbs: cols 0010/0020/0030/0060/0110 read the
+  obligor/origin population, while cols 0040/0050/0070/0080/0090/0100 read the
+  post-substitution population and sheet class. Expected loss belongs to the
+  latter because it is calculated after applying CRM and follows the resultant
+  obligor (EBA Q&A 2023_6718). The seam is the ``both_bases`` opt-in on
+  ``_irb_population``; C 08.04/05 retain its origin-only default.
 - SURFACED BY THIS CHANGE AND NOT FIXED HERE (measured on the CRM-substitution
   portfolio, both regimes): the dependents that tie to the moved columns and are
   still keyed on the origin class — C 09.02's geographical cols 0105/0110
@@ -891,12 +898,12 @@ def _value_cells(  # noqa: C901, PLR0915 - the full C 08.01/02 column surface
         ),
         "0280": CellSpec(
             Sum("c08_el_pre" if "el_pre_adjustment" in cols else "expected_loss"),
-            predicate=member,
+            predicate=post_member,
         ),
-        "0281": CellSpec(Sum("post_model_adjustment_el"), predicate=member),
+        "0281": CellSpec(Sum("post_model_adjustment_el"), predicate=post_member),
         "0282": CellSpec(
             Sum("c08_el_after" if "el_after_adjustment" in cols else "el_after_adjustment"),
-            predicate=member,
+            predicate=post_member,
         ),
         "0290": CellSpec(
             SafeSum(("scra_provision_amount", "gcra_provision_amount")), predicate=member
@@ -1432,11 +1439,12 @@ def c08_03_plans(
     ``c08_pd_range`` / ``c08_pd_parent`` label carried in ``row_terms``. The scale
     is hierarchical, so parent bands overlap and sum their sub-bands. Gross and
     other pre-CRM columns key on the sealed ``reporting_class_origin`` over the
-    IRB NON-slotting book. Post-CRM exposure-value and RWEA columns key on
-    ``reporting_class`` and the post-substitution IRB population. The sheet axis
-    is the union of both class bases, so a beneficial IRB-to-IRB guarantee can
-    create a guarantor-class sheet with no native exposure. A covered IRB leg
-    treated as standardised leaves this template and is reported in C 07.00.
+    IRB NON-slotting book. Post-CRM exposure-value, RWEA and expected-loss
+    columns key on ``reporting_class`` and the post-substitution IRB population.
+    The sheet axis is the union of both class bases, so a beneficial IRB-to-IRB
+    guarantee can create a guarantor-class sheet with no native exposure. A
+    covered IRB leg treated as standardised leaves this template and is reported
+    in C 07.00.
     C 08.03 carries no "(-)"-labelled deduction column, so ``negative_cols`` is empty. The
     provisions ladder (col 0110) is the one post-execute pass, on the REPORTED
     frame (``generate_c08_03``), which the drill-down reads a cell's value from.

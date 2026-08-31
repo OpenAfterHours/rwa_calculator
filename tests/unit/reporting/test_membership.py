@@ -560,8 +560,8 @@ def test_a_row_carries_one_group_per_distinct_predicate(framework: str) -> None:
 
     c0803_columns = membership.columns.filter(pl.col("template_id") == "c08_03")
     expected = {
-        "0010": {"0010", "0020", "0030", "0060", "0100", "0110"},
-        "0040": {"0040", "0050", "0070", "0080", "0090"},
+        "0010": {"0010", "0020", "0030", "0060", "0110"},
+        "0040": {"0040", "0050", "0070", "0080", "0090", "0100"},
     }
     for predicate_key, col_refs in expected.items():
         mapped = set(
@@ -599,6 +599,23 @@ def test_the_two_basis_groups_hold_different_populations(framework: str) -> None
             for sheet in ("corporate", "institution")
         }
         assert by_sheet["corporate"].isdisjoint(by_sheet["institution"]), template_id
+
+
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_c08_03_expected_loss_drilldown_follows_the_post_crm_sheet(framework: str) -> None:
+    """Column 0100 exposes the guaranteed leg under the resultant obligor."""
+    membership = cell_membership(_FrameSource(_ledger(), framework), ["c08_03"])
+    keys = ["template_id", "sheet", "row_ref", "predicate_key"]
+    behind_el = membership.columns.filter(pl.col("col_ref") == "0100").join(
+        membership.legs,
+        on=keys,
+        how="inner",
+    )
+
+    guaranteed = behind_el.filter(pl.col("exposure_reference") == "IRB_CORP_GTD")
+    assert guaranteed.height > 0
+    assert set(guaranteed["sheet"].to_list()) == {"institution"}
+    assert set(guaranteed["predicate_key"].to_list()) == {"0040"}
 
 
 @pytest.mark.parametrize("framework", FRAMEWORKS)

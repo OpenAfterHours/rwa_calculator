@@ -32,11 +32,14 @@ Published identities pinned (``src/rwa_calc/reporting/validations/rules/crr-eba-
 - ``v1662_m`` (C 08.01.a): ``{c0090} = {c0020} + {c0070} + {c0080}``.
 - ``v0305_m`` (C 07.00.a, live): ``{c0090} = {c0050} + {c0060} + {c0070} + {c0080}``.
 - ``v0306_m`` (C 07.00.a, live): ``{c0110} = {c0040} + {c0090} + {c0100}``.
+- ``boe_b0739`` (OF 08.01/03, live): expected loss is consistent across the
+  templates after substitution.
 
 References:
 - CRR Art. 235 (risk-weight substitution), Art. 161 (IRB parameter substitution)
 - COREP Annex II, C 07.00 / C 08.01: "Exposures stemming from possible in- and
   outflows from and to other templates shall be taken into account."
+- EBA Q&A 2017_3509: C 08.01/02 c0280 includes CRM with substitution effects.
 - src/rwa_calc/reporting/corep/crm_substitution.py: the cross-template router
 """
 
@@ -236,20 +239,30 @@ class TestCrossTemplateConservation:
 
 
 class TestC0803PostCrmBasis:
-    """C 08.03 keeps gross on the obligor but moves EAD/RWEA to IRB guarantors."""
+    """C 08.03 keeps gross on the obligor but moves EAD/RWEA/EL to IRB guarantors."""
 
     @pytest.mark.parametrize("regime_key", list(_REGIMES))
     def test_leaf_pd_ranges_reconcile_to_c0801_by_post_crm_class(self, regime_key: str) -> None:
         """C 08.03 post-CRM measures equal C 08.01's non-slotting row per sheet."""
-        _results, corep = _run(regime_key)
+        results, corep = _run(regime_key)
 
         assert set(corep.c08_03) == {"corporate", "institution", "retail_other"}
         for exposure_class, c08_03 in corep.c08_03.items():
             leaves = c08_03.filter(~pl.col("row_ref").is_in(list(C08_03_PD_PARENT_REFS)))
             c08_01 = corep.c08_01[exposure_class].filter(pl.col("row_ref") == "0070")
+            c08_02 = corep.c08_02[exposure_class]
+            post_legs = results.filter(
+                pl.col("reporting_approach").is_in(["foundation_irb", "advanced_irb"])
+                & (pl.col("reporting_class") == exposure_class)
+            )
 
             assert leaves["0040"].sum() == pytest.approx(c08_01["0110"][0])
             assert leaves["0090"].sum() == pytest.approx(c08_01["0260"][0])
+            assert leaves["0100"].sum() == pytest.approx(c08_01["0280"][0])
+            assert c08_02["0280"].sum() == pytest.approx(c08_01["0280"][0])
+            assert leaves["0100"].sum() == pytest.approx(
+                post_legs["expected_loss"].fill_null(0.0).sum()
+            )
 
     @pytest.mark.parametrize("regime_key", list(_REGIMES))
     def test_destination_only_retail_sheet_has_post_values_but_no_origin_gross(
@@ -263,6 +276,28 @@ class TestC0803PostCrmBasis:
 
         assert leaves["0010"].sum() + leaves["0020"].sum() == pytest.approx(0.0)
         assert leaves["0040"].sum() == pytest.approx(3_300_000.0)
+        assert leaves["0100"].sum() > 0.0
+
+    @pytest.mark.parametrize("regime_key", list(_REGIMES))
+    def test_el_shortfall_and_excess_are_recomputed_from_post_crm_el(self, regime_key: str) -> None:
+        """The real pipeline's Art. 159 carriers use the substituted EL."""
+        results, _corep = _run(regime_key)
+        irb = results.filter(pl.col("expected_loss").is_not_null()).with_columns(
+            (
+                pl.col("provision_allocated").fill_null(0.0)
+                + pl.col("ava_amount").fill_null(0.0)
+                + pl.col("other_own_funds_reductions").fill_null(0.0)
+            ).alias("pool_b")
+        )
+
+        expected_shortfall = (pl.col("expected_loss") - pl.col("pool_b")).clip(lower_bound=0.0)
+        expected_excess = (pl.col("pool_b") - pl.col("expected_loss")).clip(lower_bound=0.0)
+        assert irb["el_shortfall"].to_list() == pytest.approx(
+            irb.select(expected_shortfall)["expected_loss"].to_list()
+        )
+        assert irb["el_excess"].to_list() == pytest.approx(
+            irb.select(expected_excess)["pool_b"].to_list()
+        )
 
     @pytest.mark.parametrize("regime_key", list(_REGIMES))
     def test_destination_pd_uses_guarantor_parameter_in_origin_obligor_band(

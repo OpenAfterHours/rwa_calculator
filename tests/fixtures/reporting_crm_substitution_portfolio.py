@@ -52,30 +52,16 @@ per leg:
     reporting_class_origin / reporting_approach_origin  = the OBLIGOR's applied
         class / approach (``exposure_class_applied`` / ``approach_applied``) —
         UNIFORM across a loan's legs, including the ``__G_`` leg. This is the
-        key BOTH templates sheet on: C 07.00's module docstring says "Sheets
-        key the OBLIGOR applied class"; C 08.01/02's says the five dicts "key
-        the sealed ``reporting_class_origin`` ... the obligor basis" — same
-        rule, each template's own column name for it. A guaranteed leg
-        therefore never appears as a ROW on the guarantor's own class sheet —
-        it stays on the obligor's ORIGIN sheet, contributing to that sheet's
-        outflow column (C 07.00 col 0090 / C 08.01 col 0070).
-        NO LONGER TRUE FOR C 07.00 as of task #8 (landed): C 07.00's exposure
-        value / RWEA columns (0200/0210/0211/0215/0216/0217/0220/0230/0235 +
-        the CCF buckets) now read a per-sheet UNION of the origin and
-        post-substitution populations (``c07_basis_origin`` /
-        ``c07_basis_post`` in ``reporting/corep/c07.py::_prepare``), so a
-        beneficially-substituted leg DOES appear as a row on the guarantor's
-        own C 07.00 sheet for those columns — the flow/gross columns still
-        key on the origin population alone, so the SENTENCE'S ORIGIN-sheet-
-        KEYING claim (which sheet a leg's outflow posts to) remains true; only
-        the stronger "never appears as a row at all" reading is now false.
-        Kept rather than deleted because the keying half still holds and the
-        distinction is easy to miss. C 08.01 is unaffected (task #8 scoped to
-        C 07.00 only; see task #9/S3 for the equivalent C 08.01 work).
+        key gross, flow and other origin-basis cells on the obligor sheet. A
+        guaranteed leg therefore contributes to the obligor sheet's outflow
+        column (C 07.00 col 0090 / C 08.01 col 0070). Post-CRM exposure value,
+        RWEA and EL cells are different: their predicates use the resultant
+        class below, so the same leg also appears on the guarantor sheet for
+        those columns without duplicating the pre-CRM gross.
     reporting_class / reporting_approach = the POST-substitution twin
         (``exposure_class_post_crm`` / ``approach_post_crm``) — the guarantor's
-        class on the ``__G_`` leg. This is NOT a sheet key; it feeds the
-        cross-template INFLOW, a per-destination-class SCALAR computed by
+        class on the ``__G_`` leg. This is the sheet key for post-CRM cells and
+        also feeds the cross-template INFLOW, a per-destination-class SCALAR computed by
         ``reporting/corep/crm_substitution.py::substitution_inflows`` — ONE
         function, run once over the WHOLE sealed population (not a
         per-template slice) — that lands on the destination class's Total row

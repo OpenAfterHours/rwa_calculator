@@ -12,7 +12,20 @@ import polars as pl
 import pytest
 
 from rwa_calc.reporting.corep.generator import COREPTemplateBundle
+from rwa_calc.reporting.membership import cell_membership
 from tests.fixtures.recon_ledger import LedgerShimCorepGenerator
+
+
+class _FrameSource:
+    """Minimal reporting source for checking cell drilldown membership."""
+
+    framework = "CRR"
+
+    def __init__(self, frame: pl.LazyFrame) -> None:
+        self._frame = frame
+
+    def scan_results(self) -> pl.LazyFrame:
+        return self._frame
 
 
 def _irb_pd_range_results() -> pl.LazyFrame:
@@ -102,13 +115,13 @@ def _partially_guaranteed_retail_loan() -> pl.LazyFrame:
         {
             "exposure_reference": ["LOAN1__G_GUARANTOR", "LOAN1__REM"],
             "counterparty_reference": ["BORROWER", "BORROWER"],
-            "approach_applied": ["foundation_irb", "foundation_irb"],
+            "approach_applied": ["advanced_irb", "advanced_irb"],
             "exposure_class": ["retail_other", "retail_other"],
             "exposure_class_applied": ["retail_other", "retail_other"],
             "reporting_class_origin": ["retail_other", "retail_other"],
             "reporting_class": ["institution", "retail_other"],
-            "reporting_approach_origin": ["foundation_irb", "foundation_irb"],
-            "reporting_approach": ["foundation_irb", "foundation_irb"],
+            "reporting_approach_origin": ["advanced_irb", "advanced_irb"],
+            "reporting_approach": ["foundation_irb", "advanced_irb"],
             "exposure_type": ["loan", "loan"],
             "drawn_amount": [80.0, 20.0],
             "interest": [0.0, 0.0],
@@ -122,7 +135,9 @@ def _partially_guaranteed_retail_loan() -> pl.LazyFrame:
             "lgd_floored": [0.45, 0.45],
             "reporting_lgd_post_crm": [0.40, 0.45],
             "irb_maturity_m": [2.5, 2.5],
-            "expected_loss": [0.18, 0.045],
+            # EL follows the post-CRM leg parameters: 0.2% * 40% * 80 and
+            # 0.5% * 45% * 20 respectively.
+            "expected_loss": [0.064, 0.045],
             "scra_provision_amount": [0.8, 0.2],
             "gcra_provision_amount": [0.0, 0.0],
             "ccf": [0.0, 0.0],
@@ -337,8 +352,8 @@ class TestC0803Generation:
         assert covered["0070"][0] == pytest.approx(0.40)
         assert covered["0090"][0] == pytest.approx(16.0)
 
-    def test_partial_guarantee_keeps_origin_only_columns_off_destination_sheet(self) -> None:
-        """Count, EL and provisions follow the obligor along with pre-CRM gross."""
+    def test_partial_guarantee_moves_el_but_keeps_count_and_provisions_on_origin(self) -> None:
+        """EL follows the resultant obligor; count and provisions stay pre-CRM."""
         bundle = LedgerShimCorepGenerator().generate_from_lazyframe(
             _partially_guaranteed_retail_loan()
         )
@@ -347,11 +362,28 @@ class TestC0803Generation:
         covered = bundle.c08_03["institution"].filter(pl.col("row_ref") == "0060")
 
         assert retained["0060"][0] == pytest.approx(1.0)
-        assert retained["0100"][0] == pytest.approx(0.225)
+        assert retained["0100"][0] == pytest.approx(0.045)
         assert retained["0110"][0] == pytest.approx(1.0)
         assert covered["0060"][0] == pytest.approx(0.0)
-        assert covered["0100"][0] == pytest.approx(0.0)
+        assert covered["0100"][0] == pytest.approx(0.064)
         assert covered["0110"][0] == pytest.approx(0.0)
+
+    def test_partial_guarantee_el_drilldown_splits_covered_and_retained_legs(self) -> None:
+        """The 80/20 legs behind c0100 appear only on their post-CRM sheets."""
+        membership = cell_membership(_FrameSource(_partially_guaranteed_retail_loan()), ["c08_03"])
+        keys = ["template_id", "sheet", "row_ref", "predicate_key"]
+        behind_el = membership.columns.filter(pl.col("col_ref") == "0100").join(
+            membership.legs,
+            on=keys,
+            how="inner",
+        )
+
+        covered = behind_el.filter(pl.col("exposure_reference") == "LOAN1__G_GUARANTOR")
+        retained = behind_el.filter(pl.col("exposure_reference") == "LOAN1__REM")
+        assert set(covered["sheet"].to_list()) == {"institution"}
+        assert set(retained["sheet"].to_list()) == {"retail_other"}
+        assert set(covered["predicate_key"].to_list()) == {"0040"}
+        assert set(retained["predicate_key"].to_list()) == {"0040"}
 
     def test_irb_to_sa_covered_leg_leaves_c0803(self) -> None:
         """A covered leg treated under SA is reported in C07, not C08.03."""
@@ -373,6 +405,7 @@ class TestC0803Generation:
         assert retained["0010"][0] == pytest.approx(100.0)
         assert retained["0040"][0] == pytest.approx(20.0)
         assert retained["0090"][0] == pytest.approx(10.0)
+        assert retained["0100"][0] == pytest.approx(0.045)
 
     def test_same_class_substitution_keeps_the_whole_post_crm_value_on_origin_sheet(self) -> None:
         """A same-class guarantor changes no sheet even though its leg is substituted."""
@@ -388,6 +421,7 @@ class TestC0803Generation:
         assert retail["0050"][0] == pytest.approx(0.0026)
         assert retail["0070"][0] == pytest.approx(0.41)
         assert retail["0090"][0] == pytest.approx(26.0)
+        assert retail["0100"][0] == pytest.approx(0.109)
 
 
 class TestC0803PDRangeAssignment:

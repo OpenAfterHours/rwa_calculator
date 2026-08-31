@@ -698,17 +698,19 @@ LINEAGE_PLANS: dict[str, _Provider] = {
     # its one post-execute pass (the provisions ladder, col 0110) lives on the
     # reported frame the drill-down reads. Cols 0010/0020 Sum the sealed per-side
     # gross carriers (reporting_gross_on_bs / _off_bs) over the band with a
-    # member-only predicate — row-level and null outside their side — so they need
-    # no post-pass.
+    # origin-basis predicate — row-level and null outside their side — so they
+    # need no post-pass. The post-CRM columns use the corresponding resultant-
+    # obligor predicate from the same plans.
     "c08_03": _Provider(
         plans=c08_03_plans,
         generate=generate_c08_03,
         scope=(
             "Internal-ratings-based credit-risk legs on the F-IRB and A-IRB "
             "approaches; slotting (supervisory-slotting specialised lending) is "
-            "excluded — it discloses on C 08.06 (reporting_approach_origin in "
-            "{foundation_irb, advanced_irb}), keyed on the sealed obligor "
-            "origination class (reporting_class_origin)",
+            "excluded — it discloses on C 08.06. Pre-CRM columns key on the "
+            "sealed obligor origination class (reporting_class_origin); EAD, "
+            "PD/LGD, RWEA and EL key on the post-substitution class and approach "
+            "(reporting_class/reporting_approach)",
             "Rows are the populated bands of the fixed regulatory PD scale, "
             "allocated on pd_floored under CRR and on the pre-input-floor pd under "
             "Basel 3.1 (the reported PD is always post-floor), plus an optional "

@@ -2157,8 +2157,11 @@ def test_every_priced_matrix_cell_links_to_the_exposures_behind_it(client: TestC
     """
     # Arrange
     recon = _split_probe("mig-links")
-    html = _migration_page(client, "mig-links")
     matrix = _matrix_of(recon)
+    # The default population is whichever group serves the most columns. Moving
+    # C 08.03 c0100 to the post-CRM group makes that group the page default, so
+    # name the matrix under test explicitly instead of relying on that tie-break.
+    html = _migration_page(client, "mig-links", group=matrix.predicate_key)
     priced = {
         (cell.our_row_ref, cell.their_row_ref)
         for row in matrix.cells

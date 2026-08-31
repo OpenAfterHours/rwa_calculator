@@ -546,15 +546,11 @@ class TestC0806ColumnValues:
         """C08.06's post-basis totals reconcile to C08.01 row 0080."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_slotting_results(), framework=framework)
-        c08_01_total = bundle.c08_01["specialised_lending"].filter(
-            pl.col("row_ref") == "0080"
-        )
+        c08_01_total = bundle.c08_01["specialised_lending"].filter(pl.col("row_ref") == "0080")
 
         def c08_06_total(column_ref: str) -> float:
             return sum(
-                sheet.filter(pl.col("row_ref").is_in(["0110", "0120"]))[
-                    column_ref
-                ].sum()
+                sheet.filter(pl.col("row_ref").is_in(["0110", "0120"]))[column_ref].sum()
                 for sheet in bundle.c08_06.values()
             )
 

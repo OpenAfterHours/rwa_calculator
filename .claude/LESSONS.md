@@ -112,9 +112,15 @@ enclosing `Article NNN` heading — the same CIU ×1.2 multiplier text appears a
 Art. 132(4) (SA) and Art. 152(8) (IRB) with near-identical wording, so
 grepping the rule text alone lands on the wrong article.
 
-**Note.** `docs/assets/` has **no** PRA Credit Risk Mitigation Part, so any
-PS1/26-side CRM citation rests on text nobody here can read. Say so rather
-than implying verification.
+**Note — corrected 2026-09-04.** This entry used to say `docs/assets/` has
+**no** PRA Credit Risk Mitigation Part. It does: `ps126app1.pdf` is a
+multi-Part document and the Credit Risk Mitigation (CRR) Part starts around
+0-indexed page 161 (Art. 195 on pp. 170-171, Art. 205 on p. 179, each with its
+`[Note: corresponds to Article NNN]` line). The false claim survived here long
+enough to be copied into an orchestrator brief and from there into a pack
+comment, both caught only by review — so a "not readable here" caveat is itself
+a claim to verify by iterating `doc[i].get_text()` for the article, not to
+repeat.
 
 ---
 

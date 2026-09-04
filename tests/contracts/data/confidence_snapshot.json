@@ -1069,7 +1069,7 @@
         "tests/acceptance/crr/test_p1_219_guarantee_maturity_mismatch_residual.py",
         "tests/acceptance/crr/test_p1_227_art_201_guarantor_eligibility.py",
         "tests/acceptance/crr/test_p1_233_art_197_corp_bond_collateral.py",
-        "tests/acceptance/crr/test_p1_238_art_195_same_counterparty_netting.py",
+        "tests/acceptance/crr/test_p1_238_art_195_agreement_perimeter_netting.py",
         "tests/acceptance/crr/test_p1_241_art_219_netting_maturity_mismatch.py",
         "tests/acceptance/crr/test_p1_270_art_194_own_issue_collateral.py",
         "tests/acceptance/crr/test_p1_271_art_198_non_main_index_equity.py",
@@ -2883,9 +2883,11 @@
       ],
       "confidence": "MEDIUM",
       "framework": "CRR",
-      "layer_count": 3,
+      "layer_count": 4,
       "oracle_cases": [],
-      "pack_entries": [],
+      "pack_entries": [
+        "on_bs_netting_perimeter_is_agreement@crr"
+      ],
       "source_files": [
         "contracts/errors.py",
         "contracts/validation.py",
@@ -2893,11 +2895,12 @@
         "engine/crm/collateral.py",
         "engine/crm/processor.py",
         "engine/hierarchy/facility_undrawn.py",
-        "reporting/kernel/columns.py"
+        "reporting/kernel/columns.py",
+        "rulebook/packs/crr.py"
       ],
       "test_files": [
-        "tests/acceptance/basel31/test_p1_238_art_195_same_counterparty_netting.py",
-        "tests/acceptance/crr/test_p1_238_art_195_same_counterparty_netting.py",
+        "tests/acceptance/basel31/test_p1_238_art_195_agreement_perimeter_netting.py",
+        "tests/acceptance/crr/test_p1_238_art_195_agreement_perimeter_netting.py",
         "tests/acceptance/reporting/test_r1_negative_gross_carriers.py",
         "tests/benchmarks/data_generators.py",
         "tests/contracts/test_r1_gross_carrier_edge.py",
@@ -2906,6 +2909,7 @@
         "tests/properties/test_source_conservation.py",
         "tests/robustness/test_referential_integrity.py",
         "tests/unit/crm/test_collateral_submodules.py",
+        "tests/unit/crm/test_netting.py",
         "tests/unit/test_hierarchy.py",
         "tests/unit/test_r1_negative_amount_dq.py"
       ],
@@ -3102,6 +3106,25 @@
       "watchfire_index_gap": false
     },
     {
+      "article": "205",
+      "code_functions": [
+        "rwa_calc.engine.crm.collateral::generate_netting_collateral"
+      ],
+      "confidence": "MEDIUM",
+      "framework": "CRR",
+      "layer_count": 3,
+      "oracle_cases": [],
+      "pack_entries": [],
+      "source_files": [
+        "engine/crm/collateral.py"
+      ],
+      "test_files": [
+        "tests/acceptance/crr/test_p1_238_art_195_agreement_perimeter_netting.py",
+        "tests/fixtures/p1_238/p1_238.py"
+      ],
+      "watchfire_index_gap": false
+    },
+    {
       "article": "207",
       "code_functions": [
         "rwa_calc.engine.crm.eligibility::debt_security_ineligible_expr"
@@ -3290,6 +3313,7 @@
         "engine/crm/processor.py"
       ],
       "test_files": [
+        "tests/acceptance/crr/test_p1_238_art_195_agreement_perimeter_netting.py",
         "tests/acceptance/crr/test_p1_241_art_219_netting_maturity_mismatch.py",
         "tests/fixtures/p1_238/p1_238.py",
         "tests/fixtures/p1_241/p1_241.py",
@@ -6287,7 +6311,7 @@
         "tests/acceptance/basel31/test_p1_130_summaries_reflect_post_floor.py",
         "tests/acceptance/basel31/test_p1_193_b31_rated_sme_corporate_cqs_weights.py",
         "tests/acceptance/basel31/test_p1_227_art_201_guarantor_eligibility.py",
-        "tests/acceptance/basel31/test_p1_238_art_195_same_counterparty_netting.py",
+        "tests/acceptance/basel31/test_p1_238_art_195_agreement_perimeter_netting.py",
         "tests/acceptance/basel31/test_p1_241_art_219_netting_maturity_mismatch.py",
         "tests/acceptance/basel31/test_p1_270_art_194_own_issue_collateral.py",
         "tests/acceptance/basel31/test_p1_271_art_198_non_main_index_equity.py",
@@ -7857,16 +7881,18 @@
     {
       "article": "195",
       "code_functions": [],
-      "confidence": "UNCITED",
+      "confidence": "MEDIUM",
       "framework": "PS1/26",
-      "layer_count": 2,
+      "layer_count": 3,
       "oracle_cases": [],
-      "pack_entries": [],
+      "pack_entries": [
+        "on_bs_netting_perimeter_is_agreement@b31"
+      ],
       "source_files": [
         "engine/hierarchy/facility_undrawn.py"
       ],
       "test_files": [
-        "tests/acceptance/basel31/test_p1_238_art_195_same_counterparty_netting.py",
+        "tests/acceptance/basel31/test_p1_238_art_195_agreement_perimeter_netting.py",
         "tests/unit/test_hierarchy.py"
       ],
       "watchfire_index_gap": false
@@ -7964,6 +7990,20 @@
       "watchfire_index_gap": false
     },
     {
+      "article": "205",
+      "code_functions": [],
+      "confidence": "GAP",
+      "framework": "PS1/26",
+      "layer_count": 1,
+      "oracle_cases": [],
+      "pack_entries": [],
+      "source_files": [],
+      "test_files": [
+        "tests/acceptance/basel31/test_p1_238_art_195_agreement_perimeter_netting.py"
+      ],
+      "watchfire_index_gap": false
+    },
+    {
       "article": "211",
       "code_functions": [
         "rwa_calc.engine.crm.collateral::_apply_collateral_unified"
@@ -8027,6 +8067,7 @@
       "pack_entries": [],
       "source_files": [],
       "test_files": [
+        "tests/acceptance/basel31/test_p1_238_art_195_agreement_perimeter_netting.py",
         "tests/acceptance/basel31/test_p1_241_art_219_netting_maturity_mismatch.py"
       ],
       "watchfire_index_gap": false
@@ -8550,8 +8591,8 @@
     }
   ],
   "pack_content_hashes": {
-    "b31": "a0784d121c08ecf162937f9f5cd6b4614b2169e40abf23dcd9819c3d1b554502",
-    "crr": "5d5c57b888cb32499f4189fc6e44f2b27d7cad2a3979fbaf343764c9fbdc0f12"
+    "b31": "be501c3fe55131179e4da131f4be37dd8ab2f6fc69f11cacac2d60074c9b19e8",
+    "crr": "9c63304e801e3a38dbcbb03e55130676fd230352e80de778f335dc455b77b26a"
   },
   "package_version": "0.3.32",
   "scoring_rule": {

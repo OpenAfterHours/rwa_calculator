@@ -8,10 +8,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- (Next release changes will go here)
+- **Pack Feature `on_bs_netting_perimeter_is_agreement`, enabled in both regimes.**
+  Records the operator decision of 2026-09-04 that the netting agreement
+  reference alone bounds on-balance-sheet set-off under CRR / PS1/26 Art. 195:
+  where one agreement binds several entities jointly and severally, the group
+  is the counterparty, and Art. 205(a) enforceability "in the event of the
+  insolvency or bankruptcy of a counterparty" is the firm's attestation for
+  every party under the reference. The citation note carries that basis, so a
+  challenge to the reading is met by flipping `enabled=False`, which restores
+  the single-counterparty keying introduced by P1.238 exactly.
 
 ### Changed
-- (Next release changes will go here)
+- **On-balance-sheet netting now nets across counterparties under one
+  agreement reference (reverses P1.238, Art. 195 / 219).**
+  `engine/crm/collateral.py::generate_netting_collateral` keyed its deposit
+  pools on `(netting_agreement_reference, currency, counterparty_reference)`
+  and matched positive-drawn loans on the reference *and* the counterparty, so
+  a deposit booked against one group entity never offset a loan to another
+  entity under the same agreement. Pools are now keyed on
+  `(netting_agreement_reference, currency)`, loans match on the reference
+  alone, and the pro-rata denominator is the agreement's total drawn amount,
+  so the reference is the whole netting perimeter across facilities and
+  counterparties — the data model stays the reference on the loan row; there is
+  no separate netting-agreements table. Drawn-only beneficiaries (Art. 219),
+  the FX haircut on a pool-currency mismatch and the earliest-deposit-maturity
+  convention for the Art. 237-239 mismatch treatment are unchanged. The two
+  keyings differ in exactly one place and are selected by the new pack Feature
+  above; the pack is threaded from the CRM stage adapter through
+  `CRMProcessor._merge_netting_collateral`.
+
+  **`CRM016` is kept, same trigger, as an audit record rather than a refusal.**
+  It still fires once per agreement carrying a deposit and a positive loan that
+  span more than one counterparty (or a null one), but with the Feature enabled
+  its message names the agreement, the number of distinct counterparties it
+  netted across (plus a clause when any row carries a null counterparty), the
+  agreement-perimeter basis, and that Art. 205(a) enforceability against every
+  party must be evidenced; with the Feature disabled it keeps the previous
+  "offsets are disallowed" wording character for character. A null
+  `counterparty_reference` no longer blocks netting, because the join no longer
+  reads that column — the loader still raises `DQ001` at error severity for
+  the null, so such a row nets while the input is flagged; the remedy is the
+  input, not the netting.
+
+  **Direction and blast radius — measured, not inferred.** The change is
+  RWA-reducing wherever a spanning agreement exists: on the P1.238 fixture
+  (unrated SA corporates, GBP 1m loan, GBP 200k deposit under one reference)
+  the cross-counterparty loan moves from RWA 1,000,000 to 800,000 under both
+  CRR and Basel 3.1. On an SA row the benefit lands on the post-CRM exposure
+  E\*; on an F-IRB row it lands on LGD\* (the netted deposit is cash collateral
+  under Art. 219). The Basel 3.1 **output-floor basis does not move**: the
+  standardised-equivalent S-TREA of an IRB row is computed on the unreduced
+  exposure, so on a mixed F-IRB + SA book measured at three reporting dates
+  S-TREA was identical in both Feature states while U-TREA fell — the floor
+  becomes *more* likely to bind, not less. Every golden, oracle and reporting
+  fixture is number-neutral — none carries a netting agreement spanning
+  counterparties (only the P1.238, P1.241 and `r1_negative_gross` builders set
+  a reference at all, each on one counterparty), which is a coverage gap, not
+  evidence of a small effect. The per-exposure
+  `on_bs_netting_amount` (COREP C 07.00 / C 08.01 column 0035) sums the
+  cross-counterparty allocations per beneficiary as before. Pinned by
+  `tests/unit/crm/test_netting.py::TestNettingByAgreementReference` (cross-
+  counterparty nets, three-counterparty pro-rata sums to the pool, null
+  counterparty, CRM016 wording, two-limbed Feature-disabled control) and the
+  CRR / Basel 3.1 acceptance twins
+  `test_p1_238_art_195_agreement_perimeter_netting.py` (renamed from the
+  single-counterparty files). Docs: `docs/user-guide/methodology/crm.md`,
+  `docs/data-model/input-schemas.md`, and a dated reversal note under P1.238 in
+  `docs/plans/compliance-audit-crr-111-241-rectification.md`.
 
 ---
 

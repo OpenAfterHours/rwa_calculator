@@ -32,15 +32,15 @@ Articles are grouped by the citing instrument and keyed by *base* article (`122`
 
 Package version `0.3.32`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — content hash `5d5c57b888cb3249`
-- **Basel 3.1** (`b31` @ 2027-01-01) — content hash `a0784d121c08ecf1`
+- **CRR** (`crr` @ 2026-01-01) — content hash `9c63304e801e3a38`
+- **Basel 3.1** (`b31` @ 2027-01-01) — content hash `be501c3fe5513117`
 
 ## Summary
 
 | Instrument | HIGH | MEDIUM | LOW | UNCITED | GAP | Total |
 |---|---|---|---|---|---|---|
-| CRR (Capital Requirements Regulation) | 34 | 58 | 10 | 37 | 14 | 153 |
-| PS1/26 (PRA Policy Statement) | 24 | 29 | 7 | 30 | 16 | 106 |
+| CRR (Capital Requirements Regulation) | 34 | 59 | 10 | 37 | 14 | 154 |
+| PS1/26 (PRA Policy Statement) | 24 | 30 | 7 | 29 | 17 | 107 |
 
 ## CRR (Capital Requirements Regulation)
 
@@ -119,13 +119,14 @@ Package version `0.3.32`. Resolved packs:
 | 192 | 0 | 0 | 1 | 0 | 1 | UNCITED |
 | 193 | 1 | 0 | 12 | 1 | 6 | HIGH |
 | 194 | 2 | 0 | 1 | 0 | 4 | MEDIUM |
-| 195 | 1 | 0 | 7 | 0 | 12 | MEDIUM |
+| 195 | 1 | 1 | 8 | 0 | 13 | MEDIUM |
 | 197 | 4 | 0 | 7 | 19 | 19 | HIGH |
 | 198 | 1 | 0 | 2 | 2 | 2 | HIGH |
 | 199 | 1 | 0 | 2 | 0 | 15 | MEDIUM |
 | 200 | 0 | 0 | 4 | 0 | 5 | UNCITED |
 | 201 | 1 | 0 | 2 | 9 | 4 | HIGH |
 | 203 | 0 | 0 | 0 | 0 | 1 | GAP |
+| 205 | 1 | 0 | 1 | 0 | 2 | MEDIUM |
 | 207 | 1 | 0 | 2 | 0 | 7 | MEDIUM |
 | 211 | 1 | 0 | 1 | 0 | 3 | MEDIUM |
 | 212 | 0 | 0 | 2 | 0 | 0 | UNCITED |
@@ -134,7 +135,7 @@ Package version `0.3.32`. Resolved packs:
 | 216 | 0 | 0 | 0 | 0 | 1 | GAP |
 | 217 | 2 | 0 | 1 | 0 | 0 | LOW |
 | 218 | 1 | 0 | 2 | 2 | 3 | HIGH |
-| 219 | 1 | 0 | 3 | 0 | 4 | MEDIUM |
+| 219 | 1 | 0 | 3 | 0 | 5 | MEDIUM |
 | 220 | 1 | 0 | 8 | 0 | 11 | MEDIUM |
 | 221 | 0 | 0 | 2 | 0 | 1 | UNCITED |
 | 222 | 2 | 9 | 5 | 22 | 12 | HIGH |
@@ -275,16 +276,17 @@ Package version `0.3.32`. Resolved packs:
 | 181 | 0 | 0 | 4 | 0 | 2 | UNCITED |
 | 191A | 0 | 0 | 4 | 0 | 3 | UNCITED |
 | 194 | 0 | 0 | 0 | 0 | 2 | GAP |
-| 195 | 0 | 0 | 1 | 0 | 2 | UNCITED |
+| 195 | 0 | 1 | 1 | 0 | 2 | MEDIUM |
 | 197 | 0 | 0 | 0 | 0 | 5 | GAP |
 | 198 | 0 | 0 | 1 | 0 | 1 | UNCITED |
 | 199 | 1 | 0 | 2 | 0 | 5 | MEDIUM |
 | 200 | 0 | 0 | 1 | 0 | 1 | UNCITED |
 | 201 | 1 | 0 | 1 | 0 | 2 | MEDIUM |
+| 205 | 0 | 0 | 0 | 0 | 1 | GAP |
 | 211 | 1 | 0 | 1 | 0 | 1 | MEDIUM |
 | 213 | 1 | 1 | 1 | 0 | 1 | MEDIUM |
 | 218 | 0 | 0 | 1 | 0 | 1 | UNCITED |
-| 219 | 0 | 0 | 0 | 0 | 1 | GAP |
+| 219 | 0 | 0 | 0 | 0 | 2 | GAP |
 | 220 | 0 | 0 | 0 | 0 | 2 | GAP |
 | 222 | 0 | 1 | 4 | 0 | 5 | MEDIUM |
 | 223 | 0 | 0 | 4 | 0 | 2 | UNCITED |
@@ -352,7 +354,6 @@ These articles are named in `src/rwa_calc/` production source but carry no `@cit
 | PS1/26 122B | 1 | 0 | 2 | — | — |
 | PS1/26 166E | 4 | 0 | 2 | — | — |
 | PS1/26 181 | 4 | 0 | 2 | — | CRR Art. 181 |
-| PS1/26 195 | 1 | 0 | 2 | — | CRR Art. 195 |
 | CRR 215 | 2 | 0 | 2 | — | — |
 | PS1/26 223 | 4 | 0 | 2 | — | CRR Art. 223 |
 | PS1/26 226 | 1 | 0 | 2 | — | CRR Art. 226 |
@@ -405,6 +406,7 @@ The actionable list: articles referenced **only** by the oracle and/or a (heuris
 | CRR 169 | 0 | 2 | — |
 | PS1/26 180 | 0 | 2 | — |
 | PS1/26 194 | 0 | 2 | CRR Art. 194 |
+| PS1/26 219 | 0 | 2 | CRR Art. 219 |
 | PS1/26 220 | 0 | 2 | CRR Art. 220 |
 | PS1/26 238 | 0 | 2 | CRR Art. 238 |
 | CRR 281 | 0 | 2 | — |
@@ -418,8 +420,8 @@ The actionable list: articles referenced **only** by the oracle and/or a (heuris
 | PS1/26 159 | 0 | 1 | — |
 | PS1/26 169B | 0 | 1 | — |
 | CRR 203 | 0 | 1 | — |
+| PS1/26 205 | 0 | 1 | CRR Art. 205 |
 | CRR 216 | 0 | 1 | — |
-| PS1/26 219 | 0 | 1 | CRR Art. 219 |
 | PS1/26 231 | 0 | 1 | CRR Art. 231 |
 | PS1/26 271 | 0 | 1 | CRR Art. 271 |
 | CRR 283 | 0 | 1 | — |

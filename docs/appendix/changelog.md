@@ -55,6 +55,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   implies both, and `--publish` now means "upload from this machine instead of
   via the release". Pinned by `tests/unit/test_deploy_push.py` and
   `tests/unit/test_deploy_changelog.py::TestExtractVersionSection`.
+- **Stress-suite fixture generation is no longer quadratic.**
+  `generate_stress_org_mappings` in `tests/acceptance/stress/conftest.py` built
+  the parent pool with a list comprehension that re-materialised
+  `set(child_indices)` for every candidate index — O(n × n_children), measured
+  at 2 s / 15 s / 56 s for 10k / 20k / 40k counterparties and ~514 s for the
+  100k `stress_dataset_100k` session fixture, which was 87% of the stress
+  suite's 9m52s wall time. It now uses `np.setdiff1d`, which returns the same
+  ascending complement (output verified frame-identical at 10k and 20k across
+  two seeds) in under a second at 100k. Test infrastructure only; no engine or
+  fixture-data change.
 
 ---
 

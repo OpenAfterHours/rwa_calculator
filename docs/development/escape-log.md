@@ -1820,3 +1820,161 @@ gate that shipped.
   The transferable rule is already in the file: a `NO_FIXTURE` classification
   in the template-cell baseline is a list of gates that are not running, and
   the change that lights one should expect the register to move.
+
+## 2026-09-05 — A window nested inside a window made the classifier eleven times slower, and the one instrument that measured it asserted nothing
+
+- **Defect**: commit `8ec7d302` (P1.320, *"count each facility limit once in the
+  QRRE obligor aggregate"*, authored 2026-08-15) rewrote
+  `engine/classify/subtypes.py::qrre_obligor_aggregate_limit_expr` so that a
+  `cum_sum().over([counterparty_reference, parent_facility_reference])` ordinal
+  and a `max().over([...same keys])` group limit sit **inside the input** of
+  `deduped_limit.sum().over("counterparty_reference")`. Polars evaluates a
+  window's input inside the outer group-by context, so both inner windows re-run
+  once per obligor group: per-row cost stops being a function of row count and
+  becomes a function of row count times group count. It first shipped in
+  **v0.3.27** on 2026-08-28 and was present through **v0.3.32**.
+
+  Measured 2026-09-04, same machine, back to back, `CreditRiskCalc.calculate()`
+  on the repository's 100k-counterparty synthetic book (373,568 result rows, CRR
+  standardised):
+
+  | | v0.3.26 | v0.3.32 |
+  |---|---|---|
+  | classifier stage | 495 ms | 5,640 ms |
+  | total run | 11.8 s | 18.6 s |
+
+  With only that one function reverted, v0.3.32 measured **9.4-11.3 s** across
+  three runs against **9.5-11.8 s** for v0.3.26, so the function accounts for the
+  whole regression and nothing else in the release range does. The expression
+  alone, in one `with_columns` at 800k legs: **46 ms** in the v0.3.26 form
+  against **45,851 ms** in the shipped form, growing roughly **4x per row
+  doubling**. And the decisive control — **each window alone costs ≤151 ms at
+  400k rows**, so neither window is expensive and only the nesting is. A user
+  reported a real book going from under one minute to over three; the measured
+  curve predicts that at roughly 1.7M legs, which is a prediction about their
+  shape rather than a measurement on their data, and is recorded here as such.
+- **Rule**: **Not a regulatory escape.** No RWA figure moves, in either regime,
+  on any portfolio. The P1.320 rewrite was regulatorily *correct* — CRR
+  Art. 154(4)(c) caps the aggregate nominal exposure to a single individual, so a
+  facility's limit must be counted once however many legs it carries — and the
+  fix below preserves it exactly. What escaped is cost, not capital.
+- **Origin**: `src/rwa_calc/engine/classify/subtypes.py`, commit `8ec7d302`,
+  2026-08-15. Released 2026-08-28 in v0.3.27 and live for five releases.
+- **Escape class**: `no-gate-exists`. The instrument existed and the assertion
+  did not: the CI `benchmarks` job ran `test_classifier_100k` on every push from
+  the day the defect landed, recorded the 11x stage regression every time, and
+  uploaded it — so `gate-not-run` is the wrong label, because the job *did* run
+  and simply had no failure condition to reach.
+- **Why every gate missed it**: three independent reasons, none of them a weak
+  assertion.
+
+  **Nothing in the estate is big enough for the defect to be visible.** Every
+  fixture and golden portfolio is under 40k rows, where the penalty is about
+  **60 ms** — comfortably inside the noise of a test run. The defect's signature
+  is a *curve*, and a single-point measurement cannot carry one.
+
+  **The tests that cover this function pin behaviour, not cost.** The P1.320 unit
+  and acceptance tests assert the aggregate limit is right, and it is right; they
+  pass identically on both forms of the expression, before and after. A
+  correctness gate cannot fail on a performance defect however thorough it is,
+  which is why the gate change below is a *scaling* assertion rather than more
+  coverage of the same property.
+
+  **The benchmark job produces a number and compares it to nothing.**
+  `.github/workflows/ci.yml`'s `benchmarks` job runs `tests/benchmarks` under
+  `-m 'benchmark and not slow'` and uploads `benchmark-results.json` as an
+  artifact. There is no baseline, no ratchet and no threshold, so the job cannot
+  fail. The 11x classifier regression was therefore *recorded on every run from
+  2026-08-15 onwards* and read by nobody. And the marker is deselected from both
+  places a developer would otherwise meet it — `pyproject.toml`'s `addopts` for
+  the dev loop, and CI's own `test` job — so the only path to the number was
+  downloading an artifact from a green build. This is the estate's standing habit
+  in its purest form: build the measurement, ship it, wire it to nothing.
+- **Gate change**: two, both in this change-set, and they close different halves
+  — one measures the cost, one forbids the shape.
+
+  1. **`tests/unit/classifier/test_p1_320_qrre_aggregate_scaling.py`** — drives
+     `classify_exposure_subtypes` at **100k and 400k synthetic legs in the
+     default dev loop** (no marker, so it is not deselected anywhere) and asserts
+     the 4x frame costs **less than 8x** the small one and **under 3 s** in
+     absolute terms. The ratio is the assertion that matches the defect's shape;
+     the absolute budget stops a uniformly slow machine passing a quadratic
+     curve. Its `TestTheMeasuredPathIsLive` class carries the adequacy
+     assertions — the window keys are non-degenerate (multi-leg obligors,
+     multi-facility obligors, and both null slices present), and the QRRE limb
+     both fires and discriminates at each size, anchored to `ExposureClass`
+     rather than to a hand-written list — so the file cannot silently degrade
+     into timing a dead path. Those assertions hold on the pre-change engine too,
+     by design: they are the premise of the timing, not part of it.
+  2. **`scripts/arch_check.py` check 21 —
+     `check_no_nested_window_expressions`** — an AST scan of `engine/` that fails
+     any `.over()` whose **input** contains another `.over()`. It follows
+     local-name bindings within one function body, because the shipped defect
+     bound the nested expression to a local first and a scan of the call chain
+     alone would not have seen it; each name resolves to the last binding that
+     **ends strictly before** the outer window's own line, so a self-rebinding
+     statement cannot make a window find itself. Only the input is scanned, not
+     the partition arguments, since the input is what Polars re-evaluates per
+     group. No allowlist. It is contract-tested by
+     `tests/contracts/test_nested_window_gate.py`, which pins the check's
+     registration in the `arch_check` run, the two flagged shapes (direct nesting
+     and nesting through a local), the clean two-step remedy, and — the reason
+     the source-order rule exists at all — the real **false-positive shape in
+     `engine/supporting_factors.py`**, whose single legitimate window sits in a
+     statement that rebinds the frame name and which a source-order-blind
+     resolver flags as nested against itself.
+- **Verified red**: taken on this worktree at `cb59e53c` with the two new test
+  files present and **before** the engine rewrite, so both gates are observed
+  failing against the code that actually shipped.
+
+  The scaling test, `2 failed, 4 passed in 19.94s` — the ratio limb and the
+  absolute limb, from the same pair of measurements:
+
+  ```
+  test_classifier_cost_scales_linearly_in_row_count
+      assert 18.3 < 8.0
+      (100,000 rows: 0.281s -> 400,000 rows: 5.129s)
+
+  test_classifier_stays_within_the_absolute_budget_at_scale
+      assert 5.129 < 3.0
+  ```
+
+  The contract test was `10 failed in 7.96s` before check 21 existed, which is
+  the trivial red. The one that matters came next: with the check implemented and
+  the engine still on the shipped expression, it named **exactly one violation in
+  the whole engine tree** —
+
+  ```
+  src\rwa_calc\engine\classify\subtypes.py:374: nested Polars window -- this .over()'s
+  input contains another .over(), which Polars re-evaluates once per outer group.
+  Compute the inner result as its own column in a preceding with_columns and read it
+  back with pl.col()
+  ```
+
+  — with the contract suite at `1 failed, 9 passed`, the single failure being
+  `test_engine_has_no_nested_window_expressions`. A check that finds one instance
+  and no others across the engine tree is the useful outcome: it is neither
+  vacuous nor a false-positive generator, and the one shape that could have made
+  it the latter is pinned as a test.
+- **The fix, stated narrowly**: the same expression tree, split across two
+  `with_columns`. The per-leg deduplicated contribution is materialised as the
+  scratch column `_qrre_deduped_limit`, the obligor sum reads it back with
+  `pl.col()`, and the helper is dropped before the stage returns, so the classify
+  exit schema is unchanged. After the rewrite the same measurement gives
+  **0.095 s at 100k rows and 0.382 s at 400k, a ratio of 4.02x** against a 4x row
+  increase. The aggregate is **bit-identical to the shipped form** on a 400k-leg
+  frame — 0 mismatches, 20,581 QRRE rows on both sides — and the P1.320 unit and
+  acceptance tests pass unchanged. Both `@cites("CRR Art. 154(4)")` and
+  `@cites("PS1/26, paragraph 147")` are retained, and the function keeps its
+  name so `tests/contracts/data/citation_snapshot.json` does not move.
+- **Lesson**: **graduated on the first occurrence, so there is no prose entry.**
+  The transferable rule — *a nested Polars window is quadratic in group count,
+  and no correctness gate can see it* — is mechanically checkable from the AST,
+  which is the strongest form available, so it lands as check 21 with a row in
+  the `.claude/LESSONS.md` Graduation ledger rather than as a `Trap / Why /
+  Detect` entry that would have to recur before earning a check. The residual
+  worth naming, because check 21 does not cover it: **the benchmark job still
+  compares against nothing.** Check 21 forbids one known-quadratic shape and the
+  scaling test guards one stage; neither would catch a different construct
+  slowing a different stage by the same order. Ratcheting `benchmark-results.json`
+  against a stored baseline is the general form, and it is not built here.

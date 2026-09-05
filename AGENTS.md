@@ -75,7 +75,7 @@ Key topics: SA risk weights (CRE20-22), IRB approach (CRE30-36), Credit risk mit
 
 Run these after implementing, before handing work back. The **static** gates below mirror `.pre-commit-config.yaml` and the `lint` / `typecheck` jobs in `.github/workflows/ci.yml`, so green here is green there. The **test** line does not — it is weaker than CI, and its own bullet says how.
 
-- **Architecture**: `uv run python scripts/arch_check.py` — the 20 numbered invariants, plus `watchfire check` as its final step.
+- **Architecture**: `uv run python scripts/arch_check.py` — the 21 numbered invariants, plus `watchfire check` as its final step.
 - **Lint**: `uv run ruff check src tests scripts`. Fix with `uv run ruff check --fix src tests scripts`.
 - **Format**: `uv run ruff format --check src tests scripts`. Fix with `uv run ruff format src tests scripts`.
 - **Types**: `uv run ty check src/rwa_calc/`. `ty` dispatches on a subcommand — a bare `uv run ty src/` is not a valid invocation.
@@ -242,7 +242,7 @@ fix-commit-closes-it convention produces.
 
 A lesson that reaches production **twice** has proven it cannot survive as
 prose — graduate it to an executable check, or file the graduation as a Tier 1
-plan item. `scripts/arch_check.py`'s 20 numbered checks and the supervisory
+plan item. `scripts/arch_check.py`'s 21 numbered checks and the supervisory
 validation register are what graduated lessons look like.
 
 The clearest worked example is the **skill-value graduation (2026-08-08)**. The

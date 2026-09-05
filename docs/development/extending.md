@@ -388,6 +388,41 @@ See `engine/sa/risk_weights.py`, `engine/sa/rw_adjustments.py`,
 `engine/irb/transforms.py`, and `engine/slotting/transforms.py` for the
 canonical transform-function style.
 
+### Never nest one window inside another
+
+A `.over()` may not appear inside the **input** of another `.over()` — banned by
+`scripts/arch_check.py` check 21, with no allowlist. Polars evaluates a window
+function's input inside the outer group-by context, so an inner window re-runs
+once per outer group and the cost stops being a function of row count alone.
+Compute the inner result as its own column in a preceding `with_columns` and
+read it back with `pl.col()`:
+
+```python
+# WRONG — the inner windows re-run once per obligor group
+aggregate = (
+    per_facility_limit.max().over(["counterparty_reference", "facility_reference"])
+    .sum()
+    .over("counterparty_reference")
+)
+
+# RIGHT — two passes, each linear in row count
+exposures = exposures.with_columns(
+    per_facility_limit.max()
+    .over(["counterparty_reference", "facility_reference"])
+    .alias("_deduped_limit")
+)
+aggregate = pl.col("_deduped_limit").sum().over("counterparty_reference")
+```
+
+Drop any scratch column before the stage returns so the exit schema is
+unchanged. This is a performance contract rather than a style preference: the
+shipped instance took the classify stage from 0.5 s to 5.6 s at 374k rows and
+survived five releases with every correctness gate green, because no fixture is
+large enough for the curve to show. The account is in
+[the escape log](escape-log.md) under 2026-09-05, and
+`tests/unit/classifier/test_p1_320_qrre_aggregate_scaling.py` is the pattern for
+asserting a stage's scaling when you need one.
+
 ## Best Practices
 
 ### 1. Follow Existing Patterns

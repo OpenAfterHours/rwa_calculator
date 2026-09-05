@@ -2163,6 +2163,7 @@
         "tests/oracle/derivations/irb.py",
         "tests/unit/classifier/test_p1_191_qrre_aggregate_nominal.py",
         "tests/unit/classifier/test_p1_244_qrre_gates.py",
+        "tests/unit/classifier/test_p1_320_qrre_aggregate_scaling.py",
         "tests/unit/classifier/test_p1_320_qrre_leg_multiplication.py",
         "tests/unit/crr/test_irb_defaulted.py",
         "tests/unit/test_p6_26_qrre_coupling_constant.py"
@@ -7217,6 +7218,7 @@
         "tests/unit/classifier/test_p1_244_qrre_gates.py",
         "tests/unit/classifier/test_p1_245_group_revenue_rollup.py",
         "tests/unit/classifier/test_p1_276_crr_non_named_mdb_irb_class.py",
+        "tests/unit/classifier/test_p1_320_qrre_aggregate_scaling.py",
         "tests/unit/classifier/test_p1_320_qrre_leg_multiplication.py",
         "tests/unit/rulebook/test_thresholds_features.py",
         "tests/unit/test_other_items_risk_weights.py",

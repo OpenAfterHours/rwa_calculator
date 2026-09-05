@@ -367,6 +367,7 @@
         "tests/acceptance/crr/test_scenario_crr_h_complex.py",
         "tests/acceptance/reporting/test_r1_negative_gross_carriers.py",
         "tests/acceptance/reporting/test_reporting_offbs_golden.py",
+        "tests/acceptance/test_p1_307_facility_share_zero_rw_member_cannot_win.py",
         "tests/conformance/rederive.py",
         "tests/contracts/test_ccf_tables.py",
         "tests/contracts/test_errors.py",
@@ -582,7 +583,7 @@
         "tests/acceptance/crr/test_p1_314_art_114_7_funded_currency.py",
         "tests/acceptance/crr/test_scenario_crr_a_sa.py",
         "tests/acceptance/stress/test_stress_pipeline.py",
-        "tests/acceptance/test_p1_307_facility_share_counterparty_preview.py",
+        "tests/acceptance/test_p1_307_facility_share_zero_rw_member_cannot_win.py",
         "tests/contracts/test_crr_art114_citation_paragraph.py",
         "tests/fixtures/ccr/p845_e1_e5_builder.py",
         "tests/fixtures/generate_all.py",
@@ -601,7 +602,6 @@
         "tests/unit/crr/test_crr_tables.py",
         "tests/unit/rulebook/test_sa_risk_weight_features.py",
         "tests/unit/test_classifier.py",
-        "tests/unit/test_entity_rw_preview.py",
         "tests/unit/test_guarantor_exposure_class_rw.py",
         "tests/unit/test_p1_281_art_114_ecb_and_central_bank_cqs.py",
         "tests/unit/test_p1_314_art_114_115_funded_currency.py"
@@ -656,7 +656,6 @@
         "tests/fixtures/pse_rgla_guarantor/pse_rgla_guarantor.py",
         "tests/fixtures/reporting_sa_classes_portfolio.py",
         "tests/oracle/derivations/sa_crr.py",
-        "tests/unit/test_entity_rw_preview.py",
         "tests/unit/test_p1_314_art_114_115_funded_currency.py",
         "tests/unit/test_rgla_risk_weights.py"
       ],
@@ -711,7 +710,6 @@
         "tests/fixtures/pse_rgla_guarantor/pse_rgla_guarantor.py",
         "tests/fixtures/single_exposure.py",
         "tests/oracle/derivations/sa_crr.py",
-        "tests/unit/test_entity_rw_preview.py",
         "tests/unit/test_pse_risk_weights.py"
       ],
       "watchfire_index_gap": false
@@ -752,7 +750,7 @@
         "tests/acceptance/crr/test_p1_184_art_117_mdb_institution_routing.py",
         "tests/acceptance/reporting/test_c07_risk_weight_rows.py",
         "tests/acceptance/reporting/test_reporting_sa_classes_golden.py",
-        "tests/acceptance/test_p1_307_facility_share_counterparty_preview.py",
+        "tests/acceptance/test_p1_307_facility_share_zero_rw_member_cannot_win.py",
         "tests/fixtures/generate_all.py",
         "tests/fixtures/p1_154/p1_154.py",
         "tests/fixtures/p1_154_b31/p1_154_b31.py",
@@ -762,7 +760,6 @@
         "tests/oracle/derivations/sa_crr.py",
         "tests/unit/classifier/test_p1_276_crr_non_named_mdb_irb_class.py",
         "tests/unit/irb/test_irb_guarantor_sa_rw_io_mdb.py",
-        "tests/unit/test_entity_rw_preview.py",
         "tests/unit/test_hierarchy.py",
         "tests/unit/test_mdb_risk_weights.py",
         "tests/unit/test_p1_253_crr_mdb_guarantor_institution_rw.py"
@@ -795,7 +792,6 @@
         "tests/fixtures/p1_154/p1_154.py",
         "tests/oracle/derivations/sa_crr.py",
         "tests/unit/irb/test_irb_guarantor_sa_rw_io_mdb.py",
-        "tests/unit/test_entity_rw_preview.py",
         "tests/unit/test_mdb_risk_weights.py"
       ],
       "watchfire_index_gap": false
@@ -1078,7 +1074,7 @@
         "tests/acceptance/crr/test_scenario_crr_a_sa.py",
         "tests/acceptance/crr/test_scenario_crr_f_supporting_factors.py",
         "tests/acceptance/reporting/test_reporting_netting_golden.py",
-        "tests/acceptance/test_p1_307_facility_share_counterparty_preview.py",
+        "tests/acceptance/test_p1_307_facility_share_zero_rw_member_cannot_win.py",
         "tests/fixtures/ccr/p845_e1_e5_builder.py",
         "tests/fixtures/collateral/collateral.py",
         "tests/fixtures/counterparty/corporate.py",
@@ -1117,7 +1113,6 @@
         "tests/unit/crm/test_simple_method.py",
         "tests/unit/crr/test_crr_tables.py",
         "tests/unit/crr/test_p1_255_art_122_2_unrated_corporate_sovereign_floor.py",
-        "tests/unit/test_entity_rw_preview.py",
         "tests/unit/test_guarantor_exposure_class_rw.py",
         "tests/unit/test_output_floor_ig_assessment.py"
       ],
@@ -1165,6 +1160,7 @@
         "tests/acceptance/crr/test_p1_294_art_124_1_unsecured_counterparty_rw.py",
         "tests/acceptance/crr/test_p2_17_crr_payroll_loan_35pct_rw.py",
         "tests/acceptance/crr/test_scenario_crr_a_sa.py",
+        "tests/acceptance/test_p1_307_facility_share_zero_rw_member_cannot_win.py",
         "tests/conformance/portfolios.py",
         "tests/contracts/test_crr_art123_payroll_citation.py",
         "tests/fixtures/counterparty/corporate.py",
@@ -1553,6 +1549,7 @@
         "tests/acceptance/crr/test_scenario_crr_j_equity.py",
         "tests/conformance/test_cell_rederivation.py",
         "tests/integration/test_branch_error_accumulation.py",
+        "tests/integration/test_facility_share_equity_exit.py",
         "tests/oracle/derivations/sa_b31.py",
         "tests/oracle/derivations/sa_crr.py",
         "tests/unit/crm/test_p1_296_fcsm_equity_collateral_rw.py",
@@ -1737,7 +1734,8 @@
         "tests/acceptance/crr/test_p1_225_cofire_spillover_floor.py",
         "tests/acceptance/crr/test_p1_264_art_140_1_st_class_gate.py",
         "tests/fixtures/p1_225/p1_225.py",
-        "tests/fixtures/p1_264/p1_264.py"
+        "tests/fixtures/p1_264/p1_264.py",
+        "tests/unit/test_p1_311_entity_class_maps_regime.py"
       ],
       "watchfire_index_gap": false
     },
@@ -5783,7 +5781,8 @@
       "oracle_cases": [],
       "pack_entries": [],
       "source_files": [
-        "engine/aggregator/_floor.py"
+        "engine/aggregator/_floor.py",
+        "engine/aggregator/aggregator.py"
       ],
       "test_files": [],
       "watchfire_index_gap": false
@@ -5811,6 +5810,7 @@
         "contracts/edges.py",
         "contracts/protocols.py",
         "domain/enums.py",
+        "engine/aggregator/_facility_share.py",
         "engine/aggregator/_floor.py",
         "engine/aggregator/_schemas.py",
         "engine/aggregator/_summaries.py",
@@ -5923,6 +5923,7 @@
         "tests/acceptance/basel31/test_p1_251_b31_firb_uk_resi_commitment_ccf.py",
         "tests/acceptance/basel31/test_p2_33_uk_resi_mortgage_commitment_ccf.py",
         "tests/acceptance/reporting/test_reporting_offbs_golden.py",
+        "tests/acceptance/test_p1_307_facility_share_zero_rw_member_cannot_win.py",
         "tests/contracts/test_ccf_tables.py",
         "tests/fixtures/facility_share_portfolio.py",
         "tests/fixtures/p2_33/p2_33.py",
@@ -6010,7 +6011,7 @@
         "tests/acceptance/basel31/test_p2_47_art137_meip_b31.py",
         "tests/acceptance/ccr/test_p1_342_qccp_art_121_6_carve_out.py",
         "tests/acceptance/crr/test_p1_222_rgla_uk_gbp_flat_20.py",
-        "tests/acceptance/test_p1_307_facility_share_counterparty_preview.py",
+        "tests/acceptance/test_p1_307_facility_share_zero_rw_member_cannot_win.py",
         "tests/fixtures/ccr/p1342_qccp_fx_floor_builder.py",
         "tests/fixtures/p1_10/p1_10.py",
         "tests/fixtures/p1_222/p1_222.py",
@@ -6024,7 +6025,6 @@
         "tests/properties/test_differential_shadow.py",
         "tests/properties/test_regime_deltas.py",
         "tests/unit/rulebook/test_sa_risk_weight_features.py",
-        "tests/unit/test_entity_rw_preview.py",
         "tests/unit/test_p1_254_art_121_6_unrated_sovereign_floor.py",
         "tests/unit/test_p1_281_art_114_ecb_and_central_bank_cqs.py",
         "tests/unit/test_p1_314_art_114_115_funded_currency.py",
@@ -6122,13 +6122,11 @@
       "test_files": [
         "tests/acceptance/basel31/test_p1_154_b31_art_118_international_organisation_class.py",
         "tests/acceptance/crr/test_p1_184_art_117_mdb_institution_routing.py",
-        "tests/acceptance/test_p1_307_facility_share_counterparty_preview.py",
+        "tests/acceptance/test_p1_307_facility_share_zero_rw_member_cannot_win.py",
         "tests/fixtures/p1_154_b31/p1_154_b31.py",
         "tests/fixtures/p1_184/p1_184.py",
         "tests/oracle/derivations/sa_b31.py",
         "tests/unit/irb/test_irb_guarantor_sa_rw_io_mdb.py",
-        "tests/unit/test_entity_rw_preview.py",
-        "tests/unit/test_hierarchy.py",
         "tests/unit/test_mdb_risk_weights.py",
         "tests/unit/test_p1_253_crr_mdb_guarantor_institution_rw.py"
       ],
@@ -6352,7 +6350,7 @@
         "tests/acceptance/basel31/test_p5_15_art_123a_granularity.py",
         "tests/acceptance/ccr/test_ccr_e1_e5_default_risk_routing.py",
         "tests/acceptance/reporting/test_reporting_netting_golden.py",
-        "tests/acceptance/test_p1_307_facility_share_counterparty_preview.py",
+        "tests/acceptance/test_p1_307_facility_share_zero_rw_member_cannot_win.py",
         "tests/contracts/test_docs_freshness.py",
         "tests/fixtures/ccr/p845_e1_e5_builder.py",
         "tests/fixtures/collateral/collateral.py",
@@ -7067,6 +7065,7 @@
         "tests/conformance/test_cell_rederivation.py",
         "tests/fixtures/p1_182/p1_182.py",
         "tests/fixtures/p2_19/p2_19.py",
+        "tests/integration/test_facility_share_equity_exit.py",
         "tests/oracle/derivations/sa_b31.py",
         "tests/properties/test_regime_deltas.py",
         "tests/unit/crm/test_p1_296_fcsm_equity_collateral_rw.py",

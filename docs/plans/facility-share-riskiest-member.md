@@ -11,8 +11,14 @@
 > always a member · D4 candidates count toward their own member's obligor aggregates with no window
 > special-casing (revised before implementation — see Section 4) · D5 delete the SA-only preview
 > (P1.359 superseded). Runtime measured 2026-09-05: ~41 µs per extra candidate row through
-> classifier→aggregator plus ~10 ms resolution pass at 112k rows; the unsecured-preview
-> alternative (Section 4, O1) was ~20 ms fixed + ~1 µs/candidate — not a deciding factor.
+> classifier→aggregator; the unsecured-preview alternative (Section 4, O1) was ~20 ms fixed +
+> ~1 µs/candidate — not a deciding factor. **Implemented cost (S3 gate):** a share-free book pays
+> ~2 ms for the candidate probe at 400k rows; on a synthetic worst case (3,005 shared facilities
+> over 20k counterparties, 7,105 candidates) the aggregator stage runs +83% (106 → 195 ms on the
+> implementer's machine) after a short-circuit that skips both trial evaluations whenever the two
+> assignments already coincide — the residual is the loser drop (~56 ms) and Python-side ranking
+> (~44 ms). Accepted as a bounded cost; vectorising the ranking is an optional follow-up. The
+> earlier "~10 ms resolution pass" estimate measured the rank alone and is withdrawn.
 
 This document answers three questions and ends with the decisions the proposal needs and a
 sequenced way forward:

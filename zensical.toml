@@ -120,6 +120,7 @@ nav = [
     { "Common" = [
       { "Hierarchy & Classification" = "specifications/common/hierarchy-classification.md" },
       { "Default Definition (Art. 178)" = "specifications/common/default-definition.md" },
+      { "Facility Share Allocation" = "specifications/facility-share-allocation.md" },
       { "Stress Testing" = "specifications/common/stress-testing.md" },
     ]},
     { "Project" = [
@@ -158,7 +159,7 @@ nav = [
     { "Return Reconciliation (proposed)" = "plans/return-reconciliation.md" },
     { "Boundary Hardening (Phase 3)" = "plans/engine-defensiveness-boundary-hardening.md" },
     { "Single-Lazy-Plan Refactor (superseded)" = "plans/single-lazy-plan-refactor.md" },
-    { "Facility Share — Riskiest Member (proposed)" = "plans/facility-share-riskiest-member.md" },
+    { "Facility Share — Riskiest Member (implemented)" = "plans/facility-share-riskiest-member.md" },
   ]},
   { "Appendix" = [
     "appendix/index.md",

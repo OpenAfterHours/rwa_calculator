@@ -16,7 +16,7 @@ The project follows a **phased, test-first approach** prioritising CRR (Basel 3.
 - [**Return Reconciliation**](return-reconciliation.md) - Proposed: compare a generated template (e.g. C 08.03) against the firm's current return cell by cell, and decompose each delta into population / row placement / sheet placement / measurement
 - [**Independent Validation System**](independent-validation-system.md) - Why a green suite keeps shipping template defects, and the six-component plan (impact report, property suite, shadow calculator, cell re-derivation, coverage ratchets, defect-injection scorecard) to fix it
 - [**Architecture Review — structure, efficiency, parallelism (2026-08-29)**](architecture-review-2026-08-29.md) - Measured review of `engine/stages/` layout, reporting-vs-calculation cost, and thread scaling; a sequenced proposal (proposal only, nothing implemented)
-- [**Facility Share — Riskiest Member by Applied Approach**](facility-share-riskiest-member.md) - Proposal: allocate a shared facility's undrawn to the member with the highest RWA under its *own* approach (candidate fan-out, resolved before the output floor), and the two-assignment rule that makes "riskiest" well-defined under the Basel 3.1 floor (proposal only, nothing implemented)
+- [**Facility Share — Riskiest Member by Applied Approach**](facility-share-riskiest-member.md) - Proposal: allocate a shared facility's undrawn to the member with the highest RWA under its *own* approach (candidate fan-out, resolved before the output floor), and the two-assignment rule that makes "riskiest" well-defined under the Basel 3.1 floor (approved and implemented 2026-09-05; methodology in Specifications → Facility Share Allocation)
 
 ## Development Philosophy
 

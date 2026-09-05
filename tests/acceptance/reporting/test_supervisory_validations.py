@@ -346,6 +346,21 @@ REGISTER_NOTES: dict[str, str] = {
         "those are counts in a different gate, so one rule going dark nets against another "
         "activating. The NOT_EVALUATED half is owed work, not a property of this register."
     ),
+    "binding_output_floor_add_on_has_no_home_in_the_ir_templates": (
+        "boe_b0751 (OF08.01.01.01) and boe_b0763 (OF08.02.01.01) are ONE published identity "
+        "restated per template (LESSONS C6): RWEA after adjustments (col 0260) must equal the sum "
+        "of RWEA before adjustments, PMAs, unrecognised-exposure adjustments and the mortgage "
+        "RW-floor adjustment (cols 0251-0254). They FAIL on b31/facility-share-binding by exactly "
+        "OutputFloorSummary.shortfall, because the pro-rata output-floor add-on lives inside "
+        "rwa_final and the reporting projection mirrors it into col 0260 while cols 0251-0254 "
+        "have no column for it. Every portfolio registered before 2026-09-05 had a NON-binding "
+        "floor, so the pair had never been evaluated in the binding state (LESSONS B5, a "
+        "portfolio STATE no fixture reached). Pre-existing: the values are byte-identical at the "
+        "commit before the facility-share fan-out landed. The reporting-basis decision - "
+        "un-floored RWEA in the IRB templates with the floor at the total level (OF 02.01 / "
+        "C 02.00), or an adjustment column - is OWNER: P1.369 and is NOT made here. Banked as an "
+        "ERROR-severity liability, not a waiver."
+    ),
     "how_to_discharge_a_vacuity_entry": (
         "Make one cell the rule addresses carry a real figure on a registered portfolio, then "
         "DELETE the entry - the gate will fail until you do, which is the design. The worked "

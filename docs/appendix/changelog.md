@@ -8,10 +8,133 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- (Next release changes will go here)
+- **`facility_share_resolution`, a per-candidate allocation audit frame on
+  `AggregatedResultBundle`.** One row per priced member of every Facility Share,
+  in both regimes: the member and the owner, the approach and class it was priced
+  on, `ead_final`, its own pre-floor RWA, its standardised-equivalent RWA and
+  `risk_weight`, the floored-branch marginal `b_i`, a rank under each metric,
+  `is_winner` (exactly one per group), `metric_used` and the collapsed reference.
+  Because every member is priced, the frame doubles as a per-facility
+  **allocation sensitivity table** — what the commitment would have cost under
+  each member, on each metric — which is directly useful in reconciliation
+  against a legacy system whose own share rule is unknown. The floor-side columns
+  are typed nulls under CRR, where `sa_rwa` is absent from the results frame
+  outright rather than null, so consumers see one schema and not two.
+- **Two `OutputFloorSummary` fields: `facility_share_metric_used` and
+  `facility_share_trea_alternative`.** Which assignment decided the book, and the
+  total the other assignment came to. Under the floor-aware default the
+  allocation can flip with the floor state, with the Art. 92(5) phase-in step and
+  between reporting scopes; that is a designed consequence, but it may never be
+  silent, and these are what the flip is read against rather than a moved COREP
+  row. `None` where the portfolio holds no share or only one assignment was
+  evaluated. There is no `OutputFloorSummary` under CRR, so the audit frame's
+  per-candidate `metric_used` is the only observable there.
+- **`CalculationConfig.facility_share_metric` — a firm election, `"floor_aware"`
+  by default.** `"own_approach"` pins the un-floored rule in every state.
+  **It LOWERS RWA wherever the output floor binds, which is why it is opt-in:**
+  the default takes the larger of the two assignments and so can never produce
+  less capital than the un-floored rule, while pinning discards the larger branch
+  whenever the floored one would have won. It exists for firms whose reporting or
+  reconciliation cannot tolerate obligor attribution moving with the floor state.
+  Accepted and inert under CRR. The election lives on the config, like
+  `OutputFloorConfig.skip_transitional`, not in the rulepack — the *regime* gate
+  is the existing `output_floor` pack Feature (arch_check check 17).
+- **`AGG003`, a WARNING for a share resolved by the deterministic fallback.**
+  Where every priced candidate of one group carries a non-finite or absent
+  own-approach RWA the ranking metric decides nothing. The group is **never
+  dropped** — dropping every candidate would delete the facility's undrawn
+  commitment from the submission outright — so the allocation falls back to
+  `risk_weight` descending then `counterparty_reference` ascending, every
+  candidate keeps a null rank and `metric_used = "fallback_deterministic"`, and
+  the warning names the group and the candidate count. A fallback nobody is told
+  about is indistinguishable from a ranked outcome.
+- **New methodology page `docs/specifications/facility-share-allocation.md`**,
+  added to the Specifications nav under Common. It states the allocation rule as
+  firm policy, the mechanism, both metrics, the floor-percentage boundary, the
+  election with its direction, the obligor-aggregate semantics and the audit
+  surface.
 
 ### Changed
-- (Next release changes will go here)
+- **A shared facility's undrawn commitment is now allocated to the riskiest
+  member by that member's OWN applied approach, decided on real priced RWA
+  instead of an entity-type preview.** The hierarchy stage no longer picks a
+  winner. It emits one undrawn **candidate** row per member
+  (`<facility>_UNDRAWN@<member>`, carrying the FULL headroom, with
+  `facility_share_group` / `is_facility_share_candidate` and the owner preserved
+  in `original_counterparty_reference`); `source_exposure_reference` is unchanged
+  so reconciliation keys are untouched. Each candidate flows through the
+  classifier, CRM and the calculators as an ordinary row of its own member — its
+  own exposure class, model permission, PD/LGD and CRM — and a new resolver at
+  the **head** of the aggregator (`engine/aggregator/_facility_share.py::resolve_facility_shares`)
+  keeps exactly one and drops the rest before the securitisation views, the
+  residual multiplier, the expected-loss summary and the output floor. The
+  aggregator's exit invariant is unchanged: one undrawn row per facility, with
+  the winner's reference collapsed back to `<facility>_UNDRAWN`. **The drop is
+  applied to the combined frame AND to all three branch frames** — the
+  expected-loss summary reads the branch frames directly, so a drop on the
+  combined frame alone is green on `rwa_final` and wrong on OF-ADJ. No pricing
+  logic is duplicated anywhere.
+
+  The metric is `argmax` own-approach pre-floor RWA under CRR, where capital is
+  additive. Under Basel 3.1 with the floor applicable, total risk exposure is a
+  portfolio `max`, so "riskiest" is state-dependent: the engine evaluates
+  assignment **A** (every share by `argmax u_i`) and assignment **B** (every
+  share by `argmax b_i`, where `b_i` is the floor percentage times the
+  standardised-equivalent RWA for a floor-eligible member and the full RWA
+  otherwise) **end to end** through the aggregator's own expected-loss, OF-ADJ
+  and floor arithmetic, and keeps the larger total; ties go to A. That is a
+  **bound, not an identity** — OF-ADJ's expected-loss channel moves with the
+  winners, so the floored branch is not additive across shares and the two
+  assignments cannot be compared on marginals alone. Ranking on RWA rather than
+  risk weight (the two coincide wherever the exposure value is obligor-invariant)
+  and the whole rule are **firm policy grounded in conservatism, not
+  regulation** — neither CRR nor PS1/26 defines a facility share; the exposure
+  value cites the conversion-factor articles (CRR Art. 111 / Annex I,
+  Art. 166(8)(d); PS1/26 Art. 111 Table A1, Art. 166C).
+- **The facility owner is now always a member, which changes DETECTION and not
+  only allocation.** A facility owned by A whose only mapped loan belongs to B
+  has the member set `{A, B}` and is a share; under the descendants-only rule it
+  had one member and its undrawn stayed with A untouched. Multiple Option
+  Facility parents keep their exclusion — each waterfall row already carries its
+  sub-facility's own counterparty.
+- **Candidate rows count toward their own member's obligor aggregates, with no
+  window special-casing anywhere.** The eventual winner's siblings are unchanged;
+  a losing member's siblings gain the undrawn, so the partition-local retail and
+  qualifying-revolving thresholds can only be crossed **upward**. The
+  Art. 123A(1)(b)(ii) granularity denominator does not move in either direction —
+  the retail-threshold carrier is built from the drawn amount only, so an undrawn
+  row contributes zero to it, and the denominator divides each obligor's
+  aggregate by that obligor's own line count. The audit premise that the fan-out
+  inflated it was **refuted by measurement** and the invariance is now pinned by
+  a test with an adequacy assertion.
+- **The SA-equivalent risk-weight preview `build_entity_rw_expr` is deleted, with
+  its `_share_*` plumbing and the `getattr(config, "is_basel_3_1")` read that
+  went with it** (the check-17 allowlist entry retires with it — a stale
+  allowlist entry silences the check on a real future violation). The preview was
+  its own only consumer's ranking key; it knew nothing about whether a member was
+  on a model, its PD/LGD, its exposure class, any CRM on the facility, or the
+  floor, and it was anti-conservative in exactly the case the rule exists for — a
+  low-PD IRB corporate previewing at the unrated-corporate weight would beat a
+  regulatory-retail SA member and then be priced far below it, having won the
+  whole undrawn. **P1.359 (plain `central_bank` under
+  Basel 3.1) is superseded**, since the code path it targeted no longer exists;
+  P1.358 is the *guarantor* path and is unaffected.
+  `docs/specifications/crr/sa-risk-weights.md` is corrected accordingly.
+- **Known findings filed (not fixed here).** The engine's output floor takes its
+  `max` over floor-eligible rows with the standardised book added outside it,
+  where Art. 92(2A) takes it over whole-firm totals — the two agree only at a
+  floor percentage of one, so the engine binds more often and by more, and
+  correcting it would be RWA-reducing. The Art. 110A due-diligence inputs
+  (`due_diligence_performed`, `due_diligence_override_rw`) are accepted by the
+  loan and contingent schemas but not declared on the hierarchy edge contract, so
+  `EdgeContract.conform` drops them silently and `SA004` fires on every Basel 3.1
+  run regardless of input while the override risk weight stays unreachable. And
+  the pro-rata binding-floor add-on has no reported home in the internal-ratings
+  templates: it lives inside `rwa_final` and the projection mirrors it into
+  OF 08.01 / OF 08.02 column 0260, which then exceeds the sum of its stated
+  components (columns 0251–0254) by exactly the floor shortfall — the first
+  registered portfolio with a **binding** floor is what made those rules fire at
+  all.
 
 ---
 

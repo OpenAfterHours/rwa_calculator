@@ -780,6 +780,13 @@ and run the checker from the venv binary rather than `uv run`.
   `generate_all.py`** or it works locally and fails on a fresh checkout.
 - **New `@cites` need a citation-matrix snapshot regen *before* the suite** —
   `scripts/generate_citation_matrix.py`.
+- **`REGEN_VALIDATION_BASELINE=1` rewrites the register's `notes` header from
+  `REGISTER_NOTES` in the test module — a note hand-added to the JSON alone is
+  silently dropped.** Measured 2026-09-05: `pattern_non_additive_columns_in_summation_rules`
+  existed only in `validation_known_breaks.json` and vanished on the first regen after it;
+  other entries referenced it by name. Entry *reasons* are preserved by rule key; header
+  notes are not. Put a new note in `REGISTER_NOTES`, then regen. **Detect:** after any
+  regen, `git diff` the register and read every `-` line that is not a removed entry.
 - **A SonarQube taint finding is a flow, not a line — fetch it before fixing.**
   The rule title names the sink family and says nothing about the source, and a
   sink can be reported for a tainted **argument** rather than a tainted path,

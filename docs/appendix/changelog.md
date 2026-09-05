@@ -17,6 +17,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every party under the reference. The citation note carries that basis, so a
   challenge to the reading is met by flipping `enabled=False`, which restores
   the single-counterparty keying introduced by P1.238 exactly.
+- **A `netting` reporting portfolio and its goldens — the estate's first
+  agreement spanning counterparties.** `tests/fixtures/reporting_netting_portfolio.py`
+  holds five unrated corporates: one agreement whose deposit (from one entity)
+  nets the loans of two others pro rata, one same-counterparty control
+  agreement, and one un-netted loan. It is registered in the supervisory
+  validation `RUNS` (now 20 runs over 10 portfolios), captured as
+  `tests/expected_outputs/reporting/netting_{crr,b31}/`, and pinned by
+  `tests/acceptance/reporting/test_reporting_netting_golden.py`: per-leg netting
+  amounts, C 07.00 row 0010/0070 cells, the Basel 3.1-only column 0035 (reported
+  negated under the COREP "(-)" convention; absent on the CRR template, where
+  the netting shows through column 0200), the single CRM016 record, and a
+  two-limbed Feature test in which the same-counterparty leg survives both
+  states and the group leg moves. This lights C 07.00 column 0035, which the
+  template-cell census had classified `NO_FIXTURE` for the template's whole
+  life, and it is what makes the Tier 2 gate able to see the perimeter change
+  at all.
+
+  **Found on registration: Basel 3.1 C 07.00 deducts on-balance-sheet netting
+  twice** — once in column 0035 (so column 0040 is already net of it) and again
+  inside column 0130, because the Art. 219 synthetic cash collateral is summed
+  into the financial-collateral column with everything else. Column 0150 reads
+  16,000,000 against a correct column 0200 of 19,000,000 on the new portfolio,
+  breaking `boe_b0471` (ERROR) and `boe_b0556` (WARNING); CRR has no column
+  0035 and ties. Pre-existing and independent of the perimeter change (the
+  Feature-disabled run shows the same gap). Recorded in
+  `docs/development/escape-log.md` (2026-09-05, class `path-never-exercised`,
+  verified red) and banked in `validation_known_breaks.json` with the mechanism
+  as its reason; the fix — a sealed post-haircut `on_bs_netting_adjusted_value`
+  carrier reported in 0035 and excluded from 0130 — is deferred to its own
+  change. Registering the portfolio also activated `boe_b0555`, which now
+  asserts and passes. The supervisory register's header note
+  `pattern_non_additive_columns_in_summation_rules` was found to live only in
+  the JSON and was dropped by regeneration; it is now in `REGISTER_NOTES` so it
+  survives.
 
 ### Changed
 - **On-balance-sheet netting now nets across counterparties under one

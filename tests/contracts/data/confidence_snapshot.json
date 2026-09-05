@@ -1080,6 +1080,7 @@
         "tests/acceptance/crr/test_p2_46_ppu_provenance_corep.py",
         "tests/acceptance/crr/test_scenario_crr_a_sa.py",
         "tests/acceptance/crr/test_scenario_crr_f_supporting_factors.py",
+        "tests/acceptance/reporting/test_reporting_netting_golden.py",
         "tests/acceptance/test_p1_307_facility_share_counterparty_preview.py",
         "tests/fixtures/ccr/p845_e1_e5_builder.py",
         "tests/fixtures/collateral/collateral.py",
@@ -1106,6 +1107,7 @@
         "tests/fixtures/p1_274/p1_274.py",
         "tests/fixtures/p1_30e/p1_30e.py",
         "tests/fixtures/p1_96/p1_96.py",
+        "tests/fixtures/reporting_netting_portfolio.py",
         "tests/fixtures/reporting_offbs_portfolio.py",
         "tests/integration/test_model_permissions_pipeline.py",
         "tests/oracle/derivations/branch_sa.py",
@@ -2902,10 +2904,12 @@
         "tests/acceptance/basel31/test_p1_238_art_195_agreement_perimeter_netting.py",
         "tests/acceptance/crr/test_p1_238_art_195_agreement_perimeter_netting.py",
         "tests/acceptance/reporting/test_r1_negative_gross_carriers.py",
+        "tests/acceptance/reporting/test_reporting_netting_golden.py",
         "tests/benchmarks/data_generators.py",
         "tests/contracts/test_r1_gross_carrier_edge.py",
         "tests/fixtures/exposures/loans.py",
         "tests/fixtures/r1_negative_gross/r1_negative_gross.py",
+        "tests/fixtures/reporting_netting_portfolio.py",
         "tests/properties/test_source_conservation.py",
         "tests/robustness/test_referential_integrity.py",
         "tests/unit/crm/test_collateral_submodules.py",
@@ -3120,7 +3124,8 @@
       ],
       "test_files": [
         "tests/acceptance/crr/test_p1_238_art_195_agreement_perimeter_netting.py",
-        "tests/fixtures/p1_238/p1_238.py"
+        "tests/fixtures/p1_238/p1_238.py",
+        "tests/fixtures/reporting_netting_portfolio.py"
       ],
       "watchfire_index_gap": false
     },
@@ -3315,8 +3320,10 @@
       "test_files": [
         "tests/acceptance/crr/test_p1_238_art_195_agreement_perimeter_netting.py",
         "tests/acceptance/crr/test_p1_241_art_219_netting_maturity_mismatch.py",
+        "tests/acceptance/reporting/test_reporting_netting_golden.py",
         "tests/fixtures/p1_238/p1_238.py",
         "tests/fixtures/p1_241/p1_241.py",
+        "tests/fixtures/reporting_netting_portfolio.py",
         "tests/unit/crm/test_netting.py"
       ],
       "watchfire_index_gap": false
@@ -6322,6 +6329,7 @@
         "tests/acceptance/basel31/test_p2_18_art_226_1_b31_secured_lending_fx.py",
         "tests/acceptance/basel31/test_p5_15_art_123a_granularity.py",
         "tests/acceptance/ccr/test_ccr_e1_e5_default_risk_routing.py",
+        "tests/acceptance/reporting/test_reporting_netting_golden.py",
         "tests/acceptance/test_p1_307_facility_share_counterparty_preview.py",
         "tests/contracts/test_docs_freshness.py",
         "tests/fixtures/ccr/p845_e1_e5_builder.py",
@@ -6337,6 +6345,7 @@
         "tests/fixtures/p1_95/p1_95.py",
         "tests/fixtures/p2_18/p2_18.py",
         "tests/fixtures/p5_15/p5_15.py",
+        "tests/fixtures/reporting_netting_portfolio.py",
         "tests/integration/test_re_split_pipeline.py",
         "tests/oracle/derivations/branch_sa.py",
         "tests/oracle/derivations/sa_b31.py",

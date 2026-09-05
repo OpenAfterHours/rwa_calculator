@@ -4,12 +4,14 @@ Utility scripts for the rwa-calc project.
 
 ## deploy.py
 
-Automates version updates and PyPI deployment.
+Automates version updates, the release commit, tag and push, and (optionally)
+PyPI deployment.
 
 > **Recommended path:** invoke `/release` in a Claude Code session instead of
 > calling `deploy.py` directly. The slash command previews which `[Unreleased]`
 > bullets will be promoted into the new version section before running the
-> script, so you can verify the changelog promotion before commit + tag.
+> script, so you can verify the changelog promotion before it is committed and
+> pushed.
 
 The `[Unreleased]` -> new-version promotion logic lives in
 `scripts/_deploy_changelog.py` (pure string transforms, unit-tested at
@@ -17,11 +19,16 @@ The `[Unreleased]` -> new-version promotion logic lives in
 
 ### Features
 
+- Fails fast, before the tests, if the branch is behind `origin`, the tag
+  already exists there, or HEAD is detached
+- Runs tests before deployment
 - Updates version in all required files (pyproject.toml, __init__.py, docs)
 - Updates changelog with new version section
+- Regenerates the version-stamped generated docs pages
 - Syncs uv.lock
-- Runs tests before deployment
-- Builds the package
+- Builds the package and checks the distribution metadata
+- Commits and tags the release
+- Pushes the branch and the release tag to `origin` in one atomic push
 - Optionally publishes to PyPI
 
 ### Usage
@@ -44,6 +51,9 @@ python scripts/deploy.py --bump patch --dry-run
 
 # Skip tests (not recommended)
 python scripts/deploy.py --bump patch --skip-tests
+
+# Commit and tag locally without pushing
+python scripts/deploy.py 0.1.4 --no-push
 ```
 
 ### Windows
@@ -57,13 +67,26 @@ scripts\deploy.bat 0.1.4 --publish
 
 ### After Deployment
 
-The script reminds you to commit and tag:
+Nothing, for git: the script has committed `chore(release): bump version to
+X.Y.Z`, tagged `vX.Y.Z`, and pushed both to `origin` in one atomic push, so
+either both are on the remote or neither is. Only the release tag travels;
+stray local tags stay local. The script refuses up front, before the test run,
+if the local branch is behind its upstream, if the tag already exists on the
+remote, or if HEAD is detached, so a stale checkout is caught in seconds.
+
+Pushing the tag does not publish to PyPI. `.github/workflows/publish.yml` runs
+on a *published GitHub Release*, so either pass `--publish` (uploads from this
+machine with `uv publish`) or create the release from the tag afterwards:
 
 ```bash
-git add -A
-git commit -m "chore: release v0.1.4"
-git tag v0.1.4
-git push origin master --tags
+gh release create vX.Y.Z --generate-notes
+```
+
+With `--no-push` (or `--no-git`, which implies it) the script prints the exact
+push command to run by hand instead:
+
+```bash
+git push --atomic origin master refs/tags/vX.Y.Z
 ```
 
 ### PyPI Token

@@ -11,7 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - (Next release changes will go here)
 
 ### Changed
-- (Next release changes will go here)
+- **The release flow now pushes for you.** `scripts/deploy.py`, and so
+  `/release`, ends by pushing the release commit and its tag to `origin` in one
+  `git push --atomic origin <branch> refs/tags/v<ver>`: both land or neither
+  does, and only the release tag travels, never every local tag. Because the
+  push is the step most likely to be rejected by state outside the checkout, a
+  new pre-flight runs *before* the test suite and refuses on a detached HEAD, a
+  branch behind its upstream, or a tag that already exists on the remote, so a
+  stale checkout costs seconds rather than a full run followed by a rejected
+  push. A failed push leaves the local commit and tag alone and prints the
+  manual command. `--no-push` keeps the old behaviour (commit and tag locally,
+  print the push command) and `--no-git` implies it. Pushing the tag does not
+  publish to PyPI — `publish.yml` runs on a published GitHub Release — so the
+  script now names `gh release create v<ver> --generate-notes` as the publish
+  step when `--publish` was not passed. Pinned by
+  `tests/unit/test_deploy_push.py`.
 
 ---
 

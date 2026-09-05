@@ -2,20 +2,26 @@
 """
 Deployment script for rwa-calc package.
 
-Automates version updates and PyPI publishing:
-1. Updates version in pyproject.toml, __init__.py, docs
-2. Updates changelog with new version section
-3. Regenerates generated docs pages (citation matrix from @cites; module dependency graph via curfew)
-4. Syncs uv.lock
-5. Builds the package
-6. Commits the version bump and creates a git tag
-7. Optionally publishes to PyPI
+Automates version updates, the release commit, tag and push, and PyPI publishing:
+1. Checks the remote state the final push needs (fails fast, before the tests)
+2. Runs the test suite
+3. Updates version in pyproject.toml, __init__.py, docs
+4. Updates changelog with new version section
+5. Regenerates generated docs pages (citation matrix from @cites; module dependency graph via curfew)
+6. Syncs uv.lock
+7. Builds the package and checks the distribution metadata
+8. Commits the version bump and creates a git tag
+9. Pushes the branch and the release tag to origin in one atomic push
+10. Optionally publishes to PyPI
 
-After it runs, only `git push origin master --tags` is required.
+After it runs, the release is on the remote. Pushing the tag does not by itself
+publish: `.github/workflows/publish.yml` runs on a published GitHub Release, so
+either pass `--publish` here or create a release from the tag afterwards.
 
 Usage:
     python scripts/deploy.py 0.1.4
     python scripts/deploy.py 0.1.4 --publish
+    python scripts/deploy.py 0.1.4 --no-push
     python scripts/deploy.py --bump patch
     python scripts/deploy.py --bump minor --publish
 """
@@ -47,6 +53,10 @@ VERSION_FILES = {
 }
 
 CHANGELOG_PATH = PROJECT_ROOT / "docs" / "appendix" / "changelog.md"
+
+# Remote the release commit and tag are pushed to. Every clone has `origin`, and
+# on this project it points at OpenAfterHours/rwa_calculator.
+RELEASE_REMOTE = "origin"
 
 # Files to stage in the release commit. Versioned files + changelog + the lockfile
 # touched by `uv sync`. Listed explicitly to avoid accidentally sweeping in untracked
@@ -142,13 +152,59 @@ def update_changelog(new_version: str, old_version: str) -> bool:
 
 def git_tag_exists(tag: str) -> bool:
     """Return True if a git tag with this name already exists locally."""
-    result = subprocess.run(
-        ["git", "tag", "--list", tag],
-        cwd=PROJECT_ROOT,
-        capture_output=True,
-        text=True,
-    )
+    result = _git("tag", "--list", tag)
     return result.returncode == 0 and result.stdout.strip() == tag
+
+
+def remote_tag_exists(tag: str) -> bool:
+    """Return True if the release remote already carries this tag."""
+    result = _git("ls-remote", "--tags", RELEASE_REMOTE, f"refs/tags/{tag}")
+    return result.returncode == 0 and bool(result.stdout.strip())
+
+
+def current_branch() -> str | None:
+    """Return the checked-out branch name, or None on a detached HEAD."""
+    result = _git("rev-parse", "--abbrev-ref", "HEAD")
+    if result.returncode != 0:
+        return None
+    name = result.stdout.strip()
+    return None if name == "HEAD" else name
+
+
+def check_release_preflight(branch: str, tag: str) -> bool:
+    """Fail fast on any remote state the final push could not land on.
+
+    Runs before the test suite, so a stale local branch or an already-published
+    tag costs seconds rather than a full test run followed by a rejected push.
+    """
+    print(f"\nChecking {RELEASE_REMOTE} before releasing {tag} from {branch}...")
+
+    if _git("remote", "get-url", RELEASE_REMOTE).returncode != 0:
+        print(f"  ERROR: no '{RELEASE_REMOTE}' remote is configured.")
+        print("  Pass --no-push to release without pushing.")
+        return False
+
+    fetch = _git("fetch", "--quiet", RELEASE_REMOTE)
+    if fetch.returncode != 0:
+        print(f"  ERROR: git fetch {RELEASE_REMOTE} failed: {fetch.stderr.strip()}")
+        return False
+
+    if remote_tag_exists(tag):
+        print(f"  ERROR: tag {tag} already exists on {RELEASE_REMOTE}. Pick a new version.")
+        return False
+
+    upstream = f"{RELEASE_REMOTE}/{branch}"
+    if _git("rev-parse", "--verify", "--quiet", upstream).returncode != 0:
+        print(f"  {upstream} does not exist yet; the push will create it")
+        return True
+
+    if _git("merge-base", "--is-ancestor", upstream, "HEAD").returncode != 0:
+        print(f"  ERROR: {branch} is behind {upstream}; the push would be rejected.")
+        print(f"  Run `git pull --ff-only {RELEASE_REMOTE} {branch}` and re-run.")
+        return False
+
+    print(f"  {branch} is up to date with {upstream}; tag {tag} is free")
+    return True
 
 
 def commit_and_tag(new_version: str) -> bool:
@@ -170,6 +226,22 @@ def commit_and_tag(new_version: str) -> bool:
         ["git", "tag", "-a", tag, "-m", f"Release {tag}"],
         f"Creating tag {tag}",
     )
+
+
+def push_release(branch: str, tag: str) -> bool:
+    """Push the release commit and its tag together: both land, or neither does.
+
+    The tag is named explicitly rather than pushed with `--tags`, which would
+    sweep every stray local tag onto the remote with it.
+    """
+    push_cmd = ["git", "push", "--atomic", RELEASE_REMOTE, branch, f"refs/tags/{tag}"]
+    if run_command(push_cmd, f"Pushing {branch} and {tag} to {RELEASE_REMOTE}"):
+        return True
+
+    print("\nPush failed. The release commit and tag exist locally and were left alone.")
+    print("Resolve the remote state, then push by hand:")
+    print(f"  {' '.join(push_cmd)}")
+    return False
 
 
 def run_command(cmd: list[str], description: str) -> bool:
@@ -196,6 +268,15 @@ def run_command(cmd: list[str], description: str) -> bool:
         return False
 
 
+def _git(*args: str) -> subprocess.CompletedProcess[str]:
+    """Run one git query in the project root with its output captured.
+
+    The single subprocess seam for every git question the release asks, so the
+    tests can fake it and assert on argv without touching a repository.
+    """
+    return subprocess.run(["git", *args], cwd=PROJECT_ROOT, capture_output=True, text=True)
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the command-line argument parser for the deploy script."""
     parser = argparse.ArgumentParser(
@@ -207,6 +288,7 @@ Examples:
   python scripts/deploy.py --bump patch    # Bump patch version (0.1.3 -> 0.1.4)
   python scripts/deploy.py --bump minor    # Bump minor version (0.1.3 -> 0.2.0)
   python scripts/deploy.py 0.1.4 --publish # Update and publish to PyPI
+  python scripts/deploy.py 0.1.4 --no-push # Commit and tag locally; push by hand
   python scripts/deploy.py --dry-run       # Show what would be done
         """,
     )
@@ -238,7 +320,12 @@ Examples:
     parser.add_argument(
         "--no-git",
         action="store_true",
-        help="Skip git commit and tag creation (leave changes uncommitted)",
+        help="Skip git commit and tag creation (leave changes uncommitted; implies --no-push)",
+    )
+    parser.add_argument(
+        "--no-push",
+        action="store_true",
+        help="Commit and tag locally but do not push to the remote",
     )
     return parser
 
@@ -269,6 +356,8 @@ def print_dry_run(args: argparse.Namespace, new_version: str) -> None:
     print("  - Run: uv build")
     if not args.no_git:
         print(f"  - git commit + git tag v{new_version}")
+        if not args.no_push:
+            print(f"  - git push --atomic {RELEASE_REMOTE} <branch> refs/tags/v{new_version}")
     if args.publish:
         print("  - Run: uv publish")
 
@@ -346,21 +435,45 @@ def build_release(new_version: str) -> bool:
     return True
 
 
-def print_next_steps(args: argparse.Namespace, new_version: str) -> None:
-    """Print the manual follow-up steps a maintainer must run after the script."""
+def print_next_steps(args: argparse.Namespace, new_version: str, branch: str | None) -> None:
+    """Print what, if anything, is left for the maintainer to do after the script."""
+    tag = f"v{new_version}"
+    push_cmd = f"git push --atomic {RELEASE_REMOTE} {branch or '<branch>'} refs/tags/{tag}"
+
     if args.no_git:
-        print("\nGit step skipped (--no-git). To commit and tag manually:")
+        print("\nGit step skipped (--no-git). To commit, tag and push manually:")
         print(f"  git add {' '.join(GIT_STAGE_FILES)}")
         print(f'  git commit -m "chore(release): bump version to {new_version}"')
-        print(f'  git tag -a v{new_version} -m "Release v{new_version}"')
-        print("  git push origin master --tags")
-    else:
-        print("\nRelease committed and tagged. To finish, push:")
-        print("  git push origin master --tags")
+        print(f'  git tag -a {tag} -m "Release {tag}"')
+        print(f"  {push_cmd}")
+        return
+
+    if args.no_push:
+        print("\nRelease committed and tagged locally (--no-push). To finish, push:")
+        print(f"  {push_cmd}")
+        return
+
+    print(f"\nRelease {tag} is on {RELEASE_REMOTE} ({branch}).")
+    if not args.publish:
+        print("PyPI publishes from a GitHub Release, not from the tag push. To publish:")
+        print(f"  gh release create {tag} --generate-notes")
 
 
 def run_release(args: argparse.Namespace, new_version: str, current_version: str) -> int:
-    """Execute the full release flow (tests, build, commit/tag, publish)."""
+    """Execute the full release flow: pre-flight, tests, bump, build, commit/tag, push, publish."""
+    tag = f"v{new_version}"
+    wants_push = not args.no_git and not args.no_push
+    branch = current_branch()
+    if wants_push and branch is None:
+        print("\nERROR: HEAD is detached. Check out the release branch and re-run.")
+        return 1
+    push_target = branch if wants_push else None
+
+    # The push is the last step and the one most likely to be rejected by state
+    # outside this checkout, so check that state first, before the test run.
+    if push_target is not None and not check_release_preflight(push_target, tag):
+        return 1
+
     # Run tests first (unless skipped)
     if not args.skip_tests and not run_command(
         ["uv", "run", "pytest", "-x", "-q"], "Running tests"
@@ -382,6 +495,10 @@ def run_release(args: argparse.Namespace, new_version: str, current_version: str
             print("\nGit commit/tag failed. Resolve manually before publishing.")
             return 1
 
+    # Push before publishing so a PyPI release always has its tag on the remote.
+    if push_target is not None and not push_release(push_target, tag):
+        return 1
+
     # Publish if requested
     if args.publish:
         if not run_command(["uv", "publish"], "Publishing to PyPI"):
@@ -389,11 +506,9 @@ def run_release(args: argparse.Namespace, new_version: str, current_version: str
         print(f"\nSuccessfully published rwa-calc {new_version} to PyPI!")
         print(f"View at: https://pypi.org/project/rwa-calc/{new_version}/")
     else:
-        print(f"\nVersion {new_version} ready for deployment.")
-        print("Run with --publish to upload to PyPI:")
-        print(f"  python scripts/deploy.py {new_version} --publish")
+        print(f"\nVersion {new_version} built and tagged; not published to PyPI.")
 
-    print_next_steps(args, new_version)
+    print_next_steps(args, new_version, branch)
     return 0
 
 

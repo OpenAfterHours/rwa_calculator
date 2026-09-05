@@ -102,18 +102,23 @@ If the workbooks are missing it exits non-zero and points you back at `download_
 
 ### `scripts/deploy.py` — Version bumping and PyPI publication
 
-Automates the release process: updates version strings across all files (`pyproject.toml`, `__init__.py`, docs, changelog), syncs `uv.lock`, runs tests, builds the package, and optionally publishes to PyPI. Intended for maintainers.
+Automates the release process end to end: checks that the local branch is current with `origin` and the tag is free (before the tests, so a stale checkout fails in seconds), runs tests, updates version strings across all files (`pyproject.toml`, `__init__.py`, docs, changelog), regenerates the version-stamped docs pages, syncs `uv.lock`, builds the package, commits and tags the release, pushes the branch and tag to `origin` in one atomic push, and optionally publishes to PyPI. Intended for maintainers.
 
 ```bash
-# Bump patch version (e.g. 0.1.3 -> 0.1.4)
+# Bump patch version (e.g. 0.1.3 -> 0.1.4), commit, tag and push
 uv run python scripts/deploy.py --bump patch
 
 # Set specific version and publish
 uv run python scripts/deploy.py 0.1.4 --publish
 
+# Commit and tag locally without pushing
+uv run python scripts/deploy.py 0.1.4 --no-push
+
 # Dry run
 uv run python scripts/deploy.py --bump patch --dry-run
 ```
+
+Pushing the tag does not publish: `.github/workflows/publish.yml` runs on a published GitHub Release, so without `--publish` the follow-up is `gh release create vX.Y.Z --generate-notes`.
 
 !!! info "See also"
     Full details (Windows batch wrapper, PyPI token setup, post-deployment git workflow) in [`scripts/README.md`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/scripts/README.md).

@@ -665,6 +665,21 @@ class CalculationConfig:
     # under CRE20.66's national-discretion clause, or to isolate the other
     # Art. 123A limbs in tests. No effect under CRR (the limb is Basel-3.1 only).
     enforce_retail_granularity: bool = True
+    # Firm election for the facility-share allocation metric (design of record:
+    # docs/plans/facility-share-riskiest-member.md, decision D2). A shared
+    # facility's undrawn commitment is capitalised against its riskiest member;
+    # under the Basel 3.1 output floor "riskiest" is state-dependent, because
+    # TREA is a portfolio max. "floor_aware" (default) evaluates both whole-book
+    # assignments end to end and keeps the larger; "own_approach" pins the
+    # un-floored rule for firms whose reporting or reconciliation cannot
+    # tolerate attribution moving with the floor state. It LOWERS RWA wherever
+    # the floor binds, which is why it is opt-in.
+    #
+    # This is a firm choice, like OutputFloorConfig.skip_transitional, so it
+    # lives on the config and not in the rulepack; the REGIME gate is the
+    # existing ``output_floor`` pack Feature (arch_check check 17). Accepted and
+    # inert under CRR, where that Feature is off and P0 applies either way.
+    facility_share_metric: Literal["floor_aware", "own_approach"] = "floor_aware"
     use_investment_grade_assessment: bool = False  # Art. 122(6)/(8): IG=65% / non-IG=135%
     # Art. 122(8): IRB institutions must choose between para 2 (100% flat)
     # or para 6 (65%/135% IG assessment) for unrated corporates. This choice
@@ -786,6 +801,7 @@ class CalculationConfig:
         crm_collateral_method: CRMCollateralMethod = CRMCollateralMethod.COMPREHENSIVE,
         airb_collateral_method: AIRBCollateralMethod = AIRBCollateralMethod.LGD_MODELLING,
         enable_collateral_link_splitting: bool = True,
+        facility_share_metric: Literal["floor_aware", "own_approach"] = "floor_aware",
         collect_engine: PolarsEngine = "cpu",
         spill_dir: Path | None = None,
         log_level: str = "INFO",
@@ -822,6 +838,10 @@ class CalculationConfig:
                 exposures take the fixed supervisory M of 2.5y (repo-style stays 0.5y)
                 instead of the per-exposure Art. 162(2) derivation. Set it only for a
                 firm whose Art. 143 permission does not require the Art. 162(2) M.
+            facility_share_metric: firm election for the facility-share allocation
+                metric. Inert under CRR (the output-floor Feature is off, so the
+                un-floored rule applies either way) and accepted here so a firm can
+                set it once and run both regimes.
             collect_engine: Polars engine for .collect() - 'cpu' (default) for
                 in-memory processing, 'streaming' for batched lower-memory execution.
             sft_method: SFT EAD method (CRR Art. 271(2)). "fccm" (default,
@@ -857,6 +877,7 @@ class CalculationConfig:
             crm_collateral_method=crm_collateral_method,
             airb_collateral_method=airb_collateral_method,
             enable_collateral_link_splitting=enable_collateral_link_splitting,
+            facility_share_metric=facility_share_metric,
             collect_engine=collect_engine,
             spill_dir=spill_dir,
             log_level=log_level,
@@ -883,6 +904,7 @@ class CalculationConfig:
         airb_collateral_method: AIRBCollateralMethod = AIRBCollateralMethod.LGD_MODELLING,
         enforce_retail_granularity: bool = True,
         enable_collateral_link_splitting: bool = True,
+        facility_share_metric: Literal["floor_aware", "own_approach"] = "floor_aware",
         collect_engine: PolarsEngine = "cpu",
         spill_dir: Path | None = None,
         log_level: str = "INFO",
@@ -939,6 +961,11 @@ class CalculationConfig:
                 and concentrated obligors are re-routed to CORPORATE. Set False to
                 suppress the limb (granularity assessed by another method, or to
                 isolate the other Art. 123A limbs in tests).
+            facility_share_metric: firm election for the facility-share allocation
+                metric — "floor_aware" (default) evaluates both whole-book
+                assignments end to end and keeps the larger; "own_approach" pins
+                the un-floored rule. The election LOWERS RWA wherever the floor
+                binds and is opt-in for that reason.
             collect_engine: Polars engine for .collect() - 'cpu' (default) for
                 in-memory processing, 'streaming' for batched lower-memory execution.
             sft_method: SFT EAD method (CRR Art. 271(2)). "fccm" (default,
@@ -986,6 +1013,7 @@ class CalculationConfig:
             airb_collateral_method=airb_collateral_method,
             enable_collateral_link_splitting=enable_collateral_link_splitting,
             enforce_retail_granularity=enforce_retail_granularity,
+            facility_share_metric=facility_share_metric,
             collect_engine=collect_engine,
             spill_dir=spill_dir,
             log_level=log_level,

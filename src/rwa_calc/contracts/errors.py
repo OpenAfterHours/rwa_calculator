@@ -367,6 +367,14 @@ ERROR_NON_FINITE_OUTPUT = "AGG001"
 # carried a non-finite value rather than letting it be absorbed silently.
 ERROR_NON_FINITE_INPUT = "AGG002"
 
+# Aggregator facility-share fallback code. Every priced candidate of one shared
+# facility carried a non-finite / absent own-approach RWA, so the riskiest-member
+# ranking decided nothing and a deterministic ordering allocated the commitment
+# instead. A WARNING rather than an error: the exposure is still capitalised
+# (never dropped), but the member it was capitalised against was not chosen by
+# the policy metric, and that must not be silent.
+ERROR_FACILITY_SHARE_FALLBACK = "AGG003"
+
 # Parallel-run reconciliation error codes (legacy-vs-ours comparison).
 # Non-fatal: reconciliation degrades gracefully (skips the affected
 # component/column) and records the issue rather than aborting.
@@ -1059,6 +1067,34 @@ def non_finite_input_warning(
         category=ErrorCategory.DATA_QUALITY,
         field_name=column,
         actual_value=str(count),
+    )
+
+
+def facility_share_fallback_warning(*, group: str, candidate_count: int) -> CalculationError:
+    """Create an AGG003 warning for a facility share resolved by the fallback rule.
+
+    Raised by the aggregator's facility-share resolver when EVERY priced
+    candidate of one shared facility carries a non-finite (NaN / inf) or absent
+    own-approach RWA, so the ranking metric decides nothing. The group is never
+    dropped — dropping every candidate would delete the facility's undrawn
+    commitment from the submission outright — so a deterministic ordering
+    (risk weight descending, then the counterparty reference) picks the member
+    instead. This warning is what makes that substitution attributable: a
+    fallback nobody is told about is indistinguishable from a ranked outcome.
+    """
+    return CalculationError(
+        code=ERROR_FACILITY_SHARE_FALLBACK,
+        message=(
+            f"Facility share '{group}': all {candidate_count} priced candidate(s) "
+            "carry a non-finite or absent own-approach RWA, so the riskiest-member "
+            "ranking could not be applied. The commitment was allocated by the "
+            "deterministic fallback (highest risk weight, then lowest counterparty "
+            "reference). Check the candidates' PD / LGD / EAD inputs."
+        ),
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.DATA_QUALITY,
+        field_name=group,
+        actual_value=str(candidate_count),
     )
 
 

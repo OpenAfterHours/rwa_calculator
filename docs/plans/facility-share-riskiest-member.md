@@ -17,8 +17,16 @@
 > over 20k counterparties, 7,105 candidates) the aggregator stage runs +83% (106 → 195 ms on the
 > implementer's machine) after a short-circuit that skips both trial evaluations whenever the two
 > assignments already coincide — the residual is the loser drop (~56 ms) and Python-side ranking
-> (~44 ms). Accepted as a bounded cost; vectorising the ranking is an optional follow-up. The
-> earlier "~10 ms resolution pass" estimate measured the rank alone and is withdrawn.
+> (~44 ms). The skeptic's independent method on the same synthetic book measured +149% (162 → 405
+> ms best-of-four), the residual being per-candidate Python work (`to_dicts`, two sorts per group,
+> audit-frame rebuild); the closure is called zero times there. Accepted as a bounded cost on a
+> book shape the estate does not contain; vectorising the ranking is an optional follow-up. The
+> earlier "~10 ms resolution pass" estimate measured the rank alone and is withdrawn. **Retro
+> caveat:** the three `materialise_frame` passthroughs on `sa_results` / `irb_results` /
+> `slotting_results` were removed in S3 (−39 ms); `tests/unit/test_aggregator_eager_views.py`
+> does not list those three fields, so the weakening is unguarded — bounded, because the frames sit
+> on data `materialise_branches` already made eager and their only reader outside the aggregator is
+> the audit sink gated on `config.audit_cache_dir`.
 
 This document answers three questions and ends with the decisions the proposal needs and a
 sequenced way forward:

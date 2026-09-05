@@ -59,6 +59,7 @@ from rwa_calc.contracts.validation import (
     validate_bundle_values,
 )
 from rwa_calc.domain.enums import PermissionMode
+from rwa_calc.engine.aggregator import rekey_candidate_errors
 from rwa_calc.engine.fx_rate_sync import extract_eur_gbp_rate
 from rwa_calc.engine.materialise import (
     begin_edge_capture,
@@ -389,6 +390,32 @@ class PipelineOrchestrator:
             if extra_errors:
                 all_errors = list(result.errors) + extra_errors
                 result = replace(result, errors=all_errors)
+
+            # Facility-share candidates that LOST are priced rows that never
+            # reach the ledger, so a classification / CRM warning raised against
+            # one is noise about an exposure the submission does not contain.
+            # Re-key it to the surviving reference where the WINNER raised it and
+            # drop it otherwise. This is the only merge point that sees every
+            # channel at once (aggregator + branch + loader + stage + crash), so
+            # it is the only place the pass can be complete. No-op on every
+            # portfolio with no facility share, which is most of them.
+            #
+            # Applied UNCONDITIONALLY. The pass has two effects and only one of
+            # them changes the list LENGTH: suppressing a loser's error shortens
+            # it, but RE-KEYING the winner's rewrites an element in place. A
+            # length guard therefore discards the whole result whenever only the
+            # winner raised anything, and the ``@<member>`` suffix leaks onto the
+            # error channel naming a row the results frame does not contain.
+            # ``replace`` on an unchanged list is free, so there is nothing to
+            # guard for.
+            rekeyed = rekey_candidate_errors(result.errors, result.facility_share_resolution)
+            dropped_error_count = len(result.errors) - len(rekeyed)
+            if dropped_error_count:
+                logger.info(
+                    "facility share: suppressed %d error(s) raised against dropped candidates",
+                    dropped_error_count,
+                )
+            result = replace(result, errors=rekeyed)
 
             # Output-bounds gate (OUT001-005): risk_weight above the 1250% cap
             # or negative, negative rwa_final, null ead_final, null

@@ -3,6 +3,7 @@
     "what_this_is": "Known supervisory validation breaks, coverage holes and VACUOUS rules, ratcheted by tests/acceptance/reporting/test_supervisory_validations.py. An entry is a LIABILITY, not a waiver: an ERROR-severity break rejects the entire return at submission.",
     "what_a_vacuity_entry_MEANS": "known_vacuous_rules lists rules that REACH a verdict on at least one registered run and reach it only VACUOUSLY - every operand was null or exactly zero, so the comparison held at 0 = 0 and asserted nothing about our figures. It is not a break and not a coverage hole; it is a check we are not getting. Membership is the union over portfolios: a rule PASSing or FAILing anywhere is NOT here, which also makes this list disjoint from known_broken_rules. It is ratcheted BOTH ways, exactly like a break - a rule that falls to vacuous outside this list fails the gate (the PASS -> VACUOUS regression, which moves neither the break set nor template coverage and was invisible before), and a listed rule that stops being vacuous on every run must be REMOVED from the list.",
     "what_the_vacuity_ratchet_does_NOT_catch": "Two limits, both measured, both stated because a green leg is otherwise read as more than it is. (1) UNION: a change that empties a column on one portfolio while another still gets a real verdict out of the same rule moves nothing here, and 221 rules (130 ERROR) currently hold a real verdict on exactly ONE run. Same masking on the removal leg: crr/v3332_i is vacuous on both rich and crm-substitution, so darkening it on rich leaves the entry standing. (2) STATUS SCOPE: these legs see VACUOUS only, so PASS -> NOT_EVALUATED escapes every leg of this gate - dropping one emitted row (C 02.00 r0160) from crr/rich darkens two ERROR rules, one of them (v3335_i) passing on rich alone, and the whole gate stays green. scripts/coverage_report.py --check mitigates that by ratcheting never_evaluated_rules (max 785) and union_binding_rules (min 257/289), but those are counts in a different gate, so one rule going dark nets against another activating. The NOT_EVALUATED half is owed work, not a property of this register.",
+    "binding_output_floor_add_on_has_no_home_in_the_ir_templates": "boe_b0751 (OF08.01.01.01) and boe_b0763 (OF08.02.01.01) are ONE published identity restated per template (LESSONS C6): RWEA after adjustments (col 0260) must equal the sum of RWEA before adjustments, PMAs, unrecognised-exposure adjustments and the mortgage RW-floor adjustment (cols 0251-0254). They FAIL on b31/facility-share-binding by exactly OutputFloorSummary.shortfall, because the pro-rata output-floor add-on lives inside rwa_final and the reporting projection mirrors it into col 0260 while cols 0251-0254 have no column for it. Every portfolio registered before 2026-09-05 had a NON-binding floor, so the pair had never been evaluated in the binding state (LESSONS B5, a portfolio STATE no fixture reached). Pre-existing: the values are byte-identical at the commit before the facility-share fan-out landed. The reporting-basis decision - un-floored RWEA in the IRB templates with the floor at the total level (OF 02.01 / C 02.00), or an adjustment column - is OWNER: P1.369 and is NOT made here. Banked as an ERROR-severity liability, not a waiver.",
     "how_to_discharge_a_vacuity_entry": "Make one cell the rule addresses carry a real figure on a registered portfolio, then DELETE the entry - the gate will fail until you do, which is the design. The worked example is the 2026-08-08 B5 recurrence (.claude/LESSONS.md): C 08.01 r0253 read 0.00 in all six goldens, so Tier 2 was structurally incapable of seeing a change to it. Closing it needed a TWO-LEG fixture - a live cell that SURVIVES the change plus one that MOVES, because a single moving row leaves the cell at 0.00 afterwards - and activated five previously-VACUOUS rules to PASS, boe_b0752_27 (the r0253 tie-out) among them. Do NOT discharge an entry by deleting the rule, narrowing a portfolio, or making the cell structurally absent: absence is NOT_EVALUATED, which is worse than vacuity, not better - and per what_the_vacuity_ratchet_does_NOT_catch, that route may not even redden a leg, so nothing here will stop you doing it.",
     "reading_a_vacuity_reason": "The mechanism sentence names WHICH limb the measured evidence supports. 'emitted but unreported (null)' means the cells exist in the layout and carry no figure, so the rule's treat-missing-as-zero policy coalesces them to 0.0 - the LESSONS B1/B5 dead-cell signature, and the limb most likely to be hiding a defect. 'emitted and exactly 0.00' means the cells ARE populated and the figure is genuinely zero - usually a portfolio artefact (no exposure of the kind the column measures) but equally consistent with a column nothing ever writes to. Neither limb settles the root cause, which is why most entries are prefixed 'unattributed - needs investigation'. The exception is the 'structural' prefix: see the next note.",
     "structural_vacuity_of_prohibition_rules": "A rule of the form '{ref} = empty' asks whether a cell was REPORTED, and holds precisely by our reporting nothing there. reporting/validations/evaluate.py::_evaluate_emptiness returns VACUOUS for the holding case, so PASS is UNREACHABLE for this family and vacuity is the passing verdict, not a lost check. Those entries are prefixed 'structural' and need no investigation. Their only other outcome is FAIL (we reported a figure the publisher forbids), which lands in known_broken_rules - so removing them from here on activation is coherent, not a loophole.",
@@ -11,7 +12,7 @@
     "caution_on_arithmetic_coincidence": "Do not read an arithmetic coincidence as evidence of a mechanism. boe_b0752_22/24 were once attributed to a class-level figure being 'broadcast' onto every PD-grade row, on the evidence that the grade sum was exactly 7x the total across 7 grades. That is equally consistent with a genuine per-grade average whose inputs coincide - which is what it was. The decisive evidence was float dust (1672.9999999999995 on one row of seven): a broadcast constant would be bit-identical.",
     "caution_on_plan_doc_definitions": "A plan document naming a column as the DEFINITION of a basis is not evidence the column implements it. Worked example: docs/plans/phase7-declarative-reporting.md's F3 decision (the Pillar 3 CR4/CR5 tranche) cites 'C 07.00 col 0200 basis' as what 'post-substitution' MEANS - it assumed col 0200 already carried that basis, not that it should. That assumption was false at the time and broke v0308_m/boe_b0471/v8726_m/boe_b0556: C 07.00's own col 0200 summed EAD over the ORIGIN population (the F4 build never extended substitution-awareness to it), while CR4/CR5 (reporting/pillar3/cr4.py, cr5.py) keyed the post-substitution `reporting_class` they cite the same definition for - so two parts of the estate that cite one shared basis were inconsistent. RESOLVED: C 07.00 col 0200/0220 (and the C 08.01 / C 09.02 cousins) were rebound to the post-substitution population, col 0200 now reads Sum(ead_col) over that basis, and the four rules were removed from this register. Retained as the lesson: verify a definition is IMPLEMENTED before citing it as evidence a related gap is a deliberate decision rather than a build shortfall.",
     "pattern_boe_summation_templates": "The BoE summation rules do not distinguish ADDITIVE columns from AVERAGED ones. 'r0070 = sum(grade rows)' is applied across all ~36 columns of OF 08.01/08.02, including exposure-weighted averages, where it cannot hold unless there is exactly one grade row. Same shape as boe_b0779 on c0050 and v09782_m/v09783_m on C 08.06's risk-weight column. Recognise it before re-deriving it a fourth time.",
-    "pattern_empty_subrow_vs_negated_column": "An inequality between an 'of which' sub-row and its parent inverts when the parent is a genuinely negative Annex II Sec.1.3 '(-)' deduction column and the sub-row's own subset is empty: our empty-subset convention renders the sub-row ALL-NULL, the evaluator coalesces that null to 0.0 for the comparison, and 0 <= a negative number reads false however correct that negative figure is. Same shape as the zero-exposure ratio family (boe_b0778/v09782_m and boe_b0779's 'no emptiness guard' \u2014 see the caution on unattributed entries above before assuming the parent's negative figure is itself the bug, as it genuinely was in the boe_b0378 worked example there).",
+    "pattern_empty_subrow_vs_negated_column": "An inequality between an 'of which' sub-row and its parent inverts when the parent is a genuinely negative Annex II Sec.1.3 '(-)' deduction column and the sub-row's own subset is empty: our empty-subset convention renders the sub-row ALL-NULL, the evaluator coalesces that null to 0.0 for the comparison, and 0 <= a negative number reads false however correct that negative figure is. Same shape as the zero-exposure ratio family (boe_b0778/v09782_m and boe_b0779's 'no emptiness guard' — see the caution on unattributed entries above before assuming the parent's negative figure is itself the bug, as it genuinely was in the boe_b0378 worked example there).",
     "pattern_non_additive_columns_in_summation_rules": "The BoE summation rules are COLUMN-AGNOSTIC: 'total row = sum(breakdown rows)' is applied across every column of the table, including columns that are not additive across those rows. This is the same family as notes.pattern_boe_summation_templates but a STRICTER form, because it cannot be satisfied by any portfolio rather than only by a single-row one. Two column kinds are affected on OF 08.01: c0300 = Count(counterparty_reference, distinct=True) and c0250 = WeightedAvg(irb_maturity_m, weight=ead). A DISTINCT COUNT counts an obligor once on the total row and once in EACH breakdown row it appears in, so the row sum exceeds the total whenever one obligor holds legs on both balance-sheet sides. Measured on reporting/irb-shapes/b31, C 08.01 corporate: c0300 total = 3 distinct obligors, on-BS row = 3, off-BS row = 1 -> row sum 4 vs total 3. c0250 total = 1673.0, on-BS = 1673.0, off-BS = 1673.0 -> row sum 3346 vs total 1673. Our figures are correct on their own definitions in both cases. This surfaced only when the irb-shapes portfolio arrived because it is the FIRST portfolio in the estate where a single obligor spans both the on- and off-balance-sheet rows, which is inherent to covering IRB off-balance-sheet exposure at all."
   },
   "summary": {
@@ -214,6 +215,46 @@
       "rules_executed": 173,
       "templates_emitted": 5,
       "templates_covered": 5
+    },
+    "crr/facility-share-binding": {
+      "PASS": 94,
+      "FAIL": 1,
+      "VACUOUS": 94,
+      "NOT_EVALUATED": 552,
+      "rules_enforced": 741,
+      "rules_executed": 189,
+      "templates_emitted": 10,
+      "templates_covered": 10
+    },
+    "crr/facility-share-nonbinding": {
+      "PASS": 94,
+      "FAIL": 1,
+      "VACUOUS": 94,
+      "NOT_EVALUATED": 552,
+      "rules_enforced": 741,
+      "rules_executed": 189,
+      "templates_emitted": 10,
+      "templates_covered": 10
+    },
+    "b31/facility-share-binding": {
+      "PASS": 133,
+      "FAIL": 10,
+      "VACUOUS": 192,
+      "NOT_EVALUATED": 473,
+      "rules_enforced": 808,
+      "rules_executed": 335,
+      "templates_emitted": 11,
+      "templates_covered": 11
+    },
+    "b31/facility-share-nonbinding": {
+      "PASS": 132,
+      "FAIL": 7,
+      "VACUOUS": 196,
+      "NOT_EVALUATED": 473,
+      "rules_enforced": 808,
+      "rules_executed": 335,
+      "templates_emitted": 11,
+      "templates_covered": 11
     }
   },
   "known_broken_rules": [
@@ -367,6 +408,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -392,6 +435,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -415,6 +460,7 @@
       "severity": "ERROR",
       "reason": "known limitation of the published rule, not a defect in our output (notes.pattern_non_additive_columns_in_summation_rules): {t: OF08.01.01.01, r: 0010} = sum({t: OF08.01.01.01, r: 0020; 0030; 0040; 0050; 0060}) is applied across ALL columns of the table, two of which are not additive across the on-BS / off-BS / CCR breakdown rows. Failing cells: OF08.01.01.01[corporate][c0300] and [specialised_lending][c0300], a DISTINCT obligor count, and [corporate][c0250], an exposure-weighted average maturity. Measured on C 08.01 corporate: c0300 total row = 3 distinct obligors, on-BS row = 3, off-BS row = 1, so the row sum is 4 against a distinct total of 3 - arithmetically unsatisfiable whenever ONE obligor holds both an on- and an off-balance-sheet leg, which IRS-CP-CORP (3 legs) and IRS-CP-SL (2 legs) both do. c0250 total = 1673.0 with on-BS and off-BS each also 1673.0, summing to 3346: an average, not a total. Our per-cell figures are correct. NOTE this is ERROR-severity, so it would reject a submission - it is banked as a rule limitation on the evidence above and is a one-line revert if that reading is rejected on review.",
       "portfolios": [
+        "facility-share-binding",
         "irb-shapes"
       ],
       "failing_coordinates": 3,
@@ -427,11 +473,31 @@
     },
     {
       "regime": "b31",
+      "rule_id": "boe_b0751",
+      "severity": "ERROR",
+      "reason": "OWNER: P1.369 - the binding output-floor add-on has no reported home in the IRB templates. Col 0260 (RWEA after adjustments) exceeds the sum of cols 0251-0254 (RWEA before adjustments, PMAs, unrecognised-exposure adjustments, mortgage RW-floor adjustment) by exactly OutputFloorSummary.shortfall on b31/facility-share-binding, because the pro-rata floor add-on lives inside rwa_final and the reporting projection mirrors it into col 0260 while no adjustment column carries it. OF08.01.01.01 (exposure-class rows) restatement of the one published identity (the pair is one defect, LESSONS C6). Pre-existing behaviour first exposed 2026-09-05 by the first registered portfolio with a BINDING floor (every earlier portfolio was non-binding); the values are byte-identical at the commit before the facility-share fan-out landed. Reporting-basis decision - un-floored RWEA in the IRB templates with the floor carried at the total level (OF 02.01 / C 02.00), or a new adjustment column - is P1.369's and is NOT made here. ERROR severity: rejects the submission; banked as a liability, not a waiver.",
+      "portfolios": [
+        "facility-share-binding"
+      ],
+      "failing_coordinates": 5,
+      "coordinates": [
+        "OF08.01.01.01[corporate][r0010]",
+        "OF08.01.01.01[corporate][r0020]",
+        "OF08.01.01.01[corporate][r0030]",
+        "OF08.01.01.01[corporate][r0070]",
+        "OF08.01.01.01[corporate][r0190]"
+      ],
+      "expression": "{t: OF08.01.01.01, c: 0260} = sum({t: OF08.01.01.01, c: 0251; 0252; 0253; 0254})"
+    },
+    {
+      "regime": "b31",
       "rule_id": "boe_b0752_22",
       "severity": "ERROR",
       "reason": "limit of the published rule, not of our output: c0230 and c0250 are exposure-weighted AVERAGES, and summing an average down the 7 PD-grade rows cannot equal the class-level average unless there is exactly one grade row (0.4 against 2.8; 1,673 against 11,711). Our per-grade values are correctly computed, not broadcast: c0110 differs on every grade row, and c0250 carries float dust on one of the seven (1672.9999999999995), which a broadcast constant could not. They coincide only because every corporate leg in this fixture shares the same supervisory F-IRB LGD and maturity. See notes.pattern_boe_summation_templates",
       "portfolios": [
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes"
       ],
@@ -448,6 +514,8 @@
       "reason": "limit of the published rule, not of our output: c0230 and c0250 are exposure-weighted AVERAGES, and summing an average down the 7 PD-grade rows cannot equal the class-level average unless there is exactly one grade row (0.4 against 2.8; 1,673 against 11,711). Our per-grade values are correctly computed, not broadcast: c0110 differs on every grade row, and c0250 carries float dust on one of the seven (1672.9999999999995), which a broadcast constant could not. They coincide only because every corporate leg in this fixture shares the same supervisory F-IRB LGD and maturity. See notes.pattern_boe_summation_templates",
       "portfolios": [
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes"
       ],
@@ -464,6 +532,8 @@
       "reason": "limit of the published rule, not of our output: the exposure-weighted RESTATEMENT of boe_b0752_22 / boe_b0752_24, and it fails for exactly the same reason. The weighting factor is identical on both sides - b0756 multiplies both by (sum(c0110) - sum(c0140)), b0758 both by sum(c0110) - so it cancels and the rule reduces to the same 'class average = sum of grade averages' assertion. Verified arithmetically: b0756's 20,440,000 vs 143,080,000 is 0.4 vs 2.8 scaled by 51,100,000, and b0758's 85,490,300,000 vs 598,432,100,000 is 1,673 vs 11,711 scaled by the same. NB the rule LOOKS like it intends the correct paired identity - each grade's average times that grade's own exposure - but as published it multiplies two separate sums, which the simplified expression cannot express as a per-grade pairing. Either reading leaves it unsatisfiable against a correct return. See notes.pattern_boe_summation_templates",
       "portfolios": [
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes"
       ],
@@ -480,6 +550,8 @@
       "reason": "limit of the published rule, not of our output: the exposure-weighted RESTATEMENT of boe_b0752_22 / boe_b0752_24, and it fails for exactly the same reason. The weighting factor is identical on both sides - b0756 multiplies both by (sum(c0110) - sum(c0140)), b0758 both by sum(c0110) - so it cancels and the rule reduces to the same 'class average = sum of grade averages' assertion. Verified arithmetically: b0756's 20,440,000 vs 143,080,000 is 0.4 vs 2.8 scaled by 51,100,000, and b0758's 85,490,300,000 vs 598,432,100,000 is 1,673 vs 11,711 scaled by the same. NB the rule LOOKS like it intends the correct paired identity - each grade's average times that grade's own exposure - but as published it multiplies two separate sums, which the simplified expression cannot express as a per-grade pairing. Either reading leaves it unsatisfiable against a correct return. See notes.pattern_boe_summation_templates",
       "portfolios": [
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes"
       ],
@@ -491,6 +563,21 @@
     },
     {
       "regime": "b31",
+      "rule_id": "boe_b0763",
+      "severity": "ERROR",
+      "reason": "OWNER: P1.369 - the binding output-floor add-on has no reported home in the IRB templates. Col 0260 (RWEA after adjustments) exceeds the sum of cols 0251-0254 (RWEA before adjustments, PMAs, unrecognised-exposure adjustments, mortgage RW-floor adjustment) by exactly OutputFloorSummary.shortfall on b31/facility-share-binding, because the pro-rata floor add-on lives inside rwa_final and the reporting projection mirrors it into col 0260 while no adjustment column carries it. OF08.02.01.01 (PD-band rows) restatement of the one published identity (the pair is one defect, LESSONS C6). Pre-existing behaviour first exposed 2026-09-05 by the first registered portfolio with a BINDING floor (every earlier portfolio was non-binding); the values are byte-identical at the commit before the facility-share fan-out landed. Reporting-basis decision - un-floored RWEA in the IRB templates with the floor carried at the total level (OF 02.01 / C 02.00), or a new adjustment column - is P1.369's and is NOT made here. ERROR severity: rejects the submission; banked as a liability, not a waiver.",
+      "portfolios": [
+        "facility-share-binding"
+      ],
+      "failing_coordinates": 2,
+      "coordinates": [
+        "OF08.02.01.01[corporate][r0.00% - 0.15%]",
+        "OF08.02.01.01[corporate][r0.25% - 0.50%]"
+      ],
+      "expression": "{t: OF08.02.01.01, c: 0260} = sum({t: OF08.02.01.01, c: 0251; 0252; 0253; 0254})"
+    },
+    {
+      "regime": "b31",
       "rule_id": "boe_b0778",
       "severity": "ERROR",
       "reason": "limit of the published rule, not of our output: after the DPM-fraction fix these now fail ONLY on roll-out-class rows with ZERO exposure, where every coordinate reads lhs=0.0 against rhs=1.0. A row with no exposure admits no partition - 0/0 has no answer - and the rule carries no emptiness guard, so it demands the three shares total 1 on a row where there is nothing to share. Coordinate counts now vary by portfolio (6-14 CRR, 3-7 B3.1) purely with how many roll-out classes each leaves empty",
@@ -498,6 +585,8 @@
         "art199",
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "netting",
@@ -614,6 +703,8 @@
         "art199",
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "netting",
@@ -830,6 +921,8 @@
       "portfolios": [
         "art199",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "rich"
@@ -848,6 +941,8 @@
       "portfolios": [
         "art199",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "rich"
@@ -867,6 +962,8 @@
       "portfolios": [
         "art199",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "rich"
@@ -886,6 +983,8 @@
       "portfolios": [
         "art199",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "rich"
@@ -905,6 +1004,8 @@
       "portfolios": [
         "art199",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "rich"
@@ -924,6 +1025,8 @@
       "portfolios": [
         "art199",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "rich"
@@ -943,6 +1046,8 @@
       "portfolios": [
         "art199",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "rich"
@@ -962,6 +1067,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -998,6 +1105,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1019,6 +1128,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1040,6 +1151,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1061,6 +1174,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1082,6 +1197,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1103,6 +1220,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1124,6 +1243,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1145,6 +1266,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1166,6 +1289,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1187,6 +1312,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1208,6 +1335,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1229,6 +1358,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1250,6 +1381,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1271,6 +1404,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1292,6 +1427,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1313,6 +1450,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1334,6 +1473,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1371,6 +1512,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1392,6 +1535,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1428,6 +1573,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1449,6 +1596,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1470,6 +1619,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1491,6 +1642,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1512,6 +1665,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1533,6 +1688,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1554,6 +1711,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1575,6 +1734,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1596,6 +1757,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1617,6 +1780,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1638,6 +1803,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1659,6 +1826,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1680,6 +1849,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1701,6 +1872,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1722,6 +1895,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1743,6 +1918,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1764,6 +1941,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1785,6 +1964,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1806,6 +1987,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1827,6 +2010,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1848,6 +2033,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1869,6 +2056,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1890,6 +2079,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1911,6 +2102,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1932,6 +2125,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1953,6 +2148,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -1989,6 +2186,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -2025,6 +2224,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -2047,6 +2248,8 @@
         "art199",
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "netting",
@@ -2072,6 +2275,8 @@
         "art199",
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "netting",
@@ -2097,6 +2302,8 @@
         "art199",
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "netting",
@@ -2122,6 +2329,8 @@
         "art199",
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "netting",
@@ -2146,6 +2355,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -2167,6 +2378,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -2203,6 +2416,8 @@
       "portfolios": [
         "art199",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "rich"
@@ -2222,6 +2437,8 @@
       "portfolios": [
         "art199",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "rich"
@@ -2241,6 +2458,8 @@
       "portfolios": [
         "art199",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "rich"
@@ -2260,6 +2479,8 @@
       "portfolios": [
         "art199",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "rich"
@@ -2279,6 +2500,8 @@
       "portfolios": [
         "art199",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "rich"
@@ -2298,6 +2521,8 @@
       "portfolios": [
         "art199",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "rich"
@@ -2317,6 +2542,8 @@
       "portfolios": [
         "art199",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "rich"
@@ -2336,6 +2563,8 @@
       "portfolios": [
         "art199",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "rich"
@@ -2355,6 +2584,8 @@
       "portfolios": [
         "art199",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "rich"
@@ -2374,6 +2605,8 @@
       "portfolios": [
         "art199",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "rich"
@@ -2393,6 +2626,8 @@
       "portfolios": [
         "art199",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "rich"
@@ -2412,6 +2647,8 @@
       "portfolios": [
         "art199",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "rich"
@@ -2431,6 +2668,8 @@
       "portfolios": [
         "art199",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "rich"
@@ -2450,6 +2689,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -2472,6 +2713,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -2494,6 +2737,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -2515,6 +2760,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -2536,6 +2783,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",
@@ -2557,6 +2806,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",
@@ -2578,6 +2829,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",
@@ -2599,6 +2852,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",
@@ -2620,6 +2875,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",
@@ -2641,6 +2898,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",
@@ -2662,6 +2921,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",
@@ -2683,6 +2944,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",
@@ -2704,6 +2967,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",
@@ -2821,6 +3086,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -2842,6 +3109,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -2863,6 +3132,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -2884,6 +3155,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -3267,6 +3540,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "netting",
         "off-bs",
@@ -3349,6 +3624,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",
@@ -3426,6 +3703,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",
@@ -3446,6 +3725,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",
@@ -3466,6 +3747,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",
@@ -3486,6 +3769,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",
@@ -3506,6 +3791,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",
@@ -3526,6 +3813,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",
@@ -3546,6 +3835,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",
@@ -3566,6 +3857,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",
@@ -3586,6 +3879,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",
@@ -3606,6 +3901,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",
@@ -3627,6 +3924,8 @@
         "art199",
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "netting",
@@ -3649,6 +3948,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",
@@ -3669,6 +3970,8 @@
       "portfolios": [
         "art199",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "rich"
@@ -3703,6 +4006,8 @@
       "portfolios": [
         "art199",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "rich"
@@ -3721,6 +4026,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",
@@ -3757,6 +4064,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",
@@ -3777,6 +4086,8 @@
       "portfolios": [
         "art199",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "irb-classes",
         "irb-shapes",
         "rich"
@@ -3810,6 +4121,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",
@@ -3830,6 +4143,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",
@@ -3850,6 +4165,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",
@@ -3992,6 +4309,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",
@@ -4012,6 +4331,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",
@@ -4060,6 +4381,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",
@@ -4080,6 +4403,8 @@
       "portfolios": [
         "ccr",
         "crm-substitution",
+        "facility-share-binding",
+        "facility-share-nonbinding",
         "netting",
         "off-bs",
         "re-split",

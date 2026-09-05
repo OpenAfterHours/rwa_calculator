@@ -127,10 +127,31 @@ def test_p1_311_the_default_binding_still_works_without_a_pack() -> None:
 def test_p1_311_the_inverse_index_follows_the_pack_it_is_given() -> None:
     """``entity_types_by_sa_class`` is derived from the same pack, not the default.
 
-    The inverse index feeds the entity-level SA RW preview. If it kept binding
+    The inverse index feeds the CRR Art. 140(1) / CRE21.16 short-term ECAI
+    obligor-class gate in ``engine/hierarchy/enrich.py``, which expands the
+    ``institution`` and ``corporate`` SA classes into the set of ``entity_type``
+    strings a short-term assessment may be used for. If the index kept binding
     the default pack while the forward map followed the caller's, the two would
     disagree for exactly the rows a divergence affects — a subtler version of
     the defect being fixed.
+
+    **Scope, stated honestly: this is a forward guard, not a pin on a live
+    path.** The docstring used to name "the entity-level SA RW preview" as the
+    consumer; that preview
+    (``engine/sa/guarantor_rw.py::build_entity_rw_expr``) is deleted, and the
+    Art. 140(1) gate named above is the only remaining one. But the gate reads
+    the module-level ``ENTITY_TYPES_BY_SA_CLASS`` constant, which
+    ``entity_class_maps.py`` binds by calling this accessor with **no pack** at
+    import. So no production caller passes a pack to
+    ``entity_types_by_sa_class`` today, and this test is currently its only
+    pack-aware caller. That is the difference from the forward maps, which
+    ``engine/classify/attributes.py`` does call with the run's pack.
+
+    Keep the test rather than delete it: a regime-divergent SA class map is the
+    change P1.303 D4 anticipates, and the day the gate starts resolving through
+    the run's pack this is the assertion that says the two sides agree. Written
+    down because an unexercised parameter that looks exercised is how a
+    divergence lands silently on one of the two maps.
     """
     pack = resolve("b31", _REPORTING_DATE)
     entries = dict(pack.category_map("entity_type_to_sa_class").entries)

@@ -491,15 +491,6 @@
   "rwa_calc.engine.sa.guarantor_rw::build_corporate_guarantor_rw_expr": [
     "CRR Art. 122"
   ],
-  "rwa_calc.engine.sa.guarantor_rw::build_entity_rw_expr": [
-    "CRR Art. 114",
-    "CRR Art. 115",
-    "CRR Art. 116",
-    "CRR Art. 117",
-    "CRR Art. 118",
-    "CRR Art. 122",
-    "CRR Art. 123"
-  ],
   "rwa_calc.engine.sa.guarantor_rw::build_guarantor_rw_expr": [
     "CRR Art. 114",
     "CRR Art. 115",

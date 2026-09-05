@@ -1,3 +1,7 @@
+---
+verified: "2026-09-05 @ 0.3.33"
+---
+
 # SA Risk Weights Specification
 
 Standardised Approach risk weights by exposure class and credit quality step.
@@ -271,18 +275,22 @@ Development Bank of Latin America.
     Remaining cosmetic gap: the module *name* still implies a CRR home for a PS1/26
     table.
 
-    The entity-level SA-RW **preview** used to rank facility-share counterparties
-    (`build_entity_rw_expr`) now branches the same way — Table 2B on the Basel 3.1
-    arm, the Art. 117(1) institution treatment on the CRR arm (P1.307). Earlier
-    revisions of this page called the preview's use of Table 2B under both regimes a
-    non-binding approximation. **That was wrong: the preview *is* binding on
-    ownership.** `_derive_facility_share_counterparty` sorts on it descending and
-    takes `.first()`, and the winner becomes the share's `counterparty_reference` —
-    so the preview decides which obligor owns the whole undrawn EAD and therefore how
-    it is priced. It must be regime-correct. The same change added the Art. 114(3)
-    ECB carve-out, which is regime-invariant: without it an unrated ECB previewed at
-    100%, won the share against every ordinary obligor, and the undrawn was then
-    priced at 0%.
+    **The entity-level SA-RW preview (`build_entity_rw_expr`) was removed on
+    2026-09-05 and no longer exists.** It used to rank facility-share
+    counterparties, and because it decided which obligor owned the whole undrawn
+    exposure value it was binding on ownership despite never pricing anything —
+    which is why P1.307 had to make it regime-correct (Table 2B on the Basel 3.1
+    arm, the Art. 117(1) institution treatment on the CRR arm) and add the
+    Art. 114(3) ECB carve-out, without which an unrated ECB out-previewed every
+    ordinary obligor and the undrawn was then priced at 0%.
+
+    Facility-share allocation no longer uses a preview of any kind. The hierarchy
+    stage now emits one undrawn **candidate** row per member; each is priced by
+    the real pipeline on its own applied approach, and the aggregator keeps one
+    before the output floor. See
+    [Facility Share Allocation](../facility-share-allocation.md). Nothing in this
+    section's MDB treatment changed with that removal — the direct-exposure and
+    guarantor paths above are unaffected.
 
 !!! info "Basel 3.1 Change"
     PRA PS1/26 Art. 117(1) introduces a **dedicated MDB risk weight table (Table 2B)**,

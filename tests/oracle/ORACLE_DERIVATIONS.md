@@ -1396,6 +1396,83 @@ Approach, `RW = 0` for a defaulted exposure. The loss is carried by the expected
 loss amount under Art. 158, not by the risk weight.
 **Arithmetic:** `RW = 0.00`; `RWA = 0.00`.
 
+## FS-1 — the priced facility-share candidate
+
+Two records that referee the per-candidate pricing behind the FS-1 facility-share
+scenario. **Scope first, because it bounds what they prove.** `tests/oracle/drivers.py`
+drives one explicit row into a single calculator branch, bypassing the hierarchy,
+the classifier and the credit-risk-mitigation stage. It therefore cannot reach the
+candidate fan-out (a hierarchy emission), the resolution step that picks the
+winning member (an aggregator step) or the output floor (a portfolio quantity).
+These two records pin the risk weight a member's undrawn candidate row is priced
+at once it exists, and nothing else; the pipeline-level acceptance tests are the
+referee for the mechanism.
+
+The two exposure values are the **same 400,000 of undrawn headroom through two
+different conversion factors**, which is the divergence the acceptance tests
+depend on:
+
+- **CRR Art. 166(8)(d)** gives a Foundation IRB credit line its own 75%, so
+  `EAD = 400,000 × 0.75 = 300,000`.
+- **PS1/26 Art. 166C(1)** instead directs a Foundation IRB off-balance-sheet item
+  to the conversion factor that would apply under the Standardised Approach. For a
+  medium-risk commitment (CRR Annex I para 2(b)(ii) / PS1/26 Art. 111(1)(b)
+  Table A1) that is 50%, so `EAD = 400,000 × 0.50 = 200,000`.
+
+PD is 0.08%, above both input floors (CRR Art. 160(1) 0.03%, PS1/26 Art. 160(1)
+0.05%), so the floor is a non-binding pass-through. The obligor is a
+non-financial corporate with turnover above both SME thresholds, so neither the
+Art. 153(4) SME correlation adjustment nor the Art. 153(2) financial-institution
+multiplier applies. Maturity is a firm estimate of 2.5 years, at which the
+Art. 153(1) maturity adjustment collapses to `1 / (1 − 1.5b)`.
+
+Shared arithmetic, identical in both regimes because correlation and the maturity
+adjustment depend only on PD and M:
+
+```
+A       = (1 − e^(−50·0.0008)) / (1 − e^(−50))  = 0.03921056084767682
+R       = 0.12·A + 0.24·(1−A)                    = 0.23529473269827877
+b       = (0.11852 − 0.05478·ln(0.0008))²        = 0.25923437209804334
+MA      = 1 / (1 − 1.5·b)                        = 1.6362636824665868
+G(PD)   = G(0.0008)                              = −3.155906757921817
+G(0.999)                                         =  3.090232306167813
+N(inner)                                         =  0.029061870219907304
+```
+
+## ORC-FS1-CRR — F-IRB facility-share candidate (CRR)
+
+**Inputs:** undrawn headroom £400,000 at the Art. 166(8)(d) 75% conversion factor,
+so EAD £300,000; PD 0.08%; no own LGD (F-IRB); M = 2.5.
+**Regulation:** Art. 153(1) with the 1.06 scaling factor; Art. 161(1)(a) senior
+unsecured supervisory LGD 45%; Art. 162(2); Art. 160(1); Art. 166(8)(d).
+
+```
+RW  = 0.45 × (0.029061870219907304 − 0.0008) × 1.6362636824665868 × 12.5 × 1.06
+    = 0.2757290858425316
+RWA = 300,000 × 0.2757290858425316 = 82,718.73
+EL  = 0.0008 × 0.45 = 0.00036 (rate)
+```
+
+## ORC-FS1-B31 — F-IRB facility-share candidate (PS1/26)
+
+**Inputs:** the same £400,000 of undrawn headroom, at the Art. 166C(1)
+Standardised medium-risk 50% conversion factor, so EAD £200,000; PD 0.08%; no own
+LGD; M = 2.5.
+**Regulation:** Art. 153(1) with no 1.06 scaling factor; Art. 161(1)(aa)
+non-financial-sector senior unsecured supervisory LGD 40%; Art. 162(2A);
+Art. 160(1); Art. 166C(1).
+
+```
+RW  = 0.40 × (0.029061870219907304 − 0.0008) × 1.6362636824665868 × 12.5 × 1.00
+    = 0.23121935919709147
+RWA = 200,000 × 0.23121935919709147 = 46,243.87
+EL  = 0.0008 × 0.40 = 0.00032 (rate)
+```
+
+The ratio of the two risk weights is exactly `(0.40 / 0.45) / 1.06`, because LGD
+enters the formula linearly and the scaling factor multiplies it — the two
+regimes differ here in nothing else.
+
 ---
 
 # Phase O4 — Slotting and IRB equity

@@ -25,6 +25,8 @@ References:
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
+from functools import partial
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -45,8 +47,16 @@ from rwa_calc.contracts.errors import non_finite_input_warning, non_finite_outpu
 from rwa_calc.domain.enums import ApproachType, ExposureClass
 from rwa_calc.engine.aggregator._el_summary import compute_el_portfolio_summary
 from rwa_calc.engine.aggregator._equity_prep import prepare_equity_results
+from rwa_calc.engine.aggregator._facility_share import (
+    APPROACH_COL,
+    SA_RWA_COL,
+    drop_losing_candidates,
+    resolvable_candidate,
+    resolve_facility_shares,
+)
 from rwa_calc.engine.aggregator._floor import apply_floor_with_impact, compute_of_adj
 from rwa_calc.engine.aggregator._lgd_floor_check import check_retail_re_portfolio_lgd_floors
+from rwa_calc.engine.aggregator._schemas import FLOOR_ELIGIBLE_APPROACHES
 from rwa_calc.engine.aggregator._securitisation import (
     apply_residual_multiplier,
     generate_securitisation_audit,
@@ -59,14 +69,16 @@ from rwa_calc.engine.aggregator._summaries import (
     method_label_expr,
 )
 from rwa_calc.engine.aggregator._supporting_factors import generate_supporting_factor_impact
+from rwa_calc.engine.aggregator._utils import collect_views, resolve_own_approach_rwa_col
 from rwa_calc.engine.sa.risk_weights import is_commercial_re_class
 from rwa_calc.rulebook import RulepackV0
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from datetime import date
     from decimal import Decimal
 
-    from rwa_calc.contracts.bundles import EquityResultBundle
+    from rwa_calc.contracts.bundles import ELPortfolioSummary, EquityResultBundle
     from rwa_calc.contracts.config import CalculationConfig, OutputFloorConfig
     from rwa_calc.contracts.errors import CalculationError
     from rwa_calc.rulebook.resolve import ResolvedRulepack
@@ -116,7 +128,7 @@ class OutputAggregator:
         Returns:
             AggregatedResultBundle with all summaries and adjustments. Every
             frame field is eager-backed: the summary views are collected once
-            here (in two ``_collect_views`` batches, pre- and post-floor) and
+            here (in two ``collect_views`` batches, pre- and post-floor) and
             wrapped back with ``.lazy()``, so a downstream collect call is a
             near-free shallow collect rather than a plan re-execution.
         """
@@ -150,6 +162,83 @@ class OutputAggregator:
                 [combined_unmultiplied, equity_prepared], how="diagonal_relaxed"
             )
             equity_results = equity_bundle.results
+
+        # --- Facility-share candidate resolution (firm policy) --------------
+        # A shared facility's undrawn commitment arrives here as one PRICED
+        # CANDIDATE row per member (``engine/hierarchy/facility_undrawn.py``),
+        # each carrying the full headroom under its own member's class, model
+        # permission, PD/LGD and CRM. Exactly one survives.
+        #
+        # The choice has to be made HERE — ahead of the applied-class overlay,
+        # the securitisation views, the residual multiplier, the expected-loss
+        # summary and the output floor — because
+        # ``compute_el_portfolio_summary`` reads the BRANCH frames directly and
+        # ``apply_floor_with_impact`` sums every floor-eligible row into S-TREA.
+        # A drop applied to the combined frame later is green on ``rwa_final``
+        # and wrong on OF-ADJ, hence on the floor threshold.
+        #
+        # ``floor_applicable`` composes the regime Feature with the entity-scope
+        # gate (never a ``config.is_basel_3_1`` branch — arch_check check 17);
+        # the same pair drives the floor itself below.
+        floor_applicable = (
+            resolved_pack.feature("output_floor") and config.output_floor.is_entity_in_scope()
+        )
+        floor_pct = (
+            float(_output_floor_pct(resolved_pack, config.output_floor, config.reporting_date))
+            if floor_applicable
+            else 0.0
+        )
+        facility_share_resolution: pl.LazyFrame | None = None
+        facility_share_summary = None
+        # One probe, two facts: whether the book holds anything to resolve, and
+        # the concatenated frame's column names (a filtered-to-empty frame keeps
+        # its schema), which is what resolves the pre-floor RWA carrier without a
+        # second schema read. The predicate is the resolver's OWN, so the probe
+        # and the resolution cannot disagree about what counts as a candidate.
+        share_candidates = collect_views(
+            {"facility_share_candidates": combined_unmultiplied.filter(resolvable_candidate())}
+        )["facility_share_candidates"]
+        combined_names = set(share_candidates.columns)
+        own_rwa_col = resolve_own_approach_rwa_col(combined_names)
+        if share_candidates.height and own_rwa_col is not None:
+            facility_share_resolution, facility_share_summary = resolve_facility_shares(
+                combined_unmultiplied,
+                own_rwa_col=own_rwa_col,
+                evaluate_trea=partial(
+                    _facility_share_trea,
+                    candidate_references=frozenset(
+                        share_candidates.get_column("exposure_reference").to_list()
+                    ),
+                    combined=combined_unmultiplied,
+                    irb_results=irb_results,
+                    slotting_results=slotting_results,
+                    column_names=combined_names,
+                    config=config,
+                    resolved_pack=resolved_pack,
+                    floor_pct=floor_pct,
+                ),
+                floor_applicable=floor_applicable,
+                floor_pct=floor_pct,
+                metric=config.facility_share_metric,
+            )
+            # One shared drop, on all FOUR frames a candidate can appear on:
+            # ``compute_el_portfolio_summary`` reads the BRANCH frames directly,
+            # so a drop applied to the combined frame alone is green on
+            # ``rwa_final`` and wrong on the CET1 deduction.
+            #
+            # The three branch frames are left as plans over their own eager
+            # backing rather than re-materialised. The eager-backed contract in
+            # this module's return docstring covers the frames ``aggregate``
+            # BUILDS; the sa/irb/slotting fields are the caller's passthroughs
+            # (tests/unit/test_aggregator_eager_views.py says so in as many
+            # words, and excludes them). Re-materialising them measured +39.3 ms
+            # on the 20k benchmark book for no observable gain.
+            combined_unmultiplied = drop_losing_candidates(
+                combined_unmultiplied, facility_share_summary
+            )
+            sa_results = drop_losing_candidates(sa_results, facility_share_summary)
+            irb_results = drop_losing_candidates(irb_results, facility_share_summary)
+            slotting_results = drop_losing_candidates(slotting_results, facility_share_summary)
 
         # Applied reporting class (recon + COREP class dimension). Pure function
         # of columns already present on every branch exit, so it is added once
@@ -190,7 +279,7 @@ class OutputAggregator:
             pre_floor_views["securitisation_summary"] = securitisation_summary
         if sec_audit_view is not None:
             pre_floor_views["securitisation_audit"] = sec_audit_view
-        pre_floor_dfs = _collect_views(pre_floor_views)
+        pre_floor_dfs = collect_views(pre_floor_views)
 
         combined_df = pre_floor_dfs["combined"]
         combined = combined_df.lazy()
@@ -306,43 +395,20 @@ class OutputAggregator:
         # combinations — exempt entities use U-TREA with no floor add-on.
         floor_impact = None
         output_floor_summary = None
-        if resolved_pack.feature("output_floor") and config.output_floor.is_entity_in_scope():
-            floor_pct = float(
-                _output_floor_pct(resolved_pack, config.output_floor, config.reporting_date)
-            )
-
+        if floor_applicable:
             # Compute OF-ADJ from EL summary + capital-tier config inputs
             # OF-ADJ = 12.5 * (IRB_T2 - IRB_CET1 - GCRA + SA_T2)
             # ELPortfolioSummary stores Decimal; convert to float for floor arithmetic.
-            irb_t2 = float(el_summary.t2_credit) if el_summary else 0.0
-            irb_cet1 = (
-                float(el_summary.cet1_deduction) if el_summary else 0.0
-            ) + config.output_floor.art_40_deductions
-            gcra = config.output_floor.gcra_amount
+            irb_t2, irb_cet1 = _capital_tier_inputs(el_summary, config.output_floor)
             sa_t2 = config.output_floor.sa_t2_credit
 
-            # S-TREA is needed for GCRA cap — pre-compute it here.
-            # We need a quick aggregate of SA-equivalent RWA for floor-eligible
-            # exposures.  This duplicates some work in apply_floor_with_impact
-            # but avoids restructuring the floor module's internal flow.
-            # Computed eagerly from ``combined_df`` (materialised above) so no
-            # extra plan execution is needed.
-            from rwa_calc.engine.aggregator._schemas import FLOOR_ELIGIBLE_APPROACHES
-
-            if "approach_applied" in combined_df.columns:
-                sa_rwa_col = "sa_rwa" if "sa_rwa" in combined_df.columns else "rwa_final"
-                s_trea_pre = float(
-                    combined_df.filter(
-                        pl.col("approach_applied").is_in(list(FLOOR_ELIGIBLE_APPROACHES))
-                    )
-                    .select(pl.col(sa_rwa_col).fill_null(0.0).sum())
-                    .item()
-                )
-            else:
-                s_trea_pre = 0.0
-
             of_adj_val, gcra_capped = compute_of_adj(
-                irb_t2, irb_cet1, gcra, sa_t2, s_trea_pre, pack=resolved_pack
+                irb_t2,
+                irb_cet1,
+                config.output_floor.gcra_amount,
+                sa_t2,
+                _floor_eligible_sa_equivalent(combined, set(combined_df.columns)),
+                pack=resolved_pack,
             )
 
             combined, floor_impact, output_floor_summary = apply_floor_with_impact(
@@ -355,6 +421,17 @@ class OutputAggregator:
                 gcra_amount=gcra_capped,
                 sa_t2_credit=sa_t2,
             )
+            if facility_share_summary is not None:
+                # Which assignment decided the allocation, and what the other one
+                # came to. Recorded on the summary so a flip is never inferred
+                # from a moved obligor-level COREP row. Under CRR there is no
+                # summary object at all, and the audit frame's per-candidate
+                # ``metric_used`` is the only observable.
+                output_floor_summary = replace(
+                    output_floor_summary,
+                    facility_share_metric_used=facility_share_summary.metric_used,
+                    facility_share_trea_alternative=facility_share_summary.trea_alternative,
+                )
 
         # Canonical reporting projection (Phase 7 S2): name the per-leg
         # substitution ledger on the frame that gets sealed. Applied AFTER the
@@ -394,7 +471,7 @@ class OutputAggregator:
             post_floor_views["floor_impact"] = floor_impact
         if supporting_factor_impact is not None:
             post_floor_views["supporting_factor_impact"] = supporting_factor_impact
-        post_floor_dfs = _collect_views(post_floor_views)
+        post_floor_dfs = collect_views(post_floor_views)
 
         return AggregatedResultBundle(
             # Producer seal (Phase 3): the aggregator's combined results
@@ -437,8 +514,11 @@ class OutputAggregator:
             rwa_ccr_default=rwa_ccr_default,
             rwa_ccr_qccp_trade=rwa_ccr_qccp_trade,
             failed_trades_rwa=failed_trades_rwa,
+            facility_share_resolution=facility_share_resolution,
             errors=(
-                _detect_non_finite_errors(post_floor_dfs["results"]) + retail_re_lgd_floor_warnings
+                _detect_non_finite_errors(post_floor_dfs["results"])
+                + retail_re_lgd_floor_warnings
+                + (facility_share_summary.errors if facility_share_summary else [])
             ),
         )
 
@@ -446,6 +526,115 @@ class OutputAggregator:
 # =============================================================================
 # Private helpers
 # =============================================================================
+
+
+def _capital_tier_inputs(
+    el_summary: ELPortfolioSummary | None, output_floor: OutputFloorConfig
+) -> tuple[float, float]:
+    """The two OF-ADJ capital-tier inputs, as floats.
+
+    ``ELPortfolioSummary`` stores Decimal; the floor arithmetic is float. One
+    definition, because the facility-share trial evaluation recomputes the
+    expected-loss summary per assignment and must convert it the same way — the
+    winning member's own expected loss is what moves the CET1 deduction, hence
+    OF-ADJ, hence the floor threshold.
+
+    References:
+        PRA PS1/26 Art. 62(d) (IRB T2 credit), Art. 36(1)(d) / Art. 40 (CET1).
+    """
+    irb_t2 = float(el_summary.t2_credit) if el_summary else 0.0
+    irb_cet1 = (
+        float(el_summary.cet1_deduction) if el_summary else 0.0
+    ) + output_floor.art_40_deductions
+    return irb_t2, irb_cet1
+
+
+def _floor_eligible_sa_equivalent(combined: pl.LazyFrame, column_names: set[str]) -> float:
+    """Total SA-equivalent RWA over the floor-eligible rows — the GCRA cap base.
+
+    Deliberately duplicates a slice of ``apply_floor_with_impact``'s own S-TREA:
+    the 1.25% GCRA cap is an INPUT to OF-ADJ, which is an input to the floor, so
+    the number is needed one step before the floor module computes it. Kept as
+    ONE definition, used by the main path and by the facility-share trial
+    evaluation, so the two cannot drift.
+
+    ``.sum()`` skips nulls (and returns 0.0 over an empty or all-null column),
+    which is the existing convention: a null SA-equivalent contributes nothing
+    to S-TREA. A frame with no ``approach_applied`` has no eligible rows by
+    definition.
+    """
+    if APPROACH_COL not in column_names:
+        return 0.0
+    sa_equivalent_col = SA_RWA_COL if SA_RWA_COL in column_names else "rwa_final"
+    totals = collect_views(
+        {
+            "s_trea": combined.filter(
+                pl.col(APPROACH_COL).is_in(list(FLOOR_ELIGIBLE_APPROACHES))
+            ).select(pl.col(sa_equivalent_col).sum().alias("s_trea"))
+        }
+    )["s_trea"]
+    value = totals.get_column("s_trea").item() if totals.height else None
+    return float(value) if value is not None else 0.0
+
+
+def _facility_share_trea(
+    surviving: Sequence[str],
+    *,
+    candidate_references: frozenset[str],
+    combined: pl.LazyFrame,
+    irb_results: pl.LazyFrame,
+    slotting_results: pl.LazyFrame,
+    column_names: set[str],
+    config: CalculationConfig,
+    resolved_pack: ResolvedRulepack,
+    floor_pct: float,
+) -> float:
+    """``TREA`` for ONE facility-share assignment, end to end.
+
+    The closure the resolver calls twice under the floor-aware metric. It runs
+    the aggregator's OWN arithmetic on the restricted book — the expected-loss
+    summary off the branch frames, OF-ADJ through :func:`compute_of_adj`, the
+    ``max`` through :func:`apply_floor_with_impact` — rather than a second copy
+    of it, which is the whole reason the resolver takes a callable instead of a
+    pair of scalars.
+
+    That is what makes P2 exact for the two assignments it evaluates: OF-ADJ's
+    expected-loss channel moves with the winning member, so the floored branch
+    is not additive across groups and the assignments cannot be compared on
+    per-member marginals.
+
+    Only CANDIDATE rows are ever excluded, so the filter is built from the small
+    complement of ``surviving`` within the candidate universe rather than from
+    ``surviving`` itself, which is the whole surviving book.
+    """
+    excluded = list(candidate_references.difference(surviving))
+    kept = ~pl.col("exposure_reference").is_in(excluded)
+    trial_combined = apply_residual_multiplier(combined.filter(kept))
+    trial_el_summary = compute_el_portfolio_summary(
+        apply_residual_multiplier(irb_results.filter(kept)),
+        apply_residual_multiplier(slotting_results.filter(kept)),
+    )
+    irb_t2, irb_cet1 = _capital_tier_inputs(trial_el_summary, config.output_floor)
+    sa_t2 = config.output_floor.sa_t2_credit
+    of_adj_val, gcra_capped = compute_of_adj(
+        irb_t2,
+        irb_cet1,
+        config.output_floor.gcra_amount,
+        sa_t2,
+        _floor_eligible_sa_equivalent(trial_combined, column_names),
+        pack=resolved_pack,
+    )
+    _floored, _impact, summary = apply_floor_with_impact(
+        trial_combined,
+        trial_combined,
+        floor_pct,
+        of_adj=of_adj_val,
+        irb_t2_credit=irb_t2,
+        irb_cet1_deduction=irb_cet1,
+        gcra_amount=gcra_capped,
+        sa_t2_credit=sa_t2,
+    )
+    return summary.total_rwa_post_floor
 
 
 @cites("CRR Art. 112")
@@ -1085,28 +1274,6 @@ def _crm_lgd_carriers() -> tuple[pl.Expr, pl.Expr, pl.Expr, pl.Expr]:
         basis("collateral_other_physical_value", "collateral_other_physical_market_value"),
         basis("collateral_receivables_value", "collateral_receivables_market_value"),
     )
-
-
-def _collect_views(views: dict[str, pl.LazyFrame]) -> dict[str, pl.DataFrame]:
-    """Materialise a batch of aggregator views together, in one pass.
-
-    The calculator branches arrive already eager (collected by
-    ``materialise_branches`` at the calculator edge), so every view here is a
-    plan over in-memory data.  Collecting the batch with a single
-    ``pl.collect_all`` lets Polars share the common subplans (the combined
-    concat + residual multiplier) across views via comm-subplan elimination.
-    The caller wraps each eager result back with ``.lazy()`` so the bundle
-    fields stay LazyFrame-typed; any downstream collect on them is then a
-    near-free shallow collect instead of a plan re-execution.
-
-    This is deliberately a plain ``pl.collect_all`` rather than
-    ``materialise_branches``: the latter records per-frame EdgeEvents in the
-    run capture, and the aggregator's internal summary views are not stage
-    edges (the documented edge inventory in
-    tests/integration/test_stage_edges.py pins the stage-exit sequence).
-    """
-    collected = pl.collect_all(list(views.values()))
-    return dict(zip(views, collected, strict=True))
 
 
 def _non_finite_refs(df: pl.DataFrame, col: str) -> list[str]:

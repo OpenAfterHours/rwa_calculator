@@ -855,6 +855,18 @@ class OutputFloorSummary:
         sa_t2_credit: Art. 62(c) SA T2 credit
         sa_rwa_total: Sum of ``rwa_final`` across SA rows in the portfolio
         equity_rwa_total: Sum of ``rwa_final`` across equity rows in the portfolio
+        facility_share_metric_used: Which assignment decided every facility
+            share's allocation — ``"own_approach"`` (assignment A, or the firm
+            election) or ``"sa_equivalent"`` (the floored branch). ``None`` when
+            the portfolio holds no facility share. Under CRR there is no
+            ``OutputFloorSummary`` at all, so the audit frame's per-candidate
+            ``metric_used`` is the only place this is observable there.
+        facility_share_trea_alternative: ``total_rwa_post_floor`` of the OTHER
+            assignment. Under the floor-aware default the allocation can flip
+            with the floor state, with the Art. 92(5) phase-in step and between
+            reporting scopes; that is a designed consequence, but it may never be
+            silent, and this is what the flip is read against. ``None`` when only
+            one assignment was evaluated.
 
     References:
     - PRA PS1/26 Art. 92 para 2A
@@ -876,6 +888,8 @@ class OutputFloorSummary:
     sa_rwa_total: float = 0.0
     equity_rwa_total: float = 0.0
     total_rwa_post_floor: float = 0.0
+    facility_share_metric_used: str | None = None
+    facility_share_trea_alternative: float | None = None
 
 
 @dataclass(frozen=True)
@@ -943,6 +957,16 @@ class AggregatedResultBundle:
         cva_hedges_recognised: ``True`` when at least one eligible CVA hedge fed
             the full-K path (PS1/26 CVA Part 4.5), ``False`` for the reduced
             path. ``None`` when CVA is out of scope.
+        facility_share_resolution: Per-candidate audit frame for the
+            facility-share allocation — one row per priced member of each shared
+            facility, carrying its own-approach RWA, its SA-equivalent, its
+            floored-branch contribution, both ranks, the winner flag and the
+            metric that decided the group. It is the ONLY place an attribution
+            flip under the floor-aware metric is visible, and it doubles as a
+            per-facility allocation sensitivity table. ``None`` when the
+            portfolio holds no facility share, which is most of them — an empty
+            frame would not distinguish "no share in this book" from "a share the
+            resolver failed to record".
         errors: All errors accumulated throughout pipeline
     """
 
@@ -968,6 +992,7 @@ class AggregatedResultBundle:
     cva_rwa: float | None = None
     cva_method: str | None = None
     cva_hedges_recognised: bool | None = None
+    facility_share_resolution: pl.LazyFrame | None = None
     errors: list[CalculationError] = field(default_factory=list)
 
     def __post_init__(self) -> None:

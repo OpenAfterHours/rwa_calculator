@@ -11,19 +11,25 @@ Key responsibilities:
   aggregated descendant loan drawn + contingent nominal).
 - Expand Multiple Option Facility (MOF) parents into per-sub CCF-descending
   waterfall rows plus an optional residual row.
-- Facility Share riskiest-counterparty override via the non-binding
-  SA-equivalent risk-weight preview, compiled from the shared
-  ``build_entity_rw_expr`` builder (``data/tables/guarantor_rw``).
+- Facility Share candidate fan-out: emit one undrawn CANDIDATE row per member
+  counterparty, each carrying the FULL headroom, so every member is priced by
+  the real downstream pipeline and the aggregator can pick the riskiest.
 - Project the canonical facility_undrawn exposure schema, emitting the
   ``original_counterparty_reference`` / ``mof_risk_type_source`` audit
-  columns (Site A of the ``_FACILITY_QRRE_COUPLED_COLUMNS`` coupling).
+  columns (Site A of the ``_FACILITY_QRRE_COUPLED_COLUMNS`` coupling) and the
+  ``facility_share_group`` / ``is_facility_share_candidate`` carriers.
+
+The allocation of a shared facility's undrawn commitment to one member is
+**firm policy grounded in conservatism, not regulation** — neither CRR nor
+PS1/26 defines a facility share or prescribes how to attribute a commitment
+several obligors may draw. It therefore carries no ``@cites`` of its own; the
+EAD it produces cites the CCF articles below. See
+``docs/plans/facility-share-riskiest-member.md``.
 
 References:
 - CRR Art. 166(8)(d) / Art. 166(10): commitment vs issued-item CCF buckets
 - CRR Art. 195 / 219: on-balance-sheet netting of drawn balances
 - CRR Art. 147(5) / CRE30.55: QRRE classification fields
-- CRR Art. 114-128: SA risk weights read by the RW preview (see
-  ``data/tables/guarantor_rw.build_entity_rw_expr``)
 - PRA PS1/26 Art. 111(1) Table A1 Row 4(b): residential mortgage commitments
 - PRA PS1/26 Art. 166E(5): revolving purchased-receivables commitments
 - PRA PS1/26 Art. 124(3) / Art. 124K: under-construction (ADC) flag
@@ -42,7 +48,6 @@ from rwa_calc.engine.hierarchy.graph import (
     filter_mappings_by_child_type,
     resolve_to_root_facility,
 )
-from rwa_calc.engine.sa.guarantor_rw import build_entity_rw_expr
 from rwa_calc.engine.utils import has_required_columns
 
 if TYPE_CHECKING:
@@ -72,18 +77,20 @@ def calculate_facility_undrawn(
     sub-facilities are aggregated up to the root facility. Sub-facilities
     do not produce their own undrawn exposure records.
 
-    Two facility-product overrides are applied to the resulting undrawn
-    rows when ``counterparty_lookup`` and ``config`` are provided:
+    Two facility-product expansions are applied to the resulting undrawn rows:
 
     - **Multiple Option Facility (MOF)**: any facility with at least one
       ``child_type='facility'`` mapping inherits the descendant ``risk_type``
       producing the highest SA CCF, ensuring the parent's undrawn EAD
       reflects the worst-case off-balance commitment among its components.
-    - **Facility Share**: when the descendant loans/contingents reference
-      more than one distinct counterparty, the undrawn is allocated to the
-      riskiest member by SA-equivalent risk weight.
+    - **Facility Share**: when the facility's own owner plus the counterparties
+      on its descendant loans / contingents / sub-facilities form more than one
+      distinct member, the single undrawn row is FANNED OUT into one candidate
+      row per member, each carrying the full headroom. The choice of member is
+      made downstream, at the head of the aggregator, on the candidates' real
+      priced RWA; nothing here ranks them.
 
-    Both overrides preserve the original facility values in audit columns
+    Both preserve the original facility values in audit columns
     (``original_counterparty_reference``, ``mof_risk_type_source``).
 
     Args:
@@ -92,10 +99,13 @@ def calculate_facility_undrawn(
         contingents: Contingents with nominal_amount (optional)
         facility_mappings: Mappings between facilities and children
         facility_root_lookup: Root lookup from graph.build_facility_root_lookup
-        counterparty_lookup: Used to resolve riskiest counterparty for
-            Facility Shares (entity_type + cqs preview lookup)
-        config: Calculation configuration (frame switch for SA CCF /
-            SA RW preview tables)
+        counterparty_lookup: Unused by the fan-out — membership is structural
+            (the facility's owner plus its descendants' counterparties), so no
+            counterparty attribute is read here any more. Retained on the
+            signature because it is part of the hierarchy stage's calling
+            contract and the SA-preview it once fed may not silently come back.
+        config: Calculation configuration (frame switch for the MOF waterfall's
+            SA CCF weighting basis)
 
     Returns:
         LazyFrame with facility_undrawn exposure records
@@ -142,18 +152,22 @@ def calculate_facility_undrawn(
 
     facility_with_drawn = _apply_mof_parent_marker(facility_with_drawn, root_lookup)
 
-    is_basel_3_1 = bool(getattr(config, "is_basel_3_1", False)) if config is not None else False
-
-    facility_with_drawn = _apply_facility_share_override(
-        facility_with_drawn,
-        facilities,
-        facility_mappings,
-        loans,
-        contingents,
-        counterparty_lookup,
-        root_lookup,
-        is_basel_3_1,
+    # ``share_counterparty_reference`` is the single carrier both expansions
+    # write into: the MOF waterfall puts each sub's own counterparty there, and
+    # the Facility Share fan-out puts the candidate's member there. Seeded null
+    # so the select's coalesce falls back to the facility's own owner.
+    facility_with_drawn = facility_with_drawn.with_columns(
+        pl.lit(None).cast(pl.String).alias("share_counterparty_reference")
     )
+
+    # Regime boolean, check-17 allowlisted. Its ONE live consumer is the MOF
+    # waterfall's ``sa_ccf_expression(risk_type_col="_sub_risk_type",
+    # is_basel_3_1=...)`` in ``_expand_mof_facility_undrawn`` — the CCF that
+    # WEIGHTS each sub-facility's slice of the parent headroom, unrelated to the
+    # deleted facility-share risk-weight preview. Retiring it means threading the
+    # resolved pack into ``engine/ccf.py``'s expression signature, so do not
+    # delete this line as leftover preview plumbing.
+    is_basel_3_1 = bool(getattr(config, "is_basel_3_1", False)) if config is not None else False
 
     # Expand MOF parents into per-sub waterfall rows + optional residual.
     # Non-MOF parents pass through unchanged. After this step
@@ -170,6 +184,21 @@ def calculate_facility_undrawn(
         contingents,
         facility_mappings,
         is_basel_3_1,
+    )
+
+    # Fan out Facility Shares into one candidate row per member. Runs AFTER the
+    # MOF expansion so the two suffix grammars compose on one column: a MOF
+    # parent is excluded from the member lookup entirely, which is what keeps
+    # ``@<member>`` from ever meeting ``_<sub>`` / ``_RESIDUAL``.
+    facility_with_drawn = _apply_facility_share_fanout(
+        facility_with_drawn,
+        _derive_facility_share_members(
+            facilities,
+            facility_mappings,
+            loans,
+            contingents,
+            root_lookup,
+        ),
     )
 
     select_exprs = _undrawn_select_expressions()
@@ -203,6 +232,8 @@ def _empty_facility_undrawn_frame() -> pl.LazyFrame:
             "is_under_irb_rollout": pl.Boolean,
             "counterparty_reference": pl.String,
             "original_counterparty_reference": pl.String,
+            "facility_share_group": pl.String,
+            "is_facility_share_candidate": pl.Boolean,
             "value_date": pl.Date,
             "maturity_date": pl.Date,
             "currency": pl.String,
@@ -379,13 +410,16 @@ def _apply_mof_parent_marker(
 
     MOF parents are expanded into per-sub waterfall rows by
     ``_expand_mof_facility_undrawn``; non-MOF parents flow through the
-    single-row path with the optional Facility Share counterparty override.
+    single-row path and are the only rows the Facility Share fan-out can
+    replicate.
 
-    Scratch: ``_is_mof_parent`` is added here, read by
-    ``_apply_facility_share_override`` (suppress override on MOF) and by
+    Scratch: ``_is_mof_parent`` is added here and read by
     ``_expand_mof_facility_undrawn`` (route into waterfall vs. pass-through);
     kept on the frame through to the final select where it is dropped
-    implicitly by not appearing in ``_undrawn_select_expressions``.
+    implicitly by not appearing in ``_undrawn_select_expressions``. The
+    fan-out enforces the same MOF exclusion on the lookup SIDE rather than
+    reading this flag, because a MOF parent left in the member lookup would
+    replicate every one of its waterfall rows.
     """
     mof_parent_marker = (
         root_lookup.select(pl.col("root_facility_reference").alias("facility_reference"))
@@ -400,50 +434,64 @@ def _apply_mof_parent_marker(
     ).with_columns(pl.col("_is_mof_parent").fill_null(False))
 
 
-def _apply_facility_share_override(
+def _apply_facility_share_fanout(
     facility_with_drawn: pl.LazyFrame,
-    facilities: pl.LazyFrame,
-    facility_mappings: pl.LazyFrame,
-    loans: pl.LazyFrame,
-    contingents: pl.LazyFrame | None,
-    counterparty_lookup: CounterpartyLookup | None,
-    root_lookup: pl.LazyFrame,
-    is_basel_3_1: bool,
+    share_members: pl.LazyFrame,
 ) -> pl.LazyFrame:
-    """Attach ``share_counterparty_reference`` to non-MOF facilities.
+    """Replicate each Facility Share's undrawn row into one row per member.
 
-    MOF parents do not need the share override — each waterfall row already
-    carries its sub-facility's own counterparty. Non-MOF parents benefit
-    from the riskiest-CP allocation when more than one counterparty appears
-    among the facility's descendants.
+    A left join against a lookup holding one row per (share facility, member)
+    does the whole job: a facility absent from the lookup keeps its single row
+    with a null member, and a share with N members becomes N rows that are
+    identical apart from the four columns written below. Every candidate keeps
+    the facility's full ``undrawn_amount`` / ``nominal_amount`` — each is "as if
+    this member drew the whole line", so nothing is pro-rated and nothing is
+    drawn-weighted.
 
-    When ``counterparty_lookup`` is None, the column is added as NULL
-    on every row so the downstream select keeps a stable schema.
+    Which member ends up owning the commitment is NOT decided here. Every
+    candidate flows through the classifier, CRM and the calculators as an
+    ordinary row of its own member — its own exposure class, model permission,
+    PD/LGD and CRM — and the aggregator drops all but one before the output
+    floor. That is the whole point of the fan-out: the ranking sees real priced
+    RWA instead of a preview that knows only entity type and CQS.
+
+    ``_exposure_suffix`` is OVERWRITTEN, not appended, and that is safe because
+    ``share_members`` excludes MOF parents: a candidate row is therefore always
+    a pass-through row whose suffix is "".
+
+    Args:
+        facility_with_drawn: Post-MOF-expansion rows, carrying
+            ``_exposure_suffix`` and ``share_counterparty_reference``.
+        share_members: One row per (facility_reference, member) for facilities
+            with more than one member; MOF parents excluded.
+
+    Returns:
+        The same frame with ``facility_share_group`` /
+        ``is_facility_share_candidate`` populated and share rows replicated.
     """
-    if counterparty_lookup is None:
-        return facility_with_drawn.with_columns(
-            pl.lit(None).cast(pl.String).alias("share_counterparty_reference")
-        )
+    member = pl.col("_share_member_reference")
+    is_candidate = member.is_not_null()
 
-    share_lookup = _derive_facility_share_counterparty(
-        facilities,
-        facility_mappings,
-        loans,
-        contingents,
-        counterparty_lookup,
-        root_lookup,
-        is_basel_3_1,
-    )
-    return facility_with_drawn.join(
-        share_lookup,
-        on="facility_reference",
-        how="left",
-    ).with_columns(
-        # Suppress share override on MOF parents — sub rows handle it.
-        pl.when(pl.col("_is_mof_parent"))
-        .then(pl.lit(None).cast(pl.String))
-        .otherwise(pl.col("share_counterparty_reference"))
-        .alias("share_counterparty_reference")
+    return (
+        facility_with_drawn.join(share_members, on="facility_reference", how="left")
+        .with_columns(
+            [
+                pl.when(is_candidate)
+                .then(pl.lit("@") + member)
+                .otherwise(pl.col("_exposure_suffix"))
+                .alias("_exposure_suffix"),
+                pl.when(is_candidate)
+                .then(member)
+                .otherwise(pl.col("share_counterparty_reference"))
+                .alias("share_counterparty_reference"),
+                pl.when(is_candidate)
+                .then(pl.col("facility_reference"))
+                .otherwise(pl.lit(None).cast(pl.String))
+                .alias("facility_share_group"),
+                is_candidate.alias("is_facility_share_candidate"),
+            ]
+        )
+        .drop("_share_member_reference")
     )
 
 
@@ -457,9 +505,17 @@ def _undrawn_select_expressions() -> list[pl.Expr]:
 
     Note: ``parent_facility_reference`` is set to the source facility to
     enable facility-level collateral allocation to undrawn amounts.
-    ``_exposure_suffix`` is "" for non-MOF rows, "_{sub_ref}" for MOF
-    waterfall rows, and "_RESIDUAL" for the optional MOF residual row —
-    set by ``_expand_mof_facility_undrawn``.
+
+    ``_exposure_suffix`` grammar — one column, four forms:
+
+    - ``""`` — the ordinary single undrawn row (the default).
+    - ``"_<sub>"`` — a MOF per-sub waterfall row.
+    - ``"_RESIDUAL"`` — the MOF parent's own residual row.
+    - ``"@<member>"`` — a Facility Share candidate row.
+
+    The ``@`` form and the two ``_`` forms are mutually exclusive by
+    construction rather than by convention: ``_derive_facility_share_members``
+    excludes MOF parents outright, so no row is ever offered both.
 
     Site A of the two-site QRRE coupling pinned by
     ``_FACILITY_QRRE_COUPLED_COLUMNS`` (engine/hierarchy/__init__.py): the
@@ -494,6 +550,18 @@ def _undrawn_select_expressions() -> list[pl.Expr]:
             pl.col("counterparty_reference"),
         ).alias("counterparty_reference"),
         pl.col("counterparty_reference").alias("original_counterparty_reference"),
+        # Facility Share carriers. The group is the root facility whose whole
+        # headroom this candidate carries, and is null on every ordinary row;
+        # the flag is False rather than null on the rows THIS function emits, so
+        # the aggregator's resolver reads a two-state column here. Rows from
+        # other producers are their own producers' business — loan and contingent
+        # legs pick the flag up from the diagonal concat in ``unify`` and have it
+        # filled to False at the classifier / CRM / branch seals, and equity legs
+        # (which bypass every branch seal) get it from
+        # ``engine/aggregator/_equity_prep.py``. Set by
+        # ``_apply_facility_share_fanout``.
+        pl.col("facility_share_group"),
+        pl.col("is_facility_share_candidate"),
         pl.col("value_date"),
         pl.col("maturity_date"),
         pl.col("currency"),
@@ -822,54 +890,60 @@ def _expand_mof_facility_undrawn(
     return pl.concat([non_mof_rows, sub_rows, residual_rows], how="diagonal_relaxed")
 
 
-def _derive_facility_share_counterparty(
+def _derive_facility_share_members(
     facilities: pl.LazyFrame,
     facility_mappings: pl.LazyFrame,
     loans: pl.LazyFrame,
     contingents: pl.LazyFrame | None,
-    counterparty_lookup: CounterpartyLookup,
     root_lookup: pl.LazyFrame,
-    is_basel_3_1: bool,
 ) -> pl.LazyFrame:
-    """Derive the riskiest counterparty for facilities with multi-CP shares.
+    """Derive the member set of every Facility Share, one row per member.
 
-    A Facility Share is a single facility linked to multiple counterparties
-    — identified here by the union of distinct ``counterparty_reference``
-    values on descendant loans, contingents, **and sub-facilities**. When
-    that set has more than one member, the facility's undrawn must be
-    allocated to the riskiest member (highest SA-equivalent risk weight),
-    because any of the linked counterparties could draw against the limit
-    and the conservative undrawn EAD must sit with the worst credit.
+    A Facility Share is a single facility any of several counterparties may
+    draw against. The member set is the union of
 
-    Sub-facility counterparties are included so that a MOF parent whose
-    sub-facilities span multiple obligors triggers riskiest-CP allocation
-    even when nothing has been drawn yet (the all-undrawn case).
+    - the facility's **own** ``counterparty_reference`` (Decision D3 — the
+      owner is the legal borrower and can draw the whole line), and
+    - the distinct ``counterparty_reference`` values on its descendant loans
+      and contingents, each resolved to its root facility.
 
-    The risk-weight preview uses the shared
-    :func:`rwa_calc.engine.sa.guarantor_rw.build_entity_rw_expr` builder
-    and is non-binding: the chosen counterparty still flows through the
-    full classifier and SA/IRB pipeline downstream.
+    A facility whose union has more than one member is a share. Including the
+    owner changes DETECTION as well as allocation: a facility owned by A whose
+    only mapped loan belongs to B has member set ``{A, B}`` and is a share,
+    where the descendants-only rule saw one member and left the undrawn with A
+    untouched.
+
+    **Sub-facility owners are deliberately NOT a third limb.** A sub-facility's
+    owner could only ever be a member of the root it hangs off, and a root with
+    a sub-facility is by definition a MOF parent — the two sets are the same
+    ``root_facility_reference`` column of ``root_lookup``. MOF parents are
+    removed by the anti-join below, because their waterfall rows already carry
+    each sub's own counterparty, so the allocation question does not arise and
+    replicating them would multiply the waterfall. A sub-facility limb would
+    therefore contribute only rows the anti-join deletes.
+
+    Nothing is ranked here and nothing is drawn-weighted. A member with a GBP 1
+    loan and a member with a GBP 10m loan are equal members, because either may
+    draw the whole headroom; the choice is made on real priced RWA at the head
+    of the aggregator.
 
     Args:
-        facilities: Facilities frame, used for the root-facility schema only.
+        facilities: Facilities frame; supplies the owner limb.
         facility_mappings: Mappings between facilities and children.
         loans: Loans frame; descendant counterparties come from here.
         contingents: Contingents frame (optional); descendants also come from here.
-        counterparty_lookup: Used to look up ``entity_type``, ``cqs`` and
-            ``country_code`` (when present) per candidate counterparty.
-        root_lookup: Output of :func:`graph.build_facility_root_lookup`.
-        is_basel_3_1: Framework switch passed to
-            :func:`rwa_calc.engine.sa.guarantor_rw.build_entity_rw_expr`.
+        root_lookup: Output of :func:`graph.build_facility_root_lookup`; used to
+            roll descendants up to their root and to identify MOF parents.
 
     Returns:
         LazyFrame with columns:
-            - facility_reference: root facility with a multi-CP share.
-            - share_counterparty_reference: the chosen riskiest member.
+            - facility_reference: a root/standalone facility that is a share.
+            - _share_member_reference: one member of that share.
     """
     empty = pl.LazyFrame(
         schema={
             "facility_reference": pl.String,
-            "share_counterparty_reference": pl.String,
+            "_share_member_reference": pl.String,
         }
     )
 
@@ -878,34 +952,14 @@ def _derive_facility_share_counterparty(
     ):
         return empty
 
-    # Gather descendant (root_facility_reference, counterparty_reference) pairs
-    # from loans, contingents, and sub-facilities that map to a facility.
-    candidate_frames: list[pl.LazyFrame] = []
-
-    # Sub-facility counterparties — every descendant facility's own owner
-    # is a potential drawer against the parent's limit. Joining via the
-    # root_lookup gives every sub-facility its MOF root in a single hop.
-    sub_fac_with_root = (
-        facilities.select([pl.col("facility_reference"), pl.col("counterparty_reference")])
-        .join(
-            root_lookup.select(
-                [
-                    pl.col("child_facility_reference"),
-                    pl.col("root_facility_reference"),
-                ]
-            ),
-            left_on="facility_reference",
-            right_on="child_facility_reference",
-            how="inner",
-        )
-        .select(
-            [
-                pl.col("root_facility_reference").alias("facility_reference"),
-                pl.col("counterparty_reference"),
-            ]
-        )
-    )
-    candidate_frames.append(sub_fac_with_root)
+    # Gather (facility_reference, counterparty_reference) member pairs from the
+    # facility's own owner and from its descendant loans and contingents. No
+    # sub-facility limb — see the docstring: it could only ever key on a MOF
+    # root, which the anti-join below removes.
+    candidate_frames: list[pl.LazyFrame] = [
+        # D3 — the facility's own owner is always a member.
+        facilities.select([pl.col("facility_reference"), pl.col("counterparty_reference")]),
+    ]
 
     loan_mappings = filter_mappings_by_child_type(facility_mappings, "loan")
 
@@ -948,62 +1002,30 @@ def _derive_facility_share_counterparty(
             )
         )
 
-    candidates = (
+    members = (
         pl.concat(candidate_frames, how="diagonal_relaxed")
         .filter(pl.col("counterparty_reference").is_not_null())
         .unique(subset=["facility_reference", "counterparty_reference"])
     )
 
     # Only facilities with > 1 distinct member are Facility Shares.
-    member_counts = candidates.group_by("facility_reference").agg(pl.len().alias("_member_count"))
-    candidates = candidates.join(member_counts, on="facility_reference", how="inner").filter(
-        pl.col("_member_count") > 1
-    )
+    member_counts = members.group_by("facility_reference").agg(pl.len().alias("_member_count"))
 
-    # Pull entity_type + cqs (+ country_code when present) from the resolved
-    # counterparty lookup.
-    cp_cols = set(counterparty_lookup.counterparties.collect_schema().names())
-    cp_select = [pl.col("counterparty_reference")]
-    if "entity_type" in cp_cols:
-        cp_select.append(pl.col("entity_type").alias("_share_entity_type"))
-    else:
-        return empty
-    if "cqs" in cp_cols:
-        cp_select.append(pl.col("cqs").alias("_share_cqs"))
-    else:
-        cp_select.append(pl.lit(None).cast(pl.Int8).alias("_share_cqs"))
-    # country_code drives the unrated PSE / RGLA GB-vs-other approximation in
-    # the preview. No presence probe: CounterpartyLookup frames are
-    # brand-validated against the cp_lookup_counterparties edge, which
-    # declares (and injects) country_code — the column is always present.
-    cp_select.append(pl.col("country_code").alias("_share_country_code"))
+    # MOF parents are excluded on the LOOKUP side rather than at the join, so a
+    # MOF parent can never be offered a member and its waterfall / residual rows
+    # can never be replicated.
+    mof_parents = root_lookup.select(
+        pl.col("root_facility_reference").alias("facility_reference")
+    ).unique()
 
-    candidates = candidates.join(
-        counterparty_lookup.counterparties.select(cp_select),
-        on="counterparty_reference",
-        how="left",
-    ).with_columns(
-        build_entity_rw_expr(
-            entity_type_col="_share_entity_type",
-            cqs_col="_share_cqs",
-            is_basel_3_1=is_basel_3_1,
-            country_code_col="_share_country_code",
-        ).alias("_preview_rw")
-    )
-
-    # Per facility, pick the candidate with max preview RW. Tie-break on
-    # higher CQS (worse credit) then alphabetical counterparty_reference.
     return (
-        candidates.sort(
+        members.join(member_counts, on="facility_reference", how="inner")
+        .filter(pl.col("_member_count") > 1)
+        .join(mof_parents, on="facility_reference", how="anti")
+        .select(
             [
-                "facility_reference",
-                "_preview_rw",
-                "_share_cqs",
-                "counterparty_reference",
-            ],
-            descending=[False, True, True, False],
-            nulls_last=True,
+                pl.col("facility_reference"),
+                pl.col("counterparty_reference").alias("_share_member_reference"),
+            ]
         )
-        .group_by("facility_reference")
-        .agg(pl.col("counterparty_reference").first().alias("share_counterparty_reference"))
     )

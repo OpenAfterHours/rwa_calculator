@@ -1,3 +1,7 @@
+---
+verified: "2026-09-05 @ 0.3.33"
+---
+
 # Component Overview
 
 This document provides detailed documentation of each component in the RWA calculator.
@@ -146,7 +150,8 @@ class HierarchyResolver:
 | `_build_facility_root_lookup()` | Traverse facility-to-facility hierarchies to find root facility |
 | `_calculate_facility_undrawn()` | Calculate undrawn = limit - sum(descendant drawn), excluding sub-facilities. Suppresses the synthetic `facility_undrawn` exposure row when `committed=False` — uncommitted (unconditionally cancellable) facilities carry no commitment EAD because the bank can refuse to lend; loans and contingents mapped to the facility are unaffected and continue to flow as their own exposure rows |
 | `_expand_mof_facility_undrawn()` | For Multiple Option Facility (MOF) parents — replaces the parent's single undrawn row with one row per **committed** descendant sub-facility (with positive headroom), allocated by waterfall in descending SA CCF order, capped per-sub at `sub_limit − sub_drawn` and globally at the parent's headroom. Emits a residual row at the parent's own `risk_type` when sub-limits don't cover the full parent limit. Uncommitted subs are skipped entirely. Each split row carries the sub's `risk_type` and `counterparty_reference`; provenance lives in `mof_risk_type_source` |
-| `_derive_facility_share_counterparty()` | For non-MOF Facility Shares (one facility, many counterparties on its loans/contingents) — allocate the undrawn to the riskiest member by SA-equivalent risk-weight preview. Skipped on MOF parents because each sub waterfall row already carries the right counterparty natively |
+| `_derive_facility_share_members()` | For non-MOF Facility Shares (one facility any of several counterparties may draw) — derive the member set: the facility's own `counterparty_reference` (the owner is always a member) unioned with the distinct counterparties on its descendant loans and contingents, each resolved to its root facility. A union of more than one member is what makes the facility a share. MOF parents are anti-joined out, because each sub waterfall row already carries the right counterparty natively |
+| `_apply_facility_share_fanout()` | Replicate a share's single undrawn row into one **candidate** row per member, each carrying the **full** headroom (each is "as if this member drew the whole line" — nothing is pro-rated and nothing is drawn-weighted). Each candidate takes `exposure_reference = <facility>_UNDRAWN@<member>`, the member as `counterparty_reference`, the owner in `original_counterparty_reference`, `facility_share_group = <facility>` and `is_facility_share_candidate = True`; `source_exposure_reference` stays `<facility>`, so reconciliation keys are unchanged. Nothing is ranked here |
 | `_unify_exposures()` | Combine loan, contingent, and facility_undrawn into single LazyFrame |
 | `_calculate_lending_group_totals()` | Aggregate exposure by lending group for retail threshold |
 | `_add_collateral_ltv()` | Add LTV from collateral (direct → facility → counterparty priority) |
@@ -160,7 +165,7 @@ class HierarchyResolver:
 - Multi-level facility hierarchy: drawn amounts aggregated to root facility
 - Sub-facility exclusion from undrawn exposure output (avoids double-counting)
 - **Multiple Option Facility (MOF) parents emit per-sub waterfall undrawn rows** (any facility with at least one `child_type='facility'` mapping is a MOF). Sub-facilities are sorted by descending SA CCF under the active framework and each takes the lesser of its own headroom (`sub_limit − sub_drawn`) and the parent's remaining headroom. Sub-limits beyond the parent's cap spill out, leftover parent headroom emits a residual row at the parent's own `risk_type`, uncommitted subs are skipped, and each row records its source in `mof_risk_type_source` for audit.
-- **Non-MOF Facility Share undrawn is allocated to the riskiest counterparty among the descendant loan/contingent counterparties** by SA-equivalent risk-weight preview; the original facility counterparty is preserved as `original_counterparty_reference` for audit. MOF parents skip this override because each waterfall row already carries its sub-facility's own counterparty.
+- **A non-MOF Facility Share fans out into one undrawn candidate row per member**, rather than being allocated here. The member set is the facility's owner unioned with the distinct counterparties on its descendant loans and contingents; more than one member makes it a share. Every candidate carries the full headroom, its own member as `counterparty_reference`, the owner in `original_counterparty_reference` for audit, and the `facility_share_group` / `is_facility_share_candidate` carriers. Each then flows through the classifier, CRM and the calculators as an ordinary row of its own member — its own exposure class, model permission, PD/LGD and CRM — and the **aggregator** keeps one and drops the rest, so the allocation is decided on real priced RWA. MOF parents are excluded because each waterfall row already carries its sub-facility's own counterparty. The SA-equivalent risk-weight preview that used to choose the winner here was removed on 2026-09-05; see [Facility Share Allocation](../specifications/facility-share-allocation.md).
 - Rating inheritance from parent (own → parent → unrated)
 - Lending group aggregation with residential property exclusion (CRR Art. 123(c))
 - Multi-level collateral linking (direct, facility, counterparty) with pro-rata allocation
@@ -693,8 +698,21 @@ class OutputAggregator:
         )
 ```
 
+### Key Internal Steps
+
+| Step | Purpose |
+|--------|---------|
+| `resolve_facility_shares()` (`engine/aggregator/_facility_share.py`) | Runs at the **head** of `aggregate()`, on the three branch frames (`sa_results`, `irb_results`, `slotting_results`) plus the concatenation — before the securitisation views, the residual multiplier, the expected-loss summary and the output floor. Keeps exactly one undrawn candidate per `facility_share_group` and drops the rest from every frame, then collapses the winner's `exposure_reference` back to `<facility>_UNDRAWN`, so the aggregator exit keeps its **one undrawn row per facility** invariant. The metric is P0 (`argmax` own-approach RWA) under CRR, and under Basel 3.1 when the firm has elected `own_approach`; otherwise P2 — evaluate assignment **A** (`argmax` own RWA) and assignment **B** (`argmax` floored-branch marginal) end to end and keep the larger, ties to A. Emits the per-candidate `facility_share_resolution` audit frame, sets `facility_share_metric_used` / `facility_share_trea_alternative` on `OutputFloorSummary`, and raises an `AGG003` **warning** where every candidate of a group carries a non-finite own-approach RWA and a deterministic fallback ordering picked the member instead. See [Facility Share Allocation](../specifications/facility-share-allocation.md) |
+| `apply_floor_with_impact()` (`engine/aggregator/_floor.py`) | Basel 3.1 output floor at portfolio level, gated on the `output_floor` pack Feature and the entity-scope check; distributes the shortfall pro-rata by `sa_rwa` across floor-eligible rows |
+
+The drop must precede the floor **and** the expected-loss summary: a loser left on
+a branch frame inflates S-TREA, and its expected loss feeds the CET1 deduction and
+therefore OF-ADJ. Filtering the combined frame alone is green on `rwa_final` and
+wrong on OF-ADJ.
+
 ### Key Features
 
+- Facility-share candidate resolution before the floor
 - Result combination
 - Output floor application
 - Floor impact calculation

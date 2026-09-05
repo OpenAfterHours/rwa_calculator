@@ -103,6 +103,26 @@
         "regime": "b31"
       },
       {
+        "source": "reporting",
+        "portfolio": "facility-share-binding",
+        "regime": "crr"
+      },
+      {
+        "source": "reporting",
+        "portfolio": "facility-share-nonbinding",
+        "regime": "crr"
+      },
+      {
+        "source": "reporting",
+        "portfolio": "facility-share-binding",
+        "regime": "b31"
+      },
+      {
+        "source": "reporting",
+        "portfolio": "facility-share-nonbinding",
+        "regime": "b31"
+      },
+      {
         "source": "corpus",
         "portfolio": "sa_broad",
         "regime": "crr"
@@ -167,13 +187,13 @@
       "BASEL_3_1",
       "CRR"
     ],
-    "runs": 32,
-    "prior_period_runs": 10,
+    "runs": 36,
+    "prior_period_runs": 14,
     "config_source": "each portfolio runs under its OWN canonical config - RUNS in tests/acceptance/reporting/test_supervisory_validations.py for the reporting fixtures, tests/properties/portfolios.py::config_for for the corpus. One uniform config would strand six portfolios in the missing-model_permissions SA fallback and record their IRB columns dead.",
     "excludes": {
       "tests/fixtures/reporting_funded_protection_portfolio.py": "WITHHELD from RUNS deliberately, not an oversight. Registering it needs a config electing the Art. 222 SIMPLE Method (_fcsm_config); registered against _sa_config, which defaults to comprehensive, the fixture sits in the gate with its own feature silenced - C 07.00 col 0070 reads 0.00 under comprehensive and non-zero under SIMPLE on the identical bundle, and dropping its two runs left this census at 210 live / 129 dead unchanged, so it contributed no liveness. Registered CORRECTLY it exposes two ERROR-severity supervisory breaks (boe_b0471, v0308_m) that predate the carrier fix, so the registration is filed as a Tier 1 item with the Art. 222 defect rather than banked here. Its canonical config lives in tests/acceptance/reporting/test_funded_protection_coverage.py. Registering it should move the Simple Method (C 07.00 col 0070) and Art. 199 (C 08.01/02 cols 0200/0210, CR7-A cols e/f) columns off NO_FIXTURE."
     },
-    "seconds": 56.0
+    "seconds": 74.9
   },
   "counts": {
     "template_column_pairs": 339,
@@ -182,11 +202,11 @@
     "emitted_pairs": 329,
     "never_emitted_pairs": 10,
     "non_numeric_columns_excluded": 4,
-    "frames": 781,
-    "numeric_cells": 247648,
-    "non_null_cells": 47139,
-    "non_zero_cells": 12954,
-    "cell_fill_pct": 5.23
+    "frames": 869,
+    "numeric_cells": 267406,
+    "non_null_cells": 52295,
+    "non_zero_cells": 14306,
+    "cell_fill_pct": 5.35
   },
   "caveats": [
     "reporting/rich/crr: C 02.00: row 0300 (13622029.83) exceeds its class breakdown 0310+0330+0340+0370 (15245.72) by 13606784.12 \u2014 an (approach, class) pair with no row in the layout; the RWEA is counted in the approach total but absent from the of-which rows",

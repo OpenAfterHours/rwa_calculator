@@ -49,6 +49,19 @@ def prepare_equity_results(
         # Equity is base-grain, so its reconciliation base equals its own
         # reference (set unconditionally — no presence guard).
         pl.col("exposure_reference").alias("source_exposure_reference"),
+        # Facility-share carriers. An equity holding is never a candidate: the
+        # fan-out only replicates synthetic facility_undrawn rows. They are
+        # emitted HERE because equity is the one path that reaches the sealed
+        # aggregator exit without passing an SA/IRB/slotting branch seal — it is
+        # concatenated straight onto the combined frame (aggregator.py) — so
+        # nothing upstream resolves these two columns for an equity row and the
+        # diagonal concat would otherwise inject a null. Resolving them at the
+        # producer rather than filling them at the exit is deliberate: a fill on
+        # AGGREGATOR_EXIT_EDGE adds a with_columns node on top of the already
+        # materialised frame, which tests/unit/test_aggregator_eager_views.py
+        # counts and rejects.
+        pl.lit(None).cast(pl.String).alias("facility_share_group"),
+        pl.lit(False).alias("is_facility_share_candidate"),
     ]
     if include_sa_equivalent:
         prepared.append(pl.col(rwa_col).alias("sa_rwa"))

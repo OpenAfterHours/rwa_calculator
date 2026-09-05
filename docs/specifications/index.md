@@ -45,6 +45,7 @@ See also the [CRR vs Basel 3.1](../framework-comparison/index.md) section for co
 | Specification | Description |
 |--------------|-------------|
 | [Hierarchy & Classification](common/hierarchy-classification.md) | Counterparty hierarchy resolution and exposure classification |
+| [Facility Share Allocation](facility-share-allocation.md) | Allocating a shared facility's undrawn commitment to its riskiest member — candidate fan-out, the metric under each regime, the `facility_share_metric` election. **Firm policy, not regulation** |
 | [Stress Testing](common/stress-testing.md) | Pipeline integrity tests at 10K–100K scale across all framework/permission combinations |
 
 ### Project

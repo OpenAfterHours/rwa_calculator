@@ -6,8 +6,8 @@ Every cited regulatory value in the rulepack packs `src/rwa_calc/rulebook/packs/
 
 Package version `0.3.32`. Resolved packs:
 
-- **CRR** (`crr` @ 2026-01-01) — 203 entries, content hash `5d5c57b888cb3249`
-- **Basel 3.1** (`b31` @ 2027-01-01) — 235 entries, content hash `a0784d121c08ecf1`
+- **CRR** (`crr` @ 2026-01-01) — 204 entries, content hash `9c63304e801e3a38`
+- **Basel 3.1** (`b31` @ 2027-01-01) — 236 entries, content hash `be501c3fe5513117`
 
 ## Regime features
 
@@ -42,6 +42,7 @@ On/off behaviour switches (`Feature`).
 | `intragroup_zero_rw` | on | on | CRR Art. 113 / PS1/26, paragraph 113 |
 | `irb_correlation_sme_gbp_native` | off | on | CRR Art. 153(4) / PS1/26, paragraph 153 |
 | `mna_intermediate_floor_requires_daily_condition` | off | on | CRR Art. 162(2) / PS1/26, paragraph 162 |
+| `on_bs_netting_perimeter_is_agreement` | on | on | CRR Art. 195 / PS1/26, paragraph 195 |
 | `one_day_maturity_floor` | on | off | CRR Art. 162(3) / PS1/26, paragraph 162 |
 | `output_floor` | off | on | CRR Art. 92 / PS1/26, paragraph 92 |
 | `post_model_adjustments` | off | on | CRR Art. 153 / PS1/26, paragraph 154 |

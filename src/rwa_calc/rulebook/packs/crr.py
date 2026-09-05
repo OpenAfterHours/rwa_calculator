@@ -950,6 +950,32 @@ ENTRIES: dict[str, RuleEntry] = {
         ),
         citation=Citation("CRR", "161", "F-IRB supervisory LGD (Art. 161 / Art. 230 Table 5)"),
     ),
+    # On-balance-sheet netting perimeter (CRR Art. 195/205(a)/219). Selects the
+    # pool / sibling-join / pro-rata-denominator keying in
+    # engine/crm/collateral.py::generate_netting_collateral.
+    "on_bs_netting_perimeter_is_agreement": Feature(
+        name="on_bs_netting_perimeter_is_agreement",
+        enabled=True,
+        citation=Citation(
+            "CRR",
+            "195",
+            "Operator decision 2026-09-04: the netting agreement reference is "
+            "the legal set-off boundary and defines the mutual-claims perimeter "
+            "of Art. 195 where one agreement binds several entities jointly and "
+            "severally, so a deposit offsets every positive-drawn loan under the "
+            "same agreement whichever party to it holds the leg. Art. 205(a) "
+            "enforceability 'in the event of the insolvency or bankruptcy of a "
+            "counterparty' is the firm's attestation for every party under the "
+            "reference, and a spanning agreement raises a CRM016 audit record "
+            "so that attestation is evidenced. Direction (measured): enabling "
+            "this is RWA-reducing — an SA exposure's E* falls by the netted "
+            "deposit and an F-IRB exposure's LGD* falls with it — but the "
+            "output-floor basis S-TREA is UNCHANGED, because an IRB row's "
+            "SA-equivalent is computed on the unreduced EAD; only U-TREA falls, "
+            "so the floor becomes MORE likely to bind. Flip enabled=False to "
+            "restore the single-counterparty (P1.238) keying",
+        ),
+    ),
     # FCCM collateral-haircut maturity-band structure (CRR Art. 224 Table 1): CRR
     # uses 3 bands (0_1y / 1_5y / 5y_plus); Basel 3.1 uses 5 (0_1y / 1_3y / 3_5y /
     # 5_10y / 10y_plus) — see packs/b31.py. The Feature gates the band-classification

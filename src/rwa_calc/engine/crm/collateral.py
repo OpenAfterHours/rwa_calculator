@@ -168,6 +168,7 @@ def find_misdirected_airb_model_collateral(
 
 
 @cites("CRR Art. 195")
+@cites("CRR Art. 205")
 @cites("CRR Art. 219")
 @cites("CRR Art. 223")
 @cites("CRR Art. 238")
@@ -175,78 +176,72 @@ def generate_netting_collateral(
     exposures: pl.LazyFrame,
     errors: list[CalculationError] | None = None,
     *,
+    pack: ResolvedRulepack,
     reporting_date: date | None = None,
 ) -> pl.LazyFrame | None:
     """
     Generate synthetic cash collateral from negative-drawn netting-eligible loans.
 
-    When a loan has a negative drawn amount (credit balance / deposit) and carries
-    a ``netting_agreement_reference`` (CRR Art. 195/219), the absolute value of
-    that negative balance can reduce other exposures covered by the SAME netting
-    agreement AND owed by the SAME counterparty — treated as synthetic cash
-    collateral.
+    A negative drawn amount (credit balance / deposit) on a loan carrying a
+    ``netting_agreement_reference`` (CRR Art. 195/219) becomes synthetic cash
+    collateral for the other exposures under the SAME agreement.
 
-    CRR/PS1-26 Art. 195 (P1.238): on-balance-sheet netting is limited to "mutual
-    claims" / "reciprocal cash balances between the institution and the
-    counterparty" — a single counterparty. So a deposit from counterparty A may
-    net only loans owed by counterparty A under the same agreement; it may NOT
-    offset a loan to a different counterparty B, even where a group-level
-    agreement reference is shared. Pools are therefore keyed by
-    (netting_agreement_reference, counterparty_reference) — the agreement is the
-    legal set-off boundary, the counterparty the Art. 195 eligibility boundary.
-    A netting_agreement_reference that spans more than one counterparty raises a
-    CRM016 data-quality warning (the disallowed cross-counterparty offset is
-    otherwise invisible). Two exposures still do NOT net unless they share the
-    reference, regardless of facility hierarchy.
+    The agreement reference ALONE bounds the set-off (operator decision
+    2026-09-04, reversing P1.238's (reference, counterparty) keying): pools key
+    on (reference, currency), siblings match on the reference and the pro-rata
+    denominator is the agreement's total drawn, so a deposit offsets every
+    positive-drawn loan sibling under that agreement whichever party to it holds
+    the leg. This is the cited pack Feature
+    ``on_bs_netting_perimeter_is_agreement``; flipping it off restores the
+    (reference, counterparty) keying exactly. An agreement spanning more than one
+    counterparty — or carrying a null one — raises one CRM016 WARNING as an AUDIT
+    record: the offset IS applied, and Art. 205(a) enforceability against every
+    party to the agreement must be evidenced separately. Two exposures still do
+    NOT net unless they share the reference, regardless of facility hierarchy.
 
     CRR Art. 219 limits on-balance-sheet netting to drawn loans and deposits
     (cash-on-cash). Synthetic cash collateral is allocated pro-rata by the drawn
     portion (`on_bs_for_ead`) to positive-drawn LOAN siblings carrying the same
     reference — contingents and synthetic facility_undrawn rows are
     off-balance-sheet and excluded from the beneficiary set. Netting pools also
-    keep currency (as (ref, currency, counterparty_reference)) so the haircut
-    pipeline can apply FX haircuts when the pool currency differs from the
-    sibling's currency.
+    keep currency so the haircut pipeline can apply FX haircuts when the pool
+    currency differs from the sibling's currency.
 
     Art. 219 treats the netted deposit as cash collateral, so the funded-
     protection maturity-mismatch rules (Art. 237-239) apply exactly as for any
     other funded protection (P1.241). The synthetic row therefore carries the
     DEPOSIT's maturity — not the beneficiary loan's — as ``maturity_date``, the
     deposit residual (t) as ``residual_maturity_years`` (when ``reporting_date``
-    is supplied), and the deposit ORIGINAL term as ``original_maturity_years``
-    (when ``value_date`` is available). The downstream ``apply_maturity_mismatch``
+    is supplied) and the deposit ORIGINAL term as ``original_maturity_years``
+    (when ``value_date`` is available). Downstream ``apply_maturity_mismatch``
     then, on a mismatch (t < T where T is the loan residual), zeroes the
     protection when t < 0.25 (Art. 237(1)) OR the original term < 1y
-    (Art. 237(2)(a)), else applies (t-0.25)/(T-0.25) (Art. 238-239). Previously
-    the row carried the loan's maturity, a null residual (filled to 10y
-    downstream) and no original term, so no gate fired and a short deposit
-    netting a long loan was recognised in full.
+    (Art. 237(2)(a)), else applies (t-0.25)/(T-0.25) (Art. 238-239). The residual
+    uses the /365.25 day-count of that function's exposure-side T (so equal
+    deposit/loan maturities net in full, with NO phantom mismatch); the original
+    term uses the /365 convention of the engine's other original-maturity
+    derivations (risk_weights.py / enrich.py).
 
-    The residual t uses the /365.25 day-count of the exposure-side T derivation in
-    ``apply_maturity_mismatch`` (so equal deposit/loan maturities net in full with
-    NO phantom mismatch); the original term uses the /365 convention of the
-    engine's other original-maturity derivations (risk_weights.py / enrich.py).
-
-    Pooling convention (conservative): when several deposits of differing
-    maturities pool into one (ref, currency, counterparty) row, the pool carries
-    the EARLIEST (minimum) deposit maturity AND the minimum deposit original term.
-    The earliest-maturing deposit is when the pool's protection first begins to
-    lapse; representing the whole pool at that maturity maximises the mismatch
-    haircut (shortest t → smallest (t-0.25)/(T-0.25)), and the minimum original
-    term is the one most likely to trip the Art. 237(2)(a) <1y gate — both the
-    prudent single-value summary. A null deposit maturity (or no
-    ``reporting_date``) leaves the residual null and is handled permissively
-    downstream — absent maturity data cannot establish a mismatch, the same
-    convention ordinary financial collateral without a supplied residual follows
-    (this is NOT an anti-conservative fill: the downstream 10y default is
-    unchanged, it is simply no longer fed a null when the data is present); a null
+    Pooling convention (conservative): a pool of deposits of differing maturities
+    carries the EARLIEST (minimum) deposit maturity AND the minimum deposit
+    original term — the earliest maturity is when the pool's protection first
+    begins to lapse and maximises the mismatch haircut (shortest t → smallest
+    (t-0.25)/(T-0.25)), and the shortest original term is the one most likely to
+    trip the Art. 237(2)(a) <1y gate. A null deposit maturity (or no
+    ``reporting_date``) leaves the residual null, handled permissively downstream
+    — absent maturity data cannot establish a mismatch, the convention ordinary
+    financial collateral without a supplied residual follows, and the downstream
+    10y default is unchanged (so this is NOT an anti-conservative fill); a null
     original term (no ``value_date``) likewise leaves the Art. 237(2)(a) gate
     permissive.
 
     Args:
         exposures: Exposures with ead_for_crm, on_bs_for_ead, exposure_type set
-        errors: optional CRM error channel — receives Art. 195 CRM016 warnings
-            for netting agreements that span more than one counterparty.
+        errors: optional CRM error channel — receives the Art. 195 CRM016 audit
+            warning for agreements spanning more than one counterparty.
+        pack: resolved rulepack supplying the perimeter Feature. REQUIRED — a
+            default would fail open to the wider, RWA-reducing perimeter, so
+            every caller resolves a pack of its own.
         reporting_date: run reporting date, used to derive the deposit residual
             maturity (Art. 238) on the synthetic rows. When None (direct
             unit-test callers), residual_maturity_years stays null and the
@@ -283,40 +278,42 @@ def generate_netting_collateral(
     if "exposure_type" not in schema_names:
         exposures = exposures.with_columns(pl.lit("loan").alias("exposure_type"))
     if "counterparty_reference" not in schema_names:
-        # Test-caller fallback only: production always supplies counterparty_reference
-        # (a core exposure column). Absent → treat every row as the same counterparty
-        # so the Art. 195 same-counterparty constraint is a no-op for legacy callers.
+        # Test-caller fallback only (production always supplies it): one synthetic
+        # counterparty, so the disabled perimeter is a no-op for legacy callers.
         exposures = exposures.with_columns(pl.lit("_UNKNOWN_CP").alias("counterparty_reference"))
+
+    # The Art. 195 set-off perimeter, from the cited pack Feature: the agreement
+    # reference alone (enabled), or (reference, counterparty) when disabled.
+    # Derived once so the two states differ in exactly one place — every pool,
+    # sibling-join and pro-rata key below is built from these lists.
+    perimeter_is_agreement = pack.feature("on_bs_netting_perimeter_is_agreement")
+    perimeter_keys = ["netting_agreement_reference"]
+    if not perimeter_is_agreement:
+        perimeter_keys.append("counterparty_reference")
+    allocation_keys = [*perimeter_keys, "_pool_currency"]
 
     # Negative-drawn loans carrying a netting agreement reference provide the pool
     negative_loans = exposures.filter(
         pl.col("netting_agreement_reference").is_not_null() & (pl.col("drawn_amount") < 0)
     )
 
-    # Art. 195 (P1.238): emit a CRM016 warning for any agreement that spans more
-    # than one counterparty (a deposit and a positive loan under the same
-    # reference but for different counterparties would previously have netted).
+    # Art. 195/205(a): CRM016 audit record for any agreement spanning more than
+    # one counterparty (or carrying a null one) — the offset itself applies.
     if errors is not None:
-        _record_cross_counterparty_netting(exposures, errors)
+        _record_cross_counterparty_netting(exposures, errors, perimeter_is_agreement)
 
-    # Sum abs(drawn_amount) per (netting_agreement_reference, currency,
-    # counterparty_reference) → netting pool. Currency is kept so the synthetic
-    # collateral carries the source currency (FX haircut when currencies differ);
-    # counterparty_reference enforces the Art. 195 same-counterparty limit.
-    # Art. 219/238 (P1.241): the earliest (min) deposit maturity per pool is the
-    # conservative single-maturity summary — it drives the maturity-mismatch t.
-    # The minimum deposit ORIGINAL maturity is carried alongside for the
-    # Art. 237(2)(a) >=1y eligibility gate (min → shortest term is most likely to
-    # trip the <1y gate; derived from maturity_date - value_date, the same
-    # convention as engine/sa/risk_weights.py / hierarchy/enrich.py, /365). A null
-    # value_date yields a null original maturity (permissive — gate does not fire).
+    # Sum abs(drawn_amount) per (perimeter keys, currency) → netting pool.
+    # Currency is kept so the synthetic collateral carries the source currency
+    # (FX haircut when currencies differ). Art. 219/238 (P1.241): the earliest
+    # (min) deposit maturity per pool drives the mismatch t; the minimum deposit
+    # ORIGINAL maturity rides alongside for the Art. 237(2)(a) >=1y gate (from
+    # maturity_date - value_date, /365 as in engine/sa/risk_weights.py and
+    # hierarchy/enrich.py). A null value_date leaves it null (gate permissive).
     deposit_original_years = (
         pl.col("maturity_date").cast(pl.Int32) - pl.col("value_date").cast(pl.Int32)
     ).cast(pl.Float64) / 365.0
     netting_pool = (
-        negative_loans.group_by(
-            ["netting_agreement_reference", "currency", "counterparty_reference"]
-        )
+        negative_loans.group_by([*perimeter_keys, "currency"])
         .agg(
             pl.col("drawn_amount").abs().sum().alias("netting_pool"),
             pl.col("maturity_date").min().alias("_pool_deposit_maturity_date"),
@@ -327,11 +324,9 @@ def generate_netting_collateral(
 
     # CRR Art. 219: drawn-on-drawn cash netting. Synthetic cash collateral may
     # only benefit the drawn portion of loan exposures — contingents and
-    # facility_undrawn synthetic rows are off-balance-sheet and ineligible. A
-    # sibling matches a pool iff it shares BOTH the netting_agreement_reference
-    # and the counterparty_reference (Art. 195 same-counterparty limit).
-    # The beneficiary loan's own maturity is NOT carried onto the synthetic row:
-    # it feeds the mismatch as the EXPOSURE side (T) via the exposure lookup join
+    # facility_undrawn synthetic rows are off-balance-sheet and ineligible. The
+    # beneficiary loan's own maturity is NOT carried onto the synthetic row: it
+    # feeds the mismatch as the EXPOSURE side (T) via the exposure lookup join
     # downstream, while the synthetic row carries the DEPOSIT maturity (t).
     positive_siblings = exposures.filter(
         (pl.col("exposure_type") == "loan")
@@ -345,30 +340,21 @@ def generate_netting_collateral(
         "on_bs_for_ead",
     )
 
-    # Match siblings to pools by shared agreement reference AND counterparty.
-    matched = positive_siblings.join(
-        netting_pool,
-        on=["netting_agreement_reference", "counterparty_reference"],
-        how="inner",
-    )
+    # Match siblings to pools on the perimeter keys.
+    matched = positive_siblings.join(netting_pool, on=perimeter_keys, how="inner")
 
     # Total drawn EAD per pool for pro-rata allocation. CRR Art. 219 nets cash
-    # against drawn loans, so the pro-rata basis is the on-BS (drawn) portion,
-    # NOT ead_for_crm (which includes the off-BS nominal at CCF=100% per
-    # Art. 223(4) — that override is for collateral valuation, not for OBS
-    # netting allocation basis).
-    facility_totals = matched.group_by(
-        "netting_agreement_reference", "_pool_currency", "counterparty_reference"
-    ).agg(
+    # against drawn loans, so the basis is the on-BS (drawn) portion, NOT
+    # ead_for_crm (which includes the off-BS nominal at CCF=100% per Art. 223(4)
+    # — that override is for collateral valuation, not the OBS netting basis).
+    facility_totals = matched.group_by(allocation_keys).agg(
         pl.col("on_bs_for_ead").sum().alias("_facility_total_drawn"),
     )
 
     # Join totals back for pro-rata
-    allocated = matched.join(
-        facility_totals,
-        on=["netting_agreement_reference", "_pool_currency", "counterparty_reference"],
-        how="left",
-    ).filter(pl.col("_facility_total_drawn") > 0)
+    allocated = matched.join(facility_totals, on=allocation_keys, how="left").filter(
+        pl.col("_facility_total_drawn") > 0
+    )
 
     # Pro-rata market_value per sibling by drawn portion (Art. 219).
     allocated = allocated.with_columns(
@@ -845,17 +831,18 @@ def _record_credit_linked_note_not_own_issued(
 def _record_cross_counterparty_netting(
     exposures: pl.LazyFrame,
     errors: list[CalculationError],
+    perimeter_is_agreement: bool,
 ) -> None:
     """Emit one CRM016 warning per netting agreement that spans >1 counterparty.
 
-    CRR/PS1-26 Art. 195 limits on-B/S netting to a single counterparty. The
-    warning fires for an agreement (carrying both a deposit and a positive loan)
-    where reciprocity cannot be positively confirmed: either more than one
-    distinct counterparty, OR any null counterparty (netting benefit requires a
-    POSITIVE same-counterparty confirmation, so an unconfirmed counterparty is
-    conservatively excluded — Polars' default null-join semantics already prevent
-    a null-keyed deposit from matching any sibling). Targeted collect of the
-    offending agreements (the accepted DQ-emission idiom, P1.264).
+    The trigger is the same in both perimeter states: an agreement carrying both
+    a deposit and a positive loan whose counterparty cannot be positively
+    confirmed — more than one distinct counterparty, OR any null counterparty.
+    Only the WORDING varies. Under the agreement perimeter the offset IS applied
+    and the warning is the audit record that Art. 205(a) enforceability against
+    every party must be evidenced; with the Feature disabled the offset is
+    refused and the message says so. Targeted collect of the offending
+    agreements (the accepted DQ-emission idiom, P1.264).
     """
     is_deposit = pl.col("drawn_amount") < 0
     is_positive_loan = (pl.col("exposure_type") == "loan") & (pl.col("on_bs_for_ead") > 0)
@@ -875,18 +862,30 @@ def _record_cross_counterparty_netting(
             & (pl.col("_n_deposit") > 0)
             & (pl.col("_n_positive") > 0)
         )
-        .select("netting_agreement_reference")
+        .select("netting_agreement_reference", "_n_cp", "_has_null_cp")
         .collect()
+    )
+    refused_tail = (
+        "could not be confined to a single confirmed counterparty (cross-counterparty "
+        "or null-counterparty rows present); on-balance-sheet netting is limited to "
+        "reciprocal balances with one counterparty (Art. 195), so those offsets are "
+        "disallowed."
     )
     for row in spanning.iter_rows(named=True):
         agr = row.get("netting_agreement_reference")
+        null_cp = " and an unconfirmed (null) counterparty" if row["_has_null_cp"] else ""
+        tail = (
+            f"nets reciprocal balances across {row['_n_cp']} counterparties{null_cp} on "
+            "the agreement-perimeter basis (Art. 195, Feature "
+            "on_bs_netting_perimeter_is_agreement); Art. 205(a) legal enforceability "
+            "against every party under the agreement must be evidenced."
+            if perimeter_is_agreement
+            else refused_tail
+        )
         errors.append(
             crm_warning(
                 ERROR_CROSS_COUNTERPARTY_NETTING,
-                f"Netting agreement '{agr}' could not be confined to a single confirmed "
-                f"counterparty (cross-counterparty or null-counterparty rows present); "
-                f"on-balance-sheet netting is limited to reciprocal balances with one "
-                f"counterparty (Art. 195), so those offsets are disallowed.",
+                f"Netting agreement '{agr}' {tail}",
                 regulatory_reference="CRR Art. 195",
             )
         )

@@ -34,7 +34,7 @@ All seven legs share ONE set-diff (P5.41):
 
     The mechanism is shared; the POLICY is not, and the difference is
     deliberate. This register stays TWO-WAY: its membership is measured over
-    sixteen pipeline runs, so a fixture change legitimately grows it and
+    twenty pipeline runs, so a fixture change legitimately grows it and
     ``REGEN_VALIDATION_BASELINE=1`` may bank that. The declared registers are
     SHRINK-ONLY, with no bulk affordance that adds an entry at all, because an
     entry there is a decision to ship a figure an independent derivation has
@@ -54,7 +54,7 @@ Why (f)/(g) exist — the third way this gate used to fail open:
     ``checker.py::_roll_up``). Vacuity is 21%–70% of executed rules depending on
     the run — 23 of 109 on ``crr/irb-classes`` at the low end, 219 of 415 on
     ``b31/rich``, 123 of 177 on ``b31/off-bs`` at the high end. Union it across
-    the sixteen runs and 218 rules — 143 of them Error-severity — reach a verdict
+    the run matrix and 218 rules — 143 of them Error-severity — reach a verdict
     and NEVER reach a real one anywhere.
 
     Legs (a)–(e) are all blind to it. A defect that empties a column silently
@@ -99,7 +99,7 @@ Why the key is ``(regime, rule_id)`` and not the failing coordinate:
     evidence the estate is still being checked — an earlier draft of this
     paragraph overclaimed twice and a reviewer measured both claims false.
 
-    FIRST, the union. Membership is the union over the sixteen runs: a rule is
+    FIRST, the union. Membership is the union over the twenty runs: a rule is
     vacuity-only when NO run gets a real verdict out of it. A change that empties
     a column on ONE portfolio while another still exercises the same rule leaves
     this population unmoved, and 221 rules (130 of them ERROR) currently hold a
@@ -134,16 +134,17 @@ Why the key is ``(regime, rule_id)`` and not the failing coordinate:
     it is owed work — not a property of legs (f)/(g).
 
     Where the single-portfolio case actually goes, stated per portfolio rather
-    than waved at ``test_reporting_*_golden.py``: only FIVE goldens exist — rich,
-    ccr, irb-classes, off-bs, sa-classes. ``crm-substitution``, ``re-split`` and
-    ``art199`` have NO golden, only focused acceptance tests pinning the columns
+    than waved at ``test_reporting_*_golden.py``: only SIX goldens exist — rich,
+    ccr, irb-classes, off-bs, sa-classes and netting. ``crm-substitution``,
+    ``re-split``, ``art199`` and ``irb-shapes`` have NO golden, only focused
+    acceptance tests pinning the columns
     each fixture was built for: strong on those columns, silent elsewhere. Golden
-    coverage for those three is owed work too.
+    coverage for those four is owed work too.
 
 Cost, and why every run is load-bearing:
-    This file is the most expensive test in the suite: eight portfolios x two
-    regimes, plus a prior-period run for each of the eight IRB ones, is
-    TWENTY-FOUR full pipeline runs. That is a standing temptation to trim the run set, so
+    This file is the most expensive test in the suite: ten portfolios x two
+    regimes, plus a prior-period run for each of the ten IRB ones, is
+    THIRTY full pipeline runs. That is a standing temptation to trim the run set, so
     the justification lives here rather than only in a commit message. Each run
     is the SOLE reachability route for a family of published rules, and
     dropping one does not make those rules pass — it makes them NOT_EVALUATED,
@@ -165,9 +166,14 @@ Cost, and why every run is load-bearing:
                            0040/0050/0070/0080, C 08.02 col 0080) — the sole
                            route to every rule written over the
                            outflow/inflow columns.
+    - ``netting``          the ONLY portfolio whose on-balance-sheet netting
+                           agreement spans more than one counterparty, and so
+                           the only route to C 07.00 col 0035 ("(-) Adjustment
+                           due to on-balance sheet netting", Basel 3.1 sheet
+                           only) carrying a figure at all.
 
     Measured: ``sa-classes`` and ``irb-classes`` together move 53 CRR and 32
-    Basel 3.1 rules out of NOT_EVALUATED. The six prior-period runs exist
+    Basel 3.1 rules out of NOT_EVALUATED. The ten prior-period runs exist
     because C 08.04 reports RWEA *flows* — COREP Annex II §3.3.6.1 ¶79 defines
     them against the PRIOR reference date — so without one, rows 0010-0080 are
     null by construction and the flow rules cannot be evaluated at all. Each
@@ -249,6 +255,7 @@ from tests.fixtures.reporting_funded_protection_portfolio import (
 )
 from tests.fixtures.reporting_irb_classes_portfolio import build_reporting_irb_classes_bundle
 from tests.fixtures.reporting_irb_shapes_portfolio import build_reporting_irb_shapes_bundle
+from tests.fixtures.reporting_netting_portfolio import build_reporting_netting_bundle
 from tests.fixtures.reporting_offbs_portfolio import build_reporting_offbs_bundle
 from tests.fixtures.reporting_portfolio import build_reporting_bundle
 from tests.fixtures.reporting_re_split_portfolio import build_reporting_re_split_bundle
@@ -421,6 +428,25 @@ REGISTER_NOTES: dict[str, str] = {
         "on unattributed entries above before assuming the parent's negative figure is itself "
         "the bug, as it genuinely was in the boe_b0378 worked example there)."
     ),
+    # Hand-written into the JSON on 2026-08-xx and dropped by the next REGEN because
+    # it lived only there; moved here (verbatim) on 2026-09-05 so regeneration keeps it.
+    "pattern_non_additive_columns_in_summation_rules": (
+        "The BoE summation rules are COLUMN-AGNOSTIC: 'total row = sum(breakdown rows)' is "
+        "applied across every column of the table, including columns that are not additive "
+        "across those rows. This is the same family as notes.pattern_boe_summation_templates "
+        "but a STRICTER form, because it cannot be satisfied by any portfolio rather than only "
+        "by a single-row one. Two column kinds are affected on OF 08.01: c0300 = "
+        "Count(counterparty_reference, distinct=True) and c0250 = WeightedAvg(irb_maturity_m, "
+        "weight=ead). A DISTINCT COUNT counts an obligor once on the total row and once in EACH "
+        "breakdown row it appears in, so the row sum exceeds the total whenever one obligor "
+        "holds legs on both balance-sheet sides. Measured on reporting/irb-shapes/b31, C 08.01 "
+        "corporate: c0300 total = 3 distinct obligors, on-BS row = 3, off-BS row = 1 -> row sum "
+        "4 vs total 3. c0250 total = 1673.0, on-BS = 1673.0, off-BS = 1673.0 -> row sum 3346 vs "
+        "total 1673. Our figures are correct on their own definitions in both cases. This "
+        "surfaced only when the irb-shapes portfolio arrived because it is the FIRST portfolio "
+        "in the estate where a single obligor spans both the on- and off-balance-sheet rows, "
+        "which is inherent to covering IRB off-balance-sheet exposure at all."
+    ),
 }
 
 
@@ -504,10 +530,14 @@ class GateInput(NamedTuple):
     build_prior_config: Callable[[], CalculationConfig] | None = None
 
 
-#: The sixteen runs, each the sole reachability route for a family of published
+#: The twenty runs, each the sole reachability route for a family of published
 #: rules. See "Cost, and why every run is load-bearing" in the module docstring
 #: before trimming this list — a dropped run does not make its rules pass, it
 #: makes them NOT_EVALUATED, which reads the same on the error channel.
+#:
+#: The count in this comment read "sixteen" until the ``netting`` pair below was
+#: added: it had already gone stale when ``art199`` and ``irb-shapes`` were
+#: registered. Count the tuple, not the prose.
 #:
 #: The last four were added with the real-estate carrier-conservation batch. They
 #: are registered here rather than left as standalone acceptance fixtures because
@@ -671,6 +701,25 @@ RUNS: tuple[GateInput, ...] = (
         lambda: _irb_config("BASEL_3_1"),
         lambda: _prior_config("BASEL_3_1"),
     ),
+    # On-balance-sheet netting across a spanning agreement — LESSONS B5. C 07.00
+    # col 0035 "(-) Adjustment due to on-balance sheet netting" was DEAD in every
+    # registered run (``NO_FIXTURE``: no fixture supplies a netting agreement),
+    # and this portfolio is what lights it. Its GROUP agreement is also the only
+    # exercise anywhere in the estate of CROSS-counterparty netting: the three
+    # other fixture files that set ``netting_agreement_reference`` at all put
+    # every leg of their agreement under ONE counterparty, which nets identically
+    # whichever perimeter key is in force.
+    #
+    # SA-only (five unrated corporates, no IRB obligor), so ``_sa_config`` and no
+    # prior frame — same shape as the ``off-bs`` and ``sa-classes`` runs.
+    GateInput("crr", "CRR", "netting", build_reporting_netting_bundle, lambda: _sa_config("CRR")),
+    GateInput(
+        "b31",
+        "BASEL_3_1",
+        "netting",
+        build_reporting_netting_bundle,
+        lambda: _sa_config("BASEL_3_1"),
+    ),
 )
 
 
@@ -746,7 +795,7 @@ class VacuityFact(NamedTuple):
 
 
 class GateRun(NamedTuple):
-    """Everything the sixteen runs produced.
+    """Everything the twenty runs produced.
 
     ``summary`` is per-run outcome counts, kept descriptive: nothing asserts an
     individual count, only that the four statuses are all reported and account
@@ -867,7 +916,7 @@ def _run_gate() -> GateRun:
 
 @pytest.fixture(scope="module")
 def gate_run() -> GateRun:
-    """The sixteen runs, executed once for this file.
+    """The twenty runs, executed once for this file.
 
     ``--dist=loadfile`` pins this file to one worker, so the pipeline runs happen
     once per session rather than once per test.
@@ -969,7 +1018,7 @@ def _write_baseline(run: GateRun) -> None:
 # ---------------------------------------------------------------------------
 # Extracted rather than inlined like legs (a)-(d), for one reason: a gate nobody
 # has watched fail is not a gate, and watching THIS one fail through the tests
-# costs sixteen pipeline runs plus a fixture change. Named functions over plain
+# costs twenty pipeline runs plus a fixture change. Named functions over plain
 # dicts can be driven with a synthetic measured-vs-baseline pair in seconds, so
 # both directions are demonstrable on demand instead of argued from the code.
 #
@@ -980,7 +1029,7 @@ def _write_baseline(run: GateRun) -> None:
 # what "new" and "gone" mean. `diff` is deliberately direction-NEUTRAL: it
 # reports both sides and each caller decides which is a failure. This register
 # stays two-way — an increase may be banked with REGEN_VALIDATION_BASELINE=1,
-# because its membership is MEASURED over sixteen pipeline runs and a fixture
+# because its membership is MEASURED over twenty pipeline runs and a fixture
 # change legitimately moves it. The declared registers are shrink-only, because
 # an entry there is a decision to ship a number the oracle has independently
 # shown is wrong. Same arithmetic, different policy, stated in each caller.
@@ -1275,7 +1324,7 @@ def test_the_summary_keeps_unevaluable_rules_apart_from_passes(gate_run: GateRun
     after a rule falls out of ``PASS`` into ``VACUOUS`` as before. Legs (f)/(g)
     ratchet the rules themselves.
 
-    Arrange: the sixteen runs.
+    Arrange: the twenty runs.
     Act:     read the per-run summary.
     Assert:  all four outcome statuses are reported for every run, and together
              they account for exactly the enforced population.

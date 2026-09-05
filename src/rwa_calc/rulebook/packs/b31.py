@@ -883,6 +883,35 @@ ENTRIES: dict[str, RuleEntry] = {
         ),
         citation=Citation("PS1/26", "161", "Basel 3.1 F-IRB supervisory LGD (CRE32.9-12)"),
     ),
+    # On-balance-sheet netting perimeter. The PS1/26 text was read and carries
+    # both articles forward unchanged: ps126app1.pdf page 171 of 492 states
+    # Art. 195(1)-(2) ("mutual claims" / "reciprocal cash balances") and page 180
+    # states Art. 205(a) verbatim, each under a "[Note: This rule corresponds to
+    # Article NNN of CRR ...]" line. The entry is therefore pinned per regime
+    # with the same enabled state as the CRR pack rather than inherited silently.
+    "on_bs_netting_perimeter_is_agreement": Feature(
+        name="on_bs_netting_perimeter_is_agreement",
+        enabled=True,
+        citation=Citation(
+            "PS1/26",
+            "195",
+            "Operator decision 2026-09-04: the netting agreement reference is "
+            "the legal set-off boundary and defines the mutual-claims perimeter "
+            "of Art. 195 where one agreement binds several entities jointly and "
+            "severally, so a deposit offsets every positive-drawn loan under the "
+            "same agreement whichever party to it holds the leg. Art. 205(a) "
+            "enforceability 'in the event of the insolvency or bankruptcy of a "
+            "counterparty' is the firm's attestation for every party under the "
+            "reference, and a spanning agreement raises a CRM016 audit record "
+            "so that attestation is evidenced. Direction (measured): enabling "
+            "this is RWA-reducing — an SA exposure's E* falls by the netted "
+            "deposit and an F-IRB exposure's LGD* falls with it — but the "
+            "output-floor basis S-TREA is UNCHANGED, because an IRB row's "
+            "SA-equivalent is computed on the unreduced EAD; only U-TREA falls, "
+            "so the floor becomes MORE likely to bind. Flip enabled=False to "
+            "restore the single-counterparty (P1.238) keying",
+        ),
+    ),
     # FCCM collateral-haircut maturity-band structure: Basel 3.1 uses 5 bands
     # (0_1y / 1_3y / 3_5y / 5_10y / 10y_plus) vs the CRR 3 bands. Overrides the CRR
     # Feature; gates _maturity_band_expression in engine/crm/haircuts.py. The

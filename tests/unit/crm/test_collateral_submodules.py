@@ -31,6 +31,15 @@ from rwa_calc.engine.crm.collateral import (
     apply_firb_supervisory_lgd_no_collateral,
     generate_netting_collateral,
 )
+from rwa_calc.rulebook import RulepackV0
+
+# ``generate_netting_collateral`` takes a REQUIRED pack: the netting perimeter is
+# a cited pack Feature (``on_bs_netting_perimeter_is_agreement``) and there is no
+# None fallback, because defaulting would fail open to the wider, RWA-reducing
+# perimeter. These direct callers therefore supply the CRR pack explicitly. None
+# of the frames below sets ``counterparty_reference``, so both perimeter states
+# put every row in one group and the results here are perimeter-independent.
+_PACK = RulepackV0.from_config(CalculationConfig.crr(reporting_date=date(2024, 12, 31))).pack
 
 # =============================================================================
 # generate_netting_collateral
@@ -50,7 +59,7 @@ class TestGenerateNettingCollateral:
                 "ead_gross": [0.0],
             }
         )
-        result = generate_netting_collateral(lf)
+        result = generate_netting_collateral(lf, pack=_PACK)
         assert result is None
 
     def test_nets_without_parent_facility(self) -> None:
@@ -65,7 +74,7 @@ class TestGenerateNettingCollateral:
                 "maturity_date": [None, None],
             }
         )
-        result = generate_netting_collateral(lf)
+        result = generate_netting_collateral(lf, pack=_PACK)
         assert result is not None
         df = result.collect()
         assert len(df) == 1
@@ -95,7 +104,7 @@ class TestGenerateNettingCollateral:
                 "currency": ["GBP"],
             }
         )
-        result = generate_netting_collateral(lf)
+        result = generate_netting_collateral(lf, pack=_PACK)
         if result is not None:
             df = result.collect()
             assert len(df) == 0
@@ -112,7 +121,7 @@ class TestGenerateNettingCollateral:
                 "currency": ["GBP", "GBP"],
             }
         )
-        result = generate_netting_collateral(lf)
+        result = generate_netting_collateral(lf, pack=_PACK)
         assert result is not None
 
         df = result.collect()
@@ -132,7 +141,7 @@ class TestGenerateNettingCollateral:
                 "currency": ["GBP", "EUR", "GBP"],
             }
         )
-        result = generate_netting_collateral(lf)
+        result = generate_netting_collateral(lf, pack=_PACK)
         assert result is not None
 
         df = result.collect()
@@ -152,7 +161,7 @@ class TestGenerateNettingCollateral:
                 "currency": ["GBP", "GBP"],
             }
         )
-        result = generate_netting_collateral(lf)
+        result = generate_netting_collateral(lf, pack=_PACK)
         if result is not None:
             df = result.collect()
             assert len(df) == 0
@@ -169,7 +178,7 @@ class TestGenerateNettingCollateral:
                 "currency": ["GBP", "GBP"],
             }
         )
-        result = generate_netting_collateral(lf)
+        result = generate_netting_collateral(lf, pack=_PACK)
         assert result is not None
 
         df = result.collect()
@@ -188,7 +197,7 @@ class TestGenerateNettingCollateral:
                 "currency": ["GBP", "GBP"],
             }
         )
-        result = generate_netting_collateral(lf)
+        result = generate_netting_collateral(lf, pack=_PACK)
         assert result is not None
 
         df = result.collect()
@@ -208,7 +217,7 @@ class TestGenerateNettingCollateral:
                 "currency": ["GBP", "GBP", "GBP"],
             }
         )
-        result = generate_netting_collateral(lf)
+        result = generate_netting_collateral(lf, pack=_PACK)
         assert result is not None
 
         df = result.collect()
@@ -236,7 +245,7 @@ class TestGenerateNettingCollateral:
                 "maturity_date": [d(2026, 7, 1), d(2031, 1, 1)],
             }
         )
-        result = generate_netting_collateral(lf, reporting_date=d(2026, 1, 1))
+        result = generate_netting_collateral(lf, reporting_date=d(2026, 1, 1), pack=_PACK)
         assert result is not None
 
         df = result.collect()
@@ -263,7 +272,7 @@ class TestGenerateNettingCollateral:
                 "maturity_date": [d(2026, 7, 1), d(2031, 1, 1)],
             }
         )
-        result = generate_netting_collateral(lf)
+        result = generate_netting_collateral(lf, pack=_PACK)
         assert result is not None
 
         df = result.collect()
@@ -289,7 +298,7 @@ class TestGenerateNettingCollateral:
                 "maturity_date": [d(2027, 1, 1), d(2026, 7, 1), d(2031, 1, 1)],
             }
         )
-        result = generate_netting_collateral(lf, reporting_date=d(2026, 1, 1))
+        result = generate_netting_collateral(lf, reporting_date=d(2026, 1, 1), pack=_PACK)
         assert result is not None
 
         df = result.collect()
@@ -323,7 +332,7 @@ class TestGenerateNettingCollateral:
                 "maturity_date": [d(2026, 2, 1), d(2033, 1, 1)],
             }
         )
-        synthetic = generate_netting_collateral(lf, reporting_date=reporting)
+        synthetic = generate_netting_collateral(lf, reporting_date=reporting, pack=_PACK)
         assert synthetic is not None
 
         # Hand the synthetic to the mismatch stage with the loan's maturity as the

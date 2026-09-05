@@ -183,6 +183,7 @@
   ],
   "rwa_calc.engine.crm.collateral::generate_netting_collateral": [
     "CRR Art. 195",
+    "CRR Art. 205",
     "CRR Art. 219",
     "CRR Art. 223",
     "CRR Art. 238"

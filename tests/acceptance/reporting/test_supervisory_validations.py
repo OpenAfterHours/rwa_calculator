@@ -246,6 +246,11 @@ from typing import TYPE_CHECKING, NamedTuple
 import pytest
 from scripts.tolerated_findings import diff
 from tests.acceptance.reporting.test_reporting_golden import _b31_config, _crr_config
+from tests.fixtures.facility_share_portfolio import (
+    build_facility_share_bundle,
+    facility_share_config,
+    facility_share_prior_config,
+)
 from tests.fixtures.reporting_ccr_portfolio import build_reporting_ccr_bundle
 from tests.fixtures.reporting_crm_substitution_portfolio import (
     build_reporting_crm_substitution_bundle,
@@ -719,6 +724,74 @@ RUNS: tuple[GateInput, ...] = (
         "netting",
         build_reporting_netting_bundle,
         lambda: _sa_config("BASEL_3_1"),
+    ),
+    # Facility share — a shared facility whose undrawn headroom is allocated to
+    # one of three members by the firm-policy riskiest-member rule (FS-1). This
+    # is the FIRST portfolio in the estate with a facility share at all: the
+    # design's own scan of the generated fixtures found ZERO facilities with more
+    # than one distinct child counterparty, which means every reporting cell the
+    # allocation path can populate has been dead since the path was written
+    # (LESSONS B5).
+    #
+    # BOTH variants of BOTH regimes, four runs. The pair differs in exactly one
+    # input — the non-member anchor obligor's PD — and that single input decides
+    # whether the Basel 3.1 output floor BINDS. That is the two-leg pattern B5
+    # asks for on the C 07.00 50% risk-weight band row of the corporates sheet:
+    # the solo facility's undrawn and a drawn loan sit in that row in EVERY cell
+    # of the matrix, while the share's undrawn moves in and out of it as the
+    # allocation moves between a standardised and a modelled member. A change
+    # that ZEROED the row is therefore distinguishable from one that moved a row
+    # out of it.
+    #
+    # ``crr/facility-share-nonbinding`` is NOT a duplicate of its binding twin
+    # even though the CRR allocation is variant-invariant (the floor Feature is
+    # off): the anchor's PD moves its C 08.03 PD band, so the two runs light
+    # different rows of the IRB templates.
+    #
+    # These use the PORTFOLIO's OWN config helpers rather than ``_irb_config``,
+    # and the difference is load-bearing. ``_irb_config`` passes
+    # ``enforce_retail_granularity=False`` on its Basel 3.1 arm so a compact
+    # oracle portfolio's natural-person rows stay retail; THIS portfolio has no
+    # retail obligor at all, so the Art. 123A(1)(b)(ii) limb decides nothing here
+    # and the production default must stand. Cloning ``_irb_config`` would put
+    # the portfolio inside the gate against a config that softens a feature its
+    # own assertions describe — LESSONS B5's third form, registered with the
+    # wrong config.
+    #
+    # All four are ``PermissionMode.IRB`` and therefore all four take a prior
+    # frame, without which C 08.04's movement rows are null by construction and
+    # every published rule over them stays NOT_EVALUATED — the fail-open shape.
+    GateInput(
+        "crr",
+        "CRR",
+        "facility-share-binding",
+        lambda: build_facility_share_bundle("binding"),
+        lambda: facility_share_config("CRR"),
+        lambda: facility_share_prior_config("CRR"),
+    ),
+    GateInput(
+        "crr",
+        "CRR",
+        "facility-share-nonbinding",
+        lambda: build_facility_share_bundle("nonbinding"),
+        lambda: facility_share_config("CRR"),
+        lambda: facility_share_prior_config("CRR"),
+    ),
+    GateInput(
+        "b31",
+        "BASEL_3_1",
+        "facility-share-binding",
+        lambda: build_facility_share_bundle("binding"),
+        lambda: facility_share_config("BASEL_3_1"),
+        lambda: facility_share_prior_config("BASEL_3_1"),
+    ),
+    GateInput(
+        "b31",
+        "BASEL_3_1",
+        "facility-share-nonbinding",
+        lambda: build_facility_share_bundle("nonbinding"),
+        lambda: facility_share_config("BASEL_3_1"),
+        lambda: facility_share_prior_config("BASEL_3_1"),
     ),
 )
 

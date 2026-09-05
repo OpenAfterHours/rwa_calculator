@@ -831,6 +831,93 @@ def defaulted() -> list[dict[str, Any]]:
     ]
 
 
+# -----------------------------------------------------------------------------
+# FS-1 -- the priced facility-share candidate, both regimes
+# -----------------------------------------------------------------------------
+#
+# WHAT LAYER THIS EXERCISES, stated first because it bounds the case.
+# ``tests/oracle/drivers.py`` bypasses the hierarchy, the classifier and the CRM
+# stage and drives one explicit row into a single calculator branch. It therefore
+# CANNOT reach the facility-share fan-out (a hierarchy emission), the resolution
+# step that picks a winner (an aggregator step) or the output floor (a portfolio
+# quantity). These two records referee only the PER-CANDIDATE PRICING that the
+# rest of the FS-1 hand calculation rests on: the risk weight that member's
+# undrawn candidate row is priced at once it exists. The pipeline-level
+# acceptance tests in tests/acceptance/test_fs1_facility_share_fanout.py are the
+# real referee for the mechanism.
+#
+# The two exposure values differ DELIBERATELY -- 300,000 under CRR and 200,000
+# under Basel 3.1 -- because they are the same 400,000 of undrawn headroom
+# through two different conversion factors. CRR Art. 166(8)(d) gives an F-IRB
+# credit line its own 75%; PS1/26 Art. 166C(1) routes F-IRB to the Standardised
+# Approach factor instead, which for this medium-risk commitment is 50%. Pinning
+# both amounts here makes that divergence a checked fact rather than an
+# assumption of the acceptance tests.
+#
+# The internal PD of 0.08% clears both PD input floors (CRR 0.03%, PS1/26
+# 0.05%), so the floor is a non-binding pass-through and the risk weight is a
+# function of the fixture's own input rather than of the floor.
+
+#: The undrawn headroom of the FS-1 shared facility, and the two conversion
+#: factors it passes through. Stated as an amount and a factor rather than as
+#: two exposure values so the Art. 166C divergence is visible in the arithmetic.
+FS1_HEADROOM = 400_000.0
+FS1_CRR_CREDIT_LINE_CCF = 0.75
+FS1_SA_MEDIUM_RISK_CCF = 0.50
+
+#: The F-IRB member's internal PD on the FS-1 portfolio.
+FS1_PD = 0.0008
+
+
+def facility_share_candidate() -> list[dict[str, Any]]:
+    """The FS-1 F-IRB candidate row, priced under each regime."""
+    return [
+        _corporate(
+            "ORC-FS1-CRR",
+            "CRR",
+            "FIRB",
+            "CRR Art. 153(1) IRB risk weight with the 1.06 scaling factor; "
+            "Art. 161(1)(a) senior unsecured supervisory LGD 45%; Art. 162(2) "
+            "firm-estimated M = 2.5; Art. 160(1) PD floor 0.03% (non-binding); "
+            "Art. 166(8)(d) credit-line conversion factor 75% on 400,000 of "
+            "undrawn commitment",
+            pd_value=FS1_PD,
+            lgd=CRR_FIRB_LGD_SENIOR,
+            maturity=FIRB_FIXED_MATURITY,
+            scaling_factor=CRR_IRB_SCALING_FACTOR,
+            correlation=correlation_corporate(FS1_PD),
+            ead=FS1_HEADROOM * FS1_CRR_CREDIT_LINE_CCF,
+            inputs={
+                "pd_value": FS1_PD,
+                "lgd": CRR_FIRB_LGD_SENIOR,
+                "maturity": FIRB_FIXED_MATURITY,
+            },
+        ),
+        _corporate(
+            "ORC-FS1-B31",
+            "BASEL_3_1",
+            "FIRB",
+            "PS1/26 Art. 153(1) IRB risk weight with no 1.06 scaling factor; "
+            "Art. 161(1)(aa) non-financial-sector senior unsecured supervisory "
+            "LGD 40%; Art. 162(2A) firm-estimated M = 2.5; Art. 160(1) PD floor "
+            "0.05% (non-binding); Art. 166C(1) routes the F-IRB conversion "
+            "factor to the Standardised Art. 111 medium-risk 50% on 400,000 of "
+            "undrawn commitment",
+            pd_value=FS1_PD,
+            lgd=B31_FIRB_LGD_SENIOR_CORPORATE,
+            maturity=FIRB_FIXED_MATURITY,
+            scaling_factor=B31_IRB_SCALING_FACTOR,
+            correlation=correlation_corporate(FS1_PD),
+            ead=FS1_HEADROOM * FS1_SA_MEDIUM_RISK_CCF,
+            inputs={
+                "pd_value": FS1_PD,
+                "lgd": B31_FIRB_LGD_SENIOR_CORPORATE,
+                "maturity": FIRB_FIXED_MATURITY,
+            },
+        ),
+    ]
+
+
 def all_oracles() -> list[dict[str, Any]]:
     return [
         *crr_corporate(),
@@ -839,4 +926,5 @@ def all_oracles() -> list[dict[str, Any]]:
         *b31_retail(),
         *defaulted(),
         *floor_scope(),
+        *facility_share_candidate(),
     ]

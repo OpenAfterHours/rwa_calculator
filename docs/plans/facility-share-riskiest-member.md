@@ -241,15 +241,23 @@ would.** Each member's lending-group / obligor totals therefore include the full
 the conservative reading of "total amount owed" for a commitment any member may draw. Direction
 versus today: the eventual winner's siblings are unchanged (the single undrawn row already counted
 for them); a losing member's siblings gain the undrawn in their totals, so the **partition-local**
-thresholds (retail GBP limit, QRRE limit) can only be crossed *upward*. **One site is not
-partition-local and is RWA-reducing:** the Art. 123A(1)(b)(ii) granularity limb
-(`attributes.py:703-722`) divides each obligor's aggregate by a portfolio-wide `portfolio_total`
-that every extra candidate inflates, so unrelated retail obligors near the 0.2% limit would
-requalify as retail. **Candidates are therefore excluded from that denominator** — an ex-candidate
-aggregate computed as a separate window in `enrich.py` (never a window inside a window, check 21),
-consumed only by the granularity denominator. That leaves the denominator without the eventual
-winner's undrawn too (today it includes it), a deviation of one undrawn amount in the conservative
-direction. A second, narrow path exists and is measured by the scenario rather than designed away:
+thresholds (retail GBP limit, QRRE limit) can only be crossed *upward*. **The Art. 123A(1)(b)(ii)
+granularity limb was thought to be an exception and is not — premise refuted by measurement in the
+test wave (2026-09-05).** The audit derived that each extra candidate inflates the portfolio-wide
+`portfolio_total` (`attributes.py:703-722`). Measured on the engine: a `facility_undrawn` row
+contributes exactly 0.0 to `exposure_for_retail_threshold`, because `enrich.py` builds it from the
+drawn amount only ("total amount owed", CRR Art. 123(c) / PS1/26 Art. 123A(1)(b)(i)), and the
+denominator divides each obligor's aggregate by that obligor's own line count, so extra rows of the
+same obligor and `_sa_class` leave its term algebraically unchanged. The denominator does not move
+with the fan-out in any direction, and the earlier claim that today's denominator "includes the
+winner's undrawn" was equally false. **No ex-candidate aggregate is built.** The one residual, found
+in review: a candidate row of a *non-retail* class joining a retail obligor raises that obligor's
+line count without adding to its aggregate, so its contribution falls to `L/(L+1)` of the aggregate,
+the 0.2% limit becomes *easier* to breach, and the direction is **conservative** — the opposite of
+the audit's premise; an ex-candidate denominator would have been the anti-conservative move. The
+invariance is pinned by `tests/unit/classifier/test_facility_share_granularity_denominator.py`,
+whose adequacy assertion proves a 0.1% denominator move would be visible. A second, narrow path exists and is *not* measured by
+the scenario (Section 10):
 a member demoted out of QRRE by the extra aggregate has correlation `0.03 + 0.13·exp(-35·PD)`,
 which falls below QRRE's fixed 0.04 above PD ≈ 7.3%, so for such an obligor demotion *lowers* RWA;
 it is partition-local (touches only that member) and is disclosed in the methodology page.
@@ -401,7 +409,7 @@ against the legacy system in reconciliation, whose own share rule is unknown.
 | **D1** | Rank on RWA (`rwa_pre_floor`) or on RW (`risk_weight`)? | **RWA**, RW as first tie-break (Section 2). |
 | **D2** | Basel 3.1 policy: P0 / P2 / P3? Default of the election? | **P2 default, P0 election** (Section 6.4). |
 | **D3** | Is the facility **owner** always a member? | **Yes.** The owner is the legal borrower and can draw. This turns `FAC_RTL_SME_001` in `tests/fixtures/exposures` into a two-member share — measure that fixture's consumers with the full unit suite before relying on any green (LESSONS D2). |
-| **D4** | Candidate rows in obligor aggregates: count each candidate toward its own member's partition-local totals, and exclude candidates from the portfolio-wide Art. 123A granularity denominator (Section 4)? | **Yes** — conservative at every site; record it in the methodology page with the high-PD QRRE residual. "Own-inclusive" rejected as RWA-reducing for the winner's siblings; a second pass is O3. |
+| **D4** | Candidate rows in obligor aggregates: count each candidate toward its own member's partition-local totals with **no window special-casing anywhere** (Section 4)? | **Yes** — conservative at every site; the granularity-denominator exclusion first added to this decision was withdrawn 2026-09-05 when measurement showed undrawn rows contribute 0.0 to the retail-threshold aggregate. Record it in the methodology page with the high-PD QRRE residual. "Own-inclusive" rejected as RWA-reducing for the winner's siblings; a second pass is O3. |
 | **D5** | Delete the SA preview (`build_entity_rw_expr` and its `_share_*` plumbing)? | **Yes** — it has one consumer and the fan-out replaces it. P1.359 becomes superseded; P1.358 is the *guarantor* path and is unaffected. |
 
 ---
@@ -416,7 +424,7 @@ P1.367).
 |---|---|---|
 | **S0** | Decisions D1–D5 recorded at the top of this page. | — |
 | **S1 — fixtures & failing tests (TDD)** | An **in-memory** reporting portfolio `tests/fixtures/facility_share_portfolio.py::build_facility_share_bundle(variant)` returning a `RawDataBundle` via `make_raw_bundle` (the shape every `RUNS` entry consumes — **not** a parquet directory, no `generate_all.py` entry; corrected 2026-09-05 after the Wave 1 review). One shared facility with three members — the SA owner at CQS 2, an SA member at CQS 1, an F-IRB member with a low internal PD (so `u_IRB < u_SA < x·s_IRB`, the divergence the floor-aware rule needs) — a solo facility as control, and an IRB anchor loan whose PD is the single input that makes the floor **bind in one variant and not the other** (the two-leg pattern from LESSONS B5). Register all four regime×variant runs in `RUNS` with an explicit `enforce_retail_granularity=True` on the Basel 3.1 arm and a prior-period config so C 08.04 is emitted. Every asserted number is derived in-test from `statistics.NormalDist` plus pack values, never transcribed. Oracle case pins per-candidate pricing only (the oracle drivers bypass hierarchy, classifier and CRM). Unit tests for the resolver on synthetic frames: ties, the all-non-finite fallback, `argmax s_i` vs `argmax b_i`, and slotting / `standardised_ccr` candidates in the `b_i` predicate. Named mutation detectors per C1.11. Scenario of record: `.claude/state/fs1-scenario-proposal.md`. | red before S2/S3 |
-| **S2 — hierarchy fan-out** (P1.367) | Candidate rows, the two new columns, owner-as-member, the ex-candidate granularity aggregate (separate window), the nine edge declarations plus a contract test that pins them, preview deletion with its footprint (S5), rulepack threaded into `facility_undrawn.py` so the check-17 allowlist entry retires; tests pin that each candidate contributes to its own member's partition-local totals and that the short-term spill-over windows are value-idempotent. | arch_check 16/17/18/21 green; full `tests/unit` (column footprint changes — LESSONS D2) |
+| **S2 — hierarchy fan-out** (P1.367) | Candidate rows, the two new columns, owner-as-member, **no aggregate-window changes** (the granularity exclusion was withdrawn — see Section 4), the nine edge declarations plus a contract test that pins them, preview deletion with its footprint (S5), rulepack threaded into `facility_undrawn.py` so the check-17 allowlist entry retires; tests pin that each candidate contributes to its own member's partition-local totals and that the short-term spill-over windows are value-idempotent. | arch_check 16/17/18/21 green; full `tests/unit` (column footprint changes — LESSONS D2) |
 | **S3 — aggregator resolution** (P1.368, single-stream) | `engine/aggregator/_facility_share.py` called at the head of `aggregate()` on the three branch frames: metric per policy, `TREA(A)`/`TREA(B)` evaluated end-to-end, loser drop from all three frames, winner reference collapse, error re-key, `facility_share_resolution` audit frame on `AggregatedResultBundle`, summary fields, `facility_share_metric` config election. | Tier 2 mandatory: `tests/oracle` + `tests/acceptance/reporting`; `coverage_report.py --check` (cells newly live ⇒ `--update-baseline`, re-measured) |
 | **S4 — docs** (Tier 5) | `docs/architecture/components.md` hierarchy + aggregator rows; a methodology page `docs/specifications/facility-share-allocation.md` stating the policy, the two-assignment rule and D4; changelog. The basel31/crr skills get a *mechanics* paragraph only — no values. | `uv run zensical build`; `check_doc_links.py --check` |
 | **S5 — close out** | Retire P1.359 as superseded (its `Ev:` path is already stale). **D5 deletion footprint:** `build_entity_rw_expr` has one production consumer (`facility_undrawn.py:986`) but deleting it means regenerating `tests/contracts/data/citation_snapshot.json` (7 entries) *before* the suite, `tests/contracts/data/confidence_snapshot.json` (7 references — its evidence layer text-scans the test tree) and `docs/development/citation-matrix.md`; correcting `docs/specifications/crr/sa-risk-weights.md:274-283`; retiring the check-17 allowlist entry for `facility_undrawn.py`; and re-pointing the defect-pinning tests that assert the old SA-preview winner — `tests/unit/test_entity_rw_preview.py` (whole file), `tests/unit/test_hierarchy.py` `:6379`, `:6475` (rename — under D3 it is a two-member share), `:6674`, `:6780` and the eight `test_p1_307_share_*`, and `tests/acceptance/test_p1_307_facility_share_counterparty_preview.py` `:292`, `:323`, `:351`, `:375`. Add the resolution rule to the reconciliation docs (sensitivity table). | stress suite before PR |
@@ -466,9 +474,12 @@ Effort: S1 M · S2 M · S3 M · S4 S — **L overall**, two batches.
    Reachability not established.
 3. **QRRE demotion at high PD lowers RWA** (Section 4, D4) — **not** measurable by the S1 scenario,
    which has no retail obligor (adding one breaks the divergence chain the floor-aware test needs).
-   Owed coverage, to be filed as a Tier 1 bullet alongside the Art. 123A granularity-denominator
-   fixture (a share with a retail member plus a second retail obligor large enough that the 0.2%
-   limit is live, asserting the denominator is identical with and without the fan-out). A
+   The QRRE obligor aggregate dedupes on `parent_facility_reference` per obligor and picks up
+   `facility_limit` once per member (Site A coupling), so a candidate does move a losing member's
+   QRRE aggregate even though it moves no retail-threshold aggregate. Owed coverage, to be filed as
+   a Tier 1 bullet: a share with a revolving retail member near the QRRE limit and a PD above the
+   ≈7.3% crossover. (The Art. 123A granularity-denominator fixture once listed here is no longer
+   owed — the premise was refuted by measurement and the invariance is pinned; see Section 4.) A
    candidate-aware QRRE aggregate would need the obligor's PD at classification time.
 4. **The Art. 110A due-diligence input never reaches the SA branch** (found by the fixture wave,
    2026-09-05). `due_diligence_performed` and `due_diligence_override_rw` are accepted by
@@ -479,6 +490,20 @@ Effort: S1 M · S2 M · S3 M · S4 S — **L overall**, two batches.
    weight is unreachable. LESSONS B1 shape. Needs its own Tier 1 bullet (declare the columns on
    the hierarchy edges, test the override end-to-end); the FS-1 tests filter `SA004` by code
    meanwhile.
+5. **The output-floor add-on has no reported home in the IRB templates** (found by the test wave,
+   2026-09-05, when the FS-1 portfolio became the first registered run with a *binding* floor).
+   Supervisory rules `boe_b0751` (OF08.01.01.01) and `boe_b0763` (OF08.02.01.01) — one published
+   identity restated per template, LESSONS C6 — require RWEA after adjustments (col 0260) to equal
+   the sum of RWEA before adjustments, PMAs, unrecognised-exposure adjustments and the mortgage
+   RW-floor adjustment (cols 0251–0254). On `b31/facility-share-binding` col 0260 exceeds that sum by
+   exactly `OutputFloorSummary.shortfall` (453,708.71), because the pro-rata floor add-on lives
+   inside `rwa_final` and the reporting projection mirrors it into col 0260. Every prior registered
+   portfolio had a non-binding floor, so the rules had never fired (LESSONS B5, fourth form: a
+   *state* no fixture reached). Both breaks are ERROR severity. Direction of the fix is a reporting
+   basis decision — un-floored RWEA in the IRB templates with the floor carried at the total level
+   (OF 02.01 / C 02.00), or a new adjustment column — and it is **not** made in this batch. The
+   breaks are banked in `validation_known_breaks.json` with an `OWNER:` token pointing at the new
+   Tier 1 bullet so the shrink-only register stays honest.
 
 ## Appendix A — estate measurement
 

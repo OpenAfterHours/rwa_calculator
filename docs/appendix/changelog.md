@@ -8,9 +8,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- (Next release changes will go here)
+- **CRM002 maturity-mismatch warning is now produced.** One rolled-up warning per
+  run counts the collateral rows the CRR/PS1-26 Art. 237-239 treatment zeroed
+  (three-month, one-year-original and one-day-floor gates) or scaled by the
+  Art. 238 factor, netted deposits included. The code had been declared with no
+  producer, so protection lost to these gates left no record.
+- Acceptance coverage for matched short-dated on-balance-sheet netting under
+  F-IRB (institution obligor, CRR and Basel 3.1) and two new P1.241 scenarios
+  (`matched_short`, `matched_past`).
 
 ### Changed
+- **Fixed: a loan and a deposit sharing one maturity date inside three months of
+  the reporting date, or a date already passed, lost their whole netting benefit
+  (RWA-reducing).** `apply_maturity_mismatch` floored the exposure residual at
+  0.25 years before comparing it with the (unfloored) protection residual, so a
+  matched pair compared as "protection shorter than exposure", tripped the
+  Art. 237(1) three-month gate and was zeroed — an F-IRB interbank loan fully
+  offset by a same-day deposit reported LGD 45% and full RWA. Art. 237(1) defines
+  a mismatch only where the protection residual is *less than* the exposure's,
+  and Art. 238(1) caps the exposure maturity at five years without flooring it,
+  so the comparison now uses the raw residuals (as the guarantee twin already
+  did); the 0.25 term stays in the scaling formula, which is reached only when
+  0.25 <= t < T. Same-currency, same-maturity pairs now net in full at any tenor;
+  a real sub-three-month mismatch is still zeroed. User-supplied collateral whose
+  residual matches a short loan is freed by the same change. Escape-log entry
+  2026-09-05 (`path-never-exercised`).
 - **The release flow now pushes and publishes for you.** `scripts/deploy.py`,
   and so `/release`, ends by pushing the release commit and its tag to `origin`
   in one `git push --atomic origin <branch> refs/tags/v<ver>` (both land or

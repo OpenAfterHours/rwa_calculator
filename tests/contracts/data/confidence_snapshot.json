@@ -2400,6 +2400,7 @@
         "tests/acceptance/basel31/test_p1_151_art_161_purchased_receivables_lgd.py",
         "tests/acceptance/basel31/test_scenario_b31_d7_parameter_substitution.py",
         "tests/acceptance/ccr/test_ccr_irb1_routing.py",
+        "tests/acceptance/crr/test_art237_matched_short_dated_netting_firb.py",
         "tests/acceptance/crr/test_p1_165_art_230_receivables_no_volatility_haircut.py",
         "tests/acceptance/crr/test_p1_190_crr_full_re.py",
         "tests/acceptance/crr/test_p1_190_crr_thin_re.py",
@@ -2415,6 +2416,7 @@
         "tests/fixtures/ccr/golden_ccr_sft_irb_maturity.py",
         "tests/fixtures/exposures/loans.py",
         "tests/fixtures/generate_all.py",
+        "tests/fixtures/matched_short_netting/matched_short_netting.py",
         "tests/fixtures/p1_118/p1_118.py",
         "tests/fixtures/p1_156/p1_156.py",
         "tests/fixtures/p1_165/p1_165.py",
@@ -3316,12 +3318,15 @@
       "source_files": [
         "contracts/edges.py",
         "engine/crm/collateral.py",
+        "engine/crm/haircuts.py",
         "engine/crm/processor.py"
       ],
       "test_files": [
+        "tests/acceptance/crr/test_art237_matched_short_dated_netting_firb.py",
         "tests/acceptance/crr/test_p1_238_art_195_agreement_perimeter_netting.py",
         "tests/acceptance/crr/test_p1_241_art_219_netting_maturity_mismatch.py",
         "tests/acceptance/reporting/test_reporting_netting_golden.py",
+        "tests/fixtures/matched_short_netting/matched_short_netting.py",
         "tests/fixtures/p1_238/p1_238.py",
         "tests/fixtures/p1_241/p1_241.py",
         "tests/fixtures/reporting_netting_portfolio.py",
@@ -4088,6 +4093,7 @@
         "tests/acceptance/basel31/test_p1_122a_b31_corporate_cqs3_guarantor_irb_sa_fallback.py",
         "tests/acceptance/basel31/test_p1_122b_b31_unrated_scra_b_institution_guarantor_irb_sa_fallback.py",
         "tests/acceptance/basel31/test_pse_rgla_guarantor_irb_sa_substitution.py",
+        "tests/acceptance/crr/test_art237_matched_short_dated_netting_firb.py",
         "tests/acceptance/crr/test_p1_109_art_237_maturity_mismatch_guarantees.py",
         "tests/acceptance/crr/test_p1_124_art_237_2a_guarantee_ineligibility.py",
         "tests/acceptance/crr/test_p1_219_guarantee_maturity_mismatch_residual.py",
@@ -4096,6 +4102,7 @@
         "tests/acceptance/crr/test_p1_241_art_219_netting_maturity_mismatch.py",
         "tests/acceptance/crr/test_p1_30e_art_234_partial_protection_tranching.py",
         "tests/fixtures/generate_all.py",
+        "tests/fixtures/matched_short_netting/matched_short_netting.py",
         "tests/fixtures/p1_109/p1_109.py",
         "tests/fixtures/p1_110/p1_110.py",
         "tests/fixtures/p1_122/p1_122.py",
@@ -4129,11 +4136,13 @@
         "engine/crm/haircuts.py"
       ],
       "test_files": [
+        "tests/acceptance/crr/test_art237_matched_short_dated_netting_firb.py",
         "tests/acceptance/crr/test_p1_109_art_237_maturity_mismatch_guarantees.py",
         "tests/acceptance/crr/test_p1_123_art_223_5_fccm_exposure_volatility_haircut.py",
         "tests/acceptance/crr/test_p1_124_art_237_2a_guarantee_ineligibility.py",
         "tests/acceptance/crr/test_p1_219_guarantee_maturity_mismatch_residual.py",
         "tests/acceptance/crr/test_scenario_crr_d_crm.py",
+        "tests/fixtures/matched_short_netting/matched_short_netting.py",
         "tests/fixtures/p1_109/p1_109.py",
         "tests/fixtures/p1_219/p1_219.py",
         "tests/fixtures/p1_241/p1_241.py",
@@ -7549,6 +7558,7 @@
         "rulebook/packs/b31.py"
       ],
       "test_files": [
+        "tests/acceptance/basel31/test_art237_matched_short_dated_netting_firb.py",
         "tests/acceptance/basel31/test_p1_151_art_161_purchased_receivables_lgd.py",
         "tests/acceptance/basel31/test_p1_157_psm_no_better_than_direct.py",
         "tests/acceptance/basel31/test_p1_159_art_236_psm_correlation_guarantor_class.py",
@@ -7563,6 +7573,7 @@
         "tests/acceptance/basel31/test_p2_43_psm_lgd_source_switch.py",
         "tests/acceptance/crr/test_p1_278_art_160_2_top_down_pd.py",
         "tests/acceptance/crr/test_p1_351_retail_supervisory_subtype.py",
+        "tests/fixtures/matched_short_netting/matched_short_netting.py",
         "tests/fixtures/p1_130/p1_130.py",
         "tests/fixtures/p1_151/p1_151.py",
         "tests/fixtures/p1_157/p1_157.py",
@@ -8078,8 +8089,10 @@
       "pack_entries": [],
       "source_files": [],
       "test_files": [
+        "tests/acceptance/basel31/test_art237_matched_short_dated_netting_firb.py",
         "tests/acceptance/basel31/test_p1_238_art_195_agreement_perimeter_netting.py",
-        "tests/acceptance/basel31/test_p1_241_art_219_netting_maturity_mismatch.py"
+        "tests/acceptance/basel31/test_p1_241_art_219_netting_maturity_mismatch.py",
+        "tests/fixtures/matched_short_netting/matched_short_netting.py"
       ],
       "watchfire_index_gap": false
     },
@@ -8403,11 +8416,13 @@
         "engine/crm/guarantees.py"
       ],
       "test_files": [
+        "tests/acceptance/basel31/test_art237_matched_short_dated_netting_firb.py",
         "tests/acceptance/basel31/test_p1_200_b31_guarantee_maturity_mismatch.py",
         "tests/acceptance/basel31/test_p1_231_art_237_maturity_gates.py",
         "tests/acceptance/basel31/test_p1_232_art_237_2a_matched_short_guarantee.py",
         "tests/acceptance/basel31/test_p1_241_art_219_netting_maturity_mismatch.py",
         "tests/acceptance/basel31/test_p1_95_b31_unrated_inst_guarantor_scra.py",
+        "tests/fixtures/matched_short_netting/matched_short_netting.py",
         "tests/fixtures/p1_200/p1_200.py",
         "tests/fixtures/p1_95/p1_95.py",
         "tests/fixtures/p2_43/p2_43.py",
@@ -8425,6 +8440,7 @@
       "pack_entries": [],
       "source_files": [],
       "test_files": [
+        "tests/fixtures/matched_short_netting/matched_short_netting.py",
         "tests/fixtures/p1_200/p1_200.py",
         "tests/unit/crm/test_maturity_mismatch.py"
       ],

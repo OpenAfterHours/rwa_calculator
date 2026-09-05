@@ -1978,3 +1978,95 @@ gate that shipped.
   scaling test guards one stage; neither would catch a different construct
   slowing a different stage by the same order. Ratcheting `benchmark-results.json`
   against a stored baseline is the general form, and it is not built here.
+
+## 2026-09-05 — A matched short-dated interbank pair lost its whole netting benefit to a mismatch that did not exist
+
+- **Defect**: an F-IRB loan to an institution, fully offset by a negative-balance
+  deposit under one on-balance-sheet netting agreement, in the same currency and
+  with the SAME maturity date, reported LGD 45% and full RWA. `on_bs_netting_amount`
+  was populated (the pair pooled) and `total_collateral_for_lgd` was 0 (the
+  synthetic `NETTING_` cash row was zeroed). Reported by a user; confirmed by the
+  operator on 2026-09-05: the shared maturity was under 91 days from the
+  reporting date. Measured on an F-IRB institution obligor under CRR, 1m loan
+  and 1m deposit: matched at 6 months and 5 years gives LGD* 0.00 and RWA 0;
+  matched at 91, 89, 30 and 7 days, and one day before the reporting date, gives
+  LGD* 0.45 and RWA 776,751. Basel 3.1 identical. Direct collateral with a
+  matched short residual fails the same way (a 0.1-year cash deposit against a
+  one-month loan).
+- **Rule**: CRR Art. 237(1) — *"a maturity mismatch occurs when the residual
+  maturity of the credit protection is **less than** that of the protected
+  exposure. Where protection has a residual maturity of less than three months
+  and the maturity of the protection is less than the maturity of the underlying
+  exposure that protection does not qualify"* (crr.pdf p.232); Art. 238(1) —
+  *"Subject to a maximum of five years, the effective maturity of the underlying
+  shall be the longest possible remaining time"* — a cap, no floor. PS1/26
+  Art. 219(3) routes netting through Art. 237-239 unchanged and Art. 219(2)
+  prescribes the treatment for the currency case, so the regime carry-forward
+  is word-for-word on the point that matters.
+- **Origin**: `engine/crm/haircuts.py::apply_maturity_mismatch` derived the
+  exposure residual as `.clip(lower_bound=0.25, upper_bound=5.0)` and then asked
+  `coll_maturity < _exposure_maturity_years`. The collateral residual was not
+  floored, so any matched pair under 0.25 years (91 days on the /365.25 basis)
+  compared as protection-shorter-than-exposure, entered the gate chain, and hit
+  the `< 0.25` three-month zero. A past-dated pair has a negative residual on
+  both sides and fails the same comparison. The floor was there to keep the
+  scaling denominator `T − 0.25` positive, but the scaling branch is reached only
+  with `t >= 0.25` and `t < T`, where the denominator is positive on its own. The
+  guarantee twin (`engine/crm/guarantees.py::_apply_maturity_mismatch_to_guarantees`,
+  P1.232) had already been rewritten to compare raw residuals and carries a
+  comment recording that the collateral twin still floored — the divergence was
+  known and never closed.
+- **Escape class**: `path-never-exercised`. The estate's netting fixtures
+  (P1.238, P1.241, `reporting_netting_portfolio`, `r1_negative_gross`) all carry
+  deposits maturing months or years out; the P1.241 "matched" control is a
+  six-year deposit against a five-year loan. No fixture anywhere had a matched
+  pair inside three months, which is the ordinary tenor of interbank money. The
+  one unit test that mentioned the floor, `test_exposure_maturity_floored_at_0_25`,
+  covered only collateral LONGER than a one-month exposure (factor 1.0 either
+  way), so it documented the clip without ever exercising the matched limb.
+- **Why nothing else would have caught it**: the treatment was silent —
+  `ERROR_MATURITY_MISMATCH` (CRM002) was declared in `contracts/errors.py` and
+  produced nowhere, so a zeroed deposit left no record; the supervisory
+  validation register cannot see LGD* on an F-IRB row that never reaches a
+  registered portfolio; and the `lgd` export column carries the unsecured
+  supervisory LGD on every F-IRB row, so the number the user read (0.45) was
+  the same whether the collateral had been applied or not — only `lgd_floored`
+  and the RWA told the two cases apart.
+- **Gate change**: (1) `tests/unit/crm/test_maturity_mismatch.py::TestMatchedAndShortDatedProtection`
+  — matched pairs at 7/30/60/89/91 days, a past-dated pair, a matched pair with a
+  short original term, a genuine sub-three-month mismatch (still zeroed), a
+  just-over-three-months mismatch (scales, denominator positive without a
+  floor), and the Basel 3.1 twin; the pinning test retitled to
+  `test_collateral_outliving_a_one_month_exposure_keeps_full_value`. (2)
+  `tests/acceptance/{crr,basel31}/test_art237_matched_short_dated_netting_firb.py`
+  on the new in-memory `tests/fixtures/matched_short_netting/` builder — the
+  user's shape exactly: F-IRB institution, same currency, same maturity, negative
+  balance deposit — asserting `lgd_floored == 0` and RWA 0 at 7/60/89 days and
+  past-dated, a six-month control, and a real 30-day-vs-2-year mismatch that
+  must stay zeroed AND now raise CRM002. (3) P1.241 gains `matched_short` and
+  `matched_past` scenarios in both regimes with the hand-calc corrected (no
+  floor on T). (4) `engine/crm/haircuts.py::_record_maturity_mismatch_adjustments`
+  produces CRM002 as one rolled-up count per run (zeroed and scaled rows),
+  pinned by `tests/unit/crm/test_crm002_maturity_zeroed_warning.py`. Deferred to
+  **P1.367**: a registered `RUNS` interbank netting portfolio so Tier 2 and the
+  template-cell census see the treatment.
+- **Verified red**: `uv run pytest tests/unit/crm/test_maturity_mismatch.py -n 0 -q`
+  on the unchanged engine — `8 failed, 13 passed`, every new matched case
+  `assert 0.0 == 1.0 ± 1.0e-06` on `maturity_adjustment_factor`; and
+  `uv run pytest tests/acceptance/crr/test_art237_matched_short_dated_netting_firb.py -n 0 -q`
+  — `5 failed, 2 passed`: `matched_7d`, `matched_60d`, `matched_89d` and
+  `matched_past` each `assert 0.0 == 1000000.0` on `total_collateral_for_lgd`,
+  and the mismatch control `assert False` on CRM002 presence. The six-month
+  control and the no-warning test passed on the same run, which localises the
+  defect to the sub-three-month window.
+- **Lesson**: the rule's own words are the assertion. "Less than" is a strict
+  comparison on the residuals as they are; a floor applied to one side of it
+  for an arithmetic convenience elsewhere changed the rule's meaning for an
+  entire tenor bucket, and the twin that had been corrected said so in a
+  comment nobody acted on. LESSONS C10's question — *"which call site did I
+  measure this on, and is there a second one?"* — applies to a comment that
+  names its sibling's divergence: a known divergence between twins is a plan
+  bullet, not a comment. Second, the silence: a treatment that can remove 100%
+  of a protection's value must say so; declaring an error code and producing it
+  nowhere is the shape LESSONS B9 warns about, and the 2026-08-12 entry names
+  two more codes in the same state.

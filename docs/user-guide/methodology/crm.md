@@ -369,28 +369,40 @@ its value is scaled down by the Art. 239 adjustment factor.
 
 ```python
 # Maturity inputs (CRR Art. 238 — measurement of T and t):
-#   t = residual maturity of the credit protection (years)
-#   T = min(residual exposure maturity, 5)  # 5-year cap per Art. 238
+#   t = residual maturity of the credit protection (years), as it is
+#   T = min(residual exposure maturity, 5)  # 5-year cap per Art. 238(1), NO floor
 # The 5-year cap on T is the rule that distinguishes the maturity-mismatch
-# treatment from the IRB maturity adjustment in Art. 162.
-t = max(0.25, protection_residual_maturity)
-T = min(max(0.25, exposure_residual_maturity), 5.0)  # Art. 238: cap T at 5 years
+# treatment from the IRB maturity adjustment in Art. 162. Neither residual is
+# floored before the comparison: Art. 237(1) defines a mismatch as the
+# protection residual being LESS THAN the exposure residual, so a loan and a
+# deposit sharing one maturity date are matched at any tenor — seven days,
+# sixty days, or a contractual date that has already passed on a rolled
+# position. (Escape log 2026-09-05: flooring T at 0.25 before the comparison
+# fabricated a mismatch for every matched pair inside three months and zeroed
+# its netting benefit.)
+t = protection_residual_maturity
+T = min(exposure_residual_maturity, 5.0)
 
 # Adjustment factor (CRR Art. 239(2) for funded, Art. 239(3) for unfunded):
 #   funded:    CVAM = CVA × (t − 0.25) / (T − 0.25)
 #   unfunded:  GA   = G*  × (t − 0.25) / (T − 0.25)
 # Note: the multiplier is identical between Art. 239(2) and (3); only the
-# protection input (CVA vs G*) differs.
+# protection input (CVA vs G*) differs. The formula is reached only when
+# 0.25 <= t < T, so T − 0.25 is always positive.
 if t >= T:
-    adjustment = 1.0
+    adjustment = 1.0  # no mismatch (Art. 237(1)) — no gate, no scaling
 elif t < 0.25:
-    adjustment = 0.0  # Art. 237(1) — below 3-month floor, protection ineligible
+    adjustment = 0.0  # Art. 237(1) — under 3 months AND shorter than the exposure
 else:
     adjustment = (t - 0.25) / (T - 0.25)
 
 # Adjusted protection
 Adjusted_Protection = Protection × adjustment
 ```
+
+Every row the treatment zeroes or scales is counted into one `CRM002` warning
+per run, so a book that loses its netting benefit to these gates says so in
+the error list rather than only in the LGD.
 
 **Example:**
 - Exposure residual maturity: 5 years (so T = min(5, 5) = 5)

@@ -51,14 +51,14 @@ Last generated: 2026-09-05.
 
 ### CRR Art. 112 — Exposure classes
 
-??? quote "`_add_exposure_class_applied` — src/rwa_calc/engine/aggregator/aggregator.py:451"
+??? quote "`_add_exposure_class_applied` — src/rwa_calc/engine/aggregator/aggregator.py:640"
     ```python
-    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:451:564"
+    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:640:753"
     ```
 
-??? quote "`_add_reporting_projection` — src/rwa_calc/engine/aggregator/aggregator.py:794"
+??? quote "`_add_reporting_projection` — src/rwa_calc/engine/aggregator/aggregator.py:983"
     ```python
-    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:793:1054"
+    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:982:1243"
     ```
 
 ??? quote "`classify` — src/rwa_calc/engine/classify/classifier.py:106"
@@ -269,9 +269,9 @@ Last generated: 2026-09-05.
 
 ### CRR Art. 123 — Retail exposures
 
-??? quote "`_add_exposure_class_applied` — src/rwa_calc/engine/aggregator/aggregator.py:452"
+??? quote "`_add_exposure_class_applied` — src/rwa_calc/engine/aggregator/aggregator.py:641"
     ```python
-    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:451:564"
+    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:640:753"
     ```
 
 ??? quote "`_build_qualifies_as_retail_expr` — src/rwa_calc/engine/classify/attributes.py:650"
@@ -303,9 +303,9 @@ Last generated: 2026-09-05.
 
 ### CRR Art. 126 — Exposures fully and completely secured by mortgages on commercial immovable property
 
-??? quote "`_add_exposure_class_applied` — src/rwa_calc/engine/aggregator/aggregator.py:453"
+??? quote "`_add_exposure_class_applied` — src/rwa_calc/engine/aggregator/aggregator.py:642"
     ```python
-    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:451:564"
+    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:640:753"
     ```
 
 ??? quote "`split` — src/rwa_calc/engine/re_split/splitter.py:204"
@@ -753,9 +753,9 @@ Last generated: 2026-09-05.
 
 ### CRR Art. 161 — Loss Given Default (LGD)
 
-??? quote "`apply_firb_supervisory_lgd_no_collateral` — src/rwa_calc/engine/crm/collateral.py:579"
+??? quote "`apply_firb_supervisory_lgd_no_collateral` — src/rwa_calc/engine/crm/collateral.py:580"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:579:704"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:580:705"
     ```
 
 ??? quote "`_parametric_irb_risk_weight_expr` — src/rwa_calc/engine/irb/formulas.py:989"
@@ -929,9 +929,9 @@ Last generated: 2026-09-05.
 
 ### CRR Art. 199 — Additional eligibility for collateral under the IRB Approach
 
-??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:894"
+??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:895"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:894:1599"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:895:1600"
     ```
 
 
@@ -961,9 +961,9 @@ Last generated: 2026-09-05.
 
 ### CRR Art. 211 — Requirements for treating lease exposures as collateralised
 
-??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:895"
+??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:896"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:894:1599"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:895:1600"
     ```
 
 
@@ -1039,7 +1039,7 @@ Last generated: 2026-09-05.
 
 ??? quote "`apply_collateral` — src/rwa_calc/engine/crm/collateral.py:420"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:418:556"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:418:557"
     ```
 
 ??? quote "`lgd_star_exposure_basis_expr` — src/rwa_calc/engine/crm/expressions.py:106"
@@ -1065,9 +1065,9 @@ Last generated: 2026-09-05.
     --8<-- "src/rwa_calc/engine/crm/haircut_tables.py:353:385"
     ```
 
-??? quote "`apply_haircuts` — src/rwa_calc/engine/crm/haircuts.py:124"
+??? quote "`apply_haircuts` — src/rwa_calc/engine/crm/haircuts.py:126"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/haircuts.py:124:329"
+    --8<-- "src/rwa_calc/engine/crm/haircuts.py:126:331"
     ```
 
 ??? quote "`sft_bundle_to_exposures` — src/rwa_calc/engine/sft/fccm.py:111"
@@ -1093,7 +1093,7 @@ Last generated: 2026-09-05.
 
 ??? quote "`apply_collateral` — src/rwa_calc/engine/crm/collateral.py:421"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:418:556"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:418:557"
     ```
 
 ??? quote "`allocate_links` — src/rwa_calc/engine/crm/link_allocation.py:89"
@@ -1161,19 +1161,19 @@ Last generated: 2026-09-05.
 
 ### CRR Art. 235 — Calculating risk-weighted exposure amounts under the Standardised Approach
 
-??? quote "`_add_post_crm_reporting_class` — src/rwa_calc/engine/aggregator/aggregator.py:685"
+??? quote "`_add_post_crm_reporting_class` — src/rwa_calc/engine/aggregator/aggregator.py:874"
     ```python
-    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:685:727"
+    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:874:916"
     ```
 
-??? quote "`_add_post_crm_reporting_approach` — src/rwa_calc/engine/aggregator/aggregator.py:730"
+??? quote "`_add_post_crm_reporting_approach` — src/rwa_calc/engine/aggregator/aggregator.py:919"
     ```python
-    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:730:755"
+    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:919:944"
     ```
 
-??? quote "`_add_reporting_projection` — src/rwa_calc/engine/aggregator/aggregator.py:793"
+??? quote "`_add_reporting_projection` — src/rwa_calc/engine/aggregator/aggregator.py:982"
     ```python
-    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:793:1054"
+    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:982:1243"
     ```
 
 ??? quote "`_build_guarantor_sub_rows` — src/rwa_calc/engine/crm/guarantees.py:898"
@@ -1219,9 +1219,9 @@ Last generated: 2026-09-05.
     --8<-- "src/rwa_calc/engine/crm/guarantees.py:1507:1699"
     ```
 
-??? quote "`apply_maturity_mismatch` — src/rwa_calc/engine/crm/haircuts.py:674"
+??? quote "`apply_maturity_mismatch` — src/rwa_calc/engine/crm/haircuts.py:676"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/haircuts.py:674:779"
+    --8<-- "src/rwa_calc/engine/crm/haircuts.py:676:813"
     ```
 
 
@@ -1232,9 +1232,9 @@ Last generated: 2026-09-05.
     --8<-- "src/rwa_calc/engine/crm/collateral.py:170:415"
     ```
 
-??? quote "`apply_maturity_mismatch` — src/rwa_calc/engine/crm/haircuts.py:675"
+??? quote "`apply_maturity_mismatch` — src/rwa_calc/engine/crm/haircuts.py:677"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/haircuts.py:674:779"
+    --8<-- "src/rwa_calc/engine/crm/haircuts.py:676:813"
     ```
 
 
@@ -1413,9 +1413,9 @@ Last generated: 2026-09-05.
     --8<-- "src/rwa_calc/engine/aggregator/_floor.py:108:356"
     ```
 
-??? quote "`aggregate` — src/rwa_calc/engine/aggregator/aggregator.py:86"
+??? quote "`aggregate` — src/rwa_calc/engine/aggregator/aggregator.py:98"
     ```python
-    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:86:443"
+    --8<-- "src/rwa_calc/engine/aggregator/aggregator.py:98:523"
     ```
 
 
@@ -1863,17 +1863,17 @@ Last generated: 2026-09-05.
 
 ### PS1/26 Art. 199 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:896"
+??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:897"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:894:1599"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:895:1600"
     ```
 
 
 ### PS1/26 Art. 211 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:897"
+??? quote "`_apply_collateral_unified` — src/rwa_calc/engine/crm/collateral.py:898"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:894:1599"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:895:1600"
     ```
 
 
@@ -1881,12 +1881,12 @@ Last generated: 2026-09-05.
 
 ??? quote "`apply_collateral` — src/rwa_calc/engine/crm/collateral.py:418"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:418:556"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:418:557"
     ```
 
 ??? quote "`apply_collateral` — src/rwa_calc/engine/crm/collateral.py:419"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:418:556"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:418:557"
     ```
 
 ??? quote "`lgd_star_exposure_basis_expr` — src/rwa_calc/engine/crm/expressions.py:107"

@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- (Next release changes will go here)
+
+### Changed
+- (Next release changes will go here)
+
+---
+
+## [0.3.34] - 2026-09-05
+
+### Added
 - **`facility_share_resolution`, a per-candidate allocation audit frame on
   `AggregatedResultBundle`.** One row per priced member of every Facility Share,
   in both regimes: the member and the owner, the approach and class it was priced

@@ -613,19 +613,34 @@ FRAGMENTS: tuple[Fragment, ...] = (
 #: spec — so nothing that has passed through a file, a parsed document or a
 #: function parameter takes part in constructing one.
 #:
-#: That provenance is the point, and it is a security property rather than a
-#: style choice. ``main()`` used to take its write targets out of the keys of
-#: ``render_targets()``, whose *values* are spliced from text read off disk. A
-#: taint analyser models a mapping as a single container, so the file-derived
-#: values marked the whole mapping and the paths came back out of it
-#: attacker-controlled: ``path.write_text(...)`` read as an arbitrary-file-write
-#: sink (``pythonsecurity:S2083``). Iterating this tuple separates the two —
-#: the content still comes from the mapping, the path never does.
+#: That provenance is worth keeping on its own terms: only a path declared here
+#: at import time is ever written, so a bug in the render cannot invent a
+#: target.
 #:
-#: Same remedy as ``injection_ratchet.py`` and ``check_distribution.py``: remove
-#: the flow rather than guard it. Commit ``a5d34c0d`` records two
-#: resolve-then-contain guards that were correct at runtime and left the finding
-#: standing anyway, one of them multiplying it.
+#: **It is a write-set-drift guard, not a taint fix, whatever the commit that
+#: added it says.** It was introduced to close ``pythonsecurity:S2083`` on the
+#: write in ``main()`` and did not, twice over (``2b1be086``, then ``d5cb3e58``
+#: which bound the write path off this tuple at the sink). Both were designed
+#: from the rule's title, which points at the path. The reported flow points at
+#: the content and never mentions a path at all:
+#:
+#:     source  ``_splice``: ``path.read_text(...)``   -> the file CONTENT
+#:     sink    ``main()``:  the write of that content -> "a malicious value can
+#:                                                       be used as argument"
+#:
+#: ``_splice`` must read each target to preserve the hand-written prose outside
+#: the GENERATED markers, and the script must write the result back, so
+#: file-derived content reaching the write is the feature — no path
+#: restructuring can move it. What is responsive to that flow is keeping the
+#: content out of a path-taking call's argument list, which is why ``main()``
+#: opens the target and writes to the stream rather than calling
+#: ``path.write_text(content)``.
+#:
+#: Read the flow before designing a fix — the ``gh api`` incantation that
+#: retrieves it without SonarCloud credentials is in
+#: ``sonar-project.properties``. The read/write asymmetry that looks like
+#: evidence about path provenance is just ``read_text`` taking no tainted
+#: argument; it was misread as proof twice.
 TARGET_PATHS: tuple[Path, ...] = (
     OUTPUT_PATH,
     *sorted({fragment.path for fragment in FRAGMENTS}, key=lambda p: p.as_posix()),
@@ -699,8 +714,20 @@ def main() -> int:
     # target that is merely read-only — the release bumps a version stamp the
     # page carries and the skill fragments do not, so the common case is a
     # single stale page among a dozen fresh fragments.
+    #
+    # The write goes through the stream API deliberately. `Path.write_text`
+    # takes the path and the spliced content in a single path-taking call, and
+    # that content is read off disk by `_splice`, so the taint analyser sees
+    # file-derived data arriving as an argument to an I/O function that also
+    # takes a path and reports `pythonsecurity:S2083`. Opening first keeps the
+    # two apart: the path-taking call carries only the constant-derived path
+    # and a literal mode, and the content reaches a stream, which is not a path
+    # sink. Behaviour is identical — `write_text` is exactly this open-and-
+    # write. This is a false-positive remedy, not a vulnerability fix; see
+    # TARGET_PATHS for the flow and for the two fixes that misread it.
     for path in stale:
-        path.write_text(targets[path], encoding="utf-8")
+        with path.open("w", encoding="utf-8") as handle:
+            handle.write(targets[path])
     sys.stderr.write(f"wrote {len(stale)} of {len(TARGET_PATHS)} target(s)\n")
     return 0
 

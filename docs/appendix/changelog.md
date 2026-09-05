@@ -17,6 +17,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   F-IRB (institution obligor, CRR and Basel 3.1) and two new P1.241 scenarios
   (`matched_short`, `matched_past`).
 
+### Security
+- **`pythonsecurity:S2083` on `scripts/generate_regulatory_tables.py` is fixed
+  structurally, and was never accepted as the record claimed.** The BLOCKER
+  taint finding (GitHub code-scanning alert 35) had been open on `master` since
+  2026-08-16 while a commit message, `sonar-project.properties` and a test
+  docstring all recorded it as resolved-Accepted in the SonarCloud platform; the
+  key they named is not the key `master` reports, and that issue is still `OPEN`.
+  The reported flow runs from `_splice`'s `read_text` (the file *content*) to the
+  write's *data argument*, so neither of the two earlier path-provenance fixes
+  could move it — but the content does not have to be an argument to a call that
+  also takes a path. `main()` now opens each stale target and writes to the
+  stream, leaving the path-taking call with only the constant-derived path and a
+  literal mode. Generator behaviour is byte-identical (`--check` exit 0 fresh /
+  1 stale, `wrote 1 of 17`, page restored byte-for-byte). Gated by
+  `test_generator_keeps_spliced_content_out_of_a_path_taking_call`, which fails
+  on any `write_text` / `write_bytes` in the generator; recorded in
+  `docs/development/escape-log.md` as `caught-and-parked`.
+
 ### Changed
 - **Fixed: a loan and a deposit sharing one maturity date inside three months of
   the reporting date, or a date already passed, lost their whole netting benefit

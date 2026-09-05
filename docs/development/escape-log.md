@@ -2070,3 +2070,105 @@ gate that shipped.
   of a protection's value must say so; declaring an error code and producing it
   nowhere is the shape LESSONS B9 warns about, and the 2026-08-12 entry names
   two more codes in the same state.
+
+## 2026-09-05 — A BLOCKER taint finding was recorded as accepted, was not accepted, and sat open on master for three weeks
+
+- **Defect**: `pythonsecurity:S2083` (BLOCKER) on
+  `scripts/generate_regulatory_tables.py:703` — the single open code-scanning
+  alert on `master` (GitHub alert 35), raised 2026-08-16 and still open on
+  2026-09-05. The 2026-08-17 entry above closed this finding by recording it as
+  "resolved as **Accepted** in the SonarCloud platform (issue
+  `AaAMt-IEKije7nS9AwhB`)". It was not. `master` reports the issue under a
+  different key entirely, and it has never been resolved:
+
+  ```
+  AZ__l2AI-nu7-4qGDJNX  BLOCKER  OPEN      scripts/generate_regulatory_tables.py:703
+  AZ8Ke_9KFFhzEQA0N41T  BLOCKER  ACCEPTED  src/rwa_calc/ui/app/recon_signoff.py:244
+  ```
+
+  The second row is the control: an accept in this project does land, and does
+  show as `ACCEPTED`/`WONTFIX`. The key named in the record is on neither list,
+  so the accept was applied to something else — most likely a branch-scoped
+  duplicate on the PR — while the issue on `master` was never touched.
+- **Rule**: Not a regulatory escape. No RWA number is affected; the script is
+  developer/CI codegen whose only external input is a boolean `--check` flag.
+- **Origin**: the closure, not the code. The generator is byte-for-byte the
+  version the 2026-08-17 entry analysed, and that analysis was correct — the
+  flow really does run from `_splice`'s content read to the write's data
+  argument, re-fetched here from today's SARIF and unchanged. What failed was
+  the remedy: a platform action with no artefact in this repository was
+  recorded as done, in a commit message, a properties note and a test
+  docstring, and nothing anywhere could disagree with it.
+- **Escape class**: `caught-and-parked`. The gate fired and kept firing; the
+  *record* of the finding became its resting place. It is the class whose fix
+  targets the register of tolerated findings rather than the output, and the
+  register here was three pieces of prose asserting an accept that no one had
+  checked. `no-gate-exists` is the near miss and is wrong: SonarCloud caught
+  this on the day it was introduced and has reported it on every analysis of
+  `master` since.
+- **Why every gate missed it**: nothing in the repository can observe a platform
+  accept, so "accepted" was unfalsifiable prose. Local gates cannot substitute —
+  `ruff` and `arch_check` have no taint model, and the freshness tests measure
+  output bytes and were correctly green throughout. CI is also no help by
+  design: SonarCloud's finding surfaces as a GitHub *code-scanning alert*, not
+  as a failing job, so `master` CI has been green for three weeks with a BLOCKER
+  alert open on it. The alert was found by a human reading the security tab.
+- **Gate change**: the finding is fixed structurally rather than accepted, and
+  the property is gated executably.
+
+  The 2026-08-17 entry concluded "there was never a structural fix to find —
+  the flow is the feature", and stopped one step short of its own lesson. The
+  flow is indeed the feature: `_splice` must read each target to preserve the
+  hand-written prose outside the `GENERATED` markers, and the script must write
+  the result back, so the content is file-derived and cannot stop being so. But
+  that entry had already named the mechanism — *"a sink can be reported for a
+  tainted **argument** rather than a tainted path"* — and the remedy follows
+  from it: the content does not have to be an **argument to a call that also
+  takes a path**. `main()` now opens the target and writes to the stream, so
+  the path-taking call carries only the constant-derived path and a literal
+  mode:
+
+  ```python
+  with path.open("w", encoding="utf-8") as handle:
+      handle.write(targets[path])
+  ```
+
+  `tests/contracts/test_docs_freshness.py::test_generator_keeps_spliced_content_out_of_a_path_taking_call`
+  parses the generator and fails on any `write_text` / `write_bytes` call, so
+  the shape cannot come back. The `S6549 / S2083` note in
+  `sonar-project.properties` records the remedy, drops the false claim, and now
+  carries the one-line command that makes any *future* accept falsifiable:
+
+  ```
+  gh api repos/OpenAfterHours/rwa_calculator/code-scanning/alerts/<n> --jq .state
+  ```
+
+  An accept remains legitimate where the path genuinely is the trust root
+  (`recon_signoff.py` above). What is no longer legitimate is recording one
+  without verifying it landed.
+- **Verified red**: the new gate run against the pre-fix generator restored
+  from `master` (`45f5b315`) fails on the flagged line itself —
+
+  ```
+  AssertionError: scripts/generate_regulatory_tables.py hands its rendered
+  content to a path-taking write call:
+    line 703: .write_text(...)
+  ```
+
+  — and passes on the fix, with `tests/contracts/test_docs_freshness.py`
+  6 passed. The closure claim is independently red too: the anonymous
+  SonarCloud query above (no credentials needed) returns `OPEN` for the
+  generator's issue against a record that said `Accepted`, and
+  `gh api .../code-scanning/alerts/35 --jq .state` returns `open` with
+  `dismissed_at: null`.
+- **Lesson**: *a remedy that leaves no artefact in the repository is not closed
+  until something outside the repository has been asked.* The closing rule
+  already says a defect is closed by its escape-log entry rather than its fix
+  commit — this entry is the case where the escape-log entry itself was the
+  resting place, because its named gate change was an action in another system
+  that nobody verified. Where a fix is a platform action, the entry must carry
+  the query that proves it, and the query must be run. Second, and narrower:
+  when an analysis correctly identifies a mechanism but concludes no fix
+  exists, re-read the mechanism for the remedy it implies. "The sink is
+  reported for a tainted argument" and "there is no structural fix" cannot both
+  be true — the first names exactly what to remove.

@@ -37,6 +37,7 @@ References:
 
 from __future__ import annotations
 
+import ast
 import subprocess
 import sys
 from pathlib import Path
@@ -141,11 +142,14 @@ def test_generator_write_paths_do_not_come_from_the_rendered_mapping() -> None:
     introduced to clear `pythonsecurity:S2083` and did not, twice over. The
     reported flow never mentioned the path — it runs from `_splice`'s
     `read_text` (the file *content*) to the `write_text` *data* argument, so no
-    path restructuring could move it, and the finding is accepted in the
-    SonarCloud platform instead. Do not cite this gate as evidence that a taint
-    finding was closed; fetch the `codeFlows` and read the source. See
-    docs/development/escape-log.md (2026-08-17) and the `S6549 / S2083` note in
-    sonar-project.properties for the retrieval command.
+    path restructuring could move it. Do not cite this gate as evidence that a
+    taint finding was closed; fetch the `codeFlows` and read the source. The
+    finding was recorded as accepted in the SonarCloud platform on 2026-08-17
+    and was not: GitHub code-scanning alert 35 stayed open on master for three
+    weeks. What is responsive to that flow is
+    `test_generator_keeps_spliced_content_out_of_a_path_taking_call` below. See
+    docs/development/escape-log.md (2026-08-17, 2026-09-05) and the
+    `S6549 / S2083` note in sonar-project.properties for the retrieval command.
     """
     # Arrange / Act
     source = GENERATOR.read_text(encoding="utf-8")
@@ -160,4 +164,47 @@ def test_generator_write_paths_do_not_come_from_the_rendered_mapping() -> None:
     assert "in TARGET_PATHS:" in source, (
         "Nothing iterates TARGET_PATHS any more. The constant is only a write-set "
         "guarantee while it is the thing the write loop walks."
+    )
+
+
+def test_generator_keeps_spliced_content_out_of_a_path_taking_call() -> None:
+    """The generator writes through a stream, never `Path.write_text`.
+
+    This one *is* about the taint finding, and it is the property the reported
+    flow actually names. `pythonsecurity:S2083` ran two steps — `_splice`'s
+    `path.read_text(...)` (the file CONTENT) to the write in `main()`, whose
+    sink message is "a malicious value can be used as argument". `_splice` has
+    to read each target to preserve the hand-written prose outside the
+    GENERATED markers, so the content is file-derived by design and cannot be
+    made otherwise. What can be changed is whether that content is handed to a
+    call that also takes a path: `path.write_text(content)` is one such call,
+    `path.open("w")` followed by `handle.write(content)` is not.
+
+    Two earlier fixes moved where the *path* came from and left the finding
+    standing, so this gate deliberately asserts nothing about path provenance —
+    `test_generator_write_paths_do_not_come_from_the_rendered_mapping` covers
+    that separately, and on its own (non-security) merits.
+    """
+    # Arrange
+    tree = ast.parse(GENERATOR.read_text(encoding="utf-8"))
+
+    # Act
+    offenders = [
+        f"line {node.lineno}: .{node.func.attr}(...)"
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in {"write_text", "write_bytes"}
+    ]
+
+    # Assert
+    assert not offenders, (
+        "scripts/generate_regulatory_tables.py hands its rendered content to a "
+        "path-taking write call:\n  " + "\n  ".join(offenders) + "\n"
+        "The content is spliced from text read off disk, so a taint analyser "
+        "reports it as pythonsecurity:S2083 the moment it becomes an argument "
+        "to a call that also carries the path. Open the target and write to "
+        "the stream instead:\n"
+        '    with path.open("w", encoding="utf-8") as handle:\n'
+        "        handle.write(targets[path])"
     )

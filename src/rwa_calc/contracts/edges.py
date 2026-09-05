@@ -790,6 +790,33 @@ def _hierarchy_resolved_columns() -> dict[str, EdgeColumn]:
         "other_own_funds_reductions": EdgeColumn(dtype=pl.Float64, citation=_CITE_CRR_159),
         "original_counterparty_reference": EdgeColumn(dtype=pl.String),
         "mof_risk_type_source": EdgeColumn(dtype=pl.String),
+        # Facility-share candidate fan-out (firm policy, not regulation — see
+        # docs/plans/facility-share-riskiest-member.md). A shared facility emits
+        # one synthetic undrawn CANDIDATE per member counterparty, each carrying
+        # the full headroom and keyed ``<facility>_UNDRAWN@<member>``; the
+        # aggregator resolves the group to one winner before the output floor.
+        # Both columns must survive every edge from the hierarchy exit to the
+        # aggregator: ``conform`` drops an undeclared column silently, which
+        # would turn the fan-out into a green no-op from that stage onward
+        # (pinned by tests/contracts/test_facility_share_contracts.py).
+        # Optional so a directly-built or synthetic CCR/SFT frame that never ran
+        # the facility-undrawn producer is injected with a typed null / False
+        # rather than failing the seal.
+        "facility_share_group": EdgeColumn(
+            dtype=pl.String,
+            required=False,
+            null_meaning="null = ordinary row, never allocated by the facility-share "
+            "fan-out; non-null = the root facility whose headroom this candidate "
+            "carries in full",
+        ),
+        "is_facility_share_candidate": EdgeColumn(
+            dtype=pl.Boolean,
+            required=False,
+            default=False,
+            fill_null_default=True,
+            null_meaning="False = ordinary row; True = one of several priced "
+            "candidates for one shared facility's undrawn commitment",
+        ),
         "is_revolving": EdgeColumn(dtype=pl.Boolean),
         "is_qrre_transactor": EdgeColumn(dtype=pl.Boolean),
         "is_secured": EdgeColumn(
@@ -1770,6 +1797,16 @@ SA_BRANCH_EDGE: EdgeContract = EdgeContract(
     name="sa_branch",
     columns={
         **_calc_output_common_columns(),
+        # Facility-share fan-out carriers, named on this literal dict in their
+        # own right rather than inherited: the aggregator's resolver reads them
+        # off ALL THREE branch frames (a candidate can be standardised, IRB or
+        # slotting), and a carrier dropped at one branch edge would leave that
+        # branch's losing candidates inside S-TREA and the expected-loss summary.
+        # Semantics documented once at _hierarchy_resolved_columns.
+        "facility_share_group": EdgeColumn(dtype=pl.String, required=False),
+        "is_facility_share_candidate": EdgeColumn(
+            dtype=pl.Boolean, required=False, default=False, fill_null_default=True
+        ),
         "cp_internal_rating_grade": EdgeColumn(dtype=pl.String),
         "cp_is_core_market_participant": EdgeColumn(dtype=pl.Boolean),
         "is_presold": EdgeColumn(dtype=pl.Boolean),
@@ -1786,6 +1823,11 @@ IRB_BRANCH_EDGE: EdgeContract = EdgeContract(
     name="irb_branch",
     columns={
         **_calc_output_common_columns(),
+        # Facility-share fan-out carriers — see SA_BRANCH_EDGE.
+        "facility_share_group": EdgeColumn(dtype=pl.String, required=False),
+        "is_facility_share_candidate": EdgeColumn(
+            dtype=pl.Boolean, required=False, default=False, fill_null_default=True
+        ),
         "correlation": EdgeColumn(dtype=pl.Float64),
         "el_after_adjustment": EdgeColumn(dtype=pl.Float64),
         "el_excess": EdgeColumn(dtype=pl.Float64),
@@ -1847,6 +1889,13 @@ SLOTTING_BRANCH_EDGE: EdgeContract = EdgeContract(
     name="slotting_branch",
     columns={
         **_calc_output_common_columns(),
+        # Facility-share fan-out carriers — see SA_BRANCH_EDGE. A specialised-
+        # lending facility's undrawn candidate takes the slotting branch, so the
+        # resolver's floored-branch predicate must be able to see it here too.
+        "facility_share_group": EdgeColumn(dtype=pl.String, required=False),
+        "is_facility_share_candidate": EdgeColumn(
+            dtype=pl.Boolean, required=False, default=False, fill_null_default=True
+        ),
         "el_excess": EdgeColumn(dtype=pl.Float64),
         "el_shortfall": EdgeColumn(dtype=pl.Float64),
         "expected_loss": EdgeColumn(dtype=pl.Float64),
@@ -1869,6 +1918,28 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
     name="aggregator_exit",
     columns={
         **_calc_output_common_columns(),
+        # The winning facility-share candidate keeps its group to reporting, so
+        # a reader of the sealed ledger can tell an allocated undrawn commitment
+        # from an ordinary one. The candidate flag rides along as the resolver's
+        # own observable: by this edge every loser has been dropped, so a True
+        # value on the sealed exit is a resolver defect and asserting on it is
+        # how that defect becomes visible rather than silent.
+        "facility_share_group": EdgeColumn(dtype=pl.String, required=False),
+        # No ``fill_null_default`` here, unlike the three branch edges: this edge
+        # is sealed on an ALREADY-MATERIALISED frame, and a fill adds a
+        # ``with_columns`` node on top of the eager backing that
+        # tests/unit/test_aggregator_eager_views.py counts.
+        #
+        # That omission is only safe because EVERY producer resolves the flag
+        # itself, and there are two of them, not one. The SA / IRB / slotting
+        # branch seals fill it on every row that passes through one; equity rows
+        # pass through NONE of them — ``prepare_equity_results`` is concatenated
+        # straight onto the combined frame — so
+        # ``engine/aggregator/_equity_prep.py`` emits the literal False (and a
+        # typed null group) itself. Add a producer that bypasses the branch seals
+        # and it must do the same, or this column becomes three-state on the
+        # sealed exit with nothing here to catch it.
+        "is_facility_share_candidate": EdgeColumn(dtype=pl.Boolean, required=False, default=False),
         # Post-guarantee twin of approach_applied: the guaranteed slice of an
         # SA-guaranteed exposure is reported under the guarantor's standardised
         # approach (Art. 235 risk-weight substitution), while an IRB-guaranteed

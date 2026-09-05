@@ -117,14 +117,9 @@ Last generated: 2026-09-05.
     --8<-- "src/rwa_calc/engine/sa/central_bank.py:67:76"
     ```
 
-??? quote "`build_guarantor_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:134"
+??? quote "`build_guarantor_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:117"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:134:318"
-    ```
-
-??? quote "`build_entity_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:321"
-    ```python
-    --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:321:486"
+    --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:117:301"
     ```
 
 ??? quote "`rgla_sovereign_rw_expr` — src/rwa_calc/engine/sa/rgla.py:97"
@@ -145,14 +140,9 @@ Last generated: 2026-09-05.
     --8<-- "src/rwa_calc/engine/sa/crr_risk_weight_tables.py:291:303"
     ```
 
-??? quote "`build_guarantor_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:135"
+??? quote "`build_guarantor_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:118"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:134:318"
-    ```
-
-??? quote "`build_entity_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:322"
-    ```python
-    --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:321:486"
+    --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:117:301"
     ```
 
 ??? quote "`is_rgla_sovereign_expr` — src/rwa_calc/engine/sa/rgla.py:74"
@@ -178,14 +168,9 @@ Last generated: 2026-09-05.
     --8<-- "src/rwa_calc/engine/sa/crr_risk_weight_tables.py:248:259"
     ```
 
-??? quote "`build_guarantor_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:136"
+??? quote "`build_guarantor_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:119"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:134:318"
-    ```
-
-??? quote "`build_entity_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:323"
-    ```python
-    --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:321:486"
+    --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:117:301"
     ```
 
 ??? quote "`pse_jurisdiction_not_permitted_expr` — src/rwa_calc/engine/sa/jurisdiction.py:58"
@@ -211,14 +196,9 @@ Last generated: 2026-09-05.
     --8<-- "src/rwa_calc/engine/sa/crr_risk_weight_tables.py:339:347"
     ```
 
-??? quote "`build_guarantor_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:137"
+??? quote "`build_guarantor_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:120"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:134:318"
-    ```
-
-??? quote "`build_entity_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:324"
-    ```python
-    --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:321:486"
+    --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:117:301"
     ```
 
 
@@ -229,38 +209,33 @@ Last generated: 2026-09-05.
     --8<-- "src/rwa_calc/engine/sa/crr_risk_weight_tables.py:363:377"
     ```
 
-??? quote "`build_guarantor_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:139"
+??? quote "`build_guarantor_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:122"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:134:318"
-    ```
-
-??? quote "`build_entity_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:325"
-    ```python
-    --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:321:486"
+    --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:117:301"
     ```
 
 
 ### CRR Art. 119 — Exposures to institutions
 
-??? quote "`build_institution_guarantor_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:489"
+??? quote "`build_institution_guarantor_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:304"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:489:575"
+    --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:304:390"
     ```
 
 
 ### CRR Art. 120 — Exposures to rated institutions
 
-??? quote "`build_institution_guarantor_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:490"
+??? quote "`build_institution_guarantor_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:305"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:489:575"
+    --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:304:390"
     ```
 
 
 ### CRR Art. 121 — Exposures to unrated institutions
 
-??? quote "`build_institution_guarantor_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:491"
+??? quote "`build_institution_guarantor_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:306"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:489:575"
+    --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:304:390"
     ```
 
 ??? quote "`_crr_append_institution_maturity_branches` — src/rwa_calc/engine/sa/risk_weights.py:846"
@@ -286,14 +261,9 @@ Last generated: 2026-09-05.
     --8<-- "src/rwa_calc/engine/irb/guarantee.py:330:436"
     ```
 
-??? quote "`build_entity_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:326"
+??? quote "`build_corporate_guarantor_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:393"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:321:486"
-    ```
-
-??? quote "`build_corporate_guarantor_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:578"
-    ```python
-    --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:578:632"
+    --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:393:447"
     ```
 
 
@@ -307,11 +277,6 @@ Last generated: 2026-09-05.
 ??? quote "`_build_qualifies_as_retail_expr` — src/rwa_calc/engine/classify/attributes.py:650"
     ```python
     --8<-- "src/rwa_calc/engine/classify/attributes.py:650:748"
-    ```
-
-??? quote "`build_entity_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:327"
-    ```python
-    --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:321:486"
     ```
 
 ??? quote "`_crr_append_retail_branches` — src/rwa_calc/engine/sa/risk_weights.py:759"
@@ -1231,9 +1196,9 @@ Last generated: 2026-09-05.
     --8<-- "src/rwa_calc/engine/irb/guarantee.py:330:436"
     ```
 
-??? quote "`build_guarantor_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:140"
+??? quote "`build_guarantor_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:123"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:134:318"
+    --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:117:301"
     ```
 
 ??? quote "`apply_guarantee_substitution` — src/rwa_calc/engine/sa/rw_adjustments.py:196"
@@ -1526,9 +1491,9 @@ Last generated: 2026-09-05.
     --8<-- "src/rwa_calc/engine/sa/cqs_lift.py:47:82"
     ```
 
-??? quote "`build_guarantor_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:138"
+??? quote "`build_guarantor_rw_expr` — src/rwa_calc/engine/sa/guarantor_rw.py:121"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:134:318"
+    --8<-- "src/rwa_calc/engine/sa/guarantor_rw.py:117:301"
     ```
 
 

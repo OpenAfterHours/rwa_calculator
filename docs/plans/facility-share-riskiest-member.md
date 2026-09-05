@@ -282,8 +282,13 @@ must assert both columns are declared on every edge in that chain. The only `exp
 de-dup in `src/` is `classify/permissions.py:261`; the `@<member>` suffix keeps candidates distinct
 through it.
 
-**Cost.** Rows added = Σ(members − 1) over Facility Shares; a handful per portfolio. No new
-materialisation; the resolution is a `.over(facility_share_group)` rank plus a filter.
+**Cost.** Rows added = Σ(members − 1) over Facility Shares. That is *not* "a handful" on a book with
+many multi-borrower facilities: measured on the 20k-counterparty benchmark generator (S2 gate,
+2026-09-05) the fan-out adds 4,100 candidate rows, 5.6% more exposures through classifier, CRM and
+the calculators. The hierarchy stage nevertheless ran **35% faster** after S2 (0.221 s vs 0.342 s,
+best of three), because the deleted SA preview cost more than the new join; the per-row cost
+downstream is the ~41 µs measured in the header. No new materialisation; the resolution is a rank
+per `facility_share_group` plus a filter on the three branch frames.
 
 ### O3 — Shadow second pass (rejected)
 

@@ -9,8 +9,9 @@ runs, this module:
 3. Writes the real bullets under a new `## [version] - YYYY-MM-DD` section,
 4. Resets `[Unreleased]` to the canonical empty placeholder.
 
-The two public entry points are pure string transforms so they can be unit-tested
-without touching the filesystem.
+It also reads the promoted section back (`extract_version_section`) so the
+GitHub Release can carry the same notes. The public entry points are pure string
+transforms so they can be unit-tested without touching the filesystem.
 """
 
 from __future__ import annotations
@@ -85,6 +86,22 @@ def update_version_table(
         f"| {new_version} | {today} | Current |\n| {old_version} | {today} | Previous |"
     )
     return re.sub(table_pattern, table_replacement, content)
+
+
+def extract_version_section(content: str, version: str) -> str | None:
+    """
+    Return the body of `## [version] - date`, without its header or closing rule.
+
+    This is the block `promote_unreleased` just wrote, read back so the GitHub
+    Release can carry the same notes. Returns None if the version has no section.
+    """
+    header = re.search(rf"^## \[{re.escape(version)}\][^\n]*\n", content, re.MULTILINE)
+    if header is None:
+        return None
+    rest = content[header.end() :]
+    end = re.search(r"^(?:---|## \[)", rest, re.MULTILINE)
+    body = rest if end is None else rest[: end.start()]
+    return body.strip() or None
 
 
 def _parse_subsections(body: str) -> dict[str, list[str]]:

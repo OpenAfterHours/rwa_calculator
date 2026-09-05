@@ -1,3 +1,7 @@
+---
+verified: "2026-09-05 @ 0.3.32"
+---
+
 # Input Data Schemas
 
 This page documents the authoritative schemas for all input data files required by the RWA calculator. These schemas are defined in `src/rwa_calc/data/schemas.py` and represent the single source of truth.
@@ -313,7 +317,7 @@ facilities = pl.DataFrame({
 | `has_one_day_maturity_floor` | `Boolean` | No | Eligible for the CRR Art. 162(3) 1-day `M` floor in lieu of the standard 1-year floor |
 | `is_sft` | `Boolean` | No | Securities Financing Transaction — see Facility schema |
 | `effective_maturity` | `Float64` | No | Explicit numeric `M` override (years) per CRR Art. 162(3) / PS1/26. Bypasses the 1-year floor when populated |
-| `netting_agreement_reference` | `String` | No | CRR Art. 195/219 on-balance-sheet netting set. A non-null reference is the sole signal that the loan participates in a netting agreement; exposures net against each other **iff they share the same reference** — independent of facility or counterparty |
+| `netting_agreement_reference` | `String` | No | CRR Art. 195/219 on-balance-sheet netting set. A non-null reference is the sole signal that the loan participates in a netting agreement, and the reference alone defines the **netting perimeter**: exposures net against each other **iff they share the same reference**, across facilities *and* across counterparties. The cross-counterparty limb is gated by the rulepack Feature `on_bs_netting_perimeter_is_agreement` (enabled under both regimes); disabled, the pool and the beneficiary match are additionally keyed on `counterparty_reference`. Sharing one reference across counterparties is the firm's Art. 205(a) attestation that set-off is enforceable against every party under it, and raises the **CRM016** audit warning naming the agreement and the number of counterparties it netted across. A row with a null `counterparty_reference` still nets under the agreement and adds a null clause to that warning, while the loader raises **DQ001** for the null reference separately. Enabling the perimeter reduces own-funds RWA without reducing the Basel 3.1 output-floor basis. See [Credit Risk Mitigation — On-Balance Sheet Netting](../user-guide/methodology/crm.md#on-balance-sheet-netting-crr-art-195-art-219) |
 | `due_diligence_performed` | `Boolean` | No | Basel 3.1 Art. 110A: True if the firm has performed the prescribed due-diligence assessment of the obligor. Required for the SA RW override below to apply. Absence raises diagnostic warning **SA004** under B3.1 |
 | `due_diligence_override_rw` | `Float64` | No | Basel 3.1 Art. 110A SA RW override (decimal, e.g. `1.50` for 150%). Applied as `max(calculated_rw, override_rw)` — the override can only **increase** the regulatory RW, never decrease it. CRR-only runs ignore this column |
 | `intragroup_entity_reference` | `String` | No | Intragroup tag — see Facility schema and [Multi-Entity Reporting](../features/multi-entity-reporting.md) |

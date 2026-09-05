@@ -45,6 +45,7 @@ from rwa_calc.engine.irb.calculator import IRBCalculator
 from rwa_calc.engine.sa.calculator import SACalculator
 from rwa_calc.engine.slotting.calculator import SlottingCalculator
 from rwa_calc.engine.utils import has_required_columns
+from rwa_calc.rulebook import RulepackV0
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -160,9 +161,12 @@ def profile_pipeline_stages(
         results,
     )
 
-    # 3e: Netting collateral
+    # 3e: Netting collateral. The pack is REQUIRED — the netting perimeter is a
+    # cited Feature (on_bs_netting_perimeter_is_agreement) with no None fallback,
+    # so the profile must resolve the run's own pack to measure the real perimeter.
+    netting_pack = RulepackV0.from_config(config).pack
     netting_collateral = _time(
-        lambda: collateral_mod.generate_netting_collateral(exposures),
+        lambda: collateral_mod.generate_netting_collateral(exposures, pack=netting_pack),
         "CRM: netting collateral gen",
         results,
     )

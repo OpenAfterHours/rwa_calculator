@@ -1744,3 +1744,79 @@ gate that shipped.
   single test, and C12's second, third and fourth mechanisms are all mechanically
   checkable from a shared plugin base in `tests/mutations/`. Both are filed in the
   ledger's candidates list.
+
+## 2026-09-05 — Basel 3.1 C 07.00 deducts on-balance-sheet netting twice, and no registered portfolio had a netting agreement
+
+- **Defect**: on the Basel 3.1 OF 07.00 template the netted deposit is deducted
+  once in column 0035 "(-) Adjustment due to on-balance sheet netting" (so column
+  0040 is already net of it) and **again** inside column 0130 "(-) Financial
+  collateral: adjusted value", because CRR Art. 219 turns the netted deposit into
+  synthetic cash collateral that the CRM stage merges into the ordinary
+  collateral frame, and `reporting/corep/c07.py` sums the whole
+  `collateral_adjusted_value` carrier into 0130. Column 0150 (fully adjusted
+  exposure value) is therefore understated by the netting amount while column
+  0200 (exposure value, from `ead_final`) is correct. Measured on the new
+  `netting` portfolio (five unrated corporates, all drawn, GBP): col 0040
+  19,000,000, col 0130 −3,000,000, col 0150 **16,000,000**, col 0200
+  **19,000,000**. Under CRR the template has no column 0035, so the chain nets
+  once and ties. The defect is **pre-existing and independent of PR #487's
+  perimeter change**: with the Feature disabled (only the same-counterparty
+  agreement nets) the same sheet reads col 0150 20,000,000 against col 0200
+  21,000,000.
+- **Rule**: `boe_b0471` (ERROR — "{c0200} = {c0150} − 0.9·{c0160} − 0.8·{c0170}
+  − 0.6·{c0171} − 0.5·{c0180}", the end-exposure-value derivation) and
+  `boe_b0556` (WARNING — "{c0200} ≤ {c0150}"), both live on OF 07.00.01.01;
+  `boe_b0555` (an OF 07.00 collateral/exposure-value relation) left the vacuity
+  population on the same run and now asserts.
+- **Origin**: `src/rwa_calc/reporting/corep/c07.py` — col 0035 was added under
+  `if is_b31` as `Sum("on_bs_netting_amount")` while col 0130 kept summing the
+  undifferentiated `collateral_adjusted_value`. The carrier that would separate
+  them — the post-haircut, post-mismatch adjusted value of the `NETTING_`
+  synthetic collateral per beneficiary — does not exist on the sealed ledger;
+  `on_bs_netting_amount` is the pre-haircut pro-rata allocation, which
+  coincides with it only for same-currency, maturity-matched deposits.
+- **Escape class**: `path-never-exercised`. `boe_b0471` is a live ERROR rule
+  and the register ran on every commit, but no portfolio in `RUNS` carried a
+  netting agreement at all — the template-cell census had classified
+  `corep/c07_00/0035` as `NO_FIXTURE` ("no fixture supplies a netting
+  agreement") for the template's whole life, so the rule was evaluated over
+  sheets on which 0035 was structurally null and the double deduction summed to
+  zero. Only three fixture builders in the estate set a
+  `netting_agreement_reference` (P1.238, P1.241, `r1_negative_gross`), none of
+  them a reporting portfolio.
+- **Why nothing else would have caught it**: the unit tests for C 07.00 build
+  their frames from the sealed carrier names and never populate
+  `on_bs_netting_amount` and `collateral_adjusted_value` on the same row; the
+  golden portfolios have no deposits; the P1.238/P1.241 acceptance twins assert
+  RWA, not template cells; and the engine's own EAD path is correct (it nets
+  once), so no engine-level test can see a reporting-layer double count.
+- **Gate change**: `tests/fixtures/reporting_netting_portfolio.py` registered in
+  `RUNS` (two runs, `crr`/`b31` × `netting`) and captured as goldens under
+  `tests/expected_outputs/reporting/netting_{crr,b31}/`, pinned by
+  `tests/acceptance/reporting/test_reporting_netting_golden.py` (per-leg netting,
+  C 07.00 rows 0010/0070, the Basel 3.1-only col 0035, the CRR absence of it,
+  the single CRM016 record, and a two-limbed Feature test). Landed in PR #487.
+  The two breaks are banked in `validation_known_breaks.json` with this
+  mechanism as their written reason, so the register shrinks by two the day the
+  fix lands. **Code fix deferred**, design recorded here: seal a per-exposure
+  `on_bs_netting_adjusted_value` (the adjusted value of the `NETTING_` collateral
+  rows after Art. 223 haircuts and Art. 237-239 mismatch scaling) from the CRM
+  stage through `contracts/edges.py` and the re-split carriers; under Basel 3.1
+  report it in col 0035 and subtract it from col 0130, so 0150 = 0200 for an
+  all-drawn book in every currency case; leave CRR untouched (no 0035).
+  `C 08.01` col 0035 sits beside the LGD-collateral columns 0170-0210 and needs
+  the same review.
+- **Verified red**: `uv run pytest tests/acceptance/reporting/test_supervisory_validations.py -n 4 -q`
+  on the unchanged reporting code with the two netting runs registered —
+  `2 failed, 6 passed`:
+  `b31/boe_b0471 [ERROR] left = 19,000,000.0000 vs right = 16,000,000.0000 on 2 cell(s)`
+  at `OF07.00.01.01[corporate][r0010]` and `[r0230]`, and
+  `b31/boe_b0556 [WARNING] left = 19,000,000.0000 vs right = 16,000,000.0000 on 3 cell(s)`.
+  The golden test's own cell pins (`col 0200 == 19,000,000`) pass on the same
+  run, which is the point: the exposure value is right and the intermediate
+  column is wrong, and only the published identity between them sees it.
+- **Lesson**: LESSONS B5 in its plainest form — the column was dead, the census
+  said so, and the ERROR rule over it was green for the life of the template.
+  The transferable rule is already in the file: a `NO_FIXTURE` classification
+  in the template-cell baseline is a list of gates that are not running, and
+  the change that lights one should expect the register to move.

@@ -3,8 +3,22 @@ Generate P1.241 fixtures: Art. 219 on-B/S netting maturity mismatch (Art. 237-23
 
 On-balance-sheet netting treats a deposit as cash collateral (CRR Art. 219), so
 the funded-protection maturity-mismatch rules (Art. 237-239) then apply. Each
-scenario carries a £200k deposit (a negative-drawn loan) and a £1m positive loan
-under the same netting agreement AGR1 and the SAME counterparty (Art. 195):
+Scenario's rows carry their OWN `netting_agreement_reference`
+(`f"{AGREEMENT_REF}-{label}"`, via `Scenario.agreement_ref`), rather than the
+single module-level `AGREEMENT_REF` value: under the on-B/S netting
+agreement-perimeter reading (see `tests/fixtures/p1_238/p1_238.py`), ALL rows
+sharing one agreement reference pool together regardless of counterparty, so a
+shared literal reference across scenarios would let a multi-scenario bundle
+pool deposits/loans across scenarios — and this fixture is maturity-sensitive,
+so pooling would corrupt the maturity-mismatch calculation by taking the
+minimum deposit residual across scenarios rather than each scenario's own.
+Scoping the reference per scenario keeps scenarios independent no matter how
+many are assembled into one bundle. `AGREEMENT_REF` remains exported as the
+shared PREFIX for callers that need it.
+
+Each scenario carries a £200k deposit (a negative-drawn loan) and a £1m
+positive loan under its own netting agreement (`AGR1-<label>`) and the SAME
+counterparty (Art. 195):
 
     <regime>_matched   — 6-year deposit nets a 5-year loan (no mismatch): the full
                          £200k nets → EAD £800k (control).
@@ -68,6 +82,18 @@ class Scenario:
     def loan_ref(self) -> str:
         return f"P1241-LN-{self.label}"
 
+    @property
+    def agreement_ref(self) -> str:
+        """Scenario-scoped netting agreement reference.
+
+        Scoped per scenario (rather than the shared `AGREEMENT_REF` constant)
+        so that assembling more than one scenario into a single bundle cannot
+        pool their deposits/loans together under the agreement-perimeter
+        reading — see the module docstring. This fixture is maturity-sensitive,
+        so pooling would corrupt the mismatch calculation, not just the amount.
+        """
+        return f"{AGREEMENT_REF}-{self.label}"
+
     def deposit_value_date(self, reporting_date: date) -> date:
         # partial: 2.5y before reporting → 3y original term (>= 1y, eligible).
         # matched / short_orig: value_date = reporting → original = residual.
@@ -129,7 +155,14 @@ def _counterparty(cp_ref: str) -> dict:
     }
 
 
-def _loan(ref: str, cp_ref: str, drawn: float, value_date: date, maturity: date) -> dict:
+def _loan(
+    ref: str,
+    cp_ref: str,
+    drawn: float,
+    value_date: date,
+    maturity: date,
+    agreement_ref: str,
+) -> dict:
     return {
         "loan_reference": ref,
         "counterparty_reference": cp_ref,
@@ -139,7 +172,7 @@ def _loan(ref: str, cp_ref: str, drawn: float, value_date: date, maturity: date)
         "drawn_amount": drawn,
         "interest": 0.0,
         "seniority": "senior",
-        "netting_agreement_reference": AGREEMENT_REF,
+        "netting_agreement_reference": agreement_ref,
     }
 
 
@@ -161,6 +194,7 @@ def build_p1_241_bundle(scenario_labels: list[str], reporting_date: date) -> Raw
                 DEPOSIT_BALANCE,
                 s.deposit_value_date(reporting_date),
                 s.deposit_maturity(reporting_date),
+                s.agreement_ref,
             )
         )
         loan_rows.append(
@@ -170,6 +204,7 @@ def build_p1_241_bundle(scenario_labels: list[str], reporting_date: date) -> Raw
                 LOAN_DRAWN,
                 reporting_date,
                 s.loan_maturity(reporting_date),
+                s.agreement_ref,
             )
         )
     loans = pl.DataFrame(loan_rows, schema=dtypes_of(LOAN_SCHEMA))

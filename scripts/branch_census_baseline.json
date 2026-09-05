@@ -1,6 +1,6 @@
 {
   "_comment": "Branch census ratchet (scripts/check_branch_census.py --check). Ids are <column>::<reason>. `reached` is a COVERAGE population: REMOVALS ARE A HARD FAILURE and --update-baseline refuses to make one, because a limb the estate stops exercising is coverage going backwards. `dead` is a TOLERATED-FINDINGS population: ADDITIONS ARE A HARD FAILURE and must be hand-edited into this file, because a declared limb no row reaches is either dead code or an untested path. docs/plans/test-space-correctness-proposal.md Phase 3.",
-  "runs": 28,
+  "runs": 32,
   "reached_count": 7,
   "reached": [
     "irb_lgd_branch_reason::own_estimate",
@@ -15,7 +15,7 @@
   "dead": [
     {
       "id": "irb_lgd_branch_reason::UNKNOWN_FALLBACK",
-      "reason": "DESIRED STATE, not a coverage gap. No row in the estate reaches the IRB LGD selector with no own estimate, no modelled LGD and no purchased-receivables subtype — i.e. no IRB row is priced on a supervisory default standing in for absent data. Banked here so that this limb becoming LIVE fails the gate: rows newly landing on UNKNOWN_FALLBACK are a loss of justification, and the census is the only thing that would notice. OWNER: P1.341"
+      "reason": "DESIRED STATE, not a coverage gap. No row in the estate reaches the IRB LGD selector with no own estimate, no modelled LGD and no purchased-receivables subtype \u2014 i.e. no IRB row is priced on a supervisory default standing in for absent data. Banked here so that this limb becoming LIVE fails the gate: rows newly landing on UNKNOWN_FALLBACK are a loss of justification, and the census is the only thing that would notice. OWNER: P1.341"
     },
     {
       "id": "irb_lgd_branch_reason::ccr_modelled",
@@ -27,7 +27,7 @@
     },
     {
       "id": "sa_risk_weight_branch_reason::UNKNOWN_FALLBACK",
-      "reason": "DESIRED STATE, not a coverage gap, and the ONLY entry in this file that moved OUT of `reached` by hand. Banked deliberately by P1.342 (2026-08-13) rather than by --update-baseline, which refuses the removal by design. The two rows that formerly took this limb are the ccr__NS_CCR_QCCP legs, and they took it because `original_currency` was null on rows minted after the FX converter, so the whole Art. 121(6) domesticity test was Kleene-null and no limb could be chosen. P1.342 fixed that at the producers (engine/ccr/pipeline_adapter.py, engine/sft/fccm.py) and added the Art. 306 carve-out, so both rows now land on the DELIBERATE qccp_trade_exposure limb instead. The limb going quiet is therefore the fix, not coverage loss: no SA row is priced on a domesticity test the engine could not evaluate. Banked in the same shape as its irb_lgd sibling so that this limb becoming LIVE AGAIN fails the gate — a row newly landing on UNKNOWN_FALLBACK is a loss of justification, and this census is the only thing that would notice. OWNER: P1.333, which must keep it dead when it fills the remaining is_eu_domestic null."
+      "reason": "DESIRED STATE, not a coverage gap, and the ONLY entry in this file that moved OUT of `reached` by hand. Banked deliberately by P1.342 (2026-08-13) rather than by --update-baseline, which refuses the removal by design. The two rows that formerly took this limb are the ccr__NS_CCR_QCCP legs, and they took it because `original_currency` was null on rows minted after the FX converter, so the whole Art. 121(6) domesticity test was Kleene-null and no limb could be chosen. P1.342 fixed that at the producers (engine/ccr/pipeline_adapter.py, engine/sft/fccm.py) and added the Art. 306 carve-out, so both rows now land on the DELIBERATE qccp_trade_exposure limb instead. The limb going quiet is therefore the fix, not coverage loss: no SA row is priced on a domesticity test the engine could not evaluate. Banked in the same shape as its irb_lgd sibling so that this limb becoming LIVE AGAIN fails the gate \u2014 a row newly landing on UNKNOWN_FALLBACK is a loss of justification, and this census is the only thing that would notice. OWNER: P1.333, which must keep it dead when it fills the remaining is_eu_domestic null."
     },
     {
       "id": "sa_risk_weight_branch_reason::floor_bound",

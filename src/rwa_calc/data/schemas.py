@@ -672,8 +672,10 @@ LOAN_SCHEMA: dict[str, ColumnSpec] = {
     # CRR Art. 195/219 on-balance-sheet netting. A non-null reference is the sole
     # signal that the exposure participates in a netting agreement: a deposit
     # (negative drawn amount) and the loans it offsets net iff they carry the SAME
-    # reference. Netting is driven exclusively by this reference — never by
-    # facility hierarchy or counterparty — reflecting the legal right of set-off.
+    # reference. The reference defines the netting perimeter ACROSS facilities and
+    # counterparties, reflecting the legal right of set-off, and is gated by the
+    # pack Feature ``on_bs_netting_perimeter_is_agreement``; disabling that Feature
+    # adds counterparty_reference as a second key (the P1.238 keying).
     "netting_agreement_reference": ColumnSpec(pl.String, required=False),
     "due_diligence_performed": ColumnSpec(pl.Boolean, default=False, required=False),
     "due_diligence_override_rw": ColumnSpec(pl.Float64, required=False, domain=_RISK_WEIGHT_DOMAIN),

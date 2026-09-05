@@ -1,3 +1,7 @@
+---
+verified: "2026-09-05 @ 0.3.32"
+---
+
 # Credit Risk Mitigation
 
 **Credit Risk Mitigation (CRM)** techniques reduce the capital requirement for exposures by providing protection against default losses. The calculator supports collateral, guarantees, and provisions.
@@ -412,7 +416,81 @@ adjustment = (3 - 0.25) / (5 - 0.25) = 2.75 / 4.75 = 0.579
 
 ## On-Balance Sheet Netting (CRR Art. 195 / Art. 219)
 
-When a legally enforceable netting agreement exists, mutual claims covered by that agreement can be netted. In practice, this means a negative drawn amount (credit balance / deposit) on one loan can reduce other exposures **covered by the same netting agreement**. Netting is driven **solely by a shared `netting_agreement_reference`** — the agreement is the legal right-of-set-off boundary, so netting follows the reference rather than facility hierarchy or counterparty. A deposit booked against one counterparty can net a loan to a different counterparty (and under a different facility) when both carry the same reference.
+When a legally enforceable netting agreement exists, mutual claims covered by that agreement can be netted. In practice, this means a negative drawn amount (credit balance / deposit) on one loan can reduce other exposures **covered by the same netting agreement**.
+
+### The Netting Perimeter Is the Agreement
+
+Netting is driven **solely by a shared `netting_agreement_reference`**. The agreement is the legal right-of-set-off boundary, so netting follows the reference rather than facility hierarchy or counterparty. A deposit booked against one counterparty nets a loan to a **different** counterparty — and under a different facility — whenever both rows carry the same reference.
+
+CRR Art. 195 permits an institution to net *"mutual claims between itself and its counterparty"*, and limits eligibility to *"reciprocal cash balances between the institution and the counterparty"*. The calculator reads *the counterparty* as the party bound by the agreement, not as a single obligor record: where one agreement binds several entities jointly and severally, that group of entities **is** the Art. 195 counterparty. The control on this reading is CRR Art. 205(a) — an on-balance-sheet netting agreement is eligible only where it is *"legally effective and enforceable in all relevant jurisdictions, including in the event of the insolvency or bankruptcy of a counterparty"*. Supplying one reference across several obligors is therefore the firm's attestation that set-off is enforceable against every party under it.
+
+PRA PS1/26 carries both articles forward in substance, split into numbered paragraphs. PS1/26 Art. 195(1)–(2) restates the mutual-claims and reciprocal-cash-balances limbs, and PS1/26 Art. 205(1)(a)–(d) restates the enforceability and control conditions. Each is followed by *"[Note: This rule corresponds to Article 195 of CRR as it applied immediately before revocation by the Treasury]"* (and the equivalent note for Art. 205), so neither article is a Basel 3.1 change. The perimeter rule is identical under both regimes, which is why the Feature below is enabled for both.
+
+!!! warning "What you must evidence"
+    The reference is an assertion the calculator cannot verify. Before sharing one
+    reference across counterparties, the firm must hold, for **every** party under
+    that reference:
+
+    - a netting agreement that is legally effective and enforceable in all relevant
+      jurisdictions, including on the insolvency or bankruptcy of a counterparty
+      (Art. 205(a));
+    - the ability to determine at any time which assets and liabilities the agreement
+      covers (Art. 205(b));
+    - ongoing monitoring and control of the risks associated with termination of the
+      protection, and of the relevant exposures on a net basis (Art. 205(c)–(d)).
+
+    A shared reference without that evidence overstates credit risk mitigation.
+
+#### Regime Feature and the Revert
+
+The perimeter is gated by the cited rulepack Feature `on_bs_netting_perimeter_is_agreement`, **enabled under both CRR and Basel 3.1**. The Feature exists because the agreement-perimeter reading is an operator decision recorded in the Feature's own citation note, and it keeps the stricter alternative one line away:
+
+| Feature state | Netting pool key | Beneficiary match |
+|---------------|------------------|-------------------|
+| **Enabled** (default, both regimes) | `(netting_agreement_reference, currency)` | shared `netting_agreement_reference` |
+| Disabled | `(netting_agreement_reference, currency, counterparty_reference)` | shared reference **and** same `counterparty_reference` |
+
+Disabled, a deposit nets only loans owed by the same counterparty, and any cross-counterparty offset is dropped. Flipping the Feature changes no input data and no other pipeline stage.
+
+##### Capital direction
+
+Enabling the perimeter is **RWA-reducing** on the own-funds side: an SA row's post-CRM exposure `E*` falls by the netted deposit, and an F-IRB row's `LGD*` falls as the synthetic cash collateral enters the weighted-LGD blend. Both effects reach the risk-weighted amount computed on the firm's own approach.
+
+The Basel 3.1 **output-floor basis is not reduced with it**. The standardised-equivalent amount (S-TREA) that the floor is measured against is computed for an IRB row on the *unreduced* exposure, so it is unchanged by the perimeter. The consequence runs the opposite way to the intuition: the own-funds amount falls while the floor basis stays put, so the output floor becomes **more likely to bind**, not less.
+
+!!! example "Illustration only — synthetic book"
+    On a synthetic two-counterparty book built for this change, enabling the
+    perimeter moved U-TREA from 8,770,039 to 7,600,701 while S-TREA stayed at
+    10,000,000 in both states. Those figures characterise that book, not any real
+    portfolio, and are quoted here only to show the two quantities moving
+    independently.
+
+#### CRM016 — Cross-Counterparty Netting Record
+
+Where an agreement holds a deposit and a positive-drawn loan spanning **more than one counterparty** (or carrying a null counterparty), the calculator emits data-quality warning **CRM016** once against that agreement:
+
+```text
+Netting agreement '<ref>' nets reciprocal balances across <n> counterparties
+[ and an unconfirmed (null) counterparty] on the agreement-perimeter basis
+(Art. 195, Feature on_bs_netting_perimeter_is_agreement); Art. 205(a) legal
+enforceability against every party under the agreement must be evidenced.
+```
+
+`<n>` is the number of distinct non-null `counterparty_reference` values under that agreement — 2 in the worked example below. The bracketed null clause is present only when at least one row under the agreement has a **null** `counterparty_reference`, and absent otherwise.
+
+- **Feature enabled** — CRM016 is an **audit-trail record, not a refusal**. The netting benefit is applied, and the record is what makes the cross-counterparty offset visible to review.
+- **Feature disabled** — the same code path reports that the cross-counterparty offset was **not applied**.
+
+Either way CRM016 is a warning-severity `CalculationError`: it flows into the run's error channel and never blocks the calculation.
+
+!!! note "A null counterparty still nets"
+    A deposit whose `counterparty_reference` is null still nets under the agreement
+    perimeter — the join no longer reads that column — even though the loader
+    separately raises a **DQ001** error for the null reference and CRM016 carries its
+    null clause. The remedy is to fix the input row rather than to rely on the
+    netting.
+
+### Drawn-Only Beneficiaries (Art. 219)
 
 CRR Art. 219 limits on-balance-sheet netting to **drawn loans and deposits** — it is a cash-on-cash mechanism. Off-balance-sheet items (contingent exposures and synthetic facility-undrawn rows representing unused commitment headroom) are **not eligible** to receive the netting benefit.
 
@@ -428,7 +506,8 @@ This reuses the full collateral mechanics:
 
 - **SA**: Cash collateral (0% haircut) directly reduces EAD
 - **F-IRB**: Cash collateral has 0% LGD → weighted LGD reduction
-- **FX mismatch**: 8% haircut if the negative-drawn loan's currency differs from the positive sibling's
+- **FX mismatch**: the standard currency-mismatch haircut applies when the pool currency differs from the beneficiary loan's currency
+- **Maturity mismatch**: the pool carries the **earliest** deposit maturity, so the Art. 237–239 treatment is applied on the most conservative single maturity in the pool
 
 ### No Double-Counting
 
@@ -437,19 +516,23 @@ This reuses the full collateral mechanics:
 
 ### Input Data
 
-Set `netting_agreement_reference` to the same value on every exposure covered by one netting agreement — both the negative-drawn deposit and the loans it offsets. Exposures with no reference are never netted. No facility or counterparty linkage is required: the reference alone defines the netting set.
+Set `netting_agreement_reference` to the same value on every exposure covered by one netting agreement — both the negative-drawn deposit and the loans it offsets. Exposures with no reference are never netted. There is **no separate netting-agreements input file**: the reference on the loan row is the whole data model, and no facility or counterparty linkage is required.
 
 ### Example
 
 ```python
-# Two loans (any facility / counterparty) sharing netting_agreement_reference = "AGR1":
-# Loan A: drawn = -200 (credit balance), netting_agreement_reference = "AGR1"
-# Loan B: drawn = 1000,                  netting_agreement_reference = "AGR1"
+# Two loans sharing netting_agreement_reference = "AGR1", booked against
+# DIFFERENT counterparties under one joint-and-several agreement:
+# Loan A: drawn = -200 (credit balance), counterparty = "CP_A", reference = "AGR1"
+# Loan B: drawn = 1000,                  counterparty = "CP_B", reference = "AGR1"
 
 # Result (SA):
 # Loan A EAD = 0 (floored)
 # Loan B EAD = 1000 - 200 = 800 (reduced by synthetic cash collateral)
+# Errors: one CRM016 warning recording that AGR1 netted across 2 counterparties
 ```
+
+With `on_bs_netting_perimeter_is_agreement` disabled, those same two rows do not net: Loan B keeps an EAD of 1000, and CRM016 records that the offset was not applied.
 
 A mixed facility containing a drawn loan, a contingent guarantee, and an undrawn commitment receives the full netting benefit on the drawn loan only:
 
@@ -465,6 +548,11 @@ A mixed facility containing a drawn loan, a contingent guarantee, and an undrawn
 # Contingent C EAD = unchanged from its CCF-based value
 # Facility undrawn EAD = unchanged from its CCF-based value
 ```
+
+> **Implementation:** `generate_netting_collateral` in
+> [`crm/collateral.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/crm/collateral.py)
+> builds the pool, applies the Feature to the pool key and the beneficiary match,
+> and emits CRM016.
 
 ## Cross-Approach CCF Substitution
 
@@ -742,6 +830,7 @@ provision = {
 | Topic | CRR Article | BCBS CRE |
 |-------|-------------|----------|
 | On-balance sheet netting | Art. 195 | CRE22.11-14 |
+| On-balance sheet netting agreement requirements | Art. 205 | — |
 | CRM overview | Art. 192-194 | CRE22.1-10 |
 | Financial collateral | Art. 197-200 | CRE22.35-70 |
 | Haircuts | Art. 224-227 | CRE22.50-55 |

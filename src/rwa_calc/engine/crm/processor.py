@@ -614,9 +614,12 @@ class CRMProcessor:
         # Steps 1-3: provisions -> CCF -> init EAD -> crm_post_ead checkpoint
         exposures = self._run_ead_pipeline(data, config, pack=pack)
 
-        # Generate synthetic collateral from netting (CRR Art. 195)
+        # Generate synthetic collateral from netting (CRR Art. 195). The Art. 195
+        # set-off perimeter is a pack Feature with no engine-side default, so a
+        # caller-omitted pack is resolved here rather than defaulted downstream.
+        netting_pack = pack if pack is not None else RulepackV0.from_config(config).pack
         exposures, collateral = self._merge_netting_collateral(
-            exposures, collateral_lf, errors, config.reporting_date
+            exposures, collateral_lf, errors, config.reporting_date, pack=netting_pack
         )
 
         # Step 3.6: CRR/PS1-26 Art. 194(4) own-issue / connected-issuer gate.
@@ -818,10 +821,14 @@ class CRMProcessor:
         collateral_lf: pl.LazyFrame | None,
         errors: list[CalculationError],
         reporting_date: date,
+        *,
+        pack: ResolvedRulepack,
     ) -> tuple[pl.LazyFrame, pl.LazyFrame | None]:
         """Generate synthetic netting collateral and merge with input collateral.
 
         Returns the (possibly joined) exposures frame and the merged collateral.
+        ``pack`` supplies the Art. 195 set-off perimeter Feature and is required —
+        a default would fail open to the wider, RWA-reducing perimeter.
 
         A supplied collateral table whose column dtypes are incompatible with
         the canonical collateral schema (e.g. a String ``market_value``) is a
@@ -833,7 +840,7 @@ class CRMProcessor:
         required columns" (silent-skip layer, migration Phase 3).
         """
         netting_collateral = collateral_mod.generate_netting_collateral(
-            exposures, errors, reporting_date=reporting_date
+            exposures, errors, reporting_date=reporting_date, pack=pack
         )
         collateral: pl.LazyFrame | None = collateral_lf
         if netting_collateral is None:
@@ -1253,9 +1260,15 @@ class CRMProcessor:
     def _generate_netting_collateral(
         self,
         exposures: pl.LazyFrame,
+        *,
+        pack: ResolvedRulepack,
     ) -> pl.LazyFrame | None:
-        """Generate synthetic cash collateral from netting-eligible loans."""
-        return collateral_mod.generate_netting_collateral(exposures)
+        """Generate synthetic cash collateral from netting-eligible loans.
+
+        ``pack`` is required: the Art. 195 set-off perimeter Feature has no
+        engine-side default, since one would fail open to the wider perimeter.
+        """
+        return collateral_mod.generate_netting_collateral(exposures, pack=pack)
 
     def apply_collateral(
         self,

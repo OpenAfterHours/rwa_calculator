@@ -218,12 +218,14 @@ ERROR_INELIGIBLE_IRB_COLLATERAL = "CRM014"
 # counterparty sharing the obligor's ultimate parent, the row is zeroed (no CRM
 # benefit) and this warning is raised (one per row). Null issuer is permissive.
 ERROR_OWN_ISSUE_COLLATERAL = "CRM015"
-# Cross-counterparty on-balance-sheet netting (CRR/PS1-26 Art. 195): on-B/S
-# netting is limited to mutual claims / reciprocal cash balances between the
-# institution and a SINGLE counterparty. A netting_agreement_reference that spans
-# more than one counterparty cannot net a deposit from counterparty A against a
-# loan to counterparty B; such cross-counterparty offsets are disallowed and this
-# warning names the agreement (one per multi-counterparty agreement).
+# Cross-counterparty on-balance-sheet netting (CRR/PS1-26 Art. 195/205(a)): the
+# set-off perimeter is the netting_agreement_reference, so a deposit from
+# counterparty A DOES offset a loan to counterparty B under the same agreement.
+# This warning is the audit record of such an applied offset (one per spanning or
+# null-counterparty agreement): Art. 205(a) enforceability against every party
+# must be evidenced separately. With the pack Feature
+# ``on_bs_netting_perimeter_is_agreement`` disabled the offset is instead refused
+# and the message says so; the trigger is identical in both states.
 ERROR_CROSS_COUNTERPARTY_NETTING = "CRM016"
 # Third-party deposit under FIRB (CRR/PS1-26 Art. 200(a)/232(2), P1.239/P1.240):
 # cash on deposit with a third-party institution is "other funded credit

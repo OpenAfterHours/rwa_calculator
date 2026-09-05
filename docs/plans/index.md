@@ -16,6 +16,7 @@ The project follows a **phased, test-first approach** prioritising CRR (Basel 3.
 - [**Return Reconciliation**](return-reconciliation.md) - Proposed: compare a generated template (e.g. C 08.03) against the firm's current return cell by cell, and decompose each delta into population / row placement / sheet placement / measurement
 - [**Independent Validation System**](independent-validation-system.md) - Why a green suite keeps shipping template defects, and the six-component plan (impact report, property suite, shadow calculator, cell re-derivation, coverage ratchets, defect-injection scorecard) to fix it
 - [**Architecture Review — structure, efficiency, parallelism (2026-08-29)**](architecture-review-2026-08-29.md) - Measured review of `engine/stages/` layout, reporting-vs-calculation cost, and thread scaling; a sequenced proposal (proposal only, nothing implemented)
+- [**polspec for benchmark and stress data generation (2026-09-05)**](polspec-benchmark-data-proposal.md) - Evaluation of the polspec schema-driven generator against `tests/benchmarks/data_generators.py`: measured proof of concept, how we would adopt it as the primitive layer behind one bridge module, and the changes polspec would need first (proposal only, nothing implemented)
 
 ## Development Philosophy
 

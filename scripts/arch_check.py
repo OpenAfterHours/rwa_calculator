@@ -88,6 +88,16 @@ Checks machine-verifiable invariants from CLAUDE.md:
     Allowlist ``GUARD_REACHABILITY_ALLOWLIST`` is empty by design, and
     ``CONTRACTS_GUARD_SURFACE`` pins the population so the check cannot be
     satisfied by deleting or privatising the guard it measures.
+21. No nested Polars window expressions in engine/ — a ``.over()`` may not
+    appear inside the INPUT of another ``.over()``. Polars evaluates a
+    window's input inside the outer group-by context, so the inner window
+    re-runs once per outer group and per-row cost becomes a function of row
+    count. Compute the inner result as its own column in a preceding
+    ``with_columns`` and read it back with ``pl.col()``. Detection follows
+    local-name bindings within one function body (the shipped defect bound
+    the nested expression to a local first), resolving each name to the last
+    binding that ENDS STRICTLY BEFORE the outer ``.over()``'s own line so a
+    self-rebinding statement cannot make a window find itself. No allowlist.
 
 Checks 5, 6, 7 enforce the data/engine separation. Check 8 enforces the
 observability contract (see docs/specifications/observability.md). Check 9
@@ -2152,6 +2162,203 @@ def _guard_surface_violations(
     return violations
 
 
+# ---------------------------------------------------------------------------
+# Check 21 — no nested Polars window expressions in engine/
+# ---------------------------------------------------------------------------
+
+#: Scope-introducing nodes. A name bound inside one of these is not a binding
+#: of the enclosing scope, so the resolver stops at their boundary.
+_NESTED_SCOPE_NODES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)
+
+
+def check_no_nested_window_expressions(path: Path) -> list[str]:
+    """No Polars ``.over()`` inside the INPUT of another ``.over()`` in engine/.
+
+    The rule: an expression whose windowed input itself contains a window is a
+    violation. Compute the inner result as its own column in a preceding
+    ``with_columns`` and read it back with ``pl.col()``.
+
+    The mechanism: Polars evaluates a window function's input inside the OUTER
+    group-by context, so an inner window re-runs once per outer group. Cost
+    stops being a function of row count alone and becomes a function of row
+    count times group count — invisible on a fixture, catastrophic on a book.
+
+    The escape this closes: commit ``8ec7d302`` (P1.320) put a
+    ``cum_sum().over([cp, fac])`` ordinal and a ``max().over([cp, fac])`` group
+    limit into the input of ``.sum().over(cp)`` in
+    ``engine/classify/subtypes.py``. The classify stage went from 0.5 s to
+    5.6 s at 374k rows and shipped that way from v0.3.27 to v0.3.32 with every
+    correctness gate green: nothing in the estate measured how the classifier
+    scales, and the benchmark job is deselected from both the dev loop and the
+    CI test job.
+
+    Source-order binding rule, and why it is not optional: the shipped defect
+    binds the nested expression to a LOCAL first and only then windows it, so
+    the scan must follow local names — but a resolver that follows them
+    without respecting source order makes a window find ITSELF.
+    ``engine/supporting_factors.py`` is the production instance: its single
+    window sits in a statement that REBINDS the frame name
+    (``exposures = exposures.with_columns(... .over(...) ...)``) and the
+    window's receiver reaches that same name through a chain of local bindings
+    (``drawn_in_e_star`` -> ``drawn_expr`` -> ``has_drawn`` -> ``names`` ->
+    ``schema`` -> ``exposures``). So a name resolves only to the last binding
+    that ENDS STRICTLY BEFORE the outer ``.over()`` call's own line.
+
+    Only the window's INPUT (the receiver chain) is scanned, not its partition
+    arguments — the input is what Polars re-evaluates per group, and it is the
+    shape the remedy moves out.
+    """
+    engine_root = path / "engine"
+    if not engine_root.exists():
+        return []
+
+    violations: list[str] = []
+    for py_file in sorted(engine_root.rglob("*.py")):
+        try:
+            tree = ast.parse(py_file.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, SyntaxError):
+            continue
+        for scope in _iter_expression_scopes(tree):
+            nodes = _scope_owned_nodes(scope)
+            bindings = _local_name_bindings(nodes)
+            violations.extend(_nested_window_violations(py_file, nodes, bindings))
+    return violations
+
+
+def _nested_window_violations(
+    py_file: Path,
+    nodes: list[ast.AST],
+    bindings: dict[str, list[tuple[int, int, ast.AST]]],
+) -> list[str]:
+    """One message per ``.over()`` in ``nodes`` whose input reaches another window."""
+    violations: list[str] = []
+    for call in nodes:
+        if not isinstance(call, ast.Call) or not isinstance(call.func, ast.Attribute):
+            continue
+        attribute = call.func
+        if attribute.attr != "over":
+            continue
+        line = attribute.end_lineno or call.lineno
+        if not _window_input_contains_window(attribute.value, bindings, line):
+            continue
+        violations.append(
+            f"  {py_file}:{line}: nested Polars window -- this .over()'s input contains "
+            "another .over(), which Polars re-evaluates once per outer group. Compute "
+            "the inner result as its own column in a preceding with_columns and read it "
+            "back with pl.col()"
+        )
+    return violations
+
+
+def _iter_expression_scopes(tree: ast.Module) -> Iterator[ast.AST]:
+    """Yield the module and every function/lambda body as its own name scope."""
+    yield tree
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            yield node
+
+
+def _scope_owned_nodes(scope: ast.AST) -> list[ast.AST]:
+    """Every descendant of ``scope`` that is not inside a nested scope."""
+    owned: list[ast.AST] = []
+    stack = list(ast.iter_child_nodes(scope))
+    while stack:
+        node = stack.pop()
+        if isinstance(node, _NESTED_SCOPE_NODES):
+            continue
+        owned.append(node)
+        stack.extend(ast.iter_child_nodes(node))
+    return owned
+
+
+def _local_name_bindings(nodes: list[ast.AST]) -> dict[str, list[tuple[int, int, ast.AST]]]:
+    """Map each locally assigned name to its ``(end_line, end_col, value)`` bindings.
+
+    ``end_line`` / ``end_col`` are the end of the whole binding statement, which
+    is what the source-order rule compares against: a statement still being
+    evaluated when the outer window runs cannot be that window's input. Each
+    list is in ``_scope_owned_nodes`` collection order, which is NOT source
+    order — see ``_resolve_binding``.
+    """
+    bindings: dict[str, list[tuple[int, int, ast.AST]]] = {}
+    for node in nodes:
+        if isinstance(node, ast.Assign):
+            targets: list[ast.expr] = list(node.targets)
+            value: ast.expr | None = node.value
+        elif isinstance(node, (ast.AnnAssign, ast.NamedExpr)):
+            targets, value = [node.target], node.value
+        else:
+            continue
+        if value is None:
+            continue
+        end_line = node.end_lineno or node.lineno
+        end_col = node.end_col_offset or 0
+        for target in targets:
+            if isinstance(target, ast.Name):
+                bindings.setdefault(target.id, []).append((end_line, end_col, value))
+    return bindings
+
+
+def _is_over_call(node: ast.AST) -> bool:
+    """True for a ``<expr>.over(...)`` call node."""
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "over"
+    )
+
+
+def _window_input_contains_window(
+    receiver: ast.AST,
+    bindings: dict[str, list[tuple[int, int, ast.AST]]],
+    outer_line: int,
+) -> bool:
+    """True when ``receiver`` reaches a ``.over()`` call, following local names.
+
+    A name resolves to the last binding that ENDS STRICTLY BEFORE
+    ``outer_line`` — see ``check_no_nested_window_expressions`` for the trap
+    that rule exists to avoid. ``seen`` makes a self-referential binding
+    (``exposures = exposures.with_columns(...)``) terminate.
+    """
+    seen: set[int] = set()
+    stack: list[ast.AST] = [receiver]
+    while stack:
+        node = stack.pop()
+        if id(node) in seen:
+            continue
+        seen.add(id(node))
+        if _is_over_call(node):
+            return True
+        if isinstance(node, ast.Name):
+            bound = _resolve_binding(node.id, bindings, outer_line)
+            if bound is not None:
+                stack.append(bound)
+            continue
+        stack.extend(ast.iter_child_nodes(node))
+    return False
+
+
+def _resolve_binding(
+    name: str,
+    bindings: dict[str, list[tuple[int, int, ast.AST]]],
+    outer_line: int,
+) -> ast.AST | None:
+    """The last value bound to ``name`` by a statement ending before ``outer_line``.
+
+    "Last" is the greatest SOURCE POSITION, taken with ``max``, because
+    ``_local_name_bindings`` collects in ``_scope_owned_nodes`` order and that
+    is a stack walk rather than a source-order walk: reading ``candidates[-1]``
+    would resolve a rebound name to whichever binding the walk happened to
+    reach last, which both misses a window arriving on a later binding and
+    invents one on a name whose earlier windowed value has since been
+    materialised into a column.
+    """
+    candidates = [b for b in bindings.get(name, []) if b[0] < outer_line]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda binding: (binding[0], binding[1]))[2]
+
+
 def check_watchfire_citations() -> tuple[list[str], list[str]]:
     """Run `watchfire check` via its Python API.
 
@@ -2355,6 +2562,11 @@ def main() -> int:
         (
             "Contracts guards are reachable from production (wire it, or delete it)",
             check_guard_reachability,
+        ),
+        (
+            "No nested Polars window expressions in engine/ "
+            "(compute the inner window as its own column)",
+            check_no_nested_window_expressions,
         ),
     ]
 

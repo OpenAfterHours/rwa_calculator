@@ -13,6 +13,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - (Next release changes will go here)
 
+### Fixed
+- **Classification is no longer quadratic in obligor count — a large book that
+  slowed down across v0.3.27-v0.3.32 runs at its old speed again.** Users on
+  books of a few hundred thousand exposures saw run times climb sharply over
+  that release range; one real book went from under a minute to over three. The
+  cause was a single expression in `engine/classify/subtypes.py`. The
+  Art. 154(4)(c) QRRE obligor aggregate deduplicates each facility's limit with
+  a `cum_sum().over([counterparty, parent_facility])` ordinal and a
+  `max().over(...)` group limit, and both of those sat **inside the input** of
+  the per-obligor `.sum().over(counterparty)`. Polars evaluates a window's input
+  in the outer group-by context, so each inner window re-ran once per obligor
+  group and the cost became a function of row count times group count. Measured
+  on the 100k-counterparty synthetic book (373,568 result rows, CRR
+  standardised), the classify stage went from **495 ms on v0.3.26 to 5,640 ms on
+  v0.3.32** and the total run from **11.8 s to 18.6 s**; on a synthetic
+  400,000-leg frame the classify transform took **5.129 s**. The fix computes
+  the deduplicated per-leg contribution as its own scratch column in a preceding
+  `with_columns` and has the obligor sum read it back with `pl.col()`, dropping
+  the helper before the stage returns. Same expression tree, same regulatory
+  treatment, one extra pass: the same 400,000-leg transform now costs
+  **0.382 s**, and the classify exit schema is unchanged.
+
+  **No reported number moves.** The aggregate limit is bit-identical to the
+  shipped form on a 400,000-leg frame (0 mismatches over 20,581 QRRE rows on
+  both sides), the P1.320 unit and acceptance tests pass unchanged, and no RWA,
+  EAD or template cell changes in either regime. This is a cost fix only — the
+  P1.320 treatment it preserves is correct and stays.
+
+  Two new gates land with it, because every correctness gate in the estate was
+  green for the whole five releases: `tests/unit/classifier/test_p1_320_qrre_aggregate_scaling.py`
+  times `classify_exposure_subtypes` at 100k and 400k legs **in the default dev
+  loop** and fails if the 4x frame costs more than 8x the small one or more than
+  3 s outright, with adequacy assertions so it cannot end up timing a dead path;
+  and `arch_check` **check 21** (`check_no_nested_window_expressions`) is an AST
+  scan that fails any `.over()` in `engine/` whose input contains another
+  `.over()`, contract-tested by `tests/contracts/test_nested_window_gate.py`.
+  Full account in
+  [the escape log](../development/escape-log.md). Ref: CRR Art. 154(4)(c); PRA
+  PS1/26 paragraph 147.
+
 ---
 
 ## [0.3.32] - 2026-08-31

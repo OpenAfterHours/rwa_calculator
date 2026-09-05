@@ -55,9 +55,20 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+#: Scratch column holding each leg's deduplicated contribution to its
+#: obligor's Art. 154(4)(c) aggregate. Materialised by
+#: ``qrre_obligor_aggregate_limit_expr`` and dropped by
+#: ``classify_exposure_subtypes`` before it returns, so the classify exit
+#: schema is unchanged. It exists because the per-(obligor, facility)
+#: deduplication may not sit INSIDE the input of the per-obligor sum: Polars
+#: evaluates a window's input in the outer group-by context, so a nested
+#: window re-runs once per outer group (arch_check check 21).
+_QRRE_DEDUPED_LIMIT_COLUMN = "_qrre_deduped_limit"
+
 
 # =========================================================================
-# Exposure subtype classification (1 .with_columns — 5 expressions)
+# Exposure subtype classification (2 .with_columns — the QRRE dedup helper
+# column, then 4 output expressions — plus a drop of the helper)
 # =========================================================================
 
 
@@ -73,7 +84,13 @@ def classify_exposure_subtypes(
     pack: ResolvedRulepack | None = None,
 ) -> pl.LazyFrame:
     """
-    Merge SME, retail, and QRRE classification into a single .with_columns().
+    Merge SME, retail, and QRRE classification into one output .with_columns().
+
+    Preceded by an additional single-expression ``.with_columns`` that materialises
+    the QRRE per-leg deduplicated limit as the scratch column
+    ``_QRRE_DEDUPED_LIMIT_COLUMN``, dropped again before this function returns
+    (see ``qrre_obligor_aggregate_limit_expr`` for why that step cannot be
+    folded into the output expressions). The classify exit schema is unchanged.
 
     Works because they operate on non-overlapping initial exposure_class values:
     SME only touches "corporate", retail only touches "retail_other",
@@ -187,8 +204,8 @@ def classify_exposure_subtypes(
     )
     facility_limit = pl.col("facility_limit").fill_null(float("inf"))
     candidate_limit = pl.when(is_qrre_candidate).then(facility_limit).otherwise(pl.lit(0.0))
-    obligor_aggregate_limit = qrre_obligor_aggregate_limit_expr(
-        is_qrre_candidate, facility_limit, candidate_limit
+    exposures, obligor_aggregate_limit = qrre_obligor_aggregate_limit_expr(
+        exposures, is_qrre_candidate, facility_limit, candidate_limit
     )
     is_qrre = is_qrre_candidate & (obligor_aggregate_limit <= qrre_max_limit)
 
@@ -249,7 +266,7 @@ def classify_exposure_subtypes(
             # --- HVCRE flag (from specialised lending join, null → False) ---
             pl.col("is_hvcre").fill_null(False).alias("is_hvcre"),
         ]
-    )
+    ).drop(_QRRE_DEDUPED_LIMIT_COLUMN)
 
 
 # =========================================================================
@@ -306,11 +323,32 @@ def qrre_undrawn_cancellable_expr() -> pl.Expr:
 @cites("CRR Art. 154(4)")
 @cites("PS1/26, paragraph 147")
 def qrre_obligor_aggregate_limit_expr(
+    exposures: pl.LazyFrame,
     is_qrre_candidate: pl.Expr,
     facility_limit: pl.Expr,
     candidate_limit: pl.Expr,
-) -> pl.Expr:
+) -> tuple[pl.LazyFrame, pl.Expr]:
     """Return the Art. 147(5A)(c) / Art. 154(4)(c) per-individual aggregate limit.
+
+    Returns ``(exposures, obligor_aggregate_limit)``: the frame with the
+    per-leg deduplicated contribution materialised as
+    ``_QRRE_DEDUPED_LIMIT_COLUMN``, and the expression that sums that column
+    per obligor. The caller drops the helper before returning, so the classify
+    exit schema is unchanged.
+
+    ⚠ The two steps may NOT be folded into one expression, and this is a
+    performance contract, not a style preference. Polars evaluates a window
+    function's INPUT inside the outer group-by context, so putting the
+    per-(obligor, facility) ``cum_sum().over(...)`` / ``max().over(...)``
+    inside the input of the per-obligor ``.sum().over(...)`` re-runs both
+    inner windows once per obligor group: cost becomes a function of row count
+    times group count rather than of row count. That is what commit
+    ``8ec7d302`` shipped — the classify stage went from 0.5 s to 5.6 s at 374k
+    rows across v0.3.27-v0.3.32, with every correctness gate green. Reading the
+    inner result back as a plain column makes the outer window's input a
+    ``pl.col()``, which Polars evaluates once per row. ``arch_check`` check 21
+    and ``tests/unit/classifier/test_p1_320_qrre_aggregate_scaling.py`` hold
+    the shape; the numbers are unchanged.
 
     The limb caps the *aggregate* nominal exposure to any single individual
     across the QRRE sub-portfolio, not each facility individually. The nominal
@@ -346,23 +384,17 @@ def qrre_obligor_aggregate_limit_expr(
     - Null ``counterparty_reference`` — the row falls back to its own
       ``candidate_limit`` and never sees the pooled null partition, unchanged.
     """
-    # One contribution per (obligor, facility): the first candidate leg of the
-    # group carries the group's limit, every later leg carries zero.
+    # Step 1 — one contribution per (obligor, facility): the first candidate
+    # leg of the group carries the group's limit, every later leg carries
+    # zero. Materialised as its own column so step 2's window input is a
+    # plain column read rather than a nested window (see the ⚠ note above).
+    facility_keys = ["counterparty_reference", "parent_facility_reference"]
     deduped_limit = (
         pl.when(is_qrre_candidate)
         .then(
             partition_by_nullable(
-                pl.when(
-                    is_qrre_candidate.cast(pl.UInt32)
-                    .cum_sum()
-                    .over(["counterparty_reference", "parent_facility_reference"])
-                    == 1
-                )
-                .then(
-                    candidate_limit.max().over(
-                        ["counterparty_reference", "parent_facility_reference"]
-                    )
-                )
+                pl.when(is_qrre_candidate.cast(pl.UInt32).cum_sum().over(facility_keys) == 1)
+                .then(candidate_limit.max().over(facility_keys))
                 .otherwise(pl.lit(0.0)),
                 "parent_facility_reference",
                 facility_limit,
@@ -370,10 +402,15 @@ def qrre_obligor_aggregate_limit_expr(
         )
         .otherwise(pl.lit(0.0))
     )
-    return partition_by_nullable(
-        deduped_limit.sum().over("counterparty_reference"),
+    # Step 2 — the per-obligor aggregate, reading the helper column back.
+    obligor_aggregate_limit = partition_by_nullable(
+        pl.col(_QRRE_DEDUPED_LIMIT_COLUMN).sum().over("counterparty_reference"),
         "counterparty_reference",
         candidate_limit,
+    )
+    return (
+        exposures.with_columns(deduped_limit.alias(_QRRE_DEDUPED_LIMIT_COLUMN)),
+        obligor_aggregate_limit,
     )
 
 

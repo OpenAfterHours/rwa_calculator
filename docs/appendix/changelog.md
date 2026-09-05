@@ -33,6 +33,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a real sub-three-month mismatch is still zeroed. User-supplied collateral whose
   residual matches a short loan is freed by the same change. Escape-log entry
   2026-09-05 (`path-never-exercised`).
+- **The release flow now pushes and publishes for you.** `scripts/deploy.py`,
+  and so `/release`, ends by pushing the release commit and its tag to `origin`
+  in one `git push --atomic origin <branch> refs/tags/v<ver>` (both land or
+  neither does, and only the release tag travels, never every local tag) and
+  then creating GitHub Release `v<ver>` from that tag with
+  `gh release create --verify-tag`, using the just-promoted changelog section as
+  the notes with GitHub's generated PR list appended. The GitHub Release is the
+  publish step — `publish.yml` runs on a published release and uploads to
+  PyPI — which is how every release since v0.3.28 was in fact published, by
+  hand. Because the push and the release are the steps most likely to be
+  rejected by state outside the checkout, a new pre-flight runs *before* the
+  test suite and refuses on a detached HEAD, a branch behind its upstream, a
+  tag already on the remote, or `gh` not logged in, so a stale checkout costs
+  seconds rather than a full run followed by a rejected push. A failed push or
+  release leaves the local state alone and prints the manual command. The
+  irreversible steps are named up front and confirmed interactively; `--yes`
+  skips that prompt for non-interactive callers, and `/release` passes it on
+  the strength of its own Step 3 confirmation. Opt-outs: `--no-github-release`
+  pushes without publishing, `--no-push` commits and tags locally, `--no-git`
+  implies both, and `--publish` now means "upload from this machine instead of
+  via the release". Pinned by `tests/unit/test_deploy_push.py` and
+  `tests/unit/test_deploy_changelog.py::TestExtractVersionSection`.
 
 ---
 

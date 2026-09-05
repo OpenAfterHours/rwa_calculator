@@ -4,12 +4,14 @@ Utility scripts for the rwa-calc project.
 
 ## deploy.py
 
-Automates version updates and PyPI deployment.
+Automates version updates, the release commit, tag and push, and the GitHub
+Release that publishes to PyPI.
 
 > **Recommended path:** invoke `/release` in a Claude Code session instead of
 > calling `deploy.py` directly. The slash command previews which `[Unreleased]`
 > bullets will be promoted into the new version section before running the
-> script, so you can verify the changelog promotion before commit + tag.
+> script, so you can verify the changelog promotion before it is committed and
+> pushed.
 
 The `[Unreleased]` -> new-version promotion logic lives in
 `scripts/_deploy_changelog.py` (pure string transforms, unit-tested at
@@ -17,12 +19,21 @@ The `[Unreleased]` -> new-version promotion logic lives in
 
 ### Features
 
+- Fails fast, before the tests, if the branch is behind `origin`, the tag
+  already exists there, HEAD is detached, or `gh` is not logged in
+- Runs tests before deployment
 - Updates version in all required files (pyproject.toml, __init__.py, docs)
 - Updates changelog with new version section
+- Regenerates the version-stamped generated docs pages
 - Syncs uv.lock
-- Runs tests before deployment
-- Builds the package
-- Optionally publishes to PyPI
+- Builds the package and checks the distribution metadata
+- Commits and tags the release
+- Pushes the branch and the release tag to `origin` in one atomic push
+- Creates the GitHub Release from the promoted changelog section, which runs
+  `publish.yml` and uploads to PyPI
+- Names those irreversible steps up front and asks for confirmation (`--yes`
+  skips the prompt for non-interactive callers such as `/release`)
+- Or uploads from this machine with `--publish` instead of via the release
 
 ### Usage
 
@@ -36,7 +47,13 @@ python scripts/deploy.py --bump minor
 # Set specific version
 python scripts/deploy.py 0.1.4
 
-# Bump and publish to PyPI
+# Same, without the confirmation prompt (what /release passes)
+python scripts/deploy.py 0.1.4 --yes
+
+# Push the tag but create no GitHub Release, so nothing is published
+python scripts/deploy.py 0.1.4 --no-github-release
+
+# Upload from this machine instead of via the GitHub Release
 python scripts/deploy.py --bump patch --publish
 
 # Dry run (show what would be done)
@@ -44,6 +61,9 @@ python scripts/deploy.py --bump patch --dry-run
 
 # Skip tests (not recommended)
 python scripts/deploy.py --bump patch --skip-tests
+
+# Commit and tag locally without pushing
+python scripts/deploy.py 0.1.4 --no-push
 ```
 
 ### Windows
@@ -57,14 +77,36 @@ scripts\deploy.bat 0.1.4 --publish
 
 ### After Deployment
 
-The script reminds you to commit and tag:
+Nothing. The script has committed `chore(release): bump version to X.Y.Z`,
+tagged `vX.Y.Z`, pushed both to `origin` in one atomic push (either both are on
+the remote or neither is; only the release tag travels, stray local tags stay
+local), and created GitHub Release `vX.Y.Z` from the promoted changelog section
+with GitHub's generated PR list appended. That release is what publishes:
+`.github/workflows/publish.yml` runs on a published release, builds, and
+uploads to PyPI. Watch it with:
 
 ```bash
-git add -A
-git commit -m "chore: release v0.1.4"
-git tag v0.1.4
-git push origin master --tags
+gh run list --workflow=publish.yml --limit 1
 ```
+
+The script refuses up front, before the test run, if the local branch is behind
+its upstream, if the tag already exists on the remote, if HEAD is detached, or
+if `gh` is not logged in, so a stale checkout is caught in seconds.
+
+`--no-github-release` pushes without creating the release, so nothing is
+published; `--no-push` (or `--no-git`, which implies it) commits and tags
+locally only. In both cases the script prints the exact commands to finish by
+hand:
+
+```bash
+git push --atomic origin master refs/tags/vX.Y.Z
+gh release create vX.Y.Z --verify-tag --title vX.Y.Z --notes-file dist/release_notes_vX.Y.Z.md --generate-notes
+```
+
+`--publish` uploads from this machine with `uv publish` instead of via the
+GitHub Release, which is then skipped: a release created after a local upload
+would run `publish.yml` onto a version PyPI already has. Use it only when CI
+publishing is unavailable.
 
 ### PyPI Token
 

@@ -70,13 +70,26 @@ from .conftest import (
 # threshold ~25,000 (measured on 1.37; not re-characterised on 1.42.1). ccr_exit
 # is not exercised by the recalibration runs (no-CCR fixtures) — its 800 ceiling
 # is carried forward unchanged.
+# Re-measured 2026-09-05 on Polars 1.44.1 (max of plain/guaranteed runs):
+# hierarchy_exit 1733, classifier_exit 176, crm_post_ead 25,
+# crm_pre_guarantee_unified 1394, crm_exit 1398 (plain) / 1259 (with
+# guarantees), re_split_exit 131, sa_branch 76, irb_branch 96, slotting_branch
+# 59. Two edges moved materially — classifier_exit 97 -> 176 and
+# crm_pre_guarantee_unified 1043 -> 1394 — and both were re-pinned at ~2x the
+# new measurement; crm_exit's plain-run count (1398) now exceeds its guaranteed
+# count, so its ceiling is pinned off the larger of the two. The rest are within
+# a few nodes of the 1.42.1 figures and keep their ceilings. The classifier
+# edge's growth includes the explicit `when` chain that replaced
+# `pl.max_horizontal` in `classify/attributes.py::with_group_annual_revenue`
+# (pola-rs/polars#29082 workaround) and whatever 1.44.1 itself changed in plan
+# shape; the two were not separated.
 _EDGE_NODE_CEILINGS: dict[str, int] = {
     "hierarchy_exit": 3500,
     "ccr_exit": 800,
-    "classifier_exit": 200,
+    "classifier_exit": 400,
     "crm_post_ead": 100,
-    "crm_pre_guarantee_unified": 2100,
-    "crm_exit": 2600,
+    "crm_pre_guarantee_unified": 2800,
+    "crm_exit": 2800,
     "re_split_exit": 300,
     "sa_branch": 200,
     "irb_branch": 200,
@@ -259,8 +272,8 @@ def test_pipeline_polars_version_pin_reminder() -> None:
     When it fails after a Polars upgrade: re-run with RWA_PRINT_EDGE_NODES=1,
     re-pin _EDGE_NODE_CEILINGS, and update this version string.
     """
-    assert pl.__version__.startswith("1.42"), (
+    assert pl.__version__.startswith("1.44"), (
         f"Polars {pl.__version__}: plan-node ceilings in this module were "
-        "measured on 1.42.1 — recalibrate (see module docstring) before bumping "
+        "measured on 1.44.1 — recalibrate (see module docstring) before bumping "
         "this pin."
     )

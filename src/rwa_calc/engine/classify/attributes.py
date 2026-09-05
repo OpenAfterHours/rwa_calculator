@@ -232,11 +232,24 @@ def with_group_annual_revenue(counterparties: pl.LazyFrame) -> pl.LazyFrame:
     subsidiary figure AND a large subsidiary is never let off by a smaller
     (data-anomalous) parent figure — both are the conservative direction for a
     test that FORCES F-IRB (own-LGD A-IRB is typically lower RWA than the F-IRB
-    supervisory LGD). ``max_horizontal`` ignores nulls, so a null own revenue
-    under a revenue-bearing parent yields the parent figure, a top-level entity
-    (null ``ultimate_parent_reference`` → no self-join match) yields its own, and
+    supervisory LGD). Nulls are ignored, so a null own revenue under a
+    revenue-bearing parent yields the parent figure, a top-level entity (null
+    ``ultimate_parent_reference`` → no self-join match) yields its own, and
     both-null yields null (the caller's total_assets / conservative-large default
     at ``_apply_b31_approach_restrictions`` then applies unchanged).
+
+    The null-ignoring max is written as an explicit ``when`` chain rather than
+    ``pl.max_horizontal``. When ``annual_revenue`` is absent from the input and
+    ``ensure_columns`` has filled it with a literal default, BOTH operands here
+    are scalar-backed (the self-join of a literal-null key misses, so the parent
+    revenue is a literal null too), and polars 1.44.1's ``max_horizontal`` then
+    returns a length-1 column without the broadcast flag — the classifier edge
+    fails with ``Series group_annual_revenue, length 1 doesn't match the
+    DataFrame height`` (pola-rs/polars#29082; fixed upstream by #29083 on
+    2026-09-01, in no release as of polars 1.44.1). The ``when`` chain is
+    value-for-value identical to the reducer, including on all-scalar inputs,
+    on 1.42.1 and 1.44.1. Revert to ``pl.max_horizontal`` once the lock is on a
+    polars release that contains #29083.
 
     3-year averaging (Art. 147(4C)(b)(ii) second sentence — "average annual
     amount over the last three years") is NOT applied: the counterparty schema
@@ -253,6 +266,17 @@ def with_group_annual_revenue(counterparties: pl.LazyFrame) -> pl.LazyFrame:
         pl.col("counterparty_reference").alias("_grp_parent_ref"),
         pl.col("annual_revenue").alias("_grp_parent_revenue"),
     )
+    own = pl.col("annual_revenue")
+    parent = pl.col("_grp_parent_revenue")
+    null_ignoring_max = (
+        pl.when(own.is_null())
+        .then(parent)
+        .when(parent.is_null())
+        .then(own)
+        .when(parent > own)
+        .then(parent)
+        .otherwise(own)
+    )
     return (
         counterparties.join(
             parent_revenue,
@@ -260,12 +284,7 @@ def with_group_annual_revenue(counterparties: pl.LazyFrame) -> pl.LazyFrame:
             right_on="_grp_parent_ref",
             how="left",
         )
-        .with_columns(
-            pl.max_horizontal(
-                pl.col("annual_revenue"),
-                pl.col("_grp_parent_revenue"),
-            ).alias("group_annual_revenue")
-        )
+        .with_columns(null_ignoring_max.alias("group_annual_revenue"))
         .drop("_grp_parent_revenue")
     )
 

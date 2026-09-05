@@ -11,7 +11,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - (Next release changes will go here)
 
 ### Changed
-- (Next release changes will go here)
+- **Polars lock bumped 1.42.1 → 1.44.1** (`uv lock --upgrade-package polars`; only
+  `polars` and `polars-runtime-32` moved). 1.44.1 is the only non-yanked release
+  above 1.43.2 — 1.43.0, 1.43.1 and 1.44.0 are yanked on PyPI, 1.44.0 for a
+  when/then/otherwise regression. The bump is a prerequisite for evaluating
+  `polspec` (`docs/plans/polspec-benchmark-data-proposal.md`), which requires
+  `polars>=1.44.1`.
+- **Two engine workarounds for pola-rs/polars#29082 on 1.44.1.** On polars
+  1.44.1 `pl.max_horizontal` / `pl.min_horizontal` return a length-1 column
+  without the broadcast flag when every input is scalar-backed — the shape
+  `ensure_columns` produces for an optional column absent from the input and
+  filled with its literal default, and any column derived from one. The bump
+  turned 68 tests red through exactly two sites, both failing their stage with
+  `Series <col>, length 1 doesn't match the DataFrame height`; the same suite is
+  green on 1.42.1 and the standalone repro is clean on 1.43.2.
+  (1) `engine/classify/attributes.py::with_group_annual_revenue` — the
+  Art. 147(4C)(b)(ii) group revenue `max_horizontal(own, parent)` is now an
+  explicit null-aware `when` chain. (2) `engine/ccr/maturity_factor.py::
+  compute_maturity_factor_unmargined` — the Art. 279c(1)
+  `min_horizontal(max_horizontal(BD, 10), 250)` clamp is now an explicit
+  null branch to the floor plus `clip(10, 250)` (a `when` rather than
+  `fill_null`, so the Phase 0 architecture-debt ratchet on `fill_null` sites
+  does not move for a workaround). Both forms are value-for-value identical to
+  the reducers on 1.42.1 and 1.44.1, including the null-takes-the-floor
+  behaviour and all-scalar inputs. Upstream fix is pola-rs/polars#29083 (merged
+  2026-09-02, in no release as of 1.44.1); the comment at each site names the
+  revert condition. The engine has ~90 other horizontal-reducer call sites that
+  the suite did not drive with all-scalar inputs; a customer file that omits an
+  optional column feeding one of them would fail its stage loudly (a
+  `PIPELINE_*` error, never a wrong number) until the polars fix ships.
+  `tests/integration/test_stage_edges.py` plan-node ceilings re-measured on
+  1.44.1 and the version pin moved.
 
 ---
 

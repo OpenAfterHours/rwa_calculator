@@ -104,19 +104,29 @@ def compute_maturity_factor_unmargined(trades: pl.LazyFrame) -> pl.LazyFrame:
     """
     bd_per_year = _SA_CCR_BUSINESS_DAYS_PER_YEAR
     floor_days = _MF_UNMARGINED_FLOOR_DAYS
+    # ``min(max(BD, 10), 250)`` written element-wise rather than as
+    # ``pl.min_horizontal(pl.max_horizontal(BD, 10), 250)``. The horizontal
+    # reducers ignore nulls, so a null BD took the 10-BD floor; the explicit
+    # null branch reproduces that before ``clip`` applies both bounds, so the
+    # two forms are value-for-value identical (a ``when`` rather than
+    # ``fill_null`` so the architecture-debt ratchet on fill_null sites does not
+    # move for a workaround). The reducer form is avoided because polars 1.44.1
+    # returns an unflagged length-1 column from ``max_horizontal`` /
+    # ``min_horizontal`` when every input is scalar-backed (pola-rs/polars#29082,
+    # fixed upstream by #29083, in no release as of 1.44.1) — which is the shape
+    # a trades frame has when ``business_days_to_maturity`` derives from a
+    # literal-defaulted maturity column, and it failed the ``ccr_sa_ccr`` stage
+    # with ``Series maturity_factor, length 1 doesn't match the DataFrame
+    # height``. ``clip`` is element-wise and unaffected. Either form may be used
+    # once the lock is on a polars release containing #29083.
+    business_days = pl.col("business_days_to_maturity")
+    residual_bd = (
+        pl.when(business_days.is_null())
+        .then(pl.lit(floor_days))
+        .otherwise(business_days.clip(lower_bound=floor_days, upper_bound=bd_per_year))
+    )
     return trades.with_columns(
-        (
-            pl.min_horizontal(
-                pl.max_horizontal(
-                    pl.col("business_days_to_maturity"),
-                    pl.lit(floor_days),
-                ),
-                pl.lit(bd_per_year),
-            ).cast(pl.Float64)
-            / float(bd_per_year)
-        )
-        .sqrt()
-        .alias("maturity_factor")
+        (residual_bd.cast(pl.Float64) / float(bd_per_year)).sqrt().alias("maturity_factor")
     )
 
 

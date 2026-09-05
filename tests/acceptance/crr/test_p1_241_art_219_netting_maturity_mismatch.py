@@ -91,3 +91,18 @@ class TestP1241CrrNettingMaturityMismatch:
         short = _loan_rwa(_run("crr_short_orig"), SCENARIOS["crr_short_orig"].loan_ref)
         partial = _loan_rwa(_run("crr_partial"), SCENARIOS["crr_partial"].loan_ref)
         assert short > partial
+
+    def test_matched_short_dated_pair_nets_in_full(self) -> None:
+        """Escape 2026-09-05: a 60-day deposit against a 60-day loan is NOT a mismatch
+        (Art. 237(1)), so neither the three-month gate nor the <1y-original gate
+        applies → full £200k nets → RWA £800k."""
+        s = SCENARIOS["crr_matched_short"]
+        result = _run("crr_matched_short")
+        assert s.expected_loan_rwa(REPORTING_DATE) == pytest.approx(800_000.0)
+        assert _loan_rwa(result, s.loan_ref) == pytest.approx(800_000.0, rel=1e-9)
+
+    def test_matched_past_dated_pair_nets_in_full(self) -> None:
+        """Both contractual dates passed 10 days ago: still equal residuals → RWA £800k."""
+        s = SCENARIOS["crr_matched_past"]
+        result = _run("crr_matched_past")
+        assert _loan_rwa(result, s.loan_ref) == pytest.approx(800_000.0, rel=1e-9)

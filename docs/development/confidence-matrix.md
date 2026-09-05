@@ -103,7 +103,7 @@ Package version `0.3.33`. Resolved packs:
 | 158 | 0 | 4 | 11 | 0 | 16 | MEDIUM |
 | 159 | 0 | 0 | 8 | 0 | 10 | UNCITED |
 | 160 | 2 | 1 | 10 | 1 | 17 | HIGH |
-| 161 | 4 | 2 | 16 | 3 | 41 | HIGH |
+| 161 | 4 | 2 | 16 | 3 | 43 | HIGH |
 | 162 | 5 | 16 | 15 | 2 | 33 | HIGH |
 | 163 | 2 | 4 | 4 | 0 | 8 | MEDIUM |
 | 164 | 3 | 5 | 7 | 0 | 10 | MEDIUM |
@@ -135,7 +135,7 @@ Package version `0.3.33`. Resolved packs:
 | 216 | 0 | 0 | 0 | 0 | 1 | GAP |
 | 217 | 2 | 0 | 1 | 0 | 0 | LOW |
 | 218 | 1 | 0 | 2 | 2 | 3 | HIGH |
-| 219 | 1 | 0 | 3 | 0 | 7 | MEDIUM |
+| 219 | 1 | 0 | 4 | 0 | 9 | MEDIUM |
 | 220 | 1 | 0 | 8 | 0 | 11 | MEDIUM |
 | 221 | 0 | 0 | 2 | 0 | 1 | UNCITED |
 | 222 | 2 | 9 | 5 | 22 | 12 | HIGH |
@@ -153,8 +153,8 @@ Package version `0.3.33`. Resolved packs:
 | 234 | 1 | 0 | 2 | 0 | 4 | MEDIUM |
 | 235 | 10 | 1 | 15 | 7 | 18 | HIGH |
 | 236 | 0 | 0 | 0 | 0 | 4 | GAP |
-| 237 | 2 | 0 | 4 | 0 | 25 | MEDIUM |
-| 238 | 2 | 0 | 3 | 0 | 10 | MEDIUM |
+| 237 | 2 | 0 | 4 | 0 | 27 | MEDIUM |
+| 238 | 2 | 0 | 3 | 0 | 12 | MEDIUM |
 | 239 | 0 | 0 | 2 | 0 | 13 | UNCITED |
 | 244 | 1 | 0 | 5 | 0 | 0 | LOW |
 | 247 | 0 | 0 | 1 | 0 | 0 | UNCITED |
@@ -262,7 +262,7 @@ Package version `0.3.33`. Resolved packs:
 | 158 | 0 | 3 | 0 | 0 | 3 | MEDIUM |
 | 159 | 0 | 0 | 0 | 0 | 1 | GAP |
 | 160 | 1 | 1 | 4 | 1 | 15 | HIGH |
-| 161 | 2 | 4 | 6 | 4 | 39 | HIGH |
+| 161 | 2 | 4 | 6 | 4 | 41 | HIGH |
 | 162 | 1 | 6 | 7 | 0 | 9 | MEDIUM |
 | 163 | 2 | 4 | 3 | 2 | 11 | HIGH |
 | 164 | 4 | 1 | 2 | 3 | 4 | HIGH |
@@ -286,7 +286,7 @@ Package version `0.3.33`. Resolved packs:
 | 211 | 1 | 0 | 1 | 0 | 1 | MEDIUM |
 | 213 | 1 | 1 | 1 | 0 | 1 | MEDIUM |
 | 218 | 0 | 0 | 1 | 0 | 1 | UNCITED |
-| 219 | 0 | 0 | 0 | 0 | 2 | GAP |
+| 219 | 0 | 0 | 0 | 0 | 4 | GAP |
 | 220 | 0 | 0 | 0 | 0 | 2 | GAP |
 | 222 | 0 | 1 | 4 | 0 | 5 | MEDIUM |
 | 223 | 0 | 0 | 4 | 0 | 2 | UNCITED |
@@ -300,8 +300,8 @@ Package version `0.3.33`. Resolved packs:
 | 233 | 0 | 0 | 1 | 0 | 3 | UNCITED |
 | 235 | 3 | 1 | 5 | 0 | 20 | MEDIUM |
 | 236 | 0 | 0 | 1 | 0 | 7 | UNCITED |
-| 237 | 1 | 0 | 1 | 0 | 9 | MEDIUM |
-| 238 | 0 | 0 | 0 | 0 | 2 | GAP |
+| 237 | 1 | 0 | 1 | 0 | 11 | MEDIUM |
+| 238 | 0 | 0 | 0 | 0 | 3 | GAP |
 | 239 | 0 | 0 | 1 | 0 | 4 | UNCITED |
 | 261 | 0 | 0 | 2 | 0 | 0 | UNCITED |
 | 271 | 0 | 0 | 0 | 0 | 1 | GAP |
@@ -396,19 +396,19 @@ The actionable list: articles referenced **only** by the oracle and/or a (heuris
 |---|---|---|---|
 | PS1/26 197 | 0 | 5 | CRR Art. 197 |
 | PS1/26 124A | 0 | 4 | — |
+| PS1/26 219 | 0 | 4 | CRR Art. 219 |
 | CRR 236 | 0 | 4 | — |
 | CRR 36 | 0 | 3 | — |
 | PS1/26 132a | 0 | 3 | — |
 | PS1/26 155 | 0 | 3 | CRR Art. 155 |
 | CRR 233A | 0 | 3 | — |
+| PS1/26 238 | 0 | 3 | CRR Art. 238 |
 | PS1/26 126 | 0 | 2 | CRR Art. 126 |
 | CRR 132A | 0 | 2 | — |
 | CRR 169 | 0 | 2 | — |
 | PS1/26 180 | 0 | 2 | — |
 | PS1/26 194 | 0 | 2 | CRR Art. 194 |
-| PS1/26 219 | 0 | 2 | CRR Art. 219 |
 | PS1/26 220 | 0 | 2 | CRR Art. 220 |
-| PS1/26 238 | 0 | 2 | CRR Art. 238 |
 | CRR 281 | 0 | 2 | — |
 | CRR 282 | 0 | 2 | — |
 | CRR 1 | 0 | 1 | PS1/26 para. 1 |

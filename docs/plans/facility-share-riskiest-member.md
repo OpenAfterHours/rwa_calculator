@@ -415,7 +415,7 @@ P1.367).
 | Step | Deliverable | Gate |
 |---|---|---|
 | **S0** | Decisions D1–D5 recorded at the top of this page. | — |
-| **S1 — fixtures & failing tests (TDD)** | A generated portfolio `tests/fixtures/facility_share/` with one facility, three members: the owner (SA, unrated corporate), an IRB corporate (low PD, so `u < s`), and an SA retail member; two variants so the floor **binds in one and not the other** (the two-leg pattern from LESSONS B5). Register in `generate_all.py` and in `RUNS`. Oracle case with the hand-calc for both regimes and both floor states. Unit tests for the resolution function (both regimes, both states, ties). Named mutation detector: `argmax → argmin` in the resolver must redden a specific test (C1.11). | red before S2/S3 |
+| **S1 — fixtures & failing tests (TDD)** | An **in-memory** reporting portfolio `tests/fixtures/facility_share_portfolio.py::build_facility_share_bundle(variant)` returning a `RawDataBundle` via `make_raw_bundle` (the shape every `RUNS` entry consumes — **not** a parquet directory, no `generate_all.py` entry; corrected 2026-09-05 after the Wave 1 review). One shared facility with three members — the SA owner at CQS 2, an SA member at CQS 1, an F-IRB member with a low internal PD (so `u_IRB < u_SA < x·s_IRB`, the divergence the floor-aware rule needs) — a solo facility as control, and an IRB anchor loan whose PD is the single input that makes the floor **bind in one variant and not the other** (the two-leg pattern from LESSONS B5). Register all four regime×variant runs in `RUNS` with an explicit `enforce_retail_granularity=True` on the Basel 3.1 arm and a prior-period config so C 08.04 is emitted. Every asserted number is derived in-test from `statistics.NormalDist` plus pack values, never transcribed. Oracle case pins per-candidate pricing only (the oracle drivers bypass hierarchy, classifier and CRM). Unit tests for the resolver on synthetic frames: ties, the all-non-finite fallback, `argmax s_i` vs `argmax b_i`, and slotting / `standardised_ccr` candidates in the `b_i` predicate. Named mutation detectors per C1.11. Scenario of record: `.claude/state/fs1-scenario-proposal.md`. | red before S2/S3 |
 | **S2 — hierarchy fan-out** (P1.367) | Candidate rows, the two new columns, owner-as-member, the ex-candidate granularity aggregate (separate window), the nine edge declarations plus a contract test that pins them, preview deletion with its footprint (S5), rulepack threaded into `facility_undrawn.py` so the check-17 allowlist entry retires; tests pin that each candidate contributes to its own member's partition-local totals and that the short-term spill-over windows are value-idempotent. | arch_check 16/17/18/21 green; full `tests/unit` (column footprint changes — LESSONS D2) |
 | **S3 — aggregator resolution** (P1.368, single-stream) | `engine/aggregator/_facility_share.py` called at the head of `aggregate()` on the three branch frames: metric per policy, `TREA(A)`/`TREA(B)` evaluated end-to-end, loser drop from all three frames, winner reference collapse, error re-key, `facility_share_resolution` audit frame on `AggregatedResultBundle`, summary fields, `facility_share_metric` config election. | Tier 2 mandatory: `tests/oracle` + `tests/acceptance/reporting`; `coverage_report.py --check` (cells newly live ⇒ `--update-baseline`, re-measured) |
 | **S4 — docs** (Tier 5) | `docs/architecture/components.md` hierarchy + aggregator rows; a methodology page `docs/specifications/facility-share-allocation.md` stating the policy, the two-assignment rule and D4; changelog. The basel31/crr skills get a *mechanics* paragraph only — no values. | `uv run zensical build`; `check_doc_links.py --check` |
@@ -464,8 +464,21 @@ Effort: S1 M · S2 M · S3 M · S4 S — **L overall**, two batches.
 2. **`InstitutionType` has no member for a ring-fenced body outside a sub-consolidation group**
    (`domain/enums.py:622-624`), which Art. 92(2A)(a)(i) says *is* floored on an individual basis.
    Reachability not established.
-3. **QRRE demotion at high PD lowers RWA** (Section 4, D4) — measured by the scenario in S1 and
-   disclosed; a candidate-aware QRRE aggregate would need the obligor's PD at classification time.
+3. **QRRE demotion at high PD lowers RWA** (Section 4, D4) — **not** measurable by the S1 scenario,
+   which has no retail obligor (adding one breaks the divergence chain the floor-aware test needs).
+   Owed coverage, to be filed as a Tier 1 bullet alongside the Art. 123A granularity-denominator
+   fixture (a share with a retail member plus a second retail obligor large enough that the 0.2%
+   limit is live, asserting the denominator is identical with and without the fan-out). A
+   candidate-aware QRRE aggregate would need the obligor's PD at classification time.
+4. **The Art. 110A due-diligence input never reaches the SA branch** (found by the fixture wave,
+   2026-09-05). `due_diligence_performed` and `due_diligence_override_rw` are accepted by
+   `LOAN_SCHEMA` / `CONTINGENTS_SCHEMA` but are not declared in
+   `contracts/edges.py::_hierarchy_resolved_columns`, so `EdgeContract.conform` drops them
+   silently before classification; the guard at `engine/sa/rw_adjustments.py:599` tests column
+   *presence*, so `SA004` fires on every Basel 3.1 run regardless of input and the override risk
+   weight is unreachable. LESSONS B1 shape. Needs its own Tier 1 bullet (declare the columns on
+   the hierarchy edges, test the override end-to-end); the FS-1 tests filter `SA004` by code
+   meanwhile.
 
 ## Appendix A — estate measurement
 

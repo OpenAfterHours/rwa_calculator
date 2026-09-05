@@ -5,7 +5,15 @@ The vectorized apply_maturity_mismatch method must use actual exposure maturity
 (derived from exposure_maturity Date column) rather than a hardcoded T=5 default.
 The formula is CVAM = CVA × (t − 0.25) / (T − 0.25) where:
 - t = collateral residual maturity in years
-- T = min(exposure residual maturity, 5) in years, floored at 0.25
+- T = min(exposure residual maturity, 5) in years (Art. 238(1) cap, no floor)
+
+Whether a mismatch exists at all is decided on the RAW residuals (Art. 237(1):
+"the residual maturity of the credit protection is less than that of the
+protected exposure"). The 0.25 term lives only in the scaling formula, which
+is reached only when t >= 0.25 < T, so it never divides by zero. Flooring T
+before the comparison fabricated a mismatch for every matched pair maturing
+within three months of the reporting date and zeroed its protection (escape
+log 2026-09-05).
 
 References:
     CRR Art. 238: Maturity mismatch adjustment
@@ -242,18 +250,138 @@ class TestMaturityMismatchVectorized:
         # Collateral < 3 months → no protection
         assert factors[3] == pytest.approx(0.0)
 
-    def test_exposure_maturity_floored_at_0_25(self, crr_config: CalculationConfig) -> None:
-        """Very short exposure maturity (< 3 months) is floored at 0.25 years."""
+    def test_collateral_outliving_a_one_month_exposure_keeps_full_value(
+        self, crr_config: CalculationConfig
+    ) -> None:
+        """Collateral (0.5y) longer than a one-month exposure: no mismatch, factor 1.0.
+
+        Only the protection-longer-than-exposure limb of the short-exposure case;
+        the matched and protection-shorter limbs live in
+        TestMatchedAndShortDatedProtection.
+        """
         reporting = crr_config.reporting_date
-        # Exposure matures in 1 month (0.083yr), floored to 0.25yr
         exposure_mat = reporting + timedelta(days=30)
         collateral = _make_collateral(0.5, exposure_mat)
 
         calc = HaircutCalculator()
         result = calc.apply_maturity_mismatch(collateral, crr_config).collect()
 
-        # T floored at 0.25, collateral 0.5yr >= 0.25yr → adjustment applies
-        # Factor = (0.5 - 0.25) / (0.25 - 0.25) would be division by zero
-        # But T is floored at 0.25 so denominator = 0.25 - 0.25 = 0
-        # Actually, collateral 0.5 >= exposure 0.25 → no mismatch, factor = 1.0
+        assert result["maturity_adjustment_factor"][0] == pytest.approx(1.0)
+
+
+class TestMatchedAndShortDatedProtection:
+    """Art. 237(1): a mismatch exists only when protection is SHORTER than the exposure.
+
+    Escape log 2026-09-05: the exposure residual was floored at 0.25y before the
+    comparison while the collateral residual was not, so a matched pair maturing
+    within three months of the reporting date (interbank loan against interbank
+    deposit under one netting agreement) compared as "protection shorter than
+    exposure", hit the three-month gate, and lost all protection. Equal residuals
+    are not a mismatch, whatever their length, and Art. 238(1) caps T at five
+    years without flooring it.
+    """
+
+    @pytest.mark.parametrize("days", [7, 30, 60, 89, 91])
+    def test_matched_pair_within_three_months_keeps_full_value(
+        self, crr_config: CalculationConfig, days: int
+    ) -> None:
+        # Arrange: exposure and collateral share one maturity date inside 3 months.
+        reporting = crr_config.reporting_date
+        exposure_mat = reporting + timedelta(days=days)
+        collateral = _make_collateral(days / 365.25, exposure_mat)
+
+        # Act
+        result = HaircutCalculator().apply_maturity_mismatch(collateral, crr_config).collect()
+
+        # Assert: no mismatch → no gate, no scaling.
+        assert result["maturity_adjustment_factor"][0] == pytest.approx(1.0)
+        assert result["value_after_maturity_adj"][0] == pytest.approx(1000.0)
+
+    def test_matched_past_dated_pair_keeps_full_value(self, crr_config: CalculationConfig) -> None:
+        # Arrange: both legs carry a maturity date ten days before the reporting date
+        # (a rolled position whose contractual date has passed).
+        reporting = crr_config.reporting_date
+        exposure_mat = reporting - timedelta(days=10)
+        collateral = _make_collateral(-10 / 365.25, exposure_mat)
+
+        # Act
+        result = HaircutCalculator().apply_maturity_mismatch(collateral, crr_config).collect()
+
+        # Assert
+        assert result["maturity_adjustment_factor"][0] == pytest.approx(1.0)
+
+    def test_matched_pair_with_short_original_term_is_not_gated(
+        self, crr_config: CalculationConfig
+    ) -> None:
+        # Arrange: a 60-day deposit opened 30 days ago (original term 90 days) against a
+        # 60-day loan. Art. 237(2)(a) binds only where a mismatch exists.
+        reporting = crr_config.reporting_date
+        exposure_mat = reporting + timedelta(days=60)
+        collateral = pl.LazyFrame(
+            {
+                "residual_maturity_years": [60 / 365.25],
+                "exposure_maturity": [exposure_mat],
+                "value_after_haircut": [1000.0],
+                "original_maturity_years": [90 / 365.0],
+            },
+            schema={
+                "residual_maturity_years": pl.Float64,
+                "exposure_maturity": pl.Date,
+                "value_after_haircut": pl.Float64,
+                "original_maturity_years": pl.Float64,
+            },
+        )
+
+        # Act
+        result = HaircutCalculator().apply_maturity_mismatch(collateral, crr_config).collect()
+
+        # Assert
+        assert result["maturity_adjustment_factor"][0] == pytest.approx(1.0)
+
+    def test_protection_shorter_than_a_short_exposure_is_still_zeroed(
+        self, crr_config: CalculationConfig
+    ) -> None:
+        # Arrange: 60-day exposure, 18-day collateral — a real mismatch under 3 months.
+        reporting = crr_config.reporting_date
+        exposure_mat = reporting + timedelta(days=60)
+        collateral = _make_collateral(18 / 365.25, exposure_mat)
+
+        # Act
+        result = HaircutCalculator().apply_maturity_mismatch(collateral, crr_config).collect()
+
+        # Assert: Art. 237(1) — under three months AND shorter than the exposure.
+        assert result["maturity_adjustment_factor"][0] == pytest.approx(0.0)
+
+    def test_mismatch_just_over_three_months_scales_without_a_floor_on_t(
+        self, crr_config: CalculationConfig
+    ) -> None:
+        # Arrange: 100-day exposure (T = 0.2738y), 95-day collateral (t = 0.2601y).
+        # A real mismatch with t >= 0.25, so the Art. 238 formula applies and its
+        # denominator T - 0.25 is positive without any floor on T.
+        reporting = crr_config.reporting_date
+        exposure_mat = reporting + timedelta(days=100)
+        t = 95 / 365.25
+        big_t = 100 / 365.25
+        collateral = _make_collateral(t, exposure_mat)
+
+        # Act
+        result = HaircutCalculator().apply_maturity_mismatch(collateral, crr_config).collect()
+
+        # Assert
+        expected = (t - 0.25) / (big_t - 0.25)
+        assert 0.0 < expected < 1.0
+        assert result["maturity_adjustment_factor"][0] == pytest.approx(expected, rel=1e-6)
+
+    def test_basel31_matched_short_pair_keeps_full_value(
+        self, b31_config: CalculationConfig
+    ) -> None:
+        # Arrange: PS1/26 carries Art. 237-239 forward unchanged.
+        reporting = b31_config.reporting_date
+        exposure_mat = reporting + timedelta(days=45)
+        collateral = _make_collateral(45 / 365.25, exposure_mat)
+
+        # Act
+        result = HaircutCalculator().apply_maturity_mismatch(collateral, b31_config).collect()
+
+        # Assert
         assert result["maturity_adjustment_factor"][0] == pytest.approx(1.0)

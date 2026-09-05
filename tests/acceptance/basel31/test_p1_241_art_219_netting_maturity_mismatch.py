@@ -80,3 +80,16 @@ class TestP1241B31NettingMaturityMismatch:
         short = _loan_rwa(_run("b31_short_orig"), SCENARIOS["b31_short_orig"].loan_ref)
         partial = _loan_rwa(_run("b31_partial"), SCENARIOS["b31_partial"].loan_ref)
         assert short > partial
+
+    def test_matched_short_dated_pair_nets_in_full(self) -> None:
+        """Escape 2026-09-05: a 60-day deposit against a 60-day loan is NOT a mismatch
+        under PS1/26 Art. 237(1) either → full £200k nets → RWA £800k."""
+        s = SCENARIOS["b31_matched_short"]
+        result = _run("b31_matched_short")
+        assert _loan_rwa(result, s.loan_ref) == pytest.approx(800_000.0, rel=1e-9)
+
+    def test_matched_past_dated_pair_nets_in_full(self) -> None:
+        """Both contractual dates passed 10 days ago: still equal residuals → RWA £800k."""
+        s = SCENARIOS["b31_matched_past"]
+        result = _run("b31_matched_past")
+        assert _loan_rwa(result, s.loan_ref) == pytest.approx(800_000.0, rel=1e-9)

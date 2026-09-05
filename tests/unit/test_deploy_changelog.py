@@ -13,6 +13,7 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 from _deploy_changelog import (  # noqa: E402  # ty: ignore[unresolved-import]
     EMPTY_UNRELEASED_BLOCK,
+    extract_version_section,
     promote_unreleased,
     update_version_table,
 )
@@ -205,6 +206,55 @@ class TestUpdateVersionTable:
 
         assert "| 0.2.15 | 2026-05-26 | Current |" in result
         assert "| 0.2.14 | 2026-05-26 | Previous |" in result
+
+
+class TestExtractVersionSection:
+    """The promoted section is reused verbatim as the GitHub Release notes."""
+
+    def test_returns_the_section_body_without_header_or_rule(self):
+        # Arrange
+        content = _wrap("\n### Added\n- Unreleased thing.\n\n")
+
+        # Act
+        section = extract_version_section(content, "0.2.14")
+
+        # Assert
+        assert section == "### Added\n- Prior release bullet."
+
+    def test_missing_version_is_none(self):
+        # Arrange
+        content = _wrap("\n")
+
+        # Act / Assert
+        assert extract_version_section(content, "9.9.9") is None
+
+    def test_freshly_promoted_section_round_trips_with_multiline_bullets(self):
+        # Arrange
+        body = (
+            "\n"
+            "### Fixed\n"
+            "- **A wrapped bullet** that runs on\n"
+            "  to a second line.\n"
+            "  - with a nested sub-bullet\n"
+            "\n"
+            "### Added\n"
+            "- Second bullet.\n"
+            "\n"
+        )
+        promoted = promote_unreleased(_wrap(body), "0.2.15", today=TODAY)
+
+        # Act
+        section = extract_version_section(promoted, "0.2.15")
+
+        # Assert
+        assert section is not None
+        assert section.startswith("### Fixed")
+        assert "  - with a nested sub-bullet" in section
+        assert "- Second bullet." in section
+        assert "## [" not in section, "the header of the NEXT section leaked in"
+        assert "---" not in section
+        assert "Unreleased" not in section
+        assert "Prior release bullet" not in section, "read past the section into 0.2.14"
 
 
 if __name__ == "__main__":

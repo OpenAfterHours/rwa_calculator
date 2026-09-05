@@ -29,6 +29,14 @@ counterparty (Art. 195):
     <regime>_short_orig — 6-month-ORIGINAL deposit (value_date = reporting) nets a
                          7-year loan: a mismatch with original < 1y → Art. 237(2)(a)
                          zeroes the protection → NO netting benefit → EAD £1m.
+    <regime>_matched_short — deposit AND loan both mature 60 days out (deposit
+                         opened 30 days before that): equal residuals are NOT a
+                         mismatch (Art. 237(1)), so the short original term never
+                         comes into it → full £200k nets → EAD £800k. Escape log
+                         2026-09-05: the exposure residual used to be floored at
+                         0.25y before the comparison, which zeroed this pair.
+    <regime>_matched_past — both contractual dates passed 10 days before the
+                         reporting date (a rolled position): still matched → EAD £800k.
 
 Both counterparties are unrated corporates (100% SA risk weight), so the loan RWA
 equals the post-netting EAD. The bundle is assembled IN MEMORY (no parquet
@@ -45,7 +53,7 @@ References:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 
 import polars as pl
 from dateutil.relativedelta import relativedelta
@@ -96,22 +104,34 @@ class Scenario:
 
     def deposit_value_date(self, reporting_date: date) -> date:
         # partial: 2.5y before reporting → 3y original term (>= 1y, eligible).
+        # matched_short / matched_past: opened 30 days before maturity (short
+        # original term that Art. 237(2)(a) may only hold against a MISMATCH).
         # matched / short_orig: value_date = reporting → original = residual.
         if self.kind == "partial":
             return reporting_date - relativedelta(years=2, months=6)
+        if self.kind in ("matched_short", "matched_past"):
+            return self.deposit_maturity(reporting_date) - timedelta(days=30)
         return reporting_date
 
     def deposit_maturity(self, reporting_date: date) -> date:
         # matched: 6-year deposit (longer than the 5-year loan → no mismatch).
+        # matched_short: 60 days; matched_past: 10 days AGO (rolled position).
         # partial / short_orig: 6-month residual (short protection).
         if self.kind == "matched":
             return reporting_date + relativedelta(years=6)
+        if self.kind == "matched_short":
+            return reporting_date + timedelta(days=60)
+        if self.kind == "matched_past":
+            return reporting_date - timedelta(days=10)
         return reporting_date + relativedelta(months=6)
 
     def loan_maturity(self, reporting_date: date) -> date:
-        # matched: 5-year loan. partial / short_orig: 7-year loan → T caps at 5y.
+        # matched: 5-year loan. matched_short / matched_past: the deposit's own
+        # date (equal residuals). partial / short_orig: 7-year loan → T caps at 5y.
         if self.kind == "matched":
             return reporting_date + relativedelta(years=5)
+        if self.kind in ("matched_short", "matched_past"):
+            return self.deposit_maturity(reporting_date)
         return reporting_date + relativedelta(years=7)
 
     def expected_loan_rwa(self, reporting_date: date) -> float:
@@ -120,10 +140,11 @@ class Scenario:
         # t = deposit residual (Art. 238), engine /365.25 basis (matches the
         # exposure-side T in HaircutCalculator.apply_maturity_mismatch).
         t = (dep_mat - reporting_date).days / 365.25
-        # T = min(loan residual /365.25, 5.0), floored at 0.25.
+        # T = min(loan residual /365.25, 5.0) — Art. 238(1) caps T at five years
+        # and does NOT floor it: the 0.25 term belongs to the scaling formula only.
         loan_days = (self.loan_maturity(reporting_date) - reporting_date).days
-        big_t = max(min(loan_days / 365.25, 5.0), 0.25)
-        if t >= big_t:  # no maturity mismatch → full netting
+        big_t = min(loan_days / 365.25, 5.0)
+        if t >= big_t:  # no maturity mismatch (Art. 237(1)) → full netting
             return RWA_MATCHED_NETTED
         # original maturity (Art. 237(2)(a)) via /365 (engine enrich/risk_weights).
         orig = (dep_mat - self.deposit_value_date(reporting_date)).days / 365.0
@@ -140,6 +161,10 @@ SCENARIOS: dict[str, Scenario] = {
     "b31_matched": Scenario("b31_matched", "matched"),
     "b31_partial": Scenario("b31_partial", "partial"),
     "b31_short_orig": Scenario("b31_short_orig", "short_orig"),
+    "crr_matched_short": Scenario("crr_matched_short", "matched_short"),
+    "crr_matched_past": Scenario("crr_matched_past", "matched_past"),
+    "b31_matched_short": Scenario("b31_matched_short", "matched_short"),
+    "b31_matched_past": Scenario("b31_matched_past", "matched_past"),
 }
 
 

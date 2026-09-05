@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 from watchfire import cites
 
+from rwa_calc.contracts.errors import ERROR_MATURITY_MISMATCH, crm_warning
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.schemas import NON_FINANCIAL_COLLATERAL_TYPES
 from rwa_calc.domain.enums import CRMCollateralMethod
@@ -51,6 +52,7 @@ from rwa_calc.rulebook.resolve import resolve
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.contracts.errors import CalculationError
     from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 # CRM regulatory int counts resolved from the common pack once at module load:
@@ -677,15 +679,31 @@ class HaircutCalculator:
         self,
         collateral: pl.LazyFrame,
         config: CalculationConfig,
+        *,
+        errors: list[CalculationError] | None = None,
     ) -> pl.LazyFrame:
         """
         Apply maturity mismatch adjustment per CRR Art. 237-238.
 
-        Art. 237(2) ineligibility conditions (protection zeroed when mismatch exists):
-        - (a) Residual maturity < 3 months (existing check)
-        - (b) Original maturity of protection < 1 year
-        - Art. 162(3) exposures with 1-day IRB maturity floor: ANY mismatch makes
-          protection ineligible (repos/SFTs with daily margining)
+        A mismatch exists only where the protection's residual maturity is LESS
+        THAN the exposure's (Art. 237(1)); the comparison is made on the RAW
+        residuals. Equal residuals — an interbank loan against an interbank
+        deposit sharing one maturity date, however short — are not a mismatch and
+        keep full protection. The exposure residual ``T`` is capped at five years
+        (Art. 238(1)) and is NOT floored: the 0.25 term belongs to the scaling
+        formula below, which is reached only when ``t >= 0.25`` and ``t < T``, so
+        its denominator is always positive. Flooring ``T`` before the comparison
+        fabricated a mismatch for every matched pair maturing within three months
+        of the reporting date and zeroed its protection (escape log 2026-09-05;
+        the guarantee twin in ``engine/crm/guarantees.py`` already compares raw
+        residuals).
+
+        Art. 237 ineligibility conditions (protection zeroed when a mismatch exists):
+        - 237(1): protection residual maturity < 3 months
+        - 237(2)(a): original maturity of protection < 1 year
+        - 237(2)(b) with Art. 162(3): exposures subject to the one-day IRB
+          maturity floor — ANY mismatch makes protection ineligible (repos/SFTs
+          with daily margining)
 
         Formula (Art. 238): CVAM = CVA × (t - 0.25) / (T - 0.25)
         where t = collateral residual maturity, T = min(exposure residual maturity, 5).
@@ -696,6 +714,10 @@ class HaircutCalculator:
                 original_maturity_years (Float64) and
                 exposure_has_one_day_maturity_floor (Boolean).
             config: Calculation configuration (provides reporting_date)
+            errors: CRM error channel. When supplied, ONE rolled-up CRM002
+                warning records how many rows the gates zeroed and how many the
+                formula scaled (``_record_maturity_mismatch_adjustments``);
+                direct unit-test callers may omit it.
 
         Returns:
             LazyFrame with maturity-adjusted collateral values
@@ -703,7 +725,9 @@ class HaircutCalculator:
         reporting_date = config.reporting_date
         coll_schema = collateral.collect_schema()
 
-        # Derive exposure maturity in years from the Date column, capped at 5y, floored at 0.25y
+        # Exposure residual maturity T in years: Art. 238(1) caps it at five years
+        # and does not floor it. A null exposure maturity defaults to 5y — the
+        # most conservative recognised maturity, mirroring the guarantee twin.
         exposure_maturity_years_expr = (
             (
                 (pl.col("exposure_maturity").cast(pl.Date) - pl.lit(reporting_date))
@@ -711,7 +735,7 @@ class HaircutCalculator:
                 .cast(pl.Float64)
                 / 365.25
             )
-            .clip(lower_bound=0.25, upper_bound=5.0)
+            .clip(upper_bound=5.0)
             .fill_null(5.0)
         )
 
@@ -740,7 +764,9 @@ class HaircutCalculator:
 
         collateral = collateral.with_columns(prep_cols)
 
-        # Determine whether a maturity mismatch exists (collateral < exposure)
+        # Art. 237(1): a mismatch exists only where the protection residual is
+        # strictly LESS than the exposure residual — compared raw, no floor on
+        # either side. Every gate and the scaling below are conditioned on it.
         has_mismatch = pl.col("coll_maturity") < pl.col("_exposure_maturity_years")
 
         # Calculate maturity mismatch adjustment per Art. 237-238
@@ -749,17 +775,19 @@ class HaircutCalculator:
                 # No adjustment when collateral maturity >= exposure maturity
                 pl.when(~has_mismatch)
                 .then(pl.lit(1.0))
-                # Art. 237(2)(a): No protection when collateral maturity < 3 months
+                # Art. 237(1): no protection when the (shorter) collateral residual
+                # is under three months
                 .when(pl.col("coll_maturity") < 0.25)
                 .then(pl.lit(0.0))
-                # Art. 237(2): Original maturity of protection < 1 year → ineligible
+                # Art. 237(2)(a): original maturity of protection < 1 year → ineligible
                 .when(pl.col("_orig_maturity") < 1.0)
                 .then(pl.lit(0.0))
-                # Art. 162(3)/237(2): 1-day M floor exposure → any mismatch makes
+                # Art. 162(3)/237(2)(b): 1-day M floor exposure → any mismatch makes
                 # protection ineligible (repos/SFTs with daily margining)
                 .when(pl.col("_has_1d_floor"))
                 .then(pl.lit(0.0))
-                # CVAM = (t - 0.25) / (T - 0.25) where T = exposure maturity capped at 5y
+                # CVAM = (t - 0.25) / (T - 0.25), T capped at 5y. Reached only with
+                # t >= 0.25 and t < T, so T - 0.25 > 0 without any floor on T.
                 .otherwise(
                     (pl.col("coll_maturity") - 0.25) / (pl.col("_exposure_maturity_years") - 0.25)
                 )
@@ -775,6 +803,12 @@ class HaircutCalculator:
                 ),
             ]
         )
+
+        # CRR/PS1-26 Art. 237-239: say what was taken away. Until the 2026-09-05
+        # escape CRM002 was declared and never produced, so a netted deposit
+        # zeroed by the gates left no record beside the unsecured LGD.
+        if errors is not None:
+            _record_maturity_mismatch_adjustments(collateral, errors)
 
         return collateral.drop(["_exposure_maturity_years", "_orig_maturity", "_has_1d_floor"])
 
@@ -1039,3 +1073,41 @@ def _apply_optional_maturity_mismatch(
     if adjusted > Decimal("0") and denominator > Decimal("0"):
         maturity_adj = adjusted / denominator
     return adjusted, maturity_adj
+
+
+def _record_maturity_mismatch_adjustments(
+    collateral: pl.LazyFrame,
+    errors: list[CalculationError],
+) -> None:
+    """Append ONE rolled-up CRM002 warning counting the collateral rows the
+    CRR/PS1-26 Art. 237-239 maturity treatment zeroed or scaled.
+
+    Called from ``HaircutCalculator.apply_maturity_mismatch`` on the frame it has
+    just annotated, so ``value_after_haircut`` and ``maturity_adjustment_factor``
+    are present by construction. Rows that carried no value before the step are
+    not counted — zeroing nothing is not a loss — and a null value or factor
+    drops out of the count. Rolled up to a per-run count (the CRM018 idiom) so
+    an interbank book cannot flood the error channel.
+    """
+    factor = pl.col("maturity_adjustment_factor")
+    had_value = pl.col("value_after_haircut") > 0.0
+    counts = collateral.select(
+        (had_value & (factor <= 0.0)).cast(pl.UInt32).sum().alias("zeroed"),
+        (had_value & (factor > 0.0) & (factor < 1.0)).cast(pl.UInt32).sum().alias("scaled"),
+    ).collect()
+    zeroed = int(counts["zeroed"][0] or 0)
+    scaled = int(counts["scaled"][0] or 0)
+    if zeroed <= 0 and scaled <= 0:
+        return
+    errors.append(
+        crm_warning(
+            ERROR_MATURITY_MISMATCH,
+            f"{zeroed} collateral row(s) lost all protection to the Art. 237 "
+            f"maturity gates (protection residual under three months and shorter "
+            f"than the exposure; original term under one year with a mismatch; or "
+            f"a one-day-maturity-floor exposure with a mismatch) and {scaled} row(s) "
+            f"were scaled by the Art. 238 factor (t - 0.25) / (T - 0.25). Netted "
+            f"deposits (CRR Art. 219) appear here as NETTING_ cash rows.",
+            regulatory_reference="CRR/PS1-26 Art. 237-239",
+        )
+    )

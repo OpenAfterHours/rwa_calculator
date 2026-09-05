@@ -364,9 +364,12 @@ def generate_stress_org_mappings(
     n = len(cp_refs)
     n_children = int(n * hierarchy_pct)
 
-    # First n_children are children, rest are potential parents
+    # First n_children are children, rest are potential parents. ``setdiff1d`` returns
+    # the ascending complement, the same array the previous comprehension built —
+    # but that form rebuilt ``set(child_indices)`` once per candidate, which was
+    # O(n x n_children) and cost ~500s of fixture setup at the 100k scale.
     child_indices = rng.permutation(n)[:n_children]
-    parent_pool = np.array([i for i in range(n) if i not in set(child_indices)])
+    parent_pool = np.setdiff1d(np.arange(n), child_indices)
 
     if len(parent_pool) == 0:
         return pl.LazyFrame(schema=dtypes_of(ORG_MAPPING_SCHEMA))

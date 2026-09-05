@@ -796,16 +796,28 @@ and run the checker from the venv binary rather than `uv run`.
   the reported flow was `_splice`'s `read_text` content reaching `write_text`'s
   *data* argument. Beware the plausible tell — an unflagged `read_text` beside a
   flagged `write_text` on the same loop variable looks like proof that provenance
-  is the variable; it only means the read takes no tainted argument. **Detect:**
+  is the variable; it only means the read takes no tainted argument. Follow the
+  mechanism to the remedy: when a sink is reported for a tainted *argument*, what
+  to remove is the argument, not the path — the generator now does
+  `path.open("w")` + `handle.write(content)`, so the path-taking call carries no
+  tainted argument at all. "The sink is reported for an argument" and "there is
+  no structural fix" cannot both be true. And an **accept is not a closure**: it
+  is a platform action leaving no artefact in this repo, so it must be verified
+  (`gh api repos/.../code-scanning/alerts/<n> --jq .state`) — one recorded as done
+  in a commit message, a properties note *and* a test docstring had never landed,
+  and the BLOCKER sat open on master for three weeks. **Detect:**
   SonarCloud uploads SARIF to GitHub code scanning, so the flow needs no
-  SonarCloud credentials (which the sandbox cannot reach anyway):
+  SonarCloud credentials:
   ```
   gh api "repos/OpenAfterHours/rwa_calculator/code-scanning/analyses?tool_name=SonarCloud&ref=refs/heads/master" --jq '.[0].id'
   gh api "repos/OpenAfterHours/rwa_calculator/code-scanning/analyses/<id>" -H "Accept: application/sarif+json"
   ```
   Read `.runs[].results[].codeFlows[].threadFlows[].locations[]` (each carries a
   `Source:`/`Sink:` message). Swap `ref=` for `pr=<n>` on a PR. Mint the token
-  with `git credential fill` — see the `gh` auth note in memory.
+  with `git credential fill` — see the `gh` auth note in memory. sonarcloud.io
+  *is* reachable from the sandbox and answers anonymously for this project; that
+  is the faster check, and unlike the SARIF route it shows resolution state:
+  `curl -s "https://sonarcloud.io/api/issues/search?componentKeys=OpenAfterHours_rwa_calculator&branch=master&rules=pythonsecurity:S2083"`
 - **The ruff `--fix` PostToolUse hook strips a momentarily-unused import**
   between edits (and unquotes `Literal["x"]`). Add imports after the usage
   exists.

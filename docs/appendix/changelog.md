@@ -53,6 +53,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   firm policy, the mechanism, both metrics, the floor-percentage boundary, the
   election with its direction, the obligor-aggregate semantics and the audit
   surface.
+- **CRM002 maturity-mismatch warning is now produced.** One rolled-up warning per
+  run counts the collateral rows the CRR/PS1-26 Art. 237-239 treatment zeroed
+  (three-month, one-year-original and one-day-floor gates) or scaled by the
+  Art. 238 factor, netted deposits included. The code had been declared with no
+  producer, so protection lost to these gates left no record.
+- Acceptance coverage for matched short-dated on-balance-sheet netting under
+  F-IRB (institution obligor, CRR and Basel 3.1) and two new P1.241 scenarios
+  (`matched_short`, `matched_past`).
 
 ### Changed
 - **A shared facility's undrawn commitment is now allocated to the riskiest
@@ -135,6 +143,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   components (columns 0251–0254) by exactly the floor shortfall — the first
   registered portfolio with a **binding** floor is what made those rules fire at
   all.
+- **Fixed: a loan and a deposit sharing one maturity date inside three months of
+  the reporting date, or a date already passed, lost their whole netting benefit
+  (RWA-reducing).** `apply_maturity_mismatch` floored the exposure residual at
+  0.25 years before comparing it with the (unfloored) protection residual, so a
+  matched pair compared as "protection shorter than exposure", tripped the
+  Art. 237(1) three-month gate and was zeroed — an F-IRB interbank loan fully
+  offset by a same-day deposit reported LGD 45% and full RWA. Art. 237(1) defines
+  a mismatch only where the protection residual is *less than* the exposure's,
+  and Art. 238(1) caps the exposure maturity at five years without flooring it,
+  so the comparison now uses the raw residuals (as the guarantee twin already
+  did); the 0.25 term stays in the scaling formula, which is reached only when
+  0.25 <= t < T. Same-currency, same-maturity pairs now net in full at any tenor;
+  a real sub-three-month mismatch is still zeroed. User-supplied collateral whose
+  residual matches a short loan is freed by the same change. Escape-log entry
+  2026-09-05 (`path-never-exercised`).
+- **The release flow now pushes and publishes for you.** `scripts/deploy.py`,
+  and so `/release`, ends by pushing the release commit and its tag to `origin`
+  in one `git push --atomic origin <branch> refs/tags/v<ver>` (both land or
+  neither does, and only the release tag travels, never every local tag) and
+  then creating GitHub Release `v<ver>` from that tag with
+  `gh release create --verify-tag`, using the just-promoted changelog section as
+  the notes with GitHub's generated PR list appended. The GitHub Release is the
+  publish step — `publish.yml` runs on a published release and uploads to
+  PyPI — which is how every release since v0.3.28 was in fact published, by
+  hand. Because the push and the release are the steps most likely to be
+  rejected by state outside the checkout, a new pre-flight runs *before* the
+  test suite and refuses on a detached HEAD, a branch behind its upstream, a
+  tag already on the remote, or `gh` not logged in, so a stale checkout costs
+  seconds rather than a full run followed by a rejected push. A failed push or
+  release leaves the local state alone and prints the manual command. The
+  irreversible steps are named up front and confirmed interactively; `--yes`
+  skips that prompt for non-interactive callers, and `/release` passes it on
+  the strength of its own Step 3 confirmation. Opt-outs: `--no-github-release`
+  pushes without publishing, `--no-push` commits and tags locally, `--no-git`
+  implies both, and `--publish` now means "upload from this machine instead of
+  via the release". Pinned by `tests/unit/test_deploy_push.py` and
+  `tests/unit/test_deploy_changelog.py::TestExtractVersionSection`.
+- **Stress-suite fixture generation is no longer quadratic.**
+  `generate_stress_org_mappings` in `tests/acceptance/stress/conftest.py` built
+  the parent pool with a list comprehension that re-materialised
+  `set(child_indices)` for every candidate index — O(n × n_children), measured
+  at 2 s / 15 s / 56 s for 10k / 20k / 40k counterparties and ~514 s for the
+  100k `stress_dataset_100k` session fixture, which was 87% of the stress
+  suite's 9m52s wall time. It now uses `np.setdiff1d`, which returns the same
+  ascending complement (output verified frame-identical at 10k and 20k across
+  two seeds) in under a second at 100k. Test infrastructure only; no engine or
+  fixture-data change.
+
+### Security
+- **`pythonsecurity:S2083` on `scripts/generate_regulatory_tables.py` is fixed
+  structurally, and was never accepted as the record claimed.** The BLOCKER
+  taint finding (GitHub code-scanning alert 35) had been open on `master` since
+  2026-08-16 while a commit message, `sonar-project.properties` and a test
+  docstring all recorded it as resolved-Accepted in the SonarCloud platform; the
+  key they named is not the key `master` reports, and that issue is still `OPEN`.
+  The reported flow runs from `_splice`'s `read_text` (the file *content*) to the
+  write's *data argument*, so neither of the two earlier path-provenance fixes
+  could move it — but the content does not have to be an argument to a call that
+  also takes a path. `main()` now opens each stale target and writes to the
+  stream, leaving the path-taking call with only the constant-derived path and a
+  literal mode. Generator behaviour is byte-identical (`--check` exit 0 fresh /
+  1 stale, `wrote 1 of 17`, page restored byte-for-byte). Gated by
+  `test_generator_keeps_spliced_content_out_of_a_path_taking_call`, which fails
+  on any `write_text` / `write_bytes` in the generator; recorded in
+  `docs/development/escape-log.md` as `caught-and-parked`.
 
 ---
 

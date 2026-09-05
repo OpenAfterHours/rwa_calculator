@@ -537,8 +537,9 @@ def apply_collateral(
         # warning per gated row.
         _record_credit_linked_note_not_own_issued(adjusted_collateral, errors)
 
-    # Apply maturity mismatch using actual exposure maturity (Art. 238)
-    adjusted_collateral = haircut_calculator.apply_maturity_mismatch(adjusted_collateral, config)
+    adjusted_collateral = haircut_calculator.apply_maturity_mismatch(
+        adjusted_collateral, config, errors=errors
+    )
 
     # Opt-in audit cache: persist the per-collateral haircut frame for inspection.
     # No-op unless config.audit_cache_dir is set. Surfaces fx_haircut /

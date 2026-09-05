@@ -30,7 +30,7 @@ Only **GAP** is an actionable coverage hole. **UNCITED** is a citation-debt sign
 
 Articles are grouped by the citing instrument and keyed by *base* article (`122` for a `122(2)` citation); the layers cite the same rule at different sub-reference granularity, so the machine-readable snapshot at `tests/contracts/data/confidence_snapshot.json` preserves the full member list per layer for audit.
 
-Package version `0.3.32`. Resolved packs:
+Package version `0.3.33`. Resolved packs:
 
 - **CRR** (`crr` @ 2026-01-01) — content hash `9c63304e801e3a38`
 - **Basel 3.1** (`b31` @ 2027-01-01) — content hash `be501c3fe5513117`

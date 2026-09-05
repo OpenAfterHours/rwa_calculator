@@ -4,7 +4,7 @@
 
 Every cited regulatory value in the rulepack packs `src/rwa_calc/rulebook/packs/{common,crr,b31}.py`, rendered from `rwa_calc.rulebook.resolve.resolve(regime, date)`. **This page is generated** — a wrong value here is a rulepack finding, never a docs edit. Entries identical under both regimes appear once; divergent entries appear per regime.
 
-Package version `0.3.32`. Resolved packs:
+Package version `0.3.33`. Resolved packs:
 
 - **CRR** (`crr` @ 2026-01-01) — 204 entries, content hash `9c63304e801e3a38`
 - **Basel 3.1** (`b31` @ 2027-01-01) — 236 entries, content hash `be501c3fe5513117`

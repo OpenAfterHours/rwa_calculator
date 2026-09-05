@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- (Next release changes will go here)
+
+### Changed
+- (Next release changes will go here)
+
+---
+
+## [0.3.33] - 2026-09-05
+
+### Added
 - **Pack Feature `on_bs_netting_perimeter_is_agreement`, enabled in both regimes.**
   Records the operator decision of 2026-09-04 that the netting agreement
   reference alone bounds on-balance-sheet set-off under CRR / PS1/26 Art. 195:

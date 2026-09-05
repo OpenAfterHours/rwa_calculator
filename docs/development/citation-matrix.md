@@ -517,9 +517,9 @@ Last generated: 2026-09-05.
 
 ### CRR Art. 142 — Definitions
 
-??? quote "`classify_exposure_subtypes` — src/rwa_calc/engine/classify/subtypes.py:65"
+??? quote "`classify_exposure_subtypes` — src/rwa_calc/engine/classify/subtypes.py:76"
     ```python
-    --8<-- "src/rwa_calc/engine/classify/subtypes.py:64:252"
+    --8<-- "src/rwa_calc/engine/classify/subtypes.py:75:269"
     ```
 
 
@@ -573,14 +573,14 @@ Last generated: 2026-09-05.
     --8<-- "src/rwa_calc/engine/classify/classifier.py:106:195"
     ```
 
-??? quote "`sync_irb_exposure_class` — src/rwa_calc/engine/classify/subtypes.py:549"
+??? quote "`sync_irb_exposure_class` — src/rwa_calc/engine/classify/subtypes.py:586"
     ```python
-    --8<-- "src/rwa_calc/engine/classify/subtypes.py:549:619"
+    --8<-- "src/rwa_calc/engine/classify/subtypes.py:586:656"
     ```
 
-??? quote "`sync_irb_exposure_class` — src/rwa_calc/engine/classify/subtypes.py:550"
+??? quote "`sync_irb_exposure_class` — src/rwa_calc/engine/classify/subtypes.py:587"
     ```python
-    --8<-- "src/rwa_calc/engine/classify/subtypes.py:549:619"
+    --8<-- "src/rwa_calc/engine/classify/subtypes.py:586:656"
     ```
 
 
@@ -646,9 +646,9 @@ Last generated: 2026-09-05.
     --8<-- "src/rwa_calc/engine/classify/attributes.py:602:630"
     ```
 
-??? quote "`classify_exposure_subtypes` — src/rwa_calc/engine/classify/subtypes.py:64"
+??? quote "`classify_exposure_subtypes` — src/rwa_calc/engine/classify/subtypes.py:75"
     ```python
-    --8<-- "src/rwa_calc/engine/classify/subtypes.py:64:252"
+    --8<-- "src/rwa_calc/engine/classify/subtypes.py:75:269"
     ```
 
 ??? quote "`apply_irb_formulas` — src/rwa_calc/engine/irb/formulas.py:532"
@@ -709,24 +709,24 @@ Last generated: 2026-09-05.
 
 ### CRR Art. 154 — Risk-weighted exposure amounts for retail exposures
 
-??? quote "`classify_exposure_subtypes` — src/rwa_calc/engine/classify/subtypes.py:66"
+??? quote "`classify_exposure_subtypes` — src/rwa_calc/engine/classify/subtypes.py:77"
     ```python
-    --8<-- "src/rwa_calc/engine/classify/subtypes.py:64:252"
+    --8<-- "src/rwa_calc/engine/classify/subtypes.py:75:269"
     ```
 
-??? quote "`qrre_unsecured_expr` — src/rwa_calc/engine/classify/subtypes.py:260"
+??? quote "`qrre_unsecured_expr` — src/rwa_calc/engine/classify/subtypes.py:277"
     ```python
-    --8<-- "src/rwa_calc/engine/classify/subtypes.py:260:275"
+    --8<-- "src/rwa_calc/engine/classify/subtypes.py:277:292"
     ```
 
-??? quote "`qrre_undrawn_cancellable_expr` — src/rwa_calc/engine/classify/subtypes.py:278"
+??? quote "`qrre_undrawn_cancellable_expr` — src/rwa_calc/engine/classify/subtypes.py:295"
     ```python
-    --8<-- "src/rwa_calc/engine/classify/subtypes.py:278:303"
+    --8<-- "src/rwa_calc/engine/classify/subtypes.py:295:320"
     ```
 
-??? quote "`qrre_obligor_aggregate_limit_expr` — src/rwa_calc/engine/classify/subtypes.py:306"
+??? quote "`qrre_obligor_aggregate_limit_expr` — src/rwa_calc/engine/classify/subtypes.py:323"
     ```python
-    --8<-- "src/rwa_calc/engine/classify/subtypes.py:306:377"
+    --8<-- "src/rwa_calc/engine/classify/subtypes.py:323:414"
     ```
 
 ??? quote "`apply_irb_formulas` — src/rwa_calc/engine/irb/formulas.py:533"
@@ -770,14 +770,14 @@ Last generated: 2026-09-05.
 
 ### CRR Art. 160 — Probability of default (PD)
 
-??? quote "`derive_purchased_receivables_pd` — src/rwa_calc/engine/classify/subtypes.py:385"
+??? quote "`derive_purchased_receivables_pd` — src/rwa_calc/engine/classify/subtypes.py:422"
     ```python
-    --8<-- "src/rwa_calc/engine/classify/subtypes.py:385:480"
+    --8<-- "src/rwa_calc/engine/classify/subtypes.py:422:517"
     ```
 
-??? quote "`derive_purchased_receivables_pd` — src/rwa_calc/engine/classify/subtypes.py:386"
+??? quote "`derive_purchased_receivables_pd` — src/rwa_calc/engine/classify/subtypes.py:423"
     ```python
-    --8<-- "src/rwa_calc/engine/classify/subtypes.py:385:480"
+    --8<-- "src/rwa_calc/engine/classify/subtypes.py:422:517"
     ```
 
 ??? quote "`_pd_floor_expression` — src/rwa_calc/engine/irb/formulas.py:110"
@@ -1715,29 +1715,29 @@ Last generated: 2026-09-05.
     --8<-- "src/rwa_calc/engine/classify/attributes.py:508:524"
     ```
 
-??? quote "`classify_exposure_subtypes` — src/rwa_calc/engine/classify/subtypes.py:68"
+??? quote "`classify_exposure_subtypes` — src/rwa_calc/engine/classify/subtypes.py:79"
     ```python
-    --8<-- "src/rwa_calc/engine/classify/subtypes.py:64:252"
+    --8<-- "src/rwa_calc/engine/classify/subtypes.py:75:269"
     ```
 
-??? quote "`qrre_unsecured_expr` — src/rwa_calc/engine/classify/subtypes.py:261"
+??? quote "`qrre_unsecured_expr` — src/rwa_calc/engine/classify/subtypes.py:278"
     ```python
-    --8<-- "src/rwa_calc/engine/classify/subtypes.py:260:275"
+    --8<-- "src/rwa_calc/engine/classify/subtypes.py:277:292"
     ```
 
-??? quote "`qrre_undrawn_cancellable_expr` — src/rwa_calc/engine/classify/subtypes.py:279"
+??? quote "`qrre_undrawn_cancellable_expr` — src/rwa_calc/engine/classify/subtypes.py:296"
     ```python
-    --8<-- "src/rwa_calc/engine/classify/subtypes.py:278:303"
+    --8<-- "src/rwa_calc/engine/classify/subtypes.py:295:320"
     ```
 
-??? quote "`qrre_obligor_aggregate_limit_expr` — src/rwa_calc/engine/classify/subtypes.py:307"
+??? quote "`qrre_obligor_aggregate_limit_expr` — src/rwa_calc/engine/classify/subtypes.py:324"
     ```python
-    --8<-- "src/rwa_calc/engine/classify/subtypes.py:306:377"
+    --8<-- "src/rwa_calc/engine/classify/subtypes.py:323:414"
     ```
 
-??? quote "`sync_irb_exposure_class` — src/rwa_calc/engine/classify/subtypes.py:551"
+??? quote "`sync_irb_exposure_class` — src/rwa_calc/engine/classify/subtypes.py:588"
     ```python
-    --8<-- "src/rwa_calc/engine/classify/subtypes.py:549:619"
+    --8<-- "src/rwa_calc/engine/classify/subtypes.py:586:656"
     ```
 
 
@@ -1751,25 +1751,25 @@ Last generated: 2026-09-05.
 
 ### PS1/26, paragraph 147A.1 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`derive_exposure_subclass` — src/rwa_calc/engine/classify/subtypes.py:622"
+??? quote "`derive_exposure_subclass` — src/rwa_calc/engine/classify/subtypes.py:659"
     ```python
-    --8<-- "src/rwa_calc/engine/classify/subtypes.py:622:676"
+    --8<-- "src/rwa_calc/engine/classify/subtypes.py:659:713"
     ```
 
 
 ### PS1/26, paragraph 153 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`classify_exposure_subtypes` — src/rwa_calc/engine/classify/subtypes.py:67"
+??? quote "`classify_exposure_subtypes` — src/rwa_calc/engine/classify/subtypes.py:78"
     ```python
-    --8<-- "src/rwa_calc/engine/classify/subtypes.py:64:252"
+    --8<-- "src/rwa_calc/engine/classify/subtypes.py:75:269"
     ```
 
 
 ### PS1/26, paragraph 160 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`derive_purchased_receivables_pd` — src/rwa_calc/engine/classify/subtypes.py:387"
+??? quote "`derive_purchased_receivables_pd` — src/rwa_calc/engine/classify/subtypes.py:424"
     ```python
-    --8<-- "src/rwa_calc/engine/classify/subtypes.py:385:480"
+    --8<-- "src/rwa_calc/engine/classify/subtypes.py:422:517"
     ```
 
 

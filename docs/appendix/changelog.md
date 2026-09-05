@@ -94,11 +94,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   standardised-equivalent S-TREA of an IRB row is computed on the unreduced
   exposure, so on a mixed F-IRB + SA book measured at three reporting dates
   S-TREA was identical in both Feature states while U-TREA fell — the floor
-  becomes *more* likely to bind, not less. Every golden, oracle and reporting
-  fixture is number-neutral — none carries a netting agreement spanning
-  counterparties (only the P1.238, P1.241 and `r1_negative_gross` builders set
-  a reference at all, each on one counterparty), which is a coverage gap, not
-  evidence of a small effect. The per-exposure
+  becomes *more* likely to bind, not less. Every pre-existing golden, oracle
+  and `RUNS`-registered reporting portfolio is number-neutral — none carries a
+  netting agreement spanning counterparties (only the P1.238, P1.241 and
+  `r1_negative_gross` builders set a reference at all, and the one that spans
+  counterparties, P1.238, is an in-memory acceptance fixture asserting RWA, not
+  a reporting portfolio) — a coverage gap, not evidence of a small effect,
+  closed by the `netting` portfolio added above. The per-exposure
   `on_bs_netting_amount` (COREP C 07.00 / C 08.01 column 0035) sums the
   cross-counterparty allocations per beneficiary as before. Pinned by
   `tests/unit/crm/test_netting.py::TestNettingByAgreementReference` (cross-

@@ -9,13 +9,16 @@ Why this exists — the coverage gap recorded in PR #487. The netting commit on 
 branch makes on-balance-sheet netting key on ``netting_agreement_reference`` ALONE
 (CRR/PS1-26 Art. 195 / 205(a) / 219), so a deposit held by counterparty A now
 offsets a loan to counterparty B under the same agreement. NO golden, oracle or
-reporting fixture in the estate carries an agreement that spans counterparties:
-the three fixture files that set a netting reference at all (``p1_238``,
-``p1_241`` and the ``r1_negative_gross`` portfolio) each put every leg under ONE
-counterparty, and such a reference nets identically whichever perimeter key is in
-force. The change was therefore number-neutral across the whole committed estate,
-and C 07.00 col 0035 was dead (``NO_FIXTURE``) in every registered run. This
-portfolio is the fixture that lights it.
+RUNS-registered reporting portfolio in the estate carried an agreement that spans
+counterparties: of the three fixture files that set a netting reference at all,
+``p1_241`` and the ``r1_negative_gross`` portfolio put every leg under ONE
+counterparty (such a reference nets identically whichever perimeter key is in
+force), and ``p1_238`` — which DOES span counterparties and whose RWA the Feature
+DOES move — is an in-memory acceptance fixture asserting RWA, not template cells,
+and is not registered in ``RUNS``. The change was therefore invisible to every
+golden, census and supervisory rule, and C 07.00 col 0035 was dead
+(``NO_FIXTURE``) in every registered run. This portfolio is the fixture that
+lights it.
 
 Two-leg design (LESSONS.md B5 — a single moving row leaves the cell at 0.00
 afterwards, so a test over it cannot tell "the change worked" from "the change

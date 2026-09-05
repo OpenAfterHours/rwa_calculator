@@ -139,7 +139,7 @@ Why the key is ``(regime, rule_id)`` and not the failing coordinate:
     ``re-split``, ``art199`` and ``irb-shapes`` have NO golden, only focused
     acceptance tests pinning the columns
     each fixture was built for: strong on those columns, silent elsewhere. Golden
-    coverage for those three is owed work too.
+    coverage for those four is owed work too.
 
 Cost, and why every run is load-bearing:
     This file is the most expensive test in the suite: ten portfolios x two

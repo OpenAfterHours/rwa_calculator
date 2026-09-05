@@ -11,17 +11,19 @@ Why a NEW portfolio (rather than extending an existing one): the
 agreement-perimeter change makes on-balance-sheet netting key on the
 ``netting_agreement_reference`` ALONE, so a deposit and a loan under the SAME
 agreement now net regardless of which counterparty holds which leg (CRR/PS1-26
-Art. 195, Art. 205(a), Art. 219). Every existing golden/oracle/reporting
-portfolio is number-NEUTRAL to this change — the census that motivated this
-fixture found only three fixture files that set
-``netting_agreement_reference`` at all (``tests/fixtures/p1_238/``,
-``tests/fixtures/p1_241/`` and the ``r1_negative_gross`` portfolio in
-``tests/acceptance/reporting/test_r1_negative_gross_carriers.py``), and each of
-those puts every leg of its agreement under ONE counterparty. A reference held
-by a single counterparty nets identically whether the perimeter key is
-``(agreement,)`` or ``(agreement, counterparty)`` — so the change to
-``on_bs_netting_perimeter_is_agreement`` cannot move a single number in the
-whole estate today. Adding cross-counterparty rows to an existing portfolio
+Art. 195, Art. 205(a), Art. 219). Every existing golden, oracle and
+RUNS-registered reporting portfolio is number-NEUTRAL to this change — the
+census that motivated this fixture found only three fixture files that set
+``netting_agreement_reference`` at all. Two of them (``tests/fixtures/p1_241/``
+and the ``r1_negative_gross`` portfolio in
+``tests/acceptance/reporting/test_r1_negative_gross_carriers.py``) put every leg
+of the agreement under ONE counterparty, and such a reference nets identically
+whether the perimeter key is ``(agreement,)`` or ``(agreement, counterparty)``.
+The third, ``tests/fixtures/p1_238/``, DOES span counterparties by design and
+the Feature DOES move its numbers (RWA 1,000,000 -> 800,000) — but it is an
+in-memory acceptance fixture asserting RWA, not template cells, and it is not
+registered in the supervisory ``RUNS``, so no reporting gate, golden or census
+could see the change. Adding cross-counterparty rows to an existing portfolio
 would move that portfolio's committed goldens and bury the actual question —
 does a netting agreement spanning counterparties work end to end, and does it
 survive turning the Feature back off — in unrelated churn. Same reasoning,

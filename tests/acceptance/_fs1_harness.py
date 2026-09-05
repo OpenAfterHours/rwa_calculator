@@ -31,6 +31,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+import pytest
+
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.acceptance import _fs1_expectations as fx
 from tests.fixtures.facility_share_portfolio import (
@@ -251,7 +253,15 @@ def adequacy_variants_pick_different_members() -> None:
 
     The binding margin is EXACT — both floored branches are pinned by
     ``x . S_irb + OF-ADJ``, whose terms are integers on this portfolio — so it is
-    asserted to the penny rather than to a tolerance.
+    asserted to the penny (``abs=1e-6``) rather than to a relative tolerance.
+
+    ``abs=1e-6`` rather than bare ``==`` because the margin is a DIFFERENCE of
+    two independently summed TREA totals, each a float accumulation over the
+    portfolio: the terms are integers, the summation order is not pinned, and a
+    single unit in the last place would fail an exact comparison. This is an
+    adequacy assertion, so an ULP failing it would block every value test
+    downstream of it at a claim about the fixture rather than about the engine.
+    A penny is four orders of magnitude tighter than any real term could move.
     """
     binding_a, binding_b = fx.assignment_a("binding"), fx.assignment_b("binding")
     free_a, free_b = fx.assignment_a("nonbinding"), fx.assignment_b("nonbinding")
@@ -260,7 +270,9 @@ def adequacy_variants_pick_different_members() -> None:
         "the two variants pick the SAME member, so the pair is a duplicate and "
         "the floor-aware metric is not distinguished from the own-approach one"
     )
-    assert binding_b.total_rwa_post_floor - binding_a.total_rwa_post_floor == 19_200.00, (
+    assert binding_b.total_rwa_post_floor - binding_a.total_rwa_post_floor == pytest.approx(
+        19_200.00, abs=1e-6
+    ), (
         f"binding TREA(B) - TREA(A) is "
         f"{binding_b.total_rwa_post_floor - binding_a.total_rwa_post_floor:,.6f}, "
         "not the exact 19,200.00 the integer floored branches give; a non-exact "

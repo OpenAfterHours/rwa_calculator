@@ -127,13 +127,21 @@ def test_facility_share_group_declared_on_the_aggregator_exit() -> None:
     Act:     read its declared columns.
     Assert:  ``facility_share_group`` is declared as a String.
 
-    The candidate flag is deliberately NOT required here: by the aggregator exit
-    the losers are gone and every surviving row is an ordinary exposure, so the
-    flag would carry no information. The group does — it is what lets a reader of
-    the ledger tell an allocated undrawn from an ordinary one.
+    Both carriers are DECLARED on this edge. Their ``required`` setting says how
+    the seal treats an input that omits them, not whether the edge carries them:
+    ``required=False`` means optional on INPUT (tolerated when absent, injected
+    from the declared default), always present on OUTPUT. So a conformed
+    aggregator exit carries both columns on every row whatever the producer
+    supplied — which is what lets a reader of the sealed ledger tell an allocated
+    undrawn from an ordinary one, and what makes a surviving ``True`` candidate
+    flag an assertable resolver defect rather than a silently absent column.
     """
     assert "facility_share_group" in AGGREGATOR_EXIT_EDGE.columns
     assert AGGREGATOR_EXIT_EDGE.columns["facility_share_group"].dtype == pl.String
+    # Asserted here too, so the docstring above does not describe a guard the
+    # file does not run (LESSONS C10 — an overstated guard stops anyone looking).
+    assert "is_facility_share_candidate" in AGGREGATOR_EXIT_EDGE.columns
+    assert AGGREGATOR_EXIT_EDGE.columns["is_facility_share_candidate"].dtype == pl.Boolean
 
 
 def test_facility_share_carriers_survive_a_conform_round_trip() -> None:
@@ -174,15 +182,23 @@ def test_aggregated_bundle_carries_the_facility_share_resolution_frame() -> None
     Nullable because most portfolios hold no facility share at all. Its default
     must be ``None`` rather than an empty frame so a consumer can tell "no share
     in this book" from "a share the resolver failed to record".
+
+    Reads the RAW annotation off the dataclass field rather than resolving it
+    with ``typing.get_type_hints``. ``contracts/bundles.py`` uses
+    ``from __future__ import annotations`` and imports ``CalculationError`` only
+    under ``TYPE_CHECKING``, so ``get_type_hints`` walks every annotation on the
+    class and raises ``NameError`` on that one — a failure with nothing to do
+    with the field under test, and one that no amount of correct engine work
+    could clear. The raw string is what the test actually wants: whether the
+    declaration admits ``None``.
     """
-    names = {field.name for field in fields(AggregatedResultBundle)}
-    assert "facility_share_resolution" in names, (
+    declared = {field.name: str(field.type) for field in fields(AggregatedResultBundle)}
+    assert "facility_share_resolution" in declared, (
         "the audit frame is the ONLY place an attribution flip under the "
         "floor-aware metric is visible; without it a moved COREP row is the "
         "first anyone hears of it"
     )
-    hints = get_type_hints(AggregatedResultBundle)
-    assert "None" in str(hints["facility_share_resolution"])
+    assert "None" in declared["facility_share_resolution"], declared["facility_share_resolution"]
     field = next(f for f in fields(AggregatedResultBundle) if f.name == "facility_share_resolution")
     assert field.default is None
 

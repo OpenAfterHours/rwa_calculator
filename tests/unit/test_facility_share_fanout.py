@@ -29,10 +29,14 @@ Two decisions are pinned here because nothing else can see them:
   commitment any member may draw.
 
 These tests drive ``calculate_facility_undrawn`` directly on hand-built frames and
-``HierarchyResolver.resolve`` on the FS-1 bundle. They deliberately do NOT edit
-``tests/unit/test_hierarchy.py``, whose ``TestP1307FacilityShareEntityPreview``
-class pins the preview this change deletes; re-pointing those is the
-implementation wave's job and is listed in the design of record's S5 row.
+``HierarchyResolver.resolve`` on the FS-1 bundle.
+
+The preview pins they were written beside have since been re-pointed (design of
+record S5). ``tests/unit/test_hierarchy.py::TestP1307FacilityShareEntityPreview``
+is now ``TestFacilityShareFanOutIsEntityTypeBlind``, and it covers what this file
+deliberately does not: the ECB and MDB entity types P1.307 found the preview
+mis-ranking, and the case where the counterparty lookup is absent entirely.
+``tests/unit/test_entity_rw_preview.py`` is deleted with its subject.
 
 References:
 - docs/plans/facility-share-riskiest-member.md Sections 4 (O2) and 7 (D3, D4).

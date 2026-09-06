@@ -1,9 +1,10 @@
 # Test-suite runtime: where 6m47s goes, and the path to ~4 minutes
 
-**Status:** Proposal, 2026-09-06. Nothing here is implemented. Every number below was
-measured on `master` at `cd25836b` (v0.3.34) on the reference dev box (16 cores, 8 xdist
-workers, `POLARS_MAX_THREADS=1`) and is reproducible with the commands in the appendix.
-The stress suite is out of scope — PR #491 already took it from 9m52s to ~2m15s.
+**Status:** Implemented 2026-09-06 — see [Outcome](#outcome-what-landed) at the end for
+what each lever actually bought. Every number in the diagnosis below was measured on
+`master` at `cd25836b` (v0.3.34) on the reference dev box (16 cores, 8 xdist workers,
+`POLARS_MAX_THREADS=1`) and is reproducible with the commands in the appendix. The stress
+suite is out of scope — PR #491 already took it from 9m52s to ~2m15s.
 
 ## The finding in one sentence
 
@@ -283,3 +284,70 @@ with counters around one `PipelineOrchestrator().run_with_data(...)` on (a) a on
 `elapsed_ms` extra that `observability.context.stage_timer` puts on its log records, and
 `cProfile` for the call attribution. The COREP figures wrap `RowPredicate._compile` and
 `pl.lit` the same way around `COREPGenerator().generate_from_lazyframe`.
+
+---
+
+## Outcome: what landed
+
+Implemented 2026-09-06 on `worktree-perf-test-suite-runtime-proposal` (PR #494). Every
+item was built against a measurement, reviewed for conformance and attacked by an
+adversarial reviewer who injected defects to prove the tests still fail on a wrong result.
+
+### The decisive gate for the engine and reporting changes
+
+`scripts/pytest_timings.py` measures; it cannot prove the numbers did not move. That is
+what the **reference dump** does: 27 pipeline runs (the 20 supervisory-gate portfolios,
+five acceptance-fixture configurations, a one-row property bundle) dumped as 871 files —
+every ledger, every ordered `CalculationError` list, every COREP and Pillar 3 sheet — and
+compared cell by cell against the same dump from unmodified `master`. Levers 2 and 3 each
+had to print `RESULT: IDENTICAL` before landing, and each did. One caveat is worth
+recording: the engine is **not** bit-deterministic between runs. Ledger rows come back in
+a different order and summed template cells differ at the last ULP, so the comparator
+sorts on every non-float column and compares floats at the goldens' `1e-9`. That was
+established by dumping unmodified `master` twice and diffing it against itself.
+
+### Per-lever result
+
+| Lever | What landed | Measured |
+|---|---|---|
+| 1 | Nine test files stop rebuilding the same pipeline run, template or census | The nine files: **754 s -> 434 s** of in-suite test time |
+| 2 items 1+3 | Warning recorders read materialised frames; the input-domain gate batches | 1-row run **0.39 -> 0.23 s**, 150-row **1.17 -> 0.44 s**, CRM stage **508 -> 163 ms**; oracle suite **88 -> 41 s** |
+| 2 item 4 | Two-way ratchet on the per-run collect budget | Banked; `collect` 98 -> 85 (CRR), 96 -> 83 (B31) |
+| 3 | COREP cell expressions compile once per (spec, column signature) | Generation **0.63 -> 0.38 s** (CRR), **1.10 -> 0.60 s** (B31); warm predicate compiles **0** |
+| 5 | The robustness marker hook stops walking `Path.parents` per item | Hook **0.67 s -> 0.02 s** per collecting process |
+
+The largest single Lever 1 win was not a memo. `tests/unit/analysis/test_return_recon.py`
+called `cell_diff(recon.ours.source, recon.theirs.source, t)` at seven sites on a recon it
+had *already built*, and that helper is literally `build_recon` followed by `diff_cells` —
+so each call silently regenerated both sides. Switching to the held-recon form the
+library's own docstring prescribes took the file from 224 s to 92 s.
+
+### Two premises in the diagnosis above were wrong
+
+Recorded because the plan states them as fact and a later reader would inherit them:
+
+- **The autouse run-index clear was not why the UI and REST tests recomputed.** No
+  endpoint reads the run index; `find_reusable` is called only by the UI reuse checkbox
+  and the calculator banner. The UI reconciliation tests recompute because their form data
+  never sets `reuse_calculation`, and the index clear has to stay regardless because
+  `GET /reconciliation` reads the index to decide whether to offer reuse.
+- **`tests/unit/analysis/test_legacy_ledger.py` makes 146 COREP generations, not 114.**
+  The leave-one-out property drops 29 mappings, not 21.
+
+### What Lever 5 did not find
+
+The collection phase is dominated by fixed cost, and saying so is the result. Hypothesis's
+constants scan (1.49 s) is front-loaded by design; the FastAPI import chain (~0.5 s) is
+paid once per process by the 47 modules that test it; the root conftest's polars import is
+needed by effectively every module; and no parametrisation product reaches 0.2 s. One
+measured change was worth taking, and it is in the table above.
+
+### Reading the end-to-end number honestly
+
+Wall-clock for the whole dev loop is a poor instrument on this box. Between the baseline
+and post-change runs, files that **no lever touched** rose a uniform 6.6% — including
+pure-unit files with no pipeline in them at all, one going 2.8 s to 8.5 s, which no change
+here could cause. That is background load (the box runs other work), not a regression, and
+it swamps a real improvement. The per-component figures above are all measured in
+isolation and are the numbers to trust; the suite-level claim in the PR comes from a
+controlled A/B of the base commit against the final tree, run back to back.

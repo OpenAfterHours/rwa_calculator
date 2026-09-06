@@ -46,6 +46,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (Basel 3.1), with `collect_all` 6 -> 8 / 7 -> 9 because 28 single collects were
   folded into two batches — banked in
   `tests/contracts/test_pipeline_collect_budget.py`.
+- **Pipeline fixed cost: each stage resolves the column set it needs once and
+  threads it, instead of re-walking the plan at every call site** (test-suite
+  runtime proposal, Lever 2 item 2). `LazyFrame.collect_schema()` is O(plan
+  NODES), so a run that asks the same frame "which columns do you carry?" from a
+  dozen places pays a fixed tax a big book never outgrows. The input-domain gate
+  now resolves each raw table's names ONCE (`validation._table_column_names`)
+  and hands the set to every per-table check builder, every declared foreign key
+  and every unique key; the aggregator resolves the post-floor ledger once for
+  its four summary builders; and the CRM facility lookup reuses the names
+  `_build_exposure_lookups` already resolved. Every threaded set describes the
+  exact `LazyFrame` OBJECT its consumer tests — a LazyFrame is immutable, so the
+  presence checks test the same population as before by construction, not by
+  assumption. A one-row run's `collect_schema()` count falls 136 -> 113 (CRR)
+  and 135 -> 113 (Basel 3.1), and a 150-row run's 199 -> 165; ledgers, error
+  lists and every COREP / Pillar 3 sheet are byte-identical across the 27-run
+  reference dump. Banked in `tests/contracts/test_pipeline_collect_budget.py`.
 
 ---
 

@@ -112,9 +112,17 @@ _METRICS: tuple[str, ...] = ("collect", "collect_schema", "collect_all")
 #: CRM recorders moved onto materialised frames; ``collect_all`` +2 in each
 #: regime because 28 single collects were folded into two batches (the
 #: input-domain gate's 26 -> 1, the short-term-lookup + DQ015 count 2 -> 1).
+#: 2026-09-06 (Lever 2 item 2): ``collect_schema`` 136 -> 113 (CRR) and
+#: 135 -> 113 (B31) as the schema each stage needs is resolved once and
+#: threaded, instead of re-walking the plan at every call site. The input
+#: gate resolves each raw table's column names ONCE
+#: (``validation._table_column_names``) rather than once per check builder,
+#: per declared foreign key and per unique key; the aggregator resolves the
+#: post-floor ledger once for its four summary builders; the CRM facility
+#: lookup reuses the names its caller already resolved.
 _BANKED: dict[str, dict[str, int]] = {
-    "CRR": {"collect": 85, "collect_schema": 136, "collect_all": 8},
-    "B31": {"collect": 83, "collect_schema": 135, "collect_all": 9},
+    "CRR": {"collect": 85, "collect_schema": 113, "collect_all": 8},
+    "B31": {"collect": 83, "collect_schema": 113, "collect_all": 9},
 }
 
 _REGIMES: tuple[str, ...] = tuple(_BANKED)

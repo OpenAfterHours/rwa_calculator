@@ -148,6 +148,7 @@ def _build_facility_lookup(
     exposures: pl.LazyFrame,
     exposure_ccy_col: str,
     pool_expr: pl.Expr,
+    schema_names: list[str],
     *,
     has_parent_col: bool,
     has_floor_col: bool,
@@ -164,6 +165,9 @@ def _build_facility_lookup(
     1-element ``[parent_facility_reference]`` list, identical to the legacy
     single-level behaviour. This makes a ``pledge_percentage`` pledged at any
     ancestor facility resolve against the full subtree EAD.
+
+    ``schema_names`` is ``exposures``' column names, resolved once by
+    :func:`_build_exposure_lookups` off the same frame object this reads.
     """
     if not has_parent_col:
         return pl.LazyFrame(
@@ -195,7 +199,7 @@ def _build_facility_lookup(
         key="parent_facility_reference",
         out_key="_ben_ref_facility",
         values=facility_agg,
-        membership=ancestor_membership_expr(exposures.collect_schema().names()),
+        membership=ancestor_membership_expr(schema_names),
     ).with_columns(pl.col("_ben_ref_facility").cast(pl.String))
 
 
@@ -286,6 +290,7 @@ def _build_exposure_lookups(
         exposures,
         exposure_ccy_col,
         pool_expr,
+        schema_names,
         has_parent_col=has_parent_col,
         has_floor_col=has_floor_col,
         has_sft_col=has_sft_col,

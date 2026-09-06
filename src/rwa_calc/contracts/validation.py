@@ -82,7 +82,7 @@ from rwa_calc.contracts.errors import (
 from rwa_calc.domain.branch_reasons import BRANCH_REASON_VOCABULARIES, UNKNOWN_FALLBACK
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
 
     from rwa_calc.contracts.bundles import AggregatedResultBundle, RawDataBundle
     from rwa_calc.data.column_spec import ColumnDomain, ForeignKey
@@ -189,6 +189,7 @@ class _TableCheck:
 def _validate_declared_domains(
     lf: pl.LazyFrame,
     table_name: str,
+    present: frozenset[str],
     sample_cap: int = 5,
 ) -> _TableCheck | None:
     """Flag input values outside the domain their column DECLARES.
@@ -217,6 +218,8 @@ def _validate_declared_domains(
         lf: The table's LazyFrame.
         table_name: ``TABLE_SCHEMAS`` key — resolves the declaring schema,
             the natural key, and the message prefix.
+        present: ``lf``'s column names, resolved once by :func:`_table_checks`
+            for every check it builds off the same frame object.
         sample_cap: Maximum per-row errors emitted per column (default 5);
             a single summary error carries the truthful omitted count.
 
@@ -230,7 +233,6 @@ def _validate_declared_domains(
     if schema is None:
         return None
 
-    present = set(lf.collect_schema().names())
     specs: list[_DomainSpec] = []
     for column, spec in schema.items():
         if spec.domain is None or column not in present:
@@ -518,11 +520,16 @@ def validate_bundle_values(
 
         constraints = COLUMN_VALUE_CONSTRAINTS
 
+    frames = bundle_frames(bundle)
+    columns = _table_column_names(frames)
+
     checks: list[_TableCheck] = []
-    for table_name, lf in bundle_frames(bundle).items():
+    for table_name, lf in frames.items():
         if lf is None:
             continue
-        checks.extend(_table_checks(lf, table_name, constraints.get(table_name, {})))
+        checks.extend(
+            _table_checks(lf, table_name, constraints.get(table_name, {}), columns[table_name])
+        )
     all_errors = _run_table_checks(checks)
 
     # Cross-table referential integrity for the M:N collateral-links table.
@@ -530,43 +537,78 @@ def validate_bundle_values(
 
     # Declared foreign keys (DQ005 / DQ001) and natural-key uniqueness (DQ004).
     # Both are cross-row / cross-table facts, so they follow the per-table pass.
-    all_errors.extend(validate_referential_integrity(bundle))
-    all_errors.extend(validate_duplicate_keys(bundle))
+    all_errors.extend(validate_referential_integrity(bundle, columns=columns))
+    all_errors.extend(validate_duplicate_keys(bundle, columns=columns))
 
     return all_errors
+
+
+def _table_column_names(
+    frames: Mapping[str, pl.LazyFrame | None],
+) -> dict[str, frozenset[str]]:
+    """Resolve every supplied frame's column names ONCE, keyed by table name.
+
+    ``LazyFrame.collect_schema()`` walks the whole plan, so it is O(plan
+    NODES) and a fixed per-run tax a big book never outgrows. The input gate
+    asks the same handful of raw frames "which columns do you carry?" from a
+    dozen places — every per-table check builder, every declared foreign key,
+    every unique key — and each ask used to re-walk the plan.
+
+    Safe by CONSTRUCTION rather than by assumption, which is the whole point
+    of resolving here: the returned names describe the exact ``LazyFrame``
+    OBJECTS in ``frames``, and every consumer is handed the entry for the
+    object it was already given. A LazyFrame is immutable, so a name resolved
+    off one cannot go stale while that object is the one being tested — the
+    staleness trap that makes a threaded column set dangerous elsewhere
+    (see ``data/column_spec.py::ensure_columns``) cannot arise.
+
+    Absent tables map to an empty set, so a caller can look up any
+    ``TABLE_SCHEMAS`` key without a presence dance; ``frames[name] is None``
+    remains the test for "table not supplied".
+    """
+    return {
+        name: frozenset(lf.collect_schema().names()) if lf is not None else frozenset()
+        for name, lf in frames.items()
+    }
 
 
 def _table_checks(
     lf: pl.LazyFrame,
     table_name: str,
     table_constraints: dict[str, set[str]],
+    columns: frozenset[str],
 ) -> list[_TableCheck]:
-    """The per-table checks for one bundle frame, in the order their errors are emitted."""
+    """The per-table checks for one bundle frame, in the order their errors are emitted.
+
+    ``columns`` is ``lf``'s resolved column names — every builder below reads
+    the SAME frame object, so the set is resolved once here and threaded
+    rather than re-walked per check.
+    """
     checks: list[_TableCheck | None] = []
     if table_constraints:
-        checks.append(_validate_table_columns_batched(lf, table_constraints, table_name))
+        checks.append(_validate_table_columns_batched(lf, table_constraints, table_name, columns))
 
     # Declared input domains; a no-op for a table whose schema declares none.
-    checks.append(_validate_declared_domains(lf, table_name))
+    checks.append(_validate_declared_domains(lf, table_name, columns))
 
     # A negative on-balance amount is the Art. 195/219 netting convention,
     # so it is NOT a declared-domain violation — only an UNREFERENCED one
     # is, and that needs a second column to decide.
     if table_name in {"facilities", "loans", "contingents"}:
-        checks.append(_validate_negative_amounts_without_netting(lf, table_name))
+        checks.append(_validate_negative_amounts_without_netting(lf, table_name, columns))
 
     # CRR Art. 111 Annex I / PS1/26 Table A1: an OBS amount with neither a
     # risk_type nor an obs_product is priced on the regime's residual limb
     # with no signal of any kind today — DQ006 filters nulls out before its
     # domain test (P1.267).
     if table_name in {"facilities", "contingents"}:
-        checks.append(_validate_unresolved_obs_risk_type(lf, table_name))
+        checks.append(_validate_unresolved_obs_risk_type(lf, table_name, columns))
 
     # PRA PS1/26 Art. 120(2B) / Art. 122(3): short-term rating rows must
     # carry a scope (which exposure they attach to). Flag rows that violate
     # the is_short_term ↔ scope_type/scope_id contract.
     if table_name == "ratings":
-        checks.append(_validate_short_term_rating_scope(lf))
+        checks.append(_validate_short_term_rating_scope(lf, columns))
     return [check for check in checks if check is not None]
 
 
@@ -924,6 +966,8 @@ _KIND_ABSENT = "absent"
 def validate_referential_integrity(
     bundle: RawDataBundle,
     sample_cap: int = 5,
+    *,
+    columns: Mapping[str, frozenset[str]] | None = None,
 ) -> list[CalculationError]:
     """Flag input rows whose DECLARED foreign key is broken or never supplied.
 
@@ -955,6 +999,10 @@ def validate_referential_integrity(
     Args:
         bundle: RawDataBundle to validate.
         sample_cap: Maximum row-named errors per (table, column, kind).
+        columns: Pre-resolved column names per table (:func:`_table_column_names`),
+            supplied by :func:`validate_bundle_values` so the shared frames are
+            walked once for the whole input gate. Omitted, they are resolved
+            here exactly as before.
 
     Returns:
         List of CalculationError objects (empty when every link resolves).
@@ -962,6 +1010,7 @@ def validate_referential_integrity(
     from rwa_calc.data.schemas import TABLE_FOREIGN_KEYS, TABLE_KEY_COLUMNS
 
     frames = bundle_frames(bundle)
+    names = _table_column_names(frames) if columns is None else columns
     plans: list[pl.LazyFrame] = []
     declarations: dict[tuple[str, str], ForeignKey] = {}
 
@@ -969,12 +1018,12 @@ def validate_referential_integrity(
         child = frames.get(table)
         if child is None:
             continue
-        child_columns = set(child.collect_schema().names())
+        child_columns = names[table]
         key_column = TABLE_KEY_COLUMNS.get(table)
         if key_column not in child_columns:
             key_column = None
         for foreign_key in foreign_keys:
-            parent = _checkable_parent(frames, child_columns, foreign_key)
+            parent = _checkable_parent(frames, names, child_columns, foreign_key)
             if parent is None:
                 continue
             declarations[table, foreign_key.column] = foreign_key
@@ -1004,7 +1053,11 @@ def validate_referential_integrity(
     return errors
 
 
-def validate_duplicate_keys(bundle: RawDataBundle) -> list[CalculationError]:
+def validate_duplicate_keys(
+    bundle: RawDataBundle,
+    *,
+    columns: Mapping[str, frozenset[str]] | None = None,
+) -> list[CalculationError]:
     """Flag input tables whose natural key names more than one row (``DQ004``).
 
     Reads ``data/schemas.py``'s ``TABLE_UNIQUE_KEYS`` — the tables where a
@@ -1023,6 +1076,10 @@ def validate_duplicate_keys(bundle: RawDataBundle) -> list[CalculationError]:
 
     Args:
         bundle: RawDataBundle to validate.
+        columns: Pre-resolved column names per table (:func:`_table_column_names`),
+            supplied by :func:`validate_bundle_values` so the shared frames are
+            walked once for the whole input gate. Omitted, they are resolved
+            here exactly as before.
 
     Returns:
         List of CalculationError objects (empty when every key is unique).
@@ -1030,10 +1087,11 @@ def validate_duplicate_keys(bundle: RawDataBundle) -> list[CalculationError]:
     from rwa_calc.data.schemas import TABLE_UNIQUE_KEYS
 
     frames = bundle_frames(bundle)
+    names = _table_column_names(frames) if columns is None else columns
     plans: list[pl.LazyFrame] = []
     for table, key_column in TABLE_UNIQUE_KEYS.items():
         lf = frames.get(table)
-        if lf is None or key_column not in set(lf.collect_schema().names()):
+        if lf is None or key_column not in names[table]:
             continue
         plans.append(
             lf.select(pl.col(key_column).cast(pl.String).alias("_value"))
@@ -1065,7 +1123,8 @@ def validate_duplicate_keys(bundle: RawDataBundle) -> list[CalculationError]:
 
 def _checkable_parent(
     frames: dict[str, pl.LazyFrame | None],
-    child_columns: set[str],
+    names: Mapping[str, frozenset[str]],
+    child_columns: frozenset[str],
     foreign_key: ForeignKey,
 ) -> pl.LazyFrame | None:
     """The parent frame a declared link can actually be checked against.
@@ -1076,11 +1135,15 @@ def _checkable_parent(
     into one orphan error per child row would be the loudest possible way to
     repeat it. The same holds for the columns — a link whose child or parent
     column was never supplied has nothing to resolve.
+
+    ``names`` is the caller's per-table column map (:func:`_table_column_names`),
+    so the parent frame is not re-walked once per declared link that points at
+    it — the ``counterparties`` table is a parent five times over.
     """
     parent = frames.get(foreign_key.parent_table)
     if parent is None or foreign_key.column not in child_columns:
         return None
-    if foreign_key.parent_column not in set(parent.collect_schema().names()):
+    if foreign_key.parent_column not in names[foreign_key.parent_table]:
         return None
     return parent
 
@@ -1182,7 +1245,10 @@ def _referential_errors(
     return errors
 
 
-def _validate_short_term_rating_scope(lf: pl.LazyFrame) -> _TableCheck | None:
+def _validate_short_term_rating_scope(
+    lf: pl.LazyFrame,
+    schema_names: frozenset[str],
+) -> _TableCheck | None:
     """Flag short-term rating rows that violate the scope contract.
 
     Three violations are detected and reported via ``DQ002``:
@@ -1198,8 +1264,10 @@ def _validate_short_term_rating_scope(lf: pl.LazyFrame) -> _TableCheck | None:
     ``scope_type`` value-set validation (must be one of
     ``VALID_RATING_SCOPE_TYPES``) is handled by the generic categorical-value
     pass via ``COLUMN_VALUE_CONSTRAINTS``.
+
+    ``schema_names`` is ``lf``'s resolved column names, threaded in by
+    :func:`_table_checks` (see :func:`_table_column_names`).
     """
-    schema_names = lf.collect_schema().names()
     if "is_short_term" not in schema_names:
         return None
     if "scope_type" not in schema_names or "scope_id" not in schema_names:
@@ -1256,6 +1324,7 @@ def _validate_short_term_rating_scope(lf: pl.LazyFrame) -> _TableCheck | None:
 def _validate_negative_amounts_without_netting(
     lf: pl.LazyFrame,
     context: str,
+    schema_names: frozenset[str],
 ) -> _TableCheck | None:
     """Flag negative ``drawn_amount`` / ``interest`` rows that carry no netting.
 
@@ -1271,8 +1340,10 @@ def _validate_negative_amounts_without_netting(
     References:
     - CRR Art. 111 (SA gross exposure value); Art. 166 (IRB exposure value)
     - CRR Art. 195/219 (on-balance-sheet netting)
+
+    ``schema_names`` is ``lf``'s resolved column names, threaded in by
+    :func:`_table_checks` (see :func:`_table_column_names`).
     """
-    schema_names = lf.collect_schema().names()
     amount_cols = [c for c in ("drawn_amount", "interest") if c in schema_names]
     if not amount_cols:
         return None
@@ -1298,6 +1369,7 @@ def _validate_negative_amounts_without_netting(
 def _validate_unresolved_obs_risk_type(
     lf: pl.LazyFrame,
     context: str,
+    schema_names: frozenset[str],
 ) -> _TableCheck | None:
     """Flag OBS rows carrying an amount but no resolvable Annex I risk category.
 
@@ -1326,8 +1398,10 @@ def _validate_unresolved_obs_risk_type(
     References:
     - CRR Art. 111, Annex I item 1(k)
     - PRA PS1/26 Art. 111, Table A1 Rows 3 and 5
+
+    ``schema_names`` is ``lf``'s resolved column names, threaded in by
+    :func:`_table_checks` (see :func:`_table_column_names`).
     """
-    schema_names = lf.collect_schema().names()
     if "risk_type" not in schema_names:
         return None
 
@@ -1363,6 +1437,7 @@ def _validate_table_columns_batched(
     lf: pl.LazyFrame,
     table_constraints: dict[str, set[str]],
     context: str,
+    schema_names: frozenset[str],
 ) -> _TableCheck | None:
     """
     Validate multiple columns in a single table with one plan.
@@ -1377,12 +1452,13 @@ def _validate_table_columns_batched(
         lf: LazyFrame for the table
         table_constraints: Mapping of column name -> valid values
         context: Table name for error messages
+        schema_names: ``lf``'s resolved column names, threaded in by
+            :func:`_table_checks` (see :func:`_table_column_names`).
 
     Returns:
         The table's check, or None when it carries no constrained column.
     """
-    schema = lf.collect_schema()
-    columns_to_check = [col for col in table_constraints if col in schema.names()]
+    columns_to_check = [col for col in table_constraints if col in schema_names]
 
     if not columns_to_check:
         return None

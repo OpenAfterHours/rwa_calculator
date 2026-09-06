@@ -447,16 +447,20 @@ class OutputAggregator:
         # and, when the floor bound, the per-row ``floor_impact_rwa`` add-on,
         # which ``total_rwa`` folds in so the reported totals reconcile with
         # ``output_floor_summary.total_rwa_post_floor`` (P1.130).
-        summary_by_class = generate_summary_by_class(combined)
-        summary_by_approach = generate_summary_by_approach(combined)
-        summary_by_class_method = generate_summary_by_class_method(combined)
+        # All four summary builders below read the SAME ``combined`` object,
+        # and ``collect_schema()`` is O(plan NODES) — so its columns are
+        # resolved once here and threaded rather than walked four times.
+        combined_columns = frozenset(combined.collect_schema().names())
+        summary_by_class = generate_summary_by_class(combined, combined_columns)
+        summary_by_approach = generate_summary_by_approach(combined, combined_columns)
+        summary_by_class_method = generate_summary_by_class_method(combined, combined_columns)
 
         # Supporting factor impact. The regime gate is pack Feature-sourced; the
         # pack is threaded into aggregate() (S11d), so this reads the run's
         # resolved pack directly rather than re-deriving one from config.
         supporting_factor_impact = None
         if resolved_pack.feature("supporting_factors"):
-            supporting_factor_impact = generate_supporting_factor_impact(combined)
+            supporting_factor_impact = generate_supporting_factor_impact(combined, combined_columns)
 
         # Materialise the post-floor views ONCE (same single-collect pattern
         # as the pre-floor batch).  ``None`` fields stay None — only frames

@@ -160,6 +160,7 @@ nav = [
     { "Boundary Hardening (Phase 3)" = "plans/engine-defensiveness-boundary-hardening.md" },
     { "Single-Lazy-Plan Refactor (superseded)" = "plans/single-lazy-plan-refactor.md" },
     { "Facility Share — Riskiest Member (implemented)" = "plans/facility-share-riskiest-member.md" },
+    { "Test-Suite Runtime (proposed)" = "plans/test-suite-runtime-proposal.md" },
   ]},
   { "Appendix" = [
     "appendix/index.md",

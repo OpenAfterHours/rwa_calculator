@@ -17,6 +17,7 @@ The project follows a **phased, test-first approach** prioritising CRR (Basel 3.
 - [**Independent Validation System**](independent-validation-system.md) - Why a green suite keeps shipping template defects, and the six-component plan (impact report, property suite, shadow calculator, cell re-derivation, coverage ratchets, defect-injection scorecard) to fix it
 - [**Architecture Review — structure, efficiency, parallelism (2026-08-29)**](architecture-review-2026-08-29.md) - Measured review of `engine/stages/` layout, reporting-vs-calculation cost, and thread scaling; a sequenced proposal (proposal only, nothing implemented)
 - [**Facility Share — Riskiest Member by Applied Approach**](facility-share-riskiest-member.md) - Proposal: allocate a shared facility's undrawn to the member with the highest RWA under its *own* approach (candidate fan-out, resolved before the output floor), and the two-assignment rule that makes "riskiest" well-defined under the Basel 3.1 floor (approved and implemented 2026-09-05; methodology in Specifications → Facility Share Allocation)
+- [**Test-Suite Runtime (proposed)**](test-suite-runtime-proposal.md) - Measured: the dev loop's 6m47s is ~1,300 tests that each run a pipeline or a COREP generation, not per-test overhead; five ranked levers (memoise repeat runs, cut the per-run fixed cost, compile COREP cells once, tail, collection) to ~4m15s with identical tests (proposal only, nothing implemented)
 
 ## Development Philosophy
 

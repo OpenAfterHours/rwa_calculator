@@ -264,14 +264,14 @@ recorder and schema costs scale with plan depth, not row count.
 ## Appendix — reproducing the numbers
 
 ```bash
-# Full dev loop with per-test timings (controller writes PERF_OUT at session end)
-PYTHONPATH=scripts PERF_OUT=timings.json uv run pytest tests/ -p pytest_timings -q
+# Full dev loop with per-test timings (the controller writes the slot at session end)
+PYTHONPATH=scripts PERF_SLOT=before uv run pytest tests/ -p pytest_timings -q
 
 # The report: bands, directories, files, workers, slowest tests, setup-heavy files
-uv run python scripts/pytest_timings.py timings.json
+uv run python scripts/pytest_timings.py --slot before
 
 # One file after a Lever 1 change
-PYTHONPATH=scripts PERF_OUT=one.json uv run pytest tests/unit/analysis/test_return_recon.py -p pytest_timings -q -n 0
+PYTHONPATH=scripts PERF_SLOT=after uv run pytest tests/unit/analysis/test_return_recon.py -p pytest_timings -q -n 0
 
 # Single-process collection cost
 uv run pytest tests/ --collect-only -q -n 0

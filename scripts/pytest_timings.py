@@ -10,18 +10,27 @@ rather than from a scratch directory:
    JSON file. The hook runs on the controller, where xdist forwards every
    worker's ``TestReport``, so one file covers the whole fleet::
 
-       PYTHONPATH=scripts PERF_OUT=timings.json uv run pytest tests/ -p pytest_timings
+       PYTHONPATH=scripts PERF_SLOT=before uv run pytest tests/ -p pytest_timings
 
-2. **report CLI** — summarise that JSON: where the time goes by band, by
+2. **report CLI** — summarise that capture: where the time goes by band, by
    directory, by file, by phase, by worker (busy time vs the loadfile tail)::
 
-       uv run python scripts/pytest_timings.py timings.json
+       uv run python scripts/pytest_timings.py --slot before
+
+Captures go to named slots under ``.pytest_timings/`` (git-ignored) rather than
+to a caller-supplied path: an operator string — argv or an environment variable —
+must never construct a path here, because the security taint analysis treats both
+as attacker-controlled and the resulting finding fails the ``new_security_rating``
+quality gate (the sibling rule is arch_check check 19). ``PERF_SLOT`` and
+``--slot`` NAME a slot; the name indexes a literal mapping and the value used is
+a constant. A caller needing another location imports :func:`report`.
 
 Nothing here changes what runs or how it is asserted; it only observes.
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
@@ -35,6 +44,16 @@ if TYPE_CHECKING:
 
 _RECORDS: list[dict[str, Any]] = []
 _T0 = time.time()
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+
+#: Named capture slots. ``PERF_SLOT`` / ``--slot`` select one of these constants
+#: BY NAME; no operator string is ever used to construct a path.
+_SLOT_ROOT = _REPO_ROOT / ".pytest_timings"
+_SLOTS: dict[str, Path] = {
+    name: _SLOT_ROOT / f"{name}.json" for name in ("before", "after", "current")
+}
+_DEFAULT_SLOT = "current"
 
 # Per-test totals bucketed by wall time. The top band is what "about a second"
 # tests look like from the outside; the bottom band is what pytest's own
@@ -75,11 +94,18 @@ def pytest_runtest_logreport(report: pytest.TestReport) -> None:
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
-    """Write the capture on the controller only (workers hold a partial view)."""
+    """Write the capture on the controller only (workers hold a partial view).
+
+    ``PERF_SLOT`` names a slot; an unknown name falls back to the default rather
+    than becoming a path, so the written location is always one of the constants
+    in ``_SLOTS``.
+    """
     if hasattr(session.config, "workerinput"):
         return
-    out = Path(os.environ.get("PERF_OUT", "pytest_timings.json"))
+    out = _SLOTS.get(os.environ.get("PERF_SLOT", _DEFAULT_SLOT), _SLOTS[_DEFAULT_SLOT])
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps({"wall": time.time() - _T0, "records": _RECORDS}), encoding="utf-8")
+    print(f"\npytest_timings: wrote {out}")
 
 
 # =============================================================================
@@ -201,8 +227,24 @@ def _print_setup_heavy(per_test: dict[str, dict[str, float]], top: int) -> None:
         print(f"setup={secs:>6.1f}s {key}")
 
 
+def main() -> int:
+    """Report on one named slot.
+
+    ``--slot`` selects a constant from ``_SLOTS``; argv never constructs a path.
+    A caller needing another location imports :func:`report` and passes a
+    ``Path`` it built itself.
+    """
+    parser = argparse.ArgumentParser(description="Summarise a pytest timing capture.")
+    parser.add_argument("--slot", choices=sorted(_SLOTS), default=_DEFAULT_SLOT)
+    parser.add_argument("--top", type=int, default=40)
+    args = parser.parse_args()
+    capture = _SLOTS[args.slot]
+    if not capture.is_file():
+        print(f"no capture in slot {args.slot!r} — run pytest with PERF_SLOT={args.slot} first")
+        return 2
+    report(capture, top=args.top)
+    return 0
+
+
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print(__doc__)
-        sys.exit(2)
-    report(Path(sys.argv[1]))
+    sys.exit(main())

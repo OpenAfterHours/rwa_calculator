@@ -141,6 +141,7 @@ References:
 from __future__ import annotations
 
 import logging
+from functools import cache
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 import polars as pl
@@ -177,7 +178,7 @@ from rwa_calc.reporting.metadata import SUBSTITUTION_INFLOW_RW_PREFIX, Reporting
 from rwa_calc.reporting.plans import SheetPlan
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
 logger = logging.getLogger(__name__)
 
@@ -378,11 +379,9 @@ _EQUITY_TRANSITIONAL_FILTERS: dict[str, tuple[str, bool]] = {
 _Terms = tuple[tuple[str, str | bool], ...]
 
 
-def _const(value: float | None):  # noqa: ANN202 - tiny Formula factory
-    def fn(_cells: Mapping[str, float | None], _prior: bool) -> float | None:
-        return value
-
-    return fn
+@cache  # one callable per value, so a rebuilt spec stays value-equal to the last
+def _const(value: float | None) -> Callable[[Mapping[str, float | None], bool], float | None]:
+    return lambda _cells, _prior: value
 
 
 def _net_of_adjustments(cells: Mapping[str, float | None], _prior: bool) -> float | None:

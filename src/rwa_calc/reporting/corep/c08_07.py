@@ -56,6 +56,7 @@ References:
 
 from __future__ import annotations
 
+from functools import cache
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -80,7 +81,7 @@ from rwa_calc.reporting.metadata import ReportingContext
 from rwa_calc.reporting.plans import SheetPlan
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
 # Single-frame lineage key: C 08.07 has no sheet axis, so its one plan keys
 # under a canonical name (see reporting.plans / _resolve_sheet_key single_frame).
@@ -99,11 +100,9 @@ class _Row:
         self.name = name
 
 
-def _const(value: float | None):  # noqa: ANN202 - tiny Formula factory
-    def fn(_cells: Mapping[str, float | None], _prior: bool) -> float | None:
-        return value
-
-    return fn
+@cache  # one callable per value, so a rebuilt spec stays value-equal to the last
+def _const(value: float | None) -> Callable[[Mapping[str, float | None], bool], float | None]:
+    return lambda _cells, _prior: value
 
 
 @cites("CRR Art. 148")

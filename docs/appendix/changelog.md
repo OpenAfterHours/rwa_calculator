@@ -12,6 +12,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - (Next release changes will go here)
+- **COREP / Pillar 3 cell expressions compile once and are reused across
+  sheets and runs.** The declarative executor's Python-side work — compiling a
+  `RowPredicate` to a filter expression, and turning a template's cells into
+  mask + aggregation expressions — is a pure function of the predicate or spec
+  and the frame's column signature, and on the 150-row acceptance ledger it cost
+  about as much as the Polars passes it fed (4,849 CRR / 7,634 Basel 3.1
+  predicate compiles per COREP generation, C 07.00 running one spec over every
+  class sheet). `reporting/cellspec.py` now holds three bounded LRU caches —
+  the interned column signature, the compiled expression per (predicate value,
+  signature), and the sheet plan per (spec value, signature), with an identity
+  front so a spec executed over consecutive sheets hashes its cells once — and
+  the four `_const` `Formula` factories return one callable per value so a
+  rebuilt spec stays value-equal to the last. Measured per generation: COREP
+  CRR 0.63–0.73 s → 0.37–0.42 s, Basel 3.1 1.10–1.14 s → 0.57–0.70 s, with
+  warm-cache predicate compiles at zero. Nothing data-dependent is cached —
+  every frame still runs its own mask and aggregation passes — and the 27-run
+  reference dump (ledgers, error lists, every COREP and Pillar 3 sheet) is
+  identical to master. Pinned by `tests/unit/reporting/test_cellspec_caches.py`.
 
 ---
 

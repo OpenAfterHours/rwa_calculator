@@ -180,6 +180,7 @@ References:
 
 from __future__ import annotations
 
+from functools import cache
 from typing import TYPE_CHECKING, cast
 
 import polars as pl
@@ -402,11 +403,9 @@ class _Row:
         self.name = name
 
 
-def _const(value: float | None):  # noqa: ANN202 - tiny Formula factory
-    def fn(_cells: Mapping[str, float | None], _prior: bool) -> float | None:
-        return value
-
-    return fn
+@cache  # one callable per value, so a rebuilt spec stays value-equal to the last
+def _const(value: float | None) -> Callable[[Mapping[str, float | None], bool], float | None]:
+    return lambda _cells, _prior: value
 
 
 # =============================================================================

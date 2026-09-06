@@ -11,6 +11,16 @@ Runs a full pipeline against the standard test fixtures with
   the audit cache must never perturb the calculation.
 - A subsequent run is partitioned under a *different* ``run_id`` and the
   prior run's artifacts survive (no overwrite, no leakage).
+
+Run budget. A full-fixture run costs ~3 s, so the module makes exactly three
+of them: ONE module-scoped CRR run with the cache on (``cached_run``), shared
+read-only by every test that reads artefact contents or the manifest and
+reused as the "cache on" side of the perturbation test; one CRR control run
+with the cache off; and one Basel 3.1 run for the floor-impact artefact. The
+run-directory lifecycle tests (distinct ``run_id`` per run, pruning) assert
+only on the number and identity of subdirectories under ``audit_cache_dir``,
+which the manifest write creates for ANY input, so they run the one-loan
+integration bundle through ``run_with_data`` instead of the full fixture.
 """
 
 from __future__ import annotations
@@ -18,12 +28,18 @@ from __future__ import annotations
 import json
 from datetime import date
 from pathlib import Path
+from typing import TYPE_CHECKING, NamedTuple
 
 import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.engine.pipeline import create_test_pipeline
+from rwa_calc.engine.pipeline import PipelineOrchestrator, create_test_pipeline
+
+from .conftest import make_raw_data_bundle
+
+if TYPE_CHECKING:
+    from rwa_calc.contracts.bundles import AggregatedResultBundle
 
 # Artifacts that ALWAYS appear when ``audit_cache_dir`` is set, regardless of
 # framework, IRB permissions, or input feature usage. The standard test
@@ -61,19 +77,51 @@ CRR_ONLY_ARTIFACTS = {"supporting_factor_impact.parquet"}
 BASEL_3_1_ONLY_ARTIFACTS = {"floor_impact.parquet"}
 
 
-@pytest.fixture
-def cached_run_dir(tmp_path: Path) -> Path:
-    """Run the test pipeline with ``audit_cache_dir=tmp_path`` and return the run dir."""
+class CachedRun(NamedTuple):
+    """The module's one shared full-fixture CRR run with the audit cache on."""
+
+    run_dir: Path
+    result: AggregatedResultBundle
+
+
+@pytest.fixture(scope="module")
+def cached_run(tmp_path_factory: pytest.TempPathFactory) -> CachedRun:
+    """Run the full test fixture once with ``audit_cache_dir`` set.
+
+    Module-scoped and shared: every consumer reads the run directory and the
+    result bundle and never writes into or under either. A test that needs its
+    own run directory (the lifecycle tests) takes ``tmp_path`` and runs the
+    pipeline itself.
+    """
+    cache_dir = tmp_path_factory.mktemp("audit_cache")
     cfg = CalculationConfig.crr(
         reporting_date=date(2024, 12, 31),
-        audit_cache_dir=tmp_path,
+        audit_cache_dir=cache_dir,
     )
     pipeline = create_test_pipeline()
-    pipeline.run(cfg)
+    result = pipeline.run(cfg)
 
-    run_dirs = [p for p in tmp_path.iterdir() if p.is_dir()]
+    run_dirs = [p for p in cache_dir.iterdir() if p.is_dir()]
     assert len(run_dirs) == 1, f"expected one run dir, got {[d.name for d in run_dirs]}"
-    return run_dirs[0]
+    return CachedRun(run_dir=run_dirs[0], result=result)
+
+
+@pytest.fixture(scope="module")
+def cached_run_dir(cached_run: CachedRun) -> Path:
+    """The shared run directory of :func:`cached_run` — read-only."""
+    return cached_run.run_dir
+
+
+def _run_one_loan_bundle(cfg: CalculationConfig) -> AggregatedResultBundle:
+    """Run the one-loan integration bundle in memory under ``cfg``.
+
+    The run-directory lifecycle (one ``<run_id>`` subdirectory per run, pruned
+    to ``audit_cache_max_runs``) is driven by the manifest write and
+    ``prune_audit_cache`` at the end of every run, independent of which
+    artefacts the input produced — so the lifecycle tests use the smallest
+    bundle that runs the pipeline end to end rather than the full fixture.
+    """
+    return PipelineOrchestrator().run_with_data(make_raw_data_bundle(), cfg)
 
 
 def test_pipeline_writes_all_always_present_artifacts(cached_run_dir: Path) -> None:
@@ -219,21 +267,21 @@ def test_collateral_haircuts_carries_diagnostic_columns(cached_run_dir: Path) ->
     assert haircuts.height > 0, "expected at least one collateral row in the fixture run"
 
 
-def test_audit_cache_does_not_perturb_rwa_totals(tmp_path: Path) -> None:
+def test_audit_cache_does_not_perturb_rwa_totals(cached_run: CachedRun) -> None:
     """A run with the cache on must produce identical RWA totals to one
     without the cache — the sink calls are pure side-effects.
+
+    The "cache on" side is the module's shared full-fixture run (same config
+    as a fresh run here: CRR, 2024-12-31, ``audit_cache_dir`` set); only the
+    "cache off" control run is made afresh. The full fixture is kept for both
+    sides so every sink site fires with a non-empty frame.
     """
     cfg_off = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
     pipeline_off = create_test_pipeline()
     result_off = pipeline_off.run(cfg_off)
     rwa_off = result_off.results.select(pl.col("rwa_final").sum()).collect().item()
 
-    cfg_on = CalculationConfig.crr(
-        reporting_date=date(2024, 12, 31),
-        audit_cache_dir=tmp_path,
-    )
-    pipeline_on = create_test_pipeline()
-    result_on = pipeline_on.run(cfg_on)
+    result_on = cached_run.result
     rwa_on = result_on.results.select(pl.col("rwa_final").sum()).collect().item()
 
     assert rwa_off == pytest.approx(rwa_on, rel=1e-12), (
@@ -250,13 +298,11 @@ def test_second_run_writes_to_distinct_run_dir(tmp_path: Path) -> None:
         audit_cache_dir=tmp_path,
     )
 
-    pipeline1 = create_test_pipeline()
-    pipeline1.run(cfg)
+    _run_one_loan_bundle(cfg)
     first_dirs = [p for p in tmp_path.iterdir() if p.is_dir()]
     assert len(first_dirs) == 1
 
-    pipeline2 = create_test_pipeline()
-    pipeline2.run(cfg)
+    _run_one_loan_bundle(cfg)
     all_dirs = sorted(p for p in tmp_path.iterdir() if p.is_dir())
     assert len(all_dirs) == 2, f"expected two distinct run dirs, got {[d.name for d in all_dirs]}"
     assert all_dirs[0] != all_dirs[1]
@@ -273,8 +319,7 @@ def test_pruning_keeps_only_n_newest_runs(tmp_path: Path) -> None:
     )
 
     for _ in range(3):
-        pipeline = create_test_pipeline()
-        pipeline.run(cfg)
+        _run_one_loan_bundle(cfg)
 
     surviving = [p for p in tmp_path.iterdir() if p.is_dir()]
     assert len(surviving) == 1, f"expected 1 surviving run dir, got {[d.name for d in surviving]}"

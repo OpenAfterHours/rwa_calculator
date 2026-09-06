@@ -14,6 +14,12 @@ Key responsibilities tested:
 
 Uses the mandatory-minimum on-disk fixture (one SA-eligible corporate loan) so
 the calculation reaches the engine and produces a non-zero RWA.
+
+Cost model: the app and the datasets are built once per module, and the tests
+whose act only READS a registered run share one module-scoped calculation
+(``warm_run_id``) / reconciliation (``warm_recon_id``). A test whose act is the
+calculation, or that asserts what the run index holds afterwards, still runs its
+own — see the fixture docstrings for what is and is not shared.
 """
 
 from __future__ import annotations
@@ -42,26 +48,51 @@ from tests.fixtures.recon_ledger import with_reporting_ledger
 
 @pytest.fixture(autouse=True)
 def _clean_run_index() -> None:
-    """Each test starts with an empty calculation run index (module-level state)."""
+    """Each test starts with an empty calculation run index (module-level state).
+
+    Cost-free, and it only matters to the two ``*_seeds_run_index`` tests: no
+    REST endpoint READS the index. ``/api/calculate`` and ``/api/comparison``
+    write to it after running the pipeline; ``/api/reconcile`` neither reads nor
+    writes it — its reuse path is an explicit caller-supplied ``run_id``,
+    resolved against ``rest._RUNS``. The module-scoped runs below are therefore
+    shared through ``rest._RUNS`` (by run_id), which nothing here clears, not
+    through the index.
+    """
     run_index.clear()
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def client() -> TestClient:
-    """A TestClient over a standalone API app."""
+    """A TestClient over a standalone API app, built once per module.
+
+    ``create_api_app`` is a stateless shell: every registry the router reads
+    (``_RUNS``, ``_RECON_RUNS``, ``_COMPARISONS``, ``_TEMPLATE_BUNDLES``) is
+    module-level in ``rwa_calc.api.rest``, so a fresh app per test never gave a
+    fresh registry — only a fresh binding of the same router.
+    """
     return TestClient(create_api_app())
 
 
-@pytest.fixture
-def data_dir(tmp_path: Path) -> str:
-    """Mandatory-minimum SA dataset written to disk; returns the path string."""
-    write_mandatory_minimum(tmp_path)
-    return str(tmp_path)
+@pytest.fixture(scope="module")
+def data_dir(tmp_path_factory: pytest.TempPathFactory) -> str:
+    """Mandatory-minimum SA dataset written once per module; returns the path string.
+
+    Read-only by contract: no test writes into it. A write would move the
+    on-disk data every later test reads, and change its run-index signature.
+    """
+    root = tmp_path_factory.mktemp("rest_data")
+    write_mandatory_minimum(root)
+    return str(root)
 
 
-@pytest.fixture
-def recon_data_dir(tmp_path: Path) -> str:
-    """Mandatory-minimum dataset plus a legacy_output.csv derived from our results."""
+@pytest.fixture(scope="module")
+def recon_data_dir(tmp_path_factory: pytest.TempPathFactory) -> str:
+    """Mandatory-minimum dataset plus a legacy_output.csv derived from our results.
+
+    Module-scoped for the same read-only reason as ``data_dir``; the one direct
+    ``CreditRiskCalc.calculate()`` here only derives the nudged legacy file.
+    """
+    tmp_path = tmp_path_factory.mktemp("rest_recon_data")
     write_mandatory_minimum(tmp_path)
     ours = (
         CreditRiskCalc(
@@ -100,6 +131,59 @@ def _reconcile_body(data_dir: str) -> dict:
         "data_format": "parquet",
         "mapping_toml": DEFAULT_MAPPING_TOML,
     }
+
+
+def _calculate_run_id(client: TestClient, data_dir: str, framework: str = "CRR") -> str:
+    """Run /api/calculate and return the registered run_id."""
+    resp = client.post(
+        "/api/calculate",
+        json={
+            "data_path": data_dir,
+            "framework": framework,
+            "reporting_date": "2025-01-01",
+            "permission_mode": "standardised",
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    return body["run_id"]
+
+
+@pytest.fixture(scope="module")
+def warm_run_id(client: TestClient, data_dir: str) -> str:
+    """One CRR calculation over ``data_dir``, registered once per module.
+
+    Shared by every test whose ACT only reads an already-registered run
+    (results paging, templates, lineage, exports). The run lives in
+    ``rest._RUNS`` and its COREP / Pillar 3 bundles are cached per run_id, so
+    the pipeline and the template generation run once for the module instead
+    of once per test. Every consumer is a GET — nothing mutates the run. Tests
+    whose act IS the calculation post ``/api/calculate`` themselves.
+    """
+    return _calculate_run_id(client, data_dir)
+
+
+@pytest.fixture(scope="module")
+def recon_run_id(client: TestClient, recon_data_dir: str) -> str:
+    """A CRR run over ``recon_data_dir``, registered once per module.
+
+    The run the explicit-``run_id`` reconcile tests hand to ``/api/reconcile``;
+    they only read it (one of them patches the pipeline to prove it is not
+    re-run, and restores the patch on exit).
+    """
+    return _calculate_run_id(client, recon_data_dir)
+
+
+@pytest.fixture(scope="module")
+def warm_recon_id(client: TestClient, recon_data_dir: str) -> str:
+    """One registered reconciliation over ``recon_data_dir`` (a full pipeline run
+    plus the legacy join), shared by the reconcile-export tests whose act is
+    only the download. The test whose act is the reconciliation posts its own.
+    """
+    recon_id: str = client.post("/api/reconcile", json=_reconcile_body(recon_data_dir)).json()[
+        "recon_id"
+    ]
+    return recon_id
 
 
 # =============================================================================
@@ -149,17 +233,9 @@ def test_calculate_returns_run_id_and_positive_rwa(client: TestClient, data_dir:
     assert body["summary"]["total_rwa"] > 0
 
 
-def test_results_pages_registered_run(client: TestClient, data_dir: str) -> None:
-    # Arrange — run a calculation to register a run_id
-    run_id = client.post(
-        "/api/calculate",
-        json={
-            "data_path": data_dir,
-            "framework": "CRR",
-            "reporting_date": date(2025, 1, 1).isoformat(),
-            "permission_mode": "standardised",
-        },
-    ).json()["run_id"]
+def test_results_pages_registered_run(client: TestClient, warm_run_id: str) -> None:
+    # Arrange — the module's registered run
+    run_id = warm_run_id
 
     # Act
     resp = client.get("/api/results", params={"run_id": run_id, "limit": 50})
@@ -185,23 +261,11 @@ def test_results_unknown_run_id_is_404(client: TestClient) -> None:
 # =============================================================================
 
 
-def _run(client: TestClient, data_dir: str) -> str:
-    """Run a CRR calculation and return its run_id."""
-    run_id: str = client.post(
-        "/api/calculate",
-        json={
-            "data_path": data_dir,
-            "framework": "CRR",
-            "reporting_date": date(2025, 1, 1).isoformat(),
-            "permission_mode": "standardised",
-        },
-    ).json()["run_id"]
-    return run_id
-
-
-def test_templates_index_lists_the_generated_templates(client: TestClient, data_dir: str) -> None:
+def test_templates_index_lists_the_generated_templates(
+    client: TestClient, warm_run_id: str
+) -> None:
     # Arrange
-    run_id = _run(client, data_dir)
+    run_id = warm_run_id
 
     # Act
     resp = client.get("/api/templates", params={"run_id": run_id})
@@ -217,10 +281,10 @@ def test_templates_index_lists_the_generated_templates(client: TestClient, data_
 
 
 def test_template_sheet_returns_headers_and_the_generated_cells(
-    client: TestClient, data_dir: str
+    client: TestClient, warm_run_id: str
 ) -> None:
     # Arrange
-    run_id = _run(client, data_dir)
+    run_id = warm_run_id
 
     # Act
     resp = client.get("/api/templates/c07_00", params={"run_id": run_id, "sheet": "corporate"})
@@ -236,9 +300,9 @@ def test_template_sheet_returns_headers_and_the_generated_cells(
     assert total["0220"] > 0
 
 
-def test_template_sheet_defaults_to_the_first_sheet(client: TestClient, data_dir: str) -> None:
+def test_template_sheet_defaults_to_the_first_sheet(client: TestClient, warm_run_id: str) -> None:
     # Arrange
-    run_id = _run(client, data_dir)
+    run_id = warm_run_id
 
     # Act — no sheet named
     resp = client.get("/api/templates/c07_00", params={"run_id": run_id})
@@ -249,10 +313,10 @@ def test_template_sheet_defaults_to_the_first_sheet(client: TestClient, data_dir
 
 
 def test_lineage_explains_a_reported_cell_and_lists_its_contributors(
-    client: TestClient, data_dir: str
+    client: TestClient, warm_run_id: str
 ) -> None:
     # Arrange
-    run_id = _run(client, data_dir)
+    run_id = warm_run_id
 
     # Act — C 07.00 / corporate / row 0010 (total) / col 0220 (RWEA)
     resp = client.get(
@@ -286,10 +350,10 @@ def test_lineage_explains_a_reported_cell_and_lists_its_contributors(
 
 
 def test_lineage_reports_a_cell_whose_sources_are_never_produced(
-    client: TestClient, data_dir: str
+    client: TestClient, warm_run_id: str
 ) -> None:
     # Arrange
-    run_id = _run(client, data_dir)
+    run_id = warm_run_id
 
     # Act — col 0020 sums own_funds_deduction_amount, which the engine does not
     # put on the ledger (col 0030 used to be the showcase here, but R9 rebound
@@ -315,10 +379,12 @@ def test_lineage_reports_a_cell_whose_sources_are_never_produced(
     assert body["contribution_total"] is None
 
 
-def test_lineage_serves_a_single_frame_pillar3_template(client: TestClient, data_dir: str) -> None:
+def test_lineage_serves_a_single_frame_pillar3_template(
+    client: TestClient, warm_run_id: str
+) -> None:
     # Arrange — R20 instrumented four single-frame Pillar 3 templates. CR4 (SA
     # exposure-and-CRM-effects) is populated by this SA-only run.
-    run_id = _run(client, data_dir)
+    run_id = warm_run_id
 
     # Act — CR4 total row (17) / RWEAs (col e). No sheet param: a single-frame
     # template has no sheet axis, so its cells report sheet = None.
@@ -378,9 +444,11 @@ def test_lineage_refuses_cr8_prior_period_derived_cells(client: TestClient, tmp_
         assert "prior period" in resp.json()["detail"].lower(), f"row {prior_row}"
 
 
-def test_lineage_unknown_run_template_and_cell_are_404(client: TestClient, data_dir: str) -> None:
+def test_lineage_unknown_run_template_and_cell_are_404(
+    client: TestClient, warm_run_id: str
+) -> None:
     # Arrange
-    run_id = _run(client, data_dir)
+    run_id = warm_run_id
     cell = {"template": "c07_00", "sheet": "corporate", "row": "0010", "col": "0220"}
 
     # Act / Assert — an unknown run, an uninstrumented template (C 02.00 is the
@@ -403,10 +471,10 @@ def test_lineage_unknown_run_template_and_cell_are_404(client: TestClient, data_
 
 
 def test_templates_unknown_run_and_unknown_template_are_404(
-    client: TestClient, data_dir: str
+    client: TestClient, warm_run_id: str
 ) -> None:
     # Arrange
-    run_id = _run(client, data_dir)
+    run_id = warm_run_id
 
     # Act / Assert — an uninstrumented cell address is a clean 404, never a guess.
     assert client.get("/api/templates", params={"run_id": "nope"}).status_code == 404
@@ -439,18 +507,10 @@ def test_openapi_documents_results_404(client: TestClient) -> None:
     [("parquet", "zip"), ("csv", "zip"), ("excel", "xlsx"), ("pillar3", "xlsx")],
 )
 def test_export_downloads_with_fixed_filename(
-    client: TestClient, data_dir: str, fmt: str, media: str
+    client: TestClient, warm_run_id: str, fmt: str, media: str
 ) -> None:
     # Arrange
-    run_id = client.post(
-        "/api/calculate",
-        json={
-            "data_path": data_dir,
-            "framework": "CRR",
-            "reporting_date": "2025-01-01",
-            "permission_mode": "standardised",
-        },
-    ).json()["run_id"]
+    run_id = warm_run_id
 
     # Act
     resp = client.get(f"/api/export/{fmt}", params={"run_id": run_id})
@@ -473,12 +533,12 @@ def test_export_downloads_with_fixed_filename(
     ],
 )
 def test_export_cell_facts_downloads(
-    client: TestClient, data_dir: str, fmt: str, media: str
+    client: TestClient, warm_run_id: str, fmt: str, media: str
 ) -> None:
     """The flat, keyed cell-fact feed (reporting/facts.py) downloads the same
     way as the other export formats, with the same run_id-in-filename guard."""
     # Arrange
-    run_id = _run(client, data_dir)
+    run_id = warm_run_id
 
     # Act
     resp = client.get(f"/api/export/{fmt}", params={"run_id": run_id})
@@ -492,12 +552,12 @@ def test_export_cell_facts_downloads(
 
 
 def test_export_filenames_are_stamped_with_framework_and_reporting_date(
-    client: TestClient, data_dir: str
+    client: TestClient, warm_run_id: str
 ) -> None:
     """Filenames now carry server-validated run data (framework, reporting
     date) instead of a bare fixed literal — still never the opaque run_id."""
     # Arrange
-    run_id = _run(client, data_dir)
+    run_id = warm_run_id
 
     # Act
     resp = client.get("/api/export/corep", params={"run_id": run_id})
@@ -510,11 +570,11 @@ def test_export_filenames_are_stamped_with_framework_and_reporting_date(
 
 
 def test_export_entity_identifier_is_stamped_into_corep_facts(
-    client: TestClient, data_dir: str
+    client: TestClient, warm_run_id: str
 ) -> None:
     """The optional entity_identifier query param reaches every fact row."""
     # Arrange
-    run_id = _run(client, data_dir)
+    run_id = warm_run_id
 
     # Act
     resp = client.get(
@@ -835,12 +895,10 @@ def test_reconcile_invalid_config_is_422(client: TestClient, recon_data_dir: str
 
 @pytest.mark.parametrize(("fmt", "media"), [("csv", "zip"), ("excel", "xlsx")])
 def test_reconcile_export_downloads(
-    client: TestClient, recon_data_dir: str, fmt: str, media: str
+    client: TestClient, warm_recon_id: str, fmt: str, media: str
 ) -> None:
     # Arrange
-    recon_id = client.post("/api/reconcile", json=_reconcile_body(recon_data_dir)).json()[
-        "recon_id"
-    ]
+    recon_id = warm_recon_id
 
     # Act
     resp = client.get(f"/api/reconcile/export/{fmt}", params={"recon_id": recon_id})
@@ -939,27 +997,14 @@ def test_openapi_documents_reconcile(client: TestClient) -> None:
 # =============================================================================
 
 
-def _calculate_run_id(client: TestClient, data_dir: str, framework: str = "CRR") -> str:
-    """Run /api/calculate and return the registered run_id."""
-    resp = client.post(
-        "/api/calculate",
-        json={
-            "data_path": data_dir,
-            "framework": framework,
-            "reporting_date": "2025-01-01",
-            "permission_mode": "standardised",
-        },
-    )
-    assert resp.status_code == 200
-    body = resp.json()
-    return body["run_id"]
-
-
 def test_reconcile_with_run_id_reuses_registered_run(
-    client: TestClient, recon_data_dir: str, monkeypatch: pytest.MonkeyPatch
+    client: TestClient,
+    recon_data_dir: str,
+    recon_run_id: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Arrange — a registered run; any pipeline re-run would raise.
-    run_id = _calculate_run_id(client, recon_data_dir)
+    run_id = recon_run_id
     monkeypatch.setattr(
         CreditRiskCalc,
         "calculate",
@@ -987,10 +1032,12 @@ def test_reconcile_with_unknown_run_id_is_404(client: TestClient, recon_data_dir
     assert resp.status_code == 404
 
 
-def test_reconcile_with_mismatched_run_is_422(client: TestClient, recon_data_dir: str) -> None:
+def test_reconcile_with_mismatched_run_is_422(
+    client: TestClient, recon_data_dir: str, recon_run_id: str
+) -> None:
     # An explicit run_id whose framework does not match the request must not be
-    # silently recomputed — the caller asked for THAT run.
-    run_id = _calculate_run_id(client, recon_data_dir, framework="CRR")
+    # silently recomputed — the caller asked for THAT run (a CRR one).
+    run_id = recon_run_id
     body = _reconcile_body(recon_data_dir)
     body["framework"] = "BASEL_3_1"
     body["run_id"] = run_id

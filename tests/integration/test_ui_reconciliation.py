@@ -77,29 +77,68 @@ def client() -> TestClient:
     return TestClient(create_app(), base_url="http://localhost")
 
 
+@pytest.fixture(scope="module")
+def mandatory_ours(tmp_path_factory: pytest.TempPathFactory) -> pl.DataFrame:
+    """Our SA results for the mandatory-minimum dataset, computed once per module.
+
+    The pipeline output is a pure function of the dataset ``write_mandatory_minimum``
+    writes, so every test's ``legacy_output.csv`` is derived from this one frame
+    instead of re-running the pipeline in each test's setup. The frame is shared and
+    read-only: consumers ``select``/``rename`` into a new frame, never mutate it. A
+    module-scoped fixture sets up before the function-scoped autouse
+    ``_isolated_state_dir``, so the one ``calculate()`` here points the state home at
+    its own tmp dir the same way, and can never touch the real ``~/.rwa_calc``.
+
+    Only the setup side is memoised. ``_form_data`` never sets ``reuse_calculation``,
+    so every ``POST /reconciliation`` built from it runs the pipeline, by design; the
+    reuse tests that set the field themselves monkeypatch ``calculate`` to prove the
+    run is skipped. The run index is keyed on the resolved data path plus a stat
+    signature of its parquet files, so a per-test directory can never hit another
+    test's run anyway. The autouse ``_clean_run_index`` must stay regardless:
+    ``GET /reconciliation`` reads the index whatever the form says, to decide whether
+    to render the reuse offer, and
+    ``test_form_without_matching_run_has_no_reuse_option`` asserts that offer is
+    absent -- a warm shared index breaks it on the GET path alone.
+    """
+    root = tmp_path_factory.mktemp("recon_seed") / "data"
+    root.mkdir()
+    write_mandatory_minimum(root)
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv(STATE_DIR_ENV_VAR, str(tmp_path_factory.mktemp("state")))
+        return (
+            CreditRiskCalc(
+                data_path=str(root),
+                framework="CRR",
+                reporting_date=date(2025, 1, 1),
+                permission_mode="standardised",
+                data_format="parquet",
+            )
+            .calculate()
+            .scan_results()
+            .select(
+                "exposure_reference",
+                "ead_final",
+                "rwa_final",
+                "exposure_class",
+                "approach_applied",
+            )
+            .collect()
+        )
+
+
 @pytest.fixture
-def recon_dir(tmp_path: Path) -> str:
+def recon_dir(tmp_path: Path, mandatory_ours: pl.DataFrame) -> str:
     """Mandatory-minimum dataset plus a legacy_output.csv derived from our results.
 
     Lives in a subdir so the state home (tmp_path/"state", which holds the
-    persistent run caches) never sits inside the data path signature.
+    persistent run caches) never sits inside the data path signature. Each test
+    gets its own copy of the dataset: sign-off decisions and the saved last run
+    are keyed on the data path, and ``_move_break`` rewrites the CSV in place.
     """
     root = tmp_path / "data"
     root.mkdir()
     write_mandatory_minimum(root)
-    ours = (
-        CreditRiskCalc(
-            data_path=str(root),
-            framework="CRR",
-            reporting_date=date(2025, 1, 1),
-            permission_mode="standardised",
-            data_format="parquet",
-        )
-        .calculate()
-        .scan_results()
-        .select("exposure_reference", "ead_final", "rwa_final")
-        .collect()
-    )
+    ours = mandatory_ours.select("exposure_reference", "ead_final", "rwa_final")
     legacy = (
         ours.rename({"ead_final": "EAD", "rwa_final": "RWA"})
         .with_row_index("_i")
@@ -212,24 +251,14 @@ def test_reconciliation_progress_stream_replays_recon_tail(
     assert "recon_reconcile" in stream.text
 
 
-def test_reconciliation_renders_asset_class_allocation(client: TestClient, tmp_path: Path) -> None:
+def test_reconciliation_renders_asset_class_allocation(
+    client: TestClient, tmp_path: Path, mandatory_ours: pl.DataFrame
+) -> None:
     # Arrange: a legacy file that carries an asset-class column per line (the
     # default mapping maps exposure_class -> Asset_Class), so the allocation tier
     # is populated and rendered.
     write_mandatory_minimum(tmp_path)
-    ours = (
-        CreditRiskCalc(
-            data_path=str(tmp_path),
-            framework="CRR",
-            reporting_date=date(2025, 1, 1),
-            permission_mode="standardised",
-            data_format="parquet",
-        )
-        .calculate()
-        .scan_results()
-        .select("exposure_reference", "ead_final", "rwa_final", "exposure_class")
-        .collect()
-    )
+    ours = mandatory_ours.select("exposure_reference", "ead_final", "rwa_final", "exposure_class")
     ours.rename(
         {"ead_final": "EAD", "rwa_final": "RWA", "exposure_class": "Asset_Class"}
     ).write_csv(tmp_path / "legacy_output.csv")
@@ -248,26 +277,14 @@ def test_reconciliation_renders_asset_class_allocation(client: TestClient, tmp_p
 
 
 def test_reconciliation_splits_asset_class_allocation_by_method(
-    client: TestClient, tmp_path: Path
+    client: TestClient, tmp_path: Path, mandatory_ours: pl.DataFrame
 ) -> None:
     # Arrange: a legacy extract that reports each asset class PER METHOD (as COREP
     # does), so mapping [components.approach] gives the legacy side a method to split
     # on and the allocation renders one chart section + a table row set per method.
     write_mandatory_minimum(tmp_path)
-    ours = (
-        CreditRiskCalc(
-            data_path=str(tmp_path),
-            framework="CRR",
-            reporting_date=date(2025, 1, 1),
-            permission_mode="standardised",
-            data_format="parquet",
-        )
-        .calculate()
-        .scan_results()
-        .select(
-            "exposure_reference", "ead_final", "rwa_final", "exposure_class", "approach_applied"
-        )
-        .collect()
+    ours = mandatory_ours.select(
+        "exposure_reference", "ead_final", "rwa_final", "exposure_class", "approach_applied"
     )
     ours.rename(
         {

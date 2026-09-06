@@ -9,6 +9,7 @@ including C 08.03's fatal row axis, and backwards compatibility of the grammar.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -21,6 +22,7 @@ from rwa_calc.analysis.legacy_ledger import (
     MULTI_TARGET_COMPONENTS,
     PROJECTABLE_LEDGER_COLUMNS,
     TEMPLATE_POPULATION_LABELS,
+    LedgerCoverage,
     LegacyLedgerSource,
     ledger_coverage,
     project_legacy_ledger,
@@ -45,7 +47,7 @@ from rwa_calc.data.schemas import (
     VALID_SLOTTING_CATEGORIES,
 )
 from rwa_calc.domain.enums import ApproachType, ExposureClass
-from rwa_calc.reporting.corep.generator import COREPGenerator
+from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBundle
 from rwa_calc.reporting.kernel.columns import _CREDIT_BS_TYPES
 
 if TYPE_CHECKING:
@@ -484,20 +486,26 @@ def _components_for(route: str) -> dict[str, ComponentMapping]:
     return {**_BASE_COMPONENTS, **_ROUTES[route][0]}
 
 
-def _write_legacy(tmp_path: Path, rows: dict[str, list[object]] | None = None) -> Path:
+def _write_legacy(directory: Path, rows: dict[str, list[object]] | None = None) -> Path:
     """Write the firm's extract as a parquet the loader can scan."""
-    path = tmp_path / "legacy.parquet"
+    path = directory / "legacy.parquet"
     pl.DataFrame(rows if rows is not None else _LEGACY_ROWS).write_parquet(path)
     return path
 
 
 def _load(
-    tmp_path: Path,
+    legacy_file: Path,
     components: dict[str, ComponentMapping],
     carriers: dict[str, CarrierMapping] | None = None,
-    rows: dict[str, list[object]] | None = None,
 ) -> tuple[pl.LazyFrame, LegacyColumnMapping]:
-    """Run the real loader so the projection's input is the production shape."""
+    """Run the real loader so the projection's input is the production shape.
+
+    ``legacy_file`` is ``shared.legacy_file`` for a test on the default rows
+    (written once per module) and ``_write_legacy(tmp_path, rows)`` for a test
+    that supplies its own. The loader returns a lazy scan, so the file has to
+    outlive every frame derived from it — which is why the default lives in a
+    module-scoped directory rather than a per-test ``tmp_path``.
+    """
     mapping = LegacyColumnMapping(
         legacy_keys=("Loan Ref",),
         our_keys=("exposure_reference",),
@@ -505,11 +513,82 @@ def _load(
         carriers=carriers or {},
     )
     settings = ReconciliationSettings(
-        legacy_file=_write_legacy(tmp_path, rows),
+        legacy_file=legacy_file,
         mapping=mapping,
         legacy_format="parquet",
     )
     return LegacyOutputLoader(settings).load(), mapping
+
+
+@dataclass
+class _Shared:
+    """Products of the DEFAULT rows under the FULL mapping, built once per key.
+
+    The reference-side bundle, the default load, its projection and the
+    legacy-side bundle are pure functions of ``(route, framework)`` — and they
+    used to be rebuilt per test. Measured by wrapping
+    ``COREPGenerator.generate_from_lazyframe`` under one ``-n 0`` run of this
+    file: 146 generations before the memo, 79 after, of which 8 are this memo's
+    builds (four per side) and 71 are tests' own custom-mapping or custom-rows
+    bundles. Each product is built on first use and the SAME object is handed
+    to every later reader.
+
+    THE RULE: everything returned here is shared and READ-ONLY. A test that
+    mutates a frame, a bundle's sheet dict or a mapping poisons every later
+    test in the module. A test that needs its own must build it: ``_load`` for
+    a custom mapping (``shared.legacy_file`` still serves the default rows),
+    ``_write_legacy(tmp_path, rows)`` for custom rows.
+    """
+
+    legacy_file: Path
+    _loads: dict[str, tuple[pl.LazyFrame, LegacyColumnMapping]] = field(default_factory=dict)
+    _projections: dict[tuple[str, str], tuple[LegacyLedgerSource, LedgerCoverage]] = field(
+        default_factory=dict
+    )
+    _reference_bundles: dict[tuple[str, str], COREPTemplateBundle] = field(default_factory=dict)
+    _legacy_bundles: dict[tuple[str, str], COREPTemplateBundle] = field(default_factory=dict)
+
+    def load(self, route: str) -> tuple[pl.LazyFrame, LegacyColumnMapping]:
+        """The default extract under ``_components_for(route)`` + ``_CARRIERS``."""
+        if route not in self._loads:
+            self._loads[route] = _load(self.legacy_file, _components_for(route), _CARRIERS)
+        return self._loads[route]
+
+    def projection(self, route: str, framework: str) -> tuple[LegacyLedgerSource, LedgerCoverage]:
+        """``project_legacy_ledger`` over the default load, per (route, framework)."""
+        key = (route, framework)
+        if key not in self._projections:
+            legacy, mapping = self.load(route)
+            self._projections[key] = project_legacy_ledger(legacy, mapping, framework=framework)
+        return self._projections[key]
+
+    def reference_bundle(self, route: str, framework: str) -> COREPTemplateBundle:
+        """Our own side's templates, generated from ``_reference_frame(route)``."""
+        key = (route, framework)
+        if key not in self._reference_bundles:
+            self._reference_bundles[key] = COREPGenerator().generate_from_lazyframe(
+                _reference_frame(route), framework=framework
+            )
+        return self._reference_bundles[key]
+
+    def legacy_bundle(self, route: str, framework: str) -> COREPTemplateBundle:
+        """The firm's side's templates, generated from the default projection."""
+        key = (route, framework)
+        if key not in self._legacy_bundles:
+            source, _coverage = self.projection(route, framework)
+            self._legacy_bundles[key] = COREPGenerator().generate(source)
+        return self._legacy_bundles[key]
+
+
+@pytest.fixture(scope="module")
+def shared(tmp_path_factory: pytest.TempPathFactory) -> _Shared:
+    """The default extract on disk, written ONCE, and the memo over it.
+
+    Module-scoped so the parquet is written once and every product is built at
+    most once; under ``--dist=loadfile`` the whole file runs on one worker, so
+    that is once per session too.
+    """
+    return _Shared(_write_legacy(tmp_path_factory.mktemp("legacy_ledger")))
 
 
 def _assert_same_templates(ours: object, theirs: object) -> None:
@@ -542,7 +621,7 @@ def _cell(sheet: pl.DataFrame, row_ref: str, col_ref: str) -> float | None:
 @pytest.mark.parametrize("route", sorted(_ROUTES))
 @pytest.mark.parametrize("framework", FRAMEWORKS)
 def test_identity_projection_generates_cell_identical_templates(
-    tmp_path: Path, framework: str, route: str
+    shared: _Shared, framework: str, route: str
 ) -> None:
     """Our own results, re-read as a legacy extract, generate the same templates.
 
@@ -552,14 +631,11 @@ def test_identity_projection_generates_cell_identical_templates(
     between the two generate calls is which frame went in. Run on BOTH gross
     routes — the raw-amount one is the path a real extract takes.
     """
-    # Arrange
-    reference = _reference_frame(route)
-    legacy, mapping = _load(tmp_path, _components_for(route), _CARRIERS)
-
-    # Act
-    source, coverage = project_legacy_ledger(legacy, mapping, framework=framework)
-    ours = COREPGenerator().generate_from_lazyframe(reference, framework=framework)
-    theirs = COREPGenerator().generate(source)
+    # Arrange / Act — the default load, its projection and both generations,
+    # built once per (route, framework) and read here
+    _source, coverage = shared.projection(route, framework)
+    ours = shared.reference_bundle(route, framework)
+    theirs = shared.legacy_bundle(route, framework)
 
     # Assert
     assert coverage.reachable_templates == set(LEDGER_TEMPLATE_IDS)
@@ -586,14 +662,16 @@ def test_identity_projection_generates_cell_identical_templates(
 
 
 @pytest.mark.parametrize("framework", FRAMEWORKS)
-def test_hvcre_flag_is_derived_from_sl_type_when_not_mapped(tmp_path: Path, framework: str) -> None:
+def test_hvcre_flag_is_derived_from_sl_type_when_not_mapped(
+    shared: _Shared, framework: str
+) -> None:
     """The optional HVCRE flag is derived without changing either regime's sheets."""
     carriers = {name: spec for name, spec in _CARRIERS.items() if name != "is_hvcre"}
-    legacy, mapping = _load(tmp_path, _components_for("raw"), carriers)
+    legacy, mapping = _load(shared.legacy_file, _components_for("raw"), carriers)
 
     source, coverage = project_legacy_ledger(legacy, mapping, framework=framework)
     projected = source.scan_results().collect()
-    ours = COREPGenerator().generate_from_lazyframe(_reference_frame("raw"), framework=framework)
+    ours = shared.reference_bundle("raw", framework)
 
     assert projected["is_hvcre"].to_list()[-3:] == [False, False, True]
     assert "is_hvcre" in coverage.supplied
@@ -613,7 +691,7 @@ def test_explicit_hvcre_flag_wins_over_sl_type_derivation(tmp_path: Path) -> Non
             "IPRE": "ipre",
         },
     )
-    legacy, mapping = _load(tmp_path, _components_for("raw"), carriers, rows)
+    legacy, mapping = _load(_write_legacy(tmp_path, rows), _components_for("raw"), carriers)
 
     source, _coverage = project_legacy_ledger(legacy, mapping, framework="BASEL_3_1")
     projected = source.scan_results().collect()
@@ -624,12 +702,12 @@ def test_explicit_hvcre_flag_wins_over_sl_type_derivation(tmp_path: Path) -> Non
 
 @pytest.mark.parametrize("framework", FRAMEWORKS)
 def test_numeric_maturity_derives_band_with_exact_boundary_long(
-    tmp_path: Path, framework: str
+    shared: _Shared, framework: str
 ) -> None:
     """Numeric maturity is the optional route; <2.5 is short and 2.5 is long."""
     carriers = {name: spec for name, spec in _CARRIERS.items() if name != "is_short_maturity"}
     carriers["remaining_maturity_years"] = CarrierMapping("Remaining Maturity")
-    legacy, mapping = _load(tmp_path, _components_for("raw"), carriers)
+    legacy, mapping = _load(shared.legacy_file, _components_for("raw"), carriers)
 
     source, coverage = project_legacy_ledger(legacy, mapping, framework=framework)
     projected = source.scan_results().collect()
@@ -659,7 +737,7 @@ def test_direct_maturity_band_wins_over_numeric_derivation(tmp_path: Path) -> No
     ]
     carriers = dict(_CARRIERS)
     carriers["remaining_maturity_years"] = CarrierMapping("Remaining Maturity")
-    legacy, mapping = _load(tmp_path, _components_for("raw"), carriers, rows)
+    legacy, mapping = _load(_write_legacy(tmp_path, rows), _components_for("raw"), carriers)
 
     source, coverage = project_legacy_ledger(legacy, mapping, framework="CRR")
     projected = source.scan_results().collect()
@@ -669,39 +747,29 @@ def test_direct_maturity_band_wins_over_numeric_derivation(tmp_path: Path) -> No
 
 
 @pytest.mark.parametrize("framework", FRAMEWORKS)
-def test_raw_and_derived_gross_routes_agree(tmp_path: Path, framework: str) -> None:
+def test_raw_and_derived_gross_routes_agree(shared: _Shared, framework: str) -> None:
     """Deriving the per-side gross gives the same templates as mapping it.
 
     The evidence for choosing the raw route as the default: it is not a
     compromise. ``ensure_gross_side_carriers`` reproduces the firm's own split
     exactly, so mapping the derived carriers buys nothing but an extra column.
     """
-    # Arrange
-    raw_legacy, raw_mapping = _load(tmp_path, _components_for("raw"), _CARRIERS)
-    derived_legacy, derived_mapping = _load(tmp_path, _components_for("derived"), _CARRIERS)
-
-    # Act
-    raw_source, _c1 = project_legacy_ledger(raw_legacy, raw_mapping, framework=framework)
-    derived_source, _c2 = project_legacy_ledger(
-        derived_legacy, derived_mapping, framework=framework
-    )
+    # Arrange / Act — one default load, projection and generation per route
+    raw_bundle = shared.legacy_bundle("raw", framework)
+    derived_bundle = shared.legacy_bundle("derived", framework)
 
     # Assert
-    raw_bundle = COREPGenerator().generate(raw_source)
-    _assert_same_templates(raw_bundle, COREPGenerator().generate(derived_source))
+    _assert_same_templates(raw_bundle, derived_bundle)
     # ...and the agreement is not between two sets of zeros: both gross SIDES
     # carry money on the derived route, so the derivation is genuinely exercised.
     assert _cell(raw_bundle.c08_03["corporate"], "0050", "0010") == pytest.approx(4_000_000.0)
     assert _cell(raw_bundle.c07_00["retail_other"], "0080", "0010") == pytest.approx(500_000.0)
 
 
-def test_projection_satisfies_the_results_source_protocol(tmp_path: Path) -> None:
+def test_projection_satisfies_the_results_source_protocol(shared: _Shared) -> None:
     """``LegacyLedgerSource`` is structurally a ``reporting.metadata.ResultsSource``."""
-    # Arrange
-    legacy, mapping = _load(tmp_path, _components_for("raw"), _CARRIERS)
-
-    # Act
-    source, _coverage = project_legacy_ledger(legacy, mapping, framework="CRR")
+    # Arrange / Act
+    source, _coverage = shared.projection("raw", "CRR")
 
     # Assert — the annotation is what ``ty`` checks; the call proves it at runtime
     def accepts(results_source: ResultsSource) -> str:
@@ -739,7 +807,7 @@ def _changed(
 @pytest.mark.parametrize("framework", FRAMEWORKS)
 @pytest.mark.parametrize("dropped", sorted({*_components_for("raw"), *_CARRIERS}))
 def test_dropping_any_mapping_changes_no_cell_coverage_does_not_name(
-    tmp_path: Path, dropped: str, framework: str
+    shared: _Shared, dropped: str, framework: str
 ) -> None:
     """Drop each mapping in turn; every cell it moves must be REPORTED.
 
@@ -760,16 +828,13 @@ def test_dropping_any_mapping_changes_no_cell_coverage_does_not_name(
     Over-reporting is deliberately allowed: naming a cell that did not move costs
     an analyst a look, while missing one costs them a wrong number.
     """
-    # Arrange
+    # Arrange — the full-mapping baseline is the shared default bundle; the
+    # thinned mapping is this test's own load over the same rows
     components = {k: v for k, v in _components_for("raw").items() if k != dropped}
     carriers = {k: v for k, v in _CARRIERS.items() if k != dropped}
-    full_legacy, full_mapping = _load(tmp_path, _components_for("raw"), _CARRIERS)
-    baseline_source, _baseline_cov = project_legacy_ledger(
-        full_legacy, full_mapping, framework=framework
-    )
-    baseline = COREPGenerator().generate(baseline_source)
+    baseline = shared.legacy_bundle("raw", framework)
 
-    thin_legacy, thin_mapping = _load(tmp_path, components, carriers)
+    thin_legacy, thin_mapping = _load(shared.legacy_file, components, carriers)
 
     # Act
     thin_source, coverage = project_legacy_ledger(thin_legacy, thin_mapping, framework=framework)
@@ -824,7 +889,7 @@ def test_every_projection_target_is_a_sealed_ledger_column() -> None:
     assert unsealed == [], f"projection targets not on AGGREGATOR_EXIT_EDGE: {unsealed}"
 
 
-def test_provisions_land_on_the_rung_our_own_side_traverses(tmp_path: Path) -> None:
+def test_provisions_land_on_the_rung_our_own_side_traverses(shared: _Shared) -> None:
     """A mapped provisions column reaches both sealed carriers, and neither SCRA.
 
     C 07.00 col 0030 resolves ``provision_deducted`` and the C 08.01/C 08.03
@@ -832,11 +897,8 @@ def test_provisions_land_on_the_rung_our_own_side_traverses(tmp_path: Path) -> N
     first, and neither SCRA column is sealed. Landing there would also move
     ``_block_cap_scale``, the C 07.00 protection-block cap basis.
     """
-    # Arrange
-    legacy, mapping = _load(tmp_path, _components_for("raw"), _CARRIERS)
-
-    # Act
-    source, _coverage = project_legacy_ledger(legacy, mapping, framework="CRR")
+    # Arrange / Act
+    source, _coverage = shared.projection("raw", "CRR")
     projected = source.scan_results().collect()
 
     # Assert
@@ -846,7 +908,7 @@ def test_provisions_land_on_the_rung_our_own_side_traverses(tmp_path: Path) -> N
     assert "gcra_provision_amount" not in projected.columns
 
 
-def test_a_leg_written_to_both_provision_names_is_counted_once(tmp_path: Path) -> None:
+def test_a_leg_written_to_both_provision_names_is_counted_once(shared: _Shared) -> None:
     """The dual write cannot double-count, because the populations partition.
 
     One mapped provisions value lands on ``provision_deducted`` AND
@@ -859,12 +921,8 @@ def test_a_leg_written_to_both_provision_names_is_counted_once(tmp_path: Path) -
     counted twice and nothing lost. Both columns carry the Annex II §1.3 "(-)"
     sign, hence the negatives.
     """
-    # Arrange — SA1 1,500 | IRB1 3,000 | IRB2 50,000, all on the corporate sheet
-    legacy, mapping = _load(tmp_path, _components_for("raw"), _CARRIERS)
-
-    # Act
-    source, _coverage = project_legacy_ledger(legacy, mapping, framework="CRR")
-    bundle = COREPGenerator().generate(source)
+    # Arrange / Act — SA1 1,500 | IRB1 3,000 | IRB2 50,000, all on the corporate sheet
+    bundle = shared.legacy_bundle("raw", "CRR")
 
     # Assert
     sa_provisions = _cell(bundle.c07_00["corporate"], "0010", "0030")
@@ -899,7 +957,7 @@ def test_risk_type_is_not_projectable_so_the_populations_cannot_overlap() -> Non
 
 
 def test_categorical_component_labels_are_canonicalised_by_the_projection(
-    tmp_path: Path,
+    shared: _Shared,
 ) -> None:
     """A legacy class label reaches the sheet key CANONICALISED, not raw.
 
@@ -909,13 +967,10 @@ def test_categorical_component_labels_are_canonicalised_by_the_projection(
     into a sheet no template has and C 07.00 / C 08.01 / C 08.03 come out silently
     empty — the exact failure this feature exists to surface, shipped inside it.
     """
-    # Arrange — the extract says CORP / RETAIL / INST and SA / AIRB / FIRB
-    legacy, mapping = _load(tmp_path, _components_for("raw"), _CARRIERS)
-
-    # Act
-    source, _coverage = project_legacy_ledger(legacy, mapping, framework="CRR")
+    # Arrange / Act — the extract says CORP / RETAIL / INST and SA / AIRB / FIRB
+    source, _coverage = shared.projection("raw", "CRR")
     projected = source.scan_results().collect()
-    sheets = COREPGenerator().generate(source)
+    sheets = shared.legacy_bundle("raw", "CRR")
 
     # Assert
     assert projected["reporting_class_origin"].to_list() == [
@@ -971,7 +1026,7 @@ def test_categorical_component_label_is_casefolded_without_a_value_map(
     ]
     components = dict(_components_for("raw"))
     components["exposure_class"] = ComponentMapping("Asset Class")
-    legacy, mapping = _load(tmp_path, components, _CARRIERS, rows)
+    legacy, mapping = _load(_write_legacy(tmp_path, rows), components, _CARRIERS)
 
     # Act
     source, _coverage = project_legacy_ledger(legacy, mapping, framework="CRR")
@@ -1039,7 +1094,7 @@ def test_unmapped_class_label_is_reported_with_its_row_count(tmp_path: Path) -> 
         "CORP",
         "CORP",
     ]
-    legacy, mapping = _load(tmp_path, _components_for("raw"), _CARRIERS, rows)
+    legacy, mapping = _load(_write_legacy(tmp_path, rows), _components_for("raw"), _CARRIERS)
 
     # Act
     _source, coverage = project_legacy_ledger(legacy, mapping, framework="CRR")
@@ -1067,7 +1122,7 @@ def test_unmapped_approach_label_makes_every_template_unreachable(tmp_path: Path
     rows["Approach"] = ["IRB"] * 10
     components = dict(_components_for("raw"))
     components["approach"] = ComponentMapping("Approach")
-    legacy, mapping = _load(tmp_path, components, _CARRIERS, rows)
+    legacy, mapping = _load(_write_legacy(tmp_path, rows), components, _CARRIERS)
 
     # Act
     source, coverage = project_legacy_ledger(legacy, mapping, framework="CRR")
@@ -1105,7 +1160,7 @@ def test_an_all_sa_book_leaves_the_irb_templates_reachable_but_unpopulated(
     # Arrange — every leg standardised, every label valid
     rows = dict(_LEGACY_ROWS)
     rows["Approach"] = ["SA"] * 10
-    legacy, mapping = _load(tmp_path, _components_for("raw"), _CARRIERS, rows)
+    legacy, mapping = _load(_write_legacy(tmp_path, rows), _components_for("raw"), _CARRIERS)
 
     # Act
     source, coverage = project_legacy_ledger(legacy, mapping, framework="CRR")
@@ -1140,7 +1195,7 @@ def test_unmapped_approach_is_unreachable_where_an_absent_population_is_not(
     rows["Approach"] = ["SA", "SA", "IRB-A", "SA", "SA", "SA", "SA", "SA", "SA", "SA"]
     components = dict(_components_for("raw"))
     components["approach"] = ComponentMapping("Approach", value_map={"SA": "standardised"})
-    legacy, mapping = _load(tmp_path, components, _CARRIERS, rows)
+    legacy, mapping = _load(_write_legacy(tmp_path, rows), components, _CARRIERS)
 
     # Act
     _source, coverage = project_legacy_ledger(legacy, mapping, framework="CRR")
@@ -1198,7 +1253,7 @@ def test_preflight_coverage_cannot_answer_the_population_question() -> None:
 # =============================================================================
 
 
-def test_unsupplied_carriers_yield_null_cells_and_are_reported(tmp_path: Path) -> None:
+def test_unsupplied_carriers_yield_null_cells_and_are_reported(shared: _Shared) -> None:
     """An unmapped carrier produces a null cell, not a legacy zero — and is named.
 
     ``irb_maturity_m`` (C 08.03 col 0080) and ``expected_loss`` (col 0100) are the
@@ -1212,7 +1267,7 @@ def test_unsupplied_carriers_yield_null_cells_and_are_reported(tmp_path: Path) -
         for name, spec in _components_for("raw").items()
         if name not in {"maturity", "expected_loss"}
     }
-    legacy, mapping = _load(tmp_path, components, _CARRIERS)
+    legacy, mapping = _load(shared.legacy_file, components, _CARRIERS)
 
     # Act
     source, coverage = project_legacy_ledger(legacy, mapping, framework="CRR")
@@ -1227,13 +1282,13 @@ def test_unsupplied_carriers_yield_null_cells_and_are_reported(tmp_path: Path) -
     assert "0100" in coverage.unavailable_refs("c08_03")
 
 
-def test_unsupplied_carrier_reason_names_the_column_to_map(tmp_path: Path) -> None:
+def test_unsupplied_carrier_reason_names_the_column_to_map(shared: _Shared) -> None:
     """The coverage entry carries the WHY, so a panel can say what to map."""
     # Arrange
     components = {
         name: spec for name, spec in _components_for("raw").items() if name != "provisions"
     }
-    legacy, mapping = _load(tmp_path, components, _CARRIERS)
+    legacy, mapping = _load(shared.legacy_file, components, _CARRIERS)
 
     # Act
     _source, coverage = project_legacy_ledger(legacy, mapping, framework="CRR")
@@ -1249,7 +1304,7 @@ def test_unsupplied_carrier_reason_names_the_column_to_map(tmp_path: Path) -> No
     assert "provision_held" not in provisions
 
 
-def test_projection_never_writes_a_column_for_an_unmapped_component(tmp_path: Path) -> None:
+def test_projection_never_writes_a_column_for_an_unmapped_component(shared: _Shared) -> None:
     """An unsupplied carrier is ABSENT, not an all-null column.
 
     A typed null COLUMN is present, and ``kernel/sums.py::col_sum`` sums a present
@@ -1260,7 +1315,7 @@ def test_projection_never_writes_a_column_for_an_unmapped_component(tmp_path: Pa
     components = {
         name: spec for name, spec in _components_for("raw").items() if name != "expected_loss"
     }
-    legacy, mapping = _load(tmp_path, components, _CARRIERS)
+    legacy, mapping = _load(shared.legacy_file, components, _CARRIERS)
 
     # Act
     source, _coverage = project_legacy_ledger(legacy, mapping, framework="CRR")
@@ -1302,7 +1357,7 @@ def test_mapped_pd_bands_correctly_across_a_band_boundary(
     # Arrange — IRB3 (the only institution leg) carries the boundary PD
     rows = dict(_LEGACY_ROWS)
     rows["PD Pct"] = [None, None, 0.35, 100.0, pd_pct, None, None, None, None, None]
-    legacy, mapping = _load(tmp_path, _components_for("raw"), _CARRIERS, rows)
+    legacy, mapping = _load(_write_legacy(tmp_path, rows), _components_for("raw"), _CARRIERS)
 
     # Act
     source, _coverage = project_legacy_ledger(legacy, mapping, framework=framework)
@@ -1320,13 +1375,10 @@ def test_mapped_pd_bands_correctly_across_a_band_boundary(
     assert siblings.isdisjoint(sheet["row_ref"].to_list())
 
 
-def test_mapped_pd_reaches_both_ledger_pd_columns(tmp_path: Path) -> None:
+def test_mapped_pd_reaches_both_ledger_pd_columns(shared: _Shared) -> None:
     """The recorded PD decision, asserted directly rather than via a band."""
-    # Arrange
-    legacy, mapping = _load(tmp_path, _components_for("raw"), _CARRIERS)
-
-    # Act
-    source, _coverage = project_legacy_ledger(legacy, mapping, framework="CRR")
+    # Arrange / Act
+    source, _coverage = shared.projection("raw", "CRR")
     projected = source.scan_results().collect()
 
     # Assert
@@ -1348,11 +1400,11 @@ def test_mapped_pd_reaches_both_ledger_pd_columns(tmp_path: Path) -> None:
     ],
 )
 def test_missing_slotting_placement_mapping_blocks_c08_06(
-    tmp_path: Path, dropped: str, blocking: str
+    shared: _Shared, dropped: str, blocking: str
 ) -> None:
     """Generator fallbacks are not comparable sheet/row placement evidence."""
     carriers = {name: spec for name, spec in _CARRIERS.items() if name != dropped}
-    legacy, mapping = _load(tmp_path, _components_for("raw"), carriers)
+    legacy, mapping = _load(shared.legacy_file, _components_for("raw"), carriers)
 
     _source, coverage = project_legacy_ledger(legacy, mapping, framework="CRR")
 
@@ -1383,7 +1435,7 @@ def test_invalid_slotting_placement_value_blocks_c08_06(
     values = list(rows[legacy_column])
     values[7] = bad_value
     rows[legacy_column] = values
-    legacy, mapping = _load(tmp_path, _components_for("raw"), _CARRIERS, rows)
+    legacy, mapping = _load(_write_legacy(tmp_path, rows), _components_for("raw"), _CARRIERS)
 
     _source, coverage = project_legacy_ledger(legacy, mapping, framework="CRR")
 
@@ -1399,7 +1451,7 @@ def test_invalid_explicit_hvcre_flag_blocks_ipre_routing(tmp_path: Path) -> None
     values = list(rows["HVCRE Flag"])
     values[9] = "UNKNOWN"
     rows["HVCRE Flag"] = values
-    legacy, mapping = _load(tmp_path, _components_for("raw"), _CARRIERS, rows)
+    legacy, mapping = _load(_write_legacy(tmp_path, rows), _components_for("raw"), _CARRIERS)
 
     source, coverage = project_legacy_ledger(legacy, mapping, framework="BASEL_3_1")
 
@@ -1429,7 +1481,7 @@ def test_null_or_invalid_numeric_maturity_blocks_c08_06(
     ]
     carriers = {name: spec for name, spec in _CARRIERS.items() if name != "is_short_maturity"}
     carriers["remaining_maturity_years"] = CarrierMapping("Remaining Maturity")
-    legacy, mapping = _load(tmp_path, _components_for("raw"), carriers, rows)
+    legacy, mapping = _load(_write_legacy(tmp_path, rows), _components_for("raw"), carriers)
 
     source, coverage = project_legacy_ledger(legacy, mapping, framework="CRR")
 
@@ -1439,7 +1491,7 @@ def test_null_or_invalid_numeric_maturity_blocks_c08_06(
 
 
 def test_missing_gross_route_reports_c08_03_gross_columns_unavailable(
-    tmp_path: Path,
+    shared: _Shared,
 ) -> None:
     """With NEITHER gross route mapped, C 08.03 cols 0010/0020 are unavailable...
 
@@ -1451,7 +1503,7 @@ def test_missing_gross_route_reports_c08_03_gross_columns_unavailable(
     has to name the cells.
     """
     # Arrange
-    legacy, mapping = _load(tmp_path, dict(_BASE_COMPONENTS), _CARRIERS)
+    legacy, mapping = _load(shared.legacy_file, dict(_BASE_COMPONENTS), _CARRIERS)
 
     # Act
     source, coverage = project_legacy_ledger(legacy, mapping, framework="CRR")
@@ -1480,7 +1532,7 @@ def test_template_is_unreachable_without_the_approach_component() -> None:
     assert not coverage.row_axis_deleted("c08_03")
 
 
-def test_missing_pd_deletes_c08_03_entirely_and_is_reported_as_such(tmp_path: Path) -> None:
+def test_missing_pd_deletes_c08_03_entirely_and_is_reported_as_such(shared: _Shared) -> None:
     """C 08.03's PD is its ROW AXIS: without it the template does not exist.
 
     The one fatal-missing-column case of the three. ``banded_rows`` cannot run,
@@ -1490,7 +1542,7 @@ def test_missing_pd_deletes_c08_03_entirely_and_is_reported_as_such(tmp_path: Pa
     """
     # Arrange
     components = {name: spec for name, spec in _components_for("raw").items() if name != "pd"}
-    legacy, mapping = _load(tmp_path, components, _CARRIERS)
+    legacy, mapping = _load(shared.legacy_file, components, _CARRIERS)
 
     # Act
     source, coverage = project_legacy_ledger(legacy, mapping, framework="CRR")
@@ -1525,10 +1577,10 @@ def test_full_mapping_reaches_every_scoped_template() -> None:
     assert coverage.unavailable_refs("c08_03") == ()
 
 
-def test_unknown_framework_is_a_programming_error(tmp_path: Path) -> None:
+def test_unknown_framework_is_a_programming_error(shared: _Shared) -> None:
     """A bad regime string is the caller's bug, not a data-quality condition."""
     # Arrange
-    legacy, mapping = _load(tmp_path, _components_for("raw"))
+    legacy, mapping = _load(shared.legacy_file, _components_for("raw"))
 
     # Act / Assert
     with pytest.raises(ValueError, match="framework must be one of"):
@@ -1540,7 +1592,7 @@ def test_unknown_framework_is_a_programming_error(tmp_path: Path) -> None:
 # =============================================================================
 
 
-def test_carrier_values_are_written_verbatim_not_casefolded(tmp_path: Path) -> None:
+def test_carrier_values_are_written_verbatim_not_casefolded(shared: _Shared) -> None:
     """A carrier's value reaches the ledger with its own case intact.
 
     This guard replaces one that could not fail. Its predecessor asserted the
@@ -1555,13 +1607,10 @@ def test_carrier_values_are_written_verbatim_not_casefolded(tmp_path: Path) -> N
     the obligor count on a published cell. The label assertions below ride along;
     the count is the one that detects the mutation.
     """
-    # Arrange
-    legacy, mapping = _load(tmp_path, _components_for("raw"), _CARRIERS)
-
-    # Act
-    source, _coverage = project_legacy_ledger(legacy, mapping, framework="CRR")
+    # Arrange / Act
+    source, _coverage = shared.projection("raw", "CRR")
     projected = source.scan_results().collect()
-    corporate = COREPGenerator().generate(source).c08_01["corporate"]
+    corporate = shared.legacy_bundle("raw", "CRR").c08_01["corporate"]
 
     # Assert — two distinct obligors on the corporate IRB sheet, not one
     assert projected["counterparty_reference"].to_list()[2:4] == ["O2", "o2"]
@@ -1577,7 +1626,7 @@ def test_unrecognised_flag_token_is_null_not_false(tmp_path: Path) -> None:
     rows["Default Flag"] = ["N", "N", "N", "UNKNOWN", "N", "N", "N", "N", "N", "N"]
     carriers = dict(_CARRIERS)
     carriers["defaulted"] = CarrierMapping("Default Flag", value_map={"Y": "true"})
-    legacy, mapping = _load(tmp_path, _components_for("raw"), carriers, rows)
+    legacy, mapping = _load(_write_legacy(tmp_path, rows), _components_for("raw"), carriers)
 
     # Act
     source, _coverage = project_legacy_ledger(legacy, mapping, framework="CRR")

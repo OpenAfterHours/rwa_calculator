@@ -19,13 +19,21 @@ registered portfolio is covered without editing this file), five acceptance-fixt
 configurations spanning SA / IRB / slotting under both regimes, and a one-row
 property bundle. That is ~870 files.
 
-Usage::
+Dumps go to two fixed slots under ``.reference_dumps/`` (git-ignored). Usage::
 
-    uv run python scripts/reference_dump.py dump  <out_dir>     # on the base commit
-    uv run python scripts/reference_dump.py dump  <new_dir>     # on the change
-    uv run python scripts/reference_dump.py check <out_dir> <new_dir>
+    git worktree add --detach ../base <base-commit>
+    (cd ../base && uv run python scripts/reference_dump.py dump --slot base)
+    uv run python scripts/reference_dump.py dump --slot current   # on the change
+    uv run python scripts/reference_dump.py check
 
-``check`` exits non-zero on any difference and prints the first few per file.
+``check`` exits non-zero on any difference and prints the first few per file. The
+slots are named rather than passed as paths because argv is attacker-controlled
+to the security taint analysis (arch_check check 19); a caller that needs another
+location imports :func:`dump` and :func:`check` and passes its own ``Path``.
+
+Both slots live under the tree the script is run from, so the base dump must be
+written from a worktree at the base commit — which is what you want anyway, since
+that is the engine being compared.
 
 **The engine is not bit-deterministic between runs, and that is expected.** Ledger
 rows come back in a different order, and summed template cells differ at the last
@@ -65,6 +73,11 @@ REL_TOL = 1e-9
 ABS_TOL = 1e-6
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
+
+#: The two fixed dump slots. The CLI selects one of these constants by NAME —
+#: argv never constructs a path (arch_check check 19 / pythonsecurity:S8707).
+_DUMP_ROOT = _REPO_ROOT / ".reference_dumps"
+_SLOTS: dict[str, Path] = {"base": _DUMP_ROOT / "base", "current": _DUMP_ROOT / "current"}
 
 
 # =============================================================================
@@ -354,17 +367,25 @@ def _compare_errors(a: Path, b: Path, order_only: list[str]) -> list[str]:
 
 
 def main() -> int:
+    """CLI over the two fixed slots.
+
+    ``--slot`` names a constant from ``_SLOTS``; no operator string ever reaches
+    a ``Path`` constructor (arch_check check 19). A caller needing a different
+    location imports :func:`dump` / :func:`check` directly.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    dump_parser = sub.add_parser("dump", help="write a reference dump")
-    dump_parser.add_argument("out_dir", type=Path)
-    check_parser = sub.add_parser("check", help="compare two dumps")
-    check_parser.add_argument("ref_dir", type=Path)
-    check_parser.add_argument("new_dir", type=Path)
+    dump_parser = sub.add_parser("dump", help="write a reference dump into a slot")
+    dump_parser.add_argument("--slot", choices=sorted(_SLOTS), required=True)
+    sub.add_parser("check", help="compare the base slot against the current slot")
     args = parser.parse_args()
     if args.command == "dump":
-        return dump(args.out_dir)
-    return check(args.ref_dir, args.new_dir)
+        return dump(_SLOTS[args.slot])
+    missing = [name for name, path in _SLOTS.items() if not path.is_dir()]
+    if missing:
+        print(f"missing dump slot(s): {', '.join(missing)} — run `dump --slot <name>` first")
+        return 2
+    return check(_SLOTS["base"], _SLOTS["current"])
 
 
 if __name__ == "__main__":

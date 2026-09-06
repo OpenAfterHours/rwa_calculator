@@ -39,7 +39,7 @@ least one of these holds:
     whose ``(table, column)`` matches an injected field. Excuses an UNSOUND
     result only — never a vanished or collapsed row (see :func:`triage`). This
     clause is not optional politeness — it is the difference between a suite
-    that is used and one that is switched off. ``_collect_domain_violations`` samples at most
+    that is used and one that is switched off. ``_domain_violation_errors`` samples at most
     ``sample_cap=5`` named errors per column and then emits ONE summary carrying
     the omitted count (pinned by ``tests/contracts/test_validation.py``), so
     injecting six bad values into one column produces a sixth row that NO error
@@ -517,7 +517,7 @@ def _aggregate_covers(
 
     The table is matched against the three renderings the error factories
     actually use, none of which is a structured field:
-    ``[table]`` (``validate_column_values``, ``_collect_domain_violations``,
+    ``[table]`` (``validate_column_values``, ``_domain_violation_errors``,
     ``_validate_negative_amounts_without_netting``), ``'table.column'``
     (``non_finite_raw_input_error``), and ``actual_value == table``
     (``missing_required_column_error``). A structured ``table`` field on

@@ -89,6 +89,7 @@ def compute_third_party_deposit_columns(
     is_basel_3_1: bool,
     errors: list[CalculationError] | None = None,
     present: Collection[str] | None = None,
+    gate_frame: pl.LazyFrame | None = None,
 ) -> pl.LazyFrame:
     """Set SA third-party-deposit CRM columns on the exposure frame.
 
@@ -103,6 +104,15 @@ def compute_third_party_deposit_columns(
     so the conservative fallback binds). A populated NON-institution holder is out
     of scope: no benefit (it is already excluded from the 0% cash path) + CRM017.
     Under F-IRB the substitution is deferred: no benefit + CRM017.
+
+    ``gate_frame`` is the frame the CRM017 gate is evaluated on: an already
+    materialised frame with the same rows, reference and ``approach`` as
+    ``exposures`` — the CRM processor passes its ``crm_post_ead`` checkpoint. At
+    this step ``exposures`` is the whole collateral chain, and filtering that plan
+    for the handful of warning rows re-executed it (55-98 ms of a 150-row run,
+    the single largest recorder). Omitted, the gate reads ``exposures`` as before;
+    the reported rows are identical either way, since the gate reads only
+    ``approach`` and the deposit aggregate, neither of which the chain changes.
     """
     if third_party_deposits is None:
         return _add_default_columns(exposures)
@@ -138,8 +148,6 @@ def compute_third_party_deposit_columns(
     exp_ref = "exposure_reference" if "exposure_reference" in exp_names else "loan_reference"
     ead_col = "ead_gross" if "ead_gross" in exp_names else "ead"
 
-    exposures = exposures.join(agg, left_on=exp_ref, right_on="beneficiary_reference", how="left")
-
     ead = pl.col(ead_col).fill_null(0.0)
     inst_value = pl.col("_tpd_inst_value").fill_null(0.0)
     wrw = pl.col("_tpd_weighted_rw").fill_null(0.0)
@@ -149,16 +157,26 @@ def compute_third_party_deposit_columns(
     is_firb = pl.col("approach").is_in([ApproachType.FIRB.value, ApproachType.AIRB.value])
     if errors is not None:
         _record_third_party_deposit_warnings(
-            exposures, inst_value, has_non_inst, is_firb, exp_ref, errors
+            exposures if gate_frame is None else gate_frame,
+            agg,
+            inst_value,
+            has_non_inst,
+            is_firb,
+            exp_ref,
+            errors,
         )
 
-    exposures = exposures.with_columns(
-        pl.when(is_firb)
-        .then(pl.lit(0.0))
-        .otherwise(pl.min_horizontal(inst_value, ead))
-        .alias("third_party_deposit_value"),
-        avg_rw.alias("third_party_deposit_secured_rw"),
-    ).drop(["_tpd_inst_value", "_tpd_weighted_rw", "_tpd_has_non_inst"])
+    exposures = (
+        exposures.join(agg, left_on=exp_ref, right_on="beneficiary_reference", how="left")
+        .with_columns(
+            pl.when(is_firb)
+            .then(pl.lit(0.0))
+            .otherwise(pl.min_horizontal(inst_value, ead))
+            .alias("third_party_deposit_value"),
+            avg_rw.alias("third_party_deposit_secured_rw"),
+        )
+        .drop(["_tpd_inst_value", "_tpd_weighted_rw", "_tpd_has_non_inst"])
+    )
 
     return exposures
 
@@ -172,7 +190,8 @@ def _add_default_columns(exposures: pl.LazyFrame) -> pl.LazyFrame:
 
 
 def _record_third_party_deposit_warnings(
-    exposures: pl.LazyFrame,
+    basis: pl.LazyFrame,
+    agg: pl.LazyFrame,
     inst_value: pl.Expr,
     has_non_inst: pl.Expr,
     is_firb: pl.Expr,
@@ -181,13 +200,19 @@ def _record_third_party_deposit_warnings(
 ) -> None:
     """Append CRM017 warnings for third-party deposits that yield no benefit.
 
+    ``basis`` carries the exposure reference and ``approach`` — the processor's
+    materialised ``crm_post_ead`` frame, or ``exposures`` itself for a direct
+    caller; the per-beneficiary deposit aggregate ``agg`` is joined onto a
+    projection of it, so the whole plan is one small join over in-memory data.
     Two distinct reasons (one collect over the gated rows, P1.264 idiom):
     - F-IRB exposure with an institution-held deposit: substitution deferred.
     - a NON-institution holder: out of Art. 232(2) scope (institution only).
     """
     firb_flag = (is_firb & (inst_value > 0)).alias("_firb")
     gated = (
-        exposures.filter((is_firb & (inst_value > 0)) | has_non_inst)
+        basis.select(exp_ref, "approach")
+        .join(agg, left_on=exp_ref, right_on="beneficiary_reference", how="left")
+        .filter((is_firb & (inst_value > 0)) | has_non_inst)
         .select(pl.col(exp_ref).alias("_ref"), firb_flag, has_non_inst.alias("_non_inst"))
         .collect()
     )

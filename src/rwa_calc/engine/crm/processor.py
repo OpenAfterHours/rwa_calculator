@@ -81,7 +81,7 @@ from rwa_calc.engine.kernels.allocation import (
     join_items_to_level_lookups,
     switch_by_beneficiary_level,
 )
-from rwa_calc.engine.materialise import materialise_edge
+from rwa_calc.engine.materialise import materialise_edge, materialise_frame
 from rwa_calc.engine.utils import has_required_columns
 from rwa_calc.observability.audit_cache import sink_audit
 from rwa_calc.rulebook import RulepackV0
@@ -501,22 +501,20 @@ def _build_beneficiary_obligor_map(exposures: pl.LazyFrame, exp_names: list[str]
 
 def _record_own_issue_collateral(
     collateral: pl.LazyFrame,
-    is_own_issue: pl.Expr,
     names: list[str],
     errors: list[CalculationError],
 ) -> None:
     """Append one CRM015 warning per Art. 194(4) own-issue collateral row dropped.
 
-    Targeted collect of the gated rows only (the accepted DQ-emission idiom,
-    P1.264) — the collateral table is a small dimension frame.
+    Reads the ``_own_issue`` flag off the materialised collateral frame — an
+    in-memory scan of the gated rows only (the accepted DQ-emission idiom, P1.264).
     """
-    select_cols: list[pl.Expr] = [is_own_issue.alias("_own_issue")]
-    select_cols.extend(
+    select_cols: list[pl.Expr] = [
         pl.col(c)
         for c in ("collateral_reference", "beneficiary_reference", "issuer_counterparty_reference")
         if c in names
-    )
-    gated = collateral.filter(is_own_issue).select(select_cols).collect()
+    ]
+    gated = collateral.filter(pl.col("_own_issue")).select(select_cols).collect()
     for row in gated.iter_rows(named=True):
         coll_ref = row.get("collateral_reference")
         ben_ref = row.get("beneficiary_reference")
@@ -585,7 +583,13 @@ class CRMProcessor:
         the calculators' approach split. Laziness is strictly intra-stage:
         the two sanctioned checkpoints (``crm_post_ead``,
         ``crm_pre_guarantee_unified``) and the ``crm_exit`` stage edge keep
-        the plan shallow.
+        the plan shallow. The collateral DIMENSION is additionally
+        materialised in memory (``materialise_frame``, outside the edge map)
+        once after the Art. 194(4) gate and once after haircuts, so the
+        eight data-quality recorders that read it, and the allocation
+        aggregates, scan memory instead of each re-executing its plan; the
+        CRM013 and CRM017 recorders likewise read materialised frames
+        (``crm_exit`` and ``crm_post_ead``) rather than the deep chain.
 
         Args:
             data: Classified exposures from classifier
@@ -613,6 +617,10 @@ class CRMProcessor:
 
         # Steps 1-3: provisions -> CCF -> init EAD -> crm_post_ead checkpoint
         exposures = self._run_ead_pipeline(data, config, pack=pack)
+        # The checkpoint frame is also the in-memory basis for the Art. 200(a)
+        # CRM017 gate (step 4c): same rows and ``approach`` as the deep frame the
+        # gate would otherwise re-execute to find its warning rows.
+        post_ead = exposures
 
         # Generate synthetic collateral from netting (CRR Art. 195). The Art. 195
         # set-off perimeter is a pack Feature with no engine-side default, so a
@@ -699,6 +707,7 @@ class CRMProcessor:
             errors,
             pack=pack,
             present=ofcp_block_columns,
+            gate_frame=post_ead,
         )
 
         # Step 4d: split the Art. 200(1) amounts both preceding steps produced
@@ -719,10 +728,11 @@ class CRMProcessor:
         # deep plans. Guarded by the plan-node ceiling tests
         # (tests/integration/test_stage_edges.py); re-validate per Polars
         # upgrade before attempting removal.
-        if (
+        guarantees_applied = (
             has_required_columns(guarantees_lf, self.GUARANTEE_REQUIRED_COLUMNS)
             and data.counterparty_lookup is not None
-        ):
+        )
+        if guarantees_applied:
             exposures = materialise_edge(exposures, config, "crm_pre_guarantee_unified")
             exposures = self._apply_guarantees_step(
                 exposures, guarantees_lf, data, config, errors, pack=pack
@@ -737,6 +747,14 @@ class CRMProcessor:
         # projections below derive from `exposures`, so they read in-memory
         # data instead of re-executing the guarantee plan.
         exposures = materialise_edge(exposures, config, "crm_exit")
+
+        # CRR Art. 201(1)(g)/(2): CRM013 for the corporate guarantors the approach
+        # step rejected, read off the materialised frame (an in-memory scan) rather
+        # than at the rejection site, where it re-executed the guarantee split. No
+        # error is appended between the two points, so the list order is unchanged;
+        # the seal below strips the ``_guarantor_ineligible`` flag it reads.
+        if guarantees_applied:
+            guarantees_mod.record_ineligible_guarantors(exposures, errors)
 
         # CRR Art. 230(2) Table 5 C*: diagnose the collateral the minimum-
         # collateralisation threshold dropped. Emitted here, on the materialised frame,
@@ -901,6 +919,16 @@ class CRMProcessor:
 
         Null ``issuer_counterparty_reference`` is PERMISSIVE — the gate never fires,
         so existing data (which does not populate the field) is number-neutral.
+
+        Returns the collateral dimension materialised in memory
+        (``materialise_frame``, outside the stage-edge map) on every path. It
+        is the frame every later collateral consumer reads — the third-party-
+        deposit split, the link allocator, the type check, the AIRB
+        misdirection finder, the lookup joins, the life-insurance and deposit
+        aggregates — and each of those re-executed the netting concat and the
+        joins below for itself (~10 evaluations of the plan per run).
+        Materialising once here is what turns the CRM015 / CRM006 / CRM020 /
+        CRM021 recorders into in-memory scans.
         """
         if collateral is None:
             return None
@@ -909,9 +937,9 @@ class CRMProcessor:
         if "issuer_counterparty_reference" not in coll_names or "beneficiary_reference" not in (
             coll_names
         ):
-            return collateral
+            return materialise_frame(collateral)
         if "counterparty_reference" not in exp_names:
-            return collateral
+            return materialise_frame(collateral)
 
         # Resolve each collateral's obligor counterparty (any pledge level).
         obligor_map = _build_beneficiary_obligor_map(exposures, exp_names)
@@ -965,10 +993,13 @@ class CRMProcessor:
             )
         ).fill_null(value=False)
 
-        _record_own_issue_collateral(collateral, is_own_issue, coll_names, errors)
+        # Materialised with the flag on it, so the CRM015 recorder and every later
+        # consumer scan memory (see the docstring); the flag is scratch.
+        collateral = materialise_frame(collateral.with_columns(is_own_issue.alias("_own_issue")))
+        _record_own_issue_collateral(collateral, coll_names, errors)
 
-        return collateral.filter(~is_own_issue).drop(
-            "_obligor_cp", "_obligor_ult", "_issuer_ult", strict=False
+        return collateral.filter(~pl.col("_own_issue")).drop(
+            "_own_issue", "_obligor_cp", "_obligor_ult", "_issuer_ult", strict=False
         )
 
     def _apply_collateral_links(
@@ -1149,6 +1180,7 @@ class CRMProcessor:
         *,
         pack: ResolvedRulepack | None = None,
         present: Collection[str] | None = None,
+        gate_frame: pl.LazyFrame | None = None,
     ) -> pl.LazyFrame:
         """Pre-compute Art. 200(a)/232(2) third-party-deposit SA RW columns.
 
@@ -1157,6 +1189,8 @@ class CRMProcessor:
         covered part for SA exposures; F-IRB is a deferred follow-up (no benefit +
         CRM017). The regime is read from the ``sa_revised_risk_weight_tables``
         pack Feature — never ``config.is_basel_3_1`` (arch check 17).
+        ``gate_frame`` is the materialised ``crm_post_ead`` checkpoint the CRM017
+        gate is evaluated on instead of the deep ``exposures`` plan.
         """
         resolved = pack if pack is not None else RulepackV0.from_config(config).pack
         is_b31 = bool(resolved.feature("sa_revised_risk_weight_tables"))
@@ -1166,6 +1200,7 @@ class CRMProcessor:
             is_basel_3_1=is_b31,
             errors=errors,
             present=present,
+            gate_frame=gate_frame,
         )
 
     def _apply_guarantees_step(

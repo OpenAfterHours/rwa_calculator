@@ -173,7 +173,7 @@ def test_a_breached_bound_reaches_the_error_channel(
 def test_more_violations_than_the_sample_cap_still_accounts_for_every_row() -> None:
     """Clause (c): beyond ``sample_cap=5`` no error names the row individually.
 
-    ``_collect_domain_violations`` emits at most five row-named errors per column
+    ``_domain_violation_errors`` emits at most five row-named errors per column
     and then ONE summary carrying the omitted count. On a portfolio of eight
     bad rows, three are covered by the summary alone — and an invariant without
     clause (c) would report those three as unaccounted-for, on correct

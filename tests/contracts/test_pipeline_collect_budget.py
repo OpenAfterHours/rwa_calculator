@@ -108,9 +108,13 @@ invariant in warm/cold state and in row count.
 _METRICS: tuple[str, ...] = ("collect", "collect_schema", "collect_all")
 
 #: The banked per-run fixed cost, per regime. See ``_NOTE`` before editing.
+#: 2026-09-06 (Lever 2 items 1 and 3): ``collect`` 98 -> 85 / 96 -> 83 as the
+#: CRM recorders moved onto materialised frames; ``collect_all`` +2 in each
+#: regime because 28 single collects were folded into two batches (the
+#: input-domain gate's 26 -> 1, the short-term-lookup + DQ015 count 2 -> 1).
 _BANKED: dict[str, dict[str, int]] = {
-    "CRR": {"collect": 98, "collect_schema": 136, "collect_all": 6},
-    "B31": {"collect": 96, "collect_schema": 135, "collect_all": 7},
+    "CRR": {"collect": 85, "collect_schema": 136, "collect_all": 8},
+    "B31": {"collect": 83, "collect_schema": 135, "collect_all": 9},
 }
 
 _REGIMES: tuple[str, ...] = tuple(_BANKED)

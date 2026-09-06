@@ -49,8 +49,11 @@ one `EdgeEvent` per branch; the calc stage invokes it through the sealing wrappe
   `CalculationConfig` and no stage edge, such as the reporting generators reading a
   finished results parquet — the sanctioned form is `materialise_frame`
   (`engine/materialise.py:167`): the in-memory half only, no spill decision and no
-  `EdgeEvent`. Both live in `materialise.py`, which is the check's sole allowlist
-  entry; neither the pattern nor a new allowlist entry belongs anywhere else.
+  `EdgeEvent`. The same form serves **inside** the engine for a small dimension frame
+  that is not a pipeline plan and that many consumers read — the two collateral
+  materialisations in the CRM stage (see the intra-stage table below). Both functions
+  live in `materialise.py`, which is the check's sole allowlist entry; neither the
+  pattern nor a new allowlist entry belongs anywhere else.
   `materialise_frame` is **not** a free win and is not the default: it materialises the
   whole frame, so it defeats projection pushdown and pays only where MANY consumers read
   it. The reporting split is the worked example — applied to the current results frame
@@ -270,7 +273,17 @@ and their census is ratcheted by arch_check check 11:
 | `engine/hierarchy/ratings.py` | Best internal/external rating lookups (`pl.collect_all`) | Small per-counterparty frames referenced by multiple downstream joins |
 | `engine/crm/collateral.py:363` | 3 collateral lookup collects (`pl.collect_all`) | Each lookup feeds multiple downstream joins; without materialisation the `group_by`/`select` re-evaluates at each reference |
 | `engine/crm/processor.py:982` | Guarantee + counterparty + rating-inheritance lookups (`pl.collect_all`) | Prevents parquet re-scans; small frames |
+| `engine/crm/processor.py` (`_apply_own_issue_collateral_gate`) | The collateral dimension, materialised once after the Art. 194(4) gate (`materialise_frame`, flag included, on every path) | ~10 later consumers — the third-party-deposit split, the link allocator, the type check, the AIRB misdirection finder, the lookup joins, the life-insurance and deposit aggregates — each re-executed the netting concat and the gate's joins for itself; the CRM015 / CRM006 / CRM020 / CRM021 recorders now scan memory |
+| `engine/crm/collateral.py` (`apply_collateral`, after `apply_haircuts`) | The post-haircut collateral frame, materialised once (`materialise_frame`) | The CRM018 / CRM019 / CRM002 / CRM014 recorders and the allocation aggregates each re-executed the lookup joins and the haircut chain (~10 ms apiece on a 150-row run) |
 | `contracts/validation.py`, `engine/utils.py` (`has_rows`), `sa/calculator.py` (`_warn_equity_in_main_table`), `irb/formulas.py` (scalar wrapper) | Validation / diagnostics / scalar helpers | Off the hot path or `.head(1)`-sized |
+
+The two `materialise_frame` rows are not in check 11's census (the pattern it counts is a
+raw `.collect()` / `collect_all(` line); what bounds them is the per-run collect budget in
+`tests/contracts/test_pipeline_collect_budget.py`, which counts every materialisation a
+one-row run makes and ratchets both ways. The remaining data-quality recorders that still
+collect for themselves do so over one of these frames or over a stage edge —
+`crm_post_ead` for the CRM016 netting audit and the CRM017 deposit gate, `crm_exit` for
+CRM013 — never over the un-materialised stage plan.
 
 ---
 

@@ -133,6 +133,8 @@ def apply_guarantees(
         rating_inheritance: For guarantor CQS lookup
         errors: Optional CRM error channel. When provided, guarantees dropped by
             the Art. 213(1)(c)(i) eligibility gate append a CRM012 warning each.
+            CRM013 (Art. 201) is NOT raised here: the processor raises it from the
+            materialised ``crm_exit`` frame (:func:`record_ineligible_guarantors`).
 
     Returns:
         Exposures with guarantee effects applied
@@ -162,7 +164,7 @@ def apply_guarantees(
         .alias("guarantor_exposure_class"),
     )
 
-    exposures = _assign_guarantor_approach(exposures, config, errors=errors, present=join_cols)
+    exposures = _assign_guarantor_approach(exposures, config, present=join_cols)
 
     # Cross-approach CCF substitution (CRR Art. 111 / COREP C07)
     # When IRB exposure guaranteed by SA counterparty, use SA CCFs for guaranteed portion
@@ -190,6 +192,40 @@ def apply_guarantees(
     # They can be dropped in the final output aggregation if needed.
 
     return exposures
+
+
+def record_ineligible_guarantors(
+    exposures: pl.LazyFrame,
+    errors: list[CalculationError],
+) -> None:
+    """Append one CRM013 warning per Art. 201-ineligible corporate guarantor leg.
+
+    Reads the ``_guarantor_ineligible`` flag ``_assign_guarantor_approach`` sets.
+    The CRM processor calls this on the materialised ``crm_exit`` frame — an
+    in-memory scan, where the flag's own site re-executed the guarantee split
+    (23 ms of a 150-row run). Nothing is appended to ``errors`` between the two
+    points, so CRM013 keeps its place in the list; the exit seal strips the flag.
+    """
+    dropped = (
+        exposures.filter(pl.col("_guarantor_ineligible"))
+        .select("parent_exposure_reference", "guarantor_reference")
+        .collect()
+    )
+    for row in dropped.iter_rows(named=True):
+        loan_ref = row.get("parent_exposure_reference")
+        guar_ref = row.get("guarantor_reference")
+        errors.append(
+            crm_warning(
+                ERROR_INELIGIBLE_GUARANTOR,
+                f"Guarantor '{guar_ref}' is an ineligible protection provider for "
+                f"exposure '{loan_ref}': a corporate guarantor without an ECAI credit "
+                "assessment (or, for an IRB-approach beneficiary, an internal rating) "
+                "is not eligible under Art. 201(1)(g)/(2); the guarantee is not "
+                "recognised and the exposure reverts to the borrower's own basis.",
+                exposure_reference=loan_ref,
+                regulatory_reference="CRR Art. 201(1)(g)",
+            )
+        )
 
 
 def _prepare_guarantees(
@@ -417,7 +453,6 @@ def _assign_guarantor_approach(
     exposures: pl.LazyFrame,
     config: CalculationConfig,
     *,
-    errors: list[CalculationError] | None = None,
     present: list[str] | None = None,
 ) -> pl.LazyFrame:
     """
@@ -441,9 +476,9 @@ def _assign_guarantor_approach(
     rating (``guarantor_internal_pd``) when the beneficiary is itself IRB. An
     ineligible corporate guarantor is rejected: its ``guarantor_exposure_class``
     is cleared so the SA guarantor-RW lookup returns null (non-beneficial), the
-    covered leg reverts to the borrower's own basis, and a CRM013 warning is
-    raised. Non-corporate classes are governed by other Art. 201 limbs and are
-    not gated here.
+    covered leg reverts to the borrower's own basis, and the leg is flagged on
+    ``_guarantor_ineligible`` for :func:`record_ineligible_guarantors` (CRM013).
+    Non-corporate classes are governed by other Art. 201 limbs and not gated here.
     """
     # irb_permissions is derived non-None in CalculationConfig.__post_init__.
     irb_exposure_class_values = {
@@ -473,9 +508,6 @@ def _assign_guarantor_approach(
     guarantor_ineligible = (
         is_corporate_guarantor & corporate_eligible.not_() & (pl.col("guaranteed_portion") > 0)
     )
-
-    if errors is not None:
-        _record_ineligible_guarantors(exposures, guarantor_ineligible, errors)
 
     return exposures.with_columns(
         pl.when(is_domestic_cgcb_guarantor)
@@ -509,41 +541,9 @@ def _assign_guarantor_approach(
         .then(pl.lit(""))
         .otherwise(pl.col("guarantor_exposure_class"))
         .alias("guarantor_exposure_class"),
+        # Scratch for the processor's CRM013 recorder (stripped by the exit seal).
+        guarantor_ineligible.alias("_guarantor_ineligible"),
     )
-
-
-def _record_ineligible_guarantors(
-    exposures: pl.LazyFrame,
-    ineligible: pl.Expr,
-    errors: list[CalculationError],
-) -> None:
-    """Append one CRM013 warning per Art. 201-ineligible corporate guarantor leg.
-
-    Targeted mid-pipeline collect of the ineligible guarantor sub-rows' parent
-    loan + guarantor references only — the guarantee book is a small dimension
-    (empty when every guarantor is eligible), so materialising just those two
-    columns to build the per-leg CRM013 messages is cheap.
-    """
-    dropped = (
-        exposures.filter(ineligible)
-        .select("parent_exposure_reference", "guarantor_reference")
-        .collect()
-    )
-    for row in dropped.iter_rows(named=True):
-        loan_ref = row.get("parent_exposure_reference")
-        guar_ref = row.get("guarantor_reference")
-        errors.append(
-            crm_warning(
-                ERROR_INELIGIBLE_GUARANTOR,
-                f"Guarantor '{guar_ref}' is an ineligible protection provider for "
-                f"exposure '{loan_ref}': a corporate guarantor without an ECAI credit "
-                "assessment (or, for an IRB-approach beneficiary, an internal rating) "
-                "is not eligible under Art. 201(1)(g)/(2); the guarantee is not "
-                "recognised and the exposure reverts to the borrower's own basis.",
-                exposure_reference=loan_ref,
-                regulatory_reference="CRR Art. 201(1)(g)",
-            )
-        )
 
 
 def _build_domestic_cgcb_flag(schema_names: list[str]) -> pl.Expr:

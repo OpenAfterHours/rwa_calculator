@@ -197,9 +197,7 @@ def apply_short_term_rating_override(
     Always returns ``exposures`` augmented with a ``has_short_term_ecai``
     boolean column (False when no override matched).
     """
-    _record_unsolicited_ratings(ratings, errors)
-
-    st_ratings = _prepare_short_term_lookup(ratings)
+    st_ratings = _prepare_short_term_lookup(ratings, errors)
     if st_ratings is None:
         return exposures.with_columns(pl.lit(False).alias("has_short_term_ecai"))
 
@@ -309,8 +307,8 @@ def apply_short_term_rating_override(
 
 
 def _record_unsolicited_ratings(
-    ratings: pl.LazyFrame | None,
-    errors: list[CalculationError] | None,
+    unsolicited: int,
+    errors: list[CalculationError],
 ) -> None:
     """Append one DQ015 warning per run if any assessment is flagged unsolicited.
 
@@ -325,24 +323,11 @@ def _record_unsolicited_ratings(
     the condition is a portfolio-level governance fact about which ECAI
     permissions the firm holds, not a defect in any individual rating.
 
-    A single cheap aggregate — ``is_solicited`` is nullable with a ``True``
-    default, so only an explicit ``False`` counts and a portfolio that never
-    populates the column costs one count over an empty filter.
+    ``unsolicited`` is the count of rows carrying an explicit ``False`` — the
+    column is nullable with a ``True`` default — taken by
+    :func:`_prepare_short_term_lookup` in the same ``collect_all`` as the
+    short-term lookup, so the count never pays a materialisation of its own.
     """
-    if errors is None or ratings is None:
-        return
-
-    # No presence guard: ``is_solicited`` is declared on RATINGS_SCHEMA with a
-    # ``True`` default, so the loader supplies it on every production frame, and
-    # ``select`` below would raise loudly rather than silently skip if that ever
-    # stopped being true. Keeping the defensive surface flat is the deliberate
-    # trade (arch_check ``engine_presence_guard_sites``).
-    unsolicited = int(
-        ratings.filter(pl.col("is_solicited").eq_missing(other=False))
-        .select(pl.len())
-        .collect()
-        .item()
-    )
     if unsolicited:
         errors.append(unsolicited_rating_not_filtered_warning(n=unsolicited))
 
@@ -812,12 +797,21 @@ def _add_ltv_defaults_for_missing_collateral(exposures: pl.LazyFrame) -> pl.Lazy
     return exposures.with_columns(defaults) if defaults else exposures
 
 
-def _prepare_short_term_lookup(ratings: pl.LazyFrame | None) -> pl.LazyFrame | None:
+def _prepare_short_term_lookup(
+    ratings: pl.LazyFrame | None,
+    errors: list[CalculationError] | None,
+) -> pl.LazyFrame | None:
     """Filter, sort and materialise the short-term rating lookup.
 
     Returns ``None`` if no short-term rows are available (i.e. ``ratings`` is
     ``None`` or the filtered set is empty). The caller treats ``None`` as "no
     override applies — set ``has_short_term_ecai=False``".
+
+    When ``errors`` is given, the Art. 138 unsolicited-rating count for DQ015
+    (:func:`_record_unsolicited_ratings`) rides in the same ``pl.collect_all``
+    as the lookup — one pass over the ratings table serves both, and the
+    warning is appended before any short-term join is built, exactly where the
+    count's own collect used to sit.
     """
     if ratings is None:
         return None
@@ -854,8 +848,20 @@ def _prepare_short_term_lookup(ratings: pl.LazyFrame | None) -> pl.LazyFrame | N
     )
 
     # Materialise the small short-term lookup eagerly so the three scope-
-    # specific joins below can re-use it without re-evaluating the sort.
-    st_ratings_df = st_ratings.collect()
+    # specific joins below can re-use it without re-evaluating the sort. No
+    # presence guard on ``is_solicited``: it is declared on RATINGS_SCHEMA with
+    # a ``True`` default, so the loader supplies it on every production frame,
+    # and the filter would raise loudly rather than silently skip if that ever
+    # stopped being true (arch_check ``engine_presence_guard_sites``).
+    plans = [st_ratings]
+    if errors is not None:
+        plans.append(
+            ratings.filter(pl.col("is_solicited").eq_missing(other=False)).select(pl.len())
+        )
+    frames = pl.collect_all(plans)
+    if errors is not None:
+        _record_unsolicited_ratings(int(frames[1].item()), errors)
+    st_ratings_df = frames[0]
     if st_ratings_df.height == 0:
         return None
     return st_ratings_df.lazy()

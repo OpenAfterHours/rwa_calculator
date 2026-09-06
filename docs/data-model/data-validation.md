@@ -176,8 +176,12 @@ The function validates these tables (when present in the bundle):
 | `guarantees` | `beneficiary_type` |
 | `facility_mappings` | `child_type` |
 
-**Performance:** Internally uses `_validate_table_columns_batched()` which checks
-multiple columns per table in a single `.collect()` call.
+**Performance:** Internally uses `_validate_table_columns_batched()`, which checks
+every constrained column of a table in one plan; that plan, the table's declared-domain
+aggregate and its other per-table checks are `_TableCheck`s that
+`validate_bundle_values()` executes together in a single `pl.collect_all` for the whole
+bundle (one materialisation per run instead of one per table per check), decoding them
+in build order so the error list is unchanged.
 
 **Returns:** `list[CalculationError]`
 

@@ -3099,6 +3099,7 @@
       "pack_entries": [],
       "source_files": [
         "engine/crm/guarantees.py",
+        "engine/crm/processor.py",
         "reporting/corep/c02.py"
       ],
       "test_files": [

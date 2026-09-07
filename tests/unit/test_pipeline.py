@@ -63,15 +63,26 @@ from tests.fixtures.resolved_bundle import (
 # =============================================================================
 # Test Fixtures
 # =============================================================================
+#
+# The config and raw-bundle fixtures are module-scoped: both are frozen
+# dataclasses (the bundle's LazyFrames are never mutated in place — every test
+# that changes the input goes through ``dataclasses.replace``), so one instance
+# serves the whole module. That lets the three ``*_result`` fixtures below run
+# the pipeline ONCE per (bundle, config) pair instead of once per test.
+#
+# Rule for the cached results: they are shared and READ-ONLY. A test that needs
+# to change the input, inject a component, or run a different config calls
+# ``PipelineOrchestrator().run_with_data(...)`` itself, as the error-channel and
+# error-propagation tests below do.
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def crr_config() -> CalculationConfig:
     """CRR configuration for testing."""
     return CalculationConfig.crr(reporting_date=date(2024, 12, 31))
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def basel31_config() -> CalculationConfig:
     """Basel 3.1 configuration with IRB permissions."""
     return CalculationConfig.basel_3_1(
@@ -80,7 +91,7 @@ def basel31_config() -> CalculationConfig:
     )
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def mock_raw_data() -> RawDataBundle:
     """Create mock raw data bundle."""
     # Facilities
@@ -256,6 +267,28 @@ def mock_raw_data() -> RawDataBundle:
         org_mappings=org_mappings,
         lending_mappings=lending_mappings,
     )
+
+
+@pytest.fixture(scope="module")
+def crr_result(
+    mock_raw_data: RawDataBundle, crr_config: CalculationConfig
+) -> AggregatedResultBundle:
+    """One shared, read-only run of the mock bundle under CRR (see the rule above)."""
+    return PipelineOrchestrator().run_with_data(mock_raw_data, crr_config)
+
+
+@pytest.fixture(scope="module")
+def basel31_result(
+    mock_raw_data: RawDataBundle, basel31_config: CalculationConfig
+) -> AggregatedResultBundle:
+    """One shared, read-only run of the mock bundle under Basel 3.1 (see the rule above)."""
+    return PipelineOrchestrator().run_with_data(mock_raw_data, basel31_config)
+
+
+@pytest.fixture(scope="module")
+def empty_crr_result(crr_config: CalculationConfig) -> AggregatedResultBundle:
+    """One shared, read-only run of an empty raw bundle under CRR (see the rule above)."""
+    return PipelineOrchestrator().run_with_data(create_empty_raw_data_bundle(), crr_config)
 
 
 @pytest.fixture
@@ -500,27 +533,23 @@ class TestPipelineOrchestratorInitialization:
 class TestPipelineRunWithData:
     """Tests for run_with_data method."""
 
-    def test_run_with_data_crr(self, mock_raw_data, crr_config):
+    def test_run_with_data_crr(self, crr_result):
         """Test full pipeline execution with CRR config."""
-        pipeline = PipelineOrchestrator()
-        result = pipeline.run_with_data(mock_raw_data, crr_config)
+        result = crr_result
 
         assert isinstance(result, AggregatedResultBundle)
         assert result.results is not None
 
-    def test_run_with_data_basel31(self, mock_raw_data, basel31_config):
+    def test_run_with_data_basel31(self, basel31_result):
         """Test full pipeline execution with Basel 3.1 config."""
-        pipeline = PipelineOrchestrator()
-        result = pipeline.run_with_data(mock_raw_data, basel31_config)
+        result = basel31_result
 
         assert isinstance(result, AggregatedResultBundle)
         assert result.results is not None
 
-    def test_run_with_empty_data(self, crr_config):
+    def test_run_with_empty_data(self, empty_crr_result):
         """Test pipeline with empty raw data."""
-        empty_data = create_empty_raw_data_bundle()
-        pipeline = PipelineOrchestrator()
-        result = pipeline.run_with_data(empty_data, crr_config)
+        result = empty_crr_result
 
         assert isinstance(result, AggregatedResultBundle)
 
@@ -591,13 +620,10 @@ class TestPipelineStageExecution:
 class TestPipelineErrorHandling:
     """Tests for error handling."""
 
-    def test_hierarchy_resolver_error_accumulation(self, crr_config):
+    def test_hierarchy_resolver_error_accumulation(self, empty_crr_result):
         """Test that hierarchy resolver errors are accumulated."""
-        pipeline = PipelineOrchestrator()
-
-        # Create data that might cause errors
-        raw_data = create_empty_raw_data_bundle()
-        result = pipeline.run_with_data(raw_data, crr_config)
+        # Empty data that might cause errors, run once for the module
+        result = empty_crr_result
 
         # Check result is valid despite potential errors
         assert isinstance(result, AggregatedResultBundle)
@@ -651,10 +677,9 @@ class TestPipelineBundleErrorPropagation:
         assert isinstance(result, AggregatedResultBundle)
         assert any("INVALID_TYPE" in e.message for e in result.errors)
 
-    def test_empty_bundle_errors_not_added(self, mock_raw_data, crr_config):
+    def test_empty_bundle_errors_not_added(self, crr_result):
         """Empty bundle errors should not bloat the final result."""
-        pipeline = PipelineOrchestrator()
-        result = pipeline.run_with_data(mock_raw_data, crr_config)
+        result = crr_result
 
         assert isinstance(result, AggregatedResultBundle)
         assert not any("entity_type" in e.message for e in result.errors)
@@ -852,19 +877,17 @@ class TestPipelineUtilities:
 class TestPipelineResults:
     """Tests for pipeline result generation."""
 
-    def test_result_contains_summaries(self, mock_raw_data, crr_config):
+    def test_result_contains_summaries(self, crr_result):
         """Test that result contains summaries."""
-        pipeline = PipelineOrchestrator()
-        result = pipeline.run_with_data(mock_raw_data, crr_config)
+        result = crr_result
 
         # Result should have summary frames
         assert result.summary_by_class is not None
         assert result.summary_by_approach is not None
 
-    def test_crr_no_floor_impact(self, mock_raw_data, crr_config):
+    def test_crr_no_floor_impact(self, crr_result):
         """Test that CRR config has no floor impact."""
-        pipeline = PipelineOrchestrator()
-        result = pipeline.run_with_data(mock_raw_data, crr_config)
+        result = crr_result
 
         # CRR doesn't have output floor
         # floor_impact may be None or empty
@@ -874,10 +897,9 @@ class TestPipelineResults:
             if "is_floor_binding" in collected.columns:
                 assert not collected["is_floor_binding"].any()
 
-    def test_crr_supporting_factor_impact(self, mock_raw_data, crr_config):
+    def test_crr_supporting_factor_impact(self, crr_result):
         """Test that CRR config tracks supporting factor impact."""
-        pipeline = PipelineOrchestrator()
-        result = pipeline.run_with_data(mock_raw_data, crr_config)
+        result = crr_result
 
         # CRR should track supporting factors
         # May or may not have impact depending on data
@@ -887,10 +909,9 @@ class TestPipelineResults:
 class TestPipelineIntegration:
     """Integration tests for complete pipeline flow."""
 
-    def test_full_pipeline_sa_only(self, mock_raw_data, crr_config):
+    def test_full_pipeline_sa_only(self, crr_result):
         """Test complete pipeline with SA-only config."""
-        pipeline = PipelineOrchestrator()
-        result = pipeline.run_with_data(mock_raw_data, crr_config)
+        result = crr_result
 
         assert isinstance(result, AggregatedResultBundle)
 
@@ -921,10 +942,9 @@ class TestPipelineIntegration:
         # Results should be generated even if all exposures
         # fall to SA due to lack of IRB data
 
-    def test_result_frame_can_be_collected(self, mock_raw_data, crr_config):
+    def test_result_frame_can_be_collected(self, crr_result):
         """Test that result LazyFrames can be collected."""
-        pipeline = PipelineOrchestrator()
-        result = pipeline.run_with_data(mock_raw_data, crr_config)
+        result = crr_result
 
         # Should be able to collect all result frames
         results_df = result.results.collect()

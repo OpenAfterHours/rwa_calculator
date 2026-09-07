@@ -12,6 +12,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - (Next release changes will go here)
+- **COREP / Pillar 3 cell expressions compile once and are reused across
+  sheets and runs.** The declarative executor's Python-side work — compiling a
+  `RowPredicate` to a filter expression, and turning a template's cells into
+  mask + aggregation expressions — is a pure function of the predicate or spec
+  and the frame's column signature, and on the 150-row acceptance ledger it cost
+  about as much as the Polars passes it fed (4,849 CRR / 7,634 Basel 3.1
+  predicate compiles per COREP generation, C 07.00 running one spec over every
+  class sheet). `reporting/cellspec.py` now holds five bounded LRU caches serving three
+  products — the interned column signature, the compiled expression per
+  (predicate value, signature), and the sheet plan per (spec value, signature)
+  behind an identity front keyed on the spec object, so a `TemplateSpec`'s
+  cells must never be mutated after construction — and
+  the four `_const` `Formula` factories return one callable per value so a
+  rebuilt spec stays value-equal to the last. Measured per generation: COREP
+  CRR 0.63–0.73 s → 0.37–0.42 s, Basel 3.1 1.10–1.14 s → 0.57–0.70 s, with
+  warm-cache predicate compiles at zero. Nothing data-dependent is cached —
+  every frame still runs its own mask and aggregation passes — and the 27-run
+  reference dump (ledgers, error lists, every COREP and Pillar 3 sheet) is
+  identical to master. Pinned by `tests/unit/reporting/test_cellspec_caches.py`.
+- **Pipeline fixed cost: the data-quality recorders and the input-domain gate no
+  longer re-execute deep lazy plans** (test-suite runtime proposal, Lever 2 items
+  1 and 3). The CRM017 third-party-deposit gate is evaluated on the materialised
+  `crm_post_ead` checkpoint; CRM013 is raised by the CRM processor from the
+  materialised `crm_exit` frame via a scratch `_guarantor_ineligible` flag the
+  seal strips; the collateral dimension is materialised in memory once after the
+  Art. 194(4) gate and once after haircuts, so the eight collateral recorders and
+  the allocation aggregates scan memory; the DQ015 unsolicited-rating count rides
+  in the short-term-lookup `collect_all`; and `validate_bundle_values` runs every
+  per-table check in one `pl.collect_all` instead of ~26 collects. Results and
+  error lists (codes, messages, references and order) are unchanged on every
+  fixture. A one-row run's `collect()` count falls 98 -> 85 (CRR) and 96 -> 83
+  (Basel 3.1), with `collect_all` 6 -> 8 / 7 -> 9 because 28 single collects were
+  folded into two batches — banked in
+  `tests/contracts/test_pipeline_collect_budget.py`.
+- **Pipeline fixed cost: each stage resolves the column set it needs once and
+  threads it, instead of re-walking the plan at every call site** (test-suite
+  runtime proposal, Lever 2 item 2). `LazyFrame.collect_schema()` is O(plan
+  NODES), so a run that asks the same frame "which columns do you carry?" from a
+  dozen places pays a fixed tax a big book never outgrows. The input-domain gate
+  now resolves each raw table's names ONCE (`validation._table_column_names`)
+  and hands the set to every per-table check builder, every declared foreign key
+  and every unique key; the aggregator resolves the post-floor ledger once for
+  its four summary builders; and the CRM facility lookup reuses the names
+  `_build_exposure_lookups` already resolved. Every threaded set describes the
+  exact `LazyFrame` OBJECT its consumer tests — a LazyFrame is immutable, so the
+  presence checks test the same population as before by construction, not by
+  assumption. A one-row run's `collect_schema()` count falls 136 -> 113 (CRR)
+  and 135 -> 113 (Basel 3.1), and a 150-row run's 199 -> 165; ledgers, error
+  lists and every COREP / Pillar 3 sheet are byte-identical across the 27-run
+  reference dump. Banked in `tests/contracts/test_pipeline_collect_budget.py`.
 
 ---
 

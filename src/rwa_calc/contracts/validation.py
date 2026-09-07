@@ -20,6 +20,14 @@ Key responsibilities:
 - Collateral-link referential integrity
 - Regulatory output bounds on the aggregated results frame
 
+Every per-table check in the bundle gate is a ``_TableCheck`` — a lazy plan
+plus the reader that turns its frame into errors — and
+``validate_bundle_values`` executes all of them in ONE ``pl.collect_all``.
+The gate ran ~26 separate collects per run (one per table per check) before
+that; the count, not the plans, was the cost (test-suite runtime proposal,
+Lever 2 item 3), and the ratchet in
+``tests/contracts/test_pipeline_collect_budget.py`` is what keeps it down.
+
 Schema shape is NOT validated here. Every ``RawDataBundle`` frame carries a
 loader edge brand (``contracts/edges.py``, ``contracts.bundles``
 ``SEALED_FRAME_FIELDS``), and the seal that grants the brand already injects
@@ -37,7 +45,7 @@ References:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
@@ -74,6 +82,8 @@ from rwa_calc.contracts.errors import (
 from rwa_calc.domain.branch_reasons import BRANCH_REASON_VOCABULARIES, UNKNOWN_FALLBACK
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
+
     from rwa_calc.contracts.bundles import AggregatedResultBundle, RawDataBundle
     from rwa_calc.data.column_spec import ColumnDomain, ForeignKey
 
@@ -155,18 +165,40 @@ class _DomainSpec:
     severity: ErrorSeverity
 
 
+@dataclass(frozen=True)
+class _TableCheck:
+    """One per-table input check, split into its plan and the reader of its result.
+
+    ``validate_bundle_values`` gathers every table's checks and executes their
+    plans in ONE ``pl.collect_all`` — a shared source frame is scanned once —
+    then calls each ``decode`` on its frame in the order the checks were
+    built, so the error list reads exactly as it did when every check
+    collected for itself.
+
+    ``fallback`` is the check's own recovery when its plan cannot be executed
+    at all. Only the categorical batch carries one (per-column
+    ``validate_column_values``, the behaviour it always had); a check without
+    one re-raises, exactly as its standalone collect did.
+    """
+
+    plan: pl.LazyFrame
+    decode: Callable[[pl.DataFrame], list[CalculationError]]
+    fallback: Callable[[], list[CalculationError]] | None = None
+
+
 def _validate_declared_domains(
     lf: pl.LazyFrame,
     table_name: str,
+    present: frozenset[str],
     sample_cap: int = 5,
-) -> list[CalculationError]:
+) -> _TableCheck | None:
     """Flag input values outside the domain their column DECLARES.
 
     The generic reader of ``ColumnSpec.domain``. For every column the table's
     schema declares a domain for and the frame actually carries, this builds
-    the domain's own violation predicate and turns the results into row-named
-    ``CalculationError``s in ONE ``.collect()`` per table — whatever the
-    number of validated columns.
+    the domain's own violation predicate into ONE aggregate plan per table —
+    whatever the number of validated columns — whose single row
+    ``_domain_violation_errors`` turns into row-named ``CalculationError``s.
 
     Severity is ERROR unless ``_DOMAIN_REPORTING`` pins otherwise: an
     out-of-domain PD, LGD, CQS or amount does not degrade, it produces a
@@ -186,19 +218,21 @@ def _validate_declared_domains(
         lf: The table's LazyFrame.
         table_name: ``TABLE_SCHEMAS`` key — resolves the declaring schema,
             the natural key, and the message prefix.
+        present: ``lf``'s column names, resolved once by :func:`_table_checks`
+            for every check it builds off the same frame object.
         sample_cap: Maximum per-row errors emitted per column (default 5);
             a single summary error carries the truthful omitted count.
 
     Returns:
-        List of CalculationError objects (empty when every value is in domain).
+        The table's check, or None when its schema declares no domain the
+        frame carries (nothing to run).
     """
     from rwa_calc.data.schemas import TABLE_KEY_COLUMNS, TABLE_SCHEMAS
 
     schema = TABLE_SCHEMAS.get(table_name)
     if schema is None:
-        return []
+        return None
 
-    present = set(lf.collect_schema().names())
     specs: list[_DomainSpec] = []
     for column, spec in schema.items():
         if spec.domain is None or column not in present:
@@ -206,12 +240,20 @@ def _validate_declared_domains(
         code, severity = _reporting_for(column)
         specs.append(_DomainSpec(column=column, domain=spec.domain, code=code, severity=severity))
     if not specs:
-        return []
+        return None
 
     key_column = TABLE_KEY_COLUMNS.get(table_name)
     if key_column not in present:
         key_column = None
-    return _collect_domain_violations(lf, key_column, specs, table_name, sample_cap)
+
+    def decode(frame: pl.DataFrame) -> list[CalculationError]:
+        return _domain_violation_errors(
+            frame.row(0, named=True), key_column, specs, table_name, sample_cap
+        )
+
+    return _TableCheck(
+        plan=lf.select(_domain_violation_exprs(key_column, specs, sample_cap)), decode=decode
+    )
 
 
 def _reporting_for(column: str) -> tuple[str, ErrorSeverity]:
@@ -221,18 +263,16 @@ def _reporting_for(column: str) -> tuple[str, ErrorSeverity]:
     return _DOMAIN_REPORTING.get(column, (ERROR_INPUT_OUT_OF_DOMAIN, ErrorSeverity.ERROR))
 
 
-def _collect_domain_violations(
-    lf: pl.LazyFrame,
+def _domain_violation_exprs(
     key_column: str | None,
     specs: list[_DomainSpec],
-    table_name: str,
     sample_cap: int,
-) -> list[CalculationError]:
-    """Turn every declared domain's violation predicate into errors in one collect.
+) -> list[pl.Expr]:
+    """The aggregate expressions behind every declared domain's violation predicate.
 
-    Per spec the aggregation carries three length-1 outputs — the violation
-    count, up to ``sample_cap`` offending keys, and their values — so the
-    whole table costs one collect however many columns were validated.
+    Per spec three length-1 outputs — the violation count, up to
+    ``sample_cap`` offending keys, and their values — so the whole table is
+    one aggregate row however many columns were validated.
 
     ``key_column`` may be None for a table with no single-column identity; the
     per-row errors then carry no ``exposure_reference`` rather than the table
@@ -256,9 +296,21 @@ def _collect_domain_violations(
         exprs.append(
             pl.col(spec.column).filter(invalid).head(sample_cap).implode().alias(f"v_{spec.column}")
         )
+    return exprs
 
-    row = lf.select(exprs).collect().row(0, named=True)
 
+def _domain_violation_errors(
+    row: dict[str, Any],
+    key_column: str | None,
+    specs: list[_DomainSpec],
+    table_name: str,
+    sample_cap: int,
+) -> list[CalculationError]:
+    """Read the aggregate row ``_domain_violation_exprs`` produced into errors.
+
+    Up to ``sample_cap`` row-named errors per column, then one summary
+    carrying the truthful omitted count.
+    """
     errors: list[CalculationError] = []
     for spec in specs:
         total = int(row[f"n_{spec.column}"] or 0)
@@ -345,31 +397,34 @@ def validate_column_values(
         .collect()
     )
 
-    if invalid_df.height == 0:
-        return []
+    return [
+        _invalid_column_value_error(context, column, row[column], row["len"], valid_values)
+        for row in invalid_df.iter_rows(named=True)
+    ]
 
-    errors: list[CalculationError] = []
-    for row in invalid_df.iter_rows(named=True):
-        bad_value = row[column]
-        count = row["len"]
-        sorted_valid = sorted(valid_values)
-        errors.append(
-            CalculationError(
-                code=ERROR_INVALID_COLUMN_VALUE,
-                message=(
-                    f"[{context}] Invalid value '{bad_value}' for column '{column}' "
-                    f"({count} row(s)). "
-                    f"Valid values: {sorted_valid}"
-                ),
-                severity=ErrorSeverity.WARNING,
-                category=ErrorCategory.DATA_QUALITY,
-                field_name=column,
-                expected_value=", ".join(sorted_valid),
-                actual_value=str(bad_value),
-            )
-        )
 
-    return errors
+def _invalid_column_value_error(
+    context: str,
+    column: str,
+    bad_value: object,
+    count: int,
+    valid_values: set[str],
+) -> CalculationError:
+    """The DQ006 warning for one distinct out-of-set value of a categorical column."""
+    sorted_valid = sorted(valid_values)
+    return CalculationError(
+        code=ERROR_INVALID_COLUMN_VALUE,
+        message=(
+            f"[{context}] Invalid value '{bad_value}' for column '{column}' "
+            f"({count} row(s)). "
+            f"Valid values: {sorted_valid}"
+        ),
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.DATA_QUALITY,
+        field_name=column,
+        expected_value=", ".join(sorted_valid),
+        actual_value=str(bad_value),
+    )
 
 
 def bundle_frames(bundle: RawDataBundle) -> dict[str, pl.LazyFrame | None]:
@@ -433,12 +488,17 @@ def validate_bundle_values(
 
     - **Declared domains** — every ``ColumnSpec.domain`` the table's schema
       declares and the frame carries (:func:`_validate_declared_domains`),
-      one ``.collect()`` per table, with the offending row named.
+      one aggregate plan per table, with the offending row named.
     - **Categorical domains** against the constraints registry (DQ006), all
-      columns batched into a single ``.collect()``.
+      columns batched into a single plan.
     - **Exposure-table rules** — unreferenced negative on-balance amounts
       (DQ010).
     - **Ratings** — the short-term rating scope contract (DQ002).
+
+    Every per-table check is a :class:`_TableCheck`; all of them are executed
+    in ONE ``pl.collect_all`` (:func:`_run_table_checks`) and decoded in
+    build order, so the error list is what the per-check collects produced,
+    at one materialisation instead of one per table per check.
 
     Then, cross-table, the collateral-link referential integrity checks.
 
@@ -460,48 +520,130 @@ def validate_bundle_values(
 
         constraints = COLUMN_VALUE_CONSTRAINTS
 
-    all_errors: list[CalculationError] = []
+    frames = bundle_frames(bundle)
+    columns = _table_column_names(frames)
 
-    for table_name, lf in bundle_frames(bundle).items():
+    checks: list[_TableCheck] = []
+    for table_name, lf in frames.items():
         if lf is None:
             continue
-        table_constraints = constraints.get(table_name, {})
-        if table_constraints:
-            errors = _validate_table_columns_batched(lf, table_constraints, table_name)
-            all_errors.extend(errors)
-
-        # Declared input domains. One collect per table; a no-op for a table
-        # whose schema declares none.
-        all_errors.extend(_validate_declared_domains(lf, table_name))
-
-        # A negative on-balance amount is the Art. 195/219 netting convention,
-        # so it is NOT a declared-domain violation — only an UNREFERENCED one
-        # is, and that needs a second column to decide.
-        if table_name in {"facilities", "loans", "contingents"}:
-            all_errors.extend(_validate_negative_amounts_without_netting(lf, table_name))
-
-        # CRR Art. 111 Annex I / PS1/26 Table A1: an OBS amount with neither a
-        # risk_type nor an obs_product is priced on the regime's residual limb
-        # with no signal of any kind today — DQ006 filters nulls out before its
-        # domain test (P1.267).
-        if table_name in {"facilities", "contingents"}:
-            all_errors.extend(_validate_unresolved_obs_risk_type(lf, table_name))
-
-        # PRA PS1/26 Art. 120(2B) / Art. 122(3): short-term rating rows must
-        # carry a scope (which exposure they attach to). Flag rows that violate
-        # the is_short_term ↔ scope_type/scope_id contract.
-        if table_name == "ratings":
-            all_errors.extend(_validate_short_term_rating_scope(lf))
+        checks.extend(
+            _table_checks(lf, table_name, constraints.get(table_name, {}), columns[table_name])
+        )
+    all_errors = _run_table_checks(checks)
 
     # Cross-table referential integrity for the M:N collateral-links table.
     all_errors.extend(validate_collateral_links(bundle))
 
     # Declared foreign keys (DQ005 / DQ001) and natural-key uniqueness (DQ004).
     # Both are cross-row / cross-table facts, so they follow the per-table pass.
-    all_errors.extend(validate_referential_integrity(bundle))
-    all_errors.extend(validate_duplicate_keys(bundle))
+    all_errors.extend(validate_referential_integrity(bundle, columns=columns))
+    all_errors.extend(validate_duplicate_keys(bundle, columns=columns))
 
     return all_errors
+
+
+def _table_column_names(
+    frames: Mapping[str, pl.LazyFrame | None],
+) -> dict[str, frozenset[str]]:
+    """Resolve every supplied frame's column names ONCE, keyed by table name.
+
+    ``LazyFrame.collect_schema()`` walks the whole plan, so it is O(plan
+    NODES) and a fixed per-run tax a big book never outgrows. The input gate
+    asks the same handful of raw frames "which columns do you carry?" from a
+    dozen places — every per-table check builder, every declared foreign key,
+    every unique key — and each ask used to re-walk the plan.
+
+    Safe by CONSTRUCTION rather than by assumption, which is the whole point
+    of resolving here: the returned names describe the exact ``LazyFrame``
+    OBJECTS in ``frames``, and every consumer is handed the entry for the
+    object it was already given. A LazyFrame is immutable, so a name resolved
+    off one cannot go stale while that object is the one being tested — the
+    staleness trap that makes a threaded column set dangerous elsewhere
+    (see ``data/column_spec.py::ensure_columns``) cannot arise.
+
+    Absent tables map to an empty set, so a caller can look up any
+    ``TABLE_SCHEMAS`` key without a presence dance; ``frames[name] is None``
+    remains the test for "table not supplied".
+    """
+    return {
+        name: frozenset(lf.collect_schema().names()) if lf is not None else frozenset()
+        for name, lf in frames.items()
+    }
+
+
+def _table_checks(
+    lf: pl.LazyFrame,
+    table_name: str,
+    table_constraints: dict[str, set[str]],
+    columns: frozenset[str],
+) -> list[_TableCheck]:
+    """The per-table checks for one bundle frame, in the order their errors are emitted.
+
+    ``columns`` is ``lf``'s resolved column names — every builder below reads
+    the SAME frame object, so the set is resolved once here and threaded
+    rather than re-walked per check.
+    """
+    checks: list[_TableCheck | None] = []
+    if table_constraints:
+        checks.append(_validate_table_columns_batched(lf, table_constraints, table_name, columns))
+
+    # Declared input domains; a no-op for a table whose schema declares none.
+    checks.append(_validate_declared_domains(lf, table_name, columns))
+
+    # A negative on-balance amount is the Art. 195/219 netting convention,
+    # so it is NOT a declared-domain violation — only an UNREFERENCED one
+    # is, and that needs a second column to decide.
+    if table_name in {"facilities", "loans", "contingents"}:
+        checks.append(_validate_negative_amounts_without_netting(lf, table_name, columns))
+
+    # CRR Art. 111 Annex I / PS1/26 Table A1: an OBS amount with neither a
+    # risk_type nor an obs_product is priced on the regime's residual limb
+    # with no signal of any kind today — DQ006 filters nulls out before its
+    # domain test (P1.267).
+    if table_name in {"facilities", "contingents"}:
+        checks.append(_validate_unresolved_obs_risk_type(lf, table_name, columns))
+
+    # PRA PS1/26 Art. 120(2B) / Art. 122(3): short-term rating rows must
+    # carry a scope (which exposure they attach to). Flag rows that violate
+    # the is_short_term ↔ scope_type/scope_id contract.
+    if table_name == "ratings":
+        checks.append(_validate_short_term_rating_scope(lf, columns))
+    return [check for check in checks if check is not None]
+
+
+def _run_table_checks(checks: list[_TableCheck]) -> list[CalculationError]:
+    """Execute every check's plan in one ``pl.collect_all`` and decode in order.
+
+    When the batch cannot be executed, each plan is collected on its own so a
+    check that fails alone reaches its own ``fallback`` — or re-raises, as it
+    would have standalone — while every other check still reports normally.
+    That is the behaviour the per-check collects had; only the cost of the
+    failure path differs.
+    """
+    if not checks:
+        return []
+    try:
+        frames: list[pl.DataFrame] | None = pl.collect_all([check.plan for check in checks])
+    except Exception:
+        frames = None
+
+    errors: list[CalculationError] = []
+    if frames is not None:
+        for check, frame in zip(checks, frames, strict=True):
+            errors.extend(check.decode(frame))
+        return errors
+
+    for check in checks:
+        try:
+            frame = check.plan.collect()
+        except Exception:
+            if check.fallback is None:
+                raise
+            errors.extend(check.fallback())
+            continue
+        errors.extend(check.decode(frame))
+    return errors
 
 
 def scrub_non_finite_values(bundle: RawDataBundle) -> RawDataBundle:
@@ -824,6 +966,8 @@ _KIND_ABSENT = "absent"
 def validate_referential_integrity(
     bundle: RawDataBundle,
     sample_cap: int = 5,
+    *,
+    columns: Mapping[str, frozenset[str]] | None = None,
 ) -> list[CalculationError]:
     """Flag input rows whose DECLARED foreign key is broken or never supplied.
 
@@ -855,6 +999,10 @@ def validate_referential_integrity(
     Args:
         bundle: RawDataBundle to validate.
         sample_cap: Maximum row-named errors per (table, column, kind).
+        columns: Pre-resolved column names per table (:func:`_table_column_names`),
+            supplied by :func:`validate_bundle_values` so the shared frames are
+            walked once for the whole input gate. Omitted, they are resolved
+            here exactly as before.
 
     Returns:
         List of CalculationError objects (empty when every link resolves).
@@ -862,6 +1010,7 @@ def validate_referential_integrity(
     from rwa_calc.data.schemas import TABLE_FOREIGN_KEYS, TABLE_KEY_COLUMNS
 
     frames = bundle_frames(bundle)
+    names = _table_column_names(frames) if columns is None else columns
     plans: list[pl.LazyFrame] = []
     declarations: dict[tuple[str, str], ForeignKey] = {}
 
@@ -869,12 +1018,12 @@ def validate_referential_integrity(
         child = frames.get(table)
         if child is None:
             continue
-        child_columns = set(child.collect_schema().names())
+        child_columns = names[table]
         key_column = TABLE_KEY_COLUMNS.get(table)
         if key_column not in child_columns:
             key_column = None
         for foreign_key in foreign_keys:
-            parent = _checkable_parent(frames, child_columns, foreign_key)
+            parent = _checkable_parent(frames, names, child_columns, foreign_key)
             if parent is None:
                 continue
             declarations[table, foreign_key.column] = foreign_key
@@ -904,7 +1053,11 @@ def validate_referential_integrity(
     return errors
 
 
-def validate_duplicate_keys(bundle: RawDataBundle) -> list[CalculationError]:
+def validate_duplicate_keys(
+    bundle: RawDataBundle,
+    *,
+    columns: Mapping[str, frozenset[str]] | None = None,
+) -> list[CalculationError]:
     """Flag input tables whose natural key names more than one row (``DQ004``).
 
     Reads ``data/schemas.py``'s ``TABLE_UNIQUE_KEYS`` — the tables where a
@@ -923,6 +1076,10 @@ def validate_duplicate_keys(bundle: RawDataBundle) -> list[CalculationError]:
 
     Args:
         bundle: RawDataBundle to validate.
+        columns: Pre-resolved column names per table (:func:`_table_column_names`),
+            supplied by :func:`validate_bundle_values` so the shared frames are
+            walked once for the whole input gate. Omitted, they are resolved
+            here exactly as before.
 
     Returns:
         List of CalculationError objects (empty when every key is unique).
@@ -930,10 +1087,11 @@ def validate_duplicate_keys(bundle: RawDataBundle) -> list[CalculationError]:
     from rwa_calc.data.schemas import TABLE_UNIQUE_KEYS
 
     frames = bundle_frames(bundle)
+    names = _table_column_names(frames) if columns is None else columns
     plans: list[pl.LazyFrame] = []
     for table, key_column in TABLE_UNIQUE_KEYS.items():
         lf = frames.get(table)
-        if lf is None or key_column not in set(lf.collect_schema().names()):
+        if lf is None or key_column not in names[table]:
             continue
         plans.append(
             lf.select(pl.col(key_column).cast(pl.String).alias("_value"))
@@ -965,7 +1123,8 @@ def validate_duplicate_keys(bundle: RawDataBundle) -> list[CalculationError]:
 
 def _checkable_parent(
     frames: dict[str, pl.LazyFrame | None],
-    child_columns: set[str],
+    names: Mapping[str, frozenset[str]],
+    child_columns: frozenset[str],
     foreign_key: ForeignKey,
 ) -> pl.LazyFrame | None:
     """The parent frame a declared link can actually be checked against.
@@ -976,11 +1135,15 @@ def _checkable_parent(
     into one orphan error per child row would be the loudest possible way to
     repeat it. The same holds for the columns — a link whose child or parent
     column was never supplied has nothing to resolve.
+
+    ``names`` is the caller's per-table column map (:func:`_table_column_names`),
+    so the parent frame is not re-walked once per declared link that points at
+    it — the ``counterparties`` table is a parent five times over.
     """
     parent = frames.get(foreign_key.parent_table)
     if parent is None or foreign_key.column not in child_columns:
         return None
-    if foreign_key.parent_column not in set(parent.collect_schema().names()):
+    if foreign_key.parent_column not in names[foreign_key.parent_table]:
         return None
     return parent
 
@@ -1082,7 +1245,10 @@ def _referential_errors(
     return errors
 
 
-def _validate_short_term_rating_scope(lf: pl.LazyFrame) -> list[CalculationError]:
+def _validate_short_term_rating_scope(
+    lf: pl.LazyFrame,
+    schema_names: frozenset[str],
+) -> _TableCheck | None:
     """Flag short-term rating rows that violate the scope contract.
 
     Three violations are detected and reported via ``DQ002``:
@@ -1098,65 +1264,68 @@ def _validate_short_term_rating_scope(lf: pl.LazyFrame) -> list[CalculationError
     ``scope_type`` value-set validation (must be one of
     ``VALID_RATING_SCOPE_TYPES``) is handled by the generic categorical-value
     pass via ``COLUMN_VALUE_CONSTRAINTS``.
+
+    ``schema_names`` is ``lf``'s resolved column names, threaded in by
+    :func:`_table_checks` (see :func:`_table_column_names`).
     """
-    schema_names = lf.collect_schema().names()
     if "is_short_term" not in schema_names:
-        return []
+        return None
     if "scope_type" not in schema_names or "scope_id" not in schema_names:
-        return []
+        return None
 
     is_st = pl.col("is_short_term").fill_null(False)
     scope_t = pl.col("scope_type")
     scope_id = pl.col("scope_id")
 
-    bad = (
-        lf.select(
-            [
-                (is_st & (scope_t.is_null() | scope_id.is_null())).sum().alias("missing"),
-                (~is_st & (scope_t.is_not_null() | scope_id.is_not_null())).sum().alias("stray"),
-            ]
-        )
-        .collect()
-        .row(0, named=True)
+    plan = lf.select(
+        [
+            (is_st & (scope_t.is_null() | scope_id.is_null())).sum().alias("missing"),
+            (~is_st & (scope_t.is_not_null() | scope_id.is_not_null())).sum().alias("stray"),
+        ]
     )
 
-    errors: list[CalculationError] = []
-    if bad["missing"]:
-        errors.append(
-            CalculationError(
-                code=ERROR_INVALID_VALUE,
-                message=(
-                    f"[ratings] {bad['missing']} row(s) have is_short_term=True "
-                    "but null scope_type or scope_id. Short-term rating rows must "
-                    "identify the exposure they attach to (PRA PS1/26 Art. 120(2B))."
-                ),
-                severity=ErrorSeverity.ERROR,
-                category=ErrorCategory.DATA_QUALITY,
-                field_name="scope_type",
-                regulatory_reference="PRA PS1/26 Art. 120(2B)",
+    def decode(frame: pl.DataFrame) -> list[CalculationError]:
+        bad = frame.row(0, named=True)
+        errors: list[CalculationError] = []
+        if bad["missing"]:
+            errors.append(
+                CalculationError(
+                    code=ERROR_INVALID_VALUE,
+                    message=(
+                        f"[ratings] {bad['missing']} row(s) have is_short_term=True "
+                        "but null scope_type or scope_id. Short-term rating rows must "
+                        "identify the exposure they attach to (PRA PS1/26 Art. 120(2B))."
+                    ),
+                    severity=ErrorSeverity.ERROR,
+                    category=ErrorCategory.DATA_QUALITY,
+                    field_name="scope_type",
+                    regulatory_reference="PRA PS1/26 Art. 120(2B)",
+                )
             )
-        )
-    if bad["stray"]:
-        errors.append(
-            CalculationError(
-                code=ERROR_INVALID_VALUE,
-                message=(
-                    f"[ratings] {bad['stray']} row(s) have is_short_term=False "
-                    "but populated scope_type/scope_id. Scope columns apply only "
-                    "to short-term rating rows."
-                ),
-                severity=ErrorSeverity.WARNING,
-                category=ErrorCategory.DATA_QUALITY,
-                field_name="scope_type",
+        if bad["stray"]:
+            errors.append(
+                CalculationError(
+                    code=ERROR_INVALID_VALUE,
+                    message=(
+                        f"[ratings] {bad['stray']} row(s) have is_short_term=False "
+                        "but populated scope_type/scope_id. Scope columns apply only "
+                        "to short-term rating rows."
+                    ),
+                    severity=ErrorSeverity.WARNING,
+                    category=ErrorCategory.DATA_QUALITY,
+                    field_name="scope_type",
+                )
             )
-        )
-    return errors
+        return errors
+
+    return _TableCheck(plan=plan, decode=decode)
 
 
 def _validate_negative_amounts_without_netting(
     lf: pl.LazyFrame,
     context: str,
-) -> list[CalculationError]:
+    schema_names: frozenset[str],
+) -> _TableCheck | None:
     """Flag negative ``drawn_amount`` / ``interest`` rows that carry no netting.
 
     A negative on-balance amount is the deliberate on-balance-sheet netting
@@ -1171,34 +1340,37 @@ def _validate_negative_amounts_without_netting(
     References:
     - CRR Art. 111 (SA gross exposure value); Art. 166 (IRB exposure value)
     - CRR Art. 195/219 (on-balance-sheet netting)
+
+    ``schema_names`` is ``lf``'s resolved column names, threaded in by
+    :func:`_table_checks` (see :func:`_table_column_names`).
     """
-    schema_names = lf.collect_schema().names()
     amount_cols = [c for c in ("drawn_amount", "interest") if c in schema_names]
     if not amount_cols:
-        return []
+        return None
 
     if "netting_agreement_reference" in schema_names:
         unreferenced = pl.col("netting_agreement_reference").is_null()
     else:
         unreferenced = pl.lit(value=True)
 
-    counts = (
-        lf.select([((pl.col(c) < 0) & unreferenced).sum().alias(c) for c in amount_cols])
-        .collect()
-        .row(0, named=True)
-    )
+    plan = lf.select([((pl.col(c) < 0) & unreferenced).sum().alias(c) for c in amount_cols])
 
-    return [
-        negative_amount_without_netting_warning(context=context, column=c, n=counts[c])
-        for c in amount_cols
-        if counts[c]
-    ]
+    def decode(frame: pl.DataFrame) -> list[CalculationError]:
+        counts = frame.row(0, named=True)
+        return [
+            negative_amount_without_netting_warning(context=context, column=c, n=counts[c])
+            for c in amount_cols
+            if counts[c]
+        ]
+
+    return _TableCheck(plan=plan, decode=decode)
 
 
 def _validate_unresolved_obs_risk_type(
     lf: pl.LazyFrame,
     context: str,
-) -> list[CalculationError]:
+    schema_names: frozenset[str],
+) -> _TableCheck | None:
     """Flag OBS rows carrying an amount but no resolvable Annex I risk category.
 
     ``risk_type`` is optional and the DQ006 domain test filters
@@ -1226,14 +1398,16 @@ def _validate_unresolved_obs_risk_type(
     References:
     - CRR Art. 111, Annex I item 1(k)
     - PRA PS1/26 Art. 111, Table A1 Rows 3 and 5
+
+    ``schema_names`` is ``lf``'s resolved column names, threaded in by
+    :func:`_table_checks` (see :func:`_table_column_names`).
     """
-    schema_names = lf.collect_schema().names()
     if "risk_type" not in schema_names:
-        return []
+        return None
 
     amount_column = next((c for c in ("nominal_amount", "limit") if c in schema_names), None)
     if amount_column is None:
-        return []
+        return None
 
     unresolved = pl.col("risk_type").is_null()
     if "obs_product" in schema_names:
@@ -1250,36 +1424,44 @@ def _validate_unresolved_obs_risk_type(
         >= _ZERO_AMOUNT_TOLERANCE
     )
 
-    n = lf.select((unresolved & has_amount).sum().alias("n")).collect().item()
-    if not n:
-        return []
-    return [unresolved_obs_risk_type_warning(context=context, amount_column=amount_column, n=n)]
+    def decode(frame: pl.DataFrame) -> list[CalculationError]:
+        n = frame.item()
+        if not n:
+            return []
+        return [unresolved_obs_risk_type_warning(context=context, amount_column=amount_column, n=n)]
+
+    return _TableCheck(plan=lf.select((unresolved & has_amount).sum().alias("n")), decode=decode)
 
 
 def _validate_table_columns_batched(
     lf: pl.LazyFrame,
     table_constraints: dict[str, set[str]],
     context: str,
-) -> list[CalculationError]:
+    schema_names: frozenset[str],
+) -> _TableCheck | None:
     """
-    Validate multiple columns in a single table with one .collect() call.
+    Validate multiple columns in a single table with one plan.
 
-    Builds a single LazyFrame query that checks all constrained columns at once,
-    reducing N separate .collect() calls to 1.
+    Builds a single LazyFrame query that checks all constrained columns at once
+    — one frame of (column_name, bad_value, count) rows for the whole table —
+    and returns it as a check for ``validate_bundle_values``'s shared
+    ``collect_all``. The check's ``fallback`` is per-column
+    ``validate_column_values``, used only if the batched plan cannot run.
 
     Args:
         lf: LazyFrame for the table
         table_constraints: Mapping of column name -> valid values
         context: Table name for error messages
+        schema_names: ``lf``'s resolved column names, threaded in by
+            :func:`_table_checks` (see :func:`_table_column_names`).
 
     Returns:
-        List of CalculationError objects for invalid values found
+        The table's check, or None when it carries no constrained column.
     """
-    schema = lf.collect_schema()
-    columns_to_check = [col for col in table_constraints if col in schema.names()]
+    columns_to_check = [col for col in table_constraints if col in schema_names]
 
     if not columns_to_check:
-        return []
+        return None
 
     # Build a single query that finds invalid values for all columns at once.
     # For each column, select rows where the value is not in the valid set,
@@ -1297,15 +1479,19 @@ def _validate_table_columns_batched(
         )
         invalid_queries.append(q)
 
-    if not invalid_queries:
-        return []
+    def decode(invalid_df: pl.DataFrame) -> list[CalculationError]:
+        return [
+            _invalid_column_value_error(
+                context,
+                row["column_name"],
+                row["bad_value"],
+                row["len"],
+                table_constraints[row["column_name"]],
+            )
+            for row in invalid_df.iter_rows(named=True)
+        ]
 
-    # Single collect for all column checks in this table
-    combined = pl.concat(invalid_queries, how="diagonal_relaxed")
-    try:
-        invalid_df = combined.collect()
-    except Exception:
-        # Fallback to per-column validation if batching fails
+    def fallback() -> list[CalculationError]:
         errors: list[CalculationError] = []
         for col_name in columns_to_check:
             errors.extend(
@@ -1313,32 +1499,9 @@ def _validate_table_columns_batched(
             )
         return errors
 
-    if invalid_df.height == 0:
-        return []
-
-    errors = []
-    for row in invalid_df.iter_rows(named=True):
-        col_name = row["column_name"]
-        bad_value = row["bad_value"]
-        count = row["len"]
-        sorted_valid = sorted(table_constraints[col_name])
-        errors.append(
-            CalculationError(
-                code=ERROR_INVALID_COLUMN_VALUE,
-                message=(
-                    f"[{context}] Invalid value '{bad_value}' for column '{col_name}' "
-                    f"({count} row(s)). "
-                    f"Valid values: {sorted_valid}"
-                ),
-                severity=ErrorSeverity.WARNING,
-                category=ErrorCategory.DATA_QUALITY,
-                field_name=col_name,
-                expected_value=", ".join(sorted_valid),
-                actual_value=str(bad_value),
-            )
-        )
-
-    return errors
+    return _TableCheck(
+        plan=pl.concat(invalid_queries, how="diagonal_relaxed"), decode=decode, fallback=fallback
+    )
 
 
 # =============================================================================

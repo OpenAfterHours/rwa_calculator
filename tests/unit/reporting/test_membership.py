@@ -38,7 +38,7 @@ from rwa_calc.reporting.cellspec import CellSpec, RowPredicate, Sum, TemplateSpe
 from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBundle
 from rwa_calc.reporting.corep.templates import C08_03_PD_PARENT_REFS
 from rwa_calc.reporting.kernel import available_columns, ensure_gross_side_carriers
-from rwa_calc.reporting.lineage import LINEAGE_PLANS, _Provider, describe_cell
+from rwa_calc.reporting.lineage import LINEAGE_PLANS, CellQuery, _Provider, describe_cell
 from rwa_calc.reporting.membership import (
     MEMBERSHIP_COLUMN_SCHEMA,
     MEMBERSHIP_SCHEMA,
@@ -341,6 +341,7 @@ def _leg(  # noqa: PLR0913 - one exposure row of the synthetic portfolio
     }
 
 
+@lru_cache(maxsize=4)
 def _ledger(*, stripped: bool = False) -> pl.LazyFrame:
     """The sealed reporting ledger for the synthetic portfolio.
 
@@ -348,6 +349,12 @@ def _ledger(*, stripped: bool = False) -> pl.LazyFrame:
     to the sealed aggregator exit the generators actually consume. ``stripped``
     drops the sealed per-side gross carriers, keeping their raw sources — the
     shape where the generator and lineage paths can diverge.
+
+    Cached per call spelling — ``lru_cache`` does not normalise a defaulted
+    keyword, so ``_ledger()``, ``_ledger(stripped=False)`` and
+    ``_ledger(stripped=True)`` are three keys, hence the size. A ``LazyFrame``
+    is immutable, so each cached plan is shared read-only and every consumer
+    derives its own (``head``, ``drop``, …).
     """
     rows = _sa_legs() + _irb_legs() + _slotting_legs()
     raw = pl.LazyFrame(
@@ -377,18 +384,51 @@ def _bundle(framework: str, *, stripped: bool = False) -> COREPTemplateBundle:
     return COREPGenerator().generate_from_lazyframe(_ledger(stripped=stripped), framework=framework)
 
 
-def _cell(
-    frames: dict[str, pl.DataFrame], sheet: str | None, row_ref: str, col: str
-) -> float | None:
-    """One reported cell, or None where the row/column carries no figure."""
+@lru_cache(maxsize=32)
+def _membership(
+    framework: str, template_ids: tuple[str, ...] | None = None, *, stripped: bool = False
+) -> CellMembership:
+    """The portfolio's membership, built ONCE per distinct request.
+
+    Keyed on everything that shapes the build: the framework, the exact
+    ``template_ids`` tuple handed to ``cell_membership`` (``None`` passes the
+    module's OWN default, so the default-set tests keep exercising that default
+    rather than a list written here), and whether the ledger is the ``stripped``
+    variant. NOT in the key: the module global ``LINEAGE_PLANS`` that
+    ``cell_membership`` reads — safe today only because the tests that
+    ``monkeypatch.setitem`` it add a fresh ``t_split`` id and call
+    ``cell_membership`` directly, while this memo is only ever asked for
+    ``None`` or a ``MEMBERSHIP_TEMPLATE_IDS`` id; a test that patches an
+    EXISTING template id must not call ``_membership``. The returned
+    ``CellMembership`` is SHARED and READ-ONLY: every consumer derives new
+    frames (``filter`` / ``group_by`` / ``unique``). A test that must mutate
+    what it gets, or that asserts on what the build LOGS or on a
+    differently-shaped ledger, calls ``cell_membership`` directly instead.
+    """
+    source = _FrameSource(_ledger(stripped=stripped), framework)
+    return (
+        cell_membership(source) if template_ids is None else cell_membership(source, template_ids)
+    )
+
+
+def _reported_rows(
+    frames: dict[str, pl.DataFrame], sheet: str | None
+) -> dict[str, dict[str, object]]:
+    """One sheet's reported rows keyed by ``row_ref`` — the first row wins."""
     key = sheet if sheet is not None else next(iter(frames))
     frame = frames.get(key)
-    if frame is None or col not in frame.columns:
-        return None
-    match = frame.filter(pl.col("row_ref") == row_ref)
-    if match.height == 0:
-        return None
-    value = match[col][0]
+    if frame is None:
+        return {}
+    rows: dict[str, dict[str, object]] = {}
+    for record in frame.iter_rows(named=True):
+        rows.setdefault(record["row_ref"], record)
+    return rows
+
+
+def _reported(rows: dict[str, dict[str, object]], row_ref: str, col: str) -> float | None:
+    """One reported cell, or None where the row/column carries no figure."""
+    record = rows.get(row_ref)
+    value = None if record is None else record.get(col)
     return None if value is None else float(value)
 
 
@@ -406,7 +446,7 @@ class _TieOut:
     unmapped: list[str]
 
 
-def _tie_out_census(  # noqa: C901 - one walk over every (row, column) of a template
+def _tie_out_census(
     template_id: str, framework: str, membership: CellMembership, *, stripped: bool
 ) -> _TieOut:
     """Sum each row-backed ``Sum``/``SafeSum`` cell's OWN group and compare.
@@ -416,6 +456,10 @@ def _tie_out_census(  # noqa: C901 - one walk over every (row, column) of a temp
     carriers), narrowed to the legs the membership group holds. Cells whose
     metric column the frame does not carry are skipped — the generator renders
     those structurally, with no population to sum.
+
+    Every group's sums are computed in ONE aggregation per sheet
+    (``_group_sums``) and the walk over cells then reads them from a dict — the
+    per-cell filter-and-sum this replaced issued ~16,000 collects on C 07.00.
     """
     ledger = _ledger(stripped=stripped)
     # Ensured exactly as ``cell_membership`` and the generator both ensure it,
@@ -432,55 +476,100 @@ def _tie_out_census(  # noqa: C901 - one walk over every (row, column) of a temp
     mismatches: list[str] = []
     unmapped: list[str] = []
     for sheet, plan in plans.items():
-        sheet_map = mapping.filter(pl.col("sheet") == sheet)
-        sheet_legs = legs.filter(pl.col("sheet") == sheet)
-        for row in plan.spec.rows:
-            for col_ref in plan.spec.column_refs:
-                cell = plan.spec.cells.get((row.ref, col_ref))
-                if cell is None:
-                    continue
-                query = describe_cell(
-                    provider, plan, template_id, sheet, row.ref, col_ref, sealed=cols
+        summable = _summable_cells(provider, plan, template_id, sheet, cols)
+        served = _served_groups(mapping.filter(pl.col("sheet") == sheet))
+        frame_cols = set(plan.frame.columns)
+        metric_cols = [
+            c
+            for c in dict.fromkeys(
+                c for _row, _col, query in summable for c in query.metric_columns
+            )
+            if c in frame_cols
+        ]
+        sums = _group_sums(legs.filter(pl.col("sheet") == sheet), plan.frame, metric_cols)
+        reported_rows = _reported_rows(frames, sheet)
+        for row_ref, col_ref, query in summable:
+            key = served.get((row_ref, col_ref))
+            if key is None:
+                unmapped.append(f"{sheet}/{row_ref}/{col_ref}")
+                continue
+            present = [c for c in query.metric_columns if c in frame_cols]
+            if not present:
+                continue
+            group = sums.get((row_ref, key), {})
+            total = sum((group.get(c, 0.0) for c in present), 0.0)
+            if col_ref in plan.negative_cols:
+                total = -total
+            reported = _reported(reported_rows, row_ref, col_ref)
+            agrees = abs(total) < 1e-9 if reported is None else abs(reported - total) <= 1e-6
+            if agrees:
+                tied += 1
+            else:
+                mismatches.append(
+                    f"{sheet}/{row_ref}/{col_ref} [{key}] reported={reported} group={total}"
                 )
-                if query.kind != "rows" or query.metric != "sum":
-                    continue
-                served = sheet_map.filter(
-                    (pl.col("row_ref") == row.ref) & (pl.col("col_ref") == col_ref)
-                )
-                if served.height == 0:
-                    unmapped.append(f"{sheet}/{row.ref}/{col_ref}")
-                    continue
-                key = served["predicate_key"][0]
-                refs = sheet_legs.filter(
-                    (pl.col("row_ref") == row.ref) & (pl.col("predicate_key") == key)
-                )["exposure_reference"].to_list()
-                subset = (
-                    plan.frame.filter(pl.col("exposure_reference").is_in(refs))
-                    if refs
-                    else plan.frame.clear()
-                )
-                present = [c for c in query.metric_columns if c in subset.columns]
-                if not present:
-                    continue
-                total = sum(float(subset[c].fill_null(0.0).sum() or 0.0) for c in present)
-                if col_ref in plan.negative_cols:
-                    total = -total
-                reported = _cell(frames, sheet, row.ref, col_ref)
-                agrees = abs(total) < 1e-9 if reported is None else abs(reported - total) <= 1e-6
-                if agrees:
-                    tied += 1
-                else:
-                    mismatches.append(
-                        f"{sheet}/{row.ref}/{col_ref} [{key}] reported={reported} group={total}"
-                    )
     return _TieOut(tied=tied, mismatches=mismatches, unmapped=unmapped)
+
+
+def _summable_cells(
+    provider: _Provider, plan: SheetPlan, template_id: str, sheet: str | None, cols: set[str]
+) -> list[tuple[str, str, CellQuery]]:
+    """The row-backed ``Sum``/``SafeSum`` cells of one sheet, in template order."""
+    out: list[tuple[str, str, CellQuery]] = []
+    for row in plan.spec.rows:
+        for col_ref in plan.spec.column_refs:
+            if plan.spec.cells.get((row.ref, col_ref)) is None:
+                continue
+            query = describe_cell(provider, plan, template_id, sheet, row.ref, col_ref, sealed=cols)
+            if query.kind == "rows" and query.metric == "sum":
+                out.append((row.ref, col_ref, query))
+    return out
+
+
+def _served_groups(sheet_map: pl.DataFrame) -> dict[tuple[str, str], str]:
+    """``(row_ref, col_ref) -> predicate_key`` for one sheet; the first mapping wins."""
+    served: dict[tuple[str, str], str] = {}
+    for record in sheet_map.iter_rows(named=True):
+        served.setdefault((record["row_ref"], record["col_ref"]), record["predicate_key"])
+    return served
+
+
+def _group_sums(
+    sheet_legs: pl.DataFrame, frame: pl.DataFrame, metric_cols: list[str]
+) -> dict[tuple[str, str], dict[str, float]]:
+    """Every membership group's sum of every metric column, in one aggregation.
+
+    A group is ``(row_ref, predicate_key)``; its population is the plan-frame
+    rows whose ``exposure_reference`` the group holds — the rows a per-cell
+    ``is_in`` filter selected, so a reference the frame carries twice is summed
+    twice, and a group holding no legs is simply absent and reads as 0.0 on
+    every column, as summing an empty frame did.
+    """
+    if not metric_cols:
+        return {}
+    members = sheet_legs.select("row_ref", "predicate_key", "exposure_reference").unique()
+    summed = (
+        members.join(
+            frame.select("exposure_reference", *metric_cols),
+            on="exposure_reference",
+            how="inner",
+        )
+        .group_by("row_ref", "predicate_key")
+        .agg(pl.col(col).fill_null(0.0).sum() for col in metric_cols)
+    )
+    return {
+        (record["row_ref"], record["predicate_key"]): {
+            col: float(record[col] or 0.0) for col in metric_cols
+        }
+        for record in summed.iter_rows(named=True)
+    }
 
 
 @pytest.mark.parametrize("framework", FRAMEWORKS)
 @pytest.mark.parametrize("template_id", MEMBERSHIP_TEMPLATE_IDS)
 def test_every_summable_cell_ties_out_to_its_own_group(template_id: str, framework: str) -> None:
     # Arrange
-    membership = cell_membership(_FrameSource(_ledger(), framework), [template_id])
+    membership = _membership(framework, (template_id,))
 
     # Act
     census = _tie_out_census(template_id, framework, membership, stripped=False)
@@ -521,8 +610,7 @@ def test_every_summable_cell_ties_out_without_the_gross_carriers(
     3.1) cells, which no test in this module can reach.
     """
     # Arrange
-    ledger = _ledger(stripped=True)
-    membership = cell_membership(_FrameSource(ledger, framework), [template_id])
+    membership = _membership(framework, (template_id,), stripped=True)
 
     # Act
     census = _tie_out_census(template_id, framework, membership, stripped=True)
@@ -543,7 +631,7 @@ def test_a_row_carries_one_group_per_distinct_predicate(framework: str) -> None:
     C 08.01's summable cells.
     """
     # Arrange / Act
-    membership = cell_membership(_FrameSource(_ledger(), framework))
+    membership = _membership(framework)
     groups = membership.columns.group_by(["template_id", "sheet", "row_ref"]).agg(
         pl.col("predicate_key").n_unique().alias("groups")
     )
@@ -578,7 +666,7 @@ def test_the_two_basis_groups_hold_different_populations(framework: str) -> None
     would hold whichever group served the cell.
     """
     # Arrange / Act
-    membership = cell_membership(_FrameSource(_ledger(), framework))
+    membership = _membership(framework)
 
     # Assert — the guaranteed leg is on the obligor's sheet under one group and
     # the guarantor's under another, for real money.
@@ -604,7 +692,7 @@ def test_the_two_basis_groups_hold_different_populations(framework: str) -> None
 @pytest.mark.parametrize("framework", FRAMEWORKS)
 def test_c08_03_expected_loss_drilldown_follows_the_post_crm_sheet(framework: str) -> None:
     """Column 0100 exposes the guaranteed leg under the resultant obligor."""
-    membership = cell_membership(_FrameSource(_ledger(), framework), ["c08_03"])
+    membership = _membership(framework, ("c08_03",))
     keys = ["template_id", "sheet", "row_ref", "predicate_key"]
     behind_el = membership.columns.filter(pl.col("col_ref") == "0100").join(
         membership.legs,
@@ -621,7 +709,7 @@ def test_c08_03_expected_loss_drilldown_follows_the_post_crm_sheet(framework: st
 @pytest.mark.parametrize("framework", FRAMEWORKS)
 def test_every_scoped_template_contributes_membership(framework: str) -> None:
     # Arrange / Act
-    membership = cell_membership(_FrameSource(_ledger(), framework))
+    membership = _membership(framework)
 
     # Assert — absence is this estate's dominant defect, so assert presence.
     assert set(membership.legs["template_id"].unique().to_list()) == set(MEMBERSHIP_TEMPLATE_IDS)
@@ -642,7 +730,7 @@ def test_c08_03_empirical_parents_reproduce_the_published_parent_refs(framework:
     never reads that list, deriving the flag from the leg sets alone.
     """
     # Arrange / Act
-    membership = cell_membership(_FrameSource(_ledger(), framework), ["c08_03"])
+    membership = _membership(framework, ("c08_03",))
     legs = membership.legs
 
     # Assert — hierarchy is inferred independently inside each basis group.
@@ -667,7 +755,7 @@ def test_c08_03_empirical_parents_reproduce_the_published_parent_refs(framework:
 @pytest.mark.parametrize("framework", FRAMEWORKS)
 def test_c08_03_parent_rows_equal_the_union_of_their_children(framework: str) -> None:
     # Arrange
-    legs = cell_membership(_FrameSource(_ledger(), framework), ["c08_03"]).legs
+    legs = _membership(framework, ("c08_03",)).legs
     parents = legs.filter(pl.col("is_parent_row"))
     leaves = legs.filter(~pl.col("is_parent_row"))
     assert parents.height > 0
@@ -698,7 +786,7 @@ def test_c08_03_parent_rows_equal_the_union_of_their_children(framework: str) ->
 @pytest.mark.parametrize("framework", FRAMEWORKS)
 def test_a_leg_lands_in_exactly_one_c08_03_leaf_row_per_sheet(framework: str) -> None:
     # Arrange
-    legs = cell_membership(_FrameSource(_ledger(), framework), ["c08_03"]).legs
+    legs = _membership(framework, ("c08_03",)).legs
 
     # Act
     leaves = legs.filter(~pl.col("is_parent_row"))
@@ -723,7 +811,7 @@ def test_non_parent_rows_never_exceed_their_group_total(template_id: str, framew
     leaves and the money counts three times.
     """
     # Arrange
-    legs = cell_membership(_FrameSource(_ledger(), framework), [template_id]).legs
+    legs = _membership(framework, (template_id,)).legs
     assert legs.height > 0
 
     # Act / Assert — per group, non-parent EAD never exceeds the group's own.
@@ -740,7 +828,7 @@ def test_a_leg_lands_in_at_most_one_non_parent_row_per_group(
 ) -> None:
     """The same defect stated on the legs rather than the money."""
     # Arrange
-    legs = cell_membership(_FrameSource(_ledger(), framework), [template_id]).legs
+    legs = _membership(framework, (template_id,)).legs
 
     # Act
     per_leg = (
@@ -775,7 +863,7 @@ def test_summing_across_predicate_groups_is_not_the_sheet_total(framework: str) 
       groups together double-counts legs that remain on the same sheet.
     """
     # Arrange
-    legs = cell_membership(_FrameSource(_ledger(), framework)).legs
+    legs = _membership(framework).legs
 
     # Act — the naive per-sheet aggregation a reader would reach for.
     shapes: dict[tuple[str, str], tuple[float, float]] = {}
@@ -807,7 +895,7 @@ def test_indistinguishable_rows_report_null_not_false(framework: str) -> None:
     reports NULL. Asserting only True/False would let the null branch rot.
     """
     # Arrange / Act
-    legs = cell_membership(_FrameSource(_ledger(), framework), ["c08_01"]).legs
+    legs = _membership(framework, ("c08_01",)).legs
 
     # Assert — the null state occurs, and every row carrying it shares its legs
     # with another row of the same group (which is what "cannot tell" means).
@@ -836,7 +924,7 @@ def test_containment_is_measured_within_a_group_not_across_bases(framework: str)
     across them would flag a row as its own parent's child.
     """
     # Arrange / Act
-    legs = cell_membership(_FrameSource(_ledger(), framework), ["c08_01"]).legs
+    legs = _membership(framework, ("c08_01",)).legs
     parents = legs.filter(pl.col("is_parent_row"))
 
     # Assert — every parent row is a strict superset of a sibling in the SAME

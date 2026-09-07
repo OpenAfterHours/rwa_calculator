@@ -60,6 +60,7 @@ from rwa_calc.engine.crm.min_collateralisation import (
     MIN_COLLATERALISATION_CATEGORIES,
     below_min_collateralisation_expr,
 )
+from rwa_calc.engine.materialise import materialise_frame
 from rwa_calc.observability.audit_cache import sink_audit
 from rwa_calc.rulebook import RulepackV0
 from rwa_calc.rulebook.compile import lookup_float_map
@@ -524,17 +525,22 @@ def apply_collateral(
     # Resolve pledge_percentage → market_value (uses pre-joined _beneficiary_ead)
     collateral = resolve_pledge_from_joined_fn(collateral)
 
-    # Apply haircuts to collateral (no longer needs exposures)
-    adjusted_collateral = haircut_calculator.apply_haircuts(collateral, config, pack=pack)
+    # Apply haircuts to collateral (no longer needs exposures), then materialise
+    # the dimension ONCE, in memory: the four eligibility recorders that follow
+    # (CRM018/CRM019 here, CRM002 in apply_maturity_mismatch, CRM014 in
+    # _apply_collateral_unified) and the allocation aggregates all read this
+    # frame, and each collect re-executed the lookup joins and the haircut
+    # chain for itself (~10 ms apiece on a 150-row run).
+    adjusted_collateral = materialise_frame(
+        haircut_calculator.apply_haircuts(collateral, config, pack=pack)
+    )
 
-    # CRR/PS1-26 Art. 197(1)(f)/198(1)(a) (P1.271): apply_haircuts has already
-    # zeroed non-main-index / non-listed equity collateral and cleared its
-    # eligibility flag; record one CRM018 warning per gated row.
+    # CRR/PS1-26 Art. 197(1)(f)/198(1)(a) (P1.271) and Art. 218 (P1.274):
+    # apply_haircuts has already zeroed non-main-index / non-listed equity and
+    # non-own-issued credit-linked notes and cleared their eligibility flags;
+    # record CRM018 (rolled up) and CRM019 (per row).
     if errors is not None:
         _record_non_main_index_equity_ineligible(adjusted_collateral, errors)
-        # CRR/PS1-26 Art. 218 (P1.274): apply_haircuts has already zeroed a
-        # credit-linked note that is not attested own-issued; record one CRM019
-        # warning per gated row.
         _record_credit_linked_note_not_own_issued(adjusted_collateral, errors)
 
     adjusted_collateral = haircut_calculator.apply_maturity_mismatch(
@@ -719,9 +725,7 @@ def _record_ineligible_irb_collateral(
     """Append one CRM014 warning per FIRB FCM non-financial collateral row zeroed
     by the Art. 199(2)/(5)/(6) eligibility gate.
 
-    Targeted collect of the gated rows only — the accepted data-quality emission
-    idiom (P1.264); the collateral table is a small dimension frame, so
-    materialising just the gated rows' references is cheap.
+    Reads the materialised post-haircut collateral frame — an in-memory scan.
     """
     names = annotated.collect_schema().names()
     select_cols: list[pl.Expr] = [
@@ -761,14 +765,11 @@ def _record_non_main_index_equity_ineligible(
     """Append ONE rolled-up CRM018 warning counting the equity collateral rows
     ruled ineligible by the CRR/PS1-26 Art. 197(1)(f)/198(1)(a) listing gate.
 
-    The gate itself (value zeroing + is_eligible_financial_collateral clearing) is
-    applied in ``HaircutCalculator.apply_haircuts``; this re-derives the SAME
-    shared predicate on the post-haircut frame purely to emit the data-quality
-    warning. Rolled up to a per-cause count (the splitter's RE002-RE004 idiom):
-    portfolios with unattested index/listing flags gate thousands of rows, and
-    per-row emission floods the error channel — 13k+ warnings at 100k-exposure
-    scale made the re_split stage's error dedup quadratic. Reusing the one
-    predicate keeps the warning from drifting from the zeroed number.
+    Re-derives the SAME shared predicate ``HaircutCalculator.apply_haircuts``
+    zeroed on, over the materialised post-haircut frame, so the warning cannot
+    drift from the zeroed number. Rolled up to a count (the splitter's RE002-RE004
+    idiom): per-row emission floods the channel — 13k+ warnings at 100k-exposure
+    scale once made the re_split stage's error dedup quadratic.
     """
     names = collateral.collect_schema().names()
     gate = equity_ineligible_expr(names, method=CRMCollateralMethod.COMPREHENSIVE)
@@ -797,12 +798,8 @@ def _record_credit_linked_note_not_own_issued(
     """Append one CRM019 warning per credit-linked note ruled ineligible by the
     CRR/PS1-26 Art. 218 own-issuance gate.
 
-    The gate itself (value zeroing + is_eligible_financial_collateral clearing) is
-    applied in ``HaircutCalculator.apply_haircuts``; this re-derives the SAME
-    shared predicate on the post-haircut frame purely to emit the data-quality
-    warning. Targeted collect of the gated rows only — the accepted emission idiom
-    (P1.264); the collateral table is a small dimension frame. Reusing the one
-    predicate keeps the warning from drifting from the zeroed number.
+    Re-derives the SAME shared predicate ``HaircutCalculator.apply_haircuts``
+    zeroed on, over the materialised post-haircut frame (P1.264 idiom).
     """
     names = collateral.collect_schema().names()
     gate = credit_linked_note_ineligible_expr(names)

@@ -424,8 +424,13 @@ def _single_cause(cause: str, framework: str) -> ReturnRecon:
     return build_recon(our_source, their_source)
 
 
+@lru_cache(maxsize=32)
 def _slotting_single_cause(cause: str, framework: str) -> ReturnRecon:
-    """A C08.06 pair differing on exactly one slotting-specific dimension."""
+    """A C08.06 pair differing on exactly one slotting-specific dimension.
+
+    Cached on ``(cause, framework)`` like ``_single_cause`` — shared, so never
+    mutate what it returns.
+    """
     base = _base_legs()
     ours = [*base]
     theirs = [*base]
@@ -541,7 +546,7 @@ class _Census:
 
 def _census(recon: ReturnRecon, template_id: str) -> _Census:
     """Decompose EVERY published cell of a template and score the identity."""
-    diff = cell_diff(recon.ours.source, recon.theirs.source, template_id)
+    diff = diff_cells(recon, template_id)
     checked = 0
     reconciled = 0
     moved = 0
@@ -613,7 +618,7 @@ def test_the_combined_portfolio_leaves_no_term_at_zero(template_id: str, framewo
     totals = dict.fromkeys(TERM_NAMES, 0.0)
 
     # Act
-    diff = cell_diff(recon.ours.source, recon.theirs.source, template_id)
+    diff = diff_cells(recon, template_id)
     for row in diff.iter_rows(named=True):
         result = decompose_cell(recon, template_id, row["sheet"], row["row_ref"], row["col_ref"])
         for term in result.terms:
@@ -876,7 +881,7 @@ def test_a_one_sided_cell_on_a_static_row_axis_is_not_unmeasurable(framework: st
     recon = _combined(framework)
 
     # Act
-    diff = cell_diff(recon.ours.source, recon.theirs.source, "c07_00")
+    diff = diff_cells(recon, "c07_00")
     one_sided = diff.filter(pl.col("status").is_in(["ours_only", "theirs_only"]))
 
     # Assert — they exist, they read as empty (not unavailable), and every one
@@ -921,7 +926,7 @@ def test_a_cell_whose_metric_source_one_side_lacks_is_refused(framework: str) ->
     assert not result.decomposable
     assert "unavailable on theirs" in (result.refusal or "")
     assert result.delta is None
-    diff = cell_diff(our_source, their_source, "c08_03", sheet=CORPORATE)
+    diff = diff_cells(recon, "c08_03", CORPORATE)
     unmeasurable = diff.filter((pl.col("row_ref") == row_ref) & (pl.col("col_ref") == "0100"))
     assert unmeasurable["status"][0] == "unmeasurable"
     assert unmeasurable["delta"][0] is None
@@ -948,8 +953,13 @@ _GROSS_SOURCES = (
 )
 
 
+@lru_cache(maxsize=8)
 def _unmapped_gross(framework: str) -> tuple[_FrameSource, _FrameSource, object]:
-    """Ours, theirs-without-any-gross-source, and theirs' coverage record."""
+    """Ours, theirs-without-any-gross-source, and theirs' coverage record.
+
+    Cached: the sources are lazy frames and the coverage record is derived
+    from a schema, so nothing here is mutable.
+    """
     base = _base_legs()
     our_source = _FrameSource(_ledger(base), framework)
     full = _ledger(base)
@@ -957,6 +967,15 @@ def _unmapped_gross(framework: str) -> tuple[_FrameSource, _FrameSource, object]
     stripped = full.drop([col for col in _GROSS_SOURCES if col in present])
     coverage = ledger_coverage(set(stripped.collect_schema().names()), framework=framework)
     return our_source, _FrameSource(stripped, framework), coverage
+
+
+@lru_cache(maxsize=8)
+def _unmapped_gross_recon(framework: str, *, guarded: bool) -> ReturnRecon:
+    """The ``_unmapped_gross`` pair built with (``guarded``) or without the
+    coverage record — cached on both settings, so never mutate what it returns.
+    """
+    our_source, their_source, coverage = _unmapped_gross(framework)
+    return build_recon(our_source, their_source, theirs_coverage=coverage if guarded else None)
 
 
 @pytest.mark.parametrize("framework", FRAMEWORKS)
@@ -1020,8 +1039,7 @@ def test_an_unpopulatable_cell_is_refused_not_attributed_to_measurement(framewor
     assertion can go vacuous if the misattribution ever moves to another term.
     """
     # Arrange
-    our_source, their_source, coverage = _unmapped_gross(framework)
-    unguarded = build_recon(our_source, their_source)
+    unguarded = _unmapped_gross_recon(framework, guarded=False)
     row_ref = _leaf_row_of(unguarded, ours=True, reference="BASE_A1", col_ref="0010")
     our_gross = unguarded.ours.frames["c08_03"][CORPORATE].filter(pl.col("row_ref") == row_ref)[
         "0010"
@@ -1030,7 +1048,7 @@ def test_an_unpopulatable_cell_is_refused_not_attributed_to_measurement(framewor
 
     # Act — the same cell, without the coverage record and then with it.
     wrong = decompose_cell(unguarded, "c08_03", CORPORATE, row_ref, "0010")
-    guarded = build_recon(our_source, their_source, theirs_coverage=coverage)
+    guarded = _unmapped_gross_recon(framework, guarded=True)
     result = decompose_cell(guarded, "c08_03", CORPORATE, row_ref, "0010")
 
     # Assert — unguarded, the whole cell is a confident MEASUREMENT difference
@@ -1057,8 +1075,8 @@ def test_coverage_guards_every_named_cell_not_just_the_gross_carriers(framework:
     C 08.01's gross columns too; every one of them must read unavailable.
     """
     # Arrange
-    our_source, their_source, coverage = _unmapped_gross(framework)
-    recon = build_recon(our_source, their_source, theirs_coverage=coverage)
+    _, _, coverage = _unmapped_gross(framework)
+    recon = _unmapped_gross_recon(framework, guarded=True)
 
     # Act / Assert
     for template_id in ("c07_00", "c08_01", "c08_03"):
@@ -1472,7 +1490,45 @@ def _split_recon(
     ``key_column`` from the effect of that absence: they are different causes,
     and the equivalence test asserts over BOTH values precisely because the
     answer must not depend on either.
+
+    CACHED on the legs and both settings (``_Leg`` is frozen, so the lists key
+    by value), so never mutate what it returns. A test that must observe the
+    BUILD itself — the log records emitted while the sides are generated —
+    calls ``_uncached_split_recon``: served from the cache, an assertion of
+    silence during the build would be true for the wrong reason.
     """
+    return _cached_split_recon(
+        tuple(ours), tuple(theirs), framework, key_column, theirs_supplies_base_ref
+    )
+
+
+@lru_cache(maxsize=32)
+def _cached_split_recon(
+    ours: tuple[_Leg, ...],
+    theirs: tuple[_Leg, ...],
+    framework: str,
+    key_column: str,
+    theirs_supplies_base_ref: bool,
+) -> ReturnRecon:
+    """The memo behind ``_split_recon``; hashable arguments only."""
+    return _uncached_split_recon(
+        list(ours),
+        list(theirs),
+        framework,
+        key_column=key_column,
+        theirs_supplies_base_ref=theirs_supplies_base_ref,
+    )
+
+
+def _uncached_split_recon(
+    ours: list[_Leg],
+    theirs: list[_Leg],
+    framework: str,
+    *,
+    key_column: str = "exposure_reference",
+    theirs_supplies_base_ref: bool = False,
+) -> ReturnRecon:
+    """``_split_recon`` built afresh — see its docstring for the arguments."""
     base = _split_base()
     their_legs = [*base, *theirs]
     our_source, their_source = _sources(
@@ -1487,7 +1543,7 @@ def _population_offenders(
     recon: ReturnRecon, template_id: str = "c08_03", sheet: str | None = CORPORATE
 ) -> list[str]:
     """Every cell of one template (or one sheet of it) reporting a population term."""
-    diff = cell_diff(recon.ours.source, recon.theirs.source, template_id, sheet=sheet)
+    diff = diff_cells(recon, template_id, sheet)
     offenders: list[str] = []
     for row in diff.iter_rows(named=True):
         result = decompose_cell(recon, template_id, row["sheet"], row["row_ref"], row["col_ref"])
@@ -1871,7 +1927,18 @@ _FAC_WHOLE = _Leg("FAC1", approach="standardised", pd=None, cqs=3, ead=1_000_000
 
 
 def _sa_recon(ours: list[_Leg], theirs: list[_Leg], framework: str) -> ReturnRecon:
-    """Both sides of a STANDARDISED portfolio, at the default join key."""
+    """Both sides of a STANDARDISED portfolio, at the default join key.
+
+    Cached on the legs, so never mutate what it returns.
+    """
+    return _cached_sa_recon(tuple(ours), tuple(theirs), framework)
+
+
+@lru_cache(maxsize=16)
+def _cached_sa_recon(
+    ours: tuple[_Leg, ...], theirs: tuple[_Leg, ...], framework: str
+) -> ReturnRecon:
+    """The memo behind ``_sa_recon``; hashable arguments only."""
     our_source, their_source = _sources(
         [_SA_FILL_INST, *ours], _legacy([_SA_FILL_INST, *theirs]), framework
     )
@@ -2256,8 +2323,10 @@ def test_a_side_that_omits_the_base_reference_still_pairs_on_its_own(
     asserted here because it is the property that would regress.
     """
     # Arrange — the production shape, keyed where only the last rung can help.
+    # Built UNCACHED: the silence asserted below is a property of the build,
+    # and a recon served from the memo emits nothing whatever the code does.
     with caplog.at_level(logging.WARNING, logger="rwa_calc.analysis.return_recon"):
-        recon = _split_recon(
+        recon = _uncached_split_recon(
             [_SPLIT_G_LEG, _SPLIT_REM_LEG],
             [_WHOLE_LOAN],
             framework,
@@ -2784,7 +2853,7 @@ def test_every_terms_pairs_sum_to_that_term_on_every_additive_cell(
     """
     # Arrange
     recon = _combined(framework)
-    diff = cell_diff(recon.ours.source, recon.theirs.source, template_id)
+    diff = diff_cells(recon, template_id)
     checked = 0
     refused = 0
     live: set[str] = set()
@@ -2863,8 +2932,8 @@ def test_a_coverage_unavailable_cell_yields_no_pairs(framework: str) -> None:
     contract.
     """
     # Arrange
-    our_source, their_source, coverage = _unmapped_gross(framework)
-    recon = build_recon(our_source, their_source, theirs_coverage=coverage)
+    _, _, coverage = _unmapped_gross(framework)
+    recon = _unmapped_gross_recon(framework, guarded=True)
     row_ref = _leaf_row_of(recon, ours=True, reference="BASE_A1", col_ref="0010")
 
     # Act
@@ -3589,7 +3658,7 @@ def test_every_term_the_engine_builds_satisfies_the_constructor_bound() -> None:
     # Arrange
     recon = _probe("CRR")
     row_ref = _probe_row(recon)
-    diff = cell_diff(recon.ours.source, recon.theirs.source, "c08_03")
+    diff = diff_cells(recon, "c08_03")
     checked = 0
 
     # Act / Assert

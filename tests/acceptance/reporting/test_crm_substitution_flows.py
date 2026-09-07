@@ -45,6 +45,7 @@ References:
 
 from __future__ import annotations
 
+import functools
 from datetime import date
 
 import polars as pl
@@ -87,8 +88,21 @@ def _config(regime_key: str) -> CalculationConfig:
     )
 
 
+@functools.cache
 def _run(regime_key: str) -> tuple[pl.DataFrame, COREPTemplateBundle]:
-    """Run the CRM-substitution portfolio through one regime."""
+    """Run the CRM-substitution portfolio through one regime, once per process.
+
+    The pipeline run plus COREP generation costs ~2.6 s and every test in this
+    module asks for the same two inputs, so the result is memoised on the
+    regime key. The cached tuple is SHARED across tests and must be treated as
+    read-only. Most ``pl.DataFrame`` operations return a new frame, but the
+    in-place methods (``drop_in_place``, ``insert_column``, ``replace_column``,
+    ``extend``, and ``vstack`` / ``hstack`` with ``in_place=True``) mutate the
+    cached ledger; ``COREPTemplateBundle`` is a frozen dataclass, but its
+    per-class dicts are plain dicts. A test that needs to mutate a sheet, a
+    dict, or the ledger must call ``_run.__wrapped__(regime_key)`` for an
+    uncached copy rather than poison the memo for every test after it.
+    """
     framework = _REGIMES[regime_key]
     result = PipelineOrchestrator().run_with_data(
         build_reporting_crm_substitution_bundle(), _config(regime_key)

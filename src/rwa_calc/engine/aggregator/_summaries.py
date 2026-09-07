@@ -45,7 +45,10 @@ METHOD_LABELS: tuple[str, ...] = (
 )
 
 
-def generate_summary_by_class(results: pl.LazyFrame) -> pl.LazyFrame:
+def generate_summary_by_class(
+    results: pl.LazyFrame,
+    columns: frozenset[str] | None = None,
+) -> pl.LazyFrame:
     """
     Generate RWA summary by exposure class.
 
@@ -54,13 +57,20 @@ def generate_summary_by_class(results: pl.LazyFrame) -> pl.LazyFrame:
     SME-managed-as-retail rows under their applied class (CRR Art. 235 /
     Art. 112). ``total_rwa`` is the summed post-floor row RWA and ties exactly
     to the portfolio total.
+
+    ``columns`` lets the aggregator hand over ``results``' column names it has
+    already resolved for its sibling summaries; omitted, they are resolved here
+    exactly as before. See :func:`generate_summary_by_approach`.
     """
-    cols = set(results.collect_schema().names())
+    cols = _columns_of(results, columns)
     summary = results.group_by("reporting_class").agg(_class_agg_exprs(cols))
     return _with_avg_risk_weight(summary.rename({"reporting_class": "exposure_class"}))
 
 
-def generate_summary_by_approach(results: pl.LazyFrame) -> pl.LazyFrame:
+def generate_summary_by_approach(
+    results: pl.LazyFrame,
+    columns: frozenset[str] | None = None,
+) -> pl.LazyFrame:
     """
     Generate RWA summary by calculation approach.
 
@@ -68,8 +78,15 @@ def generate_summary_by_approach(results: pl.LazyFrame) -> pl.LazyFrame:
     SA-guaranteed leg is counted under the guarantor's standardised approach
     (CRR Art. 235 substitution) while IRB-guaranteed legs stay under the
     obligor's approach (Art. 161 parameter substitution).
+
+    ``columns`` is ``results``' column names when the caller already holds
+    them. The four summary builders the aggregator runs back to back all read
+    the SAME post-floor ledger object, and ``collect_schema()`` is O(plan
+    NODES) — so the aggregator resolves once and threads the set here. Because
+    the set describes the very object being tested, and a LazyFrame is
+    immutable, it cannot go stale. Omitted, it is resolved here as before.
     """
-    cols = set(results.collect_schema().names())
+    cols = _columns_of(results, columns)
     agg_exprs: list[pl.Expr] = [
         pl.col("reporting_ead").sum().alias("total_ead"),
         pl.len().alias("exposure_count"),
@@ -88,7 +105,10 @@ def generate_summary_by_approach(results: pl.LazyFrame) -> pl.LazyFrame:
     return summary.rename({"reporting_approach": "approach_applied"})
 
 
-def generate_summary_by_class_method(results: pl.LazyFrame) -> pl.LazyFrame:
+def generate_summary_by_class_method(
+    results: pl.LazyFrame,
+    columns: frozenset[str] | None = None,
+) -> pl.LazyFrame:
     """
     Generate RWA summary by exposure class AND methodology (STD / FIRB / AIRB / …).
 
@@ -100,8 +120,11 @@ def generate_summary_by_class_method(results: pl.LazyFrame) -> pl.LazyFrame:
 
     Output columns: ``exposure_class``, ``method``, ``total_ead``, ``total_rwa``,
     ``exposure_count``, ``avg_risk_weight``.
+
+    ``columns`` is the aggregator's already-resolved column set; see
+    :func:`generate_summary_by_approach`.
     """
-    cols = set(results.collect_schema().names())
+    cols = _columns_of(results, columns)
     summary = results.group_by(["reporting_class", "reporting_method"]).agg(_class_agg_exprs(cols))
     return _with_avg_risk_weight(
         summary.rename({"reporting_class": "exposure_class", "reporting_method": "method"})
@@ -169,6 +192,17 @@ def _post_floor_rwa_expr() -> pl.Expr:
     add-on. A null ``rwa_final`` stays null (never filled — anti-conservative).
     """
     return pl.col("rwa_final")
+
+
+def _columns_of(lf: pl.LazyFrame, columns: frozenset[str] | None) -> set[str]:
+    """``lf``'s column names, resolved only when the caller supplied none.
+
+    ``LazyFrame.collect_schema()`` walks the whole plan (O(plan NODES)), and
+    the aggregator asks the same post-floor ledger object for its columns four
+    times in a row. A supplied set always describes that same object, so it is
+    safe by construction rather than by assumption.
+    """
+    return set(lf.collect_schema().names()) if columns is None else set(columns)
 
 
 def _class_agg_exprs(cols: set[str]) -> list[pl.Expr]:

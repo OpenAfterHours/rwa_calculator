@@ -22,6 +22,23 @@ intra-row escape (a plain typed callable over already-computed row cells);
 ``PriorPeriod`` / the ``ReportingContext`` side inputs are the out-of-frame
 escape. Anything richer is a typed kernel function a spec references.
 
+Compiled once, reused across frames: the executor's Python-side work —
+compiling a ``RowPredicate`` to a filter expression, and turning a template's
+cells into mask + aggregation expressions — is a pure function of (the
+predicate or spec, the frame's column signature) and, measured on the 150-row
+acceptance ledger, cost about as much as the Polars passes it feeds (C 07.00
+alone runs one spec over ~15 class sheets). ``pl.Expr`` is immutable, so
+five bounded LRU caches serve three products: the interned column signature,
+the compiled expression per (predicate value, signature), and the sheet plan
+per (spec value, signature) behind an identity front that maps a spec OBJECT
+to its value key and interns that key. Because that front is keyed on
+``id(spec)``, a ``TemplateSpec``'s ``cells`` mapping must never be mutated
+after construction — build it fully, then construct the spec — or the second
+execute is served the plan compiled from the pre-mutation contents. Nothing
+data-dependent is cached — every frame still runs its own mask and
+aggregation passes — and a spec that cannot be hashed by value compiles per
+call, so the caches never change what ``execute`` accepts.
+
 References:
 - docs/plans/phase7-declarative-reporting.md §3.2 (vocabulary sized to the
   measured cell-semantics taxonomy)
@@ -31,6 +48,7 @@ References:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import TYPE_CHECKING, Literal, Protocol, cast
 
 import polars as pl
@@ -41,6 +59,20 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
 
     from rwa_calc.reporting.metadata import ReportingContext
+
+
+# Cache bounds. Each is sized well above the estate's working set (one
+# generation of COREP + Pillar 3 under one framework), so steady state is all
+# hits; an eviction only costs the compile it would have saved.
+#: Distinct frame column sets interned (per template prepared frame, per regime).
+_COLUMN_SIGNATURE_CACHE_SIZE = 64
+#: Distinct (RowPredicate value, column signature) pairs compiled.
+_PREDICATE_CACHE_SIZE = 8192
+#: Spec OBJECTS whose value key has been computed (the identity front — one
+#: spec executed over consecutive sheets skips re-hashing its ~1-2k cells).
+_SPEC_KEY_CACHE_SIZE = 16
+#: Distinct (TemplateSpec value, column signature) sheet plans.
+_SHEET_PLAN_CACHE_SIZE = 64
 
 
 # =============================================================================
@@ -279,15 +311,18 @@ class RowPredicate:
 
     def apply(self, data: pl.DataFrame) -> pl.DataFrame:
         """Filter ``data``: strict terms + tolerant terms + ``any_of`` union."""
-        expr = self._compile(set(data.columns))
+        expr = _compile_predicate(self, _column_signature(data.columns))
         return data.filter(expr) if expr is not None else data
 
-    def _compile(self, cols: set[str]) -> pl.Expr | None:
+    def _compile(self, cols: frozenset[str]) -> pl.Expr | None:
         """The full filter expression against a frame with ``cols`` (None =
         no constraint). A tolerant ``equals``/``between`` column absent from
         the frame compiles to match-nothing — the recorded permanently-
         null-cell behaviour. ``any_of`` limbs compile independently and
-        union; an all-defaults limb matches everything."""
+        union; an all-defaults limb matches everything.
+
+        Callers go through ``_compile_predicate``, which memoises this on
+        (predicate value, column signature); this body runs once per pair."""
         if any(col not in cols for col, _value in self.equals) or any(
             col not in cols for col, _low, _high in self.between
         ):
@@ -317,7 +352,7 @@ class RowPredicate:
         if self.any_of:
             union: pl.Expr | None = None
             for limb in self.any_of:
-                limb_expr = limb._compile(cols)
+                limb_expr = _compile_predicate(limb, cols)
                 limb_expr = pl.lit(True) if limb_expr is None else limb_expr
                 union = limb_expr if union is None else union | limb_expr
             expr = _conj(expr, union) if union is not None else expr
@@ -359,6 +394,11 @@ class TemplateSpec:
     ``cells`` keys are ``(row_ref, column_ref)``; unbound cells take the
     template's ``empty_cell`` policy. ``predicate`` narrows the input frame
     for every cell (a per-cell predicate narrows further).
+
+    Build the ``cells`` mapping completely BEFORE constructing the spec and
+    never mutate it afterwards: the executor caches a compiled plan against
+    the spec object's identity, so a spec whose cells change after its first
+    ``execute`` is served the plan compiled from the earlier contents.
     """
 
     name: str
@@ -397,44 +437,29 @@ def execute(
     prior_available = prior_df is not None
 
     empty_default: float | None = 0.0 if spec.empty_cell == "zero" else None
-    empty_as_none = spec.empty_cell == "null"
 
     # Pass 1: every non-formula cell, keyed (row_ref, col_ref). The whole
     # sheet evaluates in ONE aggregation pass over the UNFILTERED frame —
     # each distinct predicate becomes one boolean mask column and each cell
-    # one filtered aggregation expression (``_evaluate_batched``), instead of
-    # a physical subset copy per predicate and a collect per cell. Same masks,
-    # same aggregations as ``_evaluate`` — number-neutral by construction (the
-    # binding-by-binding derivation is the comment block above
-    # ``_cell_aggregation``).
-    computed: dict[tuple[str, str], float | None] = {}
-    formulas: list[tuple[str, str, Formula]] = []
-    jobs: list[_CellJob] = []
-    for row_def in spec.rows:
-        for col_ref in spec.column_refs:
-            cell = spec.cells.get((row_def.ref, col_ref))
-            if cell is None:
-                computed[(row_def.ref, col_ref)] = empty_default
-                continue
-            binding = cell.binding
-            if isinstance(binding, Formula):
-                formulas.append((row_def.ref, col_ref, binding))
-                continue
-            cell_empty_as_none = (
-                empty_as_none if cell.empty_cell is None else cell.empty_cell == "null"
-            )
-            jobs.append(((row_def.ref, col_ref), cell, binding, cell_empty_as_none))
-    batched, deferred = _evaluate_batched(jobs, data)
-    computed.update(batched)
+    # one filtered aggregation expression, instead of a physical subset copy
+    # per predicate and a collect per cell. Those expressions depend only on
+    # the spec and the frame's column signature, so they compile once
+    # (``_sheet_plan``) and every sheet with that signature reuses them;
+    # ``_run_batched`` is the per-frame half. Same masks, same aggregations as
+    # ``_evaluate`` — number-neutral by construction (the binding-by-binding
+    # derivation is the comment block above ``_cell_aggregation``).
+    plan = _sheet_plan(spec, _column_signature(data.columns))
+    computed: dict[tuple[str, str], float | None] = dict.fromkeys(plan.unbound, empty_default)
+    computed.update(_run_batched(plan, data))
 
     # Pass 1b: the out-of-frame bindings (SideContext / PriorPeriod read the
     # context and the prior frame, not the sheet frame) keep the per-cell
     # ``_evaluate`` path — with subsets built ONLY for the predicates THEIR
     # cells use. Building them for the whole spec is exactly the per-predicate
     # frame copying pass 1 exists to avoid.
-    if deferred:
-        subsets = _predicate_subsets(spec, data, prior_df, [job[1] for job in deferred])
-        for key, cell, binding, cell_empty_as_none in deferred:
+    if plan.deferred:
+        subsets = _predicate_subsets(spec, data, prior_df, [job[1] for job in plan.deferred])
+        for key, cell, binding, cell_empty_as_none in plan.deferred:
             cell_data, cell_prior = subsets[cell.predicate]
             computed[key] = _evaluate(
                 binding, cell_data, cell_prior, ctx, empty_as_none=cell_empty_as_none
@@ -442,7 +467,7 @@ def execute(
 
     # Pass 2: formulas, over the computed cells (own-row column ref first,
     # then own-column row ref — see Formula's resolution rule).
-    for row_ref, col_ref, formula in formulas:
+    for row_ref, col_ref, formula in plan.formulas:
         inputs: dict[str, float | None] = {}
         for ref in formula.refs:
             if (row_ref, ref) in computed:
@@ -495,10 +520,10 @@ def subset_rows(
     keys = list(preds)
     exprs: list[pl.Expr] = []
     free: list[bool] = []
-    cols = set(frame.columns)
+    cols = _column_signature(frame.columns)
     for i, key in enumerate(keys):
         pred = preds[key]
-        expr = None if pred is None else pred._compile(cols)  # noqa: SLF001 - same-module kernel
+        expr = None if pred is None else _compile_predicate(pred, cols)
         free.append(expr is None)
         exprs.append((pl.lit(value=True) if expr is None else expr).alias(f"__mask_{i}"))
     mask_frame = frame.select(exprs) if exprs else None
@@ -515,12 +540,12 @@ def matched_counts(frame: pl.DataFrame, preds: Mapping[str, RowPredicate | None]
     """Batched ``pred.apply(frame).height`` — one select of mask sums,
     no filters at all (the empty-row post-passes only need counts)."""
     keys = list(preds)
-    cols = set(frame.columns)
+    cols = _column_signature(frame.columns)
     exprs: list[pl.Expr] = []
     free: list[bool] = []
     for i, key in enumerate(keys):
         pred = preds[key]
-        expr = None if pred is None else pred._compile(cols)  # noqa: SLF001 - same-module kernel
+        expr = None if pred is None else _compile_predicate(pred, cols)
         free.append(expr is None)
         exprs.append(
             (pl.lit(value=True) if expr is None else expr).cast(pl.UInt32).sum().alias(f"__n_{i}")
@@ -569,11 +594,11 @@ def _predicate_subsets(
         return subsets
 
     def masks_for(frame: pl.DataFrame) -> list[pl.Series | None]:
-        cols = set(frame.columns)
+        cols = _column_signature(frame.columns)
         exprs: list[pl.Expr] = []
         free: list[bool] = []
         for i, pred in enumerate(preds):
-            expr = pred._compile(cols)  # noqa: SLF001 - same-module kernel
+            expr = _compile_predicate(pred, cols)
             free.append(expr is None)
             exprs.append((pl.lit(value=True) if expr is None else expr).alias(f"__mask_{i}"))
         mask_frame = frame.select(exprs)
@@ -609,69 +634,236 @@ type _CellJob = tuple[tuple[str, str], CellSpec, _EvaluableBinding, bool]
 type _Combiner = Callable[[Mapping[str, object]], float | None]
 
 
-def _evaluate_batched(
-    jobs: list[_CellJob], data: pl.DataFrame
-) -> tuple[dict[tuple[str, str], float | None], list[_CellJob]]:
-    """Evaluate every IN-FRAME cell binding of a sheet in ONE ``select``.
+@dataclass(frozen=True, eq=False)
+class _SheetPlan:
+    """A spec's pass-1 work compiled against one column signature.
+
+    Everything here is a pure function of (spec, column signature) and none
+    of it touches a frame: ``unbound`` are the cells taking the template's
+    empty-cell policy; ``formulas`` the pass-2 cells; ``mask_exprs`` one
+    aliased boolean column per distinct cell predicate; ``aggs`` the filtered
+    aggregations, one or more per in-frame cell; ``combiners`` the reader of
+    each cell's value off the one-row aggregation result; ``deferred`` the
+    cells whose binding is not an in-frame aggregation (``SideContext`` /
+    ``PriorPeriod``), left to the per-cell ``_evaluate`` path. ``eq=False``
+    because a ``pl.Expr`` has no boolean equality to compare by.
+    """
+
+    unbound: tuple[tuple[str, str], ...]
+    formulas: tuple[tuple[str, str, Formula], ...]
+    mask_exprs: tuple[pl.Expr, ...]
+    aggs: tuple[pl.Expr, ...]
+    combiners: tuple[tuple[tuple[str, str], _Combiner], ...]
+    deferred: tuple[_CellJob, ...]
+
+
+def _compile_sheet(spec: TemplateSpec, cols: frozenset[str]) -> _SheetPlan:
+    """Compile every cell of ``spec`` against the column signature ``cols``.
 
     Each distinct cell predicate compiles to one boolean mask column (all of
-    them in a single ``with_columns``), and each cell becomes one or more
-    aggregation expressions filtered by its mask over the UNFILTERED frame.
-    A sheet therefore costs one mask pass and one aggregation pass, rather
-    than a physical subset copy per distinct predicate plus a
-    plan-optimise-collect round trip per cell.
-
-    Returns ``(computed, deferred)`` — ``deferred`` being the cells whose
-    binding is not an in-frame aggregation (``SideContext`` / ``PriorPeriod``,
-    which read the context and the prior frame), left to the caller's
-    per-cell ``_evaluate`` path.
+    them in a single ``with_columns`` at run time), and each in-frame cell
+    becomes one or more aggregation expressions filtered by its mask over the
+    UNFILTERED frame. A sheet therefore costs one mask pass and one
+    aggregation pass, rather than a physical subset copy per distinct
+    predicate plus a plan-optimise-collect round trip per cell — and, cached
+    by ``_sheet_plan``, this compilation once per (spec value, signature).
     """
-    cols = set(data.columns)
+    empty_as_none = spec.empty_cell == "null"
+    unbound: list[tuple[str, str]] = []
+    formulas: list[tuple[str, str, Formula]] = []
     masks: dict[RowPredicate | None, str | None] = {}
     mask_exprs: list[pl.Expr] = []
     counts: dict[str | None, str] = {}
     aggs: list[pl.Expr] = []
     combiners: list[tuple[tuple[str, str], _Combiner]] = []
-    computed: dict[tuple[str, str], float | None] = {}
     deferred: list[_CellJob] = []
 
-    for key, cell, binding, cell_empty_as_none in jobs:
-        if isinstance(binding, SideContext | PriorPeriod):
-            deferred.append((key, cell, binding, cell_empty_as_none))
-            continue
-        if cell.predicate not in masks:
-            # Same _compile as _predicate_subsets: strict sealed-column terms,
-            # tolerant equals/between compiled against THIS frame's columns.
-            expr = None if cell.predicate is None else cell.predicate._compile(cols)  # noqa: SLF001 - same-module kernel
-            if expr is None:
-                masks[cell.predicate] = None  # constraint-free: no filter at all
-            else:
-                name = f"__cellspec_m{len(mask_exprs)}"
-                mask_exprs.append(expr.alias(name))
-                masks[cell.predicate] = name
-        combine = _cell_aggregation(
-            binding,
-            masks[cell.predicate],
-            cols,
-            f"__cellspec_v{len(combiners)}",
-            aggs,
-            counts,
-            empty_as_none=cell_empty_as_none,
-        )
-        if combine is None:
-            deferred.append((key, cell, binding, cell_empty_as_none))
-            continue
-        combiners.append((key, combine))
+    for row_def in spec.rows:
+        for col_ref in spec.column_refs:
+            key = (row_def.ref, col_ref)
+            cell = spec.cells.get(key)
+            if cell is None:
+                unbound.append(key)
+                continue
+            binding = cell.binding
+            if isinstance(binding, Formula):
+                formulas.append((row_def.ref, col_ref, binding))
+                continue
+            cell_empty_as_none = (
+                empty_as_none if cell.empty_cell is None else cell.empty_cell == "null"
+            )
+            if isinstance(binding, SideContext | PriorPeriod):
+                deferred.append((key, cell, binding, cell_empty_as_none))
+                continue
+            if cell.predicate not in masks:
+                # Same compile as _predicate_subsets: strict sealed-column
+                # terms, tolerant equals/between against THIS signature.
+                expr = None if cell.predicate is None else _compile_predicate(cell.predicate, cols)
+                if expr is None:
+                    masks[cell.predicate] = None  # constraint-free: no filter at all
+                else:
+                    name = f"__cellspec_m{len(mask_exprs)}"
+                    mask_exprs.append(expr.alias(name))
+                    masks[cell.predicate] = name
+            combine = _cell_aggregation(
+                binding,
+                masks[cell.predicate],
+                cols,
+                f"__cellspec_v{len(combiners)}",
+                aggs,
+                counts,
+                empty_as_none=cell_empty_as_none,
+            )
+            if combine is None:
+                deferred.append((key, cell, binding, cell_empty_as_none))
+                continue
+            combiners.append((key, combine))
 
-    if not aggs:
+    return _SheetPlan(
+        unbound=tuple(unbound),
+        formulas=tuple(formulas),
+        mask_exprs=tuple(mask_exprs),
+        aggs=tuple(aggs),
+        combiners=tuple(combiners),
+        deferred=tuple(deferred),
+    )
+
+
+def _run_batched(plan: _SheetPlan, data: pl.DataFrame) -> dict[tuple[str, str], float | None]:
+    """Evaluate a compiled plan's in-frame cells over ``data`` in ONE select:
+    the mask pass, the aggregation pass, then each combiner reads its cell."""
+    if not plan.aggs:
         # Every cell resolved to a constant (absent columns) or deferred.
         row: Mapping[str, object] = {}
     else:
-        masked = data.with_columns(mask_exprs) if mask_exprs else data
-        row = masked.select(aggs).row(0, named=True)
-    for key, combine in combiners:
-        computed[key] = combine(row)
-    return computed, deferred
+        masked = data.with_columns(plan.mask_exprs) if plan.mask_exprs else data
+        row = masked.select(plan.aggs).row(0, named=True)
+    return {key: combine(row) for key, combine in plan.combiners}
+
+
+# -----------------------------------------------------------------------------
+# The compiled-expression caches
+# -----------------------------------------------------------------------------
+
+
+@lru_cache(maxsize=_COLUMN_SIGNATURE_CACHE_SIZE)
+def _intern_columns(cols: frozenset[str]) -> frozenset[str]:
+    return cols
+
+
+def _column_signature(columns: Iterable[str]) -> frozenset[str]:
+    """A frame's column set as the interned frozenset the caches key on.
+
+    The same set of names resolves to ONE object, so every cache lookup keyed
+    on it compares by identity rather than re-comparing ~300 names per
+    predicate (a frozenset caches its hash; equality does not short-circuit
+    without identity)."""
+    return _intern_columns(frozenset(columns))
+
+
+@lru_cache(maxsize=_PREDICATE_CACHE_SIZE)
+def _compile_predicate(pred: RowPredicate, cols: frozenset[str]) -> pl.Expr | None:
+    """``pred._compile(cols)``, memoised on the predicate's VALUE and the
+    column signature — the two things the expression depends on (the
+    tolerant ``equals``/``between`` terms compile to match-nothing exactly
+    when their column is absent from ``cols``, so the signature IS part of
+    the key). A ``pl.Expr`` is immutable, so one compiled expression serves
+    every frame with that signature. Keyed on the frozen dataclass's own
+    equality: ``RowPredicate`` fields are strings, bools, floats and nested
+    predicates, none of which conflate across the types the fields admit."""
+    return pred._compile(cols)  # noqa: SLF001 - same-module kernel
+
+
+class _SpecRef:
+    """A ``TemplateSpec`` by IDENTITY — the key of the identity front.
+
+    Hashes and compares on ``id(spec)``; holding the spec keeps that id from
+    being recycled for as long as the handle is cached."""
+
+    __slots__ = ("spec",)
+
+    def __init__(self, spec: TemplateSpec) -> None:
+        self.spec = spec
+
+    def __hash__(self) -> int:
+        return id(self.spec)
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, _SpecRef) and other.spec is self.spec
+
+
+class _SpecKey:
+    """A ``TemplateSpec`` by VALUE — the key of the sheet-plan cache.
+
+    The value is every field of the spec (``cells`` as its item tuple, so a
+    ``Formula`` participates through its ``refs`` and the identity of its
+    ``fn``); the hash is computed once. Raises ``TypeError`` from the
+    constructor for a spec that cannot be hashed by value, which
+    ``_sheet_plan`` turns into an uncached compile."""
+
+    __slots__ = ("_hash", "_value", "spec")
+
+    def __init__(self, spec: TemplateSpec) -> None:
+        self.spec = spec
+        self._value = (
+            spec.name,
+            spec.rows,
+            spec.column_refs,
+            tuple(spec.cells.items()),
+            spec.predicate,
+            spec.empty_cell,
+        )
+        self._hash = hash(self._value)
+
+    def __hash__(self) -> int:
+        return self._hash
+
+    def __eq__(self, other: object) -> bool:
+        if self is other:
+            return True
+        return (
+            isinstance(other, _SpecKey)
+            and self._hash == other._hash
+            and self._value == other._value
+        )
+
+
+@lru_cache(maxsize=_SHEET_PLAN_CACHE_SIZE)
+def _intern_spec_key(key: _SpecKey) -> _SpecKey:
+    return key
+
+
+@lru_cache(maxsize=_SPEC_KEY_CACHE_SIZE)
+def _spec_key(ref: _SpecRef) -> _SpecKey:
+    return _intern_spec_key(_SpecKey(ref.spec))
+
+
+@lru_cache(maxsize=_SHEET_PLAN_CACHE_SIZE)
+def _cached_sheet_plan(key: _SpecKey, cols: frozenset[str]) -> _SheetPlan:
+    return _compile_sheet(key.spec, cols)
+
+
+def _sheet_plan(spec: TemplateSpec, cols: frozenset[str]) -> _SheetPlan:
+    """The compiled plan for ``spec`` over the column signature ``cols``.
+
+    Two levels: the identity front (``_spec_key``) maps the spec OBJECT to its
+    value key so a spec executed over consecutive sheets — C 07.00 runs one
+    spec over every class sheet — hashes its cells once; the plan cache
+    (``_cached_sheet_plan``) is keyed on that VALUE and the signature, so a
+    spec a template module rebuilds per generate call, structurally identical
+    to the last one, hits too. The value key is interned (``_intern_spec_key``,
+    the ``_intern_columns`` pattern) so that a rebuilt spec's key resolves to
+    the ONE object the plan cache already holds and every sheet's lookup
+    compares by identity; its cells are compared by value once per rebuild,
+    not once per sheet. A spec that cannot be hashed by value (a ``Formula``
+    over an unhashable callable) compiles per call — the caches never change
+    what ``execute`` accepts.
+    """
+    try:
+        key = _spec_key(_SpecRef(spec))
+    except TypeError:
+        return _compile_sheet(spec, cols)
+    return _cached_sheet_plan(key, cols)
 
 
 # The binding -> expression mapping, derived line-by-line against ``_evaluate``
@@ -711,7 +903,7 @@ def _evaluate_batched(
 def _cell_aggregation(  # noqa: PLR0911 - one return per binding kind, mirroring _evaluate
     binding: ValueBinding,
     mask: str | None,
-    cols: set[str],
+    cols: frozenset[str],
     alias: str,
     aggs: list[pl.Expr],
     counts: dict[str | None, str],

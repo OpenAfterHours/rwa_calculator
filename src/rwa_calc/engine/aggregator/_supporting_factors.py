@@ -15,13 +15,20 @@ from rwa_calc.engine.aggregator._schemas import SUPPORTING_FACTOR_SCHEMA
 from rwa_calc.engine.aggregator._utils import col_or_default, empty_frame
 
 
-def generate_supporting_factor_impact(sa_results: pl.LazyFrame) -> pl.LazyFrame:
+def generate_supporting_factor_impact(
+    sa_results: pl.LazyFrame,
+    columns: frozenset[str] | None = None,
+) -> pl.LazyFrame:
     """
     Generate supporting factor impact analysis.
 
     Shows the RWA reduction from SME and infrastructure factors.
+
+    ``columns`` is ``sa_results``' column names when the aggregator has already
+    resolved them for its sibling summaries; omitted, they are resolved here
+    exactly as before. See ``_summaries.generate_summary_by_approach``.
     """
-    cols = set(sa_results.collect_schema().names())
+    cols = set(sa_results.collect_schema().names()) if columns is None else set(columns)
 
     has_sf = "supporting_factor" in cols
     has_pre = "rwa_pre_factor" in cols

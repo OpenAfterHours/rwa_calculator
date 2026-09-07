@@ -70,14 +70,19 @@ Checks machine-verifiable invariants from CLAUDE.md:
     the module logger). When an implementation moves into a stage package,
     the old path is deleted and its importers repointed, never kept as a
     thin alias. Allowlist ``REEXPORT_SHELL_ALLOWLIST`` is empty by design.
-19. No ``type=Path`` argparse argument in scripts/ — an operator-supplied
-    string must never be used to construct a path, because SonarCloud's
-    ``pythonsecurity:S8707`` taint analysis treats argv as attacker-
-    controlled and the resulting arbitrary-file-read finding fails the
-    ``new_security_rating`` quality gate. Select a fixed ``Path`` from a
-    literal via ``choices=``, or read the standard location directly, and
-    let callers needing another location import the function. Allowlist
-    ``CLI_PATH_ARG_ALLOWLIST`` is empty by design.
+19. No operator-supplied string may construct a path in scripts/ — not via a
+    ``type=Path`` argparse argument, and not via ``Path(sys.argv[...])``,
+    ``Path(os.environ...)`` or ``Path(os.getenv(...))``. SonarCloud's
+    ``pythonsecurity:S8707`` taint analysis treats argv AND the environment as
+    attacker-controlled, and the resulting arbitrary-file-read finding fails
+    the ``new_security_rating`` quality gate. Select a fixed ``Path`` from a
+    literal via ``choices=`` (or by indexing a literal mapping with a NAME),
+    or read the standard location directly, and let callers needing another
+    location import the function. The check covered only the ``type=Path``
+    spelling until `scripts/pytest_timings.py` reached CI with the other two
+    and failed the gate; the taint engine does not care which spelling
+    produced the string. Allowlist ``CLI_PATH_ARG_ALLOWLIST`` is empty by
+    design.
 20. Guard reachability in the contracts layer: every public function in
     ``contracts/validation.py`` (the input contract, guard-shaped in whole)
     and every guard-NAMED public function elsewhere under ``contracts/``
@@ -1812,7 +1817,7 @@ def check_no_reexport_shells(path: Path) -> list[str]:
 
 
 def check_no_cli_path_arguments(path: Path) -> list[str]:
-    """No ``type=Path`` argparse argument in scripts/ — remove the source, don't guard it.
+    """No operator-supplied string builds a path in scripts/ — remove the source, don't guard it.
 
     SonarCloud's ``pythonsecurity:S8707`` treats ``argv`` as attacker-controlled,
     so any command-line string used to construct a path is an arbitrary-file-read
@@ -1834,6 +1839,14 @@ def check_no_cli_path_arguments(path: Path) -> list[str]:
     directly and let callers needing another one import the function and pass it.
     Both leave nothing for a later edit to get subtly wrong.
 
+    **The check itself had this gap.** It detected only the ``type=Path``
+    spelling, so ``scripts/pytest_timings.py`` reached CI with
+    ``Path(sys.argv[1])`` and ``Path(os.environ.get("PERF_OUT", ...))`` and
+    failed the quality gate on a high-severity finding. The environment is an
+    operator input exactly as argv is, and the taint engine does not care which
+    spelling produced the string — so both are now flagged, via
+    :func:`_operator_input_in_path_call`.
+
     Scans ``scripts/`` regardless of the target path, since that is where this
     project's CLI surface lives.
     """
@@ -1848,21 +1861,60 @@ def check_no_cli_path_arguments(path: Path) -> list[str]:
         except (OSError, UnicodeDecodeError, SyntaxError):
             continue
         for node in ast.walk(tree):
-            if not _is_add_argument_call(node):
+            if _is_add_argument_call(node):
+                flag = _add_argument_flag(node)
+                if flag in allowed:
+                    continue
+                for keyword in node.keywords:
+                    if keyword.arg == "type" and _names_path(keyword.value):
+                        violations.append(
+                            f"scripts/{py_file.name}: add_argument({flag}) uses type=Path. "
+                            f"An operator-supplied string must not construct a path "
+                            f"(pythonsecurity:S8707 — fails the security quality gate). "
+                            f"Use choices= over a literal Path mapping, or read the fixed "
+                            f"location and let callers import the function."
+                        )
                 continue
-            flag = _add_argument_flag(node)
-            if flag in allowed:
-                continue
-            for keyword in node.keywords:
-                if keyword.arg == "type" and _names_path(keyword.value):
-                    violations.append(
-                        f"scripts/{py_file.name}: add_argument({flag}) uses type=Path. "
-                        f"An operator-supplied string must not construct a path "
-                        f"(pythonsecurity:S8707 — fails the security quality gate). "
-                        f"Use choices= over a literal Path mapping, or read the fixed "
-                        f"location and let callers import the function."
-                    )
+            source = _operator_input_in_path_call(node)
+            if source is not None and source not in allowed:
+                violations.append(
+                    f"scripts/{py_file.name}:{node.lineno}: Path(...) is built from "
+                    f"{source}. An operator-supplied string must not construct a path "
+                    f"(pythonsecurity:S8707 — fails the security quality gate). Index a "
+                    f"literal mapping of constant Paths by NAME, or read the fixed "
+                    f"location and let callers import the function."
+                )
     return violations
+
+
+#: The operator-controlled sources check 19 refuses to see inside a ``Path(...)``.
+#: ``type=Path`` was the only spelling detected until a plugin reached CI with
+#: ``Path(sys.argv[1])`` and ``Path(os.environ.get(...))``; the taint engine does
+#: not care which spelling produced the string.
+_OPERATOR_INPUT_ATTRS: dict[str, str] = {"argv": "sys.argv", "environ": "os.environ"}
+_OPERATOR_INPUT_FUNCS: dict[str, str] = {"getenv": "os.getenv"}
+
+
+def _operator_input_in_path_call(node: ast.AST) -> str | None:
+    """Name the operator input a ``Path(...)`` call derives from, if any.
+
+    Returns the source (``sys.argv`` / ``os.environ`` / ``os.getenv``) so the
+    message can say which one, or ``None`` when the call is safe. Walks the whole
+    argument subtree, so an intermediate ``.get(...)``, index or ``or`` default
+    does not hide the source.
+    """
+    if not (isinstance(node, ast.Call) and _names_path(node.func)):
+        return None
+    for arg in node.args:
+        for inner in ast.walk(arg):
+            if isinstance(inner, ast.Attribute) and inner.attr in _OPERATOR_INPUT_ATTRS:
+                return _OPERATOR_INPUT_ATTRS[inner.attr]
+            if isinstance(inner, ast.Call):
+                func = inner.func
+                name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+                if name in _OPERATOR_INPUT_FUNCS:
+                    return _OPERATOR_INPUT_FUNCS[name]
+    return None
 
 
 def _is_add_argument_call(node: ast.AST) -> bool:

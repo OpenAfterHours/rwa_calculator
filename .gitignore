@@ -29,3 +29,5 @@ scripts/coverage_metrics.json
 
 # defect_injection.py campaign output
 scripts/defect_scorecard.json
+.reference_dumps/
+.pytest_timings/

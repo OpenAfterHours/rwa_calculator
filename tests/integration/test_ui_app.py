@@ -13,12 +13,19 @@ Key responsibilities tested:
 - POST /comparison runs both frameworks and renders the executive summary.
 - Invalid data paths re-render the form with an error; unknown run ids 404.
 - The REST API and the shared tokens.css are served from the same app.
+
+Cost model: the app and the dataset are built once per module, and the tests
+whose act only READS a finished run share one module-scoped calculation
+(``warm_run_id``). A test whose act is the dispatch itself, or that asserts what
+the run index holds afterwards, still runs its own — the latter over a fresh app
+and an empty index (``cold_client``). See the fixture docstrings.
 """
 
 from __future__ import annotations
 
 import re
 import time
+from collections.abc import Iterator
 from datetime import date
 from decimal import Decimal
 from html import unescape
@@ -36,39 +43,9 @@ from rwa_calc.ui.app.main import create_app
 from tests.fixtures.api_validation.build_mandatory_only import write_mandatory_minimum
 from tests.fixtures.recon_ledger import with_reporting_ledger
 
-
-@pytest.fixture(autouse=True)
-def _isolated_state_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Redirect the calculator last-run state file into tmp so ~/.rwa_calc is untouched."""
-    monkeypatch.setenv(STATE_DIR_ENV_VAR, str(tmp_path / "state"))
-
-
-@pytest.fixture(autouse=True)
-def _clean_run_index() -> None:
-    """Each test starts with an empty calculation run index (module-level state)."""
-    run_index.clear()
-
-
-@pytest.fixture
-def client() -> TestClient:
-    # base_url uses a loopback host so the app's TrustedHostMiddleware (which
-    # only answers to localhost / 127.0.0.1) accepts the default test requests.
-    return TestClient(create_app(), base_url="http://localhost")
-
-
-@pytest.fixture
-def data_dir(tmp_path: Path) -> str:
-    # A sibling of the state home (tmp_path/"state"): the persistent run caches
-    # must never land inside the data path, or they would change its signature.
-    root = tmp_path / "data"
-    root.mkdir()
-    write_mandatory_minimum(root)
-    return str(root)
-
-
-def test_static_pages_render(client: TestClient) -> None:
-    for path in ("/", "/calculator", "/comparison"):
-        assert client.get(path).status_code == 200, path
+# =============================================================================
+# Helpers
+# =============================================================================
 
 
 def _wait_for_job(client: TestClient, job_id: str, timeout: float = 60.0) -> dict:
@@ -80,6 +57,126 @@ def _wait_for_job(client: TestClient, job_id: str, timeout: float = 60.0) -> dic
             return status
         time.sleep(0.05)
     raise AssertionError(f"job {job_id} did not finish within {timeout}s")
+
+
+def _run_to_completion(client: TestClient, data_dir: str) -> str:
+    """Dispatch a calculation and return its run_id once the job finishes."""
+    resp = client.post(
+        "/calculate",
+        data={"data_path": data_dir, "reporting_date": "2025-01-01"},
+        follow_redirects=False,
+    )
+    run_id = resp.headers["location"].rsplit("/", 1)[1]
+    _wait_for_job(client, run_id)
+    return run_id
+
+
+# =============================================================================
+# Fixtures
+# =============================================================================
+
+
+@pytest.fixture(autouse=True)
+def _isolated_state_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Redirect the calculator last-run state file into tmp so ~/.rwa_calc is untouched.
+
+    Per test even though the app is module-scoped: ``calculator_state`` resolves
+    the env var on every read and write, so each test's form pre-fill starts
+    from an absent state file. The run-index persistence home is the one thing
+    bound at ``create_app`` time — see ``_module_state_home``.
+    """
+    monkeypatch.setenv(STATE_DIR_ENV_VAR, str(tmp_path / "state"))
+
+
+@pytest.fixture(scope="module")
+def _module_state_home(tmp_path_factory: pytest.TempPathFactory) -> Iterator[None]:
+    """The state home the module-scoped app binds its run-index persistence to.
+
+    Its own mktemp directory, never inside ``data_dir``: a run cache landing in
+    the data path would change the data's run-index signature. The index is
+    emptied when the module finishes so the next module starts cold.
+    """
+    env = pytest.MonkeyPatch()
+    env.setenv(STATE_DIR_ENV_VAR, str(tmp_path_factory.mktemp("ui_state")))
+    yield
+    env.undo()
+    run_index.clear()
+
+
+@pytest.fixture(scope="module")
+def client(_module_state_home: None) -> TestClient:
+    """The UI app, built once per module.
+
+    ``create_app`` holds no per-test state: the run / job / template-bundle /
+    export-outcome registries are module-level in ``rwa_calc.api.rest``,
+    ``ui.app.progress`` and ``ui.app.main``, ``attach_progress_handler`` is
+    idempotent, and the only thing bound at construction is the run-index
+    persistence home. base_url uses a loopback host so the app's
+    TrustedHostMiddleware (which only answers to localhost / 127.0.0.1) accepts
+    the default test requests.
+    """
+    return TestClient(create_app(), base_url="http://localhost")
+
+
+@pytest.fixture
+def cold_client(
+    _isolated_state_dir: None, tmp_path_factory: pytest.TempPathFactory
+) -> Iterator[TestClient]:
+    """A fresh app over an EMPTY run index — the per-test setup every test once
+    had, kept for the tests that assert what the index holds after their own run.
+
+    ``create_app`` binds persistence to this test's own state dir (the autouse
+    env). ``run_index.clear()`` also switches persistence off, so on the way out
+    the module app is handed a NEW, empty persistence home: an empty index with
+    persistence on, the state every test started from before. (Re-binding the
+    module's original home would instead reload its persisted entries and sweep
+    any run cache they no longer reference — the shared ``warm_run_id``'s, once
+    the index cap had evicted it.)
+    """
+    run_index.clear()
+    yield TestClient(create_app(), base_url="http://localhost")
+    run_index.clear()
+    run_index.configure_persistence(tmp_path_factory.mktemp("ui_state"))
+
+
+@pytest.fixture(scope="module")
+def data_dir(tmp_path_factory: pytest.TempPathFactory) -> str:
+    """Mandatory-minimum SA dataset written once per module; returns the path string.
+
+    Read-only by contract: no test writes into it (the on-disk data every later
+    test reads, and its run-index signature, would both move). Its own mktemp
+    directory, a sibling of every state home, so no run cache can land inside it.
+    """
+    root = tmp_path_factory.mktemp("ui_data")
+    write_mandatory_minimum(root)
+    return str(root)
+
+
+@pytest.fixture(scope="module")
+def warm_run_id(client: TestClient, data_dir: str) -> str:
+    """One standardised calculation over ``data_dir``, dispatched through the
+    form and run to completion once per module.
+
+    Shared by every test whose ACT only reads a finished run: the results page,
+    the template viewer and its lineage drill-down, the download buttons, the
+    save-to-folder re-export and the SSE replay. The run lives in the process
+    registries (``rest._RUNS`` / ``progress._JOBS``) and its template bundles
+    are cached per run_id, so the pipeline and the COREP / Pillar 3 generation
+    run once for the module. A save-to-folder writes only to the test's own
+    output folder and records nothing against the run. Tests whose act IS the
+    dispatch, or that assert what the run index holds afterwards, run their own.
+    """
+    return _run_to_completion(client, data_dir)
+
+
+# =============================================================================
+# Tests
+# =============================================================================
+
+
+def test_static_pages_render(client: TestClient) -> None:
+    for path in ("/", "/calculator", "/comparison"):
+        assert client.get(path).status_code == 200, path
 
 
 def test_calculate_dispatches_job_then_results_become_available(
@@ -124,15 +221,9 @@ def test_calculate_dispatches_job_then_results_become_available(
     assert "exposure_reference" in results.text
 
 
-def test_results_page_splits_rwa_by_class_by_method(client: TestClient, data_dir: str) -> None:
-    # Arrange — run a standardised calculation to completion
-    resp = client.post(
-        "/calculate",
-        data={"data_path": data_dir, "reporting_date": "2025-01-01"},
-        follow_redirects=False,
-    )
-    job_id = resp.headers["location"].rsplit("/", 1)[1]
-    _wait_for_job(client, job_id)
+def test_results_page_splits_rwa_by_class_by_method(client: TestClient, warm_run_id: str) -> None:
+    # Arrange — the module's completed standardised calculation
+    job_id = warm_run_id
 
     # Act
     page = client.get(f"/results/{job_id}").text
@@ -146,15 +237,9 @@ def test_results_page_splits_rwa_by_class_by_method(client: TestClient, data_dir
     assert ">STD<" in page
 
 
-def test_results_page_links_the_template_viewer(client: TestClient, data_dir: str) -> None:
-    # Arrange — run a calculation to completion
-    resp = client.post(
-        "/calculate",
-        data={"data_path": data_dir, "reporting_date": "2025-01-01"},
-        follow_redirects=False,
-    )
-    job_id = resp.headers["location"].rsplit("/", 1)[1]
-    _wait_for_job(client, job_id)
+def test_results_page_links_the_template_viewer(client: TestClient, warm_run_id: str) -> None:
+    # Arrange — the module's completed calculation
+    job_id = warm_run_id
 
     # Act
     page = client.get(f"/results/{job_id}").text
@@ -164,16 +249,10 @@ def test_results_page_links_the_template_viewer(client: TestClient, data_dir: st
 
 
 def test_template_viewer_renders_cells_keyed_for_drilldown(
-    client: TestClient, data_dir: str
+    client: TestClient, warm_run_id: str
 ) -> None:
-    # Arrange — run a calculation to completion
-    resp = client.post(
-        "/calculate",
-        data={"data_path": data_dir, "reporting_date": "2025-01-01"},
-        follow_redirects=False,
-    )
-    job_id = resp.headers["location"].rsplit("/", 1)[1]
-    _wait_for_job(client, job_id)
+    # Arrange — the module's completed calculation
+    job_id = warm_run_id
 
     # Act — C 07.00, corporate sheet (the SA corporate loan's sheet)
     page = client.get(
@@ -198,16 +277,10 @@ def test_template_viewer_renders_cells_keyed_for_drilldown(
 
 
 def test_template_viewer_uses_the_full_width_with_frozen_row_labels(
-    client: TestClient, data_dir: str
+    client: TestClient, warm_run_id: str
 ) -> None:
-    # Arrange — run a calculation to completion
-    resp = client.post(
-        "/calculate",
-        data={"data_path": data_dir, "reporting_date": "2025-01-01"},
-        follow_redirects=False,
-    )
-    job_id = resp.headers["location"].rsplit("/", 1)[1]
-    _wait_for_job(client, job_id)
+    # Arrange — the module's completed calculation
+    job_id = warm_run_id
 
     # Act
     html = client.get(
@@ -225,16 +298,10 @@ def test_template_viewer_uses_the_full_width_with_frozen_row_labels(
 
 
 def test_template_viewer_distinguishes_null_from_reported_zero(
-    client: TestClient, data_dir: str
+    client: TestClient, warm_run_id: str
 ) -> None:
-    # Arrange — run a calculation to completion
-    resp = client.post(
-        "/calculate",
-        data={"data_path": data_dir, "reporting_date": "2025-01-01"},
-        follow_redirects=False,
-    )
-    job_id = resp.headers["location"].rsplit("/", 1)[1]
-    _wait_for_job(client, job_id)
+    # Arrange — the module's completed calculation
+    job_id = warm_run_id
 
     # Act
     html = client.get(
@@ -249,15 +316,9 @@ def test_template_viewer_distinguishes_null_from_reported_zero(
     assert ">0<" in html
 
 
-def test_clicking_a_template_cell_opens_its_lineage(client: TestClient, data_dir: str) -> None:
-    # Arrange — run a calculation to completion
-    resp = client.post(
-        "/calculate",
-        data={"data_path": data_dir, "reporting_date": "2025-01-01"},
-        follow_redirects=False,
-    )
-    job_id = resp.headers["location"].rsplit("/", 1)[1]
-    _wait_for_job(client, job_id)
+def test_clicking_a_template_cell_opens_its_lineage(client: TestClient, warm_run_id: str) -> None:
+    # Arrange — the module's completed calculation
+    job_id = warm_run_id
 
     # Act — follow the C 07.00 RWEA cell's own link, exactly as a user would
     grid = client.get(
@@ -282,16 +343,10 @@ def test_clicking_a_template_cell_opens_its_lineage(client: TestClient, data_dir
 
 
 def test_uninstrumented_templates_offer_no_dead_drilldown_links(
-    client: TestClient, data_dir: str
+    client: TestClient, warm_run_id: str
 ) -> None:
     # Arrange
-    resp = client.post(
-        "/calculate",
-        data={"data_path": data_dir, "reporting_date": "2025-01-01"},
-        follow_redirects=False,
-    )
-    job_id = resp.headers["location"].rsplit("/", 1)[1]
-    _wait_for_job(client, job_id)
+    job_id = warm_run_id
 
     # Act — C 02.00 has no lineage (its cells are not spec-backed): the pre-pass
     # kernel-plus-thin-shell hybrid exposes no TemplateSpec. (R27a instrumented
@@ -556,15 +611,9 @@ def test_templates_page_prior_run_id_mismatched_framework_is_422(
     assert "framework" in resp.json()["detail"]
 
 
-def test_results_page_offers_download_buttons(client: TestClient, data_dir: str) -> None:
-    # Arrange — run a calculation to completion
-    resp = client.post(
-        "/calculate",
-        data={"data_path": data_dir, "reporting_date": "2025-01-01"},
-        follow_redirects=False,
-    )
-    job_id = resp.headers["location"].rsplit("/", 1)[1]
-    _wait_for_job(client, job_id)
+def test_results_page_offers_download_buttons(client: TestClient, warm_run_id: str) -> None:
+    # Arrange — the module's completed calculation
+    job_id = warm_run_id
 
     # Act
     page = client.get(f"/results/{job_id}").text
@@ -578,23 +627,11 @@ def test_results_page_offers_download_buttons(client: TestClient, data_dir: str)
     assert "Pillar III" in page
 
 
-def _run_to_completion(client: TestClient, data_dir: str) -> str:
-    """Dispatch a calculation and return its run_id once the job finishes."""
-    resp = client.post(
-        "/calculate",
-        data={"data_path": data_dir, "reporting_date": "2025-01-01"},
-        follow_redirects=False,
-    )
-    run_id = resp.headers["location"].rsplit("/", 1)[1]
-    _wait_for_job(client, run_id)
-    return run_id
-
-
 def test_save_to_folder_writes_both_parquet_and_csv_with_data(
-    client: TestClient, data_dir: str, tmp_path: Path
+    client: TestClient, warm_run_id: str, tmp_path: Path
 ) -> None:
     # Arrange
-    run_id = _run_to_completion(client, data_dir)
+    run_id = warm_run_id
     out = tmp_path / "exports"
     out.mkdir()
 
@@ -691,11 +728,11 @@ def test_calculate_invalid_output_folder_rerenders_form(client: TestClient, data
 
 
 def test_save_to_folder_csv_carries_data_despite_nested_columns(
-    client: TestClient, data_dir: str, tmp_path: Path
+    client: TestClient, warm_run_id: str, tmp_path: Path
 ) -> None:
     # The full result set has nested columns CSV cannot natively hold; they are
     # JSON-encoded so the CSV carries data instead of being written blank.
-    run_id = _run_to_completion(client, data_dir)
+    run_id = warm_run_id
     out = tmp_path / "exports_csv"
     out.mkdir()
 
@@ -719,8 +756,8 @@ def test_save_to_folder_unknown_run_is_404(client: TestClient, tmp_path: Path) -
     assert resp.status_code == 404
 
 
-def test_save_to_folder_invalid_folder_is_400(client: TestClient, data_dir: str) -> None:
-    run_id = _run_to_completion(client, data_dir)
+def test_save_to_folder_invalid_folder_is_400(client: TestClient, warm_run_id: str) -> None:
+    run_id = warm_run_id
     resp = client.post(
         f"/results/{run_id}/save",
         data={"output_folder": "relative/out", "output_formats": ["parquet"]},
@@ -728,15 +765,9 @@ def test_save_to_folder_invalid_folder_is_400(client: TestClient, data_dir: str)
     assert resp.status_code == 400
 
 
-def test_progress_stream_replays_stages_and_completes(client: TestClient, data_dir: str) -> None:
-    # Arrange — dispatch and let the job finish
-    resp = client.post(
-        "/calculate",
-        data={"data_path": data_dir, "reporting_date": "2025-01-01"},
-        follow_redirects=False,
-    )
-    job_id = resp.headers["location"].rsplit("/", 1)[1]
-    _wait_for_job(client, job_id)
+def test_progress_stream_replays_stages_and_completes(client: TestClient, warm_run_id: str) -> None:
+    # Arrange — the module's finished job
+    job_id = warm_run_id
 
     # Act — connecting after completion replays every stage, sends the terminal
     # event, and closes the stream (so the read does not hang)
@@ -866,14 +897,14 @@ def test_landing_hosts_bear_constellation(client: TestClient) -> None:
 
 
 def test_calculator_offers_results_link_when_identical_run_exists(
-    client: TestClient, data_dir: str
+    cold_client: TestClient, data_dir: str
 ) -> None:
-    # A fresh form offers nothing.
-    assert "already ran at" not in client.get("/calculator").text
+    # A fresh form (fresh app, empty run index) offers nothing.
+    assert "already ran at" not in cold_client.get("/calculator").text
 
     # Arrange — run a calculation via the form (the worker saves the form state
     # and seeds the run index).
-    posted = client.post(
+    posted = cold_client.post(
         "/calculate",
         data={
             "data_path": data_dir,
@@ -886,19 +917,22 @@ def test_calculator_offers_results_link_when_identical_run_exists(
     )
     assert posted.status_code == 303
     job_id = posted.headers["location"].rsplit("/", 1)[1]
-    assert _wait_for_job(client, job_id)["status"] == "done"
+    assert _wait_for_job(cold_client, job_id)["status"] == "done"
 
     # Act — reopen the calculator (pre-filled with the same values).
-    form = client.get("/calculator")
+    form = cold_client.get("/calculator")
 
     # Assert — a non-blocking banner links straight to the existing results.
     assert "already ran at" in form.text
     assert f"/results/{job_id}" in form.text
 
 
-def test_comparison_seeds_run_index_for_both_frameworks(client: TestClient, data_dir: str) -> None:
-    # Act — a comparison runs both frameworks over one dataset.
-    resp = client.post(
+def test_comparison_seeds_run_index_for_both_frameworks(
+    cold_client: TestClient, data_dir: str
+) -> None:
+    # Act — a comparison runs both frameworks over one dataset (empty index first,
+    # so a hit below can only be the comparison's own seeding).
+    resp = cold_client.post(
         "/comparison",
         data={
             "data_path": data_dir,

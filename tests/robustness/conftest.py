@@ -30,13 +30,16 @@ References:
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
 
-#: This suite's directory. Used to scope the marker hook below — see its
-#: docstring for why an unscoped hook silently emptied the whole dev loop.
-_SUITE_ROOT = Path(__file__).parent
+#: This suite's directory as a case-normalised string prefix, trailing separator
+#: included so a sibling such as ``robustness_extra/`` cannot match. Used to
+#: scope the marker hook below — see its docstring for why an unscoped hook
+#: silently emptied the whole dev loop.
+_SUITE_PREFIX = os.path.normcase(str(Path(__file__).parent)) + os.sep
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
@@ -60,8 +63,17 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     suite — the exact silent-absence shape ``.claude/LESSONS.md`` B4 is about,
     and it would have been introduced by the change whose purpose was to keep
     this suite OUT of the dev loop.
+
+    Because the hook sees every item in the session, the per-item check has to
+    be cheap. It is a normalised string-prefix test rather than
+    ``suite_root in Path(path).parents``: ``parents`` builds and case-compares a
+    fresh ``Path`` per ancestor per item, which measured at 0.67 s of every
+    collection at 13.5k items — the single most expensive hook in the session
+    after Hypothesis's constants scan — against ~0.1 s for the prefix test.
+    ``os.path.normcase`` keeps the comparison case-insensitive on Windows, as
+    ``Path`` equality is there.
     """
     for item in items:
         path = getattr(item, "path", None)
-        if path is not None and _SUITE_ROOT in Path(path).parents:
+        if path is not None and os.path.normcase(str(path)).startswith(_SUITE_PREFIX):
             item.add_marker(pytest.mark.robustness)

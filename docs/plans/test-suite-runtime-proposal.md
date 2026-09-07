@@ -1,4 +1,4 @@
-# Test-suite runtime: where 6m47s goes, and the path to ~4 minutes
+# Test-suite runtime: where 6m47s goes, and the levers that cut it 38%
 
 **Status:** Implemented 2026-09-06 — see [Outcome](#outcome-what-landed) at the end for
 what each lever actually bought. Every number in the diagnosis below was measured on
@@ -342,12 +342,30 @@ paid once per process by the 47 modules that test it; the root conftest's polars
 needed by effectively every module; and no parametrisation product reaches 0.2 s. One
 measured change was worth taking, and it is in the table above.
 
-### Reading the end-to-end number honestly
+### The end-to-end result, and how it had to be measured
 
-Wall-clock for the whole dev loop is a poor instrument on this box. Between the baseline
-and post-change runs, files that **no lever touched** rose a uniform 6.6% — including
-pure-unit files with no pipeline in them at all, one going 2.8 s to 8.5 s, which no change
-here could cause. That is background load (the box runs other work), not a regression, and
-it swamps a real improvement. The per-component figures above are all measured in
-isolation and are the numbers to trust; the suite-level claim in the PR comes from a
-controlled A/B of the base commit against the final tree, run back to back.
+**Controlled A/B, back to back on one machine, `-n 4`:**
+
+| Tree | Tests | Wall |
+|---|---|---|
+| Base `cd25836b` (pre-batch) | 12,992 passed, 59 skipped, 23 xfailed | **557.8 s (9m17s)** |
+| Final (all five levers) | 13,007 passed, 59 skipped, 23 xfailed | **343.2 s (5m43s)** |
+
+**−214.6 s, a 38% reduction**, with 15 more tests than the base.
+
+Two things about that measurement are worth keeping, because a casual re-run will not
+reproduce it.
+
+**Compare like with like, back to back.** Wall-clock on this box is not a stable
+instrument. Between two full runs taken hours apart, files that **no lever touched** rose
+a uniform 6.6% — including pure-unit files with no pipeline in them, one going 2.8 s to
+8.5 s, which nothing here could cause. That is background load, and it is large enough to
+swamp the entire improvement. Only a base-vs-final pair run back to back means anything;
+the per-component figures in the table above are measured in isolation and are the other
+half of the evidence.
+
+**The A/B ran at `-n 4`, not the dev-loop default `-n 8`.** With ~1.1 GB of 16.9 GB free,
+the 8-worker fleet was OOM-killed by the operating system three times mid-run. Both halves
+use the same setting so the ratio holds, but the absolute seconds are not comparable to an
+`-n 8` figure — the 6m47s in the diagnosis at the top of this document is an `-n 8` number.
+Re-run the pair with `-n 8` on an idle machine for a directly comparable headline.

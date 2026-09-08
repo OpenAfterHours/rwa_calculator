@@ -60,7 +60,7 @@ Package version `0.3.34`. Resolved packs:
 | 109 | 1 | 0 | 5 | 0 | 1 | MEDIUM |
 | 110 | 0 | 1 | 4 | 0 | 6 | MEDIUM |
 | 111 | 6 | 8 | 20 | 0 | 40 | MEDIUM |
-| 112 | 4 | 3 | 19 | 0 | 36 | MEDIUM |
+| 112 | 4 | 3 | 19 | 0 | 37 | MEDIUM |
 | 113 | 2 | 2 | 11 | 0 | 10 | MEDIUM |
 | 114 | 8 | 6 | 14 | 14 | 33 | HIGH |
 | 115 | 6 | 10 | 8 | 3 | 9 | HIGH |
@@ -93,7 +93,7 @@ Package version `0.3.34`. Resolved packs:
 | 141 | 1 | 0 | 1 | 0 | 0 | LOW |
 | 142 | 1 | 0 | 4 | 0 | 5 | MEDIUM |
 | 143 | 1 | 0 | 7 | 0 | 8 | MEDIUM |
-| 147 | 5 | 5 | 20 | 0 | 25 | MEDIUM |
+| 147 | 5 | 5 | 20 | 0 | 26 | MEDIUM |
 | 148 | 2 | 0 | 8 | 0 | 5 | MEDIUM |
 | 150 | 1 | 0 | 4 | 0 | 5 | MEDIUM |
 | 151 | 1 | 0 | 2 | 0 | 4 | MEDIUM |

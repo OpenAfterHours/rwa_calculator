@@ -2310,3 +2310,182 @@ gate that shipped.
   scoping that made it correct was three lines and available all along. When a
   comment says a check may fire on rows the consumer cannot read, ask what
   firing costs before accepting it.
+
+## 2026-09-08 — The C 07.00 exposure-class axis was our own vocabulary, and the register's scope resolution summed two of our sheets into the class total it was checking
+
+- **Defect**: a user reading the COREP output asked why `retail_mortgages` was
+  appearing as an exposure class on C 07.00, since it is not one. They were
+  right. C 07.00 and OF 07.00 keyed their **sheet (z) axis** on this repo's
+  internal `ExposureClass` values instead of on the **Art. 112(1)** classes the
+  templates index. `reporting/kernel/bases.py::sheet_axis` builds the axis as
+  `data[class_col].drop_nulls().unique()`, so whatever string the sealed class
+  carrier happens to hold becomes a sheet, with no membership test anywhere
+  between the classifier and the submission.
+
+  So `corporate_sme` opened a sheet beside `corporate`, and `retail_mortgage` /
+  `residential_mortgage` / `commercial_mortgage` opened three sheets for the
+  single class (i). **The Art. 112(1)(g) and (i) class totals were therefore
+  reported nowhere**, and row 0020 "of which: SME" was null on the very sheet
+  that should have carried it. Measured on the b31 estate before the fix: sheet
+  `corporate` r0010 = 8,000,000 with r0020 NULL, beside a separate
+  `corporate_sme` sheet of 500,000; `retail_mortgage` 400,000 beside
+  `commercial_mortgage` 10,000,000 with no class-(i) total anywhere. Two further
+  non-conforming keys were reachable in production and hit by no fixture:
+  `retail_qrre` and `residential_mortgage`. Fixed in **PR #497** (`eb546935`,
+  merged as `f42cf9c4`); after it `corporate` reports 8,500,000 with r0020 =
+  500,000, and `real_estate` 10,400,000 split across r0330 / r0340.
+- **Rule**: CRR Art. 112(1)(a)-(q) — the class list the C 07.00 z-axis indexes.
+  COREP Annex II ¶47 and PS1/26 Annex II ¶47 both require the total and each
+  exposure class in a separate dimension, and ¶56 assigns them in the
+  Art. 112(2) Table A2 order (checked against
+  `ps1-26-annex-ii-reporting-instructions.pdf` p.77 by the review that filed
+  P5.65; not re-extracted for this entry). The published rule the axis broke is
+  EBA `v4240_i` — ERROR, live —
+  `{C 02.00, r0130, c0010} == {C 07.00.a, r0010, c0220, s0008}`.
+- **Origin**: two places, and the second is why it survived.
+  `reporting/corep/c07.py` keyed the sheet off the sealed class directly, and
+  `reporting/validations/scope.py` then declared **the same wrong axis to the
+  validator**: `_C07_SHEETS` z0008 held `("corporate", "corporate_sme")`, z0009
+  `("retail_other", "retail_qrre")` and z0010 the three mortgage classes, with
+  the same three shapes on the `_OF07_SHEETS` twin. Standing since C 07.00
+  acquired a sheet axis. Found by a user reading the output.
+- **Escape class**: `test-shared-the-assumption`.
+  `tests/unit/reporting/corep/test_c07.py` covered the sheet axis and passed
+  while indexing three keys — `secured_by_re_residential`,
+  `secured_by_re_commercial`, `secured_by_re_property` — that are **not
+  `ExposureClass` members at all**. Production and its tests were written from
+  one invented vocabulary, so both sides agreed and both were wrong. The class's
+  prescribed fix, *re-anchor to a source of truth*, is exactly what shipped:
+  `tests/contracts/test_c07_art112_sheet_axis.py` anchors every assertion on
+  `domain.enums.ExposureClass`, on the sibling template's `C02_00_SA_CLASS_MAP`,
+  and on the published z-axis in `SHEET_INDEX_MAPS` — three things that cannot
+  drift with `C07_00_SA_SHEET_MAP`.
+
+  **The register limb carries no class, and forcing one would prescribe the
+  wrong fix.** The supervisory register did not fail to catch this; it converted
+  it into a pass (below). That is a defect *in* a gate, which this file's own
+  preamble says to leave unclassed — and it is the **second** instance of the
+  shape the 2026-08-09 ratchet entry conditionally named `gate-unfit`, a gate
+  measuring something that is not the quantity that matters. That entry said one
+  instance is not a taxonomy. Two may be, and the naming is the operator's call;
+  the difference worth recording is that the first was caught by adversarial
+  review *before* its gate shipped, while this one shipped, ran green, and
+  masked a live defect for as long as C 07.00 has had a sheet axis.
+- **Why every gate missed it**: the strongest gate in the estate was
+  structurally incapable of binding, and its green was manufactured by the
+  defect itself. `reporting/validations/scope.py::resolve_sheet_codes` returns
+  **every** `bundle_key` a published z-code names, and the evaluator then
+  aggregates the rule's reference across all of them
+  (`reporting/validations/evaluate.py::_sum_cells`, whose own docstring names
+  this exact case: *"or from a publisher sheet code that maps onto more than one
+  of our sheets"*). With z0008 holding two keys, the live ERROR rule `v4240_i`
+  compared C 02.00 row 0130 against **the sum of two of our sheets** — a figure
+  appearing in no submitted workbook. A faithful pre/post comparison of the
+  whole register is identical in both states: **27 broken / 4 uncovered / 188
+  vacuous** either way, not one rule outcome moved. Corroborating that from the
+  other side, `eb546935` does not touch
+  `tests/expected_outputs/reporting/validation_known_breaks.json` at all. The
+  multi-key mapping did not merely fail to catch the defect; **it masked it.**
+
+  Nothing else was positioned to see it either.
+
+    - **The goldens pinned it.** The pre-fix estate carried
+      `corep__c07_00__corporate_sme.ndjson` and
+      `corep__c07_00__retail_mortgage.ndjson` as golden files — one per wrong
+      sheet — so the golden gate was green *because* it had recorded the wrong
+      axis. Goldens ratchet against change, not against conformance, and a wrong
+      axis presents to them as a set of filenames.
+    - **The coverage ratchets are blind to it by construction.** The cells were
+      populated and the rules bound; an axis error redistributes figures across
+      sheets without nulling a cell or un-binding a rule, so no liveness or
+      binding-rule metric moves (first entry in this file).
+    - **The two unfixtured keys fail open.** A sheet we emit that no z-code
+      addresses resolves to `sheet_not_emitted`, and every rule scoped to it is
+      skipped rather than failed — so `residential_mortgage` and `retail_qrre`
+      would have cost coverage silently rather than reddening anything.
+- **Gate change**: the invariant is graduated executably in two halves that
+  measure different things, and the wrong axis is additionally caught in
+  positive form.
+
+  **`scripts/arch_check.py` check 22 — `check_sheet_code_single_bundle_key`**,
+  registered in `main()` so it runs on every commit through the pre-commit hook.
+  An AST scan of `reporting/validations/**/*.py`: every `SheetCode(...)` — and
+  any call passing `bundle_keys=` at all, which is what catches
+  `replace(entry, bundle_keys=...)` — may carry **at most one** bundle key. It
+  is unconditional and has **no allowlist**, which the estate can afford because
+  no map violates it after #497; measured population **67 `SheetCode` entries
+  across all four maps, zero violations**. It walks whole modules, so a map
+  built inside a builder function or a class body is still seen, and it fails
+  loudly rather than silently if it finds zero `SheetCode` literals or if
+  `reporting/validations/` moves out from under it — an unmeasured invariant
+  reads exactly like a satisfied one.
+
+  Two cardinalities stay legal, deliberately. An **empty** tuple is a skip, not
+  a zero (z0012 and s0015 use it; filed as P2.55 and P2.54). And the **reverse**
+  shape — several z-codes onto one of our sheets — is the DPM's Art. 147(2)(d)
+  IRB axis being genuinely finer than ours (z0013 SME and z0014 non-SME both
+  address our single `retail_mortgage` sheet), made safe by the existing
+  `sheet_scope_not_closed` refusal. A "simplification" to a 1:1 axis would break
+  the IRB templates. `_C08_SHEETS` / `_OF08_SHEETS` were clean before #497 and
+  after it, which is the evidence the invariant is aimed at the one direction.
+
+  **`tests/contracts/test_sheet_index_bundle_key_cardinality.py`** carries the
+  same invariant over the map the evaluator actually resolves, rather than over
+  source literals, and pins the reverse shape and its closure guard beside it so
+  neither can be removed without the other being read. Its last limb asserts the
+  arch-gate half exists **and is dispatched by `main()`**, locating the check by
+  what it reads rather than by its name — a guard that is built and never wired
+  is this estate's dominant meta-pattern, and it is why `arch_check` grew check
+  20.
+
+  **`tests/contracts/test_c07_art112_sheet_axis.py`** is the positive form: the
+  C 07.00 sheet axis must be in 1:1 correspondence with the C 02.00 SA class
+  rows, since COREP Annex II §1.3.1 makes C 02.00 rows 0070-0211 identities
+  against the C 07.00 sheet for the same Art. 112(1) letter. So the class is now
+  caught two ways — at pytest time by the axis correspondence, at arch-gate time
+  by the cardinality invariant — and the two are anchored on different sources.
+
+  The axis review that produced this entry also filed **P5.65** (this
+  graduation) plus **P1.371**, **P1.372**, **P2.53**, **P2.54**, **P2.55** and
+  **P5.66**: further Art. 112(1) axis gaps that the fix exposes rather than
+  causes, none of them closed here.
+- **Verified red**: the shipped check run against the pre-fix source produces
+  **6 violations** — z0008, z0009 and z0010 in each of `_C07_SHEETS` and
+  `_OF07_SHEETS` — and **0** on the current tree:
+
+  ```
+  scope.py:143: _C07_SHEETS sheet code '0008' maps to 2 bundle keys
+  (corporate, corporate_sme). resolve_sheet_codes returns EVERY key for a scoped
+  code, so the rule evaluator aggregates the publisher's reference across all of
+  them and asserts against a figure that appears in no submitted workbook ...
+  ```
+
+  The sample is `tests/contracts/data/scope_pre_art112_class_axis_fix.py.txt`,
+  verbatim `eb546935^:src/rwa_calc/reporting/validations/scope.py`, so the red is
+  reproducible from the repository rather than only from history; it was also
+  reproduced independently straight from `git show` while this entry was
+  written. The measured population is **67 in both states**, which matters — the
+  red is a change in *cardinality*, not in how much the check can see.
+
+  The contract file's limb 3 runs the identical predicate over those pre-fix
+  entries transcribed verbatim, carrying z0007 unchanged as a single-key
+  control, so a predicate that flagged every entry or none of them fails there.
+  And its companion holds the requested z-code and the emitted sheet set fixed
+  while varying only the map, showing the pre-fix entry handing the evaluator
+  both `corporate` and `corporate_sme` where the live one hands it one — the
+  masking measured rather than argued.
+- **Lesson**: *a gate that normalises its input before asserting on it will
+  report the normalisation as a pass.* Summing a multi-cell reference is a
+  reasonable reading — `_sum_cells` documents it as "the only additive reading"
+  — and it quietly reassembled the class total the workbook had lost, so the
+  register asserted against a correct figure the submission did not contain.
+  Where a validator canonicalises its input, the canonicalisation is part of the
+  assertion and needs a gate of its own; here that gate is a cardinality
+  invariant on the mapping, not a check on any number.
+
+  Narrower, and the reason this was a user's finding rather than a test's: **a
+  template's axis is a published vocabulary, not a free string.** `unique()`
+  over a sealed column produces an axis-shaped object that is not an axis, and
+  once one exists the tests written against it inherit its vocabulary — which is
+  how `secured_by_re_property`, a string belonging to no enum in the repository,
+  came to sit in a passing test asserting on a regulatory return.

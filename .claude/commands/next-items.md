@@ -943,7 +943,7 @@ file that concurrent agents would race on.
    | 5 (last) | prose | an entry in `.claude/LESSONS.md` |
 
    Prose is the **fallback**, not the default. `arch_check.py` already
-   carries 17 numbered checks and the validation register carries
+   carries 22 numbered checks and the validation register carries
    hundreds of entries — every one of them is a lesson that graduated.
    That is what "learning" looks like here; a paragraph nobody rereads
    is not.

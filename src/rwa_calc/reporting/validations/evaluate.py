@@ -667,6 +667,14 @@ def _sum_cells(ref: Ref, context: _Context, *, aggregated: bool) -> float:
     axis, or from a publisher sheet code that maps onto more than one of our
     sheets. Summation is the publisher's own reading in the first two cases and
     the only additive reading in the third.
+
+    The third case is not an endorsement, and our maps may no longer produce it:
+    ``arch_check`` check 22 forbids a ``SheetCode`` carrying more than one
+    ``bundle_key``, because summing two of our sheets under one z-code asserts
+    against a figure that appears in no submitted workbook — which is how PR
+    #497's wrong C 07.00 class axis read as a PASSING rule rather than a break.
+    The branch stays, because summation IS the publisher's semantics for a
+    genuinely multi-cell reference; it is not licence to widen a ``bundle_keys``.
     """
     return sum(_resolve_cells(ref, context, aggregated=aggregated))
 

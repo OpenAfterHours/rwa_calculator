@@ -103,6 +103,24 @@ Checks machine-verifiable invariants from CLAUDE.md:
     the nested expression to a local first), resolving each name to the last
     binding that ENDS STRICTLY BEFORE the outer ``.over()``'s own line so a
     self-rebinding statement cannot make a window find itself. No allowlist.
+22. One bundle key per publisher sheet code: every ``SheetCode`` in
+    ``reporting/validations/scope.py`` maps to AT MOST ONE of our bundle
+    keys. ``resolve_sheet_codes`` returns every key a scoped code addresses,
+    so a second key makes the supervisory rule evaluator aggregate the
+    publisher's reference across two of our sheets and assert against a
+    figure that appears in no submitted workbook — which converts a wrong
+    sheet axis into a PASSING rule rather than a break (PR #497). Where
+    several internal classes belong to one regulatory class the generator
+    fans them onto one key, so the sheet is the class TOTAL the z-axis asks
+    for. The reverse shape — several z-codes onto one of our keys — is the
+    legitimately-finer IRB axis and stays legal; ``resolve_sheet_codes``
+    already enforces closure over it. The gate reads a SOURCE SHAPE — a
+    ``SheetCode(...)`` call, or any call passing ``bundle_keys=``, written
+    anywhere in the module — so it is not a completeness claim; the live-map
+    half is limb 1 of
+    ``tests/contracts/test_sheet_index_bundle_key_cardinality.py``, which
+    reads ``SHEET_INDEX_MAPS`` itself and holds whatever syntax built it. No
+    allowlist.
 
 Checks 5, 6, 7 enforce the data/engine separation. Check 8 enforces the
 observability contract (see docs/specifications/observability.md). Check 9
@@ -113,6 +131,8 @@ guard, and checks 14-16 and 18 the Phase 4 uniform-stage-model guards (see
 docs/plans/target-architecture-migration.md) — check 18 closes out the
 migration by banning the back-compat shells the earlier slices left behind.
 Check 20 is Phase 0 of docs/plans/test-space-correctness-proposal.md.
+Checks 21 and 22 are graduated LESSONS: a trap that reached production and
+was mechanically checkable from the source is now a check rather than prose.
 Rare intentional exceptions are listed in the ALLOWLIST dicts below; adding
 a new entry there should be a deliberate, reviewed decision.
 
@@ -2411,6 +2431,229 @@ def _resolve_binding(
     return max(candidates, key=lambda binding: (binding[0], binding[1]))[2]
 
 
+# ---------------------------------------------------------------------------
+# Check 22 — one bundle key per publisher sheet code
+# ---------------------------------------------------------------------------
+
+#: Where the publisher z-axis (sheet) index maps live. Scanned as a DIRECTORY
+#: rather than as one named module, so moving ``scope.py`` WITHIN that package
+#: keeps it measured.
+#:
+#: What the population pin below catches is the maps being emptied, or
+#: ``SheetCode`` being renamed. It does NOT catch the ``validations/`` PACKAGE
+#: moving: ``root.is_dir()`` is then False and the scan has nothing to walk. So
+#: a run against the package root treats a missing directory as a violation
+#: rather than a skip, and only a genuine subpath run may skip.
+_SHEET_MAP_SUBPACKAGE = ("reporting", "validations")
+#: The package root, so a full run cannot silently take the subpath skip branch.
+_PACKAGE_ROOT_NAME = "rwa_calc"
+_SHEET_CODE_CTOR = "SheetCode"
+#: ``bundle_keys`` is the third POSITIONAL parameter of ``SheetCode`` — and the
+#: keyword is read on a call to ANYTHING, because ``replace(entry,
+#: bundle_keys=(...))`` widens a z-code without ever naming the constructor.
+#: That is not a hypothetical shape: ``scope.py`` imports ``replace`` and
+#: already uses it on its sibling frozen dataclass (``_bindings_for`` ->
+#: ``replace(binding, columns=...)``), so it is the nearest in-file precedent a
+#: future widening would copy.
+_BUNDLE_KEYS_ARG = "bundle_keys"
+_BUNDLE_KEYS_POSITION = 2
+
+
+def check_sheet_code_single_bundle_key(path: Path) -> list[str]:
+    """Every publisher sheet code addresses at most ONE of our bundle keys.
+
+    A ``SheetCode`` carrying two or more ``bundle_keys`` is an undeclared
+    assertion that our sheet axis is FINER than the publisher's z-axis, and the
+    supervisory rule evaluator has no way to honour it: ``resolve_sheet_codes``
+    returns EVERY key for a scoped code, so the rule is evaluated against the
+    SUM of those sheets — a figure that appears in no submitted workbook.
+
+    The escape this closes: before PR #497, ``_C07_SHEETS`` z0008 held
+    ``("corporate", "corporate_sme")``, z0009 ``("retail_other",
+    "retail_qrre")`` and z0010 the three mortgage classes — our internal
+    ``ExposureClass`` values rather than the Art. 112(1) classes the C 07.00
+    z-axis indexes. The live EBA ERROR rule ``v4240_i`` therefore compared
+    C 02.00 row 0130 against the sum of two of our sheets, and PASSED. The
+    multi-key map did not merely fail to catch the wrong sheet axis: it
+    CONVERTED it into a passing rule, which is why a faithful pre/post
+    comparison of the whole supervisory register was identical in both states
+    (27 broken / 4 uncovered / 188 vacuous either way).
+
+    The remedy is never to widen the map. Where several internal classes belong
+    to one regulatory class, the GENERATOR fans them onto one key so the sheet
+    is the class TOTAL the z-axis asks for — ``templates.C07_00_SA_SHEET_MAP``
+    does exactly that for ``real_estate``.
+
+    The REVERSE shape stays legal, and must: several z-codes mapping onto one of
+    our keys (``_C08_SHEETS`` z0013/z0014 -> ``retail_mortgage``) is the
+    genuinely-finer Art. 147(2)(d) IRB axis, and ``resolve_sheet_codes`` already
+    refuses any scope that is not CLOSED under that mapping.
+
+    **Scope, stated honestly — this gate guards the SOURCE SHAPE, not the
+    estate, and "no allowlist" is not a completeness claim.** It reads two
+    shapes anywhere in a module (module scope, a builder function's body, a
+    class body): a call to ``SheetCode``, and a call to ANYTHING that passes
+    ``bundle_keys=``. A ``bundle_keys`` that is not a literal tuple of strings
+    is itself a violation, because an invariant that cannot be read off the
+    source cannot be gated here. The one shape it does not see is an import
+    ALIAS constructed positionally (``SC = SheetCode``; ``SC(code, label, (a,
+    b), src)``), which is not this file's idiom.
+
+    What guards the ESTATE is limb 1 of
+    ``tests/contracts/test_sheet_index_bundle_key_cardinality.py``, which reads
+    the live ``SHEET_INDEX_MAPS`` at pytest time and therefore holds whatever
+    syntax built it. The division is deliberate: the test guards the data, this
+    gate guards the shape the data is written in, and a widened z-code has to
+    get past both.
+
+    There is no allowlist and none is owed: a code understood but with no
+    analogue in our output carries an EMPTY tuple — a skip, never a zero —
+    which is the only other legal cardinality.
+    """
+    root = path.joinpath(*_SHEET_MAP_SUBPACKAGE)
+    if not root.is_dir():
+        if path.name == _PACKAGE_ROOT_NAME:
+            return [
+                f"  {root} does not exist -- check 22 has lost its population. The "
+                "sheet-index maps moved out of reporting/validations/; re-point "
+                "_SHEET_MAP_SUBPACKAGE at them. A full-package run may not take the "
+                "subpath skip: an unmeasured invariant reads exactly like a satisfied one."
+            ]
+        return []  # a genuine subpath run (arch_check.py src/rwa_calc/engine) — skip
+
+    violations: list[str] = []
+    measured = 0
+    for py_file in sorted(root.rglob("*.py")):
+        try:
+            tree = ast.parse(py_file.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, SyntaxError):
+            continue
+        for context, call in _iter_sheet_code_calls(tree):
+            measured += 1
+            violations.extend(_sheet_code_violations(py_file, context, call))
+
+    if not measured:
+        return [
+            f"  no {_SHEET_CODE_CTOR}(...) / {_BUNDLE_KEYS_ARG}= call found under "
+            f"{root} -- check 22 has lost its population. Re-point "
+            f"_SHEET_MAP_SUBPACKAGE / {_SHEET_CODE_CTOR} at the sheet-index maps: "
+            "an unmeasured invariant reads exactly like a satisfied one."
+        ]
+    return violations
+
+
+def _iter_sheet_code_calls(tree: ast.Module) -> Iterator[tuple[str, ast.Call]]:
+    """Every sheet-code construction in a module, labelled by where it is written.
+
+    Walks the WHOLE tree rather than only top-level assignment values, because
+    ``scope.py`` already derives two of its own maps inside helpers
+    (``derive_variant_columns``, ``_bindings_for``) — a ``_C09_SHEETS =
+    _build(...)`` is the natural next step and would otherwise be invisible.
+    """
+    for context, node in _labelled_nodes(tree, ""):
+        if not isinstance(node, ast.Call):
+            continue
+        keyed = any(keyword.arg == _BUNDLE_KEYS_ARG for keyword in node.keywords)
+        if _callee_name(node) == _SHEET_CODE_CTOR or keyed:
+            yield context or "<module scope>", node
+
+
+def _labelled_nodes(node: ast.AST, label: str) -> Iterator[tuple[str, ast.AST]]:
+    """Every node under ``node``, labelled with the dotted path of enclosing names.
+
+    The label is what puts a map name — ``_C07_SHEETS``, or
+    ``_build_sheets.entries`` — into the failure message, which is the whole
+    point of naming the map rather than only the line.
+    """
+    yield label, node
+    for child in ast.iter_child_nodes(node):
+        name = _binding_name(child)
+        yield from _labelled_nodes(child, f"{label}.{name}" if name and label else name or label)
+
+
+def _binding_name(node: ast.AST) -> str | None:
+    """The name a node binds — an assignment target, or a def/class name."""
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        return node.name
+    if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+        return node.target.id
+    if isinstance(node, ast.Assign):
+        return next((t.id for t in node.targets if isinstance(t, ast.Name)), None)
+    return None
+
+
+def _callee_name(call: ast.Call) -> str | None:
+    """The bare name a call invokes, through an attribute access if needed."""
+    func = call.func
+    return func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
+
+
+def _sheet_code_violations(py_file: Path, context: str, call: ast.Call) -> list[str]:
+    """Reject a sheet code that addresses more than one of our bundle keys."""
+    positional = (
+        call.args[_BUNDLE_KEYS_POSITION]
+        if _callee_name(call) == _SHEET_CODE_CTOR and len(call.args) > _BUNDLE_KEYS_POSITION
+        else None
+    )
+    keys_node = next(
+        (keyword.value for keyword in call.keywords if keyword.arg == _BUNDLE_KEYS_ARG),
+        positional,
+    )
+    code = _sheet_code_id(call)
+    keys = _literal_bundle_keys(keys_node)
+    if keys is None:
+        return [
+            f"  {py_file}:{call.lineno}: {context} sheet code {code} does not declare "
+            f"{_BUNDLE_KEYS_ARG} as a literal tuple of strings, so the one-key invariant "
+            "cannot be read off the source. Keep the sheet-index maps literal -- a map "
+            "assembled at runtime is checkable only by the live-map limb of "
+            "tests/contracts/test_sheet_index_bundle_key_cardinality.py."
+        ]
+    if len(keys) <= 1:
+        return []
+    return [
+        f"  {py_file}:{call.lineno}: {context} sheet code {code} maps to "
+        f"{len(keys)} bundle keys ({', '.join(keys)}). resolve_sheet_codes returns "
+        "EVERY key for a scoped code, so the rule evaluator aggregates the publisher's "
+        "reference across all of them and asserts against a figure that appears in no "
+        "submitted workbook -- a wrong sheet axis then reads as a PASSING rule instead "
+        "of a break (PR #497: C 07.00 z0008 held corporate + corporate_sme, and the "
+        "live EBA ERROR rule v4240_i passed against the sum of the two sheets). Fan "
+        "the internal classes onto ONE key in the generator so the sheet is the class "
+        "TOTAL the z-axis asks for, as C07_00_SA_SHEET_MAP does for real_estate; never "
+        "widen the map."
+    ]
+
+
+def _sheet_code_id(call: ast.Call) -> str:
+    """The z-code a call names, or the source of the entry it widens.
+
+    ``replace(_C07_SHEETS[7], bundle_keys=...)`` names no code at all, so the
+    expression is unparsed instead: ``<_C07_SHEETS[7]>`` sends the reader to the
+    entry, where a bare ``<unknown>`` would leave them counting tuple positions.
+    """
+    named = (keyword.value for keyword in call.keywords if keyword.arg == "code")
+    for node in [*call.args[:1], *named]:
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return repr(node.value)
+        if isinstance(node, ast.expr):
+            return f"<{ast.unparse(node)[:60]}>"
+    return "<unknown>"
+
+
+def _literal_bundle_keys(node: ast.AST | None) -> tuple[str, ...] | None:
+    """The literal ``bundle_keys`` tuple, or ``None`` when it is not statically known."""
+    if node is None:
+        return None
+    try:
+        value = ast.literal_eval(node)
+    except (ValueError, TypeError, SyntaxError):
+        return None
+    if not isinstance(value, (tuple, list)) or not all(isinstance(key, str) for key in value):
+        return None
+    return tuple(value)
+
+
 def check_watchfire_citations() -> tuple[list[str], list[str]]:
     """Run `watchfire check` via its Python API.
 
@@ -2619,6 +2862,10 @@ def main() -> int:
             "No nested Polars window expressions in engine/ "
             "(compute the inner window as its own column)",
             check_no_nested_window_expressions,
+        ),
+        (
+            "One bundle key per publisher sheet code (reporting/validations)",
+            check_sheet_code_single_bundle_key,
         ),
     ]
 

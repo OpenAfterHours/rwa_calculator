@@ -35,11 +35,12 @@ from typing import TYPE_CHECKING, Literal, Protocol
 
 import polars as pl
 
+from rwa_calc.reporting.corep import sheet_labels
 from rwa_calc.reporting.corep import templates as ct
 from rwa_calc.reporting.pillar3 import templates as pt
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, Mapping, Sequence
 
     from rwa_calc.reporting.corep.generator import COREPTemplateBundle
     from rwa_calc.reporting.pillar3.generator import Pillar3TemplateBundle
@@ -93,6 +94,14 @@ class TemplateInfo:
     family: Family
     sheets: tuple[str, ...] = ()
     sheet_label: str = ""
+    #: Readable name per sheet key, where the template supplies one. A tuple of
+    #: pairs rather than a dict so the dataclass stays hashable.
+    sheet_names: tuple[tuple[str, str], ...] = ()
+
+    @property
+    def sheet_options(self) -> tuple[tuple[str, str], ...]:
+        """``(key, display)`` for every sheet — see ``sheet_options``."""
+        return sheet_options(self.sheets, self.sheet_names)
 
 
 @dataclass(frozen=True)
@@ -114,6 +123,10 @@ class _TemplateDef:
     family: Family
     columns: Callable[[str], Sequence[RefNamed]]
     sheet_label: str = ""
+    #: Framework -> {sheet key: readable name}, for templates whose sheet keys
+    #: are not self-explaining. Absent (the default) leaves every key its own
+    #: label, which is what every template did before C 07.00 acquired one.
+    sheet_names: Callable[[str], Mapping[str, str]] | None = None
 
 
 def _fixed(columns: Sequence[RefNamed]) -> Callable[[str], Sequence[RefNamed]]:
@@ -131,7 +144,14 @@ def _fixed(columns: Sequence[RefNamed]) -> Callable[[str], Sequence[RefNamed]]:
 # (e.g. CRR C 07.00 has 24 columns; Basel 3.1 OF 07.00 has 22).
 _TEMPLATES: tuple[_TemplateDef, ...] = (
     _TemplateDef("c_02_00", "C 02.00 — Own funds requirements", "corep", ct.get_c02_00_columns),
-    _TemplateDef("c07_00", "C 07.00 — SA credit risk", "corep", ct.get_c07_columns, _CLASS),
+    _TemplateDef(
+        "c07_00",
+        "C 07.00 — SA credit risk",
+        "corep",
+        ct.get_c07_columns,
+        _CLASS,
+        sheet_labels.get_c07_sheet_labels,
+    ),
     _TemplateDef("c08_01", "C 08.01 — IRB totals", "corep", ct.get_c08_columns, _CLASS),
     _TemplateDef("c08_02", "C 08.02 — IRB by PD grade", "corep", ct.get_c08_02_columns, _CLASS),
     _TemplateDef("c08_03", "C 08.03 — IRB PD ranges", "corep", ct.get_c08_03_columns, _CLASS),
@@ -180,6 +200,26 @@ _TEMPLATES: tuple[_TemplateDef, ...] = (
 _BY_ID: dict[str, _TemplateDef] = {spec.id: spec for spec in _TEMPLATES}
 
 
+def sheet_options(
+    sheets: Sequence[str], names: Sequence[tuple[str, str]]
+) -> tuple[tuple[str, str], ...]:
+    """``(key, display)`` for every sheet, in ``sheets`` order.
+
+    A picker renders the display and submits the key. An unnamed sheet displays
+    its own key, which is what every picker did before C 07.00 supplied names —
+    so a caller renders this unconditionally and a missing label can never drop
+    a sheet from the list.
+
+    Module-level rather than a method because TWO unrelated classes present the
+    same axis — ``TemplateInfo`` (the report viewer) and
+    ``ui.views.return_recon.TemplateOption`` (the reconciliation viewer) — and
+    the second was left rendering raw keys for a whole release when the first
+    was fixed alone.
+    """
+    named = dict(names)
+    return tuple((key, named.get(key, key)) for key in sheets)
+
+
 def template_index(
     corep: COREPTemplateBundle | None, pillar3: Pillar3TemplateBundle | None
 ) -> tuple[TemplateInfo, ...]:
@@ -194,7 +234,7 @@ def template_index(
         bundle = corep if spec.family == "corep" else pillar3
         if bundle is None:
             continue
-        info = _info_for(spec, getattr(bundle, spec.id, None))
+        info = _info_for(spec, getattr(bundle, spec.id, None), _framework_of(bundle))
         if info is not None:
             infos.append(info)
     return tuple(infos)
@@ -220,7 +260,7 @@ def template_sheet(
     if bundle is None:
         return None
     value = getattr(bundle, spec.id, None)
-    info = _info_for(spec, value)
+    info = _info_for(spec, value, _framework_of(bundle))
     if info is None:
         return None
 
@@ -233,7 +273,7 @@ def template_sheet(
     if not isinstance(frame, pl.DataFrame):
         return None
 
-    framework = getattr(bundle, "framework", "CRR")
+    framework = _framework_of(bundle)
     return TemplateSheet(
         info=info,
         sheet=selected,
@@ -247,17 +287,35 @@ def template_sheet(
 # =============================================================================
 
 
-def _info_for(spec: _TemplateDef, value: object) -> TemplateInfo | None:
-    """The ``TemplateInfo`` for a bundle field, or None when it has no content."""
+def _framework_of(bundle: object) -> str:
+    """The regime a bundle was generated under, defaulting to CRR.
+
+    A Pillar 3 bundle and a hand-built stub may not carry the field at all,
+    which is why this is a ``getattr`` rather than an attribute read.
+    """
+    framework = getattr(bundle, "framework", "CRR")
+    return framework if isinstance(framework, str) else "CRR"
+
+
+def _info_for(spec: _TemplateDef, value: object, framework: str = "CRR") -> TemplateInfo | None:
+    """The ``TemplateInfo`` for a bundle field, or None when it has no content.
+
+    ``framework`` resolves the regime-dependent sheet names (PS1/26 renames four
+    of the Art. 112(1) classes C 07.00 keys its sheets on). Only the names are
+    regime-dependent; the KEYS are not, so a caller that gets the framework
+    wrong mislabels a sheet but can never mis-select one.
+    """
     if isinstance(value, dict):
         if not value:
             return None
+        names = spec.sheet_names(framework) if spec.sheet_names is not None else {}
         return TemplateInfo(
             id=spec.id,
             title=spec.title,
             family=spec.family,
             sheets=tuple(sorted(value)),
             sheet_label=spec.sheet_label,
+            sheet_names=tuple(sorted(names.items())),
         )
     if value is None:
         return None

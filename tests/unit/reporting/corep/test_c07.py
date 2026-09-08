@@ -120,81 +120,6 @@ def _sa_results_with_sl() -> pl.LazyFrame:
     )
 
 
-def _sa_results_with_re() -> pl.LazyFrame:
-    """SA results with real estate columns for Task 3H testing."""
-    return pl.LazyFrame(
-        {
-            "exposure_reference": [
-                "SA_RE_RES_1",
-                "SA_RE_RES_2",
-                "SA_RE_COMM_1",
-                "SA_RE_COMM_2",
-                "SA_RE_COMM_3",
-                "SA_RE_ADC_1",
-                "SA_CORP_1",
-            ],
-            "approach_applied": ["standardised"] * 7,
-            "exposure_class": [
-                "secured_by_re_residential",
-                "secured_by_re_residential",
-                "secured_by_re_commercial",
-                "secured_by_re_commercial",
-                "secured_by_re_commercial",
-                "secured_by_re_commercial",
-                "corporate",
-            ],
-            "drawn_amount": [200.0, 300.0, 500.0, 400.0, 150.0, 100.0, 1000.0],
-            "undrawn_amount": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-            "ead_final": [200.0, 300.0, 500.0, 400.0, 150.0, 100.0, 1000.0],
-            "rwa_final": [40.0, 105.0, 300.0, 240.0, 112.5, 150.0, 1000.0],
-            "risk_weight": [0.20, 0.35, 0.60, 0.60, 0.75, 1.50, 1.00],
-            "scra_provision_amount": [0.0] * 7,
-            "gcra_provision_amount": [0.0] * 7,
-            "collateral_adjusted_value": [0.0] * 7,
-            "guaranteed_portion": [0.0] * 7,
-            "sa_cqs": [None] * 7,
-            "counterparty_reference": [
-                "CP_R1",
-                "CP_R2",
-                "CP_C1",
-                "CP_C2",
-                "CP_C3",
-                "CP_ADC",
-                "CP_CORP",
-            ],
-            "property_type": [
-                "residential",
-                "residential",
-                "commercial",
-                "commercial",
-                "commercial",
-                "commercial",
-                None,
-            ],
-            "materially_dependent_on_property": [
-                False,
-                True,
-                False,
-                True,
-                False,
-                None,
-                None,
-            ],
-            "is_adc": [False, False, False, False, False, True, False],
-            # SME flag for commercial sub-split
-            "sme_supporting_factor_eligible": [
-                False,
-                False,
-                False,
-                False,
-                True,
-                False,
-                False,
-            ],
-        }
-    )
-
-
 def _sa_results_with_defaulted() -> pl.LazyFrame:
     """SA results with defaulted exposures at different risk weights.
 
@@ -259,10 +184,13 @@ def _sa_results_with_re_memorandum() -> pl.LazyFrame:
                 "standardised",
                 "standardised",
             ],
+            # Enum members matching each row's ``property_type`` — both key the
+            # Art. 112(1)(i) ``real_estate`` sheet, where rows 0290 / 0310 split
+            # them back out under CRR.
             "exposure_class": [
-                "secured_by_re_property",
-                "secured_by_re_property",
-                "secured_by_re_property",
+                "commercial_mortgage",
+                "commercial_mortgage",
+                "residential_mortgage",
                 "corporate",
             ],
             "drawn_amount": [1000.0, 2000.0, 3000.0, 4000.0],
@@ -343,7 +271,7 @@ class TestC0700:
         assert isinstance(bundle.c07_00, dict)
         assert "corporate" in bundle.c07_00
         assert "institution" in bundle.c07_00
-        assert "retail_other" in bundle.c07_00
+        assert "retail" in bundle.c07_00
         assert "central_govt_central_bank" in bundle.c07_00
 
     def test_c07_each_class_has_row_sections(self) -> None:
@@ -387,8 +315,9 @@ class TestC0700:
         bundle = gen.generate_from_lazyframe(_sa_results())
 
         corp = _get_total_row(bundle.c07_00["corporate"])
-        # 2 corporate exposures: drawn 1000+2000=3000, undrawn 500+0=500
-        assert corp["0010"][0] == pytest.approx(3500.0)
+        # Art. 112(1)(g) is one sheet, so the SME leg is on it: drawn
+        # 1000+2000+500=3500, undrawn 500+0+100=600.
+        assert corp["0010"][0] == pytest.approx(4100.0)
 
     def test_c07_total_row_provisions(self) -> None:
         """Provisions (col 0030) sum SCRA + GCRA amounts — emitted negative per Annex II §1.3."""
@@ -396,8 +325,8 @@ class TestC0700:
         bundle = gen.generate_from_lazyframe(_sa_results())
 
         corp = _get_total_row(bundle.c07_00["corporate"])
-        # Corp provisions: (10+5) + (20+10) = 45; stored as negative deduction
-        assert corp["0030"][0] == pytest.approx(-45.0)
+        # Letter (g) provisions: (10+5) + (20+10) + (5+2.5) = 52.5, negative.
+        assert corp["0030"][0] == pytest.approx(-52.5)
 
     def test_c07_total_row_net_exposure(self) -> None:
         """Net exposure (col 0040) = original - provisions."""
@@ -405,8 +334,8 @@ class TestC0700:
         bundle = gen.generate_from_lazyframe(_sa_results())
 
         corp = _get_total_row(bundle.c07_00["corporate"])
-        # 3500 - 45 = 3455
-        assert corp["0040"][0] == pytest.approx(3455.0)
+        # 4100 - 52.5 = 4047.5
+        assert corp["0040"][0] == pytest.approx(4047.5)
 
     def test_c07_total_row_guarantees(self) -> None:
         """Guarantees (col 0050) are aggregated correctly — emitted negative per Annex II §1.3."""
@@ -423,8 +352,8 @@ class TestC0700:
         bundle = gen.generate_from_lazyframe(_sa_results())
 
         corp = _get_total_row(bundle.c07_00["corporate"])
-        # Corp collateral: 100 + 0 = 100; stored as negative deduction
-        assert corp["0130"][0] == pytest.approx(-100.0)
+        # Letter (g) collateral: 100 + 0 + 50 = 150; negative deduction.
+        assert corp["0130"][0] == pytest.approx(-150.0)
 
     def test_c07_total_row_ead(self) -> None:
         """Exposure value (col 0200) matches EAD."""
@@ -432,8 +361,8 @@ class TestC0700:
         bundle = gen.generate_from_lazyframe(_sa_results())
 
         corp = _get_total_row(bundle.c07_00["corporate"])
-        # EAD: 1200 + 2000 = 3200
-        assert corp["0200"][0] == pytest.approx(3200.0)
+        # EAD: 1200 + 2000 + 550 = 3750
+        assert corp["0200"][0] == pytest.approx(3750.0)
 
     def test_c07_total_row_rwea(self) -> None:
         """RWEA (col 0220) matches RWA."""
@@ -441,8 +370,8 @@ class TestC0700:
         bundle = gen.generate_from_lazyframe(_sa_results())
 
         corp = _get_total_row(bundle.c07_00["corporate"])
-        # RWA: 1200 + 2000 = 3200
-        assert corp["0220"][0] == pytest.approx(3200.0)
+        # RWA: 1200 + 2000 + 467.5 = 3667.5
+        assert corp["0220"][0] == pytest.approx(3667.5)
 
     def test_c07_zero_rw_for_sovereign(self) -> None:
         """Central government with CQS 1 gets 0% RW, hence 0 RWEA."""
@@ -459,16 +388,20 @@ class TestC0700:
         bundle = gen.generate_from_lazyframe(_sa_results())
 
         corp = _get_total_row(bundle.c07_00["corporate"])
-        # All corp exposures have sa_cqs not null -> all RWA is rated
-        assert corp["0230"][0] == pytest.approx(3200.0)
+        # Every letter-(g) exposure has sa_cqs not null -> all RWA is rated
+        assert corp["0230"][0] == pytest.approx(3667.5)
 
     def test_c07_no_irb_in_sa_output(self) -> None:
         """C 07.00 dict must not include IRB-only exposure classes."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_combined_results())
 
-        # retail_mortgage is IRB-only in test data
-        assert "retail_mortgage" not in bundle.c07_00
+        # retail_mortgage is IRB-only in test data, and it is the only class in
+        # the combined frame that keys the Art. 112(1)(i) sheet — so the sheet
+        # must not exist at all. Asserting the absence of the sheet KEY, not of
+        # the engine class: after the merge the class name is not a sheet key,
+        # and `"retail_mortgage" not in bundle.c07_00` would hold vacuously.
+        assert "real_estate" not in bundle.c07_00
 
     def test_c07_empty_results(self) -> None:
         """C 07.00 handles empty results gracefully."""
@@ -500,7 +433,8 @@ class TestC0700RiskWeightSection:
         corp = bundle.c07_00["corporate"]
         rw_100 = _get_rw_row(corp, "100%")
 
-        # EAD: 1200 + 2000 = 3200 (both corps are 100% RW)
+        # EAD: 1200 + 2000 = 3200 (the two 100%-RW corporates; the SME leg
+        # shares the sheet but sits in the 85% band)
         assert len(rw_100) == 1
         assert rw_100["0200"][0] == pytest.approx(3200.0)
 
@@ -520,7 +454,7 @@ class TestC0700RiskWeightSection:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results())
 
-        retail = bundle.c07_00["retail_other"]
+        retail = bundle.c07_00["retail"]
         rw_75 = _get_rw_row(retail, "75%")
 
         # EAD: 225 + 300 = 525
@@ -543,7 +477,7 @@ class TestC0700RiskWeightSection:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results())
 
-        retail = bundle.c07_00["retail_other"]
+        retail = bundle.c07_00["retail"]
         rw_75 = _get_rw_row(retail, "75%")
         # RWA: 168.75 + 225.0 = 393.75
         assert rw_75["0220"][0] == pytest.approx(393.75)
@@ -558,17 +492,20 @@ class TestSupportingFactors:
         bundle = gen.generate_from_lazyframe(_sa_results_with_phase2_cols())
 
         corp = _get_total_row(bundle.c07_00["corporate"])
-        # corporate has 3 exposures: rwa_before_sme_factor = 1200+2000+1200 = 4400
-        assert corp["0215"][0] == pytest.approx(4400.0)
+        # Letter (g) holds four exposures once corporate_sme shares the sheet:
+        # rwa_pre_factor = 1200+2000+550+1200 = 4950
+        assert corp["0215"][0] == pytest.approx(4950.0)
 
     def test_c07_sme_factor_benefit(self) -> None:
         """Col 0216 (SME factor benefit) = pre - post, emitted negative per Annex II §1.3."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_phase2_cols())
 
-        sme = _get_total_row(bundle.c07_00["corporate_sme"])
-        # rwa_before_sme_factor=550, rwa_final=467.5, benefit=82.5; negative deduction.
-        assert sme["0216"][0] == pytest.approx(-82.5)
+        # SA_CORP_3 is the only SME leg, and it now shares the Art. 112(1)(g)
+        # sheet with the plain corporates — so col 0216 on the merged sheet is
+        # still its benefit alone: 550 - 467.5 = 82.5, negative deduction.
+        corp = _get_total_row(bundle.c07_00["corporate"])
+        assert corp["0216"][0] == pytest.approx(-82.5)
 
     def test_c07_infra_factor_benefit(self) -> None:
         """Col 0217 (infra factor benefit) computed, emitted negative per Annex II §1.3."""
@@ -590,15 +527,49 @@ class TestSupportingFactors:
         assert "0217" not in corp.columns
 
     def test_c07_rwea_relationship(self) -> None:
-        """Col 0220 = 0215 + 0216 + 0217 under the "(-)" display convention."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_sa_results_with_phase2_cols())
+        """Col 0220 = 0215 + 0216 + 0217 under the "(-)" display convention.
 
-        sme = _get_total_row(bundle.c07_00["corporate_sme"])
+        Stated on a frame holding ONLY the SME leg. It used to read the
+        ``corporate_sme`` sheet, which the Art. 112(1)(g) merge no longer emits
+        — and the merged sheet cannot carry this identity, because
+        ``_sa_results_with_phase2_cols`` gives SA_CORP_2 a 100 pre/post
+        difference attributed to NEITHER supporting factor. Reading the merged
+        sheet would make the assertion fail for a reason that has nothing to do
+        with the columns under test.
+        """
+        data = pl.LazyFrame(
+            {
+                "exposure_reference": ["SA_SME_ONLY"],
+                "approach_applied": ["standardised"],
+                "exposure_class": ["corporate_sme"],
+                "drawn_amount": [500.0],
+                "undrawn_amount": [100.0],
+                "ead_final": [550.0],
+                "rwa_final": [467.5],
+                "rwa_pre_factor": [550.0],
+                "risk_weight": [0.85],
+                "scra_provision_amount": [5.0],
+                "gcra_provision_amount": [2.5],
+                "collateral_adjusted_value": [50.0],
+                "guaranteed_portion": [0.0],
+                "sa_cqs": [0],
+                "counterparty_reference": ["CP_C"],
+                "sme_supporting_factor_eligible": [True],
+                "sme_supporting_factor_applied": [True],
+                "infrastructure_factor_applied": [False],
+            }
+        )
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(data)
+
+        sme = _get_total_row(bundle.c07_00["corporate"])
         pre = sme["0215"][0]
         sme_benefit = sme["0216"][0]  # negative per Annex II §1.3
         post = sme["0220"][0]
-        # pre + sme_benefit = post (no infra for SME class; 0216 already signed)
+        assert sme_benefit == pytest.approx(-82.5), (
+            "the SME benefit is zero, so the identity below would hold whatever col 0216 did"
+        )
+        # pre + sme_benefit = post (no infra on this leg; 0216 already signed)
         assert post == pytest.approx(pre + sme_benefit)
 
 
@@ -821,110 +792,6 @@ class TestSpecialisedLendingRows:
         assert total_pf == pytest.approx(pre_op + op + hq_op)
 
 
-class TestRealEstateRows:
-    """Task 3H: Real estate detail rows (B3.1 OF 07.00 rows 0330-0360).
-
-    Why: Basel 3.1 requires granular reporting of RE exposures by property
-    type, cash-flow dependency, and SME status. This enables supervisors to
-    assess concentration risk in property-secured lending.
-    """
-
-    def test_residential_re_total(self) -> None:
-        """Row 0330 shows total regulatory residential RE."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_sa_results_with_re(), framework="BASEL_3_1")
-        # RE exposures are in "secured_by_re_residential" class
-        re_res = bundle.c07_00.get("secured_by_re_residential")
-        assert re_res is not None
-        row = re_res.filter(pl.col("row_ref") == "0330")
-        assert len(row) == 1
-        # SA_RE_RES_1 + SA_RE_RES_2: 200 + 300 = 500
-        assert row["0200"][0] == pytest.approx(500.0)
-
-    def test_residential_not_dependent(self) -> None:
-        """Row 0331: residential, not materially dependent."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_sa_results_with_re(), framework="BASEL_3_1")
-        re_res = bundle.c07_00["secured_by_re_residential"]
-        row = re_res.filter(pl.col("row_ref") == "0331")
-        assert len(row) == 1
-        # SA_RE_RES_1: 200 (not dependent)
-        assert row["0200"][0] == pytest.approx(200.0)
-
-    def test_residential_dependent(self) -> None:
-        """Row 0332: residential, materially dependent."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_sa_results_with_re(), framework="BASEL_3_1")
-        re_res = bundle.c07_00["secured_by_re_residential"]
-        row = re_res.filter(pl.col("row_ref") == "0332")
-        assert len(row) == 1
-        # SA_RE_RES_2: 300 (dependent)
-        assert row["0200"][0] == pytest.approx(300.0)
-
-    def test_commercial_re_total(self) -> None:
-        """Row 0340 shows total regulatory commercial RE."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_sa_results_with_re(), framework="BASEL_3_1")
-        re_comm = bundle.c07_00.get("secured_by_re_commercial")
-        assert re_comm is not None
-        row = re_comm.filter(pl.col("row_ref") == "0340")
-        assert len(row) == 1
-        # All commercial (excl ADC): 500 + 400 + 150 + 100 = 1150
-        # But property_type = commercial for all, including ADC
-        assert row["0200"][0] == pytest.approx(1150.0)
-
-    def test_commercial_not_dependent_non_sme(self) -> None:
-        """Row 0341: commercial, not dependent, non-SME."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_sa_results_with_re(), framework="BASEL_3_1")
-        re_comm = bundle.c07_00["secured_by_re_commercial"]
-        row = re_comm.filter(pl.col("row_ref") == "0341")
-        assert len(row) == 1
-        # SA_RE_COMM_1: 500 (not dependent, not SME)
-        assert row["0200"][0] == pytest.approx(500.0)
-
-    def test_commercial_sme_not_dependent(self) -> None:
-        """Row 0343: commercial, not dependent, SME."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_sa_results_with_re(), framework="BASEL_3_1")
-        re_comm = bundle.c07_00["secured_by_re_commercial"]
-        row = re_comm.filter(pl.col("row_ref") == "0343")
-        assert len(row) == 1
-        # SA_RE_COMM_3: 150 (not dependent, SME)
-        assert row["0200"][0] == pytest.approx(150.0)
-
-    def test_adc_row(self) -> None:
-        """Row 0360 shows ADC exposures."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_sa_results_with_re(), framework="BASEL_3_1")
-        re_comm = bundle.c07_00["secured_by_re_commercial"]
-        row = re_comm.filter(pl.col("row_ref") == "0360")
-        assert len(row) == 1
-        # SA_RE_ADC_1: 100
-        assert row["0200"][0] == pytest.approx(100.0)
-
-    def test_re_rows_absent_crr(self) -> None:
-        """RE detail rows don't exist under CRR."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_sa_results_with_re(), framework="CRR")
-        re_res = bundle.c07_00.get("secured_by_re_residential")
-        if re_res is not None:
-            re_rows = re_res.filter(
-                pl.col("row_ref").is_in(["0330", "0331", "0332", "0340", "0341", "0342", "0360"])
-            )
-            assert len(re_rows) == 0
-
-    def test_dependent_splits_sum_to_total(self) -> None:
-        """Rows 0331 + 0332 = 0330 for residential RE."""
-        gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(_sa_results_with_re(), framework="BASEL_3_1")
-        re_res = bundle.c07_00["secured_by_re_residential"]
-        total = re_res.filter(pl.col("row_ref") == "0330")["0200"][0]
-        not_dep = re_res.filter(pl.col("row_ref") == "0331")["0200"][0]
-        dep = re_res.filter(pl.col("row_ref") == "0332")["0200"][0]
-        assert total == pytest.approx(not_dep + dep)
-
-
 class TestCurrencyMismatchRow:
     """Task 3J: Currency mismatch multiplier memorandum row 0380.
 
@@ -941,7 +808,7 @@ class TestCurrencyMismatchRow:
             _sa_results_with_currency_mismatch(), framework="BASEL_3_1"
         )
         # Retail class — SA_RET_1 has mismatch, SA_RET_2 does not
-        ret = bundle.c07_00["retail_other"]
+        ret = bundle.c07_00["retail"]
         row = ret.filter(pl.col("row_ref") == "0380")
         assert len(row) == 1
         # Only SA_RET_1 (EAD=100, RWA=112.5) has mismatch
@@ -949,12 +816,16 @@ class TestCurrencyMismatchRow:
         assert row["0220"][0] == pytest.approx(112.5)
 
     def test_b31_mortgage_row_0380(self) -> None:
-        """Row 0380 works for retail_mortgage class too."""
+        """Row 0380 works on the Art. 112(1)(i) sheet too.
+
+        ``retail_mortgage`` keys the ``real_estate`` sheet, which under this
+        builder holds SA_MORT_1 alone.
+        """
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(
             _sa_results_with_currency_mismatch(), framework="BASEL_3_1"
         )
-        mort = bundle.c07_00["retail_mortgage"]
+        mort = bundle.c07_00["real_estate"]
         row = mort.filter(pl.col("row_ref") == "0380")
         assert len(row) == 1
         # SA_MORT_1 has mismatch (EAD=500, RWA=375)
@@ -976,7 +847,7 @@ class TestCurrencyMismatchRow:
         """CRR framework does not have row 0380 — it's a B3.1-only memorandum."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_currency_mismatch(), framework="CRR")
-        ret = bundle.c07_00.get("retail_other")
+        ret = bundle.c07_00.get("retail")
         if ret is not None:
             row = ret.filter(pl.col("row_ref") == "0380")
             assert len(row) == 0
@@ -1046,7 +917,7 @@ class TestC0700MemorandumRows:
         """Row 0320 applies within each exposure class independently."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_defaulted(), framework="CRR")
-        retail = bundle.c07_00["retail_other"]
+        retail = bundle.c07_00["retail"]
         row = retail.filter(pl.col("row_ref") == "0320")
         # SA_RET_DEF has EAD 500, RW 150%, defaulted
         assert row["0200"][0] == pytest.approx(500.0)
@@ -1056,7 +927,7 @@ class TestC0700MemorandumRows:
         """Row 0300 is null when no defaulted exposures have RW = 100%."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_defaulted(), framework="CRR")
-        retail = bundle.c07_00["retail_other"]
+        retail = bundle.c07_00["retail"]
         row = retail.filter(pl.col("row_ref") == "0300")
         # No defaulted retail exposures at RW 100%
         assert row["0200"][0] is None
@@ -1082,7 +953,7 @@ class TestC0700MemorandumRows:
         """CRR row 0290: commercial immovable property secured exposures."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_re_memorandum(), framework="CRR")
-        re = bundle.c07_00["secured_by_re_property"]
+        re = bundle.c07_00["real_estate"]
         row = re.filter(pl.col("row_ref") == "0290")
         assert len(row) == 1
         # Two commercial RE: EAD 1000 + 2000 = 3000
@@ -1094,7 +965,7 @@ class TestC0700MemorandumRows:
         """CRR row 0310: residential immovable property secured exposures."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_re_memorandum(), framework="CRR")
-        re = bundle.c07_00["secured_by_re_property"]
+        re = bundle.c07_00["real_estate"]
         row = re.filter(pl.col("row_ref") == "0310")
         assert len(row) == 1
         # One residential RE: EAD 3000
@@ -1115,7 +986,7 @@ class TestC0700MemorandumRows:
         bundle = gen.generate_from_lazyframe(
             _sa_results_with_re_memorandum(), framework="BASEL_3_1"
         )
-        re = bundle.c07_00["secured_by_re_property"]
+        re = bundle.c07_00["real_estate"]
         row_refs = re["row_ref"].to_list()
         # B31 memorandum doesn't include 0290/0310 (removed in template defs)
         assert "0290" not in row_refs
@@ -1179,7 +1050,8 @@ class TestC0700SupportingFactorRows:
         """Row 0030 filters SME exposures with supporting factor applied."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_supporting_factors(), framework="CRR")
-        # corporate_sme merges into corporate for C 07.00
+        # Every exposure in this builder is class "corporate"; the is_sme flag
+        # is what routes row 0030, not the class
         corp = bundle.c07_00["corporate"]
         row = corp.filter(pl.col("row_ref") == "0030")
         assert len(row) == 1
@@ -1359,7 +1231,7 @@ class TestOF0700RESubRowFallback:
             {
                 "exposure_reference": ["RE_1", "RE_2", "RE_3"],
                 "approach_applied": ["standardised"] * 3,
-                "exposure_class": ["secured_by_re_residential"] * 3,
+                "exposure_class": ["residential_mortgage"] * 3,
                 "drawn_amount": [100.0, 200.0, 300.0],
                 "undrawn_amount": [0.0, 0.0, 0.0],
                 "ead_final": [100.0, 200.0, 300.0],
@@ -1375,7 +1247,7 @@ class TestOF0700RESubRowFallback:
         )
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(data, framework="BASEL_3_1")
-        re_res = bundle.c07_00["secured_by_re_residential"]
+        re_res = bundle.c07_00["real_estate"]
         # 0331: residential, NOT dependent → RE_1 + RE_3 (EAD 100+300=400)
         r0331 = re_res.filter(pl.col("row_ref") == "0331")
         assert len(r0331) == 1
@@ -1393,7 +1265,7 @@ class TestOF0700RESubRowFallback:
             {
                 "exposure_reference": ["RE_1", "RE_2"],
                 "approach_applied": ["standardised"] * 2,
-                "exposure_class": ["secured_by_re_residential"] * 2,
+                "exposure_class": ["residential_mortgage"] * 2,
                 "drawn_amount": [100.0, 200.0],
                 "undrawn_amount": [0.0, 0.0],
                 "ead_final": [100.0, 200.0],
@@ -1409,7 +1281,7 @@ class TestOF0700RESubRowFallback:
         )
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(data, framework="BASEL_3_1")
-        re_res = bundle.c07_00["secured_by_re_residential"]
+        re_res = bundle.c07_00["real_estate"]
         r0331 = re_res.filter(pl.col("row_ref") == "0331")
         ead_col = "0200" if "0200" in r0331.columns else "0010"
         assert float(r0331[ead_col][0] or 0) == pytest.approx(100.0)
@@ -1420,7 +1292,7 @@ class TestOF0700RESubRowFallback:
             {
                 "exposure_reference": ["RE_1"],
                 "approach_applied": ["standardised"],
-                "exposure_class": ["secured_by_re_residential"],
+                "exposure_class": ["residential_mortgage"],
                 "drawn_amount": [100.0],
                 "undrawn_amount": [0.0],
                 "ead_final": [100.0],
@@ -1435,7 +1307,7 @@ class TestOF0700RESubRowFallback:
         )
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(data, framework="BASEL_3_1")
-        re_res = bundle.c07_00["secured_by_re_residential"]
+        re_res = bundle.c07_00["real_estate"]
         r0331 = re_res.filter(pl.col("row_ref") == "0331")
         ead_col = "0200" if "0200" in r0331.columns else "0010"
         # Should be null (no data to split on)
@@ -1447,7 +1319,7 @@ class TestOF0700RESubRowFallback:
             {
                 "exposure_reference": ["RE_1"],
                 "approach_applied": ["standardised"],
-                "exposure_class": ["secured_by_re_residential"],
+                "exposure_class": ["residential_mortgage"],
                 "drawn_amount": [100.0],
                 "undrawn_amount": [0.0],
                 "ead_final": [100.0],
@@ -1464,7 +1336,7 @@ class TestOF0700RESubRowFallback:
         )
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(data, framework="BASEL_3_1")
-        re_res = bundle.c07_00["secured_by_re_residential"]
+        re_res = bundle.c07_00["real_estate"]
         ead_col = "0200" if "0200" in re_res.columns else "0010"
         # RE_1 has materially_dependent=True, so should appear in row 0332
         r0332 = re_res.filter(pl.col("row_ref") == "0332")

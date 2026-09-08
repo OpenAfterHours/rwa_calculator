@@ -3333,24 +3333,51 @@ class TestCurrencyMismatchMultiplier:
         # Check the multiplied RW is reasonable for 60% LTV residential
         assert float(result["risk_weight"]) > 0.20  # Must be > 20%
 
-    def test_commercial_re_with_mismatch(
+    def test_commercial_re_is_out_of_scope_for_the_mismatch_multiplier(
         self,
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """Commercial RE with currency mismatch gets 1.5x multiplier."""
-        result = calculate_single_sa_exposure(
+        """PS1/26 Art. 123B(1) covers RETAIL and RESIDENTIAL real estate only.
+
+        Its heading says so outright — "retail exposures and residential real
+        estate exposures with a currency mismatch" — and the operative text
+        scopes it to "unhedged retail exposures or unhedged residential real
+        estate exposures ... assigned to the exposure classes referred to in
+        points (h) and (i) of Article 112(1)". Commercial real estate takes no
+        multiplier.
+
+        Stated as a PAIR rather than as ``risk_weight > 0``. The exposure class
+        this used to pass was ``secured_by_re_commercial`` — not an
+        ``ExposureClass`` member at all, so nothing keyed on it and the
+        assertion held for any number the calculator returned.
+        """
+        mismatched = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="secured_by_re_commercial",
+            exposure_class="commercial_mortgage",
             ltv=Decimal("0.55"),
             property_type="commercial",
             currency="USD",
             borrower_income_currency="GBP",
             config=b31_config,
         )
-        # RW should be multiplied by 1.5
-        assert float(result["risk_weight"]) > 0.0
+        matched = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("500000"),
+            exposure_class="commercial_mortgage",
+            ltv=Decimal("0.55"),
+            property_type="commercial",
+            currency="GBP",
+            borrower_income_currency="GBP",
+            config=b31_config,
+        )
+
+        assert float(matched["risk_weight"]) > 0.0, (
+            "the commercial RE leg carries no risk weight at all, so an equality "
+            "against it would hold whatever the multiplier did"
+        )
+        assert float(mismatched["risk_weight"]) == pytest.approx(float(matched["risk_weight"]))
 
     def test_corporate_not_affected_by_mismatch(
         self,

@@ -31,6 +31,11 @@ References:
 from __future__ import annotations
 
 from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBundle
+from rwa_calc.reporting.corep.sheet_labels import (
+    B31_C07_00_SA_SHEET_LABELS,
+    CRR_C07_00_SA_SHEET_LABELS,
+    get_c07_sheet_labels,
+)
 from rwa_calc.reporting.corep.templates import (
     B31_C02_00_COLUMN_REFS,
     B31_C02_00_COLUMNS,
@@ -58,6 +63,8 @@ from rwa_calc.reporting.corep.templates import (
     B31_SL_TYPES,
     C02_00_CREDIT_RISK_ROWS,
     C02_00_SA_CLASS_MAP,
+    C07_00_SA_SHEET_KEYS,
+    C07_00_SA_SHEET_MAP,
     C07_COLUMNS,
     C08_01_COLUMNS,
     C08_03_COLUMN_REFS,
@@ -165,6 +172,9 @@ __all__ = [
     "B31_SL_TYPES",
     "C02_00_CREDIT_RISK_ROWS",
     "C02_00_SA_CLASS_MAP",
+    "B31_C07_00_SA_SHEET_LABELS",
+    "C07_00_SA_SHEET_KEYS",
+    "C07_00_SA_SHEET_MAP",
     "C07_COLUMNS",
     "C08_01_COLUMNS",
     "C08_03_COLUMN_REFS",
@@ -185,6 +195,7 @@ __all__ = [
     "CRR_C02_00_COLUMN_REFS",
     "CRR_C02_00_COLUMNS",
     "CRR_C02_00_ROW_SECTIONS",
+    "CRR_C07_00_SA_SHEET_LABELS",
     "CRR_C07_COLUMNS",
     "CRR_C08_COLUMNS",
     "CRR_C08_03_COLUMNS",
@@ -224,6 +235,7 @@ __all__ = [
     "get_c02_00_columns",
     "get_c02_00_row_sections",
     "get_c07_columns",
+    "get_c07_sheet_labels",
     "get_c34_01_columns",
     "get_c34_02_columns",
     "get_c34_04_columns",

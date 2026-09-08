@@ -785,7 +785,7 @@ LOAN_EXPECTED_ORIGIN_SHEET_CRR: dict[str, tuple[str, str]] = {
     LN_S5: ("c08_01", "corporate"),
     # Slotting is its OWN IRB exposure class (ExposureClass.SPECIALISED_LENDING),
     # not merged into "corporate" — that Art. 112 Table A2 merge is a C 07.00
-    # SA-side rule only (``c07.py::_merge_specialised_lending``); C 08.01 keys
+    # SA-side rule only (``templates.C07_00_SA_SHEET_MAP``); C 08.01 keys
     # slotting-origin legs on the raw class ("C 08.01 does NOT exclude
     # slotting" — ``c08.py::c08_01_plans``). No S1-S5 loan reaches this sheet.
     LN_S6: ("c08_01", "specialised_lending"),

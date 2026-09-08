@@ -58,8 +58,8 @@ sheet, then click a cell to see why it differs.</p>
       {% if page.selected and page.selected.id == "c08_06" %}SL type{% else %}Exposure class{% endif %}
     </label>
     <select id="sheet" name="sheet" onchange="this.form.submit()">
-      {% for key in page.selected.sheets %}
-      <option value="{{ key }}"{% if key == page.sheet %} selected{% endif %}>{{ key }}</option>
+      {% for key, name in page.selected.sheet_options %}
+      <option value="{{ key }}"{% if key == page.sheet %} selected{% endif %}>{{ name }}</option>
       {% endfor %}
     </select>
   </div>

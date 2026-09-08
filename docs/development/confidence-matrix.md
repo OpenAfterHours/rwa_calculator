@@ -60,7 +60,7 @@ Package version `0.3.34`. Resolved packs:
 | 109 | 1 | 0 | 5 | 0 | 1 | MEDIUM |
 | 110 | 0 | 1 | 4 | 0 | 6 | MEDIUM |
 | 111 | 6 | 8 | 20 | 0 | 40 | MEDIUM |
-| 112 | 4 | 3 | 18 | 0 | 33 | MEDIUM |
+| 112 | 4 | 3 | 19 | 0 | 36 | MEDIUM |
 | 113 | 2 | 2 | 11 | 0 | 10 | MEDIUM |
 | 114 | 8 | 6 | 14 | 14 | 33 | HIGH |
 | 115 | 6 | 10 | 8 | 3 | 9 | HIGH |
@@ -212,7 +212,7 @@ Package version `0.3.34`. Resolved packs:
 | 92 | 2 | 4 | 21 | 0 | 34 | MEDIUM |
 | 110A | 1 | 1 | 3 | 0 | 3 | MEDIUM |
 | 111 | 2 | 2 | 11 | 1 | 17 | HIGH |
-| 112 | 0 | 0 | 4 | 0 | 2 | UNCITED |
+| 112 | 0 | 0 | 6 | 0 | 2 | UNCITED |
 | 113 | 0 | 2 | 1 | 0 | 0 | LOW |
 | 114 | 3 | 1 | 10 | 2 | 24 | HIGH |
 | 115 | 2 | 0 | 3 | 3 | 6 | HIGH |
@@ -350,7 +350,7 @@ These articles are named in `src/rwa_calc/` production source but carry no `@cit
 | CRR 308 | 7 | 0 | 3 | — | — |
 | CRR 309 | 3 | 0 | 3 | — | — |
 | CRR 439 | 2 | 0 | 3 | — | — |
-| PS1/26 112 | 4 | 0 | 2 | — | CRR Art. 112 |
+| PS1/26 112 | 6 | 0 | 2 | — | CRR Art. 112 |
 | PS1/26 122B | 1 | 0 | 2 | — | — |
 | PS1/26 166E | 4 | 0 | 2 | — | — |
 | PS1/26 181 | 4 | 0 | 2 | — | CRR Art. 181 |

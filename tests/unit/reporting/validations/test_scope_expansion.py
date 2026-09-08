@@ -161,12 +161,14 @@ def test_the_boe_scope_supplies_the_axes_its_expression_omits() -> None:
     column 0220 (RWEA) and a 16-code z-list all live in the scope expression, so
     an evaluator reading only the formula would have no coordinate at all.
     """
-    # Arrange: three SA classes emitted, of the sixteen the rule scopes.
+    # Arrange: three SA sheets emitted, of the sixteen the rule scopes. The keys
+    # are Art. 112(1) LETTERS — "retail", not "retail_qrre", which is an engine
+    # sub-class the z-axis has never addressed.
     rule = next(r for r in load_rules("BASEL_3_1").enforced if r.rule_id == "boe_b0529")
     sheet = build_frame({"0140": {"0220": 0.0}})
     index = build_index(
         "BASEL_3_1",
-        c07_00={"corporate": sheet, "institution": sheet, "retail_qrre": sheet},
+        c07_00={"corporate": sheet, "institution": sheet, "retail": sheet},
     )
 
     # Act
@@ -176,7 +178,7 @@ def test_the_boe_scope_supplies_the_axes_its_expression_omits() -> None:
     assert [c.describe() for c in expansion.coordinates] == [
         "OF07.00.01.01[institution][r0140][c0220]",
         "OF07.00.01.01[corporate][r0140][c0220]",
-        "OF07.00.01.01[retail_qrre][r0140][c0220]",
+        "OF07.00.01.01[retail][r0140][c0220]",
     ]
 
 

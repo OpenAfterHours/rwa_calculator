@@ -49,7 +49,7 @@ class ExposureClass(StrEnum):
     """Central government and central bank exposures (CRR Art. 112(a), CRE20.7-15)"""
 
     INSTITUTION = "institution"
-    """Exposures to institutions (CRR Art. 112(d), CRE20.16-21)"""
+    """Exposures to institutions (CRR Art. 112(1)(f), CRE20.16-21)"""
 
     CORPORATE = "corporate"
     """Corporate exposures (CRR Art. 112(g), CRE20.22-25)"""
@@ -58,7 +58,13 @@ class ExposureClass(StrEnum):
     """SME corporate (turnover <= EUR 50m / GBP 44m)"""
 
     RETAIL_MORTGAGE = "retail_mortgage"
-    """Retail - residential mortgages (CRR Art. 112(h), CRE20.71-81)"""
+    """Mortgage-secured exposures to a retail counterparty (CRR Art. 112(1)(i),
+    CRE20.71-81). Class (i) — "exposures secured by mortgages on immovable
+    property" under CRR, "real estate exposures" under PRA PS1/26 — is defined by
+    the SECURITY, not by the counterparty, and outranks retail (h) in the
+    PS1/26 Art. 112(2) Table A2 ranking. That is why the C 07.00 / C 09.01
+    class (i) key legitimately absorbs ``RESIDENTIAL_MORTGAGE`` and
+    ``COMMERCIAL_MORTGAGE`` alongside this member."""
 
     RESIDENTIAL_MORTGAGE = "residential_mortgage"
     """Residential mortgage exposures emitted by the SA real-estate loan-splitter
@@ -103,7 +109,7 @@ class ExposureClass(StrEnum):
     """Covered bonds (CRR Art. 129, PRA PS1/26 Art. 129)"""
 
     HIGH_RISK = "high_risk"
-    """Items associated with particularly high risk (CRR Art. 112(l), Art. 128)"""
+    """Items associated with particularly high risk (CRR Art. 112(1)(k), Art. 128)"""
 
     OTHER = "other"
     """Other items (CRR Art. 112(q))"""

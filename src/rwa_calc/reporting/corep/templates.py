@@ -79,9 +79,18 @@ _LBL_SA_RGLA = "Regional governments or local authorities"
 _LBL_SA_PSE = "Public sector entities"
 _LBL_SA_MDB = "Multilateral development banks"
 _LBL_SA_INTL_ORG = "International organisations"
+_LBL_SA_INSTITUTIONS = "Institutions"
+_LBL_SA_CORPORATES = "Corporates"
+_LBL_SA_RETAIL = "Retail"
 _LBL_SA_MORTGAGES = "Secured by mortgages on immovable property"
+_LBL_SA_REAL_ESTATE = "Real estate exposures"
 _LBL_SA_DEFAULTED = "Exposures in default"
+_LBL_SA_HIGH_RISK = "Items associated with particularly high risk"
+_LBL_SA_HIGH_RISK_B31 = "Exposures associated with particularly high risk"
 _LBL_SA_COVERED_BOND = "Covered bonds"
+_LBL_SA_COVERED_BOND_B31 = "Eligible covered bonds"
+_LBL_SA_EQUITY = "Equity exposures"
+_LBL_SA_EQUITY_B31 = "Subordinated debt, equity and other own funds instruments"
 _LBL_SA_OTHER = "Other items"
 
 # --- Common column / row labels ---
@@ -460,6 +469,70 @@ B31_SA_ROW_SECTIONS: list[RowSection] = [
         ],
     ),
 ]
+
+
+# =============================================================================
+# C 07.00 / OF 07.00 — SA SHEET (z-axis) KEY MAP
+# =============================================================================
+
+# Sealed ``ExposureClass`` value -> the C 07.00 / OF 07.00 SHEET key. COREP and
+# PS1/26 Annex II §47 make that z-axis the Article 112(1) class (§56 assigning per
+# the Art. 112(2) Table A2 ranking) and the published z-codes run 0001-0017, so a
+# key outside Art. 112(1) has no sheet to be submitted on and opening one deletes
+# the class TOTAL — a ``corporate_sme`` sheet beside ``corporate`` left point (g)
+# reported nowhere and row 0020 "of which: SME" null on the sheet that carries it.
+#
+# 12 of the 19 keys map to themselves. The three fan-ins are the families split
+# FINER here than in the template. Every distinction the template DECLARES is
+# still reported, on the row axis; the merge loses only distinctions the template
+# never asked for:
+#   (g) <- + corporate_sme + specialised_lending. Table A2 row (15) scopes (g) to
+#          "Articles 122 to 122B", and 122A/122B ARE the SL articles. SME on row
+#          0020 in both regimes; SL on rows 0021-0026 (sl_type) under BASEL 3.1
+#          ONLY — CRR section 0 is 0010/0015/0020/0030/0035/0040/0050/0060 and
+#          declares no SL row, so under CRR the SL split does not return.
+#   (h) <- retail_other + retail_qrre. NOTHING returns: neither C 07.00 nor
+#          OF 07.00 declares a QRRE row in either regime.
+#   (i) <- the three RE classes. Class (i) is defined by the SECURITY, not the
+#          counterparty, so one key holds the residential AND commercial legs;
+#          the residential/commercial split returns on rows 0330/0340/0350/0360
+#          (B31, off property_type / is_adc) and on the memorandum rows
+#          0290/0310 (CRR).
+# ``real_estate`` is PS1/26's own name for (i) (Table A2 row (7), "Articles 124 to
+# 124L"), deliberately NOT ``C09_01_SA_CLASS_MAP``'s vocabulary, which fans the
+# family onto ``retail_mortgage`` — a name reading as retail-only to any reader
+# a sheet key reaches. (o) CIU has no ``ExposureClass`` member here so it has no
+# entry, matching the empty ``bundle_keys`` on its z-code in validations/scope.py.
+#
+# TOTAL over ``ExposureClass``; a value outside it passes through UNCHANGED
+# (``corep/c07.py::_art112_sheet_key``) so nothing can vanish, and ``c07_plans``
+# records it in the error list rather than folding it into "other".
+C07_00_SA_SHEET_MAP: dict[str, str] = {
+    "central_govt_central_bank": "central_govt_central_bank",  # (a)
+    "rgla": "rgla",  # (b)
+    "pse": "pse",  # (c)
+    "mdb": "mdb",  # (d)
+    "international_organisation": "international_organisation",  # (e)
+    "institution": "institution",  # (f)
+    "corporate": "corporate",  # (g)
+    "corporate_sme": "corporate",  # (g)
+    "specialised_lending": "corporate",  # (g)
+    "retail_other": "retail",  # (h)
+    "retail_qrre": "retail",  # (h)
+    "retail_mortgage": "real_estate",  # (i)
+    "residential_mortgage": "real_estate",  # (i)
+    "commercial_mortgage": "real_estate",  # (i)
+    "defaulted": "defaulted",  # (j)
+    "high_risk": "high_risk",  # (k)
+    "covered_bond": "covered_bond",  # (l)
+    "equity": "equity",  # (p)
+    "other": "other",  # (q)
+}
+
+# The Art. 112(1) sheet keys the map can produce — every value it holds. A sheet
+# key outside this set reached the axis by the pass-through limb, i.e. it is not
+# an Art. 112(1) class. Consumed by ``corep/c07.py::c07_plans``.
+C07_00_SA_SHEET_KEYS: frozenset[str] = frozenset(C07_00_SA_SHEET_MAP.values())
 
 
 # =============================================================================
@@ -1731,15 +1804,15 @@ CRR_C09_01_ROWS: list[COREPRow] = [
     COREPRow("0030", _LBL_SA_PSE, "pse"),
     COREPRow("0040", _LBL_SA_MDB, "mdb"),
     COREPRow("0050", _LBL_SA_INTL_ORG, "international_organisation"),
-    COREPRow("0060", "Institutions", "institution"),
-    COREPRow("0070", "Corporates", "corporate"),
+    COREPRow("0060", _LBL_SA_INSTITUTIONS, "institution"),
+    COREPRow("0070", _LBL_SA_CORPORATES, "corporate"),
     COREPRow("0075", _LBL_ROW_OF_WHICH_SME_LC, "corporate_sme"),
-    COREPRow("0080", "Retail", "retail"),
+    COREPRow("0080", _LBL_SA_RETAIL, "retail"),
     COREPRow("0085", _LBL_ROW_OF_WHICH_SME_LC, "retail_sme"),
     COREPRow("0090", _LBL_SA_MORTGAGES, "retail_mortgage"),
     COREPRow("0095", _LBL_ROW_OF_WHICH_SME_LC, "mortgage_sme"),
     COREPRow("0100", _LBL_SA_DEFAULTED, "defaulted"),
-    COREPRow("0110", "Items associated with particularly high risk", "high_risk"),
+    COREPRow("0110", _LBL_SA_HIGH_RISK, "high_risk"),
     COREPRow("0120", _LBL_SA_COVERED_BOND, "covered_bond"),
     COREPRow(
         "0130",
@@ -1750,7 +1823,7 @@ CRR_C09_01_ROWS: list[COREPRow] = [
     COREPRow("0141", "  Look-through approach", "ciu_look_through"),
     COREPRow("0142", "  Mandate-based approach", "ciu_mandate"),
     COREPRow("0143", "  Fall-back approach", "ciu_fallback"),
-    COREPRow("0150", "Equity exposures", "equity"),
+    COREPRow("0150", _LBL_SA_EQUITY, "equity"),
     COREPRow("0160", "Other exposures", "other"),
     COREPRow("0170", _LBL_ROW_TOTAL_EXPOSURES_MC, None),
 ]
@@ -1762,30 +1835,30 @@ B31_C09_01_ROWS: list[COREPRow] = [
     COREPRow("0030", _LBL_SA_PSE, "pse"),
     COREPRow("0040", _LBL_SA_MDB, "mdb"),
     COREPRow("0050", _LBL_SA_INTL_ORG, "international_organisation"),
-    COREPRow("0060", "Institutions", "institution"),
-    COREPRow("0070", "Corporates", "corporate"),
+    COREPRow("0060", _LBL_SA_INSTITUTIONS, "institution"),
+    COREPRow("0070", _LBL_SA_CORPORATES, "corporate"),
     COREPRow("0075", _LBL_ROW_OF_WHICH_SME_LC, "corporate_sme"),
     COREPRow("0071", "  of which: specialised lending - object finance", "sl_object_finance"),
     COREPRow(
         "0072", "  of which: specialised lending - commodities finance", "sl_commodities_finance"
     ),
     COREPRow("0073", "  of which: specialised lending - project finance", "sl_project_finance"),
-    COREPRow("0080", "Retail", "retail"),
+    COREPRow("0080", _LBL_SA_RETAIL, "retail"),
     COREPRow("0085", _LBL_ROW_OF_WHICH_SME_LC, "retail_sme"),
-    COREPRow("0090", "Real estate exposures", "real_estate"),
+    COREPRow("0090", _LBL_SA_REAL_ESTATE, "real_estate"),
     COREPRow("0095", _LBL_ROW_OF_WHICH_SME_LC, "re_sme"),
     COREPRow("0091", "  of which: regulatory residential real estate", "re_residential"),
     COREPRow("0092", "  of which: regulatory commercial real estate", "re_commercial"),
     COREPRow("0093", "  of which: other real estate", "re_other"),
     COREPRow("0094", "  of which: land acquisition, development and construction", "re_adc"),
     COREPRow("0100", _LBL_SA_DEFAULTED, "defaulted"),
-    COREPRow("0110", "Exposures associated with particularly high risk", "high_risk"),
-    COREPRow("0120", "Eligible covered bonds", "covered_bond"),
+    COREPRow("0110", _LBL_SA_HIGH_RISK_B31, "high_risk"),
+    COREPRow("0120", _LBL_SA_COVERED_BOND_B31, "covered_bond"),
     COREPRow("0140", _LBL_ROW_CIU, "ciu"),
     COREPRow("0141", "  Look-through approach", "ciu_look_through"),
     COREPRow("0142", "  Mandate-based approach", "ciu_mandate"),
     COREPRow("0143", "  Fall-back approach", "ciu_fallback"),
-    COREPRow("0150", "Subordinated debt, equity and other own funds instruments", "equity"),
+    COREPRow("0150", _LBL_SA_EQUITY_B31, "equity"),
     COREPRow("0160", _LBL_SA_OTHER, "other"),
     COREPRow("0170", _LBL_ROW_TOTAL_EXPOSURES_MC, None),
 ]

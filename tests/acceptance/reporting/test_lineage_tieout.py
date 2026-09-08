@@ -433,7 +433,14 @@ def test_contributing_rows_are_legs_of_the_corporate_book(source: _Source) -> No
     assert result is not None
     rows = result.rows
     assert "reporting_leg_role" in rows.columns
-    assert set(rows["reporting_class_origin"].unique()) <= {"corporate", "specialised_lending"}
+    # The sheet is the Art. 112(1)(g) LETTER, so its legs carry any of the three
+    # engine classes that report under it — corporate, corporate_sme and (SA)
+    # specialised_lending.
+    assert set(rows["reporting_class_origin"].unique()) <= {
+        "corporate",
+        "corporate_sme",
+        "specialised_lending",
+    }
     assert set(rows["reporting_leg_role"].unique()) <= {"whole", "guaranteed", "retained"}
 
 

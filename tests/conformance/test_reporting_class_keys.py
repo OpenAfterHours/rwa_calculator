@@ -1,5 +1,6 @@
 """
-C4a — every exposure-class collection in ``rwa_calc.reporting`` is keyed on the enum.
+C4a — every exposure-class collection in ``rwa_calc.reporting`` is keyed on a
+DECLARED vocabulary.
 
 Pipeline position:
     rwa_calc.reporting.** (introspected) -> these assertions
@@ -8,10 +9,36 @@ Key responsibilities:
 - DISCOVER the class collections rather than listing them: walk every module of
   ``rwa_calc.reporting``, pull out each homogeneous group of exposure-class-like
   strings, and check the whole estate in one assertion.
-- Anchor the assertion to ``{m.value for m in ExposureClass}`` — never to a
-  hand-written list of class strings. ``.claude/LESSONS.md`` B2/B3: the phantom
-  ``C02_00_SA_CLASS_MAP`` passed its own test because the test used the same
-  invented strings the map did.
+- Anchor the assertion to ``{m.value for m in ExposureClass}`` and to
+  ``C07_00_SA_SHEET_MAP.values()`` — never to a hand-written list of class
+  strings. ``.claude/LESSONS.md`` B2/B3: the phantom ``C02_00_SA_CLASS_MAP``
+  passed its own test because the test used the same invented strings the map
+  did.
+
+Why there are TWO legal vocabularies, and why the second is not a hole
+---------------------------------------------------------------------
+The engine's ``ExposureClass`` is the ROUTING vocabulary: what an exposure is
+classified as, and therefore how it is risk-weighted. C 07.00 / OF 07.00 key
+their sheets on the PRESENTATION vocabulary instead — the Art. 112(1)(a)-(q)
+letters the template's z-axis is defined over (COREP Annex II §3.2.2; PS1/26
+Annex II keeps the letters). Several engine classes share one letter, so the
+presentation vocabulary collapses them: ``corporate_sme`` and
+``specialised_lending`` into ``corporate`` (g), ``retail_qrre`` into ``retail``
+(h), and the three mortgage classes into ``real_estate`` (i).
+
+``retail`` and ``real_estate`` are therefore legitimately NOT
+``ExposureClass`` members, and **the fix is not to add them**. The engine must
+never be able to classify an exposure as ``real_estate``: that would let the
+reporting taxonomy leak back into classification and risk-weight selection,
+which is precisely the boundary ``C07_00_SA_SHEET_MAP`` exists to hold. If this
+test fails on ``['real_estate', 'retail']`` again, the question to ask is which
+vocabulary the offending collection belongs to — not whether the enum is short
+two members.
+
+The widening is a SUBSET-of-one-vocabulary test, never membership of their
+union — see :func:`_is_keyed_legally`. The sheet vocabulary excludes every
+merged sub-class, so a C 02.00-shaped map cannot borrow ``retail`` from it, and
+every other reporting collection is checked exactly as strictly as before.
 
 Why discovery and not enumeration: a map added tomorrow is checked without
 anyone remembering to add it here. The trade-off is a heuristic, so the
@@ -21,11 +48,12 @@ class the check exists to prevent.
 
 Note that an EMPTY class tuple is not a violation. Rows 13 and 14 of
 ``SA_DISCLOSURE_CLASSES`` (short-term claims, CIUs) have no ``ExposureClass``
-member and are legitimately empty; the assertion is "no member that is not an
-``ExposureClass`` value", not "no empty group".
+member and are legitimately empty; the assertion is "no member outside the
+declared vocabularies", not "no empty group".
 
 References:
-- CRR Art. 112 / Art. 147: the exposure classes the enum represents
+- CRR Art. 112(1)(a)-(q) / Art. 147: the exposure classes the enum represents
+- COREP Annex II §3.2.2; PRA PS1/26 Annex II (OF 07.00): the C 07.00 z-axis
 - docs/plans/independent-validation-system.md §C4a
 """
 
@@ -39,14 +67,19 @@ from typing import TYPE_CHECKING, Any
 
 import rwa_calc.reporting
 from rwa_calc.domain.enums import ExposureClass
+from rwa_calc.reporting.corep.templates import C07_00_SA_SHEET_MAP
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
 
 logger = logging.getLogger(__name__)
 
-#: The one source of truth. Never a hand-written list of class strings.
+#: The one source of truth for the ENGINE vocabulary. Never a hand-written list.
 CLASS_VALUES: frozenset[str] = frozenset(m.value for m in ExposureClass)
+
+#: The one source of truth for the C 07.00 / OF 07.00 PRESENTATION vocabulary —
+#: read off the map the generator's sheet axis is built from, never retyped.
+SA_SHEET_KEYS: frozenset[str] = frozenset(C07_00_SA_SHEET_MAP.values())
 
 #: A SLOT (a dict's keys, a dict's values, a tuple position, a dataclass field)
 #: is a candidate exposure-class axis when it holds at least this many real
@@ -80,17 +113,18 @@ def test_every_reporting_class_collection_is_keyed_on_the_enum() -> None:
 
     Arrange: import every module under ``rwa_calc.reporting`` and extract each
     homogeneous group of exposure-class-like strings.
-    Act: intersect each group with ``{m.value for m in ExposureClass}``.
-    Assert: any group that clearly holds exposure classes holds ONLY exposure
-    classes. An unmatched key does not raise anywhere in production — it
-    zero-fills, so the breakdown row silently sheds exposure while the
+    Act: check each group against the two legal vocabularies (see
+    :func:`_is_keyed_legally`).
+    Assert: any group that clearly holds exposure classes holds ONLY strings
+    from one of them. An unmatched key does not raise anywhere in production —
+    it zero-fills, so the breakdown row silently sheds exposure while the
     independently-computed parent still counts it.
     """
     groups = list(_discover_class_groups())
     offenders = {
         origin: sorted(members - CLASS_VALUES)
         for origin, members in groups
-        if not members <= CLASS_VALUES
+        if not _is_keyed_legally(members)
     }
     assert not offenders, (
         "reporting collections keyed on strings that are not ExposureClass members:\n  "
@@ -156,9 +190,39 @@ def test_the_check_catches_a_planted_phantom_key() -> None:
     found = {
         origin: sorted(members - CLASS_VALUES)
         for origin, members in _class_groups_in(planted, "planted")
-        if not members <= CLASS_VALUES
+        if not _is_keyed_legally(members)
     }
     assert found == {"planted::C02_00_SA_CLASS_MAP.keys": ["central_government", "retail"]}, found
+
+
+def test_the_sheet_vocabulary_does_not_launder_an_engine_class_map() -> None:
+    """``retail`` is legal as a C 07.00 SHEET key and illegal as a C 02.00 map key.
+
+    The sharp edge of the two-vocabulary rule, asserted directly rather than
+    left to the planted-map test to imply. The historical phantom was literally
+    ``retail``, so admitting the presentation vocabulary is only safe while the
+    admission is a subset test.
+
+    Arrange: three namespaces — the real sheet vocabulary; the same vocabulary
+    with one typo; and the sheet vocabulary with one MERGED sub-class added,
+    which is what a C 02.00-shaped map looks like.
+    Act: run discovery over each.
+    Assert: the first is clean, the second and third are caught.
+    """
+    clean = {"SHEET_KEYS": frozenset(SA_SHEET_KEYS)}
+    typo = {"SHEET_KEYS": frozenset(SA_SHEET_KEYS | {"real_state"})}
+    borrowed = {"CLASS_MAP": frozenset(SA_SHEET_KEYS | {"corporate_sme"})}
+
+    def offenders(namespace: Mapping[str, Any], origin: str) -> dict[str, list[str]]:
+        return {
+            found_origin: sorted(members - CLASS_VALUES)
+            for found_origin, members in _class_groups_in(namespace, origin)
+            if not _is_keyed_legally(members)
+        }
+
+    assert offenders(clean, "clean") == {}
+    assert offenders(typo, "typo") == {"typo::SHEET_KEYS": ["real_estate", "real_state", "retail"]}
+    assert offenders(borrowed, "borrowed") == {"borrowed::CLASS_MAP": ["real_estate", "retail"]}
 
 
 # ---------------------------------------------------------------------------
@@ -285,3 +349,22 @@ def _is_class_group(members: frozenset[str]) -> bool:
     """
     hits = len(members & CLASS_VALUES)
     return hits >= _MIN_HITS and hits >= _MIN_RATIO * len(members)
+
+
+def _is_keyed_legally(members: frozenset[str]) -> bool:
+    """Whether a class group is keyed on one of the two legal vocabularies.
+
+    The test is SUBSET-of-one, never membership-of-the-union, and that is the
+    whole design. ``SA_SHEET_KEYS`` is not simply the enum plus two names: it
+    also EXCLUDES the engine sub-classes that merge into a letter
+    (``corporate_sme``, ``retail_qrre``, the three mortgage classes,
+    ``specialised_lending``). So a C 02.00-shaped class map that reached for
+    ``retail`` — the historical phantom — cannot qualify under it: the map also
+    holds ``corporate_sme`` and friends, which are not sheet keys, so it is not
+    a subset of the sheet vocabulary and falls back to the strict enum test.
+    ``test_the_check_catches_a_planted_phantom_key`` pins exactly that.
+
+    Membership-of-the-union would have laundered it, which is why the union is
+    never formed.
+    """
+    return members <= CLASS_VALUES or members <= SA_SHEET_KEYS

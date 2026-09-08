@@ -19,10 +19,10 @@ Key responsibilities:
 
 Why the sheet map is the hard part: the supervisory z-axis is a positional index
 into the regulation's exposure-class list, while our bundles key sheets by class
-NAME. Our classes are also a COARSER partition than the DPM's in places (one
-``retail_mortgage`` sheet against the DPM's SME / non-SME pair), so a scoped
-subset of z-codes is only safe to evaluate when the set is CLOSED under the
-mapping — see ``resolve_sheet_codes``.
+NAME. Our sheets are also a COARSER partition than the DPM's in places — on
+``_C08_SHEETS``, one ``retail_mortgage`` sheet answers the DPM's SME (z0013) /
+non-SME (z0014) pair — so a scoped subset of z-codes is only safe to evaluate
+when the set is CLOSED under the mapping — see ``resolve_sheet_codes``.
 
 References:
 - CRR Art. 112(1)(a)-(q) — the SA exposure classes indexed by the C 07.00 z-axis
@@ -143,25 +143,25 @@ _C07_SHEETS: Final[tuple[SheetCode, ...]] = (
     SheetCode(
         "0008",
         "Art. 112(1)(g) corporates (incl. SME of-which)",
-        ("corporate", "corporate_sme"),
+        ("corporate",),
         "CRR Art. 112(1)(g); v4240_i vs C 02.00 r0130",
     ),
     SheetCode(
         "0009",
         "Art. 112(1)(h) retail (incl. QRRE of-which)",
-        ("retail_other", "retail_qrre"),
+        ("retail",),
         "CRR Art. 112(1)(h); v4241_i vs C 02.00 r0140",
     ),
-    # All THREE real-estate class keys, not just the retail one. Art. 112(1)(i)
-    # is defined by the security, so it holds residential AND commercial: row
-    # 0040 is an "of which: ... Residential property" of this sheet, which only
-    # parses if the sheet is the wider set. ``commercial_mortgage`` /
-    # ``residential_mortgage`` reach it from the applied-class overlay and from
-    # the SA loan-splitter's secured legs respectively.
+    # ONE key, and it covers residential AND commercial. Art. 112(1)(i) is
+    # defined by the security, not the counterparty: row 0040 is an "of which:
+    # ... Residential property" OF this sheet, which only parses if the sheet is
+    # the wider set. ``corep/c07.py`` fans all three internal real-estate classes
+    # onto this single key (``templates.C07_00_SA_SHEET_MAP``), so the sheet is
+    # the class TOTAL the z-axis asks for rather than three partial sheets.
     SheetCode(
         "0010",
         "Art. 112(1)(i) secured by mortgages on immovable property",
-        ("retail_mortgage", "residential_mortgage", "commercial_mortgage"),
+        ("real_estate",),
         "COREP Annex II C 07.00 row 0040 + para 62 rank 6; v7477_m",
     ),
     SheetCode("0011", "Art. 112(1)(j) exposures in default", ("defaulted",), "CRR Art. 112(1)(j)"),
@@ -240,23 +240,25 @@ _OF07_SHEETS: Final[tuple[SheetCode, ...]] = (
     SheetCode(
         "0008",
         "Art. 112(1)(g) corporates (incl. SME of-which)",
-        ("corporate", "corporate_sme"),
+        ("corporate",),
         "PS1/26 Annex II OF 09.01 row 0070; boe_b0973",
     ),
     SheetCode(
         "0009",
         "Art. 112(1)(h) retail (incl. QRRE of-which)",
-        ("retail_other", "retail_qrre"),
+        ("retail",),
         "PS1/26 Annex II OF 09.01 row 0080",
     ),
     # Under PS1/26 real estate is a STANDALONE class (Art. 112(2) Table A2 row
     # (7), criteria "Articles 124 to 124L"), outranking retail (14) and
-    # corporates (15) — so all three real-estate class keys belong here, exactly
-    # as they already key OF 09.01 row 0090 (``corep/c09.py::_C09_01_RE_CLASSES``).
+    # corporates (15). ``corep/c07.py`` fans all three internal real-estate
+    # classes onto the single ``real_estate`` key
+    # (``templates.C07_00_SA_SHEET_MAP``), exactly as they already fan into OF
+    # 09.01 row 0090 (``corep/c09.py::_C09_01_RE_CLASSES``).
     SheetCode(
         "0010",
         "Art. 112(1)(i) real estate exposures",
-        ("retail_mortgage", "residential_mortgage", "commercial_mortgage"),
+        ("real_estate",),
         "PS1/26 Art. 112(2) Table A2 row (7); Annex II OF 09.01 row 0090; boe_b0985/b0987",
     ),
     SheetCode(
@@ -1051,10 +1053,14 @@ def resolve_sheet_codes(
     - a code set that is not CLOSED under the mapping -> ``sheet_scope_not_closed``.
 
     Closure is the load-bearing test. Our sheets are in places a COARSER
-    partition than the publisher's z-axis (one ``retail_mortgage`` sheet against
-    the DPM's SME / non-SME pair), so a sheet we would evaluate may carry
-    exposures the rule was never scoped to. The set is safe only when every code
-    mapping into the selected sheets is itself in the requested set.
+    partition than the publisher's z-axis — on ``_C08_SHEETS`` (the Art. 147(2)
+    IRB axis) one ``retail_mortgage`` sheet answers the DPM's SME (z0013) /
+    non-SME (z0014) pair — so a sheet we would evaluate may carry exposures the
+    rule was never scoped to. The set is safe only when every code mapping into
+    the selected sheets is itself in the requested set. ``_C07_SHEETS`` /
+    ``_OF07_SHEETS`` are NOT such a case: C 07.00 keys its sheets on the
+    Art. 112(1) class itself (``templates.C07_00_SA_SHEET_MAP``), one key per
+    z-code.
     """
     requested = tuple(codes)
     unknown = [code for code in requested if code not in sheet_map]

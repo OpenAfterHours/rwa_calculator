@@ -57,10 +57,10 @@ from rwa_calc.reporting.corep.c34 import (
     generate_c34_08,
 )
 from rwa_calc.reporting.corep.of02 import generate_of_02_01
+from rwa_calc.reporting.corep.sheet_labels import get_c07_sheet_labels
 from rwa_calc.reporting.corep.templates import (
     IRB_EXPOSURE_CLASS_ROWS,
     OF_02_01_COLUMNS,
-    SA_EXPOSURE_CLASS_ROWS,
     get_c02_00_columns,
     get_c07_columns,
     get_c08_02_columns,
@@ -432,56 +432,59 @@ class COREPGenerator:
         """
         framework = bundle.framework
         is_b31 = framework == "BASEL_3_1"
+        # Readable tab names. The C 07.00 axis is the Art. 112(1) class and its
+        # labels are regime-dependent (PS1/26 renames four of them), so they are
+        # resolved per framework; the IRB axis is the raw Art. 147 class, whose
+        # names the row table already carries.
+        irb_labels = {key: name for key, (_ref, name) in IRB_EXPOSURE_CLASS_ROWS.items()}
         total = 0
         total += self._write_template_sheets(
             workbook,
             bundle.c07_00,
             "C 07.00",
-            SA_EXPOSURE_CLASS_ROWS,
+            get_c07_sheet_labels(framework),
             column_name_map(get_c07_columns(framework)),
         )
         total += self._write_template_sheets(
             workbook,
             bundle.c08_01,
             "C 08.01",
-            IRB_EXPOSURE_CLASS_ROWS,
+            irb_labels,
             column_name_map(get_c08_columns(framework)),
         )
         total += self._write_template_sheets(
             workbook,
             bundle.c08_02,
             "C 08.02",
-            IRB_EXPOSURE_CLASS_ROWS,
+            irb_labels,
             column_name_map(get_c08_02_columns(framework)),
         )
         total += self._write_template_sheets(
             workbook,
             bundle.c08_03,
             "C 08.03",
-            IRB_EXPOSURE_CLASS_ROWS,
+            irb_labels,
             column_name_map(get_c08_03_columns(framework)),
         )
         total += self._write_template_sheets(
             workbook,
             bundle.c08_04,
             "OF 08.04" if is_b31 else "C 08.04",
-            IRB_EXPOSURE_CLASS_ROWS,
+            irb_labels,
             column_name_map(get_c08_04_columns(framework)),
         )
         total += self._write_template_sheets(
             workbook,
             bundle.c08_05,
             "OF 08.05" if is_b31 else "C 08.05",
-            IRB_EXPOSURE_CLASS_ROWS,
+            irb_labels,
             column_name_map(get_c08_05_columns(framework)),
         )
-        sl_type_names = get_c08_06_sl_types(framework)
-        sl_class_map = {k: (k, v) for k, v in sl_type_names.items()}
         total += self._write_template_sheets(
             workbook,
             bundle.c08_06,
             "C 08.06",
-            sl_class_map,
+            get_c08_06_sl_types(framework),
             column_name_map(get_c08_06_columns(framework)),
         )
 
@@ -524,18 +527,22 @@ class COREPGenerator:
         workbook: Workbook,
         templates: dict[str, pl.DataFrame],
         prefix: str,
-        class_names: dict[str, tuple[str, str]],
+        labels: Mapping[str, str],
         name_by_ref: Mapping[str, str],
     ) -> int:
-        """Write per-class DataFrames as Excel sheets. Returns total rows written.
+        """Write per-sheet DataFrames as Excel sheets. Returns total rows written.
 
         Each sheet carries a readable column-name banner above the COREP ref
         codes (see ``kernel.write_template_sheet``).
+
+        ``labels`` names each sheet key for the tab; an unlabelled key falls
+        back to the key itself, so a class this map has not caught up with is
+        still exported rather than dropped or mislabelled.
         """
         total = 0
         for ec, df in sorted(templates.items()):
             if len(df) > 0:
-                display = class_names.get(ec, (None, ec))[1]
+                display = labels.get(ec, ec)
                 total += write_template_sheet(workbook, df, f"{prefix} - {display}", name_by_ref)
         return total
 

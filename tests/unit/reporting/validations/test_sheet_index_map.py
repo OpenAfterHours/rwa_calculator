@@ -30,6 +30,7 @@ from __future__ import annotations
 import pytest
 
 from rwa_calc.domain.enums import ExposureClass
+from rwa_calc.reporting.corep.templates import C07_00_SA_SHEET_MAP
 from rwa_calc.reporting.validations.scope import (
     SHEET_INDEX_MAPS,
     SKIP_SHEET_SCOPE_NOT_CLOSED,
@@ -38,8 +39,21 @@ from rwa_calc.reporting.validations.scope import (
 
 MAP_NAMES = sorted(SHEET_INDEX_MAPS)
 
-#: Every class value this project can key a template sheet by.
-EMITTABLE_CLASSES = {member.value for member in ExposureClass}
+#: Every value this project can key a template sheet by, per sheet map.
+#:
+#: The C 08.xx z-axes key the engine's own ``ExposureClass`` values. The C 07.00
+#: / OF 07.00 z-axis does NOT: it is the Art. 112(1)(a)-(q) list, and several
+#: engine classes share one letter (``corporate_sme`` -> (g), ``retail_qrre`` ->
+#: (h), the three mortgage classes -> (i)), so its sheet keys are the values of
+#: ``C07_00_SA_SHEET_MAP``. Both vocabularies are read from the module that
+#: OWNS them rather than restated here.
+_SA_SHEET_KEYS = frozenset(C07_00_SA_SHEET_MAP.values())
+_ENGINE_CLASSES = frozenset(member.value for member in ExposureClass)
+
+EMITTABLE_BY_MAP: dict[str, frozenset[str]] = {
+    "c07": _SA_SHEET_KEYS,
+    "of07": _SA_SHEET_KEYS,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -48,7 +62,7 @@ EMITTABLE_CLASSES = {member.value for member in ExposureClass}
 
 
 @pytest.mark.parametrize("map_name", MAP_NAMES)
-def test_every_mapped_bundle_key_is_a_real_exposure_class(map_name: str) -> None:
+def test_every_mapped_bundle_key_is_a_key_its_generator_can_emit(map_name: str) -> None:
     """A ``bundle_keys`` typo would silently map a z-code onto nothing.
 
     The failure mode is invisible: the code resolves to a sheet name no generator
@@ -57,19 +71,15 @@ def test_every_mapped_bundle_key_is_a_real_exposure_class(map_name: str) -> None
     """
     # Arrange
     sheet_map = SHEET_INDEX_MAPS[map_name]
+    emittable = EMITTABLE_BY_MAP.get(map_name, _ENGINE_CLASSES)
 
     # Act
     unknown = sorted(
-        {
-            key
-            for entry in sheet_map.values()
-            for key in entry.bundle_keys
-            if key not in EMITTABLE_CLASSES
-        }
+        {key for entry in sheet_map.values() for key in entry.bundle_keys if key not in emittable}
     )
 
     # Assert
-    assert unknown == [], f"{map_name} maps onto class name(s) that do not exist: {unknown}"
+    assert unknown == [], f"{map_name} maps onto sheet key(s) no generator emits: {unknown}"
 
 
 @pytest.mark.parametrize("map_name", MAP_NAMES)

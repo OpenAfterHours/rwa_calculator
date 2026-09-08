@@ -36,6 +36,7 @@ import polars as pl
 import pytest
 
 from rwa_calc.reporting.corep.generator import COREPGenerator
+from rwa_calc.reporting.corep.templates import C07_00_SA_SHEET_MAP
 from tests.conformance.rederive import CellDerivation, load_derivations
 from tests.properties.portfolios import ExposureSpec, pillar3_bundle, results_df, run
 
@@ -455,8 +456,9 @@ def test_output_floor_column_is_the_floor_amount(templates, floor_summaries) -> 
         "An SA-treated equity leg reaches no C 07.00 sheet. Measured under CRR: LN011 carries "
         "reporting_approach 'equity', ead_final 1,500,000 and rwa_final 1,500,000, and C 02.00 "
         "row 0210 ('1.1.1.1.15 Equity', whose whole instruction is 'See CR SA template') "
-        "publishes that 1,500,000 — but C 07.00 emits sheets for exactly four classes "
-        "(central_govt_central_bank, corporate, institution, retail_other) and none of them is "
+        "publishes that 1,500,000 — but C 07.00 emits sheets for exactly four Art. 112(1) "
+        "letters ((a) central_govt_central_bank, (f) institution, (g) corporate, (h) retail) "
+        "and none of them is "
         "equity. CRR Art. 112(1)(p) makes equity exposures an SA exposure class, and Annex II "
         "paragraphs 47-48 put every SA class except securitisation positions in CR SA, so the "
         "row C 02.00 points at does not exist: 1,500,000 of exposure value and RWEA sits in the "
@@ -481,6 +483,11 @@ def test_an_sa_equity_leg_reaches_a_c0700_sheet(templates, ledgers) -> None:
     chosen to avoid conflating that defect with this one. P1.317 is fixed and
     both regimes now carry the RWEA, so widening this to Basel 3.1 is available
     and would add C 07.00 coverage for the B31 equity leg.
+
+    The ledger's ``reporting_class`` is an engine class and the C 07.00 sheet
+    keys are Art. 112(1) letters, so the leg is routed through
+    ``C07_00_SA_SHEET_MAP`` before the membership test — comparing the two
+    vocabularies directly would call any merged class an orphan.
     """
     equity = ledgers["CRR"].filter(
         (pl.col("reporting_approach") == "equity") & (pl.col("rwa_final").fill_null(0.0) != 0.0)
@@ -491,7 +498,7 @@ def test_an_sa_equity_leg_reaches_a_c0700_sheet(templates, ledgers) -> None:
         f"{row['exposure_reference']}: reporting_class={row['reporting_class']!r} "
         f"ead_final={row['ead_final']:,.2f} rwa_final={row['rwa_final']:,.2f}"
         for row in equity.iter_rows(named=True)
-        if row["reporting_class"] not in sheets
+        if C07_00_SA_SHEET_MAP.get(row["reporting_class"], row["reporting_class"]) not in sheets
     ]
     assert not orphaned, (
         f"SA equity RWEA with no C 07.00 sheet (emitted sheets: {sorted(sheets)}):\n  "

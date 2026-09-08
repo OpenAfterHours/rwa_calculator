@@ -395,10 +395,14 @@ class TestC07BucketsOnAppliedClass:
         assert _total_ev(bundle.c07_00["defaulted"]) == pytest.approx(800.0)
 
     def test_sme_managed_as_retail_lands_in_retail_sheet(self) -> None:
-        """SME managed as retail is reported under the Retail sheet."""
+        """SME managed as retail is reported under the Art. 112(1)(h) sheet.
+
+        ``retail_other`` keys the ``retail`` sheet — the template's z-axis is
+        the Art. 112(1) letter, not the engine sub-class.
+        """
         bundle = LedgerShimCorepGenerator().generate_from_lazyframe(_sa_results_with_applied())
-        assert "retail_other" in bundle.c07_00
-        assert _total_ev(bundle.c07_00["retail_other"]) == pytest.approx(500.0)
+        assert "retail" in bundle.c07_00
+        assert _total_ev(bundle.c07_00["retail"]) == pytest.approx(500.0)
 
     def test_corporate_sheet_excludes_moved_rows(self) -> None:
         """The corporate sheet no longer double-counts the defaulted/retail rows."""

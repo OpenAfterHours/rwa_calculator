@@ -630,7 +630,13 @@ whose two regimes differ by a RISK WEIGHT rather than by a population.
 [[cell]]
 id = "c0700-retail-0010-0010"
 template = "C0700"
-member = "retail_other"
+# The C 07.00 sheet axis is the Art. 112(1) class list, so the member is the
+# LETTER (h) key while the ``where`` filter below stays on the engine class the
+# sealed ledger actually holds. Measured on this portfolio: the only letter-(h)
+# class present is ``retail_other`` (2 legs, 1,100,000 EAD, of which 600,000 is
+# standardised) — there is no ``retail_qrre``, so merging the sheet moves no
+# authored value here.
+member = "retail"
 row = "0010"
 column = "0010"
 regimes = ["CRR", "B31"]
@@ -647,7 +653,7 @@ basis = "As c0700-cgcb-0010-0010."
 [[cell]]
 id = "c0700-retail-0010-0200"
 template = "C0700"
-member = "retail_other"
+member = "retail"
 row = "0010"
 column = "0200"
 regimes = ["CRR", "B31"]
@@ -664,7 +670,7 @@ basis = "Post-substitution basis untested (limits 1)."
 [[cell]]
 id = "c0700-retail-0010-0220"
 template = "C0700"
-member = "retail_other"
+member = "retail"
 row = "0010"
 column = "0220"
 regimes = ["CRR", "B31"]
@@ -945,7 +951,7 @@ leg is CQS3 at 100% — so this cell tests the ROW ADDRESS, not the partition.
 [[cell]]
 id = "c0700-retail-rw075-0200"
 template = "C0700"
-member = "retail_other"
+member = "retail"
 row = "0220"
 column = "0200"
 regimes = ["CRR"]

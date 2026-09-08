@@ -32,71 +32,7 @@
       "0235": "Float64",
       "0240": "Float64"
     },
-    "corep__c07_00__commercial_mortgage": {
-      "row_ref": "String",
-      "row_name": "String",
-      "0010": "Float64",
-      "0020": "Float64",
-      "0030": "Float64",
-      "0035": "Float64",
-      "0040": "Float64",
-      "0050": "Float64",
-      "0060": "Float64",
-      "0070": "Float64",
-      "0080": "Float64",
-      "0090": "Float64",
-      "0100": "Float64",
-      "0110": "Float64",
-      "0120": "Float64",
-      "0130": "Float64",
-      "0140": "Float64",
-      "0150": "Float64",
-      "0160": "Float64",
-      "0170": "Float64",
-      "0171": "Float64",
-      "0180": "Float64",
-      "0190": "Float64",
-      "0200": "Float64",
-      "0210": "Float64",
-      "0211": "Float64",
-      "0220": "Float64",
-      "0230": "Float64",
-      "0235": "Float64",
-      "0240": "Float64"
-    },
     "corep__c07_00__corporate": {
-      "row_ref": "String",
-      "row_name": "String",
-      "0010": "Float64",
-      "0020": "Float64",
-      "0030": "Float64",
-      "0035": "Float64",
-      "0040": "Float64",
-      "0050": "Float64",
-      "0060": "Float64",
-      "0070": "Float64",
-      "0080": "Float64",
-      "0090": "Float64",
-      "0100": "Float64",
-      "0110": "Float64",
-      "0120": "Float64",
-      "0130": "Float64",
-      "0140": "Float64",
-      "0150": "Float64",
-      "0160": "Float64",
-      "0170": "Float64",
-      "0171": "Float64",
-      "0180": "Float64",
-      "0190": "Float64",
-      "0200": "Float64",
-      "0210": "Float64",
-      "0211": "Float64",
-      "0220": "Float64",
-      "0230": "Float64",
-      "0235": "Float64",
-      "0240": "Float64"
-    },
-    "corep__c07_00__corporate_sme": {
       "row_ref": "String",
       "row_name": "String",
       "0010": "Float64",
@@ -224,7 +160,7 @@
       "0235": "Float64",
       "0240": "Float64"
     },
-    "corep__c07_00__retail_mortgage": {
+    "corep__c07_00__real_estate": {
       "row_ref": "String",
       "row_name": "String",
       "0010": "Float64",
@@ -256,7 +192,7 @@
       "0235": "Float64",
       "0240": "Float64"
     },
-    "corep__c07_00__retail_other": {
+    "corep__c07_00__retail": {
       "row_ref": "String",
       "row_name": "String",
       "0010": "Float64",
@@ -1092,14 +1028,12 @@
         "kind": "dict",
         "keys": [
           "central_govt_central_bank",
-          "commercial_mortgage",
           "corporate",
-          "corporate_sme",
           "defaulted",
           "institution",
           "other",
-          "retail_mortgage",
-          "retail_other"
+          "real_estate",
+          "retail"
         ]
       },
       "c08_01": {

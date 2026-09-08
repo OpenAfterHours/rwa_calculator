@@ -343,9 +343,15 @@ _APPROACH_MAPPING: str = "approach"
 _SLOTTING_TEMPLATE: str = "c08_06"
 
 # C 08.06 sheet/row mappings whose invalid DATA makes the template unsafe even
-# when the columns exist. These names are the actionable TOML carrier keys.
-_SLOTTING_PLACEMENT_MAPPINGS: frozenset[str] = frozenset(
-    {"sl_type", "slotting_category", "is_short_maturity", "is_hvcre"}
+# when the columns exist. These names are the actionable TOML carrier keys, and
+# for all four the ledger column and the mapping key are spelled the same, so
+# one ordered tuple serves the scan and the report. ORDERED because the scan
+# zips its plans back against it.
+_SLOTTING_PLACEMENT_MAPPINGS: tuple[str, ...] = (
+    "sl_type",
+    "slotting_category",
+    "is_short_maturity",
+    "is_hvcre",
 )
 
 #: Ledger column -> the vocabulary its values must fall inside. Only the columns
@@ -987,6 +993,14 @@ class LedgerCoverage:
             CLASS produces bogus sheets, and an unmapped APPROACH empties every
             template. Empty when every label matched, and when no vocabulary
             column was supplied.
+        invalid_placements: The C 08.06 placement mappings carrying a null or
+            out-of-vocabulary value ON A SLOTTING ROW — the set the reachability
+            refusal keys on, read through ``blocking_placement``. Deliberately
+            NARROWER than the placement keys of ``unmapped_labels``: that report
+            spans the whole ledger, and a bad value on a non-slotting row cannot
+            reach a slotting-only template, so it is worth naming and not worth
+            withholding a template for. Empty in the pre-flight form, which has
+            no data to measure.
         present_approaches: The distinct ``reporting_approach_origin`` values the
             extract actually carries, or ``None`` when the vocabulary was not
             measured (the pre-flight ``ledger_coverage`` form, which has no data).
@@ -1001,6 +1015,7 @@ class LedgerCoverage:
     unmapped_labels: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     present_approaches: frozenset[str] | None = None
     populated_templates: frozenset[str] | None = None
+    invalid_placements: frozenset[str] = frozenset()
 
     def unavailable_refs(self, template_id: str) -> tuple[str, ...]:
         """The bare column refs of ``template_id`` that cannot be populated."""
@@ -1051,6 +1066,11 @@ class LedgerCoverage:
         slotting one. ``_vocabulary_permits`` refuses the template on exactly
         this set, so this names what it refused on.
 
+        SCOPED TO THE SLOTTING BOOK, and the scoping is the whole point. A value
+        on a non-slotting row reaches no sheet, row or cell of a slotting-only
+        template, so it is REPORTED in ``unmapped_labels`` (C 07.00 reads
+        ``sl_type`` off SA rows) and does not appear here.
+
         IT HAS TO BE NAMED, BECAUSE THE ALTERNATIVE IS NAMING SOMETHING ELSE.
         ``blocking_labels`` is a set subtraction that returns whatever OTHER
         approaches the book carries, whatever the real cause; on the mixed
@@ -1061,7 +1081,7 @@ class LedgerCoverage:
         """
         if template_id != _SLOTTING_TEMPLATE or template_id in self.reachable_templates:
             return ()
-        return tuple(sorted(_SLOTTING_PLACEMENT_MAPPINGS & self.unmapped_labels.keys()))
+        return tuple(sorted(self.invalid_placements))
 
     def blocking_labels(self, template_id: str) -> tuple[str, ...]:
         """The approach labels the extract carries that ``template_id`` refuses.
@@ -1164,12 +1184,13 @@ def project_legacy_ledger(
     # because that is the only place the question can be asked: a value that
     # survives casefolding and the value_map without matching the engine's
     # vocabulary is one nothing downstream will ever match either.
-    unmapped_labels, present_approaches = _label_facts(ledger, supplied)
+    unmapped_labels, present_approaches, invalid_placements = _label_facts(ledger, supplied)
     coverage = ledger_coverage(
         supplied,
         framework=framework,
         present_approaches=present_approaches,
         unmapped_labels=unmapped_labels,
+        invalid_placements=invalid_placements,
     )
     logger.info(
         "legacy ledger projection: %d ledger columns supplied, %d missing, "
@@ -1189,6 +1210,7 @@ def ledger_coverage(
     framework: str,
     present_approaches: frozenset[str] | None = None,
     unmapped_labels: Mapping[str, tuple[str, ...]] | None = None,
+    invalid_placements: frozenset[str] | None = None,
 ) -> LedgerCoverage:
     """Score a set of supplied ledger columns against the scoped templates.
 
@@ -1202,6 +1224,12 @@ def ledger_coverage(
     supply every required column and still produce nothing, because every row's
     approach label falls outside the population filter. ``project_legacy_ledger``
     always measures it, so the reported reachability there is the truth.
+
+    ``invalid_placements`` is the same kind of measured fact for C 08.06's sheet
+    and row discriminators, and is likewise ``None`` in the pre-flight form.
+    Note it is NOT derivable from ``unmapped_labels``: that report spans the
+    whole ledger, and only the slotting book's own rows can block a
+    slotting-only template.
     """
     supplied = frozenset(supplied)
     unavailable: dict[str, tuple[str, ...]] = {}
@@ -1211,7 +1239,10 @@ def ledger_coverage(
     for template_id in LEDGER_TEMPLATE_IDS:
         required = TEMPLATE_REQUIRED_COLUMNS[template_id]
         if _satisfied(required, supplied) and _vocabulary_permits(
-            template_id, present_approaches, unmapped_labels or {}
+            template_id,
+            present_approaches,
+            unmapped_labels or {},
+            invalid_placements or frozenset(),
         ):
             reachable.add(template_id)
         missing |= _unmet_columns(required, supplied)
@@ -1240,6 +1271,7 @@ def ledger_coverage(
         unmapped_labels=dict(unmapped_labels or {}),
         present_approaches=present_approaches,
         populated_templates=_populated(present_approaches),
+        invalid_placements=invalid_placements or frozenset(),
     )
     _warn_unmapped_labels(coverage)
     _warn_unreachable(coverage)
@@ -1282,6 +1314,7 @@ def _vocabulary_permits(
     template_id: str,
     present_approaches: frozenset[str] | None,
     unmapped_labels: Mapping[str, tuple[str, ...]],
+    invalid_placements: frozenset[str],
 ) -> bool:
     """Is the MAPPING capable of producing this template's population?
 
@@ -1293,7 +1326,7 @@ def _vocabulary_permits(
     recognised, one of them might have been the missing population, and that is a
     mapping defect the analyst can fix.
     """
-    if template_id == _SLOTTING_TEMPLATE and _SLOTTING_PLACEMENT_MAPPINGS & unmapped_labels.keys():
+    if template_id == _SLOTTING_TEMPLATE and invalid_placements:
         return False
     if present_approaches is None:
         return True
@@ -1400,38 +1433,50 @@ def _warn_unreachable(coverage: LedgerCoverage) -> None:
 
 def _label_facts(
     ledger: pl.LazyFrame, supplied: set[str]
-) -> tuple[dict[str, tuple[str, ...]], frozenset[str]]:
+) -> tuple[dict[str, tuple[str, ...]], frozenset[str], frozenset[str]]:
     """Measure the projected LABEL columns: what is unmapped, what approaches exist.
 
     One scan per vocabulary column, batched through ``collect_all`` so the whole
     measurement is a single pass over the extract rather than one per column.
     Nulls are excluded — an absent value is a coverage question, not a vocabulary
     one, and it is already answered by the missing-column report.
+
+    Returns the whole-ledger unmapped-value REPORT, the approaches present, and
+    the placement mappings that are invalid INSIDE THE SLOTTING BOOK. The last
+    two of those are different questions and the third is deliberately the
+    narrower one — see the placement scan below.
     """
     columns = [column for column in LEDGER_VOCABULARY if column in supplied]
     if not columns:
-        return {}, frozenset()
+        return {}, frozenset(), frozenset()
     value_plans = [
         ledger.select(pl.col(column).alias("value")).drop_nulls().group_by("value").len()
         for column in columns
     ]
     slotting_discriminators = [
         column
-        for column in ("sl_type", "slotting_category", "is_short_maturity", "is_hvcre")
+        for column in _SLOTTING_PLACEMENT_MAPPINGS
         if column in supplied
         and _APPROACH_COLUMN in supplied
         and (column != "is_hvcre" or "sl_type" in supplied)
     ]
-    # THESE NULL COUNTS ARE SCOPED TO THE SLOTTING BOOK; THE VOCABULARY COUNTS
-    # ABOVE ARE NOT. ``value_plans`` measures every mapped label column over the
-    # WHOLE ledger, so an out-of-vocabulary ``sl_type`` / ``slotting_category``
-    # token sitting on a NON-slotting row still lands in ``unmapped`` and, via
-    # ``_SLOTTING_PLACEMENT_MAPPINGS`` in ``_vocabulary_permits``, still blocks
-    # C 08.06 — even though no slotting row is affected. Conservative in the
-    # right direction (it reports a mapping the analyst can fix rather than a
-    # silently wrong sheet), but it can over-report on an extract that reuses
-    # one source column across approaches.
-    null_plans: list[pl.LazyFrame] = []
+    # THE PLACEMENT SCAN IS SCOPED TO THE SLOTTING BOOK; THE VOCABULARY SCAN
+    # ABOVE IS NOT, AND THE TWO ANSWER DIFFERENT QUESTIONS. ``value_plans``
+    # measures every mapped label column over the WHOLE ledger, which is right
+    # for a REPORT — C 07.00's specialised-lending rows (0021-0023) read
+    # ``sl_type`` off SA rows, so an unmapped value there is worth naming. It is
+    # wrong for a BLOCK: C 08.06's population is slotting-only
+    # (``TEMPLATE_POPULATION_LABELS``), so a value on a non-slotting row reaches
+    # no sheet, row or cell of it, and withholding the whole template over one
+    # is a refusal to compare anything on account of a value nothing reads.
+    #
+    # That is not hypothetical. A mixed extract reuses one SL column across
+    # approaches and fills it where specialised lending does not apply — "N/A",
+    # "NONE", "-" — and a firm doing the ordinary thing was refused C 08.06 with
+    # every slotting row present and correctly mapped. So the block keys on THIS
+    # count: rows of the slotting book whose discriminator is null or outside
+    # its vocabulary, which is exactly the set that cannot be placed.
+    invalid_plans: list[pl.LazyFrame] = []
     for column in slotting_discriminators:
         relevant = pl.col(_APPROACH_COLUMN) == ApproachType.SLOTTING.value
         if column == "is_hvcre":
@@ -1439,10 +1484,16 @@ def _label_facts(
             # project/object/commodities finance cannot change its sheet, while
             # a bad explicit token on IPRE could silently hide HVCRE exposure.
             relevant &= pl.col("sl_type").is_in(["ipre", "hvcre"])
-        null_plans.append(
-            ledger.filter(relevant).select(pl.col(column).is_null().sum().alias("null_count"))
-        )
-    frames = pl.collect_all([*value_plans, *null_plans])
+        # Null OR out-of-vocabulary. The flags have no vocabulary to fail: a
+        # token they cannot parse is already null by ``_carrier_value``, which
+        # refuses to guess False. ``is_in`` yields null on a null input, and
+        # ``True | null`` is True, so the null limb carries those rows.
+        invalid = pl.col(column).is_null()
+        vocabulary = LEDGER_VOCABULARY.get(column)
+        if vocabulary is not None:
+            invalid = invalid | ~pl.col(column).is_in(list(vocabulary.values))
+        invalid_plans.append(ledger.filter(relevant).select(invalid.sum().alias("invalid_count")))
+    frames = pl.collect_all([*value_plans, *invalid_plans])
     counts = frames[: len(value_plans)]
     unmapped: dict[str, tuple[str, ...]] = {}
     present_approaches: frozenset[str] = frozenset()
@@ -1456,20 +1507,36 @@ def _label_facts(
         # Commonest first: the value costing the most rows is the one to map.
         outside.sort(key=lambda row: (-row[1], row[0]))
         unmapped[vocabulary.mapping_name] = tuple(
-            f"{value} ({count} rows)" for value, count in outside
+            f"{_shown(value)} ({count} rows)" for value, count in outside
         )
+    invalid_placements: set[str] = set()
     for column, frame in zip(slotting_discriminators, frames[len(value_plans) :], strict=True):
-        null_count = int(frame["null_count"][0])
-        if null_count == 0:
+        invalid_count = int(frame["invalid_count"][0])
+        if invalid_count == 0:
             continue
         mapping_name = (
             LEDGER_VOCABULARY[column].mapping_name if column in LEDGER_VOCABULARY else column
         )
+        invalid_placements.add(mapping_name)
         unmapped[mapping_name] = (
             *unmapped.get(mapping_name, ()),
-            f"<null or invalid> ({null_count} rows)",
+            f"<null or invalid> ({invalid_count} rows)",
         )
-    return unmapped, present_approaches
+    return unmapped, present_approaches, frozenset(invalid_placements)
+
+
+def _shown(value: str | None) -> str:
+    """An unmapped value as the remedy line should render it.
+
+    A value that is empty or all whitespace formats into
+    ``"unmapped sl_type value(s): {value} ({n} rows)"`` as a hole, which reads
+    as a rendering fault rather than as the value it names — and a blank is the
+    shape an analyst produces when told to clear a placeholder, so it is exactly
+    the value they most need to see named.
+    """
+    if value is None or not value.strip():
+        return "<blank>"
+    return value
 
 
 def _projection_exprs(

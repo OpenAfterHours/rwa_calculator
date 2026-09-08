@@ -1445,6 +1445,68 @@ def test_invalid_slotting_placement_value_blocks_c08_06(
     assert coverage.blocking_columns("c08_06") == ()
 
 
+@pytest.mark.parametrize("placeholder", ["N/A", "NONE", "-", "", "   "])
+def test_a_placeholder_on_the_non_slotting_rows_does_not_block_c08_06(
+    tmp_path: Path, placeholder: str
+) -> None:
+    """C 08.06's population is slotting-only, so a value it cannot read cannot block it.
+
+    A mixed extract reuses one SL column across every approach and fills it
+    where specialised lending does not apply. Those rows fall outside
+    ``TEMPLATE_POPULATION_LABELS["c08_06"]`` and can reach no sheet, row or cell
+    of the template, so refusing to produce it on their account withholds a
+    whole comparison over a value nothing reads. The empty and whitespace
+    parameters are the same defect wearing the analyst's own fix: a firm told to
+    blank the placeholders often writes a blank string, which is not a null.
+    """
+    # Arrange — placeholders on the seven non-slotting rows; the slotting book
+    # itself is untouched and entirely valid.
+    rows = dict(_LEGACY_ROWS)
+    rows["SL Type"] = [placeholder] * 7 + ["PF", "OF", "HVCRE"]
+    rows["Slot Category"] = [placeholder] * 7 + ["CAT1", "CAT2", "CAT3"]
+    legacy, mapping = _load(_write_legacy(tmp_path, rows), _components_for("raw"), _CARRIERS)
+
+    # Act
+    _source, coverage = project_legacy_ledger(legacy, mapping, framework="CRR")
+
+    # Assert — the template is produced, and nothing about placement is blocking.
+    assert "c08_06" in coverage.reachable_templates
+    assert coverage.blocking_placement("c08_06") == ()
+
+
+def test_a_placeholder_off_the_slotting_book_is_still_reported(tmp_path: Path) -> None:
+    """Not blocking is not the same as not saying so.
+
+    C 07.00's specialised-lending rows (0021-0023) read ``sl_type`` too, so an
+    unmapped value on an SA row is worth an analyst's attention even though it
+    cannot stop C 08.06. Report it; just do not withhold a template for it.
+    """
+    rows = dict(_LEGACY_ROWS)
+    rows["SL Type"] = ["N/A"] * 7 + ["PF", "OF", "HVCRE"]
+    legacy, mapping = _load(_write_legacy(tmp_path, rows), _components_for("raw"), _CARRIERS)
+
+    _source, coverage = project_legacy_ledger(legacy, mapping, framework="CRR")
+
+    assert "N/A (7 rows)" in coverage.unmapped_labels["sl_type"]
+    assert "c08_06" in coverage.reachable_templates
+
+
+def test_an_unmapped_blank_is_reported_visibly(tmp_path: Path) -> None:
+    """A blank renders as ``<blank>``; a remedy line nobody can read is not one.
+
+    An empty or whitespace value formatted straight into "unmapped sl_type
+    value(s): {value} ({n} rows)" produces a line with a hole in it, which reads
+    as a rendering fault rather than as the value it is naming.
+    """
+    rows = dict(_LEGACY_ROWS)
+    rows["SL Type"] = [None] * 7 + ["  ", "OF", "HVCRE"]
+    legacy, mapping = _load(_write_legacy(tmp_path, rows), _components_for("raw"), _CARRIERS)
+
+    _source, coverage = project_legacy_ledger(legacy, mapping, framework="CRR")
+
+    assert "<blank> (1 rows)" in coverage.unmapped_labels["sl_type"]
+
+
 @pytest.mark.parametrize(
     ("legacy_column", "bad_value", "mapping_name"),
     [

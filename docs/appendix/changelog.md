@@ -64,6 +64,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reference dump. Banked in `tests/contracts/test_pipeline_collect_budget.py`.
 
 ### Fixed
+- **A placeholder on the non-slotting rows no longer withholds C 08.06.** The
+  placement check measured `sl_type` / `slotting_category` over the *whole*
+  ledger, so a mixed extract that reuses one SL column across approaches and
+  fills it where specialised lending does not apply — `"N/A"`, `"NONE"`, `"-"`,
+  or a blank string, which is not a null — had the template refused on rows that
+  can reach no sheet, row or cell of it. C 08.06's population is slotting-only,
+  so the block now keys on a slotting-book-scoped count (null **or**
+  out-of-vocabulary), the same scoping the null check already used;
+  `LedgerCoverage.invalid_placements` carries it. Whole-ledger findings are
+  still *reported* in `unmapped_labels`, because C 07.00's specialised-lending
+  rows (0021-0023) read `sl_type` off SA rows — the change is what blocks, not
+  what is said. An unmapped value that is empty or whitespace now renders as
+  `<blank>` rather than as a hole in the remedy line. Pinned by
+  `tests/unit/analysis/test_legacy_ledger.py::test_a_placeholder_on_the_non_slotting_rows_does_not_block_c08_06`
+  (five placeholder shapes) and its two siblings; every existing block test
+  targets a slotting row and still fires.
 - **A C 08.06 slotting placement block no longer blames the approach labels.**
   On a mixed extract — one carrying SA and IRB rows alongside its slotting book
   — a placeholder left in the SL columns of the non-slotting rows (`"N/A"`,

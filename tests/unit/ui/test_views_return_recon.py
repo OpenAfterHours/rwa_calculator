@@ -1748,7 +1748,8 @@ def test_a_slotting_placement_block_names_the_carriers_not_the_approaches() -> N
     whose slotting rows are right there.
     """
     # Arrange — every required column supplied and slotting present, but a
-    # placement carrier carries a value outside the engine vocabulary.
+    # placement carrier carries a value outside the engine vocabulary on a
+    # slotting row (``invalid_placements``, not merely somewhere in the ledger).
     coverage = replace(
         _coverage(),
         supplied=frozenset(
@@ -1766,6 +1767,7 @@ def test_a_slotting_placement_block_names_the_carriers_not_the_approaches() -> N
             {"slotting", "standardised", "foundation_irb", "advanced_irb"}
         ),
         unmapped_labels={"sl_type": ("N/A (4 rows)",)},
+        invalid_placements=frozenset({"sl_type"}),
     )
 
     # Act

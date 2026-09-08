@@ -2193,6 +2193,14 @@ gate that shipped.
   `_vocabulary_permits` refuse C 08.06 on `_SLOTTING_PLACEMENT_MAPPINGS`. The
   message named `[components.approach]`, the one table already right, and said
   nothing about the two `[carriers.*]` tables that were wrong.
+
+  **And the block itself was wrong, which the first pass at this entry missed.**
+  Told the placeholders were the cause, the firm cleared them and was refused
+  again. `_label_facts` measures the placement columns' vocabulary over the
+  WHOLE ledger, so a value on a row C 08.06 can never read — its population is
+  slotting-only — was refusing the template. The rows carrying the placeholder
+  were exactly the rows the template excludes. Naming the cause correctly is
+  worth nothing if the cause should not have been a cause.
 - **Rule**: not a regulatory escape — no RWA number is affected. C 08.06 / OF
   08.06 (Reg (EU) 2021/451 Annex II; PS1/26 Annex I/II) simply went unproduced
   on the compare surface, with a reason that sent the analyst the wrong way.
@@ -2240,6 +2248,25 @@ gate that shipped.
   (all three placement carriers; asserts `slotting` *is* in
   `present_approaches` while the block stands) and
   `test_a_slotting_placement_block_names_the_carriers_not_the_approaches`.
+
+  **Second change, for the block itself**: the refusal is now scoped to the
+  slotting book, matching the scoping the null check already had. The placement
+  scan counts rows of the slotting population whose discriminator is null *or*
+  out of vocabulary, and `LedgerCoverage.invalid_placements` carries that set;
+  `_vocabulary_permits` keys on it instead of on the whole-ledger
+  `unmapped_labels`. The whole-ledger measurement is still REPORTED — C 07.00's
+  rows 0021-0023 read `sl_type` off SA rows, so an unmapped value there is worth
+  naming — so nothing diagnostic is lost and only the refusal narrows. An
+  unmapped blank now renders `<blank>` instead of a hole in the remedy line,
+  because a blank is precisely what an analyst produces when told to clear a
+  placeholder. Gate:
+  `test_a_placeholder_on_the_non_slotting_rows_does_not_block_c08_06`, over five
+  placeholder shapes including the empty and whitespace strings.
+
+  Note what did NOT change: every pre-existing block test targets a slotting row
+  (index 7 or 9 of `_LEGACY_ROWS`) and all still fire. That is the evidence the
+  scoping is narrow rather than merely permissive — had the fix been "stop
+  blocking", those tests would have gone green-by-deletion.
 - **Verified red**: both gates were run against the unfixed tree first. The UI
   gate reproduces the reported sentence verbatim —
 
@@ -2250,12 +2277,15 @@ gate that shipped.
   ```
 
   — and the analysis gate fails `AttributeError: 'LedgerCoverage' object has no
-  attribute 'blocking_placement'` on all three parameters. After the fix, the
-  four pass, and `tests/unit/analysis/test_legacy_ledger.py`,
-  `tests/unit/ui/test_views_return_recon.py`,
-  `tests/unit/api/test_service_reconcile_ledger.py`,
-  `tests/contracts/test_reconciliation_contract.py` and
-  `tests/integration/test_ui_recon_templates.py` are 258 passed.
+  attribute 'blocking_placement'` on all three parameters. The over-refusal gate
+  was run red too, on all seven of its parameters:
+
+  ```
+  AssertionError: assert 'c08_06' in frozenset({'c07_00', 'c08_01', 'c08_03'})
+  ```
+
+  After both fixes, `tests/unit/analysis/`, `tests/unit/ui/`, `tests/unit/api/`
+  are 1037 passed and `tests/contracts tests/integration` 1510 passed.
 - **Lesson**: *a derived explanation must be refused when it is not the reason,
   not merely computed when it is.* `blocking_labels` answers "which approaches
   are not in the population" — a question with an answer on almost every mixed
@@ -2266,3 +2296,17 @@ gate that shipped.
   re-derives the precedence and one of them gets it wrong. The tell was
   available for free: two surfaces printed different causes for the same
   coverage record in the same run.
+
+  *Second, and the one that cost the user a second round trip:* **a comment
+  admitting a check over-reports is a defect report, not a caveat.**
+  `_label_facts` carried, in capitals, the sentence "it can over-report on an
+  extract that reuses one source column across approaches" — an accurate
+  description of this exact escape, written before it happened, directly above
+  the code that caused it. It read as a documented trade-off ("conservative in
+  the right direction") because the cost was invisible: an over-report on a
+  *reachability* check is not a noisy warning, it is a template silently
+  withheld. Conservatism is only free where the failure mode is a false alarm;
+  where it is a refusal, "conservative" and "wrong" are the same thing, and the
+  scoping that made it correct was three lines and available all along. When a
+  comment says a check may fire on rows the consumer cannot read, ask what
+  firing costs before accepting it.

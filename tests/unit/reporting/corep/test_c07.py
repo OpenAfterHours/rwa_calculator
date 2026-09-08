@@ -10,7 +10,9 @@ import pytest
 
 from rwa_calc.reporting.corep.templates import (
     B31_C07_COLUMNS,
+    C07_00_SA_SHEET_MAP,
     CRR_C07_COLUMNS,
+    get_sa_risk_weight_bands,
 )
 from tests.fixtures.recon_ledger import LedgerShimCorepGenerator
 from tests.unit.reporting.corep._builders import (
@@ -527,50 +529,119 @@ class TestSupportingFactors:
         assert "0217" not in corp.columns
 
     def test_c07_rwea_relationship(self) -> None:
-        """Col 0220 = 0215 + 0216 + 0217 under the "(-)" display convention.
+        """Col 0220 = 0215 + 0216 + 0217 on the MIXED Art. 112(1)(g) sheet.
 
-        Stated on a frame holding ONLY the SME leg. It used to read the
-        ``corporate_sme`` sheet, which the Art. 112(1)(g) merge no longer emits
-        — and the merged sheet cannot carry this identity, because
-        ``_sa_results_with_phase2_cols`` gives SA_CORP_2 a 100 pre/post
-        difference attributed to NEITHER supporting factor. Reading the merged
-        sheet would make the assertion fail for a reason that has nothing to do
-        with the columns under test.
+        The published identity is EBA ``v09747_m`` (live, C 07.00.c, all rows):
+        ``{c0215} + {c0216} + {c0217} = {c0220}``. It is a SUM because
+        0216/0217 are "(-)"-labelled, and COREP Annex II Part I §1.3 says no
+        positive figure is expected for a "(-)" item. Annex II defines 0215 as
+        RWEA *without* Art. 501/501a, 0216/0217 as the deduction of the
+        difference each factor makes, and 0220 as RWEA *with* them — so the
+        only thing that may move RWEA between 0215 and 0220 is a supporting
+        factor.
+
+        P5.66 restored this to the merged sheet. It had been moved onto a
+        single-SME frame because ``_sa_results_with_phase2_cols`` gave SA_CORP_2
+        a 100 pre/post reduction with BOTH factor flags False — a state
+        production cannot produce, which broke the identity for a reason
+        unrelated to the columns under test. Post-#497 ``corporate_sme`` merges
+        into ``corporate``, so a sheet carrying factor and non-factor rows
+        together is the normal case and is what this now covers.
         """
-        data = pl.LazyFrame(
-            {
-                "exposure_reference": ["SA_SME_ONLY"],
-                "approach_applied": ["standardised"],
-                "exposure_class": ["corporate_sme"],
-                "drawn_amount": [500.0],
-                "undrawn_amount": [100.0],
-                "ead_final": [550.0],
-                "rwa_final": [467.5],
-                "rwa_pre_factor": [550.0],
-                "risk_weight": [0.85],
-                "scra_provision_amount": [5.0],
-                "gcra_provision_amount": [2.5],
-                "collateral_adjusted_value": [50.0],
-                "guaranteed_portion": [0.0],
-                "sa_cqs": [0],
-                "counterparty_reference": ["CP_C"],
-                "sme_supporting_factor_eligible": [True],
-                "sme_supporting_factor_applied": [True],
-                "infrastructure_factor_applied": [False],
-            }
-        )
         gen = LedgerShimCorepGenerator()
-        bundle = gen.generate_from_lazyframe(data)
+        bundle = gen.generate_from_lazyframe(_sa_results_with_phase2_cols())
 
-        sme = _get_total_row(bundle.c07_00["corporate"])
-        pre = sme["0215"][0]
-        sme_benefit = sme["0216"][0]  # negative per Annex II §1.3
-        post = sme["0220"][0]
-        assert sme_benefit == pytest.approx(-82.5), (
-            "the SME benefit is zero, so the identity below would hold whatever col 0216 did"
+        # Negative space: the (g) sheet is emitted at all.
+        assert "corporate" in bundle.c07_00
+
+        legs = _sa_results_with_phase2_cols().collect()
+        g_classes = {cls for cls, sheet in C07_00_SA_SHEET_MAP.items() if sheet == "corporate"}
+        states = set(
+            legs.filter(pl.col("exposure_class").is_in(g_classes))
+            .select("sme_supporting_factor_applied", "infrastructure_factor_applied")
+            .iter_rows()
         )
-        # pre + sme_benefit = post (no infra on this leg; 0216 already signed)
-        assert post == pytest.approx(pre + sme_benefit)
+        assert states == {(False, False), (True, False), (False, True)}, (
+            "the (g) sheet must carry a no-factor, an SME and an infrastructure leg "
+            f"together or this is not a mixed-sheet test; it carries {sorted(states)}"
+        )
+
+        total = _get_total_row(bundle.c07_00["corporate"])
+        pre, sme_adj, infra_adj, post = (total[ref][0] for ref in ("0215", "0216", "0217", "0220"))
+        # Negative space: a null and a legitimate zero are different claims, and
+        # this sheet has exposure in all four cells.
+        assert None not in (pre, sme_adj, infra_adj, post)
+        # Absolute values, not a relative move. rwa_pre_factor 1200+2000+550+1200;
+        # SME benefit 550-467.5; infra benefit 1200-1140; rwa_final 1140+2000+467.5+1200.
+        assert pre == pytest.approx(4950.0)
+        assert sme_adj == pytest.approx(-82.5)
+        assert infra_adj == pytest.approx(-60.0)
+        assert post == pytest.approx(4807.5)
+        assert post == pytest.approx(pre + sme_adj + infra_adj)
+
+    def test_c07_rwea_relationship_holds_on_every_populated_row(self) -> None:
+        """``v09747_m`` is scoped to ALL rows, not just the total.
+
+        The total row can foot while a breakdown row does not — the risk-weight
+        bands split the legs by ``risk_weight``, so the infrastructure leg lands
+        on 0230 (100%) and the SME leg on 0280 (Other), each with a different
+        factor state. A row-wise check is what makes the sheet's mixture bite.
+        Nulls are read as zero, matching the rule's ``if_value_missing``.
+        """
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_results_with_phase2_cols())
+        corp = bundle.c07_00["corporate"]
+
+        populated = corp.filter(pl.col("0220").is_not_null()).with_columns(
+            (
+                pl.col("0215").fill_null(0.0)
+                + pl.col("0216").fill_null(0.0)
+                + pl.col("0217").fill_null(0.0)
+                - pl.col("0220")
+            ).alias("residual")
+        )
+        # Adequacy: the populated rows must show more than one factor state, or
+        # this degenerates into the total row asserted several times over.
+        assert populated.filter(pl.col("0216").fill_null(0.0) != 0.0).height > 0
+        assert populated.filter(pl.col("0217").fill_null(0.0) != 0.0).height > 0
+        assert (
+            populated.filter(
+                (pl.col("0216").fill_null(0.0) == 0.0) & (pl.col("0217").fill_null(0.0) == 0.0)
+            ).height
+            > 0
+        )
+
+        breaks = populated.filter(pl.col("residual").abs() > 1e-9)
+        assert breaks.height == 0, (
+            "rows breaching {c0215}+{c0216}+{c0217}={c0220}: "
+            f"{breaks.select('row_ref', '0215', '0216', '0217', '0220', 'residual').rows()}"
+        )
+
+    def test_c07_risk_weight_bands_foot_to_the_total_rwea(self) -> None:
+        """The RW-band breakdown sums to row 0010 on cols 0215 and 0220.
+
+        A breakdown that silently drops a leg still looks plausible, and the
+        supporting-factor columns are exactly where a dropped leg hides: the
+        band rows carry different factor states from one another.
+        """
+        gen = LedgerShimCorepGenerator()
+        bundle = gen.generate_from_lazyframe(_sa_results_with_phase2_cols())
+        corp = bundle.c07_00["corporate"]
+
+        band_labels = [label for _, label in get_sa_risk_weight_bands("CRR")]
+        bands = corp.filter(pl.col("row_name").is_in([*band_labels, "Other risk weights"]))
+        populated_bands = bands.filter(pl.col("0220").is_not_null())
+        assert populated_bands.height >= 3, (
+            "fewer than three populated bands would make this a single-row check; "
+            f"got {populated_bands['row_ref'].to_list()}"
+        )
+
+        total = _get_total_row(corp)
+        for ref in ("0215", "0220"):
+            assert bands[ref].sum() == pytest.approx(total[ref][0]), (
+                f"C 07.00 corporate col {ref}: bands sum to {bands[ref].sum()} "
+                f"but the total row reports {total[ref][0]}"
+            )
 
 
 class TestECAIUnratedSplit:

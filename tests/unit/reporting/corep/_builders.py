@@ -110,7 +110,29 @@ def _irb_results() -> pl.LazyFrame:
 
 
 def _sa_results_with_phase2_cols() -> pl.LazyFrame:
-    """SA results with Phase 2 columns: bs_type, supporting factors, default_status."""
+    """SA results with Phase 2 columns: bs_type, supporting factors, default_status.
+
+    Invariant this frame must keep: ``rwa_pre_factor`` may exceed ``rwa_final``
+    ONLY on a row flagged ``sme_supporting_factor_applied`` or
+    ``infrastructure_factor_applied``. Nothing in production reduces RWEA below
+    the pre-factor amount except Art. 501 / Art. 501a, and COREP C 07.00 cols
+    0215-0217/0220 are defined so that the reduction is attributable: EBA
+    ``v09747_m`` states ``{c0215} + {c0216} + {c0217} = {c0220}``. SA_CORP_2
+    carried an unattributable 100 (pre 2000 / final 1900, both factor flags
+    False) which broke that identity on every sheet it reached; it is now
+    2000/2000, which for THAT ROW also agrees with ``ead_final x risk_weight``.
+
+    That agreement is deliberately NOT a frame-wide invariant, and two rows
+    remain knowingly unproducible — left alone so a later pass does not "fix"
+    them into a red. SA_CORP_1 reduces at 0.95 where Art. 501a is a flat 0.75
+    (``test_c07_infra_factor_benefit`` pins the resulting -60.0). SA_CORP_3 has
+    ``rwa_pre_factor`` 550 against ``ead_final x risk_weight`` 467.5, so it
+    breaches the ``engine/sa/factors_output.py`` identity. Neither is the P5.66
+    defect: an arbitrary-but-FLAGGED ratio is attributable, and the C 07.00
+    projection reads ``rwa_pre_factor`` and ``rwa_final`` as given rather than
+    re-deriving the multiplier. Only the unflagged reduction made a published
+    identity unsatisfiable. See ``test_c07.py::TestSupportingFactors``.
+    """
     return pl.LazyFrame(
         {
             "exposure_reference": [
@@ -137,7 +159,8 @@ def _sa_results_with_phase2_cols() -> pl.LazyFrame:
             "drawn_amount": [1000.0, 2000.0, 500.0, 3000.0, 200.0, 300.0, 5000.0, 800.0],
             "undrawn_amount": [500.0, 0.0, 100.0, 0.0, 50.0, 0.0, 0.0, 0.0],
             "ead_final": [1200.0, 2000.0, 550.0, 3000.0, 225.0, 300.0, 5000.0, 800.0],
-            "rwa_final": [1140.0, 1900.0, 467.5, 600.0, 168.75, 225.0, 0.0, 1200.0],
+            # SA_CORP_2 carries NO supporting factor, so its RWEA is unreduced.
+            "rwa_final": [1140.0, 2000.0, 467.5, 600.0, 168.75, 225.0, 0.0, 1200.0],
             "risk_weight": [1.00, 1.00, 0.85, 0.20, 0.75, 0.75, 0.00, 1.50],
             "scra_provision_amount": [10.0, 20.0, 5.0, 0.0, 2.0, 3.0, 0.0, 5.0],
             "gcra_provision_amount": [5.0, 10.0, 2.5, 15.0, 1.0, 1.5, 0.0, 3.0],

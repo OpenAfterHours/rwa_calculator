@@ -2329,10 +2329,9 @@ def _template_block(coverage: LedgerCoverage | None, template_id: str) -> str:
     placement = coverage.blocking_placement(template_id)
     if placement:
         return (
-            "your mapping cannot produce this template — "
-            f"{', '.join(placement)} carries values that are not valid slotting "
-            "placements; blank them on the non-slotting rows, or map the real "
-            "values in those [carriers.*] value_maps"
+            "your mapping cannot produce this template — invalid or null slotting "
+            f"placement values in {', '.join(placement)}; blank them on the "
+            "non-slotting rows, or map the real values in those [carriers.*] value_maps"
         )
     labels = coverage.blocking_labels(template_id)
     if labels:

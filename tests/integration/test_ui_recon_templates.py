@@ -499,7 +499,16 @@ def test_slotting_population_with_only_unmapped_sl_types_stays_visible_as_blocke
     assert coverage is not None
     assert "c08_06" in (coverage.populated_templates or ())
     assert "c08_06" not in coverage.reachable_templates
-    assert coverage.unmapped_labels["sl_type"] == ("UNKNOWN (6 rows)",)
+    # Two entries answering two questions: the token is unmapped ANYWHERE in the
+    # ledger (which C 07.00's specialised-lending rows also care about), and six
+    # rows OF THE SLOTTING BOOK cannot be placed (which is what blocks C 08.06).
+    # They coincide here because this fixture's book is entirely slotting; on a
+    # mixed extract they differ, and only the second one refuses the template.
+    assert coverage.unmapped_labels["sl_type"] == (
+        "UNKNOWN (6 rows)",
+        "<null or invalid> (6 rows)",
+    )
+    assert coverage.blocking_placement("c08_06") == ("sl_type",)
     assert 'value="c08_06"' in response.text
     assert "C 08.06" in response.text
     assert "(not mapped)" in response.text

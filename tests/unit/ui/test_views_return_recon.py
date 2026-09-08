@@ -1738,6 +1738,46 @@ def test_an_unreachable_template_is_still_offered_with_the_blocking_columns() ->
     assert blocked[TEMPLATE].state == "unreachable"
 
 
+def test_a_slotting_placement_block_names_the_carriers_not_the_approaches() -> None:
+    """C 08.06 blocked on placement must not be reported as a population problem.
+
+    A mixed extract carries SA and IRB rows alongside its slotting book, and the
+    usual cause is a placeholder (``"N/A"``) left in the SL columns of the
+    non-slotting rows. ``blocking_labels`` would mechanically name the other
+    three approaches, which reads as "your slotting rows are missing" to a firm
+    whose slotting rows are right there.
+    """
+    # Arrange — every required column supplied and slotting present, but a
+    # placement carrier carries a value outside the engine vocabulary on a
+    # slotting row (``invalid_placements``, not merely somewhere in the ledger).
+    coverage = replace(
+        _coverage(),
+        supplied=frozenset(
+            {
+                "reporting_approach_origin",
+                "ead_final",
+                "rwa_final",
+                "sl_type",
+                "slotting_category",
+                "is_short_maturity",
+            }
+        ),
+        reachable_templates=frozenset(),
+        present_approaches=frozenset(
+            {"slotting", "standardised", "foundation_irb", "advanced_irb"}
+        ),
+        unmapped_labels={"sl_type": ("N/A (4 rows)",)},
+        invalid_placements=frozenset({"sl_type"}),
+    )
+
+    # Act
+    message = rr._template_block(coverage, "c08_06")
+
+    # Assert — the mapping to fix is named; the approach labels are not blamed.
+    assert "sl_type" in message
+    assert "approach labels" not in message
+
+
 def test_a_reachable_but_unpopulated_template_is_not_a_mapping_problem() -> None:
     """ "Your book has no such exposures" and "your mapping is broken" are not
     the same sentence, and telling an all-standardised firm the second would

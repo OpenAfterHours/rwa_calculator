@@ -63,6 +63,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lists and every COREP / Pillar 3 sheet are byte-identical across the 27-run
   reference dump. Banked in `tests/contracts/test_pipeline_collect_budget.py`.
 
+### Fixed
+- **A placeholder on the non-slotting rows no longer withholds C 08.06.** The
+  placement check measured `sl_type` / `slotting_category` over the *whole*
+  ledger, so a mixed extract that reuses one SL column across approaches and
+  fills it where specialised lending does not apply — `"N/A"`, `"NONE"`, `"-"`,
+  or a blank string, which is not a null — had the template refused on rows that
+  can reach no sheet, row or cell of it. C 08.06's population is slotting-only,
+  so the block now keys on a slotting-book-scoped count (null **or**
+  out-of-vocabulary), the same scoping the null check already used;
+  `LedgerCoverage.invalid_placements` carries it. Whole-ledger findings are
+  still *reported* in `unmapped_labels`, because C 07.00's specialised-lending
+  rows (0021-0023) read `sl_type` off SA rows — the change is what blocks, not
+  what is said. An unmapped value that is empty or whitespace now renders as
+  `<blank>` rather than as a hole in the remedy line. Pinned by
+  `tests/unit/analysis/test_legacy_ledger.py::test_a_placeholder_on_the_non_slotting_rows_does_not_block_c08_06`
+  (five placeholder shapes) and its two siblings; every existing block test
+  targets a slotting row and still fires.
+- **A C 08.06 slotting placement block no longer blames the approach labels.**
+  On a mixed extract — one carrying SA and IRB rows alongside its slotting book
+  — a placeholder left in the SL columns of the non-slotting rows (`"N/A"`,
+  `"NONE"`, `"-"`) puts `sl_type` / `slotting_category` outside the engine
+  vocabulary, and `_vocabulary_permits` refuses C 08.06 on it. The compare
+  surface had no branch for that cause: `blocking_columns` was empty, so it fell
+  through to `blocking_labels` — a set subtraction returning whatever OTHER
+  approaches the book carries — and reported *"its approach labels
+  (advanced_irb, foundation_irb, standardised) fall outside the population it
+  reports"* to a firm whose slotting rows were present and correctly mapped,
+  sending it to edit `[components.approach]`, the one table that was already
+  right. `LedgerCoverage` gains `blocking_placement()`, `blocking_labels()`
+  returns empty when placement is the cause so it can no longer misattribute,
+  and the UI names the carriers and the remedy (blank them on the non-slotting
+  rows, or map the real values). Pinned by
+  `tests/unit/analysis/test_legacy_ledger.py::test_a_placement_block_does_not_blame_the_approach_labels`
+  and
+  `tests/unit/ui/test_views_return_recon.py::test_a_slotting_placement_block_names_the_carriers_not_the_approaches`.
+
 ---
 
 ## [0.3.34] - 2026-09-05

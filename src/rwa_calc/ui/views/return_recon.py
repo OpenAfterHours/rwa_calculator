@@ -2313,12 +2313,26 @@ def _population_note(populated: bool | None) -> str:
 
 
 def _template_block(coverage: LedgerCoverage | None, template_id: str) -> str:
-    """Why the legacy mapping cannot produce a template AT ALL, or ``""``."""
+    """Why the legacy mapping cannot produce a template AT ALL, or ``""``.
+
+    The branches are the coverage record's own failure modes, in its order:
+    a missing COLUMN, an invalid PLACEMENT, then a refused approach LABEL.
+    Placement comes before labels because on the mixed extract that produces it
+    both are non-empty in appearance and only one is the cause — see
+    ``LedgerCoverage.blocking_placement``.
+    """
     if coverage is None or template_id in coverage.reachable_templates:
         return ""
     columns = coverage.blocking_columns(template_id)
     if columns:
         return f"your mapping cannot produce this template — map {', '.join(columns)}"
+    placement = coverage.blocking_placement(template_id)
+    if placement:
+        return (
+            "your mapping cannot produce this template — invalid or null slotting "
+            f"placement values in {', '.join(placement)}; blank them on the "
+            "non-slotting rows, or map the real values in those [carriers.*] value_maps"
+        )
     labels = coverage.blocking_labels(template_id)
     if labels:
         joined = ", ".join(labels)

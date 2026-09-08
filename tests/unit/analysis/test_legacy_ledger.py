@@ -1445,6 +1445,43 @@ def test_invalid_slotting_placement_value_blocks_c08_06(
     assert coverage.blocking_columns("c08_06") == ()
 
 
+@pytest.mark.parametrize(
+    ("legacy_column", "bad_value", "mapping_name"),
+    [
+        ("SL Type", "NOT_A_TYPE", "sl_type"),
+        ("Slot Category", "CAT9", "slotting_category"),
+        ("Maturity Band", "UNKNOWN", "is_short_maturity"),
+    ],
+)
+def test_a_placement_block_does_not_blame_the_approach_labels(
+    tmp_path: Path, legacy_column: str, bad_value: str, mapping_name: str
+) -> None:
+    """A placement block is not a population block and must not read as one.
+
+    ``blocking_labels`` is a set subtraction that returns whatever OTHER
+    approaches the book carries, so on a mixed extract it names SA and IRB
+    however the template was actually blocked. Reported as the cause, that
+    sends the analyst to edit ``[components.approach]`` — the one table that
+    is already correct — while the real fix sits in ``[carriers.*]``.
+    """
+    # Arrange — a slotting placement value outside the engine vocabulary, on
+    # an extract whose approach column is entirely well-mapped.
+    rows = dict(_LEGACY_ROWS)
+    values = list(rows[legacy_column])
+    values[7] = bad_value
+    rows[legacy_column] = values
+    legacy, mapping = _load(_write_legacy(tmp_path, rows), _components_for("raw"), _CARRIERS)
+
+    # Act
+    _source, coverage = project_legacy_ledger(legacy, mapping, framework="CRR")
+
+    # Assert — the placement is named, and the population is NOT blamed for it.
+    assert "c08_06" not in coverage.reachable_templates
+    assert coverage.blocking_placement("c08_06") == (mapping_name,)
+    assert ApproachType.SLOTTING.value in (coverage.present_approaches or frozenset())
+    assert coverage.blocking_labels("c08_06") == ()
+
+
 def test_invalid_explicit_hvcre_flag_blocks_ipre_routing(tmp_path: Path) -> None:
     """A mapped but unparsable IPRE/HVCRE flag cannot silently mean ordinary IPRE."""
     rows = dict(_LEGACY_ROWS)

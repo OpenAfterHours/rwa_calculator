@@ -2172,3 +2172,97 @@ gate that shipped.
   exists, re-read the mechanism for the remedy it implies. "The sink is
   reported for a tainted argument" and "there is no structural fix" cannot both
   be true — the first names exactly what to remove.
+
+---
+
+## 2026-09-08 — C 08.06's placement block was reported as a population block, blaming the one mapping that was correct
+
+- **Defect**: a firm mapping a mixed legacy extract for return reconciliation —
+  SA, FIRB and AIRB rows alongside its specialised-lending book — was told:
+
+  ```
+  your mapping cannot produce this template — its approach labels
+  (advanced_irb, foundation_irb, standardised) fall outside the population it reports
+  ```
+
+  Their extract *did* carry slotting, correctly mapped;
+  `present_approaches` contained `slotting` while that sentence was on screen.
+  The real cause was elsewhere entirely: the SL columns carried a placeholder
+  (`"N/A"`) on the non-slotting rows, which put `sl_type` and
+  `slotting_category` outside the engine vocabulary and made
+  `_vocabulary_permits` refuse C 08.06 on `_SLOTTING_PLACEMENT_MAPPINGS`. The
+  message named `[components.approach]`, the one table already right, and said
+  nothing about the two `[carriers.*]` tables that were wrong.
+- **Rule**: not a regulatory escape — no RWA number is affected. C 08.06 / OF
+  08.06 (Reg (EU) 2021/451 Annex II; PS1/26 Annex I/II) simply went unproduced
+  on the compare surface, with a reason that sent the analyst the wrong way.
+- **Origin**: `LedgerCoverage.blocking_labels` is a set subtraction —
+  `present_approaches - TEMPLATE_POPULATION_LABELS[template_id]` — so on a mixed
+  extract it is non-empty **whatever** made the template unreachable. Its
+  docstring anticipated exactly this and guarded one case ("or when it is
+  blocked by a missing COLUMN instead — a different fix"), but the placement
+  block is a *third* cause and was added to `_vocabulary_permits` without a
+  matching accessor. `ui/views/return_recon.py::_template_block` then walked
+  columns → labels, found columns empty, and printed the subtraction.
+  `_warn_unreachable` had it right on the same coverage record and in the same
+  run — the log said *"invalid or null slotting placement values in sl_type,
+  slotting_category"* — so the two surfaces disagreed about the cause, and only
+  the one nobody reads was correct.
+- **Escape class**: `no-assertion-of-presence`, in its diagnostic form. Every
+  gate asserted the *block* was present and none asserted the *reason* named the
+  cause. `tests/unit/analysis/test_legacy_ledger.py` covered all four placement
+  blocks and asserted `blocking_columns("c08_06") == ()` — pinning that this is
+  not a column problem, one step from the defect, without ever asking what the
+  surface says instead. `no-gate-exists` is the near miss and is wrong: the
+  gates existed and ran green; they were pointed at reachability rather than at
+  the sentence.
+- **Why every gate missed it**: the fixture had the right shape all along —
+  `_LEGACY_ROWS`'s `Approach` column is `SA, SA, AIRB, AIRB, FIRB, SA, SA,
+  SLOT, SLOT, SLOT`, precisely the mix that makes the subtraction misfire — so
+  this was never `path-never-exercised`. Both existing placement tests ran over
+  it and passed. The UI test file tests `_template_block`'s siblings
+  (`test_an_unreachable_template_is_still_offered_with_the_blocking_columns`)
+  but only that a `blocked_reason` is *non-empty*, which the wrong sentence
+  satisfies. Nothing anywhere compared the two surfaces' accounts of one
+  coverage record, which is what would have caught it: `_warn_unreachable` and
+  `_template_block` are the same decision written twice.
+- **Gate change**: the cause becomes a named thing the analysis layer owns, so a
+  surface cannot invent its own answer.
+  `LedgerCoverage.blocking_placement()` (`src/rwa_calc/analysis/legacy_ledger.py`)
+  returns the placement mappings the refusal keyed on; `blocking_labels()`
+  returns `()` when placement is the cause, so it can no longer misattribute
+  through either of its two callers — nor through a third written later —
+  rather than only through the one surface that was reported;
+  and `_warn_unreachable` now reads the accessor instead of recomputing the
+  intersection inline, so the log and the UI cannot drift apart again. The UI
+  gains the matching branch, ordered columns → placement → labels.
+  Regression gates: `test_a_placement_block_does_not_blame_the_approach_labels`
+  (all three placement carriers; asserts `slotting` *is* in
+  `present_approaches` while the block stands) and
+  `test_a_slotting_placement_block_names_the_carriers_not_the_approaches`.
+- **Verified red**: both gates were run against the unfixed tree first. The UI
+  gate reproduces the reported sentence verbatim —
+
+  ```
+  AssertionError: assert 'sl_type' in 'your mapping cannot produce this template —
+  its approach labels (advanced_irb, foundation_irb, standardised) fall outside
+  the population it reports'
+  ```
+
+  — and the analysis gate fails `AttributeError: 'LedgerCoverage' object has no
+  attribute 'blocking_placement'` on all three parameters. After the fix, the
+  four pass, and `tests/unit/analysis/test_legacy_ledger.py`,
+  `tests/unit/ui/test_views_return_recon.py`,
+  `tests/unit/api/test_service_reconcile_ledger.py`,
+  `tests/contracts/test_reconciliation_contract.py` and
+  `tests/integration/test_ui_recon_templates.py` are 258 passed.
+- **Lesson**: *a derived explanation must be refused when it is not the reason,
+  not merely computed when it is.* `blocking_labels` answers "which approaches
+  are not in the population" — a question with an answer on almost every mixed
+  extract — and the caller treated a non-empty answer as evidence it was the
+  cause. Where several causes can block one outcome, each needs its own
+  accessor, and the accessors need to be mutually exclusive at the source
+  rather than by call order in each consumer; otherwise every new consumer
+  re-derives the precedence and one of them gets it wrong. The tell was
+  available for free: two surfaces printed different causes for the same
+  coverage record in the same run.

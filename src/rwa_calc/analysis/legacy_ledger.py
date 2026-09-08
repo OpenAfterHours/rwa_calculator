@@ -156,9 +156,14 @@ no IRB book, which is not a defect and has nothing to fix. Collapsing the two
 produced an unreachable template with ``blocking_labels() == ()`` — unreachable
 with nothing to fix, a state a user cannot act on, and the same conflation
 ``sheet_not_emitted`` already made between "no exposure" and "no bundle key".
-The three states a compare surface must render differently: unreachable with
-blocking COLUMNS (map these), unreachable with blocking LABELS (add these
-value_map entries), reachable but unpopulated (nothing to fix).
+The four states a compare surface must render differently: unreachable with
+blocking COLUMNS (map these), unreachable with an invalid PLACEMENT (fix these
+carriers' values), unreachable with blocking LABELS (add these value_map
+entries), reachable but unpopulated (nothing to fix). Each has its own accessor
+and they are mutually exclusive AT THE SOURCE, not by the order a consumer
+happens to test them in — ``blocking_labels`` is a subtraction that is non-empty
+on any mixed extract, so a surface that reaches it by elimination will state a
+cause that is merely true-shaped. See ``LedgerCoverage.blocking_placement``.
 
 AN UNMAPPED LABEL IS REPORTED, NOT PASSED THROUGH. Canonicalisation casefolds
 and applies the ``value_map``; what it cannot do is INVENT a translation. A label
@@ -332,6 +337,10 @@ _APPROACH_COLUMN: str = "reporting_approach_origin"
 #: Its TOML table key — what an analyst edits, and the key ``unmapped_labels``
 #: reports it under.
 _APPROACH_MAPPING: str = "approach"
+
+#: The template those mappings place, named once: the reachability refusal, the
+#: coverage accessor that explains it and the warning that reports it all key it.
+_SLOTTING_TEMPLATE: str = "c08_06"
 
 # C 08.06 sheet/row mappings whose invalid DATA makes the template unsafe even
 # when the columns exist. These names are the actionable TOML carrier keys.
@@ -964,10 +973,12 @@ class LedgerCoverage:
             trap in this codebase — ``sheet_not_emitted`` conflated "no exposure"
             (not fixable, not a defect) with "no bundle key" (a real gap), and
             the give-away is an unreachable template with nothing named to fix.
-            The three user-facing states are: unreachable with blocking COLUMNS
-            (map these columns); unreachable with blocking LABELS (add these
+            The four user-facing states are: unreachable with blocking COLUMNS
+            (map these columns); unreachable with an invalid PLACEMENT (fix
+            these carriers' values); unreachable with blocking LABELS (add these
             value_map entries); reachable but unpopulated (your book has no such
-            exposures — nothing to fix).
+            exposures — nothing to fix). Placement outranks labels: it is the
+            narrower statement, and the two are never both the reason.
         unmapped_labels: Mapping name (a ``[components.*]`` / ``[carriers.*]``
             table key) -> the distinct values that survived canonicalisation
             without matching the engine vocabulary, as ``"<value> (<n> rows)"``,
@@ -1029,18 +1040,44 @@ class LedgerCoverage:
                 refs |= set(axis.refs(framework))
         return tuple(sorted(refs))
 
+    def blocking_placement(self, template_id: str) -> tuple[str, ...]:
+        """The C 08.06 placement mappings whose VALUES stop the template.
+
+        The third way a template can be blocked, and the one neither sibling
+        accessor can express: every required column IS mapped and the slotting
+        population IS present, but a sheet/row discriminator carries a value
+        outside the engine vocabulary — a placeholder like ``"N/A"`` left in the
+        SL columns of a mixed extract's non-slotting rows, or a null on a
+        slotting one. ``_vocabulary_permits`` refuses the template on exactly
+        this set, so this names what it refused on.
+
+        IT HAS TO BE NAMED, BECAUSE THE ALTERNATIVE IS NAMING SOMETHING ELSE.
+        ``blocking_labels`` is a set subtraction that returns whatever OTHER
+        approaches the book carries, whatever the real cause; on the mixed
+        extract this case arises from, that is SA and IRB. Reported as the
+        reason, it tells a firm whose slotting rows are right there that its
+        slotting rows are missing, and sends it to edit ``[components.approach]``
+        — the one table that was already correct.
+        """
+        if template_id != _SLOTTING_TEMPLATE or template_id in self.reachable_templates:
+            return ()
+        return tuple(sorted(_SLOTTING_PLACEMENT_MAPPINGS & self.unmapped_labels.keys()))
+
     def blocking_labels(self, template_id: str) -> tuple[str, ...]:
         """The approach labels the extract carries that ``template_id`` refuses.
 
         The vocabulary twin of ``blocking_columns``, and the actionable half of
         the answer: the column is there, the values in it are not the ones this
         template's population filter admits. Empty when the template is
-        reachable, when it is blocked by a missing COLUMN instead (a different
-        fix), or when the vocabulary was not measured.
+        reachable, when it is blocked by a missing COLUMN or by an invalid
+        PLACEMENT instead (both a different fix), or when the vocabulary was not
+        measured.
         """
         if self.present_approaches is None or template_id in self.reachable_templates:
             return ()
         if not _satisfied(TEMPLATE_REQUIRED_COLUMNS[template_id], self.supplied):
+            return ()
+        if self.blocking_placement(template_id):
             return ()
         return tuple(sorted(self.present_approaches - TEMPLATE_POPULATION_LABELS[template_id]))
 
@@ -1256,7 +1293,7 @@ def _vocabulary_permits(
     recognised, one of them might have been the missing population, and that is a
     mapping defect the analyst can fix.
     """
-    if template_id == "c08_06" and _SLOTTING_PLACEMENT_MAPPINGS & unmapped_labels.keys():
+    if template_id == _SLOTTING_TEMPLATE and _SLOTTING_PLACEMENT_MAPPINGS & unmapped_labels.keys():
         return False
     if present_approaches is None:
         return True
@@ -1323,8 +1360,8 @@ def _warn_unreachable(coverage: LedgerCoverage) -> None:
                 ", ".join(blocking),
             )
             continue
-        placement = sorted(_SLOTTING_PLACEMENT_MAPPINGS & coverage.unmapped_labels.keys())
-        if template_id == "c08_06" and placement:
+        placement = coverage.blocking_placement(template_id)
+        if placement:
             logger.warning(
                 "legacy ledger projection: %s cannot be produced safely — invalid or null "
                 "slotting placement values in %s. Fix those [carriers.*] mappings or source "

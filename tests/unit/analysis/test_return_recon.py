@@ -73,6 +73,11 @@ _FALLBACK_IDENTITY = recon_module._FALLBACK_KEY_COLUMN
 # tests all address one cell family on it.
 CORPORATE = "corporate"
 
+# The C 07.00 sheet key for Art. 112(1)(i). That template's z-axis is the
+# Art. 112(1) class list, so every mortgage-secured ExposureClass member —
+# retail_mortgage, residential_mortgage, commercial_mortgage — reports here.
+REAL_ESTATE_SHEET = "real_estate"
+
 # Two PD bands that are distinct under BOTH frameworks (Basel 3.1 splits the
 # first CRR band at 0.05%, so a mover must not straddle that boundary):
 # 0.12% sits in "0.05 to <0.15" / "0.00 to <0.15", 2.00% in "0.75 to <2.50".
@@ -2005,8 +2010,9 @@ def test_a_standardised_re_split_pairs_against_the_legacy_whole_loan(framework: 
     RRE+CRE one (``_rre`` + ``_cre``) — see ``_RE_SECURED``.
     ``engine/re_split/splitter.py`` reclassifies the secured portion to
     ``RESIDENTIAL_MORTGAGE`` and leaves the residual on the counterparty's own
-    class, so one exposure lands on the mortgage sheet AND the corporate sheet.
-    Their extract reports it whole, on one sheet, under the original reference.
+    class, so one exposure lands on the Art. 112(1)(i) ``real_estate`` sheet AND
+    the corporate sheet. Their extract reports it whole, on one sheet, under the
+    original reference.
 
     So the honest answer here is NOT "wholly in measurement" — half the money is
     on a sheet they do not use it on, which is a placement, and asserting
@@ -2021,18 +2027,18 @@ def test_a_standardised_re_split_pairs_against_the_legacy_whole_loan(framework: 
     recon = _sa_recon(
         [_SA_FILL_CORP, _RE_SECURED, _RE_RESIDUAL], [_SA_FILL_CORP, _RE_WHOLE], framework
     )
-    mortgage_rows = _c07_whole_sheet_rows(recon, "residential_mortgage", C07_RWEA_COL)
+    mortgage_rows = _c07_whole_sheet_rows(recon, REAL_ESTATE_SHEET, C07_RWEA_COL)
     corporate_rows = _c07_whole_sheet_rows(recon, CORPORATE, C07_RWEA_COL)
     assert mortgage_rows and corporate_rows
 
     # Assert — both sheets are EMITTED on both sides. A split exposure measured
     # against a sheet one side never emits is a different finding.
-    assert {"residential_mortgage", CORPORATE} <= set(recon.ours.frames["c07_00"])
-    assert {"residential_mortgage", CORPORATE} <= set(recon.theirs.frames["c07_00"])
+    assert {REAL_ESTATE_SHEET, CORPORATE} <= set(recon.ours.frames["c07_00"])
+    assert {REAL_ESTATE_SHEET, CORPORATE} <= set(recon.theirs.frames["c07_00"])
 
     for row_ref in mortgage_rows:
         # Act — the half they report the whole loan on.
-        secured = decompose_cell(recon, "c07_00", "residential_mortgage", row_ref, C07_RWEA_COL)
+        secured = decompose_cell(recon, "c07_00", REAL_ESTATE_SHEET, row_ref, C07_RWEA_COL)
         terms = _terms(secured)
 
         # Assert — a figure on each side, paired on one key, nothing missing.
@@ -2061,7 +2067,7 @@ def test_a_standardised_re_split_pairs_against_the_legacy_whole_loan(framework: 
     # Assert — the two halves net to zero, and no cell of the template anywhere
     # reports a population.
     left = _terms(
-        decompose_cell(recon, "c07_00", "residential_mortgage", mortgage_rows[0], C07_RWEA_COL)
+        decompose_cell(recon, "c07_00", REAL_ESTATE_SHEET, mortgage_rows[0], C07_RWEA_COL)
     )
     right = _terms(decompose_cell(recon, "c07_00", CORPORATE, corporate_rows[0], C07_RWEA_COL))
     assert sum(left.values()) + sum(right.values()) == pytest.approx(0.0)

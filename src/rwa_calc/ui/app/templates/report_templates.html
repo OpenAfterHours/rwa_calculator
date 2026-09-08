@@ -21,8 +21,8 @@
   <div class="field">
     <label for="sheet">{{ page.selected.sheet_label or "Sheet" }}</label>
     <select id="sheet" name="sheet" onchange="this.form.submit()">
-      {% for key in page.selected.sheets %}
-      <option value="{{ key }}"{% if key == page.sheet %} selected{% endif %}>{{ key }}</option>
+      {% for key, name in page.selected.sheet_options %}
+      <option value="{{ key }}"{% if key == page.sheet %} selected{% endif %}>{{ name }}</option>
       {% endfor %}
     </select>
   </div>

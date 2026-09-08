@@ -613,9 +613,11 @@ class TestOfWhichDetailRows:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_phase2_cols())
 
-        sme = bundle.c07_00["corporate_sme"]
-        sme_row = sme.filter(pl.col("row_ref") == "0020")
-        # corporate_sme has sme_supporting_factor_eligible=True, EAD=550
+        # The SME leg shares the Art. 112(1)(g) sheet with the plain
+        # corporates, and row 0020 is where it is reported: SA_CORP_3 has
+        # sme_supporting_factor_eligible=True, EAD=550.
+        corp = bundle.c07_00["corporate"]
+        sme_row = corp.filter(pl.col("row_ref") == "0020")
         assert sme_row["0200"][0] == pytest.approx(550.0)
 
     def test_c07_defaulted_row_null_without_flag(self) -> None:
@@ -734,20 +736,25 @@ class TestEdgeCases:
         total = _get_total_row(corp)
         assert total["0200"][0] == pytest.approx(1000.0)
 
-    def test_corporate_sme_separate_from_corporate(self) -> None:
-        """corporate_sme gets its own separate template from corporate."""
+    def test_corporate_sme_shares_the_corporate_sheet(self) -> None:
+        """corporate_sme is not an Art. 112(1) class of its own.
+
+        CRR Art. 112(1)(g) is "corporates", full stop; the SME distinction is an
+        of-which ROW (0020), not a sheet. So the SME leg has no template of its
+        own and is inside the corporate one — asserted BOTH ways, since a sheet
+        that merely stopped being emitted would leave the total short and a
+        total that happened to match would not prove the sheet had gone.
+        """
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results())
 
         assert "corporate" in bundle.c07_00
-        assert "corporate_sme" in bundle.c07_00
+        assert "corporate_sme" not in bundle.c07_00
 
-        corp_ead = _get_total_row(bundle.c07_00["corporate"])["0200"][0]
-        sme_ead = _get_total_row(bundle.c07_00["corporate_sme"])["0200"][0]
-
-        # Corporate: 1200+2000=3200, SME: 550
-        assert corp_ead == pytest.approx(3200.0)
-        assert sme_ead == pytest.approx(550.0)
+        corp = bundle.c07_00["corporate"]
+        # Corporate 1200+2000 plus the SME leg's 550.
+        assert _get_total_row(corp)["0200"][0] == pytest.approx(3750.0)
+        assert corp.filter(pl.col("row_ref") == "0020")["0200"][0] == pytest.approx(550.0)
 
 
 class TestOnBSNetting:
@@ -787,7 +794,7 @@ class TestOnBSNetting:
         """Class with no netting exposures reports 0 for col 0035."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_netting(), framework="BASEL_3_1")
-        retail = _get_total_row(bundle.c07_00["retail_other"])
+        retail = _get_total_row(bundle.c07_00["retail"])
         assert retail["0035"][0] == pytest.approx(0.0)
 
     def test_c08_col_0035_populated_b31(self) -> None:

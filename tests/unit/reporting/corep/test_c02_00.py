@@ -16,6 +16,7 @@ from rwa_calc.reporting.corep.templates import (
     B31_C02_00_COLUMNS,
     B31_C02_00_ROW_SECTIONS,
     C02_00_SA_CLASS_MAP,
+    C07_00_SA_SHEET_MAP,
     CRR_C02_00_COLUMN_REFS,
     CRR_C02_00_COLUMNS,
     CRR_C02_00_ROW_SECTIONS,
@@ -53,14 +54,15 @@ _C02_ROW_TO_C07_SHEET: dict[str, str] = {
 
 #: Classes a C 02.00 row carries that its CR SA sheet map does not list, with
 #: the reason each is legitimate rather than a routing slip.
+#:
+#: Rows 0130 (g) and 0150 (i) used to need entries here — for
+#: ``specialised_lending`` (PS1/26 Art. 122A/122B put SA SL in (g); OF 02.00 row
+#: 0131 is its of-which) and for the Art. 124A/124H loan-splitter legs
+#: ``residential_mortgage`` / ``commercial_mortgage``. They no longer do:
+#: ``C07_00_SA_SHEET_MAP`` collapses every one of those onto its Art. 112(1)
+#: letter's sheet key, which is what the comparison below is stated over, so the
+#: two sides now agree without an allowance.
 _C02_ROW_EXTRA_CLASSES: dict[str, tuple[str, ...]] = {
-    # PS1/26 Art. 122A/122B assign SA specialised lending to Art. 112(1)(g);
-    # OF 02.00 row 0131 is its of-which. C 07.00 has no SA SL sheet.
-    "0130": ("specialised_lending",),
-    # The Art. 124A/124H loan-splitter legs, which report under (i) alongside
-    # retail_mortgage — the same union as C 09.01 row 0090
-    # (``c09.py::_C09_01_RE_CLASSES``).
-    "0150": ("residential_mortgage", "commercial_mortgage"),
     # ``scope.py`` gives s0012 EMPTY bundle keys, i.e. "a class we do not
     # model". ``ExposureClass.HIGH_RISK`` does exist and C 09.01 / OF 09.01 row
     # 0110 keys it, so C 02.00 routes it rather than dropping it. The empty
@@ -579,20 +581,30 @@ class TestC0200TemplateDefinitions:
         (EBA v4240_i r0130 = s0008; v4241_i r0140 = s0009; v3334_i r0150 =
         s0010; v3338_i r0211 = s0017). The only admitted differences are the
         C 02.00-side extras recorded in ``_C02_ROW_EXTRA_CLASSES``.
+
+        Stated in the SHEET KEY vocabulary on both sides. C 02.00 routes the
+        engine's ``ExposureClass`` values while the C 07.00 z-axis keys the
+        Art. 112(1) letter, so the row's classes are mapped through
+        ``C07_00_SA_SHEET_MAP`` first — the same map the generator's axis is
+        built from, which is what makes this an identity rather than two
+        hand-kept lists that happen to agree.
         """
         # Arrange
-        sheet_classes = set(SHEET_INDEX_MAPS[sheet_map][sheet_code].bundle_keys)
+        sheet_keys = set(SHEET_INDEX_MAPS[sheet_map][sheet_code].bundle_keys)
         row_classes = {cls for cls, ref in C02_00_SA_CLASS_MAP.items() if ref == row_ref}
+        row_keys = {C07_00_SA_SHEET_MAP.get(cls, cls) for cls in row_classes}
+        extra_keys = {
+            C07_00_SA_SHEET_MAP.get(cls, cls) for cls in _C02_ROW_EXTRA_CLASSES.get(row_ref, ())
+        }
 
         # Act
-        dropped = sorted(sheet_classes - row_classes)
-        allowed = sheet_classes | set(_C02_ROW_EXTRA_CLASSES.get(row_ref, ()))
-        unexplained = sorted(row_classes - allowed)
+        dropped = sorted(sheet_keys - row_keys)
+        unexplained = sorted(row_keys - (sheet_keys | extra_keys))
 
         # Assert
-        assert not dropped, f"row {row_ref} drops CR SA sheet {sheet_code} classes: {dropped}"
+        assert not dropped, f"row {row_ref} drops CR SA sheet {sheet_code} keys: {dropped}"
         assert not unexplained, (
-            f"row {row_ref} claims classes CR SA sheet {sheet_code} does not: {unexplained}"
+            f"row {row_ref} claims keys CR SA sheet {sheet_code} does not: {unexplained}"
         )
 
     def test_get_columns_selector(self) -> None:

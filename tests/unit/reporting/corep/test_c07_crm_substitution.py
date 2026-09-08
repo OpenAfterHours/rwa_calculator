@@ -46,6 +46,9 @@ def _sa_results_with_mortgage_collateral() -> pl.LazyFrame:
 
     The shape that drove col 0110 negative: Art. 199 collateral (real estate)
     exceeding the exposure, on a Standardised-Approach row.
+
+    ``retail_mortgage`` keys the Art. 112(1)(i) ``real_estate`` sheet, which
+    holds this single row.
     """
     return pl.LazyFrame(
         {
@@ -141,7 +144,7 @@ class TestArt199CollateralIsNotAnSaSubstitutionEffect:
 
         # Act
         bundle = gen.generate_from_lazyframe(_sa_results_with_mortgage_collateral())
-        total = _get_total_row(bundle.c07_00["retail_mortgage"])
+        total = _get_total_row(bundle.c07_00["real_estate"])
 
         # Assert — 666,667 of property against a 400,000 exposure is not an
         # Art. 232 protection; col 0080 stays empty.
@@ -154,7 +157,7 @@ class TestArt199CollateralIsNotAnSaSubstitutionEffect:
 
         # Act
         bundle = gen.generate_from_lazyframe(_sa_results_with_mortgage_collateral())
-        total = _get_total_row(bundle.c07_00["retail_mortgage"])
+        total = _get_total_row(bundle.c07_00["real_estate"])
 
         # Assert — 0110 is the untouched net exposure, not -266,667.
         assert total["0110"][0] == pytest.approx(400_000.0)
@@ -166,7 +169,7 @@ class TestArt199CollateralIsNotAnSaSubstitutionEffect:
 
         # Act
         bundle = gen.generate_from_lazyframe(_sa_results_with_mortgage_collateral())
-        total = _get_total_row(bundle.c07_00["retail_mortgage"])
+        total = _get_total_row(bundle.c07_00["real_estate"])
 
         # Assert
         assert total["0150"][0] == pytest.approx(400_000.0)
@@ -426,7 +429,7 @@ class TestSubstitutionFlows:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_substitution())
 
-        retail = _get_total_row(bundle.c07_00["retail_other"])
+        retail = _get_total_row(bundle.c07_00["retail"])
         assert retail["0090"][0] == pytest.approx(0.0)
         assert retail["0100"][0] == pytest.approx(0.0)
 

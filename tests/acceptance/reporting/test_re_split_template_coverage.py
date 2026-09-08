@@ -78,6 +78,7 @@ from rwa_calc.contracts.config import CalculationConfig, PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from rwa_calc.engine.re_split.params import re_split_parameters
 from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBundle
+from rwa_calc.reporting.corep.templates import C07_00_SA_SHEET_MAP
 from rwa_calc.reporting.pillar3.generator import Pillar3Generator, Pillar3TemplateBundle
 from rwa_calc.reporting.pillar3.templates import B31_CR5_COLUMNS
 
@@ -115,6 +116,20 @@ _CR4_MONEY_COLS: tuple[str, ...] = ("a", "c", "e")
 _CR4_ROW_CORPORATES: str = "7"
 _CR4_ROW_SECURED_BY_MORTGAGES: str = "9"
 _CR4_ROW_TOTAL: str = "17"
+
+#: Engine RE class -> the of-which ROW on the merged Art. 112(1)(i) sheet that
+#: reports it. The sheet axis is the Art. 112(1) class list, so all three RE
+#: classes share one sheet; the residential / commercial detail returns here.
+#: CRR carries the pair in its MEMORANDUM section (0290 commercial / 0310
+#: residential — ``c07.py::_MEMO_RE_SECURED``); PS1/26 drops those and puts the
+#: split in section 1 as 0330 / 0340. Note CRR's section-1 row 0040 is NOT the
+#: residential row to use: it is declared in the template and wired to no
+#: predicate, so it is null on every sheet in both regimes — measured, and
+#: pre-existing rather than caused by the class merge.
+_RE_CLASS_OF_WHICH_ROWS: dict[str, dict[str, str]] = {
+    "crr": {"residential_mortgage": "0310", "commercial_mortgage": "0290"},
+    "b31": {"residential_mortgage": "0330", "commercial_mortgage": "0340"},
+}
 
 #: The Basel 3.1 CR5 "of which" sub-rows that exist only to report split legs.
 _CR5_SECURED_ROW: str = "9f"
@@ -164,7 +179,28 @@ def _cr_row(frame: pl.DataFrame, row_ref: str) -> dict[str, object]:
 
 
 def _expected_sheet_ead(regime_key: str) -> dict[str, float]:
-    """Reporting class -> total ``ead_final`` the design table puts on it."""
+    """C 07.00 SHEET KEY -> total ``ead_final`` the design table puts on it.
+
+    The design table names the engine's ``reporting_class``; the template's
+    z-axis is the Art. 112(1) class list, so the two RE classes a split emits
+    (``residential_mortgage`` / ``commercial_mortgage``) share one sheet with
+    ``retail_mortgage``. Routed through ``C07_00_SA_SHEET_MAP`` rather than
+    re-tabulated here, so this cannot drift from the axis the generator builds.
+    """
+    totals: dict[str, float] = {}
+    for reporting_class, ead in _expected_class_ead(regime_key).items():
+        sheet = C07_00_SA_SHEET_MAP[reporting_class]
+        totals[sheet] = totals.get(sheet, 0.0) + ead
+    return totals
+
+
+def _expected_class_ead(regime_key: str) -> dict[str, float]:
+    """Engine ``reporting_class`` -> total ``ead_final`` the design table gives it.
+
+    The pre-merge grain. It is what the ROW-axis of-which assertions are stated
+    against, since those rows are exactly where the class detail the sheet axis
+    no longer carries has to reappear.
+    """
     totals: dict[str, float] = {}
     for leg in _EXPECTED_LEGS[regime_key].values():
         totals[leg.reporting_class] = totals.get(leg.reporting_class, 0.0) + leg.ead
@@ -341,9 +377,13 @@ class TestRegimeDivergenceOnThePriorCharge:
 
 
 class TestCorepC0700Surface:
-    """C 07.00 is the SA template the split legs land on. One sheet per Art. 112
-    class, so a split opens a ``residential_mortgage`` / ``commercial_mortgage``
-    sheet the parent exposure never had."""
+    """C 07.00 is the SA template the split legs land on. One sheet per Art. 112(1)
+    class — and class (i) is defined by the SECURITY, so a split moves the secured
+    leg from the counterparty's own sheet onto the single ``real_estate`` sheet
+    that carries every mortgage-secured class, while the residual leg stays put.
+    The residential/commercial distinction the engine keeps in
+    ``residential_mortgage`` / ``commercial_mortgage`` is a row-axis breakdown on
+    that sheet (0330/0340 under Basel 3.1), not a sheet of its own."""
 
     @pytest.mark.parametrize("regime_key", list(_REGIMES))
     def test_every_expected_sheet_is_emitted(self, regime_key: str) -> None:
@@ -386,9 +426,42 @@ class TestCorepC0700Surface:
         one half of the split stopped being risk-weighted (LESSONS C2)."""
         _results, corep, _p3 = _run(regime_key)
 
-        for sheet in ("residential_mortgage", "corporate"):
+        for sheet in ("real_estate", "corporate"):
             total = _total_row(corep.c07_00[sheet])
             assert float(total["0220"][0] or 0.0) > 0.0, f"{regime_key}/{sheet}: zero RWEA"
+
+    @pytest.mark.parametrize("regime_key", list(_REGIMES))
+    def test_the_split_classes_stay_distinguishable_on_the_row_axis(self, regime_key: str) -> None:
+        """The merge onto Art. 112(1)(i) re-sites the residential / commercial
+        distinction, it does not delete it: the of-which rows on the merged sheet
+        must carry exactly the per-class exposure the design table allocates.
+        Asserted as absolute values, so a row that silently picked up the other
+        class's legs — or lost its own — fails rather than staying plausible."""
+        _results, corep, _p3 = _run(regime_key)
+
+        frame = corep.c07_00["real_estate"]
+        expected = _expected_class_ead(regime_key)
+        for reporting_class, row_ref in _RE_CLASS_OF_WHICH_ROWS[regime_key].items():
+            row = _cr_row(frame, row_ref)
+            assert row["0200"] is not None, (
+                f"{regime_key}: real_estate row {row_ref} ({reporting_class}) is NULL — "
+                "the class detail the sheet axis used to carry is now reported nowhere"
+            )
+            assert row["0200"] == pytest.approx(expected[reporting_class]), (
+                f"{regime_key}: real_estate row {row_ref} ({reporting_class}) col 0200"
+            )
+
+    def test_basel_31_keeps_the_sme_leg_visible_on_the_merged_corporate_sheet(self) -> None:
+        """The other half of the same argument, for letter (g): the Basel 3.1
+        split emits an SME residual leg that used to open its own
+        ``corporate_sme`` sheet. Merged into (g) corporates, it has to reappear
+        on row 0020 'of which: SME' — which was NULL while the sheets were
+        split, because the SME legs were not on the corporate sheet to describe."""
+        _results, corep, _p3 = _run("b31")
+
+        row = _cr_row(corep.c07_00["corporate"], "0020")
+        assert row["0200"] is not None, "b31: corporate row 0020 'of which: SME' is NULL"
+        assert row["0200"] == pytest.approx(_expected_class_ead("b31")["corporate_sme"])
 
 
 class TestPillar3Cr4Surface:
@@ -412,10 +485,10 @@ class TestPillar3Cr4Surface:
         puts in a real-estate reporting class."""
         _results, _corep, pillar3 = _run(regime_key)
 
-        sheet_ead = _expected_sheet_ead(regime_key)
+        class_ead = _expected_class_ead(regime_key)
         expected = sum(
             value
-            for cls, value in sheet_ead.items()
+            for cls, value in class_ead.items()
             if cls in ("residential_mortgage", "commercial_mortgage", "retail_mortgage")
         )
         assert expected > 0.0, "the design table places nothing in a real-estate class"
@@ -430,9 +503,9 @@ class TestPillar3Cr4Surface:
         secured leg onto row 9."""
         _results, _corep, pillar3 = _run(regime_key)
 
-        sheet_ead = _expected_sheet_ead(regime_key)
+        class_ead = _expected_class_ead(regime_key)
         expected = sum(
-            value for cls, value in sheet_ead.items() if cls in ("corporate", "corporate_sme")
+            value for cls, value in class_ead.items() if cls in ("corporate", "corporate_sme")
         )
         row = _cr_row(pillar3.cr4, _CR4_ROW_CORPORATES)
         assert row["c"] == pytest.approx(expected)

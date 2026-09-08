@@ -36,10 +36,25 @@ docs/plans/phase7-declarative-reporting.md §6):
 - Sheets key the OBLIGOR applied class on the origin basis (the sealed
   ``reporting_class_origin``) and the GUARANTOR class on the post basis (the
   sealed ``reporting_class``); the sheet AXIS is the union of both plus the
-  classes receiving an inflow. Specialised lending is merged into corporate
-  on BOTH keys (Art. 112(1)(g): SL is a corporate sub-type under SA; the SL
-  "of which" rows split it back via sl_type) — an SL guarantor must key a
-  sheet this template has. A frame that seals no ``reporting_class`` /
+  classes receiving an inflow. BOTH keys are mapped onto the Article 112(1)
+  class through ``templates.C07_00_SA_SHEET_MAP`` before they key a sheet:
+  Annex II §47 makes the z-axis the Art. 112(1) class (§56 assigning per the
+  Art. 112(2) Table A2 ranking), so the three families this codebase splits
+  finer than the template fan in — corporate + corporate_sme +
+  specialised_lending -> (g), retail_other + retail_qrre -> (h), and all
+  THREE real-estate classes -> (i) ``real_estate``. Every distinction the
+  published template DECLARES is still reported, on the ROW axis and off the
+  row's own data columns: SME on row 0020 (``c07_sme``) in both regimes, SL on
+  rows 0021-0026 (``sl_type``) under BASEL 3.1 ONLY, and the
+  residential/commercial split on rows 0330-0360 (``property_type`` /
+  ``is_adc``, B31) and the memorandum rows 0290/0310 (CRR). The QRRE split
+  returns on no row in either regime, and SL returns on no row under CRR,
+  because neither template declares one — the merge loses only distinctions
+  the template never asked for. Mapping BOTH keys is what
+  lets a guarantor's covered part key a sheet this template actually has. A
+  class outside the map keeps its own sheet (nothing is ever folded into
+  "other") and is recorded in the error list. A frame that seals no
+  ``reporting_class`` /
   ``reporting_approach`` (synthetic unit frames) degrades the post basis to
   the origin basis, so a book with no substitution reports identically under
   both and the split is number-neutral by construction.
@@ -147,7 +162,6 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 import polars as pl
 from watchfire import cites
 
-from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.reporting.cellspec import (
     CellSpec,
     Formula,
@@ -161,6 +175,8 @@ from rwa_calc.reporting.cellspec import (
 from rwa_calc.reporting.corep.crm_substitution import irb_origin_inflows
 from rwa_calc.reporting.corep.postpass import negate_deduction_cols, null_empty_rows
 from rwa_calc.reporting.corep.templates import (
+    C07_00_SA_SHEET_KEYS,
+    C07_00_SA_SHEET_MAP,
     get_c07_columns,
     get_sa_risk_weight_bands,
     get_sa_row_sections,
@@ -452,12 +468,12 @@ def c07_plans(
     if len(sa_df) == 0 and not inflows.total:
         return {}
 
-    # The two sheet keys, Art. 112 Table A2 merge applied to BOTH (SL is a
-    # corporate sub-type under SA). The post key degrades to the origin key on a
-    # frame that seals no ``reporting_class``, which is what makes the two-basis
-    # split number-neutral wherever nothing substitutes.
+    # The two sheet keys, the Art. 112(1) class map applied to BOTH. The post key
+    # degrades to the origin key on a frame that seals no ``reporting_class``,
+    # which is what makes the two-basis split number-neutral wherever nothing
+    # substitutes.
     sa_df = sa_df.with_columns(
-        class_keys(_BASIS, set(sa_df.columns), ec_col, key=_merge_specialised_lending)
+        class_keys(_BASIS, set(sa_df.columns), ec_col, key=_art112_sheet_key_expr)
     )
     data_cols = set(sa_df.columns)
     sa_df = _prepare(sa_df, data_cols, framework)
@@ -481,6 +497,15 @@ def c07_plans(
     # exposure value and RWEA out of the template silently. An inflow-only sheet
     # keeps its constraint-free total row 0010 and reports 0110 = 0100.
     axis = sheet_axis(_BASIS, sa_df) | set(inflows.total)
+    # A key the map does not hold reached the axis by ``_art112_sheet_key``'s
+    # pass-through limb: it keeps its exposure (folding it into "other" would
+    # hide it) but it opens a sheet the z-axis has no code for, so it is a data
+    # quality finding, never a silent merge and never an exception.
+    for ec in sorted(axis - C07_00_SA_SHEET_KEYS):
+        errors.append(
+            f"C07: exposure class '{ec}' is not an Art. 112(1) exposure class; "
+            "reported on a sheet outside the published z-axis"
+        )
     for ec in sorted(axis):
         sides = inflows.by_side.get(ec, {})
         bands = inflows.by_rw_band.get(ec, {})
@@ -500,16 +525,17 @@ def c07_plans(
     return plans
 
 
-def _merge_specialised_lending(class_col: str) -> pl.Expr:
-    """Art. 112 Table A2: SL is a corporate sub-type under SA, so it is merged
-    into corporate before keying a sheet (the SL "of which" rows split it back
-    via ``sl_type``). Applied to BOTH sheet keys, so an SL guarantor's covered
-    part keys a sheet this template actually has."""
-    return (
-        pl.when(pl.col(class_col) == ExposureClass.SPECIALISED_LENDING.value)
-        .then(pl.lit(ExposureClass.CORPORATE.value))
-        .otherwise(pl.col(class_col))
-    )
+def _art112_sheet_key_expr(class_col: str) -> pl.Expr:
+    """``class_col`` as this template's Art. 112(1) sheet key — the expression
+    twin of ``_art112_sheet_key``, over the SAME map.
+
+    Both are ``C07_00_SA_SHEET_MAP`` and nothing else: the axis is built from
+    this limb and the substitution-inflow keys from the Python one, and the two
+    keying the same class differently opens a spurious sheet with no exception
+    anywhere. ``replace`` leaves an unmapped value UNCHANGED, so a class outside
+    Art. 112(1) still reports (``c07_plans`` records it as an error).
+    """
+    return pl.col(class_col).replace(C07_00_SA_SHEET_MAP)
 
 
 @cites("PS1/26, paragraph 1.3")
@@ -1191,23 +1217,22 @@ def _accumulate_split(
     split: dict[str, dict[str, float]], exposure_class: str, axis: str, amount: float
 ) -> None:
     """Add one destination-class/axis amount under this template's sheet key."""
-    per_class = split.setdefault(_sheet_key(exposure_class), {})
+    per_class = split.setdefault(_art112_sheet_key(exposure_class), {})
     per_class[axis] = per_class.get(axis, 0.0) + amount
 
 
 def _accumulate(merged: dict[str, float], exposure_class: str, amount: float) -> None:
     """Add one destination-class amount under this template's sheet key."""
-    key = _sheet_key(exposure_class)
+    key = _art112_sheet_key(exposure_class)
     merged[key] = merged.get(key, 0.0) + amount
 
 
-def _sheet_key(exposure_class: str) -> str:
-    """A raw guarantor class as this template's sheet key — the Art. 112 Table A2
-    merge the sheet axis applies (SL is a corporate sub-type under SA), so an
-    inflow into an SL guarantor cannot key a sheet C 07.00 does not have."""
-    if exposure_class == ExposureClass.SPECIALISED_LENDING.value:
-        return ExposureClass.CORPORATE.value
-    return exposure_class
+def _art112_sheet_key(exposure_class: str) -> str:
+    """A raw guarantor class as this template's Art. 112(1) sheet key — the same
+    ``C07_00_SA_SHEET_MAP`` the axis applies (``_art112_sheet_key_expr``), so an
+    inflow into a guarantor cannot key a sheet C 07.00 does not have. An
+    unmapped class passes through rather than vanishing."""
+    return C07_00_SA_SHEET_MAP.get(exposure_class, exposure_class)
 
 
 def _inflow_rows(

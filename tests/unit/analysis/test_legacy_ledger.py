@@ -763,7 +763,7 @@ def test_raw_and_derived_gross_routes_agree(shared: _Shared, framework: str) -> 
     # ...and the agreement is not between two sets of zeros: both gross SIDES
     # carry money on the derived route, so the derivation is genuinely exercised.
     assert _cell(raw_bundle.c08_03["corporate"], "0050", "0010") == pytest.approx(4_000_000.0)
-    assert _cell(raw_bundle.c07_00["retail_other"], "0080", "0010") == pytest.approx(500_000.0)
+    assert _cell(raw_bundle.c07_00["retail"], "0080", "0010") == pytest.approx(500_000.0)
 
 
 def test_projection_satisfies_the_results_source_protocol(shared: _Shared) -> None:
@@ -998,7 +998,9 @@ def test_categorical_component_labels_are_canonicalised_by_the_projection(
         "slotting",
     ]
     # ...and the canonical labels are what the sheet axes actually key on.
-    assert set(sheets.c07_00) == {"corporate", "retail_other"}
+    # C 07.00 keys the Art. 112(1) LETTER, so the canonical ``retail_other``
+    # label is what routes the row and ``retail`` is the sheet it routes to.
+    assert set(sheets.c07_00) == {"corporate", "retail"}
     assert set(sheets.c08_01) == {"corporate", "institution"}
 
 

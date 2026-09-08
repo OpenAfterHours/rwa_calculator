@@ -815,6 +815,14 @@ class TemplateOption:
     blocked_reason: str
     populated: bool | None = None
     population_note: str = ""
+    #: Readable name per sheet key, where the catalogue supplies one. Same shape
+    #: and same renderer as ``catalog.TemplateInfo.sheet_names``.
+    sheet_names: tuple[tuple[str, str], ...] = ()
+
+    @property
+    def sheet_options(self) -> tuple[tuple[str, str], ...]:
+        """``(key, display)`` for the picker — see ``catalog.sheet_options``."""
+        return catalog.sheet_options(self.sheets, self.sheet_names)
 
     @property
     def state(self) -> str:
@@ -1178,6 +1186,7 @@ def template_options(
                 blocked_reason=blocked,
                 populated=populated,
                 population_note=_population_note(populated),
+                sheet_names=_catalogue_sheet_names(recon, template_id),
             )
         )
     return tuple(options)
@@ -2190,10 +2199,27 @@ def _template_label(recon: ReturnRecon, template_id: str) -> str:
 
 def _catalogue_title(recon: ReturnRecon, template_id: str) -> str:
     """The catalogue's own title for a template, or ``""`` when it has none."""
+    info = _catalogue_info(recon, template_id)
+    return info.title if info is not None else ""
+
+
+def _catalogue_sheet_names(recon: ReturnRecon, template_id: str) -> tuple[tuple[str, str], ...]:
+    """The catalogue's readable sheet names, empty where it declares none.
+
+    Resolved through the catalogue rather than restated here, so the C 07.00
+    Art. 112(1) labels reach this picker in the regime the reconciliation ran
+    under — the recon viewer offers the same sheet axis as the report viewer.
+    """
+    info = _catalogue_info(recon, template_id)
+    return info.sheet_names if info is not None else ()
+
+
+def _catalogue_info(recon: ReturnRecon, template_id: str) -> catalog.TemplateInfo | None:
+    """This template's catalogue entry for the reconciliation's own bundle."""
     for info in catalog.template_index(_bundle(recon, template_id), None):
         if info.id == template_id:
-            return info.title
-    return ""
+            return info
+    return None
 
 
 def _column_heads(

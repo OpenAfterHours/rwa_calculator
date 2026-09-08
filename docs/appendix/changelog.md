@@ -12,6 +12,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - (Next release changes will go here)
+- **BREAKING (reporting surface): COREP C 07.00 / OF 07.00 now keys its
+  exposure-class dimension on the Article 112(1) classes, not on the engine's
+  internal exposure classes.** The template's class dimension is the Art. 112(1)
+  class — PS1/26 Annex II §47 and COREP Annex II §47 both require the total and
+  each exposure class in a separate dimension, and §56 assigns them in the
+  Art. 112(2) Table A2 order — but the sheet axis was keyed on the raw
+  `ExposureClass` value. `corporate_sme` therefore opened a sheet beside
+  `corporate`, and `retail_mortgage` / `residential_mortgage` /
+  `commercial_mortgage` opened three sheets for the single class (i), so the
+  Art. 112(1)(g) and (i) class totals were reported **nowhere** and row 0020
+  "of which: SME" was null on the very sheet that should carry it. Two further
+  keys were reachable in production and unfixtured (`retail_qrre`,
+  `residential_mortgage`). `reporting/corep/templates.py` gains
+  `C07_00_SA_SHEET_MAP`, applied at both sheet-key sites in
+  `reporting/corep/c07.py` (the Polars expression and its Python twin, which
+  keys CRM substitution inflows — the axis unions both, so a stale twin would
+  have materialised a spurious sheet silently). `corporate_sme` and
+  `specialised_lending` now fan into `corporate`; `retail_other` and
+  `retail_qrre` into `retail`; the three real-estate classes into
+  `real_estate`. Every distinction **the published template declares** is
+  reported on the row axis: SME on row 0020, specialised lending on rows
+  0021-0026 under Basel 3.1 only, and the residential/commercial split on rows
+  0330/0340 under Basel 3.1 and on memorandum rows 0310/0290 under CRR. The
+  QRRE split, and the specialised-lending split under CRR, return on no row —
+  because neither template declares one; those distinctions were never
+  reportable here and the merge does not remove them from anywhere they were
+  published. Measured on the b31 estate: `corporate`
+  reports 8,500,000 with row 0020 = 500,000 (was 8,000,000 with row 0020 null),
+  and `real_estate` reports 10,400,000 with row 0330 = 400,000 and row 0340 =
+  10,000,000. **No RWA changes** — this is a reporting projection and the
+  display labels only; nothing under `engine/` is touched. Callers reading
+  `COREPTemplateBundle.c07_00` by key, and anything keyed on the exported Excel
+  tab names, must move to the new keys. `validations/scope.py` narrows the
+  declared z-axis to match; `_C08_SHEETS` / `_OF08_SHEETS` are deliberately
+  untouched, because the Art. 147(2)(d) IRB axis genuinely is finer than
+  Art. 112. Pinned by `tests/contracts/test_c07_art112_sheet_axis.py`, which
+  asserts the sheet axis is in 1:1 correspondence with the C 02.00 SA class
+  rows (anchored on `C02_00_SA_CLASS_MAP`, keyed on `ExposureClass`, so it
+  cannot drift with the new map) and that an unmapped class raises a named
+  finding without losing the exposure.
+- **COREP C 07.00 / OF 07.00 sheets are labelled with their published names.**
+  The Excel tab and both UI pickers showed the raw sheet key (`retail_mortgage`,
+  `corporate_sme`); they now show the Art. 112(1) label for the run's regime via
+  `reporting/corep/sheet_labels.py` — "Real estate exposures" under Basel 3.1
+  against "Secured by mortgages on immovable property" under CRR, and likewise
+  for (k), (l) and (p), whose names differ between the two frameworks. Strings
+  are taken from PS1/26 Annex II OF 09.01 rows 0010-0160 and the COREP C 09.01
+  equivalent.
+- **Three wrong Article 112 letters in `ExposureClass` docstrings.**
+  `INSTITUTION` cited Art. 112(d) (that is multilateral development banks;
+  institutions are (f)), `RETAIL_MORTGAGE` cited (h) (that is retail; the
+  mortgage / real-estate class is (i)), and `HIGH_RISK` cited (l) (that is
+  covered bonds; particularly-high-risk items are (k)). Documentation only — no
+  behaviour depends on these strings.
 - **COREP / Pillar 3 cell expressions compile once and are reused across
   sheets and runs.** The declarative executor's Python-side work — compiling a
   `RowPredicate` to a filter expression, and turning a template's cells into

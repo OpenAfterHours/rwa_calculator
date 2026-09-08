@@ -262,8 +262,19 @@ LINEAGE_PLANS: dict[str, _Provider] = {
             "populations — FCCM SFT rows and SA-CCR derivative netting sets. The CCR "
             "rows are admitted by risk type (not by the approach label, which the "
             "output floor relabels), and Annex II breaks them out in rows 0090-0130",
-            "Specialised lending is merged into corporate (Art. 112(1)(g): under the "
-            "standardised approach SL is a corporate sub-type)",
+            "Sheets key the ARTICLE 112(1) exposure class (Annex II §47), not the "
+            "internal enum. SME corporates and Specialised lending merge into (g) "
+            "corporate (corporate + corporate_sme + specialised_lending), QRRE into "
+            "(h) retail (retail_other + retail_qrre), and all three real-estate "
+            "classes into (i) real_estate (retail_mortgage + residential_mortgage + "
+            "commercial_mortgage)",
+            "Every distinction this template DECLARES is reported on the row axis: "
+            "SME on row 0020 in both regimes; Specialised lending on rows 0021-0026 "
+            "by sl_type under Basel 3.1 only; the residential/commercial split on "
+            "rows 0330/0340/0350/0360 by property_type under Basel 3.1 and on the "
+            "memorandum rows 0290/0310 under CRR. The QRRE split returns on no row "
+            "in either regime, and Specialised lending returns on no row under CRR, "
+            "because the template declares none — a sheet total covers them",
         ),
         sheet_label="obligor class",
     ),

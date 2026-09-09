@@ -460,6 +460,7 @@
         "tests/conformance/test_classification_conformance.py",
         "tests/conformance/test_reporting_class_keys.py",
         "tests/contracts/test_c07_art112_sheet_axis.py",
+        "tests/contracts/test_high_risk_sheet_addressability.py",
         "tests/contracts/test_sheet_index_bundle_key_cardinality.py",
         "tests/fixtures/p1_154/p1_154.py",
         "tests/fixtures/p1_183/p1_183.py",
@@ -5971,6 +5972,7 @@
         "reporting/validations/scope.py"
       ],
       "test_files": [
+        "tests/contracts/test_high_risk_sheet_addressability.py",
         "tests/unit/test_b31_sa_risk_weights.py",
         "tests/unit/test_exposure_class_applied.py"
       ],
@@ -6953,6 +6955,7 @@
       ],
       "test_files": [
         "tests/acceptance/crr/test_p2_14_art_128_high_risk_uk_omitted.py",
+        "tests/contracts/test_high_risk_sheet_addressability.py",
         "tests/fixtures/p2_14/p2_14.py",
         "tests/oracle/derivations/branch_sa.py",
         "tests/oracle/derivations/sa_b31.py",

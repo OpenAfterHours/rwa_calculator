@@ -109,32 +109,35 @@ class _Run:
 
 # portfolio -> row_ref -> column_ref -> value.
 #
-# rich: 14 loans + 1 equity, NO CCR. Modelled = F-IRB 48,244,060.92 + A-IRB
-#   14,625,069.66 + slotting 52,500,000.00 = 115,369,130.58 (== C 02.00 row 0220);
-#   standardised = the SA book + equity = 22,080,833.33 (== C 02.00 row 0060).
-#   They sum to the whole portfolio, 137,449,963.91 (== C 02.00 row 0010).
-#   S-TREA (column 0040) = whole-book sa_rwa = 164,155,833.33, INCLUDING equity's
+# rich: 16 loans + 1 equity, NO CCR. Modelled = F-IRB 48,244,060.92 + A-IRB
+#   16,085,419.21 + slotting 52,500,000.00 = 116,829,480.13 (== C 02.00 row 0220);
+#   standardised = the SA book + equity = 23,355,833.33 (== C 02.00 row 0060).
+#   They sum to the whole portfolio, 140,185,313.47 (== C 02.00 row 0010).
+#   S-TREA (column 0040) = whole-book sa_rwa = 167,130,833.33, INCLUDING equity's
 #   own 2,500,000 standardised-equivalent RWA (B31 equity is SA-only, Art. 147A;
 #   the aggregator now populates equity's sa_rwa — R4).
+#   The A-IRB and SA legs both grew with the P1.373 supporting-factor overlap
+#   pair (RP-LN-SME-INFRA, RP-LN-AIRB-INFRA); supporting factors are CRR-only, so
+#   under Basel 3.1 those two legs contribute their full unrelieved RWA here.
 # ccr: one SA corporate loan (2,500,000 RWEA) + two SA-CCR netting sets
 #   (1,560,296.72 RWEA). No models at all -> column 0010 is 0.0 EVERYWHERE.
 _EXPECTED: dict[str, dict[str, dict[str, float]]] = {
     "rich": {
         # Credit risk excluding CCR — the whole book (this portfolio has no CCR).
         "0010": {
-            "0010": 115_369_130.58029616,
-            "0020": 22_080_833.333333332,
-            "0030": 137_449_963.9136295,
-            "0040": 164_155_833.3333333,
+            "0010": 116_829_480.13349256,
+            "0020": 23_355_833.333333332,
+            "0030": 140_185_313.4668259,
+            "0040": 167_130_833.3333333,
         },
         # Counterparty credit risk — populated, and empty because the book has none.
         "0020": {"0010": 0.0, "0020": 0.0, "0030": 0.0, "0040": 0.0},
         # Total — 0010 + 0020, which here equals row 0010.
         "0080": {
-            "0010": 115_369_130.58029616,
-            "0020": 22_080_833.333333332,
-            "0030": 137_449_963.9136295,
-            "0040": 164_155_833.3333333,
+            "0010": 116_829_480.13349256,
+            "0020": 23_355_833.333333332,
+            "0030": 140_185_313.4668259,
+            "0040": 167_130_833.3333333,
         },
     },
     "ccr": {

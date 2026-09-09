@@ -117,6 +117,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lists and every COREP / Pillar 3 sheet are byte-identical across the 27-run
   reference dump. Banked in `tests/contracts/test_pipeline_collect_budget.py`.
 
+### Removed
+- **Dead declarations: 19 unreferenced module-level names deleted, no behaviour
+  change.** Each occurred exactly once across the whole tracked tree — its own
+  definition — and none is reachable by name, by string literal, by `__all__`,
+  by a package re-export, or from `engine/registry.py`, `reporting/cellspec.py`,
+  the rulepack packs or a `conftest.py`. The bulk is `data/schemas.py`: fourteen
+  plain-`dict[str, PolarsDataType]` schema declarations describing input tables
+  that no longer exist. Ten of them (`CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHT_`,
+  `INSTITUTION_RISK_WEIGHT_`, `CORPORATE_RISK_WEIGHT_`, `MORTGAGE_RISK_WEIGHT_`,
+  `COLLATERAL_HAIRCUT_`, `CCF_`, `FIRB_LGD_`, `AIRB_LGD_FLOOR_`, `PD_FLOOR_`,
+  `CORRELATION_PARAMETER_SCHEMA`) shaped the `data/tables/` lookup package that
+  Phase 5 S13 removed outright — the values they indexed live in the rulepack
+  packs with citations, so the declarations described a data source the
+  architecture now forbids. `EXPOSURE_CLASS_MAPPING_SCHEMA` is the same shape;
+  `IRB_PERMISSIONS_SCHEMA` is superseded by the live `MODEL_PERMISSIONS_SCHEMA`,
+  `CALCULATION_CONFIG_SCHEMA` by the `CalculationConfig` dataclass, and
+  `EXPECTED_OUTPUT_SCHEMA` by the `tests/expected_outputs/` ndjson goldens. None
+  appears in `TABLE_SCHEMAS`, and because `scripts/check_input_domains.py`
+  censuses only `ColumnSpec`-valued dicts, none was visible to the declared
+  input-domain ratchet either. Also removed: `ERROR_FSE_COLUMN_MISSING`
+  (`CLS007`), whose warning was deleted with the classifier's column-presence
+  guards — a comment now holds the code's place so it is not silently reused;
+  the unused private constants `_COMPARISON_COLUMNS` and `_ATTRIBUTION_DRIVERS`
+  (`analysis/comparison.py`) and `_SECTION3_NULL_REFS`
+  (`reporting/corep/generator.py`); and `SUPPORTED_REGIMES`
+  (`rulebook/registry.py`), which restated `REGIME_PACKS`' keys. No engine
+  expression, pack entry, edge contract or template cell is touched, and the
+  reporting coverage ratchet reports no metric moved.
+
 ### Fixed
 - **A placeholder on the non-slotting rows no longer withholds C 08.06.** The
   placement check measured `sl_type` / `slotting_category` over the *whole*

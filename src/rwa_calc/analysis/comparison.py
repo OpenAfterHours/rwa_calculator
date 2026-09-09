@@ -60,16 +60,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Columns to select from each framework's results for the comparison join
-_COMPARISON_COLUMNS = [
-    "exposure_reference",
-    "exposure_class",
-    "approach_applied",
-    "ead_final",
-    "risk_weight",
-    "rwa_final",
-]
-
 # Optional columns to include if available
 _OPTIONAL_COLUMNS = [
     "el_shortfall",
@@ -434,14 +424,6 @@ def _compute_summary_by_approach(
 # =============================================================================
 # Private Helpers — Capital Impact Analysis (M3.2)
 # =============================================================================
-
-# Attribution driver column names
-_ATTRIBUTION_DRIVERS = [
-    "scaling_factor_impact",
-    "supporting_factor_impact",
-    "output_floor_impact",
-    "methodology_impact",
-]
 
 
 def _safe_col(schema: pl.Schema, col_name: str, default: float = 0.0) -> pl.Expr:

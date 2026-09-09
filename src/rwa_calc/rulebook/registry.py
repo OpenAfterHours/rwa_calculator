@@ -28,8 +28,6 @@ REGIME_PACKS: dict[str, tuple[str, ...]] = {
     "b31": ("common", "b31"),
 }
 
-SUPPORTED_REGIMES = ("crr", "b31")
-
 # The framework -> regime-id seam: the one place the domain enum is mapped to a
 # pack-selector string. ``RulepackV0.from_config`` resolves the pack through this.
 FRAMEWORK_TO_REGIME_ID: dict[RegulatoryFramework, str] = {

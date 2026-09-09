@@ -46,7 +46,6 @@ References:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -65,15 +64,6 @@ from rwa_calc.rulebook.compile import formula_float_map
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.rulebook.resolve import ResolvedRulepack
-
-
-@dataclass
-class SupportingFactorResult:
-    """Result of supporting factor calculation."""
-
-    factor: Decimal
-    was_applied: bool
-    description: str
 
 
 class SupportingFactorCalculator:

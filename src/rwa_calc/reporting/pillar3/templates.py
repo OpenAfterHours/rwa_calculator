@@ -895,8 +895,6 @@ CR9_1_COLUMNS: list[P3Column] = [
     # Additional ECAI columns are added dynamically per firm
 ]
 
-CR9_1_COLUMN_REFS: list[str] = [c.ref for c in CR9_1_COLUMNS]
-
 
 # ---------------------------------------------------------------------------
 # CMS1 — Output Floor Comparison by Risk Type (Art. 456(1)(a))

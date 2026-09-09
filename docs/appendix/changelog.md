@@ -145,6 +145,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`rulebook/registry.py`), which restated `REGIME_PACKS`' keys. No engine
   expression, pack entry, edge contract or template cell is touched, and the
   reporting coverage ratchet reports no metric moved.
+- **Dead declarations: four further unreferenced names deleted, no behaviour
+  change.** Each occurs exactly once across the whole tracked tree — its own
+  definition — with no string-literal, `__all__`, package re-export or
+  dynamic-`getattr` form, and none carries a `@cites` decorator.
+  `_OTHER_ITEMS_DEFAULT_RW_DEC` (`engine/sa/crr_risk_weight_tables.py`) was a
+  second module-level binding of the `other_items_default_rw` pack scalar that
+  nothing read; the value keeps its live reader at
+  `engine/sa/risk_weights.py:236`, so the pack entry and the risk weight it
+  carries are untouched. `SupportingFactorResult`
+  (`engine/supporting_factors.py`) was a `@dataclass` result type no code path
+  ever constructed — `SupportingFactorCalculator` returns bare `Decimal`
+  factors — and its removal frees the module's only `dataclass` import.
+  `CR9_1_COLUMN_REFS` (`reporting/pillar3/templates.py`) was a derived
+  `[c.ref for c in CR9_1_COLUMNS]` list, the lone Pillar 3 instance of a
+  convention that is live only in `reporting/corep/`; `CR9_1_COLUMNS` itself is
+  unchanged and still drives the CR9.1 catalogue entry. `STATUS_OPEN`
+  (`ui/app/recon_signoff.py`) duplicated the `"open"` sentinel that the
+  application actually dispatches on,
+  `ui/views/reconciliation.py::SIGNOFF_OPEN`. No engine expression, pack entry,
+  edge contract or template cell is touched, and the reporting coverage ratchet
+  reports no metric moved.
 
 ### Fixed
 - **A placeholder on the non-slotting rows no longer withholds C 08.06.** The

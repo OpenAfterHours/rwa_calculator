@@ -27,6 +27,7 @@ from __future__ import annotations
 import polars as pl
 
 from rwa_calc.contracts.edges import CALC_BRANCH_EDGES, seal_lenient
+from rwa_calc.domain.enums import ExposureClass
 
 _SIMPLE_DEFAULTS: dict[str, pl.Expr] = {
     "seniority": pl.lit("senior"),
@@ -115,13 +116,33 @@ def pad_crm_exit_defaults(lf: pl.LazyFrame) -> pl.LazyFrame:
 def pad_slotting_branch_defaults(lf: pl.LazyFrame) -> pl.LazyFrame:
     """Pad a hand-rolled slotting ``calculate_branch`` frame.
 
-    Adds ``approach="slotting"`` (the pipeline routes pre-filtered slotting
-    rows, so the column is always populated in production) on top of the
-    generic crm_exit defaults.
+    Adds ``approach="slotting"`` and ``exposure_class="specialised_lending"``
+    on top of the generic crm_exit defaults. Both are always populated in
+    production and neither can be left to ``pad_crm_exit_defaults``, which
+    injects a typed NULL for ``exposure_class``:
+
+    - ``approach`` — the pipeline routes pre-filtered slotting rows.
+    - ``exposure_class`` — ``engine/classify/approach.py`` gates the slotting
+      branch on ``exposure_class == ExposureClass.SPECIALISED_LENDING.value``,
+      so a slotting row can only EXIST with that class. Verified on a real
+      ``PipelineOrchestrator`` run: the golden reporting portfolio's slotting
+      leg carries ``exposure_class='specialised_lending'`` alongside
+      ``approach_applied='slotting'``.
+
+    The null was silent until the CRR Art. 501a(1)(a) class gate landed
+    (``engine/supporting_factors.py``), which reads ``exposure_class`` and
+    correctly denies the infrastructure factor on a null. Three slotting tests
+    then failed against an input shape production cannot produce — a fixture
+    that cannot express the condition under test (LESSONS C11).
     """
     names = set(lf.collect_schema().names())
+    additions = []
     if "approach" not in names:
-        lf = lf.with_columns(pl.lit("slotting").alias("approach"))
+        additions.append(pl.lit("slotting").alias("approach"))
+    if "exposure_class" not in names:
+        additions.append(pl.lit(ExposureClass.SPECIALISED_LENDING.value).alias("exposure_class"))
+    if additions:
+        lf = lf.with_columns(additions)
     return pad_crm_exit_defaults(lf)
 
 

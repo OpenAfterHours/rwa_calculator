@@ -175,7 +175,9 @@ ERROR_MISSING_RATING = "CLS003"
 ERROR_QRRE_COLUMNS_MISSING = "CLS004"
 ERROR_RETAIL_POOL_MGMT_MISSING = "CLS005"
 ERROR_MODEL_PERMISSION_UNMATCHED = "CLS006"
-ERROR_FSE_COLUMN_MISSING = "CLS007"
+# CLS007 (ERROR_FSE_COLUMN_MISSING) was retired with the classifier's
+# column-presence guards — the absent-column state it detected is
+# unrepresentable on sealed input. See engine/classify/audit.py.
 ERROR_LARGE_CORP_REVENUE_NULL = "CLS008"
 ERROR_LFSE_ASSETS_NULL = "CLS009"
 ERROR_QRRE_GATE_DEMOTION = "CLS010"

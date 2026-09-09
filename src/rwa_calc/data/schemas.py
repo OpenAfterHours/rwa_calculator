@@ -1419,15 +1419,6 @@ LENDING_MAPPING_SCHEMA: dict[str, ColumnSpec] = {
     "child_counterparty_reference": ColumnSpec(pl.String),
 }
 
-EXPOSURE_CLASS_MAPPING_SCHEMA = {
-    "exposure_class_code": pl.String,
-    "exposure_class_name": pl.String,
-    "is_sa_class": pl.Boolean,  # Valid for Standardised Approach
-    "is_irb_class": pl.Boolean,  # Valid for IRB Approach
-    "parent_class_code": pl.String,  # For sub-classifications
-}
-
-
 # =============================================================================
 # MULTI-ENTITY REPORTING SCHEMAS (CRR Art. 6 / 11-18 levels of application)
 # =============================================================================
@@ -1467,77 +1458,6 @@ REPORTING_ENTITY_SCHEMA: dict[str, ColumnSpec] = {
 BOOK_ENTITY_MAPPING_SCHEMA: dict[str, ColumnSpec] = {
     "book_code": ColumnSpec(pl.String),
     "reporting_entity_reference": ColumnSpec(pl.String),
-}
-
-
-# =============================================================================
-# REFERENCE / LOOKUP DATA SCHEMAS
-# =============================================================================
-
-CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHT_SCHEMA = {
-    "cqs": pl.Int8,  # 1-6, 0 for unrated
-    "risk_weight": pl.Float64,  # 0%, 20%, 50%, 100%, 150%
-}
-
-INSTITUTION_RISK_WEIGHT_SCHEMA = {
-    "cqs": pl.Int8,  # 1-6, 0 for unrated
-    "risk_weight": pl.Float64,  # 20%, 30% (UK), 50%, 100%, 150%
-    "short_term_risk_weight": pl.Float64,  # For exposures <= 3 months
-}
-
-CORPORATE_RISK_WEIGHT_SCHEMA = {
-    "cqs": pl.Int8,  # 1-6, 0 for unrated
-    "risk_weight": pl.Float64,
-}
-
-MORTGAGE_RISK_WEIGHT_SCHEMA = {
-    "ltv_lower": pl.Float64,  # Lower bound of LTV band
-    "ltv_upper": pl.Float64,  # Upper bound of LTV band
-    "risk_weight": pl.Float64,  # 20%, 25%, 30%, 35%, 40%, 50%, 70%
-    "property_type": pl.String,  # residential, commercial
-}
-
-COLLATERAL_HAIRCUT_SCHEMA = {
-    "collateral_type": pl.String,  # cash, gold, equity, bond, etc.
-    "issuer_type": pl.String,  # sovereign, corporate, etc.
-    "residual_maturity_lower": pl.Float64,  # In years
-    "residual_maturity_upper": pl.Float64,
-    "cqs": pl.Int8,  # For rated securities
-    "haircut": pl.Float64,  # Supervisory haircut percentage
-    "fx_haircut": pl.Float64,  # Additional FX mismatch haircut (8%)
-}
-
-CCF_SCHEMA = {
-    "commitment_type": pl.String,  # Unconditionally cancellable, other commitments, etc.
-    "product_category": pl.String,
-    "ccf": pl.Float64,  # Credit Conversion Factor (0%, 20%, 40%, 50%, 100%)
-    "basel_version": pl.String,  # 3.0, 3.1
-}
-
-FIRB_LGD_SCHEMA = {
-    "collateral_type": pl.String,  # financial, receivables, commercial_re, residential_re, other_physical, unsecured
-    "seniority": pl.String,  # senior, subordinated
-    "lgd": pl.Float64,  # 0%, 35%, 40%, 45%, 75%
-}
-
-AIRB_LGD_FLOOR_SCHEMA = {
-    "collateral_type": pl.String,
-    "seniority": pl.String,
-    "lgd_floor": pl.Float64,  # 0%, 5%, 10%, 15%, 25%
-}
-
-PD_FLOOR_SCHEMA = {
-    "exposure_class": pl.String,  # corporate, retail, qrre, etc.
-    "pd_floor": pl.Float64,  # 0.03%, 0.05%, 0.10%
-}
-
-CORRELATION_PARAMETER_SCHEMA = {
-    "exposure_class": pl.String,
-    "correlation_type": pl.String,  # fixed, pd_dependent
-    "r_min": pl.Float64,  # Minimum correlation
-    "r_max": pl.Float64,  # Maximum correlation
-    "fixed_correlation": pl.Float64,  # For fixed types (e.g., mortgage 15%, QRRE 4%)
-    "decay_factor": pl.Float64,  # For PD-dependent formula (50 for corp, 35 for retail)
 }
 
 
@@ -3409,25 +3329,6 @@ SLOTTING_RESULT_SCHEMA = {
     "sl_rwa": pl.Float64,
 }
 
-
-# =============================================================================
-# CONFIGURATION SCHEMAS
-# =============================================================================
-
-IRB_PERMISSIONS_SCHEMA = {
-    "exposure_class": pl.String,
-    "approach_permitted": pl.String,  # SA, FIRB, AIRB
-    "effective_date": pl.Date,
-}
-
-CALCULATION_CONFIG_SCHEMA = {
-    "config_key": pl.String,
-    "config_value": pl.String,
-    "config_type": pl.String,  # string, float, date, boolean
-    # Expected keys: basel_version (3.0/3.1), reporting_date, output_floor_percentage, etc.
-}
-
-
 # =============================================================================
 # OUTPUT SCHEMAS
 # =============================================================================
@@ -3751,34 +3652,6 @@ BASEL31_OUTPUT_SCHEMA_ADDITIONS = {
     "b31_lgd_floor_binding": pl.Boolean,  # Whether LGD floor was binding
     # SME factors NOT available under Basel 3.1
     "b31_sme_factor_note": pl.String,  # "Not available under Basel 3.1"
-}
-
-
-# Combined expected output schema for acceptance testing
-EXPECTED_OUTPUT_SCHEMA = {
-    "scenario_id": pl.String,  # e.g., "CRR-A1", "B31-A1"
-    "scenario_group": pl.String,  # e.g., "CRR-A", "B31-A"
-    "regulatory_framework": pl.String,  # "CRR" or "BASEL_3_1"
-    "description": pl.String,  # Human-readable scenario description
-    "exposure_reference": pl.String,  # Link to test fixture
-    "counterparty_reference": pl.String,  # Link to test fixture
-    "approach": pl.String,  # "SA", "FIRB", "AIRB"
-    "exposure_class": pl.String,  # Exposure classification
-    # Input summary
-    "ead": pl.Float64,  # Exposure at default
-    "pd": pl.Float64,  # Probability of default (IRB)
-    "lgd": pl.Float64,  # Loss given default (IRB)
-    "maturity": pl.Float64,  # Effective maturity (IRB)
-    # Output values
-    "risk_weight": pl.Float64,  # Applied risk weight
-    "rwa_before_sf": pl.Float64,  # RWA before supporting factors
-    "supporting_factor": pl.Float64,  # SME/infrastructure factor (1.0 if none)
-    "rwa_after_sf": pl.Float64,  # Final RWA
-    "expected_loss": pl.Float64,  # EL for IRB
-    # Regulatory reference
-    "regulatory_reference": pl.String,  # CRR Art. xxx or CRE xx.xx
-    # Calculation details (JSON string for flexibility)
-    "calculation_details_json": pl.String,  # JSON-encoded calculation breakdown
 }
 
 

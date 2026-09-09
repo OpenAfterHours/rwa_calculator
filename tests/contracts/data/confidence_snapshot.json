@@ -472,6 +472,7 @@
         "tests/unit/rulebook/test_sa_risk_weight_features.py",
         "tests/unit/test_aggregator.py",
         "tests/unit/test_classifier.py",
+        "tests/unit/test_covered_bonds.py",
         "tests/unit/test_exposure_class_applied.py",
         "tests/unit/test_high_risk_items.py",
         "tests/unit/test_other_items_risk_weights.py",
@@ -5972,6 +5973,7 @@
       ],
       "test_files": [
         "tests/unit/test_b31_sa_risk_weights.py",
+        "tests/unit/test_covered_bonds.py",
         "tests/unit/test_exposure_class_applied.py"
       ],
       "watchfire_index_gap": false

@@ -264,6 +264,7 @@ from tests.fixtures.reporting_netting_portfolio import build_reporting_netting_b
 from tests.fixtures.reporting_offbs_portfolio import build_reporting_offbs_bundle
 from tests.fixtures.reporting_portfolio import build_reporting_bundle
 from tests.fixtures.reporting_re_split_portfolio import build_reporting_re_split_bundle
+from tests.fixtures.reporting_row_scope_portfolio import build_reporting_row_scope_bundle
 from tests.fixtures.reporting_sa_classes_portfolio import build_reporting_sa_classes_bundle
 
 from rwa_calc.contracts.config import CalculationConfig
@@ -807,6 +808,43 @@ RUNS: tuple[GateInput, ...] = (
         lambda: build_facility_share_bundle("nonbinding"),
         lambda: facility_share_config("BASEL_3_1"),
         lambda: facility_share_prior_config("BASEL_3_1"),
+    ),
+    # Row-level exposure-class scope — the first portfolio in the estate that can
+    # VIOLATE one. C 07.00 row 0040 is scoped by Annex II to exposure class (i)
+    # ("Only reported in exposure class 'Secured by mortgages on immovable
+    # property'") and the engine carries that as a sheet term; on the fourteen
+    # runs above, stripping the term changes NOTHING, because the RE splitter puts
+    # every residential-property-secured leg on the real-estate sheet and leaves
+    # the corporate residual with ``property_type`` NULL. Measured: the three
+    # suites that would be expected to see it — this register, the Art. 112 class
+    # axis and the RE-split coverage file — score 61 passed / 2 xfailed in BOTH
+    # states, with the mutation confirming it applied
+    # (``tests/mutations/mutate_row_0040_is_not_sheet_scoped``).
+    #
+    # So this is LESSONS B5's FOURTH form, and the first that is not about a dead
+    # cell: row 0040 column 0010 is LIVE on ``crr/rich`` and ``crr/re-split``, so
+    # neither the cell-coverage census nor ``RUNS`` registration of an existing
+    # portfolio could have caught it. What was dead is the row's NEGATIVE space —
+    # the (sheet, row) pairs where it must publish nothing — and ``{r0040} =
+    # empty`` can only be evaluated where something could have been reported.
+    # ``v7477_m`` / ``v7478_m`` sit in the known-breaks register as VACUOUS on all
+    # fourteen runs for exactly that reason.
+    #
+    # SA-only and no prior frame, like ``off-bs`` / ``sa-classes`` / ``netting``:
+    # the portfolio supplies no model permissions at all, so no permission mode
+    # could route a leg to IRB and leave the SA template empty. It introduces NO
+    # new supervisory break — measured, every rule it breaks
+    # (``v09796_m`` under CRR; ``boe_b0703`` / ``boe_b0710`` / ``boe_b0778`` under
+    # Basel 3.1) is already in the register as an estate-wide pattern entry.
+    GateInput(
+        "crr", "CRR", "row-scope", build_reporting_row_scope_bundle, lambda: _sa_config("CRR")
+    ),
+    GateInput(
+        "b31",
+        "BASEL_3_1",
+        "row-scope",
+        build_reporting_row_scope_bundle,
+        lambda: _sa_config("BASEL_3_1"),
     ),
 )
 

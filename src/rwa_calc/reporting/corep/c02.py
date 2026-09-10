@@ -92,6 +92,7 @@ from rwa_calc.reporting.corep.templates import (
     C02_00_CREDIT_RISK_ROWS,
     C02_00_SA_CLASS_MAP,
     CRR_C02_00_COLUMN_REFS,
+    EQUITY_IRB_METHODS,
     get_c02_00_row_sections,
 )
 from rwa_calc.reporting.kernel import null_row, pick
@@ -139,14 +140,13 @@ _IRB_DETAIL_ROWS: dict[str, tuple[str, ...]] = {
     "0300": ("0310", "0330", "0340", "0370"),
 }
 
-# The sealed ``equity_method`` values (domain.enums.EquityApproach, R6) that
-# report under the IRB umbrella — row 0420 "Equity IRB" plus the IRB total
-# (row 0220): Art. 155(2) simple-RW and Art. 155(3) PD/LGD. Under Basel 3.1
-# no equity leg carries these (Art. 147A removes IRB equity — every leg is
-# stamped ``sa``), so row 0420 empties by construction. Equity whose method the
-# ledger did not seal is treated as SA (never disclosed as IRB equity without an
-# explicit method). Raw strings match this module's approach-label idiom.
-_EQUITY_IRB_METHODS: tuple[str, ...] = ("irb_simple", "pd_lgd")
+# This module's handle on the shared ``equity_method`` IRB partition — row 0420
+# "Equity IRB" plus the IRB total (row 0220). A RE-EXPORT of the one definition in
+# ``templates``, not a second copy: C 07.00 admits its Art. 112(1)(p) population on
+# the same tuple and the live EBA ERROR rule ``v4244_i`` ties row 0210 here to that
+# template's equity sheet, so the two reading different values would straddle a
+# published identity with nothing to catch it.
+_EQUITY_IRB_METHODS: tuple[str, ...] = EQUITY_IRB_METHODS
 
 
 @cites("PS1/26, paragraph 1.3")

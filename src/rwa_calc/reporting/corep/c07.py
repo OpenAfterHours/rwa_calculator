@@ -58,7 +58,11 @@ docs/plans/phase7-declarative-reporting.md §6):
   ``reporting_approach`` (synthetic unit frames) degrades the post basis to
   the origin basis, so a book with no substitution reports identically under
   both and the split is number-neutral by construction.
-- The population is the standardised book plus BOTH counterparty-credit-risk
+- The population is the standardised book, SA-METHOD EQUITY (Art. 112(1)(p) —
+  see ``_equity_admission``: PS1/26 Annex II ¶48 excludes only securitisation
+  positions and own-funds deductions, ¶55C keeps IRB-transitional equity in
+  class (p), and COREP Annex II ¶50 is what puts Art. 155(2)/(3) IRB-method
+  equity outside the CRR template), plus BOTH counterparty-credit-risk
   populations (``risk_type in {"CCR_SFT", "CCR_DERIVATIVE"}`` — SA-risk-weighted
   but tagged ``standardised_ccr`` under the output floor, so they are admitted by
   ``risk_type``, never by the approach label; relabelling the approach back would
@@ -177,6 +181,7 @@ from rwa_calc.reporting.corep.postpass import negate_deduction_cols, null_empty_
 from rwa_calc.reporting.corep.templates import (
     C07_00_SA_SHEET_KEYS,
     C07_00_SA_SHEET_MAP,
+    EQUITY_IRB_METHODS,
     get_c07_columns,
     get_sa_risk_weight_bands,
     get_sa_row_sections,
@@ -323,6 +328,13 @@ _GROSS_CARRIERS: tuple[str, ...] = (
 # template owns its own tuple — a shared risk-type constant is how one template's
 # basis leaks into CR4/CR5/OV1, which key their own recorded bases.
 _CCR_RISK_TYPES: tuple[str, ...] = ("CCR_SFT", "CCR_DERIVATIVE", "CCR_DEFAULT_FUND")
+
+# The sealed method tag the Art. 112(1)(p) admission reads — see
+# ``_equity_admission``. CONDITIONAL on the aggregator exit (``required=False,
+# inject=False``), so every read is presence-guarded.
+_EQUITY_METHOD_COL: str = "equity_method"
+# The ``reporting_approach_origin`` label the equity calculator seals.
+_EQUITY_APPROACH: str = "equity"
 
 # Section 1 "of which" maps (retired _C07_* constants, preserved verbatim).
 _SL_TYPE_MAP: dict[str, str] = {
@@ -564,7 +576,7 @@ def generate_c07(
 def c07_population(
     results: pl.LazyFrame, cols: set[str], *, both_bases: bool = False
 ) -> pl.LazyFrame:
-    """The C 07.00 population: the standardised book plus the CCR rows.
+    """The C 07.00 population: the standardised book, the CCR rows, SA-method equity.
 
     ``both_bases`` selects WHICH standardised book. The default is the
     ORIGIN-approach one — the obligor's own book, and the only thing C 09.01
@@ -587,6 +599,11 @@ def c07_population(
     route into the floor-eligible approaches, which is load-bearing and must NOT
     be undone here. CCR legs join BOTH bases: substitution does not move them.
 
+    The Art. 112(1)(p) limb is ``_equity_admission`` — equity is an SA exposure
+    class, not a third approach, and omitting it kept an entire published class off
+    the template. Equity legs join BOTH bases for the CCR reason: nothing
+    substitutes onto or off an equity holding, so the two labels agree on them.
+
     The dedupe keys the exposure reference, which the sealed ledger always
     carries. The ``subset=None`` fallback (synthetic unit frames only, where no
     reference column exists) dedupes on ALL columns — two genuinely distinct
@@ -598,7 +615,11 @@ def c07_population(
         if "risk_type" in cols
         else None
     )
-    tagged = results.with_columns(population_flags(_BASIS, cols, ("standardised",), admit=ccr))
+    admit: pl.Expr | None = None
+    for limb in (ccr, _equity_admission(cols)):
+        if limb is not None:
+            admit = limb if admit is None else admit | limb
+    tagged = results.with_columns(population_flags(_BASIS, cols, ("standardised",), admit=admit))
     admitted = (
         tagged.filter(pl.col(_BASIS.pop_origin) | pl.col(_BASIS.pop_post))
         if both_bases
@@ -608,6 +629,67 @@ def c07_population(
         subset=["exposure_reference"] if "exposure_reference" in cols else None,
         keep="first",
     )
+
+
+def _equity_admission(cols: set[str]) -> pl.Expr | None:
+    """The Art. 112(1)(p) limb of the C 07.00 population, or None when unaskable.
+
+    Admits a leg whose ORIGIN approach is ``equity`` and whose ``equity_method``
+    is not one of ``EQUITY_IRB_METHODS``, with a NULL method read as SA. Returns
+    None on a frame that seals no origin-approach label, mirroring
+    ``population_flags``' rule that a missing discriminator means an EMPTY
+    population rather than a silent pass-through.
+
+    WHY EQUITY BELONGS HERE AT ALL. PS1/26 Annex II ¶48 states the ONLY two
+    positions outside OF CR SA — "exposures assigned to the exposure class 'items
+    representing securitisation positions' as referred to in Article 112(1)(m)"
+    and "exposures deducted from own funds". Equity is neither, and ¶55C puts even
+    IRB-TRANSITIONAL equity inside class (p): the Art. 112(1)(p) figure "shall
+    include exposures subject to the IRB Transitional Approach". Omitting the class
+    left OF 07.00 with no equity sheet while OF 02.00 reported its RWEA, and left
+    the ¶55A memorandum rows 0371-0374 — defined for class (p) and nothing else —
+    with no sheet to sit on.
+
+    WHY THE IRB METHODS ARE EXCLUDED, and why that is not a regime branch. COREP
+    Annex II ¶50 scopes the CRR template to "all exposures for which the own funds
+    requirements are calculated in accordance with Chapter 2 of Title II of Part
+    Three CRR" — Chapter 2 IS the Standardised Approach — so Art. 155(2)/(3)
+    IRB-method equity is correctly OUT under CRR, and the live EBA ERROR rule
+    ``v4244_i`` (``{C 02.00, r0210, c0010} == {C 07.00.a, r0010, c0220, s0016}``)
+    pins exactly that boundary. ONE regime-blind expression serves both regimes,
+    with no pack Feature and no ``is_crr`` branch, because
+    ``engine/equity/calculator.py::_determine_approach`` returns
+    ``EquityApproach.SA`` unconditionally when the pack Feature
+    ``equity_irb_approaches_available`` is false: under Basel 3.1 every equity leg
+    is stamped ``equity_method == 'sa'`` (Art. 147A), so "all equity under B31" and
+    "SA-method equity" are the SAME SET and each regime's inclusion is right for
+    its own reason.
+
+    NULL IS SA, AND THAT IS LOAD-BEARING. A main-table equity-class row — one the
+    classifier routes to ``ApproachType.EQUITY`` (``engine/classify/approach.py``)
+    rather than to the separate equity input table — takes the SA branch via
+    ``engine/branch_split.py::is_sa_branch_approach``, is risk-weighted by
+    ``engine/sa/``, keeps ``approach_applied == "equity"``
+    (``engine/sa/calculator.py``) and carries NO ``equity_method`` at all. It is
+    genuinely standardised and must be admitted, so a null method cannot be
+    treated as unknown-and-excluded.
+
+    The presence guard is not defensive either: ``equity_method`` is a CONDITIONAL
+    aggregator-exit column (``required=False, inject=False``), so it is ABSENT —
+    not null — on every equity-free portfolio, and a bare ``pl.col`` would raise on
+    each of them. Same guard as ``corep/c02.py::_equity_method_expr``, over the
+    same shared tuple: ``c02.py`` has always split its rows 0210 / 0420 on this
+    predicate, so until it landed here C 07.00 sat on a different basis from the
+    very template ``v4244_i`` ties it to.
+    """
+    if _ORIGIN_APPROACH_SOURCE not in cols:
+        return None
+    method = (
+        pl.col(_EQUITY_METHOD_COL) if _EQUITY_METHOD_COL in cols else pl.lit(None, dtype=pl.String)
+    )
+    is_irb_method = method.is_in(list(EQUITY_IRB_METHODS)).fill_null(value=False)
+    is_equity = (pl.col(_ORIGIN_APPROACH_SOURCE) == _EQUITY_APPROACH).fill_null(value=False)
+    return is_equity & ~is_irb_method
 
 
 def _has_bs_side(cols: set[str]) -> bool:
@@ -691,8 +773,12 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
             .alias("c07_bs")
         )
     elif "exposure_type" in cols:
+        # ``equity`` joins the on-side with ``loan``: an Art. 112(1)(p) holding is
+        # wholly on-balance-sheet (CRR Art. 133(3)) and must reach row 0070, or
+        # ``boe_b0717`` / ``v0310_m`` (r0010 = Σ r0070;0080;0090;0110;0130 over
+        # cols 0200/0220) breaks by the holding's whole exposure value and RWEA.
         exprs.append(
-            pl.when(pl.col("exposure_type") == "loan")
+            pl.when(pl.col("exposure_type").is_in(["loan", "equity"]))
             .then(pl.lit("on"))
             .when(pl.col("exposure_type").is_in(["facility", "contingent", "facility_undrawn"]))
             .then(pl.lit("off"))
@@ -708,16 +794,17 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
     # exposure too. Their EAD sits in drawn_amount (no CCF applies), so this is
     # the pre-fix SafeSum(reporting_gross_drawn, reporting_gross_undrawn) restored
     # for exactly those legs — null on a credit-risk leg, where the side carriers
-    # already carry the gross. The gate list is EXACTLY the four exposure_types the
-    # side carriers populate (loan / contingent / facility_undrawn + the "facility"
-    # legacy alias, Amendment 2), so col 0010's SafeSum(on_bs, off_bs, c07_ccr_gross)
-    # counts every leg once on exactly one carrier — a "facility" leg must be null
-    # here or its off-side gross would double-count.
+    # already carry the gross. The gate list is EXACTLY the exposure_types the
+    # side carriers populate (loan / contingent / facility_undrawn / equity + the
+    # "facility" legacy alias, Amendment 2), so col 0010's SafeSum(on_bs, off_bs,
+    # c07_ccr_gross) counts every leg once on exactly one carrier — a "facility"
+    # leg must be null here or its off-side gross would double-count, and so must
+    # an ``equity`` leg, whose on-side carrier the projection now populates.
     if {"exposure_type", "reporting_gross_drawn", "reporting_gross_undrawn"} <= cols:
         exprs.append(
             pl.when(
                 pl.col("exposure_type").is_in(
-                    ["loan", "contingent", "facility_undrawn", "facility"]
+                    ["loan", "contingent", "facility_undrawn", "facility", "equity"]
                 )
             )
             .then(pl.lit(None, dtype=pl.Float64))

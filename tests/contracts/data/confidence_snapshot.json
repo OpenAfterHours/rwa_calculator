@@ -455,6 +455,7 @@
         "tests/acceptance/ccr/test_ccr_ls_long_settlement_inert.py",
         "tests/acceptance/crr/test_p1_154_art_118_international_organisation_class.py",
         "tests/acceptance/reporting/test_c07_art112_class_axis.py",
+        "tests/acceptance/reporting/test_p1_371_equity_class_p.py",
         "tests/conformance/portfolios.py",
         "tests/conformance/test_cell_rederivation.py",
         "tests/conformance/test_classification_conformance.py",
@@ -1540,10 +1541,12 @@
         "equity_transitional@crr"
       ],
       "source_files": [
+        "engine/aggregator/aggregator.py",
         "engine/equity/__init__.py",
         "engine/equity/calculator.py",
         "engine/sa/calculator.py",
         "engine/stages/equity.py",
+        "reporting/corep/c07.py",
         "rulebook/packs/b31.py",
         "rulebook/packs/common.py",
         "rulebook/packs/crr.py"
@@ -2219,6 +2222,7 @@
         "tests/acceptance/crr/test_p2_38_art_155_2_short_position_netting.py",
         "tests/acceptance/crr/test_scenario_crr_j_equity.py",
         "tests/acceptance/reporting/test_p1_332_ov1_equity_partition.py",
+        "tests/acceptance/reporting/test_p1_371_equity_class_p.py",
         "tests/contracts/test_r6_equity_method_edge.py",
         "tests/fixtures/generate_all.py",
         "tests/fixtures/p1_139/p1_139.py",
@@ -7067,6 +7071,7 @@
       ],
       "source_files": [
         "data/schemas.py",
+        "engine/aggregator/_equity_prep.py",
         "engine/crm/simple_method.py",
         "engine/equity/calculator.py",
         "engine/sa/calculator.py",
@@ -7080,6 +7085,7 @@
         "tests/acceptance/basel31/test_p2_15_equity_transitional_optout.py",
         "tests/acceptance/basel31/test_p2_19_unlisted_young_equity_higher_risk.py",
         "tests/acceptance/basel31/test_scenario_b31_l_equity.py",
+        "tests/acceptance/reporting/test_p1_371_equity_class_p.py",
         "tests/conformance/test_cell_rederivation.py",
         "tests/fixtures/p1_182/p1_182.py",
         "tests/fixtures/p2_19/p2_19.py",
@@ -7304,6 +7310,7 @@
         "tests/acceptance/basel31/test_scenario_b31_l_equity.py",
         "tests/acceptance/basel31/test_scenario_b31_m_model_permissions.py",
         "tests/acceptance/reporting/test_p1_332_ov1_equity_partition.py",
+        "tests/acceptance/reporting/test_p1_371_equity_class_p.py",
         "tests/acceptance/reporting/test_reporting_irb_classes_golden.py",
         "tests/conformance/portfolios.py",
         "tests/conformance/test_cell_rederivation.py",

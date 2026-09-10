@@ -110,20 +110,56 @@ book is 0%-weighted makes every one of those identities trivially true.
 Deliberately OUT of scope:
 - Art. 112(1)(k) items associated with particularly high risk, Art. 112(1)(n)
   short-term credit assessments, Art. 112(1)(o) collective investment
-  undertakings. Their sheet codes resolve to NO bundle key at all
-  (``validations/scope.py``), so no fixture row can emit them — the gap is in
-  the estate's class taxonomy, not in the data.
-- Art. 112(1)(p) equity. ``c07.py::c07_population`` admits the standardised book
-  by ``reporting_approach_origin == "standardised"``, and the equity calculator
-  seals ``equity``, so an equity exposure cannot reach C 07.00 however it is
-  booked. Verified end-to-end: a loan to an ``entity_type="equity"`` obligor
-  routes to the equity calculator too. This is an estate gap, not a data one.
+  undertakings. Their z-codes bind NO bundle key in ``validations/scope.py``
+  (z0012 / z0014 / z0015, each ``bundle_keys=()``), so ``resolve_sheet_codes``
+  returns ``sheet_not_emitted`` for every rule scoped to them and no fixture row
+  anywhere — here or elsewhere — can make one of those rules EVALUATE. That, not
+  unreachability of the sheet, is why they are out of scope. This note used to
+  attribute all three to one taxonomy gap; checked one at a time, they are three
+  different things and (k) is not a taxonomy gap at all:
+  * (k) IS emitted, under Basel 3.1. Measured: a counterparty with
+    ``entity_type="high_risk"`` classifies to ``ExposureClass.HIGH_RISK`` and
+    C 07.00 gains a ``high_risk`` sheet at 150% (rung r0240) — the map already
+    carries ``"high_risk": "high_risk"``. Under CRR the class folds into (q)
+    ``other`` instead, because UK onshored CRR omits Art. 128 (SI 2021/1078; pack
+    Feature ``b31_high_risk_class_applicable``). So on the Basel 3.1 side the dark
+    rules are a z0012 BINDING gap, not a data one: a row added here would emit a
+    sheet no z-code binds. That is P2.55 (with its Pillar 3 twin P3.7(a)) — an
+    estate fix, and the reason this portfolio must not pre-empt it with a row.
+  * (o) has no ``ExposureClass`` member, but CIUs are NOT absent from the
+    estate: they are modelled as ``equity_type="ciu"`` through the equity
+    calculator, and they reach C 07.00 in BOTH regimes — on the (p) ``equity``
+    sheet, never on z0015. Two things are wrong, and P2.54 owns both: the class
+    (a CIU reports under (p)) and the row axis (the "of which" rows 0281-0283
+    stay structurally null because ``ciu_approach`` is not sealed at the
+    aggregator exit). It also records the mismatch that fix must resolve — EBA
+    ``v09743_m`` puts that decomposition on z0015 while the legs land on z0016.
+  * (n) is the one plain taxonomy gap: no exposure class exists for a short-term
+    credit assessment, and PS1/26 withdraws the class outright — which is why
+    ``_OF07_SHEETS`` carries no z0014 entry at all.
+- Art. 112(1)(p) equity — already covered by the ``rich`` portfolio, in both
+  regimes, so a leg here would duplicate it and move this portfolio's goldens and
+  both coverage baselines for no coverage gain. The reason is NOT that equity
+  cannot reach C 07.00: this note said so, and P1.371 refuted it.
+  ``c07.py::_equity_admission`` admits a leg whose origin approach is ``equity``
+  and whose ``equity_method`` is not an ``EQUITY_IRB_METHODS`` member, reading a
+  NULL method as SA — so reachability turns on HOW the holding is booked, which
+  is precisely what the old blanket "however it is booked" denied. Measured on
+  ``rich``: the one equity leg seals ``equity_method='irb_simple'`` under CRR
+  (Art. 155(2) simple risk weight, 290%) and is correctly EXCLUDED, because COREP
+  Annex II ¶50 scopes that template to Chapter 2 of Title II Part Three — the
+  Standardised Approach — and the live EBA ERROR rule ``v4244_i`` pins the
+  boundary; under Basel 3.1 Art. 147A leaves the method ``'sa'`` (250%) and the
+  leg emits the ``equity`` sheet (col 0010 = 1,000,000, col 0220 = 2,500,000,
+  rung r0250). Both limbs of that gate are therefore already inside ``RUNS``.
 - Off-balance-sheet items and CRM — ``reporting_offbs_portfolio.py`` owns the
   CCF-bucket axis and the rich portfolio owns the CRM columns. Every row here is
   drawn and unmitigated so a mis-weighted class is visible in one cell.
-- The risk-weight rungs no quasi-sovereign class can reach. These stay dark
-  after the four rows above, and each is a property of the RULES, not a missing
-  fixture row — recorded here so the next reader does not re-derive it:
+- The risk-weight rungs no quasi-sovereign class can reach. These stay dark on
+  THIS portfolio after the four rows above, and each is a property of the RULES
+  or of another portfolio's scope, not of a missing row here — recorded so the
+  next reader does not re-derive it. One of them (r0250) is lit elsewhere in the
+  estate, which is why that scope qualifier is load-bearing rather than padding:
   * r0150 (2%) / r0160 (4%) — Art. 306(1) QCCP trade exposures. A CCR-only
     weight; ``reporting_ccr_portfolio.py`` owns that axis.
   * r0190 (35%) — Art. 125 residential mortgage. Keyed on the security, not the
@@ -135,8 +171,13 @@ Deliberately OUT of scope:
     has a 75% rung under CRR; the row IS lit under Basel 3.1, where the
     Art. 122 corporate ladder puts CQS 3 at 75% (``LN_CORP_ANCHOR``).
   * r0250 (250%) / r0260 (370%) / r0270 (1250%) — deferred tax assets,
-    Art. 155(4) IRB private equity, and securitisation/deduction respectively.
-    None is an Art. 112(1) obligor-class weight.
+    Art. 155(2) IRB simple-risk-weight equity, and securitisation/deduction
+    respectively. None is reachable from a quasi-sovereign class, which is all
+    this list claims. r0250 is NOT unreachable in general: the Art. 112(1)(p)
+    equity sheet lights it under Basel 3.1 at the Art. 133(3) 250% weight,
+    measured on ``b31/rich``. r0260 stays dark because 370% is an Art. 155(2)
+    IRB-method weight, which Annex II ¶50 keeps out of the CRR template, and
+    Basel 3.1 has no 370% rung.
   * r0280 ("Other risk weights") — the catch-all for a weight matching no
     published band. It SHOULD stay dark; lighting it would mean the engine
     produced an unpublishable weight.

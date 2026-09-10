@@ -511,8 +511,11 @@ def _c09_01_derived_exprs(cols: set[str], rwa_col: str | None) -> list[pl.Expr]:
     the RE sub-row predicates (a null there correctly excludes the row).
     ``c09_ccr_gross`` is C 07.00's ``c07_ccr_gross`` verbatim: the original exposure
     of the counterparty-credit-risk / settlement legs, whose per-side gross carriers
-    are null by design. Its gate list is EXACTLY the four exposure_types the side
-    carriers populate, so col 0010's SafeSum counts every leg on one carrier only.
+    are null by design. Its gate list is EXACTLY the exposure_types the side
+    carriers populate, so col 0010's SafeSum counts every leg on one carrier only —
+    including ``equity``, whose on-side carrier the reporting projection populates
+    now that C 07.00 (and so this template, which shares its population) admits the
+    Art. 112(1)(p) class. The two copies of that list must not drift.
     """
     exprs: list[pl.Expr] = [
         _defaulted_expr(cols).alias("c09_defaulted"),
@@ -534,7 +537,7 @@ def _c09_01_derived_exprs(cols: set[str], rwa_col: str | None) -> list[pl.Expr]:
         exprs.append(
             pl.when(
                 pl.col("exposure_type").is_in(
-                    ["loan", "contingent", "facility_undrawn", "facility"]
+                    ["loan", "contingent", "facility_undrawn", "facility", "equity"]
                 )
             )
             .then(pl.lit(None, dtype=pl.Float64))

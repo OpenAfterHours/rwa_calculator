@@ -27,12 +27,12 @@
       "templates_covered": 11
     },
     "b31/rich": {
-      "PASS": 192,
+      "PASS": 197,
       "FAIL": 4,
-      "VACUOUS": 219,
-      "NOT_EVALUATED": 393,
+      "VACUOUS": 221,
+      "NOT_EVALUATED": 386,
       "rules_enforced": 808,
-      "rules_executed": 415,
+      "rules_executed": 422,
       "templates_emitted": 12,
       "templates_covered": 12
     },
@@ -422,8 +422,8 @@
         "OF07.00.01.01[institution][r0010]",
         "OF07.00.01.01[institution][r0182]",
         "OF07.00.01.01[corporate][r0010]",
-        "OF07.00.01.01[corporate][r0220]",
-        "OF07.00.01.01[corporate][r0230]"
+        "OF07.00.01.01[corporate][r0020]",
+        "OF07.00.01.01[corporate][r0220]"
       ],
       "expression": "{t: OF07.00.01.01, c: 0220} = {t: OF07.00.01.01, c: 0230} + {t: OF07.00.01.01, c: 0235}"
     },
@@ -444,13 +444,13 @@
         "rich",
         "sa-classes"
       ],
-      "failing_coordinates": 15,
+      "failing_coordinates": 14,
       "coordinates": [
         "OF07.00.01.01[central_govt_central_bank][r0010]",
         "OF07.00.01.01[institution][r0010]",
         "OF07.00.01.01[corporate][r0010]",
-        "OF07.00.01.01[corporate_sme][r0010]",
-        "OF07.00.01.01[corporate_sme][r0020]"
+        "OF07.00.01.01[corporate][r0020]",
+        "OF07.00.01.01[retail][r0010]"
       ],
       "expression": "{t: OF07.00.01.01, c: 0150} = {t: OF07.00.01.01, c: 0160} + {t: OF07.00.01.01, c: 0170} + {t: OF07.00.01.01, c: 0180} + {t: OF07.00.01.01, c: 0190} + {t: OF07.00.01.01, c: 0171}"
     },
@@ -835,6 +835,21 @@
     },
     {
       "regime": "b31",
+      "rule_id": "boe_b0265",
+      "severity": "WARNING",
+      "reason": "P1.371 ADMISSION, not a defect: NOT_EVALUATED until Art. 112(1)(p) equity reached OF 07.00, because z0016 had no emitted sheet and resolve_sheet_codes skipped it silently - a coverage hole that looked like a clean run. It now evaluates, and holds vacuously only because the estate has no DEFAULTED equity leg. The rule ties defaulted equity on the exposure-class sheet to the OF 09.01 subordinated-debt/equity row: measured OF07.00.01.01[equity] r0015 c0010 = null (r0015 is 'of which: Defaulted exposures'; the leg is performing) against OF09.01.01.01[TOTAL] r0150 c0020 = 0.0. Both sides agree there is no defaulted equity, and vacuity policy counts 0 = 0 as no evidence. The non-vacuous half of the same pairing IS asserted: boe_b0252 ties r0010 c0010 to OF 09.01 r0150 c0010 and PASSes at 1,000,000 on this run, so the equity cross-template tie-out is genuinely checked. Becomes a real PASS the moment a fixture carries a defaulted equity holding; no output change is wanted for it.",
+      "portfolios": [
+        "rich"
+      ],
+      "vacuous_coordinates": 1,
+      "tables": [
+        "OF07.00.01.01",
+        "OF09.01.01.01"
+      ],
+      "expression": "{t: OF07.00.01.01, r: 0015, c: 0010, z: 0016} = {t: OF09.01.01.01, r: 0150, c: 0020, filter: [eba_dim:CEG] = [eba_GA:x1]}"
+    },
+    {
+      "regime": "b31",
       "rule_id": "boe_b0311",
       "severity": "WARNING",
       "reason": "unattributed - needs investigation: an OF 08.06 specialised-lending (slotting) sign or footing rule; the columns ARE populated and read exactly 0.00 on the only two portfolios that emit the template; vacuity is driven by cells that are EMITTED AND EXACTLY 0.00 - 8 measured, so the bound holds against a genuinely zero figure rather than against nothing. Measured: OF08.06.01.01[project_finance] r0015 c0031 = exact_zero, OF08.06.01.01[project_finance] r0015 c0100 = exact_zero, OF08.06.01.01[project_finance] r0025 c0031 = exact_zero.",
@@ -1076,7 +1091,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 10,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.03"
       ],
@@ -1091,7 +1106,7 @@
         "re-split",
         "rich"
       ],
-      "vacuous_coordinates": 3,
+      "vacuous_coordinates": 2,
       "tables": [
         "OF07.00.01.05"
       ],
@@ -1142,29 +1157,6 @@
         "OF07.00.01.01"
       ],
       "expression": "{t: OF07.00.01.01, r: 0210, c: 0220} = {t: OF07.00.01.01, r: 0210, c: 0200} * 0.7"
-    },
-    {
-      "regime": "b31",
-      "rule_id": "boe_b0491",
-      "severity": "WARNING",
-      "reason": "unattributed - needs investigation: an OF 07.00 per-risk-weight-row identity (c0220 = c0200 x the row's own risk weight), on a risk-weight row this estate emits but never populates; every operand is EMITTED BUT UNREPORTED (null) - 44 cell(s) measured - and this rule's treat-missing-as-zero policy coalesces each to 0.0, so the comparison holds at 0 = 0. That is the LESSONS B1/B5 dead-cell signature: the layout has the cell and nothing writes to it. Measured: OF07.00.01.01[institution] r0250 c0220 = null, OF07.00.01.01[institution] r0250 c0200 = null, OF07.00.01.01[corporate] r0250 c0220 = null.",
-      "portfolios": [
-        "ccr",
-        "crm-substitution",
-        "facility-share-binding",
-        "facility-share-nonbinding",
-        "irb-classes",
-        "netting",
-        "off-bs",
-        "re-split",
-        "rich",
-        "sa-classes"
-      ],
-      "vacuous_coordinates": 6,
-      "tables": [
-        "OF07.00.01.01"
-      ],
-      "expression": "{t: OF07.00.01.01, r: 0250, c: 0220} = {t: OF07.00.01.01, r: 0250, c: 0200} * 2.5"
     },
     {
       "regime": "b31",
@@ -1521,7 +1513,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 18,
+      "vacuous_coordinates": 16,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1544,7 +1536,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.02"
       ],
@@ -1559,7 +1551,7 @@
         "re-split",
         "rich"
       ],
-      "vacuous_coordinates": 3,
+      "vacuous_coordinates": 2,
       "tables": [
         "OF07.00.01.05"
       ],
@@ -1582,7 +1574,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 10,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.03"
       ],
@@ -1605,7 +1597,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 252,
+      "vacuous_coordinates": 224,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1628,7 +1620,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1651,7 +1643,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1674,7 +1666,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1697,7 +1689,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1720,7 +1712,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1743,7 +1735,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1766,7 +1758,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1789,7 +1781,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1812,7 +1804,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1835,7 +1827,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1858,7 +1850,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1881,7 +1873,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1904,7 +1896,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1927,7 +1919,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1950,7 +1942,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.02"
       ],
@@ -1973,7 +1965,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -1996,7 +1988,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -2019,7 +2011,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -2042,7 +2034,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -2065,7 +2057,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -2088,7 +2080,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -2111,7 +2103,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -2134,7 +2126,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -2157,7 +2149,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 10,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.03"
       ],
@@ -2172,7 +2164,7 @@
         "re-split",
         "rich"
       ],
-      "vacuous_coordinates": 3,
+      "vacuous_coordinates": 2,
       "tables": [
         "OF07.00.01.05"
       ],
@@ -2195,11 +2187,25 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 10,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.03"
       ],
       "expression": "{t: OF07.00.01.03, c: 0150} = {t: OF07.00.01.03, c: 0160} + {t: OF07.00.01.03, c: 0170} + {t: OF07.00.01.03, c: 0171} + {t: OF07.00.01.03, c: 0180} + {t: OF07.00.01.03, c: 0190}"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0710_2",
+      "severity": "ERROR",
+      "reason": "P1.371's RECORDED RESIDUAL - this entry is the register's own pointer at it. The rule is scoped to z0016 ALONE (scope: t OF07.00.01.04, r 0371;0372;0373;0374, z 0016), so it addresses nothing but the four equity memorandum rows, and it was NOT_EVALUATED until P1.371 emitted the equity sheet. It asserts the CCF waterfall c0150 = c0160 + c0170 + c0171 + c0180 + c0190 on each of the four. Measured: all six columns null on all four rows. The rows are dark by SEAL, not by data - their carriers equity_transitional_approach and equity_higher_risk ARE produced by engine/equity/calculator.py, but are not AGGREGATOR_EXIT edge columns, so the seal strips them before reporting (LESSONS B1: an absent column makes its predicate match nothing, silently). Three tests in tests/acceptance/reporting/test_p1_371_equity_class_p.py pin that, the last going red the moment either carrier is sealed. Sealing them moves this entry VACUOUS -> PASS and is deliberately a separate item: it needs an edge column, a PS1/26 Annex II para 55B vs 55C scoping decision (Rules 4.1-4.3 vs 4.4-4.8), and a fixture electing EquityTransitionalConfig.",
+      "portfolios": [
+        "rich"
+      ],
+      "vacuous_coordinates": 4,
+      "tables": [
+        "OF07.00.01.04"
+      ],
+      "expression": "{t: OF07.00.01.04, c: 0150} = {t: OF07.00.01.04, c: 0160} + {t: OF07.00.01.04, c: 0170} + {t: OF07.00.01.04, c: 0171} + {t: OF07.00.01.04, c: 0180} + {t: OF07.00.01.04, c: 0190}"
     },
     {
       "regime": "b31",
@@ -2210,7 +2216,7 @@
         "re-split",
         "rich"
       ],
-      "vacuous_coordinates": 3,
+      "vacuous_coordinates": 2,
       "tables": [
         "OF07.00.01.05"
       ],
@@ -2233,7 +2239,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.02"
       ],
@@ -2387,7 +2393,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.02"
       ],
@@ -2698,7 +2704,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.01",
         "OF07.00.01.02"
@@ -2722,7 +2728,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.01",
         "OF07.00.01.02"
@@ -2746,11 +2752,25 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 216,
+      "vacuous_coordinates": 192,
       "tables": [
         "OF07.00.01.01"
       ],
       "expression": "{t: OF07.00.01.01, r: 0023} = sum({t: OF07.00.01.01, r: 0024; 0025; 0026})"
+    },
+    {
+      "regime": "b31",
+      "rule_id": "boe_b0959",
+      "severity": "ERROR",
+      "reason": "A PUBLISHED-RULE DEFECT, banked deliberately: do NOT engineer output toward a PASS. The expression is {r0015} >= {r0010} - r0015 is 'of which: Defaulted exposures' and r0010 is the class total, so as published it asserts defaulted >= total, which no correct report can satisfy on any sheet with a performing portion. IGNORE ITS SHORT_LABEL, which describes a different check entirely ('the three of which rows r0024, r0025 and r0026 should add up to the total row r0023' - the project-finance phase rows); label and expression disagree in the published ruleset, so the label must not be read as describing what this entry covers. It was NOT_EVALUATED until P1.371: the scope is z 0001;0012;0015;0016, and of those four only z0016 resolves to an emitted sheet - z0001 (Total) and z0015 (CIU) carry empty bundle_keys by design (no ExposureClass analogue), and z0012 is empty here too (P2.55 declares it as ('high_risk',), after which it still resolves to no emitted sheet because no registered portfolio produces the class). The 9 coordinates are the equity sheet across the 9 scoped columns 0030/0035/0050/0060/0070/0080/0090/0130/0140, every one a CRM-substitution or CCF column: measured 0.0 on r0010 and null on r0015, which is correct for a plain on-balance-sheet equity holding with no protection and no undrawn component. That zero is the only thing keeping an ERROR-severity rule off the break list - an equity fixture with guarantees or an off-balance-sheet commitment would make it FAIL on a right answer. Treat it then as a published-rule limit (the boe_b0471 precedent), never as an output defect.",
+      "portfolios": [
+        "rich"
+      ],
+      "vacuous_coordinates": 9,
+      "tables": [
+        "OF07.00.01.01"
+      ],
+      "expression": "{t: OF07.00.01.01, r: 0015} >= {t: OF07.00.01.01, r: 0010}"
     },
     {
       "regime": "b31",
@@ -2769,7 +2789,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 81,
+      "vacuous_coordinates": 72,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3095,7 +3115,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 81,
+      "vacuous_coordinates": 72,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3118,7 +3138,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 81,
+      "vacuous_coordinates": 72,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3141,7 +3161,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 81,
+      "vacuous_coordinates": 72,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3164,7 +3184,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 81,
+      "vacuous_coordinates": 72,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3179,7 +3199,7 @@
         "re-split",
         "rich"
       ],
-      "vacuous_coordinates": 3,
+      "vacuous_coordinates": 2,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3194,7 +3214,7 @@
         "re-split",
         "rich"
       ],
-      "vacuous_coordinates": 3,
+      "vacuous_coordinates": 2,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3209,7 +3229,7 @@
         "re-split",
         "rich"
       ],
-      "vacuous_coordinates": 3,
+      "vacuous_coordinates": 2,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3224,7 +3244,7 @@
         "re-split",
         "rich"
       ],
-      "vacuous_coordinates": 3,
+      "vacuous_coordinates": 2,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3239,7 +3259,7 @@
         "re-split",
         "rich"
       ],
-      "vacuous_coordinates": 3,
+      "vacuous_coordinates": 2,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3254,7 +3274,7 @@
         "re-split",
         "rich"
       ],
-      "vacuous_coordinates": 3,
+      "vacuous_coordinates": 2,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3269,7 +3289,7 @@
         "re-split",
         "rich"
       ],
-      "vacuous_coordinates": 3,
+      "vacuous_coordinates": 2,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3284,7 +3304,7 @@
         "re-split",
         "rich"
       ],
-      "vacuous_coordinates": 3,
+      "vacuous_coordinates": 2,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3299,7 +3319,7 @@
         "re-split",
         "rich"
       ],
-      "vacuous_coordinates": 3,
+      "vacuous_coordinates": 2,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3314,7 +3334,7 @@
         "re-split",
         "rich"
       ],
-      "vacuous_coordinates": 3,
+      "vacuous_coordinates": 2,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3329,7 +3349,7 @@
         "re-split",
         "rich"
       ],
-      "vacuous_coordinates": 3,
+      "vacuous_coordinates": 2,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3344,7 +3364,7 @@
         "re-split",
         "rich"
       ],
-      "vacuous_coordinates": 3,
+      "vacuous_coordinates": 2,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3359,7 +3379,7 @@
         "re-split",
         "rich"
       ],
-      "vacuous_coordinates": 3,
+      "vacuous_coordinates": 2,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3374,7 +3394,7 @@
         "re-split",
         "rich"
       ],
-      "vacuous_coordinates": 3,
+      "vacuous_coordinates": 2,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3389,7 +3409,7 @@
         "re-split",
         "rich"
       ],
-      "vacuous_coordinates": 3,
+      "vacuous_coordinates": 2,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3404,7 +3424,7 @@
         "re-split",
         "rich"
       ],
-      "vacuous_coordinates": 3,
+      "vacuous_coordinates": 2,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3419,7 +3439,7 @@
         "re-split",
         "rich"
       ],
-      "vacuous_coordinates": 3,
+      "vacuous_coordinates": 2,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3434,7 +3454,7 @@
         "re-split",
         "rich"
       ],
-      "vacuous_coordinates": 3,
+      "vacuous_coordinates": 2,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3449,7 +3469,7 @@
         "re-split",
         "rich"
       ],
-      "vacuous_coordinates": 3,
+      "vacuous_coordinates": 2,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3464,7 +3484,7 @@
         "re-split",
         "rich"
       ],
-      "vacuous_coordinates": 3,
+      "vacuous_coordinates": 2,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3479,7 +3499,7 @@
         "re-split",
         "rich"
       ],
-      "vacuous_coordinates": 3,
+      "vacuous_coordinates": 2,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3494,7 +3514,7 @@
         "re-split",
         "rich"
       ],
-      "vacuous_coordinates": 3,
+      "vacuous_coordinates": 2,
       "tables": [
         "OF07.00.01.01"
       ],
@@ -3549,7 +3569,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 8,
       "tables": [
         "OF07.00.01.02"
       ],
@@ -3632,7 +3652,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 130,
+      "vacuous_coordinates": 65,
       "tables": [
         "C 07.00.a"
       ],
@@ -3661,7 +3681,7 @@
         "re-split",
         "rich"
       ],
-      "vacuous_coordinates": 208,
+      "vacuous_coordinates": 104,
       "tables": [
         "C 07.00.a"
       ],
@@ -3711,7 +3731,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 10,
+      "vacuous_coordinates": 8,
       "tables": [
         "C 07.00.c"
       ],
@@ -3733,7 +3753,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 10,
+      "vacuous_coordinates": 8,
       "tables": [
         "C 07.00.d"
       ],
@@ -3755,7 +3775,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 45,
+      "vacuous_coordinates": 35,
       "tables": [
         "C 07.00.a"
       ],
@@ -3777,7 +3797,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 7,
       "tables": [
         "C 07.00.a"
       ],
@@ -3799,7 +3819,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 7,
       "tables": [
         "C 07.00.a"
       ],
@@ -3821,7 +3841,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 7,
       "tables": [
         "C 07.00.a"
       ],
@@ -3843,7 +3863,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 7,
       "tables": [
         "C 07.00.a"
       ],
@@ -3865,7 +3885,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 7,
       "tables": [
         "C 07.00.a"
       ],
@@ -4034,7 +4054,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 30,
+      "vacuous_coordinates": 24,
       "tables": [
         "C 07.00.d"
       ],
@@ -4072,7 +4092,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 30,
+      "vacuous_coordinates": 25,
       "tables": [
         "C 07.00.a"
       ],
@@ -4129,7 +4149,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 7,
       "tables": [
         "C 07.00.b"
       ],
@@ -4151,7 +4171,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 7,
       "tables": [
         "C 07.00.a"
       ],
@@ -4173,7 +4193,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 9,
+      "vacuous_coordinates": 7,
       "tables": [
         "C 07.00.a"
       ],
@@ -4389,7 +4409,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 147,
+      "vacuous_coordinates": 126,
       "tables": [
         "C 07.00.a"
       ],
@@ -4411,7 +4431,7 @@
         "rich",
         "sa-classes"
       ],
-      "vacuous_coordinates": 7,
+      "vacuous_coordinates": 6,
       "tables": [
         "C 07.00.b"
       ],

@@ -458,8 +458,8 @@ def test_an_sa_equity_leg_reaches_a_c0700_sheet(templates, ledgers) -> None:
     then look for a C 07.00 sheet keyed on their reporting class.
     Assert: one exists.
 
-    **Was a strict xfail until P1.371** (2026-09-10), which admitted Art. 112(1)(p)
-    to ``c07_population``. The recorded finding was: LN011 carries
+    **Was a strict xfail until P1.371** (2026-09-10), which admitted
+    CRR Art. 112(1)(p) to ``c07_population``. The recorded finding was: LN011 carries
     ``reporting_approach`` ``equity`` with ``ead_final`` / ``rwa_final`` of
     1,500,000 and C 02.00 row 0210 — whose whole published instruction is *"See
     CR SA template"* — reported it, while C 07.00 emitted sheets for only four

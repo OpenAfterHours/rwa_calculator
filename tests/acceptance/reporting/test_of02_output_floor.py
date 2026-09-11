@@ -109,13 +109,21 @@ class _Run:
 
 # portfolio -> row_ref -> column_ref -> value.
 #
-# rich: 14 loans + 1 equity, NO CCR. Modelled = F-IRB 48,244,060.92 + A-IRB
-#   14,625,069.66 + slotting 52,500,000.00 = 115,369,130.58 (== C 02.00 row 0220);
-#   standardised = the SA book + equity = 22,080,833.33 (== C 02.00 row 0060).
-#   They sum to the whole portfolio, 137,449,963.91 (== C 02.00 row 0010).
-#   S-TREA (column 0040) = whole-book sa_rwa = 164,155,833.33, INCLUDING equity's
-#   own 2,500,000 standardised-equivalent RWA (B31 equity is SA-only, Art. 147A;
-#   the aggregator now populates equity's sa_rwa — R4).
+# rich: 14 loans + 1 equity + 2 CIUs, NO CCR. Modelled = F-IRB 48,244,060.92 +
+#   A-IRB 14,625,069.66 + slotting 52,500,000.00 = 115,369,130.58 (== C 02.00 row
+#   0220); standardised = the SA book + equity + CIU = 50,080,833.33 (== C 02.00
+#   row 0060). They sum to the whole portfolio, 165,449,963.91 (== C 02.00 row
+#   0010). S-TREA (column 0040) = whole-book sa_rwa = 192,155,833.33.
+#
+#   **The standardised partition grew 22,080,833.33 -> 50,080,833.33 with P2.54**,
+#   by exactly the 28,000,000 of Art. 112(1)(o) CIU RWEA the two new equity-table
+#   legs carry (2,000,000 at the Art. 132(2) 1,250% fall-back + 4,000,000 at a
+#   75% mandate weight). That belongs in column 0020 and nowhere else: a CIU's own
+#   funds requirement is computed under the Credit Risk: Standardised Approach
+#   (CRR) Part (Art. 132/132A), it is not modelled, and the class it reports under
+#   does not change which partition it is in. Column 0040 moves by the same
+#   28,000,000 because an equity-table leg's sa_rwa IS its rwa (``_equity_prep``),
+#   so the CIU legs are their own standardised equivalent.
 # ccr: one SA corporate loan (2,500,000 RWEA) + two SA-CCR netting sets
 #   (1,560,296.72 RWEA). No models at all -> column 0010 is 0.0 EVERYWHERE.
 _EXPECTED: dict[str, dict[str, dict[str, float]]] = {
@@ -123,18 +131,18 @@ _EXPECTED: dict[str, dict[str, dict[str, float]]] = {
         # Credit risk excluding CCR — the whole book (this portfolio has no CCR).
         "0010": {
             "0010": 115_369_130.58029616,
-            "0020": 22_080_833.333333332,
-            "0030": 137_449_963.9136295,
-            "0040": 164_155_833.3333333,
+            "0020": 50_080_833.33333333,
+            "0030": 165_449_963.91362947,
+            "0040": 192_155_833.3333333,
         },
         # Counterparty credit risk — populated, and empty because the book has none.
         "0020": {"0010": 0.0, "0020": 0.0, "0030": 0.0, "0040": 0.0},
         # Total — 0010 + 0020, which here equals row 0010.
         "0080": {
             "0010": 115_369_130.58029616,
-            "0020": 22_080_833.333333332,
-            "0030": 137_449_963.9136295,
-            "0040": 164_155_833.3333333,
+            "0020": 50_080_833.33333333,
+            "0030": 165_449_963.91362947,
+            "0040": 192_155_833.3333333,
         },
     },
     "ccr": {

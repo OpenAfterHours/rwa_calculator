@@ -22,6 +22,7 @@ so the same row can and does move column between the two.
     ref                | Annex I / Table A1 basis                | CRR    | B3.1
     -------------------|-----------------------------------------|--------|-------
     LN_CORP_DRAWN      | on-balance-sheet anchor (no CCF)         |   --   |   --
+    EQ_CIU             | on-balance-sheet CIU (no CCF) — P2.54    |   --   |   --
     CT_GUARANTEE       | para 1(a) / Row 1 direct credit sub.     | 100%   | 100%
     CT_FRC_FWD         | para 2 FRC / Row 2 certain drawdown      | 100%   | 100%
     CT_STANDBY_MR      | para 2 issued / Row 3 non-substitute     |  50%   |  50%
@@ -84,6 +85,14 @@ behaviour:
 The identities this portfolio exists to make evaluable now close exactly — see
 ``test_reporting_offbs_golden.py``, which pins both.
 
+One row here is NOT about CCFs: ``EQ_CIU``, added for P2.54. It is the estate's
+only route to the Art. 112(1)(o) CIU axis under CRR, because the portfolio that
+holds the Basel 3.1 CIU legs runs IRB in both regimes and CRR then routes equity
+to Art. 155(2), which C 07.00 excludes. It reaches no CCF bucket, lands on its own
+sheet, and moves no existing sheet's cells. The full argument — including why the
+other four CRR ``_sa_config`` portfolios were rejected — is in
+``_equity_exposures``; read it before concluding the row is misplaced.
+
 References:
 - CRR Art. 111(1) + Annex I paras 1-4: SA CCF categories (FR/FRC/MR/MLR/LR)
 - PRA PS1/26 Art. 111(1) Table A1 Rows 1-7: revised SA CCFs (10% and 40% added)
@@ -102,6 +111,7 @@ from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import (
     CONTINGENTS_SCHEMA,
     COUNTERPARTY_SCHEMA,
+    EQUITY_EXPOSURE_SCHEMA,
     FACILITY_MAPPING_SCHEMA,
     FACILITY_SCHEMA,
     LOAN_SCHEMA,
@@ -115,8 +125,12 @@ from tests.fixtures.raw_bundle import make_raw_bundle
 
 CP_CORP: str = "OBS-CP-CORP"  # corporate, CQS 3 -> 100% RW (CRR Art. 122(1))
 CP_INST: str = "OBS-CP-INST"  # institution, CQS 2 -> 50% RW (CRR Art. 120(1))
+CP_CIU: str = "OBS-CP-CIU"  # corporate wrapper holding the CIU units
 
 LN_CORP_DRAWN: str = "OBS-LN-CORP"  # drawn under FAC_OC — the on-BS anchor
+
+#: The CIU holding (P2.54). Equity-table row, not a loan — see ``_equity_exposures``.
+EQ_CIU: str = "OBS-EQ-CIU"
 
 CT_GUARANTEE: str = "OBS-CT-GUARANTEE"  # FR   -> 100% / 100%
 CT_FRC_FWD: str = "OBS-CT-FRC-FWD"  # FRC  -> 100% / 100%
@@ -143,6 +157,42 @@ LIMIT_UCC: float = 3_000_000.0
 DRAWN_CORP: float = 4_000_000.0
 #: FAC_OC headroom = limit - drawn child loan (facility_undrawn.py).
 UNDRAWN_OC: float = LIMIT_OC - DRAWN_CORP
+
+#: The CIU holding's carrying / fair value. 8,000,000 is distinct from every
+#: other amount above, per this portfolio's rule that a mis-bucketed exposure be
+#: identifiable from the cell value alone. An equity-table holding is wholly
+#: drawn, so this is simultaneously the original exposure and the exposure value,
+#: and it reaches NO CCF bucket — which is the point (see the module docstring).
+CARRYING_CIU: float = 8_000_000.0
+
+#: The CIU's Art. 132A(2) mandate-derived weighted-average risk weight, read
+#: verbatim by the engine. A fixture INPUT, not a pack scalar.
+#:
+#: 35% is chosen so the reported weight can only have come from the mandate-based
+#: branch. It collides with no default anywhere on the path — not the 1,250%
+#: Art. 132(2) fall-back (which is also what a NULL or misspelled
+#: ``ciu_approach`` produces), not the 100% SA residual, not the 250% equity
+#: weight, not the 370% Art. 155(2) IRB-simple residual, and not the 75% the
+#: ``rich`` portfolio's CIU uses. Nor does it collide with this portfolio's own
+#: weights (100% / 75% corporate, 50% institution). So a 35% cell is positive
+#: evidence that ``ciu_approach`` was matched and ``ciu_mandate_rw`` read, rather
+#: than something reachable by falling through. A stray Art. 132(4) 1.2x uplift
+#: would report 42%, which lands on "Other risk weights" and is equally loud.
+#:
+#: It is also a declared C 07.00 band in BOTH regimes that maps to row 0190,
+#: which BOTH publishers' risk-weight-rung summation rules count. That second
+#: condition is not cosmetic: **70% was the first choice and had to be abandoned**
+#: because row 0210 ("70%") is omitted from the rung lists of both
+#: ``v0313_m`` (EBA) and ``boe_b0721`` (BoE) even though it is a declared row with
+#: its own dedicated ``v0323_m`` ERROR rule. Measured at 70%: r0010 = 8,000,000
+#: against a rung sum of 0.00 on both, i.e. two summation rules break for any
+#: 70%-weighted SA exposure, CIU or not. No estate portfolio had ever reached
+#: row 0210, so that is a live gap in its own right — it is NOT a CIU question,
+#: and pinning it here would have made this fixture change two things at once.
+CIU_MANDATE_RW: float = 0.35
+
+#: 8,000,000 x 35%. The only RWEA in this portfolio at this magnitude.
+CIU_RWEA: float = CARRYING_CIU * CIU_MANDATE_RW
 
 _VALUE_DATE: date = date(2020, 1, 1)
 _MATURITY: date = date(2031, 12, 31)  # > both reporting dates (CRR 2025, B31 2027)
@@ -182,6 +232,7 @@ def build_reporting_offbs_bundle() -> RawDataBundle:
         facilities=_facilities(),
         facility_mappings=_facility_mappings(),
         ratings=_ratings(),
+        equity_exposures=_equity_exposures(),
     )
 
 
@@ -191,11 +242,21 @@ def build_reporting_offbs_bundle() -> RawDataBundle:
 
 
 def _counterparties() -> pl.DataFrame:
-    """One corporate (the OBS book) and one institution (a second C 07.00 sheet).
+    """A corporate (the OBS book), an institution (a second C 07.00 sheet), and
+    the CIU wrapper (a third).
 
-    Two obligors, not one: the CCF-bucket axis must be shown to be per-sheet,
-    not an artefact of a single exposure class. ``annual_revenue`` is above the
-    SME ceiling so no supporting factor perturbs the corporate RWEA.
+    More than one obligor: the CCF-bucket axis must be shown to be per-sheet, not
+    an artefact of a single exposure class. ``annual_revenue`` is above the SME
+    ceiling on both corporates so no supporting factor perturbs the RWEA.
+
+    ``CP_CIU`` is its own obligor rather than a second exposure under ``CP_CORP``
+    because ``CP_CORP`` owns all three facilities: hanging an equity-table row off
+    it would put a non-facility exposure inside the facility hierarchy's obligor,
+    which is gratuitous risk for a row that tests neither facilities nor CCFs. The
+    ``rich`` portfolio separates ``CP_EQUITY`` for the same reason. Its
+    ``entity_type`` is ``corporate`` because nothing keys a CIU off the obligor —
+    ``equity_type == "ciu"`` on the equity table is the only identifier, and a
+    fund wrapper's counterparty is an ordinary corporate entity.
     """
     rows: list[dict] = [
         {
@@ -205,8 +266,73 @@ def _counterparties() -> pl.DataFrame:
             "annual_revenue": 250_000_000.0,
         },
         {"counterparty_reference": CP_INST, "entity_type": "institution", "country_code": "GB"},
+        {
+            "counterparty_reference": CP_CIU,
+            "entity_type": "corporate",
+            "country_code": "GB",
+            "annual_revenue": 250_000_000.0,
+        },
     ]
     return pl.DataFrame(rows, schema_overrides=dtypes_of(COUNTERPARTY_SCHEMA))
+
+
+def _equity_exposures() -> pl.DataFrame:
+    """One mandate-based CIU holding — the CRR arm of the Art. 112(1)(o) axis.
+
+    This is the whole reason an equity-table row lives in a CCF oracle, and it is
+    worth stating plainly because the placement looks wrong at first glance.
+
+    The CIU class is reachable under BOTH regimes: SI 2021/1078's omission of
+    CRR Arts. 132 / 132a / 152 is a relocation into PRA rules, not an abolition,
+    and the class stamp in ``engine/aggregator/_equity_prep.py`` is regime-blind.
+    But the ``rich`` portfolio — which carries the two Basel 3.1 CIU legs — runs
+    under IRB permission in BOTH regimes, and under CRR that routes equity to
+    Art. 155(2) IRB-simple. ``c07.py::_equity_admission`` then excludes it
+    (COREP Annex II ¶50 scopes C 07.00 to Chapter 2 of Title II Part Three), so
+    **no CRR run anywhere in ``RUNS`` could reach the CIU sheet**: the class, the
+    z0015 binding, C 02.00 r0200 and C 09.01 r0140 were all CRR-dark. That is the
+    ``.claude/LESSONS.md`` B5 shape — a registered portfolio with a dead cell,
+    where every rule over it reads NOT_EVALUATED and so looks clean.
+
+    Of the five CRR portfolios registered against ``_sa_config``, this one is the
+    host because it is the only one whose charter the row does not disturb:
+    ``sa-classes`` forbids a CIU row in its own docstring (it would pre-empt
+    P2.55's z-code binding gap); ``netting`` and ``ccr`` each hold the evidence
+    base for an open, attributed defect awaiting its fix, and moving their
+    goldens would contaminate that proof; and ``re-split`` is the one portfolio
+    where a CIU row would actively mislead, because ``ciu`` is TRUE in the
+    RE-split candidate gate (``engine/re_split/flagging.py``) even though an
+    equity-table row never traverses that stage.
+
+    What it costs this portfolio: nothing on the CCF axis. A CIU holding is
+    wholly drawn, so it reaches no CCF bucket and lands on its own C 07.00 sheet
+    — measured, no existing sheet's cells move. It does move the portfolio-level
+    totals (C 02.00, C 09.01, OV1, CMS1, OF 02.01) and it adds a ninth row, which
+    is why ``test_all_eight_portfolio_exposures_reach_the_templates`` needs its
+    count widened.
+
+    Why ``mandate_based`` and not ``fallback``: the Art. 132(2) fall-back is also
+    what a NULL or misspelled ``ciu_approach`` produces, so a 1,250% cell cannot
+    distinguish "the approach was read" from "the approach was never read". A
+    mandate weight can only arise from a matched branch. See ``CIU_MANDATE_RW``.
+
+    No ``ciu_holdings`` row is needed — only ``look_through`` reads that table.
+    ``ciu_third_party_calc`` is left defaulted: True would apply Art. 132(4)'s
+    1.2x uplift and report 42% instead of 35%.
+    """
+    rows: list[dict] = [
+        {
+            "exposure_reference": EQ_CIU,
+            "counterparty_reference": CP_CIU,
+            "equity_type": "ciu",
+            "currency": "GBP",
+            "carrying_value": CARRYING_CIU,
+            "fair_value": CARRYING_CIU,
+            "ciu_approach": "mandate_based",
+            "ciu_mandate_rw": CIU_MANDATE_RW,
+        }
+    ]
+    return pl.DataFrame(rows, schema_overrides=dtypes_of(EQUITY_EXPOSURE_SCHEMA))
 
 
 def _ratings() -> pl.DataFrame:

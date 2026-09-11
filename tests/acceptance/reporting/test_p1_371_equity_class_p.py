@@ -71,9 +71,13 @@ from typing import TYPE_CHECKING
 import polars as pl
 import pytest
 from tests.acceptance.reporting.test_reporting_golden import _b31_config, _crr_config
-from tests.fixtures.reporting_portfolio import EQ_LISTED, build_reporting_bundle
+from tests.fixtures.reporting_portfolio import (
+    ALL_EQUITY_REFERENCES,
+    EQ_LISTED,
+    build_reporting_bundle,
+)
 
-from rwa_calc.domain.enums import EquityApproach
+from rwa_calc.domain.enums import EquityApproach, ExposureClass
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from rwa_calc.reporting.corep.c02 import _EQUITY_IRB_METHODS
 from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBundle
@@ -107,6 +111,13 @@ _B31_EQUITY_RWEA: float = 2_500_000.0
 #: 1,000,000 x 290%. Pack ``equity_irb_simple_risk_weights[LISTED] = 2.90``
 #: (CRR Art. 155(2)) — the figure that must NOT appear on any CRR C 07.00 sheet.
 _CRR_EQUITY_RWEA: float = 2_900_000.0
+
+#: The WHOLE equity table's CRR RWEA: the class (p) listed leg above plus the two
+#: Article 112(1)(o) CIU legs P2.54 added (2,000,000 and 4,000,000 at the
+#: Art. 155(2)(c) 370% "all other equity" residual = 7,400,000 + 14,800,000).
+#: ``_resolve_approach`` never reads ``equity_type``, so under CRR all three take
+#: the same Art. 155(2) path and all three are equally out of C 07.00's scope.
+_CRR_EQUITY_TABLE_RWEA: float = 25_100_000.0
 
 #: The three supervisory rules the half-fixed state (population widened, gross
 #: carriers still null) breaks. Named so a future regression points straight at
@@ -210,23 +221,55 @@ def _outcome(report: ValidationReport, rule_id: str) -> object:
 class TestTheEstateCanTellTheTwoRegimesApart:
     """The fixture is a claim; these are its terms.
 
-    Every assertion downstream rests on ONE equity leg whose ``equity_method``
-    differs by regime. If it did not differ, ``TestCrrExcludesIrbMethodEquity``
-    would pass under an implementation that admits all equity regardless of
-    method — the exact over-wide fix this file exists to reject — and nothing
-    would say so.
+    Every assertion downstream rests on ONE Article 112(1)(p) leg whose
+    ``equity_method`` differs by regime. If it did not differ,
+    ``TestCrrExcludesIrbMethodEquity`` would pass under an implementation that
+    admits all equity regardless of method — the exact over-wide fix this file
+    exists to reject — and nothing would say so.
     """
 
     @pytest.mark.parametrize("regime_key", list(_REGIMES))
-    def test_the_estate_carries_exactly_one_equity_leg(self, regime_key: str) -> None:
+    def test_the_class_p_population_is_the_listed_leg_alone(self, regime_key: str) -> None:
+        """Three legs come off the equity input table; exactly ONE is class (p).
+
+        Restated for P2.54, which added the two CIU legs. The invariant this
+        guards has not changed and has not weakened: every absolute figure in
+        this file is ``RP-EQ-LISTED``'s, so what must hold is that
+        ``RP-EQ-LISTED`` is the WHOLE of the Article 112(1)(p) population — not
+        that the equity table holds one row. Art. 112(1)(o) and (p) are disjoint,
+        so a CIU landing back on (p) would inflate every cell below, and this is
+        the assertion that catches it.
+
+        Asserted on ``reporting_class_origin``, the sealed class the C 07.00
+        sheet axis is keyed on, rather than on ``equity_type`` — a class-stamping
+        regression is the failure mode, so reading the stamp is the point.
+        """
         results, _corep, _report = _run(regime_key)
 
-        legs = results.filter(pl.col("reporting_approach_origin") == "equity")
-        assert legs.height == 1, (
-            f"{regime_key}: expected one equity leg, got {legs.height} — the absolute "
-            "figures below are derived from RP-EQ-LISTED alone"
+        equity_table = results.filter(pl.col("reporting_approach_origin") == "equity")
+        assert sorted(equity_table["source_exposure_reference"].to_list()) == sorted(
+            ALL_EQUITY_REFERENCES
+        ), (
+            f"{regime_key}: the equity input table no longer contributes exactly "
+            f"{sorted(ALL_EQUITY_REFERENCES)} to the ledger, got "
+            f"{sorted(equity_table['source_exposure_reference'].to_list())} — re-derive "
+            "the absolute figures in this file before touching anything else"
         )
-        assert legs["source_exposure_reference"][0] == EQ_LISTED
+
+        class_p = equity_table.filter(pl.col("reporting_class_origin") == "equity")
+        assert class_p["source_exposure_reference"].to_list() == [EQ_LISTED], (
+            f"{regime_key}: Article 112(1)(p) must be RP-EQ-LISTED alone, got "
+            f"{class_p['source_exposure_reference'].to_list()} — (o) and (p) are "
+            "disjoint classes and every figure below is the listed leg's"
+        )
+        assert set(
+            equity_table.filter(pl.col("source_exposure_reference") != EQ_LISTED)[
+                "reporting_class_origin"
+            ].to_list()
+        ) == {ExposureClass.CIU.value}, (
+            f"{regime_key}: the two CIU legs must seal class (o); if they have fallen "
+            "back to (p) the cells below are overstated by their RWEA"
+        )
 
     def test_the_same_leg_is_sa_method_under_b31_and_irb_method_under_crr(self) -> None:
         """The asymmetry, measured rather than assumed. ``equity_method`` is the
@@ -235,10 +278,10 @@ class TestTheEstateCanTellTheTwoRegimesApart:
         crr_results, _crr_corep, _crr_report = _run("crr")
         b31_results, _b31_corep, _b31_report = _run("b31")
 
-        crr_method = crr_results.filter(pl.col("reporting_approach_origin") == "equity")[
+        crr_method = crr_results.filter(pl.col("source_exposure_reference") == EQ_LISTED)[
             "equity_method"
         ][0]
-        b31_method = b31_results.filter(pl.col("reporting_approach_origin") == "equity")[
+        b31_method = b31_results.filter(pl.col("source_exposure_reference") == EQ_LISTED)[
             "equity_method"
         ][0]
         assert crr_method == EquityApproach.IRB_SIMPLE.value, (
@@ -257,7 +300,10 @@ class TestTheEstateCanTellTheTwoRegimesApart:
         negative control would prove nothing. Measure the amount that crosses."""
         for regime_key, expected in (("crr", _CRR_EQUITY_RWEA), ("b31", _B31_EQUITY_RWEA)):
             results, _corep, _report = _run(regime_key)
-            rwea = results.filter(pl.col("reporting_approach_origin") == "equity")["rwa_final"][0]
+            # Keyed on the REFERENCE, not on row 0 of the equity-origin frame: the
+            # equity table now holds three legs (one class (p), two class (o)) and
+            # positional indexing would silently start reading a CIU.
+            rwea = results.filter(pl.col("source_exposure_reference") == EQ_LISTED)["rwa_final"][0]
             assert rwea == pytest.approx(expected), (
                 f"{regime_key}: equity RWEA {rwea} is not the pack's listed-equity weight "
                 f"on 1,000,000 — the scope assertions below would not discriminate"
@@ -510,21 +556,44 @@ class TestCrrExcludesIrbMethodEquity:
     def test_c_02_00_row_0210_reports_no_sa_equity_under_crr(self) -> None:
         """The other side of the same boundary. ``c02.py`` routes an
         ``irb_simple`` leg away from row 0210 (the SA equity row) by design, so
-        row 0210 is 0.00 while the book holds 2,900,000 of equity RWEA. A
+        row 0210 is 0.00 while the book holds 25,100,000 of equity-table RWEA. A
         C 07.00 equity sheet would therefore have nothing on C 02.00 to tie to —
-        which is what ``v4244_i`` detects."""
+        which is what ``v4244_i`` detects.
+
+        The adequacy figure is the WHOLE equity table, widened by P2.54 from
+        2,900,000 to 25,100,000: under CRR this portfolio's two CIU legs take the
+        same Art. 155(2) path as the listed one (``_resolve_approach`` never reads
+        ``equity_type``), so they are equally excluded and equally part of the
+        "row 0210 is 0.00 for a REASON" claim. Row 0200 — class (o)'s own row —
+        is asserted alongside it, because after P2.54 a CIU leaking into C 07.00
+        under CRR would land there rather than on 0210 and the original
+        single-row assertion would not have seen it.
+        """
         results, corep, _report = _run("crr")
         assert corep.c_02_00 is not None
 
-        row = corep.c_02_00.filter(pl.col("row_ref") == "0210")
-        assert row.height == 1
-        assert (row["0010"][0] or 0.0) == pytest.approx(0.0)
+        for row_ref in ("0210", "0200"):
+            row = corep.c_02_00.filter(pl.col("row_ref") == row_ref)
+            assert row.height == 1, row_ref
+            assert (row["0010"][0] or 0.0) == pytest.approx(0.0), (
+                f"C 02.00 r{row_ref} reports {row['0010'][0]} under CRR; every leg off the "
+                "equity table is Art. 155(2) IRB-method here, so both the SA equity row "
+                "(p) and the SA CIU row (o) must be 0.00 and the RWEA sits in r0420"
+            )
 
         book_equity_rwea = results.filter(pl.col("reporting_approach_origin") == "equity")[
             "rwa_final"
         ].sum()
-        assert book_equity_rwea == pytest.approx(_CRR_EQUITY_RWEA), (
-            "the CRR book holds no equity RWEA, so row 0210 being 0.00 is not evidence of anything"
+        assert book_equity_rwea == pytest.approx(_CRR_EQUITY_TABLE_RWEA), (
+            "the CRR book holds no equity-table RWEA, so rows 0200/0210 being 0.00 is "
+            "not evidence of anything"
+        )
+        irb_equity = corep.c_02_00.filter(pl.col("row_ref") == "0420")["0010"][0]
+        assert irb_equity == pytest.approx(_CRR_EQUITY_TABLE_RWEA), (
+            f"C 02.00 r0420 ('Equity IRB') reports {irb_equity} against a book carrying "
+            f"{_CRR_EQUITY_TABLE_RWEA} of Art. 155(2) equity-table RWEA. Without this the "
+            "0.00 on rows 0200/0210 is consistent with the RWEA having been dropped "
+            "entirely rather than re-homed"
         )
 
     def test_the_eba_sa_equity_tie_rule_does_not_fail_under_crr(self) -> None:

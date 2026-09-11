@@ -77,8 +77,8 @@ Cell semantics (recorded decisions, this slice):
   template. C 09.02 is the IRB book INCLUDING slotting (the retired inline
   comment claiming exclusion was misleading).
 - The reverse-map row keying handles the plain class rows: a row whose key
-  is not a ``C09_01_SA_CLASS_MAP`` value AND not an RE/SL/SME sub-row key
-  renders ALL-NULL (the short-term and CIU sub-rows stay permanently null —
+  is not a ``C09_01_SA_CLASS_MAP`` value AND not an RE/SL/SME/CIU-approach
+  sub-row key renders ALL-NULL (the short-term sub-row stays permanently null —
   recorded dead code); the corporate rows fan in corporate + corporate_sme +
   specialised_lending; retail fans in retail_other (+ retail_qrre /
   retail_mortgage per template). The B31-only RE rows (0090-0095) and SA
@@ -552,10 +552,24 @@ def _c09_01_derived_exprs(cols: set[str], rwa_col: str | None) -> list[pl.Expr]:
     return exprs
 
 
+#: Rows 0141-0143 — the Art. 132/132A approach decomposition of the CIU row
+#: 0140, declared in BOTH regimes. Keyed on the ``ciu_approach`` carrier, exactly
+#: as C 07.00 rows 0281-0283 are (``corep/c07.py::_CIU_ROW_APPROACH``), because an
+#: approach is not an exposure class and no ``C09_01_SA_CLASS_MAP`` value can
+#: reach these keys. Leaving them null while row 0140 carries a figure breaks
+#: ``boe_b0731`` / ``v09798_m`` (r0140 = r0141 + r0142 + r0143) and
+#: ``boe_b0996``-``boe_b1001`` (each row against its OF 07.00 r0282/r0283 twin).
+_C09_01_CIU_APPROACH: dict[str, str] = {
+    "ciu_look_through": "look_through",
+    "ciu_mandate": "mandate_based",
+    "ciu_fallback": "fallback",
+}
+
+
 def _c09_01_row_pred(row_def: COREPRow, basis_col: str) -> RowPredicate | None:
     """The reverse-map keying over ``basis_col``: rows whose key is not a
-    class-map VALUE and not an RE/SL/SME sub-row key are permanently null
-    (the short-term and CIU sub-rows — recorded dead code).
+    class-map VALUE, not an RE/SL/SME sub-row key and not a CIU approach key are
+    permanently null (the short-term sub-row — recorded dead code).
 
     An "of which: SME" row (0075/0085/0095, ``_C09_01_SME_PARENT_KEYS``) keys its
     PARENT row's class union narrowed by ``c09_sme``: Annex II defines all three
@@ -576,6 +590,8 @@ def _c09_01_row_pred(row_def: COREPRow, basis_col: str) -> RowPredicate | None:
     key = row_def.exposure_class_value
     if key is None:
         return None
+    if key in _C09_01_CIU_APPROACH:
+        return RowPredicate(equals=(("ciu_approach", _C09_01_CIU_APPROACH[key]),))
     re_sl = _c09_01_re_sl_pred(key, basis_col)
     if re_sl is not None:
         return re_sl

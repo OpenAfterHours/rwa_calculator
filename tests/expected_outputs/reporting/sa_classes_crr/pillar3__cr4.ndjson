@@ -11,7 +11,7 @@
 {"row_ref":"11","row_name":"Items associated with particularly high risk","a":null,"b":null,"c":null,"d":null,"e":null,"f":null}
 {"row_ref":"12","row_name":"Covered bonds","a":13000000.0,"b":0.0,"c":13000000.0,"d":0.0,"e":2000000.0,"f":0.15384615384615385}
 {"row_ref":"13","row_name":"Short-term claims on institutions and corporates","a":null,"b":null,"c":null,"d":null,"e":null,"f":null}
-{"row_ref":"14","row_name":"Collective investment undertakings","a":null,"b":null,"c":null,"d":null,"e":null,"f":null}
+{"row_ref":"14","row_name":"Collective investment undertakings","a":0.0,"b":0.0,"c":0.0,"d":0.0,"e":0.0,"f":null}
 {"row_ref":"15","row_name":"Equity","a":0.0,"b":0.0,"c":0.0,"d":0.0,"e":0.0,"f":null}
 {"row_ref":"16","row_name":"Other items","a":0.0,"b":0.0,"c":0.0,"d":0.0,"e":0.0,"f":null}
 {"row_ref":"17","row_name":"Total","a":49000000.0,"b":0.0,"c":49000000.0,"d":0.0,"e":21500000.0,"f":0.4387755102040816}

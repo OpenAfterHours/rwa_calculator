@@ -482,7 +482,7 @@ B31_SA_ROW_SECTIONS: list[RowSection] = [
 # the class TOTAL — a ``corporate_sme`` sheet beside ``corporate`` left point (g)
 # reported nowhere and row 0020 "of which: SME" null on the sheet that carries it.
 #
-# 12 of the 19 keys map to themselves. The three fan-ins are the families split
+# 13 of the 20 keys map to themselves. The three fan-ins are the families split
 # FINER here than in the template. Every distinction the template DECLARES is
 # still reported, on the row axis; the merge loses only distinctions the template
 # never asked for:
@@ -501,8 +501,10 @@ B31_SA_ROW_SECTIONS: list[RowSection] = [
 # ``real_estate`` is PS1/26's own name for (i) (Table A2 row (7), "Articles 124 to
 # 124L"), deliberately NOT ``C09_01_SA_CLASS_MAP``'s vocabulary, which fans the
 # family onto ``retail_mortgage`` — a name reading as retail-only to any reader
-# a sheet key reaches. (o) CIU has no ``ExposureClass`` member here so it has no
-# entry, matching the empty ``bundle_keys`` on its z-code in validations/scope.py.
+# a sheet key reaches. (o) CIU self-maps in BOTH regimes: (o) and (p) are
+# disjoint, told apart by the risk-weight article (Arts. 132-132C vs Art. 133),
+# so a CIU on the (p) sheet would leave (o) empty by construction — what COREP
+# Annex II ¶61 exists to prevent. z0015's ``bundle_keys`` binds this key.
 #
 # TOTAL over ``ExposureClass``; a value outside it passes through UNCHANGED
 # (``corep/c07.py::_art112_sheet_key``) so nothing can vanish, and ``c07_plans``
@@ -525,6 +527,7 @@ C07_00_SA_SHEET_MAP: dict[str, str] = {
     "defaulted": "defaulted",  # (j)
     "high_risk": "high_risk",  # (k)
     "covered_bond": "covered_bond",  # (l)
+    "ciu": "ciu",  # (o)
     "equity": "equity",  # (p)
     "other": "other",  # (q)
 }
@@ -1673,10 +1676,12 @@ B31_C02_00_COLUMN_REFS: list[str] = [c.ref for c in B31_C02_00_COLUMNS]
 #                        <- retail_mortgage + the Art. 124A/124H loan-splitter
 #                           legs, the same union as C 09.01 row 0090
 #                           (c09.py::_C09_01_RE_CLASSES)
-# Rows 0190 (n, short-term assessment) and 0200 (o, CIU) have NO key: this
-# calculator emits no exposure in either class, exactly as ``_C07_SHEETS`` gives
-# s0014 / s0015 empty bundle keys. An absent key zero-fills the row; it never
-# silently re-homes RWEA into a neighbouring class.
+#   0200 (o) CIU      <- ciu, stamped off ``equity_type`` in
+#                        engine/aggregator/_equity_prep.py; (o) and (p) are
+#                        disjoint, so 0200 is NOT an of-which of 0210
+# Row 0190 (n) alone has NO key: this calculator emits no short-term-assessment
+# exposure, as ``_C07_SHEETS`` gives s0014 empty bundle keys. An absent key drops
+# the RWEA out of the breakdown SILENTLY (measured: ``ciu`` lost 28,000,000).
 C02_00_SA_CLASS_MAP: dict[str, str] = {
     "central_govt_central_bank": "0070",
     "rgla": "0080",
@@ -1695,6 +1700,7 @@ C02_00_SA_CLASS_MAP: dict[str, str] = {
     "defaulted": "0160",
     "high_risk": "0170",
     "covered_bond": "0180",
+    "ciu": "0200",
     "equity": "0210",
     "other": "0211",
 }
@@ -2020,6 +2026,8 @@ C09_01_SA_CLASS_MAP: dict[str, str] = {
     "defaulted": "defaulted",
     "high_risk": "high_risk",
     "covered_bond": "covered_bond",
+    # Art. 112(1)(o) row 0140; rows 0141-0143 key ``ciu_approach``, not a class.
+    "ciu": "ciu",
     "equity": "equity",
     "other": "other",
     "specialised_lending": "corporate",

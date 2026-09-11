@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import polars as pl
 
-from rwa_calc.domain.enums import ApproachType
+from rwa_calc.domain.enums import ApproachType, ExposureClass
 
 
 def prepare_equity_results(
@@ -49,7 +49,32 @@ def prepare_equity_results(
 
     result = equity_results
     if "exposure_class" not in cols:
-        result = result.with_columns([pl.lit("equity").alias("exposure_class")])
+        # Art. 112(1)(o) CIU vs (p) equity. The two letters are DISJOINT in both
+        # regimes and are told apart by the article that supplies the risk
+        # weight — Arts. 132-132C for (o), Art. 133 for (p) — so this keys
+        # exactly what the risk weight keyed: ``equity_type == "ciu"``, the same
+        # discriminator as ``engine/equity/calculator.py::_append_ciu_branches``.
+        # Regime-BLIND with no Feature to read: PS1/26 Art. 112(2) Table A2 ranks
+        # (o) at row (2) above (p) at row (3), and the COREP Annex II decision
+        # tree answers its point-(p) gate ("see also Article 133 CRR") NO for a
+        # CIU and routes it to the rank-5 (l)+(o) gate, which states those
+        # classes are "disjoint among themselves". It is not a pack CategoryMap
+        # entry because ``entity_type`` cannot express a CIU — a wrapper's
+        # counterparty is an ordinary corporate or equity entity.
+        #
+        # Two steps, (p) first and the (o) override second, so the override is a
+        # no-op rather than a raise on a frame carrying no ``equity_type`` at all
+        # (the regex selector expands to nothing): the fallback direction is the
+        # pre-existing "every equity-file leg is class (p)" behaviour, never an
+        # unstamped class that would drop the leg out of the C 02.00 breakdown.
+        result = result.with_columns(
+            [pl.lit(ExposureClass.EQUITY.value).alias("exposure_class")]
+        ).with_columns(
+            pl.when(pl.col("^equity_type$").str.to_lowercase() == "ciu")
+            .then(pl.lit(ExposureClass.CIU.value))
+            .otherwise(pl.col("exposure_class"))
+            .alias("exposure_class")
+        )
 
     prepared = [
         pl.lit(ApproachType.EQUITY.value).alias("approach_applied"),
@@ -95,6 +120,26 @@ def prepare_equity_results(
         # excludes IRB-method equity (COREP Annex II ¶50), so no admitted leg
         # reports a netted figure as its gross.
         pl.col("ead_final").alias("drawn_amount"),
+        # Pre-supporting-factor RWEA. This is an ALIAS, not a shortcut: CRR
+        # Art. 501 (SME) and Art. 501a (infrastructure) apply to credit exposures
+        # computed under Chapters 2 and 3 of Title II Part Three, and an equity
+        # holding or CIU wrapper is outside both factors' scope entirely — there
+        # is no SME turnover test and no qualifying-infrastructure test to pass,
+        # so no factor can ever be applied and the pre-factor RWEA IS the RWEA.
+        # The Art. 501/501a adjustment columns are therefore a true 0.0, not a
+        # missing figure.
+        #
+        # Resolved HERE for the same reason as the three carriers above:
+        # ``rwa_pre_factor`` is written by ``engine/sa/calculator.py`` for the SA
+        # branch and ``engine/irb/calculator.py`` for IRB, and an equity-file leg
+        # passes NEITHER, so the reporting projection read an injected null and
+        # published 0.00 against a real RWEA — breaking ``0215 + 0216 + 0217 =
+        # 0220`` (C 07.00, v0329_m / v09747_m), ``0080 + 0081 + 0082 = 0090``
+        # (C 09.01, v0407_m) and the 35%-band ERROR rule v0321_m, and reconciling
+        # v5803_q at 0 = 0 against a real figure. CRR-only: the Art. 501/501a
+        # columns do not exist on OF 07.00 / OF 09.01, and no Basel 3.1 cell
+        # reads this carrier.
+        pl.col(rwa_col).alias("rwa_pre_factor"),
     ]
     if include_sa_equivalent:
         prepared.append(pl.col(rwa_col).alias("sa_rwa"))

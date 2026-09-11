@@ -20,10 +20,10 @@
 {"row_ref":"0100","row_name":"Exposures in default","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
 {"row_ref":"0110","row_name":"Exposures associated with particularly high risk","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
 {"row_ref":"0120","row_name":"Eligible covered bonds","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
-{"row_ref":"0140","row_name":"Collective investment undertakings (CIU)","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
+{"row_ref":"0140","row_name":"Collective investment undertakings (CIU)","0010":8000000.0,"0020":0.0,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":8000000.0,"0090":2800000.0}
 {"row_ref":"0141","row_name":"  Look-through approach","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
-{"row_ref":"0142","row_name":"  Mandate-based approach","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
+{"row_ref":"0142","row_name":"  Mandate-based approach","0010":8000000.0,"0020":0.0,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":8000000.0,"0090":2800000.0}
 {"row_ref":"0143","row_name":"  Fall-back approach","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
 {"row_ref":"0150","row_name":"Subordinated debt, equity and other own funds instruments","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
 {"row_ref":"0160","row_name":"Other items","0010":null,"0020":null,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":null,"0090":null}
-{"row_ref":"0170","row_name":"Total exposures","0010":25000000.0,"0020":0.0,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":14500000.0,"0090":9750000.0}
+{"row_ref":"0170","row_name":"Total exposures","0010":33000000.0,"0020":0.0,"0040":null,"0050":null,"0055":null,"0060":null,"0061":null,"0070":null,"0075":22500000.0,"0090":12550000.0}

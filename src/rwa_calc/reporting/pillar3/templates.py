@@ -151,7 +151,10 @@ SA_DISCLOSURE_CLASSES: list[tuple[str, str, tuple[str, ...]]] = [
     ("11", "Items associated with particularly high risk", ()),
     ("12", "Covered bonds", ("covered_bond",)),
     ("13", "Short-term claims on institutions and corporates", ()),
-    ("14", "Collective investment undertakings", ()),
+    # Art. 112(1)(o). Disjoint from row 15: (o) and (p) are told apart by the
+    # article supplying the risk weight (Arts. 132-132C vs Art. 133), so a CIU
+    # leaves row 15 when it becomes its own class rather than double-counting.
+    ("14", "Collective investment undertakings", ("ciu",)),
     ("15", "Equity", ("equity",)),
     ("16", "Other items", ("other",)),
 ]
@@ -996,6 +999,49 @@ CMS2_SA_CLASS_MAP: dict[str, tuple[str, ...]] = {
     "0053": ("retail_mortgage",),
     "0060": ("other", "rgla", "covered_bond", "defaulted"),
 }
+
+# The population row 0070 "Total" decomposes — i.e. CMS2's own credit-risk RWA.
+#
+# CMS1 row 0070's instruction carves "the RWA arising from equity investments in
+# funds (rows 12 to 14 in Template OV1)" OUT of credit-risk RWA, and CMS2
+# decomposes exactly that credit-risk RWA ("Asset classes that are considered for
+# RWA credit risk"), so an Art. 112(1)(o) CIU is outside this template: it gets
+# NO row, and it must not be counted in the Total either. The Total bound
+# ``Sum(...)`` with no class predicate at all, so the breakdown stopped footing
+# to it by the whole CIU RWEA in columns c and d — measured GBP 28,000,000, with
+# column d the full-standardised output-floor comparison. Equity itself STAYS
+# (row 0030): the carve-out is equity investments in FUNDS, not equity generally.
+#
+# This is an ALLOW-list because ``RowPredicate`` has no negation, and it is
+# deliberately every sealed ``ExposureClass`` value EXCEPT ``ciu`` rather than
+# the union of the row tuples above: four classes (``high_risk``,
+# ``international_organisation`` and the two loan-splitter RE classes) are
+# claimed by no CMS2 row today, and whitelisting only the rows' own classes
+# would silently drop them from the Total as well — understating the floor
+# comparison instead of curing it. Their absence from the breakdown is a
+# pre-existing CMS2 mapping gap, tracked separately; it is not this carve-out.
+# A NEW ``ExposureClass`` member must be added here as well as to a row.
+CMS2_TOTAL_CLASSES: tuple[str, ...] = (
+    "central_govt_central_bank",
+    "institution",
+    "corporate",
+    "corporate_sme",
+    "retail_mortgage",
+    "residential_mortgage",
+    "commercial_mortgage",
+    "retail_qrre",
+    "retail_other",
+    "specialised_lending",
+    "equity",
+    "defaulted",
+    "pse",
+    "mdb",
+    "international_organisation",
+    "rgla",
+    "covered_bond",
+    "high_risk",
+    "other",
+)
 
 
 # ---------------------------------------------------------------------------

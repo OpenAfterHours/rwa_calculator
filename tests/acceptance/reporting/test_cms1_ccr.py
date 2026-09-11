@@ -77,7 +77,7 @@ from tests.acceptance.reporting.test_reporting_golden import _REGIMES as _RICH_R
 from tests.fixtures.reporting_ccr_portfolio import build_reporting_ccr_bundle
 from tests.fixtures.reporting_portfolio import build_reporting_bundle
 
-from rwa_calc.domain.enums import RiskType
+from rwa_calc.domain.enums import ExposureClass, RiskType
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from rwa_calc.reporting.corep.generator import COREPGenerator
 from rwa_calc.reporting.pillar3.generator import Pillar3Generator
@@ -89,11 +89,30 @@ _ABS = 1e-6
 # The four CMS1 columns.
 _COLS: tuple[str, ...] = ("a", "b", "c", "d")
 
-# The three populated CMS1 rows.
+# The three CMS1 rows that are populated in all four columns.
 _ROWS: tuple[str, ...] = ("0010", "0020", "0080")
 
 # Out of scope for a credit-risk calculator — null, not zero.
-_NULL_ROWS: tuple[str, ...] = ("0030", "0040", "0050", "0060", "0070")
+#
+# Row 0070 ("Residual RWA") left this set with P2.54: it is where PS1/26 puts "the
+# RWA arising from equity investments in funds (rows 12 to 14 in Template OV1)",
+# which IS in a credit-risk calculator's scope. It is not in ``_ROWS`` either,
+# because its column a is legitimately null — see
+# ``test_cms1_residual_row_carries_the_equity_investments_in_funds``, which owns it
+# and asserts the published 0080 = 0010 + ... + 0070 footing over it.
+_NULL_ROWS: tuple[str, ...] = ("0030", "0040", "0050", "0060")
+
+#: The published row 0080 decomposition: "The total sum of cells 0010/c, 0020/c,
+#: 0030/c, 0040/c, 0050/c, 0060/c and 0070/c".
+_TOTAL_TERMS: tuple[str, ...] = ("0010", "0020", "0030", "0040", "0050", "0060", "0070")
+
+#: Row 0070 on each portfolio, columns b/c/d. ``rich`` carries the two
+#: Art. 112(1)(o) CIU legs (2,000,000 at the Art. 132(2) 1,250% fall-back +
+#: 4,000,000 at a 75% mandate weight); ``ccr`` holds no equity investments in funds
+#: at all, so the row is null rather than a populated zero — "not reported here",
+#: which is a different claim from "nil". Column a is null on BOTH: a CIU is never
+#: modelled, and the published 0080/a formula omits 0070/a.
+_RESIDUAL_BCD: dict[str, float | None] = {"rich": 28_000_000.0, "ccr": None}
 
 # Row 0020's population ("Counterparty credit risk"). Keyed by risk_type, never by
 # the approach label: under CRR the CCR legs carry ``standardised`` and under Basel
@@ -130,19 +149,31 @@ class _Run:
     def c02_row(self, ref: str) -> dict[str, float | str | None]:
         return _one_row(self.c02, ref, "C 02.00")
 
-    def rwa_final(self, *, ccr: bool | None = None) -> float:
+    def rwa_final(self, *, ccr: bool | None = None, residual: bool | None = None) -> float:
         """Sum of ``rwa_final`` over a row's population (None = the whole book)."""
-        return self._sum("rwa_final", ccr=ccr)
+        return self._sum("rwa_final", ccr=ccr, residual=residual)
 
-    def sa_rwa(self, *, ccr: bool | None = None) -> float:
+    def sa_rwa(self, *, ccr: bool | None = None, residual: bool | None = None) -> float:
         """Sum of ``sa_rwa`` over a row's population (None = the whole book)."""
-        return self._sum("sa_rwa", ccr=ccr)
+        return self._sum("sa_rwa", ccr=ccr, residual=residual)
 
-    def _sum(self, col: str, *, ccr: bool | None) -> float:
+    def _sum(self, col: str, *, ccr: bool | None, residual: bool | None) -> float:
+        """``ccr`` selects row 0020's risk types; ``residual`` selects row 0070's class.
+
+        The CMS1 row axis cuts the book on BOTH, and on different carriers: row
+        0020 on ``risk_type`` and row 0070 on the Art. 112(1)(o) exposure class
+        (PS1/26 row 0070 = "the RWA arising from equity investments in funds").
+        Row 0010 is the complement of both — ``ccr=False, residual=False`` — and
+        reading it as the complement of the risk types alone over-counts it by the
+        whole CIU book, which is what P2.54 made observable.
+        """
         data = self.ledger
         if ccr is not None:
             mask = pl.col("risk_type").is_in(_CCR_RISK_TYPES).fill_null(value=False)
             data = data.filter(mask if ccr else ~mask)
+        if residual is not None:
+            is_ciu = (pl.col("exposure_class") == ExposureClass.CIU.value).fill_null(value=False)
+            data = data.filter(is_ciu if residual else ~is_ciu)
         return float(data[col].sum()) if data.height else 0.0
 
 
@@ -152,14 +183,27 @@ class _Run:
 
 # portfolio -> row_ref -> column_ref -> value.
 #
-# rich: 14 loans + 1 equity, NO CCR. Modelled = F-IRB 48,244,060.92 + A-IRB
-#   14,625,069.66 + slotting 52,500,000.00 = 115,369,130.58; standardised = the SA
-#   book + equity = 22,080,833.33. They sum to the whole portfolio (== C 02.00 row
-#   0010 TREA). Column d is the book's whole sa_rwa: 164,155,833.33 — including
-#   equity's own 2,500,000 standardised-equivalent RWA (B31 equity is SA-only,
-#   Art. 147A; the aggregator now populates equity's sa_rwa — R4).
+# rich: 14 loans + 1 equity + 2 CIUs, NO CCR. Modelled = F-IRB 48,244,060.92 +
+#   A-IRB 14,625,069.66 + slotting 52,500,000.00 = 115,369,130.58; standardised =
+#   the SA book + equity + CIU = 50,080,833.33. They sum to the whole portfolio
+#   (== C 02.00 row 0010 TREA). Column d is the book's whole sa_rwa:
+#   192,155,833.33 — including equity's own 2,500,000 and the CIU legs' 28,000,000
+#   standardised-equivalent RWA (B31 equity is SA-only, Art. 147A; the aggregator
+#   populates an equity-table leg's sa_rwa as its rwa — R4).
 #   Row 0020 is a populated ZERO — the book has no CCR, which is a claim the
 #   calculator can make; Total therefore equals row 0010.
+#
+#   **P2.54 widened column b and the c/d TOTALS by 28,000,000 — and row 0010 did
+#   NOT move.** The two Art. 112(1)(o) CIU legs land in row 0070 "Residual RWA",
+#   not in row 0010, because PS1/26's row 0070 instruction reads "RWA not captured
+#   within rows 0010 to 0060 (ie the RWA arising from equity investments in funds
+#   (rows 12 to 14 in Template OV1), settlement risk ...)". Row 0080's published
+#   formula is the sum of rows 0010 to 0070, so the Total keeps them. The COLUMN
+#   partition is unaffected by either: a CIU is a standardised-approach exposure
+#   (Art. 132/132A sit in the Credit Risk: Standardised Approach (CRR) Part), so
+#   it is in b, not a. Column a of row 0070 is NULL rather than 0.00, which the
+#   published 0080/a formula corroborates — it sums 0010/a, 0020/a, 0040/a and
+#   0050/a and does not mention 0070/a at all.
 # ccr: one SA corporate loan (2,500,000) + two SA-CCR netting sets (1,560,296.72).
 #   No models at all -> column a is 0.0 EVERYWHERE, and every row is degenerate
 #   (b == c == d) because a 100%-standardised book IS its own SA equivalent.
@@ -176,9 +220,9 @@ _EXPECTED: dict[str, dict[str, dict[str, float]]] = {
         "0020": {"a": 0.0, "b": 0.0, "c": 0.0, "d": 0.0},
         "0080": {
             "a": 115_369_130.58029616,
-            "b": 22_080_833.333333332,
-            "c": 137_449_963.9136295,
-            "d": 164_155_833.3333333,
+            "b": 50_080_833.33333333,
+            "c": 165_449_963.91362947,
+            "d": 192_155_833.3333333,
         },
     },
     "ccr": {
@@ -260,7 +304,7 @@ def test_cms1_out_of_scope_rows_stay_null(portfolio: str, runs: dict[str, _Run])
 
     Arrange: a Basel 3.1 reporting portfolio.
     Act:     run the pipeline -> Pillar 3 CMS1.
-    Assert:  every cell of rows 0030-0070 is null.
+    Assert:  every cell of rows 0030-0060 is null.
     """
     # Arrange + Act
     run = runs[portfolio]
@@ -274,6 +318,56 @@ def test_cms1_out_of_scope_rows_stay_null(portfolio: str, runs: dict[str, _Run])
         )
 
 
+@pytest.mark.parametrize("portfolio", _PORTFOLIOS)
+def test_cms1_residual_row_carries_the_equity_investments_in_funds(
+    portfolio: str, runs: dict[str, _Run]
+) -> None:
+    """Row 0070 is where the Art. 112(1)(o) CIU RWA goes, and row 0080 keeps it.
+
+    PS1/26, UKB CMS1 row 0070: "RWA not captured within rows 0010 to 0060 (ie the
+    RWA arising from equity investments in funds (rows 12 to 14 in Template OV1),
+    settlement risk (row 15 in Template OV1), ...)". So a CIU is NOT in row 0010 —
+    which is why CMS2, whose population is "as in row 1 of Template CMS1", excludes
+    it too — and IS in row 0080, whose published formula sums 0010/c to 0070/c.
+
+    The footing is the assertion that makes the two halves inseparable: binding
+    row 0070 without shedding the CIU from row 0010 double-counts it in the Total,
+    and shedding it from 0010 without binding 0070 loses it altogether. Neither is
+    visible from either cell alone.
+
+    ``test_cms1_row_axis_foots_to_the_total`` holds the footing itself, over the
+    published term list; this test holds the cell.
+
+    Arrange: a Basel 3.1 reporting portfolio (rich carries two CIU legs, ccr none).
+    Act:     run the pipeline -> Pillar 3 CMS1.
+    Assert:  row 0070 b/c/d carry the CIU RWEA (null where the book has none) and
+             column a is null.
+    """
+    # Arrange + Act
+    run = runs[portfolio]
+    residual = run.cms1_row("0070")
+    expected = _RESIDUAL_BCD[portfolio]
+
+    # Assert
+    assert residual["a"] is None, (
+        f"[{portfolio}] CMS1 row 0070 column a reports {residual['a']}; 'equity "
+        "investments in funds' are never modelled, and the published 0080/a formula "
+        "sums 0010/a, 0020/a, 0040/a and 0050/a without mentioning 0070/a."
+    )
+    for col in ("b", "c", "d"):
+        if expected is None:
+            assert residual[col] is None, (
+                f"[{portfolio}] CMS1 row 0070 column {col} reports {residual[col]} on a "
+                "book with no equity investments in funds — null is 'not reported here', "
+                "which is not the same claim as 0.00."
+            )
+            continue
+        assert residual[col] == pytest.approx(expected, rel=_REL, abs=_ABS), (
+            f"[{portfolio}] CMS1 row 0070 column {col} reports {residual[col]}, expected "
+            f"the Article 112(1)(o) CIU RWEA {expected:,.2f}."
+        )
+
+
 # =============================================================================
 # The unconditional tie-outs — the lasting guard
 # =============================================================================
@@ -281,32 +375,73 @@ def test_cms1_out_of_scope_rows_stay_null(portfolio: str, runs: dict[str, _Run])
 
 @pytest.mark.parametrize("portfolio", _PORTFOLIOS)
 def test_cms1_total_ties_to_cms2_total(portfolio: str, runs: dict[str, _Run]) -> None:
-    """CMS1 row 0080 column c == CMS2 row 0070 column c — the internal oracle.
+    """CMS1 (row 0080 - row 0070) column c == CMS2 row 0070 column c — the oracle.
 
     CMS1 and CMS2 are the same book cut two ways (by risk type, by asset class), so
-    their "total actual RWA" is ONE number. CMS2 sums ``rwa_final`` over the whole
-    ledger with no approach filter and is therefore right; CMS1 sums two approach
-    allow-lists whose union is not the book. On the CCR portfolio they disagree by
-    1,560,296.72 — exactly the derivative RWEA. This test is that disagreement,
-    made permanent.
+    the RWA in the scope they SHARE is ONE number. CMS2 sums ``rwa_final`` over its
+    own population with no approach filter and is therefore right about the
+    approach split; CMS1 sums two approach allow-lists whose union is not the book.
+    On the CCR portfolio they disagree by 1,560,296.72 — exactly the derivative
+    RWEA. This test is that disagreement, made permanent.
+
+    **Why the subtraction, and why it is a TIGHTER claim than the bare Total.**
+    This asserted ``CMS1 0080/c == CMS2 0070/c`` while CMS1 rows 0030-0070 were all
+    empty, so the Total WAS the shared scope and the form did not matter. P2.54
+    ended that: the Art. 112(1)(o) CIU legs populate CMS1 row 0070 ("Residual RWA"
+    — PS1/26: "the RWA arising from equity investments in funds (rows 12 to 14 in
+    Template OV1)"), which row 0080 includes by its published formula and which
+    CMS2 excludes, because CMS2's population is "as in row 1 of Template CMS1". So
+    the relation between the two disclosures is now CMS1's Total LESS the rows CMS2
+    does not carry, and stating it that way keeps both halves honest: dropping a
+    population from CMS1 alone, or from CMS2 alone, still breaks it.
+
+    **The published form is ``CMS2 0070/c == CMS1 0010/c``, and the gap to it is
+    ASSERTED rather than described.** CMS2 §1: "As in row 1 of Template CMS1, it
+    excludes counterparty credit risk, credit valuation adjustments and
+    securitisation exposures in the banking book." CMS2 implements the CIU half of
+    that and not the CCR half: measured on the ``ccr`` book its row 0070 column c
+    is 4,060,296.72 — the whole book, SA-CCR legs included — against CMS1 row
+    0010's 2,500,000. So the published form holds exactly on a CCR-free book and
+    is short by precisely the CCR charge on a CCR-bearing one, and both are
+    asserted below, keyed on which kind of book this is. Pre-existing, masked by
+    the old 0080 form, and owed its own item; when CMS2 narrows, the second branch
+    goes red, the subtraction above becomes redundant, and both can collapse into
+    the published equality.
 
     Arrange: a Basel 3.1 reporting portfolio.
     Act:     run the pipeline -> Pillar 3 CMS1 + CMS2.
-    Assert:  CMS1 0080/c == CMS2 0070/c.
+    Assert:  CMS1 0080/c - CMS1 0070/c == CMS2 0070/c; and the published
+             ``CMS2 0070/c == CMS1 0010/c`` exactly, less the CCR charge.
     """
     # Arrange + Act
     run = runs[portfolio]
     cms1_total = _num(run.cms1_row("0080"), "c")
+    cms1_residual = run.cms1_row("0070")["c"] or 0.0
+    cms1_credit_risk = _num(run.cms1_row("0010"), "c")
+    ccr_charge = _num(run.cms1_row("0020"), "c")
     cms2_total = _num(run.cms2_row("0070"), "c")
 
     # Assert
-    assert cms1_total == pytest.approx(cms2_total, rel=_REL, abs=_ABS), (
-        f"[{portfolio}] the two output-floor comparison disclosures disagree on the "
-        f"total actual RWA: CMS1 row 0080 column c reports {cms1_total}, CMS2 row 0070 "
-        f"column c reports {cms2_total} (difference "
-        f"{(cms2_total or 0.0) - (cms1_total or 0.0):,.6f}). CMS2 totals the whole "
-        "ledger; CMS1 totals two approach allow-lists that omit standardised_ccr, so "
-        "the SA-CCR legs fall into neither column a nor column b."
+    assert cms1_total - cms1_residual == pytest.approx(cms2_total, rel=_REL, abs=_ABS), (
+        f"[{portfolio}] the two output-floor comparison disclosures disagree on the RWA "
+        f"they share: CMS1 row 0080 column c reports {cms1_total} less row 0070's "
+        f"{cms1_residual}, CMS2 row 0070 column c reports {cms2_total} (difference "
+        f"{(cms2_total or 0.0) - (cms1_total - cms1_residual):,.6f}). Two known causes, "
+        "and the sign tells them apart: CMS1 LOW means CMS1's two approach allow-lists "
+        "omit standardised_ccr so the SA-CCR legs fall into neither column a nor column "
+        "b; CMS1 HIGH by the Art. 112(1)(o) CIU RWEA means that population is counted "
+        "in a CMS1 row other than 0070 while CMS2 excludes it."
+    )
+    assert (ccr_charge > 0.0) == (portfolio == "ccr"), (
+        f"[{portfolio}] CMS1 row 0020 reports a CCR charge of {ccr_charge}; this test "
+        "branches on whether the book HAS counterparty credit risk, and the two "
+        "portfolios have swapped character"
+    )
+    assert cms2_total == pytest.approx(cms1_credit_risk + ccr_charge, rel=_REL, abs=_ABS), (
+        f"[{portfolio}] CMS2 row 0070 column c reports {cms2_total} against CMS1 row "
+        f"0010's {cms1_credit_risk} plus a {ccr_charge} CCR charge. On a CCR-free book "
+        "these are the published equality; on a CCR-bearing one the difference is the "
+        "unimplemented half of CMS2 §1's exclusion, and any OTHER difference is new."
     )
 
 
@@ -331,7 +466,8 @@ def test_cms1_columns_partition_the_row(
     run = runs[portfolio]
     row = run.cms1_row(row_ref)
     ccr_scope = {"0010": False, "0020": True, "0080": None}[row_ref]
-    ledger_rwa = run.rwa_final(ccr=ccr_scope)
+    residual_scope = {"0010": False, "0020": None, "0080": None}[row_ref]
+    ledger_rwa = run.rwa_final(ccr=ccr_scope, residual=residual_scope)
 
     # Assert
     assert row["a"] is not None and row["b"] is not None, (
@@ -352,15 +488,22 @@ def test_cms1_columns_partition_the_row(
 
 @pytest.mark.parametrize("portfolio", _PORTFOLIOS)
 def test_cms1_row_axis_foots_to_the_total(portfolio: str, runs: dict[str, _Run]) -> None:
-    """Row 0010 + row 0020 == row 0080, in every column.
+    """Rows 0010 to 0070 == row 0080, in every column.
 
-    "Credit risk (excluding CCR)" and "Counterparty credit risk" partition the
-    credit-risk book, so the Total row is their SUM — today it is a byte-for-byte
-    copy of row 0010's cell specs, which is only a total on a book with no CCR.
+    "Credit risk (excluding CCR)", "Counterparty credit risk" and the other risk
+    categories partition the book, so the Total row is their SUM — it was once a
+    byte-for-byte copy of row 0010's cell specs, which is only a total on a book
+    with no CCR and nothing in row 0070.
+
+    The term list is the published one ("The total sum of cells 0010/c, 0020/c,
+    0030/c, 0040/c, 0050/c, 0060/c and 0070/c") rather than the two rows this
+    estate happens to populate: P2.54 put the Art. 112(1)(o) CIU RWA in row 0070,
+    and a footing written over 0010 + 0020 alone would have read that as a
+    discrepancy in the Total.
 
     Arrange: a Basel 3.1 reporting portfolio.
     Act:     run the pipeline -> Pillar 3 CMS1.
-    Assert:  for every column, row 0010 + row 0020 == row 0080.
+    Assert:  for every column, rows 0010-0070 sum to row 0080.
     """
     # Arrange + Act
     run = runs[portfolio]
@@ -372,12 +515,11 @@ def test_cms1_row_axis_foots_to_the_total(portfolio: str, runs: dict[str, _Run])
             f"[{portfolio}] CMS1 rows 0010/0020 column {col} must both be populated to "
             f"foot to the Total (got {non_ccr[col]}, {ccr[col]})."
         )
-        assert _num(non_ccr, col) + _num(ccr, col) == pytest.approx(
-            total[col], rel=_REL, abs=_ABS
-        ), (
-            f"[{portfolio}] CMS1 does not foot on column {col}: row 0010 "
-            f"({non_ccr[col]}) + row 0020 ({ccr[col]}) != row 0080 ({total[col]}). The "
-            "Total row must be a total, not a duplicate of row 0010."
+        terms = sum(run.cms1_row(ref)[col] or 0.0 for ref in _TOTAL_TERMS)  # type: ignore[operator]
+        assert terms == pytest.approx(total[col], rel=_REL, abs=_ABS), (
+            f"[{portfolio}] CMS1 does not foot on column {col}: rows {_TOTAL_TERMS} sum "
+            f"to {terms} against row 0080 ({total[col]}). The Total row must be a total, "
+            "not a duplicate of row 0010."
         )
 
 
@@ -431,7 +573,8 @@ def test_cms1_full_sa_column_is_scoped_to_the_rows_population(
     # Arrange + Act
     run = runs[portfolio]
     ccr_scope = {"0010": False, "0020": True, "0080": None}[row_ref]
-    expected = run.sa_rwa(ccr=ccr_scope)
+    residual_scope = {"0010": False, "0020": None, "0080": None}[row_ref]
+    expected = run.sa_rwa(ccr=ccr_scope, residual=residual_scope)
     reported = run.cms1_row(row_ref)["d"]
 
     # Assert

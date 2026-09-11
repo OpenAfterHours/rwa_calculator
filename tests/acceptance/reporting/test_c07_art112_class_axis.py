@@ -71,21 +71,28 @@ _EXPECTED_SHEETS: frozenset[str] = frozenset(
     }
 )
 
-#: Letter (p) is REGIME-DEPENDENT, and the difference is a scope rule rather than
-#: a data one — which is why it is an extra entry rather than a loosening of the
-#: exact set above. Under Basel 3.1 every equity leg is SA (Art. 147A; the pack
-#: Feature ``equity_irb_approaches_available`` is False), and PS1/26 Annex II ¶48
-#: excludes only securitisation and own-funds deductions from OF CR SA, so
-#: ``RP-EQ-LISTED`` opens the (p) sheet. Under CRR the same leg is Art. 155(2)
-#: simple-risk-weight equity, and COREP Annex II ¶50 scopes C 07.00 to "Chapter 2
-#: of Title II of Part Three CRR" — the Standardised Approach — so it is
-#: correctly absent and the live EBA ERROR rule ``v4244_i`` holds it there.
-#: ``test_p1_371_equity_class_p.py`` owns that boundary and its arithmetic; this
-#: entry exists so the exact-set assertion keeps seeing an unexpected EXTRA sheet
-#: without also forbidding the one Basel 3.1 genuinely has.
+#: Letters (o) and (p) are REGIME-DEPENDENT, and the difference is a scope rule
+#: rather than a data one — which is why they are extra entries rather than a
+#: loosening of the exact set above. Under Basel 3.1 every equity-table leg is SA
+#: (Art. 147A; the pack Feature ``equity_irb_approaches_available`` is False), and
+#: PS1/26 Annex II ¶48 excludes only securitisation and own-funds deductions from
+#: OF CR SA, so ``RP-EQ-LISTED`` opens the (p) sheet and the two CIU legs open the
+#: (o) sheet. Under CRR all three are Art. 155(2) simple-risk-weight equity —
+#: ``_resolve_approach`` reads the firm's permissions, never ``equity_type`` — and
+#: COREP Annex II ¶50 scopes C 07.00 to "Chapter 2 of Title II of Part Three CRR",
+#: the Standardised Approach, so both letters are correctly absent and the live
+#: EBA ERROR rule ``v4244_i`` holds (p) there.
+#:
+#: The CRR absence is a property of THIS PORTFOLIO's IRB permission, not of the
+#: CRR regime: the class stamp is regime-blind, and ``off-bs`` — a CRR portfolio
+#: run ``PermissionMode.STANDARDISED`` — does open a CRR (o) sheet
+#: (``test_p2_54_ciu_class_o.py`` owns that control). ``test_p1_371_equity_class_p``
+#: and ``test_p2_54_ciu_class_o`` own the two boundaries and their arithmetic; these
+#: entries exist so the exact-set assertion keeps seeing an unexpected EXTRA sheet
+#: without also forbidding the ones Basel 3.1 genuinely has.
 _EXPECTED_EXTRA_SHEETS: dict[str, frozenset[str]] = {
     "crr": frozenset(),
-    "b31": frozenset({"equity"}),  # (p)
+    "b31": frozenset({"ciu", "equity"}),  # (o), (p)
 }
 
 #: Letter (g): ``LN_CORP_RATED`` 5,000,000 + ``LN_CORP_UNRATED`` 3,000,000
@@ -170,7 +177,13 @@ class TestSheetAxis:
     def test_the_estate_opens_exactly_the_art_112_sheets(self, regime_key: str) -> None:
         _results, corep = _run(regime_key)
 
-        assert set(corep.c07_00) == _EXPECTED_SHEETS | _EXPECTED_EXTRA_SHEETS[regime_key]
+        expected = _EXPECTED_SHEETS | _EXPECTED_EXTRA_SHEETS[regime_key]
+        assert set(corep.c07_00) == expected, (
+            f"[{regime_key}] the C 07.00 sheet axis is {sorted(corep.c07_00)}, expected "
+            f"{sorted(expected)}. An EXTRA sheet means a class is reported under a letter "
+            "the estate does not intend (or a merged letter has been re-split); a MISSING "
+            "one means a population has silently left the template"
+        )
 
     @pytest.mark.parametrize("regime_key", list(_REGIMES))
     def test_every_merged_sheet_has_non_null_money_columns(self, regime_key: str) -> None:

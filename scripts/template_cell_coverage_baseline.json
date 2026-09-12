@@ -203,24 +203,24 @@
     "excludes": {
       "tests/fixtures/reporting_funded_protection_portfolio.py": "WITHHELD from RUNS deliberately, not an oversight. Registering it needs a config electing the Art. 222 SIMPLE Method (_fcsm_config); registered against _sa_config, which defaults to comprehensive, the fixture sits in the gate with its own feature silenced - C 07.00 col 0070 reads 0.00 under comprehensive and non-zero under SIMPLE on the identical bundle, and dropping its two runs left this census at 210 live / 129 dead unchanged, so it contributed no liveness. Registered CORRECTLY it exposes two ERROR-severity supervisory breaks (boe_b0471, v0308_m) that predate the carrier fix, so the registration is filed as a Tier 1 item with the Art. 222 defect rather than banked here. Its canonical config lives in tests/acceptance/reporting/test_funded_protection_coverage.py. Registering it should move the Simple Method (C 07.00 col 0070) and Art. 199 (C 08.01/02 cols 0200/0210, CR7-A cols e/f) columns off NO_FIXTURE."
     },
-    "seconds": 70.0
+    "seconds": 57.4
   },
   "counts": {
     "template_column_pairs": 339,
-    "live": 240,
-    "dead": 99,
+    "live": 245,
+    "dead": 94,
     "emitted_pairs": 329,
     "never_emitted_pairs": 10,
     "non_numeric_columns_excluded": 4,
     "frames": 887,
     "numeric_cells": 262716,
-    "non_null_cells": 53820,
-    "non_zero_cells": 14481,
-    "cell_fill_pct": 5.51
+    "non_null_cells": 53841,
+    "non_zero_cells": 14510,
+    "cell_fill_pct": 5.52
   },
   "caveats": [
-    "reporting/rich/crr: C 02.00: row 0300 (13622029.83) exceeds its class breakdown 0310+0330+0340+0370 (15245.72) by 13606784.12 \u2014 an (approach, class) pair with no row in the layout; the RWEA is counted in the approach total but absent from the of-which rows",
-    "reporting/rich/b31: C 02.00: row 0300 (14625069.66) exceeds its class breakdown 0310+0330+0340+0370 (21574.13) by 14603495.53 \u2014 an (approach, class) pair with no row in the layout; the RWEA is counted in the approach total but absent from the of-which rows",
+    "reporting/rich/crr: C 02.00: row 0300 (14836366.31) exceeds its class breakdown 0310+0330+0340+0370 (15245.72) by 14821120.60 \u2014 an (approach, class) pair with no row in the layout; the RWEA is counted in the approach total but absent from the of-which rows",
+    "reporting/rich/b31: C 02.00: row 0300 (16085419.21) exceeds its class breakdown 0310+0330+0340+0370 (21574.13) by 16063845.09 \u2014 an (approach, class) pair with no row in the layout; the RWEA is counted in the approach total but absent from the of-which rows",
     "reporting/irb-classes/crr: C 02.00: row 0240 (90836481.76) exceeds its class breakdown 0250+0260 (84278464.09) by 6558017.67 \u2014 an (approach, class) pair with no row in the layout; the RWEA is counted in the approach total but absent from the of-which rows",
     "corpus/irb_mix/crr: C 02.00: row 0240 (76971222.15) exceeds its class breakdown 0250+0260 (66967860.77) by 10003361.38 \u2014 an (approach, class) pair with no row in the layout; the RWEA is counted in the approach total but absent from the of-which rows",
     "corpus/irb_mix/crr: C 02.00: row 0300 (28799112.25) exceeds its class breakdown 0310+0330+0340+0370 (22582055.29) by 6217056.96 \u2014 an (approach, class) pair with no row in the layout; the RWEA is counted in the approach total but absent from the of-which rows",
@@ -259,12 +259,6 @@
       "id": "corep/c07_00/0120",
       "reason_code": "ENGINE_CANNOT_PRODUCE",
       "reason": "Volatility adjustment to the exposure - bound to the recorded constant 0.0; the exposure-side He of the comprehensive method is not carried out of the CRM stage.",
-      "status": "always_zero"
-    },
-    {
-      "id": "corep/c07_00/0217",
-      "reason_code": "NO_FIXTURE",
-      "reason": "(-) Infrastructure supporting factor adjustment (CRR) - binds infrastructure_factor_applied; no fixture flags an infrastructure exposure.",
       "status": "always_zero"
     },
     {
@@ -358,12 +352,6 @@
       "status": "always_zero"
     },
     {
-      "id": "corep/c08_01/0257",
-      "reason_code": "NO_FIXTURE",
-      "reason": "(-) Infrastructure supporting factor adjustment (CRR) - binds infrastructure_factor_applied; no fixture flags an infrastructure exposure.",
-      "status": "always_zero"
-    },
-    {
       "id": "corep/c08_01/0281",
       "reason_code": "NO_FIXTURE",
       "reason": "Adjustment to EL due to post-model adjustments (B31) - binds post_model_adjustment_el, a declared input no fixture supplies.",
@@ -445,12 +433,6 @@
       "id": "corep/c08_02/0254",
       "reason_code": "NO_FIXTURE",
       "reason": "Unrecognised exposure adjustments (B31) - binds unrecognised_exposure_adjustment, a declared input column no fixture supplies.",
-      "status": "always_zero"
-    },
-    {
-      "id": "corep/c08_02/0257",
-      "reason_code": "NO_FIXTURE",
-      "reason": "(-) Infrastructure supporting factor adjustment (CRR) - binds infrastructure_factor_applied; no fixture flags an infrastructure exposure.",
       "status": "always_zero"
     },
     {
@@ -592,12 +574,6 @@
       "status": "always_zero"
     },
     {
-      "id": "corep/c09_01/0082",
-      "reason_code": "NO_FIXTURE",
-      "reason": "(-) Infrastructure supporting factor adjustment - no fixture flags an infrastructure exposure.",
-      "status": "always_zero"
-    },
-    {
       "id": "corep/c09_02/0040",
       "reason_code": "ENGINE_CANNOT_PRODUCE",
       "reason": "Observed new defaults for the period - bound to the recorded constant None; a period default-event count the ledger does not hold.",
@@ -625,12 +601,6 @@
       "id": "corep/c09_02/0070",
       "reason_code": "ENGINE_CANNOT_PRODUCE",
       "reason": "Credit risk adjustments/write-offs for observed new defaults - bound to the recorded constant None.",
-      "status": "always_zero"
-    },
-    {
-      "id": "corep/c09_02/0122",
-      "reason_code": "NO_FIXTURE",
-      "reason": "(-) Infrastructure supporting factor adjustment - no fixture flags an infrastructure exposure.",
       "status": "always_zero"
     },
     {
@@ -855,6 +825,7 @@
     "corep/c07_00/0211",
     "corep/c07_00/0215",
     "corep/c07_00/0216",
+    "corep/c07_00/0217",
     "corep/c07_00/0220",
     "corep/c08_01/0010",
     "corep/c08_01/0020",
@@ -884,6 +855,7 @@
     "corep/c08_01/0253",
     "corep/c08_01/0255",
     "corep/c08_01/0256",
+    "corep/c08_01/0257",
     "corep/c08_01/0260",
     "corep/c08_01/0265",
     "corep/c08_01/0270",
@@ -921,6 +893,7 @@
     "corep/c08_02/0253",
     "corep/c08_02/0255",
     "corep/c08_02/0256",
+    "corep/c08_02/0257",
     "corep/c08_02/0260",
     "corep/c08_02/0265",
     "corep/c08_02/0270",
@@ -966,6 +939,7 @@
     "corep/c09_01/0075",
     "corep/c09_01/0080",
     "corep/c09_01/0081",
+    "corep/c09_01/0082",
     "corep/c09_01/0090",
     "corep/c09_02/0010",
     "corep/c09_02/0030",
@@ -977,6 +951,7 @@
     "corep/c09_02/0110",
     "corep/c09_02/0120",
     "corep/c09_02/0121",
+    "corep/c09_02/0122",
     "corep/c09_02/0125",
     "corep/c09_02/0130",
     "corep/c34_01/0010",

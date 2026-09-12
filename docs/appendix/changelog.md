@@ -118,6 +118,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reference dump. Banked in `tests/contracts/test_pipeline_collect_budget.py`.
 
 ### Removed
+- **BREAKING (reporting surface): the two exposure-class row maps are retired —
+  `SA_EXPOSURE_CLASS_ROWS` is deleted, and `IRB_EXPOSURE_CLASS_ROWS` is narrowed
+  to labels as `IRB_EXPOSURE_CLASS_LABELS`.** Both mapped `ExposureClass.value`
+  to a `(row_ref, display_name)` pair for an axis the published templates put on
+  a *sheet* rather than a row, so the ref half described nothing — and each ref
+  was nonetheless a live address for a different row of a real template, which
+  is what made the maps dangerous rather than merely dead. The first seven refs
+  of `SA_EXPOSURE_CLASS_ROWS` matched `CRR_C09_01_ROWS` and then diverged: it
+  gave `equity` ref 0110, which C 09.01 spends on particularly-high-risk items,
+  and `retail_other` 0090, which C 09.01 spends on mortgages. It covered only 15
+  of the 19 `ExposureClass` members, and its own header comment still claimed
+  the generator used it to filter pipeline data — untrue since the C 07.00 /
+  OF 07.00 sheet axis moved onto `C07_00_SA_SHEET_MAP`. Its only remaining
+  readers were two test files. `IRB_EXPOSURE_CLASS_ROWS` had one production
+  reader, `reporting/corep/generator.py`, which took the name and discarded the
+  ref; 7 of its 8 refs disagree with C 08.07 — the one template that really does
+  put an Art. 147(2) class on a row — and its `corporate` ref 0030 is C 08.01's
+  "Off balance sheet items subject to credit risk". The carriers for each job
+  were already in place and are unchanged: `C07_00_SA_SHEET_MAP` for the C 07.00
+  sheet axis, `get_c07_sheet_labels(framework)` for its regime-paired display
+  names, `C02_00_SA_CLASS_MAP` for the C 02.00 SA class rows, and now
+  `IRB_EXPOSURE_CLASS_LABELS` for the C 08.01-C 08.05 tab names. Both old names
+  are gone from `reporting.corep.__all__`, so an importer of either must move.
+  **No behaviour change:** no golden moved and the supervisory validation
+  register is unchanged, which is the evidence that the deleted map was dead.
+  `docs/api/reporting.md` documented both under their old names, including a
+  copy-pasteable import block that would now raise `ImportError`, and is
+  corrected.
 - **Dead declarations: 19 unreferenced module-level names deleted, no behaviour
   change.** Each occurred exactly once across the whole tracked tree — its own
   definition — and none is reachable by name, by string literal, by `__all__`,

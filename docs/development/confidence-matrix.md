@@ -60,7 +60,7 @@ Package version `0.3.34`. Resolved packs:
 | 109 | 1 | 0 | 5 | 0 | 1 | MEDIUM |
 | 110 | 0 | 1 | 4 | 0 | 6 | MEDIUM |
 | 111 | 6 | 8 | 20 | 0 | 40 | MEDIUM |
-| 112 | 4 | 3 | 19 | 0 | 37 | MEDIUM |
+| 112 | 4 | 3 | 19 | 0 | 38 | MEDIUM |
 | 113 | 2 | 2 | 11 | 0 | 10 | MEDIUM |
 | 114 | 8 | 6 | 14 | 14 | 33 | HIGH |
 | 115 | 6 | 10 | 8 | 3 | 9 | HIGH |
@@ -198,7 +198,7 @@ Package version `0.3.34`. Resolved packs:
 | 444 | 4 | 0 | 7 | 0 | 1 | MEDIUM |
 | 452 | 2 | 0 | 4 | 0 | 0 | LOW |
 | 453 | 2 | 0 | 3 | 0 | 0 | LOW |
-| 501 | 4 | 2 | 17 | 2 | 30 | HIGH |
+| 501 | 4 | 2 | 18 | 2 | 31 | HIGH |
 | 501a | 2 | 0 | 4 | 1 | 8 | HIGH |
 
 ## PS1/26 (PRA Policy Statement)
@@ -212,7 +212,7 @@ Package version `0.3.34`. Resolved packs:
 | 92 | 2 | 4 | 21 | 0 | 35 | MEDIUM |
 | 110A | 1 | 1 | 3 | 0 | 3 | MEDIUM |
 | 111 | 2 | 2 | 11 | 1 | 17 | HIGH |
-| 112 | 0 | 0 | 6 | 0 | 2 | UNCITED |
+| 112 | 0 | 0 | 6 | 0 | 3 | UNCITED |
 | 113 | 0 | 2 | 1 | 0 | 0 | LOW |
 | 114 | 3 | 1 | 10 | 2 | 24 | HIGH |
 | 115 | 2 | 0 | 3 | 3 | 6 | HIGH |
@@ -241,7 +241,7 @@ Package version `0.3.34`. Resolved packs:
 | 124L | 0 | 4 | 3 | 1 | 7 | HIGH |
 | 126 | 0 | 0 | 0 | 0 | 2 | GAP |
 | 127 | 1 | 5 | 3 | 2 | 7 | HIGH |
-| 128 | 1 | 1 | 4 | 1 | 7 | HIGH |
+| 128 | 1 | 1 | 4 | 1 | 8 | HIGH |
 | 129 | 2 | 3 | 5 | 2 | 4 | HIGH |
 | 132 | 3 | 0 | 2 | 0 | 2 | MEDIUM |
 | 132A | 0 | 0 | 0 | 0 | 1 | GAP |
@@ -339,6 +339,7 @@ These articles are named in `src/rwa_calc/` production source but carry no `@cit
 | CRR 4 | 10 | 0 | 4 | — | PS1/26 para. 4 |
 | PS1/26 239 | 1 | 0 | 4 | — | — |
 | CRR 34 | 3 | 0 | 3 | — | — |
+| PS1/26 112 | 6 | 0 | 3 | — | CRR Art. 112 |
 | PS1/26 120A | 4 | 0 | 3 | — | — |
 | CRR 132 | 1 | 0 | 3 | — | PS1/26 para. 132 |
 | CRR 191A | 2 | 0 | 3 | — | — |
@@ -350,7 +351,6 @@ These articles are named in `src/rwa_calc/` production source but carry no `@cit
 | CRR 308 | 7 | 0 | 3 | — | — |
 | CRR 309 | 3 | 0 | 3 | — | — |
 | CRR 439 | 2 | 0 | 3 | — | — |
-| PS1/26 112 | 6 | 0 | 2 | — | CRR Art. 112 |
 | PS1/26 122B | 1 | 0 | 2 | — | — |
 | PS1/26 166E | 4 | 0 | 2 | — | — |
 | PS1/26 181 | 4 | 0 | 2 | — | CRR Art. 181 |
